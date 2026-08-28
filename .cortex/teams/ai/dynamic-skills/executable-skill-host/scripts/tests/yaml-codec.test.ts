@@ -1,5 +1,7 @@
 import { expect, test } from 'bun:test';
 import {
+  SKILL_YAML_DEPTH_LIMIT,
+  SKILL_YAML_NODE_LIMIT,
   parseSkillYamlText,
   stringifySkillYaml,
   type UntrustedSkillYamlNode,
@@ -141,6 +143,17 @@ test('rejects unsafe integer scalars without rejecting decimals', () => {
   expect(parseSkillYamlText('value: 9007199254740991\ndecimal: 1.5\n').ok).toBe(
     true,
   );
+});
+test('enforces exact structural node and depth limits', () => {
+  const exactNodes = `[${new Array<string>(SKILL_YAML_NODE_LIMIT - 1)
+    .fill('true')
+    .join(',')}]`;
+  expect(parseSkillYamlText(exactNodes).ok).toBe(true);
+  expect(parseSkillYamlText(`${exactNodes.slice(0, -1)},true]`).ok).toBe(false);
+  const nested = (depth: number): string =>
+    `${'['.repeat(depth)}true${']'.repeat(depth)}`;
+  expect(parseSkillYamlText(nested(SKILL_YAML_DEPTH_LIMIT)).ok).toBe(true);
+  expect(parseSkillYamlText(nested(SKILL_YAML_DEPTH_LIMIT + 1)).ok).toBe(false);
 });
 test('stringify preserves scalar trailing line breaks and spaces', () => {
   for (const value of ['line\n', 'line\n\n', 'line  \n']) {

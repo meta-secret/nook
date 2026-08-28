@@ -49,6 +49,7 @@ const FORBIDDEN_EVALUATOR_MEMBERS = new Set<string>(
 );
 
 enum ForbiddenAmbientGlobal {
+  Alert = 'alert',
   AsyncFunction = 'AsyncFunction',
   BroadcastChannel = 'BroadcastChannel',
   Buffer = 'Buffer',
@@ -67,6 +68,7 @@ enum ForbiddenAmbientGlobal {
   Process = 'process',
   Reflect = 'Reflect',
   Require = 'require',
+  ReportError = 'reportError',
   Self = 'self',
   SetInterval = 'setInterval',
   SetTimeout = 'setTimeout',

@@ -1,4 +1,6 @@
 import {
+  CST,
+  Lexer,
   isAlias,
   isMap,
   isScalar,
@@ -7,6 +9,7 @@ import {
   stringify,
   type ParsedNode,
 } from 'yaml';
+import { SKILL_HOST_REQUEST_BYTE_LIMIT } from './skill-command-domain.ts';
 /**
  * Boundary-only YAML syntax node. Decode it immediately into a concrete skill
  * request. Never retain it in skill domain state or expose it from actions.
@@ -20,6 +23,8 @@ export type UntrustedSkillYamlNode =
 export type UntrustedSkillYamlMap = {
   readonly [key: string]: UntrustedSkillYamlNode;
 };
+type SkillYamlContainer =
+  readonly UntrustedSkillYamlNode[] | UntrustedSkillYamlMap;
 export type SkillYamlParseSuccess = {
   readonly ok: true;
   readonly value: UntrustedSkillYamlNode;
@@ -50,10 +55,17 @@ const YAML_PARSE_OPTIONS = {
   uniqueKeys: true,
 } as const;
 const YAML_TO_JS_OPTIONS = { maxAliasCount: 0 } as const;
+export const SKILL_YAML_NODE_LIMIT = 16_384;
+export const SKILL_YAML_DEPTH_LIMIT = 64;
+const SKILL_YAML_SCALAR_BYTE_LIMIT = 1024 * 1024;
+const UTF8_ENCODER = new TextEncoder();
 export function parseSkillYamlText(text: string): SkillYamlParseOutcome {
   try {
     const normalizedText = text.replace(/\r\n?/gu, '\n');
-    if (/^%[A-Z]+(?:[ \t]|$)/mu.test(normalizedText)) {
+    if (
+      !skillYamlSourceWithinBounds(normalizedText) ||
+      /^%[A-Z]+(?:[ \t]|$)/mu.test(normalizedText)
+    ) {
       return { ok: false, message: YAML_SYNTAX_FAILURE };
     }
     const document = parseDocument(normalizedText, YAML_PARSE_OPTIONS);
@@ -84,49 +96,137 @@ export function parseSkillYamlText(text: string): SkillYamlParseOutcome {
     return { ok: false, message: YAML_SYNTAX_FAILURE };
   }
 }
+function skillYamlSourceWithinBounds(source: string): boolean {
+  if (UTF8_ENCODER.encode(source).byteLength > SKILL_HOST_REQUEST_BYTE_LIMIT)
+    return false;
+  let depth = 0;
+  let nodes = 0;
+  let scalarFollows = false;
+  let lineStart = true;
+  for (const lexeme of new Lexer().lex(source)) {
+    const type = CST.tokenType(lexeme);
+    const scalarContent = scalarFollows;
+    if (scalarFollows) {
+      scalarFollows = false;
+      if (UTF8_ENCODER.encode(lexeme).byteLength > SKILL_YAML_SCALAR_BYTE_LIMIT)
+        return false;
+    }
+    if (type === 'scalar') {
+      scalarFollows = true;
+      nodes += 1;
+    } else if (
+      type === 'alias' ||
+      type === 'single-quoted-scalar' ||
+      type === 'double-quoted-scalar'
+    ) {
+      nodes += 1;
+      if (UTF8_ENCODER.encode(lexeme).byteLength > SKILL_YAML_SCALAR_BYTE_LIMIT)
+        return false;
+    } else if (type === 'flow-map-start' || type === 'flow-seq-start') {
+      nodes += 1;
+      depth += 1;
+    } else if (type === 'flow-map-end' || type === 'flow-seq-end') {
+      depth -= 1;
+    } else if (type === 'map-value-ind' || type === 'seq-item-ind') {
+      nodes += 1;
+    }
+    if (
+      !scalarContent &&
+      lineStart &&
+      type === 'space' &&
+      lexeme.length >= SKILL_YAML_DEPTH_LIMIT
+    )
+      return false;
+    lineStart = type === 'newline';
+    if (nodes > SKILL_YAML_NODE_LIMIT || depth > SKILL_YAML_DEPTH_LIMIT)
+      return false;
+  }
+  return true;
+}
 /** Validate inert nodes before conversion can coerce keys or emit warnings. */
 function validateSkillYamlAst(node: ParsedNode): SkillYamlAstIssue {
-  if (isAlias(node) || typeof node.anchor === 'string') {
-    return SkillYamlAstIssue.Reference;
-  }
-  if (typeof node.tag === 'string') return SkillYamlAstIssue.Unsupported;
-  if (isScalar(node)) {
-    if (
-      typeof node.value === 'string' ||
-      typeof node.value === 'boolean' ||
-      (typeof node.value === 'number' &&
-        Number.isFinite(node.value) &&
-        (!Number.isInteger(node.value) || Number.isSafeInteger(node.value)))
-    ) {
-      return SkillYamlAstIssue.None;
+  const pending: Array<{ readonly depth: number; readonly node: ParsedNode }> =
+    [{ depth: 0, node }];
+  let nodes = 0;
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (!current) return SkillYamlAstIssue.Unsupported;
+    nodes += 1;
+    if (nodes > SKILL_YAML_NODE_LIMIT || current.depth > SKILL_YAML_DEPTH_LIMIT)
+      return SkillYamlAstIssue.Unsupported;
+    const item = current.node;
+    if (isAlias(item) || typeof item.anchor === 'string')
+      return SkillYamlAstIssue.Reference;
+    if (typeof item.tag === 'string') return SkillYamlAstIssue.Unsupported;
+    if (isScalar(item)) {
+      if (
+        typeof item.value !== 'string' &&
+        typeof item.value !== 'boolean' &&
+        (typeof item.value !== 'number' ||
+          !Number.isFinite(item.value) ||
+          (Number.isInteger(item.value) && !Number.isSafeInteger(item.value)))
+      )
+        return SkillYamlAstIssue.Unsupported;
+      continue;
+    }
+    if (isMap(item)) {
+      for (const pair of item.items) {
+        if (!isScalar(pair.key) || typeof pair.key.value !== 'string') {
+          return SkillYamlAstIssue.Unsupported;
+        }
+        if (!pair.value) return SkillYamlAstIssue.Unsupported;
+        const value = { depth: current.depth + 1, node: pair.value };
+        const key = { depth: current.depth + 1, node: pair.key };
+        pending.push(value, key);
+      }
+      continue;
+    }
+    if (isSeq(item)) {
+      for (const child of item.items) {
+        if (!child) return SkillYamlAstIssue.Unsupported;
+        const next = { depth: current.depth + 1, node: child };
+        pending.push(next);
+      }
+      continue;
     }
     return SkillYamlAstIssue.Unsupported;
   }
-  if (isMap(node)) {
-    for (const pair of node.items) {
-      const keyIssue = validateSkillYamlAst(pair.key);
-      if (keyIssue !== SkillYamlAstIssue.None) return keyIssue;
-      if (!isScalar(pair.key) || typeof pair.key.value !== 'string') {
-        return SkillYamlAstIssue.Unsupported;
-      }
-      if (!pair.value) return SkillYamlAstIssue.Unsupported;
-      const valueIssue = validateSkillYamlAst(pair.value);
-      if (valueIssue !== SkillYamlAstIssue.None) return valueIssue;
-    }
-    return SkillYamlAstIssue.None;
-  }
-  if (isSeq(node)) {
-    for (const item of node.items) {
-      const itemIssue = validateSkillYamlAst(item);
-      if (itemIssue !== SkillYamlAstIssue.None) return itemIssue;
-    }
-    return SkillYamlAstIssue.None;
-  }
-  return SkillYamlAstIssue.Unsupported;
+  return SkillYamlAstIssue.None;
 }
 export function stringifySkillYaml(value: UntrustedSkillYamlNode): string {
+  assertSerializableSkillYaml(value);
   const serialized = stringify(value, YAML_STRINGIFY_OPTIONS);
   return serialized.endsWith('\n') ? serialized : `${serialized}\n`;
+}
+function assertSerializableSkillYaml(value: UntrustedSkillYamlNode): void {
+  const pending: Array<{
+    readonly depth: number;
+    readonly value: UntrustedSkillYamlNode;
+  }> = [{ depth: 0, value }];
+  const seen = new Set<SkillYamlContainer>();
+  let nodes = 0;
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (!current) throw new Error('Invalid YAML response.');
+    nodes += 1;
+    if (nodes > SKILL_YAML_NODE_LIMIT || current.depth > SKILL_YAML_DEPTH_LIMIT)
+      throw new Error('Invalid YAML response.');
+    if (typeof current.value === 'number' && !Number.isFinite(current.value))
+      throw new Error('Invalid YAML response.');
+    if (typeof current.value !== 'object') continue;
+    if (seen.has(current.value)) throw new Error('Invalid YAML response.');
+    seen.add(current.value);
+    const values = Array.isArray(current.value)
+      ? current.value
+      : Object.values(current.value);
+    nodes += Array.isArray(current.value)
+      ? 0
+      : Object.keys(current.value).length;
+    for (const child of values) {
+      const next = { depth: current.depth + 1, value: child };
+      pending.push(next);
+    }
+  }
 }
 export function isSkillYamlMap(
   value: UntrustedSkillYamlNode,

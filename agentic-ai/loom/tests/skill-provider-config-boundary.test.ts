@@ -29,11 +29,9 @@ type ActionRuntimeGraph = {
   readonly sources: ReadonlyMap<string, string>;
   readonly symlinkPaths: ReadonlySet<string>;
 };
-
 type GitHubActionStep = {
   readonly uses?: string;
 };
-
 type GitHubActionRuns = {
   readonly main?: string;
   readonly post?: string;
@@ -41,11 +39,9 @@ type GitHubActionRuns = {
   readonly steps?: readonly GitHubActionStep[];
   readonly using?: string;
 };
-
 type GitHubActionDocument = {
   readonly runs?: GitHubActionRuns;
 };
-
 type ActionDependencyResolution = {
   readonly importer: string;
   readonly sources: ReadonlyMap<string, string>;
@@ -298,14 +294,17 @@ function configurationScriptReferences(
   inspection: ConfigurationReferenceInspection,
 ): readonly string[] {
   const source = inspection.source;
-  CONFIGURATION_SCRIPT_REFERENCE.lastIndex = 0;
-  EXTENSIONLESS_SCRIPT_REFERENCE.lastIndex = 0;
-  const matched = [
-    ...source.matchAll(CONFIGURATION_SCRIPT_REFERENCE),
-    ...source.matchAll(EXTENSIONLESS_SCRIPT_REFERENCE),
-  ]
-    .map((match) => match[1] ?? false)
-    .filter((specifier) => specifier !== false);
+  const launchSource = source.replace(/["'`\\]/gu, '');
+  const matched = [source, launchSource].flatMap((candidate) => {
+    CONFIGURATION_SCRIPT_REFERENCE.lastIndex = 0;
+    EXTENSIONLESS_SCRIPT_REFERENCE.lastIndex = 0;
+    return [
+      ...candidate.matchAll(CONFIGURATION_SCRIPT_REFERENCE),
+      ...candidate.matchAll(EXTENSIONLESS_SCRIPT_REFERENCE),
+    ]
+      .map((match) => match[1] ?? false)
+      .filter((specifier) => specifier !== false);
+  });
   if (!EXECUTABLE_SOURCE_EXTENSION.test(inspection.importer)) {
     return [...new Set(matched)];
   }
@@ -317,7 +316,7 @@ function configurationScriptReferences(
   );
   for (const specifier of matched) {
     const launchInspection: RequiredLaunchInspection = {
-      source,
+      source: launchSource,
       specifier,
     };
     if (isRequiredScriptLaunch(launchInspection)) references.add(specifier);
@@ -836,6 +835,7 @@ test('follows scripts launched from every runnable configuration surface', () =>
     ['package.json', '{"scripts":{"audit":"bun scripts/facade.ts"}}'],
     ['package.json', `{"scripts":{"audit":"bun ${LOOM_ARTICLE_ADAPTER}"}}`],
     ['package.json', `{"scripts":{"audit":"bun ${HOST_CLI}"}}`],
+    ['package.json', `{"scripts":{"audit":"bun ${HOST_ROOT}\\"cli.ts\\""}}`],
     ['Taskfile.yml', 'tasks:\n  audit:\n    cmds: [bun scripts/facade.ts]'],
     [
       'Taskfile.yml',

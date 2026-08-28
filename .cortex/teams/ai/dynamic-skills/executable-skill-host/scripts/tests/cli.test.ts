@@ -17,6 +17,7 @@ import {
   SkillRequestFamily,
 } from '../src/skill-command-domain.ts';
 import {
+  SKILL_YAML_DEPTH_LIMIT,
   parseSkillYamlText,
   type UntrustedSkillYamlNode,
 } from '../src/skill-yaml-codec.ts';
@@ -125,6 +126,7 @@ describe('provider-neutral executable skill YAML host', () => {
       `skillToolsList:\n  list: {}\n---\ntoken: ${secret}\n`,
       aliasLines.join('\n'),
       aliasLines.join('\r'),
+      `${'['.repeat(SKILL_YAML_DEPTH_LIMIT + 1)}${secret}`,
     ]) {
       const outcome = dispatchSkillYamlText(yaml);
       const response = parseResponse(outcome.yaml);
@@ -177,6 +179,22 @@ describe('provider-neutral executable skill YAML host', () => {
       expect(
         new TextEncoder().encode(outcome.yaml).byteLength,
       ).toBeLessThanOrEqual(SKILL_HOST_RESPONSE_BYTE_LIMIT);
+    }
+  });
+  test('returns typed bounded failures for non-finite action results', () => {
+    for (const value of [Number.NaN, Number.POSITIVE_INFINITY]) {
+      const request: FinalSkillCliResponseRequest = {
+        exitCode: 0,
+        response: { ok: true, result: value },
+      };
+      const outcome = finalizeSkillCliResponse(request);
+      expect(outcome.exitCode).toBe(1);
+      expect(parseResponse(outcome.yaml).errors?.at(0)?.issue).toBe(
+        SkillCommandIssue.InvalidResponse,
+      );
+      expect(parseSkillYamlText(outcome.yaml).ok).toBe(true);
+      expect(outcome.yaml).not.toMatch(/\.nan|\.inf/iu);
+      expect(outcome.yaml.length).toBeLessThan(1_024 * 1_024);
     }
   });
   test('uses decode phase for malformed input', () => {

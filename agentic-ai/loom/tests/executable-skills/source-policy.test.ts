@@ -266,6 +266,7 @@ describe('executable skill source policy', () => {
   test('rejects forbidden ambient roots read through shorthand properties', () => {
     for (const capability of [
       'Bun',
+      'alert',
       'Buffer',
       'process',
       'eval',
@@ -277,6 +278,7 @@ describe('executable skill source policy', () => {
       'fetch',
       'Math',
       'performance',
+      'reportError',
       'Worker',
     ]) {
       const request: AnalyzeFixtureRequest = {

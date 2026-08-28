@@ -188,7 +188,31 @@ function errorOutcome(request: SkillErrorOutcomeRequest): SkillCliOutcome {
 export function finalizeSkillCliResponse(
   request: FinalSkillCliResponseRequest,
 ): SkillCliOutcome {
-  const yaml = stringifySkillYaml(request.response);
+  let yaml: string;
+  try {
+    yaml = stringifySkillYaml(request.response);
+  } catch {
+    const invalidResponse: SkillCommandErrorResponse = {
+      ok: false,
+      isError: true,
+      phase: SkillCommandPhase.Execute,
+      errors: [
+        {
+          path: 'result',
+          issue: SkillCommandIssue.InvalidResponse,
+          message: 'Skill action returned an invalid YAML response value.',
+        },
+      ],
+      recover: {
+        toolsListRequest: SKILL_TOOLS_LIST_INVOKE,
+        hint: 'Use only finite values permitted by the action result schema.',
+      },
+    };
+    return {
+      exitCode: 1,
+      yaml: stringifySkillYaml(invalidResponse as UntrustedSkillYamlNode),
+    };
+  }
   if (UTF8_ENCODER.encode(yaml).byteLength <= SKILL_HOST_RESPONSE_BYTE_LIMIT) {
     return { exitCode: request.exitCode, yaml };
   }

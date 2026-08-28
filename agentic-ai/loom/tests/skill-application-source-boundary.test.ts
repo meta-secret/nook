@@ -34,12 +34,14 @@ const PROCESS_USES = [
   'process.stdout.write(outcome.yaml)',
 ] as const;
 const FORBIDDEN_HOST_GLOBALS = new Set([
+  'alert',
   'Bun',
   'Date',
   'Math',
   'console',
   'crypto',
   'performance',
+  'reportError',
 ]);
 type SkillSourceRequest = {
   readonly relativePath: string;
@@ -69,7 +71,7 @@ export function analyzeSkillHostSource(request: SkillSourceRequest) {
       relativePath === HOST_CLI && node.moduleSpecifier.text === 'node:fs'
         ? 'closeSync constants fstatSync openSync readSync'.split(' ')
         : relativePath === YAML_CODEC && node.moduleSpecifier.text === 'yaml'
-          ? 'ParsedNode isAlias isMap isScalar isSeq parseDocument stringify'.split(
+          ? 'CST Lexer ParsedNode isAlias isMap isScalar isSeq parseDocument stringify'.split(
               ' ',
             )
           : [];
@@ -299,6 +301,8 @@ test('rejects dangerous capabilities from every host layer', async () => {
     [HOST_CLI, 'Bun.write(Bun.stderr, text);'],
     [HOST_CLI, 'Date.now(); Math.random();'],
     [HOST_CLI, 'performance.now(); crypto.randomUUID();'],
+    [HOST_CLI, 'const secret = "secret"; alert(secret);'],
+    [HOST_CLI, 'const secret = new Error("secret"); reportError(secret);'],
     [
       HOST_CLI,
       "import fs, { closeSync, fstatSync, openSync, readSync } from 'node:fs';",
