@@ -27,13 +27,24 @@ test.describe('devices and access passkey inventory', () => {
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    const app = page.getByTestId('devices-access-app')
+    const appsGroup = page.getByTestId('devices-access-apps-group')
+    const app = appsGroup.getByTestId('devices-access-app')
     const passkeyFacts = page.getByTestId('devices-access-passkey-facts')
-    await expect(passkeyFacts).toContainText('Passkey ID')
-    await expect(passkeyFacts).toContainText('passkey_')
-    await expect(passkeyFacts).toContainText('Stored with')
+    const keeperFact = passkeyFacts.locator('[data-kind="keeper"]')
+    const passkeyIdFact = passkeyFacts.locator('[data-kind="fingerprint"]')
+    const supportingFacts = passkeyFacts.locator('[data-priority="supporting"]')
+    await expect(keeperFact).toHaveAttribute('data-priority', 'primary')
+    await expect(keeperFact).toContainText('Stored with')
+    await expect(passkeyIdFact).toHaveAttribute('data-priority', 'secondary')
+    await expect(passkeyIdFact).toContainText('Passkey ID')
+    await expect(passkeyIdFact).toContainText('passkey_')
+    await expect(supportingFacts).toHaveCount(2)
     await expect(passkeyFacts).toContainText('First recorded by Nook')
     await expect(passkeyFacts).toContainText('Last used')
+    await expect(
+      page.getByText('Passkey · recoverable identity', { exact: true }),
+    ).toHaveCount(0)
+    await expect(appsGroup).toContainText('Apps')
     await expect(app).toContainText('Nook in this browser')
     await expect(app).not.toContainText('App key')
     await expect(page.getByTestId('devices-access-app-id')).not.toBeVisible()
