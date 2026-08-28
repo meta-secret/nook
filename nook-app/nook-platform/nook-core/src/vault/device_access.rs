@@ -9,7 +9,8 @@ use sha2::{Digest, Sha256};
 use wasm_bindgen::prelude::wasm_bindgen;
 
 use crate::{
-    DeviceId, IdentityDirectory, IdentityRecord, IsoTimestamp, StoreId, WrappedDeviceIdentity,
+    AppId, DeviceId, IdentityDirectory, IdentityRecord, IsoTimestamp, StoreId,
+    WrappedDeviceIdentity,
 };
 
 mod passkey_keeper;
@@ -33,6 +34,43 @@ pub fn identities_linked_to_vault<'a>(
         .iter()
         .filter(|identity| identity.owns_vault(store_id))
         .collect()
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum IdentityVaultAppGrantKind {
+    NotLinked,
+    NotGranted,
+    Granted,
+}
+
+/// Classify whether one app is an actual recipient of both key envelopes for
+/// the selected vault. Identity membership alone is insufficient because a
+/// vault-level revocation may retain the member while removing its envelopes.
+#[must_use]
+pub fn classify_identity_vault_app_grant(
+    identity: &IdentityRecord,
+    store_id: &StoreId,
+    app_id: &AppId,
+) -> IdentityVaultAppGrantKind {
+    let Some(vault) = identity.vault_dek(store_id) else {
+        return IdentityVaultAppGrantKind::NotLinked;
+    };
+    if !identity.has_app_id(app_id) {
+        return IdentityVaultAppGrantKind::NotGranted;
+    }
+    let grants_secrets = vault
+        .secrets_envelopes
+        .iter()
+        .any(|envelope| envelope.app_id == *app_id);
+    let grants_members = vault
+        .members_envelopes
+        .iter()
+        .any(|envelope| envelope.app_id == *app_id);
+    if grants_secrets && grants_members {
+        IdentityVaultAppGrantKind::Granted
+    } else {
+        IdentityVaultAppGrantKind::NotGranted
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
@@ -434,6 +472,48 @@ mod tests {
         let directory = IdentityDirectory::from_records(vec![personal], IdentitySelection::Empty)?;
 
         assert!(identities_linked_to_vault(&directory, &unknown_store).is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn selected_vault_grants_a_member_with_both_dek_envelopes() -> anyhow::Result<()> {
+        let app_key = AppKey::generate()?;
+        let store_id = generate_store_id()?;
+        let mut identity = IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
+        identity.generate_vault_dek(store_id.clone())?;
+
+        assert_eq!(
+            classify_identity_vault_app_grant(&identity, &store_id, app_key.app_id()),
+            IdentityVaultAppGrantKind::Granted
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn selected_vault_does_not_grant_a_member_after_its_envelopes_are_revoked() -> anyhow::Result<()>
+    {
+        let app_key = AppKey::generate()?;
+        let store_id = generate_store_id()?;
+        let mut identity = IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
+        identity.generate_vault_dek(store_id.clone())?;
+        let vault = identity
+            .vault_deks
+            .iter_mut()
+            .find(|vault| vault.store_id == store_id)
+            .ok_or_else(|| anyhow::anyhow!("selected vault DEK is missing"))?;
+        vault
+            .secrets_envelopes
+            .retain(|envelope| envelope.app_id != *app_key.app_id());
+        vault
+            .members_envelopes
+            .retain(|envelope| envelope.app_id != *app_key.app_id());
+
+        assert!(identity.has_app_id(app_key.app_id()));
+        assert!(identity.owns_vault(&store_id));
+        assert_eq!(
+            classify_identity_vault_app_grant(&identity, &store_id, app_key.app_id()),
+            IdentityVaultAppGrantKind::NotGranted
+        );
         Ok(())
     }
 
