@@ -1,8 +1,7 @@
-import { afterEach, describe, expect, spyOn, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 import { chmodSync, existsSync, renameSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 
-import * as gitCommand from '../../src/module-delivery/git-command.ts';
 import * as integrationSource from '../../src/module-delivery/integration.ts';
 import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
 import {
