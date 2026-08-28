@@ -126,6 +126,10 @@ jobs:
           ref: ${{ needs.prepare.outputs.release-sha }}
           fetch-depth: 0
 
+      - name: Trust exact Actions workspace for Git
+        shell: bash
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
       - name: Resolve and validate release
         id: release
         shell: bash

@@ -884,3 +884,35 @@ fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> 
     );
     Ok(())
 }
+
+#[test]
+fn release_deploy_trusts_only_exact_actions_workspace_before_git_resolution() -> anyhow::Result<()>
+{
+    let root = repository_root();
+    let release = read(&root, ".github/workflows/release.yml");
+    let deploy = release
+        .split_once("\n  deploy:\n")
+        .context("release workflow must define the deploy job")?
+        .1;
+    let checkout = deploy
+        .find("- name: Checkout release source")
+        .context("release deploy must check out its immutable source")?;
+    let exact_trust = r#"git config --global --add safe.directory "$GITHUB_WORKSPACE""#;
+    let trust = deploy
+        .find(exact_trust)
+        .context("release deploy must trust the exact Actions workspace")?;
+    let resolve = deploy
+        .find("- name: Resolve and validate release")
+        .context("release deploy must resolve and validate its source")?;
+
+    assert!(
+        checkout < trust && trust < resolve,
+        "release deploy must trust the exact checked-out workspace before its first repository Git command"
+    );
+    assert_eq!(
+        deploy.matches("safe.directory").count(),
+        1,
+        "release deploy must register exactly one scoped Git safe directory and never wildcard trust"
+    );
+    Ok(())
+}
