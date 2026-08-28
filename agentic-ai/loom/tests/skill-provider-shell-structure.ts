@@ -17,9 +17,17 @@ type StrippedHeredocs = {
   readonly source: string;
   readonly substitutions: readonly string[];
 };
+type HeredocLine = {
+  readonly delimiters: readonly Delimiter[];
+  readonly source: string;
+};
 type ClosingRequest = {
   readonly closing: string;
   readonly opening: string;
+  readonly source: string;
+  readonly start: number;
+};
+type DelimiterRequest = {
   readonly source: string;
   readonly start: number;
 };
@@ -55,40 +63,170 @@ function stripHeredocs(source: string): StrippedHeredocs {
       output.push(line.endsWith('\n') ? '\n' : '');
       continue;
     }
-    for (const declaration of line.matchAll(
-      /<<(-?)(["']?)([A-Za-z_]\w*)\2/gu,
-    )) {
-      const delimiter: Delimiter = {
-        delimiter: declaration[3] ?? '',
-        expands: (declaration[2] ?? '') === '',
-        stripTabs: declaration[1] === '-',
-      };
-      pending.push(delimiter);
-    }
-    output.push(line.replace(/<<-?["']?[A-Za-z_]\w*["']?/gu, ''));
+    const declaration = heredocLine(line);
+    pending.push(...declaration.delimiters);
+    output.push(declaration.source);
   }
-  if (pending.length > 0) throw new Error('Unterminated shell heredoc.');
+  if (pending.length > 0)
+    throw new Error(`Unterminated shell heredoc: ${pending[0]?.delimiter}`);
   return { source: output.join(''), substitutions };
+}
+
+function heredocLine(source: string): HeredocLine {
+  const retained = [...source];
+  const delimiters: Delimiter[] = [];
+  let quote = '';
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index] ?? '';
+    if (quote) {
+      if (character === '\\' && quote === '"') index += 1;
+      else if (character === quote) quote = '';
+      continue;
+    }
+    const compoundRequest: DelimiterRequest = { source, start: index };
+    const compoundEnd = shellCompoundEnd(compoundRequest);
+    if (compoundEnd !== false) {
+      index = compoundEnd;
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+      continue;
+    }
+    if (character === '\\') {
+      index += 1;
+      continue;
+    }
+    if (
+      character === '#' &&
+      (index === 0 || /\s/u.test(source[index - 1] ?? ''))
+    )
+      break;
+    if (
+      source.slice(index, index + 2) !== '<<' ||
+      source[index - 1] === '<' ||
+      source[index + 2] === '<'
+    )
+      continue;
+    let cursor = index + 2;
+    const stripTabs = source[cursor] === '-';
+    if (stripTabs) cursor += 1;
+    while (source[cursor] === ' ' || source[cursor] === '\t') cursor += 1;
+    const delimiterRequest: DelimiterRequest = { source, start: cursor };
+    const parsed = delimiterWord(delimiterRequest);
+    if (parsed === false) throw new Error('Shell heredoc has no delimiter.');
+    const delimiter: Delimiter = {
+      delimiter: parsed.value,
+      expands: !parsed.quoted,
+      stripTabs,
+    };
+    delimiters.push(delimiter);
+    retained.fill(' ', index, parsed.end);
+    index = parsed.end - 1;
+  }
+  return { delimiters, source: retained.join('') };
+}
+
+function shellCompoundEnd(request: DelimiterRequest): number | false {
+  const opening =
+    request.source.slice(request.start, request.start + 3) === '$(('
+      ? '$(('
+      : request.source.slice(request.start, request.start + 2);
+  const closing =
+    opening === '$((' || opening === '((' ? '))' : opening === '[[' ? ']]' : '';
+  if (!closing) return false;
+  const end = request.source.indexOf(closing, request.start + opening.length);
+  if (end < 0) throw new Error('Unterminated shell compound region.');
+  return end + closing.length - 1;
+}
+
+type DelimiterWord = {
+  readonly end: number;
+  readonly quoted: boolean;
+  readonly value: string;
+};
+
+function delimiterWord(request: DelimiterRequest): DelimiterWord | false {
+  let value = '';
+  let quote = '';
+  let quoted = false;
+  let index = request.start;
+  for (; index < request.source.length; index += 1) {
+    const character = request.source[index] ?? '';
+    if (quote) {
+      if (character === quote) quote = '';
+      else if (character === '\\' && quote === '"') {
+        quoted = true;
+        index += 1;
+        value += request.source[index] ?? '';
+      } else value += character;
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+      quoted = true;
+      continue;
+    }
+    if (character === '\\') {
+      quoted = true;
+      index += 1;
+      value += request.source[index] ?? '';
+      continue;
+    }
+    if (/\s/u.test(character) || ';&|()<>'.includes(character)) break;
+    value += character;
+  }
+  if (quote) throw new Error('Unterminated shell heredoc delimiter quote.');
+  return value ? { end: index, quoted, value } : false;
 }
 
 function extractFunctions(inspection: ShellStructureInspection): string {
   const retained = [...inspection.source];
-  for (const match of inspection.source.matchAll(
-    /\b(?:function\s+([A-Za-z_]\w*)\s*|([A-Za-z_]\w*)\s*\(\s*\)\s*)\{/gu,
-  )) {
+  let quote = '';
+  for (let index = 0; index < inspection.source.length; index += 1) {
+    const character = inspection.source[index] ?? '';
+    if (quote) {
+      if (character === '\\' && quote === '"') index += 1;
+      else if (character === quote) quote = '';
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+      continue;
+    }
+    if (character === '\\') {
+      index += 1;
+      continue;
+    }
+    if (
+      character === '#' &&
+      (index === 0 || /\s/u.test(inspection.source[index - 1] ?? ''))
+    ) {
+      index = inspection.source.indexOf('\n', index);
+      if (index < 0) break;
+      continue;
+    }
+    if (index > 0 && /[A-Za-z0-9_]/u.test(inspection.source[index - 1] ?? ''))
+      continue;
+    const match =
+      /^(?:function\s+([A-Za-z_]\w*)(?:\s*\(\s*\))?|([A-Za-z_]\w*)\s*\(\s*\))\s*\{/u.exec(
+        inspection.source.slice(index),
+      );
+    if (!match) continue;
     const start = (match.index ?? 0) + match[0].length;
     const closingRequest: ClosingRequest = {
       closing: '}',
       opening: '{',
       source: inspection.source,
-      start,
+      start: index + start,
     };
     const end = findClosing(closingRequest);
     inspection.functions.set(
       match[1] ?? match[2] ?? '',
-      inspection.source.slice(start, end),
+      inspection.source.slice(index + start, end),
     );
-    retained.fill(' ', match.index, end + 1);
+    retained.fill(' ', index, end + 1);
+    index = end;
   }
   return retained.join('');
 }

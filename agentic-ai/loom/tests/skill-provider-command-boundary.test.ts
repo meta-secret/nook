@@ -92,6 +92,32 @@ runs: {using: composite, metadata: {run: bun ignored.ts}, steps: [{run: bun scri
   ]);
 });
 
+test('applies effective workflow and composite working directories', () => {
+  const workflow = (source: string) => {
+    const fixture = { path: '.github/workflows/audit.yml', source };
+    return runnableCommandSources(fixture);
+  };
+  const directory = PROTECTED.replace('/src/cli.ts', '');
+  for (const source of [
+    `defaults: {run: {working-directory: ${directory}}}\njobs: {audit: {steps: [{run: bun src/cli.ts}]}}`,
+    `jobs: {audit: {defaults: {run: {working-directory: ${directory}}}, steps: [{run: bun src/cli.ts}]}}`,
+    `jobs: {audit: {steps: [{working-directory: ${directory}, run: bun src/cli.ts}]}}`,
+  ])
+    expect(() => inspectProtected(workflow(source)[0] ?? ''), source).toThrow();
+  expect(
+    workflow(`defaults: {run: {working-directory: ${directory}}}
+jobs: {audit: {defaults: {run: {working-directory: ignored}}, steps: [{working-directory: scripts, run: bun catalog.ts}]}}`),
+  ).toEqual(['cd "scripts" && bun catalog.ts']);
+  const action = {
+    path: '.github/actions/audit/action.yml',
+    source:
+      'runs: {using: composite, steps: [{working-directory: scripts, run: bun catalog.ts}]}',
+  };
+  expect(runnableCommandSources(action)).toEqual([
+    'cd "scripts" && bun catalog.ts',
+  ]);
+});
+
 test('rejects every protected runtime construction and masked launch', () => {
   const fixtures = [
     `bun ${PROTECTED.replace('example-skill', 'exampl?-skill')}`,
@@ -122,8 +148,19 @@ test('rejects every protected runtime construction and masked launch', () => {
     `echo \`bun ${PROTECTED}\``,
     `audit(){ bun ${PROTECTED}; }; audit`,
     `function audit { bun ${PROTECTED}; }; audit`,
+    `eval 'bun ${PROTECTED}'`,
+    `eval -- 'bun ${PROTECTED}'`,
+    `builtin eval 'bun ${PROTECTED}'`,
+    `time MODE=x bun ${PROTECTED}`,
+    `alias audit='bun ${PROTECTED}'; audit`,
+    `nohup bun ${PROTECTED}`,
+    `sudo bun ${PROTECTED}`,
+    `sudo MODE=x bun ${PROTECTED}`,
+    `printf '%s\0' ignored | xargs -0 bun ${PROTECTED}`,
     `{ MODE=x bun ${PROTECTED}; }`,
     `cat <<EOF\n$(bun ${PROTECTED})\nEOF`,
+    `cat <<EOF-MARK\n$(bun ${PROTECTED})\nEOF-MARK`,
+    `cat <<END!\n$(bun ${PROTECTED})\nEND!`,
     `bun scripts/catalog.ts --label $(printf ok); bun --smol ${PROTECTED}`,
     `node scripts/catalog.ts --label ok\nbun --hot ${PROTECTED}`,
     'task skills:tools-$(printf list)',
@@ -170,6 +207,18 @@ test('accepts dynamic inert data after a static non-protected executable', () =>
     'ROOT=; ROOT=${ROOT:-scripts}; bun "$ROOT/catalog.ts"',
   ])
     expect(() => inspectShell(source)).not.toThrow();
+  for (const source of [
+    `printf '%s' 'audit(){ bun ${PROTECTED}; }'`,
+    `# function audit { bun ${PROTECTED}; }\necho safe`,
+    `printf '%s' 'eval bun ${PROTECTED}'`,
+    'time bun scripts/catalog.ts',
+    "alias audit='bun scripts/catalog.ts'; audit",
+    'echo $((1 << 2))',
+    `cat <<\\EOF\nbun ${PROTECTED}\nEOF`,
+    `cat <<'END!'\nbun ${PROTECTED}\nEND!`,
+    `cat <<E"OF-MARK"\nbun ${PROTECTED}\nEOF-MARK`,
+  ])
+    expect(() => inspectShell(source), source).not.toThrow();
   expect(() =>
     inspectShell(`unused(){ bun ${PROTECTED}; }\necho safe`),
   ).not.toThrow();

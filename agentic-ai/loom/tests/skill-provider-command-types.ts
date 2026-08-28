@@ -81,6 +81,7 @@ export type EnvPrefixRequest = WordsEnvironmentRequest & {
 };
 
 export type ShellParseState = {
+  readonly aliases: Map<string, string>;
   casePattern: boolean;
   commandCount: number;
   cwd: string;

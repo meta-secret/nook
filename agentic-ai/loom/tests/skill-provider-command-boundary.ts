@@ -5,6 +5,11 @@ import {
   type ShellStructureInspection,
 } from './skill-provider-shell-structure.ts';
 import { tokenizeShell } from './skill-provider-shell-tokenizer.ts';
+import { workflowCommandSources } from './skill-provider-workflow-commands.ts';
+import {
+  resolveDispatchCommand,
+  type DispatchRequest,
+} from './skill-provider-shell-dispatch.ts';
 import {
   assertBoundedSource,
   assignmentWord,
@@ -98,10 +103,14 @@ export function runnableCommandSources(
   if (!/\.ya?ml$/u.test(inspection.path)) return [];
   const document = Bun.YAML.parse(inspection.source) as ConfigurationNode;
   if (isTaskPath(inspection.path)) return taskCommands(document);
-  if (/^\.github\/workflows\//u.test(inspection.path))
-    return workflowCommands(document);
-  if (/(^|\/)action\.ya?ml$/u.test(inspection.path))
-    return actionCommands(document);
+  if (/^\.github\/workflows\//u.test(inspection.path)) {
+    const request = { action: false, document };
+    return workflowCommandSources(request);
+  }
+  if (/(^|\/)action\.ya?ml$/u.test(inspection.path)) {
+    const request = { action: true, document };
+    return workflowCommandSources(request);
+  }
   return [];
 }
 
@@ -116,6 +125,7 @@ export function analyzeShellCommands(
       }))
     : false;
   const state: ShellParseState = {
+    aliases: new Map(),
     casePattern: false,
     commandCount: 0,
     cwd: '',
@@ -278,37 +288,6 @@ function collectTaskShellList(request: CommandCollectionRequest): void {
   }
 }
 
-function workflowCommands(document: ConfigurationNode): readonly string[] {
-  const commands: string[] = [];
-  for (const job of Object.values(mapping(mapping(document).jobs ?? false))) {
-    const request: CommandCollectionRequest = {
-      value: mapping(job).steps ?? false,
-      target: commands,
-    };
-    collectStepRuns(request);
-  }
-  return commands;
-}
-
-function actionCommands(document: ConfigurationNode): readonly string[] {
-  const commands: string[] = [];
-  const runs = mapping(mapping(document).runs ?? false);
-  const request: CommandCollectionRequest = {
-    value: runs.steps ?? false,
-    target: commands,
-  };
-  if (runs.using === 'composite') collectStepRuns(request);
-  return commands;
-}
-
-function collectStepRuns(request: CommandCollectionRequest): void {
-  if (!Array.isArray(request.value)) return;
-  for (const step of request.value) {
-    const run = mapping(step).run;
-    if (typeof run === 'string') request.target.push(run);
-  }
-}
-
 function mapping(
   value: ConfigurationNode,
 ): Readonly<Record<string, ConfigurationNode>> {
@@ -421,6 +400,48 @@ function analyzeCommand(request: RuntimeCommandRequest): void {
     environment: request.state.environment,
   };
   command = resolveWord(wordRequest);
+  if (command.value === 'alias') {
+    for (const word of words.slice(index + 1)) {
+      const aliasRequest: WordEnvironmentRequest = {
+        environment: request.state.environment,
+        word,
+      };
+      const alias = resolveWord(aliasRequest);
+      const match = /^([A-Za-z_]\w*)=([\s\S]*)$/u.exec(alias.value);
+      if (!match || alias.dynamic)
+        throw new Error('Dynamic shell alias definition is forbidden.');
+      request.state.aliases.set(match[1] ?? '', match[2] ?? '');
+    }
+    return;
+  }
+  if (command.value === 'unalias') {
+    for (const word of words.slice(index + 1)) {
+      const aliasRequest: WordEnvironmentRequest = {
+        environment: request.state.environment,
+        word,
+      };
+      const alias = resolveWord(aliasRequest);
+      if (alias.dynamic) throw new Error('Dynamic shell unalias is forbidden.');
+      request.state.aliases.delete(alias.value);
+    }
+    return;
+  }
+  const aliasBody = request.state.aliases.get(command.value) ?? false;
+  if (aliasBody !== false) {
+    const source = [
+      aliasBody,
+      ...words.slice(index + 1).map((word) => word.source),
+    ]
+      .filter(Boolean)
+      .join(' ');
+    const nestedRequest: ShellCommandRequest = {
+      depth: request.depth + 1,
+      source,
+      state: request.state,
+    };
+    analyzeCommandSource(nestedRequest);
+    return;
+  }
   const functionBody = request.state.functions.get(command.value) ?? false;
   if (functionBody !== false) {
     const positionalArguments = request.state.positionalArguments;
@@ -490,6 +511,10 @@ function analyzeCommand(request: RuntimeCommandRequest): void {
     );
   }
   index += 1;
+  if (command.value === 'eval') {
+    analyzeEval([request, words, index]);
+    return;
+  }
   if (command.value === 'shift') {
     wordRequest = {
       word: words[index] as ShellWord,
@@ -506,30 +531,24 @@ function analyzeCommand(request: RuntimeCommandRequest): void {
       : false;
     return;
   }
-  while (command.value === 'exec' || command.value === 'command') {
-    if (index === words.length) return;
-    wordRequest = {
-      word: words[index] as ShellWord,
-      environment: request.state.environment,
-    };
-    command = resolveWord(wordRequest);
-    if (command.dynamic) {
-      if (
-        (command.value === '$@' || command.value === '${@}') &&
-        request.state.positionalArguments === false
-      )
-        throw new Error('Unbound shell positional delegation is forbidden.');
-      const argumentsRequest: WordsEnvironmentRequest = {
-        words: words.slice(index + 1),
-        environment: request.state.environment,
-      };
-      if (argumentsContainProtectedPath(argumentsRequest))
-        throw new Error(
-          'Dynamic protected-skill command construction is forbidden.',
-        );
-      throw new Error('Unknown dynamic executable is forbidden.');
-    }
-    index += 1;
+  if (
+    ['command', 'exec'].includes(command.value) &&
+    request.state.positionalArguments === false &&
+    ['$@', '${@}'].includes(words[index]?.value ?? '')
+  )
+    throw new Error('Unbound shell positional delegation is forbidden.');
+  const dispatchRequest: DispatchRequest = {
+    command,
+    environment: request.state.environment,
+    index,
+    words,
+  };
+  const dispatch = resolveDispatchCommand(dispatchRequest);
+  if (dispatch === false) return;
+  ({ command, index } = dispatch);
+  if (command.value === 'eval') {
+    analyzeEval([request, words, index]);
+    return;
   }
   if (command.value === 'env') {
     const envRequest: EnvPrefixRequest = {
@@ -571,12 +590,38 @@ function analyzeCommand(request: RuntimeCommandRequest): void {
   analyzeRuntime(commandRequest);
 }
 
+function analyzeEval([request, words, start]: readonly [
+  RuntimeCommandRequest,
+  readonly ShellWord[],
+  number,
+]): void {
+  const values = words.slice(start).map((word) => {
+    const valueRequest: WordEnvironmentRequest = {
+      environment: request.state.environment,
+      word,
+    };
+    return resolveWord(valueRequest);
+  });
+  if (values.some((word) => word.dynamic))
+    throw new Error('Dynamic shell eval is forbidden.');
+  const source = (values[0]?.value === '--' ? values.slice(1) : values)
+    .map((word) => word.value)
+    .join(' ');
+  const nestedRequest: ShellCommandRequest = {
+    depth: request.depth + 1,
+    source,
+    state: request.state,
+  };
+  analyzeCommandSource(nestedRequest);
+}
+
 function analyzeSubstitution([request, source]: readonly [
   Pick<ShellCommandRequest, 'depth' | 'state'>,
   string,
 ]): void {
   const nestedState: ShellParseState = {
     ...request.state,
+    aliases: new Map(request.state.aliases),
     environment: new Map(request.state.environment),
     functions: new Map(request.state.functions),
   };
