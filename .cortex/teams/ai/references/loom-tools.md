@@ -56,12 +56,15 @@ That workflow contains:
 - an exact-baseline task;
 - four fixed read-only agent audits and one mechanical audit in parallel;
   - a legacy all-terminal diagnostic-observation join;
-- one diagnostic finding-aggregation task whose output cannot satisfy an
-  ordinary provider edge or claim accepted-evidence synthesis compliance;
+- one `FindingSynthesizer` diagnostic aggregation task producing
+  `CortexSynthesis`; its output cannot satisfy an ordinary provider edge or
+  claim accepted-evidence synthesis compliance;
 - the existing `cortexAudit` leaf.
 
 Completed and failed lane observations remain available to that diagnostic
 aggregator. Failed observations are not accepted provider evidence.
+This lane is separate from the `loom-structural-experts`
+`system_coherence_synthesizer` / `SystemCoherenceSynthesis` diagnostic lane.
 
 The workflow audit lane also classifies:
 

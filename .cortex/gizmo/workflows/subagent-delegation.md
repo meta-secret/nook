@@ -352,9 +352,10 @@ for diagnosis. That observation is not accepted provider evidence, cannot
 satisfy a provider edge, and cannot make an evidence-only synthesis task ready.
 It is not an input to ordinary accepted-evidence synthesis. Failure of a
 required provider lane therefore stops that synthesis join. A separately
-reviewed legacy standalone diagnostic aggregator may consume terminal
-observations under its narrower static contract, but its output cannot satisfy
-an ordinary provider edge or claim this admission contract.
+reviewed legacy diagnostic aggregator may consume terminal observations under
+either the parent-authorized `loom-structural-experts` structural contract or
+the separate static Cortex-audit contract. Neither output can satisfy an
+ordinary provider edge or claim this admission contract.
 
 #### Repository hazard order
 
@@ -610,10 +611,18 @@ or Cortex structure is the requested maintenance surface.
 - The registry contains two repository-reading structural experts.
 - Each repository-reading expert declares a non-empty repository evidence
   surface covered by its read claims.
-- `system_coherence_synthesizer` declares empty repository read claims, write
-  claims, and evidence surface. Its generation freezes expected producers,
-  input schema, edges, and acceptance; Gizmo binds exact accepted evidence and
-  provenance identities when authorizing the ready attempt.
+- `system_coherence_synthesizer` and `SystemCoherenceSynthesis` remain legacy
+  `loom-structural-experts` diagnostic identities. They accept verified
+  structural `Completed` and `Failed` observations, cannot satisfy ordinary
+  provider edges, and must not be reused for future ordinary accepted-evidence
+  synthesis.
+- The separate legacy static `loom:agent-workflow:cortex-audit` lane uses
+  `FindingSynthesizer` and `CortexSynthesis` under its own all-terminal
+  diagnostic contract. It does not alias the structural identities and cannot
+  satisfy ordinary provider edges.
+- Future ordinary synthesis requires a distinct typed role, profile, and result
+  contract before implementation; no such identity or runtime support is
+  declared here, so ordinary dispatch remains fail-closed.
 - Gizmo declares all tasks and integrates accepted corrections from the
   responsible team subagents.
 - Structural roles do not delegate or create another tier.

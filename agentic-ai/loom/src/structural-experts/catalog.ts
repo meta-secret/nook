@@ -24,7 +24,8 @@ export type StructuralExpertProfile = {
 
 export const SYSTEM_COHERENCE_BEHAVIOR_CONTRACT = [
   'Act only as the assigned system_coherence_synthesizer.',
-  'Operate only as the legacy standalone all-terminal diagnostic aggregator.',
+  'Operate only as the legacy loom-structural-experts all-terminal diagnostic aggregator.',
+  'Produce only the diagnostic SystemCoherenceSynthesis result.',
   'Use only verified Completed or Failed terminal observations and bounded semantic views supplied by the parent.',
   'Do not inspect the repository or create claims that are absent from supplied evidence.',
   'Deduplicate findings, preserve disagreements and failed-lane diagnostics, correlate code and Cortex drift, order providers before consumers, and propose independent edit groups with parent-owned joins.',
@@ -121,7 +122,7 @@ export const STRUCTURAL_EXPERT_CATALOG: readonly StructuralExpertProfile[] = [
   {
     name: 'system_coherence_synthesizer',
     description:
-      'Legacy read-only standalone diagnostic aggregator for verified Completed and Failed terminal observations without repository exploration.',
+      'Legacy loom-structural-experts diagnostic aggregator producing SystemCoherenceSynthesis from verified Completed and Failed terminal observations without repository exploration.',
     kind: StructuralExpertKind.VerifiedViewSynthesis,
     resultKind: WorkflowResultKind.SystemCoherenceSynthesis,
     skillPath:

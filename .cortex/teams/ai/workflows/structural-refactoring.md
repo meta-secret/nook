@@ -23,9 +23,9 @@ Choose the smallest surface that can answer the request.
 - Use `cortex_refactoring_expert` for Cortex complexity, conflict, duplication,
   legacy guidance, ownership, and deterministic extraction candidates.
 - Use both when code and durable guidance may disagree.
-- Use the future ordinary `system_coherence_synthesizer` only when multiple
-  terminal-successful accepted evidence streams need reconciliation and the
-  universal admission gate is implemented and passing.
+- Use the legacy standalone `system_coherence_synthesizer` only when
+  `loom-structural-experts` needs an all-terminal structural diagnostic
+  aggregate.
 
 A topic-local Cortex correction does not require a full-tree audit.
 A single cohesive code correction does not require cross-surface synthesis.
@@ -38,14 +38,12 @@ Before dispatch, the delivery owner:
 2. States the behavior or policy that must remain unchanged.
 3. Declares each task, attempt, parent, and depth. Repository-reading experts
    receive bounded read claims and non-empty read-covered evidence surfaces;
-   an ordinary synthesizer receives empty repository claims and evidence
-   surface, while its generation freezes provider edges, expected producer
-   identities, typed input schema, and acceptance criteria.
+   the legacy synthesizer receives empty repository claims and evidence surface
+   plus verified typed `StructuralExpertPlan` child projections from its parent-
+   authorized all-terminal observation barrier.
 4. Resolves owning module and Cortex authorities.
 5. Declares expected evidence and acceptance proof.
-6. Declares the successful accepted-provider barrier and ordinary synthesis
-   join. A legacy diagnostic run declares its separate all-terminal observation
-   barrier instead.
+6. Declares the legacy diagnostic run's all-terminal observation barrier.
 7. Freezes every task and dependency.
 
 Children cannot extend this plan.
@@ -87,64 +85,57 @@ semantic ownership, it reports the dependency and Gizmo routes the responsible
 team.
 
 The existing compiled full Cortex garbage-collection workflow may be used when
-two or more document families need independent diagnostic observations. It is
-the legacy standalone read-only path described below, not ordinary admitted
+two or more document families need independent diagnostic observations. Its
+legacy `FindingSynthesizer` / `CortexSynthesis` lane is documented in
+[agent workflow orchestration](../design-docs/agent-workflow-orchestration.md)
+and is separate from the structural lane below. Neither is ordinary admitted
 delegation.
 
 ## Synthesize system coherence
 
-This section defines future ordinary accepted-evidence synthesis. Ordinary
-dispatch remains blocked by the universal fail-closed gate until the installed
-validator implements the complete admission contract.
+This section defines the legacy `loom-structural-experts`
+`system_coherence_synthesizer` and its `SystemCoherenceSynthesis` diagnostic
+result. It is not the `loom:agent-workflow:cortex-audit` aggregator; that static
+workflow uses `FindingSynthesizer` and `CortexSynthesis` under a separate
+all-terminal diagnostic contract.
 
 ### Readiness
 
-The synthesis role waits until every required provider edge has a terminal-
-successful result whose evidence handoff is verified and accepted. A failed or
-cancelled required lane stops the synthesis join rather than satisfying it.
+The role waits for the `loom-structural-experts` parent-authorized structural
+all-terminal observation barrier and accepts the verified `StructuralExpertPlan`
+child projections with `Completed` or `Failed` status.
 
 It receives no live repository access.
 
-Before the role starts, Loom verifies every accepted provider result and view
-against the declared baseline, lineage, paths, and hashes. Each provider-
-evidence input is bound to its accepted provider generation, task, attempt,
-team, artifact digest, and underlying repository-source provenance. Failed or
-cancelled output is not an ordinary synthesis input, does not satisfy a provider
-edge, and cannot make the synthesizer ready. The synthesizer receives no
-repository read authority.
+### Observation verification
 
-### Generation and admission binding
-
-The generation freezes the provider edges, expected producer identities, typed
-input schema, and acceptance criteria. After all required providers satisfy
-those terms, Gizmo binds the exact accepted artifact, digest, and provenance
-identities while authorizing the synthesis attempt. Filling those frozen input
-slots is not a plan mutation.
+Before the role starts, Loom verifies every terminal observation and view
+against the declared baseline, lineage, paths, and hashes. Each observation
+preserves its task, attempt, status, artifact digest, and repository-source
+provenance. The synthesizer receives no repository read authority.
 
 The synthesizer then:
 
-1. Preserves disagreements present in accepted provider evidence.
+1. Preserves disagreements and failed observations without calling failures
+   accepted provider evidence.
 2. Deduplicates equivalent findings.
 3. Correlates code findings with Cortex findings.
 4. Orders provider work before consumer work.
 5. Builds independent edit groups with non-overlapping resource claims.
 6. Returns unresolved decisions to Gizmo.
 
-The synthesis is a proposed plan.
-It does not authorize mutation.
+`SystemCoherenceSynthesis` is diagnostic-only. It cannot satisfy an ordinary
+provider edge, authorize implementation, or claim ordinary accepted-evidence
+synthesis compliance. Its execution remains outside Gizmo multi-team admission.
 
-## Legacy standalone diagnostic aggregation
+## Future ordinary synthesis boundary
 
-The existing `loom:agent-workflow:cortex-audit` static SDK workflow remains a
-separate reviewed legacy path. Its all-terminal barrier may pass verified
-completed and failed terminal observations to its diagnostic aggregation task
-so the report preserves lane failures.
-
-Those failed observations are not accepted provider evidence. The legacy
-aggregator's output is diagnostic-only: it cannot satisfy an ordinary provider
-edge, authorize implementation, or claim compliance with the future ordinary
-accepted-evidence synthesis contract. Its execution remains outside Gizmo
-multi-team admission.
+Future ordinary accepted-evidence synthesis must use a distinct typed role,
+profile, and result contract before implementation. This workflow does not name
+or register that contract. Its generation will freeze provider edges, expected
+producer identities, typed input schema, and acceptance criteria; Gizmo will
+bind exact accepted inputs only when authorizing a ready attempt. Universal
+ordinary dispatch remains fail-closed until runtime enforcement exists.
 
 ## Apply accepted corrections
 

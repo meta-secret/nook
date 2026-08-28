@@ -33,6 +33,13 @@ authorize, or execute that contract. Adding another standalone exception or
 using this path for implementation work requires a separately reviewed
 architecture decision.
 
+### Legacy aggregator identities
+
+Its all-terminal diagnostic aggregator is `FindingSynthesizer`, producing
+`CortexSynthesis`. These are separate from the `loom-structural-experts`
+`system_coherence_synthesizer` / `SystemCoherenceSynthesis` structural
+diagnostic lane. Neither legacy lane satisfies ordinary provider edges.
+
 ### Reviewed graph contract
 
 The compiled definition owns:
@@ -224,14 +231,17 @@ the explicit read-only exception above and cannot establish those properties.
 Gizmo validates accepted commits and evidence against current repository state
 before integration.
 
-Future ordinary accepted-evidence synthesis follows that same authority split.
-Its immutable generation freezes provider edges, expected producer identities,
-typed input schema, and acceptance criteria, not artifacts that do not exist
-yet. After every required provider succeeds and its evidence is accepted,
-Gizmo binds the authorized synthesis attempt to the exact accepted artifacts,
-digests, and inherited provenance matching those frozen terms. This is
-admission data, not a plan mutation. Ordinary execution remains fail-closed
-until the installed validator enforces the full contract.
+Future ordinary accepted-evidence synthesis follows that same authority split
+but requires a distinct typed role, profile, and result contract before
+implementation. It must not reuse `system_coherence_synthesizer` or
+`SystemCoherenceSynthesis`; no future identity is named here. Its immutable
+generation freezes provider edges, expected producer identities, typed input
+schema, and acceptance criteria, not artifacts that do not exist yet. After
+every required provider succeeds and its evidence is accepted, Gizmo binds the
+authorized synthesis attempt to the exact accepted artifacts, digests, and
+inherited provenance matching those frozen terms. This is admission data, not
+a plan mutation. Ordinary execution remains fail-closed until the installed
+validator enforces the full contract.
 
 ### Delivery owner
 
@@ -288,8 +298,8 @@ The parallel wave contains these tasks:
     including failed lanes.
   - Every lane exposes a verified terminal-observation Markdown view to the
     diagnostic aggregator.
-  - The diagnostic aggregation task deduplicates findings and authors the root
-    aggregate view.
+  - `FindingSynthesizer` deduplicates findings and authors the root
+    `CortexSynthesis` aggregate view.
   - A failed observation is never accepted provider evidence. Neither it nor
     the aggregate output can satisfy an ordinary provider edge or claim the
     future accepted-evidence synthesis contract.

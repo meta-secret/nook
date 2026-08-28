@@ -2,14 +2,14 @@
 
 ## Purpose
 
-Reconcile verified code-refactoring and Cortex-refactoring evidence into one
-proposed coherence plan.
+Aggregate verified code-refactoring and Cortex-refactoring terminal observations
+into one legacy standalone diagnostic coherence report.
 
-This card defines future ordinary accepted-evidence synthesis. It remains
-unexecutable while the universal ordinary-delegation gate is fail-closed.
+This is the `loom-structural-experts` profile and produces
+`SystemCoherenceSynthesis`. It is not the static Cortex-audit aggregator.
 
-Use this role only when multiple structural evidence streams need a shared
-join.
+Use this role only when multiple structural terminal-observation streams need a
+shared diagnostic join.
 
 ## Problem pattern
 
@@ -18,9 +18,10 @@ correction order when applied without a shared join.
 
 ## Preferred pattern
 
-1. Accept as provider evidence only declared terminal-successful results and
-   verified semantic views whose handoffs were accepted.
-2. Preserve disagreements present in accepted provider evidence.
+1. Accept verified typed `Completed` and `Failed` terminal observations and
+   their semantic views.
+2. Preserve disagreements and failed observations without treating failures as
+   accepted provider evidence.
 3. Deduplicate equivalent findings.
 4. Correlate code and Cortex ownership drift.
 5. Order provider corrections before consumer corrections.
@@ -32,36 +33,35 @@ correction order when applied without a shared join.
 The synthesizer has no repository read scope.
 It is nondelegating and synthesis-only.
 
-### Evidence input contract
+### Legacy observation contract
 
-The input boundary requires:
+The legacy input boundary requires:
 
 - empty repository read claims, write claims, and evidence surface;
-- generation-frozen provider edges, expected producer identities, typed input
-  schema, and acceptance criteria; and
-- every required provider edge to be terminal-successful, verified, and
-  accepted before synthesis is ready.
-
-When Gizmo authorizes the ready synthesis attempt, it binds the exact accepted
-provider generation, task, attempt, team, artifact digest, and inherited source
-provenance identities that match the frozen input contract. This binding is not
-a plan mutation.
-
-A failed or cancelled required lane stops the synthesis join. Its output is not
-an ordinary synthesis input and cannot satisfy a provider edge or appear in the
-accepted provider-evidence input set.
+- the `loom-structural-experts` parent-authorized all-terminal observation
+  barrier's verified `StructuralExpertPlan` child projections with `Completed`
+  or `Failed` status; and
+- preserved artifact and source provenance for every observation.
 
 The synthesizer does not inspect source, create new evidence, apply patches,
 authorize writes, schedule successors, or mutate lifecycle state.
 
-### Legacy diagnostic distinction
+### Ordinary synthesis boundary
 
-The existing standalone static Cortex-audit aggregation is not this ordinary
-role. Its all-terminal join may supply verified completed and failed terminal
-observations so its diagnostic report retains lane failures. Failed
-observations never count as accepted provider evidence, and the legacy output
-cannot satisfy an ordinary provider edge, authorize implementation, or claim
-compliance with this contract.
+`system_coherence_synthesizer` and `SystemCoherenceSynthesis` are legacy
+diagnostic identities. Failed observations never count as accepted provider
+evidence, and the legacy output cannot satisfy an ordinary provider edge,
+authorize implementation, or claim ordinary-contract compliance.
+
+The separate legacy `loom:agent-workflow:cortex-audit` lane uses
+`FindingSynthesizer` and `CortexSynthesis` under its own all-terminal diagnostic
+contract. Neither identity aliases this structural profile or result.
+
+#### Future contract
+
+Future ordinary accepted-evidence synthesis requires a distinct typed role,
+profile, and result contract before implementation. This card does not name or
+provide that contract. Universal ordinary dispatch remains fail-closed.
 
 The delivery owner follows the canonical
 [structural expert registry](../architecture/refactoring-experts.md) and
@@ -74,9 +74,7 @@ The delivery owner follows the canonical
 
 ## Validation
 
-Every synthesized finding references an attempt-bound typed accepted provider-
-evidence input matching the frozen input contract and preserves its source
-provenance.
-No failed or cancelled lane is counted as accepted evidence or as satisfaction
-of a required provider edge.
+Every diagnostic finding references a verified terminal observation and
+preserves its source provenance. No failed observation is counted as accepted
+evidence or as satisfaction of an ordinary provider edge.
 Every edit group names its dependencies, paths, and validation.
