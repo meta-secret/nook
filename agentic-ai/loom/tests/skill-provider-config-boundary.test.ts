@@ -17,7 +17,7 @@ import {
 } from '../src/executable-skills/repository.ts';
 import {
   CANONICAL_TASKFILE,
-  hasCanonicalToolsListTask,
+  hasOnlyCanonicalHostTaskEdge,
   HOST_CLI,
   HOST_CLI_TEMPLATE,
   HOST_ROOT,
@@ -281,7 +281,7 @@ function isAuthorizedApplicationEdge(edge: ApplicationConsumerEdge): boolean {
         edge.dependency.startsWith(HOST_ROOT)) ||
       (edge.importer === CANONICAL_TASKFILE &&
         edge.dependency === HOST_CLI &&
-        hasCanonicalToolsListTask(edge.source))
+        hasOnlyCanonicalHostTaskEdge(edge.source))
     );
   }
   if (edge.dependency === LOOM_ARTICLE_ADAPTER) {

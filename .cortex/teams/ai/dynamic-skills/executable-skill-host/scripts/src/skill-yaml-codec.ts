@@ -94,7 +94,9 @@ function validateSkillYamlAst(node: ParsedNode): SkillYamlAstIssue {
     if (
       typeof node.value === 'string' ||
       typeof node.value === 'boolean' ||
-      (typeof node.value === 'number' && Number.isFinite(node.value))
+      (typeof node.value === 'number' &&
+        Number.isFinite(node.value) &&
+        (!Number.isInteger(node.value) || Number.isSafeInteger(node.value)))
     ) {
       return SkillYamlAstIssue.None;
     }
@@ -123,7 +125,8 @@ function validateSkillYamlAst(node: ParsedNode): SkillYamlAstIssue {
   return SkillYamlAstIssue.Unsupported;
 }
 export function stringifySkillYaml(value: UntrustedSkillYamlNode): string {
-  return `${stringify(value, YAML_STRINGIFY_OPTIONS).trimEnd()}\n`;
+  const serialized = stringify(value, YAML_STRINGIFY_OPTIONS);
+  return serialized.endsWith('\n') ? serialized : `${serialized}\n`;
 }
 export function isSkillYamlMap(
   value: UntrustedSkillYamlNode,

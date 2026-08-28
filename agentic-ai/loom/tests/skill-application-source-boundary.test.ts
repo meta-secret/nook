@@ -24,6 +24,10 @@ const HOST_CALLS = [
   'openSync( invocation.requestPath, constants.O_RDONLY | constants.O_NONBLOCK, )',
   'readSync( descriptor, bytes, length, bytes.length - length, length, )',
 ] as const;
+const HOST_CONSTANT_USES = [
+  'constants.O_NONBLOCK',
+  'constants.O_RDONLY',
+] as const;
 const PROCESS_USES = [
   'process.argv.slice(2)',
   'process.exitCode = outcome.exitCode',
@@ -51,6 +55,7 @@ export function analyzeSkillHostSource(request: SkillSourceRequest) {
     ts.ScriptKind.TS,
   );
   const retained = source.split('');
+  const constantUses: string[] = [];
   const hostUses: string[] = [];
   const processUses: string[] = [];
   const erase = (node: ts.Node): string[] =>
@@ -137,14 +142,30 @@ export function analyzeSkillHostSource(request: SkillSourceRequest) {
       relativePath === HOST_CLI &&
       ts.isIdentifier(node) &&
       node.text === 'constants'
-    )
+    ) {
+      const property = node.parent;
+      const use =
+        ts.isPropertyAccessExpression(property) && property.expression === node
+          ? compact(property)
+          : '';
+      if (
+        !HOST_CONSTANT_USES.includes(
+          use as (typeof HOST_CONSTANT_USES)[number],
+        ) ||
+        constantUses.includes(use)
+      ) {
+        throw new Error('Forbidden host filesystem constant capability.');
+      }
+      constantUses.push(use);
       retained.splice(node.getStart(), node.getWidth(), ...'safeValue');
+    }
     ts.forEachChild(node, visit);
   };
   visit(sourceFile);
   if (
     relativePath === HOST_CLI &&
     (hostUses.sort().join() !== [...HOST_CALLS].sort().join() ||
+      constantUses.sort().join() !== [...HOST_CONSTANT_USES].sort().join() ||
       processUses.sort().join() !== [...PROCESS_USES].sort().join())
   )
     throw new Error('Host capabilities must use the exact bounded seam.');
@@ -305,6 +326,7 @@ test('rejects dangerous capabilities from every host layer', async () => {
       ),
     ],
     [HOST_CLI, "import { readFileSync as fetch, statSync } from 'node:fs';"],
+    [HOST_CLI, `${host}\nconstants.O_CREAT = constants.O_RDONLY;`],
     [YAML_CODEC, "import x from 'arbitrary-package';"],
     [
       `${HOST_ROOT}skill-action-registry.ts`,

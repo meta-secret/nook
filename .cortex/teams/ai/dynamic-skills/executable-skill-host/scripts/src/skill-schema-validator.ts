@@ -272,8 +272,11 @@ function validateString(
 function validateInteger(
   request: SkillIntegerValidationRequest,
 ): SkillSchemaValidation {
-  if (typeof request.value !== 'number' || !Number.isInteger(request.value)) {
-    return invalidAt(request.path)('Expected an integer.');
+  if (
+    typeof request.value !== 'number' ||
+    !Number.isSafeInteger(request.value)
+  ) {
+    return invalidAt(request.path)('Expected a safe integer.');
   }
   if (request.value < request.schema.minimum) {
     return invalidAt(request.path)(

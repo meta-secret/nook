@@ -100,3 +100,26 @@ test('uses bracket grammar for known hyphenated fields', () => {
   };
   expect(skillCommandPath(request)).toBe('root["known-field"]');
 });
+test('accepts only safe integer values', () => {
+  const schema: SkillInputSchema = {
+    type: SkillSchemaType.Integer,
+    minimum: Number.MIN_SAFE_INTEGER,
+    maximum: Number.MAX_SAFE_INTEGER,
+  };
+  for (const value of [Number.MIN_SAFE_INTEGER, 0, Number.MAX_SAFE_INTEGER]) {
+    const request: SkillSchemaValidationRequest = {
+      path: 'line',
+      schema,
+      value,
+    };
+    expect(validateSkillInput(request).ok).toBe(true);
+  }
+  for (const value of [
+    Number.MIN_SAFE_INTEGER - 1,
+    Number.MAX_SAFE_INTEGER + 1,
+    1.5,
+  ]) {
+    const rejection: RejectionRequest = { schema, value };
+    expect(reject(rejection)).toBe('blocks[4]');
+  }
+});

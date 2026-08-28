@@ -1,5 +1,9 @@
 import { expect, test } from 'bun:test';
-import { parseSkillYamlText } from '../src/skill-yaml-codec.ts';
+import {
+  parseSkillYamlText,
+  stringifySkillYaml,
+  type UntrustedSkillYamlNode,
+} from '../src/skill-yaml-codec.ts';
 const YAML_LINE_ENDINGS = ['\n', '\r\n', '\r'] as const;
 function aliasExpansionYaml(lineEnding: string): string {
   const lines = ['level0: &level0 [safe, safe, safe, safe]'];
@@ -125,4 +129,24 @@ test('preserves ordinary quoted and unquoted duplicate detection', () => {
   expect(parseSkillYamlText('plain: first\n"quoted key": second\n').ok).toBe(
     true,
   );
+});
+test('rejects unsafe integer scalars without rejecting decimals', () => {
+  for (const yaml of [
+    'value: 9007199254740992\n',
+    'value: -9007199254740992\n',
+    'value: 1e100\n',
+  ]) {
+    expect(parseSkillYamlText(yaml).ok).toBe(false);
+  }
+  expect(parseSkillYamlText('value: 9007199254740991\ndecimal: 1.5\n').ok).toBe(
+    true,
+  );
+});
+test('stringify preserves scalar trailing line breaks and spaces', () => {
+  for (const value of ['line\n', 'line\n\n', 'line  \n']) {
+    const node: UntrustedSkillYamlNode = value;
+    const outcome = parseSkillYamlText(stringifySkillYaml(node));
+    if (!outcome.ok) throw new Error('Expected scalar round trip.');
+    expect(outcome.value).toBe(value);
+  }
 });
