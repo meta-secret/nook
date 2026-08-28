@@ -20,10 +20,6 @@
   import { ColorMode } from '$lib/app/theme'
   import type { VaultState } from '$lib/vault.svelte'
   import type { ExtensionSetupOffer } from '$lib/app/extension-setup'
-  import {
-    SettingsAccordionSection,
-    SettingsSection,
-  } from '$lib/vault/state/ui.svelte'
 
   const IS_SENTINEL_APP = configured_vault_application_is_sentinel()
   const SIMPLE_VAULT_APP_URL = simple_vault_app_url(
@@ -41,6 +37,7 @@
     onNavigateHome,
     onToggleColorMode,
     onPairExtension,
+    onOpenDevicesAccess,
   }: {
     vault: VaultState
     colorMode: ColorMode
@@ -52,6 +49,7 @@
     onNavigateHome: () => void
     onToggleColorMode: () => void
     onPairExtension: () => void
+    onOpenDevicesAccess: () => void
   } = $props()
 
   function navigateToSiblingApp(event: MouseEvent) {
@@ -88,13 +86,7 @@
           data-testid="header-devices-access-btn"
           title={vault.t(I18N_KEYS.DevicesAccessTitle)}
           disabled={vault.isVerifying || vault.isInitializing}
-          onclick={() => {
-            const settingsRequest: Parameters<typeof vault.openSettings>[0] = {
-              section: SettingsSection.DevicesAccess,
-              accordion: SettingsAccordionSection.Devices,
-            }
-            vault.openSettings(settingsRequest)
-          }}
+          onclick={onOpenDevicesAccess}
         >
           <KeyRound class="size-4" />
           <span class="hidden lg:inline"

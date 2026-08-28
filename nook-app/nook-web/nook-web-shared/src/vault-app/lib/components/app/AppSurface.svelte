@@ -64,6 +64,8 @@
     onExtensionConnect: () => Promise<void>
     onFinishExtensionConnect: (approved?: boolean) => void
   } = $props()
+
+  let headerDevicesAccessRequestGeneration = $state(0)
 </script>
 
 {#if appLogsPage}
@@ -84,6 +86,9 @@
       {onNavigateHome}
       {onToggleColorMode}
       onPairExtension={() => void onExtensionConnect()}
+      onOpenDevicesAccess={() => {
+        headerDevicesAccessRequestGeneration += 1
+      }}
     />
 
     <div
@@ -112,7 +117,13 @@
           onClose={onFinishExtensionConnect}
         />
       {:else if vault.isAuthenticated}
-        <AuthenticatedVaultWorkspace {...authenticatedWorkspaceProps} />
+        <AuthenticatedVaultWorkspace
+          {...authenticatedWorkspaceProps}
+          {headerDevicesAccessRequestGeneration}
+          onHeaderDevicesAccessRequestHandled={() => {
+            headerDevicesAccessRequestGeneration = 0
+          }}
+        />
       {/if}
     </div>
 

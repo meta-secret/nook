@@ -126,6 +126,33 @@ test.describe('persistent workspace routing', () => {
     })
   })
 
+  test('leaves an active secret draft cleanly before opening header access', async ({
+    page,
+  }) => {
+    await connectLocalVault(page)
+    await page.getByTestId('add-secret-btn').click()
+    await page.getByTestId('item-type-login').click()
+    await page.getByTestId('secret-label').fill('Unsaved draft')
+    await page.getByTestId('login-username').fill('draft@example.com')
+    await expect(page.getByTestId('authenticated-shell')).toHaveClass(
+      /authenticated-shell-editor/,
+    )
+
+    await page.getByTestId('header-devices-access-btn').click()
+    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await page.getByTestId('devices-access-back').click()
+
+    await expect(page.getByTestId('vault-panel')).toBeVisible()
+    await expect(page.getByTestId('add-secret-panel')).toHaveCount(0)
+    await expect(page.getByTestId('authenticated-shell')).not.toHaveClass(
+      /authenticated-shell-editor/,
+    )
+    await expect(page.getByTestId('secret-label')).toHaveCount(0)
+    await expect(page.getByTestId('login-username')).toHaveCount(0)
+  })
+
   test('applies a direct workspace route after authentication', async ({
     page,
   }) => {

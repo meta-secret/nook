@@ -56,6 +56,8 @@
     onExtensionConnect,
     onSettingsReconnect,
     onEditorOpenChange,
+    headerDevicesAccessRequestGeneration = 0,
+    onHeaderDevicesAccessRequestHandled = () => {},
   }: {
     vault: VaultState
     extensionSetupState: ExtensionSetupOffer
@@ -68,6 +70,8 @@
     onExtensionConnect: () => void
     onSettingsReconnect: () => void
     onEditorOpenChange: (open: boolean) => void
+    headerDevicesAccessRequestGeneration?: number
+    onHeaderDevicesAccessRequestHandled?: () => void
   } = $props()
 
   const appVersion = '0.1.0'
@@ -100,6 +104,21 @@
     secretsEditorResetKey += 1
     onEditorOpenChange(false)
   }
+
+  function openDevicesAccessFromHeader() {
+    leaveSecretsEditor()
+    const settingsRequest: Parameters<typeof vault.openSettings>[0] = {
+      section: SettingsSection.DevicesAccess,
+      accordion: SettingsAccordionSection.Devices,
+    }
+    vault.openSettings(settingsRequest)
+  }
+
+  $effect(() => {
+    if (headerDevicesAccessRequestGeneration === 0) return
+    openDevicesAccessFromHeader()
+    onHeaderDevicesAccessRequestHandled()
+  })
 
   async function closeDevicesAccess() {
     vault.closeSettings()
