@@ -54,8 +54,14 @@ pub const fn propose_website_passkey(
     }
     match passkey {
         AuthenticationPasskeyEvidence::VaultAccounts { account_count }
-        | AuthenticationPasskeyEvidence::ControlAndVaultAccounts { account_count } => {
+        | AuthenticationPasskeyEvidence::ControlAndVaultAccounts { account_count }
+            if account_count > 0 =>
+        {
             WebsitePasskeyProposal::UsePasskey { account_count }
+        }
+        AuthenticationPasskeyEvidence::VaultAccounts { .. }
+        | AuthenticationPasskeyEvidence::ControlAndVaultAccounts { .. } => {
+            WebsitePasskeyProposal::None
         }
         AuthenticationPasskeyEvidence::Control => WebsitePasskeyProposal::CreatePasskey,
         AuthenticationPasskeyEvidence::Absent => WebsitePasskeyProposal::None,
@@ -152,5 +158,22 @@ mod tests {
             ),
             WebsitePasskeyProposal::None
         );
+    }
+
+    #[test]
+    fn refuses_zero_count_vault_matches() {
+        for evidence in [
+            AuthenticationPasskeyEvidence::VaultAccounts { account_count: 0 },
+            AuthenticationPasskeyEvidence::ControlAndVaultAccounts { account_count: 0 },
+        ] {
+            assert_eq!(
+                propose_website_passkey(
+                    AuthenticationWorkflowKind::Login,
+                    AuthenticationManualCheckpoint::Absent,
+                    evidence,
+                ),
+                WebsitePasskeyProposal::None
+            );
+        }
     }
 }
