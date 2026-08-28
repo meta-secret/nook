@@ -18,10 +18,10 @@ pub use compatibility::{
 };
 pub use observation_facts::{
     AuthenticationAuthenticatorObservationFacts, AuthenticationAuthenticatorSetupObservation,
-    AuthenticationBackupCodesObservation, AuthenticationCeremonyObservationFacts,
-    AuthenticationDetailedAdvanceControlObservation, AuthenticationFieldObservationFacts,
-    AuthenticationPageObservationFacts, AuthenticationPageObservationFactsBatch,
-    AuthenticationPasskeyControlObservation,
+    AuthenticationBackupCodesObservation, AuthenticationCeremonyContextObservation,
+    AuthenticationCeremonyObservationFacts, AuthenticationDetailedAdvanceControlObservation,
+    AuthenticationFieldObservationFacts, AuthenticationPageObservationFacts,
+    AuthenticationPageObservationFactsBatch, AuthenticationPasskeyControlObservation,
 };
 pub use observation_validation::{
     MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,

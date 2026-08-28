@@ -17,6 +17,7 @@ use crate::page_field_classification::{
 pub(super) fn has_positive_login_identity(
     observation: &AuthenticationAdvanceControlObservation,
     authentication_scope_owns_control: bool,
+    positive_destination_identity: &str,
 ) -> bool {
     let owned_semantic_submit = authentication_scope_owns_control
         && matches!(observation.semantics, PageControlSemantics::SemanticSubmit);
@@ -31,7 +32,7 @@ pub(super) fn has_positive_login_identity(
             ))
         || (owned_semantic_submit
             && (looks_like_explicit_authentication_advance_control_label(&observation.label)
-                || destination_has_safe_login_identity(&observation.destination_identity)))
+                || destination_has_safe_login_identity(positive_destination_identity)))
 }
 
 pub(super) fn has_unconditional_veto_identity(
@@ -105,6 +106,7 @@ pub(super) fn accepts_authentication_advance(
 
 pub(super) fn one_time_code_control_lacks_authentication_context(
     observation: &AuthenticationAdvanceControlObservation,
+    positive_destination_identity: &str,
 ) -> bool {
     observation.one_time_code_field_count > 0
         && observation.password_field_count == 0
@@ -112,7 +114,7 @@ pub(super) fn one_time_code_control_lacks_authentication_context(
         && !one_time_code_control_has_authentication_context(
             observation.authentication_username,
             &observation.form_identity,
-            &observation.destination_identity,
+            positive_destination_identity,
             &observation.label,
         )
 }

@@ -5,6 +5,7 @@ use percent_encoding::percent_decode_str;
 use url::Url;
 
 pub(super) struct CanonicalControlDestination {
+    pub(super) path_identity: String,
     pub(super) route_identity: String,
     pub(super) has_provider_authority: bool,
 }
@@ -76,7 +77,8 @@ pub(super) fn canonicalize_control_destination(
     if let Some(fragment) = destination.fragment() {
         decode_component(fragment)?;
     }
-    let mut route_identity = path;
+    let path_identity = path;
+    let mut route_identity = path_identity.clone();
     if let Some(query) = query {
         route_identity.push('?');
         route_identity.push_str(&query);
@@ -86,6 +88,7 @@ pub(super) fn canonicalize_control_destination(
     }
 
     Some(CanonicalControlDestination {
+        path_identity,
         route_identity,
         has_provider_authority: destination
             .host_str()

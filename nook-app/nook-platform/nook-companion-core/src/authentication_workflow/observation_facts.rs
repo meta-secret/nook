@@ -11,7 +11,8 @@ use tsify::Tsify;
 
 mod ceremony;
 pub use ceremony::{
-    AuthenticationCeremonyObservationFacts, AuthenticationDetailedAdvanceControlObservation,
+    AuthenticationCeremonyContextObservation, AuthenticationCeremonyObservationFacts,
+    AuthenticationDetailedAdvanceControlObservation,
 };
 
 /// Raw, non-secret field facts observed inside one authentication scope.
@@ -154,16 +155,22 @@ impl AuthenticationPageObservationFacts {
     #[must_use]
     pub fn into_observation(self) -> AuthenticationPageObservation {
         let advance_control = self.detailed_advance_control.evidence(self.fields);
+        let authenticated_ceremony_context = self
+            .ceremony
+            .authentication_context
+            .is_authenticated(self.fields);
         AuthenticationPageObservation {
             username_field_count: self.fields.username_field_count,
             current_password_field_count: self.fields.current_password_field_count,
             new_password_field_count: self.fields.new_password_field_count,
             generic_password_field_count: self.fields.generic_password_field_count,
             one_time_code_field_count: self.fields.one_time_code_field_count,
-            one_time_code_progression: self.ceremony.derived_one_time_code_progression(matches!(
-                advance_control,
-                AuthenticationAdvanceControlEvidence::Present
-            )),
+            one_time_code_progression: self.ceremony.derived_one_time_code_progression(
+                matches!(
+                    advance_control,
+                    AuthenticationAdvanceControlEvidence::Present
+                ) || authenticated_ceremony_context,
+            ),
             manual_checkpoint: self.ceremony.manual_checkpoint,
             enrollment_evidence: self.authenticator.enrollment_evidence(),
             advance_control,
@@ -472,6 +479,33 @@ mod tests {
         assert_eq!(
             trusted.into_observation().one_time_code_progression,
             AuthenticationOneTimeCodeProgressionEvidence::AutoSubmitObserved
+        );
+
+        let control_less = AuthenticationPageObservationFacts {
+            fields: AuthenticationFieldObservationFacts {
+                one_time_code_field_count: 1,
+                ..Default::default()
+            },
+            ceremony: AuthenticationCeremonyObservationFacts {
+                one_time_code_handler_signal: "onchange=this.form.submit()".to_owned(),
+                authentication_context: AuthenticationCeremonyContextObservation {
+                    authentication_username: AuthenticationUsernameEvidence::Absent,
+                    source_origin: "https://example.test".to_owned(),
+                    form_identity: "otp-challenge".to_owned(),
+                    destination_identity: "/verify".to_owned(),
+                },
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert_eq!(
+            AuthenticationPageObservationFactsBatch {
+                observations: vec![control_less],
+            }
+            .classify()
+            .snapshot()
+            .map(|snapshot| snapshot.kind),
+            Ok(crate::authentication_workflow::AuthenticationWorkflowKind::TotpChallenge)
         );
     }
 

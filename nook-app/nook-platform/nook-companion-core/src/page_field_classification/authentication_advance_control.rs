@@ -123,12 +123,16 @@ impl AuthenticationAdvanceControlObservation {
         {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
+        let positive_destination_identity = destination.path_identity;
         let mut observation = self.clone();
         observation.destination_identity = destination.route_identity;
-        observation.classify_canonical()
+        observation.classify_canonical(&positive_destination_identity)
     }
 
-    fn classify_canonical(&self) -> AuthenticationAdvanceControlDecision {
+    fn classify_canonical(
+        &self,
+        positive_destination_identity: &str,
+    ) -> AuthenticationAdvanceControlDecision {
         if matches!(self.actionability, PageControlActionability::Inert) {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
@@ -153,7 +157,7 @@ impl AuthenticationAdvanceControlObservation {
         if has_unconditional_veto_identity(self, credential_update_destination) {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
-        if one_time_code_control_lacks_authentication_context(self) {
+        if one_time_code_control_lacks_authentication_context(self, positive_destination_identity) {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
         if self.new_password_field_count == 0
@@ -170,7 +174,11 @@ impl AuthenticationAdvanceControlObservation {
             && self.new_password_field_count == 0
             && self.one_time_code_field_count == 0;
         if current_password_only
-            && !has_positive_login_identity(self, authentication_scope_owns_control)
+            && !has_positive_login_identity(
+                self,
+                authentication_scope_owns_control,
+                positive_destination_identity,
+            )
         {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
@@ -503,6 +511,12 @@ mod tests {
         };
 
         assert!(!advances_authentication(&reauthentication));
+        assert!(!advances_authentication(
+            &AuthenticationAdvanceControlObservation {
+                destination_identity: "/account/confirm?next=/login".to_owned(),
+                ..reauthentication.clone()
+            }
+        ));
         assert!(!advances_authentication(
             &AuthenticationAdvanceControlObservation {
                 destination_identity: "/account/confirm#login".to_owned(),

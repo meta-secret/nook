@@ -20,6 +20,47 @@ pub use authentication_advance_control::{
 };
 pub use one_time_code_progression::looks_like_one_time_code_auto_submit_signal;
 
+pub(crate) fn one_time_code_ceremony_context_is_authenticated(
+    authentication_username: AuthenticationUsernameEvidence,
+    source_origin: &str,
+    form_identity: &str,
+    destination_identity: &str,
+) -> bool {
+    if [source_origin, form_identity, destination_identity]
+        .into_iter()
+        .any(|value| value.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES)
+    {
+        return false;
+    }
+    let Some(destination) =
+        destination_identity::canonicalize_control_destination(source_origin, destination_identity)
+    else {
+        return false;
+    };
+    if form_identity::form_identity_indicates_destructive_action(form_identity)
+        || form_identity::form_identity_indicates_non_authentication_account_management(
+            form_identity,
+        )
+        || form_identity::form_identity_indicates_destructive_action(&destination.route_identity)
+        || form_identity::control_destination_indicates_non_authentication_route(
+            &destination.route_identity,
+        )
+        || form_identity::destination_has_disallowed_action_or_provider(
+            &destination.route_identity,
+            false,
+            false,
+        )
+    {
+        return false;
+    }
+    matches!(
+        authentication_username,
+        AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
+    ) || [form_identity, destination.path_identity.as_str()]
+        .into_iter()
+        .any(form_identity::identity_indicates_one_time_code_authentication_context)
+}
+
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
