@@ -445,8 +445,12 @@ async fn identity_directory_snapshot_for_session(
         .iter()
         .map(|entry| entry.app_id.clone())
         .collect::<Vec<_>>();
+    let selected_identities = selected_store_id.map_or_else(
+        || directory.identities().iter().collect(),
+        |store_id| nook_core::identities_linked_to_vault(&directory, store_id),
+    );
     let mut identities = Vec::new();
-    for record in identities_linked_to_store(directory.identities(), selected_store_id) {
+    for record in selected_identities {
         let mut snapshot = NookIdentitySnapshot::from_record(
             record,
             current_app_id.as_deref(),
@@ -465,23 +469,6 @@ async fn identity_directory_snapshot_for_session(
         selection,
         access,
     })
-}
-
-fn identities_linked_to_store<'a>(
-    identities: &'a [nook_core::IdentityRecord],
-    selected_store_id: Option<&nook_core::StoreId>,
-) -> Vec<&'a nook_core::IdentityRecord> {
-    identities
-        .iter()
-        .filter(|record| {
-            selected_store_id.is_none_or(|store_id| {
-                record
-                    .vault_deks
-                    .iter()
-                    .any(|vault| vault.store_id == *store_id)
-            })
-        })
-        .collect()
 }
 
 fn current_browser_identity(identities: &[NookIdentitySnapshot]) -> Option<&NookIdentitySnapshot> {
@@ -630,24 +617,13 @@ mod tests {
     }
 
     #[test]
-    fn selected_vault_context_filters_records_and_resolves_current_browser() -> anyhow::Result<()> {
+    fn selected_vault_context_resolves_current_browser() -> anyhow::Result<()> {
         let personal_key = nook_core::AppKey::generate()?;
         let work_key = nook_core::AppKey::generate()?;
-        let travel_key = nook_core::AppKey::generate()?;
-        let selected_store = nook_core::generate_store_id()?;
-        let other_store = nook_core::generate_store_id()?;
-        let mut personal =
+        let personal =
             nook_core::IdentityRecord::create_with_app_key("Personal", &personal_key, None)?;
-        let mut work = nook_core::IdentityRecord::create_with_app_key("Work", &work_key, None)?;
-        let mut travel =
-            nook_core::IdentityRecord::create_with_app_key("Travel", &travel_key, None)?;
-        personal.generate_vault_dek(selected_store.clone())?;
-        work.generate_vault_dek(selected_store.clone())?;
-        travel.generate_vault_dek(other_store)?;
-        let records = vec![personal, work, travel];
-
-        let linked = identities_linked_to_store(&records, Some(&selected_store));
-        let snapshots = linked
+        let work = nook_core::IdentityRecord::create_with_app_key("Work", &work_key, None)?;
+        let snapshots = [&personal, &work]
             .iter()
             .map(|record| {
                 NookIdentitySnapshot::from_record(record, Some(personal_key.app_id().as_str()), &[])
@@ -675,19 +651,14 @@ mod tests {
     fn selected_vault_context_keeps_other_browser_identity_without_current() -> anyhow::Result<()> {
         let work_key = nook_core::AppKey::generate()?;
         let travel_key = nook_core::AppKey::generate()?;
-        let selected_store = nook_core::generate_store_id()?;
-        let mut work = nook_core::IdentityRecord::create_with_app_key("Work", &work_key, None)?;
-        let mut travel =
-            nook_core::IdentityRecord::create_with_app_key("Travel", &travel_key, None)?;
-        work.generate_vault_dek(selected_store.clone())?;
-        travel.generate_vault_dek(selected_store.clone())?;
-        let records = vec![work, travel];
+        let work = nook_core::IdentityRecord::create_with_app_key("Work", &work_key, None)?;
+        let travel = nook_core::IdentityRecord::create_with_app_key("Travel", &travel_key, None)?;
         let local_protections = [LocalAppProtection {
             app_id: work_key.app_id().clone(),
             protection: nook_core::DeviceAccessProtectionKind::PinOrPassphrase,
         }];
 
-        let snapshots = identities_linked_to_store(&records, Some(&selected_store))
+        let snapshots = [&work, &travel]
             .iter()
             .map(|record| {
                 NookIdentitySnapshot::from_record(
@@ -716,21 +687,10 @@ mod tests {
     }
 
     #[test]
-    fn selected_vault_context_is_empty_for_unlinked_store() -> anyhow::Result<()> {
-        let app_key = nook_core::AppKey::generate()?;
-        let linked_store = nook_core::generate_store_id()?;
-        let selected_store = nook_core::generate_store_id()?;
-        let mut record =
-            nook_core::IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
-        record.generate_vault_dek(linked_store)?;
-        let records = vec![record];
-
-        let linked = identities_linked_to_store(&records, Some(&selected_store));
-        assert!(linked.is_empty());
+    fn selected_vault_context_classifies_empty_projection() {
         assert_eq!(
             selected_vault_context_kind(&[]),
             NookSelectedVaultIdentityContextKind::Empty
         );
-        Ok(())
     }
 }

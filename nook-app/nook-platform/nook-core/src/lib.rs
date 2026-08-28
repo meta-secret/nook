@@ -25,7 +25,7 @@ pub use device_access::{
     PasskeyCreationCeremony, PasskeyKeeperKind, PasskeyLastUsedAtEvidence, PasskeyObservedBrowser,
     PasskeyObservedPlatform, PasskeyTransport, VerifiedVaultAccess,
     classify_device_access_identity_state, classify_device_access_protection,
-    decode_device_access_profile, normalize_device_access_passkey_name,
+    decode_device_access_profile, identities_linked_to_vault, normalize_device_access_passkey_name,
     normalize_device_access_provider_label, passkey_credential_identifier, passkey_keeper_kind,
     passkey_user_handle_identifier,
 };
