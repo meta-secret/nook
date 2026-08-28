@@ -75,15 +75,14 @@ export function expandStaticShellVariables(source: string): string {
     if (expanded === source) break;
     source = expanded;
   }
-  const launch = source.match(
-    /\b(?:bun|node|bash|sh)[ \t]+(?:(?:run[ \t]+)?[^\s;&|]*(?:\$(?:\{([A-Za-z_]\w*)\}|([A-Za-z_]\w*)|\()|`)[^\s;&|]*|(?:[^\s;&|]+[ \t]+)+[^\s;&|]*(?:\$(?:\{[A-Za-z_]\w*\}|[A-Za-z_]\w*|\()|`)[^\s;&|]*)/u,
-  );
-  if (
-    launch &&
-    (values.has(launch[1] || launch[2] || '') ||
-      /(?:\/dynamic-skills\/|\.agents\/skills\/)/u.test(launch[0]))
-  )
-    throw new Error('Task launch variable is unresolved.');
+  for (const launch of source.matchAll(
+    /\b(?:bun|node|bash|sh)[ \t]+(?:(?:run[ \t]+)?[^\s;&|]*(?:\$(?:\{([A-Za-z_]\w*)\}|([A-Za-z_]\w*)|\()|`)[^\s;&|]*|(?:[^\s;&|]+[ \t]+)+[^\s;&|]*(?:\$(?:\{[A-Za-z_]\w*\}|[A-Za-z_]\w*|\()|`)[^\s;&|]*)/gu,
+  ))
+    if (
+      values.has(launch[1] || launch[2] || '') ||
+      /(?:\/dynamic-skills\/|\.agents\/skills\/)/u.test(launch[0])
+    )
+      throw new Error('Task launch variable is unresolved.');
   return source;
 }
 
