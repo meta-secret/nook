@@ -562,15 +562,35 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
     const stored = synthesisEvidence.acceptedProviderEvidence[0];
     if (!retained || !nested || !stored)
       throw new Error('Nested synthesis evidence is missing.');
+    const carryRegistry =
+      evidenceAuthority.createAcceptedModuleDeliveryEvidenceRegistry();
     retained.acceptedProviderEvidence = Array(129).fill(nested);
     expect(() =>
       evidenceAuthority.freezeProviderEvidenceIdentity(retained),
     ).toThrow('ancestry is too large');
+    retained.acceptedProviderEvidence = [retained];
+    const cyclicArtifactRequest: ModuleDeliveryEvidenceArtifactDigestRequest = {
+      ...exact,
+      acceptedProviderEvidence: [retained],
+    };
+    expect(() =>
+      moduleDeliveryEvidenceArtifactDigest(cyclicArtifactRequest),
+    ).toThrow('ancestry is cyclic');
+    const cyclicEvidence = {
+      ...synthesisEvidence,
+      acceptedProviderEvidence: [retained],
+    };
+    const cyclicRegistration: AcceptedModuleDeliveryEvidenceRegistration = {
+      authority: active.authority,
+      evidence: cyclicEvidence,
+      integratedTaskIds: [],
+    };
+    expect(() => carryRegistry.register(cyclicRegistration)).toThrow(
+      'ancestry is cyclic',
+    );
     retained.acceptedProviderEvidence = [];
     retained.acceptedProviderEvidence.push(nested);
     expect(stored).not.toEqual(retained);
-    const carryRegistry =
-      evidenceAuthority.createAcceptedModuleDeliveryEvidenceRegistry();
     for (const evidence of [
       providerEvidence,
       providerBEvidence,

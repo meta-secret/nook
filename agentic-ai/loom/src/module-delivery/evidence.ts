@@ -155,6 +155,7 @@ export function moduleDeliveryEvidenceClaimIdentities(
 export function moduleDeliveryEvidenceArtifactDigest(
   request: ModuleDeliveryEvidenceArtifactDigestRequest,
 ): string {
+  request.acceptedProviderEvidence.forEach(freezeProviderEvidenceIdentity);
   const content: EvidenceArtifactDigestContent = {
     artifactIdentity: request.artifactIdentity,
     evidence: request.evidence,

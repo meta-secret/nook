@@ -153,10 +153,17 @@ export function freezeProviderEvidenceIdentity(
   identity: ModuleDeliveryAcceptedProviderEvidenceIdentity,
 ): ModuleDeliveryAcceptedProviderEvidenceIdentity {
   const pending = [identity];
+  const seen = new Set<ModuleDeliveryAcceptedProviderEvidenceIdentity>();
   for (const current of pending) {
-    pending.push(...current.acceptedProviderEvidence);
-    if (pending.length > MAX_EXPANDED_PROVIDER_EVIDENCE_IDENTITIES)
+    if (seen.has(current))
+      throw new Error('Accepted provider evidence ancestry is cyclic.');
+    seen.add(current);
+    if (
+      pending.length + current.acceptedProviderEvidence.length >
+      MAX_EXPANDED_PROVIDER_EVIDENCE_IDENTITIES
+    )
       throw new Error('Accepted provider evidence ancestry is too large.');
+    pending.push(...current.acceptedProviderEvidence);
   }
   const copy: ModuleDeliveryAcceptedProviderEvidenceIdentity = {
     ...identity,

@@ -23,7 +23,6 @@ import {
   decodeAndValidateModuleDeliveryPlan,
   recordModuleDeliveryAttemptDisposition,
   recordModuleDeliveryAttemptLeases,
-  restartModuleDeliveryGeneration,
   selectModuleDeliveryAdmissions,
 } from '../../src/module-delivery/index.ts';
 
@@ -39,7 +38,6 @@ import type {
   ModuleDeliveryWriteNodeV2,
   RecordModuleDeliveryAttemptDispositionRequest,
   RecordModuleDeliveryAttemptLeasesRequest,
-  RestartModuleDeliveryGenerationRequest,
   SelectModuleDeliveryAdmissionsRequest,
   ValidatedModuleDeliveryPlan,
 } from '../../src/module-delivery/index.ts';
@@ -333,7 +331,7 @@ describe('module delivery admission authority', () => {
     ).toThrow('Expected lineage is invalid');
   });
 
-  test('rejects forged states, admissions, leases, attempts, and duplicates', () => {
+  test('rejects forged states, admissions, attempts, and conflicts atomically', () => {
     const active = runtime(validate(PLAN));
     const admission = select(active).admissions[0];
     if (!admission) throw new Error('Admission is missing.');
@@ -346,26 +344,25 @@ describe('module delivery admission authority', () => {
     expect(() =>
       selectModuleDeliveryAdmissions(forgedSelectionRequest),
     ).toThrow('authority is invalid');
-    const duplicateLeaseRequest: RecordModuleDeliveryAttemptLeasesRequest = {
+    const exactLeaseRequest: RecordModuleDeliveryAttemptLeasesRequest = {
       authority: active.authority,
       state: active.state,
-      admissions: [admission, admission],
+      admissions: [admission],
     };
-    expect(() =>
-      recordModuleDeliveryAttemptLeases(duplicateLeaseRequest),
-    ).toThrow('capability is invalid');
     const forgedAdmission = { ...admission, taskId: 'beta', attempt: 4 };
-    const forgedLeaseRequest: RecordModuleDeliveryAttemptLeasesRequest = {
-      authority: active.authority,
-      state: active.state,
-      admissions: [forgedAdmission],
-    };
-    expect(() => recordModuleDeliveryAttemptLeases(forgedLeaseRequest)).toThrow(
-      'capability is invalid',
-    );
+    const invalidAdmissions = [[admission, admission], [forgedAdmission]];
+    for (const admissions of invalidAdmissions) {
+      const invalidRequest = { ...exactLeaseRequest, admissions };
+      expect(() => recordModuleDeliveryAttemptLeases(invalidRequest)).toThrow(
+        'capability is invalid',
+      );
+    }
+    expect(
+      recordModuleDeliveryAttemptLeases(exactLeaseRequest).leases,
+    ).toHaveLength(1);
   });
 
-  test('retains lease history through disposition and restarts without stale generation state', () => {
+  test('retains lease history through disposition and reports exhausted closure', () => {
     const active = runtime(validate(PLAN));
     const firstLeaseRequest: LeaseRequest = {
       runtime: active,
@@ -392,45 +389,15 @@ describe('module delivery admission authority', () => {
     );
     expect(retry?.startingFrontier).toBe(firstLease.startingFrontier);
 
-    const secondPlan: ModuleDeliveryPlanV2 = { ...PLAN, generation: 2 };
-    const second = validate(secondPlan);
-    const forgedSecond: ValidatedModuleDeliveryPlan = { ...second, waves: [] };
-    const invalidRestartRequest: RestartModuleDeliveryGenerationRequest = {
-      authority: active.authority,
-      previousState: dispositionState,
-      acceptedPlan: forgedSecond,
-      expectedLineage: lineage(second),
-    };
-    expect(() =>
-      restartModuleDeliveryGeneration(invalidRestartRequest),
-    ).toThrow('metadata is inconsistent');
-    const restartRequest: RestartModuleDeliveryGenerationRequest = {
-      authority: active.authority,
-      previousState: dispositionState,
-      acceptedPlan: second,
-      expectedLineage: lineage(second),
-    };
-    const restarted = restartModuleDeliveryGeneration(restartRequest);
-    const restartedRuntime: Runtime = {
-      ...active,
-      accepted: second,
-      state: restarted,
-    };
-    const restartedSelection = select(restartedRuntime);
-    expect(
-      restartedSelection.admissions.map(
-        ({ taskId, attempt }) => `${taskId}:${attempt}`,
-      ),
-    ).toEqual(['alpha:2', 'beta:1']);
-    const secondLeaseRequest = { runtime: restartedRuntime, taskId: 'alpha' };
+    const secondLeaseRequest = { runtime: retryRuntime, taskId: 'alpha' };
     const secondLease = lease(secondLeaseRequest);
     const secondDispositionRequest: RecordModuleDeliveryAttemptDispositionRequest =
-      { ...dispositionRequest, state: restarted, lease: secondLease };
+      { ...dispositionRequest, state: dispositionState, lease: secondLease };
     const exhaustedState = recordModuleDeliveryAttemptDisposition(
       secondDispositionRequest,
     );
     const exhaustedRuntime: Runtime = {
-      ...restartedRuntime,
+      ...retryRuntime,
       state: exhaustedState,
     };
     const exhaustedSelection = select(exhaustedRuntime);
@@ -443,7 +410,6 @@ describe('module delivery admission authority', () => {
       ),
     ).toEqual(['beta:1']);
     expect(exhaustedSelection.blockedTaskIds).toEqual(['alpha', 'consumer']);
-    expect(() => select(active)).toThrow('superseded');
   });
 });
 

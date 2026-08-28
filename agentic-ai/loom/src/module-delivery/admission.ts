@@ -142,13 +142,6 @@ export type RecordModuleDeliveryAttemptDispositionRequest = {
   readonly outcome: ModuleDeliveryDispositionOutcome;
 };
 
-export type RestartModuleDeliveryGenerationRequest = {
-  readonly authority: ModuleDeliveryGenerationAuthority;
-  readonly previousState: ModuleDeliveryAdmissionState;
-  readonly acceptedPlan: ValidatedModuleDeliveryPlan;
-  readonly expectedLineage: readonly ModuleDeliveryExpectedLineage[];
-};
-
 export type GenerationAuthorityInspection = {
   readonly authority: ModuleDeliveryGenerationAuthority;
   readonly generation: number;
@@ -577,6 +570,9 @@ export function recordModuleDeliveryAttemptLeases(
   const seenTasks = new Set(
     [...authority.activeLeases.values()].map(({ taskId }) => taskId),
   );
+  const compatible: ModuleDeliveryAdmission[] = [
+    ...authority.activeLeases.values(),
+  ];
   const seenAdmissions = new Set<ModuleDeliveryAdmission>();
   for (const admission of request.admissions) {
     const provenance = admissionProvenance.get(admission);
@@ -591,8 +587,19 @@ export function recordModuleDeliveryAttemptLeases(
       authority.leaseHistory.has(key)
     )
       throw new Error('Module delivery admission capability is invalid.');
+    if (
+      compatible.some((active) => {
+        const conflictRequest: ResourceConflictRequest = {
+          first: admission.resources,
+          second: active.resources,
+        };
+        return moduleDeliveryResourcesConflict(conflictRequest);
+      })
+    )
+      throw new Error('Module delivery admission capability is invalid.');
     seenAdmissions.add(admission);
     seenTasks.add(admission.taskId);
+    compatible.push(admission);
   }
   const leases = request.admissions.map((admission) => {
     consumedAdmissions.add(admission);
@@ -660,52 +667,6 @@ export function recordModuleDeliveryAttemptDisposition(
   };
   authority.dispositions.push(Object.freeze(dispositionValue));
   return request.state;
-}
-
-export function restartModuleDeliveryGeneration(
-  request: RestartModuleDeliveryGenerationRequest,
-): ModuleDeliveryAdmissionState {
-  const stateInspection: AdmissionStateAuthorityInspection = {
-    authority: request.authority,
-    state: request.previousState,
-  };
-  assertModuleDeliveryAdmissionStateAuthority(stateInspection);
-  const authority = requiredAuthority(request.authority);
-  if (
-    request.acceptedPlan.plan.generation <=
-      authority.acceptedPlan.plan.generation ||
-    authority.activeLeases.size > 0 ||
-    [...authority.leaseHistory.values()].some(
-      (lease) =>
-        !authority.dispositions.some(
-          (disposition) => attemptKey(disposition) === attemptKey(lease),
-        ),
-    )
-  )
-    throw new Error(
-      'Generation restart requires a newer plan and terminal release evidence.',
-    );
-  const nextPlan = trustedModuleDeliveryPlanSnapshot(request.acceptedPlan);
-  const lineageRequest: ExpectedLineageMapRequest = {
-    acceptedPlan: nextPlan,
-    entries: request.expectedLineage,
-  };
-  const nextLineage = expectedModuleDeliveryLineageMap(lineageRequest);
-  authority.inputPlan = request.acceptedPlan;
-  authority.acceptedPlan = nextPlan;
-  authority.expectedLineage = nextLineage;
-  authority.activeLeases = new Map();
-  authority.leaseHistory = new Map();
-  authority.dispositions = [];
-  currentStates.delete(request.authority);
-  const stateRequest: CreateModuleDeliveryAdmissionStateRequest = {
-    authority: request.authority,
-    acceptedPlan: request.acceptedPlan,
-    headCommit: request.acceptedPlan.plan.sourceCommit,
-    integratedWriterFrontiers: [],
-    acceptedEvidence: [],
-  };
-  return createModuleDeliveryAdmissionState(stateRequest);
 }
 
 function requiredAuthority(
