@@ -106,34 +106,46 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
     );
 
     let taskfile = read(&root, ".task/agentic-ai.yml");
-    for required in ["loom:lint:", "bun run lint", "task: loom:lint"] {
+    let skill_taskfile = format!(
+        "{}\n  end-of-skill-host-tasks:\n",
+        read(&root, ".task/executable-skill-host.yml")
+    );
+    for required in [
+        "loom:lint:",
+        "bun run lint",
+        "task: loom:lint",
+        "executable-skill-host:\n    taskfile: executable-skill-host.yml\n    flatten: true",
+    ] {
         assert!(
             taskfile.contains(required),
             "Loom Taskfile wiring must retain `{required}`"
         );
     }
-
-    let skills_install = task_body(&taskfile, "skills:install", "skills:format");
+    let skills_install = task_body(&skill_taskfile, "skills:install", "skills:tools-list");
     assert!(
         skills_install.contains("for skill_dir in {{.SKILL_APPLICATION_DIRS}}; do")
             && skills_install.contains("{{.REPO_ROOT}}/$skill_dir")
             && skills_install.contains("bun install --frozen-lockfile"),
         "executable applications must install every pinned project"
     );
-    let skills_verify = task_body(&taskfile, "skills:verify", "skills:tools-list");
+    let skills_verify = task_body(&taskfile, "skills:verify", "loom:install");
     assert!(
         skills_verify.contains("deps: [skills:install]")
             && skills_verify.contains("for skill_dir in {{.SKILL_APPLICATION_DIRS}}; do")
             && skills_verify.contains("bun run verify"),
         "skills:verify must run every complete application project gate"
     );
-    let tools_list = task_body(&taskfile, "skills:tools-list", "loom:install");
+    let tools_list = task_body(
+        &skill_taskfile,
+        "skills:tools-list",
+        "end-of-skill-host-tasks",
+    );
     assert!(
         tools_list.contains("deps: [skills:install]")
             && tools_list.contains("silent: true")
             && tools_list.contains("executable-skill-host/scripts/src/cli.ts\"")
             && tools_list.contains("--default toolsList")
-            && !taskfile.contains("skills:run:"),
+            && !skill_taskfile.contains("skills:run:"),
         "skills:tools-list must be the sole exact public YAML-host entrypoint"
     );
 

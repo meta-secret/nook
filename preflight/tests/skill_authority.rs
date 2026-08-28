@@ -123,7 +123,10 @@ fn active_root_guidance_uses_cortex_skill_authority() -> anyhow::Result<()> {
         }
     }
     application_roots.sort();
-    let taskfile = std::fs::read_to_string(root.join(".task/agentic-ai.yml"))?;
+    let mut taskfile = std::fs::read_to_string(root.join(".task/agentic-ai.yml"))?;
+    taskfile.push_str(&std::fs::read_to_string(
+        root.join(".task/executable-skill-host.yml"),
+    )?);
     let declared = taskfile
         .lines()
         .find_map(|line| line.strip_prefix("  SKILL_APPLICATION_DIRS: "))

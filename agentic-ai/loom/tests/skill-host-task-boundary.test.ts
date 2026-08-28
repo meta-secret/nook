@@ -2,21 +2,20 @@ import { expect, test } from 'bun:test';
 import {
   CANONICAL_TASKFILE,
   CANONICAL_TASK_SOURCE,
-  hasCanonicalToolsListTask,
   hasExactToolsListTaskGraph,
+  hasOnlyCanonicalHostTaskEdge,
   HOST_CLI,
   TASK_YAML_BYTE_LIMIT,
 } from './skill-host-task-boundary.ts';
 
 type Source = { readonly path: string; readonly source: string };
-const ROOT_SOURCE =
-  "version: '3'\nincludes: {agentic-ai: {taskfile: .task/agentic-ai.yml, flatten: true}}\ntasks: {safe: {cmds: [echo safe]}}\n";
-const AGENTIC_SOURCE =
-  "version: '3'\nincludes: {executable-skill-host: {taskfile: executable-skill-host.yml, flatten: true}}\ntasks: {safe: {cmds: [echo safe]}}\n";
-const EMPTY_SOURCES: readonly Source[] = [];
-
+const REPOSITORY_ROOT = `${import.meta.dir}/../../..`;
+const ROOT_SOURCE = await Bun.file(`${REPOSITORY_ROOT}/Taskfile.yml`).text();
+const AGENTIC_SOURCE = await Bun.file(
+  `${REPOSITORY_ROOT}/.task/agentic-ai.yml`,
+).text();
 function graph(provided?: readonly Source[]): readonly Source[] {
-  const extras = provided ?? EMPTY_SOURCES;
+  const extras = provided ?? [];
   return [
     { path: 'Taskfile.yml', source: ROOT_SOURCE },
     { path: '.task/agentic-ai.yml', source: AGENTIC_SOURCE },
@@ -26,32 +25,30 @@ function graph(provided?: readonly Source[]): readonly Source[] {
 }
 
 test('accepts only the exact finite public tools-list Task schema', () => {
-  expect(hasCanonicalToolsListTask(CANONICAL_TASK_SOURCE)).toBe(true);
-  for (const source of [
-    CANONICAL_TASK_SOURCE.replace('silent: true', 'silent: false'),
-  ])
-    expect(hasCanonicalToolsListTask(source), source).toBe(false);
+  expect(hasOnlyCanonicalHostTaskEdge(CANONICAL_TASK_SOURCE)).toBe(true);
+  const mutated = CANONICAL_TASK_SOURCE.replace('true', 'false');
+  expect(hasOnlyCanonicalHostTaskEdge(mutated)).toBe(false);
 });
 
 test('requires one exact flattened include chain', () => {
   expect(hasExactToolsListTaskGraph(graph())).toBe(true);
-  expect(
-    hasExactToolsListTaskGraph(
-      graph([
-        {
-          path: '.task/agentic-ai.yml',
-          source: AGENTIC_SOURCE.replace('flatten: true', 'flatten: false'),
-        },
-      ]),
-    ),
-  ).toBe(false);
-  for (const source of [
-    'includes: {executable-skill-host: {taskfile: executable-skill-host.yml, flatten: true}}',
-    'includes:\n  executable-skill-host: {}\n  executable-skill-host: {}\n',
-  ]) {
-    const path = '.task/nested/alternate.yml';
-    expect(hasExactToolsListTaskGraph(graph([{ path, source }]))).toBe(false);
-  }
+  for (const extra of [
+    {
+      path: '.task/agentic-ai.yml',
+      source: AGENTIC_SOURCE.replace('flatten: true', 'flatten: false'),
+    },
+    {
+      path: '.task/nested/alternate.yml',
+      source:
+        'includes: {executable-skill-host: {taskfile: executable-skill-host.yml, flatten: true}}',
+    },
+    {
+      path: '.task/nested/alternate.yml',
+      source:
+        'includes:\n  executable-skill-host: {}\n  executable-skill-host: {}\n',
+    },
+  ])
+    expect(hasExactToolsListTaskGraph(graph([extra]))).toBe(false);
 });
 
 test('rejects strict YAML hazards before conversion', () => {
@@ -90,7 +87,11 @@ test('rejects every proven alternate repository Task declaration', () => {
     'preconditions: [task skills:tools-list]\n    cmds: [echo bypass]',
     'status: [go-task skills:tools-list]\n    cmds: [echo bypass]',
     `dir: ${root}\n    cmds: [bun cli.ts]`,
-    'vars: {FAMILY: skills, ACTION: tools-list}\n    cmds: [{task: "{{.FAMILY}}:{{.ACTION}}"}]',
+    'cmds: [task skills:tools-$(printf list)]',
+    'cmds: [go-task skills:tools-$(printf list)]',
+    'vars: {PREFIX: skills:tools-, SUFFIX: list}\n    cmds: [{task: "{{.PREFIX}}{{.SUFFIX}}"}]',
+    'vars: {A: executable, B: skill, C: host}\n    cmds: [bun dynamic-skills/$A-$B-$C/scripts/src/cli.ts --default toolsList]',
+    'vars: {PREFIX: "skills:tools-", SUFFIX: "list"}\n    cmds: [{task: "{{.PREFIX}}{{.SUFFIX}}"}]',
   ];
   for (const [index, body] of cases.entries()) {
     const source = `tasks:\n  alternate:\n    ${body}\n`;
@@ -100,12 +101,4 @@ test('rejects every proven alternate repository Task declaration', () => {
       ),
     ).toBe(false);
   }
-});
-
-test('does not claim to prevent ordinary same-user shell execution', () => {
-  const ordinary: Source = {
-    path: '.task/ordinary.yml',
-    source: 'tasks: {ordinary: {cmds: [echo "$LABEL"]}}\n',
-  };
-  expect(hasExactToolsListTaskGraph(graph([ordinary]))).toBe(true);
 });
