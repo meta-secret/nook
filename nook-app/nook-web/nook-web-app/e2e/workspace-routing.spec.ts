@@ -126,6 +126,27 @@ test.describe('persistent workspace routing', () => {
     })
   })
 
+  test('does not queue header access while the workspace is not mounted', async ({
+    page,
+  }) => {
+    await connectLocalVault(page)
+
+    for (const route of ['/logs', '/extension-connect']) {
+      await page.evaluate((path) => {
+        history.pushState({}, '', path)
+        window.dispatchEvent(new PopStateEvent('popstate'))
+      }, route)
+
+      await expect(page).toHaveURL(route)
+      await expect(page.getByTestId('header-devices-access-btn')).toHaveCount(0)
+      await page.getByTestId('legal-header-back').click()
+
+      await expect(page).toHaveURL(/\/vault$/)
+      await expect(page.getByTestId('vault-panel')).toBeVisible()
+      await expect(page.getByTestId('header-devices-access-btn')).toBeVisible()
+    }
+  })
+
   test('leaves an active secret draft cleanly before opening header access', async ({
     page,
   }) => {

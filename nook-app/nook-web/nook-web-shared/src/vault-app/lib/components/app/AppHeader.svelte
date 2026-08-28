@@ -77,7 +77,7 @@
     </div>
 
     <div class="flex shrink-0 items-center gap-2">
-      {#if vault.isAuthenticated && !vault.helpOpen && !legalPageOpen}
+      {#if vault.isAuthenticated && !vault.helpOpen && !legalPageOpen && !logsPage && !extensionConnectRoute}
         <Button
           type="button"
           variant="outline"
