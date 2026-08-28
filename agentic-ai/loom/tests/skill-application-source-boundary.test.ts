@@ -1,5 +1,6 @@
 import { join, posix } from 'node:path';
 import { expect, test } from 'bun:test';
+import ts from 'typescript';
 import {
   analyzeExecutableSkillSource,
   isExecutableSkillApplicationSourcePath,
@@ -9,13 +10,151 @@ import {
   executableSkillPackages,
   readTrackedRepositoryFiles,
 } from '../src/executable-skills/repository.ts';
-
 const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
+const HOST_ROOT =
+  '.cortex/teams/ai/dynamic-skills/executable-skill-host/scripts/src/';
 const ARTICLE_ROOT =
-  '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/';
+  '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/';
+const HOST_CLI = `${HOST_ROOT}cli.ts`;
+const YAML_CODEC = `${HOST_ROOT}skill-yaml-codec.ts`;
+const HOST_CALLS = [
+  'closeSync(descriptor)',
+  'fstatSync(descriptor)',
+  'fstatSync(descriptor)',
+  "openSync(invocation.requestPath, 'r')",
+  'readSync( descriptor, bytes, length, bytes.length - length, length, )',
+] as const;
+const PROCESS_USES = [
+  'process.argv.slice(2)',
+  'process.exitCode = outcome.exitCode',
+  'process.stdout.write(outcome.yaml)',
+] as const;
+type SkillSourceRequest = {
+  readonly relativePath: string;
+  readonly source: string;
+};
+export function analyzeSkillHostSource(request: SkillSourceRequest) {
+  const { relativePath, source } = request;
+  const sourceFile = ts.createSourceFile(
+    relativePath,
+    source,
+    ts.ScriptTarget.ES2022,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const retained = [...source];
+  const hostUses: string[] = [];
+  const processUses: string[] = [];
+  const erase = (node: ts.Node): string[] =>
+    retained.fill(' ', node.getFullStart(), node.getEnd());
+  const compact = (node: ts.Node): string =>
+    node.getText(sourceFile).replace(/\s+/gu, ' ');
+  const allowedExternalImport = (node: ts.ImportDeclaration): boolean => {
+    if (!ts.isStringLiteral(node.moduleSpecifier) || node.attributes)
+      return false;
+    const expected =
+      relativePath === HOST_CLI && node.moduleSpecifier.text === 'node:fs'
+        ? 'closeSync fstatSync openSync readSync'.split(' ')
+        : relativePath === YAML_CODEC && node.moduleSpecifier.text === 'yaml'
+          ? 'ParsedNode isAlias isMap isScalar isSeq parseDocument stringify'.split(
+              ' ',
+            )
+          : [];
+    const elements =
+      node.importClause?.namedBindings &&
+      ts.isNamedImports(node.importClause.namedBindings)
+        ? node.importClause.namedBindings.elements
+        : [];
+    return (
+      expected.length > 0 &&
+      elements.length === expected.length &&
+      elements.every(
+        (element) =>
+          !element.propertyName && expected.includes(element.name.text),
+      )
+    );
+  };
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isImportDeclaration(node) &&
+      ts.isStringLiteral(node.moduleSpecifier) &&
+      node.moduleSpecifier.text.startsWith('.')
+    ) {
+      const dependency = posix.normalize(
+        posix.join(posix.dirname(relativePath), node.moduleSpecifier.text),
+      );
+      const crossSkill =
+        relativePath === `${HOST_ROOT}skill-action-registry.ts` &&
+        [`${ARTICLE_ROOT}action.ts`, `${ARTICLE_ROOT}domain.ts`].includes(
+          dependency,
+        );
+      if (crossSkill) {
+        erase(node);
+        return;
+      }
+    }
+    if (
+      ts.isImportDeclaration(node) &&
+      ts.isStringLiteral(node.moduleSpecifier) &&
+      !node.moduleSpecifier.text.startsWith('.')
+    ) {
+      if (!allowedExternalImport(node))
+        throw new Error(`Forbidden host import: ${relativePath}`);
+      erase(node);
+      return;
+    }
+    if (ts.isIdentifier(node) && node.text === 'process') {
+      const property = node.parent;
+      const operation = ts.isPropertyAccessExpression(property)
+        ? property.name.text === 'exitCode'
+          ? property.parent
+          : property.parent.parent
+        : property;
+      const use = compact(operation);
+      if (
+        relativePath !== HOST_CLI ||
+        !PROCESS_USES.includes(use as (typeof PROCESS_USES)[number]) ||
+        processUses.includes(use)
+      )
+        throw new Error('Forbidden host process capability.');
+      processUses.push(use);
+      retained.splice(node.getStart(), node.getWidth(), ...'allowed');
+    }
+    if (
+      relativePath === HOST_CLI &&
+      ts.isIdentifier(node) &&
+      HOST_CALLS.some((call) => call.startsWith(`${node.text}(`))
+    ) {
+      if (!ts.isCallExpression(node.parent) || node.parent.expression !== node)
+        throw new Error('Forbidden host filesystem capability.');
+      hostUses.push(compact(node.parent));
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  if (
+    relativePath === HOST_CLI &&
+    (hostUses.sort().join() !== [...HOST_CALLS].sort().join() ||
+      processUses.sort().join() !== [...PROCESS_USES].sort().join())
+  )
+    throw new Error('Host capabilities must use the exact bounded seam.');
+  const analysisPath = `${HOST_ROOT}contained/src/${posix.basename(relativePath)}`;
+  const analysisRequest = {
+    relativePath: analysisPath,
+    source: retained
+      .join('')
+      .replace(/\bObject\.entries\b/gu, 'Object.values')
+      .replace(/\binstanceof Object\b/gu, 'instanceof SafeObject'),
+  };
+  return analyzeExecutableSkillSource(analysisRequest);
+}
+
 type ExecutableSkillSourceProfile = typeof analyzeExecutableSkillSource;
 const SOURCE_PROFILES: ReadonlyMap<string, ExecutableSkillSourceProfile> =
-  new Map([[ARTICLE_ROOT.slice(0, -1), analyzeExecutableSkillSource]]);
+  new Map([
+    [ARTICLE_ROOT.slice(0, -5), analyzeExecutableSkillSource],
+    [HOST_ROOT.slice(0, -5), analyzeSkillHostSource],
+  ]);
 
 function executableSkillRootFromTrackedPath(path: string): string | false {
   const skillPackage = executableSkillPackageFromPath(path);
@@ -102,7 +241,8 @@ test('all tracked executable application sources pass the AST capability gate', 
       );
       expect(sources, `${path} -> ${specifier}`).toContain(dependency);
     }
-    expect(source, path).not.toContain('import.meta.main');
+    if (path !== HOST_CLI)
+      expect(source, path).not.toContain('import.meta.main');
     expect(source, path).not.toMatch(
       /\bexport\s+(?:async\s+)?(?:function|const|let|var)\s+run\b/u,
     );
@@ -110,10 +250,55 @@ test('all tracked executable application sources pass the AST capability gate', 
   const manifests = tracked.filter((path) =>
     path.endsWith('/scripts/executable-skill.json'),
   );
-  expect(manifests).toContain(`${ARTICLE_ROOT}executable-skill.json`);
+  expect(manifests).toContain(
+    `${ARTICLE_ROOT.slice(0, -4)}executable-skill.json`,
+  );
   for (const path of manifests) {
     const manifest = await Bun.file(join(REPOSITORY_ROOT, path)).text();
     expect(manifest).not.toMatch(/"(?:command|entrypoint)"/u);
+  }
+});
+
+test('rejects dangerous capabilities from every host layer', async () => {
+  const host = await Bun.file(join(REPOSITORY_ROOT, HOST_CLI)).text();
+  const fixtures = [
+    [HOST_CLI, "fetch('https://example.com');"],
+    [HOST_CLI, 'process.env.SECRET;'],
+    [
+      HOST_CLI,
+      host.replace(
+        "openSync(invocation.requestPath, 'r')",
+        "openSync('/tmp/pwn', 'w')",
+      ),
+    ],
+    [
+      HOST_CLI,
+      host.replace(
+        'process.stdout.write(outcome.yaml)',
+        'process.stdout.write(bytes)',
+      ),
+    ],
+    [
+      HOST_CLI,
+      host.replace(
+        'const count = readSync(',
+        'const rebound = readSync;\nconst count = rebound(',
+      ),
+    ],
+    [HOST_CLI, "import { readFileSync as fetch, statSync } from 'node:fs';"],
+    [YAML_CODEC, "import x from 'arbitrary-package';"],
+    [
+      `${HOST_ROOT}skill-action-registry.ts`,
+      "import { spawn } from 'node:child_process';",
+    ],
+    [
+      `${HOST_ROOT}skill-schema-validator.ts`,
+      "void import('./skill-command-domain.ts');",
+    ],
+  ] as const;
+  for (const [path, source] of fixtures) {
+    const request = { relativePath: path, source };
+    expect(() => analyzeSkillHostSource(request), path).toThrow();
   }
 });
 

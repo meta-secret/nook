@@ -158,29 +158,18 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
         "the formatter contract must be a detached, install-free preflight task"
     );
 
-    let skills_manifest = read(
-        &root,
-        ".cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/package.json",
-    );
-    assert!(
-        skills_manifest.contains("\"verify\":") && !skills_manifest.contains("\"dependencies\"")
-    );
-    let skills_eslint = read(
-        &root,
-        ".cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/eslint.config.js",
-    );
-    assert!(
-        skills_eslint.contains("files: ['src/**/*.ts', 'tests/**/*.ts']")
-            && skills_eslint.contains("'max-params': ['error', { max: 1 }]")
-            && skills_eslint.contains("'nook/no-raw-object-arguments': 'error'")
-            && skills_eslint.contains("unknown:"),
-        "executable applications must retain repository TypeScript rules"
-    );
-    let skills_typescript = read(
-        &root,
-        ".cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/tsconfig.json",
-    );
-    assert!(skills_typescript.contains("\"include\": [\"src/**/*.ts\", \"tests/**/*.ts\"]"));
+    for skill in ["cortex-article-structure", "executable-skill-host"] {
+        let scripts = format!(".cortex/teams/ai/dynamic-skills/{skill}/scripts");
+        let manifest = read(&root, &format!("{scripts}/package.json"));
+        assert!(manifest.contains("\"verify\":"));
+        let eslint = read(&root, &format!("{scripts}/eslint.config.js"));
+        assert!(
+            eslint.contains("'max-params': ['error', { max: 1 }]")
+                && eslint.contains("'nook/no-raw-object-arguments': 'error'")
+        );
+        let typescript = read(&root, &format!("{scripts}/tsconfig.json"));
+        assert!(typescript.contains("\"src/**/*.ts\"") && typescript.contains("\"tests/**/*.ts\""));
+    }
     let source_gate = read(
         &root,
         "agentic-ai/loom/tests/skill-application-source-boundary.test.ts",

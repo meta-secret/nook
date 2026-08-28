@@ -120,10 +120,8 @@ application validates its request, audits it, independently verifies its
 result, and enforces contract bounds without command, network, write, agent, or
 lifecycle authority. Run its project gate with `task skills:verify`.
 Run `task loom:verify` for the recursive AST capability audit and exact
-Loom-consumer boundary.
-
-The discoverable strict-YAML host, tools listing, and invocation command are a
-follow-up slice and are not exposed by the current application.
+consumer boundary. The strict-YAML host package is statically audited but has
+no supported invocation until its exact Task reachability lands separately.
 
 ## TypeScript domain structure
 

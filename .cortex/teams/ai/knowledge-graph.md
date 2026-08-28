@@ -22,6 +22,7 @@ Use these skills when creating, moving, reviewing, or repairing Cortex.
 
 - [Cortex writer](dynamic-skills/cortex-writer.md)
 - [Cortex article structure](dynamic-skills/cortex-article-structure/SKILL.md)
+- [Executable skill host](dynamic-skills/executable-skill-host/SKILL.md)
 - [Cortex document navigation](dynamic-skills/cortex-document-map.md)
 - [Cortex consistency](dynamic-skills/cortex-consistency.md)
 - [Cortex refactoring expert](dynamic-skills/cortex-refactoring-expert.md)
