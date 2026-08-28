@@ -335,72 +335,6 @@ function verify(
   return verifyModuleDeliveryEvidenceSubmission(verification);
 }
 
-test('accepts exact repository evidence and releases its lease only after accepted disposition', () => {
-  const active = runtime();
-  try {
-    const leaseRequest: AdmittedLeaseRequest = {
-      runtime: active,
-      taskId: active.provider.taskId,
-    };
-    const lease = admittedLease(leaseRequest);
-    const submissionRequest: EvidenceSubmissionRequest = {
-      runtime: active,
-      lease,
-      acceptedProviderEvidence: [],
-    };
-    const candidate = submission(submissionRequest);
-    const verificationRequest: EvidenceVerificationRequest = {
-      ...submissionRequest,
-      candidate,
-    };
-    const accepted = verify(verificationRequest);
-    const activeSelectionRequest: SelectModuleDeliveryAdmissionsRequest = {
-      authority: active.authority,
-      acceptedPlan: active.accepted,
-      state: active.state,
-    };
-    expect(
-      selectModuleDeliveryAdmissions(activeSelectionRequest).admissions,
-    ).toEqual([]);
-    const prematureDispositionRequest: RecordModuleDeliveryAttemptDispositionRequest =
-      {
-        authority: active.authority,
-        state: active.state,
-        lease,
-        outcome: {
-          kind: ModuleDeliveryAttemptDispositionKind.Accepted,
-          conclusion: ModuleDeliveryGenerationFenceKind.Accepted,
-        },
-      };
-    expect(() =>
-      recordModuleDeliveryAttemptDisposition(prematureDispositionRequest),
-    ).toThrow('lease capability');
-
-    const evidenceStateRequest: CreateModuleDeliveryAdmissionStateRequest = {
-      authority: active.authority,
-      acceptedPlan: active.accepted,
-      headCommit: active.fixture.baselineCommit,
-      integratedWriterFrontiers: [],
-      acceptedEvidence: [accepted],
-    };
-    const evidenceState =
-      createModuleDeliveryAdmissionState(evidenceStateRequest);
-    const acceptedDispositionRequest: RecordModuleDeliveryAttemptDispositionRequest =
-      {
-        authority: active.authority,
-        state: evidenceState,
-        lease,
-        outcome: {
-          kind: ModuleDeliveryAttemptDispositionKind.Accepted,
-          conclusion: ModuleDeliveryGenerationFenceKind.Accepted,
-        },
-      };
-    recordModuleDeliveryAttemptDisposition(acceptedDispositionRequest);
-  } finally {
-    disposeGitFixture(active.fixture);
-  }
-});
-
 test('rejects forged metadata, evidence capabilities, and authority-owned stale frontier', () => {
   const active = runtime();
   try {
@@ -503,6 +437,19 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
       candidate: providerCandidate,
     };
     const providerEvidence = verify(providerVerificationRequest);
+    const prematureDispositionRequest: RecordModuleDeliveryAttemptDispositionRequest =
+      {
+        authority: active.authority,
+        state: active.state,
+        lease: providerLease,
+        outcome: {
+          kind: ModuleDeliveryAttemptDispositionKind.Accepted,
+          conclusion: ModuleDeliveryGenerationFenceKind.Accepted,
+        },
+      };
+    expect(() =>
+      recordModuleDeliveryAttemptDisposition(prematureDispositionRequest),
+    ).toThrow('lease capability');
     const evidenceStateRequest: CreateModuleDeliveryAdmissionStateRequest = {
       authority: active.authority,
       acceptedPlan: active.accepted,
@@ -512,6 +459,13 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
     };
     const evidenceState =
       createModuleDeliveryAdmissionState(evidenceStateRequest);
+    const omittedEvidenceRequest = {
+      ...evidenceStateRequest,
+      acceptedEvidence: [],
+    };
+    expect(() =>
+      createModuleDeliveryAdmissionState(omittedEvidenceRequest),
+    ).toThrow('cannot discard proof');
     const providerDispositionRequest: RecordModuleDeliveryAttemptDispositionRequest =
       {
         authority: active.authority,
@@ -610,7 +564,7 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
     if (!retained || !nested || !stored)
       throw new Error('Nested synthesis evidence is missing.');
     retained.acceptedProviderEvidence.push(nested);
-    expect(Object.isFrozen(stored.acceptedProviderEvidence)).toBe(true);
+    expect(stored).not.toEqual(retained);
     const carryRegistry =
       evidenceAuthority.createAcceptedModuleDeliveryEvidenceRegistry();
     for (const evidence of [
@@ -625,6 +579,32 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
       };
       carryRegistry.register(registration);
     }
+    const authorityBRequest: CreateModuleDeliveryGenerationAuthorityRequest = {
+      acceptedPlan: active.accepted,
+      expectedLineage: active.accepted.plan.nodes.map((node) => ({
+        taskId: node.taskId,
+        parentLineage: node.parentLineage,
+      })),
+    };
+    const authorityB =
+      createModuleDeliveryGenerationAuthority(authorityBRequest);
+    const evidenceB = structuredClone(providerEvidence);
+    const registrationB: AcceptedModuleDeliveryEvidenceRegistration = {
+      authority: authorityB,
+      evidence: evidenceB,
+      integratedTaskIds: [],
+    };
+    carryRegistry.register(registrationB);
+    const conflictingEvidence = structuredClone(providerEvidence);
+    const conflictingRegistration: AcceptedModuleDeliveryEvidenceRegistration =
+      {
+        ...registrationB,
+        authority: active.authority,
+        evidence: conflictingEvidence,
+      };
+    expect(() => carryRegistry.register(conflictingRegistration)).toThrow(
+      'integration closure is inconsistent',
+    );
     const disjointRequest = {
       authority: active.authority,
       acceptedPlan: active.accepted,

@@ -1,4 +1,5 @@
 import {
+  copyModuleDeliveryAdmission,
   createAcceptedModuleDeliveryEvidenceRegistry,
   expectedModuleDeliveryLineageMap,
   freezeModuleDeliveryAdmissionSelection,
@@ -408,6 +409,22 @@ export function createModuleDeliveryAdmissionState(
     integratedWrites,
   };
   const evidence = acceptedEvidenceRegistry.collect(evidenceRequest);
+  const previousState = currentStates.get(request.authority);
+  if (previousState) {
+    const previousProvenance = stateProvenance.get(previousState);
+    const previousIntegratedTaskIds =
+      previousState.integratedWriterFrontiers[0]?.integratedTaskIds ?? [];
+    if (
+      !previousProvenance ||
+      previousIntegratedTaskIds.some(
+        (taskId) => !integratedTaskIds.has(taskId),
+      ) ||
+      previousProvenance.acceptedEvidence.some(
+        (entry) => !evidence.accepted.includes(entry),
+      )
+    )
+      throw new Error('Module delivery admission state cannot discard proof.');
+  }
   const stateValue: ModuleDeliveryAdmissionState = {
     generation: authority.acceptedPlan.plan.generation,
     planDigest: authority.acceptedPlan.planDigest,
@@ -580,7 +597,7 @@ export function recordModuleDeliveryAttemptLeases(
   }
   const leases = request.admissions.map((admission) => {
     consumedAdmissions.add(admission);
-    const lease = Object.freeze(copyAdmission(admission));
+    const lease = Object.freeze(copyModuleDeliveryAdmission(admission));
     authority.activeLeases.set(attemptKey(lease), lease);
     authority.leaseHistory.set(attemptKey(lease), lease);
     authority.attemptsByTask.set(lease.taskId, lease.attempt);
@@ -713,7 +730,7 @@ function authorityForState(
 function expectedParent(request: AuthorityTaskRequest): AgentAttemptParent {
   const parent = request.authority.expectedLineage.get(request.taskId);
   if (!parent) throw new Error('Expected lineage is missing.');
-  return frozenParent(parent);
+  return parent;
 }
 
 function acceptedAttemptKeys(authority: AuthorityState): ReadonlySet<string> {
@@ -958,32 +975,6 @@ function startingFrontier(request: StartingFrontierRequest): string {
 
 function nextAttempt(request: AuthorityTaskRequest): number {
   return (request.authority.attemptsByTask.get(request.taskId) ?? 0) + 1;
-}
-
-function frozenParent(parent: AgentAttemptParent): AgentAttemptParent {
-  const copy: AgentAttemptParent = { ...parent };
-  return Object.freeze(copy);
-}
-
-function copyAdmission(
-  admission: ModuleDeliveryAdmission,
-): ModuleDeliveryAttemptLease {
-  const resources: ModuleDeliveryResourceClaims = {
-    read: Object.freeze([...admission.resources.read]),
-    write: Object.freeze([...admission.resources.write]),
-    evidenceSurface: Object.freeze([...admission.resources.evidenceSurface]),
-  };
-  return {
-    ...admission,
-    resources: Object.freeze(resources),
-    parentLineage: frozenParent(admission.parentLineage),
-    acceptanceRequirements: Object.freeze([
-      ...admission.acceptanceRequirements,
-    ]),
-    authorizedProviderEvidence: Object.freeze([
-      ...admission.authorizedProviderEvidence,
-    ]),
-  };
 }
 
 function attemptKey(identity: AttemptIdentity): string {

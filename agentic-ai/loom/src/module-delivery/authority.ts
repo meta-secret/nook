@@ -7,7 +7,9 @@ import type {
   TaskResourcePatternPair,
 } from '../agent-workflow/domain.ts';
 import type {
+  ModuleDeliveryAdmission,
   ModuleDeliveryAdmissionSelection,
+  ModuleDeliveryAttemptLease,
   ModuleDeliveryExpectedLineage,
   ModuleDeliveryGenerationAuthority,
 } from './admission.ts';
@@ -30,12 +32,10 @@ export type AcceptedModuleDeliveryEvidenceRegistration =
   AcceptedModuleDeliveryEvidenceInspection & {
     readonly integratedTaskIds: readonly string[];
   };
-
 export type ModuleDeliveryIntegratedWrite = Readonly<{
   taskId: string;
   claims: readonly string[];
 }>;
-
 export type AcceptedModuleDeliveryEvidenceCollectionRequest = Readonly<{
   authority: ModuleDeliveryGenerationAuthority;
   acceptedPlan: ValidatedModuleDeliveryPlan;
@@ -48,7 +48,6 @@ export type AcceptedModuleDeliveryEvidenceCollection = Readonly<{
   accepted: readonly AcceptedModuleDeliveryEvidence[];
   identities: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
 }>;
-
 export type AcceptedModuleDeliveryEvidenceRegistry = Readonly<{
   register: (request: AcceptedModuleDeliveryEvidenceRegistration) => void;
   assert: (request: AcceptedModuleDeliveryEvidenceInspection) => void;
@@ -61,6 +60,7 @@ export type AcceptedModuleDeliveryEvidenceRegistry = Readonly<{
 }>;
 
 type EvidenceFreshnessRequest = Readonly<{
+  authority: ModuleDeliveryGenerationAuthority;
   identity: ModuleDeliveryAcceptedProviderEvidenceIdentity;
   headCommit: string;
   integratedWrites: readonly ModuleDeliveryIntegratedWrite[];
@@ -178,14 +178,41 @@ export function freezeModuleDeliveryAdmissionSelection(
   return Object.freeze(selection);
 }
 
+export function copyModuleDeliveryAdmission(
+  admission: ModuleDeliveryAdmission,
+): ModuleDeliveryAttemptLease {
+  const resources: ModuleDeliveryResourceClaims = {
+    read: Object.freeze([...admission.resources.read]),
+    write: Object.freeze([...admission.resources.write]),
+    evidenceSurface: Object.freeze([...admission.resources.evidenceSurface]),
+  };
+  const parentLineage: AgentAttemptParent = { ...admission.parentLineage };
+  return {
+    ...admission,
+    resources: Object.freeze(resources),
+    parentLineage: Object.freeze(parentLineage),
+    acceptanceRequirements: Object.freeze([
+      ...admission.acceptanceRequirements,
+    ]),
+    authorizedProviderEvidence: Object.freeze([
+      ...admission.authorizedProviderEvidence,
+    ]),
+  };
+}
+
 export function createAcceptedModuleDeliveryEvidenceRegistry(): AcceptedModuleDeliveryEvidenceRegistry {
   const authorities = new WeakMap<
     AcceptedModuleDeliveryEvidence,
     ModuleDeliveryGenerationAuthority
   >();
-  const closures = new Map<string, readonly string[]>();
+  const closures = new WeakMap<
+    ModuleDeliveryGenerationAuthority,
+    Map<string, readonly string[]>
+  >();
   const evidenceFreshAtHead = (request: EvidenceFreshnessRequest): boolean => {
-    const closure = closures.get(JSON.stringify(request.identity));
+    const closure = closures
+      .get(request.authority)
+      ?.get(JSON.stringify(request.identity));
     if (!closure) return false;
     const laterWrites = request.integratedWrites.filter(
       ({ taskId }) => !closure.includes(taskId),
@@ -199,6 +226,7 @@ export function createAcceptedModuleDeliveryEvidenceRegistry(): AcceptedModuleDe
         (laterWrites.length > 0 && !claimsOverlap(claims))) &&
       request.identity.acceptedProviderEvidence.every((identity) => {
         const nestedRequest: EvidenceFreshnessRequest = {
+          authority: request.authority,
           identity,
           headCommit: request.headCommit,
           integratedWrites: request.integratedWrites,
@@ -247,10 +275,18 @@ export function createAcceptedModuleDeliveryEvidenceRegistry(): AcceptedModuleDe
         'Accepted module delivery evidence is already registered.',
       );
     authorities.set(request.evidence, request.authority);
-    closures.set(
-      JSON.stringify(identity(request.evidence)),
-      Object.freeze([...request.integratedTaskIds]),
-    );
+    const key = JSON.stringify(identity(request.evidence));
+    const authorityClosures = closures.get(request.authority) ?? new Map();
+    const existing = authorityClosures.get(key);
+    if (
+      existing &&
+      JSON.stringify(existing) !== JSON.stringify(request.integratedTaskIds)
+    ) {
+      authorities.delete(request.evidence);
+      throw new Error('Accepted evidence integration closure is inconsistent.');
+    }
+    authorityClosures.set(key, Object.freeze([...request.integratedTaskIds]));
+    closures.set(request.authority, authorityClosures);
   };
   const collect = (
     request: AcceptedModuleDeliveryEvidenceCollectionRequest,
@@ -264,6 +300,7 @@ export function createAcceptedModuleDeliveryEvidenceRegistry(): AcceptedModuleDe
       assert(inspection);
       const acceptedIdentity = identity(evidence);
       const freshnessRequest: EvidenceFreshnessRequest = {
+        authority: request.authority,
         identity: acceptedIdentity,
         headCommit: request.headCommit,
         integratedWrites: request.integratedWrites,
