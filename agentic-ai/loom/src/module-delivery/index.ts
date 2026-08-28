@@ -8,6 +8,7 @@ export {
   createModuleDeliveryGenerationAuthority,
   recordModuleDeliveryAttemptDisposition,
   recordModuleDeliveryAttemptLeases,
+  restartModuleDeliveryGeneration,
   selectModuleDeliveryAdmissions,
   verifyModuleDeliveryEvidenceSubmission,
 } from './admission.ts';
@@ -20,6 +21,7 @@ export type {
   ModuleDeliveryGenerationAuthority,
   RecordModuleDeliveryAttemptDispositionRequest,
   RecordModuleDeliveryAttemptLeasesRequest,
+  RestartModuleDeliveryGenerationRequest,
   SelectModuleDeliveryAdmissionsRequest,
 } from './admission.ts';
 export { moduleDeliveryEvidenceArtifactDigest } from './evidence.ts';

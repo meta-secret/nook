@@ -6,7 +6,9 @@ import {
   createGitFixture,
   disposeGitFixture,
   fixtureGit,
+  writeFixtureFile,
 } from './worktree-test-support.ts';
+import type { FixtureFileWrite } from './worktree-test-support.ts';
 
 import {
   REQUIRED_PARENT_OWNED_RESOURCES,
@@ -23,6 +25,7 @@ import {
   decodeAndValidateModuleDeliveryPlan,
   recordModuleDeliveryAttemptDisposition,
   recordModuleDeliveryAttemptLeases,
+  restartModuleDeliveryGeneration,
   selectModuleDeliveryAdmissions,
 } from '../../src/module-delivery/index.ts';
 
@@ -38,12 +41,32 @@ import type {
   ModuleDeliveryWriteNodeV2,
   RecordModuleDeliveryAttemptDispositionRequest,
   RecordModuleDeliveryAttemptLeasesRequest,
+  RestartModuleDeliveryGenerationRequest,
   SelectModuleDeliveryAdmissionsRequest,
   ValidatedModuleDeliveryPlan,
 } from '../../src/module-delivery/index.ts';
 
 const fixture = createGitFixture();
 const SOURCE = fixture.baselineCommit;
+const replacementWrite: FixtureFileWrite = {
+  fixture,
+  relativePath: 'module/replacement.txt',
+  contents: 'replacement\n',
+};
+writeFixtureFile(replacementWrite);
+fixtureGit(fixture)(['add', '--all']);
+fixtureGit(fixture)(['commit', '--quiet', '-m', 'replacement']);
+const REPLACEMENT_SOURCE = fixtureGit(fixture)(['rev-parse', 'HEAD']);
+const foreignFixture = createGitFixture();
+const foreignWrite: FixtureFileWrite = {
+  fixture: foreignFixture,
+  relativePath: 'module/foreign.txt',
+  contents: 'foreign\n',
+};
+writeFixtureFile(foreignWrite);
+fixtureGit(foreignFixture)(['add', '--all']);
+fixtureGit(foreignFixture)(['commit', '--quiet', '-m', 'foreign']);
+const FOREIGN_SOURCE = fixtureGit(foreignFixture)(['rev-parse', 'HEAD']);
 const ROOT = 'nook-app/nook-platform/nook-core';
 type Runtime = {
   readonly accepted: ValidatedModuleDeliveryPlan;
@@ -58,6 +81,26 @@ type WriteNodeRequest = {
 type LeaseRequest = {
   readonly runtime: Runtime;
   readonly taskId: string;
+};
+type GenerationPlanRequest = {
+  readonly sourceCommit: string;
+  readonly generation: number;
+  readonly includeGamma: boolean;
+};
+type CancelledLeaseRequest = {
+  readonly runtime: Runtime;
+  readonly lease: ModuleDeliveryAttemptLease;
+};
+type GenerationRestartRequest = {
+  readonly runtime: Runtime;
+  readonly acceptedPlan: ValidatedModuleDeliveryPlan;
+};
+type GenerationPlanUpdate = {
+  readonly generation: number;
+  readonly nodes: ModuleDeliveryPlanV2['nodes'];
+};
+type PlanConcurrencyUpdate = {
+  readonly maxConcurrency: number;
 };
 
 function writeNode(request: WriteNodeRequest): ModuleDeliveryWriteNodeV2 {
@@ -163,6 +206,19 @@ function planAt(sourceCommit: string): ModuleDeliveryPlanV2 {
   return plan;
 }
 
+function generationPlan(request: GenerationPlanRequest): ModuleDeliveryPlanV2 {
+  const plan = structuredClone(planAt(request.sourceCommit));
+  const nodes = request.includeGamma
+    ? plan.nodes
+    : plan.nodes.filter(({ taskId }) => taskId !== gamma.taskId);
+  const update: GenerationPlanUpdate = {
+    generation: request.generation,
+    nodes,
+  };
+  Object.assign(plan, update);
+  return plan;
+}
+
 function validate(plan: ModuleDeliveryPlanV2): ValidatedModuleDeliveryPlan {
   const result = decodeAndValidateModuleDeliveryPlan(JSON.stringify(plan));
   if (result.status !== ModuleDeliveryValidationStatus.Accepted)
@@ -228,6 +284,37 @@ function lease(request: LeaseRequest): ModuleDeliveryAttemptLease {
   const leased = recording.leases[0];
   if (!leased) throw new Error(`Lease ${taskId} is missing.`);
   return leased;
+}
+
+function disposeLease(
+  request: RecordModuleDeliveryAttemptDispositionRequest,
+): ModuleDeliveryAdmissionState {
+  return recordModuleDeliveryAttemptDisposition(request);
+}
+
+function cancelledLease(
+  request: CancelledLeaseRequest,
+): RecordModuleDeliveryAttemptDispositionRequest {
+  return {
+    authority: request.runtime.authority,
+    state: request.runtime.state,
+    lease: request.lease,
+    outcome: {
+      kind: ModuleDeliveryAttemptDispositionKind.FinalUnusable,
+      conclusion: ModuleDeliveryGenerationFenceKind.Cancelled,
+    },
+  };
+}
+
+function restartRequest(
+  request: GenerationRestartRequest,
+): RestartModuleDeliveryGenerationRequest {
+  return {
+    authority: request.runtime.authority,
+    previousState: request.runtime.state,
+    acceptedPlan: request.acceptedPlan,
+    expectedLineage: lineage(request.acceptedPlan),
+  };
 }
 
 describe('module delivery admission authority', () => {
@@ -316,6 +403,14 @@ describe('module delivery admission authority', () => {
         createModuleDeliveryGenerationAuthority(sourceAuthorityRequest),
       ).toThrow('source commit is not authenticated');
     }
+    const noncanonicalRootRequest: CreateModuleDeliveryGenerationAuthorityRequest =
+      {
+        ...authorityRequest(validate(PLAN)),
+        repositoryRoot: `${fixture.sourceRoot}/module`,
+      };
+    expect(() =>
+      createModuleDeliveryGenerationAuthority(noncanonicalRootRequest),
+    ).toThrow('repository root is not canonical');
 
     const wrongLineage = lineage(validate(PLAN)).map(({ taskId }) => ({
       taskId,
@@ -422,6 +517,263 @@ describe('module delivery admission authority', () => {
     expect(ongoingSelection.admissions).toEqual([]);
     expect(ongoingSelection.pendingTaskIds).toEqual(['gamma']);
   });
+
+  test('rejects replacement failures transactionally and keeps the prior generation usable', () => {
+    const firstPlanRequest: GenerationPlanRequest = {
+      sourceCommit: SOURCE,
+      generation: 1,
+      includeGamma: false,
+    };
+    const active = runtime(validate(generationPlan(firstPlanRequest)));
+    const assertPriorGenerationUsable = (): void => {
+      const current = select(active);
+      expect(current.admissions.map(({ generation }) => generation)).toEqual([
+        1, 1,
+      ]);
+    };
+    const replacementPlanRequest: GenerationPlanRequest = {
+      sourceCommit: REPLACEMENT_SOURCE,
+      generation: 2,
+      includeGamma: true,
+    };
+    const replacement = validate(generationPlan(replacementPlanRequest));
+    const sameGenerationRequest: GenerationRestartRequest = {
+      runtime: active,
+      acceptedPlan: active.accepted,
+    };
+    expect(() =>
+      restartModuleDeliveryGeneration(restartRequest(sameGenerationRequest)),
+    ).toThrow('newer immutable generation');
+    assertPriorGenerationUsable();
+
+    const forged: ValidatedModuleDeliveryPlan = {
+      ...replacement,
+      executionPrecedence: [],
+    };
+    const forgedRequest: GenerationRestartRequest = {
+      runtime: active,
+      acceptedPlan: forged,
+    };
+    expect(() =>
+      restartModuleDeliveryGeneration(restartRequest(forgedRequest)),
+    ).toThrow('metadata is inconsistent');
+    assertPriorGenerationUsable();
+
+    const blob = fixtureGit(fixture)([
+      'rev-parse',
+      `${SOURCE}:module/seed.txt`,
+    ]);
+    for (const sourceCommit of ['f'.repeat(40), blob, FOREIGN_SOURCE]) {
+      const invalidPlanRequest: GenerationPlanRequest = {
+        sourceCommit,
+        generation: 2,
+        includeGamma: true,
+      };
+      const invalidRestartRequest: GenerationRestartRequest = {
+        runtime: active,
+        acceptedPlan: validate(generationPlan(invalidPlanRequest)),
+      };
+      expect(() =>
+        restartModuleDeliveryGeneration(restartRequest(invalidRestartRequest)),
+      ).toThrow('source commit is not authenticated');
+      assertPriorGenerationUsable();
+    }
+
+    const validRestartRequest: GenerationRestartRequest = {
+      runtime: active,
+      acceptedPlan: replacement,
+    };
+    const wrongLineageRequest = restartRequest(validRestartRequest);
+    const wrongLineage: RestartModuleDeliveryGenerationRequest = {
+      ...wrongLineageRequest,
+      expectedLineage: wrongLineageRequest.expectedLineage.map(
+        ({ taskId }) => ({
+          taskId,
+          parentLineage: {
+            kind: AgentAttemptParentKind.AgentAttempt,
+            task: 'forged-task',
+            agent: 'forged-agent',
+            attempt: 2,
+          },
+        }),
+      ),
+    };
+    expect(() => restartModuleDeliveryGeneration(wrongLineage)).toThrow(
+      'Expected lineage is invalid',
+    );
+    assertPriorGenerationUsable();
+
+    const alphaLeaseRequest: LeaseRequest = {
+      runtime: active,
+      taskId: alpha.taskId,
+    };
+    const leasedAlpha = lease(alphaLeaseRequest);
+    const blockedRestartRequest: GenerationRestartRequest = {
+      runtime: active,
+      acceptedPlan: replacement,
+    };
+    expect(() =>
+      restartModuleDeliveryGeneration(restartRequest(blockedRestartRequest)),
+    ).toThrow('terminal release evidence');
+    expect(select(active).admissions.map(({ taskId }) => taskId)).toEqual([
+      beta.taskId,
+    ]);
+    const cancellationRequest: CancelledLeaseRequest = {
+      runtime: active,
+      lease: leasedAlpha,
+    };
+    disposeLease(cancelledLease(cancellationRequest));
+    assertPriorGenerationUsable();
+  });
+
+  test('restarts with a clean immutable generation and monotonic surviving attempts', () => {
+    const firstPlanRequest: GenerationPlanRequest = {
+      sourceCommit: SOURCE,
+      generation: 1,
+      includeGamma: false,
+    };
+    const active = runtime(validate(generationPlan(firstPlanRequest)));
+    const oldSelection = select(active);
+    const alphaAdmission = oldSelection.admissions.find(
+      ({ taskId }) => taskId === alpha.taskId,
+    );
+    if (!alphaAdmission) throw new Error('Alpha admission is missing.');
+    const alphaLeaseRequest: LeaseRequest = {
+      runtime: active,
+      taskId: alpha.taskId,
+    };
+    const alphaLease = lease(alphaLeaseRequest);
+    const cancellationRequest: CancelledLeaseRequest = {
+      runtime: active,
+      lease: alphaLease,
+    };
+    disposeLease(cancelledLease(cancellationRequest));
+    const replacementPlanRequest: GenerationPlanRequest = {
+      sourceCommit: REPLACEMENT_SOURCE,
+      generation: 2,
+      includeGamma: true,
+    };
+    const replacementPlan = generationPlan(replacementPlanRequest);
+    const concurrencyUpdate: PlanConcurrencyUpdate = { maxConcurrency: 3 };
+    Object.assign(replacementPlan, concurrencyUpdate);
+    const replacement = validate(replacementPlan);
+    const generationRestartRequest: GenerationRestartRequest = {
+      runtime: active,
+      acceptedPlan: replacement,
+    };
+    const restarted = restartModuleDeliveryGeneration(
+      restartRequest(generationRestartRequest),
+    );
+    const expectedState: ModuleDeliveryAdmissionState = {
+      generation: 2,
+      planDigest: replacement.planDigest,
+      headCommit: REPLACEMENT_SOURCE,
+      integratedWriterFrontiers: [],
+      acceptedProviderEvidence: [],
+    };
+    expect(restarted).toEqual(expectedState);
+    expect(Object.isFrozen(restarted)).toBe(true);
+    expect(Object.isFrozen(restarted.integratedWriterFrontiers)).toBe(true);
+    expect(Object.isFrozen(restarted.acceptedProviderEvidence)).toBe(true);
+    const restartedRuntime: Runtime = {
+      accepted: replacement,
+      authority: active.authority,
+      state: restarted,
+    };
+    const admissions = select(restartedRuntime).admissions;
+    expect(
+      admissions.map(({ taskId, attempt, startingFrontier }) => ({
+        taskId,
+        attempt,
+        startingFrontier,
+      })),
+    ).toEqual([
+      {
+        taskId: alpha.taskId,
+        attempt: 2,
+        startingFrontier: REPLACEMENT_SOURCE,
+      },
+      {
+        taskId: beta.taskId,
+        attempt: 1,
+        startingFrontier: REPLACEMENT_SOURCE,
+      },
+      {
+        taskId: gamma.taskId,
+        attempt: 1,
+        startingFrontier: REPLACEMENT_SOURCE,
+      },
+    ]);
+    expect(() => select(active)).toThrow('invalid or superseded');
+    const staleLeaseRequest: RecordModuleDeliveryAttemptLeasesRequest = {
+      authority: active.authority,
+      state: active.state,
+      admissions: [alphaAdmission],
+    };
+    expect(() => recordModuleDeliveryAttemptLeases(staleLeaseRequest)).toThrow(
+      'authority is invalid',
+    );
+  });
+
+  test('carries attempt exhaustion across generations and propagates blocked closure', () => {
+    const firstPlanRequest: GenerationPlanRequest = {
+      sourceCommit: SOURCE,
+      generation: 1,
+      includeGamma: false,
+    };
+    const firstPlan = generationPlan(firstPlanRequest);
+    const concurrencyUpdate: PlanConcurrencyUpdate = { maxConcurrency: 1 };
+    Object.assign(firstPlan, concurrencyUpdate);
+    const active = runtime(validate(firstPlan));
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      const alphaLeaseRequest: LeaseRequest = {
+        runtime: active,
+        taskId: alpha.taskId,
+      };
+      const alphaLease = lease(alphaLeaseRequest);
+      expect(alphaLease.attempt).toBe(attempt);
+      const cancellationRequest: CancelledLeaseRequest = {
+        runtime: active,
+        lease: alphaLease,
+      };
+      disposeLease(cancelledLease(cancellationRequest));
+    }
+    const replacementPlanRequest: GenerationPlanRequest = {
+      sourceCommit: REPLACEMENT_SOURCE,
+      generation: 2,
+      includeGamma: true,
+    };
+    const replacement = validate(generationPlan(replacementPlanRequest));
+    const generationRestartRequest: GenerationRestartRequest = {
+      runtime: active,
+      acceptedPlan: replacement,
+    };
+    const state = restartModuleDeliveryGeneration(
+      restartRequest(generationRestartRequest),
+    );
+    const restarted: Runtime = {
+      accepted: replacement,
+      authority: active.authority,
+      state,
+    };
+    const selection = select(restarted);
+    expect(selection.status).toBe(
+      ModuleDeliveryAdmissionSelectionStatus.Selected,
+    );
+    expect(selection.blockedTaskIds).toEqual([alpha.taskId, consumer.taskId]);
+    expect(
+      selection.admissions.map(({ taskId, attempt }) => ({
+        taskId,
+        attempt,
+      })),
+    ).toEqual([
+      { taskId: beta.taskId, attempt: 1 },
+      { taskId: gamma.taskId, attempt: 1 },
+    ]);
+  });
 });
 
-afterAll(() => disposeGitFixture(fixture));
+afterAll(() => {
+  disposeGitFixture(fixture);
+  disposeGitFixture(foreignFixture);
+});
