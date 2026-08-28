@@ -793,7 +793,6 @@ mod tests {
         for evidence in [
             crate::AuthenticationUsernameEvidence::Generic,
             crate::AuthenticationUsernameEvidence::StandardsBasedEmail,
-            crate::AuthenticationUsernameEvidence::Absent,
         ] {
             for (source_origin, destination) in [
                 ("https://github.com", "https://github.com/session"),

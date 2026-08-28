@@ -26,6 +26,13 @@ pub(super) fn identity_indicates_explicit_authentication_route(identity: &str) -
     )
 }
 
+pub(super) fn identity_indicates_explicit_login_route(identity: &str) -> bool {
+    contains_any_word(
+        &expand_identity_text(identity),
+        &["login", "log in", "signin", "sign in", "sign-in"],
+    )
+}
+
 pub(super) fn identity_indicates_one_time_code_authentication_context(identity: &str) -> bool {
     let identity = expand_identity_text(identity);
     identity_indicates_explicit_authentication_route(&identity)
@@ -101,7 +108,7 @@ pub(super) fn destination_has_disallowed_action_or_provider(
 }
 
 pub(super) fn destination_has_safe_login_identity(destination_identity: &str) -> bool {
-    identity_indicates_explicit_authentication_route(destination_identity)
+    identity_indicates_explicit_login_route(destination_identity)
         && !control_destination_indicates_non_authentication_route(destination_identity)
         && !destination_has_disallowed_action_or_provider(destination_identity, false, false)
         && !looks_like_registration_route_control_label(destination_identity)

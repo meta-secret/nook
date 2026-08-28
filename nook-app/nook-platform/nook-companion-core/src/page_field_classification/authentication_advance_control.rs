@@ -18,7 +18,7 @@ use super::form_identity::{
     destination_has_disallowed_action_or_provider, destination_has_safe_login_identity,
     form_identity_indicates_destructive_action,
     form_identity_indicates_non_authentication_account_management,
-    identity_indicates_explicit_authentication_route,
+    identity_indicates_explicit_authentication_route, identity_indicates_explicit_login_route,
     one_time_code_control_has_authentication_context,
 };
 use super::{
@@ -94,7 +94,7 @@ fn has_positive_login_identity(
     matches!(
         observation.authentication_username,
         AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
-    ) || identity_indicates_explicit_authentication_route(&observation.form_identity)
+    ) || identity_indicates_explicit_login_route(&observation.form_identity)
         || (owned_semantic_submit
             && matches!(
                 observation.authentication_username,
@@ -217,10 +217,11 @@ impl AuthenticationAdvanceControlObservation {
         else {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         };
-        if destination.has_external_provider_authority
-            && !matches!(
+        if destination.has_provider_authority
+            && matches!(
                 self.authentication_username,
-                AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
+                AuthenticationUsernameEvidence::Generic
+                    | AuthenticationUsernameEvidence::StandardsBasedEmail
             )
         {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
@@ -585,6 +586,26 @@ mod tests {
             ..password_only_submit
         };
         assert!(!advances_authentication(&destructive_destination));
+    }
+
+    #[test]
+    fn generic_reauthentication_does_not_identify_a_password_login() {
+        let reauthentication = AuthenticationAdvanceControlObservation {
+            actionability: PageControlActionability::Actionable,
+            ownership: PageControlOwnership::OwnedForm,
+            semantics: PageControlSemantics::SemanticSubmit,
+            authentication_username: AuthenticationUsernameEvidence::Absent,
+            password_field_count: 1,
+            new_password_field_count: 0,
+            one_time_code_field_count: 0,
+            semantic_submit_control_count: 1,
+            source_origin: "https://example.test".to_owned(),
+            form_identity: "reauthentication".to_owned(),
+            destination_identity: "/auth/confirm".to_owned(),
+            label: "Confirm".to_owned(),
+        };
+
+        assert!(!advances_authentication(&reauthentication));
     }
 
     #[test]

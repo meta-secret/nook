@@ -6,7 +6,7 @@ use url::Url;
 
 pub(super) struct CanonicalControlDestination {
     pub(super) route_identity: String,
-    pub(super) has_external_provider_authority: bool,
+    pub(super) has_provider_authority: bool,
 }
 
 fn is_http_url(url: &Url) -> bool {
@@ -92,7 +92,7 @@ pub(super) fn canonicalize_control_destination(
 
     Some(CanonicalControlDestination {
         route_identity,
-        has_external_provider_authority: destination
+        has_provider_authority: destination
             .host_str()
             .is_some_and(identity_names_external_authentication_provider),
     })
@@ -146,6 +146,20 @@ mod tests {
             "https://gitlab.com",
             "//gitlab.com/users/sign_in"
         )));
+    }
+
+    #[test]
+    fn accepts_password_only_login_on_the_sites_own_provider_host() {
+        for (source_origin, destination_identity) in [
+            ("https://login.microsoftonline.com", "/common/login"),
+            ("https://accounts.google.com", "/signin/v2/challenge/pwd"),
+        ] {
+            let mut observation = password_control(source_origin, destination_identity);
+            observation.authentication_username = AuthenticationUsernameEvidence::Absent;
+            observation.form_identity = String::new();
+
+            assert!(advances(&observation), "{source_origin}");
+        }
     }
 
     #[test]
