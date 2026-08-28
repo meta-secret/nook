@@ -105,10 +105,12 @@ Typed evidence, deterministic admission, provider-local joins, immutable
 generation restart, and the final join follow
 [subagent delegation](gizmo/workflows/subagent-delegation.md).
 
-The active harness alone creates, starts, runs, retries, and cancels worker
-attempts and owns worker-attempt lifecycle. It also owns native worker labels
-or names, same-model inheritance, scheduling, communication, and terminal
-barriers. Any explicit model selection remains harness-owned.
+The active harness owns worker creation and native worker labels or names.
+For Gizmo-authorized records, it alone starts, runs, retries, cancels, and
+communicates with worker attempts and owns their lifecycle. It also owns
+same-model inheritance and terminal-state reporting. Any explicit model
+selection remains harness-owned. The harness does not select or admit task
+records or snapshot or change frontiers.
 
 Repository profile files are not semantic, capability, context, model, or
 lifecycle authority.
