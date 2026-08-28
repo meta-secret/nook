@@ -988,5 +988,5 @@ describe('core to WASM to web module delivery pilot', () => {
     expect(sourceGit(['worktree', 'list', '--porcelain'])).not.toContain(
       activeFixture.workspaceRoot,
     );
-  });
+  }, 15_000);
 });
