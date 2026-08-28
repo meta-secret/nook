@@ -577,8 +577,15 @@ test.describe('devices and access dashboard', () => {
     await page.getByTestId('header-devices-access-btn').click()
     await openRelationshipGraph(page)
     await page.setViewportSize({ width: 320, height: 844 })
-    await page.getByTestId('header-language-select').click()
-    await page.getByTestId('header-language-option-ru').click()
+    await page.getByTestId('header-mobile-tools-btn').click()
+    const mobileTools = page.getByTestId('header-mobile-tools')
+    await expect(
+      mobileTools.getByTestId('header-mobile-lock-vault-btn'),
+    ).toBeVisible()
+    await mobileTools.getByTestId('header-language-select').click()
+    await mobileTools.getByTestId('header-language-option-ru').click()
+    await page.keyboard.press('Escape')
+    await expect(mobileTools).toBeHidden()
 
     const bridge = page.getByTestId('devices-access-chain')
     await expect(bridge.getByRole('article')).toHaveCount(4)

@@ -178,6 +178,41 @@ test.describe('persistent workspace routing', () => {
     }
   })
 
+  test('returns header access to the originating workspace route', async ({
+    page,
+  }) => {
+    await connectLocalVault(page)
+
+    for (const origin of [
+      {
+        tab: 'vault-admin-tab',
+        path: /\/admin$/,
+        panel: 'vault-admin-panel',
+      },
+      {
+        tab: 'vault-settings-tab',
+        path: /\/settings$/,
+        panel: 'storage-settings-panel',
+      },
+    ]) {
+      await page.getByTestId(origin.tab).click()
+      await expect(page).toHaveURL(origin.path)
+      await expect(page.getByTestId(origin.panel)).toBeVisible()
+
+      const headerDevicesAccess = page.getByTestId('header-devices-access-btn')
+      await headerDevicesAccess.click()
+      await expect(page).toHaveURL(/\/devices-access$/)
+      await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
+      await page.getByTestId('devices-access-back').click()
+
+      await expect(page).toHaveURL(origin.path)
+      await expect(page.getByTestId(origin.panel)).toBeVisible()
+      await expect(headerDevicesAccess).toBeFocused()
+    }
+  })
+
   test('leaves an active secret draft cleanly before opening header access', async ({
     page,
   }) => {

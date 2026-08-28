@@ -41,6 +41,12 @@
     SecretEditorModeKind,
     type SecretEditorMode,
   } from './authenticated-vault-workspace-state'
+  import {
+    WorkspaceRoute,
+    WorkspaceRouteLookupKind,
+    workspaceRouteFromPath,
+  } from '$lib/app/workspace-route'
+  import { applyWorkspaceRoute, pushWorkspaceRoute } from '$lib/vault/ui'
 
   const SUPPORTS_EXTENSION = configured_vault_application_supports_extension()
 
@@ -80,6 +86,7 @@
     kind: SecretEditorModeKind.Closed,
   })
   let secretsEditorResetKey = $state(0)
+  let devicesAccessReturnRoute = $state(WorkspaceRoute.Vault)
   const secretsNoteEditorOpen = $derived(
     secretsAddOpen &&
       secretsAddFormType.kind === SecretEditorModeKind.Adding &&
@@ -107,6 +114,12 @@
 
   function openDevicesAccessFromHeader() {
     leaveSecretsEditor()
+    const currentRoute = workspaceRouteFromPath(window.location.pathname)
+    devicesAccessReturnRoute =
+      currentRoute.kind === WorkspaceRouteLookupKind.Workspace &&
+      currentRoute.route !== WorkspaceRoute.DevicesAccess
+        ? currentRoute.route
+        : WorkspaceRoute.Vault
     const settingsRequest: Parameters<typeof vault.openSettings>[0] = {
       section: SettingsSection.DevicesAccess,
       accordion: SettingsAccordionSection.Devices,
@@ -121,7 +134,12 @@
   })
 
   async function closeDevicesAccess() {
-    vault.closeSettings()
+    pushWorkspaceRoute(devicesAccessReturnRoute)
+    const routeApplication: Parameters<typeof applyWorkspaceRoute>[0] = {
+      state: vault,
+      route: devicesAccessReturnRoute,
+    }
+    applyWorkspaceRoute(routeApplication)
     await tick()
     document
       .querySelector<HTMLButtonElement>(

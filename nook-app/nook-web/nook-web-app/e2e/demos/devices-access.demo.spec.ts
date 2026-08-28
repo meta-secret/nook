@@ -20,11 +20,23 @@ test('keeps access reachable in the compact authenticated header', async ({
   const headerDevicesAccess = page.getByTestId('header-devices-access-btn')
   await expect(headerDevicesAccess).toBeVisible()
   await expect(headerDevicesAccess).toBeInViewport()
-  await expect(page.getByTestId('header-lock-vault-btn')).toBeInViewport()
+  await page.getByTestId('header-mobile-tools-btn').click()
+  const mobileTools = page.getByTestId('header-mobile-tools')
+  await expect(mobileTools.getByTestId('header-language-select')).toBeVisible()
+  await expect(
+    mobileTools.getByTestId('header-mobile-theme-toggle-btn'),
+  ).toBeVisible()
+  await expect(
+    mobileTools.getByTestId('header-mobile-help-open-btn'),
+  ).toBeVisible()
+  await expect(
+    mobileTools.getByTestId('header-mobile-lock-vault-btn'),
+  ).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(
     320,
   )
   await page.waitForTimeout(BEAT_MS)
+  await page.keyboard.press('Escape')
 
   await headerDevicesAccess.click()
   await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
