@@ -821,6 +821,7 @@ mod tests {
                             new_password_field_count: 0,
                             one_time_code_field_count: 0,
                             semantic_submit_control_count: 1,
+                            source_origin: "https://example.test".to_owned(),
                             form_identity: String::new(),
                             destination_identity: String::new(),
                             label: "Continue".to_owned(),
@@ -840,7 +841,11 @@ mod tests {
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod wasm_tests {
-    use nook_companion_core::{ExtensionPersistenceArea, ExtensionPersistenceObservation};
+    use nook_companion_core::{
+        AuthenticationAdvanceControlDecision, AuthenticationAdvanceControlObservation,
+        AuthenticationUsernameEvidence, ExtensionPersistenceArea, ExtensionPersistenceObservation,
+        PageControlActionability, PageControlOwnership, PageControlSemantics,
+    };
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
@@ -855,6 +860,39 @@ mod wasm_tests {
         let decoded: ExtensionPersistenceObservation = serde_wasm_bindgen::from_value(js_value)?;
 
         assert_eq!(decoded, observation);
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn authentication_source_origin_round_trips_and_gates_cross_origin()
+    -> Result<(), serde_wasm_bindgen::Error> {
+        let observation = AuthenticationAdvanceControlObservation {
+            actionability: PageControlActionability::Actionable,
+            ownership: PageControlOwnership::OwnedForm,
+            semantics: PageControlSemantics::SemanticSubmit,
+            authentication_username: AuthenticationUsernameEvidence::Strong,
+            password_field_count: 1,
+            new_password_field_count: 0,
+            one_time_code_field_count: 0,
+            semantic_submit_control_count: 1,
+            source_origin: "https://example.test".to_owned(),
+            form_identity: "login".to_owned(),
+            destination_identity: "https://evil.example/login".to_owned(),
+            label: "Sign in".to_owned(),
+        };
+        let js_value = serde_wasm_bindgen::to_value(&observation)?;
+        let mut decoded: AuthenticationAdvanceControlObservation =
+            serde_wasm_bindgen::from_value(js_value)?;
+        assert_eq!(decoded.source_origin, observation.source_origin);
+        assert_eq!(
+            decoded.classify(),
+            AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication
+        );
+        decoded.destination_identity = "/login".to_owned();
+        assert_eq!(
+            decoded.classify(),
+            AuthenticationAdvanceControlDecision::AdvancesAuthentication
+        );
         Ok(())
     }
 }

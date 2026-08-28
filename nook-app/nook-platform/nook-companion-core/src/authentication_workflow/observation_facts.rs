@@ -310,6 +310,7 @@ mod tests {
                     new_password_field_count: 0,
                     one_time_code_field_count: 1,
                     semantic_submit_control_count: 1,
+                    source_origin: "https://example.test".to_owned(),
                     form_identity: form_identity.to_owned(),
                     destination_identity: destination_identity.to_owned(),
                     label: label.to_owned(),
@@ -325,6 +326,22 @@ mod tests {
         destination_identity: &str,
         label: &str,
     ) -> AuthenticationAdvanceControlObservation {
+        password_control_from_origin(
+            "https://example.test",
+            authentication_username,
+            ownership,
+            destination_identity,
+            label,
+        )
+    }
+
+    fn password_control_from_origin(
+        source_origin: &str,
+        authentication_username: crate::AuthenticationUsernameEvidence,
+        ownership: crate::PageControlOwnership,
+        destination_identity: &str,
+        label: &str,
+    ) -> AuthenticationAdvanceControlObservation {
         AuthenticationAdvanceControlObservation {
             actionability: crate::PageControlActionability::Actionable,
             ownership,
@@ -334,6 +351,7 @@ mod tests {
             new_password_field_count: 0,
             one_time_code_field_count: 0,
             semantic_submit_control_count: 1,
+            source_origin: source_origin.to_owned(),
             form_identity: String::new(),
             destination_identity: destination_identity.to_owned(),
             label: label.to_owned(),
@@ -388,6 +406,7 @@ mod tests {
                     new_password_field_count: 0,
                     one_time_code_field_count: 0,
                     semantic_submit_control_count: 1,
+                    source_origin: "https://example.test".to_owned(),
                     form_identity: String::new(),
                     destination_identity: String::new(),
                     label: "Continue".to_owned(),
@@ -427,6 +446,7 @@ mod tests {
                     new_password_field_count: 0,
                     one_time_code_field_count: 0,
                     semantic_submit_control_count: 1,
+                    source_origin: "https://example.test".to_owned(),
                     form_identity: "login-form".to_owned(),
                     destination_identity: String::new(),
                     label: "Continue".to_owned(),
@@ -452,6 +472,7 @@ mod tests {
             new_password_field_count: 1,
             one_time_code_field_count: 0,
             semantic_submit_control_count: 1,
+            source_origin: "https://example.test".to_owned(),
             form_identity: String::new(),
             destination_identity: String::new(),
             label: "Continue".to_owned(),
@@ -564,6 +585,7 @@ mod tests {
             new_password_field_count: 0,
             one_time_code_field_count: 0,
             semantic_submit_control_count: 1,
+            source_origin: "https://example.test".to_owned(),
             form_identity: String::new(),
             destination_identity: String::new(),
             label: "Continue".to_owned(),
@@ -601,6 +623,7 @@ mod tests {
                     new_password_field_count: 0,
                     one_time_code_field_count: 0,
                     semantic_submit_control_count: 0,
+                    source_origin: "https://example.test".to_owned(),
                     form_identity: String::new(),
                     destination_identity: String::new(),
                     label: "x".repeat(
@@ -631,6 +654,7 @@ mod tests {
                 new_password_field_count: 0,
                 one_time_code_field_count: 0,
                 semantic_submit_control_count: 1,
+                source_origin: "https://example.test".to_owned(),
                 form_identity: form_identity.to_owned(),
                 destination_identity: destination_identity.to_owned(),
                 label: label.to_owned(),
@@ -738,22 +762,26 @@ mod tests {
 
     #[test]
     fn provider_hostnames_do_not_override_login_route_identity() {
-        for (evidence, destination) in [
+        for (evidence, source_origin, destination) in [
             (
                 crate::AuthenticationUsernameEvidence::Strong,
+                "https://github.com",
                 "https://github.com/session",
             ),
             (
                 crate::AuthenticationUsernameEvidence::Explicit,
+                "https://gitlab.com",
                 "https://gitlab.com/users/sign_in",
             ),
             (
                 crate::AuthenticationUsernameEvidence::Explicit,
+                "https://github.com",
                 "//github.com/session",
             ),
         ] {
             assert_eq!(
-                password_control(
+                password_control_from_origin(
+                    source_origin,
                     evidence,
                     crate::PageControlOwnership::OwnedForm,
                     destination,
@@ -768,9 +796,13 @@ mod tests {
             crate::AuthenticationUsernameEvidence::StandardsBasedEmail,
             crate::AuthenticationUsernameEvidence::Absent,
         ] {
-            for destination in ["https://github.com/session", "//gitlab.com/users/sign_in"] {
+            for (source_origin, destination) in [
+                ("https://github.com", "https://github.com/session"),
+                ("https://gitlab.com", "//gitlab.com/users/sign_in"),
+            ] {
                 assert_eq!(
-                    password_control(
+                    password_control_from_origin(
+                        source_origin,
                         evidence,
                         crate::PageControlOwnership::OwnedForm,
                         destination,
@@ -932,6 +964,7 @@ mod tests {
                     new_password_field_count: 0,
                     one_time_code_field_count: 0,
                     semantic_submit_control_count: 1,
+                    source_origin: "https://example.test".to_owned(),
                     form_identity: "login".to_owned(),
                     destination_identity: String::new(),
                     label: "Sign in".to_owned(),

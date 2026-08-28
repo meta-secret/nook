@@ -1,9 +1,12 @@
 use super::control_identity::{
     identity_names_external_authentication_provider,
     looks_like_alternate_authentication_route_control_label,
+    looks_like_auxiliary_authentication_control_label,
+    looks_like_password_recovery_route_control_label, looks_like_registration_route_control_label,
 };
 use super::{
     AuthenticationUsernameEvidence, contains_any_word, expand_identity_text,
+    looks_like_non_authentication_submit_control_label,
     looks_like_password_update_submit_control_label,
 };
 
@@ -69,59 +72,41 @@ pub(super) fn control_destination_indicates_generic_oauth_authorization_route(
     route == "/oauth2/authorize"
 }
 
-fn control_destination_absolute_remainder(destination_identity: &str) -> Option<&str> {
-    let destination = destination_identity.trim();
-    destination
-        .strip_prefix("https://")
-        .or_else(|| destination.strip_prefix("http://"))
-        .or_else(|| destination.strip_prefix("//"))
-}
-
-fn control_destination_route_identity(destination_identity: &str) -> &str {
-    control_destination_absolute_remainder(destination_identity).map_or(
-        destination_identity.trim(),
-        |value| {
-            value
-                .find(['/', '?', '#'])
-                .map_or("", |index| &value[index..])
-        },
-    )
-}
-
-pub(super) fn control_destination_has_external_provider_authority(
-    destination_identity: &str,
-) -> bool {
-    control_destination_absolute_remainder(destination_identity).is_some_and(|value| {
-        let authority = value
-            .find(['/', '?', '#'])
-            .map_or(value, |index| &value[..index]);
-        identity_names_external_authentication_provider(authority)
-    })
-}
-
-pub(super) fn provider_authority_lacks_primary_username(
-    destination_identity: &str,
-    authentication_username: AuthenticationUsernameEvidence,
-) -> bool {
-    control_destination_has_external_provider_authority(destination_identity)
-        && !matches!(
-            authentication_username,
-            AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
-        )
-}
-
 pub(super) fn control_destination_indicates_alternate_provider(
     destination_identity: &str,
     allow_generic_oauth_authorization: bool,
 ) -> bool {
-    let route_identity = control_destination_route_identity(destination_identity);
-    looks_like_alternate_authentication_route_control_label(route_identity)
-        || identity_names_external_authentication_provider(route_identity)
-        || (contains_any_word(&expand_identity_text(route_identity), &["oauth"])
+    looks_like_alternate_authentication_route_control_label(destination_identity)
+        || identity_names_external_authentication_provider(destination_identity)
+        || (contains_any_word(&expand_identity_text(destination_identity), &["oauth"])
             && !(allow_generic_oauth_authorization
                 && control_destination_indicates_generic_oauth_authorization_route(
                     destination_identity,
                 )))
+}
+
+pub(super) fn destination_has_disallowed_action_or_provider(
+    destination_identity: &str,
+    password_update_destination: bool,
+    allow_generic_oauth_authorization: bool,
+) -> bool {
+    control_destination_has_disallowed_route_action(destination_identity)
+        || (looks_like_non_authentication_submit_control_label(destination_identity)
+            && !password_update_destination
+            && !control_destination_indicates_safe_post_login_route(destination_identity))
+        || control_destination_indicates_alternate_provider(
+            destination_identity,
+            allow_generic_oauth_authorization,
+        )
+}
+
+pub(super) fn destination_has_safe_login_identity(destination_identity: &str) -> bool {
+    identity_indicates_explicit_authentication_route(destination_identity)
+        && !control_destination_indicates_non_authentication_route(destination_identity)
+        && !destination_has_disallowed_action_or_provider(destination_identity, false, false)
+        && !looks_like_registration_route_control_label(destination_identity)
+        && !looks_like_password_recovery_route_control_label(destination_identity)
+        && !looks_like_auxiliary_authentication_control_label(destination_identity)
 }
 
 pub(super) fn form_identity_indicates_destructive_action(form_identity: &str) -> bool {

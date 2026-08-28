@@ -6,6 +6,7 @@
 
 mod authentication_advance_control;
 mod control_identity;
+mod destination_identity;
 mod form_identity;
 mod one_time_code_progression;
 

@@ -8,19 +8,18 @@ use super::control_identity::{
     looks_like_one_time_code_resend_control_label,
     looks_like_password_recovery_route_control_label, looks_like_registration_route_control_label,
 };
+use super::destination_identity::canonicalize_control_destination;
 use super::form_identity::{
-    control_destination_has_disallowed_route_action,
-    control_destination_indicates_alternate_provider,
     control_destination_indicates_generic_oauth_authorization_route,
     control_destination_indicates_non_authentication_route,
     control_destination_indicates_password_recovery_route,
     control_destination_indicates_password_update_route,
     control_destination_indicates_registration_route,
-    control_destination_indicates_safe_post_login_route,
+    destination_has_disallowed_action_or_provider, destination_has_safe_login_identity,
     form_identity_indicates_destructive_action,
     form_identity_indicates_non_authentication_account_management,
     identity_indicates_explicit_authentication_route,
-    one_time_code_control_has_authentication_context, provider_authority_lacks_primary_username,
+    one_time_code_control_has_authentication_context,
 };
 use super::{
     AuthenticationUsernameEvidence, contains_any_word, expand_identity_text,
@@ -71,6 +70,7 @@ pub struct AuthenticationAdvanceControlObservation {
     pub new_password_field_count: u32,
     pub one_time_code_field_count: u32,
     pub semantic_submit_control_count: u32,
+    pub source_origin: String,
     pub form_identity: String,
     pub destination_identity: String,
     pub label: String,
@@ -83,30 +83,6 @@ pub struct AuthenticationAdvanceControlObservation {
 pub enum AuthenticationAdvanceControlDecision {
     AdvancesAuthentication,
     DoesNotAdvanceAuthentication,
-}
-
-fn destination_has_disallowed_action_or_provider(
-    destination_identity: &str,
-    password_update_destination: bool,
-    allow_generic_oauth_authorization: bool,
-) -> bool {
-    control_destination_has_disallowed_route_action(destination_identity)
-        || (looks_like_non_authentication_submit_control_label(destination_identity)
-            && !password_update_destination
-            && !control_destination_indicates_safe_post_login_route(destination_identity))
-        || control_destination_indicates_alternate_provider(
-            destination_identity,
-            allow_generic_oauth_authorization,
-        )
-}
-
-fn destination_has_safe_login_identity(destination_identity: &str) -> bool {
-    identity_indicates_explicit_authentication_route(destination_identity)
-        && !control_destination_indicates_non_authentication_route(destination_identity)
-        && !destination_has_disallowed_action_or_provider(destination_identity, false, false)
-        && !looks_like_registration_route_control_label(destination_identity)
-        && !looks_like_password_recovery_route_control_label(destination_identity)
-        && !looks_like_auxiliary_authentication_control_label(destination_identity)
 }
 
 fn has_positive_login_identity(
@@ -145,10 +121,7 @@ fn has_unconditional_veto_identity(
         && control_destination_indicates_generic_oauth_authorization_route(
             &observation.destination_identity,
         );
-    provider_authority_lacks_primary_username(
-        &observation.destination_identity,
-        observation.authentication_username,
-    ) || form_identity_indicates_destructive_action(&observation.form_identity)
+    form_identity_indicates_destructive_action(&observation.form_identity)
         || form_identity_indicates_destructive_action(&observation.destination_identity)
         || form_identity_indicates_destructive_action(&observation.label)
         || contains_any_word(&expand_identity_text(&observation.label), &["cancel"])
@@ -219,7 +192,8 @@ impl AuthenticationAdvanceControlObservation {
     /// Whether DOM-controlled text and bounded field counts fit the observation envelope.
     #[must_use]
     pub fn is_bounded(&self) -> bool {
-        self.form_identity.len() <= super::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
+        self.source_origin.len() <= super::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
+            && self.form_identity.len() <= super::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
             && self.destination_identity.len() <= super::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
             && self.label.len() <= super::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
             && [
@@ -238,6 +212,25 @@ impl AuthenticationAdvanceControlObservation {
         if !self.is_bounded() {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
+        let Some(destination) =
+            canonicalize_control_destination(&self.source_origin, &self.destination_identity)
+        else {
+            return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
+        };
+        if destination.has_external_provider_authority
+            && !matches!(
+                self.authentication_username,
+                AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
+            )
+        {
+            return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
+        }
+        let mut observation = self.clone();
+        observation.destination_identity = destination.route_identity;
+        observation.classify_canonical()
+    }
+
+    fn classify_canonical(&self) -> AuthenticationAdvanceControlDecision {
         if matches!(self.actionability, PageControlActionability::Inert) {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
@@ -357,6 +350,7 @@ mod tests {
             new_password_field_count: 0,
             one_time_code_field_count: 0,
             semantic_submit_control_count: 1,
+            source_origin: "https://example.test".to_owned(),
             form_identity: "identity-form".to_owned(),
             destination_identity: String::new(),
             label: "Siguiente".to_owned(),
