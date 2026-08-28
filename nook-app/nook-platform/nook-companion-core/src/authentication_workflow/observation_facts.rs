@@ -747,6 +747,10 @@ mod tests {
                 crate::AuthenticationUsernameEvidence::Explicit,
                 "https://gitlab.com/users/sign_in",
             ),
+            (
+                crate::AuthenticationUsernameEvidence::Explicit,
+                "//github.com/session",
+            ),
         ] {
             assert_eq!(
                 password_control(
@@ -758,6 +762,25 @@ mod tests {
                 .classify(),
                 AuthenticationAdvanceControlDecision::AdvancesAuthentication
             );
+        }
+        for evidence in [
+            crate::AuthenticationUsernameEvidence::Generic,
+            crate::AuthenticationUsernameEvidence::StandardsBasedEmail,
+            crate::AuthenticationUsernameEvidence::Absent,
+        ] {
+            for destination in ["https://github.com/session", "//gitlab.com/users/sign_in"] {
+                assert_eq!(
+                    password_control(
+                        evidence,
+                        crate::PageControlOwnership::OwnedForm,
+                        destination,
+                        "Sign in",
+                    )
+                    .classify(),
+                    AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication,
+                    "{evidence:?} {destination}"
+                );
+            }
         }
         for (destination, label) in [
             ("/oauth/github", "Sign in"),

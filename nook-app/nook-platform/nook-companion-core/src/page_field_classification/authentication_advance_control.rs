@@ -20,7 +20,7 @@ use super::form_identity::{
     form_identity_indicates_destructive_action,
     form_identity_indicates_non_authentication_account_management,
     identity_indicates_explicit_authentication_route,
-    one_time_code_control_has_authentication_context,
+    one_time_code_control_has_authentication_context, provider_authority_lacks_primary_username,
 };
 use super::{
     AuthenticationUsernameEvidence, contains_any_word, expand_identity_text,
@@ -145,7 +145,10 @@ fn has_unconditional_veto_identity(
         && control_destination_indicates_generic_oauth_authorization_route(
             &observation.destination_identity,
         );
-    form_identity_indicates_destructive_action(&observation.form_identity)
+    provider_authority_lacks_primary_username(
+        &observation.destination_identity,
+        observation.authentication_username,
+    ) || form_identity_indicates_destructive_action(&observation.form_identity)
         || form_identity_indicates_destructive_action(&observation.destination_identity)
         || form_identity_indicates_destructive_action(&observation.label)
         || contains_any_word(&expand_identity_text(&observation.label), &["cancel"])

@@ -69,17 +69,45 @@ pub(super) fn control_destination_indicates_generic_oauth_authorization_route(
     route == "/oauth2/authorize"
 }
 
-fn control_destination_route_identity(destination_identity: &str) -> &str {
+fn control_destination_absolute_remainder(destination_identity: &str) -> Option<&str> {
     let destination = destination_identity.trim();
-    let authority = destination
+    destination
         .strip_prefix("https://")
         .or_else(|| destination.strip_prefix("http://"))
-        .or_else(|| destination.strip_prefix("//"));
-    authority.map_or(destination, |value| {
-        value
+        .or_else(|| destination.strip_prefix("//"))
+}
+
+fn control_destination_route_identity(destination_identity: &str) -> &str {
+    control_destination_absolute_remainder(destination_identity).map_or(
+        destination_identity.trim(),
+        |value| {
+            value
+                .find(['/', '?', '#'])
+                .map_or("", |index| &value[index..])
+        },
+    )
+}
+
+pub(super) fn control_destination_has_external_provider_authority(
+    destination_identity: &str,
+) -> bool {
+    control_destination_absolute_remainder(destination_identity).is_some_and(|value| {
+        let authority = value
             .find(['/', '?', '#'])
-            .map_or("", |index| &value[index..])
+            .map_or(value, |index| &value[..index]);
+        identity_names_external_authentication_provider(authority)
     })
+}
+
+pub(super) fn provider_authority_lacks_primary_username(
+    destination_identity: &str,
+    authentication_username: AuthenticationUsernameEvidence,
+) -> bool {
+    control_destination_has_external_provider_authority(destination_identity)
+        && !matches!(
+            authentication_username,
+            AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
+        )
 }
 
 pub(super) fn control_destination_indicates_alternate_provider(
