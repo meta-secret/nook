@@ -27,7 +27,6 @@ export type AcceptedModuleDeliveryEvidenceInspection = {
   readonly authority: ModuleDeliveryGenerationAuthority;
   readonly evidence: AcceptedModuleDeliveryEvidence;
 };
-
 export type AcceptedModuleDeliveryEvidenceRegistration =
   AcceptedModuleDeliveryEvidenceInspection & {
     readonly integratedTaskIds: readonly string[];
@@ -80,9 +79,6 @@ type ResourceClaimPair = {
   readonly first: readonly string[];
   readonly second: readonly string[];
 };
-
-export type FrozenAdmissionSelectionRequest =
-  Readonly<ModuleDeliveryAdmissionSelection>;
 
 export function trustedModuleDeliveryPlanSnapshot(
   candidate: ValidatedModuleDeliveryPlan,
@@ -167,7 +163,7 @@ export function freezeProviderEvidenceIdentity(
 }
 
 export function freezeModuleDeliveryAdmissionSelection(
-  request: FrozenAdmissionSelectionRequest,
+  request: Readonly<ModuleDeliveryAdmissionSelection>,
 ): ModuleDeliveryAdmissionSelection {
   const selection: ModuleDeliveryAdmissionSelection = {
     ...request,

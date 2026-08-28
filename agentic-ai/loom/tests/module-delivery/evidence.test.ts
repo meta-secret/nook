@@ -349,6 +349,14 @@ test('rejects forged metadata, evidence capabilities, and authority-owned stale 
       acceptedProviderEvidence: [],
     };
     const exact = submission(submissionRequest);
+    const gitClaimRequest: ModuleDeliveryEvidenceDigestRequest = {
+      repositoryRoot: active.fixture.sourceRoot,
+      sourceCommit: active.fixture.baselineCommit,
+      evidenceSurface: ['git:index'],
+    };
+    expect(() =>
+      moduleDeliveryEvidenceClaimIdentities(gitClaimRequest),
+    ).toThrow('Git-state evidence claims are unsupported');
     const mutations: readonly ModuleDeliveryReadOnlyEvidenceSubmission[] = [
       { ...exact, taskId: 'forged-task' },
       { ...exact, attempt: 2 },

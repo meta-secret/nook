@@ -41,7 +41,6 @@ export type {
 export {
   moduleDeliveryEvidenceArtifactDigest,
   moduleDeliveryEvidenceClaimIdentities,
-  moduleDeliveryEvidenceSurfaceDigest,
 } from './evidence.ts';
 export type {
   ModuleDeliveryAcceptedProviderEvidenceIdentity,

@@ -84,7 +84,6 @@ type AttemptIdentity = Readonly<{
   generation: number;
   planDigest: string;
 }>;
-
 export type ModuleDeliveryAdmission = AttemptIdentity & {
   readonly startingFrontier: string;
   readonly resources: ModuleDeliveryResourceClaims;
@@ -95,14 +94,11 @@ export type ModuleDeliveryAdmission = AttemptIdentity & {
   readonly acceptanceRequirements: readonly string[];
   readonly authorizedProviderEvidence: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
 };
-
 export type ModuleDeliveryAttemptLease = ModuleDeliveryAdmission;
-
 export type ModuleDeliveryAttemptDisposition = AttemptIdentity & {
   readonly kind: ModuleDeliveryAttemptDispositionKind;
   readonly conclusion: ModuleDeliveryGenerationFenceKind;
 };
-
 export type ModuleDeliveryAdmissionState = Readonly<{
   generation: number;
   planDigest: string;
@@ -116,7 +112,6 @@ export type SelectModuleDeliveryAdmissionsRequest = {
   readonly acceptedPlan: ValidatedModuleDeliveryPlan;
   readonly state: ModuleDeliveryAdmissionState;
 };
-
 export type ModuleDeliveryAdmissionSelection = {
   readonly status: ModuleDeliveryAdmissionSelectionStatus;
   readonly admissions: readonly ModuleDeliveryAdmission[];
@@ -129,7 +124,6 @@ export type RecordModuleDeliveryAttemptLeasesRequest = {
   readonly state: ModuleDeliveryAdmissionState;
   readonly admissions: readonly ModuleDeliveryAdmission[];
 };
-
 export type ModuleDeliveryLeaseRecording = {
   readonly state: ModuleDeliveryAdmissionState;
   readonly leases: readonly ModuleDeliveryAttemptLease[];
@@ -139,7 +133,6 @@ export type ModuleDeliveryDispositionOutcome = {
   readonly kind: ModuleDeliveryAttemptDispositionKind;
   readonly conclusion: ModuleDeliveryGenerationFenceKind;
 };
-
 export type RecordModuleDeliveryAttemptDispositionRequest = {
   readonly authority: ModuleDeliveryGenerationAuthority;
   readonly state: ModuleDeliveryAdmissionState;
@@ -159,12 +152,10 @@ export type GenerationAuthorityInspection = {
   readonly generation: number;
   readonly planDigest: string;
 };
-
 export type AdmissionStateAuthorityInspection = {
   readonly authority: ModuleDeliveryGenerationAuthority;
   readonly state: ModuleDeliveryAdmissionState;
 };
-
 export type AttemptLeaseAuthorityInspection = {
   readonly authority: ModuleDeliveryGenerationAuthority;
   readonly lease: ModuleDeliveryAttemptLease;
@@ -873,12 +864,17 @@ function terminallyBlockedTaskIds(
   const failed = new Set(
     authority.acceptedPlan.plan.nodes
       .filter(
-        (node) =>
-          authority.dispositions.filter(
+        ({ taskId }) =>
+          (authority.attemptsByTask.get(taskId) ?? 0) >=
+            authority.acceptedPlan.plan.maxAttempts &&
+          ![...authority.activeLeases.values()].some(
+            (lease) => lease.taskId === taskId,
+          ) &&
+          !authority.dispositions.some(
             (entry) =>
-              entry.taskId === node.taskId &&
-              entry.kind === ModuleDeliveryAttemptDispositionKind.FinalUnusable,
-          ).length >= authority.acceptedPlan.plan.maxAttempts,
+              entry.taskId === taskId &&
+              entry.kind === ModuleDeliveryAttemptDispositionKind.Accepted,
+          ),
       )
       .map(({ taskId }) => taskId),
   );

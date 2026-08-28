@@ -136,16 +136,6 @@ type EvidenceNodeRequest = {
 const COMMIT = /^[0-9a-f]{40}$/u;
 const DIGEST = /^[0-9a-f]{64}$/u;
 
-export function moduleDeliveryEvidenceSurfaceDigest(
-  request: ModuleDeliveryEvidenceDigestRequest,
-): string {
-  const digestRequest: TreeDigestRequest = {
-    entries: gitTreeEntries(request),
-    claims: request.evidenceSurface,
-  };
-  return treeDigest(digestRequest);
-}
-
 export function moduleDeliveryEvidenceClaimIdentities(
   request: ModuleDeliveryEvidenceDigestRequest,
 ): readonly ModuleDeliveryEvidenceClaimIdentity[] {
@@ -380,6 +370,8 @@ function frozenClaims(
 function gitTreeEntries(
   request: ModuleDeliveryEvidenceDigestRequest,
 ): readonly GitTreeEntry[] {
+  if (request.evidenceSurface.some((claim) => claim.startsWith('git:')))
+    throw new Error('Git-state evidence claims are unsupported.');
   const gitRequest: GitCommandRequest = {
     cwd: request.repositoryRoot,
     args: ['ls-tree', '-r', '-z', '--full-tree', request.sourceCommit],

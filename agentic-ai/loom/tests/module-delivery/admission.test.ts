@@ -5,6 +5,7 @@ import { moduleDeliveryAuthorityPlan } from '../../src/module-delivery/admission
 
 import {
   REQUIRED_PARENT_OWNED_RESOURCES,
+  ModuleDeliveryAdmissionSelectionStatus,
   ModuleDeliveryAttemptDispositionKind,
   ModuleDeliveryBaselineKind,
   ModuleDeliveryGenerationFenceKind,
@@ -399,7 +400,12 @@ describe('module delivery admission authority', () => {
       accepted: second,
       state: restarted,
     };
-    expect(select(restartedRuntime).admissions[0]?.attempt).toBe(2);
+    const restartedSelection = select(restartedRuntime);
+    expect(
+      restartedSelection.admissions.map(
+        ({ taskId, attempt }) => `${taskId}:${attempt}`,
+      ),
+    ).toEqual(['alpha:2', 'beta:1']);
     const secondLeaseRequest = { runtime: restartedRuntime, taskId: 'alpha' };
     const secondLease = lease(secondLeaseRequest);
     const secondDispositionRequest: RecordModuleDeliveryAttemptDispositionRequest =
@@ -411,9 +417,11 @@ describe('module delivery admission authority', () => {
       ...restartedRuntime,
       state: exhaustedState,
     };
-    expect(
-      select(exhaustedRuntime).admissions.map(({ taskId }) => taskId),
-    ).not.toContain('alpha');
+    const exhaustedSelection = select(exhaustedRuntime);
+    expect(exhaustedSelection.status).toBe(
+      ModuleDeliveryAdmissionSelectionStatus.Blocked,
+    );
+    expect(exhaustedSelection.blockedTaskIds).toContain('alpha');
     expect(() => select(active)).toThrow('superseded');
   });
 });
