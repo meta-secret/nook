@@ -1,33 +1,33 @@
 //! Authentication advance-control classification from browser-observed facts.
 
 use super::control_identity::{
-    identity_names_external_authentication_provider,
     looks_like_alternate_authentication_route_control_label,
     looks_like_auxiliary_authentication_control_label,
-    looks_like_explicit_authentication_advance_control_label,
     looks_like_one_time_code_resend_control_label,
     looks_like_password_recovery_route_control_label, looks_like_registration_route_control_label,
 };
 use super::destination_identity::canonicalize_control_destination;
 use super::form_identity::{
-    control_destination_indicates_generic_oauth_authorization_route,
     control_destination_indicates_non_authentication_route,
     control_destination_indicates_password_recovery_route,
     control_destination_indicates_password_update_route,
     control_destination_indicates_registration_route,
-    destination_has_disallowed_action_or_provider, destination_has_safe_login_identity,
-    form_identity_indicates_destructive_action,
     form_identity_indicates_non_authentication_account_management,
-    identity_indicates_explicit_authentication_route, identity_indicates_explicit_login_route,
-    one_time_code_control_has_authentication_context,
+    identity_indicates_explicit_authentication_route,
 };
 use super::{
     AuthenticationUsernameEvidence, contains_any_word, expand_identity_text,
-    looks_like_login_advance_control_label, looks_like_non_authentication_submit_control_label,
+    looks_like_non_authentication_submit_control_label,
     looks_like_password_update_submit_control_label,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
+
+mod policy;
+use policy::{
+    accepts_authentication_advance, has_positive_login_identity, has_semantic_submit_ceremony,
+    has_unconditional_veto_identity, one_time_code_control_lacks_authentication_context,
+};
 
 /// Whether a browser-observed control can currently receive user activation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -83,109 +83,6 @@ pub struct AuthenticationAdvanceControlObservation {
 pub enum AuthenticationAdvanceControlDecision {
     AdvancesAuthentication,
     DoesNotAdvanceAuthentication,
-}
-
-fn has_positive_login_identity(
-    observation: &AuthenticationAdvanceControlObservation,
-    authentication_scope_owns_control: bool,
-) -> bool {
-    let owned_semantic_submit = authentication_scope_owns_control
-        && matches!(observation.semantics, PageControlSemantics::SemanticSubmit);
-    matches!(
-        observation.authentication_username,
-        AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
-    ) || identity_indicates_explicit_login_route(&observation.form_identity)
-        || (owned_semantic_submit
-            && matches!(
-                observation.authentication_username,
-                AuthenticationUsernameEvidence::StandardsBasedEmail
-            ))
-        || (owned_semantic_submit
-            && (looks_like_explicit_authentication_advance_control_label(&observation.label)
-                || destination_has_safe_login_identity(&observation.destination_identity)))
-}
-
-fn has_unconditional_veto_identity(
-    observation: &AuthenticationAdvanceControlObservation,
-    credential_update_destination: bool,
-) -> bool {
-    let primary_oauth_login = matches!(observation.ownership, PageControlOwnership::OwnedForm)
-        && matches!(observation.semantics, PageControlSemantics::SemanticSubmit)
-        && matches!(
-            observation.authentication_username,
-            AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
-        )
-        && observation.password_field_count > 0
-        && looks_like_explicit_authentication_advance_control_label(&observation.label)
-        && !identity_names_external_authentication_provider(&observation.label)
-        && control_destination_indicates_generic_oauth_authorization_route(
-            &observation.destination_identity,
-        );
-    form_identity_indicates_destructive_action(&observation.form_identity)
-        || form_identity_indicates_destructive_action(&observation.destination_identity)
-        || form_identity_indicates_destructive_action(&observation.label)
-        || contains_any_word(&expand_identity_text(&observation.label), &["cancel"])
-        || destination_has_disallowed_action_or_provider(
-            &observation.destination_identity,
-            credential_update_destination,
-            primary_oauth_login,
-        )
-}
-
-fn has_semantic_submit_ceremony(
-    observation: &AuthenticationAdvanceControlObservation,
-    authentication_scope_owns_control: bool,
-) -> bool {
-    let standards_email_semantic_submit = authentication_scope_owns_control
-        && matches!(observation.semantics, PageControlSemantics::SemanticSubmit)
-        && matches!(
-            observation.authentication_username,
-            AuthenticationUsernameEvidence::StandardsBasedEmail
-        );
-    observation.password_field_count > 0
-        || observation.new_password_field_count > 0
-        || observation.one_time_code_field_count > 0
-        || matches!(
-            observation.authentication_username,
-            AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
-        )
-        || standards_email_semantic_submit
-        || (authentication_scope_owns_control
-            && identity_indicates_explicit_authentication_route(&observation.form_identity))
-}
-
-fn accepts_authentication_advance(
-    observation: &AuthenticationAdvanceControlObservation,
-    authentication_scope_owns_control: bool,
-    semantic_submit_ceremony_present: bool,
-) -> bool {
-    let accepted_semantic_submit = authentication_scope_owns_control
-        && matches!(observation.semantics, PageControlSemantics::SemanticSubmit)
-        && semantic_submit_ceremony_present;
-    let accepted_scoped_activation = authentication_scope_owns_control
-        && matches!(observation.semantics, PageControlSemantics::Activation)
-        && semantic_submit_ceremony_present
-        && (observation.semantic_submit_control_count == 0
-            || looks_like_explicit_authentication_advance_control_label(&observation.label));
-    let accepted_login_label = authentication_scope_owns_control
-        && looks_like_login_advance_control_label(&observation.label)
-        && (semantic_submit_ceremony_present
-            || looks_like_explicit_authentication_advance_control_label(&observation.label));
-    accepted_semantic_submit || accepted_scoped_activation || accepted_login_label
-}
-
-fn one_time_code_control_lacks_authentication_context(
-    observation: &AuthenticationAdvanceControlObservation,
-) -> bool {
-    observation.one_time_code_field_count > 0
-        && observation.password_field_count == 0
-        && observation.new_password_field_count == 0
-        && !one_time_code_control_has_authentication_context(
-            observation.authentication_username,
-            &observation.form_identity,
-            &observation.destination_identity,
-            &observation.label,
-        )
 }
 
 impl AuthenticationAdvanceControlObservation {
@@ -606,6 +503,12 @@ mod tests {
         };
 
         assert!(!advances_authentication(&reauthentication));
+        assert!(!advances_authentication(
+            &AuthenticationAdvanceControlObservation {
+                destination_identity: "/account/confirm#login".to_owned(),
+                ..reauthentication
+            }
+        ));
     }
 
     #[test]

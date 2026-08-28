@@ -73,18 +73,13 @@ pub(super) fn canonicalize_control_destination(
         Some(value) => Some(decode_component(value)?),
         None => None,
     };
-    let fragment = match destination.fragment() {
-        Some(value) => Some(decode_component(value)?),
-        None => None,
-    };
+    if let Some(fragment) = destination.fragment() {
+        decode_component(fragment)?;
+    }
     let mut route_identity = path;
     if let Some(query) = query {
         route_identity.push('?');
         route_identity.push_str(&query);
-    }
-    if let Some(fragment) = fragment {
-        route_identity.push('#');
-        route_identity.push_str(&fragment);
     }
     if route_identity.len() > super::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES {
         return None;
@@ -146,6 +141,10 @@ mod tests {
             "https://gitlab.com",
             "//gitlab.com/users/sign_in"
         )));
+        assert!(advances(&password_control(
+            "https://example.test",
+            "/login#account-confirmation"
+        )));
     }
 
     #[test]
@@ -182,19 +181,23 @@ mod tests {
             "/auth/%64elete-account",
             "/auth/%2564elete-account",
             "/login?next=%2Faccount%2F%63ancel",
-            "/login#%6Fauth%2Fgoogle",
         ] {
             assert!(!advances(&password_control(
                 "https://example.test",
                 destination
             )));
         }
+        assert!(advances(&password_control(
+            "https://example.test",
+            "/login#%6Fauth%2Fgoogle"
+        )));
     }
 
     #[test]
     fn rejects_malformed_or_unsupported_url_evidence() {
         for destination in [
             "/login/%ZZ",
+            "/login#%ZZ",
             "javascript:submit()",
             "data:text/plain,login",
             "https://user@example.test/login",
@@ -275,18 +278,49 @@ mod tests {
 
     #[test]
     fn source_origin_is_a_required_typed_wire_field() -> Result<(), serde_json::Error> {
+        #[derive(serde::Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct SourceOriginWireProbe {
+            source_origin: String,
+        }
+
+        #[derive(serde::Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct ObservationWithoutSourceOrigin<'a> {
+            actionability: PageControlActionability,
+            ownership: PageControlOwnership,
+            semantics: PageControlSemantics,
+            authentication_username: AuthenticationUsernameEvidence,
+            password_field_count: u32,
+            new_password_field_count: u32,
+            one_time_code_field_count: u32,
+            semantic_submit_control_count: u32,
+            form_identity: &'a str,
+            destination_identity: &'a str,
+            label: &'a str,
+        }
+
         let observation = password_control("https://example.test", "/login");
         let wire = serde_json::to_value(&observation)?;
-        assert_eq!(wire["sourceOrigin"], "https://example.test");
+        let source_origin = serde_json::from_value::<SourceOriginWireProbe>(wire.clone())?;
+        assert_eq!(source_origin.source_origin, "https://example.test");
         assert_eq!(
             serde_json::from_value::<AuthenticationAdvanceControlObservation>(wire)?,
             observation
         );
-        let mut missing = serde_json::to_value(&observation)?;
-        assert!(missing.is_object());
-        if let Some(object) = missing.as_object_mut() {
-            object.remove("sourceOrigin");
-        }
+        let missing = serde_json::to_value(ObservationWithoutSourceOrigin {
+            actionability: observation.actionability,
+            ownership: observation.ownership,
+            semantics: observation.semantics,
+            authentication_username: observation.authentication_username,
+            password_field_count: observation.password_field_count,
+            new_password_field_count: observation.new_password_field_count,
+            one_time_code_field_count: observation.one_time_code_field_count,
+            semantic_submit_control_count: observation.semantic_submit_control_count,
+            form_identity: &observation.form_identity,
+            destination_identity: &observation.destination_identity,
+            label: &observation.label,
+        })?;
         assert!(
             serde_json::from_value::<AuthenticationAdvanceControlObservation>(missing).is_err()
         );
