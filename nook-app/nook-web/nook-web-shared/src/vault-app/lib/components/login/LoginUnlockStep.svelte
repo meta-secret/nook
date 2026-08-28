@@ -6,6 +6,7 @@
 
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import {
+    NookSelectedVaultIdentityContextKind,
     SentinelVaultUnlockState,
     type NookPasswordEntrySummary,
   } from '$app-wasm'
@@ -20,7 +21,6 @@
   import type { VaultState } from '$lib/vault.svelte'
   import { isSentinelVault } from '$lib/vault/sentinel-unlock'
   import type { PasswordEntrySelection } from '$lib/vault/state/session.svelte'
-  import { loadIdentityDirectoryAccessView } from '../devices-access/identity-directory-view'
   import {
     DeviceKeysUnlockCapabilityKind,
     LoginVaultEntryKind,
@@ -31,7 +31,7 @@
     type PasswordUnlockCapability,
   } from './login-unlock-state'
   import {
-    buildLoginVaultIdentityContext,
+    loadLoginVaultIdentityContext,
     LoginVaultIdentityContextKind,
     type LoginVaultIdentityContext as LoginVaultIdentityContextState,
   } from './login-vault-identity-context'
@@ -106,23 +106,19 @@
       return
     }
     if (vaultEntry.kind !== LoginVaultEntryKind.Available) {
-      identityContext = { kind: LoginVaultIdentityContextKind.Empty }
+      identityContext = {
+        kind: NookSelectedVaultIdentityContextKind.Empty,
+      }
       return
     }
 
     const storeId = vaultEntry.entry.storeId
     const generation = ++identityContextLoadGeneration
     identityContext = { kind: LoginVaultIdentityContextKind.Loading }
-    void loadIdentityDirectoryAccessView(vault.requireManager())
-      .then(({ directory }) => {
+    void loadLoginVaultIdentityContext(vault.requireManager(), storeId)
+      .then((context) => {
         if (generation !== identityContextLoadGeneration) return
-        const identityContextRequest: Parameters<
-          typeof buildLoginVaultIdentityContext
-        >[0] = {
-          identities: directory.identities,
-          storeId,
-        }
-        identityContext = buildLoginVaultIdentityContext(identityContextRequest)
+        identityContext = context
       })
       .catch(() => {
         if (generation !== identityContextLoadGeneration) return
@@ -137,7 +133,8 @@
   })
 
   const deviceKeysUnlock = $derived<DeviceKeysUnlockCapability>(
-    identityContext.kind === LoginVaultIdentityContextKind.LinkedWithCurrent &&
+    identityContext.kind ===
+      NookSelectedVaultIdentityContextKind.LinkedWithCurrent &&
       vault.loginDeviceKeysCapable
       ? { kind: DeviceKeysUnlockCapabilityKind.Unknown }
       : {
@@ -147,10 +144,11 @@
               ? vault.t(I18N_KEYS.LoginIdentityContextLoading)
               : identityContext.kind === LoginVaultIdentityContextKind.Failed
                 ? vault.t(I18N_KEYS.LoginIdentityContextFailed)
-                : identityContext.kind === LoginVaultIdentityContextKind.Empty
+                : identityContext.kind ===
+                    NookSelectedVaultIdentityContextKind.Empty
                   ? vault.t(I18N_KEYS.LoginIdentityContextEmpty)
                   : identityContext.kind ===
-                      LoginVaultIdentityContextKind.LinkedWithoutCurrent
+                      NookSelectedVaultIdentityContextKind.LinkedWithoutCurrent
                     ? vault.t(I18N_KEYS.LoginIdentityContextMismatch)
                     : vault.t(I18N_KEYS.LoginUnlockDeviceKeysUnavailable),
         },

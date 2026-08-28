@@ -1,5 +1,6 @@
 <script lang="ts">
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
+  import { NookSelectedVaultIdentityContextKind } from '$app-wasm'
   import { Fingerprint, RefreshCw } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import type { VaultState } from '$lib/vault.svelte'
@@ -22,13 +23,17 @@
 
   const showReviewAction = $derived(
     context.kind === LoginVaultIdentityContextKind.Failed ||
-      context.kind === LoginVaultIdentityContextKind.Empty ||
-      context.kind === LoginVaultIdentityContextKind.LinkedWithoutCurrent ||
-      (context.kind === LoginVaultIdentityContextKind.LinkedWithCurrent &&
+      context.kind === NookSelectedVaultIdentityContextKind.Empty ||
+      context.kind ===
+        NookSelectedVaultIdentityContextKind.LinkedWithoutCurrent ||
+      (context.kind ===
+        NookSelectedVaultIdentityContextKind.LinkedWithCurrent &&
         !deviceKeysCapable),
   )
   const currentIdentityGuidance = $derived.by(() => {
-    if (context.kind !== LoginVaultIdentityContextKind.LinkedWithCurrent) {
+    if (
+      context.kind !== NookSelectedVaultIdentityContextKind.LinkedWithCurrent
+    ) {
       return ''
     }
     const translationArgs: Parameters<typeof vault.t>[0] = {
@@ -68,7 +73,7 @@
     >
       {vault.t(I18N_KEYS.LoginIdentityContextFailed)}
     </p>
-  {:else if context.kind === LoginVaultIdentityContextKind.Empty}
+  {:else if context.kind === NookSelectedVaultIdentityContextKind.Empty}
     <p
       class="text-sm text-pretty text-muted-foreground"
       data-testid="login-vault-identity-empty"
@@ -87,12 +92,13 @@
           </span>
           <span
             class="shrink-0 text-xs {context.kind ===
-              LoginVaultIdentityContextKind.LinkedWithCurrent &&
+              NookSelectedVaultIdentityContextKind.LinkedWithCurrent &&
             identity.identityId === context.currentIdentity.identityId
               ? 'font-medium text-primary'
               : 'text-muted-foreground'}"
           >
-            {context.kind === LoginVaultIdentityContextKind.LinkedWithCurrent &&
+            {context.kind ===
+              NookSelectedVaultIdentityContextKind.LinkedWithCurrent &&
             identity.identityId === context.currentIdentity.identityId
               ? vault.t(I18N_KEYS.LoginIdentityContextCurrent)
               : vault.t(I18N_KEYS.LoginIdentityContextLinked)}
@@ -105,7 +111,7 @@
       class="text-sm text-pretty text-muted-foreground"
       data-testid="login-vault-identity-guidance"
     >
-      {#if context.kind === LoginVaultIdentityContextKind.LinkedWithCurrent}
+      {#if context.kind === NookSelectedVaultIdentityContextKind.LinkedWithCurrent}
         {currentIdentityGuidance}
       {:else}
         {vault.t(I18N_KEYS.LoginIdentityContextMismatch)}

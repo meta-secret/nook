@@ -29,6 +29,14 @@ pub enum NookIdentityLocalAccessKind {
     OtherInstallation,
 }
 
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NookSelectedVaultIdentityContextKind {
+    Empty,
+    LinkedWithoutCurrent,
+    LinkedWithCurrent,
+}
+
 struct LocalAppProtection {
     app_id: nook_core::AppId,
     protection: nook_core::DeviceAccessProtectionKind,
@@ -305,6 +313,7 @@ pub struct NookIdentityDirectorySnapshot {
 pub struct NookIdentityDirectorySnapshotRequest {
     session_app_id: String,
     session_unlocked: bool,
+    selected_store_id: Option<nook_core::StoreId>,
 }
 
 impl NookIdentityDirectorySnapshotRequest {
@@ -312,6 +321,19 @@ impl NookIdentityDirectorySnapshotRequest {
         Self {
             session_app_id,
             session_unlocked,
+            selected_store_id: None,
+        }
+    }
+
+    pub(crate) fn for_selected_vault(
+        session_app_id: String,
+        session_unlocked: bool,
+        selected_store_id: nook_core::StoreId,
+    ) -> Self {
+        Self {
+            session_app_id,
+            session_unlocked,
+            selected_store_id: Some(selected_store_id),
         }
     }
 }
@@ -319,7 +341,12 @@ impl NookIdentityDirectorySnapshotRequest {
 #[wasm_bindgen]
 impl NookIdentityDirectorySnapshotRequest {
     pub async fn resolve(&self) -> Result<NookIdentityDirectorySnapshot, wasm_bindgen::JsError> {
-        identity_directory_snapshot_for_session(&self.session_app_id, self.session_unlocked).await
+        identity_directory_snapshot_for_session(
+            &self.session_app_id,
+            self.session_unlocked,
+            self.selected_store_id.as_ref(),
+        )
+        .await
     }
 }
 
@@ -335,6 +362,17 @@ impl NookIdentityDirectorySnapshot {
             .get(index)
             .cloned()
             .ok_or_else(|| wasm_bindgen::JsError::new("Identity index is out of bounds"))
+    }
+
+    #[wasm_bindgen(getter, js_name = selectedVaultContextKind)]
+    pub fn selected_vault_context_kind(&self) -> NookSelectedVaultIdentityContextKind {
+        selected_vault_context_kind(&self.identities)
+    }
+
+    pub fn current_browser_identity(&self) -> Result<NookIdentitySnapshot, wasm_bindgen::JsError> {
+        current_browser_identity(&self.identities)
+            .cloned()
+            .ok_or_else(|| wasm_bindgen::JsError::new("No linked identity belongs to this browser"))
     }
 
     /// Return access evidence captured from the same protected app ID as the
@@ -367,6 +405,7 @@ impl NookIdentityDirectorySnapshot {
 async fn identity_directory_snapshot_for_session(
     session_app_id: &str,
     session_unlocked: bool,
+    selected_store_id: Option<&nook_core::StoreId>,
 ) -> Result<NookIdentityDirectorySnapshot, wasm_bindgen::JsError> {
     let session_app_id = session_app_id.trim();
     let projection = load_local_identity_projection(session_app_id)
@@ -407,7 +446,7 @@ async fn identity_directory_snapshot_for_session(
         .map(|entry| entry.app_id.clone())
         .collect::<Vec<_>>();
     let mut identities = Vec::new();
-    for record in directory.identities() {
+    for record in identities_linked_to_store(directory.identities(), selected_store_id) {
         let mut snapshot = NookIdentitySnapshot::from_record(
             record,
             current_app_id.as_deref(),
@@ -428,10 +467,46 @@ async fn identity_directory_snapshot_for_session(
     })
 }
 
+fn identities_linked_to_store<'a>(
+    identities: &'a [nook_core::IdentityRecord],
+    selected_store_id: Option<&nook_core::StoreId>,
+) -> Vec<&'a nook_core::IdentityRecord> {
+    identities
+        .iter()
+        .filter(|record| {
+            selected_store_id.is_none_or(|store_id| {
+                record
+                    .vault_deks
+                    .iter()
+                    .any(|vault| vault.store_id == *store_id)
+            })
+        })
+        .collect()
+}
+
+fn current_browser_identity(identities: &[NookIdentitySnapshot]) -> Option<&NookIdentitySnapshot> {
+    identities
+        .iter()
+        .find(|identity| identity.local_access == NookIdentityLocalAccessKind::CurrentBrowser)
+}
+
+fn selected_vault_context_kind(
+    identities: &[NookIdentitySnapshot],
+) -> NookSelectedVaultIdentityContextKind {
+    if identities.is_empty() {
+        return NookSelectedVaultIdentityContextKind::Empty;
+    }
+    if current_browser_identity(identities).is_some() {
+        NookSelectedVaultIdentityContextKind::LinkedWithCurrent
+    } else {
+        NookSelectedVaultIdentityContextKind::LinkedWithoutCurrent
+    }
+}
+
 #[wasm_bindgen]
 pub async fn load_identity_directory_snapshot()
 -> Result<NookIdentityDirectorySnapshot, wasm_bindgen::JsError> {
-    identity_directory_snapshot_for_session("", false).await
+    identity_directory_snapshot_for_session("", false, None).await
 }
 
 #[wasm_bindgen]
@@ -551,6 +626,111 @@ mod tests {
             NookIdentityDirectorySelection::Selected(identity_id)
                 if identity_id == record.identity_id.as_str()
         ));
+        Ok(())
+    }
+
+    #[test]
+    fn selected_vault_context_filters_records_and_resolves_current_browser() -> anyhow::Result<()> {
+        let personal_key = nook_core::AppKey::generate()?;
+        let work_key = nook_core::AppKey::generate()?;
+        let travel_key = nook_core::AppKey::generate()?;
+        let selected_store = nook_core::generate_store_id()?;
+        let other_store = nook_core::generate_store_id()?;
+        let mut personal =
+            nook_core::IdentityRecord::create_with_app_key("Personal", &personal_key, None)?;
+        let mut work = nook_core::IdentityRecord::create_with_app_key("Work", &work_key, None)?;
+        let mut travel =
+            nook_core::IdentityRecord::create_with_app_key("Travel", &travel_key, None)?;
+        personal.generate_vault_dek(selected_store.clone())?;
+        work.generate_vault_dek(selected_store.clone())?;
+        travel.generate_vault_dek(other_store)?;
+        let records = vec![personal, work, travel];
+
+        let linked = identities_linked_to_store(&records, Some(&selected_store));
+        let snapshots = linked
+            .iter()
+            .map(|record| {
+                NookIdentitySnapshot::from_record(record, Some(personal_key.app_id().as_str()), &[])
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            snapshots
+                .iter()
+                .map(NookIdentitySnapshot::label)
+                .collect::<Vec<_>>(),
+            vec!["Personal", "Work"]
+        );
+        assert_eq!(
+            selected_vault_context_kind(&snapshots),
+            NookSelectedVaultIdentityContextKind::LinkedWithCurrent
+        );
+        let current = current_browser_identity(&snapshots)
+            .ok_or_else(|| anyhow::anyhow!("expected the personal current-browser identity"))?;
+        assert_eq!(current.label(), "Personal");
+        Ok(())
+    }
+
+    #[test]
+    fn selected_vault_context_keeps_other_browser_identity_without_current() -> anyhow::Result<()> {
+        let work_key = nook_core::AppKey::generate()?;
+        let travel_key = nook_core::AppKey::generate()?;
+        let selected_store = nook_core::generate_store_id()?;
+        let mut work = nook_core::IdentityRecord::create_with_app_key("Work", &work_key, None)?;
+        let mut travel =
+            nook_core::IdentityRecord::create_with_app_key("Travel", &travel_key, None)?;
+        work.generate_vault_dek(selected_store.clone())?;
+        travel.generate_vault_dek(selected_store.clone())?;
+        let records = vec![work, travel];
+        let local_protections = [LocalAppProtection {
+            app_id: work_key.app_id().clone(),
+            protection: nook_core::DeviceAccessProtectionKind::PinOrPassphrase,
+        }];
+
+        let snapshots = identities_linked_to_store(&records, Some(&selected_store))
+            .iter()
+            .map(|record| {
+                NookIdentitySnapshot::from_record(
+                    record,
+                    Some("app_otherbrowser"),
+                    &local_protections,
+                )
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(snapshots.len(), 2);
+        assert_eq!(
+            snapshots[0].local_access(),
+            NookIdentityLocalAccessKind::ThisBrowser
+        );
+        assert_eq!(
+            snapshots[1].local_access(),
+            NookIdentityLocalAccessKind::OtherInstallation
+        );
+        assert_eq!(
+            selected_vault_context_kind(&snapshots),
+            NookSelectedVaultIdentityContextKind::LinkedWithoutCurrent
+        );
+        assert!(current_browser_identity(&snapshots).is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn selected_vault_context_is_empty_for_unlinked_store() -> anyhow::Result<()> {
+        let app_key = nook_core::AppKey::generate()?;
+        let linked_store = nook_core::generate_store_id()?;
+        let selected_store = nook_core::generate_store_id()?;
+        let mut record =
+            nook_core::IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
+        record.generate_vault_dek(linked_store)?;
+        let records = vec![record];
+
+        let linked = identities_linked_to_store(&records, Some(&selected_store));
+        assert!(linked.is_empty());
+        assert_eq!(
+            selected_vault_context_kind(&[]),
+            NookSelectedVaultIdentityContextKind::Empty
+        );
         Ok(())
     }
 }
