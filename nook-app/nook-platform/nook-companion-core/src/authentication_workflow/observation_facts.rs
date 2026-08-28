@@ -6,6 +6,7 @@ use super::{
 };
 use crate::page_field_classification::{
     AuthenticationAdvanceControlDecision, AuthenticationAdvanceControlObservation,
+    AuthenticationUsernameEvidence, PageControlOwnership,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -21,19 +22,50 @@ pub enum AuthenticationDetailedAdvanceControlObservation {
 }
 
 impl AuthenticationDetailedAdvanceControlObservation {
-    fn evidence(&self) -> AuthenticationAdvanceControlEvidence {
+    fn evidence(
+        &self,
+        fields: AuthenticationFieldObservationFacts,
+    ) -> AuthenticationAdvanceControlEvidence {
         match self {
             Self::Observed(observation)
-                if matches!(
-                    observation.classify(),
-                    AuthenticationAdvanceControlDecision::AdvancesAuthentication
-                ) =>
+                if observation.is_bounded()
+                    && detailed_control_matches_fields(observation, fields)
+                    && matches!(
+                        observation.classify(),
+                        AuthenticationAdvanceControlDecision::AdvancesAuthentication
+                    ) =>
             {
                 AuthenticationAdvanceControlEvidence::Present
             }
             Self::Absent | Self::Observed(_) => AuthenticationAdvanceControlEvidence::Absent,
         }
     }
+
+    fn is_bounded(&self) -> bool {
+        matches!(self, Self::Absent)
+            || matches!(self, Self::Observed(observation) if observation.is_bounded())
+    }
+}
+
+fn detailed_control_matches_fields(
+    observation: &AuthenticationAdvanceControlObservation,
+    fields: AuthenticationFieldObservationFacts,
+) -> bool {
+    fields
+        .current_password_field_count
+        .saturating_add(fields.generic_password_field_count)
+        == observation.password_field_count
+        && fields.new_password_field_count == observation.new_password_field_count
+        && fields.one_time_code_field_count == observation.one_time_code_field_count
+        && (fields.username_field_count > 0)
+            != matches!(
+                observation.authentication_username,
+                AuthenticationUsernameEvidence::Absent
+            )
+        && matches!(
+            observation.ownership,
+            PageControlOwnership::OwnedForm | PageControlOwnership::LocallyScoped
+        )
 }
 
 /// Raw, non-secret field facts observed inside one authentication scope.
@@ -164,7 +196,7 @@ impl AuthenticationPageObservationFacts {
             one_time_code_progression: self.ceremony.one_time_code_progression,
             manual_checkpoint: self.ceremony.manual_checkpoint,
             enrollment_evidence: self.authenticator.enrollment_evidence(),
-            advance_control: self.detailed_advance_control.evidence(),
+            advance_control: self.detailed_advance_control.evidence(self.fields),
             passkey: self.authenticator.passkey_evidence(),
         }
     }
@@ -185,6 +217,13 @@ pub struct AuthenticationPageObservationFactsBatch {
 impl AuthenticationPageObservationFactsBatch {
     #[must_use]
     pub fn classify(&self) -> AuthenticationWorkflowMatch {
+        if self
+            .observations
+            .iter()
+            .any(|observation| !observation.detailed_advance_control.is_bounded())
+        {
+            return AuthenticationWorkflowMatch::Rejected;
+        }
         let observations = AuthenticationPageObservations {
             observations: self
                 .observations
@@ -267,6 +306,69 @@ mod tests {
         assert_eq!(
             reduced_only.into_observation().advance_control,
             AuthenticationAdvanceControlEvidence::Absent
+        );
+    }
+
+    #[test]
+    fn rejects_mismatched_outer_and_nested_authentication_facts() {
+        let signup_with_login_control = AuthenticationPageObservationFacts {
+            fields: AuthenticationFieldObservationFacts {
+                username_field_count: 1,
+                new_password_field_count: 1,
+                ..Default::default()
+            },
+            detailed_advance_control: AuthenticationDetailedAdvanceControlObservation::Observed(
+                AuthenticationAdvanceControlObservation {
+                    actionability: crate::PageControlActionability::Actionable,
+                    ownership: crate::PageControlOwnership::OwnedForm,
+                    semantics: crate::PageControlSemantics::SemanticSubmit,
+                    authentication_username: crate::AuthenticationUsernameEvidence::Strong,
+                    password_field_count: 1,
+                    new_password_field_count: 0,
+                    one_time_code_field_count: 0,
+                    semantic_submit_control_count: 1,
+                    form_identity: "login-form".to_owned(),
+                    destination_identity: String::new(),
+                    label: "Continue".to_owned(),
+                },
+            ),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            signup_with_login_control.into_observation().advance_control,
+            AuthenticationAdvanceControlEvidence::Absent
+        );
+    }
+
+    #[test]
+    fn rejects_oversized_detailed_control_batch() {
+        let facts = AuthenticationPageObservationFacts {
+            detailed_advance_control: AuthenticationDetailedAdvanceControlObservation::Observed(
+                AuthenticationAdvanceControlObservation {
+                    actionability: crate::PageControlActionability::Inert,
+                    ownership: crate::PageControlOwnership::Unowned,
+                    semantics: crate::PageControlSemantics::Activation,
+                    authentication_username: crate::AuthenticationUsernameEvidence::Absent,
+                    password_field_count: 0,
+                    new_password_field_count: 0,
+                    one_time_code_field_count: 0,
+                    semantic_submit_control_count: 0,
+                    form_identity: String::new(),
+                    destination_identity: String::new(),
+                    label: "x".repeat(
+                        crate::page_field_classification::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1,
+                    ),
+                },
+            ),
+            ..Default::default()
+        };
+        assert_eq!(
+            AuthenticationPageObservationFactsBatch {
+                observations: vec![facts],
+            }
+            .classify(),
+            AuthenticationWorkflowMatch::Rejected
         );
     }
 }

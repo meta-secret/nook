@@ -9,6 +9,10 @@ mod control_identity;
 mod form_identity;
 mod one_time_code_progression;
 
+/// Maximum byte length for each DOM-controlled identity string in a detailed
+/// authentication-control observation.
+pub const MAX_AUTHENTICATION_CONTROL_TEXT_BYTES: usize = 512;
+
 pub use authentication_advance_control::{
     AuthenticationAdvanceControlDecision, AuthenticationAdvanceControlObservation,
     PageControlActionability, PageControlOwnership, PageControlSemantics,

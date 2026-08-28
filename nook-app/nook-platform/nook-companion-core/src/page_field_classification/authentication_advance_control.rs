@@ -101,10 +101,49 @@ fn has_positive_login_identity(
     ) || form_has_authentication_identity(form_identity)
 }
 
+fn accepts_authentication_advance(
+    observation: &AuthenticationAdvanceControlObservation,
+    authentication_scope_owns_control: bool,
+    semantic_submit_ceremony_present: bool,
+) -> bool {
+    let accepted_semantic_submit = authentication_scope_owns_control
+        && matches!(observation.semantics, PageControlSemantics::SemanticSubmit)
+        && semantic_submit_ceremony_present;
+    let accepted_scoped_activation = authentication_scope_owns_control
+        && matches!(observation.semantics, PageControlSemantics::Activation)
+        && semantic_submit_ceremony_present
+        && (observation.semantic_submit_control_count == 0
+            || looks_like_explicit_authentication_advance_control_label(&observation.label));
+    let accepted_login_label = authentication_scope_owns_control
+        && looks_like_login_advance_control_label(&observation.label)
+        && (semantic_submit_ceremony_present
+            || looks_like_explicit_authentication_advance_control_label(&observation.label));
+    accepted_semantic_submit || accepted_scoped_activation || accepted_login_label
+}
+
 impl AuthenticationAdvanceControlObservation {
+    /// Whether DOM-controlled text and bounded field counts fit the observation envelope.
+    #[must_use]
+    pub fn is_bounded(&self) -> bool {
+        self.form_identity.len() <= super::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
+            && self.destination_identity.len() <= super::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
+            && self.label.len() <= super::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
+            && [
+                self.password_field_count,
+                self.new_password_field_count,
+                self.one_time_code_field_count,
+                self.semantic_submit_control_count,
+            ]
+            .into_iter()
+            .all(|count| count <= crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT)
+    }
+
     /// Decide whether this DOM-extracted control can advance the observed ceremony.
     #[must_use]
     pub fn classify(&self) -> AuthenticationAdvanceControlDecision {
+        if !self.is_bounded() {
+            return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
+        }
         if matches!(self.actionability, PageControlActionability::Inert) {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
@@ -187,19 +226,11 @@ impl AuthenticationAdvanceControlObservation {
         {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
-        let accepted_semantic_submit = authentication_scope_owns_control
-            && matches!(self.semantics, PageControlSemantics::SemanticSubmit)
-            && semantic_submit_ceremony_present;
-        let accepted_scoped_activation = authentication_scope_owns_control
-            && matches!(self.semantics, PageControlSemantics::Activation)
-            && semantic_submit_ceremony_present
-            && (self.semantic_submit_control_count == 0
-                || looks_like_explicit_authentication_advance_control_label(&self.label));
-        let accepted_login_label = authentication_scope_owns_control
-            && looks_like_login_advance_control_label(&self.label)
-            && (semantic_submit_ceremony_present
-                || looks_like_explicit_authentication_advance_control_label(&self.label));
-        if accepted_semantic_submit || accepted_scoped_activation || accepted_login_label {
+        if accepts_authentication_advance(
+            self,
+            authentication_scope_owns_control,
+            semantic_submit_ceremony_present,
+        ) {
             AuthenticationAdvanceControlDecision::AdvancesAuthentication
         } else {
             AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication
@@ -439,6 +470,20 @@ mod tests {
                 ..login
             }
         ));
+    }
+
+    #[test]
+    fn rejects_oversized_dom_control_text() {
+        let oversized = "x".repeat(super::super::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1);
+        for field in ["form", "destination", "label"] {
+            let mut observation = localized_identity_submit();
+            match field {
+                "form" => observation.form_identity = oversized.clone(),
+                "destination" => observation.destination_identity = oversized.clone(),
+                _ => observation.label = oversized.clone(),
+            }
+            assert!(!advances_authentication(&observation));
+        }
     }
 
     #[test]
