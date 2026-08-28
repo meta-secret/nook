@@ -35,7 +35,12 @@ export type AuditStructuralExpertProfilesRequest =
   };
 
 export type AuditStructuralExpertCortexAuthorityRequest = {
-  readonly source: string;
+  readonly delegationSource: string;
+  readonly orchestrationSource: string;
+  readonly registrySource: string;
+  readonly skillSource: string;
+  readonly toolsSource: string;
+  readonly workflowSource: string;
 };
 
 const EXPECTED_PROFILES = [
@@ -118,7 +123,7 @@ const EXPECTED_PROFILES = [
   {
     name: 'system_coherence_synthesizer',
     description:
-      'Read-only synthesizer that reconciles only replay-verified child results and views without repository exploration.',
+      'Legacy loom-structural-experts diagnostic aggregator producing SystemCoherenceSynthesis from verified Completed and Failed terminal observations without repository exploration.',
     resultKind: WorkflowResultKind.SystemCoherenceSynthesis,
     kind: StructuralExpertKind.VerifiedViewSynthesis,
     skillPath:
@@ -136,15 +141,36 @@ const STRUCTURAL_EXPERT_CATALOG_PATH =
   'agentic-ai/loom/src/structural-experts/catalog.ts';
 const STRUCTURAL_EXPERT_CORTEX_AUTHORITY_PATH =
   '.cortex/teams/ai/architecture/refactoring-experts.md';
-const STRUCTURAL_EXPERT_CONTRACT_SECTIONS: readonly MarkdownContractSection[] =
+const CORTEX_WORKFLOW_ORCHESTRATION_AUTHORITY_PATH =
+  '.cortex/teams/ai/design-docs/agent-workflow-orchestration.md';
+const SUBAGENT_DELEGATION_AUTHORITY_PATH =
+  '.cortex/gizmo/workflows/subagent-delegation.md';
+const SYSTEM_COHERENCE_SKILL_AUTHORITY_PATH =
+  '.cortex/teams/ai/dynamic-skills/system-coherence-synthesizer.md';
+const LOOM_TOOLS_AUTHORITY_PATH = '.cortex/teams/ai/references/loom-tools.md';
+const STRUCTURAL_REFACTORING_WORKFLOW_AUTHORITY_PATH =
+  '.cortex/teams/ai/workflows/structural-refactoring.md';
+const STRUCTURAL_EXPERT_REGISTRY_CONTRACT_SECTIONS: readonly MarkdownContractSection[] =
   [
+    {
+      heading: '## Overview',
+      requiredMarkers: [
+        '`system_coherence_synthesizer` is that legacy `loom-structural-experts` role.',
+        'It receives verified typed `Completed` and `Failed` structural terminal observations and does not inspect the repository.',
+        'Failed observations are not accepted provider evidence, and its output cannot satisfy an ordinary provider edge or claim ordinary-contract compliance.',
+        'The static `loom:agent-workflow:cortex-audit` workflow instead uses its separate `FindingSynthesizer` profile and `CortexSynthesis` result.',
+        "Those identities do not alias this registry's structural aggregator.",
+        'Future ordinary accepted-evidence synthesis must use a distinct typed role, profile, and result contract before implementation.',
+        'None is named or registered here, and ordinary dispatch remains fail-closed.',
+      ],
+    },
     {
       heading: '## Registry contract',
       requiredMarkers: [
         'one stable structural role and attempt identity;',
-        'one bounded read scope;',
+        'one of three disjoint input categories: repository evidence for readers, terminal-observation inputs for the legacy structural aggregator, or accepted provider-evidence inputs for a future unnamed ordinary role;',
         'Every role is read-only and nondelegating.',
-        'This Cortex registry defines each stable semantic role, capability, context, and evidence contract.',
+        'This Cortex registry defines each stable semantic role, capability, context, and input/result contract.',
         'Children cannot add tasks, descendants, resource claims, or workflow tiers.',
       ],
     },
@@ -158,11 +184,118 @@ const STRUCTURAL_EXPERT_CONTRACT_SECTIONS: readonly MarkdownContractSection[] =
       ],
     },
     {
+      heading: '## Repository-reader evidence contract',
+      requiredMarkers: [
+        'Every authorization binds task, expert, attempt, depth two, and immediate parent. Its evidence alternative is exactly one of:',
+        'a repository-reading expert binds the exact source commit, bounded read claims, non-empty evidence surface, and exact evidence paths;',
+        'the legacy `system_coherence_synthesizer` binds the exact `loom-structural-experts` parent-authorized structural all-terminal observation barrier, including each verified `StructuralExpertPlan` child task, expert, attempt, `Completed` or `Failed` status, result/view identity, digest, and inherited source provenance;',
+        'a future unnamed ordinary accepted-evidence role would bind generation-frozen provider edges, expected producer identities, typed input schema, and acceptance criteria, then exact accepted artifacts, digests, and provenance when Gizmo authorizes its ready attempt.',
+        'The third alternative is documentary only: no role/profile/result identity or runtime support exists, and ordinary dispatch remains fail-closed.',
+      ],
+    },
+    {
       heading: '## `system_coherence_synthesizer`',
       requiredMarkers: [
-        'It receives only typed results, verified artifact references, and bounded semantic views.',
+        'This is the legacy standalone structural/Cortex diagnostic aggregator used by `loom-structural-experts`.',
+        'It receives verified typed `Completed` and `Failed` terminal observations, artifact references, and bounded semantic views.',
+        'It declares empty repository read claims, write claims, and evidence surface.',
         'It has no repository read scope.',
+        'preserves disagreements and failed terminal observations without treating failures as accepted provider evidence;',
+        'Its `SystemCoherenceSynthesis` output is diagnostic-only. Neither an input failure nor the aggregate can satisfy an ordinary provider edge, authorize implementation, or establish compliance with ordinary accepted-evidence synthesis.',
+        'Future ordinary synthesis requires a distinct typed role/profile/result contract that freezes provider edges, expected producer identities, input schema, and acceptance criteria before Gizmo later binds exact accepted inputs at attempt authorization.',
+        'This registry does not name or implement that future contract. Universal ordinary dispatch remains fail-closed.',
+        'The repository-reader category remains separate:',
+        'repository evidence surface covered by its bounded read claims.',
         'It cannot schedule successors or authorize writes.',
+      ],
+    },
+  ];
+const CORTEX_WORKFLOW_ORCHESTRATION_CONTRACT_SECTIONS: readonly MarkdownContractSection[] =
+  [
+    {
+      heading: '## Static graph decision',
+      requiredMarkers: [
+        'The existing `loom:agent-workflow:cortex-audit` command is a legacy standalone read-only workflow.',
+        'Its all-terminal diagnostic aggregator is `FindingSynthesizer`, producing `CortexSynthesis`.',
+        'These are separate from the `loom-structural-experts` `system_coherence_synthesizer` / `SystemCoherenceSynthesis` structural diagnostic lane.',
+        'Neither legacy lane satisfies ordinary provider edges.',
+      ],
+    },
+    {
+      heading: '## First compiled workflow',
+      requiredMarkers: [
+        'The legacy all-terminal join waits for every declared terminal observation, including failed lanes.',
+        '`FindingSynthesizer` deduplicates findings and authors the root `CortexSynthesis` aggregate view.',
+        'A failed observation is never accepted provider evidence. Neither it nor the aggregate output can satisfy an ordinary provider edge or claim the future accepted-evidence synthesis contract.',
+      ],
+    },
+  ];
+const SUBAGENT_DELEGATION_CONTRACT_SECTIONS: readonly MarkdownContractSection[] =
+  [
+    {
+      heading: '## Safe delegation patterns',
+      requiredMarkers: [
+        '`system_coherence_synthesizer` and `SystemCoherenceSynthesis` remain legacy `loom-structural-experts` diagnostic identities.',
+        'They accept verified structural `Completed` and `Failed` observations, cannot satisfy ordinary provider edges, and must not be reused for future ordinary accepted-evidence synthesis.',
+        'The separate legacy static `loom:agent-workflow:cortex-audit` lane uses `FindingSynthesizer` and `CortexSynthesis` under its own all-terminal diagnostic contract.',
+        'It does not alias the structural identities and cannot satisfy ordinary provider edges.',
+        'Future ordinary synthesis requires a distinct typed role, profile, and result contract before implementation; no such identity or runtime support is declared here, so ordinary dispatch remains fail-closed.',
+      ],
+    },
+  ];
+const SYSTEM_COHERENCE_SKILL_CONTRACT_SECTIONS: readonly MarkdownContractSection[] =
+  [
+    {
+      heading: '## Scope',
+      requiredMarkers: [
+        "the `loom-structural-experts` parent-authorized all-terminal observation barrier's verified `StructuralExpertPlan` child projections with `Completed` or `Failed` status;",
+        '`system_coherence_synthesizer` and `SystemCoherenceSynthesis` are legacy diagnostic identities.',
+        'Failed observations never count as accepted provider evidence, and the legacy output cannot satisfy an ordinary provider edge, authorize implementation, or claim ordinary-contract compliance.',
+        'The separate legacy `loom:agent-workflow:cortex-audit` lane uses `FindingSynthesizer` and `CortexSynthesis` under its own all-terminal diagnostic contract.',
+        'Future ordinary accepted-evidence synthesis requires a distinct typed role, profile, and result contract before implementation.',
+        'This card does not name or provide that contract. Universal ordinary dispatch remains fail-closed.',
+      ],
+    },
+  ];
+const LOOM_TOOLS_CONTRACT_SECTIONS: readonly MarkdownContractSection[] = [
+  {
+    heading: '## Static agent workflow boundary',
+    requiredMarkers: [
+      'a legacy all-terminal diagnostic-observation join;',
+      'one `FindingSynthesizer` diagnostic aggregation task producing `CortexSynthesis`; its output cannot satisfy an ordinary provider edge or claim accepted-evidence synthesis compliance;',
+      'Completed and failed lane observations remain available to that diagnostic aggregator.',
+      'Failed observations are not accepted provider evidence.',
+      'This lane is separate from the `loom-structural-experts` `system_coherence_synthesizer` / `SystemCoherenceSynthesis` diagnostic lane.',
+    ],
+  },
+];
+const STRUCTURAL_REFACTORING_WORKFLOW_CONTRACT_SECTIONS: readonly MarkdownContractSection[] =
+  [
+    {
+      heading: '## Freeze the evidence plan',
+      requiredMarkers: [
+        'the legacy synthesizer receives empty repository claims and evidence surface',
+        'plus verified typed `StructuralExpertPlan` child projections from its parent-',
+        'authorized all-terminal observation barrier.',
+        "Declares the legacy diagnostic run's all-terminal observation barrier.",
+      ],
+    },
+    {
+      heading: '## Synthesize system coherence',
+      requiredMarkers: [
+        'This section defines the legacy `loom-structural-experts` `system_coherence_synthesizer` and its `SystemCoherenceSynthesis` diagnostic result.',
+        'It is not the `loom:agent-workflow:cortex-audit` aggregator; that static workflow uses `FindingSynthesizer` and `CortexSynthesis` under a separate all-terminal diagnostic contract.',
+        'The role waits for the `loom-structural-experts` parent-authorized structural all-terminal observation barrier and accepts the verified `StructuralExpertPlan` child projections with `Completed` or `Failed` status.',
+        'Preserves disagreements and failed observations without calling failures accepted provider evidence.',
+        '`SystemCoherenceSynthesis` is diagnostic-only. It cannot satisfy an ordinary provider edge, authorize implementation, or claim ordinary accepted-evidence synthesis compliance.',
+      ],
+    },
+    {
+      heading: '## Future ordinary synthesis boundary',
+      requiredMarkers: [
+        'Future ordinary accepted-evidence synthesis must use a distinct typed role, profile, and result contract before implementation.',
+        'Its generation will freeze provider edges, expected producer identities, typed input schema, and acceptance criteria; Gizmo will bind exact accepted inputs only when authorizing a ready attempt.',
+        'Universal ordinary dispatch remains fail-closed until runtime enforcement exists.',
       ],
     },
   ];
@@ -185,11 +318,48 @@ export function auditStructuralExpertProfiles(
     request.repoRoot,
     STRUCTURAL_EXPERT_CORTEX_AUTHORITY_PATH,
   );
-  const authoritySource = existsSync(authorityPath)
+  const registrySource = existsSync(authorityPath)
     ? readFileSync(authorityPath, 'utf8')
     : '';
+  const orchestrationPath = join(
+    request.repoRoot,
+    CORTEX_WORKFLOW_ORCHESTRATION_AUTHORITY_PATH,
+  );
+  const orchestrationSource = existsSync(orchestrationPath)
+    ? readFileSync(orchestrationPath, 'utf8')
+    : '';
+  const delegationPath = join(
+    request.repoRoot,
+    SUBAGENT_DELEGATION_AUTHORITY_PATH,
+  );
+  const delegationSource = existsSync(delegationPath)
+    ? readFileSync(delegationPath, 'utf8')
+    : '';
+  const skillPath = join(
+    request.repoRoot,
+    SYSTEM_COHERENCE_SKILL_AUTHORITY_PATH,
+  );
+  const skillSource = existsSync(skillPath)
+    ? readFileSync(skillPath, 'utf8')
+    : '';
+  const toolsPath = join(request.repoRoot, LOOM_TOOLS_AUTHORITY_PATH);
+  const toolsSource = existsSync(toolsPath)
+    ? readFileSync(toolsPath, 'utf8')
+    : '';
+  const workflowPath = join(
+    request.repoRoot,
+    STRUCTURAL_REFACTORING_WORKFLOW_AUTHORITY_PATH,
+  );
+  const workflowSource = existsSync(workflowPath)
+    ? readFileSync(workflowPath, 'utf8')
+    : '';
   const authorityRequest: AuditStructuralExpertCortexAuthorityRequest = {
-    source: authoritySource,
+    delegationSource,
+    orchestrationSource,
+    registrySource,
+    skillSource,
+    toolsSource,
+    workflowSource,
   };
   findings.push(...auditStructuralExpertCortexAuthority(authorityRequest));
   if (request.profiles.length !== EXPECTED_PROFILES.length) {
@@ -374,21 +544,51 @@ export function auditStructuralExpertCortexAuthority(
   request: AuditStructuralExpertCortexAuthorityRequest,
 ): readonly StructuralExpertAuditFinding[] {
   const findings: StructuralExpertAuditFinding[] = [];
-  const contractAuditRequest: MarkdownContractAuditRequest = {
-    sections: STRUCTURAL_EXPERT_CONTRACT_SECTIONS,
-    source: request.source,
+  const registryAuditRequest: AuditAuthorityContractRequest = {
+    findings,
+    path: STRUCTURAL_EXPERT_CORTEX_AUTHORITY_PATH,
+    sections: STRUCTURAL_EXPERT_REGISTRY_CONTRACT_SECTIONS,
+    source: request.registrySource,
   };
-  for (const drift of auditMarkdownContractSections(contractAuditRequest)) {
-    const finding: StructuralExpertAuditFinding = {
-      code: 'cortex-structural-expert-contract-semantic-drift',
-      path: STRUCTURAL_EXPERT_CORTEX_AUTHORITY_PATH,
-      message: `Canonical Cortex structural expert contract drifted in ${drift.heading}: ${drift.missingMarkers.join(', ')}`,
-    };
-    findings.push(finding);
-  }
+  auditAuthorityContract(registryAuditRequest);
+  const orchestrationAuditRequest: AuditAuthorityContractRequest = {
+    findings,
+    path: CORTEX_WORKFLOW_ORCHESTRATION_AUTHORITY_PATH,
+    sections: CORTEX_WORKFLOW_ORCHESTRATION_CONTRACT_SECTIONS,
+    source: request.orchestrationSource,
+  };
+  auditAuthorityContract(orchestrationAuditRequest);
+  const delegationAuditRequest: AuditAuthorityContractRequest = {
+    findings,
+    path: SUBAGENT_DELEGATION_AUTHORITY_PATH,
+    sections: SUBAGENT_DELEGATION_CONTRACT_SECTIONS,
+    source: request.delegationSource,
+  };
+  auditAuthorityContract(delegationAuditRequest);
+  const skillAuditRequest: AuditAuthorityContractRequest = {
+    findings,
+    path: SYSTEM_COHERENCE_SKILL_AUTHORITY_PATH,
+    sections: SYSTEM_COHERENCE_SKILL_CONTRACT_SECTIONS,
+    source: request.skillSource,
+  };
+  auditAuthorityContract(skillAuditRequest);
+  const toolsAuditRequest: AuditAuthorityContractRequest = {
+    findings,
+    path: LOOM_TOOLS_AUTHORITY_PATH,
+    sections: LOOM_TOOLS_CONTRACT_SECTIONS,
+    source: request.toolsSource,
+  };
+  auditAuthorityContract(toolsAuditRequest);
+  const workflowAuditRequest: AuditAuthorityContractRequest = {
+    findings,
+    path: STRUCTURAL_REFACTORING_WORKFLOW_AUTHORITY_PATH,
+    sections: STRUCTURAL_REFACTORING_WORKFLOW_CONTRACT_SECTIONS,
+    source: request.workflowSource,
+  };
+  auditAuthorityContract(workflowAuditRequest);
   for (const profile of STRUCTURAL_EXPERT_CATALOG) {
     const marker = `## \`${profile.name}\``;
-    if (request.source.includes(marker)) continue;
+    if (request.registrySource.includes(marker)) continue;
     const finding: StructuralExpertAuditFinding = {
       code: 'missing-cortex-structural-expert-role',
       path: STRUCTURAL_EXPERT_CORTEX_AUTHORITY_PATH,
@@ -397,6 +597,28 @@ export function auditStructuralExpertCortexAuthority(
     findings.push(finding);
   }
   return findings;
+}
+
+type AuditAuthorityContractRequest = {
+  readonly findings: StructuralExpertAuditFinding[];
+  readonly path: string;
+  readonly sections: readonly MarkdownContractSection[];
+  readonly source: string;
+};
+
+function auditAuthorityContract(request: AuditAuthorityContractRequest): void {
+  const contractAuditRequest: MarkdownContractAuditRequest = {
+    sections: request.sections,
+    source: request.source,
+  };
+  for (const drift of auditMarkdownContractSections(contractAuditRequest)) {
+    const finding: StructuralExpertAuditFinding = {
+      code: 'cortex-structural-expert-contract-semantic-drift',
+      path: request.path,
+      message: `Canonical Cortex structural expert contract drifted in ${drift.heading}: ${drift.missingMarkers.join(', ')}`,
+    };
+    request.findings.push(finding);
+  }
 }
 
 function validateRoleIsolation(
@@ -421,7 +643,7 @@ function validateRoleIsolation(
       code: 'invalid-structural-role-isolation',
       path: STRUCTURAL_EXPERT_CATALOG_PATH,
       message:
-        'Evidence experts require bounded repository roots; synthesis must receive verified child views only.',
+        'Repository evidence experts require bounded repository scope; legacy diagnostic aggregation must remain repository-blind and use verified terminal observations only.',
     };
     request.findings.push(finding);
   }

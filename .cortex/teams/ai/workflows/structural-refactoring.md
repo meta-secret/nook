@@ -23,8 +23,9 @@ Choose the smallest surface that can answer the request.
 - Use `cortex_refactoring_expert` for Cortex complexity, conflict, duplication,
   legacy guidance, ownership, and deterministic extraction candidates.
 - Use both when code and durable guidance may disagree.
-- Use `system_coherence_synthesizer` only when multiple verified evidence
-  streams need reconciliation.
+- Use the legacy standalone `system_coherence_synthesizer` only when
+  `loom-structural-experts` needs an all-terminal structural diagnostic
+  aggregate.
 
 A topic-local Cortex correction does not require a full-tree audit.
 A single cohesive code correction does not require cross-surface synthesis.
@@ -35,10 +36,14 @@ Before dispatch, the delivery owner:
 
 1. Resolves one exact Git baseline.
 2. States the behavior or policy that must remain unchanged.
-3. Declares each task, attempt, parent, depth, and read scope.
+3. Declares each task, attempt, parent, and depth. Repository-reading experts
+   receive bounded read claims and non-empty read-covered evidence surfaces;
+   the legacy synthesizer receives empty repository claims and evidence surface
+   plus verified typed `StructuralExpertPlan` child projections from its parent-
+   authorized all-terminal observation barrier.
 4. Resolves owning module and Cortex authorities.
 5. Declares expected evidence and acceptance proof.
-6. Declares the terminal barrier and synthesis join.
+6. Declares the legacy diagnostic run's all-terminal observation barrier.
 7. Freezes every task and dependency.
 
 Children cannot extend this plan.
@@ -61,8 +66,8 @@ Gizmo accepts that edit group.
 
 ## Collect Cortex-refactoring evidence
 
-The Cortex expert begins with the root routing graph and the selected team's
-knowledge graph.
+The Cortex expert begins with the root routing graph and the AI team knowledge
+graph. It loads only AI team context.
 
 1. Find the most specific authority for the topic.
 2. Read its one-hop authorities and canonical skill cards.
@@ -73,29 +78,64 @@ knowledge graph.
 7. Propose the smallest meaning-preserving corrections.
 8. Return uncertainty instead of guessing.
 
-Use the compiled full Cortex garbage-collection workflow when two or more
-document families need independent evidence.
-That workflow remains read-only.
+A foreign-team document may appear only as bounded repository evidence under
+an explicitly declared path. The expert does not load that team's graph,
+entrypoint, skills, or context. When resolving a finding requires foreign-team
+semantic ownership, it reports the dependency and Gizmo routes the responsible
+team.
+
+The existing compiled full Cortex garbage-collection workflow may be used when
+two or more document families need independent diagnostic observations. Its
+legacy `FindingSynthesizer` / `CortexSynthesis` lane is documented in
+[agent workflow orchestration](../design-docs/agent-workflow-orchestration.md)
+and is separate from the structural lane below. Neither is ordinary admitted
+delegation.
 
 ## Synthesize system coherence
 
-The synthesis role waits for the declared all-terminal barrier.
+This section defines the legacy `loom-structural-experts`
+`system_coherence_synthesizer` and its `SystemCoherenceSynthesis` diagnostic
+result. It is not the `loom:agent-workflow:cortex-audit` aggregator; that static
+workflow uses `FindingSynthesizer` and `CortexSynthesis` under a separate
+all-terminal diagnostic contract.
+
+### Readiness
+
+The role waits for the `loom-structural-experts` parent-authorized structural
+all-terminal observation barrier and accepts the verified `StructuralExpertPlan`
+child projections with `Completed` or `Failed` status.
 
 It receives no live repository access.
 
-Before the role starts, Loom verifies every supplied result and view against the
-declared baseline, lineage, paths, and hashes.
+### Observation verification
+
+Before the role starts, Loom verifies every terminal observation and view
+against the declared baseline, lineage, paths, and hashes. Each observation
+preserves its task, attempt, status, artifact digest, and repository-source
+provenance. The synthesizer receives no repository read authority.
+
 The synthesizer then:
 
-1. Preserves failed-lane evidence and disagreements.
+1. Preserves disagreements and failed observations without calling failures
+   accepted provider evidence.
 2. Deduplicates equivalent findings.
 3. Correlates code findings with Cortex findings.
 4. Orders provider work before consumer work.
 5. Builds independent edit groups with non-overlapping resource claims.
 6. Returns unresolved decisions to Gizmo.
 
-The synthesis is a proposed plan.
-It does not authorize mutation.
+`SystemCoherenceSynthesis` is diagnostic-only. It cannot satisfy an ordinary
+provider edge, authorize implementation, or claim ordinary accepted-evidence
+synthesis compliance. Its execution remains outside Gizmo multi-team admission.
+
+## Future ordinary synthesis boundary
+
+Future ordinary accepted-evidence synthesis must use a distinct typed role,
+profile, and result contract before implementation. This workflow does not name
+or register that contract. Its generation will freeze provider edges, expected
+producer identities, typed input schema, and acceptance criteria; Gizmo will
+bind exact accepted inputs only when authorizing a ready attempt. Universal
+ordinary dispatch remains fail-closed until runtime enforcement exists.
 
 ## Apply accepted corrections
 

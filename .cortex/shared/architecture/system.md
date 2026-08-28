@@ -361,7 +361,8 @@ See [architecture/engineering-harness.md](../../teams/sre/architecture/engineeri
 - **Ownership boundaries:** Agent workflow policy, scheduling, deterministic
   tools, and durable execution remain separate.
   - Cortex Markdown owns semantic delegation contracts.
-  - Loom owns deterministic tools and the static agent workflow engine.
+  - Loom owns deterministic tools and a legacy standalone reviewed read-only
+    static agent workflow engine outside Gizmo multi-team admission.
   - Hive owns durable task state and isolated execution.
   - One delivery owner integrates results and mutates shared lifecycle state.
 - **Compiled topology:** Loom agent workflows are compiled TypeScript
@@ -372,7 +373,9 @@ See [architecture/engineering-harness.md](../../teams/sre/architecture/engineeri
   - The first entry is the read-only `cortex-full-garbage-collection` workflow.
 - **Current authority:** Local runs use an append-only event journal as their
   run authority.
-  - The current static workflow implementation runs locally.
+  - The current static workflow implementation runs locally through its own
+    scheduler and SDK path. It cannot claim, authorize, or execute the ordinary
+    multi-team admission contract.
   - It does not materialize Hive tasks.
   - Every agent attempt owns a child action stream with explicit parent
     lineage.

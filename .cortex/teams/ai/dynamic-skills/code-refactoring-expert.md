@@ -16,7 +16,8 @@ The resulting refactor has no clear behavior boundary or owning evidence.
 ## Preferred pattern
 
 1. Resolve the owning module and its public boundary.
-2. Supply one exact baseline and bounded read scope.
+2. Supply one exact baseline, bounded repository read claims, and a non-empty
+   evidence surface covered by those claims.
 3. State the behavior and policy that must remain unchanged.
 4. Classify findings as behavior-preserving, contract-changing,
    product-changing, or deterministic.
@@ -43,4 +44,5 @@ Follow the canonical
 ## Validation
 
 Evidence names affected paths, preserved invariants, owning tests, risks,
-unresolved decisions, and focused validation.
+unresolved decisions, and focused validation. Its typed handoff binds every
+evidence-surface claim to exact repository-source provenance.

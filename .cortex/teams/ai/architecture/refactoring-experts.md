@@ -12,12 +12,27 @@ The registry contains exactly two repository-reading roles:
 - `code_refactoring_expert`;
 - `cortex_refactoring_expert`.
 
-It also contains one synthesis-only role:
+It also preserves one legacy standalone diagnostic aggregation role:
 
 - `system_coherence_synthesizer`.
 
-The synthesizer receives verified expert evidence.
-It does not inspect the repository.
+### Lane identities
+
+`system_coherence_synthesizer` is that legacy `loom-structural-experts` role.
+It receives verified typed `Completed` and `Failed` structural terminal
+observations and does not inspect the repository. Failed observations are not
+accepted provider evidence, and its output cannot satisfy an ordinary provider
+edge or claim ordinary-contract compliance.
+
+The static `loom:agent-workflow:cortex-audit` workflow instead uses its separate
+`FindingSynthesizer` profile and `CortexSynthesis` result. Those identities do
+not alias this registry's structural aggregator.
+
+#### Future ordinary boundary
+
+Future ordinary accepted-evidence synthesis must use a distinct typed role,
+profile, and result contract before implementation. None is named or registered
+here, and ordinary dispatch remains fail-closed.
 
 These roles are separate from the production
 [module expert registry](module-experts.md).
@@ -33,13 +48,15 @@ Every structural expert attempt follows the root
 This registry adds:
 
 - one stable structural role and attempt identity;
-- one bounded read scope;
+- one of three disjoint input categories: repository evidence for readers,
+  terminal-observation inputs for the legacy structural aggregator, or accepted
+  provider-evidence inputs for a future unnamed ordinary role;
 - the relevant canonical lenses; and
-- the role-specific evidence shape.
+- the role-specific input and result shape.
 
 - Every role is read-only and nondelegating.
 - This Cortex registry defines each stable semantic role, capability, context,
-  and evidence contract.
+  and input/result contract.
 - The delivery owner freezes the task graph before dispatch.
 - Children cannot add tasks, descendants, resource claims, or workflow tiers.
 
@@ -73,7 +90,7 @@ An expert must not:
 Markdown is a semantic view.
 Typed workflow state remains authoritative for continuation.
 
-## Structural evidence contract
+## Repository-reader evidence contract
 
 Each repository-reading role reports bounded findings.
 
@@ -105,24 +122,32 @@ Allowed dispositions are:
 The expert groups compatible findings into proposed edit groups.
 Each group names dependencies, affected paths, and validation selectors.
 
-The result is evidence for the delivery owner.
-It is not write authorization.
+Repository-reader results are evidence for the delivery owner. The legacy
+structural aggregate is diagnostic output. Neither is write authorization.
 
 ### Structural plan
 
 The depth-one parent publishes `StructuralExpertPlan` before any role runs.
 
-Each authorization binds:
+Every authorization binds task, expert, attempt, depth two, and immediate
+parent. Its evidence alternative is exactly one of:
 
-- task;
-- expert;
-- attempt;
-- depth two;
-- immediate parent;
-- exact evidence paths for a repository-reading role.
+- a repository-reading expert binds the exact source commit, bounded read
+  claims, non-empty evidence surface, and exact evidence paths;
+- the legacy `system_coherence_synthesizer` binds the exact
+  `loom-structural-experts` parent-authorized structural all-terminal
+  observation barrier, including each verified `StructuralExpertPlan` child
+  task, expert, attempt, `Completed` or `Failed` status, result/view identity,
+  digest, and inherited source provenance; or
+- a future unnamed ordinary accepted-evidence role would bind generation-frozen
+  provider edges, expected producer identities, typed input schema, and
+  acceptance criteria, then exact accepted artifacts, digests, and provenance
+  when Gizmo authorizes its ready attempt.
 
-The synthesis authorization has no repository evidence paths.
-Its invocation names the replay-verified child result and view projections.
+The third alternative is documentary only: no role/profile/result identity or
+runtime support exists, and ordinary dispatch remains fail-closed. Its later
+binding would not be a generation mutation. A failed required provider would
+stop that ordinary synthesis join.
 
 ### Code refactoring result
 
@@ -163,9 +188,10 @@ Its invocation names the replay-verified child result and view projections.
 - `unresolvedDecisions`;
 - `parentActions`.
 
-### System coherence result
+### Legacy system coherence diagnostic result
 
-`SystemCoherenceSynthesis` contains bounded continuation lists for:
+`SystemCoherenceSynthesis` is the legacy standalone diagnostic result. It
+contains bounded continuation lists for:
 
 - `consumedArtifacts`;
 - `coverageGaps`;
@@ -180,7 +206,8 @@ Its invocation names the replay-verified child result and view projections.
 - `deliveryOwnerActions`.
 
 An explicit none-with-reason entry represents an empty semantic category.
-The result cannot authorize another role or mutation.
+The result cannot authorize another role or mutation, satisfy an ordinary
+provider edge, or serve as the result identity for future ordinary synthesis.
 
 ## `code_refactoring_expert`
 
@@ -244,6 +271,13 @@ A topic-local task reads the owning authority and its one-hop context.
 A repository-wide task uses the compiled Cortex full-garbage-collection
 workflow for bounded evidence collection.
 
+### Context isolation
+
+Both forms load only AI team context. Foreign-team documents may be declared as
+bounded repository evidence paths, but the expert never loads another team's
+graph, entrypoint, skills, or context. It reports any need for foreign-team
+semantic ownership to Gizmo, which routes that team.
+
 The expert proposes the smallest correction that restores one clear owner.
 It preserves disagreements and uncertainty when evidence cannot resolve them.
 It must not silently rewrite product or architectural meaning.
@@ -255,23 +289,26 @@ conflict resolution.
 
 ## `system_coherence_synthesizer`
 
-This role reconciles verified structural evidence.
+This is the legacy standalone structural/Cortex diagnostic aggregator used by
+`loom-structural-experts`.
 
-It may receive:
+Its terminal-observation inputs may carry:
 
-- code-refactoring evidence;
-- Cortex-refactoring evidence;
-- mechanical validation evidence;
-- declared module-boundary evidence.
+- code-refactoring child output;
+- Cortex-refactoring child output;
+- mechanical-validation child output;
+- declared module-boundary child output.
 
-It receives only typed results, verified artifact references, and bounded
-semantic views.
+It receives verified typed `Completed` and `Failed` terminal observations,
+artifact references, and bounded semantic views.
+It declares empty repository read claims, write claims, and evidence surface.
 It has no repository read scope.
 
 The synthesizer:
 
 - deduplicates findings;
-- preserves disagreements and failed-lane evidence;
+- preserves disagreements and failed terminal observations without treating
+  failures as accepted provider evidence;
 - correlates code and Cortex drift;
 - orders provider corrections before consumer corrections;
 - identifies safe independent edit groups;
@@ -280,6 +317,23 @@ The synthesizer:
 
 It cannot create findings from unverified repository claims.
 It cannot schedule successors or authorize writes.
+
+Its `SystemCoherenceSynthesis` output is diagnostic-only. Neither an input
+failure nor the aggregate can satisfy an ordinary provider edge, authorize
+implementation, or establish compliance with ordinary accepted-evidence
+synthesis.
+
+### Future ordinary boundary
+
+Future ordinary synthesis requires a distinct typed role/profile/result
+contract that freezes provider edges, expected producer identities, input
+schema, and acceptance criteria before Gizmo later binds exact accepted inputs
+at attempt authorization. This registry does not name or implement that future
+contract. Universal ordinary dispatch remains fail-closed.
+
+The repository-reader category remains separate: each reader declares a non-
+empty repository evidence surface covered by its bounded read claims. Write-
+capable correction tasks declare an empty evidence surface.
 
 ## Deterministic extraction boundary
 
@@ -321,7 +375,9 @@ Normal cross-surface maintenance uses:
 
 - depth one for the delivery-owner plan and root materialization;
 - depth two for the two repository-reading structural experts;
-- depth two for `system_coherence_synthesizer` after the evidence barrier;
+- the `loom-structural-experts` parent-authorized synthesis position for
+  `system_coherence_synthesizer` after the `StructuralExpertPlan` child-
+  projection all-terminal observation barrier;
 - depth three only for an exceptional, predeclared module expert.
 
 The delivery owner declares the complete graph.
@@ -345,4 +401,10 @@ Validate direct skill routing by checking:
 - every canonical skill card is indexed;
 - no tracked `.agents`, `.cursor`, or `.claude` skill mirror exists;
 - the Cortex registry contains exactly the two repository-reading roles and one
-  synthesis-only role.
+  legacy standalone diagnostic aggregation role;
+- each repository-reading role has a non-empty read-covered evidence surface;
+  and
+- `system_coherence_synthesizer` and `SystemCoherenceSynthesis` remain legacy
+  diagnostic identities accepting verified `Completed` and `Failed`
+  observations, never satisfy ordinary provider edges, and are not reused for
+  future ordinary synthesis.

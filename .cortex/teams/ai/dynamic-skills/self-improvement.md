@@ -384,6 +384,9 @@ runtime.
 
 The static graph boundary is defined in
 [Agent workflow orchestration](../design-docs/agent-workflow-orchestration.md).
+The existing `loom:agent-workflow:cortex-audit` SDK path is a legacy standalone
+reviewed read-only workflow outside Gizmo multi-team admission. It cannot claim,
+authorize, or execute the ordinary multi-team delegation contract.
 
 ## Task lifecycle
 
@@ -505,12 +508,16 @@ Before returning promotion and cleanup evidence to Gizmo:
 
 1. Run the focused checks for every promoted Cortex authority.
 2. Run `task loom:cortex-audit`.
-3. For a broad multi-family review, run the compiled audit against the exact
-   clean baseline:
+3. For a broad multi-family review, the legacy standalone reviewed read-only
+   audit may run against the exact clean baseline:
 
    ```bash
    task loom:agent-workflow:cortex-audit BASELINE=<40-character-commit-sha>
    ```
+
+   This command uses its own static scheduler and SDK path. It does not perform
+   Gizmo admission, does not prove the ordinary multi-team contract, and must
+   not be used for implementation delegation.
 
 4. For a compiled workflow change, validate its dry run and focused behavior.
 5. Run `task loom:pre-push` before each push.
