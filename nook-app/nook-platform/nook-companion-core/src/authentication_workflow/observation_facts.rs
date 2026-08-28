@@ -69,6 +69,7 @@ impl AuthenticationFieldObservationFacts {
     ) -> bool {
         self.current_password_field_count
             .saturating_add(self.generic_password_field_count)
+            .saturating_add(self.new_password_field_count)
             == observation.password_field_count
             && self.new_password_field_count == observation.new_password_field_count
             && self.one_time_code_field_count == observation.one_time_code_field_count
@@ -369,6 +370,50 @@ mod tests {
             signup_with_login_control.into_observation().advance_control,
             AuthenticationAdvanceControlEvidence::Absent
         );
+    }
+
+    #[test]
+    fn matches_detailed_total_password_count_across_field_kinds() {
+        let control = AuthenticationAdvanceControlObservation {
+            actionability: crate::PageControlActionability::Actionable,
+            ownership: crate::PageControlOwnership::OwnedForm,
+            semantics: crate::PageControlSemantics::SemanticSubmit,
+            authentication_username: crate::AuthenticationUsernameEvidence::Absent,
+            password_field_count: 1,
+            new_password_field_count: 1,
+            one_time_code_field_count: 0,
+            semantic_submit_control_count: 1,
+            form_identity: String::new(),
+            destination_identity: String::new(),
+            label: "Continue".to_owned(),
+        };
+        let new_password = AuthenticationFieldObservationFacts {
+            new_password_field_count: 1,
+            ..Default::default()
+        };
+        assert!(new_password.is_compatible_with_detailed_control(&control));
+
+        let current_password = AuthenticationFieldObservationFacts {
+            current_password_field_count: 1,
+            ..Default::default()
+        };
+        let current_control = AuthenticationAdvanceControlObservation {
+            new_password_field_count: 0,
+            ..control.clone()
+        };
+        assert!(current_password.is_compatible_with_detailed_control(&current_control));
+
+        let generic_password = AuthenticationFieldObservationFacts {
+            generic_password_field_count: 1,
+            ..Default::default()
+        };
+        assert!(generic_password.is_compatible_with_detailed_control(&current_control));
+
+        let mismatched_total = AuthenticationAdvanceControlObservation {
+            password_field_count: 2,
+            ..control
+        };
+        assert!(!new_password.is_compatible_with_detailed_control(&mismatched_total));
     }
 
     #[test]
