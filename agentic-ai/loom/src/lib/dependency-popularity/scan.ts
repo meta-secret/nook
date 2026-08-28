@@ -1,5 +1,6 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { inspectExecutableSkillDependencies } from '../../executable-skills/repository.ts';
 import { LoomFailureCode, loomFailureDetail } from '../../loom-failure.ts';
 import {
   UntrustedYamlPropertyPresence,
@@ -31,41 +32,21 @@ export function scanRepositoryManifests(
 
 export function scanRepositoryNpmPackages(repoRoot: string): readonly string[] {
   const names = new Set<string>();
-  for (const manifestPath of repositoryNpmManifests(repoRoot)) {
+  const inspection = inspectExecutableSkillDependencies(repoRoot);
+  if (inspection.findings.length > 0) {
+    const failureArgs: LoomFailureDetailArgs = {
+      code: LoomFailureCode.ValidationFailed,
+      text: `Executable-skill package audit failed: ${JSON.stringify(inspection.findings)}`,
+    };
+    loomFailureDetail(failureArgs);
+  }
+  for (const name of inspection.npmPackages) names.add(name);
+  for (const manifestPath of REPOSITORY_NPM_MANIFESTS) {
     for (const name of readNpmPackages(path.join(repoRoot, manifestPath))) {
       names.add(name);
     }
   }
   return [...names].sort();
-}
-
-function repositoryNpmManifests(repoRoot: string): readonly string[] {
-  const cortexRoot = path.join(repoRoot, '.cortex');
-  const skillDirectories = [
-    path.join(cortexRoot, 'gizmo', 'dynamic-skills'),
-    path.join(cortexRoot, 'shared', 'dynamic-skills'),
-    path.join(cortexRoot, 'teams', 'ai', 'dynamic-skills'),
-    path.join(cortexRoot, 'teams', 'dev-core', 'dynamic-skills'),
-    path.join(cortexRoot, 'teams', 'security', 'dynamic-skills'),
-    path.join(cortexRoot, 'teams', 'sre', 'dynamic-skills'),
-    path.join(cortexRoot, 'teams', 'web-dev', 'dynamic-skills'),
-  ];
-  const directoryOptions: { readonly withFileTypes: true } = {
-    withFileTypes: true,
-  };
-  const manifests = skillDirectories.flatMap((skillsDir) => {
-    if (!existsSync(skillsDir)) return [];
-    return readdirSync(skillsDir, directoryOptions).flatMap((entry) => {
-      if (!entry.isDirectory()) return [];
-      const skillRoot = path.join(skillsDir, entry.name);
-      const manifest = path.join(skillRoot, 'scripts', 'package.json');
-      return existsSync(path.join(skillRoot, 'SKILL.md')) &&
-        existsSync(manifest)
-        ? [path.relative(repoRoot, manifest)]
-        : [];
-    });
-  });
-  return [...REPOSITORY_NPM_MANIFESTS, ...manifests.sort()];
 }
 
 function readNpmPackages(packageJsonPath: string): readonly string[] {

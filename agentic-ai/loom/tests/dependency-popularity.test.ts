@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { evaluatePopularity } from '../src/lib/dependency-popularity/evaluate.ts';
@@ -13,17 +13,6 @@ import {
 import type { EvaluatePopularityArgs } from '../src/lib/dependency-popularity/evaluate.ts';
 import type { MakeDirectoryOptions, RmOptions } from 'node:fs';
 
-interface PackageManifestFixture {
-  readonly dependencies?: Readonly<Record<string, string>>;
-  readonly devDependencies?: Readonly<Record<string, string>>;
-}
-
-interface WriteManifestArgs {
-  readonly root: string;
-  readonly relativePath: string;
-  readonly manifest: PackageManifestFixture;
-}
-
 const temporaryRoots: string[] = [];
 
 afterEach(() => {
@@ -33,17 +22,6 @@ afterEach(() => {
   }
 });
 
-function writeManifest({
-  root,
-  relativePath,
-  manifest,
-}: WriteManifestArgs): void {
-  const absolutePath = path.join(root, relativePath);
-  const directoryOptions: MakeDirectoryOptions = { recursive: true };
-  mkdirSync(path.dirname(absolutePath), directoryOptions);
-  writeFileSync(absolutePath, JSON.stringify(manifest));
-}
-
 const thresholds = {
   minNpmWeeklyDownloads: 10_000,
   minGitHubStars: 100,
@@ -52,39 +30,31 @@ const thresholds = {
 };
 
 describe('scanRepositoryNpmPackages', () => {
-  test('reads Loom and executable-application dependencies', () => {
+  test('reads Loom and validated executable-application dependencies', () => {
+    const repositoryRoot = path.join(import.meta.dir, '../../..');
+    const names = scanRepositoryNpmPackages(repositoryRoot);
+    expect(names).toContain('diff');
+    expect(names).toContain('typescript');
+    expect(names.some((name) => name.startsWith('@types/'))).toBe(false);
+  });
+
+  test('fails package audit before reading an unsafe manifest', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'nook-dependency-scan-'));
     temporaryRoots.push(root);
-    const loomManifest: PackageManifestFixture = {
-      dependencies: { alpha: '1.0.0', shared: '1.0.0' },
-      devDependencies: { '@types/ignored': '1.0.0' },
-    };
-    const loomWrite: WriteManifestArgs = {
+    const packageRoot = path.join(
       root,
-      relativePath: 'agentic-ai/loom/package.json',
-      manifest: loomManifest,
-    };
-    writeManifest(loomWrite);
-    const skillsWrite: WriteManifestArgs = {
-      root,
-      relativePath:
-        '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/package.json',
-      manifest: { dependencies: { beta: '2.0.0', shared: '1.0.0' } },
-    };
-    writeManifest(skillsWrite);
-    writeFileSync(
-      path.join(
-        root,
-        '.cortex/teams/ai/dynamic-skills/cortex-article-structure/SKILL.md',
-      ),
-      '# Cortex Article Structure\n',
+      '.cortex/teams/ai/dynamic-skills/example/scripts',
     );
-
-    expect(scanRepositoryNpmPackages(root)).toEqual([
-      'alpha',
-      'beta',
-      'shared',
-    ]);
+    const directoryOptions: MakeDirectoryOptions = { recursive: true };
+    mkdirSync(packageRoot, directoryOptions);
+    symlinkSync('/dev/null', path.join(packageRoot, 'package.json'));
+    const initOptions = { cmd: ['git', 'init', '-q'], cwd: root };
+    const addOptions = { cmd: ['git', 'add', '--', '.cortex'], cwd: root };
+    Bun.spawnSync(initOptions);
+    Bun.spawnSync(addOptions);
+    expect(() => scanRepositoryNpmPackages(root)).toThrow(
+      'Executable-skill package audit failed',
+    );
   });
 });
 

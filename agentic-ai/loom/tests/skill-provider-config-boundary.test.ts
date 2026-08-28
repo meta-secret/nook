@@ -11,7 +11,10 @@ import {
 } from './skill-provider-executable-script.ts';
 import type { SkillProviderSourceInspection } from './skill-provider-type-context.ts';
 import { cortexArticleAdapterViolatesBoundary } from './cortex-article-adapter-boundary.ts';
-import { readTrackedRepositoryFiles } from '../src/executable-skills/repository.ts';
+import {
+  executableSkillPackageFromPath,
+  readTrackedRepositoryFiles,
+} from '../src/executable-skills/repository.ts';
 
 type ActionRuntimeGraph = {
   readonly roots: readonly string[];
@@ -158,9 +161,14 @@ function configurationScriptPaths(
     for (const specifier of configurationScriptReferences(
       referenceInspection,
     )) {
-      const scriptsIndex = importer.lastIndexOf('/scripts/');
+      const skillPackage = executableSkillPackageFromPath(importer);
+      const scriptsIndex = importer.indexOf('/scripts/');
       const packageRoot =
-        scriptsIndex < 0 ? importer : importer.slice(0, scriptsIndex);
+        skillPackage !== false
+          ? skillPackage.packageRoot
+          : scriptsIndex < 0
+            ? importer
+            : importer.slice(0, scriptsIndex);
       const candidates: readonly string[] = [
         posix.normalize(specifier.replace(/^\.\//u, '')),
         posix.normalize(posix.join(posix.dirname(importer), specifier)),

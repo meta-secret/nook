@@ -1,4 +1,11 @@
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from 'bun:test';
@@ -6,6 +13,7 @@ import {
   auditExecutableSkillPackageFiles,
   EXECUTABLE_SKILL_DIAGNOSTIC_BYTE_LIMIT,
   EXECUTABLE_SKILL_FINDING_LIMIT,
+  executableSkillPackageFromPath,
   readTrackedRepositoryFiles,
   type TrackedRepositoryFile,
 } from '../../src/executable-skills/repository.ts';
@@ -15,6 +23,10 @@ const ROOT = '.cortex/teams/ai/dynamic-skills/example';
 const SCRIPTS = `${ROOT}/scripts`;
 const REMOVE_OPTIONS = { recursive: true, force: true } as const;
 const DIRECTORY_OPTIONS = { recursive: true } as const;
+const CANONICAL_SCRIPTS = join(
+  import.meta.dir,
+  '../../../../.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts',
+);
 
 const PACKAGE_DOCUMENT = {
   name: '@nook/example-skill',
@@ -85,6 +97,11 @@ async function packageFixture(overrides?: FixtureOverrides): Promise<string> {
     },
     packages: {},
   };
+  const [prettier, tsconfig, eslint] = await Promise.all(
+    ['.prettierrc', 'tsconfig.json', 'eslint.config.js'].map((name) =>
+      readFile(join(CANONICAL_SCRIPTS, name), 'utf8'),
+    ),
+  );
   await Promise.all([
     writeFile(
       join(repoRoot, ROOT, 'SKILL.md'),
@@ -99,6 +116,9 @@ async function packageFixture(overrides?: FixtureOverrides): Promise<string> {
       JSON.stringify(selected.manifest ?? MANIFEST),
     ),
     writeFile(join(repoRoot, SCRIPTS, 'bun.lock'), JSON.stringify(lock)),
+    writeFile(join(repoRoot, SCRIPTS, '.prettierrc'), prettier ?? ''),
+    writeFile(join(repoRoot, SCRIPTS, 'tsconfig.json'), tsconfig ?? ''),
+    writeFile(join(repoRoot, SCRIPTS, 'eslint.config.js'), eslint ?? ''),
   ]);
   return repoRoot;
 }
@@ -152,16 +172,23 @@ test('rejects unsafe tracked modes and tracked node_modules', async () => {
   }
 });
 
-test('rejects every non-TypeScript executable source extension', async () => {
+test('rejects every non-TypeScript executable source or test extension', async () => {
   const repoRoot = await packageFixture();
   try {
-    const unsupported = ['runtime.js', 'component.tsx', 'launcher'];
+    const unsupported = [
+      `${SCRIPTS}/src/runtime.js`,
+      `${SCRIPTS}/src/component.tsx`,
+      `${SCRIPTS}/src/launcher`,
+      `${SCRIPTS}/tests/runtime.test.js`,
+      `${SCRIPTS}/tests/component.tsx`,
+      `${SCRIPTS}/tests/launcher`,
+    ];
     const files = [
       ...trackedFiles(),
-      ...unsupported.map((name) => {
+      ...unsupported.map((filePath) => {
         const file: TrackedRepositoryFile = {
           mode: '100644',
-          path: `${SCRIPTS}/src/${name}`,
+          path: filePath,
         };
         return file;
       }),
@@ -169,11 +196,72 @@ test('rejects every non-TypeScript executable source extension', async () => {
     const findings = audit(repoRoot)(files).filter((finding) =>
       finding.issue.includes('.ts extension'),
     );
-    expect(findings.map((finding) => finding.path)).toEqual(
-      unsupported.map((name) => `${SCRIPTS}/src/${name}`),
-    );
+    expect(findings.map((finding) => finding.path)).toEqual(unsupported);
   } finally {
     await rm(repoRoot, REMOVE_OPTIONS);
+  }
+});
+
+test('derives the package root before nested scripts path segments', () => {
+  const expected = {
+    packageRoot: ROOT,
+    scriptsRoot: SCRIPTS,
+    slug: 'example',
+  };
+  for (const trackedPath of [
+    `${SCRIPTS}/src/scripts/helper.ts`,
+    `${SCRIPTS}/tests/scripts/helper.test.ts`,
+  ]) {
+    expect(executableSkillPackageFromPath(trackedPath)).toMatchObject(expected);
+  }
+});
+
+test('rejects every nested skill-card mirror under scripts', async () => {
+  const repoRoot = await packageFixture();
+  try {
+    const mirrors = [
+      `${SCRIPTS}/tests/fixtures/SKILL.md`,
+      `${SCRIPTS}/node_modules/example/SKILL.md`,
+    ];
+    const findings = audit(repoRoot)([
+      ...trackedFiles(),
+      ...mirrors.map((filePath) => ({ mode: '100644', path: filePath })),
+    ]);
+    expect(
+      findings.filter((finding) => finding.issue.includes('mirror')),
+    ).toHaveLength(mirrors.length);
+  } finally {
+    await rm(repoRoot, REMOVE_OPTIONS);
+  }
+});
+
+test('rejects project configs that weaken canonical source coverage', async () => {
+  for (const [name, replacement] of [
+    ['tsconfig.json', '"include": ["src/**/*.ts"]'],
+    ['eslint.config.js', "files: ['src/**/*.ts']"],
+    ['.prettierrc', '"printWidth": 120'],
+  ] as const) {
+    const repoRoot = await packageFixture();
+    try {
+      const configPath = join(repoRoot, SCRIPTS, name);
+      const source = await readFile(configPath, 'utf8');
+      await writeFile(
+        configPath,
+        source
+          .replace('"include": ["src/**/*.ts", "tests/**/*.ts"]', replacement)
+          .replace("files: ['src/**/*.ts', 'tests/**/*.ts']", replacement)
+          .replace('"printWidth": 80', replacement),
+      );
+      expect(
+        audit(repoRoot)(trackedFiles()).some(
+          (finding) =>
+            finding.path === `${SCRIPTS}/${name}` &&
+            finding.issue.includes('canonical policy'),
+        ),
+      ).toBe(true);
+    } finally {
+      await rm(repoRoot, REMOVE_OPTIONS);
+    }
   }
 });
 

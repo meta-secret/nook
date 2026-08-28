@@ -16,10 +16,20 @@ const FINDING_ISSUE_LIMIT = 512;
 const CANONICAL_MODE = '100644';
 const SKILL_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const OWNER_ROOT =
-  /^\.cortex\/(?:gizmo|shared|teams\/(?:ai|dev-core|security|sre|web-dev))\/dynamic-skills\//u;
+  '\\.cortex/(?:gizmo|shared|teams/(?:ai|dev-core|security|sre|web-dev))/dynamic-skills';
+const EXECUTABLE_PACKAGE_PATH = new RegExp(
+  `^(${OWNER_ROOT}/([^/]+))(?:/SKILL\\.md|/scripts(?:/|$))`,
+  'u',
+);
+const DECLARED_OWNER_PATH = new RegExp(`^${OWNER_ROOT}/`, 'u');
 const ANY_OWNER_PACKAGE =
   /^\.cortex\/(?:gizmo|shared|teams\/[^/]+)\/dynamic-skills\/[^/]+\/(?:SKILL\.md|scripts\/)/u;
-const PACKAGE_MARKER = '/scripts/';
+const CONFIG_HASHES = {
+  prettier: '5342eced2ab6be14cc6716a764019f8a037da054a5c10c5c69ed428a43f739cb',
+  eslint: 'b313fdacd4b3546a85f6eef821483b427157aea6e7d8b5a51877d78b8fb7130c',
+  typescript:
+    '28526bdfb8bdaba4bbe5eb8b4e45f47c3bbf966e99a42424e7e0573d1014c95a',
+} as const;
 
 const REQUIRED_PROJECT_FILES = [
   '.gitignore',
@@ -70,6 +80,11 @@ export type AuditExecutableSkillPackageFilesRequest = {
   readonly tracked: readonly TrackedRepositoryFile[];
 };
 
+export type ExecutableSkillDependencyInspection = {
+  readonly findings: readonly ExecutableSkillPackageFinding[];
+  readonly npmPackages: readonly string[];
+};
+
 export function readTrackedRepositoryFiles(
   repoRoot: string,
 ): readonly TrackedRepositoryFile[] {
@@ -103,17 +118,10 @@ function parseTrackedRecord(record: string): TrackedRepositoryFile {
 export function executableSkillPackageFromPath(
   trackedPath: string,
 ): ExecutableSkillPackage | false {
-  const markerIndex = trackedPath.lastIndexOf(PACKAGE_MARKER);
-  const skillSuffix = '/SKILL.md';
-  const packageRoot =
-    markerIndex >= 0
-      ? trackedPath.slice(0, markerIndex)
-      : trackedPath.endsWith(skillSuffix)
-        ? trackedPath.slice(0, -skillSuffix.length)
-        : '';
-  if (packageRoot.length === 0) return false;
-  if (!OWNER_ROOT.test(`${packageRoot}/`)) return false;
-  const slug = path.posix.basename(packageRoot);
+  const match = EXECUTABLE_PACKAGE_PATH.exec(trackedPath);
+  const packageRoot = match?.at(1);
+  const slug = match?.at(2);
+  if (typeof packageRoot !== 'string' || typeof slug !== 'string') return false;
   return {
     packageRoot,
     scriptsRoot: `${packageRoot}/scripts`,
@@ -150,20 +158,48 @@ export function auditTrackedExecutableSkillPackages(
   return auditExecutableSkillPackageFiles(request);
 }
 
+export function inspectExecutableSkillDependencies(
+  repoRoot: string,
+): ExecutableSkillDependencyInspection {
+  const tracked = readTrackedRepositoryFiles(repoRoot);
+  const request: AuditExecutableSkillPackageFilesRequest = {
+    repoRoot,
+    tracked,
+  };
+  const findings = auditExecutableSkillPackageFiles(request);
+  if (findings.length > 0) return { findings, npmPackages: [] };
+  const names = new Set<string>();
+  for (const skillPackage of executableSkillPackages(tracked)) {
+    const document = JSON.parse(
+      readFileSync(
+        path.join(repoRoot, skillPackage.scriptsRoot, 'package.json'),
+        'utf8',
+      ),
+    ) as { readonly devDependencies: Readonly<Record<string, string>> };
+    for (const name of Object.keys(document.devDependencies)) {
+      if (!name.startsWith('@types/')) names.add(name);
+    }
+  }
+  return { findings, npmPackages: [...names].sort() };
+}
+
 export function auditExecutableSkillPackageFiles(
   request: AuditExecutableSkillPackageFilesRequest,
 ): readonly ExecutableSkillPackageFinding[] {
   const { repoRoot, tracked } = request;
   const collector: FindingCollector = { findings: [], bytes: 0 };
   for (const file of tracked) {
-    if (ANY_OWNER_PACKAGE.test(file.path) && !OWNER_ROOT.test(file.path)) {
+    if (
+      ANY_OWNER_PACKAGE.test(file.path) &&
+      !DECLARED_OWNER_PATH.test(file.path)
+    ) {
       addFinding(collector)('.cortex')(
         'tracked executable-skill package has an undeclared owner',
       );
     }
     if (
-      OWNER_ROOT.test(file.path) &&
-      (file.path.includes(PACKAGE_MARKER) || file.path.endsWith('/SKILL.md')) &&
+      DECLARED_OWNER_PATH.test(file.path) &&
+      (file.path.includes('/scripts/') || file.path.endsWith('/SKILL.md')) &&
       dangerousPath(file.path)
     ) {
       addFinding(collector)('.cortex')(
@@ -212,17 +248,21 @@ function auditPackage(request: AuditPackageRequest): void {
         'node_modules content cannot be tracked in an executable-skill package',
       );
     }
-    if (file.path.endsWith('/scripts/SKILL.md')) {
+    if (
+      file.path.startsWith(`${skillPackage.scriptsRoot}/`) &&
+      file.path.endsWith('/SKILL.md')
+    ) {
       addFinding(collector)(skillPackage.scriptsRoot)(
         'scripts cannot contain a tracked skill-card mirror',
       );
     }
     if (
-      file.path.startsWith(`${skillPackage.scriptsRoot}/src/`) &&
+      (file.path.startsWith(`${skillPackage.scriptsRoot}/src/`) ||
+        file.path.startsWith(`${skillPackage.scriptsRoot}/tests/`)) &&
       !file.path.endsWith('.ts')
     ) {
       addFinding(collector)(file.path)(
-        'executable-skill src files must use the .ts extension',
+        'executable-skill source and test files must use the .ts extension',
       );
     }
   }
@@ -250,6 +290,9 @@ function auditPackage(request: AuditPackageRequest): void {
     `${skillPackage.scriptsRoot}/package.json`,
     `${skillPackage.scriptsRoot}/executable-skill.json`,
     `${skillPackage.scriptsRoot}/bun.lock`,
+    `${skillPackage.scriptsRoot}/tsconfig.json`,
+    `${skillPackage.scriptsRoot}/eslint.config.js`,
+    `${skillPackage.scriptsRoot}/.prettierrc`,
   ];
   const documentsAreSafe = documentPaths.every((required) => {
     const trackedFile = packageFiles.find((file) => file.path === required);
@@ -316,6 +359,7 @@ function auditDocuments(request: AuditDocumentsRequest): void {
   const packagePath = `${skillPackage.scriptsRoot}/package.json`;
   const manifestPath = `${skillPackage.scriptsRoot}/executable-skill.json`;
   const lockPath = `${skillPackage.scriptsRoot}/bun.lock`;
+  auditProjectConfigs(request);
   const packageRequest: ParseJsonRequest = {
     collector,
     json5: false,
@@ -360,6 +404,43 @@ function auditDocuments(request: AuditDocumentsRequest): void {
   auditPackageDocument(packageAudit);
   auditManifest(manifestAudit);
   auditLock(lockAudit);
+}
+
+function auditProjectConfigs(request: AuditDocumentsRequest): void {
+  const { collector, repoRoot, skillPackage } = request;
+  const scriptsRoot = skillPackage.scriptsRoot;
+  const prettier = readFileSync(
+    path.join(repoRoot, scriptsRoot, '.prettierrc'),
+    'utf8',
+  );
+  const tsconfig = readFileSync(
+    path.join(repoRoot, scriptsRoot, 'tsconfig.json'),
+    'utf8',
+  );
+  const eslint = readFileSync(
+    path.join(repoRoot, scriptsRoot, 'eslint.config.js'),
+    'utf8',
+  );
+  const rulePath = path.posix.relative(
+    scriptsRoot,
+    'tooling/eslint-rules/no-raw-object-arguments.js',
+  );
+  const normalizedEslint = eslint.replace(
+    rulePath,
+    '<tooling>/eslint-rules/no-raw-object-arguments.js',
+  );
+  for (const [configPath, source, expected] of [
+    [`${scriptsRoot}/.prettierrc`, prettier, CONFIG_HASHES.prettier],
+    [`${scriptsRoot}/tsconfig.json`, tsconfig, CONFIG_HASHES.typescript],
+    [`${scriptsRoot}/eslint.config.js`, normalizedEslint, CONFIG_HASHES.eslint],
+  ] as const) {
+    const actual = new Bun.CryptoHasher('sha256').update(source).digest('hex');
+    if (actual !== expected) {
+      addFinding(collector)(configPath)(
+        'executable-skill project config must match the canonical policy',
+      );
+    }
+  }
 }
 
 type ParseJsonRequest = {
