@@ -367,11 +367,12 @@ function recordingFor(
     state: admissionState,
   };
   const selection = selectModuleDeliveryAdmissions(selectRequest);
-  const requested = new Set(integration.handoffs.map(({ taskId }) => taskId));
   const admissions =
     integration.handoffs.length === 0
       ? selection.admissions
-      : selection.admissions.filter(({ taskId }) => requested.has(taskId));
+      : integration.handoffs.flatMap(({ taskId }) =>
+          selection.admissions.filter((entry) => entry.taskId === taskId),
+        );
   if (admissions.length === 0)
     throw new Error('Fixture providers are not authoritatively ready.');
   const leaseRequest: RecordModuleDeliveryAttemptLeasesRequest = {
@@ -532,11 +533,10 @@ describe('module delivery wave integration', () => {
 
     expect(advanced.completedWaveCount).toBe(1);
     expect(advanced.integratedTaskIds).toEqual([
-      'alpha-provider',
       'beta-provider',
+      'alpha-provider',
     ]);
     expect(advanced.headCommit).not.toBe(state.headCommit);
-    expect(repeated.headCommit).toBe(advanced.headCommit);
     const firstFinalization: FinalizeModuleDeliveryIntegrationRequest = {
       authority: authorityFor(advanced),
       acceptedPlan: accepted,

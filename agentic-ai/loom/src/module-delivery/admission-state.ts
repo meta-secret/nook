@@ -144,9 +144,12 @@ export function prepareFinalAdmissionState(
   const state = materializedAdmissionState(materialization);
   const integratedTaskIds =
     state.integratedWriterFrontiers[0]?.integratedTaskIds ?? [];
+  const integratedTaskSet = new Set(integratedTaskIds);
+  const canonicalTaskIds = request.canonicalTransition.integratedTaskIds;
   if (
-    JSON.stringify(integratedTaskIds) !==
-    JSON.stringify(request.canonicalTransition.integratedTaskIds)
+    integratedTaskSet.size !== integratedTaskIds.length ||
+    canonicalTaskIds.length !== integratedTaskIds.length ||
+    canonicalTaskIds.some((taskId) => !integratedTaskSet.has(taskId))
   )
     throw new Error('Final module delivery writer closure is invalid.');
   return state;

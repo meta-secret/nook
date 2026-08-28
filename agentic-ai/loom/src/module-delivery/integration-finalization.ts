@@ -35,9 +35,11 @@ export function validatedCanonicalWriterClosure(
           node.taskId === taskId && node.kind === ModuleDeliveryTaskKind.Write,
       ),
   );
+  const integratedTaskIds = new Set(inspection.integratedTaskIds);
   if (
-    JSON.stringify(writerTaskIds) !==
-    JSON.stringify(inspection.integratedTaskIds)
+    integratedTaskIds.size !== inspection.integratedTaskIds.length ||
+    writerTaskIds.length !== inspection.integratedTaskIds.length ||
+    writerTaskIds.some((taskId) => !integratedTaskIds.has(taskId))
   )
     throw new Error('Final module join lacks complete writer closure.');
   return Object.freeze(writerTaskIds);
