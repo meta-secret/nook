@@ -124,9 +124,9 @@ implementation.
    state.
 8. Require provider-owned implementation, tests, review fixes, and validation
    fixes inside the bounded scope.
-9. Require the provider to preserve the functional contract and return the
-   result to the functional owner for semantic acceptance.
-10. Integrate through Gizmo only after the functional owner accepts the
+9. Require the provider to preserve the functional contract.
+10. Return the result to the functional owner.
+11. Integrate through Gizmo only after the functional owner accepts the
     handoff.
 
 An expertise contract is an explicit task-scoped handoff. It is not general
