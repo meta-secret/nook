@@ -838,10 +838,10 @@ test('follows scripts launched from every runnable configuration surface', () =>
     ['package.json', 'a=$b; b=$a; bun "$b/cli.ts"'],
     ['package.json', `root=$PWD/${HOST_ROOT}cli.ts; bun "$root"`],
     ['package.json', `root=\${PWD}/${HOST_ROOT}cli.ts; bun "$root"`],
-    [
-      'package.json',
-      `a=${HOST_ROOT}; bun "\${a}/$(printf src)/cli.ts"; bun "\${a}/\`printf src\`/cli.ts"`,
-    ],
+    ...['$(printf src)', '`printf src`'].map(
+      (part) =>
+        ['package.json', `a=${HOST_ROOT}; bun "\${a}/${part}/cli.ts"`] as const,
+    ),
     ['Taskfile.yml', 'tasks:\n  audit:\n    cmds: [bun scripts/facade.ts]'],
     [
       'Taskfile.yml',

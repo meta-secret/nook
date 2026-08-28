@@ -293,6 +293,7 @@ test('rejects dangerous capabilities from every host layer', async () => {
   const schema = `${HOST_ROOT}skill-schema-validator.ts`;
   const fixtures = [
     [HOST_CLI, 'process.env.SECRET;'],
+    [HOST_CLI, 'const secret = "secret"; console.log(secret);'],
     [HOST_CLI, 'const secret = "secret"; alert(secret);'],
     [HOST_CLI, 'const secret = "secret"; confirm(secret); prompt(secret);'],
     [HOST_CLI, 'const secret = new Error("secret"); reportError(secret);'],
