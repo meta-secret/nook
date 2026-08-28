@@ -10,7 +10,9 @@ use super::control_identity::{
 use super::form_identity::{
     control_destination_indicates_non_authentication_route,
     control_destination_indicates_password_recovery_route,
-    control_destination_indicates_registration_route, form_identity_indicates_destructive_action,
+    control_destination_indicates_registration_route,
+    control_destination_indicates_safe_post_login_route,
+    form_identity_indicates_destructive_action,
     form_identity_indicates_non_authentication_account_management,
     identity_indicates_explicit_authentication_route,
 };
@@ -103,10 +105,9 @@ fn destination_indicates_alternate_provider(destination_identity: &str) -> bool 
 fn destination_has_disallowed_route_action(destination_identity: &str) -> bool {
     let identity = expand_identity_text(destination_identity);
     contains_any_word(&identity, &["cancel", "back", "help", "profile", "payment"])
-        || contains_any_word(
-            &identity,
-            &["billing", "subscribe", "search", "publish", "post"],
-        )
+        || contains_any_word(&identity, &["billing", "subscribe", "search", "publish"])
+        || (contains_any_word(&identity, &["post"])
+            && !control_destination_indicates_safe_post_login_route(destination_identity))
         || contains_any_word(&identity, &["learn more"])
 }
 
@@ -122,7 +123,8 @@ fn destination_has_disallowed_action_or_provider(
 ) -> bool {
     destination_has_disallowed_route_action(destination_identity)
         || (looks_like_non_authentication_submit_control_label(destination_identity)
-            && !password_update_destination)
+            && !password_update_destination
+            && !control_destination_indicates_safe_post_login_route(destination_identity))
         || destination_indicates_alternate_provider(destination_identity)
 }
 
@@ -525,43 +527,34 @@ mod tests {
             ..localized_identity_submit()
         };
         assert!(advances_authentication(&password_only_submit));
-
-        let destination_only_submit = AuthenticationAdvanceControlObservation {
-            ownership: PageControlOwnership::LocallyScoped,
-            destination_identity: "/login".to_owned(),
-            label: "Siguiente".to_owned(),
-            ..password_only_submit.clone()
+        let observes_destination =
+            |destination_identity: &str, label: &str| AuthenticationAdvanceControlObservation {
+                ownership: PageControlOwnership::LocallyScoped,
+                destination_identity: destination_identity.to_owned(),
+                label: label.to_owned(),
+                ..password_only_submit.clone()
+            };
+        let advances_destination = |destination: &str, label: &str| {
+            advances_authentication(&observes_destination(destination, label))
         };
-        assert!(advances_authentication(&destination_only_submit));
-
+        for destination in ["/login", "/auth/post-login", "/authentication/post-login"] {
+            assert!(advances_destination(destination, "Siguiente"));
+        }
+        for (destination, label) in [
+            ("/profile", "Siguiente"),
+            ("/profile", "Sign in"),
+            ("/login/cancel", "Siguiente"),
+            ("/login/cancel", "Sign in"),
+            ("/login/google", "Siguiente"),
+            ("/login/google", "Sign in"),
+            ("/auth/post", "Siguiente"),
+            ("/auth/post-login/post", "Siguiente"),
+            ("/auth/post-login/publish", "Siguiente"),
+            ("/auth/post-login/content", "Siguiente"),
+        ] {
+            assert!(!advances_destination(destination, label));
+        }
         for rejected in [
-            AuthenticationAdvanceControlObservation {
-                destination_identity: "/profile".to_owned(),
-                label: "Siguiente".to_owned(),
-                ..password_only_submit.clone()
-            },
-            AuthenticationAdvanceControlObservation {
-                destination_identity: "/profile".to_owned(),
-                ..password_only_submit.clone()
-            },
-            AuthenticationAdvanceControlObservation {
-                destination_identity: "/login/cancel".to_owned(),
-                label: "Siguiente".to_owned(),
-                ..password_only_submit.clone()
-            },
-            AuthenticationAdvanceControlObservation {
-                destination_identity: "/login/cancel".to_owned(),
-                ..password_only_submit.clone()
-            },
-            AuthenticationAdvanceControlObservation {
-                destination_identity: "/login/google".to_owned(),
-                label: "Siguiente".to_owned(),
-                ..password_only_submit.clone()
-            },
-            AuthenticationAdvanceControlObservation {
-                destination_identity: "/login/google".to_owned(),
-                ..password_only_submit.clone()
-            },
             AuthenticationAdvanceControlObservation {
                 ownership: PageControlOwnership::Unowned,
                 ..password_only_submit.clone()
@@ -956,6 +949,13 @@ mod tests {
             ..localized_identity_submit.clone()
         };
         assert!(!advances_authentication(&destructive_confirmation));
+
+        let unlink_confirmation = AuthenticationAdvanceControlObservation {
+            form_identity: "/auth/unlink-account".to_owned(),
+            label: "Unlink account".to_owned(),
+            ..destructive_confirmation.clone()
+        };
+        assert!(!advances_authentication(&unlink_confirmation));
 
         let destructive_login_fallback = AuthenticationAdvanceControlObservation {
             label: "Continue to delete account".to_owned(),

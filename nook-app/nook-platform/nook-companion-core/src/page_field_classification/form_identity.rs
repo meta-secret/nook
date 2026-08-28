@@ -25,6 +25,8 @@ pub(super) fn form_identity_indicates_destructive_action(form_identity: &str) ->
             "remove",
             "deactivate",
             "disable",
+            "unlink",
+            "disconnect",
             "revoke",
             "suspend",
             "close account",
@@ -81,6 +83,18 @@ pub(super) fn control_destination_indicates_non_authentication_route(
     }
     !identity_indicates_explicit_authentication_route(&identity)
         && form_identity_indicates_non_authentication_account_management(&identity)
+}
+
+pub(super) fn control_destination_indicates_safe_post_login_route(
+    destination_identity: &str,
+) -> bool {
+    let normalized = destination_identity.trim().to_ascii_lowercase();
+    let route = normalized
+        .split(['?', '#'])
+        .next()
+        .unwrap_or_default()
+        .trim_end_matches('/');
+    matches!(route, "/auth/post-login" | "/authentication/post-login")
 }
 
 pub(super) fn control_destination_indicates_registration_route(destination_identity: &str) -> bool {
