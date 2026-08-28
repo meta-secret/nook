@@ -1,18 +1,25 @@
 import {
+  AgentAttemptParentKind,
   isValidTaskResourceClaim,
   taskResourcePatternsOverlap,
 } from '../agent-workflow/domain.ts';
 import type { TaskResourcePatternPair } from '../agent-workflow/domain.ts';
 import { MODULE_EXPERT_CATALOG } from '../module-experts/catalog.ts';
 import type { ModuleExpertProfile } from '../module-experts/catalog.ts';
-import { decodeModuleDeliveryPlan, moduleDeliveryPlanDigest } from './codec.ts';
 import {
+  decodeCompatibleModuleDeliveryPlan,
+  moduleDeliveryPlanDigest,
+} from './codec.ts';
+import {
+  MODULE_DELIVERY_PLAN_VERSION,
   MAX_MODULE_DELIVERY_AGENT_DEPTH,
   MAX_MODULE_DELIVERY_ATTEMPTS,
   MAX_MODULE_DELIVERY_CONCURRENCY,
   MAX_MODULE_DELIVERY_NODES,
   REQUIRED_PARENT_OWNED_RESOURCES,
   ModuleDeliveryBaselineKind,
+  ModuleDeliveryCompatibilityStatus,
+  ModuleDeliveryExecutionPrecedenceReason,
   ModuleDeliveryIssueCode,
   ModuleDeliveryTaskKind,
   ModuleDeliveryValidationStatus,
@@ -22,10 +29,10 @@ import type {
   ModuleDeliveryEdgeContract,
   ModuleDeliveryIssue,
   ModuleDeliveryNodeV2,
-  ModuleDeliveryPlanInputVersion,
   ModuleDeliveryPlanV2,
   ModuleDeliveryPlanValidation,
   ModuleDeliveryExecutionPrecedence,
+  RejectedModuleDeliveryPlan,
 } from './domain.ts';
 import * as claimContainment from './resource-claim-containment.ts';
 
@@ -73,23 +80,9 @@ type ProfileProtectedWriteRequest = ModuleScopeRequest & {
   readonly claim: string;
 };
 
-type NodePair = {
-  readonly first: ModuleDeliveryNodeV2;
-  readonly second: ModuleDeliveryNodeV2;
-};
-
-type ResourceConflictRequest = NodePair & {
-  readonly reachability: DependencyReachability;
-};
-
 type ClaimPair = {
   readonly first: readonly string[];
   readonly second: readonly string[];
-};
-
-type ReachabilityRequest = {
-  readonly order: readonly string[];
-  readonly dependencies: ExecutionDependencies;
 };
 
 type ConcurrentClaimsRequest = {
@@ -121,28 +114,35 @@ type ModuleDeliveryTopology = {
   readonly executionPrecedence: readonly ModuleDeliveryExecutionPrecedence[];
 };
 
-type DecodedPlanValidationRequest = {
-  readonly plan: ModuleDeliveryPlanV2;
-  readonly inputVersion: ModuleDeliveryPlanInputVersion;
-};
-
 export function decodeAndValidateModuleDeliveryPlan(
   serialized: string,
 ): ModuleDeliveryPlanValidation {
-  const decoded = decodeModuleDeliveryPlan(serialized);
-  if (decoded.status === ModuleDeliveryValidationStatus.Rejected)
-    return decoded;
-  const request: DecodedPlanValidationRequest = {
-    plan: decoded.plan,
-    inputVersion: decoded.inputVersion,
-  };
-  return validateDecodedModuleDeliveryPlan(request);
+  const decoded = decodeCompatibleModuleDeliveryPlan(serialized);
+  if (decoded.status === ModuleDeliveryCompatibilityStatus.Rejected) {
+    const rejection: RejectedModuleDeliveryPlan = {
+      status: ModuleDeliveryValidationStatus.Rejected,
+      issues: decoded.issues,
+    };
+    return rejection;
+  }
+  if (decoded.inputVersion !== MODULE_DELIVERY_PLAN_VERSION) {
+    const issue: ModuleDeliveryIssue = {
+      code: ModuleDeliveryIssueCode.InvalidField,
+      path: '$.version',
+      message: 'Canonical validation requires authored plan version 2.',
+    };
+    const rejection: RejectedModuleDeliveryPlan = {
+      status: ModuleDeliveryValidationStatus.Rejected,
+      issues: [issue],
+    };
+    return rejection;
+  }
+  return validateDecodedModuleDeliveryPlan(decoded.plan);
 }
 
 function validateDecodedModuleDeliveryPlan(
-  request: DecodedPlanValidationRequest,
+  plan: ModuleDeliveryPlanV2,
 ): ModuleDeliveryPlanValidation {
-  const { plan, inputVersion } = request;
   const issues: ModuleDeliveryIssue[] = [];
   const nodesById = new Map<string, ModuleDeliveryNodeV2>();
   const state: ValidationState = { plan, issues, nodesById };
@@ -157,7 +157,7 @@ function validateDecodedModuleDeliveryPlan(
   if (issues.length > 0) return rejected(state);
   return {
     status: ModuleDeliveryValidationStatus.Accepted,
-    inputVersion,
+    inputVersion: MODULE_DELIVERY_PLAN_VERSION,
     plan,
     planDigest: moduleDeliveryPlanDigest(plan),
     topologicalOrder: topology.order,
@@ -287,6 +287,15 @@ function validateNodes(state: ValidationState): void {
 }
 
 function validateOwnership(request: NodeValidationRequest): void {
+  if (request.node.parentLineage.kind !== AgentAttemptParentKind.WorkflowRoot) {
+    const issueRequest: IssueRequest = {
+      state: request.state,
+      code: ModuleDeliveryIssueCode.ParentLineageMismatch,
+      path: `${request.path}.parentLineage`,
+      message: 'Canonical validation requires workflow-root lineage.',
+    };
+    issue(issueRequest);
+  }
   if (request.node.acceptanceOwner !== request.node.functionalOwner) {
     const issueRequest: IssueRequest = {
       state: request.state,
@@ -775,8 +784,7 @@ function buildTopology(state: ValidationState): ModuleDeliveryTopology | false {
     )
   )
     return false;
-  const dependencies = buildExecutionDependencies(state);
-  const topologyRequest: ExecutionTopologyRequest = { state, dependencies };
+  const topologyRequest = buildExecutionTopologyRequest(state);
   serializeOrdinaryConflicts(topologyRequest);
   return topologyForDependencies(topologyRequest);
 }
@@ -784,6 +792,7 @@ function buildTopology(state: ValidationState): ModuleDeliveryTopology | false {
 type ExecutionTopologyRequest = {
   readonly state: ValidationState;
   readonly dependencies: Map<string, Set<string>>;
+  readonly constraints: ModuleDeliveryExecutionPrecedence[];
 };
 
 function topologyForDependencies(
@@ -819,42 +828,42 @@ function topologyForDependencies(
       order.push(taskId);
     }
   }
-  const reachabilityRequest: ReachabilityRequest = {
-    order,
-    dependencies: request.dependencies,
-  };
+  const reachabilityRequest: claimContainment.ModuleDeliveryReachabilityRequest =
+    {
+      order,
+      dependencies: request.dependencies,
+    };
   return {
     order,
     waves,
-    reachability: buildReachability(reachabilityRequest),
-    executionPrecedence: executionPrecedence(request.dependencies),
+    reachability:
+      claimContainment.buildModuleDeliveryReachability(reachabilityRequest),
+    executionPrecedence: claimContainment.sortedModuleDeliveryPrecedence(
+      request.constraints,
+    ),
   };
 }
 
-function executionPrecedence(
-  dependencies: ExecutionDependencies,
-): readonly ModuleDeliveryExecutionPrecedence[] {
-  const precedence: ModuleDeliveryExecutionPrecedence[] = [];
-  for (const successorTaskId of [...dependencies.keys()].sort()) {
-    for (const predecessorTaskId of [
-      ...(dependencies.get(successorTaskId) ?? []),
-    ].sort()) {
-      const edge: ModuleDeliveryExecutionPrecedence = {
-        predecessorTaskId,
-        successorTaskId,
-      };
-      precedence.push(edge);
-    }
-  }
-  return precedence;
-}
-
-function buildExecutionDependencies(
+function buildExecutionTopologyRequest(
   state: ValidationState,
-): Map<string, Set<string>> {
+): ExecutionTopologyRequest {
   const dependencies = new Map<string, Set<string>>();
+  const request: ExecutionTopologyRequest = {
+    state,
+    dependencies,
+    constraints: [],
+  };
   for (const node of state.plan.nodes) {
-    dependencies.set(node.taskId, new Set(node.dependencies));
+    dependencies.set(node.taskId, new Set());
+    for (const predecessorTaskId of node.dependencies) {
+      const constraint = {
+        request,
+        predecessorTaskId,
+        successorTaskId: node.taskId,
+        reason: ModuleDeliveryExecutionPrecedenceReason.DeclaredDependency,
+      };
+      addExecutionConstraint(constraint);
+    }
   }
   const writers = state.plan.nodes.filter(
     (node) => node.kind === ModuleDeliveryTaskKind.Write,
@@ -869,22 +878,48 @@ function buildExecutionDependencies(
         second: provider.resources.evidenceSurface,
       };
       if (claimContainment.resourceClaimListsOverlap(overlap)) {
-        const predecessors = dependencies.get(provider.taskId);
-        if (!predecessors?.has(writer.taskId)) {
-          predecessors?.add(writer.taskId);
-          const issueRequest: IssueRequest = {
-            state,
-            code: ModuleDeliveryIssueCode.BaselineMismatch,
-            path: `$.nodes[${state.plan.nodes.indexOf(provider)}].baseline`,
-            message:
-              'Evidence tasks overlapping a writer must declare that dependency and its integrated baseline.',
-          };
-          issue(issueRequest);
-        }
+        const constraint = {
+          request,
+          predecessorTaskId: writer.taskId,
+          successorTaskId: provider.taskId,
+          reason: ModuleDeliveryExecutionPrecedenceReason.EvidenceHazard,
+        };
+        addExecutionConstraint(constraint);
       }
     }
   }
-  return dependencies;
+  return request;
+}
+
+type AddExecutionConstraintRequest = {
+  readonly request: ExecutionTopologyRequest;
+  readonly predecessorTaskId: string;
+  readonly successorTaskId: string;
+  readonly reason: ModuleDeliveryExecutionPrecedenceReason;
+};
+
+function addExecutionConstraint(value: AddExecutionConstraintRequest): void {
+  value.request.dependencies
+    .get(value.successorTaskId)
+    ?.add(value.predecessorTaskId);
+  const predecessor = value.request.state.nodesById.get(
+    value.predecessorTaskId,
+  );
+  const constraint: ModuleDeliveryExecutionPrecedence = {
+    predecessorTaskId: value.predecessorTaskId,
+    successorTaskId: value.successorTaskId,
+    reason: value.reason,
+    requiresIntegratedWriterFrontier:
+      predecessor?.kind === ModuleDeliveryTaskKind.Write,
+  };
+  if (
+    !value.request.constraints.some(
+      (candidate) =>
+        claimContainment.moduleDeliveryPrecedenceIdentity(candidate) ===
+        claimContainment.moduleDeliveryPrecedenceIdentity(constraint),
+    )
+  )
+    value.request.constraints.push(constraint);
 }
 
 function serializeOrdinaryConflicts(request: ExecutionTopologyRequest): void {
@@ -905,64 +940,25 @@ function serializeOrdinaryConflicts(request: ExecutionTopologyRequest): void {
       if (!second) continue;
       const order = topologyForDependencies(request);
       if (!order) return;
-      const pair: ResourceConflictRequest = {
+      const pair: claimContainment.OrderedModuleDeliveryNodePair = {
         first,
         second,
         reachability: order.reachability,
       };
-      if (nodesConflict(pair) && !nodesAreOrdered(pair)) {
-        request.dependencies.get(second.taskId)?.add(first.taskId);
+      if (
+        claimContainment.moduleDeliveryNodesConflict(pair) &&
+        !claimContainment.moduleDeliveryNodesAreOrdered(pair)
+      ) {
+        const constraint = {
+          request,
+          predecessorTaskId: first.taskId,
+          successorTaskId: second.taskId,
+          reason: ModuleDeliveryExecutionPrecedenceReason.ResourceConflict,
+        };
+        addExecutionConstraint(constraint);
       }
     }
   }
-}
-
-function buildReachability(
-  request: ReachabilityRequest,
-): DependencyReachability {
-  const result = new Map<string, ReadonlySet<string>>();
-  for (const taskId of request.order) {
-    const dependencies = new Set<string>();
-    for (const dependency of request.dependencies.get(taskId) ?? []) {
-      dependencies.add(dependency);
-      const ancestors = result.get(dependency);
-      if (ancestors)
-        for (const ancestor of ancestors) dependencies.add(ancestor);
-    }
-    result.set(taskId, dependencies);
-  }
-  return result;
-}
-
-function nodesAreOrdered(request: ResourceConflictRequest): boolean {
-  return (
-    request.reachability
-      .get(request.first.taskId)
-      ?.has(request.second.taskId) === true ||
-    request.reachability
-      .get(request.second.taskId)
-      ?.has(request.first.taskId) === true
-  );
-}
-
-function nodesConflict(pair: NodePair): boolean {
-  const writeWrite: ClaimPair = {
-    first: pair.first.resources.write,
-    second: pair.second.resources.write,
-  };
-  const firstWriteRead: ClaimPair = {
-    first: pair.first.resources.write,
-    second: pair.second.resources.read,
-  };
-  const secondWriteRead: ClaimPair = {
-    first: pair.second.resources.write,
-    second: pair.first.resources.read,
-  };
-  return (
-    claimContainment.resourceClaimListsOverlap(writeWrite) ||
-    claimContainment.resourceClaimListsOverlap(firstWriteRead) ||
-    claimContainment.resourceClaimListsOverlap(secondWriteRead)
-  );
 }
 
 function validateUnique(request: UniqueListRequest): void {

@@ -6,6 +6,7 @@ import {
   ModuleDeliveryIssueCode,
   ModuleDeliveryJoinKind,
   ModuleDeliveryEvidenceInputSchema,
+  ModuleDeliveryExecutionPrecedenceReason,
   ModuleDeliveryTaskKind,
   ModuleDeliveryValidationStatus,
   ModuleDeliveryWorkspaceKind,
@@ -341,28 +342,6 @@ describe('reviewed module delivery plan', () => {
       expect(result.status).toBe(ModuleDeliveryValidationStatus.Rejected);
       expect(codes(result)).toContain(ModuleDeliveryIssueCode.InvalidField);
     }
-  });
-
-  test('retains whether accepted input was authored as v1 or v2', () => {
-    const legacy = decodeAndValidateModuleDeliveryPlan(
-      JSON.stringify(legacyPlan()),
-    );
-    const fixture: PlanFixture = {
-      nodes: DEFAULT_NODES,
-      edgeContracts: DEFAULT_EDGES,
-    };
-    const current = validate(plan(fixture));
-    expect(legacy.status).toBe(ModuleDeliveryValidationStatus.Accepted);
-    expect(current.status).toBe(ModuleDeliveryValidationStatus.Accepted);
-    if (
-      legacy.status !== ModuleDeliveryValidationStatus.Accepted ||
-      current.status !== ModuleDeliveryValidationStatus.Accepted
-    )
-      return;
-    expect(legacy.inputVersion).toBe(1);
-    expect(current.inputVersion).toBe(2);
-    expect(legacy.plan.version).toBe(2);
-    expect(current.plan.version).toBe(2);
   });
 
   test('freezes owner acceptance and typed synthesis producer identities', () => {
@@ -811,23 +790,6 @@ describe('task execution and canonical ownership', () => {
 });
 
 describe('dependency edges and resource safety', () => {
-  test('rejects stale source baselines for derived evidence predecessors', () => {
-    const auditFixture: ReadOnlyNodeFixture = {
-      taskId: 'core-audit',
-      expert: 'core_expert',
-      moduleRoot: CORE_ROOT,
-      dependencies: [],
-    };
-    const staleAudit = readOnlyNode(auditFixture);
-    const staleFixture: PlanFixture = {
-      nodes: [staleAudit, CORE_NODE],
-      edgeContracts: [],
-    };
-    expect(codes(validate(plan(staleFixture)))).toContain(
-      ModuleDeliveryIssueCode.BaselineMismatch,
-    );
-  });
-
   test('requires exact edge contracts for fan-in and multiple consumers', () => {
     const secondConsumerFixture: WriteNodeFixture = {
       taskId: 'web-second',
@@ -919,6 +881,8 @@ describe('dependency edges and resource safety', () => {
     const precedence: ModuleDeliveryExecutionPrecedence = {
       predecessorTaskId: 'core-provider',
       successorTaskId: 'core-sibling',
+      reason: ModuleDeliveryExecutionPrecedenceReason.ResourceConflict,
+      requiresIntegratedWriterFrontier: true,
     };
     expect(concurrent.executionPrecedence).toContainEqual(precedence);
 

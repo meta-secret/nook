@@ -1,9 +1,11 @@
 export { decodeAndValidateModuleDeliveryPlan } from './validation.ts';
+export { decodeCompatibleModuleDeliveryPlan } from './codec.ts';
 export { cleanupModuleWorktree, prepareModuleWorktree } from './workspace.ts';
 export { verifyModuleCommitHandoff } from './handoff.ts';
 export {
   cleanupModuleIntegration,
   integrateVerifiedModuleDeliveryWave,
+  MODULE_DELIVERY_INTEGRATION_INACTIVE_MESSAGE,
   prepareModuleIntegration,
 } from './integration.ts';
 export * from './domain.ts';

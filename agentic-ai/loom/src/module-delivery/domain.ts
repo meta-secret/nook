@@ -280,9 +280,28 @@ export enum ModuleDeliveryValidationStatus {
   Rejected = 'rejected',
 }
 
-export type AcceptedModuleDeliveryPlan = {
-  readonly status: ModuleDeliveryValidationStatus.Accepted;
+export enum ModuleDeliveryCompatibilityStatus {
+  Decoded = 'decoded',
+  Rejected = 'rejected',
+}
+
+export type DecodedCompatibleModuleDeliveryPlan = {
+  readonly status: ModuleDeliveryCompatibilityStatus.Decoded;
   readonly inputVersion: ModuleDeliveryPlanInputVersion;
+  readonly plan: ModuleDeliveryPlanV2;
+};
+
+export type RejectedCompatibleModuleDeliveryPlan = {
+  readonly status: ModuleDeliveryCompatibilityStatus.Rejected;
+  readonly issues: readonly ModuleDeliveryIssue[];
+};
+
+export type CompatibleModuleDeliveryPlanDecode =
+  DecodedCompatibleModuleDeliveryPlan | RejectedCompatibleModuleDeliveryPlan;
+
+export type ValidatedModuleDeliveryPlan = {
+  readonly status: ModuleDeliveryValidationStatus.Accepted;
+  readonly inputVersion: typeof MODULE_DELIVERY_PLAN_VERSION;
   readonly plan: ModuleDeliveryPlanV2;
   readonly planDigest: string;
   readonly topologicalOrder: readonly string[];
@@ -290,9 +309,17 @@ export type AcceptedModuleDeliveryPlan = {
   readonly executionPrecedence: readonly ModuleDeliveryExecutionPrecedence[];
 };
 
+export enum ModuleDeliveryExecutionPrecedenceReason {
+  DeclaredDependency = 'declared-dependency',
+  EvidenceHazard = 'evidence-hazard',
+  ResourceConflict = 'resource-conflict',
+}
+
 export type ModuleDeliveryExecutionPrecedence = {
   readonly predecessorTaskId: string;
   readonly successorTaskId: string;
+  readonly reason: ModuleDeliveryExecutionPrecedenceReason;
+  readonly requiresIntegratedWriterFrontier: boolean;
 };
 
 export type RejectedModuleDeliveryPlan = {
@@ -301,4 +328,4 @@ export type RejectedModuleDeliveryPlan = {
 };
 
 export type ModuleDeliveryPlanValidation =
-  AcceptedModuleDeliveryPlan | RejectedModuleDeliveryPlan;
+  ValidatedModuleDeliveryPlan | RejectedModuleDeliveryPlan;

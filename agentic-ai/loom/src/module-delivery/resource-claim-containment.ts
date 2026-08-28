@@ -2,6 +2,10 @@ import { resourceClaimMatchesPath } from './resource-claims.ts';
 import { taskResourcePatternsOverlap } from '../agent-workflow/domain.ts';
 import type { TaskResourcePatternPair } from '../agent-workflow/domain.ts';
 import type { ResourcePathMatchRequest } from './resource-claims.ts';
+import type {
+  ModuleDeliveryExecutionPrecedence,
+  ModuleDeliveryNodeV2,
+} from './domain.ts';
 
 type ResourceClaimContainmentRequest = {
   readonly coveringClaim: string;
@@ -18,6 +22,20 @@ export type ResourceClaimListPair = {
   readonly second: readonly string[];
 };
 
+export type ModuleDeliveryNodePair = {
+  readonly first: ModuleDeliveryNodeV2;
+  readonly second: ModuleDeliveryNodeV2;
+};
+
+export type OrderedModuleDeliveryNodePair = ModuleDeliveryNodePair & {
+  readonly reachability: ReadonlyMap<string, ReadonlySet<string>>;
+};
+
+export type ModuleDeliveryReachabilityRequest = {
+  readonly order: readonly string[];
+  readonly dependencies: ReadonlyMap<string, ReadonlySet<string>>;
+};
+
 export function resourceClaimListsOverlap(
   request: ResourceClaimListPair,
 ): boolean {
@@ -27,6 +45,77 @@ export function resourceClaimListsOverlap(
       return taskResourcePatternsOverlap(pair);
     }),
   );
+}
+
+export function moduleDeliveryNodesConflict(
+  pair: ModuleDeliveryNodePair,
+): boolean {
+  const writeWrite: ResourceClaimListPair = {
+    first: pair.first.resources.write,
+    second: pair.second.resources.write,
+  };
+  const firstWriteRead: ResourceClaimListPair = {
+    first: pair.first.resources.write,
+    second: pair.second.resources.read,
+  };
+  const secondWriteRead: ResourceClaimListPair = {
+    first: pair.second.resources.write,
+    second: pair.first.resources.read,
+  };
+  return (
+    resourceClaimListsOverlap(writeWrite) ||
+    resourceClaimListsOverlap(firstWriteRead) ||
+    resourceClaimListsOverlap(secondWriteRead)
+  );
+}
+
+export function moduleDeliveryNodesAreOrdered(
+  request: OrderedModuleDeliveryNodePair,
+): boolean {
+  return (
+    request.reachability
+      .get(request.first.taskId)
+      ?.has(request.second.taskId) === true ||
+    request.reachability
+      .get(request.second.taskId)
+      ?.has(request.first.taskId) === true
+  );
+}
+
+export function buildModuleDeliveryReachability(
+  request: ModuleDeliveryReachabilityRequest,
+): ReadonlyMap<string, ReadonlySet<string>> {
+  const result = new Map<string, ReadonlySet<string>>();
+  for (const taskId of request.order) {
+    const dependencies = new Set<string>();
+    for (const dependency of request.dependencies.get(taskId) ?? []) {
+      dependencies.add(dependency);
+      const ancestors = result.get(dependency);
+      if (ancestors)
+        for (const ancestor of ancestors) dependencies.add(ancestor);
+    }
+    result.set(taskId, dependencies);
+  }
+  return result;
+}
+
+export function moduleDeliveryPrecedenceIdentity(
+  value: ModuleDeliveryExecutionPrecedence,
+): string {
+  return `${value.predecessorTaskId}->${value.successorTaskId}:${value.reason}`;
+}
+
+export function sortedModuleDeliveryPrecedence(
+  values: readonly ModuleDeliveryExecutionPrecedence[],
+): readonly ModuleDeliveryExecutionPrecedence[] {
+  const byIdentity = new Map<string, ModuleDeliveryExecutionPrecedence>();
+  for (const value of values)
+    byIdentity.set(moduleDeliveryPrecedenceIdentity(value), value);
+  return [...byIdentity.keys()].sort().map((identity) => {
+    const value = byIdentity.get(identity);
+    if (!value) throw new Error(`Execution constraint ${identity} is missing.`);
+    return value;
+  });
 }
 
 type BasenameContainmentRequest = {

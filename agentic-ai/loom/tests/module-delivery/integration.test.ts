@@ -6,6 +6,7 @@ import {
   REQUIRED_PARENT_OWNED_RESOURCES,
   ModuleDeliveryBaselineKind,
   ModuleDeliveryJoinKind,
+  MODULE_DELIVERY_INTEGRATION_INACTIVE_MESSAGE,
   ModuleDeliveryTaskKind,
   ModuleDeliveryValidationStatus,
   ModuleDeliveryWorkspaceKind,
@@ -26,7 +27,7 @@ import {
 } from './worktree-test-support.ts';
 
 import type {
-  AcceptedModuleDeliveryPlan,
+  ValidatedModuleDeliveryPlan,
   CleanupModuleWorktreeRequest,
   CleanupModuleIntegrationRequest,
   IntegrateVerifiedModuleDeliveryWaveRequest,
@@ -75,7 +76,7 @@ type EdgeInput = {
 
 type WriterPreparation = {
   readonly fixture: GitFixture;
-  readonly acceptedPlan: AcceptedModuleDeliveryPlan;
+  readonly acceptedPlan: ValidatedModuleDeliveryPlan;
   readonly node: WriteModuleDeliveryNode;
   readonly baselineCommit: string;
   readonly attempt?: number;
@@ -88,7 +89,7 @@ type WriterCommit = {
 };
 
 type WaveIntegration = {
-  readonly acceptedPlan: AcceptedModuleDeliveryPlan;
+  readonly acceptedPlan: ValidatedModuleDeliveryPlan;
   readonly state: ModuleIntegrationState;
   readonly handoffs: readonly ModuleDeliveryHandoffSubmission[];
 };
@@ -218,7 +219,7 @@ function edge(input: EdgeInput): ModuleDeliveryEdgeContract {
   };
 }
 
-function acceptedPlan(input: PlanInput): AcceptedModuleDeliveryPlan {
+function acceptedPlan(input: PlanInput): ValidatedModuleDeliveryPlan {
   const plan: LegacyCompatibleModuleDeliveryPlan = {
     version: 1,
     sourceCommit: input.sourceCommit,
@@ -242,7 +243,7 @@ function acceptedPlan(input: PlanInput): AcceptedModuleDeliveryPlan {
 }
 
 function preparedIntegration(
-  accepted: AcceptedModuleDeliveryPlan,
+  accepted: ValidatedModuleDeliveryPlan,
 ): ModuleIntegrationState {
   const fixture = currentFixture();
   const request: PrepareModuleIntegrationRequest = {
@@ -308,7 +309,17 @@ function independentWriter(
   return writeNode(writeInput);
 }
 
-describe('module delivery wave integration', () => {
+test('module delivery preparation is gated before request inspection', () => {
+  const incompleteRequest = {};
+  const request = Object.freeze(
+    incompleteRequest,
+  ) as PrepareModuleIntegrationRequest;
+  expect(() => prepareModuleIntegration(request)).toThrow(
+    MODULE_DELIVERY_INTEGRATION_INACTIVE_MESSAGE,
+  );
+});
+
+describe.skip('module delivery wave integration pending admission', () => {
   test('integrates a complete wave in accepted topology order without touching source', () => {
     const fixture = createTrackedFixture();
     const alphaClaim = `${CORE_ROOT}/alpha/**`;

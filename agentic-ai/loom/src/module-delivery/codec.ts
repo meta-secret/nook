@@ -18,26 +18,26 @@ import type {
 import {
   MODULE_DELIVERY_PLAN_VERSION,
   ModuleDeliveryBaselineKind,
+  ModuleDeliveryCompatibilityStatus,
   ModuleDeliveryEvidenceInputSchema,
   ModuleDeliveryIssueCode,
   ModuleDeliveryJoinKind,
   ModuleDeliveryTaskKind,
-  ModuleDeliveryValidationStatus,
   ModuleDeliveryWorkspaceKind,
   moduleDeliveryTaskTeam,
 } from './domain.ts';
 import { TeamKey } from '../team-agents/catalog.ts';
 import type {
+  CompatibleModuleDeliveryPlanDecode,
   ModuleDeliveryBaseline,
   ModuleDeliveryEdgeContract,
   ModuleDeliveryIssue,
   ModuleDeliveryNodeV2,
   ModuleDeliveryParentJoin,
-  ModuleDeliveryPlanInputVersion,
   ModuleDeliveryPlanV2,
   ModuleDeliveryExpectedProducerIdentity,
   ModuleDeliveryEvidenceInputContract,
-  RejectedModuleDeliveryPlan,
+  RejectedCompatibleModuleDeliveryPlan,
 } from './domain.ts';
 
 const MAX_SERIALIZED_PLAN_BYTES = 262_144;
@@ -373,17 +373,9 @@ class ModulePlanFields {
   }
 }
 
-export type ModuleDeliveryPlanDecode =
-  | {
-      readonly status: ModuleDeliveryValidationStatus.Accepted;
-      readonly inputVersion: ModuleDeliveryPlanInputVersion;
-      readonly plan: ModuleDeliveryPlanV2;
-    }
-  | RejectedModuleDeliveryPlan;
-
-export function decodeModuleDeliveryPlan(
+export function decodeCompatibleModuleDeliveryPlan(
   serialized: string,
-): ModuleDeliveryPlanDecode {
+): CompatibleModuleDeliveryPlanDecode {
   if (Buffer.byteLength(serialized, 'utf8') > MAX_SERIALIZED_PLAN_BYTES) {
     const request: RejectedModulePlanRequest = {
       code: ModuleDeliveryIssueCode.LimitExceeded,
@@ -415,7 +407,9 @@ export function decodeModuleDeliveryPlan(
   }
 }
 
-function decodePlanRoot(node: UntrustedYamlNode): ModuleDeliveryPlanDecode {
+function decodePlanRoot(
+  node: UntrustedYamlNode,
+): CompatibleModuleDeliveryPlanDecode {
   if (!isRecord(node)) fail('Plan root must be an object.');
   const fieldRequest: ModulePlanObjectDecodeRequest = {
     record: node,
@@ -449,7 +443,7 @@ function decodePlanRoot(node: UntrustedYamlNode): ModuleDeliveryPlanDecode {
     edgeContracts: decodeEdgeContracts(fields.list('edgeContracts')),
   };
   return {
-    status: ModuleDeliveryValidationStatus.Accepted,
+    status: ModuleDeliveryCompatibilityStatus.Decoded,
     inputVersion: version,
     plan,
   };
@@ -834,13 +828,16 @@ type RejectedModulePlanRequest = {
 
 function rejected(
   request: RejectedModulePlanRequest,
-): RejectedModuleDeliveryPlan {
+): RejectedCompatibleModuleDeliveryPlan {
   const issue: ModuleDeliveryIssue = {
     code: request.code,
     path: '$',
     message: request.message,
   };
-  return { status: ModuleDeliveryValidationStatus.Rejected, issues: [issue] };
+  return {
+    status: ModuleDeliveryCompatibilityStatus.Rejected,
+    issues: [issue],
+  };
 }
 
 export function moduleDeliveryPlanDigest(plan: ModuleDeliveryPlanV2): string {

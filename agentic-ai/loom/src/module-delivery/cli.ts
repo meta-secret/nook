@@ -1,13 +1,16 @@
 import { readFile } from 'node:fs/promises';
+import { decodeCompatibleModuleDeliveryPlan } from './codec.ts';
 import { decodeAndValidateModuleDeliveryPlan } from './validation.ts';
 import {
   MODULE_DELIVERY_PLAN_VERSION,
+  ModuleDeliveryCompatibilityStatus,
   ModuleDeliveryIssueCode,
   ModuleDeliveryValidationStatus,
 } from './domain.ts';
 import type {
   ModuleDeliveryIssue,
   ModuleDeliveryPlanValidation,
+  RejectedModuleDeliveryPlan,
 } from './domain.ts';
 
 type ModuleDeliveryCliArguments = readonly string[];
@@ -43,25 +46,39 @@ async function runModuleDeliveryCli(
     process.stderr.write('Unable to read module delivery plan.\n');
     return 2;
   }
-  const result = decodeAndValidateModuleDeliveryPlan(serialized);
+  const result = moduleDeliveryCliValidation(serialized);
   const output = moduleDeliveryCliOutput(result);
   const rendered = `${JSON.stringify(output)}\n`;
   process.stdout.write(rendered);
   return output.status === ModuleDeliveryValidationStatus.Accepted ? 0 : 1;
 }
 
-function moduleDeliveryCliOutput(
-  result: ModuleDeliveryPlanValidation,
-): ModuleDeliveryCliOutput {
-  if (result.status === ModuleDeliveryValidationStatus.Rejected) return result;
-  if (result.inputVersion !== MODULE_DELIVERY_PLAN_VERSION) {
+function moduleDeliveryCliValidation(
+  serialized: string,
+): ModuleDeliveryPlanValidation {
+  const decoded = decodeCompatibleModuleDeliveryPlan(serialized);
+  if (
+    decoded.status === ModuleDeliveryCompatibilityStatus.Decoded &&
+    decoded.inputVersion !== MODULE_DELIVERY_PLAN_VERSION
+  ) {
     const issue: ModuleDeliveryIssue = {
       code: ModuleDeliveryIssueCode.InvalidField,
       path: '$.version',
       message: 'Canonical CLI admission requires plan version 2.',
     };
-    return { status: ModuleDeliveryValidationStatus.Rejected, issues: [issue] };
+    const rejection: RejectedModuleDeliveryPlan = {
+      status: ModuleDeliveryValidationStatus.Rejected,
+      issues: [issue],
+    };
+    return rejection;
   }
+  return decodeAndValidateModuleDeliveryPlan(serialized);
+}
+
+function moduleDeliveryCliOutput(
+  result: ModuleDeliveryPlanValidation,
+): ModuleDeliveryCliOutput {
+  if (result.status === ModuleDeliveryValidationStatus.Rejected) return result;
   return {
     status: result.status,
     inputVersion: result.inputVersion,
