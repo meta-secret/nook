@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import type { ExecFileSyncOptionsWithStringEncoding } from 'node:child_process';
 import path from 'node:path';
@@ -217,6 +217,14 @@ function auditPackage(request: AuditPackageRequest): void {
         'scripts cannot contain a tracked skill-card mirror',
       );
     }
+    if (
+      file.path.startsWith(`${skillPackage.scriptsRoot}/src/`) &&
+      !file.path.endsWith('.ts')
+    ) {
+      addFinding(collector)(file.path)(
+        'executable-skill src files must use the .ts extension',
+      );
+    }
   }
   for (const relative of [
     'SKILL.md',
@@ -243,11 +251,22 @@ function auditPackage(request: AuditPackageRequest): void {
     `${skillPackage.scriptsRoot}/executable-skill.json`,
     `${skillPackage.scriptsRoot}/bun.lock`,
   ];
-  if (
-    documentPaths.every((required) =>
-      packageFiles.some((file) => file.path === required),
-    )
-  ) {
+  const documentsAreSafe = documentPaths.every((required) => {
+    const trackedFile = packageFiles.find((file) => file.path === required);
+    if (!trackedFile || trackedFile.mode !== CANONICAL_MODE) return false;
+    const absolutePath = path.join(repoRoot, required);
+    try {
+      const metadata = lstatSync(absolutePath);
+      if (metadata.isFile() && !metadata.isSymbolicLink()) return true;
+    } catch {
+      // The bounded finding below covers missing and unsafe working-tree nodes.
+    }
+    addFinding(collector)(required)(
+      'executable-skill document must be a regular file',
+    );
+    return false;
+  });
+  if (documentsAreSafe) {
     const documentsRequest: AuditDocumentsRequest = {
       collector,
       repoRoot,
@@ -284,6 +303,14 @@ function auditDocuments(request: AuditDocumentsRequest): void {
   if (!isRecord(skillName) || skillName.name !== skillPackage.slug) {
     addFinding(collector)(skillPackage.skillPath)(
       'SKILL.md name must equal its directory slug',
+    );
+  }
+  const description = isRecord(skillName)
+    ? property(skillName)('description')
+    : false;
+  if (typeof description !== 'string' || description.trim().length === 0) {
+    addFinding(collector)(skillPackage.skillPath)(
+      'SKILL.md description must be a nonempty string',
     );
   }
   const packagePath = `${skillPackage.scriptsRoot}/package.json`;

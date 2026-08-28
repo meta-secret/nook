@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from 'bun:test';
@@ -147,6 +147,91 @@ test('rejects unsafe tracked modes and tracked node_modules', async () => {
     expect(findings.some((finding) => finding.issue.includes('mirror'))).toBe(
       true,
     );
+  } finally {
+    await rm(repoRoot, REMOVE_OPTIONS);
+  }
+});
+
+test('rejects every non-TypeScript executable source extension', async () => {
+  const repoRoot = await packageFixture();
+  try {
+    const unsupported = ['runtime.js', 'component.tsx', 'launcher'];
+    const files = [
+      ...trackedFiles(),
+      ...unsupported.map((name) => {
+        const file: TrackedRepositoryFile = {
+          mode: '100644',
+          path: `${SCRIPTS}/src/${name}`,
+        };
+        return file;
+      }),
+    ];
+    const findings = audit(repoRoot)(files).filter((finding) =>
+      finding.issue.includes('.ts extension'),
+    );
+    expect(findings.map((finding) => finding.path)).toEqual(
+      unsupported.map((name) => `${SCRIPTS}/src/${name}`),
+    );
+  } finally {
+    await rm(repoRoot, REMOVE_OPTIONS);
+  }
+});
+
+test('returns central findings for invalid skill descriptions', async () => {
+  for (const skill of [
+    '---\nname: example\n---\n',
+    '---\nname: example\ndescription: null\n---\n',
+    '---\nname: example\ndescription: 42\n---\n',
+    '---\nname: example\ndescription: ""\n---\n',
+  ]) {
+    const overrides: FixtureOverrides = { skill };
+    const repoRoot = await packageFixture(overrides);
+    try {
+      const findings = audit(repoRoot)(trackedFiles());
+      const expectedFinding = {
+        path: `${ROOT}/SKILL.md`,
+        issue: 'SKILL.md description must be a nonempty string',
+      };
+      expect(findings).toContainEqual(expectedFinding);
+    } finally {
+      await rm(repoRoot, REMOVE_OPTIONS);
+    }
+  }
+});
+
+test('never follows noncanonical tracked document symlinks', async () => {
+  const repoRoot = await packageFixture();
+  try {
+    const packagePath = join(repoRoot, SCRIPTS, 'package.json');
+    await rm(packagePath);
+    await symlink('/dev/null', packagePath);
+    const noncanonicalFiles = trackedFiles().map((file) =>
+      file.path === `${SCRIPTS}/package.json`
+        ? { ...file, mode: '120000' }
+        : file,
+    );
+    const noncanonicalFindings = audit(repoRoot)(noncanonicalFiles);
+    expect(
+      noncanonicalFindings.some((finding) =>
+        finding.issue.includes('mode 100644'),
+      ),
+    ).toBe(true);
+    expect(
+      noncanonicalFindings.some((finding) =>
+        finding.issue.includes('valid object'),
+      ),
+    ).toBe(false);
+    const unsafeWorkingTreeFindings = audit(repoRoot)(trackedFiles());
+    expect(
+      unsafeWorkingTreeFindings.some((finding) =>
+        finding.issue.includes('regular file'),
+      ),
+    ).toBe(true);
+    expect(
+      unsafeWorkingTreeFindings.some((finding) =>
+        finding.issue.includes('valid object'),
+      ),
+    ).toBe(false);
   } finally {
     await rm(repoRoot, REMOVE_OPTIONS);
   }
