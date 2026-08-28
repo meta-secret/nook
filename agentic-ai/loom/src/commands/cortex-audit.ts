@@ -77,6 +77,14 @@ export async function runCortexAuditFromDirectory(
   const allMarkdownFiles = listCortexMarkdownFiles(cortexRoot);
   const brokenLinks: BrokenLink[] = [];
   const densityFindings: DensityFinding[] = [];
+  const syntaxDocuments = allMarkdownFiles.map((filePath) => {
+    const documentSource: CortexDocumentSource = {
+      absolutePath: filePath,
+      relativePath: path.relative(repoRoot, filePath),
+      content: readFileSync(filePath, 'utf8'),
+    };
+    return documentSource;
+  });
   const allDocuments = allMarkdownFiles.map((filePath) => {
     const documentSource: CortexDocumentSource = {
       absolutePath: filePath,
@@ -86,7 +94,7 @@ export async function runCortexAuditFromDirectory(
     return documentSource;
   });
   const syntaxAuditArgs: AuditCortexMarkdownSyntaxArgs = {
-    documents: allDocuments,
+    documents: syntaxDocuments,
   };
   const syntaxFindings = auditCortexMarkdownSyntax(syntaxAuditArgs);
   const syntaxInvalidPaths = new Set(

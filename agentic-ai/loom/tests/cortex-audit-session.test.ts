@@ -248,6 +248,14 @@ test('fails the integrated Cortex audit for authored HTML', async () => {
     const skillsRoot = path.join(cortexRoot, 'dynamic-skills');
     const directoryOptions = { recursive: true } as const;
     mkdirSync(skillsRoot, directoryOptions);
+    const frontmatterSkillRoot = path.join(
+      cortexRoot,
+      'teams',
+      'ai',
+      'dynamic-skills',
+      'html-frontmatter',
+    );
+    mkdirSync(frontmatterSkillRoot, directoryOptions);
     writeFileSync(
       path.join(cortexRoot, 'AGENTS.md'),
       `Text before the title with a [broken link](missing.md).
@@ -278,6 +286,10 @@ Fourth paragraph.
       '# Knowledge Graph\n',
     );
     writeFileSync(path.join(skillsRoot, 'index.md'), '# Skills\n');
+    writeFileSync(
+      path.join(frontmatterSkillRoot, 'SKILL.md'),
+      '---\nname: html-frontmatter\ndescription: <span>forbidden</span>\n---\n\n# HTML Frontmatter\n',
+    );
     const request = { includeDensityLint: true };
     const auditArgs = { request, startDirectory: repoRoot };
     const report = await runCortexAuditFromDirectory(auditArgs);
@@ -289,6 +301,14 @@ Fourth paragraph.
     expect(agentFindings[0]?.code).toBe(
       CortexStructureFindingCode.ProhibitedHtml,
     );
+    const expectedFrontmatterFinding = {
+      code: CortexStructureFindingCode.ProhibitedHtml,
+      file: '.cortex/teams/ai/dynamic-skills/html-frontmatter/SKILL.md',
+      line: 3,
+      message:
+        'Authored HTML is prohibited in Cortex Markdown. Use Markdown syntax, escaped text, or inline or block code.',
+    };
+    expect(report.structureFindings).toContainEqual(expectedFrontmatterFinding);
     expect(
       report.articleStructureFindings.some(
         (finding) => finding.file === '.cortex/AGENTS.md',

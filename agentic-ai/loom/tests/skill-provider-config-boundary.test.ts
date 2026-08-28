@@ -238,12 +238,13 @@ function configurationScriptPaths(
     for (const specifier of configurationScriptReferences(
       referenceInspection,
     )) {
+      const scriptsIndex = importer.lastIndexOf('/scripts/');
+      const packageRoot =
+        scriptsIndex < 0 ? importer : importer.slice(0, scriptsIndex);
       const candidates: readonly string[] = [
         posix.normalize(specifier.replace(/^\.\//u, '')),
         posix.normalize(posix.join(posix.dirname(importer), specifier)),
-        posix.normalize(
-          posix.join(importer.split('/scripts/')[0] ?? '', specifier),
-        ),
+        posix.normalize(posix.join(packageRoot, specifier)),
         posix.normalize(
           posix.join(
             posix.dirname(importer),

@@ -11,19 +11,19 @@ tasks:
     desc: Install every executable skill package with its frozen lockfile.
     silent: true
     cmds:
-      - for skill_dir in {{.SKILL_APPLICATION_DIRS}}; do (cd "{{.REPO_ROOT}}/$skill_dir" && bun install --frozen-lockfile 1>&2); done
+      - set -euo pipefail; for skill_dir in {{.SKILL_APPLICATION_DIRS}}; do (cd "{{.REPO_ROOT}}/$skill_dir" && bun install --frozen-lockfile 1>&2); done
 
   skills:format:
     desc: Format every executable skill package.
     deps: [skills:install]
     cmds:
-      - for skill_dir in {{.SKILL_APPLICATION_DIRS}}; do (cd "{{.REPO_ROOT}}/$skill_dir" && bun run format); done
+      - set -euo pipefail; for skill_dir in {{.SKILL_APPLICATION_DIRS}}; do (cd "{{.REPO_ROOT}}/$skill_dir" && bun run format); done
 
   skills:verify:
     desc: Verify every executable skill package.
     deps: [skills:install]
     cmds:
-      - for skill_dir in {{.SKILL_APPLICATION_DIRS}}; do (cd "{{.REPO_ROOT}}/$skill_dir" && bun run verify); done
+      - set -euo pipefail; for skill_dir in {{.SKILL_APPLICATION_DIRS}}; do (cd "{{.REPO_ROOT}}/$skill_dir" && bun run verify); done
 
   loom:install:
     desc: Install Loom Bun dependencies with a frozen lockfile.

@@ -20,6 +20,15 @@ type ExecutableSkillSourceProfile = typeof analyzeExecutableSkillSource;
 const SOURCE_PROFILES: ReadonlyMap<string, ExecutableSkillSourceProfile> =
   new Map([[ARTICLE_ROOT.slice(0, -1), analyzeExecutableSkillSource]]);
 
+function executableSkillRootFromTrackedPath(path: string): string | false {
+  const marker = '/scripts/';
+  const index = path.lastIndexOf(marker);
+  const root = index < 0 ? '' : path.slice(0, index + marker.length - 1);
+  return isExecutableSkillApplicationSourcePath(`${root}/src/index.ts`)
+    ? root
+    : false;
+}
+
 test('all tracked executable application sources pass the AST capability gate', async () => {
   const options: TrackedSourceOptions = {
     cmd: ['git', 'ls-files', '--', '.cortex'],
@@ -40,12 +49,8 @@ test('all tracked executable application sources pass the AST capability gate', 
   const implementationRoots = [
     ...new Set(
       tracked.flatMap((path) => {
-        const marker = '/scripts/';
-        const index = path.indexOf(marker);
-        const root = index < 0 ? '' : path.slice(0, index + marker.length - 1);
-        return isExecutableSkillApplicationSourcePath(`${root}/src/index.ts`)
-          ? [root]
-          : [];
+        const root = executableSkillRootFromTrackedPath(path);
+        return root === false ? [] : [root];
       }),
     ),
   ].sort();
@@ -82,8 +87,12 @@ test('all tracked executable application sources pass the AST capability gate', 
     const packageDocument = await Bun.file(
       join(REPOSITORY_ROOT, root, 'package.json'),
     ).text();
+    const lockfile = await Bun.file(
+      join(REPOSITORY_ROOT, root, 'bun.lock'),
+    ).text();
     expect(skill.startsWith(`---\nname: ${slug}\ndescription:`)).toBe(true);
     expect(packageDocument).toContain(`"name": "@nook/${slug}-skill"`);
+    expect(lockfile).toContain(`"name": "@nook/${slug}-skill"`);
   }
   const sources = tracked.filter(isExecutableSkillApplicationSourcePath);
   expect(sources.length).toBeGreaterThan(0);
@@ -126,4 +135,12 @@ test('does not exempt misspelled team owners from repository source policy', () 
   expect(
     isExecutableSkillApplicationSourcePath(`${ARTICLE_ROOT}src/audit.ts`),
   ).toBe(true);
+});
+
+test('derives package roots from the final scripts delimiter', () => {
+  const source =
+    '.cortex/teams/ai/dynamic-skills/scripts/scripts/src/application.ts';
+  expect(executableSkillRootFromTrackedPath(source)).toBe(
+    '.cortex/teams/ai/dynamic-skills/scripts/scripts',
+  );
 });
