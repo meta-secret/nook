@@ -290,7 +290,7 @@ function configurationScriptReferences(
   inspection: ConfigurationReferenceInspection,
 ): readonly string[] {
   const source = inspection.source;
-  const launchSource = source.replace(/["'`\\]/gu, '');
+  const launchSource = source.replace(/["'\\]/gu, '');
   const expandedSource = expandStaticShellVariables(launchSource);
   const matched = [source, expandedSource].flatMap((candidate) => {
     CONFIGURATION_SCRIPT_REFERENCE.lastIndex = 0;
@@ -838,6 +838,10 @@ test('follows scripts launched from every runnable configuration surface', () =>
     ['package.json', 'a=$b; b=$a; bun "$b/cli.ts"'],
     ['package.json', `root=$PWD/${HOST_ROOT}cli.ts; bun "$root"`],
     ['package.json', `root=\${PWD}/${HOST_ROOT}cli.ts; bun "$root"`],
+    [
+      'package.json',
+      `a=${HOST_ROOT}; bun "\${a}/$(printf src)/cli.ts"; bun "\${a}/\`printf src\`/cli.ts"`,
+    ],
     ['Taskfile.yml', 'tasks:\n  audit:\n    cmds: [bun scripts/facade.ts]'],
     [
       'Taskfile.yml',
@@ -904,7 +908,7 @@ test('follows scripts launched from every runnable configuration surface', () =>
     ['package.json', '{"scripts":{"audit":"bun scripts/catalog.ts"}}'],
     [
       '.task/env-catalog.yml',
-      'tasks:\n  audit:\n    cmds: ["bun scripts/catalog.ts --label $PWD"]',
+      'tasks:\n  audit:\n    cmds: ["bun scripts/catalog.ts --label $(printf $PWD)"]',
     ],
     ['scripts/catalog.ts', "const evidencePath = 'scripts/unsafe.test.ts';"],
     ['scripts/unsafe.test.ts', 'eval(source);'],

@@ -2,6 +2,7 @@ import { join, posix } from 'node:path';
 import { expect, test } from 'bun:test';
 import ts from 'typescript';
 import {
+  type AnalyzeExecutableSkillSourceRequest,
   analyzeExecutableSkillSource,
   isExecutableSkillApplicationSourcePath,
 } from '../src/executable-skills/source-policy.ts';
@@ -11,31 +12,28 @@ import {
   readTrackedRepositoryFiles,
 } from '../src/executable-skills/repository.ts';
 const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
-const HOST_ROOT =
-  '.cortex/teams/ai/dynamic-skills/executable-skill-host/scripts/src/';
+const AI_SKILLS = '.cortex/teams/ai/dynamic-skills/';
+const HOST_ROOT = `${AI_SKILLS}executable-skill-host/scripts/src/`;
 const ARTICLE_ROOT =
   '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/';
 const HOST_CLI = `${HOST_ROOT}cli.ts`;
 const YAML_CODEC = `${HOST_ROOT}skill-yaml-codec.ts`;
-const HOST_CALLS =
-  `closeSync(descriptor);fstatSync(descriptor);fstatSync(descriptor);openSync( invocation.requestPath, constants.O_RDONLY | constants.O_NONBLOCK, );readSync( descriptor, bytes, length, bytes.length - length, length, )`.split(
-    ';',
-  );
+const semicolons = (source: string): string[] => source.split(';');
+const HOST_CALLS = semicolons(
+  `closeSync(descriptor);fstatSync(descriptor);fstatSync(descriptor);openSync( invocation.requestPath, constants.O_RDONLY | constants.O_NONBLOCK, );readSync( descriptor, bytes, length, bytes.length - length, length, )`,
+);
 const HOST_CONSTANT_USES = 'constants.O_NONBLOCK constants.O_RDONLY'.split(' ');
-const PROCESS_USES =
-  `process.argv.slice(2);process.exitCode = outcome.exitCode;process.stdout.write(outcome.yaml)`.split(
-    ';',
-  );
+const PROCESS_USES = semicolons(
+  `process.argv.slice(2);process.exitCode = outcome.exitCode;process.stdout.write(outcome.yaml)`,
+);
 const FORBIDDEN_HOST_GLOBALS = new Set(
   `alert Bun confirm Date Math console crypto performance prompt reportError`.split(
     ' ',
   ),
 );
-type SkillSourceRequest = {
-  readonly relativePath: string;
-  readonly source: string;
-};
-export function analyzeSkillHostSource(request: SkillSourceRequest) {
+export function analyzeSkillHostSource(
+  request: AnalyzeExecutableSkillSourceRequest,
+) {
   const { relativePath, source } = request;
   const sourceFile = ts.createSourceFile(
     relativePath,
@@ -283,11 +281,8 @@ test('all tracked executable application sources pass the AST capability gate', 
 test('rejects dangerous capabilities from every host layer', async () => {
   const host = await Bun.file(join(REPOSITORY_ROOT, HOST_CLI)).text();
   const mutate = (change: string): string => {
-    const separator = change.indexOf('§');
-    return host.replace(
-      change.slice(0, separator),
-      change.slice(separator + 1),
-    );
+    const parts = change.split('§');
+    return host.replace(parts[0] ?? '', parts[1] ?? '');
   };
   const mutations = [
     "constants.O_RDONLY | constants.O_NONBLOCK§openSync('/tmp/pwn', 'w')",
@@ -295,6 +290,7 @@ test('rejects dangerous capabilities from every host layer', async () => {
     'const count = readSync(§const rebound = readSync;\nconst count = rebound(',
   ].map(mutate);
   const registry = `${HOST_ROOT}skill-action-registry.ts`;
+  const schema = `${HOST_ROOT}skill-schema-validator.ts`;
   const fixtures = [
     [HOST_CLI, 'process.env.SECRET;'],
     [HOST_CLI, 'const secret = "secret"; alert(secret);'],
@@ -305,10 +301,7 @@ test('rejects dangerous capabilities from every host layer', async () => {
     [HOST_CLI, `${host}\nconstants.O_CREAT = constants.O_RDONLY;`],
     [YAML_CODEC, "import x from 'arbitrary-package';"],
     [registry, "import { spawn } from 'node:child_process';"],
-    [
-      `${HOST_ROOT}skill-schema-validator.ts`,
-      "void import('./skill-command-domain.ts');",
-    ],
+    [schema, "void import('./skill-command-domain.ts');"],
   ] as const;
   for (const [path, source] of fixtures) {
     const request = { relativePath: path, source };

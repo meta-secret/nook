@@ -76,13 +76,12 @@ export function expandStaticShellVariables(source: string): string {
     source = expanded;
   }
   const launch = source.match(
-    /\b(?:bun|node|bash|sh)\s+(?:run\s+)?[^\s;&|]*\$(?:\{([A-Za-z_]\w*)\}|([A-Za-z_]\w*))[^\s;&|]*/u,
+    /\b(?:bun|node|bash|sh)\s+(?:run\s+)?[^\s;&|]*(?:\$(?:\{([A-Za-z_]\w*)\}|([A-Za-z_]\w*)|\()|`)[^\s;&|]*/u,
   );
   if (
     launch &&
     (values.has(launch[1] || launch[2] || '') ||
-      launch[0].includes('/dynamic-skills/') ||
-      launch[0].includes('.agents/skills/'))
+      /(?:\/dynamic-skills\/|\.agents\/skills\/)/u.test(launch[0]))
   )
     throw new Error('Task launch variable is unresolved.');
   return source;

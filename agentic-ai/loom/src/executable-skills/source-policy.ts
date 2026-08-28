@@ -54,6 +54,7 @@ enum ForbiddenAmbientGlobal {
   BroadcastChannel = 'BroadcastChannel',
   Buffer = 'Buffer',
   Confirm = 'confirm',
+  Console = 'console',
   Date = 'Date',
   Eval = 'eval',
   Fetch = 'fetch',

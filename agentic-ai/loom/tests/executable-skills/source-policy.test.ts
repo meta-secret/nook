@@ -481,7 +481,7 @@ describe('executable skill source policy', () => {
       "child_process.execSync('echo unsafe');",
       "http.get('http://example.com');",
       "ffi.dlopen('/tmp/unsafe.so', {});",
-      'console.takeHeapSnapshot();',
+      'console.log("secret");',
       'Bun.write(Bun.stdout, value);',
       'Date.now();',
       'Math.random();',
