@@ -814,12 +814,13 @@ function runtimeExecutable(
     if (word.dynamic) {
       if (
         request.words
-          .slice(index)
-          .some((candidate) => PROTECTED_SKILL_PATH.test(candidate.value))
+          .slice(index + 1)
+          .some(
+            (candidate) =>
+              !candidate.dynamic && looksLikeRepositoryScript(candidate.value),
+          )
       )
-        throw new Error(
-          'Dynamic protected-skill runtime option construction is forbidden.',
-        );
+        throw new Error('Dynamic runtime option construction is forbidden.');
       return false;
     }
     const option = word.value.split('=')[0] ?? '';
@@ -841,12 +842,14 @@ function runtimeExecutable(
       if (value.dynamic) {
         if (
           request.words
-            .slice(index + 1)
-            .some((candidate) => PROTECTED_SKILL_PATH.test(candidate.value))
+            .slice(index + 2)
+            .some(
+              (candidate) =>
+                !candidate.dynamic &&
+                looksLikeRepositoryScript(candidate.value),
+            )
         )
-          throw new Error(
-            'Dynamic protected-skill runtime option value is forbidden.',
-          );
+          throw new Error('Dynamic runtime option value is forbidden.');
         return false;
       }
       index += 1;

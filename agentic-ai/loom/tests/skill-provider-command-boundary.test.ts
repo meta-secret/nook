@@ -58,6 +58,9 @@ test('rejects every protected runtime construction and masked launch', () => {
     `eval 'bun ${PROTECTED}'`,
     `alias audit='bun ${PROTECTED}'; audit`,
     'task skills:tools-$(printf list)',
+    'bun --conditions="$MODE" scripts/facade.ts',
+    'bun --conditions "$MODE" scripts/facade.ts',
+    'node --conditions="$MODE" scripts/facade.ts',
   ];
   for (const source of fixtures)
     expect(() => inspectProtected(source), source).toThrow();

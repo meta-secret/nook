@@ -22,6 +22,12 @@ const MODULE_SUFFIXES = 'ts tsx mts cts js jsx mjs cjs'
   .split(' ')
   .map((suffix) => `.${suffix}`);
 export const ACTION_SOURCE_SUFFIXES = ['', ...MODULE_SUFFIXES] as const;
+export const CONFIGURATION_GRAPH_LIMITS = {
+  arguments: 256,
+  depth: 32,
+  stateBytes: 65_536,
+  states: 4_096,
+} as const;
 
 export function isRunnableConfiguration(path: string): boolean {
   return (
@@ -144,9 +150,14 @@ export function normalizeConfigurationShellSource([
     )
     .replace(/\bbash "\$formatter_root\/format\.sh"/gu, 'true')
     .replaceAll('/meta-secret/nook/', '')
-    .replace(/\bnode (?:-e|--eval) (?:"[^"]*"|'[^']*')/gu, (command) =>
-      protectedPath.test(command) ? command : 'node --version',
-    )
+    .replace(/\bnode (?:-e|--eval) (?:"[^"]*"|'[^']*')/gu, (command) => {
+      if (
+        protectedPath.test(command) ||
+        /\b(?:import|require)\s*\(\s*["']\.{1,2}\//u.test(command)
+      )
+        throw new Error('Node eval repository execution is forbidden.');
+      return 'node --version';
+    })
     .replace(/\btimeout --kill-after=([^\s;&|]+)/gu, 'timeout --kill-after $1')
     .replace(/\bnode --test\s+[^\s;&|]+/gu, (command) =>
       protectedPath.test(command) ? command : 'node --test',

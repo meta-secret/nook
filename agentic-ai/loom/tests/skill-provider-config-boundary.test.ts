@@ -16,12 +16,24 @@ import {
 import type { SkillProviderSourceInspection } from './skill-provider-type-context.ts';
 import { cortexArticleAdapterViolatesBoundary } from './cortex-article-adapter-boundary.ts';
 import {
+  assertConfigurationSourceBoundary,
+  CORTEX_AUDIT,
+  isApplicationDependency,
+  isAuthorizedApplicationEdge,
+  LOOM_ARTICLE_ADAPTER,
+  PROVIDER_APPLICATION,
+  PROVIDER_DOMAIN,
+  PROVIDER_PACKAGE,
+  PROVIDER_ROOT,
+} from './skill-provider-config-application.ts';
+import {
   assertRunnableConfigurationBytes,
   runnableCommandSources,
   taskIncludeSpecifiers,
 } from './skill-provider-config-commands.ts';
 import {
   ACTION_SOURCE_SUFFIXES,
+  CONFIGURATION_GRAPH_LIMITS as LIMITS,
   isRepositoryBackedPackageSpecifier,
   isRunnableConfiguration,
   normalizeConfigurationShellSource,
@@ -51,22 +63,10 @@ import type {
 } from './skill-provider-config-types.ts';
 
 const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
-const PROVIDER_ROOT =
-  '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts';
-const PROVIDER_APPLICATION = `${PROVIDER_ROOT}/src/application.ts`;
-const PROVIDER_DOMAIN = `${PROVIDER_ROOT}/src/domain.ts`;
-const PROVIDER_PACKAGE = `${PROVIDER_ROOT}/package.json`;
-const CORTEX_AUDIT = 'agentic-ai/loom/src/commands/cortex-audit.ts';
-const LOOM_ARTICLE_ADAPTER =
-  'agentic-ai/loom/src/lib/cortex-article-structure.ts';
 const EXECUTABLE_SOURCE_EXTENSION = /\.(?:[cm]?tsx?|[cm]?jsx?)$/u;
 const CONFIGURATION_SCRIPT_EXTENSION = /\.(?:[cm]?tsx?|[cm]?jsx?|sh)$/u;
 const actionTranspilerOptions: ActionTranspilerOptions = { loader: 'tsx' };
 const ACTION_IMPORT_SCANNER = new Bun.Transpiler(actionTranspilerOptions);
-const MAX_GRAPH_STATES = 4_096;
-const MAX_GRAPH_DEPTH = 32;
-const MAX_GRAPH_STATE_BYTES = 65_536;
-const MAX_GRAPH_ARGUMENTS = 256;
 
 async function pathsContainingProviderRoot(
   paths: readonly string[],
@@ -118,15 +118,15 @@ export function configurationScriptPaths(
     const next = pending.pop();
     if (!next) continue;
     const importer = next.importer;
-    if (next.depth > MAX_GRAPH_DEPTH || visited.size >= MAX_GRAPH_STATES)
+    if (next.depth > LIMITS.depth || visited.size >= LIMITS.states)
       throw new Error('Runnable configuration graph exceeds its bound.');
     if (
       next.positionalArguments !== false &&
-      next.positionalArguments.length > MAX_GRAPH_ARGUMENTS
+      next.positionalArguments.length > LIMITS.arguments
     )
       throw new Error('Runnable configuration arguments exceed their bound.');
     const visitKey = `${importer}\0${next.workingDirectory}\0${JSON.stringify(next.positionalArguments)}`;
-    if (new TextEncoder().encode(visitKey).byteLength > MAX_GRAPH_STATE_BYTES)
+    if (new TextEncoder().encode(visitKey).byteLength > LIMITS.stateBytes)
       throw new Error('Runnable configuration state exceeds its byte bound.');
     if (visited.has(visitKey)) continue;
     visited.add(visitKey);
@@ -134,6 +134,14 @@ export function configurationScriptPaths(
     if (typeof source !== 'string' || graph.symlinkPaths.has(importer)) {
       throw new Error(`Runnable configuration path is unsafe: ${importer}`);
     }
+    const sourceBoundaryRequest = {
+      path: importer,
+      roots: new Set(graph.roots),
+      source,
+      sources: graph.sources,
+    };
+    if (graph.roots.includes(importer))
+      assertConfigurationSourceBoundary(sourceBoundaryRequest);
     if (importer.startsWith(PROVIDER_ROOT)) {
       throw new Error(`Runnable configuration reaches provider: ${importer}`);
     }
@@ -259,21 +267,6 @@ export function configurationScriptPaths(
     }
   }
   return [...scripts].sort();
-}
-
-function isApplicationDependency(path: string): boolean {
-  return path === LOOM_ARTICLE_ADAPTER || path.startsWith(`${PROVIDER_ROOT}/`);
-}
-
-function isAuthorizedApplicationEdge(edge: ApplicationConsumerEdge): boolean {
-  if (edge.dependency === LOOM_ARTICLE_ADAPTER) {
-    return edge.importer === CORTEX_AUDIT;
-  }
-  return (
-    edge.importer === LOOM_ARTICLE_ADAPTER &&
-    (edge.dependency === PROVIDER_APPLICATION ||
-      edge.dependency === PROVIDER_DOMAIN)
-  );
 }
 
 function configurationScriptReferences(request: ConfigurationReferenceRequest) {
@@ -477,6 +470,15 @@ export function actionRuntimePaths(
       pendingSources.push(runtimePath);
     }
   }
+  const actionConfigurationGraph: ConfigurationScriptGraph = {
+    executablePaths: new Set(),
+    roots: pendingSources,
+    sources: graph.sources,
+    symlinkPaths: graph.symlinkPaths,
+  };
+  const actionConfigurationPaths = configurationScriptPaths(
+    actionConfigurationGraph,
+  );
   const visitedSources = new Set<string>();
   while (pendingSources.length > 0) {
     const importer = pendingSources.pop();
@@ -528,6 +530,7 @@ export function actionRuntimePaths(
       }
     }
   }
+  for (const path of actionConfigurationPaths) runtimePaths.add(path);
   return [...runtimePaths].sort();
 }
 
@@ -703,9 +706,7 @@ test('follows JavaScript action entrypoints and nested local actions', () => {
     sources: providerSources,
     symlinkPaths: new Set<string>(),
   };
-  expect(() => actionRuntimePaths(providerGraph)).toThrow(
-    'Action source violates runtime boundary',
-  );
+  expect(() => actionRuntimePaths(providerGraph)).toThrow('runtime boundary');
 
   const adapterSources = new Map(sources);
   adapterSources.set(
@@ -719,7 +720,7 @@ test('follows JavaScript action entrypoints and nested local actions', () => {
     symlinkPaths: new Set<string>(),
   };
   expect(() => actionRuntimePaths(adapterGraph)).toThrow(
-    'Unauthorized action application edge',
+    'Unauthorized application edge',
   );
 
   const unresolvedSources = new Map(sources);
@@ -790,7 +791,7 @@ test('follows JavaScript action entrypoints and nested local actions', () => {
     symlinkPaths: new Set<string>(),
   };
   expect(() => actionRuntimePaths(packageGraph)).toThrow(
-    'Action repository import is unsupported',
+    'repository package import is unsupported',
   );
 
   const aliasSources = new Map(sources);
@@ -801,7 +802,7 @@ test('follows JavaScript action entrypoints and nested local actions', () => {
     symlinkPaths: new Set<string>(),
   };
   expect(() => actionRuntimePaths(aliasGraph)).toThrow(
-    'Action repository import is unsupported',
+    'repository package import is unsupported',
   );
 
   const loaderFixtures: readonly ActionLoaderFixture[] = [
@@ -831,7 +832,7 @@ test('follows JavaScript action entrypoints and nested local actions', () => {
       symlinkPaths: new Set<string>(),
     };
     expect(() => actionRuntimePaths(loaderGraph), fixture.path).toThrow(
-      'Action source violates runtime boundary',
+      /(?:runtime boundary|Runnable script is untracked)/u,
     );
   }
 
@@ -850,7 +851,7 @@ test('follows JavaScript action entrypoints and nested local actions', () => {
       symlinkPaths,
     };
     expect(() => actionRuntimePaths(symlinkGraph), path).toThrow(
-      'Action path is a tracked symlink',
+      /(?:Action path|Runnable script) is a tracked symlink/u,
     );
   }
 });
