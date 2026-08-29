@@ -115,8 +115,16 @@ jobs:
               core.setFailed(`${path} has duplicate canonical gizmo_id fields`)
               return
             }
-            const assignedGizmoId = String(value(frontmatter, 'gizmo_id')).trim()
-            if (assignedGizmoId && !/^[a-z][a-z0-9-]{0,62}$/.test(assignedGizmoId)) {
+            const parsedGizmoId = value(frontmatter, 'gizmo_id')
+            const assignedGizmoId = parsedGizmoId === null || parsedGizmoId === ''
+              ? ''
+              : typeof parsedGizmoId === 'string'
+                ? parsedGizmoId.trim()
+                : parsedGizmoId
+            if (
+              typeof assignedGizmoId !== 'string' ||
+              (assignedGizmoId && !/^[a-z][a-z0-9-]{0,62}$/.test(assignedGizmoId))
+            ) {
               core.setFailed(`${path} has an invalid canonical gizmo_id`)
               return
             }

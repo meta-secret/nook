@@ -47,6 +47,10 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "automation: agent",
         "status: in_progress",
         "gizmo_id",
+        "const parsedGizmoId = value(frontmatter, 'gizmo_id')",
+        "parsedGizmoId === null || parsedGizmoId === ''",
+        "typeof parsedGizmoId === 'string'",
+        "typeof assignedGizmoId !== 'string'",
         "ASSIGNED_GIZMO_ID: ${{ steps.workbench.outputs.gizmo_id }}",
         "assignedGizmoId: process.env.ASSIGNED_GIZMO_ID",
         "`gizmo_id: ${process.env.ASSIGNED_GIZMO_ID || 'null'}`",
@@ -100,6 +104,10 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
             == 2
             && !workflow.contains("ASSIGNED_GIZMO_ID: ${{ env.ASSIGNED_GIZMO_ID }}"),
         "planning and validation must consume the trusted claim-step Gizmo ID output"
+    );
+    assert!(
+        !workflow.contains("String(value(frontmatter, 'gizmo_id'))"),
+        "null or absent Gizmo IDs must not be stringified into trusted assignments"
     );
     for required in [
         "git worktree add --detach",
