@@ -10,6 +10,11 @@ import { createLogger } from "./logger.js";
 
 const log = createLogger("run-agent");
 
+export enum AgentIsolation {
+  Legacy = "legacy",
+  Strict = "strict",
+}
+
 const AGENT_ENV_ALLOWLIST = new Set([
   "CI",
   "FORCE_COLOR",
@@ -80,7 +85,23 @@ async function createSandboxedAgent(config: CiAgentConfig) {
   }
 }
 
-export async function runFixAgent(config: CiAgentConfig, prompt: string): Promise<void> {
+async function createLegacyAgent(config: CiAgentConfig) {
+  return Agent.create({
+    apiKey: config.cursorApiKey,
+    model: { id: config.modelId },
+    local: {
+      cwd: config.repoRoot,
+      settingSources: [],
+      sandboxOptions: { enabled: false },
+    },
+  });
+}
+
+export async function runFixAgent(
+  config: CiAgentConfig,
+  prompt: string,
+  isolation: AgentIsolation = AgentIsolation.Legacy,
+): Promise<void> {
   const waitOptions = loadAgentWaitOptions();
   log.info(
     `Running Cursor SDK agent (run ${config.githubRunId}, branch ${config.fixBranch}, timeout ${formatDuration(waitOptions.timeoutMs)})`,
@@ -93,12 +114,14 @@ export async function runFixAgent(config: CiAgentConfig, prompt: string): Promis
   // the local agent can spawn a shell; local child processes inherit env.
   // Cursor SDK 1.0.28 consumes the trusted per-user policy while
   // sandboxOptions makes unsupported hosts fail closed.
-  const hostEnvironment = { ...process.env };
+  const hostEnvironment = isolation === AgentIsolation.Strict ? { ...process.env } : {};
   let sandboxHome: string | undefined;
   try {
-    const created = await createSandboxedAgent(config);
+    const created = isolation === AgentIsolation.Strict
+      ? await createSandboxedAgent(config)
+      : { agent: await createLegacyAgent(config) };
     const { agent } = created;
-    sandboxHome = created.sandboxHome;
+    if ("sandboxHome" in created) sandboxHome = created.sandboxHome;
     try {
       let run;
       try {
@@ -143,7 +166,9 @@ export async function runFixAgent(config: CiAgentConfig, prompt: string): Promis
         await rm(sandboxHome, { recursive: true, force: true });
       }
     } finally {
-      restoreHostEnvironment(hostEnvironment, process.env);
+      if (isolation === AgentIsolation.Strict) {
+        restoreHostEnvironment(hostEnvironment, process.env);
+      }
     }
   }
 }

@@ -62,6 +62,8 @@ export async function loadPrompt(config: CiAgentConfig): Promise<string> {
     .replaceAll("${FIX_BRANCH}", config.fixBranch)
     .replaceAll("${AGENT_BRANCH}", agentBranch)
     .replaceAll("${MAJOR_CHANGE_AUTHORIZATION}", majorChangeAuthorization)
-    .replaceAll("${VALIDATED_PLAN}", validatedPlan)
-    .replaceAll("${AGENT_TASK}", agentTask);
+    .replaceAll("${AGENT_TASK}", agentTask)
+    // Inject the hash-bound artifact last so template-shaped text inside the
+    // validated plan remains inert exact content.
+    .replaceAll("${VALIDATED_PLAN}", validatedPlan);
 }

@@ -27,6 +27,28 @@ const REPOSITORY_GENERATED_PATHS = new Set([
   "/nook-app/nook-web/nook-web-app/src/landing/generated-message-keys.ts",
 ]);
 
+const AGENT_RUNTIME_ARTIFACTS = [
+  ".nook-workbench-plan.md",
+  ".nook-workbench-worklog.md",
+];
+const AGENT_RUNTIME_EXCLUSIONS = AGENT_RUNTIME_ARTIFACTS.map(
+  (path) => `:(exclude)${path}`,
+);
+
+export async function excludeAgentRuntimeArtifacts(
+  repoRoot: string,
+): Promise<void> {
+  await execFileAsync("git", [
+    "-C",
+    repoRoot,
+    "reset",
+    "--quiet",
+    "HEAD",
+    "--",
+    ...AGENT_RUNTIME_ARTIFACTS,
+  ]);
+}
+
 const AUTHORED_TEXT_EXTENSIONS = new Set([
   ".bash",
   ".cjs",
@@ -223,7 +245,16 @@ export function countAuthoredNumstat(numstat: string): number {
 export async function assertAuthoredChangeBudget(
   args: AuthoredBudgetArgs,
 ): Promise<void> {
-  await execFileAsync("git", ["-C", args.repoRoot, "add", "-A"]);
+  await excludeAgentRuntimeArtifacts(args.repoRoot);
+  await execFileAsync("git", [
+    "-C",
+    args.repoRoot,
+    "add",
+    "-A",
+    "--",
+    ".",
+    ...AGENT_RUNTIME_EXCLUSIONS,
+  ]);
   const { stdout } = await execFileAsync("git", [
     "-C",
     args.repoRoot,
@@ -337,11 +368,15 @@ export async function configureGitForCi(
 export async function hasWorkingTreeChanges(
   repoRoot: string,
 ): Promise<boolean> {
+  await excludeAgentRuntimeArtifacts(repoRoot);
   const { stdout } = await execFileAsync("git", [
     "-C",
     repoRoot,
     "status",
     "--porcelain",
+    "--",
+    ".",
+    ...AGENT_RUNTIME_EXCLUSIONS,
   ]);
   return stdout.trim().length > 0;
 }
@@ -353,7 +388,16 @@ export async function pushFixBranch(
 ): Promise<void> {
   log.info(`Pushing fix branch ${fixBranch}`);
   await execFileAsync("git", ["-C", repoRoot, "checkout", "-B", fixBranch]);
-  await execFileAsync("git", ["-C", repoRoot, "add", "-A"]);
+  await excludeAgentRuntimeArtifacts(repoRoot);
+  await execFileAsync("git", [
+    "-C",
+    repoRoot,
+    "add",
+    "-A",
+    "--",
+    ".",
+    ...AGENT_RUNTIME_EXCLUSIONS,
+  ]);
 
   const staged = await hasStagedChanges(repoRoot);
   if (!staged) {

@@ -20,7 +20,7 @@ import {
 } from "./git.js";
 import { createLogger } from "./logger.js";
 import { loadPrompt, resolveAgentTask } from "./prompt.js";
-import { runFixAgent } from "./run-agent.js";
+import { AgentIsolation, runFixAgent } from "./run-agent.js";
 
 const log = createLogger("implement");
 
@@ -336,7 +336,7 @@ export async function runCiImplement(): Promise<void> {
     return;
   }
   const config = loadedConfig.config;
-  await runFixAgent(config, await loadPrompt(config));
+  await runFixAgent(config, await loadPrompt(config), AgentIsolation.Strict);
   if (!(await hasWorkingTreeChanges(repoRoot))) {
     if (target.kind === ImplementPrTargetKind.Stacked) {
       throw new Error("Stacked continuation produced a clean working tree");

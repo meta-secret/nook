@@ -2,6 +2,8 @@
 
 #[path = "workbench/harness_neutral.rs"]
 mod harness_neutral;
+#[path = "workbench/stacked_runtime.rs"]
+mod stacked_runtime;
 
 use anyhow::Context as _;
 use std::{
@@ -115,6 +117,12 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "uses: ./.github/actions/nook-node-setup",
         "uses: go-task/setup-task@v2",
         "Validate and publish Workbench task plan",
+        "Resolve standalone prompt rerun",
+        "Multiple open PRs use standalone branch",
+        "Existing standalone implementation PR has an unexpected repository or base",
+        "steps.rerun.outputs.already_open != 'true'",
+        "Standalone implementation PR already exists; skipping rerun.",
+        "Standalone implementation PR already exists; delivery is idempotently complete.",
         "Materialize validated implementation plan",
         "VALIDATED_PLAN_SHA256=$EXPECTED_PLAN_SHA256",
         "sha256sum \"$implementation_plan\"",
@@ -926,7 +934,9 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
             && prompt_loader.contains("${MAJOR_CHANGE_AUTHORIZATION}")
             && prompt_loader
                 .contains("Validated implementation plan hash changed before agent start")
-            && prompt_loader.contains("join(config.toolingRoot, config.promptFile)"),
+            && prompt_loader.contains("join(config.toolingRoot, config.promptFile)")
+            && prompt_loader.find(".replaceAll(\"${AGENT_TASK}\"")
+                < prompt_loader.find(".replaceAll(\"${VALIDATED_PLAN}\""),
         "agent prompts must use trusted workflow metadata and tooling"
     );
 
@@ -963,77 +973,6 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
         materialization_position < block_position,
         "bounded automation must identify the materialization action before blocking"
     );
-    let implement = read("agentic-ai/ci-agent/src/main/implement.ts");
-    let run_agent = read("agentic-ai/ci-agent/src/main/run-agent.ts");
-    for required in [
-        "ImplementPrTargetKind.Stacked",
-        "budgetBaseRef: input.baseSha",
-        "Stacked continuation requires CURSOR_API_KEY",
-        "Stacked continuation produced a clean working tree",
-        "validateStackDeliveryState",
-        "Live stacked predecessor must remain open and unmerged",
-        "Stacked PR head or frozen live base changed before delivery",
-        "Stacked publication did not advance the exact frozen PR head",
-        "baseRef: target.budgetBaseRef",
-        "target.baseBranch",
-    ] {
-        assert!(
-            implement.contains(required),
-            "bounded implementation is missing stacked-PR handling: {required}"
-        );
-    }
-    for required in [
-        "sanitizeAgentEnvironment(process.env)",
-        "AGENT_ENV_ALLOWLIST",
-        "restoreHostEnvironment(hostEnvironment, process.env)",
-        "readBoundary: \"workspace\"",
-        "Implementation source must not provide Cursor sandbox policy",
-        "disallowedTools: [\"task\", \"mcp\"]",
-        "sandboxOptions: { enabled: true }",
-    ] {
-        assert!(
-            run_agent.contains(required),
-            "implementation agent isolation is missing: {required}"
-        );
-    }
-    assert!(
-        workflow.contains("Run sandboxed implementation agent")
-            && workflow.contains("Validate, commit, and publish implementation")
-            && workflow.contains("CI_AGENT_CMD=deliver")
-            && !workflow.contains(
-                "CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}\n          NOOK_GITHUB_PAT"
-            ),
-        "untrusted editing and credentialed delivery must be separate processes"
-    );
-    let ordered = [
-        "assertBudget()",
-        "pushBranch()",
-        "verifyBranch()",
-        "findPr()",
-        "createPr()",
-    ]
-    .map(|step| implement.find(step));
-    assert!(
-        ordered.iter().all(Option::is_some) && ordered.is_sorted(),
-        "branch preservation sequence drifted"
-    );
-    let trusted_checkout_position = workflow
-        .find("Checkout trusted workflow tooling")
-        .context("bounded automation must check out its trusted tooling")?;
-    let claim_position = workflow
-        .find("Claim ready Workbench issue")
-        .context("bounded automation must claim its focused issue")?;
-    let implementation_position = workflow
-        .find("Prepare isolated implementation worktree")
-        .context("bounded automation must isolate implementation source")?;
-    let local_action_position = workflow
-        .find("uses: ./.github/actions/nook-docker-setup")
-        .context("bounded automation must retain its trusted local setup action")?;
-    assert!(
-        trusted_checkout_position < claim_position
-            && claim_position < implementation_position
-            && trusted_checkout_position < local_action_position,
-        "trusted tooling must remain separate from the validated implementation worktree"
-    );
+    stacked_runtime::assert_contract(&workflow)?;
     Ok(())
 }

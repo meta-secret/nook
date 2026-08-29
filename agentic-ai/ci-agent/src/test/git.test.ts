@@ -1,10 +1,18 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
+import { promisify } from "node:util";
 
 import {
   countAuthoredNumstat,
+  hasWorkingTreeChanges,
   summarizeAuthoredNumstat,
 } from "../main/git.js";
+
+const execFileAsync = promisify(execFile);
 
 describe("countAuthoredNumstat", () => {
   it("counts authored additions and deletions", () => {
@@ -61,5 +69,28 @@ describe("countAuthoredNumstat", () => {
       summarizeAuthoredNumstat(numstat).reportedOnly.malformedRecords,
       1,
     );
+  });
+});
+
+describe("implementation working tree", () => {
+  it("excludes forced runtime artifacts while retaining authored changes", async () => {
+    const repoRoot = await mkdtemp(join(tmpdir(), "nook-ci-agent-git-"));
+    try {
+      await execFileAsync("git", ["-C", repoRoot, "init"]);
+      await writeFile(join(repoRoot, "README.md"), "base\n");
+      await execFileAsync("git", ["-C", repoRoot, "add", "README.md"]);
+      await execFileAsync("git", [
+        "-C", repoRoot, "-c", "user.name=test", "-c", "user.email=test@example.com",
+        "commit", "-m", "base",
+      ]);
+      await writeFile(join(repoRoot, ".nook-workbench-plan.md"), "trusted plan\n");
+      await writeFile(join(repoRoot, ".nook-workbench-worklog.md"), "candidate log\n");
+      await execFileAsync("git", ["-C", repoRoot, "add", "-f", ".nook-workbench-plan.md", ".nook-workbench-worklog.md"]);
+      assert.equal(await hasWorkingTreeChanges(repoRoot), false);
+      await writeFile(join(repoRoot, "README.md"), "authored change\n");
+      assert.equal(await hasWorkingTreeChanges(repoRoot), true);
+    } finally {
+      await rm(repoRoot, { recursive: true, force: true });
+    }
   });
 });

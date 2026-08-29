@@ -92,7 +92,12 @@ describe("loadPrompt", () => {
     const parent = await mkdtemp(join(tmpdir(), "nook-ci-agent-plan-"));
     const toolingRoot = join(parent, "tooling");
     const repoRoot = join(parent, "implementation");
-    const plan = "# Validated plan\n\nOnly this slice.\n";
+    const plan = [
+      "# Validated plan",
+      "",
+      "Keep ${AGENT_TASK}, ${GITHUB_REPOSITORY}, and ${VALIDATED_PLAN} literal.",
+      "",
+    ].join("\n");
     await Promise.all([
       mkdir(join(toolingRoot, ".github", "prompts"), { recursive: true }),
       mkdir(repoRoot, { recursive: true }),
