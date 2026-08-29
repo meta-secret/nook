@@ -32,12 +32,14 @@ import {
   applySetPositional,
   assertSafeShellRuntime,
   hasArithmeticTestExecution,
+  hasLeadingStdinRedirection,
   isolatedShellState,
   mergeConditionalShellState,
   nodeInspectExecutables,
   normalizedRuntime,
   restoreShellState,
   shellStdinConsumer,
+  shellRuntimeUsesStdinRedirection,
   withoutLeadingRedirections,
 } from './skill-provider-shell-command.ts';
 import {
@@ -234,9 +236,10 @@ function analyzeCommandSource(request: ShellCommandRequest): void {
     if (token === ShellSeparator.Case) request.state.casePattern = true;
   }
 }
-
 function analyzeCommand(request: RuntimeCommandRequest): void {
   const words = [...withoutLeadingRedirections(request.words)];
+  if (hasLeadingStdinRedirection(request.words) && shellStdinConsumer(words))
+    throw new Error('Shell runtime stdin redirection is forbidden.');
   for (const word of words)
     for (const source of shellSubstitutionBodies(word.source))
       analyzeSubstitution([request, source]);
@@ -754,6 +757,8 @@ function analyzeRuntime(request: RuntimeCommandRequest): void {
 }
 
 function analyzeShellRuntime(request: RuntimeCommandRequest): void {
+  if (shellRuntimeUsesStdinRedirection(request.words))
+    throw new Error('Shell runtime stdin redirection is forbidden.');
   let index = 0;
   let commandString = false;
   while (index < request.words.length) {

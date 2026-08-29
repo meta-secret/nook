@@ -26,14 +26,32 @@ export function withoutLeadingRedirections(
       index += 1;
       continue;
     }
-    const match = value.match(REDIRECTION)?.[0];
+    const source = words[index]?.source ?? '';
+    const match = source.match(REDIRECTION)?.[0];
     if (!match) break;
-    const count = match === value ? 2 : 1;
+    const count = match === source ? 2 : 1;
     if (count === 2 && !words[index + 1])
       throw new Error('Shell redirection has no target.');
     words.splice(index, count);
   }
   return words;
+}
+
+export function hasLeadingStdinRedirection(
+  words: readonly ShellWord[],
+): boolean {
+  for (let index = 0; index < words.length;) {
+    const word = words[index] as ShellWord;
+    if (ASSIGNMENT.test(word.value)) {
+      index += 1;
+      continue;
+    }
+    const match = word.source.match(REDIRECTION)?.[0];
+    if (!match) return false;
+    if (/^0*</u.test(match)) return true;
+    index += match === word.source ? 2 : 1;
+  }
+  return false;
 }
 
 export function normalizedRuntime(value: string): string {
@@ -150,6 +168,12 @@ export function shellStdinConsumer(words: readonly ShellWord[]): boolean {
   if (!['bash', 'sh'].includes(normalizedRuntime(words[index]?.value ?? '')))
     return false;
   return words.slice(index + 1).every((word) => word.value.startsWith('-'));
+}
+
+export function shellRuntimeUsesStdinRedirection(
+  words: readonly ShellWord[],
+): boolean {
+  return words.some((word) => /^0*</u.test(word.source));
 }
 
 export function assertSafeShellRuntime([

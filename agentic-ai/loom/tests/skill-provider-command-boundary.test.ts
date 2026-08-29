@@ -112,6 +112,28 @@ test('rejects indirect executable shell input', () => {
     expect(() => inspectProtected(source), source).toThrow();
 });
 
+test('shell runtimes reject redirected stdin without classifying lexical data', () => {
+  for (const source of [
+    'bash < scripts/facade.sh',
+    'sh 0<scripts/facade.sh',
+    '< scripts/facade.sh bash',
+    '0<scripts/facade.sh command sh --',
+    "bash <<< 'bun scripts/facade.ts'",
+    "printf '%s' 'bun scripts/facade.ts' | bash --",
+  ])
+    expect(() => inspectShell(source), source).toThrow(
+      /(?:stdin redirection|pipeline input)/u,
+    );
+  for (const source of [
+    "bash '<' scripts/literal.sh",
+    "echo 'bash < scripts/facade.sh'",
+    "'< scripts/facade.sh' bash",
+    'cat < scripts/input.txt',
+    'bash 1<scripts/not-stdin.txt',
+  ])
+    expect(() => inspectShell(source), source).not.toThrow();
+});
+
 test('accepts bounded static shell structures', () => {
   for (const source of [
     'cleanup(){ rm -f output; }; trap cleanup EXIT',
