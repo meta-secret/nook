@@ -23,8 +23,8 @@ lifecycle, sync, and WASM events that neither linters nor DOM assertions expose.
   the CI artifact/report before changing code. The attachment is created for
   every e2e result; failures also print the same entries to test output.
 - **Human local repro:** `E2E_SPEC=… task web:test:e2e:file`, then
-  `fetchAppLogs(page)` or open `/app-logs?minLevel=debug&limit=1000`. Gizmo uses
-  the hosted remote catalog for agent delivery.
+  `fetchAppLogs(page)` or open `/app-logs?minLevel=debug&limit=1000`. Agents use
+  the hosted remote catalog.
 - **Human inspection:** `/logs` in the running app.
 
 Full reference: [logging.md § Debugging, troubleshooting, and CI verification](../../../shared/references/logging.md#debugging-troubleshooting-and-ci-verification).
@@ -262,16 +262,12 @@ publication steps. Registry credentials are not used. Prompt:
 
 - GitHub Actions is the agent build/test environment and sole merge-validation
   pipeline.
-- Team Agents format and commit allowed changes without pushing or operating
-  delivery state. Gizmo integrates, runs pre-push, and returns any team-owned
-  formatter diff for a fresh owner commit before push.
-- Gizmo owns remote/check state. Every pushed head immediately gets complete
-  validation when ready or at least one relevant focused task otherwise.
+- Format, commit, and push a coherent change before dispatching `task remote`.
 - `task pr:validate` explicitly starts complete PR validation; an ordinary push
   does not refresh that gate.
-- Agents do not run local Task mirrors of builds, tests, checks, or e2e. Team
-  Agents return focused fixes as committed handoffs; Gizmo integrates them and
-  obtains replacement remote evidence.
+- Agents do not run local Task mirrors of builds, tests, checks, or e2e. They
+  inspect remote failures, fix them, and rerun focused remote jobs before the
+  final complete gate.
 - Interactive development servers and browser sessions may remain local when
   their persistent state is intrinsic to the investigation.
 
@@ -279,8 +275,9 @@ publication steps. Registry credentials are not used. Prompt:
 
 1. **Do not** move real GitHub API tests back into `main.yml` — extend stub coverage instead.
 2. **Do** add new sync-provider integration tests to the `e2e` spec list first; add a small live smoke under `e2e/live/` if the provider has a real backend.
-3. **Do** return formatted Team Agent commits for Gizmo integration/pre-push;
-   after a clean push, immediately validate a ready head or run focused proof.
+3. **Do** format, commit, push, use focused `task remote` jobs, and explicitly
+   trigger complete validation with `task pr:validate`; never run heavy agent
+   product work locally.
 4. **Do** update this doc and
    [pull requests](../../../gizmo/workflows/pull-requests.md) when workflow
    behavior changes.

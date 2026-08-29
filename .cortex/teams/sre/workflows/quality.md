@@ -155,7 +155,7 @@ Use this workflow for quality, CI, and deployment changes.
 7. Build wasm before Svelte checks or web builds.
 8. Use `VITE_BASE="/<repo>/"` for GitHub Pages builds.
 9. Update `.cortex` docs when checks, tooling, CI, or deploy behavior changes.
-10. **CI policy** — see subsections below. Gizmo follows
+10. **CI policy** — see subsections below. Agents: follow
     [the pull request pipeline](../../../gizmo/workflows/pull-requests.md#agent-pipeline).
 
     #### Workflows and runners
@@ -477,27 +477,20 @@ Use this workflow for quality, CI, and deployment changes.
     - Hosted jobs restore the same verified Zot refs read-only.
 
 11. **GitHub Actions agent execution:**
-
-    - Team Agents format and commit allowed changes without pushing. Gizmo
-      integrates, runs pre-push, and returns any team-owned formatter diff for a
-      fresh owner commit before a clean push.
-
-- Every pushed head immediately gets complete validation when ready or at
-  least one relevant focused `task remote` job otherwise.
-- Focused tasks remain optional for a validation-ready head and are not a
-  prerequisite for or substitute for complete validation.
-- Gizmo owns complete PR checks, exact-head evidence, readiness, merge, and
-  external PR/check state. Complete checks run only after
-  `task pr:validate PR=<number>`.
-- Do not run `task check`, `task ci:pr`, full suites, builds, or e2e on the agent machine.
-- Local mirrors remain available to humans.
-- See [remote execution](remote-execution.md),
-  [mission delivery](../../../gizmo/workflows/mission-delivery.md), and
-  [pull request validation](../../../gizmo/workflows/pull-requests.md#5-hosted-iteration-and-explicit-validation).
-
-12. Gizmo proves the final head with green hosted checks. Failures return to the
-    responsible Team Agent; Gizmo integrates the fix, repeats clean pre-push,
-    pushes, and immediately obtains replacement remote evidence.
+    - When an iteration is coherent, agents run `task loom:pre-push`, commit,
+      and push the exact head.
+    - Focused diagnostics use `task remote TASK_NAME=<name>` when they are faster than complete validation.
+    - Focused tasks are not a prerequisite for complete validation.
+    - Complete PR checks run only after `task pr:validate PR=<number>`.
+    - Do not run `task check`, `task ci:pr`, full suites, builds, or e2e on the agent machine.
+    - Local mirrors remain available to humans.
+    - See [remote execution](remote-execution.md),
+      [mission delivery](../../../gizmo/workflows/mission-delivery.md), and
+      [pull request validation](../../../gizmo/workflows/pull-requests.md#5-hosted-iteration-and-explicit-validation).
+12. Prove the final pushed head with explicitly triggered green repository-owned
+    checks before merge or handoff. After a complete-gate failure, fix, run Loom
+    pre-push, commit, push, and validate the replacement head. Use focused remote
+    proof only when it shortens diagnosis.
 13. **Docker:** Killing the Docker daemon is **strictly prohibited** — only stop individual containers (`docker stop <id>`). Never `killall docker`, `pkill docker`, etc. See [docker-container-harness.md](../dynamic-skills/docker-container-harness.md).
 14. **NEVER pipe a long-running command through `| grep`/`| tail`/`| head`/`| sed` (or any filter).** This is a hard rule, not a suggestion.
     - `grep`/`tail`/`head` **buffer their input until the upstream command exits**.
