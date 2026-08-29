@@ -8,6 +8,12 @@ pub struct NookPageInputFieldObservation {
     inner: nook_companion_core::PageInputFieldObservation,
 }
 
+impl NookPageInputFieldObservation {
+    pub(crate) const fn as_core(&self) -> &nook_companion_core::PageInputFieldObservation {
+        &self.inner
+    }
+}
+
 #[wasm_bindgen]
 impl NookPageInputFieldObservation {
     #[wasm_bindgen(constructor)]
@@ -169,6 +175,15 @@ pub fn authentication_passkey_control_candidate_is_safe(
     candidate: nook_companion_core::AuthenticationDetailedPasskeyControlCandidateObservation,
 ) -> bool {
     nook_companion_core::authentication_passkey_control_candidate_is_safe(&candidate)
+}
+
+#[wasm_bindgen]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn authentication_passkey_control_evidence_is_safe(
+    evidence: nook_companion_core::AuthenticationDetailedPasskeyControlObservation,
+) -> bool {
+    nook_companion_core::authentication_passkey_control_evidence_is_safe(&evidence)
 }
 
 #[wasm_bindgen]

@@ -1,16 +1,15 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import {
+  authenticationPageObservationFacts,
   fillLoginCredentials,
   fillOneTimeCode,
   findOneTimeCodeFields,
-  findPasskeyControl,
-  pageHasPasskeyControl,
-  PasskeyControlLookupKind,
   PasswordFormQueryKind,
   PasswordFormScopeKind,
   submitLoginForm,
   summarizeAuthenticationWorkflowForms,
   summarizePasswordForms,
+  type PasswordFormObservation,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 
 const wholeDocumentOneTimeCodeFieldQuery: Parameters<
@@ -20,11 +19,278 @@ const wholeDocumentPasswordFormSubmission: Parameters<
   typeof submitLoginForm
 >[0] = { kind: PasswordFormQueryKind.Root, root: document }
 
+function observedAuthenticationWorkflow(): PasswordFormObservation {
+  const observation = summarizeAuthenticationWorkflowForms()[0]
+  if (!observation) throw new Error('expected an authentication workflow')
+  return observation
+}
+
 afterEach(() => {
   document.body.replaceChildren()
 })
 
 describe('website one-time-code fields', () => {
+  test('preserves executable OTP handler attribute names at the Rust boundary', () => {
+    document.body.innerHTML = `
+      <form id="otp-login" action="/mfa/challenge">
+        <input
+          autocomplete="one-time-code"
+          oninput="this.form.requestSubmit()"
+        />
+        <button type="submit">Verify code</button>
+      </form>
+    `
+
+    const observation = observedAuthenticationWorkflow()
+    const facts = authenticationPageObservationFacts({
+      observation,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.ceremony.oneTimeCodeHandlerSignals).toEqual([
+      'oninput=this.form.requestSubmit()',
+    ])
+  })
+
+  test('transports OTP handlers as independent Rust policy candidates', () => {
+    document.body.innerHTML = `
+      <form id="otp-login" action="/mfa/challenge">
+        <input autocomplete="one-time-code" onchange="validateCode()" />
+        <input autocomplete="one-time-code" oninput="this.form.requestSubmit()" />
+      </form>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.ceremony.oneTimeCodeHandlerSignals).toEqual([
+      'onchange=validateCode()',
+      'oninput=this.form.requestSubmit()',
+    ])
+  })
+
+  test('transports every scoped advance-control candidate for Rust selection', () => {
+    document.body.innerHTML = `
+      <form id="login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Delete account</button>
+        <button type="submit">Sign in</button>
+      </form>
+    `
+
+    const observation = observedAuthenticationWorkflow()
+    const facts = authenticationPageObservationFacts({
+      observation,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [
+        { label: expect.stringContaining('Delete account') },
+        { label: expect.stringContaining('Sign in') },
+      ],
+    })
+  })
+
+  test('resolves aria-labelledby control names for Rust classification', () => {
+    document.body.innerHTML = `
+      <form action="/session">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <span id="submit-name">Sign in</span>
+        <button type="submit" aria-labelledby="submit-name"></button>
+      </form>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [{ label: expect.stringContaining('Sign in') }],
+    })
+  })
+
+  test('transports implicit owned-form submission evidence without a control', () => {
+    document.body.innerHTML = `
+      <form aria-label="Login" action="/session">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+      </form>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.detailedAdvanceControl).toEqual({ kind: 'absent' })
+    expect(facts.ceremony.advanceControl).toBe('implicit-submission')
+  })
+
+  test('does not infer implicit submission when an inert submitter exists', () => {
+    document.body.innerHTML = `<form action="/auth/login"><input autocomplete="username" /><button type="submit" disabled>Sign in</button></form>`
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.ceremony.advanceControl).toBe('absent')
+  })
+
+  test('uses image submit alt text as bounded control identity', () => {
+    document.body.innerHTML = `<form id="login" action="/auth/login"><input autocomplete="username" /><input type="image" alt="Sign in" /></form>`
+    document
+      .querySelector('form')
+      ?.addEventListener('submit', (event) => event.preventDefault())
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [{ label: expect.stringContaining('Sign in') }],
+    })
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
+  })
+
+  test('resolves default and relative form destinations before Rust classification', () => {
+    window.history.replaceState({}, '', '/account/sign-in')
+    document.body.innerHTML = `
+      <form aria-label="Login" action="../session">
+        <input autocomplete="username" />
+        <button type="submit">Continue</button>
+      </form>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.ceremony.authenticationContext).toMatchObject({
+      formIdentity: expect.stringContaining('Login'),
+      destinationIdentity: `${location.origin}/session`,
+    })
+    expect(facts.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [{ destinationIdentity: `${location.origin}/session` }],
+    })
+
+    document.querySelector('form')?.removeAttribute('action')
+    const defaultDestination = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    const defaultAuthenticationContext =
+      defaultDestination.ceremony.authenticationContext
+    if (!defaultAuthenticationContext) {
+      throw new Error('expected default authentication context')
+    }
+    expect(defaultAuthenticationContext.destinationIdentity).toBe(location.href)
+  })
+
+  test('uses the OTP form destination instead of an auxiliary control destination', () => {
+    document.body.innerHTML = `
+      <form id="otp-login" action="/mfa/challenge">
+        <input autocomplete="one-time-code" oninput="this.form.requestSubmit()" />
+        <button type="button" formaction="/cancel">Cancel</button>
+        <button type="submit">Verify code</button>
+      </form>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    const authenticationContext = facts.ceremony.authenticationContext
+    if (!authenticationContext) {
+      throw new Error('expected OTP authentication context')
+    }
+    expect(authenticationContext.destinationIdentity).toBe(
+      `${location.origin}/mfa/challenge`,
+    )
+  })
+
+  test('transports externally associated submit controls with owned-form scope', () => {
+    document.body.innerHTML = `
+      <form id="login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+      </form>
+      <button form="login" type="submit">Sign in</button>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [
+        {
+          ownership: 'owned-form',
+          semanticSubmitControlCount: 1,
+          destinationIdentity: `${location.origin}/login`,
+        },
+      ],
+    })
+  })
+
+  test('keeps standalone explicitly marked passkey controls locally scoped', () => {
+    document.body.innerHTML = `
+      <button type="button" data-nook-passkey-control>Continue</button>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
+      kind: 'candidates',
+      observation: [
+        {
+          kind: 'explicitly-marked',
+          observation: {
+            ownership: 'locally-scoped',
+            label: expect.stringContaining('Continue'),
+          },
+        },
+      ],
+    })
+  })
+
+  test('transports every passkey candidate for Rust selection', () => {
+    document.body.innerHTML = `
+      <button type="button" disabled>Use passkey</button>
+      <button type="button">Sign in with a passkey</button>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
+      kind: 'candidates',
+      observation: [
+        { observation: { actionability: 'inert' } },
+        { observation: { actionability: 'actionable' } },
+      ],
+    })
+  })
+
   test('detects standard and common OTP fields without treating card security codes as 2FA', () => {
     document.body.innerHTML = `
       <form>
@@ -651,6 +917,52 @@ describe('website one-time-code fields', () => {
     expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
   })
 
+  test('submits the exact later control approved by Rust', () => {
+    document.body.innerHTML = `<form id="login" action="/auth/login"><input autocomplete="username" /><input type="password" /><button id="unsafe" type="submit" formaction="/register">Continue</button><button id="safe" type="submit">Sign in</button></form>`
+    const activated: string[] = []
+    for (const control of document.querySelectorAll<HTMLButtonElement>(
+      'button',
+    ))
+      control.addEventListener('click', () => activated.push(control.id))
+    document
+      .querySelector('form')
+      ?.addEventListener('submit', (event) => event.preventDefault())
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
+    expect(activated).toEqual(['safe'])
+  })
+
+  test('submits the exact approved external form-associated control', () => {
+    document.body.innerHTML = `<form id="login" action="/auth/login"><input autocomplete="username" /><input type="password" /></form><button id="unsafe" type="submit" form="login" formaction="/register">Continue</button><button id="safe" type="submit" form="login">Sign in</button>`
+    const activated: string[] = []
+    for (const control of document.querySelectorAll<HTMLButtonElement>(
+      'button',
+    ))
+      control.addEventListener('click', () => activated.push(control.id))
+    document
+      .querySelector('form')
+      ?.addEventListener('submit', (event) => event.preventDefault())
+
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
+    expect(activated).toEqual(['safe'])
+  })
+
+  test('does not submit a form outside the requested root', () => {
+    document.body.innerHTML = `<form id="outside" action="/auth/login"><button id="submit" type="submit">Sign in</button></form><section id="scope"><input form="outside" type="password" /></section>`
+    let activated = false
+    document
+      .querySelector<HTMLButtonElement>('#submit')
+      ?.addEventListener('click', () => {
+        activated = true
+      })
+    const root = document.querySelector<HTMLElement>('#scope')
+    if (!root) throw new Error('expected scoped authentication root')
+
+    expect(submitLoginForm({ kind: PasswordFormQueryKind.Root, root })).toBe(
+      false,
+    )
+    expect(activated).toBe(false)
+  })
+
   test('fills the first enabled OTP field through the native value setter', () => {
     document.body.innerHTML = `
       <input autocomplete="one-time-code" disabled />
@@ -669,48 +981,5 @@ describe('website one-time-code fields', () => {
     expect(field?.value).toBe('123456')
     expect(inputEvents).toBe(1)
     expect(document.activeElement).toBe(field)
-  })
-})
-
-describe('passkey control detection', () => {
-  test('does not treat password inputs with webauthn autocomplete as passkey controls', () => {
-    document.body.innerHTML = `
-      <form>
-        <input autocomplete="section-login username" name="email" type="email" />
-        <input
-          autocomplete="section-login current-password webauthn"
-          name="password"
-          type="password"
-        />
-        <button type="submit">Sign in</button>
-      </form>
-    `
-
-    expect(pageHasPasskeyControl()).toBe(false)
-    expect(summarizeAuthenticationWorkflowForms()[0]?.summary).toMatchObject({
-      passkeyControlPresent: false,
-      currentPasswordFieldCount: 1,
-    })
-  })
-
-  test('detects marked and labeled passkey controls', () => {
-    document.body.innerHTML = `
-      <button type="button" data-nook-passkey-control>Continue</button>
-    `
-    const marked = findPasskeyControl()
-    expect(marked.kind).toBe(PasskeyControlLookupKind.Found)
-    if (marked.kind === PasskeyControlLookupKind.Found) {
-      expect(marked.control.getAttribute('data-nook-passkey-control')).toBe('')
-    }
-
-    document.body.innerHTML = `
-      <button type="button">Sign in with a passkey</button>
-    `
-    const labeled = findPasskeyControl()
-    expect(labeled.kind).toBe(PasskeyControlLookupKind.Found)
-    if (labeled.kind === PasskeyControlLookupKind.Found) {
-      expect(labeled.control.textContent).toContain('passkey')
-    }
-    expect(pageHasPasskeyControl()).toBe(true)
   })
 })

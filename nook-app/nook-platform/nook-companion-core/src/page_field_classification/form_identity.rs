@@ -148,6 +148,7 @@ pub(super) fn identity_indicates_one_time_code_authentication_context(identity: 
             ],
         )
 }
+
 pub(super) fn one_time_code_control_has_authentication_context(
     authentication_username: AuthenticationUsernameEvidence,
     form_identity: &str,
