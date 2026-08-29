@@ -412,10 +412,15 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
             "{path} must isolate Docker plugin discovery"
         );
         assert!(source.contains("for entry in contexts; do"));
-        assert!(source.contains("export BUILDX_CONFIG=\"$docker_config_source/buildx\""));
+        assert!(source.contains("export BUILDX_CONFIG=\"$trusted_docker_config/buildx\""));
         assert!(source.contains(
-            "\"$jq_cli\" 'del(.cliPluginsExtraDirs)' \"$docker_config_source/config.json\" >\"$trusted_docker_config/config.json\""
+            "\"$jq_cli\" 'with_entries(select((.key | ascii_downcase) != \"clipluginsextradirs\"))'"
         ));
+        assert!(
+            source.find("if [ -f \"$docker_config_source/config.json\" ]; then")
+                < source.find("if [ -x /usr/local/bin/jq ]; then"),
+            "{path} must require jq only when a source Docker config exists"
+        );
         assert!(source.contains(
             "ln -s \"$buildx_cli\" \"$trusted_docker_config/cli-plugins/docker-buildx\""
         ));
@@ -505,6 +510,10 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
     let remote_wrapper = read(&root, ".github/scripts/with-remote-buildkit.sh");
     for required in [
         "ARC requires a valid job-scoped remote BuildKit builder",
+        "tcp://nook-buildkit.arc-runners.svc.cluster.local:1234",
+        "\"Driver\":\"remote\"",
+        "\"Endpoint\":\"%s\"",
+        ">\"$BUILDX_CONFIG/instances/$builder\"",
         "buildx inspect \"$builder\" --bootstrap",
         "buildx build",
         "--output type=cacheonly",
@@ -516,6 +525,12 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
             "ARC remote BuildKit wrapper missing client-only contract: {required}"
         );
     }
+    let verifier = read(&root, ".github/scripts/verify-wasm-gha-cache.sh");
+    assert!(
+        verifier.find("if [ \"${NOOK_WASM_CACHE_PROMOTION_ENABLED:-}\" = \"1\" ]; then")
+            < verifier.find("  prepare_trusted_docker"),
+        "verification-only mode must not require Docker, Buildx, or jq"
+    );
     assert!(
         ci.contains("if test \"${NOOK_BUILDKIT_REMOTE:-}\" = \"1\"; then")
             && ci.contains(".github/scripts/with-remote-buildkit.sh")
@@ -615,14 +630,14 @@ fi
     fs::create_dir_all(&malicious_config)?;
     fs::write(
         malicious_config.join("config.json"),
-        "{\n\"\\u0063liPluginsExtraDirs\"\n:\n[\"/tmp/untrusted\"],\n\"auths\":{}\n}",
+        "{\n\"\\u0063LIPLUGINSEXTRADIRS\"\n:\n[\"/tmp/untrusted\"],\n\"auths\":{}\n}",
     )?;
     let sanitized_plugin = Command::new("bash")
         .arg(&wrapper)
         .args([
             "bash",
             "-c",
-            "! grep -Eq 'cliPluginsExtraDirs|u0063liPluginsExtraDirs' \"$DOCKER_CONFIG/config.json\"",
+            "! grep -Eqi 'clipluginsextradirs|u0063lipluginsextradirs' \"$DOCKER_CONFIG/config.json\"",
         ])
         .env("DOCKER_CONFIG", malicious_config)
         .output()?;
@@ -749,11 +764,20 @@ fi
     )?;
     let output = Command::new("bash")
         .arg(&wrapper)
-        .args(["bash", "-c", "printf ok > \"$1\"", "nook-test"])
+        .args([
+            "bash",
+            "-c",
+            "grep -Fq '\"Driver\":\"remote\"' \"$BUILDX_CONFIG/instances/nook-arc-run-1\" && grep -Fq '\"Endpoint\":\"tcp://nook-buildkit.arc-runners.svc.cluster.local:1234\"' \"$BUILDX_CONFIG/instances/nook-arc-run-1\" && printf ok > \"$1\"",
+            "nook-test",
+        ])
         .arg(&command_marker)
         .env("DOCKER_CONFIG", temp.join("docker-config"))
         .env("FAKE_DOCKER_LOG", &docker_log)
         .env("NOOK_PR_BUILDX_BUILDER", "nook-arc-run-1")
+        .env(
+            "NOOK_BUILDKIT_ADDR",
+            "tcp://nook-buildkit.arc-runners.svc.cluster.local:1234",
+        )
         .output()?;
     assert!(
         output.status.success(),
@@ -795,6 +819,10 @@ fi
         .env("FAKE_DOCKER_LOG", &docker_log)
         .env("FAIL_REMOTE_PROBE", "1")
         .env("NOOK_PR_BUILDX_BUILDER", "nook-arc-run-2")
+        .env(
+            "NOOK_BUILDKIT_ADDR",
+            "tcp://nook-buildkit.arc-runners.svc.cluster.local:1234",
+        )
         .output()?;
     assert_eq!(failed.status.code(), Some(19));
     assert!(!command_marker.exists());

@@ -29,13 +29,6 @@ else
   echo "trusted Docker Buildx plugin is unavailable" >&2
   exit 127
 fi
-if [ -x /usr/local/bin/jq ]; then jq_cli=/usr/local/bin/jq
-elif [ -x /usr/bin/jq ]; then jq_cli=/usr/bin/jq
-elif [ -x /opt/homebrew/bin/jq ]; then jq_cli=/opt/homebrew/bin/jq
-else
-  echo "trusted jq is unavailable" >&2
-  exit 127
-fi
 docker_config_source="${DOCKER_CONFIG:-${HOME:?HOME is required when DOCKER_CONFIG is unset}/.docker}"
 case "$docker_config_source" in
   /*) ;;
@@ -58,11 +51,19 @@ for entry in contexts; do
   fi
 done
 if [ -f "$docker_config_source/config.json" ]; then
-  "$jq_cli" 'del(.cliPluginsExtraDirs)' "$docker_config_source/config.json" >"$trusted_docker_config/config.json"
+  if [ -x /usr/local/bin/jq ]; then jq_cli=/usr/local/bin/jq
+  elif [ -x /usr/bin/jq ]; then jq_cli=/usr/bin/jq
+  elif [ -x /opt/homebrew/bin/jq ]; then jq_cli=/opt/homebrew/bin/jq
+  else
+    echo "trusted jq is unavailable" >&2
+    exit 127
+  fi
+  "$jq_cli" 'with_entries(select((.key | ascii_downcase) != "clipluginsextradirs"))' \
+    "$docker_config_source/config.json" >"$trusted_docker_config/config.json"
   chmod 600 "$trusted_docker_config/config.json"
 fi
 export DOCKER_CONFIG="$trusted_docker_config"
-export BUILDX_CONFIG="$docker_config_source/buildx"
+export BUILDX_CONFIG="$trusted_docker_config/buildx"
 
 case "$builder" in
   ''|nook-pr|*[!a-zA-Z0-9_.-]*)
@@ -77,6 +78,18 @@ case "$health_timeout" in
     exit 2
     ;;
 esac
+
+case "${NOOK_BUILDKIT_ADDR:-}" in
+  tcp://nook-buildkit.arc-runners.svc.cluster.local:1234) ;;
+  *)
+    echo "ARC BuildKit address must be tcp://nook-buildkit.arc-runners.svc.cluster.local:1234" >&2
+    exit 2
+    ;;
+esac
+mkdir -m 700 -p "$BUILDX_CONFIG/instances"
+printf '{"Name":"%s","Driver":"remote","Nodes":[{"Name":"%s0","Endpoint":"%s","Platforms":null,"DriverOpts":null,"Flags":null,"Files":null}],"Dynamic":false}\n' \
+  "$builder" "$builder" "$NOOK_BUILDKIT_ADDR" >"$BUILDX_CONFIG/instances/$builder"
+chmod 600 "$BUILDX_CONFIG/instances/$builder"
 
 probe_context="$(mktemp -d "${TMPDIR:-/tmp}/nook-remote-buildkit-probe.XXXXXX")"
 printf 'FROM scratch\n' > "$probe_context/Dockerfile"

@@ -26,13 +26,6 @@ else
   echo "trusted Docker Buildx plugin is unavailable" >&2
   exit 127
 fi
-if [ -x /usr/local/bin/jq ]; then jq_cli=/usr/local/bin/jq
-elif [ -x /usr/bin/jq ]; then jq_cli=/usr/bin/jq
-elif [ -x /opt/homebrew/bin/jq ]; then jq_cli=/opt/homebrew/bin/jq
-else
-  echo "trusted jq is unavailable" >&2
-  exit 127
-fi
 docker_config_source="${DOCKER_CONFIG:-${HOME:?HOME is required when DOCKER_CONFIG is unset}/.docker}"
 case "$docker_config_source" in
   /*) ;;
@@ -55,11 +48,19 @@ for entry in contexts; do
   fi
 done
 if [ -f "$docker_config_source/config.json" ]; then
-  "$jq_cli" 'del(.cliPluginsExtraDirs)' "$docker_config_source/config.json" >"$trusted_docker_config/config.json"
+  if [ -x /usr/local/bin/jq ]; then jq_cli=/usr/local/bin/jq
+  elif [ -x /usr/bin/jq ]; then jq_cli=/usr/bin/jq
+  elif [ -x /opt/homebrew/bin/jq ]; then jq_cli=/opt/homebrew/bin/jq
+  else
+    echo "trusted jq is unavailable" >&2
+    exit 127
+  fi
+  "$jq_cli" 'with_entries(select((.key | ascii_downcase) != "clipluginsextradirs"))' \
+    "$docker_config_source/config.json" >"$trusted_docker_config/config.json"
   chmod 600 "$trusted_docker_config/config.json"
 fi
 export DOCKER_CONFIG="$trusted_docker_config"
-export BUILDX_CONFIG="$docker_config_source/buildx"
+export BUILDX_CONFIG="$trusted_docker_config/buildx"
 
 # Never default to a shared docker-container builder. Delivery used to reuse
 # `nook-pr` across local and self-hosted runs; one wedged or concurrent build
