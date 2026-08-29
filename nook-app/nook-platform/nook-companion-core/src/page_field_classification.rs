@@ -4,6 +4,7 @@
 //! which identity strings count as username, OTP, passkey, or manual-checkpoint
 //! signals used to build authentication workflow observations in the host.
 
+mod authentication_advance_control;
 mod control_identity;
 mod destination_identity;
 mod form_identity;
@@ -12,10 +13,26 @@ mod one_time_code_progression;
 /// Maximum byte length for each DOM-controlled authentication identity string.
 pub const MAX_AUTHENTICATION_CONTROL_TEXT_BYTES: usize = 512;
 
+pub use authentication_advance_control::{
+    AuthenticationAdvanceControlDecision, AuthenticationAdvanceControlObservation,
+    PageControlActionability, PageControlOwnership, PageControlSemantics,
+};
 pub use destination_identity::{CanonicalControlDestination, canonicalize_control_destination};
 pub use one_time_code_progression::looks_like_one_time_code_auto_submit_signal;
 
+/// Validate one bounded advance-control observation for exact browser actuation.
+#[must_use]
+pub fn authentication_advance_control_is_safe(
+    observation: &AuthenticationAdvanceControlObservation,
+) -> bool {
+    matches!(
+        observation.classify(),
+        AuthenticationAdvanceControlDecision::AdvancesAuthentication
+    )
+}
+
 use serde::{Deserialize, Serialize};
+use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 /// Portable HTML input type bucket for auth classification.
@@ -280,6 +297,10 @@ fn repeated_localized_login_label(identity: &str) -> bool {
             || (tokens.len() % 2 == 0 && tokens.chunks(2).all(|pair| pair == ["se", "connecter"])))
 }
 
+pub(super) fn looks_like_supported_localized_login_control_label(label: &str) -> bool {
+    repeated_localized_login_label(&expand_identity_text(label))
+}
+
 /// True when a semantic submit explicitly describes a non-authentication action.
 #[must_use]
 pub fn looks_like_non_authentication_submit_control_label(label: &str) -> bool {
@@ -307,6 +328,54 @@ pub fn looks_like_non_authentication_submit_control_label(label: &str) -> bool {
     )
 }
 
+#[must_use]
+pub fn looks_like_password_update_submit_control_label(label: &str) -> bool {
+    let identity = expand_identity_text(label);
+    matches!(
+        identity.as_str(),
+        "save" | "save changes" | "save and continue" | "update" | "update credentials" | "change"
+    ) || (contains_any_word(&identity, &["password"])
+        && contains_any_word(&identity, &["save", "update", "change", "set", "reset"]))
+}
+
+pub(crate) fn authentication_passkey_control_is_safe(
+    observation: &AuthenticationAdvanceControlObservation,
+    explicitly_marked: bool,
+) -> bool {
+    if !observation.is_bounded()
+        || !matches!(
+            observation.actionability,
+            PageControlActionability::Actionable
+        )
+        || !matches!(
+            observation.ownership,
+            PageControlOwnership::OwnedForm | PageControlOwnership::LocallyScoped
+        )
+        || (!explicitly_marked && !looks_like_passkey_control_label(&observation.label))
+        || form_identity::form_identity_indicates_destructive_action(&observation.form_identity)
+        || form_identity::form_identity_indicates_non_authentication_account_management(
+            &observation.form_identity,
+        )
+    {
+        return false;
+    }
+    let Some(destination) = destination_identity::canonicalize_control_destination(
+        &observation.source_origin,
+        &observation.destination_identity,
+    ) else {
+        return false;
+    };
+    !form_identity::form_identity_indicates_destructive_action(&destination.route_identity)
+        && !form_identity::control_destination_indicates_non_authentication_route(
+            &destination.route_identity,
+        )
+        && !form_identity::destination_has_disallowed_action_or_provider(
+            &destination.route_identity,
+            false,
+            false,
+        )
+}
+
 /// Decide whether bounded form and destination identities describe a safe authentication route.
 #[must_use]
 pub fn has_safe_authentication_route_identity(
@@ -332,11 +401,24 @@ pub fn has_safe_authentication_route_identity(
         &destination.route_identity,
     ) || form_identity::destination_has_disallowed_action_or_provider(
         &destination.route_identity,
+        false,
+        false,
     ) {
         return false;
     }
     form_identity::identity_indicates_explicit_authentication_route(form_identity)
         || form_identity::destination_has_safe_login_identity(&destination.path_identity)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum AuthenticationUsernameEvidence {
+    Absent,
+    Generic,
+    StandardsBasedEmail,
+    Strong,
+    Explicit,
 }
 
 /// Decide whether a locally scoped control may advance a safe authentication route.
@@ -653,6 +735,7 @@ mod tests {
         for label in "Sign in to Microsoft 365|Continue with email address|Continue with your email|Continue with your email address|Use your password to sign in|Se connecter|Anmelden".split('|') {
             assert!(decide("f", label, true, true, true));
         }
+        assert!(decide("login-form", "Sign in", true, true, true));
         for label in "Continue with Amazon|Sign in to Google|Sign in to Amazon|Amazon login|Discord login|machine:delete-account|machine:reset-password|machine:create-account|machine:google|machine:passkey|machine:provider=acme|Sign in to Microsoft and reset password|Sign in to Microsoft or Google".split('|') {
             assert!(!decide("login-form", label, true, true, true));
         }

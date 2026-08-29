@@ -155,6 +155,24 @@ pub fn can_activate_authentication_route_control(
 
 #[wasm_bindgen]
 #[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn authentication_advance_control_is_safe(
+    observation: nook_companion_core::AuthenticationAdvanceControlObservation,
+) -> bool {
+    nook_companion_core::authentication_advance_control_is_safe(&observation)
+}
+
+#[wasm_bindgen]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn authentication_passkey_control_candidate_is_safe(
+    candidate: nook_companion_core::AuthenticationDetailedPasskeyControlCandidateObservation,
+) -> bool {
+    nook_companion_core::authentication_passkey_control_candidate_is_safe(&candidate)
+}
+
+#[wasm_bindgen]
+#[must_use]
 pub fn authentication_form_observation_priority(
     observation: nook_companion_core::AuthenticationPageObservation,
 ) -> u8 {

@@ -127,6 +127,24 @@ pub(super) fn looks_like_auxiliary_authentication_control_label(label: &str) -> 
             ],
         )
 }
+pub(super) fn looks_like_explicit_authentication_advance_control_label(label: &str) -> bool {
+    contains_any_word(
+        &expand_identity_text(label),
+        &["signin", "sign-in", "sign in", "login", "log-in", "log in"],
+    )
+}
+pub(super) fn looks_like_one_time_code_resend_control_label(label: &str) -> bool {
+    contains_any_word(
+        &expand_identity_text(label),
+        &[
+            "resend",
+            "send again",
+            "request new code",
+            "send new code",
+            "another code",
+        ],
+    )
+}
 pub(super) fn looks_like_password_recovery_route_control_label(label: &str) -> bool {
     let identity = expand_identity_text(label);
     contains_any_word(&identity, &["password"])
