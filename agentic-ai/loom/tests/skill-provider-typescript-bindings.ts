@@ -83,6 +83,56 @@ export type BindingCollectionRequest = {
   readonly node: ts.Node;
   readonly target: LexicalBinding[];
 };
+export type BindingLookupRequest = {
+  readonly location: ts.Node;
+  readonly model: LexicalModel;
+  readonly name: string;
+};
+
+export function bindingAt(
+  request: BindingLookupRequest,
+): LexicalBinding | false {
+  let node: ts.Node = request.location;
+  for (;;) {
+    if (ts.isBlock(node) || ts.isFunctionLike(node) || ts.isSourceFile(node)) {
+      const binding = request.model.bindings.find(
+        (candidate) =>
+          candidate.scope === node && candidate.name === request.name,
+      );
+      if (binding) return binding;
+    }
+    if (!node.parent) return false;
+    node = node.parent;
+  }
+}
+
+export function hasBinding([model, location, name]: readonly [
+  LexicalModel,
+  ts.Node,
+  string,
+]): boolean {
+  let node: ts.Node = location;
+  for (;;) {
+    if (
+      (ts.isBlock(node) || ts.isFunctionLike(node) || ts.isSourceFile(node)) &&
+      model.bindings.some(
+        (candidate) => candidate.scope === node && candidate.name === name,
+      )
+    )
+      return true;
+    if (!node.parent) return false;
+    node = node.parent;
+  }
+}
+
+export function lookupBinding([model, location, name]: readonly [
+  LexicalModel,
+  ts.Node,
+  string,
+]): LexicalBinding | false {
+  const request: BindingLookupRequest = { location, model, name };
+  return bindingAt(request);
+}
 
 export function collectBinding(request: BindingCollectionRequest): void {
   const node = request.node;

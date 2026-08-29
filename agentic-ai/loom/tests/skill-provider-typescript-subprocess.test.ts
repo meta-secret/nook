@@ -219,6 +219,38 @@ const holder={call(){}}; holder.call();`),
   ).toEqual([]);
 });
 
+test('fails closed on ambient Reflect subprocess invocation', () => {
+  for (const source of [
+    "import {spawnSync} from 'node:child_process'; Reflect.apply(spawnSync, undefined, ['bun', ['scripts/facade.ts']]);",
+    "Reflect['apply'](Bun.spawn, receiver, [['bun', 'scripts/facade.ts']]);",
+    "import {spawnSync} from 'node:child_process'; globalThis.Reflect.apply(spawnSync, receiver, ['bun', []]);",
+    "Reflect.construct(Worker, ['./scripts/facade.mjs']);",
+    "import {fork} from 'node:child_process'; const invoke=Reflect.apply; invoke(fork, receiver, ['scripts/facade.ts']);",
+    "import {execSync} from 'node:child_process'; const {apply}=Reflect; apply(execSync, receiver, ['bun scripts/facade.ts']);",
+  ])
+    expect(() => extract(source)).toThrow(
+      'Indirect Reflect subprocess invocation is forbidden.',
+    );
+  expect(() =>
+    extract(`
+import {spawnSync} from 'node:child_process';
+Reflect[method](spawnSync, receiver, arguments_);`),
+  ).toThrow('Dynamic Reflect subprocess member selection is forbidden.');
+  expect(
+    extract(`
+import {spawnSync} from 'node:child_process';
+function local(Reflect:{apply(...values:readonly string[]):void}){Reflect.apply('ignored.ts');}
+const Reflect={apply(){},construct(){}};
+Reflect.apply(spawnSync); Reflect['construct'](spawnSync);`),
+  ).toEqual([]);
+  expect(
+    extract(`
+import {spawnSync} from 'node:child_process';
+const globalThis={Reflect:{apply(){}}};
+globalThis.Reflect.apply(spawnSync);`),
+  ).toEqual([]);
+});
+
 test('recovers subprocess capabilities from exact static object holders', () => {
   expect(
     extract(`

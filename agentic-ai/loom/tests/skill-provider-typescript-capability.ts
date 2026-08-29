@@ -7,6 +7,10 @@ export enum SubprocessCallKind {
   ExecFile = 'execFile',
   Fork = 'fork',
   Namespace = 'namespace',
+  ReflectApply = 'reflectApply',
+  ReflectConstruct = 'reflectConstruct',
+  ReflectDynamic = 'reflectDynamic',
+  ReflectNamespace = 'reflectNamespace',
   RunCommand = 'runCommand',
   Spawn = 'spawn',
   Worker = 'worker',
@@ -133,6 +137,42 @@ export function functionInvocationCapability(
   if (/^(?:apply|bind|call)$/u.test(member))
     throw new Error('Indirect subprocess function invocation is forbidden.');
   return false;
+}
+
+export function reflectInvocationCapability(
+  request: ChildProcessMemberRequest,
+): SubprocessCallKind | false {
+  const [owner, member] = request;
+  if (owner !== SubprocessCallKind.ReflectNamespace) return false;
+  if (member === false) return SubprocessCallKind.ReflectDynamic;
+  if (member === 'apply') return SubprocessCallKind.ReflectApply;
+  return member === 'construct' ? SubprocessCallKind.ReflectConstruct : false;
+}
+
+export function isReflectInvocation(kind: SubprocessCallKind): boolean {
+  return (
+    kind === SubprocessCallKind.ReflectApply ||
+    kind === SubprocessCallKind.ReflectConstruct ||
+    kind === SubprocessCallKind.ReflectDynamic
+  );
+}
+
+export function assertReflectInvocationTarget([adapter, target]: readonly [
+  SubprocessCallKind,
+  SubprocessCallKind | false,
+]): void {
+  if (
+    target === false ||
+    target === SubprocessCallKind.Namespace ||
+    target === SubprocessCallKind.WorkerNamespace ||
+    target === SubprocessCallKind.ReflectNamespace
+  )
+    return;
+  if (adapter === SubprocessCallKind.ReflectDynamic)
+    throw new Error(
+      'Dynamic Reflect subprocess member selection is forbidden.',
+    );
+  throw new Error('Indirect Reflect subprocess invocation is forbidden.');
 }
 
 export function exactObjectProperty([object, name]: readonly [

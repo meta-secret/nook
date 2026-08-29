@@ -5,10 +5,12 @@ import {
   isStaticChildProcessRequire,
 } from './skill-provider-typescript-require.ts';
 import {
+  assertReflectInvocationTarget,
   bunShellTemplateCommand,
   childProcessCapability,
   exactObjectProperty,
   functionInvocationCapability,
+  isReflectInvocation,
   isSuccessorFreeExternalCommand,
   isStaticWorkerThreadsRequire,
   serializeSubprocessCommand,
@@ -20,14 +22,19 @@ import {
   subprocessCwd,
   type SubprocessCwdRequest,
   workerThreadCapability,
+  reflectInvocationCapability,
 } from './skill-provider-typescript-capability.ts';
 import {
+  bindingAt,
   collectBinding,
   type BindingCollectionRequest,
+  type BindingLookupRequest,
   dynamicCwdExemptions,
+  hasBinding,
   isDynamicCwdExempt,
   type LexicalBinding,
   type LexicalModel,
+  lookupBinding,
 } from './skill-provider-typescript-bindings.ts';
 
 export type TypeScriptSubprocessInspection = {
@@ -63,11 +70,6 @@ type CapabilityResolutionRequest = {
   readonly location: ts.Node;
   readonly model: LexicalModel;
   readonly visited: ReadonlySet<ts.Node>;
-};
-type BindingLookupRequest = {
-  readonly location: ts.Node;
-  readonly model: LexicalModel;
-  readonly name: string;
 };
 const MAX_BYTES = 65_536;
 const MAX_DEPTH = 16;
@@ -117,10 +119,26 @@ export function typescriptSubprocessCommands(
       };
       const kind = resolveCapability(capabilityRequest);
       if (kind !== false) {
-        const callRequest: CallCommandRequest = { call: node, kind, model };
-        const command = commandFromCall(callRequest);
-        if (command !== false)
-          commands.push(serializeSubprocessCommand(command));
+        if (isReflectInvocation(kind)) {
+          const target = node.arguments[0];
+          if (target) {
+            const targetRequest: CapabilityResolutionRequest = {
+              expression: target,
+              location: node,
+              model,
+              visited: new Set(),
+            };
+            assertReflectInvocationTarget([
+              kind,
+              resolveCapability(targetRequest),
+            ]);
+          }
+        } else {
+          const callRequest: CallCommandRequest = { call: node, kind, model };
+          const command = commandFromCall(callRequest);
+          if (command !== false)
+            commands.push(serializeSubprocessCommand(command));
+        }
       }
     }
     if (ts.isNewExpression(node)) {
@@ -181,7 +199,11 @@ function resolveCapability(
     };
     const binding = bindingAt(lookupRequest);
     if (binding === false)
-      return expression.text === 'Worker' ? SubprocessCallKind.Worker : false;
+      return expression.text === 'Worker'
+        ? SubprocessCallKind.Worker
+        : expression.text === 'Reflect'
+          ? SubprocessCallKind.ReflectNamespace
+          : false;
     if (binding.capability !== false) return binding.capability;
     if (!binding.constant || binding.initializer === false) return false;
     if (binding.member !== false) {
@@ -213,6 +235,7 @@ function resolveCapability(
       return (
         childProcessCapability([ownerCapability, binding.member]) ||
         workerThreadCapability([ownerCapability, binding.member]) ||
+        reflectInvocationCapability([ownerCapability, binding.member]) ||
         functionInvocationCapability([ownerCapability, binding.member])
       );
     }
@@ -237,6 +260,11 @@ function resolveCapability(
   const access = staticMemberAccess(expression);
   if (access === false) return false;
   const [owner, member] = access;
+  if (ts.isIdentifier(owner) && owner.text === 'globalThis') {
+    if (hasBinding([request.model, request.location, 'globalThis']))
+      return false;
+    return member === 'Reflect' ? SubprocessCallKind.ReflectNamespace : false;
+  }
   if (ts.isIdentifier(owner) && owner.text === 'Bun') {
     if (hasBinding([request.model, request.location, 'Bun'])) return false;
     if (member === '$') return SubprocessCallKind.BunShell;
@@ -287,6 +315,7 @@ function resolveCapability(
   return (
     childProcessCapability([ownerCapability, member]) ||
     workerThreadCapability([ownerCapability, member]) ||
+    reflectInvocationCapability([ownerCapability, member]) ||
     functionInvocationCapability([ownerCapability, member])
   );
 }
@@ -334,46 +363,6 @@ function objectContainsCapability([object, request, visited]: readonly [
     };
     return resolveCapability(propertyRequest) !== false;
   });
-}
-function bindingAt(request: BindingLookupRequest): LexicalBinding | false {
-  let node: ts.Node = request.location;
-  for (;;) {
-    if (ts.isBlock(node) || ts.isFunctionLike(node) || ts.isSourceFile(node)) {
-      const binding = request.model.bindings.find(
-        (candidate) =>
-          candidate.scope === node && candidate.name === request.name,
-      );
-      if (binding) return binding;
-    }
-    if (!node.parent) return false;
-    node = node.parent;
-  }
-}
-function hasBinding([model, location, name]: readonly [
-  LexicalModel,
-  ts.Node,
-  string,
-]): boolean {
-  let node: ts.Node = location;
-  for (;;) {
-    if (
-      (ts.isBlock(node) || ts.isFunctionLike(node) || ts.isSourceFile(node)) &&
-      model.bindings.some(
-        (candidate) => candidate.scope === node && candidate.name === name,
-      )
-    )
-      return true;
-    if (!node.parent) return false;
-    node = node.parent;
-  }
-}
-function lookupBinding([model, location, name]: readonly [
-  LexicalModel,
-  ts.Node,
-  string,
-]): LexicalBinding | false {
-  const request: BindingLookupRequest = { location, model, name };
-  return bindingAt(request);
 }
 function commandFromCall(request: CallCommandRequest): StaticCommand | false {
   const first = request.call.arguments?.[0];
