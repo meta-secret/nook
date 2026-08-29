@@ -79,6 +79,10 @@ tasks:
         fi
         export DOCKER_CONFIG="$trusted_docker_config"
         export BUILDX_CONFIG="$trusted_docker_config/buildx"
+        unset BUILDX_BUILDER
+        if [ -n "${GITHUB_ACTIONS:-}" ]; then
+          unset DOCKER_HOST DOCKER_CONTEXT BUILDKIT_HOST
+        fi
         repo_root="$(git rev-parse --show-toplevel)"
         sim_dir="$repo_root/infra/sim/bake-cache"
         zot_image="{{.BAKE_CACHE_ZOT_IMAGE}}"

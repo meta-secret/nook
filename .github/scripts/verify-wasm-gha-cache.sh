@@ -69,6 +69,10 @@ prepare_trusted_docker() {
   fi
   export DOCKER_CONFIG="$trusted_docker_config"
   export BUILDX_CONFIG="$trusted_docker_config/buildx"
+  unset BUILDX_BUILDER
+  if [ -n "${GITHUB_ACTIONS:-}" ]; then
+    unset DOCKER_HOST DOCKER_CONTEXT BUILDKIT_HOST
+  fi
 }
 cache_scope="${GHA_RUST_WASM_DEPS_SCOPE:?missing GHA_RUST_WASM_DEPS_SCOPE}"
 deps_fingerprint="${NOOK_RUST_DEPS_INPUT_FINGERPRINT:?missing NOOK_RUST_DEPS_INPUT_FINGERPRINT}"

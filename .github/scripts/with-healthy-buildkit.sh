@@ -75,6 +75,10 @@ if [ -f "$docker_config_source/config.json" ]; then
 fi
 export DOCKER_CONFIG="$trusted_docker_config"
 export BUILDX_CONFIG="$trusted_docker_config/buildx"
+unset BUILDX_BUILDER
+if [ -n "${GITHUB_ACTIONS:-}" ]; then
+  unset DOCKER_HOST DOCKER_CONTEXT BUILDKIT_HOST
+fi
 
 # Never default to a shared docker-container builder. Delivery used to reuse
 # `nook-pr` across local and self-hosted runs; one wedged or concurrent build

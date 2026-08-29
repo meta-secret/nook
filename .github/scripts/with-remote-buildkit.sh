@@ -78,6 +78,10 @@ if [ -f "$docker_config_source/config.json" ]; then
 fi
 export DOCKER_CONFIG="$trusted_docker_config"
 export BUILDX_CONFIG="$trusted_docker_config/buildx"
+unset BUILDX_BUILDER
+if [ -n "${GITHUB_ACTIONS:-}" ]; then
+  unset DOCKER_HOST DOCKER_CONTEXT BUILDKIT_HOST
+fi
 
 case "$builder" in
   ''|nook-pr|*[!a-zA-Z0-9_.-]*)
