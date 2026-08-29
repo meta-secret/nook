@@ -63,7 +63,7 @@ impl AuthenticationPageObservationFacts {
             ),
             authenticator_setup_hint: self.authenticator.authenticator_setup_hint(),
             backup_codes_hint: self.authenticator.backup_codes_hint(),
-            passkey_control_present: self.authenticator.passkey_control_present(),
+            passkey_control_present: self.authenticator.passkey_control_present(self.fields),
             matching_passkey_account_count: self.authenticator.matching_passkey_account_count,
         }
     }
@@ -85,7 +85,7 @@ impl AuthenticationPageObservationFacts {
         matches!(
             self.detailed_advance_control.evidence(self.fields),
             AuthenticationAdvanceControlEvidence::Present
-        ) || self.authenticator.passkey_control_present()
+        ) || self.authenticator.passkey_control_present(self.fields)
             || self.ceremony.has_safe_implicit_submission(self.fields)
             || matches!(
                 self.ceremony.manual_checkpoint,
@@ -111,10 +111,11 @@ pub struct AuthenticationPageObservationFactsBatch {
 impl AuthenticationPageObservationFactsBatch {
     #[must_use]
     pub fn classify(&self) -> AuthenticationWorkflowMatch {
-        if self
-            .observations
-            .iter()
-            .any(|observation| !observation.is_bounded())
+        if self.observations.len() > crate::MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS
+            || self
+                .observations
+                .iter()
+                .any(|observation| !observation.is_bounded())
         {
             return AuthenticationWorkflowMatch::Rejected;
         }
@@ -374,6 +375,60 @@ mod tests {
             }
             .classify(),
             AuthenticationWorkflowMatch::NoMatch
+        );
+    }
+
+    #[test]
+    fn passkey_evidence_must_match_the_surrounding_field_scope() {
+        let control = AuthenticationAdvanceControlObservation {
+            actionability: PageControlActionability::Actionable,
+            ownership: PageControlOwnership::LocallyScoped,
+            semantics: PageControlSemantics::Activation,
+            authentication_username: AuthenticationUsernameEvidence::Explicit,
+            password_field_count: 0,
+            new_password_field_count: 0,
+            one_time_code_field_count: 0,
+            semantic_submit_control_count: 0,
+            source_origin: "https://example.test".to_owned(),
+            form_identity: "login".to_owned(),
+            destination_identity: "https://example.test/login".to_owned(),
+            label: "Use passkey".to_owned(),
+        };
+        let facts = AuthenticationPageObservationFacts {
+            fields: AuthenticationFieldObservationFacts {
+                one_time_code_field_count: 1,
+                ..Default::default()
+            },
+            authenticator: AuthenticationAuthenticatorObservationFacts {
+                detailed_passkey_control:
+                    AuthenticationDetailedPasskeyControlObservation::Candidates(vec![
+                        AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(control),
+                    ]),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        assert!(authentication_passkey_control_evidence_is_safe(
+            &facts.authenticator.detailed_passkey_control
+        ));
+        assert!(!facts.authenticator.passkey_control_present(facts.fields));
+        assert_eq!(
+            AuthenticationPageObservationFactsBatch {
+                observations: vec![facts],
+            }
+            .classify(),
+            AuthenticationWorkflowMatch::NoMatch
+        );
+    }
+
+    #[test]
+    fn oversized_fact_batches_are_rejected_before_scanning_entries() {
+        let observations =
+            vec![password_login(); crate::MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS + 1];
+        assert_eq!(
+            AuthenticationPageObservationFactsBatch { observations }.classify(),
+            AuthenticationWorkflowMatch::Rejected
         );
     }
 }

@@ -1,3 +1,4 @@
+use super::AuthenticationFieldObservationFacts;
 use crate::page_field_classification::{
     AuthenticationAdvanceControlObservation, authentication_passkey_control_is_safe,
 };
@@ -78,21 +79,35 @@ impl AuthenticationDetailedPasskeyControlObservation {
     }
 
     pub(super) fn is_safe(&self) -> bool {
+        self.is_safe_for_fields(None)
+    }
+
+    pub(super) fn is_safe_for_fields(
+        &self,
+        fields: Option<AuthenticationFieldObservationFacts>,
+    ) -> bool {
         if !self.is_bounded() {
             return false;
         }
+        let compatible = |observation: &AuthenticationAdvanceControlObservation| {
+            fields.is_none_or(|fields| fields.is_compatible_with_detailed_control(observation))
+        };
         matches!(
             self,
-            Self::Observed(observation) if authentication_passkey_control_is_safe(observation, false)
+            Self::Observed(observation)
+                if compatible(observation)
+                    && authentication_passkey_control_is_safe(observation, false)
         ) || matches!(
             self,
             Self::ExplicitlyMarked(observation)
-                if authentication_passkey_control_is_safe(observation, true)
+                if compatible(observation)
+                    && authentication_passkey_control_is_safe(observation, true)
         ) || matches!(
             self,
-            Self::Candidates(candidates) if candidates.iter().any(
-                AuthenticationDetailedPasskeyControlCandidateObservation::is_safe
-            )
+            Self::Candidates(candidates)
+                if candidates.iter().any(|candidate| {
+                    compatible(candidate.observation()) && candidate.is_safe()
+                })
         )
     }
 }

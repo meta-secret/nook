@@ -1,5 +1,6 @@
 use super::{
-    AuthenticationDetailedPasskeyControlObservation, AuthenticationPasskeyControlObservation,
+    AuthenticationDetailedPasskeyControlObservation, AuthenticationFieldObservationFacts,
+    AuthenticationPasskeyControlObservation,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -51,7 +52,11 @@ impl AuthenticationAuthenticatorObservationFacts {
         )
     }
 
-    pub(super) fn passkey_control_present(&self) -> bool {
-        self.detailed_passkey_control.is_safe()
+    pub(super) fn passkey_control_present(
+        &self,
+        fields: AuthenticationFieldObservationFacts,
+    ) -> bool {
+        self.detailed_passkey_control
+            .is_safe_for_fields(Some(fields))
     }
 }
