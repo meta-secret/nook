@@ -143,27 +143,26 @@ export const runValidationCommand: ValidationRunner = async (
   process.chdir(options.cwd);
   restoreHostEnvironment(options.env, process.env);
   try {
-    const wait = (name: "hive:verify" | "fuzz") =>
+    const wait = (fuzz: boolean) =>
       new Promise<void>((resolveRun, rejectRun) => {
-        const child =
-          name === "fuzz"
-            ? spawn("task", ["docker:ecosystem:fuzz", "FUZZ_SECONDS=20"], {
-                stdio: "inherit",
-              })
-            : spawn("task", ["hive:verify"], { stdio: "inherit" });
+        const child = fuzz
+          ? spawn("task", ["docker:ecosystem:fuzz", "FUZZ_SECONDS=20"], {
+              stdio: "inherit",
+            })
+          : spawn("task", ["hive:verify"], { stdio: "inherit" });
         child.once("error", rejectRun);
         child.once("close", (code, signal) => {
           if (code === 0 && !signal) resolveRun();
           else rejectRun(new Error("Isolated validation command failed"));
         });
       });
-    if (args[0] === "hive:verify" && args.length === 1) await wait("hive:verify");
+    if (args[0] === "hive:verify" && args.length === 1) await wait(false);
     else if (
       args[0] === "docker:ecosystem:fuzz" &&
       args[1] === "FUZZ_SECONDS=20" &&
       args.length === 2
     )
-      await wait("fuzz");
+      await wait(true);
     else throw new Error("Isolated validation command is not allowlisted");
   } finally {
     restoreHostEnvironment(hostEnvironment, process.env);
@@ -772,11 +771,12 @@ export async function runCiFix(): Promise<CiFixOutcome> {
     prNumber = openPr.number;
     if (profile === CiAgentFixProfile.RustDependencyUpdate) {
       const token = process.env.NOOK_GITHUB_PAT?.trim();
-      const prior = [
-        process.env.GIT_CONFIG_COUNT,
-        process.env.GIT_CONFIG_KEY_0,
-        process.env.GIT_CONFIG_VALUE_0,
-      ];
+      const priorCount = process.env.GIT_CONFIG_COUNT ?? "";
+      const priorKey = process.env.GIT_CONFIG_KEY_0 ?? "";
+      const priorValue = process.env.GIT_CONFIG_VALUE_0 ?? "";
+      const hadCount = Object.hasOwn(process.env, "GIT_CONFIG_COUNT");
+      const hadKey = Object.hasOwn(process.env, "GIT_CONFIG_KEY_0");
+      const hadValue = Object.hasOwn(process.env, "GIT_CONFIG_VALUE_0");
       if (token) {
         process.env.GIT_CONFIG_COUNT = "1";
         process.env.GIT_CONFIG_KEY_0 = "http.https://github.com/.extraheader";
@@ -791,16 +791,12 @@ export async function runCiFix(): Promise<CiFixOutcome> {
           fixBranch,
         ]);
       } finally {
-        const names = [
-          "GIT_CONFIG_COUNT",
-          "GIT_CONFIG_KEY_0",
-          "GIT_CONFIG_VALUE_0",
-        ] as const;
-        names.forEach((name, index) => {
-          const value = prior[index];
-          if (value === undefined) delete process.env[name];
-          else process.env[name] = value;
-        });
+        if (hadCount) process.env.GIT_CONFIG_COUNT = priorCount;
+        else delete process.env.GIT_CONFIG_COUNT;
+        if (hadKey) process.env.GIT_CONFIG_KEY_0 = priorKey;
+        else delete process.env.GIT_CONFIG_KEY_0;
+        if (hadValue) process.env.GIT_CONFIG_VALUE_0 = priorValue;
+        else delete process.env.GIT_CONFIG_VALUE_0;
       }
       await gitOutput(repoRoot, [
         "checkout",
