@@ -15,6 +15,7 @@ import type * as PairingStateQuery from './pairing-state-query'
 import type * as SessionLifecycle from './session-lifecycle'
 import type * as SessionRuntimeMessages from './session-runtime-messages'
 import type * as AccountPickers from './account-pickers'
+import { AccountPickerCleanupMarkerStatus } from './account-pickers'
 import type * as AuthenticatorOperations from './authenticator-operations'
 import {
   LoginDetectionStatus,
@@ -34,6 +35,7 @@ type ExtensionLifecycleRoutingArgs = {
 }
 
 export type ExtensionLifecycleRoutingDependencies = {
+  accountPickerAuthorizationCleanupPending: typeof AccountPickers.accountPickerAuthorizationCleanupPending
   beginAccountPickerAuthorizationCleanup: typeof AccountPickers.beginAccountPickerAuthorizationCleanup
   clearPendingAccountPickers: typeof AccountPickers.clearPendingAccountPickers
   clearStagedAuthenticatorEnrollments: typeof AuthenticatorOperations.clearStagedAuthenticatorEnrollments
@@ -53,6 +55,7 @@ export type ExtensionLifecycleRoutingDependencies = {
   openExtensionPairing: typeof PairingIdentity.openExtensionPairing
   openSimpleVault: typeof SessionLifecycle.openSimpleVault
   queryActiveTabLoginDetection: typeof SessionLifecycle.queryActiveTabLoginDetection
+  releaseAccountPickerAuthorizationCleanup: typeof AccountPickers.releaseAccountPickerAuthorizationCleanup
 }
 
 type MessageResponse = Parameters<
@@ -87,8 +90,22 @@ type ClearAuthorizationStateArgs = {
   clearStagedAuthenticatorEnrollments: typeof AuthenticatorOperations.clearStagedAuthenticatorEnrollments
   closeExtensionSessionDocument: typeof SessionLifecycle.closeExtensionSessionDocument
   completeAccountPickerAuthorizationCleanup: typeof AccountPickers.completeAccountPickerAuthorizationCleanup
+  releaseAccountPickerAuthorizationCleanup: typeof AccountPickers.releaseAccountPickerAuthorizationCleanup
   closeSession: boolean
+  cleanupStart: AuthorizationCleanupStart
 }
+
+enum AuthorizationCleanupStartKind {
+  Begin = 'begin',
+  Existing = 'existing',
+}
+
+type AuthorizationCleanupStart =
+  | { kind: AuthorizationCleanupStartKind.Begin }
+  | {
+      kind: AuthorizationCleanupStartKind.Existing
+      cleanup: AccountPickers.AccountPickerAuthorizationCleanupStart
+    }
 
 async function clearAuthorizationState({
   beginAccountPickerAuthorizationCleanup,
@@ -96,10 +113,16 @@ async function clearAuthorizationState({
   clearStagedAuthenticatorEnrollments,
   closeExtensionSessionDocument,
   completeAccountPickerAuthorizationCleanup,
+  releaseAccountPickerAuthorizationCleanup,
   closeSession,
+  cleanupStart,
 }: ClearAuthorizationStateArgs): Promise<void> {
-  const authorizationGeneration = await beginAccountPickerAuthorizationCleanup()
-  let failed = false
+  const startedCleanup =
+    cleanupStart.kind === AuthorizationCleanupStartKind.Existing
+      ? cleanupStart.cleanup
+      : await beginAccountPickerAuthorizationCleanup()
+  const { authorizationGeneration, markerStatus } = startedCleanup
+  let failed = markerStatus === AccountPickerCleanupMarkerStatus.Unavailable
   clearStagedAuthenticatorEnrollments()
   try {
     await clearPendingAccountPickers()
@@ -119,8 +142,23 @@ async function clearAuthorizationState({
     failed = true
   }
   clearStagedAuthenticatorEnrollments()
-  if (failed) throw new Error('authorization cleanup failed')
+  if (failed) {
+    releaseAccountPickerAuthorizationCleanup(authorizationGeneration)
+    throw new Error('authorization cleanup failed')
+  }
   await completeAccountPickerAuthorizationCleanup(authorizationGeneration)
+}
+
+export async function recoverInterruptedAuthorizationCleanup(
+  dependencies: ExtensionLifecycleRoutingDependencies,
+): Promise<void> {
+  if (!(await dependencies.accountPickerAuthorizationCleanupPending())) return
+  const cleanupArgs: ClearAuthorizationStateArgs = {
+    ...dependencies,
+    closeSession: true,
+    cleanupStart: { kind: AuthorizationCleanupStartKind.Begin },
+  }
+  await clearAuthorizationState(cleanupArgs)
 }
 
 export enum ExtensionLifecycleRoutingResult {
@@ -153,6 +191,7 @@ export function routeExtensionLifecycleMessage({
     openExtensionPairing,
     openSimpleVault,
     queryActiveTabLoginDetection,
+    releaseAccountPickerAuthorizationCleanup,
   } = dependencies
   if (isExtensionPairingStateQueryMessage(message)) {
     const queryContext: Parameters<typeof handlePairingStateQuery>[0] = {
@@ -188,7 +227,9 @@ export function routeExtensionLifecycleMessage({
       clearStagedAuthenticatorEnrollments,
       closeExtensionSessionDocument,
       completeAccountPickerAuthorizationCleanup,
+      releaseAccountPickerAuthorizationCleanup,
       closeSession: true,
+      cleanupStart: { kind: AuthorizationCleanupStartKind.Begin },
     }
     void clearAuthorizationState(cleanupArgs)
       .then(() => sendResponse(successResponse))
@@ -210,7 +251,9 @@ export function routeExtensionLifecycleMessage({
       clearStagedAuthenticatorEnrollments,
       closeExtensionSessionDocument,
       completeAccountPickerAuthorizationCleanup,
+      releaseAccountPickerAuthorizationCleanup,
       closeSession: true,
+      cleanupStart: { kind: AuthorizationCleanupStartKind.Begin },
     }
     void clearAuthorizationState(cleanupArgs)
       .then(() => sendResponse(successResponse))
@@ -236,24 +279,41 @@ export function routeExtensionLifecycleMessage({
       vaultStoreId: message.payload.vaultStoreId,
       eventLogRecords: message.payload.eventLogRecords,
     }
-    void importLocalEventLogUpdate(importArgs)
-      .then(async (response) => {
-        if (!response.ok && response.reason === 'event-log-access-revoked') {
-          const cleanupArgs: ClearAuthorizationStateArgs = {
-            beginAccountPickerAuthorizationCleanup,
-            clearPendingAccountPickers,
-            clearStagedAuthenticatorEnrollments,
-            closeExtensionSessionDocument,
-            completeAccountPickerAuthorizationCleanup,
-            closeSession: false,
+    void beginAccountPickerAuthorizationCleanup()
+      .then(async (cleanupStart) => {
+        try {
+          const response = await importLocalEventLogUpdate(importArgs)
+          if (!response.ok && response.reason === 'event-log-access-revoked') {
+            const cleanupArgs: ClearAuthorizationStateArgs = {
+              beginAccountPickerAuthorizationCleanup,
+              clearPendingAccountPickers,
+              clearStagedAuthenticatorEnrollments,
+              closeExtensionSessionDocument,
+              completeAccountPickerAuthorizationCleanup,
+              releaseAccountPickerAuthorizationCleanup,
+              closeSession: false,
+              cleanupStart: {
+                kind: AuthorizationCleanupStartKind.Existing,
+                cleanup: cleanupStart,
+              },
+            }
+            try {
+              await clearAuthorizationState(cleanupArgs)
+            } catch {
+              // Authorization remains invalid while browser cleanup is retried.
+            }
+          } else {
+            await completeAccountPickerAuthorizationCleanup(
+              cleanupStart.authorizationGeneration,
+            )
           }
-          try {
-            await clearAuthorizationState(cleanupArgs)
-          } catch {
-            // Authorization remains invalid while browser cleanup is retried.
-          }
+          return response
+        } catch (error) {
+          releaseAccountPickerAuthorizationCleanup(
+            cleanupStart.authorizationGeneration,
+          )
+          throw error
         }
-        return response
       })
       .then(sendResponse)
     return true

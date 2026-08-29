@@ -432,6 +432,7 @@ export async function websiteAuthenticatorEnrollPreview({
 
 type StagedAuthenticatorEnrollment = {
   stageId: string
+  authorizationGeneration: number
   origin: string
   vaultStoreId: string
   otpauthUri: string
@@ -444,6 +445,12 @@ const stagedAuthenticatorEnrollments = new Map<
   string,
   StagedAuthenticatorEnrollment
 >()
+
+export function authenticatorEnrollmentAuthorizationIsCurrent(
+  authorizationGeneration: number,
+): boolean {
+  return accountPickerAuthorizationIsCurrent(authorizationGeneration)
+}
 
 function purgeExpiredStagedEnrollments(now = Date.now()): void {
   for (const [stageId, staged] of stagedAuthenticatorEnrollments) {
@@ -508,10 +515,15 @@ export async function websiteAuthenticatorEnrollStage({
     typeof stagedAuthenticatorEnrollments.set
   >[1] = {
     stageId,
+    authorizationGeneration,
     origin: message.payload.origin,
     vaultStoreId: message.payload.vaultStoreId,
     otpauthUri: message.payload.otpauthUri,
     expiresAt: Date.now() + STAGED_ENROLLMENT_TTL_MS,
+  }
+  if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
+    nookTypedArgs0_11.otpauthUri = ''
+    return { ok: false, reason: 'authenticator-locked' }
   }
   stagedAuthenticatorEnrollments.set(stageId, nookTypedArgs0_11)
   return { ok: true, stageId }
@@ -540,9 +552,22 @@ export async function websiteAuthenticatorEnrollCode({
   if (!staged || staged.origin !== message.payload.origin) {
     return { ok: false, reason: 'authenticator-stage-missing' }
   }
+  if (
+    !authenticatorEnrollmentAuthorizationIsCurrent(
+      staged.authorizationGeneration,
+    )
+  ) {
+    clearStagedEnrollment(message.payload.stageId)
+    return { ok: false, reason: 'authenticator-locked' }
+  }
   await ensureExtensionSessionDocument()
   try {
-    return await stagedAuthenticatorCodeFromSession(staged.otpauthUri)
+    const response = await stagedAuthenticatorCodeFromSession(staged.otpauthUri)
+    return authenticatorEnrollmentAuthorizationIsCurrent(
+      staged.authorizationGeneration,
+    )
+      ? response
+      : { ok: false, reason: 'authenticator-locked' }
   } catch {
     return { ok: false, reason: 'authenticator-code-failed' }
   }
@@ -575,6 +600,14 @@ export async function websiteAuthenticatorEnrollConfirm({
   ) {
     return { ok: false, reason: 'authenticator-stage-missing' }
   }
+  if (
+    !authenticatorEnrollmentAuthorizationIsCurrent(
+      staged.authorizationGeneration,
+    )
+  ) {
+    clearStagedEnrollment(message.payload.stageId)
+    return { ok: false, reason: 'authenticator-locked' }
+  }
   const nookTypedArgs0_15: Parameters<
     typeof authorizedWebsiteGrant
   >[0]['reasons'] = {
@@ -590,6 +623,13 @@ export async function websiteAuthenticatorEnrollConfirm({
   }
   const access = await authorizedWebsiteGrant(nookTypedArgs0_4)
   if ('response' in access) return access.response
+  if (
+    !authenticatorEnrollmentAuthorizationIsCurrent(
+      staged.authorizationGeneration,
+    )
+  ) {
+    return { ok: false, reason: 'authenticator-locked' }
+  }
   try {
     const confirmArgs: Parameters<typeof confirmAuthenticatorEnrollment>[0] = {
       grant: access.grant,
@@ -597,7 +637,11 @@ export async function websiteAuthenticatorEnrollConfirm({
       origin: message.payload.origin,
     }
     const response = await confirmAuthenticatorEnrollment(confirmArgs)
-    return response
+    return authenticatorEnrollmentAuthorizationIsCurrent(
+      staged.authorizationGeneration,
+    )
+      ? response
+      : { ok: false, reason: 'authenticator-locked' }
   } catch {
     return { ok: false, reason: 'authenticator-enroll-failed' }
   } finally {
@@ -653,6 +697,14 @@ export async function websiteAuthenticatorEnrollPending({
   purgeExpiredStagedEnrollments()
   for (const staged of stagedAuthenticatorEnrollments.values()) {
     if (staged.origin === message.payload.origin) {
+      if (
+        !authenticatorEnrollmentAuthorizationIsCurrent(
+          staged.authorizationGeneration,
+        )
+      ) {
+        clearStagedEnrollment(staged.stageId)
+        continue
+      }
       return {
         ok: true,
         stageId: staged.stageId,
