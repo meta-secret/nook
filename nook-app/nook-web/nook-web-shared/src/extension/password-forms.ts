@@ -484,7 +484,37 @@ export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
       ...request,
       usernameField,
     };
-    return clickAdvanceControl(nookNamedArgs0_4);
+    if (clickAdvanceControl(nookNamedArgs0_4)) return true;
+    const form = usernameField.form;
+    const sourceOrigin = form?.ownerDocument.defaultView?.location.origin;
+    if (
+      !form ||
+      !sourceOrigin ||
+      form.querySelector(
+        'button[type="submit"], input[type="submit"], button:not([type]), button[type="button"]',
+      ) ||
+      !can_activate_authentication_route_control(
+        sourceOrigin,
+        [
+          form.id,
+          form.getAttribute("name") ?? "",
+          form.getAttribute("class") ?? "",
+          form.getAttribute("aria-label") ?? "",
+        ].join(" "),
+        form.action,
+        "",
+        true,
+        isAuthUsernameField(usernameField),
+        true,
+      )
+    ) {
+      return false;
+    }
+    const nookTypedArgs0_28: Parameters<typeof observeSubmit>[0] = {
+      form,
+      action: () => form.requestSubmit(),
+    };
+    return observeSubmit(nookTypedArgs0_28);
   }
 
   const form = anchor.form;
@@ -562,11 +592,18 @@ function canActivateAuthenticationRouteControl(
   const sourceOrigin = control.ownerDocument.defaultView?.location.origin;
   if (!sourceOrigin) return false;
 
+  const identityContainer =
+    !form &&
+    query.kind === PasswordFormQueryKind.Scoped &&
+    query.formScope.kind === PasswordFormScopeKind.Unowned &&
+    query.root instanceof Element
+      ? query.root
+      : form;
   const formIdentity = [
-    form?.id ?? "",
-    form?.getAttribute("name") ?? "",
-    form?.getAttribute("class") ?? "",
-    form?.getAttribute("aria-label") ?? "",
+    identityContainer?.id ?? "",
+    identityContainer?.getAttribute("name") ?? "",
+    identityContainer?.getAttribute("class") ?? "",
+    identityContainer?.getAttribute("aria-label") ?? "",
   ].join(" ");
   const destinationIdentity = control.hasAttribute("formaction")
     ? control.formAction

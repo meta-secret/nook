@@ -363,6 +363,7 @@ describe('website one-time-code fields', () => {
   })
 
   test('advances a form-less semantic submit in its local auth scope', () => {
+    window.history.replaceState({}, '', '/')
     document.body.innerHTML = `
       <div role="form" class="signin-panel">
         <input data-qa="login_email" name="email" type="email" />
@@ -385,6 +386,19 @@ describe('website one-time-code fields', () => {
 
     expect(submitLoginForm(submissionArgs)).toBe(true)
     expect(activated).toBe(true)
+  })
+
+  test.each([
+    ['login-form', true],
+    ['delete-account', false],
+  ])('gates implicit username-only submit for %s', (formId, allowed) => {
+    window.history.replaceState({}, '', '/account')
+    document.body.innerHTML = `<form id="${formId}"><input autocomplete="username" /></form>`
+    document.querySelector('form')?.addEventListener('submit', (event) => {
+      event.preventDefault()
+    })
+
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(allowed)
   })
 
   test.each([
