@@ -60,6 +60,22 @@ export type MatchingPasskeyAvailability =
   | { kind: MatchingPasskeyAvailabilityKind.Ready; accountCount: number }
   | { kind: MatchingPasskeyAvailabilityKind.Unavailable }
 
+type PasskeyAccountCountForClassificationArgs = {
+  needsPasskeyLookup: boolean
+  availability: MatchingPasskeyAvailability
+}
+
+export function passkeyAccountCountForClassification({
+  needsPasskeyLookup,
+  availability,
+}: PasskeyAccountCountForClassificationArgs): number {
+  if (!needsPasskeyLookup) return 0
+  if (availability.kind === MatchingPasskeyAvailabilityKind.Unavailable) {
+    throw new Error('Passkey availability is required for classification.')
+  }
+  return availability.accountCount
+}
+
 type MatchingPasskeyAvailabilityForOriginArgs = {
   origin: string
   queueExpiresAt: number

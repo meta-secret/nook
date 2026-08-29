@@ -11,8 +11,10 @@ import type {
 } from '../../lib/auth-workflow-messages'
 import type * as AccountPickers from './account-pickers'
 import {
+  type MatchingPasskeyAvailability,
   MatchingPasskeyAvailabilityKind,
   type matchingPasskeyAvailabilityForOriginSafe,
+  passkeyAccountCountForClassification,
 } from './passkey-operations'
 import {
   AuthenticationWorkflowSnapshotKind,
@@ -65,21 +67,25 @@ export async function authenticationWorkflowMessageResponse({
       },
     )
     const needsPasskeyLookup = passkeyEvidenceIsSafe.some(Boolean)
+    const passkeyLookupNotRequired: MatchingPasskeyAvailability = {
+      kind: MatchingPasskeyAvailabilityKind.Ready,
+      accountCount: 0,
+    }
     const passkeyAvailability = needsPasskeyLookup
       ? await matchingPasskeyAvailabilityForOriginSafe(message.payload.origin)
-      : {
-          kind: MatchingPasskeyAvailabilityKind.Ready,
-          accountCount: 0,
-        }
+      : passkeyLookupNotRequired
+    const matchingPasskeyAccountCount = passkeyAccountCountForClassification({
+      needsPasskeyLookup,
+      availability: passkeyAvailability,
+    })
     const observations = Array.from(message.payload.observations.entries()).map(
       ([observationIndex, observation]) => ({
         ...observation,
         authenticator: {
           ...observation.authenticator,
           matchingPasskeyAccountCount:
-            passkeyEvidenceIsSafe[observationIndex] === true &&
-            passkeyAvailability.kind === MatchingPasskeyAvailabilityKind.Ready
-              ? passkeyAvailability.accountCount
+            passkeyEvidenceIsSafe[observationIndex] === true
+              ? matchingPasskeyAccountCount
               : 0,
         },
       }),

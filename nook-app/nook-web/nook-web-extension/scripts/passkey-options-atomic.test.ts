@@ -86,4 +86,19 @@ describe('website passkey options', () => {
     })
     expect(sendSessionMessage).toHaveBeenCalledTimes(3)
   })
+
+  test('does not classify unavailable passkey lookup as zero matches', async () => {
+    const {
+      MatchingPasskeyAvailabilityKind,
+      passkeyAccountCountForClassification,
+    } = await import('../src/background/service-worker/passkey-operations')
+    const args: Parameters<typeof passkeyAccountCountForClassification>[0] = {
+      needsPasskeyLookup: true,
+      availability: { kind: MatchingPasskeyAvailabilityKind.Unavailable },
+    }
+
+    expect(() => passkeyAccountCountForClassification(args)).toThrow(
+      'Passkey availability is required for classification.',
+    )
+  })
 })
