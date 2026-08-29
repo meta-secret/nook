@@ -310,6 +310,52 @@ test('env options preserve wrapped Playwright configuration discovery', () => {
   expectProviderReachable(graph(request));
 });
 
+test('bunx options preserve wrapped configuration tool discovery', () => {
+  for (const [command, config] of [
+    ['bunx --bun playwright test', 'playwright.config.ts'],
+    ['bunx --package eslint eslint src', 'eslint.config.ts'],
+  ]) {
+    const sources = new Map([
+      [
+        'nested/package.json',
+        `{"scripts":{"audit":${JSON.stringify(command)}}}`,
+      ],
+      [`nested/${config}`, `await import('../${PROVIDER_CLI}');`],
+      [PROVIDER_CLI, 'export {};'],
+    ]);
+    const request = { roots: ['nested/package.json'], sources };
+    expectProviderReachable(graph(request));
+  }
+  const sources = new Map([
+    ['package.json', '{"scripts":{"audit":"bunx --future playwright test"}}'],
+  ]);
+  const request = { roots: ['package.json'], sources };
+  expect(() => configurationScriptPaths(graph(request))).toThrow(
+    'Unsupported bunx wrapper option',
+  );
+});
+
+test('Node environment-file authority fails closed', () => {
+  for (const option of [
+    '--env-file=a.env',
+    '--env-file a.env',
+    '--env-file-if-exists=a.env',
+  ]) {
+    const sources = new Map([
+      [
+        'package.json',
+        `{"scripts":{"audit":"node ${option} scripts/main.cjs"}}`,
+      ],
+      ['a.env', 'NODE_OPTIONS=--require=./scripts/facade.cjs'],
+      ['scripts/main.cjs', 'console.log("neutral");'],
+    ]);
+    const request = { roots: ['package.json'], sources };
+    expect(() => configurationScriptPaths(graph(request)), option).toThrow(
+      'Executable node runtime option is forbidden',
+    );
+  }
+});
+
 test('dynamic and malformed env options fail closed', () => {
   for (const command of [
     'env -u "$NAME" task --taskfile scripts/commands.yml audit',

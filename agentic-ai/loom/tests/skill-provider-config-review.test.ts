@@ -68,6 +68,26 @@ test('configuration roots cannot recover ambient loader aliases', () => {
   }
 });
 
+test('configuration roots reject computed dynamic imports', () => {
+  const sources = new Map([
+    [
+      'vite.config.ts',
+      "const target='./scripts/facade.ts'; await import(target);",
+    ],
+    ['scripts/facade.ts', `await import('../${PROVIDER}');`],
+    [PROVIDER, 'export {};'],
+  ]);
+  const graph: ConfigurationScriptGraph = {
+    executablePaths: new Set(),
+    roots: ['vite.config.ts'],
+    sources,
+    symlinkPaths: new Set(),
+  };
+  expect(() => configurationScriptPaths(graph)).toThrow(
+    'root violates runtime boundary',
+  );
+});
+
 test('production hydration loads every statically reached shell target', async () => {
   const sources = new Map([
     ['package.json', '{"scripts":{"audit":"bash scripts/first.bash"}}'],

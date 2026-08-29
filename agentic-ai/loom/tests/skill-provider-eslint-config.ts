@@ -63,6 +63,15 @@ const PLAYWRIGHT_CONFIG_NAMES = [
   'playwright.config.cjs',
 ] as const;
 
+const WRAPPER_BOOLEAN_OPTIONS = new Set(
+  '--bun --no-install --verbose --silent --yes -y --no --workspaces --include-workspace-root'.split(
+    ' ',
+  ),
+);
+const WRAPPER_VALUE_OPTIONS = new Set(
+  '--package -p --call -c --shell --workspace -w'.split(' '),
+);
+
 export function commandConfigurationReferences(
   request: CommandConfigurationRequest,
 ): readonly ConfigurationReference[] {
@@ -323,10 +332,13 @@ function toolInvocation([words, start]: readonly [
   const runtime = posix.basename(words[start]?.value ?? '');
   const direct = configurationTool(runtime);
   if (direct !== false) return { argumentStart: start + 1, tool: direct };
-  const wrapperTool = words[start + 1] ?? false;
-  if ((runtime === 'bunx' || runtime === 'npx') && wrapperTool !== false) {
+  const wrapperStart = wrapperToolStart([runtime, words, start + 1]);
+  if (wrapperStart !== false) {
+    const wrapperTool = words[wrapperStart];
+    if (!wrapperTool) return false;
     const wrapped = configurationTool(wrapperTool.value);
-    if (wrapped !== false) return { argumentStart: start + 2, tool: wrapped };
+    if (wrapped !== false)
+      return { argumentStart: wrapperStart + 1, tool: wrapped };
   }
   const execTool = words[start + 2] ?? false;
   if (
@@ -338,6 +350,49 @@ function toolInvocation([words, start]: readonly [
     if (wrapped !== false) return { argumentStart: start + 3, tool: wrapped };
   }
   return false;
+}
+
+function wrapperToolStart([runtime, words, start]: readonly [
+  string,
+  readonly ShellWord[],
+  number,
+]): number | false {
+  if (runtime !== 'bunx' && runtime !== 'npx') return false;
+  let index = start;
+  while (index < words.length) {
+    const word = words[index] as ShellWord;
+    if (word.dynamic) {
+      if (!words.slice(index + 1).some(isConfigurationToolWord)) return false;
+      throw new Error(
+        `Dynamic ${runtime} wrapper option is forbidden: ${word.source}`,
+      );
+    }
+    if (word.value === '--') return index + 1;
+    if (!word.value.startsWith('-') || word.value === '-') return index;
+    const option = word.value.split('=')[0] ?? '';
+    if (WRAPPER_BOOLEAN_OPTIONS.has(word.value)) {
+      index += 1;
+      continue;
+    }
+    if (!WRAPPER_VALUE_OPTIONS.has(option)) {
+      if (!words.slice(index + 1).some(isConfigurationToolWord)) return false;
+      throw new Error(`Unsupported ${runtime} wrapper option: ${word.value}`);
+    }
+    if (!word.value.includes('=')) {
+      const value = words[index + 1];
+      if (!value || value.dynamic)
+        throw new Error(
+          `Dynamic ${runtime} wrapper option value is forbidden.`,
+        );
+      index += 1;
+    }
+    index += 1;
+  }
+  return false;
+}
+
+function isConfigurationToolWord(word: ShellWord): boolean {
+  return !word.dynamic && configurationTool(word.value) !== false;
 }
 
 function configurationTool(value: string): ConfigurationTool | false {
