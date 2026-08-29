@@ -45,10 +45,12 @@ describe('authentication workflow routing', () => {
       },
     } as unknown as AuthenticationWorkflowRoutingDependencies
 
-    const response = authenticationWorkflowMessageResponse(
-      message,
-      dependencies,
-    )
+    const request: Parameters<typeof authenticationWorkflowMessageResponse>[0] =
+      {
+        message,
+        dependencies,
+      }
+    const response = authenticationWorkflowMessageResponse(request)
     await Promise.resolve()
     expect(events).toEqual([])
 
@@ -71,8 +73,13 @@ describe('authentication workflow routing', () => {
       authenticationWorkflowSnapshot: async () => ({ kind: 'no-match' }),
     } as unknown as AuthenticationWorkflowRoutingDependencies
 
+    const request: Parameters<typeof authenticationWorkflowMessageResponse>[0] =
+      {
+        message,
+        dependencies,
+      }
     await expect(
-      authenticationWorkflowMessageResponse(message, dependencies),
+      authenticationWorkflowMessageResponse(request),
     ).resolves.toEqual({
       ok: false,
       reason: 'workflow-snapshot-failed',
