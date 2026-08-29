@@ -149,12 +149,15 @@ pub(super) fn identity_indicates_one_time_code_authentication_context(identity: 
         )
 }
 pub(super) fn one_time_code_control_has_authentication_context(
-    _authentication_username: AuthenticationUsernameEvidence,
+    authentication_username: AuthenticationUsernameEvidence,
     form_identity: &str,
     destination_identity: &str,
     label: &str,
 ) -> bool {
-    [form_identity, destination_identity, label]
+    matches!(
+        authentication_username,
+        AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
+    ) || [form_identity, destination_identity, label]
         .into_iter()
         .any(identity_indicates_one_time_code_authentication_context)
 }
@@ -328,6 +331,38 @@ pub(super) fn control_destination_indicates_password_recovery_route(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn strong_username_evidence_supplies_one_time_code_authentication_context() {
+        for evidence in [
+            AuthenticationUsernameEvidence::Strong,
+            AuthenticationUsernameEvidence::Explicit,
+        ] {
+            assert!(one_time_code_control_has_authentication_context(
+                evidence, "", "", ""
+            ));
+        }
+    }
+
+    #[test]
+    fn weaker_username_evidence_still_requires_string_authentication_context() {
+        for evidence in [
+            AuthenticationUsernameEvidence::Absent,
+            AuthenticationUsernameEvidence::Generic,
+            AuthenticationUsernameEvidence::StandardsBasedEmail,
+        ] {
+            assert!(!one_time_code_control_has_authentication_context(
+                evidence, "", "", ""
+            ));
+            assert!(one_time_code_control_has_authentication_context(
+                evidence,
+                "verify-otp-form",
+                "",
+                "Continue"
+            ));
+        }
+    }
+
     #[test]
     fn unconditional_vetoes_cover_account_detail_transaction_and_termination_actions() {
         for identity in "/auth/change-email|Update username|Edit phone|Save profile|Change account details|Pay now|/checkout/confirm|Purchase|Place order|Transfer funds|Wire funds|Withdraw|Withdrawal|Deposit|Send money|Financial transaction|Authorize transaction|Transaction authorization|/transactions/123/authorize|/payments/123/confirm|/orders/123/confirm|/auth/logoff|Log off|signoff|Sign off|Lock account|Freeze session".split('|') {

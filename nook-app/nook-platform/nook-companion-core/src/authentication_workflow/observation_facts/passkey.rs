@@ -84,4 +84,49 @@ mod tests {
             &unsafe_candidate
         ));
     }
+
+    #[test]
+    fn explicitly_marked_passkey_candidates_retain_destructive_label_vetoes() {
+        for label in ["Delete passkey", "Remove security key", "Revoke device"] {
+            let candidate =
+                AuthenticationDetailedPasskeyControlCandidateObservation::ExplicitlyMarked(
+                    passkey_control(label),
+                );
+            assert!(!authentication_passkey_control_candidate_is_safe(
+                &candidate
+            ));
+        }
+    }
+
+    #[test]
+    fn passkey_candidates_require_authentication_context() {
+        let mut observation = passkey_control("Use passkey");
+        observation.authentication_username = AuthenticationUsernameEvidence::Absent;
+        observation.form_identity.clear();
+        observation.destination_identity = "https://login.example.test/".to_owned();
+        let candidate =
+            AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(observation);
+
+        assert!(!authentication_passkey_control_candidate_is_safe(
+            &candidate
+        ));
+    }
+
+    #[test]
+    fn explicitly_marked_enrollment_and_device_management_controls_are_rejected() {
+        for label in [
+            "Add passkey",
+            "Add a security key",
+            "Enroll passkey",
+            "Manage devices",
+        ] {
+            let candidate =
+                AuthenticationDetailedPasskeyControlCandidateObservation::ExplicitlyMarked(
+                    passkey_control(label),
+                );
+            assert!(!authentication_passkey_control_candidate_is_safe(
+                &candidate
+            ));
+        }
+    }
 }

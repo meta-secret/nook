@@ -252,7 +252,7 @@ mod tests {
             semantic_submit_control_count: 1,
             source_origin: "https://login.example.test".to_owned(),
             form_identity: "login-form".to_owned(),
-            destination_identity: "/auth/login".to_owned(),
+            destination_identity: "https://login.example.test/auth/login".to_owned(),
             label: "Sign in".to_owned(),
         }
     }
@@ -267,7 +267,12 @@ mod tests {
         assert!(!authentication_advance_control_is_safe(&inert));
 
         let mut registration = control;
-        registration.destination_identity = "/register".to_owned();
+        registration.destination_identity = "https://login.example.test/register".to_owned();
         assert!(!authentication_advance_control_is_safe(&registration));
+
+        let mut account_settings = login_control();
+        account_settings.destination_identity =
+            "https://login.example.test/settings/profile".to_owned();
+        assert!(!authentication_advance_control_is_safe(&account_settings));
     }
 }

@@ -342,6 +342,38 @@ pub(crate) fn authentication_passkey_control_is_safe(
     observation: &AuthenticationAdvanceControlObservation,
     explicitly_marked: bool,
 ) -> bool {
+    let label_identity = expand_identity_text(&observation.label);
+    let label_names_passkey_credential = contains_any_word(
+        &label_identity,
+        &[
+            "passkey",
+            "passkeys",
+            "pass key",
+            "pass keys",
+            "security key",
+            "security keys",
+            "webauthn",
+            "fido",
+        ],
+    );
+    let label_names_enrollment_or_management = contains_any_word(
+        &label_identity,
+        &[
+            "add",
+            "enroll",
+            "enrollment",
+            "register",
+            "registration",
+            "manage",
+            "management",
+            "settings",
+            "configure",
+        ],
+    );
+    let label_names_passkey_enrollment_or_management =
+        label_names_passkey_credential && label_names_enrollment_or_management;
+    let label_names_device_management = label_names_enrollment_or_management
+        && contains_any_word(&label_identity, &["device", "devices"]);
     if !observation.is_bounded()
         || !matches!(
             observation.actionability,
@@ -352,6 +384,9 @@ pub(crate) fn authentication_passkey_control_is_safe(
             PageControlOwnership::OwnedForm | PageControlOwnership::LocallyScoped
         )
         || (!explicitly_marked && !looks_like_passkey_control_label(&observation.label))
+        || form_identity::form_identity_indicates_destructive_action(&observation.label)
+        || label_names_passkey_enrollment_or_management
+        || label_names_device_management
         || form_identity::form_identity_indicates_destructive_action(&observation.form_identity)
         || form_identity::form_identity_indicates_non_authentication_account_management(
             &observation.form_identity,
@@ -365,6 +400,21 @@ pub(crate) fn authentication_passkey_control_is_safe(
     ) else {
         return false;
     };
+    let has_authentication_context = observation.password_field_count > 0
+        || observation.one_time_code_field_count > 0
+        || matches!(
+            observation.authentication_username,
+            AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
+        )
+        || form_identity::identity_indicates_explicit_authentication_route(
+            &observation.form_identity,
+        )
+        || form_identity::identity_indicates_explicit_authentication_route(
+            &destination.path_identity,
+        );
+    if !has_authentication_context {
+        return false;
+    }
     !form_identity::form_identity_indicates_destructive_action(&destination.route_identity)
         && !form_identity::control_destination_indicates_non_authentication_route(
             &destination.route_identity,
