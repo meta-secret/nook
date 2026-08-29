@@ -83,19 +83,25 @@ Agent count never determines PR count.
    - Receive each Team Agent's existing typed handoff directly. Do not add a
      slice-process transport or intermediate agent.
    - Aggregate each verified handoff under its assigned passive Gizmo record.
-   - Treat a trusted `agent-implement.yml` publication as the documented narrow
-     exception to the ordinary committed-handoff sequence.
-   - Require that publisher to format the isolated implementation, validate
-     its change budget and branch or PR identity, publish it, and return its
-     exact head.
+   - Treat exactly two trusted GitHub Actions publishers as narrow exceptions
+     to the ordinary committed-handoff sequence.
+   - For `agent-implement.yml`, require trusted host formatting, change-budget
+     and branch or PR identity validation, publication, and exact-head handoff.
+   - For `rust-dependency-updates.yml` through `task ci-agent:fix`, require the
+     exact `CI_AGENT_FIX_PROFILE=rust-dependency-update` profile, an isolated
+     exact branch or PR identity, and dependency-update validation remotely
+     inside trusted GitHub Actions before publication.
+   - Require the dependency-update harness to publish and return the exact head
+     to Gizmo. Do not treat its remote pre-publication validation as a
+     developer-host local gate.
 5. **Integrate accepted commits.**
    - Integrate in deterministic dependency order.
    - Bind each downstream task to the exact integrated commit.
    - Keep shared files and integrated or external delivery-state mutations
      serialized under Gizmo.
 6. **Prepare the integrated head.**
-   - For an accepted trusted `agent-implement.yml` publication, continue from
-     its exact published head. Do not require a duplicate integration commit.
+   - For either accepted trusted publication, continue from its exact published
+     head. Do not require a duplicate integration commit.
    - Immediately resume Gizmo ownership of PR, review, and validation work.
    - Do not add advisory local review after the publisher handoff.
    - Use immediate focused remote evidence or complete exact-head validation.

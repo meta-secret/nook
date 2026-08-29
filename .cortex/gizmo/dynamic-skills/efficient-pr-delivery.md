@@ -45,13 +45,16 @@ Delivery rules:
 - Do not run `task check` or `task ci:pr` as a local product gate.
 - Do not run broad local builds, tests, e2e, container product gates, advisory
   review, or duplicate hosted-check mirrors before push.
-- The trusted `agent-implement.yml` publisher is the sole exception to ordinary
-  worker commit handoffs. Trusted host tooling formats the isolated change,
-  validates its change budget and branch or PR identity, publishes it, and
-  returns the exact head to Gizmo.
-- Gizmo continues that published head without duplicate integration or advisory
-  local review. Its immediate hosted path enforces the UI-demo and other product
-  or publication contracts through Repository policy and PR verification.
+- Exactly two trusted GitHub Actions publishers bypass ordinary worker commit
+  handoffs.
+  - `agent-implement.yml` formats, budget- and identity-validates, publishes,
+    and returns its exact isolated head.
+  - `rust-dependency-updates.yml` runs required integrated validation remotely
+    inside trusted GitHub Actions before `task ci-agent:fix` with
+    `CI_AGENT_FIX_PROFILE=rust-dependency-update` publishes and returns its
+    exact isolated head. This is not a developer-host local gate.
+- Neither bounded editor has independent Git authority. Gizmo continues either
+  published head without duplicate integration or advisory local review.
 - `task loom:pr-land CONFIG=<pr-land-merge-check-request.yaml>` summarizes
   readiness.
 - Loom never squash-merges.

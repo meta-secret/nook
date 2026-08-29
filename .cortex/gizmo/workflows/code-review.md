@@ -19,13 +19,21 @@ Review policy is explicit:
 Do not require advisory local review before the first push or after a worker
 handoff.
 
-### Trusted automated publisher
+### Trusted automated publishers
 
-The no-local-review rule also applies when the trusted `agent-implement.yml`
-publisher formats, budget- and identity-validates, commits, and publishes an
-isolated implementation.
-That publisher returns the exact published head directly to Gizmo. Gizmo then
-owns continuing PR, review, validation, readiness, and merge work.
+The no-local-review rule applies to exactly two trusted GitHub Actions
+publishers:
+
+- `agent-implement.yml` formats, budget- and identity-validates, commits, and
+  publishes an isolated implementation.
+- `rust-dependency-updates.yml` runs required integrated dependency validation
+  remotely inside trusted GitHub Actions before `task ci-agent:fix` with
+  `CI_AGENT_FIX_PROFILE=rust-dependency-update` commits and publishes its
+  isolated dependency-update branch.
+
+Neither bounded editor has independent Git or external delivery authority.
+Each publisher returns the exact published head directly to Gizmo. Gizmo then
+owns continuing review, validation, readiness, and merge work.
 
 ### Ordinary worker handoff
 

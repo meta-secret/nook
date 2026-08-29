@@ -63,10 +63,10 @@ ownership until merge or a concrete blocked handoff:
    - Team workers own formatter mutations in their allowed source or Cortex
      files and return fresh formatted commits.
    - Gizmo may commit deterministic integration-only state.
-   - The trusted `agent-implement.yml` publisher is a narrow exception. It
-     formats its isolated implementation, validates the change budget and
-     branch or PR identity, commits, and publishes before returning the exact
-     head to Gizmo.
+   - Exactly two trusted GitHub Actions publishers are narrow exceptions:
+     `agent-implement.yml` and `rust-dependency-updates.yml` through
+     `task ci-agent:fix` with
+     `CI_AGENT_FIX_PROFILE=rust-dependency-update`.
 4. **Promptly push and create or update the PR.** Do not add another local
    product or review gate.
 5. **Request review and validate on GitHub Actions:**
@@ -390,24 +390,32 @@ file remains provisional and untracked.
 
 ### 3. Push an exact remote-executable commit
 
-#### Trusted automated publisher exception
+#### Trusted automated publisher exceptions
 
-The explicitly dispatched `agent-implement.yml` path is the sole trusted
-exception to ordinary worker commit handoffs. Its bounded editor cannot use Git
-or mutate external delivery state. Trusted host tooling owns these publication
-steps after the editor exits:
+Exactly two trusted GitHub Actions publishers bypass the ordinary worker
+commit-handoff integration step. Their bounded editors have no independent Git
+or external delivery authority.
 
-1. Format the isolated implementation.
-2. Validate the change budget and branch or PR identity.
-3. Commit and publish the implementation branch and PR.
-4. Verify and return the exact published head to Gizmo.
+- **`agent-implement.yml`**
+  1. Trusted host tooling formats the isolated implementation.
+  2. It validates the change budget and branch or PR identity.
+  3. It commits and publishes the implementation branch and PR.
+  4. It verifies and returns the exact published head to Gizmo.
+  5. Hosted Repository policy and PR verification enforce the UI-demo and
+     other product or publication contracts after publication.
+- **`rust-dependency-updates.yml` through `task ci-agent:fix` with
+  `CI_AGENT_FIX_PROFILE=rust-dependency-update`**
+  1. The trusted GitHub Actions job preserves the isolated exact branch or PR
+     identity.
+  2. It runs required integrated dependency-update validation remotely inside
+     that job before publication. This is not a developer-host local gate.
+  3. The trusted harness commits and publishes the dependency-update branch and
+     PR.
+  4. It verifies and returns the exact published head to Gizmo.
 
-Gizmo continues that PR from the returned head. It does not require a duplicate
-integration commit or advisory local review. Gizmo immediately selects the
-focused-remote or complete-validation path for that pushed head and retains
-review, repair, readiness, and merge ownership. Hosted Repository policy and
-PR verification enforce the UI-demo and other product or publication
-contracts.
+Gizmo continues either PR from the returned head. It does not require a
+duplicate integration commit or advisory local review. Gizmo owns continuing
+review, validation, repair, readiness, and merge work.
 
 Prepare an exact remote commit:
 

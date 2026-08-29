@@ -18,6 +18,15 @@ Load only:
 Do not load implementation-team graphs into Gizmo's context. Do not pass Gizmo
 context to implementation workers.
 
+## Bounded editor boundary
+
+This editor may change only the working tree. Do not run Git, Task, builds,
+tests, validation, or external network operations. Do not inspect or use
+publication credentials. The trusted host detects changes after this editor
+exits, runs the fixed integrated validation sequence, and only then commits and
+publishes the isolated dependency-update branch. This boundary is selected only
+by the exact trusted profile `CI_AGENT_FIX_PROFILE=rust-dependency-update`.
+
 ## Coordination procedure
 
 1. Record the exact 40-character baseline commit.
@@ -32,8 +41,9 @@ context to implementation workers.
 5. Assign each dependency, lockfile, source, and test task to exactly one
    semantic team identity.
 6. Integrate only verified commit handoffs.
-7. Run integrated validation through repository Task targets.
-8. Return the branch to the normal Gizmo PR-delivery workflow.
+7. Finish the bounded working-tree edit without running validation or Git.
+8. Let the trusted host validate and publish before returning the exact head to
+   the normal Gizmo PR-delivery workflow.
 
 Gizmo selects each team through the canonical mapping authority at
 `.cortex/gizmo/workflows/team-oriented-development.md`.
@@ -57,13 +67,15 @@ The dependency-specific contract also names:
 
 The worker loads only its named team context and task-relevant authorities. It
 must not load Gizmo context or another team's graph. It preserves standard
-Cargo version strings, updates only owned lockfiles, makes the smallest API
-migration, and returns a commit handoff with focused tests.
+Cargo version strings, updates only owned lockfiles, and makes the smallest API
+migration. In this trusted publisher profile, the bounded editor returns
+working-tree changes and a focused summary without using Git or Task.
 
-## Integrated validation
+## Trusted host integrated validation
 
-Gizmo selects validation after integrating all owner handoffs. The complete
-dependency mission normally includes:
+Do not run these commands in the bounded editor. After editor completion and
+change detection, trusted host code runs exactly this sequence before any
+commit or push:
 
 ```bash
 WASM_BUILD_MODE=prod task ci:pr:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
@@ -71,8 +83,14 @@ task docker:ecosystem:fuzz FUZZ_SECONDS=20
 task hive:verify
 ```
 
-This covers every local-provider Playwright e2e spec, and the
-   extension e2e. The fuzz and Hive targets validate their separate workspaces.
+This validation runs remotely inside trusted GitHub Actions, not as a
+developer-host local gate. The validation subprocess does not receive Cursor
+or GitHub publication credentials. The trusted harness restores publication
+credentials only after validation succeeds.
 
-Repeat only the applicable failing scope after a team-owned correction. Never
-kill the Docker daemon. Do not commit secrets, `.env`, credentials, or raw logs.
+The sequence covers every local-provider Playwright e2e spec and extension
+e2e. The fuzz and Hive targets validate their separate workspaces.
+
+The bounded editor must not repeat a failing command. Return the correction and
+let trusted host code rerun the fixed sequence. Never kill the Docker daemon.
+Do not commit secrets, `.env`, credentials, or raw logs.

@@ -148,21 +148,32 @@ pre-push hygiene mutates team-owned source or Cortex content, Gizmo returns
 that diff to the responsible team. The team supplies a fresh formatted commit
 before Gizmo reintegrates and reruns pre-push hygiene.
 
-The trusted `agent-implement.yml` publisher is the sole exception to the
-ordinary committed-handoff sequence. Its bounded editor has no Git or external
-delivery authority. After editing ends, trusted host tooling must:
+Exactly two tightly scoped trusted GitHub Actions publishers are exceptions to
+the ordinary committed-handoff sequence:
 
-- format the isolated implementation;
-- validate its change budget and branch or PR identity;
-- commit and publish the isolated implementation; and
-- return the exact published head to Gizmo.
+- **`agent-implement.yml`**
+  - Its bounded editor has no Git or external delivery authority.
+  - Trusted host tooling formats the isolated implementation.
+  - It validates the change budget and branch or PR identity.
+  - It commits, publishes, and returns the exact published head to Gizmo.
+  - Gizmo immediately dispatches focused remote evidence or complete exact-head
+    validation. Hosted Repository policy and PR verification enforce the
+    UI-demo and other product or publication contracts.
+- **`rust-dependency-updates.yml` through `task ci-agent:fix` with
+  `CI_AGENT_FIX_PROFILE=rust-dependency-update`**
+  - Its bounded editors and ordinary workers have no independent Git or
+    external delivery authority.
+  - The trusted GitHub Actions job preserves the isolated exact branch or PR
+    identity.
+  - It runs its required integrated dependency-update validation remotely
+    inside that job before publication. This is not a developer-host local
+    gate.
+  - The trusted harness commits, publishes, and returns the exact published
+    head to Gizmo.
 
-This exception does not grant the bounded editor or an ordinary worker
-publication authority. After publication, Gizmo owns continuing PR, review,
-validation, readiness, and merge work. Gizmo immediately dispatches focused
-remote evidence or complete exact-head validation. Hosted Repository policy
-and PR verification enforce the UI-demo and other product or publication
-contracts.
+Neither exception grants publication authority to an ordinary worker. After
+either publication, Gizmo owns continuing review, validation, readiness, and
+merge work.
 
 A repository-reading read-only provider satisfies its consumer edge only when
 it is:
