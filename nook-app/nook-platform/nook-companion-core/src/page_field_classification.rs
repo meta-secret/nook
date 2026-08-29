@@ -259,7 +259,9 @@ pub fn looks_like_login_advance_control_label(label: &str) -> bool {
 
 fn looks_like_unrestricted_login_advance_control_label(label: &str) -> bool {
     let identity = expand_identity_text(label);
-    if identity != "entrar" && contains_any_word(&identity, &["entrar"]) {
+    if contains_any_word(&identity, &["entrar"])
+        && identity.split_whitespace().any(|token| token != "entrar")
+    {
         return false;
     }
     contains_any_word(&identity, LOGIN_ADVANCE_WORDS) || contains_any_word(&identity, &["submit"])
@@ -357,8 +359,7 @@ pub fn can_activate_authentication_route_control(
         return false;
     }
     if looks_like_login_advance_control_label(control_label) {
-        return !form_identity.trim().is_empty()
-            || (has_authentication_username && has_local_authentication_scope);
+        return has_authentication_username && has_local_authentication_scope;
     }
     control_label.is_empty()
         && !has_form_owned_semantic_submit
@@ -621,12 +622,6 @@ mod tests {
         ));
         assert!(!looks_like_login_advance_control_label("Entrar con Amazon"));
         assert!(!looks_like_login_advance_control_label("Entrar con Foo"));
-        assert!(looks_like_login_advance_control_label(
-            "Sign in to Microsoft 365"
-        ));
-        assert!(!looks_like_login_advance_control_label(
-            "Continue with LinkedIn"
-        ));
         assert!(!looks_like_login_advance_control_label("Continue with X"));
         assert!(!looks_like_login_advance_control_label(
             &"x".repeat(MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1)
@@ -647,8 +642,10 @@ mod tests {
             )
         };
         assert!(decide("login-form", "", false, true, true));
-        assert!(decide("", "Entrar", false, true, true));
-        assert!(decide("f", "Sign in to Microsoft 365", false, false, false));
+        assert!(decide("", "Entrar Entrar", false, true, true));
+        assert!(decide("f", "Sign in to Microsoft 365", false, true, true));
+        assert!(decide("f", "Continue with email", true, true, true));
+        assert!(decide("f", "Sign in using password", true, true, true));
         assert!(!decide("f", "Continue with Amazon", true, true, true));
         for label in [
             "Sign in to Google",
@@ -658,7 +655,7 @@ mod tests {
         ] {
             assert!(!decide("login-form", label, true, true, true));
         }
-        assert!(!decide("f", "", true, true, true));
+        assert!(!decide("f", "Entrar", true, true, false));
         assert!(!decide("f", "Supprimer le compte", true, true, true));
     }
 

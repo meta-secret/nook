@@ -51,6 +51,7 @@ fn has_open_ended_provider_selection_grammar(identity: &str) -> bool {
             *token,
             "with" | "using" | "via" | "use" | "choose" | "select"
         ) && index + 1 < tokens.len()
+            && !matches!(&tokens[index + 1..], ["email" | "password"])
     })
 }
 

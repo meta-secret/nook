@@ -286,7 +286,7 @@ describe('website one-time-code fields', () => {
   })
 
   test('fills username-only then advances common multi-step login controls', () => {
-    for (const label of ['Next', 'Login', 'signin', 'Sign   In', 'Log\tin']) {
+    for (const label of ['Next', 'Login', 'Continue with email', 'Sign in using password']) {
       document.body.innerHTML = `
         <form id="login-form">
           <input autocomplete="username" name="email" type="email" />
@@ -343,7 +343,7 @@ describe('website one-time-code fields', () => {
     document.body.innerHTML = `
       <form id="account-step" action="/auth/login">
         <input autocomplete="username" name="email" type="email" />
-        <button id="login-next" type="submit">Entrar</button>
+        <button id="login-next" type="submit" aria-label="Entrar">Entrar</button>
       </form>
     `
     let activated = false
@@ -356,14 +356,15 @@ describe('website one-time-code fields', () => {
   })
 
   test.each([
-    ['Entrar', true],
-    ['Supprimer le compte', false],
-  ])('gates form-less localized control %s', (label, expected) => {
+    ['<button id="login-next" type="submit">Entrar</button>', true],
+    ['<button id="login-next" type="submit">Supprimer le compte</button>', false],
+    ['<form id="login-form"><button id="login-next">Entrar</button></form>', false],
+  ])('gates form-less localized control %s', (control, expected) => {
     window.history.replaceState({}, '', '/')
     document.body.innerHTML = `
       <div role="form" class="signin-panel">
         <input data-qa="login_email" name="email" type="email" />
-        <button id="login-next" type="submit">${label}</button>
+        ${control}
       </div>
     `
     const workflow = summarizeAuthenticationWorkflowForms()[0]

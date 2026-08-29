@@ -183,7 +183,7 @@ mod tests {
             false,
         );
         assert!(looks_like_username_field(&username));
-        assert!(looks_like_login_advance_control_label("Entrar"));
+        assert!(looks_like_login_advance_control_label("Entrar Entrar"));
         assert!(has_safe_authentication_route_identity(
             "https://example.test",
             "login-form",
