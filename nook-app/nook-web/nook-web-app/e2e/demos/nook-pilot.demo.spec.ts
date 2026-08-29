@@ -352,7 +352,7 @@ test('fill a Namecheap-like OTP challenge through Nook Pilot', async ({
   await demoBeat(page)
 })
 
-test('advance a Microsoft-like email-first Login control through Nook Pilot', async ({
+test('advance a branded Microsoft email-first control through Nook Pilot', async ({
   page,
 }) => {
   const messages = await loadPilotMessages()
@@ -418,7 +418,7 @@ test('advance a Microsoft-like email-first Login control through Nook Pilot', as
               placeholder="Email, phone, or Skype"
               aria-label="Enter your email, phone, or Skype."
             />
-            <button type="button" id="idSIButton9">Login</button>
+            <button type="button" id="idSIButton9">Sign in to Microsoft 365</button>
           </form>
           <p data-testid="advance-status"></p>
         </main>

@@ -286,7 +286,14 @@ describe('website one-time-code fields', () => {
   })
 
   test('fills username-only then advances common multi-step login controls', () => {
-    for (const label of ['Next', 'Login', 'signin', 'Sign   In', 'Log\tin']) {
+    for (const label of [
+      'Next',
+      'Login',
+      'signin',
+      'Sign   In',
+      'Log\tin',
+      'Sign in to Microsoft 365',
+    ]) {
       document.body.innerHTML = `
         <form id="login-form">
           <input autocomplete="username" name="email" type="email" />
@@ -315,7 +322,8 @@ describe('website one-time-code fields', () => {
   test.each([
     ['password recovery', 'Continue to reset password'],
     ['registration', 'Continue to create account'],
-    ['external provider', 'Continue with Google'],
+    ['Google provider selector', 'Continue Google'],
+    ['Amazon provider selector', 'Continue with Amazon'],
     ['destructive action', 'Continue to delete account'],
   ])('skips %s controls before advancing login', (_, routeLabel) => {
     document.body.innerHTML = `
@@ -338,11 +346,11 @@ describe('website one-time-code fields', () => {
     expect(activatedControls).toEqual(['login-next'])
   })
 
-  test('advances a username-only login with a safe resolved route', () => {
+  test('advances a localized semantic submit through a safe login route', () => {
     document.body.innerHTML = `
       <form id="account-step" action="/auth/login">
         <input autocomplete="username" name="email" type="email" />
-        <button id="login-next" type="submit">Continue</button>
+        <button id="login-next" type="submit">Entrar</button>
       </form>
     `
     let activated = false
@@ -351,6 +359,31 @@ describe('website one-time-code fields', () => {
     })
 
     expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
+    expect(activated).toBe(true)
+  })
+
+  test('advances a form-less semantic submit in its local auth scope', () => {
+    document.body.innerHTML = `
+      <div role="form" class="signin-panel">
+        <input data-qa="login_email" name="email" type="email" />
+        <button id="login-next" type="submit">Sign In</button>
+      </div>
+    `
+    const workflow = summarizeAuthenticationWorkflowForms()[0]
+    expect(workflow?.formScope.kind).toBe(PasswordFormScopeKind.Unowned)
+    let activated = false
+    document.querySelector('#login-next')?.addEventListener('click', () => {
+      activated = true
+    })
+    const submissionArgs: Parameters<typeof submitLoginForm>[0] = {
+      kind: PasswordFormQueryKind.Scoped,
+      root: workflow?.root ?? document,
+      formScope: workflow?.formScope ?? {
+        kind: PasswordFormScopeKind.Unowned,
+      },
+    }
+
+    expect(submitLoginForm(submissionArgs)).toBe(true)
     expect(activated).toBe(true)
   })
 
