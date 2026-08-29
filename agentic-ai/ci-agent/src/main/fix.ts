@@ -37,8 +37,8 @@ export enum CiAgentFixProfile {
 }
 
 export const CI_FIX_SKIPPED = { kind: "skipped" } as const;
-export type CiFixOutcome =
-  typeof CI_FIX_SKIPPED | { headSha: string; kind: "published" };
+export type PublishedCiFixOutcome = { headSha: string; kind: "published" };
+export type CiFixOutcome = typeof CI_FIX_SKIPPED | PublishedCiFixOutcome;
 
 const VALIDATION_ENV_ALLOWLIST = new Set([
   "BUILDKIT_PROGRESS",
@@ -513,14 +513,6 @@ export async function runRustDependencyUpdateValidation(
   }
 }
 
-export async function validateThenPublish(
-  validate: () => Promise<void>,
-  publish: () => Promise<void>,
-): Promise<void> {
-  await validate();
-  await publish();
-}
-
 type PublishedFixIdentity = {
   actualBaseRef: string;
   actualHeadRef: string;
@@ -599,27 +591,32 @@ async function verifyLiveFixPublication(args: {
   octokit: ReturnType<typeof createOctokit>;
   prNumber: number;
   repoRef: ReturnType<typeof parseRepository>;
-}): Promise<string> {
-  return verifyPublishedFix({
-    expectedBaseRef: "main",
-    expectedHeadRef: args.fixBranch,
-    ...(args.expectedHeadSha ? { expectedHeadSha: args.expectedHeadSha } : {}),
-    expectedPrNumber: args.prNumber,
-    fetchPullRequest: async () => {
-      const { data } = await args.octokit.rest.pulls.get({
-        ...args.repoRef,
-        pull_number: args.prNumber,
-      });
-      return data;
-    },
-    fetchRemoteHeadSha: async () => {
-      const { data } = await args.octokit.rest.repos.getBranch({
-        ...args.repoRef,
-        branch: args.fixBranch,
-      });
-      return data.commit.sha;
-    },
-  });
+}): Promise<PublishedCiFixOutcome> {
+  return {
+    headSha: await verifyPublishedFix({
+      expectedBaseRef: "main",
+      expectedHeadRef: args.fixBranch,
+      ...(args.expectedHeadSha
+        ? { expectedHeadSha: args.expectedHeadSha }
+        : {}),
+      expectedPrNumber: args.prNumber,
+      fetchPullRequest: async () => {
+        const { data } = await args.octokit.rest.pulls.get({
+          ...args.repoRef,
+          pull_number: args.prNumber,
+        });
+        return data;
+      },
+      fetchRemoteHeadSha: async () => {
+        const { data } = await args.octokit.rest.repos.getBranch({
+          ...args.repoRef,
+          branch: args.fixBranch,
+        });
+        return data.commit.sha;
+      },
+    }),
+    kind: "published",
+  };
 }
 
 export async function runCiFix(): Promise<CiFixOutcome> {
@@ -645,15 +642,12 @@ export async function runCiFix(): Promise<CiFixOutcome> {
   let outcome: CiFixOutcome;
   if (openPr.kind === OpenPrLookupKind.Found) {
     prNumber = openPr.number;
-    outcome = {
-      headSha: await verifyLiveFixPublication({
-        fixBranch,
-        octokit,
-        prNumber,
-        repoRef,
-      }),
-      kind: "published",
-    };
+    outcome = await verifyLiveFixPublication({
+      fixBranch,
+      octokit,
+      prNumber,
+      repoRef,
+    });
     log.info(
       `Existing PR #${prNumber} exact head ${outcome.headSha} verified and handed to the continuing Gizmo owner`,
     );
@@ -696,16 +690,12 @@ export async function runCiFix(): Promise<CiFixOutcome> {
       if (!baseline) {
         throw new Error("Rust dependency update baseline was not captured");
       }
-      await validateThenPublish(
-        async () => {
-          await assertBaselineUnchanged(repoRoot, baseline);
-          await assertTrustedChangeSet(repoRoot, baseline);
-          await runValidationWithoutPublicationCredentials(repoRoot);
-          await assertBaselineUnchanged(repoRoot, baseline);
-          await assertTrustedChangeSet(repoRoot, baseline);
-        },
-        () => pushFixBranch(repoRoot, fixBranch, runId),
-      );
+      await assertBaselineUnchanged(repoRoot, baseline);
+      await assertTrustedChangeSet(repoRoot, baseline);
+      await runValidationWithoutPublicationCredentials(repoRoot);
+      await assertBaselineUnchanged(repoRoot, baseline);
+      await assertTrustedChangeSet(repoRoot, baseline);
+      await pushFixBranch(repoRoot, fixBranch, runId);
     } else {
       await pushFixBranch(repoRoot, fixBranch, runId);
     }
@@ -724,16 +714,13 @@ export async function runCiFix(): Promise<CiFixOutcome> {
       );
     }
     const localHead = await revParse(repoRoot, "HEAD");
-    outcome = {
-      headSha: await verifyLiveFixPublication({
-        expectedHeadSha: localHead,
-        fixBranch,
-        octokit,
-        prNumber,
-        repoRef,
-      }),
-      kind: "published",
-    };
+    outcome = await verifyLiveFixPublication({
+      expectedHeadSha: localHead,
+      fixBranch,
+      octokit,
+      prNumber,
+      repoRef,
+    });
     log.info(
       `PR #${prNumber} exact head ${outcome.headSha} verified and handed to the continuing Gizmo owner`,
     );

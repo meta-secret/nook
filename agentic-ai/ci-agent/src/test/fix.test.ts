@@ -24,12 +24,14 @@ import {
   resolveCiAgentFixProfile,
   runValidationCommand,
   runRustDependencyUpdateValidation,
-  validateThenPublish,
   verifyPublishedFix,
   withValidationEnvironment,
 } from "../main/fix.js";
 import type { CiFixOutcome } from "../main/fix.js";
 import { AgentIsolation } from "../main/run-agent.js";
+
+const SHA = "a".repeat(40);
+const OTHER_SHA = "b".repeat(40);
 
 const execFileAsync = promisify(execFile);
 
@@ -138,22 +140,6 @@ test("validation strips secrets and forces Docker workloads offline", async () =
   }
 });
 
-test("validation failure prevents publication", async () => {
-  let published = false;
-  await assert.rejects(
-    validateThenPublish(
-      async () => {
-        throw new Error("validation failed");
-      },
-      async () => {
-        published = true;
-      },
-    ),
-    /validation failed/,
-  );
-  assert.equal(published, false);
-});
-
 test("streamed validation runner propagates exit and signal failures", async () => {
   const options = { cwd: process.cwd(), env: process.env };
   await assert.rejects(
@@ -171,16 +157,10 @@ test("streamed validation runner propagates exit and signal failures", async () 
 });
 
 test("baseline HEAD and index mutations fail closed", () => {
-  const baseline = {
-    headSha: "a".repeat(40),
-    indexTreeSha: "b".repeat(40),
-  };
+  const baseline = { headSha: SHA, indexTreeSha: OTHER_SHA };
   for (const current of [
-    {
-      currentHeadSha: "c".repeat(40),
-      currentIndexTreeSha: baseline.indexTreeSha,
-    },
-    { currentHeadSha: baseline.headSha, currentIndexTreeSha: "d".repeat(40) },
+    { currentHeadSha: OTHER_SHA, currentIndexTreeSha: baseline.indexTreeSha },
+    { currentHeadSha: baseline.headSha, currentIndexTreeSha: SHA },
   ])
     assert.throws(
       () => assertRepositoryBaselineUnchanged({ baseline, ...current }),
@@ -279,30 +259,27 @@ test("persisted Git authentication config fails without exposing values", () => 
 const PUBLISHED_IDENTITY = {
   actualBaseRef: "main",
   actualHeadRef: "fix/rust-dependencies-42",
-  actualHeadSha: "a".repeat(40),
+  actualHeadSha: SHA,
   actualPrNumber: 1208,
-  actualRemoteHeadSha: "a".repeat(40),
+  actualRemoteHeadSha: SHA,
   expectedBaseRef: "main",
   expectedHeadRef: "fix/rust-dependencies-42",
-  expectedHeadSha: "a".repeat(40),
+  expectedHeadSha: SHA,
   expectedPrNumber: 1208,
 };
 
 test("new publication exact identity succeeds and mismatches fail closed", () => {
-  const published: CiFixOutcome = {
-    headSha: "a".repeat(40),
-    kind: "published",
-  };
+  const published: CiFixOutcome = { headSha: SHA, kind: "published" };
   assert.deepEqual(
     [CI_FIX_SKIPPED.kind, published.kind],
     ["skipped", "published"],
   );
-  assert.equal(assertPublishedFixIdentity(PUBLISHED_IDENTITY), "a".repeat(40));
+  assert.equal(assertPublishedFixIdentity(PUBLISHED_IDENTITY), SHA);
   const mismatches = [
     { actualPrNumber: 1209 },
     { actualHeadRef: "fix/other" },
-    { actualHeadSha: "b".repeat(40) },
-    { actualRemoteHeadSha: "b".repeat(40) },
+    { actualHeadSha: OTHER_SHA },
+    { actualRemoteHeadSha: OTHER_SHA },
     { actualBaseRef: "release" },
   ] as const;
   for (const mismatch of mismatches)
@@ -313,7 +290,7 @@ test("new publication exact identity succeeds and mismatches fail closed", () =>
 });
 
 test("existing PR verification binds PR and remote branch identity", async () => {
-  const headSha = "a".repeat(40);
+  const headSha = SHA;
   const verify = (remoteHeadSha: string) =>
     verifyPublishedFix({
       expectedBaseRef: "main",
@@ -327,5 +304,5 @@ test("existing PR verification binds PR and remote branch identity", async () =>
       fetchRemoteHeadSha: async () => remoteHeadSha,
     });
   assert.equal(await verify(headSha), headSha);
-  await assert.rejects(verify("b".repeat(40)), /head SHA changed/);
+  await assert.rejects(verify(OTHER_SHA), /head SHA changed/);
 });
