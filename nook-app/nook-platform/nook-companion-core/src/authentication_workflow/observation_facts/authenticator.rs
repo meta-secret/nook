@@ -23,6 +23,15 @@ pub enum AuthenticationBackupCodesObservation {
     Present,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum AuthenticationPasskeyAccountAvailability {
+    #[default]
+    Unavailable,
+    Ready,
+}
+
 /// Classify non-secret recovery copy before consent. Candidate extraction is deferred
 /// until the user approves the save action.
 #[must_use]
@@ -64,6 +73,8 @@ pub struct AuthenticationAuthenticatorObservationFacts {
     /// Bounded, non-secret heading/action copy; recovery candidates are never transported here.
     pub backup_codes_copy: String,
     pub passkey_control: AuthenticationPasskeyControlObservation,
+    #[serde(default)]
+    pub passkey_account_availability: AuthenticationPasskeyAccountAvailability,
     pub matching_passkey_account_count: u32,
     /// Detailed evidence is classified in Rust; the legacy presence flag is ignored.
     #[serde(default)]
@@ -92,7 +103,21 @@ impl AuthenticationAuthenticatorObservationFacts {
     }
 
     pub(super) fn passkey_control_present(&self) -> bool {
-        self.detailed_passkey_control.is_safe()
+        matches!(
+            self.passkey_account_availability,
+            AuthenticationPasskeyAccountAvailability::Ready
+        ) && self.detailed_passkey_control.is_safe()
+    }
+
+    pub(super) const fn matching_passkey_account_count(&self) -> u32 {
+        if matches!(
+            self.passkey_account_availability,
+            AuthenticationPasskeyAccountAvailability::Ready
+        ) {
+            self.matching_passkey_account_count
+        } else {
+            0
+        }
     }
 }
 

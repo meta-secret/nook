@@ -26,7 +26,8 @@ pub use observation_facts::{
     AuthenticationDetailedPasskeyControlCandidateObservation,
     AuthenticationDetailedPasskeyControlObservation, AuthenticationFieldObservationFacts,
     AuthenticationPageObservationFacts, AuthenticationPageObservationFactsBatch,
-    AuthenticationPasskeyControlObservation, authentication_passkey_control_candidate_is_safe,
+    AuthenticationPasskeyAccountAvailability, AuthenticationPasskeyControlObservation,
+    authentication_passkey_control_candidate_is_safe,
     authentication_passkey_control_evidence_is_safe,
     classify_authentication_backup_codes_observation,
 };

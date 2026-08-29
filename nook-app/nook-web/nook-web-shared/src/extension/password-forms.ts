@@ -541,6 +541,7 @@ export function authenticationPageObservationFacts({
         passkeyControls.length > 0
           ? passkeyControlPresent
           : passkeyControlAbsent,
+      passkeyAccountAvailability: "unavailable",
       matchingPasskeyAccountCount: 0,
       detailedPasskeyControl,
     },

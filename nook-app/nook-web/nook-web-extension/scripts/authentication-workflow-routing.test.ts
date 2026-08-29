@@ -13,6 +13,7 @@ const message = {
       {
         authenticator: {
           detailedPasskeyControl: { control: 'candidate' },
+          passkeyAccountAvailability: 'unavailable',
           matchingPasskeyAccountCount: 0,
         },
       },
@@ -96,5 +97,33 @@ describe('authentication workflow routing', () => {
       ok: false,
       reason: 'workflow-snapshot-failed',
     })
+  })
+
+  test('preserves non-passkey classification when lookup is unavailable', async () => {
+    const observedAvailability: string[] = []
+    const dependencies = {
+      companionWasmReady: Promise.resolve(),
+      authenticationPasskeyEvidenceIsSafe: () => true,
+      matchingPasskeyAvailabilityForOriginSafe: async () => ({
+        kind: 'unavailable',
+      }),
+      loginMatchAvailabilityForOriginSafe: async () => ({
+        kind: 'unavailable',
+      }),
+      authenticationWorkflowSnapshot: async ({ observations }) => {
+        observedAvailability.push(
+          observations[0]?.authenticator.passkeyAccountAvailability ?? '',
+        )
+        return { kind: 'no-match' }
+      },
+    } as unknown as AuthenticationWorkflowRoutingDependencies
+
+    await expect(
+      authenticationWorkflowMessageResponse(message, dependencies),
+    ).resolves.toEqual({
+      workflow: { ok: true },
+      loginMatches: { kind: 'unavailable' },
+    })
+    expect(observedAvailability).toEqual(['unavailable'])
   })
 })

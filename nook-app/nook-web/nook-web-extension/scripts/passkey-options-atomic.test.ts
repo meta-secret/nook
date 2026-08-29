@@ -87,7 +87,7 @@ describe('website passkey options', () => {
     expect(sendSessionMessage).toHaveBeenCalledTimes(3)
   })
 
-  test('does not classify unavailable passkey lookup as zero matches', async () => {
+  test('classifies unavailable passkey lookup as closed passkey evidence', async () => {
     const {
       MatchingPasskeyAvailabilityKind,
       passkeyAccountCountForClassification,
@@ -97,8 +97,16 @@ describe('website passkey options', () => {
       availability: { kind: MatchingPasskeyAvailabilityKind.Unavailable },
     }
 
-    expect(() => passkeyAccountCountForClassification(args)).toThrow(
-      'Passkey availability is required for classification.',
-    )
+    expect(passkeyAccountCountForClassification(args)).toBe(0)
+
+    expect(
+      passkeyAccountCountForClassification({
+        needsPasskeyLookup: true,
+        availability: {
+          kind: MatchingPasskeyAvailabilityKind.Ready,
+          accountCount: 0,
+        },
+      }),
+    ).toBe(0)
   })
 })

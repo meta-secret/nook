@@ -34,6 +34,7 @@ const validMessage = {
           authenticatorSetup: 'absent',
           backupCodesCopy: '',
           passkeyControl: 'absent',
+          passkeyAccountAvailability: 'unavailable',
           matchingPasskeyAccountCount: 0,
           detailedPasskeyControl: { kind: 'absent' },
         },
@@ -210,6 +211,7 @@ describe('authentication workflow snapshot messages', () => {
               ...validMessage.payload.observations[0],
               authenticator: {
                 ...validMessage.payload.observations[0].authenticator,
+                passkeyAccountAvailability: 'ready',
                 matchingPasskeyAccountCount: 101,
               },
             },

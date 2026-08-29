@@ -71,7 +71,7 @@ export function passkeyAccountCountForClassification({
 }: PasskeyAccountCountForClassificationArgs): number {
   if (!needsPasskeyLookup) return 0
   if (availability.kind === MatchingPasskeyAvailabilityKind.Unavailable) {
-    throw new Error('Passkey availability is required for classification.')
+    return 0
   }
   return availability.accountCount
 }
@@ -96,7 +96,9 @@ async function matchingPasskeyAvailabilityForOrigin({
   }
   if (!hostname) return unavailable
   const grants = await passkeyPairingGrants()
-  if (grants.length === 0) return unavailable
+  if (grants.length === 0) {
+    return { kind: MatchingPasskeyAvailabilityKind.Ready, accountCount: 0 }
+  }
   try {
     await ensureExtensionSessionDocument()
   } catch {

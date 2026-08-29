@@ -151,6 +151,9 @@ export function isAuthenticationWorkflowSnapshotMessage(
         fields.oneTimeCodeFieldCount,
         authenticator.matchingPasskeyAccountCount,
       ].every(isCount) &&
+      ['unavailable', 'ready'].includes(
+        authenticator.passkeyAccountAvailability,
+      ) &&
       ['absent', 'present'].includes(ceremony.manualCheckpoint) &&
       ['advance-control-required', 'auto-submit-observed'].includes(
         ceremony.oneTimeCodeProgression,
