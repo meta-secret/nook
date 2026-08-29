@@ -155,6 +155,7 @@ impl AuthenticationCeremonyObservationFacts {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::page_field_classification::browser_resolved_test_destination;
     use crate::{PageControlActionability, PageControlOwnership, PageControlSemantics};
 
     fn context(
@@ -165,16 +166,10 @@ mod tests {
             authentication_username: AuthenticationUsernameEvidence::Absent,
             source_origin: "https://example.test".to_owned(),
             form_identity: form_identity.to_owned(),
-            destination_identity: if destination_identity.contains("://") {
-                destination_identity.to_owned()
-            } else {
-                let separator = if destination_identity.starts_with('/') {
-                    ""
-                } else {
-                    "/"
-                };
-                format!("https://example.test{separator}{destination_identity}")
-            },
+            destination_identity: browser_resolved_test_destination(
+                "https://example.test",
+                destination_identity,
+            ),
         }
     }
 

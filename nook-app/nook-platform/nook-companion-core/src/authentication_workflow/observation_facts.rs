@@ -1,14 +1,18 @@
 use super::{
-    AuthenticationAdvanceControlEvidence, AuthenticationEnrollmentEvidence,
-    AuthenticationFormObservationPriority, AuthenticationPageObservation,
-    AuthenticationPageObservations, AuthenticationPasskeyEvidence, AuthenticationWorkflowMatch,
+    AuthenticationAdvanceControlEvidence, AuthenticationFormObservationPriority,
+    AuthenticationPageObservation, AuthenticationPageObservations, AuthenticationWorkflowMatch,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
+mod authenticator;
 mod ceremony;
 mod fields;
 mod passkey;
+pub use authenticator::{
+    AuthenticationAuthenticatorObservationFacts, AuthenticationAuthenticatorSetupObservation,
+    AuthenticationBackupCodesObservation,
+};
 pub use ceremony::{
     AuthenticationCeremonyContextObservation, AuthenticationCeremonyObservationFacts,
     AuthenticationDetailedAdvanceControlObservation,
@@ -17,66 +21,6 @@ pub use fields::AuthenticationFieldObservationFacts;
 pub use passkey::{
     AuthenticationDetailedPasskeyControlObservation, AuthenticationPasskeyControlObservation,
 };
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
-pub enum AuthenticationAuthenticatorSetupObservation {
-    #[default]
-    Absent,
-    Present,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
-pub enum AuthenticationBackupCodesObservation {
-    #[default]
-    Absent,
-    Present,
-}
-
-/// Raw, non-secret authenticator and passkey facts for one authentication scope.
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
-pub struct AuthenticationAuthenticatorObservationFacts {
-    pub authenticator_setup: AuthenticationAuthenticatorSetupObservation,
-    pub backup_codes: AuthenticationBackupCodesObservation,
-    pub passkey_control: AuthenticationPasskeyControlObservation,
-    pub matching_passkey_account_count: u32,
-    /// Detailed evidence is classified in Rust; the legacy presence flag is ignored.
-    #[serde(default)]
-    pub detailed_passkey_control: AuthenticationDetailedPasskeyControlObservation,
-}
-
-impl AuthenticationAuthenticatorObservationFacts {
-    const fn enrollment_evidence(&self) -> AuthenticationEnrollmentEvidence {
-        match (self.authenticator_setup, self.backup_codes) {
-            (
-                AuthenticationAuthenticatorSetupObservation::Present,
-                AuthenticationBackupCodesObservation::Present,
-            ) => AuthenticationEnrollmentEvidence::AuthenticatorSetupAndBackupCodes,
-            (
-                AuthenticationAuthenticatorSetupObservation::Present,
-                AuthenticationBackupCodesObservation::Absent,
-            ) => AuthenticationEnrollmentEvidence::AuthenticatorSetup,
-            (
-                AuthenticationAuthenticatorSetupObservation::Absent,
-                AuthenticationBackupCodesObservation::Present,
-            ) => AuthenticationEnrollmentEvidence::BackupCodes,
-            (
-                AuthenticationAuthenticatorSetupObservation::Absent,
-                AuthenticationBackupCodesObservation::Absent,
-            ) => AuthenticationEnrollmentEvidence::Absent,
-        }
-    }
-
-    fn passkey_evidence(&self) -> AuthenticationPasskeyEvidence {
-        self.detailed_passkey_control
-            .evidence(self.matching_passkey_account_count)
-    }
-}
 
 /// Raw browser facts grouped by the authentication domains that own their conversion.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
@@ -165,23 +109,8 @@ mod tests {
     use crate::authentication_workflow::AuthenticationOneTimeCodeProgressionEvidence;
     use crate::page_field_classification::{
         AuthenticationAdvanceControlDecision, AuthenticationAdvanceControlObservation,
-        AuthenticationUsernameEvidence,
+        AuthenticationUsernameEvidence, browser_resolved_test_destination,
     };
-
-    fn browser_resolved_destination(source_origin: &str, destination_identity: &str) -> String {
-        if destination_identity.contains("://") {
-            destination_identity.to_owned()
-        } else if destination_identity.is_empty() {
-            source_origin.to_owned()
-        } else {
-            let separator = if destination_identity.starts_with('/') {
-                ""
-            } else {
-                "/"
-            };
-            format!("{source_origin}{separator}{destination_identity}")
-        }
-    }
 
     fn detailed_one_time_code_control(
         form_identity: &str,
@@ -207,7 +136,7 @@ mod tests {
             crate::AuthenticationUsernameEvidence::Absent
         ));
         let destination_identity =
-            browser_resolved_destination("https://example.test", destination_identity);
+            browser_resolved_test_destination("https://example.test", destination_identity);
         AuthenticationPageObservationFacts {
             fields: AuthenticationFieldObservationFacts {
                 username_field_count,
@@ -276,7 +205,10 @@ mod tests {
             semantic_submit_control_count: 1,
             source_origin: source_origin.to_owned(),
             form_identity: String::new(),
-            destination_identity: browser_resolved_destination(source_origin, destination_identity),
+            destination_identity: browser_resolved_test_destination(
+                source_origin,
+                destination_identity,
+            ),
             label: label.to_owned(),
         }
     }

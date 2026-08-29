@@ -238,24 +238,14 @@ impl AuthenticationAdvanceControlObservation {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::page_field_classification::browser_resolved_test_destination;
 
     fn advances_authentication(observation: &AuthenticationAdvanceControlObservation) -> bool {
         let mut observation = observation.clone();
-        if !observation.destination_identity.contains("://") {
-            observation.destination_identity = if observation.destination_identity.is_empty() {
-                observation.source_origin.clone()
-            } else {
-                let separator = if observation.destination_identity.starts_with('/') {
-                    ""
-                } else {
-                    "/"
-                };
-                format!(
-                    "{}{separator}{}",
-                    observation.source_origin, observation.destination_identity,
-                )
-            };
-        }
+        observation.destination_identity = browser_resolved_test_destination(
+            &observation.source_origin,
+            &observation.destination_identity,
+        );
         matches!(
             observation.classify(),
             AuthenticationAdvanceControlDecision::AdvancesAuthentication

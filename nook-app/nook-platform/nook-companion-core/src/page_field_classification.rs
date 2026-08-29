@@ -21,6 +21,25 @@ pub use authentication_advance_control::{
 pub use destination_identity::{CanonicalControlDestination, canonicalize_control_destination};
 pub use one_time_code_progression::looks_like_one_time_code_auto_submit_signal;
 
+#[cfg(test)]
+pub(crate) fn browser_resolved_test_destination(
+    source_origin: &str,
+    destination_identity: &str,
+) -> String {
+    if destination_identity.contains("://") {
+        destination_identity.to_owned()
+    } else if destination_identity.is_empty() {
+        source_origin.to_owned()
+    } else {
+        let separator = if destination_identity.starts_with('/') {
+            ""
+        } else {
+            "/"
+        };
+        format!("{source_origin}{separator}{destination_identity}")
+    }
+}
+
 pub(crate) fn one_time_code_ceremony_context_is_authenticated(
     _authentication_username: AuthenticationUsernameEvidence,
     source_origin: &str,
