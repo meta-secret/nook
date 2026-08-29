@@ -7,11 +7,13 @@
 mod control_identity;
 mod destination_identity;
 mod form_identity;
+mod one_time_code_progression;
 
 /// Maximum byte length for each DOM-controlled authentication identity string.
 pub const MAX_AUTHENTICATION_CONTROL_TEXT_BYTES: usize = 512;
 
 pub use destination_identity::{CanonicalControlDestination, canonicalize_control_destination};
+pub use one_time_code_progression::looks_like_one_time_code_auto_submit_signal;
 
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::wasm_bindgen;

@@ -86,6 +86,12 @@ pub fn looks_like_one_time_code_field(field: &NookPageInputFieldObservation) -> 
 
 #[wasm_bindgen]
 #[must_use]
+pub fn looks_like_one_time_code_auto_submit_signal(signal: &str) -> bool {
+    nook_companion_core::looks_like_one_time_code_auto_submit_signal(signal)
+}
+
+#[wasm_bindgen]
+#[must_use]
 pub fn looks_like_passkey_control_label(label: &str) -> bool {
     nook_companion_core::looks_like_passkey_control_label(label)
 }
@@ -176,6 +182,9 @@ mod tests {
             false,
         );
         assert!(looks_like_one_time_code_field(&otp));
+        assert!(looks_like_one_time_code_auto_submit_signal(
+            "oninput=this.form.requestSubmit()"
+        ));
 
         let username = NookPageInputFieldObservation::new(
             nook_companion_core::PageInputType::Text,
