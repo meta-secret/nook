@@ -117,6 +117,20 @@ type AuthenticationObservationFactsRequest = {
   backupCodesHint: boolean;
 };
 
+export function refreshAuthenticationWorkflowObservation(
+  observation: PasswordFormObservation,
+): PasswordFormObservation {
+  const summaryRequest: PasswordFormSummaryRequest = {
+    kind: PasswordFormQueryKind.Scoped,
+    root: observation.root,
+    formScope: observation.formScope,
+  };
+  return {
+    ...observation,
+    summary: summarizeRoot(summaryRequest),
+  };
+}
+
 type NativeInputValueMutation = {
   input: HTMLInputElement;
   value: string;
