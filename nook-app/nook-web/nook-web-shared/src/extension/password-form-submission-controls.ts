@@ -149,19 +149,25 @@ function canActivateAuthenticationRouteControl(
 export function clickAdvanceControl(
   request: LoginAdvanceControlRequest,
 ): boolean {
-  const ownedForm =
+  const ownedScope =
     request.kind === PasswordFormQueryKind.Scoped &&
     request.formScope.kind === PasswordFormScopeKind.Owned
-      ? request.formScope.owner
-      : undefined;
-  const queryRoot = ownedForm?.ownerDocument ?? request.root;
+      ? { kind: PasswordFormScopeKind.Owned, owner: request.formScope.owner }
+      : { kind: PasswordFormScopeKind.Unowned };
+  const queryRoot =
+    ownedScope.kind === PasswordFormScopeKind.Owned
+      ? ownedScope.owner.ownerDocument
+      : request.root;
   const controls = Array.from(
     queryRoot.querySelectorAll<LoginAdvanceControl>(
       authenticationAdvanceControlSelector,
     ),
   );
   for (const control of controls) {
-    if (ownedForm && control.form !== ownedForm) {
+    if (
+      ownedScope.kind === PasswordFormScopeKind.Owned &&
+      control.form !== ownedScope.owner
+    ) {
       continue;
     }
     if (
