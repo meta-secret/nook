@@ -652,10 +652,11 @@ fi
         .args([
             "bash",
             "-c",
-            "grep -Fq '\"currentContext\":\"desktop-linux\"' \"$DOCKER_CONFIG/config.json\" && ! grep -Eqi 'clipluginsextradirs|u0063lipluginsextradirs|credsstore|credhelpers|untrusted' \"$DOCKER_CONFIG/config.json\"",
+            "grep -Fq '\"auths\": {}' \"$DOCKER_CONFIG/config.json\" && ! grep -Eqi 'currentcontext|clipluginsextradirs|u0063lipluginsextradirs|credsstore|credhelpers|untrusted' \"$DOCKER_CONFIG/config.json\"",
         ])
         .env("DOCKER_CONFIG", &malicious_config)
         .env("FAKE_DOCKER_LOG", &docker_log)
+        .env("GITHUB_ACTIONS", "true")
         .output()?;
     assert!(
         sanitized_plugin.status.success(),
