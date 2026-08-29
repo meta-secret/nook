@@ -6,7 +6,6 @@ import {
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   authenticationPageObservationFacts,
-  pageHasManualCheckpoint,
   summarizeAuthenticationWorkflowForms,
 } from '../../../nook-web-shared/src/extension/password-forms'
 import { isRuntimeNookVaultAppUrl } from '../lib/simple-vault-runtime'
@@ -19,9 +18,7 @@ import { cancelPendingAuthenticatorPickerRequest } from './autofill/authenticato
 import {
   AUTHENTICATION_MUTATION_ATTRIBUTE_FILTER,
   AUTHENTICATION_VIEWPORT_EVENTS,
-  mutationBelongsOnlyToMountedWidget,
-  mutationCanChangeAuthenticationWorkflows,
-  mutationTouchesAuthenticationWorkflow,
+  authenticationMutationImpact,
 } from './autofill/authentication-surface-observation'
 import {
   cancelPendingLoginPickerRequest,
@@ -238,33 +235,27 @@ function handleAuthenticationMutations(
     widgetState.host.kind === WidgetHostKind.Attached
       ? widgetState.host.element
       : undefined
-  const pageMutations = records.filter((record) => {
-    const request: Parameters<typeof mutationBelongsOnlyToMountedWidget>[0] = {
-      record,
-      mountedHost,
-    }
-    return !mutationBelongsOnlyToMountedWidget(request)
-  })
-  if (pageMutations.length === 0) return
+  const renderedWorkflow =
+    widgetState.renderedWorkflowRoot.kind === WidgetWorkflowRootKind.Assigned
+      ? widgetState.renderedWorkflowRoot.observation
+      : undefined
+  const impactRequest: Parameters<typeof authenticationMutationImpact>[0] = {
+    records,
+    mountedHost,
+    renderedWorkflow,
+  }
+  const impact = authenticationMutationImpact(impactRequest)
+  if (!impact.shouldScheduleScan) return
   if (pageHasManualCheckpoint(document)) {
     invalidateRenderedAuthenticationAction()
     removeScannedWidget()
     scheduleScan()
     return
   }
-  const renderedWorkflow = widgetState.renderedWorkflowRoot
   if (
     widgetState.host.kind === WidgetHostKind.Attached &&
-    renderedWorkflow.kind === WidgetWorkflowRootKind.Assigned &&
-    pageMutations.some((record) => {
-      const request: Parameters<
-        typeof mutationTouchesAuthenticationWorkflow
-      >[0] = { record, workflow: renderedWorkflow.observation }
-      return (
-        mutationTouchesAuthenticationWorkflow(request) ||
-        mutationCanChangeAuthenticationWorkflows(record)
-      )
-    })
+    renderedWorkflow &&
+    impact.shouldRemountRenderedWorkflow
   ) {
     invalidateRenderedAuthenticationAction()
     remountWidget()
@@ -274,14 +265,6 @@ function handleAuthenticationMutations(
 
 function handleViewportChange(): void {
   clampMountedWidgetPosition()
-  if (
-    widgetState.host.kind === WidgetHostKind.Attached &&
-    widgetState.renderedWorkflowRoot.kind === WidgetWorkflowRootKind.Assigned
-  ) {
-    invalidateRenderedAuthenticationAction()
-    remountWidget()
-  }
-  scheduleScan()
 }
 
 scanState.schedule = scheduleScan

@@ -18,6 +18,7 @@ export const AUTHENTICATION_MUTATION_ATTRIBUTE_FILTER = [
   'data-testid',
   'disabled',
   'form',
+  'formaction',
   'for',
   'hidden',
   'href',
@@ -50,6 +51,17 @@ export type AuthenticationWorkflowMutationRequest = {
   workflow: PasswordFormObservation
 }
 
+export type AuthenticationMutationImpactRequest = {
+  records: MutationRecord[]
+  mountedHost: HTMLElement | undefined
+  renderedWorkflow: PasswordFormObservation | undefined
+}
+
+export type AuthenticationMutationImpact = {
+  shouldRemountRenderedWorkflow: boolean
+  shouldScheduleScan: boolean
+}
+
 type OwnedFormAssociationRequest = {
   node: Node
   boundary: HTMLFormElement
@@ -70,6 +82,15 @@ export function mutationBelongsOnlyToMountedWidget(
   request: MountedWidgetMutationRequest,
 ): boolean {
   const { record, mountedHost } = request
+  if (!mountedHost && record.type === 'childList') {
+    const changedNodes = [...record.addedNodes, ...record.removedNodes]
+    return (
+      changedNodes.length > 0 &&
+      changedNodes.every(
+        (node) => node instanceof HTMLElement && node.id === 'nook-auth-widget',
+      )
+    )
+  }
   if (!mountedHost) return false
   if (record.target === mountedHost || mountedHost.contains(record.target)) {
     return true
@@ -189,4 +210,39 @@ export function mutationCanChangeAuthenticationWorkflows(
       AUTHENTICATION_WORKFLOW_MUTATION_SELECTOR,
     ),
   )
+}
+
+export function authenticationMutationImpact({
+  records,
+  mountedHost,
+  renderedWorkflow,
+}: AuthenticationMutationImpactRequest): AuthenticationMutationImpact {
+  const pageMutations = records.filter((record) => {
+    const mountedWidgetRequest: MountedWidgetMutationRequest = {
+      record,
+      mountedHost,
+    }
+    return !mutationBelongsOnlyToMountedWidget(mountedWidgetRequest)
+  })
+  const relevantMutations = pageMutations.filter((record) => {
+    if (mutationCanChangeAuthenticationWorkflows(record)) return true
+    if (!renderedWorkflow) return false
+    const workflowRequest: AuthenticationWorkflowMutationRequest = {
+      record,
+      workflow: renderedWorkflow,
+    }
+    return mutationTouchesAuthenticationWorkflow(workflowRequest)
+  })
+  return {
+    shouldRemountRenderedWorkflow:
+      Boolean(renderedWorkflow) &&
+      relevantMutations.some((record) => {
+        const workflowRequest: AuthenticationWorkflowMutationRequest = {
+          record,
+          workflow: renderedWorkflow as PasswordFormObservation,
+        }
+        return mutationTouchesAuthenticationWorkflow(workflowRequest)
+      }),
+    shouldScheduleScan: relevantMutations.length > 0,
+  }
 }

@@ -26,8 +26,6 @@ import { stopPendingSaveWatch } from './login-save'
 import {
   AuthenticatorPickerKind,
   LoginPickerKind,
-  WidgetHostKind,
-  WidgetWorkflowRootKind,
   authenticationActionState,
   pickerState,
   scanState,
@@ -36,10 +34,14 @@ import {
 import { removeWidget, translatedMessage } from './workflow-ui'
 
 export function removeScannedWidget(): void {
-  stopPendingSaveWatch()
   cancelPendingAuthenticatorPickerRequest()
   cancelPendingLoginPickerRequest()
   removeWidget()
+}
+
+function clearAuthenticationSurface(): void {
+  stopPendingSaveWatch()
+  removeScannedWidget()
 }
 
 type AutofillMessageListener = Parameters<
@@ -59,7 +61,7 @@ export const routeAutofillMessage: AutofillMessageListener =
       scanState.invalidateCurrentResult()
       authenticationActionState.invalidate()
       widgetState.busy = false
-      removeScannedWidget()
+      clearAuthenticationSurface()
       const response: Parameters<typeof sendResponse>[0] = { ok: true }
       sendResponse(response)
       return false
@@ -72,16 +74,7 @@ export const routeAutofillMessage: AutofillMessageListener =
       scanState.invalidateCurrentResult()
       authenticationActionState.invalidate()
       widgetState.busy = false
-      widgetState.dismissed = false
-      cancelPendingAuthenticatorPickerRequest()
-      cancelPendingLoginPickerRequest()
-      if (
-        widgetState.host.kind === WidgetHostKind.Attached &&
-        widgetState.renderedWorkflowRoot.kind ===
-          WidgetWorkflowRootKind.Assigned
-      ) {
-        widgetState.host.element.inert = true
-      }
+      clearAuthenticationSurface()
       scanState.schedule()
       const response: Parameters<typeof sendResponse>[0] = { ok: true }
       sendResponse(response)

@@ -26,7 +26,12 @@ import {
   LoginPickerOpenResponseKind,
   WebsiteLoginOptionsKind,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-import { LoginPickerKind, pickerState, widgetState } from './state'
+import {
+  LoginPickerKind,
+  authenticationActionState,
+  pickerState,
+  widgetState,
+} from './state'
 import { setFlightProgress, translatedMessage } from './workflow-ui'
 import {
   LoginFillDeliveryKind,
@@ -83,6 +88,7 @@ export type PasskeyWidgetAction =
 type PasskeyWidgetStatusUpdate = {
   description: HTMLParagraphElement
   continueButton: HTMLButtonElement
+  actionGeneration?: number
   text: string
   enableContinue: boolean
 }
@@ -115,7 +121,10 @@ export async function fillAndSubmitAccount({
   title,
   description,
   continueButton,
+  actionGeneration: providedActionGeneration,
 }: FillAndSubmitAccountArgs): Promise<boolean> {
+  const actionGeneration =
+    providedActionGeneration ?? authenticationActionState.begin()
   let releasedObservationBinding: AuthenticationObservationBinding = {
     kind: AuthenticationObservationBindingKind.Unbound,
   }
@@ -136,6 +145,7 @@ export async function fillAndSubmitAccount({
   const releaseApproved = await performRevalidatedAuthenticationAction(
     releaseRevalidationRequest,
   )
+  if (!authenticationActionState.isCurrent(actionGeneration)) return false
   if (!releaseApproved) {
     const progressRequest: Parameters<typeof setFlightProgress>[0] = {
       step,
@@ -166,6 +176,16 @@ export async function fillAndSubmitAccount({
     },
   }
   const delivery = await sendLoginFillMessage(nookTypedArgs0_2)
+  if (!authenticationActionState.isCurrent(actionGeneration)) {
+    if (
+      delivery.kind !== LoginFillDeliveryKind.Unavailable &&
+      delivery.response?.ok &&
+      typeof delivery.response.password === 'string'
+    ) {
+      delivery.response.password = ''
+    }
+    return false
+  }
   if (delivery.kind === LoginFillDeliveryKind.Unavailable) {
     const nookTypedArgs0_0: Parameters<typeof setFlightProgress>[0] = {
       step,
@@ -221,6 +241,7 @@ export async function fillAndSubmitAccount({
     expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
     observationBinding: releasedObservationBinding,
     act: ({ currentWorkflow }) => {
+      if (!authenticationActionState.isCurrent(actionGeneration)) return false
       const fillRequest: Parameters<typeof fillLoginCredentials>[0] = {
         credentials,
         kind: PasswordFormQueryKind.Scoped,
@@ -237,6 +258,7 @@ export async function fillAndSubmitAccount({
   )
   credentials.password = ''
   credentials.username = ''
+  if (!authenticationActionState.isCurrent(actionGeneration)) return false
   if (!filled) {
     const nookTypedArgs0_5: Parameters<typeof setFlightProgress>[0] = {
       step,
@@ -291,6 +313,7 @@ type OpenLoginPickerArgs = {
   title: HTMLHeadingElement
   description: HTMLParagraphElement
   continueButton: HTMLButtonElement
+  actionGeneration: number
 }
 
 async function openLoginPicker({
@@ -299,6 +322,7 @@ async function openLoginPicker({
   title,
   description,
   continueButton,
+  actionGeneration,
 }: OpenLoginPickerArgs): Promise<void> {
   if (pickerState.login.kind === LoginPickerKind.Open) return
   const nookTypedArgs0_3: Parameters<
@@ -308,6 +332,16 @@ async function openLoginPicker({
     payload: { origin: location.origin },
   }
   const delivery = await sendLoginPickerOpenRuntimeMessage(nookTypedArgs0_3)
+  if (!authenticationActionState.isCurrent(actionGeneration)) {
+    if (
+      delivery.kind !== RuntimeMessageDeliveryKind.Unavailable &&
+      delivery.response.kind === LoginPickerOpenResponseKind.Ready &&
+      'requestId' in delivery.response
+    ) {
+      cancelLoginPickerRequest(delivery.response.requestId)
+    }
+    return
+  }
   if (
     delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
     delivery.response.kind === LoginPickerOpenResponseKind.Failed
@@ -477,6 +511,7 @@ export async function generatePasswordWithNook({
   continueButton,
 }: GeneratePasswordWithNookArgs): Promise<void> {
   if (widgetState.busy) return
+  const actionGeneration = authenticationActionState.begin()
   widgetState.busy = true
   continueButton.disabled = true
   const totalSteps = workflow.summary.currentPasswordFieldCount > 0 ? 4 : 5
@@ -529,6 +564,16 @@ export async function generatePasswordWithNook({
       payload: { origin: location.origin },
     }
     const delivery = await sendGeneratePasswordRuntimeMessage(nookTypedArgs0_6)
+    if (!authenticationActionState.isCurrent(actionGeneration)) {
+      if (
+        delivery.kind !== RuntimeMessageDeliveryKind.Unavailable &&
+        delivery.response.kind === GeneratedPasswordResponseKind.Generated &&
+        'password' in delivery.response
+      ) {
+        delivery.response.password = ''
+      }
+      return
+    }
     if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
       const nookTypedArgs0_23: Parameters<typeof setStatus>[0] = {
         description,
@@ -557,19 +602,28 @@ export async function generatePasswordWithNook({
       setStatus(nookTypedArgs0_24)
       return
     }
-    const password = response.password
-    const filled = await performRevalidatedAuthenticationAction({
-      workflow,
-      expectedAction: AuthenticationWorkflowAction.GeneratePassword,
-      observationBinding: releasedObservationBinding,
-      act: ({ currentWorkflow }) =>
-        fillGeneratedPassword({
-          password,
-          kind: PasswordFormQueryKind.Scoped,
-          root: currentWorkflow.root,
-          formScope: currentWorkflow.formScope,
-        }),
-    })
+    const password = { value: response.password }
+    response.password = ''
+    let filled = false
+    try {
+      filled = await performRevalidatedAuthenticationAction({
+        workflow,
+        expectedAction: AuthenticationWorkflowAction.GeneratePassword,
+        observationBinding: releasedObservationBinding,
+        act: ({ currentWorkflow }) => {
+          const nookTypedArgs0_25: Parameters<typeof fillGeneratedPassword>[0] =
+            {
+              password: password.value,
+              kind: PasswordFormQueryKind.Scoped,
+              root: currentWorkflow.root,
+              formScope: currentWorkflow.formScope,
+            }
+          return fillGeneratedPassword(nookTypedArgs0_25)
+        },
+      })
+    } finally {
+      password.value = ''
+    }
     if (!filled) {
       const nookTypedArgs0_26: Parameters<typeof setStatus>[0] = {
         description,
@@ -593,8 +647,10 @@ export async function generatePasswordWithNook({
     setStatus(nookTypedArgs0_27)
     continueButton.hidden = true
   } finally {
-    widgetState.busy = false
-    continueButton.disabled = false
+    if (authenticationActionState.isCurrent(actionGeneration)) {
+      widgetState.busy = false
+      continueButton.disabled = false
+    }
   }
 }
 
@@ -612,6 +668,7 @@ export async function proposePasskeyWithNook({
   workflow,
 }: ProposePasskeyWithNookArgs): Promise<void> {
   if (widgetState.busy) return
+  const actionGeneration = authenticationActionState.begin()
   widgetState.busy = true
   continueButton.disabled = true
   const nookTypedArgs0_28: Parameters<typeof setStatus>[0] = {
@@ -635,6 +692,7 @@ export async function proposePasskeyWithNook({
         kind: AuthenticationObservationBindingKind.Unbound,
       },
       act: ({ currentWorkflow }) => {
+        if (!authenticationActionState.isCurrent(actionGeneration)) return false
         const control = findWorkflowPasskeyControl(currentWorkflow)
         if (control.kind === PasskeyControlLookupKind.Absent) return false
         control.control.click()
@@ -643,6 +701,7 @@ export async function proposePasskeyWithNook({
     }
     const actuated =
       await performRevalidatedAuthenticationAction(revalidationRequest)
+    if (!authenticationActionState.isCurrent(actionGeneration)) return
     if (!actuated) {
       const nookTypedArgs0_29: Parameters<typeof setStatus>[0] = {
         description,
@@ -666,8 +725,10 @@ export async function proposePasskeyWithNook({
     setStatus(nookTypedArgs0_30)
     continueButton.hidden = true
   } finally {
-    widgetState.busy = false
-    continueButton.disabled = false
+    if (authenticationActionState.isCurrent(actionGeneration)) {
+      widgetState.busy = false
+      continueButton.disabled = false
+    }
   }
 }
 
@@ -703,6 +764,7 @@ export async function continueWithNook({
 }: ContinueWithNookArgs): Promise<void> {
   if (widgetState.busy || pickerState.login.kind === LoginPickerKind.Open)
     return
+  const actionGeneration = authenticationActionState.begin()
   widgetState.busy = true
   continueButton.disabled = true
   const nookTypedArgs0_31: Parameters<typeof setFlightProgress>[0] = {
@@ -729,6 +791,7 @@ export async function continueWithNook({
       payload: { origin: location.origin },
     }
     const delivery = await sendLoginOptionsRuntimeMessage(nookTypedArgs0_7)
+    if (!authenticationActionState.isCurrent(actionGeneration)) return
 
     if (
       delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
@@ -821,6 +884,7 @@ export async function continueWithNook({
         title,
         description,
         continueButton,
+        actionGeneration,
       }
       await fillAndSubmitAccount(nookTypedArgs0_41)
       return
@@ -832,16 +896,19 @@ export async function continueWithNook({
       title,
       description,
       continueButton,
+      actionGeneration,
     }
     await openLoginPicker(nookTypedArgs0_42)
   } finally {
-    widgetState.busy = false
-    if (
-      pickerState.login.kind === LoginPickerKind.Closed &&
-      continueButton.isConnected &&
-      !continueButton.hidden
-    ) {
-      continueButton.disabled = false
+    if (authenticationActionState.isCurrent(actionGeneration)) {
+      widgetState.busy = false
+      if (
+        pickerState.login.kind === LoginPickerKind.Closed &&
+        continueButton.isConnected &&
+        !continueButton.hidden
+      ) {
+        continueButton.disabled = false
+      }
     }
   }
 }

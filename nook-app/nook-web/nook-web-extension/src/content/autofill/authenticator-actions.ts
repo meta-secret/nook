@@ -22,7 +22,12 @@ import {
   sendRuntimeMessageWithoutResponse,
   setStatus,
 } from './login-passkey-actions'
-import { AuthenticatorPickerKind, pickerState, widgetState } from './state'
+import {
+  AuthenticatorPickerKind,
+  authenticationActionState,
+  pickerState,
+  widgetState,
+} from './state'
 import { setFlightProgress, translatedMessage } from './workflow-ui'
 import {
   AuthenticationObservationBindingKind,
@@ -78,6 +83,7 @@ export async function fillAuthenticatorCode({
   description,
   continueButton,
 }: FillAuthenticatorCodeArgs): Promise<boolean> {
+  const actionGeneration = authenticationActionState.begin()
   const failureUi: AuthenticatorFillFailureArgs = {
     step,
     title,
@@ -104,6 +110,7 @@ export async function fillAuthenticatorCode({
   if (!(await performRevalidatedAuthenticationAction(releaseRequest))) {
     return reportAuthenticatorFillFailure(failureUi)
   }
+  if (!authenticationActionState.isCurrent(actionGeneration)) return false
   const message: Parameters<typeof sendAuthenticatorCodeRuntimeMessage>[0] = {
     type: WebsiteAuthenticatorFillMessageType.NookWebsiteAuthenticatorFill,
     payload: {
@@ -116,6 +123,16 @@ export async function fillAuthenticatorCode({
     },
   }
   const delivery = await sendAuthenticatorCodeRuntimeMessage(message)
+  if (!authenticationActionState.isCurrent(actionGeneration)) {
+    if (
+      delivery.kind !== RuntimeMessageDeliveryKind.Unavailable &&
+      delivery.response.kind === AuthenticatorCodeResponseKind.Ready &&
+      'code' in delivery.response
+    ) {
+      delivery.response.code = ''
+    }
+    return false
+  }
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
     return reportAuthenticatorFillFailure(failureUi)
   }
@@ -136,6 +153,7 @@ export async function fillAuthenticatorCode({
     expectedAction: AuthenticationWorkflowAction.FillTotp,
     observationBinding: releasedObservationBinding,
     act: ({ currentWorkflow }) => {
+      if (!authenticationActionState.isCurrent(actionGeneration)) return false
       const nookTypedArgs0_4: Parameters<typeof fillOneTimeCode>[0] = {
         code: code.value,
         kind: PasswordFormQueryKind.Scoped,
@@ -148,6 +166,7 @@ export async function fillAuthenticatorCode({
   const filled =
     await performRevalidatedAuthenticationAction(revalidationRequest)
   code.value = ''
+  if (!authenticationActionState.isCurrent(actionGeneration)) return false
   if (!filled) {
     return reportAuthenticatorFillFailure(failureUi)
   }
@@ -187,6 +206,7 @@ export async function continueWithAuthenticator({
   ) {
     return
   }
+  const actionGeneration = authenticationActionState.begin()
   widgetState.busy = true
   continueButton.disabled = true
   const nookTypedArgs0_8: Parameters<typeof setFlightProgress>[0] = {
@@ -213,6 +233,16 @@ export async function continueWithAuthenticator({
       payload: { origin: location.origin },
     }
     const delivery = await sendAuthenticatorPickerOpenRuntimeMessage(message)
+    if (!authenticationActionState.isCurrent(actionGeneration)) {
+      if (
+        delivery.kind !== RuntimeMessageDeliveryKind.Unavailable &&
+        delivery.response.kind === AuthenticatorPickerOpenResponseKind.Ready &&
+        'requestId' in delivery.response
+      ) {
+        cancelAuthenticatorPickerRequest(delivery.response.requestId)
+      }
+      return
+    }
     if (
       delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
       delivery.response.kind === AuthenticatorPickerOpenResponseKind.Rejected
@@ -362,13 +392,15 @@ export async function continueWithAuthenticator({
     }
     setStatus(nookTypedArgs0_20)
   } finally {
-    widgetState.busy = false
-    if (
-      pickerState.authenticator.kind === AuthenticatorPickerKind.Closed &&
-      continueButton.isConnected &&
-      !continueButton.hidden
-    ) {
-      continueButton.disabled = false
+    if (authenticationActionState.isCurrent(actionGeneration)) {
+      widgetState.busy = false
+      if (
+        pickerState.authenticator.kind === AuthenticatorPickerKind.Closed &&
+        continueButton.isConnected &&
+        !continueButton.hidden
+      ) {
+        continueButton.disabled = false
+      }
     }
   }
 }

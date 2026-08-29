@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 import {
+  AUTHENTICATION_MUTATION_ATTRIBUTE_FILTER,
+  authenticationMutationImpact,
   mutationBelongsOnlyToMountedWidget,
   mutationCanChangeAuthenticationWorkflows,
   mutationTouchesAuthenticationWorkflow,
@@ -89,6 +91,51 @@ describe('authentication surface mutation filtering', () => {
         workflow: observation(form),
       }
     expect(mutationTouchesAuthenticationWorkflow(request)).toBe(true)
+  })
+
+  test('observes submit destination changes', () => {
+    expect(AUTHENTICATION_MUTATION_ATTRIBUTE_FILTER).toContain('formaction')
+  })
+
+  test('keeps the rendered workflow mounted for unrelated controls', () => {
+    document.body.innerHTML = `
+      <form id="login"><input type="password" /></form>
+      <button id="navigation">Next slide</button>
+    `
+    const form = document.querySelector<HTMLFormElement>('#login')
+    const navigation = document.querySelector<HTMLButtonElement>('#navigation')
+    if (!form || !navigation) throw new Error('expected mutation fixture')
+    const request: Parameters<typeof authenticationMutationImpact>[0] = {
+      records: [attributeMutation(navigation)],
+      mountedHost: undefined,
+      renderedWorkflow: observation(form),
+    }
+    expect(authenticationMutationImpact(request)).toEqual({
+      shouldRemountRenderedWorkflow: false,
+      shouldScheduleScan: true,
+    })
+  })
+
+  test('ignores unrelated prose and a detached Nook host', () => {
+    const prose = document.createTextNode('12:01')
+    document.body.append(prose)
+    const textMutation = {
+      type: 'characterData',
+      target: prose,
+    } as unknown as MutationRecord
+    const detachedHost = document.createElement('section')
+    detachedHost.id = 'nook-auth-widget'
+    const hostRemoval = childListMutation(document.body, [], [detachedHost])
+    for (const record of [textMutation, hostRemoval]) {
+      const request: Parameters<typeof authenticationMutationImpact>[0] = {
+        records: [record],
+        mountedHost: undefined,
+        renderedWorkflow: undefined,
+      }
+      expect(authenticationMutationImpact(request).shouldScheduleScan).toBe(
+        false,
+      )
+    }
   })
 
   test('rescans controls and forms without treating prose as auth evidence', () => {

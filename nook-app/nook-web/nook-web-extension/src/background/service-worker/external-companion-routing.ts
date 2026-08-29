@@ -7,6 +7,7 @@ import {
 import type * as PairingIdentity from './pairing-identity'
 import type * as PairingImport from './pairing-import'
 import type * as SessionLifecycle from './session-lifecycle'
+import type * as AccountPickers from './account-pickers'
 
 type ChromeMessageListener = Parameters<
   typeof chrome.runtime.onMessageExternal.addListener
@@ -24,12 +25,14 @@ export type ExternalCompanionRoutingDependencies = {
   discoverPairedVaultIdentity: typeof PairingIdentity.discoverPairedVaultIdentity
   hasPairingApprovedType: typeof PairingIdentity.hasPairingApprovedType
   importPairingAfterCompanionReady: typeof PairingImport.importPairingAfterCompanionReady
+  invalidateAllLoginMatchAvailability: typeof AccountPickers.invalidateAllLoginMatchAvailability
   isExtensionIdentityHandoffRequestMessage: typeof RuntimeMessages.isExtensionIdentityHandoffRequestMessage
   isExtensionPairedVaultIdentityDiscoveryMessage: typeof RuntimeMessages.isExtensionPairedVaultIdentityDiscoveryMessage
   isExtensionPairedVaultIdentityHandoffRequestMessage: typeof RuntimeMessages.isExtensionPairedVaultIdentityHandoffRequestMessage
   isExtensionPairedVaultUnlockRequestMessage: typeof RuntimeMessages.isExtensionPairedVaultUnlockRequestMessage
   normalizeOpenCompanionLauncherMessage: typeof normalizeOpenCompanionLauncherMessage
   openCompanionLauncher: typeof SessionLifecycle.openCompanionLauncher
+  refreshAuthenticationSurfaces: typeof SessionLifecycle.refreshAuthenticationSurfaces
   requestPairedVaultUnlock: typeof PairingIdentity.requestPairedVaultUnlock
 }
 
@@ -62,12 +65,14 @@ export function routeExternalCompanionMessage({
     discoverPairedVaultIdentity,
     hasPairingApprovedType,
     importPairingAfterCompanionReady,
+    invalidateAllLoginMatchAvailability,
     isExtensionIdentityHandoffRequestMessage,
     isExtensionPairedVaultIdentityDiscoveryMessage,
     isExtensionPairedVaultIdentityHandoffRequestMessage,
     isExtensionPairedVaultUnlockRequestMessage,
     normalizeOpenCompanionLauncherMessage,
     openCompanionLauncher,
+    refreshAuthenticationSurfaces,
     requestPairedVaultUnlock,
   } = dependencies
   const launcherMessage = normalizeOpenCompanionLauncherMessage(message)
@@ -128,6 +133,16 @@ export function routeExternalCompanionMessage({
     sendResponse(invalidPairingGrantResponse)
     return false
   }
-  void importPairingAfterCompanionReady(message).then(sendResponse)
+  void importPairingAfterCompanionReady(message)
+    .then(async (response) => {
+      if (response.ok) {
+        invalidateAllLoginMatchAvailability()
+        await refreshAuthenticationSurfaces().catch(() => {
+          // Restricted pages do not invalidate the successful grant import.
+        })
+      }
+      return response
+    })
+    .then(sendResponse)
   return true
 }

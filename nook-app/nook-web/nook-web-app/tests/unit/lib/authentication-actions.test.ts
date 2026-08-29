@@ -6,8 +6,8 @@ import {
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 const actionMocks = vi.hoisted(() => ({
-  fillLoginCredentials: vi.fn(() => true),
   fillGeneratedPassword: vi.fn(() => true),
+  fillLoginCredentials: vi.fn(() => true),
   fillOneTimeCode: vi.fn(() => true),
   findWorkflowPasskeyControl: vi.fn(),
   performRevalidation: vi.fn(),
@@ -84,9 +84,22 @@ vi.mock(
   }),
 )
 
+let actionGeneration = 0
+const authenticationActionState = {
+  begin: () => {
+    actionGeneration += 1
+    return actionGeneration
+  },
+  invalidate: () => {
+    actionGeneration += 1
+  },
+  isCurrent: (candidate: number) => candidate === actionGeneration,
+}
+
 vi.mock('../../../../nook-web-extension/src/content/autofill/state', () => ({
   AuthenticatorPickerKind: { Closed: 'closed', Open: 'open' },
   LoginPickerKind: { Closed: 'closed', Open: 'open' },
+  authenticationActionState,
   pickerState: {},
   widgetState: { busy: false },
 }))
@@ -114,6 +127,7 @@ function controls() {
 }
 
 beforeEach(() => {
+  actionGeneration = 0
   vi.clearAllMocks()
   actionMocks.performRevalidation.mockImplementation(async (request) =>
     request.act({
@@ -122,6 +136,14 @@ beforeEach(() => {
     }),
   )
 })
+
+function deferred<Value>() {
+  let resolve!: (value: Value) => void
+  const promise = new Promise<Value>((next) => {
+    resolve = next
+  })
+  return { promise, resolve }
+}
 
 describe('revalidated authentication actions', () => {
   test('binds login credential release and fill to one observation', async () => {
@@ -166,6 +188,72 @@ describe('revalidated authentication actions', () => {
     expect(actionMocks.performRevalidation).toHaveBeenCalledTimes(2)
     expect(actionMocks.sendAuthenticatorCode).toHaveBeenCalledOnce()
     expect(actionMocks.fillOneTimeCode).toHaveBeenCalledOnce()
+  })
+
+  test('scrubs delayed login credentials after action invalidation', async () => {
+    const response = { ok: true, username: 'person', password: 'secret' }
+    const delivery = deferred<{ kind: string; response: typeof response }>()
+    actionMocks.sendLoginFill.mockReturnValue(delivery.promise)
+    const pending = fillAndSubmitAccount({
+      account: { vaultStoreId: 'vault', secretId: 'login' },
+      workflow,
+      ...controls(),
+    })
+    await vi.waitFor(() => expect(actionMocks.sendLoginFill).toHaveBeenCalled())
+    authenticationActionState.invalidate()
+    delivery.resolve({ kind: 'delivered', response })
+
+    await expect(pending).resolves.toBe(false)
+    expect(response.password).toBe('')
+    expect(actionMocks.fillLoginCredentials).not.toHaveBeenCalled()
+  })
+
+  test('scrubs a delayed authenticator code after action invalidation', async () => {
+    const response = {
+      kind: AuthenticatorCodeResponseKind.Ready,
+      code: '123456',
+    }
+    const delivery = deferred<{ kind: string; response: typeof response }>()
+    actionMocks.sendAuthenticatorCode.mockReturnValue(delivery.promise)
+    const pending = fillAuthenticatorCode({
+      account: { vaultStoreId: 'vault', secretId: 'otp' },
+      workflow,
+      ...controls(),
+    })
+    await vi.waitFor(() =>
+      expect(actionMocks.sendAuthenticatorCode).toHaveBeenCalled(),
+    )
+    authenticationActionState.invalidate()
+    delivery.resolve({ kind: 'delivered', response })
+
+    await expect(pending).resolves.toBe(false)
+    expect(response.code).toBe('')
+    expect(actionMocks.fillOneTimeCode).not.toHaveBeenCalled()
+  })
+
+  test('scrubs a generated password after action invalidation', async () => {
+    const response = {
+      kind: GeneratedPasswordResponseKind.Generated,
+      password: 'generated-secret',
+    }
+    const delivery = deferred<{ kind: string; response: typeof response }>()
+    actionMocks.sendGeneratePassword.mockReturnValue(delivery.promise)
+    const pending = generatePasswordWithNook({
+      workflow: {
+        ...workflow,
+        summary: { currentPasswordFieldCount: 0 },
+      } as never,
+      ...controls(),
+    })
+    await vi.waitFor(() =>
+      expect(actionMocks.sendGeneratePassword).toHaveBeenCalled(),
+    )
+    authenticationActionState.invalidate()
+    delivery.resolve({ kind: 'delivered', response })
+
+    await pending
+    expect(response.password).toBe('')
+    expect(actionMocks.fillGeneratedPassword).not.toHaveBeenCalled()
   })
 
   test('actuates only the passkey control returned by approved lookup', async () => {

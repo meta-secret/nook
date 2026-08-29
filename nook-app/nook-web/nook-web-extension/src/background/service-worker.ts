@@ -97,6 +97,7 @@ import {
 import {
   importLocalEventLogUpdate,
   importPairingAfterCompanionReady,
+  invalidateAllLoginMatchAvailability,
 } from './service-worker/pairing-import'
 import { handlePairingStateQuery } from './service-worker/pairing-state-query'
 import { isExtensionPairingStateQueryMessage } from '../lib/pairing-state'
@@ -182,12 +183,14 @@ const externalCompanionRoutingDependencies: Parameters<
   discoverPairedVaultIdentity,
   hasPairingApprovedType,
   importPairingAfterCompanionReady,
+  invalidateAllLoginMatchAvailability,
   isExtensionIdentityHandoffRequestMessage,
   isExtensionPairedVaultIdentityDiscoveryMessage,
   isExtensionPairedVaultIdentityHandoffRequestMessage,
   isExtensionPairedVaultUnlockRequestMessage,
   normalizeOpenCompanionLauncherMessage,
   openCompanionLauncher,
+  refreshAuthenticationSurfaces,
   requestPairedVaultUnlock,
 }
 
