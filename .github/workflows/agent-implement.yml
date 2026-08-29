@@ -357,12 +357,18 @@ jobs:
               core.setFailed(`Rejected agent-authored Workbench task plan: ${rejection}.`)
               return
             }
+            const currentGizmoIdMatch = /^- Current Gizmo ID:\s*([a-z][a-z0-9-]{0,62})\s*$/m.exec(candidate)
+            const currentGizmoId = currentGizmoIdMatch?.[1]
+            if (!currentGizmoId) {
+              core.setFailed('Validated Workbench task plan is missing its Current Gizmo ID.')
+              return
+            }
             const plan = [
               '---',
               `title: ${JSON.stringify(process.env.TASK_TITLE)}`,
               `feature: ${process.env.TASK_FEATURE}`,
               `issue: ${process.env.ISSUE_PATH || 'null'}`,
-              `gizmo_id: ${process.env.ASSIGNED_GIZMO_ID || 'null'}`,
+              `gizmo_id: ${currentGizmoId}`,
               `started_at: ${process.env.TASK_PLAN_STARTED_AT}`,
               'agent: cursor',
               '---',

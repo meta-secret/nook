@@ -57,7 +57,10 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "typeof assignedGizmoId !== 'string'",
         "ASSIGNED_GIZMO_ID: ${{ steps.workbench.outputs.gizmo_id }}",
         "assignedGizmoId: process.env.ASSIGNED_GIZMO_ID",
-        "`gizmo_id: ${process.env.ASSIGNED_GIZMO_ID || 'null'}`",
+        "const currentGizmoIdMatch = /^- Current Gizmo ID:",
+        "const currentGizmoId = currentGizmoIdMatch?.[1]",
+        "Validated Workbench task plan is missing its Current Gizmo ID.",
+        "`gizmo_id: ${currentGizmoId}`",
         "assignedGizmoId && !/^[a-z][a-z0-9-]{0,62}$/.test(assignedGizmoId)",
         "gizmoIdRows.length > 1",
         "continuing_owner:",
@@ -112,6 +115,10 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
     assert!(
         !workflow.contains("String(value(frontmatter, 'gizmo_id'))"),
         "null or absent Gizmo IDs must not be stringified into trusted assignments"
+    );
+    assert!(
+        !workflow.contains("`gizmo_id: ${process.env.ASSIGNED_GIZMO_ID || 'null'}`"),
+        "published plan frontmatter must persist the validated Current Gizmo ID"
     );
     for required in [
         "git worktree add --detach",
@@ -179,6 +186,20 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
     let plan_position = workflow
         .find("Validate and publish Workbench task plan")
         .context("the workflow must validate and publish its Workbench plan")?;
+    let trusted_plan_validation_position = workflow
+        .find("const rejection = validateAgentRecord(candidate, 'plan'")
+        .context("the workflow must validate the candidate plan with trusted context")?;
+    let current_gizmo_position = workflow
+        .find("const currentGizmoIdMatch")
+        .context("the workflow must extract the validated Current Gizmo ID")?;
+    let persisted_gizmo_position = workflow
+        .find("`gizmo_id: ${currentGizmoId}`")
+        .context("the workflow must persist the validated Current Gizmo ID")?;
+    assert!(
+        trusted_plan_validation_position < current_gizmo_position
+            && current_gizmo_position < persisted_gizmo_position,
+        "Current Gizmo ID must be extracted only after trusted validation and then persisted"
+    );
     let implementation_position = workflow
         .find("Run ci-agent implement")
         .context("the workflow must run bounded implementation")?;
