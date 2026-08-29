@@ -23,7 +23,7 @@ test("rust dependency update profile selects strict isolation", () => {
   const profile = resolveCiAgentFixProfile("rust-dependency-update");
   assert.equal(isolationForFixProfile(profile), AgentIsolation.Strict);
   assert.equal(
-    isolationForFixProfile(resolveCiAgentFixProfile(undefined)),
+    isolationForFixProfile(resolveCiAgentFixProfile()),
     AgentIsolation.Legacy,
   );
   assert.throws(
@@ -39,11 +39,11 @@ test("dependency validation runs fixed commands in order with exact overrides", 
     NOOK_GITHUB_PAT: "github-secret",
     GITHUB_TOKEN: "github-token",
   };
+  const baseEnvironment = { HOME: "/home/runner", PATH: "/bin" };
   await runRustDependencyUpdateValidation(
     "/repo",
     {
-      PATH: "/bin",
-      HOME: "/home/runner",
+      ...baseEnvironment,
       ...secrets,
       WASM_BUILD_MODE: "wrong-host-value",
     },
@@ -58,18 +58,22 @@ test("dependency validation runs fixed commands in order with exact overrides", 
       ["task", "hive:verify"],
     ],
   );
-  assert.deepEqual(calls[0]?.[2], {
-    PATH: "/bin",
-    HOME: "/home/runner",
-    WASM_BUILD_MODE: "prod",
-    VITE_BASE: "/",
-    VITE_VAULT_SYNC_INTERVAL_MS: "1000",
-  });
-  assert.deepEqual(calls[1]?.[2], { PATH: "/bin", HOME: "/home/runner" });
-  assert.deepEqual(calls[2]?.[2], calls[1]?.[2]);
+  assert.deepEqual(
+    calls.map(([, , env]) => env),
+    [
+      {
+        ...baseEnvironment,
+        WASM_BUILD_MODE: "prod",
+        VITE_BASE: "/",
+        VITE_VAULT_SYNC_INTERVAL_MS: "1000",
+      },
+      baseEnvironment,
+      baseEnvironment,
+    ],
+  );
   for (const [, , env] of calls)
     for (const secret of Object.keys(secrets))
-      assert.equal(env[secret], undefined);
+      assert.equal(secret in env, false);
 });
 
 test("publication credentials are absent during validation and restored after", async () => {

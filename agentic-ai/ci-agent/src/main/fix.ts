@@ -97,7 +97,7 @@ export const runValidationCommand: ValidationRunner = async (
       const failure = signal
         ? `terminated by signal ${signal}`
         : code === 0
-          ? undefined
+          ? ""
           : `exited with code ${code}`;
       if (failure)
         rejectRun(new Error(`${command} ${args.join(" ")} ${failure}`));
@@ -116,7 +116,7 @@ type ChangedPath = {
   status: string;
 };
 
-type BaselineModeLookup = (path: string) => Promise<string | undefined>;
+type BaselineModeLookup = (path: string) => Promise<string>;
 
 type GitConfigEntry = {
   key: string;
@@ -242,7 +242,7 @@ async function collectChangedPaths(repoRoot: string): Promise<ChangedPath[]> {
 export async function assertRustDependencyUpdateChangeSet(
   repoRoot: string,
   changes: readonly ChangedPath[],
-  baselineModeForPath?: BaselineModeLookup,
+  baselineModeForPath: BaselineModeLookup = async () => "",
 ): Promise<void> {
   if (changes.length === 0) {
     throw new Error("Trusted dependency-update change set is empty");
@@ -279,7 +279,7 @@ export async function assertRustDependencyUpdateChangeSet(
           ? String(error.code)
           : "";
       if (code !== "ENOENT" || !change.status.includes("D")) throw error;
-      const baselineMode = await baselineModeForPath?.(change.path);
+      const baselineMode = await baselineModeForPath(change.path);
       if (baselineMode !== "100644" && baselineMode !== "100755") {
         throw new Error(
           `Dependency update deleted a symlink or special file: ${change.path}`,
@@ -289,20 +289,6 @@ export async function assertRustDependencyUpdateChangeSet(
   }
 }
 
-async function baselineMode(
-  repoRoot: string,
-  baseline: RepositoryBaseline,
-  path: string,
-): Promise<string | undefined> {
-  const output = await gitOutput(repoRoot, [
-    "ls-tree",
-    baseline.headSha,
-    "--",
-    path,
-  ]);
-  return /^(\d{6})\s/u.exec(output)?.[1];
-}
-
 async function assertTrustedChangeSet(
   repoRoot: string,
   baseline: RepositoryBaseline,
@@ -310,7 +296,16 @@ async function assertTrustedChangeSet(
   await assertRustDependencyUpdateChangeSet(
     repoRoot,
     await collectChangedPaths(repoRoot),
-    (path) => baselineMode(repoRoot, baseline, path),
+    async (path) => {
+      const tree = await gitOutput(repoRoot, [
+        "ls-tree",
+        baseline.headSha,
+        "--",
+        path,
+      ]);
+      const match = /^(\d{6})\s/u.exec(tree);
+      return match ? match[1] || "" : "";
+    },
   );
 }
 
@@ -355,10 +350,8 @@ async function assertCheckoutHasNoPersistedCredentials(
   assertNoPersistedGitCredentials(parseGitConfig(config));
 }
 
-export function resolveCiAgentFixProfile(
-  value: string | undefined,
-): CiAgentFixProfile {
-  const profile = value?.trim();
+export function resolveCiAgentFixProfile(value = ""): CiAgentFixProfile {
+  const profile = value.trim();
   if (!profile) return CiAgentFixProfile.Default;
   if (profile === CiAgentFixProfile.RustDependencyUpdate) {
     return CiAgentFixProfile.RustDependencyUpdate;
@@ -381,7 +374,7 @@ export function createValidationEnvironment(
   const environment: NodeJS.ProcessEnv = {};
   for (const name of VALIDATION_ENV_ALLOWLIST) {
     const value = hostEnvironment[name];
-    if (value !== undefined) environment[name] = value;
+    if (typeof value === "string") environment[name] = value;
   }
   return { ...environment, ...overrides };
 }
@@ -522,7 +515,7 @@ async function verifyLiveFixPublication(args: {
   });
 }
 
-export async function runCiFix(): Promise<string | undefined> {
+export async function runCiFix(): Promise<string> {
   const repository = process.env.GITHUB_REPOSITORY?.trim();
   const runId = process.env.GITHUB_RUN_ID?.trim();
   if (!repository || !runId) {
@@ -531,7 +524,9 @@ export async function runCiFix(): Promise<string | undefined> {
 
   const repoRoot = process.env.REPO_ROOT?.trim() || process.cwd();
   const fixBranch = process.env.FIX_BRANCH?.trim() || `fix/ci-${runId}`;
-  const profile = resolveCiAgentFixProfile(process.env.CI_AGENT_FIX_PROFILE);
+  const profile = resolveCiAgentFixProfile(
+    process.env.CI_AGENT_FIX_PROFILE || "",
+  );
   chdir(repoRoot);
 
   const octokit = createOctokit();
@@ -540,7 +535,7 @@ export async function runCiFix(): Promise<string | undefined> {
 
   let openPr = await findOpenPr(octokit, repoRef, fixBranch);
   let prNumber: number;
-  let publishedHead: string | undefined;
+  let publishedHead = "";
   if (openPr.kind === OpenPrLookupKind.Found) {
     prNumber = openPr.number;
     publishedHead = await verifyLiveFixPublication({
@@ -561,15 +556,15 @@ export async function runCiFix(): Promise<string | undefined> {
       console.log(
         "Add repository secret CURSOR_API_KEY (Cursor Dashboard → Integrations → User API Keys).",
       );
-      return undefined;
+      return "";
     }
 
     const loadedConfig = loadConfig();
     if (loadedConfig.kind === CiAgentConfigLoadKind.MissingApiKey) {
-      return undefined;
+      return "";
     }
     const config = loadedConfig.config;
-    let baseline: RepositoryBaseline | undefined;
+    let baseline: RepositoryBaseline | false = false;
     if (profile === CiAgentFixProfile.RustDependencyUpdate) {
       await assertCheckoutHasNoPersistedCredentials(repoRoot);
       baseline = await captureRepositoryBaseline(repoRoot);
@@ -584,7 +579,7 @@ export async function runCiFix(): Promise<string | undefined> {
       console.log(
         "::warning::Agent finished but working tree is clean — nothing to push.",
       );
-      return undefined;
+      return "";
     }
 
     if (profile === CiAgentFixProfile.RustDependencyUpdate) {
