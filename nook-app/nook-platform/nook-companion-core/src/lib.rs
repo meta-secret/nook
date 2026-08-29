@@ -117,10 +117,11 @@ pub use outcome_evidence::{
     DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS, classify_authentication_outcome,
 };
 pub use page_field_classification::{
-    LoginContextObservation, PageInputFieldObservation, PageInputType, expand_identity_text,
-    has_login_context, looks_like_email_verification_body, looks_like_login_advance_control_label,
-    looks_like_manual_checkpoint_label, looks_like_one_time_code_field,
-    looks_like_passkey_control_label, looks_like_username_field,
+    CanonicalControlDestination, LoginContextObservation, MAX_AUTHENTICATION_CONTROL_TEXT_BYTES,
+    PageInputFieldObservation, PageInputType, canonicalize_control_destination,
+    expand_identity_text, has_login_context, looks_like_email_verification_body,
+    looks_like_login_advance_control_label, looks_like_manual_checkpoint_label,
+    looks_like_one_time_code_field, looks_like_passkey_control_label, looks_like_username_field,
 };
 pub use vault_host_policy::{
     DEFAULT_SIMPLE_VAULT_URL, VaultHostPolicyError, belongs_to_sentinel_vault,

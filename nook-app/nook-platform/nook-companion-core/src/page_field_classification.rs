@@ -4,6 +4,13 @@
 //! which identity strings count as username, OTP, passkey, or manual-checkpoint
 //! signals used to build authentication workflow observations in the host.
 
+mod destination_identity;
+
+/// Maximum byte length for each DOM-controlled authentication identity string.
+pub const MAX_AUTHENTICATION_CONTROL_TEXT_BYTES: usize = 512;
+
+pub use destination_identity::{CanonicalControlDestination, canonicalize_control_destination};
+
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::wasm_bindgen;
 
