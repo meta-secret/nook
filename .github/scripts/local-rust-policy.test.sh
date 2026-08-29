@@ -52,6 +52,21 @@ fi
 grep -Fq "Local Rust/WASM product execution is disabled" <<<"$denial_output" || fail "task rust:test did not fail at the policy boundary"
 [[ ! -e "$fixture_root/docker-invoked" ]] || fail "task rust:test touched Docker before local denial"
 
+for selector in wasm:build:fast web:dev web:dev:fast; do
+  rm -f "$fixture_root/docker-invoked"
+  if mounted_output="$(
+    env -u GITHUB_ACTIONS -u CI -u NOOK_ALLOW_LOCAL_RUST_DIAGNOSTIC \
+      DOCKER="$fixture_root/docker" \
+      SCCACHE_S3_ACCESS_KEY_FILE="$fixture_root/access" \
+      SCCACHE_S3_SECRET_KEY_FILE="$fixture_root/secret" \
+      task "$selector" 2>&1
+  )"; then
+    fail "task $selector was allowed locally"
+  fi
+  grep -Fq "Local Rust/WASM product execution is disabled" <<<"$mounted_output" || fail "$selector did not fail at the host policy boundary"
+  [[ ! -e "$fixture_root/docker-invoked" ]] || fail "$selector touched Docker before local denial"
+done
+
 if GITHUB_ACTIONS=true CI=true \
   DOCKER="$fixture_root/docker" \
   SCCACHE_S3_ACCESS_KEY_FILE="$fixture_root/access" \
@@ -99,6 +114,18 @@ assert_guarded() {
   grep -Fq '.github/scripts/local-rust-policy.sh' <<<"$block" || fail "$task_name bypasses the local Rust policy"
 }
 
+assert_internal_marker() {
+  local file="$1"
+  local task_name="$2"
+  local block
+  block="$(task_block "$file" "$task_name")"
+  [[ -n "$block" ]] || fail "missing task $task_name in $file"
+  grep -Fq -- '-e CI=1' <<<"$block" || fail "$task_name does not forward the constrained internal second-stage marker"
+  if grep -Fq 'NOOK_ALLOW_LOCAL_RUST_DIAGNOSTIC' <<<"$block"; then
+    fail "$task_name forwards the human diagnostic override into its child container"
+  fi
+}
+
 unguarded_boundaries="$({
   for file in \
     nook-app/Taskfile.yml \
@@ -143,6 +170,18 @@ done
 for task_name in _wasm:build:run _wasm:test _wasm:test:browser; do
   assert_guarded nook-app/nook-platform/nook-wasm/Taskfile.yml "$task_name"
 done
+
+wasm_fast_block="$(task_block nook-app/nook-platform/nook-wasm/Taskfile.yml wasm:build:fast)"
+grep -Fq 'setup:rust:fast' <<<"$wasm_fast_block" || fail "wasm:build:fast lost its guarded host setup"
+assert_internal_marker nook-app/nook-platform/docker/Taskfile.yml docker:wasm:build:fast
+
+for task_name in web:dev web:dev:fast; do
+  assert_guarded nook-app/nook-web/Taskfile.yml "$task_name"
+done
+assert_guarded nook-app/nook-web/docker/Taskfile.yml docker:web:dev
+assert_guarded nook-app/nook-web/docker/Taskfile.yml docker:web:dev:fast
+assert_internal_marker nook-app/nook-web/docker/Taskfile.yml docker:web:dev
+assert_internal_marker nook-app/nook-web/docker/Taskfile.yml docker:web:dev:fast
 
 for task_name in \
   registry-cache:publish:local-format-deps docker:rust:task \

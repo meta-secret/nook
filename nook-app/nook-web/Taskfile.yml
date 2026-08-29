@@ -240,18 +240,18 @@ tasks:
 
   web:dev:
     desc: Start the trusted-HTTPS Svelte dev server in Docker.
-    deps:
-      - setup:rust:browser
-      - web:https:setup
     cmds:
+      - bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" web:dev
+      - task: setup:rust:browser
+      - task: web:https:setup
       - task: docker:web:dev
 
   web:dev:fast:
     desc: Start the trusted-HTTPS Svelte dev server in Docker with a no-opt wasm build (local iteration).
-    deps:
-      - setup:rust:browser
-      - web:https:setup
     cmds:
+      - bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" web:dev:fast
+      - task: setup:rust:browser
+      - task: web:https:setup
       - task: docker:web:dev:fast
 
   web:https:setup:
