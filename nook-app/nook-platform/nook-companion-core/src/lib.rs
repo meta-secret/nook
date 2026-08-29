@@ -10,8 +10,6 @@
 )]
 
 mod authentication_outcome_response;
-#[path = "authentication_workflow/observation_facts/passkey.rs"]
-mod authentication_passkey_policy;
 mod authentication_workflow;
 mod authentication_workflow_response;
 mod authenticator_backup_attach_response;
@@ -39,18 +37,25 @@ pub use authentication_outcome_response::{
     AuthenticationOutcomeResponseKind, AuthenticationOutcomeResponseWire,
     decode_authentication_outcome_response,
 };
-pub use authentication_passkey_policy::{
-    AuthenticationDetailedPasskeyControlCandidateObservation,
-    authentication_passkey_control_candidate_is_safe,
-};
 pub use authentication_workflow::{
-    AuthenticationApprovalRequirement, AuthenticationFormObservationPriority,
-    AuthenticationPageObservation, AuthenticationPageObservations, AuthenticationWorkflowAction,
-    AuthenticationWorkflowKind, AuthenticationWorkflowMatch, AuthenticationWorkflowSnapshot,
-    AuthenticationWorkflowSnapshotError, AuthenticationWorkflowStage,
-    MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
-    authentication_form_observation_priority, authentication_page_observations_are_valid,
-    classify_authentication_workflow, classify_authentication_workflow_candidates,
+    AuthenticationAdvanceControlEvidence, AuthenticationApprovalRequirement,
+    AuthenticationAuthenticatorObservationFacts, AuthenticationAuthenticatorSetupObservation,
+    AuthenticationBackupCodesObservation, AuthenticationCeremonyContextObservation,
+    AuthenticationCeremonyObservationFacts, AuthenticationDetailedAdvanceControlObservation,
+    AuthenticationDetailedPasskeyControlCandidateObservation,
+    AuthenticationDetailedPasskeyControlObservation, AuthenticationEnrollmentEvidence,
+    AuthenticationFieldObservationFacts, AuthenticationFormObservationPriority,
+    AuthenticationManualCheckpoint, AuthenticationOneTimeCodeProgressionEvidence,
+    AuthenticationPageObservation, AuthenticationPageObservationFacts,
+    AuthenticationPageObservationFactsBatch, AuthenticationPageObservations,
+    AuthenticationPasskeyControlObservation, AuthenticationPasskeyEvidence,
+    AuthenticationWorkflowAction, AuthenticationWorkflowKind, AuthenticationWorkflowMatch,
+    AuthenticationWorkflowSnapshot, AuthenticationWorkflowSnapshotError,
+    AuthenticationWorkflowStage, MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
+    MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS, authentication_form_observation_priority,
+    authentication_page_observations_are_valid, authentication_passkey_control_candidate_is_safe,
+    authentication_passkey_control_evidence_is_safe, classify_authentication_workflow,
+    classify_authentication_workflow_candidates,
 };
 pub use authentication_workflow_response::{
     AuthenticationWorkflowSnapshotResponse, AuthenticationWorkflowSnapshotResponseDecodeError,
@@ -126,7 +131,8 @@ pub use outcome_evidence::{
 pub use page_field_classification::{
     AuthenticationAdvanceControlDecision, AuthenticationAdvanceControlObservation,
     AuthenticationUsernameEvidence, PageControlActionability, PageControlOwnership,
-    PageControlSemantics, authentication_advance_control_is_safe,
+    PageControlSemantics, authentication_advance_control_is_safe, authentication_username_evidence,
+    strongest_authentication_username_evidence,
 };
 pub use page_field_classification::{
     CanonicalControlDestination, LoginContextObservation, MAX_AUTHENTICATION_CONTROL_TEXT_BYTES,

@@ -1,8 +1,18 @@
+use super::AuthenticationFieldObservationFacts;
 use crate::page_field_classification::{
     AuthenticationAdvanceControlObservation, authentication_passkey_control_is_safe,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum AuthenticationPasskeyControlObservation {
+    #[default]
+    Absent,
+    Present,
+}
 
 /// How the browser identified one bounded passkey control candidate.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -34,6 +44,72 @@ pub fn authentication_passkey_control_candidate_is_safe(
     candidate: &AuthenticationDetailedPasskeyControlCandidateObservation,
 ) -> bool {
     candidate.is_safe()
+}
+
+/// Validate detailed passkey evidence before enriching it with vault metadata.
+#[must_use]
+pub fn authentication_passkey_control_evidence_is_safe(
+    evidence: &AuthenticationDetailedPasskeyControlObservation,
+) -> bool {
+    evidence.is_safe()
+}
+
+/// Detailed browser evidence for the passkey control selected by the host.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
+#[serde(tag = "kind", content = "observation", rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum AuthenticationDetailedPasskeyControlObservation {
+    #[default]
+    Absent,
+    Observed(AuthenticationAdvanceControlObservation),
+    /// The browser observed the dedicated non-secret passkey marker on this control.
+    ExplicitlyMarked(AuthenticationAdvanceControlObservation),
+    /// Every passkey candidate observed in the bounded authentication scope.
+    Candidates(Vec<AuthenticationDetailedPasskeyControlCandidateObservation>),
+}
+
+impl AuthenticationDetailedPasskeyControlObservation {
+    pub(super) fn is_bounded(&self) -> bool {
+        matches!(self, Self::Absent)
+            || matches!(self, Self::Observed(observation) | Self::ExplicitlyMarked(observation) if observation.is_bounded())
+            || matches!(self, Self::Candidates(candidates)
+                if !candidates.is_empty()
+                    && candidates.len() <= crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT as usize
+                    && candidates.iter().all(|candidate| candidate.observation().is_bounded()))
+    }
+
+    pub(super) fn is_safe(&self) -> bool {
+        self.is_safe_for_fields(None)
+    }
+
+    pub(super) fn is_safe_for_fields(
+        &self,
+        fields: Option<AuthenticationFieldObservationFacts>,
+    ) -> bool {
+        if !self.is_bounded() {
+            return false;
+        }
+        let compatible = |observation: &AuthenticationAdvanceControlObservation| {
+            fields.is_none_or(|fields| fields.is_compatible_with_detailed_control(observation))
+        };
+        matches!(
+            self,
+            Self::Observed(observation)
+                if compatible(observation)
+                    && authentication_passkey_control_is_safe(observation, false)
+        ) || matches!(
+            self,
+            Self::ExplicitlyMarked(observation)
+                if compatible(observation)
+                    && authentication_passkey_control_is_safe(observation, true)
+        ) || matches!(
+            self,
+            Self::Candidates(candidates)
+                if candidates.iter().any(|candidate| {
+                    compatible(candidate.observation()) && candidate.is_safe()
+                })
+        )
+    }
 }
 
 #[cfg(test)]
@@ -219,5 +295,19 @@ mod tests {
         assert!(authentication_passkey_control_candidate_is_safe(
             &AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(assertion)
         ));
+    }
+
+    #[test]
+    fn oversized_candidate_evidence_fails_before_selecting_a_safe_candidate() {
+        let candidate = AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(
+            passkey_control("Use passkey"),
+        );
+        let evidence = AuthenticationDetailedPasskeyControlObservation::Candidates(vec![
+            candidate;
+            crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT as usize
+                + 1
+        ]);
+
+        assert!(!authentication_passkey_control_evidence_is_safe(&evidence));
     }
 }
