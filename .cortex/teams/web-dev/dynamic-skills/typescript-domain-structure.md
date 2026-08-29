@@ -96,11 +96,16 @@ Does not apply to:
   allow-lists
 - `rg "type Result<|type Maybe<" agentic-ai` should find none
 - The web worker runs the affected package's focused typecheck and behavior
-  tests, commits one coherent exact handoff, and returns that evidence without
-  pushing.
-- Gizmo integrates the handoff, runs `task loom:pre-push` on the integrated
-  head, commits and pushes promptly, then owns any useful focused hosted build
-  and the complete exact-head validation, readiness, and merge lifecycle.
+  tests, retains required browser evidence, deterministically formats every
+  allowed web or web-owned Cortex file, commits one coherent exact handoff, and
+  returns that evidence without pushing.
+- Gizmo integrates the formatted handoff and runs `task loom:pre-push` on the
+  combined head. If that gate formats web-owned content, Gizmo returns the exact
+  diff for a fresh web-development commit instead of committing it. After
+  reintegration and a clean gate, Gizmo pushes and immediately obtains remote
+  evidence: at least one relevant focused remote task while the head is not
+  validation-ready, or complete exact-head validation immediately when it is
+  ready. Gizmo then owns readiness and merge.
 
 For Loom's one-parameter function rule, see
 [typescript-single-parameter.md](typescript-single-parameter.md).
