@@ -1,8 +1,7 @@
 use super::control_identity::{
-    identity_names_external_authentication_provider,
-    looks_like_alternate_authentication_route_control_label,
     looks_like_auxiliary_authentication_control_label,
     looks_like_password_recovery_route_control_label, looks_like_registration_route_control_label,
+    route_names_external_authentication_provider,
 };
 use super::{
     contains_any_word, expand_identity_text, looks_like_non_authentication_submit_control_label,
@@ -47,8 +46,11 @@ fn control_destination_indicates_alternate_provider(
     destination_identity: &str,
     allow_generic_oauth_authorization: bool,
 ) -> bool {
-    looks_like_alternate_authentication_route_control_label(destination_identity)
-        || identity_names_external_authentication_provider(destination_identity)
+    route_names_external_authentication_provider(destination_identity)
+        || contains_any_word(
+            &expand_identity_text(destination_identity),
+            &["passkey", "saml", "sso"],
+        )
         || (contains_any_word(&expand_identity_text(destination_identity), &["oauth"])
             && !(allow_generic_oauth_authorization
                 && control_destination_indicates_generic_oauth_authorization_route(

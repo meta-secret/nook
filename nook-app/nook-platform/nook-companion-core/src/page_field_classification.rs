@@ -583,6 +583,10 @@ mod tests {
             "Continue with Google"
         ));
         assert!(!looks_like_login_advance_control_label(
+            "Continue with Amazon"
+        ));
+        assert!(!looks_like_login_advance_control_label("Continue Google"));
+        assert!(!looks_like_login_advance_control_label(
             "Continue with LinkedIn"
         ));
         assert!(!looks_like_login_advance_control_label("Continue with X"));
@@ -607,6 +611,11 @@ mod tests {
             "https://example.test",
             "login-form",
             "https://example.test/auth/login?next=/profile",
+        ));
+        assert!(has_safe_authentication_route_identity(
+            "https://example.test",
+            "login-form",
+            "https://example.test/auth/login?x=1",
         ));
         for (form, destination) in [
             ("delete-account", "https://example.test/auth/login"),

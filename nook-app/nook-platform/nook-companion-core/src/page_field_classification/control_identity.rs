@@ -2,9 +2,13 @@ use super::{
     contains_any_word, expand_identity_text, looks_like_unrestricted_login_advance_control_label,
 };
 
-pub(super) fn identity_names_external_authentication_provider(identity: &str) -> bool {
+fn identity_names_external_authentication_provider(
+    identity: &str,
+    allow_single_letter_x: bool,
+) -> bool {
+    let identity = expand_identity_text(identity);
     contains_any_word(
-        &expand_identity_text(identity),
+        &identity,
         &[
             "google",
             "apple",
@@ -17,11 +21,28 @@ pub(super) fn identity_names_external_authentication_provider(identity: &str) ->
             "linkedin",
             "linked in",
             "twitter",
-            "x",
             "x com",
             "okta",
         ],
-    )
+    ) || (allow_single_letter_x && contains_any_word(&identity, &["x"]))
+}
+
+pub(super) fn label_names_external_authentication_provider(identity: &str) -> bool {
+    identity_names_external_authentication_provider(identity, true)
+}
+
+pub(super) fn route_names_external_authentication_provider(identity: &str) -> bool {
+    identity_names_external_authentication_provider(identity, false)
+}
+
+fn has_open_ended_provider_selection_grammar(identity: &str) -> bool {
+    let tokens = identity.split_whitespace().collect::<Vec<_>>();
+    tokens.iter().enumerate().any(|(index, token)| {
+        matches!(
+            *token,
+            "with" | "using" | "via" | "use" | "choose" | "select"
+        ) && index + 1 < tokens.len()
+    })
 }
 
 pub(super) fn looks_like_alternate_authentication_route_control_label(label: &str) -> bool {
@@ -29,15 +50,9 @@ pub(super) fn looks_like_alternate_authentication_route_control_label(label: &st
     if contains_any_word(&identity, &["passkey", "saml", "sso"]) {
         return true;
     }
-    let names_external_provider = identity_names_external_authentication_provider(&identity);
-    if !names_external_provider {
-        return false;
-    }
-    let selects_alternate_provider = contains_any_word(
-        &identity,
-        &["with", "using", "via", "use", "choose", "select"],
-    );
-    selects_alternate_provider || !looks_like_unrestricted_login_advance_control_label(label)
+    label_names_external_authentication_provider(&identity)
+        || (looks_like_unrestricted_login_advance_control_label(label)
+            && has_open_ended_provider_selection_grammar(&identity))
 }
 
 pub(super) fn looks_like_auxiliary_authentication_control_label(label: &str) -> bool {

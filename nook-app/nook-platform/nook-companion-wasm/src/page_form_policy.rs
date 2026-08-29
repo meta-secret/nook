@@ -110,6 +110,20 @@ pub fn looks_like_login_advance_control_label(label: &str) -> bool {
 
 #[wasm_bindgen]
 #[must_use]
+pub fn has_safe_authentication_route_identity(
+    source_origin: &str,
+    form_identity: &str,
+    destination_identity: &str,
+) -> bool {
+    nook_companion_core::has_safe_authentication_route_identity(
+        source_origin,
+        form_identity,
+        destination_identity,
+    )
+}
+
+#[wasm_bindgen]
+#[must_use]
 pub fn authentication_form_observation_priority(
     observation: nook_companion_core::AuthenticationPageObservation,
 ) -> u8 {
@@ -148,6 +162,16 @@ mod tests {
         );
         assert!(looks_like_username_field(&username));
         assert!(looks_like_login_advance_control_label("Continue"));
+        assert!(has_safe_authentication_route_identity(
+            "https://example.test",
+            "login-form",
+            "https://example.test/auth/login?x=1",
+        ));
+        assert!(!has_safe_authentication_route_identity(
+            "https://example.test",
+            "login-form",
+            "https://example.test/signin/x.com",
+        ));
 
         let login = nook_companion_core::AuthenticationPageObservation {
             current_password_field_count: 1,
