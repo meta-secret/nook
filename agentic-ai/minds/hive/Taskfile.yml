@@ -192,12 +192,14 @@ tasks:
             -e "HIVE_NEO4J_TEST_USERNAME=${HIVE_NEO4J_TEST_USERNAME:-neo4j}"
             -e "HIVE_NEO4J_TEST_PASSWORD")
         fi
-        if [ "${NOOK_ARC_HIVE:-}" = "1" ]; then
+        if [ "${NOOK_ARC_HIVE:-}" = "1" ] && [ -z "${NOOK_VALIDATION_DOCKER:-}" ]; then
           "$HIVE_TASK_DIR/run-arc-tests.sh" "$verified/hive-tests"
         else
+          extra_net=(--network host)
+          if [ -n "${NOOK_VALIDATION_DOCKER:-}" ]; then extra_net=(); fi
           docker run --rm \
             --platform linux/amd64 \
-            --network host \
+            "${extra_net[@]}" \
             --mount "type=bind,src=$verified/hive-tests,dst=/tests,readonly" \
             "${test_environment[@]}" \
             "$HIVE_TEST_RUNTIME_IMAGE" \

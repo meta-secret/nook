@@ -259,6 +259,11 @@ test("dependency update scope accepts only regular Rust mission files", async ()
       " M",
       /non-crates.io source/,
     );
+    await writeFile(
+      join(root, "nook-app/nook-platform/Cargo.toml"),
+      "serde = { git = 'https://evil.example/serde' }\n",
+    );
+    await rejects("nook-app/nook-platform/Cargo.toml", " M", /non-crates.io/);
 
     const symlinkPath = "preflight/src/linked.rs";
     await mkdir(join(root, "preflight/src"), { recursive: true });

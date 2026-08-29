@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import {
   copyFile,
   lstat,
@@ -143,17 +143,27 @@ export const runValidationCommand: ValidationRunner = async (
   process.chdir(options.cwd);
   restoreHostEnvironment(options.env, process.env);
   try {
-    if (args[0] === "hive:verify" && args.length === 1)
-      await execFileAsync("task", ["hive:verify"]);
+    const wait = (name: "hive:verify" | "fuzz") =>
+      new Promise<void>((resolveRun, rejectRun) => {
+        const child =
+          name === "fuzz"
+            ? spawn("task", ["docker:ecosystem:fuzz", "FUZZ_SECONDS=20"], {
+                stdio: "inherit",
+              })
+            : spawn("task", ["hive:verify"], { stdio: "inherit" });
+        child.once("error", rejectRun);
+        child.once("close", (code, signal) => {
+          if (code === 0 && !signal) resolveRun();
+          else rejectRun(new Error("Isolated validation command failed"));
+        });
+      });
+    if (args[0] === "hive:verify" && args.length === 1) await wait("hive:verify");
     else if (
       args[0] === "docker:ecosystem:fuzz" &&
       args[1] === "FUZZ_SECONDS=20" &&
       args.length === 2
     )
-      await execFileAsync("task", [
-        "docker:ecosystem:fuzz",
-        "FUZZ_SECONDS=20",
-      ]);
+      await wait("fuzz");
     else throw new Error("Isolated validation command is not allowlisted");
   } finally {
     restoreHostEnvironment(hostEnvironment, process.env);
@@ -194,13 +204,15 @@ const CRATES_IO_SOURCE =
 
 function cargoLockSources(content: string): Set<string> {
   return new Set(
-    [...content.matchAll(/^\s*source\s*=\s*"([^"]+)"/gmu)].map((m) => m[1]!),
+    [...content.matchAll(/^\s*source\s*=\s*["']([^"']+)["']/gmu)].map(
+      (m) => m[1]!,
+    ),
   );
 }
 
 function cargoTomlGitSources(content: string): Set<string> {
   return new Set(
-    [...content.matchAll(/\bgit\s*=\s*"([^"]+)"/gu)].map((m) => m[1]!),
+    [...content.matchAll(/\bgit\s*=\s*["']([^"']+)["']/gu)].map((m) => m[1]!),
   );
 }
 
@@ -301,10 +313,17 @@ export async function captureGitMetadataBaseline(
     ]),
     gitOutput(repoRoot, ["rev-parse", "--absolute-git-dir"]),
   ]);
+  const gitDir = gitDirectory.trim();
+  let exclude = "";
+  try {
+    exclude = await readFile(join(gitDir, "info", "exclude"), "utf8");
+  } catch {
+    exclude = "";
+  }
   return {
     commonDirectory: commonDirectory.trim(),
-    configuration,
-    gitDirectory: gitDirectory.trim(),
+    configuration: `${configuration}\0${exclude}`,
+    gitDirectory: gitDir,
   };
 }
 
@@ -753,20 +772,41 @@ export async function runCiFix(): Promise<CiFixOutcome> {
     prNumber = openPr.number;
     if (profile === CiAgentFixProfile.RustDependencyUpdate) {
       const token = process.env.NOOK_GITHUB_PAT?.trim();
+      const prior = [
+        process.env.GIT_CONFIG_COUNT,
+        process.env.GIT_CONFIG_KEY_0,
+        process.env.GIT_CONFIG_VALUE_0,
+      ];
+      if (token) {
+        process.env.GIT_CONFIG_COUNT = "1";
+        process.env.GIT_CONFIG_KEY_0 = "http.https://github.com/.extraheader";
+        process.env.GIT_CONFIG_VALUE_0 = `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`;
+      }
+      try {
+        await gitOutput(repoRoot, [
+          "fetch",
+          "--depth=1",
+          "origin",
+          "main",
+          fixBranch,
+        ]);
+      } finally {
+        const names = [
+          "GIT_CONFIG_COUNT",
+          "GIT_CONFIG_KEY_0",
+          "GIT_CONFIG_VALUE_0",
+        ] as const;
+        names.forEach((name, index) => {
+          const value = prior[index];
+          if (value === undefined) delete process.env[name];
+          else process.env[name] = value;
+        });
+      }
       await gitOutput(repoRoot, [
-        ...(token
-          ? [
-              "-c",
-              `http.https://github.com/.extraheader=AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`,
-            ]
-          : []),
-        "fetch",
-        "--depth=1",
-        "origin",
-        "main",
-        fixBranch,
+        "checkout",
+        "--force",
+        `origin/${fixBranch}`,
       ]);
-      await gitOutput(repoRoot, ["checkout", "--force", "FETCH_HEAD"]);
       await assertTrustedChangeSet(
         repoRoot,
         "origin/main",
