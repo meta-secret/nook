@@ -30,6 +30,7 @@ import {
   applyCd,
   applyParentMutation,
   applySetPositional,
+  assertNoDynamicShellRuntimeScript,
   assertSafeShellRuntime,
   hasArithmeticTestExecution,
   hasLeadingStdinRedirection,
@@ -37,10 +38,12 @@ import {
   mergeConditionalShellState,
   nodeInspectExecutables,
   normalizedRuntime,
+  PROTECTED_SKILL_PATH,
   restoreShellState,
   shellStdinConsumer,
   shellRuntimeUsesStdinRedirection,
   withoutLeadingRedirections,
+  looksLikeRepositoryScript,
 } from './skill-provider-shell-command.ts';
 import {
   ShellSeparator,
@@ -70,8 +73,6 @@ export type {
 const MAX_SHELL_COMMANDS = 4_096;
 const MAX_SHELL_DEPTH = 8;
 const MAX_COMMAND_NORMALIZATIONS = 32;
-const PROTECTED_SKILL_PATH =
-  /(?:\.agents\/skills|\.cortex\/(?:gizmo|shared|teams\/[^/]+)\/dynamic-skills\/[^/]+\/scripts)\//u;
 const PROTECTED_SKILL_FRAGMENTS = [
   '.cortex',
   'dynamic-skills',
@@ -763,8 +764,9 @@ function analyzeShellRuntime(request: RuntimeCommandRequest): void {
   let commandString = false;
   while (index < request.words.length) {
     const word = request.words[index] as ShellWord;
-    if (!word.value.startsWith('-') || word.value === '-') break;
     if (word.dynamic) {
+      assertNoDynamicShellRuntimeScript([request.words, index]);
+      if (!word.value.startsWith('-') || word.value === '-') return;
       const argumentsRequest: WordsEnvironmentRequest = {
         words: request.words.slice(index),
         environment: request.state.environment,
@@ -775,6 +777,7 @@ function analyzeShellRuntime(request: RuntimeCommandRequest): void {
         );
       return;
     }
+    if (!word.value.startsWith('-') || word.value === '-') break;
     if (word.value === '--') {
       index += 1;
       break;
@@ -948,17 +951,6 @@ function addLaunch(request: LaunchRequest): void {
     workingDirectory: request.state.cwd,
   };
   request.state.launches.push(scriptLaunch);
-}
-
-function looksLikeRepositoryScript(value: string): boolean {
-  if (value.includes('*') || value.includes('?') || value.includes('['))
-    return PROTECTED_SKILL_PATH.test(value);
-  if (/^(?:build|coverage|dist|target)\//u.test(value)) return false;
-  return (
-    !/^(?:[a-z]+:|\/)/u.test(value) &&
-    !value.includes('node_modules/.bin/') &&
-    /[/.]/u.test(value)
-  );
 }
 
 function expandPositionalWords(

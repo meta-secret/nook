@@ -16,6 +16,35 @@ const ABSOLUTE_RUNTIME =
 const SCRIPT_DIRECTORY_EXPRESSION =
   /^\$\(dirname (?:-- )?["']?(?:\$0|\$\{BASH_SOURCE\[0\]\})["']?\)$/u;
 
+export const PROTECTED_SKILL_PATH =
+  /(?:\.agents\/skills|\.cortex\/(?:gizmo|shared|teams\/[^/]+)\/dynamic-skills\/[^/]+\/scripts)\//u;
+
+export function looksLikeRepositoryScript(value: string): boolean {
+  if (value.includes('*') || value.includes('?') || value.includes('['))
+    return PROTECTED_SKILL_PATH.test(value);
+  if (/^(?:build|coverage|dist|target)\//u.test(value)) return false;
+  return (
+    !/^(?:[a-z]+:|\/)/u.test(value) &&
+    !value.includes('node_modules/.bin/') &&
+    /[/.]/u.test(value)
+  );
+}
+
+export function assertNoDynamicShellRuntimeScript([words, index]: readonly [
+  readonly ShellWord[],
+  number,
+]): void {
+  if (
+    words
+      .slice(index + 1)
+      .some(
+        (candidate) =>
+          !candidate.dynamic && looksLikeRepositoryScript(candidate.value),
+      )
+  )
+    throw new Error('Dynamic shell runtime option construction is forbidden.');
+}
+
 export function withoutLeadingRedirections(
   input: readonly ShellWord[],
 ): readonly ShellWord[] {

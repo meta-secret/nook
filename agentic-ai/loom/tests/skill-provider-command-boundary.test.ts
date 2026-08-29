@@ -145,6 +145,13 @@ test('accepts bounded static shell structures', () => {
     expect(() => inspectProtected(source), source).not.toThrow();
 });
 
+test('rejects dynamic shell options before a static script target', () => {
+  expect(() => inspectShell('bash $OPTS scripts/facade.bash')).toThrow(
+    'Dynamic shell runtime option construction is forbidden.',
+  );
+  expect(() => inspectShell('bash "$OPTS"')).not.toThrow();
+});
+
 test('closes the exact-head shell review batch', () => {
   for (const source of [
     `ROOT=${PROTECTED_ROOT}; env ROOT=scripts true; bun "$ROOT/cli.ts"`,

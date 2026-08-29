@@ -26,6 +26,7 @@ const STANDARD_WORKFLOW_SHELLS = new Set([
   'pwsh',
   'sh',
 ]);
+const EXECUTION_ENVIRONMENT_NAMES = new Set(['BASH_ENV', 'NODE_OPTIONS']);
 
 export function workflowCommandSources(
   request: WorkflowCommandRequest,
@@ -148,7 +149,7 @@ function staticEnvironment(
     if (
       /^[A-Za-z_]\w*$/u.test(name) &&
       typeof value === 'string' &&
-      !value.includes('${{')
+      (!value.includes('${{') || EXECUTION_ENVIRONMENT_NAMES.has(name))
     )
       values.set(name, value);
   return values;
