@@ -223,6 +223,59 @@ test('dynamic ESLint config selection fails closed', () => {
   );
 });
 
+test('wrapped Playwright commands select the nearest implicit config', () => {
+  const sources = new Map([
+    ['nested/package.json', '{"scripts":{"test:e2e":"npx playwright test"}}'],
+    ['playwright.config.ts', 'export const rootDecoy = true;'],
+    ['nested/playwright.config.mts', `await import('../${PROVIDER_CLI}');`],
+    [PROVIDER_CLI, 'export {};'],
+  ]);
+  const request = { roots: ['nested/package.json'], sources };
+  expectProviderReachable(graph(request));
+});
+
+test('explicit Playwright config forms follow package-command cd', () => {
+  for (const command of [
+    'cd .. && bunx playwright test --config config/playwright.cjs',
+    'cd .. && npx playwright test --config=config/playwright.cjs',
+  ]) {
+    const sources = new Map([
+      ['nested/package.json', `{"scripts":{"test:e2e":"${command}"}}`],
+      ['nested/playwright.config.ts', 'export const nestedDecoy = true;'],
+      ['config/playwright.cjs', `await import('../${PROVIDER_CLI}');`],
+      [PROVIDER_CLI, 'export {};'],
+    ]);
+    const request = { roots: ['nested/package.json'], sources };
+    expectProviderReachable(graph(request));
+  }
+});
+
+test('dynamic Playwright config selection fails closed', () => {
+  const sources = new Map([
+    [
+      'package.json',
+      '{"scripts":{"test:e2e":"npx playwright test --config \\"$CONFIG\\""}}',
+    ],
+  ]);
+  const request = { roots: ['package.json'], sources };
+  expect(() => configurationScriptPaths(graph(request))).toThrow(
+    'Dynamic Playwright configuration selection',
+  );
+});
+
+test('ESLint no-config-lookup does not suppress Playwright config lookup', () => {
+  const sources = new Map([
+    [
+      'nested/package.json',
+      '{"scripts":{"test:e2e":"playwright test --no-config-lookup"}}',
+    ],
+    ['nested/playwright.config.cts', `await import('../${PROVIDER_CLI}');`],
+    [PROVIDER_CLI, 'export {};'],
+  ]);
+  const request = { roots: ['nested/package.json'], sources };
+  expectProviderReachable(graph(request));
+});
+
 test('complex Task templates cannot hide executable entrypoints', () => {
   const sources = new Map([
     [
