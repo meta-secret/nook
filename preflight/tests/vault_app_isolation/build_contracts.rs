@@ -13,6 +13,7 @@ const TRUSTED_BUILDX_PATHS: [&str; 6] = [
     "/opt/homebrew/lib/docker/cli-plugins/docker-buildx",
     "/Applications/Docker.app/Contents/Resources/cli-plugins/docker-buildx",
 ];
+const TRUSTED_JQ_PATHS: [&str; 3] = ["/usr/local/bin/jq", "/usr/bin/jq", "/opt/homebrew/bin/jq"];
 const TRUSTED_DOCKER_SELECTOR: &str =
     "if [ -x /usr/local/bin/docker ]; then docker_cli=/usr/local/bin/docker
 elif [ -x /usr/bin/docker ]; then docker_cli=/usr/bin/docker
@@ -397,6 +398,11 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
             buildx_assignments, TRUSTED_BUILDX_PATHS,
             "{path} Buildx selector drift"
         );
+        let jq_assignments: Vec<_> = source
+            .lines()
+            .filter_map(|line| line.split_once("jq_cli=").map(|entry| entry.1.trim()))
+            .collect();
+        assert_eq!(jq_assignments, TRUSTED_JQ_PATHS, "{path} jq selector drift");
         assert_eq!(source.matches("\"$docker_cli\"").count(), invocation_count);
         assert_eq!(
             source
@@ -405,15 +411,15 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
             1,
             "{path} must isolate Docker plugin discovery"
         );
-        assert!(source.contains("for entry in config.json contexts; do"));
+        assert!(source.contains("for entry in contexts; do"));
         assert!(source.contains("export BUILDX_CONFIG=\"$docker_config_source/buildx\""));
-        assert!(source.contains("Docker config may not add CLI plugin directories"));
+        assert!(source.contains(
+            "\"$jq_cli\" 'del(.cliPluginsExtraDirs)' \"$docker_config_source/config.json\" >\"$trusted_docker_config/config.json\""
+        ));
         assert!(source.contains(
             "ln -s \"$buildx_cli\" \"$trusted_docker_config/cli-plugins/docker-buildx\""
         ));
-        assert!(source.contains(
-            "grep -q '\"cliPluginsExtraDirs\"[[:space:]]*:' \"$trusted_docker_config/config.json\""
-        ));
+        assert!(source.contains("chmod 600 \"$trusted_docker_config/config.json\""));
         if path.contains("with-") {
             let propagation_count = usize::from(path.contains("with-remote"))
                 + usize::from(path.contains("with-healthy")) * 2;
@@ -609,17 +615,21 @@ fi
     fs::create_dir_all(&malicious_config)?;
     fs::write(
         malicious_config.join("config.json"),
-        r#"{"cliPluginsExtraDirs":["/tmp/untrusted"]}"#,
+        "{\n\"\\u0063liPluginsExtraDirs\"\n:\n[\"/tmp/untrusted\"],\n\"auths\":{}\n}",
     )?;
-    let refused_plugin = Command::new("bash")
+    let sanitized_plugin = Command::new("bash")
         .arg(&wrapper)
-        .args(["true"])
+        .args([
+            "bash",
+            "-c",
+            "! grep -Eq 'cliPluginsExtraDirs|u0063liPluginsExtraDirs' \"$DOCKER_CONFIG/config.json\"",
+        ])
         .env("DOCKER_CONFIG", malicious_config)
         .output()?;
-    assert!(!refused_plugin.status.success());
     assert!(
-        String::from_utf8_lossy(&refused_plugin.stderr)
-            .contains("Docker config may not add CLI plugin directories")
+        sanitized_plugin.status.success(),
+        "structural Docker config sanitizer failed: {}",
+        String::from_utf8_lossy(&sanitized_plugin.stderr)
     );
 
     fs::remove_dir_all(temp)?;

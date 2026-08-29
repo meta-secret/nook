@@ -29,6 +29,13 @@ else
   echo "trusted Docker Buildx plugin is unavailable" >&2
   exit 127
 fi
+if [ -x /usr/local/bin/jq ]; then jq_cli=/usr/local/bin/jq
+elif [ -x /usr/bin/jq ]; then jq_cli=/usr/bin/jq
+elif [ -x /opt/homebrew/bin/jq ]; then jq_cli=/opt/homebrew/bin/jq
+else
+  echo "trusted jq is unavailable" >&2
+  exit 127
+fi
 docker_config_source="${DOCKER_CONFIG:-${HOME:?HOME is required when DOCKER_CONFIG is unset}/.docker}"
 case "$docker_config_source" in
   /*) ;;
@@ -45,15 +52,14 @@ cleanup_docker_config() {
   rm -rf -- "$trusted_docker_config"
 }
 trap cleanup_docker_config EXIT
-for entry in config.json contexts; do
+for entry in contexts; do
   if [ -e "$docker_config_source/$entry" ]; then
     cp -RL "$docker_config_source/$entry" "$trusted_docker_config/$entry"
   fi
 done
-if [ -f "$trusted_docker_config/config.json" ] &&
-  grep -q '"cliPluginsExtraDirs"[[:space:]]*:' "$trusted_docker_config/config.json"; then
-  echo "Docker config may not add CLI plugin directories" >&2
-  exit 2
+if [ -f "$docker_config_source/config.json" ]; then
+  "$jq_cli" 'del(.cliPluginsExtraDirs)' "$docker_config_source/config.json" >"$trusted_docker_config/config.json"
+  chmod 600 "$trusted_docker_config/config.json"
 fi
 export DOCKER_CONFIG="$trusted_docker_config"
 export BUILDX_CONFIG="$docker_config_source/buildx"
