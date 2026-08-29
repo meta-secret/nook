@@ -18,7 +18,8 @@ import {
   MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
 } from '../../offscreen/session-request-adapter'
 import {
-  passkeyAccountsFromSession,
+  PasskeyAccountListKind,
+  passkeyAccountListFromSession,
   passkeyCeremonyResponseFromSession,
 } from './passkey-session-adapter'
 import {
@@ -50,28 +51,40 @@ function passkeyRequestKey({
 
 const PASSKEY_ACCOUNT_LOOKUP_TIMEOUT_MS = 1500
 
-type MatchingPasskeyAccountCountForOriginArgs = {
+export enum MatchingPasskeyAvailabilityKind {
+  Ready = 'ready',
+  Unavailable = 'unavailable',
+}
+
+export type MatchingPasskeyAvailability =
+  | { kind: MatchingPasskeyAvailabilityKind.Ready; accountCount: number }
+  | { kind: MatchingPasskeyAvailabilityKind.Unavailable }
+
+type MatchingPasskeyAvailabilityForOriginArgs = {
   origin: string
   queueExpiresAt: number
 }
 
-async function matchingPasskeyAccountCountForOrigin({
+async function matchingPasskeyAvailabilityForOrigin({
   origin,
   queueExpiresAt,
-}: MatchingPasskeyAccountCountForOriginArgs): Promise<number> {
+}: MatchingPasskeyAvailabilityForOriginArgs): Promise<MatchingPasskeyAvailability> {
+  const unavailable: MatchingPasskeyAvailability = {
+    kind: MatchingPasskeyAvailabilityKind.Unavailable,
+  }
   let hostname: string
   try {
     hostname = new URL(origin).hostname
   } catch {
-    return 0
+    return unavailable
   }
-  if (!hostname) return 0
+  if (!hostname) return unavailable
   const grants = await passkeyPairingGrants()
-  if (grants.length === 0) return 0
+  if (grants.length === 0) return unavailable
   try {
     await ensureExtensionSessionDocument()
   } catch {
-    return 0
+    return unavailable
   }
   const nookTypedArgs0_0: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-status',
@@ -83,7 +96,7 @@ async function matchingPasskeyAccountCountForOrigin({
     typeof status !== 'object' ||
     !isUnlockedSessionStatus(status)
   ) {
-    return 0
+    return unavailable
   }
   let count = 0
   for (const grant of grants) {
@@ -97,28 +110,39 @@ async function matchingPasskeyAccountCountForOrigin({
       },
     }
     const response = await sendSessionMessage(nookTypedArgs0_1)
-    count += passkeyAccountsFromSession(response).length
+    const accountList = passkeyAccountListFromSession(response)
+    if (accountList.kind === PasskeyAccountListKind.Invalid) return unavailable
+    count += accountList.accounts.length
   }
-  return count
+  return {
+    kind: MatchingPasskeyAvailabilityKind.Ready,
+    accountCount: count,
+  }
 }
 
-export /** Never fail a workflow snapshot on passkey lookup; slow/failed → 0. */
-async function matchingPasskeyAccountCountForOriginSafe(
+export /** Never fail a workflow snapshot; slow, locked, or failed stays unavailable. */
+async function matchingPasskeyAvailabilityForOriginSafe(
   origin: string,
-): Promise<number> {
+): Promise<MatchingPasskeyAvailability> {
   const queueExpiresAt = Date.now() + PASSKEY_ACCOUNT_LOOKUP_TIMEOUT_MS
+  const unavailable: MatchingPasskeyAvailability = {
+    kind: MatchingPasskeyAvailabilityKind.Unavailable,
+  }
   try {
     const nookTypedArgs0_0: Parameters<
-      typeof matchingPasskeyAccountCountForOrigin
+      typeof matchingPasskeyAvailabilityForOrigin
     >[0] = { origin, queueExpiresAt }
     return await Promise.race([
-      matchingPasskeyAccountCountForOrigin(nookTypedArgs0_0),
-      new Promise<number>((resolve) => {
-        setTimeout(() => resolve(0), PASSKEY_ACCOUNT_LOOKUP_TIMEOUT_MS)
+      matchingPasskeyAvailabilityForOrigin(nookTypedArgs0_0),
+      new Promise<MatchingPasskeyAvailability>((resolve) => {
+        setTimeout(
+          () => resolve(unavailable),
+          PASSKEY_ACCOUNT_LOOKUP_TIMEOUT_MS,
+        )
       }),
     ])
   } catch {
-    return 0
+    return unavailable
   }
 }
 
@@ -201,7 +225,15 @@ export async function websitePasskeyOptions({
       },
     }
     const response = await sendSessionMessage(nookTypedArgs0_4)
-    const accounts = passkeyAccountsFromSession(response)
+    const accountList = passkeyAccountListFromSession(response)
+    if (accountList.kind === PasskeyAccountListKind.Invalid) {
+      return {
+        ok: true,
+        status: WebsitePasskeyOptionsStatus.Unavailable,
+        options: [],
+      }
+    }
+    const { accounts } = accountList
     if (accounts.length > 0) {
       for (const account of accounts) {
         const nookTypedArgs0_5: Parameters<typeof options.push>[0] = {

@@ -101,7 +101,7 @@ import { handlePairingStateQuery } from './service-worker/pairing-state-query'
 import { isExtensionPairingStateQueryMessage } from '../lib/pairing-state'
 import {
   cancelWebsitePasskey,
-  matchingPasskeyAccountCountForOriginSafe,
+  matchingPasskeyAvailabilityForOriginSafe,
   performWebsitePasskey,
   websitePasskeyOptions,
 } from './service-worker/passkey-operations'
@@ -355,7 +355,7 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
       authenticationPasskeyEvidenceIsSafe,
       authenticationWorkflowSnapshot,
       loginMatchAvailabilityForOriginSafe,
-      matchingPasskeyAccountCountForOriginSafe,
+      matchingPasskeyAvailabilityForOriginSafe,
     }
     const workflowRequest: Parameters<
       typeof authenticationWorkflowMessageResponse

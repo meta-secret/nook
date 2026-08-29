@@ -10,7 +10,10 @@ import type {
   WebsiteLoginMatchAvailabilityWire,
 } from '../../lib/auth-workflow-messages'
 import type * as AccountPickers from './account-pickers'
-import type * as PasskeyOperations from './passkey-operations'
+import {
+  MatchingPasskeyAvailabilityKind,
+  type matchingPasskeyAvailabilityForOriginSafe,
+} from './passkey-operations'
 import {
   AuthenticationWorkflowSnapshotKind,
   type authenticationWorkflowSnapshot,
@@ -21,7 +24,7 @@ export type AuthenticationWorkflowRoutingDependencies = {
   authenticationPasskeyEvidenceIsSafe: typeof authenticationPasskeyEvidenceIsSafe
   authenticationWorkflowSnapshot: typeof authenticationWorkflowSnapshot
   loginMatchAvailabilityForOriginSafe: typeof AccountPickers.loginMatchAvailabilityForOriginSafe
-  matchingPasskeyAccountCountForOriginSafe: typeof PasskeyOperations.matchingPasskeyAccountCountForOriginSafe
+  matchingPasskeyAvailabilityForOriginSafe: typeof matchingPasskeyAvailabilityForOriginSafe
 }
 
 export function authenticationPasskeyEvidenceIsSafe(
@@ -51,7 +54,7 @@ export async function authenticationWorkflowMessageResponse({
     authenticationPasskeyEvidenceIsSafe,
     authenticationWorkflowSnapshot,
     loginMatchAvailabilityForOriginSafe,
-    matchingPasskeyAccountCountForOriginSafe,
+    matchingPasskeyAvailabilityForOriginSafe,
   } = dependencies
   try {
     await companionWasmReady
@@ -62,17 +65,21 @@ export async function authenticationWorkflowMessageResponse({
       },
     )
     const needsPasskeyLookup = passkeyEvidenceIsSafe.some(Boolean)
-    const matchingPasskeyAccountCount = needsPasskeyLookup
-      ? await matchingPasskeyAccountCountForOriginSafe(message.payload.origin)
-      : 0
+    const passkeyAvailability = needsPasskeyLookup
+      ? await matchingPasskeyAvailabilityForOriginSafe(message.payload.origin)
+      : {
+          kind: MatchingPasskeyAvailabilityKind.Ready,
+          accountCount: 0,
+        }
     const observations = Array.from(message.payload.observations.entries()).map(
       ([observationIndex, observation]) => ({
         ...observation,
         authenticator: {
           ...observation.authenticator,
           matchingPasskeyAccountCount:
-            passkeyEvidenceIsSafe[observationIndex] === true
-              ? matchingPasskeyAccountCount
+            passkeyEvidenceIsSafe[observationIndex] === true &&
+            passkeyAvailability.kind === MatchingPasskeyAvailabilityKind.Ready
+              ? passkeyAvailability.accountCount
               : 0,
         },
       }),

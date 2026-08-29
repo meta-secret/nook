@@ -33,9 +33,9 @@ describe('authentication workflow routing', () => {
         events.push('evidence-classified')
         return true
       },
-      matchingPasskeyAccountCountForOriginSafe: async () => {
+      matchingPasskeyAvailabilityForOriginSafe: async () => {
         events.push('passkeys-counted')
-        return 2
+        return { kind: 'ready', accountCount: 2 }
       },
       loginMatchAvailabilityForOriginSafe: async () => ({
         kind: 'unavailable',
@@ -75,7 +75,10 @@ describe('authentication workflow routing', () => {
       authenticationPasskeyEvidenceIsSafe: () => {
         throw new Error('WASM not initialized')
       },
-      matchingPasskeyAccountCountForOriginSafe: async () => 0,
+      matchingPasskeyAvailabilityForOriginSafe: async () => ({
+        kind: 'ready',
+        accountCount: 0,
+      }),
       loginMatchAvailabilityForOriginSafe: async () => ({
         kind: 'unavailable',
       }),
