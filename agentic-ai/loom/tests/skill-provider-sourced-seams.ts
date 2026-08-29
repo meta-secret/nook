@@ -17,6 +17,10 @@ export type AuditedRuntimeSourceRequest = {
 
 const AUDITED_RUNTIME_SOURCES = new Map([
   [
+    '.github/scripts/format-host-apply.test.sh',
+    '2774564698cebb96f2bf1a16e9d2acd3866ae078894de2aa5004b84c401c1b05',
+  ],
+  [
     'agentic-ai/ci-agent/scripts/exit-smoke.mjs',
     'acdc9208aa99cbedbbcac688316622757a58ea67a9df408ed0b1a6c4b536b423',
   ],
@@ -55,6 +59,10 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   [
     'nook-app/nook-web/nook-web-app/scripts/verify-app-isolation.ts',
     'b1a958b0499e73241a967d5540c3615e66a91be43a4f1a53e9cdeccd8f85f417',
+  ],
+  [
+    'nook-app/nook-web/nook-web-extension/scripts/hosted-extension.sh',
+    '920eda984b215b325800af8e56f6af3ebf699a93f0aec0cb52b41792b16edfe9',
   ],
   [
     'nook-app/nook-web/nook-web-extension/scripts/setup-brave-vault.mjs',
