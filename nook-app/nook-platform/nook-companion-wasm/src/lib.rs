@@ -137,6 +137,20 @@ pub fn authentication_enrollment_pilot_presentation_capability(
 }
 
 #[wasm_bindgen]
+#[must_use]
+pub fn authentication_enrollment_workflow_match(
+    authenticator_setup_hint: bool,
+    backup_codes_copy: &str,
+    manual_checkpoint_present: bool,
+) -> nook_companion_core::AuthenticationWorkflowMatch {
+    nook_companion_core::authentication_enrollment_workflow_match(
+        authenticator_setup_hint,
+        backup_codes_copy,
+        manual_checkpoint_present,
+    )
+}
+
+#[wasm_bindgen]
 pub fn decode_authenticator_backup_attach_response(
     response: nook_companion_core::AuthenticatorBackupAttachResponseWire,
 ) -> Result<nook_companion_core::AuthenticatorBackupAttachResponse, wasm_bindgen::JsError> {
@@ -813,6 +827,19 @@ mod tests {
                 "Save your recovery codes in a secure place"
             ),
             nook_companion_core::AuthenticationBackupCodesObservation::Present
+        );
+    }
+
+    #[test]
+    fn enrollment_match_bridge_preserves_selected_recovery_action() {
+        let nook_companion_core::AuthenticationWorkflowMatch::Matched(snapshot) =
+            authentication_enrollment_workflow_match(true, "Save these recovery codes", false)
+        else {
+            panic!("expected a selected enrollment workflow");
+        };
+        assert_eq!(
+            snapshot.action,
+            nook_companion_core::AuthenticationWorkflowAction::SaveBackupCodes
         );
     }
 }

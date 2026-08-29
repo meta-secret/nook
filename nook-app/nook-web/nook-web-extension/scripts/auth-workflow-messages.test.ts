@@ -48,6 +48,29 @@ describe('authentication workflow snapshot messages', () => {
     expect(isAuthenticationWorkflowSnapshotMessage(validMessage)).toBe(true)
   })
 
+  test('rejects invalid or oversized recovery copy', () => {
+    const observation = validMessage.payload.observations[0]
+    for (const backupCodesCopy of [42, 'x'.repeat(129)]) {
+      expect(
+        isAuthenticationWorkflowSnapshotMessage({
+          ...validMessage,
+          payload: {
+            ...validMessage.payload,
+            observations: [
+              {
+                ...observation,
+                authenticator: {
+                  ...observation.authenticator,
+                  backupCodesCopy,
+                },
+              },
+            ],
+          },
+        }),
+      ).toBe(false)
+    }
+  })
+
   test('accepts the generated passkey presence representation', () => {
     expect(
       isAuthenticationWorkflowSnapshotMessage({

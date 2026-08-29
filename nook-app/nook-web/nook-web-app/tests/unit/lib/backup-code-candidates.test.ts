@@ -15,7 +15,25 @@ describe('backup-code presentation evidence', () => {
       <ul><li>A1B2-C3D4-E5F6</li></ul>
     `
 
-    expect(authenticationRecoveryCopy()).toBe('Save your recovery codes  ')
+    expect(authenticationRecoveryCopy()).toBe('Save your recovery codes')
+    expect(authenticationRecoveryCopy()).not.toContain('A1B2-C3D4-E5F6')
+    expect(pageHasDocumentBackupCodeHint()).toBe(true)
+  })
+
+  test('uses visible instructional paragraphs but excludes hidden and code-bearing copy', () => {
+    document.body.innerHTML = `
+      <h1>Backup codes</h1>
+      <p>Save these recovery codes somewhere secure.</p>
+      <p hidden>Save your hidden backup codes</p>
+      <div aria-hidden="true"><p>Save your inactive backup codes</p></div>
+      <button>Copy A1B2-C3D4-E5F6</button>
+    `
+
+    expect(authenticationRecoveryCopy()).toBe(
+      'Backup codes Save these recovery codes somewhere secure.',
+    )
+    expect(authenticationRecoveryCopy()).not.toContain('hidden')
+    expect(authenticationRecoveryCopy()).not.toContain('inactive')
     expect(authenticationRecoveryCopy()).not.toContain('A1B2-C3D4-E5F6')
     expect(pageHasDocumentBackupCodeHint()).toBe(true)
   })

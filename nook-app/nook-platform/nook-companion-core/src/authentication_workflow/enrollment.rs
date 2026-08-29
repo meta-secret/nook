@@ -61,24 +61,38 @@ pub(super) const fn classify_enrollment_workflow(
 
 /// Project page-level enrollment evidence through the same classifier and Pilot gate.
 #[must_use]
-pub fn authentication_enrollment_pilot_presentation_capability(
+pub fn authentication_enrollment_workflow_match(
     authenticator_setup_hint: bool,
     backup_codes_copy: &str,
     manual_checkpoint_present: bool,
-) -> AuthenticationPilotPresentationCapability {
+) -> AuthenticationWorkflowMatch {
     if backup_codes_copy.len() > crate::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES {
-        return AuthenticationPilotPresentationCapability::Hidden;
+        return AuthenticationWorkflowMatch::Rejected;
     }
     let backup_codes_hint = matches!(
         classify_authentication_backup_codes_observation(backup_codes_copy),
         super::AuthenticationBackupCodesObservation::Present
     );
-    match super::classify_authentication_workflow(AuthenticationPageObservation {
+    super::classify_authentication_workflow(AuthenticationPageObservation {
         authenticator_setup_hint,
         backup_codes_hint,
         manual_checkpoint_present,
         ..AuthenticationPageObservation::default()
-    }) {
+    })
+}
+
+/// Project page-level enrollment evidence through the same classifier and Pilot gate.
+#[must_use]
+pub fn authentication_enrollment_pilot_presentation_capability(
+    authenticator_setup_hint: bool,
+    backup_codes_copy: &str,
+    manual_checkpoint_present: bool,
+) -> AuthenticationPilotPresentationCapability {
+    match authentication_enrollment_workflow_match(
+        authenticator_setup_hint,
+        backup_codes_copy,
+        manual_checkpoint_present,
+    ) {
         AuthenticationWorkflowMatch::Matched(snapshot) => snapshot.pilot_presentation_capability(),
         AuthenticationWorkflowMatch::NoMatch | AuthenticationWorkflowMatch::Rejected => {
             AuthenticationPilotPresentationCapability::Hidden
@@ -103,6 +117,19 @@ mod tests {
                 false,
             ),
             AuthenticationPilotPresentationCapability::ProposeAction
+        );
+    }
+
+    #[test]
+    fn enrollment_fast_path_preserves_recovery_precedence() {
+        let AuthenticationWorkflowMatch::Matched(snapshot) =
+            authentication_enrollment_workflow_match(true, "Save your recovery codes", false)
+        else {
+            panic!("expected a selected enrollment workflow");
+        };
+        assert_eq!(
+            snapshot.action,
+            AuthenticationWorkflowAction::SaveBackupCodes
         );
     }
 }

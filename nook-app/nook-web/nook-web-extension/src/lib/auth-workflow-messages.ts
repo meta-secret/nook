@@ -155,7 +155,8 @@ export function isAuthenticationWorkflowSnapshotMessage(
       typeof authenticationContext.formIdentity === 'string' &&
       typeof authenticationContext.destinationIdentity === 'string' &&
       ['absent', 'present'].includes(authenticator.authenticatorSetup) &&
-      ['absent', 'present'].includes(authenticator.backupCodes) &&
+      typeof authenticator.backupCodesCopy === 'string' &&
+      Array.from(authenticator.backupCodesCopy).length <= 128 &&
       ['absent', 'present'].includes(authenticator.passkeyControl) &&
       isDetailedAdvanceControl(observation.detailedAdvanceControl) &&
       isDetailedPasskeyControl(authenticator.detailedPasskeyControl)

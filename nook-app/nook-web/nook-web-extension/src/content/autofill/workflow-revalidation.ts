@@ -18,6 +18,7 @@ type RevalidatedAuthenticationActionArgs = {
   workflow: PasswordFormObservation
   expectedAction: AuthenticationWorkflowAction
   observationBinding: AuthenticationObservationBinding
+  backupCodesCopy?: string
   act: (request: RevalidatedAuthenticationActRequest) => boolean
 }
 
@@ -47,6 +48,7 @@ export async function performRevalidatedAuthenticationAction({
   workflow,
   expectedAction,
   observationBinding,
+  backupCodesCopy = '',
   act,
 }: RevalidatedAuthenticationActionArgs): Promise<boolean> {
   const workflowIsAttachedToCurrentDocument = () => {
@@ -71,7 +73,7 @@ export async function performRevalidatedAuthenticationAction({
     >[0] = {
       observation: currentWorkflow,
       authenticatorSetupHint: false,
-      backupCodesCopy: '',
+      backupCodesCopy,
     }
     return {
       currentWorkflow,
