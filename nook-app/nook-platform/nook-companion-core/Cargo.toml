@@ -9,6 +9,7 @@ repository.workspace = true
 [dependencies]
 nook-authenticator-domain = { path = "../nook-authenticator-domain" }
 nook-event-log = { path = "../nook-event-log" }
+percent-encoding = "2.3.2"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.151"
 thiserror = "2.0.18"
