@@ -18,6 +18,16 @@ function loginPilotStubArgs(messages: Record<string, ChromeMessage>) {
   }
 }
 
+function unavailableLoginPilotStubArgs(
+  messages: Record<string, ChromeMessage>,
+) {
+  return {
+    localizedMessages: messages,
+    ...demoDomainEnumArgs,
+    unavailableLoginPilotFlow: true,
+  }
+}
+
 function totpPilotStubArgs(messages: Record<string, ChromeMessage>) {
   const { authenticationWorkflow } = demoDomainEnumArgs
   return {
@@ -44,6 +54,83 @@ function totpPilotStubArgs(messages: Record<string, ChromeMessage>) {
     },
   }
 }
+
+test('open trusted pairing from disconnected Nook Pilot', async ({ page }) => {
+  const messages = await loadPilotMessages()
+  const stubArgs = unavailableLoginPilotStubArgs(messages)
+
+  await page.addInitScript(installDemoChromeStub, stubArgs)
+  await page.goto('/')
+  await page.setContent(`<!doctype html>
+    <html>
+      <head>
+        <title>Disconnected Pilot sign in</title>
+        <style>
+          :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+          * { box-sizing: border-box; }
+          body {
+            min-height: 100vh;
+            margin: 0;
+            display: grid;
+            place-items: center;
+            background: linear-gradient(145deg, #161923, #090a0f 72%);
+            color: #f7f7f8;
+          }
+          main {
+            width: min(440px, calc(100vw - 48px));
+            padding: 40px;
+            border: 1px solid rgb(255 255 255 / 10%);
+            border-radius: 20px;
+            background: rgb(24 26 35 / 94%);
+          }
+          h1 { margin: 0 0 10px; font-size: 30px; }
+          p { margin: 0 0 24px; color: #aeb4c1; }
+          form { display: grid; gap: 16px; }
+          input, button { min-height: 48px; border-radius: 10px; font: inherit; }
+          input { padding: 12px 14px; border: 1px solid #3a3f50; background: #11131a; color: #fff; }
+          button { border: 0; background: #eef0f4; color: #171921; font-weight: 750; }
+        </style>
+      </head>
+      <body>
+        <main>
+          <h1>Welcome back</h1>
+          <p>Sign in to continue to your account.</p>
+          <form>
+            <input aria-label="Email" autocomplete="username" type="email" />
+            <input aria-label="Password" autocomplete="current-password" type="password" />
+            <button type="submit">Sign in</button>
+          </form>
+        </main>
+      </body>
+    </html>`)
+  await page.evaluate(installDemoChromeStub, stubArgs)
+  await injectPilotAutofill(page)
+
+  const widget = page.locator('#nook-auth-widget')
+  await expect(widget.getByText('Ready to sign in')).toBeVisible()
+  await expect(widget.getByTestId('nook-auth-gate-vault-status')).toHaveText(
+    'Vault not connected',
+  )
+  await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+  await expect(
+    widget.getByText(
+      'Connect this browser to your vault, then click Continue with Nook again.',
+    ),
+  ).toBeVisible()
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (
+            window as typeof window & {
+              __nookDemoCompanionLauncherUrls?: string[]
+            }
+          ).__nookDemoCompanionLauncherUrls ?? [],
+      ),
+    )
+    .toEqual(['chrome-extension://demo-extension/popup/index.html?intent=pair'])
+  await demoBeat(page)
+})
 
 test('guide a login through the Nook Pilot control plane', async ({ page }) => {
   const messages = await loadPilotMessages()

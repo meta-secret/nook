@@ -1,4 +1,5 @@
 import {
+  WebsiteAuthenticatorResponseStatus,
   type WebsiteAuthenticatorOption,
   type WebsiteLoginAccountOption,
 } from '../../lib/login-fill-messages'
@@ -319,25 +320,52 @@ type WebsiteLoginOptionsArgs = {
     }
   }
   sender: chrome.runtime.MessageSender
+  dependencies?: WebsiteLoginOptionsDependencies
+}
+
+type WebsiteLoginOptionsDependencies = {
+  availableWebsiteGrants: typeof availableWebsiteGrants
+  loginAccountsForOrigin: typeof loginAccountsForOrigin
+  openCompanionLauncherBestEffort: typeof openCompanionLauncherBestEffort
+}
+
+const websiteLoginOptionsDependencies: WebsiteLoginOptionsDependencies = {
+  availableWebsiteGrants,
+  loginAccountsForOrigin,
+  openCompanionLauncherBestEffort,
 }
 
 export async function websiteLoginOptions({
   message,
   sender,
+  dependencies,
 }: WebsiteLoginOptionsArgs): Promise<unknown> {
+  const resolvedDependencies = dependencies ?? websiteLoginOptionsDependencies
   const nookTypedArgs0_6: Parameters<typeof availableWebsiteGrants>[0] = {
     origin: message.payload.origin,
     sender,
     forbiddenReason: 'login-forbidden-origin',
   }
-  const access = await availableWebsiteGrants(nookTypedArgs0_6)
-  if ('response' in access) return access.response
+  const access =
+    await resolvedDependencies.availableWebsiteGrants(nookTypedArgs0_6)
+  if ('response' in access) {
+    if (
+      access.response.ok &&
+      access.response.status === WebsiteAuthenticatorResponseStatus.Unavailable
+    ) {
+      resolvedDependencies.openCompanionLauncherBestEffort(
+        OpenCompanionLauncherIntent.Pair,
+      )
+    }
+    return access.response
+  }
 
   const nookTypedArgs0_0: Parameters<typeof loginAccountsForOrigin>[0] = {
     grants: access.grants,
     origin: message.payload.origin,
   }
-  const accounts = await loginAccountsForOrigin(nookTypedArgs0_0)
+  const accounts =
+    await resolvedDependencies.loginAccountsForOrigin(nookTypedArgs0_0)
   return { ok: true, status: 'ready', accounts }
 }
 

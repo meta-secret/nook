@@ -92,6 +92,8 @@ export type DemoChromeStubArgs = {
   responsesByType?: Record<string, unknown>
   /** Stateful login-pilot replies for Continue → unlock → chooser. */
   loginPilotFlow?: boolean
+  /** Disconnected login reply that records the trusted companion launch. */
+  unavailableLoginPilotFlow?: boolean
   /** Stateful post-submit save-offer replies for Pilot login capture. */
   savePilotFlow?: boolean
   /** Signup generate-password Pilot replies. */
@@ -132,6 +134,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     loginSaveResponses,
     responsesByType = {},
     loginPilotFlow = false,
+    unavailableLoginPilotFlow = false,
     savePilotFlow = false,
     generatePilotFlow = false,
     passkeyPilotFlow = false,
@@ -176,6 +179,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
       return responsesByType[message.type]
     }
     if (message.type === 'nook:extension-pairing-state-query') {
+      if (unavailableLoginPilotFlow) return { ok: false }
       return { ok: true, setup: demoExtensionSetup }
     }
     if (
@@ -434,6 +438,35 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
         case 'nook:website-login-save-dismiss':
           stagedOffer = { kind: StagedOfferKind.Empty }
           return { kind: loginSaveResponses.completed }
+        default:
+          return { ok: true }
+      }
+    }
+    if (unavailableLoginPilotFlow) {
+      switch (message.type) {
+        case 'nook:authentication-workflow-snapshot':
+          return {
+            ok: true,
+            snapshot: {
+              kind: authenticationWorkflow.loginKind,
+              stage: authenticationWorkflow.credentialsStage,
+              action: authenticationWorkflow.continueAction,
+              currentStep: 1,
+              totalSteps: 3,
+              requiresHumanApproval: false,
+              observationIndex: 0,
+            },
+          }
+        case 'nook:website-login-options': {
+          const demoWindow = window as typeof window & {
+            __nookDemoCompanionLauncherUrls?: string[]
+          }
+          demoWindow.__nookDemoCompanionLauncherUrls ??= []
+          demoWindow.__nookDemoCompanionLauncherUrls.push(
+            'chrome-extension://demo-extension/popup/index.html?intent=pair',
+          )
+          return { ok: true, status: 'unavailable' }
+        }
         default:
           return { ok: true }
       }
