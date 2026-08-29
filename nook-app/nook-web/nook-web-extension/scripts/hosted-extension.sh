@@ -309,12 +309,47 @@ print_launch_metadata() {
   fi
 }
 
+launch_browser_binary() {
+  local browser="$1"
+  local binary="$2"
+  local extension_dir="$3"
+  local profile_dir="$4"
+  local debug_address="$5"
+  local debug_port_arg="$6"
+  local app_name="$7"
+  [ -x "$binary" ] || { fail "approved $browser executable is unavailable: $binary"; return 1; }
+  if [ "$browser" = chrome ]; then
+    local version
+    version="$("$binary" --version 2>/dev/null || true)"
+    case "$version" in
+      'Google Chrome for Testing '*) app_name='Google Chrome for Testing' ;;
+      'Chromium '*) app_name='Chromium' ;;
+      'Google Chrome '*)
+        if [ -n "$debug_port_arg" ]; then
+          launch_binary_detached "$binary" --user-data-dir="$profile_dir" "$debug_address" "$debug_port_arg" chrome://extensions
+        else
+          launch_binary_detached "$binary" --user-data-dir="$profile_dir" chrome://extensions
+        fi
+        printf 'Opened Google Chrome extension manager using isolated profile %s\n' "$profile_dir"
+        printf 'Google Chrome 137+ ignores --load-extension. Click "Load unpacked" and select:\n%s\n' "$extension_dir"
+        print_launch_metadata "$app_name" "$extension_dir" "$profile_dir"
+        return 0
+        ;;
+    esac
+  fi
+  if [ -n "$debug_port_arg" ]; then
+    launch_binary_detached "$binary" --user-data-dir="$profile_dir" --load-extension="$extension_dir" "$debug_address" "$debug_port_arg" about:blank
+  else
+    launch_binary_detached "$binary" --user-data-dir="$profile_dir" --load-extension="$extension_dir" about:blank
+  fi
+  print_launch_metadata "$app_name" "$extension_dir" "$profile_dir"
+}
+
 launch_browser() {
   local browser="$1"
   local extension_dir="$2"
   local requested_profile_dir="${3:-}"
   local profile_dir
-  local binary=''
   local app_name=''
   local env_name=''
   local debug_address=''
@@ -334,57 +369,52 @@ launch_browser() {
 
   case "$browser" in
     chrome)
-      binary="${CHROME_BIN:-}"
       app_name='Google Chrome'
       env_name='CHROME_BIN'
+      case "${CHROME_BIN:-}" in
+        '') ;;
+        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome')
+          launch_browser_binary chrome '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' "$extension_dir" "$profile_dir" "$debug_address" "$debug_port_arg" "$app_name"; return ;;
+        '/Applications/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing')
+          launch_browser_binary chrome '/Applications/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing' "$extension_dir" "$profile_dir" "$debug_address" "$debug_port_arg" "$app_name"; return ;;
+        '/usr/bin/google-chrome')
+          launch_browser_binary chrome '/usr/bin/google-chrome' "$extension_dir" "$profile_dir" "$debug_address" "$debug_port_arg" "$app_name"; return ;;
+        '/usr/bin/chromium')
+          launch_browser_binary chrome '/usr/bin/chromium' "$extension_dir" "$profile_dir" "$debug_address" "$debug_port_arg" "$app_name"; return ;;
+        '/opt/google/chrome/chrome')
+          launch_browser_binary chrome '/opt/google/chrome/chrome' "$extension_dir" "$profile_dir" "$debug_address" "$debug_port_arg" "$app_name"; return ;;
+        *) fail 'CHROME_BIN is not an approved browser executable'; return 1 ;;
+      esac
       ;;
     brave)
-      binary="${BRAVE_BIN:-}"
       app_name='Brave Browser'
       env_name='BRAVE_BIN'
+      case "${BRAVE_BIN:-}" in
+        '') ;;
+        '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser')
+          launch_browser_binary brave '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser' "$extension_dir" "$profile_dir" "$debug_address" "$debug_port_arg" "$app_name"; return ;;
+        '/usr/bin/brave-browser')
+          launch_browser_binary brave '/usr/bin/brave-browser' "$extension_dir" "$profile_dir" "$debug_address" "$debug_port_arg" "$app_name"; return ;;
+        '/opt/brave.com/brave/brave-browser')
+          launch_browser_binary brave '/opt/brave.com/brave/brave-browser' "$extension_dir" "$profile_dir" "$debug_address" "$debug_port_arg" "$app_name"; return ;;
+        *) fail 'BRAVE_BIN is not an approved browser executable'; return 1 ;;
+      esac
       ;;
     *) fail "unsupported browser: $browser"; return 1 ;;
   esac
 
-  if [ -n "$binary" ]; then
-    [ -x "$binary" ] || { fail "$env_name is not executable: $binary"; return 1; }
-    if [ "$browser" = chrome ]; then
-      local version
-      version="$("$binary" --version 2>/dev/null || true)"
-      case "$version" in
-        'Google Chrome for Testing '*) app_name='Google Chrome for Testing' ;;
-        'Chromium '*) app_name='Chromium' ;;
-        'Google Chrome '*)
-          if [ -n "$debug_port_arg" ]; then
-            launch_binary_detached "$binary" --user-data-dir="$profile_dir" "$debug_address" "$debug_port_arg" chrome://extensions
-          else
-            launch_binary_detached "$binary" --user-data-dir="$profile_dir" chrome://extensions
-          fi
-          printf 'Opened Google Chrome extension manager using isolated profile %s\n' "$profile_dir"
-          printf 'Google Chrome 137+ ignores --load-extension. Click "Load unpacked" and select:\n%s\n' "$extension_dir"
-          print_launch_metadata "$app_name" "$extension_dir" "$profile_dir"
-          return 0
-          ;;
-      esac
-    fi
-    if [ -n "$debug_port_arg" ]; then
-      launch_binary_detached "$binary" --user-data-dir="$profile_dir" --load-extension="$extension_dir" "$debug_address" "$debug_port_arg" about:blank
-    else
-      launch_binary_detached "$binary" --user-data-dir="$profile_dir" --load-extension="$extension_dir" about:blank
-    fi
-  else
-    [ "$(uname -s)" = 'Darwin' ] || {
-      fail "automatic $app_name discovery is supported only on macOS; set $env_name to its executable"
-      return 1
-    }
-    if [ "$browser" = chrome ] && [ -d '/Applications/Google Chrome for Testing.app' ]; then
+  [ "$(uname -s)" = 'Darwin' ] || {
+    fail "automatic $app_name discovery is supported only on macOS; set $env_name to its executable"
+    return 1
+  }
+  if [ "$browser" = chrome ] && [ -d '/Applications/Google Chrome for Testing.app' ]; then
       app_name='Google Chrome for Testing'
       if [ -n "$debug_port_arg" ]; then
         open -na "$app_name" --args --user-data-dir="$profile_dir" --load-extension="$extension_dir" "$debug_address" "$debug_port_arg" about:blank
       else
         open -na "$app_name" --args --user-data-dir="$profile_dir" --load-extension="$extension_dir" about:blank
       fi
-    elif [ "$browser" = chrome ] && [ -d '/Applications/Google Chrome.app' ]; then
+  elif [ "$browser" = chrome ] && [ -d '/Applications/Google Chrome.app' ]; then
       if [ -n "$debug_port_arg" ]; then
         open -na 'Google Chrome' --args --user-data-dir="$profile_dir" "$debug_address" "$debug_port_arg" chrome://extensions
       else
@@ -394,7 +424,7 @@ launch_browser() {
       printf 'Google Chrome 137+ ignores --load-extension. Click "Load unpacked" and select:\n%s\n' "$extension_dir"
       print_launch_metadata 'Google Chrome' "$extension_dir" "$profile_dir"
       return 0
-    else
+  else
       [ -d "/Applications/$app_name.app" ] || {
         fail "$app_name is not installed in /Applications; set $env_name to its executable"
         return 1
@@ -404,7 +434,6 @@ launch_browser() {
       else
         open -na "$app_name" --args --user-data-dir="$profile_dir" --load-extension="$extension_dir" about:blank
       fi
-    fi
   fi
   print_launch_metadata "$app_name" "$extension_dir" "$profile_dir"
 }
