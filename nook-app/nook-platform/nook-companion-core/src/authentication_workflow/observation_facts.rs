@@ -70,7 +70,7 @@ impl AuthenticationPageObservationFacts {
 
     #[must_use]
     pub fn form_priority(self) -> AuthenticationFormObservationPriority {
-        if self.has_progression() {
+        if self.is_bounded() && self.has_progression() {
             self.into_observation().form_priority()
         } else {
             AuthenticationPageObservation::default().form_priority()
@@ -258,6 +258,21 @@ mod tests {
             .classify(),
             AuthenticationWorkflowMatch::Rejected
         );
+    }
+
+    #[test]
+    fn unbounded_high_priority_facts_are_isolated_before_form_selection() {
+        let valid_priority = password_login().form_priority();
+        let mut unbounded = password_login();
+        unbounded.fields.one_time_code_field_count =
+            crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT + 1;
+
+        let isolated_priority = unbounded.form_priority();
+        assert_eq!(
+            isolated_priority,
+            AuthenticationFormObservationPriority::default()
+        );
+        assert!(isolated_priority < valid_priority);
     }
 
     #[test]
