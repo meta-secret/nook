@@ -262,13 +262,20 @@ publication steps. Registry credentials are not used. Prompt:
 
 - GitHub Actions is the agent build/test environment and sole merge-validation
   pipeline.
-- An ordinary Team Agent commits and returns one coherent exact handoff. It does
-  not push or operate PR, review, validation, readiness, or merge state.
+- An ordinary Team Agent formats every changed file in its allowed scope,
+  commits, and returns one coherent exact handoff. It does not push or operate
+  PR, review, validation, readiness, or merge state.
 - Gizmo integrates accepted handoffs first, runs `task loom:pre-push` on the
-  integrated head, commits any resulting hygiene updates, and pushes promptly.
+  integrated head, and inspects every host-applied change. If formatting changes
+  team-owned source or Cortex, Gizmo routes that exact diff to the responsible
+  Team Agent for a fresh formatted commit, reintegrates it, and repeats
+  pre-push. Gizmo pushes only after pre-push leaves the integrated head clean.
 - Gizmo owns `task remote`, complete exact-head validation, readiness, merge,
-  and external PR/check state. Focused remote jobs remain optional diagnostic
-  tools, not prerequisites for complete validation.
+  and external PR/check state. Every pushed head receives remote evidence
+  immediately: dispatch complete validation when it is validation-ready;
+  otherwise dispatch at least one relevant focused remote task. Focused remote
+  jobs remain optional for a validation-ready head and never replace complete
+  validation.
 - `task pr:validate` explicitly starts complete PR validation; an ordinary push
   does not refresh that gate.
 - Agents do not run local Task mirrors of builds, tests, checks, or e2e. Team
@@ -281,9 +288,12 @@ publication steps. Registry credentials are not used. Prompt:
 
 1. **Do not** move real GitHub API tests back into `main.yml` — extend stub coverage instead.
 2. **Do** add new sync-provider integration tests to the `e2e` spec list first; add a small live smoke under `e2e/live/` if the provider has a real backend.
-3. **Do** return an ordinary Team Agent change as a coherent exact commit.
-   Gizmo integrates it, runs Loom pre-push, pushes promptly, and explicitly
-   triggers complete validation; focused `task remote` jobs are optional.
+3. **Do** format every allowed changed file and return an ordinary Team Agent
+   change as a coherent exact commit. Gizmo integrates it, runs Loom pre-push,
+   routes any team-owned formatter diff back to its owner, and pushes only after
+   clean reintegration. A validation-ready pushed head starts complete
+   validation immediately; any other pushed head starts at least one relevant
+   focused `task remote` job immediately.
 4. **Do** update this doc and
    [pull requests](../../../gizmo/workflows/pull-requests.md) when workflow
    behavior changes.

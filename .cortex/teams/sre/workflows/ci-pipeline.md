@@ -740,7 +740,8 @@ cross-package app tasks in `nook-app/ci/Taskfile.yml`, Docker tasks in
 `nook-web-extension/` / `nook-platform/`:
 
 ```bash
-# Gizmo-required local action after integration and before every push
+# Gizmo-required local action after integration and before every push; route
+# team-owned formatter diffs back to their owner and repeat until clean
 task loom:pre-push                  # host-applied format + UI demo contract
 
 # Optional local mirrors (humans / deep debug — not agent merge gates)
@@ -891,15 +892,21 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 
 **Gizmo remote commands:**
 
-- Ordinary Team Agents return coherent exact committed handoffs. They do not
-  push, dispatch remote work, or operate external PR/check state.
-- After integration, Gizmo runs `task loom:pre-push`, commits any hygiene
-  updates, and pushes promptly.
-- Gizmo uses `task remote TASK_NAME=<name>` for one optional focused command.
-- Gizmo uses `task remote TASK_NAMES=<a>,<b>` to reuse one job for an optional
-  focused batch.
-- When the branch is ready, Gizmo runs `task pr:validate PR=<number>` or adds
-  `FULL_E2E=1`.
+- Ordinary Team Agents format every changed file in their allowed scope and
+  return coherent exact committed handoffs. They do not push, dispatch remote
+  work, or operate external PR/check state.
+- After integration, Gizmo runs `task loom:pre-push` and inspects every
+  host-applied change. If formatting changes team-owned source or Cortex, Gizmo
+  routes that exact diff to the responsible Team Agent for a fresh formatted
+  commit, reintegrates it, and repeats pre-push rather than authoring or
+  committing the diff itself. Gizmo pushes only after pre-push is clean.
+- Every pushed head receives remote evidence immediately. For a
+  non-validation-ready head, Gizmo uses `task remote TASK_NAME=<name>` for at
+  least one relevant focused command; `TASK_NAMES=<a>,<b>` may reuse one job for
+  a relevant focused batch.
+- When the pushed branch is validation-ready, Gizmo immediately runs
+  `task pr:validate PR=<number>` or adds `FULL_E2E=1`. Focused tasks are optional
+  for that head and never replace complete validation.
 - Validation first requests one idempotent exact-head Codex review.
 - Current findings stop dispatch so they can be repaired as one coherent batch.
 - Review unavailability is bounded to 600 seconds when no current findings are

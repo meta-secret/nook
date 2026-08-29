@@ -38,6 +38,13 @@ Nook separates iterative evidence from merge authorization.
 
 Ordinary PR pushes do not start complete validation.
 
+Every pushed head must nevertheless receive remote evidence immediately:
+
+- if the head is validation-ready, Gizmo starts complete validation and may
+  optionally add focused tasks; or
+- if the head is not validation-ready, Gizmo starts at least one relevant
+  focused remote task.
+
 ## Focused remote tasks
 
 List the allowlisted catalog:
@@ -164,11 +171,16 @@ When a remote task or complete check fails:
 1. Inspect the exact job log.
 2. Identify the first failing product or infrastructure boundary.
 3. Route the causal defect to its responsible Team Agent.
-4. Have that Team Agent return one coherent exact fix commit.
-5. Let Gizmo integrate the handoff, run `task loom:pre-push`, commit any hygiene
-   updates, and push promptly.
-6. Let Gizmo rerun focused evidence when useful.
-7. Let Gizmo request complete validation again for the new head.
+4. Have that Team Agent format its allowed changed files and return one coherent
+   exact fix commit.
+5. Let Gizmo integrate the handoff, run `task loom:pre-push`, and inspect the
+   result. If formatting changes team-owned source or Cortex, route that exact
+   diff back to the responsible Team Agent for a fresh formatted commit,
+   reintegrate it, and repeat pre-push rather than authoring or committing that
+   diff in Gizmo.
+6. After a clean pre-push, let Gizmo push and immediately request complete
+   validation when the head is validation-ready. Otherwise immediately run at
+   least one relevant focused task.
 
 Treat a transient unchanged-head registry or BuildKit read failure as
 infrastructure evidence. Replay the unchanged head before changing product code.
