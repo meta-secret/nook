@@ -11,13 +11,16 @@ RUN mkdir -p src \
     && printf 'fn main() {}\n' > src/main.rs \
     && printf '\n' > src/lib.rs
 RUN cargo chef prepare --recipe-path recipe.json
-RUN --network=default cargo fetch --locked
 
-FROM chef AS deps
+FROM rust-base AS deps
 
 WORKDIR /opt/nook/preflight
 COPY --from=chef /opt/nook/preflight/recipe.json recipe.json
 COPY preflight/Cargo.toml preflight/Cargo.lock ./
+RUN mkdir -p src \
+    && printf 'fn main() {}\n' > src/main.rs \
+    && printf '\n' > src/lib.rs
+RUN --network=default cargo fetch --locked
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo chef cook --recipe-path recipe.json \
