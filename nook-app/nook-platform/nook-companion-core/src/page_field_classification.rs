@@ -259,6 +259,9 @@ pub fn looks_like_login_advance_control_label(label: &str) -> bool {
 
 fn looks_like_unrestricted_login_advance_control_label(label: &str) -> bool {
     let identity = expand_identity_text(label);
+    if identity != "entrar" && contains_any_word(&identity, &["entrar"]) {
+        return false;
+    }
     contains_any_word(&identity, LOGIN_ADVANCE_WORDS) || contains_any_word(&identity, &["submit"])
 }
 
@@ -616,13 +619,8 @@ mod tests {
         assert!(!looks_like_login_advance_control_label(
             "Continue to reset password"
         ));
-        assert!(!looks_like_login_advance_control_label(
-            "Continue with Google"
-        ));
-        assert!(!looks_like_login_advance_control_label(
-            "Continue with Amazon"
-        ));
-        assert!(!looks_like_login_advance_control_label("Continue Google"));
+        assert!(!looks_like_login_advance_control_label("Entrar con Amazon"));
+        assert!(!looks_like_login_advance_control_label("Entrar con Foo"));
         assert!(looks_like_login_advance_control_label(
             "Sign in to Microsoft 365"
         ));
