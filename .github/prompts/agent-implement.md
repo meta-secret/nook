@@ -74,8 +74,8 @@ a container runtime.
    the shared tree by default.
 3. Do not run formatting, Task commands, full suites, builds, or e2e in this
    bounded worker. The trusted harness applies the deterministic repository
-   formatter and validates the change budget and branch or PR identity after
-   the editor exits. It then commits and publishes the isolated implementation.
+   formatter after the editor exits. It then validates the change budget and
+   branch or PR identity. It then commits and publishes the isolated implementation.
    Gizmo owns focused and complete hosted execution from that exact head, where
    Repository policy and PR verification enforce the UI-demo and other product
    or publication contracts.
