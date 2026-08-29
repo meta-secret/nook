@@ -111,7 +111,7 @@ export function exactObjectProperty([object, name]: readonly [
 ]): ts.Expression | false {
   const matches = object.properties.filter(
     (candidate) =>
-      candidate.name !== undefined &&
+      candidate.name &&
       (ts.isIdentifier(candidate.name) || ts.isStringLiteral(candidate.name)) &&
       candidate.name.text === name,
   );
