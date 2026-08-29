@@ -24,7 +24,11 @@ import {
 } from './login-passkey-actions'
 import { AuthenticatorPickerKind, pickerState, widgetState } from './state'
 import { setFlightProgress, translatedMessage } from './workflow-ui'
-import { performRevalidatedAuthenticationAction } from './workflow-revalidation'
+import {
+  AuthenticationObservationBindingKind,
+  performRevalidatedAuthenticationAction,
+  type AuthenticationObservationBinding,
+} from './workflow-revalidation'
 
 type FillAuthenticatorCodeArgs = {
   account: Pick<WebsiteAuthenticatorOption, 'vaultStoreId' | 'secretId'>
@@ -35,6 +39,35 @@ type FillAuthenticatorCodeArgs = {
   continueButton: HTMLButtonElement
 }
 
+type AuthenticatorFillFailureArgs = Omit<
+  FillAuthenticatorCodeArgs,
+  'account' | 'workflow'
+>
+
+function reportAuthenticatorFillFailure({
+  step,
+  title,
+  description,
+  continueButton,
+}: AuthenticatorFillFailureArgs): false {
+  const progressRequest: Parameters<typeof setFlightProgress>[0] = {
+    step,
+    title,
+    currentStep: 2,
+    totalSteps: 3,
+    titleKey: BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
+  }
+  setFlightProgress(progressRequest)
+  const statusRequest: Parameters<typeof setStatus>[0] = {
+    description,
+    continueButton,
+    text: translatedMessage(BROWSER_MESSAGE_KEYS.WidgetAuthenticatorFillFailed),
+    enableContinue: true,
+  }
+  setStatus(statusRequest)
+  return false
+}
+
 export async function fillAuthenticatorCode({
   account,
   workflow,
@@ -43,6 +76,32 @@ export async function fillAuthenticatorCode({
   description,
   continueButton,
 }: FillAuthenticatorCodeArgs): Promise<boolean> {
+  const failureUi: AuthenticatorFillFailureArgs = {
+    step,
+    title,
+    description,
+    continueButton,
+  }
+  let releasedObservationBinding: AuthenticationObservationBinding = {
+    kind: AuthenticationObservationBindingKind.Unbound,
+  }
+  const releaseRequest: Parameters<
+    typeof performRevalidatedAuthenticationAction
+  >[0] = {
+    workflow,
+    expectedAction: AuthenticationWorkflowAction.FillTotp,
+    observationBinding: releasedObservationBinding,
+    act: ({ observationDigest }) => {
+      releasedObservationBinding = {
+        kind: AuthenticationObservationBindingKind.Required,
+        observationDigest,
+      }
+      return true
+    },
+  }
+  if (!(await performRevalidatedAuthenticationAction(releaseRequest))) {
+    return reportAuthenticatorFillFailure(failureUi)
+  }
   const message: Parameters<typeof sendAuthenticatorCodeRuntimeMessage>[0] = {
     type: WebsiteAuthenticatorFillMessageType.NookWebsiteAuthenticatorFill,
     payload: {
@@ -53,48 +112,14 @@ export async function fillAuthenticatorCode({
   }
   const delivery = await sendAuthenticatorCodeRuntimeMessage(message)
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
-    const nookTypedArgs0_0: Parameters<typeof setFlightProgress>[0] = {
-      step,
-      title,
-      currentStep: 2,
-      totalSteps: 3,
-      titleKey: BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
-    }
-    setFlightProgress(nookTypedArgs0_0)
-    const nookTypedArgs0_1: Parameters<typeof setStatus>[0] = {
-      description,
-      continueButton,
-      text: translatedMessage(
-        BROWSER_MESSAGE_KEYS.WidgetAuthenticatorFillFailed,
-      ),
-      enableContinue: true,
-    }
-    setStatus(nookTypedArgs0_1)
-    return false
+    return reportAuthenticatorFillFailure(failureUi)
   }
   const { response } = delivery
   if (
     response.kind !== AuthenticatorCodeResponseKind.Ready ||
     !('code' in response)
   ) {
-    const nookTypedArgs0_2: Parameters<typeof setFlightProgress>[0] = {
-      step,
-      title,
-      currentStep: 2,
-      totalSteps: 3,
-      titleKey: BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
-    }
-    setFlightProgress(nookTypedArgs0_2)
-    const nookTypedArgs0_3: Parameters<typeof setStatus>[0] = {
-      description,
-      continueButton,
-      text: translatedMessage(
-        BROWSER_MESSAGE_KEYS.WidgetAuthenticatorFillFailed,
-      ),
-      enableContinue: true,
-    }
-    setStatus(nookTypedArgs0_3)
-    return false
+    return reportAuthenticatorFillFailure(failureUi)
   }
   const codeValue = response.code
   const code = { value: codeValue }
@@ -104,7 +129,8 @@ export async function fillAuthenticatorCode({
   >[0] = {
     workflow,
     expectedAction: AuthenticationWorkflowAction.FillTotp,
-    act: (currentWorkflow) => {
+    observationBinding: releasedObservationBinding,
+    act: ({ currentWorkflow }) => {
       const nookTypedArgs0_4: Parameters<typeof fillOneTimeCode>[0] = {
         code: code.value,
         kind: PasswordFormQueryKind.Scoped,
@@ -118,24 +144,7 @@ export async function fillAuthenticatorCode({
     await performRevalidatedAuthenticationAction(revalidationRequest)
   code.value = ''
   if (!filled) {
-    const nookTypedArgs0_5: Parameters<typeof setFlightProgress>[0] = {
-      step,
-      title,
-      currentStep: 2,
-      totalSteps: 3,
-      titleKey: BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
-    }
-    setFlightProgress(nookTypedArgs0_5)
-    const nookTypedArgs0_6: Parameters<typeof setStatus>[0] = {
-      description,
-      continueButton,
-      text: translatedMessage(
-        BROWSER_MESSAGE_KEYS.WidgetAuthenticatorFillFailed,
-      ),
-      enableContinue: true,
-    }
-    setStatus(nookTypedArgs0_6)
-    return false
+    return reportAuthenticatorFillFailure(failureUi)
   }
   const nookTypedArgs0_7: Parameters<typeof setFlightProgress>[0] = {
     step,

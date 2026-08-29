@@ -40,7 +40,11 @@ import {
   sendRuntimeMessageWithoutResponse,
 } from './runtime-message-adapter'
 import { GeneratePasswordRequestType } from '../../../../nook-web-shared/src/extension/runtime-messages'
-import { performRevalidatedAuthenticationAction } from './workflow-revalidation'
+import {
+  AuthenticationObservationBindingKind,
+  performRevalidatedAuthenticationAction,
+  type AuthenticationObservationBinding,
+} from './workflow-revalidation'
 
 export {
   RuntimeMessageDeliveryKind,
@@ -110,12 +114,22 @@ export async function fillAndSubmitAccount({
   description,
   continueButton,
 }: FillAndSubmitAccountArgs): Promise<boolean> {
+  let releasedObservationBinding: AuthenticationObservationBinding = {
+    kind: AuthenticationObservationBindingKind.Unbound,
+  }
   const releaseRevalidationRequest: Parameters<
     typeof performRevalidatedAuthenticationAction
   >[0] = {
     workflow,
     expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
-    act: () => true,
+    observationBinding: releasedObservationBinding,
+    act: ({ observationDigest }) => {
+      releasedObservationBinding = {
+        kind: AuthenticationObservationBindingKind.Required,
+        observationDigest,
+      }
+      return true
+    },
   }
   const releaseApproved = await performRevalidatedAuthenticationAction(
     releaseRevalidationRequest,
@@ -200,7 +214,8 @@ export async function fillAndSubmitAccount({
   >[0] = {
     workflow,
     expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
-    act: (currentWorkflow) => {
+    observationBinding: releasedObservationBinding,
+    act: ({ currentWorkflow }) => {
       const fillRequest: Parameters<typeof fillLoginCredentials>[0] = {
         credentials,
         kind: PasswordFormQueryKind.Scoped,
@@ -580,7 +595,10 @@ export async function proposePasskeyWithNook({
     >[0] = {
       workflow,
       expectedAction: action,
-      act: (currentWorkflow) => {
+      observationBinding: {
+        kind: AuthenticationObservationBindingKind.Unbound,
+      },
+      act: ({ currentWorkflow }) => {
         const control = findWorkflowPasskeyControl(currentWorkflow)
         if (control.kind === PasskeyControlLookupKind.Absent) return false
         control.control.click()

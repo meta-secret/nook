@@ -25,7 +25,10 @@ vi.mock(
 )
 
 import { RuntimeMessageDeliveryKind } from '../../../../nook-web-extension/src/content/autofill/runtime-message-adapter'
-import { performRevalidatedAuthenticationAction } from '../../../../nook-web-extension/src/content/autofill/workflow-revalidation'
+import {
+  AuthenticationObservationBindingKind,
+  performRevalidatedAuthenticationAction,
+} from '../../../../nook-web-extension/src/content/autofill/workflow-revalidation'
 
 const explicitUserApproval =
   'explicit-user-approval' satisfies AuthenticationApprovalRequirement
@@ -75,6 +78,9 @@ describe('credential-bearing workflow revalidation', () => {
       performRevalidatedAuthenticationAction({
         workflow,
         expectedAction: AuthenticationWorkflowAction.FillTotp,
+        observationBinding: {
+          kind: AuthenticationObservationBindingKind.Unbound,
+        },
         act,
       }),
     ).resolves.toBe(false)
@@ -107,11 +113,77 @@ describe('credential-bearing workflow revalidation', () => {
       performRevalidatedAuthenticationAction({
         workflow,
         expectedAction: AuthenticationWorkflowAction.UsePasskey,
+        observationBinding: {
+          kind: AuthenticationObservationBindingKind.Unbound,
+        },
         act,
       }),
     ).resolves.toBe(true)
     expect(act).toHaveBeenCalledOnce()
-    expect(act).toHaveBeenCalledWith(expect.objectContaining(workflow))
+    expect(act).toHaveBeenCalledWith(
+      expect.objectContaining({
+        currentWorkflow: expect.objectContaining({
+          root: workflow.root,
+          formScope: workflow.formScope,
+        }),
+        observationDigest: expect.any(String),
+      }),
+    )
+  })
+
+  test('rejects a later action when its release-bound observation changed', async () => {
+    document.body.innerHTML = `
+      <form id="login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+    const workflow = firstWorkflow()
+    runtime.sendSnapshot.mockResolvedValue({
+      kind: RuntimeMessageDeliveryKind.Delivered,
+      response: {
+        kind: AuthenticationWorkflowSnapshotResponseKind.Matched,
+        snapshot: {
+          kind: AuthenticationWorkflowKind.Login,
+          stage: AuthenticationWorkflowStage.Credentials,
+          action: AuthenticationWorkflowAction.ContinueWithNook,
+          currentStep: 1,
+          totalSteps: 3,
+          approvalRequirement: explicitUserApproval,
+          observationIndex: 0,
+        },
+      },
+    })
+    let observationDigest = ''
+    await performRevalidatedAuthenticationAction({
+      workflow,
+      expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
+      observationBinding: {
+        kind: AuthenticationObservationBindingKind.Unbound,
+      },
+      act: ({ observationDigest: approvedDigest }) => {
+        observationDigest = approvedDigest
+        return true
+      },
+    })
+    document
+      .querySelector<HTMLFormElement>('#login')
+      ?.setAttribute('action', '/different-safe-login')
+    const act = vi.fn(() => true)
+
+    await expect(
+      performRevalidatedAuthenticationAction({
+        workflow,
+        expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
+        observationBinding: {
+          kind: AuthenticationObservationBindingKind.Required,
+          observationDigest,
+        },
+        act,
+      }),
+    ).resolves.toBe(false)
+    expect(act).not.toHaveBeenCalled()
   })
 
   test('sends current field semantics before allowing credential release', async () => {
@@ -144,6 +216,9 @@ describe('credential-bearing workflow revalidation', () => {
       performRevalidatedAuthenticationAction({
         workflow,
         expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
+        observationBinding: {
+          kind: AuthenticationObservationBindingKind.Unbound,
+        },
         act,
       }),
     ).resolves.toBe(false)

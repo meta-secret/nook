@@ -318,6 +318,23 @@ describe('website one-time-code fields', () => {
     })
   })
 
+  test('skips hidden and inert passkey candidates before exact actuation', () => {
+    document.body.innerHTML = `
+      <form action="/login">
+        <input autocomplete="username" />
+        <button hidden data-nook-passkey-control>Use hidden passkey</button>
+        <button disabled data-nook-passkey-control>Use inert passkey</button>
+        <button id="approved-passkey" data-nook-passkey-control>Use passkey</button>
+      </form>
+    `
+
+    const control = findWorkflowPasskeyControl(observedAuthenticationWorkflow())
+    expect(control).toMatchObject({
+      kind: PasskeyControlLookupKind.Found,
+      control: document.querySelector('#approved-passkey'),
+    })
+  })
+
   test('detects standard and common OTP fields without treating card security codes as 2FA', () => {
     document.body.innerHTML = `
       <form>
