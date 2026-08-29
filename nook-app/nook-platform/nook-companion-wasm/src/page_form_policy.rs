@@ -155,6 +155,24 @@ pub fn can_activate_authentication_route_control(
 
 #[wasm_bindgen]
 #[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn authentication_advance_control_is_safe(
+    observation: nook_companion_core::AuthenticationAdvanceControlObservation,
+) -> bool {
+    nook_companion_core::authentication_advance_control_is_safe(&observation)
+}
+
+#[wasm_bindgen]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn authentication_passkey_control_candidate_is_safe(
+    candidate: nook_companion_core::AuthenticationDetailedPasskeyControlCandidateObservation,
+) -> bool {
+    nook_companion_core::authentication_passkey_control_candidate_is_safe(&candidate)
+}
+
+#[wasm_bindgen]
+#[must_use]
 pub fn authentication_form_observation_priority(
     observation: nook_companion_core::AuthenticationPageObservation,
 ) -> u8 {
@@ -236,5 +254,75 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(authentication_form_observation_priority(login), 4);
+    }
+
+    fn login_advance_observation(
+        destination: &str,
+        label: &str,
+    ) -> nook_companion_core::AuthenticationAdvanceControlObservation {
+        nook_companion_core::AuthenticationAdvanceControlObservation {
+            actionability: nook_companion_core::PageControlActionability::Actionable,
+            ownership: nook_companion_core::PageControlOwnership::OwnedForm,
+            semantics: nook_companion_core::PageControlSemantics::SemanticSubmit,
+            authentication_username: nook_companion_core::AuthenticationUsernameEvidence::Explicit,
+            password_field_count: 1,
+            new_password_field_count: 0,
+            one_time_code_field_count: 0,
+            semantic_submit_control_count: 1,
+            source_origin: "https://login.example.test".to_owned(),
+            form_identity: "login-form".to_owned(),
+            destination_identity: destination.to_owned(),
+            label: label.to_owned(),
+        }
+    }
+
+    #[test]
+    fn authentication_advance_control_wasm_export_accepts_and_rejects_observations() {
+        assert!(authentication_advance_control_is_safe(
+            login_advance_observation("https://login.example.test/auth/login", "Sign in",)
+        ));
+        assert!(!authentication_advance_control_is_safe(
+            login_advance_observation("https://login.example.test/register", "Sign in",)
+        ));
+    }
+
+    #[test]
+    fn authentication_passkey_control_wasm_export_accepts_and_rejects_candidates() {
+        let accepted =
+            nook_companion_core::AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(
+                login_advance_observation("https://login.example.test/auth/passkey", "Use passkey"),
+            );
+        assert!(authentication_passkey_control_candidate_is_safe(accepted));
+
+        let rejected =
+            nook_companion_core::AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(
+                login_advance_observation(
+                    "https://login.example.test/auth/passkey/enroll",
+                    "Use passkey",
+                ),
+            );
+        assert!(!authentication_passkey_control_candidate_is_safe(rejected));
+
+        let security_key_enrollment =
+            nook_companion_core::AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(
+                login_advance_observation(
+                    "https://login.example.test/auth/security-key/create",
+                    "Use security key",
+                ),
+            );
+        assert!(!authentication_passkey_control_candidate_is_safe(
+            security_key_enrollment
+        ));
+
+        let mut signup =
+            login_advance_observation("https://login.example.test/auth/passkey", "Use passkey");
+        signup.new_password_field_count = 1;
+        let signup_candidate =
+            nook_companion_core::AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(
+                signup,
+            );
+        assert!(!authentication_passkey_control_candidate_is_safe(
+            signup_candidate
+        ));
     }
 }

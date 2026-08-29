@@ -10,6 +10,8 @@
 )]
 
 mod authentication_outcome_response;
+#[path = "authentication_workflow/observation_facts/passkey.rs"]
+mod authentication_passkey_policy;
 mod authentication_workflow;
 mod authentication_workflow_response;
 mod authenticator_backup_attach_response;
@@ -36,6 +38,10 @@ pub use authentication_outcome_response::{
     AuthenticationOutcomeResponse, AuthenticationOutcomeResponseDecodeError,
     AuthenticationOutcomeResponseKind, AuthenticationOutcomeResponseWire,
     decode_authentication_outcome_response,
+};
+pub use authentication_passkey_policy::{
+    AuthenticationDetailedPasskeyControlCandidateObservation,
+    authentication_passkey_control_candidate_is_safe,
 };
 pub use authentication_workflow::{
     AuthenticationApprovalRequirement, AuthenticationFormObservationPriority,
@@ -116,6 +122,11 @@ pub use outcome_evidence::{
     AuthenticationOutcomeClassification, AuthenticationOutcomeDecision,
     AuthenticationOutcomeObservation, AuthenticationOutcomeVerdict,
     DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS, classify_authentication_outcome,
+};
+pub use page_field_classification::{
+    AuthenticationAdvanceControlDecision, AuthenticationAdvanceControlObservation,
+    AuthenticationUsernameEvidence, PageControlActionability, PageControlOwnership,
+    PageControlSemantics, authentication_advance_control_is_safe,
 };
 pub use page_field_classification::{
     CanonicalControlDestination, LoginContextObservation, MAX_AUTHENTICATION_CONTROL_TEXT_BYTES,
