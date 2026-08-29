@@ -60,11 +60,11 @@ pub const fn propose_website_passkey(
             WebsitePasskeyProposal::UsePasskey { account_count }
         }
         AuthenticationPasskeyEvidence::VaultAccounts { .. }
-        | AuthenticationPasskeyEvidence::ControlAndVaultAccounts { .. } => {
-            WebsitePasskeyProposal::None
+        | AuthenticationPasskeyEvidence::Absent => WebsitePasskeyProposal::None,
+        AuthenticationPasskeyEvidence::ControlAndVaultAccounts { .. } => {
+            WebsitePasskeyProposal::CreatePasskey
         }
         AuthenticationPasskeyEvidence::Control => WebsitePasskeyProposal::CreatePasskey,
-        AuthenticationPasskeyEvidence::Absent => WebsitePasskeyProposal::None,
     }
 }
 
@@ -161,19 +161,22 @@ mod tests {
     }
 
     #[test]
-    fn refuses_zero_count_vault_matches() {
-        for evidence in [
-            AuthenticationPasskeyEvidence::VaultAccounts { account_count: 0 },
-            AuthenticationPasskeyEvidence::ControlAndVaultAccounts { account_count: 0 },
-        ] {
-            assert_eq!(
-                propose_website_passkey(
-                    AuthenticationWorkflowKind::Login,
-                    AuthenticationManualCheckpoint::Absent,
-                    evidence,
-                ),
-                WebsitePasskeyProposal::None
-            );
-        }
+    fn normalizes_zero_count_passkey_evidence() {
+        assert_eq!(
+            propose_website_passkey(
+                AuthenticationWorkflowKind::Login,
+                AuthenticationManualCheckpoint::Absent,
+                AuthenticationPasskeyEvidence::VaultAccounts { account_count: 0 },
+            ),
+            WebsitePasskeyProposal::None
+        );
+        assert_eq!(
+            propose_website_passkey(
+                AuthenticationWorkflowKind::Login,
+                AuthenticationManualCheckpoint::Absent,
+                AuthenticationPasskeyEvidence::ControlAndVaultAccounts { account_count: 0 },
+            ),
+            WebsitePasskeyProposal::CreatePasskey
+        );
     }
 }

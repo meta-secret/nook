@@ -943,8 +943,12 @@ mod tests {
             };
             let progression = control.progression();
             assert_eq!(progression, AuthenticationPageProgression::PasskeyControl);
-            let workflow = classify_authentication_workflow(control);
-            assert!(matches!(workflow, AuthenticationWorkflowMatch::Matched(_)));
+            let snapshot = classify_authentication_workflow(control).snapshot()?;
+            assert_eq!(snapshot.action, AuthenticationWorkflowAction::CreatePasskey);
+            assert_eq!(
+                snapshot.saved_login_capability(),
+                AuthenticationSavedLoginCapability::Unavailable
+            );
         }
 
         let login = AuthenticationPageObservation {
