@@ -6,9 +6,10 @@ import {
 } from './skill-provider-typescript-require.ts';
 import {
   assertReflectInvocationTarget,
-  assertUnsupportedCallCapability,
+  assertUnsupportedCallArgument,
   auditSubprocessEnvironment,
   bunShellTemplateCommand,
+  bunNamespaceCapability,
   childProcessCapability,
   dynamicImportCapability,
   exactObjectProperty,
@@ -24,6 +25,8 @@ import {
   subprocessArgumentList,
   subprocessCwd,
   type SubprocessCwdRequest,
+  type UnsupportedCallArgumentRequest,
+  unwrapTypescriptExpression,
   workerThreadCapability,
   reflectInvocationCapability,
 } from './skill-provider-typescript-capability.ts';
@@ -131,17 +134,30 @@ export function typescriptSubprocessCommands(
         adapterTarget === false ? resolveCapability(capabilityRequest) : false;
       if (kind === false && adapterTarget === false)
         for (const argument of node.arguments) {
-          const argumentRequest: CapabilityResolutionRequest = {
+          const callArgumentRequest: UnsupportedCallArgumentRequest = {
+            call: node.getText(),
+            capability: (expression) => {
+              const nestedRequest: CapabilityResolutionRequest = {
+                expression,
+                location: node,
+                model,
+                visited: new Set(),
+              };
+              return resolveCapability(nestedRequest);
+            },
             expression: argument,
-            location: node,
-            model,
-            visited: new Set(),
+            resolve: (expression) => {
+              const resolutionRequest: ArrayResolutionRequest = {
+                expression,
+                location: node,
+                model,
+                visited: new Set(),
+              };
+              return resolveStaticExpression(resolutionRequest);
+            },
+            sourcePath: model.path,
           };
-          assertUnsupportedCallCapability([
-            resolveCapability(argumentRequest),
-            model.path,
-            node.getText(),
-          ]);
+          assertUnsupportedCallArgument(callArgumentRequest);
         }
       if (kind !== false) {
         if (isReflectInvocation(kind)) {
@@ -215,7 +231,7 @@ function resolveCapability(
 ): SubprocessCallKind | false {
   if (request.visited.has(request.expression)) return false;
   const visited = new Set(request.visited).add(request.expression);
-  const expression = unwrapExpression(request.expression);
+  const expression = unwrapTypescriptExpression(request.expression);
   if (ts.isCallExpression(expression)) {
     const target = nodePromisifyTarget([expression, request.model]);
     if (target !== false) {
@@ -353,6 +369,7 @@ function resolveCapability(
   const ownerCapability = resolveCapability(ownerRequest);
   return (
     childProcessCapability([ownerCapability, member]) ||
+    bunNamespaceCapability([ownerCapability, member]) ||
     workerThreadCapability([ownerCapability, member]) ||
     reflectInvocationCapability([ownerCapability, member]) ||
     functionInvocationCapability([ownerCapability, member])
@@ -699,7 +716,6 @@ function parameterArgumentMember([argument, member, model, visited]: readonly [
     ? parameterMemberCallValues([binding, member, model, visited])
     : false;
 }
-
 type CallExpressionRequest = {
   readonly expression: ts.Expression;
   readonly request: CallCommandRequest;
@@ -762,14 +778,12 @@ function commandFromExpression(
   }
   return { cwd: false, shellSource: false, words };
 }
-
 function shellCommand(request: CallExpressionRequest): StaticCommand {
   const source = evaluate(request);
   if (source.dynamic)
     throw new Error('Dynamic TypeScript subprocess shell source is forbidden.');
   return { cwd: false, shellSource: true, words: [source] };
 }
-
 function callArguments(
   request: OptionalCallExpressionRequest,
 ): readonly StaticText[] {
@@ -790,7 +804,6 @@ function callArguments(
   };
   return evaluateArray(arrayRequest);
 }
-
 function resolveArrayExpression(
   request: ArrayResolutionRequest,
 ): ts.ArrayLiteralExpression | false {
@@ -798,11 +811,10 @@ function resolveArrayExpression(
   if (ts.isArrayLiteralExpression(expression)) return expression;
   return false;
 }
-
 function resolveStaticExpression(
   request: ArrayResolutionRequest,
 ): ts.Expression {
-  const expression = unwrapExpression(request.expression);
+  const expression = unwrapTypescriptExpression(request.expression);
   if (!ts.isIdentifier(expression)) return expression;
   const lookupRequest: BindingLookupRequest = {
     location: request.location,
@@ -825,7 +837,6 @@ function resolveStaticExpression(
   };
   return resolveStaticExpression(nestedRequest);
 }
-
 function evaluate(request: CallExpressionRequest): StaticText {
   const evaluationRequest: ExpressionEvaluationRequest = {
     depth: 0,
@@ -836,7 +847,6 @@ function evaluate(request: CallExpressionRequest): StaticText {
   };
   return evaluateText(evaluationRequest);
 }
-
 function evaluateArray(request: ArrayEvaluationRequest): readonly StaticText[] {
   return request.expression.elements.map((element) => {
     if (ts.isSpreadElement(element))
@@ -851,13 +861,12 @@ function evaluateArray(request: ArrayEvaluationRequest): readonly StaticText[] {
     return evaluateText(evaluationRequest);
   });
 }
-
 function evaluateText(request: ExpressionEvaluationRequest): StaticText {
   if (request.depth > MAX_DEPTH)
     throw new Error(
       'TypeScript subprocess expression exceeds its depth bound.',
     );
-  const expression = unwrapExpression(request.expression);
+  const expression = unwrapTypescriptExpression(request.expression);
   if (
     ts.isStringLiteral(expression) ||
     ts.isNoSubstitutionTemplateLiteral(expression)
@@ -951,7 +960,6 @@ function evaluateText(request: ExpressionEvaluationRequest): StaticText {
   }
   return { dynamic: true, value: expression.getText() };
 }
-
 function evaluatePathCall([request, call]: readonly [
   ExpressionEvaluationRequest,
   ts.CallExpression,
@@ -984,15 +992,4 @@ function evaluatePathCall([request, call]: readonly [
     dynamic: false,
     value: name === 'join' ? posix.join(...text) : posix.resolve(...text),
   };
-}
-
-function unwrapExpression(expression: ts.Expression): ts.Expression {
-  if (
-    ts.isParenthesizedExpression(expression) ||
-    ts.isAsExpression(expression) ||
-    ts.isNonNullExpression(expression) ||
-    ts.isAwaitExpression(expression)
-  )
-    return unwrapExpression(expression.expression);
-  return expression;
 }

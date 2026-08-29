@@ -301,7 +301,9 @@ export function collectBinding(request: BindingCollectionRequest): void {
         ? SubprocessCallKind.Namespace
         : /^(?:node:)?worker_threads$/u.test(specifier)
           ? SubprocessCallKind.WorkerNamespace
-          : false,
+          : specifier === 'bun'
+            ? SubprocessCallKind.BunNamespace
+            : false,
       constant: true,
       declaration: node.importClause,
       importedFrom: specifier,
@@ -319,7 +321,9 @@ export function collectBinding(request: BindingCollectionRequest): void {
         ? SubprocessCallKind.Namespace
         : /^(?:node:)?worker_threads$/u.test(specifier)
           ? SubprocessCallKind.WorkerNamespace
-          : false,
+          : specifier === 'bun'
+            ? SubprocessCallKind.BunNamespace
+            : false,
       constant: true,
       declaration: namedBindings,
       importedFrom: specifier,
@@ -338,10 +342,12 @@ export function collectBinding(request: BindingCollectionRequest): void {
         ? (CHILD_PROCESS_CALLS.get(imported) ?? false)
         : /^(?:node:)?worker_threads$/u.test(specifier)
           ? (WORKER_THREAD_CALLS.get(imported) ?? false)
-          : imported === 'runCommand' &&
-              /(?:^|\/)lib\/run\.ts$/u.test(specifier)
-            ? SubprocessCallKind.RunCommand
-            : false,
+          : specifier === 'bun' && imported === '$'
+            ? SubprocessCallKind.BunShell
+            : imported === 'runCommand' &&
+                /(?:^|\/)lib\/run\.ts$/u.test(specifier)
+              ? SubprocessCallKind.RunCommand
+              : false,
       constant: true,
       declaration: element,
       importedFrom: specifier,

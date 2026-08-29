@@ -2,6 +2,7 @@ import ts from 'typescript';
 
 export enum SubprocessCallKind {
   Bun = 'bun',
+  BunNamespace = 'bunNamespace',
   BunShell = 'bunShell',
   Exec = 'exec',
   ExecFile = 'execFile',
@@ -62,6 +63,28 @@ type ChildProcessMemberRequest = readonly [
   SubprocessCallKind | false,
   string | false,
 ];
+export type UnsupportedCallArgumentRequest = {
+  readonly call: string;
+  readonly capability: (
+    expression: ts.Expression,
+  ) => SubprocessCallKind | false;
+  readonly expression: ts.Expression;
+  readonly resolve: (expression: ts.Expression) => ts.Expression;
+  readonly sourcePath: string;
+};
+
+export function unwrapTypescriptExpression(
+  expression: ts.Expression,
+): ts.Expression {
+  if (
+    ts.isParenthesizedExpression(expression) ||
+    ts.isAsExpression(expression) ||
+    ts.isNonNullExpression(expression) ||
+    ts.isAwaitExpression(expression)
+  )
+    return unwrapTypescriptExpression(expression.expression);
+  return expression;
+}
 
 export function bunShellTemplateCommand(
   request: BunShellTemplateRequest,
@@ -121,12 +144,23 @@ export function workerThreadCapability(
   return WORKER_THREAD_CALLS.get(member) ?? false;
 }
 
+export function bunNamespaceCapability(
+  request: ChildProcessMemberRequest,
+): SubprocessCallKind | false {
+  const [owner, member] = request;
+  if (owner !== SubprocessCallKind.BunNamespace) return false;
+  if (member === false)
+    throw new Error('Dynamic Bun namespace member selection is forbidden.');
+  return member === '$' ? SubprocessCallKind.BunShell : false;
+}
+
 export function functionInvocationCapability(
   request: ChildProcessMemberRequest,
 ): false {
   const [owner, member] = request;
   if (
     owner === false ||
+    owner === SubprocessCallKind.BunNamespace ||
     owner === SubprocessCallKind.Namespace ||
     owner === SubprocessCallKind.WorkerNamespace
   )
@@ -192,6 +226,48 @@ export function assertUnsupportedCallCapability([
   throw new Error(
     `Subprocess capability passed to unsupported call in ${sourcePath}: ${call}`,
   );
+}
+
+export function assertUnsupportedCallArgument(
+  request: UnsupportedCallArgumentRequest,
+): void {
+  assertNestedCallArgument([request, new Set()]);
+}
+
+function assertNestedCallArgument([request, visited]: readonly [
+  UnsupportedCallArgumentRequest,
+  ReadonlySet<ts.Expression>,
+]): void {
+  if (visited.has(request.expression)) return;
+  const nextVisited = new Set(visited).add(request.expression);
+  assertUnsupportedCallCapability([
+    request.capability(request.expression),
+    request.sourcePath,
+    request.call,
+  ]);
+  const resolved = request.resolve(request.expression);
+  if (resolved !== request.expression) {
+    assertNestedCallArgument([
+      { ...request, expression: resolved },
+      nextVisited,
+    ]);
+    return;
+  }
+  const nested: ts.Expression[] = [];
+  if (ts.isArrayLiteralExpression(resolved)) {
+    for (const element of resolved.elements)
+      nested.push(ts.isSpreadElement(element) ? element.expression : element);
+  }
+  if (ts.isObjectLiteralExpression(resolved)) {
+    for (const property of resolved.properties) {
+      if (ts.isPropertyAssignment(property)) nested.push(property.initializer);
+      if (ts.isShorthandPropertyAssignment(property))
+        nested.push(property.name);
+      if (ts.isSpreadAssignment(property)) nested.push(property.expression);
+    }
+  }
+  for (const expression of nested)
+    assertNestedCallArgument([{ ...request, expression }, nextVisited]);
 }
 
 export function dynamicImportCapability(
@@ -353,6 +429,20 @@ function assertSubprocessEnvironment([request, object]: readonly [
         `Nonempty TypeScript subprocess environment is forbidden in ${request.sourcePath}.`,
       );
   }
+  const shell = exactObjectProperty([object, 'shell']);
+  const shellProperties = object.properties.filter(
+    (property) =>
+      property.name &&
+      (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) &&
+      property.name.text === 'shell',
+  );
+  if (
+    shellProperties.length > 0 &&
+    (shell === false || shell.kind !== ts.SyntaxKind.FalseKeyword)
+  )
+    throw new Error(
+      `Shell-enabled TypeScript subprocess options are forbidden in ${request.sourcePath}.`,
+    );
 }
 
 export function subprocessArgumentList(

@@ -297,6 +297,26 @@ invoke(spawnSync); invoke(Bun.spawn); invoke(Worker);`),
   ).toEqual([]);
 });
 
+test('fails closed on execution capabilities nested in aggregate arguments', () => {
+  for (const source of [
+    "import {spawnSync} from 'node:child_process'; invoke({tool:{run:spawnSync}});",
+    'invoke([[Bun.spawn]]);',
+    'const tools={worker:Worker}; invoke({tools});',
+    "import * as child from 'node:child_process'; const holder={child}; invoke({...holder});",
+  ])
+    expect(() => extract(source)).toThrow(
+      'Subprocess capability passed to unsupported call',
+    );
+  expect(
+    extract(`
+const spawnSync=()=>{};
+const Bun={spawn(){}};
+class Worker {}
+const holder={nested:[spawnSync,Bun.spawn,Worker]};
+invoke(holder);`),
+  ).toEqual([]);
+});
+
 test('propagates subprocess capability through exact Node promisify', () => {
   expect(
     extract(`
@@ -426,6 +446,26 @@ spawnSync('bun', ['scripts/facade.ts'], {cwd:'nested',env:{}});`),
     );
 });
 
+test('rejects shell-enabled subprocess options', () => {
+  expect(
+    extract(`
+import {execFileSync,spawnSync} from 'node:child_process';
+spawnSync('bun', ['scripts/spawn.ts'], {shell:false});
+execFileSync('bun', ['scripts/exec-file.ts'], {shell:false});`),
+  ).toEqual(["'bun' 'scripts/spawn.ts'", "'bun' 'scripts/exec-file.ts'"]);
+  for (const source of [
+    "import {spawnSync} from 'node:child_process'; spawnSync('bun', ['scripts/facade.ts'], {shell:true});",
+    "import {execFileSync} from 'node:child_process'; execFileSync('bun', ['scripts/facade.ts'], {shell:'/bin/bash'});",
+    "import {execSync} from 'node:child_process'; execSync('bun scripts/facade.ts', {shell:runtimeShell});",
+    "import {spawnSync} from 'node:child_process'; spawnSync('git', ['status'], {shell:true});",
+    "Bun.spawn(['bun', 'scripts/facade.ts'], {shell:true});",
+    "import {spawnSync} from 'node:child_process'; spawnSync('bun', [], {shell:false,shell:true});",
+  ])
+    expect(() => extract(source)).toThrow(
+      'Shell-enabled TypeScript subprocess options are forbidden in',
+    );
+});
+
 test('pins the isolated command environment to its exact function AST', async () => {
   const path = 'agentic-ai/loom/src/module-experts/runtime-contract.ts';
   const sourcePath = resolve(import.meta.dir, '../../..', path);
@@ -530,6 +570,36 @@ shell\`bun scripts/alias.ts\`;`),
   expect(extract('const Bun={$(){}}; Bun.$`bun scripts/ignored.ts`;')).toEqual(
     [],
   );
+});
+
+test('propagates imported Bun shell tags through static aliases', () => {
+  expect(
+    extract(`
+import {$ as shell} from 'bun';
+import * as runtime from 'bun';
+import BunRuntime from 'bun';
+const alias=shell;
+const namespaced=runtime.$;
+const defaulted=BunRuntime['$'];
+alias\`bun scripts/alias.ts\`;
+namespaced\`bun scripts/namespace.ts\`;
+defaulted\`bun scripts/default.ts\`;`),
+  ).toEqual([
+    'bun scripts/alias.ts',
+    'bun scripts/namespace.ts',
+    'bun scripts/default.ts',
+  ]);
+  expect(
+    extract(`
+const shell=(parts:TemplateStringsArray)=>parts;
+const runtime={$:shell};
+shell\`ignored\`; runtime.$\`ignored\`;`),
+  ).toEqual([]);
+  expect(() =>
+    extract(`
+import * as runtime from 'bun';
+runtime[method]\`bun scripts/ignored.ts\`;`),
+  ).toThrow('Dynamic Bun namespace member selection is forbidden.');
 });
 
 test('proves dynamic wrappers through exact lexical callers instead of file text', () => {
