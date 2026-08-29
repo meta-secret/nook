@@ -10,9 +10,15 @@ if [ "$#" -eq 0 ]; then
   exit 2
 fi
 
-docker_bin="${DOCKER:-docker}"
 builder="${NOOK_PR_BUILDX_BUILDER:-}"
 health_timeout="${NOOK_BUILDKIT_HEALTH_TIMEOUT_SECONDS:-60}"
+if [ -x /usr/local/bin/docker ]; then docker_cli=/usr/local/bin/docker
+elif [ -x /usr/bin/docker ]; then docker_cli=/usr/bin/docker
+elif [ -x /opt/homebrew/bin/docker ]; then docker_cli=/opt/homebrew/bin/docker
+else
+  echo "trusted Docker CLI is unavailable" >&2
+  exit 127
+fi
 
 case "$builder" in
   ''|nook-pr|*[!a-zA-Z0-9_.-]*)
@@ -63,8 +69,8 @@ run_with_timeout() {
 }
 
 probe_remote_builder() {
-  "$docker_bin" buildx inspect "$builder" --bootstrap >/dev/null 2>&1 \
-    && "$docker_bin" buildx build \
+  "$docker_cli" buildx inspect "$builder" --bootstrap >/dev/null 2>&1 \
+    && "$docker_cli" buildx build \
       --builder "$builder" \
       --file "$probe_context/Dockerfile" \
       --output type=cacheonly \
@@ -85,5 +91,5 @@ if [ "$probe_status" -ne 0 ]; then
 fi
 
 echo "Using healthy ARC remote BuildKit builder $builder" >&2
-"$docker_bin" buildx use "$builder"
+"$docker_cli" buildx use "$builder"
 "$@"
