@@ -61,6 +61,34 @@ describe('website one-time-code fields', () => {
     )
   })
 
+  test('authenticates OTP auto-submit against the form action', () => {
+    document.body.innerHTML = `
+      <form id="transaction" action="/transfer">
+        <input
+          autocomplete="one-time-code"
+          oninput="this.form.requestSubmit()"
+        />
+        <button type="submit" formaction="/auth/verify">Verify code</button>
+      </form>
+    `
+
+    const observation = observedAuthenticationWorkflow()
+    const facts = authenticationPageObservationFacts({
+      observation,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.ceremony.authenticationContext.destinationIdentity).toBe(
+      'http://localhost:3000/transfer',
+    )
+    const workflowMatch = classify_companion_authentication_workflow_facts({
+      observations: [facts],
+    })
+    expect(companion_authentication_workflow_match_kind(workflowMatch)).toBe(
+      CompanionAuthenticationWorkflowMatchKind.NoMatch,
+    )
+  })
+
   test('transports every scoped advance-control candidate for Rust selection', () => {
     document.body.innerHTML = `
       <form id="login" action="/login">
@@ -455,6 +483,38 @@ describe('website one-time-code fields', () => {
         },
       ],
     })
+  })
+
+  test('transports an image input as a semantic submit control', () => {
+    document.body.innerHTML = `
+      <form id="login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <input type="image" alt="Sign in" />
+      </form>
+    `
+
+    const observation = observedAuthenticationWorkflow()
+    const facts = authenticationPageObservationFacts({
+      observation,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [
+        {
+          semantics: 'semantic-submit',
+          label: expect.stringContaining('Sign in'),
+        },
+      ],
+    })
+    const workflowMatch = classify_companion_authentication_workflow_facts({
+      observations: [facts],
+    })
+    expect(companion_authentication_workflow_match_kind(workflowMatch)).toBe(
+      CompanionAuthenticationWorkflowMatchKind.Matched,
+    )
   })
 
   test('ignores closed-dropdown password fields inside the same page form', () => {

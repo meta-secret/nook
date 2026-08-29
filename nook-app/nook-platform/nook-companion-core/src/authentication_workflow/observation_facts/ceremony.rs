@@ -145,6 +145,11 @@ impl AuthenticationCeremonyObservationFacts {
             AuthenticationOneTimeCodeProgressionEvidence::AdvanceControlRequired
         }
     }
+
+    pub(super) fn has_one_time_code_auto_submit_signal(&self) -> bool {
+        self.is_bounded()
+            && looks_like_one_time_code_auto_submit_signal(&self.one_time_code_handler_signal)
+    }
 }
 
 #[cfg(test)]

@@ -180,20 +180,23 @@ mod tests {
 
     #[test]
     fn decodes_route_vocabulary_before_policy_classification() {
-        for destination in [
-            "/auth/%64elete-account",
-            "/auth/%2564elete-account",
-            "/login?next=%2Faccount%2F%63ancel",
-        ] {
+        for destination in ["/auth/%64elete-account", "/auth/%2564elete-account"] {
             assert!(!advances(&password_control(
                 "https://example.test",
                 destination
             )));
         }
-        assert!(advances(&password_control(
-            "https://example.test",
-            "/login#%6Fauth%2Fgoogle"
-        )));
+        for destination in [
+            "/login?next=%2Faccount%2F%63ancel",
+            "/login?next=/profile",
+            "/signin?returnTo=/settings",
+            "/login#%6Fauth%2Fgoogle",
+        ] {
+            assert!(advances(&password_control(
+                "https://example.test",
+                destination
+            )));
+        }
     }
 
     #[test]

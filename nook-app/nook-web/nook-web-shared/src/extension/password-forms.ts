@@ -247,7 +247,7 @@ function scopedControlRoot({ root, formScope }: PasswordFormObservation): Parent
 }
 
 const authenticationAdvanceControlSelector =
-  'button[type="submit"], input[type="submit"], button:not([type]), button[type="button"]';
+  'button[type="submit"], input[type="submit"], input[type="image"], button:not([type]), button[type="button"]';
 
 function isRenderedControl(control: HTMLElement): boolean {
   let element = control;
@@ -293,6 +293,7 @@ function controlLabel(control: HTMLElement): string {
     control.textContent ?? "",
     control.getAttribute("aria-label") ?? "",
     control.getAttribute("title") ?? "",
+    control.getAttribute("alt") ?? "",
     (control as HTMLInputElement).value ?? "",
   ].join(" ");
 }
@@ -379,11 +380,11 @@ function pageControlObservation({
   const semanticSubmitControls = authenticationAdvanceControls(observation).filter(
     (candidate) =>
       candidate.matches(
-        'button[type="submit"], input[type="submit"], button:not([type])',
+        'button[type="submit"], input[type="submit"], input[type="image"], button:not([type])',
       ),
   );
   const semanticSubmit = control.matches(
-    'button[type="submit"], input[type="submit"], button:not([type])',
+    'button[type="submit"], input[type="submit"], input[type="image"], button:not([type])',
   );
   const owned =
     observation.formScope.kind === PasswordFormScopeKind.Owned &&
@@ -491,8 +492,7 @@ export function authenticationPageObservationFacts({
         authenticationUsername,
         sourceOrigin: location.origin,
         formIdentity: contextObservation?.formIdentity ?? formIdentity(observation),
-        destinationIdentity:
-          contextObservation?.destinationIdentity ?? formDestination(observation),
+        destinationIdentity: formDestination(observation),
       },
       manualCheckpoint: observation.summary.manualCheckpointPresent
         ? "present"
@@ -522,7 +522,7 @@ function nearestUnownedAuthContainer({
     );
     const hasSubmitControl = Boolean(
       container.querySelector(
-        'button[type="submit"], input[type="submit"], button:not([type])',
+        'button[type="submit"], input[type="submit"], input[type="image"], button:not([type])',
       ),
     );
     if (explicitAuthContainer || hasSubmitControl) return container;
@@ -797,7 +797,7 @@ export function submitLoginForm(observation: PasswordFormObservation): boolean {
     (control) => {
       if (
         !control.matches(
-          'button[type="submit"], input[type="submit"], button:not([type])',
+          'button[type="submit"], input[type="submit"], input[type="image"], button:not([type])',
         )
       ) {
         return false;

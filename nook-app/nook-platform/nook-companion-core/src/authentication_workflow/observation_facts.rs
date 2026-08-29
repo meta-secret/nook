@@ -3,58 +3,20 @@ use super::{
     AuthenticationFormObservationPriority, AuthenticationPageObservation,
     AuthenticationPageObservations, AuthenticationPasskeyEvidence, AuthenticationWorkflowMatch,
 };
-use crate::page_field_classification::{
-    AuthenticationAdvanceControlObservation, AuthenticationUsernameEvidence, PageControlOwnership,
-};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
 mod ceremony;
+mod fields;
 mod passkey;
 pub use ceremony::{
     AuthenticationCeremonyContextObservation, AuthenticationCeremonyObservationFacts,
     AuthenticationDetailedAdvanceControlObservation,
 };
+pub use fields::AuthenticationFieldObservationFacts;
 pub use passkey::{
     AuthenticationDetailedPasskeyControlObservation, AuthenticationPasskeyControlObservation,
 };
-
-/// Raw, non-secret field facts observed inside one authentication scope.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
-pub struct AuthenticationFieldObservationFacts {
-    pub username_field_count: u32,
-    pub current_password_field_count: u32,
-    pub new_password_field_count: u32,
-    pub generic_password_field_count: u32,
-    pub one_time_code_field_count: u32,
-}
-
-impl AuthenticationFieldObservationFacts {
-    /// Validate that detailed control evidence describes these same fields and scope.
-    #[must_use]
-    pub fn is_compatible_with_detailed_control(
-        self,
-        observation: &AuthenticationAdvanceControlObservation,
-    ) -> bool {
-        self.current_password_field_count
-            .saturating_add(self.generic_password_field_count)
-            .saturating_add(self.new_password_field_count)
-            == observation.password_field_count
-            && self.new_password_field_count == observation.new_password_field_count
-            && self.one_time_code_field_count == observation.one_time_code_field_count
-            && (self.username_field_count > 0)
-                != matches!(
-                    observation.authentication_username,
-                    AuthenticationUsernameEvidence::Absent
-                )
-            && matches!(
-                observation.ownership,
-                PageControlOwnership::OwnedForm | PageControlOwnership::LocallyScoped
-            )
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
@@ -138,23 +100,23 @@ impl AuthenticationPageObservationFacts {
 
     #[must_use]
     pub fn into_observation(self) -> AuthenticationPageObservation {
-        let advance_control = self.detailed_advance_control.evidence(self.fields);
+        let mut advance_control = self.detailed_advance_control.evidence(self.fields);
         let authenticated_ceremony_context = self
             .ceremony
             .authentication_context
             .is_authenticated(self.fields);
+        if self.ceremony.has_one_time_code_auto_submit_signal() && !authenticated_ceremony_context {
+            advance_control = AuthenticationAdvanceControlEvidence::Absent;
+        }
         AuthenticationPageObservation {
             username_field_count: self.fields.username_field_count,
             current_password_field_count: self.fields.current_password_field_count,
             new_password_field_count: self.fields.new_password_field_count,
             generic_password_field_count: self.fields.generic_password_field_count,
             one_time_code_field_count: self.fields.one_time_code_field_count,
-            one_time_code_progression: self.ceremony.derived_one_time_code_progression(
-                matches!(
-                    advance_control,
-                    AuthenticationAdvanceControlEvidence::Present
-                ) || authenticated_ceremony_context,
-            ),
+            one_time_code_progression: self
+                .ceremony
+                .derived_one_time_code_progression(authenticated_ceremony_context),
             manual_checkpoint: self.ceremony.manual_checkpoint,
             enrollment_evidence: self.authenticator.enrollment_evidence(),
             advance_control,
@@ -201,7 +163,10 @@ impl AuthenticationPageObservationFactsBatch {
 mod tests {
     use super::*;
     use crate::authentication_workflow::AuthenticationOneTimeCodeProgressionEvidence;
-    use crate::page_field_classification::AuthenticationAdvanceControlDecision;
+    use crate::page_field_classification::{
+        AuthenticationAdvanceControlDecision, AuthenticationAdvanceControlObservation,
+        AuthenticationUsernameEvidence,
+    };
 
     fn detailed_one_time_code_control(
         form_identity: &str,
@@ -460,6 +425,12 @@ mod tests {
         let mut trusted = detailed_one_time_code_control("auth", "", "Verify code");
         trusted.ceremony.one_time_code_handler_signal =
             "oninput=this.form.requestSubmit()".to_owned();
+        trusted.ceremony.authentication_context = AuthenticationCeremonyContextObservation {
+            authentication_username: AuthenticationUsernameEvidence::Absent,
+            source_origin: "https://example.test".to_owned(),
+            form_identity: "auth".to_owned(),
+            destination_identity: String::new(),
+        };
         assert_eq!(
             trusted.into_observation().one_time_code_progression,
             AuthenticationOneTimeCodeProgressionEvidence::AutoSubmitObserved
@@ -868,6 +839,13 @@ mod tests {
         authentication_auto_submit
             .ceremony
             .one_time_code_handler_signal = "oninput=this.form.requestSubmit()".to_owned();
+        authentication_auto_submit.ceremony.authentication_context =
+            AuthenticationCeremonyContextObservation {
+                authentication_username: AuthenticationUsernameEvidence::Absent,
+                source_origin: "https://example.test".to_owned(),
+                form_identity: "auth".to_owned(),
+                destination_identity: String::new(),
+            };
         assert_eq!(
             AuthenticationPageObservationFactsBatch {
                 observations: vec![authentication_auto_submit],
@@ -884,6 +862,25 @@ mod tests {
     fn rejects_auto_submitted_transaction_one_time_code() {
         let mut transaction =
             detailed_one_time_code_control("transaction-confirmation", "/transfer", "Confirm");
+        transaction.detailed_advance_control =
+            AuthenticationDetailedAdvanceControlObservation::observed(
+                AuthenticationAdvanceControlObservation {
+                    destination_identity: "/auth/verify".to_owned(),
+                    label: "Verify code".to_owned(),
+                    ..match transaction.detailed_advance_control.clone() {
+                        AuthenticationDetailedAdvanceControlObservation::Observed(mut controls) => {
+                            controls.remove(0)
+                        }
+                        AuthenticationDetailedAdvanceControlObservation::Absent => unreachable!(),
+                    }
+                },
+            );
+        transaction.ceremony.authentication_context = AuthenticationCeremonyContextObservation {
+            authentication_username: AuthenticationUsernameEvidence::Absent,
+            source_origin: "https://example.test".to_owned(),
+            form_identity: "transaction-confirmation".to_owned(),
+            destination_identity: "/transfer".to_owned(),
+        };
         transaction.ceremony.one_time_code_handler_signal = "oninput=this.form.submit()".to_owned();
 
         let observation = transaction.clone().into_observation();

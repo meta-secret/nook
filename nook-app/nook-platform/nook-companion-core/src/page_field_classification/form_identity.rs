@@ -114,12 +114,36 @@ fn destination_without_oauth_form_post_metadata(destination_identity: &str) -> S
     }
 }
 
+fn destination_without_navigation_metadata(destination_identity: &str) -> String {
+    let Some((path, query)) = destination_identity.split_once('?') else {
+        return destination_identity.to_owned();
+    };
+    let remaining_query = query
+        .split('&')
+        .filter(|component| {
+            let key = component.split_once('=').map_or(*component, |(key, _)| key);
+            !matches!(
+                expand_identity_text(key).as_str(),
+                "next" | "return" | "return to" | "redirect" | "redirect uri" | "continue"
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("&");
+    if remaining_query.is_empty() {
+        path.to_owned()
+    } else {
+        format!("{path}?{remaining_query}")
+    }
+}
+
 pub(super) fn destination_has_disallowed_action_or_provider(
     destination_identity: &str,
     password_update_destination: bool,
     allow_generic_oauth_authorization: bool,
 ) -> bool {
-    let content_identity = destination_without_oauth_form_post_metadata(destination_identity);
+    let content_identity = destination_without_navigation_metadata(
+        &destination_without_oauth_form_post_metadata(destination_identity),
+    );
     control_destination_has_disallowed_route_action(destination_identity)
         || (looks_like_non_authentication_submit_control_label(&content_identity)
             && !password_update_destination
@@ -263,14 +287,21 @@ pub(super) fn control_destination_indicates_safe_post_login_route(
 }
 
 pub(super) fn control_destination_has_disallowed_route_action(destination_identity: &str) -> bool {
-    let identity = expand_identity_text(destination_identity);
-    let path_identity =
-        expand_identity_text(destination_identity.split('?').next().unwrap_or_default());
-    contains_any_word(&identity, &["cancel", "back", "help", "profile", "payment"])
-        || contains_any_word(&identity, &["billing", "subscribe", "search", "publish"])
-        || (contains_any_word(&path_identity, &["post"])
-            && !control_destination_indicates_safe_post_login_route(destination_identity))
-        || contains_any_word(&identity, &["learn more"])
+    let path_identity = expand_identity_text(
+        destination_identity
+            .split(['?', '#'])
+            .next()
+            .unwrap_or_default(),
+    );
+    contains_any_word(
+        &path_identity,
+        &["cancel", "back", "help", "profile", "payment"],
+    ) || contains_any_word(
+        &path_identity,
+        &["billing", "subscribe", "search", "publish"],
+    ) || (contains_any_word(&path_identity, &["post"])
+        && !control_destination_indicates_safe_post_login_route(destination_identity))
+        || contains_any_word(&path_identity, &["learn more"])
 }
 
 pub(super) fn control_destination_indicates_password_update_route(
