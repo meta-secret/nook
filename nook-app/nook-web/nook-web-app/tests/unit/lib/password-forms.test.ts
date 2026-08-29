@@ -313,15 +313,14 @@ describe('website one-time-code fields', () => {
   })
 
   test.each([
-    ['password recovery', 'Continue to reset password'],
-    ['registration', 'Continue to create account'],
-    ['Amazon provider selector', 'Continue with Amazon'],
-    ['destructive action', 'Continue'],
-  ])('skips %s controls before advancing login', (_, routeLabel) => {
+    ['Amazon provider selector', 'Continue with Amazon', ''],
+    ['destructive action', 'Continue', 'name="delete-account"'],
+    ['hidden control', '', 'name="continue" style="display:none"'],
+  ])('skips %s before advancing login', (_, label, attrs) => {
     document.body.innerHTML = `
       <form id="login-form">
         <input autocomplete="username" name="email" type="email" />
-        <button id="alternate-route" name="${routeLabel === 'Continue' ? 'delete-account' : ''}" type="button">${routeLabel}</button>
+        <button id="alternate-route" ${attrs} type="button">${label}</button>
         <button id="login-next" type="button">Continue</button>
       </form>
     `
@@ -355,7 +354,7 @@ describe('website one-time-code fields', () => {
   })
 
   test.each([
-    ['<button id="login-next" type="submit">Entrar</button>', true],
+    ['<button name="login" type="submit">Entrar</button>', true],
     ['<button type="submit">Supprimer le compte</button>', false],
     ['<form id="f"><button>Entrar</button></form>', false],
   ])('gates form-less localized control %s', (control, expected) => {

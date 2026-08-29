@@ -29,7 +29,6 @@ fn identity_names_external_authentication_provider(
 pub(super) fn label_names_external_authentication_provider(identity: &str) -> bool {
     identity_names_external_authentication_provider(identity, true)
 }
-
 pub(super) fn route_names_external_authentication_provider(identity: &str) -> bool {
     let route = expand_identity_text(identity.split(['?', '#']).next().unwrap_or_default());
     identity_names_external_authentication_provider(identity, false)
@@ -41,7 +40,6 @@ pub(super) fn route_names_external_authentication_provider(identity: &str) -> bo
         || (contains_any_word(&route, &["x"])
             && contains_any_word(&route, &["login", "log in", "signin", "sign in"]))
 }
-
 fn has_open_ended_provider_selection_grammar(identity: &str) -> bool {
     let tokens = identity.split_whitespace().collect::<Vec<_>>();
     tokens.iter().enumerate().any(|(index, token)| {

@@ -124,11 +124,13 @@ pub fn has_safe_authentication_route_identity(
 
 #[wasm_bindgen]
 #[must_use]
+#[expect(clippy::too_many_arguments, reason = "typed WASM policy boundary")]
 pub fn can_activate_authentication_route_control(
     source_origin: &str,
     form_identity: &str,
     destination_identity: &str,
     control_label: &str,
+    control_machine_identity: &str,
     has_form_owned_semantic_submit: bool,
     has_authentication_username: bool,
     has_local_authentication_scope: bool,
@@ -138,6 +140,7 @@ pub fn can_activate_authentication_route_control(
         form_identity,
         destination_identity,
         control_label,
+        control_machine_identity,
         has_form_owned_semantic_submit,
         has_authentication_username,
         has_local_authentication_scope,
@@ -198,7 +201,8 @@ mod tests {
             "https://example.test",
             "login-form",
             "https://example.test/auth/login",
-            "Entrar con Amazon",
+            "Continue",
+            "delete-account",
             true,
             true,
             true,
@@ -207,6 +211,7 @@ mod tests {
             "https://example.test",
             "login-form",
             "https://example.test/auth/login",
+            "",
             "",
             false,
             true,

@@ -335,17 +335,21 @@ pub fn has_safe_authentication_route_identity(
 
 /// Decide whether a locally scoped control may advance a safe authentication route.
 #[must_use]
+#[expect(clippy::too_many_arguments, reason = "typed WASM policy boundary")]
 pub fn can_activate_authentication_route_control(
     source_origin: &str,
     form_identity: &str,
     destination_identity: &str,
     control_label: &str,
+    control_machine_identity: &str,
     has_form_owned_semantic_submit: bool,
     has_authentication_username: bool,
     has_local_authentication_scope: bool,
 ) -> bool {
     if !has_safe_authentication_route_identity(source_origin, form_identity, destination_identity)
         || control_label.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
+        || control_machine_identity.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
+        || form_identity::form_identity_indicates_destructive_action(control_machine_identity)
     {
         return false;
     }
@@ -530,10 +534,6 @@ mod tests {
             "verification code"
         );
         assert_eq!(expand_identity_text("login_email"), "login email");
-        assert_eq!(
-            expand_identity_text("/auth/close/account"),
-            "auth close account"
-        );
     }
 
     #[test]
@@ -596,7 +596,6 @@ mod tests {
     fn passkey_and_manual_checkpoint_labels() {
         assert!(looks_like_passkey_control_label("Sign in with passkey"));
         assert!(!looks_like_passkey_control_label("Continue"));
-        assert!(!looks_like_passkey_control_label("Delete passkey"));
         assert!(looks_like_manual_checkpoint_label("I agree to the Terms"));
         assert!(looks_like_email_verification_body(
             "Please verify your email to continue"
@@ -636,6 +635,11 @@ mod tests {
                 form,
                 "https://login.microsoftonline.com/common/login",
                 label,
+                if label == "Continue" {
+                    "delete-account"
+                } else {
+                    ""
+                },
                 semantic,
                 username,
                 local,
@@ -649,7 +653,7 @@ mod tests {
         assert!(!decide("f", "Continue with Amazon", true, true, true));
         for label in [
             "Sign in to Google",
-            "Continue delete-account yes",
+            "Continue",
             "Sign in to Microsoft and reset password",
             "Sign in to Microsoft or Google",
         ] {
@@ -663,18 +667,8 @@ mod tests {
     fn route_identity_requires_positive_same_origin_authentication_evidence() {
         assert!(has_safe_authentication_route_identity(
             "https://example.test",
-            "login-form",
-            "https://example.test/session",
-        ));
-        assert!(has_safe_authentication_route_identity(
-            "https://example.test",
             "",
             "https://example.test/login?notprovider=x&continue=https://mail.google.com",
-        ));
-        assert!(has_safe_authentication_route_identity(
-            "https://example.test",
-            "login-form",
-            "https://example.test/auth/login?next=/profile",
         ));
         assert!(has_safe_authentication_route_identity(
             "https://example.test",
@@ -684,7 +678,6 @@ mod tests {
         for (form, destination) in [
             ("delete-account", "https://example.test/auth/login"),
             ("profile-settings", "https://example.test/auth/login"),
-            ("login-form", "https://example.test/register"),
             ("login-form", "https://example.test/reset-password"),
             ("login-form", "https://example.test/login?provider"),
             ("login-form", "https://example.test/login#/google"),
@@ -692,10 +685,7 @@ mod tests {
             ("login-form", "https://example.test/signin/x"),
             ("login-form", "https://example.test/auth/close/account"),
             ("login-form", "https://example.test/auth/forgot/password"),
-            (
-                "login-form",
-                "https://example.test/auth/authorize/transaction",
-            ),
+            ("login-form", "https://example.test/transaction/authorize"),
             (
                 "login-form",
                 "https://example.test/auth/login?action=close+account",

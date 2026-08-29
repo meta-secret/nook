@@ -503,6 +503,7 @@ export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
         ].join(" "),
         form.action,
         "",
+        "",
         false,
         isAuthUsernameField(usernameField),
         true,
@@ -562,13 +563,17 @@ function clickAdvanceControl(request: LoginAdvanceControlRequest): boolean {
     ),
   );
   for (const control of controls) {
-    if (control.disabled || control.getAttribute("aria-disabled") === "true") {
+    if (
+      control.disabled ||
+      control.getAttribute("aria-disabled") === "true" ||
+      control.hidden ||
+      getComputedStyle(control).display === "none"
+    ) {
       continue;
     }
     const label = [
       control.textContent ?? "",
       control.getAttribute("aria-label") ?? "",
-      control.getAttribute("name") ?? "",
       control.value || (control.tagName === "INPUT" ? "submit" : ""),
     ].join(" ");
     const nookTypedArgs0_30: AuthenticationRouteControlRequest = {
@@ -624,6 +629,7 @@ function canActivateAuthenticationRouteControl(
     formIdentity,
     destinationIdentity,
     controlLabel,
+    control.getAttribute("name") ?? "",
     Boolean(form && control.type === "submit"),
     isAuthUsernameField(query.usernameField),
     sharesOwnedForm || hasLocalUnownedScope,
