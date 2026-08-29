@@ -35,63 +35,135 @@ export function removeScannedWidget(): void {
   removeWidget()
 }
 
-// eslint-disable-next-line max-params -- Chrome owns the runtime listener callback signature.
-chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
-  if (!runtimeMessage || typeof runtimeMessage !== 'object') return false
-  const message = runtimeMessage
-  if (
-    sender.id === chrome.runtime.id &&
-    isQueryLoginDetectionMessage(message)
-  ) {
-    const detected = summarizeAuthenticationWorkflowForms().length > 0
-    const nookTypedArgs0_0: Parameters<typeof sendResponse>[0] = {
-      ok: true,
-      status: detected
-        ? LoginDetectionStatus.Detected
-        : LoginDetectionStatus.NotDetected,
+type AutofillMessageListener = Parameters<
+  typeof chrome.runtime.onMessage.addListener
+>[0]
+
+export const routeAutofillMessage: AutofillMessageListener =
+  // eslint-disable-next-line max-params -- Chrome owns the runtime listener callback signature.
+  (runtimeMessage, sender, sendResponse) => {
+    if (!runtimeMessage || typeof runtimeMessage !== 'object') return false
+    const message = runtimeMessage
+    if (
+      sender.id === chrome.runtime.id &&
+      isQueryLoginDetectionMessage(message)
+    ) {
+      const detected = summarizeAuthenticationWorkflowForms().length > 0
+      const nookTypedArgs0_0: Parameters<typeof sendResponse>[0] = {
+        ok: true,
+        status: detected
+          ? LoginDetectionStatus.Detected
+          : LoginDetectionStatus.NotDetected,
+      }
+      sendResponse(nookTypedArgs0_0)
+      return false
     }
-    sendResponse(nookTypedArgs0_0)
-    return false
-  }
-  if (
-    sender.id === chrome.runtime.id &&
-    isWebsiteLoginCanceledMessage(message) &&
-    message.payload.origin === location.origin &&
-    pickerState.login.kind === LoginPickerKind.Open &&
-    message.payload.requestId === pickerState.login.request.requestId
-  ) {
-    const pending = pickerState.login.request
-    pickerState.clearPendingLogin()
+    if (
+      sender.id === chrome.runtime.id &&
+      isWebsiteLoginCanceledMessage(message) &&
+      message.payload.origin === location.origin &&
+      pickerState.login.kind === LoginPickerKind.Open &&
+      message.payload.requestId === pickerState.login.request.requestId
+    ) {
+      const pending = pickerState.login.request
+      pickerState.clearPendingLogin()
+      window.clearTimeout(pending.timeoutId)
+      const nookTypedArgs0_0: Parameters<typeof setStatus>[0] = {
+        description: pending.description,
+        continueButton: pending.continueButton,
+        text: translatedMessage(BROWSER_MESSAGE_KEYS.WidgetLoginPickerCanceled),
+        enableContinue: true,
+      }
+      setStatus(nookTypedArgs0_0)
+      if (
+        pending.continueButton.isConnected &&
+        !pending.continueButton.hidden
+      ) {
+        pending.continueButton.disabled = false
+      }
+      const nookTypedArgs0_1: Parameters<typeof sendResponse>[0] = { ok: true }
+      sendResponse(nookTypedArgs0_1)
+      return false
+    }
+    if (
+      sender.id === chrome.runtime.id &&
+      isWebsiteLoginSelectedMessage(message) &&
+      message.payload.origin === location.origin &&
+      pickerState.login.kind === LoginPickerKind.Open &&
+      message.payload.requestId === pickerState.login.request.requestId
+    ) {
+      const pending = pickerState.login.request
+      pickerState.clearPendingLogin()
+      window.clearTimeout(pending.timeoutId)
+      const nookTypedArgs0_2: Parameters<typeof sendResponse>[0] = { ok: true }
+      sendResponse(nookTypedArgs0_2)
+      widgetState.busy = true
+      pending.continueButton.disabled = true
+      const nookTypedArgs0_1: Parameters<typeof fillAndSubmitAccount>[0] = {
+        account: message.payload.account,
+        workflow: pending.workflow,
+        step: pending.step,
+        title: pending.title,
+        description: pending.description,
+        continueButton: pending.continueButton,
+      }
+      void fillAndSubmitAccount(nookTypedArgs0_1).finally(() => {
+        widgetState.busy = false
+        if (
+          pending.continueButton.isConnected &&
+          !pending.continueButton.hidden
+        ) {
+          pending.continueButton.disabled = false
+        }
+      })
+      return false
+    }
+    if (
+      sender.id === chrome.runtime.id &&
+      isWebsiteAuthenticatorCanceledMessage(message) &&
+      message.payload.origin === location.origin &&
+      pickerState.authenticator.kind === AuthenticatorPickerKind.Open &&
+      message.payload.requestId === pickerState.authenticator.request.requestId
+    ) {
+      const pending = pickerState.authenticator.request
+      pickerState.clearPendingAuthenticator()
+      window.clearTimeout(pending.timeoutId)
+      const nookTypedArgs0_2: Parameters<typeof setStatus>[0] = {
+        description: pending.description,
+        continueButton: pending.continueButton,
+        text: translatedMessage(
+          BROWSER_MESSAGE_KEYS.WidgetAuthenticatorPickerCanceled,
+        ),
+        enableContinue: true,
+      }
+      setStatus(nookTypedArgs0_2)
+      if (
+        pending.continueButton.isConnected &&
+        !pending.continueButton.hidden
+      ) {
+        pending.continueButton.disabled = false
+      }
+      const nookTypedArgs0_3: Parameters<typeof sendResponse>[0] = { ok: true }
+      sendResponse(nookTypedArgs0_3)
+      return false
+    }
+    if (
+      sender.id !== chrome.runtime.id ||
+      !isWebsiteAuthenticatorSelectedMessage(message) ||
+      message.payload.origin !== location.origin ||
+      pickerState.authenticator.kind !== AuthenticatorPickerKind.Open ||
+      message.payload.requestId !== pickerState.authenticator.request.requestId
+    ) {
+      return false
+    }
+    const pending = pickerState.authenticator.request
+    pickerState.clearPendingAuthenticator()
     window.clearTimeout(pending.timeoutId)
-    const nookTypedArgs0_0: Parameters<typeof setStatus>[0] = {
-      description: pending.description,
-      continueButton: pending.continueButton,
-      text: translatedMessage(BROWSER_MESSAGE_KEYS.WidgetLoginPickerCanceled),
-      enableContinue: true,
-    }
-    setStatus(nookTypedArgs0_0)
-    if (pending.continueButton.isConnected && !pending.continueButton.hidden) {
-      pending.continueButton.disabled = false
-    }
-    const nookTypedArgs0_1: Parameters<typeof sendResponse>[0] = { ok: true }
-    sendResponse(nookTypedArgs0_1)
-    return false
-  }
-  if (
-    sender.id === chrome.runtime.id &&
-    isWebsiteLoginSelectedMessage(message) &&
-    message.payload.origin === location.origin &&
-    pickerState.login.kind === LoginPickerKind.Open &&
-    message.payload.requestId === pickerState.login.request.requestId
-  ) {
-    const pending = pickerState.login.request
-    pickerState.clearPendingLogin()
-    window.clearTimeout(pending.timeoutId)
-    const nookTypedArgs0_2: Parameters<typeof sendResponse>[0] = { ok: true }
-    sendResponse(nookTypedArgs0_2)
+    const nookTypedArgs0_4: Parameters<typeof sendResponse>[0] = { ok: true }
+    sendResponse(nookTypedArgs0_4)
     widgetState.busy = true
     pending.continueButton.disabled = true
-    const nookTypedArgs0_1: Parameters<typeof fillAndSubmitAccount>[0] = {
+    const nookTypedArgs0_3: Parameters<typeof fillAuthenticatorCode>[0] = {
       account: message.payload.account,
       workflow: pending.workflow,
       approval: pending.approval,
@@ -100,7 +172,7 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
       description: pending.description,
       continueButton: pending.continueButton,
     }
-    void fillAndSubmitAccount(nookTypedArgs0_1).finally(() => {
+    void fillAuthenticatorCode(nookTypedArgs0_3).finally(() => {
       widgetState.busy = false
       if (
         pending.continueButton.isConnected &&
@@ -111,62 +183,4 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     })
     return false
   }
-  if (
-    sender.id === chrome.runtime.id &&
-    isWebsiteAuthenticatorCanceledMessage(message) &&
-    message.payload.origin === location.origin &&
-    pickerState.authenticator.kind === AuthenticatorPickerKind.Open &&
-    message.payload.requestId === pickerState.authenticator.request.requestId
-  ) {
-    const pending = pickerState.authenticator.request
-    pickerState.clearPendingAuthenticator()
-    window.clearTimeout(pending.timeoutId)
-    const nookTypedArgs0_2: Parameters<typeof setStatus>[0] = {
-      description: pending.description,
-      continueButton: pending.continueButton,
-      text: translatedMessage(
-        BROWSER_MESSAGE_KEYS.WidgetAuthenticatorPickerCanceled,
-      ),
-      enableContinue: true,
-    }
-    setStatus(nookTypedArgs0_2)
-    if (pending.continueButton.isConnected && !pending.continueButton.hidden) {
-      pending.continueButton.disabled = false
-    }
-    const nookTypedArgs0_3: Parameters<typeof sendResponse>[0] = { ok: true }
-    sendResponse(nookTypedArgs0_3)
-    return false
-  }
-  if (
-    sender.id !== chrome.runtime.id ||
-    !isWebsiteAuthenticatorSelectedMessage(message) ||
-    message.payload.origin !== location.origin ||
-    pickerState.authenticator.kind !== AuthenticatorPickerKind.Open ||
-    message.payload.requestId !== pickerState.authenticator.request.requestId
-  ) {
-    return false
-  }
-  const pending = pickerState.authenticator.request
-  pickerState.clearPendingAuthenticator()
-  window.clearTimeout(pending.timeoutId)
-  const nookTypedArgs0_4: Parameters<typeof sendResponse>[0] = { ok: true }
-  sendResponse(nookTypedArgs0_4)
-  widgetState.busy = true
-  pending.continueButton.disabled = true
-  const nookTypedArgs0_3: Parameters<typeof fillAuthenticatorCode>[0] = {
-    account: message.payload.account,
-    workflow: pending.workflow,
-    approval: pending.approval,
-    step: pending.step,
-    title: pending.title,
-    description: pending.description,
-    continueButton: pending.continueButton,
-  }
-  void fillAuthenticatorCode(nookTypedArgs0_3).finally(() => {
-    widgetState.busy = false
-    if (pending.continueButton.isConnected && !pending.continueButton.hidden) {
-      pending.continueButton.disabled = false
-    }
-  })
-  return false
-})
+chrome.runtime.onMessage.addListener(routeAutofillMessage)
