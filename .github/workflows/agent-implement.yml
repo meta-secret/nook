@@ -121,21 +121,14 @@ jobs:
               )
               return
             }
-            const gizmoIdRows = [...frontmatter.matchAll(/^gizmo_id:\s*(.+)$/gm)]
+            const gizmoIdRows = [...frontmatter.matchAll(/^gizmo_id:\s*(.*)$/gm)]
             if (gizmoIdRows.length > 1) {
               core.setFailed(`${path} has duplicate canonical gizmo_id fields`)
               return
             }
-            const parsedGizmoId = value(frontmatter, 'gizmo_id')
-            const assignedGizmoId = parsedGizmoId === null || parsedGizmoId === ''
-              ? ''
-              : typeof parsedGizmoId === 'string'
-                ? parsedGizmoId.trim()
-                : parsedGizmoId
-            if (
-              typeof assignedGizmoId !== 'string' ||
-              (assignedGizmoId && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(assignedGizmoId))
-            ) {
+            const rawGizmoId = gizmoIdRows[0]?.[1].trim() || ''
+            const assignedGizmoId = rawGizmoId === 'null' ? '' : rawGizmoId
+            if (assignedGizmoId && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(assignedGizmoId)) {
               core.setFailed(`${path} has an invalid canonical gizmo_id`)
               return
             }

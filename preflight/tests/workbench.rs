@@ -51,10 +51,8 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "new RegExp(`^\\\\s*${key}\\\\s*:`, 'm').test(frontmatter)",
         "presentStackMetadata.length > 0",
         "Stacked successor dispatch requires the later runtime support; retry after it lands.",
-        "const parsedGizmoId = value(frontmatter, 'gizmo_id')",
-        "parsedGizmoId === null || parsedGizmoId === ''",
-        "typeof parsedGizmoId === 'string'",
-        "typeof assignedGizmoId !== 'string'",
+        "const rawGizmoId = gizmoIdRows[0]?.[1].trim() || ''",
+        "const assignedGizmoId = rawGizmoId === 'null' ? '' : rawGizmoId",
         "ASSIGNED_GIZMO_ID: ${{ steps.workbench.outputs.gizmo_id }}",
         "assignedGizmoId: process.env.ASSIGNED_GIZMO_ID",
         "const currentGizmoIdMatch = /^- Current Gizmo ID:\\s*([a-z0-9]+(?:-[a-z0-9]+)*)\\s*$/m",
@@ -62,6 +60,7 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "Validated Workbench task plan is missing its Current Gizmo ID.",
         "`gizmo_id: ${currentGizmoId}`",
         "assignedGizmoId && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(assignedGizmoId)",
+        "frontmatter.matchAll(/^gizmo_id:\\s*(.*)$/gm)",
         "gizmoIdRows.length > 1",
         "continuing_owner:",
         "A prompt-backed run requires continuing_owner.",
@@ -113,24 +112,32 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "planning and validation must consume the trusted claim-step Gizmo ID output"
     );
     assert!(
-        !workflow.contains("String(value(frontmatter, 'gizmo_id'))"),
-        "null or absent Gizmo IDs must not be stringified into trusted assignments"
+        !workflow.contains("value(frontmatter, 'gizmo_id')"),
+        "Gizmo IDs must retain their raw frontmatter scalar spelling"
     );
     let canonical_gizmo_id = |gizmo_id: &str| {
-        !gizmo_id.is_empty()
-            && gizmo_id.split('-').all(|segment| {
-                !segment.is_empty()
-                    && segment
-                        .bytes()
-                        .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
-            })
+        gizmo_id.split('-').all(|segment| {
+            !segment.is_empty()
+                && segment
+                    .bytes()
+                    .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
+        })
     };
-    assert!(
-        canonical_gizmo_id("2fa-slice")
-            && !canonical_gizmo_id("slice--one")
-            && !canonical_gizmo_id("slice-"),
-        "workflow Gizmo IDs must use canonical non-empty lowercase alphanumeric segments"
-    );
+    fn assigned_gizmo_id(raw: &str) -> &str {
+        if raw == "null" { "" } else { raw }
+    }
+    for accepted in ["2fa-slice", "123", "true", "false"] {
+        assert!(
+            canonical_gizmo_id(assigned_gizmo_id(accepted)),
+            "rejected: {accepted}"
+        );
+    }
+    for rejected in ["null", "", "slice--one", "slice-"] {
+        assert!(
+            !canonical_gizmo_id(assigned_gizmo_id(rejected)),
+            "unexpected assignment: {rejected}"
+        );
+    }
     assert!(
         !workflow.contains("`gizmo_id: ${process.env.ASSIGNED_GIZMO_ID || 'null'}`"),
         "published plan frontmatter must persist the validated Current Gizmo ID"
