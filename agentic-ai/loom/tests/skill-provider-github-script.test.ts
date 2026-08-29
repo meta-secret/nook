@@ -82,6 +82,9 @@ test('github-script injected require aliases remain module loaders', () => {
   for (const script of [
     "const load=require; load('./scripts/facade.cjs')",
     "const load=require; const loadAgain=load; loadAgain('./scripts/facade.cjs')",
+    "__original_require__('./scripts/facade.cjs')",
+    "const load=__original_require__; load('./scripts/facade.cjs')",
+    "const load=__original_require__; const loadAgain=load; loadAgain('./scripts/facade.cjs')",
   ]) {
     const expected = { specifier: './scripts/facade.cjs' };
     expect(references(script), script).toContainEqual(
@@ -96,6 +99,10 @@ test('github-script injected require aliases fail closed on escape', () => {
     "let load=require; load('./scripts/facade.cjs')",
     'const load=require; consume(load)',
     'const load=require; return load',
+    '__original_require__(modulePath)',
+    "let load=__original_require__; load('./scripts/facade.cjs')",
+    'const load=__original_require__; consume(load)',
+    'const load=__original_require__; return load',
   ])
     expect(() => references(script), script).toThrow(
       /(?:module load|require capability escape)/u,
@@ -108,6 +115,16 @@ test('github-script local require shadows the injected loader', () => {
   expect(references(script)).toEqual([]);
   const nested =
     "{ const require=(value)=>value; const load=require; load(modulePath) } const load=require; load('./scripts/facade.cjs')";
+  const expected = { specifier: './scripts/facade.cjs' };
+  expect(references(nested)).toContainEqual(expect.objectContaining(expected));
+});
+
+test('github-script local original require shadows the injected loader', () => {
+  const script =
+    'const __original_require__=(value)=>value; const load=__original_require__; load(modulePath)';
+  expect(references(script)).toEqual([]);
+  const nested =
+    "{ const __original_require__=(value)=>value; const load=__original_require__; load(modulePath) } const load=__original_require__; load('./scripts/facade.cjs')";
   const expected = { specifier: './scripts/facade.cjs' };
   expect(references(nested)).toContainEqual(expect.objectContaining(expected));
 });

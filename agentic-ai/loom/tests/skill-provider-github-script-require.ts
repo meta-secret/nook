@@ -95,7 +95,7 @@ function resolvesInjectedRequire(request: RequireResolutionRequest): boolean {
     name: expression.text,
   };
   const binding = bindingAt(lookup);
-  if (binding === false) return expression.text === 'require';
+  if (binding === false) return isInjectedRequireName(expression.text);
   if (
     !binding.constant ||
     binding.initializer === false ||
@@ -109,6 +109,10 @@ function resolvesInjectedRequire(request: RequireResolutionRequest): boolean {
     visited: new Set(request.visited).add(binding.initializer),
   };
   return resolvesInjectedRequire(nested);
+}
+
+function isInjectedRequireName(name: string): boolean {
+  return name === 'require' || name === '__original_require__';
 }
 
 function isConstantIdentifierDeclaration(
