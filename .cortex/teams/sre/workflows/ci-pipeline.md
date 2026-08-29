@@ -645,9 +645,13 @@ The publisher exception fails closed unless all of these boundaries hold:
 
 - the diff is bounded to the audited Rust dependency updates and their
   necessary compatibility changes;
-- workflow tooling comes from the trusted workflow source, and publication
-  credentials remain controlled by that tooling rather than the bounded
-  editor;
+- workflow tooling comes from the trusted workflow source; checkout sets
+  `persist-credentials: false`, and the publication PAT exists only in the
+  trusted host process environment, is withheld from Git checkout configuration
+  and the strict editor, and is used only after validation;
+- `CI_AGENT_TIMEOUT_MS=10800000` bounds the editor to three hours of the
+  six-hour job, reserving the other three-hour half for trusted validation and
+  publication;
 - the expected publication branch and pull-request identity are exact and
   unambiguous; and
 - after commit, push, and pull-request creation, the publisher resolves and

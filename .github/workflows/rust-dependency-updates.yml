@@ -60,13 +60,13 @@ jobs:
       CI_AGENT_FIX_PROFILE: rust-dependency-update
       CI_AGENT_PROMPT_FILE: .github/prompts/rust-dependency-update-agent.md
       CI_FIX_LABEL: Rust dependency update
-      CI_AGENT_TIMEOUT_MS: '21600000'
+      CI_AGENT_TIMEOUT_MS: '10800000'
     steps:
       - name: Checkout
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          token: ${{ secrets.NOOK_GITHUB_PAT }}
+          persist-credentials: false
 
       - name: Setup Task
         uses: go-task/setup-task@v2
