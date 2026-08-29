@@ -14,7 +14,6 @@ pub(super) fn identity_indicates_explicit_authentication_route(identity: &str) -
             "log in",
             "signin",
             "sign in",
-            "sign-in",
             "identity",
             "auth",
             "authentication",
@@ -22,21 +21,22 @@ pub(super) fn identity_indicates_explicit_authentication_route(identity: &str) -
     )
 }
 fn identity_indicates_explicit_login_route(identity: &str) -> bool {
-    contains_any_word(
-        &expand_identity_text(identity),
-        &["login", "log in", "signin", "sign in", "sign-in"],
-    )
+    let identity = expand_identity_text(identity);
+    contains_any_word(&identity, &["login", "log in", "signin", "sign in"])
+}
+fn normalized_route(identity: &str) -> String {
+    let normalized = identity.trim().to_ascii_lowercase();
+    normalized
+        .split(['?', '#'])
+        .next()
+        .unwrap_or_default()
+        .trim_end_matches('/')
+        .to_owned()
 }
 fn control_destination_indicates_generic_oauth_authorization_route(
     destination_identity: &str,
 ) -> bool {
-    let normalized = destination_identity.trim().to_ascii_lowercase();
-    let route = normalized
-        .split(['?', '#'])
-        .next()
-        .unwrap_or_default()
-        .trim_end_matches('/');
-    route == "/oauth2/authorize"
+    normalized_route(destination_identity) == "/oauth2/authorize"
 }
 fn control_destination_indicates_alternate_provider(
     destination_identity: &str,
@@ -122,10 +122,7 @@ pub(super) fn identity_has_authentication_control_veto(identity: &str) -> bool {
 pub(super) fn destination_has_safe_login_identity(destination_identity: &str) -> bool {
     identity_indicates_explicit_login_route(destination_identity)
         && !control_destination_indicates_non_authentication_route(destination_identity)
-        && !destination_has_disallowed_action_or_provider(destination_identity)
-        && !looks_like_registration_route_control_label(destination_identity)
-        && !looks_like_password_recovery_route_control_label(destination_identity)
-        && !looks_like_auxiliary_authentication_control_label(destination_identity)
+        && !identity_has_authentication_control_veto(destination_identity)
 }
 pub(super) fn form_identity_indicates_destructive_action(form_identity: &str) -> bool {
     let identity = expand_identity_text(form_identity);
@@ -195,21 +192,19 @@ pub(super) fn form_identity_indicates_destructive_action(form_identity: &str) ->
             ],
         )
 }
-pub(super) fn form_identity_indicates_non_authentication_account_management(
-    form_identity: &str,
-) -> bool {
-    let identity = expand_identity_text(form_identity);
+const NON_AUTHENTICATION_ACCOUNT_WORDS: &[&str] = &[
+    "profile",
+    "settings",
+    "preferences",
+    "newsletter",
+    "subscribe",
+    "marketing",
+    "contact",
+];
+pub(super) fn form_identity_indicates_non_authentication_account_management(form: &str) -> bool {
     contains_any_word(
-        &identity,
-        &[
-            "profile",
-            "settings",
-            "preferences",
-            "newsletter",
-            "subscribe",
-            "marketing",
-            "contact",
-        ],
+        &expand_identity_text(form),
+        NON_AUTHENTICATION_ACCOUNT_WORDS,
     )
 }
 pub(super) fn control_destination_indicates_non_authentication_route(
@@ -241,13 +236,10 @@ pub(super) fn control_destination_indicates_non_authentication_route(
         && form_identity_indicates_non_authentication_account_management(&identity)
 }
 fn control_destination_indicates_safe_post_login_route(destination_identity: &str) -> bool {
-    let normalized = destination_identity.trim().to_ascii_lowercase();
-    let route = normalized
-        .split(['?', '#'])
-        .next()
-        .unwrap_or_default()
-        .trim_end_matches('/');
-    matches!(route, "/auth/post-login" | "/authentication/post-login")
+    matches!(
+        normalized_route(destination_identity).as_str(),
+        "/auth/post-login" | "/authentication/post-login"
+    )
 }
 fn control_destination_has_disallowed_route_action(destination_identity: &str) -> bool {
     let path_identity = expand_identity_text(

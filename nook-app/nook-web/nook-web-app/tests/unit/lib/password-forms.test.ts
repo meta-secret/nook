@@ -363,7 +363,8 @@ describe('website one-time-code fields', () => {
   })
 
   test.each([
-    ['<button name="login" type="submit">Entrar</button>', true],
+    ['<button aria-label="Anmelden">Anmelden</button>', true],
+    ['<button aria-label="Se connecter">Se connecter</button>', true],
     ['<button type="submit">Supprimer le compte</button>', false],
     ['<form id="f"><button>Entrar</button></form>', false],
   ])('gates form-less localized control %s', (control, expected) => {

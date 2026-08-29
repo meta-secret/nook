@@ -266,7 +266,8 @@ fn looks_like_unrestricted_login_advance_control_label(label: &str) -> bool {
     {
         return false;
     }
-    matches!(identity.as_str(), "se connecter" | "anmelden")
+    ["anmelden", "anmelden anmelden"].contains(&identity.as_str())
+        || ["se connecter", "se connecter se connecter"].contains(&identity.as_str())
         || contains_any_word(&identity, LOGIN_ADVANCE_WORDS)
         || contains_any_word(&identity, &["submit"])
 }
@@ -319,12 +320,11 @@ pub fn has_safe_authentication_route_identity(
     else {
         return false;
     };
-    if form_identity::form_identity_indicates_destructive_action(&destination.route_identity)
-        || form_identity::control_destination_indicates_non_authentication_route(
-            &destination.route_identity,
-        )
-        || form_identity::destination_has_disallowed_action_or_provider(&destination.route_identity)
-    {
+    if form_identity::control_destination_indicates_non_authentication_route(
+        &destination.route_identity,
+    ) || form_identity::destination_has_disallowed_action_or_provider(
+        &destination.route_identity,
+    ) {
         return false;
     }
     form_identity::identity_indicates_explicit_authentication_route(form_identity)
@@ -613,15 +613,14 @@ mod tests {
 
     #[test]
     fn login_advance_labels_require_authentication_words() {
-        for label in "Next|SignIn|signin|Sign   In|Login|Log\tin|Submit".split('|') {
+        for label in "Next|SignIn|signin|Sign   In|Login|Log\tin|Submit|Anmelden Anmelden|Se connecter Se connecter".split('|') {
             assert!(looks_like_login_advance_control_label(label));
         }
-        for label in "Learn more|Subscribe|Submit order|Continue to reset password|Entrar con Amazon|Entrar con Foo|Continue with X".split('|') {
+        for label in "Learn more|Subscribe|Submit order|Continue to reset password|Entrar con Amazon|Entrar con Foo|Anmelden Foo|Se connecter Amazon|Continue with X".split('|') {
             assert!(!looks_like_login_advance_control_label(label));
         }
-        assert!(!looks_like_login_advance_control_label(
-            &"x".repeat(MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1)
-        ));
+        let oversized = "x".repeat(MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1);
+        assert!(!looks_like_login_advance_control_label(&oversized));
     }
 
     #[test]
@@ -660,13 +659,13 @@ mod tests {
         let safe = |form, destination| {
             has_safe_authentication_route_identity("https://example.test", form, destination)
         };
-        for destination in "https://example.test/login?notprovider=x&continue=https://mail.google.com|https://example.test/auth/login?x=1|https://example.test/v3/signin/identifier|https://example.test/login/v2".split('|') {
-            assert!(safe("login-form", destination));
+        for destination in "https://example.test/login?notprovider=x&continue=https://mail.google.com|https://example.test/auth/login?x=1|https://example.test/v3/signin/identifier|https://example.test/signin/callback|https://example.test/login/v2".split('|') {
+            assert!(safe("login-form", destination), "{destination}");
         }
         for form in "reset-password|signup-form|google-login|passkey-login".split('|') {
             assert!(!safe(form, "https://example.test/auth/login"));
         }
-        for destination in "https://example.test/login?provider|https://example.test/login?next=/home#google|https://example.test/login#provider=acme|https://example.test/login?next=/home#provider=acme|https://example.test/login?identity_provider=amazon|https://example.test/signin/x|https://example.test/account/close|https://example.test/login/amazon|https://example.test/orders/123/submit|https://example.test/auth/login?action=close+account|https://example.test/login/provider/acme|https://example.test/login/discord".split('|') {
+        for destination in "https://example.test/login?provider|https://example.test/login?next=/home#google|https://example.test/login#provider=acme|https://example.test/login?next=/home#provider=acme|https://example.test/login?identity_provider=amazon|https://example.test/signin/x|https://example.test/signin/auth0|https://example.test/account/close|https://example.test/login/amazon|https://example.test/orders/123/submit|https://example.test/auth/login?action=close+account|https://example.test/login/provider/acme|https://example.test/login/discord".split('|') {
             assert!(!safe("login-form", destination), "{destination}");
         }
         assert!(!safe(

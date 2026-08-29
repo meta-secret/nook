@@ -33,8 +33,19 @@ pub(super) fn label_names_external_authentication_provider(identity: &str) -> bo
 pub(super) fn route_names_external_authentication_provider(identity: &str) -> bool {
     let route = expand_identity_text(identity.split(['?', '#']).next().unwrap_or_default());
     let fragment = expand_identity_text(identity.split_once('#').map_or("", |(_, value)| value));
-    let segments = route.split_whitespace().collect::<Vec<_>>();
-    let provider_segments = ["provider", "idp", "amazon", "discord"];
+    let segments = identity
+        .split(['?', '#'])
+        .next()
+        .unwrap_or_default()
+        .split('/')
+        .filter(|segment| !segment.is_empty())
+        .map(str::to_ascii_lowercase)
+        .collect::<Vec<_>>();
+    let is_local_tail = |segment: &str| {
+        matches!(segment, "identifier" | "email" | "password" | "username")
+            || matches!(segment, "verify" | "challenge" | "callback")
+            || (segment.starts_with('v') && segment[1..].parse::<u32>().is_ok())
+    };
     identity_names_external_authentication_provider(identity, false)
         || identity.split(['?', '#']).any(|metadata| {
             metadata.split('&').any(|component| {
@@ -43,10 +54,9 @@ pub(super) fn route_names_external_authentication_provider(identity: &str) -> bo
                 )
             })
         })
-        || (identity.contains('/')
-            && segments.windows(2).any(|pair| {
-                matches!(pair[0], "login" | "signin") && provider_segments.contains(&pair[1])
-            }))
+        || segments
+            .windows(2)
+            .any(|pair| matches!(pair[0].as_str(), "login" | "signin") && !is_local_tail(&pair[1]))
         || ((contains_any_word(&route, &["x"]) || contains_any_word(&fragment, &["x"]))
             && contains_any_word(&route, &["login", "log in", "signin", "sign in"]))
 }
