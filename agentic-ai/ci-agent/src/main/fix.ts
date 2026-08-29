@@ -4,6 +4,7 @@ import {
   lstat,
   mkdir,
   mkdtemp,
+  readFile,
   rm,
   writeFile,
 } from "node:fs/promises";
@@ -21,6 +22,7 @@ import {
   parseRepository,
 } from "./github.js";
 import {
+  authenticatedGit,
   configureGitForCi,
   hasWorkingTreeChanges,
   pushFixBranch,
@@ -189,6 +191,23 @@ const RUST_DEPENDENCY_ROOTS = [
   "nook-app/nook-platform/",
   "preflight/",
 ] as const;
+
+const CRATES_IO_LOCK_SOURCE =
+  'source = "registry+https://github.com/rust-lang/crates.io-index"';
+
+export function assertCratesIoOnlySources(path: string, content: string): void {
+  const forbidden = path.endsWith("Cargo.toml")
+    ? /\bgit\s*=/u.test(content)
+    : path.endsWith("Cargo.lock") &&
+      content
+        .split("\n")
+        .some(
+          (line) =>
+            line.startsWith("source = ") && line !== CRATES_IO_LOCK_SOURCE,
+        );
+  if (forbidden)
+    throw new Error(`Dependency update used a non-crates.io source: ${path}`);
+}
 
 function isAllowedRustDependencyPath(path: string): boolean {
   if (!RUST_DEPENDENCY_ROOTS.some((root) => path.startsWith(root))) {
@@ -379,6 +398,14 @@ export async function assertRustDependencyUpdateChangeSet(
           `Dependency update produced a symlink or special file: ${change.path}`,
         );
       }
+      if (
+        change.path.endsWith("Cargo.toml") ||
+        change.path.endsWith("Cargo.lock")
+      )
+        assertCratesIoOnlySources(
+          change.path,
+          await readFile(absolutePath, "utf8"),
+        );
     } catch (error: unknown) {
       const code =
         error && typeof error === "object" && "code" in error
@@ -589,7 +616,7 @@ type PublishedPullRequest = {
 export async function verifyPublishedFix(args: {
   expectedBaseRef: string;
   expectedHeadRef: string;
-  expectedHeadSha?: string;
+  expectedHeadSha: string;
   expectedPrNumber: number;
   fetchPullRequest: () => Promise<PublishedPullRequest>;
   fetchRemoteHeadSha: () => Promise<string>;
@@ -606,7 +633,7 @@ export async function verifyPublishedFix(args: {
     actualRemoteHeadSha: remoteHeadSha,
     expectedBaseRef: args.expectedBaseRef,
     expectedHeadRef: args.expectedHeadRef,
-    expectedHeadSha: args.expectedHeadSha ?? remoteHeadSha,
+    expectedHeadSha: args.expectedHeadSha,
     expectedPrNumber: args.expectedPrNumber,
   });
 }
@@ -620,7 +647,7 @@ async function runValidationWithoutPublicationCredentials(
 }
 
 async function verifyLiveFixPublication(args: {
-  expectedHeadSha?: string;
+  expectedHeadSha: string;
   fixBranch: string;
   octokit: ReturnType<typeof createOctokit>;
   prNumber: number;
@@ -630,9 +657,7 @@ async function verifyLiveFixPublication(args: {
     headSha: await verifyPublishedFix({
       expectedBaseRef: "main",
       expectedHeadRef: args.fixBranch,
-      ...(args.expectedHeadSha
-        ? { expectedHeadSha: args.expectedHeadSha }
-        : {}),
+      expectedHeadSha: args.expectedHeadSha,
       expectedPrNumber: args.prNumber,
       fetchPullRequest: async () => {
         const { data } = await args.octokit.rest.pulls.get({
@@ -676,7 +701,18 @@ export async function runCiFix(): Promise<CiFixOutcome> {
   let outcome: CiFixOutcome;
   if (openPr.kind === OpenPrLookupKind.Found) {
     prNumber = openPr.number;
+    if (profile === CiAgentFixProfile.RustDependencyUpdate) {
+      await authenticatedGit(repoRoot, [
+        "fetch",
+        "--depth=1",
+        "origin",
+        fixBranch,
+      ]);
+      await gitOutput(repoRoot, ["checkout", "--force", "FETCH_HEAD"]);
+      await runValidationWithoutPublicationCredentials(repoRoot);
+    }
     outcome = await verifyLiveFixPublication({
+      expectedHeadSha: await revParse(repoRoot, "HEAD"),
       fixBranch,
       octokit,
       prNumber,

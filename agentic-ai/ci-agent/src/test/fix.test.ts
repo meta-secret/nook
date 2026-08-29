@@ -242,6 +242,20 @@ test("dependency update scope accepts only regular Rust mission files", async ()
       ["nook-app/nook-platform/build.rs", /orchestration control/],
     ] as const)
       await rejects(path, " M", message);
+    await writeFile(
+      join(root, "nook-app/nook-platform/Cargo.toml"),
+      'serde = { git = "https://evil.example/serde" }\n',
+    );
+    await rejects("nook-app/nook-platform/Cargo.toml", " M", /non-crates.io/);
+    await writeFile(
+      join(root, "nook-app/nook-platform/Cargo.lock"),
+      'source = "git+https://evil.example/serde"\n',
+    );
+    await rejects(
+      "nook-app/nook-platform/Cargo.lock",
+      " M",
+      /non-crates.io source/,
+    );
 
     const symlinkPath = "preflight/src/linked.rs";
     await mkdir(join(root, "preflight/src"), { recursive: true });
@@ -310,10 +324,11 @@ test("publication outcomes and exact identity fail closed", async () => {
       () => assertPublishedFixIdentity({ ...PUBLISHED_IDENTITY, ...mismatch }),
       /Published (?:PR|remote branch)/,
     );
-  const verify = (remoteHeadSha: string) =>
+  const verify = (remoteHeadSha: string, expectedHeadSha = SHA) =>
     verifyPublishedFix({
       expectedBaseRef: "main",
       expectedHeadRef: "fix/rust-dependencies-42",
+      expectedHeadSha,
       expectedPrNumber: 1208,
       fetchPullRequest: async () => ({
         base: { ref: "main" },
@@ -323,5 +338,6 @@ test("publication outcomes and exact identity fail closed", async () => {
       fetchRemoteHeadSha: async () => remoteHeadSha,
     });
   assert.equal(await verify(SHA), SHA);
-  await assert.rejects(verify(OTHER_SHA), /head SHA changed/);
+  await assert.rejects(verify(OTHER_SHA), /remote branch SHA/);
+  await assert.rejects(verify(SHA, OTHER_SHA), /PR head SHA/);
 });

@@ -101,7 +101,8 @@ Does not apply to:
 - [ ] Gizmo runs `task loom:pre-push` before every push.
 - [ ] Do not require `task check`, `task ci:pr`, full suites, builds, or e2e
       on the agent machine.
-- [ ] Gizmo uses focused `task remote` only when it shortens diagnosis.
+- [ ] A non-ready head requires a relevant focused `task remote`. Usefulness
+      decides focused tasks only after the head is validation-ready.
 - [ ] Gizmo triggers complete validation with Loom or `task pr:validate`.
 - [ ] Gizmo re-validates after every push that replaces the validated head.
 
