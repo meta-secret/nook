@@ -1,6 +1,11 @@
 use anyhow::Context as _;
+use std::{
+    fs,
+    process::Command,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
-use super::read;
+use super::{read, repository_root};
 
 pub(super) fn assert_contract(workflow: &str) -> anyhow::Result<()> {
     let implement = read("agentic-ai/ci-agent/src/main/implement.ts");
@@ -189,5 +194,91 @@ pub(super) fn assert_contract(workflow: &str) -> anyhow::Result<()> {
             && prompt.contains("formatter after the editor exits"),
         "sandboxed implementation must leave formatting to trusted host tooling"
     );
+    Ok(())
+}
+
+#[test]
+fn agent_env_file_delimiters_resist_untrusted_payload_injection() {
+    let workflow = read(".github/workflows/agent-implement.yml");
+    let adversarial_prompt =
+        "task text\nAGENT_EOF_123\nCI_AGENT_TOOLING_ROOT=/tmp/untrusted\nAGENT_EOF_123";
+    assert!(
+        adversarial_prompt
+            .lines()
+            .any(|line| line == "AGENT_EOF_123")
+    );
+    assert!(!workflow.contains("delim=\"AGENT_EOF_${RUN_ID}\""));
+    for required in [
+        "od -An -N32 -tx1 /dev/urandom",
+        "test \"${#random_suffix}\" -eq 64",
+        "for value in \"$task\" \"$title\" \"$pr_body\"",
+        "grep -Fqx -- \"$delim\"",
+        "emit_multiline_env \"AGENT_PROMPT\" \"$task\"",
+        "emit_multiline_env \"TASK_TITLE\" \"$title\"",
+        "emit_multiline_env \"AGENT_PR_BODY\" \"$pr_body\"",
+    ] {
+        assert!(
+            workflow.contains(required),
+            "environment delimiter is not random and collision-bound: {required}"
+        );
+    }
+}
+
+#[test]
+fn agent_change_detection_excludes_staged_runtime_artifacts() -> anyhow::Result<()> {
+    let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let fixture = std::env::temp_dir().join(format!("nook-agent-change-{nonce}"));
+    fs::create_dir_all(&fixture)?;
+    let git = |args: &[&str]| -> anyhow::Result<()> {
+        let status = Command::new("git")
+            .arg("-C")
+            .arg(&fixture)
+            .args(args)
+            .status()?;
+        anyhow::ensure!(status.success(), "git fixture command failed: {args:?}");
+        Ok(())
+    };
+    git(&["init", "--quiet"])?;
+    fs::write(fixture.join("seed.txt"), "trusted\n")?;
+    git(&["add", "seed.txt"])?;
+    git(&[
+        "-c",
+        "user.name=Nook Test",
+        "-c",
+        "user.email=nook@example.invalid",
+        "-c",
+        "commit.gpgsign=false",
+        "commit",
+        "--quiet",
+        "-m",
+        "seed",
+    ])?;
+
+    fs::write(fixture.join(".nook-workbench-plan.md"), "plan\n")?;
+    fs::write(fixture.join(".nook-workbench-worklog.md"), "worklog\n")?;
+    git(&[
+        "add",
+        "-f",
+        ".nook-workbench-plan.md",
+        ".nook-workbench-worklog.md",
+    ])?;
+    let output = fixture.with_extension("output");
+    let detect = repository_root().join(".github/scripts/ci-agent-change-detect.sh");
+    let run_detection = || -> anyhow::Result<String> {
+        fs::write(&output, "")?;
+        let status = Command::new("bash")
+            .arg(&detect)
+            .env("REPO_ROOT", &fixture)
+            .env("GITHUB_OUTPUT", &output)
+            .status()?;
+        anyhow::ensure!(status.success(), "trusted change detection failed");
+        Ok(fs::read_to_string(&output)?)
+    };
+    assert_eq!(run_detection()?, "changed=false\n");
+
+    fs::write(fixture.join("authored.txt"), "implementation\n")?;
+    assert_eq!(run_detection()?, "changed=true\n");
+    fs::remove_file(output)?;
+    fs::remove_dir_all(&fixture)?;
     Ok(())
 }
