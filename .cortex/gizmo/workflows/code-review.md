@@ -17,7 +17,19 @@ Review policy is explicit:
 ## Prompt remote review after push
 
 Do not require advisory local review before the first push or after a worker
-handoff. Once Gizmo integrates a coherent committed handoff, it runs
+handoff.
+
+### Trusted automated publisher
+
+The no-local-review rule also applies when the trusted `agent-implement.yml`
+publisher formats, budget- and identity-validates, commits, and publishes an
+isolated implementation.
+That publisher returns the exact published head directly to Gizmo. Gizmo then
+owns continuing PR, review, validation, readiness, and merge work.
+
+### Ordinary worker handoff
+
+For an ordinary worker handoff, once Gizmo integrates a coherent commit it runs
 `task loom:pre-push`. Gizmo may commit deterministic integration-only state.
 If hygiene mutates team-owned source or Cortex content, Gizmo returns that diff
 to the responsible team for a fresh formatted commit, reintegrates it, and

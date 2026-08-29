@@ -146,6 +146,22 @@ pre-push hygiene mutates team-owned source or Cortex content, Gizmo returns
 that diff to the responsible team. The team supplies a fresh formatted commit
 before Gizmo reintegrates and reruns pre-push hygiene.
 
+The trusted `agent-implement.yml` publisher is the sole exception to the
+ordinary committed-handoff sequence. Its bounded editor has no Git or external
+delivery authority. After editing ends, trusted host tooling must:
+
+- format the isolated implementation;
+- validate its change budget and branch or PR identity;
+- commit and publish the isolated implementation; and
+- return the exact published head to Gizmo.
+
+This exception does not grant the bounded editor or an ordinary worker
+publication authority. After publication, Gizmo owns continuing PR, review,
+validation, readiness, and merge work. Gizmo immediately dispatches focused
+remote evidence or complete exact-head validation. Hosted Repository policy
+and PR verification enforce the UI-demo and other product or publication
+contracts.
+
 A repository-reading read-only provider satisfies its consumer edge only when
 it is:
 

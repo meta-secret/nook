@@ -63,6 +63,10 @@ ownership until merge or a concrete blocked handoff:
    - Team workers own formatter mutations in their allowed source or Cortex
      files and return fresh formatted commits.
    - Gizmo may commit deterministic integration-only state.
+   - The trusted `agent-implement.yml` publisher is a narrow exception. It
+     formats its isolated implementation, validates the change budget and
+     branch or PR identity, commits, and publishes before returning the exact
+     head to Gizmo.
 4. **Promptly push and create or update the PR.** Do not add another local
    product or review gate.
 5. **Request review and validate on GitHub Actions:**
@@ -385,6 +389,25 @@ Capture meaningful discoveries and evidence in `.cortex/.session/`. The session
 file remains provisional and untracked.
 
 ### 3. Push an exact remote-executable commit
+
+#### Trusted automated publisher exception
+
+The explicitly dispatched `agent-implement.yml` path is the sole trusted
+exception to ordinary worker commit handoffs. Its bounded editor cannot use Git
+or mutate external delivery state. Trusted host tooling owns these publication
+steps after the editor exits:
+
+1. Format the isolated implementation.
+2. Validate the change budget and branch or PR identity.
+3. Commit and publish the implementation branch and PR.
+4. Verify and return the exact published head to Gizmo.
+
+Gizmo continues that PR from the returned head. It does not require a duplicate
+integration commit or advisory local review. Gizmo immediately selects the
+focused-remote or complete-validation path for that pushed head and retains
+review, repair, readiness, and merge ownership. Hosted Repository policy and
+PR verification enforce the UI-demo and other product or publication
+contracts.
 
 Prepare an exact remote commit:
 

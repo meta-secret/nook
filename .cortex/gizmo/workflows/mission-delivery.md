@@ -83,12 +83,24 @@ Agent count never determines PR count.
    - Receive each Team Agent's existing typed handoff directly. Do not add a
      slice-process transport or intermediate agent.
    - Aggregate each verified handoff under its assigned passive Gizmo record.
+   - Treat a trusted `agent-implement.yml` publication as the documented narrow
+     exception to the ordinary committed-handoff sequence.
+   - Require that publisher to format the isolated implementation, validate
+     its change budget and branch or PR identity, publish it, and return its
+     exact head.
 5. **Integrate accepted commits.**
    - Integrate in deterministic dependency order.
    - Bind each downstream task to the exact integrated commit.
    - Keep shared files and integrated or external delivery-state mutations
      serialized under Gizmo.
 6. **Prepare the integrated head.**
+   - For an accepted trusted `agent-implement.yml` publication, continue from
+     its exact published head. Do not require a duplicate integration commit.
+   - Immediately resume Gizmo ownership of PR, review, and validation work.
+   - Do not add advisory local review after the publisher handoff.
+   - Use immediate focused remote evidence or complete exact-head validation.
+     Hosted Repository policy and PR verification enforce the UI-demo and
+     other product or publication contracts.
    - Run `task loom:pre-push` before each push.
    - Gizmo may commit deterministic integration-only state.
    - If pre-push hygiene mutates team-owned source or Cortex content, do not
