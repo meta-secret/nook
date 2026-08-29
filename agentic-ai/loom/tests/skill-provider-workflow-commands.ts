@@ -96,6 +96,10 @@ function githubScriptSources(steps: ConfigurationNode): readonly string[] {
     const source = mapping(node.with ?? false).script;
     if (typeof source !== 'string')
       throw new Error('github-script step has no static script body.');
+    if (source.includes('${{'))
+      throw new Error(
+        'github-script body has an unresolved Actions expression.',
+      );
     return [source];
   });
 }

@@ -7,6 +7,7 @@ import type { ConfigurationReference } from './skill-provider-config-types.ts';
 import { typescriptSubprocessCommands } from './skill-provider-typescript-subprocess.ts';
 import { workflowGithubScriptSources } from './skill-provider-workflow-commands.ts';
 import { githubScriptExecCommands } from './skill-provider-github-script-exec.ts';
+import { githubScriptRequireSpecifiers } from './skill-provider-github-script-require.ts';
 
 type GithubScriptReferenceRequest = {
   readonly importer: string;
@@ -97,13 +98,19 @@ function normalizeGithubScriptSource(source: string): string {
 function githubScriptModuleReferences(
   request: GithubScriptModuleRequest,
 ): readonly ConfigurationReference[] {
-  return GITHUB_SCRIPT_TRANSPILER.scanImports(request.source).map((entry) => ({
+  const specifiers = new Set([
+    ...GITHUB_SCRIPT_TRANSPILER.scanImports(request.source).map(
+      (entry) => entry.path,
+    ),
+    ...githubScriptRequireSpecifiers(request.source),
+  ]);
+  return [...specifiers].map((specifier) => ({
     importerRelative: false,
     positionalArguments: false,
-    required: entry.path.startsWith('.'),
+    required: specifier.startsWith('.'),
     requiresExecuteMode: false,
     shellRuntime: false,
-    specifier: entry.path,
+    specifier,
     taskInclude: false,
     workingDirectory: request.workingDirectory,
   }));
@@ -134,7 +141,6 @@ function assertStaticGithubScriptLoaders(source: string): void {
 
 function isModuleLoaderCall(expression: ts.Expression): boolean {
   if (expression.kind === ts.SyntaxKind.ImportKeyword) return true;
-  if (ts.isIdentifier(expression)) return expression.text === 'require';
   return (
     ts.isPropertyAccessExpression(expression) &&
     expression.name.text === 'require'

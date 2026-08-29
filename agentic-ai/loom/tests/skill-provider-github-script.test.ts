@@ -71,3 +71,43 @@ test('github-script local exec shadows the injected client', () => {
     "{ const exec={exec(){}}; exec.exec('bun', ['ignored.ts']) } await exec.exec('bun', ['scripts/facade.ts'])";
   expect(references(scoped)).toContainEqual(partialReference);
 });
+
+test('github-script rejects unresolved Actions expressions', () => {
+  expect(() => references("require('${{ inputs.module }}')")).toThrow(
+    'unresolved Actions expression',
+  );
+});
+
+test('github-script injected require aliases remain module loaders', () => {
+  for (const script of [
+    "const load=require; load('./scripts/facade.cjs')",
+    "const load=require; const loadAgain=load; loadAgain('./scripts/facade.cjs')",
+  ]) {
+    const expected = { specifier: './scripts/facade.cjs' };
+    expect(references(script), script).toContainEqual(
+      expect.objectContaining(expected),
+    );
+  }
+});
+
+test('github-script injected require aliases fail closed on escape', () => {
+  for (const script of [
+    'const load=require; load(modulePath)',
+    "let load=require; load('./scripts/facade.cjs')",
+    'const load=require; consume(load)',
+    'const load=require; return load',
+  ])
+    expect(() => references(script), script).toThrow(
+      /(?:module load|require capability escape)/u,
+    );
+});
+
+test('github-script local require shadows the injected loader', () => {
+  const script =
+    'const require=(value)=>value; const load=require; load(modulePath)';
+  expect(references(script)).toEqual([]);
+  const nested =
+    "{ const require=(value)=>value; const load=require; load(modulePath) } const load=require; load('./scripts/facade.cjs')";
+  const expected = { specifier: './scripts/facade.cjs' };
+  expect(references(nested)).toContainEqual(expect.objectContaining(expected));
+});
