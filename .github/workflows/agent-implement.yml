@@ -46,7 +46,6 @@ jobs:
       WORKBENCH_REPOSITORY: meta-secret/nook-workbench
       WORKBENCH_PLAN_FILE: .nook-workbench-plan.md
       WORKBENCH_SUMMARY_FILE: .nook-workbench-worklog.md
-      CI_AGENT_TOOLING_ROOT: ${{ github.workspace }}
     steps:
       - name: Validate dispatch inputs
         env:
@@ -376,7 +375,6 @@ jobs:
           WORKBENCH_SLUG: ${{ steps.workbench.outputs.slug }}
         run: |
           set -euo pipefail
-          delim="AGENT_EOF_${RUN_ID}"
           if [ -n "$DISPATCH_PROMPT" ]; then
             branch="agent/prompt-${RUN_ID}"
             base_branch="main"
@@ -407,6 +405,37 @@ jobs:
           plan_started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           plan_timestamp="$(printf '%s' "$plan_started_at" | tr ':' '-')"
           plan_path="plans/${feature}/${plan_timestamp}-run-${RUN_ID}.md"
+          pr_body="$(
+            printf '%s\n' "## Summary"
+            if [ -n "$ISSUE_URL" ]; then
+              printf '%s\n' "Agent implementation for [\`${ISSUE_PATH}\`](${ISSUE_URL})."
+            else
+              printf '%s\n' "Agent implementation from a manual workflow prompt."
+            fi
+            printf '%s\n' "" "## Ownership" "Continuing agent: \`${continuing_owner}\`"
+            if [ -n "$ISSUE_URL" ]; then
+              printf '%s\n' "Owned scope: \`${ISSUE_PATH}\`"
+            else
+              printf '%s\n' "Owned scope: manual prompt run \`${RUN_ID}\`"
+            fi
+            printf '%s\n' "" "## Test plan" "- [ ] CI green on this PR"
+          )"
+          while :; do
+            random_suffix="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
+            test "${#random_suffix}" -eq 64
+            delim="AGENT_EOF_${random_suffix}"
+            collision=false
+            for value in "$task" "$title" "$pr_body"; do
+              if printf '%s\n' "$value" | grep -Fqx -- "$delim"; then
+                collision=true
+                break
+              fi
+            done
+            [ "$collision" = false ] && break
+          done
+          emit_multiline_env() {
+            printf '%s<<%s\n%s\n%s\n' "$1" "$delim" "$2" "$delim"
+          }
           {
             echo "AGENT_BRANCH=$branch"
             echo "FIX_BRANCH=$branch"
@@ -416,40 +445,16 @@ jobs:
             echo "AGENT_PR_PREDECESSOR_BRANCH=$ISSUE_STACK_PREDECESSOR_BRANCH"
             echo "AGENT_PR_START_HEAD_SHA=$ISSUE_STACK_START_HEAD_SHA"
             echo "AGENT_PR_TARGET_KIND=$target_kind"
-            echo "AGENT_PROMPT<<${delim}"
-            printf '%s\n' "$task"
-            echo "${delim}"
-            echo "AGENT_PR_TITLE<<${delim}"
-            printf '%s\n' "$title"
-            echo "${delim}"
-            echo "AGENT_COMMIT_MESSAGE<<${delim}"
-            printf '%s\n' "$title"
-            echo "${delim}"
+            emit_multiline_env "AGENT_PROMPT" "$task"
+            emit_multiline_env "AGENT_PR_TITLE" "$title"
+            emit_multiline_env "AGENT_COMMIT_MESSAGE" "$title"
             echo "TASK_FEATURE=$feature"
             echo "TASK_PLAN_PATH=$plan_path"
             echo "TASK_PLAN_STARTED_AT=$plan_started_at"
-            echo "TASK_TITLE=$title"
+            emit_multiline_env "TASK_TITLE" "$title"
             echo "CONTINUING_AGENT_OWNER=$continuing_owner"
             echo "MAJOR_CHANGE_AUTHORIZED=$MAJOR_CHANGE_AUTHORIZED"
-            echo "AGENT_PR_BODY<<${delim}"
-            printf '%s\n' "## Summary"
-            if [ -n "$ISSUE_URL" ]; then
-              printf '%s\n' "Agent implementation for [\`${ISSUE_PATH}\`](${ISSUE_URL})."
-            else
-              printf '%s\n' "Agent implementation from a manual workflow prompt."
-            fi
-            printf '%s\n' ""
-            printf '%s\n' "## Ownership"
-            printf '%s\n' "Continuing agent: \`${continuing_owner}\`"
-            if [ -n "$ISSUE_URL" ]; then
-              printf '%s\n' "Owned scope: \`${ISSUE_PATH}\`"
-            else
-              printf '%s\n' "Owned scope: manual prompt run \`${RUN_ID}\`"
-            fi
-            printf '%s\n' ""
-            printf '%s\n' "## Test plan"
-            printf '%s\n' "- [ ] CI green on this PR"
-            echo "${delim}"
+            emit_multiline_env "AGENT_PR_BODY" "$pr_body"
           } >> "$GITHUB_ENV"
           echo "ready=true" >> "$GITHUB_OUTPUT"
           echo "checkout_ref=$checkout_ref" >> "$GITHUB_OUTPUT"
@@ -737,11 +742,13 @@ jobs:
           test -f "$plan" && test ! -L "$plan"
           test "$(wc -c < "$plan")" -le 65536
           test "$(sha256sum "$plan" | cut -d' ' -f1)" = "$VALIDATED_PLAN_SHA256"
-          node "$GITHUB_WORKSPACE/agentic-ai/ci-agent/dist/main/main.js" edit
+          CI_AGENT_TOOLING_ROOT="$GITHUB_WORKSPACE" \
+            node "$GITHUB_WORKSPACE/agentic-ai/ci-agent/dist/main/main.js" edit
+          bash "$GITHUB_WORKSPACE/.github/scripts/ci-agent-change-detect.sh"
 
       - name: Format implementation on trusted host
         id: format
-        if: steps.agent_edit.outcome == 'success' && steps.rerun.outputs.terminal != 'true'
+        if: steps.agent_edit.outputs.changed == 'true' && steps.rerun.outputs.terminal != 'true'
         env:
           TRUSTED_WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: |
@@ -758,7 +765,7 @@ jobs:
 
       - name: Validate, commit, and publish implementation
         id: implement
-        if: steps.rerun.outputs.terminal == 'true' || steps.format.outcome == 'success'
+        if: steps.rerun.outputs.terminal == 'true' || (steps.agent_edit.outputs.changed == 'true' && steps.format.outcome == 'success')
         env:
           IMPLEMENTATION_TERMINAL: ${{ steps.rerun.outputs.terminal }}
           IMPLEMENTATION_TERMINAL_REASON: ${{ steps.rerun.outputs.terminal_reason }}
@@ -769,7 +776,8 @@ jobs:
             echo "Standalone implementation PR is $IMPLEMENTATION_TERMINAL_REASON; delivery is idempotently complete."
             exit 0
           fi
-          node "$GITHUB_WORKSPACE/agentic-ai/ci-agent/dist/main/main.js" deliver
+          CI_AGENT_TOOLING_ROOT="$GITHUB_WORKSPACE" \
+            node "$GITHUB_WORKSPACE/agentic-ai/ci-agent/dist/main/main.js" deliver
 
       - name: Publish Workbench result
         if: >-

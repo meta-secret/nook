@@ -31,7 +31,8 @@ cleanup() {
 }
 trap cleanup EXIT
 git -C "$IMPLEMENTATION_REPO_ROOT" worktree add --detach "$planning_root" HEAD
-REPO_ROOT="$planning_root" \
+CI_AGENT_TOOLING_ROOT="$ROOT" \
+  REPO_ROOT="$planning_root" \
   node "$ROOT/agentic-ai/ci-agent/dist/main/main.js" plan
 plan_path="$planning_root/$WORKBENCH_PLAN_FILE"
 blocker_path="$planning_root/$WORKBENCH_SUMMARY_FILE"

@@ -46,9 +46,8 @@ and posts a direct mention. Gizmo runs advisory local review after handoff. It
 may use `task remote` for focused execution, then runs `task pr:validate`. Gizmo
 stabilizes exact-head Codex review before dispatching GitHub Actions. A bounded
 timeout keeps review unavailability from blocking those checks. Gizmo never
-activates another review provider. Use
-repository Task targets; do not replace them with
-hand-written `docker run` commands.
+activates another review provider. This bounded worker must not invoke Task or
+a container runtime.
 
 ## Steps
 
@@ -91,6 +90,8 @@ hand-written `docker run` commands.
 - Keep the diff focused on the requested task.
 - Stay in the harness-provided isolated workspace. Return the work to the
   parent through the harness commit handoff.
-- Follow `.cortex/gizmo/workflows/pull-requests.md` (squash merge only) and `.cortex/teams/sre/dynamic-skills/docker-container-harness.md` (never kill Docker daemon).
+- Follow `.cortex/gizmo/workflows/pull-requests.md` (squash merge only) and
+  `.cortex/teams/sre/workflows/ci-operations.md` (this Kubernetes-native worker
+  must not invoke a container runtime).
 - Follow `.cortex/teams/sre/dynamic-skills/github-actions-only-validation.md`: format
   locally; product gates run on GitHub Actions.

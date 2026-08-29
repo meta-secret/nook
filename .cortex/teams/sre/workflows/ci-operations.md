@@ -196,7 +196,8 @@ Exactly one of `issue_path` or `prompt` is required. Empty or ambiguous
 dispatches fail before checkout. Issue eligibility requires `status: ready`,
 `automation: agent`, and an owner who is a Nook GitHub collaborator with write
 access. The workflow resolves only the requested path. It commits `status:
-in_progress` atomically before Docker setup. Prompt mode requires a valid
+in_progress` atomically before implementation checkout and setup. Prompt mode
+requires a valid
 `continuing_owner` with Nook write access. Each explicit dispatch has an
 independent run. A blob-SHA conflict rejects a duplicate claim of the same
 issue without collapsing unrelated pending dispatches.

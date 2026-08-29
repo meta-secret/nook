@@ -49,11 +49,26 @@ pub(super) fn assert_contract(workflow: &str) -> anyhow::Result<()> {
     );
     let plan_script = read(".github/scripts/ci-agent-plan.sh");
     assert!(
-        plan_script.contains("dist/main/main.js\" plan")
+        plan_script.contains("CI_AGENT_TOOLING_ROOT=\"$ROOT\"")
+            && plan_script.contains("dist/main/main.js\" plan")
             && !plan_script.contains("CI_AGENT_CMD=agent")
             && !plan_script.contains("task ci-agent"),
         "the unreviewed-source planner must select the explicit strict command"
     );
+    let change_detection = read(".github/scripts/ci-agent-change-detect.sh");
+    for required in [
+        "reset --quiet HEAD -- \"${artifacts[@]}\"",
+        "status --porcelain --untracked-files=all",
+        "':(exclude).nook-workbench-plan.md'",
+        "':(exclude).nook-workbench-worklog.md'",
+        "echo \"changed=true\" >> \"$GITHUB_OUTPUT\"",
+        "echo \"changed=false\" >> \"$GITHUB_OUTPUT\"",
+    ] {
+        assert!(
+            change_detection.contains(required),
+            "trusted edit result classification is missing: {required}"
+        );
+    }
     for required in [
         "state: 'all'",
         "pull.state === 'open'",
@@ -85,6 +100,10 @@ pub(super) fn assert_contract(workflow: &str) -> anyhow::Result<()> {
             && workflow.contains("Validate, commit, and publish implementation")
             && workflow.contains("dist/main/main.js\" edit")
             && workflow.contains("dist/main/main.js\" deliver")
+            && workflow
+                .matches("CI_AGENT_TOOLING_ROOT=\"$GITHUB_WORKSPACE\"")
+                .count()
+                == 2
             && !workflow.contains("dist/main/main.js\" implement")
             && !workflow.contains(
                 "CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}\n          NOOK_GITHUB_PAT"
@@ -138,7 +157,10 @@ pub(super) fn assert_contract(workflow: &str) -> anyhow::Result<()> {
         "NOOK_REPO_ROOT=\"$IMPLEMENTATION_REPO_ROOT\"",
         "NOOK_FORMATTER_ROOT=\"$GITHUB_WORKSPACE/.github/formatting\"",
         "bash \"$GITHUB_WORKSPACE/.github/formatting/format.sh\"",
+        "bash \"$GITHUB_WORKSPACE/.github/scripts/ci-agent-change-detect.sh\"",
+        "steps.agent_edit.outputs.changed == 'true'",
         "steps.format.outcome == 'success'",
+        "always() &&\n          steps.rerun.outputs.terminal != 'true'",
     ] {
         assert!(
             workflow.contains(required),
