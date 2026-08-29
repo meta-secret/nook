@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest'
+import { render } from '@testing-library/svelte'
 import {
   DeviceAccessIdentityState,
   DeviceAccessProtectionKind,
@@ -23,6 +24,7 @@ import {
   buildIdentityKeyInventory,
   IdentityKeyInventoryRowKind,
 } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/identity-key-inventory'
+import IdentityKeyInventory from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/IdentityKeyInventory.svelte'
 import { PasskeyCardSummaryKind } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/passkey-card'
 import type { VaultState } from '../../../../nook-web-shared/src/vault-app/lib/vault.svelte'
 
@@ -143,6 +145,50 @@ describe('identity access cards', () => {
 })
 
 describe('identity key inventory', () => {
+  test('renders connected apps without a local Add app action', () => {
+    const addAppLabel = 'Add app'
+    const addAppHelper =
+      'Another Nook installation must request identity enrollment before it can be added.'
+    const renderedVault = {
+      ...vault,
+      t: (request: TranslationRequest) => {
+        const key = typeof request === 'string' ? request : request.key
+        if (key === 'devices_access.add_key') return addAppLabel
+        if (key === 'devices_access.add_key_unavailable') return addAppHelper
+        return vault.t(request)
+      },
+    } as VaultState
+    const identity: IdentityDirectoryEntry = {
+      identityId: 'identity_personal',
+      label: 'Personal',
+      localAccess: NookIdentityLocalAccessKind.CurrentBrowser,
+      members: [
+        {
+          appId: 'device_5678',
+          label: known('Nook on MacBook'),
+          currentBrowser: true,
+          localProtection: DeviceAccessProtectionKind.PasskeyStandard,
+        },
+      ],
+      vaults: [],
+    }
+
+    const rendered = render(IdentityKeyInventory, {
+      vault: renderedVault,
+      identity,
+      view: passkeyView(),
+      onRenamePasskey: async () => true,
+    })
+
+    expect(rendered.getByTestId('devices-access-app').textContent).toContain(
+      'Nook on MacBook',
+    )
+    expect(
+      rendered.queryByRole('button', { name: addAppLabel }),
+    ).not.toBeTruthy()
+    expect(rendered.queryByText(addAppHelper)).not.toBeTruthy()
+  })
+
   test('nests the protected app and keeps remote apps in a linked group', () => {
     const view = passkeyView()
     const identity: IdentityDirectoryEntry = {

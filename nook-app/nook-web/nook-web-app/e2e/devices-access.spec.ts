@@ -179,6 +179,15 @@ test.describe('devices and access dashboard', () => {
     await expect(keyInventory).toContainText('Passkey')
     await expect(keyInventory).toContainText('Apps')
     await expect(keyInventory).toContainText('Nook in this browser')
+    await expect(
+      keyInventory.getByRole('button', { name: 'Add app', exact: true }),
+    ).toHaveCount(0)
+    await expect(
+      keyInventory.getByText(
+        'Another Nook installation must request identity enrollment before it can be added.',
+        { exact: true },
+      ),
+    ).toHaveCount(0)
     await expect(page.getByTestId('devices-access-app-id')).not.toBeVisible()
     await expect(listView).toHaveAttribute('aria-pressed', 'true')
     await expect(graphView).toHaveAttribute('aria-pressed', 'false')
