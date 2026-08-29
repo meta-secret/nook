@@ -72,7 +72,9 @@ migration, and returns a non-Git handoff with focused tests.
 
 ## Trusted host validation
 
-After editor completion, the trusted host runs before any commit or push:
+After editor completion, the trusted host runs Hive and fuzz on the Hive
+runner before any commit or push. Browser e2e runs through PR CI after
+publication:
 
 ```bash
 WASM_BUILD_MODE=prod task ci:pr:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000

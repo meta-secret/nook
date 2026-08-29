@@ -130,16 +130,10 @@ test("validation isolates secrets, preserves wrapper vars, and denies network ov
             environment.NOOK_VALIDATION_DOCKER,
           );
           assert.equal(env.SCCACHE_OPTIONAL, "1");
-          if (args[0] === "ci:pr:e2e")
-            assert.equal(env.WASM_BUILD_MODE, "prod");
           if (args[0] === "hive:verify") assert.equal(env.NOOK_ARC_HIVE, "1");
         },
       );
-      assert.deepEqual(names, [
-        "ci:pr:e2e",
-        "docker:ecosystem:fuzz",
-        "hive:verify",
-      ]);
+      assert.deepEqual(names, ["docker:ecosystem:fuzz", "hive:verify"]);
     });
     assert.equal(
       await readFile(log, "utf8"),
@@ -242,6 +236,15 @@ test("dependency update scope accepts only regular Rust mission files", async ()
       ["nook-app/nook-platform/build.rs", /orchestration control/],
     ] as const)
       await rejects(path, " M", message);
+    const pinned =
+      'hickory = { git = "https://github.com/meta-secret/hickory-dns.git" }\n';
+    await writeFile(join(root, "nook-app/nook-platform/Cargo.toml"), pinned);
+    await assertRustDependencyUpdateChangeSet(
+      root,
+      [{ path: "nook-app/nook-platform/Cargo.toml", status: " M" }],
+      async () => "",
+      async () => pinned,
+    );
     await writeFile(
       join(root, "nook-app/nook-platform/Cargo.toml"),
       'serde = { git = "https://evil.example/serde" }\n',
@@ -249,7 +252,7 @@ test("dependency update scope accepts only regular Rust mission files", async ()
     await rejects("nook-app/nook-platform/Cargo.toml", " M", /non-crates.io/);
     await writeFile(
       join(root, "nook-app/nook-platform/Cargo.lock"),
-      'source = "git+https://evil.example/serde"\n',
+      'source="git+https://evil.example/serde"\n',
     );
     await rejects(
       "nook-app/nook-platform/Cargo.lock",

@@ -87,7 +87,7 @@ Agent count never determines PR count.
      to the ordinary committed-handoff sequence:
      `agent-implement.yml` and `rust-dependency-updates.yml` through
      `task ci-agent:fix` with `CI_AGENT_FIX_PROFILE=rust-dependency-update`.
-     Follow the root [team worker contract](../AGENTS.md#team-worker-contract)
+     Follow the root [team worker contract](../../AGENTS.md#team-worker-contract)
      for their isolation, publication, and exact-head verification rules.
 5. **Integrate accepted commits.**
    - Integrate in deterministic dependency order.

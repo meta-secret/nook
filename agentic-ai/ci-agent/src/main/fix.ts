@@ -120,14 +120,6 @@ type ValidationCommand = {
 export const RUST_DEPENDENCY_UPDATE_VALIDATION_COMMANDS: readonly ValidationCommand[] =
   [
     {
-      args: ["ci:pr:e2e"],
-      environment: {
-        WASM_BUILD_MODE: "prod",
-        VITE_BASE: "/",
-        VITE_VAULT_SYNC_INTERVAL_MS: "1000",
-      },
-    },
-    {
       args: ["docker:ecosystem:fuzz", "FUZZ_SECONDS=20"],
       environment: {},
     },
@@ -192,20 +184,37 @@ const RUST_DEPENDENCY_ROOTS = [
   "preflight/",
 ] as const;
 
-const CRATES_IO_LOCK_SOURCE =
-  'source = "registry+https://github.com/rust-lang/crates.io-index"';
+const CRATES_IO_SOURCE =
+  "registry+https://github.com/rust-lang/crates.io-index";
 
-export function assertCratesIoOnlySources(path: string, content: string): void {
-  const forbidden = path.endsWith("Cargo.toml")
-    ? /\bgit\s*=/u.test(content)
-    : path.endsWith("Cargo.lock") &&
-      content
-        .split("\n")
-        .some(
-          (line) =>
-            line.startsWith("source = ") && line !== CRATES_IO_LOCK_SOURCE,
-        );
-  if (forbidden)
+function cargoLockSources(content: string): Set<string> {
+  return new Set(
+    [...content.matchAll(/^\s*source\s*=\s*"([^"]+)"/gmu)].map((m) => m[1]!),
+  );
+}
+
+function cargoTomlGitSources(content: string): Set<string> {
+  return new Set(
+    [...content.matchAll(/\bgit\s*=\s*"([^"]+)"/gu)].map((m) => m[1]!),
+  );
+}
+
+export function assertCratesIoOnlySources(
+  path: string,
+  content: string,
+  baseline = "",
+): void {
+  const introduced = path.endsWith("Cargo.lock")
+    ? [...cargoLockSources(content)].filter(
+        (source) =>
+          source !== CRATES_IO_SOURCE && !cargoLockSources(baseline).has(source),
+      )
+    : path.endsWith("Cargo.toml")
+      ? [...cargoTomlGitSources(content)].filter(
+          (source) => !cargoTomlGitSources(baseline).has(source),
+        )
+      : [];
+  if (introduced.length > 0)
     throw new Error(`Dependency update used a non-crates.io source: ${path}`);
 }
 
@@ -373,6 +382,7 @@ export async function assertRustDependencyUpdateChangeSet(
   repoRoot: string,
   changes: readonly ChangedPath[],
   baselineModeForPath: BaselineModeLookup = async () => "",
+  baselineContentForPath: (path: string) => Promise<string> = async () => "",
 ): Promise<void> {
   if (changes.length === 0)
     throw new Error("Trusted dependency-update change set is empty");
@@ -405,6 +415,7 @@ export async function assertRustDependencyUpdateChangeSet(
         assertCratesIoOnlySources(
           change.path,
           await readFile(absolutePath, "utf8"),
+          await baselineContentForPath(change.path),
         );
     } catch (error: unknown) {
       const code =
@@ -422,23 +433,53 @@ export async function assertRustDependencyUpdateChangeSet(
   }
 }
 
+async function gitShow(repoRoot: string, spec: string): Promise<string> {
+  try {
+    return await gitOutput(repoRoot, ["show", spec]);
+  } catch {
+    return "";
+  }
+}
+
+async function collectCommittedChangeSet(
+  repoRoot: string,
+  base: string,
+): Promise<ChangedPath[]> {
+  const records = parseNulSeparated(
+    await gitOutput(repoRoot, ["diff", "-z", "--name-status", base]),
+  );
+  const changes: ChangedPath[] = [];
+  for (let index = 0; index < records.length; ) {
+    const status = records[index]!;
+    if (status.startsWith("R") || status.startsWith("C")) {
+      changes.push(
+        { path: records[index + 2]!, status },
+        { path: records[index + 1]!, status },
+      );
+      index += 3;
+    } else {
+      changes.push({ path: records[index + 1]!, status: status.padEnd(2, " ") });
+      index += 2;
+    }
+  }
+  return changes;
+}
+
 async function assertTrustedChangeSet(
   repoRoot: string,
-  baseline: RepositoryBaseline,
+  baseline: string,
+  changes: readonly ChangedPath[],
 ): Promise<void> {
   await assertRustDependencyUpdateChangeSet(
     repoRoot,
-    await collectChangedPaths(repoRoot),
+    changes,
     async (path) => {
-      const tree = await gitOutput(repoRoot, [
-        "ls-tree",
-        baseline.headSha,
-        "--",
-        path,
-      ]);
-      const match = /^(\d{6})\s/u.exec(tree);
+      const match = /^(\d{6})\s/u.exec(
+        await gitOutput(repoRoot, ["ls-tree", baseline, "--", path]),
+      );
       return match ? match[1] || "" : "";
     },
+    async (path) => gitShow(repoRoot, `${baseline}:${path}`),
   );
 }
 
@@ -493,7 +534,7 @@ export function isolationForFixProfile(
   profile: CiAgentFixProfile,
 ): AgentIsolation {
   return profile === CiAgentFixProfile.RustDependencyUpdate
-    ? AgentIsolation.Strict
+    ? AgentIsolation["Strict"]
     : AgentIsolation.Legacy;
 }
 
@@ -706,9 +747,15 @@ export async function runCiFix(): Promise<CiFixOutcome> {
         "fetch",
         "--depth=1",
         "origin",
+        "main",
         fixBranch,
       ]);
       await gitOutput(repoRoot, ["checkout", "--force", "FETCH_HEAD"]);
+      await assertTrustedChangeSet(
+        repoRoot,
+        "origin/main",
+        await collectCommittedChangeSet(repoRoot, "origin/main"),
+      );
       await runValidationWithoutPublicationCredentials(repoRoot);
     }
     outcome = await verifyLiveFixPublication({
@@ -767,11 +814,17 @@ export async function runCiFix(): Promise<CiFixOutcome> {
         throw new Error("Rust dependency update baseline was not captured");
       }
       const { baseline } = baselineState;
+      const scoped = async () =>
+        assertTrustedChangeSet(
+          repoRoot,
+          baseline.headSha,
+          await collectChangedPaths(repoRoot),
+        );
       await assertBaselineUnchanged(repoRoot, baseline);
-      await assertTrustedChangeSet(repoRoot, baseline);
+      await scoped();
       await runValidationWithoutPublicationCredentials(repoRoot);
       await assertBaselineUnchanged(repoRoot, baseline);
-      await assertTrustedChangeSet(repoRoot, baseline);
+      await scoped();
       await pushFixBranch(repoRoot, fixBranch, runId);
     } else {
       await pushFixBranch(repoRoot, fixBranch, runId);
