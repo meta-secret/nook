@@ -360,6 +360,8 @@ pub(crate) fn authentication_passkey_control_is_safe(
         &label_identity,
         &[
             "add",
+            "create",
+            "enable",
             "enroll",
             "enrollment",
             "register",
@@ -367,6 +369,8 @@ pub(crate) fn authentication_passkey_control_is_safe(
             "manage",
             "management",
             "settings",
+            "set up",
+            "setup",
             "configure",
         ],
     );
@@ -419,10 +423,8 @@ pub(crate) fn authentication_passkey_control_is_safe(
         && !form_identity::control_destination_indicates_non_authentication_route(
             &destination.route_identity,
         )
-        && !form_identity::destination_has_disallowed_action_or_provider(
+        && !form_identity::passkey_destination_has_disallowed_action_or_provider(
             &destination.route_identity,
-            false,
-            false,
         )
 }
 

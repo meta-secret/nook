@@ -57,6 +57,7 @@ pub(super) fn has_unconditional_veto_identity(
 pub(super) fn has_semantic_submit_ceremony(
     observation: &AuthenticationAdvanceControlObservation,
     authentication_scope_owns_control: bool,
+    positive_destination_identity: &str,
 ) -> bool {
     let standards_email_semantic_submit = authentication_scope_owns_control
         && matches!(observation.semantics, PageControlSemantics::SemanticSubmit)
@@ -64,14 +65,17 @@ pub(super) fn has_semantic_submit_ceremony(
             observation.authentication_username,
             AuthenticationUsernameEvidence::StandardsBasedEmail
         );
+    let username_only_authentication_context =
+        identity_indicates_explicit_authentication_route(&observation.form_identity)
+            || identity_indicates_explicit_authentication_route(positive_destination_identity);
     observation.password_field_count > 0
         || observation.new_password_field_count > 0
         || observation.one_time_code_field_count > 0
-        || matches!(
+        || ((matches!(
             observation.authentication_username,
             AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
-        )
-        || standards_email_semantic_submit
+        ) || standards_email_semantic_submit)
+            && username_only_authentication_context)
         || (authentication_scope_owns_control
             && identity_indicates_explicit_authentication_route(&observation.form_identity))
 }
@@ -87,8 +91,7 @@ pub(super) fn accepts_authentication_advance(
     let accepted_scoped_activation = authentication_scope_owns_control
         && matches!(observation.semantics, PageControlSemantics::Activation)
         && semantic_submit_ceremony_present
-        && (observation.semantic_submit_control_count == 0
-            || looks_like_explicit_authentication_advance_control_label(&observation.label));
+        && looks_like_login_advance_control_label(&observation.label);
     let accepted_login_label = authentication_scope_owns_control
         && looks_like_login_advance_control_label(&observation.label)
         && (semantic_submit_ceremony_present

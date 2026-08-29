@@ -123,6 +123,32 @@ pub(super) fn destination_has_disallowed_action_or_provider(
             allow_generic_oauth_authorization,
         )
 }
+
+pub(super) fn passkey_destination_has_disallowed_action_or_provider(
+    destination_identity: &str,
+) -> bool {
+    let content_identity = destination_without_navigation_metadata(
+        &destination_without_oauth_form_post_metadata(destination_identity),
+    );
+    let passkey_authentication_route =
+        identity_indicates_explicit_authentication_route(&content_identity)
+            && contains_any_word(
+                &expand_identity_text(&content_identity),
+                &["passkey", "pass key", "webauthn"],
+            )
+            && !route_names_external_authentication_provider(&content_identity);
+    control_destination_has_disallowed_route_action(destination_identity)
+        || control_destination_indicates_alternate_provider(
+            destination_identity
+                .split_once('#')
+                .map_or("", |(_, value)| value),
+            false,
+        )
+        || (looks_like_non_authentication_submit_control_label(&content_identity)
+            && !control_destination_indicates_safe_post_login_route(destination_identity))
+        || (control_destination_indicates_alternate_provider(&content_identity, false)
+            && !passkey_authentication_route)
+}
 pub(super) fn identity_has_authentication_control_veto(identity: &str) -> bool {
     destination_has_disallowed_action_or_provider(identity, false, false)
         || looks_like_registration_route_control_label(identity)

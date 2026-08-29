@@ -140,8 +140,11 @@ impl AuthenticationAdvanceControlObservation {
             self.ownership,
             PageControlOwnership::OwnedForm | PageControlOwnership::LocallyScoped
         );
-        let semantic_submit_ceremony_present =
-            has_semantic_submit_ceremony(self, authentication_scope_owns_control);
+        let semantic_submit_ceremony_present = has_semantic_submit_ceremony(
+            self,
+            authentication_scope_owns_control,
+            positive_destination_identity,
+        );
         let non_authentication_label =
             looks_like_non_authentication_submit_control_label(&self.label);
         let contextual_password_update = self.new_password_field_count > 0
@@ -182,13 +185,18 @@ impl AuthenticationAdvanceControlObservation {
         {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
+        let expanded_control_label = expand_identity_text(&self.label);
         let primary_sso_submit = authentication_scope_owns_control
             && matches!(self.semantics, PageControlSemantics::SemanticSubmit)
             && matches!(
                 self.authentication_username,
                 AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
             )
-            && contains_any_word(&expand_identity_text(&self.label), &["sso"]);
+            && contains_any_word(&expanded_control_label, &["sso"])
+            && contains_any_word(
+                &expanded_control_label,
+                &["sign in", "signin", "continue", "next"],
+            );
         if looks_like_alternate_authentication_route_control_label(&self.label)
             && !primary_sso_submit
         {
@@ -274,5 +282,42 @@ mod tests {
         account_settings.destination_identity =
             "https://login.example.test/settings/profile".to_owned();
         assert!(!authentication_advance_control_is_safe(&account_settings));
+    }
+
+    #[test]
+    fn username_only_submits_require_positive_authentication_identity() {
+        let mut control = login_control();
+        control.password_field_count = 0;
+        control.form_identity = "security-form".to_owned();
+        control.destination_identity = "https://login.example.test/account/security".to_owned();
+        control.label = "Continue".to_owned();
+        assert!(!authentication_advance_control_is_safe(&control));
+
+        control.form_identity = "login-form".to_owned();
+        control.destination_identity = "https://login.example.test/auth/login".to_owned();
+        assert!(authentication_advance_control_is_safe(&control));
+    }
+
+    #[test]
+    fn sso_management_and_unlabeled_activations_do_not_advance_authentication() {
+        for label in ["Configure SSO", "Manage SSO", "Enroll SSO"] {
+            let mut control = login_control();
+            control.label = label.to_owned();
+            assert!(!authentication_advance_control_is_safe(&control));
+        }
+
+        for label in ["Open settings", "Enable MFA"] {
+            let mut control = login_control();
+            control.semantics = PageControlSemantics::Activation;
+            control.semantic_submit_control_count = 0;
+            control.label = label.to_owned();
+            assert!(!authentication_advance_control_is_safe(&control));
+        }
+
+        let mut continue_control = login_control();
+        continue_control.semantics = PageControlSemantics::Activation;
+        continue_control.semantic_submit_control_count = 0;
+        continue_control.label = "Continue".to_owned();
+        assert!(authentication_advance_control_is_safe(&continue_control));
     }
 }

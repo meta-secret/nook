@@ -116,7 +116,10 @@ mod tests {
     fn explicitly_marked_enrollment_and_device_management_controls_are_rejected() {
         for label in [
             "Add passkey",
+            "Create passkey",
             "Add a security key",
+            "Set up security key",
+            "Enable passkey",
             "Enroll passkey",
             "Manage devices",
         ] {
@@ -127,6 +130,20 @@ mod tests {
             assert!(!authentication_passkey_control_candidate_is_safe(
                 &candidate
             ));
+        }
+    }
+
+    #[test]
+    fn same_origin_passkey_authentication_routes_are_accepted() {
+        for destination in [
+            "https://login.example.test/auth/passkey",
+            "https://login.example.test/webauthn/login",
+        ] {
+            let mut observation = passkey_control("Use passkey");
+            observation.destination_identity = destination.to_owned();
+            let candidate =
+                AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(observation);
+            assert!(authentication_passkey_control_candidate_is_safe(&candidate));
         }
     }
 }
