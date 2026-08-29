@@ -65,15 +65,9 @@ Does not apply to:
 7. Security reviews the exact functional-owner handoff and focused proof,
    formats and commits only its allowed security-owned Cortex changes, and
    returns its acceptance verdict to Gizmo.
-8. Gizmo integrates the accepted handoffs and runs `task loom:pre-push` on the
-   combined head. If formatting changes security-owned content, Gizmo returns
-   that exact diff to Security for a fresh formatted commit instead of
-   committing it.
-9. After reintegration and a clean `task loom:pre-push`, Gizmo pushes promptly
-   and immediately obtains remote evidence: at least one relevant focused
-   remote task for a non-validation-ready head, or complete exact-head
-   validation when the head is validation-ready. Gizmo owns readiness and
-   merge.
+8. Gizmo integrates accepted handoffs, runs `task loom:pre-push`, returns any
+   security-owned formatter diff, then pushes and owns remote validation,
+   readiness, and merge.
 
 ## Validation
 

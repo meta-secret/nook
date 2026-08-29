@@ -86,13 +86,14 @@ const VALIDATION_ENV_ALLOWLIST = new Set([
 const NETWORKLESS_DOCKER = `#!/bin/sh
 set -eu
 real=\${NOOK_VALIDATION_DOCKER:?}
+deny_net() { for a; do case "$a" in --network|--network=*|--net|--net=*) echo "Blocked Docker network override: $a" >&2; exit 97;; esac; done; }
 case "\${1:-}" in
-  build) shift; exec "$real" build --network none "$@" ;;
+  build) shift; deny_net "$@"; exec "$real" build --network none "$@" ;;
   buildx)
     sub=\${2:-}; shift 2
     case "$sub" in
-      bake) exec "$real" buildx bake --set '*.network=none' "$@" ;;
-      build) exec "$real" buildx build --network none "$@" ;;
+      bake) deny_net "$@"; exec "$real" buildx bake --set '*.network=none' "$@" ;;
+      build) deny_net "$@"; exec "$real" buildx build --network none "$@" ;;
       create)
         [ "$*" = "--name \${NOOK_PR_BUILDX_BUILDER:-} --driver docker-container --bootstrap" ] || exit 97
         exec "$real" buildx create "$@" ;;
@@ -102,7 +103,7 @@ case "\${1:-}" in
         exec "$real" buildx rm "$@" ;;
       *) echo "Blocked Docker buildx operation during isolated validation: $sub" >&2; exit 97 ;;
     esac ;;
-  run) shift; exec "$real" run --network none "$@" ;;
+  run) shift; deny_net "$@"; exec "$real" run --network none "$@" ;;
   container|cp|create|image|images|inspect|ps|rm|version) exec "$real" "$@" ;;
   *) echo "Blocked Docker operation during isolated validation: \${1:-<empty>}" >&2; exit 97 ;;
 esac
@@ -470,14 +471,13 @@ export function isolationForFixProfile(
 
 export function createValidationEnvironment(
   hostEnvironment: NodeJS.ProcessEnv,
-  overrides: Readonly<Record<string, string>> = {},
 ): NodeJS.ProcessEnv {
   const environment: NodeJS.ProcessEnv = {};
   for (const name of VALIDATION_ENV_ALLOWLIST) {
     const value = hostEnvironment[name];
     if (typeof value === "string") environment[name] = value;
   }
-  return { ...environment, ...overrides };
+  return environment;
 }
 
 export async function withValidationEnvironment<T>(
@@ -535,13 +535,13 @@ export async function withValidationEnvironment<T>(
 
 export async function runRustDependencyUpdateValidation(
   repoRoot: string,
-  hostEnvironment: NodeJS.ProcessEnv,
+  sanitizedEnvironment: NodeJS.ProcessEnv,
   runner: ValidationRunner = runValidationCommand,
 ): Promise<void> {
   for (const validation of RUST_DEPENDENCY_UPDATE_VALIDATION_COMMANDS) {
     await runner("task", validation.args, {
       cwd: repoRoot,
-      env: createValidationEnvironment(hostEnvironment, validation.environment),
+      env: { ...sanitizedEnvironment, ...validation.environment },
     });
   }
 }

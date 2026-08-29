@@ -84,19 +84,11 @@ Agent count never determines PR count.
      slice-process transport or intermediate agent.
    - Aggregate each verified handoff under its assigned passive Gizmo record.
    - Treat exactly two trusted GitHub Actions publishers as narrow exceptions
-     to the ordinary committed-handoff sequence.
-   - For `agent-implement.yml`, require trusted host formatting, change-budget
-     and branch or PR identity validation, publication, and exact-head handoff.
-   - For `rust-dependency-updates.yml` through `task ci-agent:fix`, require the
-     exact `CI_AGENT_FIX_PROFILE=rust-dependency-update` profile, a clean exact
-     HEAD and index, hard-coded regular Rust dependency mission-file scope,
-     unchanged orchestration controls, and streamed dependency-update validation
-     without publication credentials remotely inside trusted GitHub Actions
-     before publication.
-   - Require the dependency-update harness to publish and return the exact head
-     to Gizmo after verifying the PR number, base, head ref, and remote head SHA,
-     including on existing-PR reruns. Do not treat its remote pre-publication
-     validation as a developer-host local gate.
+     to the ordinary committed-handoff sequence:
+     `agent-implement.yml` and `rust-dependency-updates.yml` through
+     `task ci-agent:fix` with `CI_AGENT_FIX_PROFILE=rust-dependency-update`.
+     Follow the root [team worker contract](../AGENTS.md#team-worker-contract)
+     for their isolation, publication, and exact-head verification rules.
 5. **Integrate accepted commits.**
    - Integrate in deterministic dependency order.
    - Bind each downstream task to the exact integrated commit.

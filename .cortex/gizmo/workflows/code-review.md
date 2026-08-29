@@ -21,19 +21,11 @@ handoff.
 
 ### Trusted automated publishers
 
-The no-local-review rule applies to exactly two trusted GitHub Actions
-publishers:
-
-- `agent-implement.yml` formats, budget- and identity-validates, commits, and
-  publishes an isolated implementation.
-- `rust-dependency-updates.yml` runs required integrated dependency validation
-  remotely inside trusted GitHub Actions before `task ci-agent:fix` with
-  `CI_AGENT_FIX_PROFILE=rust-dependency-update` commits and publishes its
-  isolated dependency-update branch.
-
+The no-local-review rule applies to the two trusted GitHub Actions publishers
+named in the root [team worker contract](../../AGENTS.md#team-worker-contract).
 Neither bounded editor has independent Git or external delivery authority.
-Each publisher returns the exact published head directly to Gizmo. Gizmo then
-owns continuing review, validation, readiness, and merge work.
+Each publisher returns the exact published head to Gizmo, which owns review,
+validation, readiness, and merge.
 
 ### Ordinary worker handoff
 

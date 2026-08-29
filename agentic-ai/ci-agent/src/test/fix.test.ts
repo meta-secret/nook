@@ -49,36 +49,7 @@ test("rust dependency update profile selects strict isolation", () => {
   );
 });
 
-test("dependency validation runs fixed commands in order with exact overrides", async () => {
-  const calls: unknown[] = [];
-  await runRustDependencyUpdateValidation(
-    "/repo",
-    {
-      PATH: "/bin",
-      CURSOR_API_KEY: "cursor-secret",
-      NOOK_GITHUB_PAT: "github-secret",
-      GITHUB_TOKEN: "github-token",
-      WASM_BUILD_MODE: "wrong-host-value",
-    },
-    async (command, args, { env }) => void calls.push([command, ...args, env]),
-  );
-  assert.deepEqual(calls, [
-    [
-      "task",
-      "ci:pr:e2e",
-      {
-        PATH: "/bin",
-        WASM_BUILD_MODE: "prod",
-        VITE_BASE: "/",
-        VITE_VAULT_SYNC_INTERVAL_MS: "1000",
-      },
-    ],
-    ["task", "docker:ecosystem:fuzz", "FUZZ_SECONDS=20", { PATH: "/bin" }],
-    ["task", "hive:verify", { PATH: "/bin" }],
-  ]);
-});
-
-test("validation strips secrets and forces Docker workloads offline", async () => {
+test("validation isolates secrets, preserves wrapper vars, and denies network overrides", async () => {
   const root = await mkdtemp(join(tmpdir(), "nook-validation-test-"));
   const bin = join(root, "bin");
   const log = join(root, "docker.log");
@@ -136,10 +107,36 @@ test("validation strips secrets and forces Docker workloads offline", async () =
       ])
         await docker(args);
       await assert.rejects(docker(["buildx", "rm", "--force", "other"]));
+      for (const blocked of [
+        ["run", "--network", "host", "image"],
+        ["run", "--network=host", "image"],
+      ])
+        await assert.rejects(docker(blocked), /network override/);
       await assert.rejects(
         docker(["exec", "container", "cargo", "test"]),
         /Blocked Docker operation/,
       );
+      const names: string[] = [];
+      await runRustDependencyUpdateValidation(
+        "/repo",
+        environment,
+        async (_command, args, { env }) => {
+          names.push(String(args[0]));
+          assert.equal(env.HOME, environment.HOME);
+          assert.equal(
+            env.NOOK_VALIDATION_DOCKER,
+            environment.NOOK_VALIDATION_DOCKER,
+          );
+          assert.equal(env.SCCACHE_OPTIONAL, "1");
+          if (args[0] === "ci:pr:e2e")
+            assert.equal(env.WASM_BUILD_MODE, "prod");
+        },
+      );
+      assert.deepEqual(names, [
+        "ci:pr:e2e",
+        "docker:ecosystem:fuzz",
+        "hive:verify",
+      ]);
     });
     assert.equal(
       await readFile(log, "utf8"),

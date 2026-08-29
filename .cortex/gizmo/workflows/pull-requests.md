@@ -392,33 +392,14 @@ file remains provisional and untracked.
 
 #### Trusted automated publisher exceptions
 
-Exactly two trusted GitHub Actions publishers bypass the ordinary worker
-commit-handoff integration step. Their bounded editors have no independent Git
-or external delivery authority.
-
-- **`agent-implement.yml`**
-  1. Trusted host tooling formats the isolated implementation.
-  2. It validates the change budget and branch or PR identity.
-  3. It commits and publishes the implementation branch and PR.
-  4. It verifies and returns the exact published head to Gizmo.
-  5. Hosted Repository policy and PR verification enforce the UI-demo and
-     other product or publication contracts after publication.
-- **`rust-dependency-updates.yml` through `task ci-agent:fix` with
-  `CI_AGENT_FIX_PROFILE=rust-dependency-update`**
-  1. The trusted GitHub Actions job rejects persisted checkout credentials,
-     freezes the clean exact HEAD and index, and rejects changes outside regular
-     Rust dependency mission files or to orchestration controls.
-  2. It streams required integrated dependency-update validation remotely,
-     without publication credentials, inside that job before publication. This
-     is not a developer-host local gate.
-  3. The trusted harness commits and publishes the dependency-update branch and
-     PR.
-  4. It verifies the PR number, base, head ref, and remote head SHA, including
-     on existing-PR reruns, and returns that exact head to Gizmo.
-
-Gizmo continues either PR from the returned head. It does not require a
-duplicate integration commit or advisory local review. Gizmo owns continuing
-review, validation, repair, readiness, and merge work.
+Exactly two trusted GitHub Actions publishers bypass ordinary worker
+commit-handoff integration: `agent-implement.yml` and
+`rust-dependency-updates.yml` through `task ci-agent:fix` with
+`CI_AGENT_FIX_PROFILE=rust-dependency-update`. Their bounded editors have no
+independent Git or external delivery authority. See the root
+[team worker contract](../../AGENTS.md#team-worker-contract) for the exact
+publication, isolation, and head-verification rules. Gizmo continues either
+returned head and owns review, validation, readiness, and merge.
 
 Prepare an exact remote commit:
 

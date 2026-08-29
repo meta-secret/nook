@@ -46,15 +46,10 @@ Delivery rules:
 - Do not run broad local builds, tests, e2e, container product gates, advisory
   review, or duplicate hosted-check mirrors before push.
 - Exactly two trusted GitHub Actions publishers bypass ordinary worker commit
-  handoffs.
-  - `agent-implement.yml` formats, budget- and identity-validates, publishes,
-    and returns its exact isolated head.
-  - `rust-dependency-updates.yml` runs required integrated validation remotely
-    inside trusted GitHub Actions before `task ci-agent:fix` with
-    `CI_AGENT_FIX_PROFILE=rust-dependency-update` publishes and returns its
-    exact isolated head. This is not a developer-host local gate.
-- Neither bounded editor has independent Git authority. Gizmo continues either
-  published head without duplicate integration or advisory local review.
+  handoffs. See the root
+  [team worker contract](../../AGENTS.md#team-worker-contract). Neither bounded
+  editor has independent Git authority. Gizmo continues either published head
+  without duplicate integration or advisory local review.
 - `task loom:pr-land CONFIG=<pr-land-merge-check-request.yaml>` summarizes
   readiness.
 - Loom never squash-merges.
