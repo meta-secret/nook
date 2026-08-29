@@ -192,7 +192,7 @@ mod tests {
         assert!(!has_safe_authentication_route_identity(
             "https://example.test",
             "login-form",
-            "https://example.test/signin/x",
+            "https://example.test/login?provider=google",
         ));
         assert!(!can_activate_authentication_route_control(
             "https://example.test",
