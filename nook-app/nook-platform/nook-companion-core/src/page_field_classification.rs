@@ -335,7 +335,7 @@ pub fn can_activate_authentication_route_control(
     form_identity: &str,
     destination_identity: &str,
     control_label: &str,
-    _has_form_owned_semantic_submit: bool,
+    has_form_owned_semantic_submit: bool,
     has_authentication_username: bool,
     has_local_authentication_scope: bool,
 ) -> bool {
@@ -357,7 +357,11 @@ pub fn can_activate_authentication_route_control(
         return !form_identity.trim().is_empty()
             || (has_authentication_username && has_local_authentication_scope);
     }
-    false
+    control_label.is_empty()
+        && !has_form_owned_semantic_submit
+        && has_authentication_username
+        && has_local_authentication_scope
+        && !form_identity.trim().is_empty()
 }
 
 fn has_autocomplete_token(tokens: &[String], expected: &str) -> bool {
@@ -644,22 +648,10 @@ mod tests {
                 local,
             )
         };
-        assert!(decide("login-form", "Entrar", true, true, true));
+        assert!(decide("login-form", "", false, true, true));
         assert!(decide("", "Entrar", false, true, true));
-        assert!(decide(
-            "login-form",
-            "Sign in to Microsoft 365",
-            false,
-            false,
-            false
-        ));
-        assert!(!decide(
-            "login-form",
-            "Continue with Amazon",
-            true,
-            true,
-            true
-        ));
+        assert!(decide("f", "Sign in to Microsoft 365", false, false, false));
+        assert!(!decide("f", "Continue with Amazon", true, true, true));
         for label in [
             "Sign in to Google",
             "Sign in to Microsoft and delete account",

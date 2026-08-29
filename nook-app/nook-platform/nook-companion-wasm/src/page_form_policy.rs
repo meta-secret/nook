@@ -203,6 +203,15 @@ mod tests {
             true,
             true,
         ));
+        assert!(can_activate_authentication_route_control(
+            "https://example.test",
+            "login-form",
+            "https://example.test/auth/login",
+            "",
+            false,
+            true,
+            true,
+        ));
         let login = nook_companion_core::AuthenticationPageObservation {
             current_password_field_count: 1,
             ..Default::default()

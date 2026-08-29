@@ -503,7 +503,7 @@ export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
         ].join(" "),
         form.action,
         "",
-        true,
+        false,
         isAuthUsernameField(usernameField),
         true,
       )
