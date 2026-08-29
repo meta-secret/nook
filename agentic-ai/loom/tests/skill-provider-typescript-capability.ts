@@ -2,6 +2,7 @@ import ts from 'typescript';
 
 export enum SubprocessCallKind {
   Bun = 'bun',
+  BunShell = 'bunShell',
   Exec = 'exec',
   ExecFile = 'execFile',
   Fork = 'fork',
@@ -26,7 +27,7 @@ export type TaggedTemplateText = {
 };
 
 export type BunShellTemplateRequest = {
-  readonly bunShadowed: boolean;
+  readonly capability: SubprocessCallKind | false;
   readonly evaluate: (expression: ts.Expression) => TaggedTemplateText;
   readonly tagged: ts.TaggedTemplateExpression;
 };
@@ -41,11 +42,10 @@ export function bunShellTemplateCommand(
 ): string | false {
   const tag = request.tagged.tag;
   if (
-    request.bunShadowed ||
-    !ts.isPropertyAccessExpression(tag) ||
-    !ts.isIdentifier(tag.expression) ||
-    tag.expression.text !== 'Bun' ||
-    tag.name.text !== '$'
+    request.capability !== SubprocessCallKind.BunShell ||
+    (!ts.isPropertyAccessExpression(tag) &&
+      !ts.isElementAccessExpression(tag) &&
+      !ts.isIdentifier(tag))
   )
     return false;
   const template = request.tagged.template;

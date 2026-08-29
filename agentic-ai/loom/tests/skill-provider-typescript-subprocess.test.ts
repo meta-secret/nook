@@ -190,8 +190,14 @@ test('extracts static Bun shell templates and rejects dynamic interpolation', ()
     extract(`
 const target='scripts/facade.ts';
 Bun.$\`bun \${target}\`;
-Bun.$\`bun scripts/check.ts\`;`),
-  ).toEqual(["bun 'scripts/facade.ts'", 'bun scripts/check.ts']);
+Bun['$']\`bun scripts/check.ts\`;
+const shell=Bun.$;
+shell\`bun scripts/alias.ts\`;`),
+  ).toEqual([
+    "bun 'scripts/facade.ts'",
+    'bun scripts/check.ts',
+    'bun scripts/alias.ts',
+  ]);
   expect(() => extract('Bun.$`bun ${input}`;')).toThrow(
     'Dynamic Bun.$ subprocess shell source is forbidden.',
   );

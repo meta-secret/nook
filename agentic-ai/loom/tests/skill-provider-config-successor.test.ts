@@ -238,6 +238,7 @@ test('explicit Playwright config forms follow package-command cd', () => {
   for (const command of [
     'cd .. && bunx playwright test --config config/playwright.cjs',
     'cd .. && npx playwright test --config=config/playwright.cjs',
+    'cd .. && playwright test -c config/playwright.cjs',
   ]) {
     const sources = new Map([
       ['nested/package.json', `{"scripts":{"test:e2e":"${command}"}}`],

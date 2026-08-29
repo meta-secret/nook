@@ -71,12 +71,10 @@ type BindingLookupRequest = {
   readonly model: LexicalModel;
   readonly name: string;
 };
-
 const MAX_BYTES = 65_536;
 const MAX_DEPTH = 16;
 const MAX_NODES = 65_536;
 const encoder = new TextEncoder();
-
 export function typescriptSubprocessCommands(
   inspection: TypeScriptSubprocessInspection,
 ): readonly string[] {
@@ -123,8 +121,14 @@ export function typescriptSubprocessCommands(
       }
     }
     if (ts.isTaggedTemplateExpression(node)) {
+      const capabilityRequest: CapabilityResolutionRequest = {
+        expression: node.tag,
+        location: node,
+        model,
+        visited: new Set(),
+      };
       const templateRequest: BunShellTemplateRequest = {
-        bunShadowed: hasBinding([model, node, 'Bun']),
+        capability: resolveCapability(capabilityRequest),
         evaluate: (expression) => {
           const evaluationRequest: ExpressionEvaluationRequest = {
             depth: 0,
@@ -145,7 +149,6 @@ export function typescriptSubprocessCommands(
   visit(sourceFile);
   return commands;
 }
-
 type BindingCollectionRequest = {
   readonly node: ts.Node;
   readonly target: LexicalBinding[];
@@ -344,6 +347,7 @@ function resolveCapability(
   const [owner, member] = access;
   if (ts.isIdentifier(owner) && owner.text === 'Bun') {
     if (hasBinding([request.model, request.location, 'Bun'])) return false;
+    if (member === '$') return SubprocessCallKind.BunShell;
     return member === 'spawn' || member === 'spawnSync'
       ? SubprocessCallKind.Bun
       : false;

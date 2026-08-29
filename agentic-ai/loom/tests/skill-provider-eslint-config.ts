@@ -202,10 +202,7 @@ function selectedConfiguration(
       noConfigLookup = true;
       continue;
     }
-    if (
-      word.value === '--config' ||
-      (request.tool === ConfigurationTool.Eslint && word.value === '-c')
-    ) {
+    if (word.value === '--config' || word.value === '-c') {
       const value = request.words[index + 1];
       if (!value || value.dynamic)
         throw new Error(`Dynamic ${request.tool} configuration selection.`);
