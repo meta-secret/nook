@@ -61,8 +61,10 @@ pub(super) fn route_names_external_authentication_provider(identity: &str) -> bo
         let tails = &segments[index + 1..];
         identity_indicates_explicit_login_route(segment)
             && (!segments[..index].iter().all(|prefix| {
-                matches!(prefix.as_str(), "auth" | "authentication" | "common")
-                    || is_version(prefix)
+                matches!(
+                    prefix.as_str(),
+                    "auth" | "authentication" | "common" | "users"
+                ) || is_version(prefix)
             }) || !(tails.is_empty() || matches!(tails, [tail] if is_local_tail(tail))))
     });
     identity_names_external_authentication_provider(identity, false)

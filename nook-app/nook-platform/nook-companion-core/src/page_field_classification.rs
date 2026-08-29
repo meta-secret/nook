@@ -352,8 +352,12 @@ pub(crate) fn authentication_passkey_control_is_safe(
             "pass keys",
             "security key",
             "security keys",
+            "hardware key",
             "webauthn",
             "fido",
+            "touch id",
+            "face id",
+            "windows hello",
         ],
     );
     let label_names_enrollment_or_management = contains_any_word(

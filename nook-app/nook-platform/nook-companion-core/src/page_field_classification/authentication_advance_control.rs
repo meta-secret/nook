@@ -363,6 +363,14 @@ mod tests {
     }
 
     #[test]
+    fn nested_local_login_routes_are_accepted() {
+        let mut control = login_control();
+        control.source_origin = "https://gitlab.com".to_owned();
+        control.destination_identity = "https://gitlab.com/users/sign_in".to_owned();
+        assert!(authentication_advance_control_is_safe(&control));
+    }
+
+    #[test]
     fn primary_oauth_authorization_routes_are_accepted() {
         for destination in [
             "https://login.example.test/oauth2/authorize",
