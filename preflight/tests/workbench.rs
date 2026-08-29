@@ -2,6 +2,8 @@
 
 #[path = "workbench/harness_neutral.rs"]
 mod harness_neutral;
+#[path = "workbench/stacked_runtime.rs"]
+mod stacked_runtime;
 
 use anyhow::Context as _;
 use std::{
@@ -40,6 +42,7 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "WORKBENCH_REPOSITORY: meta-secret/nook-workbench",
         "WORKBENCH_PLAN_FILE: .nook-workbench-plan.md",
         "WORKBENCH_SUMMARY_FILE: .nook-workbench-worklog.md",
+        "CI_AGENT_TOOLING_ROOT: ${{ github.workspace }}",
         "major_change_authorized:",
         "MAJOR_CHANGE_AUTHORIZED=$MAJOR_CHANGE_AUTHORIZED",
         "CI_AGENT_TIMEOUT_MS: \"18000000\"",
@@ -47,12 +50,43 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "automation: agent",
         "status: in_progress",
         "gizmo_id",
-        "const stackMetadataKeys = ['stack_branch', 'stack_predecessor_branch']",
-        "new RegExp(`^\\\\s*${key}\\\\s*:`, 'm').test(frontmatter)",
-        "presentStackMetadata.length > 0",
-        "Stacked successor dispatch requires the later runtime support; retry after it lands.",
         "const rawGizmoId = gizmoIdRows[0]?.[1].trim() || ''",
         "const assignedGizmoId = rawGizmoId === 'null' ? '' : rawGizmoId",
+        "stack_branch",
+        "stack_predecessor_branch",
+        "must provide both stack_branch and stack_predecessor_branch",
+        "stack_branch must exist in the Nook repository",
+        "stack_branch must have exactly one same-repository open PR",
+        "GET /repos/{owner}/{repo}/stacks",
+        "application/vnd.github.nebula-preview+json",
+        "GitHub native stack membership is unavailable",
+        "must belong to exactly one open GitHub native stack based on main",
+        "successorIndex <= 0",
+        "must immediately follow stack_predecessor_branch in its GitHub native stack",
+        "recorded predecessor must exist while it remains the live PR base",
+        "recorded predecessor must remain open and unmerged while it is the live PR base",
+        "cannot target main before its native-stack predecessor is merged",
+        "mergeCommit.parents[0]?.sha === predecessorPull.base.sha",
+        "mergeCommit.commit.tree.sha === predecessorHeadCommit.commit.tree.sha",
+        "native-stack predecessor must be squash-merged into main",
+        "retargeted successor must contain the current main frontier",
+        "successor PR must target its recorded predecessor or main",
+        "ISSUE_STACK_BRANCH: ${{ steps.workbench.outputs.stack_branch }}",
+        "ISSUE_STACK_LIVE_BASE_BRANCH: ${{ steps.workbench.outputs.stack_live_base_branch }}",
+        "ISSUE_STACK_LIVE_BASE_SHA: ${{ steps.workbench.outputs.stack_live_base_sha }}",
+        "ISSUE_STACK_PREDECESSOR_BRANCH: ${{ steps.workbench.outputs.stack_predecessor_branch }}",
+        "ISSUE_STACK_PR_NUMBER: ${{ steps.workbench.outputs.stack_pr_number }}",
+        "ISSUE_STACK_START_HEAD_SHA: ${{ steps.workbench.outputs.stack_start_head_sha }}",
+        "AGENT_PR_BASE_BRANCH=$base_branch",
+        "AGENT_PR_BASE_SHA=$ISSUE_STACK_LIVE_BASE_SHA",
+        "AGENT_PR_TARGET_KIND=$target_kind",
+        "Checkout trusted workflow tooling",
+        "ref: ${{ github.workflow_sha }}",
+        "Prepare isolated implementation worktree",
+        "IMPLEMENTATION_REPO_ROOT=$implementation_root",
+        "REPO_ROOT: ${{ env.IMPLEMENTATION_REPO_ROOT }}",
+        "node \"$GITHUB_WORKSPACE/agentic-ai/ci-agent/dist/main/main.js\" deliver",
+        "Rejected unsafe implementation worklog artifact.",
         "ASSIGNED_GIZMO_ID: ${{ steps.workbench.outputs.gizmo_id }}",
         "assignedGizmoId: process.env.ASSIGNED_GIZMO_ID",
         "const currentGizmoIdMatch = /^- Current Gizmo ID:\\s*([a-z0-9]+(?:-[a-z0-9]+)*)\\s*$/m",
@@ -79,10 +113,33 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "github.rest.repos.getContent({ owner, repo, path, ref: 'main' })",
         "Claim ready Workbench issue",
         "Run task-planning agent",
-        "task ci-agent:plan",
+        "bash \"$GITHUB_WORKSPACE/.github/scripts/ci-agent-plan.sh\"",
         "uses: ./.github/actions/nook-node-setup",
-        "uses: go-task/setup-task@v2",
+        "uses: oven-sh/setup-bun@v2",
+        "uses: dtolnay/rust-toolchain@1.97.0",
+        "npm ci --ignore-scripts --include=dev --prefix",
+        "bun install --cwd",
+        "Format implementation on trusted host",
         "Validate and publish Workbench task plan",
+        "Resolve standalone prompt rerun",
+        "if: steps.task.outputs.ready == 'true' && inputs.prompt != ''",
+        "Multiple open PRs use standalone branch",
+        "Existing standalone implementation PR has an unexpected repository or base",
+        "state: 'all'",
+        "github.rest.pulls.get",
+        "pull.state === 'open'",
+        "pull.merged",
+        "was closed without merge; preserve it for explicit recovery",
+        "github.rest.repos.getBranch",
+        "exists without a PR; preserve it for explicit recovery",
+        "error.status !== 404",
+        "steps.rerun.outputs.terminal != 'true'",
+        "Standalone implementation PR is $IMPLEMENTATION_TERMINAL_REASON; skipping rerun.",
+        "Standalone implementation PR is $IMPLEMENTATION_TERMINAL_REASON; delivery is idempotently complete.",
+        "Materialize validated implementation plan",
+        "VALIDATED_PLAN_SHA256=$EXPECTED_PLAN_SHA256",
+        "sha256sum \"$implementation_plan\"",
+        "sha256sum \"$plan\"",
         "Publish Workbench result",
         "MULTI_PR_PLAN: ${{ steps.plan.outputs.multi_pr }}",
         "Materialize the feature and ordered focused issues",
@@ -103,6 +160,46 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
             "Workbench agent workflow is missing: {required}"
         );
     }
+    let accepts_stack_claim = |native: bool,
+                               adjacent: bool,
+                               retargeted: bool,
+                               predecessor_open: bool,
+                               merged: bool,
+                               squash: bool,
+                               current_main: bool| {
+        native
+            && adjacent
+            && ((retargeted && merged && squash && current_main)
+                || (!retargeted && predecessor_open))
+    };
+    assert!(
+        !accepts_stack_claim(false, true, false, true, false, false, false),
+        "an informal PR chain must not pass as a native stack"
+    );
+    assert!(
+        !accepts_stack_claim(true, false, false, true, false, false, false),
+        "a non-adjacent native-stack predecessor must be rejected"
+    );
+    assert!(
+        !accepts_stack_claim(true, true, false, false, false, false, false),
+        "a closed unmerged predecessor must be rejected"
+    );
+    assert!(
+        accepts_stack_claim(true, true, false, true, false, false, false),
+        "an adjacent successor with an open predecessor must remain claimable"
+    );
+    assert!(
+        !accepts_stack_claim(true, true, true, false, false, false, false),
+        "retargeting to main before predecessor merge must be rejected"
+    );
+    assert!(
+        !accepts_stack_claim(true, true, true, false, true, true, false),
+        "a successor behind the current main frontier must be rejected"
+    );
+    assert!(
+        accepts_stack_claim(true, true, true, false, true, true, true),
+        "a current successor after predecessor squash merge must remain claimable"
+    );
     assert!(
         workflow
             .matches("ASSIGNED_GIZMO_ID: ${{ steps.workbench.outputs.gizmo_id }}")
@@ -142,9 +239,22 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         !workflow.contains("`gizmo_id: ${process.env.ASSIGNED_GIZMO_ID || 'null'}`"),
         "published plan frontmatter must persist the validated Current Gizmo ID"
     );
+    assert!(
+        !workflow.contains("presentStackMetadata")
+            && !workflow.contains("Stacked successor dispatch requires the later runtime support"),
+        "successor runtime support must replace the bottom-only stack rejection"
+    );
+    assert!(
+        workflow.matches("uses: actions/checkout@v7").count() == 1
+            && workflow.contains("persist-credentials: false")
+            && !workflow.contains("ref: ${{ steps.task.outputs.checkout_ref }}"),
+        "unreviewed implementation source must not replace the trusted workflow checkout"
+    );
     for required in [
-        "git worktree add --detach",
-        "REPO_ROOT=\"$planning_root\" task ci-agent:run",
+        "git -C \"$IMPLEMENTATION_REPO_ROOT\" worktree add --detach",
+        "node \"$ROOT/agentic-ai/ci-agent/dist/main/main.js\" plan",
+        "artifact_ready",
+        "[ ! -L \"$1\" ]",
     ] {
         assert!(
             plan_script.contains(required),
@@ -188,21 +298,21 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
     let claim_position = workflow
         .find("Claim ready Workbench issue")
         .context("the workflow must claim the requested Workbench issue")?;
-    let stack_guard_position = workflow
-        .find("presentStackMetadata.length > 0")
-        .context("the workflow must reject focused issues carrying stack metadata")?;
+    let stack_parser_position = workflow
+        .find("const stackBranchRows")
+        .context("the successor workflow must parse trusted stack metadata")?;
     let claim_mutation_position = workflow
         .find("github.rest.repos.createOrUpdateFileContents")
         .context("the workflow must claim the requested Workbench issue atomically")?;
     assert!(
-        stack_guard_position < claim_mutation_position,
-        "stacked focused issues must fail before the Workbench claim is mutated"
+        stack_parser_position < claim_mutation_position,
+        "trusted stack metadata must be validated before the Workbench claim is mutated"
     );
-    let docker_position = workflow
-        .find("Docker setup")
-        .context("the workflow must set up Docker")?;
+    let tooling_position = workflow
+        .find("Prepare direct host tooling")
+        .context("the workflow must prepare direct host tooling")?;
     assert!(
-        claim_position < docker_position,
+        claim_position < tooling_position,
         "the workflow must atomically claim a Workbench record before expensive setup"
     );
     let plan_position = workflow
@@ -223,7 +333,7 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "Current Gizmo ID must be extracted only after trusted validation and then persisted"
     );
     let implementation_position = workflow
-        .find("Run ci-agent implement")
+        .find("Run sandboxed implementation agent")
         .context("the workflow must run bounded implementation")?;
     assert!(
         plan_position < implementation_position,
@@ -764,6 +874,8 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
         "## Decisions",
         "## Validation",
         "## Remaining work",
+        "${VALIDATED_PLAN}",
+        "authoritative even if a workspace file is later changed",
     ] {
         assert!(
             prompt.contains(required),
@@ -832,8 +944,13 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
     }
     assert!(
         prompt_loader.contains("process.env.MAJOR_CHANGE_AUTHORIZED === \"true\"")
-            && prompt_loader.contains("${MAJOR_CHANGE_AUTHORIZATION}"),
-        "agent prompt loading must derive major-change authorization from trusted workflow metadata"
+            && prompt_loader.contains("${MAJOR_CHANGE_AUTHORIZATION}")
+            && prompt_loader
+                .contains("Validated implementation plan hash changed before agent start")
+            && prompt_loader.contains("join(config.toolingRoot, config.promptFile)")
+            && prompt_loader.find(".replaceAll(\"${AGENT_TASK}\"")
+                < prompt_loader.find(".replaceAll(\"${VALIDATED_PLAN}\""),
+        "agent prompts must use trusted workflow metadata and tooling"
     );
 
     for required in [
@@ -869,18 +986,6 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
         materialization_position < block_position,
         "bounded automation must identify the materialization action before blocking"
     );
-    let implement = read("agentic-ai/ci-agent/src/main/implement.ts");
-    let ordered = [
-        "assertBudget()",
-        "pushBranch()",
-        "verifyBranch()",
-        "findPr()",
-        "createPr()",
-    ]
-    .map(|step| implement.find(step));
-    assert!(
-        ordered.iter().all(Option::is_some) && ordered.is_sorted(),
-        "branch preservation sequence drifted"
-    );
+    stacked_runtime::assert_contract(&workflow)?;
     Ok(())
 }

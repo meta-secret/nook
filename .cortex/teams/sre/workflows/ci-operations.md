@@ -71,7 +71,10 @@ assume per-PR Cloudflare preview hosts can be covered by wildcards. See
 
 ## CI agent (dependency updates / implementation)
 
-[`agent-implement.yml`](../../../../.github/workflows/agent-implement.yml) uses the CI-agent harness via **`task ci-agent:implement`** for ready Workbench issues or manual prompts (see below).
+[`agent-implement.yml`](../../../../.github/workflows/agent-implement.yml) uses
+the trusted direct-host CI-agent entrypoint for ready Workbench issues or manual
+prompts (see below). Dependency-update and generic-fix workflows retain their
+separate Task-backed harness.
 
 **Main failure handoff:**
 
@@ -112,13 +115,19 @@ Merge still requires the standard exact-head readiness audit.
   - The PAT is classic with `repo` scope or fine-grained with contents and pull
     requests write on this repository.
 - **Execution:**
-  1. Run `task setup` to bake sealed `nook-web:local`.
-  2. Provision Task and the Actions Node.js runtime on the ARC checkout.
-  3. Run `task ci-agent:implement` directly in that checkout.
-  4. Let repository build tasks use the configured persistent BuildKit service.
+  1. Keep the workflow-SHA checkout as trusted tooling and install only its
+     lockfile-pinned CI-agent and formatter dependencies plus pinned `rustfmt`.
+  2. Run the dedicated `CI_AGENT_CMD=plan` equivalent in strict isolation over
+     a detached implementation-source worktree.
+  3. Run strict implementation editing with network denied, an isolated home,
+     and no PAT or registry credentials in the editor process.
+  4. After the editor exits, let trusted host tooling format the isolated
+     implementation worktree, enforce the authored-line budget, commit, push,
+     and use the GitHub API.
 - **Runner:** `agent-implement.yml` uses the general `nook-k0s` ARC scale set.
   - Concurrent work scales across the ARC worker pool.
-  - No nested runtime or host container socket is available.
+  - No Docker, Podman, nested runtime, privileged container, or host container
+    socket is used by this workflow.
 - **Teardown:** await `agent[Symbol.asyncDispose]()`, call `process.exit`, and
   best-effort kill direct child PIDs.
 - **Optional environment:** `CI_AGENT_PROMPT_FILE` and `CI_FIX_LABEL`.
@@ -169,7 +178,9 @@ The `task ci-agent:fix` step (`agentic-ai/ci-agent/`) emits **log4j-style** line
 
 ## Agent implement (Workbench issue / manual prompt)
 
-[`agent-implement.yml`](../../../../.github/workflows/agent-implement.yml) runs the same Cursor SDK harness (`task ci-agent:implement`) for intentional implementation work — not CI failure recovery.
+[`agent-implement.yml`](../../../../.github/workflows/agent-implement.yml) runs
+the direct-host Cursor SDK harness for intentional implementation work — not CI
+failure recovery.
 
 ### Agent implement triggers
 
@@ -209,15 +220,15 @@ The workflow publishes a Workbench progress update and worklog whether
 implementation opens a PR or blocks. Drafts, manually owned issues, and
 historical imports cannot trigger it.
 
-Loop: claim Workbench record → `task setup` → classify and publish the planning
-result → either publish an authorization blocker or run
-**`task ci-agent:implement`** (direct Node process on ARC with persistent
-BuildKit) → push branch → open a Nook PR → assign and directly mention the
-continuing owner → publish Workbench progress/worklog → exit. The assigned
-owner then follows the standard failure/comment/conflict loop, exact-head
-readiness audit, squash merge, and final Workbench completion update. Agent
-secrets:
-`CURSOR_API_KEY`, `NOOK_GITHUB_PAT`. Prompt:
+Loop: claim Workbench record → strict isolated planning → classify and publish
+the planning result → either publish an authorization blocker or run strict
+isolated editing → trusted direct-host formatting → trusted budget, commit,
+push, and PR publication → assign and directly mention the continuing owner →
+publish Workbench progress/worklog → exit. `CURSOR_API_KEY` is supplied only to
+the strict planner/editor SDK control plane and trusted plan/worklog secret
+validators; it is removed from the editor subprocess environment.
+`NOOK_GITHUB_PAT` belongs only to trusted claim, fetch, delivery, and
+publication steps. Registry credentials are not used. Prompt:
 [`.github/prompts/agent-implement.md`](../../../../.github/prompts/agent-implement.md).
 
 ## Agent execution policy

@@ -34,8 +34,9 @@ it directly; this alone does not require an expertise provider.
 
 ## Execution environment
 
-The job runs `task setup` before you start. Use repository Task targets for all
-allowed actions.
+The bounded editor has no repository credentials, network access, container
+runtime, or Task runner. Trusted host tooling formats and publishes the result
+only after the sandboxed editor exits.
 
 **Product validation runs on configured GitHub Actions workers after the harness
 opens the PR. Trusted Rust gates may use ARC; runtime-dependent gates stay
@@ -59,12 +60,10 @@ hand-written `docker run` commands.
    team's authorities. Load `.cortex/shared/architecture/system.md` or one
    shared skill only when the task names that cross-team dependency; never scan
    the shared tree by default.
-3. **Always run `task format`** (host-applied) before finishing so the harness
-   commits a formatted tree. When UI-facing paths change, pass the UI demo
-   contract against the base ref when practical.
-4. Do not run `task check`, `task ci:pr`, full suites, builds, or e2e in this
-   bounded worker. Gizmo runs focused and complete hosted execution after the
-   harness publishes the branch and PR.
+3. Do not run formatting, Task commands, full suites, builds, or e2e in this
+   bounded worker. The trusted harness applies the deterministic repository
+   formatter after the editor exits. Gizmo runs focused and complete hosted
+   execution after the harness publishes the branch and PR.
 5. If part of the request is too large, risky, blocked, or out of scope, follow
    `.cortex/gizmo/workflows/issues.md` (update/create Workbench Markdown records)
    rather than silently dropping work.
