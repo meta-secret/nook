@@ -68,6 +68,23 @@ describe('classified login activation', () => {
     expect(submitted).toBe(false)
   })
 
+  test('does not click a username-only submitter twice when click cancels submit', () => {
+    document.body.innerHTML = `
+      <form aria-label="Login" action="/auth/login">
+        <input autocomplete="username" name="email" type="email" />
+        <button id="next" type="submit">Proceed</button>
+      </form>
+    `
+    let clicks = 0
+    document.querySelector('#next')?.addEventListener('click', (event) => {
+      event.preventDefault()
+      clicks += 1
+    })
+
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
+    expect(clicks).toBe(1)
+  })
+
   test('activates a Rust-approved neutral username-only submitter', () => {
     document.body.innerHTML = `
       <form aria-label="Login" action="/auth/login">

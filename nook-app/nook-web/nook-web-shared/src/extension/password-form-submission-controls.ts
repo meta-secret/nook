@@ -40,6 +40,77 @@ type FormSubmissionObservation = {
   action: () => void;
 };
 
+export const MAX_AUTHENTICATION_CONTROL_TEXT_BYTES = 512;
+
+function utf8ByteLength(value: string): number {
+  return new TextEncoder().encode(value).length;
+}
+
+function truncateUtf8Bytes(value: string, maxBytes: number): string {
+  const encoded = new TextEncoder().encode(value);
+  if (encoded.length <= maxBytes) {
+    return value;
+  }
+  let end = maxBytes;
+  while (end > 0 && (encoded[end] & 0b1100_0000) === 0b1000_0000) {
+    end -= 1;
+  }
+  return new TextDecoder().decode(encoded.subarray(0, end));
+}
+
+export function boundedAuthenticationDestination(identity: string): string {
+  if (utf8ByteLength(identity) <= MAX_AUTHENTICATION_CONTROL_TEXT_BYTES) {
+    return identity;
+  }
+  try {
+    const url = new URL(identity);
+    const pathIdentity = `${url.origin}${url.pathname}`;
+    if (utf8ByteLength(pathIdentity) <= MAX_AUTHENTICATION_CONTROL_TEXT_BYTES) {
+      return pathIdentity;
+    }
+    return truncateUtf8Bytes(
+      pathIdentity,
+      MAX_AUTHENTICATION_CONTROL_TEXT_BYTES,
+    );
+  } catch {
+    return truncateUtf8Bytes(identity, MAX_AUTHENTICATION_CONTROL_TEXT_BYTES);
+  }
+}
+
+export function ownedFormDestinationIdentity(form: HTMLFormElement): string {
+  return boundedAuthenticationDestination(
+    form.hasAttribute("action")
+      ? form.action
+      : (form.ownerDocument.defaultView?.location.href ?? ""),
+  );
+}
+
+export function controlDestinationIdentity(
+  control: HTMLElement,
+  formScope: PasswordFormScope,
+): string {
+  if (control instanceof HTMLAnchorElement) {
+    return boundedAuthenticationDestination(control.href);
+  }
+  if (
+    (control instanceof HTMLButtonElement ||
+      control instanceof HTMLInputElement) &&
+    control.hasAttribute("formaction")
+  ) {
+    return boundedAuthenticationDestination(control.formAction);
+  }
+  if (
+    (control instanceof HTMLButtonElement ||
+      control instanceof HTMLInputElement) &&
+    control.form
+  ) {
+    return ownedFormDestinationIdentity(control.form);
+  }
+  return formScope.kind === PasswordFormScopeKind.Owned
+    ? ownedFormDestinationIdentity(formScope.owner)
+    : boundedAuthenticationDestination(location.href);
+}
+
 export const authenticationAdvanceControlSelector =
   'button[type="submit"], input[type="submit"], input[type="image"], button:not([type]), button[type="button"]';
 
@@ -83,16 +154,19 @@ export function authenticationRouteDestination({
   form,
   control,
 }: AuthenticationRouteDestinationRequest): string {
-  if (control?.hasAttribute("formaction")) return control.formAction;
-  if (form.hasAttribute("action")) return form.action;
-  return form.ownerDocument.defaultView?.location.href ?? "";
+  if (control?.hasAttribute("formaction")) {
+    return boundedAuthenticationDestination(control.formAction);
+  }
+  return ownedFormDestinationIdentity(form);
 }
 
 function authenticationControlDestination(
   control: LoginAdvanceControl,
 ): string {
   if (!control.form) {
-    return control.ownerDocument.defaultView?.location.href ?? "";
+    return boundedAuthenticationDestination(
+      control.ownerDocument.defaultView?.location.href ?? "",
+    );
   }
   const request: AuthenticationRouteDestinationRequest = {
     form: control.form,

@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, test } from 'vitest'
+import { authenticationFactAttributeFilter } from '../../../../nook-web-shared/src/extension/authentication-fact-attributes'
+import { MAX_AUTHENTICATION_CONTROL_TEXT_BYTES } from '../../../../nook-web-shared/src/extension/password-form-submission-controls'
 import {
   authenticationPageObservationFacts,
   fillLoginCredentials,
@@ -196,6 +198,79 @@ describe('website one-time-code fields', () => {
       throw new Error('expected default authentication context')
     }
     expect(defaultAuthenticationContext.destinationIdentity).toBe(location.href)
+  })
+
+  test('bounds omitted-action OAuth destinations to the authentication path', () => {
+    const query = `state=${'a'.repeat(600)}`
+    window.history.replaceState({}, '', `/oauth/authorize?${query}`)
+    document.body.innerHTML = `
+      <form aria-label="Login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Continue</button>
+      </form>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    const authenticationContext = facts.ceremony.authenticationContext
+    if (!authenticationContext) {
+      throw new Error('expected authentication context')
+    }
+    const destination = authenticationContext.destinationIdentity
+    expect(destination).toBe(`${location.origin}/oauth/authorize`)
+    expect(new TextEncoder().encode(destination).length).toBeLessThanOrEqual(
+      MAX_AUTHENTICATION_CONTROL_TEXT_BYTES,
+    )
+  })
+
+  test('watches remaining fact-bearing identities used by observation facts', () => {
+    expect(authenticationFactAttributeFilter).toEqual(
+      expect.arrayContaining(['alt', 'role', 'title', 'value']),
+    )
+    document.body.innerHTML = `
+      <form aria-label="Login" action="/login" role="form">
+        <input autocomplete="username" />
+        <input type="submit" value="Delete" title="Remove account" />
+      </form>
+    `
+    const before = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(before.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [
+        {
+          label: expect.stringContaining('Delete'),
+          formIdentity: expect.stringContaining('form'),
+        },
+      ],
+    })
+
+    const submitter = document.querySelector('input[type="submit"]')
+    submitter?.setAttribute('value', 'Sign in')
+    submitter?.setAttribute('title', 'Sign in')
+    document.querySelector('form')?.setAttribute('role', 'search')
+
+    const after = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(after.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [
+        {
+          label: expect.stringContaining('Sign in'),
+          formIdentity: expect.stringContaining('search'),
+        },
+      ],
+    })
   })
 
   test('submits a classified username-only login whose form action is omitted', () => {

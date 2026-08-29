@@ -37,10 +37,12 @@ import {
   authenticationAdvanceControlSelector,
   authenticationRouteDestination,
   clickAdvanceControl,
+  controlDestinationIdentity,
   controlLabel,
   isRenderedControl,
   formHasSemanticSubmitter,
   observeSubmit,
+  ownedFormDestinationIdentity,
   PasswordFormQueryKind,
   semanticSubmitControlSelector,
   type LoginAdvanceControl,
@@ -337,9 +339,7 @@ function observedFormDestination({
   formScope,
 }: PasswordFormObservation): string {
   if (formScope.kind !== PasswordFormScopeKind.Owned) return "";
-  return formScope.owner.hasAttribute("action")
-    ? formScope.owner.action
-    : (formScope.owner.ownerDocument.defaultView?.location.href ?? "");
+  return ownedFormDestinationIdentity(formScope.owner);
 }
 
 type ControlDestinationRequest = {
@@ -351,28 +351,7 @@ function controlDestination({
   control,
   formScope,
 }: ControlDestinationRequest): string {
-  if (control instanceof HTMLAnchorElement) return control.href;
-  if (
-    (control instanceof HTMLButtonElement ||
-      control instanceof HTMLInputElement) &&
-    control.hasAttribute("formaction")
-  ) {
-    return control.formAction;
-  }
-  if (
-    (control instanceof HTMLButtonElement ||
-      control instanceof HTMLInputElement) &&
-    control.form
-  ) {
-    return control.form.hasAttribute("action")
-      ? control.form.action
-      : (control.form.ownerDocument.defaultView?.location.href ?? "");
-  }
-  return formScope.kind === PasswordFormScopeKind.Owned
-    ? formScope.owner.hasAttribute("action")
-      ? formScope.owner.action
-      : (formScope.owner.ownerDocument.defaultView?.location.href ?? "")
-    : location.href;
+  return controlDestinationIdentity(control, formScope);
 }
 
 function scopedAdvanceControls(
@@ -570,7 +549,10 @@ export function authenticationPageObservationFacts({
             (observation.root === document &&
               observation.formScope.kind === PasswordFormScopeKind.Unowned) ||
             (observation.formScope.kind === PasswordFormScopeKind.Owned &&
-              isLocallyAdjacentToOwnedForm(control, observation.formScope.owner)),
+              isLocallyAdjacentToOwnedForm(
+                control,
+                observation.formScope.owner,
+              )),
         };
         return {
           kind: explicitlyMarked ? "explicitly-marked" : "labeled",
@@ -872,7 +854,11 @@ function activateApprovedOwnedAdvanceControl(
     (request.root instanceof Node && request.root.contains(form));
   const observation: PasswordFormObservation | false =
     request.kind === PasswordFormQueryKind.Scoped
-      ? { root: request.root, formScope: request.formScope, summary: summarizeRoot(request) }
+      ? {
+          root: request.root,
+          formScope: request.formScope,
+          summary: summarizeRoot(request),
+        }
       : (summarizeAuthenticationWorkflowForms().find(
           (candidate) =>
             formWithinRequestRoot &&
@@ -903,10 +889,11 @@ function activateApprovedOwnedAdvanceControl(
     approved.click();
     return true;
   }
-  return observeSubmit({
+  observeSubmit({
     form,
     action: () => approved.click(),
   });
+  return true;
 }
 
 export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
