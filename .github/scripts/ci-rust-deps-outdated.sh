@@ -12,15 +12,17 @@ outdated=false
 
 check_manifest() {
   local directory="$1"
+  local output=""
   local status
 
   set +e
-  (
+  output=$(
     cd "$directory"
     cargo outdated --workspace --root-deps-only --exit-code 1
   )
   status=$?
   set -e
+  printf '%s\n' "$output"
 
   case "$status" in
     0)
@@ -35,8 +37,14 @@ check_manifest() {
       exit "$status"
       ;;
   esac
+  if [ -n "${RUST_DEPS_OUTDATED_REPORT:-}" ]; then
+    printf '%s\n%s\n' "## $directory" "$output" >> "$RUST_DEPS_OUTDATED_REPORT"
+  fi
 }
 
+if [ -n "${RUST_DEPS_OUTDATED_REPORT:-}" ]; then
+  : > "$RUST_DEPS_OUTDATED_REPORT"
+fi
 check_manifest nook-app/nook-platform
 check_manifest nook-app/nook-platform/fuzz
 check_manifest agentic-ai/minds

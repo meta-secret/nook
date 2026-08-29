@@ -64,6 +64,16 @@ export async function loadPrompt(config: CiAgentConfig): Promise<string> {
     }
   }
 
+  let outdatedReport = "";
+  if (template.includes("${RUST_DEPS_OUTDATED_REPORT}")) {
+    const reportPath = process.env.RUST_DEPS_OUTDATED_REPORT?.trim() ?? "";
+    if (!reportPath.endsWith("rust-deps-outdated.txt"))
+      throw new Error("RUST_DEPS_OUTDATED_REPORT path is invalid");
+    outdatedReport = await readFile(reportPath, "utf8");
+    if (!outdatedReport.trim())
+      throw new Error("RUST_DEPS_OUTDATED_REPORT is empty");
+  }
+
   return (
     template
       .replaceAll("${GITHUB_REPOSITORY}", config.githubRepository)
@@ -72,6 +82,7 @@ export async function loadPrompt(config: CiAgentConfig): Promise<string> {
       .replaceAll("${AGENT_BRANCH}", agentBranch)
       .replaceAll("${MAJOR_CHANGE_AUTHORIZATION}", majorChangeAuthorization)
       .replaceAll("${AGENT_TASK}", agentTask)
+      .replaceAll("${RUST_DEPS_OUTDATED_REPORT}", outdatedReport)
       // Inject the hash-bound artifact last so template-shaped text inside the
       // validated plan remains inert exact content.
       .replaceAll("${VALIDATED_PLAN}", validatedPlan)

@@ -68,6 +68,7 @@ test("validation isolates secrets, preserves wrapper vars, and denies network ov
     CURSOR_API_KEY: "cursor",
     NOOK_GITHUB_PAT: "github",
     SCCACHE_S3_ACCESS_KEY_FILE: "/trusted/sccache-access",
+    NOOK_ARC_HIVE: "1",
     NOOK_BUILDKIT_REMOTE: "1",
     NOOK_PR_BUILDX_BUILDER: builder,
   };
@@ -81,6 +82,7 @@ test("validation isolates secrets, preserves wrapper vars, and denies network ov
       ])
         assert.equal(secret in environment, false);
       assert.notEqual(environment.HOME, trustedHome);
+      assert.equal(environment.NOOK_ARC_HIVE, "1");
       assert.equal(environment.NOOK_BUILDKIT_REMOTE, "1");
       assert.equal(
         await readFile(
@@ -130,6 +132,7 @@ test("validation isolates secrets, preserves wrapper vars, and denies network ov
           assert.equal(env.SCCACHE_OPTIONAL, "1");
           if (args[0] === "ci:pr:e2e")
             assert.equal(env.WASM_BUILD_MODE, "prod");
+          if (args[0] === "hive:verify") assert.equal(env.NOOK_ARC_HIVE, "1");
         },
       );
       assert.deepEqual(names, [

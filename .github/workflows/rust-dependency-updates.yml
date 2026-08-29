@@ -41,13 +41,20 @@ jobs:
 
       - name: Check every direct Cargo dependency
         id: audit
+        env:
+          RUST_DEPS_OUTDATED_REPORT: ${{ runner.temp }}/rust-deps-outdated.txt
         run: task rust:deps:outdated
+      - if: steps.audit.outputs.outdated == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-deps-outdated
+          path: ${{ runner.temp }}/rust-deps-outdated.txt
 
   update:
     name: AI update, full test, and PR
     needs: audit
     if: needs.audit.outputs.outdated == 'true'
-    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
+    runs-on: ${{ vars.NOOK_HIVE_RUNS_ON || 'nook-k0s-hive' }}
     timeout-minutes: 360
     permissions:
       contents: write
@@ -61,12 +68,17 @@ jobs:
       CI_AGENT_PROMPT_FILE: .github/prompts/rust-dependency-update-agent.md
       CI_FIX_LABEL: Rust dependency update
       CI_AGENT_TIMEOUT_MS: '10800000'
+      RUST_DEPS_OUTDATED_REPORT: ${{ runner.temp }}/rust-deps-outdated.txt
     steps:
       - name: Checkout
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: rust-deps-outdated
+          path: ${{ runner.temp }}
 
       - name: Setup Task
         uses: go-task/setup-task@v2

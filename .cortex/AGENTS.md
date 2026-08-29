@@ -161,17 +161,14 @@ the ordinary committed-handoff sequence:
     UI-demo and other product or publication contracts.
 - **`rust-dependency-updates.yml` through `task ci-agent:fix` with
   `CI_AGENT_FIX_PROFILE=rust-dependency-update`**
-  - Its bounded editors and ordinary workers have no independent Git or
-    external delivery authority.
-  - The trusted GitHub Actions job rejects persisted checkout credentials,
-    freezes a clean exact HEAD and index, and rejects editor changes outside
-    regular Rust dependency mission files or to orchestration controls.
-  - It runs its required integrated dependency-update validation remotely
-    with streamed output and without publication credentials inside that job
-    before publication. This is not a developer-host local gate.
-  - The trusted harness commits, publishes, and returns the exact published
-    head to Gizmo only after verifying the PR number, base, head ref, and
-    remote head SHA, including on existing-PR reruns.
+  - Bounded editors have no Git or external delivery authority.
+  - The trusted job rejects persisted checkout credentials, freezes HEAD and
+    index, and accepts only regular Rust dependency mission files.
+  - It binds a host-provided outdated-crate inventory into the editor, then
+    validates remotely without publication credentials, including Hive
+    verification on the Hive runner.
+  - It publishes and returns the exact head only after verifying PR number,
+    base, head ref, and remote SHA, including existing-PR reruns.
 
 Neither exception grants publication authority to an ordinary worker. After
 either publication, Gizmo owns continuing review, validation, readiness, and

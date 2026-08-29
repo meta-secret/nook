@@ -63,8 +63,6 @@ Does not apply to:
 
 ## Validation
 
-Development-core workers run the syntax-aware preflight tests and the smallest
-focused Rust tests that prove the changed behavior. Format allowed files,
-commit the handoff, and do not push. Gizmo integrates, runs
-`task loom:pre-push`, returns any development-core formatter diff, then pushes
-and owns remote validation.
+Run the syntax-aware preflight tests and the focused hosted Rust tasks. For
+implementation work, run `task format`, commit and push, then explicitly trigger
+complete exact-head validation with `task pr:validate`.

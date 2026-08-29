@@ -79,11 +79,8 @@ and `preflight` sources. Unused-code ownership is split as follows:
 - Live sync Playwright (`sync-live` project): `task web:test:e2e:sync-live` — real GitHub API; explicit manual runs only. Requires `NOOK_GITHUB_PAT` in `nook-app/nook-web/.env.test.local`.
 - Vite `import.meta.env` values used by e2e are build-time constants; Task targets that serve `dist` must rebuild the e2e dist with the e2e env before Playwright runs.
 - Do not run `bun run test:e2e*` or `playwright test` directly on the host; use Taskfile so wasm is built and tooling matches CI.
-- Before integration, the Web worker runs applicable focused proof, formats
-  allowed files, and returns a committed handoff without pushing. Required
-  agent browser E2E is not pre-integration evidence; it runs against a
-  published SHA. Humans may use local single-spec Docker e2e for debugging.
-- Gizmo integrates the handoff, runs `task loom:pre-push`, returns any
-  web-owned formatter diff, then pushes and collects required browser E2E
-  against that published head before readiness. See
-  [workflows/remote-execution.md](../../sre/workflows/remote-execution.md).
+- Agent e2e runs through the configured GitHub Actions worker via `task remote`; humans may use
+  local single-spec Docker e2e for interactive debugging. Complete agent
+  validation is explicit: Loom pre-push, commit, push, then `task pr:validate`
+  when the head is ready for the final gate.
+  See [workflows/remote-execution.md](../../sre/workflows/remote-execution.md).

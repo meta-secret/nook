@@ -404,7 +404,7 @@ For every substantial task:
 8. Run the workflow improvement review when the evidence triggers it.
 9. Promote only evidence-backed durable knowledge.
 10. Synchronize skills, workflows, and the knowledge graph when their contracts
-   changed.
+    changed.
 11. Validate Cortex consistency and the updated documentation head.
 12. Delete the session file.
 13. Confirm no `.cortex/.session/` file is tracked.
@@ -546,14 +546,11 @@ Before returning promotion and cleanup evidence to Gizmo:
 8. Run `task loom:cortex-session-clean`.
 9. Confirm `git ls-files .cortex/.session` prints nothing.
 10. Return the exact commit, worker-focused proof, promotion, and cleanup
-   evidence to Gizmo.
+    evidence to Gizmo.
 
 Do not add broad local builds, tests, e2e, container product gates, or duplicate
 hosted-check mirrors to this validation sequence.
 
-Gizmo promptly pushes a coherent promoted head. If it is not validation-ready,
-Gizmo immediately dispatches at least one relevant focused remote task. When
-it is validation-ready, Gizmo immediately dispatches complete exact-head hosted
-validation. Promotion that changes an already validated head requires complete
-hosted validation again.
-Gizmo then performs readiness, merge, or the requested handoff.
+Gizmo pushes a coherent promoted head, obtains exact-head remote evidence, and
+repeats complete hosted validation if promotion changed an already validated
+head. Gizmo then performs readiness, merge, or the requested handoff.

@@ -33,11 +33,8 @@ For every submitted annotation, the agent must:
 3. implement every in-scope fix instead of stopping at diagnosis;
 4. add or update behavior-focused tests that fail on the reported regression;
    and
-5. format allowed web files and commit one coherent handoff with focused
-   proof for Gizmo to integrate; and
-6. leave push, PR, and external lifecycle state to Gizmo. Gizmo integrates,
-   runs `task loom:pre-push`, returns any web-owned formatter diff, then
-   pushes and owns remote validation, readiness, and merge.
+5. commit, push, open or update the PR, and complete the repository's normal
+   validation workflow.
 
 The agent may stop without a code fix only when:
 

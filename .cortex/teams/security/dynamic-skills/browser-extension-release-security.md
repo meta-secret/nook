@@ -16,8 +16,8 @@ found only by asynchronous PR review.
 
 ## Preferred Pattern
 
-For a hosted extension change, run `task extension:check:fast` as focused
-security proof and verify all of these invariants in code and tests:
+Before pushing a hosted extension change, run `task extension:check:fast` and
+verify all of these invariants in code and tests:
 
 - selected Simple plus selected and production Sentinel injection exclusions;
 - exact selected-channel externally-connectable and content-script targets;
@@ -52,22 +52,14 @@ Does not apply to:
 
 ## Application procedure
 
-1. Security defines the invariants and focused acceptance evidence. A Web
-   worker owns browser-control implementation, while an SRE worker owns release
-   workflow and deployment implementation. Each functional worker formats and
-   commits its allowed implementation files; Security does not commit foreign
-   implementation.
-2. Run `task extension:check:fast` as focused security proof.
-3. Verify channel origin and extension identity together.
-4. Verify injection exclusions for every vault boundary.
-5. Verify archive and redirect safety before activation.
-6. Keep profiles isolated by channel and PR.
-7. Security reviews the exact functional-owner handoff and focused proof,
-   formats and commits only its allowed security-owned Cortex changes, and
-   returns its acceptance verdict to Gizmo.
-8. Gizmo integrates accepted handoffs, runs `task loom:pre-push`, returns any
-   security-owned formatter diff, then pushes and owns remote validation,
-   readiness, and merge.
+1. Run the host-cached fast extension gate.
+2. Verify channel origin and extension identity together.
+3. Verify injection exclusions for every vault boundary.
+4. Verify archive and redirect safety before activation.
+5. Keep profiles isolated by channel and PR.
+6. Run `task format`, commit, and push.
+7. Use focused hosted tasks as useful, then explicitly trigger complete GitHub
+   Actions validation.
 
 ## Validation
 
@@ -78,5 +70,4 @@ Deployment verification must prove:
 - the checksum; and
 - the packaged manifest.
 
-The security worker returns focused evidence for its exact committed handoff.
-Gizmo owns repository-wide validation and PR/check state after integration.
+Run `task pr:validate` and monitor the repository-owned PR workflow.

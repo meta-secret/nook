@@ -19,8 +19,13 @@ Do not load implementation-team graphs into Gizmo's context. Do not pass Gizmo
 context to implementation workers.
 
 The `rust-dependency-update` editor has no Git, validation, network, credentials,
-or publication. The host rechecks HEAD/index/Git metadata and accepts only
-regular mission `Cargo.toml`, `Cargo.lock`, and `.rs`; all else fails closed.
+or publication. Use only this host-provided inventory; do not guess versions.
+The host rechecks HEAD/index/Git metadata and accepts only regular mission
+`Cargo.toml`, `Cargo.lock`, and `.rs`; all else fails closed.
+
+```
+${RUST_DEPS_OUTDATED_REPORT}
+```
 
 ## Coordination procedure
 
@@ -75,10 +80,7 @@ task docker:ecosystem:fuzz FUZZ_SECONDS=20
 task hive:verify
 ```
 
-Trusted Actions validation uses a fresh credential-free HOME. Manifest-only
-fetch layers materialize crates without secrets or source execution; the
-wrapper keeps later compilation and containers offline. Publication credentials
-return only after success.
-
-Failure blocks publication; verify PR/base/head and remote SHA before returning
-to Gizmo. Never kill Docker or commit secrets or raw logs.
+This covers every local-provider Playwright e2e spec, and the
+   extension e2e. The fuzz and Hive targets validate their separate workspaces
+on the Hive runner. Failure blocks publication; verify PR/base/head and remote
+SHA before returning to Gizmo. Never kill Docker or commit secrets or raw logs.

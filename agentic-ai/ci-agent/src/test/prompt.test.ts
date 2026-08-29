@@ -15,6 +15,7 @@ import {
 const ENV_KEYS = [
   "AGENT_PROMPT",
   "MAJOR_CHANGE_AUTHORIZED",
+  "RUST_DEPS_OUTDATED_REPORT",
   "VALIDATED_PLAN_SHA256",
   "WORKBENCH_PLAN_FILE",
 ] as const;
@@ -128,6 +129,37 @@ describe("loadPrompt", () => {
       assert.equal(await loadPrompt(config), `Trusted plan:\n${plan}`);
       await writeFile(join(repoRoot, ".nook-workbench-plan.md"), "changed");
       await assert.rejects(loadPrompt(config), /plan hash changed/);
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  it("embeds only a host-provided rust-deps-outdated.txt inventory", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "nook-ci-agent-deps-"));
+    const toolingRoot = join(parent, "tooling");
+    const report = join(parent, "rust-deps-outdated.txt");
+    await mkdir(join(toolingRoot, ".github", "prompts"), { recursive: true });
+    await writeFile(
+      join(toolingRoot, ".github", "prompts", "agent.md"),
+      "Report:\n${RUST_DEPS_OUTDATED_REPORT}",
+    );
+    await writeFile(report, "serde 1.0 -> 1.1\n");
+    process.env.RUST_DEPS_OUTDATED_REPORT = report;
+    const config: CiAgentConfig = {
+      repoRoot: parent,
+      toolingRoot,
+      cursorApiKey: "test-key",
+      githubRepository: "meta-secret/nook",
+      githubRunId: "42",
+      fixBranch: "codex/successor",
+      fixLabel: "focused issue",
+      promptFile: ".github/prompts/agent.md",
+      modelId: "test-model",
+    };
+    try {
+      assert.equal(await loadPrompt(config), "Report:\nserde 1.0 -> 1.1\n");
+      process.env.RUST_DEPS_OUTDATED_REPORT = join(parent, "secrets.env");
+      await assert.rejects(loadPrompt(config), /path is invalid/);
     } finally {
       await rm(parent, { recursive: true, force: true });
     }
