@@ -165,7 +165,16 @@ mod tests {
             authentication_username: AuthenticationUsernameEvidence::Absent,
             source_origin: "https://example.test".to_owned(),
             form_identity: form_identity.to_owned(),
-            destination_identity: destination_identity.to_owned(),
+            destination_identity: if destination_identity.contains("://") {
+                destination_identity.to_owned()
+            } else {
+                let separator = if destination_identity.starts_with('/') {
+                    ""
+                } else {
+                    "/"
+                };
+                format!("https://example.test{separator}{destination_identity}")
+            },
         }
     }
 
@@ -188,7 +197,7 @@ mod tests {
             semantic_submit_control_count: 2,
             source_origin: "https://example.test".to_owned(),
             form_identity: "login".to_owned(),
-            destination_identity: "/login".to_owned(),
+            destination_identity: "https://example.test/login".to_owned(),
             label: label.to_owned(),
         }
     }

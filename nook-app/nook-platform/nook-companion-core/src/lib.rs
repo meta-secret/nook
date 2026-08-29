@@ -134,10 +134,11 @@ pub use outcome_evidence::{
 };
 pub use page_field_classification::{
     AuthenticationAdvanceControlDecision, AuthenticationAdvanceControlObservation,
-    AuthenticationUsernameEvidence, AuthenticationUsernameEvidenceBatch, LoginContextObservation,
-    MAX_AUTHENTICATION_CONTROL_TEXT_BYTES, PageControlActionability, PageControlOwnership,
-    PageControlSemantics, PageInputFieldObservation, PageInputType,
-    authentication_username_evidence, expand_identity_text, has_login_context,
+    AuthenticationUsernameEvidence, AuthenticationUsernameEvidenceBatch,
+    CanonicalControlDestination, LoginContextObservation, MAX_AUTHENTICATION_CONTROL_TEXT_BYTES,
+    PageControlActionability, PageControlOwnership, PageControlSemantics,
+    PageInputFieldObservation, PageInputType, authentication_username_evidence,
+    canonicalize_control_destination, expand_identity_text, has_login_context,
     looks_like_email_verification_body, looks_like_login_advance_control_label,
     looks_like_manual_checkpoint_label, looks_like_non_authentication_submit_control_label,
     looks_like_one_time_code_auto_submit_signal, looks_like_one_time_code_field,

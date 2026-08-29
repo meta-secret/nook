@@ -168,6 +168,21 @@ mod tests {
         AuthenticationUsernameEvidence,
     };
 
+    fn browser_resolved_destination(source_origin: &str, destination_identity: &str) -> String {
+        if destination_identity.contains("://") {
+            destination_identity.to_owned()
+        } else if destination_identity.is_empty() {
+            source_origin.to_owned()
+        } else {
+            let separator = if destination_identity.starts_with('/') {
+                ""
+            } else {
+                "/"
+            };
+            format!("{source_origin}{separator}{destination_identity}")
+        }
+    }
+
     fn detailed_one_time_code_control(
         form_identity: &str,
         destination_identity: &str,
@@ -191,6 +206,8 @@ mod tests {
             authentication_username,
             crate::AuthenticationUsernameEvidence::Absent
         ));
+        let destination_identity =
+            browser_resolved_destination("https://example.test", destination_identity);
         AuthenticationPageObservationFacts {
             fields: AuthenticationFieldObservationFacts {
                 username_field_count,
@@ -209,10 +226,19 @@ mod tests {
                     semantic_submit_control_count: 1,
                     source_origin: "https://example.test".to_owned(),
                     form_identity: form_identity.to_owned(),
-                    destination_identity: destination_identity.to_owned(),
+                    destination_identity: destination_identity.clone(),
                     label: label.to_owned(),
                 },
             ),
+            ceremony: AuthenticationCeremonyObservationFacts {
+                authentication_context: AuthenticationCeremonyContextObservation {
+                    authentication_username,
+                    source_origin: "https://example.test".to_owned(),
+                    form_identity: form_identity.to_owned(),
+                    destination_identity,
+                },
+                ..Default::default()
+            },
             ..Default::default()
         }
     }
@@ -250,7 +276,7 @@ mod tests {
             semantic_submit_control_count: 1,
             source_origin: source_origin.to_owned(),
             form_identity: String::new(),
-            destination_identity: destination_identity.to_owned(),
+            destination_identity: browser_resolved_destination(source_origin, destination_identity),
             label: label.to_owned(),
         }
     }
@@ -305,7 +331,7 @@ mod tests {
                     semantic_submit_control_count: 1,
                     source_origin: "https://example.test".to_owned(),
                     form_identity: "login".to_owned(),
-                    destination_identity: String::new(),
+                    destination_identity: "https://example.test".to_owned(),
                     label: "Continue".to_owned(),
                 },
             ),
@@ -371,7 +397,7 @@ mod tests {
             semantic_submit_control_count: 1,
             source_origin: "https://example.test".to_owned(),
             form_identity: String::new(),
-            destination_identity: String::new(),
+            destination_identity: "https://example.test".to_owned(),
             label: "Continue".to_owned(),
         };
         let new_password = AuthenticationFieldObservationFacts {
@@ -429,7 +455,7 @@ mod tests {
             authentication_username: AuthenticationUsernameEvidence::Absent,
             source_origin: "https://example.test".to_owned(),
             form_identity: "auth".to_owned(),
-            destination_identity: String::new(),
+            destination_identity: "https://example.test".to_owned(),
         };
         assert_eq!(
             trusted.into_observation().one_time_code_progression,
@@ -447,7 +473,7 @@ mod tests {
                     authentication_username: AuthenticationUsernameEvidence::Absent,
                     source_origin: "https://example.test".to_owned(),
                     form_identity: "otp-challenge".to_owned(),
-                    destination_identity: "/verify".to_owned(),
+                    destination_identity: "https://example.test/verify".to_owned(),
                 },
                 ..Default::default()
             },
@@ -547,7 +573,7 @@ mod tests {
                     semantic_submit_control_count: 0,
                     source_origin: "https://example.test".to_owned(),
                     form_identity: String::new(),
-                    destination_identity: String::new(),
+                    destination_identity: "https://example.test".to_owned(),
                     label: "x".repeat(
                         crate::page_field_classification::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1,
                     ),
@@ -698,7 +724,7 @@ mod tests {
             (
                 crate::AuthenticationUsernameEvidence::Explicit,
                 "https://github.com",
-                "//github.com/session",
+                "https://github.com/session",
             ),
         ] {
             assert_eq!(
@@ -844,7 +870,7 @@ mod tests {
                 authentication_username: AuthenticationUsernameEvidence::Absent,
                 source_origin: "https://example.test".to_owned(),
                 form_identity: "auth".to_owned(),
-                destination_identity: String::new(),
+                destination_identity: "https://example.test".to_owned(),
             };
         assert_eq!(
             AuthenticationPageObservationFactsBatch {
@@ -962,7 +988,7 @@ mod tests {
                     semantic_submit_control_count: 1,
                     source_origin: "https://example.test".to_owned(),
                     form_identity: "login".to_owned(),
-                    destination_identity: String::new(),
+                    destination_identity: "https://example.test".to_owned(),
                     label: "Sign in".to_owned(),
                 },
             ),
