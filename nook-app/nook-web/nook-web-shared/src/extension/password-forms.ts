@@ -3,7 +3,6 @@ import {
   authentication_advance_control_is_safe,
   authentication_form_observation_priority,
   authentication_passkey_control_candidate_is_safe,
-  can_activate_authentication_route_control,
   strongest_authentication_username_evidence,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import type {
@@ -35,8 +34,10 @@ import type {
 import type { PasswordFieldQuery } from "./password-form-fields";
 import {
   authenticationAdvanceControlSelector,
+  authenticationFactStringsAreTransportable,
+  authenticationPolicyTextFits,
   authenticationRouteDestination,
-  boundedAuthenticationText,
+  canRequestImplicitAuthenticationSubmit,
   clickAdvanceControl,
   controlDestinationIdentity,
   controlLabel,
@@ -50,6 +51,7 @@ import {
   type LoginAdvanceControl,
   type PasswordFormScopeQuery,
 } from "./password-form-submission-controls";
+import { summarizePasskeyOnlyWorkflowForms } from "./password-form-passkey-only-workflows";
 
 export {
   findOneTimeCodeFields,
@@ -290,7 +292,6 @@ function isLocallyAdjacentToOwnedForm(
 function controlAssociatesWithObservation({
   control,
   formScope,
-  root,
 }: {
   control: HTMLElement;
   formScope: PasswordFormScope;
@@ -315,9 +316,9 @@ function controlAssociatesWithObservation({
     control instanceof HTMLButtonElement ||
     control instanceof HTMLInputElement
   ) {
-    return !control.form || root === control.ownerDocument;
+    return !control.form;
   }
-  return true;
+  return !control.closest("form");
 }
 
 function observedFormIdentity({
@@ -326,17 +327,15 @@ function observedFormIdentity({
 }: PasswordFormObservation): string {
   const owner =
     formScope.kind === PasswordFormScopeKind.Owned ? formScope.owner : root;
-  return owner instanceof Element
-    ? boundedAuthenticationText(
-        [
-          owner.id,
-          owner.className,
-          owner.getAttribute("name") ?? "",
-          owner.getAttribute("role") ?? "",
-          owner.getAttribute("aria-label") ?? "",
-        ].join(" "),
-      )
-    : "";
+  if (!(owner instanceof Element)) return "";
+  const identity = [
+    owner.id,
+    owner.className,
+    owner.getAttribute("name") ?? "",
+    owner.getAttribute("role") ?? "",
+    owner.getAttribute("aria-label") ?? "",
+  ].join(" ");
+  return authenticationPolicyTextFits(identity) ? identity : "";
 }
 
 function observedFormDestination({
@@ -416,11 +415,13 @@ function pageControlObservation({
       isRenderedControl(candidate),
   );
   const semanticSubmit = control.matches(semanticSubmitControlSelector);
-  const owned =
-    observation.formScope.kind === PasswordFormScopeKind.Owned &&
+  const controlForm =
     (control instanceof HTMLButtonElement ||
       control instanceof HTMLInputElement) &&
-    control.form === observation.formScope.owner;
+    control.form
+      ? { kind: PasswordFormScopeKind.Owned, owner: control.form }
+      : { kind: PasswordFormScopeKind.Unowned };
+  const owned = controlForm.kind === PasswordFormScopeKind.Owned;
   const destinationRequest: ControlDestinationRequest = {
     control,
     formScope: observation.formScope,
@@ -443,19 +444,34 @@ function pageControlObservation({
     newPasswordFieldCount: observation.summary.newPasswordFieldCount,
     oneTimeCodeFieldCount: observation.summary.oneTimeCodeFieldCount,
     semanticSubmitControlCount: semanticSubmitControls.length,
-    sourceOrigin: boundedAuthenticationText(location.origin),
-    formIdentity: observedFormIdentity(observation),
+    sourceOrigin: location.origin,
+    formIdentity: owned
+      ? ownedFormIdentity(controlForm.owner)
+      : observedFormIdentity(observation),
     destinationIdentity: controlDestination(destinationRequest),
-    label: boundedAuthenticationText(controlLabel(control)),
-    machineIdentity: boundedAuthenticationText(
-      `${control.id} ${
-        control instanceof HTMLButtonElement ||
-        control instanceof HTMLInputElement
-          ? `${control.name}=${control.value}`
-          : ""
-      }`,
-    ),
+    label: controlLabel(control),
+    machineIdentity: `${control.id} ${
+      control instanceof HTMLButtonElement ||
+      control instanceof HTMLInputElement
+        ? `${control.name}=${control.value}`
+        : ""
+    }`,
   };
+}
+
+function transportableControlObservation(
+  request: PageControlObservationRequest,
+): AuthenticationAdvanceControlObservation[] {
+  const observation = pageControlObservation(request);
+  return authenticationFactStringsAreTransportable([
+    observation.sourceOrigin,
+    observation.formIdentity,
+    observation.destinationIdentity,
+    observation.label,
+    observation.machineIdentity,
+  ])
+    ? [observation]
+    : [];
 }
 
 /** Bind the first DOM candidate that Rust accepts in the approved workflow scope. */
@@ -485,10 +501,12 @@ export function findWorkflowPasskeyControl(
           (observation.formScope.kind === PasswordFormScopeKind.Owned &&
             isLocallyAdjacentToOwnedForm(control, observation.formScope.owner)),
       };
+      const [transported] = transportableControlObservation(factsRequest);
+      if (!transported) return false;
       const evidence: AuthenticationDetailedPasskeyControlCandidateObservation =
         {
           kind: explicitlyMarked ? "explicitly-marked" : "labeled",
-          observation: pageControlObservation(factsRequest),
+          observation: transported,
         };
       return authentication_passkey_control_candidate_is_safe(evidence);
     },
@@ -524,50 +542,55 @@ export function authenticationPageObservationFacts({
   ).flatMap((field) =>
     ["oninput", "onchange"].flatMap((attribute) => {
       const handler = field.getAttribute(attribute);
-      return typeof handler === "string"
-        ? [boundedAuthenticationText(`${attribute}=${handler}`)]
-        : [];
+      if (typeof handler !== "string") return [];
+      const signal = `${attribute}=${handler}`;
+      return authenticationPolicyTextFits(signal) ? [signal] : [];
     }),
   );
   let detailedAdvanceControl: AuthenticationPageObservationFacts["detailedAdvanceControl"] =
     { kind: PasskeyControlLookupKind.Absent };
-  if (advanceControls.length > 0) {
+  const advanceObservations = advanceControls.flatMap((control) => {
+    const request: PageControlObservationRequest = {
+      observation,
+      control,
+      authenticationUsername,
+    };
+    return transportableControlObservation(request);
+  });
+  if (advanceObservations.length > 0) {
     detailedAdvanceControl = {
       kind: "observed",
-      observations: advanceControls.map((control) => {
-        const request: PageControlObservationRequest = {
-          observation,
-          control,
-          authenticationUsername,
-        };
-        return pageControlObservation(request);
-      }),
+      observations: advanceObservations,
     };
   }
   let detailedPasskeyControl: AuthenticationDetailedPasskeyControlObservation =
     { kind: PasskeyControlLookupKind.Absent };
-  if (passkeyControls.length > 0) {
-    const candidates: AuthenticationDetailedPasskeyControlCandidateObservation[] =
-      passkeyControls.map(({ control, explicitlyMarked }) => {
-        const passkeyRequest: PageControlObservationRequest = {
-          observation,
-          control,
-          authenticationUsername,
-          explicitlyLocallyScoped:
-            (observation.root === document &&
-              observation.formScope.kind === PasswordFormScopeKind.Unowned) ||
-            (observation.formScope.kind === PasswordFormScopeKind.Owned &&
-              isLocallyAdjacentToOwnedForm(
-                control,
-                observation.formScope.owner,
-              )),
-        };
-        return {
-          kind: explicitlyMarked ? "explicitly-marked" : "labeled",
-          observation: pageControlObservation(passkeyRequest),
-        };
-      });
-    detailedPasskeyControl = { kind: "candidates", observation: candidates };
+  const passkeyCandidates = passkeyControls.flatMap(
+    ({ control, explicitlyMarked }) => {
+      const passkeyRequest: PageControlObservationRequest = {
+        observation,
+        control,
+        authenticationUsername,
+        explicitlyLocallyScoped:
+          (observation.root === document &&
+            observation.formScope.kind === PasswordFormScopeKind.Unowned) ||
+          (observation.formScope.kind === PasswordFormScopeKind.Owned &&
+            isLocallyAdjacentToOwnedForm(control, observation.formScope.owner)),
+      };
+      return transportableControlObservation(passkeyRequest).map(
+        (candidateObservation) =>
+          ({
+            kind: explicitlyMarked ? "explicitly-marked" : "labeled",
+            observation: candidateObservation,
+          }) as AuthenticationDetailedPasskeyControlCandidateObservation,
+      );
+    },
+  );
+  if (passkeyCandidates.length > 0) {
+    detailedPasskeyControl = {
+      kind: "candidates",
+      observation: passkeyCandidates,
+    };
   }
   const contextFormIdentity = observedFormIdentity(observation);
   const contextDestinationIdentity = observedFormDestination(observation);
@@ -585,7 +608,7 @@ export function authenticationPageObservationFacts({
       oneTimeCodeHandlerSignals,
       authenticationContext: {
         authenticationUsername,
-        sourceOrigin: boundedAuthenticationText(location.origin),
+        sourceOrigin: location.origin,
         formIdentity: contextFormIdentity,
         destinationIdentity: contextDestinationIdentity,
       },
@@ -650,22 +673,7 @@ export function summarizeAuthenticationWorkflowForms(): PasswordFormObservation[
     authUsernameFields.length +
     allOneTimeCodeFields.length;
   if (authFieldCount === 0) {
-    if (!pageHasPasskeyControl(root)) return [];
-    const nookTypedArgs0_2: PasswordFormScope = {
-      kind: PasswordFormScopeKind.Unowned,
-    };
-    const nookTypedArgs0_13: Parameters<typeof summarizeRoot>[0] = {
-      kind: PasswordFormQueryKind.Scoped,
-      root,
-      formScope: nookTypedArgs0_2,
-    };
-    return [
-      {
-        root,
-        formScope: { kind: PasswordFormScopeKind.Unowned },
-        summary: summarizeRoot(nookTypedArgs0_13),
-      },
-    ];
+    return summarizePasskeyOnlyWorkflowForms(root, summarizeRoot);
   }
 
   const forms = Array.from(
@@ -888,8 +896,10 @@ function activateApprovedOwnedAdvanceControl(
           control,
           authenticationUsername: usernameEvidence(observation),
         };
-        return authentication_advance_control_is_safe(
-          pageControlObservation(factsRequest),
+        const [transported] = transportableControlObservation(factsRequest);
+        return (
+          Boolean(transported) &&
+          authentication_advance_control_is_safe(transported)
         );
       });
   if (!approved) return false;
@@ -929,15 +939,11 @@ export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
       form,
     };
     if (
-      !can_activate_authentication_route_control(
+      !canRequestImplicitAuthenticationSubmit(
+        form,
         sourceOrigin,
-        ownedFormIdentity(form),
         authenticationRouteDestination(destinationRequest),
-        "",
-        "",
-        false,
         isAuthUsernameField(usernameField),
-        true,
       )
     ) {
       return false;
@@ -963,15 +969,11 @@ export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
     form,
   };
   if (
-    !can_activate_authentication_route_control(
+    !canRequestImplicitAuthenticationSubmit(
+      form,
       sourceOrigin,
-      ownedFormIdentity(form),
       authenticationRouteDestination(destinationRequest),
-      "",
-      "",
-      false,
       isAuthUsernameField(usernameField),
-      true,
     )
   ) {
     return false;

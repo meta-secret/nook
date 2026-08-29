@@ -46,50 +46,32 @@ function utf8ByteLength(value: string): number {
   return new TextEncoder().encode(value).length;
 }
 
-function truncateUtf8Bytes(value: string, maxBytes: number): string {
-  const encoded = new TextEncoder().encode(value);
-  if (encoded.length <= maxBytes) {
-    return value;
-  }
-  let end = maxBytes;
-  while (end > 0 && (encoded[end] & 0b1100_0000) === 0b1000_0000) {
-    end -= 1;
-  }
-  return new TextDecoder().decode(encoded.subarray(0, end));
+export function authenticationPolicyTextFits(value: string): boolean {
+  return utf8ByteLength(value) <= MAX_AUTHENTICATION_CONTROL_TEXT_BYTES;
 }
 
-export function boundedAuthenticationText(value: string): string {
-  return truncateUtf8Bytes(value, MAX_AUTHENTICATION_CONTROL_TEXT_BYTES);
+export function authenticationFactStringsAreTransportable(
+  values: string[],
+): boolean {
+  return values.every(authenticationPolicyTextFits);
 }
 
 export function boundedAuthenticationDestination(identity: string): string {
-  if (utf8ByteLength(identity) <= MAX_AUTHENTICATION_CONTROL_TEXT_BYTES) {
-    return identity;
-  }
-  try {
-    const url = new URL(identity);
-    const pathIdentity = `${url.origin}${url.pathname}`;
-    if (utf8ByteLength(pathIdentity) <= MAX_AUTHENTICATION_CONTROL_TEXT_BYTES) {
-      return pathIdentity;
-    }
-    return truncateUtf8Bytes(
-      pathIdentity,
-      MAX_AUTHENTICATION_CONTROL_TEXT_BYTES,
-    );
-  } catch {
-    return truncateUtf8Bytes(identity, MAX_AUTHENTICATION_CONTROL_TEXT_BYTES);
-  }
+  return authenticationPolicyTextFits(identity) ? identity : "";
+}
+
+export function rawOwnedFormIdentity(form: HTMLFormElement): string {
+  return [
+    form.id,
+    form.getAttribute("name") ?? "",
+    form.getAttribute("class") ?? "",
+    form.getAttribute("aria-label") ?? "",
+  ].join(" ");
 }
 
 export function ownedFormIdentity(form: HTMLFormElement): string {
-  return boundedAuthenticationText(
-    [
-      form.id,
-      form.getAttribute("name") ?? "",
-      form.getAttribute("class") ?? "",
-      form.getAttribute("aria-label") ?? "",
-    ].join(" "),
-  );
+  const identity = rawOwnedFormIdentity(form);
+  return authenticationPolicyTextFits(identity) ? identity : "";
 }
 
 export function ownedFormDestinationIdentity(form: HTMLFormElement): string {
@@ -165,6 +147,31 @@ export function controlLabel(control: HTMLElement): string {
   ].join(" ");
 }
 
+export function canRequestImplicitAuthenticationSubmit(
+  form: HTMLFormElement,
+  sourceOrigin: string,
+  destinationIdentity: string,
+  hasAuthenticationUsername: boolean,
+): boolean {
+  return (
+    authenticationFactStringsAreTransportable([
+      sourceOrigin,
+      rawOwnedFormIdentity(form),
+      destinationIdentity,
+    ]) &&
+    can_activate_authentication_route_control(
+      sourceOrigin,
+      ownedFormIdentity(form),
+      destinationIdentity,
+      "",
+      "",
+      false,
+      hasAuthenticationUsername,
+      true,
+    )
+  );
+}
+
 export function authenticationRouteDestination({
   form,
   control,
@@ -205,16 +212,26 @@ function canActivateAuthenticationRouteControl(
     query.root instanceof Element
       ? query.root
       : form;
-  const formIdentity = boundedAuthenticationText(
-    [
-      identityContainer?.id ?? "",
-      identityContainer?.getAttribute("name") ?? "",
-      identityContainer?.getAttribute("class") ?? "",
-      identityContainer?.getAttribute("aria-label") ?? "",
-    ].join(" "),
-  );
+  const formIdentity = [
+    identityContainer?.id ?? "",
+    identityContainer?.getAttribute("name") ?? "",
+    identityContainer?.getAttribute("class") ?? "",
+    identityContainer?.getAttribute("aria-label") ?? "",
+  ].join(" ");
   const destinationIdentity = authenticationControlDestination(control);
-  if (!destinationIdentity) return false;
+  const machineIdentity = `${control.id} ${control.name}=${control.value}`;
+  if (
+    !destinationIdentity ||
+    !authenticationFactStringsAreTransportable([
+      sourceOrigin,
+      formIdentity,
+      destinationIdentity,
+      controlLabel,
+      machineIdentity,
+    ])
+  ) {
+    return false;
+  }
 
   const sharesOwnedForm = Boolean(form && form === query.usernameField.form);
   const hasLocalUnownedScope =
@@ -223,15 +240,12 @@ function canActivateAuthenticationRouteControl(
     query.kind === PasswordFormQueryKind.Scoped &&
     query.formScope.kind === PasswordFormScopeKind.Unowned &&
     query.root !== control.ownerDocument;
-  const machineIdentity = boundedAuthenticationText(
-    `${control.id} ${control.name}=${control.value}`,
-  );
 
   return can_activate_authentication_route_control(
     sourceOrigin,
     formIdentity,
     destinationIdentity,
-    boundedAuthenticationText(controlLabel),
+    controlLabel,
     machineIdentity,
     true,
     isAuthUsernameField(query.usernameField),

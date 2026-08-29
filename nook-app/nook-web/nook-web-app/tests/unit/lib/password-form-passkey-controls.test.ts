@@ -60,6 +60,16 @@ describe('passkey control detection', () => {
     expect(pageHasPasskeyControl()).toBe(true)
   })
 
+  test('does not bind a passkey-only Continue control owned by a destructive form', () => {
+    document.body.innerHTML = `
+      <form id="delete-account" action="/login">
+        <button type="button" data-nook-passkey-control>Continue</button>
+      </form>
+    `
+    const control = findWorkflowPasskeyControl(observedAuthenticationWorkflow())
+    expect(control.kind).toBe(PasskeyControlLookupKind.Absent)
+  })
+
   test('does not bind a marked passkey control whose machine identity is destructive', () => {
     document.body.innerHTML = `
       <form id="login" action="/auth/login">

@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import { authenticationFactAttributeFilter } from '../../../../nook-web-shared/src/extension/authentication-fact-attributes'
-import { MAX_AUTHENTICATION_CONTROL_TEXT_BYTES } from '../../../../nook-web-shared/src/extension/password-form-submission-controls'
 import {
   authenticationPageObservationFacts,
   fillLoginCredentials,
@@ -200,13 +199,14 @@ describe('website one-time-code fields', () => {
     expect(defaultAuthenticationContext.destinationIdentity).toBe(location.href)
   })
 
-  test('bounds oversized control labels so one long submitter cannot reject the page', () => {
+  test('isolates an oversized submitter so a sibling login control can still transport', () => {
     const oversizedLabel = `Sign in ${'x'.repeat(600)}`
     document.body.innerHTML = `
       <form aria-label="Login" action="/login">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
         <button type="submit">${oversizedLabel}</button>
+        <button type="submit">Continue</button>
       </form>
     `
 
@@ -215,25 +215,25 @@ describe('website one-time-code fields', () => {
       authenticatorSetupHint: false,
       backupCodesHint: false,
     })
+    expect(facts.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [{ label: expect.stringContaining('Continue') }],
+    })
     const observation = facts.detailedAdvanceControl
     if (observation.kind !== 'observed') {
       throw new Error('expected observed advance control')
     }
-    const label = observation.observations[0]?.label
-    if (!label) {
-      throw new Error('expected a bounded control label')
-    }
-    expect(label.startsWith('Sign in')).toBe(true)
-    expect(new TextEncoder().encode(label).length).toBeLessThanOrEqual(
-      MAX_AUTHENTICATION_CONTROL_TEXT_BYTES,
-    )
+    expect(
+      observation.observations.every((candidate) =>
+        candidate.label.includes('Continue'),
+      ),
+    ).toBe(true)
   })
 
-  test('bounds omitted-action OAuth destinations to the authentication path', () => {
-    const query = `state=${'a'.repeat(600)}`
-    window.history.replaceState({}, '', `/oauth/authorize?${query}`)
+  test('does not strip destructive query evidence from an oversized destination', () => {
+    const query = `action=delete-account&state=${'a'.repeat(600)}`
     document.body.innerHTML = `
-      <form aria-label="Login">
+      <form aria-label="Login" action="/login?${query}">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
         <button type="submit">Continue</button>
@@ -245,15 +245,62 @@ describe('website one-time-code fields', () => {
       authenticatorSetupHint: false,
       backupCodesHint: false,
     })
-    const authenticationContext = facts.ceremony.authenticationContext
-    if (!authenticationContext) {
-      throw new Error('expected authentication context')
-    }
-    const destination = authenticationContext.destinationIdentity
-    expect(destination).toBe(`${location.origin}/oauth/authorize`)
-    expect(new TextEncoder().encode(destination).length).toBeLessThanOrEqual(
-      MAX_AUTHENTICATION_CONTROL_TEXT_BYTES,
-    )
+    expect(facts.detailedAdvanceControl).toMatchObject({
+      kind: 'absent',
+    })
+    expect(facts.ceremony.authenticationContext?.destinationIdentity).toBe('')
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(false)
+  })
+
+  test('isolates a control whose machine identity would lose a destructive suffix', () => {
+    document.body.innerHTML = `
+      <form aria-label="Login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button
+          id="${'n'.repeat(500)}"
+          name="action"
+          value="delete-account"
+          type="submit"
+        >Sign in</button>
+      </form>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.detailedAdvanceControl).toMatchObject({
+      kind: 'absent',
+    })
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(false)
+  })
+
+  test('transports a passkey-only destructive form identity instead of the document', () => {
+    document.body.innerHTML = `
+      <form id="delete-account" action="/login">
+        <button type="button" data-nook-passkey-control>Continue</button>
+      </form>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
+      kind: 'candidates',
+      observation: [
+        {
+          kind: 'explicitly-marked',
+          observation: {
+            ownership: 'owned-form',
+            formIdentity: expect.stringContaining('delete-account'),
+          },
+        },
+      ],
+    })
   })
 
   test('watches remaining fact-bearing identities used by observation facts', () => {
