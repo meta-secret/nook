@@ -806,7 +806,7 @@ mod tests {
                     ..Default::default()
                 },
                 detailed_advance_control:
-                    nook_companion_core::AuthenticationDetailedAdvanceControlObservation::Observed(
+                    nook_companion_core::AuthenticationDetailedAdvanceControlObservation::observed(
                         nook_companion_core::AuthenticationAdvanceControlObservation {
                             actionability:
                                 nook_companion_core::PageControlActionability::Actionable,

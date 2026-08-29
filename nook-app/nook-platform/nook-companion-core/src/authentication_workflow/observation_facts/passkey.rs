@@ -25,25 +25,27 @@ pub enum AuthenticationDetailedPasskeyControlObservation {
 }
 
 impl AuthenticationDetailedPasskeyControlObservation {
-    fn is_safe(&self) -> bool {
-        matches!(self, Self::Observed(observation) if authentication_passkey_control_is_safe(observation))
-    }
-
     pub(super) fn is_bounded(&self) -> bool {
         matches!(self, Self::Absent)
             || matches!(self, Self::Observed(observation) if observation.is_bounded())
     }
 
     pub(super) fn evidence(&self, matching_account_count: u32) -> AuthenticationPasskeyEvidence {
-        match (self.is_safe(), matching_account_count) {
-            (true, account_count) if account_count > 0 => {
+        match (self, matching_account_count) {
+            (Self::Observed(observation), account_count)
+                if authentication_passkey_control_is_safe(observation) && account_count > 0 =>
+            {
                 AuthenticationPasskeyEvidence::ControlAndVaultAccounts { account_count }
             }
-            (true, _) => AuthenticationPasskeyEvidence::Control,
-            (false, account_count) if account_count > 0 => {
+            (Self::Observed(observation), _)
+                if authentication_passkey_control_is_safe(observation) =>
+            {
+                AuthenticationPasskeyEvidence::Control
+            }
+            (Self::Absent, account_count) if account_count > 0 => {
                 AuthenticationPasskeyEvidence::VaultAccounts { account_count }
             }
-            (false, _) => AuthenticationPasskeyEvidence::Absent,
+            (Self::Absent | Self::Observed(_), _) => AuthenticationPasskeyEvidence::Absent,
         }
     }
 }
@@ -85,10 +87,7 @@ mod tests {
                 destination,
             ));
             assert_eq!(detailed.evidence(0), AuthenticationPasskeyEvidence::Absent);
-            assert_eq!(
-                detailed.evidence(2),
-                AuthenticationPasskeyEvidence::VaultAccounts { account_count: 2 }
-            );
+            assert_eq!(detailed.evidence(2), AuthenticationPasskeyEvidence::Absent);
         }
 
         let safe = AuthenticationDetailedPasskeyControlObservation::Observed(control(
@@ -96,5 +95,9 @@ mod tests {
             "/login",
         ));
         assert_eq!(safe.evidence(0), AuthenticationPasskeyEvidence::Control);
+        assert_eq!(
+            AuthenticationDetailedPasskeyControlObservation::Absent.evidence(2),
+            AuthenticationPasskeyEvidence::VaultAccounts { account_count: 2 }
+        );
     }
 }

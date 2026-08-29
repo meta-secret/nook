@@ -1,6 +1,7 @@
 import type {
   AuthenticationAdvanceControlObservation,
   AuthenticationDetailedAdvanceControlObservation,
+  AuthenticationDetailedPasskeyControlObservation,
   AuthenticationPageObservationFacts,
   AuthenticationWorkflowSnapshot,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
@@ -58,9 +59,23 @@ function isAdvanceControl(
   )
 }
 
-function isDetailedControl(
+function isDetailedAdvanceControl(
   value: unknown,
 ): value is AuthenticationDetailedAdvanceControlObservation {
+  if (!value || typeof value !== 'object' || !('kind' in value)) return false
+  if (value.kind === 'absent') return true
+  return (
+    value.kind === 'observed' &&
+    'observations' in value &&
+    Array.isArray(value.observations) &&
+    value.observations.length > 0 &&
+    value.observations.every(isAdvanceControl)
+  )
+}
+
+function isDetailedPasskeyControl(
+  value: unknown,
+): value is AuthenticationDetailedPasskeyControlObservation {
   if (!value || typeof value !== 'object' || !('kind' in value)) return false
   if (value.kind === 'absent') return true
   return (
@@ -119,8 +134,8 @@ export function isAuthenticationWorkflowSnapshotMessage(
       ['absent', 'present'].includes(authenticator.authenticatorSetup) &&
       ['absent', 'present'].includes(authenticator.backupCodes) &&
       ['absent', 'present'].includes(authenticator.passkeyControl) &&
-      isDetailedControl(observation.detailedAdvanceControl) &&
-      isDetailedControl(authenticator.detailedPasskeyControl)
+      isDetailedAdvanceControl(observation.detailedAdvanceControl) &&
+      isDetailedPasskeyControl(authenticator.detailedPasskeyControl)
     )
   })
 }

@@ -361,32 +361,37 @@ export function authenticationPageObservationFacts({
 }: AuthenticationObservationFactsRequest): AuthenticationPageObservationFacts {
   const controlRoot = scopedControlRoot(observation);
   const authenticationUsername = usernameEvidence(observation);
-  const advanceControl =
-    controlRoot.querySelector<HTMLElement>(
-      'button[type="submit"], input[type="submit"], button:not([type])',
-    ) ?? controlRoot.querySelector<HTMLElement>('button[type="button"]');
+  const advanceControls = Array.from(
+    controlRoot.querySelectorAll<HTMLElement>(
+      'button[type="submit"], input[type="submit"], button:not([type]), button[type="button"]',
+    ),
+  );
   const passkeyControl = findPasskeyControl(controlRoot);
   const oneTimeCodeQuery: Parameters<typeof findOneTimeCodeFields>[0] = {
     root: observation.root,
     formScope: observation.formScope,
   };
   const oneTimeCodeHandlerSignal = findOneTimeCodeFields(oneTimeCodeQuery)
-    .flatMap((field) => [
-      field.getAttribute("oninput") ?? "",
-      field.getAttribute("onchange") ?? "",
-    ])
-    .join(" ");
+    .flatMap((field) =>
+      ["oninput", "onchange"].flatMap((attribute) => {
+        const handler = field.getAttribute(attribute);
+        return handler === null ? [] : [`${attribute}=${handler}`];
+      }),
+    )
+    .join("\n");
   let detailedAdvanceControl: AuthenticationPageObservationFacts["detailedAdvanceControl"] =
     { kind: "absent" };
-  if (advanceControl) {
-    const advanceControlRequest: PageControlObservationRequest = {
-      observation,
-      control: advanceControl,
-      authenticationUsername,
-    };
+  if (advanceControls.length > 0) {
     detailedAdvanceControl = {
       kind: "observed",
-      observation: pageControlObservation(advanceControlRequest),
+      observations: advanceControls.map((control) => {
+        const advanceControlRequest: PageControlObservationRequest = {
+          observation,
+          control,
+          authenticationUsername,
+        };
+        return pageControlObservation(advanceControlRequest);
+      }),
     };
   }
   let detailedPasskeyControl: AuthenticationDetailedPasskeyControlObservation =
@@ -403,8 +408,8 @@ export function authenticationPageObservationFacts({
     };
   }
   const contextObservation =
-    "observation" in detailedAdvanceControl
-      ? detailedAdvanceControl.observation
+    "observations" in detailedAdvanceControl
+      ? detailedAdvanceControl.observations[0]
       : undefined;
   return {
     fields: {

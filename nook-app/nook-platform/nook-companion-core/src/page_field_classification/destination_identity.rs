@@ -244,7 +244,7 @@ mod tests {
 
         let facts = |fields, control| AuthenticationPageObservationFacts {
             fields,
-            detailed_advance_control: AuthenticationDetailedAdvanceControlObservation::Observed(
+            detailed_advance_control: AuthenticationDetailedAdvanceControlObservation::observed(
                 control,
             ),
             ..Default::default()

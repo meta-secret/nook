@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import {
+  authenticationPageObservationFacts,
   fillLoginCredentials,
   fillOneTimeCode,
   findOneTimeCodeFields,
@@ -25,6 +26,57 @@ afterEach(() => {
 })
 
 describe('website one-time-code fields', () => {
+  test('preserves executable OTP handler attribute names at the Rust boundary', () => {
+    document.body.innerHTML = `
+      <form id="otp-login" action="/mfa/challenge">
+        <input
+          autocomplete="one-time-code"
+          oninput="this.form.requestSubmit()"
+        />
+        <button type="submit">Verify code</button>
+      </form>
+    `
+
+    const observation = summarizeAuthenticationWorkflowForms()[0]
+    expect(observation).toBeDefined()
+    if (!observation) return
+    const facts = authenticationPageObservationFacts({
+      observation,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.ceremony.oneTimeCodeHandlerSignal).toBe(
+      'oninput=this.form.requestSubmit()',
+    )
+  })
+
+  test('transports every scoped advance-control candidate for Rust selection', () => {
+    document.body.innerHTML = `
+      <form id="login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Delete account</button>
+        <button type="submit">Sign in</button>
+      </form>
+    `
+
+    const observation = summarizeAuthenticationWorkflowForms()[0]
+    expect(observation).toBeDefined()
+    if (!observation) return
+    const facts = authenticationPageObservationFacts({
+      observation,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [
+        { label: expect.stringContaining('Delete account') },
+        { label: expect.stringContaining('Sign in') },
+      ],
+    })
+  })
+
   test('detects standard and common OTP fields without treating card security codes as 2FA', () => {
     document.body.innerHTML = `
       <form>

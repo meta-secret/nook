@@ -232,7 +232,7 @@ mod tests {
                 one_time_code_field_count: 1,
                 ..Default::default()
             },
-            detailed_advance_control: AuthenticationDetailedAdvanceControlObservation::Observed(
+            detailed_advance_control: AuthenticationDetailedAdvanceControlObservation::observed(
                 AuthenticationAdvanceControlObservation {
                     actionability: crate::PageControlActionability::Actionable,
                     ownership: crate::PageControlOwnership::OwnedForm,
@@ -328,7 +328,7 @@ mod tests {
                 advance_control: AuthenticationAdvanceControlEvidence::Present,
                 ..Default::default()
             },
-            detailed_advance_control: AuthenticationDetailedAdvanceControlObservation::Observed(
+            detailed_advance_control: AuthenticationDetailedAdvanceControlObservation::observed(
                 AuthenticationAdvanceControlObservation {
                     actionability: crate::PageControlActionability::Actionable,
                     ownership: crate::PageControlOwnership::OwnedForm,
@@ -368,7 +368,7 @@ mod tests {
                 new_password_field_count: 1,
                 ..Default::default()
             },
-            detailed_advance_control: AuthenticationDetailedAdvanceControlObservation::Observed(
+            detailed_advance_control: AuthenticationDetailedAdvanceControlObservation::observed(
                 AuthenticationAdvanceControlObservation {
                     actionability: crate::PageControlActionability::Actionable,
                     ownership: crate::PageControlOwnership::OwnedForm,
@@ -550,7 +550,7 @@ mod tests {
         assert_eq!(
             (AuthenticationPageObservationFacts {
                 fields,
-                detailed_advance_control: AuthenticationDetailedAdvanceControlObservation::Observed(
+                detailed_advance_control: AuthenticationDetailedAdvanceControlObservation::observed(
                     login_control
                 ),
                 ..Default::default()
@@ -564,7 +564,7 @@ mod tests {
     #[test]
     fn rejects_oversized_detailed_control_batch() {
         let facts = AuthenticationPageObservationFacts {
-            detailed_advance_control: AuthenticationDetailedAdvanceControlObservation::Observed(
+            detailed_advance_control: AuthenticationDetailedAdvanceControlObservation::observed(
                 AuthenticationAdvanceControlObservation {
                     actionability: crate::PageControlActionability::Inert,
                     ownership: crate::PageControlOwnership::Unowned,
@@ -953,7 +953,7 @@ mod tests {
                 generic_password_field_count: 1,
                 ..Default::default()
             },
-            detailed_advance_control: AuthenticationDetailedAdvanceControlObservation::Observed(
+            detailed_advance_control: AuthenticationDetailedAdvanceControlObservation::observed(
                 AuthenticationAdvanceControlObservation {
                     actionability: crate::PageControlActionability::Actionable,
                     ownership: crate::PageControlOwnership::OwnedForm,

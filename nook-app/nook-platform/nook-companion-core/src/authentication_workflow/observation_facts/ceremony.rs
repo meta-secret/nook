@@ -13,37 +13,44 @@ use tsify::Tsify;
 
 /// Detailed browser evidence for the control selected to advance authentication.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
-#[serde(tag = "kind", content = "observation", rename_all = "kebab-case")]
+#[serde(tag = "kind", content = "observations", rename_all = "kebab-case")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum AuthenticationDetailedAdvanceControlObservation {
     #[default]
     Absent,
-    Observed(AuthenticationAdvanceControlObservation),
+    Observed(Vec<AuthenticationAdvanceControlObservation>),
 }
 
 impl AuthenticationDetailedAdvanceControlObservation {
+    #[must_use]
+    pub fn observed(observation: AuthenticationAdvanceControlObservation) -> Self {
+        Self::Observed(vec![observation])
+    }
+
     pub(super) fn evidence(
         &self,
         fields: AuthenticationFieldObservationFacts,
     ) -> AuthenticationAdvanceControlEvidence {
-        match self {
-            Self::Observed(observation)
-                if observation.is_bounded()
-                    && fields.is_compatible_with_detailed_control(observation)
-                    && matches!(
-                        observation.classify(),
-                        AuthenticationAdvanceControlDecision::AdvancesAuthentication
-                    ) =>
-            {
-                AuthenticationAdvanceControlEvidence::Present
-            }
-            Self::Absent | Self::Observed(_) => AuthenticationAdvanceControlEvidence::Absent,
+        let advances = matches!(self, Self::Observed(observations) if observations.iter().any(
+            |observation| fields.is_compatible_with_detailed_control(observation)
+                && matches!(
+                    observation.classify(),
+                    AuthenticationAdvanceControlDecision::AdvancesAuthentication
+                )
+        ));
+        if advances {
+            AuthenticationAdvanceControlEvidence::Present
+        } else {
+            AuthenticationAdvanceControlEvidence::Absent
         }
     }
 
     pub(super) fn is_bounded(&self) -> bool {
         matches!(self, Self::Absent)
-            || matches!(self, Self::Observed(observation) if observation.is_bounded())
+            || matches!(self, Self::Observed(observations)
+                if !observations.is_empty()
+                    && observations.len() <= crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT as usize
+                    && observations.iter().all(AuthenticationAdvanceControlObservation::is_bounded))
     }
 }
 
@@ -143,6 +150,7 @@ impl AuthenticationCeremonyObservationFacts {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{PageControlActionability, PageControlOwnership, PageControlSemantics};
 
     fn context(
         form_identity: &str,
@@ -161,6 +169,57 @@ mod tests {
             one_time_code_field_count: 1,
             ..Default::default()
         }
+    }
+
+    fn password_submit(label: &str) -> AuthenticationAdvanceControlObservation {
+        AuthenticationAdvanceControlObservation {
+            actionability: PageControlActionability::Actionable,
+            ownership: PageControlOwnership::OwnedForm,
+            semantics: PageControlSemantics::SemanticSubmit,
+            authentication_username: AuthenticationUsernameEvidence::Strong,
+            password_field_count: 1,
+            new_password_field_count: 0,
+            one_time_code_field_count: 0,
+            semantic_submit_control_count: 2,
+            source_origin: "https://example.test".to_owned(),
+            form_identity: "login".to_owned(),
+            destination_identity: "/login".to_owned(),
+            label: label.to_owned(),
+        }
+    }
+
+    #[test]
+    fn selects_an_eligible_control_from_the_bounded_candidate_batch() {
+        let fields = AuthenticationFieldObservationFacts {
+            username_field_count: 1,
+            current_password_field_count: 1,
+            ..Default::default()
+        };
+        let controls = AuthenticationDetailedAdvanceControlObservation::Observed(vec![
+            password_submit("Delete account"),
+            password_submit("Sign in"),
+        ]);
+        assert!(controls.is_bounded());
+        assert_eq!(
+            controls.evidence(fields),
+            AuthenticationAdvanceControlEvidence::Present
+        );
+    }
+
+    #[test]
+    fn rejects_empty_and_oversized_control_candidate_batches() {
+        assert!(!AuthenticationDetailedAdvanceControlObservation::Observed(vec![]).is_bounded());
+        assert!(
+            !AuthenticationDetailedAdvanceControlObservation::Observed(vec![
+                password_submit(
+                    "Sign in"
+                );
+                crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT
+                    as usize
+                    + 1
+            ])
+            .is_bounded()
+        );
     }
 
     #[test]

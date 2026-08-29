@@ -143,4 +143,55 @@ describe('authentication workflow snapshot messages', () => {
       }),
     ).toBe(false)
   })
+
+  test('accepts a typed control batch and rejects the obsolete singular shape', () => {
+    const control = {
+      actionability: 'actionable',
+      ownership: 'owned-form',
+      semantics: 'semantic-submit',
+      authenticationUsername: 'explicit',
+      passwordFieldCount: 1,
+      newPasswordFieldCount: 0,
+      oneTimeCodeFieldCount: 0,
+      semanticSubmitControlCount: 2,
+      sourceOrigin: 'https://login.example.com',
+      formIdentity: 'login',
+      destinationIdentity: '/login',
+      label: 'Sign in',
+    }
+    expect(
+      isAuthenticationWorkflowSnapshotMessage({
+        ...validMessage,
+        payload: {
+          ...validMessage.payload,
+          observations: [
+            {
+              ...validMessage.payload.observations[0],
+              detailedAdvanceControl: {
+                kind: 'observed',
+                observations: [control],
+              },
+            },
+          ],
+        },
+      }),
+    ).toBe(true)
+    expect(
+      isAuthenticationWorkflowSnapshotMessage({
+        ...validMessage,
+        payload: {
+          ...validMessage.payload,
+          observations: [
+            {
+              ...validMessage.payload.observations[0],
+              detailedAdvanceControl: {
+                kind: 'observed',
+                observation: control,
+              },
+            },
+          ],
+        },
+      }),
+    ).toBe(false)
+  })
 })
