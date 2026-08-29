@@ -147,6 +147,7 @@ export function configurationScriptPaths(
         importer,
         importerRelative: reference.importerRelative,
         specifier,
+        sources: graph.sources,
         workingDirectory: next.workingDirectory,
       };
       const candidates = resolutionCandidates(resolutionRequest);
@@ -561,6 +562,7 @@ test('only the Loom semantic adapter reaches the provider', async () => {
       !symlinkPaths.has(path) &&
       (actionSourceRequiresContent(path) ||
         configPathSet.has(path) ||
+        path.endsWith('tsconfig.json') ||
         /\.ya?ml$/u.test(path) ||
         CONFIGURATION_SCRIPT_EXTENSION.test(path))
         ? await Bun.file(join(REPOSITORY_ROOT, path)).text()
@@ -607,7 +609,6 @@ test('only the Loom semantic adapter reaches the provider', async () => {
   expect(activeAudit).toContain("'../lib/cortex-article-structure.ts'");
   expect(activeAudit).not.toContain('src/cortex-article-provider');
 }, 15_000);
-
 test('runnable configuration inventory includes Taskfiles and actions', () => {
   const taskfilePattern = /(^|\/)Taskfile(?:\.[^/]*)?\.ya?ml$/u;
   const allPaths = readTrackedRepositoryFiles(REPOSITORY_ROOT).map(
@@ -627,7 +628,6 @@ test('runnable configuration inventory includes Taskfiles and actions', () => {
   const discoveredActions = runnablePaths.filter(isActionManifest).sort();
   expect(discoveredActions).toEqual(expectedActions);
 });
-
 test('classifies every runnable configuration category at root and nested boundaries', () => {
   const expected = [
     'package.json',

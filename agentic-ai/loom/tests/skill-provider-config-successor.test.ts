@@ -138,6 +138,8 @@ test('explicit Taskfile selections join the runnable graph', () => {
 test('env options preserve wrapped configuration command discovery', () => {
   for (const command of [
     'env -i task --taskfile scripts/commands.yml audit',
+    '/usr/bin/env task --taskfile scripts/commands.yml audit',
+    '/bin/env -i task --taskfile scripts/commands.yml audit',
     'env --ignore-environment --unset OLD task -t scripts/commands.yml audit',
     'env -u OLD task --taskfile=scripts/commands.yml audit',
     'env --unset=OLD -- task --taskfile scripts/commands.yml audit',
@@ -150,6 +152,73 @@ test('env options preserve wrapped configuration command discovery', () => {
     const request = { roots: ['package.json'], sources };
     expectProviderReachable(graph(request));
   }
+});
+
+test('Task dotenv authority fails closed at root and task scope', () => {
+  for (const source of [
+    'dotenv: [audit.env]\ntasks: {audit: {cmds: [node scripts/main.cjs]}}',
+    'tasks: {audit: {dotenv: [audit.env], cmds: [node scripts/main.cjs]}}',
+  ]) {
+    const sources = new Map([
+      ['Taskfile.yml', source],
+      ['audit.env', 'NODE_OPTIONS=--require=./scripts/facade.cjs'],
+      ['scripts/main.cjs', 'console.log("neutral");'],
+    ]);
+    const request = { roots: ['Taskfile.yml'], sources };
+    expect(() => configurationScriptPaths(graph(request)), source).toThrow(
+      'Task dotenv configuration is forbidden',
+    );
+  }
+});
+
+test('absolute env wrappers preserve direct runtime launches', () => {
+  const sources = new Map([
+    [
+      'package.json',
+      '{"scripts":{"audit":"/usr/bin/env bun scripts/facade.ts"}}',
+    ],
+    ['scripts/facade.ts', `await import('../${PROVIDER_CLI}');`],
+    [PROVIDER_CLI, 'export {};'],
+  ]);
+  const request = { roots: ['package.json'], sources };
+  expectProviderReachable(graph(request));
+});
+
+test('runnable TypeScript imports resolve nearest tsconfig aliases', () => {
+  const sources = new Map([
+    [
+      'tsconfig.json',
+      '{"compilerOptions":{"baseUrl":".","paths":{"@audit/*":["decoy/*"]}}}',
+    ],
+    [
+      'nested/tsconfig.json',
+      '{"compilerOptions":{"baseUrl":".","paths":{"@audit/*":["scripts/*"]}}}',
+    ],
+    ['nested/vite.config.ts', "await import('@audit/facade');"],
+    ['decoy/facade.ts', 'export const decoy = true;'],
+    ['nested/scripts/facade.ts', `await import('../../${PROVIDER_CLI}');`],
+    [PROVIDER_CLI, 'export {};'],
+  ]);
+  const request = { roots: ['nested/vite.config.ts'], sources };
+  expectProviderReachable(graph(request));
+});
+
+test('Bun preload configuration fails closed', () => {
+  expect(isRunnableConfiguration('nested/bunfig.toml')).toBe(true);
+  const sources = new Map([
+    ['nested/package.json', '{"scripts":{"audit":"bun scripts/main.ts"}}'],
+    ['nested/bunfig.toml', 'preload = ["./scripts/facade.ts"]'],
+    ['nested/scripts/main.ts', 'export const neutral = true;'],
+    ['nested/scripts/facade.ts', `await import('../../${PROVIDER_CLI}');`],
+    [PROVIDER_CLI, 'export {};'],
+  ]);
+  const request = {
+    roots: ['nested/package.json', 'nested/bunfig.toml'],
+    sources,
+  };
+  expect(() => configurationScriptPaths(graph(request))).toThrow(
+    'Bun preload configuration is forbidden',
+  );
 });
 
 test('env options preserve wrapped Playwright configuration discovery', () => {

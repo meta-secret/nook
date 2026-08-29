@@ -12,7 +12,7 @@ import type {
 const REDIRECTION = /^(?:\d+)?(?:>>?|<<?|<>|>&|<&|&>>?)/u;
 const ASSIGNMENT = /^[A-Za-z_]\w*\+?=/u;
 const ABSOLUTE_RUNTIME =
-  /^\/(?:usr\/(?:local\/)?bin|opt\/homebrew\/bin)\/(bun|node|bash|sh)$|^\/bin\/(bash|sh)$/u;
+  /^\/(?:usr\/(?:local\/)?bin|opt\/homebrew\/bin)\/(bun|node|bash|sh|env)$|^\/bin\/(bash|sh|env)$/u;
 const SCRIPT_DIRECTORY_EXPRESSION =
   /^\$\(dirname (?:-- )?["']?(?:\$0|\$\{BASH_SOURCE\[0\]\})["']?\)$/u;
 

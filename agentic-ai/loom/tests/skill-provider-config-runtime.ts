@@ -11,7 +11,15 @@ type ResolutionCandidateRequest = {
   readonly importer: string;
   readonly importerRelative: boolean;
   readonly specifier: string;
+  readonly sources: ReadonlyMap<string, string>;
   readonly workingDirectory: string;
+};
+
+type TsconfigDocument = {
+  readonly compilerOptions?: {
+    readonly baseUrl?: string;
+    readonly paths?: Readonly<Record<string, readonly string[]>>;
+  };
 };
 
 type PositionalSpecializationRequest = {
@@ -43,6 +51,7 @@ export function isRunnableConfiguration(path: string): boolean {
   return (
     /(^|\/)package\.json$/u.test(path) ||
     /(^|\/)Taskfile(?:\.[^/]*)?\.ya?ml$/u.test(path) ||
+    /(^|\/)bunfig\.toml$/u.test(path) ||
     /^\.task\/(?:[^/]+\/)*[^/]+\.ya?ml$/u.test(path) ||
     /(^|\/)vite\.config\.(?:[cm]?[jt]s)$/u.test(path) ||
     /(^|\/)svelte\.config\.(?:[cm]?[jt]s)$/u.test(path) ||
@@ -66,7 +75,7 @@ export function actionSourceRequiresContent(path: string): boolean {
 
 export function configurationRootWorkingDirectory(path: string): string {
   if (
-    !/(^|\/)(?:package\.json|(?:vite|svelte)\.config\.(?:[cm]?[jt]s))$/u.test(
+    !/(^|\/)(?:package\.json|bunfig\.toml|(?:vite|svelte)\.config\.(?:[cm]?[jt]s))$/u.test(
       path,
     )
   )
@@ -92,9 +101,77 @@ export function resolutionCandidates(
   ];
   return [
     ...new Set(
-      bases.flatMap((path) => moduleCandidates([path, request.exactFirst])),
+      [...bases, ...tsconfigAliasBases(request)].flatMap((path) =>
+        moduleCandidates([path, request.exactFirst]),
+      ),
     ),
   ];
+}
+
+function tsconfigAliasBases(
+  request: ResolutionCandidateRequest,
+): readonly string[] {
+  if (/^(?:\.|\/|node:)/u.test(request.specifier)) return [];
+  let directory = posix.dirname(request.importer).replace(/^\.$/u, '');
+  while (true) {
+    const path = directory ? `${directory}/tsconfig.json` : 'tsconfig.json';
+    const source = request.sources.get(path);
+    if (source !== undefined && source.length > 0)
+      return aliasesFromTsconfig([request, path, source]);
+    if (!directory) return [];
+    const parent = posix.dirname(directory).replace(/^\.$/u, '');
+    if (parent === directory) return [];
+    directory = parent;
+  }
+}
+
+function aliasesFromTsconfig([request, path, source]: readonly [
+  ResolutionCandidateRequest,
+  string,
+  string,
+]): readonly string[] {
+  let document: TsconfigDocument;
+  try {
+    document = Bun.JSONC.parse(source) as TsconfigDocument;
+  } catch {
+    throw new Error(`Runnable tsconfig is invalid: ${path}`);
+  }
+  const options = document.compilerOptions;
+  const mappings = options?.paths ?? {};
+  const baseUrl = options?.baseUrl ?? '.';
+  if (typeof baseUrl !== 'string')
+    throw new Error(`Runnable tsconfig baseUrl is invalid: ${path}`);
+  for (const [alias, targets] of Object.entries(mappings)) {
+    const wildcard = alias.indexOf('*');
+    if (wildcard !== alias.lastIndexOf('*'))
+      throw new Error(`Runnable tsconfig alias is unsupported: ${alias}`);
+    const prefix = wildcard < 0 ? alias : alias.slice(0, wildcard);
+    const suffix = wildcard < 0 ? '' : alias.slice(wildcard + 1);
+    if (
+      !request.specifier.startsWith(prefix) ||
+      !request.specifier.endsWith(suffix) ||
+      (wildcard < 0 && request.specifier !== alias)
+    )
+      continue;
+    if (!Array.isArray(targets) || targets.length === 0)
+      throw new Error(`Runnable tsconfig alias target is invalid: ${alias}`);
+    const substitution = request.specifier.slice(
+      prefix.length,
+      request.specifier.length - suffix.length,
+    );
+    return targets.map((target) => {
+      if (typeof target !== 'string' || target.includes('*') !== wildcard >= 0)
+        throw new Error(`Runnable tsconfig alias target is invalid: ${alias}`);
+      const resolvedTarget = target.replace('*', substitution);
+      const candidate = posix.normalize(
+        posix.join(posix.dirname(path), baseUrl, resolvedTarget),
+      );
+      if (candidate.startsWith('../') || candidate.startsWith('/'))
+        throw new Error(`Runnable tsconfig alias escapes repository: ${alias}`);
+      return candidate;
+    });
+  }
+  return [];
 }
 
 export function isRepositoryBackedPackageSpecifier(
