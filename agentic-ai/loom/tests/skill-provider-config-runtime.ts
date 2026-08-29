@@ -47,6 +47,10 @@ export const CONFIGURATION_GRAPH_LIMITS = {
 } as const;
 const AUDITED_NODE_EVAL_COMMAND_DIGESTS = new Map<string, string>([
   [
+    '.github/workflows/agent-implement.yml',
+    '56531d77488fefab8ce870dc24942bffdda5b828cd761eeca5b58167b503476f',
+  ],
+  [
     '.task/agentic-ai.yml',
     'aa81b457c8f43b93e64cd4f7b1ccbd3371338bc965ff7bea10c58dead505a5ff',
   ],
@@ -310,14 +314,26 @@ export function normalizeConfigurationShellSource([
     if (
       sourcePath === '.github/workflows/agent-implement.yml' &&
       new Bun.CryptoHasher('sha256').update(source).digest('hex') ===
-        'ea60680b19621cf87a566bf9e4e526bb8134dd6a95d3fe1dcfc0fcba4eb30047'
+        '3f2071b04769ac9daabab25ef4eb3d78ab5dd575518da062acde130389466313'
     )
       return 'true';
     throw new Error('Unaudited AGENT_EOF shell exemption.');
   }
   const protectedPath =
     /(?:\.agents\/skills|\.cortex\/(?:gizmo|shared|teams\/[^/]+)\/dynamic-skills)/u;
-  const normalized = source
+  const trustedWorkspaceCommands =
+    sourcePath === '.github/workflows/agent-implement.yml'
+      ? source
+          .replaceAll(
+            'node "$GITHUB_WORKSPACE/agentic-ai/ci-agent/dist/main/main.js" edit',
+            "node 'agentic-ai/ci-agent/dist/main/main.js' edit",
+          )
+          .replaceAll(
+            'node "$GITHUB_WORKSPACE/agentic-ai/ci-agent/dist/main/main.js" deliver',
+            "node 'agentic-ai/ci-agent/dist/main/main.js' deliver",
+          )
+      : source;
+  const normalized = trustedWorkspaceCommands
     .replaceAll('\\`', '')
     .replace(
       /\bformatter_root="\$\{NOOK_FORMATTER_ROOT:-\/opt\/nook-formatter\}"/gu,

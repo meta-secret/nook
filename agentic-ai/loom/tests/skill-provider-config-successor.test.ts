@@ -724,6 +724,28 @@ test('AGENT_EOF exemptions reject wrong provenance and content', () => {
     ).toThrow('Unaudited AGENT_EOF shell exemption');
 });
 
+test('workspace-root normalization rejects dynamic repository suffixes', () => {
+  expect(
+    normalizeConfigurationShellSource([
+      'node "$GITHUB_WORKSPACE/agentic-ai/ci-agent/dist/main/main.js" edit',
+      '.github/workflows/agent-implement.yml',
+    ]),
+  ).toBe("node 'agentic-ai/ci-agent/dist/main/main.js' edit");
+  const adversarial = normalizeConfigurationShellSource([
+    'node "$GITHUB_WORKSPACE/$UNTRUSTED"',
+    '.github/workflows/agent-implement.yml',
+  ]);
+  expect(adversarial).toBe('node "$GITHUB_WORKSPACE/$UNTRUSTED"');
+  const inspection = {
+    positionalArguments: false,
+    source: adversarial,
+    sourcePath: '.github/workflows/agent-implement.yml',
+  } as const;
+  expect(() => analyzeShellCommands(inspection)).toThrow(
+    'Dynamic node executable construction is forbidden',
+  );
+});
+
 test('successor launches preserve package cwd through child-process cd', () => {
   const sources = new Map([
     ['nested/package.json', '{"scripts":{"audit":"bun config/loader.ts"}}'],

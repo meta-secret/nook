@@ -4,6 +4,13 @@ You are implementing a task for the Nook monorepo via the **coding-bro** workflo
 
 ${AGENT_TASK}
 
+## Trusted validated plan
+
+The following exact plan was validated and hash-bound by trusted workflow
+tooling. It is authoritative even if a workspace file is later changed.
+
+${VALIDATED_PLAN}
+
 ## Context
 
 - Repository: ${GITHUB_REPOSITORY}
@@ -34,8 +41,9 @@ it directly; this alone does not require an expertise provider.
 
 ## Execution environment
 
-The job runs `task setup` before you start. Use repository Task targets for all
-allowed actions.
+The bounded editor has no repository credentials, network access, container
+runtime, or Task runner. Trusted host tooling formats and publishes the result
+only after the sandboxed editor exits.
 
 **Product validation runs on configured GitHub Actions workers after the harness
 opens the PR. Trusted Rust gates may use ARC; runtime-dependent gates stay
@@ -45,9 +53,8 @@ and posts a direct mention. Gizmo runs advisory local review after handoff. It
 may use `task remote` for focused execution, then runs `task pr:validate`. Gizmo
 stabilizes exact-head Codex review before dispatching GitHub Actions. A bounded
 timeout keeps review unavailability from blocking those checks. Gizmo never
-activates another review provider. Use
-repository Task targets; do not replace them with
-hand-written `docker run` commands.
+activates another review provider. This bounded worker must not invoke Task or
+a container runtime.
 
 ## Steps
 
@@ -59,12 +66,10 @@ hand-written `docker run` commands.
    team's authorities. Load `.cortex/shared/architecture/system.md` or one
    shared skill only when the task names that cross-team dependency; never scan
    the shared tree by default.
-3. **Always run `task format`** (host-applied) before finishing so the harness
-   commits a formatted tree. When UI-facing paths change, pass the UI demo
-   contract against the base ref when practical.
-4. Do not run `task check`, `task ci:pr`, full suites, builds, or e2e in this
-   bounded worker. Gizmo runs focused and complete hosted execution after the
-   harness publishes the branch and PR.
+3. Do not run formatting, Task commands, full suites, builds, or e2e in this
+   bounded worker. The trusted harness applies the deterministic repository
+   formatter after the editor exits. Gizmo runs focused and complete hosted
+   execution after the harness publishes the branch and PR.
 5. If part of the request is too large, risky, blocked, or out of scope, follow
    `.cortex/gizmo/workflows/issues.md` (update/create Workbench Markdown records)
    rather than silently dropping work.
@@ -92,6 +97,8 @@ hand-written `docker run` commands.
 - Keep the diff focused on the requested task.
 - Stay in the harness-provided isolated workspace. Return the work to the
   parent through the harness commit handoff.
-- Follow `.cortex/gizmo/workflows/pull-requests.md` (squash merge only) and `.cortex/teams/sre/dynamic-skills/docker-container-harness.md` (never kill Docker daemon).
+- Follow `.cortex/gizmo/workflows/pull-requests.md` (squash merge only) and
+  `.cortex/teams/sre/workflows/ci-operations.md` (this Kubernetes-native worker
+  must not invoke a container runtime).
 - Follow `.cortex/teams/sre/dynamic-skills/github-actions-only-validation.md`: format
   locally; product gates run on GitHub Actions.
