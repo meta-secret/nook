@@ -223,7 +223,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
               action: authenticationWorkflow.createPasskeyAction,
               currentStep: 1,
               totalSteps: 3,
-              requiresHumanApproval: false,
+              requiresHumanApproval: true,
               observationIndex: 0,
             },
           }
@@ -342,7 +342,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
               action: authenticationWorkflow.generatePasswordAction,
               currentStep: 2,
               totalSteps: 5,
-              requiresHumanApproval: false,
+              requiresHumanApproval: true,
               observationIndex: 0,
             },
           }
@@ -366,7 +366,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
               action: authenticationWorkflow.continueAction,
               currentStep: 1,
               totalSteps: 3,
-              requiresHumanApproval: false,
+              requiresHumanApproval: true,
               observationIndex: 0,
             },
           }
@@ -453,7 +453,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
               action: authenticationWorkflow.continueAction,
               currentStep: 1,
               totalSteps: 3,
-              requiresHumanApproval: false,
+              requiresHumanApproval: true,
               observationIndex: 0,
             },
           }
@@ -483,7 +483,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
             action: authenticationWorkflow.continueAction,
             currentStep: 1,
             totalSteps: 3,
-            requiresHumanApproval: false,
+            requiresHumanApproval: true,
             observationIndex: 0,
           },
         }
