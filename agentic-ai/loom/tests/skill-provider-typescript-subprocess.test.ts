@@ -172,12 +172,12 @@ import * as child from 'node:child_process';
 child['spawnSync']('bun', ['scripts/facade.ts']);
 require('child_process')['execFileSync']('bun', ['scripts/check.ts']);`),
   ).toEqual(["'bun' 'scripts/facade.ts'", "'bun' 'scripts/check.ts'"]);
-  expect(
+  expect(() =>
     extract(`
 import * as child from 'node:child_process';
 const method=input;
 child[method]('bun', ['ignored.ts']);`),
-  ).toEqual([]);
+  ).toThrow('Dynamic child-process method selection is forbidden.');
   expect(
     extract(
       "const child={spawnSync(){}}; child['spawnSync']('bun', ['ignored.ts']);",

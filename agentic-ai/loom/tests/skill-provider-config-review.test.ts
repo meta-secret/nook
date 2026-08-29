@@ -16,13 +16,16 @@ test('static Node eval cannot erase repository execution', () => {
       `node -e "import('./scripts/facade.mjs')"`,
       'package.json',
     ]),
-  ).toThrow('Node eval repository execution is forbidden');
-  expect(
-    normalizeConfigurationShellSource([
-      `node -e 'console.log("bounded")'`,
-      'package.json',
-    ]),
-  ).toBe('node --version');
+  ).toThrow('Node eval execution is forbidden');
+  for (const source of [
+    `node -e 'console.log("bounded")'`,
+    "node --eval 'require(String.raw`./scripts/facade.cjs`)'",
+    "node -e 'const load = require; load(`./scripts/facade.cjs`)'",
+  ]) {
+    expect(() =>
+      normalizeConfigurationShellSource([source, 'package.json']),
+    ).toThrow('Node eval execution is forbidden');
+  }
 });
 
 test('configuration roots receive the executable loader boundary', () => {
@@ -33,6 +36,24 @@ test('configuration roots receive the executable loader boundary', () => {
     ],
     ['scripts/facade.cjs', `require('../${PROVIDER}');`],
     [PROVIDER, 'export {};'],
+  ]);
+  const graph: ConfigurationScriptGraph = {
+    executablePaths: new Set(),
+    roots: ['vite.config.ts'],
+    sources,
+    symlinkPaths: new Set(),
+  };
+  expect(() => configurationScriptPaths(graph)).toThrow(
+    'root violates runtime boundary',
+  );
+});
+
+test('configuration roots cannot recover ambient loader aliases', () => {
+  const sources = new Map([
+    [
+      'vite.config.ts',
+      "const get = process['getBuiltinModule']; const {createRequire}=get('node:module'); createRequire(import.meta.url)('./scripts/facade.cjs');",
+    ],
   ]);
   const graph: ConfigurationScriptGraph = {
     executablePaths: new Set(),

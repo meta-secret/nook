@@ -28,6 +28,16 @@ export const CONFIGURATION_GRAPH_LIMITS = {
   stateBytes: 65_536,
   states: 4_096,
 } as const;
+const AUDITED_NODE_EVAL_COMMAND_DIGESTS = new Map<string, string>([
+  [
+    '.task/agentic-ai.yml',
+    'aa81b457c8f43b93e64cd4f7b1ccbd3371338bc965ff7bea10c58dead505a5ff',
+  ],
+  [
+    '.task/ai-debug.yml',
+    '52258309733346901e9962cecc19927e86e142140563575277abe3e362553e2d',
+  ],
+]);
 
 export function isRunnableConfiguration(path: string): boolean {
   return (
@@ -151,12 +161,12 @@ export function normalizeConfigurationShellSource([
     .replace(/\bbash "\$formatter_root\/format\.sh"/gu, 'true')
     .replaceAll('/meta-secret/nook/', '')
     .replace(/\bnode (?:-e|--eval) (?:"[^"]*"|'[^']*')/gu, (command) => {
-      if (
-        protectedPath.test(command) ||
-        /\b(?:import|require)\s*\(\s*["']\.{1,2}\//u.test(command)
-      )
-        throw new Error('Node eval repository execution is forbidden.');
-      return 'node --version';
+      const expectedDigest = AUDITED_NODE_EVAL_COMMAND_DIGESTS.get(sourcePath);
+      const actualDigest = new Bun.CryptoHasher('sha256')
+        .update(command)
+        .digest('hex');
+      if (actualDigest === expectedDigest) return 'node --version';
+      throw new Error(`Node eval execution is forbidden: ${sourcePath}`);
     })
     .replace(/\btimeout --kill-after=([^\s;&|]+)/gu, 'timeout --kill-after $1')
     .replace(/\bnode --test\s+[^\s;&|]+/gu, (command) =>

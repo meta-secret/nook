@@ -36,6 +36,10 @@ export type SerializedSubprocessCommand = {
   readonly shellSource: boolean;
   readonly words: readonly TaggedTemplateText[];
 };
+type ChildProcessMemberRequest = readonly [
+  SubprocessCallKind | false,
+  string | false,
+];
 
 export function bunShellTemplateCommand(
   request: BunShellTemplateRequest,
@@ -62,15 +66,27 @@ export function bunShellTemplateCommand(
 
 export function staticMemberAccess(
   expression: ts.Expression,
-): readonly [ts.Expression, string] | false {
+): readonly [ts.Expression, string | false] | false {
   if (ts.isPropertyAccessExpression(expression))
     return [expression.expression, expression.name.text];
-  if (
-    ts.isElementAccessExpression(expression) &&
-    ts.isStringLiteral(expression.argumentExpression)
-  )
-    return [expression.expression, expression.argumentExpression.text];
+  if (ts.isElementAccessExpression(expression))
+    return [
+      expression.expression,
+      ts.isStringLiteral(expression.argumentExpression)
+        ? expression.argumentExpression.text
+        : false,
+    ];
   return false;
+}
+
+export function childProcessCapability(
+  request: ChildProcessMemberRequest,
+): SubprocessCallKind | false {
+  const [owner, member] = request;
+  if (owner !== SubprocessCallKind.Namespace) return false;
+  if (member === false)
+    throw new Error('Dynamic child-process method selection is forbidden.');
+  return CHILD_PROCESS_CALLS.get(member) ?? false;
 }
 
 export function serializeSubprocessCommand(

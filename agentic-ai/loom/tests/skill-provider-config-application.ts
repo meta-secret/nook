@@ -1,11 +1,10 @@
+import { violatesSkillProviderBoundary } from './skill-provider-boundary.test.ts';
+import type { SkillProviderSourceInspection } from './skill-provider-type-context.ts';
 import type { ApplicationConsumerEdge } from './skill-provider-config-types.ts';
-import ts from 'typescript';
 
 type ConfigurationSourceBoundaryRequest = {
   readonly path: string;
-  readonly roots: ReadonlySet<string>;
   readonly source: string;
-  readonly sources: ReadonlyMap<string, string>;
 };
 
 export const PROVIDER_ROOT =
@@ -41,54 +40,21 @@ export function assertConfigurationSourceBoundary(
     !/\.(?:[cm]?tsx?|[cm]?jsx?)$/u.test(request.path)
   )
     return;
-  if (usesRuntimeLoaderModule(request.source))
+  const inspection: SkillProviderSourceInspection = {
+    filePath: request.path,
+    source: request.source,
+  };
+  if (
+    mightUseRuntimeLoader(request.source) &&
+    violatesSkillProviderBoundary(inspection)
+  )
     throw new Error(
       `Runnable configuration root violates runtime boundary: ${request.path}`,
     );
 }
 
-function usesRuntimeLoaderModule(source: string): boolean {
-  const file = ts.createSourceFile(
-    'configuration.ts',
+function mightUseRuntimeLoader(source: string): boolean {
+  return /(?:\b(?:getBuiltinModule|mainModule)\b|["'](?:node:)?(?:module|process)["']|(?:globalThis|global|import\.meta|module)\s*(?:\.|\[)\s*["']?require\b)/u.test(
     source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
   );
-  let violation = false;
-  const loaderModule = (node: ts.Expression): boolean =>
-    ts.isStringLiteralLike(node) &&
-    /^(?:node:)?(?:module|process)$/u.test(node.text);
-  const visit = (node: ts.Node): void => {
-    if (violation) return;
-    if (
-      ts.isImportDeclaration(node) &&
-      loaderModule(node.moduleSpecifier) &&
-      !node.importClause?.isTypeOnly
-    ) {
-      const bindings = node.importClause?.namedBindings;
-      violation =
-        !bindings ||
-        !ts.isNamedImports(bindings) ||
-        bindings.elements.some((element) => !element.isTypeOnly);
-      if (violation) return;
-    }
-    if (
-      ts.isCallExpression(node) &&
-      node.arguments[0] &&
-      loaderModule(node.arguments[0]) &&
-      ((ts.isIdentifier(node.expression) &&
-        (node.expression.text === 'require' ||
-          node.expression.text === 'getBuiltinModule')) ||
-        node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-        (ts.isPropertyAccessExpression(node.expression) &&
-          node.expression.name.text === 'getBuiltinModule'))
-    ) {
-      violation = true;
-      return;
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(file);
-  return violation;
 }

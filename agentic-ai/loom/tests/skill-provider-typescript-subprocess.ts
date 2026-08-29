@@ -7,6 +7,7 @@ import {
 } from './skill-provider-typescript-require.ts';
 import {
   bunShellTemplateCommand,
+  childProcessCapability,
   CHILD_PROCESS_CALLS,
   serializeSubprocessCommand,
   staticMemberAccess,
@@ -358,9 +359,7 @@ function resolveCapability(
     model: request.model,
     visited,
   };
-  return resolveCapability(ownerRequest) === SubprocessCallKind.Namespace
-    ? (CHILD_PROCESS_CALLS.get(member) ?? false)
-    : false;
+  return childProcessCapability([resolveCapability(ownerRequest), member]);
 }
 
 function bindingAt(request: BindingLookupRequest): LexicalBinding | false {

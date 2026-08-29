@@ -136,9 +136,7 @@ export function configurationScriptPaths(
     }
     const sourceBoundaryRequest = {
       path: importer,
-      roots: new Set(graph.roots),
       source,
-      sources: graph.sources,
     };
     if (graph.roots.includes(importer))
       assertConfigurationSourceBoundary(sourceBoundaryRequest);
