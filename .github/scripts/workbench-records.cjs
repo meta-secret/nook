@@ -342,6 +342,7 @@ function parseSliceContract(value, numbered) {
     valid:
       validGizmoIds &&
       !isPlaceholder(scope) &&
+      (!numbered || gizmoName.length > 0) &&
       !isPlaceholder(gizmoName) &&
       !isPlaceholder(evidence),
     number,
@@ -396,9 +397,7 @@ function validateTrustedGizmoAssignment(
 
 function validateGizmoMapping(budgetFields, slices) {
   const gizmoIds = slices.map((slice) => slice.gizmoId)
-  const gizmoNames = slices.map((slice) =>
-    normalizedContractValue(slice.gizmoName.trim()),
-  )
+  const gizmoNames = slices.map((slice) => normalizedContractValue(slice.gizmoName))
   if (new Set(gizmoIds).size !== gizmoIds.length) {
     return 'every PR slice must declare a unique Gizmo ID'
   }

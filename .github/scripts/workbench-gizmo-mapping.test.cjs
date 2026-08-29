@@ -98,6 +98,10 @@ function boundedMultiPlan(mode = 'Independent PRs', predecessor = 'None') {
   })
 }
 
+function validate(candidate, assignedGizmoId = '') {
+  return validateAgentRecord(candidate, 'plan', [], '', { assignedGizmoId })
+}
+
 test('accepts a 200-line one-Gizmo plan with multiple ownership units', () => {
   const candidate = plan({
     ownershipUnits: [
@@ -105,7 +109,7 @@ test('accepts a 200-line one-Gizmo plan with multiple ownership units', () => {
       ownershipUnit(2, 'gizmo-1', 'Publication'),
     ],
   })
-  assert.equal(validateAgentRecord(candidate, 'plan'), '')
+  assert.equal(validate(candidate), '')
 })
 
 test('rejects one-PR delivery with multiple Gizmos', () => {
@@ -115,29 +119,29 @@ test('rejects one-PR delivery with multiple Gizmos', () => {
       slice(2, 'gizmo-2', 'Publisher', 'None', '100'),
     ],
   })
-  assert.match(validateAgentRecord(candidate, 'plan'), /one-PR plan requires one numbered slice/)
+  assert.match(validate(candidate), /one-PR plan requires one numbered slice/)
 })
 
 test('rejects an over-2,000 feature represented by one Gizmo', () => {
   const candidate = stackedPlan()
     .replaceAll('Gizmo ID: gizmo-2', 'Gizmo ID: gizmo-1')
     .replace('Predecessor Gizmo ID: gizmo-1', 'Predecessor Gizmo ID: None')
-  assert.match(validateAgentRecord(candidate, 'plan'), /unique Gizmo ID/)
+  assert.match(validate(candidate), /unique Gizmo ID/)
 })
 
 for (const [label, replacement, rejection] of [
-  ['ID', ['2. Gizmo ID: gizmo-2', '2. Gizmo ID: gizmo-1'], /unique Gizmo ID/],
-  ['name', ['Gizmo name: Publisher', 'Gizmo name: Validator'], /unique Gizmo name/],
+  ['duplicate ID', ['2. Gizmo ID: gizmo-2', '2. Gizmo ID: gizmo-1'], /unique Gizmo ID/],
+  ['duplicate name', ['Gizmo name: Publisher', 'Gizmo name: Validator'], /unique Gizmo name/],
+  ['empty name', ['Gizmo name: Validator', 'Gizmo name:   '], /requires at least two consecutively numbered slices/],
 ]) {
-  test(`rejects a duplicate Gizmo ${label}`, () => {
-    const candidate = stackedPlan().replace(...replacement)
-    assert.match(validateAgentRecord(candidate, 'plan'), rejection)
+  test(`rejects a Gizmo ${label}`, () => {
+    assert.match(validate(stackedPlan().replace(...replacement)), rejection)
   })
 }
 
 test('rejects a declared Gizmo without ownership-unit mapping', () => {
   const candidate = stackedPlan().replace(`\n${ownershipUnit(2, 'gizmo-2', 'Publisher')}`, '')
-  assert.match(validateAgentRecord(candidate, 'plan'), /every declared PR slice Gizmo must own/)
+  assert.match(validate(candidate), /every declared PR slice Gizmo must own/)
 })
 
 test('rejects an ownership unit mapped to an undeclared Gizmo', () => {
@@ -145,21 +149,16 @@ test('rejects an ownership unit mapped to an undeclared Gizmo', () => {
     'Gizmo ID: gizmo-1; Functional owner: AI',
     'Gizmo ID: gizmo-missing; Functional owner: AI',
   )
-  assert.match(validateAgentRecord(candidate, 'plan'), /every ownership unit must reference/)
+  assert.match(validate(candidate), /every ownership unit must reference/)
 })
 
 test('rejects a current Gizmo that differs from the first slice', () => {
   const candidate = plan({ currentGizmoId: 'gizmo-2' })
-  assert.match(validateAgentRecord(candidate, 'plan'), /current Gizmo ID must match/)
+  assert.match(validate(candidate), /current Gizmo ID must match/)
 })
 
 test('accepts a plan bound to its trusted focused-issue Gizmo ID', () => {
-  assert.equal(
-    validateAgentRecord(plan(), 'plan', [], '', {
-      assignedGizmoId: 'gizmo-1',
-    }),
-    '',
-  )
+  assert.equal(validate(plan(), 'gizmo-1'), '')
 })
 
 test('accepts a canonical Gizmo ID that starts with a digit', () => {
@@ -169,12 +168,7 @@ test('accepts a canonical Gizmo ID that starts with a digit', () => {
     ownershipUnits: [ownershipUnit(1, canonicalId)],
     slices: [slice(1, canonicalId, 'Validator', 'None', '200')],
   })
-  assert.equal(
-    validateAgentRecord(candidate, 'plan', [], '', {
-      assignedGizmoId: canonicalId,
-    }),
-    '',
-  )
+  assert.equal(validate(candidate, canonicalId), '')
 })
 
 for (const invalidId of ['slice--one', 'slice-']) {
@@ -184,11 +178,9 @@ for (const invalidId of ['slice--one', 'slice-']) {
       ownershipUnits: [ownershipUnit(1, invalidId)],
       slices: [slice(1, invalidId, 'Validator', 'None', '200')],
     })
-    assert.notEqual(validateAgentRecord(candidate, 'plan'), '')
+    assert.notEqual(validate(candidate), '')
     assert.match(
-      validateAgentRecord(plan(), 'plan', [], '', {
-        assignedGizmoId: invalidId,
-      }),
+      validate(plan(), invalidId),
       /trusted assigned Gizmo ID is invalid/,
     )
   })
@@ -201,28 +193,19 @@ test('accepts multiple ownership units bound to one trusted Gizmo ID', () => {
       ownershipUnit(2, 'gizmo-1', 'Publisher'),
     ],
   })
-  assert.equal(
-    validateAgentRecord(candidate, 'plan', [], '', {
-      assignedGizmoId: 'gizmo-1',
-    }),
-    '',
-  )
+  assert.equal(validate(candidate, 'gizmo-1'), '')
 })
 
 test('rejects a plan that invents a different focused-issue Gizmo ID', () => {
   assert.match(
-    validateAgentRecord(plan(), 'plan', [], '', {
-      assignedGizmoId: 'gizmo-2',
-    }),
+    validate(plan(), 'gizmo-2'),
     /trusted focused-issue Gizmo ID/,
   )
 })
 
 test('rejects multi-PR delivery for a trusted focused-issue Gizmo ID', () => {
   assert.match(
-    validateAgentRecord(stackedPlan(), 'plan', [], '', {
-      assignedGizmoId: 'gizmo-1',
-    }),
+    validate(stackedPlan(), 'gizmo-1'),
     /requires one-PR delivery/,
   )
 })
@@ -232,9 +215,7 @@ test('rejects a different sole slice ID for a trusted focused issue', () => {
     slices: [slice(1, 'gizmo-2', 'Validator', 'None', '200')],
   })
   assert.match(
-    validateAgentRecord(candidate, 'plan', [], '', {
-      assignedGizmoId: 'gizmo-1',
-    }),
+    validate(candidate, 'gizmo-1'),
     /sole PR slice must use the trusted focused-issue Gizmo ID/,
   )
 })
@@ -244,36 +225,32 @@ test('rejects a different ownership-unit ID for a trusted focused issue', () => 
     ownershipUnits: [ownershipUnit(1, 'gizmo-2')],
   })
   assert.match(
-    validateAgentRecord(candidate, 'plan', [], '', {
-      assignedGizmoId: 'gizmo-1',
-    }),
+    validate(candidate, 'gizmo-1'),
     /every ownership unit must use the trusted focused-issue Gizmo ID/,
   )
 })
 
 test('rejects an invalid trusted focused-issue Gizmo ID', () => {
   assert.match(
-    validateAgentRecord(plan(), 'plan', [], '', {
-      assignedGizmoId: 'Gizmo 1',
-    }),
+    validate(plan(), 'Gizmo 1'),
     /trusted assigned Gizmo ID is invalid/,
   )
 })
 
 test('accepts predecessor-free independent PRs at the 2,000-line ceiling', () => {
-  assert.equal(validateAgentRecord(boundedMultiPlan(), 'plan'), '')
+  assert.equal(validate(boundedMultiPlan()), '')
 })
 
 test('rejects stacked PRs at the 2,000-line ceiling', () => {
   assert.match(
-    validateAgentRecord(boundedMultiPlan('Stacked PRs', 'gizmo-1'), 'plan'),
+    validate(boundedMultiPlan('Stacked PRs', 'gizmo-1')),
     /requires independent PRs/,
   )
 })
 
 test('rejects dependent independent PRs below the ceiling', () => {
   assert.match(
-    validateAgentRecord(boundedMultiPlan('Independent PRs', 'gizmo-1'), 'plan'),
+    validate(boundedMultiPlan('Independent PRs', 'gizmo-1')),
     /independent PR slices must not declare predecessor Gizmos/,
   )
 })
@@ -283,7 +260,7 @@ test('rejects a nonconsecutive stacked Gizmo predecessor', () => {
     'Predecessor Gizmo ID: gizmo-1; Publisher',
     'Predecessor Gizmo ID: None; Publisher',
   )
-  assert.match(validateAgentRecord(candidate, 'plan'), /predecessors must follow consecutive/)
+  assert.match(validate(candidate), /predecessors must follow consecutive/)
 })
 
 for (const forbiddenField of ['Parent Gizmo ID', 'Child Gizmo', 'Nested Gizmo ID']) {
@@ -292,6 +269,6 @@ for (const forbiddenField of ['Parent Gizmo ID', 'Child Gizmo', 'Nested Gizmo ID
       '- Current Gizmo ID: gizmo-1',
       `- Current Gizmo ID: gizmo-1\n- ${forbiddenField}: gizmo-2`,
     )
-    assert.match(validateAgentRecord(candidate, 'plan'), /nested or child Gizmo fields/)
+    assert.match(validate(candidate), /nested or child Gizmo fields/)
   })
 }

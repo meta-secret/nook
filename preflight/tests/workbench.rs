@@ -868,15 +868,17 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
         "bounded automation must identify the materialization action before blocking"
     );
     let implement = read("agentic-ai/ci-agent/src/main/implement.ts");
-    let budget_position = implement
-        .find("assertAuthoredChangeBudget(budgetArgs)")
-        .context("bounded implementation must enforce the authored diff budget")?;
-    let push_position = implement
-        .find("pushFixBranch(repoRoot, agentBranch, runId)")
-        .context("bounded implementation must push its bounded branch")?;
+    let ordered = [
+        "pushBranch()",
+        "verifyBranch()",
+        "assertBudget()",
+        "findPr()",
+        "createPr()",
+    ]
+    .map(|step| implement.find(step));
     assert!(
-        budget_position < push_position,
-        "bounded implementation must enforce the authored diff budget before push"
+        ordered.iter().all(Option::is_some) && ordered.is_sorted(),
+        "branch preservation sequence drifted"
     );
     Ok(())
 }
