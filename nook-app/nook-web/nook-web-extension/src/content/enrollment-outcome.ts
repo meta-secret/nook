@@ -184,11 +184,13 @@ async function classifyEnrollmentOutcome({
 type FillStagedEnrollmentCodeArgs = {
   host: EnrollmentOutcomeHost
   stageId: string
+  authorizationIsCurrent: () => boolean
 }
 
 export async function fillStagedEnrollmentCode({
   host,
   stageId,
+  authorizationIsCurrent,
 }: FillStagedEnrollmentCodeArgs): Promise<boolean> {
   const message: Parameters<
     typeof host.sendAuthenticatorCodeRuntimeMessage
@@ -206,12 +208,20 @@ export async function fillStagedEnrollmentCode({
   ) {
     return false
   }
+  const code = { value: delivery.response.code }
+  delivery.response.code = ''
+  if (!authorizationIsCurrent()) {
+    code.value = ''
+    return false
+  }
   const nookTypedArgs0_0: Parameters<typeof fillOneTimeCode>[0] = {
-    code: delivery.response.code,
+    code: code.value,
     kind: PasswordFormQueryKind.Root,
     root: document,
   }
-  return fillOneTimeCode(nookTypedArgs0_0)
+  const filled = fillOneTimeCode(nookTypedArgs0_0)
+  code.value = ''
+  return filled
 }
 
 export function stopPendingEnrollmentWatch(): void {
@@ -310,6 +320,9 @@ export function beginEnrollmentEvidenceWatch({
       const nookTypedArgs0_3: Parameters<typeof fillStagedEnrollmentCode>[0] = {
         host,
         stageId,
+        authorizationIsCurrent: () =>
+          enrollmentWatchState.kind === EnrollmentWatchStateKind.Watching &&
+          enrollmentWatchState.watch.stageId === stageId,
       }
       void fillStagedEnrollmentCode(nookTypedArgs0_3)
     }
@@ -326,6 +339,9 @@ export function beginEnrollmentEvidenceWatch({
       const nookTypedArgs0_4: Parameters<typeof fillStagedEnrollmentCode>[0] = {
         host,
         stageId,
+        authorizationIsCurrent: () =>
+          enrollmentWatchState.kind === EnrollmentWatchStateKind.Watching &&
+          enrollmentWatchState.watch.stageId === stageId,
       }
       void fillStagedEnrollmentCode(nookTypedArgs0_4)
     }

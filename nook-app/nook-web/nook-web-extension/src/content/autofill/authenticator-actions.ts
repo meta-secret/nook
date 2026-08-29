@@ -51,6 +51,7 @@ type FillAuthenticatorCodeArgs = {
   title: HTMLHeadingElement
   description: HTMLParagraphElement
   continueButton: HTMLButtonElement
+  actionGeneration: number
 }
 
 type AuthenticatorFillFailureArgs = Omit<
@@ -90,6 +91,7 @@ export async function fillAuthenticatorCode({
   title,
   description,
   continueButton,
+  actionGeneration,
 }: FillAuthenticatorCodeArgs): Promise<boolean> {
   const failureUi: AuthenticatorFillFailureArgs = {
     step,
