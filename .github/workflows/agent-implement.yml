@@ -134,7 +134,7 @@ jobs:
                 : parsedGizmoId
             if (
               typeof assignedGizmoId !== 'string' ||
-              (assignedGizmoId && !/^[a-z][a-z0-9-]{0,62}$/.test(assignedGizmoId))
+              (assignedGizmoId && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(assignedGizmoId))
             ) {
               core.setFailed(`${path} has an invalid canonical gizmo_id`)
               return
@@ -357,7 +357,7 @@ jobs:
               core.setFailed(`Rejected agent-authored Workbench task plan: ${rejection}.`)
               return
             }
-            const currentGizmoIdMatch = /^- Current Gizmo ID:\s*([a-z][a-z0-9-]{0,62})\s*$/m.exec(candidate)
+            const currentGizmoIdMatch = /^- Current Gizmo ID:\s*([a-z0-9]+(?:-[a-z0-9]+)*)\s*$/m.exec(candidate)
             const currentGizmoId = currentGizmoIdMatch?.[1]
             if (!currentGizmoId) {
               core.setFailed('Validated Workbench task plan is missing its Current Gizmo ID.')

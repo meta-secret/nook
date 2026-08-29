@@ -57,11 +57,11 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "typeof assignedGizmoId !== 'string'",
         "ASSIGNED_GIZMO_ID: ${{ steps.workbench.outputs.gizmo_id }}",
         "assignedGizmoId: process.env.ASSIGNED_GIZMO_ID",
-        "const currentGizmoIdMatch = /^- Current Gizmo ID:",
+        "const currentGizmoIdMatch = /^- Current Gizmo ID:\\s*([a-z0-9]+(?:-[a-z0-9]+)*)\\s*$/m",
         "const currentGizmoId = currentGizmoIdMatch?.[1]",
         "Validated Workbench task plan is missing its Current Gizmo ID.",
         "`gizmo_id: ${currentGizmoId}`",
-        "assignedGizmoId && !/^[a-z][a-z0-9-]{0,62}$/.test(assignedGizmoId)",
+        "assignedGizmoId && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(assignedGizmoId)",
         "gizmoIdRows.length > 1",
         "continuing_owner:",
         "A prompt-backed run requires continuing_owner.",
@@ -115,6 +115,21 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
     assert!(
         !workflow.contains("String(value(frontmatter, 'gizmo_id'))"),
         "null or absent Gizmo IDs must not be stringified into trusted assignments"
+    );
+    let canonical_gizmo_id = |gizmo_id: &str| {
+        !gizmo_id.is_empty()
+            && gizmo_id.split('-').all(|segment| {
+                !segment.is_empty()
+                    && segment
+                        .bytes()
+                        .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
+            })
+    };
+    assert!(
+        canonical_gizmo_id("2fa-slice")
+            && !canonical_gizmo_id("slice--one")
+            && !canonical_gizmo_id("slice-"),
+        "workflow Gizmo IDs must use canonical non-empty lowercase alphanumeric segments"
     );
     assert!(
         !workflow.contains("`gizmo_id: ${process.env.ASSIGNED_GIZMO_ID || 'null'}`"),
