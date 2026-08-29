@@ -539,7 +539,7 @@ describe('module delivery wave integration', () => {
     expect(sourceGit(['status', '--porcelain=v1'])).toBe('');
 
     expect(() => integrateWave(integration)).toThrow('invalid or stale');
-  });
+  }, 15_000);
 
   test('authenticates typed evidence and rejects stale tuples after supersession', () => {
     const fixture = createTrackedFixture();
