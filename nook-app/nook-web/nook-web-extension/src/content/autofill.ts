@@ -20,10 +20,13 @@ import {
   AUTHENTICATION_VIEWPORT_EVENTS,
   authenticationMutationImpact,
 } from './autofill/authentication-surface-observation'
+import { authenticationEnrollmentObservationFacts } from './autofill/authentication-enrollment-observation'
 import {
-  approvedEnrollmentHints,
-  authenticationEnrollmentObservationFacts,
-} from './autofill/authentication-enrollment-observation'
+  AuthenticationEnrollmentWorkflowDeliveryKind,
+  performAuthenticationEnrollmentScan,
+  postSaveEnrollmentHoldAllowsOrdinarySurface,
+  refreshHeldEnrollmentRecoveryPresentation,
+} from './autofill/authentication-enrollment-scan'
 import {
   cancelPendingLoginPickerRequest,
   RuntimeMessageDeliveryKind,
@@ -55,7 +58,11 @@ import {
   renderWidget,
 } from './autofill/widget-rendering'
 import { clampMountedWidgetPosition } from './autofill/widget-position'
-import { loadPilotVaultConnection, remountWidget } from './autofill/workflow-ui'
+import {
+  loadPilotVaultConnection,
+  remountWidget,
+  setFlightProgress,
+} from './autofill/workflow-ui'
 import {
   detectEnrollmentHints,
   enrollmentCeremonyActive,
@@ -70,11 +77,17 @@ async function performScanAndRender(): Promise<void> {
   if (enrollmentCeremonyActive()) return
   const postSaveWidget = enrollmentWidgetHeldAfterSave()
   const preservePostSaveWidget = postSaveWidget.kind === 'held'
+  const ordinarySurfacesAllowed = postSaveEnrollmentHoldAllowsOrdinarySurface(
+    preservePostSaveWidget,
+  )
   const removeUnavailableWidget = (): void => {
     if (!preservePostSaveWidget) removeScannedWidget()
   }
   const sequence = ++scanState.sequence
-  if (saveOfferState.display.kind === SaveOfferDisplayKind.Visible) {
+  if (
+    ordinarySurfacesAllowed &&
+    saveOfferState.display.kind === SaveOfferDisplayKind.Visible
+  ) {
     const { offer } = saveOfferState.display
     if (
       widgetState.workflowKey.kind !== WidgetWorkflowKeyKind.Assigned ||
@@ -84,15 +97,20 @@ async function performScanAndRender(): Promise<void> {
     }
     return
   }
-  if (saveOfferState.watch.kind === SavePageWatchKind.Watching) {
+  if (
+    ordinarySurfacesAllowed &&
+    saveOfferState.watch.kind === SavePageWatchKind.Watching
+  ) {
     void evaluatePendingSaveEvidence()
     return
   }
-  const pendingOffer = await loadPendingSaveOffer()
-  if (sequence !== scanState.sequence) return
-  if (pendingOffer.kind === PendingSaveOfferLoadKind.Loaded) {
-    beginPendingSaveWatch(pendingOffer.offer)
-    return
+  if (ordinarySurfacesAllowed) {
+    const pendingOffer = await loadPendingSaveOffer()
+    if (sequence !== scanState.sequence) return
+    if (pendingOffer.kind === PendingSaveOfferLoadKind.Loaded) {
+      beginPendingSaveWatch(pendingOffer.offer)
+      return
+    }
   }
   const enrollmentHints = detectEnrollmentHints()
   const recoveryCopy = authenticationRecoveryCopy()
@@ -120,7 +138,7 @@ async function performScanAndRender(): Promise<void> {
       typeof authenticationEnrollmentObservationFacts
     >[0] = {
       authenticatorSetupPresent: enrollmentHints.qr,
-      backupCodesPresent: enrollmentHints.backupCodes,
+      backupCodesCopy: recoveryCopy,
       manualCheckpointPresent: pageHasManualCheckpoint(document),
     }
     const message: Parameters<
@@ -134,50 +152,56 @@ async function performScanAndRender(): Promise<void> {
         ],
       },
     }
-    const delivery =
-      await sendAuthenticationWorkflowSnapshotRuntimeMessage(message)
-    if (sequence !== scanState.sequence) return
-    if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
-      removeUnavailableWidget()
-      return
-    }
-    const { workflow: response } = delivery.response
-    if (
-      response.kind !== AuthenticationWorkflowSnapshotResponseKind.Matched ||
-      !('snapshot' in response)
-    ) {
-      removeUnavailableWidget()
-      return
-    }
-    const vaultConnection = await loadPilotVaultConnection()
-    if (sequence !== scanState.sequence) return
-    if (
-      postSaveWidget.kind === 'held' &&
-      postSaveWidget.host.panel.isConnected
-    ) {
-      const approvedHintsRequest: Parameters<
-        typeof approvedEnrollmentHints
-      >[0] = {
-        hints: enrollmentHints,
-        snapshot: response.snapshot,
-      }
-      const approvedActions: Parameters<typeof renderEnrollmentActions>[0] = {
-        host: postSaveWidget.host,
-        hints: approvedEnrollmentHints(approvedHintsRequest),
-      }
-      releaseEnrollmentWidgetHold()
-      renderEnrollmentActions(approvedActions)
-    } else {
-      const nookTypedArgs0_0: Parameters<typeof renderEnrollmentWidget>[0] = {
-        hints: enrollmentHints,
-        snapshot: response.snapshot,
-        vaultConnection,
-      }
-      releaseEnrollmentWidgetHold()
-      renderEnrollmentWidget(nookTypedArgs0_0)
-    }
+    const postSaveHeld =
+      postSaveWidget.kind === 'held' && postSaveWidget.host.panel.isConnected
+    await performAuthenticationEnrollmentScan({
+      hints: enrollmentHints,
+      postSaveHeld,
+      deliverWorkflow: async () => {
+        const delivery =
+          await sendAuthenticationWorkflowSnapshotRuntimeMessage(message)
+        return delivery.kind === RuntimeMessageDeliveryKind.Unavailable
+          ? {
+              kind: AuthenticationEnrollmentWorkflowDeliveryKind.Unavailable,
+            }
+          : {
+              kind: AuthenticationEnrollmentWorkflowDeliveryKind.Delivered,
+              workflow: delivery.response.workflow,
+            }
+      },
+      isCurrent: () => sequence === scanState.sequence,
+      loadVaultConnection: loadPilotVaultConnection,
+      removeUnavailable: removeUnavailableWidget,
+      renderNew: ({ snapshot, vaultConnection }) => {
+        const nookTypedArgs0_0: Parameters<typeof renderEnrollmentWidget>[0] = {
+          hints: enrollmentHints,
+          snapshot,
+          vaultConnection,
+        }
+        releaseEnrollmentWidgetHold()
+        renderEnrollmentWidget(nookTypedArgs0_0)
+      },
+      renderPostSaveRecovery: ({ hints, snapshot }) => {
+        if (postSaveWidget.kind !== 'held') return
+        const approvedActions: Parameters<typeof renderEnrollmentActions>[0] = {
+          host: postSaveWidget.host,
+          hints,
+        }
+        const presentationRequest: Parameters<
+          typeof refreshHeldEnrollmentRecoveryPresentation
+        >[0] = {
+          host: postSaveWidget.host,
+          snapshot,
+          updateProgress: setFlightProgress,
+        }
+        refreshHeldEnrollmentRecoveryPresentation(presentationRequest)
+        releaseEnrollmentWidgetHold()
+        renderEnrollmentActions(approvedActions)
+      },
+    })
     return
   }
+  if (!ordinarySurfacesAllowed) return
   if (workflowForms.length === 0) {
     removeUnavailableWidget()
     return

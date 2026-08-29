@@ -8,14 +8,14 @@ import type { EnrollmentPageHints } from '../enrollment-flow-view'
 
 export type AuthenticationEnrollmentObservationRequest = {
   authenticatorSetupPresent: boolean
-  backupCodesPresent: boolean
+  backupCodesCopy: string
   manualCheckpointPresent: boolean
 }
 
 /** Collect direct enrollment facts only; Rust owns workflow and action selection. */
 export function authenticationEnrollmentObservationFacts({
   authenticatorSetupPresent,
-  backupCodesPresent,
+  backupCodesCopy,
   manualCheckpointPresent,
 }: AuthenticationEnrollmentObservationRequest): AuthenticationPageObservationFacts {
   return {
@@ -41,12 +41,25 @@ export function authenticationEnrollmentObservationFacts({
     },
     authenticator: {
       authenticatorSetup: authenticatorSetupPresent ? 'present' : 'absent',
-      backupCodes: backupCodesPresent ? 'present' : 'absent',
+      backupCodesCopy,
       passkeyControl: 'absent',
       matchingPasskeyAccountCount: 0,
       detailedPasskeyControl: { kind: 'absent' },
     },
     detailedAdvanceControl: { kind: 'absent' },
+  }
+}
+
+export function approvedPostSaveEnrollmentHints({
+  hints,
+  snapshot,
+}: ApprovedEnrollmentHintsRequest): EnrollmentPageHints {
+  const approved = approvedEnrollmentHints({ hints, snapshot })
+  return {
+    qr: false,
+    backupCodes:
+      snapshot.action === AuthenticationWorkflowAction.SaveBackupCodes &&
+      approved.backupCodes,
   }
 }
 

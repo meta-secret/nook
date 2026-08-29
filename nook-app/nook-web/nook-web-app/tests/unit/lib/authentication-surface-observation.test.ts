@@ -8,6 +8,7 @@ import {
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   approvedEnrollmentHints,
+  approvedPostSaveEnrollmentHints,
   authenticationEnrollmentObservationFacts,
 } from '../../../../nook-web-extension/src/content/autofill/authentication-enrollment-observation'
 import {
@@ -60,7 +61,7 @@ describe('authentication surface mutation filtering', () => {
   test('reports direct enrollment evidence without inventing form controls', () => {
     const facts = authenticationEnrollmentObservationFacts({
       authenticatorSetupPresent: true,
-      backupCodesPresent: true,
+      backupCodesCopy: 'Save these recovery codes',
       manualCheckpointPresent: true,
     })
 
@@ -78,12 +79,38 @@ describe('authentication surface mutation filtering', () => {
       },
       authenticator: {
         authenticatorSetup: 'present',
-        backupCodes: 'present',
+        backupCodesCopy: 'Save these recovery codes',
         passkeyControl: 'absent',
         matchingPasskeyAccountCount: 0,
       },
       detailedAdvanceControl: { kind: 'absent' },
     })
+  })
+
+  test('retains post-save confirmation unless Rust approves recovery follow-up', () => {
+    const bothHints = { qr: true, backupCodes: true }
+    const setup: AuthenticationWorkflowSnapshot = {
+      kind: AuthenticationWorkflowKind.TotpEnrollment,
+      stage: AuthenticationWorkflowStage.Setup,
+      action: AuthenticationWorkflowAction.EnrollAuthenticator,
+      currentStep: 2,
+      totalSteps: 5,
+      approvalRequirement: 'explicit-user-approval',
+      observationIndex: 0,
+    }
+    expect(
+      approvedPostSaveEnrollmentHints({ hints: bothHints, snapshot: setup }),
+    ).toEqual({ qr: false, backupCodes: false })
+
+    const recovery: AuthenticationWorkflowSnapshot = {
+      ...setup,
+      stage: AuthenticationWorkflowStage.Recovery,
+      action: AuthenticationWorkflowAction.SaveBackupCodes,
+      currentStep: 4,
+    }
+    expect(
+      approvedPostSaveEnrollmentHints({ hints: bothHints, snapshot: recovery }),
+    ).toEqual({ qr: false, backupCodes: true })
   })
 
   test('adapts only the closed Rust-approved enrollment action', () => {
