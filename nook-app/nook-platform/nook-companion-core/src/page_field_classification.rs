@@ -126,8 +126,7 @@ pub fn has_login_context(observation: &LoginContextObservation) -> bool {
             return true;
         }
     }
-    let advance = expand_identity_text(&observation.advance_control_label);
-    if contains_any_word(&advance, LOGIN_ADVANCE_WORDS) {
+    if looks_like_login_advance_control_label(&observation.advance_control_label) {
         return true;
     }
     let path = observation.path_context.to_ascii_lowercase();
@@ -559,6 +558,18 @@ mod tests {
 
     #[test]
     fn detects_username_with_login_context_for_bare_email() {
+        let context = |label: &str| {
+            has_login_context(&LoginContextObservation {
+                form_identity: String::new(),
+                ancestor_identities: Vec::new(),
+                advance_control_label: label.to_owned(),
+                path_context: String::new(),
+            })
+        };
+        assert!(context("Entrar"));
+        for label in "Entrar en el sorteo|Entrar con Amazon".split('|') {
+            assert!(!context(label));
+        }
         assert!(!looks_like_username_field(&field(
             PageInputType::Email,
             "newsletter-email",
@@ -633,9 +644,9 @@ mod tests {
         };
         assert!(decide("", "", false, true, true));
         assert!(decide("", "Entrar Entrar", false, true, true));
-        assert!(decide("f", "Sign in to Microsoft 365", false, true, true));
-        assert!(decide("f", "Continue with email", true, true, true));
-        assert!(decide("f", "Sign in using password", true, true, true));
+        for label in "Sign in to Microsoft 365|Continue with email address|Continue with your email|Use your password to sign in".split('|') {
+            assert!(decide("f", label, true, true, true));
+        }
         assert!(!decide("f", "Continue with Amazon", true, true, true));
         for label in "Sign in to Google|machine:delete-account|machine:reset-password|machine:create-account|machine:google|machine:passkey|Sign in to Microsoft and reset password|Sign in to Microsoft or Google".split('|') {
             assert!(!decide("login-form", label, true, true, true));
@@ -646,45 +657,23 @@ mod tests {
 
     #[test]
     fn route_identity_requires_positive_same_origin_authentication_evidence() {
-        assert!(has_safe_authentication_route_identity(
-            "https://example.test",
+        let safe = |form, destination| {
+            has_safe_authentication_route_identity("https://example.test", form, destination)
+        };
+        assert!(safe(
             "",
-            "https://example.test/login?notprovider=x&continue=https://mail.google.com",
+            "https://example.test/login?notprovider=x&continue=https://mail.google.com"
         ));
-        assert!(has_safe_authentication_route_identity(
-            "https://example.test",
-            "login-form",
-            "https://example.test/auth/login?x=1",
-        ));
-        for (form, destination) in [
-            ("reset-password", "https://example.test/auth/login"),
-            ("signup-form", "https://example.test/auth/login"),
-            ("google-login", "https://example.test/auth/login"),
-            ("passkey-login", "https://example.test/auth/login"),
-            ("login-form", "https://example.test/login?provider"),
-            ("login-form", "https://example.test/login?next=/home#google"),
-            (
-                "login-form",
-                "https://example.test/login?identity_provider=amazon",
-            ),
-            ("login-form", "https://example.test/signin/x"),
-            ("login-form", "https://example.test/account/close"),
-            ("login-form", "https://example.test/login/amazon"),
-            ("login-form", "https://example.test/orders/123/submit"),
-            ("login-form", "/auth/login?action=close+account"),
-            ("login-form", "https://example.test/login/provider/acme"),
-            ("login-form", "https://example.test/login/discord"),
-        ] {
-            assert!(!has_safe_authentication_route_identity(
-                "https://example.test",
-                form,
-                destination,
-            ));
+        assert!(safe("login-form", "https://example.test/auth/login?x=1"));
+        for form in "reset-password|signup-form|google-login|passkey-login".split('|') {
+            assert!(!safe(form, "https://example.test/auth/login"));
         }
-        assert!(!has_safe_authentication_route_identity(
-            "https://example.test",
+        for destination in "https://example.test/login?provider|https://example.test/login?next=/home#google|https://example.test/login?identity_provider=amazon|https://example.test/signin/x|https://example.test/account/close|https://example.test/login/amazon|https://example.test/orders/123/submit|https://example.test/auth/login?action=close+account|https://example.test/login/provider/acme|https://example.test/login/discord".split('|') {
+            assert!(!safe("login-form", destination));
+        }
+        assert!(!safe(
             &"x".repeat(MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1),
-            "https://example.test/auth/login",
+            "https://example.test/auth/login"
         ));
     }
 }

@@ -48,7 +48,13 @@ fn has_open_ended_provider_selection_grammar(identity: &str) -> bool {
             *token,
             "with" | "using" | "via" | "use" | "choose" | "select"
         ) && index + 1 < tokens.len()
-            && !matches!(&tokens[index + 1..], ["email" | "password"])
+            && !matches!(
+                &tokens[index + 1..],
+                ["email" | "password"]
+                    | ["email", "address"]
+                    | ["your", "email"]
+                    | ["your", "password", "to", "sign", "in"]
+            )
     })
 }
 pub(super) fn looks_like_microsoft_primary_sign_in_label(label: &str) -> bool {
