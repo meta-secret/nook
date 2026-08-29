@@ -107,12 +107,37 @@ impl AuthenticationWorkflowSnapshot {
 mod tests {
     use super::super::{
         AuthenticationApprovalRequirement, AuthenticationPageObservation,
-        AuthenticationWorkflowAction, AuthenticationWorkflowKind, AuthenticationWorkflowMatch,
-        AuthenticationWorkflowSnapshot, AuthenticationWorkflowStage,
-        MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS, classify_authentication_workflow,
-        classify_authentication_workflow_candidates,
+        AuthenticationSavedLoginCapability, AuthenticationWorkflowAction,
+        AuthenticationWorkflowKind, AuthenticationWorkflowMatch, AuthenticationWorkflowSnapshot,
+        AuthenticationWorkflowStage, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
+        classify_authentication_workflow, classify_authentication_workflow_candidates,
     };
     use super::MAX_AUTHENTICATION_WORKFLOW_OBSERVATION_INDEX_EXCLUSIVE;
+
+    #[test]
+    fn saved_login_capability_requires_a_complete_login_snapshot() {
+        let valid = AuthenticationWorkflowSnapshot {
+            kind: AuthenticationWorkflowKind::Login,
+            stage: AuthenticationWorkflowStage::Credentials,
+            action: AuthenticationWorkflowAction::ContinueWithNook,
+            current_step: 1,
+            total_steps: 3,
+            approval_requirement: AuthenticationApprovalRequirement::ExplicitUserApproval,
+            observation_index: 0,
+        };
+        assert_eq!(
+            valid.saved_login_capability(),
+            AuthenticationSavedLoginCapability::FillSavedLogin
+        );
+        assert_eq!(
+            AuthenticationWorkflowSnapshot {
+                stage: AuthenticationWorkflowStage::Recovery,
+                ..valid
+            }
+            .saved_login_capability(),
+            AuthenticationSavedLoginCapability::Unavailable
+        );
+    }
 
     fn classifier_outputs() -> Vec<(
         AuthenticationPageObservation,

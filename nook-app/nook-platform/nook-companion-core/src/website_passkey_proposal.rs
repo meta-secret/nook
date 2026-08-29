@@ -117,4 +117,16 @@ mod tests {
             WebsitePasskeyProposal::None
         );
     }
+
+    #[test]
+    fn normalizes_zero_count_passkey_matches() {
+        assert_eq!(
+            propose_website_passkey(AuthenticationWorkflowKind::Login, false, false, 0),
+            WebsitePasskeyProposal::None
+        );
+        assert_eq!(
+            propose_website_passkey(AuthenticationWorkflowKind::Login, false, true, 0),
+            WebsitePasskeyProposal::CreatePasskey
+        );
+    }
 }

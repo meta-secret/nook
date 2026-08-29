@@ -93,6 +93,61 @@ pub enum AuthenticationWorkflowSnapshotResponseKind {
     Rejected,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum WebsiteLoginMatchAvailabilityKind {
+    Ready,
+    Locked,
+    Unavailable,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct WebsiteLoginMatchAvailabilityWithCountWire {
+    kind: WebsiteLoginMatchAvailabilityKind,
+    count: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct WebsiteLoginMatchAvailabilityWithoutCountWire {
+    kind: WebsiteLoginMatchAvailabilityKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Tsify)]
+#[serde(untagged)]
+#[tsify(from_wasm_abi)]
+pub enum WebsiteLoginMatchAvailabilityWire {
+    WithCount(WebsiteLoginMatchAvailabilityWithCountWire),
+    WithoutCount(WebsiteLoginMatchAvailabilityWithoutCountWire),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Tsify)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+#[tsify(into_wasm_abi)]
+pub enum WebsiteLoginMatchAvailability {
+    Ready { count: u32 },
+    Locked,
+    Unavailable,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[tsify(from_wasm_abi)]
+pub struct AuthenticationWorkflowRuntimeResponseWire {
+    workflow: AuthenticationWorkflowSnapshotResponseWire,
+    login_matches: WebsiteLoginMatchAvailabilityWire,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+#[tsify(into_wasm_abi)]
+pub struct AuthenticationWorkflowRuntimeResponse {
+    pub workflow: AuthenticationWorkflowSnapshotResponse,
+    pub login_matches: WebsiteLoginMatchAvailability,
+}
+
 impl Serialize for AuthenticationWorkflowSnapshotResponseKind {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -105,6 +160,10 @@ impl Serialize for AuthenticationWorkflowSnapshotResponseKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 #[error("authentication workflow snapshot response is malformed")]
 pub struct AuthenticationWorkflowSnapshotResponseDecodeError;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("authentication workflow runtime response is malformed")]
+pub struct AuthenticationWorkflowRuntimeResponseDecodeError;
 
 pub fn decode_authentication_workflow_snapshot_response(
     wire: AuthenticationWorkflowSnapshotResponseWire,
@@ -139,6 +198,40 @@ pub fn decode_authentication_workflow_snapshot_response(
             Err(AuthenticationWorkflowSnapshotResponseDecodeError)
         }
     }
+}
+
+pub fn decode_authentication_workflow_runtime_response(
+    wire: AuthenticationWorkflowRuntimeResponseWire,
+) -> Result<AuthenticationWorkflowRuntimeResponse, AuthenticationWorkflowRuntimeResponseDecodeError>
+{
+    let workflow = decode_authentication_workflow_snapshot_response(wire.workflow)
+        .map_err(|_| AuthenticationWorkflowRuntimeResponseDecodeError)?;
+    let login_matches = match wire.login_matches {
+        WebsiteLoginMatchAvailabilityWire::WithCount(
+            WebsiteLoginMatchAvailabilityWithCountWire {
+                kind: WebsiteLoginMatchAvailabilityKind::Ready,
+                count,
+            },
+        ) => WebsiteLoginMatchAvailability::Ready { count },
+        WebsiteLoginMatchAvailabilityWire::WithoutCount(
+            WebsiteLoginMatchAvailabilityWithoutCountWire {
+                kind: WebsiteLoginMatchAvailabilityKind::Locked,
+            },
+        ) => WebsiteLoginMatchAvailability::Locked,
+        WebsiteLoginMatchAvailabilityWire::WithoutCount(
+            WebsiteLoginMatchAvailabilityWithoutCountWire {
+                kind: WebsiteLoginMatchAvailabilityKind::Unavailable,
+            },
+        ) => WebsiteLoginMatchAvailability::Unavailable,
+        WebsiteLoginMatchAvailabilityWire::WithCount(_)
+        | WebsiteLoginMatchAvailabilityWire::WithoutCount(_) => {
+            return Err(AuthenticationWorkflowRuntimeResponseDecodeError);
+        }
+    };
+    Ok(AuthenticationWorkflowRuntimeResponse {
+        workflow,
+        login_matches,
+    })
 }
 
 #[cfg(test)]
@@ -276,6 +369,43 @@ mod tests {
             assert_eq!(
                 decode_authentication_workflow_snapshot_response(malformed),
                 Err(AuthenticationWorkflowSnapshotResponseDecodeError)
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn enforces_the_closed_runtime_login_match_envelope() -> anyhow::Result<()> {
+        for availability in [
+            r#"{"kind":"ready","count":0}"#,
+            r#"{"kind":"locked"}"#,
+            r#"{"kind":"unavailable"}"#,
+        ] {
+            let json = format!(r#"{{"workflow":{{"ok":true}},"loginMatches":{availability}}}"#);
+            let wire = serde_json::from_str::<AuthenticationWorkflowRuntimeResponseWire>(&json)?;
+            assert!(decode_authentication_workflow_runtime_response(wire).is_ok());
+        }
+
+        for malformed in [
+            r#"{"workflow":{"ok":true},"loginMatches":{"kind":"ready"}}"#,
+            r#"{"workflow":{"ok":true},"loginMatches":{"kind":"locked","count":0}}"#,
+            r#"{"workflow":{"ok":true},"loginMatches":{"kind":"unavailable","count":0}}"#,
+        ] {
+            let wire =
+                serde_json::from_str::<AuthenticationWorkflowRuntimeResponseWire>(malformed)?;
+            assert_eq!(
+                decode_authentication_workflow_runtime_response(wire),
+                Err(AuthenticationWorkflowRuntimeResponseDecodeError)
+            );
+        }
+
+        for malformed in [
+            r#"{"workflow":{"ok":true},"loginMatches":{"kind":"ready","count":-1}}"#,
+            r#"{"workflow":{"ok":true},"loginMatches":{"kind":"other"}}"#,
+        ] {
+            assert!(
+                serde_json::from_str::<AuthenticationWorkflowRuntimeResponseWire>(malformed)
+                    .is_err()
             );
         }
         Ok(())
