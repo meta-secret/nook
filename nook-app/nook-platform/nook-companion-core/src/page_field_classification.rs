@@ -343,7 +343,16 @@ pub fn can_activate_authentication_route_control(
     {
         return false;
     }
-    if looks_like_login_advance_control_label(control_label) {
+    let has_matching_microsoft_authority =
+        destination_identity::canonicalize_control_destination(source_origin, destination_identity)
+            .is_some_and(|destination| destination.has_microsoft_provider_authority)
+            && control_identity::looks_like_microsoft_primary_sign_in_label(control_label);
+    if control_identity::label_names_external_authentication_provider(control_label)
+        && !has_matching_microsoft_authority
+    {
+        return false;
+    }
+    if looks_like_login_advance_control_label(control_label) || has_matching_microsoft_authority {
         return !form_identity.trim().is_empty()
             || (has_authentication_username && has_local_authentication_scope);
     }
@@ -632,9 +641,9 @@ mod tests {
     fn activation_accepts_only_bounded_semantic_username_scope_evidence() {
         let decide = |form: &str, label: &str, semantic, username, local| {
             can_activate_authentication_route_control(
-                "https://example.test",
+                "https://login.microsoftonline.com",
                 form,
-                "https://example.test/auth/login",
+                "https://login.microsoftonline.com/common/login",
                 label,
                 semantic,
                 username,
@@ -657,7 +666,7 @@ mod tests {
             true,
             true
         ));
-        assert!(!decide("login-form", "Continue Google", true, true, true));
+        assert!(!decide("login-form", "Sign in to Google", true, true, true));
         assert!(!decide("", "Entrar", true, false, true));
     }
 

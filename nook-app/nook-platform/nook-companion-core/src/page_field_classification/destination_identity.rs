@@ -14,6 +14,8 @@ pub struct CanonicalControlDestination {
     pub route_identity: String,
     /// Whether the source host is a known external authentication authority.
     pub has_provider_authority: bool,
+    /// Whether the source host is a Microsoft authentication authority.
+    pub has_microsoft_provider_authority: bool,
 }
 
 fn is_http_url(url: &Url) -> bool {
@@ -149,6 +151,12 @@ pub fn canonicalize_control_destination(
             && destination
                 .host_str()
                 .is_some_and(host_is_registered_authentication_provider),
+        has_microsoft_provider_authority: destination.scheme() == "https"
+            && destination.host_str().is_some_and(|host| {
+                ["live.com", "microsoft.com", "microsoftonline.com"]
+                    .iter()
+                    .any(|domain| host_matches_registered_domain(host, domain))
+            }),
     })
 }
 

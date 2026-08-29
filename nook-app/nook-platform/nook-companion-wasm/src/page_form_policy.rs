@@ -194,11 +194,11 @@ mod tests {
             "login-form",
             "https://example.test/signin/x.com",
         ));
-        assert!(can_activate_authentication_route_control(
+        assert!(!can_activate_authentication_route_control(
             "https://example.test",
             "login-form",
             "https://example.test/auth/login",
-            "Entrar",
+            "Sign in to Google",
             true,
             true,
             true,
