@@ -28,7 +28,6 @@ export type ExecutableSkillPackageGateRequest = {
   readonly repoRoot: string;
   readonly runner?: ExecutableSkillCommandRunner;
 };
-
 type PackageGateSpawnOptions = {
   readonly cmd: string[];
   readonly cwd: string;
@@ -44,31 +43,33 @@ function commandArguments(
 }
 
 function runCommand(request: ExecutableSkillCommandRequest): number {
-  let spawnOptions: PackageGateSpawnOptions;
+  let exitCode: number;
   if (request.arguments.at(0) === 'install') {
-    spawnOptions = {
+    const options: PackageGateSpawnOptions = {
       cmd: ['bun', 'install', '--frozen-lockfile'],
       cwd: request.cwd,
       stderr: 'inherit',
       stdout: 'inherit',
     };
+    exitCode = Bun.spawnSync(options).exitCode;
   } else if (request.arguments.at(1) === 'format') {
-    spawnOptions = {
+    const options: PackageGateSpawnOptions = {
       cmd: ['bun', 'run', 'format'],
       cwd: request.cwd,
       stderr: 'inherit',
       stdout: 'inherit',
     };
+    exitCode = Bun.spawnSync(options).exitCode;
   } else {
-    spawnOptions = {
+    const options: PackageGateSpawnOptions = {
       cmd: ['bun', 'run', 'verify'],
       cwd: request.cwd,
       stderr: 'inherit',
       stdout: 'inherit',
     };
+    exitCode = Bun.spawnSync(options).exitCode;
   }
-  const result = Bun.spawnSync(spawnOptions);
-  return result.exitCode;
+  return exitCode;
 }
 
 export function runExecutableSkillPackageGate(

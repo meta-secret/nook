@@ -1,0 +1,118 @@
+import type {
+  ConfigurationMapping,
+  ConfigurationNode,
+} from './skill-provider-command-types.ts';
+
+type WorkflowCommandRequest = {
+  readonly action: boolean;
+  readonly document: ConfigurationNode;
+};
+type StepRunRequest = {
+  readonly defaultDirectory: string;
+  readonly environment: ReadonlyMap<string, string>;
+  readonly steps: ConfigurationNode;
+  readonly target: string[];
+};
+type StaticEnvironmentRequest = {
+  readonly inherited: ReadonlyMap<string, string> | false;
+  readonly node: ConfigurationMapping;
+};
+
+export function workflowCommandSources(
+  request: WorkflowCommandRequest,
+): readonly string[] {
+  const root = mapping(request.document);
+  const commands: string[] = [];
+  if (request.action) {
+    const runs = mapping(root.runs ?? false);
+    if (runs.using === 'composite') {
+      const environmentRequest: StaticEnvironmentRequest = {
+        inherited: false,
+        node: root,
+      };
+      const stepRequest: StepRunRequest = {
+        defaultDirectory: '',
+        environment: staticEnvironment(environmentRequest),
+        steps: runs.steps ?? false,
+        target: commands,
+      };
+      collectStepRuns(stepRequest);
+    }
+    return commands;
+  }
+  const workflowDirectory = defaultWorkingDirectory(root);
+  const workflowEnvironmentRequest: StaticEnvironmentRequest = {
+    inherited: false,
+    node: root,
+  };
+  const workflowEnvironment = staticEnvironment(workflowEnvironmentRequest);
+  for (const job of Object.values(mapping(root.jobs ?? false))) {
+    const jobNode = mapping(job);
+    const jobDirectory = defaultWorkingDirectory(jobNode);
+    const environmentRequest: StaticEnvironmentRequest = {
+      inherited: workflowEnvironment,
+      node: jobNode,
+    };
+    const stepRequest: StepRunRequest = {
+      defaultDirectory: jobDirectory || workflowDirectory,
+      environment: staticEnvironment(environmentRequest),
+      steps: jobNode.steps ?? false,
+      target: commands,
+    };
+    collectStepRuns(stepRequest);
+  }
+  return commands;
+}
+
+function collectStepRuns(request: StepRunRequest): void {
+  if (!Array.isArray(request.steps)) return;
+  for (const step of request.steps) {
+    const node = mapping(step);
+    if (typeof node.run !== 'string') continue;
+    const directory =
+      typeof node['working-directory'] === 'string'
+        ? node['working-directory']
+        : request.defaultDirectory;
+    const environmentRequest: StaticEnvironmentRequest = {
+      inherited: request.environment,
+      node,
+    };
+    const environment = staticEnvironment(environmentRequest);
+    const prefix = [...environment]
+      .map(([name, value]) => `${name}='${value.replaceAll("'", "'\\''")}'`)
+      .join(' ');
+    const command = directory
+      ? `cd "${directory.replaceAll('"', '\\"')}" && ${node.run}`
+      : node.run;
+    request.target.push(prefix ? `${prefix} ${command}` : command);
+  }
+}
+
+function staticEnvironment(
+  request: StaticEnvironmentRequest,
+): ReadonlyMap<string, string> {
+  const values = new Map(request.inherited || []);
+  for (const [name, value] of Object.entries(
+    mapping(request.node.env ?? false),
+  ))
+    if (
+      /^[A-Za-z_]\w*$/u.test(name) &&
+      typeof value === 'string' &&
+      !value.includes('${{')
+    )
+      values.set(name, value);
+  return values;
+}
+
+function defaultWorkingDirectory(node: ConfigurationMapping): string {
+  const run = mapping(mapping(node.defaults ?? false).run ?? false);
+  return typeof run['working-directory'] === 'string'
+    ? run['working-directory']
+    : '';
+}
+
+function mapping(value: ConfigurationNode): ConfigurationMapping {
+  return value instanceof Object && !Array.isArray(value)
+    ? (value as ConfigurationMapping)
+    : {};
+}
