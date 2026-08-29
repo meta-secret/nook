@@ -32,10 +32,14 @@ Nook separates iterative evidence from merge authorization.
    - Do not authorize merge.
 2. **Complete PR validation**
    - Runs through `.github/workflows/pr.yml`.
-   - Starts only after the agent explicitly requests validation.
+   - Starts only after Gizmo explicitly requests validation for the integrated
+     pushed head.
    - Provides the exact-head checks and deployment required for readiness.
 
 Ordinary PR pushes do not start complete validation.
+
+Every pushed head gets remote evidence immediately: complete validation when
+ready, or at least one relevant focused task otherwise.
 
 ## Focused remote tasks
 
@@ -137,7 +141,7 @@ Every dispatch requires:
 
 ## Explicit complete PR validation
 
-When the pushed head is coherent, run:
+When the integrated pushed head is coherent, Gizmo runs:
 
 ```bash
 task pr:validate PR=<number>
@@ -161,11 +165,9 @@ When a remote task or complete check fails:
 
 1. Inspect the exact job log.
 2. Identify the first failing product or infrastructure boundary.
-3. Fix only the causal defect.
-4. Apply host formatting.
-5. Commit and push the coherent change.
-6. Rerun focused evidence when useful.
-7. Request complete validation again for the new head.
+3. Obtain and integrate the responsible Team Agent's formatted exact fix.
+4. Run pre-push, returning any team-owned formatter diff, until clean.
+5. Push, then immediately validate when ready or run relevant focused proof.
 
 Treat a transient unchanged-head registry or BuildKit read failure as
 infrastructure evidence. Replay the unchanged head before changing product code.
@@ -184,7 +186,7 @@ Readiness requires:
 - no unresolved actionable review thread; and
 - a clean Cortex session directory.
 
-The delivery owner then squash-merges the PR.
+Gizmo then squash-merges the PR.
 
 Ordinary delivery stops at the merge boundary. Verify the resulting Main state
 only when the user requests live verification or the task owns a Main-failure
