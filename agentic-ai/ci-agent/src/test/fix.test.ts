@@ -10,7 +10,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
 
@@ -82,17 +82,25 @@ test("validation strips secrets and forces Docker workloads offline", async () =
   const root = await mkdtemp(join(tmpdir(), "nook-validation-test-"));
   const bin = join(root, "bin");
   const log = join(root, "docker.log");
+  const trustedHome = join(root, "home");
+  const builder = "nook-builder";
   await mkdir(bin);
+  const instances = join(trustedHome, ".docker", "buildx", "instances");
+  await mkdir(instances, { recursive: true });
+  await writeFile(join(instances, builder), "trusted-instance");
   const realDocker = join(bin, "docker");
   await writeFile(realDocker, `#!/bin/sh\nprintf '%s\\n' "$*" >> '${log}'\n`);
   await chmod(realDocker, 0o700);
   const hostEnvironment: NodeJS.ProcessEnv = {
     PATH: bin,
-    HOME: "/trusted/home",
+    HOME: trustedHome,
     CURSOR_API_KEY: "cursor",
     NOOK_GITHUB_PAT: "github",
     SCCACHE_S3_ACCESS_KEY_FILE: "/trusted/sccache-access",
+    NOOK_BUILDKIT_REMOTE: "1",
+    NOOK_PR_BUILDX_BUILDER: builder,
   };
+  const originalEnvironment = { ...hostEnvironment };
   try {
     await withValidationEnvironment(hostEnvironment, async (environment) => {
       for (const secret of [
@@ -101,31 +109,73 @@ test("validation strips secrets and forces Docker workloads offline", async () =
         "SCCACHE_S3_ACCESS_KEY_FILE",
       ])
         assert.equal(secret in environment, false);
-      assert.notEqual(environment.HOME, "/trusted/home");
-      await execFileAsync("docker", ["buildx", "build", "."], {
-        env: environment,
-      });
-      await execFileAsync("docker", ["run", "image"], { env: environment });
+      assert.notEqual(environment.HOME, trustedHome);
+      assert.equal(environment.NOOK_BUILDKIT_REMOTE, "1");
+      assert.equal(
+        await readFile(
+          join(environment.HOME!, ".docker", "buildx", "instances", builder),
+          "utf8",
+        ),
+        "trusted-instance",
+      );
+      const docker = (args: string[]) =>
+        execFileAsync("docker", args, { env: environment });
+      for (const args of [
+        ["buildx", "build", "."],
+        [
+          "buildx",
+          "create",
+          "--name",
+          builder,
+          "--driver",
+          "docker-container",
+          "--bootstrap",
+        ],
+        ["buildx", "rm", "--force", builder],
+        ["run", "image"],
+      ])
+        await docker(args);
+      await assert.rejects(docker(["buildx", "rm", "--force", "other"]));
       await assert.rejects(
-        execFileAsync("docker", ["exec", "container", "cargo", "test"], {
-          env: environment,
-        }),
+        docker(["exec", "container", "cargo", "test"]),
         /Blocked Docker operation/,
       );
     });
     assert.equal(
       await readFile(log, "utf8"),
-      "buildx build --network none .\nrun --network none image\n",
+      `buildx build --network none .\nbuildx create --name ${builder} --driver docker-container --bootstrap\nbuildx rm --force ${builder}\nrun --network none image\n`,
     );
-    assert.deepEqual(hostEnvironment, {
-      PATH: bin,
-      HOME: "/trusted/home",
-      CURSOR_API_KEY: "cursor",
-      NOOK_GITHUB_PAT: "github",
-      SCCACHE_S3_ACCESS_KEY_FILE: "/trusted/sccache-access",
-    });
+    assert.deepEqual(hostEnvironment, originalEnvironment);
   } finally {
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("networked fetch steps materialize manifests before offline compilation", async () => {
+  const repo = resolve(import.meta.dirname, "../../../..");
+  for (const path of [
+    "nook-app/nook-platform/docker/rust/product.Dockerfile",
+    "preflight/Dockerfile",
+    "agentic-ai/minds/hive/Dockerfile",
+  ]) {
+    const source = await readFile(join(repo, path), "utf8");
+    const fetch = source.indexOf("RUN --network=default");
+    const stage = source.slice(source.lastIndexOf("\nFROM ", fetch), fetch);
+    const lines = source.slice(fetch).split("\n");
+    let commandEnd = 0;
+    while (lines[commandEnd]?.endsWith("\\")) commandEnd += 1;
+    const command = lines.slice(0, commandEnd + 1).join("\n");
+    assert.ok(
+      fetch > 0 &&
+        ["Cargo.toml", "Cargo.lock"].every((name) => stage.includes(name)),
+    );
+    const fetchInput = `${stage}\n${command}`;
+    assert.match(fetchInput, /(?:touch|printf).*src/su);
+    assert.doesNotMatch(stage, /^COPY .*src/mu);
+    assert.doesNotMatch(fetchInput, /build\.rs|type=secret/u);
+    assert.match(command, /cargo fetch --locked/u);
+    assert.doesNotMatch(command, /cargo (?:build|test|chef|clippy)/u);
+    assert.ok(fetch < source.indexOf("cargo chef cook", fetch));
   }
 });
 

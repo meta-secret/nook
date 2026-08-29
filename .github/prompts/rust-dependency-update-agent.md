@@ -18,14 +18,9 @@ Load only:
 Do not load implementation-team graphs into Gizmo's context. Do not pass Gizmo
 context to implementation workers.
 
-## Bounded editor boundary
-
-Only exact profile `CI_AGENT_FIX_PROFILE=rust-dependency-update` selects this
-working-tree-only editor. Do not run Git, Task, builds, tests, validation,
-network operations, or inspect credentials. The trusted host freezes and
-rechecks clean HEAD/index/Git metadata plus every path, accepting only regular
-mission `Cargo.toml`, `Cargo.lock`, and `.rs` files. Symlinks, special files,
-build scripts, or orchestration controls fail closed; only the host publishes.
+The `rust-dependency-update` editor has no Git, validation, network, credentials,
+or publication. The host rechecks HEAD/index/Git metadata and accepts only
+regular mission `Cargo.toml`, `Cargo.lock`, and `.rs`; all else fails closed.
 
 ## Coordination procedure
 
@@ -40,8 +35,7 @@ build scripts, or orchestration controls fail closed; only the host publishes.
 4. Partition writer tasks by functional owner and allowed path.
 5. Assign each dependency, lockfile, source, and test task to exactly one
    semantic team identity.
-6. Integrate each verified non-Git handoff: bounded diff, owned-path inventory,
-   and focused summary. Writer commits would violate frozen HEAD/index.
+6. Integrate each non-Git handoff: bounded diff, owned paths, focused summary.
 7. Finish the bounded working-tree edit without running validation or Git.
 8. Let the trusted host validate and publish before returning the exact head to
    the normal Gizmo PR-delivery workflow.
@@ -68,14 +62,12 @@ The dependency-specific contract also names:
 
 The worker loads only its named team context and task-relevant authorities. It
 must not load Gizmo context or another team's graph. It preserves standard
-Cargo version strings, updates only owned lockfiles, and makes the smallest API
-migration. Writers return that handoff without Git or Task; only the host commits.
+Cargo version strings, updates only owned lockfiles, makes the smallest API
+migration, and returns a non-Git handoff with focused tests.
 
-## Trusted host integrated validation
+## Trusted host validation
 
-Do not run these commands in the bounded editor. After editor completion and
-change detection, trusted host code runs exactly this sequence before any
-commit or push:
+After editor completion, the trusted host runs before any commit or push:
 
 ```bash
 WASM_BUILD_MODE=prod task ci:pr:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
@@ -83,12 +75,10 @@ task docker:ecosystem:fuzz FUZZ_SECONDS=20
 task hive:verify
 ```
 
-Validation runs in trusted Actions, not locally. Its fresh HOME has no Cursor,
-GitHub, registry, or compiler-cache credentials. An immutable Docker wrapper
-forces BuildKit `RUN` and validation containers onto `network=none` and rejects
-unknown operations. Publication credentials return only after success.
+Trusted Actions validation uses a fresh credential-free HOME. Manifest-only
+fetch layers materialize crates without secrets or source execution; the
+wrapper keeps later compilation and containers offline. Publication credentials
+return only after success.
 
-Streamed nonzero/signal failure blocks publication. Reruns and new PRs verify PR,
-base, head ref, and exact remote SHA before returning it to Gizmo. The sequence
-covers local-provider/extension e2e plus fuzz and Hive. Return corrections for a
-host rerun; never kill Docker or commit secrets, `.env`, credentials, or raw logs.
+Failure blocks publication; verify PR/base/head and remote SHA before returning
+to Gizmo. Never kill Docker or commit secrets or raw logs.

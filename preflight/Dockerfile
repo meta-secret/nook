@@ -11,8 +11,9 @@ RUN mkdir -p src \
     && printf 'fn main() {}\n' > src/main.rs \
     && printf '\n' > src/lib.rs
 RUN cargo chef prepare --recipe-path recipe.json
+RUN --network=default cargo fetch --locked
 
-FROM rust-base AS deps
+FROM chef AS deps
 
 WORKDIR /opt/nook/preflight
 COPY --from=chef /opt/nook/preflight/recipe.json recipe.json

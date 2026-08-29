@@ -1,5 +1,12 @@
 import { execFile, spawn } from "node:child_process";
-import { lstat, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import {
+  copyFile,
+  lstat,
+  mkdir,
+  mkdtemp,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import { chdir } from "node:process";
@@ -40,6 +47,15 @@ export enum CiFixOutcomeKind {
   Published = "published",
   Skipped = "skipped",
 }
+
+enum RepositoryBaselineKind {
+  Captured = "captured",
+  NotRequired = "not-required",
+}
+
+type RepositoryBaselineState =
+  | { kind: RepositoryBaselineKind.NotRequired }
+  | { baseline: RepositoryBaseline; kind: RepositoryBaselineKind.Captured };
 export const CI_FIX_SKIPPED = { kind: CiFixOutcomeKind.Skipped } as const;
 export type PublishedCiFixOutcome = {
   headSha: string;
@@ -58,6 +74,8 @@ const VALIDATION_ENV_ALLOWLIST = new Set([
   "LANG",
   "LC_ALL",
   "NO_COLOR",
+  "NOOK_BUILDKIT_REMOTE",
+  "NOOK_PR_BUILDX_BUILDER",
   "PATH",
   "RUNNER_TOOL_CACHE",
   "SHELL",
@@ -75,7 +93,13 @@ case "\${1:-}" in
     case "$sub" in
       bake) exec "$real" buildx bake --set '*.network=none' "$@" ;;
       build) exec "$real" buildx build --network none "$@" ;;
+      create)
+        [ "$*" = "--name \${NOOK_PR_BUILDX_BUILDER:-} --driver docker-container --bootstrap" ] || exit 97
+        exec "$real" buildx create "$@" ;;
       inspect|use|version) exec "$real" buildx "$sub" "$@" ;;
+      rm)
+        [ "$*" = "--force \${NOOK_PR_BUILDX_BUILDER:-}" ] || exit 97
+        exec "$real" buildx rm "$@" ;;
       *) echo "Blocked Docker buildx operation during isolated validation: $sub" >&2; exit 97 ;;
     esac ;;
   run) shift; exec "$real" run --network none "$@" ;;
@@ -477,6 +501,20 @@ export async function withValidationEnvironment<T>(
     const docker = join(bin, "docker");
     await Promise.all([mkdir(bin), mkdir(home)]);
     await writeFile(docker, NETWORKLESS_DOCKER, { mode: 0o700 });
+    const builder = base.NOOK_PR_BUILDX_BUILDER;
+    if (builder) {
+      if (!/^[a-zA-Z0-9_.-]+$/u.test(builder) || !hostEnvironment.HOME)
+        throw new Error("Invalid trusted Buildx instance metadata");
+      const buildx = join(hostEnvironment.HOME, ".docker", "buildx");
+      const source = join(buildx, "instances", builder);
+      if (!(await lstat(source)).isFile())
+        throw new Error(
+          "Trusted Buildx instance metadata is not a regular file",
+        );
+      const instances = join(home, ".docker", "buildx", "instances");
+      await mkdir(instances, { recursive: true });
+      await copyFile(source, join(instances, builder));
+    }
     restoreHostEnvironment(
       {
         ...base,
@@ -663,16 +701,22 @@ export async function runCiFix(): Promise<CiFixOutcome> {
       return CI_FIX_SKIPPED;
     }
     const config = loadedConfig.config;
-    let baseline: RepositoryBaseline | false = false;
+    let baselineState: RepositoryBaselineState = {
+      kind: RepositoryBaselineKind.NotRequired,
+    };
     if (profile === CiAgentFixProfile.RustDependencyUpdate) {
       await assertCheckoutHasNoPersistedCredentials(repoRoot);
-      baseline = await captureRepositoryBaseline(repoRoot);
+      baselineState = {
+        baseline: await captureRepositoryBaseline(repoRoot),
+        kind: RepositoryBaselineKind.Captured,
+      };
     }
 
     const prompt = await loadPrompt(config);
     await runFixAgent(config, prompt, isolationForFixProfile(profile));
 
-    if (baseline) await assertBaselineUnchanged(repoRoot, baseline);
+    if (baselineState.kind === RepositoryBaselineKind.Captured)
+      await assertBaselineUnchanged(repoRoot, baselineState.baseline);
 
     if (!(await hasWorkingTreeChanges(repoRoot))) {
       console.log(
@@ -682,9 +726,10 @@ export async function runCiFix(): Promise<CiFixOutcome> {
     }
 
     if (profile === CiAgentFixProfile.RustDependencyUpdate) {
-      if (!baseline) {
+      if (baselineState.kind !== RepositoryBaselineKind.Captured) {
         throw new Error("Rust dependency update baseline was not captured");
       }
+      const { baseline } = baselineState;
       await assertBaselineUnchanged(repoRoot, baseline);
       await assertTrustedChangeSet(repoRoot, baseline);
       await runValidationWithoutPublicationCredentials(repoRoot);
