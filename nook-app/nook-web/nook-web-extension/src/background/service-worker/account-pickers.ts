@@ -346,9 +346,8 @@ export async function websiteLoginOptions({
     sender,
     forbiddenReason: 'login-forbidden-origin',
   }
-  const access = await resolvedDependencies.availableWebsiteGrants(
-    nookTypedArgs0_6,
-  )
+  const access =
+    await resolvedDependencies.availableWebsiteGrants(nookTypedArgs0_6)
   if ('response' in access) {
     if (
       access.response.ok &&
@@ -365,9 +364,8 @@ export async function websiteLoginOptions({
     grants: access.grants,
     origin: message.payload.origin,
   }
-  const accounts = await resolvedDependencies.loginAccountsForOrigin(
-    nookTypedArgs0_0,
-  )
+  const accounts =
+    await resolvedDependencies.loginAccountsForOrigin(nookTypedArgs0_0)
   return { ok: true, status: 'ready', accounts }
 }
 
