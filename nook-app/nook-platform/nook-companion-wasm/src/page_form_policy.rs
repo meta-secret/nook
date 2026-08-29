@@ -129,7 +129,7 @@ pub fn can_activate_authentication_route_control(
     form_identity: &str,
     destination_identity: &str,
     control_label: &str,
-    is_semantic_submit: bool,
+    has_form_owned_semantic_submit: bool,
     has_authentication_username: bool,
     has_local_authentication_scope: bool,
 ) -> bool {
@@ -138,7 +138,7 @@ pub fn can_activate_authentication_route_control(
         form_identity,
         destination_identity,
         control_label,
-        is_semantic_submit,
+        has_form_owned_semantic_submit,
         has_authentication_username,
         has_local_authentication_scope,
     )
@@ -198,8 +198,8 @@ mod tests {
             "https://example.test",
             "login-form",
             "https://example.test/auth/login",
-            "Sign in to Google",
-            true,
+            "Supprimer le compte",
+            false,
             true,
             true,
         ));

@@ -355,20 +355,19 @@ describe('website one-time-code fields', () => {
     expect(activated).toBe(true)
   })
 
-  test('advances a form-less semantic submit in its local auth scope', () => {
+  test.each([
+    ['Entrar', true],
+    ['Supprimer le compte', false],
+  ])('gates form-less localized control %s', (label, expected) => {
     window.history.replaceState({}, '', '/')
     document.body.innerHTML = `
       <div role="form" class="signin-panel">
         <input data-qa="login_email" name="email" type="email" />
-        <button id="login-next" type="submit">Sign In</button>
+        <button id="login-next" type="submit">${label}</button>
       </div>
     `
     const workflow = summarizeAuthenticationWorkflowForms()[0]
     expect(workflow?.formScope.kind).toBe(PasswordFormScopeKind.Unowned)
-    let activated = false
-    document.querySelector('#login-next')?.addEventListener('click', () => {
-      activated = true
-    })
     const submissionArgs: Parameters<typeof submitLoginForm>[0] = {
       kind: PasswordFormQueryKind.Scoped,
       root: workflow?.root ?? document,
@@ -377,8 +376,7 @@ describe('website one-time-code fields', () => {
       },
     }
 
-    expect(submitLoginForm(submissionArgs)).toBe(true)
-    expect(activated).toBe(true)
+    expect(submitLoginForm(submissionArgs)).toBe(expected)
   })
 
   test.each([

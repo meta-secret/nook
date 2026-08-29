@@ -99,6 +99,7 @@ const LOGIN_SURFACE_WORDS: &[&str] = &[
 
 const LOGIN_ADVANCE_WORDS: &[&str] = &[
     "next", "continue", "signin", "sign-in", "sign in", "login", "log-in", "log in", "verify",
+    "entrar",
 ];
 
 const LOGIN_PATH_WORDS: &[&str] = &[
@@ -334,7 +335,7 @@ pub fn can_activate_authentication_route_control(
     form_identity: &str,
     destination_identity: &str,
     control_label: &str,
-    is_semantic_submit: bool,
+    has_form_owned_semantic_submit: bool,
     has_authentication_username: bool,
     has_local_authentication_scope: bool,
 ) -> bool {
@@ -356,7 +357,7 @@ pub fn can_activate_authentication_route_control(
         return !form_identity.trim().is_empty()
             || (has_authentication_username && has_local_authentication_scope);
     }
-    is_semantic_submit
+    has_form_owned_semantic_submit
         && has_authentication_username
         && has_local_authentication_scope
         && !form_identity::form_identity_indicates_destructive_action(control_label)
@@ -651,7 +652,7 @@ mod tests {
             )
         };
         assert!(decide("login-form", "Entrar", true, true, true));
-        assert!(decide("", "Entrar", true, true, true));
+        assert!(decide("", "Entrar", false, true, true));
         assert!(decide(
             "login-form",
             "Sign in to Microsoft 365",
@@ -674,7 +675,7 @@ mod tests {
         ] {
             assert!(!decide("login-form", label, true, true, true));
         }
-        assert!(!decide("", "Entrar", true, false, true));
+        assert!(!decide("", "Supprimer le compte", false, true, true));
     }
 
     #[test]

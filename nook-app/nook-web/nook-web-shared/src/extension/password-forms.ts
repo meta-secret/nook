@@ -623,7 +623,7 @@ function canActivateAuthenticationRouteControl(
     formIdentity,
     destinationIdentity,
     controlLabel,
-    control.type === "submit",
+    Boolean(form && control.type === "submit"),
     isAuthUsernameField(query.usernameField),
     sharesOwnedForm || hasLocalUnownedScope,
   );
