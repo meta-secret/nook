@@ -94,7 +94,11 @@ function authenticationControlDestination(
   if (!control.form) {
     return control.ownerDocument.defaultView?.location.origin ?? "";
   }
-  return authenticationRouteDestination({ form: control.form, control });
+  const request: AuthenticationRouteDestinationRequest = {
+    form: control.form,
+    control,
+  };
+  return authenticationRouteDestination(request);
 }
 
 function canActivateAuthenticationRouteControl(
@@ -163,13 +167,12 @@ export function clickAdvanceControl(
     ) {
       continue;
     }
-    if (
-      !canActivateAuthenticationRouteControl({
-        control,
-        controlLabel: controlLabel(control),
-        query: request,
-      })
-    ) {
+    const activationRequest: AuthenticationRouteControlRequest = {
+      control,
+      controlLabel: controlLabel(control),
+      query: request,
+    };
+    if (!canActivateAuthenticationRouteControl(activationRequest)) {
       continue;
     }
     control.click();

@@ -26,10 +26,15 @@ export type AuthenticationWorkflowRoutingResponse =
   | { ok: true; snapshot?: AuthenticationWorkflowSnapshotView }
   | { ok: false; reason: 'workflow-snapshot-failed' }
 
-export async function authenticationWorkflowMessageResponse(
-  message: AuthenticationWorkflowSnapshotMessage,
-  dependencies: AuthenticationWorkflowRoutingDependencies,
-): Promise<AuthenticationWorkflowRoutingResponse> {
+export type AuthenticationWorkflowRoutingRequest = {
+  message: AuthenticationWorkflowSnapshotMessage
+  dependencies: AuthenticationWorkflowRoutingDependencies
+}
+
+export async function authenticationWorkflowMessageResponse({
+  message,
+  dependencies,
+}: AuthenticationWorkflowRoutingRequest): Promise<AuthenticationWorkflowRoutingResponse> {
   const {
     companionWasmReady,
     authenticationPasskeyEvidenceIsSafe,
@@ -60,7 +65,12 @@ export async function authenticationWorkflowMessageResponse(
         },
       }),
     )
-    const result = await authenticationWorkflowSnapshot({ observations })
+    const snapshotRequest: Parameters<
+      typeof authenticationWorkflowSnapshot
+    >[0] = {
+      observations,
+    }
+    const result = await authenticationWorkflowSnapshot(snapshotRequest)
     return {
       ok: true,
       ...('snapshot' in result ? { snapshot: result.snapshot } : {}),

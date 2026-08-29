@@ -325,16 +325,21 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     }
     const workflowDependencies: Parameters<
       typeof authenticationWorkflowMessageResponse
-    >[1] = {
+    >[0]['dependencies'] = {
       companionWasmReady,
       authenticationPasskeyEvidenceIsSafe,
       authenticationWorkflowSnapshot,
       matchingPasskeyAccountCountForOriginSafe,
     }
-    void authenticationWorkflowMessageResponse(
+    const workflowRequest: Parameters<
+      typeof authenticationWorkflowMessageResponse
+    >[0] = {
       message,
-      workflowDependencies,
-    ).then(sendResponse)
+      dependencies: workflowDependencies,
+    }
+    void authenticationWorkflowMessageResponse(workflowRequest).then(
+      sendResponse,
+    )
     return true
   }
 
