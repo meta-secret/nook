@@ -117,14 +117,15 @@ type LoginAdvanceControlRequest = PasswordFormScopeQuery & {
 type LoginAdvanceControl = HTMLButtonElement | HTMLInputElement;
 
 function isRenderedControl(control: LoginAdvanceControl): boolean {
-  let element: HTMLElement | undefined = control;
-  while (element) {
+  let element: HTMLElement = control;
+  for (;;) {
     const style = getComputedStyle(element);
     const rendered = style.display !== "none" && style.visibility !== "hidden";
     if (element.hidden || !rendered) return false;
-    element = element.parentElement ?? undefined;
+    const parent = element.parentElement;
+    if (!(parent instanceof HTMLElement)) return true;
+    element = parent;
   }
-  return true;
 }
 
 type AuthenticationRouteControlRequest = {
