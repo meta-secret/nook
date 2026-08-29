@@ -512,10 +512,7 @@ function assertExternalCommandArguments([executable, words]: readonly [
   if (executable === 'git') {
     for (const [index, value] of values.entries()) {
       const next = values[index + 1];
-      if (
-        value === '-c' &&
-        (next === false || (next !== undefined && gitConfigRunsCommand(next)))
-      )
+      if (value === '-c' && (!next || gitConfigRunsCommand(next)))
         throw new Error('Command-capable git configuration is forbidden.');
       if (
         value &&

@@ -198,7 +198,7 @@ function aliasesFromTsconfig(
     });
   }
   const inherited = document.extends;
-  if (inherited === undefined) return [];
+  if (!('extends' in document)) return [];
   const parents = typeof inherited === 'string' ? [inherited] : inherited;
   if (
     !Array.isArray(parents) ||
