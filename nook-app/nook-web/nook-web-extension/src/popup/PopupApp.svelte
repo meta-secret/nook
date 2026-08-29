@@ -33,11 +33,11 @@
     type ExtensionDeviceProtectionResult,
     type ExtensionSessionDeviceState,
   } from '../lib/nook-wasm'
-  import { ExtensionRuntimeRequestType } from '../lib/extension-runtime-request-type'
   import {
     PairingCandidateKind,
     type PairingCandidate,
   } from './popup-app-state'
+  import { refreshInvokingAuthenticationSurface } from './authentication-surface-refresh'
   import { DeviceProtectionSetupWorkflow } from '../../../nook-web-shared/src/vault-app/lib/components/device-protection-gate-state'
 
   let {
@@ -132,21 +132,6 @@
     window.close()
   }
 
-  function refreshAuthenticationSurfaces(): void {
-    const query: Parameters<typeof chrome.tabs.query>[0] = {}
-    chrome.tabs.query(query, (tabs) => {
-      for (const tab of tabs) {
-        if (typeof tab.id !== 'number') continue
-        const message: Parameters<typeof chrome.tabs.sendMessage>[1] = {
-          type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces,
-        }
-        void chrome.tabs.sendMessage(tab.id, message).catch(() => {
-          // Restricted pages may not host the Nook content script.
-        })
-      }
-    })
-  }
-
   function beginPairing(device: ExtensionDeviceProtectionResult): void {
     busy = true
     error = ''
@@ -190,7 +175,7 @@
     error = ''
     try {
       const device = await action()
-      refreshAuthenticationSurfaces()
+      refreshInvokingAuthenticationSurface()
       enterToolbarMenu(device)
     } catch (caught) {
       busy = false

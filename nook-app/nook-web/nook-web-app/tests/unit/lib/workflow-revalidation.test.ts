@@ -33,6 +33,10 @@ import {
 const explicitUserApproval =
   'explicit-user-approval' satisfies AuthenticationApprovalRequirement
 
+function runtimeResponse<T>(workflow: T) {
+  return { workflow, loginMatches: { kind: 'unavailable' as const } }
+}
+
 function firstWorkflow(): PasswordFormObservation {
   const workflow = summarizeAuthenticationWorkflowForms()[0]
   if (!workflow) throw new Error('expected an authentication workflow')
@@ -58,7 +62,7 @@ describe('credential-bearing workflow revalidation', () => {
       if (form) form.action = '/transfer/confirm'
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
-        response: {
+        response: runtimeResponse({
           kind: AuthenticationWorkflowSnapshotResponseKind.Matched,
           snapshot: {
             kind: AuthenticationWorkflowKind.TotpChallenge,
@@ -69,7 +73,7 @@ describe('credential-bearing workflow revalidation', () => {
             approvalRequirement: explicitUserApproval,
             observationIndex: 0,
           },
-        },
+        }),
       }
     })
     const act = vi.fn(() => true)
@@ -136,7 +140,7 @@ describe('credential-bearing workflow revalidation', () => {
     const workflow = firstWorkflow()
     runtime.sendSnapshot.mockResolvedValue({
       kind: RuntimeMessageDeliveryKind.Delivered,
-      response: {
+      response: runtimeResponse({
         kind: AuthenticationWorkflowSnapshotResponseKind.Matched,
         snapshot: {
           kind: AuthenticationWorkflowKind.Login,
@@ -147,7 +151,7 @@ describe('credential-bearing workflow revalidation', () => {
           approvalRequirement: explicitUserApproval,
           observationIndex: 0,
         },
-      },
+      }),
     })
     const act = vi.fn(() => true)
 
@@ -184,7 +188,7 @@ describe('credential-bearing workflow revalidation', () => {
     const workflow = firstWorkflow()
     runtime.sendSnapshot.mockResolvedValue({
       kind: RuntimeMessageDeliveryKind.Delivered,
-      response: {
+      response: runtimeResponse({
         kind: AuthenticationWorkflowSnapshotResponseKind.Matched,
         snapshot: {
           kind: AuthenticationWorkflowKind.Login,
@@ -195,7 +199,7 @@ describe('credential-bearing workflow revalidation', () => {
           approvalRequirement: explicitUserApproval,
           observationIndex: 0,
         },
-      },
+      }),
     })
     let observationDigest = ''
     await performRevalidatedAuthenticationAction({
@@ -247,9 +251,9 @@ describe('credential-bearing workflow revalidation', () => {
       })
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
-        response: {
+        response: runtimeResponse({
           kind: AuthenticationWorkflowSnapshotResponseKind.NoMatch,
-        },
+        }),
       }
     })
     const act = vi.fn(() => true)
