@@ -1,13 +1,18 @@
 import { expect, test } from 'bun:test';
 import { analyzeShellCommands } from './skill-provider-command-boundary.ts';
-import { configurationScriptPaths } from './skill-provider-config-boundary.test.ts';
+import {
+  actionRuntimePaths,
+  configurationScriptPaths,
+} from './skill-provider-config-boundary.test.ts';
 import { runnableCommandSources } from './skill-provider-config-commands.ts';
 import { commandConfigurationReferences } from './skill-provider-eslint-config.ts';
 import {
+  isActionManifest,
   isRunnableConfiguration,
   normalizeConfigurationShellSource,
 } from './skill-provider-config-runtime.ts';
 import type { ConfigurationScriptGraph } from './skill-provider-executable-script.ts';
+import type { ActionRuntimeGraph } from './skill-provider-config-types.ts';
 
 const PROVIDER_ROOT = '.cortex/teams/ai/dynamic-skills/example/scripts/src';
 const PROVIDER_CLI = `${PROVIDER_ROOT}/cli.ts`;
@@ -115,6 +120,9 @@ test('explicit Taskfile selections join the runnable graph', () => {
     'task --taskfile scripts/commands.yml audit',
     'task -t=scripts/commands.yml audit',
     'go-task --taskfile=scripts/commands.yml audit',
+    'command task --taskfile scripts/commands.yml audit',
+    'exec task -t scripts/commands.yml audit',
+    'env SAFE=1 command task --taskfile=scripts/commands.yml audit',
   ]) {
     const sources = new Map([
       ['package.json', `{"scripts":{"audit":"${command}"}}`],
@@ -167,6 +175,8 @@ test('dynamic and malformed Taskfile selections fail closed', () => {
     'task --taskfile= audit',
     'task -t scripts/a.yml --taskfile scripts/b.yml audit',
     'task --taskfile ../../outside.yml audit',
+    'command "$RUNTIME" --taskfile scripts/commands.yml audit',
+    '"$WRAPPER" task --taskfile scripts/commands.yml audit',
   ]) {
     const sources = new Map([
       ['package.json', `{"scripts":{"audit":${JSON.stringify(command)}}}`],
@@ -174,6 +184,56 @@ test('dynamic and malformed Taskfile selections fail closed', () => {
     const request = { roots: ['package.json'], sources };
     expect(() => configurationScriptPaths(graph(request)), command).toThrow();
   }
+});
+
+test('module-flavor imports resolve to tracked TypeScript sources', () => {
+  for (const [specifier, dependency] of [
+    ['./facade.mjs', 'scripts/facade.mts'],
+    ['./facade.cjs', 'scripts/facade.cts'],
+  ] as const) {
+    const sources = new Map([
+      ['scripts/vite.config.ts', `await import('${specifier}');`],
+      [dependency, `await import('../${PROVIDER_CLI}');`],
+      [PROVIDER_CLI, 'export {};'],
+    ]);
+    const request = { roots: ['scripts/vite.config.ts'], sources };
+    expectProviderReachable(graph(request));
+  }
+});
+
+test('tracked local actions are roots outside the conventional directory', () => {
+  const manifest = 'scripts/audit-action/action.yml';
+  const entrypoint = 'scripts/audit-action/index.js';
+  const sources = new Map([
+    [
+      '.github/workflows/audit.yml',
+      'jobs: {audit: {steps: [{uses: ./scripts/audit-action}]}}',
+    ],
+    [manifest, 'runs: {using: node24, main: index.js}'],
+    [entrypoint, `await import('../../${PROVIDER_CLI}');`],
+    [PROVIDER_CLI, 'export {};'],
+  ]);
+  const roots = [...sources.keys()].filter(isRunnableConfiguration);
+  expect(roots).toContain(manifest);
+  const actionGraph: ActionRuntimeGraph = {
+    roots: roots.filter(isActionManifest),
+    sources,
+    symlinkPaths: new Set(),
+  };
+  expect(actionRuntimePaths(actionGraph)).toContain(PROVIDER_CLI);
+
+  const symlinkGraph: ActionRuntimeGraph = {
+    ...actionGraph,
+    symlinkPaths: new Set([manifest]),
+  };
+  expect(() => actionRuntimePaths(symlinkGraph)).toThrow('tracked symlink');
+  const untrackedGraph: ActionRuntimeGraph = {
+    ...actionGraph,
+    sources: new Map([[manifest, 'runs: {using: node24, main: missing.js}']]),
+  };
+  expect(() => actionRuntimePaths(untrackedGraph)).toThrow(
+    'entrypoint is untracked',
+  );
 });
 
 test('workflow env precedence is propagated into run analysis', () => {

@@ -47,7 +47,7 @@ export function isRunnableConfiguration(path: string): boolean {
     /(^|\/)vite\.config\.(?:[cm]?[jt]s)$/u.test(path) ||
     /(^|\/)svelte\.config\.(?:[cm]?[jt]s)$/u.test(path) ||
     /^\.github\/workflows\/[^/]+\.ya?ml$/u.test(path) ||
-    /^\.github\/actions\/(?:[^/]+\/)*action\.ya?ml$/u.test(path)
+    /(^|\/)action\.ya?ml$/u.test(path)
   );
 }
 
@@ -80,7 +80,7 @@ export function resolutionCandidates(
   const importerDirectory = posix.dirname(request.importer);
   const sourceSpecifier = request.specifier
     .replace(/(^|\/)dist\//u, '$1src/')
-    .replace(/\.js$/u, '.ts');
+    .replace(/\.([mc]?)js$/u, '.$1ts');
   const baseDirectory = request.importerRelative
     ? importerDirectory
     : request.workingDirectory;

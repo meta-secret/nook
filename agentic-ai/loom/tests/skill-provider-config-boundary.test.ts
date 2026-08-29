@@ -635,6 +635,7 @@ test('classifies every runnable configuration category at root and nested bounda
     '.github/actions/evil\n/action.yml',
     'vite.config.ts',
     'nested/svelte.config.js',
+    'scripts/audit/action.yml',
   ];
   const candidates = [
     ...expected,
@@ -649,6 +650,7 @@ test('classifies every runnable configuration category at root and nested bounda
     '.github/actions/evil\n/action.yml/child',
     'nested/vite.config.css',
     'nested/svelte.config.css',
+    'scripts/audit/not-action.yml',
   ];
   expect(candidates.filter(isRunnableConfiguration)).toEqual(expected);
 });

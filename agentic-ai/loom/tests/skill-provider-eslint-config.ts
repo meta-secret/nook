@@ -5,6 +5,7 @@ import {
   type ShellWord,
 } from './skill-provider-command-types.ts';
 import type { ConfigurationReference } from './skill-provider-config-types.ts';
+import { resolveDispatchCommand } from './skill-provider-shell-dispatch.ts';
 import { tokenizeShell } from './skill-provider-shell-tokenizer.ts';
 
 export type CommandConfigurationRequest = {
@@ -31,9 +32,9 @@ type ConfigurationSelectionRequest = {
 };
 
 type TaskfileSelectionRequest = {
+  readonly argumentStart: number;
   readonly importer: string;
   readonly initialDirectory: string | false;
-  readonly start: number;
   readonly words: readonly ShellWord[];
 };
 
@@ -82,7 +83,10 @@ function commandReferences([
   sources,
   initialDirectory,
 ]: readonly [string, string, ReadonlyMap<string, string>, string]) {
-  if (!/(?:^|[\s/])(?:eslint|playwright|go-task|task)(?:\s|$)/u.test(command))
+  if (
+    !/(?:^|[\s/])(?:eslint|playwright|go-task|task)(?:\s|$)/u.test(command) &&
+    !/(?:--taskfile(?:=|\s)|(?:^|\s)-t(?:=|\s))/u.test(command)
+  )
     return [];
   const references: ConfigurationReference[] = [];
   let directory: string | false = initialDirectory;
@@ -101,18 +105,31 @@ function commandReferences([
           : false;
       continue;
     }
-    const runtimeName = posix.basename(runtime.value);
-    if (runtimeName === 'task' || runtimeName === 'go-task') {
-      const taskfileRequest: TaskfileSelectionRequest = {
-        importer,
-        initialDirectory: directory,
-        start,
+    if (mightSelectTaskfile([words, start])) {
+      if (runtime.dynamic)
+        throw new Error('Dynamic Task dispatch wrapper is forbidden.');
+      const dispatchRequest = {
+        command: runtime,
+        environment: new Map(),
+        index: start + 1,
         words,
       };
-      const taskfile = selectedTaskfileReference(taskfileRequest);
-      if (taskfile !== false) {
-        references.push(taskfile);
-        continue;
+      const dispatch = resolveDispatchCommand(dispatchRequest);
+      const runtimeName = posix.basename(
+        dispatch ? dispatch.command.value : '',
+      );
+      if (runtimeName === 'task' || runtimeName === 'go-task') {
+        const taskfileRequest: TaskfileSelectionRequest = {
+          argumentStart: dispatch ? dispatch.index : words.length,
+          importer,
+          initialDirectory: directory,
+          words,
+        };
+        const taskfile = selectedTaskfileReference(taskfileRequest);
+        if (taskfile !== false) {
+          references.push(taskfile);
+          continue;
+        }
       }
     }
     const invocation = toolInvocation([words, start]);
@@ -154,16 +171,31 @@ function commandReferences([
   return references;
 }
 
+function mightSelectTaskfile([words, start]: readonly [
+  readonly ShellWord[],
+  number,
+]): boolean {
+  return words.slice(start).some((word) => {
+    const value = posix.basename(word.value);
+    return (
+      value === 'task' ||
+      value === 'go-task' ||
+      value === '--taskfile' ||
+      value.startsWith('--taskfile=') ||
+      value === '-t' ||
+      value.startsWith('-t=')
+    );
+  });
+}
+
 function selectedTaskfileReference(
   request: TaskfileSelectionRequest,
 ): ConfigurationReference | false {
-  const runtime = posix.basename(request.words[request.start]?.value ?? '');
-  if (runtime !== 'task' && runtime !== 'go-task') return false;
   let directory = request.initialDirectory;
   let selection: ShellWord | false = false;
   let taskNameSeen = false;
   for (
-    let index = request.start + 1;
+    let index = request.argumentStart;
     index < request.words.length;
     index += 1
   ) {
