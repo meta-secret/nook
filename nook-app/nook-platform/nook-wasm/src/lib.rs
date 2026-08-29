@@ -15,6 +15,7 @@
 )]
 
 mod application;
+mod authentication_workflow_response;
 mod conversion;
 mod device_access;
 mod error_mapping;
@@ -30,6 +31,7 @@ mod types;
 #[doc(hidden)]
 pub use wasm_bindgen_futures as __wasm_bindgen_futures;
 
+pub use authentication_workflow_response::*;
 pub use device_access::*;
 pub use identity_record::{
     NookIdentityDirectorySelectionKind, NookIdentityDirectorySnapshot,
