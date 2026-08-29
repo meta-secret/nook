@@ -302,8 +302,18 @@ tasks.
   [source file size](shared/dynamic-skills/source-file-size.md).
 - **P1 hard rule:** Repository-authored automation uses TypeScript/Bun, Rust,
   and Taskfiles. It does not use Python.
-- Run `task loom:pre-push` before every push.
-- Run heavy product validation through the configured GitHub Actions path.
+- Once an integrated implementation or correction is coherent, Gizmo runs
+  `task loom:pre-push`, then promptly commits and pushes the head. Team workers
+  promptly commit coherent handoffs without taking external delivery state.
+- Treat `task loom:pre-push` as the only required local pre-push hygiene.
+  Agents do not block a push on broad local builds, tests, e2e, container
+  product gates, or duplicate local mirrors of hosted checks.
+- After each push, Gizmo immediately obtains exact-head remote evidence. It
+  uses a focused remote task only when it helps iteration; otherwise, when the
+  head is validation-ready, it dispatches complete GitHub Actions validation
+  immediately.
+- Every replacement push invalidates earlier head-specific evidence and
+  requires fresh exact-head remote validation.
 - Keep `.cortex/.session/` temporary and physically clean before readiness.
 
 Load detailed policy only when its action is reached. Gizmo owns planning,

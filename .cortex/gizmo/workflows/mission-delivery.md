@@ -88,18 +88,22 @@ Agent count never determines PR count.
      serialized under Gizmo.
 6. **Prepare the integrated head.**
    - Run `task loom:pre-push` before each push.
-   - Commit and push the coherent integrated change.
-   - Run the required advisory review before the first owner-authored push.
-   - Use `task remote TASK_NAME=web:build` for focused web build evidence.
-   - Use `task remote TASK_NAME=web:e2e` for focused browser evidence.
-   - Dispatch each focused command separately.
+   - Promptly commit and push the coherent integrated change.
+   - Do not add broad local builds, tests, e2e, container product gates, local
+     review, or duplicate hosted-check mirrors before the push.
+   - Immediately obtain remote evidence for the pushed head.
+   - Use a focused `task remote` command only when it helps iteration.
+   - When the head is validation-ready, dispatch complete exact-head validation
+     immediately instead of requiring focused tasks first.
 7. **Validate and repair through teams.**
    - Trigger the repository-owned exact-head review and validation path.
    - Route each review or CI finding to its functional owner.
    - Admission-authorize a bounded fix task from the current integrated head
      and request its attempt through the active harness.
-   - Require a verified fix commit and focused evidence.
-   - Integrate the fix, push, and validate the replacement head.
+   - Require a verified coherent fix commit. Remote evidence follows after
+     Gizmo integrates and pushes it.
+   - Integrate the fix, promptly push, and obtain fresh exact-head remote
+     validation for the replacement head.
    - Gizmo must not edit the implementation to resolve a finding.
 8. **Collect required verdicts.**
    - Require a verdict from every team whose acceptance is mandatory.

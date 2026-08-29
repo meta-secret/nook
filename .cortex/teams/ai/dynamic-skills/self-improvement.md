@@ -397,7 +397,8 @@ For every substantial task:
 2. Create temporary session memory.
 3. Investigate and plan.
 4. Implement the bounded request.
-5. Validate the implementation enough to evaluate the lessons.
+5. Run only the focused AI or Cortex proof needed to evaluate the lessons. Do
+   not add broad local product validation.
 6. Capture meaningful discoveries throughout work, review, and CI.
 7. Complete the self-improvement review.
 8. Run the workflow improvement review when the evidence triggers it.
@@ -410,8 +411,8 @@ For every substantial task:
 14. Return promotion, validation, and cleanup evidence to Gizmo.
 15. Gizmo performs exact-head readiness, merge, or the requested handoff.
 
-If promotion changes the pushed head, Gizmo repeats exact-head validation before
-readiness.
+If promotion changes the pushed head, Gizmo promptly pushes the coherent
+replacement and obtains fresh exact-head remote validation before readiness.
 
 ## Pull-request completion contract
 
@@ -526,5 +527,11 @@ Before returning promotion and cleanup evidence to Gizmo:
 8. Confirm `git ls-files .cortex/.session` prints nothing.
 9. Return the promotion, validation, and cleanup evidence to Gizmo.
 
-Gizmo repeats exact-head hosted validation when promotion changed the PR head.
+Do not add broad local builds, tests, e2e, container product gates, or duplicate
+hosted-check mirrors to this validation sequence.
+
+Gizmo promptly pushes a coherent promoted head. Focused remote tasks are
+optional for iteration. When that head is validation-ready, Gizmo immediately
+dispatches complete exact-head hosted validation. Every replacement push
+requires fresh exact-head remote evidence.
 Gizmo then performs readiness, merge, or the requested handoff.

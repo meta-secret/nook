@@ -45,11 +45,17 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 - Docker tasks live in `nook-app/nook-platform/docker/Taskfile.yml` and `nook-app/nook-web/docker/Taskfile.yml`.
 - Web-family tasks live in `nook-app/nook-web/Taskfile.yml` and `nook-web-extension/Taskfile.yml`.
 - Agents do not run raw compiler, bundler, or environment commands.
-- They use `task loom:pre-push` locally.
-- They use `task remote TASK_NAME=<name>` for focused hosted execution.
-- They use `task pr:validate` for the complete gate.
+- Gizmo uses `task loom:pre-push` as the only required local pre-push hygiene,
+  then promptly commits and pushes a coherent integrated head. Team workers
+  promptly commit coherent handoffs without mutating external delivery state.
+- Gizmo uses `task remote TASK_NAME=<name>` only when focused hosted feedback
+  helps iteration.
+- Gizmo dispatches `task pr:validate` immediately when the pushed head is ready
+  for complete validation.
+- Every replacement push requires fresh exact-head remote evidence.
+- They do not add broad local builds, tests, e2e, container product gates, or
+  duplicate local mirrors before push.
 - They use local `task web:dev` only for interactive development state.
-- Human local mirrors remain available.
 - **Containerized Toolchain:** All compiles, tests, and package installs run inside Docker.
 - This ensures environment parity between the host machine and GitHub Actions CI.
 
@@ -86,11 +92,13 @@ These are the core engineering beliefs that guide the development of Nook. Becau
   2. Gizmo admission-authorizes the implementation task and submits its bounded
      contract to the active harness, which creates and runs the attempt.
   3. Gizmo integrates the verified implementation handoff.
-  4. Gizmo runs Loom pre-push and updates the PR.
-  5. Gizmo runs focused hosted execution and complete PR validation.
+  4. Gizmo runs Loom pre-push, promptly commits, and updates the PR.
+  5. Gizmo optionally runs focused hosted execution for iteration or
+     immediately dispatches complete validation when the head is ready.
   6. Gizmo admission-authorizes each bounded correction task and submits its
      contract to the active harness, which creates and runs the attempt.
-  7. Gizmo integrates verified fixes and repeats exact-head validation.
+  7. Gizmo integrates verified fixes, pushes promptly, and obtains fresh
+     exact-head validation.
   8. Gizmo runs readiness and completes the squash merge.
 - **Do not stop at push or readiness.** Gizmo owns the PR through squash merge
   unless concretely blocked.
