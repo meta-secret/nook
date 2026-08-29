@@ -40,13 +40,27 @@ pub(super) fn route_names_external_authentication_provider(identity: &str) -> bo
         .unwrap_or_default()
         .split('/')
         .filter(|segment| !segment.is_empty())
-        .map(str::to_ascii_lowercase)
+        .map(expand_identity_text)
         .collect::<Vec<_>>();
+    let is_version = |segment: &str| {
+        segment
+            .strip_prefix("v ")
+            .or_else(|| segment.strip_prefix('v'))
+            .is_some_and(|version| !version.is_empty() && version.parse::<u32>().is_ok())
+    };
     let is_local_tail = |segment: &str| {
         matches!(segment, "identifier" | "email" | "password" | "username")
             || matches!(segment, "verify" | "challenge" | "callback")
-            || (segment.starts_with('v') && segment[1..].parse::<u32>().is_ok())
+            || is_version(segment)
     };
+    let has_unknown_login_route_segment = segments.iter().enumerate().any(|(index, segment)| {
+        let tails = &segments[index + 1..];
+        identity_indicates_explicit_login_route(segment)
+            && (!segments[..index].iter().all(|prefix| {
+                matches!(prefix.as_str(), "auth" | "authentication" | "common")
+                    || is_version(prefix)
+            }) || !(tails.is_empty() || matches!(tails, [tail] if is_local_tail(tail))))
+    });
     identity_names_external_authentication_provider(identity, false)
         || identity.split(['?', '#']).any(|metadata| {
             metadata.split('&').any(|component| {
@@ -55,16 +69,11 @@ pub(super) fn route_names_external_authentication_provider(identity: &str) -> bo
                     .strip_suffix(" id")
                     .or_else(|| key.strip_suffix(" name"))
                     .unwrap_or(&key);
-                ["provider", "identity provider", "idp"].contains(&root)
+                ["provider", "identity provider", "idp", "connection"].contains(&root)
             })
         })
         || contains_any_word(&route, &["provider", "idp"])
-        || segments.iter().enumerate().any(|(index, segment)| {
-            identity_indicates_explicit_login_route(segment)
-                && segments
-                    .get(index + 1)
-                    .is_some_and(|tail| !is_local_tail(tail) || segments.get(index + 2).is_some())
-        })
+        || has_unknown_login_route_segment
         || ((contains_any_word(&route, &["x"]) || contains_any_word(&fragment, &["x"]))
             && contains_any_word(&route, &["login", "log in", "signin", "sign in"]))
 }
