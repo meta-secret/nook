@@ -1,12 +1,12 @@
 import { expect, test } from 'bun:test';
 import {
   analyzeShellCommands,
-  runnableCommandSources,
   type ShellCommandInspection,
 } from './skill-provider-command-boundary.ts';
 
 const PROTECTED =
   '.cortex/teams/ai/dynamic-skills/example-skill/scripts/src/cli.ts';
+const PROTECTED_ROOT = PROTECTED.slice(0, PROTECTED.lastIndexOf('/'));
 
 function inspectShell(source: string) {
   const inspection: ShellCommandInspection = {
@@ -30,50 +30,6 @@ function inspectProtected(source: string) {
     throw new Error('Protected executable-skill launch.');
   return analysis;
 }
-
-test('extracts only schema-executable package, Task, workflow, and action values', () => {
-  const packageFixture = {
-    path: 'package.json',
-    source:
-      '{"description":"bun prose.ts","scripts":{"check":"bun scripts/check.ts"}}',
-  };
-  expect(runnableCommandSources(packageFixture)).toEqual([
-    'bun scripts/check.ts',
-  ]);
-  const taskSource = `version: '3'
-vars: {ROOT: scripts}
-tasks:
-  check:
-    desc: bun prose.ts
-    dir: '{{.ROOT}}'
-    deps: [prepare]
-    cmds: [bun check.ts, {task: verify}, {defer: bun cleanup.ts}]
-    status: [bun status.ts]
-    preconditions: [{sh: bun ready.ts}]
-    vars: {DISCOVER: {sh: bun discover.ts}, DATA: {value: bun ignored.ts}}`;
-  const taskFixture = {
-    path: 'Taskfile.ci.yml',
-    source: taskSource,
-  };
-  expect(runnableCommandSources(taskFixture)).toEqual([
-    'cd "scripts" && bun check.ts',
-    'cd "scripts" && task verify',
-    'cd "scripts" && bun cleanup.ts',
-    'cd "scripts" && bun status.ts',
-    'cd "scripts" && task prepare',
-    'cd "scripts" && bun ready.ts',
-    'cd "scripts" && bun discover.ts',
-  ]);
-  const workflow = `name: bun prose.ts
-jobs: {audit: {metadata: {run: bun ignored.ts}, steps: [{name: bun prose.ts, run: bun scripts/workflow.ts}]}}`;
-  const workflowFixture = {
-    path: '.github/workflows/audit.yml',
-    source: workflow,
-  };
-  expect(runnableCommandSources(workflowFixture)).toEqual([
-    'bun scripts/workflow.ts',
-  ]);
-});
 
 test('rejects every protected runtime construction and masked launch', () => {
   const fixtures = [
@@ -110,16 +66,37 @@ test('enforces UTF-8 source and token bounds before classification', () => {
     'UTF-8 byte bound',
   );
   expect(() => inspectShell('word '.repeat(4_097))).toThrow('token count');
-  const inert = { inert: 'é'.repeat(32_768) };
-  const huge = { path: 'package.json', source: JSON.stringify(inert) };
-  expect(() => runnableCommandSources(huge)).toThrow('UTF-8 byte bound');
-  const entries = [...Array(4_097).keys()].map((index) => [String(index), 'x']);
-  const scripts = { scripts: Object.fromEntries(entries) };
-  const many = { path: 'package.json', source: JSON.stringify(scripts) };
-  expect(() => runnableCommandSources(many)).toThrow('command count');
-  const amplified = {
-    path: 'Taskfile.yml',
-    source: `vars: {LONG: ${'a'.repeat(100)}}\ntasks: {x: {dir: '{{.LONG}}', cmds: [${'x,'.repeat(3_000)}]}}`,
-  };
-  expect(() => runnableCommandSources(amplified)).toThrow('command bytes');
+});
+
+test('preserves shell execution semantics around state and branches', () => {
+  for (const source of [
+    `ROOT=${PROTECTED_ROOT}; ROOT=scripts true; bun "$ROOT/cli.ts"`,
+    `audit(){ bun ${PROTECTED}; }; audit; audit(){ bun scripts/safe.ts; }`,
+    `case x in x) bun ${PROTECTED};; esac`,
+    `ROOT=${PROTECTED_ROOT}; false && ROOT=scripts; bun "$ROOT/cli.ts"`,
+    `bash -c 'bun "$1"' _ ${PROTECTED}`,
+  ])
+    expect(() => inspectProtected(source), source).toThrow();
+});
+
+test('rejects indirect executable shell input', () => {
+  for (const source of [
+    `bash <(printf 'bun ${PROTECTED}')`,
+    `bash <<'EOF'\nbun ${PROTECTED}\nEOF`,
+    `npm exec -c 'bun ${PROTECTED}'`,
+    `[[ $(bun ${PROTECTED}) = x ]]`,
+    `trap 'bun ${PROTECTED}' EXIT`,
+    `PATH=${PROTECTED_ROOT}:$PATH bun scripts/safe.ts`,
+  ])
+    expect(() => inspectProtected(source), source).toThrow();
+});
+
+test('accepts bounded static shell structures', () => {
+  for (const source of [
+    'cleanup(){ rm -f output; }; trap cleanup EXIT',
+    'case x in x) bun scripts/safe.ts;; esac',
+    "bash <<'EOF'\necho ok\nEOF",
+    'while read -r value; do echo "$value"; done < <(printf ok)',
+  ])
+    expect(() => inspectProtected(source), source).not.toThrow();
 });

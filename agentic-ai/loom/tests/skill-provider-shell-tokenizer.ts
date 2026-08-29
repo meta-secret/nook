@@ -44,11 +44,14 @@ export function tokenizeShell(source: string): readonly ShellToken[] {
       index = end + 1;
       continue;
     }
-    if (character === '$' && source[index + 1] === '(') {
+    if (
+      (character === '$' || character === '<' || character === '>') &&
+      source[index + 1] === '('
+    ) {
       let depth = 1;
       let nestedQuote = '';
-      raw += '$(';
-      value += '$(';
+      raw += `${character}(`;
+      value += `${character}(`;
       dynamic = true;
       index += 2;
       for (; index < source.length && depth > 0; index += 1) {

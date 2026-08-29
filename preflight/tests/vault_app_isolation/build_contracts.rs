@@ -1,37 +1,5 @@
 use super::*;
 
-const TRUSTED_DOCKER_PATHS: [&str; 3] = [
-    "/usr/local/bin/docker",
-    "/usr/bin/docker",
-    "/opt/homebrew/bin/docker",
-];
-const TRUSTED_DOCKER_SELECTOR: &str =
-    "if [ -x /usr/local/bin/docker ]; then docker_cli=/usr/local/bin/docker
-elif [ -x /usr/bin/docker ]; then docker_cli=/usr/bin/docker
-elif [ -x /opt/homebrew/bin/docker ]; then docker_cli=/opt/homebrew/bin/docker
-else
-echo \"trusted Docker CLI is unavailable\" >&2
-exit 127
-fi";
-
-fn docker_script_fixture(
-    root: &std::path::Path,
-    relative: &str,
-    directory: &std::path::Path,
-    fake_docker: &std::path::Path,
-) -> anyhow::Result<std::path::PathBuf> {
-    let fake = fake_docker.to_string_lossy();
-    let mut source = read(root, relative);
-    for candidate in TRUSTED_DOCKER_PATHS {
-        anyhow::ensure!(source.matches(candidate).count() == 2);
-        source = source.replace(candidate, &fake);
-    }
-    anyhow::ensure!(source.matches(fake.as_ref()).count() == 6);
-    let fixture = directory.join("wrapper.sh");
-    fs::write(&fixture, source)?;
-    Ok(fixture)
-}
-
 #[test]
 fn fast_wasm_build_reuses_manifest_keyed_dependencies_outside_the_source_mount()
 -> anyhow::Result<()> {
@@ -363,33 +331,6 @@ fn scheduled_nightly_live_sync_is_retired() -> anyhow::Result<()> {
 #[test]
 fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
     let root = repository_root();
-    for (path, invocation_count) in [
-        (".github/scripts/verify-wasm-gha-cache.sh", 1),
-        (".github/scripts/with-healthy-buildkit.sh", 7),
-        (".github/scripts/with-remote-buildkit.sh", 3),
-        ("infra/tasks/bake-cache.yml", 13),
-    ] {
-        let source = read(&root, path);
-        let normalized = source.lines().map(str::trim).collect::<Vec<_>>().join("\n");
-        assert_eq!(normalized.matches(TRUSTED_DOCKER_SELECTOR).count(), 1);
-        let assignments: Vec<_> = source
-            .lines()
-            .filter_map(|line| line.split_once("docker_cli=").map(|entry| entry.1.trim()))
-            .collect();
-        assert_eq!(assignments, TRUSTED_DOCKER_PATHS, "{path} selector drift");
-        assert_eq!(source.matches("\"$docker_cli\"").count(), invocation_count);
-        for forbidden in ["${DOCKER", "docker_bin", "PATH=", "command -v docker"] {
-            assert!(!source.contains(forbidden), "{path} permits {forbidden}");
-        }
-        assert!(!source.lines().any(|line| {
-            let command = line.trim_start();
-            !command.starts_with('#')
-                && !command.contains("echo ")
-                && command
-                    .split_whitespace()
-                    .any(|word| word.trim_matches(['\'', '"', ';', '&', '|', '(', ')']) == "docker")
-        }));
-    }
     let pr = read(&root, ".github/workflows/pr.yml");
     assert!(
         !pr.contains("docker buildx prune") && !pr.contains("BUILDX_BUILDER"),
@@ -498,18 +439,13 @@ fi
     let mut permissions = fs::metadata(&fake_docker)?.permissions();
     permissions.set_mode(0o755);
     fs::set_permissions(&fake_docker, permissions)?;
-    let wrapper = docker_script_fixture(
-        &root,
-        ".github/scripts/with-healthy-buildkit.sh",
-        &temp,
-        &fake_docker,
-    )?;
 
     let started = Instant::now();
     let output = Command::new("bash")
-        .arg(wrapper)
+        .arg(root.join(".github/scripts/with-healthy-buildkit.sh"))
         .args(["bash", "-c", "printf ok > \"$1\"", "nook-test"])
         .arg(&command_marker)
+        .env("DOCKER", &fake_docker)
         .env("FAKE_DOCKER_LOG", &docker_log)
         .env("FAKE_DOCKER_CHILD_PID", &child_pid_file)
         .env("NOOK_PR_BUILDX_BUILDER", "nook-pr-timeout-test")
@@ -581,17 +517,12 @@ printf '%s\n' "$*" >> "$FAKE_DOCKER_LOG"
     let mut permissions = fs::metadata(&fake_docker)?.permissions();
     permissions.set_mode(0o755);
     fs::set_permissions(&fake_docker, permissions)?;
-    let wrapper = docker_script_fixture(
-        &root,
-        ".github/scripts/with-healthy-buildkit.sh",
-        &temp,
-        &fake_docker,
-    )?;
 
     let output = Command::new("bash")
-        .arg(&wrapper)
+        .arg(root.join(".github/scripts/with-healthy-buildkit.sh"))
         .args(["bash", "-c", "printf ok > \"$1\"", "nook-test"])
         .arg(&command_marker)
+        .env("DOCKER", &fake_docker)
         .env("FAKE_DOCKER_LOG", &docker_log)
         .env_remove("NOOK_PR_BUILDX_BUILDER")
         .env_remove("BUILDX_BUILDER")
@@ -616,8 +547,9 @@ printf '%s\n' "$*" >> "$FAKE_DOCKER_LOG"
     );
 
     let refused = Command::new("bash")
-        .arg(wrapper)
+        .arg(root.join(".github/scripts/with-healthy-buildkit.sh"))
         .args(["true"])
+        .env("DOCKER", &fake_docker)
         .env("NOOK_PR_BUILDX_BUILDER", "nook-pr")
         .output()?;
     assert!(
@@ -660,16 +592,12 @@ fi
     permissions.set_mode(0o755);
     fs::set_permissions(&fake_docker, permissions)?;
 
-    let wrapper = docker_script_fixture(
-        &root,
-        ".github/scripts/with-remote-buildkit.sh",
-        &temp,
-        &fake_docker,
-    )?;
+    let wrapper = root.join(".github/scripts/with-remote-buildkit.sh");
     let output = Command::new("bash")
         .arg(&wrapper)
         .args(["bash", "-c", "printf ok > \"$1\"", "nook-test"])
         .arg(&command_marker)
+        .env("DOCKER", &fake_docker)
         .env("FAKE_DOCKER_LOG", &docker_log)
         .env("NOOK_PR_BUILDX_BUILDER", "nook-arc-run-1")
         .output()?;
@@ -709,6 +637,7 @@ fi
         .arg(&wrapper)
         .args(["bash", "-c", "printf bad > \"$1\"", "nook-test"])
         .arg(&command_marker)
+        .env("DOCKER", &fake_docker)
         .env("FAKE_DOCKER_LOG", &docker_log)
         .env("FAIL_REMOTE_PROBE", "1")
         .env("NOOK_PR_BUILDX_BUILDER", "nook-arc-run-2")

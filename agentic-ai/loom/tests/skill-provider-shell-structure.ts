@@ -11,8 +11,10 @@ export type ShellStructure = {
 };
 
 type Delimiter = {
+  body: string;
   readonly delimiter: string;
   readonly expands: boolean;
+  readonly shellInput: boolean;
   readonly stripTabs: boolean;
 };
 type StrippedHeredocs = {
@@ -45,7 +47,10 @@ export function shellStructure(
   const source = extractFunctions(functionInspection);
   return {
     source,
-    substitutions: heredocs.substitutions,
+    substitutions: [
+      ...heredocs.substitutions,
+      ...compoundSubstitutions(heredocs.source),
+    ],
   };
 }
 
@@ -59,7 +64,10 @@ function stripHeredocs(source: string): StrippedHeredocs {
       const candidate = (
         active.stripTabs ? line.replace(/^\t+/u, '') : line
       ).replace(/\n$/u, '');
-      if (candidate === active.delimiter) pending.shift();
+      if (candidate === active.delimiter) {
+        if (active.shellInput) substitutions.push(active.body);
+        pending.shift();
+      } else if (active.shellInput) active.body += line;
       else if (active.expands)
         substitutions.push(...shellSubstitutionBodies(line));
       output.push(line.endsWith('\n') ? '\n' : '');
@@ -120,8 +128,13 @@ function heredocLine(source: string): HeredocLine {
     const parsed = delimiterWord(delimiterRequest);
     if (parsed === false) throw new Error('Shell heredoc has no delimiter.');
     const delimiter: Delimiter = {
+      body: '',
       delimiter: parsed.value,
       expands: !parsed.quoted,
+      shellInput:
+        /(?:^|[;&|]\s*)(?:bash|sh|source)\b[^#\n]*<</u.test(source) ||
+        /(?:^|[;&|]\s*)\.\s+[^#\n]*<</u.test(source) ||
+        /<<[^|\n]*\|\s*(?:bash|sh)\b/u.test(source),
       stripTabs,
     };
     delimiters.push(delimiter);
@@ -130,6 +143,24 @@ function heredocLine(source: string): HeredocLine {
     index = parsed.end - 1;
   }
   return { delimiters, source: retained.join('') };
+}
+
+function compoundSubstitutions(source: string): readonly string[] {
+  const substitutions: string[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    if (
+      !['[[', '((', '$(('].some((opening) => source.startsWith(opening, index))
+    )
+      continue;
+    const request: DelimiterRequest = { source, start: index };
+    const end = shellCompoundEnd(request);
+    if (end === false) continue;
+    substitutions.push(
+      ...shellSubstitutionBodies(source.slice(index, end + 1)),
+    );
+    index = end;
+  }
+  return substitutions;
 }
 
 function shellCompoundEnd(request: DelimiterRequest): number | false {
@@ -233,10 +264,10 @@ function extractFunctions(inspection: ShellStructureInspection): string {
       start: index + start,
     };
     const end = findClosing(closingRequest);
-    inspection.functions.set(
-      match[1] ?? match[2] ?? '',
-      inspection.source.slice(index + start, end),
-    );
+    const name = match[1] ?? match[2] ?? '';
+    const body = inspection.source.slice(index + start, end);
+    const previous = inspection.functions.get(name);
+    inspection.functions.set(name, previous ? `${previous}\n${body}` : body);
     retained.fill(' ', index, end + 1);
     wordActive = true;
     index = end;
@@ -300,9 +331,10 @@ export function shellSubstitutionBodies(source: string): readonly string[] {
       continue;
     }
     if (
-      character === '$' &&
-      source[index + 1] === '(' &&
-      source[index + 2] !== '('
+      ((character === '$' && source[index + 2] !== '(') ||
+        character === '<' ||
+        character === '>') &&
+      source[index + 1] === '('
     ) {
       const start = index + 2;
       const closingRequest: ClosingRequest = {

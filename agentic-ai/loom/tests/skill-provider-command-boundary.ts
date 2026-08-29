@@ -10,7 +10,6 @@ import {
   applyAliasMutation,
   type AliasRequest,
 } from './skill-provider-shell-alias.ts';
-export { runnableCommandSources } from './skill-provider-config-commands.ts';
 import {
   isDispatchWrapper,
   resolveDispatchCommand,
@@ -91,6 +90,11 @@ const TASK_VALUE_OPTIONS = new Set('--dir --taskfile -d -t'.split(' '));
 const ENV_BOOLEAN_OPTIONS = new Set('-i --ignore-environment'.split(' '));
 const ENV_VALUE_OPTIONS = new Set('-u --unset'.split(' '));
 const ENV_ATTACHED_VALUE = /^--unset=[^=]+$/u;
+type ResolvedCommandRequest = {
+  readonly request: RuntimeCommandRequest;
+  readonly start: number;
+  readonly words: readonly ShellWord[];
+};
 export function analyzeShellCommands(
   inspection: ShellCommandInspection,
 ): ShellCommandAnalysis {
@@ -152,6 +156,7 @@ function analyzeCommandSource(request: ShellCommandRequest): void {
     analyzeSubstitution([request, source]);
   const tokens = tokenizeShell(structure.source);
   let command: ShellWord[] = [];
+  let conditionalEnvironment: Map<string, ShellWord> | false = false;
   for (const token of [...tokens, ShellSeparator.Newline]) {
     if (request.state.casePattern) {
       if (
@@ -186,6 +191,16 @@ function analyzeCommandSource(request: ShellCommandRequest): void {
       analyzeCommand(commandRequest);
       command = [];
     }
+    if (conditionalEnvironment !== false) {
+      request.state.environment.clear();
+      for (const [name, value] of conditionalEnvironment)
+        request.state.environment.set(name, value);
+      conditionalEnvironment = false;
+    }
+    if (token === ShellSeparator.And || token === ShellSeparator.Or)
+      conditionalEnvironment = new Map(request.state.environment);
+    if (token === ShellSeparator.CloseParenthesis)
+      request.state.casePattern = false;
     if (token === ShellSeparator.Case) request.state.casePattern = true;
   }
 }
@@ -195,8 +210,57 @@ function analyzeCommand(request: RuntimeCommandRequest): void {
   for (const word of words)
     for (const source of shellSubstitutionBodies(word.source))
       analyzeSubstitution([request, source]);
-  let index = consumeAssignments([words, 0, request.state.environment]);
-  if (index === words.length) return;
+  const outerEnvironment = request.state.environment;
+  const commandEnvironment = new Map(outerEnvironment);
+  let index = consumeAssignments([words, 0, commandEnvironment]);
+  if (index === words.length) {
+    consumeAssignments([words, 0, outerEnvironment]);
+    return;
+  }
+  if (index > 0) {
+    const scopedNames = new Set(
+      words
+        .slice(0, index)
+        .map((word) => word.value.split(/\+?=/u, 1)[0] ?? ''),
+    );
+    if (scopedNames.has('PATH'))
+      throw new Error('Command-scoped PATH mutation is forbidden.');
+    const scopedState: ShellParseState = {
+      ...request.state,
+      environment: commandEnvironment,
+    };
+    const scopedRequest: RuntimeCommandRequest = {
+      ...request,
+      state: scopedState,
+    };
+    const resolvedRequest: ResolvedCommandRequest = {
+      request: scopedRequest,
+      start: index,
+      words,
+    };
+    analyzeResolvedCommand(resolvedRequest);
+    for (const [name, value] of commandEnvironment)
+      if (!scopedNames.has(name)) outerEnvironment.set(name, value);
+    request.state.casePattern = scopedState.casePattern;
+    request.state.commandCount = scopedState.commandCount;
+    request.state.cwd = scopedState.cwd;
+    request.state.cwdProtected = scopedState.cwdProtected;
+    request.state.cwdUnknown = scopedState.cwdUnknown;
+    request.state.positionalArguments = scopedState.positionalArguments;
+    return;
+  }
+  const resolvedRequest: ResolvedCommandRequest = {
+    request,
+    start: index,
+    words,
+  };
+  analyzeResolvedCommand(resolvedRequest);
+}
+
+function analyzeResolvedCommand(resolved: ResolvedCommandRequest): void {
+  const { request, words } = resolved;
+  const start = resolved.start;
+  let index = start;
   let wordRequest: WordEnvironmentRequest = {
     word: words[index] as ShellWord,
     environment: request.state.environment,
@@ -546,6 +610,8 @@ function consumeEnvPrefix(request: EnvPrefixRequest): number {
     };
     const assignment = assignmentWord(assignmentRequest);
     if (assignment === false) break;
+    if (assignment.name === 'PATH')
+      throw new Error('env PATH mutation is forbidden.');
     request.environment.set(assignment.name, assignment.value);
     index += 1;
   }
@@ -583,6 +649,37 @@ function analyzeRuntime(request: RuntimeCommandRequest): void {
   }
   if (request.runtime === 'bash' || request.runtime === 'sh') {
     analyzeShellRuntime(request);
+    return;
+  }
+  if (request.runtime === 'npm' && request.words[0]?.value === 'exec') {
+    const option = request.words[1];
+    const source =
+      option?.value === '-c' || option?.value === '--call'
+        ? request.words[2]
+        : option?.value.startsWith('--call=')
+          ? staticWord(option.value.slice('--call='.length))
+          : false;
+    if (!source) return;
+    if (source.dynamic)
+      throw new Error('Dynamic npm exec command is forbidden.');
+    const nestedRequest: ShellCommandRequest = {
+      depth: request.depth + 1,
+      source: source.value,
+      state: request.state,
+    };
+    analyzeCommandSource(nestedRequest);
+    return;
+  }
+  if (request.runtime === 'trap') {
+    const action = request.words[0];
+    if (!action || action.value === '-' || action.value.startsWith('-')) return;
+    if (action.dynamic) throw new Error('Dynamic shell trap is forbidden.');
+    const nestedRequest: ShellCommandRequest = {
+      depth: request.depth + 1,
+      source: action.value,
+      state: request.state,
+    };
+    analyzeCommandSource(nestedRequest);
     return;
   }
   if (request.runtime === 'source' || request.runtime === '.') {
@@ -641,14 +738,22 @@ function analyzeShellRuntime(request: RuntimeCommandRequest): void {
   }
   const executable = request.words[index];
   if (!executable) return;
+  if (/^[<>]\(/u.test(executable.source))
+    throw new Error('Shell process-substitution input is forbidden.');
   if (!executableIsStatic(executable)) return;
   if (commandString) {
+    const positionalArguments = request.state.positionalArguments;
+    request.state.positionalArguments = request.words.slice(index + 2);
     const nestedRequest: ShellCommandRequest = {
       depth: request.depth + 1,
       source: executable.value,
       state: request.state,
     };
-    analyzeCommandSource(nestedRequest);
+    try {
+      analyzeCommandSource(nestedRequest);
+    } finally {
+      request.state.positionalArguments = positionalArguments;
+    }
     return;
   }
   const launch: RuntimeExecutable = {
@@ -803,6 +908,31 @@ function expandPositionalWords(
     if (word.value === '$@' || word.value === '${@}') {
       if (request.positionalArguments === false) expanded.push(word);
       else expanded.push(...request.positionalArguments);
+    } else if (request.positionalArguments !== false) {
+      let value = '';
+      let dynamic = word.dynamic;
+      let end = 0;
+      for (const match of word.value.matchAll(
+        /\$(?:\{([1-9]\d*)\}|([1-9]\d*))/gu,
+      )) {
+        const argument =
+          request.positionalArguments[Number(match[1] ?? match[2]) - 1];
+        value += word.value.slice(end, match.index);
+        if (argument) {
+          value += argument.value;
+          dynamic ||= argument.dynamic;
+        } else {
+          value += match[0];
+          dynamic = true;
+        }
+        end = match.index + match[0].length;
+      }
+      const expandedWord: ShellWord = {
+        ...word,
+        value: value + word.value.slice(end),
+        dynamic,
+      };
+      expanded.push(expandedWord);
     } else expanded.push(word);
   }
   return expanded;
