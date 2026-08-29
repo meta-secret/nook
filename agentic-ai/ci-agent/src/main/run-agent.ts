@@ -1,4 +1,7 @@
 import { Agent, CursorAgentError } from "@cursor/sdk";
+import { access, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { formatDuration, loadAgentWaitOptions, waitWithHeartbeat } from "./agent-wait.js";
 import type { CiAgentConfig } from "./config.js";
@@ -6,6 +9,68 @@ import { finishInteractionLog, logInteractionUpdate } from "./log.js";
 import { createLogger } from "./logger.js";
 
 const log = createLogger("run-agent");
+
+const AGENT_ENV_ALLOWLIST = new Set([
+  "CI",
+  "FORCE_COLOR",
+  "HOME",
+  "LANG",
+  "LC_ALL",
+  "NO_COLOR",
+  "PATH",
+  "SHELL",
+  "TERM",
+  "TMPDIR",
+  "WASM_BUILD_MODE",
+]);
+
+export function sanitizeAgentEnvironment(
+  environment: NodeJS.ProcessEnv,
+): void {
+  for (const name of Object.keys(environment)) {
+    if (!AGENT_ENV_ALLOWLIST.has(name)) delete environment[name];
+  }
+}
+
+async function createSandboxedAgent(config: CiAgentConfig) {
+  try {
+    await access(join(config.repoRoot, ".cursor", "sandbox.json"));
+    throw new Error("Implementation source must not provide Cursor sandbox policy");
+  } catch (error: unknown) {
+    if (error instanceof Error && !error.message.includes("ENOENT")) throw error;
+  }
+  const sandboxHome = await mkdtemp(join(tmpdir(), "nook-agent-home-"));
+  const cursorHome = join(sandboxHome, ".cursor");
+  await mkdir(cursorHome);
+  await writeFile(
+    join(cursorHome, "sandbox.json"),
+    JSON.stringify({
+      type: "workspace_readwrite",
+      readBoundary: "workspace",
+      networkPolicy: { version: 1, default: "deny" },
+      networkPolicyStrict: true,
+    }),
+    { mode: 0o600 },
+  );
+  sanitizeAgentEnvironment(process.env);
+  process.env.HOME = sandboxHome;
+  try {
+    const agent = await Agent.create({
+      apiKey: config.cursorApiKey,
+      model: { id: config.modelId },
+      disallowedTools: ["task", "mcp"],
+      local: {
+        cwd: config.repoRoot,
+        settingSources: [],
+        sandboxOptions: { enabled: true },
+      },
+    });
+    return { agent, sandboxHome };
+  } catch (error) {
+    await rm(sandboxHome, { recursive: true, force: true });
+    throw error;
+  }
+}
 
 export async function runFixAgent(config: CiAgentConfig, prompt: string): Promise<void> {
   const waitOptions = loadAgentWaitOptions();
@@ -15,15 +80,12 @@ export async function runFixAgent(config: CiAgentConfig, prompt: string): Promis
 
   // Prefer explicit asyncDispose over fire-and-forget close() so local executor
   // resources are released before git push / PR polling / process.exit.
-  const agent = await Agent.create({
-    apiKey: config.cursorApiKey,
-    model: { id: config.modelId },
-    local: {
-      cwd: config.repoRoot,
-      settingSources: [],
-      sandboxOptions: { enabled: false },
-    },
-  });
+  // The API key is passed directly to the SDK control plane. Remove every
+  // repository/control-plane credential from the process environment before
+  // the local agent can spawn a shell; local child processes inherit env.
+  // Cursor SDK 1.0.28 consumes the trusted per-user policy while
+  // sandboxOptions makes unsupported hosts fail closed.
+  const { agent, sandboxHome } = await createSandboxedAgent(config);
 
   try {
     let run;
@@ -62,5 +124,6 @@ export async function runFixAgent(config: CiAgentConfig, prompt: string): Promis
       const message = err instanceof Error ? err.message : String(err);
       log.info(`Agent dispose warning: ${message}`);
     }
+    await rm(sandboxHome, { recursive: true, force: true });
   }
 }

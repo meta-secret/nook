@@ -26,6 +26,7 @@ function deliveryArgs(log: string[]) {
     findPr: () => step(log, "find-pr", notFound),
     pushBranch: async () => mark("push"),
     verifyBranch: () => step(log, "verify-origin", true),
+    verifyPublishedHead: async () => mark("verify-head"),
   };
 }
 
@@ -40,7 +41,7 @@ test("oversized implementation is pushed and preserved before budget rejection",
     throw budgetError;
   };
   await assert.rejects(preserve(args), (error) => error === budgetError);
-  assert.deepEqual(events, ["budget", "push", "verify-origin"]);
+  assert.deepEqual(events, ["budget", "push", "verify-origin", "verify-head"]);
 });
 
 test("budget measurement errors abort before branch preservation", async () => {
@@ -59,7 +60,7 @@ test("bounded implementation keeps the normal push, budget, and PR creation path
   const events: string[] = [];
   assert.equal(await preserve(deliveryArgs(events)), 73);
 
-  assert.equal(events.join(), "budget,push,verify-origin,find-pr,create-pr");
+  assert.equal(events.join(), "budget,push,verify-origin,verify-head,find-pr,create-pr");
 });
 
 describe("resolveImplementPrTarget", () => {
@@ -84,13 +85,21 @@ describe("resolveImplementPrTarget", () => {
       resolveImplementPrTarget({
         branch: "codex/feature-successor",
         baseBranch: "codex/feature-predecessor",
+        baseSha: "a".repeat(40),
         kind: ImplementPrTargetKind.Stacked,
+        predecessorBranch: "codex/feature-predecessor",
+        prNumber: "1199",
+        startHeadSha: "b".repeat(40),
       }),
       {
         kind: ImplementPrTargetKind.Stacked,
         branch: "codex/feature-successor",
         baseBranch: "codex/feature-predecessor",
-        budgetBaseRef: "origin/codex/feature-predecessor",
+        baseSha: "a".repeat(40),
+        budgetBaseRef: "a".repeat(40),
+        predecessorBranch: "codex/feature-predecessor",
+        prNumber: 1199,
+        startHeadSha: "b".repeat(40),
       },
     );
   });
@@ -100,13 +109,21 @@ describe("resolveImplementPrTarget", () => {
       resolveImplementPrTarget({
         branch: "codex/feature-successor",
         baseBranch: "main",
+        baseSha: "c".repeat(40),
         kind: ImplementPrTargetKind.Stacked,
+        predecessorBranch: "codex/feature-predecessor",
+        prNumber: "1199",
+        startHeadSha: "d".repeat(40),
       }),
       {
         kind: ImplementPrTargetKind.Stacked,
         branch: "codex/feature-successor",
         baseBranch: "main",
-        budgetBaseRef: "origin/main",
+        baseSha: "c".repeat(40),
+        budgetBaseRef: "c".repeat(40),
+        predecessorBranch: "codex/feature-predecessor",
+        prNumber: 1199,
+        startHeadSha: "d".repeat(40),
       },
     );
   });
@@ -116,15 +133,31 @@ describe("resolveImplementPrTarget", () => {
       resolveImplementPrTarget({
         branch: "codex/feature-successor",
         baseBranch: "codex/feature-successor",
+        baseSha: "a".repeat(40),
         kind: ImplementPrTargetKind.Stacked,
+        predecessorBranch: "codex/feature-predecessor",
+        prNumber: "1199",
+        startHeadSha: "b".repeat(40),
       }),
     );
     assert.throws(() =>
       resolveImplementPrTarget({
         branch: "codex/feature successor",
         baseBranch: "codex/feature-predecessor",
+        baseSha: "a".repeat(40),
+        kind: ImplementPrTargetKind.Stacked,
+        predecessorBranch: "codex/feature-predecessor",
+        prNumber: "1199",
+        startHeadSha: "b".repeat(40),
+      }),
+    );
+    assert.throws(() =>
+      resolveImplementPrTarget({
+        branch: "codex/feature-successor",
+        baseBranch: "codex/feature-predecessor",
         kind: ImplementPrTargetKind.Stacked,
       }),
+      /frozen PR and base SHA metadata/,
     );
   });
 });

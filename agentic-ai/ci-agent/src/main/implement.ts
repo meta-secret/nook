@@ -16,6 +16,7 @@ import {
   configureGitForCi,
   hasWorkingTreeChanges,
   pushFixBranch,
+  revParse,
 } from "./git.js";
 import { createLogger } from "./logger.js";
 import { loadPrompt, resolveAgentTask } from "./prompt.js";
@@ -30,6 +31,7 @@ type PreserveImplementedBranchArgs = {
   findPr: () => Promise<OpenPrLookup>;
   pushBranch: () => Promise<void>;
   verifyBranch: () => Promise<boolean>;
+  verifyPublishedHead?: () => Promise<void>;
 };
 
 export async function preserveImplementedBranchBeforePr(
@@ -48,6 +50,7 @@ export async function preserveImplementedBranchBeforePr(
       `Agent branch ${args.agentBranch} was not found on origin after push`,
     );
   }
+  await args.verifyPublishedHead?.();
   if (budgetResult.kind === "rejected") throw budgetResult.error;
 
   const openPr = await args.findPr();
@@ -65,8 +68,14 @@ export enum ImplementPrTargetKind {
 type ImplementPrTargetInput = {
   branch: string;
   baseBranch: string;
+  baseSha?: string;
   kind: string;
+  predecessorBranch?: string;
+  prNumber?: string;
+  startHeadSha?: string;
 };
+
+const FULL_SHA = /^[0-9a-f]{40}$/;
 
 function isValidBranch(branch: string): boolean {
   if (
@@ -112,11 +121,198 @@ export function resolveImplementPrTarget(input: ImplementPrTargetInput) {
   if (input.branch === input.baseBranch) {
     throw new Error("Stacked implement PRs require a distinct live base branch");
   }
+  if (
+    !input.baseSha ||
+    !FULL_SHA.test(input.baseSha) ||
+    !input.startHeadSha ||
+    !FULL_SHA.test(input.startHeadSha) ||
+    !input.predecessorBranch ||
+    !isValidBranch(input.predecessorBranch) ||
+    input.predecessorBranch === "main" ||
+    input.predecessorBranch === input.branch ||
+    !input.prNumber ||
+    !/^[1-9]\d*$/.test(input.prNumber)
+  ) {
+    throw new Error("Stacked implement PRs require frozen PR and base SHA metadata");
+  }
   return {
     ...input,
     kind: ImplementPrTargetKind.Stacked,
-    budgetBaseRef: `origin/${input.baseBranch}`,
+    budgetBaseRef: input.baseSha,
+    prNumber: Number(input.prNumber),
   };
+}
+
+type NativeStackMember = {
+  number: number;
+  state?: string;
+  merged_at?: string | null;
+  head?: { ref?: string };
+};
+
+type NativeStack = {
+  open?: boolean;
+  base?: { ref?: string };
+  pull_requests?: NativeStackMember[];
+};
+
+async function nativeStacks(
+  octokit: ReturnType<typeof createOctokit>,
+  repoRef: ReturnType<typeof parseRepository>,
+) {
+  try {
+    return (await octokit.paginate(
+      "GET /repos/{owner}/{repo}/stacks" as never,
+      {
+        ...repoRef,
+        per_page: 100,
+        headers: { accept: "application/vnd.github.nebula-preview+json" },
+      } as never,
+    )) as NativeStack[];
+  } catch {
+    throw new Error("GitHub native stack membership is unavailable during delivery");
+  }
+}
+
+async function assertContains(
+  octokit: ReturnType<typeof createOctokit>,
+  repoRef: ReturnType<typeof parseRepository>,
+  baseSha: string,
+  headSha: string,
+): Promise<void> {
+  const { data } = await octokit.rest.repos.compareCommitsWithBasehead({
+    ...repoRef,
+    basehead: `${baseSha}...${headSha}`,
+  });
+  if (data.behind_by !== 0 || !["ahead", "identical"].includes(data.status)) {
+    throw new Error("Stacked successor no longer contains its frozen live base");
+  }
+}
+
+export async function validateStackDeliveryState(args: {
+  octokit: ReturnType<typeof createOctokit>;
+  repoRef: ReturnType<typeof parseRepository>;
+  branch: string;
+  baseBranch: string;
+  baseSha: string;
+  predecessorBranch: string;
+  prNumber: number;
+  startHeadSha: string;
+}): Promise<void> {
+  const { data: pull } = await args.octokit.rest.pulls.get({
+    ...args.repoRef,
+    pull_number: args.prNumber,
+  });
+  if (
+    pull.state !== "open" ||
+    pull.head.repo?.full_name !== `${args.repoRef.owner}/${args.repoRef.repo}` ||
+    pull.head.ref !== args.branch ||
+    pull.head.sha !== args.startHeadSha ||
+    pull.base.ref !== args.baseBranch ||
+    pull.base.sha !== args.baseSha
+  ) {
+    throw new Error("Stacked PR head or frozen live base changed before delivery");
+  }
+
+  const matches = (await nativeStacks(args.octokit, args.repoRef))
+    .map((stack) => {
+      const members = Array.isArray(stack.pull_requests) ? stack.pull_requests : [];
+      return {
+        stack,
+        members,
+        index: members.findIndex((member) => member.number === args.prNumber),
+      };
+    })
+    .filter(({ index }) => index >= 0);
+  if (
+    matches.length !== 1 ||
+    matches[0].stack.open !== true ||
+    matches[0].stack.base?.ref !== "main"
+  ) {
+    throw new Error("Stacked PR lost its unique open GitHub native stack");
+  }
+  const { members, index } = matches[0];
+  const predecessor = members[index - 1];
+  if (
+    index <= 0 ||
+    members[index].head?.ref !== args.branch ||
+    predecessor?.head?.ref !== args.predecessorBranch
+  ) {
+    throw new Error("Stacked PR is no longer adjacent to its recorded predecessor");
+  }
+
+  const { data: predecessorPull } = await args.octokit.rest.pulls.get({
+    ...args.repoRef,
+    pull_number: predecessor.number,
+  });
+  if (args.baseBranch === args.predecessorBranch) {
+    if (
+      predecessor.state !== "open" ||
+      predecessor.merged_at ||
+      predecessorPull.state !== "open" ||
+      predecessorPull.merged ||
+      predecessorPull.merged_at ||
+      predecessorPull.head.ref !== args.predecessorBranch ||
+      predecessorPull.base.ref !== "main"
+    ) {
+      throw new Error("Live stacked predecessor must remain open and unmerged");
+    }
+  } else if (args.baseBranch === "main") {
+    const { data: main } = await args.octokit.rest.repos.getBranch({
+      ...args.repoRef,
+      branch: "main",
+    });
+    if (
+      predecessor.state !== "closed" ||
+      !predecessor.merged_at ||
+      predecessorPull.merged !== true ||
+      !predecessorPull.merged_at ||
+      predecessorPull.base.ref !== "main" ||
+      !predecessorPull.merge_commit_sha ||
+      main.commit.sha !== args.baseSha
+    ) {
+      throw new Error("Retargeted successor predecessor/main state changed before delivery");
+    }
+    const [{ data: merge }, { data: predecessorHead }] = await Promise.all([
+      args.octokit.rest.repos.getCommit({
+        ...args.repoRef,
+        ref: predecessorPull.merge_commit_sha,
+      }),
+      args.octokit.rest.repos.getCommit({
+        ...args.repoRef,
+        ref: predecessorPull.head.sha,
+      }),
+    ]);
+    if (
+      predecessorPull.merge_commit_sha === predecessorPull.head.sha ||
+      merge.parents.length !== 1 ||
+      merge.parents[0]?.sha !== predecessorPull.base.sha ||
+      merge.commit.tree.sha !== predecessorHead.commit.tree.sha
+    ) {
+      throw new Error("Retargeted predecessor is not an authenticated squash merge");
+    }
+    await assertContains(args.octokit, args.repoRef, predecessorPull.merge_commit_sha, args.baseSha);
+  } else {
+    throw new Error("Stacked successor has an invalid live base branch");
+  }
+  await assertContains(args.octokit, args.repoRef, args.baseSha, args.startHeadSha);
+}
+
+function resolveTargetFromEnvironment() {
+  const runId = process.env.GITHUB_RUN_ID?.trim() ?? "";
+  const agentBranch =
+    process.env.AGENT_BRANCH?.trim() ||
+    process.env.FIX_BRANCH?.trim() ||
+    `agent/prompt-${runId}`;
+  return resolveImplementPrTarget({
+    branch: agentBranch,
+    baseBranch: process.env.AGENT_PR_BASE_BRANCH?.trim() || "main",
+    baseSha: process.env.AGENT_PR_BASE_SHA?.trim(),
+    kind: process.env.AGENT_PR_TARGET_KIND?.trim() || ImplementPrTargetKind.Standalone,
+    predecessorBranch: process.env.AGENT_PR_PREDECESSOR_BRANCH?.trim(),
+    prNumber: process.env.AGENT_PR_NUMBER?.trim(),
+    startHeadSha: process.env.AGENT_PR_START_HEAD_SHA?.trim(),
+  });
 }
 
 export async function runCiImplement(): Promise<void> {
@@ -129,112 +325,110 @@ export async function runCiImplement(): Promise<void> {
   resolveAgentTask();
 
   const repoRoot = process.env.REPO_ROOT?.trim() || process.cwd();
-  const agentBranch =
-    process.env.AGENT_BRANCH?.trim() ||
-    process.env.FIX_BRANCH?.trim() ||
-    `agent/prompt-${runId}`;
-  const target = resolveImplementPrTarget({
-    branch: agentBranch,
-    baseBranch: process.env.AGENT_PR_BASE_BRANCH?.trim() || "main",
-    kind:
-      process.env.AGENT_PR_TARGET_KIND?.trim() ||
-      ImplementPrTargetKind.Standalone,
-  });
+  const target = resolveTargetFromEnvironment();
   chdir(repoRoot);
+  const loadedConfig = loadConfig();
+  if (loadedConfig.kind === CiAgentConfigLoadKind.MissingApiKey) {
+    if (target.kind === ImplementPrTargetKind.Stacked) {
+      throw new Error("Stacked continuation requires CURSOR_API_KEY");
+    }
+    console.log("::warning::CURSOR_API_KEY is not set — skipping agent implement job.");
+    return;
+  }
+  const config = loadedConfig.config;
+  await runFixAgent(config, await loadPrompt(config));
+  if (!(await hasWorkingTreeChanges(repoRoot))) {
+    if (target.kind === ImplementPrTargetKind.Stacked) {
+      throw new Error("Stacked continuation produced a clean working tree");
+    }
+    console.log("::warning::Agent finished but working tree is clean — nothing to push.");
+  }
+}
+
+export async function runCiDeliver(): Promise<void> {
+  const repository = process.env.GITHUB_REPOSITORY?.trim();
+  const runId = process.env.GITHUB_RUN_ID?.trim();
+  if (!repository || !runId) {
+    throw new Error("GITHUB_REPOSITORY and GITHUB_RUN_ID are required");
+  }
+  const repoRoot = process.env.REPO_ROOT?.trim() || process.cwd();
+  const target = resolveTargetFromEnvironment();
+  chdir(repoRoot);
+  if (!(await hasWorkingTreeChanges(repoRoot))) {
+    throw new Error("Trusted delivery requires implementation changes");
+  }
 
   const octokit = createOctokit();
-  await configureGitForCi(repoRoot, octokit);
   const repoRef = parseRepository(repository);
-
-  const openPr = await findOpenPr(octokit, repoRef, agentBranch);
-  let prNumber: number | undefined;
-  if (openPr.kind === OpenPrLookupKind.Found) {
-    prNumber = openPr.number;
-    if (openPr.baseBranch !== target.baseBranch) {
-      throw new Error(
-        `Open PR for ${agentBranch} targets ${openPr.baseBranch}, expected ${target.baseBranch}`,
-      );
-    }
-    log.info(
-      target.kind === ImplementPrTargetKind.Stacked
-        ? `Continuing stacked PR #${openPr.number} on ${agentBranch}`
-        : `Open PR already exists for ${agentBranch} (#${openPr.number})`,
-    );
-  } else if (target.kind === ImplementPrTargetKind.Stacked) {
-    throw new Error(
-      `Stacked implement branch ${agentBranch} requires a pre-existing linked PR`,
-    );
-  }
-
-  if (
-    openPr.kind === OpenPrLookupKind.NotFound ||
-    target.kind === ImplementPrTargetKind.Stacked
-  ) {
-    const cursorApiKey = process.env.CURSOR_API_KEY?.trim();
-    if (!cursorApiKey) {
-      console.log(
-        "::warning::CURSOR_API_KEY is not set — skipping agent implement job.",
-      );
-      console.log(
-        "Add repository secret CURSOR_API_KEY (Cursor Dashboard → Integrations → User API Keys).",
-      );
-      return;
-    }
-
-    const loadedConfig = loadConfig();
-    if (loadedConfig.kind === CiAgentConfigLoadKind.MissingApiKey) return;
-    const config = loadedConfig.config;
-
-    const prompt = await loadPrompt(config);
-    await runFixAgent(config, prompt);
-
-    if (!(await hasWorkingTreeChanges(repoRoot))) {
-      console.log(
-        "::warning::Agent finished but working tree is clean — nothing to push.",
-      );
-      return;
-    }
-
-    prNumber = await preserveImplementedBranchBeforePr({
-      agentBranch,
-      assertBudget: () =>
-        assertAuthoredChangeBudget({
-          repoRoot,
-          baseRef: target.budgetBaseRef,
-          maximumLines: 2_000,
-        }),
-      createPr: () =>
-        createFixPr(
-          octokit,
-          repoRef,
-          agentBranch,
-          runId,
-          config.fixLabel,
-          target.baseBranch,
-        ),
-      findPr: async () => {
-        const linkedPr = await findOpenPr(octokit, repoRef, agentBranch);
-        if (
-          linkedPr.kind === OpenPrLookupKind.Found &&
-          linkedPr.baseBranch !== target.baseBranch
-        ) {
-          throw new Error(
-            `Open PR for ${agentBranch} targets ${linkedPr.baseBranch}, expected ${target.baseBranch}`,
-          );
-        }
-        return linkedPr;
-      },
-      pushBranch: () => pushFixBranch(repoRoot, agentBranch, runId),
-      verifyBranch: () => branchExistsOnOrigin(octokit, repoRef, agentBranch),
+  await configureGitForCi(repoRoot, octokit);
+  if (target.kind === ImplementPrTargetKind.Stacked) {
+    await validateStackDeliveryState({
+      octokit,
+      repoRef,
+      branch: target.branch,
+      baseBranch: target.baseBranch,
+      baseSha: target.baseSha!,
+      predecessorBranch: target.predecessorBranch!,
+      prNumber: Number(target.prNumber),
+      startHeadSha: target.startHeadSha!,
     });
-    log.info(`Opened implement PR #${prNumber}`);
   }
 
-  if (prNumber === undefined) throw new Error("Implement PR number was not resolved");
-  log.info(
-    `PR #${prNumber} opened; this bounded worker hands it to a continuing task-owning agent`,
-  );
-  log.info(
-    `Done — implement run ${runId} exits before the monitor-and-merge lifecycle`,
-  );
+  const prNumber = await preserveImplementedBranchBeforePr({
+    agentBranch: target.branch,
+    assertBudget: () =>
+      assertAuthoredChangeBudget({
+        repoRoot,
+        baseRef: target.budgetBaseRef,
+        maximumLines: 2_000,
+      }),
+    createPr: () => {
+      if (target.kind === ImplementPrTargetKind.Stacked) {
+        throw new Error("Stacked delivery cannot create a replacement PR");
+      }
+      return createFixPr(
+        octokit,
+        repoRef,
+        target.branch,
+        runId,
+        undefined,
+        target.baseBranch,
+      );
+    },
+    findPr: async () => {
+      const found = await findOpenPr(octokit, repoRef, target.branch);
+      if (
+        found.kind === OpenPrLookupKind.Found &&
+        (found.baseBranch !== target.baseBranch ||
+          (target.kind === ImplementPrTargetKind.Stacked &&
+            found.number !== Number(target.prNumber)))
+      ) {
+        throw new Error("Published implementation PR identity or base changed");
+      }
+      return found;
+    },
+    pushBranch: () => pushFixBranch(repoRoot, target.branch, runId),
+    verifyBranch: () => branchExistsOnOrigin(octokit, repoRef, target.branch),
+    verifyPublishedHead:
+      target.kind === ImplementPrTargetKind.Stacked
+        ? async () => {
+            const localHead = await revParse(repoRoot, "HEAD");
+            const { data: pull } = await octokit.rest.pulls.get({
+              ...repoRef,
+              pull_number: Number(target.prNumber),
+            });
+            if (
+              localHead === target.startHeadSha ||
+              pull.head.sha !== localHead ||
+              pull.base.ref !== target.baseBranch ||
+              pull.base.sha !== target.baseSha
+            ) {
+              throw new Error(
+                "Stacked publication did not advance the exact frozen PR head",
+              );
+            }
+          }
+        : undefined,
+  });
+  log.info(`PR #${prNumber} opened; delivery verified and handed to the continuing owner`);
 }

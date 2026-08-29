@@ -365,8 +365,31 @@ export async function pushFixBranch(
     `Fix main CI failure (run ${runId}).`;
 
   await execFileAsync("git", ["-C", repoRoot, "commit", "-m", commitMessage]);
-  await execFileAsync("git", ["-C", repoRoot, "push", "-u", "origin", "HEAD"]);
+  const token = process.env.NOOK_GITHUB_PAT?.trim();
+  const authEnv = token
+    ? {
+        ...process.env,
+        GIT_CONFIG_COUNT: "1",
+        GIT_CONFIG_KEY_0: "http.https://github.com/.extraheader",
+        GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`,
+      }
+    : process.env;
+  await execFileAsync(
+    "git",
+    ["-C", repoRoot, "push", "-u", "origin", "HEAD"],
+    { env: authEnv },
+  );
   log.info(`Pushed ${fixBranch}`);
+}
+
+export async function revParse(repoRoot: string, ref: string): Promise<string> {
+  const { stdout } = await execFileAsync("git", [
+    "-C",
+    repoRoot,
+    "rev-parse",
+    ref,
+  ]);
+  return stdout.trim();
 }
 
 async function hasStagedChanges(repoRoot: string): Promise<boolean> {

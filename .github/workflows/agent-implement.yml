@@ -71,7 +71,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          persist-credentials: true
+          persist-credentials: false
           ref: ${{ github.workflow_sha }}
           token: ${{ secrets.NOOK_GITHUB_PAT }}
 
@@ -216,6 +216,16 @@ jobs:
                 core.setFailed(`${path} stack_branch must immediately follow stack_predecessor_branch in its GitHub native stack`)
                 return
               }
+              let predecessorPull
+              try {
+                predecessorPull = (await github.rest.pulls.get({
+                  ...context.repo,
+                  pull_number: nativePredecessor.number,
+                })).data
+              } catch {
+                core.setFailed(`${path} predecessor PR verification is unavailable`)
+                return
+              }
               if (stackPull.base.ref === stackPredecessorBranch) {
                 try {
                   await github.rest.repos.getBranch({ ...context.repo, branch: stackPredecessorBranch })
@@ -223,20 +233,22 @@ jobs:
                   core.setFailed(`${path} recorded predecessor must exist while it remains the live PR base`)
                   return
                 }
+                if (
+                  nativePredecessor.state !== 'open' || nativePredecessor.merged_at ||
+                  predecessorPull.state !== 'open' || predecessorPull.merged || predecessorPull.merged_at ||
+                  predecessorPull.head.ref !== stackPredecessorBranch || predecessorPull.base.ref !== 'main'
+                ) {
+                  core.setFailed(`${path} recorded predecessor must remain open and unmerged while it is the live PR base`)
+                  return
+                }
                 core.setOutput('stack_live_base_branch', stackPredecessorBranch)
               } else if (stackPull.base.ref === 'main') {
-                let predecessorPull
                 let mainBranch
                 try {
-                  const predecessorResponse = await github.rest.pulls.get({
-                    ...context.repo,
-                    pull_number: nativePredecessor.number,
-                  })
                   const mainResponse = await github.rest.repos.getBranch({
                     ...context.repo,
                     branch: 'main',
                   })
-                  predecessorPull = predecessorResponse.data
                   mainBranch = mainResponse.data
                 } catch {
                   core.setFailed(`${path} predecessor merge verification is unavailable`)
@@ -286,7 +298,7 @@ jobs:
                   return
                 }
                 const containsMain = mainToSuccessor.behind_by === 0 && ['ahead', 'identical'].includes(mainToSuccessor.status)
-                if (!containsMain) {
+                if (!containsMain || stackPull.base.sha !== mainBranch.commit.sha) {
                   core.setFailed(`${path} retargeted successor must contain the current main frontier`)
                   return
                 }
@@ -295,6 +307,13 @@ jobs:
                 core.setFailed(`${path} successor PR must target its recorded predecessor or main`)
                 return
               }
+              if (!/^[0-9a-f]{40}$/.test(stackPull.head.sha) || !/^[0-9a-f]{40}$/.test(stackPull.base.sha)) {
+                core.setFailed(`${path} successor PR did not expose immutable head/base SHAs`)
+                return
+              }
+              core.setOutput('stack_pr_number', String(stackPull.number))
+              core.setOutput('stack_start_head_sha', stackPull.head.sha)
+              core.setOutput('stack_live_base_sha', stackPull.base.sha)
             }
 
             const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
@@ -350,7 +369,10 @@ jobs:
           RUN_ID: ${{ github.run_id }}
           ISSUE_STACK_BRANCH: ${{ steps.workbench.outputs.stack_branch }}
           ISSUE_STACK_LIVE_BASE_BRANCH: ${{ steps.workbench.outputs.stack_live_base_branch }}
+          ISSUE_STACK_LIVE_BASE_SHA: ${{ steps.workbench.outputs.stack_live_base_sha }}
           ISSUE_STACK_PREDECESSOR_BRANCH: ${{ steps.workbench.outputs.stack_predecessor_branch }}
+          ISSUE_STACK_PR_NUMBER: ${{ steps.workbench.outputs.stack_pr_number }}
+          ISSUE_STACK_START_HEAD_SHA: ${{ steps.workbench.outputs.stack_start_head_sha }}
           WORKBENCH_SLUG: ${{ steps.workbench.outputs.slug }}
         run: |
           set -euo pipefail
@@ -389,6 +411,10 @@ jobs:
             echo "AGENT_BRANCH=$branch"
             echo "FIX_BRANCH=$branch"
             echo "AGENT_PR_BASE_BRANCH=$base_branch"
+            echo "AGENT_PR_BASE_SHA=$ISSUE_STACK_LIVE_BASE_SHA"
+            echo "AGENT_PR_NUMBER=$ISSUE_STACK_PR_NUMBER"
+            echo "AGENT_PR_PREDECESSOR_BRANCH=$ISSUE_STACK_PREDECESSOR_BRANCH"
+            echo "AGENT_PR_START_HEAD_SHA=$ISSUE_STACK_START_HEAD_SHA"
             echo "AGENT_PR_TARGET_KIND=$target_kind"
             echo "AGENT_PROMPT<<${delim}"
             printf '%s\n' "$task"
@@ -432,6 +458,7 @@ jobs:
         if: steps.task.outputs.ready == 'true'
         env:
           IMPLEMENTATION_REF: ${{ steps.task.outputs.checkout_ref }}
+          NOOK_TOKEN: ${{ secrets.NOOK_GITHUB_PAT }}
           TRUSTED_WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: |
           set -euo pipefail
@@ -445,8 +472,23 @@ jobs:
             echo "::error::Implementation worktree path already exists."
             exit 1
           fi
+          auth="$(printf 'x-access-token:%s' "$NOOK_TOKEN" | base64 | tr -d '\n')"
+          GIT_CONFIG_COUNT=1 \
+          GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+          GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
           git -C "$GITHUB_WORKSPACE" fetch --no-tags origin \
             "refs/heads/${IMPLEMENTATION_REF}:refs/remotes/origin/${IMPLEMENTATION_REF}"
+          implementation_sha="$(git -C "$GITHUB_WORKSPACE" rev-parse "refs/remotes/origin/${IMPLEMENTATION_REF}")"
+          test "$implementation_sha" = "${AGENT_PR_START_HEAD_SHA:-$implementation_sha}"
+          if [ "$AGENT_PR_TARGET_KIND" = stacked ]; then
+            GIT_CONFIG_COUNT=1 \
+            GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+            GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
+            git -C "$GITHUB_WORKSPACE" fetch --no-tags origin \
+              "refs/heads/${AGENT_PR_BASE_BRANCH}:refs/nook/validated-base"
+            test "$(git -C "$GITHUB_WORKSPACE" rev-parse refs/nook/validated-base)" = "$AGENT_PR_BASE_SHA"
+          fi
+          unset auth NOOK_TOKEN
           git -C "$GITHUB_WORKSPACE" worktree add --detach "$implementation_root" \
             "refs/remotes/origin/${IMPLEMENTATION_REF}"
           echo "IMPLEMENTATION_REPO_ROOT=$implementation_root" >> "$GITHUB_ENV"
@@ -597,15 +639,22 @@ jobs:
               return
             }
 
-      - name: Run ci-agent implement
-        id: implement
+      - name: Run sandboxed implementation agent
+        id: agent_edit
         if: steps.plan.outcome == 'success' && steps.plan.outputs.authorization_blocked != 'true'
         env:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
-          NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
           REPO_ROOT: ${{ env.IMPLEMENTATION_REPO_ROOT }}
           WASM_BUILD_MODE: prod
         run: task ci-agent:host:run CI_AGENT_CMD=implement
+
+      - name: Validate, commit, and publish implementation
+        id: implement
+        if: steps.agent_edit.outcome == 'success'
+        env:
+          NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
+          REPO_ROOT: ${{ env.IMPLEMENTATION_REPO_ROOT }}
+        run: task ci-agent:host:run CI_AGENT_CMD=deliver
 
       - name: Publish Workbench result
         if: >-

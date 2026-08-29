@@ -62,6 +62,7 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "successorIndex <= 0",
         "must immediately follow stack_predecessor_branch in its GitHub native stack",
         "recorded predecessor must exist while it remains the live PR base",
+        "recorded predecessor must remain open and unmerged while it is the live PR base",
         "cannot target main before its native-stack predecessor is merged",
         "mergeCommit.parents[0]?.sha === predecessorPull.base.sha",
         "mergeCommit.commit.tree.sha === predecessorHeadCommit.commit.tree.sha",
@@ -70,15 +71,19 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "successor PR must target its recorded predecessor or main",
         "ISSUE_STACK_BRANCH: ${{ steps.workbench.outputs.stack_branch }}",
         "ISSUE_STACK_LIVE_BASE_BRANCH: ${{ steps.workbench.outputs.stack_live_base_branch }}",
+        "ISSUE_STACK_LIVE_BASE_SHA: ${{ steps.workbench.outputs.stack_live_base_sha }}",
         "ISSUE_STACK_PREDECESSOR_BRANCH: ${{ steps.workbench.outputs.stack_predecessor_branch }}",
+        "ISSUE_STACK_PR_NUMBER: ${{ steps.workbench.outputs.stack_pr_number }}",
+        "ISSUE_STACK_START_HEAD_SHA: ${{ steps.workbench.outputs.stack_start_head_sha }}",
         "AGENT_PR_BASE_BRANCH=$base_branch",
+        "AGENT_PR_BASE_SHA=$ISSUE_STACK_LIVE_BASE_SHA",
         "AGENT_PR_TARGET_KIND=$target_kind",
         "Checkout trusted workflow tooling",
         "ref: ${{ github.workflow_sha }}",
         "Prepare isolated implementation worktree",
         "IMPLEMENTATION_REPO_ROOT=$implementation_root",
         "REPO_ROOT: ${{ env.IMPLEMENTATION_REPO_ROOT }}",
-        "task ci-agent:host:run CI_AGENT_CMD=implement",
+        "task ci-agent:host:run CI_AGENT_CMD=deliver",
         "Rejected unsafe implementation worklog artifact.",
         "ASSIGNED_GIZMO_ID: ${{ steps.workbench.outputs.gizmo_id }}",
         "assignedGizmoId: process.env.ASSIGNED_GIZMO_ID",
@@ -133,29 +138,41 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
     let accepts_stack_claim = |native: bool,
                                adjacent: bool,
                                retargeted: bool,
+                               predecessor_open: bool,
                                merged: bool,
                                squash: bool,
                                current_main: bool| {
-        native && adjacent && (!retargeted || (merged && squash && current_main))
+        native
+            && adjacent
+            && ((retargeted && merged && squash && current_main)
+                || (!retargeted && predecessor_open))
     };
     assert!(
-        !accepts_stack_claim(false, true, false, false, false, false),
+        !accepts_stack_claim(false, true, false, true, false, false, false),
         "an informal PR chain must not pass as a native stack"
     );
     assert!(
-        !accepts_stack_claim(true, false, false, false, false, false),
+        !accepts_stack_claim(true, false, false, true, false, false, false),
         "a non-adjacent native-stack predecessor must be rejected"
     );
     assert!(
-        !accepts_stack_claim(true, true, true, false, false, false),
+        !accepts_stack_claim(true, true, false, false, false, false, false),
+        "a closed unmerged predecessor must be rejected"
+    );
+    assert!(
+        accepts_stack_claim(true, true, false, true, false, false, false),
+        "an adjacent successor with an open predecessor must remain claimable"
+    );
+    assert!(
+        !accepts_stack_claim(true, true, true, false, false, false, false),
         "retargeting to main before predecessor merge must be rejected"
     );
     assert!(
-        !accepts_stack_claim(true, true, true, true, true, false),
+        !accepts_stack_claim(true, true, true, false, true, true, false),
         "a successor behind the current main frontier must be rejected"
     );
     assert!(
-        accepts_stack_claim(true, true, true, true, true, true),
+        accepts_stack_claim(true, true, true, false, true, true, true),
         "a current successor after predecessor squash merge must remain claimable"
     );
     assert!(
@@ -204,6 +221,7 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
     );
     assert!(
         workflow.matches("uses: actions/checkout@v7").count() == 1
+            && workflow.contains("persist-credentials: false")
             && !workflow.contains("ref: ${{ steps.task.outputs.checkout_ref }}"),
         "unreviewed implementation source must not replace the trusted workflow checkout"
     );
@@ -290,7 +308,7 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "Current Gizmo ID must be extracted only after trusted validation and then persisted"
     );
     let implementation_position = workflow
-        .find("Run ci-agent implement")
+        .find("Run sandboxed implementation agent")
         .context("the workflow must run bounded implementation")?;
     assert!(
         plan_position < implementation_position,
@@ -938,11 +956,16 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
         "bounded automation must identify the materialization action before blocking"
     );
     let implement = read("agentic-ai/ci-agent/src/main/implement.ts");
+    let run_agent = read("agentic-ai/ci-agent/src/main/run-agent.ts");
     for required in [
         "ImplementPrTargetKind.Stacked",
-        "budgetBaseRef: `origin/${input.baseBranch}`",
-        "requires a pre-existing linked PR",
-        "openPr.baseBranch !== target.baseBranch",
+        "budgetBaseRef: input.baseSha",
+        "Stacked continuation requires CURSOR_API_KEY",
+        "Stacked continuation produced a clean working tree",
+        "validateStackDeliveryState",
+        "Live stacked predecessor must remain open and unmerged",
+        "Stacked PR head or frozen live base changed before delivery",
+        "Stacked publication did not advance the exact frozen PR head",
         "baseRef: target.budgetBaseRef",
         "target.baseBranch",
     ] {
@@ -951,6 +974,28 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
             "bounded implementation is missing stacked-PR handling: {required}"
         );
     }
+    for required in [
+        "sanitizeAgentEnvironment(process.env)",
+        "AGENT_ENV_ALLOWLIST",
+        "readBoundary: \"workspace\"",
+        "Implementation source must not provide Cursor sandbox policy",
+        "disallowedTools: [\"task\", \"mcp\"]",
+        "sandboxOptions: { enabled: true }",
+    ] {
+        assert!(
+            run_agent.contains(required),
+            "implementation agent isolation is missing: {required}"
+        );
+    }
+    assert!(
+        workflow.contains("Run sandboxed implementation agent")
+            && workflow.contains("Validate, commit, and publish implementation")
+            && workflow.contains("CI_AGENT_CMD=deliver")
+            && !workflow.contains(
+                "CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}\n          NOOK_GITHUB_PAT"
+            ),
+        "untrusted editing and credentialed delivery must be separate processes"
+    );
     let ordered = [
         "assertBudget()",
         "pushBranch()",

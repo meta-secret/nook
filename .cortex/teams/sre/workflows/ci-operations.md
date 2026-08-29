@@ -195,16 +195,24 @@ issue instead declares immutable `stack_branch` and historical
 `stack_predecessor_branch` values. Before claim, the workflow requires the same-
 repository successor branch and exactly one open successor PR. It accepts only
 the live pre-merge state, where that PR still targets an existing recorded
-predecessor, or the post-merge state, where the same PR has been retargeted to
+predecessor whose PR remains open and unmerged, or the post-merge state, where
+the same PR has been retargeted to
 `main` and the predecessor may be gone. The authored-line budget uses that live
-base. Any other base or incomplete metadata fails closed.
+base's frozen SHA. Immediately before delivery, the trusted publisher repeats
+the native-stack adjacency, PR state, base SHA, and containment checks. A
+successful stacked publication proves that the exact PR head advanced from its
+frozen starting SHA. Any other base or incomplete metadata fails closed.
 
 The workflow checkout remains pinned to `github.workflow_sha` while local
 actions, Taskfiles, validators, prompts, and credentials are used. Successor
 source is fetched into a separate detached implementation worktree and is
 passed only as the CI agent's bounded `REPO_ROOT`. Trusted tooling creates a
 disposable planning worktree from that source; only plan or worklog artifacts
-cross back to trusted validation and publication code.
+cross back to trusted validation and publication code. The implementation agent
+runs with a trusted SDK workspace-read-boundary, network-disabled sandbox after
+credential environment variables are removed. It has no persisted GitHub
+credential; a separate trusted process owns the budget, commit, push, and API
+operations.
 
 ### Major-change authorization
 
