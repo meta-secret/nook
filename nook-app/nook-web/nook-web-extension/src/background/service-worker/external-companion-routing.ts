@@ -30,6 +30,7 @@ export type ExternalCompanionRoutingDependencies = {
   isExtensionPairedVaultUnlockRequestMessage: typeof RuntimeMessages.isExtensionPairedVaultUnlockRequestMessage
   normalizeOpenCompanionLauncherMessage: typeof normalizeOpenCompanionLauncherMessage
   openCompanionLauncher: typeof SessionLifecycle.openCompanionLauncher
+  refreshAuthenticationSurfaces: typeof SessionLifecycle.refreshAuthenticationSurfaces
   requestPairedVaultUnlock: typeof PairingIdentity.requestPairedVaultUnlock
 }
 
@@ -68,6 +69,7 @@ export function routeExternalCompanionMessage({
     isExtensionPairedVaultUnlockRequestMessage,
     normalizeOpenCompanionLauncherMessage,
     openCompanionLauncher,
+    refreshAuthenticationSurfaces,
     requestPairedVaultUnlock,
   } = dependencies
   const launcherMessage = normalizeOpenCompanionLauncherMessage(message)
@@ -128,6 +130,15 @@ export function routeExternalCompanionMessage({
     sendResponse(invalidPairingGrantResponse)
     return false
   }
-  void importPairingAfterCompanionReady(message).then(sendResponse)
+  void importPairingAfterCompanionReady(message)
+    .then(async (response) => {
+      if (response.ok) {
+        await refreshAuthenticationSurfaces().catch(() => {
+          // Restricted pages do not invalidate the successful grant import.
+        })
+      }
+      return response
+    })
+    .then(sendResponse)
   return true
 }

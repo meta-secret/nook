@@ -103,9 +103,7 @@ export {
 
 export type { PasskeyWidgetAction } from './login-passkey-action-types'
 
-type PreparedPasskeyActuation = {
-  act: () => RevalidatedAuthenticationActResultKind
-}
+type PreparedPasskeyActuation = () => RevalidatedAuthenticationActResultKind
 
 const preparedPasskeyActuations = new WeakMap<
   HTMLButtonElement,
@@ -192,6 +190,11 @@ export async function fillAndSubmitAccount({
     return false
   }
   const { response } = delivery
+  if (!approvalIsActive()) {
+    if (response?.ok && typeof response.password === 'string')
+      response.password = ''
+    return false
+  }
   if (
     !response?.ok ||
     !response.username ||
@@ -605,6 +608,14 @@ export async function generatePasswordWithNook({
       return
     }
     const { response } = delivery
+    const approvalRemainsActive = approvalIsActive()
+    if (
+      !approvalRemainsActive &&
+      response.kind === GeneratedPasswordResponseKind.Generated &&
+      'password' in response
+    )
+      response.password = ''
+    if (!approvalRemainsActive) return
     if (
       response.kind !== GeneratedPasswordResponseKind.Generated ||
       !('password' in response)
@@ -691,7 +702,7 @@ export async function proposePasskeyWithNook({
   const preparedActuation = preparedPasskeyActuations.get(continueButton)
   if (preparedActuation) {
     preparedPasskeyActuations.delete(continueButton)
-    const actuationResult = preparedActuation.act()
+    const actuationResult = preparedActuation()
     if (actuationResult !== RevalidatedAuthenticationActResultKind.Acted) {
       const failedStatus: Parameters<typeof setStatus>[0] = {
         description,
@@ -756,25 +767,23 @@ export async function proposePasskeyWithNook({
           return { kind: RevalidatedAuthenticationActResultKind.Failed }
         }
         const approvedControl = control.control
-        const preparedActuation: PreparedPasskeyActuation = {
-          act: () => {
-            if (!approvalIsActive()) {
-              return RevalidatedAuthenticationActResultKind.Failed
-            }
-            const liveWorkflow = revalidateCurrentWorkflow()
-            if (!liveWorkflow) {
-              return RevalidatedAuthenticationActResultKind.Failed
-            }
-            const liveControl = findWorkflowPasskeyControl(liveWorkflow)
-            if (liveControl.kind === PasskeyControlLookupKind.Absent) {
-              return RevalidatedAuthenticationActResultKind.ControlMissing
-            }
-            if (liveControl.control !== approvedControl) {
-              return RevalidatedAuthenticationActResultKind.Failed
-            }
-            liveControl.control.click()
-            return RevalidatedAuthenticationActResultKind.Acted
-          },
+        const preparedActuation: PreparedPasskeyActuation = () => {
+          if (!approvalIsActive()) {
+            return RevalidatedAuthenticationActResultKind.Failed
+          }
+          const liveWorkflow = revalidateCurrentWorkflow()
+          if (!liveWorkflow) {
+            return RevalidatedAuthenticationActResultKind.Failed
+          }
+          const liveControl = findWorkflowPasskeyControl(liveWorkflow)
+          if (liveControl.kind === PasskeyControlLookupKind.Absent) {
+            return RevalidatedAuthenticationActResultKind.ControlMissing
+          }
+          if (liveControl.control !== approvedControl) {
+            return RevalidatedAuthenticationActResultKind.Failed
+          }
+          liveControl.control.click()
+          return RevalidatedAuthenticationActResultKind.Acted
         }
         preparedPasskeyActuations.set(continueButton, preparedActuation)
         return { kind: RevalidatedAuthenticationActResultKind.Acted }

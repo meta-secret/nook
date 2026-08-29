@@ -13,17 +13,21 @@ export const AUTHENTICATION_MUTATION_ATTRIBUTE_FILTER = [
   'data-auto-submit',
   'data-autosubmit',
   'data-nook-manual-checkpoint',
+  'data-nook-otpauth-uri',
   'data-nook-passkey-control',
   'data-submit-on-input',
   'data-testid',
   'disabled',
   'form',
+  'formaction',
+  'formmethod',
   'for',
   'hidden',
   'href',
   'id',
   'inert',
   'name',
+  'method',
   'open',
   'onchange',
   'oninput',
@@ -42,12 +46,23 @@ export const AUTHENTICATION_VIEWPORT_EVENTS = ['resize', 'scroll'] as const
 
 export type MountedWidgetMutationRequest = {
   record: MutationRecord
-  mountedHost: HTMLElement
+  mountedHost: HTMLElement | false
 }
 
 export type AuthenticationWorkflowMutationRequest = {
   record: MutationRecord
   workflow: PasswordFormObservation
+}
+
+export type AuthenticationMutationImpactRequest = {
+  records: MutationRecord[]
+  mountedHost: HTMLElement | false
+  renderedWorkflow: PasswordFormObservation | false
+}
+
+export type AuthenticationMutationImpact = {
+  shouldRemountRenderedWorkflow: boolean
+  shouldScheduleScan: boolean
 }
 
 type OwnedFormAssociationRequest = {
@@ -56,13 +71,17 @@ type OwnedFormAssociationRequest = {
 }
 
 const AUTHENTICATION_WORKFLOW_MUTATION_SELECTOR = [
+  'canvas',
   'form',
+  'img',
   'input',
   'button',
   'select',
   'textarea',
+  'svg',
   '[role="button"]',
   '[data-nook-manual-checkpoint]',
+  '[data-nook-otpauth-uri]',
   '[data-nook-passkey-control]',
 ].join(',')
 
@@ -70,6 +89,16 @@ export function mutationBelongsOnlyToMountedWidget(
   request: MountedWidgetMutationRequest,
 ): boolean {
   const { record, mountedHost } = request
+  if (!mountedHost && record.type === 'childList') {
+    const changedNodes = [...record.addedNodes, ...record.removedNodes]
+    return (
+      changedNodes.length > 0 &&
+      changedNodes.every(
+        (node) => node instanceof HTMLElement && node.id === 'nook-auth-widget',
+      )
+    )
+  }
+  if (!mountedHost) return false
   if (record.target === mountedHost || mountedHost.contains(record.target)) {
     return true
   }
@@ -185,4 +214,39 @@ export function mutationCanChangeAuthenticationWorkflows(
       AUTHENTICATION_WORKFLOW_MUTATION_SELECTOR,
     ),
   )
+}
+
+export function authenticationMutationImpact({
+  records,
+  mountedHost,
+  renderedWorkflow,
+}: AuthenticationMutationImpactRequest): AuthenticationMutationImpact {
+  const pageMutations = records.filter((record) => {
+    const mountedWidgetRequest: MountedWidgetMutationRequest = {
+      record,
+      mountedHost,
+    }
+    return !mutationBelongsOnlyToMountedWidget(mountedWidgetRequest)
+  })
+  const relevantMutations = pageMutations.filter((record) => {
+    if (mutationCanChangeAuthenticationWorkflows(record)) return true
+    if (!renderedWorkflow) return false
+    const workflowRequest: AuthenticationWorkflowMutationRequest = {
+      record,
+      workflow: renderedWorkflow,
+    }
+    return mutationTouchesAuthenticationWorkflow(workflowRequest)
+  })
+  return {
+    shouldRemountRenderedWorkflow:
+      Boolean(renderedWorkflow) &&
+      relevantMutations.some((record) => {
+        const workflowRequest: AuthenticationWorkflowMutationRequest = {
+          record,
+          workflow: renderedWorkflow as PasswordFormObservation,
+        }
+        return mutationTouchesAuthenticationWorkflow(workflowRequest)
+      }),
+    shouldScheduleScan: relevantMutations.length > 0,
+  }
 }

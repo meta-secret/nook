@@ -89,6 +89,7 @@ const externalDependencies: ExternalCompanionRoutingDependencies = {
   isExtensionPairedVaultUnlockRequestMessage: mock(() => false),
   normalizeOpenCompanionLauncherMessage,
   openCompanionLauncher,
+  refreshAuthenticationSurfaces,
   requestPairedVaultUnlock: unusedAsyncDependency,
 }
 
@@ -438,6 +439,39 @@ describe('service worker routing', () => {
       OpenCompanionLauncherIntent.Default,
     )
     expect(sendResponse).toHaveBeenCalledWith({ ok: true })
+  })
+
+  test('refreshes cached surfaces after an external pairing import', async () => {
+    const importPairingAfterCompanionReady = mock(() =>
+      Promise.resolve({ ok: true as const, eventCount: 1 }),
+    )
+    const refresh = mock(() => Promise.resolve())
+    const dependencies: ExternalCompanionRoutingDependencies = {
+      ...externalDependencies,
+      hasPairingApprovedType: () => true,
+      importPairingAfterCompanionReady,
+      refreshAuthenticationSurfaces: refresh,
+    }
+    const { routeExternalCompanionMessage } =
+      await import('../src/background/service-worker/external-companion-routing')
+    const sendResponse = mock(() => {})
+
+    expect(
+      routeExternalCompanionMessage({
+        dependencies,
+        message: { type: 'nook:extension-pairing-approved' },
+        sender: {
+          id: 'simple-vault',
+          url: 'https://simple.example.test/',
+        },
+        sendResponse,
+      }),
+    ).toBe(true)
+    await flushResponses()
+    await flushResponses()
+
+    expect(refresh).toHaveBeenCalledOnce()
+    expect(sendResponse).toHaveBeenCalledWith({ ok: true, eventCount: 1 })
   })
 
   test('normalizes pair intent before internal launcher routing', async () => {

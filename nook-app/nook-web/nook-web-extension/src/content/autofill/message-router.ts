@@ -28,10 +28,14 @@ import {
 import { removeWidget, translatedMessage } from './workflow-ui'
 
 export function removeScannedWidget(): void {
-  stopPendingSaveWatch()
   cancelPendingAuthenticatorPickerRequest()
   cancelPendingLoginPickerRequest()
   removeWidget()
+}
+
+function clearAuthenticationSurface(): void {
+  stopPendingSaveWatch()
+  removeScannedWidget()
 }
 
 type AutofillMessageListener = Parameters<
@@ -50,7 +54,7 @@ export const routeAutofillMessage: AutofillMessageListener =
     ) {
       scanState.sequence += 1
       widgetState.busy = false
-      removeScannedWidget()
+      clearAuthenticationSurface()
       const response: Parameters<typeof sendResponse>[0] = { ok: true }
       sendResponse(response)
       return false
@@ -63,7 +67,7 @@ export const routeAutofillMessage: AutofillMessageListener =
       scanState.sequence += 1
       widgetState.busy = false
       widgetState.dismissed = false
-      removeScannedWidget()
+      clearAuthenticationSurface()
       scanState.schedule()
       const response: Parameters<typeof sendResponse>[0] = { ok: true }
       sendResponse(response)

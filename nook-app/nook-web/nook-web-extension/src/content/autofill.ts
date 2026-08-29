@@ -25,10 +25,9 @@ import {
 } from '../lib/auth-workflow-messages'
 import { cancelPendingAuthenticatorPickerRequest } from './autofill/authenticator-actions'
 import {
+  AUTHENTICATION_MUTATION_ATTRIBUTE_FILTER,
   AUTHENTICATION_VIEWPORT_EVENTS,
-  mutationBelongsOnlyToMountedWidget,
-  mutationCanChangeAuthenticationWorkflows,
-  mutationTouchesAuthenticationWorkflow,
+  authenticationMutationImpact,
 } from './autofill/authentication-surface-observation'
 import {
   cancelPendingLoginPickerRequest,
@@ -60,8 +59,11 @@ import {
   renderEnrollmentWidget,
   renderWidget,
 } from './autofill/widget-rendering'
-import { clampMountedWidgetPosition } from './autofill/widget-position'
-import { loadPilotVaultConnection, remountWidget } from './autofill/workflow-ui'
+import {
+  applyWidgetPosition,
+  clampWidgetPosition,
+} from './autofill/widget-position'
+import { loadPilotVaultConnection } from './autofill/workflow-ui'
 import {
   detectEnrollmentHintsFromRecoveryCopy,
   enrollmentCeremonyActive,
@@ -248,60 +250,60 @@ function handleAuthenticationMutations(
     )
     if (mountedHostWasRemoved) {
       invalidateRenderedAuthenticationAction()
-      widgetState.detachRenderedWidget()
+      widgetState.clearRenderedWidget()
       scheduleScan()
       return
     }
   }
-  const pageMutations =
+  const mountedHost =
     widgetState.host.kind === WidgetHostKind.Attached
-      ? records.filter((record) => {
-          const request: Parameters<
-            typeof mutationBelongsOnlyToMountedWidget
-          >[0] = {
-            record,
-            mountedHost: widgetState.host.element,
-          }
-          return !mutationBelongsOnlyToMountedWidget(request)
-        })
-      : records
-  if (pageMutations.length === 0) return
+      ? widgetState.host.element
+      : false
+  const renderedWorkflow =
+    widgetState.renderedWorkflowRoot.kind === WidgetWorkflowRootKind.Assigned
+      ? widgetState.renderedWorkflowRoot.observation
+      : false
+  const impactRequest: Parameters<typeof authenticationMutationImpact>[0] = {
+    records,
+    mountedHost,
+    renderedWorkflow,
+  }
+  const impact = authenticationMutationImpact(impactRequest)
+  if (!impact.shouldScheduleScan) return
   if (pageHasManualCheckpoint(document)) {
     invalidateRenderedAuthenticationAction()
     removeScannedWidget()
     scheduleScan()
     return
   }
-  const renderedWorkflow = widgetState.renderedWorkflowRoot
   if (
     widgetState.host.kind === WidgetHostKind.Attached &&
-    renderedWorkflow.kind === WidgetWorkflowRootKind.Assigned &&
-    pageMutations.some((record) => {
-      const request: Parameters<
-        typeof mutationTouchesAuthenticationWorkflow
-      >[0] = { record, workflow: renderedWorkflow.observation }
-      return (
-        mutationTouchesAuthenticationWorkflow(request) ||
-        mutationCanChangeAuthenticationWorkflows(record)
-      )
-    })
+    renderedWorkflow &&
+    impact.shouldRemountRenderedWorkflow
   ) {
     invalidateRenderedAuthenticationAction()
-    remountWidget()
+    removeScannedWidget()
   }
   scheduleScan()
 }
 
 function handleViewportChange(): void {
-  clampMountedWidgetPosition()
-  if (
-    widgetState.host.kind === WidgetHostKind.Attached &&
-    widgetState.renderedWorkflowRoot.kind === WidgetWorkflowRootKind.Assigned
-  ) {
-    invalidateRenderedAuthenticationAction()
-    remountWidget()
+  if (widgetState.host.kind !== WidgetHostKind.Attached) return
+  const host = widgetState.host.element
+  const rect = host.getBoundingClientRect()
+  const clampRequest: Parameters<typeof clampWidgetPosition>[0] = {
+    left: rect.left,
+    top: rect.top,
+    width: rect.width,
+    height: rect.height,
   }
-  scheduleScan()
+  const position = clampWidgetPosition(clampRequest)
+  widgetState.setPosition(position)
+  const applyRequest: Parameters<typeof applyWidgetPosition>[0] = {
+    host,
+    position,
+  }
+  applyWidgetPosition(applyRequest)
 }
 
 scanState.schedule = scheduleScan
@@ -314,7 +316,11 @@ void companionWasmReady.then(() => {
   void scanAndRender()
 
   const observer = new MutationObserver(handleAuthenticationMutations)
-  observer.observe(document.documentElement, authenticationFactObserverOptions)
+  const observerOptions: MutationObserverInit = {
+    ...authenticationFactObserverOptions,
+    attributeFilter: [...AUTHENTICATION_MUTATION_ATTRIBUTE_FILTER],
+  }
+  observer.observe(document.documentElement, observerOptions)
   observeAuthenticationSubmitValueAssignments(scheduleScan)
   window.addEventListener('message', (event) => {
     if (
