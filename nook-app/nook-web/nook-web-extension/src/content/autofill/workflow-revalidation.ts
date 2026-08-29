@@ -71,7 +71,7 @@ export async function performRevalidatedAuthenticationAction({
     >[0] = {
       observation: currentWorkflow,
       authenticatorSetupHint: false,
-      backupCodesHint: false,
+      backupCodesCopy: '',
     }
     return {
       currentWorkflow,

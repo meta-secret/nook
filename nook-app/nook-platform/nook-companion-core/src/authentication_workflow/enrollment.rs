@@ -1,8 +1,10 @@
 //! Enrollment and recovery precedence for authenticator workflows.
 
 use super::{
-    AuthenticationPageObservation, AuthenticationWorkflowAction, AuthenticationWorkflowKind,
-    AuthenticationWorkflowMatch, AuthenticationWorkflowSnapshot, AuthenticationWorkflowStage,
+    AuthenticationPageObservation, AuthenticationPilotPresentationCapability,
+    AuthenticationWorkflowAction, AuthenticationWorkflowKind, AuthenticationWorkflowMatch,
+    AuthenticationWorkflowSnapshot, AuthenticationWorkflowStage,
+    classify_authentication_backup_codes_observation,
 };
 
 pub(super) const fn classify_enrollment_workflow(
@@ -55,4 +57,52 @@ pub(super) const fn classify_enrollment_workflow(
         ));
     }
     AuthenticationWorkflowMatch::NoMatch
+}
+
+/// Project page-level enrollment evidence through the same classifier and Pilot gate.
+#[must_use]
+pub fn authentication_enrollment_pilot_presentation_capability(
+    authenticator_setup_hint: bool,
+    backup_codes_copy: &str,
+    manual_checkpoint_present: bool,
+) -> AuthenticationPilotPresentationCapability {
+    if backup_codes_copy.len() > crate::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES {
+        return AuthenticationPilotPresentationCapability::Hidden;
+    }
+    let backup_codes_hint = matches!(
+        classify_authentication_backup_codes_observation(backup_codes_copy),
+        super::AuthenticationBackupCodesObservation::Present
+    );
+    match super::classify_authentication_workflow(AuthenticationPageObservation {
+        authenticator_setup_hint,
+        backup_codes_hint,
+        manual_checkpoint_present,
+        ..AuthenticationPageObservation::default()
+    }) {
+        AuthenticationWorkflowMatch::Matched(snapshot) => snapshot.pilot_presentation_capability(),
+        AuthenticationWorkflowMatch::NoMatch | AuthenticationWorkflowMatch::Rejected => {
+            AuthenticationPilotPresentationCapability::Hidden
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn enrollment_fast_path_hides_checkpointed_surfaces() {
+        assert_eq!(
+            authentication_enrollment_pilot_presentation_capability(true, "", true),
+            AuthenticationPilotPresentationCapability::Hidden
+        );
+        assert_eq!(
+            authentication_enrollment_pilot_presentation_capability(
+                false,
+                "Save your recovery codes",
+                false,
+            ),
+            AuthenticationPilotPresentationCapability::ProposeAction
+        );
+    }
 }

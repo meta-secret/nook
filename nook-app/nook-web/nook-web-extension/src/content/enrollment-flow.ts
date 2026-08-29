@@ -724,6 +724,34 @@ type RenderEnrollmentActionsArgs = {
   hints: EnrollmentPageHints
 }
 
+type StartBackupCodeEnrollmentArgs = {
+  host: EnrollmentFlowHost
+  section?: HTMLElement
+}
+
+/** Begin recovery-code extraction only after the trusted action has been approved. */
+export function startBackupCodeEnrollment({
+  host,
+  section = createEnrollmentSection(host.panel),
+}: StartBackupCodeEnrollmentArgs): void {
+  releaseEnrollmentWidgetHold()
+  const backupHost: BackupEnrollmentHost = {
+    ...host,
+    returnToActions: () => {
+      const actionsContext: Parameters<typeof renderEnrollmentActions>[0] = {
+        host,
+        hints: detectEnrollmentHints(),
+      }
+      renderEnrollmentActions(actionsContext)
+    },
+  }
+  const backupEnrollment: Parameters<typeof startBackupEnrollment>[0] = {
+    host: backupHost,
+    section,
+  }
+  void startBackupEnrollment(backupEnrollment)
+}
+
 export function renderEnrollmentActions({
   host,
   hints,
@@ -760,24 +788,11 @@ export function renderEnrollmentActions({
       labelKey: BROWSER_MESSAGE_KEYS.WidgetSaveBackupCodes,
       onClick: (event) => {
         if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
-        releaseEnrollmentWidgetHold()
-        const backupHost: BackupEnrollmentHost = {
-          ...host,
-          returnToActions: () => {
-            const actionsContext: Parameters<
-              typeof renderEnrollmentActions
-            >[0] = {
-              host,
-              hints: detectEnrollmentHints(),
-            }
-            renderEnrollmentActions(actionsContext)
-          },
-        }
-        const backupEnrollment: Parameters<typeof startBackupEnrollment>[0] = {
-          host: backupHost,
+        const request: Parameters<typeof startBackupCodeEnrollment>[0] = {
+          host,
           section,
         }
-        void startBackupEnrollment(backupEnrollment)
+        startBackupCodeEnrollment(request)
       },
     }
     buttons.push(createSecondaryButton(nookTypedArgs1_11))

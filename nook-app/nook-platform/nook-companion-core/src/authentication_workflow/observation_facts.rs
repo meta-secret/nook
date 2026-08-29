@@ -42,11 +42,9 @@ pub struct AuthenticationPageObservationFacts {
 impl AuthenticationPageObservationFacts {
     fn is_bounded(&self) -> bool {
         self.fields.is_bounded()
-            && self.authenticator.matching_passkey_account_count
-                <= crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT
+            && self.authenticator.is_bounded()
             && self.ceremony.is_bounded()
             && self.detailed_advance_control.is_bounded()
-            && self.authenticator.detailed_passkey_control.is_bounded()
     }
 
     #[must_use]

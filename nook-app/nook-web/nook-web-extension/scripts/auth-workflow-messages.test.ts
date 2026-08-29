@@ -32,7 +32,7 @@ const validMessage = {
         },
         authenticator: {
           authenticatorSetup: 'absent',
-          backupCodes: 'absent',
+          backupCodesCopy: '',
           passkeyControl: 'absent',
           matchingPasskeyAccountCount: 0,
           detailedPasskeyControl: { kind: 'absent' },

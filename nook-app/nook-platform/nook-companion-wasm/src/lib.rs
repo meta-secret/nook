@@ -123,6 +123,20 @@ pub fn classify_authentication_backup_codes_observation(
 }
 
 #[wasm_bindgen]
+#[must_use]
+pub fn authentication_enrollment_pilot_presentation_capability(
+    authenticator_setup_hint: bool,
+    backup_codes_copy: &str,
+    manual_checkpoint_present: bool,
+) -> nook_companion_core::AuthenticationPilotPresentationCapability {
+    nook_companion_core::authentication_enrollment_pilot_presentation_capability(
+        authenticator_setup_hint,
+        backup_codes_copy,
+        manual_checkpoint_present,
+    )
+}
+
+#[wasm_bindgen]
 pub fn decode_authenticator_backup_attach_response(
     response: nook_companion_core::AuthenticatorBackupAttachResponseWire,
 ) -> Result<nook_companion_core::AuthenticatorBackupAttachResponse, wasm_bindgen::JsError> {
@@ -787,11 +801,28 @@ mod tests {
             nook_companion_core::AuthenticationPilotPresentationCapability::Hidden
         );
     }
+
+    #[test]
+    fn backup_code_classifier_bridge_preserves_typed_variants() {
+        assert_eq!(
+            classify_authentication_backup_codes_observation("Use a backup code instead"),
+            nook_companion_core::AuthenticationBackupCodesObservation::Absent
+        );
+        assert_eq!(
+            classify_authentication_backup_codes_observation(
+                "Save your recovery codes in a secure place"
+            ),
+            nook_companion_core::AuthenticationBackupCodesObservation::Present
+        );
+    }
 }
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod wasm_tests {
-    use nook_companion_core::{ExtensionPersistenceArea, ExtensionPersistenceObservation};
+    use nook_companion_core::{
+        AuthenticationBackupCodesObservation, ExtensionPersistenceArea,
+        ExtensionPersistenceObservation,
+    };
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
@@ -806,6 +837,29 @@ mod wasm_tests {
         let decoded: ExtensionPersistenceObservation = serde_wasm_bindgen::from_value(js_value)?;
 
         assert_eq!(decoded, observation);
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn backup_code_classifier_round_trips_both_typed_wasm_variants()
+    -> Result<(), serde_wasm_bindgen::Error> {
+        for (text, expected) in [
+            (
+                "Use a backup code instead",
+                AuthenticationBackupCodesObservation::Absent,
+            ),
+            (
+                "Save your backup codes in a secure place",
+                AuthenticationBackupCodesObservation::Present,
+            ),
+        ] {
+            let classified = super::classify_authentication_backup_codes_observation(text);
+            let js_value = serde_wasm_bindgen::to_value(&classified)?;
+            let decoded: AuthenticationBackupCodesObservation =
+                serde_wasm_bindgen::from_value(js_value)?;
+            assert_eq!(classified, expected);
+            assert_eq!(decoded, expected);
+        }
         Ok(())
     }
 }

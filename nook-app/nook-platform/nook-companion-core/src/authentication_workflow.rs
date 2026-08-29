@@ -15,6 +15,7 @@ pub use candidate_selection::{
     AuthenticationFormObservationPriority, authentication_form_observation_priority,
     classify_authentication_workflow_candidates,
 };
+pub use enrollment::authentication_enrollment_pilot_presentation_capability;
 pub use observation_facts::{
     AuthenticationAuthenticatorObservationFacts, AuthenticationAuthenticatorSetupObservation,
     AuthenticationBackupCodesObservation, AuthenticationCeremonyContextObservation,
@@ -300,6 +301,14 @@ const fn credentials_or_manual(manual_checkpoint_present: bool) -> Authenticatio
     }
 }
 
+const fn continue_or_takeover(manual_checkpoint_present: bool) -> AuthenticationWorkflowAction {
+    if manual_checkpoint_present {
+        AuthenticationWorkflowAction::TakeOver
+    } else {
+        AuthenticationWorkflowAction::ContinueWithNook
+    }
+}
+
 const fn apply_passkey_proposal(
     observation: AuthenticationPageObservation,
     mut snapshot: AuthenticationWorkflowSnapshot,
@@ -410,8 +419,8 @@ pub const fn classify_authentication_workflow(
             observation,
             AuthenticationWorkflowSnapshot::new(
                 AuthenticationWorkflowKind::Login,
-                AuthenticationWorkflowStage::Credentials,
-                AuthenticationWorkflowAction::ContinueWithNook,
+                credentials_or_manual(observation.manual_checkpoint_present),
+                continue_or_takeover(observation.manual_checkpoint_present),
                 1,
                 3,
             ),
@@ -423,8 +432,8 @@ pub const fn classify_authentication_workflow(
             observation,
             AuthenticationWorkflowSnapshot::new(
                 AuthenticationWorkflowKind::Login,
-                AuthenticationWorkflowStage::Credentials,
-                AuthenticationWorkflowAction::ContinueWithNook,
+                credentials_or_manual(observation.manual_checkpoint_present),
+                continue_or_takeover(observation.manual_checkpoint_present),
                 1,
                 3,
             ),
@@ -687,6 +696,42 @@ mod tests {
         assert_eq!(code.stage, AuthenticationWorkflowStage::SecondFactor);
         assert_eq!(code.action, AuthenticationWorkflowAction::FillTotp);
         assert_eq!((code.current_step, code.total_steps), (2, 3));
+        Ok(())
+    }
+
+    #[test]
+    fn checkpointed_standalone_one_time_code_requires_takeover() -> anyhow::Result<()> {
+        let snapshot = classify_authentication_workflow(AuthenticationPageObservation {
+            one_time_code_field_count: 1,
+            manual_checkpoint_present: true,
+            ..observation()
+        })
+        .snapshot()?;
+        assert_eq!(snapshot.kind, AuthenticationWorkflowKind::TotpChallenge);
+        assert_eq!(snapshot.stage, AuthenticationWorkflowStage::Manual);
+        assert_eq!(snapshot.action, AuthenticationWorkflowAction::TakeOver);
+        assert_eq!(
+            snapshot.pilot_presentation_capability(),
+            AuthenticationPilotPresentationCapability::Hidden
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn checkpointed_login_requires_takeover_and_hides_pilot() -> anyhow::Result<()> {
+        let snapshot = classify_authentication_workflow(AuthenticationPageObservation {
+            current_password_field_count: 1,
+            manual_checkpoint_present: true,
+            ..observation()
+        })
+        .snapshot()?;
+        assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Login);
+        assert_eq!(snapshot.stage, AuthenticationWorkflowStage::Manual);
+        assert_eq!(snapshot.action, AuthenticationWorkflowAction::TakeOver);
+        assert_eq!(
+            snapshot.pilot_presentation_capability(),
+            AuthenticationPilotPresentationCapability::Hidden
+        );
         Ok(())
     }
 

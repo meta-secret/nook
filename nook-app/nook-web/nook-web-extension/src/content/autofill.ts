@@ -1,10 +1,17 @@
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
-import { AuthenticationWorkflowSnapshotResponseKind } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
+  authentication_enrollment_pilot_presentation_capability,
+  authentication_workflow_pilot_presentation_capability,
+  AuthenticationPilotPresentationCapability,
+  AuthenticationWorkflowSnapshotResponseKind,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   authenticationPageObservationFacts,
+  pageHasManualCheckpoint,
   summarizeAuthenticationWorkflowForms,
 } from '../../../nook-web-shared/src/extension/password-forms'
 import { isRuntimeNookVaultAppUrl } from '../lib/simple-vault-runtime'
+import { authenticationRecoveryCopy } from '../lib/backup-code-candidates'
 import {
   AuthenticationWorkflowSnapshotMessageType,
   MAX_AUTHENTICATION_WORKFLOW_TRANSPORT_OBSERVATIONS,
@@ -69,6 +76,7 @@ async function scanAndRender(): Promise<void> {
     return
   }
   const enrollmentHints = detectEnrollmentHints()
+  const recoveryCopy = authenticationRecoveryCopy()
   const workflowForms = summarizeAuthenticationWorkflowForms().slice(
     0,
     MAX_AUTHENTICATION_WORKFLOW_TRANSPORT_OBSERVATIONS,
@@ -80,6 +88,16 @@ async function scanAndRender(): Promise<void> {
     enrollmentHints.qr ||
     (enrollmentHints.backupCodes && workflowForms.length === 0)
   ) {
+    if (
+      authentication_enrollment_pilot_presentation_capability(
+        enrollmentHints.qr,
+        recoveryCopy,
+        pageHasManualCheckpoint(document),
+      ) === AuthenticationPilotPresentationCapability.Hidden
+    ) {
+      removeScannedWidget()
+      return
+    }
     cancelPendingAuthenticatorPickerRequest()
     cancelPendingLoginPickerRequest()
     const vaultConnection = await loadPilotVaultConnection()
@@ -108,7 +126,7 @@ async function scanAndRender(): Promise<void> {
         >[0] = {
           observation,
           authenticatorSetupHint: enrollmentHints.qr,
-          backupCodesHint: enrollmentHints.backupCodes,
+          backupCodesCopy: recoveryCopy,
         }
         return authenticationPageObservationFacts(factsRequest)
       }),
@@ -130,6 +148,13 @@ async function scanAndRender(): Promise<void> {
     return
   }
   const { snapshot } = response
+  if (
+    authentication_workflow_pilot_presentation_capability(snapshot) ===
+    AuthenticationPilotPresentationCapability.Hidden
+  ) {
+    removeScannedWidget()
+    return
+  }
   const selected = workflowForms[snapshot.observationIndex]
   if (!selected) {
     removeScannedWidget()
