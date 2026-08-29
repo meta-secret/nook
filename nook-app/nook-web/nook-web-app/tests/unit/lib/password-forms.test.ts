@@ -5,6 +5,7 @@ import {
   fillOneTimeCode,
   findOneTimeCodeFields,
   findPasskeyControl,
+  findWorkflowPasskeyControl,
   pageHasPasskeyControl,
   PasskeyControlLookupKind,
   PasswordFormQueryKind,
@@ -23,6 +24,7 @@ const wholeDocumentPasswordFormSubmission: Parameters<
 
 afterEach(() => {
   document.body.replaceChildren()
+  window.history.replaceState({}, '', '/')
 })
 
 describe('website one-time-code fields', () => {
@@ -75,6 +77,55 @@ describe('website one-time-code fields', () => {
         { label: expect.stringContaining('Sign in') },
       ],
     })
+  })
+
+  test('resolves omitted form actions to the current login route', () => {
+    window.history.replaceState({}, '', '/login')
+    document.body.innerHTML = `
+      <form>
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Continuar</button>
+      </form>
+    `
+
+    const observation = summarizeAuthenticationWorkflowForms()[0]
+    expect(observation).toBeDefined()
+    if (!observation) return
+    const facts = authenticationPageObservationFacts({
+      observation,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [{ destinationIdentity: 'http://localhost:3000/login' }],
+    })
+  })
+
+  test('keeps passkey actuation inside the classified workflow scope', () => {
+    document.body.innerHTML = `
+      <section id="settings">
+        <button data-nook-passkey-control>Delete passkey</button>
+      </section>
+      <form id="login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button data-nook-passkey-control>Use passkey</button>
+      </form>
+    `
+
+    const workflow = summarizeAuthenticationWorkflowForms().find(
+      ({ formScope }) =>
+        formScope.kind === PasswordFormScopeKind.Owned &&
+        formScope.owner.id === 'login',
+    )
+    expect(workflow).toBeDefined()
+    if (!workflow) return
+    const scoped = findWorkflowPasskeyControl(workflow)
+    expect(scoped.kind).toBe(PasskeyControlLookupKind.Found)
+    if (scoped.kind === PasskeyControlLookupKind.Found) {
+      expect(scoped.control.textContent).toContain('Use passkey')
+    }
   })
 
   test('detects standard and common OTP fields without treating card security codes as 2FA', () => {

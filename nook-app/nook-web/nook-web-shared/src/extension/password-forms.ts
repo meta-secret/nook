@@ -23,7 +23,10 @@ import {
   pageHasPasskeyControl,
   PasswordFormScopeKind,
 } from "./password-form-fields";
-import type { PasswordFormScope } from "./password-form-fields";
+import type {
+  PasskeyControlLookup,
+  PasswordFormScope,
+} from "./password-form-fields";
 import type { PasswordFieldQuery } from "./password-form-fields";
 
 export {
@@ -264,8 +267,8 @@ function formIdentity({ root, formScope }: PasswordFormObservation): string {
 
 function formDestination({ formScope }: PasswordFormObservation): string {
   return formScope.kind === PasswordFormScopeKind.Owned
-    ? (formScope.owner.getAttribute("action") ?? "")
-    : "";
+    ? formScope.owner.action
+    : location.href;
 }
 
 interface ControlDestinationRequest {
@@ -277,14 +280,22 @@ function controlDestination({
   control,
   formScope,
 }: ControlDestinationRequest): string {
-  return (
-    control.getAttribute("formaction") ??
-    control.getAttribute("href") ??
-    (formScope.kind === PasswordFormScopeKind.Owned
-      ? formScope.owner.getAttribute("action")
-      : "") ??
-    ""
-  );
+  if (control.hasAttribute("formaction")) {
+    return (control as HTMLButtonElement).formAction;
+  }
+  if (control.hasAttribute("href")) {
+    return (control as HTMLAnchorElement).href;
+  }
+  return formScope.kind === PasswordFormScopeKind.Owned
+    ? formScope.owner.action
+    : location.href;
+}
+
+/** Reuse the classified workflow scope when locating its passkey control. */
+export function findWorkflowPasskeyControl(
+  observation: PasswordFormObservation,
+): PasskeyControlLookup {
+  return findPasskeyControl(scopedControlRoot(observation));
 }
 
 function usernameEvidence(
@@ -366,7 +377,7 @@ export function authenticationPageObservationFacts({
       'button[type="submit"], input[type="submit"], button:not([type]), button[type="button"]',
     ),
   );
-  const passkeyControl = findPasskeyControl(controlRoot);
+  const passkeyControl = findWorkflowPasskeyControl(observation);
   const oneTimeCodeQuery: Parameters<typeof findOneTimeCodeFields>[0] = {
     root: observation.root,
     formScope: observation.formScope,
