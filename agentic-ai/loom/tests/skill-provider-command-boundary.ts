@@ -27,8 +27,13 @@ import {
   type AuditedSourceRequest,
 } from './skill-provider-sourced-seams.ts';
 import {
-  cdOperandIndex,
+  applyCd,
+  applySetPositional,
+  isolatedShellState,
+  nodeInspectExecutables,
   normalizedRuntime,
+  restoreShellState,
+  shellStdinConsumer,
   withoutLeadingRedirections,
 } from './skill-provider-shell-command.ts';
 import {
@@ -69,8 +74,6 @@ const PROTECTED_SKILL_FRAGMENTS = [
 ] as const;
 const TYPESCRIPT_SCRIPT_REFERENCE =
   /(?:^|[\s"'`:=[({,])((?:\.{0,2}\/|\/)?[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)+(?:\.(?:[cm]?[jt]sx?|sh))?)(?=$|[\s"'`,;\]})])/gmu;
-const SCRIPT_DIRECTORY_EXPRESSION =
-  /^\$\(dirname (?:-- )?["']?(?:\$0|\$\{BASH_SOURCE\[0\]\})["']?\)$/u;
 const BUN_BOOLEAN_OPTIONS = new Set(
   '--watch --hot --smol --check --test --version -v --prod'.split(' '),
 );
@@ -91,7 +94,7 @@ const NODE_VALUE_OPTIONS = new Set(
   ),
 );
 const EXECUTABLE_RUNTIME_OPTIONS = new Set(
-  '--preload --require --import --loader --experimental-loader --eval -e --print -p'.split(
+  '--cwd --preload --require --import --loader --experimental-loader --eval -e --print -p'.split(
     ' ',
   ),
 );
@@ -168,6 +171,7 @@ function analyzeCommandSource(request: ShellCommandRequest): void {
   let command: ShellWord[] = [];
   let conditionalEnvironment: Map<string, ShellWord> | false = false;
   let pipelineEnvironment: Map<string, ShellWord> | false = false;
+  const subshells: ShellParseState[] = [];
   for (const token of [...tokens, ShellSeparator.Newline]) {
     if (request.state.casePattern) {
       if (
@@ -186,11 +190,7 @@ function analyzeCommandSource(request: ShellCommandRequest): void {
       continue;
     }
     if (command.length > 0) {
-      if (
-        pipelineEnvironment !== false &&
-        command.length === 1 &&
-        ['bash', 'sh'].includes(normalizedRuntime(command[0]?.value ?? ''))
-      )
+      if (pipelineEnvironment !== false && shellStdinConsumer(command))
         throw new Error('Shell pipeline input is forbidden.');
       if (token === ShellSeparator.Pipe && pipelineEnvironment === false)
         pipelineEnvironment = new Map(request.state.environment);
@@ -224,6 +224,12 @@ function analyzeCommandSource(request: ShellCommandRequest): void {
     }
     if (token === ShellSeparator.And || token === ShellSeparator.Or)
       conditionalEnvironment = new Map(request.state.environment);
+    if (token === ShellSeparator.OpenParenthesis)
+      subshells.push(isolatedShellState(request.state));
+    if (token === ShellSeparator.CloseParenthesis) {
+      const snapshot = subshells.pop();
+      if (snapshot) restoreShellState([request.state, snapshot]);
+    }
     if (token === ShellSeparator.CloseParenthesis)
       request.state.casePattern = false;
     if (token === ShellSeparator.Case) request.state.casePattern = true;
@@ -373,25 +379,7 @@ function analyzeResolvedCommand(resolved: ResolvedCommandRequest): void {
     return;
   }
   if (command.value === 'cd') {
-    const operandIndex = cdOperandIndex([words, index + 1]);
-    if (operandIndex === false) return;
-    wordRequest = {
-      word: words[operandIndex] as ShellWord,
-      environment: request.state.environment,
-    };
-    const directory = resolveWord(wordRequest);
-    if (SCRIPT_DIRECTORY_EXPRESSION.test(directory.value)) return;
-    if (directory.dynamic) {
-      request.state.cwd = '';
-      request.state.cwdProtected = wordHasProtectedMarkers(directory);
-      request.state.cwdUnknown = !request.state.cwdProtected;
-      return;
-    }
-    request.state.cwdProtected = false;
-    request.state.cwdUnknown = false;
-    request.state.cwd = posix.normalize(
-      posix.join(request.state.cwd, directory.value),
-    );
+    applyCd([request.state, words, index + 1]);
     return;
   }
   if (command.dynamic) {
@@ -441,6 +429,11 @@ function analyzeResolvedCommand(resolved: ResolvedCommandRequest): void {
       : false;
     return;
   }
+  if (
+    command.value === 'set' &&
+    applySetPositional([request.state, words, index])
+  )
+    return;
   if (
     ['command', 'exec'].includes(command.value) &&
     request.state.positionalArguments === false &&
@@ -498,7 +491,7 @@ function analyzeResolvedCommand(resolved: ResolvedCommandRequest): void {
   if (!normalized)
     throw new Error('Shell command normalization exceeds its bound.');
   if (
-    ['alias', 'eval', 'unalias'].includes(command.value) ||
+    ['alias', 'cd', 'eval', 'unalias'].includes(command.value) ||
     request.state.aliases.has(command.value)
   ) {
     const normalizedRequest: RuntimeCommandRequest = {
@@ -511,6 +504,9 @@ function analyzeResolvedCommand(resolved: ResolvedCommandRequest): void {
       words: [command, ...words.slice(index)],
     };
     analyzeCommand(normalizedRequest);
+    request.state.cwd = normalizedRequest.state.cwd;
+    request.state.cwdProtected = normalizedRequest.state.cwdProtected;
+    request.state.cwdUnknown = normalizedRequest.state.cwdUnknown;
     return;
   }
   const commandRequest: RuntimeCommandRequest = {
@@ -523,7 +519,7 @@ function analyzeResolvedCommand(resolved: ResolvedCommandRequest): void {
     words: words.slice(index).map((word) => {
       const resolutionRequest: WordEnvironmentRequest = {
         word,
-        environment: request.state.environment,
+        environment: dispatchEnvironment,
       };
       return resolveWord(resolutionRequest);
     }),
@@ -560,12 +556,7 @@ function analyzeSubstitution([request, source]: readonly [
   Pick<ShellCommandRequest, 'depth' | 'state'>,
   string,
 ]): void {
-  const nestedState: ShellParseState = {
-    ...request.state,
-    aliases: new Map(request.state.aliases),
-    environment: new Map(request.state.environment),
-    functions: new Map(request.state.functions),
-  };
+  const nestedState = isolatedShellState(request.state);
   const nestedRequest: ShellCommandRequest = {
     depth: request.depth + 1,
     source,
@@ -877,6 +868,8 @@ function runtimeExecutable(
       `Dynamic ${request.runtime} executable construction is forbidden: ${executable.source}`,
     );
   }
+  if (request.runtime === 'node' && executable.value === 'inspect')
+    return nodeInspectExecutables([request.words, index + 1]);
   if (
     !terminated &&
     request.runtime === 'bun' &&
@@ -902,8 +895,13 @@ function runtimeExecutable(
 
 function executableIsStatic(word: ShellWord): boolean {
   if (/^'[\s\S]*'$/u.test(word.source)) return true;
-  if (!/^['"]/u.test(word.source) && /[{}]/u.test(word.value))
-    throw new Error('Shell brace expansion in an executable is forbidden.');
+  if (
+    !/^['"]/u.test(word.source) &&
+    (/[{}*?]/u.test(word.value) || word.value.includes('['))
+  )
+    throw new Error('Shell expansion in an executable is forbidden.');
+  if (word.value.startsWith('/'))
+    throw new Error('Absolute runtime entry point is forbidden.');
   if (!word.dynamic) return true;
   if (
     PROTECTED_SKILL_PATH.test(word.value) ||

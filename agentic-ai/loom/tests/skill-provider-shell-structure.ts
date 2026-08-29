@@ -132,7 +132,9 @@ function heredocLine(source: string): HeredocLine {
       delimiter: parsed.value,
       expands: !parsed.quoted,
       shellInput:
-        /(?:^|[;&|]\s*)(?:bash|sh|source)\b[^#\n]*<</u.test(source) ||
+        /(?:^|[;&|]\s*)(?:(?:builtin|command|exec)\s+)*(?:bash|sh|source)\b[^#\n]*<</u.test(
+          source,
+        ) ||
         /(?:^|[;&|]\s*)\.\s+[^#\n]*<</u.test(source) ||
         /<<[^|\n]*\|\s*(?:bash|sh)\b/u.test(source),
       stripTabs,

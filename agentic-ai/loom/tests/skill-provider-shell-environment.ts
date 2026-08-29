@@ -7,7 +7,7 @@ import type {
 
 const MAX_SHELL_BYTES = 65_536;
 const DYNAMIC_SHELL = /\{\{|\$\(|`|\$\{[^}]*[:#%?+=-]|\$(?:\{|[A-Za-z_@])/u;
-const SHELL_ASSIGNMENT = /^([A-Za-z_][A-Za-z0-9_]*)\+?=(.*)$/su;
+const SHELL_ASSIGNMENT = /^([A-Za-z_][A-Za-z0-9_]*)(\+?=)(.*)$/su;
 const STATIC_EXECUTABLE_DEFAULT = /^\$\{([A-Za-z_]\w*):-([^}]*)\}$/u;
 const EPHEMERAL_DIRECTORY = /^\$\(mktemp -d\)$/u;
 const REPOSITORY_ROOT_ASSIGNMENT =
@@ -21,7 +21,8 @@ export function assignmentWord(
   const match = request.word.value.match(SHELL_ASSIGNMENT);
   if (!match) return false;
   const name = match[1] ?? '';
-  const rawValue = match[2] ?? '';
+  const operator = match[2] ?? '=';
+  const rawValue = match[3] ?? '';
   if (
     REPOSITORY_ROOT_ASSIGNMENT.test(rawValue) ||
     SCRIPT_DIRECTORY_ASSIGNMENT.test(rawValue)
@@ -60,9 +61,20 @@ export function assignmentWord(
   };
   const value = resolveWord(wordRequest);
   const directory = /^\$\(cd "?([^"$`]*)"? && pwd\)$/u.exec(value.value)?.[1];
-  return directory
+  const resolved = directory
     ? { name, value: staticWord(posix.normalize(directory)) }
     : { name, value };
+  if (operator !== '+=') return resolved;
+  const existing = request.environment.get(name);
+  if (!existing) return resolved;
+  return {
+    name,
+    value: {
+      dynamic: existing.dynamic || resolved.value.dynamic,
+      source: `${existing.source}${resolved.value.source}`,
+      value: `${existing.value}${resolved.value.value}`,
+    },
+  };
 }
 
 export function consumeAssignments([words, start, environment]: readonly [

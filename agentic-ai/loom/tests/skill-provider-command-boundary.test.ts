@@ -120,8 +120,23 @@ test('closes the exact-head shell review batch', () => {
     `nice -n 5 bun ${PROTECTED}`,
     `bun test ${PROTECTED}`,
     `cd -P ${PROTECTED_ROOT}; bun cli.ts`,
+    `ROOT=scripts; env ROOT=${PROTECTED_ROOT} bun "$ROOT/cli.ts"`,
+    `ROOT=${PROTECTED_ROOT}; (ROOT=scripts); bun "$ROOT/cli.ts"`,
+    `printf x | bash --`,
+    `command bash <<'EOF'\nbun ${PROTECTED}\nEOF`,
+    `bun --cwd ${PROTECTED_ROOT} cli.ts`,
+    `bun /workspace/nook/${PROTECTED}`,
+    `builtin cd ${PROTECTED_ROOT}; bun cli.ts`,
+    `f(){ set -- ${PROTECTED}; bun "$1"; }; f scripts/safe.ts`,
+    `ROOT=${PROTECTED_ROOT}; ROOT+=/src; bun "$ROOT/cli.ts"`,
+    `bun ${PROTECTED.replace('scripts', 'scr?pts')}`,
+    `node inspect ${PROTECTED}`,
   ])
     expect(() => inspectProtected(source), source).toThrow();
+  expect(() =>
+    inspectShell('ROOT=scripts; cd "$ROOT"; bun safe.ts'),
+  ).not.toThrow();
+  expect(() => inspectShell('cd "$RESEARCH_DIR"; echo ok')).not.toThrow();
   for (const seam of AUDITED_SOURCE_SEAMS) {
     const sourceRequest: AuditedSourceRequest = {
       source: seam.specifier,
