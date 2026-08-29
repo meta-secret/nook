@@ -2,75 +2,42 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { OpenPrLookupKind } from "../main/github.js";
-import { preserveImplementedBranchBeforePr } from "../main/implement.js";
+import { preserveImplementedBranchBeforePr as preserve } from "../main/implement.js";
+
+async function step<T>(log: string[], name: string, value: T): Promise<T> {
+  log.push(name);
+  return value;
+}
+
+function deliveryArgs(log: string[]) {
+  const notFound = { kind: OpenPrLookupKind.NotFound as const };
+  return {
+    agentBranch: "agent/test",
+    assertBudget: () => step(log, "budget", undefined),
+    createPr: () => step(log, "create-pr", 73),
+    findPr: () => step(log, "find-pr", notFound),
+    pushBranch: () => step(log, "push", undefined),
+    verifyBranch: () => step(log, "verify-origin", true),
+  };
+}
 
 test("oversized implementation is pushed and preserved before budget rejection", async () => {
   const events: string[] = [];
-  let prCreations = 0;
-
+  const args = deliveryArgs(events);
+  args.assertBudget = async () => {
+    await step(events, "budget", undefined);
+    throw new Error("exceeds the 2000 authored changed-line budget: 2001");
+  };
   await assert.rejects(
-    preserveImplementedBranchBeforePr({
-      agentBranch: "agent/oversized",
-      assertBudget: async () => {
-        events.push("budget");
-        throw new Error(
-          "Implemented diff exceeds the 2000 authored changed-line budget: 2001",
-        );
-      },
-      createPr: async () => {
-        prCreations += 1;
-        events.push("create-pr");
-        return 42;
-      },
-      findPr: async () => {
-        events.push("find-pr");
-        return { kind: OpenPrLookupKind.NotFound };
-      },
-      pushBranch: async () => {
-        events.push("push");
-      },
-      verifyBranch: async () => {
-        events.push("verify-origin");
-        return true;
-      },
-    }),
+    preserve(args),
     /exceeds the 2000 authored changed-line budget: 2001/,
   );
-
   assert.deepEqual(events, ["push", "verify-origin", "budget"]);
-  assert.equal(prCreations, 0);
 });
 
 test("bounded implementation keeps the normal push, budget, and PR creation path", async () => {
   const events: string[] = [];
-  const prNumber = await preserveImplementedBranchBeforePr({
-    agentBranch: "agent/bounded",
-    assertBudget: async () => {
-      events.push("budget");
-    },
-    createPr: async () => {
-      events.push("create-pr");
-      return 73;
-    },
-    findPr: async () => {
-      events.push("find-pr");
-      return { kind: OpenPrLookupKind.NotFound };
-    },
-    pushBranch: async () => {
-      events.push("push");
-    },
-    verifyBranch: async () => {
-      events.push("verify-origin");
-      return true;
-    },
-  });
+  assert.equal(await preserve(deliveryArgs(events)), 73);
 
-  assert.equal(prNumber, 73);
-  assert.deepEqual(events, [
-    "push",
-    "verify-origin",
-    "budget",
-    "find-pr",
-    "create-pr",
-  ]);
+  assert.equal(events.join(), "push,verify-origin,budget,find-pr,create-pr");
 });
