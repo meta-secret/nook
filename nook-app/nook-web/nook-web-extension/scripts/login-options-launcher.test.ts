@@ -16,7 +16,7 @@ type ExtensionWindowRequest = {
 }
 
 describe('websiteLoginOptions', () => {
-  test('opens one trusted companion surface when Continue finds no grant', async () => {
+  test('opens one trusted pairing surface when Continue finds no password-filling grant', async () => {
     Object.assign(globalThis, {
       __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
     })
@@ -40,9 +40,9 @@ describe('websiteLoginOptions', () => {
     })
     const openCompanionLauncherBestEffort = mock(
       (intent: OpenCompanionLauncherIntent) => {
-        if (intent !== OpenCompanionLauncherIntent.Default) return
+        if (intent !== OpenCompanionLauncherIntent.Pair) return
         const extensionWindowRequest: ExtensionWindowRequest = {
-          url: extensionRuntimeUrl('popup/index.html'),
+          url: extensionRuntimeUrl('popup/index.html?intent=pair'),
         }
         openExtensionWindow(extensionWindowRequest)
       },
@@ -71,10 +71,12 @@ describe('websiteLoginOptions', () => {
     })
     expect(openCompanionLauncherBestEffort).toHaveBeenCalledTimes(1)
     expect(openCompanionLauncherBestEffort).toHaveBeenCalledWith(
-      OpenCompanionLauncherIntent.Default,
+      OpenCompanionLauncherIntent.Pair,
     )
     expect(openExtensionWindow).toHaveBeenCalledTimes(1)
-    expect(openedUrls).toEqual(['chrome-extension://nook/popup/index.html'])
+    expect(openedUrls).toEqual([
+      'chrome-extension://nook/popup/index.html?intent=pair',
+    ])
 
     grantAccessResponse = {
       response: { ok: false, reason: 'login-forbidden-origin' },
@@ -95,6 +97,8 @@ describe('websiteLoginOptions', () => {
     })
     expect(openCompanionLauncherBestEffort).toHaveBeenCalledTimes(1)
     expect(openExtensionWindow).toHaveBeenCalledTimes(1)
-    expect(openedUrls).toEqual(['chrome-extension://nook/popup/index.html'])
+    expect(openedUrls).toEqual([
+      'chrome-extension://nook/popup/index.html?intent=pair',
+    ])
   })
 })

@@ -55,7 +55,7 @@ function totpPilotStubArgs(messages: Record<string, ChromeMessage>) {
   }
 }
 
-test('open trusted setup from disconnected Nook Pilot', async ({ page }) => {
+test('open trusted pairing from disconnected Nook Pilot', async ({ page }) => {
   const messages = await loadPilotMessages()
   const stubArgs = unavailableLoginPilotStubArgs(messages)
 
@@ -128,7 +128,7 @@ test('open trusted setup from disconnected Nook Pilot', async ({ page }) => {
           ).__nookDemoCompanionLauncherUrls ?? [],
       ),
     )
-    .toEqual(['chrome-extension://demo-extension/popup/index.html'])
+    .toEqual(['chrome-extension://demo-extension/popup/index.html?intent=pair'])
   await demoBeat(page)
 })
 

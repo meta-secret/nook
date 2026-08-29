@@ -354,7 +354,7 @@ export async function websiteLoginOptions({
       access.response.status === WebsiteAuthenticatorResponseStatus.Unavailable
     ) {
       resolvedDependencies.openCompanionLauncherBestEffort(
-        OpenCompanionLauncherIntent.Default,
+        OpenCompanionLauncherIntent.Pair,
       )
     }
     return access.response

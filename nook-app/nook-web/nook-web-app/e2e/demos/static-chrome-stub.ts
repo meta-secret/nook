@@ -463,7 +463,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
           }
           demoWindow.__nookDemoCompanionLauncherUrls ??= []
           demoWindow.__nookDemoCompanionLauncherUrls.push(
-            'chrome-extension://demo-extension/popup/index.html',
+            'chrome-extension://demo-extension/popup/index.html?intent=pair',
           )
           return { ok: true, status: 'unavailable' }
         }
