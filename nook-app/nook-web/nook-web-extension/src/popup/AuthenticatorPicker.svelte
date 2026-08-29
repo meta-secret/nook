@@ -6,6 +6,7 @@
   import { Search } from '@lucide/svelte'
   import { onMount } from 'svelte'
   import NookIcon from '../../../nook-web-shared/src/components/NookIcon.svelte'
+  import { isWebsiteAuthenticatorCanceledMessage } from '../lib/authenticator-picker-messages'
   import type { WebsiteAuthenticatorOption } from '../lib/login-fill-messages'
   import {
     ExtensionTranslationRequestKind,
@@ -122,6 +123,23 @@
   })
 
   onMount(() => {
+    const runtimeListener: Parameters<
+      typeof chrome.runtime.onMessage.addListener
+    >[0] = (message) => {
+      if (
+        !isWebsiteAuthenticatorCanceledMessage(message) ||
+        message.payload.requestId !== requestId
+      ) {
+        return false
+      }
+      completed = true
+      querySequence += 1
+      accounts = []
+      destinationOrigin = ''
+      error = ''
+      window.close()
+      return false
+    }
     searchInput?.focus()
     const cancelPendingPicker = () => {
       if (completed) return
@@ -132,6 +150,7 @@
       }
       void chrome.runtime.sendMessage(message)
     }
+    chrome.runtime.onMessage.addListener(runtimeListener)
     window.addEventListener('pagehide', cancelPendingPicker)
     return () => window.removeEventListener('pagehide', cancelPendingPicker)
   })
