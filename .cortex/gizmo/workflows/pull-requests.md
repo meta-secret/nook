@@ -338,6 +338,7 @@ flowchart TD
   G -->|no| H[7 Route finding to owner team]
   H --> PUSH[8 Integrate fix + loom pre-push + push]
   PUSH --> X
+  PUSH --> V
   G -->|yes| C[9 Address comments]
   C --> R[Run exact-head readiness audit]
   R -->|blocked| H

@@ -80,6 +80,8 @@ Does not apply to:
 
 For documentation-only captures, run `task loom:cortex-audit`.
 
-For code refactors using a dynamic skill, run `task loom:pre-push`, commit and
-push, use focused hosted tasks as useful, then explicitly trigger complete
-validation with `task pr:validate`.
+For code refactors using a dynamic skill, run the focused worker proof and
+commit the coherent handoff. Return the exact commit and evidence to Gizmo.
+Gizmo integrates the handoff, runs `task loom:pre-push`, promptly pushes, uses
+focused hosted tasks only when useful, and triggers complete exact-head
+validation when the head is ready.

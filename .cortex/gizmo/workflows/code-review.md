@@ -14,25 +14,15 @@ Review policy is explicit:
 - Other external review services remain optional. Do not request or wait for
   Claude, CodeRabbit, or similar services unless the user explicitly asks.
 
-## Local review before the first owner-authored push
+## Prompt remote review after push
 
-Run the advisory local review on a coherent branch head:
+Do not require advisory local review before the first push or after a worker
+handoff. Once Gizmo integrates a coherent committed handoff, it runs
+`task loom:pre-push`, commits any integration result, and promptly pushes the
+head. Exact-head Cloud review then stabilizes through complete validation.
 
-```bash
-task pr:review-local
-```
-
-The command compares the branch with current `origin/main`. Handle its outcome
-as follows:
-
-- If the Codex CLI or authentication is unavailable, it reports the skip and
-  does not block delivery. Cloud review remains Codex-only.
-- Treat any actionable finding as normal implementation work. Run pre-push
-  hygiene again after fixes.
-- The bounded implementation worker cannot run Git. The harness commits and
-  pushes its result after the worker exits. For that path, the continuing owner
-  runs local review immediately after handoff. This is the only first-push
-  exception.
+Treat any actionable Cloud finding as normal correction work. Run pre-push
+hygiene again before Gizmo pushes the replacement head.
 
 ## Complete validation and Cloud review
 
