@@ -141,8 +141,10 @@ export const runValidationCommand: ValidationRunner = async (
   process.chdir(options.cwd);
   restoreHostEnvironment(options.env, process.env);
   try {
+    if (command !== "task")
+      throw new Error("Isolated validation may only spawn task");
     await new Promise<void>((resolveRun, rejectRun) => {
-      const child = spawn(command, [...args], { stdio: "inherit" });
+      const child = spawn("task", [...args], { stdio: "inherit" });
       child.once("error", rejectRun);
       child.once("close", (code, signal) => {
         const failure = signal
