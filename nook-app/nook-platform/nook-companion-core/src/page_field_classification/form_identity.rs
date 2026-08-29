@@ -271,49 +271,10 @@ mod tests {
     use super::*;
     #[test]
     fn unconditional_vetoes_cover_account_detail_transaction_and_termination_actions() {
-        for identity in [
-            "/auth/change-email",
-            "Update username",
-            "Edit phone",
-            "Save profile",
-            "Change account details",
-            "Pay now",
-            "/checkout/confirm",
-            "Purchase",
-            "Place order",
-            "Transfer funds",
-            "Wire funds",
-            "Withdraw",
-            "Withdrawal",
-            "Deposit",
-            "Send money",
-            "Financial transaction",
-            "Authorize transaction",
-            "Transaction authorization",
-            "/transactions/123/authorize",
-            "/payments/123/confirm",
-            "/orders/123/confirm",
-            "/auth/logoff",
-            "Log off",
-            "signoff",
-            "Sign off",
-            "Lock account",
-            "Freeze session",
-        ] {
+        for identity in "/auth/change-email|Update username|Edit phone|Save profile|Change account details|Pay now|/checkout/confirm|Purchase|Place order|Transfer funds|Wire funds|Withdraw|Withdrawal|Deposit|Send money|Financial transaction|Authorize transaction|Transaction authorization|/transactions/123/authorize|/payments/123/confirm|/orders/123/confirm|/auth/logoff|Log off|signoff|Sign off|Lock account|Freeze session".split('|') {
             assert!(form_identity_indicates_destructive_action(identity));
         }
-        for identity in [
-            "Change password",
-            "Update credentials",
-            "/account/details/change-password",
-            "/account/details/update-credentials",
-            "Sign in",
-            "signin",
-            "login",
-            "log in",
-            "lock password field",
-            "freeze animation",
-        ] {
+        for identity in "Change password|Update credentials|/account/details/change-password|/account/details/update-credentials|Sign in|signin|login|log in|lock password field|freeze animation".split('|') {
             assert!(!form_identity_indicates_destructive_action(identity));
         }
     }

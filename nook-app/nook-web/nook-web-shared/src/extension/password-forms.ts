@@ -502,7 +502,7 @@ export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
       !form ||
       !sourceOrigin ||
       form.querySelector(
-        'button[type="submit"], input[type="submit"], button:not([type]), button[type="button"]',
+        'button[type="submit"], input[type="submit"], button:not([type])',
       ) ||
       !can_activate_authentication_route_control(
         sourceOrigin,

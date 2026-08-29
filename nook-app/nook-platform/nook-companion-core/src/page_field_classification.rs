@@ -126,7 +126,10 @@ pub fn has_login_context(observation: &LoginContextObservation) -> bool {
             return true;
         }
     }
-    if looks_like_login_advance_control_label(&observation.advance_control_label) {
+    let advance = expand_identity_text(&observation.advance_control_label);
+    if advance != "submit"
+        && looks_like_login_advance_control_label(&observation.advance_control_label)
+    {
         return true;
     }
     let path = observation.path_context.to_ascii_lowercase();
@@ -263,7 +266,9 @@ fn looks_like_unrestricted_login_advance_control_label(label: &str) -> bool {
     {
         return false;
     }
-    contains_any_word(&identity, LOGIN_ADVANCE_WORDS) || contains_any_word(&identity, &["submit"])
+    matches!(identity.as_str(), "se connecter" | "anmelden")
+        || contains_any_word(&identity, LOGIN_ADVANCE_WORDS)
+        || contains_any_word(&identity, &["submit"])
 }
 
 /// True when a semantic submit explicitly describes a non-authentication action.
@@ -567,7 +572,7 @@ mod tests {
             })
         };
         assert!(context("Entrar"));
-        for label in "Entrar en el sorteo|Entrar con Amazon".split('|') {
+        for label in "Submit|Entrar en el sorteo|Entrar con Amazon".split('|') {
             assert!(!context(label));
         }
         assert!(!looks_like_username_field(&field(
@@ -608,16 +613,10 @@ mod tests {
 
     #[test]
     fn login_advance_labels_require_authentication_words() {
-        assert!(looks_like_login_advance_control_label("Next"));
-        assert!(looks_like_login_advance_control_label("SignIn"));
-        assert!(looks_like_login_advance_control_label("signin"));
-        assert!(looks_like_login_advance_control_label("Sign   In"));
-        assert!(looks_like_login_advance_control_label("Login"));
-        assert!(looks_like_login_advance_control_label("Log\tin"));
-        assert!(looks_like_login_advance_control_label("Submit"));
-        assert!(!looks_like_login_advance_control_label("Learn more"));
-        assert!(!looks_like_login_advance_control_label("Subscribe"));
-        for label in "Submit order|Continue to reset password|Entrar con Amazon|Entrar con Foo|Continue with X".split('|') {
+        for label in "Next|SignIn|signin|Sign   In|Login|Log\tin|Submit".split('|') {
+            assert!(looks_like_login_advance_control_label(label));
+        }
+        for label in "Learn more|Subscribe|Submit order|Continue to reset password|Entrar con Amazon|Entrar con Foo|Continue with X".split('|') {
             assert!(!looks_like_login_advance_control_label(label));
         }
         assert!(!looks_like_login_advance_control_label(
@@ -644,7 +643,7 @@ mod tests {
         };
         assert!(decide("", "", false, true, true));
         assert!(decide("", "Entrar Entrar", false, true, true));
-        for label in "Sign in to Microsoft 365|Continue with email address|Continue with your email|Use your password to sign in".split('|') {
+        for label in "Sign in to Microsoft 365|Continue with email address|Continue with your email|Use your password to sign in|Se connecter|Anmelden".split('|') {
             assert!(decide("f", label, true, true, true));
         }
         assert!(!decide("f", "Continue with Amazon", true, true, true));
@@ -660,16 +659,14 @@ mod tests {
         let safe = |form, destination| {
             has_safe_authentication_route_identity("https://example.test", form, destination)
         };
-        assert!(safe(
-            "",
-            "https://example.test/login?notprovider=x&continue=https://mail.google.com"
-        ));
-        assert!(safe("login-form", "https://example.test/auth/login?x=1"));
+        for destination in "https://example.test/login?notprovider=x&continue=https://mail.google.com|https://example.test/auth/login?x=1|https://example.test/v3/signin/identifier|https://example.test/login/v2".split('|') {
+            assert!(safe("login-form", destination));
+        }
         for form in "reset-password|signup-form|google-login|passkey-login".split('|') {
             assert!(!safe(form, "https://example.test/auth/login"));
         }
-        for destination in "https://example.test/login?provider|https://example.test/login?next=/home#google|https://example.test/login?identity_provider=amazon|https://example.test/signin/x|https://example.test/account/close|https://example.test/login/amazon|https://example.test/orders/123/submit|https://example.test/auth/login?action=close+account|https://example.test/login/provider/acme|https://example.test/login/discord".split('|') {
-            assert!(!safe("login-form", destination));
+        for destination in "https://example.test/login?provider|https://example.test/login?next=/home#google|https://example.test/login#provider=acme|https://example.test/login?next=/home#provider=acme|https://example.test/login?identity_provider=amazon|https://example.test/signin/x|https://example.test/account/close|https://example.test/login/amazon|https://example.test/orders/123/submit|https://example.test/auth/login?action=close+account|https://example.test/login/provider/acme|https://example.test/login/discord".split('|') {
+            assert!(!safe("login-form", destination), "{destination}");
         }
         assert!(!safe(
             &"x".repeat(MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1),

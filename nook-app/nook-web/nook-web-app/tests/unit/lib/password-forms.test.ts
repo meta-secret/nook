@@ -79,7 +79,7 @@ describe('website one-time-code fields', () => {
   test('returns no workflow for ordinary pages and email-only newsletters', () => {
     document.body.innerHTML = `
       <main><p>Documentation</p></main>
-      <form><input type="email" name="newsletter-email" /></form>
+      <form><input type="email" name="newsletter-email" /><button>Submit</button></form>
     `
 
     expect(summarizeAuthenticationWorkflowForms()).toEqual([])
@@ -386,17 +386,21 @@ describe('website one-time-code fields', () => {
   })
 
   test.each([
-    ['', true],
-    ['delete-account', false],
-  ])('gates implicit username-only submit for %s', (formId, allowed) => {
-    window.history.replaceState({}, '', '/account')
-    document.body.innerHTML = `<form id="${formId}" action="/login"><input autocomplete="username" /></form>`
-    document.querySelector('form')?.addEventListener('submit', (event) => {
-      event.preventDefault()
-    })
+    ['', '', true],
+    ['', '<button type="button">Help</button>', true],
+    ['delete-account', '', false],
+  ])(
+    'gates implicit username-only submit for %s',
+    (formId, control, allowed) => {
+      window.history.replaceState({}, '', '/account')
+      document.body.innerHTML = `<form id="${formId}" action="/login"><input autocomplete="username" />${control}</form>`
+      document.querySelector('form')?.addEventListener('submit', (event) => {
+        event.preventDefault()
+      })
 
-    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(allowed)
-  })
+      expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(allowed)
+    },
+  )
 
   test.each([
     ['destructive same-origin action', '/settings/delete-account'],
