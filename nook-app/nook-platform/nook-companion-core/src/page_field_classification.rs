@@ -515,6 +515,55 @@ pub fn has_safe_authentication_route_identity(
         || form_identity::destination_has_safe_login_identity(&destination.path_identity)
 }
 
+/// Admit implicit credential-creation on register, recovery, or password-update routes.
+#[must_use]
+pub fn has_safe_credential_update_route_identity(
+    source_origin: &str,
+    form_identity: &str,
+    destination_identity: &str,
+) -> bool {
+    if [source_origin, form_identity, destination_identity]
+        .into_iter()
+        .any(|value| value.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES)
+    {
+        return false;
+    }
+    if form_identity::destination_has_disallowed_action_or_provider(form_identity, true, false)
+        || control_identity::looks_like_auxiliary_authentication_control_label(form_identity)
+    {
+        return false;
+    }
+    let Some(destination) =
+        destination_identity::canonicalize_control_destination(source_origin, destination_identity)
+    else {
+        return false;
+    };
+    if form_identity::destination_has_disallowed_action_or_provider(
+        &destination.route_identity,
+        true,
+        false,
+    ) {
+        return false;
+    }
+    let credential_update_route =
+        form_identity::control_destination_indicates_registration_route(
+            &destination.route_identity,
+        ) || form_identity::control_destination_indicates_password_recovery_route(
+            &destination.route_identity,
+        ) || form_identity::control_destination_indicates_password_update_route(
+            &destination.route_identity,
+        );
+    if form_identity::control_destination_indicates_non_authentication_route(
+        &destination.route_identity,
+    ) && !credential_update_route
+    {
+        return false;
+    }
+    form_identity::identity_indicates_explicit_authentication_route(form_identity)
+        || form_identity::destination_has_safe_login_identity(&destination.path_identity)
+        || credential_update_route
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
 #[tsify(into_wasm_abi, from_wasm_abi)]

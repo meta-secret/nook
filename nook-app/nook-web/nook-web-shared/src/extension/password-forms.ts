@@ -252,8 +252,33 @@ function scopedControlRoot({
   formScope,
 }: PasswordFormObservation): ParentNode {
   return formScope.kind === PasswordFormScopeKind.Owned
-    ? formScope.owner
+    ? formScope.owner.ownerDocument
     : root;
+}
+
+function controlAssociatesWithObservation({
+  control,
+  formScope,
+}: {
+  control: HTMLElement;
+  formScope: PasswordFormScope;
+}): boolean {
+  if (formScope.kind === PasswordFormScopeKind.Owned) {
+    if (
+      control instanceof HTMLButtonElement ||
+      control instanceof HTMLInputElement
+    ) {
+      return control.form === formScope.owner;
+    }
+    return formScope.owner.contains(control);
+  }
+  if (
+    control instanceof HTMLButtonElement ||
+    control instanceof HTMLInputElement
+  ) {
+    return !control.form;
+  }
+  return true;
 }
 
 function observedFormIdentity({
@@ -276,9 +301,10 @@ function observedFormIdentity({
 function observedFormDestination({
   formScope,
 }: PasswordFormObservation): string {
-  return formScope.kind === PasswordFormScopeKind.Owned
+  if (formScope.kind !== PasswordFormScopeKind.Owned) return "";
+  return formScope.owner.hasAttribute("action")
     ? formScope.owner.action
-    : "";
+    : (formScope.owner.ownerDocument.defaultView?.location.href ?? "");
 }
 
 type ControlDestinationRequest = {
@@ -305,12 +331,12 @@ function controlDestination({
   ) {
     return control.form.hasAttribute("action")
       ? control.form.action
-      : (control.form.ownerDocument.defaultView?.location.origin ?? "");
+      : (control.form.ownerDocument.defaultView?.location.href ?? "");
   }
   return formScope.kind === PasswordFormScopeKind.Owned
     ? formScope.owner.hasAttribute("action")
       ? formScope.owner.action
-      : (formScope.owner.ownerDocument.defaultView?.location.origin ?? "")
+      : (formScope.owner.ownerDocument.defaultView?.location.href ?? "")
     : location.href;
 }
 
@@ -409,6 +435,14 @@ export function findWorkflowPasskeyControl(
   const authenticationUsername = usernameEvidence(observation);
   const candidate = findPasskeyControls(scopedControlRoot(observation)).find(
     ({ control, explicitlyMarked }) => {
+      if (
+        !controlAssociatesWithObservation({
+          control,
+          formScope: observation.formScope,
+        })
+      ) {
+        return false;
+      }
       if (!isRenderedControl(control)) return false;
       const factsRequest: PageControlObservationRequest = {
         observation,
@@ -440,7 +474,13 @@ export function authenticationPageObservationFacts({
   const controlRoot = scopedControlRoot(observation);
   const authenticationUsername = usernameEvidence(observation);
   const advanceControls = scopedAdvanceControls(observation);
-  const passkeyControls = findPasskeyControls(controlRoot);
+  const passkeyControls = findPasskeyControls(controlRoot).filter(
+    ({ control }) =>
+      controlAssociatesWithObservation({
+        control,
+        formScope: observation.formScope,
+      }),
+  );
   const oneTimeCodeQuery: Parameters<typeof findOneTimeCodeFields>[0] = {
     root: observation.root,
     formScope: observation.formScope,
@@ -796,7 +836,19 @@ export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
       form,
     };
     if (
-      form.querySelector(semanticSubmitControlSelector) ||
+      Array.from(
+        form.ownerDocument.querySelectorAll<HTMLElement>(
+          semanticSubmitControlSelector,
+        ),
+      ).some((control) => {
+        if (
+          !(control instanceof HTMLButtonElement) &&
+          !(control instanceof HTMLInputElement)
+        ) {
+          return false;
+        }
+        return control.form === form;
+      }) ||
       !can_activate_authentication_route_control(
         sourceOrigin,
         [

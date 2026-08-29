@@ -149,17 +149,21 @@ function canActivateAuthenticationRouteControl(
 export function clickAdvanceControl(
   request: LoginAdvanceControlRequest,
 ): boolean {
-  const queryRoot =
+  const ownedForm =
     request.kind === PasswordFormQueryKind.Scoped &&
     request.formScope.kind === PasswordFormScopeKind.Owned
       ? request.formScope.owner
-      : request.root;
+      : undefined;
+  const queryRoot = ownedForm?.ownerDocument ?? request.root;
   const controls = Array.from(
     queryRoot.querySelectorAll<LoginAdvanceControl>(
       authenticationAdvanceControlSelector,
     ),
   );
   for (const control of controls) {
+    if (ownedForm && control.form !== ownedForm) {
+      continue;
+    }
     if (
       control.disabled ||
       control.getAttribute("aria-disabled") === "true" ||

@@ -6,7 +6,8 @@ use crate::authentication_workflow::{
 use crate::page_field_classification::{
     AuthenticationAdvanceControlDecision, AuthenticationAdvanceControlObservation,
     AuthenticationUsernameEvidence, has_safe_authentication_route_identity,
-    looks_like_one_time_code_auto_submit_signal, one_time_code_ceremony_context_is_authenticated,
+    has_safe_credential_update_route_identity, looks_like_one_time_code_auto_submit_signal,
+    one_time_code_ceremony_context_is_authenticated,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -183,10 +184,18 @@ impl AuthenticationCeremonyObservationFacts {
                     AuthenticationUsernameEvidence::Absent
                 )
             && self.authentication_context.is_bounded()
-            && has_safe_authentication_route_identity(
-                &self.authentication_context.source_origin,
-                &self.authentication_context.form_identity,
-                &self.authentication_context.destination_identity,
-            )
+            && if fields.new_password_field_count > 0 {
+                has_safe_credential_update_route_identity(
+                    &self.authentication_context.source_origin,
+                    &self.authentication_context.form_identity,
+                    &self.authentication_context.destination_identity,
+                )
+            } else {
+                has_safe_authentication_route_identity(
+                    &self.authentication_context.source_origin,
+                    &self.authentication_context.form_identity,
+                    &self.authentication_context.destination_identity,
+                )
+            }
     }
 }
