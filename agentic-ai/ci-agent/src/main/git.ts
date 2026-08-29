@@ -27,6 +27,28 @@ const REPOSITORY_GENERATED_PATHS = new Set([
   "/nook-app/nook-web/nook-web-app/src/landing/generated-message-keys.ts",
 ]);
 
+const AGENT_RUNTIME_ARTIFACTS = [
+  ".nook-workbench-plan.md",
+  ".nook-workbench-worklog.md",
+];
+const AGENT_RUNTIME_EXCLUSIONS = AGENT_RUNTIME_ARTIFACTS.map(
+  (path) => `:(exclude)${path}`,
+);
+
+export async function excludeAgentRuntimeArtifacts(
+  repoRoot: string,
+): Promise<void> {
+  await execFileAsync("git", [
+    "-C",
+    repoRoot,
+    "reset",
+    "--quiet",
+    "HEAD",
+    "--",
+    ...AGENT_RUNTIME_ARTIFACTS,
+  ]);
+}
+
 const AUTHORED_TEXT_EXTENSIONS = new Set([
   ".bash",
   ".cjs",
@@ -223,7 +245,16 @@ export function countAuthoredNumstat(numstat: string): number {
 export async function assertAuthoredChangeBudget(
   args: AuthoredBudgetArgs,
 ): Promise<void> {
-  await execFileAsync("git", ["-C", args.repoRoot, "add", "-A"]);
+  await excludeAgentRuntimeArtifacts(args.repoRoot);
+  await execFileAsync("git", [
+    "-C",
+    args.repoRoot,
+    "add",
+    "-A",
+    "--",
+    ".",
+    ...AGENT_RUNTIME_EXCLUSIONS,
+  ]);
   const { stdout } = await execFileAsync("git", [
     "-C",
     args.repoRoot,
@@ -337,13 +368,32 @@ export async function configureGitForCi(
 export async function hasWorkingTreeChanges(
   repoRoot: string,
 ): Promise<boolean> {
+  await excludeAgentRuntimeArtifacts(repoRoot);
   const { stdout } = await execFileAsync("git", [
     "-C",
     repoRoot,
     "status",
     "--porcelain",
+    "--",
+    ".",
+    ...AGENT_RUNTIME_EXCLUSIONS,
   ]);
   return stdout.trim().length > 0;
+}
+
+async function pushAuthenticatedBranch(repoRoot: string): Promise<void> {
+  const token = process.env.NOOK_GITHUB_PAT?.trim();
+  const authEnv = token
+    ? {
+        ...process.env,
+        GIT_CONFIG_COUNT: "1",
+        GIT_CONFIG_KEY_0: "http.https://github.com/.extraheader",
+        GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`,
+      }
+    : process.env;
+  await execFileAsync("git", ["-C", repoRoot, "push", "-u", "origin", "HEAD"], {
+    env: authEnv,
+  });
 }
 
 export async function pushFixBranch(
@@ -353,7 +403,16 @@ export async function pushFixBranch(
 ): Promise<void> {
   log.info(`Pushing fix branch ${fixBranch}`);
   await execFileAsync("git", ["-C", repoRoot, "checkout", "-B", fixBranch]);
-  await execFileAsync("git", ["-C", repoRoot, "add", "-A"]);
+  await excludeAgentRuntimeArtifacts(repoRoot);
+  await execFileAsync("git", [
+    "-C",
+    repoRoot,
+    "add",
+    "-A",
+    "--",
+    ".",
+    ...AGENT_RUNTIME_EXCLUSIONS,
+  ]);
 
   const staged = await hasStagedChanges(repoRoot);
   if (!staged) {
@@ -365,8 +424,18 @@ export async function pushFixBranch(
     `Fix main CI failure (run ${runId}).`;
 
   await execFileAsync("git", ["-C", repoRoot, "commit", "-m", commitMessage]);
-  await execFileAsync("git", ["-C", repoRoot, "push", "-u", "origin", "HEAD"]);
+  await pushAuthenticatedBranch(repoRoot);
   log.info(`Pushed ${fixBranch}`);
+}
+
+export async function revParse(repoRoot: string, ref: string): Promise<string> {
+  const { stdout } = await execFileAsync("git", [
+    "-C",
+    repoRoot,
+    "rev-parse",
+    ref,
+  ]);
+  return stdout.trim();
 }
 
 async function hasStagedChanges(repoRoot: string): Promise<boolean> {

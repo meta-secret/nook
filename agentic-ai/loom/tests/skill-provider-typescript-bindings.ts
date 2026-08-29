@@ -46,6 +46,13 @@ const DYNAMIC_CWD_EXEMPTIONS: readonly DynamicCwdExemption[] = [
   },
 ];
 const DYNAMIC_ENVIRONMENT_EXEMPTIONS: readonly DynamicCwdExemption[] = [
+  // The exact helper adds only GitHub's authenticated HTTPS header to the
+  // trusted host environment for one fixed git push invocation.
+  {
+    digest: 'f3b7c182c601b7e552dd5d9f2f4f59c01a5f0cc01b6aa44a5dd3852a47ee94de',
+    functionName: 'pushAuthenticatedBranch',
+    path: 'agentic-ai/ci-agent/src/main/git.ts',
+  },
   // The exact helper is reachable only through the proven git/tar snapshot
   // calls and receives the runtime contract's audited platform allowlist.
   {

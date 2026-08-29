@@ -1,15 +1,23 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
+import { promisify } from "node:util";
 
 import {
+  configureGitForCi,
   countAuthoredNumstat,
+  hasWorkingTreeChanges,
   summarizeAuthoredNumstat,
 } from "../main/git.js";
 
+const execFileAsync = promisify(execFile);
+
 describe("countAuthoredNumstat", () => {
   it("counts authored additions and deletions", () => {
-    const numstat =
-      "12\t3\tsrc/domain.ts\0" + "4\t5\ttests/domain.test.ts\0";
+    const numstat = "12\t3\tsrc/domain.ts\0" + "4\t5\ttests/domain.test.ts\0";
     assert.equal(countAuthoredNumstat(numstat), 24);
   });
 
@@ -61,5 +69,77 @@ describe("countAuthoredNumstat", () => {
       summarizeAuthoredNumstat(numstat).reportedOnly.malformedRecords,
       1,
     );
+  });
+});
+
+describe("implementation working tree", () => {
+  it("marks the worktree safe before inspecting its state", async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), "nook-ci-agent-safe-"));
+    const repoRoot = join(tempRoot, "repo");
+    const globalConfig = join(tempRoot, "global.gitconfig");
+    const hadGlobalConfig = Object.hasOwn(process.env, "GIT_CONFIG_GLOBAL");
+    const previousGlobalConfig = process.env.GIT_CONFIG_GLOBAL ?? "";
+    process.env.GIT_CONFIG_GLOBAL = globalConfig;
+    try {
+      await mkdir(repoRoot);
+      await execFileAsync("git", ["-C", repoRoot, "init"]);
+      await configureGitForCi(repoRoot);
+      await writeFile(join(repoRoot, "README.md"), "base\n");
+      await execFileAsync("git", ["-C", repoRoot, "add", "README.md"]);
+      await execFileAsync("git", ["-C", repoRoot, "commit", "-m", "base"]);
+      const { stdout } = await execFileAsync("git", [
+        "config",
+        "--global",
+        "--get-all",
+        "safe.directory",
+      ]);
+      assert.deepEqual(stdout.trim().split("\n"), [repoRoot, "*"]);
+      assert.equal(await hasWorkingTreeChanges(repoRoot), false);
+    } finally {
+      if (hadGlobalConfig) process.env.GIT_CONFIG_GLOBAL = previousGlobalConfig;
+      else delete process.env.GIT_CONFIG_GLOBAL;
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("excludes forced runtime artifacts while retaining authored changes", async () => {
+    const repoRoot = await mkdtemp(join(tmpdir(), "nook-ci-agent-git-"));
+    try {
+      await execFileAsync("git", ["-C", repoRoot, "init"]);
+      await writeFile(join(repoRoot, "README.md"), "base\n");
+      await execFileAsync("git", ["-C", repoRoot, "add", "README.md"]);
+      await execFileAsync("git", [
+        "-C",
+        repoRoot,
+        "-c",
+        "user.name=test",
+        "-c",
+        "user.email=test@example.com",
+        "commit",
+        "-m",
+        "base",
+      ]);
+      await writeFile(
+        join(repoRoot, ".nook-workbench-plan.md"),
+        "trusted plan\n",
+      );
+      await writeFile(
+        join(repoRoot, ".nook-workbench-worklog.md"),
+        "candidate log\n",
+      );
+      await execFileAsync("git", [
+        "-C",
+        repoRoot,
+        "add",
+        "-f",
+        ".nook-workbench-plan.md",
+        ".nook-workbench-worklog.md",
+      ]);
+      assert.equal(await hasWorkingTreeChanges(repoRoot), false);
+      await writeFile(join(repoRoot, "README.md"), "authored change\n");
+      assert.equal(await hasWorkingTreeChanges(repoRoot), true);
+    } finally {
+      await rm(repoRoot, { recursive: true, force: true });
+    }
   });
 });

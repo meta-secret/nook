@@ -2,15 +2,12 @@ import { chdir } from "node:process";
 
 import { exitCiAgent } from "./exit.js";
 import { runCiFix } from "./fix.js";
-import { runCiImplement } from "./implement.js";
+import { runCiDeliver, runCiEditOnly, runCiImplement } from "./implement.js";
 import { CiAgentConfigLoadKind, loadConfig } from "./config.js";
 import { loadPrompt } from "./prompt.js";
-import { runFixAgent } from "./run-agent.js";
+import { AgentIsolation, runFixAgent } from "./run-agent.js";
 import { runPrAudit } from "./pr-audit.js";
-import {
-  runPrReviewRequest,
-  runPrReviewStabilization,
-} from "./pr-review.js";
+import { runPrReviewRequest, runPrReviewStabilization } from "./pr-review.js";
 
 async function runAgentCommand(): Promise<void> {
   const loadedConfig = loadConfig();
@@ -23,6 +20,20 @@ async function runAgentCommand(): Promise<void> {
   chdir(config.repoRoot);
   const prompt = await loadPrompt(config);
   await runFixAgent(config, prompt);
+}
+
+async function runPlanningAgentCommand(): Promise<void> {
+  const loadedConfig = loadConfig();
+  if (loadedConfig.kind === CiAgentConfigLoadKind.MissingApiKey) {
+    throw new Error(
+      "CURSOR_API_KEY is required for the isolated planning agent",
+    );
+  }
+  const config = loadedConfig.config;
+
+  chdir(config.repoRoot);
+  const prompt = await loadPrompt(config);
+  await runFixAgent(config, prompt, AgentIsolation.Strict);
 }
 
 async function main(): Promise<void> {
@@ -38,6 +49,15 @@ async function main(): Promise<void> {
     case "implement":
       await runCiImplement();
       break;
+    case "plan":
+      await runPlanningAgentCommand();
+      break;
+    case "deliver":
+      await runCiDeliver();
+      break;
+    case "edit":
+      await runCiEditOnly();
+      break;
     case "pr-preflight":
       await runPrAudit(false);
       break;
@@ -52,7 +72,7 @@ async function main(): Promise<void> {
       break;
     default:
       throw new Error(
-        `Unknown command: ${command} (expected agent, fix, implement, pr-preflight, pr-ready, pr-review, or pr-review-stabilize)`,
+        `Unknown command: ${command} (expected agent, fix, implement, plan, edit, deliver, pr-preflight, pr-ready, pr-review, or pr-review-stabilize)`,
       );
   }
 }
