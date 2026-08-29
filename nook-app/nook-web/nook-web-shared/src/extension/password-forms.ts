@@ -94,6 +94,20 @@ type AuthenticationObservationFactsRequest = {
   backupCodesHint: boolean;
 };
 
+export function refreshAuthenticationWorkflowObservation(
+  observation: PasswordFormObservation,
+): PasswordFormObservation {
+  const summaryRequest: PasswordFormSummaryRequest = {
+    kind: PasswordFormQueryKind.Scoped,
+    root: observation.root,
+    formScope: observation.formScope,
+  };
+  return {
+    ...observation,
+    summary: summarizeRoot(summaryRequest),
+  };
+}
+
 type NativeInputValueMutation = {
   input: HTMLInputElement;
   value: string;
@@ -355,11 +369,14 @@ export function findWorkflowPasskeyControl(
     : { kind: PasskeyControlLookupKind.Absent };
 }
 
-function passkeyControlOwner(control: HTMLElement): HTMLFormElement | null {
-  return control instanceof HTMLButtonElement ||
-    control instanceof HTMLInputElement
-    ? control.form
-    : control.closest("form");
+function passkeyControlOwner(
+  control: HTMLElement,
+): HTMLFormElement | undefined {
+  const owner =
+    control instanceof HTMLButtonElement || control instanceof HTMLInputElement
+      ? control.form
+      : control.closest("form");
+  return owner ?? undefined;
 }
 
 function usernameEvidence(
@@ -692,7 +709,7 @@ export function summarizeAuthenticationWorkflowForms(): PasswordFormObservation[
     observations.push(nookTypedArgs0_3);
   }
   for (const passkeyControl of renderedPasskeyControls.filter(
-    (control) => passkeyControlOwner(control) === null,
+    (control) => passkeyControlOwner(control) === undefined,
   )) {
     const containerQuery: UnownedAuthenticationContainerQuery = {
       field: passkeyControl,

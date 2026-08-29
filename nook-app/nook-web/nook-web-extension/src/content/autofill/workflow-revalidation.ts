@@ -1,5 +1,6 @@
 import {
   authenticationPageObservationFacts,
+  refreshAuthenticationWorkflowObservation,
   type PasswordFormObservation,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 import {
@@ -15,7 +16,7 @@ import {
 type RevalidatedAuthenticationActionArgs = {
   workflow: PasswordFormObservation
   expectedAction: AuthenticationWorkflowAction
-  act: () => boolean
+  act: (currentWorkflow: PasswordFormObservation) => boolean
 }
 
 /**
@@ -28,20 +29,28 @@ export async function performRevalidatedAuthenticationAction({
   expectedAction,
   act,
 }: RevalidatedAuthenticationActionArgs): Promise<boolean> {
-  const factsRequest: Parameters<typeof authenticationPageObservationFacts>[0] =
-    {
-      observation: workflow,
+  const observeCurrentFacts = () => {
+    const currentWorkflow = refreshAuthenticationWorkflowObservation(workflow)
+    const factsRequest: Parameters<
+      typeof authenticationPageObservationFacts
+    >[0] = {
+      observation: currentWorkflow,
       authenticatorSetupHint: false,
       backupCodesHint: false,
     }
-  const approvedFacts = authenticationPageObservationFacts(factsRequest)
+    return {
+      currentWorkflow,
+      facts: authenticationPageObservationFacts(factsRequest),
+    }
+  }
+  const approvedObservation = observeCurrentFacts()
   const message: Parameters<
     typeof sendAuthenticationWorkflowSnapshotRuntimeMessage
   >[0] = {
     type: AuthenticationWorkflowSnapshotMessageType.NookAuthenticationWorkflowSnapshot,
     payload: {
       origin: location.origin,
-      observations: [approvedFacts],
+      observations: [approvedObservation.facts],
     },
   }
   const delivery =
@@ -57,9 +66,12 @@ export async function performRevalidatedAuthenticationAction({
     return false
   }
 
-  const currentFacts = authenticationPageObservationFacts(factsRequest)
-  if (JSON.stringify(currentFacts) !== JSON.stringify(approvedFacts)) {
+  const currentObservation = observeCurrentFacts()
+  if (
+    JSON.stringify(currentObservation.facts) !==
+    JSON.stringify(approvedObservation.facts)
+  ) {
     return false
   }
-  return act()
+  return act(currentObservation.currentWorkflow)
 }

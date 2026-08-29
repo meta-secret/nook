@@ -110,4 +110,45 @@ describe('credential-bearing workflow revalidation', () => {
     )
     expect(act).toHaveBeenCalledOnce()
   })
+
+  test('sends current field semantics before allowing credential release', async () => {
+    document.body.innerHTML = `
+      <form action="/login">
+        <input autocomplete="username" />
+        <input id="password" type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+    const workflow = summarizeAuthenticationWorkflowForms()[0]
+    expect(workflow).toBeDefined()
+    if (!workflow) return
+    document
+      .querySelector<HTMLInputElement>('#password')
+      ?.setAttribute('autocomplete', 'new-password')
+    runtime.sendSnapshot.mockImplementation(async (message) => {
+      expect(message.payload.observations[0]?.fields).toMatchObject({
+        currentPasswordFieldCount: 0,
+        newPasswordFieldCount: 1,
+      })
+      return {
+        kind: 'delivered',
+        response: {
+          kind: AuthenticationWorkflowSnapshotResponseKind.NoMatch,
+        },
+      }
+    })
+    const act = vi.fn(() => true)
+    const request: Parameters<
+      typeof performRevalidatedAuthenticationAction
+    >[0] = {
+      workflow,
+      expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
+      act,
+    }
+
+    await expect(performRevalidatedAuthenticationAction(request)).resolves.toBe(
+      false,
+    )
+    expect(act).not.toHaveBeenCalled()
+  })
 })

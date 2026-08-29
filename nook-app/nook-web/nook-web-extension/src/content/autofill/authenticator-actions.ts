@@ -104,12 +104,12 @@ export async function fillAuthenticatorCode({
   >[0] = {
     workflow,
     expectedAction: AuthenticationWorkflowAction.FillTotp,
-    act: () => {
+    act: (currentWorkflow) => {
       const nookTypedArgs0_4: Parameters<typeof fillOneTimeCode>[0] = {
         code: code.value,
         kind: PasswordFormQueryKind.Scoped,
-        root: workflow.root,
-        formScope: workflow.formScope,
+        root: currentWorkflow.root,
+        formScope: currentWorkflow.formScope,
       }
       return fillOneTimeCode(nookTypedArgs0_4)
     },
