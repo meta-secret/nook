@@ -335,6 +335,23 @@ new Holder({nested:[spawnSync,Bun.spawn,Worker]});`),
   ).toEqual([]);
 });
 
+test('fails closed on deferred accessors hiding execution capabilities', () => {
+  for (const source of [
+    "import {spawnSync} from 'node:child_process'; invoke({get run(){return spawnSync;}});",
+    'new Holder({nested:{get run(){return Bun.spawn;}}});',
+    'const tools={set run(value:unknown){sink=Worker;}}; invoke({tools});',
+  ])
+    expect(() => extract(source)).toThrow(
+      'Subprocess capability passed to unsupported call',
+    );
+  expect(
+    extract(`
+import {spawnSync} from 'node:child_process';
+invoke({get run(){const spawnSync=()=>{};return spawnSync;}});
+new Holder({set run(value:unknown){const Worker=value; sink=Worker;}});`),
+  ).toEqual([]);
+});
+
 test('propagates subprocess capability through exact Node promisify', () => {
   expect(
     extract(`
@@ -522,6 +539,30 @@ test('rejects command-capable git and tar arguments', () => {
 import {spawnSync} from 'node:child_process';
 spawnSync('git',['-c','core.hooksPath=/dev/null','archive','HEAD']);
 spawnSync('tar',['--extract','--file=repository.tar']);`),
+  ).toEqual([]);
+});
+
+test('rejects command-launching git subcommands and options', () => {
+  for (const args of [
+    "['difftool','--extcmd=sh hook.sh']",
+    "['mergetool','--tool=custom']",
+    "['bisect','run','sh','hook.sh']",
+    "['submodule','foreach','sh hook.sh']",
+    "['rebase','--exec=sh hook.sh','main']",
+    "['grep','--open-files-in-pager=sh hook.sh','needle']",
+    "['config','core.sshCommand','sh hook.sh']",
+  ])
+    expect(() =>
+      extract(
+        `import {spawnSync} from 'node:child_process'; spawnSync('git',${args});`,
+      ),
+    ).toThrow('Command-capable git');
+  expect(
+    extract(`
+import {spawnSync} from 'node:child_process';
+spawnSync('git',['help','difftool']);
+spawnSync('git',['config','--global','user.name','Nook']);
+spawnSync('git',['-c','core.hooksPath=/dev/null','archive','HEAD']);`),
   ).toEqual([]);
 });
 

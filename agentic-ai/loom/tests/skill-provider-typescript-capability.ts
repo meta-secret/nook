@@ -264,10 +264,31 @@ function assertNestedCallArgument([request, visited]: readonly [
       if (ts.isShorthandPropertyAssignment(property))
         nested.push(property.name);
       if (ts.isSpreadAssignment(property)) nested.push(property.expression);
+      if (
+        (ts.isGetAccessorDeclaration(property) ||
+          ts.isSetAccessorDeclaration(property) ||
+          ts.isMethodDeclaration(property)) &&
+        property.body
+      )
+        ts.forEachChild(property.body, (node) =>
+          inspectDeferredAggregateNode([request, nextVisited, node]),
+        );
     }
   }
   for (const expression of nested)
     assertNestedCallArgument([{ ...request, expression }, nextVisited]);
+}
+
+function inspectDeferredAggregateNode([request, visited, node]: readonly [
+  UnsupportedCallArgumentRequest,
+  ReadonlySet<ts.Expression>,
+  ts.Node,
+]): void {
+  if (ts.isExpression(node))
+    assertNestedCallArgument([{ ...request, expression: node }, visited]);
+  ts.forEachChild(node, (child) =>
+    inspectDeferredAggregateNode([request, visited, child]),
+  );
 }
 
 export function dynamicImportCapability(
@@ -510,6 +531,7 @@ function assertExternalCommandArguments([executable, words]: readonly [
 ]): void {
   const values = words.map((word) => (word.dynamic ? false : word.value));
   if (executable === 'git') {
+    assertGitSubcommandArguments(values);
     for (const [index, value] of values.entries()) {
       const next = values[index + 1];
       if (value === '-c' && (!next || gitConfigRunsCommand(next)))
@@ -546,12 +568,84 @@ function assertExternalCommandArguments([executable, words]: readonly [
     throw new Error('Command-capable tar option is forbidden.');
 }
 
+function assertGitSubcommandArguments(
+  values: readonly (string | false)[],
+): void {
+  const located = gitSubcommand(values);
+  if (located === false) return;
+  const [subcommand, index] = located;
+  const args = values.slice(index + 1);
+  if (
+    /^(?:citool|difftool|filter-branch|for-each-repo|gui|instaweb|mergetool|p4|send-email|web--browse)$/u.test(
+      subcommand,
+    ) ||
+    (subcommand === 'bisect' && args.includes('run')) ||
+    (subcommand === 'submodule' && args.includes('foreach')) ||
+    (subcommand === 'rebase' &&
+      args.some(
+        (value) =>
+          value === '-x' ||
+          (typeof value === 'string' && value.startsWith('--exec')),
+      )) ||
+    (subcommand === 'grep' &&
+      args.some(
+        (value) =>
+          typeof value === 'string' &&
+          value.startsWith('--open-files-in-pager'),
+      )) ||
+    (subcommand === 'help' &&
+      args.some((value) => /^(?:-w|--web)(?:=|$)/u.test(value || '')))
+  )
+    throw new Error(
+      `Command-capable git subcommand is forbidden: ${subcommand}`,
+    );
+  if (subcommand !== 'config') return;
+  for (const [argumentIndex, value] of args.entries()) {
+    if (
+      value &&
+      gitConfigKeyRunsCommand(value) &&
+      args[argumentIndex + 1] !== undefined
+    )
+      throw new Error('Command-capable git configuration is forbidden.');
+  }
+}
+
+function gitSubcommand(
+  values: readonly (string | false)[],
+): readonly [string, number] | false {
+  const consuming = new Set([
+    '-C',
+    '-c',
+    '--config-env',
+    '--git-dir',
+    '--namespace',
+    '--super-prefix',
+    '--work-tree',
+  ]);
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index];
+    if (typeof value !== 'string') return false;
+    if (consuming.has(value)) {
+      index += 1;
+      continue;
+    }
+    if (value.startsWith('-')) continue;
+    return [value, index];
+  }
+  return false;
+}
+
 function gitConfigRunsCommand(value: string): boolean {
   const separator = value.indexOf('=');
   if (separator < 1) return false;
   const key = value.slice(0, separator);
   const configured = value.slice(separator + 1).trimStart();
-  if (/^alias\./iu.test(key)) return configured.startsWith('!');
+  return /^alias\./iu.test(key)
+    ? configured.startsWith('!')
+    : gitConfigKeyRunsCommand(key);
+}
+
+function gitConfigKeyRunsCommand(key: string): boolean {
   return /^(?:core\.sshcommand|diff\.external|difftool\..*\.cmd|filter\..*\.(?:clean|process|smudge)|mergetool\..*\.cmd)$/iu.test(
     key,
   );

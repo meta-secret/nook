@@ -210,7 +210,7 @@ function assertUnsupportedArguments([call, model]: readonly [
     expression: ts.Expression,
   ): CapabilityResolutionRequest => ({
     expression,
-    location: call,
+    location: expression,
     model,
     visited: new Set(),
   });
