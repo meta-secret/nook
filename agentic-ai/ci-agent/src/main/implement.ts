@@ -6,6 +6,7 @@ import {
   createFixPr,
   createOctokit,
   findOpenPr,
+  type OpenPrLookup,
   OpenPrLookupKind,
   parseRepository,
 } from "./github.js";
@@ -20,6 +21,34 @@ import { loadPrompt, resolveAgentTask } from "./prompt.js";
 import { runFixAgent } from "./run-agent.js";
 
 const log = createLogger("implement");
+
+type PreserveImplementedBranchArgs = {
+  agentBranch: string;
+  assertBudget: () => Promise<void>;
+  createPr: () => Promise<number>;
+  findPr: () => Promise<OpenPrLookup>;
+  pushBranch: () => Promise<void>;
+  verifyBranch: () => Promise<boolean>;
+};
+
+export async function preserveImplementedBranchBeforePr(
+  args: PreserveImplementedBranchArgs,
+): Promise<number> {
+  await args.pushBranch();
+  if (!(await args.verifyBranch())) {
+    throw new Error(
+      `Agent branch ${args.agentBranch} was not found on origin after push`,
+    );
+  }
+
+  await args.assertBudget();
+
+  const openPr = await args.findPr();
+  if (openPr.kind === OpenPrLookupKind.Found) {
+    return openPr.number;
+  }
+  return args.createPr();
+}
 
 export async function runCiImplement(): Promise<void> {
   const repository = process.env.GITHUB_REPOSITORY?.trim();
@@ -42,7 +71,7 @@ export async function runCiImplement(): Promise<void> {
   await configureGitForCi(repoRoot, octokit);
   const repoRef = parseRepository(repository);
 
-  let openPr = await findOpenPr(octokit, repoRef, agentBranch);
+  const openPr = await findOpenPr(octokit, repoRef, agentBranch);
   let prNumber: number;
   if (openPr.kind === OpenPrLookupKind.Found) {
     prNumber = openPr.number;
@@ -75,33 +104,20 @@ export async function runCiImplement(): Promise<void> {
       return;
     }
 
-    const budgetArgs = {
-      repoRoot,
-      baseRef: "origin/main",
-      maximumLines: 2_000,
-    };
-    await assertAuthoredChangeBudget(budgetArgs);
-
-    await pushFixBranch(repoRoot, agentBranch, runId);
-
-    if (!(await branchExistsOnOrigin(octokit, repoRef, agentBranch))) {
-      throw new Error(
-        `Agent branch ${agentBranch} was not found on origin after push`,
-      );
-    }
-
-    openPr = await findOpenPr(octokit, repoRef, agentBranch);
-    if (openPr.kind === OpenPrLookupKind.Found) {
-      prNumber = openPr.number;
-    } else {
-      prNumber = await createFixPr(
-        octokit,
-        repoRef,
-        agentBranch,
-        runId,
-        config.fixLabel,
-      );
-    }
+    prNumber = await preserveImplementedBranchBeforePr({
+      agentBranch,
+      assertBudget: () =>
+        assertAuthoredChangeBudget({
+          repoRoot,
+          baseRef: "origin/main",
+          maximumLines: 2_000,
+        }),
+      createPr: () =>
+        createFixPr(octokit, repoRef, agentBranch, runId, config.fixLabel),
+      findPr: () => findOpenPr(octokit, repoRef, agentBranch),
+      pushBranch: () => pushFixBranch(repoRoot, agentBranch, runId),
+      verifyBranch: () => branchExistsOnOrigin(octokit, repoRef, agentBranch),
+    });
     log.info(`Opened implement PR #${prNumber}`);
   }
 
