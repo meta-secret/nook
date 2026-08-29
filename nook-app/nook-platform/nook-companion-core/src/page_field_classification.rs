@@ -337,6 +337,44 @@ pub fn looks_like_password_update_submit_control_label(label: &str) -> bool {
         && contains_any_word(&identity, &["save", "update", "change", "set", "reset"]))
 }
 
+pub(crate) fn one_time_code_ceremony_context_is_authenticated(
+    _authentication_username: AuthenticationUsernameEvidence,
+    source_origin: &str,
+    form_identity: &str,
+    destination_identity: &str,
+) -> bool {
+    if [source_origin, form_identity, destination_identity]
+        .into_iter()
+        .any(|value| value.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES)
+    {
+        return false;
+    }
+    let Some(destination) =
+        destination_identity::canonicalize_control_destination(source_origin, destination_identity)
+    else {
+        return false;
+    };
+    if form_identity::form_identity_indicates_destructive_action(form_identity)
+        || form_identity::form_identity_indicates_non_authentication_account_management(
+            form_identity,
+        )
+        || form_identity::form_identity_indicates_destructive_action(&destination.route_identity)
+        || form_identity::control_destination_indicates_non_authentication_route(
+            &destination.route_identity,
+        )
+        || form_identity::destination_has_disallowed_action_or_provider(
+            &destination.route_identity,
+            false,
+            false,
+        )
+    {
+        return false;
+    }
+    [form_identity, destination.path_identity.as_str()]
+        .into_iter()
+        .any(form_identity::identity_indicates_one_time_code_authentication_context)
+}
+
 pub(crate) fn authentication_passkey_control_is_safe(
     observation: &AuthenticationAdvanceControlObservation,
     explicitly_marked: bool,
@@ -486,6 +524,60 @@ pub enum AuthenticationUsernameEvidence {
     StandardsBasedEmail,
     Strong,
     Explicit,
+}
+
+#[must_use]
+pub fn authentication_username_evidence(
+    field: &PageInputFieldObservation,
+) -> AuthenticationUsernameEvidence {
+    if !looks_like_username_field(field) {
+        return AuthenticationUsernameEvidence::Absent;
+    }
+    if has_autocomplete_token(&field.autocomplete_tokens, "username") {
+        return AuthenticationUsernameEvidence::Explicit;
+    }
+    let identity = expand_identity_text(&field.identity_text);
+    if has_autocomplete_token(&field.autocomplete_tokens, "email") {
+        return if username_negative(&identity) {
+            AuthenticationUsernameEvidence::Generic
+        } else if field.login_context {
+            AuthenticationUsernameEvidence::Strong
+        } else {
+            AuthenticationUsernameEvidence::StandardsBasedEmail
+        };
+    }
+    if contains_any_word(
+        &identity,
+        &[
+            "loginfmt",
+            "login fmt",
+            "login email",
+            "login e mail",
+            "login e-mail",
+        ],
+    ) {
+        AuthenticationUsernameEvidence::Strong
+    } else {
+        AuthenticationUsernameEvidence::Generic
+    }
+}
+
+/// Select the strongest username evidence without duplicating its ordering in hosts.
+#[must_use]
+pub fn strongest_authentication_username_evidence(
+    evidence: &[AuthenticationUsernameEvidence],
+) -> AuthenticationUsernameEvidence {
+    if evidence.contains(&AuthenticationUsernameEvidence::Explicit) {
+        AuthenticationUsernameEvidence::Explicit
+    } else if evidence.contains(&AuthenticationUsernameEvidence::Strong) {
+        AuthenticationUsernameEvidence::Strong
+    } else if evidence.contains(&AuthenticationUsernameEvidence::StandardsBasedEmail) {
+        AuthenticationUsernameEvidence::StandardsBasedEmail
+    } else if evidence.contains(&AuthenticationUsernameEvidence::Generic) {
+        AuthenticationUsernameEvidence::Generic
+    } else {
+        AuthenticationUsernameEvidence::Absent
+    }
 }
 
 /// Decide whether a locally scoped control may advance a safe authentication route.
