@@ -53,6 +53,7 @@ import {
   sendRuntimeMessageWithoutResponse,
 } from './runtime-message-adapter'
 import { GeneratePasswordRequestType } from '../../../../nook-web-shared/src/extension/runtime-messages'
+import { performRevalidatedAuthenticationAction } from './workflow-revalidation'
 
 export {
   RuntimeMessageDeliveryKind,
@@ -157,6 +158,34 @@ export async function fillAndSubmitAccount({
     setStatus(nookTypedArgs0_stale)
     return false
   }
+  const releaseRevalidationRequest: Parameters<
+    typeof performRevalidatedAuthenticationAction
+  >[0] = {
+    workflow,
+    expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
+    act: () => true,
+  }
+  const releaseApproved = await performRevalidatedAuthenticationAction(
+    releaseRevalidationRequest,
+  )
+  if (!releaseApproved) {
+    const progressRequest: Parameters<typeof setFlightProgress>[0] = {
+      step,
+      title,
+      currentStep: 1,
+      totalSteps: 3,
+      titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
+    }
+    setFlightProgress(progressRequest)
+    const statusRequest: Parameters<typeof setStatus>[0] = {
+      description,
+      continueButton,
+      text: translatedMessage(BROWSER_MESSAGE_KEYS.WidgetFillFailed),
+      enableContinue: true,
+    }
+    setStatus(statusRequest)
+    return false
+  }
   const nookTypedArgs0_2: Parameters<typeof sendLoginFillMessage>[0] = {
     type: WebsiteLoginRevealMessageType.NookWebsiteLoginFill,
     payload: {
@@ -233,19 +262,44 @@ export async function fillAndSubmitAccount({
     setStatus(nookTypedArgs0_staleFillStatus)
     return false
   }
-  const nookTypedArgs0_4: Parameters<typeof fillLoginCredentials>[0] = {
-    credentials,
-    kind: PasswordFormQueryKind.Scoped,
-    root: workflow.root,
-    formScope: workflow.formScope,
+  let submissionResult = FormSubmissionResult.NotObserved
+  let filledRequest: Parameters<typeof fillLoginCredentials>[0] | false = false
+  const fillRevalidationRequest: Parameters<
+    typeof performRevalidatedAuthenticationAction
+  >[0] = {
+    workflow,
+    expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
+    act: (currentWorkflow) => {
+      const fillRequest: Parameters<typeof fillLoginCredentials>[0] = {
+        credentials,
+        kind: PasswordFormQueryKind.Scoped,
+        root: currentWorkflow.root,
+        formScope: currentWorkflow.formScope,
+      }
+      if (!fillLoginCredentials(fillRequest)) return false
+      filledRequest = fillRequest
+      const submissionApproval: NonNullable<
+        Parameters<typeof submitLoginForm>[0]['submissionApproval']
+      > = {
+        isApproved: () => approvedWorkflowIsStillCurrent(currentWorkflow),
+        reject: () => clearLoginCredentials(fillRequest),
+      }
+      const submissionRequest: Parameters<typeof submitLoginForm>[0] = {
+        ...fillRequest,
+        submissionApproval,
+      }
+      submissionResult = submitLoginForm(submissionRequest)
+      return true
+    },
   }
-  const filled = fillLoginCredentials(nookTypedArgs0_4)
+  const filled = await performRevalidatedAuthenticationAction(
+    fillRevalidationRequest,
+  )
   credentials.password = ''
   credentials.username = ''
   const postFillApproved = filled && approvedWorkflowIsStillCurrent(workflow)
-  if (filled && !postFillApproved) {
-    clearLoginCredentials(nookTypedArgs0_4)
-  }
+  if (filled && !postFillApproved && filledRequest)
+    clearLoginCredentials(filledRequest)
   if (!postFillApproved) {
     const nookTypedArgs0_5: Parameters<typeof setFlightProgress>[0] = {
       step,
@@ -264,19 +318,6 @@ export async function fillAndSubmitAccount({
     setStatus(nookTypedArgs0_6)
     return false
   }
-  const submissionApproval: NonNullable<
-    Parameters<typeof submitLoginForm>[0]['submissionApproval']
-  > = {
-    isApproved: () => approvedWorkflowIsStillCurrent(workflow),
-    reject: () => clearLoginCredentials(nookTypedArgs0_4),
-  }
-  const nookTypedArgs0_7: Parameters<typeof submitLoginForm>[0] = {
-    kind: PasswordFormQueryKind.Scoped,
-    root: workflow.root,
-    formScope: workflow.formScope,
-    submissionApproval,
-  }
-  const submissionResult = submitLoginForm(nookTypedArgs0_7)
   if (submissionResult === FormSubmissionResult.Rejected) {
     const rejectedProgress: Parameters<typeof setFlightProgress>[0] = {
       step,
@@ -683,8 +724,21 @@ export async function proposePasskeyWithNook({
   }
   setStatus(nookTypedArgs0_28)
   try {
-    const control = findWorkflowPasskeyControl(workflow)
-    if (control.kind === PasskeyControlLookupKind.Absent) {
+    const revalidationRequest: Parameters<
+      typeof performRevalidatedAuthenticationAction
+    >[0] = {
+      workflow,
+      expectedAction: action,
+      act: (currentWorkflow) => {
+        const control = findWorkflowPasskeyControl(currentWorkflow)
+        if (control.kind === PasskeyControlLookupKind.Absent) return false
+        control.control.click()
+        return true
+      },
+    }
+    const actuated =
+      await performRevalidatedAuthenticationAction(revalidationRequest)
+    if (!actuated) {
       const nookTypedArgs0_29: Parameters<typeof setStatus>[0] = {
         description,
         continueButton,
@@ -696,7 +750,6 @@ export async function proposePasskeyWithNook({
       setStatus(nookTypedArgs0_29)
       return
     }
-    control.control.click()
     const nookTypedArgs0_30: Parameters<typeof setStatus>[0] = {
       description,
       continueButton,

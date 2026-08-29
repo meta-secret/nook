@@ -367,7 +367,7 @@ test('fill a Namecheap-like OTP challenge through Nook Pilot', async ({
   await demoBeat(page)
 })
 
-test('classify contextual email-first facts through Nook Pilot', async ({
+test('revalidate contextual email-first facts through Nook Pilot', async ({
   page,
 }) => {
   const messages = await loadPilotMessages()

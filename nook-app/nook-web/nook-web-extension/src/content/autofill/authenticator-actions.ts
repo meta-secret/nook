@@ -5,6 +5,7 @@ import {
   PasswordFormQueryKind,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 import {
+  AuthenticationWorkflowAction,
   AuthenticatorCodeResponseKind,
   AuthenticatorPickerOpenResponseKind,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
@@ -30,6 +31,7 @@ import {
   widgetState,
 } from './state'
 import { setFlightProgress, translatedMessage } from './workflow-ui'
+import { performRevalidatedAuthenticationAction } from './workflow-revalidation'
 
 type FillAuthenticatorCodeArgs = {
   account: Pick<WebsiteAuthenticatorOption, 'vaultStoreId' | 'secretId'>
@@ -131,13 +133,23 @@ export async function fillAuthenticatorCode({
     setStatus(nookTypedArgs0_staleAuthFill)
     return false
   }
-  const nookTypedArgs0_4: Parameters<typeof fillOneTimeCode>[0] = {
-    code: code.value,
-    kind: PasswordFormQueryKind.Scoped,
-    root: workflow.root,
-    formScope: workflow.formScope,
+  const revalidationRequest: Parameters<
+    typeof performRevalidatedAuthenticationAction
+  >[0] = {
+    workflow,
+    expectedAction: AuthenticationWorkflowAction.FillTotp,
+    act: (currentWorkflow) => {
+      const nookTypedArgs0_4: Parameters<typeof fillOneTimeCode>[0] = {
+        code: code.value,
+        kind: PasswordFormQueryKind.Scoped,
+        root: currentWorkflow.root,
+        formScope: currentWorkflow.formScope,
+      }
+      return fillOneTimeCode(nookTypedArgs0_4)
+    },
   }
-  const filled = fillOneTimeCode(nookTypedArgs0_4)
+  const filled =
+    await performRevalidatedAuthenticationAction(revalidationRequest)
   code.value = ''
   if (!filled) {
     const nookTypedArgs0_5: Parameters<typeof setFlightProgress>[0] = {
