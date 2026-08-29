@@ -198,6 +198,33 @@ describe('website one-time-code fields', () => {
     expect(defaultAuthenticationContext.destinationIdentity).toBe(location.href)
   })
 
+  test('submits a classified username-only login whose form action is omitted', () => {
+    window.history.replaceState({}, '', '/auth/login')
+    document.body.innerHTML = `
+      <form aria-label="Login">
+        <input autocomplete="username" />
+        <button type="submit">Continue</button>
+      </form>
+    `
+    let submissions = 0
+    document.querySelector('form')?.addEventListener('submit', (event) => {
+      event.preventDefault()
+      submissions += 1
+    })
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [{ destinationIdentity: location.href }],
+    })
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
+    expect(submissions).toBe(1)
+  })
+
   test('uses the OTP form destination instead of an auxiliary control destination', () => {
     document.body.innerHTML = `
       <form id="otp-login" action="/mfa/challenge">
