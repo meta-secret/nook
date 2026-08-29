@@ -5,6 +5,7 @@
 //! user is in it, and which action Nook may offer next.
 
 mod candidate_selection;
+mod enrollment;
 mod observation_facts;
 mod observation_validation;
 mod snapshot_contract;
@@ -23,17 +24,19 @@ pub use observation_facts::{
     AuthenticationPageObservationFacts, AuthenticationPageObservationFactsBatch,
     AuthenticationPasskeyControlObservation, authentication_passkey_control_candidate_is_safe,
     authentication_passkey_control_evidence_is_safe,
+    classify_authentication_backup_codes_observation,
 };
 pub use observation_validation::{
     MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
     authentication_page_observations_are_valid,
 };
 pub use vocabulary::{
-    AuthenticationSavedLoginCapability, AuthenticationWorkflowAction, AuthenticationWorkflowKind,
-    AuthenticationWorkflowStage,
+    AuthenticationPilotPresentationCapability, AuthenticationSavedLoginCapability,
+    AuthenticationWorkflowAction, AuthenticationWorkflowKind, AuthenticationWorkflowStage,
 };
 
 use crate::website_passkey_proposal::{WebsitePasskeyProposal, propose_website_passkey};
+use enrollment::classify_enrollment_workflow;
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
@@ -253,39 +256,32 @@ impl AuthenticationWorkflowSnapshot {
             AuthenticationSavedLoginCapability::Unavailable
         }
     }
-}
 
-const fn classify_enrollment_workflow(
-    observation: AuthenticationPageObservation,
-) -> AuthenticationWorkflowMatch {
-    if observation.authenticator_setup_hint {
-        if observation.one_time_code_field_count > 0 {
-            return AuthenticationWorkflowMatch::Matched(AuthenticationWorkflowSnapshot::new(
-                AuthenticationWorkflowKind::TotpEnrollment,
-                AuthenticationWorkflowStage::Verification,
-                AuthenticationWorkflowAction::FillTotp,
-                3,
-                5,
-            ));
+    #[must_use]
+    pub const fn pilot_presentation_capability(self) -> AuthenticationPilotPresentationCapability {
+        if !self.matches_classifier_contract()
+            || !matches!(
+                self.approval_requirement,
+                AuthenticationApprovalRequirement::ExplicitUserApproval
+            )
+        {
+            return AuthenticationPilotPresentationCapability::Hidden;
         }
-        return AuthenticationWorkflowMatch::Matched(AuthenticationWorkflowSnapshot::new(
-            AuthenticationWorkflowKind::TotpEnrollment,
-            AuthenticationWorkflowStage::Setup,
-            AuthenticationWorkflowAction::EnrollAuthenticator,
-            2,
-            5,
-        ));
+        match self.action {
+            AuthenticationWorkflowAction::ContinueWithNook
+            | AuthenticationWorkflowAction::GeneratePassword
+            | AuthenticationWorkflowAction::FillTotp
+            | AuthenticationWorkflowAction::EnrollAuthenticator
+            | AuthenticationWorkflowAction::SaveBackupCodes
+            | AuthenticationWorkflowAction::UsePasskey
+            | AuthenticationWorkflowAction::CreatePasskey => {
+                AuthenticationPilotPresentationCapability::ProposeAction
+            }
+            AuthenticationWorkflowAction::TakeOver => {
+                AuthenticationPilotPresentationCapability::Hidden
+            }
+        }
     }
-    if observation.backup_codes_hint && observation.one_time_code_field_count == 0 {
-        return AuthenticationWorkflowMatch::Matched(AuthenticationWorkflowSnapshot::new(
-            AuthenticationWorkflowKind::TotpEnrollment,
-            AuthenticationWorkflowStage::Recovery,
-            AuthenticationWorkflowAction::TakeOver,
-            4,
-            5,
-        ));
-    }
-    AuthenticationWorkflowMatch::NoMatch
 }
 
 const fn generate_or_takeover(manual_checkpoint_present: bool) -> AuthenticationWorkflowAction {
@@ -371,14 +367,25 @@ pub const fn classify_authentication_workflow(
     }
 
     if observation.one_time_code_field_count > 0 {
-        let action = if observation.password_field_count() == 0 {
-            AuthenticationWorkflowAction::FillTotp
+        let (stage, action) = if observation.manual_checkpoint_present {
+            (
+                AuthenticationWorkflowStage::Manual,
+                AuthenticationWorkflowAction::TakeOver,
+            )
+        } else if observation.password_field_count() == 0 {
+            (
+                AuthenticationWorkflowStage::SecondFactor,
+                AuthenticationWorkflowAction::FillTotp,
+            )
         } else {
-            AuthenticationWorkflowAction::TakeOver
+            (
+                AuthenticationWorkflowStage::SecondFactor,
+                AuthenticationWorkflowAction::TakeOver,
+            )
         };
         return AuthenticationWorkflowMatch::Matched(AuthenticationWorkflowSnapshot::new(
             AuthenticationWorkflowKind::TotpChallenge,
-            AuthenticationWorkflowStage::SecondFactor,
+            stage,
             action,
             2,
             3,
@@ -591,6 +598,81 @@ mod tests {
         assert_eq!(verify.kind, AuthenticationWorkflowKind::TotpEnrollment);
         assert_eq!(verify.stage, AuthenticationWorkflowStage::Verification);
         assert_eq!(verify.action, AuthenticationWorkflowAction::FillTotp);
+
+        let recovery = AuthenticationPageObservation {
+            authenticator_setup_hint: true,
+            backup_codes_hint: true,
+            ..observation()
+        };
+        let recovery = classify_authentication_workflow(recovery).snapshot()?;
+        assert_eq!(recovery.stage, AuthenticationWorkflowStage::Recovery);
+        assert_eq!(
+            recovery.action,
+            AuthenticationWorkflowAction::SaveBackupCodes
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn enrollment_checkpoints_fail_closed_at_the_observed_step() -> anyhow::Result<()> {
+        for (observation, expected_step) in [
+            (
+                AuthenticationPageObservation {
+                    authenticator_setup_hint: true,
+                    manual_checkpoint_present: true,
+                    ..observation()
+                },
+                2,
+            ),
+            (
+                AuthenticationPageObservation {
+                    authenticator_setup_hint: true,
+                    one_time_code_field_count: 1,
+                    manual_checkpoint_present: true,
+                    ..observation()
+                },
+                3,
+            ),
+            (
+                AuthenticationPageObservation {
+                    backup_codes_hint: true,
+                    manual_checkpoint_present: true,
+                    ..observation()
+                },
+                4,
+            ),
+        ] {
+            let snapshot = classify_authentication_workflow(observation).snapshot()?;
+            assert_eq!(snapshot.stage, AuthenticationWorkflowStage::Manual);
+            assert_eq!(snapshot.action, AuthenticationWorkflowAction::TakeOver);
+            assert_eq!(snapshot.current_step, expected_step);
+            assert_eq!(
+                snapshot.pilot_presentation_capability(),
+                AuthenticationPilotPresentationCapability::Hidden
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn pilot_presentation_requires_a_complete_approved_snapshot() -> anyhow::Result<()> {
+        let snapshot = classify_authentication_workflow(AuthenticationPageObservation {
+            username_field_count: 1,
+            ..observation()
+        })
+        .snapshot()?;
+        assert_eq!(
+            snapshot.pilot_presentation_capability(),
+            AuthenticationPilotPresentationCapability::ProposeAction
+        );
+        assert_eq!(
+            AuthenticationWorkflowSnapshot {
+                stage: AuthenticationWorkflowStage::Recovery,
+                ..snapshot
+            }
+            .pilot_presentation_capability(),
+            AuthenticationPilotPresentationCapability::Hidden
+        );
         Ok(())
     }
 

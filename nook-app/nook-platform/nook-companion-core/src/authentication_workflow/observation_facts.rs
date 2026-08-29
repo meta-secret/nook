@@ -12,7 +12,7 @@ mod fields;
 mod passkey;
 pub use authenticator::{
     AuthenticationAuthenticatorObservationFacts, AuthenticationAuthenticatorSetupObservation,
-    AuthenticationBackupCodesObservation,
+    AuthenticationBackupCodesObservation, classify_authentication_backup_codes_observation,
 };
 pub use ceremony::{
     AuthenticationCeremonyContextObservation, AuthenticationCeremonyObservationFacts,

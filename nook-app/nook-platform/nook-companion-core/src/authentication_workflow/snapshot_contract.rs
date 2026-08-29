@@ -75,6 +75,12 @@ impl AuthenticationWorkflowSnapshot {
                 2,
                 3,
             ) | (
+                AuthenticationWorkflowKind::TotpChallenge,
+                AuthenticationWorkflowStage::Manual,
+                AuthenticationWorkflowAction::TakeOver,
+                2,
+                3,
+            ) | (
                 AuthenticationWorkflowKind::TotpEnrollment,
                 AuthenticationWorkflowStage::Setup,
                 AuthenticationWorkflowAction::EnrollAuthenticator,
@@ -89,8 +95,14 @@ impl AuthenticationWorkflowSnapshot {
             ) | (
                 AuthenticationWorkflowKind::TotpEnrollment,
                 AuthenticationWorkflowStage::Recovery,
-                AuthenticationWorkflowAction::TakeOver,
+                AuthenticationWorkflowAction::SaveBackupCodes,
                 4,
+                5,
+            ) | (
+                AuthenticationWorkflowKind::TotpEnrollment,
+                AuthenticationWorkflowStage::Manual,
+                AuthenticationWorkflowAction::TakeOver,
+                2..=4,
                 5,
             ) | (
                 AuthenticationWorkflowKind::Manual,
@@ -222,6 +234,7 @@ mod tests {
             AuthenticationWorkflowAction::UsePasskey,
             AuthenticationWorkflowAction::CreatePasskey,
             AuthenticationWorkflowAction::TakeOver,
+            AuthenticationWorkflowAction::SaveBackupCodes,
         ];
 
         for kind in kinds {
