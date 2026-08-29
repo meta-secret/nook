@@ -64,7 +64,7 @@ Does not apply to:
 6. Keep profiles isolated by channel and PR.
 7. Security reviews the exact functional-owner handoff and focused proof,
    formats and commits only its allowed security-owned Cortex changes, and
-   returns its acceptance verdict to Gizmo.
+   returns a pending acceptance verdict to Gizmo.
 8. Gizmo integrates the accepted handoffs and runs `task loom:pre-push` on the
    combined head. If formatting changes security-owned content, Gizmo returns
    that exact diff to Security for a fresh formatted commit instead of
@@ -72,8 +72,11 @@ Does not apply to:
 9. After reintegration and a clean `task loom:pre-push`, Gizmo pushes promptly
    and immediately obtains remote evidence: at least one relevant focused
    remote task for a non-validation-ready head, or complete exact-head
-   validation when the head is validation-ready. Gizmo owns readiness and
-   merge.
+   validation when the head is validation-ready.
+10. Gizmo routes the exact-head deployed channel, origin, checksum, and
+    packaged-manifest evidence back to Security. The Security verdict stays
+    pending until Security accepts that evidence. Gizmo then owns readiness
+    and merge.
 
 ## Validation
 
@@ -85,4 +88,5 @@ Deployment verification must prove:
 - the packaged manifest.
 
 The security worker returns focused evidence for its exact committed handoff.
-Gizmo owns repository-wide validation and PR/check state after integration.
+Gizmo obtains the hosted deployment evidence and returns it to Security.
+Security accepts or rejects that exact-head evidence before readiness.

@@ -31,11 +31,12 @@ Use this workflow for feature work that touches more than one package.
      pushing.
    - Do not add broad local builds, tests, e2e, container product gates, or
      duplicate hosted-check mirrors before push.
-   - If the pushed head is not validation-ready, dispatch at least one relevant
-     focused hosted task immediately.
-   - When the head is validation-ready, dispatch complete exact-head validation
-     immediately. Focused tasks are optional on that path.
-   - Obtain fresh exact-head remote evidence after every replacement push.
+   - If the pushed head is not validation-ready, Gizmo dispatches at least one
+     relevant focused hosted task immediately.
+   - When the head is validation-ready, Gizmo dispatches complete exact-head
+     validation immediately. Focused tasks are optional on that path.
+   - Gizmo obtains fresh exact-head remote evidence after every replacement
+     push.
 
 For multiple package PRs:
 

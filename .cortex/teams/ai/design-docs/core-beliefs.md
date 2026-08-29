@@ -102,12 +102,13 @@ These are the core engineering beliefs that guide the development of Nook. Becau
      validation.
   6. Gizmo admission-authorizes each bounded correction task and submits its
      contract to the active harness, which creates and runs the attempt.
-  7. Gizmo integrates verified fixes, pushes promptly, and obtains fresh
-     exact-head validation.
+  7. Gizmo integrates verified fixes and runs Loom pre-push. Team-owned
+     formatter mutations return to their owners for a fresh committed handoff
+     before Gizmo pushes and obtains fresh exact-head validation.
   8. Before final readiness, the AI team completes substantial-task
      self-improvement and returns its clean committed handoff.
-  9. Gizmo integrates any promotion and repeats hosted validation if the head
-     changes.
+  9. Gizmo integrates any promotion and runs Loom pre-push. It repeats hosted
+     validation if the head changes.
   10. Gizmo runs readiness and completes the squash merge.
 - **Do not stop at push or readiness.** Gizmo owns the PR through squash merge
   unless concretely blocked.
