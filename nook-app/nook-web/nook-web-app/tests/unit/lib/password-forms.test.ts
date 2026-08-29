@@ -312,6 +312,32 @@ describe('website one-time-code fields', () => {
     }
   })
 
+  test.each([
+    ['password recovery', 'Continue to reset password'],
+    ['registration', 'Continue to create account'],
+    ['external provider', 'Continue with Google'],
+    ['destructive action', 'Continue to delete account'],
+  ])('skips %s controls before advancing login', (_, routeLabel) => {
+    document.body.innerHTML = `
+      <form id="login-form">
+        <input autocomplete="username" name="email" type="email" />
+        <button id="alternate-route" type="button">${routeLabel}</button>
+        <button id="login-next" type="button">Continue</button>
+      </form>
+    `
+    const activatedControls: string[] = []
+    for (const control of document.querySelectorAll<HTMLButtonElement>(
+      'button',
+    )) {
+      control.addEventListener('click', () =>
+        activatedControls.push(control.id),
+      )
+    }
+
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
+    expect(activatedControls).toEqual(['login-next'])
+  })
+
   test('groups externally associated controls with their form owner', () => {
     document.body.innerHTML = `
       <form id="login"><input autocomplete="username" /></form>
