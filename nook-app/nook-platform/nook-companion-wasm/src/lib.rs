@@ -722,13 +722,10 @@ mod tests {
                 observations: vec![observation],
             },
         );
-        assert!(matches!(
+        assert_eq!(
             workflow,
-            nook_companion_core::AuthenticationWorkflowMatch::Matched(snapshot)
-                if snapshot.kind == nook_companion_core::AuthenticationWorkflowKind::Login
-                    && snapshot.action
-                        == nook_companion_core::AuthenticationWorkflowAction::ContinueWithNook
-        ));
+            nook_companion_core::AuthenticationWorkflowMatch::NoMatch
+        );
     }
 
     #[test]

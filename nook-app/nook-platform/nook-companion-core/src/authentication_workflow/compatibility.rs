@@ -81,11 +81,44 @@ impl AuthenticationPageObservationCompatibility {
                 AuthenticationManualCheckpoint::Absent
             },
             enrollment_evidence,
-            // Current-main observations predate detailed control evidence. Preserve that
-            // transitional API's behavior here; the detailed-facts path ignores reduced flags.
-            advance_control: AuthenticationAdvanceControlEvidence::Present,
+            // Legacy observations cannot prove which control will submit the form.
+            // Actionable workflow matching therefore requires the detailed-facts export.
+            advance_control: AuthenticationAdvanceControlEvidence::Absent,
             passkey,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn legacy_password_form_never_synthesizes_an_advance_control() {
+        let observation = AuthenticationPageObservationCompatibility {
+            username_field_count: 1,
+            current_password_field_count: 1,
+            new_password_field_count: 0,
+            generic_password_field_count: 0,
+            one_time_code_field_count: 0,
+            manual_checkpoint_present: false,
+            authenticator_setup_hint: false,
+            backup_codes_hint: false,
+            passkey_control_present: false,
+            matching_passkey_account_count: 0,
+        };
+        assert_eq!(
+            observation.into_observation().advance_control,
+            AuthenticationAdvanceControlEvidence::Absent
+        );
+        assert_eq!(
+            AuthenticationPageObservationsCompatibility {
+                observations: vec![observation],
+            }
+            .into_observations()
+            .classify(),
+            crate::AuthenticationWorkflowMatch::NoMatch
+        );
     }
 }
 
