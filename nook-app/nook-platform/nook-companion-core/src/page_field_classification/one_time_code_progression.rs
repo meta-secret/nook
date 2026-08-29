@@ -1,12 +1,39 @@
 //! Direct browser evidence that filling a one-time code advances the ceremony.
 
-const INPUT_EVENT_ATTRIBUTES: &[&str] = &["oninput=", "onchange="];
-const DIRECT_FORM_SUBMIT_CALLS: &[&str] = &["this.form.requestsubmit()", "this.form.submit()"];
+const INPUT_EVENT_ATTRIBUTES: &[&str] = &["oninput", "onchange"];
+
+fn strip_token<'a>(value: &'a str, token: &str) -> Option<&'a str> {
+    value.trim_start().strip_prefix(token)
+}
 
 fn handler_submits_form(value: &str) -> bool {
-    let handler = value.to_ascii_lowercase().replace(char::is_whitespace, "");
-    let handler = handler.strip_suffix(';').unwrap_or(&handler);
-    DIRECT_FORM_SUBMIT_CALLS.contains(&handler)
+    let Some(value) = strip_token(value, "this") else {
+        return false;
+    };
+    let Some(value) = strip_token(value, ".") else {
+        return false;
+    };
+    let Some(value) = strip_token(value, "form") else {
+        return false;
+    };
+    let Some(value) = strip_token(value, ".") else {
+        return false;
+    };
+    let Some(value) = strip_token(value, "requestSubmit").or_else(|| strip_token(value, "submit"))
+    else {
+        return false;
+    };
+    let Some(value) = strip_token(value, "(") else {
+        return false;
+    };
+    let Some(value) = strip_token(value, ")") else {
+        return false;
+    };
+    let value = value.trim();
+    value.is_empty()
+        || value
+            .strip_prefix(';')
+            .is_some_and(|tail| tail.trim().is_empty())
 }
 
 /// True only when an executable input/change handler directly submits the form.
@@ -26,12 +53,13 @@ pub fn looks_like_one_time_code_auto_submit_signal(signal: &str) -> bool {
         return false;
     }
 
-    let lower = line.to_ascii_lowercase();
-    INPUT_EVENT_ATTRIBUTES.iter().any(|attribute| {
-        lower
-            .strip_prefix(attribute)
-            .is_some_and(handler_submits_form)
-    })
+    let Some((attribute, handler)) = line.split_once('=') else {
+        return false;
+    };
+    INPUT_EVENT_ATTRIBUTES
+        .iter()
+        .any(|expected| attribute.trim().eq_ignore_ascii_case(expected))
+        && handler_submits_form(handler)
 }
 
 #[cfg(test)]
@@ -46,6 +74,21 @@ mod tests {
         assert!(looks_like_one_time_code_auto_submit_signal(
             "onchange=this.form.submit();"
         ));
+        assert!(looks_like_one_time_code_auto_submit_signal(
+            "ONINPUT = this . form . requestSubmit ( ) ;"
+        ));
+    }
+
+    #[test]
+    fn rejects_case_changed_and_whitespace_split_javascript_identifiers() {
+        for signal in [
+            "oninput=this.form.Submit()",
+            "onchange=this.form.requestsubmit()",
+            "oninput=this.form.request Submit()",
+            "onchange=this.form.sub mit()",
+        ] {
+            assert!(!looks_like_one_time_code_auto_submit_signal(signal));
+        }
     }
 
     #[test]
