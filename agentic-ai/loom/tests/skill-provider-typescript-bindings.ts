@@ -70,13 +70,13 @@ export function isDynamicCwdExempt([model, location]: readonly [
   LexicalModel,
   ts.Node,
 ]): boolean {
-  let node: ts.Node | undefined = location;
-  while (node) {
+  let node = location;
+  for (;;) {
     if (model.dynamicCwdExemptions.some((candidate) => candidate === node))
       return true;
+    if (!node.parent) return false;
     node = node.parent;
   }
-  return false;
 }
 
 export type BindingCollectionRequest = {
