@@ -101,8 +101,6 @@ pub(super) fn one_time_code_control_lacks_authentication_context(
     positive_destination_identity: &str,
 ) -> bool {
     observation.one_time_code_field_count > 0
-        && observation.password_field_count == 0
-        && observation.new_password_field_count == 0
         && !one_time_code_control_has_authentication_context(
             observation.authentication_username,
             &observation.form_identity,

@@ -811,4 +811,54 @@ describe('passkey control detection', () => {
       expect(approved.control.textContent).toContain('Use passkey')
     }
   })
+
+  test('keeps an external form-associated passkey control owned', () => {
+    document.body.innerHTML = `
+      <form id="login" action="/login"></form>
+      <button form="login" type="button" data-nook-passkey-control>Use passkey</button>
+    `
+
+    const observation = summarizeAuthenticationWorkflowForms()[0]
+    expect(observation).toBeDefined()
+    if (!observation) return
+    const facts = authenticationPageObservationFacts({
+      observation,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
+      kind: 'observed',
+      observation: {
+        ownership: 'owned-form',
+        label: expect.stringContaining('Use passkey'),
+      },
+    })
+  })
+
+  test('treats an in-form passkey link as locally scoped', () => {
+    document.body.innerHTML = `
+      <form id="login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+        <a href="/login" data-nook-passkey-control>Use passkey</a>
+      </form>
+    `
+
+    const observation = summarizeAuthenticationWorkflowForms()[0]
+    expect(observation).toBeDefined()
+    if (!observation) return
+    const facts = authenticationPageObservationFacts({
+      observation,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
+      kind: 'observed',
+      observation: {
+        ownership: 'locally-scoped',
+        label: expect.stringContaining('Use passkey'),
+      },
+    })
+  })
 })

@@ -170,7 +170,7 @@ impl AuthenticationAdvanceControlObservation {
         if non_authentication_label && !contextual_password_update {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
-        let current_password_only = self.password_field_count == 1
+        let current_password_only = self.password_field_count > 0
             && self.new_password_field_count == 0
             && self.one_time_code_field_count == 0;
         if current_password_only
@@ -536,6 +536,12 @@ mod tests {
         assert!(!advances_authentication(
             &AuthenticationAdvanceControlObservation {
                 destination_identity: "/account/confirm#login".to_owned(),
+                ..reauthentication.clone()
+            }
+        ));
+        assert!(!advances_authentication(
+            &AuthenticationAdvanceControlObservation {
+                password_field_count: 2,
                 ..reauthentication
             }
         ));
@@ -683,6 +689,16 @@ mod tests {
             ..localized_identity_submit.clone()
         };
         assert!(!advances_authentication(&transaction_code_submit));
+        let password_and_transaction_code_submit = AuthenticationAdvanceControlObservation {
+            password_field_count: 1,
+            form_identity: "verification".to_owned(),
+            destination_identity: "/verify".to_owned(),
+            label: "Confirm".to_owned(),
+            ..transaction_code_submit.clone()
+        };
+        assert!(!advances_authentication(
+            &password_and_transaction_code_submit
+        ));
         let neutral_newsletter_submit = AuthenticationAdvanceControlObservation {
             form_identity: String::new(),
             label: "Continue".to_owned(),

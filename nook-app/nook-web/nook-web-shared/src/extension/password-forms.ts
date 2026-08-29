@@ -389,6 +389,10 @@ function pageControlObservation({
     observation.formScope.kind === PasswordFormScopeKind.Owned &&
     (control as AuthenticationAdvanceControl).form ===
       observation.formScope.owner;
+  const locallyScoped =
+    observation.formScope.kind === PasswordFormScopeKind.Owned
+      ? observation.formScope.owner.contains(control)
+      : observation.root !== document && observation.root.contains(control);
   const destinationRequest: ControlDestinationRequest = {
     control,
     formScope: observation.formScope,
@@ -402,7 +406,7 @@ function pageControlObservation({
         : "actionable",
     ownership: owned
       ? "owned-form"
-      : observation.root !== document && observation.root.contains(control)
+      : locallyScoped
         ? "locally-scoped"
         : "unowned",
     semantics: semanticSubmit ? "semantic-submit" : "activation",
