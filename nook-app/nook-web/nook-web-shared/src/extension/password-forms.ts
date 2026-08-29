@@ -15,12 +15,13 @@ import {
   findOneTimeCodeFields,
   findPasswordFields,
   findUsernameFields,
-  findPasskeyControl,
+  findPasskeyControls,
   hasAutocompleteToken,
   authenticationUsernameEvidence,
   isAuthUsernameField,
   pageHasManualCheckpoint,
   pageHasPasskeyControl,
+  PasskeyControlLookupKind,
   PasswordFormScopeKind,
 } from "./password-form-fields";
 import type {
@@ -34,6 +35,7 @@ export {
   findPasswordFields,
   findUsernameFields,
   findPasskeyControl,
+  findPasskeyControls,
   oneTimeCodeFieldSelectors,
   pageHasPasskeyControl,
   PasskeyControlLookupKind,
@@ -83,6 +85,7 @@ export type PasswordFormObservation = {
   root: ParentNode;
   formScope: PasswordFormScope;
   summary: PasswordFormSummary;
+  passkeyControl?: HTMLElement;
 };
 
 type AuthenticationObservationFactsRequest = {
@@ -337,7 +340,13 @@ function controlDestination({
 export function findWorkflowPasskeyControl(
   observation: PasswordFormObservation,
 ): PasskeyControlLookup {
-  return findPasskeyControl(scopedControlRoot(observation));
+  const controls = observation.passkeyControl
+    ? [observation.passkeyControl]
+    : findPasskeyControls(scopedControlRoot(observation));
+  const control = controls.find(isRenderedControl);
+  return control
+    ? { kind: PasskeyControlLookupKind.Found, control }
+    : { kind: PasskeyControlLookupKind.Absent };
 }
 
 function usernameEvidence(
@@ -534,36 +543,37 @@ export function summarizeAuthenticationWorkflowForms(): PasswordFormObservation[
     authUsernameFields.length +
     allOneTimeCodeFields.length;
   if (authFieldCount === 0) {
-    const passkeyControl = findPasskeyControl(root);
-    if (passkeyControl.kind === "absent") return [];
-    const owner =
-      passkeyControl.control instanceof HTMLButtonElement ||
-      passkeyControl.control instanceof HTMLInputElement
-        ? passkeyControl.control.form
-        : passkeyControl.control.closest("form");
-    const formScope: PasswordFormScope = owner
-      ? { kind: PasswordFormScopeKind.Owned, owner }
-      : { kind: PasswordFormScopeKind.Unowned };
-    let scopedRoot: ParentNode = owner ?? root;
-    if (!owner) {
-      const containerQuery: UnownedAuthenticationContainerQuery = {
-        field: passkeyControl.control,
-        root,
-      };
-      scopedRoot = nearestUnownedAuthContainer(containerQuery);
-    }
-    const nookTypedArgs0_13: Parameters<typeof summarizeRoot>[0] = {
-      kind: PasswordFormQueryKind.Scoped,
-      root: scopedRoot,
-      formScope,
-    };
-    return [
-      {
-        root: scopedRoot,
-        formScope,
-        summary: summarizeRoot(nookTypedArgs0_13),
-      },
-    ];
+    return findPasskeyControls(root)
+      .filter(isRenderedControl)
+      .map((passkeyControl) => {
+        const owner =
+          passkeyControl instanceof HTMLButtonElement ||
+          passkeyControl instanceof HTMLInputElement
+            ? passkeyControl.form
+            : passkeyControl.closest("form");
+        const formScope: PasswordFormScope = owner
+          ? { kind: PasswordFormScopeKind.Owned, owner }
+          : { kind: PasswordFormScopeKind.Unowned };
+        let scopedRoot: ParentNode = owner ?? root;
+        if (!owner) {
+          const containerQuery: UnownedAuthenticationContainerQuery = {
+            field: passkeyControl,
+            root,
+          };
+          scopedRoot = nearestUnownedAuthContainer(containerQuery);
+        }
+        const nookTypedArgs0_13: Parameters<typeof summarizeRoot>[0] = {
+          kind: PasswordFormQueryKind.Scoped,
+          root: scopedRoot,
+          formScope,
+        };
+        return {
+          root: scopedRoot,
+          formScope,
+          summary: summarizeRoot(nookTypedArgs0_13),
+          passkeyControl,
+        };
+      });
   }
 
   const forms = Array.from(

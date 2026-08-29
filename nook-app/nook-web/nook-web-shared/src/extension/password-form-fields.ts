@@ -384,21 +384,20 @@ export type PasskeyControlLookup =
   | { kind: PasskeyControlLookupKind.Absent }
   | { kind: PasskeyControlLookupKind.Found; control: HTMLElement };
 
-export function findPasskeyControl(
+export function findPasskeyControls(
   root: ParentNode = document,
-): PasskeyControlLookup {
+): HTMLElement[] {
   // Inputs with a WebAuthn autocomplete token remain credential fields. Only
   // marked or labeled activatable elements count as passkey controls.
-  const marked = root.querySelector?.("[data-nook-passkey-control]");
-  if (marked instanceof HTMLElement) {
-    return { kind: PasskeyControlLookupKind.Found, control: marked };
-  }
+  const marked = Array.from(
+    root.querySelectorAll?.<HTMLElement>("[data-nook-passkey-control]") ?? [],
+  );
   const controls = Array.from(
     root.querySelectorAll?.<HTMLElement>(
       'button, a[href], [role="button"], input[type="button"], input[type="submit"]',
     ) ?? [],
   );
-  for (const control of controls) {
+  const labeled = controls.filter((control) => {
     const labeled = (
       control.textContent ??
       control.getAttribute("aria-label") ??
@@ -406,9 +405,17 @@ export function findPasskeyControl(
       (control as HTMLInputElement).value ??
       ""
     ).trim();
-    if (labeled && looks_like_passkey_control_label(labeled)) {
-      return { kind: PasskeyControlLookupKind.Found, control };
-    }
+    return Boolean(labeled && looks_like_passkey_control_label(labeled));
+  });
+  return [...new Set([...marked, ...labeled])];
+}
+
+export function findPasskeyControl(
+  root: ParentNode = document,
+): PasskeyControlLookup {
+  const control = findPasskeyControls(root)[0];
+  if (control) {
+    return { kind: PasskeyControlLookupKind.Found, control };
   }
   return { kind: PasskeyControlLookupKind.Absent };
 }

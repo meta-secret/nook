@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import {
+  classify_companion_authentication_workflow_facts,
+  CompanionAuthenticationWorkflowMatchKind,
+  companion_authentication_workflow_match_kind,
+} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
   authenticationPageObservationFacts,
   fillLoginCredentials,
   fillOneTimeCode,
@@ -757,5 +762,53 @@ describe('passkey control detection', () => {
       expect(labeled.control.textContent).toContain('passkey')
     }
     expect(pageHasPasskeyControl()).toBe(true)
+  })
+
+  test('enumerates passkey-only candidates until Rust approves a safe control', () => {
+    document.body.innerHTML = `
+      <section id="account-settings">
+        <button type="button" data-nook-passkey-control>Delete passkey</button>
+      </section>
+      <section id="login">
+        <button type="button" data-nook-passkey-control>Use passkey</button>
+      </section>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(2)
+    const facts = observations.map((observation) =>
+      authenticationPageObservationFacts({
+        observation,
+        authenticatorSetupHint: false,
+        backupCodesHint: false,
+      }),
+    )
+    const detailedControls = facts.map(
+      ({ authenticator }) => authenticator.detailedPasskeyControl,
+    )
+    expect(detailedControls[0]).toMatchObject({
+      kind: 'observed',
+      observation: { label: expect.stringContaining('Delete passkey') },
+    })
+    expect(detailedControls[1]).toMatchObject({
+      kind: 'observed',
+      observation: { label: expect.stringContaining('Use passkey') },
+    })
+    const workflowMatch = classify_companion_authentication_workflow_facts({
+      observations: facts,
+    })
+    expect(companion_authentication_workflow_match_kind(workflowMatch)).toBe(
+      CompanionAuthenticationWorkflowMatchKind.Matched,
+    )
+    expect(
+      'snapshot' in workflowMatch
+        ? workflowMatch.snapshot.observationIndex
+        : undefined,
+    ).toBe(1)
+    const approved = findWorkflowPasskeyControl(observations[1]!)
+    expect(approved.kind).toBe(PasskeyControlLookupKind.Found)
+    if (approved.kind === PasskeyControlLookupKind.Found) {
+      expect(approved.control.textContent).toContain('Use passkey')
+    }
   })
 })
