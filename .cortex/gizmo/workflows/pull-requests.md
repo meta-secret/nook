@@ -337,17 +337,17 @@ and its team subagents:
 flowchart TD
   Z[0 Fetch origin/main] --> A[1 Branch + prepare PR]
   A --> I[2 Delegate team implementation]
-  I --> E[3 Format + push + open/update PR]
+  I --> CMT[3 Team returns committed handoff]
+  CMT --> E[4 Gizmo integrate + pre-push + push/update PR]
   E --> D{Validation-ready?}
-  D -->|no| X[4 Required relevant focused remote evidence]
-  D -->|yes| V[5 Explicit loom/pr validate]
-  X --> V
+  D -->|no| X[Required relevant focused remote evidence]
+  D -->|yes| V[Explicit loom/pr validate]
+  X --> D
   V --> F[6 Monitor applicable Nook PR checks on GHA]
   F --> G{Nook PR checks green?}
   G -->|no| H[7 Route finding to owner team]
-  H --> PUSH[8 Integrate fix + loom pre-push + push]
-  PUSH --> X
-  PUSH --> V
+  H --> PUSH[8 Gizmo integrates fix + pre-push + push]
+  PUSH --> D
   G -->|yes| C[9 Address comments]
   C --> SI[10 Complete substantial-task self-improvement]
   SI -->|promotion changed head| E

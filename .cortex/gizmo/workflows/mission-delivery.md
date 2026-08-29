@@ -142,6 +142,11 @@ Agent count never determines PR count.
     - Integrate the clean committed promotion handoff into the same PR.
     - If promotion changes the head, rerun pre-push hygiene through the owning
       teams, push, and obtain fresh exact-head hosted validation.
+    - When promotion changes the head, recollect every required team and
+      security verdict that is not explicitly head-stable.
+    - When promotion changes the head, issue the final integrated verdict for
+      that promoted exact head before readiness. Never carry a stale
+      pre-promotion verdict forward.
 11. **Finish delivery.**
     - Run the exact-head readiness audit only after required self-improvement.
     - Squash-merge when readiness succeeds.

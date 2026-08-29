@@ -128,8 +128,10 @@ Gizmo supplies a bounded task contract for that identity.
   authorities.
 - It requires an isolated workspace and verified handoff for write-capable
   work.
-- The worker runs required formatters and owns every resulting mutation inside
-  its allowed source or Cortex paths before committing the handoff.
+- The worker applies any task-scoped formatter named by its contract and owns
+  every resulting mutation inside its allowed source or Cortex paths.
+- The worker returns a verified committed handoff. It does not run integrated
+  pre-push hygiene, push, or dispatch remote review or validation.
 - It returns foreign-team dependencies to Gizmo.
 - It does not grant parent-owned lifecycle authority.
 
@@ -326,10 +328,10 @@ tasks.
 - **P1 hard rule:** Repository-authored automation uses TypeScript/Bun, Rust,
   and Taskfiles. It does not use Python.
 - Once an integrated implementation or correction is coherent, Gizmo runs
-  `task loom:pre-push`, then promptly pushes the head. Team workers run required
-  formatters and commit every mutation in their allowed source or Cortex paths.
-  Gizmo may commit deterministic integration-only state. It returns any new
-  team-owned formatter diff for a fresh team commit before reintegration.
+  `task loom:pre-push`, then promptly pushes the head. Ordinary workers have
+  already stopped at verified committed handoffs. Gizmo may commit
+  deterministic integration-only state. It returns any new team-owned
+  formatter diff for a fresh team commit before reintegration.
 - Treat `task loom:pre-push` as the only required local pre-push hygiene.
   Agents do not block a push on broad local builds, tests, e2e, container
   product gates, or duplicate local mirrors of hosted checks.

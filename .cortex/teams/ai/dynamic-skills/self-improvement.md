@@ -524,8 +524,10 @@ List existing authorities first. Name new files only when no authority exists.
 Before returning promotion and cleanup evidence to Gizmo:
 
 1. Run the focused checks for every promoted Cortex authority.
-2. Run `task loom:cortex-audit`.
-3. For a broad multi-family review, the legacy standalone reviewed read-only
+2. Run required formatters. Include every resulting mutation in the AI team's
+   allowed paths.
+3. Run `task loom:cortex-audit` against the formatted promotion tree.
+4. For a broad multi-family review, the legacy standalone reviewed read-only
    audit may run against the exact clean baseline:
 
    ```bash
@@ -536,13 +538,14 @@ Before returning promotion and cleanup evidence to Gizmo:
    Gizmo admission, does not prove the ordinary multi-team contract, and must
    not be used for implementation delegation.
 
-4. For a compiled workflow change, validate its dry run and focused behavior.
-5. Run required formatters and commit the coherent promotion handoff. Include
-   every resulting mutation in the AI team's allowed paths. Do not push it.
-6. Delete the local session file.
-7. Run `task loom:cortex-session-clean`.
-8. Confirm `git ls-files .cortex/.session` prints nothing.
-9. Return the exact commit, worker-focused proof, promotion, and cleanup
+5. For a compiled workflow change, validate its dry run and focused behavior.
+6. Commit the coherent audited promotion handoff. Do not push it. If any
+   formatter changes the tree after step 3, rerun `task loom:cortex-audit`
+   before committing.
+7. Delete the local session file.
+8. Run `task loom:cortex-session-clean`.
+9. Confirm `git ls-files .cortex/.session` prints nothing.
+10. Return the exact commit, worker-focused proof, promotion, and cleanup
    evidence to Gizmo.
 
 Do not add broad local builds, tests, e2e, container product gates, or duplicate
