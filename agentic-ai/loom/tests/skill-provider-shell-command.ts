@@ -94,7 +94,7 @@ export function mergeConditionalShellState([target, snapshot]: readonly [
     const before = snapshot.environment.get(name);
     if (after?.source === before?.source && after?.value === before?.value)
       continue;
-    target.environment.set(name, mergedWord([before, after]));
+    target.environment.set(name, mergedWord([before ?? false, after ?? false]));
   }
   const afterArguments = target.positionalArguments;
   const beforeArguments = snapshot.positionalArguments;
@@ -104,8 +104,8 @@ export function mergeConditionalShellState([target, snapshot]: readonly [
     if (!available) return;
     target.positionalArguments = [...available.keys()].map((index) =>
       mergedWord([
-        beforeArguments ? beforeArguments[index] : undefined,
-        afterArguments ? afterArguments[index] : undefined,
+        beforeArguments ? (beforeArguments[index] ?? false) : false,
+        afterArguments ? (afterArguments[index] ?? false) : false,
       ]),
     );
     return;
@@ -113,18 +113,23 @@ export function mergeConditionalShellState([target, snapshot]: readonly [
   const length = Math.max(afterArguments.length, beforeArguments.length);
   const merged: ShellWord[] = [];
   for (let index = 0; index < length; index += 1)
-    merged.push(mergedWord([beforeArguments[index], afterArguments[index]]));
+    merged.push(
+      mergedWord([
+        beforeArguments[index] ?? false,
+        afterArguments[index] ?? false,
+      ]),
+    );
   target.positionalArguments = merged;
 }
 
 function mergedWord([before, after]: readonly [
-  ShellWord | undefined,
-  ShellWord | undefined,
+  ShellWord | false,
+  ShellWord | false,
 ]): ShellWord {
   return {
     dynamic: true,
-    source: `${before?.source ?? ''}|${after?.source ?? ''}`,
-    value: `${before?.value ?? ''}|${after?.value ?? ''}`,
+    source: `${before ? before.source : ''}|${after ? after.source : ''}`,
+    value: `${before ? before.value : ''}|${after ? after.value : ''}`,
   };
 }
 
