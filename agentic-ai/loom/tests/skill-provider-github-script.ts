@@ -5,6 +5,7 @@ import type { ConfigurationNode } from './skill-provider-command-types.ts';
 import type { ConfigurationReference } from './skill-provider-config-types.ts';
 import { typescriptSubprocessCommands } from './skill-provider-typescript-subprocess.ts';
 import { workflowGithubScriptSources } from './skill-provider-workflow-commands.ts';
+import { githubScriptExecCommands } from './skill-provider-github-script-exec.ts';
 
 type GithubScriptReferenceRequest = {
   readonly importer: string;
@@ -54,7 +55,10 @@ export function githubScriptConfigurationReferences(
       path: `${request.importer}.github-script.ts`,
       source: normalized,
     };
-    const subprocesses = typescriptSubprocessCommands(subprocessInspection);
+    const subprocesses = [
+      ...typescriptSubprocessCommands(subprocessInspection),
+      ...githubScriptExecCommands(normalized),
+    ];
     const launches = subprocesses.flatMap((command) => {
       const shellInspection = {
         positionalArguments: request.positionalArguments,
