@@ -21,14 +21,12 @@ test("requiredPrCheckNames maps changed paths to repository-owned gates", () => 
     requiredPrCheckNames(["nook-app/nook-platform/.cargo/config.toml"]),
     ["Verify and preview"],
   );
-  assert.deepEqual(
-    requiredPrCheckNames(["preflight/Cargo.lock"]),
-    ["Verify and preview"],
-  );
-  assert.deepEqual(
-    requiredPrCheckNames(["agentic-ai/minds/Cargo.lock"]),
-    ["Rust ecosystem checks"],
-  );
+  assert.deepEqual(requiredPrCheckNames(["preflight/Cargo.lock"]), [
+    "Verify and preview",
+  ]);
+  assert.deepEqual(requiredPrCheckNames(["agentic-ai/minds/Cargo.lock"]), [
+    "Rust ecosystem checks",
+  ]);
   assert.deepEqual(
     requiredPrCheckNames(["nook-app/nook-web/nook-web-research/src/main.ts"]),
     ["Build and deploy research catalog"],
@@ -40,20 +38,23 @@ test("requiredPrCheckNames maps changed paths to repository-owned gates", () => 
     ]),
     ["Build and deploy research catalog", "Verify and preview"],
   );
-  assert.deepEqual(requiredPrWorkflows(["nook-app/nook-platform/nook-core/src/lib.rs"]), [
-    {
-      checkName: "Verify and preview",
-      requiredJobs: [
-        "Native Rust verification",
-        "WASM build and artifact",
-        "WASM Node tests",
-        "Web verification",
-        "Verify and preview",
-      ],
-      workflowFile: "pr.yml",
-      workflowName: "PR",
-    },
-  ]);
+  assert.deepEqual(
+    requiredPrWorkflows(["nook-app/nook-platform/nook-core/src/lib.rs"]),
+    [
+      {
+        checkName: "Verify and preview",
+        requiredJobs: [
+          "Native Rust verification",
+          "WASM build and artifact",
+          "WASM Node tests",
+          "Web verification",
+          "Verify and preview",
+        ],
+        workflowFile: "pr.yml",
+        workflowName: "PR",
+      },
+    ],
+  );
   assert.deepEqual(requiredPrWorkflows(["agentic-ai/minds/Cargo.lock"]), [
     {
       checkName: "Rust ecosystem checks",
@@ -92,7 +93,10 @@ test("createFixPr leaves the PR body free of automatic merge control markers", a
     assert.equal(prNumber, 347);
     assert.equal(createdBase, "codex/predecessor");
     assert.equal(createdBody, "## Summary\n\nOpen this PR for review.");
-    assert.doesNotMatch(createdBody, /nook-agent-managed|nook-agent-monitor-wake/);
+    assert.doesNotMatch(
+      createdBody,
+      /nook-agent-managed|nook-agent-monitor-wake/,
+    );
   } finally {
     if (!priorBody) {
       delete process.env.AGENT_PR_BODY;

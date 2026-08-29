@@ -418,11 +418,9 @@ export async function pushFixBranch(
         GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`,
       }
     : process.env;
-  await execFileAsync(
-    "git",
-    ["-C", repoRoot, "push", "-u", "origin", "HEAD"],
-    { env: authEnv },
-  );
+  await execFileAsync("git", ["-C", repoRoot, "push", "-u", "origin", "HEAD"], {
+    env: authEnv,
+  });
   log.info(`Pushed ${fixBranch}`);
 }
 

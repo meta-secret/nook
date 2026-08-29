@@ -466,7 +466,7 @@ jobs:
           script: |
             const pulls = await github.rest.pulls.list({
               ...context.repo,
-              state: 'open',
+              state: 'all',
               head: `${context.repo.owner}:${process.env.AGENT_BRANCH}`,
               per_page: 2,
             })
@@ -474,15 +474,43 @@ jobs:
               core.setFailed(`Multiple open PRs use standalone branch ${process.env.AGENT_BRANCH}`)
               return
             }
-            const pull = pulls.data[0]
-            if (pull && (pull.head.repo?.full_name !== `${context.repo.owner}/${context.repo.repo}` || pull.base.ref !== 'main')) {
+            const candidate = pulls.data[0]
+            if (candidate && (candidate.head.repo?.full_name !== `${context.repo.owner}/${context.repo.repo}` || candidate.base.ref !== 'main')) {
               core.setFailed('Existing standalone implementation PR has an unexpected repository or base')
               return
             }
-            core.setOutput('already_open', pull ? 'true' : 'false')
+            if (candidate) {
+              const { data: pull } = await github.rest.pulls.get({
+                ...context.repo,
+                pull_number: candidate.number,
+              })
+              if (pull.state === 'open') {
+                core.setOutput('terminal', 'true')
+                core.setOutput('terminal_reason', 'open')
+                return
+              }
+              if (pull.merged) {
+                core.setOutput('terminal', 'true')
+                core.setOutput('terminal_reason', 'merged')
+                return
+              }
+              core.setFailed(`Standalone implementation PR #${pull.number} was closed without merge; preserve it for explicit recovery`)
+              return
+            }
+            try {
+              await github.rest.repos.getBranch({
+                ...context.repo,
+                branch: process.env.AGENT_BRANCH,
+              })
+              core.setFailed(`Standalone implementation branch ${process.env.AGENT_BRANCH} exists without a PR; preserve it for explicit recovery`)
+              return
+            } catch (error) {
+              if (error.status !== 404) throw error
+            }
+            core.setOutput('terminal', 'false')
 
       - name: Prepare isolated implementation worktree
-        if: steps.task.outputs.ready == 'true' && steps.rerun.outputs.already_open != 'true'
+        if: steps.task.outputs.ready == 'true' && steps.rerun.outputs.terminal != 'true'
         env:
           IMPLEMENTATION_REF: ${{ steps.task.outputs.checkout_ref }}
           NOOK_TOKEN: ${{ secrets.NOOK_GITHUB_PAT }}
@@ -521,7 +549,7 @@ jobs:
           echo "IMPLEMENTATION_REPO_ROOT=$implementation_root" >> "$GITHUB_ENV"
 
       - name: Validate continuing GitHub owner
-        if: steps.task.outputs.ready == 'true' && steps.rerun.outputs.already_open != 'true'
+        if: steps.task.outputs.ready == 'true' && steps.rerun.outputs.terminal != 'true'
         uses: actions/github-script@v9
         env:
           CONTINUING_AGENT_OWNER: ${{ env.CONTINUING_AGENT_OWNER }}
@@ -539,7 +567,7 @@ jobs:
             }
 
       - name: Docker setup
-        if: steps.task.outputs.ready == 'true' && steps.rerun.outputs.already_open != 'true'
+        if: steps.task.outputs.ready == 'true' && steps.rerun.outputs.terminal != 'true'
         uses: ./.github/actions/nook-docker-setup
         with:
           registry-host: registry.dev.nokey.sh
@@ -547,21 +575,21 @@ jobs:
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
 
       - name: Setup Task
-        if: steps.task.outputs.ready == 'true' && steps.rerun.outputs.already_open != 'true'
+        if: steps.task.outputs.ready == 'true' && steps.rerun.outputs.terminal != 'true'
         uses: go-task/setup-task@v2
         with:
           version: 3.52.0
 
       - name: Expose Actions Node.js runtime
-        if: steps.task.outputs.ready == 'true' && steps.rerun.outputs.already_open != 'true'
+        if: steps.task.outputs.ready == 'true' && steps.rerun.outputs.terminal != 'true'
         uses: ./.github/actions/nook-node-setup
 
       - name: Build split Rust/WASM and web images
-        if: steps.task.outputs.ready == 'true' && steps.rerun.outputs.already_open != 'true'
+        if: steps.task.outputs.ready == 'true' && steps.rerun.outputs.terminal != 'true'
         run: task setup WASM_BUILD_MODE=prod
 
       - name: Verify trusted tooling and implementation worktree
-        if: steps.task.outputs.ready == 'true' && steps.rerun.outputs.already_open != 'true'
+        if: steps.task.outputs.ready == 'true' && steps.rerun.outputs.terminal != 'true'
         env:
           TRUSTED_WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: |
@@ -573,7 +601,7 @@ jobs:
 
       - name: Run task-planning agent
         id: planning
-        if: steps.task.outputs.ready == 'true' && steps.rerun.outputs.already_open != 'true'
+        if: steps.task.outputs.ready == 'true' && steps.rerun.outputs.terminal != 'true'
         env:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
           CI_AGENT_PROMPT_FILE: .github/prompts/agent-plan.md
@@ -584,7 +612,7 @@ jobs:
 
       - name: Validate and publish Workbench task plan
         id: plan
-        if: steps.planning.outcome == 'success' && steps.rerun.outputs.already_open != 'true'
+        if: steps.planning.outcome == 'success' && steps.rerun.outputs.terminal != 'true'
         uses: actions/github-script@v9
         env:
           ISSUE_PATH: ${{ steps.workbench.outputs.path }}
@@ -671,7 +699,7 @@ jobs:
             }
 
       - name: Materialize validated implementation plan
-        if: steps.plan.outcome == 'success' && steps.plan.outputs.authorization_blocked != 'true' && steps.rerun.outputs.already_open != 'true'
+        if: steps.plan.outcome == 'success' && steps.plan.outputs.authorization_blocked != 'true' && steps.rerun.outputs.terminal != 'true'
         env:
           EXPECTED_PLAN_SHA256: ${{ steps.plan.outputs.sha256 }}
         run: |
@@ -688,16 +716,17 @@ jobs:
 
       - name: Run sandboxed implementation agent
         id: agent_edit
-        if: steps.rerun.outputs.already_open == 'true' || (steps.plan.outcome == 'success' && steps.plan.outputs.authorization_blocked != 'true')
+        if: steps.rerun.outputs.terminal == 'true' || (steps.plan.outcome == 'success' && steps.plan.outputs.authorization_blocked != 'true')
         env:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
-          IMPLEMENTATION_ALREADY_OPEN: ${{ steps.rerun.outputs.already_open }}
+          IMPLEMENTATION_TERMINAL: ${{ steps.rerun.outputs.terminal }}
+          IMPLEMENTATION_TERMINAL_REASON: ${{ steps.rerun.outputs.terminal_reason }}
           REPO_ROOT: ${{ env.IMPLEMENTATION_REPO_ROOT }}
           WASM_BUILD_MODE: prod
         run: |
           set -euo pipefail
-          if [ "$IMPLEMENTATION_ALREADY_OPEN" = true ]; then
-            echo "Standalone implementation PR already exists; skipping rerun."
+          if [ "$IMPLEMENTATION_TERMINAL" = true ]; then
+            echo "Standalone implementation PR is $IMPLEMENTATION_TERMINAL_REASON; skipping rerun."
             exit 0
           fi
           plan="$REPO_ROOT/$WORKBENCH_PLAN_FILE"
@@ -710,12 +739,13 @@ jobs:
         id: implement
         if: steps.agent_edit.outcome == 'success'
         env:
-          IMPLEMENTATION_ALREADY_OPEN: ${{ steps.rerun.outputs.already_open }}
+          IMPLEMENTATION_TERMINAL: ${{ steps.rerun.outputs.terminal }}
+          IMPLEMENTATION_TERMINAL_REASON: ${{ steps.rerun.outputs.terminal_reason }}
           NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
           REPO_ROOT: ${{ env.IMPLEMENTATION_REPO_ROOT }}
         run: |
-          if [ "$IMPLEMENTATION_ALREADY_OPEN" = true ]; then
-            echo "Standalone implementation PR already exists; delivery is idempotently complete."
+          if [ "$IMPLEMENTATION_TERMINAL" = true ]; then
+            echo "Standalone implementation PR is $IMPLEMENTATION_TERMINAL_REASON; delivery is idempotently complete."
             exit 0
           fi
           task ci-agent:host:run CI_AGENT_CMD=deliver
@@ -723,7 +753,7 @@ jobs:
       - name: Publish Workbench result
         if: >-
           always() &&
-          steps.rerun.outputs.already_open != 'true' &&
+          steps.rerun.outputs.terminal != 'true' &&
           (steps.task.outputs.ready == 'true' ||
            steps.workbench.outputs.found == 'true')
         uses: actions/github-script@v9

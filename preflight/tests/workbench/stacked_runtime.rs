@@ -43,9 +43,29 @@ pub(super) fn assert_contract(workflow: &str) -> anyhow::Result<()> {
     let generic_agent = read("agentic-ai/ci-agent/src/main/main.ts");
     assert!(
         !generic_fix.contains("AgentIsolation.Strict")
-            && !generic_agent.contains("AgentIsolation.Strict"),
-        "strict implementation isolation must not change generic or weekly fix behavior"
+            && generic_agent.contains("await runFixAgent(config, prompt);")
+            && generic_agent.contains("await runFixAgent(config, prompt, AgentIsolation.Strict);"),
+        "planning and implementation must be strict without changing generic or weekly fix behavior"
     );
+    let plan_script = read(".github/scripts/ci-agent-plan.sh");
+    assert!(
+        plan_script.contains("CI_AGENT_CMD=plan") && !plan_script.contains("CI_AGENT_CMD=agent"),
+        "the unreviewed-source planner must select the explicit strict command"
+    );
+    for required in [
+        "state: 'all'",
+        "pull.state === 'open'",
+        "pull.merged",
+        "was closed without merge; preserve it for explicit recovery",
+        "github.rest.repos.getBranch",
+        "exists without a PR; preserve it for explicit recovery",
+        "core.setOutput('terminal', 'false')",
+    ] {
+        assert!(
+            workflow.contains(required),
+            "standalone rerun recovery is missing: {required}"
+        );
+    }
     let git = read("agentic-ai/ci-agent/src/main/git.ts");
     for required in [
         ".nook-workbench-plan.md",

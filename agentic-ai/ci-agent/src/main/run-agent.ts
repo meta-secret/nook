@@ -3,7 +3,11 @@ import { access, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { formatDuration, loadAgentWaitOptions, waitWithHeartbeat } from "./agent-wait.js";
+import {
+  formatDuration,
+  loadAgentWaitOptions,
+  waitWithHeartbeat,
+} from "./agent-wait.js";
 import type { CiAgentConfig } from "./config.js";
 import { finishInteractionLog, logInteractionUpdate } from "./log.js";
 import { createLogger } from "./logger.js";
@@ -29,9 +33,7 @@ const AGENT_ENV_ALLOWLIST = new Set([
   "WASM_BUILD_MODE",
 ]);
 
-export function sanitizeAgentEnvironment(
-  environment: NodeJS.ProcessEnv,
-): void {
+export function sanitizeAgentEnvironment(environment: NodeJS.ProcessEnv): void {
   for (const name of Object.keys(environment)) {
     if (!AGENT_ENV_ALLOWLIST.has(name)) delete environment[name];
   }
@@ -48,9 +50,12 @@ export function restoreHostEnvironment(
 async function createSandboxedAgent(config: CiAgentConfig) {
   try {
     await access(join(config.repoRoot, ".cursor", "sandbox.json"));
-    throw new Error("Implementation source must not provide Cursor sandbox policy");
+    throw new Error(
+      "Implementation source must not provide Cursor sandbox policy",
+    );
   } catch (error: unknown) {
-    if (error instanceof Error && !error.message.includes("ENOENT")) throw error;
+    if (error instanceof Error && !error.message.includes("ENOENT"))
+      throw error;
   }
   const sandboxHome = await mkdtemp(join(tmpdir(), "nook-agent-home-"));
   const cursorHome = join(sandboxHome, ".cursor");
@@ -114,12 +119,14 @@ export async function runFixAgent(
   // the local agent can spawn a shell; local child processes inherit env.
   // Cursor SDK 1.0.28 consumes the trusted per-user policy while
   // sandboxOptions makes unsupported hosts fail closed.
-  const hostEnvironment = isolation === AgentIsolation.Strict ? { ...process.env } : {};
+  const hostEnvironment =
+    isolation === AgentIsolation.Strict ? { ...process.env } : {};
   let sandboxHome: string | undefined;
   try {
-    const created = isolation === AgentIsolation.Strict
-      ? await createSandboxedAgent(config)
-      : { agent: await createLegacyAgent(config) };
+    const created =
+      isolation === AgentIsolation.Strict
+        ? await createSandboxedAgent(config)
+        : { agent: await createLegacyAgent(config) };
     const { agent } = created;
     if ("sandboxHome" in created) sandboxHome = created.sandboxHome;
     try {
@@ -138,7 +145,11 @@ export async function runFixAgent(
         throw err;
       }
 
-      const result = await waitWithHeartbeat("Agent", () => run.wait(), waitOptions);
+      const result = await waitWithHeartbeat(
+        "Agent",
+        () => run.wait(),
+        waitOptions,
+      );
       if (result.status === "error") {
         const detail = result.error?.message?.trim();
         throw new Error(

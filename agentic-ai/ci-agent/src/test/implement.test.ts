@@ -60,7 +60,10 @@ test("bounded implementation keeps the normal push, budget, and PR creation path
   const events: string[] = [];
   assert.equal(await preserve(deliveryArgs(events)), 73);
 
-  assert.equal(events.join(), "budget,push,verify-origin,verify-head,find-pr,create-pr");
+  assert.equal(
+    events.join(),
+    "budget,push,verify-origin,verify-head,find-pr,create-pr",
+  );
 });
 
 describe("resolveImplementPrTarget", () => {
@@ -151,12 +154,13 @@ describe("resolveImplementPrTarget", () => {
         startHeadSha: "b".repeat(40),
       }),
     );
-    assert.throws(() =>
-      resolveImplementPrTarget({
-        branch: "codex/feature-successor",
-        baseBranch: "codex/feature-predecessor",
-        kind: ImplementPrTargetKind.Stacked,
-      }),
+    assert.throws(
+      () =>
+        resolveImplementPrTarget({
+          branch: "codex/feature-successor",
+          baseBranch: "codex/feature-predecessor",
+          kind: ImplementPrTargetKind.Stacked,
+        }),
       /frozen PR and base SHA metadata/,
     );
   });

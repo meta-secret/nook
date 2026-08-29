@@ -31,7 +31,7 @@ cleanup() {
 }
 trap cleanup EXIT
 git -C "$IMPLEMENTATION_REPO_ROOT" worktree add --detach "$planning_root" HEAD
-REPO_ROOT="$planning_root" task ci-agent:host:run CI_AGENT_CMD=agent
+REPO_ROOT="$planning_root" task ci-agent:host:run CI_AGENT_CMD=plan
 plan_path="$planning_root/$WORKBENCH_PLAN_FILE"
 blocker_path="$planning_root/$WORKBENCH_SUMMARY_FILE"
 artifact_ready() {

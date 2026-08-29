@@ -16,8 +16,7 @@ const execFileAsync = promisify(execFile);
 
 describe("countAuthoredNumstat", () => {
   it("counts authored additions and deletions", () => {
-    const numstat =
-      "12\t3\tsrc/domain.ts\0" + "4\t5\ttests/domain.test.ts\0";
+    const numstat = "12\t3\tsrc/domain.ts\0" + "4\t5\ttests/domain.test.ts\0";
     assert.equal(countAuthoredNumstat(numstat), 24);
   });
 
@@ -80,12 +79,32 @@ describe("implementation working tree", () => {
       await writeFile(join(repoRoot, "README.md"), "base\n");
       await execFileAsync("git", ["-C", repoRoot, "add", "README.md"]);
       await execFileAsync("git", [
-        "-C", repoRoot, "-c", "user.name=test", "-c", "user.email=test@example.com",
-        "commit", "-m", "base",
+        "-C",
+        repoRoot,
+        "-c",
+        "user.name=test",
+        "-c",
+        "user.email=test@example.com",
+        "commit",
+        "-m",
+        "base",
       ]);
-      await writeFile(join(repoRoot, ".nook-workbench-plan.md"), "trusted plan\n");
-      await writeFile(join(repoRoot, ".nook-workbench-worklog.md"), "candidate log\n");
-      await execFileAsync("git", ["-C", repoRoot, "add", "-f", ".nook-workbench-plan.md", ".nook-workbench-worklog.md"]);
+      await writeFile(
+        join(repoRoot, ".nook-workbench-plan.md"),
+        "trusted plan\n",
+      );
+      await writeFile(
+        join(repoRoot, ".nook-workbench-worklog.md"),
+        "candidate log\n",
+      );
+      await execFileAsync("git", [
+        "-C",
+        repoRoot,
+        "add",
+        "-f",
+        ".nook-workbench-plan.md",
+        ".nook-workbench-worklog.md",
+      ]);
       assert.equal(await hasWorkingTreeChanges(repoRoot), false);
       await writeFile(join(repoRoot, "README.md"), "authored change\n");
       assert.equal(await hasWorkingTreeChanges(repoRoot), true);

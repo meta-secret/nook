@@ -96,8 +96,7 @@ function isValidBranch(branch: string): boolean {
   return branch
     .split("/")
     .every(
-      (component) =>
-        !component.startsWith(".") && !component.endsWith(".lock"),
+      (component) => !component.startsWith(".") && !component.endsWith(".lock"),
     );
 }
 
@@ -119,7 +118,9 @@ export function resolveImplementPrTarget(input: ImplementPrTargetInput) {
     throw new Error(`Unknown implement PR target kind: ${input.kind}`);
   }
   if (input.branch === input.baseBranch) {
-    throw new Error("Stacked implement PRs require a distinct live base branch");
+    throw new Error(
+      "Stacked implement PRs require a distinct live base branch",
+    );
   }
   if (
     !input.baseSha ||
@@ -133,7 +134,9 @@ export function resolveImplementPrTarget(input: ImplementPrTargetInput) {
     !input.prNumber ||
     !/^[1-9]\d*$/.test(input.prNumber)
   ) {
-    throw new Error("Stacked implement PRs require frozen PR and base SHA metadata");
+    throw new Error(
+      "Stacked implement PRs require frozen PR and base SHA metadata",
+    );
   }
   return {
     ...input,
@@ -170,7 +173,9 @@ async function nativeStacks(
       } as never,
     )) as NativeStack[];
   } catch {
-    throw new Error("GitHub native stack membership is unavailable during delivery");
+    throw new Error(
+      "GitHub native stack membership is unavailable during delivery",
+    );
   }
 }
 
@@ -185,7 +190,9 @@ async function assertContains(
     basehead: `${baseSha}...${headSha}`,
   });
   if (data.behind_by !== 0 || !["ahead", "identical"].includes(data.status)) {
-    throw new Error("Stacked successor no longer contains its frozen live base");
+    throw new Error(
+      "Stacked successor no longer contains its frozen live base",
+    );
   }
 }
 
@@ -205,18 +212,23 @@ export async function validateStackDeliveryState(args: {
   });
   if (
     pull.state !== "open" ||
-    pull.head.repo?.full_name !== `${args.repoRef.owner}/${args.repoRef.repo}` ||
+    pull.head.repo?.full_name !==
+      `${args.repoRef.owner}/${args.repoRef.repo}` ||
     pull.head.ref !== args.branch ||
     pull.head.sha !== args.startHeadSha ||
     pull.base.ref !== args.baseBranch ||
     pull.base.sha !== args.baseSha
   ) {
-    throw new Error("Stacked PR head or frozen live base changed before delivery");
+    throw new Error(
+      "Stacked PR head or frozen live base changed before delivery",
+    );
   }
 
   const matches = (await nativeStacks(args.octokit, args.repoRef))
     .map((stack) => {
-      const members = Array.isArray(stack.pull_requests) ? stack.pull_requests : [];
+      const members = Array.isArray(stack.pull_requests)
+        ? stack.pull_requests
+        : [];
       return {
         stack,
         members,
@@ -238,7 +250,9 @@ export async function validateStackDeliveryState(args: {
     members[index].head?.ref !== args.branch ||
     predecessor?.head?.ref !== args.predecessorBranch
   ) {
-    throw new Error("Stacked PR is no longer adjacent to its recorded predecessor");
+    throw new Error(
+      "Stacked PR is no longer adjacent to its recorded predecessor",
+    );
   }
 
   const { data: predecessorPull } = await args.octokit.rest.pulls.get({
@@ -271,7 +285,9 @@ export async function validateStackDeliveryState(args: {
       !predecessorPull.merge_commit_sha ||
       main.commit.sha !== args.baseSha
     ) {
-      throw new Error("Retargeted successor predecessor/main state changed before delivery");
+      throw new Error(
+        "Retargeted successor predecessor/main state changed before delivery",
+      );
     }
     const [{ data: merge }, { data: predecessorHead }] = await Promise.all([
       args.octokit.rest.repos.getCommit({
@@ -289,13 +305,25 @@ export async function validateStackDeliveryState(args: {
       merge.parents[0]?.sha !== predecessorPull.base.sha ||
       merge.commit.tree.sha !== predecessorHead.commit.tree.sha
     ) {
-      throw new Error("Retargeted predecessor is not an authenticated squash merge");
+      throw new Error(
+        "Retargeted predecessor is not an authenticated squash merge",
+      );
     }
-    await assertContains(args.octokit, args.repoRef, predecessorPull.merge_commit_sha, args.baseSha);
+    await assertContains(
+      args.octokit,
+      args.repoRef,
+      predecessorPull.merge_commit_sha,
+      args.baseSha,
+    );
   } else {
     throw new Error("Stacked successor has an invalid live base branch");
   }
-  await assertContains(args.octokit, args.repoRef, args.baseSha, args.startHeadSha);
+  await assertContains(
+    args.octokit,
+    args.repoRef,
+    args.baseSha,
+    args.startHeadSha,
+  );
 }
 
 function resolveTargetFromEnvironment() {
@@ -308,7 +336,9 @@ function resolveTargetFromEnvironment() {
     branch: agentBranch,
     baseBranch: process.env.AGENT_PR_BASE_BRANCH?.trim() || "main",
     baseSha: process.env.AGENT_PR_BASE_SHA?.trim(),
-    kind: process.env.AGENT_PR_TARGET_KIND?.trim() || ImplementPrTargetKind.Standalone,
+    kind:
+      process.env.AGENT_PR_TARGET_KIND?.trim() ||
+      ImplementPrTargetKind.Standalone,
     predecessorBranch: process.env.AGENT_PR_PREDECESSOR_BRANCH?.trim(),
     prNumber: process.env.AGENT_PR_NUMBER?.trim(),
     startHeadSha: process.env.AGENT_PR_START_HEAD_SHA?.trim(),
@@ -332,7 +362,9 @@ export async function runCiImplement(): Promise<void> {
     if (target.kind === ImplementPrTargetKind.Stacked) {
       throw new Error("Stacked continuation requires CURSOR_API_KEY");
     }
-    console.log("::warning::CURSOR_API_KEY is not set — skipping agent implement job.");
+    console.log(
+      "::warning::CURSOR_API_KEY is not set — skipping agent implement job.",
+    );
     return;
   }
   const config = loadedConfig.config;
@@ -341,7 +373,9 @@ export async function runCiImplement(): Promise<void> {
     if (target.kind === ImplementPrTargetKind.Stacked) {
       throw new Error("Stacked continuation produced a clean working tree");
     }
-    console.log("::warning::Agent finished but working tree is clean — nothing to push.");
+    console.log(
+      "::warning::Agent finished but working tree is clean — nothing to push.",
+    );
   }
 }
 
@@ -430,5 +464,7 @@ export async function runCiDeliver(): Promise<void> {
           }
         : undefined,
   });
-  log.info(`PR #${prNumber} opened; delivery verified and handed to the continuing owner`);
+  log.info(
+    `PR #${prNumber} opened; delivery verified and handed to the continuing owner`,
+  );
 }
