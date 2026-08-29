@@ -56,7 +56,7 @@ mod tests {
             semantic_submit_control_count: 0,
             source_origin: "https://login.example.test".to_owned(),
             form_identity: "login-form".to_owned(),
-            destination_identity: "/auth/login".to_owned(),
+            destination_identity: "https://login.example.test/auth/login".to_owned(),
             label: label.to_owned(),
         }
     }
@@ -77,7 +77,7 @@ mod tests {
         ));
 
         let mut unsafe_route = passkey_control("Use passkey");
-        unsafe_route.destination_identity = "/register".to_owned();
+        unsafe_route.destination_identity = "https://login.example.test/register".to_owned();
         let unsafe_candidate =
             AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(unsafe_route);
         assert!(!authentication_passkey_control_candidate_is_safe(
