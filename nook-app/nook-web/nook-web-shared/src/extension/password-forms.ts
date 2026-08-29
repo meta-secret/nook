@@ -927,7 +927,7 @@ export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
 
   const submitControls = Array.from(
     form.ownerDocument.querySelectorAll<LoginAdvanceControl>(
-      semanticSubmitControlSelector,
+      authenticationAdvanceControlSelector,
     ),
   ).filter((control) => control.form === form);
   const formWithinRequestRoot =
@@ -960,6 +960,10 @@ export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
       })
     : false;
   if (submitControl) {
+    if (!submitControl.matches(semanticSubmitControlSelector)) {
+      submitControl.click();
+      return true;
+    }
     const nookTypedArgs0_28: Parameters<typeof observeSubmit>[0] = {
       form,
       action: () => submitControl.click(),

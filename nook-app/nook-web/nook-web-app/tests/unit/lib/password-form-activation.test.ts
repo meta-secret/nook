@@ -17,6 +17,27 @@ afterEach(() => {
 })
 
 describe('classified login activation', () => {
+  test('activates the Rust-approved type-button instead of posting the form action', () => {
+    document.body.innerHTML = `
+      <form id="login" action="/account/delete">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button id="safe" type="button" formaction="/login">Sign in</button>
+      </form>
+    `
+    let activated = ''
+    document.querySelector('#safe')?.addEventListener('click', () => {
+      activated = 'safe'
+    })
+    document.querySelector('form')?.addEventListener('submit', (event) => {
+      event.preventDefault()
+      activated = 'form'
+    })
+
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
+    expect(activated).toBe('safe')
+  })
+
   test('advances a form-less username-only login whose page path is the destination', () => {
     window.history.replaceState({}, '', '/account/sign-in')
     document.body.innerHTML = `
