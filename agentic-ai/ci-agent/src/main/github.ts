@@ -651,6 +651,8 @@ export function isRepositoryStatusComment(
       trimmed.startsWith(
         "You have reached your Codex usage limits for code reviews.",
       )) ||
+    (isCodexReviewer(input.user) &&
+      trimmed.startsWith("<!-- codex-pull-request-review-summary -->")) ||
     (isCursorReviewer(input.user) &&
       trimmed.startsWith("<!-- BUGBOT_FREE_TIER_DISABLED_UPSELL -->"))
   );
