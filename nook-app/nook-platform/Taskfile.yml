@@ -1,6 +1,22 @@
 version: '3'
 
 tasks:
+  _local-rust:prepare:
+    internal: true
+    requires:
+      vars: [LOCAL_RUST_TASK]
+    vars:
+      LOCAL_RUST_REGISTRY: '{{default "0" .LOCAL_RUST_REGISTRY}}'
+    cmds:
+      - bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" "{{.LOCAL_RUST_TASK}}"
+      - |
+        case "{{.LOCAL_RUST_REGISTRY}}" in
+          0) ;;
+          1) task registry-cache:ensure ;;
+          *) echo "LOCAL_RUST_REGISTRY must be 0 or 1" >&2; exit 2 ;;
+        esac
+      - task: sccache:ensure
+
   rust:build:
     desc: Build the Rust workspace in Docker.
     deps:
@@ -101,16 +117,22 @@ tasks:
   _rust:test:run:
     internal: true
     desc: Run portable Rust crate tests via cargo-nextest (ci profile, no coverage gate).
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" _rust:test:run
     cmds:
       - cd "{{.PLATFORM_ROOT}}" && cargo nextest run -p nook-app-common -p nook-authenticator-domain -p nook-companion-core -p nook-companion-wasm -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --profile ci
 
   _rust:coverage:
     desc: Print portable Rust crate line coverage summary (no floor enforcement).
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" _rust:coverage
     cmds:
       - cd "{{.PLATFORM_ROOT}}" && cargo llvm-cov nextest --no-clean --profile ci -p nook-app-common -p nook-authenticator-domain -p nook-companion-core -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --summary-only
 
   _rust:coverage:check:
     desc: Run portable Rust crate coverage in Docker and let cargo-llvm-cov enforce the line floor.
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" _rust:coverage:check
     vars:
       FLOOR:
         sh: jq -r '.lines_percent' {{.APP_ROOT}}/nook-platform/nook-core/coverage-floor.json
@@ -122,6 +144,8 @@ tasks:
 
   _rust:coverage:update:
     desc: Print measured portable Rust crate line coverage as JSON so the floor can be bumped (apply on host).
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" _rust:coverage:update
     cmds:
       # Emit machine-readable coverage; --fail-under-lines with the current floor still gates, while
       # the JSON summary gives the exact measured line% to copy into {{.APP_ROOT}}/nook-platform/nook-core/coverage-floor.json.
@@ -129,6 +153,8 @@ tasks:
 
   _rust:format:
     desc: Format Rust projects, then print a host-applicable git diff (sealed image).
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" _rust:format
     cmds:
       - bash -c 'cd "{{.PLATFORM_ROOT}}" && cargo fmt --all'
       - >-
@@ -141,6 +167,8 @@ tasks:
 
   _rust:build:
     desc: Build the native Rust crates (wasm is built via _wasm:build).
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" _rust:build
     cmds:
       - cd "{{.PLATFORM_ROOT}}" && cargo build -p nook-app-common -p nook-authenticator-domain -p nook-companion-core -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log
 
@@ -151,6 +179,8 @@ tasks:
 
   _rust:lint:
     desc: Lint portable Rust crates on host and nook-wasm for wasm32.
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" _rust:lint
     cmds:
       - cd "{{.PLATFORM_ROOT}}" && cargo clippy -p nook-app-common -p nook-authenticator-domain -p nook-companion-core -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --all-targets -- -D warnings
       - cd "{{.PLATFORM_ROOT}}" && cargo clippy --release --target wasm32-unknown-unknown -p nook-wasm -p nook-companion-wasm -- -D warnings
@@ -276,8 +306,11 @@ tasks:
   setup:rust:
     desc: Build and load the source-sealed Rust/WASM image for explicit rust/wasm commands.
     dir: '{{.REPO_ROOT}}'
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" setup:rust
     deps:
-      - sccache:ensure
+      - task: _local-rust:prepare
+        vars: { LOCAL_RUST_TASK: setup:rust }
     env:
       GIT_COMMIT_ID: '{{.GIT_COMMIT_ID}}'
       WASM_BUILD_MODE: '{{.WASM_BUILD_MODE}}'
@@ -296,8 +329,11 @@ tasks:
   setup:rust:test:
     desc: Build the narrow source-sealed native Rust test image without unrelated WASM or coverage branches.
     dir: '{{.REPO_ROOT}}'
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" setup:rust:test
     deps:
-      - sccache:ensure
+      - task: _local-rust:prepare
+        vars: { LOCAL_RUST_TASK: setup:rust:test }
     cmds:
       - >-
         {{.DOCKER}} buildx bake
@@ -306,8 +342,11 @@ tasks:
   setup:rust:lint:
     desc: Build the source-sealed Rust lint image and export its compiled graph.
     dir: '{{.REPO_ROOT}}'
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" setup:rust:lint
     deps:
-      - sccache:ensure
+      - task: _local-rust:prepare
+        vars: { LOCAL_RUST_TASK: setup:rust:lint }
     cmds:
       - >-
         {{.DOCKER}} buildx bake
@@ -316,8 +355,11 @@ tasks:
   setup:rust:coverage:
     desc: Build the source-sealed Rust coverage image and export its compiled graph.
     dir: '{{.REPO_ROOT}}'
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" setup:rust:coverage
     deps:
-      - sccache:ensure
+      - task: _local-rust:prepare
+        vars: { LOCAL_RUST_TASK: setup:rust:coverage }
     cmds:
       - >-
         {{.DOCKER}} buildx bake
@@ -326,8 +368,11 @@ tasks:
   setup:rust:fast:
     desc: Build the manifest-keyed Rust/WASM development image for mounted source builds.
     dir: '{{.REPO_ROOT}}'
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" setup:rust:fast
     deps:
-      - sccache:ensure
+      - task: _local-rust:prepare
+        vars: { LOCAL_RUST_TASK: setup:rust:fast }
     cmds:
       - >-
         {{.DOCKER}} buildx bake
@@ -336,8 +381,11 @@ tasks:
   setup:rust:browser:
     desc: Build and load the on-demand Rust image with Chromium for browser-wasm tests.
     dir: '{{.REPO_ROOT}}'
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" setup:rust:browser
     deps:
-      - sccache:ensure
+      - task: _local-rust:prepare
+        vars: { LOCAL_RUST_TASK: setup:rust:browser }
     env:
       GIT_COMMIT_ID: '{{.GIT_COMMIT_ID}}'
       WASM_BUILD_MODE: '{{.WASM_BUILD_MODE}}'

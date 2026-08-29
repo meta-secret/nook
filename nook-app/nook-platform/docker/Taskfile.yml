@@ -57,6 +57,8 @@ tasks:
   registry-cache:publish:local-format-deps:
     internal: true
     desc: Publish source-free Rust dependency graphs completed by sealed local formatting.
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" registry-cache:publish:local-format-deps
     cmds:
       - |
         set -euo pipefail
@@ -118,6 +120,8 @@ tasks:
   docker:rust:task:
     internal: true
     desc: Run a Task target in the on-demand source-sealed Rust/WASM image.
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" docker:rust:task
     cmds:
       - >-
         {{.DOCKER}} run --rm
@@ -134,6 +138,8 @@ tasks:
   docker:rust:browser:task:
     internal: true
     desc: Run a Task target in the on-demand Rust/WASM image with Chromium.
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" docker:rust:browser:task
     cmds:
       - >-
         {{.DOCKER}} run --rm
@@ -150,6 +156,8 @@ tasks:
   docker:wasm:build:fast:
     internal: true
     # Mounted fast path uses a manifest-keyed image whose Cargo target lives outside the bind mount.
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" docker:wasm:build:fast
     cmds:
       - >-
         {{.DOCKER}} run --rm
@@ -186,9 +194,11 @@ tasks:
 
   docker:coverage:export:
     desc: Run coverage-gated portable Rust unit tests and export their artifacts (no app image export).
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" docker:coverage:export
     deps:
-      - sccache:ensure
-      - registry-cache:ensure
+      - task: _local-rust:prepare
+        vars: { LOCAL_RUST_TASK: docker:coverage:export, LOCAL_RUST_REGISTRY: "1" }
     vars:
       COVERAGE_OUT_DIR: '{{default (printf "%s/coverage/nook-core" .REPO_ROOT) .COVERAGE_OUT_DIR}}'
     cmds:
@@ -205,7 +215,11 @@ tasks:
 
   docker:ci:rust:export:
     desc: Run native Rust formatting/coverage on one CI runner and export only coverage artifacts.
-    deps: [sccache:ensure, registry-cache:ensure]
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" docker:ci:rust:export
+    deps:
+      - task: _local-rust:prepare
+        vars: { LOCAL_RUST_TASK: docker:ci:rust:export, LOCAL_RUST_REGISTRY: "1" }
     vars:
       CI_ARTIFACT_DIR: '{{default (printf "%s/ci-artifacts/rust" .REPO_ROOT) .CI_ARTIFACT_DIR}}'
     cmds:
@@ -219,7 +233,11 @@ tasks:
 
   docker:ci:wasm:export:
     desc: Run WASM clippy/build on a separate CI runner and export only the generated package.
-    deps: [sccache:ensure, registry-cache:ensure]
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" docker:ci:wasm:export
+    deps:
+      - task: _local-rust:prepare
+        vars: { LOCAL_RUST_TASK: docker:ci:wasm:export, LOCAL_RUST_REGISTRY: "1" }
     vars:
       CI_ARTIFACT_DIR: '{{default (printf "%s/ci-artifacts/wasm" .REPO_ROOT) .CI_ARTIFACT_DIR}}'
     cmds:
@@ -233,7 +251,11 @@ tasks:
 
   docker:ci:wasm:node-test:
     desc: Run WASM Node tests after the exact generated package is available to parallel consumers.
-    deps: [sccache:ensure, registry-cache:ensure]
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" docker:ci:wasm:node-test
+    deps:
+      - task: _local-rust:prepare
+        vars: { LOCAL_RUST_TASK: docker:ci:wasm:node-test, LOCAL_RUST_REGISTRY: "1" }
     cmds:
       - >-
         {{.DOCKER}} buildx bake
@@ -243,6 +265,8 @@ tasks:
 
   docker:ci:cache:publish:rust-base:
     desc: Publish only the shared rust-base toolchain scope from this job's builder.
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" docker:ci:cache:publish:rust-base
     env:
       GHA_CACHE_WRITE_ENABLED: "1"
     cmds:
@@ -258,6 +282,8 @@ tasks:
 
   docker:ci:cache:publish:native:
     desc: Export the already-verified native dependency/source graph from this job's builder.
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" docker:ci:cache:publish:native
     env:
       GHA_CACHE_WRITE_ENABLED: "1"
     cmds:
@@ -297,6 +323,8 @@ tasks:
 
   docker:ci:cache:publish:wasm:
     desc: Export verified ARC-local WASM source state; hosted CI owns the portable dependency ref.
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" docker:ci:cache:publish:wasm
     env:
       GHA_CACHE_WRITE_ENABLED: "1"
     cmds:
@@ -314,7 +342,11 @@ tasks:
 
   docker:rust-base:
     desc: Bake only rust-base (apt/mold/sccache). Read-only for Zot; never publishes.
-    deps: [sccache:ensure, registry-cache:ensure]
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" docker:rust-base
+    deps:
+      - task: _local-rust:prepare
+        vars: { LOCAL_RUST_TASK: docker:rust-base, LOCAL_RUST_REGISTRY: "1" }
     cmds:
       # Restore via rust-base-restore (has cache-from). Context target rust-base
       # omits cache-from so nested nightly/policy leaves are not orphaned.
@@ -326,7 +358,11 @@ tasks:
 
   docker:ecosystem:policy-tools:
     desc: Bake pinned deny/audit CLIs without exporting a runnable image.
-    deps: [sccache:ensure, registry-cache:ensure]
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" docker:ecosystem:policy-tools
+    deps:
+      - task: _local-rust:prepare
+        vars: { LOCAL_RUST_TASK: docker:ecosystem:policy-tools, LOCAL_RUST_REGISTRY: "1" }
     cmds:
       - task: docker:rust-base
       # Restore/build first without publishing. A second cache-only Bake below
@@ -346,6 +382,8 @@ tasks:
   docker:ecosystem:dependency-policy:run:
     internal: true
     desc: Run cargo-deny and cargo-audit for one workspace inside BuildKit.
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" docker:ecosystem:dependency-policy:run
     requires:
       vars: [WORKSPACE]
     cmds:
@@ -358,7 +396,11 @@ tasks:
 
   docker:ecosystem:dependency-policy:
     desc: Run cargo-deny and cargo-audit for every Rust workspace via its Taskfile.
-    deps: [sccache:ensure, registry-cache:ensure]
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" docker:ecosystem:dependency-policy
+    deps:
+      - task: _local-rust:prepare
+        vars: { LOCAL_RUST_TASK: docker:ecosystem:dependency-policy, LOCAL_RUST_REGISTRY: "1" }
     cmds:
       - task: docker:ecosystem:policy-tools
       - task: rust:dependency-policy
@@ -368,7 +410,11 @@ tasks:
 
   docker:ecosystem:deterministic:
     desc: Bake Proptest, Insta, and Loom on the sealed Rust dependency graph.
-    deps: [sccache:ensure, registry-cache:ensure]
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" docker:ecosystem:deterministic
+    deps:
+      - task: _local-rust:prepare
+        vars: { LOCAL_RUST_TASK: docker:ecosystem:deterministic, LOCAL_RUST_REGISTRY: "1" }
     cmds:
       # Context parents have no cache-to. Leaf writes only its own scoped ref when
       # publish enables GHA_CACHE_WRITE_ENABLED.
@@ -389,7 +435,11 @@ tasks:
 
   docker:ecosystem:kani:
     desc: Run Kani bounded proofs in a full-graph BuildKit cache scope.
-    deps: [sccache:ensure, registry-cache:ensure]
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" docker:ecosystem:kani
+    deps:
+      - task: _local-rust:prepare
+        vars: { LOCAL_RUST_TASK: docker:ecosystem:kani, LOCAL_RUST_REGISTRY: "1" }
     cmds:
       - task: docker:rust-base
       - >-
@@ -406,7 +456,11 @@ tasks:
 
   docker:ecosystem:fuzz:
     desc: Bake the cargo-fuzz smoke target with a bounded runtime.
-    deps: [sccache:ensure, registry-cache:ensure]
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" docker:ecosystem:fuzz
+    deps:
+      - task: _local-rust:prepare
+        vars: { LOCAL_RUST_TASK: docker:ecosystem:fuzz, LOCAL_RUST_REGISTRY: "1" }
     vars:
       FUZZ_SECONDS: '{{default "20" .FUZZ_SECONDS}}'
     cmds:
@@ -427,7 +481,11 @@ tasks:
 
   docker:ecosystem:dylint:
     desc: Bake repository Dylint lints on the sealed nightly ecosystem image.
-    deps: [sccache:ensure, registry-cache:ensure]
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" docker:ecosystem:dylint
+    deps:
+      - task: _local-rust:prepare
+        vars: { LOCAL_RUST_TASK: docker:ecosystem:dylint, LOCAL_RUST_REGISTRY: "1" }
     cmds:
       - task: docker:rust-base
       - >-

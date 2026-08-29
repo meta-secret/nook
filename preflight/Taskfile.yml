@@ -51,13 +51,17 @@ tasks:
   preflight:
     desc: Run all repository-wide invariant tests.
     cmds:
+      - task: preflight:local-rust-policy
       - task: preflight:test
 
   preflight:test:
     desc: Run the Rust preflight test suite in Docker.
     dir: '{{.REPO_ROOT}}'
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" preflight:test
     deps:
-      - sccache:ensure
+      - task: _local-rust:prepare
+        vars: { LOCAL_RUST_TASK: preflight:test }
     cmds:
       # rust-base is restored via Bake contexts; never let this target write it.
       - >-
@@ -74,11 +78,20 @@ tasks:
     cmds:
       - bash "{{.REPO_ROOT}}/.github/scripts/format-host-apply.test.sh"
 
+  preflight:local-rust-policy:
+    desc: Verify local Rust/WASM denial, CI allowance, indirect coverage, and compile-free formatting.
+    dir: '{{.REPO_ROOT}}'
+    cmds:
+      - bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.test.sh"
+
   preflight:export:
     desc: Export the static Rust preflight reporter for downstream CI jobs.
     dir: '{{.REPO_ROOT}}'
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" preflight:export
     deps:
-      - sccache:ensure
+      - task: _local-rust:prepare
+        vars: { LOCAL_RUST_TASK: preflight:export }
     requires:
       vars: [PREFLIGHT_OUTPUT_DIR]
     vars:
@@ -107,6 +120,8 @@ tasks:
   preflight:source-architecture:
     desc: Enforce source architecture and repository language boundaries.
     dir: '{{.ROOT_DIR}}'
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" preflight:source-architecture
     cmds:
       - >-
         cargo test
@@ -122,6 +137,8 @@ tasks:
   preflight:typescript-state:
     desc: Enforce authored TypeScript absence, enum, and state-modeling invariants.
     dir: '{{.ROOT_DIR}}'
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" preflight:typescript-state
     cmds:
       - >-
         cargo test
@@ -133,6 +150,8 @@ tasks:
   preflight:loom-contracts:
     desc: Enforce hosted Loom and skill-authority contracts.
     dir: '{{.ROOT_DIR}}'
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" preflight:loom-contracts
     cmds:
       - >-
         cargo test

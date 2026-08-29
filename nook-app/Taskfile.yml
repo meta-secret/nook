@@ -268,9 +268,11 @@ tasks:
   setup:
     desc: Build the slim linux/amd64 nook-web image via parallel Rust/WASM + web preparation.
     dir: '{{.REPO_ROOT}}'
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" setup
     deps:
-      - sccache:ensure
-      - registry-cache:ensure
+      - task: _local-rust:prepare
+        vars: { LOCAL_RUST_TASK: setup, LOCAL_RUST_REGISTRY: "1" }
     # Phase one builds Rust/WASM validation and web dependencies concurrently, exporting only the
     # generated WASM package + coverage files to a commit-scoped, invocation-isolated host directory.
     # Phase two consumes that tiny directory to build the web image; builder-wasm is never a
@@ -327,9 +329,11 @@ tasks:
   setup:web:focused:
     desc: Build the narrow source-sealed web image for focused checks without full verification or production builds.
     dir: '{{.REPO_ROOT}}'
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" setup:web:focused
     deps:
-      - sccache:ensure
-      - registry-cache:ensure
+      - task: _local-rust:prepare
+        vars: { LOCAL_RUST_TASK: setup:web:focused, LOCAL_RUST_REGISTRY: "1" }
     env:
       GIT_COMMIT_ID: '{{.GIT_COMMIT_ID}}'
       NOOK_EXTENSION_COMMIT: '{{.NOOK_EXTENSION_COMMIT}}'

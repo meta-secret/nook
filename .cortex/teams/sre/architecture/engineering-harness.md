@@ -2,7 +2,11 @@
 
 ## Overview
 
-All development tasks in Nook run containerized via `Taskfile`. This document specifies the Taskfile hierarchy, sealed container image architecture, BuildKit Docker cache model, Zot OCI registry scopes, and SeaweedFS `sccache` compiler caching.
+Nook exposes development tasks through `Taskfile`. Product execution is
+containerized on GitHub Actions; agent hosts retain only compile-free source
+work such as the shared formatter. This document specifies the Taskfile
+hierarchy, sealed container image architecture, BuildKit Docker cache model,
+Zot OCI registry scopes, and SeaweedFS `sccache` compiler caching.
 
 For the system overview and crate dependency flow, see [ARCHITECTURE.md](../../../shared/architecture/system.md).
 
@@ -40,11 +44,16 @@ For the system overview and crate dependency flow, see [ARCHITECTURE.md](../../.
 - There is no runtime bind mount on the common path.
 - The image is self-contained and reproducible.
 
-### Local-iteration exceptions
+### Human diagnostic exceptions
 
-- `task web:dev` and `task web:dev:fast` — Vite hot-reload over trusted `https://localhost:<port>`.
+- Rust/WASM Task paths fail closed on local hosts before dependency or BuildKit
+  setup begins.
+- A human may opt into an intentional diagnostic with
+  `NOOK_ALLOW_LOCAL_RUST_DIAGNOSTIC=1`; agents keep product validation remote.
+- `task web:dev` and `task web:dev:fast` require that diagnostic override while
+  their setup graph builds WASM.
 - TLS material lives under `~/.nook/https/` and is git-ignored.
-- `task wasm:build:fast` — mounted no-opt WASM regeneration.
+- `task wasm:build:fast` is a diagnostic-only mounted no-opt WASM regeneration.
 
 ### HTTPS setup
 
@@ -193,9 +202,10 @@ legacy registered `nook` runner is not used.
 - Trusted Main and Remote compiler vertices reuse bucket-scoped SeaweedFS `sccache` objects.
 - Reuse happens through stable BuildKit secret mounts.
 
-### Local On-Demand Images
+### Diagnostic On-Demand Images
 
-- Explicit `task rust:*` and `task wasm:*` commands load the source-sealed `nook-rust:local` image on demand.
+- Explicit human-diagnostic `task rust:*` and `task wasm:*` commands load the
+  source-sealed `nook-rust:local` image on demand only after the named override.
 - Browser-only WASM tests and mounted Vite development use `nook-rust-browser:local`.
 
 ### Web Lineage
@@ -221,7 +231,8 @@ legacy registered `nook` runner is not used.
 
 ## 6. `task setup` Solve Flow
 
-`task setup` has two solves:
+On GitHub Actions, and for an explicitly opted-in human diagnostic, `task setup`
+has two solves:
 
 ### First Solve
 
@@ -280,7 +291,9 @@ legacy registered `nook` runner is not used.
 
 ### Builder Selection
 
-- Normal local `task setup` and optional local `task ci:*` callers use the active Docker-context daemon builder (`desktop-linux` or `default`).
+- Explicit human-diagnostic `task setup` callers use the active Docker-context
+  daemon builder (`desktop-linux` or `default`). Ordinary agent execution is
+  denied before builder setup.
 - ARC Actions registers the node-local persistent BuildKit service as a remote
   Buildx builder.
 - Zot refs carry cache state between nodes and hosted runners.
@@ -385,6 +398,15 @@ legacy registered `nook` runner is not used.
   content-addressed, tool-only Docker image shared by all worktrees. The image
   formats the mounted working tree but must never contain project source,
   compile products, run tests, or use registry-cache paths.
+- **Remote-only Rust/WASM:** Direct Cargo/wasm-pack tasks and indirect
+  setup/export/cache producers share one fail-closed local policy. GitHub
+  Actions is allowed; source-sealed task containers receive only a constrained
+  internal second-stage allowance; human diagnostics require the explicit
+  `NOOK_ALLOW_LOCAL_RUST_DIAGNOSTIC=1` override.
+  - Task starts dependencies before it evaluates the parent task's
+    preconditions. `_local-rust:prepare` therefore runs the policy as its first
+    serialized command and only then reaches registry or sccache setup. Do not
+    replace that ordering with sibling dependencies.
 - **`dist` hand-off:** CI deploys isolated `dist/site`, Simple, and Sentinel artifacts to respective Cloudflare Pages branch aliases.
 
 ---

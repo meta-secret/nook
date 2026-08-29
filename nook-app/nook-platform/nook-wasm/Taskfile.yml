@@ -45,6 +45,8 @@ tasks:
 
   _wasm:build:run:
     internal: true
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" _wasm:build:run
     cmds:
       - >-
         sh -c '
@@ -87,6 +89,8 @@ tasks:
 
   _wasm:test:
     desc: Run release-profile wasm-bindgen tests in Node.
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" _wasm:test
     cmds:
       - cd "{{.PLATFORM_ROOT}}" && wasm-pack test --node --release nook-wasm
       - cd "{{.PLATFORM_ROOT}}" && wasm-pack test --node --release nook-companion-wasm
@@ -101,5 +105,7 @@ tasks:
 
   _wasm:test:browser:
     desc: Run nook-wasm wasm-bindgen tests in headless Chrome (manual/debug).
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" _wasm:test:browser
     cmds:
       - cd "{{.PLATFORM_ROOT}}" && wasm-pack test --chrome --headless nook-wasm --features browser-wasm-tests

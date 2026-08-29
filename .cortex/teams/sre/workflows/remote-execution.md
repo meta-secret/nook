@@ -19,8 +19,33 @@ ARC runners receive no:
 - Kata runtime.
 
 Untrusted fork and Dependabot lanes remain on GitHub-hosted runners. Agent
-machines remain available for editing, inspection, host-applied formatting, UI
-demos, and interactive servers.
+machines remain available for editing, inspection, host-applied formatting, and
+compile-free interactive work. Product Rust/WASM builds and their indirect
+setup paths run on GitHub Actions, not on agent machines.
+
+## Local Rust/WASM policy
+
+`.github/scripts/local-rust-policy.sh` fails closed before Task reaches Cargo,
+wasm-pack, or a Rust/WASM BuildKit producer. The policy covers direct
+`_rust:*` / `_wasm:*` selectors, app and web setup, preflight, Rust ecosystem
+jobs, and CI export/cache producers. `task format` is outside this boundary
+because its shared tool-only formatter never compiles product code.
+
+Allowed execution contexts are deliberately narrow:
+
+- GitHub Actions sets both `GITHUB_ACTIONS=true` and `CI=true`.
+- A source-sealed Rust task container may continue its already-authorized
+  second stage with `CI=1`, `/.dockerenv`, and `/meta-secret/nook` as its
+  working-tree prefix. This is an execution-internal allowance, not a host
+  override.
+- A human may run one intentional local diagnostic with
+  `NOOK_ALLOW_LOCAL_RUST_DIAGNOSTIC=1 task <selector>`. Agents do not use this
+  override for ordinary implementation or validation.
+
+Local denial prints the focused Remote catalog guidance when a matching
+selector exists and always points to exact-head `task pr:validate` for merge
+evidence. `.github/scripts/local-rust-policy.test.sh` proves default denial,
+the two allowed contexts, indirect caller coverage, and formatter isolation.
 
 ## Two remote surfaces
 
@@ -55,6 +80,12 @@ Dispatch one ARC-native Rust task:
 
 ```bash
 task remote TASK_NAME=rust:ci
+```
+
+Dispatch repository preflight without compiling its Rust harness locally:
+
+```bash
+task remote TASK_NAME=preflight
 ```
 
 Reuse one ARC job for a Kubernetes-native batch:

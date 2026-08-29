@@ -9,6 +9,10 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
 
 - **Unified Command Interface**: The root `Taskfile.yml` is the repo entrypoint. App workflows are included from `nook-app/Taskfile.yml`; cross-package app tasks live in `nook-app/ci/Taskfile.yml`, Docker tasks in `nook-app/nook-platform/docker/Taskfile.yml`, and web-family tasks in `nook-app/nook-web/Taskfile.yml` and package Taskfiles under `nook-web-extension/` / `nook-platform/`.
 - **Zero-Config Host**: No local installations of Rust toolchains, Bun, or wasm-pack should be required on the host system for builds.
+- **Remote-only Rust/WASM**: Agent hosts must not compile product Rust/WASM,
+  including through app, web, preflight, ecosystem, export, or cache-producer
+  Task paths. GitHub Actions is the normal execution surface. A human may use
+  `NOOK_ALLOW_LOCAL_RUST_DIAGNOSTIC=1` for one intentional diagnostic.
 - **Docker-Safe Dev Server**: Vite dev server must run in a container, bind ports correctly, and use the ignored locally trusted certificate to be accessible at `https://localhost:5173`.
 - **Reproducible dependencies:** Commit lockfiles for Cargo and JavaScript
   workspaces. Use exact manifest pins when the owning ecosystem and update
@@ -32,7 +36,9 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Normal `task` commands run that image directly.
   - `nook-app/target/` lives at the default in-tree path `/meta-secret/nook/nook-app/target`.
   - There is no `CARGO_TARGET_DIR` override and no `/opt`.
-  - The explicit mounted local-iteration tasks are `task web:dev` / `task web:dev:fast` (Vite hot-reload) and `task wasm:build:fast` (no-opt WASM regeneration).
+  - Mounted `task web:dev` / `task web:dev:fast` and `task wasm:build:fast`
+    are human diagnostic paths because they regenerate WASM; they require the
+    explicit local diagnostic override.
 - **Two independent image lineages.**
   - Rust/WASM owns Cargo, `target/`, coverage, and wasm-bindgen tests.
   - Web owns Bun, `node_modules`, and Playwright.
@@ -40,8 +46,8 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - The common `nook-web:local` image contains web tooling plus generated WASM/coverage and source.
   - It does not contain a Rust toolchain or `target/`.
   - Explicit Rust/WASM commands load `nook-rust:local` on demand.
-- **Host artifact handoff.**
-  - `task setup` builds Rust/WASM and web dependencies in parallel.
+- **Artifact handoff.**
+  - On GitHub Actions, `task setup` builds Rust/WASM and web dependencies in parallel.
   - It exports only generated WASM and coverage from a scratch target under `${TMPDIR}/nook-web-artifacts/<full-commit-sha>/<unique-invocation>/`.
   - It then passes that directory as the web solve's named context.
   - Commit and invocation scoping prevent concurrent builds from consuming each other's artifacts.
@@ -102,6 +108,8 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - A warm format never builds an image or installs per-worktree dependencies.
   - Formatting never compiles products, runs tests, or reads or publishes
     registry caches.
+  - A repository-owned non-Rust contract test denies direct and indirect local
+    Rust/WASM selectors and proves formatter isolation with fixtures.
   - Run it unconditionally before every push. Product validation remains remote.
   - `task rust:coverage:update` still prints a host-applicable diff.
 - **CI runners:**

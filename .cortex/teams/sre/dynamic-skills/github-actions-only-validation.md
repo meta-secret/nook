@@ -83,10 +83,11 @@ Applies to:
 
 Does not apply to:
 
-- Humans who choose to run local mirrors for their own feedback
+- A human's explicitly opted-in one-off diagnostic using
+  `NOOK_ALLOW_LOCAL_RUST_DIAGNOSTIC=1`; this is never ordinary validation
 - Workbench issue, worklog, and statistics commits
 - Read-only / question-only sessions with no commits
-- Interactive development servers that require retained local state
+- Compile-free interactive development servers that require retained local state
 
 ## Examples
 
@@ -101,6 +102,8 @@ Does not apply to:
 - [ ] Run `task loom:pre-push` unconditionally before every push.
 - [ ] Do not require `task check`, `task ci:pr`, full suites, builds, or e2e
       on the agent machine.
+- [ ] Do not set `NOOK_ALLOW_LOCAL_RUST_DIAGNOSTIC`; it is a human diagnostic
+      escape hatch, not an agent validation path.
 - [ ] Use `task remote` only for focused diagnosis that shortens feedback time.
 - [ ] Do not require focused tasks before complete validation.
 - [ ] Trigger complete validation explicitly with Loom or `task pr:validate`.
