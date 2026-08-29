@@ -87,15 +87,15 @@ function execCommand(request: ExecCallRequest): string {
     }
   }
   const source = parts.join(' ');
-  const cwd = execCwd([request.call.arguments[2], request.member]);
+  const cwd = execCwd([request.call.arguments[2] ?? false, request.member]);
   return cwd === false ? source : `cd ${shellQuote(cwd)} && ${source}`;
 }
 
 function execCwd([options, member]: readonly [
-  ts.Expression | undefined,
+  ts.Expression | false,
   string,
 ]): string | false {
-  if (!options) return false;
+  if (options === false) return false;
   if (!ts.isObjectLiteralExpression(options))
     throw new Error(`Dynamic github-script ${member} options are forbidden.`);
   let cwd: string | false = false;
