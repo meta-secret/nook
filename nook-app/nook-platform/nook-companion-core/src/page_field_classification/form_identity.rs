@@ -54,15 +54,12 @@ pub(super) fn identity_indicates_one_time_code_authentication_context(identity: 
 }
 
 pub(super) fn one_time_code_control_has_authentication_context(
-    authentication_username: AuthenticationUsernameEvidence,
+    _authentication_username: AuthenticationUsernameEvidence,
     form_identity: &str,
     destination_identity: &str,
     label: &str,
 ) -> bool {
-    matches!(
-        authentication_username,
-        AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
-    ) || [form_identity, destination_identity, label]
+    [form_identity, destination_identity, label]
         .into_iter()
         .any(identity_indicates_one_time_code_authentication_context)
 }

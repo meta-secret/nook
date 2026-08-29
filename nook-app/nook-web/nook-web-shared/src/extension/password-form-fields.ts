@@ -2,6 +2,7 @@ import { companionWasmReady } from "./companion-ready";
 import {
   NookLoginContextObservation,
   NookPageInputFieldObservation,
+  authentication_username_evidence,
   has_login_context,
   looks_like_email_verification_body,
   looks_like_manual_checkpoint_label,
@@ -10,6 +11,7 @@ import {
   looks_like_username_field,
   parse_page_input_type,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
+import type { AuthenticationUsernameEvidence } from "./nook-companion-wasm/nook_companion_wasm.js";
 
 void companionWasmReady;
 
@@ -255,6 +257,21 @@ function pageInputObservation({
     rawFieldIdentityText(field),
     loginContext,
   );
+}
+
+export function authenticationUsernameEvidence(
+  field: HTMLInputElement,
+): AuthenticationUsernameEvidence {
+  const observationRequest: Parameters<typeof pageInputObservation>[0] = {
+    field,
+    loginContext: hasLoginContext(field),
+  };
+  const observation = pageInputObservation(observationRequest);
+  try {
+    return authentication_username_evidence(observation);
+  } finally {
+    observation.free();
+  }
 }
 
 function looksLikeUsernameField(field: HTMLInputElement): boolean {

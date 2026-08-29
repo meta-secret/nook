@@ -821,7 +821,7 @@ mod tests {
                             source_origin: "https://example.test".to_owned(),
                             form_identity: String::new(),
                             destination_identity: String::new(),
-                            label: "Continue".to_owned(),
+                            label: "Sign in".to_owned(),
                         },
                     ),
                 ..Default::default()

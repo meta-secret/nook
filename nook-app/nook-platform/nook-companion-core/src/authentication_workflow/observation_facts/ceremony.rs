@@ -171,5 +171,18 @@ mod tests {
         assert!(!context("transaction-confirmation", "/transfer").is_authenticated(fields));
         assert!(!context("otp-challenge", "https://evil.example/verify").is_authenticated(fields));
         assert!(!context("otp-challenge", "/verify#%ZZ").is_authenticated(fields));
+
+        let neutral_username = AuthenticationCeremonyContextObservation {
+            authentication_username: AuthenticationUsernameEvidence::Explicit,
+            source_origin: "https://example.test".to_owned(),
+            form_identity: "verification".to_owned(),
+            destination_identity: "/verify".to_owned(),
+        };
+        let username_fields = AuthenticationFieldObservationFacts {
+            username_field_count: 1,
+            one_time_code_field_count: 1,
+            ..Default::default()
+        };
+        assert!(!neutral_username.is_authenticated(username_fields));
     }
 }

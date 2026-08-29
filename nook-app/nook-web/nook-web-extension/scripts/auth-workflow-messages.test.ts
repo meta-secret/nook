@@ -7,16 +7,33 @@ const validMessage = {
     origin: 'https://login.example.com',
     observations: [
       {
-        usernameFieldCount: 1,
-        manualCheckpointPresent: false,
-        authenticatorSetupHint: false,
-        backupCodesHint: false,
-        passkeyControlPresent: false,
-        matchingPasskeyAccountCount: 0,
-        currentPasswordFieldCount: 1,
-        newPasswordFieldCount: 0,
-        genericPasswordFieldCount: 0,
-        oneTimeCodeFieldCount: 0,
+        fields: {
+          usernameFieldCount: 1,
+          currentPasswordFieldCount: 1,
+          newPasswordFieldCount: 0,
+          genericPasswordFieldCount: 0,
+          oneTimeCodeFieldCount: 0,
+        },
+        ceremony: {
+          oneTimeCodeProgression: 'advance-control-required',
+          oneTimeCodeHandlerSignal: '',
+          authenticationContext: {
+            authenticationUsername: 'explicit',
+            sourceOrigin: 'https://login.example.com',
+            formIdentity: 'login',
+            destinationIdentity: '/login',
+          },
+          manualCheckpoint: 'absent',
+          advanceControl: 'absent',
+        },
+        authenticator: {
+          authenticatorSetup: 'absent',
+          backupCodes: 'absent',
+          passkeyControl: 'absent',
+          matchingPasskeyAccountCount: 0,
+          detailedPasskeyControl: { kind: 'absent' },
+        },
+        detailedAdvanceControl: { kind: 'absent' },
       },
     ],
   },
@@ -30,10 +47,11 @@ describe('authentication workflow snapshot messages', () => {
   test('rejects missing, negative, and fractional counts structurally', () => {
     const observationWithoutOneTimeCodeCount = {
       ...validMessage.payload.observations[0],
+      fields: { ...validMessage.payload.observations[0].fields },
     }
     expect(
       Reflect.deleteProperty(
-        observationWithoutOneTimeCodeCount,
+        observationWithoutOneTimeCodeCount.fields,
         'oneTimeCodeFieldCount',
       ),
     ).toBe(true)
@@ -56,7 +74,10 @@ describe('authentication workflow snapshot messages', () => {
             observations: [
               {
                 ...validMessage.payload.observations[0],
-                oneTimeCodeFieldCount: invalidCount,
+                fields: {
+                  ...validMessage.payload.observations[0].fields,
+                  oneTimeCodeFieldCount: invalidCount,
+                },
               },
             ],
           },
@@ -74,7 +95,10 @@ describe('authentication workflow snapshot messages', () => {
           observations: [
             {
               ...validMessage.payload.observations[0],
-              oneTimeCodeFieldCount: 101,
+              fields: {
+                ...validMessage.payload.observations[0].fields,
+                oneTimeCodeFieldCount: 101,
+              },
             },
           ],
         },
@@ -88,7 +112,10 @@ describe('authentication workflow snapshot messages', () => {
           observations: [
             {
               ...validMessage.payload.observations[0],
-              matchingPasskeyAccountCount: 101,
+              authenticator: {
+                ...validMessage.payload.observations[0].authenticator,
+                matchingPasskeyAccountCount: 101,
+              },
             },
           ],
         },

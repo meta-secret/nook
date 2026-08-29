@@ -1,21 +1,11 @@
-import type { PasswordFormSummary } from '../../../nook-web-shared/src/extension/password-forms'
-import type { AuthenticationWorkflowSnapshot } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import type {
+  AuthenticationAdvanceControlObservation,
+  AuthenticationDetailedAdvanceControlObservation,
+  AuthenticationPageObservationFacts,
+  AuthenticationWorkflowSnapshot,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
-export type AuthenticationPageObservationView = Pick<
-  PasswordFormSummary,
-  | 'usernameFieldCount'
-  | 'currentPasswordFieldCount'
-  | 'newPasswordFieldCount'
-  | 'genericPasswordFieldCount'
-  | 'oneTimeCodeFieldCount'
-  | 'manualCheckpointPresent'
-  | 'passkeyControlPresent'
-> & {
-  authenticatorSetupHint: boolean
-  backupCodesHint: boolean
-  matchingPasskeyAccountCount: number
-}
-
+export type AuthenticationPageObservationView = AuthenticationPageObservationFacts
 export type AuthenticationWorkflowSnapshotView = AuthenticationWorkflowSnapshot
 
 export enum AuthenticationWorkflowSnapshotMessageType {
@@ -30,6 +20,53 @@ export type AuthenticationWorkflowSnapshotMessage = {
     origin: string
     observations: AuthenticationPageObservationView[]
   }
+}
+
+function isCount(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0
+}
+
+function isAdvanceControl(
+  value: unknown,
+): value is AuthenticationAdvanceControlObservation {
+  if (!value || typeof value !== 'object') return false
+  const control = value as AuthenticationAdvanceControlObservation
+  return (
+    ['inert', 'actionable'].includes(control.actionability) &&
+    ['unowned', 'owned-form', 'locally-scoped'].includes(control.ownership) &&
+    ['activation', 'semantic-submit'].includes(control.semantics) &&
+    [
+      'absent',
+      'generic',
+      'standards-based-email',
+      'strong',
+      'explicit',
+    ].includes(control.authenticationUsername) &&
+    [
+      control.passwordFieldCount,
+      control.newPasswordFieldCount,
+      control.oneTimeCodeFieldCount,
+      control.semanticSubmitControlCount,
+    ].every(isCount) &&
+    [
+      control.sourceOrigin,
+      control.formIdentity,
+      control.destinationIdentity,
+      control.label,
+    ].every((identity) => typeof identity === 'string')
+  )
+}
+
+function isDetailedControl(
+  value: unknown,
+): value is AuthenticationDetailedAdvanceControlObservation {
+  if (!value || typeof value !== 'object' || !('kind' in value)) return false
+  if (value.kind === 'absent') return true
+  return (
+    value.kind === 'observed' &&
+    'observation' in value &&
+    isAdvanceControl(value.observation)
+  )
 }
 
 export function isAuthenticationWorkflowSnapshotMessage(
@@ -57,24 +94,32 @@ export function isAuthenticationWorkflowSnapshotMessage(
   return message.payload.observations.every((value) => {
     if (!value || typeof value !== 'object') return false
     const observation = value as AuthenticationPageObservationView
+    const { fields, ceremony, authenticator } = observation
+    const authenticationContext = ceremony?.authenticationContext
     return (
+      Boolean(fields && ceremony && authenticator) &&
       [
-        observation.usernameFieldCount,
-        observation.currentPasswordFieldCount,
-        observation.newPasswordFieldCount,
-        observation.genericPasswordFieldCount,
-        observation.oneTimeCodeFieldCount,
-      ].every(
-        (count) =>
-          typeof count === 'number' && Number.isInteger(count) && count >= 0,
+        fields.usernameFieldCount,
+        fields.currentPasswordFieldCount,
+        fields.newPasswordFieldCount,
+        fields.genericPasswordFieldCount,
+        fields.oneTimeCodeFieldCount,
+        authenticator.matchingPasskeyAccountCount,
+      ].every(isCount) &&
+      ['absent', 'present'].includes(ceremony.manualCheckpoint) &&
+      ['advance-control-required', 'auto-submit-observed'].includes(
+        ceremony.oneTimeCodeProgression,
       ) &&
-      typeof observation.manualCheckpointPresent === 'boolean' &&
-      typeof observation.authenticatorSetupHint === 'boolean' &&
-      typeof observation.backupCodesHint === 'boolean' &&
-      typeof observation.passkeyControlPresent === 'boolean' &&
-      typeof observation.matchingPasskeyAccountCount === 'number' &&
-      Number.isInteger(observation.matchingPasskeyAccountCount) &&
-      observation.matchingPasskeyAccountCount >= 0
+      typeof ceremony.oneTimeCodeHandlerSignal === 'string' &&
+      Boolean(authenticationContext) &&
+      typeof authenticationContext?.sourceOrigin === 'string' &&
+      typeof authenticationContext.formIdentity === 'string' &&
+      typeof authenticationContext.destinationIdentity === 'string' &&
+      ['absent', 'present'].includes(authenticator.authenticatorSetup) &&
+      ['absent', 'present'].includes(authenticator.backupCodes) &&
+      ['absent', 'present'].includes(authenticator.passkeyControl) &&
+      isDetailedControl(observation.detailedAdvanceControl) &&
+      isDetailedControl(authenticator.detailedPasskeyControl)
     )
   })
 }

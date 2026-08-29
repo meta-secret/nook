@@ -320,7 +320,8 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
       return false
     }
     const needsPasskeyLookup = message.payload.observations.some(
-      (observation) => observation.passkeyControlPresent,
+      (observation) =>
+        observation.authenticator.detailedPasskeyControl?.kind === 'observed',
     )
     void (
       needsPasskeyLookup
@@ -331,9 +332,14 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
         const observations = message.payload.observations.map(
           (observation) => ({
             ...observation,
-            matchingPasskeyAccountCount: observation.passkeyControlPresent
-              ? matchingPasskeyAccountCount
-              : 0,
+            authenticator: {
+              ...observation.authenticator,
+              matchingPasskeyAccountCount:
+                observation.authenticator.detailedPasskeyControl?.kind ===
+                'observed'
+                  ? matchingPasskeyAccountCount
+                  : 0,
+            },
           }),
         )
         const workflowInput: Parameters<

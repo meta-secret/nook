@@ -21,7 +21,7 @@ pub use authentication_advance_control::{
 pub use one_time_code_progression::looks_like_one_time_code_auto_submit_signal;
 
 pub(crate) fn one_time_code_ceremony_context_is_authenticated(
-    authentication_username: AuthenticationUsernameEvidence,
+    _authentication_username: AuthenticationUsernameEvidence,
     source_origin: &str,
     form_identity: &str,
     destination_identity: &str,
@@ -53,12 +53,46 @@ pub(crate) fn one_time_code_ceremony_context_is_authenticated(
     {
         return false;
     }
-    matches!(
-        authentication_username,
-        AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
-    ) || [form_identity, destination.path_identity.as_str()]
+    [form_identity, destination.path_identity.as_str()]
         .into_iter()
         .any(form_identity::identity_indicates_one_time_code_authentication_context)
+}
+
+pub(crate) fn authentication_passkey_control_is_safe(
+    observation: &AuthenticationAdvanceControlObservation,
+) -> bool {
+    if !observation.is_bounded()
+        || !matches!(
+            observation.actionability,
+            PageControlActionability::Actionable
+        )
+        || !matches!(
+            observation.ownership,
+            PageControlOwnership::OwnedForm | PageControlOwnership::LocallyScoped
+        )
+        || !looks_like_passkey_control_label(&observation.label)
+        || form_identity::form_identity_indicates_destructive_action(&observation.form_identity)
+        || form_identity::form_identity_indicates_non_authentication_account_management(
+            &observation.form_identity,
+        )
+    {
+        return false;
+    }
+    let Some(destination) = destination_identity::canonicalize_control_destination(
+        &observation.source_origin,
+        &observation.destination_identity,
+    ) else {
+        return false;
+    };
+    !form_identity::form_identity_indicates_destructive_action(&destination.route_identity)
+        && !form_identity::control_destination_indicates_non_authentication_route(
+            &destination.route_identity,
+        )
+        && !form_identity::destination_has_disallowed_action_or_provider(
+            &destination.route_identity,
+            false,
+            false,
+        )
 }
 
 use serde::{Deserialize, Serialize};
@@ -238,7 +272,18 @@ pub fn looks_like_one_time_code_field(field: &PageInputFieldObservation) -> bool
 #[must_use]
 pub fn looks_like_passkey_control_label(label: &str) -> bool {
     let identity = expand_identity_text(label);
-    contains_any_word(
+    !contains_any_word(
+        &identity,
+        &[
+            "delete",
+            "remove",
+            "revoke",
+            "unlink",
+            "disconnect",
+            "disable",
+            "deactivate",
+        ],
+    ) && contains_any_word(
         &identity,
         &[
             "pass key",

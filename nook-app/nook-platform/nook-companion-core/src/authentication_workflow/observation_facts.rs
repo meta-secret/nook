@@ -10,9 +10,13 @@ use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
 mod ceremony;
+mod passkey;
 pub use ceremony::{
     AuthenticationCeremonyContextObservation, AuthenticationCeremonyObservationFacts,
     AuthenticationDetailedAdvanceControlObservation,
+};
+pub use passkey::{
+    AuthenticationDetailedPasskeyControlObservation, AuthenticationPasskeyControlObservation,
 };
 
 /// Raw, non-secret field facts observed inside one authentication scope.
@@ -70,17 +74,8 @@ pub enum AuthenticationBackupCodesObservation {
     Present,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
-pub enum AuthenticationPasskeyControlObservation {
-    #[default]
-    Absent,
-    Present,
-}
-
 /// Raw, non-secret authenticator and passkey facts for one authentication scope.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct AuthenticationAuthenticatorObservationFacts {
@@ -88,10 +83,13 @@ pub struct AuthenticationAuthenticatorObservationFacts {
     pub backup_codes: AuthenticationBackupCodesObservation,
     pub passkey_control: AuthenticationPasskeyControlObservation,
     pub matching_passkey_account_count: u32,
+    /// Detailed evidence is classified in Rust; the legacy presence flag is ignored.
+    #[serde(default)]
+    pub detailed_passkey_control: AuthenticationDetailedPasskeyControlObservation,
 }
 
 impl AuthenticationAuthenticatorObservationFacts {
-    const fn enrollment_evidence(self) -> AuthenticationEnrollmentEvidence {
+    const fn enrollment_evidence(&self) -> AuthenticationEnrollmentEvidence {
         match (self.authenticator_setup, self.backup_codes) {
             (
                 AuthenticationAuthenticatorSetupObservation::Present,
@@ -112,25 +110,9 @@ impl AuthenticationAuthenticatorObservationFacts {
         }
     }
 
-    const fn passkey_evidence(self) -> AuthenticationPasskeyEvidence {
-        match (self.passkey_control, self.matching_passkey_account_count) {
-            (AuthenticationPasskeyControlObservation::Present, account_count)
-                if account_count > 0 =>
-            {
-                AuthenticationPasskeyEvidence::ControlAndVaultAccounts { account_count }
-            }
-            (AuthenticationPasskeyControlObservation::Present, _) => {
-                AuthenticationPasskeyEvidence::Control
-            }
-            (AuthenticationPasskeyControlObservation::Absent, account_count)
-                if account_count > 0 =>
-            {
-                AuthenticationPasskeyEvidence::VaultAccounts { account_count }
-            }
-            (AuthenticationPasskeyControlObservation::Absent, _) => {
-                AuthenticationPasskeyEvidence::Absent
-            }
-        }
+    fn passkey_evidence(&self) -> AuthenticationPasskeyEvidence {
+        self.detailed_passkey_control
+            .evidence(self.matching_passkey_account_count)
     }
 }
 
@@ -149,7 +131,9 @@ pub struct AuthenticationPageObservationFacts {
 
 impl AuthenticationPageObservationFacts {
     fn is_bounded(&self) -> bool {
-        self.ceremony.is_bounded() && self.detailed_advance_control.is_bounded()
+        self.ceremony.is_bounded()
+            && self.detailed_advance_control.is_bounded()
+            && self.authenticator.detailed_passkey_control.is_bounded()
     }
 
     #[must_use]
@@ -820,12 +804,6 @@ mod tests {
             detailed_one_time_code_control("auth", "", "Confirm"),
             detailed_one_time_code_control("", "/mfa/challenge", "Siguiente"),
             detailed_one_time_code_control("", "", "Verify TOTP"),
-            detailed_one_time_code_control_with_username(
-                "",
-                "",
-                "Siguiente",
-                crate::AuthenticationUsernameEvidence::Strong,
-            ),
         ] {
             assert_eq!(
                 contextual.clone().into_observation().advance_control,
@@ -843,6 +821,24 @@ mod tests {
                 crate::authentication_workflow::AuthenticationWorkflowKind::TotpChallenge
             );
         }
+
+        let neutral_username = detailed_one_time_code_control_with_username(
+            "verification",
+            "/verify",
+            "Confirm",
+            crate::AuthenticationUsernameEvidence::Explicit,
+        );
+        assert_eq!(
+            neutral_username.clone().into_observation().advance_control,
+            AuthenticationAdvanceControlEvidence::Absent
+        );
+        assert_eq!(
+            AuthenticationPageObservationFactsBatch {
+                observations: vec![neutral_username],
+            }
+            .classify(),
+            AuthenticationWorkflowMatch::NoMatch
+        );
 
         for evidence in [
             crate::AuthenticationUsernameEvidence::Generic,

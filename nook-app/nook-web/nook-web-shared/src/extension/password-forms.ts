@@ -2,13 +2,22 @@ import { companionWasmReady } from "./companion-ready";
 import {
   authentication_form_observation_priority,
   looks_like_login_advance_control_label,
+  strongest_authentication_username_evidence,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
-import type { AuthenticationPageObservation } from "./nook-companion-wasm/nook_companion_wasm.js";
+import type {
+  AuthenticationAdvanceControlObservation,
+  AuthenticationDetailedPasskeyControlObservation,
+  AuthenticationPageObservation,
+  AuthenticationPageObservationFacts,
+  AuthenticationUsernameEvidence,
+} from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
   findOneTimeCodeFields,
   findPasswordFields,
   findUsernameFields,
+  findPasskeyControl,
   hasAutocompleteToken,
+  authenticationUsernameEvidence,
   isAuthUsernameField,
   pageHasManualCheckpoint,
   pageHasPasskeyControl,
@@ -73,6 +82,12 @@ export type PasswordFormObservation = {
   summary: PasswordFormSummary;
 };
 
+type AuthenticationObservationFactsRequest = {
+  observation: PasswordFormObservation;
+  authenticatorSetupHint: boolean;
+  backupCodesHint: boolean;
+};
+
 type NativeInputValueMutation = {
   input: HTMLInputElement;
   value: string;
@@ -94,7 +109,7 @@ export type PasswordFormScopeQuery =
 type PasswordFormSummaryRequest = PasswordFormScopeQuery;
 
 type UnownedAuthenticationContainerQuery = {
-  field: HTMLInputElement;
+  field: HTMLElement;
   root: ParentNode;
 };
 
@@ -219,6 +234,213 @@ function passwordFormPriority({ summary }: PasswordFormObservation): number {
   return authentication_form_observation_priority(observation);
 }
 
+function scopedControlRoot({ root, formScope }: PasswordFormObservation): ParentNode {
+  return formScope.kind === PasswordFormScopeKind.Owned
+    ? formScope.owner
+    : root;
+}
+
+function controlLabel(control: HTMLElement): string {
+  return [
+    control.textContent ?? "",
+    control.getAttribute("aria-label") ?? "",
+    control.getAttribute("title") ?? "",
+    (control as HTMLInputElement).value ?? "",
+  ].join(" ");
+}
+
+function formIdentity({ root, formScope }: PasswordFormObservation): string {
+  const owner =
+    formScope.kind === PasswordFormScopeKind.Owned ? formScope.owner : root;
+  return owner instanceof Element
+    ? [
+        owner.id,
+        owner.className,
+        owner.getAttribute("name") ?? "",
+        owner.getAttribute("role") ?? "",
+      ].join(" ")
+    : "";
+}
+
+function formDestination({ formScope }: PasswordFormObservation): string {
+  return formScope.kind === PasswordFormScopeKind.Owned
+    ? (formScope.owner.getAttribute("action") ?? "")
+    : "";
+}
+
+interface ControlDestinationRequest {
+  control: HTMLElement;
+  formScope: PasswordFormScope;
+}
+
+function controlDestination({
+  control,
+  formScope,
+}: ControlDestinationRequest): string {
+  return (
+    control.getAttribute("formaction") ??
+    control.getAttribute("href") ??
+    (formScope.kind === PasswordFormScopeKind.Owned
+      ? formScope.owner.getAttribute("action")
+      : "") ??
+    ""
+  );
+}
+
+function usernameEvidence(
+  observation: PasswordFormObservation,
+): AuthenticationUsernameEvidence {
+  const usernameQuery: Parameters<typeof findUsernameFields>[0] = {
+    root: observation.root,
+    formScope: observation.formScope,
+  };
+  const evidence = findUsernameFields(usernameQuery).map(
+    authenticationUsernameEvidence,
+  );
+  const evidenceBatch: Parameters<
+    typeof strongest_authentication_username_evidence
+  >[0] = { evidence };
+  return strongest_authentication_username_evidence(evidenceBatch);
+}
+
+interface PageControlObservationRequest {
+  observation: PasswordFormObservation;
+  control: HTMLElement;
+  authenticationUsername: AuthenticationUsernameEvidence;
+}
+
+function pageControlObservation({
+  observation,
+  control,
+  authenticationUsername,
+}: PageControlObservationRequest): AuthenticationAdvanceControlObservation {
+  const root = scopedControlRoot(observation);
+  const semanticSubmitControls = root.querySelectorAll(
+    'button[type="submit"], input[type="submit"], button:not([type])',
+  );
+  const semanticSubmit = control.matches(
+    'button[type="submit"], input[type="submit"], button:not([type])',
+  );
+  const owned =
+    observation.formScope.kind === PasswordFormScopeKind.Owned &&
+    observation.formScope.owner.contains(control);
+  const destinationRequest: ControlDestinationRequest = {
+    control,
+    formScope: observation.formScope,
+  };
+  const destinationIdentity = controlDestination(destinationRequest);
+  return {
+    actionability:
+      (control as HTMLButtonElement).disabled ||
+      control.getAttribute("aria-disabled") === "true"
+        ? "inert"
+        : "actionable",
+    ownership: owned
+      ? "owned-form"
+      : observation.root !== document && observation.root.contains(control)
+        ? "locally-scoped"
+        : "unowned",
+    semantics: semanticSubmit ? "semantic-submit" : "activation",
+    authenticationUsername,
+    passwordFieldCount: observation.summary.passwordFieldCount,
+    newPasswordFieldCount: observation.summary.newPasswordFieldCount,
+    oneTimeCodeFieldCount: observation.summary.oneTimeCodeFieldCount,
+    semanticSubmitControlCount: semanticSubmitControls.length,
+    sourceOrigin: location.origin,
+    formIdentity: formIdentity(observation),
+    destinationIdentity,
+    label: controlLabel(control),
+  };
+}
+
+/** Collect browser facts only; Rust owns every workflow and control decision. */
+export function authenticationPageObservationFacts({
+  observation,
+  authenticatorSetupHint,
+  backupCodesHint,
+}: AuthenticationObservationFactsRequest): AuthenticationPageObservationFacts {
+  const controlRoot = scopedControlRoot(observation);
+  const authenticationUsername = usernameEvidence(observation);
+  const advanceControl =
+    controlRoot.querySelector<HTMLElement>(
+      'button[type="submit"], input[type="submit"], button:not([type])',
+    ) ?? controlRoot.querySelector<HTMLElement>('button[type="button"]');
+  const passkeyControl = findPasskeyControl(controlRoot);
+  const oneTimeCodeQuery: Parameters<typeof findOneTimeCodeFields>[0] = {
+    root: observation.root,
+    formScope: observation.formScope,
+  };
+  const oneTimeCodeHandlerSignal = findOneTimeCodeFields(oneTimeCodeQuery)
+    .flatMap((field) => [
+      field.getAttribute("oninput") ?? "",
+      field.getAttribute("onchange") ?? "",
+    ])
+    .join(" ");
+  let detailedAdvanceControl: AuthenticationPageObservationFacts["detailedAdvanceControl"] =
+    { kind: "absent" };
+  if (advanceControl) {
+    const advanceControlRequest: PageControlObservationRequest = {
+      observation,
+      control: advanceControl,
+      authenticationUsername,
+    };
+    detailedAdvanceControl = {
+      kind: "observed",
+      observation: pageControlObservation(advanceControlRequest),
+    };
+  }
+  let detailedPasskeyControl: AuthenticationDetailedPasskeyControlObservation =
+    { kind: "absent" };
+  if (passkeyControl.kind === "found") {
+    const passkeyControlRequest: PageControlObservationRequest = {
+      observation,
+      control: passkeyControl.control,
+      authenticationUsername,
+    };
+    detailedPasskeyControl = {
+      kind: "observed",
+      observation: pageControlObservation(passkeyControlRequest),
+    };
+  }
+  const contextObservation =
+    "observation" in detailedAdvanceControl
+      ? detailedAdvanceControl.observation
+      : undefined;
+  return {
+    fields: {
+      usernameFieldCount: observation.summary.usernameFieldCount,
+      currentPasswordFieldCount: observation.summary.currentPasswordFieldCount,
+      newPasswordFieldCount: observation.summary.newPasswordFieldCount,
+      genericPasswordFieldCount: observation.summary.genericPasswordFieldCount,
+      oneTimeCodeFieldCount: observation.summary.oneTimeCodeFieldCount,
+    },
+    ceremony: {
+      oneTimeCodeProgression: "advance-control-required",
+      oneTimeCodeHandlerSignal,
+      authenticationContext: {
+        authenticationUsername,
+        sourceOrigin: location.origin,
+        formIdentity: contextObservation?.formIdentity ?? formIdentity(observation),
+        destinationIdentity:
+          contextObservation?.destinationIdentity ?? formDestination(observation),
+      },
+      manualCheckpoint: observation.summary.manualCheckpointPresent
+        ? "present"
+        : "absent",
+      advanceControl: "absent",
+    },
+    authenticator: {
+      authenticatorSetup: authenticatorSetupHint ? "present" : "absent",
+      backupCodes: backupCodesHint ? "present" : "absent",
+      passkeyControl:
+        passkeyControl.kind === "found" ? "present" : "absent",
+      matchingPasskeyAccountCount: 0,
+      detailedPasskeyControl,
+    },
+    detailedAdvanceControl,
+  };
+}
+
 function nearestUnownedAuthContainer({
   field,
   root,
@@ -255,19 +477,33 @@ export function summarizeAuthenticationWorkflowForms(): PasswordFormObservation[
     authUsernameFields.length +
     allOneTimeCodeFields.length;
   if (authFieldCount === 0) {
-    if (!pageHasPasskeyControl(root)) return [];
-    const nookTypedArgs0_2: PasswordFormScope = {
-      kind: PasswordFormScopeKind.Unowned,
-    };
+    const passkeyControl = findPasskeyControl(root);
+    if (passkeyControl.kind === "absent") return [];
+    const owner =
+      passkeyControl.control instanceof HTMLButtonElement ||
+      passkeyControl.control instanceof HTMLInputElement
+        ? passkeyControl.control.form
+        : passkeyControl.control.closest("form");
+    const formScope: PasswordFormScope = owner
+      ? { kind: PasswordFormScopeKind.Owned, owner }
+      : { kind: PasswordFormScopeKind.Unowned };
+    let scopedRoot: ParentNode = owner ?? root;
+    if (!owner) {
+      const containerQuery: UnownedAuthenticationContainerQuery = {
+        field: passkeyControl.control,
+        root,
+      };
+      scopedRoot = nearestUnownedAuthContainer(containerQuery);
+    }
     const nookTypedArgs0_13: Parameters<typeof summarizeRoot>[0] = {
       kind: PasswordFormQueryKind.Scoped,
-      root,
-      formScope: nookTypedArgs0_2,
+      root: scopedRoot,
+      formScope,
     };
     return [
       {
-        root,
-        formScope: { kind: PasswordFormScopeKind.Unowned },
+        root: scopedRoot,
+        formScope,
         summary: summarizeRoot(nookTypedArgs0_13),
       },
     ];
