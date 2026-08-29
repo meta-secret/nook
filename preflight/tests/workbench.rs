@@ -582,7 +582,7 @@ fn feature_slice_gizmos_are_passive_workbench_records() {
 }
 
 #[test]
-fn pr_workbench_suite_loads_gizmo_mapping_tests() {
+fn pr_workbench_suite_loads_split_contract_tests() {
     let pr_workflow = read(".github/workflows/pr.yml");
     let pr_suite = read(".github/scripts/workbench-records.test.cjs");
     let mapping_suite = read(".github/scripts/workbench-gizmo-mapping.test.cjs");
@@ -594,6 +594,10 @@ fn pr_workbench_suite_loads_gizmo_mapping_tests() {
     assert!(
         pr_suite.contains("require('./workbench-gizmo-mapping.test.cjs')"),
         "the PR-invoked Workbench suite must load Gizmo mapping tests"
+    );
+    assert!(
+        pr_suite.contains("require('./workbench-publish.test.cjs')"),
+        "the PR-invoked Workbench suite must load publisher tests"
     );
     assert!(
         mapping_suite.contains("rejects one-PR delivery with multiple Gizmos")

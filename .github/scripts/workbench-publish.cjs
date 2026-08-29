@@ -15,6 +15,27 @@ const SourceTaskFileKind = Object.freeze({
   Present: 'present',
 })
 
+function parsePlanFrontmatterGizmoId(content) {
+  const frontmatterMatch = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(content)
+  if (!frontmatterMatch) {
+    return { kind: 'invalid', message: 'missing YAML frontmatter' }
+  }
+  const gizmoIdRows = [
+    ...frontmatterMatch[1].matchAll(/^gizmo_id:\s*(.*?)\s*$/gm),
+  ]
+  if (gizmoIdRows.length !== 1) {
+    return {
+      kind: 'invalid',
+      message: 'YAML frontmatter requires exactly one gizmo_id',
+    }
+  }
+  const value = gizmoIdRows[0][1].trim()
+  if (value === 'null' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value)) {
+    return { kind: 'invalid', message: 'YAML frontmatter gizmo_id is invalid' }
+  }
+  return { kind: 'valid', value }
+}
+
 const repository =
   process.env.NOOK_WORKBENCH_REPOSITORY || 'meta-secret/nook-workbench'
 const expectedSha = process.env.NOOK_WORKBENCH_EXPECTED_SHA?.trim()
@@ -78,6 +99,21 @@ if (remotePath.startsWith('plans/')) {
   })
   if (rejection) {
     console.error(`Refusing invalid Workbench plan: ${rejection}`)
+    process.exit(7)
+  }
+  const currentGizmoId =
+    /^- Current Gizmo ID:\s*([a-z0-9]+(?:-[a-z0-9]+)*)\s*$/m.exec(
+      localContent,
+    )?.[1] || ''
+  const frontmatterGizmoId = parsePlanFrontmatterGizmoId(localContent)
+  if (frontmatterGizmoId.kind === 'invalid') {
+    console.error(`Refusing invalid Workbench plan: ${frontmatterGizmoId.message}`)
+    process.exit(7)
+  }
+  if (frontmatterGizmoId.value !== currentGizmoId) {
+    console.error(
+      'Refusing invalid Workbench plan: YAML frontmatter gizmo_id must match the validated Current Gizmo ID',
+    )
     process.exit(7)
   }
 }
