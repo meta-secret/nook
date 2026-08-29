@@ -317,6 +317,24 @@ invoke(holder);`),
   ).toEqual([]);
 });
 
+test('fails closed on execution capabilities nested in constructor arguments', () => {
+  for (const source of [
+    "import {spawnSync} from 'node:child_process'; new Holder({tool:{run:spawnSync}});",
+    'new Holder([[Bun.spawn]]);',
+    'const tools={worker:Worker}; new Holder({tools});',
+  ])
+    expect(() => extract(source)).toThrow(
+      'Subprocess capability passed to unsupported call',
+    );
+  expect(
+    extract(`
+const spawnSync=()=>{};
+const Bun={spawn(){}};
+class Worker {}
+new Holder({nested:[spawnSync,Bun.spawn,Worker]});`),
+  ).toEqual([]);
+});
+
 test('propagates subprocess capability through exact Node promisify', () => {
   expect(
     extract(`
@@ -464,6 +482,47 @@ execFileSync('bun', ['scripts/exec-file.ts'], {shell:false});`),
     expect(() => extract(source)).toThrow(
       'Shell-enabled TypeScript subprocess options are forbidden in',
     );
+});
+
+test('rejects TypeScript Worker execution options authority', () => {
+  expect(
+    extract(`
+new Worker('./scripts/empty.mjs', {});
+new Worker('./scripts/args.mjs', {execArgv:[],eval:false});`),
+  ).toEqual(["'node' './scripts/empty.mjs'", "'node' './scripts/args.mjs'"]);
+  for (const source of [
+    "new Worker('./scripts/facade.mjs', runtimeOptions);",
+    "new Worker('./scripts/facade.mjs', {execArgv:['--require','./hook.cjs']});",
+    "new Worker('./scripts/facade.mjs', {execArgv:runtimeArgs});",
+    "new Worker('./scripts/facade.mjs', {execArgv:[],execArgv:['--inspect']});",
+    "new Worker('postMessage(1)', {eval:true});",
+    "new Worker('./scripts/facade.mjs', {eval:false,eval:false});",
+    "new Worker('./scripts/facade.mjs', {env:{NODE_OPTIONS:'--require ./hook.cjs'}});",
+  ])
+    expect(() => extract(source)).toThrow();
+  expect(
+    extract(`
+class Worker { constructor(path:string,options:unknown){} }
+new Worker('ignored.ts', {execArgv:['--require','./ignored.cjs'],eval:true});`),
+  ).toEqual([]);
+});
+
+test('rejects command-capable git and tar arguments', () => {
+  for (const source of [
+    "import {spawnSync} from 'node:child_process'; spawnSync('git',['-c','alias.audit=!sh -c whoami','status']);",
+    "import {execFileSync} from 'node:child_process'; execFileSync('git',['config','alias.audit','!sh -c whoami']);",
+    "Bun.spawn(['git','--upload-pack=./scripts/helper','fetch','origin']);",
+    "Bun.spawn(['tar','--checkpoint-action=exec=sh hook.sh','--extract']);",
+    "import {spawnSync} from 'node:child_process'; spawnSync('git',['-c',runtimeConfig,'status']);",
+    "import {runCommand} from '../src/lib/run.ts'; runCommand({command:'git',args:['-c','core.sshCommand=sh hook.sh'],cwd:'.'});",
+  ])
+    expect(() => extract(source)).toThrow(/Command-capable (?:git|tar)/);
+  expect(
+    extract(`
+import {spawnSync} from 'node:child_process';
+spawnSync('git',['-c','core.hooksPath=/dev/null','archive','HEAD']);
+spawnSync('tar',['--extract','--file=repository.tar']);`),
+  ).toEqual([]);
 });
 
 test('pins the isolated command environment to its exact function AST', async () => {

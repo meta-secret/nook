@@ -133,32 +133,7 @@ export function typescriptSubprocessCommands(
       const kind =
         adapterTarget === false ? resolveCapability(capabilityRequest) : false;
       if (kind === false && adapterTarget === false)
-        for (const argument of node.arguments) {
-          const callArgumentRequest: UnsupportedCallArgumentRequest = {
-            call: node.getText(),
-            capability: (expression) => {
-              const nestedRequest: CapabilityResolutionRequest = {
-                expression,
-                location: node,
-                model,
-                visited: new Set(),
-              };
-              return resolveCapability(nestedRequest);
-            },
-            expression: argument,
-            resolve: (expression) => {
-              const resolutionRequest: ArrayResolutionRequest = {
-                expression,
-                location: node,
-                model,
-                visited: new Set(),
-              };
-              return resolveStaticExpression(resolutionRequest);
-            },
-            sourcePath: model.path,
-          };
-          assertUnsupportedCallArgument(callArgumentRequest);
-        }
+        assertUnsupportedArguments([node, model]);
       if (kind !== false) {
         if (isReflectInvocation(kind)) {
           const target = node.arguments[0];
@@ -190,6 +165,7 @@ export function typescriptSubprocessCommands(
         visited: new Set(),
       };
       const kind = resolveCapability(capabilityRequest);
+      if (kind === false) assertUnsupportedArguments([node, model]);
       if (kind === SubprocessCallKind.Worker) {
         const callRequest: CallCommandRequest = { call: node, kind, model };
         const command = commandFromCall(callRequest);
@@ -225,6 +201,29 @@ export function typescriptSubprocessCommands(
   };
   visit(sourceFile);
   return commands;
+}
+function assertUnsupportedArguments([call, model]: readonly [
+  ts.CallExpression | ts.NewExpression,
+  LexicalModel,
+]): void {
+  const requestFor = (
+    expression: ts.Expression,
+  ): CapabilityResolutionRequest => ({
+    expression,
+    location: call,
+    model,
+    visited: new Set(),
+  });
+  for (const argument of call.arguments ?? []) {
+    const callArgumentRequest: UnsupportedCallArgumentRequest = {
+      call: call.getText(),
+      capability: (expression) => resolveCapability(requestFor(expression)),
+      expression: argument,
+      resolve: (expression) => resolveStaticExpression(requestFor(expression)),
+      sourcePath: model.path,
+    };
+    assertUnsupportedCallArgument(callArgumentRequest);
+  }
 }
 function resolveCapability(
   request: CapabilityResolutionRequest,
@@ -530,12 +529,14 @@ function commandFromCall(request: CallCommandRequest): StaticCommand | false {
       `Dynamic TypeScript subprocess executable is forbidden in ${request.model.path}: ${request.call.getText()}`,
     );
   }
-  if (/^(?:cargo|git|tar|zip)$/u.test(executable.value)) return false;
-  return {
-    cwd: cwd(),
+  const command: StaticCommand = {
+    cwd: false,
     shellSource: false,
     words: [executable, ...argumentsValue],
   };
+  return isSuccessorFreeExternalCommand(command)
+    ? false
+    : { ...command, cwd: cwd() };
 }
 function commandFromRunCommand(request: CallCommandRequest): StaticCommand {
   const first = request.call.arguments?.[0];
@@ -562,11 +563,13 @@ function commandFromRunCommand(request: CallCommandRequest): StaticCommand {
     expression: exactObjectProperty([resolved, 'args']),
     request,
   };
-  return {
+  const result: StaticCommand = {
     cwd: false,
     shellSource: false,
     words: [executable, ...callArguments(argumentRequest)],
   };
+  isSuccessorFreeExternalCommand(result);
+  return result;
 }
 function isExactRunCommandDispatch(request: CallCommandRequest): boolean {
   const [command, args] = request.call.arguments ?? [];

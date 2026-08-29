@@ -373,6 +373,8 @@ function subprocessOptionsObject(
         : (args[1] ?? false);
   } else if (request.kind === SubprocessCallKind.Exec) {
     options = args[1] ?? false;
+  } else if (request.kind === SubprocessCallKind.Worker) {
+    options = args[1] ?? false;
   } else if (
     request.kind === SubprocessCallKind.ExecFile ||
     request.kind === SubprocessCallKind.Fork ||
@@ -386,8 +388,8 @@ function subprocessOptionsObject(
   }
   if (
     options === false ||
-    ts.isArrowFunction(options) ||
-    ts.isFunctionExpression(options)
+    ((ts.isArrowFunction(options) || ts.isFunctionExpression(options)) &&
+      request.kind !== SubprocessCallKind.Worker)
   )
     return false;
   const object = request.resolveObject(options);
@@ -443,6 +445,37 @@ function assertSubprocessEnvironment([request, object]: readonly [
     throw new Error(
       `Shell-enabled TypeScript subprocess options are forbidden in ${request.sourcePath}.`,
     );
+  if (request.kind !== SubprocessCallKind.Worker) return;
+  const execArgv = exactObjectProperty([object, 'execArgv']);
+  const execArgvProperties = object.properties.filter(
+    (property) =>
+      property.name &&
+      (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) &&
+      property.name.text === 'execArgv',
+  );
+  if (
+    execArgvProperties.length > 0 &&
+    (execArgv === false ||
+      !ts.isArrayLiteralExpression(execArgv) ||
+      execArgv.elements.length > 0)
+  )
+    throw new Error(
+      `TypeScript Worker execArgv authority is forbidden in ${request.sourcePath}.`,
+    );
+  const evaluate = exactObjectProperty([object, 'eval']);
+  const evaluateProperties = object.properties.filter(
+    (property) =>
+      property.name &&
+      (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) &&
+      property.name.text === 'eval',
+  );
+  if (
+    evaluateProperties.length > 0 &&
+    (evaluate === false || evaluate.kind !== ts.SyntaxKind.FalseKeyword)
+  )
+    throw new Error(
+      `TypeScript Worker eval authority is forbidden in ${request.sourcePath}.`,
+    );
 }
 
 export function subprocessArgumentList(
@@ -460,11 +493,70 @@ export function isSuccessorFreeExternalCommand(
   command: SerializedSubprocessCommand,
 ): boolean {
   const executable = command.words[0];
-  return Boolean(
+  const successorFree = Boolean(
     !command.shellSource &&
     executable &&
     !executable.dynamic &&
     /^(?:cargo|git|tar|zip)$/u.test(executable.value),
+  );
+  if (!successorFree || !executable) return false;
+  assertExternalCommandArguments([executable.value, command.words.slice(1)]);
+  return true;
+}
+
+function assertExternalCommandArguments([executable, words]: readonly [
+  string,
+  readonly TaggedTemplateText[],
+]): void {
+  const values = words.map((word) => (word.dynamic ? false : word.value));
+  if (executable === 'git') {
+    for (const [index, value] of values.entries()) {
+      const next = values[index + 1];
+      if (
+        value === '-c' &&
+        (next === false || (next !== undefined && gitConfigRunsCommand(next)))
+      )
+        throw new Error('Command-capable git configuration is forbidden.');
+      if (
+        value &&
+        value.startsWith('-c') &&
+        gitConfigRunsCommand(value.slice(2))
+      )
+        throw new Error('Command-capable git configuration is forbidden.');
+      if (
+        value &&
+        /^--(?:exec-path|receive-pack|upload-pack)(?:=|$)/u.test(value)
+      )
+        throw new Error('Command-capable git option is forbidden.');
+      if (
+        value &&
+        /^alias\./iu.test(value) &&
+        (next === false || next?.trimStart().startsWith('!'))
+      )
+        throw new Error('Command-capable git alias is forbidden.');
+    }
+  }
+  if (
+    executable === 'tar' &&
+    values.some(
+      (value) =>
+        value !== false &&
+        /^(?:-I|--checkpoint-action=exec|--info-script|--rsh-command|--to-command|--use-compress-program)(?:=|$)/u.test(
+          value,
+        ),
+    )
+  )
+    throw new Error('Command-capable tar option is forbidden.');
+}
+
+function gitConfigRunsCommand(value: string): boolean {
+  const separator = value.indexOf('=');
+  if (separator < 1) return false;
+  const key = value.slice(0, separator);
+  const configured = value.slice(separator + 1).trimStart();
+  if (/^alias\./iu.test(key)) return configured.startsWith('!');
+  return /^(?:core\.sshcommand|diff\.external|difftool\..*\.cmd|filter\..*\.(?:clean|process|smudge)|mergetool\..*\.cmd)$/iu.test(
+    key,
   );
 }
 
