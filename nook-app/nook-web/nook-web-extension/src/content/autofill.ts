@@ -8,9 +8,8 @@ import {
 } from '../../../nook-web-shared/src/extension/authentication-fact-attributes'
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import {
-  authentication_enrollment_pilot_presentation_capability,
+  authentication_enrollment_workflow_match,
   authentication_workflow_pilot_presentation_capability,
-  AuthenticationPilotPresentationCapability,
   AuthenticationWorkflowSnapshotResponseKind,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { classifiedAuthenticationWorkflowObservations } from '../../../nook-web-shared/src/extension/password-form-classified-observations'
@@ -97,12 +96,16 @@ async function scanAndRender(): Promise<void> {
     enrollmentHints.qr ||
     (enrollmentHints.backupCodes && workflowForms.length === 0)
   ) {
+    const enrollmentMatch = authentication_enrollment_workflow_match(
+      enrollmentHints.qr,
+      recoveryCopy,
+      pageHasManualCheckpoint(document),
+    )
     if (
-      authentication_enrollment_pilot_presentation_capability(
-        enrollmentHints.qr,
-        recoveryCopy,
-        pageHasManualCheckpoint(document),
-      ) === AuthenticationPilotPresentationCapability.Hidden
+      enrollmentMatch.kind !== 'matched' ||
+      authentication_workflow_pilot_presentation_capability(
+        enrollmentMatch.snapshot,
+      ) !== 'propose-action'
     ) {
       removeScannedWidget()
       return
@@ -113,6 +116,7 @@ async function scanAndRender(): Promise<void> {
     if (sequence !== scanState.sequence) return
     const nookTypedArgs0_0: Parameters<typeof renderEnrollmentWidget>[0] = {
       hints: enrollmentHints,
+      action: enrollmentMatch.snapshot.action,
       vaultConnection,
     }
     renderEnrollmentWidget(nookTypedArgs0_0)
@@ -165,8 +169,7 @@ async function scanAndRender(): Promise<void> {
   const { snapshot } = verdict
   const selected = classifiedWorkflows[snapshot.observationIndex]
   if (
-    authentication_workflow_pilot_presentation_capability(snapshot) ===
-    AuthenticationPilotPresentationCapability.Hidden
+    authentication_workflow_pilot_presentation_capability(snapshot) === 'hidden'
   ) {
     removeScannedWidget()
     return

@@ -14,9 +14,13 @@ import {
 import {
   detectEnrollmentHints,
   renderEnrollmentActions,
-  startBackupCodeEnrollment,
   type EnrollmentPageHints,
 } from '../enrollment-flow'
+import { startRevalidatedBackupCodeEnrollment } from './backup-code-workflow-action'
+import {
+  selectedEnrollmentHints,
+  supplementalEnrollmentHints,
+} from './enrollment-action-presentation'
 import {
   cancelPendingAuthenticatorPickerRequest,
   continueWithAuthenticator,
@@ -47,11 +51,13 @@ import { removeWidget, translatedMessage, workflowCopy } from './workflow-ui'
 
 type RenderEnrollmentWidgetArgs = {
   hints: EnrollmentPageHints
+  action: AuthenticationWorkflowAction
   vaultConnection: PilotVaultConnection
 }
 
 export function renderEnrollmentWidget({
   hints,
+  action,
   vaultConnection,
 }: RenderEnrollmentWidgetArgs): void {
   if (widgetState.dismissed) {
@@ -111,7 +117,7 @@ export function renderEnrollmentWidget({
   }
   const nookTypedArgs1_0: Parameters<typeof renderEnrollmentActions>[0] = {
     host: buildEnrollmentFlowHost(nookTypedArgs0_2),
-    hints,
+    hints: selectedEnrollmentHints(action),
   }
   renderEnrollmentActions(nookTypedArgs1_0)
 }
@@ -265,10 +271,10 @@ export function renderWidget({
         continueButton,
         openVaultButton,
       }
-      const backupRequest: Parameters<typeof startBackupCodeEnrollment>[0] = {
+      void startRevalidatedBackupCodeEnrollment({
+        workflow,
         host: buildEnrollmentFlowHost(hostRequest),
-      }
-      startBackupCodeEnrollment(backupRequest)
+      })
     } else if (
       snapshot.action === AuthenticationWorkflowAction.GeneratePassword
     ) {
@@ -365,7 +371,11 @@ export function renderWidget({
   mountWidgetShell(nookTypedArgs0_8)
 
   const enrollmentHints = detectEnrollmentHints()
-  if (enrollmentHints.qr || enrollmentHints.backupCodes) {
+  const supplementalHints = supplementalEnrollmentHints(
+    snapshot.action,
+    enrollmentHints,
+  )
+  if (supplementalHints.qr || supplementalHints.backupCodes) {
     const nookTypedArgs0_9: Parameters<typeof buildEnrollmentFlowHost>[0] = {
       panel: body,
       step,
@@ -376,7 +386,7 @@ export function renderWidget({
     }
     const nookTypedArgs1_1: Parameters<typeof renderEnrollmentActions>[0] = {
       host: buildEnrollmentFlowHost(nookTypedArgs0_9),
-      hints: enrollmentHints,
+      hints: supplementalHints,
     }
     renderEnrollmentActions(nookTypedArgs1_1)
   }

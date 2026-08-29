@@ -16,7 +16,10 @@ pub use candidate_selection::{
     AuthenticationFormObservationPriority, authentication_form_observation_priority,
     classify_authentication_workflow_candidates,
 };
-pub use enrollment::authentication_enrollment_pilot_presentation_capability;
+pub use enrollment::{
+    authentication_enrollment_pilot_presentation_capability,
+    authentication_enrollment_workflow_match,
+};
 pub use observation_binding::{
     AuthenticationObservationBindingError, AuthenticationObservationBindingToken,
     authentication_page_observation_facts_match_binding,

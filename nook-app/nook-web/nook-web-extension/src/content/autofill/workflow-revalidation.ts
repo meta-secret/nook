@@ -184,7 +184,7 @@ export async function performRevalidatedAuthenticationAction({
       >[0] = {
         observation: candidate,
         authenticatorSetupHint: hints.qr,
-        backupCodesHint: hints.backupCodes,
+        backupCodesCopy: hints.backupCodes ? 'Save backup codes' : '',
       }
       return authenticationPageObservationFacts(factsRequest)
     })
