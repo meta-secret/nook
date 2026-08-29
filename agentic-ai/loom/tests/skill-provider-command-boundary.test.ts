@@ -58,6 +58,9 @@ test('rejects every protected runtime construction and masked launch', () => {
     `eval 'bun ${PROTECTED}'`,
     `alias audit='bun ${PROTECTED}'; audit`,
     'task skills:tools-$(printf list)',
+    'bun --conditions="$MODE" scripts/facade.ts',
+    'bun --conditions "$MODE" scripts/facade.ts',
+    'node --conditions="$MODE" scripts/facade.ts',
   ];
   for (const source of fixtures)
     expect(() => inspectProtected(source), source).toThrow();
@@ -109,14 +112,44 @@ test('rejects indirect executable shell input', () => {
     expect(() => inspectProtected(source), source).toThrow();
 });
 
+test('shell runtimes reject redirected stdin without classifying lexical data', () => {
+  for (const source of [
+    'bash < scripts/facade.sh',
+    'sh 0<scripts/facade.sh',
+    '< scripts/facade.sh bash',
+    '0<scripts/facade.sh command sh --',
+    "bash <<< 'bun scripts/facade.ts'",
+    "printf '%s' 'bun scripts/facade.ts' | bash --",
+  ])
+    expect(() => inspectShell(source), source).toThrow(
+      /(?:stdin redirection|pipeline input)/u,
+    );
+  for (const source of [
+    "bash '<' scripts/literal.sh",
+    "echo 'bash < scripts/facade.sh'",
+    "'< scripts/facade.sh' bash",
+    'cat < scripts/input.txt',
+    'bash 1<scripts/not-stdin.txt',
+  ])
+    expect(() => inspectShell(source), source).not.toThrow();
+});
+
 test('accepts bounded static shell structures', () => {
   for (const source of [
     'cleanup(){ rm -f output; }; trap cleanup EXIT',
+    "false && bash -c 'cleanup(){ true; }'",
     'case x in x) bun scripts/safe.ts;; esac',
     "bash <<'EOF'\necho ok\nEOF",
     'while read -r value; do echo "$value"; done < <(printf ok)',
   ])
     expect(() => inspectProtected(source), source).not.toThrow();
+});
+
+test('rejects dynamic shell options before a static script target', () => {
+  expect(() => inspectShell('bash $OPTS scripts/facade.bash')).toThrow(
+    'Dynamic shell runtime option construction is forbidden.',
+  );
+  expect(() => inspectShell('bash "$OPTS"')).not.toThrow();
 });
 
 test('closes the exact-head shell review batch', () => {

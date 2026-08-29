@@ -376,6 +376,8 @@ mod tests {
             r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":1,"totalSteps":0,"approvalRequirement":"explicit-user-approval","observationIndex":0}}"#,
             r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":2,"totalSteps":1,"approvalRequirement":"explicit-user-approval","observationIndex":0}}"#,
             r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":1,"totalSteps":4,"approvalRequirement":"explicit-user-approval","observationIndex":0}}"#,
+            r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":6,"currentStep":1,"totalSteps":3,"approvalRequirement":"takeover-required","observationIndex":0}}"#,
+            r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":1,"totalSteps":3,"approvalRequirement":"explicit-user-approval","observationIndex":20}}"#,
         ] {
             let wire = serde_json::from_str::<AuthenticationWorkflowSnapshotResponseWire>(
                 contradictory_snapshot,

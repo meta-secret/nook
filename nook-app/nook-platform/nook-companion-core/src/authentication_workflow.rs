@@ -1,8 +1,5 @@
-//! Portable authentication-workflow classification for browser companions.
-//!
-//! Browser adapters report only structural, non-secret observations. This
-//! module owns the product decision about which workflow is present, where the
-//! user is in it, and which action Nook may offer next.
+//! Portable authentication-workflow policy for structural, non-secret browser observations.
+//! Rust owns the workflow, stage, and next-action decision exposed to browser companions.
 
 mod candidate_selection;
 mod compatibility;
@@ -11,7 +8,10 @@ mod observation_validation;
 mod snapshot_contract;
 mod vocabulary;
 
-pub use candidate_selection::AuthenticationFormObservationPriority;
+pub use candidate_selection::{
+    AuthenticationFormObservationPriority, authentication_form_observation_priority,
+    classify_authentication_workflow_candidates,
+};
 pub use compatibility::{
     AUTHENTICATION_WORKFLOW_COMPATIBILITY_TYPESCRIPT, AuthenticationPageObservationCompatibility,
     AuthenticationPageObservationsCompatibility,

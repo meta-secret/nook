@@ -802,7 +802,7 @@ mod tests {
             observations: vec![nook_companion_core::AuthenticationPageObservationFacts {
                 fields: nook_companion_core::AuthenticationFieldObservationFacts {
                     username_field_count: 1,
-                    current_password_field_count: 1,
+                    generic_password_field_count: 1,
                     ..Default::default()
                 },
                 detailed_advance_control:
@@ -819,8 +819,8 @@ mod tests {
                             one_time_code_field_count: 0,
                             semantic_submit_control_count: 1,
                             source_origin: "https://example.test".to_owned(),
-                            form_identity: String::new(),
-                            destination_identity: String::new(),
+                            form_identity: "login".to_owned(),
+                            destination_identity: "https://example.test".to_owned(),
                             label: "Sign in".to_owned(),
                         },
                     ),

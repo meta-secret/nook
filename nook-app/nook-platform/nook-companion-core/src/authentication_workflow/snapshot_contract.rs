@@ -5,6 +5,8 @@ use super::{
     AuthenticationWorkflowStage,
 };
 
+const MAX_AUTHENTICATION_WORKFLOW_OBSERVATION_INDEX_EXCLUSIVE: u32 = 20;
+
 impl AuthenticationWorkflowSnapshot {
     /// Whether this snapshot is one of the complete tuples emitted by the classifier.
     #[must_use]
@@ -13,6 +15,7 @@ impl AuthenticationWorkflowSnapshot {
             || self.total_steps == 0
             || self.current_step > self.total_steps
             || !self.approval_requirement_matches_action()
+            || self.observation_index >= MAX_AUTHENTICATION_WORKFLOW_OBSERVATION_INDEX_EXCLUSIVE
         {
             return false;
         }
@@ -121,8 +124,10 @@ mod tests {
         AuthenticationPasskeyEvidence, AuthenticationSavedLoginCapability,
         AuthenticationWorkflowAction, AuthenticationWorkflowKind, AuthenticationWorkflowMatch,
         AuthenticationWorkflowSnapshot, AuthenticationWorkflowStage,
-        classify_authentication_workflow,
+        MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS, classify_authentication_workflow,
+        classify_authentication_workflow_candidates,
     };
+    use super::MAX_AUTHENTICATION_WORKFLOW_OBSERVATION_INDEX_EXCLUSIVE;
 
     #[test]
     fn saved_login_capability_requires_a_complete_login_snapshot() {
@@ -150,8 +155,11 @@ mod tests {
         );
     }
 
-    #[test]
-    fn every_classifier_snapshot_satisfies_the_wire_contract() {
+    fn classifier_outputs() -> Vec<(
+        AuthenticationPageObservation,
+        AuthenticationWorkflowSnapshot,
+    )> {
+        let mut outputs = Vec::new();
         let enrollment_evidence = [
             AuthenticationEnrollmentEvidence::Absent,
             AuthenticationEnrollmentEvidence::AuthenticatorSetup,
@@ -202,10 +210,7 @@ mod tests {
                                                     snapshot,
                                                 ) = classify_authentication_workflow(observation)
                                                 {
-                                                    assert!(
-                                                        snapshot.matches_classifier_contract(),
-                                                        "classifier produced an invalid snapshot: {snapshot:?}",
-                                                    );
+                                                    outputs.push((observation, snapshot));
                                                 }
                                             }
                                         }
@@ -217,5 +222,116 @@ mod tests {
                 }
             }
         }
+        outputs
+    }
+
+    #[test]
+    fn every_classifier_snapshot_satisfies_the_wire_contract() {
+        for (_, snapshot) in classifier_outputs() {
+            assert!(
+                snapshot.matches_classifier_contract(),
+                "classifier produced an invalid snapshot: {snapshot:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn every_accepted_workflow_tuple_is_classifier_producible() -> anyhow::Result<()> {
+        let outputs = classifier_outputs();
+        let kinds = [
+            AuthenticationWorkflowKind::Login,
+            AuthenticationWorkflowKind::Signup,
+            AuthenticationWorkflowKind::PasswordChange,
+            AuthenticationWorkflowKind::TotpChallenge,
+            AuthenticationWorkflowKind::TotpEnrollment,
+            AuthenticationWorkflowKind::Manual,
+        ];
+        let stages = [
+            AuthenticationWorkflowStage::Credentials,
+            AuthenticationWorkflowStage::SecondFactor,
+            AuthenticationWorkflowStage::Verification,
+            AuthenticationWorkflowStage::Setup,
+            AuthenticationWorkflowStage::Recovery,
+            AuthenticationWorkflowStage::Manual,
+        ];
+        let actions = [
+            AuthenticationWorkflowAction::ContinueWithNook,
+            AuthenticationWorkflowAction::GeneratePassword,
+            AuthenticationWorkflowAction::FillTotp,
+            AuthenticationWorkflowAction::EnrollAuthenticator,
+            AuthenticationWorkflowAction::UsePasskey,
+            AuthenticationWorkflowAction::CreatePasskey,
+            AuthenticationWorkflowAction::TakeOver,
+        ];
+
+        for kind in kinds {
+            for stage in stages {
+                for action in actions {
+                    for current_step in 1..=5 {
+                        for total_steps in 1..=5 {
+                            let accepted = AuthenticationWorkflowSnapshot {
+                                kind,
+                                stage,
+                                action,
+                                current_step,
+                                total_steps,
+                                approval_requirement: AuthenticationApprovalRequirement::for_action(
+                                    action,
+                                ),
+                                observation_index: 0,
+                            };
+                            if !accepted.matches_classifier_contract() {
+                                continue;
+                            }
+
+                            let Some((observation, _)) =
+                                outputs.iter().find(|(_, produced)| *produced == accepted)
+                            else {
+                                anyhow::bail!(
+                                    "wire contract accepted a tuple the classifier cannot produce: {accepted:?}"
+                                );
+                            };
+
+                            for index in 0..MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS {
+                                let mut observations =
+                                    vec![AuthenticationPageObservation::default(); index];
+                                observations.push(*observation);
+                                let produced =
+                                    classify_authentication_workflow_candidates(&observations)
+                                        .snapshot()?;
+                                let mut expected = accepted;
+                                expected.observation_index = u32::try_from(index)?;
+                                assert_eq!(produced, expected);
+                                assert!(produced.matches_classifier_contract());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn snapshot_observation_index_stays_within_the_bounded_batch() -> anyhow::Result<()> {
+        let maximum_exclusive = u32::try_from(MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS)?;
+        assert_eq!(
+            maximum_exclusive,
+            MAX_AUTHENTICATION_WORKFLOW_OBSERVATION_INDEX_EXCLUSIVE
+        );
+        let mut snapshot = AuthenticationWorkflowSnapshot {
+            kind: AuthenticationWorkflowKind::Login,
+            stage: AuthenticationWorkflowStage::Credentials,
+            action: AuthenticationWorkflowAction::ContinueWithNook,
+            current_step: 1,
+            total_steps: 3,
+            approval_requirement: AuthenticationApprovalRequirement::ExplicitUserApproval,
+            observation_index: maximum_exclusive - 1,
+        };
+        assert!(snapshot.matches_classifier_contract());
+
+        snapshot.observation_index = maximum_exclusive;
+        assert!(!snapshot.matches_classifier_contract());
+        Ok(())
     }
 }
