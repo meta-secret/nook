@@ -29,6 +29,19 @@ describe('lintProseDensity', () => {
     expect(lintProseDensity(lintProseDensityArgs)).toEqual([]);
   });
 
+  test('ignores quoted command output and log excerpts', () => {
+    const content = [
+      '> command output includes one actor and another actor and a branch and a',
+      '> credential and a failure mode and a recovery path and enough quoted detail',
+      '> to exceed the density threshold without becoming authored Cortex prose.',
+    ].join('\n');
+    const lintArgs: LintProseDensityArgs = {
+      filePath: 'quoted-output.md',
+      content,
+    };
+    expect(lintProseDensity(lintArgs)).toEqual([]);
+  });
+
   test('reconstructs a dense sentence across hard-wrapped prose', () => {
     const content = [
       'A stacked successor declares immutable branch metadata and historical',

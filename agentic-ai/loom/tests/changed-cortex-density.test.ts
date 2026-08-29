@@ -133,6 +133,56 @@ test('preserves rename ancestry and checks edits made during a rename', () => {
   }
 });
 
+test('checks full destinations promoted from nonpersistent sources', () => {
+  const fixtureArgs: CreateFixtureArgs = {
+    prefix: 'promoted-cortex-density-',
+    files: [
+      {
+        relativePath: 'external.md',
+        content:
+          'External prose has one rule and another rule and another rule and another rule and another rule and another rule and remains dense enough to require review after promotion.\n',
+      },
+      {
+        relativePath: '.cortex/.session/draft.md',
+        content:
+          'Session prose has one command and another command and another command and another command and another command and another command and remains dense after promotion.\n',
+      },
+    ],
+  };
+  const fixture = createFixture(fixtureArgs);
+  try {
+    const externalMoveArgs: GitArgs = {
+      arguments: ['mv', 'external.md', '.cortex/external.md'],
+      repoRoot: fixture.repoRoot,
+    };
+    git(externalMoveArgs);
+    const sessionMoveArgs: GitArgs = {
+      arguments: [
+        'mv',
+        '.cortex/.session/draft.md',
+        '.cortex/session-promoted.md',
+      ],
+      repoRoot: fixture.repoRoot,
+    };
+    git(sessionMoveArgs);
+    const reportArgs: LintFixtureArgs = {
+      baseSha: fixture.baseSha,
+      repoRoot: fixture.repoRoot,
+    };
+    const report = lintFixture(reportArgs);
+    expect(report.checkedPaths).toEqual([
+      '.cortex/external.md',
+      '.cortex/session-promoted.md',
+    ]);
+    expect(report.findings.map((finding) => finding.file).sort()).toEqual([
+      '.cortex/external.md',
+      '.cortex/session-promoted.md',
+    ]);
+  } finally {
+    rmSync(fixture.repoRoot, REMOVE_OPTIONS);
+  }
+});
+
 test('compares a stale feature branch from its merge base with main', () => {
   const fixtureArgs: CreateFixtureArgs = {
     prefix: 'diverged-cortex-density-',
@@ -216,7 +266,9 @@ function createFixture(args: CreateFixtureArgs): Fixture {
   const directoryOptions = { recursive: true } as const;
   mkdirSync(path.join(repoRoot, '.cortex'), directoryOptions);
   for (const file of args.files) {
-    writeFileSync(path.join(repoRoot, file.relativePath), file.content);
+    const filePath = path.join(repoRoot, file.relativePath);
+    mkdirSync(path.dirname(filePath), directoryOptions);
+    writeFileSync(filePath, file.content);
   }
   const initArgs: GitArgs = { arguments: ['init', '-q'], repoRoot };
   git(initArgs);

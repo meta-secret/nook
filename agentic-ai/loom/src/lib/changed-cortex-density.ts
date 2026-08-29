@@ -130,7 +130,12 @@ function changedCortexPaths(args: ChangedCortexPathsArgs): ChangedCortexPath[] {
         failChangedCortexGit('incomplete rename record');
       }
       if (isPersistentCortexMarkdownPath(currentPath)) {
-        const change: ChangedCortexPath = { currentPath, previousPath };
+        const change: ChangedCortexPath = {
+          currentPath,
+          previousPath: isPersistentCortexMarkdownPath(previousPath)
+            ? previousPath
+            : currentPath,
+        };
         changes.push(change);
       }
       continue;

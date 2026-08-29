@@ -96,12 +96,13 @@ This changed-file gate has bounded scope.
 
 - It compares the working branch with its merge base against `origin/main`.
 - It checks prose blocks touched by additions or deletion boundaries.
-- A pure rename keeps its source ancestry and does not recheck legacy prose.
+- A pure rename within persistent Cortex keeps its source ancestry.
+- A rename from outside persistent Cortex checks the full destination.
 - Content edited during a rename remains in scope.
 - It also checks untracked Cortex Markdown.
 - It reconstructs prose across ordinary hard-wrapped lines.
 - It checks each list-item paragraph independently.
-- It excludes fenced code and structural Markdown blocks.
+- It excludes blockquotes, fenced code, and structural Markdown blocks.
 - It does not audit unchanged legacy prose.
 
 Use Loom configuration for an explicit full-corpus density pass:

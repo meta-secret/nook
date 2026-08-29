@@ -53,6 +53,7 @@ type InspectMarkdownNodeArgs = {
 };
 
 function inspectMarkdownNode(args: InspectMarkdownNodeArgs): void {
+  if (args.node.type === 'blockquote') return;
   if (args.node.type === 'paragraph') {
     const paragraphArgs: InspectParagraphArgs = {
       filePath: args.filePath,
