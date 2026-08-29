@@ -23,10 +23,19 @@ Use this workflow for feature work that touches more than one package.
 6. Add or update tests in the owning package (`nook-core` Rust tests for domain logic; Playwright for UI flows).
 7. Add new app routine commands to the nearest owning Taskfile: web-family tasks under `nook-app/nook-web/Taskfile.yml` , Docker tasks under `nook-app/nook-platform/docker/Taskfile.yml`, CI tasks under `nook-app/ci/Taskfile.yml`, and repo-level non-app commands under the root `Taskfile.yml` or root `.task/`.
 8. Update `.cortex` docs when architecture or workflow changes.
-9. Run `task loom:pre-push`, commit, and push.
-   Trigger complete validation when the head is ready for the final gate.
-   - Use a focused hosted task only when it shortens diagnosis of a known failure.
-   - Do not run local `task check` for agent work.
+9. Run required formatters and commit every resulting mutation in the allowed
+   AI paths. Gizmo integrates that coherent handoff and runs
+   `task loom:pre-push`.
+   - If hygiene mutates AI-owned source or Cortex content, the AI team returns
+     a fresh formatted commit. Gizmo reintegrates it and reruns hygiene before
+     pushing.
+   - Do not add broad local builds, tests, e2e, container product gates, or
+     duplicate hosted-check mirrors before push.
+   - If the pushed head is not validation-ready, dispatch at least one relevant
+     focused hosted task immediately.
+   - When the head is validation-ready, dispatch complete exact-head validation
+     immediately. Focused tasks are optional on that path.
+   - Obtain fresh exact-head remote evidence after every replacement push.
 
 For multiple package PRs:
 
@@ -51,7 +60,8 @@ For multiple package PRs:
    or adding a third-party dependency.
 5. After each predecessor merges, Gizmo Prime retargets the immediate successor
    to `main`, updates it from current `origin/main`, re-measures authored
-   additions plus deletions, runs full checks, and validates the new exact head.
+   additions plus deletions, and dispatches complete validation for the new
+   exact head.
 6. Small independent slices at or below the ceiling may be delivered from
    current `origin/main` only as predecessor-free independent PRs; do not
    register them as a stack.

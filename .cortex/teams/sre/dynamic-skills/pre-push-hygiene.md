@@ -5,13 +5,13 @@
 Prevent avoidable PR Verify failures from formatting lag and missing UI demo
 contract updates without turning local pre-push into a product build.
 
-This is the **only required local product work**.
+This is the **only required local product work for Gizmo after integration**.
 
 Every other gate runs on GitHub Actions.
 
 ## Problem Pattern
 
-Agents push a coherent change, then burn a full remote cycle on:
+Gizmo pushes a coherent integrated change, then burns a full remote cycle on:
 
 - Prettier / rustfmt failures because format never wrote the host tree
 - Missing `nook-web-app/e2e/demos/*.demo.spec.ts` updates after UI path changes
@@ -22,7 +22,8 @@ These show up in Workbench `stats/ai-agent` records as waste.
 
 ## Preferred Pattern
 
-Call Loom `pre-push` before every push.
+Team Agents format and commit allowed changes without pushing. After integration,
+Gizmo calls Loom `pre-push` before every push.
 
 Request:
 
@@ -49,7 +50,9 @@ Loom always:
 3. Runs `.github/scripts/ui-demo-contract.sh` against that base
 4. Stages host format updates when `stageHostUpdates: true`
 
-Then commit → push → focused `task remote` → explicit validate.
+Gizmo returns any team-owned formatter diff for a fresh owner commit and repeats
+after reintegration until clean. It then pushes and immediately validates a ready
+head or starts relevant focused remote proof for any other head.
 
 See [remote-execution.md](../workflows/remote-execution.md)
 and [loom-tools.md](../../ai/references/loom-tools.md).
@@ -57,7 +60,10 @@ and [loom-tools.md](../../ai/references/loom-tools.md).
 ### Shared formatter rule
 
 - Loom invokes host-applied `task format` internally.
-- The agent entrypoint is `task loom:pre-push`.
+- The integrated-delivery entrypoint is `task loom:pre-push`; ordinary Team
+  Agent handoffs do not run the parent-owned integration gate.
+- Ordinary Team Agents still format every changed file in their allowed scope
+  before committing their handoff.
 - `task format` may build its content-addressed tool-only image once.
 - Every worktree reuses that image without per-worktree Rust or Bun dependency
   installation.
@@ -88,13 +94,18 @@ Does not apply to read-only sessions with no commits.
 - Before: format runs a product build → local CPU and cache bandwidth are wasted.
 - After: the shared tool-only formatter writes the same source changes in
   seconds without per-worktree dependency trees.
-- After: `task loom:pre-push` → commit → push; Verify sees a formatted head.
+- After: formatted Team Agent exact commit → Gizmo integration → clean
+  `task loom:pre-push` → push → immediate remote evidence.
 - Before: change shared UI → push → demo contract fails.
 - After: Loom fails closed until a demo spec is updated.
 
 ## Application Checklist
 
-- [ ] Run `task loom:pre-push` before every push.
+- [ ] Team Agents format and commit allowed changes without pushing.
+- [ ] Gizmo runs `task loom:pre-push` after integration and before every push.
+- [ ] Return team-owned formatter diffs for owner commit, then reintegrate.
+- [ ] Every pushed head immediately receives complete validation when ready or
+      at least one relevant focused remote task when not ready.
 - [ ] Do not use `task extension:format` as the sole format step.
 - [ ] Do not run local `task check` / `task ci:pr` after the push.
 

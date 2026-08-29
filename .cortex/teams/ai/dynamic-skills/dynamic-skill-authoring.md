@@ -80,6 +80,10 @@ Does not apply to:
 
 For documentation-only captures, run `task loom:cortex-audit`.
 
-For code refactors using a dynamic skill, run `task loom:pre-push`, commit and
-push, use focused hosted tasks as useful, then explicitly trigger complete
-validation with `task pr:validate`.
+For code refactors using a dynamic skill, run the focused worker proof and
+required formatters. Commit every resulting mutation in the allowed paths and
+return the exact handoff commit to Gizmo. If integrated pre-push hygiene mutates
+AI-owned content, the AI team returns a fresh formatted commit. Gizmo then
+reintegrates, reruns hygiene, and pushes. A pushed head that is not
+validation-ready requires at least one relevant focused hosted task. A ready
+head enters complete exact-head validation immediately.
