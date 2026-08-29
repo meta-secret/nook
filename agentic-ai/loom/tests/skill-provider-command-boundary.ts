@@ -600,7 +600,7 @@ function wordHasProtectedMarkers(word: ShellWord): boolean {
   );
 }
 
-function consumeEnvPrefix(request: EnvPrefixRequest): number {
+export function consumeEnvPrefix(request: EnvPrefixRequest): number {
   let index = request.start;
   let options = true;
   while (index < request.words.length) {

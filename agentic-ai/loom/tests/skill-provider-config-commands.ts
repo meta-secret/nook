@@ -262,8 +262,9 @@ function resolveTaskShellVariables(request: TaskShellVariableRequest): string {
   let resolved = request.source;
   for (const [name, value] of request.values) {
     if (value.includes('{{')) continue;
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
     resolved = resolved
-      .replaceAll(`$${name}`, value)
+      .replace(new RegExp(`\\$${escaped}(?![A-Za-z0-9_])`, 'gu'), value)
       .replaceAll(`\${${name}}`, value);
   }
   return resolved;

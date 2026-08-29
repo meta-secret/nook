@@ -1,4 +1,5 @@
 import { posix } from 'node:path';
+import { consumeEnvPrefix } from './skill-provider-command-boundary.ts';
 import {
   ShellSeparator,
   type ShellToken,
@@ -304,9 +305,13 @@ function commandSegments(
 function firstCommandWord(words: readonly ShellWord[]): number {
   let index = 0;
   while (/^[A-Za-z_]\w*=/u.test(words[index]?.value ?? '')) index += 1;
-  if (words[index]?.value === 'env') {
-    index += 1;
-    while (/^[A-Za-z_]\w*=/u.test(words[index]?.value ?? '')) index += 1;
+  if (posix.basename(words[index]?.value ?? '') === 'env') {
+    const envRequest = {
+      environment: new Map(),
+      start: index + 1,
+      words,
+    };
+    index = consumeEnvPrefix(envRequest);
   }
   return index;
 }

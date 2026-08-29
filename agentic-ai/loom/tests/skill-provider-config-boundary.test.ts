@@ -42,7 +42,7 @@ import {
   specializePositionalArguments,
 } from './skill-provider-config-runtime.ts';
 import { githubScriptConfigurationReferences } from './skill-provider-github-script.ts';
-import { pathsContainingProviderRoot } from './skill-provider-config-test-helpers.ts';
+import * as configTestHelpers from './skill-provider-config-test-helpers.ts';
 import {
   eslintConfigurationReferences,
   type EslintConfigurationRequest,
@@ -555,6 +555,7 @@ test('only the Loom semantic adapter reaches the provider', async () => {
   );
   const configPathSet = new Set(configPaths);
   const actionSources = new Map<string, string>();
+  const unreadPaths = new Set<string>();
   for (const path of actionPaths) {
     const source =
       !symlinkPaths.has(path) &&
@@ -565,6 +566,7 @@ test('only the Loom semantic adapter reaches the provider', async () => {
         ? await Bun.file(join(REPOSITORY_ROOT, path)).text()
         : '';
     actionSources.set(path, source);
+    if (source === '' && !symlinkPaths.has(path)) unreadPaths.add(path);
   }
   const actionGraph: ActionRuntimeGraph = {
     roots: configPaths.filter(isActionManifest),
@@ -580,18 +582,25 @@ test('only the Loom semantic adapter reaches the provider', async () => {
     sources: actionSources,
     symlinkPaths,
   };
-  const reachableScriptPaths = configurationScriptPaths(scriptGraph);
-  expect(await pathsContainingProviderRoot(productionPaths)).toEqual([
-    LOOM_ARTICLE_ADAPTER,
-  ]);
+  const hydrationRequest = {
+    discover: configurationScriptPaths,
+    graph: scriptGraph,
+    repositoryRoot: REPOSITORY_ROOT,
+    sources: actionSources,
+    unreadPaths,
+  };
+  const reachableScriptPaths =
+    await configTestHelpers.hydrateRepositorySources(hydrationRequest);
   expect(
-    await pathsContainingProviderRoot([
+    await configTestHelpers.pathsContainingProviderRoot(productionPaths),
+  ).toEqual([LOOM_ARTICLE_ADAPTER]);
+  expect(
+    await configTestHelpers.pathsContainingProviderRoot([
       ...configPaths,
       ...reachableActionPaths,
       ...reachableScriptPaths,
     ]),
   ).toEqual([PROVIDER_PACKAGE, LOOM_ARTICLE_ADAPTER].sort());
-
   const activeAudit = await Bun.file(
     join(REPOSITORY_ROOT, 'agentic-ai/loom/src/commands/cortex-audit.ts'),
   ).text();

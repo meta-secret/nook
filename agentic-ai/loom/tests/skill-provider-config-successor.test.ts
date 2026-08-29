@@ -135,6 +135,49 @@ test('explicit Taskfile selections join the runnable graph', () => {
   }
 });
 
+test('env options preserve wrapped configuration command discovery', () => {
+  for (const command of [
+    'env -i task --taskfile scripts/commands.yml audit',
+    'env --ignore-environment --unset OLD task -t scripts/commands.yml audit',
+    'env -u OLD task --taskfile=scripts/commands.yml audit',
+    'env --unset=OLD -- task --taskfile scripts/commands.yml audit',
+  ]) {
+    const sources = new Map([
+      ['package.json', `{"scripts":{"audit":${JSON.stringify(command)}}}`],
+      ['scripts/commands.yml', `tasks: {audit: {cmds: [bun ${PROVIDER_CLI}]}}`],
+      [PROVIDER_CLI, 'export {};'],
+    ]);
+    const request = { roots: ['package.json'], sources };
+    expectProviderReachable(graph(request));
+  }
+});
+
+test('env options preserve wrapped Playwright configuration discovery', () => {
+  const sources = new Map([
+    [
+      'nested/package.json',
+      '{"scripts":{"test:e2e":"env -i -- playwright test"}}',
+    ],
+    ['nested/playwright.config.ts', `await import('../${PROVIDER_CLI}');`],
+    [PROVIDER_CLI, 'export {};'],
+  ]);
+  const request = { roots: ['nested/package.json'], sources };
+  expectProviderReachable(graph(request));
+});
+
+test('dynamic and malformed env options fail closed', () => {
+  for (const command of [
+    'env -u "$NAME" task --taskfile scripts/commands.yml audit',
+    'env --unsupported task --taskfile scripts/commands.yml audit',
+  ]) {
+    const sources = new Map([
+      ['package.json', `{"scripts":{"audit":${JSON.stringify(command)}}}`],
+    ]);
+    const request = { roots: ['package.json'], sources };
+    expect(() => configurationScriptPaths(graph(request)), command).toThrow();
+  }
+});
+
 test('repository explicit Taskfile selection preserves relative cwd', () => {
   const repositorySelectionRequest = {
     commands: ['task --taskfile agentic-ai/minds/hive/Taskfile.yml format'],
@@ -438,6 +481,17 @@ tasks: {audit: {cmds: ['bun {{.TARGET}}']}}`,
   ]);
   const request = { roots: ['Taskfile.yml'], sources };
   expectProviderReachable(graph(request));
+});
+
+test('Task shell variables substitute only complete parameter names', () => {
+  const source = `vars: {FOO: safe}
+env: {FOOBAR: bun scripts/facade.ts}
+tasks: {audit: {cmds: ['$FOOBAR', 'bun \${FOO}.ts']}}`;
+  const inspection = { path: 'Taskfile.yml', source };
+  expect(runnableCommandSources(inspection)).toEqual([
+    "FOOBAR='bun scripts/facade.ts' $FOOBAR",
+    "FOOBAR='bun scripts/facade.ts' bun safe.ts",
+  ]);
 });
 
 test('unresolved Task arguments do not hide a known executable entrypoint', () => {

@@ -54,7 +54,7 @@ export function assertConfigurationSourceBoundary(
 }
 
 function mightUseRuntimeLoader(source: string): boolean {
-  return /(?:\b(?:getBuiltinModule|mainModule)\b|["'](?:node:)?(?:module|process)["']|(?:globalThis|global|import\.meta|module)\s*(?:\.|\[)\s*["']?require\b)/u.test(
+  return /(?:\b(?:getBuiltinModule|mainModule|require)\b|["'](?:node:)?(?:module|process)["']|(?:globalThis|global|import\.meta|module)\s*(?:\.|\[)\s*["']?require\b)/u.test(
     source,
   );
 }

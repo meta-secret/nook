@@ -4,6 +4,7 @@ import {
   configurationScriptPaths,
 } from './skill-provider-config-boundary.test.ts';
 import { normalizeConfigurationShellSource } from './skill-provider-config-runtime.ts';
+import { hydrateReachableSources } from './skill-provider-config-test-helpers.ts';
 import type { ConfigurationScriptGraph } from './skill-provider-executable-script.ts';
 import type { ActionRuntimeGraph } from './skill-provider-config-types.ts';
 
@@ -49,21 +50,59 @@ test('configuration roots receive the executable loader boundary', () => {
 });
 
 test('configuration roots cannot recover ambient loader aliases', () => {
+  for (const source of [
+    "const get = process['getBuiltinModule']; const {createRequire}=get('node:module'); createRequire(import.meta.url)('./scripts/facade.cjs');",
+    "const target='./scripts/facade.cjs'; require(target);",
+    "const load=require; const target='./scripts/facade.cjs'; load(target);",
+  ]) {
+    const sources = new Map([['vite.config.cjs', source]]);
+    const graph: ConfigurationScriptGraph = {
+      executablePaths: new Set(),
+      roots: ['vite.config.cjs'],
+      sources,
+      symlinkPaths: new Set(),
+    };
+    expect(() => configurationScriptPaths(graph), source).toThrow(
+      'root violates runtime boundary',
+    );
+  }
+});
+
+test('production hydration loads every statically reached shell target', async () => {
   const sources = new Map([
-    [
-      'vite.config.ts',
-      "const get = process['getBuiltinModule']; const {createRequire}=get('node:module'); createRequire(import.meta.url)('./scripts/facade.cjs');",
-    ],
+    ['package.json', '{"scripts":{"audit":"bash scripts/first.bash"}}'],
+    ['scripts/first.bash', ''],
+    ['scripts/second.command', ''],
+    ['scripts/provider.ts', 'export {};'],
   ]);
+  const unreadPaths = new Set(['scripts/first.bash', 'scripts/second.command']);
+  const storedSources = new Map([
+    ['scripts/first.bash', 'sh scripts/second.command'],
+    ['scripts/second.command', 'bun scripts/provider.ts'],
+  ]);
+  const readSource = async (path: string): Promise<string> => {
+    const source = storedSources.get(path);
+    if (source === undefined)
+      throw new Error(`Unexpected source read: ${path}`);
+    return source;
+  };
   const graph: ConfigurationScriptGraph = {
     executablePaths: new Set(),
-    roots: ['vite.config.ts'],
+    roots: ['package.json'],
     sources,
     symlinkPaths: new Set(),
   };
-  expect(() => configurationScriptPaths(graph)).toThrow(
-    'root violates runtime boundary',
+  const request = {
+    discover: configurationScriptPaths,
+    graph,
+    readSource,
+    sources,
+    unreadPaths,
+  };
+  expect(await hydrateReachableSources(request)).toContain(
+    'scripts/provider.ts',
   );
+  expect(unreadPaths).toEqual(new Set());
 });
 
 test('Node action subprocesses join the runnable configuration graph', () => {
