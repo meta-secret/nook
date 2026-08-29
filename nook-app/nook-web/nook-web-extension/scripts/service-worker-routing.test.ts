@@ -23,9 +23,17 @@ const unusedAsyncDependency = mock(() =>
 )
 const ensureExtensionSessionDocument = mock(() => Promise.resolve())
 const openCompanionLauncher = mock(() => Promise.resolve())
+const beginAccountPickerAuthorizationCleanup = mock(() => 1)
+const clearPendingAccountPickers = mock(() => Promise.resolve())
+const clearStagedAuthenticatorEnrollments = mock(() => {})
+const completeAccountPickerAuthorizationCleanup = mock(() => {})
 
 const lifecycleDependencies: ExtensionLifecycleRoutingDependencies = {
+  beginAccountPickerAuthorizationCleanup,
+  clearPendingAccountPickers,
+  clearStagedAuthenticatorEnrollments,
   closeExtensionSessionDocument: unusedAsyncDependency,
+  completeAccountPickerAuthorizationCleanup,
   ensureExtensionSessionDocument,
   extensionSessionDocument: 'offscreen/session.html',
   handlePairingStateQuery: mock(() => false),
@@ -99,6 +107,63 @@ describe('service worker routing', () => {
     expect(routeExtensionLifecycleMessage(routingArgs)).toBe(true)
     await flushResponses()
     expect(ensureExtensionSessionDocument).toHaveBeenCalledTimes(1)
+    expect(sendResponse).toHaveBeenCalledWith({ ok: true })
+  })
+
+  test('keeps picker authorization invalid until lock cleanup finishes', async () => {
+    const events: string[] = []
+    let pickerCleanupCount = 0
+    const dependencies: ExtensionLifecycleRoutingDependencies = {
+      ...lifecycleDependencies,
+      beginAccountPickerAuthorizationCleanup: () => {
+        events.push('authorization-invalidated')
+        return 4
+      },
+      clearPendingAccountPickers: () => {
+        pickerCleanupCount += 1
+        events.push(`pickers-cleared-${pickerCleanupCount}`)
+        return Promise.resolve()
+      },
+      clearStagedAuthenticatorEnrollments: () => {
+        events.push('enrollments-cleared')
+      },
+      closeExtensionSessionDocument: () => {
+        events.push('session-closed')
+        return Promise.resolve()
+      },
+      completeAccountPickerAuthorizationCleanup: (generation) => {
+        events.push(`authorization-restored-${generation}`)
+      },
+      isExtensionSessionEnsureMessage: () => false,
+      isExtensionSessionLockMessage: () => true,
+    }
+    const { routeExtensionLifecycleMessage } =
+      await import('../src/background/service-worker/extension-lifecycle-routing')
+    const sendResponse = mock(() => {})
+
+    expect(
+      routeExtensionLifecycleMessage({
+        dependencies,
+        message: { type: 'test-session-lock' },
+        sender: {
+          id: 'nook-extension',
+          url: 'chrome-extension://nook-extension/popup/index.html',
+        },
+        sendResponse,
+      }),
+    ).toBe(true)
+    await flushResponses()
+    await flushResponses()
+
+    expect(events).toEqual([
+      'authorization-invalidated',
+      'enrollments-cleared',
+      'pickers-cleared-1',
+      'session-closed',
+      'pickers-cleared-2',
+      'enrollments-cleared',
+      'authorization-restored-4',
+    ])
     expect(sendResponse).toHaveBeenCalledWith({ ok: true })
   })
 

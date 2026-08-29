@@ -7,9 +7,15 @@ import {
   WebsiteAuthenticatorResponseStatus,
 } from '../../lib/login-fill-messages'
 import {
+  AccountPickerSurfaceKind,
   AuthenticatorPickerLoadKind,
+  type AccountPickerSurface,
+  accountPickerAuthorizationGeneration,
+  accountPickerAuthorizationIsCurrent,
   authenticatorAccounts,
   authorizedWebsiteGrant,
+  closeAccountPickerSurface,
+  emptyAccountPickerSurface,
   isAuthenticatorPickerSender,
   loadAuthenticatorPicker,
   removeAuthenticatorPicker,
@@ -120,6 +126,10 @@ export async function openWebsiteAuthenticatorPicker({
   message,
   sender,
 }: OpenWebsiteAuthenticatorPickerArgs): Promise<AuthenticatorPickerOpenResponse> {
+  const authorizationGeneration = accountPickerAuthorizationGeneration()
+  if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
+    return { ok: true, status: WebsiteAuthenticatorResponseStatus.Locked }
+  }
   const nookTypedArgs0_1: Parameters<typeof availableWebsiteGrants>[0] = {
     origin: message.payload.origin,
     sender,
@@ -136,17 +146,24 @@ export async function openWebsiteAuthenticatorPicker({
   }
 
   const requestId = randomNonce()
-  const request: Parameters<typeof storeAuthenticatorPicker>[0] = {
+  const request: Parameters<typeof storeAuthenticatorPicker>[0]['request'] = {
     requestId,
     origin: message.payload.origin,
     tabId: sender.tab.id,
     allowedVaultStoreIds: access.grants.map((grant) => grant.vaultStoreId),
     expiresAt: Date.now() + AUTHENTICATOR_PICKER_TTL_MS,
   }
-  await storeAuthenticatorPicker(request)
+  const storeArgs: Parameters<typeof storeAuthenticatorPicker>[0] = {
+    request,
+    authorizationGeneration,
+  }
+  if (!(await storeAuthenticatorPicker(storeArgs))) {
+    return { ok: true, status: WebsiteAuthenticatorResponseStatus.Locked }
+  }
   const pickerUrl = new URL(chrome.runtime.getURL('popup/index.html'))
   pickerUrl.searchParams.set('intent', 'authenticator-picker')
   pickerUrl.searchParams.set('request', requestId)
+  let createdSurface: AccountPickerSurface = emptyAccountPickerSurface()
   try {
     if (chrome.windows?.create) {
       const nookTypedArgs0_2: Parameters<typeof chrome.windows.create>[0] = {
@@ -156,16 +173,40 @@ export async function openWebsiteAuthenticatorPicker({
         height: 620,
         focused: true,
       }
-      await chrome.windows.create(nookTypedArgs0_2)
+      const createdWindow = await chrome.windows.create(nookTypedArgs0_2)
+      if (
+        createdWindow &&
+        typeof createdWindow === 'object' &&
+        'id' in createdWindow &&
+        typeof createdWindow.id === 'number'
+      ) {
+        createdSurface = {
+          kind: AccountPickerSurfaceKind.Window,
+          id: createdWindow.id,
+        }
+      }
     } else {
       const nookTypedArgs0_3: Parameters<typeof chrome.tabs.create>[0] = {
         url: pickerUrl.toString(),
       }
-      await chrome.tabs.create(nookTypedArgs0_3)
+      const createdTab = await chrome.tabs.create(nookTypedArgs0_3)
+      if ('id' in createdTab && typeof createdTab.id === 'number') {
+        createdSurface = {
+          kind: AccountPickerSurfaceKind.Tab,
+          id: createdTab.id,
+        }
+      }
     }
   } catch {
     await removeAuthenticatorPicker(requestId)
     return { ok: false, reason: 'authenticator-picker-open-failed' }
+  }
+  if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
+    await Promise.allSettled([
+      removeAuthenticatorPicker(requestId),
+      closeAccountPickerSurface(createdSurface),
+    ])
+    return { ok: true, status: WebsiteAuthenticatorResponseStatus.Locked }
   }
   return {
     ok: true,
@@ -414,6 +455,13 @@ function clearStagedEnrollment(stageId: string): void {
   stagedAuthenticatorEnrollments.delete(stageId)
 }
 
+export function clearStagedAuthenticatorEnrollments(): void {
+  for (const staged of stagedAuthenticatorEnrollments.values()) {
+    staged.otpauthUri = ''
+  }
+  stagedAuthenticatorEnrollments.clear()
+}
+
 type WebsiteAuthenticatorEnrollStageArgs = {
   message: {
     payload: { origin: string; vaultStoreId: string; otpauthUri: string }
@@ -425,6 +473,10 @@ export async function websiteAuthenticatorEnrollStage({
   message,
   sender,
 }: WebsiteAuthenticatorEnrollStageArgs): Promise<AuthenticatorStageResponse> {
+  const authorizationGeneration = accountPickerAuthorizationGeneration()
+  if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
+    return { ok: false, reason: 'authenticator-locked' }
+  }
   const nookTypedArgs0_10: Parameters<typeof isAuthorizedWebsiteSender>[0] = {
     sender,
     origin: message.payload.origin,
@@ -436,6 +488,9 @@ export async function websiteAuthenticatorEnrollStage({
     (candidate) => candidate.vaultStoreId === message.payload.vaultStoreId,
   )
   if (!grant) return { ok: false, reason: 'authenticator-vault-not-granted' }
+  if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
+    return { ok: false, reason: 'authenticator-locked' }
+  }
   purgeExpiredStagedEnrollments()
   for (const [stageId, staged] of stagedAuthenticatorEnrollments) {
     if (staged.origin === message.payload.origin) {
