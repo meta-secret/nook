@@ -9,7 +9,6 @@ on request.
     Fingerprint,
     MonitorSmartphone,
     Pencil,
-    Plus,
   } from '@lucide/svelte'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { Button } from '$lib/components/ui/button'
@@ -267,17 +266,5 @@ on request.
         </li>
       {/each}
     </ul>
-
-    <div class="mt-4">
-      <Button type="button" variant="ghost" disabled>
-        <Plus class="size-4" />
-        {vault.t(I18N_KEYS.DevicesAccessAddKey)}
-      </Button>
-      <p
-        class="mt-1 max-w-[60ch] text-xs leading-relaxed text-muted-foreground"
-      >
-        {vault.t(I18N_KEYS.DevicesAccessAddKeyUnavailable)}
-      </p>
-    </div>
   </div>
 </section>

@@ -366,9 +366,10 @@ Current dashboard requirements:
 - The relationship graph labels the internal app-key node as **App**.
   - It reads as protection method → app → identity → vault.
   - Raw app-key identifiers and cryptographic terminology remain internal.
-- **Add app** must not imply success before explicit identity enrollment
-  exists.
-  - The control explains that another installation must request enrollment.
+- App enrollment begins from the Nook installation that creates or joins a
+  vault.
+  - The selected-identity inventory only lists connected apps; it does not
+    offer a local **Add app** action.
 - The primary surface omits access-evidence inspection and browser-reported
   ceremony fields.
 - Raw passkey credential bytes never appear.
