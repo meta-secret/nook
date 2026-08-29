@@ -137,6 +137,22 @@ pub fn authentication_workflow_requires_login_match_availability(
 }
 
 #[wasm_bindgen]
+#[must_use]
+pub fn authentication_workflow_pilot_presentation_capability(
+    snapshot: nook_companion_core::AuthenticationWorkflowSnapshot,
+) -> nook_companion_core::AuthenticationPilotPresentationCapability {
+    snapshot.pilot_presentation_capability()
+}
+
+#[wasm_bindgen]
+#[must_use]
+pub fn classify_authentication_backup_codes_observation(
+    text: &str,
+) -> nook_companion_core::AuthenticationBackupCodesObservation {
+    nook_companion_core::classify_authentication_backup_codes_observation(text)
+}
+
+#[wasm_bindgen]
 pub fn decode_authenticator_backup_attach_response(
     response: nook_companion_core::AuthenticatorBackupAttachResponseWire,
 ) -> Result<nook_companion_core::AuthenticatorBackupAttachResponse, wasm_bindgen::JsError> {
@@ -782,6 +798,10 @@ mod tests {
             }
         ));
         assert_eq!(
+            authentication_workflow_pilot_presentation_capability(valid),
+            nook_companion_core::AuthenticationPilotPresentationCapability::ProposeAction
+        );
+        assert_eq!(
             authentication_workflow_saved_login_capability(
                 nook_companion_core::AuthenticationWorkflowSnapshot {
                     stage: nook_companion_core::AuthenticationWorkflowStage::Recovery,
@@ -789,6 +809,15 @@ mod tests {
                 }
             ),
             nook_companion_core::AuthenticationSavedLoginCapability::Unavailable
+        );
+        assert_eq!(
+            authentication_workflow_pilot_presentation_capability(
+                nook_companion_core::AuthenticationWorkflowSnapshot {
+                    stage: nook_companion_core::AuthenticationWorkflowStage::Recovery,
+                    ..valid
+                }
+            ),
+            nook_companion_core::AuthenticationPilotPresentationCapability::Hidden
         );
     }
 }

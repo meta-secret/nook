@@ -120,6 +120,7 @@ pub enum AuthenticationWorkflowAction {
     UsePasskey,
     CreatePasskey,
     TakeOver,
+    SaveBackupCodes,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -128,6 +129,14 @@ pub enum AuthenticationWorkflowAction {
 pub enum AuthenticationSavedLoginCapability {
     Unavailable,
     FillSavedLogin,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum AuthenticationPilotPresentationCapability {
+    Hidden,
+    ProposeAction,
 }
 
 impl AuthenticationWorkflowAction {
@@ -141,6 +150,7 @@ impl AuthenticationWorkflowAction {
             Self::UsePasskey => "use-passkey",
             Self::CreatePasskey => "create-passkey",
             Self::TakeOver => "take-over",
+            Self::SaveBackupCodes => "save-backup-codes",
         }
     }
 }
@@ -167,6 +177,7 @@ impl<'de> Deserialize<'de> for AuthenticationWorkflowAction {
             4 => Ok(Self::UsePasskey),
             5 => Ok(Self::CreatePasskey),
             6 => Ok(Self::TakeOver),
+            7 => Ok(Self::SaveBackupCodes),
             value => Err(serde::de::Error::custom(format!(
                 "invalid authentication workflow action: {value}"
             ))),
@@ -216,6 +227,7 @@ mod tests {
             AuthenticationWorkflowAction::UsePasskey,
             AuthenticationWorkflowAction::CreatePasskey,
             AuthenticationWorkflowAction::TakeOver,
+            AuthenticationWorkflowAction::SaveBackupCodes,
         ])
     }
 
@@ -234,6 +246,27 @@ mod tests {
             assert_eq!(serde_json::to_string(&value)?, serialized);
             assert_eq!(
                 serde_json::from_str::<AuthenticationSavedLoginCapability>(serialized)?,
+                value
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn pilot_presentation_capability_roundtrips_semantic_values() -> anyhow::Result<()> {
+        for (value, serialized) in [
+            (
+                AuthenticationPilotPresentationCapability::Hidden,
+                "\"hidden\"",
+            ),
+            (
+                AuthenticationPilotPresentationCapability::ProposeAction,
+                "\"propose-action\"",
+            ),
+        ] {
+            assert_eq!(serde_json::to_string(&value)?, serialized);
+            assert_eq!(
+                serde_json::from_str::<AuthenticationPilotPresentationCapability>(serialized)?,
                 value
             );
         }

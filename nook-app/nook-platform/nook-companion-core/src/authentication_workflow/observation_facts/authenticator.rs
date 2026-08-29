@@ -20,7 +20,22 @@ pub enum AuthenticationAuthenticatorSetupObservation {
 pub enum AuthenticationBackupCodesObservation {
     #[default]
     Absent,
+    /// Visible recovery material with at least one Rust-extracted backup-code candidate.
     Present,
+}
+
+/// Require both recovery copy and an extracted candidate before exposing a save action.
+#[must_use]
+pub fn classify_authentication_backup_codes_observation(
+    text: &str,
+) -> AuthenticationBackupCodesObservation {
+    if crate::page_has_backup_code_hint(text)
+        && !crate::extract_backup_code_candidates(text).is_empty()
+    {
+        AuthenticationBackupCodesObservation::Present
+    } else {
+        AuthenticationBackupCodesObservation::Absent
+    }
 }
 
 /// Raw, non-secret authenticator and passkey facts for one authentication scope.
@@ -58,5 +73,24 @@ impl AuthenticationAuthenticatorObservationFacts {
     ) -> bool {
         self.detailed_passkey_control
             .is_safe_for_fields(Some(fields))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn backup_code_observation_requires_an_extracted_candidate() {
+        assert_eq!(
+            classify_authentication_backup_codes_observation("Use a backup code instead"),
+            AuthenticationBackupCodesObservation::Absent
+        );
+        assert_eq!(
+            classify_authentication_backup_codes_observation(
+                "Save your backup codes\nA1B2-C3D4-E5F6"
+            ),
+            AuthenticationBackupCodesObservation::Present
+        );
     }
 }
