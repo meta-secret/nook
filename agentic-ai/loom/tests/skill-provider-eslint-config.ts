@@ -30,6 +30,13 @@ type ConfigurationSelectionRequest = {
   readonly words: readonly ShellWord[];
 };
 
+type TaskfileSelectionRequest = {
+  readonly importer: string;
+  readonly initialDirectory: string | false;
+  readonly start: number;
+  readonly words: readonly ShellWord[];
+};
+
 type ImplicitConfigurationRequest = {
   readonly initialDirectory: string;
   readonly names: readonly string[];
@@ -75,7 +82,8 @@ function commandReferences([
   sources,
   initialDirectory,
 ]: readonly [string, string, ReadonlyMap<string, string>, string]) {
-  if (!/(?:^|[\s/])(?:eslint|playwright)(?:\s|$)/u.test(command)) return [];
+  if (!/(?:^|[\s/])(?:eslint|playwright|go-task|task)(?:\s|$)/u.test(command))
+    return [];
   const references: ConfigurationReference[] = [];
   let directory: string | false = initialDirectory;
   for (const words of commandSegments(tokenizeShell(command))) {
@@ -92,6 +100,20 @@ function commandReferences([
           ? repositoryCommandDirectory([directory, target.value])
           : false;
       continue;
+    }
+    const runtimeName = posix.basename(runtime.value);
+    if (runtimeName === 'task' || runtimeName === 'go-task') {
+      const taskfileRequest: TaskfileSelectionRequest = {
+        importer,
+        initialDirectory: directory,
+        start,
+        words,
+      };
+      const taskfile = selectedTaskfileReference(taskfileRequest);
+      if (taskfile !== false) {
+        references.push(taskfile);
+        continue;
+      }
     }
     const invocation = toolInvocation([words, start]);
     if (invocation === false) continue;
@@ -130,6 +152,102 @@ function commandReferences([
     references.push(reference);
   }
   return references;
+}
+
+function selectedTaskfileReference(
+  request: TaskfileSelectionRequest,
+): ConfigurationReference | false {
+  const runtime = posix.basename(request.words[request.start]?.value ?? '');
+  if (runtime !== 'task' && runtime !== 'go-task') return false;
+  let directory = request.initialDirectory;
+  let selection: ShellWord | false = false;
+  let taskNameSeen = false;
+  for (
+    let index = request.start + 1;
+    index < request.words.length;
+    index += 1
+  ) {
+    const word = request.words[index] as ShellWord;
+    if (word.value === '--') {
+      taskNameSeen = true;
+      continue;
+    }
+    if (word.value === '--taskfile=' || word.value === '-t=')
+      throw new Error('Taskfile selection has no path.');
+    if (word.value === '--taskfile' || word.value === '-t') {
+      const value = request.words[index + 1];
+      if (!value || value.value.startsWith('-'))
+        throw new Error('Taskfile selection has no path.');
+      if (selection !== false)
+        throw new Error('Duplicate Taskfile selection is forbidden.');
+      selection = value;
+      index += 1;
+      continue;
+    }
+    if (word.value === '--dir' || word.value === '-d') {
+      const value = request.words[index + 1];
+      if (!value || value.dynamic || value.value.startsWith('-'))
+        throw new Error('Task working directory is missing or dynamic.');
+      directory =
+        directory === false
+          ? false
+          : repositoryCommandDirectory([directory, value.value]);
+      index += 1;
+      continue;
+    }
+    const attachedDirectory = /^(?:--dir=|-d=)(.+)$/u.exec(word.value);
+    if (attachedDirectory) {
+      if (word.dynamic)
+        throw new Error('Task working directory is missing or dynamic.');
+      directory =
+        directory === false
+          ? false
+          : repositoryCommandDirectory([directory, attachedDirectory[1] ?? '']);
+      continue;
+    }
+    const attached = /^(?:--taskfile=|-t=)(.+)$/u.exec(word.value);
+    if (attached) {
+      if (selection !== false)
+        throw new Error('Duplicate Taskfile selection is forbidden.');
+      selection = { ...word, value: attached[1] ?? '' };
+      continue;
+    }
+    if (word.dynamic && !taskNameSeen)
+      throw new Error('Dynamic Task option construction is forbidden.');
+    if (!word.value.startsWith('-')) taskNameSeen = true;
+  }
+  if (selection === false) return false;
+  if (directory === false)
+    throw new Error('Dynamic package command working directory.');
+  const selected = repositoryTaskfilePath([directory, selection]);
+  return {
+    importerRelative: true,
+    positionalArguments: false,
+    required: true,
+    requiresExecuteMode: false,
+    shellRuntime: false,
+    specifier: posix.relative(posix.dirname(request.importer), selected),
+    taskInclude: true,
+    workingDirectory: directory,
+  };
+}
+
+function repositoryTaskfilePath([directory, selection]: readonly [
+  string,
+  ShellWord,
+]): string {
+  let path = selection.value;
+  if (selection.dynamic) {
+    const workspace = /^\$\{?GITHUB_WORKSPACE\}?\/(.+)$/u.exec(path)?.[1];
+    if (!workspace) throw new Error('Dynamic Taskfile selection is forbidden.');
+    path = workspace.replace(/^\.nook\/release-workflow\//u, '');
+  }
+  if (path.length === 0 || path.startsWith('/'))
+    throw new Error('Taskfile path escapes the repository.');
+  const resolved = posix.normalize(posix.join(directory, path));
+  if (resolved === '..' || resolved.startsWith('../'))
+    throw new Error('Taskfile path escapes the repository.');
+  return resolved.replace(/^\.$/u, '');
 }
 
 function commandSegments(
@@ -237,16 +355,10 @@ function nearestImplicitConfiguration(
 function repositoryCommandDirectory([directory, path]: readonly [
   string,
   string,
-]): string {
-  if (path.length === 0 || path.startsWith('/'))
-    throw new Error(
-      'Package command working directory escapes the repository.',
-    );
+]): string | false {
+  if (path.length === 0 || path.startsWith('/')) return false;
   const resolved = posix.normalize(posix.join(directory, path));
-  if (resolved === '..' || resolved.startsWith('../'))
-    throw new Error(
-      'Package command working directory escapes the repository.',
-    );
+  if (resolved === '..' || resolved.startsWith('../')) return false;
   return resolved.replace(/^\.$/u, '');
 }
 

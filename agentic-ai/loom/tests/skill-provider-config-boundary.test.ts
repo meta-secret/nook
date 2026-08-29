@@ -158,7 +158,10 @@ export function configurationScriptPaths(
           throw new Error(
             `Runnable repository package import is unsupported: ${importer} -> ${specifier}`,
           );
-        if (reference.required && posix.extname(specifier).length > 0) {
+        if (
+          reference.required &&
+          (reference.taskInclude || posix.extname(specifier).length > 0)
+        ) {
           throw new Error(
             `Runnable script is untracked: ${importer} -> ${specifier}`,
           );

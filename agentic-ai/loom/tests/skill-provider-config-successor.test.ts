@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 import { analyzeShellCommands } from './skill-provider-command-boundary.ts';
 import { configurationScriptPaths } from './skill-provider-config-boundary.test.ts';
 import { runnableCommandSources } from './skill-provider-config-commands.ts';
+import { commandConfigurationReferences } from './skill-provider-eslint-config.ts';
 import {
   isRunnableConfiguration,
   normalizeConfigurationShellSource,
@@ -106,6 +107,73 @@ test('Task includes with arbitrary filenames join the runnable graph', () => {
   ]);
   const request = { roots: ['infra/Taskfile.yml'], sources };
   expectProviderReachable(graph(request));
+});
+
+test('explicit Taskfile selections join the runnable graph', () => {
+  for (const command of [
+    'task -t scripts/commands.yml audit',
+    'task --taskfile scripts/commands.yml audit',
+    'task -t=scripts/commands.yml audit',
+    'go-task --taskfile=scripts/commands.yml audit',
+  ]) {
+    const sources = new Map([
+      ['package.json', `{"scripts":{"audit":"${command}"}}`],
+      ['scripts/commands.yml', `tasks: {audit: {cmds: [bun ${PROVIDER_CLI}]}}`],
+      [PROVIDER_CLI, 'export {};'],
+    ]);
+    const request = { roots: ['package.json'], sources };
+    expectProviderReachable(graph(request));
+  }
+});
+
+test('repository explicit Taskfile selection preserves relative cwd', () => {
+  const repositorySelectionRequest = {
+    commands: ['task --taskfile agentic-ai/minds/hive/Taskfile.yml format'],
+    importer: '.task/agentic-ai.yml',
+    sources: new Map<string, string>(),
+    workingDirectory: '',
+  };
+  expect(commandConfigurationReferences(repositorySelectionRequest)).toEqual([
+    {
+      importerRelative: true,
+      positionalArguments: false,
+      required: true,
+      requiresExecuteMode: false,
+      shellRuntime: false,
+      specifier: '../agentic-ai/minds/hive/Taskfile.yml',
+      taskInclude: true,
+      workingDirectory: '',
+    },
+  ]);
+  const sources = new Map([
+    [
+      'package.json',
+      '{"scripts":{"audit":"cd nested && task --taskfile ../scripts/commands.yml audit"}}',
+    ],
+    ['scripts/commands.yml', 'tasks: {audit: {cmds: [bun scripts/facade.ts]}}'],
+    ['scripts/facade.ts', 'export const safe = true;'],
+    ['nested/scripts/facade.ts', `await import('../../${PROVIDER_CLI}');`],
+    [PROVIDER_CLI, 'export {};'],
+  ]);
+  const collisionRequest = { roots: ['package.json'], sources };
+  expectProviderReachable(graph(collisionRequest));
+});
+
+test('dynamic and malformed Taskfile selections fail closed', () => {
+  for (const command of [
+    'task --taskfile "$TASKFILE" audit',
+    'task "$OPTION" scripts/commands.yml audit',
+    'task --taskfile audit',
+    'task --taskfile= audit',
+    'task -t scripts/a.yml --taskfile scripts/b.yml audit',
+    'task --taskfile ../../outside.yml audit',
+  ]) {
+    const sources = new Map([
+      ['package.json', `{"scripts":{"audit":${JSON.stringify(command)}}}`],
+    ]);
+    const request = { roots: ['package.json'], sources };
+    expect(() => configurationScriptPaths(graph(request)), command).toThrow();
+  }
 });
 
 test('workflow env precedence is propagated into run analysis', () => {
