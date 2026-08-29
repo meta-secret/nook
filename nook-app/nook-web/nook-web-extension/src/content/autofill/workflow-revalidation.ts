@@ -16,8 +16,26 @@ import {
 type RevalidatedAuthenticationActionArgs = {
   workflow: PasswordFormObservation
   expectedAction: AuthenticationWorkflowAction
-  act: (currentWorkflow: PasswordFormObservation) => boolean
+  observationBinding: AuthenticationObservationBinding
+  act: (request: RevalidatedAuthenticationActRequest) => boolean
 }
+
+export type RevalidatedAuthenticationActRequest = {
+  currentWorkflow: PasswordFormObservation
+  observationDigest: string
+}
+
+export enum AuthenticationObservationBindingKind {
+  Unbound = 'unbound',
+  Required = 'required',
+}
+
+export type AuthenticationObservationBinding =
+  | { kind: AuthenticationObservationBindingKind.Unbound }
+  | {
+      kind: AuthenticationObservationBindingKind.Required
+      observationDigest: string
+    }
 
 /**
  * Rebuild untrusted DOM facts and require a fresh Rust decision immediately
@@ -27,6 +45,7 @@ type RevalidatedAuthenticationActionArgs = {
 export async function performRevalidatedAuthenticationAction({
   workflow,
   expectedAction,
+  observationBinding,
   act,
 }: RevalidatedAuthenticationActionArgs): Promise<boolean> {
   const observeCurrentFacts = () => {
@@ -44,6 +63,13 @@ export async function performRevalidatedAuthenticationAction({
     }
   }
   const approvedObservation = observeCurrentFacts()
+  const approvedObservationDigest = JSON.stringify(approvedObservation.facts)
+  if (
+    observationBinding.kind === AuthenticationObservationBindingKind.Required &&
+    observationBinding.observationDigest !== approvedObservationDigest
+  ) {
+    return false
+  }
   const message: Parameters<
     typeof sendAuthenticationWorkflowSnapshotRuntimeMessage
   >[0] = {
@@ -73,5 +99,9 @@ export async function performRevalidatedAuthenticationAction({
   ) {
     return false
   }
-  return act(currentObservation.currentWorkflow)
+  const actRequest: RevalidatedAuthenticationActRequest = {
+    currentWorkflow: currentObservation.currentWorkflow,
+    observationDigest: approvedObservationDigest,
+  }
+  return act(actRequest)
 }

@@ -53,7 +53,11 @@ import {
   sendRuntimeMessageWithoutResponse,
 } from './runtime-message-adapter'
 import { GeneratePasswordRequestType } from '../../../../nook-web-shared/src/extension/runtime-messages'
-import { performRevalidatedAuthenticationAction } from './workflow-revalidation'
+import {
+  AuthenticationObservationBindingKind,
+  performRevalidatedAuthenticationAction,
+  type AuthenticationObservationBinding,
+} from './workflow-revalidation'
 
 export {
   RuntimeMessageDeliveryKind,
@@ -148,22 +152,22 @@ export async function fillAndSubmitAccount({
   description,
   continueButton,
 }: FillAndSubmitAccountArgs): Promise<boolean> {
-  if (!approvedWorkflowIsStillCurrent(workflow)) {
-    const nookTypedArgs0_stale: Parameters<typeof setStatus>[0] = {
-      description,
-      continueButton,
-      text: translatedMessage(BROWSER_MESSAGE_KEYS.WidgetFillFailed),
-      enableContinue: true,
-    }
-    setStatus(nookTypedArgs0_stale)
-    return false
+  let releasedObservationBinding: AuthenticationObservationBinding = {
+    kind: AuthenticationObservationBindingKind.Unbound,
   }
   const releaseRevalidationRequest: Parameters<
     typeof performRevalidatedAuthenticationAction
   >[0] = {
     workflow,
     expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
-    act: () => true,
+    observationBinding: releasedObservationBinding,
+    act: ({ observationDigest }) => {
+      releasedObservationBinding = {
+        kind: AuthenticationObservationBindingKind.Required,
+        observationDigest,
+      }
+      return true
+    },
   }
   const releaseApproved = await performRevalidatedAuthenticationAction(
     releaseRevalidationRequest,
@@ -242,26 +246,6 @@ export async function fillAndSubmitAccount({
     password: response.password,
   }
   response.password = ''
-  if (!approvedWorkflowIsStillCurrent(workflow)) {
-    credentials.password = ''
-    credentials.username = ''
-    const nookTypedArgs0_staleFill: Parameters<typeof setFlightProgress>[0] = {
-      step,
-      title,
-      currentStep: 1,
-      totalSteps: 3,
-      titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
-    }
-    setFlightProgress(nookTypedArgs0_staleFill)
-    const nookTypedArgs0_staleFillStatus: Parameters<typeof setStatus>[0] = {
-      description,
-      continueButton,
-      text: translatedMessage(BROWSER_MESSAGE_KEYS.WidgetFillFailed),
-      enableContinue: true,
-    }
-    setStatus(nookTypedArgs0_staleFillStatus)
-    return false
-  }
   let submissionResult = FormSubmissionResult.NotObserved
   let filledRequest: Parameters<typeof fillLoginCredentials>[0] | false = false
   const fillRevalidationRequest: Parameters<
@@ -269,7 +253,8 @@ export async function fillAndSubmitAccount({
   >[0] = {
     workflow,
     expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
-    act: (currentWorkflow) => {
+    observationBinding: releasedObservationBinding,
+    act: ({ currentWorkflow }) => {
       const fillRequest: Parameters<typeof fillLoginCredentials>[0] = {
         credentials,
         kind: PasswordFormQueryKind.Scoped,
@@ -571,18 +556,6 @@ export async function generatePasswordWithNook({
   continueButton,
 }: GeneratePasswordWithNookArgs): Promise<void> {
   if (widgetState.busy) return
-  if (!approvedWorkflowIsStillCurrent(workflow)) {
-    const nookTypedArgs0_staleGenerate: Parameters<typeof setStatus>[0] = {
-      description,
-      continueButton,
-      text: translatedMessage(
-        BROWSER_MESSAGE_KEYS.WidgetGeneratePasswordFailed,
-      ),
-      enableContinue: true,
-    }
-    setStatus(nookTypedArgs0_staleGenerate)
-    return
-  }
   widgetState.busy = true
   continueButton.disabled = true
   const totalSteps = workflow.summary.currentPasswordFieldCount > 0 ? 4 : 5
@@ -638,19 +611,6 @@ export async function generatePasswordWithNook({
       return
     }
     const password = response.password
-    if (!approvedWorkflowIsStillCurrent(workflow)) {
-      const nookTypedArgs0_staleGeneratedFill: Parameters<typeof setStatus>[0] =
-        {
-          description,
-          continueButton,
-          text: translatedMessage(
-            BROWSER_MESSAGE_KEYS.WidgetGeneratePasswordFailed,
-          ),
-          enableContinue: true,
-        }
-      setStatus(nookTypedArgs0_staleGeneratedFill)
-      return
-    }
     const nookTypedArgs0_25: Parameters<typeof fillGeneratedPassword>[0] = {
       password,
       kind: PasswordFormQueryKind.Scoped,
@@ -700,16 +660,6 @@ export async function proposePasskeyWithNook({
   workflow,
 }: ProposePasskeyWithNookArgs): Promise<void> {
   if (widgetState.busy) return
-  if (!approvedWorkflowIsStillCurrent(workflow)) {
-    const nookTypedArgs0_stalePasskey: Parameters<typeof setStatus>[0] = {
-      description,
-      continueButton,
-      text: translatedMessage(BROWSER_MESSAGE_KEYS.WidgetPasskeyControlMissing),
-      enableContinue: true,
-    }
-    setStatus(nookTypedArgs0_stalePasskey)
-    return
-  }
   widgetState.busy = true
   continueButton.disabled = true
   const nookTypedArgs0_28: Parameters<typeof setStatus>[0] = {
@@ -729,7 +679,10 @@ export async function proposePasskeyWithNook({
     >[0] = {
       workflow,
       expectedAction: action,
-      act: (currentWorkflow) => {
+      observationBinding: {
+        kind: AuthenticationObservationBindingKind.Unbound,
+      },
+      act: ({ currentWorkflow }) => {
         const control = findWorkflowPasskeyControl(currentWorkflow)
         if (control.kind === PasskeyControlLookupKind.Absent) return false
         control.control.click()
@@ -798,16 +751,6 @@ export async function continueWithNook({
 }: ContinueWithNookArgs): Promise<void> {
   if (widgetState.busy || pickerState.login.kind === LoginPickerKind.Open)
     return
-  if (!approvedWorkflowIsStillCurrent(workflow)) {
-    const nookTypedArgs0_staleContinue: Parameters<typeof setStatus>[0] = {
-      description,
-      continueButton,
-      text: translatedMessage(BROWSER_MESSAGE_KEYS.WidgetFillFailed),
-      enableContinue: true,
-    }
-    setStatus(nookTypedArgs0_staleContinue)
-    return
-  }
   widgetState.busy = true
   continueButton.disabled = true
   const nookTypedArgs0_31: Parameters<typeof setFlightProgress>[0] = {
