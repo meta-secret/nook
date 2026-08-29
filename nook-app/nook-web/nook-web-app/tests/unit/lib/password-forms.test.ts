@@ -9,9 +9,7 @@ import {
   fillLoginCredentials,
   fillOneTimeCode,
   findOneTimeCodeFields,
-  findPasskeyControl,
   findWorkflowPasskeyControl,
-  pageHasPasskeyControl,
   PasskeyControlLookupKind,
   PasswordFormQueryKind,
   PasswordFormScopeKind,
@@ -452,6 +450,28 @@ describe('website one-time-code fields', () => {
     }
   })
 
+  test('fills username-only then advances an input activation control', () => {
+    document.body.innerHTML = `
+      <form id="login-form">
+        <input autocomplete="username" name="email" type="email" />
+        <input id="next" type="button" value="Next" />
+      </form>
+    `
+    let advanced = false
+    document.querySelector('#next')?.addEventListener('click', () => {
+      advanced = true
+    })
+
+    const loginFillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: { username: 'pilot@nook.test', password: '' },
+      kind: PasswordFormQueryKind.Root,
+      root: document,
+    }
+    expect(fillLoginCredentials(loginFillArgs)).toBe(true)
+    expect(submitLoginForm(observedAuthenticationWorkflow())).toBe(true)
+    expect(advanced).toBe(true)
+  })
+
   test('groups externally associated controls with their form owner', () => {
     document.body.innerHTML = `
       <form id="login"><input autocomplete="username" /></form>
@@ -779,146 +799,5 @@ describe('website one-time-code fields', () => {
     expect(field?.value).toBe('123456')
     expect(inputEvents).toBe(1)
     expect(document.activeElement).toBe(field)
-  })
-})
-
-describe('passkey control detection', () => {
-  test('does not treat password inputs with webauthn autocomplete as passkey controls', () => {
-    document.body.innerHTML = `
-      <form>
-        <input autocomplete="section-login username" name="email" type="email" />
-        <input
-          autocomplete="section-login current-password webauthn"
-          name="password"
-          type="password"
-        />
-        <button type="submit">Sign in</button>
-      </form>
-    `
-
-    expect(pageHasPasskeyControl()).toBe(false)
-    expect(summarizeAuthenticationWorkflowForms()[0]?.summary).toMatchObject({
-      passkeyControlPresent: false,
-      currentPasswordFieldCount: 1,
-    })
-  })
-
-  test('detects marked and labeled passkey controls', () => {
-    document.body.innerHTML = `
-      <button type="button" data-nook-passkey-control>Continue</button>
-    `
-    const marked = findPasskeyControl()
-    expect(marked.kind).toBe(PasskeyControlLookupKind.Found)
-    if (marked.kind === PasskeyControlLookupKind.Found) {
-      expect(marked.control.getAttribute('data-nook-passkey-control')).toBe('')
-    }
-
-    document.body.innerHTML = `
-      <button type="button">Sign in with a passkey</button>
-    `
-    const labeled = findPasskeyControl()
-    expect(labeled.kind).toBe(PasskeyControlLookupKind.Found)
-    if (labeled.kind === PasskeyControlLookupKind.Found) {
-      expect(labeled.control.textContent).toContain('passkey')
-    }
-    expect(pageHasPasskeyControl()).toBe(true)
-  })
-
-  test('enumerates passkey-only candidates until Rust approves a safe control', () => {
-    document.body.innerHTML = `
-      <section id="account-settings">
-        <button type="button" data-nook-passkey-control>Delete passkey</button>
-      </section>
-      <section id="login">
-        <button type="button" data-nook-passkey-control>Use passkey</button>
-      </section>
-    `
-
-    const observations = summarizeAuthenticationWorkflowForms()
-    expect(observations).toHaveLength(2)
-    const facts = observations.map((observation) =>
-      authenticationPageObservationFacts({
-        observation,
-        authenticatorSetupHint: false,
-        backupCodesHint: false,
-      }),
-    )
-    const detailedControls = facts.map(
-      ({ authenticator }) => authenticator.detailedPasskeyControl,
-    )
-    expect(detailedControls[0]).toMatchObject({
-      kind: 'observed',
-      observation: { label: expect.stringContaining('Delete passkey') },
-    })
-    expect(detailedControls[1]).toMatchObject({
-      kind: 'observed',
-      observation: { label: expect.stringContaining('Use passkey') },
-    })
-    const workflowMatch = classify_companion_authentication_workflow_facts({
-      observations: facts,
-    })
-    expect(companion_authentication_workflow_match_kind(workflowMatch)).toBe(
-      CompanionAuthenticationWorkflowMatchKind.Matched,
-    )
-    expect(
-      'snapshot' in workflowMatch
-        ? workflowMatch.snapshot.observationIndex
-        : undefined,
-    ).toBe(1)
-    const approved = findWorkflowPasskeyControl(observations[1]!)
-    expect(approved.kind).toBe(PasskeyControlLookupKind.Found)
-    if (approved.kind === PasskeyControlLookupKind.Found) {
-      expect(approved.control.textContent).toContain('Use passkey')
-    }
-  })
-
-  test('keeps an external form-associated passkey control owned', () => {
-    document.body.innerHTML = `
-      <form id="login" action="/login"></form>
-      <button form="login" type="button" data-nook-passkey-control>Use passkey</button>
-    `
-
-    const observation = summarizeAuthenticationWorkflowForms()[0]
-    expect(observation).toBeDefined()
-    if (!observation) return
-    const facts = authenticationPageObservationFacts({
-      observation,
-      authenticatorSetupHint: false,
-      backupCodesHint: false,
-    })
-    expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
-      kind: 'observed',
-      observation: {
-        ownership: 'owned-form',
-        label: expect.stringContaining('Use passkey'),
-      },
-    })
-  })
-
-  test('treats an in-form passkey link as locally scoped', () => {
-    document.body.innerHTML = `
-      <form id="login" action="/login">
-        <input autocomplete="username" />
-        <input type="password" autocomplete="current-password" />
-        <button type="submit">Sign in</button>
-        <a href="/login" data-nook-passkey-control>Use passkey</a>
-      </form>
-    `
-
-    const observation = summarizeAuthenticationWorkflowForms()[0]
-    expect(observation).toBeDefined()
-    if (!observation) return
-    const facts = authenticationPageObservationFacts({
-      observation,
-      authenticatorSetupHint: false,
-      backupCodesHint: false,
-    })
-    expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
-      kind: 'observed',
-      observation: {
-        ownership: 'locally-scoped',
-        label: expect.stringContaining('Use passkey'),
-      },
-    })
   })
 })

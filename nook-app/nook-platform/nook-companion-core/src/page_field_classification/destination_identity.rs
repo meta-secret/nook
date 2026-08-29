@@ -51,6 +51,10 @@ fn decode_component(value: &str) -> Option<String> {
     Some(decoded.into_owned())
 }
 
+fn decode_query_component(value: &str) -> Option<String> {
+    decode_component(&value.replace('+', " "))
+}
+
 pub(super) fn canonicalize_control_destination(
     source_origin: &str,
     destination_identity: &str,
@@ -71,7 +75,7 @@ pub(super) fn canonicalize_control_destination(
         decode_component(destination.path())?
     };
     let query = match destination.query() {
-        Some(value) => Some(decode_component(value)?),
+        Some(value) => Some(decode_query_component(value)?),
         None => None,
     };
     if let Some(fragment) = destination.fragment() {
@@ -180,7 +184,12 @@ mod tests {
 
     #[test]
     fn decodes_route_vocabulary_before_policy_classification() {
-        for destination in ["/auth/%64elete-account", "/auth/%2564elete-account"] {
+        for destination in [
+            "/auth/%64elete-account",
+            "/auth/%2564elete-account",
+            "/auth/confirm?action=close+account",
+            "/login?action=authorize+transaction",
+        ] {
             assert!(!advances(&password_control(
                 "https://example.test",
                 destination

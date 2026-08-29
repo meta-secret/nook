@@ -247,7 +247,7 @@ function scopedControlRoot({ root, formScope }: PasswordFormObservation): Parent
 }
 
 const authenticationAdvanceControlSelector =
-  'button[type="submit"], input[type="submit"], input[type="image"], button:not([type]), button[type="button"]';
+  'button[type="submit"], input[type="submit"], input[type="image"], input[type="button"], button:not([type]), button[type="button"]';
 
 function isRenderedControl(control: HTMLElement): boolean {
   let element = control;
@@ -348,6 +348,13 @@ export function findWorkflowPasskeyControl(
   return control
     ? { kind: PasskeyControlLookupKind.Found, control }
     : { kind: PasskeyControlLookupKind.Absent };
+}
+
+function passkeyControlOwner(control: HTMLElement): HTMLFormElement | null {
+  return control instanceof HTMLButtonElement ||
+    control instanceof HTMLInputElement
+    ? control.form
+    : control.closest("form");
 }
 
 function usernameEvidence(
@@ -603,7 +610,7 @@ export function summarizeAuthenticationWorkflowForms(): PasswordFormObservation[
       findUsernameFields(nookNamedArgs0_2).some(isAuthUsernameField)
     );
   });
-  const observations: PasswordFormObservation[] = forms.map((form) => {
+  const observations: PasswordFormObservation[] = forms.flatMap((form) => {
     const summaryArgs: Parameters<typeof summarizeRoot>[0] = {
       kind: PasswordFormQueryKind.Scoped,
       root,
@@ -612,11 +619,20 @@ export function summarizeAuthenticationWorkflowForms(): PasswordFormObservation[
         owner: form,
       },
     };
-    return {
+    const observation: PasswordFormObservation = {
       root,
       formScope: { kind: PasswordFormScopeKind.Owned, owner: form },
       summary: summarizeRoot(summaryArgs),
     };
+    const passkeyControls = findPasskeyControls(root).filter(
+      (control) => isRenderedControl(control) && passkeyControlOwner(control) === form,
+    );
+    return passkeyControls.length > 0
+      ? passkeyControls.map((passkeyControl) => ({
+          ...observation,
+          passkeyControl,
+        }))
+      : [observation];
   });
   const unownedFields = [
     ...allPasswordFields,

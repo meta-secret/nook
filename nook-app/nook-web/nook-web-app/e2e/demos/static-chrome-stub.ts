@@ -458,7 +458,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
               action: authenticationWorkflow.continueAction,
               currentStep: 1,
               totalSteps: 3,
-              requiresHumanApproval: false,
+              approvalRequirement: authenticationWorkflow.explicitUserApproval,
               observationIndex: 0,
             },
           }
