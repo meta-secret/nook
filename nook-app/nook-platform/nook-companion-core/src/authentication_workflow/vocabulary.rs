@@ -1,6 +1,7 @@
 //! Stable browser-companion vocabulary for authentication workflows.
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
@@ -121,6 +122,14 @@ pub enum AuthenticationWorkflowAction {
     TakeOver,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum AuthenticationSavedLoginCapability {
+    Unavailable,
+    FillSavedLogin,
+}
+
 impl AuthenticationWorkflowAction {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
@@ -208,5 +217,26 @@ mod tests {
             AuthenticationWorkflowAction::CreatePasskey,
             AuthenticationWorkflowAction::TakeOver,
         ])
+    }
+
+    #[test]
+    fn saved_login_capability_roundtrips_semantic_values() -> anyhow::Result<()> {
+        for (value, serialized) in [
+            (
+                AuthenticationSavedLoginCapability::Unavailable,
+                "\"unavailable\"",
+            ),
+            (
+                AuthenticationSavedLoginCapability::FillSavedLogin,
+                "\"fill-saved-login\"",
+            ),
+        ] {
+            assert_eq!(serde_json::to_string(&value)?, serialized);
+            assert_eq!(
+                serde_json::from_str::<AuthenticationSavedLoginCapability>(serialized)?,
+                value
+            );
+        }
+        Ok(())
     }
 }

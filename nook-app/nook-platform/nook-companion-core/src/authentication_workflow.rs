@@ -30,7 +30,8 @@ pub use observation_validation::{
     authentication_page_observations_are_valid,
 };
 pub use vocabulary::{
-    AuthenticationWorkflowAction, AuthenticationWorkflowKind, AuthenticationWorkflowStage,
+    AuthenticationSavedLoginCapability, AuthenticationWorkflowAction, AuthenticationWorkflowKind,
+    AuthenticationWorkflowStage,
 };
 
 use crate::website_passkey_proposal::{WebsitePasskeyProposal, propose_website_passkey};
@@ -240,6 +241,18 @@ impl AuthenticationWorkflowSnapshot {
                 AuthenticationApprovalRequirement::TakeoverRequired,
             )
         )
+    }
+
+    #[must_use]
+    pub const fn saved_login_capability(self) -> AuthenticationSavedLoginCapability {
+        if self.matches_classifier_contract()
+            && matches!(self.kind, AuthenticationWorkflowKind::Login)
+            && matches!(self.action, AuthenticationWorkflowAction::ContinueWithNook)
+        {
+            AuthenticationSavedLoginCapability::FillSavedLogin
+        } else {
+            AuthenticationSavedLoginCapability::Unavailable
+        }
     }
 }
 
