@@ -315,9 +315,16 @@ export async function captureGitMetadataBaseline(
   } catch {
     exclude = "";
   }
+  const indexFlags = await gitOutput(repoRoot, ["ls-files", "-v"]);
+  if (
+    indexFlags
+      .split("\n")
+      .some((line) => line.startsWith("S") || line.startsWith("h"))
+  )
+    throw new Error("Bounded editor set nondefault Git index flags");
   return {
     commonDirectory: commonDirectory.trim(),
-    configuration: `${configuration}\0${exclude}`,
+    configuration: `${configuration}\0${exclude}\0${indexFlags}`,
     gitDirectory: gitDir,
   };
 }
