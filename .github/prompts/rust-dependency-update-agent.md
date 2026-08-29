@@ -18,6 +18,15 @@ Load only:
 Do not load implementation-team graphs into Gizmo's context. Do not pass Gizmo
 context to implementation workers.
 
+The `rust-dependency-update` editor has no Git, validation, network, credentials,
+or publication. Use only this host-provided inventory; do not guess versions.
+The host rechecks HEAD/index/Git metadata and accepts only regular mission
+`Cargo.toml`, `Cargo.lock`, and `.rs`; all else fails closed.
+
+```
+${RUST_DEPS_OUTDATED_REPORT}
+```
+
 ## Coordination procedure
 
 1. Record the exact 40-character baseline commit.
@@ -31,9 +40,10 @@ context to implementation workers.
 4. Partition writer tasks by functional owner and allowed path.
 5. Assign each dependency, lockfile, source, and test task to exactly one
    semantic team identity.
-6. Integrate only verified commit handoffs.
-7. Run integrated validation through repository Task targets.
-8. Return the branch to the normal Gizmo PR-delivery workflow.
+6. Integrate each non-Git handoff: bounded diff, owned paths, focused summary.
+7. Finish the bounded working-tree edit without running validation or Git.
+8. Let the trusted host validate and publish before returning the exact head to
+   the normal Gizmo PR-delivery workflow.
 
 Gizmo selects each team through the canonical mapping authority at
 `.cortex/gizmo/workflows/team-oriented-development.md`.
@@ -58,12 +68,13 @@ The dependency-specific contract also names:
 The worker loads only its named team context and task-relevant authorities. It
 must not load Gizmo context or another team's graph. It preserves standard
 Cargo version strings, updates only owned lockfiles, makes the smallest API
-migration, and returns a commit handoff with focused tests.
+migration, and returns a non-Git handoff with focused tests.
 
-## Integrated validation
+## Trusted host validation
 
-Gizmo selects validation after integrating all owner handoffs. The complete
-dependency mission normally includes:
+After editor completion, the trusted host runs Hive and fuzz on the Hive
+runner before any commit or push. Browser e2e runs through PR CI after
+publication:
 
 ```bash
 WASM_BUILD_MODE=prod task ci:pr:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
@@ -72,7 +83,6 @@ task hive:verify
 ```
 
 This covers every local-provider Playwright e2e spec, and the
-   extension e2e. The fuzz and Hive targets validate their separate workspaces.
-
-Repeat only the applicable failing scope after a team-owned correction. Never
-kill the Docker daemon. Do not commit secrets, `.env`, credentials, or raw logs.
+   extension e2e. The fuzz and Hive targets validate their separate workspaces
+on the Hive runner. Failure blocks publication; verify PR/base/head and remote
+SHA before returning to Gizmo. Never kill Docker or commit secrets or raw logs.

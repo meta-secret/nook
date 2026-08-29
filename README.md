@@ -447,16 +447,18 @@ and the explicit expertise contract. [Shared knowledge](.cortex/shared/knowledge
 is loaded only for a named cross-team dependency. It is not an implementation
 team.
 
-Agent workflow: run **`task loom:pre-push`**, commit, and push the exact branch head;
-run focused builds/tests with **`task remote TASK_NAME=<name>`** or batch them
-with **`task remote TASK_NAMES=<name>,<name>`**. Single `preflight`, `rust:ci`,
-and `arc:runtime` selections use disposable ARC runner Pods in k0s. Browser
+Ordinary implementation agents return verified committed handoffs to Gizmo.
+Gizmo integrates them, runs **`task loom:pre-push`**, and pushes the exact
+branch head. Gizmo then runs focused builds/tests with
+**`task remote TASK_NAME=<name>`** or batches them with
+**`task remote TASK_NAMES=<name>,<name>`**. Single `preflight`, `rust:ci`, and
+`arc:runtime` selections use disposable ARC runner Pods in k0s. Browser
 selectors execute separately in exact-image Kubernetes Pods; compatible
-build-only selectors may share one ARC batch. Then explicitly start complete PR validation with
-**`task pr:validate PR=<number>`** when the head is ready. Ordinary PR pushes do
-not start the complete pipeline. Local Task mirrors below remain available for
-humans. Main-fix PRs use `FULL_E2E=1` to request the Main-equivalent browser
-suites.
+build-only selectors may share one ARC batch. When the head is ready, Gizmo
+explicitly starts complete PR validation with
+**`task pr:validate PR=<number>`**. Ordinary PR pushes do not start the complete
+pipeline. Local Task mirrors below remain available for humans. Main-fix PRs
+use `FULL_E2E=1` to request the Main-equivalent browser suites.
 
 For a read-only, event-sourced Cortex garbage-collection audit, run
 **`task loom:agent-workflow:cortex-audit BASELINE=<40-character-commit-sha>`**.
@@ -514,7 +516,7 @@ or synthesis barrier; every role remains nondelegating and read-only. See the
 and [workflow](.cortex/teams/ai/workflows/structural-refactoring.md).
 
 ```sh
-task loom:pre-push         # required local agent action (host-applied)
+task loom:pre-push         # required Gizmo-owned integrated pre-push hygiene
 task loom:cortex-session-clean # assert temporary agent memory is removed
 task loom:agent-workflow:cortex-audit BASELINE=<40-character-commit-sha> # event streams plus hierarchical read models
 task loom:agent-delegation:record REQUEST=<request.json> # ordinary delegated attempt journal and view
@@ -587,8 +589,9 @@ task infra:sccache:check    # remote SeaweedFS S3 anonymous-deny + signed access
 
 Expensive remote browser/full-suite dispatches and `task pr:validate` refresh
 the target base first and stop immediately when the branch is behind. Merge the
-reported `origin/<base>`, format, push, and rerun instead of spending hosted
-validation on an obsolete base.
+reported `origin/<base>` into the delivery branch. Gizmo then runs pre-push
+hygiene, pushes, and reruns instead of spending hosted validation on an
+obsolete base.
 
 Routine `task infra:deploy` runs preserve Hive's cluster-rotated Codex
 authentication even if `HIVE_CODEX_AUTH_FILE` remains set. Use the explicit

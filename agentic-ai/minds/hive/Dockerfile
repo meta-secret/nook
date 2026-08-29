@@ -138,9 +138,9 @@ COPY Cargo.toml Cargo.lock ./
 COPY vendor vendor
 COPY lace/Cargo.toml lace/Cargo.toml
 COPY hive/Cargo.toml hive/Cargo.toml
-RUN mkdir -p lace/src hive/src \
+RUN --network=default mkdir -p lace/src hive/src \
     && touch lace/src/lib.rs hive/src/lib.rs hive/src/main.rs \
-    && cargo fetch --locked
+    && cargo fetch --locked --config net.git-fetch-with-cli=false
 
 # Production image builds use a release-profile cargo-chef layer.
 FROM fetched-dependencies AS dependencies

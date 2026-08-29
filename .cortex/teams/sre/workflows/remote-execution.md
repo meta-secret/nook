@@ -72,8 +72,7 @@ Routing rules:
 - Other mixed batches use the general `nook-k0s` scale set.
 - Fork and Dependabot jobs stay hosted and secret-free.
 - Browser jobs use ordinary Pods on `nook-k0s-container`.
-- Do not expose selectors whose Taskfile path reaches `docker run`, `docker
-  create`, `docker start`, `docker exec`, or another runtime lifecycle command.
+- Do not expose selectors whose Taskfile path reaches `docker run`, `docker create`, `docker start`, `docker exec`, or another runtime lifecycle command.
 - Keep a selector unavailable until it has a direct ordinary-Pod or build-only
   implementation.
 

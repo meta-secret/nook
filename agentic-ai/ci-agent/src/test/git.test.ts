@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -10,6 +10,7 @@ import {
   configureGitForCi,
   countAuthoredNumstat,
   hasWorkingTreeChanges,
+  pushFixBranch,
   summarizeAuthoredNumstat,
 } from "../main/git.js";
 
@@ -98,6 +99,60 @@ describe("implementation working tree", () => {
     } finally {
       if (hadGlobalConfig) process.env.GIT_CONFIG_GLOBAL = previousGlobalConfig;
       else delete process.env.GIT_CONFIG_GLOBAL;
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("disables editor-controlled hooks for trusted publication", async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), "nook-ci-agent-hooks-"));
+    const repoRoot = join(tempRoot, "repo");
+    const remoteRoot = join(tempRoot, "remote.git");
+    const hooksRoot = join(repoRoot, "attacker-hooks");
+    const marker = join(tempRoot, "hook-ran");
+    const previousToken = process.env.NOOK_GITHUB_PAT;
+    const git = (...args: string[]) =>
+      execFileAsync("git", ["-C", repoRoot, ...args]);
+    try {
+      await execFileAsync("git", ["init", "--bare", remoteRoot]);
+      await mkdir(repoRoot);
+      await git("init");
+      await git("config", "user.name", "test");
+      await git("config", "user.email", "test@example.com");
+      await writeFile(join(repoRoot, "README.md"), "base\n");
+      await git("add", "README.md");
+      await git("commit", "-m", "base");
+      await git("remote", "add", "origin", remoteRoot);
+      await git("push", "origin", "HEAD");
+
+      await mkdir(hooksRoot);
+      const hook = join(hooksRoot, "capture-token");
+      await writeFile(
+        hook,
+        `#!/bin/sh\nprintf '%s' "$NOOK_GITHUB_PAT" > '${marker}'\n`,
+      );
+      await chmod(hook, 0o755);
+      for (const name of ["post-checkout", "pre-commit", "pre-push"]) {
+        await writeFile(join(hooksRoot, name), `#!/bin/sh\n"${hook}"\n`);
+        await chmod(join(hooksRoot, name), 0o755);
+      }
+      await git("config", "core.hooksPath", "attacker-hooks");
+      await writeFile(join(repoRoot, "README.md"), "trusted update\n");
+      process.env.NOOK_GITHUB_PAT = "publication-secret";
+
+      await pushFixBranch(repoRoot, "fix/dependency-update", "42");
+
+      await assert.rejects(access(marker), /ENOENT/);
+      const { stdout } = await execFileAsync("git", [
+        "--git-dir",
+        remoteRoot,
+        "rev-parse",
+        "refs/heads/fix/dependency-update",
+      ]);
+      assert.match(stdout.trim(), /^[0-9a-f]{40}$/u);
+    } finally {
+      if (typeof previousToken === "string")
+        process.env.NOOK_GITHUB_PAT = previousToken;
+      else delete process.env.NOOK_GITHUB_PAT;
       await rm(tempRoot, { recursive: true, force: true });
     }
   });

@@ -77,29 +77,59 @@ Agent count never determines PR count.
    - Wait for each required dependency or terminal barrier.
    - Verify each commit against its baseline and write scope.
    - Verify the team's focused tests and Cortex evidence.
+   - Verify that the team ran required formatters and committed all mutations
+     in its allowed source or Cortex paths.
    - Reject incomplete or out-of-scope handoffs.
    - Receive each Team Agent's existing typed handoff directly. Do not add a
      slice-process transport or intermediate agent.
    - Aggregate each verified handoff under its assigned passive Gizmo record.
+   - Treat exactly two trusted GitHub Actions publishers as narrow exceptions
+     to the ordinary committed-handoff sequence:
+     `agent-implement.yml` and `rust-dependency-updates.yml` through
+     `task ci-agent:fix` with `CI_AGENT_FIX_PROFILE=rust-dependency-update`.
+     Follow the root [team worker contract](../../AGENTS.md#team-worker-contract)
+     for their isolation, publication, and exact-head verification rules.
 5. **Integrate accepted commits.**
    - Integrate in deterministic dependency order.
    - Bind each downstream task to the exact integrated commit.
    - Keep shared files and integrated or external delivery-state mutations
      serialized under Gizmo.
 6. **Prepare the integrated head.**
+   - For either accepted trusted publication, continue from its exact published
+     head. Do not require a duplicate integration commit.
+   - Immediately resume Gizmo ownership of PR, review, and validation work.
+   - Do not add advisory local review after the publisher handoff.
+   - Use immediate focused remote evidence or complete exact-head validation.
+     Hosted Repository policy and PR verification enforce the UI-demo and
+     other product or publication contracts.
    - Run `task loom:pre-push` before each push.
-   - Commit and push the coherent integrated change.
-   - Run the required advisory review before the first owner-authored push.
-   - Use `task remote TASK_NAME=web:build` for focused web build evidence.
-   - Use `task remote TASK_NAME=web:e2e` for focused browser evidence.
-   - Dispatch each focused command separately.
+   - Gizmo may commit deterministic integration-only state.
+   - If pre-push hygiene mutates team-owned source or Cortex content, do not
+     author or commit that diff as Gizmo.
+   - Return the diff to the responsible team for a fresh formatted commit.
+   - Reintegrate that commit and rerun `task loom:pre-push` before pushing.
+   - Promptly commit any integration-only state and push the coherent head.
+   - Do not add broad local builds, tests, e2e, container product gates, local
+     review, or duplicate hosted-check mirrors before the push.
+   - Immediately choose remote evidence for every pushed coherent head.
+   - If the head is not ready for complete validation, dispatch at least one
+     relevant focused `task remote TASK_NAME=<name>` job.
+   - Use `task remote TASK_NAME=web:build` for focused build-only web evidence.
+   - Use `task remote TASK_NAME=web:e2e` separately for direct-Pod browser
+     proof. Never batch the build and browser tasks together.
+   - After focused evidence returns, reassess whether the head is
+     validation-ready. Do not flow unconditionally into complete validation.
+   - If the head is validation-ready, dispatch complete exact-head validation
+     immediately. Focused tasks are optional on that path.
 7. **Validate and repair through teams.**
    - Trigger the repository-owned exact-head review and validation path.
    - Route each review or CI finding to its functional owner.
    - Admission-authorize a bounded fix task from the current integrated head
      and request its attempt through the active harness.
-   - Require a verified fix commit and focused evidence.
-   - Integrate the fix, push, and validate the replacement head.
+   - Require a verified coherent fix commit. Remote evidence follows after
+     Gizmo integrates and pushes it.
+   - Integrate the fix, promptly push, and obtain fresh exact-head remote
+     validation for the replacement head.
    - Gizmo must not edit the implementation to resolve a finding.
 8. **Collect required verdicts.**
    - Require a verdict from every team whose acceptance is mandatory.
@@ -112,11 +142,20 @@ Agent count never determines PR count.
    - Keep the PR blocked while any required team verdict is blocking.
    - Keep the PR blocked while a required security verdict is blocking.
    - Never waive or override either block.
-10. **Finish delivery.**
-    - Run the exact-head readiness audit.
-    - Squash-merge when readiness succeeds.
-    - Ask the AI team to complete the
+10. **Complete substantial-task self-improvement.**
+    - Before final readiness, ask the AI team to complete the
       [self-improvement lifecycle](../../teams/ai/dynamic-skills/self-improvement.md).
+    - Integrate the clean committed promotion handoff into the same PR.
+    - If promotion changes the head, rerun pre-push hygiene through the owning
+      teams, push, and obtain fresh exact-head hosted validation.
+    - When promotion changes the head, recollect every required team and
+      security verdict that is not explicitly head-stable.
+    - When promotion changes the head, issue the final integrated verdict for
+      that promoted exact head before readiness. Never carry a stale
+      pre-promotion verdict forward.
+11. **Finish delivery.**
+    - Run the exact-head readiness audit only after required self-improvement.
+    - Squash-merge when readiness succeeds.
     - Publish the Workbench issue update, linked worklog, and
       [agent statistics](agent-statistics.md).
     - Report duration and any authorized remaining work.

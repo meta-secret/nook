@@ -14,25 +14,34 @@ Review policy is explicit:
 - Other external review services remain optional. Do not request or wait for
   Claude, CodeRabbit, or similar services unless the user explicitly asks.
 
-## Local review before the first owner-authored push
+## Prompt remote review after push
 
-Run the advisory local review on a coherent branch head:
+Do not require advisory local review before the first push or after a worker
+handoff.
 
-```bash
-task pr:review-local
-```
+### Trusted automated publishers
 
-The command compares the branch with current `origin/main`. Handle its outcome
-as follows:
+The no-local-review rule applies to the two trusted GitHub Actions publishers
+named in the root [team worker contract](../../AGENTS.md#team-worker-contract).
+Neither bounded editor has independent Git or external delivery authority.
+Each publisher returns the exact published head to Gizmo, which owns review,
+validation, readiness, and merge.
 
-- If the Codex CLI or authentication is unavailable, it reports the skip and
-  does not block delivery. Cloud review remains Codex-only.
-- Treat any actionable finding as normal implementation work. Run pre-push
-  hygiene again after fixes.
-- The bounded implementation worker cannot run Git. The harness commits and
-  pushes its result after the worker exits. For that path, the continuing owner
-  runs local review immediately after handoff. This is the only first-push
-  exception.
+### Ordinary worker handoff
+
+For an ordinary worker handoff, once Gizmo integrates a coherent commit it runs
+`task loom:pre-push`. Gizmo may commit deterministic integration-only state.
+If hygiene mutates team-owned source or Cortex content, Gizmo returns that diff
+to the responsible team for a fresh formatted commit, reintegrates it, and
+reruns hygiene. Gizmo then promptly pushes the coherent head.
+
+Every pushed head immediately selects remote evidence. Dispatch at least one
+relevant focused `task remote` job when the head is not validation-ready.
+Dispatch complete validation immediately when it is ready; focused jobs are
+optional on that path.
+
+Treat any actionable Cloud finding as normal correction work. Run pre-push
+hygiene again before Gizmo pushes the replacement head.
 
 ## Complete validation and Cloud review
 
@@ -84,8 +93,10 @@ When a new finding arrives:
 2. Dispatch the fix to the responsible team.
 3. Integrate the verified fix commit.
 4. Reply to and resolve the thread.
-5. Run pre-push hygiene and push the replacement head.
-6. Restart complete validation for that head.
+5. Run pre-push hygiene through the responsible formatter owner and push the
+   replacement head.
+6. Restart complete validation for that head. If it is not yet
+   validation-ready, dispatch at least one relevant focused remote job first.
 
 Use a focused task instead only when it isolates a known failure faster.
 
@@ -109,8 +120,10 @@ Cursor, CodeRabbit, or another service:
 2. Dispatch the minimal correct fix to the responsible team, or document why
    no change is needed.
 3. Integrate the verified fix commit.
-4. Run `task loom:pre-push`, commit, and push when files changed.
-5. Use focused hosted tasks as useful.
+4. Run `task loom:pre-push` through the responsible formatter owner, commit,
+   and push when files changed.
+5. If the head is not validation-ready, dispatch at least one relevant focused
+   hosted task.
 6. If complete validation was already requested, restart it for the replacement
    head. This first stabilizes one exact-head Codex review. Otherwise start it
    when that head is ready for the final gate.

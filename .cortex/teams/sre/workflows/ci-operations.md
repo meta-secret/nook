@@ -262,12 +262,12 @@ publication steps. Registry credentials are not used. Prompt:
 
 - GitHub Actions is the agent build/test environment and sole merge-validation
   pipeline.
-- Format, commit, and push a coherent change before dispatching `task remote`.
-- `task pr:validate` explicitly starts complete PR validation; an ordinary push
-  does not refresh that gate.
-- Agents do not run local Task mirrors of builds, tests, checks, or e2e. They
-  inspect remote failures, fix them, and rerun focused remote jobs before the
-  final complete gate.
+- Team Agents format and commit without pushing. Gizmo integrates, runs
+  pre-push, pushes, and owns remote validation.
+- Gizmo starts complete PR validation with `task pr:validate`; an ordinary
+  push does not refresh that gate.
+- Agents do not run local Task mirrors of builds, tests, checks, or e2e.
+  Team Agents return focused fix commits; Gizmo obtains replacement evidence.
 - Interactive development servers and browser sessions may remain local when
   their persistent state is intrinsic to the investigation.
 
@@ -275,9 +275,8 @@ publication steps. Registry credentials are not used. Prompt:
 
 1. **Do not** move real GitHub API tests back into `main.yml` — extend stub coverage instead.
 2. **Do** add new sync-provider integration tests to the `e2e` spec list first; add a small live smoke under `e2e/live/` if the provider has a real backend.
-3. **Do** format, commit, push, use focused `task remote` jobs, and explicitly
-   trigger complete validation with `task pr:validate`; never run heavy agent
-   product work locally.
+3. **Do** return a formatted Team Agent commit for Gizmo to integrate, push,
+   and validate; never run heavy product work locally.
 4. **Do** update this doc and
    [pull requests](../../../gizmo/workflows/pull-requests.md) when workflow
    behavior changes.

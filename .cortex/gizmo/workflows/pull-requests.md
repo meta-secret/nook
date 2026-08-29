@@ -60,15 +60,20 @@ ownership until merge or a concrete blocked handoff:
    GitHub Actions runner.
 3. **Prepare a coherent commit:**
    - Run `task loom:pre-push`.
-   - Commit the formatted change.
-   - Run advisory local Codex review before the first owner-authored push.
-   - For a harness-created PR, the continuing owner runs local review after
-     handoff instead.
-4. **Push and create or update the PR.**
+   - Team workers own formatter mutations in their allowed source or Cortex
+     files and return fresh formatted commits.
+   - Gizmo may commit deterministic integration-only state.
+   - Exactly two trusted GitHub Actions publishers are narrow exceptions:
+     `agent-implement.yml` and `rust-dependency-updates.yml` through
+     `task ci-agent:fix` with
+     `CI_AGENT_FIX_PROFILE=rust-dependency-update`.
+4. **Promptly push and create or update the PR.** Do not add another local
+   product or review gate.
 5. **Request review and validate on GitHub Actions:**
-   - Run focused `task remote TASK_NAME=<name>` jobs as useful.
-   - Use focused remote tasks while iterating.
-   - When the coherent head is ready, run one complete-validation command:
+   - If the pushed head is not validation-ready, immediately dispatch at least
+     one relevant focused `task remote TASK_NAME=<name>` job.
+   - When the coherent head is validation-ready, immediately run one
+     complete-validation command without requiring a focused task first:
      `task pr:validate PR=<number>` or
      `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>`.
    - It requests one idempotent exact-head Codex review before dispatching
@@ -92,9 +97,11 @@ ownership until merge or a concrete blocked handoff:
 6. **Fix Nook's failed PR workflow.** Inspect CI and app logs. Dispatch the
    finding to its responsible team. Integrate the verified fix commit, run
    pre-push hygiene, and push the complete fix. Validate the replacement head.
-7. **Complete agent self-improvement for substantial work.** Ask the AI team
-   to follow the canonical
+7. **Complete agent self-improvement for substantial work before final
+   readiness.** Ask the AI team to follow the canonical
    [completion contract](../../teams/ai/dynamic-skills/self-improvement.md#pull-request-completion-contract).
+   Integrate its clean committed handoff into the same PR. If promotion changes
+   the head, repeat complete hosted validation.
 8. **Merge automatically when ready.** Require a current branch, green
    repository-owned checks, resolved actionable comments, every required team
    and security verdict, and the exact-head readiness audit. Then squash-merge
@@ -330,16 +337,21 @@ and its team subagents:
 flowchart TD
   Z[0 Fetch origin/main] --> A[1 Branch + prepare PR]
   A --> I[2 Delegate team implementation]
-  I --> E[3 Format + push + open/update PR]
-  E --> X[4 Focused task remote jobs as useful]
-  X --> V[5 Explicit loom/pr validate]
+  I --> CMT[3 Team returns committed handoff]
+  CMT --> E[4 Gizmo integrate + pre-push + push/update PR]
+  E --> D{Validation-ready?}
+  D -->|no| X[Required relevant focused remote evidence]
+  D -->|yes| V[Explicit loom/pr validate]
+  X --> D
   V --> F[6 Monitor applicable Nook PR checks on GHA]
   F --> G{Nook PR checks green?}
   G -->|no| H[7 Route finding to owner team]
-  H --> PUSH[8 Integrate fix + loom pre-push + push]
-  PUSH --> X
+  H --> PUSH[8 Gizmo integrates fix + pre-push + push]
+  PUSH --> D
   G -->|yes| C[9 Address comments]
-  C --> R[Run exact-head readiness audit]
+  C --> SI[10 Complete substantial-task self-improvement]
+  SI -->|promotion changed head| E
+  SI -->|head unchanged| R[Run exact-head readiness audit]
   R -->|blocked| H
   R -->|ready| M[Squash merge PR]
   M --> S[Publish Workbench issue + worklog + stats]
@@ -378,37 +390,50 @@ file remains provisional and untracked.
 
 ### 3. Push an exact remote-executable commit
 
+#### Trusted automated publisher exceptions
+
+Exactly two trusted GitHub Actions publishers bypass ordinary worker
+commit-handoff integration: `agent-implement.yml` and
+`rust-dependency-updates.yml` through `task ci-agent:fix` with
+`CI_AGENT_FIX_PROFILE=rust-dependency-update`. Their bounded editors have no
+independent Git or external delivery authority. See the root
+[team worker contract](../../AGENTS.md#team-worker-contract) for the exact
+publication, isolation, and head-verification rules. Gizmo continues either
+returned head and owns review, validation, readiness, and merge.
+
 Prepare an exact remote commit:
 
 1. Make the implementation coherent.
-2. Run pre-push hygiene.
-3. Commit and run advisory local review.
-4. Push and open or update the PR.
+2. Integrate the teams' formatted commits.
+3. Run pre-push hygiene.
+4. Promptly push and open or update the PR.
 
 This exposes the source to focused remote tasks but does not start complete
 validation.
 
-- Never require `task check`, a full test suite, build, e2e, or post-fix
-  product validation as a local gate.
+- Never require `task check`, a full test suite, build, e2e, container product
+  validation, advisory review, or a duplicate hosted-check mirror as a local
+  gate.
 - Always run `task loom:pre-push` before push.
+- If hygiene mutates team-owned source or Cortex content, return the diff to
+  that team for a fresh formatted commit. Reintegrate it and rerun hygiene.
+- Gizmo may commit deterministic integration-only state.
 - Push only when the branch is coherent enough to validate.
 
 ```bash
 task loom:pre-push
 git commit
-task pr:review-local
 git push -u origin HEAD
 gh pr create --title "…" --body "…"
 ```
 
 See [pre-push hygiene](../../teams/sre/dynamic-skills/pre-push-hygiene.md).
 
-- Before the first owner-authored push, run `task pr:review-local` on the
-  coherent head.
-  - For a harness-created PR, run it immediately after handoff.
 - After each coherent push, inspect feedback already present.
-- Use focused remote tasks when they shorten diagnosis.
-- Trigger complete validation only when the head is ready for the final gate.
+- If the pushed head is not validation-ready, dispatch at least one relevant
+  focused remote task immediately.
+- When the head is validation-ready, trigger complete validation immediately.
+  Focused remote tasks are not a prerequisite.
   - It first stabilizes one idempotent exact-head Codex review.
   - Current findings stop dispatch. Review unavailability is bounded to 600
     seconds when no findings are visible.
@@ -431,8 +456,9 @@ applies a validation label through `task pr:validate`. Its trusted daemon-free
 Rust jobs may use ARC; its remaining jobs stay hosted.
 
 ```text
-implement/fix → task loom:pre-push → commit → local review → push/update PR
-→ bounded exact-head Codex stabilization → complete exact-head PR workflow
+implement/fix → task loom:pre-push → commit → push/update PR
+→ focused remote evidence when not ready or exact-head Codex stabilization
+→ complete exact-head PR workflow
 ```
 
 **Required local action** (before every push):
@@ -442,6 +468,8 @@ task loom:pre-push
 ```
 
 Always run `task loom:pre-push` again before every fix re-push.
+Do not add broad local builds, tests, e2e, container product gates, advisory
+review, or duplicate hosted-check mirrors.
 
 Focused hosted commands (never merge gates):
 
@@ -464,13 +492,15 @@ task pr:validate PR=<number> FULL_E2E=1
   - Purpose: Only required local product action; applies formatting and UI demo contract
 - **Focused build/test feedback**
   - Command: `task remote TASK_NAMES=<a>,<b>`
-  - Purpose: Reuse one hosted worker for selected tasks
+  - Purpose: Required immediate evidence when the pushed head is not
+    validation-ready; reuse one hosted worker for selected tasks
 - **Final validation boundary**
   - Command: `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>` or `task pr:validate PR=<number>`
   - Purpose: Start the complete exact-head PR gate
 - **After complete CI failure**
   - Command: Fix → `task loom:pre-push` → commit → push → trigger validation again
-  - Purpose: Pushing alone does not start `pr.yml`
+  - Purpose: Pushing alone does not start `pr.yml`; every replacement head
+    needs fresh exact-head remote evidence
 
 See [CI pipeline](../../teams/sre/workflows/ci-pipeline.md#local-vs-remote-ci)
 and [GitHub Actions validation](../../teams/sre/dynamic-skills/github-actions-only-validation.md).
@@ -624,19 +654,26 @@ gate. See [quality](../../teams/sre/workflows/quality.md#fix-check-findings--not
    Use the Playwright `nook-app-logs.json` attachment. Local sources include
    `fetchAppLogs(page)`, `/app-logs`, and `dumpNookLogs(page)`.
 3. Dispatch the root cause to its responsible team.
-4. Integrate the verified fix commit. Run `task loom:pre-push`, commit, and
-   push the completed fix.
-5. Run Loom/Task validate and return to monitoring Nook's complete exact-head PR checks. Use a focused `task remote` job only when it shortens diagnosis.
+4. Integrate the verified fix commit and run `task loom:pre-push`. Return any
+   team-owned formatter diff for a fresh team commit. Reintegrate it, rerun
+   hygiene, and promptly push the completed fix.
+5. Run Loom/Task validation and return to monitoring Nook's complete exact-head
+   PR checks. If the pushed fix is not validation-ready, dispatch at least one
+   relevant focused `task remote` job first.
 6. Complete validation stabilizes one exact-head Codex review before dispatch.
    Current findings stop the dispatch. Review unavailability is bounded, and
    no other review service is activated.
 
-If the failure was obviously fmt-only, `task loom:pre-push` before re-push is enough. Broader failures are proven by the refreshed remote `pr.yml` run on the latest head.
+If the failure was obviously fmt-only, `task loom:pre-push` is the only local
+proof required before re-push. Every replacement head still requires refreshed
+remote `pr.yml` evidence.
 
 ### 8. Merge and finish
 
 For a substantial task, complete the checklist in
 [Agent self-improvement](../../teams/ai/dynamic-skills/self-improvement.md#pull-request-completion-contract).
+Integrate its clean committed handoff before final readiness. If promotion
+changes the head, repeat complete hosted validation.
 
 Merge only when all readiness conditions pass:
 
@@ -735,25 +772,27 @@ See [mission delivery](mission-delivery.md) for the delivery procedure.
 1. Fetch `origin/main` and branch from it.
 2. Dispatch the focused change to the responsible team.
 3. Run `task loom:pre-push`.
-4. Commit the formatted change.
-5. Run `task pr:review-local` before the first owner-authored push.
-6. For a harness-created PR, run local review after handoff instead.
-7. Push and open or update the PR.
-8. Use focused `task remote` jobs only for faster isolated diagnosis.
-9. Run Loom or Task validation on the ready head.
-10. It stabilizes one exact-head Codex review before dispatching checks.
-11. Current findings stop dispatch; an unavailable review times out after the
+4. Route team-owned formatter mutations back for fresh formatted commits.
+5. Promptly push and open or update the PR without another local gate.
+6. If the pushed head is not validation-ready, immediately dispatch at least
+   one relevant focused `task remote` job.
+7. Immediately run Loom or Task validation when the head is validation-ready.
+8. It stabilizes one exact-head Codex review before dispatching checks.
+9. Current findings stop dispatch; an unavailable review times out after the
     bounded wait when no findings are visible.
-12. Keep Codex as the sole automatic provider. Do not activate Cursor Bugbot,
+10. Keep Codex as the sole automatic provider. Do not activate Cursor Bugbot,
     Claude, CodeRabbit, or other optional reviews.
-13. Address and resolve actionable comments.
-14. Ask the AI team to complete the canonical self-improvement contract for
-    substantial work.
-15. On failure, dispatch the issue to its responsible team.
-16. Integrate and push the verified fix, then validate the replacement head.
-17. Squash-merge after the exact-head readiness audit succeeds.
-18. Publish the Workbench completion records.
-19. Report task duration.
+11. Address and resolve actionable comments.
+12. Before final readiness, ask the AI team to complete the canonical
+    self-improvement contract for substantial work. Integrate its clean
+    committed handoff and repeat hosted validation if promotion changes the
+    head.
+13. On failure, dispatch the issue to its responsible team.
+14. Integrate and promptly push the verified fix, then obtain fresh exact-head
+    validation for the replacement head.
+15. Squash-merge after the exact-head readiness audit succeeds.
+16. Publish the Workbench completion records.
+17. Report task duration.
 
 ## CLI reference
 
