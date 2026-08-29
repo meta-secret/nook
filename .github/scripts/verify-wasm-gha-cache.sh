@@ -36,11 +36,13 @@ prepare_trusted_docker() {
     rm -rf -- "$trusted_docker_config"
   }
   trap cleanup_docker_config EXIT
-  for entry in contexts; do
-    if [ -e "$docker_config_source/$entry" ]; then
-      cp -RL "$docker_config_source/$entry" "$trusted_docker_config/$entry"
+  if [ -e "$docker_config_source/contexts" ]; then
+    cp -RP -- "$docker_config_source/contexts" "$trusted_docker_config/contexts"
+    if find "$trusted_docker_config/contexts" -type l -print -quit | grep -q .; then
+      echo "Docker contexts must not contain symlinks" >&2
+      exit 2
     fi
-  done
+  fi
   if [ -f "$docker_config_source/config.json" ]; then
     if [ -x /usr/local/bin/jq ]; then jq_cli=/usr/local/bin/jq
     elif [ -x /usr/bin/jq ]; then jq_cli=/usr/bin/jq
@@ -49,7 +51,7 @@ prepare_trusted_docker() {
       echo "trusted jq is unavailable" >&2
       exit 127
     fi
-    "$jq_cli" 'with_entries(select((.key | ascii_downcase) != "clipluginsextradirs"))' \
+    "$jq_cli" 'if any(keys[]; explode | any(. > 127)) then error("non-ASCII Docker config key") else with_entries(select((.key | ascii_downcase) != "clipluginsextradirs")) end' \
       "$docker_config_source/config.json" >"$trusted_docker_config/config.json"
     chmod 600 "$trusted_docker_config/config.json"
   fi
@@ -104,21 +106,34 @@ if [ "${NOOK_WASM_CACHE_PROMOTION_ENABLED:-}" = "1" ]; then
       exit 2
       ;;
   esac
-  case "${NOOK_BUILDKIT_ADDR:-}" in
-    tcp://nook-buildkit.arc-runners.svc.cluster.local:1234) ;;
+  promotion_wrapper=()
+  case "${NOOK_BUILDKIT_REMOTE:-}" in
+    1)
+      case "${NOOK_BUILDKIT_ADDR:-}" in
+        tcp://nook-buildkit.arc-runners.svc.cluster.local:1234) ;;
+        *)
+          echo "ARC BuildKit address must be tcp://nook-buildkit.arc-runners.svc.cluster.local:1234" >&2
+          exit 2
+          ;;
+      esac
+      mkdir -m 700 -p "$BUILDX_CONFIG/instances"
+      printf '{"Name":"%s","Driver":"remote","Nodes":[{"Name":"%s0","Endpoint":"%s","Platforms":null,"DriverOpts":null,"Flags":null,"Files":null}],"Dynamic":false}\n' \
+        "$builder" "$builder" "$NOOK_BUILDKIT_ADDR" >"$BUILDX_CONFIG/instances/$builder"
+      chmod 600 "$BUILDX_CONFIG/instances/$builder"
+      "$docker_cli" buildx use "$builder"
+      ;;
+    '')
+      promotion_wrapper=("$repo_root/.github/scripts/with-healthy-buildkit.sh")
+      ;;
     *)
-      echo "ARC BuildKit address must be tcp://nook-buildkit.arc-runners.svc.cluster.local:1234" >&2
+      echo "NOOK_BUILDKIT_REMOTE must be 1 or unset" >&2
       exit 2
       ;;
   esac
-  mkdir -m 700 -p "$BUILDX_CONFIG/instances"
-  printf '{"Name":"%s","Driver":"remote","Nodes":[{"Name":"%s0","Endpoint":"%s","Platforms":null,"DriverOpts":null,"Flags":null,"Files":null}],"Dynamic":false}\n' \
-    "$builder" "$builder" "$NOOK_BUILDKIT_ADDR" >"$BUILDX_CONFIG/instances/$builder"
-  chmod 600 "$BUILDX_CONFIG/instances/$builder"
   # Publish from the already-selected node-local rootless BuildKit shard. A
   # repair solve never imports the ref it is replacing: independent input and
   # source refs may accelerate it, while a miss rebuilds from source.
-  "$docker_cli" buildx bake \
+  "${promotion_wrapper[@]}" "$docker_cli" buildx bake \
     --progress=plain \
     "${bake_args[@]}" \
     --set "builder-wasm-deps-cache-proof.output=type=cacheonly" \

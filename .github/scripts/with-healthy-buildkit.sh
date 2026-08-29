@@ -42,11 +42,13 @@ cleanup_docker_config() {
   rm -rf -- "$trusted_docker_config"
 }
 trap cleanup_docker_config EXIT
-for entry in contexts; do
-  if [ -e "$docker_config_source/$entry" ]; then
-    cp -RL "$docker_config_source/$entry" "$trusted_docker_config/$entry"
+if [ -e "$docker_config_source/contexts" ]; then
+  cp -RP -- "$docker_config_source/contexts" "$trusted_docker_config/contexts"
+  if find "$trusted_docker_config/contexts" -type l -print -quit | grep -q .; then
+    echo "Docker contexts must not contain symlinks" >&2
+    exit 2
   fi
-done
+fi
 if [ -f "$docker_config_source/config.json" ]; then
   if [ -x /usr/local/bin/jq ]; then jq_cli=/usr/local/bin/jq
   elif [ -x /usr/bin/jq ]; then jq_cli=/usr/bin/jq
@@ -55,7 +57,7 @@ if [ -f "$docker_config_source/config.json" ]; then
     echo "trusted jq is unavailable" >&2
     exit 127
   fi
-  "$jq_cli" 'with_entries(select((.key | ascii_downcase) != "clipluginsextradirs"))' \
+  "$jq_cli" 'if any(keys[]; explode | any(. > 127)) then error("non-ASCII Docker config key") else with_entries(select((.key | ascii_downcase) != "clipluginsextradirs")) end' \
     "$docker_config_source/config.json" >"$trusted_docker_config/config.json"
   chmod 600 "$trusted_docker_config/config.json"
 fi
@@ -100,6 +102,12 @@ case "$builder" in
     exit 2
     ;;
 esac
+
+hosted_buildkit_image="registry.dev.nokey.sh/moby/buildkit:buildx-stable-1"
+mkdir -m 700 -p "$BUILDX_CONFIG/instances"
+printf '{"Name":"%s","Driver":"docker-container","Nodes":[{"Name":"%s0","Endpoint":"default","Platforms":null,"DriverOpts":{"image":"%s"},"Flags":null,"Files":null}],"Dynamic":false}\n' \
+  "$builder" "$builder" "$hosted_buildkit_image" >"$BUILDX_CONFIG/instances/$builder"
+chmod 600 "$BUILDX_CONFIG/instances/$builder"
 
 container="buildx_buildkit_${builder}0"
 state_volume="${container}_state"
@@ -191,6 +199,7 @@ else
     "$docker_cli" buildx create \
       --name "$builder" \
       --driver docker-container \
+      --driver-opt "image=$hosted_buildkit_image" \
       --bootstrap || create_status=$?
   if [ "$create_status" -eq 124 ]; then
     echo "timed out bootstrapping replacement BuildKit builder $builder" >&2

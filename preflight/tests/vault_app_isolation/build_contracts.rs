@@ -377,7 +377,7 @@ fn scheduled_nightly_live_sync_is_retired() -> anyhow::Result<()> {
 fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
     let root = repository_root();
     for (path, invocation_count) in [
-        (".github/scripts/verify-wasm-gha-cache.sh", 1),
+        (".github/scripts/verify-wasm-gha-cache.sh", 2),
         (".github/scripts/with-healthy-buildkit.sh", 9),
         (".github/scripts/with-remote-buildkit.sh", 4),
         ("infra/tasks/bake-cache.yml", 13),
@@ -411,11 +411,10 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
             1,
             "{path} must isolate Docker plugin discovery"
         );
-        assert!(source.contains("for entry in contexts; do"));
+        assert!(source.contains("cp -RP -- \"$docker_config_source/contexts\""));
+        assert!(source.contains("Docker contexts must not contain symlinks"));
         assert!(source.contains("export BUILDX_CONFIG=\"$trusted_docker_config/buildx\""));
-        assert!(source.contains(
-            "\"$jq_cli\" 'with_entries(select((.key | ascii_downcase) != \"clipluginsextradirs\"))'"
-        ));
+        assert!(source.contains("any(keys[]; explode | any(. > 127))"));
         assert!(
             source.find("if [ -f \"$docker_config_source/config.json\" ]; then")
                 < source.find("if [ -x /usr/local/bin/jq ]; then"),
@@ -491,6 +490,8 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
         "rm --force \"$container\"",
         "volume rm --force \"$state_volume\"",
         "--driver docker-container",
+        "--driver-opt \"image=$hosted_buildkit_image\"",
+        "registry.dev.nokey.sh/moby/buildkit:buildx-stable-1",
         "--bootstrap",
         "Using healthy job-scoped BuildKit builder",
         "buildx use \"$builder\"",
@@ -531,6 +532,14 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
             < verifier.find("  prepare_trusted_docker"),
         "verification-only mode must not require Docker, Buildx, or jq"
     );
+    for required in [
+        "case \"${NOOK_BUILDKIT_REMOTE:-}\" in",
+        "\"Driver\":\"remote\"",
+        "buildx use \"$builder\"",
+        "promotion_wrapper=(\"$repo_root/.github/scripts/with-healthy-buildkit.sh\")",
+    ] {
+        assert!(verifier.contains(required), "verifier missing {required}");
+    }
     assert!(
         ci.contains("if test \"${NOOK_BUILDKIT_REMOTE:-}\" = \"1\"; then")
             && ci.contains(".github/scripts/with-remote-buildkit.sh")
@@ -617,7 +626,7 @@ fi
         "rm --force buildx_buildkit_nook-pr-timeout-test0",
         "buildx rm --force nook-pr-timeout-test",
         "volume rm --force buildx_buildkit_nook-pr-timeout-test0_state",
-        "buildx create --name nook-pr-timeout-test --driver docker-container --bootstrap",
+        "buildx create --name nook-pr-timeout-test --driver docker-container --driver-opt image=registry.dev.nokey.sh/moby/buildkit:buildx-stable-1 --bootstrap",
         "buildx use nook-pr-timeout-test",
     ] {
         assert!(
@@ -639,13 +648,36 @@ fi
             "-c",
             "! grep -Eqi 'clipluginsextradirs|u0063lipluginsextradirs' \"$DOCKER_CONFIG/config.json\"",
         ])
-        .env("DOCKER_CONFIG", malicious_config)
+        .env("DOCKER_CONFIG", &malicious_config)
         .output()?;
     assert!(
         sanitized_plugin.status.success(),
         "structural Docker config sanitizer failed: {}",
         String::from_utf8_lossy(&sanitized_plugin.stderr)
     );
+
+    fs::write(
+        malicious_config.join("config.json"),
+        "{\"cliPluginsExtraDir\\u017f\":[\"/tmp/untrusted\"]}",
+    )?;
+    let unicode_folded = Command::new("bash")
+        .arg(&wrapper)
+        .arg("true")
+        .env("DOCKER_CONFIG", &malicious_config)
+        .output()?;
+    assert!(!unicode_folded.status.success());
+    assert!(
+        String::from_utf8_lossy(&unicode_folded.stderr).contains("non-ASCII Docker config key")
+    );
+    fs::remove_file(malicious_config.join("config.json"))?;
+    std::os::unix::fs::symlink("/", malicious_config.join("contexts"))?;
+    let linked_contexts = Command::new("bash")
+        .arg(&wrapper)
+        .arg("true")
+        .env("DOCKER_CONFIG", &malicious_config)
+        .output()?;
+    assert!(!linked_contexts.status.success());
+    assert!(String::from_utf8_lossy(&linked_contexts.stderr).contains("must not contain symlinks"));
 
     fs::remove_dir_all(temp)?;
     Ok(())

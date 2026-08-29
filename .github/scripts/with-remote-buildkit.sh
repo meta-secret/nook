@@ -45,11 +45,13 @@ cleanup_docker_config() {
   rm -rf -- "$trusted_docker_config"
 }
 trap cleanup_docker_config EXIT
-for entry in contexts; do
-  if [ -e "$docker_config_source/$entry" ]; then
-    cp -RL "$docker_config_source/$entry" "$trusted_docker_config/$entry"
+if [ -e "$docker_config_source/contexts" ]; then
+  cp -RP -- "$docker_config_source/contexts" "$trusted_docker_config/contexts"
+  if find "$trusted_docker_config/contexts" -type l -print -quit | grep -q .; then
+    echo "Docker contexts must not contain symlinks" >&2
+    exit 2
   fi
-done
+fi
 if [ -f "$docker_config_source/config.json" ]; then
   if [ -x /usr/local/bin/jq ]; then jq_cli=/usr/local/bin/jq
   elif [ -x /usr/bin/jq ]; then jq_cli=/usr/bin/jq
@@ -58,7 +60,7 @@ if [ -f "$docker_config_source/config.json" ]; then
     echo "trusted jq is unavailable" >&2
     exit 127
   fi
-  "$jq_cli" 'with_entries(select((.key | ascii_downcase) != "clipluginsextradirs"))' \
+  "$jq_cli" 'if any(keys[]; explode | any(. > 127)) then error("non-ASCII Docker config key") else with_entries(select((.key | ascii_downcase) != "clipluginsextradirs")) end' \
     "$docker_config_source/config.json" >"$trusted_docker_config/config.json"
   chmod 600 "$trusted_docker_config/config.json"
 fi
