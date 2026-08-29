@@ -125,6 +125,16 @@ test('recognizes both child_process module specifiers', () => {
   }
 });
 
+test('classifies default imports of Node execution namespaces', () => {
+  expect(
+    extract(`
+import child from 'node:child_process';
+import threads from 'worker_threads';
+child.spawnSync('bun', ['scripts/facade.ts']);
+new threads.Worker('./scripts/worker.mjs');`),
+  ).toEqual(["'bun' 'scripts/facade.ts'", "'node' './scripts/worker.mjs'"]);
+});
+
 test('recognizes static CommonJS child-process bindings', () => {
   for (const specifier of ['child_process', 'node:child_process']) {
     const commands = extract(`
@@ -214,6 +224,88 @@ tools[input]('bun', ['scripts/ignored.ts']);`),
       "const tools={launch(){}}; tools.launch('bun', ['scripts/ignored.ts']);",
     ),
   ).toEqual([]);
+  expect(() =>
+    extract(`
+import * as child from 'node:child_process';
+const tools={...child};
+tools.spawnSync('bun', ['scripts/ignored.ts']);`),
+  ).toThrow('Spread TypeScript subprocess capability holders are forbidden.');
+});
+
+test('preserves static subprocess cwd and rejects ambiguous cwd options', () => {
+  const commands = extract(`
+import {execFileSync,execSync,fork,spawnSync} from 'node:child_process';
+spawnSync('bun', ['scripts/spawn.ts'], {cwd:'nested'});
+execFileSync('bun', ['scripts/exec-file.ts'], {cwd:'nested'});
+execSync('bun scripts/exec.ts', {cwd:'nested'});
+fork('scripts/fork.ts', [], {cwd:'nested'});
+Bun.spawn(['bun', 'scripts/bun-array.ts'], {cwd:'nested'});
+Bun.spawn({cmd:['bun', 'scripts/bun-object.ts'], cwd:'nested'});`);
+  expect(commands).toEqual([
+    "cd 'nested' && 'bun' 'scripts/spawn.ts'",
+    "cd 'nested' && 'bun' 'scripts/exec-file.ts'",
+    "cd 'nested' && bun scripts/exec.ts",
+    "cd 'nested' && 'node' 'scripts/fork.ts'",
+    "cd 'nested' && 'bun' 'scripts/bun-array.ts'",
+    "cd 'nested' && 'bun' 'scripts/bun-object.ts'",
+  ]);
+  for (const source of commands) {
+    const inspection: ShellCommandInspection = {
+      positionalArguments: false,
+      source,
+      sourcePath: false,
+    };
+    expect(analyzeShellCommands(inspection).launches[0]?.workingDirectory).toBe(
+      'nested',
+    );
+  }
+  expect(() =>
+    extract(`
+import {spawnSync} from 'node:child_process';
+spawnSync('bun', ['scripts/facade.ts'], {cwd:runtimeRoot});`),
+  ).toThrow('Dynamic TypeScript subprocess cwd is forbidden in');
+  expect(() =>
+    extract(`
+import {spawnSync} from 'node:child_process';
+spawnSync('bun', ['scripts/facade.ts'], runtimeOptions);`),
+  ).toThrow('Dynamic TypeScript subprocess options are forbidden.');
+  for (const runtime of ['bun', 'node', 'deno', 'tsx'])
+    expect(() =>
+      extract(`
+import {spawnSync} from 'node:child_process';
+spawnSync('${runtime}', ['scripts/facade.ts'], {cwd:runtimeRoot});`),
+    ).toThrow('Dynamic TypeScript subprocess cwd is forbidden in');
+  expect(() =>
+    extract(`
+import {execSync} from 'node:child_process';
+execSync('bun scripts/facade.ts', {cwd:runtimeRoot});`),
+  ).toThrow('Dynamic TypeScript subprocess cwd is forbidden in');
+  expect(
+    extract(`
+import {spawnSync} from 'node:child_process';
+type ExternalRequest={command:string,cwd:string};
+function runExternal(request:ExternalRequest){spawnSync(request.command,[],{cwd:request.cwd});}
+runExternal({command:'git',cwd:runtimeRoot});
+runExternal({command:'tar',cwd:runtimeRoot});`),
+  ).toEqual([]);
+});
+
+test('pins the sole dynamic package cwd exemption to its exact function AST', async () => {
+  const path = 'agentic-ai/loom/src/executable-skills/package-gate.ts';
+  const source = await Bun.file(path).text();
+  const inspection: TypeScriptSubprocessInspection = { path, source };
+  expect(typescriptSubprocessCommands(inspection)).toEqual([
+    "'bun' 'install' '--frozen-lockfile'",
+    "'bun' 'run' 'format'",
+    "'bun' 'run' 'verify'",
+  ]);
+  const driftedInspection: TypeScriptSubprocessInspection = {
+    path,
+    source: source.replace("'verify']", "'verify-drift']"),
+  };
+  expect(() => typescriptSubprocessCommands(driftedInspection)).toThrow(
+    'Dynamic TypeScript subprocess cwd is forbidden in',
+  );
 });
 
 test('audits static worker entrypoints and rejects dynamic worker authority', () => {

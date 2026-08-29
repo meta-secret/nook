@@ -39,8 +39,19 @@ export type BunShellTemplateRequest = {
 };
 
 export type SerializedSubprocessCommand = {
+  readonly cwd: TaggedTemplateText | false;
   readonly shellSource: boolean;
   readonly words: readonly TaggedTemplateText[];
+};
+export type SubprocessCwdRequest = {
+  readonly allowDynamicCwd: boolean;
+  readonly call: ts.CallExpression | ts.NewExpression;
+  readonly evaluate: (expression: ts.Expression) => TaggedTemplateText;
+  readonly kind: SubprocessCallKind;
+  readonly resolveObject: (
+    expression: ts.Expression,
+  ) => ts.ObjectLiteralExpression | false;
+  readonly sourcePath: string;
 };
 type ChildProcessMemberRequest = readonly [
   SubprocessCallKind | false,
@@ -142,13 +153,85 @@ export function isStaticWorkerThreadsRequire(
 export function serializeSubprocessCommand(
   command: SerializedSubprocessCommand,
 ): string {
-  if (command.shellSource) return command.words[0]?.value ?? '';
-  return command.words
-    .map((word) => {
-      const escaped = word.value.replaceAll("'", "'\\''");
-      return word.dynamic ? `"\${DYNAMIC:-${escaped}}"` : `'${escaped}'`;
-    })
-    .join(' ');
+  const source = command.shellSource
+    ? (command.words[0]?.value ?? '')
+    : command.words
+        .map((word) => {
+          const escaped = word.value.replaceAll("'", "'\\''");
+          return word.dynamic ? `"\${DYNAMIC:-${escaped}}"` : `'${escaped}'`;
+        })
+        .join(' ');
+  return command.cwd === false
+    ? source
+    : `cd ${shellQuote(command.cwd.value)} && ${source}`;
+}
+
+export function subprocessCwd(
+  request: SubprocessCwdRequest,
+): TaggedTemplateText | false {
+  const args = request.call.arguments ?? [];
+  const first = args[0];
+  let options: ts.Expression | false = false;
+  if (request.kind === SubprocessCallKind.Bun) {
+    options =
+      first && request.resolveObject(first) !== false
+        ? first
+        : (args[1] ?? false);
+  } else if (request.kind === SubprocessCallKind.Exec) {
+    options = args[1] ?? false;
+  } else if (
+    request.kind === SubprocessCallKind.ExecFile ||
+    request.kind === SubprocessCallKind.Fork ||
+    request.kind === SubprocessCallKind.Spawn
+  ) {
+    const second = args[1];
+    options =
+      second && request.resolveObject(second) !== false
+        ? second
+        : (args[2] ?? false);
+  }
+  if (
+    options === false ||
+    ts.isArrowFunction(options) ||
+    ts.isFunctionExpression(options)
+  )
+    return false;
+  const object = request.resolveObject(options);
+  if (object === false)
+    throw new Error('Dynamic TypeScript subprocess options are forbidden.');
+  if (object.properties.some((property) => ts.isSpreadAssignment(property)))
+    throw new Error('Spread TypeScript subprocess cwd options are forbidden.');
+  const cwd = exactObjectProperty([object, 'cwd']);
+  if (cwd === false) return false;
+  const evaluated = request.evaluate(cwd);
+  if (evaluated.dynamic && !request.allowDynamicCwd)
+    throw new Error(
+      `Dynamic TypeScript subprocess cwd is forbidden in ${request.sourcePath}.`,
+    );
+  return evaluated.dynamic ? false : evaluated;
+}
+
+export function subprocessArgumentList(
+  request: SubprocessCwdRequest,
+): ts.Expression | false {
+  const second = request.call.arguments?.[1];
+  if (!second) return false;
+  return request.kind !== SubprocessCallKind.Exec &&
+    request.resolveObject(second) !== false
+    ? false
+    : second;
+}
+
+export function isSuccessorFreeExternalCommand(
+  command: SerializedSubprocessCommand,
+): boolean {
+  const executable = command.words[0];
+  return Boolean(
+    !command.shellSource &&
+    executable &&
+    !executable.dynamic &&
+    /^(?:cargo|git|tar|zip)$/u.test(executable.value),
+  );
 }
 
 function shellQuote(value: string): string {

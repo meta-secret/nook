@@ -1,4 +1,5 @@
 import ts from 'typescript';
+import { createHash } from 'node:crypto';
 import {
   CHILD_PROCESS_CALLS,
   SubprocessCallKind,
@@ -22,8 +23,61 @@ export type LexicalBinding = {
 
 export type LexicalModel = {
   readonly bindings: readonly LexicalBinding[];
+  readonly dynamicCwdExemptions: readonly ts.FunctionDeclaration[];
   readonly path: string;
 };
+
+export type DynamicCwdExemptionRequest = {
+  readonly path: string;
+  readonly sourceFile: ts.SourceFile;
+};
+
+type DynamicCwdExemption = {
+  readonly digest: string;
+  readonly functionName: string;
+  readonly path: string;
+};
+const DYNAMIC_CWD_EXEMPTIONS: readonly DynamicCwdExemption[] = [
+  {
+    digest: '766be918ab58c5e1721d05b89fcfe3759f510387da364afa30832db6cd0a6e92',
+    functionName: 'runCommand',
+    path: 'agentic-ai/loom/src/executable-skills/package-gate.ts',
+  },
+];
+
+export function dynamicCwdExemptions(
+  request: DynamicCwdExemptionRequest,
+): readonly ts.FunctionDeclaration[] {
+  return DYNAMIC_CWD_EXEMPTIONS.flatMap((exemption) => {
+    if (
+      request.path !== exemption.path &&
+      !request.path.endsWith(`/${exemption.path}`)
+    )
+      return [];
+    const matches = request.sourceFile.statements.filter(
+      (node): node is ts.FunctionDeclaration =>
+        ts.isFunctionDeclaration(node) &&
+        node.name?.text === exemption.functionName,
+    );
+    const match = matches[0];
+    if (matches.length !== 1 || !match) return [];
+    const digest = createHash('sha256').update(match.getText()).digest('hex');
+    return digest === exemption.digest ? [match] : [];
+  });
+}
+
+export function isDynamicCwdExempt([model, location]: readonly [
+  LexicalModel,
+  ts.Node,
+]): boolean {
+  let node: ts.Node | undefined = location;
+  while (node) {
+    if (model.dynamicCwdExemptions.some((candidate) => candidate === node))
+      return true;
+    node = node.parent;
+  }
+  return false;
+}
 
 export type BindingCollectionRequest = {
   readonly node: ts.Node;
@@ -145,7 +199,11 @@ export function collectBinding(request: BindingCollectionRequest): void {
     : '';
   if (node.importClause.name) {
     const binding: LexicalBinding = {
-      capability: false,
+      capability: /^(?:node:)?child_process$/u.test(specifier)
+        ? SubprocessCallKind.Namespace
+        : /^(?:node:)?worker_threads$/u.test(specifier)
+          ? SubprocessCallKind.WorkerNamespace
+          : false,
       constant: true,
       declaration: node.importClause,
       importedFrom: specifier,

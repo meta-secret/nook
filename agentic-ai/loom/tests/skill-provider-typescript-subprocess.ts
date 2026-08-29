@@ -8,16 +8,23 @@ import {
   bunShellTemplateCommand,
   childProcessCapability,
   exactObjectProperty,
+  isSuccessorFreeExternalCommand,
   isStaticWorkerThreadsRequire,
   serializeSubprocessCommand,
+  type SerializedSubprocessCommand as StaticCommand,
   staticMemberAccess,
   SubprocessCallKind,
   type BunShellTemplateRequest,
+  subprocessArgumentList,
+  subprocessCwd,
+  type SubprocessCwdRequest,
   workerThreadCapability,
 } from './skill-provider-typescript-capability.ts';
 import {
   collectBinding,
   type BindingCollectionRequest,
+  dynamicCwdExemptions,
+  isDynamicCwdExempt,
   type LexicalBinding,
   type LexicalModel,
 } from './skill-provider-typescript-bindings.ts';
@@ -27,10 +34,6 @@ export type TypeScriptSubprocessInspection = {
   readonly source: string;
 };
 type StaticText = { readonly dynamic: boolean; readonly value: string };
-type StaticCommand = {
-  readonly shellSource: boolean;
-  readonly words: readonly StaticText[];
-};
 type ExpressionEvaluationRequest = {
   readonly depth: number;
   readonly expression: ts.Expression;
@@ -96,7 +99,12 @@ export function typescriptSubprocessCommands(
     ts.forEachChild(node, collect);
   };
   collect(sourceFile);
-  const model: LexicalModel = { bindings, path: inspection.path };
+  const exemptionRequest = { path: inspection.path, sourceFile };
+  const model: LexicalModel = {
+    bindings,
+    dynamicCwdExemptions: dynamicCwdExemptions(exemptionRequest),
+    path: inspection.path,
+  };
   const commands: string[] = [];
   const visit = (node: ts.Node): void => {
     if (ts.isCallExpression(node)) {
@@ -242,6 +250,14 @@ function resolveCapability(
   };
   const resolvedOwner = resolveObjectLiteral(resolutionRequest);
   if (resolvedOwner !== false) {
+    if (
+      resolvedOwner.properties.some((property) =>
+        ts.isSpreadAssignment(property),
+      )
+    )
+      throw new Error(
+        'Spread TypeScript subprocess capability holders are forbidden.',
+      );
     if (member === false) {
       if (objectContainsCapability([resolvedOwner, request, visited]))
         throw new Error(
@@ -271,7 +287,6 @@ function resolveCapability(
     workerThreadCapability([ownerCapability, member])
   );
 }
-
 function resolveObjectLiteral(
   request: ArrayResolutionRequest,
 ): ts.ObjectLiteralExpression | false {
@@ -298,7 +313,6 @@ function resolveObjectLiteral(
   };
   return resolveObjectLiteral(propertyRequest);
 }
-
 function objectContainsCapability([object, request, visited]: readonly [
   ts.ObjectLiteralExpression,
   CapabilityResolutionRequest,
@@ -318,7 +332,6 @@ function objectContainsCapability([object, request, visited]: readonly [
     return resolveCapability(propertyRequest) !== false;
   });
 }
-
 function bindingAt(request: BindingLookupRequest): LexicalBinding | false {
   let node: ts.Node = request.location;
   for (;;) {
@@ -333,7 +346,6 @@ function bindingAt(request: BindingLookupRequest): LexicalBinding | false {
     node = node.parent;
   }
 }
-
 function hasBinding([model, location, name]: readonly [
   LexicalModel,
   ts.Node,
@@ -365,6 +377,27 @@ function lookupBinding([model, location, name]: readonly [
 function commandFromCall(request: CallCommandRequest): StaticCommand | false {
   const first = request.call.arguments?.[0];
   if (!first) throw new Error('Recognized subprocess call has no command.');
+  const cwdRequest: SubprocessCwdRequest = {
+    allowDynamicCwd: isDynamicCwdExempt([request.model, request.call]),
+    call: request.call,
+    evaluate: (expression) => {
+      const expressionRequest: CallExpressionRequest = { expression, request };
+      return evaluate(expressionRequest);
+    },
+    kind: request.kind,
+    resolveObject: (expression) => {
+      const resolutionRequest: ArrayResolutionRequest = {
+        expression,
+        location: request.call,
+        model: request.model,
+        visited: new Set(),
+      };
+      return resolveObjectLiteral(resolutionRequest);
+    },
+    sourcePath: request.model.path,
+  };
+  const cwd = (): StaticText | false => subprocessCwd(cwdRequest);
+  const argumentList = subprocessArgumentList(cwdRequest);
   if (request.kind === SubprocessCallKind.Worker) {
     const expressionRequest: CallExpressionRequest = {
       expression: first,
@@ -376,6 +409,7 @@ function commandFromCall(request: CallCommandRequest): StaticCommand | false {
     if (/^[A-Za-z][A-Za-z+.-]*:/u.test(entrypoint.value))
       throw new Error('Non-file TypeScript worker entrypoint is forbidden.');
     return {
+      cwd: cwd(),
       shellSource: false,
       words: [{ dynamic: false, value: 'node' }, entrypoint],
     };
@@ -389,14 +423,17 @@ function commandFromCall(request: CallCommandRequest): StaticCommand | false {
       ...expressionRequest,
       expression: bunCommandExpression(expressionRequest),
     };
-    return commandFromExpression(commandRequest);
+    const command = commandFromExpression(commandRequest);
+    return command === false || isSuccessorFreeExternalCommand(command)
+      ? false
+      : { ...command, cwd: cwd() };
   }
   if (request.kind === SubprocessCallKind.Exec) {
     const expressionRequest: CallExpressionRequest = {
       expression: first,
       request,
     };
-    return shellCommand(expressionRequest);
+    return { ...shellCommand(expressionRequest), cwd: cwd() };
   }
   if (request.kind === SubprocessCallKind.RunCommand)
     return commandFromRunCommand(request);
@@ -407,11 +444,12 @@ function commandFromCall(request: CallCommandRequest): StaticCommand | false {
     };
     const module = evaluate(expressionRequest);
     const argumentRequest: OptionalCallExpressionRequest = {
-      expression: request.call.arguments?.[1] ?? false,
+      expression: argumentList,
       request,
     };
     const argumentsValue = callArguments(argumentRequest);
     return {
+      cwd: cwd(),
       shellSource: false,
       words: [{ dynamic: false, value: 'node' }, module, ...argumentsValue],
     };
@@ -422,7 +460,7 @@ function commandFromCall(request: CallCommandRequest): StaticCommand | false {
   };
   const executable = evaluate(expressionRequest);
   const argumentRequest: OptionalCallExpressionRequest = {
-    expression: request.call.arguments?.[1] ?? false,
+    expression: argumentList,
     request,
   };
   const argumentsValue = callArguments(argumentRequest);
@@ -441,7 +479,9 @@ function commandFromCall(request: CallCommandRequest): StaticCommand | false {
       `Dynamic TypeScript subprocess executable is forbidden in ${request.model.path}: ${request.call.getText()}`,
     );
   }
+  if (/^(?:cargo|git|tar|zip)$/u.test(executable.value)) return false;
   return {
+    cwd: cwd(),
     shellSource: false,
     words: [executable, ...argumentsValue],
   };
@@ -473,6 +513,7 @@ function commandFromRunCommand(request: CallCommandRequest): StaticCommand {
     request,
   };
   return {
+    cwd: false,
     shellSource: false,
     words: [executable, ...callArguments(argumentRequest)],
   };
@@ -692,14 +733,14 @@ function commandFromExpression(
       `Dynamic TypeScript subprocess executable is forbidden: ${request.request.call.getText()}`,
     );
   }
-  return { shellSource: false, words };
+  return { cwd: false, shellSource: false, words };
 }
 
 function shellCommand(request: CallExpressionRequest): StaticCommand {
   const source = evaluate(request);
   if (source.dynamic)
     throw new Error('Dynamic TypeScript subprocess shell source is forbidden.');
-  return { shellSource: true, words: [source] };
+  return { cwd: false, shellSource: true, words: [source] };
 }
 
 function callArguments(
