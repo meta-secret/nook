@@ -1,4 +1,6 @@
 import { readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { lstat } from "node:fs/promises";
 import { join } from "node:path";
 
 import type { CiAgentConfig } from "./config.js";
@@ -35,6 +37,24 @@ export async function loadPrompt(config: CiAgentConfig): Promise<string> {
     ? resolveAgentTask()
     : "";
   const majorChangeAuthorization = resolveMajorChangeAuthorization();
+  let validatedPlan = "";
+  if (template.includes("${VALIDATED_PLAN}")) {
+    const expectedHash = process.env.VALIDATED_PLAN_SHA256?.trim() ?? "";
+    const planName = process.env.WORKBENCH_PLAN_FILE?.trim();
+    if (!/^[0-9a-f]{64}$/.test(expectedHash) || planName !== ".nook-workbench-plan.md") {
+      throw new Error("Validated implementation plan metadata is missing");
+    }
+    const planPath = join(config.repoRoot, planName);
+    const artifact = await lstat(planPath);
+    if (!artifact.isFile() || artifact.isSymbolicLink() || artifact.size > 65_536) {
+      throw new Error("Validated implementation plan artifact is unsafe");
+    }
+    validatedPlan = await readFile(planPath, "utf8");
+    const actualHash = createHash("sha256").update(validatedPlan).digest("hex");
+    if (actualHash !== expectedHash) {
+      throw new Error("Validated implementation plan hash changed before agent start");
+    }
+  }
 
   return template
     .replaceAll("${GITHUB_REPOSITORY}", config.githubRepository)
@@ -42,5 +62,6 @@ export async function loadPrompt(config: CiAgentConfig): Promise<string> {
     .replaceAll("${FIX_BRANCH}", config.fixBranch)
     .replaceAll("${AGENT_BRANCH}", agentBranch)
     .replaceAll("${MAJOR_CHANGE_AUTHORIZATION}", majorChangeAuthorization)
+    .replaceAll("${VALIDATED_PLAN}", validatedPlan)
     .replaceAll("${AGENT_TASK}", agentTask);
 }

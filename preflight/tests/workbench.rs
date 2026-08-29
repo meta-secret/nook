@@ -115,6 +115,10 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "uses: ./.github/actions/nook-node-setup",
         "uses: go-task/setup-task@v2",
         "Validate and publish Workbench task plan",
+        "Materialize validated implementation plan",
+        "VALIDATED_PLAN_SHA256=$EXPECTED_PLAN_SHA256",
+        "sha256sum \"$implementation_plan\"",
+        "sha256sum \"$plan\"",
         "Publish Workbench result",
         "MULTI_PR_PLAN: ${{ steps.plan.outputs.multi_pr }}",
         "Materialize the feature and ordered focused issues",
@@ -849,6 +853,8 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
         "## Decisions",
         "## Validation",
         "## Remaining work",
+        "${VALIDATED_PLAN}",
+        "authoritative even if a workspace file is later changed",
     ] {
         assert!(
             prompt.contains(required),
@@ -918,6 +924,8 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
     assert!(
         prompt_loader.contains("process.env.MAJOR_CHANGE_AUTHORIZED === \"true\"")
             && prompt_loader.contains("${MAJOR_CHANGE_AUTHORIZATION}")
+            && prompt_loader
+                .contains("Validated implementation plan hash changed before agent start")
             && prompt_loader.contains("join(config.toolingRoot, config.promptFile)"),
         "agent prompts must use trusted workflow metadata and tooling"
     );
@@ -977,6 +985,7 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
     for required in [
         "sanitizeAgentEnvironment(process.env)",
         "AGENT_ENV_ALLOWLIST",
+        "restoreHostEnvironment(hostEnvironment, process.env)",
         "readBoundary: \"workspace\"",
         "Implementation source must not provide Cursor sandbox policy",
         "disallowedTools: [\"task\", \"mcp\"]",

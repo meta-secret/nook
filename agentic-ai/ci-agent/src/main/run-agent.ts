@@ -32,6 +32,14 @@ export function sanitizeAgentEnvironment(
   }
 }
 
+export function restoreHostEnvironment(
+  snapshot: NodeJS.ProcessEnv,
+  environment: NodeJS.ProcessEnv,
+): void {
+  for (const name of Object.keys(environment)) delete environment[name];
+  Object.assign(environment, snapshot);
+}
+
 async function createSandboxedAgent(config: CiAgentConfig) {
   try {
     await access(join(config.repoRoot, ".cursor", "sandbox.json"));
@@ -85,45 +93,57 @@ export async function runFixAgent(config: CiAgentConfig, prompt: string): Promis
   // the local agent can spawn a shell; local child processes inherit env.
   // Cursor SDK 1.0.28 consumes the trusted per-user policy while
   // sandboxOptions makes unsupported hosts fail closed.
-  const { agent, sandboxHome } = await createSandboxedAgent(config);
-
+  const hostEnvironment = { ...process.env };
+  let sandboxHome: string | undefined;
   try {
-    let run;
+    const created = await createSandboxedAgent(config);
+    const { agent } = created;
+    sandboxHome = created.sandboxHome;
     try {
-      run = await agent.send(prompt, {
-        onDelta: ({ update }) => {
-          logInteractionUpdate(update);
-        },
-      });
-      log.info(`Agent run started (id ${run.id})`);
-    } catch (err) {
-      if (err instanceof CursorAgentError) {
-        throw new Error(`Cursor agent startup failed: ${err.message}`);
+      let run;
+      try {
+        run = await agent.send(prompt, {
+          onDelta: ({ update }) => {
+            logInteractionUpdate(update);
+          },
+        });
+        log.info(`Agent run started (id ${run.id})`);
+      } catch (err) {
+        if (err instanceof CursorAgentError) {
+          throw new Error(`Cursor agent startup failed: ${err.message}`);
+        }
+        throw err;
       }
-      throw err;
-    }
 
-    const result = await waitWithHeartbeat("Agent", () => run.wait(), waitOptions);
-    if (result.status === "error") {
-      const detail = result.error?.message?.trim();
-      throw new Error(
-        `Cursor agent run failed (run id ${result.id})${detail ? `: ${detail}` : ""}`,
-      );
-    }
-    if (result.status === "cancelled") {
-      throw new Error(`Cursor agent run cancelled (run id ${result.id})`);
-    }
+      const result = await waitWithHeartbeat("Agent", () => run.wait(), waitOptions);
+      if (result.status === "error") {
+        const detail = result.error?.message?.trim();
+        throw new Error(
+          `Cursor agent run failed (run id ${result.id})${detail ? `: ${detail}` : ""}`,
+        );
+      }
+      if (result.status === "cancelled") {
+        throw new Error(`Cursor agent run cancelled (run id ${result.id})`);
+      }
 
-    log.info(`Agent finished (${result.status})`);
-    finishInteractionLog();
+      log.info(`Agent finished (${result.status})`);
+      finishInteractionLog();
+    } finally {
+      try {
+        await agent[Symbol.asyncDispose]();
+        log.info("Agent disposed");
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        log.info(`Agent dispose warning: ${message}`);
+      }
+    }
   } finally {
     try {
-      await agent[Symbol.asyncDispose]();
-      log.info("Agent disposed");
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      log.info(`Agent dispose warning: ${message}`);
+      if (sandboxHome) {
+        await rm(sandboxHome, { recursive: true, force: true });
+      }
+    } finally {
+      restoreHostEnvironment(hostEnvironment, process.env);
     }
-    await rm(sandboxHome, { recursive: true, force: true });
   }
 }

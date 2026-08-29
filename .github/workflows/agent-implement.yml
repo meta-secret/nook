@@ -574,6 +574,7 @@ jobs:
           github-token: ${{ secrets.NOOK_GITHUB_PAT }}
           retries: 3
           script: |
+            const crypto = require('node:crypto')
             const fs = require('node:fs')
             const { validateAgentRecord } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/workbench-records.cjs`)
             const [owner, repo] = process.env.WORKBENCH_REPOSITORY.split('/')
@@ -604,6 +605,9 @@ jobs:
               core.setFailed(`Rejected agent-authored Workbench task plan: ${rejection}.`)
               return
             }
+            const validatedPlan = `${candidate}\n`
+            fs.writeFileSync(localPath, validatedPlan, { encoding: 'utf8', mode: 0o600 })
+            core.setOutput('sha256', crypto.createHash('sha256').update(validatedPlan).digest('hex'))
             const currentGizmoIdMatch = /^- Current Gizmo ID:\s*([a-z0-9]+(?:-[a-z0-9]+)*)\s*$/m.exec(candidate)
             const currentGizmoId = currentGizmoIdMatch?.[1]
             if (!currentGizmoId) {
@@ -639,6 +643,22 @@ jobs:
               return
             }
 
+      - name: Materialize validated implementation plan
+        if: steps.plan.outcome == 'success' && steps.plan.outputs.authorization_blocked != 'true'
+        env:
+          EXPECTED_PLAN_SHA256: ${{ steps.plan.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+          source_plan="$GITHUB_WORKSPACE/$WORKBENCH_PLAN_FILE"
+          implementation_plan="$IMPLEMENTATION_REPO_ROOT/$WORKBENCH_PLAN_FILE"
+          test -f "$source_plan" && test ! -L "$source_plan"
+          test "$(wc -c < "$source_plan")" -le 65536
+          test ! -e "$implementation_plan" && test ! -L "$implementation_plan"
+          test "$(sha256sum "$source_plan" | cut -d' ' -f1)" = "$EXPECTED_PLAN_SHA256"
+          install -m 0444 "$source_plan" "$implementation_plan"
+          test "$(sha256sum "$implementation_plan" | cut -d' ' -f1)" = "$EXPECTED_PLAN_SHA256"
+          echo "VALIDATED_PLAN_SHA256=$EXPECTED_PLAN_SHA256" >> "$GITHUB_ENV"
+
       - name: Run sandboxed implementation agent
         id: agent_edit
         if: steps.plan.outcome == 'success' && steps.plan.outputs.authorization_blocked != 'true'
@@ -646,7 +666,13 @@ jobs:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
           REPO_ROOT: ${{ env.IMPLEMENTATION_REPO_ROOT }}
           WASM_BUILD_MODE: prod
-        run: task ci-agent:host:run CI_AGENT_CMD=implement
+        run: |
+          set -euo pipefail
+          plan="$REPO_ROOT/$WORKBENCH_PLAN_FILE"
+          test -f "$plan" && test ! -L "$plan"
+          test "$(wc -c < "$plan")" -le 65536
+          test "$(sha256sum "$plan" | cut -d' ' -f1)" = "$VALIDATED_PLAN_SHA256"
+          task ci-agent:host:run CI_AGENT_CMD=implement
 
       - name: Validate, commit, and publish implementation
         id: implement

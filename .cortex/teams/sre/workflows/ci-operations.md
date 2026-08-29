@@ -209,6 +209,8 @@ source is fetched into a separate detached implementation worktree and is
 passed only as the CI agent's bounded `REPO_ROOT`. Trusted tooling creates a
 disposable planning worktree from that source; only plan or worklog artifacts
 cross back to trusted validation and publication code. The implementation agent
+runs from an exact hash-bound copy of the validated plan, whose content is also
+embedded in the trusted runtime prompt before untrusted execution begins. It
 runs with a trusted SDK workspace-read-boundary, network-disabled sandbox after
 credential environment variables are removed. It has no persisted GitHub
 credential; a separate trusted process owns the budget, commit, push, and API
