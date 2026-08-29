@@ -723,8 +723,6 @@
     "other_installation": "Other installation",
     "other_identity_evidence_title": "This identity belongs to another installation",
     "other_identity_evidence_unavailable": "Nook can list its connected apps and vault references, but this browser cannot unlock this identity.",
-    "add_key": "Add app",
-    "add_key_unavailable": "Another Nook installation must request identity enrollment before it can be added.",
     "bridge_browse_by": "Browse by",
     "bridge_identity": "Identity",
     "bridge_vault": "Vault",

@@ -117,6 +117,15 @@ test('walk the access chain from passkey to app to vaults', async ({
   ).toHaveCount(0)
   await expect(appsGroup).toContainText('Apps')
   await expect(app).toContainText('Nook in this browser')
+  await expect(
+    keyInventory.getByRole('button', { name: 'Add app', exact: true }),
+  ).toHaveCount(0)
+  await expect(
+    keyInventory.getByText(
+      'Another Nook installation must request identity enrollment before it can be added.',
+      { exact: true },
+    ),
+  ).toHaveCount(0)
   await expect(page.getByTestId('devices-access-app-id')).not.toBeVisible()
   await expect(
     page.getByTestId('devices-access-relationship-details'),
