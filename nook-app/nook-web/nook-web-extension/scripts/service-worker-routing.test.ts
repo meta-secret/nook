@@ -37,6 +37,7 @@ const beginAccountPickerAuthorizationCleanup = mock(() =>
 )
 const clearPendingAccountPickers = mock(() => Promise.resolve())
 const clearStagedAuthenticatorEnrollments = mock(() => {})
+const rebindStagedAuthenticatorEnrollmentsAuthorization = mock(() => {})
 const completeAccountPickerAuthorizationCleanup = mock(() => Promise.resolve())
 const releaseAccountPickerAuthorizationCleanup = mock(() => {})
 
@@ -66,6 +67,7 @@ const lifecycleDependencies: ExtensionLifecycleRoutingDependencies = {
   openSimpleVault: mock(() => {}),
   queryActiveTabLoginDetection: unusedAsyncDependency,
   releaseAccountPickerAuthorizationCleanup,
+  rebindStagedAuthenticatorEnrollmentsAuthorization,
 }
 
 const externalDependencies: ExternalCompanionRoutingDependencies = {
@@ -176,8 +178,8 @@ describe('service worker routing', () => {
     expect(events).toEqual([
       'authorization-invalidated',
       'enrollments-cleared',
-      'pickers-cleared-1',
       'session-closed',
+      'pickers-cleared-1',
       'pickers-cleared-2',
       'enrollments-cleared',
       'authorization-restored-4',
@@ -249,6 +251,31 @@ describe('service worker routing', () => {
     expect(completeCleanup).toHaveBeenCalledWith(12)
   })
 
+  test('invalidates authorization before a failed startup marker lookup', async () => {
+    const events: string[] = []
+    const dependencies: ExtensionLifecycleRoutingDependencies = {
+      ...lifecycleDependencies,
+      accountPickerAuthorizationCleanupPending: () => {
+        events.push('marker-read-started')
+        return Promise.reject(new Error('session storage unavailable'))
+      },
+      beginAccountPickerAuthorizationCleanup: () => {
+        events.push('authorization-invalidated')
+        return Promise.resolve({
+          authorizationGeneration: 13,
+          markerStatus: AccountPickerCleanupMarkerStatus.Unavailable,
+        })
+      },
+    }
+    const { recoverInterruptedAuthorizationCleanup } =
+      await import('../src/background/service-worker/extension-lifecycle-routing')
+
+    await expect(
+      recoverInterruptedAuthorizationCleanup(dependencies),
+    ).rejects.toThrow('session storage unavailable')
+    expect(events).toEqual(['marker-read-started', 'authorization-invalidated'])
+  })
+
   test('invalidates picker authorization before reconciling revocation', async () => {
     const events: string[] = []
     const dependencies: ExtensionLifecycleRoutingDependencies = {
@@ -262,6 +289,10 @@ describe('service worker routing', () => {
       },
       clearPendingAccountPickers: () => {
         events.push('pickers-cleared')
+        return Promise.resolve()
+      },
+      closeExtensionSessionDocument: () => {
+        events.push('session-closed')
         return Promise.resolve()
       },
       importLocalEventLogUpdate: () => {
@@ -301,7 +332,49 @@ describe('service worker routing', () => {
       'authorization-invalidated',
       'revocation-reconciled',
     ])
+    expect(events.indexOf('session-closed')).toBeLessThan(
+      events.indexOf('pickers-cleared'),
+    )
     expect(events).toContain('pickers-cleared')
+  })
+
+  test('rebinds staged enrollment when reconciliation preserves access', async () => {
+    const events: string[] = []
+    const dependencies: ExtensionLifecycleRoutingDependencies = {
+      ...lifecycleDependencies,
+      beginAccountPickerAuthorizationCleanup: () =>
+        Promise.resolve({
+          authorizationGeneration: 15,
+          markerStatus: AccountPickerCleanupMarkerStatus.Persisted,
+        }),
+      importLocalEventLogUpdate: () => Promise.resolve({ ok: true as const }),
+      rebindStagedAuthenticatorEnrollmentsAuthorization: (generation) => {
+        events.push(`enrollments-rebound-${generation}`)
+      },
+      completeAccountPickerAuthorizationCleanup: (generation) => {
+        events.push(`authorization-restored-${generation}`)
+        return Promise.resolve()
+      },
+    }
+    const { routeExtensionLifecycleMessage } =
+      await import('../src/background/service-worker/extension-lifecycle-routing')
+
+    routeExtensionLifecycleMessage({
+      dependencies,
+      message: {
+        type: 'nook:extension-local-event-log-updated',
+        payload: { vaultStoreId: 'vault-1', eventLogRecords: [] },
+      },
+      sender: { id: 'nook-extension', url: 'https://simple.example.test/' },
+      sendResponse: mock(() => {}),
+    })
+    await flushResponses()
+    await flushResponses()
+
+    expect(events).toEqual([
+      'enrollments-rebound-15',
+      'authorization-restored-15',
+    ])
   })
 
   test('rejects a companion launcher request from an unauthorized external sender', async () => {

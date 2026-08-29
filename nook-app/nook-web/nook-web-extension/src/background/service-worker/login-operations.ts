@@ -269,6 +269,7 @@ export async function selectLoginPicker({
         account: {
           vaultStoreId: selected.vaultStoreId,
           secretId: selected.secretId,
+          authorizationGeneration,
         },
       },
     }
@@ -658,6 +659,7 @@ type WebsiteLoginFillArgs = {
       origin: string
       vaultStoreId: string
       secretId: string
+      authorizationGeneration?: number
     }
   }
   sender: chrome.runtime.MessageSender
@@ -667,6 +669,12 @@ export async function websiteLoginFill({
   message,
   sender,
 }: WebsiteLoginFillArgs): Promise<WebsiteLoginFillResponse> {
+  const authorizationGeneration =
+    message.payload.authorizationGeneration ??
+    accountPickerAuthorizationGeneration()
+  if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
+    return { ok: false, reason: 'login-locked' }
+  }
   const nookTypedArgs0_16: Parameters<
     typeof authorizedWebsiteGrant
   >[0]['reasons'] = {
@@ -682,6 +690,9 @@ export async function websiteLoginFill({
   }
   const access = await authorizedWebsiteGrant(nookTypedArgs0_2)
   if ('response' in access) return access.response
+  if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
+    return { ok: false, reason: 'login-locked' }
+  }
   const nookTypedArgs0_17: Parameters<
     typeof websiteLoginRevealSessionRequest
   >[0] = {
@@ -689,8 +700,17 @@ export async function websiteLoginFill({
     origin: message.payload.origin,
     secretId: message.payload.secretId,
   }
-  const response = await sendSessionMessage(
-    websiteLoginRevealSessionRequest(nookTypedArgs0_17),
+  const response = decodeWebsiteLoginFillResponse(
+    await sendSessionMessage(
+      websiteLoginRevealSessionRequest(nookTypedArgs0_17),
+    ),
   )
-  return decodeWebsiteLoginFillResponse(response)
+  if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
+    if (response.ok) {
+      response.password = ''
+      response.username = ''
+    }
+    return { ok: false, reason: 'login-locked' }
+  }
+  return response
 }

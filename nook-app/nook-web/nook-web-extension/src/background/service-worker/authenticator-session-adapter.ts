@@ -211,6 +211,7 @@ type SelectedAuthenticatorPageAcknowledgedArgs = {
   requestId: string
   vaultStoreId: string
   secretId: string
+  authorizationGeneration: number
 }
 
 export async function selectedAuthenticatorPageAcknowledged({
@@ -219,13 +220,14 @@ export async function selectedAuthenticatorPageAcknowledged({
   requestId,
   vaultStoreId,
   secretId,
+  authorizationGeneration,
 }: SelectedAuthenticatorPageAcknowledgedArgs): Promise<boolean> {
   const message: Parameters<typeof chrome.tabs.sendMessage>[1] = {
     type: 'nook:website-authenticator-selected',
     payload: {
       origin,
       requestId,
-      account: { vaultStoreId, secretId },
+      account: { vaultStoreId, secretId, authorizationGeneration },
     },
   }
   const response: unknown = await chrome.tabs.sendMessage(tabId, message)

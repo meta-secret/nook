@@ -59,7 +59,9 @@ export type WebsiteLoginSelectedMessage = {
   payload: {
     origin: string
     requestId: string
-    account: Pick<WebsiteLoginAccountOption, 'vaultStoreId' | 'secretId'>
+    account: Pick<WebsiteLoginAccountOption, 'vaultStoreId' | 'secretId'> & {
+      authorizationGeneration: number
+    }
   }
 }
 
@@ -181,7 +183,10 @@ export function isWebsiteLoginSelectedMessage(
     payload.account as WebsiteLoginSelectedMessage['payload']['account']
 
   return (
-    isNonEmptyString(account.vaultStoreId) && isNonEmptyString(account.secretId)
+    isNonEmptyString(account.vaultStoreId) &&
+    isNonEmptyString(account.secretId) &&
+    Number.isInteger(account.authorizationGeneration) &&
+    account.authorizationGeneration >= 0
   )
 }
 

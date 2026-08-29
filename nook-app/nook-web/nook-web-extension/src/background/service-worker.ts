@@ -58,6 +58,7 @@ import {
 import {
   cancelAuthenticatorPicker,
   clearStagedAuthenticatorEnrollments,
+  rebindStagedAuthenticatorEnrollmentsAuthorization,
   openWebsiteAuthenticatorPicker,
   queryAuthenticatorPicker,
   selectAuthenticatorPicker,
@@ -138,6 +139,7 @@ const extensionLifecycleRoutingDependencies: Parameters<
   beginAccountPickerAuthorizationCleanup,
   clearPendingAccountPickers,
   clearStagedAuthenticatorEnrollments,
+  rebindStagedAuthenticatorEnrollmentsAuthorization,
   closeExtensionSessionDocument,
   completeAccountPickerAuthorizationCleanup,
   ensureExtensionSessionDocument,

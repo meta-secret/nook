@@ -27,6 +27,7 @@ describe('website login fill runtime messages', () => {
           origin: 'https://login.example.com',
           vaultStoreId: 'store_test',
           secretId: 'secret_totp',
+          authorizationGeneration: 7,
         },
       }),
     ).toBe(true)
@@ -37,6 +38,7 @@ describe('website login fill runtime messages', () => {
           origin: 'https://login.example.com',
           vaultStoreId: 'store_test',
           secretId: 'secret_test',
+          authorizationGeneration: 7,
         },
       }),
     ).toBe(true)
@@ -64,6 +66,17 @@ describe('website login fill runtime messages', () => {
         payload: {
           origin: 'https://login.example.com',
           vaultStoreId: 'store_test',
+        },
+      }),
+    ).toBe(false)
+    expect(
+      isWebsiteLoginRevealMessage({
+        type: 'nook:website-login-fill',
+        payload: {
+          origin: 'https://login.example.com',
+          vaultStoreId: 'store_test',
+          secretId: 'secret_test',
+          authorizationGeneration: -1,
         },
       }),
     ).toBe(false)

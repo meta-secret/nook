@@ -98,7 +98,9 @@ export function setStatus({
 }
 
 type FillAndSubmitAccountArgs = {
-  account: Pick<WebsiteLoginAccountOption, 'vaultStoreId' | 'secretId'>
+  account: Pick<WebsiteLoginAccountOption, 'vaultStoreId' | 'secretId'> & {
+    authorizationGeneration?: number
+  }
   workflow: PasswordFormObservation
   step: HTMLParagraphElement
   title: HTMLHeadingElement
@@ -158,6 +160,9 @@ export async function fillAndSubmitAccount({
       origin: location.origin,
       vaultStoreId: account.vaultStoreId,
       secretId: account.secretId,
+      ...(typeof account.authorizationGeneration === 'number'
+        ? { authorizationGeneration: account.authorizationGeneration }
+        : {}),
     },
   }
   const delivery = await sendLoginFillMessage(nookTypedArgs0_2)
