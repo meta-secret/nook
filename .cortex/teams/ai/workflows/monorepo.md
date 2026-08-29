@@ -23,13 +23,18 @@ Use this workflow for feature work that touches more than one package.
 6. Add or update tests in the owning package (`nook-core` Rust tests for domain logic; Playwright for UI flows).
 7. Add new app routine commands to the nearest owning Taskfile: web-family tasks under `nook-app/nook-web/Taskfile.yml` , Docker tasks under `nook-app/nook-platform/docker/Taskfile.yml`, CI tasks under `nook-app/ci/Taskfile.yml`, and repo-level non-app commands under the root `Taskfile.yml` or root `.task/`.
 8. Update `.cortex` docs when architecture or workflow changes.
-9. Commit the coherent AI handoff promptly. Gizmo integrates the handoff,
-   runs `task loom:pre-push`, and then promptly pushes the coherent head.
+9. Run required formatters and commit every resulting mutation in the allowed
+   AI paths. Gizmo integrates that coherent handoff and runs
+   `task loom:pre-push`.
+   - If hygiene mutates AI-owned source or Cortex content, the AI team returns
+     a fresh formatted commit. Gizmo reintegrates it and reruns hygiene before
+     pushing.
    - Do not add broad local builds, tests, e2e, container product gates, or
      duplicate hosted-check mirrors before push.
-   - Use a focused hosted task only when it helps iteration.
+   - If the pushed head is not validation-ready, dispatch at least one relevant
+     focused hosted task immediately.
    - When the head is validation-ready, dispatch complete exact-head validation
-     immediately without requiring a focused task first.
+     immediately. Focused tasks are optional on that path.
    - Obtain fresh exact-head remote evidence after every replacement push.
 
 For multiple package PRs:

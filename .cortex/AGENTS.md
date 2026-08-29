@@ -128,6 +128,8 @@ Gizmo supplies a bounded task contract for that identity.
   authorities.
 - It requires an isolated workspace and verified handoff for write-capable
   work.
+- The worker runs required formatters and owns every resulting mutation inside
+  its allowed source or Cortex paths before committing the handoff.
 - It returns foreign-team dependencies to Gizmo.
 - It does not grant parent-owned lifecycle authority.
 
@@ -138,6 +140,11 @@ A write provider satisfies its consumer edge only when it is:
 - commit-verified against its declared starting frontier and resource scope;
   and
 - integrated into the consumer's Git frontier.
+
+Gizmo may commit deterministic integration-only state. If integrated
+pre-push hygiene mutates team-owned source or Cortex content, Gizmo returns
+that diff to the responsible team. The team supplies a fresh formatted commit
+before Gizmo reintegrates and reruns pre-push hygiene.
 
 A repository-reading read-only provider satisfies its consumer edge only when
 it is:
@@ -303,15 +310,17 @@ tasks.
 - **P1 hard rule:** Repository-authored automation uses TypeScript/Bun, Rust,
   and Taskfiles. It does not use Python.
 - Once an integrated implementation or correction is coherent, Gizmo runs
-  `task loom:pre-push`, then promptly commits and pushes the head. Team workers
-  promptly commit coherent handoffs without taking external delivery state.
+  `task loom:pre-push`, then promptly pushes the head. Team workers run required
+  formatters and commit every mutation in their allowed source or Cortex paths.
+  Gizmo may commit deterministic integration-only state. It returns any new
+  team-owned formatter diff for a fresh team commit before reintegration.
 - Treat `task loom:pre-push` as the only required local pre-push hygiene.
   Agents do not block a push on broad local builds, tests, e2e, container
   product gates, or duplicate local mirrors of hosted checks.
 - After each push, Gizmo immediately obtains exact-head remote evidence. It
-  uses a focused remote task only when it helps iteration; otherwise, when the
-  head is validation-ready, it dispatches complete GitHub Actions validation
-  immediately.
+  dispatches at least one relevant focused remote task when the head is not
+  validation-ready. When the head is ready, it dispatches complete GitHub
+  Actions validation immediately; focused tasks are optional on that path.
 - Every replacement push invalidates earlier head-specific evidence and
   requires fresh exact-head remote validation.
 - Keep `.cortex/.session/` temporary and physically clean before readiness.
@@ -319,7 +328,9 @@ tasks.
 Load detailed policy only when its action is reached. Gizmo owns planning,
 delegation, review coordination, and PR completion. AI owns self-improvement
 and Cortex promotion. SRE owns the execution platform. Substantial tasks follow the
-[self-improvement lifecycle](teams/ai/dynamic-skills/self-improvement.md).
+[self-improvement lifecycle](teams/ai/dynamic-skills/self-improvement.md)
+before final readiness and merge. Promotion enters the same PR, and a changed
+head repeats hosted validation.
 
 ## Navigation maintenance
 

@@ -18,8 +18,15 @@ Review policy is explicit:
 
 Do not require advisory local review before the first push or after a worker
 handoff. Once Gizmo integrates a coherent committed handoff, it runs
-`task loom:pre-push`, commits any integration result, and promptly pushes the
-head. Exact-head Cloud review then stabilizes through complete validation.
+`task loom:pre-push`. Gizmo may commit deterministic integration-only state.
+If hygiene mutates team-owned source or Cortex content, Gizmo returns that diff
+to the responsible team for a fresh formatted commit, reintegrates it, and
+reruns hygiene. Gizmo then promptly pushes the coherent head.
+
+Every pushed head immediately selects remote evidence. Dispatch at least one
+relevant focused `task remote` job when the head is not validation-ready.
+Dispatch complete validation immediately when it is ready; focused jobs are
+optional on that path.
 
 Treat any actionable Cloud finding as normal correction work. Run pre-push
 hygiene again before Gizmo pushes the replacement head.
@@ -74,8 +81,10 @@ When a new finding arrives:
 2. Dispatch the fix to the responsible team.
 3. Integrate the verified fix commit.
 4. Reply to and resolve the thread.
-5. Run pre-push hygiene and push the replacement head.
-6. Restart complete validation for that head.
+5. Run pre-push hygiene through the responsible formatter owner and push the
+   replacement head.
+6. Restart complete validation for that head. If it is not yet
+   validation-ready, dispatch at least one relevant focused remote job first.
 
 Use a focused task instead only when it isolates a known failure faster.
 
@@ -99,8 +108,10 @@ Cursor, CodeRabbit, or another service:
 2. Dispatch the minimal correct fix to the responsible team, or document why
    no change is needed.
 3. Integrate the verified fix commit.
-4. Run `task loom:pre-push`, commit, and push when files changed.
-5. Use focused hosted tasks as useful.
+4. Run `task loom:pre-push` through the responsible formatter owner, commit,
+   and push when files changed.
+5. If the head is not validation-ready, dispatch at least one relevant focused
+   hosted task.
 6. If complete validation was already requested, restart it for the replacement
    head. This first stabilizes one exact-head Codex review. Otherwise start it
    when that head is ready for the final gate.

@@ -77,6 +77,8 @@ Agent count never determines PR count.
    - Wait for each required dependency or terminal barrier.
    - Verify each commit against its baseline and write scope.
    - Verify the team's focused tests and Cortex evidence.
+   - Verify that the team ran required formatters and committed all mutations
+     in its allowed source or Cortex paths.
    - Reject incomplete or out-of-scope handoffs.
    - Receive each Team Agent's existing typed handoff directly. Do not add a
      slice-process transport or intermediate agent.
@@ -88,16 +90,19 @@ Agent count never determines PR count.
      serialized under Gizmo.
 6. **Prepare the integrated head.**
    - Run `task loom:pre-push` before each push.
-   - Promptly commit and push the coherent integrated change.
+   - Gizmo may commit deterministic integration-only state.
+   - If pre-push hygiene mutates team-owned source or Cortex content, do not
+     author or commit that diff as Gizmo.
+   - Return the diff to the responsible team for a fresh formatted commit.
+   - Reintegrate that commit and rerun `task loom:pre-push` before pushing.
+   - Promptly commit any integration-only state and push the coherent head.
    - Do not add broad local builds, tests, e2e, container product gates, local
      review, or duplicate hosted-check mirrors before the push.
-   - Immediately obtain remote evidence for the pushed head.
-   - Use a focused `task remote TASK_NAME=web:build` command only when it helps
-     iteration.
-   - Use a focused `task remote TASK_NAME=web:e2e` command only when it helps
-     iteration.
-   - When the head is validation-ready, dispatch complete exact-head validation
-     immediately instead of requiring focused tasks first.
+   - Immediately choose remote evidence for every pushed coherent head.
+   - If the head is not ready for complete validation, dispatch at least one
+     relevant focused `task remote TASK_NAME=<name>` job.
+   - If the head is validation-ready, dispatch complete exact-head validation
+     immediately. Focused tasks are optional on that path.
 7. **Validate and repair through teams.**
    - Trigger the repository-owned exact-head review and validation path.
    - Route each review or CI finding to its functional owner.
@@ -119,11 +124,15 @@ Agent count never determines PR count.
    - Keep the PR blocked while any required team verdict is blocking.
    - Keep the PR blocked while a required security verdict is blocking.
    - Never waive or override either block.
-10. **Finish delivery.**
-    - Run the exact-head readiness audit.
-    - Squash-merge when readiness succeeds.
-    - Ask the AI team to complete the
+10. **Complete substantial-task self-improvement.**
+    - Before final readiness, ask the AI team to complete the
       [self-improvement lifecycle](../../teams/ai/dynamic-skills/self-improvement.md).
+    - Integrate the clean committed promotion handoff into the same PR.
+    - If promotion changes the head, rerun pre-push hygiene through the owning
+      teams, push, and obtain fresh exact-head hosted validation.
+11. **Finish delivery.**
+    - Run the exact-head readiness audit only after required self-improvement.
+    - Squash-merge when readiness succeeds.
     - Publish the Workbench issue update, linked worklog, and
       [agent statistics](agent-statistics.md).
     - Report duration and any authorized remaining work.

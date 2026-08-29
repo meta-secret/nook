@@ -150,11 +150,14 @@ task loom:cortex-audit
   harness skill mirrors.
 - Semantic conflicts still require agent judgment.
 - For implementation tasks:
-  1. promptly commit the coherent AI handoff;
-  2. have Gizmo integrate the handoff, run `task loom:pre-push`, and push
-     without broad local product or duplicate hosted gates; and
-  3. have Gizmo use an optional focused remote task for iteration or dispatch
-     complete exact-head hosted validation immediately when the head is ready.
+  1. run required formatters and commit every allowed AI source or Cortex
+     mutation in the coherent handoff;
+  2. have Gizmo integrate the handoff and run `task loom:pre-push`;
+  3. return any new formatter mutation in AI-owned content for a fresh AI
+     commit before Gizmo reintegrates, reruns hygiene, and pushes; and
+  4. dispatch at least one relevant focused remote task when the pushed head is
+     not validation-ready, or complete exact-head validation immediately when
+     it is ready.
 - Obtain fresh exact-head remote evidence after every replacement push.
 
 For a full Cortex GC request, report:

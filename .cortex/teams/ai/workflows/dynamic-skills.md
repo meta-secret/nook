@@ -122,7 +122,10 @@ When applying a skill to code:
 4. Preserve package boundaries in [`.cortex/shared/architecture/system.md`](../../../shared/architecture/system.md).
 5. Add or update tests when the refactor changes behavior or protects a durable
    invariant.
-6. Run the focused worker proof and commit the coherent handoff. Return the
-   exact commit and evidence to Gizmo. Gizmo integrates the handoff, runs
-   `task loom:pre-push`, promptly pushes, uses focused hosted tasks only when
-   useful, and triggers complete exact-head validation when the head is ready.
+6. Run the focused worker proof and required formatters. Commit every resulting
+   mutation in the allowed paths and return the exact handoff to Gizmo. If
+   integrated pre-push hygiene mutates AI-owned content, the AI team returns a
+   fresh formatted commit. Gizmo reintegrates, reruns hygiene, and pushes. A
+   pushed head that is not validation-ready requires at least one relevant
+   focused hosted task. A ready head enters complete exact-head validation
+   immediately.

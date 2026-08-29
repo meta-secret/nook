@@ -408,15 +408,19 @@ For every substantial task:
 11. Validate Cortex consistency and the updated documentation head.
 12. Delete the session file.
 13. Confirm no `.cortex/.session/` file is tracked.
-14. Commit the clean promotion handoff.
+14. Run required formatters and commit the clean promotion handoff. Include
+    every resulting mutation in the AI team's allowed source or Cortex paths.
 15. Return its exact commit, worker-focused proof, and cleanup evidence to
     Gizmo.
-16. Gizmo integrates the handoff, performs minimal pre-push hygiene, and owns
-    push, exact-head remote validation, readiness, merge, or the requested
+16. Gizmo integrates the handoff and performs minimal pre-push hygiene. If
+    hygiene mutates AI-owned content, the AI team supplies a fresh formatted
+    commit before Gizmo reintegrates, reruns hygiene, and pushes.
+17. Gizmo owns exact-head remote validation, readiness, merge, or the requested
     handoff.
 
 If promotion changes the pushed head, Gizmo promptly pushes the coherent
-replacement and obtains fresh exact-head remote validation before readiness.
+replacement and repeats complete exact-head hosted validation before
+readiness.
 
 ## Pull-request completion contract
 
@@ -432,6 +436,9 @@ Before the AI team returns self-improvement evidence to Gizmo:
 - [ ] Temporary session memory was removed.
 - [ ] No speculative or duplicate knowledge was promoted.
 - [ ] The clean handoff is committed and its exact commit is reported.
+
+This contract completes before final readiness and merge. Promotion therefore
+enters the same pull request as the substantial work.
 
 Hosted validation and readiness are not worker completion gates. After
 integration, Gizmo runs minimal pre-push hygiene, promptly pushes the coherent
@@ -530,7 +537,8 @@ Before returning promotion and cleanup evidence to Gizmo:
    not be used for implementation delegation.
 
 4. For a compiled workflow change, validate its dry run and focused behavior.
-5. Commit the coherent promotion handoff. Do not push it.
+5. Run required formatters and commit the coherent promotion handoff. Include
+   every resulting mutation in the AI team's allowed paths. Do not push it.
 6. Delete the local session file.
 7. Run `task loom:cortex-session-clean`.
 8. Confirm `git ls-files .cortex/.session` prints nothing.
@@ -540,8 +548,9 @@ Before returning promotion and cleanup evidence to Gizmo:
 Do not add broad local builds, tests, e2e, container product gates, or duplicate
 hosted-check mirrors to this validation sequence.
 
-Gizmo promptly pushes a coherent promoted head. Focused remote tasks are
-optional for iteration. When that head is validation-ready, Gizmo immediately
-dispatches complete exact-head hosted validation. Every replacement push
-requires fresh exact-head remote evidence.
+Gizmo promptly pushes a coherent promoted head. If it is not validation-ready,
+Gizmo immediately dispatches at least one relevant focused remote task. When
+it is validation-ready, Gizmo immediately dispatches complete exact-head hosted
+validation. Promotion that changes an already validated head requires complete
+hosted validation again.
 Gizmo then performs readiness, merge, or the requested handoff.
