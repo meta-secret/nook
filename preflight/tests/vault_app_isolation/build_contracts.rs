@@ -377,10 +377,10 @@ fn scheduled_nightly_live_sync_is_retired() -> anyhow::Result<()> {
 fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
     let root = repository_root();
     for (path, invocation_count) in [
-        (".github/scripts/verify-wasm-gha-cache.sh", 2),
-        (".github/scripts/with-healthy-buildkit.sh", 9),
-        (".github/scripts/with-remote-buildkit.sh", 4),
-        ("infra/tasks/bake-cache.yml", 13),
+        (".github/scripts/verify-wasm-gha-cache.sh", 3),
+        (".github/scripts/with-healthy-buildkit.sh", 10),
+        (".github/scripts/with-remote-buildkit.sh", 5),
+        ("infra/tasks/bake-cache.yml", 14),
     ] {
         let source = read(&root, path);
         let normalized = source.lines().map(str::trim).collect::<Vec<_>>().join("\n");
@@ -415,6 +415,16 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
         assert!(source.contains("Docker contexts must not contain symlinks"));
         assert!(source.contains("export BUILDX_CONFIG=\"$trusted_docker_config/buildx\""));
         assert!(source.contains("any(keys[]; explode | any(. > 127))"));
+        assert!(source.contains("if [ -n \"${GITHUB_ACTIONS:-}\" ]; then"));
+        assert!(
+            source.find("if [ -n \"${GITHUB_ACTIONS:-}\" ]; then")
+                < source.find("if [ -x /usr/local/bin/jq ]; then"),
+            "{path} must never require jq on the documented local Docker path"
+        );
+        assert!(source.contains(
+            "current_context=\"$(DOCKER_CONFIG=\"$docker_config_source\" \"$docker_cli\" context show)\""
+        ));
+        assert!(source.contains("Docker context name contains unsupported characters"));
         assert!(source.contains("(.key | ascii_downcase) != \"credsstore\""));
         assert!(source.contains("(.key | ascii_downcase) != \"credhelpers\""));
         assert!(
@@ -452,6 +462,18 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
                     .split_whitespace()
                     .any(|word| word.trim_matches(['\'', '"', ';', '&', '|', '(', ')']) == "docker")
         }));
+    }
+    let registry_cache = read(&root, "nook-app/nook-platform/docker/Taskfile.yml");
+    for required in [
+        "registry-cache:ensure:",
+        "registry-remote-username",
+        "registry-remote-password",
+        "{{.DOCKER}} login \"$host\" -u \"$user\" --password-stdin",
+    ] {
+        assert!(
+            registry_cache.contains(required),
+            "local isolated Docker config must be reauthenticated through {required}"
+        );
     }
     let pr = read(&root, ".github/workflows/pr.yml");
     assert!(
@@ -570,6 +592,10 @@ fn stuck_pr_buildkit_probe_is_killed_and_replaced_within_its_deadline() -> anyho
         r#"#!/usr/bin/env bash
 set -euo pipefail
 printf '%s\n' "$*" >> "$FAKE_DOCKER_LOG"
+if [ "${1:-}" = context ] && [ "${2:-}" = show ]; then
+  printf '%s\n' desktop-linux
+  exit 0
+fi
 if [ "${1:-}" = buildx ] && [ "${2:-}" = inspect ]; then
   sleep 30 &
   child_pid=$!
@@ -648,14 +674,30 @@ fi
         .args([
             "bash",
             "-c",
-            "! grep -Eqi 'clipluginsextradirs|u0063lipluginsextradirs|credsstore|credhelpers|untrusted' \"$DOCKER_CONFIG/config.json\"",
+            "grep -Fq '\"currentContext\":\"desktop-linux\"' \"$DOCKER_CONFIG/config.json\" && ! grep -Eqi 'clipluginsextradirs|u0063lipluginsextradirs|credsstore|credhelpers|untrusted' \"$DOCKER_CONFIG/config.json\"",
         ])
         .env("DOCKER_CONFIG", &malicious_config)
+        .env("FAKE_DOCKER_LOG", &docker_log)
         .output()?;
     assert!(
         sanitized_plugin.status.success(),
         "structural Docker config sanitizer failed: {}",
         String::from_utf8_lossy(&sanitized_plugin.stderr)
+    );
+    let sanitized_ci_config = Command::new("bash")
+        .arg(&wrapper)
+        .args([
+            "bash",
+            "-c",
+            "grep -Fq '\"auths\": {}' \"$DOCKER_CONFIG/config.json\" && ! grep -Eqi 'clipluginsextradirs|u0063lipluginsextradirs|credsstore|credhelpers|untrusted' \"$DOCKER_CONFIG/config.json\"",
+        ])
+        .env("DOCKER_CONFIG", &malicious_config)
+        .env("GITHUB_ACTIONS", "true")
+        .output()?;
+    assert!(
+        sanitized_ci_config.status.success(),
+        "GitHub Actions Docker config sanitizer failed: {}",
+        String::from_utf8_lossy(&sanitized_ci_config.stderr)
     );
 
     fs::write(
@@ -666,6 +708,7 @@ fi
         .arg(&wrapper)
         .arg("true")
         .env("DOCKER_CONFIG", &malicious_config)
+        .env("GITHUB_ACTIONS", "true")
         .output()?;
     assert!(!unicode_folded.status.success());
     assert!(

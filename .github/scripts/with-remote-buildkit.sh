@@ -53,15 +53,27 @@ if [ -e "$docker_config_source/contexts" ]; then
   fi
 fi
 if [ -f "$docker_config_source/config.json" ]; then
-  if [ -x /usr/local/bin/jq ]; then jq_cli=/usr/local/bin/jq
-  elif [ -x /usr/bin/jq ]; then jq_cli=/usr/bin/jq
-  elif [ -x /opt/homebrew/bin/jq ]; then jq_cli=/opt/homebrew/bin/jq
+  if [ -n "${GITHUB_ACTIONS:-}" ]; then
+    if [ -x /usr/local/bin/jq ]; then jq_cli=/usr/local/bin/jq
+    elif [ -x /usr/bin/jq ]; then jq_cli=/usr/bin/jq
+    elif [ -x /opt/homebrew/bin/jq ]; then jq_cli=/opt/homebrew/bin/jq
+    else
+      echo "trusted jq is unavailable in GitHub Actions" >&2
+      exit 127
+    fi
+    "$jq_cli" 'if any(keys[]; explode | any(. > 127)) then error("non-ASCII Docker config key") else with_entries(select((.key | ascii_downcase) != "clipluginsextradirs" and (.key | ascii_downcase) != "credsstore" and (.key | ascii_downcase) != "credhelpers")) end' \
+      "$docker_config_source/config.json" >"$trusted_docker_config/config.json"
   else
-    echo "trusted jq is unavailable" >&2
-    exit 127
+    current_context="$(DOCKER_CONFIG="$docker_config_source" "$docker_cli" context show)"
+    case "$current_context" in
+      ''|default) printf '{}\n' >"$trusted_docker_config/config.json" ;;
+      *[!a-zA-Z0-9_.-]*)
+        echo "Docker context name contains unsupported characters" >&2
+        exit 2
+        ;;
+      *) printf '{"currentContext":"%s"}\n' "$current_context" >"$trusted_docker_config/config.json" ;;
+    esac
   fi
-  "$jq_cli" 'if any(keys[]; explode | any(. > 127)) then error("non-ASCII Docker config key") else with_entries(select((.key | ascii_downcase) != "clipluginsextradirs" and (.key | ascii_downcase) != "credsstore" and (.key | ascii_downcase) != "credhelpers")) end' \
-    "$docker_config_source/config.json" >"$trusted_docker_config/config.json"
   chmod 600 "$trusted_docker_config/config.json"
 fi
 export DOCKER_CONFIG="$trusted_docker_config"
