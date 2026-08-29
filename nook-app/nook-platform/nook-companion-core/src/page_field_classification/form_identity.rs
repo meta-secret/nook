@@ -225,6 +225,10 @@ fn identity_indicates_authenticator_enrollment(identity: &str) -> bool {
             "add",
             "configure",
             "activate",
+            "pair",
+            "pairing",
+            "provision",
+            "provisioning",
         ],
     ) && contains_any_word(
         &identity,
@@ -452,6 +456,8 @@ mod tests {
             ("mfa-add-form", "/auth/mfa/add"),
             ("totp-configure-form", "/auth/totp/configure"),
             ("authenticator-activate-form", "/auth/mfa/activate"),
+            ("totp-pair-form", "/auth/totp/pair"),
+            ("mfa-provision-form", "/auth/mfa/provision"),
         ] {
             assert!(
                 !one_time_code_control_has_authentication_context(

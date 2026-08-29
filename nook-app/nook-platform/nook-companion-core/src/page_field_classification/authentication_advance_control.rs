@@ -395,6 +395,7 @@ mod tests {
         assert!(authentication_advance_control_is_safe(&unique_continue));
     }
 
+    #[test]
     fn primary_oauth_authorization_routes_are_accepted() {
         for destination in [
             "https://login.example.test/oauth2/authorize",
