@@ -10,8 +10,8 @@ use crate::page_field_classification::form_identity::{
     identity_indicates_explicit_login_route, one_time_code_control_has_authentication_context,
 };
 use crate::page_field_classification::{
-    contains_any_word, expand_identity_text, looks_like_login_advance_control_label,
-    looks_like_supported_localized_login_control_label, AuthenticationUsernameEvidence,
+    AuthenticationUsernameEvidence, contains_any_word, expand_identity_text,
+    looks_like_login_advance_control_label, looks_like_supported_localized_login_control_label,
 };
 
 pub(super) fn has_positive_login_identity(

@@ -5,9 +5,9 @@ use super::control_identity::{
     route_names_external_authentication_provider,
 };
 use super::{
-    contains_any_word, expand_identity_text, looks_like_non_authentication_submit_control_label,
-    looks_like_password_update_submit_control_label, AuthenticationUsernameEvidence,
-    PASSKEY_OR_PLATFORM_AUTHENTICATOR_WORDS,
+    AuthenticationUsernameEvidence, PASSKEY_OR_PLATFORM_AUTHENTICATOR_WORDS, contains_any_word,
+    expand_identity_text, looks_like_non_authentication_submit_control_label,
+    looks_like_password_update_submit_control_label,
 };
 pub(super) fn identity_indicates_explicit_authentication_route(identity: &str) -> bool {
     contains_any_word(

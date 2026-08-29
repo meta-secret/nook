@@ -1,5 +1,5 @@
 use crate::page_field_classification::{
-    authentication_passkey_control_is_safe, AuthenticationAdvanceControlObservation,
+    AuthenticationAdvanceControlObservation, authentication_passkey_control_is_safe,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;

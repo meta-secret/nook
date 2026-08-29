@@ -16,8 +16,9 @@ use super::form_identity::{
     identity_indicates_explicit_authentication_route,
 };
 use super::{
-    contains_any_word, expand_identity_text, looks_like_non_authentication_submit_control_label,
-    looks_like_password_update_submit_control_label, AuthenticationUsernameEvidence,
+    AuthenticationUsernameEvidence, contains_any_word, expand_identity_text,
+    looks_like_non_authentication_submit_control_label,
+    looks_like_password_update_submit_control_label,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
