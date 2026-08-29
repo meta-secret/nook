@@ -200,6 +200,35 @@ describe('website one-time-code fields', () => {
     expect(defaultAuthenticationContext.destinationIdentity).toBe(location.href)
   })
 
+  test('bounds oversized control labels so one long submitter cannot reject the page', () => {
+    const oversizedLabel = `Sign in ${'x'.repeat(600)}`
+    document.body.innerHTML = `
+      <form aria-label="Login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">${oversizedLabel}</button>
+      </form>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    const observation = facts.detailedAdvanceControl
+    if (observation.kind !== 'observed') {
+      throw new Error('expected observed advance control')
+    }
+    const label = observation.observations[0]?.label
+    if (!label) {
+      throw new Error('expected a bounded control label')
+    }
+    expect(label.startsWith('Sign in')).toBe(true)
+    expect(new TextEncoder().encode(label).length).toBeLessThanOrEqual(
+      MAX_AUTHENTICATION_CONTROL_TEXT_BYTES,
+    )
+  })
+
   test('bounds omitted-action OAuth destinations to the authentication path', () => {
     const query = `state=${'a'.repeat(600)}`
     window.history.replaceState({}, '', `/oauth/authorize?${query}`)

@@ -36,6 +36,7 @@ import type { PasswordFieldQuery } from "./password-form-fields";
 import {
   authenticationAdvanceControlSelector,
   authenticationRouteDestination,
+  boundedAuthenticationText,
   clickAdvanceControl,
   controlDestinationIdentity,
   controlLabel,
@@ -43,6 +44,7 @@ import {
   formHasSemanticSubmitter,
   observeSubmit,
   ownedFormDestinationIdentity,
+  ownedFormIdentity,
   PasswordFormQueryKind,
   semanticSubmitControlSelector,
   type LoginAdvanceControl,
@@ -325,13 +327,15 @@ function observedFormIdentity({
   const owner =
     formScope.kind === PasswordFormScopeKind.Owned ? formScope.owner : root;
   return owner instanceof Element
-    ? [
-        owner.id,
-        owner.className,
-        owner.getAttribute("name") ?? "",
-        owner.getAttribute("role") ?? "",
-        owner.getAttribute("aria-label") ?? "",
-      ].join(" ")
+    ? boundedAuthenticationText(
+        [
+          owner.id,
+          owner.className,
+          owner.getAttribute("name") ?? "",
+          owner.getAttribute("role") ?? "",
+          owner.getAttribute("aria-label") ?? "",
+        ].join(" "),
+      )
     : "";
 }
 
@@ -439,16 +443,18 @@ function pageControlObservation({
     newPasswordFieldCount: observation.summary.newPasswordFieldCount,
     oneTimeCodeFieldCount: observation.summary.oneTimeCodeFieldCount,
     semanticSubmitControlCount: semanticSubmitControls.length,
-    sourceOrigin: location.origin,
+    sourceOrigin: boundedAuthenticationText(location.origin),
     formIdentity: observedFormIdentity(observation),
     destinationIdentity: controlDestination(destinationRequest),
-    label: controlLabel(control),
-    machineIdentity: `${control.id} ${
-      control instanceof HTMLButtonElement ||
-      control instanceof HTMLInputElement
-        ? `${control.name}=${control.value}`
-        : ""
-    }`,
+    label: boundedAuthenticationText(controlLabel(control)),
+    machineIdentity: boundedAuthenticationText(
+      `${control.id} ${
+        control instanceof HTMLButtonElement ||
+        control instanceof HTMLInputElement
+          ? `${control.name}=${control.value}`
+          : ""
+      }`,
+    ),
   };
 }
 
@@ -518,7 +524,9 @@ export function authenticationPageObservationFacts({
   ).flatMap((field) =>
     ["oninput", "onchange"].flatMap((attribute) => {
       const handler = field.getAttribute(attribute);
-      return typeof handler === "string" ? [`${attribute}=${handler}`] : [];
+      return typeof handler === "string"
+        ? [boundedAuthenticationText(`${attribute}=${handler}`)]
+        : [];
     }),
   );
   let detailedAdvanceControl: AuthenticationPageObservationFacts["detailedAdvanceControl"] =
@@ -577,7 +585,7 @@ export function authenticationPageObservationFacts({
       oneTimeCodeHandlerSignals,
       authenticationContext: {
         authenticationUsername,
-        sourceOrigin: location.origin,
+        sourceOrigin: boundedAuthenticationText(location.origin),
         formIdentity: contextFormIdentity,
         destinationIdentity: contextDestinationIdentity,
       },
@@ -923,12 +931,7 @@ export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
     if (
       !can_activate_authentication_route_control(
         sourceOrigin,
-        [
-          form.id,
-          form.getAttribute("name") ?? "",
-          form.getAttribute("class") ?? "",
-          form.getAttribute("aria-label") ?? "",
-        ].join(" "),
+        ownedFormIdentity(form),
         authenticationRouteDestination(destinationRequest),
         "",
         "",
@@ -962,12 +965,7 @@ export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
   if (
     !can_activate_authentication_route_control(
       sourceOrigin,
-      [
-        form.id,
-        form.getAttribute("name") ?? "",
-        form.getAttribute("class") ?? "",
-        form.getAttribute("aria-label") ?? "",
-      ].join(" "),
+      ownedFormIdentity(form),
       authenticationRouteDestination(destinationRequest),
       "",
       "",

@@ -58,6 +58,10 @@ function truncateUtf8Bytes(value: string, maxBytes: number): string {
   return new TextDecoder().decode(encoded.subarray(0, end));
 }
 
+export function boundedAuthenticationText(value: string): string {
+  return truncateUtf8Bytes(value, MAX_AUTHENTICATION_CONTROL_TEXT_BYTES);
+}
+
 export function boundedAuthenticationDestination(identity: string): string {
   if (utf8ByteLength(identity) <= MAX_AUTHENTICATION_CONTROL_TEXT_BYTES) {
     return identity;
@@ -75,6 +79,17 @@ export function boundedAuthenticationDestination(identity: string): string {
   } catch {
     return truncateUtf8Bytes(identity, MAX_AUTHENTICATION_CONTROL_TEXT_BYTES);
   }
+}
+
+export function ownedFormIdentity(form: HTMLFormElement): string {
+  return boundedAuthenticationText(
+    [
+      form.id,
+      form.getAttribute("name") ?? "",
+      form.getAttribute("class") ?? "",
+      form.getAttribute("aria-label") ?? "",
+    ].join(" "),
+  );
 }
 
 export function ownedFormDestinationIdentity(form: HTMLFormElement): string {
@@ -190,12 +205,14 @@ function canActivateAuthenticationRouteControl(
     query.root instanceof Element
       ? query.root
       : form;
-  const formIdentity = [
-    identityContainer?.id ?? "",
-    identityContainer?.getAttribute("name") ?? "",
-    identityContainer?.getAttribute("class") ?? "",
-    identityContainer?.getAttribute("aria-label") ?? "",
-  ].join(" ");
+  const formIdentity = boundedAuthenticationText(
+    [
+      identityContainer?.id ?? "",
+      identityContainer?.getAttribute("name") ?? "",
+      identityContainer?.getAttribute("class") ?? "",
+      identityContainer?.getAttribute("aria-label") ?? "",
+    ].join(" "),
+  );
   const destinationIdentity = authenticationControlDestination(control);
   if (!destinationIdentity) return false;
 
@@ -206,13 +223,15 @@ function canActivateAuthenticationRouteControl(
     query.kind === PasswordFormQueryKind.Scoped &&
     query.formScope.kind === PasswordFormScopeKind.Unowned &&
     query.root !== control.ownerDocument;
-  const machineIdentity = `${control.id} ${control.name}=${control.value}`;
+  const machineIdentity = boundedAuthenticationText(
+    `${control.id} ${control.name}=${control.value}`,
+  );
 
   return can_activate_authentication_route_control(
     sourceOrigin,
     formIdentity,
     destinationIdentity,
-    controlLabel,
+    boundedAuthenticationText(controlLabel),
     machineIdentity,
     true,
     isAuthUsernameField(query.usernameField),

@@ -163,6 +163,18 @@ mod tests {
     }
 
     #[test]
+    fn explicitly_marked_passkey_candidates_retain_destructive_machine_identity_vetoes() {
+        let mut observation = passkey_control("Continue");
+        observation.machine_identity = "delete-account =".to_owned();
+        let candidate =
+            AuthenticationDetailedPasskeyControlCandidateObservation::ExplicitlyMarked(observation);
+
+        assert!(!authentication_passkey_control_candidate_is_safe(
+            &candidate
+        ));
+    }
+
+    #[test]
     fn explicitly_marked_passkey_candidates_retain_destructive_label_vetoes() {
         for label in ["Delete passkey", "Remove security key", "Revoke device"] {
             let candidate =

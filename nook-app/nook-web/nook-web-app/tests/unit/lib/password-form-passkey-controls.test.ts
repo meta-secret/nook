@@ -60,6 +60,18 @@ describe('passkey control detection', () => {
     expect(pageHasPasskeyControl()).toBe(true)
   })
 
+  test('does not bind a marked passkey control whose machine identity is destructive', () => {
+    document.body.innerHTML = `
+      <form id="login" action="/auth/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button id="delete-account" type="button" data-nook-passkey-control>Continue</button>
+      </form>
+    `
+    const control = findWorkflowPasskeyControl(observedAuthenticationWorkflow())
+    expect(control.kind).toBe(PasskeyControlLookupKind.Absent)
+  })
+
   test('binds the exact later passkey candidate approved by Rust', () => {
     document.body.innerHTML = `<form id="login" action="/auth/login"><input autocomplete="username" /><button id="inert" disabled>Use passkey</button><button id="safe">Use passkey</button></form>`
     const control = findWorkflowPasskeyControl(observedAuthenticationWorkflow())
