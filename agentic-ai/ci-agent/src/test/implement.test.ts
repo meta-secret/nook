@@ -4,8 +4,11 @@ import test, { describe, it } from "node:test";
 import { OpenPrLookupKind } from "../main/github.js";
 import { AuthoredChangeBudgetExceededError } from "../main/git.js";
 import {
+  CiEditOutcome,
+  CiImplementationMode,
   ImplementPrTargetKind,
   preserveImplementedBranchBeforePr as preserve,
+  runCiImplementationPhases,
   resolveImplementPrTarget,
   validateStackDeliveryState,
 } from "../main/implement.js";
@@ -247,6 +250,34 @@ test("bounded implementation keeps the normal push, budget, and PR creation path
     events.join(),
     "budget,push,verify-origin,verify-head,find-pr,create-pr",
   );
+});
+
+test("legacy implement delivers once while explicit edit-only never delivers", async () => {
+  const legacyEvents: string[] = [];
+  await runCiImplementationPhases({
+    deliver: async () => {
+      legacyEvents.push("deliver");
+    },
+    edit: async () => {
+      legacyEvents.push("edit");
+      return CiEditOutcome.Changed;
+    },
+    mode: CiImplementationMode.LegacyMonolithic,
+  });
+  assert.deepEqual(legacyEvents, ["edit", "deliver"]);
+
+  const editOnlyEvents: string[] = [];
+  await runCiImplementationPhases({
+    deliver: async () => {
+      editOnlyEvents.push("deliver");
+    },
+    edit: async () => {
+      editOnlyEvents.push("edit");
+      return CiEditOutcome.Changed;
+    },
+    mode: CiImplementationMode.EditOnly,
+  });
+  assert.deepEqual(editOnlyEvents, ["edit"]);
 });
 
 describe("resolveImplementPrTarget", () => {

@@ -2,7 +2,7 @@ import { chdir } from "node:process";
 
 import { exitCiAgent } from "./exit.js";
 import { runCiFix } from "./fix.js";
-import { runCiDeliver, runCiImplement } from "./implement.js";
+import { runCiDeliver, runCiEditOnly, runCiImplement } from "./implement.js";
 import { CiAgentConfigLoadKind, loadConfig } from "./config.js";
 import { loadPrompt } from "./prompt.js";
 import { AgentIsolation, runFixAgent } from "./run-agent.js";
@@ -55,6 +55,9 @@ async function main(): Promise<void> {
     case "deliver":
       await runCiDeliver();
       break;
+    case "edit":
+      await runCiEditOnly();
+      break;
     case "pr-preflight":
       await runPrAudit(false);
       break;
@@ -69,7 +72,7 @@ async function main(): Promise<void> {
       break;
     default:
       throw new Error(
-        `Unknown command: ${command} (expected agent, fix, implement, plan, deliver, pr-preflight, pr-ready, pr-review, or pr-review-stabilize)`,
+        `Unknown command: ${command} (expected agent, fix, implement, plan, edit, deliver, pr-preflight, pr-ready, pr-review, or pr-review-stabilize)`,
       );
   }
 }

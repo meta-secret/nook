@@ -345,7 +345,35 @@ function resolveTargetFromEnvironment() {
   });
 }
 
-export async function runCiImplement(): Promise<void> {
+export enum CiEditOutcome {
+  Changed = "changed",
+  Skipped = "skipped",
+}
+
+export enum CiImplementationMode {
+  EditOnly = "edit-only",
+  LegacyMonolithic = "legacy-monolithic",
+}
+
+type CiImplementationPhases = {
+  deliver: () => Promise<void>;
+  edit: () => Promise<CiEditOutcome>;
+  mode: CiImplementationMode;
+};
+
+export async function runCiImplementationPhases(
+  phases: CiImplementationPhases,
+): Promise<void> {
+  const outcome = await phases.edit();
+  if (
+    phases.mode === CiImplementationMode.LegacyMonolithic &&
+    outcome === CiEditOutcome.Changed
+  ) {
+    await phases.deliver();
+  }
+}
+
+export async function runCiEdit(): Promise<CiEditOutcome> {
   const repository = process.env.GITHUB_REPOSITORY?.trim();
   const runId = process.env.GITHUB_RUN_ID?.trim();
   if (!repository || !runId) {
@@ -365,7 +393,7 @@ export async function runCiImplement(): Promise<void> {
     console.log(
       "::warning::CURSOR_API_KEY is not set — skipping agent implement job.",
     );
-    return;
+    return CiEditOutcome.Skipped;
   }
   const config = loadedConfig.config;
   await runFixAgent(config, await loadPrompt(config), AgentIsolation.Strict);
@@ -376,7 +404,25 @@ export async function runCiImplement(): Promise<void> {
     console.log(
       "::warning::Agent finished but working tree is clean — nothing to push.",
     );
+    return CiEditOutcome.Skipped;
   }
+  return CiEditOutcome.Changed;
+}
+
+export async function runCiEditOnly(): Promise<void> {
+  await runCiImplementationPhases({
+    deliver: runCiDeliver,
+    edit: runCiEdit,
+    mode: CiImplementationMode.EditOnly,
+  });
+}
+
+export async function runCiImplement(): Promise<void> {
+  await runCiImplementationPhases({
+    deliver: runCiDeliver,
+    edit: runCiEdit,
+    mode: CiImplementationMode.LegacyMonolithic,
+  });
 }
 
 export async function runCiDeliver(): Promise<void> {
