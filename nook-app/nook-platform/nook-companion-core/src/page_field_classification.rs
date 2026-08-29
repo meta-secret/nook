@@ -335,7 +335,7 @@ pub fn can_activate_authentication_route_control(
     form_identity: &str,
     destination_identity: &str,
     control_label: &str,
-    has_form_owned_semantic_submit: bool,
+    _has_form_owned_semantic_submit: bool,
     has_authentication_username: bool,
     has_local_authentication_scope: bool,
 ) -> bool {
@@ -357,14 +357,7 @@ pub fn can_activate_authentication_route_control(
         return !form_identity.trim().is_empty()
             || (has_authentication_username && has_local_authentication_scope);
     }
-    has_form_owned_semantic_submit
-        && has_authentication_username
-        && has_local_authentication_scope
-        && !form_identity::form_identity_indicates_destructive_action(control_label)
-        && !looks_like_non_authentication_submit_control_label(control_label)
-        && !control_identity::looks_like_password_recovery_route_control_label(control_label)
-        && !control_identity::looks_like_registration_route_control_label(control_label)
-        && !control_identity::looks_like_alternate_authentication_route_control_label(control_label)
+    false
 }
 
 fn has_autocomplete_token(tokens: &[String], expected: &str) -> bool {
@@ -675,7 +668,8 @@ mod tests {
         ] {
             assert!(!decide("login-form", label, true, true, true));
         }
-        assert!(!decide("", "Supprimer le compte", false, true, true));
+        assert!(!decide("f", "", true, true, true));
+        assert!(!decide("f", "Supprimer le compte", true, true, true));
     }
 
     #[test]
@@ -688,7 +682,7 @@ mod tests {
         assert!(has_safe_authentication_route_identity(
             "https://example.test",
             "",
-            "https://example.test/login?continue=https://mail.google.com",
+            "https://example.test/login?notprovider=x&continue=https://mail.google.com",
         ));
         assert!(has_safe_authentication_route_identity(
             "https://example.test",
@@ -705,7 +699,7 @@ mod tests {
             ("profile-settings", "https://example.test/auth/login"),
             ("login-form", "https://example.test/register"),
             ("login-form", "https://example.test/reset-password"),
-            ("login-form", "https://example.test/login?provider=google"),
+            ("login-form", "https://example.test/login?provider=amazon"),
             ("login-form", "https://example.test/login#/google"),
             ("login-form", "https://example.test/login?provider=x"),
             ("login-form", "https://example.test/signin/x"),

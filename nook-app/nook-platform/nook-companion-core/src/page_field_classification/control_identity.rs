@@ -34,7 +34,12 @@ pub(super) fn label_names_external_authentication_provider(identity: &str) -> bo
 pub(super) fn route_names_external_authentication_provider(identity: &str) -> bool {
     let route = expand_identity_text(identity.split(['?', '#']).next().unwrap_or_default());
     identity_names_external_authentication_provider(identity, false)
-        || identity.to_ascii_lowercase().contains("provider=x")
+        || identity.split_once('?').is_some_and(|(_, query)| {
+            query
+                .split(['&', '#'])
+                .filter_map(|component| component.split_once('='))
+                .any(|(key, _)| key.eq_ignore_ascii_case("provider"))
+        })
         || (contains_any_word(&route, &["x"])
             && contains_any_word(&route, &["login", "log in", "signin", "sign in"]))
 }

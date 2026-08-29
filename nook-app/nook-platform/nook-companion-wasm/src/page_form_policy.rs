@@ -199,7 +199,7 @@ mod tests {
             "login-form",
             "https://example.test/auth/login",
             "Supprimer le compte",
-            false,
+            true,
             true,
             true,
         ));
