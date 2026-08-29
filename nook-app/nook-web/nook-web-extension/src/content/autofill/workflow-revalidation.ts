@@ -101,7 +101,7 @@ export async function performRevalidatedAuthenticationAction({
   const delivery =
     await sendAuthenticationWorkflowSnapshotRuntimeMessage(message)
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) return false
-  const { response } = delivery
+  const { workflow: response } = delivery.response
   if (
     response.kind !== AuthenticationWorkflowSnapshotResponseKind.Matched ||
     !('snapshot' in response) ||

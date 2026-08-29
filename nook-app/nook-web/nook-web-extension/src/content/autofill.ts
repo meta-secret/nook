@@ -143,7 +143,7 @@ async function scanAndRender(): Promise<void> {
     removeScannedWidget()
     return
   }
-  const { response } = delivery
+  const { workflow: response, loginMatches } = delivery.response
   if (
     response.kind !== AuthenticationWorkflowSnapshotResponseKind.Matched ||
     !('snapshot' in response)
@@ -169,6 +169,7 @@ async function scanAndRender(): Promise<void> {
     snapshot,
     workflow: selected,
     vaultConnection,
+    loginMatches,
   }
   renderWidget(nookTypedArgs0_1)
 }
@@ -178,7 +179,7 @@ function scheduleScan() {
     window.clearTimeout(scanState.scheduleState.timer)
   }
 
-  scanState.scheduleTimer(
+  scanState.scheduleTimer(() =>
     window.setTimeout(() => {
       scanState.clearPendingTimer()
       void scanAndRender()

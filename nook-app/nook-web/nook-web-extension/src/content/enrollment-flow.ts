@@ -74,7 +74,6 @@ type TranslatedMessageWithSubstitutionArgs = {
 export type EnrollmentFlowHost = EnrollmentFlowViewHost & {
   step: HTMLParagraphElement
   continueButton: HTMLButtonElement
-  openVaultButton: HTMLButtonElement
   setBusy: (busy: boolean) => void
   isBusy: () => boolean
   sendDecodedRuntimeMessage: <Response>(
@@ -124,6 +123,7 @@ export type EnrollmentFlowHost = EnrollmentFlowViewHost & {
   translatedMessageWithSubstitution: (
     args: TranslatedMessageWithSubstitutionArgs,
   ) => string
+  requestWorkflowReclassification: () => void
 }
 
 /** Keep the post-save enrollment widget from being rebuilt by scanAndRender. */

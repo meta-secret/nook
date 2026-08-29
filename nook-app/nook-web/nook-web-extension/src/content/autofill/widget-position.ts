@@ -1,6 +1,7 @@
 import type { WidgetPosition } from './state'
-import { widgetState } from './state'
-import { DRAG_THRESHOLD_PX } from './workflow-ui'
+import { WidgetHostKind, WidgetPlacementKind, widgetState } from './state'
+
+const DRAG_THRESHOLD_PX = 4
 
 type ClampWidgetPositionArgs = {
   left: number
@@ -38,6 +39,29 @@ export function applyWidgetPosition({
   host.style.right = 'auto'
 }
 
+export function clampMountedWidgetPosition(): void {
+  if (
+    widgetState.host.kind !== WidgetHostKind.Attached ||
+    widgetState.placement.kind !== WidgetPlacementKind.Positioned
+  ) {
+    return
+  }
+  const host = widgetState.host.element
+  const nookTypedArgs0_0: Parameters<typeof clampWidgetPosition>[0] = {
+    left: widgetState.placement.position.left,
+    top: widgetState.placement.position.top,
+    width: host.offsetWidth,
+    height: host.offsetHeight,
+  }
+  const position = clampWidgetPosition(nookTypedArgs0_0)
+  widgetState.setPosition(position)
+  const nookTypedArgs0_1: Parameters<typeof applyWidgetPosition>[0] = {
+    host,
+    position,
+  }
+  applyWidgetPosition(nookTypedArgs0_1)
+}
+
 export enum PointerDragBehaviorKind {
   DragOnly = 'drag-only',
   Tappable = 'tappable',
@@ -73,6 +97,7 @@ export function attachPointerDrag({
   let originLeft = 0
   let originTop = 0
   let dragged = false
+  let suppressClick = false
 
   handle.addEventListener('pointerdown', (event) => {
     if (event.button !== 0) return
@@ -109,19 +134,19 @@ export function attachPointerDrag({
     if (!dragged && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return
     dragged = true
     host.classList.add('dragging')
-    const nookTypedArgs0_0: Parameters<typeof clampWidgetPosition>[0] = {
+    const nookTypedArgs0_2: Parameters<typeof clampWidgetPosition>[0] = {
       left: originLeft + dx,
       top: originTop + dy,
       width: host.offsetWidth,
       height: host.offsetHeight,
     }
-    const position = clampWidgetPosition(nookTypedArgs0_0)
+    const position = clampWidgetPosition(nookTypedArgs0_2)
     widgetState.setPosition(position)
-    const nookTypedArgs0_1: Parameters<typeof applyWidgetPosition>[0] = {
+    const nookTypedArgs0_3: Parameters<typeof applyWidgetPosition>[0] = {
       host,
       position,
     }
-    applyWidgetPosition(nookTypedArgs0_1)
+    applyWidgetPosition(nookTypedArgs0_3)
   })
 
   const endDrag = (event: PointerEvent) => {
@@ -136,11 +161,24 @@ export function attachPointerDrag({
     }
     pointer = { kind: DragPointerStateKind.Released }
     host.classList.remove('dragging')
-    if (!dragged && behavior.kind === PointerDragBehaviorKind.Tappable) {
-      behavior.onTap()
+    if (dragged && event.type === 'pointerup') {
+      suppressClick = true
+      window.setTimeout(() => {
+        suppressClick = false
+      }, 0)
     }
   }
 
   handle.addEventListener('pointerup', endDrag)
   handle.addEventListener('pointercancel', endDrag)
+  if (behavior.kind === PointerDragBehaviorKind.Tappable) {
+    handle.addEventListener('click', (event) => {
+      if (suppressClick) {
+        event.preventDefault()
+        suppressClick = false
+        return
+      }
+      behavior.onTap()
+    })
+  }
 }

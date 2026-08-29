@@ -3,11 +3,22 @@ import type {
   AuthenticationDetailedAdvanceControlObservation,
   AuthenticationDetailedPasskeyControlObservation,
   AuthenticationPageObservationFacts,
+  AuthenticationWorkflowRuntimeResponse,
+  AuthenticationWorkflowRuntimeResponseWire,
   AuthenticationWorkflowSnapshot,
+  WebsiteLoginMatchAvailability,
+  WebsiteLoginMatchAvailabilityWire,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
+export type {
+  AuthenticationWorkflowRuntimeResponse,
+  AuthenticationWorkflowRuntimeResponseWire,
+  WebsiteLoginMatchAvailability,
+  WebsiteLoginMatchAvailabilityWire,
+}
 export type AuthenticationPageObservationView =
   AuthenticationPageObservationFacts
+
 export type AuthenticationWorkflowSnapshotView = AuthenticationWorkflowSnapshot
 
 export enum AuthenticationWorkflowSnapshotMessageType {

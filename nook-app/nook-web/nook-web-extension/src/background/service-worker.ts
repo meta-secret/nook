@@ -53,6 +53,8 @@ import {
   clearPendingAccountPickers,
   completeAccountPickerAuthorizationCleanup,
   releaseAccountPickerAuthorizationCleanup,
+  invalidateLoginMatchAvailabilityForOrigin,
+  loginMatchAvailabilityForOriginSafe,
   websiteLoginOptions,
 } from './service-worker/account-pickers'
 import {
@@ -352,6 +354,7 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
       companionWasmReady,
       authenticationPasskeyEvidenceIsSafe,
       authenticationWorkflowSnapshot,
+      loginMatchAvailabilityForOriginSafe,
       matchingPasskeyAccountCountForOriginSafe,
     }
     const workflowRequest: Parameters<
@@ -557,6 +560,15 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
       sender,
     }
     void websiteLoginSaveCommit(nookTypedArgs0_15)
+      .then((response) => {
+        if (response.kind === 'completed') {
+          const invalidation: Parameters<
+            typeof invalidateLoginMatchAvailabilityForOrigin
+          >[0] = { origin: message.payload.origin }
+          invalidateLoginMatchAvailabilityForOrigin(invalidation)
+        }
+        return response
+      })
       .then(sendResponse)
       .catch(() => {
         const nookArrowArgs22: Parameters<typeof sendResponse>[0] = {

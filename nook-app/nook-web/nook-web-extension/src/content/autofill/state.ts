@@ -14,9 +14,15 @@ type PendingAuthenticatorPicker = {
 }
 
 type PendingLoginPicker = PendingAuthenticatorPicker
+type ScanTimerFactory = () => number
 export enum ScanScheduleKind {
   Idle = 'idle',
   Scheduled = 'scheduled',
+}
+
+export enum ScanActivityKind {
+  Idle = 'idle',
+  Running = 'running',
 }
 
 export type ScanSchedule =
@@ -98,22 +104,66 @@ export type PendingSaveWatch = {
   observer?: MutationObserver
 }
 
-class ScanState {
+export class ScanState {
   private currentSchedule: ScanSchedule = { kind: ScanScheduleKind.Idle }
+  private currentActivity = ScanActivityKind.Idle
+  private followUpRequested = false
   sequence = 0
   schedule: () => void = () => {}
   get scheduleState(): ScanSchedule {
     return this.currentSchedule
   }
-  scheduleTimer(timer: number): void {
-    this.currentSchedule = { kind: ScanScheduleKind.Scheduled, timer }
+  scheduleTimer(createTimer: ScanTimerFactory): boolean {
+    if (this.currentSchedule.kind === ScanScheduleKind.Scheduled) return false
+    this.currentSchedule = {
+      kind: ScanScheduleKind.Scheduled,
+      timer: createTimer(),
+    }
+    return true
   }
   clearPendingTimer(): void {
     this.currentSchedule = { kind: ScanScheduleKind.Idle }
   }
+  beginScan(): boolean {
+    if (this.currentActivity === ScanActivityKind.Running) {
+      this.followUpRequested = true
+      return false
+    }
+    this.currentActivity = ScanActivityKind.Running
+    return true
+  }
+  requestFollowUpIfRunning(): boolean {
+    if (this.currentActivity === ScanActivityKind.Idle) return false
+    if (!this.followUpRequested) this.sequence += 1
+    this.followUpRequested = true
+    return true
+  }
+  invalidateCurrentResult(): void {
+    this.sequence += 1
+  }
+  finishScan(): boolean {
+    this.currentActivity = ScanActivityKind.Idle
+    const shouldRunFollowUp = this.followUpRequested
+    this.followUpRequested = false
+    return shouldRunFollowUp
+  }
 }
 
-class WidgetState {
+export class AuthenticationActionState {
+  private generation = 0
+  begin(): number {
+    this.generation += 1
+    return this.generation
+  }
+  invalidate(): void {
+    this.generation += 1
+  }
+  isCurrent(candidate: number): boolean {
+    return candidate === this.generation
+  }
+}
+
+export class WidgetState {
   private hostState: WidgetHost = { kind: WidgetHostKind.Detached }
   private workflowKeyState: WidgetWorkflowKey = {
     kind: WidgetWorkflowKeyKind.Unassigned,
@@ -121,12 +171,40 @@ class WidgetState {
   private workflowRootState: WidgetWorkflowRoot = {
     kind: WidgetWorkflowRootKind.Unassigned,
   }
+  private presentationScopeState: WidgetWorkflowKey = {
+    kind: WidgetWorkflowKeyKind.Unassigned,
+  }
   private placementState: WidgetPlacement = {
     kind: WidgetPlacementKind.Unpositioned,
   }
   dismissed = false
   busy = false
-  collapsed = false
+  private collapsedState = false
+  private collapseWasSelectedByUser = false
+  get collapsed(): boolean {
+    return this.collapsedState
+  }
+  applyAutomaticCollapse(value: boolean): void {
+    if (!this.collapseWasSelectedByUser) this.collapsedState = value
+  }
+  beginEnrollmentWorkflow(presentationScope: string): void {
+    const continuesSamePresentation =
+      this.presentationScopeState.kind === WidgetWorkflowKeyKind.Assigned &&
+      this.presentationScopeState.key === presentationScope
+    if (!continuesSamePresentation) {
+      this.collapsedState = false
+      this.collapseWasSelectedByUser = false
+    }
+    this.assignPresentationScope(presentationScope)
+  }
+  collapseByUser(): void {
+    this.collapseWasSelectedByUser = true
+    this.collapsedState = true
+  }
+  expandByUser(): void {
+    this.collapseWasSelectedByUser = true
+    this.collapsedState = false
+  }
   get host(): WidgetHost {
     return this.hostState
   }
@@ -138,6 +216,15 @@ class WidgetState {
   }
   assignWorkflowKey(value: string): void {
     this.workflowKeyState = {
+      kind: WidgetWorkflowKeyKind.Assigned,
+      key: value,
+    }
+  }
+  get presentationScope(): WidgetWorkflowKey {
+    return this.presentationScopeState
+  }
+  assignPresentationScope(value: string): void {
+    this.presentationScopeState = {
       kind: WidgetWorkflowKeyKind.Assigned,
       key: value,
     }
@@ -157,11 +244,30 @@ class WidgetState {
       position: value,
     }
   }
-  clearRenderedWidget(): void {
+  detachRenderedWidget(): void {
     this.hostState = { kind: WidgetHostKind.Detached }
     this.workflowKeyState = { kind: WidgetWorkflowKeyKind.Unassigned }
     this.workflowRootState = { kind: WidgetWorkflowRootKind.Unassigned }
   }
+  clearRenderedWidget(): void {
+    this.detachRenderedWidget()
+    this.presentationScopeState = { kind: WidgetWorkflowKeyKind.Unassigned }
+    this.collapsedState = false
+    this.collapseWasSelectedByUser = false
+  }
+}
+
+type InvalidateAuthenticationActionContextArgs = {
+  actionState: AuthenticationActionState
+  widget: WidgetState
+}
+
+export function invalidateAuthenticationActionContext({
+  actionState,
+  widget,
+}: InvalidateAuthenticationActionContextArgs): void {
+  actionState.invalidate()
+  widget.busy = false
 }
 
 class SaveOfferState {
@@ -218,6 +324,7 @@ class PickerState {
 }
 
 export const scanState = new ScanState()
+export const authenticationActionState = new AuthenticationActionState()
 export const widgetState = new WidgetState()
 export const saveOfferState = new SaveOfferState()
 export const pickerState = new PickerState()

@@ -1,16 +1,7 @@
 import {
-  WebsiteAuthenticatorResponseStatus,
   type WebsiteAuthenticatorOption,
   type WebsiteLoginAccountOption,
 } from '../../lib/login-fill-messages'
-import {
-  WebsiteAuthenticatorCanceledMessageType,
-  type WebsiteAuthenticatorCanceledMessage,
-} from '../../lib/authenticator-picker-messages'
-import {
-  WebsiteLoginCanceledMessageType,
-  type WebsiteLoginCanceledMessage,
-} from '../../lib/login-picker-messages'
 import { OpenCompanionLauncherIntent } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
 import {
   extensionSessionGrantIdentity,
@@ -18,8 +9,25 @@ import {
 } from '../pairing-grants'
 import {
   extensionSessionInteractiveDeadline,
+  extensionSessionProbeDeadline,
+  type ExtensionSessionQueue,
   MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
 } from '../../offscreen/session-request-adapter'
+import type { WebsiteLoginMatchAvailabilityWire } from '../../lib/auth-workflow-messages'
+import {
+  WebsiteLoginCanceledMessageType,
+  type WebsiteLoginCanceledMessage,
+} from '../../lib/login-picker-messages'
+import {
+  WebsiteAuthenticatorCanceledMessageType,
+  type WebsiteAuthenticatorCanceledMessage,
+} from '../../lib/authenticator-picker-messages'
+import {
+  LoginMatchAvailabilityCache,
+  type LoginMatchAvailabilityCacheInvalidation,
+  type LoginMatchAvailabilityCacheOptions,
+  type LoginMatchAvailabilityCacheRequest,
+} from '../../lib/login-match-availability-cache'
 import {
   availableWebsiteGrants,
   getAllSessionStorage,
@@ -68,10 +76,7 @@ enum AccountPickerAuthorizationPhase {
 }
 
 type AccountPickerAuthorizationLifecycle =
-  | {
-      phase: AccountPickerAuthorizationPhase.Active
-      generation: number
-    }
+  | { phase: AccountPickerAuthorizationPhase.Active; generation: number }
   | {
       phase: AccountPickerAuthorizationPhase.Cleaning
       generation: number
@@ -178,6 +183,7 @@ export type AccountPickerAuthorizationCleanupStart = {
 }
 
 export async function beginAccountPickerAuthorizationCleanup(): Promise<AccountPickerAuthorizationCleanupStart> {
+  loginMatchAvailabilityCache.invalidateAll()
   const generation = accountPickerAuthorizationState.beginCleanup()
   const cleanupStorage: Parameters<typeof setSessionStorage>[0] = {
     [ACCOUNT_PICKER_CLEANUP_STORAGE_KEY]: true,
@@ -258,6 +264,15 @@ export async function closeAccountPickerSurface(
   }
 }
 
+export type PersistedAccountPickerCleanupPlan = {
+  storageKeys: string[]
+  cancellations: Array<
+    WebsiteAuthenticatorCanceledMessage | WebsiteLoginCanceledMessage
+  >
+}
+
+export type PersistedAccountPickerStorage = Record<string, unknown>
+
 type PendingAccountPickerMemoryCleanupArgs = {
   authenticatorRequests: Map<string, PendingAuthenticatorPicker>
   loginRequests: Map<string, PendingLoginPicker>
@@ -304,7 +319,6 @@ export type PersistedAccountPickerCleanupPlan = {
 }
 
 export type PersistedAccountPickerStorage = Record<string, unknown>
-
 export function persistedAccountPickerCleanupPlan(
   stored: PersistedAccountPickerStorage,
 ): PersistedAccountPickerCleanupPlan {
@@ -343,24 +357,33 @@ export function persistedAccountPickerCleanupPlan(
 }
 
 export async function clearPendingAccountPickers(): Promise<void> {
-  const memoryCleanupArgs: PendingAccountPickerMemoryCleanupArgs = {
+  const memoryCleanupArgs: Parameters<
+    typeof takePendingAccountPickerMemoryCleanup
+  >[0] = {
     authenticatorRequests: pendingAuthenticatorPickers,
     loginRequests: pendingLoginPickers,
   }
   const memoryCancellations =
     takePendingAccountPickerMemoryCleanup(memoryCleanupArgs)
-  const memoryDelivery = Promise.allSettled(
+  const memoryCancellationDelivery = Promise.allSettled(
     memoryCancellations.map(({ tabId, message }) =>
-      chrome.tabs.sendMessage(tabId, message),
+      Promise.resolve().then(() => chrome.tabs.sendMessage(tabId, message)),
     ),
   )
-  const plan = persistedAccountPickerCleanupPlan(await getAllSessionStorage())
-  const persistedDelivery = Promise.allSettled(
+  let stored: PersistedAccountPickerStorage
+  try {
+    stored = await getAllSessionStorage()
+  } catch {
+    await memoryCancellationDelivery
+    throw new Error('account picker storage lookup failed')
+  }
+  const plan = persistedAccountPickerCleanupPlan(stored)
+  const persistedCancellationDelivery = Promise.allSettled(
     plan.cancellations.map(({ tabId, message }) =>
-      chrome.tabs.sendMessage(tabId, message),
+      Promise.resolve().then(() => chrome.tabs.sendMessage(tabId, message)),
     ),
   )
-  const removals = await Promise.allSettled(
+  const storageRemovalResults = await Promise.allSettled(
     plan.storageKeys.map(removeSessionStorage),
   )
   const pickerSurfaceQuery: Parameters<typeof chrome.tabs.query>[0] = {}
@@ -396,17 +419,26 @@ export async function clearPendingAccountPickers(): Promise<void> {
         }),
     ),
   )
-  await memoryDelivery
-  await persistedDelivery
+  await memoryCancellationDelivery
+  await persistedCancellationDelivery
   if (
-    removals.some((result) => result.status === 'rejected') ||
+    storageRemovalResults.some((result) => result.status === 'rejected') ||
     (await surfaceRemoval).some((result) => result.status === 'rejected')
   ) {
     throw new Error('account picker storage removal failed')
   }
 }
 
-function sessionResponseAccounts(response: unknown): unknown[] {
+enum SessionAccountListKind {
+  Available = 'available',
+  Invalid = 'invalid',
+}
+
+type SessionAccountList =
+  | { kind: SessionAccountListKind.Available; accounts: unknown[] }
+  | { kind: SessionAccountListKind.Invalid }
+
+function sessionResponseAccounts(response: unknown): SessionAccountList {
   if (
     !response ||
     typeof response !== 'object' ||
@@ -415,9 +447,9 @@ function sessionResponseAccounts(response: unknown): unknown[] {
     !('accounts' in response) ||
     !Array.isArray(response.accounts)
   ) {
-    return []
+    return { kind: SessionAccountListKind.Invalid }
   }
-  return response.accounts
+  return { kind: SessionAccountListKind.Available, accounts: response.accounts }
 }
 
 function authenticatorPickerStorageKey(requestId: string): string {
@@ -450,7 +482,7 @@ function isPendingAuthenticatorPicker(
   )
 }
 
-type StoreAuthenticatorPickerArgs = {
+type StoreAuthenticatorPickerRequest = {
   request: PendingAuthenticatorPicker
   authorizationGeneration: number
 }
@@ -458,7 +490,7 @@ type StoreAuthenticatorPickerArgs = {
 export async function storeAuthenticatorPicker({
   request,
   authorizationGeneration,
-}: StoreAuthenticatorPickerArgs): Promise<boolean> {
+}: StoreAuthenticatorPickerRequest): Promise<boolean> {
   if (!accountPickerAuthorizationState.isCurrent(authorizationGeneration)) {
     return false
   }
@@ -575,7 +607,9 @@ export async function authenticatorAccounts({
       },
     }
     const response = await sendSessionMessage(nookTypedArgs0_1)
-    for (const account of sessionResponseAccounts(response)) {
+    const responseAccounts = sessionResponseAccounts(response)
+    if (responseAccounts.kind === SessionAccountListKind.Invalid) continue
+    for (const account of responseAccounts.accounts) {
       if (
         !account ||
         typeof account !== 'object' ||
@@ -646,12 +680,16 @@ type LoginAccountsForOriginArgs = {
   grants: StoredExtensionPairingGrant[]
   origin: string
   query?: string
+  queue?: ExtensionSessionQueue
+  requireCompleteResponses?: boolean
 }
 
 export async function loginAccountsForOrigin({
   grants,
   origin,
   query = '',
+  queue = MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+  requireCompleteResponses = false,
 }: LoginAccountsForOriginArgs): Promise<WebsiteLoginAccountOption[]> {
   const accounts: WebsiteLoginAccountOption[] = []
   const needle = query.trim().toLowerCase()
@@ -661,11 +699,18 @@ export async function loginAccountsForOrigin({
       payload: {
         ...extensionSessionGrantIdentity(grant),
         origin,
-        queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+        queue,
       },
     }
     const response = await sendSessionMessage(nookTypedArgs0_5)
-    for (const account of sessionResponseAccounts(response)) {
+    const responseAccounts = sessionResponseAccounts(response)
+    if (responseAccounts.kind === SessionAccountListKind.Invalid) {
+      if (requireCompleteResponses) {
+        throw new Error('Extension session login lookup failed.')
+      }
+      continue
+    }
+    for (const account of responseAccounts.accounts) {
       if (
         !account ||
         typeof account !== 'object' ||
@@ -678,6 +723,11 @@ export async function loginAccountsForOrigin({
         !('websiteHost' in account) ||
         typeof account.websiteHost !== 'string'
       ) {
+        if (requireCompleteResponses) {
+          throw new Error(
+            'Extension session returned an invalid login account.',
+          )
+        }
         continue
       }
       const option: WebsiteLoginAccountOption = {
@@ -705,6 +755,111 @@ export async function loginAccountsForOrigin({
   return accounts
 }
 
+const LOGIN_MATCH_LOOKUP_TIMEOUT_MS = 1_500
+const LOGIN_MATCH_CACHE_TTL_MS = 2_000
+const loginMatchCacheOptions: LoginMatchAvailabilityCacheOptions = {
+  ttlMs: LOGIN_MATCH_CACHE_TTL_MS,
+}
+const loginMatchAvailabilityCache = new LoginMatchAvailabilityCache(
+  loginMatchCacheOptions,
+)
+
+type LoginMatchAvailabilityCandidates = readonly [
+  Promise<WebsiteLoginMatchAvailabilityWire>,
+  Promise<WebsiteLoginMatchAvailabilityWire>,
+]
+
+enum LoginMatchAvailabilityKind {
+  Ready = 'ready',
+  Locked = 'locked',
+  Unavailable = 'unavailable',
+}
+
+async function loginMatchAvailabilityForOrigin(
+  origin: string,
+): Promise<WebsiteLoginMatchAvailabilityWire> {
+  const grants = await passwordPairingGrants()
+  if (grants.length === 0) {
+    return { kind: LoginMatchAvailabilityKind.Unavailable }
+  }
+  await ensureExtensionSessionDocument()
+  const expiresAt = Date.now() + LOGIN_MATCH_LOOKUP_TIMEOUT_MS
+  const nookTypedArgs0_6: Parameters<typeof sendSessionMessage>[0] = {
+    type: 'nook:extension-session-status',
+    payload: { queue: extensionSessionProbeDeadline(expiresAt) },
+  }
+  const status = await sendSessionMessage(nookTypedArgs0_6)
+  if (!isUnlockedSessionStatus(status)) {
+    return { kind: LoginMatchAvailabilityKind.Locked }
+  }
+  const nookTypedArgs0_7: Parameters<typeof loginAccountsForOrigin>[0] = {
+    grants,
+    origin,
+    queue: extensionSessionProbeDeadline(expiresAt),
+    requireCompleteResponses: true,
+  }
+  const accounts = await loginAccountsForOrigin(nookTypedArgs0_7)
+  const currentGrantIds = (await passwordPairingGrants())
+    .map((grant) => grant.vaultStoreId)
+    .sort()
+  const lookupGrantIds = grants.map((grant) => grant.vaultStoreId).sort()
+  if (currentGrantIds.join(':') !== lookupGrantIds.join(':')) {
+    return { kind: LoginMatchAvailabilityKind.Unavailable }
+  }
+  const finalStatusDeadline = Date.now() + LOGIN_MATCH_LOOKUP_TIMEOUT_MS
+  const finalStatusArgs: Parameters<typeof sendSessionMessage>[0] = {
+    type: 'nook:extension-session-status',
+    payload: { queue: extensionSessionProbeDeadline(finalStatusDeadline) },
+  }
+  const finalStatus = await sendSessionMessage(finalStatusArgs)
+  if (!isUnlockedSessionStatus(finalStatus)) {
+    return { kind: LoginMatchAvailabilityKind.Locked }
+  }
+  return {
+    kind: LoginMatchAvailabilityKind.Ready,
+    count: accounts.length,
+  }
+}
+
+async function loginMatchAvailabilityForOriginSafeUncached(
+  origin: string,
+): Promise<WebsiteLoginMatchAvailabilityWire> {
+  const unavailable: WebsiteLoginMatchAvailabilityWire = {
+    kind: LoginMatchAvailabilityKind.Unavailable,
+  }
+  try {
+    const candidates: LoginMatchAvailabilityCandidates = [
+      loginMatchAvailabilityForOrigin(origin),
+      new Promise<WebsiteLoginMatchAvailabilityWire>((resolve) => {
+        setTimeout(() => resolve(unavailable), LOGIN_MATCH_LOOKUP_TIMEOUT_MS)
+      }),
+    ]
+    return await Promise.race(candidates)
+  } catch {
+    return unavailable
+  }
+}
+
+export function invalidateLoginMatchAvailabilityForOrigin(
+  request: LoginMatchAvailabilityCacheInvalidation,
+): void {
+  loginMatchAvailabilityCache.invalidate(request)
+}
+
+export function invalidateAllLoginMatchAvailability(): void {
+  loginMatchAvailabilityCache.invalidateAll()
+}
+
+export function loginMatchAvailabilityForOriginSafe(
+  origin: string,
+): Promise<WebsiteLoginMatchAvailabilityWire> {
+  const request: LoginMatchAvailabilityCacheRequest = {
+    origin,
+    load: () => loginMatchAvailabilityForOriginSafeUncached(origin),
+  }
+  return loginMatchAvailabilityCache.resolve(request)
+}
+
 type WebsiteLoginOptionsArgs = {
   message: {
     payload: {
@@ -712,52 +867,25 @@ type WebsiteLoginOptionsArgs = {
     }
   }
   sender: chrome.runtime.MessageSender
-  dependencies?: WebsiteLoginOptionsDependencies
-}
-
-type WebsiteLoginOptionsDependencies = {
-  availableWebsiteGrants: typeof availableWebsiteGrants
-  loginAccountsForOrigin: typeof loginAccountsForOrigin
-  openCompanionLauncherBestEffort: typeof openCompanionLauncherBestEffort
-}
-
-const websiteLoginOptionsDependencies: WebsiteLoginOptionsDependencies = {
-  availableWebsiteGrants,
-  loginAccountsForOrigin,
-  openCompanionLauncherBestEffort,
 }
 
 export async function websiteLoginOptions({
   message,
   sender,
-  dependencies,
 }: WebsiteLoginOptionsArgs): Promise<unknown> {
-  const resolvedDependencies = dependencies ?? websiteLoginOptionsDependencies
   const nookTypedArgs0_6: Parameters<typeof availableWebsiteGrants>[0] = {
     origin: message.payload.origin,
     sender,
     forbiddenReason: 'login-forbidden-origin',
   }
-  const access =
-    await resolvedDependencies.availableWebsiteGrants(nookTypedArgs0_6)
-  if ('response' in access) {
-    if (
-      access.response.ok &&
-      access.response.status === WebsiteAuthenticatorResponseStatus.Unavailable
-    ) {
-      resolvedDependencies.openCompanionLauncherBestEffort(
-        OpenCompanionLauncherIntent.Pair,
-      )
-    }
-    return access.response
-  }
+  const access = await availableWebsiteGrants(nookTypedArgs0_6)
+  if ('response' in access) return access.response
 
   const nookTypedArgs0_0: Parameters<typeof loginAccountsForOrigin>[0] = {
     grants: access.grants,
     origin: message.payload.origin,
   }
-  const accounts =
-    await resolvedDependencies.loginAccountsForOrigin(nookTypedArgs0_0)
+  const accounts = await loginAccountsForOrigin(nookTypedArgs0_0)
   return { ok: true, status: 'ready', accounts }
 }
 
@@ -769,7 +897,7 @@ function isPendingLoginPicker(value: unknown): value is PendingLoginPicker {
   return isPendingAuthenticatorPicker(value)
 }
 
-type StoreLoginPickerArgs = {
+type StoreLoginPickerRequest = {
   request: PendingLoginPicker
   authorizationGeneration: number
 }
@@ -777,7 +905,7 @@ type StoreLoginPickerArgs = {
 export async function storeLoginPicker({
   request,
   authorizationGeneration,
-}: StoreLoginPickerArgs): Promise<boolean> {
+}: StoreLoginPickerRequest): Promise<boolean> {
   if (!accountPickerAuthorizationState.isCurrent(authorizationGeneration)) {
     return false
   }

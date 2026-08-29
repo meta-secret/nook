@@ -1,18 +1,26 @@
 import {
   authentication_passkey_control_evidence_is_safe,
+  authentication_workflow_saved_login_capability,
+  type AuthenticationSavedLoginCapability,
   type AuthenticationDetailedPasskeyControlObservation,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type {
   AuthenticationWorkflowSnapshotMessage,
   AuthenticationWorkflowSnapshotView,
+  WebsiteLoginMatchAvailabilityWire,
 } from '../../lib/auth-workflow-messages'
+import type * as AccountPickers from './account-pickers'
 import type * as PasskeyOperations from './passkey-operations'
-import type * as VaultRuntime from '../vault-runtime'
+import {
+  AuthenticationWorkflowSnapshotKind,
+  type authenticationWorkflowSnapshot,
+} from '../vault-runtime'
 
 export type AuthenticationWorkflowRoutingDependencies = {
   companionWasmReady: Promise<void>
   authenticationPasskeyEvidenceIsSafe: typeof authenticationPasskeyEvidenceIsSafe
-  authenticationWorkflowSnapshot: typeof VaultRuntime.authenticationWorkflowSnapshot
+  authenticationWorkflowSnapshot: typeof authenticationWorkflowSnapshot
+  loginMatchAvailabilityForOriginSafe: typeof AccountPickers.loginMatchAvailabilityForOriginSafe
   matchingPasskeyAccountCountForOriginSafe: typeof PasskeyOperations.matchingPasskeyAccountCountForOriginSafe
 }
 
@@ -23,7 +31,10 @@ export function authenticationPasskeyEvidenceIsSafe(
 }
 
 export type AuthenticationWorkflowRoutingResponse =
-  | { ok: true; snapshot?: AuthenticationWorkflowSnapshotView }
+  | {
+      workflow: { ok: true; snapshot?: AuthenticationWorkflowSnapshotView }
+      loginMatches: WebsiteLoginMatchAvailabilityWire
+    }
   | { ok: false; reason: 'workflow-snapshot-failed' }
 
 export type AuthenticationWorkflowRoutingRequest = {
@@ -39,6 +50,7 @@ export async function authenticationWorkflowMessageResponse({
     companionWasmReady,
     authenticationPasskeyEvidenceIsSafe,
     authenticationWorkflowSnapshot,
+    loginMatchAvailabilityForOriginSafe,
     matchingPasskeyAccountCountForOriginSafe,
   } = dependencies
   try {
@@ -71,9 +83,21 @@ export async function authenticationWorkflowMessageResponse({
       observations,
     }
     const result = await authenticationWorkflowSnapshot(snapshotRequest)
+    const savedLoginCapability =
+      result.kind === AuthenticationWorkflowSnapshotKind.Matched
+        ? authentication_workflow_saved_login_capability(result.snapshot)
+        : ('unavailable' satisfies AuthenticationSavedLoginCapability)
+    const loginMatches: WebsiteLoginMatchAvailabilityWire =
+      savedLoginCapability ===
+      ('fill-saved-login' satisfies AuthenticationSavedLoginCapability)
+        ? await loginMatchAvailabilityForOriginSafe(message.payload.origin)
+        : { kind: 'unavailable' }
     return {
-      ok: true,
-      ...('snapshot' in result ? { snapshot: result.snapshot } : {}),
+      workflow: {
+        ok: true,
+        ...('snapshot' in result ? { snapshot: result.snapshot } : {}),
+      },
+      loginMatches,
     }
   } catch {
     return { ok: false, reason: 'workflow-snapshot-failed' }

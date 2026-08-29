@@ -37,6 +37,9 @@ describe('authentication workflow routing', () => {
         events.push('passkeys-counted')
         return 2
       },
+      loginMatchAvailabilityForOriginSafe: async () => ({
+        kind: 'unavailable',
+      }),
       authenticationWorkflowSnapshot: async ({ observations }) => {
         events.push(
           `snapshot:${observations[0]?.authenticator.matchingPasskeyAccountCount}`,
@@ -55,7 +58,10 @@ describe('authentication workflow routing', () => {
     expect(events).toEqual([])
 
     resolveReady()
-    await expect(response).resolves.toEqual({ ok: true })
+    await expect(response).resolves.toEqual({
+      workflow: { ok: true },
+      loginMatches: { kind: 'unavailable' },
+    })
     expect(events).toEqual([
       'evidence-classified',
       'passkeys-counted',
@@ -70,6 +76,9 @@ describe('authentication workflow routing', () => {
         throw new Error('WASM not initialized')
       },
       matchingPasskeyAccountCountForOriginSafe: async () => 0,
+      loginMatchAvailabilityForOriginSafe: async () => ({
+        kind: 'unavailable',
+      }),
       authenticationWorkflowSnapshot: async () => ({ kind: 'no-match' }),
     } as unknown as AuthenticationWorkflowRoutingDependencies
 
