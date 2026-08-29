@@ -78,6 +78,9 @@ impl AuthenticationDetailedPasskeyControlObservation {
     }
 
     pub(super) fn is_safe(&self) -> bool {
+        if !self.is_bounded() {
+            return false;
+        }
         matches!(
             self,
             Self::Observed(observation) if authentication_passkey_control_is_safe(observation, false)
@@ -277,5 +280,19 @@ mod tests {
         assert!(authentication_passkey_control_candidate_is_safe(
             &AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(assertion)
         ));
+    }
+
+    #[test]
+    fn oversized_candidate_evidence_fails_before_selecting_a_safe_candidate() {
+        let candidate = AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(
+            passkey_control("Use passkey"),
+        );
+        let evidence = AuthenticationDetailedPasskeyControlObservation::Candidates(vec![
+            candidate;
+            crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT as usize
+                + 1
+        ]);
+
+        assert!(!authentication_passkey_control_evidence_is_safe(&evidence));
     }
 }
