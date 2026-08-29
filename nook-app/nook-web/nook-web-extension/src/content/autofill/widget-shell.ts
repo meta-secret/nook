@@ -266,6 +266,7 @@ type BuildEnrollmentFlowHostArgs = {
   description: HTMLParagraphElement
   continueButton: HTMLButtonElement
   openVaultButton: HTMLButtonElement
+  requestWorkflowReclassification: () => void
 }
 
 export function buildEnrollmentFlowHost({
@@ -275,6 +276,7 @@ export function buildEnrollmentFlowHost({
   description,
   continueButton,
   openVaultButton,
+  requestWorkflowReclassification,
 }: BuildEnrollmentFlowHostArgs): EnrollmentFlowHost {
   return {
     panel,
@@ -283,6 +285,7 @@ export function buildEnrollmentFlowHost({
     description,
     continueButton,
     openVaultButton,
+    requestWorkflowReclassification,
     setBusy: (value: boolean) => {
       widgetState.busy = value
     },

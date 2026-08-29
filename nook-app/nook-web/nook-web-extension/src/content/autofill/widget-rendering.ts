@@ -40,6 +40,7 @@ import {
   WidgetWorkflowKeyKind,
   WidgetWorkflowRootKind,
   pickerState,
+  scanState,
   widgetState,
 } from './state'
 import {
@@ -119,6 +120,10 @@ export function renderEnrollmentWidget({
     description,
     continueButton,
     openVaultButton,
+    requestWorkflowReclassification: () => {
+      removeWidget()
+      scanState.schedule()
+    },
   }
   const nookTypedArgs1_0: Parameters<typeof renderEnrollmentActions>[0] = {
     host: buildEnrollmentFlowHost(nookTypedArgs0_2),
@@ -284,6 +289,10 @@ export function renderWidget({
         description,
         continueButton,
         openVaultButton,
+        requestWorkflowReclassification: () => {
+          removeWidget()
+          scanState.schedule()
+        },
       }
       const host = buildEnrollmentFlowHost(hostRequest)
       const enrollmentRequest: Parameters<
@@ -422,6 +431,10 @@ export function renderWidget({
       description,
       continueButton,
       openVaultButton,
+      requestWorkflowReclassification: () => {
+        removeWidget()
+        scanState.schedule()
+      },
     }
     const nookTypedArgs1_1: Parameters<typeof renderEnrollmentActions>[0] = {
       host: buildEnrollmentFlowHost(nookTypedArgs0_9),

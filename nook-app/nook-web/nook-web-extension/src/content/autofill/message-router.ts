@@ -111,7 +111,6 @@ export const routeAutofillMessage: AutofillMessageListener =
       const nookTypedArgs0_2: Parameters<typeof sendResponse>[0] = { ok: true }
       sendResponse(nookTypedArgs0_2)
       widgetState.busy = true
-      const actionGeneration = authenticationActionState.begin()
       pending.continueButton.disabled = true
       const nookTypedArgs0_1: Parameters<typeof fillAndSubmitAccount>[0] = {
         account: message.payload.account,
@@ -121,10 +120,8 @@ export const routeAutofillMessage: AutofillMessageListener =
         title: pending.title,
         description: pending.description,
         continueButton: pending.continueButton,
-        actionGeneration,
       }
       void fillAndSubmitAccount(nookTypedArgs0_1).finally(() => {
-        if (!authenticationActionState.isCurrent(actionGeneration)) return
         widgetState.busy = false
         if (
           pending.continueButton.isConnected &&
@@ -179,7 +176,6 @@ export const routeAutofillMessage: AutofillMessageListener =
     const nookTypedArgs0_4: Parameters<typeof sendResponse>[0] = { ok: true }
     sendResponse(nookTypedArgs0_4)
     widgetState.busy = true
-    const actionGeneration = authenticationActionState.begin()
     pending.continueButton.disabled = true
     const nookTypedArgs0_3: Parameters<typeof fillAuthenticatorCode>[0] = {
       account: message.payload.account,
@@ -189,10 +185,8 @@ export const routeAutofillMessage: AutofillMessageListener =
       title: pending.title,
       description: pending.description,
       continueButton: pending.continueButton,
-      actionGeneration,
     }
     void fillAuthenticatorCode(nookTypedArgs0_3).finally(() => {
-      if (!authenticationActionState.isCurrent(actionGeneration)) return
       widgetState.busy = false
       if (
         pending.continueButton.isConnected &&
