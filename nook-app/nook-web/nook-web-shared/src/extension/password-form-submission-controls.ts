@@ -85,7 +85,7 @@ export function authenticationRouteDestination({
 }: AuthenticationRouteDestinationRequest): string {
   if (control?.hasAttribute("formaction")) return control.formAction;
   if (form.hasAttribute("action")) return form.action;
-  return form.ownerDocument.defaultView?.location.origin ?? "";
+  return form.ownerDocument.defaultView?.location.href ?? "";
 }
 
 function authenticationControlDestination(
