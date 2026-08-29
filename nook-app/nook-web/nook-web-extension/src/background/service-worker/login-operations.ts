@@ -200,7 +200,7 @@ export async function queryLoginPicker({
   if (loaded.kind === LoginPickerLoadKind.Unavailable) {
     return { ok: false, reason: 'login-picker-expired' }
   }
-  const { request } = loaded
+  const { request, authorizationGeneration } = loaded
   const grants = (await passwordPairingGrants()).filter((grant) =>
     request.allowedVaultStoreIds.includes(grant.vaultStoreId),
   )
@@ -210,6 +210,9 @@ export async function queryLoginPicker({
     query: message.payload.query,
   }
   const accounts = await loginAccountsForOrigin(nookTypedArgs0_0)
+  if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
+    return { ok: false, reason: 'login-picker-expired' }
+  }
   return { ok: true, origin: request.origin, accounts }
 }
 
@@ -237,7 +240,7 @@ export async function selectLoginPicker({
   if (loaded.kind === LoginPickerLoadKind.Unavailable) {
     return { ok: false, reason: 'login-picker-expired' }
   }
-  const { request } = loaded
+  const { request, authorizationGeneration } = loaded
   const grants = (await passwordPairingGrants()).filter((grant) =>
     request.allowedVaultStoreIds.includes(grant.vaultStoreId),
   )
@@ -253,6 +256,9 @@ export async function selectLoginPicker({
   )
   if (!selected) {
     return { ok: false, reason: 'login-picker-selection-invalid' }
+  }
+  if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
+    return { ok: false, reason: 'login-picker-expired' }
   }
   try {
     const nookTypedArgs0_3: Parameters<typeof chrome.tabs.sendMessage>[1] = {

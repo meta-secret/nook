@@ -98,7 +98,7 @@ async function clearAuthorizationState({
   completeAccountPickerAuthorizationCleanup,
   closeSession,
 }: ClearAuthorizationStateArgs): Promise<void> {
-  const authorizationGeneration = beginAccountPickerAuthorizationCleanup()
+  const authorizationGeneration = await beginAccountPickerAuthorizationCleanup()
   let failed = false
   clearStagedAuthenticatorEnrollments()
   try {
@@ -120,7 +120,7 @@ async function clearAuthorizationState({
   }
   clearStagedAuthenticatorEnrollments()
   if (failed) throw new Error('authorization cleanup failed')
-  completeAccountPickerAuthorizationCleanup(authorizationGeneration)
+  await completeAccountPickerAuthorizationCleanup(authorizationGeneration)
 }
 
 export enum ExtensionLifecycleRoutingResult {

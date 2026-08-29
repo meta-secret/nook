@@ -23,10 +23,10 @@ const unusedAsyncDependency = mock(() =>
 )
 const ensureExtensionSessionDocument = mock(() => Promise.resolve())
 const openCompanionLauncher = mock(() => Promise.resolve())
-const beginAccountPickerAuthorizationCleanup = mock(() => 1)
+const beginAccountPickerAuthorizationCleanup = mock(() => Promise.resolve(1))
 const clearPendingAccountPickers = mock(() => Promise.resolve())
 const clearStagedAuthenticatorEnrollments = mock(() => {})
-const completeAccountPickerAuthorizationCleanup = mock(() => {})
+const completeAccountPickerAuthorizationCleanup = mock(() => Promise.resolve())
 
 const lifecycleDependencies: ExtensionLifecycleRoutingDependencies = {
   beginAccountPickerAuthorizationCleanup,
@@ -117,7 +117,7 @@ describe('service worker routing', () => {
       ...lifecycleDependencies,
       beginAccountPickerAuthorizationCleanup: () => {
         events.push('authorization-invalidated')
-        return 4
+        return Promise.resolve(4)
       },
       clearPendingAccountPickers: () => {
         pickerCleanupCount += 1
@@ -133,6 +133,7 @@ describe('service worker routing', () => {
       },
       completeAccountPickerAuthorizationCleanup: (generation) => {
         events.push(`authorization-restored-${generation}`)
+        return Promise.resolve()
       },
       isExtensionSessionEnsureMessage: () => false,
       isExtensionSessionLockMessage: () => true,
