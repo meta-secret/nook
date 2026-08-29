@@ -22,7 +22,10 @@ wastes hosted concurrency before the branch is ready.
 
 Validation has three layers:
 
-- **Required locally:** run `task loom:pre-push` only.
+- **Required worker handoff:** an ordinary Team Agent returns one coherent exact
+  commit without pushing or operating external delivery state.
+- **Required integrated local hygiene:** after integrating accepted handoffs,
+  Gizmo runs `task loom:pre-push` before every push.
 - **Focused diagnosis:** after pushing an exact branch head, use
   `task remote TASK_NAME=<name>` only when one isolated gate gives faster
   feedback than complete validation.
@@ -49,10 +52,11 @@ prLand:
 ```
 
 ```bash
+# Gizmo, after integrating accepted Team Agent handoffs
 task loom:pre-push
 git commit …
 git push -u origin HEAD
-task loom:pr-land CONFIG=path/to/agent-owned/pr-land-validate.yaml
+task loom:pr-land CONFIG=path/to/gizmo-owned/pr-land-validate.yaml
 ```
 
 - For Main-fix PRs, set `runFullE2e: true` in the `prLand.validate` request.
@@ -67,17 +71,18 @@ task loom:pr-land CONFIG=path/to/agent-owned/pr-land-validate.yaml
   4. retry.
 - On a red remote run:
   1. read `gh run view <id> --log-failed`;
-  2. fix the cause;
-  3. run `task loom:pre-push`;
-  4. commit and push; and
-  5. use focused remote work or complete validation again.
+  2. route the cause to its responsible Team Agent for one coherent exact fix
+     commit;
+  3. integrate the handoff and run `task loom:pre-push`;
+  4. commit any hygiene updates and push; and
+  5. use focused remote work when helpful or complete validation again.
 - Ordinary pushes do not refresh complete PR checks.
 
 ## Scope
 
 Applies to:
 
-- Every normal implementation PR owned by an AI agent
+- Every normal implementation PR coordinated by Gizmo
 - Coding-bro, pull-request, CI-pipeline, and quality workflow docs
 - Pre-push hygiene and efficient PR delivery skills
 
@@ -92,19 +97,25 @@ Does not apply to:
 
 - Before: format → push → local `task check` while automatic PR CI consumes
   hosted workers.
-- After: Loom pre-push → commit → push → Loom validate → Loom ready.
+- After: Team Agent commit handoff → Gizmo integration → Loom pre-push →
+  push → Loom validate → Loom ready.
 - Before: remote Verify fails → run full local `task ci:pr` before re-push.
-- After: remote Verify fails → fix from logs → Loom pre-push → push → re-validate.
+- After: remote Verify fails → Team Agent exact fix commit → Gizmo integration
+  and Loom pre-push → push → re-validate.
 
 ## Application Checklist
 
-- [ ] Run `task loom:pre-push` unconditionally before every push.
+- [ ] Ordinary Team Agents return one coherent exact commit without pushing.
+- [ ] After integration, Gizmo runs `task loom:pre-push` unconditionally before
+      every push.
 - [ ] Do not require `task check`, `task ci:pr`, full suites, builds, or e2e
       on the agent machine.
-- [ ] Use `task remote` only for focused diagnosis that shortens feedback time.
+- [ ] Gizmo uses `task remote` only for focused diagnosis that shortens feedback
+      time.
 - [ ] Do not require focused tasks before complete validation.
-- [ ] Trigger complete validation explicitly with Loom or `task pr:validate`.
-- [ ] Re-validate after every push that replaces the validated head.
+- [ ] Gizmo triggers complete validation explicitly with Loom or
+      `task pr:validate`.
+- [ ] Gizmo re-validates after every push that replaces the validated head.
 
 ## Validation
 

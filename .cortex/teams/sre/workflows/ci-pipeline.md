@@ -650,8 +650,8 @@ task hive:verify
   - It creates disposable external-provider state.
   - It requires provider secrets.
 - No workflow merges the harness-owned PR from a check event.
-  - A task-owning agent runs the standard readiness audit.
-  - The agent squash-merges when readiness succeeds.
+  - Gizmo runs the standard readiness audit.
+  - Gizmo squash-merges when readiness succeeds.
 
 **One web server per Playwright process is enough.** CI serves static `dist/` via `vite preview`; workers share that HTTP endpoint. Isolation is at the browser layer:
 
@@ -673,15 +673,16 @@ UI demo rules:
   - They run serially with one worker.
   - PR CI avoids the cost of the full browser suite.
 
-**Run the contract on the host before the first push** (and after any later UI
-edit) so Verify does not discover a missing demo:
+**After integration, Gizmo runs the contract on the host before the first
+push** (and after any later UI edit) so Verify does not discover a missing demo:
 
 ```bash
 git fetch origin main
 .github/scripts/ui-demo-contract.sh "$(git rev-parse origin/main)"
 ```
 
-Combine with unconditional `task format` — see
+The integrated `task loom:pre-push` call combines this contract with
+unconditional host formatting — see
 [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md).
 
 The `ui-demo` Playwright project runs Chromium headlessly at 1280x720.
@@ -728,8 +729,9 @@ The Playwright project catalog and command grouping live in
 
 ## Task commands
 
-Product checks run remotely in containerized jobs. The mandatory local format
-command reuses one content-addressed tool-only image across worktrees. The root
+Product checks run remotely in containerized jobs. The mandatory integrated
+pre-push hygiene reuses one content-addressed tool-only formatter image across
+worktrees. The root
 `Taskfile.yml` is the repo entrypoint; app commands are included through
 `nook-app/Taskfile.yml`, with
 cross-package app tasks in `nook-app/ci/Taskfile.yml`, Docker tasks in
@@ -738,8 +740,8 @@ cross-package app tasks in `nook-app/ci/Taskfile.yml`, Docker tasks in
 `nook-web-extension/` / `nook-platform/`:
 
 ```bash
-# Agent-required local action before every push
-task format                         # host-applied format only
+# Gizmo-required local action after integration and before every push
+task loom:pre-push                  # host-applied format + UI demo contract
 
 # Optional local mirrors (humans / deep debug — not agent merge gates)
 task check                          # format, clippy, unit tests, wasm-bindgen tests, web build (dev/no-opt wasm)
@@ -887,11 +889,16 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 - Missing or unchanged base coverage reuses the current artifact for comparison without another Docker solve.
 - Use remote CI as the **sole PR product validation gate**.
 
-**Agent remote commands:**
+**Gizmo remote commands:**
 
-- Agents use `task remote TASK_NAME=<name>` for one focused command.
-- Agents use `task remote TASK_NAMES=<a>,<b>` to reuse one job for a batch.
-- When the branch is ready, agents run `task pr:validate PR=<number>` or add
+- Ordinary Team Agents return coherent exact committed handoffs. They do not
+  push, dispatch remote work, or operate external PR/check state.
+- After integration, Gizmo runs `task loom:pre-push`, commits any hygiene
+  updates, and pushes promptly.
+- Gizmo uses `task remote TASK_NAME=<name>` for one optional focused command.
+- Gizmo uses `task remote TASK_NAMES=<a>,<b>` to reuse one job for an optional
+  focused batch.
+- When the branch is ready, Gizmo runs `task pr:validate PR=<number>` or adds
   `FULL_E2E=1`.
 - Validation first requests one idempotent exact-head Codex review.
 - Current findings stop dispatch so they can be repaired as one coherent batch.
@@ -981,8 +988,8 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
   A Main final-image cache therefore cannot substitute a stale source snapshot.
 - Main and release jobs import neither candidate nor stable formatter tags.
 - Hosted promotion independently fingerprints the exact committed source SHA.
-- Agents still run build, test, proof, and validation tasks remotely. Local
-  execution remains available only for explicit rare-case debugging.
+- Gizmo still dispatches build, test, proof, and validation tasks remotely.
+  Local execution remains available only for explicit rare-case debugging.
 - Commit-scoped local publish requires a clean worktree. Dirty builds remain
   local and cannot poison the committed PR scope.
 - The formatter dependency candidate is the exception because its targets
