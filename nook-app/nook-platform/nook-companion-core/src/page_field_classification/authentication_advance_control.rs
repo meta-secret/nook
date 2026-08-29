@@ -86,6 +86,30 @@ pub enum AuthenticationAdvanceControlDecision {
 }
 
 impl AuthenticationAdvanceControlObservation {
+    fn credential_update_destination(&self) -> bool {
+        self.new_password_field_count > 0
+            && (control_destination_indicates_registration_route(&self.destination_identity)
+                || control_destination_indicates_password_recovery_route(
+                    &self.destination_identity,
+                )
+                || control_destination_indicates_password_update_route(&self.destination_identity))
+    }
+
+    fn is_primary_sso_submit(&self, authentication_scope_owns_control: bool) -> bool {
+        let expanded_control_label = expand_identity_text(&self.label);
+        authentication_scope_owns_control
+            && matches!(self.semantics, PageControlSemantics::SemanticSubmit)
+            && matches!(
+                self.authentication_username,
+                AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
+            )
+            && contains_any_word(&expanded_control_label, &["sso"])
+            && contains_any_word(
+                &expanded_control_label,
+                &["sign in", "signin", "continue", "next"],
+            )
+    }
+
     /// Whether DOM-controlled text and bounded field counts fit the observation envelope.
     #[must_use]
     pub fn is_bounded(&self) -> bool {
@@ -149,14 +173,7 @@ impl AuthenticationAdvanceControlObservation {
             looks_like_non_authentication_submit_control_label(&self.label);
         let contextual_password_update = self.new_password_field_count > 0
             && looks_like_password_update_submit_control_label(&self.label);
-        let password_update_destination = self.new_password_field_count > 0
-            && control_destination_indicates_password_update_route(&self.destination_identity);
-        let credential_update_destination = self.new_password_field_count > 0
-            && (control_destination_indicates_registration_route(&self.destination_identity)
-                || control_destination_indicates_password_recovery_route(
-                    &self.destination_identity,
-                )
-                || password_update_destination);
+        let credential_update_destination = self.credential_update_destination();
         if has_unconditional_veto_identity(self, credential_update_destination) {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
@@ -185,18 +202,7 @@ impl AuthenticationAdvanceControlObservation {
         {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
-        let expanded_control_label = expand_identity_text(&self.label);
-        let primary_sso_submit = authentication_scope_owns_control
-            && matches!(self.semantics, PageControlSemantics::SemanticSubmit)
-            && matches!(
-                self.authentication_username,
-                AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
-            )
-            && contains_any_word(&expanded_control_label, &["sso"])
-            && contains_any_word(
-                &expanded_control_label,
-                &["sign in", "signin", "continue", "next"],
-            );
+        let primary_sso_submit = self.is_primary_sso_submit(authentication_scope_owns_control);
         if looks_like_alternate_authentication_route_control_label(&self.label)
             && !primary_sso_submit
         {
