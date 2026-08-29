@@ -116,6 +116,17 @@ type LoginAdvanceControlRequest = PasswordFormScopeQuery & {
 
 type LoginAdvanceControl = HTMLButtonElement | HTMLInputElement;
 
+function isRenderedControl(control: LoginAdvanceControl): boolean {
+  let element: HTMLElement | null = control;
+  while (element) {
+    const style = getComputedStyle(element);
+    const rendered = style.display !== "none" && style.visibility !== "hidden";
+    if (element.hidden || !rendered) return false;
+    element = element.parentElement;
+  }
+  return true;
+}
+
 type AuthenticationRouteControlRequest = {
   control: LoginAdvanceControl;
   controlLabel: string;
@@ -566,15 +577,14 @@ function clickAdvanceControl(request: LoginAdvanceControlRequest): boolean {
     if (
       control.disabled ||
       control.getAttribute("aria-disabled") === "true" ||
-      control.hidden ||
-      getComputedStyle(control).display === "none"
+      !isRenderedControl(control)
     ) {
       continue;
     }
     const label = [
       control.textContent ?? "",
       control.getAttribute("aria-label") ?? "",
-      control.value || (control.tagName === "INPUT" ? "submit" : ""),
+      control.tagName === "INPUT" ? control.value || "submit" : "",
     ].join(" ");
     const nookTypedArgs0_30: AuthenticationRouteControlRequest = {
       control,
@@ -623,13 +633,14 @@ function canActivateAuthenticationRouteControl(
     query.kind === PasswordFormQueryKind.Scoped &&
     query.formScope.kind === PasswordFormScopeKind.Unowned &&
     query.root !== control.ownerDocument;
+  const machineIdentity = `${control.id} ${control.name} ${control.value}`;
 
   return can_activate_authentication_route_control(
     sourceOrigin,
     formIdentity,
     destinationIdentity,
     controlLabel,
-    control.getAttribute("name") ?? "",
+    machineIdentity,
     Boolean(form && control.type === "submit"),
     isAuthUsernameField(query.usernameField),
     sharesOwnedForm || hasLocalUnownedScope,

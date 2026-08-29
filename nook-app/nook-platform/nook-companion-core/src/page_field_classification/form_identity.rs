@@ -6,7 +6,6 @@ use super::control_identity::{
 use super::{
     contains_any_word, expand_identity_text, looks_like_non_authentication_submit_control_label,
 };
-
 pub(super) fn identity_indicates_explicit_authentication_route(identity: &str) -> bool {
     contains_any_word(
         &expand_identity_text(identity),
@@ -22,14 +21,12 @@ pub(super) fn identity_indicates_explicit_authentication_route(identity: &str) -
         ],
     )
 }
-
 fn identity_indicates_explicit_login_route(identity: &str) -> bool {
     contains_any_word(
         &expand_identity_text(identity),
         &["login", "log in", "signin", "sign in", "sign-in"],
     )
 }
-
 fn control_destination_indicates_generic_oauth_authorization_route(
     destination_identity: &str,
 ) -> bool {
@@ -41,7 +38,6 @@ fn control_destination_indicates_generic_oauth_authorization_route(
         .trim_end_matches('/');
     route == "/oauth2/authorize"
 }
-
 fn control_destination_indicates_alternate_provider(
     destination_identity: &str,
     allow_generic_oauth_authorization: bool,
@@ -57,7 +53,6 @@ fn control_destination_indicates_alternate_provider(
                     destination_identity,
                 )))
 }
-
 fn destination_without_oauth_form_post_metadata(destination_identity: &str) -> String {
     let Some((path, query)) = destination_identity.split_once('?') else {
         return destination_identity.to_owned();
@@ -82,7 +77,6 @@ fn destination_without_oauth_form_post_metadata(destination_identity: &str) -> S
         format!("{path}?{remaining_query}")
     }
 }
-
 fn destination_without_navigation_metadata(destination_identity: &str) -> String {
     let Some((path, query)) = destination_identity.split_once('?') else {
         return destination_identity.to_owned();
@@ -104,7 +98,6 @@ fn destination_without_navigation_metadata(destination_identity: &str) -> String
         format!("{path}?{remaining_query}")
     }
 }
-
 pub(super) fn destination_has_disallowed_action_or_provider(destination_identity: &str) -> bool {
     let content_identity = destination_without_navigation_metadata(
         &destination_without_oauth_form_post_metadata(destination_identity),
@@ -114,7 +107,12 @@ pub(super) fn destination_has_disallowed_action_or_provider(destination_identity
             && !control_destination_indicates_safe_post_login_route(destination_identity))
         || control_destination_indicates_alternate_provider(&content_identity, false)
 }
-
+pub(super) fn identity_has_authentication_control_veto(identity: &str) -> bool {
+    destination_has_disallowed_action_or_provider(identity)
+        || looks_like_registration_route_control_label(identity)
+        || looks_like_password_recovery_route_control_label(identity)
+        || looks_like_auxiliary_authentication_control_label(identity)
+}
 pub(super) fn destination_has_safe_login_identity(destination_identity: &str) -> bool {
     identity_indicates_explicit_login_route(destination_identity)
         && !control_destination_indicates_non_authentication_route(destination_identity)
@@ -123,7 +121,6 @@ pub(super) fn destination_has_safe_login_identity(destination_identity: &str) ->
         && !looks_like_password_recovery_route_control_label(destination_identity)
         && !looks_like_auxiliary_authentication_control_label(destination_identity)
 }
-
 pub(super) fn form_identity_indicates_destructive_action(form_identity: &str) -> bool {
     let identity = expand_identity_text(form_identity);
     let changes_account_detail =
@@ -191,7 +188,6 @@ pub(super) fn form_identity_indicates_destructive_action(form_identity: &str) ->
             ],
         )
 }
-
 pub(super) fn form_identity_indicates_non_authentication_account_management(
     form_identity: &str,
 ) -> bool {
@@ -209,7 +205,6 @@ pub(super) fn form_identity_indicates_non_authentication_account_management(
         ],
     )
 }
-
 pub(super) fn control_destination_indicates_non_authentication_route(
     destination_identity: &str,
 ) -> bool {
@@ -238,7 +233,6 @@ pub(super) fn control_destination_indicates_non_authentication_route(
     !identity_indicates_explicit_authentication_route(&identity)
         && form_identity_indicates_non_authentication_account_management(&identity)
 }
-
 fn control_destination_indicates_safe_post_login_route(destination_identity: &str) -> bool {
     let normalized = destination_identity.trim().to_ascii_lowercase();
     let route = normalized
@@ -248,7 +242,6 @@ fn control_destination_indicates_safe_post_login_route(destination_identity: &st
         .trim_end_matches('/');
     matches!(route, "/auth/post-login" | "/authentication/post-login")
 }
-
 fn control_destination_has_disallowed_route_action(destination_identity: &str) -> bool {
     let path_identity = expand_identity_text(
         destination_identity
@@ -266,11 +259,9 @@ fn control_destination_has_disallowed_route_action(destination_identity: &str) -
         && !control_destination_indicates_safe_post_login_route(destination_identity))
         || contains_any_word(&path_identity, &["learn more"])
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
     #[test]
     fn unconditional_vetoes_cover_account_detail_transaction_and_termination_actions() {
         for identity in [

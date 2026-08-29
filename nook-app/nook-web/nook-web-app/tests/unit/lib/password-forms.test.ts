@@ -313,14 +313,14 @@ describe('website one-time-code fields', () => {
   })
 
   test.each([
-    ['Amazon provider selector', 'Continue with Amazon', ''],
-    ['destructive action', 'Continue', 'name="delete-account"'],
-    ['hidden control', '', 'name="continue" style="display:none"'],
-  ])('skips %s before advancing login', (_, label, attrs) => {
+    ['Amazon provider selector', 'Continue with Amazon', '', ''],
+    ['destructive action', 'Continue', 'id="delete-account"', ''],
+    ['hidden ancestor', '', 'name="continue"', 'hidden'],
+  ])('skips %s before advancing login', (_, label, attrs, parentAttrs) => {
     document.body.innerHTML = `
       <form id="login-form">
         <input autocomplete="username" name="email" type="email" />
-        <button id="alternate-route" ${attrs} type="button">${label}</button>
+        <span ${parentAttrs}><button ${attrs} type="button">${label}</button></span>
         <button id="login-next" type="button">Continue</button>
       </form>
     `

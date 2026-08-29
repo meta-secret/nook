@@ -1,7 +1,6 @@
 use super::{
     contains_any_word, expand_identity_text, looks_like_unrestricted_login_advance_control_label,
 };
-
 fn identity_names_external_authentication_provider(
     identity: &str,
     allow_single_letter_x: bool,
@@ -30,7 +29,7 @@ pub(super) fn label_names_external_authentication_provider(identity: &str) -> bo
     identity_names_external_authentication_provider(identity, true)
 }
 pub(super) fn route_names_external_authentication_provider(identity: &str) -> bool {
-    let route = expand_identity_text(identity.split(['?', '#']).next().unwrap_or_default());
+    let route = expand_identity_text(identity.split('?').next().unwrap_or_default());
     identity_names_external_authentication_provider(identity, false)
         || identity.split_once('?').is_some_and(|(_, query)| {
             query
@@ -50,14 +49,12 @@ fn has_open_ended_provider_selection_grammar(identity: &str) -> bool {
             && !matches!(&tokens[index + 1..], ["email" | "password"])
     })
 }
-
 pub(super) fn looks_like_microsoft_primary_sign_in_label(label: &str) -> bool {
     let identity = expand_identity_text(label);
     identity.starts_with("sign in to ")
         && contains_any_word(&identity, &["microsoft"])
         && !label_names_external_authentication_provider(&identity.replace("microsoft", ""))
 }
-
 pub(super) fn looks_like_alternate_authentication_route_control_label(label: &str) -> bool {
     let identity = expand_identity_text(label);
     if contains_any_word(&identity, &["passkey", "saml", "sso"]) {
@@ -68,7 +65,6 @@ pub(super) fn looks_like_alternate_authentication_route_control_label(label: &st
         || (looks_like_unrestricted_login_advance_control_label(label)
             && has_open_ended_provider_selection_grammar(&identity))
 }
-
 pub(super) fn looks_like_auxiliary_authentication_control_label(label: &str) -> bool {
     let identity = expand_identity_text(label);
     contains_any_word(&identity, &["password"])
@@ -86,7 +82,6 @@ pub(super) fn looks_like_auxiliary_authentication_control_label(label: &str) -> 
             ],
         )
 }
-
 pub(super) fn looks_like_password_recovery_route_control_label(label: &str) -> bool {
     let identity = expand_identity_text(label);
     contains_any_word(&identity, &["password"])
@@ -95,7 +90,6 @@ pub(super) fn looks_like_password_recovery_route_control_label(label: &str) -> b
             &["forgot", "forget", "recover", "recovery", "reset"],
         )
 }
-
 pub(super) fn looks_like_registration_route_control_label(label: &str) -> bool {
     contains_any_word(
         &expand_identity_text(label),

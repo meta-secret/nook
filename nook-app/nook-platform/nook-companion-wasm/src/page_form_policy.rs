@@ -202,7 +202,7 @@ mod tests {
             "login-form",
             "https://example.test/auth/login",
             "Continue",
-            "delete-account",
+            "reset-password",
             true,
             true,
             true,

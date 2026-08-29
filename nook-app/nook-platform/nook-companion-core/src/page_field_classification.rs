@@ -70,7 +70,7 @@ pub fn expand_identity_text(value: &str) -> String {
                 with_breaks.push(' ');
             }
         }
-        if matches!(*c, '_' | '-' | '.' | '/') {
+        if matches!(*c, '_' | '-' | '.' | '/' | '#') {
             with_breaks.push(' ');
         } else {
             with_breaks.push(*c);
@@ -309,11 +309,7 @@ pub fn has_safe_authentication_route_identity(
     {
         return false;
     }
-    if form_identity::form_identity_indicates_destructive_action(form_identity)
-        || form_identity::form_identity_indicates_non_authentication_account_management(
-            form_identity,
-        )
-    {
+    if form_identity::identity_has_authentication_control_veto(form_identity) {
         return false;
     }
     let Some(destination) =
@@ -349,7 +345,7 @@ pub fn can_activate_authentication_route_control(
     if !has_safe_authentication_route_identity(source_origin, form_identity, destination_identity)
         || control_label.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
         || control_machine_identity.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
-        || form_identity::form_identity_indicates_destructive_action(control_machine_identity)
+        || form_identity::identity_has_authentication_control_veto(control_machine_identity)
     {
         return false;
     }
@@ -630,16 +626,18 @@ mod tests {
     #[test]
     fn activation_accepts_only_bounded_semantic_username_scope_evidence() {
         let decide = |form: &str, label: &str, semantic, username, local| {
+            let machine = label.strip_prefix("machine:").unwrap_or_default();
+            let visible_label = if machine.is_empty() {
+                label
+            } else {
+                "Continue"
+            };
             can_activate_authentication_route_control(
                 "https://login.microsoftonline.com",
                 form,
                 "https://login.microsoftonline.com/common/login",
-                label,
-                if label == "Continue" {
-                    "delete-account"
-                } else {
-                    ""
-                },
+                visible_label,
+                machine,
                 semantic,
                 username,
                 local,
@@ -653,7 +651,11 @@ mod tests {
         assert!(!decide("f", "Continue with Amazon", true, true, true));
         for label in [
             "Sign in to Google",
-            "Continue",
+            "machine:delete-account",
+            "machine:reset-password",
+            "machine:create-account",
+            "machine:google",
+            "machine:passkey",
             "Sign in to Microsoft and reset password",
             "Sign in to Microsoft or Google",
         ] {
@@ -676,11 +678,12 @@ mod tests {
             "https://example.test/auth/login?x=1",
         ));
         for (form, destination) in [
-            ("delete-account", "https://example.test/auth/login"),
-            ("profile-settings", "https://example.test/auth/login"),
-            ("login-form", "https://example.test/reset-password"),
+            ("reset-password", "https://example.test/auth/login"),
+            ("signup-form", "https://example.test/auth/login"),
+            ("google-login", "https://example.test/auth/login"),
+            ("passkey-login", "https://example.test/auth/login"),
             ("login-form", "https://example.test/login?provider"),
-            ("login-form", "https://example.test/login#/google"),
+            ("login-form", "https://example.test/login#/x"),
             ("login-form", "https://example.test/login?provider=x"),
             ("login-form", "https://example.test/signin/x"),
             ("login-form", "https://example.test/auth/close/account"),
