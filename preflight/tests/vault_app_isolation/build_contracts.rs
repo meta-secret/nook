@@ -5,6 +5,14 @@ const TRUSTED_DOCKER_PATHS: [&str; 3] = [
     "/usr/bin/docker",
     "/opt/homebrew/bin/docker",
 ];
+const TRUSTED_BUILDX_PATHS: [&str; 6] = [
+    "/usr/local/lib/docker/cli-plugins/docker-buildx",
+    "/usr/local/libexec/docker/cli-plugins/docker-buildx",
+    "/usr/lib/docker/cli-plugins/docker-buildx",
+    "/usr/libexec/docker/cli-plugins/docker-buildx",
+    "/opt/homebrew/lib/docker/cli-plugins/docker-buildx",
+    "/Applications/Docker.app/Contents/Resources/cli-plugins/docker-buildx",
+];
 const TRUSTED_DOCKER_SELECTOR: &str =
     "if [ -x /usr/local/bin/docker ]; then docker_cli=/usr/local/bin/docker
 elif [ -x /usr/bin/docker ]; then docker_cli=/usr/bin/docker
@@ -26,7 +34,11 @@ fn docker_script_fixture(
         anyhow::ensure!(source.matches(candidate).count() == 2);
         source = source.replace(candidate, &fake);
     }
-    anyhow::ensure!(source.matches(fake.as_ref()).count() == 6);
+    for candidate in TRUSTED_BUILDX_PATHS {
+        anyhow::ensure!(source.matches(candidate).count() == 2);
+        source = source.replace(candidate, &fake);
+    }
+    anyhow::ensure!(source.matches(fake.as_ref()).count() == 18);
     let fixture = directory.join("wrapper.sh");
     fs::write(&fixture, source)?;
     Ok(fixture)
@@ -365,7 +377,7 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
     let root = repository_root();
     for (path, invocation_count) in [
         (".github/scripts/verify-wasm-gha-cache.sh", 1),
-        (".github/scripts/with-healthy-buildkit.sh", 8),
+        (".github/scripts/with-healthy-buildkit.sh", 9),
         (".github/scripts/with-remote-buildkit.sh", 4),
         ("infra/tasks/bake-cache.yml", 13),
     ] {
@@ -377,15 +389,47 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
             .filter_map(|line| line.split_once("docker_cli=").map(|entry| entry.1.trim()))
             .collect();
         assert_eq!(assignments, TRUSTED_DOCKER_PATHS, "{path} selector drift");
+        let buildx_assignments: Vec<_> = source
+            .lines()
+            .filter_map(|line| line.split_once("buildx_cli=").map(|entry| entry.1.trim()))
+            .collect();
+        assert_eq!(
+            buildx_assignments, TRUSTED_BUILDX_PATHS,
+            "{path} Buildx selector drift"
+        );
         assert_eq!(source.matches("\"$docker_cli\"").count(), invocation_count);
+        assert_eq!(
+            source
+                .matches("export DOCKER_CONFIG=\"$trusted_docker_config\"")
+                .count(),
+            1,
+            "{path} must isolate Docker plugin discovery"
+        );
+        assert!(source.contains("for entry in config.json contexts; do"));
+        assert!(source.contains("export BUILDX_CONFIG=\"$docker_config_source/buildx\""));
+        assert!(source.contains("Docker config may not add CLI plugin directories"));
+        assert!(source.contains(
+            "ln -s \"$buildx_cli\" \"$trusted_docker_config/cli-plugins/docker-buildx\""
+        ));
+        assert!(source.contains(
+            "grep -q '\"cliPluginsExtraDirs\"[[:space:]]*:' \"$trusted_docker_config/config.json\""
+        ));
         if path.contains("with-") {
+            let propagation_count = usize::from(path.contains("with-remote"))
+                + usize::from(path.contains("with-healthy")) * 2;
             assert_eq!(
                 source.matches("DOCKER=\"$docker_cli\" \"$@\"").count(),
-                1,
+                propagation_count,
                 "{path} must propagate the trusted Docker CLI to wrapped Task commands"
             );
         }
-        for forbidden in ["${DOCKER", "docker_bin", "PATH=", "command -v docker"] {
+        for forbidden in [
+            "${DOCKER:-",
+            "${DOCKER}",
+            "docker_bin",
+            "PATH=",
+            "command -v docker",
+        ] {
             assert!(!source.contains(forbidden), "{path} permits {forbidden}");
         }
         assert!(!source.lines().any(|line| {
@@ -514,9 +558,10 @@ fi
 
     let started = Instant::now();
     let output = Command::new("bash")
-        .arg(wrapper)
+        .arg(&wrapper)
         .args(["bash", "-c", "printf ok > \"$1\"", "nook-test"])
         .arg(&command_marker)
+        .env("DOCKER_CONFIG", temp.join("docker-config"))
         .env("FAKE_DOCKER_LOG", &docker_log)
         .env("FAKE_DOCKER_CHILD_PID", &child_pid_file)
         .env("NOOK_PR_BUILDX_BUILDER", "nook-pr-timeout-test")
@@ -560,6 +605,23 @@ fi
         );
     }
 
+    let malicious_config = temp.join("malicious-docker-config");
+    fs::create_dir_all(&malicious_config)?;
+    fs::write(
+        malicious_config.join("config.json"),
+        r#"{"cliPluginsExtraDirs":["/tmp/untrusted"]}"#,
+    )?;
+    let refused_plugin = Command::new("bash")
+        .arg(&wrapper)
+        .args(["true"])
+        .env("DOCKER_CONFIG", malicious_config)
+        .output()?;
+    assert!(!refused_plugin.status.success());
+    assert!(
+        String::from_utf8_lossy(&refused_plugin.stderr)
+            .contains("Docker config may not add CLI plugin directories")
+    );
+
     fs::remove_dir_all(temp)?;
     Ok(())
 }
@@ -599,6 +661,7 @@ printf '%s\n' "$*" >> "$FAKE_DOCKER_LOG"
         .arg(&wrapper)
         .args(["bash", "-c", "printf ok > \"$1\"", "nook-test"])
         .arg(&command_marker)
+        .env("DOCKER_CONFIG", temp.join("docker-config"))
         .env("FAKE_DOCKER_LOG", &docker_log)
         .env_remove("NOOK_PR_BUILDX_BUILDER")
         .env_remove("BUILDX_BUILDER")
@@ -625,6 +688,7 @@ printf '%s\n' "$*" >> "$FAKE_DOCKER_LOG"
     let refused = Command::new("bash")
         .arg(wrapper)
         .args(["true"])
+        .env("DOCKER_CONFIG", temp.join("docker-config"))
         .env("NOOK_PR_BUILDX_BUILDER", "nook-pr")
         .output()?;
     assert!(
@@ -677,6 +741,7 @@ fi
         .arg(&wrapper)
         .args(["bash", "-c", "printf ok > \"$1\"", "nook-test"])
         .arg(&command_marker)
+        .env("DOCKER_CONFIG", temp.join("docker-config"))
         .env("FAKE_DOCKER_LOG", &docker_log)
         .env("NOOK_PR_BUILDX_BUILDER", "nook-arc-run-1")
         .output()?;
@@ -716,6 +781,7 @@ fi
         .arg(&wrapper)
         .args(["bash", "-c", "printf bad > \"$1\"", "nook-test"])
         .arg(&command_marker)
+        .env("DOCKER_CONFIG", temp.join("docker-config"))
         .env("FAKE_DOCKER_LOG", &docker_log)
         .env("FAIL_REMOTE_PROBE", "1")
         .env("NOOK_PR_BUILDX_BUILDER", "nook-arc-run-2")

@@ -16,6 +16,44 @@ else
   echo "trusted Docker CLI is unavailable" >&2
   exit 127
 fi
+if [ -x /usr/local/lib/docker/cli-plugins/docker-buildx ]; then buildx_cli=/usr/local/lib/docker/cli-plugins/docker-buildx
+elif [ -x /usr/local/libexec/docker/cli-plugins/docker-buildx ]; then buildx_cli=/usr/local/libexec/docker/cli-plugins/docker-buildx
+elif [ -x /usr/lib/docker/cli-plugins/docker-buildx ]; then buildx_cli=/usr/lib/docker/cli-plugins/docker-buildx
+elif [ -x /usr/libexec/docker/cli-plugins/docker-buildx ]; then buildx_cli=/usr/libexec/docker/cli-plugins/docker-buildx
+elif [ -x /opt/homebrew/lib/docker/cli-plugins/docker-buildx ]; then buildx_cli=/opt/homebrew/lib/docker/cli-plugins/docker-buildx
+elif [ -x /Applications/Docker.app/Contents/Resources/cli-plugins/docker-buildx ]; then buildx_cli=/Applications/Docker.app/Contents/Resources/cli-plugins/docker-buildx
+else
+  echo "trusted Docker Buildx plugin is unavailable" >&2
+  exit 127
+fi
+docker_config_source="${DOCKER_CONFIG:-${HOME:?HOME is required when DOCKER_CONFIG is unset}/.docker}"
+case "$docker_config_source" in
+  /*) ;;
+  *)
+    echo "Docker config path must be absolute" >&2
+    exit 2
+    ;;
+esac
+trusted_docker_config="$(mktemp -d "${TMPDIR:-/tmp}/nook-docker-config.XXXXXX")"
+chmod 700 "$trusted_docker_config"
+mkdir -m 700 "$trusted_docker_config/cli-plugins"
+ln -s "$buildx_cli" "$trusted_docker_config/cli-plugins/docker-buildx"
+cleanup_docker_config() {
+  rm -rf -- "$trusted_docker_config"
+}
+trap cleanup_docker_config EXIT
+for entry in config.json contexts; do
+  if [ -e "$docker_config_source/$entry" ]; then
+    cp -RL "$docker_config_source/$entry" "$trusted_docker_config/$entry"
+  fi
+done
+if [ -f "$trusted_docker_config/config.json" ] &&
+  grep -q '"cliPluginsExtraDirs"[[:space:]]*:' "$trusted_docker_config/config.json"; then
+  echo "Docker config may not add CLI plugin directories" >&2
+  exit 2
+fi
+export DOCKER_CONFIG="$trusted_docker_config"
+export BUILDX_CONFIG="$docker_config_source/buildx"
 
 # Never default to a shared docker-container builder. Delivery used to reuse
 # `nook-pr` across local and self-hosted runs; one wedged or concurrent build
@@ -41,7 +79,7 @@ esac
 
 run_with_daemon_builder() {
   echo "Using default docker buildx builder (Taskfiles must not pass --builder)" >&2
-  "$@"
+  DOCKER="$docker_cli" "$@"
 }
 
 if [ -z "$builder" ]; then
