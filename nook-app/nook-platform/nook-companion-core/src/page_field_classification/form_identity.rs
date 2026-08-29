@@ -112,7 +112,7 @@ pub(super) fn destination_has_disallowed_action_or_provider(destination_identity
     control_destination_has_disallowed_route_action(destination_identity)
         || (looks_like_non_authentication_submit_control_label(&content_identity)
             && !control_destination_indicates_safe_post_login_route(destination_identity))
-        || control_destination_indicates_alternate_provider(destination_identity, false)
+        || control_destination_indicates_alternate_provider(&content_identity, false)
 }
 
 pub(super) fn destination_has_safe_login_identity(destination_identity: &str) -> bool {

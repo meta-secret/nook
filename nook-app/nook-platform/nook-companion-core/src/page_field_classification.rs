@@ -688,7 +688,7 @@ mod tests {
         assert!(has_safe_authentication_route_identity(
             "https://example.test",
             "",
-            "https://example.test/auth/login",
+            "https://example.test/login?continue=https://mail.google.com",
         ));
         assert!(has_safe_authentication_route_identity(
             "https://example.test",
@@ -707,7 +707,7 @@ mod tests {
             ("login-form", "https://example.test/reset-password"),
             ("login-form", "https://example.test/login?provider=google"),
             ("login-form", "https://example.test/login#/google"),
-            ("login-form", "https://example.test/signin/x.com"),
+            ("login-form", "https://example.test/login?provider=x"),
             ("login-form", "https://example.test/signin/x"),
             ("login-form", "https://example.test/auth/close/account"),
             ("login-form", "https://example.test/auth/forgot/password"),
