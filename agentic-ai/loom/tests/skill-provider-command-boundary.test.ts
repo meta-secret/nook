@@ -112,6 +112,7 @@ test('rejects indirect executable shell input', () => {
 test('accepts bounded static shell structures', () => {
   for (const source of [
     'cleanup(){ rm -f output; }; trap cleanup EXIT',
+    "false && bash -c 'cleanup(){ true; }'",
     'case x in x) bun scripts/safe.ts;; esac',
     "bash <<'EOF'\necho ok\nEOF",
     'while read -r value; do echo "$value"; done < <(printf ok)',

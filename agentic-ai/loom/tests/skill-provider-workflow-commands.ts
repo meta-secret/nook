@@ -24,7 +24,6 @@ const STANDARD_WORKFLOW_SHELLS = new Set([
   'cmd',
   'powershell',
   'pwsh',
-  'python',
   'sh',
 ]);
 

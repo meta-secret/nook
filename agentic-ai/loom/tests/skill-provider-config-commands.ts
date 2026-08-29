@@ -240,10 +240,20 @@ function taskStaticVariables(
 }
 
 function resolveTaskTemplate(request: TaskTemplateRequest): string {
-  return request.source.replace(/\{\{\.([A-Za-z_]\w*)\}\}/gu, (template) => {
-    const name = /^\{\{\.([A-Za-z_]\w*)\}\}$/u.exec(template)?.[1] ?? '';
-    return request.values.get(name) ?? template;
-  });
+  return request.source
+    .replace(/\{\{default "([^"]*)" \.([A-Za-z_]\w*)\}\}/gu, (template) => {
+      const match = /^\{\{default "([^"]*)" \.([A-Za-z_]\w*)\}\}$/u.exec(
+        template,
+      );
+      const fallback = match?.[1] ?? '';
+      const name = match?.[2] ?? '';
+      const value = request.values.get(name);
+      return value && !value.includes('{{') ? value : fallback;
+    })
+    .replace(/\{\{\.([A-Za-z_]\w*)\}\}/gu, (template) => {
+      const name = /^\{\{\.([A-Za-z_]\w*)\}\}$/u.exec(template)?.[1] ?? '';
+      return request.values.get(name) ?? template;
+    });
 }
 
 function resolveTaskShellVariables(request: TaskShellVariableRequest): string {

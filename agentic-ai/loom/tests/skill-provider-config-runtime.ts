@@ -12,21 +12,9 @@ type PositionalSpecializationRequest = {
   readonly arguments: readonly ShellLaunchArgument[] | false;
   readonly source: string;
 };
-type ModuleCandidateRequest = {
-  readonly exactFirst: boolean;
-  readonly path: string;
-};
-
-const MODULE_SUFFIXES = [
-  '.ts',
-  '.tsx',
-  '.mts',
-  '.cts',
-  '.js',
-  '.jsx',
-  '.mjs',
-  '.cjs',
-] as const;
+const MODULE_SUFFIXES = 'ts tsx mts cts js jsx mjs cjs'
+  .split(' ')
+  .map((suffix) => `.${suffix}`);
 export const ACTION_SOURCE_SUFFIXES = ['', ...MODULE_SUFFIXES] as const;
 
 export function isRunnableConfiguration(path: string): boolean {
@@ -56,25 +44,21 @@ export function resolutionCandidates(
   ];
   return [
     ...new Set(
-      bases.flatMap((path) => {
-        const candidateRequest: ModuleCandidateRequest = {
-          exactFirst: request.exactFirst,
-          path,
-        };
-        return moduleCandidates(candidateRequest);
-      }),
+      bases.flatMap((path) => moduleCandidates([path, request.exactFirst])),
     ),
   ];
 }
 
-function moduleCandidates(request: ModuleCandidateRequest): readonly string[] {
-  const path = request.path;
+function moduleCandidates([path, exactFirst]: readonly [
+  string,
+  boolean,
+]): readonly string[] {
   if (posix.extname(path).length > 0) return [path];
   const resolved = [
     ...MODULE_SUFFIXES.map((suffix) => `${path}${suffix}`),
     ...MODULE_SUFFIXES.map((suffix) => posix.join(path, `index${suffix}`)),
   ];
-  return request.exactFirst ? [path, ...resolved] : [...resolved, path];
+  return exactFirst ? [path, ...resolved] : [...resolved, path];
 }
 
 export function specializePositionalArguments(
@@ -96,7 +80,10 @@ export function specializePositionalArguments(
   );
 }
 
-export function normalizeConfigurationShellSource(source: string): string {
+export function normalizeConfigurationShellSource([
+  source,
+  sourcePath,
+]: readonly [string, string]): string {
   if (
     source.includes('delim="AGENT_EOF_') &&
     !/(?:^|[;&|]\s*)(?:bash|bun|node|sh|source)\b/mu.test(source)
@@ -130,8 +117,19 @@ export function normalizeConfigurationShellSource(source: string): string {
       'repo_root=.',
     )
     .replace(
-      /\b([A-Za-z_]\w*)="\$\(cd "\$\(dirname "(?:\$0|\$\{BASH_SOURCE\[0\]\})"\)(?:\/\.\.)*" && pwd\)"/gu,
-      '$1=.',
+      /\b([A-Za-z_]\w*)="\$\(cd "\$\(dirname "(?:\$0|\$\{BASH_SOURCE\[0\]\})"\)((?:\/\.\.)*)" && pwd\)"/gu,
+      (assignment) => {
+        const match =
+          /^([A-Za-z_]\w*)="\$\(cd "\$\(dirname "(?:\$0|\$\{BASH_SOURCE\[0\]\})"\)((?:\/\.\.)*)" && pwd\)"$/u.exec(
+            assignment,
+          );
+        const name = match?.[1] ?? '';
+        const ascents = match?.[2] ?? '';
+        const levels =
+          ascents.length === 0 ? 0 : ascents.split('/..').length - 1;
+        const base = posix.dirname(sourcePath);
+        return `${name}=${posix.normalize(posix.join(base, ...Array(levels).fill('..')))}`;
+      },
     )
     .replace(
       /\b([A-Za-z_]\w*)="\$\(cd "\$[A-Za-z_]\w*(?:\/\.\.)+" && pwd\)"/gu,

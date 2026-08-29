@@ -11,7 +11,6 @@ import {
 } from './skill-provider-executable-script.ts';
 import {
   analyzeShellCommands,
-  type ShellLaunchArgument,
   type ShellScriptLaunch,
 } from './skill-provider-command-boundary.ts';
 import type { SkillProviderSourceInspection } from './skill-provider-type-context.ts';
@@ -44,6 +43,7 @@ import type {
   ActionTranspilerOptions,
   ApplicationConsumerEdge,
   ConfigurationReference,
+  ConfigurationReferenceRequest,
   GitHubActionDocument,
   PendingConfiguration,
   RepositoryPackageDocument,
@@ -152,7 +152,7 @@ export function configurationScriptPaths(
       importer,
       source,
     };
-    const configurationRequest: ConfigurationReferenceRequest = {
+    const configurationRequest = {
       inspection: referenceInspection,
       positionalArguments: next.positionalArguments,
     };
@@ -271,14 +271,7 @@ function isAuthorizedApplicationEdge(edge: ApplicationConsumerEdge): boolean {
   );
 }
 
-type ConfigurationReferenceRequest = {
-  readonly inspection: ConfigurationReferenceInspection;
-  readonly positionalArguments: readonly ShellLaunchArgument[] | false;
-};
-
-function configurationScriptReferences(
-  request: ConfigurationReferenceRequest,
-): readonly ConfigurationReference[] {
+function configurationScriptReferences(request: ConfigurationReferenceRequest) {
   const inspection = request.inspection;
   if (!EXECUTABLE_SOURCE_EXTENSION.test(inspection.importer)) {
     const runtimeSourceRequest = {
@@ -294,7 +287,10 @@ function configurationScriptReferences(
       (source): readonly ShellScriptLaunch[] => {
         const shellInspection = {
           positionalArguments: request.positionalArguments,
-          source: normalizeConfigurationShellSource(source),
+          source: normalizeConfigurationShellSource([
+            source,
+            inspection.importer,
+          ]),
           sourcePath: inspection.importer,
         };
         return analyzeShellCommands(shellInspection).launches;

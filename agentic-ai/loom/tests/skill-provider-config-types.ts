@@ -1,4 +1,5 @@
 import type { ShellLaunchArgument } from './skill-provider-command-types.ts';
+import type { ConfigurationReferenceInspection } from './skill-provider-executable-script.ts';
 
 export type ActionRuntimeGraph = {
   readonly roots: readonly string[];
@@ -30,6 +31,10 @@ export type ConfigurationReference = {
   readonly requiresExecuteMode: boolean;
   readonly specifier: string;
   readonly taskInclude: boolean;
+};
+export type ConfigurationReferenceRequest = {
+  readonly inspection: ConfigurationReferenceInspection;
+  readonly positionalArguments: readonly ShellLaunchArgument[] | false;
 };
 export type PendingConfiguration = {
   readonly depth: number;

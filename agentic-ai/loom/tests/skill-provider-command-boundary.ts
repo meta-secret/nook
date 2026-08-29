@@ -780,18 +780,15 @@ function analyzeShellRuntime(request: RuntimeCommandRequest): void {
     throw new Error('Shell process-substitution input is forbidden.');
   if (!executableIsStatic(executable)) return;
   if (commandString) {
-    const positionalArguments = request.state.positionalArguments;
-    request.state.positionalArguments = request.words.slice(index + 2);
+    const nestedState = isolatedShellState(request.state);
+    nestedState.positionalArguments = request.words.slice(index + 2);
     const nestedRequest: ShellCommandRequest = {
       depth: request.depth + 1,
       source: executable.value,
-      state: request.state,
+      state: nestedState,
     };
-    try {
-      analyzeCommandSource(nestedRequest);
-    } finally {
-      request.state.positionalArguments = positionalArguments;
-    }
+    analyzeCommandSource(nestedRequest);
+    request.state.commandCount = nestedState.commandCount;
     return;
   }
   const launch: RuntimeExecutable = {
