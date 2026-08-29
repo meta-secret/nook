@@ -381,6 +381,21 @@ export async function hasWorkingTreeChanges(
   return stdout.trim().length > 0;
 }
 
+async function pushAuthenticatedBranch(repoRoot: string): Promise<void> {
+  const token = process.env.NOOK_GITHUB_PAT?.trim();
+  const authEnv = token
+    ? {
+        ...process.env,
+        GIT_CONFIG_COUNT: "1",
+        GIT_CONFIG_KEY_0: "http.https://github.com/.extraheader",
+        GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`,
+      }
+    : process.env;
+  await execFileAsync("git", ["-C", repoRoot, "push", "-u", "origin", "HEAD"], {
+    env: authEnv,
+  });
+}
+
 export async function pushFixBranch(
   repoRoot: string,
   fixBranch: string,
@@ -409,18 +424,7 @@ export async function pushFixBranch(
     `Fix main CI failure (run ${runId}).`;
 
   await execFileAsync("git", ["-C", repoRoot, "commit", "-m", commitMessage]);
-  const token = process.env.NOOK_GITHUB_PAT?.trim();
-  const authEnv = token
-    ? {
-        ...process.env,
-        GIT_CONFIG_COUNT: "1",
-        GIT_CONFIG_KEY_0: "http.https://github.com/.extraheader",
-        GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`,
-      }
-    : process.env;
-  await execFileAsync("git", ["-C", repoRoot, "push", "-u", "origin", "HEAD"], {
-    env: authEnv,
-  });
+  await pushAuthenticatedBranch(repoRoot);
   log.info(`Pushed ${fixBranch}`);
 }
 

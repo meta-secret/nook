@@ -588,6 +588,21 @@ test('pins the isolated command environment to its exact function AST', async ()
   );
 });
 
+test('pins the authenticated Git push environment to its exact helper AST', async () => {
+  const path = 'agentic-ai/ci-agent/src/main/git.ts';
+  const sourcePath = resolve(import.meta.dir, '../../..', path);
+  const source = await Bun.file(sourcePath).text();
+  const inspection: TypeScriptSubprocessInspection = { path, source };
+  expect(() => typescriptSubprocessCommands(inspection)).not.toThrow();
+  const driftedInspection: TypeScriptSubprocessInspection = {
+    path,
+    source: source.replace('env: authEnv,', 'env: process.env,'),
+  };
+  expect(() => typescriptSubprocessCommands(driftedInspection)).toThrow(
+    'Dynamic TypeScript subprocess environment is forbidden in',
+  );
+});
+
 test('pins the sole dynamic package cwd exemption to its exact function AST', async () => {
   const path = 'agentic-ai/loom/src/executable-skills/package-gate.ts';
   const sourcePath = resolve(import.meta.dir, '../../..', path);

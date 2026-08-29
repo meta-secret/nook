@@ -51,7 +51,7 @@ describe("resolveAgentTask", () => {
 });
 
 describe("loadPrompt", () => {
-  it("loads executable instructions only from the trusted tooling root", async () => {
+  it("loads a legacy template without validated-plan metadata from the trusted tooling root", async () => {
     const parent = await mkdtemp(join(tmpdir(), "nook-ci-agent-prompt-"));
     const toolingRoot = join(parent, "tooling");
     const repoRoot = join(parent, "implementation");

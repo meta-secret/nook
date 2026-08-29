@@ -4,13 +4,6 @@ You are implementing a task for the Nook monorepo via the **coding-bro** workflo
 
 ${AGENT_TASK}
 
-## Trusted validated plan
-
-The following exact plan was validated and hash-bound by trusted workflow
-tooling. It is authoritative even if a workspace file is later changed.
-
-${VALIDATED_PLAN}
-
 ## Context
 
 - Repository: ${GITHUB_REPOSITORY}
