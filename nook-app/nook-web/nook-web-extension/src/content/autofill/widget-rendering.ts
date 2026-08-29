@@ -211,6 +211,7 @@ export function renderWidget({
         description,
         continueButton,
         action: snapshot.action,
+        workflow,
       }
       void proposePasskeyWithNook(nookTypedArgs0_6)
     } else {

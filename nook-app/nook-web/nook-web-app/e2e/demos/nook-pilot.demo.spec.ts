@@ -352,7 +352,7 @@ test('fill a Namecheap-like OTP challenge through Nook Pilot', async ({
   await demoBeat(page)
 })
 
-test('advance a localized email-first control through Nook Pilot', async ({
+test('classify contextual email-first facts through Nook Pilot', async ({
   page,
 }) => {
   const messages = await loadPilotMessages()

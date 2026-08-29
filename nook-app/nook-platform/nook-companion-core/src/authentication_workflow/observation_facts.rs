@@ -308,6 +308,41 @@ mod tests {
     }
 
     #[test]
+    fn later_safe_passkey_candidate_survives_an_inert_first_candidate() {
+        let candidate = |actionability, label: &str| AuthenticationAdvanceControlObservation {
+            actionability,
+            ownership: PageControlOwnership::LocallyScoped,
+            semantics: PageControlSemantics::Activation,
+            authentication_username: AuthenticationUsernameEvidence::Absent,
+            password_field_count: 0,
+            new_password_field_count: 0,
+            one_time_code_field_count: 0,
+            semantic_submit_control_count: 0,
+            source_origin: "https://example.test".to_owned(),
+            form_identity: "login".to_owned(),
+            destination_identity: "https://example.test/login".to_owned(),
+            label: label.to_owned(),
+        };
+        let facts = AuthenticationPageObservationFacts {
+            authenticator: AuthenticationAuthenticatorObservationFacts {
+                detailed_passkey_control:
+                    AuthenticationDetailedPasskeyControlObservation::Candidates(vec![
+                        AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(
+                            candidate(PageControlActionability::Inert, "Use passkey"),
+                        ),
+                        AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(
+                            candidate(PageControlActionability::Actionable, "Use passkey"),
+                        ),
+                    ]),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        assert!(facts.into_observation().passkey_control_present);
+    }
+
+    #[test]
     fn implicit_owned_form_submission_preserves_password_login() {
         let facts = AuthenticationPageObservationFacts {
             fields: AuthenticationFieldObservationFacts {
@@ -336,6 +371,28 @@ mod tests {
             AuthenticationWorkflowMatch::Matched(snapshot)
                 if snapshot.kind == AuthenticationWorkflowKind::Login
         ));
+    }
+
+    #[test]
+    fn localized_login_labels_are_positive_current_password_identity() {
+        for label in ["Anmelden", "Se connecter"] {
+            let mut facts = password_login();
+            if let AuthenticationDetailedAdvanceControlObservation::Observed(controls) =
+                &mut facts.detailed_advance_control
+            {
+                controls[0].form_identity.clear();
+                controls[0].destination_identity = "https://example.test/session".to_owned();
+                controls[0].label = label.to_owned();
+            }
+            assert!(matches!(
+                AuthenticationPageObservationFactsBatch {
+                    observations: vec![facts],
+                }
+                .classify(),
+                AuthenticationWorkflowMatch::Matched(snapshot)
+                    if snapshot.kind == AuthenticationWorkflowKind::Login
+            ));
+        }
     }
 
     #[test]
@@ -430,5 +487,38 @@ mod tests {
             AuthenticationPageObservationFactsBatch { observations }.classify(),
             AuthenticationWorkflowMatch::Rejected
         );
+    }
+
+    #[test]
+    fn otp_handler_candidates_are_classified_independently() {
+        let otp = AuthenticationPageObservationFacts {
+            fields: AuthenticationFieldObservationFacts {
+                one_time_code_field_count: 1,
+                ..Default::default()
+            },
+            ceremony: AuthenticationCeremonyObservationFacts {
+                one_time_code_handler_signals: vec![
+                    "onchange=validateCode()".to_owned(),
+                    "oninput=this.form.requestSubmit()".to_owned(),
+                ],
+                authentication_context: AuthenticationCeremonyContextObservation {
+                    authentication_username: AuthenticationUsernameEvidence::Absent,
+                    source_origin: "https://example.test".to_owned(),
+                    form_identity: "otp verification".to_owned(),
+                    destination_identity: "https://example.test/login/verify".to_owned(),
+                },
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        assert!(matches!(
+            AuthenticationPageObservationFactsBatch {
+                observations: vec![otp],
+            }
+            .classify(),
+            AuthenticationWorkflowMatch::Matched(snapshot)
+                if snapshot.kind == AuthenticationWorkflowKind::TotpChallenge
+        ));
     }
 }

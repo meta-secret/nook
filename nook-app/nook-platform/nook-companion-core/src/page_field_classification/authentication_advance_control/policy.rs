@@ -54,6 +54,7 @@ pub(super) fn has_unconditional_veto_identity(
             primary_oauth_login,
         )
 }
+
 pub(super) fn has_semantic_submit_ceremony(
     observation: &AuthenticationAdvanceControlObservation,
     authentication_scope_owns_control: bool,

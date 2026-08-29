@@ -1,6 +1,9 @@
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import { AuthenticationWorkflowSnapshotResponseKind } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-import { summarizeAuthenticationWorkflowForms } from '../../../nook-web-shared/src/extension/password-forms'
+import {
+  authenticationPageObservationFacts,
+  summarizeAuthenticationWorkflowForms,
+} from '../../../nook-web-shared/src/extension/password-forms'
 import { isRuntimeNookVaultAppUrl } from '../lib/simple-vault-runtime'
 import {
   AuthenticationWorkflowSnapshotMessageType,
@@ -99,18 +102,16 @@ async function scanAndRender(): Promise<void> {
     type: AuthenticationWorkflowSnapshotMessageType.NookAuthenticationWorkflowSnapshot,
     payload: {
       origin: location.origin,
-      observations: workflowForms.map(({ summary }) => ({
-        usernameFieldCount: summary.usernameFieldCount,
-        currentPasswordFieldCount: summary.currentPasswordFieldCount,
-        newPasswordFieldCount: summary.newPasswordFieldCount,
-        genericPasswordFieldCount: summary.genericPasswordFieldCount,
-        oneTimeCodeFieldCount: summary.oneTimeCodeFieldCount,
-        manualCheckpointPresent: summary.manualCheckpointPresent,
-        authenticatorSetupHint: detectEnrollmentHints().qr,
-        backupCodesHint: detectEnrollmentHints().backupCodes,
-        passkeyControlPresent: summary.passkeyControlPresent,
-        matchingPasskeyAccountCount: 0,
-      })),
+      observations: workflowForms.map((observation) => {
+        const factsRequest: Parameters<
+          typeof authenticationPageObservationFacts
+        >[0] = {
+          observation,
+          authenticatorSetupHint: enrollmentHints.qr,
+          backupCodesHint: enrollmentHints.backupCodes,
+        }
+        return authenticationPageObservationFacts(factsRequest)
+      }),
     },
   }
   const delivery =

@@ -6,7 +6,7 @@ import type { PasswordFormObservation } from '../../../../nook-web-shared/src/ex
 import {
   fillGeneratedPassword,
   fillLoginCredentials,
-  findPasskeyControl,
+  findWorkflowPasskeyControl,
   PasskeyControlLookupKind,
   PasswordFormQueryKind,
   submitLoginForm,
@@ -513,12 +513,14 @@ type ProposePasskeyWithNookArgs = {
   description: HTMLParagraphElement
   continueButton: HTMLButtonElement
   action: PasskeyWidgetAction
+  workflow: PasswordFormObservation
 }
 
 export async function proposePasskeyWithNook({
   description,
   continueButton,
   action,
+  workflow,
 }: ProposePasskeyWithNookArgs): Promise<void> {
   if (widgetState.busy) return
   widgetState.busy = true
@@ -535,7 +537,7 @@ export async function proposePasskeyWithNook({
   }
   setStatus(nookTypedArgs0_28)
   try {
-    const control = findPasskeyControl(document)
+    const control = findWorkflowPasskeyControl(workflow)
     if (control.kind === PasskeyControlLookupKind.Absent) {
       const nookTypedArgs0_29: Parameters<typeof setStatus>[0] = {
         description,
