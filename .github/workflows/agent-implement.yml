@@ -178,6 +178,44 @@ jobs:
                 core.setFailed(`${path} stack_branch must have exactly one same-repository open PR`)
                 return
               }
+              let nativeStacks
+              try {
+                nativeStacks = await github.paginate('GET /repos/{owner}/{repo}/stacks', {
+                  ...context.repo,
+                  per_page: 100,
+                  headers: { accept: 'application/vnd.github.nebula-preview+json' },
+                })
+              } catch {
+                core.setFailed(`${path} GitHub native stack membership is unavailable`)
+                return
+              }
+              const nativeStackMatches = nativeStacks.map((nativeStack) => {
+                const members = Array.isArray(nativeStack.pull_requests) ? nativeStack.pull_requests : []
+                return {
+                  members,
+                  nativeStack,
+                  successorIndex: members.findIndex((member) => member.number === stackPull.number),
+                }
+              }).filter(({ successorIndex }) => successorIndex >= 0)
+              if (
+                nativeStackMatches.length !== 1 ||
+                nativeStackMatches[0].nativeStack.open !== true ||
+                nativeStackMatches[0].nativeStack.base?.ref !== 'main'
+              ) {
+                core.setFailed(`${path} stack_branch must belong to exactly one open GitHub native stack based on main`)
+                return
+              }
+              const { members, successorIndex } = nativeStackMatches[0]
+              const nativeSuccessor = members[successorIndex]
+              const nativePredecessor = members[successorIndex - 1]
+              if (
+                successorIndex <= 0 ||
+                nativeSuccessor.head?.ref !== stackBranch ||
+                nativePredecessor?.head?.ref !== stackPredecessorBranch
+              ) {
+                core.setFailed(`${path} stack_branch must immediately follow stack_predecessor_branch in its GitHub native stack`)
+                return
+              }
               if (stackPull.base.ref === stackPredecessorBranch) {
                 try {
                   await github.rest.repos.getBranch({ ...context.repo, branch: stackPredecessorBranch })
@@ -187,6 +225,71 @@ jobs:
                 }
                 core.setOutput('stack_live_base_branch', stackPredecessorBranch)
               } else if (stackPull.base.ref === 'main') {
+                let predecessorPull
+                let mainBranch
+                try {
+                  const predecessorResponse = await github.rest.pulls.get({
+                    ...context.repo,
+                    pull_number: nativePredecessor.number,
+                  })
+                  const mainResponse = await github.rest.repos.getBranch({
+                    ...context.repo,
+                    branch: 'main',
+                  })
+                  predecessorPull = predecessorResponse.data
+                  mainBranch = mainResponse.data
+                } catch {
+                  core.setFailed(`${path} predecessor merge verification is unavailable`)
+                  return
+                }
+                if (
+                  nativePredecessor.state !== 'closed' || !nativePredecessor.merged_at ||
+                  predecessorPull.merged !== true || !predecessorPull.merged_at ||
+                  predecessorPull.base.ref !== 'main' || !predecessorPull.merge_commit_sha
+                ) {
+                  core.setFailed(`${path} cannot target main before its native-stack predecessor is merged`)
+                  return
+                }
+                let mergeCommit
+                let predecessorHeadCommit
+                let mergeToMain
+                let mainToSuccessor
+                try {
+                  const responses = await Promise.all([
+                    github.rest.repos.getCommit({ ...context.repo, ref: predecessorPull.merge_commit_sha }),
+                    github.rest.repos.getCommit({ ...context.repo, ref: predecessorPull.head.sha }),
+                    github.rest.repos.compareCommitsWithBasehead({
+                      ...context.repo,
+                      basehead: `${predecessorPull.merge_commit_sha}...${mainBranch.commit.sha}`,
+                    }),
+                    github.rest.repos.compareCommitsWithBasehead({
+                      ...context.repo,
+                      basehead: `${mainBranch.commit.sha}...${stackPull.head.sha}`,
+                    }),
+                  ])
+                  mergeCommit = responses[0].data
+                  predecessorHeadCommit = responses[1].data
+                  mergeToMain = responses[2].data
+                  mainToSuccessor = responses[3].data
+                } catch {
+                  core.setFailed(`${path} predecessor squash and main-frontier verification is unavailable`)
+                  return
+                }
+                const mergeIsOnMain = mergeToMain.behind_by === 0 && ['ahead', 'identical'].includes(mergeToMain.status)
+                const squashShape =
+                  predecessorPull.merge_commit_sha !== predecessorPull.head.sha &&
+                  mergeCommit.parents.length === 1 &&
+                  mergeCommit.parents[0]?.sha === predecessorPull.base.sha &&
+                  mergeCommit.commit.tree.sha === predecessorHeadCommit.commit.tree.sha
+                if (!squashShape || !mergeIsOnMain) {
+                  core.setFailed(`${path} native-stack predecessor must be squash-merged into main`)
+                  return
+                }
+                const containsMain = mainToSuccessor.behind_by === 0 && ['ahead', 'identical'].includes(mainToSuccessor.status)
+                if (!containsMain) {
+                  core.setFailed(`${path} retargeted successor must contain the current main frontier`)
+                  return
+                }
                 core.setOutput('stack_live_base_branch', 'main')
               } else {
                 core.setFailed(`${path} successor PR must target its recorded predecessor or main`)

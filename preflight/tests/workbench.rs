@@ -55,7 +55,18 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "must provide both stack_branch and stack_predecessor_branch",
         "stack_branch must exist in the Nook repository",
         "stack_branch must have exactly one same-repository open PR",
+        "GET /repos/{owner}/{repo}/stacks",
+        "application/vnd.github.nebula-preview+json",
+        "GitHub native stack membership is unavailable",
+        "must belong to exactly one open GitHub native stack based on main",
+        "successorIndex <= 0",
+        "must immediately follow stack_predecessor_branch in its GitHub native stack",
         "recorded predecessor must exist while it remains the live PR base",
+        "cannot target main before its native-stack predecessor is merged",
+        "mergeCommit.parents[0]?.sha === predecessorPull.base.sha",
+        "mergeCommit.commit.tree.sha === predecessorHeadCommit.commit.tree.sha",
+        "native-stack predecessor must be squash-merged into main",
+        "retargeted successor must contain the current main frontier",
         "successor PR must target its recorded predecessor or main",
         "ISSUE_STACK_BRANCH: ${{ steps.workbench.outputs.stack_branch }}",
         "ISSUE_STACK_LIVE_BASE_BRANCH: ${{ steps.workbench.outputs.stack_live_base_branch }}",
@@ -119,6 +130,34 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
             "Workbench agent workflow is missing: {required}"
         );
     }
+    let accepts_stack_claim = |native: bool,
+                               adjacent: bool,
+                               retargeted: bool,
+                               merged: bool,
+                               squash: bool,
+                               current_main: bool| {
+        native && adjacent && (!retargeted || (merged && squash && current_main))
+    };
+    assert!(
+        !accepts_stack_claim(false, true, false, false, false, false),
+        "an informal PR chain must not pass as a native stack"
+    );
+    assert!(
+        !accepts_stack_claim(true, false, false, false, false, false),
+        "a non-adjacent native-stack predecessor must be rejected"
+    );
+    assert!(
+        !accepts_stack_claim(true, true, true, false, false, false),
+        "retargeting to main before predecessor merge must be rejected"
+    );
+    assert!(
+        !accepts_stack_claim(true, true, true, true, true, false),
+        "a successor behind the current main frontier must be rejected"
+    );
+    assert!(
+        accepts_stack_claim(true, true, true, true, true, true),
+        "a current successor after predecessor squash merge must remain claimable"
+    );
     assert!(
         workflow
             .matches("ASSIGNED_GIZMO_ID: ${{ steps.workbench.outputs.gizmo_id }}")
