@@ -25,6 +25,25 @@ use crate::website_passkey_proposal::{WebsitePasskeyProposal, propose_website_pa
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum AuthenticationApprovalRequirement {
+    ExplicitUserApproval,
+    TakeoverRequired,
+}
+
+impl AuthenticationApprovalRequirement {
+    #[must_use]
+    pub const fn for_action(action: AuthenticationWorkflowAction) -> Self {
+        if matches!(action, AuthenticationWorkflowAction::TakeOver) {
+            Self::TakeoverRequired
+        } else {
+            Self::ExplicitUserApproval
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
@@ -76,7 +95,7 @@ pub struct AuthenticationWorkflowSnapshot {
     pub action: AuthenticationWorkflowAction,
     pub current_step: u8,
     pub total_steps: u8,
-    pub requires_human_approval: bool,
+    pub approval_requirement: AuthenticationApprovalRequirement,
     pub observation_index: u32,
 }
 
@@ -130,9 +149,26 @@ impl AuthenticationWorkflowSnapshot {
             action,
             current_step,
             total_steps,
-            requires_human_approval: true,
+            approval_requirement: AuthenticationApprovalRequirement::for_action(action),
             observation_index: 0,
         }
+    }
+
+    #[must_use]
+    pub const fn approval_requirement_matches_action(self) -> bool {
+        matches!(
+            (
+                self.approval_requirement,
+                AuthenticationApprovalRequirement::for_action(self.action)
+            ),
+            (
+                AuthenticationApprovalRequirement::ExplicitUserApproval,
+                AuthenticationApprovalRequirement::ExplicitUserApproval,
+            ) | (
+                AuthenticationApprovalRequirement::TakeoverRequired,
+                AuthenticationApprovalRequirement::TakeoverRequired,
+            )
+        )
     }
 }
 
@@ -198,10 +234,14 @@ const fn apply_passkey_proposal(
         WebsitePasskeyProposal::None => snapshot,
         WebsitePasskeyProposal::UsePasskey { .. } => {
             snapshot.action = AuthenticationWorkflowAction::UsePasskey;
+            snapshot.approval_requirement =
+                AuthenticationApprovalRequirement::for_action(snapshot.action);
             snapshot
         }
         WebsitePasskeyProposal::CreatePasskey => {
             snapshot.action = AuthenticationWorkflowAction::CreatePasskey;
+            snapshot.approval_requirement =
+                AuthenticationApprovalRequirement::for_action(snapshot.action);
             snapshot
         }
     }
@@ -368,7 +408,10 @@ mod tests {
         assert_eq!(login.kind, AuthenticationWorkflowKind::Login);
         assert_eq!(login.action, AuthenticationWorkflowAction::ContinueWithNook);
         assert_eq!((login.current_step, login.total_steps), (1, 3));
-        assert!(login.requires_human_approval);
+        assert_eq!(
+            login.approval_requirement,
+            AuthenticationApprovalRequirement::ExplicitUserApproval
+        );
 
         let password_login = AuthenticationPageObservation {
             current_password_field_count: 1,
@@ -435,6 +478,10 @@ mod tests {
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Signup);
         assert_eq!(snapshot.stage, AuthenticationWorkflowStage::Manual);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::TakeOver);
+        assert_eq!(
+            snapshot.approval_requirement,
+            AuthenticationApprovalRequirement::TakeoverRequired
+        );
         Ok(())
     }
 
@@ -614,7 +661,10 @@ mod tests {
         let snapshot = classify_authentication_workflow(login).snapshot()?;
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Login);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::UsePasskey);
-        assert!(snapshot.requires_human_approval);
+        assert_eq!(
+            snapshot.approval_requirement,
+            AuthenticationApprovalRequirement::ExplicitUserApproval
+        );
         Ok(())
     }
 

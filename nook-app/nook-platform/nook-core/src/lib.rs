@@ -136,9 +136,10 @@ pub use nook_auth2::{
     MockPasskeyUserAuthorization, StoredMockPasskey,
 };
 pub use nook_companion_core::{
-    AuthenticationOutcomeDecision, AuthenticationOutcomeObservation, AuthenticationOutcomeVerdict,
-    AuthenticationPageObservation, AuthenticationPageObservations, AuthenticationWorkflowAction,
-    AuthenticationWorkflowKind, AuthenticationWorkflowMatch, AuthenticationWorkflowSnapshot,
+    AuthenticationApprovalRequirement, AuthenticationOutcomeDecision,
+    AuthenticationOutcomeObservation, AuthenticationOutcomeVerdict, AuthenticationPageObservation,
+    AuthenticationPageObservations, AuthenticationWorkflowAction, AuthenticationWorkflowKind,
+    AuthenticationWorkflowMatch, AuthenticationWorkflowSnapshot,
     AuthenticationWorkflowSnapshotError, AuthenticationWorkflowStage, BrowserOAuthProvider,
     DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS, DEFAULT_SIMPLE_VAULT_URL, LoginContextObservation,
     MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
