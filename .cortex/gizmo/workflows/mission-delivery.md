@@ -8,14 +8,14 @@ Gizmo Prime is the single existing root Gizmo mission owner and owns integrated
 and external delivery state. The active harness alone owns worker-attempt
 lifecycle. Gizmo Prime never implements the feature or a resulting fix.
 
-For one feature or PR, Gizmo Prime creates one named feature-slice Gizmo by
-default. That controller owns one semantic PR slice, coordinates its Team
-Agents, and returns a typed handoff to Gizmo Prime. Additional feature-slice
-Gizmos exist only for a semantic split when the feature is expected to exceed
-or actually grows beyond 2,000 authored additions plus deletions, or for
-genuinely independent delivery units. Team Agent count never determines PR
-count. A feature-slice Gizmo cannot create Gizmos or worker attempts and owns no
-process lifecycle or delivery state.
+For one feature or PR, Gizmo Prime creates one named immutable feature-slice
+Gizmo record in the Workbench plan by default. The record groups one semantic
+PR slice by stable ID and name, scope, predecessor, estimate, acceptance
+evidence, and ownership-unit mappings. It is not a process, agent, worker
+attempt, or controller. Additional records exist only for a semantic split when
+the feature is expected to exceed or actually grows beyond 2,000 authored
+additions plus deletions, or for genuinely independent delivery units. Team
+Agent count never determines PR count.
 
 ## Required authorities
 
@@ -63,14 +63,15 @@ process lifecycle or delivery state.
      and exact frontier data.
    - Validate the computed batch, select and admission-authorize ready task
      records, freeze their exact starting frontiers, and supply their contracts
-     to the active harness.
+     to the active harness with the assigned Gizmo ID in plan/task context.
 4. **Accept implementation handoffs.**
    - Wait for each required dependency or terminal barrier.
    - Verify each commit against its baseline and write scope.
    - Verify the team's focused tests and Cortex evidence.
    - Reject incomplete or out-of-scope handoffs.
-   - Require each feature-slice Gizmo to return its typed slice handoff to Gizmo
-     Prime; slice controllers never mutate the overall feature DAG.
+   - Receive each Team Agent's existing typed handoff directly. Do not add a
+     slice-process transport or intermediate agent.
+   - Aggregate each verified handoff under its assigned passive Gizmo record.
 5. **Integrate accepted commits.**
    - Integrate in deterministic dependency order.
    - Bind each downstream task to the exact integrated commit.

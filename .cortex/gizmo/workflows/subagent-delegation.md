@@ -113,17 +113,18 @@ The active harness may coordinate subagents on Gizmo Prime's behalf.
 
 ### Adaptive cardinality
 
-- Gizmo Prime creates one named feature-slice Gizmo by default for one semantic
-  PR slice.
-- It creates additional feature-slice Gizmos only when the feature is expected
+- Gizmo Prime creates one named immutable feature-slice Gizmo Workbench record
+  by default for one semantic PR slice.
+- It records additional feature-slice Gizmos only when the feature is expected
   to exceed or actually grows beyond 2,000 authored additions plus deletions
   and needs semantic PR slices, or for genuinely independent delivery units.
 - Team Agent count never determines this cardinality.
-- A feature-slice Gizmo coordinates Team Agent contracts and accepted results
-  for exactly one PR slice and returns a typed handoff to Gizmo Prime.
-- It is not a team identity or worker-attempt lifecycle owner, cannot create
-  another Gizmo, and cannot mutate the overall feature DAG, integrated Git,
-  GitHub stack, retargeting, readiness, merge, or Workbench state.
+- A feature-slice Gizmo record groups Team Agent contracts and accepted results
+  for exactly one PR slice. It is not a process, agent, worker attempt,
+  controller, or team identity and performs no coordination or handoff.
+- Gizmo Prime routes task contracts by their assigned Gizmo ID, receives Team
+  Agent handoffs directly, and aggregates verified results under the record.
+  Only the existing harness operates the admission-authorized attempts.
 
 This rule preserves
 [agent feature ownership](../dynamic-skills/agent-feature-ownership.md).
@@ -469,11 +470,12 @@ The plan declares a task-specific hierarchy depth bound.
 The frozen worker graph records parent lineage and bounded authority for every
 worker-executable team or provider task.
 Those fields support validation and result aggregation; they do not authorize
-an active worker to create another worker. A feature-slice Gizmo may identify
-the Team Agent work its slice requires, but only Gizmo Prime may add a newly
-discovered dependency through a replacement immutable generation, and only the
-harness may create its attempt after Gizmo Prime admission-authorizes it and
-freezes its frontier following old-generation disposition.
+an active worker to create another worker. The assigned Gizmo ID in plan and
+task context binds Team Agent work to its passive slice record, but only Gizmo
+Prime may add a newly discovered dependency through a replacement immutable
+generation, and only the harness may create its attempt after Gizmo Prime
+admission-authorizes it and freezes its frontier following old-generation
+disposition.
 `ModuleExpertEvidence`, Markdown, and `parentActions` are recommendations.
 They do not authorize worker creation or lifecycle mutations.
 

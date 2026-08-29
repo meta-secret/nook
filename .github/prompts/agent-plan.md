@@ -110,7 +110,7 @@ require an ordered native GitHub Stacked Pull Request sequence. Use `None` when
 no public or cross-module interface changes.
 
 Set `Mission controller` to exactly `Gizmo Prime`. Give every feature-slice
-Gizmo a stable lowercase-hyphenated ID and a unique human-readable name. Set
+Gizmo record a stable lowercase-hyphenated ID and a unique human-readable name. Set
 `Current Gizmo ID` to the first/current PR slice's Gizmo ID. List every PR slice
 on its own consecutively numbered line as
 `<number>. Gizmo ID: <id>; Gizmo name: <name>; Predecessor Gizmo ID: <id-or-None>; <scope>; Estimated authored changed lines: <positive integer>; Acceptance evidence: <observable proof>`.
@@ -129,15 +129,17 @@ every declared Gizmo needs at least one unit. Do not add parent, child, nested,
 or child-Gizmo fields.
 
 Gizmo Prime is the repository's single existing root Gizmo mission owner, not
-an engineering team. It creates one named feature-slice Gizmo by default for
-one feature and PR. Each feature-slice Gizmo owns exactly one semantic PR slice,
-coordinates the Team Agents for that slice without creating them, and returns a
-typed handoff to Gizmo Prime. Gizmo Prime creates additional slice Gizmos only
-for a semantic split above 2,000 authored changed lines or genuinely independent
+an engineering team. It creates one named feature-slice Gizmo record by default
+for one feature and PR. Each feature-slice Gizmo is an immutable typed Workbench
+slice record, not a process, agent, worker attempt, or controller. It groups
+exactly one semantic PR slice. Gizmo Prime creates additional records only for
+a semantic split above 2,000 authored changed lines or genuinely independent
 delivery units. Team Agent count never determines PR or Gizmo count, and small
 features must not be fragmented merely because multiple teams participate.
-Feature-slice Gizmos cannot create Gizmos and own no process lifecycle, GitHub,
-readiness, merge, or Workbench authority.
+Gizmo Prime admission-authorizes Team Agent task attempts through the existing
+harness, routes tasks by assigned Gizmo ID, receives existing typed handoffs
+directly, and aggregates verified results under each record. Do not introduce a
+slice-process handoff transport or intermediate agent.
 
 Add one consecutively numbered `Ownership units` row per capability. Set its
 `Gizmo ID` to a declared PR-slice Gizmo. Set each

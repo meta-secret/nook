@@ -455,6 +455,59 @@ fn team_work_distinguishes_owner_vocabulary_from_implementation_expertise() -> a
 }
 
 #[test]
+fn feature_slice_gizmos_are_passive_workbench_records() {
+    let policy_paths = [
+        ".cortex/AGENTS.md",
+        ".cortex/knowledge-graph.md",
+        ".cortex/gizmo/AGENTS.md",
+        ".cortex/gizmo/workflows/issues.md",
+        ".cortex/gizmo/workflows/mission-delivery.md",
+        ".cortex/gizmo/workflows/pull-requests.md",
+        ".cortex/gizmo/workflows/subagent-delegation.md",
+        ".cortex/teams/ai/workflows/monorepo.md",
+        ".github/prompts/agent-plan.md",
+    ];
+    let policy = policy_paths
+        .iter()
+        .map(|path| read(path))
+        .collect::<Vec<_>>()
+        .join("\n")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let normalized = policy.to_lowercase();
+
+    for required in [
+        "immutable typed Workbench slice record, not a process, agent, worker attempt, or controller",
+        "routes tasks by assigned Gizmo ID",
+        "receives existing typed handoffs directly",
+        "existing typed handoff directly to Gizmo Prime",
+        "introduces no new handoff transport",
+    ] {
+        assert!(
+            policy.contains(required),
+            "feature-slice record policy is missing: {required}"
+        );
+    }
+
+    for forbidden in [
+        "feature-slice gizmo coordinates",
+        "slice gizmo coordinates",
+        "coordinates its required team agents",
+        "returns a typed slice handoff",
+        "return its typed slice handoff",
+        "return the ai team agent handoff to the assigned feature-slice gizmo",
+        "non-team slice controller",
+        "that controller owns",
+    ] {
+        assert!(
+            !normalized.contains(forbidden),
+            "feature-slice Gizmo must remain a passive record: {forbidden}"
+        );
+    }
+}
+
+#[test]
 fn substantial_agent_tasks_use_curated_session_memory() -> anyhow::Result<()> {
     let gitignore = read(".gitignore");
     let agent_map = read(".cortex/AGENTS.md");

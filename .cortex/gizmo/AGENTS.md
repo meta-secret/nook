@@ -13,9 +13,10 @@ they explicitly name a feature-slice Gizmo.
 ## Adaptive feature-slice Gizmos
 
 For implementation delivery, Gizmo Prime creates one named feature-slice Gizmo
-by default. Each feature-slice Gizmo owns exactly one semantic PR slice,
-coordinates its required Team Agents, and returns a typed slice handoff to
-Gizmo Prime.
+record by default in the Workbench plan. This is an immutable typed Workbench
+slice record, not a process, agent, worker attempt, or controller. It groups one
+semantic PR slice by stable ID and name, scope, predecessor, estimate,
+acceptance evidence, and ownership-unit mappings.
 
 - One feature or PR at or below 2,000 authored additions plus deletions uses one
   feature-slice Gizmo by default, regardless of Team Agent count.
@@ -24,9 +25,10 @@ Gizmo Prime.
   beyond 2,000 authored changed lines, or when delivery units are genuinely
   independent.
 - Team Agent count never determines PR count or feature-slice Gizmo count.
-- A feature-slice Gizmo cannot create another Gizmo. It has no worker-attempt or
-  process-lifecycle authority and no integrated Git, GitHub, readiness, merge,
-  or Workbench authority.
+- Gizmo Prime admission-authorizes Team Agent task attempts through the
+  existing harness, routes each task by its assigned Gizmo ID, receives Team
+  Agent handoffs directly through existing contracts, and aggregates verified
+  results under the matching record. The record performs no work.
 - Gizmo Prime alone owns the overall feature DAG, the native GitHub stack,
   retargeting, exact-head readiness, merge, and Workbench lifecycle. The active
   harness alone creates and operates authorized Team Agent attempts.

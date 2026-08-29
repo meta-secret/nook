@@ -14,9 +14,9 @@ coordination, Workbench, pull requests, readiness, and merge state.
 
 - [Gizmo Prime](gizmo/knowledge-graph.md) owns delivery control and the final
   integrated PR verdict.
-- Feature-slice Gizmos are non-team controllers created by Gizmo Prime. Each
-  coordinates Team Agents for exactly one semantic PR slice and returns a typed
-  handoff; it does not own worker lifecycle or delivery state.
+- Feature-slice Gizmos are immutable typed Workbench slice records created and
+  updated by Gizmo Prime. Each groups exactly one semantic PR slice; it is not
+  a process, agent, worker attempt, or controller and owns no lifecycle state.
 
 ## Team routes
 

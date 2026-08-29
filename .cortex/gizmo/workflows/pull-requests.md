@@ -196,17 +196,18 @@ Sequence rules:
   stacked base to `main`, update it from current `origin/main`, re-measure its
   authored additions plus deletions, and validate the new exact head.
 - Continue until the complete Workbench outcome is merged.
-- Gizmo Prime owns the complete declared sequence and creates exactly one named
-  feature-slice Gizmo for each semantic PR slice. Each slice Gizmo coordinates
-  its Team Agents and returns a typed handoff; it owns no GitHub or Workbench
-  lifecycle state and cannot create another Gizmo.
+- Gizmo Prime owns the complete declared sequence and records exactly one named
+  immutable feature-slice Gizmo Workbench record for each semantic PR slice.
+  Gizmo Prime coordinates Team Agent work, receives existing handoffs directly,
+  and aggregates verified results under the matching record. A slice record is
+  not a process or controller and owns no lifecycle state.
 - Scope reduction without a linked preservation PR is a P1 delivery failure.
 
 ### Adaptive Gizmo cardinality
 
 - One feature at or below 2,000 authored additions plus deletions defaults to
   one PR and one feature-slice Gizmo.
-- Gizmo Prime creates additional feature-slice Gizmos only for a required
+- Gizmo Prime records additional feature-slice Gizmos only for a required
   semantic size split above 2,000 or for genuinely independent delivery units.
 - Team Agent count never determines PR or Gizmo count. Do not fragment a small
   feature merely because multiple teams or agents contribute to it.

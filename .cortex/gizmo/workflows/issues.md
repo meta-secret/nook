@@ -48,9 +48,10 @@ sequence. The second may use ordinary independent PRs from `main` when the
 slices do not depend on unmerged predecessor work; stacking is not required for
 every small PR.
 
-Gizmo Prime creates one named feature-slice Gizmo per semantic PR slice and
-owns the complete feature sequence. Team Agent count never determines slice,
-PR, or Gizmo count; a small feature is not split merely because multiple teams
+Gizmo Prime records one named immutable feature-slice Gizmo Workbench record
+per semantic PR slice and owns the complete feature sequence. The record is not
+a running agent or controller. Team Agent count never determines slice, PR, or
+Gizmo count; a small feature is not split merely because multiple teams
 contribute.
 
 The feature `README.md` must record:
