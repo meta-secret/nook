@@ -5,7 +5,7 @@
 Prevent avoidable PR Verify failures from formatting lag and missing UI demo
 contract updates without turning local pre-push into a product build.
 
-This is the **only required local product work**.
+This is the **only required local source mutation**.
 
 Every other gate runs on GitHub Actions.
 
@@ -66,6 +66,8 @@ and [loom-tools.md](../../ai/references/loom-tools.md).
 - The formatter image context contains no product source.
 - `task format` must not invoke BuildKit product graphs, compilation, tests, or
   remote cache reads or writes.
+- The local Rust/WASM policy contract test must keep `task format` outside every
+  guarded product-build path and prove it with fixture-only formatter tests.
 - Never use `task extension:format` as the only format step before push.
 
 ### UI demo contract paths

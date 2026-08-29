@@ -272,6 +272,8 @@ tasks:
     internal: true
     # Mounted for Vite hot-reload. The on-demand browser/Rust image contains both toolchains;
     # node_modules is an anonymous volume and Bun installs current dependencies before startup.
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" docker:web:dev
     cmds:
       - >-
         {{.DOCKER}} run --rm
@@ -281,6 +283,7 @@ tasks:
         -e REPO_ROOT=/meta-secret/nook
         -e GIT_COMMIT_ID="{{.GIT_COMMIT_ID}}"
         -e WASM_BUILD_MODE="{{.WASM_BUILD_MODE}}"
+        -e CI=1
         -e VITE_BASE="{{.VITE_BASE}}"
         -e NOOK_LOCAL_HTTPS=1
         -e NOOK_LOCAL_HTTPS_CERT_PATH={{.LOCAL_HTTPS_CONTAINER_DIR}}/localhost.pem
@@ -296,6 +299,8 @@ tasks:
   docker:web:dev:fast:
     internal: true
     # Fast mounted dev path: same as docker:web:dev, but skips wasm-opt during the initial wasm build.
+    preconditions:
+      - sh: bash "{{.REPO_ROOT}}/.github/scripts/local-rust-policy.sh" docker:web:dev:fast
     cmds:
       - >-
         {{.DOCKER}} run --rm
@@ -305,6 +310,7 @@ tasks:
         -e REPO_ROOT=/meta-secret/nook
         -e GIT_COMMIT_ID="{{.GIT_COMMIT_ID}}"
         -e WASM_BUILD_MODE=dev
+        -e CI=1
         -e VITE_BASE="{{.VITE_BASE}}"
         -e NOOK_LOCAL_HTTPS=1
         -e NOOK_LOCAL_HTTPS_CERT_PATH={{.LOCAL_HTTPS_CONTAINER_DIR}}/localhost.pem
