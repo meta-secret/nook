@@ -130,10 +130,11 @@ test("validation isolates secrets, preserves wrapper vars, and denies network ov
             environment.NOOK_VALIDATION_DOCKER,
           );
           assert.equal(env.SCCACHE_OPTIONAL, "1");
-          if (args[0] === "hive:verify") assert.equal(env.NOOK_ARC_HIVE, "1");
+          assert.equal(env.NOOK_ARC_HIVE, "1");
+          assert.equal(env.BUILDX_BUILDER, builder);
         },
       );
-      assert.deepEqual(names, ["docker:ecosystem:fuzz", "hive:verify"]);
+      assert.deepEqual(names, ["docker:ecosystem:fuzz"]);
     });
     assert.equal(
       await readFile(log, "utf8"),

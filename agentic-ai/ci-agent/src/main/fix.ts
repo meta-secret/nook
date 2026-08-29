@@ -122,7 +122,6 @@ export const RUST_DEPENDENCY_UPDATE_VALIDATION_COMMANDS: readonly ValidationComm
       args: ["docker:ecosystem:fuzz", "FUZZ_SECONDS=20"],
       environment: {},
     },
-    { args: ["hive:verify"], environment: {} },
   ];
 
 type ValidationRunner = (
@@ -143,27 +142,24 @@ export const runValidationCommand: ValidationRunner = async (
   process.chdir(options.cwd);
   restoreHostEnvironment(options.env, process.env);
   try {
-    const wait = (fuzz: boolean) =>
-      new Promise<void>((resolveRun, rejectRun) => {
-        const child = fuzz
-          ? spawn("task", ["docker:ecosystem:fuzz", "FUZZ_SECONDS=20"], {
-              stdio: "inherit",
-            })
-          : spawn("task", ["hive:verify"], { stdio: "inherit" });
-        child.once("error", rejectRun);
-        child.once("close", (code, signal) => {
-          if (code === 0 && !signal) resolveRun();
-          else rejectRun(new Error("Isolated validation command failed"));
-        });
-      });
-    if (args[0] === "hive:verify" && args.length === 1) await wait(false);
-    else if (
-      args[0] === "docker:ecosystem:fuzz" &&
-      args[1] === "FUZZ_SECONDS=20" &&
-      args.length === 2
+    if (
+      args[0] !== "docker:ecosystem:fuzz" ||
+      args[1] !== "FUZZ_SECONDS=20" ||
+      args.length !== 2
     )
-      await wait(true);
-    else throw new Error("Isolated validation command is not allowlisted");
+      throw new Error("Isolated validation command is not allowlisted");
+    await new Promise<void>((resolveRun, rejectRun) => {
+      const child = spawn(
+        "task",
+        ["docker:ecosystem:fuzz", "FUZZ_SECONDS=20"],
+        { stdio: "inherit" },
+      );
+      child.once("error", rejectRun);
+      child.once("close", (code, signal) => {
+        if (code === 0 && !signal) resolveRun();
+        else rejectRun(new Error("Isolated validation command failed"));
+      });
+    });
   } finally {
     restoreHostEnvironment(hostEnvironment, process.env);
     process.chdir(cwd);
@@ -619,6 +615,7 @@ export async function withValidationEnvironment<T>(
         NOOK_VALIDATION_DOCKER: dockerHost,
         PATH: `${bin}:${base.PATH || ""}`,
         SCCACHE_OPTIONAL: "1",
+        ...(builder ? { BUILDX_BUILDER: builder } : {}),
       },
       environment,
     );
