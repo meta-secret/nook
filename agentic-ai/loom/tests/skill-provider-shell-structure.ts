@@ -147,7 +147,26 @@ function heredocLine(source: string): HeredocLine {
 
 function compoundSubstitutions(source: string): readonly string[] {
   const substitutions: string[] = [];
+  let quote = '';
   for (let index = 0; index < source.length; index += 1) {
+    const character = source[index] ?? '';
+    if (quote) {
+      if (character === '\\' && quote === '"') {
+        index += 1;
+        continue;
+      }
+      if (character === quote) {
+        quote = '';
+        continue;
+      }
+      if (quote !== '"' || !source.startsWith('$((', index)) continue;
+    } else if (character === '"' || character === "'") {
+      quote = character;
+      continue;
+    } else if (character === '\\') {
+      index += 1;
+      continue;
+    }
     if (
       !['[[', '((', '$(('].some((opening) => source.startsWith(opening, index))
     )

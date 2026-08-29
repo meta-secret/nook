@@ -129,4 +129,7 @@ test('closes the exact-head shell review batch', () => {
     };
     expect(isAuditedSource(sourceRequest), seam.sourcePath).toBeTrue();
   }
+  expect(() =>
+    inspectShell('env TOKEN="${DYNAMIC}" true; sed -E "s/\\x1b\\[[0-9;]*m//g"'),
+  ).not.toThrow();
 });

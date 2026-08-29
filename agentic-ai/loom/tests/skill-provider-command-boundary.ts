@@ -608,6 +608,18 @@ function consumeEnvPrefix(request: EnvPrefixRequest): number {
   let index = request.start;
   let options = true;
   while (index < request.words.length) {
+    const assignmentRequest: WordEnvironmentRequest = {
+      word: request.words[index] as ShellWord,
+      environment: request.environment,
+    };
+    const assignment = assignmentWord(assignmentRequest);
+    if (assignment !== false) {
+      if (assignment.name === 'PATH')
+        throw new Error('env PATH mutation is forbidden.');
+      request.environment.set(assignment.name, assignment.value);
+      index += 1;
+      continue;
+    }
     let wordRequest: WordEnvironmentRequest = {
       word: request.words[index] as ShellWord,
       environment: request.environment,
@@ -643,16 +655,7 @@ function consumeEnvPrefix(request: EnvPrefixRequest): number {
     }
     if (options && word.value.startsWith('-'))
       throw new Error(`Unsupported env option: ${word.value}`);
-    const assignmentRequest: WordEnvironmentRequest = {
-      word,
-      environment: request.environment,
-    };
-    const assignment = assignmentWord(assignmentRequest);
-    if (assignment === false) break;
-    if (assignment.name === 'PATH')
-      throw new Error('env PATH mutation is forbidden.');
-    request.environment.set(assignment.name, assignment.value);
-    index += 1;
+    break;
   }
   return index;
 }
