@@ -528,7 +528,8 @@ pub fn has_safe_credential_update_route_identity(
     {
         return false;
     }
-    if form_identity::destination_has_disallowed_action_or_provider(form_identity, true, false)
+    if form_identity::form_identity_indicates_destructive_action(form_identity)
+        || form_identity::destination_has_disallowed_action_or_provider(form_identity, true, false)
         || control_identity::looks_like_auxiliary_authentication_control_label(form_identity)
     {
         return false;
@@ -538,11 +539,13 @@ pub fn has_safe_credential_update_route_identity(
     else {
         return false;
     };
-    if form_identity::destination_has_disallowed_action_or_provider(
-        &destination.route_identity,
-        true,
-        false,
-    ) {
+    if form_identity::form_identity_indicates_destructive_action(&destination.route_identity)
+        || form_identity::destination_has_disallowed_action_or_provider(
+            &destination.route_identity,
+            true,
+            false,
+        )
+    {
         return false;
     }
     let credential_update_route =

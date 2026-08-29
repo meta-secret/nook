@@ -405,6 +405,36 @@ mod tests {
     }
 
     #[test]
+    fn implicit_credential_creation_rejects_destructive_register_destinations() {
+        let facts = AuthenticationPageObservationFacts {
+            fields: AuthenticationFieldObservationFacts {
+                username_field_count: 1,
+                new_password_field_count: 1,
+                ..Default::default()
+            },
+            ceremony: AuthenticationCeremonyObservationFacts {
+                authentication_context: AuthenticationCeremonyContextObservation {
+                    authentication_username: AuthenticationUsernameEvidence::Strong,
+                    source_origin: "https://example.test".to_owned(),
+                    form_identity: "signup-form".to_owned(),
+                    destination_identity: "https://example.test/account/delete/register".to_owned(),
+                },
+                advance_control: AuthenticationAdvanceControlEvidence::ImplicitSubmission,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        assert!(!matches!(
+            AuthenticationPageObservationFactsBatch {
+                observations: vec![facts],
+            }
+            .classify(),
+            AuthenticationWorkflowMatch::Matched(_)
+        ));
+    }
+
+    #[test]
     fn localized_login_labels_are_positive_current_password_identity() {
         for label in ["Anmelden", "Se connecter"] {
             let mut facts = password_login();

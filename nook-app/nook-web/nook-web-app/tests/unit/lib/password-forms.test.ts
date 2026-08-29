@@ -323,6 +323,63 @@ describe('website one-time-code fields', () => {
     })
   })
 
+  test('transports a locally adjacent form-less passkey alternative with a credential form', () => {
+    document.body.innerHTML = `
+      <div class="login-panel">
+        <form id="login" action="/login">
+          <input autocomplete="username" />
+          <input type="password" autocomplete="current-password" />
+          <button type="submit">Sign in</button>
+        </form>
+        <button type="button">Sign in with a passkey</button>
+      </div>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
+      kind: 'candidates',
+      observation: [
+        {
+          kind: 'labeled',
+          observation: {
+            ownership: 'locally-scoped',
+            label: expect.stringContaining('passkey'),
+          },
+        },
+      ],
+    })
+  })
+
+  test('counts only actionable semantic submitters for Rust ambiguity', () => {
+    document.body.innerHTML = `
+      <form aria-label="Login" action="/auth/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Proceed</button>
+        <button type="submit" disabled>Cancel</button>
+      </form>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: expect.arrayContaining([
+        expect.objectContaining({
+          label: expect.stringContaining('Proceed'),
+          semanticSubmitControlCount: 1,
+        }),
+      ]),
+    })
+  })
+
   test('transports an external form-associated passkey control with owned-form scope', () => {
     document.body.innerHTML = `
       <form id="login" action="/login">

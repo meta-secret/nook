@@ -256,6 +256,28 @@ function scopedControlRoot({
     : root;
 }
 
+function isLocallyAdjacentToOwnedForm(
+  control: HTMLElement,
+  owner: HTMLFormElement,
+): boolean {
+  const panel = owner.parentElement;
+  if (
+    !panel ||
+    panel === owner.ownerDocument.body ||
+    panel === owner.ownerDocument.documentElement
+  ) {
+    return false;
+  }
+  if (
+    (control instanceof HTMLButtonElement ||
+      control instanceof HTMLInputElement) &&
+    control.form
+  ) {
+    return false;
+  }
+  return panel.contains(control);
+}
+
 function controlAssociatesWithObservation({
   control,
   formScope,
@@ -270,9 +292,15 @@ function controlAssociatesWithObservation({
       control instanceof HTMLButtonElement ||
       control instanceof HTMLInputElement
     ) {
-      return control.form === formScope.owner;
+      return (
+        control.form === formScope.owner ||
+        isLocallyAdjacentToOwnedForm(control, formScope.owner)
+      );
     }
-    return formScope.owner.contains(control);
+    return (
+      formScope.owner.contains(control) ||
+      isLocallyAdjacentToOwnedForm(control, formScope.owner)
+    );
   }
   if (
     control instanceof HTMLButtonElement ||
@@ -393,7 +421,11 @@ function pageControlObservation({
   explicitlyLocallyScoped = false,
 }: PageControlObservationRequest): AuthenticationAdvanceControlObservation {
   const semanticSubmitControls = scopedAdvanceControls(observation).filter(
-    (candidate) => candidate.matches(semanticSubmitControlSelector),
+    (candidate) =>
+      candidate.matches(semanticSubmitControlSelector) &&
+      !(candidate as HTMLButtonElement | HTMLInputElement).disabled &&
+      candidate.getAttribute("aria-disabled") !== "true" &&
+      isRenderedControl(candidate),
   );
   const semanticSubmit = control.matches(semanticSubmitControlSelector);
   const owned =
@@ -452,8 +484,10 @@ export function findWorkflowPasskeyControl(
         control,
         authenticationUsername,
         explicitlyLocallyScoped:
-          observation.root === document &&
-          observation.formScope.kind === PasswordFormScopeKind.Unowned,
+          (observation.root === document &&
+            observation.formScope.kind === PasswordFormScopeKind.Unowned) ||
+          (observation.formScope.kind === PasswordFormScopeKind.Owned &&
+            isLocallyAdjacentToOwnedForm(control, observation.formScope.owner)),
       };
       const evidence: AuthenticationDetailedPasskeyControlCandidateObservation =
         {
@@ -522,8 +556,10 @@ export function authenticationPageObservationFacts({
           control,
           authenticationUsername,
           explicitlyLocallyScoped:
-            observation.root === document &&
-            observation.formScope.kind === PasswordFormScopeKind.Unowned,
+            (observation.root === document &&
+              observation.formScope.kind === PasswordFormScopeKind.Unowned) ||
+            (observation.formScope.kind === PasswordFormScopeKind.Owned &&
+              isLocallyAdjacentToOwnedForm(control, observation.formScope.owner)),
         };
         return {
           kind: explicitlyMarked ? "explicitly-marked" : "labeled",
