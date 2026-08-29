@@ -31,6 +31,10 @@ fn identity_names_external_authentication_provider(
 pub(super) fn label_names_external_authentication_provider(identity: &str) -> bool {
     identity_names_external_authentication_provider(identity, true)
 }
+
+pub(super) fn identity_names_registered_external_authentication_provider(identity: &str) -> bool {
+    identity_names_external_authentication_provider(identity, false)
+}
 pub(super) fn route_names_external_authentication_provider(identity: &str) -> bool {
     let route = expand_identity_text(identity.split(['?', '#']).next().unwrap_or_default());
     let fragment = expand_identity_text(identity.split_once('#').map_or("", |(_, value)| value));
@@ -57,8 +61,10 @@ pub(super) fn route_names_external_authentication_provider(identity: &str) -> bo
         let tails = &segments[index + 1..];
         identity_indicates_explicit_login_route(segment)
             && (!segments[..index].iter().all(|prefix| {
-                matches!(prefix.as_str(), "auth" | "authentication" | "common")
-                    || is_version(prefix)
+                matches!(
+                    prefix.as_str(),
+                    "auth" | "authentication" | "common" | "users"
+                ) || is_version(prefix)
             }) || !(tails.is_empty() || matches!(tails, [tail] if is_local_tail(tail))))
     });
     identity_names_external_authentication_provider(identity, false)
@@ -126,6 +132,24 @@ pub(super) fn looks_like_auxiliary_authentication_control_label(label: &str) -> 
                 "visible",
             ],
         )
+}
+pub(super) fn looks_like_explicit_authentication_advance_control_label(label: &str) -> bool {
+    contains_any_word(
+        &expand_identity_text(label),
+        &["signin", "sign-in", "sign in", "login", "log-in", "log in"],
+    )
+}
+pub(super) fn looks_like_one_time_code_resend_control_label(label: &str) -> bool {
+    contains_any_word(
+        &expand_identity_text(label),
+        &[
+            "resend",
+            "send again",
+            "request new code",
+            "send new code",
+            "another code",
+        ],
+    )
 }
 pub(super) fn looks_like_password_recovery_route_control_label(label: &str) -> bool {
     let identity = expand_identity_text(label);
