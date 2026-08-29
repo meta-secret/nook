@@ -869,19 +869,19 @@ test('follows scripts launched from every runnable configuration surface', () =>
     ],
     [
       '.github/workflows/audit.yml',
-      'jobs:\n  audit:\n    steps:\n      - run: bun scripts/facade.ts',
+      'jobs:\n  audit:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bun scripts/facade.ts',
     ],
     [
       '.github/workflows/audit.yml',
-      `jobs:\n  audit:\n    steps:\n      - run: bun ${LOOM_ARTICLE_ADAPTER}`,
+      `jobs:\n  audit:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bun ${LOOM_ARTICLE_ADAPTER}`,
     ],
     [
       '.github/actions/audit/action.yml',
-      'runs:\n  using: composite\n  steps:\n    - run: bun scripts/facade.ts',
+      'runs:\n  using: composite\n  steps:\n    - run: bun scripts/facade.ts\n      shell: bash',
     ],
     [
       '.github/actions/audit/action.yml',
-      `runs:\n  using: composite\n  steps:\n    - run: bun ${LOOM_ARTICLE_ADAPTER}`,
+      `runs:\n  using: composite\n  steps:\n    - run: bun ${LOOM_ARTICLE_ADAPTER}\n      shell: bash`,
     ],
   ] as const) {
     const sources = new Map<string, string>([

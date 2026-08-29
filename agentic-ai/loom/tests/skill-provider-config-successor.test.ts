@@ -354,7 +354,7 @@ test('workflow env precedence is propagated into run analysis', () => {
   const sources = new Map([
     [
       workflow,
-      `env: {ROOT: safe}\njobs: {audit: {env: {ROOT: ${PROVIDER_ROOT}}, steps: [{env: {UNUSED: value}, run: 'bun "$ROOT/cli.ts"'}]}}`,
+      `env: {ROOT: safe}\njobs: {audit: {runs-on: ubuntu-latest, env: {ROOT: ${PROVIDER_ROOT}}, steps: [{env: {UNUSED: value}, run: 'bun "$ROOT/cli.ts"'}]}}`,
     ],
     [PROVIDER_CLI, 'export {};'],
   ]);
