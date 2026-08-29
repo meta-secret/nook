@@ -52,18 +52,23 @@ Does not apply to:
 
 ## Application procedure
 
-1. Run `task extension:check:fast` as focused security proof.
-2. Deterministically format every allowed Cortex or source file changed by the
-   security task, and keep the resulting diff inside the assigned write scope.
+1. Security defines the invariants and focused acceptance evidence. A Web
+   worker owns browser-control implementation, while an SRE worker owns release
+   workflow and deployment implementation. Each functional worker formats and
+   commits its allowed implementation files; Security does not commit foreign
+   implementation.
+2. Run `task extension:check:fast` as focused security proof.
 3. Verify channel origin and extension identity together.
 4. Verify injection exclusions for every vault boundary.
 5. Verify archive and redirect safety before activation.
 6. Keep profiles isolated by channel and PR.
-7. Commit the coherent formatted change and return the exact commit plus
-   focused evidence to Gizmo.
-8. Gizmo integrates the handoff and runs `task loom:pre-push` on the combined
-   head. If formatting changes security-owned content, Gizmo returns that exact
-   diff to Security for a fresh formatted commit instead of committing it.
+7. Security reviews the exact functional-owner handoff and focused proof,
+   formats and commits only its allowed security-owned Cortex changes, and
+   returns its acceptance verdict to Gizmo.
+8. Gizmo integrates the accepted handoffs and runs `task loom:pre-push` on the
+   combined head. If formatting changes security-owned content, Gizmo returns
+   that exact diff to Security for a fresh formatted commit instead of
+   committing it.
 9. After reintegration and a clean `task loom:pre-push`, Gizmo pushes promptly
    and immediately obtains remote evidence: at least one relevant focused
    remote task for a non-validation-ready head, or complete exact-head
