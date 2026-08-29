@@ -20,12 +20,17 @@ export type DispatchResult = {
 };
 
 const WRAPPERS = new Set(
-  'builtin command exec nohup sudo time xargs'.split(' '),
+  'builtin command exec nice nohup sudo time timeout xargs'.split(' '),
 );
 const SUDO_BOOLEAN = new Set('-n -E -H -S -k -K -v --'.split(' '));
 const SUDO_VALUE = new Set('-u -g -h -p -C -T'.split(' '));
 const XARGS_BOOLEAN = new Set('-0 --null -r --no-run-if-empty --'.split(' '));
 const XARGS_VALUE = new Set('-I -n -P -s -a -E'.split(' '));
+const NICE_VALUE = new Set('-n --adjustment'.split(' '));
+const TIMEOUT_BOOLEAN = new Set(
+  '--foreground --preserve-status --verbose --'.split(' '),
+);
+const TIMEOUT_VALUE = new Set('-k --kill-after -s --signal'.split(' '));
 const MAX_DISPATCH_DEPTH = 32;
 
 export function isDispatchWrapper(command: string): boolean {
@@ -66,7 +71,9 @@ export function resolveDispatchCommand(
         else if (option.value === '-a') index = consumeValue([request, index]);
         else throw new Error(`Unsupported exec option: ${option.value}`);
       }
-    } else if (wrapper === 'nohup') {
+    } else if (wrapper === 'nice')
+      index = consumeOptions([request, index, new Set(), NICE_VALUE, wrapper]);
+    else if (wrapper === 'nohup') {
       const option = resolveAt([request, index]);
       if (option !== false && option.value === '--') index += 1;
       else if (
@@ -80,6 +87,18 @@ export function resolveDispatchCommand(
       if (option !== false && (option.value === '-p' || option.value === '--'))
         index += 1;
       else assertNoOption([option, wrapper]);
+    } else if (wrapper === 'timeout') {
+      index = consumeOptions([
+        request,
+        index,
+        TIMEOUT_BOOLEAN,
+        TIMEOUT_VALUE,
+        wrapper,
+      ]);
+      const duration = resolveAt([request, index]);
+      if (!duration || duration.dynamic)
+        throw new Error('Missing or dynamic timeout duration.');
+      index += 1;
     } else if (wrapper === 'sudo')
       index = consumeOptions([
         request,

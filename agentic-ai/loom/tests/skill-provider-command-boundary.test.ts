@@ -3,6 +3,11 @@ import {
   analyzeShellCommands,
   type ShellCommandInspection,
 } from './skill-provider-command-boundary.ts';
+import {
+  AUDITED_SOURCE_SEAMS,
+  isAuditedSource,
+  type AuditedSourceRequest,
+} from './skill-provider-sourced-seams.ts';
 
 const PROTECTED =
   '.cortex/teams/ai/dynamic-skills/example-skill/scripts/src/cli.ts';
@@ -99,4 +104,29 @@ test('accepts bounded static shell structures', () => {
     'while read -r value; do echo "$value"; done < <(printf ok)',
   ])
     expect(() => inspectProtected(source), source).not.toThrow();
+});
+
+test('closes the exact-head shell review batch', () => {
+  for (const source of [
+    `ROOT=${PROTECTED_ROOT}; env ROOT=scripts true; bun "$ROOT/cli.ts"`,
+    `ROOT=${PROTECTED_ROOT}; ROOT=scripts | cat; bun "$ROOT/cli.ts"`,
+    `node --require ${PROTECTED} scripts/safe.js`,
+    `/usr/bin/node ${PROTECTED}`,
+    `printf '%s' 'bun ${PROTECTED}' | bash`,
+    `>/tmp/output bun ${PROTECTED}`,
+    `if ! bun ${PROTECTED}; then true; fi`,
+    `bun .cortex/teams/ai/dynamic-{skills,other}/example-skill/scripts/src/cli.ts`,
+    `timeout 10 bun ${PROTECTED}`,
+    `nice -n 5 bun ${PROTECTED}`,
+    `bun test ${PROTECTED}`,
+    `cd -P ${PROTECTED_ROOT}; bun cli.ts`,
+  ])
+    expect(() => inspectProtected(source), source).toThrow();
+  for (const seam of AUDITED_SOURCE_SEAMS) {
+    const sourceRequest: AuditedSourceRequest = {
+      source: seam.specifier,
+      sourcePath: seam.sourcePath,
+    };
+    expect(isAuditedSource(sourceRequest), seam.sourcePath).toBeTrue();
+  }
 });

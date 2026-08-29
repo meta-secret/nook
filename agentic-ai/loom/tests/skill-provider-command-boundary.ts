@@ -27,6 +27,11 @@ import {
   type AuditedSourceRequest,
 } from './skill-provider-sourced-seams.ts';
 import {
+  cdOperandIndex,
+  normalizedRuntime,
+  withoutLeadingRedirections,
+} from './skill-provider-shell-command.ts';
+import {
   ShellSeparator,
   type EnvPrefixRequest,
   type LaunchRequest,
@@ -82,6 +87,11 @@ const BUN_SUBCOMMANDS = new Set(
 const NODE_BOOLEAN_OPTIONS = new Set('--check --test --version -v'.split(' '));
 const NODE_VALUE_OPTIONS = new Set(
   '--conditions --require --import --loader --experimental-loader --env-file --input-type -e --eval --print -p'.split(
+    ' ',
+  ),
+);
+const EXECUTABLE_RUNTIME_OPTIONS = new Set(
+  '--preload --require --import --loader --experimental-loader --eval -e --print -p'.split(
     ' ',
   ),
 );
@@ -157,6 +167,7 @@ function analyzeCommandSource(request: ShellCommandRequest): void {
   const tokens = tokenizeShell(structure.source);
   let command: ShellWord[] = [];
   let conditionalEnvironment: Map<string, ShellWord> | false = false;
+  let pipelineEnvironment: Map<string, ShellWord> | false = false;
   for (const token of [...tokens, ShellSeparator.Newline]) {
     if (request.state.casePattern) {
       if (
@@ -175,6 +186,14 @@ function analyzeCommandSource(request: ShellCommandRequest): void {
       continue;
     }
     if (command.length > 0) {
+      if (
+        pipelineEnvironment !== false &&
+        command.length === 1 &&
+        ['bash', 'sh'].includes(normalizedRuntime(command[0]?.value ?? ''))
+      )
+        throw new Error('Shell pipeline input is forbidden.');
+      if (token === ShellSeparator.Pipe && pipelineEnvironment === false)
+        pipelineEnvironment = new Map(request.state.environment);
       request.state.commandCount += 1;
       if (request.state.commandCount > MAX_SHELL_COMMANDS)
         throw new Error('Shell command count exceeds its bound.');
@@ -190,6 +209,12 @@ function analyzeCommandSource(request: ShellCommandRequest): void {
       };
       analyzeCommand(commandRequest);
       command = [];
+      if (pipelineEnvironment !== false) {
+        request.state.environment.clear();
+        for (const [name, value] of pipelineEnvironment)
+          request.state.environment.set(name, value);
+        if (token !== ShellSeparator.Pipe) pipelineEnvironment = false;
+      }
     }
     if (conditionalEnvironment !== false) {
       request.state.environment.clear();
@@ -206,7 +231,7 @@ function analyzeCommandSource(request: ShellCommandRequest): void {
 }
 
 function analyzeCommand(request: RuntimeCommandRequest): void {
-  const words = [...request.words];
+  const words = [...withoutLeadingRedirections(request.words)];
   for (const word of words)
     for (const source of shellSubstitutionBodies(word.source))
       analyzeSubstitution([request, source]);
@@ -266,7 +291,7 @@ function analyzeResolvedCommand(resolved: ResolvedCommandRequest): void {
     environment: request.state.environment,
   };
   let command = resolveWord(wordRequest);
-  if (
+  while (
     ['if', 'then', 'else', 'while', 'until', 'do', '!'].includes(command.value)
   ) {
     index += 1;
@@ -348,12 +373,13 @@ function analyzeResolvedCommand(resolved: ResolvedCommandRequest): void {
     return;
   }
   if (command.value === 'cd') {
+    const operandIndex = cdOperandIndex([words, index + 1]);
+    if (operandIndex === false) return;
     wordRequest = {
-      word: words[index + 1] as ShellWord,
+      word: words[operandIndex] as ShellWord,
       environment: request.state.environment,
     };
-    const directory = words[index + 1] ? resolveWord(wordRequest) : false;
-    if (directory === false) return;
+    const directory = resolveWord(wordRequest);
     if (SCRIPT_DIRECTORY_EXPRESSION.test(directory.value)) return;
     if (directory.dynamic) {
       request.state.cwd = '';
@@ -394,6 +420,7 @@ function analyzeResolvedCommand(resolved: ResolvedCommandRequest): void {
     );
   }
   index += 1;
+  command = { ...command, value: normalizedRuntime(command.value) };
   if (command.value === 'eval') {
     analyzeEval([request, words, index]);
     return;
@@ -421,11 +448,14 @@ function analyzeResolvedCommand(resolved: ResolvedCommandRequest): void {
   )
     throw new Error('Unbound shell positional delegation is forbidden.');
   let normalized = false;
+  const outerDispatchEnvironment = request.state.environment;
+  let dispatchEnvironment = outerDispatchEnvironment;
   for (let step = 0; step < MAX_COMMAND_NORMALIZATIONS; step += 1) {
     if (isDispatchWrapper(command.value)) {
+      dispatchEnvironment = new Map(dispatchEnvironment);
       const dispatchRequest: DispatchRequest = {
         command,
-        environment: request.state.environment,
+        environment: dispatchEnvironment,
         index,
         words,
       };
@@ -435,22 +465,23 @@ function analyzeResolvedCommand(resolved: ResolvedCommandRequest): void {
       continue;
     }
     if (command.value === 'env') {
+      dispatchEnvironment = new Map(dispatchEnvironment);
       const envRequest: EnvPrefixRequest = {
         words,
         start: index,
-        environment: request.state.environment,
+        environment: dispatchEnvironment,
       };
       index = consumeEnvPrefix(envRequest);
       if (index === words.length) return;
       wordRequest = {
         word: words[index] as ShellWord,
-        environment: request.state.environment,
+        environment: dispatchEnvironment,
       };
       command = resolveWord(wordRequest);
       if (command.dynamic) {
         const argumentsRequest: WordsEnvironmentRequest = {
           words: words.slice(index + 1),
-          environment: request.state.environment,
+          environment: dispatchEnvironment,
         };
         if (argumentsContainProtectedPath(argumentsRequest))
           throw new Error(
@@ -473,6 +504,10 @@ function analyzeResolvedCommand(resolved: ResolvedCommandRequest): void {
     const normalizedRequest: RuntimeCommandRequest = {
       ...request,
       depth: request.depth + 1,
+      state:
+        dispatchEnvironment === outerDispatchEnvironment
+          ? request.state
+          : { ...request.state, environment: dispatchEnvironment },
       words: [command, ...words.slice(index)],
     };
     analyzeCommand(normalizedRequest);
@@ -481,6 +516,10 @@ function analyzeResolvedCommand(resolved: ResolvedCommandRequest): void {
   const commandRequest: RuntimeCommandRequest = {
     ...request,
     runtime: command.value,
+    state:
+      dispatchEnvironment === outerDispatchEnvironment
+        ? request.state
+        : { ...request.state, environment: dispatchEnvironment },
     words: words.slice(index).map((word) => {
       const resolutionRequest: WordEnvironmentRequest = {
         word,
@@ -628,13 +667,12 @@ function analyzeRuntime(request: RuntimeCommandRequest): void {
         request.runtime === 'bun' ? BUN_VALUE_OPTIONS : NODE_VALUE_OPTIONS,
       words: request.words,
     };
-    const executable = runtimeExecutable(executableRequest);
-    if (executable === false) return;
-    const launchRequest: LaunchRequest = {
-      launch: executable,
-      state: request.state,
-    };
-    addLaunch(launchRequest);
+    const executables = runtimeExecutable(executableRequest);
+    if (executables === false) return;
+    for (const launch of executables) {
+      const launchRequest: LaunchRequest = { launch, state: request.state };
+      addLaunch(launchRequest);
+    }
     return;
   }
   if (request.runtime === 'task' || request.runtime === 'go-task') {
@@ -766,7 +804,7 @@ function analyzeShellRuntime(request: RuntimeCommandRequest): void {
 
 function runtimeExecutable(
   request: RuntimeExecutableRequest,
-): RuntimeExecutable | false {
+): readonly RuntimeExecutable[] | false {
   let index = 0;
   let terminated = false;
   while (index < request.words.length) {
@@ -789,6 +827,10 @@ function runtimeExecutable(
       return false;
     }
     const option = word.value.split('=')[0] ?? '';
+    if (EXECUTABLE_RUNTIME_OPTIONS.has(option))
+      throw new Error(
+        `Executable ${request.runtime} runtime option is forbidden.`,
+      );
     if (request.booleanOptions.has(word.value)) {
       index += 1;
       continue;
@@ -840,18 +882,25 @@ function runtimeExecutable(
     const taskName = request.words[index + 1];
     if (!taskName) return false;
     if (!executableIsStatic(taskName)) return false;
+    if (executable.value === 'test')
+      return request.words
+        .slice(index + 1)
+        .filter((word) => !word.value.startsWith('-'))
+        .filter((word) => looksLikeRepositoryScript(word.value))
+        .map((word) => ({ executable: word, arguments: [] }));
     if (executable.value === 'run' && looksLikeRepositoryScript(taskName.value))
-      return {
-        executable: taskName,
-        arguments: request.words.slice(index + 2),
-      };
+      return [
+        { executable: taskName, arguments: request.words.slice(index + 2) },
+      ];
     return false;
   }
-  return { executable, arguments: request.words.slice(index + 1) };
+  return [{ executable, arguments: request.words.slice(index + 1) }];
 }
 
 function executableIsStatic(word: ShellWord): boolean {
   if (/^'[\s\S]*'$/u.test(word.source)) return true;
+  if (!/^['"]/u.test(word.source) && /[{}]/u.test(word.value))
+    throw new Error('Shell brace expansion in an executable is forbidden.');
   if (!word.dynamic) return true;
   if (
     PROTECTED_SKILL_PATH.test(word.value) ||

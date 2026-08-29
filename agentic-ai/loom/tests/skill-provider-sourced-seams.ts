@@ -31,7 +31,7 @@ export const AUDITED_SOURCE_SEAMS: readonly AuditedSourceSeam[] = [
     targetPath: 'agentic-ai/minds/hive/prepare-sccache-context.sh',
   },
   {
-    digest: '4ee74cfabd7a09da4f084af07a7927223c7874db31665e09bd39c830ca2eb09b',
+    digest: '920eda984b215b325800af8e56f6af3ebf699a93f0aec0cb52b41792b16edfe9',
     marker: '$SCRIPT_DIR/hosted-extension.sh',
     sourcePath:
       'nook-app/nook-web/nook-web-extension/scripts/hosted-extension.test.sh',
@@ -49,7 +49,7 @@ export const AUDITED_SOURCE_SEAMS: readonly AuditedSourceSeam[] = [
       'nook-app/nook-web/nook-web-extension/scripts/setup-brave-vault.sh',
   },
   {
-    digest: '4ee74cfabd7a09da4f084af07a7927223c7874db31665e09bd39c830ca2eb09b',
+    digest: '920eda984b215b325800af8e56f6af3ebf699a93f0aec0cb52b41792b16edfe9',
     marker: '$HOSTED_INSTALLER',
     sourcePath:
       'nook-app/nook-web/nook-web-extension/scripts/setup-brave-vault.sh',
@@ -73,6 +73,18 @@ export function isAuditedSource(request: AuditedSourceRequest): boolean {
   return AUDITED_SOURCE_SEAMS.some(
     (seam) =>
       seam.sourcePath === request.sourcePath &&
-      (seam.specifier === specifier || seam.marker === specifier),
+      (seam.specifier === specifier || seam.marker === specifier) &&
+      seamDigestMatches(seam),
   );
 }
+
+function seamDigestMatches(seam: AuditedSourceSeam): boolean {
+  if (seam.digest === false || seam.targetPath === false) return true;
+  const source = readFileSync(
+    resolve(import.meta.dir, '../../..', seam.targetPath),
+  );
+  return createHash('sha256').update(source).digest('hex') === seam.digest;
+}
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
