@@ -22,7 +22,6 @@ import {
   parseRepository,
 } from "./github.js";
 import {
-  authenticatedGit,
   configureGitForCi,
   hasWorkingTreeChanges,
   pushFixBranch,
@@ -743,7 +742,14 @@ export async function runCiFix(): Promise<CiFixOutcome> {
   if (openPr.kind === OpenPrLookupKind.Found) {
     prNumber = openPr.number;
     if (profile === CiAgentFixProfile.RustDependencyUpdate) {
-      await authenticatedGit(repoRoot, [
+      const token = process.env.NOOK_GITHUB_PAT?.trim();
+      await gitOutput(repoRoot, [
+        ...(token
+          ? [
+              "-c",
+              `http.https://github.com/.extraheader=AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`,
+            ]
+          : []),
         "fetch",
         "--depth=1",
         "origin",
