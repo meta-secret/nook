@@ -409,7 +409,6 @@ test('advance a localized email-first control through Nook Pilot', async ({
       <body>
         <main>
           <h1>Iniciar sesión</h1>
-          <p class="intro">Usa tu cuenta para continuar.</p>
           <form id="loginForm">
             <input
               type="email"
@@ -426,12 +425,9 @@ test('advance a localized email-first control through Nook Pilot', async ({
     </html>`)
   await page.evaluate(installDemoChromeStub, loginPilotStubArgs(messages))
   await page.evaluate(() => {
-    document
-      .querySelector('#loginForm')
-      ?.addEventListener('submit', (event) => {
-        event.preventDefault()
-      })
-    document.querySelector('#login-next')?.addEventListener('click', () => {
+    const loginNext = document.getElementById('login-next')
+    loginNext?.addEventListener('click', (event) => {
+      event.preventDefault()
       const status = document.querySelector('[data-testid="advance-status"]')
       if (status) status.textContent = 'Email-first login advanced'
     })
