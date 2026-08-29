@@ -33,8 +33,12 @@ For every submitted annotation, the agent must:
 3. implement every in-scope fix instead of stopping at diagnosis;
 4. add or update behavior-focused tests that fail on the reported regression;
    and
-5. commit, push, open or update the PR, and complete the repository's normal
-   validation workflow.
+5. commit one coherent exact handoff with the focused test and browser evidence
+   needed for Gizmo to verify and integrate it; and
+6. leave push, PR, and external lifecycle state to Gizmo. Gizmo runs
+   `task loom:pre-push` on the integrated head, pushes promptly, and owns any
+   useful focused hosted build/e2e iteration plus complete exact-head
+   validation, readiness, and merge.
 
 The agent may stop without a code fix only when:
 

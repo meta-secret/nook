@@ -95,9 +95,12 @@ Does not apply to:
 - `rg "new Set\\(\\['" agentic-ai nook-app` should find no authored field
   allow-lists
 - `rg "type Result<|type Maybe<" agentic-ai` should find none
-- `task preflight:typescript-state`
-- Loom: `bun run verify` in `agentic-ai/loom`
-- `task loom:pre-push` before push
+- The web worker runs the affected package's focused typecheck and behavior
+  tests, commits one coherent exact handoff, and returns that evidence without
+  pushing.
+- Gizmo integrates the handoff, runs `task loom:pre-push` on the integrated
+  head, commits and pushes promptly, then owns any useful focused hosted build
+  and the complete exact-head validation, readiness, and merge lifecycle.
 
 For Loom's one-parameter function rule, see
 [typescript-single-parameter.md](typescript-single-parameter.md).
