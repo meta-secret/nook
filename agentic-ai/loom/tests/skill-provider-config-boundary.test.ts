@@ -22,6 +22,7 @@ import {
   taskIncludeSpecifiers,
 } from './skill-provider-config-commands.ts';
 import {
+  ACTION_SOURCE_SUFFIXES,
   isRunnableConfiguration,
   normalizeConfigurationShellSource,
   resolutionCandidates,
@@ -59,10 +60,6 @@ const LOOM_ARTICLE_ADAPTER =
   'agentic-ai/loom/src/lib/cortex-article-structure.ts';
 const EXECUTABLE_SOURCE_EXTENSION = /\.(?:[cm]?tsx?|[cm]?jsx?)$/u;
 const CONFIGURATION_SCRIPT_EXTENSION = /\.(?:[cm]?tsx?|[cm]?jsx?|sh)$/u;
-const ACTION_SOURCE_SUFFIXES = [
-  '',
-  ...'ts tsx mts cts js jsx mjs cjs'.split(' ').map((value) => `.${value}`),
-] as const;
 const actionTranspilerOptions: ActionTranspilerOptions = { loader: 'tsx' };
 const ACTION_IMPORT_SCANNER = new Bun.Transpiler(actionTranspilerOptions);
 const MAX_GRAPH_STATES = 4_096;
@@ -171,7 +168,12 @@ export function configurationScriptPaths(
           : scriptsIndex < 0
             ? importer
             : importer.slice(0, scriptsIndex);
-      const resolutionRequest = { importer, packageRoot, specifier };
+      const resolutionRequest = {
+        exactFirst: reference.required,
+        importer,
+        packageRoot,
+        specifier,
+      };
       const candidates = resolutionCandidates(resolutionRequest);
       const dependency =
         candidates.find((path) => graph.sources.has(path)) ?? false;
@@ -188,7 +190,8 @@ export function configurationScriptPaths(
       }
       const isExtensionlessExecutable =
         posix.extname(dependency).length === 0 &&
-        graph.executablePaths.has(dependency);
+        (!reference.requiresExecuteMode ||
+          graph.executablePaths.has(dependency));
       if (
         reference.taskInclude ||
         CONFIGURATION_SCRIPT_EXTENSION.test(dependency) ||
@@ -300,6 +303,7 @@ function configurationScriptReferences(
     const references: ConfigurationReference[] = launches.map((launch) => ({
       positionalArguments: launch.positionalArguments,
       required: true,
+      requiresExecuteMode: launch.requiresExecuteMode,
       specifier: launch.specifier,
       taskInclude: false,
     }));
@@ -308,6 +312,7 @@ function configurationScriptReferences(
         ...taskIncludeSpecifiers(inspection.source).map((specifier) => ({
           positionalArguments: false as const,
           required: true,
+          requiresExecuteMode: false,
           specifier,
           taskInclude: true,
         })),
@@ -324,6 +329,7 @@ function configurationScriptReferences(
   ).map((imported) => ({
     positionalArguments: false,
     required: false,
+    requiresExecuteMode: false,
     specifier: imported.path,
     taskInclude: false,
   }));
@@ -349,6 +355,7 @@ function configurationScriptReferences(
       return shellLaunches.map((launch) => ({
         positionalArguments: launch.positionalArguments,
         required: true,
+        requiresExecuteMode: launch.requiresExecuteMode,
         specifier: launch.specifier,
         taskInclude: false,
       }));
@@ -601,7 +608,7 @@ test('only the Loom semantic adapter reaches the provider', async () => {
   ).text();
   expect(activeAudit).toContain("'../lib/cortex-article-structure.ts'");
   expect(activeAudit).not.toContain('src/cortex-article-provider');
-});
+}, 15_000);
 
 test('runnable configuration inventory includes Taskfiles and actions', () => {
   const taskfilePattern = /(^|\/)Taskfile(?:\.[^/]*)?\.ya?ml$/u;

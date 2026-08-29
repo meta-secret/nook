@@ -117,3 +117,54 @@ test('workflow env precedence is propagated into run analysis', () => {
   const request = { roots: [workflow], sources };
   expectProviderReachable(graph(request));
 });
+
+test('extensionless TypeScript imports are resolved before optional pruning', () => {
+  for (const [specifier, dependency] of [
+    ['./nested', 'scripts/nested.ts'],
+    ['./directory', 'scripts/directory/index.js'],
+  ] as const) {
+    const sources = new Map([
+      ['package.json', '{"scripts":{"audit":"bun scripts/loader.ts"}}'],
+      ['scripts/loader.ts', `import '${specifier}';`],
+      [specifier === './nested' ? 'scripts/nested' : 'scripts/directory', ''],
+      [dependency, `await import('${PROVIDER_CLI}');`],
+      [PROVIDER_CLI, 'export {};'],
+    ]);
+    const request = { roots: ['package.json'], sources };
+    expectProviderReachable(graph(request));
+  }
+});
+
+test('runtime-launched extensionless files do not require execute mode', () => {
+  for (const runtime of ['bun', 'node']) {
+    const sources = new Map([
+      ['package.json', `{"scripts":{"audit":"${runtime} scripts/loader"}}`],
+      ['scripts/loader', `await import('../${PROVIDER_CLI}');`],
+      [PROVIDER_CLI, 'export {};'],
+    ]);
+    const request = { roots: ['package.json'], sources };
+    expectProviderReachable(graph(request));
+  }
+});
+
+test('workflow and composite custom shells fail closed', () => {
+  for (const [path, source] of [
+    [
+      '.github/workflows/default.yml',
+      'defaults: {run: {shell: scripts/runner {0}}}\njobs: {audit: {steps: [{run: echo safe}]}}',
+    ],
+    [
+      '.github/workflows/step.yml',
+      'jobs: {audit: {steps: [{shell: "${{ matrix.shell }}", run: echo safe}]}}',
+    ],
+    [
+      '.github/actions/audit/action.yml',
+      'runs: {using: composite, steps: [{shell: scripts/runner {0}, run: echo safe}]}',
+    ],
+  ] as const) {
+    const inspection = { path, source };
+    expect(() => runnableCommandSources(inspection), path).toThrow(
+      /(?:Custom|Dynamic) workflow shell is forbidden/u,
+    );
+  }
+});

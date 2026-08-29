@@ -228,10 +228,9 @@ function collectBinding(request: BindingCollectionRequest): void {
   const namedBindings = node.importClause.namedBindings;
   if (namedBindings && ts.isNamespaceImport(namedBindings)) {
     const binding: LexicalBinding = {
-      capability:
-        specifier === 'node:child_process'
-          ? SubprocessCallKind.Namespace
-          : false,
+      capability: /^(?:node:)?child_process$/u.test(specifier)
+        ? SubprocessCallKind.Namespace
+        : false,
       constant: true,
       declaration: namedBindings,
       importedFrom: specifier,
@@ -246,13 +245,11 @@ function collectBinding(request: BindingCollectionRequest): void {
   for (const element of namedBindings.elements) {
     const imported = (element.propertyName ?? element.name).text;
     const binding: LexicalBinding = {
-      capability:
-        specifier === 'node:child_process'
-          ? (CHILD_PROCESS_CALLS.get(imported) ?? false)
-          : imported === 'runCommand' &&
-              /(?:^|\/)lib\/run\.ts$/u.test(specifier)
-            ? SubprocessCallKind.RunCommand
-            : false,
+      capability: /^(?:node:)?child_process$/u.test(specifier)
+        ? (CHILD_PROCESS_CALLS.get(imported) ?? false)
+        : imported === 'runCommand' && /(?:^|\/)lib\/run\.ts$/u.test(specifier)
+          ? SubprocessCallKind.RunCommand
+          : false,
       constant: true,
       declaration: element,
       importedFrom: specifier,

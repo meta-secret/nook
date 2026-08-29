@@ -9,6 +9,7 @@ type WorkflowCommandRequest = {
 };
 type StepRunRequest = {
   readonly defaultDirectory: string;
+  readonly defaultShell: string | false;
   readonly environment: ReadonlyMap<string, string>;
   readonly steps: ConfigurationNode;
   readonly target: string[];
@@ -17,6 +18,15 @@ type StaticEnvironmentRequest = {
   readonly inherited: ReadonlyMap<string, string> | false;
   readonly node: ConfigurationMapping;
 };
+
+const STANDARD_WORKFLOW_SHELLS = new Set([
+  'bash',
+  'cmd',
+  'powershell',
+  'pwsh',
+  'python',
+  'sh',
+]);
 
 export function workflowCommandSources(
   request: WorkflowCommandRequest,
@@ -32,6 +42,7 @@ export function workflowCommandSources(
       };
       const stepRequest: StepRunRequest = {
         defaultDirectory: '',
+        defaultShell: workflowDefaultShell(root),
         environment: staticEnvironment(environmentRequest),
         steps: runs.steps ?? false,
         target: commands,
@@ -41,6 +52,7 @@ export function workflowCommandSources(
     return commands;
   }
   const workflowDirectory = defaultWorkingDirectory(root);
+  const workflowShell = workflowDefaultShell(root);
   const workflowEnvironmentRequest: StaticEnvironmentRequest = {
     inherited: false,
     node: root,
@@ -55,6 +67,7 @@ export function workflowCommandSources(
     };
     const stepRequest: StepRunRequest = {
       defaultDirectory: jobDirectory || workflowDirectory,
+      defaultShell: workflowDefaultShell(jobNode) || workflowShell,
       environment: staticEnvironment(environmentRequest),
       steps: jobNode.steps ?? false,
       target: commands,
@@ -69,6 +82,7 @@ function collectStepRuns(request: StepRunRequest): void {
   for (const step of request.steps) {
     const node = mapping(step);
     if (typeof node.run !== 'string') continue;
+    assertSafeWorkflowShell(node.shell ?? request.defaultShell);
     const directory =
       typeof node['working-directory'] === 'string'
         ? node['working-directory']
@@ -86,6 +100,14 @@ function collectStepRuns(request: StepRunRequest): void {
       : node.run;
     request.target.push(prefix ? `${prefix} ${command}` : command);
   }
+}
+
+function assertSafeWorkflowShell(shell: ConfigurationNode | false): void {
+  if (shell === false) return;
+  if (typeof shell !== 'string' || shell.includes('${{'))
+    throw new Error('Dynamic workflow shell is forbidden.');
+  if (!STANDARD_WORKFLOW_SHELLS.has(shell))
+    throw new Error(`Custom workflow shell is forbidden: ${shell}`);
 }
 
 function staticEnvironment(
@@ -109,6 +131,14 @@ function defaultWorkingDirectory(node: ConfigurationMapping): string {
   return typeof run['working-directory'] === 'string'
     ? run['working-directory']
     : '';
+}
+
+function workflowDefaultShell(node: ConfigurationMapping): string | false {
+  const runDefaults = mapping(mapping(node.defaults ?? false).run ?? false);
+  if (!('shell' in runDefaults)) return false;
+  const shell = runDefaults.shell;
+  assertSafeWorkflowShell(shell);
+  return typeof shell === 'string' ? shell : false;
 }
 
 function mapping(value: ConfigurationNode): ConfigurationMapping {

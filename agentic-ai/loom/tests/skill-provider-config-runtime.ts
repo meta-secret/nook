@@ -2,6 +2,7 @@ import { posix } from 'node:path';
 import type { ShellLaunchArgument } from './skill-provider-command-types.ts';
 
 type ResolutionCandidateRequest = {
+  readonly exactFirst: boolean;
   readonly importer: string;
   readonly packageRoot: string;
   readonly specifier: string;
@@ -11,6 +12,22 @@ type PositionalSpecializationRequest = {
   readonly arguments: readonly ShellLaunchArgument[] | false;
   readonly source: string;
 };
+type ModuleCandidateRequest = {
+  readonly exactFirst: boolean;
+  readonly path: string;
+};
+
+const MODULE_SUFFIXES = [
+  '.ts',
+  '.tsx',
+  '.mts',
+  '.cts',
+  '.js',
+  '.jsx',
+  '.mjs',
+  '.cjs',
+] as const;
+export const ACTION_SOURCE_SUFFIXES = ['', ...MODULE_SUFFIXES] as const;
 
 export function isRunnableConfiguration(path: string): boolean {
   return (
@@ -30,13 +47,34 @@ export function resolutionCandidates(
   const sourceSpecifier = request.specifier
     .replace(/(^|\/)dist\//u, '$1src/')
     .replace(/\.js$/u, '.ts');
-  return [
+  const bases = [
     posix.normalize(posix.join(importerDirectory, request.specifier)),
     posix.normalize(posix.join(importerDirectory, sourceSpecifier)),
     posix.normalize(posix.join(request.packageRoot, request.specifier)),
     posix.normalize(request.specifier.replace(/^\.\//u, '')),
     posix.normalize(sourceSpecifier.replace(/^\.\//u, '')),
   ];
+  return [
+    ...new Set(
+      bases.flatMap((path) => {
+        const candidateRequest: ModuleCandidateRequest = {
+          exactFirst: request.exactFirst,
+          path,
+        };
+        return moduleCandidates(candidateRequest);
+      }),
+    ),
+  ];
+}
+
+function moduleCandidates(request: ModuleCandidateRequest): readonly string[] {
+  const path = request.path;
+  if (posix.extname(path).length > 0) return [path];
+  const resolved = [
+    ...MODULE_SUFFIXES.map((suffix) => `${path}${suffix}`),
+    ...MODULE_SUFFIXES.map((suffix) => posix.join(path, `index${suffix}`)),
+  ];
+  return request.exactFirst ? [path, ...resolved] : [...resolved, path];
 }
 
 export function specializePositionalArguments(

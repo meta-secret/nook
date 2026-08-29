@@ -738,7 +738,11 @@ function analyzeRuntime(request: RuntimeCommandRequest): void {
       executable: directExecutable,
       arguments: request.words,
     };
-    const launchRequest: LaunchRequest = { launch, state: request.state };
+    const launchRequest: LaunchRequest = {
+      launch,
+      requiresExecuteMode: true,
+      state: request.state,
+    };
     addLaunch(launchRequest);
   }
 }
@@ -932,8 +936,9 @@ function addLaunch(request: LaunchRequest): void {
     value: word.value,
   }));
   const scriptLaunch: ShellScriptLaunch = {
-    specifier: value,
     positionalArguments,
+    requiresExecuteMode: request.requiresExecuteMode === true,
+    specifier: value,
   };
   request.state.launches.push(scriptLaunch);
 }

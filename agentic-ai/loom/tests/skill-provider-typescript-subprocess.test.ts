@@ -113,6 +113,18 @@ child.execFile('bun', ['scripts/check.ts']);`);
   );
 });
 
+test('recognizes both child_process module specifiers', () => {
+  const protectedPath =
+    '.cortex/teams/ai/dynamic-skills/example/scripts/src/cli.ts';
+  for (const specifier of ['child_process', 'node:child_process']) {
+    const source = `import * as child from '${specifier}'; import {spawnSync} from '${specifier}'; child.execFileSync('bun', ['${protectedPath}']); spawnSync('bun', ['${protectedPath}']);`;
+    expect(extract(source)).toEqual([
+      `'bun' '${protectedPath}'`,
+      `'bun' '${protectedPath}'`,
+    ]);
+  }
+});
+
 test('proves dynamic wrappers through exact lexical callers instead of file text', () => {
   const isolated = `
 import {spawnSync} from 'node:child_process';

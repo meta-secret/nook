@@ -27,6 +27,7 @@ export type ActionLoaderFixture = {
 export type ConfigurationReference = {
   readonly positionalArguments: readonly ShellLaunchArgument[] | false;
   readonly required: boolean;
+  readonly requiresExecuteMode: boolean;
   readonly specifier: string;
   readonly taskInclude: boolean;
 };
