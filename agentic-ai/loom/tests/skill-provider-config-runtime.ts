@@ -116,7 +116,7 @@ function tsconfigAliasBases(
   while (true) {
     const path = directory ? `${directory}/tsconfig.json` : 'tsconfig.json';
     const source = request.sources.get(path);
-    if (source !== undefined && source.length > 0)
+    if (source && source.length > 0)
       return aliasesFromTsconfig([request, path, source]);
     if (!directory) return [];
     const parent = posix.dirname(directory).replace(/^\.$/u, '');

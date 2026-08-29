@@ -100,7 +100,7 @@ function bounded(commands: readonly string[]): readonly string[] {
 
 function taskCommands(request: TaskCommandRequest): readonly string[] {
   const root = mapping(request.document);
-  if (root.dotenv !== undefined)
+  if ('dotenv' in root)
     throw new Error('Task dotenv configuration is forbidden.');
   const commands: string[] = [];
   const rootShellRequest: ShellVariableCollectionRequest = {
@@ -127,7 +127,7 @@ function taskCommands(request: TaskCommandRequest): readonly string[] {
   }
   for (const task of Object.values(mapping(root.tasks ?? false))) {
     const node = mapping(task);
-    if (node.dotenv !== undefined)
+    if ('dotenv' in node)
       throw new Error('Task dotenv configuration is forbidden.');
     const start = commands.length;
     const shellVariableRequest: ShellVariableCollectionRequest = {
