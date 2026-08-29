@@ -5,6 +5,14 @@ import {
   isStaticChildProcessRequire,
   lexicalScope,
 } from './skill-provider-typescript-require.ts';
+import {
+  bunShellTemplateCommand,
+  CHILD_PROCESS_CALLS,
+  serializeSubprocessCommand,
+  staticMemberAccess,
+  SubprocessCallKind,
+  type BunShellTemplateRequest,
+} from './skill-provider-typescript-capability.ts';
 
 export type TypeScriptSubprocessInspection = {
   readonly path: string;
@@ -15,15 +23,6 @@ type StaticCommand = {
   readonly shellSource: boolean;
   readonly words: readonly StaticText[];
 };
-enum SubprocessCallKind {
-  Bun = 'bun',
-  Exec = 'exec',
-  ExecFile = 'execFile',
-  Fork = 'fork',
-  Namespace = 'namespace',
-  RunCommand = 'runCommand',
-  Spawn = 'spawn',
-}
 type LexicalBinding = {
   readonly capability: SubprocessCallKind | false;
   readonly constant: boolean;
@@ -76,15 +75,6 @@ type BindingLookupRequest = {
 const MAX_BYTES = 65_536;
 const MAX_DEPTH = 16;
 const MAX_NODES = 65_536;
-const CHILD_PROCESS_CALLS = new Map<string, SubprocessCallKind>([
-  ['spawn', SubprocessCallKind.Spawn],
-  ['spawnSync', SubprocessCallKind.Spawn],
-  ['execFile', SubprocessCallKind.ExecFile],
-  ['execFileSync', SubprocessCallKind.ExecFile],
-  ['exec', SubprocessCallKind.Exec],
-  ['execSync', SubprocessCallKind.Exec],
-  ['fork', SubprocessCallKind.Fork],
-]);
 const encoder = new TextEncoder();
 
 export function typescriptSubprocessCommands(
@@ -128,8 +118,27 @@ export function typescriptSubprocessCommands(
       if (kind !== false) {
         const callRequest: CallCommandRequest = { call: node, kind, model };
         const command = commandFromCall(callRequest);
-        if (command !== false) commands.push(serializeCommand(command));
+        if (command !== false)
+          commands.push(serializeSubprocessCommand(command));
       }
+    }
+    if (ts.isTaggedTemplateExpression(node)) {
+      const templateRequest: BunShellTemplateRequest = {
+        bunShadowed: hasBinding([model, node, 'Bun']),
+        evaluate: (expression) => {
+          const evaluationRequest: ExpressionEvaluationRequest = {
+            depth: 0,
+            expression,
+            location: node,
+            model,
+            visited: new Set(),
+          };
+          return evaluateText(evaluationRequest);
+        },
+        tagged: node,
+      };
+      const command = bunShellTemplateCommand(templateRequest);
+      if (command !== false) commands.push(command);
     }
     ts.forEachChild(node, visit);
   };
@@ -330,25 +339,23 @@ function resolveCapability(
     !hasBinding([request.model, request.location, 'require'])
   )
     return SubprocessCallKind.Namespace;
-  if (!ts.isPropertyAccessExpression(expression)) return false;
-  if (
-    ts.isIdentifier(expression.expression) &&
-    expression.expression.text === 'Bun'
-  ) {
+  const access = staticMemberAccess(expression);
+  if (access === false) return false;
+  const [owner, member] = access;
+  if (ts.isIdentifier(owner) && owner.text === 'Bun') {
     if (hasBinding([request.model, request.location, 'Bun'])) return false;
-    return expression.name.text === 'spawn' ||
-      expression.name.text === 'spawnSync'
+    return member === 'spawn' || member === 'spawnSync'
       ? SubprocessCallKind.Bun
       : false;
   }
   const ownerRequest: CapabilityResolutionRequest = {
-    expression: expression.expression,
+    expression: owner,
     location: request.location,
     model: request.model,
     visited,
   };
   return resolveCapability(ownerRequest) === SubprocessCallKind.Namespace
-    ? (CHILD_PROCESS_CALLS.get(expression.name.text) ?? false)
+    ? (CHILD_PROCESS_CALLS.get(member) ?? false)
     : false;
 }
 
@@ -986,14 +993,4 @@ function unwrapExpression(expression: ts.Expression): ts.Expression {
   )
     return unwrapExpression(expression.expression);
   return expression;
-}
-
-function serializeCommand(command: StaticCommand): string {
-  if (command.shellSource) return command.words[0]?.value ?? '';
-  return command.words
-    .map((word) => {
-      const escaped = word.value.replaceAll("'", "'\\''");
-      return word.dynamic ? `"\${DYNAMIC:-${escaped}}"` : `'${escaped}'`;
-    })
-    .join(' ');
 }

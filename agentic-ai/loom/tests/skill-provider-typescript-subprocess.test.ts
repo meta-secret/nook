@@ -165,6 +165,41 @@ test('does not grant child-process capability to unsafe require owners', () => {
   ).toEqual([]);
 });
 
+test('recognizes static element-access child-process methods', () => {
+  expect(
+    extract(`
+import * as child from 'node:child_process';
+child['spawnSync']('bun', ['scripts/facade.ts']);
+require('child_process')['execFileSync']('bun', ['scripts/check.ts']);`),
+  ).toEqual(["'bun' 'scripts/facade.ts'", "'bun' 'scripts/check.ts'"]);
+  expect(
+    extract(`
+import * as child from 'node:child_process';
+const method=input;
+child[method]('bun', ['ignored.ts']);`),
+  ).toEqual([]);
+  expect(
+    extract(
+      "const child={spawnSync(){}}; child['spawnSync']('bun', ['ignored.ts']);",
+    ),
+  ).toEqual([]);
+});
+
+test('extracts static Bun shell templates and rejects dynamic interpolation', () => {
+  expect(
+    extract(`
+const target='scripts/facade.ts';
+Bun.$\`bun \${target}\`;
+Bun.$\`bun scripts/check.ts\`;`),
+  ).toEqual(["bun 'scripts/facade.ts'", 'bun scripts/check.ts']);
+  expect(() => extract('Bun.$`bun ${input}`;')).toThrow(
+    'Dynamic Bun.$ subprocess shell source is forbidden.',
+  );
+  expect(extract('const Bun={$(){}}; Bun.$`bun scripts/ignored.ts`;')).toEqual(
+    [],
+  );
+});
+
 test('proves dynamic wrappers through exact lexical callers instead of file text', () => {
   const isolated = `
 import {spawnSync} from 'node:child_process';
