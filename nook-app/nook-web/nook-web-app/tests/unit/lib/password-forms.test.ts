@@ -321,6 +321,8 @@ describe('website one-time-code fields', () => {
       '',
     ],
     ['destructive action', '<button id="delete-account">Continue</button>', ''],
+    ['provider', '<button name="provider" value="acme">Continue</button>', ''],
+    ['unlabeled control', '<button type="button"></button>', ''],
     ['hidden ancestor', '<button name="continue"></button>', 'hidden'],
   ])('skips %s before advancing login', (_, control, parentAttrs) => {
     document.body.innerHTML = `

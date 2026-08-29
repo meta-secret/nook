@@ -22,6 +22,8 @@ fn identity_names_external_authentication_provider(
             "twitter",
             "x com",
             "okta",
+            "amazon",
+            "discord",
         ],
     ) || (allow_single_letter_x && contains_any_word(&identity, &["x"]))
 }

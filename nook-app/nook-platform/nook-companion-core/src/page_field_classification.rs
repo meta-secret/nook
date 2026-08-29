@@ -340,7 +340,7 @@ pub fn can_activate_authentication_route_control(
     destination_identity: &str,
     control_label: &str,
     control_machine_identity: &str,
-    has_form_owned_semantic_submit: bool,
+    has_concrete_control: bool,
     has_authentication_username: bool,
     has_local_authentication_scope: bool,
 ) -> bool {
@@ -364,7 +364,7 @@ pub fn can_activate_authentication_route_control(
         return has_authentication_username && has_local_authentication_scope;
     }
     control_label.is_empty()
-        && !has_form_owned_semantic_submit
+        && !has_concrete_control
         && has_authentication_username
         && has_local_authentication_scope
 }
@@ -626,7 +626,7 @@ mod tests {
 
     #[test]
     fn activation_accepts_only_bounded_semantic_username_scope_evidence() {
-        let decide = |form: &str, label: &str, semantic, username, local| {
+        let decide = |form: &str, label: &str, concrete, username, local| {
             let (machine, visible_label) = label
                 .strip_prefix("machine:")
                 .map_or(("", label), |machine| (machine, "Continue"));
@@ -636,18 +636,19 @@ mod tests {
                 "https://login.microsoftonline.com/common/login",
                 visible_label,
                 machine,
-                semantic,
+                concrete,
                 username,
                 local,
             )
         };
         assert!(decide("", "", false, true, true));
+        assert!(!decide("", "", true, true, true));
         assert!(decide("", "Entrar Entrar", false, true, true));
         for label in "Sign in to Microsoft 365|Continue with email address|Continue with your email|Use your password to sign in|Se connecter|Anmelden".split('|') {
             assert!(decide("f", label, true, true, true));
         }
         assert!(!decide("f", "Continue with Amazon", true, true, true));
-        for label in "Sign in to Google|machine:delete-account|machine:reset-password|machine:create-account|machine:google|machine:passkey|Sign in to Microsoft and reset password|Sign in to Microsoft or Google".split('|') {
+        for label in "Sign in to Google|Sign in to Amazon|Amazon login|Discord login|machine:delete-account|machine:reset-password|machine:create-account|machine:google|machine:passkey|machine:provider=acme|Sign in to Microsoft and reset password|Sign in to Microsoft or Google".split('|') {
             assert!(!decide("login-form", label, true, true, true));
         }
         assert!(!decide("f", "Entrar", true, true, false));

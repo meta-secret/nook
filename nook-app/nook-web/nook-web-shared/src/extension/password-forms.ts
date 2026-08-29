@@ -639,7 +639,7 @@ function canActivateAuthenticationRouteControl(
     query.kind === PasswordFormQueryKind.Scoped &&
     query.formScope.kind === PasswordFormScopeKind.Unowned &&
     query.root !== control.ownerDocument;
-  const machineIdentity = `${control.id} ${control.name} ${control.value}`;
+  const machineIdentity = `${control.id} ${control.name}=${control.value}`;
 
   return can_activate_authentication_route_control(
     sourceOrigin,
@@ -647,7 +647,7 @@ function canActivateAuthenticationRouteControl(
     destinationIdentity,
     controlLabel,
     machineIdentity,
-    Boolean(form && control.type === "submit"),
+    true,
     isAuthUsernameField(query.usernameField),
     sharesOwnedForm || hasLocalUnownedScope,
   );
