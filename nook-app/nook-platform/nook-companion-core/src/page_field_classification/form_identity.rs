@@ -103,6 +103,12 @@ pub(super) fn destination_has_disallowed_action_or_provider(destination_identity
         &destination_without_oauth_form_post_metadata(destination_identity),
     );
     control_destination_has_disallowed_route_action(destination_identity)
+        || control_destination_indicates_alternate_provider(
+            destination_identity
+                .split_once('#')
+                .map_or("", |(_, value)| value),
+            false,
+        )
         || (looks_like_non_authentication_submit_control_label(&content_identity)
             && !control_destination_indicates_safe_post_login_route(destination_identity))
         || control_destination_indicates_alternate_provider(&content_identity, false)

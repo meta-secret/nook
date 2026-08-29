@@ -31,14 +31,13 @@ pub(super) fn label_names_external_authentication_provider(identity: &str) -> bo
 pub(super) fn route_names_external_authentication_provider(identity: &str) -> bool {
     let route = expand_identity_text(identity.split(['?', '#']).next().unwrap_or_default());
     let fragment = expand_identity_text(identity.split_once('#').map_or("", |(_, value)| value));
+    let segments = route.split_whitespace().collect::<Vec<_>>();
     identity_names_external_authentication_provider(identity, false)
         || identity.split_once('?').is_some_and(|(_, query)| {
-            query
-                .to_ascii_lowercase()
-                .split(['&', '#'])
-                .any(|component| component.split('=').next() == Some("provider"))
+            query.split(['&', '#'])
+                .any(|component| matches!(expand_identity_text(component.split('=').next().unwrap_or_default()).as_str(), "provider" | "identity provider" | "idp"))
         })
-        || contains_any_word(&route, &["provider"])
+        || (identity.contains('/') && segments.windows(2).any(|pair| matches!(pair, ["login" | "signin", provider] if !matches!(*provider, "email" | "password" | "username" | "verify" | "challenge" | "callback"))))
         || ((contains_any_word(&route, &["x"]) || contains_any_word(&fragment, &["x"]))
             && contains_any_word(&route, &["login", "log in", "signin", "sign in"]))
 }
