@@ -300,6 +300,7 @@ export async function selectAuthenticatorPicker({
       requestId: request.requestId,
       vaultStoreId: selected.vaultStoreId,
       secretId: selected.secretId,
+      authorizationGeneration,
     }
     if (!(await selectedAuthenticatorPageAcknowledged(acknowledgeArgs))) {
       return { ok: false, reason: 'authenticator-picker-page-unavailable' }
@@ -356,7 +357,12 @@ export async function cancelAuthenticatorPicker({
 
 type WebsiteAuthenticatorFillArgs = {
   message: {
-    payload: { origin: string; vaultStoreId: string; secretId: string }
+    payload: {
+      origin: string
+      vaultStoreId: string
+      secretId: string
+      authorizationGeneration?: number
+    }
   }
   sender: chrome.runtime.MessageSender
 }
@@ -365,6 +371,12 @@ export async function websiteAuthenticatorFill({
   message,
   sender,
 }: WebsiteAuthenticatorFillArgs): Promise<AuthenticatorCodeResponse> {
+  const authorizationGeneration =
+    message.payload.authorizationGeneration ??
+    accountPickerAuthorizationGeneration()
+  if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
+    return { ok: false, reason: 'authenticator-locked' }
+  }
   const nookTypedArgs0_6: Parameters<
     typeof authorizedWebsiteGrant
   >[0]['reasons'] = {
@@ -380,11 +392,19 @@ export async function websiteAuthenticatorFill({
   }
   const access = await authorizedWebsiteGrant(nookTypedArgs0_3)
   if ('response' in access) return access.response
+  if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
+    return { ok: false, reason: 'authenticator-locked' }
+  }
   const sessionArgs: Parameters<typeof authenticatorCodeFromSession>[0] = {
     grant: access.grant,
     secretId: message.payload.secretId,
   }
-  return authenticatorCodeFromSession(sessionArgs)
+  const response = await authenticatorCodeFromSession(sessionArgs)
+  if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
+    if (response.ok) response.code = ''
+    return { ok: false, reason: 'authenticator-locked' }
+  }
+  return response
 }
 
 type WebsiteAuthenticatorEnrollPreviewArgs = {
@@ -473,6 +493,14 @@ export function clearStagedAuthenticatorEnrollments(): void {
     staged.otpauthUri = ''
   }
   stagedAuthenticatorEnrollments.clear()
+}
+
+export function rebindStagedAuthenticatorEnrollmentsAuthorization(
+  authorizationGeneration: number,
+): void {
+  for (const staged of stagedAuthenticatorEnrollments.values()) {
+    staged.authorizationGeneration = authorizationGeneration
+  }
 }
 
 type WebsiteAuthenticatorEnrollStageArgs = {

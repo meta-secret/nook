@@ -169,6 +169,9 @@ export async function fillAndSubmitAccount({
       origin: location.origin,
       vaultStoreId: account.vaultStoreId,
       secretId: account.secretId,
+      ...(typeof account.authorizationGeneration === 'number'
+        ? { authorizationGeneration: account.authorizationGeneration }
+        : {}),
     },
   }
   const delivery = await sendLoginFillMessage(nookTypedArgs0_2)

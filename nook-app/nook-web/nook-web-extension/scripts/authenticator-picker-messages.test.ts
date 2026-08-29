@@ -73,6 +73,7 @@ describe('authenticator picker messages', () => {
           account: {
             vaultStoreId: 'vault-1',
             secretId: 'secret-1',
+            authorizationGeneration: 7,
           },
         },
       }),
@@ -84,6 +85,16 @@ describe('authenticator picker messages', () => {
           origin: 'https://example.test',
           requestId: 'picker-1',
           account: { vaultStoreId: 'vault-1' },
+        },
+      }),
+    ).toBe(false)
+    expect(
+      isWebsiteAuthenticatorSelectedMessage({
+        type: 'nook:website-authenticator-selected',
+        payload: {
+          origin: 'https://example.test',
+          requestId: 'picker-1',
+          account: { vaultStoreId: 'vault-1', secretId: 'secret-1' },
         },
       }),
     ).toBe(false)
