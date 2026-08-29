@@ -131,6 +131,13 @@ test('closes the exact-head shell review batch', () => {
     `ROOT=${PROTECTED_ROOT}; ROOT+=/src; bun "$ROOT/cli.ts"`,
     `bun ${PROTECTED.replace('scripts', 'scr?pts')}`,
     `node inspect ${PROTECTED}`,
+    `bash -c 'bun "$0"' ${PROTECTED}`,
+    `set -- ${PROTECTED}; false && set -- scripts/safe.ts; bun "$1"`,
+    `ROOT=scripts/safe.ts; read ROOT <<< ${PROTECTED}; bun "$ROOT"`,
+    `coproc bun ${PROTECTED}`,
+    `BASH_ENV=${PROTECTED_ROOT}/hook.sh bash -c 'echo safe'`,
+    `command_not_found_handle(){ bun ${PROTECTED}; }; definitely_missing_xyz`,
+    `test -v 'x[$(bun ${PROTECTED})]'`,
   ])
     expect(() => inspectProtected(source), source).toThrow();
   expect(() =>

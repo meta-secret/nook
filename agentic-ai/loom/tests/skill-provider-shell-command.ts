@@ -1,6 +1,7 @@
 import { posix } from 'node:path';
 import { resolveWord } from './skill-provider-shell-environment.ts';
 import type {
+  RuntimeCommandRequest,
   ShellEnvironment,
   ShellParseState,
   RuntimeExecutable,
@@ -76,6 +77,17 @@ export function shellStdinConsumer(words: readonly ShellWord[]): boolean {
   return words.slice(index + 1).every((word) => word.value.startsWith('-'));
 }
 
+export function assertSafeShellRuntime([
+  request,
+  source,
+  commandString,
+]: readonly [RuntimeCommandRequest, string, boolean]): void {
+  if (request.runtime === 'bash' && request.state.environment.has('BASH_ENV'))
+    throw new Error('BASH_ENV shell startup hooks are forbidden.');
+  if (commandString && /\$(?:\{0\}|0)/u.test(source))
+    throw new Error('Shell command-string $0 execution is forbidden.');
+}
+
 export function applySetPositional([state, words, start]: readonly [
   ShellParseState,
   readonly ShellWord[],
@@ -89,6 +101,26 @@ export function applySetPositional([state, words, start]: readonly [
     };
     return resolveWord(request);
   });
+  return true;
+}
+
+export function applyParentMutation([command, state, words, start]: readonly [
+  string,
+  ShellParseState,
+  readonly ShellWord[],
+  number,
+]): boolean {
+  if (!['getopts', 'mapfile', 'read', 'readarray'].includes(command))
+    return false;
+  for (const word of words.slice(start)) {
+    if (!/^[A-Za-z_]\w*$/u.test(word.value)) continue;
+    const mutation: ShellWord = {
+      dynamic: true,
+      source: command,
+      value: '',
+    };
+    state.environment.set(word.value, mutation);
+  }
   return true;
 }
 

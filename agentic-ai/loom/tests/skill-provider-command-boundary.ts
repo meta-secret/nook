@@ -28,7 +28,9 @@ import {
 } from './skill-provider-sourced-seams.ts';
 import {
   applyCd,
+  applyParentMutation,
   applySetPositional,
+  assertSafeShellRuntime,
   isolatedShellState,
   nodeInspectExecutables,
   normalizedRuntime,
@@ -169,7 +171,7 @@ function analyzeCommandSource(request: ShellCommandRequest): void {
     analyzeSubstitution([request, source]);
   const tokens = tokenizeShell(structure.source);
   let command: ShellWord[] = [];
-  let conditionalEnvironment: Map<string, ShellWord> | false = false;
+  let conditionalState: ShellParseState | false = false;
   let pipelineEnvironment: Map<string, ShellWord> | false = false;
   const subshells: ShellParseState[] = [];
   for (const token of [...tokens, ShellSeparator.Newline]) {
@@ -216,14 +218,12 @@ function analyzeCommandSource(request: ShellCommandRequest): void {
         if (token !== ShellSeparator.Pipe) pipelineEnvironment = false;
       }
     }
-    if (conditionalEnvironment !== false) {
-      request.state.environment.clear();
-      for (const [name, value] of conditionalEnvironment)
-        request.state.environment.set(name, value);
-      conditionalEnvironment = false;
+    if (conditionalState !== false) {
+      restoreShellState([request.state, conditionalState]);
+      conditionalState = false;
     }
     if (token === ShellSeparator.And || token === ShellSeparator.Or)
-      conditionalEnvironment = new Map(request.state.environment);
+      conditionalState = isolatedShellState(request.state);
     if (token === ShellSeparator.OpenParenthesis)
       subshells.push(isolatedShellState(request.state));
     if (token === ShellSeparator.CloseParenthesis) {
@@ -308,6 +308,8 @@ function analyzeResolvedCommand(resolved: ResolvedCommandRequest): void {
     };
     command = resolveWord(wordRequest);
   }
+  if (command.value === 'coproc')
+    throw new Error('Shell coprocess execution is forbidden.');
   if (command.value === 'case') {
     request.state.casePattern = true;
     return;
@@ -434,6 +436,7 @@ function analyzeResolvedCommand(resolved: ResolvedCommandRequest): void {
     applySetPositional([request.state, words, index])
   )
     return;
+  if (applyParentMutation([command.value, request.state, words, index])) return;
   if (
     ['command', 'exec'].includes(command.value) &&
     request.state.positionalArguments === false &&
@@ -714,6 +717,11 @@ function analyzeRuntime(request: RuntimeCommandRequest): void {
     analyzeCommandSource(nestedRequest);
     return;
   }
+  if (
+    (request.runtime === 'test' || request.runtime === '[') &&
+    request.words.some((word) => word.source.includes('$('))
+  )
+    throw new Error('Arithmetic test operand execution is forbidden.');
   if (request.runtime === 'source' || request.runtime === '.') {
     const executable = request.words[0];
     if (request.runtime === '.' && !executable) return;
@@ -731,6 +739,8 @@ function analyzeRuntime(request: RuntimeCommandRequest): void {
       `Unsupported sourced shell execution in ${request.state.sourcePath || 'inline'}: ${executable?.source ?? 'missing'}`,
     );
   }
+  if (request.state.functions.has('command_not_found_handle'))
+    throw new Error('Shell command-not-found hooks are forbidden.');
   const directExecutable = staticWord(request.runtime);
   if (looksLikeRepositoryScript(directExecutable.value)) {
     const launch: RuntimeExecutable = {
@@ -770,6 +780,7 @@ function analyzeShellRuntime(request: RuntimeCommandRequest): void {
   }
   const executable = request.words[index];
   if (!executable) return;
+  assertSafeShellRuntime([request, executable.value, commandString]);
   if (/^[<>]\(/u.test(executable.source))
     throw new Error('Shell process-substitution input is forbidden.');
   if (!executableIsStatic(executable)) return;
