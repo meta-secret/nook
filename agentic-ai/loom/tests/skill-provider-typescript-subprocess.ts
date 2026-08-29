@@ -8,6 +8,7 @@ import {
   bunShellTemplateCommand,
   childProcessCapability,
   exactObjectProperty,
+  functionInvocationCapability,
   isSuccessorFreeExternalCommand,
   isStaticWorkerThreadsRequire,
   serializeSubprocessCommand,
@@ -211,7 +212,8 @@ function resolveCapability(
       const ownerCapability = resolveCapability(ownerRequest);
       return (
         childProcessCapability([ownerCapability, binding.member]) ||
-        workerThreadCapability([ownerCapability, binding.member])
+        workerThreadCapability([ownerCapability, binding.member]) ||
+        functionInvocationCapability([ownerCapability, binding.member])
       );
     }
     const nestedRequest: CapabilityResolutionRequest = {
@@ -284,7 +286,8 @@ function resolveCapability(
   const ownerCapability = resolveCapability(ownerRequest);
   return (
     childProcessCapability([ownerCapability, member]) ||
-    workerThreadCapability([ownerCapability, member])
+    workerThreadCapability([ownerCapability, member]) ||
+    functionInvocationCapability([ownerCapability, member])
   );
 }
 function resolveObjectLiteral(
@@ -364,7 +367,6 @@ function hasBinding([model, location, name]: readonly [
     node = node.parent;
   }
 }
-
 function lookupBinding([model, location, name]: readonly [
   LexicalModel,
   ts.Node,
@@ -373,7 +375,6 @@ function lookupBinding([model, location, name]: readonly [
   const request: BindingLookupRequest = { location, model, name };
   return bindingAt(request);
 }
-
 function commandFromCall(request: CallCommandRequest): StaticCommand | false {
   const first = request.call.arguments?.[0];
   if (!first) throw new Error('Recognized subprocess call has no command.');
@@ -486,7 +487,6 @@ function commandFromCall(request: CallCommandRequest): StaticCommand | false {
     words: [executable, ...argumentsValue],
   };
 }
-
 function commandFromRunCommand(request: CallCommandRequest): StaticCommand {
   const first = request.call.arguments?.[0];
   if (!first) throw new Error('runCommand requires one exact request.');

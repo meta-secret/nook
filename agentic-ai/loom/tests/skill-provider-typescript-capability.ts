@@ -116,6 +116,25 @@ export function workerThreadCapability(
   return WORKER_THREAD_CALLS.get(member) ?? false;
 }
 
+export function functionInvocationCapability(
+  request: ChildProcessMemberRequest,
+): false {
+  const [owner, member] = request;
+  if (
+    owner === false ||
+    owner === SubprocessCallKind.Namespace ||
+    owner === SubprocessCallKind.WorkerNamespace
+  )
+    return false;
+  if (member === false)
+    throw new Error(
+      'Dynamic subprocess function member selection is forbidden.',
+    );
+  if (/^(?:apply|bind|call)$/u.test(member))
+    throw new Error('Indirect subprocess function invocation is forbidden.');
+  return false;
+}
+
 export function exactObjectProperty([object, name]: readonly [
   ts.ObjectLiteralExpression,
   string,

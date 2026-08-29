@@ -196,6 +196,29 @@ child[method]('bun', ['ignored.ts']);`),
   ).toEqual([]);
 });
 
+test('fails closed on Function call, apply, and bind subprocess adapters', () => {
+  for (const source of [
+    "import {spawnSync} from 'node:child_process'; spawnSync.call(undefined, 'bun', ['scripts/facade.ts']);",
+    "import {execFileSync} from 'node:child_process'; execFileSync.apply(receiver, arguments_);",
+    "import {fork} from 'node:child_process'; const launch=fork.bind(receiver, 'scripts/facade.ts'); launch();",
+    "Bun.spawn['call'](receiver, ['bun', 'scripts/facade.ts']);",
+  ])
+    expect(() => extract(source)).toThrow(
+      'Indirect subprocess function invocation is forbidden.',
+    );
+  expect(() =>
+    extract(`
+import {spawnSync} from 'node:child_process';
+spawnSync[method](receiver, 'bun', ['scripts/facade.ts']);`),
+  ).toThrow('Dynamic subprocess function member selection is forbidden.');
+  expect(
+    extract(`
+import {spawnSync} from 'node:child_process';
+function local(spawnSync:{call(...values:readonly string[]):void}){spawnSync.call('ignored.ts');}
+const holder={call(){}}; holder.call();`),
+  ).toEqual([]);
+});
+
 test('recovers subprocess capabilities from exact static object holders', () => {
   expect(
     extract(`
