@@ -56,14 +56,13 @@
   } = $props()
 
   const authenticatedSessionControlsVisible = $derived(
-    vault.isAuthenticated &&
-      !vault.helpOpen &&
-      !legalPageOpen &&
-      !logsPage &&
-      !extensionConnectRoute,
+    vault.isAuthenticated && !vault.helpOpen && !legalPageOpen,
   )
   const devicesAccessVisible = $derived(
-    authenticatedSessionControlsVisible && workspaceAccessAvailable,
+    authenticatedSessionControlsVisible &&
+      workspaceAccessAvailable &&
+      !logsPage &&
+      !extensionConnectRoute,
   )
   let mobileToolsOpen = $state(false)
   let mobileToolsRoot = $state<HTMLDivElement>()
