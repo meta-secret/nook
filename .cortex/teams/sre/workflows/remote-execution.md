@@ -38,12 +38,8 @@ Nook separates iterative evidence from merge authorization.
 
 Ordinary PR pushes do not start complete validation.
 
-Every pushed head must nevertheless receive remote evidence immediately:
-
-- if the head is validation-ready, Gizmo starts complete validation and may
-  optionally add focused tasks; or
-- if the head is not validation-ready, Gizmo starts at least one relevant
-  focused remote task.
+Every pushed head gets remote evidence immediately: complete validation when
+ready, or at least one relevant focused task otherwise.
 
 ## Focused remote tasks
 
@@ -81,7 +77,7 @@ Routing rules:
 - Fork and Dependabot jobs stay hosted and secret-free.
 - Browser jobs use ordinary Pods on `nook-k0s-container`.
 - Do not expose selectors whose Taskfile path reaches `docker run`, `docker
-  create`, `docker start`, `docker exec`, or another runtime lifecycle command.
+create`, `docker start`, `docker exec`, or another runtime lifecycle command.
 - Keep a selector unavailable until it has a direct ordinary-Pod or build-only
   implementation.
 
@@ -170,17 +166,9 @@ When a remote task or complete check fails:
 
 1. Inspect the exact job log.
 2. Identify the first failing product or infrastructure boundary.
-3. Route the causal defect to its responsible Team Agent.
-4. Have that Team Agent format its allowed changed files and return one coherent
-   exact fix commit.
-5. Let Gizmo integrate the handoff, run `task loom:pre-push`, and inspect the
-   result. If formatting changes team-owned source or Cortex, route that exact
-   diff back to the responsible Team Agent for a fresh formatted commit,
-   reintegrate it, and repeat pre-push rather than authoring or committing that
-   diff in Gizmo.
-6. After a clean pre-push, let Gizmo push and immediately request complete
-   validation when the head is validation-ready. Otherwise immediately run at
-   least one relevant focused task.
+3. Obtain and integrate the responsible Team Agent's formatted exact fix.
+4. Run pre-push, returning any team-owned formatter diff, until clean.
+5. Push, then immediately validate when ready or run relevant focused proof.
 
 Treat a transient unchanged-head registry or BuildKit read failure as
 infrastructure evidence. Replay the unchanged head before changing product code.

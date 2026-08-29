@@ -110,36 +110,19 @@ describe("implementation working tree", () => {
     const hooksRoot = join(repoRoot, "attacker-hooks");
     const marker = join(tempRoot, "hook-ran");
     const previousToken = process.env.NOOK_GITHUB_PAT;
+    const git = (...args: string[]) =>
+      execFileAsync("git", ["-C", repoRoot, ...args]);
     try {
       await execFileAsync("git", ["init", "--bare", remoteRoot]);
       await mkdir(repoRoot);
-      await execFileAsync("git", ["-C", repoRoot, "init"]);
-      await execFileAsync("git", [
-        "-C",
-        repoRoot,
-        "config",
-        "user.name",
-        "test",
-      ]);
-      await execFileAsync("git", [
-        "-C",
-        repoRoot,
-        "config",
-        "user.email",
-        "test@example.com",
-      ]);
+      await git("init");
+      await git("config", "user.name", "test");
+      await git("config", "user.email", "test@example.com");
       await writeFile(join(repoRoot, "README.md"), "base\n");
-      await execFileAsync("git", ["-C", repoRoot, "add", "README.md"]);
-      await execFileAsync("git", ["-C", repoRoot, "commit", "-m", "base"]);
-      await execFileAsync("git", [
-        "-C",
-        repoRoot,
-        "remote",
-        "add",
-        "origin",
-        remoteRoot,
-      ]);
-      await execFileAsync("git", ["-C", repoRoot, "push", "origin", "HEAD"]);
+      await git("add", "README.md");
+      await git("commit", "-m", "base");
+      await git("remote", "add", "origin", remoteRoot);
+      await git("push", "origin", "HEAD");
 
       await mkdir(hooksRoot);
       const hook = join(hooksRoot, "capture-token");
@@ -152,13 +135,7 @@ describe("implementation working tree", () => {
         await writeFile(join(hooksRoot, name), `#!/bin/sh\n"${hook}"\n`);
         await chmod(join(hooksRoot, name), 0o755);
       }
-      await execFileAsync("git", [
-        "-C",
-        repoRoot,
-        "config",
-        "core.hooksPath",
-        "attacker-hooks",
-      ]);
+      await git("config", "core.hooksPath", "attacker-hooks");
       await writeFile(join(repoRoot, "README.md"), "trusted update\n");
       process.env.NOOK_GITHUB_PAT = "publication-secret";
 

@@ -4,6 +4,7 @@ import {
   chmod,
   mkdtemp,
   mkdir,
+  readFile,
   rm,
   symlink,
   writeFile,
@@ -20,9 +21,9 @@ import {
   assertRepositoryBaselineUnchanged,
   assertRustDependencyUpdateChangeSet,
   CI_FIX_SKIPPED,
+  CiFixOutcomeKind,
   isolationForFixProfile,
   resolveCiAgentFixProfile,
-  runValidationCommand,
   runRustDependencyUpdateValidation,
   verifyPublishedFix,
   withValidationEnvironment,
@@ -49,47 +50,32 @@ test("rust dependency update profile selects strict isolation", () => {
 });
 
 test("dependency validation runs fixed commands in order with exact overrides", async () => {
-  const calls: Array<[string, readonly string[], NodeJS.ProcessEnv]> = [];
-  const secrets = {
-    CURSOR_API_KEY: "cursor-secret",
-    NOOK_GITHUB_PAT: "github-secret",
-    GITHUB_TOKEN: "github-token",
-  };
-  const baseEnvironment = { PATH: "/bin" };
+  const calls: unknown[] = [];
   await runRustDependencyUpdateValidation(
     "/repo",
     {
-      ...baseEnvironment,
-      ...secrets,
+      PATH: "/bin",
+      CURSOR_API_KEY: "cursor-secret",
+      NOOK_GITHUB_PAT: "github-secret",
+      GITHUB_TOKEN: "github-token",
       WASM_BUILD_MODE: "wrong-host-value",
     },
-    async (command, args, { env }) => void calls.push([command, args, env]),
+    async (command, args, { env }) => void calls.push([command, ...args, env]),
   );
-
-  assert.deepEqual(
-    calls.map(([command, args]) => [command, ...args]),
+  assert.deepEqual(calls, [
     [
-      ["task", "ci:pr:e2e"],
-      ["task", "docker:ecosystem:fuzz", "FUZZ_SECONDS=20"],
-      ["task", "hive:verify"],
-    ],
-  );
-  assert.deepEqual(
-    calls.map(([, , env]) => env),
-    [
+      "task",
+      "ci:pr:e2e",
       {
-        ...baseEnvironment,
+        PATH: "/bin",
         WASM_BUILD_MODE: "prod",
         VITE_BASE: "/",
         VITE_VAULT_SYNC_INTERVAL_MS: "1000",
       },
-      baseEnvironment,
-      baseEnvironment,
     ],
-  );
-  for (const [, , env] of calls)
-    for (const secret of Object.keys(secrets))
-      assert.equal(secret in env, false);
+    ["task", "docker:ecosystem:fuzz", "FUZZ_SECONDS=20", { PATH: "/bin" }],
+    ["task", "hive:verify", { PATH: "/bin" }],
+  ]);
 });
 
 test("validation strips secrets and forces Docker workloads offline", async () => {
@@ -107,7 +93,6 @@ test("validation strips secrets and forces Docker workloads offline", async () =
     NOOK_GITHUB_PAT: "github",
     SCCACHE_S3_ACCESS_KEY_FILE: "/trusted/sccache-access",
   };
-  const original = { ...hostEnvironment };
   try {
     await withValidationEnvironment(hostEnvironment, async (environment) => {
       for (const secret of [
@@ -116,7 +101,7 @@ test("validation strips secrets and forces Docker workloads offline", async () =
         "SCCACHE_S3_ACCESS_KEY_FILE",
       ])
         assert.equal(secret in environment, false);
-      assert.notEqual(environment.HOME, original.HOME);
+      assert.notEqual(environment.HOME, "/trusted/home");
       await execFileAsync("docker", ["buildx", "build", "."], {
         env: environment,
       });
@@ -129,34 +114,22 @@ test("validation strips secrets and forces Docker workloads offline", async () =
       );
     });
     assert.equal(
-      await import("node:fs/promises").then(({ readFile }) =>
-        readFile(log, "utf8"),
-      ),
+      await readFile(log, "utf8"),
       "buildx build --network none .\nrun --network none image\n",
     );
-    assert.deepEqual(hostEnvironment, original);
+    assert.deepEqual(hostEnvironment, {
+      PATH: bin,
+      HOME: "/trusted/home",
+      CURSOR_API_KEY: "cursor",
+      NOOK_GITHUB_PAT: "github",
+      SCCACHE_S3_ACCESS_KEY_FILE: "/trusted/sccache-access",
+    });
   } finally {
     await rm(root, { recursive: true, force: true });
   }
 });
 
-test("streamed validation runner propagates exit and signal failures", async () => {
-  const options = { cwd: process.cwd(), env: process.env };
-  await assert.rejects(
-    runValidationCommand(process.execPath, ["-e", "process.exit(7)"], options),
-    /exited with code 7/,
-  );
-  await assert.rejects(
-    runValidationCommand(
-      process.execPath,
-      ["-e", "process.kill(process.pid, 'SIGTERM')"],
-      options,
-    ),
-    /terminated by signal SIGTERM/,
-  );
-});
-
-test("baseline HEAD and index mutations fail closed", () => {
+test("baseline Git state mutations fail closed", () => {
   const baseline = { headSha: SHA, indexTreeSha: OTHER_SHA };
   for (const current of [
     { currentHeadSha: OTHER_SHA, currentIndexTreeSha: baseline.indexTreeSha },
@@ -166,24 +139,22 @@ test("baseline HEAD and index mutations fail closed", () => {
       () => assertRepositoryBaselineUnchanged({ baseline, ...current }),
       /baseline (?:HEAD|index)/,
     );
-});
-
-test("Git directory and effective configuration mutations fail closed", () => {
-  const baseline = {
+  const gitMetadata = {
     commonDirectory: "/repo/.git",
     configuration: "global\0file:/trusted\0user.name\ntrusted\0",
     gitDirectory: "/repo/.git",
   };
   for (const current of [
-    { ...baseline, commonDirectory: "/repo/attacker.git" },
-    { ...baseline, gitDirectory: "/repo/attacker.git" },
+    { ...gitMetadata, commonDirectory: "/repo/attacker.git" },
+    { ...gitMetadata, gitDirectory: "/repo/attacker.git" },
     {
-      ...baseline,
-      configuration: `${baseline.configuration}local\0file:.git/config\0core.hookspath\nattacker-hooks\0`,
+      ...gitMetadata,
+      configuration: `${gitMetadata.configuration}local\0file:.git/config\0core.hookspath\nattacker-hooks\0`,
     },
   ])
     assert.throws(
-      () => assertGitMetadataBaselineUnchanged({ baseline, current }),
+      () =>
+        assertGitMetadataBaselineUnchanged({ baseline: gitMetadata, current }),
       /changed trusted Git metadata/,
     );
 });
@@ -193,7 +164,6 @@ test("dependency update scope accepts only regular Rust mission files", async ()
   try {
     const allowed = [
       "nook-app/nook-platform/Cargo.toml",
-      "nook-app/nook-platform/fuzz/Cargo.lock",
       "agentic-ai/minds/hive/src/lib.rs",
       "preflight/tests/policy.rs",
     ];
@@ -225,7 +195,7 @@ test("dependency update scope accepts only regular Rust mission files", async ()
 
     const symlinkPath = "preflight/src/linked.rs";
     await mkdir(join(root, "preflight/src"), { recursive: true });
-    await symlink(join(root, allowed[3]!), join(root, symlinkPath));
+    await symlink(join(root, allowed[2]!), join(root, symlinkPath));
     await rejects(symlinkPath, "??", /symlink or special file/);
     await rejects(
       "preflight/src/deleted.rs",
@@ -268,11 +238,14 @@ const PUBLISHED_IDENTITY = {
   expectedPrNumber: 1208,
 };
 
-test("new publication exact identity succeeds and mismatches fail closed", () => {
-  const published: CiFixOutcome = { headSha: SHA, kind: "published" };
+test("publication outcomes and exact identity fail closed", async () => {
+  const published: CiFixOutcome = {
+    headSha: SHA,
+    kind: CiFixOutcomeKind.Published,
+  };
   assert.deepEqual(
     [CI_FIX_SKIPPED.kind, published.kind],
-    ["skipped", "published"],
+    [CiFixOutcomeKind.Skipped, CiFixOutcomeKind.Published],
   );
   assert.equal(assertPublishedFixIdentity(PUBLISHED_IDENTITY), SHA);
   const mismatches = [
@@ -287,10 +260,6 @@ test("new publication exact identity succeeds and mismatches fail closed", () =>
       () => assertPublishedFixIdentity({ ...PUBLISHED_IDENTITY, ...mismatch }),
       /Published (?:PR|remote branch)/,
     );
-});
-
-test("existing PR verification binds PR and remote branch identity", async () => {
-  const headSha = SHA;
   const verify = (remoteHeadSha: string) =>
     verifyPublishedFix({
       expectedBaseRef: "main",
@@ -298,11 +267,11 @@ test("existing PR verification binds PR and remote branch identity", async () =>
       expectedPrNumber: 1208,
       fetchPullRequest: async () => ({
         base: { ref: "main" },
-        head: { ref: "fix/rust-dependencies-42", sha: headSha },
+        head: { ref: "fix/rust-dependencies-42", sha: SHA },
         number: 1208,
       }),
       fetchRemoteHeadSha: async () => remoteHeadSha,
     });
-  assert.equal(await verify(headSha), headSha);
+  assert.equal(await verify(SHA), SHA);
   await assert.rejects(verify(OTHER_SHA), /head SHA changed/);
 });

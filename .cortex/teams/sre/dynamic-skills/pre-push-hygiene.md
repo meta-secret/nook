@@ -22,10 +22,8 @@ These show up in Workbench `stats/ai-agent` records as waste.
 
 ## Preferred Pattern
 
-After integrating accepted Team Agent handoffs, Gizmo calls Loom `pre-push`
-before every push. Ordinary Team Agents first format every changed file in their
-allowed scope and return coherent exact commits without pushing or operating
-external delivery state.
+Team Agents format and commit allowed changes without pushing. After integration,
+Gizmo calls Loom `pre-push` before every push.
 
 Request:
 
@@ -52,12 +50,9 @@ Loom always:
 3. Runs `.github/scripts/ui-demo-contract.sh` against that base
 4. Stages host format updates when `stageHostUpdates: true`
 
-If host-applied formatting changes team-owned source or Cortex, Gizmo routes
-that exact diff to the responsible Team Agent for a fresh formatted commit,
-reintegrates it, and repeats pre-push rather than authoring or committing that
-diff. After a clean pre-push, Gizmo pushes and immediately starts complete
-validation for a validation-ready head or at least one relevant focused remote
-task for any other head.
+Gizmo returns any team-owned formatter diff for a fresh owner commit and repeats
+after reintegration until clean. It then pushes and immediately validates a ready
+head or starts relevant focused remote proof for any other head.
 
 See [remote-execution.md](../workflows/remote-execution.md)
 and [loom-tools.md](../../ai/references/loom-tools.md).
@@ -106,12 +101,9 @@ Does not apply to read-only sessions with no commits.
 
 ## Application Checklist
 
-- [ ] Ordinary Team Agents format their allowed changed files and return one
-      coherent exact commit without pushing.
+- [ ] Team Agents format and commit allowed changes without pushing.
 - [ ] Gizmo runs `task loom:pre-push` after integration and before every push.
-- [ ] Gizmo routes team-owned source or Cortex formatter diffs back to the
-      responsible Team Agent for a fresh formatted commit, then reintegrates and
-      reruns pre-push.
+- [ ] Return team-owned formatter diffs for owner commit, then reintegrate.
 - [ ] Every pushed head immediately receives complete validation when ready or
       at least one relevant focused remote task when not ready.
 - [ ] Do not use `task extension:format` as the sole format step.

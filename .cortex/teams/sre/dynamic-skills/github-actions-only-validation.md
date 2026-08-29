@@ -22,14 +22,9 @@ wastes hosted concurrency before the branch is ready.
 
 Validation has three layers:
 
-- **Required worker handoff:** an ordinary Team Agent formats every changed file
-  in its allowed scope and returns one coherent exact commit without pushing or
-  operating external delivery state.
-- **Required integrated local hygiene:** after integrating accepted handoffs,
-  Gizmo runs `task loom:pre-push` before every push. If host-applied formatting
-  changes team-owned source or Cortex, Gizmo routes that exact diff to the
-  responsible Team Agent for a fresh formatted commit, reintegrates it, and
-  repeats pre-push rather than authoring or committing it.
+- **Required handoff/hygiene:** Team Agents format and commit their allowed
+  changes without pushing. Gizmo integrates, runs `task loom:pre-push`, and
+  returns any team-owned formatter diff for a fresh owner commit before push.
 - **Focused evidence:** after pushing an exact non-validation-ready branch head,
   immediately use `task remote TASK_NAME=<name>` for at least one relevant gate.
   - Do not batch broad gates sequentially before complete validation.
@@ -75,13 +70,9 @@ task loom:pr-land CONFIG=path/to/gizmo-owned/pr-land-validate.yaml
   4. retry.
 - On a red remote run:
   1. read `gh run view <id> --log-failed`;
-  2. route the cause to its responsible Team Agent for one coherent exact fix
-     commit;
-  3. integrate the formatted handoff and run `task loom:pre-push`;
-  4. route any team-owned source or Cortex formatter diff back to its owner,
-     reintegrate the fresh formatted commit, and repeat pre-push; and
-  5. after a clean pre-push, push and immediately dispatch complete validation
-     when ready, or at least one relevant focused task when not ready.
+  2. obtain and integrate the responsible Team Agent's formatted exact fix;
+  3. repeat pre-push, returning any owner diff, until clean; and
+  4. push, then immediately validate when ready or run relevant focused proof.
 - Ordinary pushes do not refresh complete PR checks.
 
 ## Scope
@@ -111,12 +102,9 @@ Does not apply to:
 
 ## Application Checklist
 
-- [ ] Ordinary Team Agents format their allowed changed files and return one
-      coherent exact commit without pushing.
-- [ ] After integration, Gizmo runs `task loom:pre-push` unconditionally before
-      every push.
-- [ ] Gizmo routes team-owned source or Cortex formatter diffs back to the
-      responsible Team Agent and reintegrates a fresh formatted commit.
+- [ ] Team Agents format and commit allowed changes without pushing; Gizmo
+      integrates them and returns any owner formatter diff.
+- [ ] Gizmo runs `task loom:pre-push` before every push.
 - [ ] Do not require `task check`, `task ci:pr`, full suites, builds, or e2e
       on the agent machine.
 - [ ] Every non-validation-ready pushed head immediately gets at least one

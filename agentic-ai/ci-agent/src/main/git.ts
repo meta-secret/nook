@@ -51,19 +51,20 @@ export function trustedGitArgs(
   return ["-C", repoRoot, ...TRUSTED_GIT_OPTIONS, ...args];
 }
 
+function trustedGit(repoRoot: string, args: readonly string[]) {
+  return execFileAsync("git", trustedGitArgs(repoRoot, args));
+}
+
 export async function excludeAgentRuntimeArtifacts(
   repoRoot: string,
 ): Promise<void> {
-  await execFileAsync(
-    "git",
-    trustedGitArgs(repoRoot, [
-      "reset",
-      "--quiet",
-      "HEAD",
-      "--",
-      ...AGENT_RUNTIME_ARTIFACTS,
-    ]),
-  );
+  await trustedGit(repoRoot, [
+    "reset",
+    "--quiet",
+    "HEAD",
+    "--",
+    ...AGENT_RUNTIME_ARTIFACTS,
+  ]);
 }
 
 const AUTHORED_TEXT_EXTENSIONS = new Set([
@@ -263,29 +264,23 @@ export async function assertAuthoredChangeBudget(
   args: AuthoredBudgetArgs,
 ): Promise<void> {
   await excludeAgentRuntimeArtifacts(args.repoRoot);
-  await execFileAsync(
-    "git",
-    trustedGitArgs(args.repoRoot, [
-      "add",
-      "-A",
-      "--",
-      ".",
-      ...AGENT_RUNTIME_EXCLUSIONS,
-    ]),
-  );
-  const { stdout } = await execFileAsync(
-    "git",
-    trustedGitArgs(args.repoRoot, [
-      "diff",
-      "--cached",
-      "--no-ext-diff",
-      "--numstat",
-      "-z",
-      "--find-renames",
-      "-l0",
-      args.baseRef,
-    ]),
-  );
+  await trustedGit(args.repoRoot, [
+    "add",
+    "-A",
+    "--",
+    ".",
+    ...AGENT_RUNTIME_EXCLUSIONS,
+  ]);
+  const { stdout } = await trustedGit(args.repoRoot, [
+    "diff",
+    "--cached",
+    "--no-ext-diff",
+    "--numstat",
+    "-z",
+    "--find-renames",
+    "-l0",
+    args.baseRef,
+  ]);
   const summary = summarizeAuthoredNumstat(stdout);
   log.info(
     `Implemented diff contains ${summary.authoredLines} authored changed lines against ${args.baseRef}`,
@@ -341,10 +336,7 @@ async function assertGitRepo(repoRoot: string): Promise<void> {
   }
 
   try {
-    await execFileAsync(
-      "git",
-      trustedGitArgs(repoRoot, ["rev-parse", "--git-dir"]),
-    );
+    await trustedGit(repoRoot, ["rev-parse", "--git-dir"]);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     throw new Error(`git rev-parse failed in ${repoRoot}: ${message}`);
@@ -392,16 +384,13 @@ export async function hasWorkingTreeChanges(
   repoRoot: string,
 ): Promise<boolean> {
   await excludeAgentRuntimeArtifacts(repoRoot);
-  const { stdout } = await execFileAsync(
-    "git",
-    trustedGitArgs(repoRoot, [
-      "status",
-      "--porcelain",
-      "--",
-      ".",
-      ...AGENT_RUNTIME_EXCLUSIONS,
-    ]),
-  );
+  const { stdout } = await trustedGit(repoRoot, [
+    "status",
+    "--porcelain",
+    "--",
+    ".",
+    ...AGENT_RUNTIME_EXCLUSIONS,
+  ]);
   return stdout.trim().length > 0;
 }
 
@@ -428,21 +417,15 @@ export async function pushFixBranch(
   runId: string,
 ): Promise<void> {
   log.info(`Pushing fix branch ${fixBranch}`);
-  await execFileAsync(
-    "git",
-    trustedGitArgs(repoRoot, ["checkout", "-B", fixBranch]),
-  );
+  await trustedGit(repoRoot, ["checkout", "-B", fixBranch]);
   await excludeAgentRuntimeArtifacts(repoRoot);
-  await execFileAsync(
-    "git",
-    trustedGitArgs(repoRoot, [
-      "add",
-      "-A",
-      "--",
-      ".",
-      ...AGENT_RUNTIME_EXCLUSIONS,
-    ]),
-  );
+  await trustedGit(repoRoot, [
+    "add",
+    "-A",
+    "--",
+    ".",
+    ...AGENT_RUNTIME_EXCLUSIONS,
+  ]);
 
   const staged = await hasStagedChanges(repoRoot);
   if (!staged) {
@@ -453,33 +436,24 @@ export async function pushFixBranch(
     process.env.AGENT_COMMIT_MESSAGE?.trim() ||
     `Fix main CI failure (run ${runId}).`;
 
-  await execFileAsync(
-    "git",
-    trustedGitArgs(repoRoot, ["commit", "-m", commitMessage]),
-  );
+  await trustedGit(repoRoot, ["commit", "-m", commitMessage]);
   await pushAuthenticatedBranch(repoRoot);
   log.info(`Pushed ${fixBranch}`);
 }
 
 export async function revParse(repoRoot: string, ref: string): Promise<string> {
-  const { stdout } = await execFileAsync(
-    "git",
-    trustedGitArgs(repoRoot, ["rev-parse", ref]),
-  );
+  const { stdout } = await trustedGit(repoRoot, ["rev-parse", ref]);
   return stdout.trim();
 }
 
 async function hasStagedChanges(repoRoot: string): Promise<boolean> {
   try {
-    await execFileAsync(
-      "git",
-      trustedGitArgs(repoRoot, [
-        "diff",
-        "--cached",
-        "--quiet",
-        "--no-ext-diff",
-      ]),
-    );
+    await trustedGit(repoRoot, [
+      "diff",
+      "--cached",
+      "--quiet",
+      "--no-ext-diff",
+    ]);
     return false;
   } catch (err: unknown) {
     if (isExecExitCode(err, 1)) {

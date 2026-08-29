@@ -626,14 +626,11 @@ runs weekly and can be started manually. It installs the pinned
 The audit covers every direct library declared in those `Cargo.toml` manifests.
 It does not audit only the current lockfile's transitive graph.
 
-If any audit reports a newer release, the workflow invokes `task ci-agent:fix`
-with `CI_AGENT_FIX_PROFILE=rust-dependency-update` on the general ARC scale set.
-This scheduled workflow and Task entrypoint are a narrow trusted remote GitHub
-Actions publisher exception, not an ordinary Team Agent worker. The profile
-enforces strict editor isolation and trusted-host validation before publication.
-The bounded editor updates **all** outdated direct Rust dependencies and makes
-necessary compatibility fixes inside an isolated update. It has no publication
-authority.
+On an outdated result, `task ci-agent:fix` runs on general ARC with
+`CI_AGENT_FIX_PROFILE=rust-dependency-update`. This narrow trusted Actions
+publisher is not an ordinary Team Agent: its isolated editor updates every
+outdated direct dependency and necessary compatibility code without Git,
+validation, credentials, or publication authority.
 
 Before any push, trusted workflow tooling runs the required broad validation
 remotely against that isolated update:
@@ -644,31 +641,22 @@ task docker:ecosystem:fuzz FUZZ_SECONDS=20
 task hive:verify
 ```
 
-The publisher exception fails closed unless all of these boundaries hold:
+The trusted host fails closed unless:
 
-- the diff is bounded to the audited Rust dependency updates and their
-  necessary compatibility changes;
-- workflow tooling comes from the trusted workflow source; checkout sets
-  `persist-credentials: false`, and the publication PAT exists only in the
-  trusted host process environment, is withheld from Git checkout configuration
-  and the strict editor, and is used only after validation;
-- before editing, trusted tooling freezes the absolute Git directory, common
-  directory, and complete effective configuration, then verifies them again
-  after editing and validation; every later trusted Git command also disables
-  hooks, filesystem monitors, and commit signing so editor-created Git metadata
-  cannot execute with restored publication credentials;
-- validation uses a fresh HOME with publication, registry, and compiler-cache
-  credentials absent; its trusted Docker wrapper forces BuildKit `RUN` and
-  runtime containers onto `network=none` and rejects unknown Docker operations,
-  so editor-authored Rust and build scripts cannot reach secrets or external
-  services;
-- `CI_AGENT_TIMEOUT_MS=10800000` bounds the editor to three hours of the
-  six-hour job, reserving the other three-hour half for trusted validation and
-  publication;
-- the expected publication branch and pull-request identity are exact and
-  unambiguous; and
-- after commit, push, and pull-request creation, the publisher resolves and
-  returns the exact published head SHA, branch, and PR identity to Gizmo.
+- the diff contains only regular Rust dependency mission files and compatibility
+  changes;
+- trusted workflow checkout uses `persist-credentials: false`; the PAT remains
+  only in host process state and is unavailable to Git/editor until validation;
+- frozen HEAD, index, Git/common directories, and effective configuration remain
+  exact after editing and validation, while trusted Git disables hooks,
+  filesystem monitors, and signing;
+- validation's fresh HOME contains no publication, registry, or compiler-cache
+  credentials, and its immutable Docker wrapper forces BuildKit `RUN` and
+  runtime containers onto `network=none` while rejecting unknown operations;
+- the three-hour `CI_AGENT_TIMEOUT_MS=10800000` leaves half of the six-hour job
+  for validation/publication; and
+- exact branch/PR identity is unambiguous and the publisher returns its verified
+  remote head SHA to Gizmo after commit, push, and PR creation.
 
 That handoff resumes the ordinary delivery boundary. Gizmo owns continuing
 hosted review, replacement exact-head validation, readiness, and merge. The

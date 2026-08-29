@@ -1,5 +1,5 @@
 import { execFile, spawn } from "node:child_process";
-import { chmod, lstat, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import { chdir } from "node:process";
@@ -36,8 +36,15 @@ export enum CiAgentFixProfile {
   RustDependencyUpdate = "rust-dependency-update",
 }
 
-export const CI_FIX_SKIPPED = { kind: "skipped" } as const;
-export type PublishedCiFixOutcome = { headSha: string; kind: "published" };
+export enum CiFixOutcomeKind {
+  Published = "published",
+  Skipped = "skipped",
+}
+export const CI_FIX_SKIPPED = { kind: CiFixOutcomeKind.Skipped } as const;
+export type PublishedCiFixOutcome = {
+  headSha: string;
+  kind: CiFixOutcomeKind.Published;
+};
 export type CiFixOutcome = typeof CI_FIX_SKIPPED | PublishedCiFixOutcome;
 
 const VALIDATION_ENV_ALLOWLIST = new Set([
@@ -132,13 +139,11 @@ export const runValidationCommand: ValidationRunner = async (
 export type RepositoryBaseline = {
   headSha: string;
   indexTreeSha: string;
-  gitMetadata: GitMetadataBaseline;
-};
-
-export type GitMetadataBaseline = {
-  commonDirectory: string;
-  configuration: string;
-  gitDirectory: string;
+  gitMetadata: {
+    commonDirectory: string;
+    configuration: string;
+    gitDirectory: string;
+  };
 };
 
 type ChangedPath = {
@@ -208,14 +213,11 @@ export function parsePorcelainStatus(output: string): ChangedPath[] {
 }
 
 async function gitOutput(repoRoot: string, args: string[]): Promise<string> {
-  const { stdout } = await execFileAsync(
-    "git",
-    trustedGitArgs(repoRoot, args),
-    {
+  return (
+    await execFileAsync("git", trustedGitArgs(repoRoot, args), {
       encoding: "utf8",
-    },
-  );
-  return stdout;
+    })
+  ).stdout;
 }
 
 async function currentIndexTree(repoRoot: string): Promise<string> {
@@ -224,7 +226,7 @@ async function currentIndexTree(repoRoot: string): Promise<string> {
 
 export async function captureGitMetadataBaseline(
   repoRoot: string,
-): Promise<GitMetadataBaseline> {
+): Promise<RepositoryBaseline["gitMetadata"]> {
   const [commonDirectory, configuration, gitDirectory] = await Promise.all([
     gitOutput(repoRoot, [
       "rev-parse",
@@ -248,8 +250,8 @@ export async function captureGitMetadataBaseline(
 }
 
 export function assertGitMetadataBaselineUnchanged(args: {
-  baseline: GitMetadataBaseline;
-  current: GitMetadataBaseline;
+  baseline: RepositoryBaseline["gitMetadata"];
+  current: RepositoryBaseline["gitMetadata"];
 }): void {
   if (
     args.current.commonDirectory !== args.baseline.commonDirectory ||
@@ -263,15 +265,16 @@ export function assertGitMetadataBaselineUnchanged(args: {
 export async function captureRepositoryBaseline(
   repoRoot: string,
 ): Promise<RepositoryBaseline> {
-  const headSha = await revParse(repoRoot, "HEAD");
-  const headTreeSha = await revParse(repoRoot, "HEAD^{tree}");
-  const indexTreeSha = await currentIndexTree(repoRoot);
-  if (indexTreeSha !== headTreeSha) {
-    throw new Error("Trusted dependency-update baseline index is not clean");
-  }
-  if ((await collectChangedPaths(repoRoot)).length !== 0) {
+  const [headSha, headTreeSha, indexTreeSha] = await Promise.all([
+    revParse(repoRoot, "HEAD"),
+    revParse(repoRoot, "HEAD^{tree}"),
+    currentIndexTree(repoRoot),
+  ]);
+  if (
+    indexTreeSha !== headTreeSha ||
+    (await collectChangedPaths(repoRoot)).length !== 0
+  )
     throw new Error("Trusted dependency-update baseline checkout is not clean");
-  }
   return {
     gitMetadata: await captureGitMetadataBaseline(repoRoot),
     headSha,
@@ -284,12 +287,14 @@ export function assertRepositoryBaselineUnchanged(args: {
   currentHeadSha: string;
   currentIndexTreeSha: string;
 }): void {
-  if (args.currentHeadSha !== args.baseline.headSha) {
-    throw new Error("Bounded editor changed the trusted baseline HEAD");
-  }
-  if (args.currentIndexTreeSha !== args.baseline.indexTreeSha) {
-    throw new Error("Bounded editor changed the trusted baseline index");
-  }
+  const changed =
+    args.currentHeadSha !== args.baseline.headSha
+      ? "HEAD"
+      : args.currentIndexTreeSha !== args.baseline.indexTreeSha
+        ? "index"
+        : "";
+  if (changed)
+    throw new Error(`Bounded editor changed the trusted baseline ${changed}`);
 }
 
 async function assertBaselineUnchanged(
@@ -324,28 +329,23 @@ export async function assertRustDependencyUpdateChangeSet(
   changes: readonly ChangedPath[],
   baselineModeForPath: BaselineModeLookup = async () => "",
 ): Promise<void> {
-  if (changes.length === 0) {
+  if (changes.length === 0)
     throw new Error("Trusted dependency-update change set is empty");
-  }
   const root = resolve(repoRoot);
   for (const change of changes) {
-    if (change.path.startsWith("/") || change.path.split("/").includes("..")) {
+    if (change.path.startsWith("/") || change.path.split("/").includes(".."))
       throw new Error("Dependency-update path escapes the repository");
-    }
-    if (isOrchestrationControlPath(change.path)) {
+    if (isOrchestrationControlPath(change.path))
       throw new Error(
         `Dependency update changed trusted orchestration control: ${change.path}`,
       );
-    }
-    if (!isAllowedRustDependencyPath(change.path)) {
+    if (!isAllowedRustDependencyPath(change.path))
       throw new Error(
         `Dependency update changed forbidden path: ${change.path}`,
       );
-    }
     const absolutePath = resolve(root, change.path);
-    if (!absolutePath.startsWith(`${root}${sep}`)) {
+    if (!absolutePath.startsWith(`${root}${sep}`))
       throw new Error("Dependency-update path escapes the repository");
-    }
     try {
       const metadata = await lstat(absolutePath);
       if (!metadata.isFile()) {
@@ -392,24 +392,21 @@ async function assertTrustedChangeSet(
 export function assertNoPersistedGitCredentials(
   entries: readonly GitConfigEntry[],
 ): void {
-  for (const entry of entries) {
+  const forbidden = entries.some((entry) => {
     const key = entry.key.toLowerCase();
-    const value = entry.value.toLowerCase();
-    const keyOrValue = `${key}\n${value}`;
-    const forbidden =
+    const keyOrValue = `${key}\n${entry.value.toLowerCase()}`;
+    return (
       (key.startsWith("http.") && key.endsWith(".extraheader")) ||
       key === "credential.helper" ||
       (key.startsWith("credential.") && key.endsWith(".helper")) ||
       keyOrValue.includes("authorization:") ||
       keyOrValue.includes("x-access-token") ||
       keyOrValue.includes("github_pat_") ||
-      /https?:\/\/[^/\s]+@/u.test(keyOrValue);
-    if (forbidden) {
-      throw new Error(
-        "Persisted Git publication credential detected in config",
-      );
-    }
-  }
+      /https?:\/\/[^/\s]+@/u.test(keyOrValue)
+    );
+  });
+  if (forbidden)
+    throw new Error("Persisted Git publication credential detected in config");
 }
 
 function parseGitConfig(output: string): GitConfigEntry[] {
@@ -478,10 +475,8 @@ export async function withValidationEnvironment<T>(
     const bin = join(isolatedRoot, "bin");
     const home = join(isolatedRoot, "home");
     const docker = join(bin, "docker");
-    await mkdir(bin);
-    await mkdir(home);
+    await Promise.all([mkdir(bin), mkdir(home)]);
     await writeFile(docker, NETWORKLESS_DOCKER, { mode: 0o700 });
-    await chmod(docker, 0o700);
     restoreHostEnvironment(
       {
         ...base,
@@ -615,7 +610,7 @@ async function verifyLiveFixPublication(args: {
         return data.commit.sha;
       },
     }),
-    kind: "published",
+    kind: CiFixOutcomeKind.Published,
   };
 }
 
