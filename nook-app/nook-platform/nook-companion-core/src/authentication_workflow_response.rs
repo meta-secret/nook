@@ -197,10 +197,20 @@ mod tests {
         );
 
         let impossible_snapshot = serde_json::from_str::<AuthenticationWorkflowSnapshotResponseWire>(
-            r#"{"ok":true,"snapshot":{"kind":0,"stage":2,"action":0,"currentStep":2,"totalSteps":3,"requiresHumanApproval":true,"observationIndex":0}}"#,
+            r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":6,"currentStep":1,"totalSteps":3,"requiresHumanApproval":true,"observationIndex":0}}"#,
         )?;
         assert_eq!(
             decode_authentication_workflow_snapshot_response(impossible_snapshot),
+            Err(AuthenticationWorkflowSnapshotResponseDecodeError)
+        );
+
+        let out_of_bounds_observation = serde_json::from_str::<
+            AuthenticationWorkflowSnapshotResponseWire,
+        >(
+            r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":1,"totalSteps":3,"requiresHumanApproval":true,"observationIndex":20}}"#,
+        )?;
+        assert_eq!(
+            decode_authentication_workflow_snapshot_response(out_of_bounds_observation),
             Err(AuthenticationWorkflowSnapshotResponseDecodeError)
         );
 

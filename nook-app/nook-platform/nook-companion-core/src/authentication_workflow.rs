@@ -306,8 +306,12 @@ pub const fn classify_authentication_workflow(
             observation,
             AuthenticationWorkflowSnapshot::new(
                 AuthenticationWorkflowKind::Login,
-                AuthenticationWorkflowStage::Credentials,
-                AuthenticationWorkflowAction::TakeOver,
+                credentials_or_manual(observation.manual_checkpoint_present),
+                if observation.manual_checkpoint_present {
+                    AuthenticationWorkflowAction::TakeOver
+                } else {
+                    AuthenticationWorkflowAction::ContinueWithNook
+                },
                 1,
                 3,
             ),
@@ -636,6 +640,20 @@ mod tests {
         let snapshot = classify_authentication_workflow(passkey_only).snapshot()?;
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Login);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::CreatePasskey);
+        Ok(())
+    }
+
+    #[test]
+    fn manual_passkey_only_login_yields_to_manual_takeover() -> anyhow::Result<()> {
+        let passkey_only = AuthenticationPageObservation {
+            passkey_control_present: true,
+            manual_checkpoint_present: true,
+            ..observation()
+        };
+        let snapshot = classify_authentication_workflow(passkey_only).snapshot()?;
+        assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Login);
+        assert_eq!(snapshot.stage, AuthenticationWorkflowStage::Manual);
+        assert_eq!(snapshot.action, AuthenticationWorkflowAction::TakeOver);
         Ok(())
     }
 

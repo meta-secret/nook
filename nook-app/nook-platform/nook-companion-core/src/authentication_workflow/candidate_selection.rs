@@ -8,9 +8,7 @@ use super::{
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize, Tsify,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Tsify)]
 #[serde(transparent)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct AuthenticationFormObservationPriority(u8);
@@ -25,6 +23,30 @@ impl AuthenticationFormObservationPriority {
     #[must_use]
     pub const fn value(self) -> u8 {
         self.0
+    }
+}
+
+impl Default for AuthenticationFormObservationPriority {
+    fn default() -> Self {
+        Self::USERNAME_OR_PASSKEY_ONLY
+    }
+}
+
+impl<'de> Deserialize<'de> for AuthenticationFormObservationPriority {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        match u8::deserialize(deserializer)? {
+            1 => Ok(Self::USERNAME_OR_PASSKEY_ONLY),
+            2 => Ok(Self::PASSWORD_FORM),
+            3 => Ok(Self::GENERIC_PASSWORD),
+            4 => Ok(Self::CURRENT_PASSWORD),
+            5 => Ok(Self::ONE_TIME_CODE),
+            value => Err(serde::de::Error::custom(format!(
+                "invalid authentication form observation priority: {value}"
+            ))),
+        }
     }
 }
 
@@ -67,6 +89,9 @@ impl AuthenticationWorkflowSnapshot {
             (AuthenticationWorkflowKind::Signup, _) => {
                 AuthenticationWorkflowCandidatePriority::Signup
             }
+            (AuthenticationWorkflowKind::Login, AuthenticationWorkflowAction::TakeOver) => {
+                AuthenticationWorkflowCandidatePriority::ManualLoginTakeover
+            }
             (AuthenticationWorkflowKind::Login, _) => {
                 AuthenticationWorkflowCandidatePriority::Login
             }
@@ -82,6 +107,7 @@ enum AuthenticationWorkflowCandidatePriority {
     Manual,
     Login,
     Signup,
+    ManualLoginTakeover,
     CredentialChangeOrPasskeySetup,
     SavedLogin,
     SecondFactorOrPasskeyUse,
@@ -125,4 +151,29 @@ pub fn classify_authentication_workflow_candidates(
         }
     }
     selected
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn priority_default_and_deserialization_stay_within_the_closed_ranking() -> anyhow::Result<()> {
+        assert_eq!(AuthenticationFormObservationPriority::default().value(), 1);
+
+        for value in 1..=5 {
+            let priority =
+                serde_json::from_str::<AuthenticationFormObservationPriority>(&value.to_string())?;
+            assert_eq!(priority.value(), value);
+        }
+        for unsupported in [0, 6, u8::MAX] {
+            assert!(
+                serde_json::from_str::<AuthenticationFormObservationPriority>(
+                    &unsupported.to_string()
+                )
+                .is_err()
+            );
+        }
+        Ok(())
+    }
 }
