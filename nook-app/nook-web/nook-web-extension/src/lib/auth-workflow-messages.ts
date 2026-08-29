@@ -5,7 +5,8 @@ import type {
   AuthenticationWorkflowSnapshot,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
-export type AuthenticationPageObservationView = AuthenticationPageObservationFacts
+export type AuthenticationPageObservationView =
+  AuthenticationPageObservationFacts
 export type AuthenticationWorkflowSnapshotView = AuthenticationWorkflowSnapshot
 
 export enum AuthenticationWorkflowSnapshotMessageType {
