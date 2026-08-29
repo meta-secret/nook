@@ -16,10 +16,18 @@ type ResolutionCandidateRequest = {
 };
 
 type TsconfigDocument = {
+  readonly extends?: string | readonly string[];
   readonly compilerOptions?: {
     readonly baseUrl?: string;
     readonly paths?: Readonly<Record<string, readonly string[]>>;
   };
+};
+
+type TsconfigAliasRequest = {
+  readonly depth: number;
+  readonly path: string;
+  readonly request: ResolutionCandidateRequest;
+  readonly visited: ReadonlySet<string>;
 };
 
 type PositionalSpecializationRequest = {
@@ -29,6 +37,7 @@ type PositionalSpecializationRequest = {
 const MODULE_SUFFIXES = 'ts tsx mts cts js jsx mjs cjs'
   .split(' ')
   .map((suffix) => `.${suffix}`);
+const MAX_TSCONFIG_EXTENDS_DEPTH = 16;
 export const ACTION_SOURCE_SUFFIXES = ['', ...MODULE_SUFFIXES] as const;
 export const CONFIGURATION_GRAPH_LIMITS = {
   arguments: 256,
@@ -116,8 +125,15 @@ function tsconfigAliasBases(
   while (true) {
     const path = directory ? `${directory}/tsconfig.json` : 'tsconfig.json';
     const source = request.sources.get(path);
-    if (source && source.length > 0)
-      return aliasesFromTsconfig([request, path, source]);
+    if (source && source.length > 0) {
+      const aliasRequest: TsconfigAliasRequest = {
+        depth: 0,
+        path,
+        request,
+        visited: new Set(),
+      };
+      return aliasesFromTsconfig(aliasRequest);
+    }
     if (!directory) return [];
     const parent = posix.dirname(directory).replace(/^\.$/u, '');
     if (parent === directory) return [];
@@ -125,22 +141,32 @@ function tsconfigAliasBases(
   }
 }
 
-function aliasesFromTsconfig([request, path, source]: readonly [
-  ResolutionCandidateRequest,
-  string,
-  string,
-]): readonly string[] {
+function aliasesFromTsconfig(
+  aliasRequest: TsconfigAliasRequest,
+): readonly string[] {
+  if (aliasRequest.depth > MAX_TSCONFIG_EXTENDS_DEPTH)
+    throw new Error('Runnable tsconfig extends chain exceeds its bound.');
+  if (aliasRequest.visited.has(aliasRequest.path))
+    throw new Error(`Runnable tsconfig extends cycle: ${aliasRequest.path}`);
+  const source = aliasRequest.request.sources.get(aliasRequest.path);
+  if (!source)
+    throw new Error(
+      `Runnable tsconfig extends target is untracked: ${aliasRequest.path}`,
+    );
+  assertRunnableConfigurationBytes(source);
   let document: TsconfigDocument;
   try {
     document = Bun.JSONC.parse(source) as TsconfigDocument;
   } catch {
-    throw new Error(`Runnable tsconfig is invalid: ${path}`);
+    throw new Error(`Runnable tsconfig is invalid: ${aliasRequest.path}`);
   }
   const options = document.compilerOptions;
   const mappings = options?.paths ?? {};
   const baseUrl = options?.baseUrl ?? '.';
   if (typeof baseUrl !== 'string')
-    throw new Error(`Runnable tsconfig baseUrl is invalid: ${path}`);
+    throw new Error(
+      `Runnable tsconfig baseUrl is invalid: ${aliasRequest.path}`,
+    );
   for (const [alias, targets] of Object.entries(mappings)) {
     const wildcard = alias.indexOf('*');
     if (wildcard !== alias.lastIndexOf('*'))
@@ -148,28 +174,66 @@ function aliasesFromTsconfig([request, path, source]: readonly [
     const prefix = wildcard < 0 ? alias : alias.slice(0, wildcard);
     const suffix = wildcard < 0 ? '' : alias.slice(wildcard + 1);
     if (
-      !request.specifier.startsWith(prefix) ||
-      !request.specifier.endsWith(suffix) ||
-      (wildcard < 0 && request.specifier !== alias)
+      !aliasRequest.request.specifier.startsWith(prefix) ||
+      !aliasRequest.request.specifier.endsWith(suffix) ||
+      (wildcard < 0 && aliasRequest.request.specifier !== alias)
     )
       continue;
     if (!Array.isArray(targets) || targets.length === 0)
       throw new Error(`Runnable tsconfig alias target is invalid: ${alias}`);
-    const substitution = request.specifier.slice(
+    const substitution = aliasRequest.request.specifier.slice(
       prefix.length,
-      request.specifier.length - suffix.length,
+      aliasRequest.request.specifier.length - suffix.length,
     );
     return targets.map((target) => {
       if (typeof target !== 'string' || target.includes('*') !== wildcard >= 0)
         throw new Error(`Runnable tsconfig alias target is invalid: ${alias}`);
       const resolvedTarget = target.replace('*', substitution);
       const candidate = posix.normalize(
-        posix.join(posix.dirname(path), baseUrl, resolvedTarget),
+        posix.join(posix.dirname(aliasRequest.path), baseUrl, resolvedTarget),
       );
       if (candidate.startsWith('../') || candidate.startsWith('/'))
         throw new Error(`Runnable tsconfig alias escapes repository: ${alias}`);
       return candidate;
     });
+  }
+  const inherited = document.extends;
+  if (inherited === undefined) return [];
+  const parents = typeof inherited === 'string' ? [inherited] : inherited;
+  if (
+    !Array.isArray(parents) ||
+    parents.some((parent) => typeof parent !== 'string')
+  )
+    throw new Error(
+      `Runnable tsconfig extends is invalid: ${aliasRequest.path}`,
+    );
+  const visited = new Set(aliasRequest.visited).add(aliasRequest.path);
+  for (const parent of [...parents].reverse()) {
+    if (!parent.startsWith('.')) continue;
+    const base = posix.normalize(
+      posix.join(posix.dirname(aliasRequest.path), parent),
+    );
+    if (base.startsWith('../') || base.startsWith('/'))
+      throw new Error(
+        `Runnable tsconfig extends escapes repository: ${parent}`,
+      );
+    if (/(^|\/)node_modules\//u.test(base)) continue;
+    const candidates = posix.extname(base) ? [base] : [base, `${base}.json`];
+    const path = candidates.find((candidate) =>
+      aliasRequest.request.sources.has(candidate),
+    );
+    if (!path)
+      throw new Error(
+        `Runnable tsconfig extends target is untracked: ${parent}`,
+      );
+    const parentRequest: TsconfigAliasRequest = {
+      depth: aliasRequest.depth + 1,
+      path,
+      request: aliasRequest.request,
+      visited,
+    };
+    const aliases = aliasesFromTsconfig(parentRequest);
+    if (aliases.length > 0) return aliases;
   }
   return [];
 }

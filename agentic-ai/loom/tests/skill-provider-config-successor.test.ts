@@ -203,21 +203,97 @@ test('runnable TypeScript imports resolve nearest tsconfig aliases', () => {
   expectProviderReachable(graph(request));
 });
 
-test('Bun preload configuration fails closed', () => {
-  expect(isRunnableConfiguration('nested/bunfig.toml')).toBe(true);
+test('runnable TypeScript imports resolve inherited tsconfig aliases', () => {
   const sources = new Map([
-    ['nested/package.json', '{"scripts":{"audit":"bun scripts/main.ts"}}'],
-    ['nested/bunfig.toml', 'preload = ["./scripts/facade.ts"]'],
-    ['nested/scripts/main.ts', 'export const neutral = true;'],
-    ['nested/scripts/facade.ts', `await import('../../${PROVIDER_CLI}');`],
+    [
+      'tsconfig.base.json',
+      '{"compilerOptions":{"baseUrl":".","paths":{"@audit/*":["scripts/*"]}}}',
+    ],
+    ['nested/tsconfig.json', '{"extends":"../tsconfig.base.json"}'],
+    ['nested/vite.config.ts', "await import('@audit/facade');"],
+    ['scripts/facade.ts', `await import('../${PROVIDER_CLI}');`],
     [PROVIDER_CLI, 'export {};'],
   ]);
-  const request = {
-    roots: ['nested/package.json', 'nested/bunfig.toml'],
-    sources,
+  const request = { roots: ['nested/vite.config.ts'], sources };
+  expectProviderReachable(graph(request));
+});
+
+test('tsconfig extends chains fail closed on drift cycles and path bounds', () => {
+  const cases = [
+    new Map([
+      ['nested/tsconfig.json', '{"extends":"./base.json"}'],
+      ['nested/base.json', '{"extends":"./tsconfig.json"}'],
+      ['nested/vite.config.ts', "await import('@audit/facade');"],
+    ]),
+    new Map([
+      ['nested/tsconfig.json', '{"extends":"../missing.json"}'],
+      ['nested/vite.config.ts', "await import('@audit/facade');"],
+    ]),
+    new Map([
+      ['tsconfig.json', '{"extends":"../outside.json"}'],
+      ['vite.config.ts', "await import('@audit/facade');"],
+    ]),
+  ];
+  for (const sources of cases) {
+    const root = sources.has('vite.config.ts')
+      ? 'vite.config.ts'
+      : 'nested/vite.config.ts';
+    const request = { roots: [root], sources };
+    expect(() => configurationScriptPaths(graph(request))).toThrow(
+      /(?:cycle|untracked|escapes repository)/u,
+    );
+  }
+
+  const boundedSources = new Map<string, string>([
+    ['nested/tsconfig.json', '{"extends":"./base-0.json"}'],
+    ['nested/vite.config.ts', "await import('@audit/facade');"],
+  ]);
+  for (let index = 0; index <= 17; index += 1) {
+    const next = index === 17 ? '{}' : `{"extends":"./base-${index + 1}.json"}`;
+    boundedSources.set(`nested/base-${index}.json`, next);
+  }
+  const boundedRequest = {
+    roots: ['nested/vite.config.ts'],
+    sources: boundedSources,
   };
-  expect(() => configurationScriptPaths(graph(request))).toThrow(
-    'Bun preload configuration is forbidden',
+  expect(() => configurationScriptPaths(graph(boundedRequest))).toThrow(
+    'tsconfig extends chain exceeds its bound',
+  );
+});
+
+test('external tsconfig presets do not become repository inheritance edges', () => {
+  const sources = new Map([
+    [
+      'nested/tsconfig.json',
+      '{"extends":"../app/node_modules/@tsconfig/svelte/tsconfig.json"}',
+    ],
+    ['nested/vite.config.ts', "import '@external/package';"],
+  ]);
+  const request = { roots: ['nested/vite.config.ts'], sources };
+  expect(configurationScriptPaths(graph(request))).toEqual([]);
+});
+
+test('Bun preload configuration fails closed', () => {
+  expect(isRunnableConfiguration('nested/bunfig.toml')).toBe(true);
+  for (const key of ['preload', '"preload"', "'preload'"]) {
+    const sources = new Map([
+      ['nested/package.json', '{"scripts":{"audit":"bun scripts/main.ts"}}'],
+      ['nested/bunfig.toml', `${key} = ["./scripts/facade.ts"]`],
+      ['nested/scripts/main.ts', 'export const neutral = true;'],
+      ['nested/scripts/facade.ts', `await import('../../${PROVIDER_CLI}');`],
+      [PROVIDER_CLI, 'export {};'],
+    ]);
+    const request = {
+      roots: ['nested/package.json', 'nested/bunfig.toml'],
+      sources,
+    };
+    expect(() => configurationScriptPaths(graph(request)), key).toThrow(
+      'Bun preload configuration is forbidden',
+    );
+  }
+  const invalidInspection = { path: 'bunfig.toml', source: 'preload = [' };
+  expect(() => runnableCommandSources(invalidInspection)).toThrow(
+    'Bun configuration is invalid',
   );
 });
 

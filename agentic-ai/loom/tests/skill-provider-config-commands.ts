@@ -37,7 +37,15 @@ export function runnableCommandSources(
 ): readonly string[] {
   assertRunnableConfigurationBytes(inspection.source);
   if (inspection.path.endsWith('bunfig.toml')) {
-    if (/^\s*preload\s*=/mu.test(inspection.source))
+    let document: Readonly<Record<string, ConfigurationNode>>;
+    try {
+      document = Bun.TOML.parse(inspection.source) as Readonly<
+        Record<string, ConfigurationNode>
+      >;
+    } catch {
+      throw new Error('Bun configuration is invalid.');
+    }
+    if (Object.hasOwn(document, 'preload'))
       throw new Error('Bun preload configuration is forbidden.');
     return [];
   }

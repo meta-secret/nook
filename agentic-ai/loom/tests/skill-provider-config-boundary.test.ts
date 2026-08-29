@@ -562,7 +562,7 @@ test('only the Loom semantic adapter reaches the provider', async () => {
       !symlinkPaths.has(path) &&
       (actionSourceRequiresContent(path) ||
         configPathSet.has(path) ||
-        path.endsWith('tsconfig.json') ||
+        /(^|\/)tsconfig(?:\.[^/]*)?\.json$/u.test(path) ||
         /\.ya?ml$/u.test(path) ||
         CONFIGURATION_SCRIPT_EXTENSION.test(path))
         ? await Bun.file(join(REPOSITORY_ROOT, path)).text()
