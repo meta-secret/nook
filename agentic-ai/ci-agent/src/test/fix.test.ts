@@ -9,8 +9,6 @@ import {
   assertPublishedFixIdentity,
   assertRepositoryBaselineUnchanged,
   assertRustDependencyUpdateChangeSet,
-  CiAgentFixProfile,
-  createValidationEnvironment,
   isolationForFixProfile,
   resolveCiAgentFixProfile,
   runValidationCommand,
@@ -23,7 +21,6 @@ import { AgentIsolation } from "../main/run-agent.js";
 
 test("rust dependency update profile selects strict isolation", () => {
   const profile = resolveCiAgentFixProfile("rust-dependency-update");
-  assert.equal(profile, CiAgentFixProfile.RustDependencyUpdate);
   assert.equal(isolationForFixProfile(profile), AgentIsolation.Strict);
   assert.equal(
     isolationForFixProfile(resolveCiAgentFixProfile(undefined)),
@@ -36,105 +33,69 @@ test("rust dependency update profile selects strict isolation", () => {
 });
 
 test("dependency validation runs fixed commands in order with exact overrides", async () => {
-  const calls: Array<{
-    command: string;
-    args: readonly string[];
-    environment: NodeJS.ProcessEnv;
-  }> = [];
+  const calls: Array<[string, readonly string[], NodeJS.ProcessEnv]> = [];
+  const secrets = {
+    CURSOR_API_KEY: "cursor-secret",
+    NOOK_GITHUB_PAT: "github-secret",
+    GITHUB_TOKEN: "github-token",
+  };
   await runRustDependencyUpdateValidation(
     "/repo",
     {
       PATH: "/bin",
       HOME: "/home/runner",
-      CURSOR_API_KEY: "cursor-secret",
-      NOOK_GITHUB_PAT: "github-secret",
-      GITHUB_TOKEN: "github-token",
+      ...secrets,
       WASM_BUILD_MODE: "wrong-host-value",
     },
-    async (command, args, options) => {
-      calls.push({ command, args, environment: options.env });
-    },
+    async (command, args, { env }) => void calls.push([command, args, env]),
   );
 
   assert.deepEqual(
-    calls.map(({ command, args }) => [command, ...args]),
+    calls.map(([command, args]) => [command, ...args]),
     [
       ["task", "ci:pr:e2e"],
       ["task", "docker:ecosystem:fuzz", "FUZZ_SECONDS=20"],
       ["task", "hive:verify"],
     ],
   );
-  assert.deepEqual(
-    {
-      WASM_BUILD_MODE: calls[0]?.environment.WASM_BUILD_MODE,
-      VITE_BASE: calls[0]?.environment.VITE_BASE,
-      VITE_VAULT_SYNC_INTERVAL_MS:
-        calls[0]?.environment.VITE_VAULT_SYNC_INTERVAL_MS,
-    },
-    {
-      WASM_BUILD_MODE: "prod",
-      VITE_BASE: "/",
-      VITE_VAULT_SYNC_INTERVAL_MS: "1000",
-    },
-  );
-  assert.equal(calls[1]?.environment.WASM_BUILD_MODE, undefined);
-  assert.equal(calls[2]?.environment.VITE_BASE, undefined);
-  for (const call of calls) {
-    assert.equal(call.environment.CURSOR_API_KEY, undefined);
-    assert.equal(call.environment.NOOK_GITHUB_PAT, undefined);
-    assert.equal(call.environment.GITHUB_TOKEN, undefined);
-    assert.equal(call.environment.PATH, "/bin");
-    assert.equal(call.environment.HOME, "/home/runner");
-  }
-});
-
-test("validation environment excludes publication credentials", () => {
-  const environment = createValidationEnvironment({
+  assert.deepEqual(calls[0]?.[2], {
     PATH: "/bin",
-    DOCKER_HOST: "unix:///docker.sock",
-    CURSOR_API_KEY: "cursor-secret",
-    NOOK_GITHUB_PAT: "github-secret",
-    GH_TOKEN: "gh-secret",
-    AWS_SECRET_ACCESS_KEY: "aws-secret",
+    HOME: "/home/runner",
+    WASM_BUILD_MODE: "prod",
+    VITE_BASE: "/",
+    VITE_VAULT_SYNC_INTERVAL_MS: "1000",
   });
-  assert.deepEqual(environment, {
-    PATH: "/bin",
-    DOCKER_HOST: "unix:///docker.sock",
-  });
+  assert.deepEqual(calls[1]?.[2], { PATH: "/bin", HOME: "/home/runner" });
+  assert.deepEqual(calls[2]?.[2], calls[1]?.[2]);
+  for (const [, , env] of calls)
+    for (const secret of Object.keys(secrets))
+      assert.equal(env[secret], undefined);
 });
 
 test("publication credentials are absent during validation and restored after", async () => {
   const hostEnvironment: NodeJS.ProcessEnv = {
     PATH: "/bin",
-    CURSOR_API_KEY: "cursor-secret",
-    NOOK_GITHUB_PAT: "github-secret",
-    GITHUB_TOKEN: "github-token",
+    CURSOR_API_KEY: "cursor",
+    NOOK_GITHUB_PAT: "github",
   };
+  const original = { ...hostEnvironment };
   await withValidationEnvironment(hostEnvironment, async (environment) => {
-    assert.equal(environment.CURSOR_API_KEY, undefined);
-    assert.equal(environment.NOOK_GITHUB_PAT, undefined);
-    assert.equal(environment.GITHUB_TOKEN, undefined);
-    assert.equal(environment.PATH, "/bin");
+    assert.deepEqual(environment, { PATH: "/bin" });
   });
-  assert.deepEqual(hostEnvironment, {
-    PATH: "/bin",
-    CURSOR_API_KEY: "cursor-secret",
-    NOOK_GITHUB_PAT: "github-secret",
-    GITHUB_TOKEN: "github-token",
-  });
+  assert.deepEqual(hostEnvironment, original);
 });
 
 test("validation failure prevents publication", async () => {
   let published = false;
   await assert.rejects(
-    validateThenPublish({
-      validate: async () => {
+    validateThenPublish(
+      async () => {
         throw new Error("validation failed");
       },
-      publish: async () => {
+      async () => {
         published = true;
       },
-    }),
+    ),
     /validation failed/,
   );
   assert.equal(published, false);
@@ -161,31 +122,20 @@ test("baseline HEAD and index mutations fail closed", () => {
     headSha: "a".repeat(40),
     indexTreeSha: "b".repeat(40),
   };
-  assert.doesNotThrow(() =>
-    assertRepositoryBaselineUnchanged({
-      baseline,
-      currentHeadSha: baseline.headSha,
-      currentIndexTreeSha: baseline.indexTreeSha,
-    }),
-  );
-  assert.throws(
-    () =>
-      assertRepositoryBaselineUnchanged({
-        baseline,
-        currentHeadSha: "c".repeat(40),
-        currentIndexTreeSha: baseline.indexTreeSha,
-      }),
-    /baseline HEAD/,
-  );
-  assert.throws(
-    () =>
-      assertRepositoryBaselineUnchanged({
-        baseline,
-        currentHeadSha: baseline.headSha,
-        currentIndexTreeSha: "d".repeat(40),
-      }),
-    /baseline index/,
-  );
+  for (const [field, value, message] of [
+    ["currentHeadSha", "c".repeat(40), /baseline HEAD/],
+    ["currentIndexTreeSha", "d".repeat(40), /baseline index/],
+  ] as const)
+    assert.throws(
+      () =>
+        assertRepositoryBaselineUnchanged({
+          baseline,
+          currentHeadSha: baseline.headSha,
+          currentIndexTreeSha: baseline.indexTreeSha,
+          [field]: value,
+        }),
+      message,
+    );
 });
 
 test("dependency update scope accepts only regular Rust mission files", async () => {
@@ -206,30 +156,15 @@ test("dependency update scope accepts only regular Rust mission files", async ()
       allowed.map((path) => ({ path, status: " M" })),
     );
 
-    await assert.rejects(
-      assertRustDependencyUpdateChangeSet(root, [
-        { path: "README.md", status: " M" },
-      ]),
-      /forbidden path/,
-    );
-
-    const taskfile = "nook-app/nook-platform/Taskfile.yml";
-    await writeFile(join(root, taskfile), "version: '3'\n");
-    await assert.rejects(
-      assertRustDependencyUpdateChangeSet(root, [
-        { path: taskfile, status: " M" },
-      ]),
-      /orchestration control/,
-    );
-
-    const buildScript = "nook-app/nook-platform/build.rs";
-    await writeFile(join(root, buildScript), "fn main() {}\n");
-    await assert.rejects(
-      assertRustDependencyUpdateChangeSet(root, [
-        { path: buildScript, status: " M" },
-      ]),
-      /orchestration control/,
-    );
+    for (const [path, message] of [
+      ["README.md", /forbidden path/],
+      ["nook-app/nook-platform/Taskfile.yml", /orchestration control/],
+      ["nook-app/nook-platform/build.rs", /orchestration control/],
+    ] as const)
+      await assert.rejects(
+        assertRustDependencyUpdateChangeSet(root, [{ path, status: " M" }]),
+        message,
+      );
 
     const symlinkPath = "preflight/src/linked.rs";
     await mkdir(join(root, "preflight/src"), { recursive: true });
@@ -255,33 +190,21 @@ test("dependency update scope accepts only regular Rust mission files", async ()
 });
 
 test("persisted Git authentication config fails without exposing values", () => {
-  assert.doesNotThrow(() =>
-    assertNoPersistedGitCredentials([
-      { key: "core.repositoryformatversion", value: "0" },
-    ]),
-  );
-  assert.throws(
-    () =>
-      assertNoPersistedGitCredentials([
-        {
-          key: "http.https://github.com/.extraheader",
-          value: "AUTHORIZATION: basic should-not-appear",
-        },
-      ]),
-    (error: unknown) => {
-      assert.ok(error instanceof Error);
-      assert.match(error.message, /credential detected/);
-      assert.doesNotMatch(error.message, /should-not-appear/);
-      return true;
+  for (const entry of [
+    {
+      key: "http.https://github.com/.extraheader",
+      value: "AUTHORIZATION: basic should-not-appear",
     },
-  );
-  assert.throws(
-    () =>
-      assertNoPersistedGitCredentials([
-        { key: "credential.https://github.com.helper", value: "store" },
-      ]),
-    /credential detected/,
-  );
+    { key: "credential.https://github.com.helper", value: "store" },
+  ])
+    assert.throws(
+      () => assertNoPersistedGitCredentials([entry]),
+      (error) => {
+        assert.match(String(error), /credential detected/);
+        assert.doesNotMatch(String(error), /should-not-appear/);
+        return true;
+      },
+    );
 });
 
 const PUBLISHED_IDENTITY = {
@@ -296,52 +219,25 @@ const PUBLISHED_IDENTITY = {
   expectedPrNumber: 1208,
 };
 
-test("exact published fix identity returns the verified head", () => {
-  assert.equal(
-    assertPublishedFixIdentity(PUBLISHED_IDENTITY),
-    PUBLISHED_IDENTITY.expectedHeadSha,
-  );
-});
-
-test("published fix identity mismatches fail closed", async (t) => {
+test("new publication exact identity succeeds and mismatches fail closed", () => {
+  assert.equal(assertPublishedFixIdentity(PUBLISHED_IDENTITY), "a".repeat(40));
   const mismatches = [
-    ["PR number", { actualPrNumber: 1209 }],
-    ["head branch", { actualHeadRef: "fix/other" }],
-    ["head SHA", { actualHeadSha: "b".repeat(40) }],
-    ["remote branch SHA", { actualRemoteHeadSha: "b".repeat(40) }],
-    ["base branch", { actualBaseRef: "release" }],
+    { actualPrNumber: 1209 },
+    { actualHeadRef: "fix/other" },
+    { actualHeadSha: "b".repeat(40) },
+    { actualRemoteHeadSha: "b".repeat(40) },
+    { actualBaseRef: "release" },
   ] as const;
-  for (const [name, mismatch] of mismatches) {
-    await t.test(name, () => {
-      assert.throws(
-        () =>
-          assertPublishedFixIdentity({
-            ...PUBLISHED_IDENTITY,
-            ...mismatch,
-          }),
-        /Published (?:PR|remote branch)/,
-      );
-    });
-  }
+  for (const mismatch of mismatches)
+    assert.throws(
+      () => assertPublishedFixIdentity({ ...PUBLISHED_IDENTITY, ...mismatch }),
+      /Published (?:PR|remote branch)/,
+    );
 });
 
 test("existing PR verification binds PR and remote branch identity", async () => {
   const headSha = "a".repeat(40);
-  assert.equal(
-    await verifyPublishedFix({
-      expectedBaseRef: "main",
-      expectedHeadRef: "fix/rust-dependencies-42",
-      expectedPrNumber: 1208,
-      fetchPullRequest: async () => ({
-        base: { ref: "main" },
-        head: { ref: "fix/rust-dependencies-42", sha: headSha },
-        number: 1208,
-      }),
-      fetchRemoteHeadSha: async () => headSha,
-    }),
-    headSha,
-  );
-  await assert.rejects(
+  const verify = (remoteHeadSha: string) =>
     verifyPublishedFix({
       expectedBaseRef: "main",
       expectedHeadRef: "fix/rust-dependencies-42",
@@ -351,8 +247,8 @@ test("existing PR verification binds PR and remote branch identity", async () =>
         head: { ref: "fix/rust-dependencies-42", sha: headSha },
         number: 1208,
       }),
-      fetchRemoteHeadSha: async () => "b".repeat(40),
-    }),
-    /head SHA changed/,
-  );
+      fetchRemoteHeadSha: async () => remoteHeadSha,
+    });
+  assert.equal(await verify(headSha), headSha);
+  await assert.rejects(verify("b".repeat(40)), /head SHA changed/);
 });

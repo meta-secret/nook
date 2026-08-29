@@ -94,21 +94,14 @@ export const runValidationCommand: ValidationRunner = async (
     });
     child.once("error", rejectRun);
     child.once("close", (code, signal) => {
-      if (signal) {
-        rejectRun(
-          new Error(
-            `${command} ${args.join(" ")} terminated by signal ${signal}`,
-          ),
-        );
-        return;
-      }
-      if (code !== 0) {
-        rejectRun(
-          new Error(`${command} ${args.join(" ")} exited with code ${code}`),
-        );
-        return;
-      }
-      resolveRun();
+      const failure = signal
+        ? `terminated by signal ${signal}`
+        : code === 0
+          ? undefined
+          : `exited with code ${code}`;
+      if (failure)
+        rejectRun(new Error(`${command} ${args.join(" ")} ${failure}`));
+      else resolveRun();
     });
   });
 };
@@ -152,25 +145,16 @@ function isOrchestrationControlPath(path: string): boolean {
   const lower = path.toLowerCase();
   const basename = lower.slice(lower.lastIndexOf("/") + 1);
   return (
-    lower.startsWith(".github/") ||
-    lower.startsWith(".task/") ||
-    lower.startsWith(".cursor/") ||
-    lower.startsWith("scripts/") ||
-    lower.includes("/scripts/") ||
-    basename === "taskfile.yml" ||
-    basename === "taskfile.yaml" ||
-    basename === "makefile" ||
-    basename === "justfile" ||
-    basename === "build.rs" ||
-    basename === "dockerfile" ||
-    basename.startsWith("dockerfile.") ||
-    basename.includes("bake") ||
-    basename.startsWith("docker-compose")
+    /(^|\/)(?:\.github|\.task|\.cursor|scripts)\//u.test(lower) ||
+    /^(?:taskfile\.ya?ml|makefile|justfile|build\.rs|dockerfile(?:\..*)?|docker-compose.*)$/u.test(
+      basename,
+    ) ||
+    basename.includes("bake")
   );
 }
 
 function parseNulSeparated(value: string): string[] {
-  return value.split("\0").filter((entry) => entry.length > 0);
+  return value.split("\0").filter(Boolean);
 }
 
 export function parsePorcelainStatus(output: string): ChangedPath[] {
@@ -291,7 +275,7 @@ export async function assertRustDependencyUpdateChangeSet(
       }
     } catch (error: unknown) {
       const code =
-        typeof error === "object" && error !== null && "code" in error
+        error && typeof error === "object" && "code" in error
           ? String(error.code)
           : "";
       if (code !== "ENOENT" || !change.status.includes("D")) throw error;
@@ -316,8 +300,7 @@ async function baselineMode(
     "--",
     path,
   ]);
-  const match = /^(\d{6})\s/u.exec(output);
-  return match?.[1];
+  return /^(\d{6})\s/u.exec(output)?.[1];
 }
 
 async function assertTrustedChangeSet(
@@ -430,12 +413,12 @@ export async function runRustDependencyUpdateValidation(
   }
 }
 
-export async function validateThenPublish(args: {
-  validate: () => Promise<void>;
-  publish: () => Promise<void>;
-}): Promise<void> {
-  await args.validate();
-  await args.publish();
+export async function validateThenPublish(
+  validate: () => Promise<void>,
+  publish: () => Promise<void>,
+): Promise<void> {
+  await validate();
+  await publish();
 }
 
 type PublishedFixIdentity = {
@@ -453,31 +436,21 @@ type PublishedFixIdentity = {
 export function assertPublishedFixIdentity(
   identity: PublishedFixIdentity,
 ): string {
-  if (identity.actualPrNumber !== identity.expectedPrNumber) {
+  const mismatch = [
+    ["PR number", identity.actualPrNumber, identity.expectedPrNumber],
+    ["PR head ref", identity.actualHeadRef, identity.expectedHeadRef],
+    ["PR head SHA", identity.actualHeadSha, identity.expectedHeadSha],
+    [
+      "remote branch SHA",
+      identity.actualRemoteHeadSha,
+      identity.expectedHeadSha,
+    ],
+    ["PR base", identity.actualBaseRef, identity.expectedBaseRef],
+  ].find(([, actual, expected]) => actual !== expected);
+  if (mismatch)
     throw new Error(
-      `Published PR identity changed: expected #${identity.expectedPrNumber}, got #${identity.actualPrNumber}`,
+      `Published ${mismatch[0]} changed: expected ${mismatch[2]}, got ${mismatch[1]}`,
     );
-  }
-  if (identity.actualHeadRef !== identity.expectedHeadRef) {
-    throw new Error(
-      `Published PR head branch changed: expected ${identity.expectedHeadRef}, got ${identity.actualHeadRef}`,
-    );
-  }
-  if (identity.actualHeadSha !== identity.expectedHeadSha) {
-    throw new Error(
-      `Published PR head SHA changed: expected ${identity.expectedHeadSha}, got ${identity.actualHeadSha}`,
-    );
-  }
-  if (identity.actualRemoteHeadSha !== identity.expectedHeadSha) {
-    throw new Error(
-      `Published remote branch SHA changed: expected ${identity.expectedHeadSha}, got ${identity.actualRemoteHeadSha}`,
-    );
-  }
-  if (identity.actualBaseRef !== identity.expectedBaseRef) {
-    throw new Error(
-      `Published PR base changed: expected ${identity.expectedBaseRef}, got ${identity.actualBaseRef}`,
-    );
-  }
   return identity.expectedHeadSha;
 }
 
@@ -618,16 +591,16 @@ export async function runCiFix(): Promise<string | undefined> {
       if (!baseline) {
         throw new Error("Rust dependency update baseline was not captured");
       }
-      await validateThenPublish({
-        validate: async () => {
+      await validateThenPublish(
+        async () => {
           await assertBaselineUnchanged(repoRoot, baseline);
           await assertTrustedChangeSet(repoRoot, baseline);
           await runValidationWithoutPublicationCredentials(repoRoot);
           await assertBaselineUnchanged(repoRoot, baseline);
           await assertTrustedChangeSet(repoRoot, baseline);
         },
-        publish: () => pushFixBranch(repoRoot, fixBranch, runId),
-      });
+        () => pushFixBranch(repoRoot, fixBranch, runId),
+      );
     } else {
       await pushFixBranch(repoRoot, fixBranch, runId);
     }
