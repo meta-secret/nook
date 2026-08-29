@@ -294,9 +294,7 @@ pub fn looks_like_non_authentication_submit_control_label(label: &str) -> bool {
     )
 }
 
-/// Decide whether bounded form and same-origin destination identities describe
-/// an authentication route without destructive, recovery, registration, or
-/// external-provider evidence.
+/// Decide whether bounded form and destination identities describe a safe authentication route.
 #[must_use]
 pub fn has_safe_authentication_route_identity(
     source_origin: &str,
@@ -609,15 +607,9 @@ mod tests {
         assert!(looks_like_login_advance_control_label("Submit"));
         assert!(!looks_like_login_advance_control_label("Learn more"));
         assert!(!looks_like_login_advance_control_label("Subscribe"));
-        assert!(!looks_like_login_advance_control_label(
-            "Continue to delete account"
-        ));
-        assert!(!looks_like_login_advance_control_label(
-            "Continue to reset password"
-        ));
-        assert!(!looks_like_login_advance_control_label("Entrar con Amazon"));
-        assert!(!looks_like_login_advance_control_label("Entrar con Foo"));
-        assert!(!looks_like_login_advance_control_label("Continue with X"));
+        for label in "Continue to delete account|Continue to reset password|Entrar con Amazon|Entrar con Foo|Continue with X".split('|') {
+            assert!(!looks_like_login_advance_control_label(label));
+        }
         assert!(!looks_like_login_advance_control_label(
             &"x".repeat(MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1)
         ));
@@ -626,12 +618,9 @@ mod tests {
     #[test]
     fn activation_accepts_only_bounded_semantic_username_scope_evidence() {
         let decide = |form: &str, label: &str, semantic, username, local| {
-            let machine = label.strip_prefix("machine:").unwrap_or_default();
-            let visible_label = if machine.is_empty() {
-                label
-            } else {
-                "Continue"
-            };
+            let (machine, visible_label) = label
+                .strip_prefix("machine:")
+                .map_or(("", label), |machine| (machine, "Continue"));
             can_activate_authentication_route_control(
                 "https://login.microsoftonline.com",
                 form,
@@ -649,16 +638,7 @@ mod tests {
         assert!(decide("f", "Continue with email", true, true, true));
         assert!(decide("f", "Sign in using password", true, true, true));
         assert!(!decide("f", "Continue with Amazon", true, true, true));
-        for label in [
-            "Sign in to Google",
-            "machine:delete-account",
-            "machine:reset-password",
-            "machine:create-account",
-            "machine:google",
-            "machine:passkey",
-            "Sign in to Microsoft and reset password",
-            "Sign in to Microsoft or Google",
-        ] {
+        for label in "Sign in to Google|machine:delete-account|machine:reset-password|machine:create-account|machine:google|machine:passkey|Sign in to Microsoft and reset password|Sign in to Microsoft or Google".split('|') {
             assert!(!decide("login-form", label, true, true, true));
         }
         assert!(!decide("f", "Entrar", true, true, false));
@@ -683,8 +663,8 @@ mod tests {
             ("google-login", "https://example.test/auth/login"),
             ("passkey-login", "https://example.test/auth/login"),
             ("login-form", "https://example.test/login?provider"),
-            ("login-form", "https://example.test/login#/x"),
-            ("login-form", "https://example.test/login?provider=x"),
+            ("login-form", "https://example.test/login?foo=1#/x"),
+            ("login-form", "https://example.test/login?Provider=amazon"),
             ("login-form", "https://example.test/signin/x"),
             ("login-form", "https://example.test/auth/close/account"),
             ("login-form", "https://example.test/auth/forgot/password"),

@@ -313,20 +313,27 @@ describe('website one-time-code fields', () => {
   })
 
   test.each([
-    ['Amazon provider selector', 'Continue with Amazon', '', ''],
-    ['destructive action', 'Continue', 'id="delete-account"', ''],
-    ['hidden ancestor', '', 'name="continue"', 'hidden'],
-  ])('skips %s before advancing login', (_, label, attrs, parentAttrs) => {
+    ['Amazon provider', '<button>Continue with Amazon</button>', ''],
+    ['labelled provider', '<input type="submit" aria-labelledby="p" />', ''],
+    [
+      'titled provider',
+      '<input type="submit" title="Continue with Amazon" />',
+      '',
+    ],
+    ['destructive action', '<button id="delete-account">Continue</button>', ''],
+    ['hidden ancestor', '<button name="continue"></button>', 'hidden'],
+  ])('skips %s before advancing login', (_, control, parentAttrs) => {
     document.body.innerHTML = `
       <form id="login-form">
         <input autocomplete="username" name="email" type="email" />
-        <span ${parentAttrs}><button ${attrs} type="button">${label}</button></span>
+        <span id="p">Continue with Amazon</span>
+        <span ${parentAttrs}>${control}</span>
         <button id="login-next" type="button">Continue</button>
       </form>
     `
     const activatedControls: string[] = []
-    for (const control of document.querySelectorAll<HTMLButtonElement>(
-      'button',
+    for (const control of document.querySelectorAll<HTMLInputElement>(
+      'button, input[type="submit"]',
     )) {
       control.addEventListener('click', () =>
         activatedControls.push(control.id),

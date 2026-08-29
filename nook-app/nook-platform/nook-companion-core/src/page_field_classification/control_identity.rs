@@ -29,14 +29,16 @@ pub(super) fn label_names_external_authentication_provider(identity: &str) -> bo
     identity_names_external_authentication_provider(identity, true)
 }
 pub(super) fn route_names_external_authentication_provider(identity: &str) -> bool {
-    let route = expand_identity_text(identity.split('?').next().unwrap_or_default());
+    let route = expand_identity_text(identity.split(['?', '#']).next().unwrap_or_default());
+    let fragment = expand_identity_text(identity.split_once('#').map_or("", |(_, value)| value));
     identity_names_external_authentication_provider(identity, false)
         || identity.split_once('?').is_some_and(|(_, query)| {
             query
+                .to_ascii_lowercase()
                 .split(['&', '#'])
                 .any(|component| component.split('=').next() == Some("provider"))
         })
-        || (contains_any_word(&route, &["x"])
+        || ((contains_any_word(&route, &["x"]) || contains_any_word(&fragment, &["x"]))
             && contains_any_word(&route, &["login", "log in", "signin", "sign in"]))
 }
 fn has_open_ended_provider_selection_grammar(identity: &str) -> bool {

@@ -117,12 +117,12 @@ type LoginAdvanceControlRequest = PasswordFormScopeQuery & {
 type LoginAdvanceControl = HTMLButtonElement | HTMLInputElement;
 
 function isRenderedControl(control: LoginAdvanceControl): boolean {
-  let element: HTMLElement | null = control;
+  let element: HTMLElement | undefined = control;
   while (element) {
     const style = getComputedStyle(element);
     const rendered = style.display !== "none" && style.visibility !== "hidden";
     if (element.hidden || !rendered) return false;
-    element = element.parentElement;
+    element = element.parentElement ?? undefined;
   }
   return true;
 }
@@ -584,6 +584,12 @@ function clickAdvanceControl(request: LoginAdvanceControlRequest): boolean {
     const label = [
       control.textContent ?? "",
       control.getAttribute("aria-label") ?? "",
+      control.title,
+      ...(control.getAttribute("aria-labelledby") ?? "")
+        .split(/\s+/)
+        .map(
+          (id) => control.ownerDocument.getElementById(id)?.textContent ?? "",
+        ),
       control.tagName === "INPUT" ? control.value || "submit" : "",
     ].join(" ");
     const nookTypedArgs0_30: AuthenticationRouteControlRequest = {
