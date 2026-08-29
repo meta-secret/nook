@@ -36,15 +36,19 @@ const beginAccountPickerAuthorizationCleanup = mock(() =>
   }),
 )
 const clearPendingAccountPickers = mock(() => Promise.resolve())
+const clearMountedAuthenticationSurfaces = mock(() => Promise.resolve())
 const clearStagedAuthenticatorEnrollments = mock(() => {})
 const rebindStagedAuthenticatorEnrollmentsAuthorization = mock(() => {})
 const completeAccountPickerAuthorizationCleanup = mock(() => Promise.resolve())
 const releaseAccountPickerAuthorizationCleanup = mock(() => {})
+const invalidateAllLoginMatchAvailability = mock(() => {})
+const refreshAuthenticationSurfaces = mock(() => Promise.resolve())
 
 const lifecycleDependencies: ExtensionLifecycleRoutingDependencies = {
   accountPickerAuthorizationCleanupPending,
   beginAccountPickerAuthorizationCleanup,
   clearPendingAccountPickers,
+  clearMountedAuthenticationSurfaces,
   clearStagedAuthenticatorEnrollments,
   closeExtensionSessionDocument: unusedAsyncDependency,
   completeAccountPickerAuthorizationCleanup,
@@ -54,6 +58,12 @@ const lifecycleDependencies: ExtensionLifecycleRoutingDependencies = {
   hasPairingApprovedType: mock(() => false),
   importLocalEventLogUpdate: unusedAsyncDependency,
   importPairingAfterCompanionReady: unusedAsyncDependency,
+  invalidateAllLoginMatchAvailability,
+  isExtensionAuthenticationSurfacesRefreshMessage: (message) =>
+    !!message &&
+    typeof message === 'object' &&
+    'type' in message &&
+    message.type === ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces,
   isExtensionPairingStateQueryMessage: mock(() => false),
   isExtensionSessionEnsureMessage: (message) =>
     !!message &&
@@ -68,6 +78,7 @@ const lifecycleDependencies: ExtensionLifecycleRoutingDependencies = {
   queryActiveTabLoginDetection: unusedAsyncDependency,
   releaseAccountPickerAuthorizationCleanup,
   rebindStagedAuthenticatorEnrollmentsAuthorization,
+  refreshAuthenticationSurfaces,
 }
 
 const externalDependencies: ExternalCompanionRoutingDependencies = {
@@ -126,6 +137,28 @@ describe('service worker routing', () => {
     expect(sendResponse).toHaveBeenCalledWith({ ok: true })
   })
 
+  test('refreshes mounted authentication surfaces from an authorized sender', async () => {
+    const { routeExtensionLifecycleMessage } =
+      await import('../src/background/service-worker/extension-lifecycle-routing')
+    const sendResponse = mock(() => {})
+
+    expect(
+      routeExtensionLifecycleMessage({
+        dependencies: lifecycleDependencies,
+        message: {
+          type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces,
+        },
+        sender: { id: 'nook-extension' },
+        sendResponse,
+      }),
+    ).toBe(true)
+    await flushResponses()
+
+    expect(invalidateAllLoginMatchAvailability).toHaveBeenCalled()
+    expect(refreshAuthenticationSurfaces).toHaveBeenCalled()
+    expect(sendResponse).toHaveBeenCalledWith({ ok: true })
+  })
+
   test('keeps picker authorization invalid until lock cleanup finishes', async () => {
     const events: string[] = []
     let pickerCleanupCount = 0
@@ -143,6 +176,10 @@ describe('service worker routing', () => {
         events.push(`pickers-cleared-${pickerCleanupCount}`)
         return Promise.resolve()
       },
+      clearMountedAuthenticationSurfaces: () => {
+        events.push('surfaces-cleared')
+        return Promise.resolve()
+      },
       clearStagedAuthenticatorEnrollments: () => {
         events.push('enrollments-cleared')
       },
@@ -153,6 +190,9 @@ describe('service worker routing', () => {
       completeAccountPickerAuthorizationCleanup: (generation) => {
         events.push(`authorization-restored-${generation}`)
         return Promise.resolve()
+      },
+      invalidateAllLoginMatchAvailability: () => {
+        events.push('login-matches-invalidated')
       },
       isExtensionSessionEnsureMessage: () => false,
       isExtensionSessionLockMessage: () => true,
@@ -174,15 +214,19 @@ describe('service worker routing', () => {
     ).toBe(true)
     await flushResponses()
     await flushResponses()
+    await flushResponses()
 
     expect(events).toEqual([
+      'login-matches-invalidated',
       'authorization-invalidated',
       'enrollments-cleared',
       'session-closed',
       'pickers-cleared-1',
+      'surfaces-cleared',
       'pickers-cleared-2',
       'enrollments-cleared',
       'authorization-restored-4',
+      'login-matches-invalidated',
     ])
     expect(sendResponse).toHaveBeenCalledWith({ ok: true })
   })

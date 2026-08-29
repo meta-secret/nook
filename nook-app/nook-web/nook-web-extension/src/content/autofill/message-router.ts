@@ -22,9 +22,13 @@ import {
   fillAndSubmitAccount,
   setStatus,
 } from './login-passkey-actions'
+import { stopPendingSaveWatch } from './login-save'
 import {
   AuthenticatorPickerKind,
   LoginPickerKind,
+  WidgetHostKind,
+  WidgetWorkflowRootKind,
+  authenticationActionState,
   pickerState,
   scanState,
   widgetState,
@@ -32,6 +36,7 @@ import {
 import { removeWidget, translatedMessage } from './workflow-ui'
 
 export function removeScannedWidget(): void {
+  stopPendingSaveWatch()
   cancelPendingAuthenticatorPickerRequest()
   cancelPendingLoginPickerRequest()
   removeWidget()
@@ -49,9 +54,34 @@ export const routeAutofillMessage: AutofillMessageListener =
     if (
       sender.id === chrome.runtime.id &&
       'type' in message &&
+      message.type === ExtensionRuntimeRequestType.ClearAuthenticationSurface
+    ) {
+      scanState.invalidateCurrentResult()
+      authenticationActionState.invalidate()
+      widgetState.busy = false
+      removeScannedWidget()
+      const response: Parameters<typeof sendResponse>[0] = { ok: true }
+      sendResponse(response)
+      return false
+    }
+    if (
+      sender.id === chrome.runtime.id &&
+      'type' in message &&
       message.type === ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces
     ) {
+      scanState.invalidateCurrentResult()
+      authenticationActionState.invalidate()
+      widgetState.busy = false
       widgetState.dismissed = false
+      cancelPendingAuthenticatorPickerRequest()
+      cancelPendingLoginPickerRequest()
+      if (
+        widgetState.host.kind === WidgetHostKind.Attached &&
+        widgetState.renderedWorkflowRoot.kind ===
+          WidgetWorkflowRootKind.Assigned
+      ) {
+        widgetState.host.element.inert = true
+      }
       scanState.schedule()
       const response: Parameters<typeof sendResponse>[0] = { ok: true }
       sendResponse(response)

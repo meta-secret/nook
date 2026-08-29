@@ -53,6 +53,7 @@ import {
   clearPendingAccountPickers,
   completeAccountPickerAuthorizationCleanup,
   releaseAccountPickerAuthorizationCleanup,
+  invalidateAllLoginMatchAvailability,
   invalidateLoginMatchAvailabilityForOrigin,
   loginMatchAvailabilityForOriginSafe,
   websiteLoginOptions,
@@ -116,14 +117,17 @@ import {
   authenticationWorkflowMessageResponse,
 } from './service-worker/authentication-workflow-routing'
 import {
+  clearMountedAuthenticationSurfaces,
   closeExtensionSessionDocument,
   ensureExtensionSessionDocument,
   extensionSessionDocument,
   openCompanionLauncher,
   openSimpleVault,
   queryActiveTabLoginDetection,
+  refreshAuthenticationSurfaces,
 } from './service-worker/session-lifecycle'
 import {
+  isExtensionAuthenticationSurfacesRefreshMessage,
   isExtensionSessionEnsureMessage,
   isExtensionSessionExpiryMessage,
   isExtensionSessionLockMessage,
@@ -140,6 +144,7 @@ const extensionLifecycleRoutingDependencies: Parameters<
   accountPickerAuthorizationCleanupPending,
   beginAccountPickerAuthorizationCleanup,
   clearPendingAccountPickers,
+  clearMountedAuthenticationSurfaces,
   clearStagedAuthenticatorEnrollments,
   rebindStagedAuthenticatorEnrollmentsAuthorization,
   closeExtensionSessionDocument,
@@ -150,6 +155,8 @@ const extensionLifecycleRoutingDependencies: Parameters<
   hasPairingApprovedType,
   importLocalEventLogUpdate,
   importPairingAfterCompanionReady,
+  invalidateAllLoginMatchAvailability,
+  isExtensionAuthenticationSurfacesRefreshMessage,
   isExtensionPairingStateQueryMessage,
   isExtensionSessionEnsureMessage,
   isExtensionSessionExpiryMessage,
@@ -159,6 +166,7 @@ const extensionLifecycleRoutingDependencies: Parameters<
   openSimpleVault,
   queryActiveTabLoginDetection,
   releaseAccountPickerAuthorizationCleanup,
+  refreshAuthenticationSurfaces,
 }
 
 void recoverInterruptedAuthorizationCleanup(

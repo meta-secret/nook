@@ -5,6 +5,7 @@ import {
 import { runtimeSimpleVaultUrl } from '../../lib/simple-vault-runtime'
 import { DeviceProtectionStatus } from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { OpenCompanionLauncherIntent } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
+import { ExtensionRuntimeRequestType } from '../../lib/extension-runtime-request-type'
 
 export const extensionSessionDocument = 'offscreen/session.html'
 
@@ -127,6 +128,45 @@ export function openSimpleVault(path = ''): void {
     url: runtimeSimpleVaultUrl(path),
   }
   void chrome.tabs.create(nookTypedArgs0_1)
+}
+
+type AuthenticationSurfaceNotification = {
+  type:
+    | ExtensionRuntimeRequestType.ClearAuthenticationSurface
+    | ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces
+}
+
+async function notifyAuthenticationSurfaces(
+  message: AuthenticationSurfaceNotification,
+): Promise<void> {
+  try {
+    const queryArgs: Parameters<typeof chrome.tabs.query>[0] = {}
+    const tabs = await new Promise<chrome.tabs.Tab[]>((resolve) => {
+      chrome.tabs.query(queryArgs, resolve)
+    })
+    await Promise.allSettled(
+      tabs.map(async (tab) => {
+        if (typeof tab.id !== 'number' || !Number.isInteger(tab.id)) return
+        await chrome.tabs.sendMessage(tab.id, message)
+      }),
+    )
+  } catch {
+    // Authorization cleanup must complete even when tab enumeration is absent.
+  }
+}
+
+export function clearMountedAuthenticationSurfaces(): Promise<void> {
+  const args: AuthenticationSurfaceNotification = {
+    type: ExtensionRuntimeRequestType.ClearAuthenticationSurface,
+  }
+  return notifyAuthenticationSurfaces(args)
+}
+
+export function refreshAuthenticationSurfaces(): Promise<void> {
+  const args: AuthenticationSurfaceNotification = {
+    type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces,
+  }
+  return notifyAuthenticationSurfaces(args)
 }
 
 enum ActiveTabQueryKind {

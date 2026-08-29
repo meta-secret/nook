@@ -65,3 +65,42 @@ describe('openCompanionLauncherBestEffort', () => {
     await Promise.resolve()
   })
 })
+
+describe('authentication surface notifications', () => {
+  test('refreshes every available tab and tolerates tabs without ids', async () => {
+    const messages: Array<{ tabId: number; type: string }> = []
+    globalThis.chrome = {
+      tabs: {
+        query: (_query, callback) =>
+          callback([{ id: 7 }, { id: undefined }, { id: 11 }]),
+        sendMessage: (tabId, message) => {
+          messages.push({ tabId, type: message.type })
+          return Promise.resolve()
+        },
+      },
+    } as unknown as typeof chrome
+    const { refreshAuthenticationSurfaces } =
+      await import('../src/background/service-worker/session-lifecycle')
+
+    await refreshAuthenticationSurfaces()
+
+    expect(messages).toEqual([
+      { tabId: 7, type: 'nook:refresh-authentication-surfaces' },
+      { tabId: 11, type: 'nook:refresh-authentication-surfaces' },
+    ])
+  })
+
+  test('contains absent-tab enumeration failures during cleanup', async () => {
+    globalThis.chrome = {
+      tabs: {
+        query: () => {
+          throw new Error('tabs unavailable')
+        },
+      },
+    } as unknown as typeof chrome
+    const { clearMountedAuthenticationSurfaces } =
+      await import('../src/background/service-worker/session-lifecycle')
+
+    await expect(clearMountedAuthenticationSurfaces()).resolves.toBeUndefined()
+  })
+})
