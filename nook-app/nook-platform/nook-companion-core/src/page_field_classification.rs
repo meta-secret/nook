@@ -4,7 +4,9 @@
 //! which identity strings count as username, OTP, passkey, or manual-checkpoint
 //! signals used to build authentication workflow observations in the host.
 
+mod control_identity;
 mod destination_identity;
+mod form_identity;
 
 /// Maximum byte length for each DOM-controlled authentication identity string.
 pub const MAX_AUTHENTICATION_CONTROL_TEXT_BYTES: usize = 512;
@@ -187,7 +189,18 @@ pub fn looks_like_one_time_code_field(field: &PageInputFieldObservation) -> bool
 #[must_use]
 pub fn looks_like_passkey_control_label(label: &str) -> bool {
     let identity = expand_identity_text(label);
-    contains_any_word(
+    !contains_any_word(
+        &identity,
+        &[
+            "delete",
+            "remove",
+            "revoke",
+            "unlink",
+            "disconnect",
+            "disable",
+            "deactivate",
+        ],
+    ) && contains_any_word(
         &identity,
         &[
             "pass key",
@@ -231,8 +244,87 @@ pub fn looks_like_email_verification_body(body: &str) -> bool {
 /// True when an activatable control advances an authentication ceremony.
 #[must_use]
 pub fn looks_like_login_advance_control_label(label: &str) -> bool {
+    if label.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
+        || form_identity::form_identity_indicates_destructive_action(label)
+        || looks_like_non_authentication_submit_control_label(label)
+        || control_identity::looks_like_password_recovery_route_control_label(label)
+        || control_identity::looks_like_registration_route_control_label(label)
+        || control_identity::looks_like_alternate_authentication_route_control_label(label)
+    {
+        return false;
+    }
+    looks_like_unrestricted_login_advance_control_label(label)
+}
+
+fn looks_like_unrestricted_login_advance_control_label(label: &str) -> bool {
     let identity = expand_identity_text(label);
     contains_any_word(&identity, LOGIN_ADVANCE_WORDS) || contains_any_word(&identity, &["submit"])
+}
+
+/// True when a semantic submit explicitly describes a non-authentication action.
+#[must_use]
+pub fn looks_like_non_authentication_submit_control_label(label: &str) -> bool {
+    let identity = expand_identity_text(label);
+    contains_any_word(
+        &identity,
+        &[
+            "save",
+            "update",
+            "subscribe",
+            "search",
+            "publish",
+            "post",
+            "delete",
+            "remove",
+            "deactivate",
+            "close account",
+            "erase",
+            "destroy",
+            "cancel",
+            "back",
+            "help",
+            "learn more",
+        ],
+    )
+}
+
+/// Decide whether bounded form and same-origin destination identities describe
+/// an authentication route without destructive, recovery, registration, or
+/// external-provider evidence.
+#[must_use]
+pub fn has_safe_authentication_route_identity(
+    source_origin: &str,
+    form_identity: &str,
+    destination_identity: &str,
+) -> bool {
+    if [source_origin, form_identity, destination_identity]
+        .into_iter()
+        .any(|value| value.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES)
+    {
+        return false;
+    }
+    if form_identity::form_identity_indicates_destructive_action(form_identity)
+        || form_identity::form_identity_indicates_non_authentication_account_management(
+            form_identity,
+        )
+    {
+        return false;
+    }
+    let Some(destination) =
+        destination_identity::canonicalize_control_destination(source_origin, destination_identity)
+    else {
+        return false;
+    };
+    if form_identity::form_identity_indicates_destructive_action(&destination.route_identity)
+        || form_identity::control_destination_indicates_non_authentication_route(
+            &destination.route_identity,
+        )
+        || form_identity::destination_has_disallowed_action_or_provider(&destination.route_identity)
+    {
+        return false;
+    }
+    form_identity::identity_indicates_explicit_authentication_route(form_identity)
+        || form_identity::destination_has_safe_login_identity(&destination.path_identity)
 }
 
 fn has_autocomplete_token(tokens: &[String], expected: &str) -> bool {
@@ -459,6 +551,7 @@ mod tests {
     fn passkey_and_manual_checkpoint_labels() {
         assert!(looks_like_passkey_control_label("Sign in with passkey"));
         assert!(!looks_like_passkey_control_label("Continue"));
+        assert!(!looks_like_passkey_control_label("Delete passkey"));
         assert!(looks_like_manual_checkpoint_label("I agree to the Terms"));
         assert!(looks_like_email_verification_body(
             "Please verify your email to continue"
@@ -476,5 +569,60 @@ mod tests {
         assert!(looks_like_login_advance_control_label("Submit"));
         assert!(!looks_like_login_advance_control_label("Learn more"));
         assert!(!looks_like_login_advance_control_label("Subscribe"));
+        assert!(!looks_like_login_advance_control_label(
+            "Continue to delete account"
+        ));
+        assert!(!looks_like_login_advance_control_label(
+            "Continue to reset password"
+        ));
+        assert!(!looks_like_login_advance_control_label(
+            "Continue with Google"
+        ));
+        assert!(!looks_like_login_advance_control_label(
+            &"x".repeat(MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1)
+        ));
+    }
+
+    #[test]
+    fn route_identity_requires_positive_same_origin_authentication_evidence() {
+        assert!(has_safe_authentication_route_identity(
+            "https://example.test",
+            "login-form",
+            "https://example.test/session",
+        ));
+        assert!(has_safe_authentication_route_identity(
+            "https://example.test",
+            "",
+            "https://example.test/auth/login",
+        ));
+        assert!(has_safe_authentication_route_identity(
+            "https://example.test",
+            "login-form",
+            "https://example.test/auth/login?next=/profile",
+        ));
+        for (form, destination) in [
+            ("delete-account", "https://example.test/auth/login"),
+            ("profile-settings", "https://example.test/auth/login"),
+            ("login-form", "https://example.test/register"),
+            ("login-form", "https://example.test/reset-password"),
+            ("login-form", "https://example.test/signin/google"),
+            (
+                "login-form",
+                "https://example.test/auth/login?action=close+account",
+            ),
+            ("login-form", "https://example.test/auth/%64elete-account"),
+            ("login-form", "https://evil.test/auth/login"),
+        ] {
+            assert!(!has_safe_authentication_route_identity(
+                "https://example.test",
+                form,
+                destination,
+            ));
+        }
+        assert!(!has_safe_authentication_route_identity(
+            "https://example.test",
+            &"x".repeat(MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1),
+            "https://example.test/auth/login",
+        ));
     }
 }

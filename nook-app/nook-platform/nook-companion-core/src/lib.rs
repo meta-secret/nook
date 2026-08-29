@@ -120,8 +120,9 @@ pub use outcome_evidence::{
 pub use page_field_classification::{
     CanonicalControlDestination, LoginContextObservation, MAX_AUTHENTICATION_CONTROL_TEXT_BYTES,
     PageInputFieldObservation, PageInputType, canonicalize_control_destination,
-    expand_identity_text, has_login_context, looks_like_email_verification_body,
-    looks_like_login_advance_control_label, looks_like_manual_checkpoint_label,
+    expand_identity_text, has_login_context, has_safe_authentication_route_identity,
+    looks_like_email_verification_body, looks_like_login_advance_control_label,
+    looks_like_manual_checkpoint_label, looks_like_non_authentication_submit_control_label,
     looks_like_one_time_code_field, looks_like_passkey_control_label, looks_like_username_field,
 };
 pub use vault_host_policy::{
