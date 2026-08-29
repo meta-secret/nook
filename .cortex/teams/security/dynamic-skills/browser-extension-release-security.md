@@ -53,15 +53,22 @@ Does not apply to:
 ## Application procedure
 
 1. Run `task extension:check:fast` as focused security proof.
-2. Verify channel origin and extension identity together.
-3. Verify injection exclusions for every vault boundary.
-4. Verify archive and redirect safety before activation.
-5. Keep profiles isolated by channel and PR.
-6. Commit the coherent change and return the exact commit plus focused evidence
-   to Gizmo.
-7. Gizmo integrates the handoff, runs `task loom:pre-push` on the integrated
-   head, pushes promptly, and owns complete exact-head validation, readiness,
-   and merge. Focused remote execution is optional after the push.
+2. Deterministically format every allowed Cortex or source file changed by the
+   security task, and keep the resulting diff inside the assigned write scope.
+3. Verify channel origin and extension identity together.
+4. Verify injection exclusions for every vault boundary.
+5. Verify archive and redirect safety before activation.
+6. Keep profiles isolated by channel and PR.
+7. Commit the coherent formatted change and return the exact commit plus
+   focused evidence to Gizmo.
+8. Gizmo integrates the handoff and runs `task loom:pre-push` on the combined
+   head. If formatting changes security-owned content, Gizmo returns that exact
+   diff to Security for a fresh formatted commit instead of committing it.
+9. After reintegration and a clean `task loom:pre-push`, Gizmo pushes promptly
+   and immediately obtains remote evidence: at least one relevant focused
+   remote task for a non-validation-ready head, or complete exact-head
+   validation when the head is validation-ready. Gizmo owns readiness and
+   merge.
 
 ## Validation
 
