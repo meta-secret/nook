@@ -604,7 +604,7 @@ function assertGitSubcommandArguments(
     if (
       value &&
       gitConfigKeyRunsCommand(value) &&
-      args[argumentIndex + 1] !== undefined
+      argumentIndex + 1 < args.length
     )
       throw new Error('Command-capable git configuration is forbidden.');
   }
