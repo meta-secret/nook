@@ -89,9 +89,6 @@ impl AuthenticationWorkflowSnapshot {
             (AuthenticationWorkflowKind::Signup, _) => {
                 AuthenticationWorkflowCandidatePriority::Signup
             }
-            (AuthenticationWorkflowKind::Login, AuthenticationWorkflowAction::TakeOver) => {
-                AuthenticationWorkflowCandidatePriority::ManualLoginTakeover
-            }
             (AuthenticationWorkflowKind::Login, _) => {
                 AuthenticationWorkflowCandidatePriority::Login
             }
@@ -107,7 +104,6 @@ enum AuthenticationWorkflowCandidatePriority {
     Manual,
     Login,
     Signup,
-    ManualLoginTakeover,
     CredentialChangeOrPasskeySetup,
     SavedLogin,
     SecondFactorOrPasskeyUse,
@@ -173,6 +169,32 @@ mod tests {
                 )
                 .is_err()
             );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn signup_help_outranks_manual_passkey_login_takeover() -> anyhow::Result<()> {
+        let signup = AuthenticationPageObservation {
+            new_password_field_count: 1,
+            ..Default::default()
+        };
+        let manual_login = AuthenticationPageObservation {
+            passkey_control_present: true,
+            manual_checkpoint_present: true,
+            ..Default::default()
+        };
+
+        for (observations, expected_index) in
+            [([signup, manual_login], 0), ([manual_login, signup], 1)]
+        {
+            let snapshot = classify_authentication_workflow_candidates(&observations).snapshot()?;
+            assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Signup);
+            assert_eq!(
+                snapshot.action,
+                AuthenticationWorkflowAction::GeneratePassword
+            );
+            assert_eq!(snapshot.observation_index, expected_index);
         }
         Ok(())
     }
