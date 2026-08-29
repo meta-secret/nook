@@ -138,12 +138,21 @@ test('closes the exact-head shell review batch', () => {
     `BASH_ENV=${PROTECTED_ROOT}/hook.sh bash -c 'echo safe'`,
     `command_not_found_handle(){ bun ${PROTECTED}; }; definitely_missing_xyz`,
     `test -v 'x[$(bun ${PROTECTED})]'`,
+    `test "$(bun ${PROTECTED})" -eq 1`,
   ])
     expect(() => inspectProtected(source), source).toThrow();
   expect(() =>
     inspectShell('ROOT=scripts; cd "$ROOT"; bun safe.ts'),
   ).not.toThrow();
   expect(() => inspectShell('cd "$RESEARCH_DIR"; echo ok')).not.toThrow();
+  expect(() =>
+    inspectShell(
+      'test "$(unzip -Z1 "$zip_name" | grep -c "^manifest.json$")" -eq 1',
+    ),
+  ).not.toThrow();
+  expect(() =>
+    inspectShell('[ -n "$(git status --porcelain)" ]'),
+  ).not.toThrow();
   for (const seam of AUDITED_SOURCE_SEAMS) {
     const sourceRequest: AuditedSourceRequest = {
       source: seam.specifier,

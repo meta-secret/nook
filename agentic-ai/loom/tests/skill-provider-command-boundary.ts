@@ -31,6 +31,7 @@ import {
   applyParentMutation,
   applySetPositional,
   assertSafeShellRuntime,
+  hasArithmeticTestExecution,
   isolatedShellState,
   nodeInspectExecutables,
   normalizedRuntime,
@@ -56,7 +57,6 @@ import {
   type WordEnvironmentRequest,
   type WordsEnvironmentRequest,
 } from './skill-provider-command-types.ts';
-
 export type {
   ShellCommandAnalysis,
   ShellCommandInspection,
@@ -719,7 +719,7 @@ function analyzeRuntime(request: RuntimeCommandRequest): void {
   }
   if (
     (request.runtime === 'test' || request.runtime === '[') &&
-    request.words.some((word) => word.source.includes('$('))
+    hasArithmeticTestExecution(request.words)
   )
     throw new Error('Arithmetic test operand execution is forbidden.');
   if (request.runtime === 'source' || request.runtime === '.') {

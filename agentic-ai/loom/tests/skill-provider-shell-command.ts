@@ -88,6 +88,19 @@ export function assertSafeShellRuntime([
     throw new Error('Shell command-string $0 execution is forbidden.');
 }
 
+export function hasArithmeticTestExecution(
+  words: readonly ShellWord[],
+): boolean {
+  const option = words.findIndex((word) => word.value === '-v');
+  const operand = words[option + 1];
+  return (
+    option >= 0 &&
+    !!operand &&
+    operand.source.includes('$(') &&
+    operand.source.includes('[')
+  );
+}
+
 export function applySetPositional([state, words, start]: readonly [
   ShellParseState,
   readonly ShellWord[],
