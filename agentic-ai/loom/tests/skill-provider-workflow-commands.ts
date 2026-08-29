@@ -113,6 +113,7 @@ function collectStepRuns(request: StepRunRequest): void {
     const node = mapping(step);
     if (typeof node.run !== 'string') continue;
     assertSafeWorkflowShell(node.shell ?? request.defaultShell);
+    assertNoProtectedCommandFileMutation(node.run);
     const directory =
       typeof node['working-directory'] === 'string'
         ? node['working-directory']
@@ -132,6 +133,13 @@ function collectStepRuns(request: StepRunRequest): void {
       : node.run;
     request.target.push(prefix ? `${prefix} ${command}` : command);
   }
+}
+
+function assertNoProtectedCommandFileMutation(source: string): void {
+  if (!/\$\{?GITHUB_ENV\}?/u.test(source)) return;
+  for (const name of EXECUTION_ENVIRONMENT_NAMES)
+    if (source.includes(name))
+      throw new Error(`${name} workflow command-file mutation is forbidden.`);
 }
 
 function assertSafeWorkflowShell(shell: ConfigurationNode | false): void {

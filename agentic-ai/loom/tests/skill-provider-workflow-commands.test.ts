@@ -47,6 +47,26 @@ test('rejects implicit shell startup hooks before flattening run steps', () => {
   );
 });
 
+test('rejects execution environment mutations through GITHUB_ENV', () => {
+  for (const mutation of [
+    `echo 'NODE_OPTIONS=--require=./scripts/facade.cjs' >> "$GITHUB_ENV"`,
+    `printf 'BASH_ENV=%s\\n' scripts/facade.sh >> "\${GITHUB_ENV}"`,
+  ]) {
+    const document: ConfigurationNode = {
+      jobs: {
+        audit: {
+          'runs-on': 'ubuntu-latest',
+          steps: [{ run: mutation }, { run: 'node scripts/neutral.cjs' }],
+        },
+      },
+    };
+    const request = { action: false, document };
+    expect(() => workflowCommandSources(request), mutation).toThrow(
+      /workflow command-file mutation is forbidden/u,
+    );
+  }
+});
+
 test('rejects workflow shells without a matching command parser', () => {
   for (const shell of ['cmd', 'powershell', 'pwsh']) {
     const document: ConfigurationNode = {
