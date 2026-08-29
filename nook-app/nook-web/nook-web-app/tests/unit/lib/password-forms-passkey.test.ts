@@ -10,6 +10,7 @@ import {
   findWorkflowPasskeyControl,
   pageHasPasskeyControl,
   PasskeyControlLookupKind,
+  PasswordFormScopeKind,
   summarizeAuthenticationWorkflowForms,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 
@@ -118,6 +119,42 @@ describe('passkey control detection', () => {
     if (approved.kind === PasskeyControlLookupKind.Found) {
       expect(approved.control.textContent).toContain('Use passkey')
     }
+  })
+
+  test('enumerates a passkey-only form beside a credential form', () => {
+    document.body.innerHTML = `
+      <form id="password-login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+      <form id="passkey-login" action="/login/passkey">
+        <button type="button" data-nook-passkey-control>Use passkey</button>
+      </form>
+    `
+    const observations = summarizeAuthenticationWorkflowForms()
+    const passkeyObservation = observations.find(
+      (observation) =>
+        observation.passkeyControl?.textContent === 'Use passkey',
+    )
+    expect(passkeyObservation).toBeDefined()
+    expect(
+      passkeyObservation?.formScope.kind === PasswordFormScopeKind.Owned
+        ? passkeyObservation.formScope.owner.id
+        : undefined,
+    ).toBe('passkey-login')
+    if (!passkeyObservation) return
+    const facts = authenticationPageObservationFacts({
+      observation: passkeyObservation,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
+      observation: {
+        ownership: 'owned-form',
+        label: expect.stringContaining('Use passkey'),
+      },
+    })
   })
 
   test('keeps an external form-associated passkey control owned', () => {

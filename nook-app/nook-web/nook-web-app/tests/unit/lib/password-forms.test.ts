@@ -87,7 +87,7 @@ describe('website one-time-code fields', () => {
     )
   })
 
-  test('transports every scoped advance-control candidate for Rust selection', () => {
+  test('transports every scoped advance-control candidate in Rust-ranked order', () => {
     document.body.innerHTML = `
       <form id="login" action="/login">
         <input autocomplete="username" />
@@ -108,10 +108,50 @@ describe('website one-time-code fields', () => {
     expect(facts.detailedAdvanceControl).toMatchObject({
       kind: 'observed',
       observations: [
-        { label: expect.stringContaining('Delete account') },
         { label: expect.stringContaining('Sign in') },
+        { label: expect.stringContaining('Delete account') },
       ],
     })
+  })
+
+  test('prioritizes a Rust-approved control inside an oversized batch', () => {
+    const decoys = Array.from(
+      { length: 101 },
+      (_, index) => `<button type="submit">Delete account ${index}</button>`,
+    ).join('')
+    document.body.innerHTML = `
+      <form id="login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        ${decoys}
+        <button type="submit">Sign in</button>
+      </form>
+    `
+
+    const observation = observedAuthenticationWorkflow()
+    const facts = authenticationPageObservationFacts({
+      observation,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: expect.any(Array),
+    })
+    if (facts.detailedAdvanceControl.kind !== 'observed') return
+    expect(facts.detailedAdvanceControl.observations).toHaveLength(100)
+    expect(facts.detailedAdvanceControl.observations[0]?.label).toContain(
+      'Sign in',
+    )
+    expect(
+      facts.detailedAdvanceControl.observations[0]?.semanticSubmitControlCount,
+    ).toBe(100)
+    const workflowMatch = classify_companion_authentication_workflow_facts({
+      observations: [facts],
+    })
+    expect(companion_authentication_workflow_match_kind(workflowMatch)).toBe(
+      CompanionAuthenticationWorkflowMatchKind.Matched,
+    )
   })
 
   test('resolves omitted form actions to the current login route', () => {

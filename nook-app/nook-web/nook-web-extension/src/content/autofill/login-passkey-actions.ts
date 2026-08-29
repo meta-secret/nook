@@ -40,6 +40,7 @@ import {
   sendRuntimeMessageWithoutResponse,
 } from './runtime-message-adapter'
 import { GeneratePasswordRequestType } from '../../../../nook-web-shared/src/extension/runtime-messages'
+import { performRevalidatedAuthenticationAction } from './workflow-revalidation'
 
 export {
   RuntimeMessageDeliveryKind,
@@ -533,8 +534,21 @@ export async function proposePasskeyWithNook({
   }
   setStatus(nookTypedArgs0_28)
   try {
-    const control = findWorkflowPasskeyControl(workflow)
-    if (control.kind === PasskeyControlLookupKind.Absent) {
+    const revalidationRequest: Parameters<
+      typeof performRevalidatedAuthenticationAction
+    >[0] = {
+      workflow,
+      expectedAction: action,
+      act: () => {
+        const control = findWorkflowPasskeyControl(workflow)
+        if (control.kind === PasskeyControlLookupKind.Absent) return false
+        control.control.click()
+        return true
+      },
+    }
+    const actuated =
+      await performRevalidatedAuthenticationAction(revalidationRequest)
+    if (!actuated) {
       const nookTypedArgs0_29: Parameters<typeof setStatus>[0] = {
         description,
         continueButton,
@@ -546,7 +560,6 @@ export async function proposePasskeyWithNook({
       setStatus(nookTypedArgs0_29)
       return
     }
-    control.control.click()
     const nookTypedArgs0_30: Parameters<typeof setStatus>[0] = {
       description,
       continueButton,
