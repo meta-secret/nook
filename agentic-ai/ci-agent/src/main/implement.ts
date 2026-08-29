@@ -147,7 +147,7 @@ export async function runCiImplement(): Promise<void> {
   const repoRef = parseRepository(repository);
 
   const openPr = await findOpenPr(octokit, repoRef, agentBranch);
-  let prNumber: number;
+  let prNumber: number | undefined;
   if (openPr.kind === OpenPrLookupKind.Found) {
     prNumber = openPr.number;
     if (openPr.baseBranch !== target.baseBranch) {
@@ -230,6 +230,7 @@ export async function runCiImplement(): Promise<void> {
     log.info(`Opened implement PR #${prNumber}`);
   }
 
+  if (prNumber === undefined) throw new Error("Implement PR number was not resolved");
   log.info(
     `PR #${prNumber} opened; this bounded worker hands it to a continuing task-owning agent`,
   );
