@@ -4,9 +4,15 @@
 //! module owns the product decision about which workflow is present, where the
 //! user is in it, and which action Nook may offer next.
 
+mod candidate_selection;
 mod observation_validation;
+mod snapshot_contract;
 mod vocabulary;
 
+pub use candidate_selection::{
+    AuthenticationFormObservationPriority, authentication_form_observation_priority,
+    classify_authentication_workflow_candidates,
+};
 pub use observation_validation::{
     MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
     authentication_page_observations_are_valid,
@@ -128,73 +134,6 @@ impl AuthenticationWorkflowSnapshot {
             observation_index: 0,
         }
     }
-}
-
-const fn workflow_candidate_priority(snapshot: AuthenticationWorkflowSnapshot) -> u8 {
-    match (snapshot.kind, snapshot.action) {
-        (AuthenticationWorkflowKind::TotpEnrollment, _) => 8,
-        (AuthenticationWorkflowKind::TotpChallenge, _)
-        | (AuthenticationWorkflowKind::Login, AuthenticationWorkflowAction::UsePasskey) => 7,
-        (AuthenticationWorkflowKind::Login, AuthenticationWorkflowAction::ContinueWithNook) => 6,
-        (AuthenticationWorkflowKind::Login, AuthenticationWorkflowAction::CreatePasskey)
-        | (AuthenticationWorkflowKind::PasswordChange, _)
-        | (AuthenticationWorkflowKind::Signup, AuthenticationWorkflowAction::UsePasskey) => 5,
-        (AuthenticationWorkflowKind::Signup, _) => 4,
-        (AuthenticationWorkflowKind::Login, _) => 2,
-        (AuthenticationWorkflowKind::Manual, _) => 1,
-    }
-}
-
-/// Rank browser form observations before the host applies its bounded scan.
-///
-/// This preserves the structural priority independently of DOM ownership:
-/// active OTP, current-password login, single generic password, other
-/// password forms, then username/passkey-only surfaces.
-#[must_use]
-pub const fn authentication_form_observation_priority(
-    observation: AuthenticationPageObservation,
-) -> u8 {
-    if observation.one_time_code_field_count > 0 {
-        5
-    } else if observation.current_password_field_count > 0 {
-        4
-    } else if observation.generic_password_field_count == 1 {
-        3
-    } else if observation.password_field_count() > 0 {
-        2
-    } else {
-        1
-    }
-}
-
-#[must_use]
-pub fn classify_authentication_workflow_candidates(
-    observations: &[AuthenticationPageObservation],
-) -> AuthenticationWorkflowMatch {
-    if !authentication_page_observations_are_valid(observations) {
-        return AuthenticationWorkflowMatch::Rejected;
-    }
-
-    let mut selected = AuthenticationWorkflowMatch::NoMatch;
-    for (index, observation) in observations.iter().copied().enumerate() {
-        let AuthenticationWorkflowMatch::Matched(mut candidate) =
-            classify_authentication_workflow(observation)
-        else {
-            continue;
-        };
-        candidate.observation_index = u32::try_from(index).unwrap_or(u32::MAX);
-        let replace = match selected {
-            AuthenticationWorkflowMatch::NoMatch => true,
-            AuthenticationWorkflowMatch::Rejected => false,
-            AuthenticationWorkflowMatch::Matched(current) => {
-                workflow_candidate_priority(candidate) > workflow_candidate_priority(current)
-            }
-        };
-        if replace {
-            selected = AuthenticationWorkflowMatch::Matched(candidate);
-        }
-    }
-    selected
 }
 
 const fn classify_enrollment_workflow(

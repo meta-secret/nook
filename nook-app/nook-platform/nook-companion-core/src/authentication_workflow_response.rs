@@ -1,15 +1,49 @@
 //! Typed runtime response boundary for authentication workflow snapshots.
 
-use crate::authentication_workflow::AuthenticationWorkflowSnapshot;
+use crate::authentication_workflow::{
+    AuthenticationWorkflowAction, AuthenticationWorkflowKind, AuthenticationWorkflowSnapshot,
+    AuthenticationWorkflowStage,
+};
 use serde::{Deserialize, Serialize, Serializer};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct AuthenticationWorkflowSnapshotWire {
+    kind: AuthenticationWorkflowKind,
+    stage: AuthenticationWorkflowStage,
+    action: AuthenticationWorkflowAction,
+    current_step: u8,
+    total_steps: u8,
+    requires_human_approval: bool,
+    observation_index: u32,
+}
+
+impl AuthenticationWorkflowSnapshotWire {
+    const fn into_snapshot(self) -> Option<AuthenticationWorkflowSnapshot> {
+        let snapshot = AuthenticationWorkflowSnapshot {
+            kind: self.kind,
+            stage: self.stage,
+            action: self.action,
+            current_step: self.current_step,
+            total_steps: self.total_steps,
+            requires_human_approval: self.requires_human_approval,
+            observation_index: self.observation_index,
+        };
+        if snapshot.matches_classifier_contract() {
+            Some(snapshot)
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct AuthenticationWorkflowMatchedResponseWire {
     ok: bool,
-    snapshot: AuthenticationWorkflowSnapshot,
+    snapshot: AuthenticationWorkflowSnapshotWire,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Tsify)]
@@ -79,10 +113,15 @@ pub fn decode_authentication_workflow_snapshot_response(
     match wire {
         AuthenticationWorkflowSnapshotResponseWire::Matched(
             AuthenticationWorkflowMatchedResponseWire { ok: true, snapshot },
-        ) => Ok(AuthenticationWorkflowSnapshotResponse::Matched {
-            kind: AuthenticationWorkflowSnapshotResponseKind::Matched,
-            snapshot,
-        }),
+        ) => {
+            let Some(snapshot) = snapshot.into_snapshot() else {
+                return Err(AuthenticationWorkflowSnapshotResponseDecodeError);
+            };
+            Ok(AuthenticationWorkflowSnapshotResponse::Matched {
+                kind: AuthenticationWorkflowSnapshotResponseKind::Matched,
+                snapshot,
+            })
+        }
         AuthenticationWorkflowSnapshotResponseWire::NoMatch(
             AuthenticationWorkflowNoMatchResponseWire { ok: true },
         ) => Ok(AuthenticationWorkflowSnapshotResponse::NoMatch {
@@ -154,6 +193,22 @@ mod tests {
         )?;
         assert_eq!(
             decode_authentication_workflow_snapshot_response(contradictory_matched),
+            Err(AuthenticationWorkflowSnapshotResponseDecodeError)
+        );
+
+        let impossible_snapshot = serde_json::from_str::<AuthenticationWorkflowSnapshotResponseWire>(
+            r#"{"ok":true,"snapshot":{"kind":0,"stage":2,"action":0,"currentStep":2,"totalSteps":3,"requiresHumanApproval":true,"observationIndex":0}}"#,
+        )?;
+        assert_eq!(
+            decode_authentication_workflow_snapshot_response(impossible_snapshot),
+            Err(AuthenticationWorkflowSnapshotResponseDecodeError)
+        );
+
+        let unapproved_snapshot = serde_json::from_str::<AuthenticationWorkflowSnapshotResponseWire>(
+            r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":1,"totalSteps":3,"requiresHumanApproval":false,"observationIndex":0}}"#,
+        )?;
+        assert_eq!(
+            decode_authentication_workflow_snapshot_response(unapproved_snapshot),
             Err(AuthenticationWorkflowSnapshotResponseDecodeError)
         );
 
