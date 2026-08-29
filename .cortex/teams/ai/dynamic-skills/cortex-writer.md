@@ -164,8 +164,8 @@ Full rewritten example:
   [Cortex consistency](cortex-consistency.md) for the touched topic.
 - For implementation tasks that include `.cortex` edits:
   1. promptly commit the coherent AI handoff;
-  2. have Gizmo run `task loom:pre-push`, integrate, and push without broad
-     local product or duplicate hosted gates; and
+  2. have Gizmo integrate the handoff, run `task loom:pre-push`, and push
+     without broad local product or duplicate hosted gates; and
   3. have Gizmo use an optional focused remote task for iteration or dispatch
      complete exact-head hosted validation immediately when the head is ready.
 - Obtain fresh exact-head remote evidence after every replacement push.

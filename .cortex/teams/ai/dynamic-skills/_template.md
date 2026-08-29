@@ -40,9 +40,10 @@ Does not apply to:
 
 ## Validation
 
-Run the smallest relevant hosted tasks first. For implementation tasks, run
-`task format`, commit and push, use `task remote` for focused execution, then
-explicitly trigger complete validation with `task pr:validate`.
+For implementation tasks, run focused proof and commit a coherent handoff.
+Gizmo integrates the handoff, runs `task loom:pre-push`, and pushes promptly.
+Gizmo owns optional focused remote iteration and complete exact-head
+validation.
 
 For a docs-only Cortex change, run the focused checks named by
 [Cortex document navigation](cortex-document-map.md#validation).
