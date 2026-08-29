@@ -219,6 +219,10 @@ See [issues](../../../gizmo/workflows/issues.md),
 - Requires exactly one explicit `issue_path` or `prompt`.
 - Resolves and atomically claims only the requested ready agent issue.
 - Requires an assigned Nook GitHub collaborator for issue mode.
+- Preserves a focused issue's validated `stack_branch` and
+  `stack_predecessor_branch`: stacked successors continue on the existing
+  same-repository branch and PR, target the predecessor, and measure their
+  authored-line budget from that predecessor instead of `main`.
 - Classifies and publishes the planning result before implementation.
 - An unauthorized major direction publishes a validated blocker and stops.
 - An authorized or ordinary bounded task continues through Cursor SDK

@@ -66,12 +66,6 @@ jobs:
             exit 1
           fi
 
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.NOOK_GITHUB_PAT }}
-
       - name: Claim ready Workbench issue
         id: workbench
         if: inputs.prompt == ''
@@ -132,6 +126,68 @@ jobs:
               core.setFailed(`${path} has an invalid canonical gizmo_id`)
               return
             }
+            const stackBranchRows = [...frontmatter.matchAll(/^stack_branch:\s*(.+)$/gm)]
+            const stackPredecessorRows = [...frontmatter.matchAll(/^stack_predecessor_branch:\s*(.+)$/gm)]
+            if (stackBranchRows.length > 1 || stackPredecessorRows.length > 1) {
+              core.setFailed(`${path} has duplicate canonical stack branch fields`)
+              return
+            }
+            const stackBranch = String(value(frontmatter, 'stack_branch')).trim()
+            const stackPredecessorBranch = String(value(frontmatter, 'stack_predecessor_branch')).trim()
+            if (Boolean(stackBranch) !== Boolean(stackPredecessorBranch)) {
+              core.setFailed(`${path} must provide both stack_branch and stack_predecessor_branch`)
+              return
+            }
+            const validBranch = (branch) => {
+              if (
+                !branch || branch.length > 255 || branch === '@' ||
+                branch.startsWith('-') || branch.startsWith('/') ||
+                branch.endsWith('/') || branch.endsWith('.') ||
+                branch.includes('..') || branch.includes('//') ||
+                branch.includes('@{') || /[\u0000-\u0020\u007f~^:?*\[\\]/u.test(branch)
+              ) return false
+              return branch.split('/').every(
+                (component) => !component.startsWith('.') && !component.endsWith('.lock'),
+              )
+            }
+            if (stackBranch) {
+              if (!assignedGizmoId) {
+                core.setFailed(`${path} stack metadata requires a canonical gizmo_id`)
+                return
+              }
+              if (!validBranch(stackBranch) || !validBranch(stackPredecessorBranch)) {
+                core.setFailed(`${path} has malformed stack branch metadata`)
+                return
+              }
+              if (stackBranch === stackPredecessorBranch) {
+                core.setFailed(`${path} stack branch must differ from its predecessor branch`)
+                return
+              }
+              try {
+                await Promise.all([
+                  github.rest.repos.getBranch({ ...context.repo, branch: stackBranch }),
+                  github.rest.repos.getBranch({ ...context.repo, branch: stackPredecessorBranch }),
+                ])
+              } catch {
+                core.setFailed(`${path} stack branches must already exist in the Nook repository`)
+                return
+              }
+              const { data: stackPulls } = await github.rest.pulls.list({
+                ...context.repo,
+                state: 'open',
+                head: `${context.repo.owner}:${stackBranch}`,
+                per_page: 2,
+              })
+              const stackPull = stackPulls[0]
+              if (
+                stackPulls.length !== 1 ||
+                stackPull.head.repo?.full_name !== `${context.repo.owner}/${context.repo.repo}` ||
+                stackPull.base.ref !== stackPredecessorBranch
+              ) {
+                core.setFailed(`${path} stack_branch must have exactly one same-repository open PR based on stack_predecessor_branch`)
+                return
+              }
+            }
 
             const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
             const continuingOwner = String(value(body, 'owner')).trim()
@@ -168,6 +224,8 @@ jobs:
             core.setOutput('slug', path.replace(/^issues\//, '').replace(/\.md$/, '').replaceAll('/', '-'))
             core.setOutput('continuing_owner', continuingOwner)
             core.setOutput('gizmo_id', assignedGizmoId)
+            core.setOutput('stack_branch', stackBranch)
+            core.setOutput('stack_predecessor_branch', stackPredecessorBranch)
 
       - name: Configure agent task
         id: task
@@ -182,17 +240,33 @@ jobs:
           MANUAL_CONTINUING_OWNER: ${{ inputs.continuing_owner }}
           MAJOR_CHANGE_AUTHORIZED: ${{ inputs.major_change_authorized }}
           RUN_ID: ${{ github.run_id }}
+          ISSUE_STACK_BRANCH: ${{ steps.workbench.outputs.stack_branch }}
+          ISSUE_STACK_PREDECESSOR_BRANCH: ${{ steps.workbench.outputs.stack_predecessor_branch }}
           WORKBENCH_SLUG: ${{ steps.workbench.outputs.slug }}
         run: |
           set -euo pipefail
           delim="AGENT_EOF_${RUN_ID}"
           if [ -n "$DISPATCH_PROMPT" ]; then
             branch="agent/prompt-${RUN_ID}"
+            base_branch="main"
+            checkout_ref="main"
+            target_kind="standalone"
             title="Agent implement (run ${RUN_ID})"
             task="$DISPATCH_PROMPT"
             continuing_owner="$MANUAL_CONTINUING_OWNER"
+          elif [ -n "$ISSUE_STACK_BRANCH" ]; then
+            branch="$ISSUE_STACK_BRANCH"
+            base_branch="$ISSUE_STACK_PREDECESSOR_BRANCH"
+            checkout_ref="$ISSUE_STACK_BRANCH"
+            target_kind="stacked"
+            title="Implement ${ISSUE_TITLE}"
+            task="$(printf 'Nook Workbench issue `%s`: %s\nURL: %s\n\n%s' "$ISSUE_PATH" "$ISSUE_TITLE" "$ISSUE_URL" "$ISSUE_BODY")"
+            continuing_owner="$ISSUE_CONTINUING_OWNER"
           else
             branch="agent/workbench-${WORKBENCH_SLUG}-${RUN_ID}"
+            base_branch="main"
+            checkout_ref="main"
+            target_kind="standalone"
             title="Implement ${ISSUE_TITLE}"
             task="$(printf 'Nook Workbench issue `%s`: %s\nURL: %s\n\n%s' "$ISSUE_PATH" "$ISSUE_TITLE" "$ISSUE_URL" "$ISSUE_BODY")"
             continuing_owner="$ISSUE_CONTINUING_OWNER"
@@ -205,6 +279,8 @@ jobs:
           {
             echo "AGENT_BRANCH=$branch"
             echo "FIX_BRANCH=$branch"
+            echo "AGENT_PR_BASE_BRANCH=$base_branch"
+            echo "AGENT_PR_TARGET_KIND=$target_kind"
             echo "AGENT_PROMPT<<${delim}"
             printf '%s\n' "$task"
             echo "${delim}"
@@ -241,6 +317,15 @@ jobs:
             echo "${delim}"
           } >> "$GITHUB_ENV"
           echo "ready=true" >> "$GITHUB_OUTPUT"
+          echo "checkout_ref=$checkout_ref" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout implementation branch
+        if: steps.task.outputs.ready == 'true'
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ steps.task.outputs.checkout_ref }}
+          token: ${{ secrets.NOOK_GITHUB_PAT }}
 
       - name: Validate continuing GitHub owner
         if: steps.task.outputs.ready == 'true'

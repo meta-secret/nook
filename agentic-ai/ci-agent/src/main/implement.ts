@@ -57,6 +57,70 @@ export async function preserveImplementedBranchBeforePr(
   return args.createPr();
 }
 
+export enum ImplementPrTargetKind {
+  Stacked = "stacked",
+  Standalone = "standalone",
+}
+
+type ImplementPrTargetInput = {
+  branch: string;
+  baseBranch: string;
+  kind: string;
+};
+
+function isValidBranch(branch: string): boolean {
+  if (
+    !branch ||
+    branch.length > 255 ||
+    branch === "@" ||
+    branch.startsWith("-") ||
+    branch.startsWith("/") ||
+    branch.endsWith("/") ||
+    branch.endsWith(".") ||
+    branch.includes("..") ||
+    branch.includes("//") ||
+    branch.includes("@{") ||
+    /[\u0000-\u0020\u007f~^:?*\[\\]/u.test(branch)
+  ) {
+    return false;
+  }
+  return branch
+    .split("/")
+    .every(
+      (component) =>
+        !component.startsWith(".") && !component.endsWith(".lock"),
+    );
+}
+
+export function resolveImplementPrTarget(input: ImplementPrTargetInput) {
+  if (!isValidBranch(input.branch) || !isValidBranch(input.baseBranch)) {
+    throw new Error("Implement PR branch metadata is malformed");
+  }
+  if (input.kind === ImplementPrTargetKind.Standalone) {
+    if (input.baseBranch !== "main") {
+      throw new Error("Standalone implement PRs must target main");
+    }
+    return {
+      ...input,
+      kind: ImplementPrTargetKind.Standalone,
+      budgetBaseRef: "origin/main",
+    };
+  }
+  if (input.kind !== ImplementPrTargetKind.Stacked) {
+    throw new Error(`Unknown implement PR target kind: ${input.kind}`);
+  }
+  if (input.branch === input.baseBranch || input.baseBranch === "main") {
+    throw new Error(
+      "Stacked implement PRs require a distinct predecessor branch",
+    );
+  }
+  return {
+    ...input,
+    kind: ImplementPrTargetKind.Stacked,
+    budgetBaseRef: `origin/${input.baseBranch}`,
+  };
+}
+
 export async function runCiImplement(): Promise<void> {
   const repository = process.env.GITHUB_REPOSITORY?.trim();
   const runId = process.env.GITHUB_RUN_ID?.trim();
@@ -64,7 +128,6 @@ export async function runCiImplement(): Promise<void> {
     throw new Error("GITHUB_REPOSITORY and GITHUB_RUN_ID are required");
   }
 
-  // Ensure prompt/config see a concrete task before the agent starts.
   resolveAgentTask();
 
   const repoRoot = process.env.REPO_ROOT?.trim() || process.cwd();
@@ -72,6 +135,13 @@ export async function runCiImplement(): Promise<void> {
     process.env.AGENT_BRANCH?.trim() ||
     process.env.FIX_BRANCH?.trim() ||
     `agent/prompt-${runId}`;
+  const target = resolveImplementPrTarget({
+    branch: agentBranch,
+    baseBranch: process.env.AGENT_PR_BASE_BRANCH?.trim() || "main",
+    kind:
+      process.env.AGENT_PR_TARGET_KIND?.trim() ||
+      ImplementPrTargetKind.Standalone,
+  });
   chdir(repoRoot);
 
   const octokit = createOctokit();
@@ -82,8 +152,26 @@ export async function runCiImplement(): Promise<void> {
   let prNumber: number;
   if (openPr.kind === OpenPrLookupKind.Found) {
     prNumber = openPr.number;
-    log.info(`Open PR already exists for ${agentBranch} (#${prNumber})`);
-  } else {
+    if (openPr.baseBranch !== target.baseBranch) {
+      throw new Error(
+        `Open PR for ${agentBranch} targets ${openPr.baseBranch}, expected ${target.baseBranch}`,
+      );
+    }
+    log.info(
+      target.kind === ImplementPrTargetKind.Stacked
+        ? `Continuing stacked PR #${openPr.number} on ${agentBranch}`
+        : `Open PR already exists for ${agentBranch} (#${openPr.number})`,
+    );
+  } else if (target.kind === ImplementPrTargetKind.Stacked) {
+    throw new Error(
+      `Stacked implement branch ${agentBranch} requires a pre-existing linked PR`,
+    );
+  }
+
+  if (
+    openPr.kind === OpenPrLookupKind.NotFound ||
+    target.kind === ImplementPrTargetKind.Stacked
+  ) {
     const cursorApiKey = process.env.CURSOR_API_KEY?.trim();
     if (!cursorApiKey) {
       console.log(
@@ -96,9 +184,7 @@ export async function runCiImplement(): Promise<void> {
     }
 
     const loadedConfig = loadConfig();
-    if (loadedConfig.kind === CiAgentConfigLoadKind.MissingApiKey) {
-      return;
-    }
+    if (loadedConfig.kind === CiAgentConfigLoadKind.MissingApiKey) return;
     const config = loadedConfig.config;
 
     const prompt = await loadPrompt(config);
@@ -116,12 +202,30 @@ export async function runCiImplement(): Promise<void> {
       assertBudget: () =>
         assertAuthoredChangeBudget({
           repoRoot,
-          baseRef: "origin/main",
+          baseRef: target.budgetBaseRef,
           maximumLines: 2_000,
         }),
       createPr: () =>
-        createFixPr(octokit, repoRef, agentBranch, runId, config.fixLabel),
-      findPr: () => findOpenPr(octokit, repoRef, agentBranch),
+        createFixPr(
+          octokit,
+          repoRef,
+          agentBranch,
+          runId,
+          config.fixLabel,
+          target.baseBranch,
+        ),
+      findPr: async () => {
+        const linkedPr = await findOpenPr(octokit, repoRef, agentBranch);
+        if (
+          linkedPr.kind === OpenPrLookupKind.Found &&
+          linkedPr.baseBranch !== target.baseBranch
+        ) {
+          throw new Error(
+            `Open PR for ${agentBranch} targets ${linkedPr.baseBranch}, expected ${target.baseBranch}`,
+          );
+        }
+        return linkedPr;
+      },
       pushBranch: () => pushFixBranch(repoRoot, agentBranch, runId),
       verifyBranch: () => branchExistsOnOrigin(octokit, repoRef, agentBranch),
     });

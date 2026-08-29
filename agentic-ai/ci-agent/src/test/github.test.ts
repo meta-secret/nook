@@ -65,10 +65,12 @@ test("requiredPrCheckNames maps changed paths to repository-owned gates", () => 
 
 test("createFixPr leaves the PR body free of automatic merge control markers", async () => {
   let createdBody = "";
+  let createdBase = "";
   const octokit = {
     rest: {
       pulls: {
-        create: async ({ body }: { body: string }) => {
+        create: async ({ base, body }: { base: string; body: string }) => {
+          createdBase = base;
           createdBody = body;
           return { data: { number: 347 } };
         },
@@ -79,8 +81,16 @@ test("createFixPr leaves the PR body free of automatic merge control markers", a
   const priorBody = process.env.AGENT_PR_BODY;
   process.env.AGENT_PR_BODY = "## Summary\n\nOpen this PR for review.";
   try {
-    const prNumber = await createFixPr(octokit, repoRef, "agent/fix", "run-42");
+    const prNumber = await createFixPr(
+      octokit,
+      repoRef,
+      "agent/fix",
+      "run-42",
+      "focused issue",
+      "codex/predecessor",
+    );
     assert.equal(prNumber, 347);
+    assert.equal(createdBase, "codex/predecessor");
     assert.equal(createdBody, "## Summary\n\nOpen this PR for review.");
     assert.doesNotMatch(createdBody, /nook-agent-managed|nook-agent-monitor-wake/);
   } finally {
@@ -91,4 +101,3 @@ test("createFixPr leaves the PR body free of automatic merge control markers", a
     }
   }
 });
-

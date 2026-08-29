@@ -53,6 +53,16 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "Stacked successor dispatch requires the later runtime support; retry after it lands.",
         "const rawGizmoId = gizmoIdRows[0]?.[1].trim() || ''",
         "const assignedGizmoId = rawGizmoId === 'null' ? '' : rawGizmoId",
+        "stack_branch",
+        "stack_predecessor_branch",
+        "must provide both stack_branch and stack_predecessor_branch",
+        "stack branches must already exist in the Nook repository",
+        "must have exactly one same-repository open PR based on stack_predecessor_branch",
+        "ISSUE_STACK_BRANCH: ${{ steps.workbench.outputs.stack_branch }}",
+        "ISSUE_STACK_PREDECESSOR_BRANCH: ${{ steps.workbench.outputs.stack_predecessor_branch }}",
+        "AGENT_PR_BASE_BRANCH=$base_branch",
+        "AGENT_PR_TARGET_KIND=$target_kind",
+        "ref: ${{ steps.task.outputs.checkout_ref }}",
         "ASSIGNED_GIZMO_ID: ${{ steps.workbench.outputs.gizmo_id }}",
         "assignedGizmoId: process.env.ASSIGNED_GIZMO_ID",
         "const currentGizmoIdMatch = /^- Current Gizmo ID:\\s*([a-z0-9]+(?:-[a-z0-9]+)*)\\s*$/m",
@@ -870,6 +880,19 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
         "bounded automation must identify the materialization action before blocking"
     );
     let implement = read("agentic-ai/ci-agent/src/main/implement.ts");
+    for required in [
+        "ImplementPrTargetKind.Stacked",
+        "budgetBaseRef: `origin/${input.baseBranch}`",
+        "requires a pre-existing linked PR",
+        "openPr.baseBranch !== target.baseBranch",
+        "baseRef: target.budgetBaseRef",
+        "target.baseBranch",
+    ] {
+        assert!(
+            implement.contains(required),
+            "bounded implementation is missing stacked-PR handling: {required}"
+        );
+    }
     let ordered = [
         "assertBudget()",
         "pushBranch()",
@@ -881,6 +904,16 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
     assert!(
         ordered.iter().all(Option::is_some) && ordered.is_sorted(),
         "branch preservation sequence drifted"
+    );
+    let claim_position = workflow
+        .find("Claim ready Workbench issue")
+        .context("bounded automation must claim its focused issue")?;
+    let checkout_position = workflow
+        .find("Checkout implementation branch")
+        .context("bounded automation must check out its validated implementation branch")?;
+    assert!(
+        claim_position < checkout_position,
+        "stack metadata must be validated before checkout"
     );
     Ok(())
 }

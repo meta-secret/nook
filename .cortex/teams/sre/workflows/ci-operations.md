@@ -190,6 +190,15 @@ in_progress` atomically before Docker setup. Prompt mode requires a valid
 independent run. A blob-SHA conflict rejects a duplicate claim of the same
 issue without collapsing unrelated pending dispatches.
 
+Legacy focused issues and manual prompts start from `main`. A stacked successor
+issue instead declares both `stack_branch` and `stack_predecessor_branch` in
+frontmatter. Before claim, the workflow requires both same-repository branches
+and exactly one open successor PR whose temporary base is the predecessor. It
+then checks out and advances that existing successor branch, measures the
+2,000-line budget against `origin/<stack_predecessor_branch>`, and preserves the
+predecessor as the PR base. Missing, partial, malformed, or stale stack metadata
+fails closed before the issue is claimed.
+
 ### Major-change authorization
 
 The gate enforces these rules:

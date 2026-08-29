@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { describe, it } from "node:test";
 
 import { OpenPrLookupKind } from "../main/github.js";
 import { AuthoredChangeBudgetExceededError } from "../main/git.js";
-import { preserveImplementedBranchBeforePr as preserve } from "../main/implement.js";
+import {
+  ImplementPrTargetKind,
+  preserveImplementedBranchBeforePr as preserve,
+  resolveImplementPrTarget,
+} from "../main/implement.js";
 
 async function step<T>(log: string[], name: string, value: T): Promise<T> {
   log.push(name);
@@ -56,4 +60,62 @@ test("bounded implementation keeps the normal push, budget, and PR creation path
   assert.equal(await preserve(deliveryArgs(events)), 73);
 
   assert.equal(events.join(), "budget,push,verify-origin,find-pr,create-pr");
+});
+
+describe("resolveImplementPrTarget", () => {
+  it("keeps standalone work based on main", () => {
+    assert.deepEqual(
+      resolveImplementPrTarget({
+        branch: "agent/workbench-feature-42",
+        baseBranch: "main",
+        kind: ImplementPrTargetKind.Standalone,
+      }),
+      {
+        kind: ImplementPrTargetKind.Standalone,
+        branch: "agent/workbench-feature-42",
+        baseBranch: "main",
+        budgetBaseRef: "origin/main",
+      },
+    );
+  });
+
+  it("bases stacked work and its budget on the predecessor branch", () => {
+    assert.deepEqual(
+      resolveImplementPrTarget({
+        branch: "codex/feature-successor",
+        baseBranch: "codex/feature-predecessor",
+        kind: ImplementPrTargetKind.Stacked,
+      }),
+      {
+        kind: ImplementPrTargetKind.Stacked,
+        branch: "codex/feature-successor",
+        baseBranch: "codex/feature-predecessor",
+        budgetBaseRef: "origin/codex/feature-predecessor",
+      },
+    );
+  });
+
+  it("fails closed for incomplete or malformed stack targets", () => {
+    assert.throws(() =>
+      resolveImplementPrTarget({
+        branch: "codex/feature-successor",
+        baseBranch: "main",
+        kind: ImplementPrTargetKind.Stacked,
+      }),
+    );
+    assert.throws(() =>
+      resolveImplementPrTarget({
+        branch: "codex/feature-successor",
+        baseBranch: "codex/feature-successor",
+        kind: ImplementPrTargetKind.Stacked,
+      }),
+    );
+    assert.throws(() =>
+      resolveImplementPrTarget({
+        branch: "codex/feature successor",
+        baseBranch: "codex/feature-predecessor",
+        kind: ImplementPrTargetKind.Stacked,
+      }),
+    );
+  });
 });

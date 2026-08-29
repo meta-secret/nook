@@ -43,7 +43,7 @@ export enum OpenPrLookupKind {
 }
 
 export type OpenPrLookup =
-  | { kind: OpenPrLookupKind.Found; number: number }
+  | { kind: OpenPrLookupKind.Found; number: number; baseBranch: string }
   | { kind: OpenPrLookupKind.NotFound };
 
 export function parseRepository(fullName: string): RepoRef {
@@ -106,7 +106,11 @@ export async function findOpenPr(
   });
   const match = data[0];
   return match
-    ? { kind: OpenPrLookupKind.Found, number: match.number }
+    ? {
+        kind: OpenPrLookupKind.Found,
+        number: match.number,
+        baseBranch: match.base.ref,
+      }
     : { kind: OpenPrLookupKind.NotFound };
 }
 
@@ -132,6 +136,7 @@ export async function createFixPr(
   headBranch: string,
   runId: string,
   fixLabel = "main CI",
+  baseBranch = "main",
 ): Promise<number> {
   const { owner, repo } = repoRef;
   const title =
@@ -152,13 +157,18 @@ export async function createFixPr(
       repo,
       title,
       head: headBranch,
-      base: "main",
+      base: baseBranch,
       body: requestedBody,
     });
     return data.number;
   } catch (err: unknown) {
     const existing = await findOpenPr(octokit, repoRef, headBranch);
     if (existing.kind === OpenPrLookupKind.Found) {
+      if (existing.baseBranch !== baseBranch) {
+        throw new Error(
+          `Open PR for ${headBranch} targets ${existing.baseBranch}, expected ${baseBranch}`,
+        );
+      }
       return existing.number;
     }
     throw err;
