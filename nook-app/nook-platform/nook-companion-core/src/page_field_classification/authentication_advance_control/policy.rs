@@ -6,8 +6,9 @@ use crate::page_field_classification::control_identity::{
 use crate::page_field_classification::form_identity::{
     control_destination_indicates_generic_oauth_authorization_route,
     destination_has_disallowed_action_or_provider, destination_has_safe_login_identity,
-    form_identity_indicates_destructive_action, identity_indicates_explicit_authentication_route,
-    identity_indicates_explicit_login_route, one_time_code_control_has_authentication_context,
+    form_identity_indicates_destructive_action, identity_has_authentication_control_veto,
+    identity_indicates_explicit_authentication_route, identity_indicates_explicit_login_route,
+    one_time_code_control_has_authentication_context,
 };
 use crate::page_field_classification::{
     AuthenticationUsernameEvidence, contains_any_word, expand_identity_text,
@@ -47,6 +48,7 @@ pub(super) fn has_unconditional_veto_identity(
     form_identity_indicates_destructive_action(&observation.form_identity)
         || form_identity_indicates_destructive_action(&observation.destination_identity)
         || form_identity_indicates_destructive_action(&observation.label)
+        || identity_has_authentication_control_veto(&observation.machine_identity)
         || contains_any_word(&expand_identity_text(&observation.label), &["cancel"])
         || destination_has_disallowed_action_or_provider(
             &observation.destination_identity,

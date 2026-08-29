@@ -39,6 +39,7 @@ import {
   clickAdvanceControl,
   controlLabel,
   isRenderedControl,
+  formHasSemanticSubmitter,
   observeSubmit,
   PasswordFormQueryKind,
   semanticSubmitControlSelector,
@@ -463,6 +464,12 @@ function pageControlObservation({
     formIdentity: observedFormIdentity(observation),
     destinationIdentity: controlDestination(destinationRequest),
     label: controlLabel(control),
+    machineIdentity: `${control.id} ${
+      control instanceof HTMLButtonElement ||
+      control instanceof HTMLInputElement
+        ? `${control.name}=${control.value}`
+        : ""
+    }`,
   };
 }
 
@@ -865,11 +872,7 @@ function activateApprovedOwnedAdvanceControl(
     (request.root instanceof Node && request.root.contains(form));
   const observation: PasswordFormObservation | false =
     request.kind === PasswordFormQueryKind.Scoped
-      ? {
-          root: request.root,
-          formScope: request.formScope,
-          summary: summarizeRoot(request),
-        }
+      ? { root: request.root, formScope: request.formScope, summary: summarizeRoot(request) }
       : (summarizeAuthenticationWorkflowForms().find(
           (candidate) =>
             formWithinRequestRoot &&
@@ -906,22 +909,6 @@ function activateApprovedOwnedAdvanceControl(
   });
 }
 
-function formHasSemanticSubmitter(form: HTMLFormElement): boolean {
-  return Array.from(
-    form.ownerDocument.querySelectorAll<HTMLElement>(
-      semanticSubmitControlSelector,
-    ),
-  ).some((control) => {
-    if (
-      !(control instanceof HTMLButtonElement) &&
-      !(control instanceof HTMLInputElement)
-    ) {
-      return false;
-    }
-    return control.form === form;
-  });
-}
-
 export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
   const nookTypedArgs0_26 = passwordFieldQuery(request);
   const passwordField = findPasswordFields(nookTypedArgs0_26)[0];
@@ -935,9 +922,6 @@ export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
     return true;
   }
 
-  // Email-first / multi-step logins often use a type=button "Next" control
-  // rather than a real submit. Prefer an advance control before requestSubmit
-  // only while the password step is still missing.
   if (!passwordField) {
     const nookNamedArgs0_4: Parameters<typeof clickAdvanceControl>[0] = {
       ...request,
@@ -975,13 +959,35 @@ export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
   }
 
   if (!form) {
-    // Password present without a real <form>: fill succeeded, but do not
-    // claim submission for opaque type=button host chrome.
     return false;
   }
+  const sourceOrigin = form.ownerDocument.defaultView?.location.origin;
   if (
+    !sourceOrigin ||
     formHasSemanticSubmitter(form) ||
     typeof form.requestSubmit !== "function"
+  ) {
+    return false;
+  }
+  const destinationRequest: AuthenticationRouteDestinationRequest = {
+    form,
+  };
+  if (
+    !can_activate_authentication_route_control(
+      sourceOrigin,
+      [
+        form.id,
+        form.getAttribute("name") ?? "",
+        form.getAttribute("class") ?? "",
+        form.getAttribute("aria-label") ?? "",
+      ].join(" "),
+      authenticationRouteDestination(destinationRequest),
+      "",
+      "",
+      false,
+      isAuthUsernameField(usernameField),
+      true,
+    )
   ) {
     return false;
   }

@@ -74,6 +74,9 @@ pub struct AuthenticationAdvanceControlObservation {
     pub form_identity: String,
     pub destination_identity: String,
     pub label: String,
+    /// `id` and `name=value` machine identity used by the legacy activation veto.
+    #[serde(default)]
+    pub machine_identity: String,
 }
 
 /// Portable outcome for one observed authentication advance control.
@@ -117,6 +120,7 @@ impl AuthenticationAdvanceControlObservation {
             && self.form_identity.len() <= super::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
             && self.destination_identity.len() <= super::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
             && self.label.len() <= super::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
+            && self.machine_identity.len() <= super::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
             && [
                 self.password_field_count,
                 self.new_password_field_count,
@@ -268,6 +272,7 @@ mod tests {
             form_identity: "login-form".to_owned(),
             destination_identity: "https://login.example.test/auth/login".to_owned(),
             label: "Sign in".to_owned(),
+            machine_identity: String::new(),
         }
     }
 
@@ -325,6 +330,13 @@ mod tests {
         continue_control.semantic_submit_control_count = 0;
         continue_control.label = "Continue".to_owned();
         assert!(authentication_advance_control_is_safe(&continue_control));
+
+        let mut destructive_machine = login_control();
+        destructive_machine.label = "Continue".to_owned();
+        destructive_machine.machine_identity = "delete-account =".to_owned();
+        assert!(!authentication_advance_control_is_safe(
+            &destructive_machine
+        ));
     }
 
     #[test]

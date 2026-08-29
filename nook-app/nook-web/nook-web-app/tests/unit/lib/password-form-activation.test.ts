@@ -17,6 +17,59 @@ afterEach(() => {
 })
 
 describe('classified login activation', () => {
+  test('does not activate a Continue control whose machine identity is destructive', () => {
+    document.body.innerHTML = `
+      <form aria-label="Login" action="/auth/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button id="delete-account" type="submit">Continue</button>
+      </form>
+    `
+    let activated = false
+    document
+      .querySelector('#delete-account')
+      ?.addEventListener('click', () => {
+        activated = true
+      })
+    document.querySelector('form')?.addEventListener('submit', (event) => {
+      event.preventDefault()
+    })
+
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(false)
+    expect(activated).toBe(false)
+  })
+
+  test('does not implicitly submit after fill changes the form destination', () => {
+    document.body.innerHTML = `
+      <form aria-label="Login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="button">Show password</button>
+      </form>
+    `
+    const password = document.querySelector<HTMLInputElement>(
+      'input[type="password"]',
+    )
+    password?.addEventListener('input', () => {
+      password.form?.setAttribute('action', '/account/settings')
+    })
+    let submitted = false
+    document.querySelector('form')?.addEventListener('submit', (event) => {
+      event.preventDefault()
+      submitted = true
+    })
+
+    const loginFillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      username: 'user@example.test',
+      password: 'secret',
+      kind: PasswordFormQueryKind.Root,
+      root: document,
+    }
+    expect(fillLoginCredentials(loginFillArgs)).toBe(true)
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(false)
+    expect(submitted).toBe(false)
+  })
+
   test('activates a Rust-approved neutral username-only submitter', () => {
     document.body.innerHTML = `
       <form aria-label="Login" action="/auth/login">

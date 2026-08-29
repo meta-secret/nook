@@ -288,6 +288,7 @@ mod tests {
             form_identity: "login-form".to_owned(),
             destination_identity: destination.to_owned(),
             label: label.to_owned(),
+            machine_identity: String::new(),
         }
     }
 

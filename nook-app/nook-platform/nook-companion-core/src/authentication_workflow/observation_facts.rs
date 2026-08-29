@@ -167,6 +167,7 @@ mod tests {
                     form_identity: "login".to_owned(),
                     destination_identity: "https://example.test/login".to_owned(),
                     label: "Continue".to_owned(),
+                    machine_identity: String::new(),
                 },
             ),
             ..Default::default()
@@ -291,6 +292,7 @@ mod tests {
             form_identity: "login".to_owned(),
             destination_identity: "https://example.test/login".to_owned(),
             label: "Continue".to_owned(),
+            machine_identity: String::new(),
         };
         let facts = AuthenticationPageObservationFacts {
             authenticator: AuthenticationAuthenticatorObservationFacts {
@@ -322,6 +324,7 @@ mod tests {
             form_identity: "login".to_owned(),
             destination_identity: "https://example.test/login".to_owned(),
             label: label.to_owned(),
+            machine_identity: String::new(),
         };
         let facts = AuthenticationPageObservationFacts {
             authenticator: AuthenticationAuthenticatorObservationFacts {
@@ -511,6 +514,7 @@ mod tests {
             form_identity: "login".to_owned(),
             destination_identity: "https://example.test/login".to_owned(),
             label: "Use passkey".to_owned(),
+            machine_identity: String::new(),
         };
         let facts = AuthenticationPageObservationFacts {
             fields: AuthenticationFieldObservationFacts {

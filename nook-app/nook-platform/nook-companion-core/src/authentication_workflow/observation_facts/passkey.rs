@@ -134,6 +134,7 @@ mod tests {
             form_identity: "login-form".to_owned(),
             destination_identity: "https://login.example.test/auth/login".to_owned(),
             label: label.to_owned(),
+            machine_identity: String::new(),
         }
     }
 

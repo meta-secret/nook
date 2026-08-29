@@ -191,6 +191,22 @@ export function clickAdvanceControl(
   return false;
 }
 
+export function formHasSemanticSubmitter(form: HTMLFormElement): boolean {
+  return Array.from(
+    form.ownerDocument.querySelectorAll<HTMLElement>(
+      semanticSubmitControlSelector,
+    ),
+  ).some((control) => {
+    if (
+      !(control instanceof HTMLButtonElement) &&
+      !(control instanceof HTMLInputElement)
+    ) {
+      return false;
+    }
+    return control.form === form;
+  });
+}
+
 export function observeSubmit({
   form,
   action,
