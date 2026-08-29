@@ -136,6 +136,34 @@ new threads.Worker('./scripts/worker.mjs');`),
   ).toEqual(["'bun' 'scripts/facade.ts'", "'node' './scripts/worker.mjs'"]);
 });
 
+test('classifies dynamic imports of Node execution namespaces', () => {
+  expect(
+    extract(`
+const child=await import('node:child_process');
+const threads=await import('worker_threads');
+child.spawnSync('bun', ['scripts/facade.ts']);
+new threads.Worker('./scripts/worker.mjs');
+(await import('child_process')).execFileSync('bun', ['scripts/check.ts']);`),
+  ).toEqual([
+    "'bun' 'scripts/facade.ts'",
+    "'node' './scripts/worker.mjs'",
+    "'bun' 'scripts/check.ts'",
+  ]);
+  expect(
+    extract(`
+const specifier=input;
+const child=await import(specifier);
+child.spawnSync('bun', ['scripts/ignored.ts']);`),
+  ).toEqual([]);
+  expect(
+    extract(`
+const importer=()=>({spawnSync(){}});
+importer().spawnSync('bun', ['scripts/ignored.ts']);
+const fileSystem=await import('node:fs');
+fileSystem.readFileSync('ignored.ts');`),
+  ).toEqual([]);
+});
+
 test('recognizes static CommonJS child-process bindings', () => {
   for (const specifier of ['child_process', 'node:child_process']) {
     const commands = extract(`
@@ -238,16 +266,34 @@ Reflect[method](spawnSync, receiver, arguments_);`),
   ).toThrow('Dynamic Reflect subprocess member selection is forbidden.');
   expect(
     extract(`
-import {spawnSync} from 'node:child_process';
 function local(Reflect:{apply(...values:readonly string[]):void}){Reflect.apply('ignored.ts');}
 const Reflect={apply(){},construct(){}};
-Reflect.apply(spawnSync); Reflect['construct'](spawnSync);`),
+Reflect.apply('ignored.ts'); Reflect['construct']('ignored.ts');`),
   ).toEqual([]);
   expect(
     extract(`
-import {spawnSync} from 'node:child_process';
 const globalThis={Reflect:{apply(){}}};
-globalThis.Reflect.apply(spawnSync);`),
+globalThis.Reflect.apply('ignored.ts');`),
+  ).toEqual([]);
+});
+
+test('fails closed when ordinary calls receive execution capabilities', () => {
+  for (const source of [
+    "import {spawnSync} from 'node:child_process'; invoke(spawnSync);",
+    "import * as child from 'node:child_process'; invoke(child);",
+    'invoke(Bun.spawn);',
+    'invoke(Worker);',
+    "import {fork} from 'node:child_process'; const launch=fork; invoke(launch);",
+  ])
+    expect(() => extract(source)).toThrow(
+      'Subprocess capability passed to unsupported call.',
+    );
+  expect(
+    extract(`
+const spawnSync=()=>{};
+const Bun={spawn(){}};
+class Worker {}
+invoke(spawnSync); invoke(Bun.spawn); invoke(Worker);`),
   ).toEqual([]);
 });
 
@@ -344,6 +390,24 @@ function runExternal(request:ExternalRequest){spawnSync(request.command,[],{cwd:
 runExternal({command:'git',cwd:runtimeRoot});
 runExternal({command:'tar',cwd:runtimeRoot});`),
   ).toEqual([]);
+});
+
+test('rejects subprocess environment authority and permits exact empty env', () => {
+  expect(
+    extract(`
+import {spawnSync} from 'node:child_process';
+spawnSync('bun', ['scripts/facade.ts'], {cwd:'nested',env:{}});`),
+  ).toEqual(["cd 'nested' && 'bun' 'scripts/facade.ts'"]);
+  for (const source of [
+    "import {spawnSync} from 'node:child_process'; spawnSync('bun', ['scripts/facade.ts'], {env:{NODE_OPTIONS:'--require ./hook.cjs'}});",
+    "import {execSync} from 'node:child_process'; execSync('bun scripts/facade.ts', {env:{BASH_ENV:'./hook.sh'}});",
+    "import {fork} from 'node:child_process'; fork('scripts/facade.ts', [], {env:process.env});",
+    "Bun.spawn(['bun', 'scripts/facade.ts'], {env:{...process.env}});",
+    "import {spawnSync} from 'node:child_process'; spawnSync('git', ['status'], {env:{NODE_OPTIONS:'--require ./hook.cjs'}});",
+  ])
+    expect(() => extract(source)).toThrow(
+      /(?:Dynamic|Nonempty) TypeScript subprocess environment is forbidden\./,
+    );
 });
 
 test('pins the sole dynamic package cwd exemption to its exact function AST', async () => {

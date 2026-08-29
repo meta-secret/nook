@@ -6,8 +6,11 @@ import {
 } from './skill-provider-typescript-require.ts';
 import {
   assertReflectInvocationTarget,
+  assertUnsupportedCallCapability,
+  auditSubprocessEnvironment,
   bunShellTemplateCommand,
   childProcessCapability,
+  dynamicImportCapability,
   exactObjectProperty,
   functionInvocationCapability,
   isReflectInvocation,
@@ -118,6 +121,16 @@ export function typescriptSubprocessCommands(
         visited: new Set(),
       };
       const kind = resolveCapability(capabilityRequest);
+      if (kind === false)
+        for (const argument of node.arguments) {
+          const argumentRequest: CapabilityResolutionRequest = {
+            expression: argument,
+            location: node,
+            model,
+            visited: new Set(),
+          };
+          assertUnsupportedCallCapability(resolveCapability(argumentRequest));
+        }
       if (kind !== false) {
         if (isReflectInvocation(kind)) {
           const target = node.arguments[0];
@@ -191,6 +204,8 @@ function resolveCapability(
   if (request.visited.has(request.expression)) return false;
   const visited = new Set(request.visited).add(request.expression);
   const expression = unwrapExpression(request.expression);
+  const importedCapability = dynamicImportCapability(expression);
+  if (importedCapability !== false) return importedCapability;
   if (ts.isIdentifier(expression)) {
     const lookupRequest: BindingLookupRequest = {
       location: request.location,
@@ -386,6 +401,7 @@ function commandFromCall(request: CallCommandRequest): StaticCommand | false {
     },
     sourcePath: request.model.path,
   };
+  auditSubprocessEnvironment(cwdRequest);
   const cwd = (): StaticText | false => subprocessCwd(cwdRequest);
   const argumentList = subprocessArgumentList(cwdRequest);
   if (request.kind === SubprocessCallKind.Worker) {
@@ -507,7 +523,6 @@ function commandFromRunCommand(request: CallCommandRequest): StaticCommand {
     words: [executable, ...callArguments(argumentRequest)],
   };
 }
-
 function isExactRunCommandDispatch(request: CallCommandRequest): boolean {
   const [command, args] = request.call.arguments ?? [];
   if (!command || !args || !ts.isIdentifier(command)) return false;
@@ -545,7 +560,6 @@ function isExactRunCommandDispatch(request: CallCommandRequest): boolean {
     argsBinding.initializer === initializer
   );
 }
-
 function finiteParameterMemberValues([expression, request]: readonly [
   ts.Expression,
   CallCommandRequest,
@@ -584,7 +598,6 @@ function finiteParameterMemberValues([expression, request]: readonly [
     new Set(),
   ]);
 }
-
 function parameterMemberCallValues([
   parameter,
   member,
@@ -627,7 +640,6 @@ function parameterMemberCallValues([
   visit(owner.getSourceFile());
   return invalid || values.length === 0 ? false : values;
 }
-
 function parameterArgumentMember([argument, member, model, visited]: readonly [
   ts.Expression,
   string,
@@ -668,7 +680,6 @@ type OptionalCallExpressionRequest = {
   readonly expression: ts.Expression | false;
   readonly request: CallCommandRequest;
 };
-
 function bunCommandExpression(request: CallExpressionRequest): ts.Expression {
   const resolutionRequest: ArrayResolutionRequest = {
     expression: request.expression,
@@ -693,7 +704,6 @@ function bunCommandExpression(request: CallExpressionRequest): ts.Expression {
     throw new Error('Bun subprocess object requires one exact cmd property.');
   return property.initializer;
 }
-
 function commandFromExpression(
   request: CallExpressionRequest,
 ): StaticCommand | false {
@@ -981,7 +991,8 @@ function unwrapExpression(expression: ts.Expression): ts.Expression {
   if (
     ts.isParenthesizedExpression(expression) ||
     ts.isAsExpression(expression) ||
-    ts.isNonNullExpression(expression)
+    ts.isNonNullExpression(expression) ||
+    ts.isAwaitExpression(expression)
   )
     return unwrapExpression(expression.expression);
   return expression;

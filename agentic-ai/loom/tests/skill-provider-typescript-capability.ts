@@ -175,6 +175,37 @@ export function assertReflectInvocationTarget([adapter, target]: readonly [
   throw new Error('Indirect Reflect subprocess invocation is forbidden.');
 }
 
+export function assertUnsupportedCallCapability(
+  capability: SubprocessCallKind | false,
+): void {
+  if (
+    capability === false ||
+    capability === SubprocessCallKind.ReflectApply ||
+    capability === SubprocessCallKind.ReflectConstruct ||
+    capability === SubprocessCallKind.ReflectDynamic ||
+    capability === SubprocessCallKind.ReflectNamespace
+  )
+    return;
+  throw new Error('Subprocess capability passed to unsupported call.');
+}
+
+export function dynamicImportCapability(
+  expression: ts.Expression,
+): SubprocessCallKind | false {
+  if (
+    !ts.isCallExpression(expression) ||
+    expression.expression.kind !== ts.SyntaxKind.ImportKeyword
+  )
+    return false;
+  const [specifier] = expression.arguments;
+  if (!specifier || !ts.isStringLiteral(specifier)) return false;
+  if (/^(?:node:)?child_process$/u.test(specifier.text))
+    return SubprocessCallKind.Namespace;
+  return /^(?:node:)?worker_threads$/u.test(specifier.text)
+    ? SubprocessCallKind.WorkerNamespace
+    : false;
+}
+
 export function exactObjectProperty([object, name]: readonly [
   ts.ObjectLiteralExpression,
   string,
@@ -228,6 +259,29 @@ export function serializeSubprocessCommand(
 export function subprocessCwd(
   request: SubprocessCwdRequest,
 ): TaggedTemplateText | false {
+  const object = subprocessOptionsObject(request);
+  if (object === false) return false;
+  assertSubprocessEnvironment([request, object]);
+  const cwd = exactObjectProperty([object, 'cwd']);
+  if (cwd === false) return false;
+  const evaluated = request.evaluate(cwd);
+  if (evaluated.dynamic && !request.allowDynamicCwd)
+    throw new Error(
+      `Dynamic TypeScript subprocess cwd is forbidden in ${request.sourcePath}.`,
+    );
+  return evaluated.dynamic ? false : evaluated;
+}
+
+export function auditSubprocessEnvironment(
+  request: SubprocessCwdRequest,
+): void {
+  const object = subprocessOptionsObject(request);
+  if (object !== false) assertSubprocessEnvironment([request, object]);
+}
+
+function subprocessOptionsObject(
+  request: SubprocessCwdRequest,
+): ts.ObjectLiteralExpression | false {
   const args = request.call.arguments ?? [];
   const first = args[0];
   let options: ts.Expression | false = false;
@@ -260,14 +314,39 @@ export function subprocessCwd(
     throw new Error('Dynamic TypeScript subprocess options are forbidden.');
   if (object.properties.some((property) => ts.isSpreadAssignment(property)))
     throw new Error('Spread TypeScript subprocess cwd options are forbidden.');
-  const cwd = exactObjectProperty([object, 'cwd']);
-  if (cwd === false) return false;
-  const evaluated = request.evaluate(cwd);
-  if (evaluated.dynamic && !request.allowDynamicCwd)
-    throw new Error(
-      `Dynamic TypeScript subprocess cwd is forbidden in ${request.sourcePath}.`,
-    );
-  return evaluated.dynamic ? false : evaluated;
+  return object;
+}
+
+function assertSubprocessEnvironment([request, object]: readonly [
+  SubprocessCwdRequest,
+  ts.ObjectLiteralExpression,
+]): void {
+  if (
+    object.properties.some(
+      (property) => property.name && ts.isComputedPropertyName(property.name),
+    )
+  )
+    throw new Error('Dynamic TypeScript subprocess environment is forbidden.');
+  const environment = exactObjectProperty([object, 'env']);
+  const environmentProperties = object.properties.filter(
+    (property) =>
+      property.name &&
+      (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) &&
+      property.name.text === 'env',
+  );
+  if (environment === false && environmentProperties.length > 0)
+    throw new Error('Dynamic TypeScript subprocess environment is forbidden.');
+  if (environment !== false) {
+    const environmentObject = request.resolveObject(environment);
+    if (environmentObject === false)
+      throw new Error(
+        'Dynamic TypeScript subprocess environment is forbidden.',
+      );
+    if (environmentObject.properties.length > 0)
+      throw new Error(
+        'Nonempty TypeScript subprocess environment is forbidden.',
+      );
+  }
 }
 
 export function subprocessArgumentList(
