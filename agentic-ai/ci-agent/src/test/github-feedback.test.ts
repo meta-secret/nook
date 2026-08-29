@@ -208,6 +208,60 @@ test("provider status text is authenticated before exclusion", () => {
   );
 });
 
+test("Codex review summary status is authenticated by exact actor and marker", () => {
+  const base = {
+    authorAssociation: "NONE",
+    cursorMarker: "<!-- nook-cursor-review:head-sha -->",
+    marker: "<!-- nook-codex-review:head-sha -->",
+  };
+  const summary = [
+    "<!-- codex-pull-request-review-summary -->",
+    "",
+    "## Codex Review Summary",
+  ].join("\n");
+
+  assert.equal(
+    isRepositoryStatusComment({
+      ...base,
+      body: summary,
+      user: { login: "chatgpt-codex-connector[bot]" },
+    }),
+    true,
+  );
+  assert.equal(
+    isRepositoryStatusComment({
+      ...base,
+      body: summary,
+      user: { login: "human-reviewer" },
+    }),
+    false,
+  );
+  assert.equal(
+    isRepositoryStatusComment({
+      ...base,
+      body: summary,
+      user: { login: "chatgpt-codex-connector" },
+    }),
+    false,
+  );
+  assert.equal(
+    isRepositoryStatusComment({
+      ...base,
+      body: "<!-- codex-pull-request-review-summary-lookalike -->",
+      user: { login: "chatgpt-codex-connector[bot]" },
+    }),
+    false,
+  );
+  assert.equal(
+    isRepositoryStatusComment({
+      ...base,
+      body: `Actionable finding\n\n${summary}`,
+      user: { login: "chatgpt-codex-connector[bot]" },
+    }),
+    false,
+  );
+});
+
 test("workflow status markers are authenticated before exclusion", () => {
   const base = {
     authorAssociation: "NONE",

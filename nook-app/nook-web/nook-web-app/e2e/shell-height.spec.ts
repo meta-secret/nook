@@ -71,9 +71,24 @@ test.describe('authenticated shell height', () => {
       'touch-action',
       'pan-y pinch-zoom',
     )
-    await expect(page.getByTestId('header-lock-vault-btn')).toBeInViewport()
-    await expect(page.getByTestId('header-language-select')).toBeInViewport()
-    await expect(page.getByTestId('theme-toggle-btn')).toBeInViewport()
+
+    const mobileToolsTrigger = page.getByTestId('header-mobile-tools-btn')
+    await expect(mobileToolsTrigger).toBeVisible()
+    await expect(mobileToolsTrigger).toBeInViewport()
+    await mobileToolsTrigger.click()
+
+    const mobileTools = page.getByTestId('header-mobile-tools')
+    await expect(mobileTools).toBeVisible()
+
+    for (const testId of [
+      'header-language-select',
+      'header-mobile-theme-toggle-btn',
+      'header-mobile-lock-vault-btn',
+    ]) {
+      const control = mobileTools.getByTestId(testId)
+      await expect(control).toBeVisible()
+      await expect(control).toBeInViewport()
+    }
   })
 
   test('keeps every expanded security recommendation reachable in a short viewport', async ({
