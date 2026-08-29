@@ -136,23 +136,29 @@ export const runValidationCommand: ValidationRunner = async (
   args,
   options,
 ) => {
-  await new Promise<void>((resolveRun, rejectRun) => {
-    const child = spawn(command, [...args], {
-      ...options,
-      stdio: "inherit",
+  const cwd = process.cwd();
+  const hostEnvironment = { ...process.env };
+  process.chdir(options.cwd);
+  restoreHostEnvironment(options.env, process.env);
+  try {
+    await new Promise<void>((resolveRun, rejectRun) => {
+      const child = spawn(command, [...args], { stdio: "inherit" });
+      child.once("error", rejectRun);
+      child.once("close", (code, signal) => {
+        const failure = signal
+          ? `terminated by signal ${signal}`
+          : code === 0
+            ? ""
+            : `exited with code ${code}`;
+        if (failure)
+          rejectRun(new Error(`${command} ${args.join(" ")} ${failure}`));
+        else resolveRun();
+      });
     });
-    child.once("error", rejectRun);
-    child.once("close", (code, signal) => {
-      const failure = signal
-        ? `terminated by signal ${signal}`
-        : code === 0
-          ? ""
-          : `exited with code ${code}`;
-      if (failure)
-        rejectRun(new Error(`${command} ${args.join(" ")} ${failure}`));
-      else resolveRun();
-    });
-  });
+  } finally {
+    restoreHostEnvironment(hostEnvironment, process.env);
+    process.chdir(cwd);
+  }
 };
 
 export type RepositoryBaseline = {
@@ -556,14 +562,17 @@ export async function withValidationEnvironment<T>(
   const isolatedRoot = await mkdtemp(join(tmpdir(), "nook-validation-"));
   try {
     const base = createValidationEnvironment(hostEnvironment);
-    const { stdout } = await execFileAsync(
-      "/bin/sh",
-      ["-c", "command -v docker"],
-      {
-        encoding: "utf8",
-        env: base,
-      },
-    );
+    let dockerHost = "";
+    for (const dir of (base.PATH ?? "").split(":")) {
+      try {
+        await lstat(join(dir, "docker"));
+        dockerHost = join(dir, "docker");
+        break;
+      } catch {
+        continue;
+      }
+    }
+    if (!dockerHost) throw new Error("docker not found on sanitized PATH");
     const bin = join(isolatedRoot, "bin");
     const home = join(isolatedRoot, "home");
     const docker = join(bin, "docker");
@@ -588,7 +597,7 @@ export async function withValidationEnvironment<T>(
         ...base,
         DOCKER: docker,
         HOME: home,
-        NOOK_VALIDATION_DOCKER: stdout.trim(),
+        NOOK_VALIDATION_DOCKER: dockerHost,
         PATH: `${bin}:${base.PATH || ""}`,
         SCCACHE_OPTIONAL: "1",
       },
