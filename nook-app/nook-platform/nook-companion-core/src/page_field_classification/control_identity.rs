@@ -49,15 +49,17 @@ pub(super) fn route_names_external_authentication_provider(identity: &str) -> bo
     identity_names_external_authentication_provider(identity, false)
         || identity.split(['?', '#']).any(|metadata| {
             metadata.split('&').any(|component| {
-                ["provider", "provider id", "identity provider", "idp"].contains(
-                    &expand_identity_text(component.split('=').next().unwrap_or_default()).as_str(),
-                )
+                let key = expand_identity_text(component.split('=').next().unwrap_or_default());
+                ["provider", "identity provider", "idp"].contains(&key.trim_end_matches(" id"))
             })
         })
         || contains_any_word(&route, &["provider", "idp"])
-        || segments
-            .windows(2)
-            .any(|pair| matches!(pair[0].as_str(), "login" | "signin") && !is_local_tail(&pair[1]))
+        || segments.iter().enumerate().any(|(index, segment)| {
+            matches!(segment.as_str(), "login" | "signin")
+                && segments
+                    .get(index + 1)
+                    .is_some_and(|tail| !is_local_tail(tail) || segments.get(index + 2).is_some())
+        })
         || ((contains_any_word(&route, &["x"]) || contains_any_word(&fragment, &["x"]))
             && contains_any_word(&route, &["login", "log in", "signin", "sign in"]))
 }

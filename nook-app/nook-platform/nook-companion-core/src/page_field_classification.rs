@@ -663,12 +663,10 @@ mod tests {
         for form in "reset-password|signup-form|google-login|passkey-login".split('|') {
             assert!(!safe(form, "https://example.test/auth/login"));
         }
-        for destination in "https://example.test/login?provider|https://example.test/login?providerId=custom|https://example.test/login#provider_id=custom|https://example.test/login?next=/home#google|https://example.test/login#provider=acme|https://example.test/login?next=/home#provider=acme|https://example.test/login?identity_provider=amazon|https://example.test/signin/x|https://example.test/signin/auth0|https://example.test/account/close|https://example.test/login/amazon|https://example.test/orders/123/submit|https://example.test/auth/login?action=close+account|https://example.test/auth/provider/acme|https://example.test/auth/idp/acme|https://example.test/login/provider/acme|https://example.test/login/discord".split('|') {
+        for destination in "https://example.test/login?provider|https://example.test/login?providerId=custom|https://example.test/login?idp_id=custom|https://example.test/login#idpId=custom|https://example.test/login#provider_id=custom|https://example.test/login?next=/home#google|https://example.test/login#provider=acme|https://example.test/login?next=/home#provider=acme|https://example.test/login?identity_provider=amazon|https://example.test/signin/x|https://example.test/signin/auth0|https://example.test/signin/callback/acme|https://example.test/account/close|https://example.test/login/amazon|https://example.test/orders/123/submit|https://example.test/auth/login?action=close+account|https://example.test/auth/provider/acme|https://example.test/auth/idp/acme|https://example.test/login/provider/acme|https://example.test/login/discord".split('|') {
             assert!(!safe("login-form", destination), "{destination}");
         }
-        assert!(!safe(
-            &"x".repeat(MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1),
-            "https://example.test/auth/login"
-        ));
+        let oversized = "x".repeat(MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1);
+        assert!(!safe(&oversized, "/auth/login"));
     }
 }
