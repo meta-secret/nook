@@ -568,7 +568,8 @@ function clickAdvanceControl(request: LoginAdvanceControlRequest): boolean {
     const label = [
       control.textContent ?? "",
       control.getAttribute("aria-label") ?? "",
-      control.value ?? "",
+      control.getAttribute("name") ?? "",
+      control.value || (control.tagName === "INPUT" ? "submit" : ""),
     ].join(" ");
     const nookTypedArgs0_30: AuthenticationRouteControlRequest = {
       control,

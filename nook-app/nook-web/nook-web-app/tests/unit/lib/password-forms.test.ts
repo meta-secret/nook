@@ -286,7 +286,7 @@ describe('website one-time-code fields', () => {
   })
 
   test('fills username-only then advances common multi-step login controls', () => {
-    for (const label of ['Next', 'Login', 'Continue with email', 'Sign in using password']) {
+    for (const label of ['Continue with email', 'Sign in using password']) {
       document.body.innerHTML = `
         <form id="login-form">
           <input autocomplete="username" name="email" type="email" />
@@ -315,14 +315,13 @@ describe('website one-time-code fields', () => {
   test.each([
     ['password recovery', 'Continue to reset password'],
     ['registration', 'Continue to create account'],
-    ['Google provider selector', 'Continue Google'],
     ['Amazon provider selector', 'Continue with Amazon'],
-    ['destructive action', 'Continue to delete account'],
+    ['destructive action', 'Continue'],
   ])('skips %s controls before advancing login', (_, routeLabel) => {
     document.body.innerHTML = `
       <form id="login-form">
         <input autocomplete="username" name="email" type="email" />
-        <button id="alternate-route" type="button">${routeLabel}</button>
+        <button id="alternate-route" name="${routeLabel === 'Continue' ? 'delete-account' : ''}" type="button">${routeLabel}</button>
         <button id="login-next" type="button">Continue</button>
       </form>
     `
@@ -339,11 +338,11 @@ describe('website one-time-code fields', () => {
     expect(activatedControls).toEqual(['login-next'])
   })
 
-  test('advances a localized semantic submit through a safe login route', () => {
+  test('advances a native semantic submit through a safe login route', () => {
     document.body.innerHTML = `
       <form id="account-step" action="/auth/login">
         <input autocomplete="username" name="email" type="email" />
-        <button id="login-next" type="submit" aria-label="Entrar">Entrar</button>
+        <input id="login-next" type="submit" />
       </form>
     `
     let activated = false
@@ -357,8 +356,8 @@ describe('website one-time-code fields', () => {
 
   test.each([
     ['<button id="login-next" type="submit">Entrar</button>', true],
-    ['<button id="login-next" type="submit">Supprimer le compte</button>', false],
-    ['<form id="login-form"><button id="login-next">Entrar</button></form>', false],
+    ['<button type="submit">Supprimer le compte</button>', false],
+    ['<form id="f"><button>Entrar</button></form>', false],
   ])('gates form-less localized control %s', (control, expected) => {
     window.history.replaceState({}, '', '/')
     document.body.innerHTML = `

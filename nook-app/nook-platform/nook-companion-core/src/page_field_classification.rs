@@ -649,7 +649,7 @@ mod tests {
         assert!(!decide("f", "Continue with Amazon", true, true, true));
         for label in [
             "Sign in to Google",
-            "Sign in to Microsoft and delete account",
+            "Continue delete-account yes",
             "Sign in to Microsoft and reset password",
             "Sign in to Microsoft or Google",
         ] {
@@ -686,7 +686,7 @@ mod tests {
             ("profile-settings", "https://example.test/auth/login"),
             ("login-form", "https://example.test/register"),
             ("login-form", "https://example.test/reset-password"),
-            ("login-form", "https://example.test/login?provider=amazon"),
+            ("login-form", "https://example.test/login?provider"),
             ("login-form", "https://example.test/login#/google"),
             ("login-form", "https://example.test/login?provider=x"),
             ("login-form", "https://example.test/signin/x"),

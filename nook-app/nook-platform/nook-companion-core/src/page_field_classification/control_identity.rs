@@ -26,7 +26,6 @@ fn identity_names_external_authentication_provider(
         ],
     ) || (allow_single_letter_x && contains_any_word(&identity, &["x"]))
 }
-
 pub(super) fn label_names_external_authentication_provider(identity: &str) -> bool {
     identity_names_external_authentication_provider(identity, true)
 }
@@ -37,8 +36,7 @@ pub(super) fn route_names_external_authentication_provider(identity: &str) -> bo
         || identity.split_once('?').is_some_and(|(_, query)| {
             query
                 .split(['&', '#'])
-                .filter_map(|component| component.split_once('='))
-                .any(|(key, _)| key.eq_ignore_ascii_case("provider"))
+                .any(|component| component.split('=').next() == Some("provider"))
         })
         || (contains_any_word(&route, &["x"])
             && contains_any_word(&route, &["login", "log in", "signin", "sign in"]))
