@@ -63,6 +63,10 @@ Does not apply to:
 
 ## Validation
 
-Run the syntax-aware preflight tests and the focused hosted Rust tasks. For
-implementation work, run `task format`, commit and push, then explicitly trigger
-complete exact-head validation with `task pr:validate`.
+Development-core workers run the syntax-aware preflight tests and the smallest
+focused Rust tests that prove the changed behavior. For implementation work,
+run `task format` and return a coherent exact committed handoff; do not push or
+mutate external delivery state. After integration, Gizmo runs
+`task loom:pre-push` on the integrated head and pushes promptly. Gizmo owns any
+useful focused remote Rust tasks, complete exact-head validation with
+`task pr:validate`, readiness, and merge.

@@ -458,11 +458,16 @@ When `Option<T>` is still acceptable (do not force an enum):
 
 ## Validation
 
-Run the smallest relevant Rust and web checks through `task remote`. For
-implementation tasks, run `task format`, commit and push, then explicitly
-trigger complete validation with `task pr:validate`. `task preflight`
-rejects known TypeScript domain mirrors, local aliases of generated `Nook*`
-types, same-argument forwarding functions around generated WASM imports,
-unchecked WASM type hints, and raw provider/auth `JsValue` DTO signatures.
-Extension ownership checks must reject known portable decision patterns after
-their Rust replacement lands.
+Development-core workers run the smallest focused Rust domain tests that prove
+the changed behavior and typed bridge tests when the WASM contract changes.
+Browser E2E does not replace this domain proof. For implementation tasks, run
+`task format` and return a coherent exact committed handoff; do not push or
+mutate external delivery state. After integration, Gizmo runs
+`task loom:pre-push` on the integrated head and pushes promptly. Gizmo owns any
+useful focused remote Rust or web tasks, complete exact-head validation with
+`task pr:validate`, readiness, and merge. `task preflight` rejects known
+TypeScript domain mirrors, local aliases of generated `Nook*` types,
+same-argument forwarding functions around generated WASM imports, unchecked
+WASM type hints, and raw provider/auth `JsValue` DTO signatures. Extension
+ownership checks must reject known portable decision patterns after their Rust
+replacement lands.
