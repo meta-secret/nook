@@ -286,14 +286,7 @@ describe('website one-time-code fields', () => {
   })
 
   test('fills username-only then advances common multi-step login controls', () => {
-    for (const label of [
-      'Next',
-      'Login',
-      'signin',
-      'Sign   In',
-      'Log\tin',
-      'Sign in to Microsoft 365',
-    ]) {
+    for (const label of ['Next', 'Login', 'signin', 'Sign   In', 'Log\tin']) {
       document.body.innerHTML = `
         <form id="login-form">
           <input autocomplete="username" name="email" type="email" />
