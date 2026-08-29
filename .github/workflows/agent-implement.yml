@@ -113,17 +113,6 @@ jobs:
               return
             }
             const frontmatter = body.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/)?.[1] || ''
-            const stackMetadataKeys = ['stack_branch', 'stack_predecessor_branch']
-            const presentStackMetadata = stackMetadataKeys.filter((key) =>
-              new RegExp(`^\\s*${key}\\s*:`, 'm').test(frontmatter)
-            )
-            if (presentStackMetadata.length > 0) {
-              core.setFailed(
-                `${path} carries stack metadata (${presentStackMetadata.join(', ')}). ` +
-                'Stacked successor dispatch requires the later runtime support; retry after it lands.'
-              )
-              return
-            }
             const gizmoIdRows = [...frontmatter.matchAll(/^gizmo_id:\s*(.*)$/gm)]
             if (gizmoIdRows.length > 1) {
               core.setFailed(`${path} has duplicate canonical gizmo_id fields`)

@@ -48,10 +48,6 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "automation: agent",
         "status: in_progress",
         "gizmo_id",
-        "const stackMetadataKeys = ['stack_branch', 'stack_predecessor_branch']",
-        "new RegExp(`^\\\\s*${key}\\\\s*:`, 'm').test(frontmatter)",
-        "presentStackMetadata.length > 0",
-        "Stacked successor dispatch requires the later runtime support; retry after it lands.",
         "const rawGizmoId = gizmoIdRows[0]?.[1].trim() || ''",
         "const assignedGizmoId = rawGizmoId === 'null' ? '' : rawGizmoId",
         "stack_branch",
@@ -163,6 +159,11 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "published plan frontmatter must persist the validated Current Gizmo ID"
     );
     assert!(
+        !workflow.contains("presentStackMetadata")
+            && !workflow.contains("Stacked successor dispatch requires the later runtime support"),
+        "successor runtime support must replace the bottom-only stack rejection"
+    );
+    assert!(
         workflow.matches("uses: actions/checkout@v7").count() == 1
             && !workflow.contains("ref: ${{ steps.task.outputs.checkout_ref }}"),
         "unreviewed implementation source must not replace the trusted workflow checkout"
@@ -215,15 +216,15 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
     let claim_position = workflow
         .find("Claim ready Workbench issue")
         .context("the workflow must claim the requested Workbench issue")?;
-    let stack_guard_position = workflow
-        .find("presentStackMetadata.length > 0")
-        .context("the workflow must reject focused issues carrying stack metadata")?;
+    let stack_parser_position = workflow
+        .find("const stackBranchRows")
+        .context("the successor workflow must parse trusted stack metadata")?;
     let claim_mutation_position = workflow
         .find("github.rest.repos.createOrUpdateFileContents")
         .context("the workflow must claim the requested Workbench issue atomically")?;
     assert!(
-        stack_guard_position < claim_mutation_position,
-        "stacked focused issues must fail before the Workbench claim is mutated"
+        stack_parser_position < claim_mutation_position,
+        "trusted stack metadata must be validated before the Workbench claim is mutated"
     );
     let docker_position = workflow
         .find("Docker setup")
