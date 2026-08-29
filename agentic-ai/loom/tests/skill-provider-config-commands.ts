@@ -297,6 +297,10 @@ function collectTaskDependencies(request: CommandCollectionRequest): void {
 function collectTaskShellList(request: CommandCollectionRequest): void {
   if (!Array.isArray(request.value)) return;
   for (const entry of request.value) {
+    if (typeof entry === 'string') {
+      request.target.push(entry);
+      continue;
+    }
     const shell = mapping(entry).sh;
     if (typeof shell === 'string') request.target.push(shell);
   }

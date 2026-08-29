@@ -107,11 +107,16 @@ test('shell runtimes audit tracked scripts regardless of suffix', () => {
 });
 
 test('find command-executing predicates fail closed', () => {
-  for (const predicate of ['-exec', '-execdir', '-ok', '-okdir']) {
+  for (const [runtime, predicate] of [
+    ['find', '-exec'],
+    ['/usr/bin/find', '-execdir'],
+    ['/bin/find', '-ok'],
+    ['./tools/find', '-okdir'],
+  ]) {
     const sources = new Map([
       [
         'package.json',
-        `{"scripts":{"audit":"find . ${predicate} bun scripts/facade.ts \\\\;"}}`,
+        `{"scripts":{"audit":"${runtime} . ${predicate} bun scripts/facade.ts \\\\;"}}`,
       ],
     ]);
     const graph: ConfigurationScriptGraph = {
@@ -120,8 +125,51 @@ test('find command-executing predicates fail closed', () => {
       sources,
       symlinkPaths: new Set(),
     };
-    expect(() => configurationScriptPaths(graph), predicate).toThrow(
+    expect(() => configurationScriptPaths(graph), runtime).toThrow(
       'Find command-executing predicate is forbidden',
+    );
+  }
+});
+
+test('scalar Task preconditions join the runnable graph', () => {
+  const sources = new Map([
+    [
+      'Taskfile.yml',
+      'tasks:\n  audit:\n    preconditions: [bun scripts/facade.ts]',
+    ],
+    ['scripts/facade.ts', `await import('../${PROVIDER}');`],
+    [PROVIDER, 'export {};'],
+  ]);
+  const graph: ConfigurationScriptGraph = {
+    executablePaths: new Set(),
+    roots: ['Taskfile.yml'],
+    sources,
+    symlinkPaths: new Set(),
+  };
+  expect(() => configurationScriptPaths(graph)).toThrow(
+    /(?:reaches provider|runtime boundary)/u,
+  );
+});
+
+test('nested Vite and Svelte roots preserve their runtime cwd', () => {
+  for (const root of ['nested/vite.config.ts', 'nested/svelte.config.js']) {
+    const sources = new Map([
+      [
+        root,
+        "import {spawnSync} from 'node:child_process'; spawnSync('bun',['scripts/facade.ts']);",
+      ],
+      ['scripts/facade.ts', 'export const safe = true;'],
+      ['nested/scripts/facade.ts', `await import('../../${PROVIDER}');`],
+      [PROVIDER, 'export {};'],
+    ]);
+    const graph: ConfigurationScriptGraph = {
+      executablePaths: new Set(),
+      roots: [root],
+      sources,
+      symlinkPaths: new Set(),
+    };
+    expect(() => configurationScriptPaths(graph), root).toThrow(
+      /(?:reaches provider|runtime boundary)/u,
     );
   }
 });

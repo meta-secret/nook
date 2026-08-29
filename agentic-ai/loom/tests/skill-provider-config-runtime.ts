@@ -64,6 +64,16 @@ export function actionSourceRequiresContent(path: string): boolean {
   );
 }
 
+export function configurationRootWorkingDirectory(path: string): string {
+  if (
+    !/(^|\/)(?:package\.json|(?:vite|svelte)\.config\.(?:[cm]?[jt]s))$/u.test(
+      path,
+    )
+  )
+    return '';
+  return posix.dirname(path).replace(/^\.$/u, '');
+}
+
 export function resolutionCandidates(
   request: ResolutionCandidateRequest,
 ): readonly string[] {

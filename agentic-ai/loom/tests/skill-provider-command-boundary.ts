@@ -730,7 +730,7 @@ function analyzeRuntime(request: RuntimeCommandRequest): void {
     return;
   }
   if (
-    request.runtime === 'find' &&
+    posix.basename(request.runtime) === 'find' &&
     request.words.some((word) =>
       ['-exec', '-execdir', '-ok', '-okdir'].includes(word.value),
     )

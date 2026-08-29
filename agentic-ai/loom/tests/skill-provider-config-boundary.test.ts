@@ -32,6 +32,7 @@ import {
 import {
   actionSourceRequiresContent,
   ACTION_SOURCE_SUFFIXES,
+  configurationRootWorkingDirectory,
   CONFIGURATION_GRAPH_LIMITS as LIMITS,
   isActionManifest,
   isRepositoryBackedPackageSpecifier,
@@ -78,9 +79,7 @@ export function configurationScriptPaths(
     positionalArguments: false,
     shellRuntime: false,
     depth: 0,
-    workingDirectory: importer.endsWith('package.json')
-      ? posix.dirname(importer).replace(/^\.$/u, '')
-      : '',
+    workingDirectory: configurationRootWorkingDirectory(importer),
   }));
   const visited = new Set<string>();
   const scripts = new Set<string>();
