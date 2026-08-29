@@ -856,6 +856,72 @@ export function readLoginCredentials(
   };
 }
 
+function activateApprovedOwnedAdvanceControl(
+  request: PasswordFormScopeQuery,
+  form: HTMLFormElement,
+): boolean {
+  const formWithinRequestRoot =
+    request.root === form.ownerDocument ||
+    (request.root instanceof Node && request.root.contains(form));
+  const observation: PasswordFormObservation | false =
+    request.kind === PasswordFormQueryKind.Scoped
+      ? {
+          root: request.root,
+          formScope: request.formScope,
+          summary: summarizeRoot(request),
+        }
+      : (summarizeAuthenticationWorkflowForms().find(
+          (candidate) =>
+            formWithinRequestRoot &&
+            candidate.formScope.kind === PasswordFormScopeKind.Owned &&
+            candidate.formScope.owner === form,
+        ) ?? false);
+  const approved =
+    observation &&
+    Array.from(
+      form.ownerDocument.querySelectorAll<LoginAdvanceControl>(
+        authenticationAdvanceControlSelector,
+      ),
+    )
+      .filter((control) => control.form === form)
+      .find((control) => {
+        if (!isRenderedControl(control)) return false;
+        const factsRequest: PageControlObservationRequest = {
+          observation,
+          control,
+          authenticationUsername: usernameEvidence(observation),
+        };
+        return authentication_advance_control_is_safe(
+          pageControlObservation(factsRequest),
+        );
+      });
+  if (!approved) return false;
+  if (!approved.matches(semanticSubmitControlSelector)) {
+    approved.click();
+    return true;
+  }
+  return observeSubmit({
+    form,
+    action: () => approved.click(),
+  });
+}
+
+function formHasSemanticSubmitter(form: HTMLFormElement): boolean {
+  return Array.from(
+    form.ownerDocument.querySelectorAll<HTMLElement>(
+      semanticSubmitControlSelector,
+    ),
+  ).some((control) => {
+    if (
+      !(control instanceof HTMLButtonElement) &&
+      !(control instanceof HTMLInputElement)
+    ) {
+      return false;
+    }
+    return control.form === form;
+  });
+}
+
 export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
   const nookTypedArgs0_26 = passwordFieldQuery(request);
   const passwordField = findPasswordFields(nookTypedArgs0_26)[0];
@@ -863,6 +929,11 @@ export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
   const usernameField = findUsernameFields(nookTypedArgs0_27)[0];
   const anchor = passwordField ?? usernameField;
   if (!anchor) return false;
+
+  const form = anchor.form;
+  if (form && activateApprovedOwnedAdvanceControl(request, form)) {
+    return true;
+  }
 
   // Email-first / multi-step logins often use a type=button "Next" control
   // rather than a real submit. Prefer an advance control before requestSubmit
@@ -873,26 +944,12 @@ export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
       usernameField,
     };
     if (clickAdvanceControl(nookNamedArgs0_4)) return true;
-    const form = usernameField.form;
     const sourceOrigin = form?.ownerDocument.defaultView?.location.origin;
-    if (!form || !sourceOrigin) return false;
+    if (!form || !sourceOrigin || formHasSemanticSubmitter(form)) return false;
     const destinationRequest: AuthenticationRouteDestinationRequest = {
       form,
     };
     if (
-      Array.from(
-        form.ownerDocument.querySelectorAll<HTMLElement>(
-          semanticSubmitControlSelector,
-        ),
-      ).some((control) => {
-        if (
-          !(control instanceof HTMLButtonElement) &&
-          !(control instanceof HTMLInputElement)
-        ) {
-          return false;
-        }
-        return control.form === form;
-      }) ||
       !can_activate_authentication_route_control(
         sourceOrigin,
         [
@@ -911,71 +968,25 @@ export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
     ) {
       return false;
     }
-    const nookTypedArgs0_28: Parameters<typeof observeSubmit>[0] = {
+    return observeSubmit({
       form,
       action: () => form.requestSubmit(),
-    };
-    return observeSubmit(nookTypedArgs0_28);
+    });
   }
 
-  const form = anchor.form;
   if (!form) {
     // Password present without a real <form>: fill succeeded, but do not
     // claim submission for opaque type=button host chrome.
     return false;
   }
-
-  const submitControls = Array.from(
-    form.ownerDocument.querySelectorAll<LoginAdvanceControl>(
-      authenticationAdvanceControlSelector,
-    ),
-  ).filter((control) => control.form === form);
-  const formWithinRequestRoot =
-    request.root === form.ownerDocument ||
-    (request.root instanceof Node && request.root.contains(form));
-  const observation: PasswordFormObservation | false =
-    request.kind === PasswordFormQueryKind.Scoped
-      ? {
-          root: request.root,
-          formScope: request.formScope,
-          summary: summarizeRoot(request),
-        }
-      : (summarizeAuthenticationWorkflowForms().find(
-          (candidate) =>
-            formWithinRequestRoot &&
-            candidate.formScope.kind === PasswordFormScopeKind.Owned &&
-            candidate.formScope.owner === form,
-        ) ?? false);
-  const submitControl = observation
-    ? submitControls.find((control) => {
-        if (!isRenderedControl(control)) return false;
-        const factsRequest: PageControlObservationRequest = {
-          observation,
-          control,
-          authenticationUsername: usernameEvidence(observation),
-        };
-        return authentication_advance_control_is_safe(
-          pageControlObservation(factsRequest),
-        );
-      })
-    : false;
-  if (submitControl) {
-    if (!submitControl.matches(semanticSubmitControlSelector)) {
-      submitControl.click();
-      return true;
-    }
-    const nookTypedArgs0_28: Parameters<typeof observeSubmit>[0] = {
-      form,
-      action: () => submitControl.click(),
-    };
-    return observeSubmit(nookTypedArgs0_28);
+  if (
+    formHasSemanticSubmitter(form) ||
+    typeof form.requestSubmit !== "function"
+  ) {
+    return false;
   }
-  if (submitControls.length === 0 && typeof form.requestSubmit === "function") {
-    const nookTypedArgs0_29: Parameters<typeof observeSubmit>[0] = {
-      form,
-      action: () => form.requestSubmit(),
-    };
-    return observeSubmit(nookTypedArgs0_29);
-  }
-  return false;
+  return observeSubmit({
+    form,
+    action: () => form.requestSubmit(),
+  });
 }

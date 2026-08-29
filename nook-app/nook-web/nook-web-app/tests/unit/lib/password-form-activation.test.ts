@@ -17,6 +17,43 @@ afterEach(() => {
 })
 
 describe('classified login activation', () => {
+  test('activates a Rust-approved neutral username-only submitter', () => {
+    document.body.innerHTML = `
+      <form aria-label="Login" action="/auth/login">
+        <input autocomplete="username" name="email" type="email" />
+        <button id="next" type="submit">Proceed</button>
+      </form>
+    `
+    let advanced = false
+    document.querySelector('#next')?.addEventListener('click', () => {
+      advanced = true
+    })
+    document.querySelector('form')?.addEventListener('submit', (event) => {
+      event.preventDefault()
+    })
+
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
+    expect(advanced).toBe(true)
+  })
+
+  test('implicitly submits a password form that only has a non-submit button', () => {
+    document.body.innerHTML = `
+      <form aria-label="Login" action="/session">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="button">Show password</button>
+      </form>
+    `
+    let submitted = false
+    document.querySelector('form')?.addEventListener('submit', (event) => {
+      event.preventDefault()
+      submitted = true
+    })
+
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
+    expect(submitted).toBe(true)
+  })
+
   test('activates the Rust-approved type-button instead of posting the form action', () => {
     document.body.innerHTML = `
       <form id="login" action="/account/delete">
