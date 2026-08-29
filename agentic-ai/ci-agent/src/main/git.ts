@@ -59,6 +59,8 @@ export type AuthoredBudgetArgs = {
   maximumLines: number;
 };
 
+export class AuthoredChangeBudgetExceededError extends Error {}
+
 enum NumstatRecordParseKind {
   End = "end",
   Malformed = "malformed",
@@ -182,7 +184,8 @@ export function summarizeAuthoredNumstat(
     const filename = normalizedPath.slice(normalizedPath.lastIndexOf("/") + 1);
     if (!/^\d+$/.test(parsed.added) || !/^\d+$/.test(parsed.deleted)) {
       const extensionStart = filename.lastIndexOf(".");
-      const extension = extensionStart >= 0 ? filename.slice(extensionStart) : "";
+      const extension =
+        extensionStart >= 0 ? filename.slice(extensionStart) : "";
       if (AUTHORED_TEXT_EXTENSIONS.has(extension)) {
         reportedOnly.unmeasurableAuthoredFiles += 1;
       } else {
@@ -243,7 +246,7 @@ export async function assertAuthoredChangeBudget(
     );
   }
   if (summary.authoredLines > args.maximumLines) {
-    throw new Error(
+    throw new AuthoredChangeBudgetExceededError(
       `Implemented diff exceeds the ${args.maximumLines} authored changed-line budget: ${summary.authoredLines}`,
     );
   }

@@ -67,6 +67,10 @@ function fetchRemoteIssueAssignment(issuePath) {
 const repository =
   process.env.NOOK_WORKBENCH_REPOSITORY || 'meta-secret/nook-workbench'
 const expectedSha = process.env.NOOK_WORKBENCH_EXPECTED_SHA?.trim()
+const assignedIssuePath =
+  process.env.NOOK_WORKBENCH_ASSIGNED_ISSUE_PATH?.trim() || ''
+const assignedGizmoId =
+  process.env.NOOK_WORKBENCH_ASSIGNED_GIZMO_ID?.trim() || ''
 let sourceTaskFile = { kind: SourceTaskFileKind.Missing }
 if (typeof process.env.NOOK_WORKBENCH_SOURCE_TASK_FILE === 'string') {
   const path = process.env.NOOK_WORKBENCH_SOURCE_TASK_FILE.trim()
@@ -125,14 +129,28 @@ if (remotePath.startsWith('plans/')) {
     console.error(`Refusing invalid Workbench plan: ${planFrontmatter.message}`)
     process.exit(7)
   }
-  const assignment = planFrontmatter.issuePath
-    ? fetchRemoteIssueAssignment(planFrontmatter.issuePath)
+  if (
+    assignedIssuePath !== planFrontmatter.issuePath ||
+    (assignedIssuePath &&
+      (!issuePathPattern.test(assignedIssuePath) ||
+        assignedIssuePath.includes('..'))) ||
+    (assignedGizmoId && !gizmoIdPattern.test(assignedGizmoId)) ||
+    (!assignedIssuePath && assignedGizmoId)
+  ) {
+    console.error('Refusing invalid Workbench plan: trusted caller identity does not match plan')
+    process.exit(7)
+  }
+  const assignment = assignedIssuePath
+    ? fetchRemoteIssueAssignment(assignedIssuePath)
     : { kind: 'legacy' }
-  if (assignment.kind === 'invalid') {
+  if (
+    assignment.kind === 'invalid' ||
+    (assignment.kind === 'assigned' && assignment.value !== assignedGizmoId) ||
+    (assignment.kind === 'legacy' && assignedGizmoId)
+  ) {
     console.error('Refusing invalid Workbench plan: trusted remote issue could not be validated')
     process.exit(7)
   }
-  const assignedGizmoId = assignment.kind === 'assigned' ? assignment.value : ''
   const rejection = validateAgentRecord(localContent, 'plan', [], sourceTask, {
     assignedGizmoId,
   })

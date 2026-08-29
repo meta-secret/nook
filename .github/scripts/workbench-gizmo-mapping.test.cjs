@@ -102,32 +102,34 @@ function validate(candidate, assignedGizmoId = '') {
   return validateAgentRecord(candidate, 'plan', [], '', { assignedGizmoId })
 }
 
-test('accepts a 200-line one-Gizmo plan with multiple ownership units', () => {
-  const candidate = plan({
-    ownershipUnits: [
-      ownershipUnit(1, 'gizmo-1'),
-      ownershipUnit(2, 'gizmo-1', 'Publication'),
-    ],
-  })
-  assert.equal(validate(candidate), '')
+const multiOwnershipPlan = plan({
+  ownershipUnits: [ownershipUnit(1, 'gizmo-1'), ownershipUnit(2, 'gizmo-1', 'Publication')],
 })
+const numericGizmoPlan = plan({
+  currentGizmoId: '2fa-slice',
+  ownershipUnits: [ownershipUnit(1, '2fa-slice')],
+  slices: [slice(1, '2fa-slice', 'Validator', 'None', '200')],
+})
+for (const [name, candidate, assignedId] of [
+  ['a one-Gizmo plan with multiple ownership units', multiOwnershipPlan, ''],
+  ['a plan bound to its trusted focused-issue ID', plan(), 'gizmo-1'],
+  ['a canonical ID that starts with a digit', numericGizmoPlan, '2fa-slice'],
+  ['multiple ownership units bound to one trusted ID', multiOwnershipPlan, 'gizmo-1'],
+  ['predecessor-free independent PRs at the ceiling', boundedMultiPlan(), ''],
+]) {
+  test(`accepts ${name}`, () => assert.equal(validate(candidate, assignedId), ''))
+}
 
-test('rejects one-PR delivery with multiple Gizmos', () => {
-  const candidate = plan({
-    slices: [
-      slice(1, 'gizmo-1', 'Validator', 'None', '100'),
-      slice(2, 'gizmo-2', 'Publisher', 'None', '100'),
-    ],
-  })
-  assert.match(validate(candidate), /one-PR plan requires one numbered slice/)
-})
-
-test('rejects an over-2,000 feature represented by one Gizmo', () => {
-  const candidate = stackedPlan()
-    .replaceAll('Gizmo ID: gizmo-2', 'Gizmo ID: gizmo-1')
-    .replace('Predecessor Gizmo ID: gizmo-1', 'Predecessor Gizmo ID: None')
-  assert.match(validate(candidate), /unique Gizmo ID/)
-})
+for (const [name, candidate, rejection] of [
+  ['rejects one-PR delivery with multiple Gizmos', plan({ slices: [slice(1, 'gizmo-1', 'Validator', 'None', '100'), slice(2, 'gizmo-2', 'Publisher', 'None', '100')] }), /one-PR plan requires one numbered slice/],
+  ['rejects an over-2,000 feature represented by one Gizmo', stackedPlan().replaceAll('Gizmo ID: gizmo-2', 'Gizmo ID: gizmo-1').replace('Predecessor Gizmo ID: gizmo-1', 'Predecessor Gizmo ID: None'), /unique Gizmo ID/],
+  ['rejects a declared Gizmo without ownership mapping', stackedPlan().replace(`\n${ownershipUnit(2, 'gizmo-2', 'Publisher')}`, ''), /every declared PR slice Gizmo must own/],
+  ['rejects an ownership unit mapped to an undeclared Gizmo', plan().replace('Gizmo ID: gizmo-1; Functional owner: AI', 'Gizmo ID: gizmo-missing; Functional owner: AI'), /every ownership unit must reference/],
+  ['rejects a current Gizmo that differs from the first slice', plan({ currentGizmoId: 'gizmo-2' }), /current Gizmo ID must match/],
+  ['rejects a nonconsecutive stacked predecessor', stackedPlan().replace('Predecessor Gizmo ID: gizmo-1; Publisher', 'Predecessor Gizmo ID: None; Publisher'), /predecessors must follow consecutive/],
+]) {
+  test(name, () => assert.match(validate(candidate), rejection))
+}
 
 for (const [label, replacement, rejection] of [
   ['duplicate ID', ['2. Gizmo ID: gizmo-2', '2. Gizmo ID: gizmo-1'], /unique Gizmo ID/],
@@ -137,38 +139,6 @@ for (const [label, replacement, rejection] of [
   test(`rejects a Gizmo ${label}`, () =>
     assert.match(validate(stackedPlan().replace(...replacement)), rejection))
 }
-
-test('rejects a declared Gizmo without ownership-unit mapping', () => {
-  const candidate = stackedPlan().replace(`\n${ownershipUnit(2, 'gizmo-2', 'Publisher')}`, '')
-  assert.match(validate(candidate), /every declared PR slice Gizmo must own/)
-})
-
-test('rejects an ownership unit mapped to an undeclared Gizmo', () => {
-  const candidate = plan().replace(
-    'Gizmo ID: gizmo-1; Functional owner: AI',
-    'Gizmo ID: gizmo-missing; Functional owner: AI',
-  )
-  assert.match(validate(candidate), /every ownership unit must reference/)
-})
-
-test('rejects a current Gizmo that differs from the first slice', () => {
-  const candidate = plan({ currentGizmoId: 'gizmo-2' })
-  assert.match(validate(candidate), /current Gizmo ID must match/)
-})
-
-test('accepts a plan bound to its trusted focused-issue Gizmo ID', () => {
-  assert.equal(validate(plan(), 'gizmo-1'), '')
-})
-
-test('accepts a canonical Gizmo ID that starts with a digit', () => {
-  const canonicalId = '2fa-slice'
-  const candidate = plan({
-    currentGizmoId: canonicalId,
-    ownershipUnits: [ownershipUnit(1, canonicalId)],
-    slices: [slice(1, canonicalId, 'Validator', 'None', '200')],
-  })
-  assert.equal(validate(candidate, canonicalId), '')
-})
 
 for (const invalidId of ['slice--one', 'slice-']) {
   test(`rejects noncanonical Gizmo ID ${invalidId}`, () => {
@@ -185,16 +155,6 @@ for (const invalidId of ['slice--one', 'slice-']) {
   })
 }
 
-test('accepts multiple ownership units bound to one trusted Gizmo ID', () => {
-  const candidate = plan({
-    ownershipUnits: [
-      ownershipUnit(1, 'gizmo-1'),
-      ownershipUnit(2, 'gizmo-1', 'Publisher'),
-    ],
-  })
-  assert.equal(validate(candidate, 'gizmo-1'), '')
-})
-
 for (const [name, candidate, assignedId, rejection] of [
   ['a different plan ID', plan(), 'gizmo-2', /trusted focused-issue Gizmo ID/],
   ['multi-PR delivery', stackedPlan(), 'gizmo-1', /requires one-PR delivery/],
@@ -206,10 +166,6 @@ for (const [name, candidate, assignedId, rejection] of [
     assert.match(validate(candidate, assignedId), rejection))
 }
 
-test('accepts predecessor-free independent PRs at the 2,000-line ceiling', () => {
-  assert.equal(validate(boundedMultiPlan()), '')
-})
-
 for (const [name, mode, rejection] of [
   ['stacked PRs at the ceiling', 'Stacked PRs', /requires independent PRs/],
   ['dependent independent PRs', 'Independent PRs', /must not declare predecessor/],
@@ -217,14 +173,6 @@ for (const [name, mode, rejection] of [
   test(`rejects ${name}`, () =>
     assert.match(validate(boundedMultiPlan(mode, 'gizmo-1')), rejection))
 }
-
-test('rejects a nonconsecutive stacked Gizmo predecessor', () => {
-  const candidate = stackedPlan().replace(
-    'Predecessor Gizmo ID: gizmo-1; Publisher',
-    'Predecessor Gizmo ID: None; Publisher',
-  )
-  assert.match(validate(candidate), /predecessors must follow consecutive/)
-})
 
 for (const forbiddenField of ['Parent Gizmo ID', 'Child Gizmo', 'Nested Gizmo ID']) {
   test(`rejects ${forbiddenField} fields`, () => {

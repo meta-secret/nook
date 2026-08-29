@@ -63,8 +63,8 @@ function issue(gizmoId) {
   return `---\ntitle: Focused issue\n${field}---\n\n# Focused issue\n`
 }
 
-function publish(candidate, { assignedGizmoId = '', remoteIssue = '' } = {}) {
-  const { NOOK_WORKBENCH_ASSIGNED_GIZMO_ID: _ignored, ...inheritedEnv } = process.env
+function publish(candidate, { assignedGizmoId = '', assignedIssuePath = '', remoteIssue = '' } = {}) {
+  const { NOOK_WORKBENCH_ASSIGNED_GIZMO_ID: _gizmo, NOOK_WORKBENCH_ASSIGNED_ISSUE_PATH: _issue, ...inheritedEnv } = process.env
   const scratch = mkdtempSync(join(tmpdir(), 'nook-workbench-publish-'))
   const binDirectory = join(scratch, 'bin')
   const localPlan = join(scratch, 'plan.md')
@@ -101,6 +101,7 @@ process.exit(1)
         ...inheritedEnv,
         GH_CALLS: ghCalls,
         ...(assignedGizmoId ? { NOOK_WORKBENCH_ASSIGNED_GIZMO_ID: assignedGizmoId } : {}),
+        ...(assignedIssuePath ? { NOOK_WORKBENCH_ASSIGNED_ISSUE_PATH: assignedIssuePath } : {}),
         NOOK_WORKBENCH_SOURCE_TASK_FILE: sourceTask,
         PATH: `${binDirectory}${delimiter}${process.env.PATH || ''}`,
         REMOTE_ISSUE: remoteIssue,
@@ -115,11 +116,12 @@ process.exit(1)
 const focusedIssue = 'issues/focused.md'
 for (const [name, candidate, options, status, rejection] of [
   ['publishes a direct self-contained plan', plan('2fa-slice'), {}, 0],
-  ['binds an issue-backed plan to the remote ID', plan('focused-slice', 'focused-slice', focusedIssue), { remoteIssue: issue('focused-slice') }, 0],
-  ['rejects a remote ID mismatch', plan('local-slice', 'local-slice', focusedIssue), { remoteIssue: issue('remote-slice') }, 7],
-  ['ignores an incorrect caller ID', plan('remote-slice', 'remote-slice', focusedIssue), { assignedGizmoId: 'wrong-caller-id', remoteIssue: issue('remote-slice') }, 0],
-  ['accepts a legacy issue without an ID', plan('legacy-slice', 'legacy-slice', focusedIssue), { remoteIssue: issue('') }, 0],
-  ['accepts a legacy issue with null ID', plan('legacy-slice', 'legacy-slice', focusedIssue), { remoteIssue: issue('null') }, 0],
+  ['binds an issue-backed plan to trusted caller metadata', plan('focused-slice', 'focused-slice', focusedIssue), { assignedGizmoId: 'focused-slice', assignedIssuePath: focusedIssue, remoteIssue: issue('focused-slice') }, 0],
+  ['rejects a candidate-selected issue path', plan('focused-slice', 'focused-slice', 'issues/spoofed.md'), { assignedGizmoId: 'focused-slice', assignedIssuePath: focusedIssue }, 7],
+  ['rejects a remote ID mismatch', plan('local-slice', 'local-slice', focusedIssue), { assignedGizmoId: 'remote-slice', assignedIssuePath: focusedIssue, remoteIssue: issue('remote-slice') }, 7],
+  ['rejects an incorrect caller ID', plan('remote-slice', 'remote-slice', focusedIssue), { assignedGizmoId: 'wrong-caller-id', assignedIssuePath: focusedIssue, remoteIssue: issue('remote-slice') }, 7],
+  ['accepts a legacy issue without an ID', plan('legacy-slice', 'legacy-slice', focusedIssue), { assignedIssuePath: focusedIssue, remoteIssue: issue('') }, 0],
+  ['accepts a legacy issue with null ID', plan('legacy-slice', 'legacy-slice', focusedIssue), { assignedIssuePath: focusedIssue, remoteIssue: issue('null') }, 0],
   ['rejects body and frontmatter mismatch', plan('body-slice', 'other-slice'), {}, 7, /gizmo_id must match/],
   ['rejects null plan Gizmo ID', plan('body-slice', 'null'), {}, 7, /gizmo_id is invalid/],
 ]) {

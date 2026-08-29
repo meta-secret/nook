@@ -11,6 +11,7 @@ import {
   parseRepository,
 } from "./github.js";
 import {
+  AuthoredChangeBudgetExceededError,
   assertAuthoredChangeBudget,
   configureGitForCi,
   hasWorkingTreeChanges,
@@ -36,7 +37,10 @@ export async function preserveImplementedBranchBeforePr(
 ): Promise<number> {
   const budgetResult = await args.assertBudget().then(
     () => ({ kind: "accepted" as const }),
-    (error: unknown) => ({ kind: "rejected" as const, error }),
+    (error: unknown) => {
+      if (!(error instanceof AuthoredChangeBudgetExceededError)) throw error;
+      return { kind: "rejected" as const, error };
+    },
   );
   await args.pushBranch();
   if (!(await args.verifyBranch())) {

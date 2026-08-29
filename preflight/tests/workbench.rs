@@ -840,6 +840,8 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
         "validateAgentRecord",
         "remotePath.startsWith('plans/')",
         "NOOK_WORKBENCH_SOURCE_TASK_FILE",
+        "NOOK_WORKBENCH_ASSIGNED_ISSUE_PATH",
+        "NOOK_WORKBENCH_ASSIGNED_GIZMO_ID",
         "?ref=main",
         "assignedGizmoId",
         "Refusing invalid Workbench plan",

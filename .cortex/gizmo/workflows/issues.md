@@ -322,6 +322,7 @@ Use the checked-in publisher for interactive work:
 
 ```bash
 NOOK_WORKBENCH_SOURCE_TASK_FILE=/absolute/private/source-task.md \
+NOOK_WORKBENCH_ASSIGNED_ISSUE_PATH=issues/<feature>/<issue>.md \
 NOOK_WORKBENCH_ASSIGNED_GIZMO_ID=<focused-issue-gizmo-id> \
   node .github/scripts/workbench-publish.cjs \
   /absolute/path/to/local-plan.md \
@@ -332,9 +333,9 @@ NOOK_WORKBENCH_ASSIGNED_GIZMO_ID=<focused-issue-gizmo-id> \
 - Keep the source-task file outside the checkout.
   - It lets the publisher reject copied prompt text.
   - Do not publish it.
-- Set `NOOK_WORKBENCH_ASSIGNED_GIZMO_ID` from trusted focused-issue frontmatter
-  when publishing a per-issue plan; omit it for direct or legacy standalone
-  plans without a canonical assignment.
+- Set the assigned issue path and `NOOK_WORKBENCH_ASSIGNED_GIZMO_ID` from the
+  trusted focused-issue dispatch when publishing its plan. For legacy issues,
+  set only the issue path; omit both fields for direct standalone plans.
 - The bounded worker:
   1. uses a dedicated planning LLM turn;
   2. validates and publishes the plan; and
