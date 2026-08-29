@@ -19,13 +19,7 @@ type StaticEnvironmentRequest = {
   readonly node: ConfigurationMapping;
 };
 
-const STANDARD_WORKFLOW_SHELLS = new Set([
-  'bash',
-  'cmd',
-  'powershell',
-  'pwsh',
-  'sh',
-]);
+const STANDARD_WORKFLOW_SHELLS = new Set(['bash', 'sh']);
 const EXECUTION_ENVIRONMENT_NAMES = new Set(['BASH_ENV', 'NODE_OPTIONS']);
 
 export function workflowCommandSources(
@@ -121,6 +115,8 @@ function collectStepRuns(request: StepRunRequest): void {
       node,
     };
     const environment = staticEnvironment(environmentRequest);
+    if (environment.has('BASH_ENV'))
+      throw new Error('BASH_ENV workflow shell startup is forbidden.');
     const prefix = [...environment]
       .map(([name, value]) => `${name}='${value.replaceAll("'", "'\\''")}'`)
       .join(' ');

@@ -29,3 +29,33 @@ test('preserves dynamic execution environment for fail-closed auditing', () => {
     'NODE_OPTIONS execution is forbidden.',
   );
 });
+
+test('rejects implicit shell startup hooks before flattening run steps', () => {
+  const document: ConfigurationNode = {
+    env: { BASH_ENV: 'scripts/facade.sh' },
+    jobs: { audit: { steps: [{ run: 'echo safe' }] } },
+  };
+  const request = { action: false, document };
+  expect(() => workflowCommandSources(request)).toThrow(
+    'BASH_ENV workflow shell startup is forbidden.',
+  );
+});
+
+test('rejects workflow shells without a matching command parser', () => {
+  for (const shell of ['cmd', 'powershell', 'pwsh']) {
+    const document: ConfigurationNode = {
+      jobs: { audit: { steps: [{ run: 'echo safe', shell }] } },
+    };
+    const request = { action: false, document };
+    expect(() => workflowCommandSources(request), shell).toThrow(
+      `Custom workflow shell is forbidden: ${shell}`,
+    );
+  }
+  for (const shell of ['bash', 'sh']) {
+    const document: ConfigurationNode = {
+      jobs: { audit: { steps: [{ run: 'echo safe', shell }] } },
+    };
+    const request = { action: false, document };
+    expect(workflowCommandSources(request), shell).toEqual(['echo safe']);
+  }
+});
