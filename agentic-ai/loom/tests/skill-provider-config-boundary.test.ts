@@ -22,20 +22,22 @@ import {
 } from './skill-provider-config-commands.ts';
 import {
   ACTION_SOURCE_SUFFIXES,
+  isRepositoryBackedPackageSpecifier,
   isRunnableConfiguration,
   normalizeConfigurationShellSource,
   resolutionCandidates,
   specializePositionalArguments,
 } from './skill-provider-config-runtime.ts';
+import {
+  eslintConfigurationReferences,
+  type EslintConfigurationRequest,
+} from './skill-provider-eslint-config.ts';
 import { typescriptSubprocessCommands } from './skill-provider-typescript-subprocess.ts';
 import {
   AUDITED_SOURCE_SEAMS,
   isAuditedRuntimeSource,
 } from './skill-provider-sourced-seams.ts';
-import {
-  executableSkillPackageFromPath,
-  readTrackedRepositoryFiles,
-} from '../src/executable-skills/repository.ts';
+import { readTrackedRepositoryFiles } from '../src/executable-skills/repository.ts';
 import type {
   ActionDependencyResolution,
   ActionLoaderFixture,
@@ -46,7 +48,6 @@ import type {
   ConfigurationReferenceRequest,
   GitHubActionDocument,
   PendingConfiguration,
-  RepositoryPackageDocument,
 } from './skill-provider-config-types.ts';
 
 const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
@@ -107,6 +108,9 @@ export function configurationScriptPaths(
     importer,
     positionalArguments: false,
     depth: 0,
+    workingDirectory: importer.endsWith('package.json')
+      ? posix.dirname(importer).replace(/^\.$/u, '')
+      : '',
   }));
   const visited = new Set<string>();
   const scripts = new Set<string>();
@@ -121,7 +125,7 @@ export function configurationScriptPaths(
       next.positionalArguments.length > MAX_GRAPH_ARGUMENTS
     )
       throw new Error('Runnable configuration arguments exceed their bound.');
-    const visitKey = `${importer}\0${JSON.stringify(next.positionalArguments)}`;
+    const visitKey = `${importer}\0${next.workingDirectory}\0${JSON.stringify(next.positionalArguments)}`;
     if (new TextEncoder().encode(visitKey).byteLength > MAX_GRAPH_STATE_BYTES)
       throw new Error('Runnable configuration state exceeds its byte bound.');
     if (visited.has(visitKey)) continue;
@@ -155,29 +159,29 @@ export function configurationScriptPaths(
     const configurationRequest = {
       inspection: referenceInspection,
       positionalArguments: next.positionalArguments,
+      sources: graph.sources,
+      workingDirectory: next.workingDirectory,
     };
     for (const reference of configurationScriptReferences(
       configurationRequest,
     )) {
       const specifier = reference.specifier;
-      const skillPackage = executableSkillPackageFromPath(importer);
-      const scriptsIndex = importer.indexOf('/scripts/');
-      const packageRoot =
-        skillPackage !== false
-          ? skillPackage.packageRoot
-          : scriptsIndex < 0
-            ? importer
-            : importer.slice(0, scriptsIndex);
       const resolutionRequest = {
         exactFirst: reference.required,
         importer,
-        packageRoot,
+        importerRelative: reference.importerRelative,
         specifier,
+        workingDirectory: next.workingDirectory,
       };
       const candidates = resolutionCandidates(resolutionRequest);
       const dependency =
         candidates.find((path) => graph.sources.has(path)) ?? false;
       if (dependency === false) {
+        const packageRequest = { sources: graph.sources, specifier };
+        if (isRepositoryBackedPackageSpecifier(packageRequest))
+          throw new Error(
+            `Runnable repository package import is unsupported: ${importer} -> ${specifier}`,
+          );
         if (reference.required && posix.extname(specifier).length > 0) {
           throw new Error(
             `Runnable script is untracked: ${importer} -> ${specifier}`,
@@ -248,6 +252,7 @@ export function configurationScriptPaths(
           importer: dependency,
           positionalArguments: reference.positionalArguments,
           depth: next.depth + 1,
+          workingDirectory: reference.workingDirectory,
         };
         pending.push(pendingConfiguration);
       }
@@ -273,7 +278,15 @@ function isAuthorizedApplicationEdge(edge: ApplicationConsumerEdge): boolean {
 
 function configurationScriptReferences(request: ConfigurationReferenceRequest) {
   const inspection = request.inspection;
-  if (!EXECUTABLE_SOURCE_EXTENSION.test(inspection.importer)) {
+  const extensionlessModule =
+    posix.extname(inspection.importer).length === 0 &&
+    (!inspection.source.startsWith('#!') ||
+      /^#![^\n]*(?:bun|node)/u.test(inspection.source)) &&
+    ACTION_IMPORT_SCANNER.scanImports(inspection.source).length > 0;
+  if (
+    !EXECUTABLE_SOURCE_EXTENSION.test(inspection.importer) &&
+    !extensionlessModule
+  ) {
     const runtimeSourceRequest = {
       path: inspection.importer,
       source: inspection.source,
@@ -296,21 +309,38 @@ function configurationScriptReferences(request: ConfigurationReferenceRequest) {
         return analyzeShellCommands(shellInspection).launches;
       },
     );
-    const references: ConfigurationReference[] = launches.map((launch) => ({
-      positionalArguments: launch.positionalArguments,
-      required: true,
-      requiresExecuteMode: launch.requiresExecuteMode,
-      specifier: launch.specifier,
-      taskInclude: false,
-    }));
+    const eslintRequest: EslintConfigurationRequest = {
+      commands: runnableCommandSources(commandInspection),
+      importer: inspection.importer,
+      sources: request.sources,
+      workingDirectory: request.workingDirectory,
+    };
+    const references: ConfigurationReference[] = [
+      ...eslintConfigurationReferences(eslintRequest),
+      ...launches.map((launch) => ({
+        importerRelative: false,
+        positionalArguments: launch.positionalArguments,
+        required: true,
+        requiresExecuteMode: launch.requiresExecuteMode,
+        specifier: launch.specifier,
+        taskInclude: false,
+        workingDirectory: posix
+          .normalize(
+            posix.join(request.workingDirectory, launch.workingDirectory),
+          )
+          .replace(/^\.$/u, ''),
+      })),
+    ];
     if (/\.ya?ml$/u.test(inspection.importer))
       references.push(
         ...taskIncludeSpecifiers(inspection.source).map((specifier) => ({
+          importerRelative: true,
           positionalArguments: false as const,
           required: true,
           requiresExecuteMode: false,
           specifier,
           taskInclude: true,
+          workingDirectory: request.workingDirectory,
         })),
       );
     return references;
@@ -323,11 +353,13 @@ function configurationScriptReferences(request: ConfigurationReferenceRequest) {
   const imports: ConfigurationReference[] = ACTION_IMPORT_SCANNER.scanImports(
     importSource,
   ).map((imported) => ({
+    importerRelative: true,
     positionalArguments: false,
     required: false,
     requiresExecuteMode: false,
     specifier: imported.path,
     taskInclude: false,
+    workingDirectory: request.workingDirectory,
   }));
   const subprocessInspection = {
     path: inspection.importer,
@@ -349,11 +381,17 @@ function configurationScriptReferences(request: ConfigurationReferenceRequest) {
       };
       const shellLaunches = analyzeShellCommands(shellInspection).launches;
       return shellLaunches.map((launch) => ({
+        importerRelative: false,
         positionalArguments: launch.positionalArguments,
         required: true,
         requiresExecuteMode: launch.requiresExecuteMode,
         specifier: launch.specifier,
         taskInclude: false,
+        workingDirectory: posix
+          .normalize(
+            posix.join(request.workingDirectory, launch.workingDirectory),
+          )
+          .replace(/^\.$/u, ''),
       }));
     },
   );
@@ -462,7 +500,7 @@ export function actionRuntimePaths(
         specifier: imported.path,
       };
       if (!imported.path.startsWith('.')) {
-        if (isRepositoryBackedActionSpecifier(resolution)) {
+        if (isRepositoryBackedPackageSpecifier(resolution)) {
           throw new Error(
             `Action repository import is unsupported: ${importer} -> ${imported.path}`,
           );
@@ -491,43 +529,6 @@ export function actionRuntimePaths(
     }
   }
   return [...runtimePaths].sort();
-}
-
-function isRepositoryBackedActionSpecifier(
-  resolution: ActionDependencyResolution,
-): boolean {
-  const specifier = resolution.specifier;
-  if (specifier.startsWith('#') || specifier.startsWith('file:')) return true;
-  if (specifier.startsWith('.') || specifier.startsWith('node:')) return false;
-  const segments = specifier.split('/');
-  const packageName = specifier.startsWith('@')
-    ? segments.slice(0, 2).join('/')
-    : (segments[0] ?? '');
-  for (const [path, source] of resolution.sources) {
-    if (!path.endsWith('package.json') || source.length === 0) continue;
-    assertRunnableConfigurationBytes(source);
-    let document: RepositoryPackageDocument;
-    try {
-      document = JSON.parse(source) as RepositoryPackageDocument;
-    } catch {
-      continue;
-    }
-    if (document.name === packageName) return true;
-    for (const dependencies of [
-      document.dependencies,
-      document.devDependencies,
-      document.optionalDependencies,
-    ]) {
-      const dependency = dependencies?.[packageName] ?? false;
-      if (
-        dependency !== false &&
-        (dependency.startsWith('file:') || dependency.startsWith('workspace:'))
-      ) {
-        return true;
-      }
-    }
-  }
-  return false;
 }
 
 function resolveActionDependency(

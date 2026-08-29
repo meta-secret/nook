@@ -403,9 +403,8 @@ function analyzeResolvedCommand(resolved: ResolvedCommandRequest): void {
       throw new Error(
         `Dynamic protected-skill command construction is forbidden: ${command.source}`,
       );
-    if (command.source.includes('{{')) return;
     throw new Error(
-      `Unknown dynamic executable is forbidden: ${command.source}`,
+      `Unknown dynamic executable is forbidden in ${request.state.sourcePath || 'inline'}: ${command.source}`,
     );
   }
   index += 1;
@@ -857,16 +856,6 @@ function runtimeExecutable(
   if (index === request.words.length) return false;
   const executable = request.words[index] as ShellWord;
   if (!executableIsStatic(executable)) {
-    if (
-      executable.source.includes('{{') &&
-      !wordHasProtectedMarkers(executable)
-    )
-      return false;
-    if (
-      (request.runtime === 'task' || request.runtime === 'go-task') &&
-      /^\{\{\.[A-Za-z_]\w*\}\}$/u.test(executable.source)
-    )
-      return false;
     throw new Error(
       `Dynamic ${request.runtime} executable construction is forbidden: ${executable.source}`,
     );
@@ -936,6 +925,7 @@ function addLaunch(request: LaunchRequest): void {
     positionalArguments,
     requiresExecuteMode: request.requiresExecuteMode === true,
     specifier: value,
+    workingDirectory: request.state.cwd,
   };
   request.state.launches.push(scriptLaunch);
 }

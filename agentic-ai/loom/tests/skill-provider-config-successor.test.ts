@@ -2,7 +2,10 @@ import { expect, test } from 'bun:test';
 import { analyzeShellCommands } from './skill-provider-command-boundary.ts';
 import { configurationScriptPaths } from './skill-provider-config-boundary.test.ts';
 import { runnableCommandSources } from './skill-provider-config-commands.ts';
-import { isRunnableConfiguration } from './skill-provider-config-runtime.ts';
+import {
+  isRunnableConfiguration,
+  normalizeConfigurationShellSource,
+} from './skill-provider-config-runtime.ts';
 import type { ConfigurationScriptGraph } from './skill-provider-executable-script.ts';
 
 const PROVIDER_ROOT = '.cortex/teams/ai/dynamic-skills/example/scripts/src';
@@ -167,4 +170,167 @@ test('workflow and composite custom shells fail closed', () => {
       /(?:Custom|Dynamic) workflow shell is forbidden/u,
     );
   }
+});
+
+test('nested package commands select the nearest implicit ESLint config', () => {
+  const sources = new Map([
+    ['nested/package.json', '{"scripts":{"lint":"eslint src"}}'],
+    ['eslint.config.js', 'export const rootDecoy = true;'],
+    ['nested/eslint.config.js', `await import('../${PROVIDER_CLI}');`],
+    [PROVIDER_CLI, 'export {};'],
+  ]);
+  const request = { roots: ['nested/package.json'], sources };
+  expectProviderReachable(graph(request));
+});
+
+test('explicit ESLint config selection follows package-command cd', () => {
+  const sources = new Map([
+    [
+      'nested/package.json',
+      '{"scripts":{"lint":"cd .. && node_modules/.bin/eslint --config config/eslint.cjs src"}}',
+    ],
+    ['nested/eslint.config.js', 'export const nestedDecoy = true;'],
+    ['config/eslint.cjs', `await import('../${PROVIDER_CLI}');`],
+    [PROVIDER_CLI, 'export {};'],
+  ]);
+  const request = { roots: ['nested/package.json'], sources };
+  expectProviderReachable(graph(request));
+});
+
+test('ESLint no-config-lookup suppresses implicit config execution', () => {
+  const sources = new Map([
+    [
+      'nested/package.json',
+      '{"scripts":{"lint":"eslint --no-config-lookup src"}}',
+    ],
+    ['nested/eslint.config.js', `await import('../${PROVIDER_CLI}');`],
+    [PROVIDER_CLI, 'export {};'],
+  ]);
+  const request = { roots: ['nested/package.json'], sources };
+  expect(configurationScriptPaths(graph(request))).not.toContain(PROVIDER_CLI);
+});
+
+test('dynamic ESLint config selection fails closed', () => {
+  const sources = new Map([
+    [
+      'package.json',
+      '{"scripts":{"lint":"eslint --config \\"$CONFIG\\" src"}}',
+    ],
+  ]);
+  const request = { roots: ['package.json'], sources };
+  expect(() => configurationScriptPaths(graph(request))).toThrow(
+    'Dynamic ESLint configuration selection',
+  );
+});
+
+test('complex Task templates cannot hide executable entrypoints', () => {
+  const sources = new Map([
+    [
+      'Taskfile.yml',
+      `vars:
+  ROOT: scripts
+  TARGET: '{{default (printf "%s/facade.ts" .ROOT) .TARGET}}'
+tasks:
+  audit:
+    cmds: ['bun {{.TARGET}}']`,
+    ],
+    ['scripts/facade.ts', `await import('../${PROVIDER_CLI}');`],
+    [PROVIDER_CLI, 'export {};'],
+  ]);
+  const request = { roots: ['Taskfile.yml'], sources };
+  expect(() => configurationScriptPaths(graph(request))).toThrow(
+    /(?:Dynamic bun executable construction|Shell expansion in an executable)/u,
+  );
+});
+
+test('supported static Task templates reach executable providers', () => {
+  const sources = new Map([
+    [
+      'Taskfile.yml',
+      `vars: {TARGET: scripts/facade.ts}
+tasks: {audit: {cmds: ['bun {{.TARGET}}']}}`,
+    ],
+    ['scripts/facade.ts', `await import('../${PROVIDER_CLI}');`],
+    [PROVIDER_CLI, 'export {};'],
+  ]);
+  const request = { roots: ['Taskfile.yml'], sources };
+  expectProviderReachable(graph(request));
+});
+
+test('unresolved Task arguments do not hide a known executable entrypoint', () => {
+  const sources = new Map([
+    [
+      'Taskfile.yml',
+      `tasks: {audit: {cmds: ['bun scripts/facade.ts "{{.REQUEST}}"']}}`,
+    ],
+    ['scripts/facade.ts', `await import('../${PROVIDER_CLI}');`],
+    [PROVIDER_CLI, 'export {};'],
+  ]);
+  const request = { roots: ['Taskfile.yml'], sources };
+  expectProviderReachable(graph(request));
+});
+
+test('repository-backed bare package imports fail closed', () => {
+  const sources = new Map([
+    ['package.json', '{"scripts":{"audit":"bun scripts/config.ts"}}'],
+    ['scripts/config.ts', "import 'workspace-helper';"],
+    ['packages/helper/package.json', '{"name":"workspace-helper"}'],
+    ['packages/helper/index.ts', `await import('../../${PROVIDER_CLI}');`],
+    [PROVIDER_CLI, 'export {};'],
+  ]);
+  const request = { roots: ['package.json'], sources };
+  expect(() => configurationScriptPaths(graph(request))).toThrow(
+    'Runnable repository package import is unsupported',
+  );
+});
+
+test('AGENT_EOF exemptions reject wrong provenance and content', () => {
+  const source = 'delim="AGENT_EOF_123"; payload="safe"';
+  for (const path of [
+    '.github/workflows/not-agent-implement.yml',
+    '.github/workflows/agent-implement.yml',
+  ])
+    expect(
+      () => normalizeConfigurationShellSource([source, path]),
+      path,
+    ).toThrow('Unaudited AGENT_EOF shell exemption');
+});
+
+test('successor launches preserve package cwd through child-process cd', () => {
+  const sources = new Map([
+    ['nested/package.json', '{"scripts":{"audit":"bun config/loader.ts"}}'],
+    [
+      'nested/config/loader.ts',
+      "import {execSync} from 'node:child_process'; execSync('cd child && bun scripts/facade.ts');",
+    ],
+    ['scripts/facade.ts', 'export const rootDecoy = true;'],
+    ['nested/config/scripts/facade.ts', 'export const importerDecoy = true;'],
+    [
+      'nested/child/scripts/facade.ts',
+      "import {spawnSync} from 'node:child_process'; spawnSync('bun',['provider-loader.ts']);",
+    ],
+    ['provider-loader.ts', 'export const rootDecoy = true;'],
+    ['nested/provider-loader.ts', 'export const packageDecoy = true;'],
+    [
+      'nested/child/provider-loader.ts',
+      `await import('../../${PROVIDER_CLI}');`,
+    ],
+    [PROVIDER_CLI, 'export {};'],
+  ]);
+  const request = { roots: ['nested/package.json'], sources };
+  expectProviderReachable(graph(request));
+});
+
+test('CommonJS helpers contribute subprocess successors', () => {
+  const sources = new Map([
+    ['package.json', '{"scripts":{"audit":"bun scripts/loader.cjs"}}'],
+    [
+      'scripts/loader.cjs',
+      "const {spawnSync}=require('node:child_process'); spawnSync('bun',['scripts/facade.ts']);",
+    ],
+    ['scripts/facade.ts', `await import('../${PROVIDER_CLI}');`],
+    [PROVIDER_CLI, 'export {};'],
+  ]);
+  const request = { roots: ['package.json'], sources };
+  expectProviderReachable(graph(request));
 });

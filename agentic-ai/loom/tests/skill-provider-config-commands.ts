@@ -204,6 +204,8 @@ function taskStaticVariables(
 ): ReadonlyMap<string, string> {
   const values = new Map<string, string>([
     ['APP_ROOT', 'nook-app'],
+    ['DOCKER', 'docker'],
+    ['DOCKER_MKCERT_IMAGE', 'nook-mkcert:local'],
     ['EXTENSION_ROOT', 'nook-app/nook-web/nook-web-extension'],
     ['PLATFORM_ROOT', 'nook-app/nook-platform'],
     ['REPO_ROOT', '.'],

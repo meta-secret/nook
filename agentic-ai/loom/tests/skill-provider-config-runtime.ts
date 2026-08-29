@@ -1,11 +1,17 @@
 import { posix } from 'node:path';
+import { assertRunnableConfigurationBytes } from './skill-provider-config-commands.ts';
 import type { ShellLaunchArgument } from './skill-provider-command-types.ts';
+import type {
+  RepositoryBackedPackageSpecifierRequest,
+  RepositoryPackageDocument,
+} from './skill-provider-config-types.ts';
 
 type ResolutionCandidateRequest = {
   readonly exactFirst: boolean;
   readonly importer: string;
-  readonly packageRoot: string;
+  readonly importerRelative: boolean;
   readonly specifier: string;
+  readonly workingDirectory: string;
 };
 
 type PositionalSpecializationRequest = {
@@ -35,10 +41,12 @@ export function resolutionCandidates(
   const sourceSpecifier = request.specifier
     .replace(/(^|\/)dist\//u, '$1src/')
     .replace(/\.js$/u, '.ts');
+  const baseDirectory = request.importerRelative
+    ? importerDirectory
+    : request.workingDirectory;
   const bases = [
-    posix.normalize(posix.join(importerDirectory, request.specifier)),
-    posix.normalize(posix.join(importerDirectory, sourceSpecifier)),
-    posix.normalize(posix.join(request.packageRoot, request.specifier)),
+    posix.normalize(posix.join(baseDirectory, request.specifier)),
+    posix.normalize(posix.join(baseDirectory, sourceSpecifier)),
     posix.normalize(request.specifier.replace(/^\.\//u, '')),
     posix.normalize(sourceSpecifier.replace(/^\.\//u, '')),
   ];
@@ -47,6 +55,39 @@ export function resolutionCandidates(
       bases.flatMap((path) => moduleCandidates([path, request.exactFirst])),
     ),
   ];
+}
+
+export function isRepositoryBackedPackageSpecifier(
+  request: RepositoryBackedPackageSpecifierRequest,
+): boolean {
+  const specifier = request.specifier;
+  if (specifier.startsWith('#') || specifier.startsWith('file:')) return true;
+  if (specifier.startsWith('.') || specifier.startsWith('node:')) return false;
+  const segments = specifier.split('/');
+  const packageName = specifier.startsWith('@')
+    ? segments.slice(0, 2).join('/')
+    : (segments[0] ?? '');
+  for (const [path, source] of request.sources) {
+    if (!path.endsWith('package.json') || source.length === 0) continue;
+    assertRunnableConfigurationBytes(source);
+    let document: RepositoryPackageDocument;
+    try {
+      document = JSON.parse(source) as RepositoryPackageDocument;
+    } catch {
+      continue;
+    }
+    if (document.name === packageName) return true;
+    for (const dependencies of [
+      document.dependencies,
+      document.devDependencies,
+      document.optionalDependencies,
+    ]) {
+      const dependency = dependencies?.[packageName] ?? false;
+      if (dependency !== false && /^(?:file|workspace):/u.test(dependency))
+        return true;
+    }
+  }
+  return false;
 }
 
 function moduleCandidates([path, exactFirst]: readonly [
@@ -84,11 +125,15 @@ export function normalizeConfigurationShellSource([
   source,
   sourcePath,
 ]: readonly [string, string]): string {
-  if (
-    source.includes('delim="AGENT_EOF_') &&
-    !/(?:^|[;&|]\s*)(?:bash|bun|node|sh|source)\b/mu.test(source)
-  )
-    return 'true';
+  if (source.includes('delim="AGENT_EOF_')) {
+    if (
+      sourcePath === '.github/workflows/agent-implement.yml' &&
+      new Bun.CryptoHasher('sha256').update(source).digest('hex') ===
+        'ea60680b19621cf87a566bf9e4e526bb8134dd6a95d3fe1dcfc0fcba4eb30047'
+    )
+      return 'true';
+    throw new Error('Unaudited AGENT_EOF shell exemption.');
+  }
   const protectedPath =
     /(?:\.agents\/skills|\.cortex\/(?:gizmo|shared|teams\/[^/]+)\/dynamic-skills)/u;
   const normalized = source

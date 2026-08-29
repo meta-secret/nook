@@ -18,6 +18,7 @@ export type ShellScriptLaunch = {
   readonly positionalArguments: readonly ShellLaunchArgument[];
   readonly requiresExecuteMode: boolean;
   readonly specifier: string;
+  readonly workingDirectory: string;
 };
 
 export type ShellCommandAnalysis = {

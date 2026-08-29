@@ -1,5 +1,10 @@
 import ts from 'typescript';
 import { posix } from 'node:path';
+import {
+  isRunCommandDeclaration,
+  isStaticChildProcessRequire,
+  lexicalScope,
+} from './skill-provider-typescript-require.ts';
 
 export type TypeScriptSubprocessInspection = {
   readonly path: string;
@@ -208,6 +213,29 @@ function collectBinding(request: BindingCollectionRequest): void {
     request.target.push(binding);
     return;
   }
+  if (
+    ts.isImportEqualsDeclaration(node) &&
+    ts.isExternalModuleReference(node.moduleReference) &&
+    node.moduleReference.expression &&
+    ts.isStringLiteral(node.moduleReference.expression)
+  ) {
+    const binding: LexicalBinding = {
+      capability: /^(?:node:)?child_process$/u.test(
+        node.moduleReference.expression.text,
+      )
+        ? SubprocessCallKind.Namespace
+        : false,
+      constant: true,
+      declaration: node,
+      importedFrom: node.moduleReference.expression.text,
+      initializer: false,
+      member: false,
+      name: node.name.text,
+      scope: node.getSourceFile(),
+    };
+    request.target.push(binding);
+    return;
+  }
   if (!ts.isImportDeclaration(node) || !node.importClause) return;
   const specifier = ts.isStringLiteral(node.moduleSpecifier)
     ? node.moduleSpecifier.text
@@ -262,32 +290,6 @@ function collectBinding(request: BindingCollectionRequest): void {
   }
 }
 
-function isRunCommandDeclaration(node: ts.FunctionDeclaration): boolean {
-  const [parameter] = node.parameters;
-  return (
-    node.name?.text === 'runCommand' &&
-    node.parameters.length === 1 &&
-    Boolean(
-      parameter &&
-      ts.isIdentifier(parameter.name) &&
-      parameter.name.text === 'input' &&
-      parameter.type?.getText() === 'RunCommandArgs',
-    )
-  );
-}
-
-function lexicalScope(node: ts.Node): ts.Node {
-  let parent = node.parent;
-  while (
-    parent.parent &&
-    !ts.isBlock(parent) &&
-    !ts.isFunctionLike(parent) &&
-    !ts.isSourceFile(parent)
-  )
-    parent = parent.parent;
-  return parent;
-}
-
 function resolveCapability(
   request: CapabilityResolutionRequest,
 ): SubprocessCallKind | false {
@@ -323,6 +325,11 @@ function resolveCapability(
     };
     return resolveCapability(nestedRequest);
   }
+  if (
+    isStaticChildProcessRequire(expression) &&
+    !hasBinding([request.model, request.location, 'require'])
+  )
+    return SubprocessCallKind.Namespace;
   if (!ts.isPropertyAccessExpression(expression)) return false;
   if (
     ts.isIdentifier(expression.expression) &&
@@ -334,16 +341,15 @@ function resolveCapability(
       ? SubprocessCallKind.Bun
       : false;
   }
-  if (!ts.isIdentifier(expression.expression)) return false;
-  const lookupRequest: BindingLookupRequest = {
+  const ownerRequest: CapabilityResolutionRequest = {
+    expression: expression.expression,
     location: request.location,
     model: request.model,
-    name: expression.expression.text,
+    visited,
   };
-  const binding = bindingAt(lookupRequest);
-  if (binding === false || binding.capability !== SubprocessCallKind.Namespace)
-    return false;
-  return CHILD_PROCESS_CALLS.get(expression.name.text) ?? false;
+  return resolveCapability(ownerRequest) === SubprocessCallKind.Namespace
+    ? (CHILD_PROCESS_CALLS.get(expression.name.text) ?? false)
+    : false;
 }
 
 function bindingAt(request: BindingLookupRequest): LexicalBinding | false {

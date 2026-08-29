@@ -125,6 +125,46 @@ test('recognizes both child_process module specifiers', () => {
   }
 });
 
+test('recognizes static CommonJS child-process bindings', () => {
+  for (const specifier of ['child_process', 'node:child_process']) {
+    const commands = extract(`
+const {spawnSync} = require('${specifier}');
+import child = require('${specifier}');
+spawnSync('bun', ['scripts/facade.ts']);
+child.execFileSync('bun', ['scripts/facade.ts']);`);
+    expect(commands).toEqual([
+      "'bun' 'scripts/facade.ts'",
+      "'bun' 'scripts/facade.ts'",
+    ]);
+  }
+  expect(
+    extract(
+      "const require=()=>({spawnSync(){}}); const {spawnSync}=require('node:child_process'); spawnSync('bun',['ignored.ts']);",
+    ),
+  ).toEqual([]);
+});
+
+test('recognizes direct static CommonJS child-process property calls', () => {
+  expect(
+    extract(
+      "require('node:child_process').spawnSync('bun', ['scripts/facade.ts']);",
+    ),
+  ).toEqual(["'bun' 'scripts/facade.ts'"]);
+});
+
+test('does not grant child-process capability to unsafe require owners', () => {
+  expect(
+    extract(
+      "const specifier=input; require(specifier).spawnSync('bun', ['ignored.ts']);",
+    ),
+  ).toEqual([]);
+  expect(
+    extract(
+      "const require=()=>({spawnSync(){}}); require('node:child_process').spawnSync('bun', ['ignored.ts']);",
+    ),
+  ).toEqual([]);
+});
+
 test('proves dynamic wrappers through exact lexical callers instead of file text', () => {
   const isolated = `
 import {spawnSync} from 'node:child_process';

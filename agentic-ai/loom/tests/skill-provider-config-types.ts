@@ -26,20 +26,29 @@ export type ActionLoaderFixture = {
   readonly source: string;
 };
 export type ConfigurationReference = {
+  readonly importerRelative: boolean;
   readonly positionalArguments: readonly ShellLaunchArgument[] | false;
   readonly required: boolean;
   readonly requiresExecuteMode: boolean;
   readonly specifier: string;
   readonly taskInclude: boolean;
+  readonly workingDirectory: string;
 };
 export type ConfigurationReferenceRequest = {
   readonly inspection: ConfigurationReferenceInspection;
   readonly positionalArguments: readonly ShellLaunchArgument[] | false;
+  readonly sources: ReadonlyMap<string, string>;
+  readonly workingDirectory: string;
 };
 export type PendingConfiguration = {
   readonly depth: number;
   readonly importer: string;
   readonly positionalArguments: readonly ShellLaunchArgument[] | false;
+  readonly workingDirectory: string;
+};
+export type RepositoryBackedPackageSpecifierRequest = {
+  readonly sources: ReadonlyMap<string, string>;
+  readonly specifier: string;
 };
 export type ApplicationConsumerEdge = {
   readonly dependency: string;
