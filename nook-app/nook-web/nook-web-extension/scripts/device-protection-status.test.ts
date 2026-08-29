@@ -3,6 +3,7 @@ import {
   DeviceProtectionStatus,
   extensionDeviceProtectionStatus,
   extensionSessionDevice,
+  ExtensionSessionDeviceStateKind,
 } from '../src/lib/nook-wasm'
 
 describe('extensionDeviceProtectionStatus', () => {
@@ -63,6 +64,40 @@ describe('extensionDeviceProtectionStatus', () => {
 
     await expect(extensionSessionDevice()).rejects.toThrow(
       'Extension session returned malformed device identity.',
+    )
+  })
+
+  test('carries the operational protection status for a locked session', async () => {
+    const responses: unknown[] = [
+      { ok: true },
+      { ok: true, status: DeviceProtectionStatus.Passkey },
+    ]
+    globalThis.chrome = {
+      runtime: {
+        sendMessage: (_message, callback) => callback(responses.shift()),
+      },
+    } as typeof chrome
+
+    await expect(extensionSessionDevice()).resolves.toEqual({
+      kind: ExtensionSessionDeviceStateKind.Locked,
+      status: DeviceProtectionStatus.Passkey,
+    })
+  })
+
+  test.each([
+    DeviceProtectionStatus.Loading,
+    DeviceProtectionStatus.PinSetup,
+    DeviceProtectionStatus.Error,
+  ])('rejects transient session status %s', async (status) => {
+    const responses: unknown[] = [{ ok: true }, { ok: true, status }]
+    globalThis.chrome = {
+      runtime: {
+        sendMessage: (_message, callback) => callback(responses.shift()),
+      },
+    } as typeof chrome
+
+    await expect(extensionSessionDevice()).rejects.toThrow(
+      `Unsupported extension device protection status: ${status}`,
     )
   })
 })

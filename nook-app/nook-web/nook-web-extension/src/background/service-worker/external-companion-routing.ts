@@ -103,7 +103,13 @@ export function routeExternalCompanionMessage({
       sendResponse(forbiddenSenderResponse)
       return false
     }
+    invalidateAllLoginMatchAvailability()
     void requestPairedVaultUnlock(message)
+      .then(async (response) => {
+        invalidateAllLoginMatchAvailability()
+        if (response.ok) await refreshAuthenticationSurfaces()
+        return response
+      })
       .then(sendResponse)
       .catch(() => {
         const unlockFailureResponse: Parameters<typeof sendResponse>[0] = {
@@ -133,10 +139,11 @@ export function routeExternalCompanionMessage({
     sendResponse(invalidPairingGrantResponse)
     return false
   }
+  invalidateAllLoginMatchAvailability()
   void importPairingAfterCompanionReady(message)
     .then(async (response) => {
+      invalidateAllLoginMatchAvailability()
       if (response.ok) {
-        invalidateAllLoginMatchAvailability()
         await refreshAuthenticationSurfaces().catch(() => {
           // Restricted pages do not invalidate the successful grant import.
         })

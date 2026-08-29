@@ -264,21 +264,22 @@ export async function openCompanionLauncher(
     intent === OpenCompanionLauncherIntent.Pair
       ? `${popupUrl}?intent=${OpenCompanionLauncherIntent.Pair}`
       : popupUrl
-  if (chrome.windows?.create) {
-    const nookTypedArgs0_7: Parameters<typeof chrome.windows.create>[0] = {
-      url: launcherUrl,
-      type: 'popup',
-      width: 440,
-      height: 620,
-      focused: true,
+  if (
+    intent === OpenCompanionLauncherIntent.Default &&
+    chrome.action?.openPopup
+  ) {
+    try {
+      await chrome.action.openPopup()
+      return
+    } catch {
+      // Chrome can reject openPopup outside a user gesture. Keep the extension
+      // unlock surface reachable without falling back to a website ceremony.
     }
-    await chrome.windows.create(nookTypedArgs0_7)
-    return
   }
-  const nookTypedArgs0_8: Parameters<typeof chrome.tabs.create>[0] = {
+  const nookTypedArgs0_7: Parameters<typeof chrome.tabs.create>[0] = {
     url: launcherUrl,
   }
-  await chrome.tabs.create(nookTypedArgs0_8)
+  await chrome.tabs.create(nookTypedArgs0_7)
 }
 
 export function openCompanionLauncherBestEffort(

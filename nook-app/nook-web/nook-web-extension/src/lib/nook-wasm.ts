@@ -410,8 +410,17 @@ export enum ExtensionSessionDeviceStateKind {
   Active = 'active',
 }
 
+export type ExtensionLockedDeviceProtectionStatus =
+  | DeviceProtectionStatus.Missing
+  | DeviceProtectionStatus.Plaintext
+  | DeviceProtectionStatus.Passkey
+  | DeviceProtectionStatus.Pin
+
 export type ExtensionSessionDeviceState =
-  | { kind: ExtensionSessionDeviceStateKind.Locked }
+  | {
+      kind: ExtensionSessionDeviceStateKind.Locked
+      status: ExtensionLockedDeviceProtectionStatus
+    }
   | {
       kind: ExtensionSessionDeviceStateKind.Active
       device: ExtensionDeviceProtectionResult
@@ -424,8 +433,20 @@ export async function extensionSessionDevice(): Promise<ExtensionSessionDeviceSt
   }
   const response = await sessionResponse(request)
   const status = deviceProtectionStatus(response.status)
-  if (status !== DeviceProtectionStatus.Unlocked) {
-    return { kind: ExtensionSessionDeviceStateKind.Locked }
+  switch (status) {
+    case DeviceProtectionStatus.Missing:
+    case DeviceProtectionStatus.Plaintext:
+    case DeviceProtectionStatus.Passkey:
+    case DeviceProtectionStatus.Pin:
+      return { kind: ExtensionSessionDeviceStateKind.Locked, status }
+    case DeviceProtectionStatus.Loading:
+    case DeviceProtectionStatus.PinSetup:
+    case DeviceProtectionStatus.Error:
+      throw new Error(
+        `Unsupported extension device protection status: ${status}`,
+      )
+    case DeviceProtectionStatus.Unlocked:
+      break
   }
   return {
     kind: ExtensionSessionDeviceStateKind.Active,

@@ -6,7 +6,6 @@ import {
   loadExtensionSetupState,
 } from '../lib/pairing-state'
 import {
-  extensionDeviceProtectionStatus,
   extensionSessionDevice,
   ExtensionSessionDeviceStateKind,
   DeviceProtectionStatus,
@@ -59,11 +58,12 @@ async function main() {
   }
 
   const vaultConnection = await loadCompanionVaultConnection()
-  const protectionStatus = await extensionDeviceProtectionStatus()
   const activeSessionDevice: ExtensionSessionDeviceState =
-    protectionStatus === DeviceProtectionStatus.Unlocked
-      ? await extensionSessionDevice()
-      : { kind: ExtensionSessionDeviceStateKind.Locked }
+    await extensionSessionDevice()
+  const protectionStatus =
+    activeSessionDevice.kind === ExtensionSessionDeviceStateKind.Active
+      ? DeviceProtectionStatus.Unlocked
+      : activeSessionDevice.status
 
   const nookTypedArgs0_2: MountOptions<ComponentProps<typeof PopupApp>> = {
     target,

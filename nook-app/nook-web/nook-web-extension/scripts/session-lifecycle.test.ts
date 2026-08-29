@@ -24,7 +24,9 @@ describe('ensureExtensionSessionDocument', () => {
 })
 
 describe('openCompanionLauncherBestEffort', () => {
-  test('preserves launcher failures for strict unlock callers', async () => {
+  test('opens the toolbar popup for the default unlock intent', async () => {
+    let popupOpenCount = 0
+    let createdTabUrl = ''
     Object.assign(globalThis, {
       __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
     })
@@ -32,16 +34,81 @@ describe('openCompanionLauncherBestEffort', () => {
       runtime: {
         getURL: () => 'chrome-extension://nook/popup/index.html',
       },
-      windows: {
-        create: () => Promise.reject(new Error('launcher unavailable')),
+      action: {
+        openPopup: () => {
+          popupOpenCount += 1
+          return Promise.resolve()
+        },
+      },
+      tabs: {
+        create: ({ url }) => {
+          createdTabUrl = String(url)
+          return Promise.resolve({})
+        },
       },
     } as typeof chrome
     const { openCompanionLauncher } =
       await import('../src/background/service-worker/session-lifecycle')
 
-    await expect(
-      openCompanionLauncher(OpenCompanionLauncherIntent.Default),
-    ).rejects.toThrow('launcher unavailable')
+    await openCompanionLauncher(OpenCompanionLauncherIntent.Default)
+
+    expect(popupOpenCount).toBe(1)
+    expect(createdTabUrl).toBe('')
+  })
+
+  test('falls back to an extension tab when Chrome rejects popup opening', async () => {
+    let createdTabUrl = ''
+    globalThis.chrome = {
+      runtime: {
+        getURL: () => 'chrome-extension://nook/popup/index.html',
+      },
+      action: {
+        openPopup: () => Promise.reject(new Error('gesture required')),
+      },
+      tabs: {
+        create: ({ url }) => {
+          createdTabUrl = String(url)
+          return Promise.resolve({})
+        },
+      },
+    } as typeof chrome
+    const { openCompanionLauncher } =
+      await import('../src/background/service-worker/session-lifecycle')
+
+    await openCompanionLauncher(OpenCompanionLauncherIntent.Default)
+
+    expect(createdTabUrl).toBe('chrome-extension://nook/popup/index.html')
+  })
+
+  test('preserves pair intent in an extension tab', async () => {
+    let popupOpenCount = 0
+    let createdTabUrl = ''
+    globalThis.chrome = {
+      runtime: {
+        getURL: () => 'chrome-extension://nook/popup/index.html',
+      },
+      action: {
+        openPopup: () => {
+          popupOpenCount += 1
+          return Promise.resolve()
+        },
+      },
+      tabs: {
+        create: ({ url }) => {
+          createdTabUrl = String(url)
+          return Promise.resolve({})
+        },
+      },
+    } as typeof chrome
+    const { openCompanionLauncher } =
+      await import('../src/background/service-worker/session-lifecycle')
+
+    await openCompanionLauncher(OpenCompanionLauncherIntent.Pair)
+
+    expect(popupOpenCount).toBe(0)
+    expect(createdTabUrl).toBe(
+      'chrome-extension://nook/popup/index.html?intent=pair',
+    )
   })
 
   test('contains launcher failures for callers returning locked responses', async () => {
@@ -52,8 +119,11 @@ describe('openCompanionLauncherBestEffort', () => {
       runtime: {
         getURL: () => 'chrome-extension://nook/popup/index.html',
       },
-      windows: {
-        create: () => Promise.reject(new Error('launcher unavailable')),
+      action: {
+        openPopup: () => Promise.reject(new Error('launcher unavailable')),
+      },
+      tabs: {
+        create: () => Promise.reject(new Error('tab unavailable')),
       },
     } as typeof chrome
     const { openCompanionLauncherBestEffort } =

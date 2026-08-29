@@ -474,18 +474,66 @@ describe('service worker routing', () => {
     expect(sendResponse).toHaveBeenCalledWith({ ok: true })
   })
 
-  test('refreshes cached surfaces after an external pairing import', async () => {
-    const importPairingAfterCompanionReady = mock(() =>
-      Promise.resolve({ ok: true as const, eventCount: 1 }),
-    )
-    const invalidate = mock(() => {})
-    const refresh = mock(() => Promise.resolve())
+  test('invalidates and refreshes surfaces after a trusted external unlock request', async () => {
+    const events: string[] = []
+    const dependencies: ExternalCompanionRoutingDependencies = {
+      ...externalDependencies,
+      invalidateAllLoginMatchAvailability: () => {
+        events.push('invalidated')
+      },
+      isExtensionPairedVaultUnlockRequestMessage: () => true,
+      requestPairedVaultUnlock: () => {
+        events.push('unlock-requested')
+        return Promise.resolve({ ok: true })
+      },
+      refreshAuthenticationSurfaces: () => {
+        events.push('surfaces-refreshed')
+        return Promise.resolve()
+      },
+    }
+    const { routeExternalCompanionMessage } =
+      await import('../src/background/service-worker/external-companion-routing')
+    const sendResponse = mock(() => {})
+
+    expect(
+      routeExternalCompanionMessage({
+        dependencies,
+        message: {
+          type: 'nook:extension-paired-vault-unlock-request',
+          payload: { requestId: 'request-1', vaultStoreId: 'vault-1' },
+        },
+        sender: { id: 'simple-vault', url: 'https://simple.example.test/' },
+        sendResponse,
+      }),
+    ).toBe(true)
+    await flushResponses()
+    await flushResponses()
+
+    expect(events).toEqual([
+      'invalidated',
+      'unlock-requested',
+      'invalidated',
+      'surfaces-refreshed',
+    ])
+    expect(sendResponse).toHaveBeenCalledWith({ ok: true })
+  })
+
+  test('invalidates and refreshes surfaces after a trusted external pairing import', async () => {
+    const events: string[] = []
     const dependencies: ExternalCompanionRoutingDependencies = {
       ...externalDependencies,
       hasPairingApprovedType: () => true,
-      importPairingAfterCompanionReady,
-      invalidateAllLoginMatchAvailability: invalidate,
-      refreshAuthenticationSurfaces: refresh,
+      importPairingAfterCompanionReady: () => {
+        events.push('pairing-imported')
+        return Promise.resolve({ ok: true, eventCount: 2 })
+      },
+      invalidateAllLoginMatchAvailability: () => {
+        events.push('invalidated')
+      },
+      refreshAuthenticationSurfaces: () => {
+        events.push('surfaces-refreshed')
+        return Promise.resolve()
+      },
     }
     const { routeExternalCompanionMessage } =
       await import('../src/background/service-worker/external-companion-routing')
@@ -495,19 +543,20 @@ describe('service worker routing', () => {
       routeExternalCompanionMessage({
         dependencies,
         message: { type: 'nook:extension-pairing-approved' },
-        sender: {
-          id: 'simple-vault',
-          url: 'https://simple.example.test/',
-        },
+        sender: { id: 'simple-vault', url: 'https://simple.example.test/' },
         sendResponse,
       }),
     ).toBe(true)
     await flushResponses()
     await flushResponses()
 
-    expect(invalidate).toHaveBeenCalledOnce()
-    expect(refresh).toHaveBeenCalledOnce()
-    expect(sendResponse).toHaveBeenCalledWith({ ok: true, eventCount: 1 })
+    expect(events).toEqual([
+      'invalidated',
+      'pairing-imported',
+      'invalidated',
+      'surfaces-refreshed',
+    ])
+    expect(sendResponse).toHaveBeenCalledWith({ ok: true, eventCount: 2 })
   })
 
   test('normalizes pair intent before internal launcher routing', async () => {
