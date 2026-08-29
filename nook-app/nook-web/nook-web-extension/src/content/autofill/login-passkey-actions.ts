@@ -192,11 +192,7 @@ export async function fillAndSubmitAccount({
     setStatus(nookTypedArgs0_6)
     return false
   }
-  const nookTypedArgs0_7: Parameters<typeof submitLoginForm>[0] = {
-    kind: PasswordFormQueryKind.Scoped,
-    root: workflow.root,
-    formScope: workflow.formScope,
-  }
+  const nookTypedArgs0_7: Parameters<typeof submitLoginForm>[0] = workflow
   if (!submitLoginForm(nookTypedArgs0_7)) {
     const nookTypedArgs0_8: Parameters<typeof setFlightProgress>[0] = {
       step,

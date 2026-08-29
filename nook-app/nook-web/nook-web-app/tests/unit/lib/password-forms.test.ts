@@ -18,9 +18,13 @@ import {
 const wholeDocumentOneTimeCodeFieldQuery: Parameters<
   typeof findOneTimeCodeFields
 >[0] = {}
-const wholeDocumentPasswordFormSubmission: Parameters<
+function observedAuthenticationWorkflow(): Parameters<
   typeof submitLoginForm
->[0] = { kind: PasswordFormQueryKind.Root, root: document }
+>[0] {
+  const observation = summarizeAuthenticationWorkflowForms()[0]
+  if (!observation) throw new Error('expected an authentication workflow')
+  return observation
+}
 
 afterEach(() => {
   document.body.replaceChildren()
@@ -407,7 +411,7 @@ describe('website one-time-code fields', () => {
         root: document,
       }
       expect(fillLoginCredentials(loginFillArgs)).toBe(true)
-      expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
+      expect(submitLoginForm(observedAuthenticationWorkflow())).toBe(true)
       expect(advanced).toBe(true)
       expect(
         document.querySelector<HTMLInputElement>('[name="email"]')?.value,
@@ -419,6 +423,7 @@ describe('website one-time-code fields', () => {
     document.body.innerHTML = `
       <form id="login"><input autocomplete="username" /></form>
       <input form="login" type="password" autocomplete="current-password" />
+      <button form="login" type="submit">Sign in</button>
     `
 
     const observations = summarizeAuthenticationWorkflowForms()
@@ -427,6 +432,23 @@ describe('website one-time-code fields', () => {
     expect(observations[0]?.summary).toMatchObject({
       usernameFieldCount: 1,
       currentPasswordFieldCount: 1,
+    })
+    const observation = observations[0]
+    expect(observation).toBeDefined()
+    if (!observation) return
+    const facts = authenticationPageObservationFacts({
+      observation,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [
+        {
+          ownership: 'owned-form',
+          label: expect.stringContaining('Sign in'),
+        },
+      ],
     })
   })
 
@@ -602,12 +624,7 @@ describe('website one-time-code fields', () => {
       </section>
     `
 
-    const submissionArgs: Parameters<typeof submitLoginForm>[0] = {
-      kind: PasswordFormQueryKind.Scoped,
-      root: document,
-      formScope: { kind: PasswordFormScopeKind.Unowned },
-    }
-    expect(submitLoginForm(submissionArgs)).toBe(false)
+    expect(submitLoginForm(observedAuthenticationWorkflow())).toBe(false)
   })
 
   test('does not claim a disabled submit control was activated', () => {
@@ -618,7 +635,51 @@ describe('website one-time-code fields', () => {
       </form>
     `
 
-    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(false)
+    expect(submitLoginForm(observedAuthenticationWorkflow())).toBe(false)
+  })
+
+  test('activates the Rust-approved submit instead of an earlier destructive control', () => {
+    document.body.innerHTML = `
+      <form id="login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button id="delete" type="submit" formaction="/settings/delete-account">Delete account</button>
+        <button id="sign-in" type="submit">Sign in</button>
+      </form>
+    `
+    let deleted = false
+    let signedIn = false
+    document.querySelector('#delete')?.addEventListener('click', () => {
+      deleted = true
+    })
+    document.querySelector('#sign-in')?.addEventListener('click', () => {
+      signedIn = true
+    })
+    document.querySelector('form')?.addEventListener('submit', (event) => {
+      event.preventDefault()
+    })
+
+    expect(submitLoginForm(observedAuthenticationWorkflow())).toBe(true)
+    expect(deleted).toBe(false)
+    expect(signedIn).toBe(true)
+  })
+
+  test('does not transport or activate a hidden authentication control', () => {
+    document.body.innerHTML = `
+      <form id="confirmation">
+        <input type="password" autocomplete="current-password" />
+        <div hidden><button type="submit">Sign in</button></div>
+      </form>
+    `
+    const observation = observedAuthenticationWorkflow()
+    const facts = authenticationPageObservationFacts({
+      observation,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+
+    expect(facts.detailedAdvanceControl).toEqual({ kind: 'absent' })
+    expect(submitLoginForm(observation)).toBe(false)
   })
 
   test('reports submission only when the form emits a submit event', () => {
@@ -632,7 +693,7 @@ describe('website one-time-code fields', () => {
       event.preventDefault()
     })
 
-    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
+    expect(submitLoginForm(observedAuthenticationWorkflow())).toBe(true)
   })
 
   test('fills the first enabled OTP field through the native value setter', () => {

@@ -1,7 +1,7 @@
 import { companionWasmReady } from "./companion-ready";
 import {
   authentication_form_observation_priority,
-  looks_like_login_advance_control_label,
+  classify_authentication_advance_control,
   strongest_authentication_username_evidence,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import type {
@@ -128,7 +128,7 @@ export type GeneratedPasswordFillRequest = PasswordFormScopeQuery & {
   password: string;
 };
 
-type LoginAdvanceControlRequest = PasswordFormScopeQuery;
+type AuthenticationAdvanceControl = HTMLButtonElement | HTMLInputElement;
 
 type FormSubmissionObservation = {
   form: HTMLFormElement;
@@ -243,6 +243,48 @@ function scopedControlRoot({ root, formScope }: PasswordFormObservation): Parent
     : root;
 }
 
+const authenticationAdvanceControlSelector =
+  'button[type="submit"], input[type="submit"], button:not([type]), button[type="button"]';
+
+function isRenderedControl(control: HTMLElement): boolean {
+  let element = control;
+  while (true) {
+    if (
+      element.hidden ||
+      element.getAttribute("aria-hidden") === "true"
+    ) {
+      return false;
+    }
+    const style = element.ownerDocument.defaultView?.getComputedStyle(element);
+    if (style?.display === "none" || style?.visibility === "hidden") {
+      return false;
+    }
+    const parent = element.parentElement;
+    if (!parent) break;
+    element = parent;
+  }
+  return true;
+}
+
+function authenticationAdvanceControls(
+  observation: PasswordFormObservation,
+): AuthenticationAdvanceControl[] {
+  const queryRoot =
+    observation.formScope.kind === PasswordFormScopeKind.Owned
+      ? observation.formScope.owner.ownerDocument
+      : observation.root;
+  return Array.from(
+    queryRoot.querySelectorAll<AuthenticationAdvanceControl>(
+      authenticationAdvanceControlSelector,
+    ),
+  ).filter((control) => {
+    if (!isRenderedControl(control)) return false;
+    return observation.formScope.kind === PasswordFormScopeKind.Owned
+      ? control.form === observation.formScope.owner
+      : !control.form;
+  });
+}
+
 function controlLabel(control: HTMLElement): string {
   return [
     control.textContent ?? "",
@@ -325,16 +367,19 @@ function pageControlObservation({
   control,
   authenticationUsername,
 }: PageControlObservationRequest): AuthenticationAdvanceControlObservation {
-  const root = scopedControlRoot(observation);
-  const semanticSubmitControls = root.querySelectorAll(
-    'button[type="submit"], input[type="submit"], button:not([type])',
+  const semanticSubmitControls = authenticationAdvanceControls(observation).filter(
+    (candidate) =>
+      candidate.matches(
+        'button[type="submit"], input[type="submit"], button:not([type])',
+      ),
   );
   const semanticSubmit = control.matches(
     'button[type="submit"], input[type="submit"], button:not([type])',
   );
   const owned =
     observation.formScope.kind === PasswordFormScopeKind.Owned &&
-    observation.formScope.owner.contains(control);
+    (control as AuthenticationAdvanceControl).form ===
+      observation.formScope.owner;
   const destinationRequest: ControlDestinationRequest = {
     control,
     formScope: observation.formScope,
@@ -370,13 +415,8 @@ export function authenticationPageObservationFacts({
   authenticatorSetupHint,
   backupCodesHint,
 }: AuthenticationObservationFactsRequest): AuthenticationPageObservationFacts {
-  const controlRoot = scopedControlRoot(observation);
   const authenticationUsername = usernameEvidence(observation);
-  const advanceControls = Array.from(
-    controlRoot.querySelectorAll<HTMLElement>(
-      'button[type="submit"], input[type="submit"], button:not([type]), button[type="button"]',
-    ),
-  );
+  const advanceControls = authenticationAdvanceControls(observation);
   const passkeyControl = findWorkflowPasskeyControl(observation);
   const oneTimeCodeQuery: Parameters<typeof findOneTimeCodeFields>[0] = {
     root: observation.root,
@@ -385,8 +425,9 @@ export function authenticationPageObservationFacts({
   const oneTimeCodeHandlerSignal = findOneTimeCodeFields(oneTimeCodeQuery)
     .flatMap((field) =>
       ["oninput", "onchange"].flatMap((attribute) => {
-        const handler = field.getAttribute(attribute);
-        return handler === null ? [] : [`${attribute}=${handler}`];
+        return field.hasAttribute(attribute)
+          ? [`${attribute}=${field.getAttribute(attribute) ?? ""}`]
+          : [];
       }),
     )
     .join("\n");
@@ -710,7 +751,12 @@ export function readLoginCredentials(
   };
 }
 
-export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
+export function submitLoginForm(observation: PasswordFormObservation): boolean {
+  const request: PasswordFormScopeQuery = {
+    kind: PasswordFormQueryKind.Scoped,
+    root: observation.root,
+    formScope: observation.formScope,
+  };
   const nookTypedArgs0_26 = passwordFieldQuery(request);
   const passwordField = findPasswordFields(nookTypedArgs0_26)[0];
   const nookTypedArgs0_27 = passwordFieldQuery(request);
@@ -719,10 +765,9 @@ export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
   if (!anchor) return false;
 
   // Email-first / multi-step logins often use a type=button "Next" control
-  // rather than a real submit. Prefer an advance control before requestSubmit
-  // only while the password step is still missing.
-  const nookNamedArgs0_4: Parameters<typeof clickAdvanceControl>[0] = request;
-  if (!passwordField && clickAdvanceControl(nookNamedArgs0_4)) {
+  // rather than a real submit. Use only a control Rust approves for the
+  // currently observed workflow while the password step is still missing.
+  if (!passwordField && clickAdvanceControl(observation)) {
     return true;
   }
 
@@ -733,11 +778,31 @@ export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
     return false;
   }
 
-  const submitControl = form.querySelector<
-    HTMLButtonElement | HTMLInputElement
-  >('button[type="submit"], input[type="submit"], button:not([type])');
+  const authenticationUsername = usernameEvidence(observation);
+  const submitControl = authenticationAdvanceControls(observation).find(
+    (control) => {
+      if (
+        !control.matches(
+          'button[type="submit"], input[type="submit"], button:not([type])',
+        )
+      ) {
+        return false;
+      }
+      const advanceControlRequest: PageControlObservationRequest = {
+        observation,
+        control,
+        authenticationUsername,
+      };
+      return (
+        classify_authentication_advance_control(
+          pageControlObservation(advanceControlRequest),
+        ) === "advances-authentication"
+      );
+    },
+  );
   if (submitControl) {
     if (
+      !isRenderedControl(submitControl) ||
       submitControl.disabled ||
       submitControl.getAttribute("aria-disabled") === "true"
     ) {
@@ -749,43 +814,33 @@ export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
     };
     return observeSubmit(nookTypedArgs0_28);
   }
-  if (typeof form.requestSubmit === "function") {
-    const nookTypedArgs0_29: Parameters<typeof observeSubmit>[0] = {
-      form,
-      action: () => form.requestSubmit(),
-    };
-    return observeSubmit(nookTypedArgs0_29);
-  }
   return false;
 }
 
-function clickAdvanceControl(request: LoginAdvanceControlRequest): boolean {
-  const queryRoot =
-    request.kind === PasswordFormQueryKind.Scoped &&
-    request.formScope.kind === PasswordFormScopeKind.Owned
-      ? request.formScope.owner
-      : request.root;
-  const controls = Array.from(
-    queryRoot.querySelectorAll<HTMLButtonElement | HTMLInputElement>(
-      'button[type="submit"], input[type="submit"], button:not([type]), button[type="button"]',
-    ),
-  );
-  for (const control of controls) {
-    if (control.disabled || control.getAttribute("aria-disabled") === "true") {
-      continue;
-    }
-    const label = [
-      control.textContent ?? "",
-      control.getAttribute("aria-label") ?? "",
-      control.value ?? "",
-    ].join(" ");
-    if (!looks_like_login_advance_control_label(label)) {
-      continue;
-    }
-    control.click();
-    return true;
+function clickAdvanceControl(observation: PasswordFormObservation): boolean {
+  const authenticationUsername = usernameEvidence(observation);
+  const control = authenticationAdvanceControls(observation).find((candidate) => {
+    const advanceControlRequest: PageControlObservationRequest = {
+      observation,
+      control: candidate,
+      authenticationUsername,
+    };
+    return (
+      classify_authentication_advance_control(
+        pageControlObservation(advanceControlRequest),
+      ) === "advances-authentication"
+    );
+  });
+  if (
+    !control ||
+    !isRenderedControl(control) ||
+    control.disabled ||
+    control.getAttribute("aria-disabled") === "true"
+  ) {
+    return false;
   }
-  return false;
+  control.click();
+  return true;
 }
 
 function observeSubmit({ form, action }: FormSubmissionObservation): boolean {
