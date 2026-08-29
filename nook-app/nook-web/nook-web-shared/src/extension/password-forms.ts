@@ -1,6 +1,7 @@
 import { companionWasmReady } from "./companion-ready";
 import {
   authentication_form_observation_priority,
+  has_safe_authentication_route_identity,
   looks_like_login_advance_control_label,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import type { AuthenticationPageObservation } from "./nook-companion-wasm/nook_companion_wasm.js";
@@ -111,6 +112,8 @@ export type GeneratedPasswordFillRequest = PasswordFormScopeQuery & {
 };
 
 type LoginAdvanceControlRequest = PasswordFormScopeQuery;
+
+type LoginAdvanceControl = HTMLButtonElement | HTMLInputElement;
 
 type FormSubmissionObservation = {
   form: HTMLFormElement;
@@ -469,9 +472,9 @@ export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
   // Email-first / multi-step logins often use a type=button "Next" control
   // rather than a real submit. Prefer an advance control before requestSubmit
   // only while the password step is still missing.
-  const nookNamedArgs0_4: Parameters<typeof clickAdvanceControl>[0] = request;
-  if (!passwordField && clickAdvanceControl(nookNamedArgs0_4)) {
-    return true;
+  if (!passwordField) {
+    const nookNamedArgs0_4: Parameters<typeof clickAdvanceControl>[0] = request;
+    return clickAdvanceControl(nookNamedArgs0_4);
   }
 
   const form = anchor.form;
@@ -530,10 +533,38 @@ function clickAdvanceControl(request: LoginAdvanceControlRequest): boolean {
     if (!looks_like_login_advance_control_label(label)) {
       continue;
     }
+    if (!hasSafeAuthenticationRouteIdentity(control)) {
+      continue;
+    }
     control.click();
     return true;
   }
   return false;
+}
+
+function hasSafeAuthenticationRouteIdentity(
+  control: LoginAdvanceControl,
+): boolean {
+  const form = control.form;
+  const sourceOrigin = form?.ownerDocument.defaultView?.location.origin;
+  if (!form || !sourceOrigin) return false;
+
+  const formIdentity = [
+    form.id,
+    form.getAttribute("name") ?? "",
+    form.getAttribute("class") ?? "",
+    form.getAttribute("aria-label") ?? "",
+  ].join(" ");
+  const destinationIdentity = control.hasAttribute("formaction")
+    ? control.formAction
+    : form.action;
+  if (!destinationIdentity) return false;
+
+  return has_safe_authentication_route_identity(
+    sourceOrigin,
+    formIdentity,
+    destinationIdentity,
+  );
 }
 
 function observeSubmit({ form, action }: FormSubmissionObservation): boolean {

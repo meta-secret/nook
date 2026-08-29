@@ -338,6 +338,45 @@ describe('website one-time-code fields', () => {
     expect(activatedControls).toEqual(['login-next'])
   })
 
+  test('advances a username-only login with a safe resolved route', () => {
+    document.body.innerHTML = `
+      <form id="account-step" action="/auth/login">
+        <input autocomplete="username" name="email" type="email" />
+        <button id="login-next" type="submit">Continue</button>
+      </form>
+    `
+    let activated = false
+    document.querySelector('#login-next')?.addEventListener('click', () => {
+      activated = true
+    })
+
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
+    expect(activated).toBe(true)
+  })
+
+  test.each([
+    ['destructive same-origin action', '/settings/delete-account'],
+    ['external provider', '/signin/google'],
+    ['password recovery', '/reset-password'],
+    ['registration', '/register'],
+  ])('does not advance a username-only login through %s', (_, route) => {
+    document.body.innerHTML = `
+      <form id="login-form" action="/auth/login">
+        <input autocomplete="username" name="email" type="email" />
+        <button id="alternate-route" type="submit" formaction="${route}">Continue</button>
+      </form>
+    `
+    let activated = false
+    document
+      .querySelector('#alternate-route')
+      ?.addEventListener('click', () => {
+        activated = true
+      })
+
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(false)
+    expect(activated).toBe(false)
+  })
+
   test('groups externally associated controls with their form owner', () => {
     document.body.innerHTML = `
       <form id="login"><input autocomplete="username" /></form>
