@@ -11,6 +11,7 @@ test('preserves dynamic execution environment for fail-closed auditing', () => {
     },
     jobs: {
       audit: {
+        'runs-on': 'ubuntu-latest',
         steps: [{ run: 'node scripts/safe.js' }],
       },
     },
@@ -33,7 +34,12 @@ test('preserves dynamic execution environment for fail-closed auditing', () => {
 test('rejects implicit shell startup hooks before flattening run steps', () => {
   const document: ConfigurationNode = {
     env: { BASH_ENV: 'scripts/facade.sh' },
-    jobs: { audit: { steps: [{ run: 'echo safe' }] } },
+    jobs: {
+      audit: {
+        'runs-on': 'ubuntu-latest',
+        steps: [{ run: 'echo safe' }],
+      },
+    },
   };
   const request = { action: false, document };
   expect(() => workflowCommandSources(request)).toThrow(
@@ -58,4 +64,26 @@ test('rejects workflow shells without a matching command parser', () => {
     const request = { action: false, document };
     expect(workflowCommandSources(request), shell).toEqual(['echo safe']);
   }
+});
+
+test('rejects implicit shells unless the runner proves Bourne semantics', () => {
+  for (const runner of ['windows-latest', 'self-hosted']) {
+    const document: ConfigurationNode = {
+      jobs: { audit: { 'runs-on': runner, steps: [{ run: 'echo safe' }] } },
+    };
+    const request = { action: false, document };
+    expect(() => workflowCommandSources(request), runner).toThrow(
+      'Implicit workflow shell is not proven to be Bash or sh.',
+    );
+  }
+  const document: ConfigurationNode = {
+    jobs: {
+      audit: {
+        'runs-on': 'ubuntu-latest',
+        steps: [{ run: 'echo safe' }],
+      },
+    },
+  };
+  const request = { action: false, document };
+  expect(workflowCommandSources(request)).toEqual(['echo safe']);
 });

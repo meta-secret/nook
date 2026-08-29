@@ -61,7 +61,10 @@ export function workflowCommandSources(
     };
     const stepRequest: StepRunRequest = {
       defaultDirectory: jobDirectory || workflowDirectory,
-      defaultShell: workflowDefaultShell(jobNode) || workflowShell,
+      defaultShell:
+        workflowDefaultShell(jobNode) ||
+        workflowShell ||
+        workflowRunnerDefaultShell(jobNode),
       environment: staticEnvironment(environmentRequest),
       steps: jobNode.steps ?? false,
       target: commands,
@@ -132,11 +135,25 @@ function collectStepRuns(request: StepRunRequest): void {
 }
 
 function assertSafeWorkflowShell(shell: ConfigurationNode | false): void {
-  if (shell === false) return;
+  if (shell === false)
+    throw new Error('Implicit workflow shell is not proven to be Bash or sh.');
   if (typeof shell !== 'string' || shell.includes('${{'))
     throw new Error('Dynamic workflow shell is forbidden.');
   if (!STANDARD_WORKFLOW_SHELLS.has(shell))
     throw new Error(`Custom workflow shell is forbidden: ${shell}`);
+}
+
+function workflowRunnerDefaultShell(
+  node: ConfigurationMapping,
+): string | false {
+  const runner = node['runs-on'];
+  if (typeof runner !== 'string' || /windows/iu.test(runner)) return false;
+  if (/^(?:ubuntu-|macos-|nook-k0s)/u.test(runner)) return 'bash';
+  return runner.includes('${{') &&
+    (runner.includes('vars.NOOK_RUNS_ON') ||
+      runner.includes('vars.NOOK_HIVE_RUNS_ON'))
+    ? 'bash'
+    : false;
 }
 
 function staticEnvironment(
