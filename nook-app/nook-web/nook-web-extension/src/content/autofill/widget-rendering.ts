@@ -118,7 +118,10 @@ export function renderEnrollmentWidget({
     title,
     description,
     continueButton,
-    requestWorkflowReclassification: scanState.schedule,
+    requestWorkflowReclassification: () => {
+      remountWidget()
+      scanState.schedule()
+    },
   }
   const nookTypedArgs1_0: Parameters<typeof renderEnrollmentActions>[0] = {
     host: buildEnrollmentFlowHost(nookTypedArgs0_2),
@@ -220,8 +223,7 @@ export function renderWidget({
     totalSteps: snapshot.totalSteps,
   }
   const shell = createWidgetShell(nookTypedArgs0_3)
-  const { body, step, title, description, continueButton, openVaultButton } =
-    shell
+  const { body, step, title, description, continueButton } = shell
   const continueMessageKey =
     snapshot.action === AuthenticationWorkflowAction.FillTotp
       ? BROWSER_MESSAGE_KEYS.WidgetFillAuthenticator
@@ -261,7 +263,10 @@ export function renderWidget({
         title,
         description,
         continueButton,
-        openVaultButton,
+        requestWorkflowReclassification: () => {
+          remountWidget()
+          scanState.schedule()
+        },
       }
       void startRevalidatedBackupCodeEnrollment({
         workflow,

@@ -233,7 +233,7 @@ export async function cancelActiveEnrollmentCeremony(): Promise<void> {
   await dismissStagedEnrollment(dismissArgs)
 }
 
-function requestFreshEnrollmentActions(host: EnrollmentFlowHost): void {
+export function requestFreshEnrollmentActions(host: EnrollmentFlowHost): void {
   clearEnrollmentSection(host.panel)
   host.requestWorkflowReclassification()
 }

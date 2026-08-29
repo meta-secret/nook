@@ -517,6 +517,10 @@ export async function websiteAuthenticatorEnrollStage({
   const authorizationGeneration = accountPickerAuthorizationGeneration()
   const otpauthUri = { value: message.payload.otpauthUri }
   message.payload.otpauthUri = ''
+  if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
+    otpauthUri.value = ''
+    return { ok: false, reason: 'authenticator-locked' }
+  }
   const nookTypedArgs0_10: Parameters<
     typeof authorizedWebsiteGrant
   >[0]['reasons'] = {
@@ -597,6 +601,14 @@ export async function websiteAuthenticatorEnrollCode({
     return { ok: false, reason: 'authenticator-locked' }
   }
   await ensureExtensionSessionDocument()
+  if (
+    !authenticatorEnrollmentAuthorizationIsCurrent(
+      staged.authorizationGeneration,
+    )
+  ) {
+    clearStagedEnrollment(message.payload.stageId)
+    return { ok: false, reason: 'authenticator-locked' }
+  }
   try {
     const response = await stagedAuthenticatorCodeFromSession(staged.otpauthUri)
     return authenticatorEnrollmentAuthorizationIsCurrent(

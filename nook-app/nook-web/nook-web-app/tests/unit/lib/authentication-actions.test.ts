@@ -17,6 +17,18 @@ const actionMocks = vi.hoisted(() => ({
   submitLoginForm: vi.fn(() => true),
 }))
 
+let actionGeneration = 0
+const authenticationActionState = {
+  begin: () => {
+    actionGeneration += 1
+    return actionGeneration
+  },
+  invalidate: () => {
+    actionGeneration += 1
+  },
+  isCurrent: (candidate: number) => candidate === actionGeneration,
+}
+
 vi.mock('../../../../nook-web-shared/src/extension/password-forms', () => ({
   fillGeneratedPassword: actionMocks.fillGeneratedPassword,
   fillLoginCredentials: actionMocks.fillLoginCredentials,
@@ -157,6 +169,7 @@ describe('revalidated authentication actions', () => {
         account: { vaultStoreId: 'vault', secretId: 'login' },
         workflow,
         ...controls(),
+        actionGeneration: authenticationActionState.begin(),
       }),
     ).resolves.toBe(true)
 
@@ -182,6 +195,7 @@ describe('revalidated authentication actions', () => {
         account: { vaultStoreId: 'vault', secretId: 'otp' },
         workflow,
         ...controls(),
+        actionGeneration: authenticationActionState.begin(),
       }),
     ).resolves.toBe(true)
 
@@ -190,14 +204,33 @@ describe('revalidated authentication actions', () => {
     expect(actionMocks.fillOneTimeCode).toHaveBeenCalledOnce()
   })
 
+  test('does not request a TOTP after initial authorization is invalidated', async () => {
+    const release = deferred<boolean>()
+    actionMocks.performRevalidation.mockReturnValueOnce(release.promise)
+    const generation = authenticationActionState.begin()
+    const pending = fillAuthenticatorCode({
+      account: { vaultStoreId: 'vault', secretId: 'otp' },
+      workflow,
+      ...controls(),
+      actionGeneration: generation,
+    })
+    authenticationActionState.invalidate()
+    release.resolve(true)
+
+    await expect(pending).resolves.toBe(false)
+    expect(actionMocks.sendAuthenticatorCode).not.toHaveBeenCalled()
+  })
+
   test('scrubs delayed login credentials after action invalidation', async () => {
     const response = { ok: true, username: 'person', password: 'secret' }
     const delivery = deferred<{ kind: string; response: typeof response }>()
     actionMocks.sendLoginFill.mockReturnValue(delivery.promise)
+    const generation = authenticationActionState.begin()
     const pending = fillAndSubmitAccount({
       account: { vaultStoreId: 'vault', secretId: 'login' },
       workflow,
       ...controls(),
+      actionGeneration: generation,
     })
     await vi.waitFor(() => expect(actionMocks.sendLoginFill).toHaveBeenCalled())
     authenticationActionState.invalidate()
@@ -215,10 +248,12 @@ describe('revalidated authentication actions', () => {
     }
     const delivery = deferred<{ kind: string; response: typeof response }>()
     actionMocks.sendAuthenticatorCode.mockReturnValue(delivery.promise)
+    const generation = authenticationActionState.begin()
     const pending = fillAuthenticatorCode({
       account: { vaultStoreId: 'vault', secretId: 'otp' },
       workflow,
       ...controls(),
+      actionGeneration: generation,
     })
     await vi.waitFor(() =>
       expect(actionMocks.sendAuthenticatorCode).toHaveBeenCalled(),

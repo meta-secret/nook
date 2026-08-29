@@ -26,8 +26,6 @@ import { stopPendingSaveWatch } from './login-save'
 import {
   AuthenticatorPickerKind,
   LoginPickerKind,
-  WidgetHostKind,
-  WidgetWorkflowRootKind,
   authenticationActionState,
   pickerState,
   scanState,
@@ -91,6 +89,7 @@ export const routeAutofillMessage: AutofillMessageListener =
         widgetState.host.element.inert = true
       }
       void enrollmentCancellation.finally(() => {
+        removeScannedWidget()
         scanState.schedule()
         const response: Parameters<typeof sendResponse>[0] = { ok: true }
         sendResponse(response)
