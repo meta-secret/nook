@@ -645,14 +645,17 @@ The trusted host fails closed unless:
 
 - the diff contains only regular Rust dependency mission files and compatibility
   changes;
-- trusted workflow checkout uses `persist-credentials: false`; the PAT remains
-  only in host process state and is unavailable to Git/editor until validation;
+- trusted workflow checkout uses `persist-credentials: false`; the isolated
+  editor never receives the PAT. An existing-PR rerun may apply the token
+  only to a host Git fetch of the audited refs, then remove it before
+  isolated validation;
 - frozen HEAD, index, Git/common directories, and effective configuration remain
   exact after editing and validation, while trusted Git disables hooks,
   filesystem monitors, and signing;
 - validation's fresh HOME contains no publication, registry, or compiler-cache
-  credentials, and its immutable Docker wrapper forces BuildKit `RUN` and
-  runtime containers onto `network=none` while rejecting unknown operations;
+  credentials. The immutable Docker wrapper injects `network=none` for the
+  `docker run` form used by trusted validation and rejects unknown wrapper
+  operations. Alternate Docker CLI forms are not the trusted validation path;
 - the three-hour `CI_AGENT_TIMEOUT_MS=10800000` leaves half of the six-hour job
   for validation/publication; and
 - exact branch/PR identity is unambiguous and the publisher returns its verified

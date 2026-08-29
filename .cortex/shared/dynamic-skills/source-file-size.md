@@ -114,10 +114,10 @@ An exclusion must describe data provenance, not excuse authored source.
       correct boundaries.
 - [ ] Return a verified committed handoff with the focused worker proof.
 - [ ] Have Gizmo integrate the handoff and run `task loom:pre-push`.
-- [ ] Have Gizmo push and run the repository source-size scanner through the
-      hosted remote preflight task. Inspect every violation.
-- [ ] Have Gizmo explicitly trigger exact-head GitHub Actions validation when
-      the head is ready.
+- [ ] Have Gizmo push. If the head is not validation-ready, Gizmo may run the
+      repository source-size scanner through a focused hosted preflight task.
+- [ ] Have Gizmo dispatch complete exact-head validation when the head is
+      ready. The complete gate includes the source-size scanner.
 
 ## Static Enforcement
 
@@ -133,6 +133,6 @@ Code review must verify the actual architectural seam.
 ## Validation
 
 Ordinary workers return a verified committed handoff. Gizmo runs
-`task loom:pre-push` before every push, uses the hosted remote preflight task
-while developing the gate, and explicitly triggers the complete PR gate when
-the head is ready.
+`task loom:pre-push` before every push. Gizmo uses a focused hosted preflight
+task only while the head is not validation-ready. A ready head enters the
+complete PR gate, which includes the scanner.

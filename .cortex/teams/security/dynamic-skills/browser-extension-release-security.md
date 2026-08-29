@@ -57,26 +57,27 @@ Does not apply to:
    workflow and deployment implementation. Each functional worker formats and
    commits its allowed implementation files; Security does not commit foreign
    implementation.
-2. Run `task extension:check:fast` as focused security proof.
+2. Security names the focused extension invariants for the handoff. Workers do
+   not run the host-cached `task extension:check:fast` gate.
 3. Verify channel origin and extension identity together.
 4. Verify injection exclusions for every vault boundary.
 5. Verify archive and redirect safety before activation.
 6. Keep profiles isolated by channel and PR.
-7. Security reviews the exact functional-owner handoff and focused proof,
-   formats and commits only its allowed security-owned Cortex changes, and
-   returns a pending acceptance verdict to Gizmo.
+7. Security reviews the exact functional-owner handoff, formats and commits
+   only its allowed security-owned Cortex changes, and returns a pending
+   acceptance verdict to Gizmo.
 8. Gizmo integrates the accepted handoffs and runs `task loom:pre-push` on the
    combined head. If formatting changes security-owned content, Gizmo returns
    that exact diff to Security for a fresh formatted commit instead of
    committing it.
 9. After reintegration and a clean `task loom:pre-push`, Gizmo pushes promptly
-   and immediately obtains remote evidence: at least one relevant focused
-   remote task for a non-validation-ready head, or complete exact-head
-   validation when the head is validation-ready.
-10. Gizmo routes the exact-head deployed channel, origin, checksum, and
-    packaged-manifest evidence back to Security. The Security verdict stays
-    pending until Security accepts that evidence. Gizmo then owns readiness
-    and merge.
+   and immediately obtains remote evidence. For a non-validation-ready
+   extension head, Gizmo dispatches hosted extension proof. For a
+   validation-ready head, Gizmo dispatches complete exact-head validation.
+10. Gizmo routes the hosted extension proof plus exact-head deployed channel,
+    origin, checksum, and packaged-manifest evidence back to Security. The
+    Security verdict stays pending until Security accepts that evidence.
+    Gizmo then owns readiness and merge.
 
 ## Validation
 
@@ -88,5 +89,6 @@ Deployment verification must prove:
 - the packaged manifest.
 
 The security worker returns focused evidence for its exact committed handoff.
-Gizmo obtains the hosted deployment evidence and returns it to Security.
-Security accepts or rejects that exact-head evidence before readiness.
+Gizmo obtains hosted extension proof and deployment evidence and returns both
+to Security. Security accepts or rejects that exact-head evidence before
+readiness.

@@ -539,14 +539,14 @@ Before returning promotion and cleanup evidence to Gizmo:
    not be used for implementation delegation.
 
 5. For a compiled workflow change, validate its dry run and focused behavior.
-6. Commit the coherent audited promotion handoff. Do not push it. If any
-   formatter changes the tree after step 3, rerun `task loom:cortex-audit`
-   before committing.
-7. Delete the local session file.
-8. Run `task loom:cortex-session-clean`.
-9. Confirm `git ls-files .cortex/.session` prints nothing.
-10. Return the exact commit, worker-focused proof, promotion, and cleanup
-   evidence to Gizmo.
+6. Delete the local session file.
+7. Run `task loom:cortex-session-clean`.
+8. Confirm `git ls-files .cortex/.session` prints nothing.
+9. If any formatter changed the tree after step 3, rerun
+   `task loom:cortex-audit` and repeat steps 6-8 before committing.
+10. Commit the coherent audited promotion handoff. Do not push it.
+11. Return the exact commit, worker-focused proof, promotion, and cleanup
+    evidence to Gizmo.
 
 Do not add broad local builds, tests, e2e, container product gates, or duplicate
 hosted-check mirrors to this validation sequence.
