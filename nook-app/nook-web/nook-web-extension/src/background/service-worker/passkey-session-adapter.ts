@@ -42,8 +42,13 @@ export function passkeyAccountListFromSession(
   ) {
     return { kind: PasskeyAccountListKind.Invalid }
   }
-  if (!response.accounts.every(isWebsitePasskeyAccount)) {
-    return { kind: PasskeyAccountListKind.Invalid }
+  for (let index = 0; index < response.accounts.length; index += 1) {
+    if (
+      !Object.hasOwn(response.accounts, index) ||
+      !isWebsitePasskeyAccount(response.accounts[index])
+    ) {
+      return { kind: PasskeyAccountListKind.Invalid }
+    }
   }
   return { kind: PasskeyAccountListKind.Ready, accounts: response.accounts }
 }

@@ -30,4 +30,13 @@ describe('passkey account-list session adapter', () => {
       }),
     ).toEqual({ kind: PasskeyAccountListKind.Invalid })
   })
+
+  test('rejects sparse account arrays instead of skipping their holes', () => {
+    const accounts: unknown[] = []
+    accounts.length = 1
+
+    expect(passkeyAccountListFromSession({ ok: true, accounts })).toEqual({
+      kind: PasskeyAccountListKind.Invalid,
+    })
+  })
 })

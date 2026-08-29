@@ -156,17 +156,38 @@ type WebsitePasskeyOptionsArgs = {
     }
   }
   sender: chrome.runtime.MessageSender
+  dependencies?: WebsitePasskeyOptionsDependencies
+}
+
+export type WebsitePasskeyOptionsDependencies = {
+  ensureExtensionSessionDocument: typeof ensureExtensionSessionDocument
+  isAuthorizedWebsiteSender: typeof isAuthorizedWebsiteSender
+  isUnlockedSessionStatus: typeof isUnlockedSessionStatus
+  passkeyPairingGrants: typeof passkeyPairingGrants
+  requestOriginAndRpId: typeof requestOriginAndRpId
+  sendSessionMessage: typeof sendSessionMessage
+}
+
+const websitePasskeyOptionsDependencies: WebsitePasskeyOptionsDependencies = {
+  ensureExtensionSessionDocument,
+  isAuthorizedWebsiteSender,
+  isUnlockedSessionStatus,
+  passkeyPairingGrants,
+  requestOriginAndRpId,
+  sendSessionMessage,
 }
 
 export async function websitePasskeyOptions({
   message,
   sender,
+  dependencies,
 }: WebsitePasskeyOptionsArgs): Promise<WebsitePasskeyOptionsResponse> {
+  const resolvedDependencies = dependencies ?? websitePasskeyOptionsDependencies
   const nookTypedArgs0_2: Parameters<typeof requestOriginAndRpId>[0] = {
     ceremony: message.payload.ceremony,
     requestJson: message.payload.requestJson,
   }
-  const context = requestOriginAndRpId(nookTypedArgs0_2)
+  const context = resolvedDependencies.requestOriginAndRpId(nookTypedArgs0_2)
   if (context.kind === WebsitePasskeyRequestContextKind.Rejected) {
     return { ok: false, reason: 'passkey-forbidden-origin' }
   }
@@ -174,28 +195,28 @@ export async function websitePasskeyOptions({
     sender,
     origin: context.origin,
   }
-  if (!isAuthorizedWebsiteSender(nookNamedArgs0_0)) {
+  if (!resolvedDependencies.isAuthorizedWebsiteSender(nookNamedArgs0_0)) {
     return { ok: false, reason: 'passkey-forbidden-origin' }
   }
-  const grants = await passkeyPairingGrants()
+  const grants = await resolvedDependencies.passkeyPairingGrants()
   if (grants.length === 0)
     return {
       ok: true,
       status: WebsitePasskeyOptionsStatus.Unavailable,
       options: [],
     }
-  await ensureExtensionSessionDocument()
+  await resolvedDependencies.ensureExtensionSessionDocument()
   const nookTypedArgs0_3: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-status',
     payload: {
       queue: extensionSessionProbeDeadline(message.payload.expiresAt),
     },
   }
-  const status = await sendSessionMessage(nookTypedArgs0_3)
+  const status = await resolvedDependencies.sendSessionMessage(nookTypedArgs0_3)
   if (
     !status ||
     typeof status !== 'object' ||
-    !isUnlockedSessionStatus(status)
+    !resolvedDependencies.isUnlockedSessionStatus(status)
   ) {
     return {
       ok: true,
@@ -224,7 +245,8 @@ export async function websitePasskeyOptions({
         queue: extensionSessionProbeDeadline(message.payload.expiresAt),
       },
     }
-    const response = await sendSessionMessage(nookTypedArgs0_4)
+    const response =
+      await resolvedDependencies.sendSessionMessage(nookTypedArgs0_4)
     const accountList = passkeyAccountListFromSession(response)
     if (accountList.kind === PasskeyAccountListKind.Invalid) {
       return {
