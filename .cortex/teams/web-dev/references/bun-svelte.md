@@ -79,18 +79,23 @@ and `preflight` sources. Unused-code ownership is split as follows:
 - Live sync Playwright (`sync-live` project): `task web:test:e2e:sync-live` — real GitHub API; explicit manual runs only. Requires `NOOK_GITHUB_PAT` in `nook-app/nook-web/.env.test.local`.
 - Vite `import.meta.env` values used by e2e are build-time constants; Task targets that serve `dist` must rebuild the e2e dist with the e2e env before Playwright runs.
 - Do not run `bun run test:e2e*` or `playwright test` directly on the host; use Taskfile so wasm is built and tooling matches CI.
-- Web workers retain focused tests and browser evidence for the behavior they
-  change. They deterministically format every allowed web or web-owned Cortex
-  file before committing one coherent exact handoff. Agent e2e uses the
-  configured GitHub Actions worker; Gizmo owns its dispatch via `task remote`.
-  Humans may use local single-spec Docker e2e for interactive debugging. The
-  worker promptly returns the commit plus focused test and browser evidence
-  without pushing or taking PR lifecycle ownership.
+- Before integration, the Web worker runs the applicable focused proof for the
+  behavior it changes, deterministically formats every allowed web or web-owned
+  Cortex file, and commits one coherent exact handoff. The worker promptly
+  returns that commit and focused evidence without pushing or taking PR
+  lifecycle ownership. Required agent browser E2E is not pre-integration
+  handoff evidence: it runs on the configured GitHub Actions worker against a
+  published SHA. Humans may use local single-spec Docker e2e for interactive
+  debugging.
 - Gizmo integrates accepted formatted handoffs and runs `task loom:pre-push`
   on the combined head. If that gate formats web-owned content, Gizmo returns
   the exact diff to web development for a fresh formatted commit instead of
   committing it. After reintegration and a clean gate, Gizmo pushes and
-  immediately obtains remote evidence: at least one relevant focused remote
-  task while the head is not validation-ready, or complete exact-head
-  validation immediately when it is ready. Gizmo then owns readiness and merge.
+  immediately obtains exact-published-head remote evidence: at least one
+  relevant focused remote task, including any required Web-owned browser E2E
+  through `task remote`, while the head is not validation-ready; or complete
+  exact-head validation immediately when it is ready. Gizmo must collect every
+  required browser E2E result against that published head before readiness.
+  Web development owns the browser acceptance requirement; Gizmo owns
+  publication, remote dispatch and collection, readiness, and merge.
   See [workflows/remote-execution.md](../../sre/workflows/remote-execution.md).
