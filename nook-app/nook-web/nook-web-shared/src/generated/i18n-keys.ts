@@ -347,8 +347,6 @@ export const I18N_KEYS = {
   DevicesAccessAccessUnknown: 'devices_access.access_unknown',
   DevicesAccessAccessVerified: 'devices_access.access_verified',
   DevicesAccessAddIdentity: 'devices_access.add_identity',
-  DevicesAccessAddKey: 'devices_access.add_key',
-  DevicesAccessAddKeyUnavailable: 'devices_access.add_key_unavailable',
   DevicesAccessAdvancedDetails: 'devices_access.advanced_details',
   DevicesAccessAppLinkedToIdentity: 'devices_access.app_linked_to_identity',
   DevicesAccessAppProtectedBy: 'devices_access.app_protected_by',
