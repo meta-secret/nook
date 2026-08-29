@@ -1,7 +1,7 @@
 import { companionWasmReady } from "./companion-ready";
 import {
   authentication_form_observation_priority,
-  looks_like_login_advance_control_label,
+  can_activate_authentication_route_control,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import type { AuthenticationPageObservation } from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
@@ -110,7 +110,29 @@ export type GeneratedPasswordFillRequest = PasswordFormScopeQuery & {
   password: string;
 };
 
-type LoginAdvanceControlRequest = PasswordFormScopeQuery;
+type LoginAdvanceControlRequest = PasswordFormScopeQuery & {
+  usernameField: HTMLInputElement;
+};
+
+type LoginAdvanceControl = HTMLButtonElement | HTMLInputElement;
+
+function isRenderedControl(control: LoginAdvanceControl): boolean {
+  let element: HTMLElement = control;
+  for (;;) {
+    const style = getComputedStyle(element);
+    const rendered = style.display !== "none" && style.visibility !== "hidden";
+    if (element.hidden || !rendered) return false;
+    const parent = element.parentElement;
+    if (!(parent instanceof HTMLElement)) return true;
+    element = parent;
+  }
+}
+
+type AuthenticationRouteControlRequest = {
+  control: LoginAdvanceControl;
+  controlLabel: string;
+  query: LoginAdvanceControlRequest;
+};
 
 type FormSubmissionObservation = {
   form: HTMLFormElement;
@@ -469,9 +491,43 @@ export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
   // Email-first / multi-step logins often use a type=button "Next" control
   // rather than a real submit. Prefer an advance control before requestSubmit
   // only while the password step is still missing.
-  const nookNamedArgs0_4: Parameters<typeof clickAdvanceControl>[0] = request;
-  if (!passwordField && clickAdvanceControl(nookNamedArgs0_4)) {
-    return true;
+  if (!passwordField) {
+    const nookNamedArgs0_4: Parameters<typeof clickAdvanceControl>[0] = {
+      ...request,
+      usernameField,
+    };
+    if (clickAdvanceControl(nookNamedArgs0_4)) return true;
+    const form = usernameField.form;
+    const sourceOrigin = form?.ownerDocument.defaultView?.location.origin;
+    if (
+      !form ||
+      !sourceOrigin ||
+      form.querySelector(
+        'button[type="submit"], input[type="submit"], button:not([type])',
+      ) ||
+      !can_activate_authentication_route_control(
+        sourceOrigin,
+        [
+          form.id,
+          form.getAttribute("name") ?? "",
+          form.getAttribute("class") ?? "",
+          form.getAttribute("aria-label") ?? "",
+        ].join(" "),
+        form.action,
+        "",
+        "",
+        false,
+        isAuthUsernameField(usernameField),
+        true,
+      )
+    ) {
+      return false;
+    }
+    const nookTypedArgs0_28: Parameters<typeof observeSubmit>[0] = {
+      form,
+      action: () => form.requestSubmit(),
+    };
+    return observeSubmit(nookTypedArgs0_28);
   }
 
   const form = anchor.form;
@@ -519,21 +575,83 @@ function clickAdvanceControl(request: LoginAdvanceControlRequest): boolean {
     ),
   );
   for (const control of controls) {
-    if (control.disabled || control.getAttribute("aria-disabled") === "true") {
+    if (
+      control.disabled ||
+      control.getAttribute("aria-disabled") === "true" ||
+      !isRenderedControl(control)
+    ) {
       continue;
     }
     const label = [
       control.textContent ?? "",
       control.getAttribute("aria-label") ?? "",
-      control.value ?? "",
+      control.title,
+      ...(control.getAttribute("aria-labelledby") ?? "")
+        .split(/\s+/)
+        .map(
+          (id) => control.ownerDocument.getElementById(id)?.textContent ?? "",
+        ),
+      control.tagName === "INPUT" ? control.value || "submit" : "",
     ].join(" ");
-    if (!looks_like_login_advance_control_label(label)) {
+    const nookTypedArgs0_30: AuthenticationRouteControlRequest = {
+      control,
+      controlLabel: label,
+      query: request,
+    };
+    if (!canActivateAuthenticationRouteControl(nookTypedArgs0_30)) {
       continue;
     }
     control.click();
     return true;
   }
   return false;
+}
+
+function canActivateAuthenticationRouteControl(
+  request: AuthenticationRouteControlRequest,
+): boolean {
+  const { control, controlLabel, query } = request;
+  const form = control.form;
+  const sourceOrigin = control.ownerDocument.defaultView?.location.origin;
+  if (!sourceOrigin) return false;
+
+  const identityContainer =
+    !form &&
+    query.kind === PasswordFormQueryKind.Scoped &&
+    query.formScope.kind === PasswordFormScopeKind.Unowned &&
+    query.root instanceof Element
+      ? query.root
+      : form;
+  const formIdentity = [
+    identityContainer?.id ?? "",
+    identityContainer?.getAttribute("name") ?? "",
+    identityContainer?.getAttribute("class") ?? "",
+    identityContainer?.getAttribute("aria-label") ?? "",
+  ].join(" ");
+  const destinationIdentity = control.hasAttribute("formaction")
+    ? control.formAction
+    : (form?.action ?? control.ownerDocument.defaultView?.location.href ?? "");
+  if (!destinationIdentity) return false;
+
+  const sharesOwnedForm = Boolean(form && form === query.usernameField.form);
+  const hasLocalUnownedScope =
+    !form &&
+    !query.usernameField.form &&
+    query.kind === PasswordFormQueryKind.Scoped &&
+    query.formScope.kind === PasswordFormScopeKind.Unowned &&
+    query.root !== control.ownerDocument;
+  const machineIdentity = `${control.id} ${control.name}=${control.value}`;
+
+  return can_activate_authentication_route_control(
+    sourceOrigin,
+    formIdentity,
+    destinationIdentity,
+    controlLabel,
+    machineIdentity,
+    true,
+    isAuthUsernameField(query.usernameField),
+    sharesOwnedForm || hasLocalUnownedScope,
+  );
 }
 
 function observeSubmit({ form, action }: FormSubmissionObservation): boolean {

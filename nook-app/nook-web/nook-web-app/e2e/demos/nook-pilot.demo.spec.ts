@@ -352,7 +352,7 @@ test('fill a Namecheap-like OTP challenge through Nook Pilot', async ({
   await demoBeat(page)
 })
 
-test('advance a Microsoft-like email-first Login control through Nook Pilot', async ({
+test('advance a localized email-first control through Nook Pilot', async ({
   page,
 }) => {
   const messages = await loadPilotMessages()
@@ -363,7 +363,7 @@ test('advance a Microsoft-like email-first Login control through Nook Pilot', as
   await page.setContent(`<!doctype html>
     <html>
       <head>
-        <title>Sign in to your Microsoft account</title>
+        <title>Acceso a tu cuenta</title>
         <style>
           :root { color-scheme: light; font-family: "Segoe UI", ui-sans-serif, system-ui, sans-serif; }
           * { box-sizing: border-box; }
@@ -408,17 +408,16 @@ test('advance a Microsoft-like email-first Login control through Nook Pilot', as
       </head>
       <body>
         <main>
-          <h1>Sign in</h1>
-          <p class="intro">Use your work, school, or personal Microsoft account.</p>
+          <h1>Iniciar sesión</h1>
           <form id="loginForm">
             <input
               type="email"
-              name="loginfmt"
-              id="i0116"
-              placeholder="Email, phone, or Skype"
-              aria-label="Enter your email, phone, or Skype."
+              name="email"
+              id="account-email"
+              placeholder="Correo electrónico"
+              aria-label="Correo electrónico"
             />
-            <button type="button" id="idSIButton9">Login</button>
+            <button type="submit" id="login-next">Entrar</button>
           </form>
           <p data-testid="advance-status"></p>
         </main>
@@ -426,7 +425,9 @@ test('advance a Microsoft-like email-first Login control through Nook Pilot', as
     </html>`)
   await page.evaluate(installDemoChromeStub, loginPilotStubArgs(messages))
   await page.evaluate(() => {
-    document.querySelector('#idSIButton9')?.addEventListener('click', () => {
+    const loginNext = document.getElementById('login-next')
+    loginNext?.addEventListener('click', (event) => {
+      event.preventDefault()
       const status = document.querySelector('[data-testid="advance-status"]')
       if (status) status.textContent = 'Email-first login advanced'
     })
@@ -439,7 +440,7 @@ test('advance a Microsoft-like email-first Login control through Nook Pilot', as
   await expect(
     widget.getByRole('button', { name: 'Continue with Nook' }),
   ).toBeVisible()
-  await expect(page.locator('[name="loginfmt"]')).toBeVisible()
+  await expect(page.locator('[name="email"]')).toBeVisible()
   await demoBeat(page)
 
   await widget.getByRole('button', { name: 'Continue with Nook' }).click()
@@ -449,9 +450,7 @@ test('advance a Microsoft-like email-first Login control through Nook Pilot', as
     ),
   ).toBeVisible()
   await widget.getByRole('button', { name: 'Continue with Nook' }).click()
-  await expect(page.locator('[name="loginfmt"]')).toHaveValue(
-    'pilot@example.test',
-  )
+  await expect(page.locator('[name="email"]')).toHaveValue('pilot@example.test')
   await expect(page.getByTestId('advance-status')).toHaveText(
     'Email-first login advanced',
   )

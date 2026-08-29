@@ -4,7 +4,9 @@
 //! which identity strings count as username, OTP, passkey, or manual-checkpoint
 //! signals used to build authentication workflow observations in the host.
 
+mod control_identity;
 mod destination_identity;
+mod form_identity;
 
 /// Maximum byte length for each DOM-controlled authentication identity string.
 pub const MAX_AUTHENTICATION_CONTROL_TEXT_BYTES: usize = 512;
@@ -68,7 +70,7 @@ pub fn expand_identity_text(value: &str) -> String {
                 with_breaks.push(' ');
             }
         }
-        if *c == '_' || *c == '-' || *c == '.' {
+        if matches!(*c, '_' | '-' | '.' | '/' | '#') {
             with_breaks.push(' ');
         } else {
             with_breaks.push(*c);
@@ -97,6 +99,7 @@ const LOGIN_SURFACE_WORDS: &[&str] = &[
 
 const LOGIN_ADVANCE_WORDS: &[&str] = &[
     "next", "continue", "signin", "sign-in", "sign in", "login", "log-in", "log in", "verify",
+    "entrar",
 ];
 
 const LOGIN_PATH_WORDS: &[&str] = &[
@@ -124,7 +127,9 @@ pub fn has_login_context(observation: &LoginContextObservation) -> bool {
         }
     }
     let advance = expand_identity_text(&observation.advance_control_label);
-    if contains_any_word(&advance, LOGIN_ADVANCE_WORDS) {
+    if advance != "submit"
+        && looks_like_login_advance_control_label(&observation.advance_control_label)
+    {
         return true;
     }
     let path = observation.path_context.to_ascii_lowercase();
@@ -187,7 +192,18 @@ pub fn looks_like_one_time_code_field(field: &PageInputFieldObservation) -> bool
 #[must_use]
 pub fn looks_like_passkey_control_label(label: &str) -> bool {
     let identity = expand_identity_text(label);
-    contains_any_word(
+    !contains_any_word(
+        &identity,
+        &[
+            "delete",
+            "remove",
+            "revoke",
+            "unlink",
+            "disconnect",
+            "disable",
+            "deactivate",
+        ],
+    ) && contains_any_word(
         &identity,
         &[
             "pass key",
@@ -231,8 +247,132 @@ pub fn looks_like_email_verification_body(body: &str) -> bool {
 /// True when an activatable control advances an authentication ceremony.
 #[must_use]
 pub fn looks_like_login_advance_control_label(label: &str) -> bool {
+    if label.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
+        || form_identity::form_identity_indicates_destructive_action(label)
+        || looks_like_non_authentication_submit_control_label(label)
+        || control_identity::looks_like_password_recovery_route_control_label(label)
+        || control_identity::looks_like_registration_route_control_label(label)
+        || control_identity::looks_like_alternate_authentication_route_control_label(label)
+    {
+        return false;
+    }
+    looks_like_unrestricted_login_advance_control_label(label)
+}
+
+fn looks_like_unrestricted_login_advance_control_label(label: &str) -> bool {
     let identity = expand_identity_text(label);
-    contains_any_word(&identity, LOGIN_ADVANCE_WORDS) || contains_any_word(&identity, &["submit"])
+    if contains_any_word(&identity, &["entrar"])
+        && identity.split_whitespace().any(|token| token != "entrar")
+    {
+        return false;
+    }
+    repeated_localized_login_label(&identity)
+        || contains_any_word(&identity, LOGIN_ADVANCE_WORDS)
+        || contains_any_word(&identity, &["submit"])
+}
+
+fn repeated_localized_login_label(identity: &str) -> bool {
+    let tokens = identity.split_whitespace().collect::<Vec<_>>();
+    !tokens.is_empty()
+        && (tokens.iter().all(|token| *token == "anmelden")
+            || (tokens.len() % 2 == 0 && tokens.chunks(2).all(|pair| pair == ["se", "connecter"])))
+}
+
+/// True when a semantic submit explicitly describes a non-authentication action.
+#[must_use]
+pub fn looks_like_non_authentication_submit_control_label(label: &str) -> bool {
+    let identity = expand_identity_text(label);
+    contains_any_word(
+        &identity,
+        &[
+            "save",
+            "update",
+            "subscribe",
+            "search",
+            "publish",
+            "post",
+            "delete",
+            "remove",
+            "deactivate",
+            "close account",
+            "erase",
+            "destroy",
+            "cancel",
+            "back",
+            "help",
+            "learn more",
+        ],
+    )
+}
+
+/// Decide whether bounded form and destination identities describe a safe authentication route.
+#[must_use]
+pub fn has_safe_authentication_route_identity(
+    source_origin: &str,
+    form_identity: &str,
+    destination_identity: &str,
+) -> bool {
+    if [source_origin, form_identity, destination_identity]
+        .into_iter()
+        .any(|value| value.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES)
+    {
+        return false;
+    }
+    if form_identity::identity_has_authentication_control_veto(form_identity) {
+        return false;
+    }
+    let Some(destination) =
+        destination_identity::canonicalize_control_destination(source_origin, destination_identity)
+    else {
+        return false;
+    };
+    if form_identity::control_destination_indicates_non_authentication_route(
+        &destination.route_identity,
+    ) || form_identity::destination_has_disallowed_action_or_provider(
+        &destination.route_identity,
+    ) {
+        return false;
+    }
+    form_identity::identity_indicates_explicit_authentication_route(form_identity)
+        || form_identity::destination_has_safe_login_identity(&destination.path_identity)
+}
+
+/// Decide whether a locally scoped control may advance a safe authentication route.
+#[must_use]
+#[expect(clippy::too_many_arguments, reason = "typed WASM policy boundary")]
+pub fn can_activate_authentication_route_control(
+    source_origin: &str,
+    form_identity: &str,
+    destination_identity: &str,
+    control_label: &str,
+    control_machine_identity: &str,
+    has_concrete_control: bool,
+    has_authentication_username: bool,
+    has_local_authentication_scope: bool,
+) -> bool {
+    if !has_safe_authentication_route_identity(source_origin, form_identity, destination_identity)
+        || control_label.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
+        || control_machine_identity.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
+        || form_identity::identity_has_authentication_control_veto(control_machine_identity)
+    {
+        return false;
+    }
+    let has_matching_microsoft_authority =
+        destination_identity::canonicalize_control_destination(source_origin, destination_identity)
+            .is_some_and(|destination| destination.has_microsoft_provider_authority)
+            && control_identity::looks_like_microsoft_primary_sign_in_label(control_label);
+    if control_identity::label_names_external_authentication_provider(control_label)
+        && !has_matching_microsoft_authority
+    {
+        return false;
+    }
+    if looks_like_login_advance_control_label(control_label) {
+        return has_authentication_username && has_local_authentication_scope;
+    }
+    control_label.is_empty()
+        && !has_concrete_control
+        && has_authentication_username
+        && has_local_authentication_scope
 }
 
 fn has_autocomplete_token(tokens: &[String], expected: &str) -> bool {
@@ -429,6 +569,18 @@ mod tests {
 
     #[test]
     fn detects_username_with_login_context_for_bare_email() {
+        let context = |label: &str| {
+            has_login_context(&LoginContextObservation {
+                form_identity: String::new(),
+                ancestor_identities: Vec::new(),
+                advance_control_label: label.to_owned(),
+                path_context: String::new(),
+            })
+        };
+        assert!(context("Entrar"));
+        for label in "Submit|Entrar en el sorteo|Entrar con Amazon".split('|') {
+            assert!(!context(label));
+        }
         assert!(!looks_like_username_field(&field(
             PageInputType::Email,
             "newsletter-email",
@@ -467,14 +619,60 @@ mod tests {
 
     #[test]
     fn login_advance_labels_require_authentication_words() {
-        assert!(looks_like_login_advance_control_label("Next"));
-        assert!(looks_like_login_advance_control_label("SignIn"));
-        assert!(looks_like_login_advance_control_label("signin"));
-        assert!(looks_like_login_advance_control_label("Sign   In"));
-        assert!(looks_like_login_advance_control_label("Login"));
-        assert!(looks_like_login_advance_control_label("Log\tin"));
-        assert!(looks_like_login_advance_control_label("Submit"));
-        assert!(!looks_like_login_advance_control_label("Learn more"));
-        assert!(!looks_like_login_advance_control_label("Subscribe"));
+        for label in "Next|SignIn|signin|Sign   In|Login|Log\tin|Submit|Entrar|Entrar Entrar Entrar|Anmelden Anmelden Anmelden|Se connecter Se connecter Se connecter".split('|') {
+            assert!(looks_like_login_advance_control_label(label));
+        }
+        for label in "Learn more|Subscribe|Submit order|Continue to reset password|Entrar con Amazon|Entrar con Foo|Anmelden Anmelden Foo|Se connecter Se connecter Amazon|Continue with X".split('|') {
+            assert!(!looks_like_login_advance_control_label(label));
+        }
+        let oversized = "x".repeat(MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1);
+        assert!(!looks_like_login_advance_control_label(&oversized));
+    }
+
+    #[test]
+    fn activation_accepts_only_bounded_semantic_username_scope_evidence() {
+        let decide = |form: &str, label: &str, concrete, username, local| {
+            let (machine, visible_label) = label
+                .strip_prefix("machine:")
+                .map_or(("", label), |machine| (machine, "Continue"));
+            can_activate_authentication_route_control(
+                "https://login.microsoftonline.com",
+                form,
+                "https://login.microsoftonline.com/common/login",
+                visible_label,
+                machine,
+                concrete,
+                username,
+                local,
+            )
+        };
+        assert!(decide("", "", false, true, true));
+        assert!(!decide("", "", true, true, true));
+        for label in "Sign in to Microsoft 365|Continue with email address|Continue with your email|Continue with your email address|Use your password to sign in|Se connecter|Anmelden".split('|') {
+            assert!(decide("f", label, true, true, true));
+        }
+        for label in "Continue with Amazon|Sign in to Google|Sign in to Amazon|Amazon login|Discord login|machine:delete-account|machine:reset-password|machine:create-account|machine:google|machine:passkey|machine:provider=acme|Sign in to Microsoft and reset password|Sign in to Microsoft or Google".split('|') {
+            assert!(!decide("login-form", label, true, true, true));
+        }
+        assert!(!decide("f", "Entrar", true, true, false));
+        assert!(!decide("f", "Supprimer le compte", true, true, true));
+    }
+
+    #[test]
+    fn route_identity_requires_positive_same_origin_authentication_evidence() {
+        let safe = |form, destination| {
+            has_safe_authentication_route_identity("https://example.test", form, destination)
+        };
+        for destination in "https://example.test/login?notprovider=x&notconnection=enterprise&continue=https://mail.google.com|https://example.test/auth/login?x=1|https://example.test/v3/signin/identifier|https://example.test/auth/sign-in/identifier|https://example.test/authentication/login|https://example.test/v2/auth/signin|https://example.test/signin/callback|https://example.test/login/v2".split('|') {
+            assert!(safe("login-form", destination), "{destination}");
+        }
+        for form in "reset-password|signup-form|google-login|passkey-login".split('|') {
+            assert!(!safe(form, "https://example.test/auth/login"));
+        }
+        for destination in "https://example.test/login?provider|https://example.test/login?providerId=custom|https://example.test/login?provider_name=custom|https://example.test/login?idp_id=custom|https://example.test/login?idp_name=custom|https://example.test/login?identityProviderName=custom|https://example.test/login?connection=enterprise|https://example.test/login?connection_id=enterprise|https://example.test/login?connectionName=enterprise|https://example.test/login#idpId=custom|https://example.test/login#providerName=custom|https://example.test/login#provider_id=custom|https://example.test/login?next=/home#google|https://example.test/login#provider=acme|https://example.test/login?next=/home#provider=acme|https://example.test/login?identity_provider=amazon|https://example.test/signin/x|https://example.test/signin/auth0|https://example.test/sign-in/auth0|https://example.test/sign_in/auth0|https://example.test/sign.in/auth0|https://example.test/log-in/auth0|https://example.test/log_in/auth0|https://example.test/auth/auth0/login|https://example.test/auth/acme/signin|https://example.test/signin/callback/acme|https://example.test/account/close|https://example.test/login/amazon|https://example.test/orders/123/submit|https://example.test/auth/login?action=close+account|https://example.test/auth/provider/acme|https://example.test/auth/idp/acme|https://example.test/login/provider/acme|https://example.test/login/discord".split('|') {
+            assert!(!safe("login-form", destination), "{destination}");
+        }
+        let oversized = "x".repeat(MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1);
+        assert!(!safe(&oversized, "/auth/login"));
     }
 }
