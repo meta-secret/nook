@@ -81,6 +81,23 @@ function stackedPlan() {
   })
 }
 
+function boundedMultiPlan(mode = 'Independent PRs', predecessor = 'None') {
+  return plan({
+    featureEstimate: '2,000',
+    currentEstimate: '1,000',
+    shape: 'Multiple PRs',
+    mode,
+    ownershipUnits: [
+      ownershipUnit(1, 'gizmo-1'),
+      ownershipUnit(2, 'gizmo-2', 'Publisher'),
+    ],
+    slices: [
+      slice(1, 'gizmo-1', 'Validator', 'None', '1,000'),
+      slice(2, 'gizmo-2', 'Publisher', predecessor, '1,000', 'Publisher'),
+    ],
+  })
+}
+
 test('accepts a 200-line one-Gizmo plan with multiple ownership units', () => {
   const candidate = plan({
     ownershipUnits: [
@@ -145,6 +162,21 @@ test('accepts a plan bound to its trusted focused-issue Gizmo ID', () => {
   )
 })
 
+test('accepts multiple ownership units bound to one trusted Gizmo ID', () => {
+  const candidate = plan({
+    ownershipUnits: [
+      ownershipUnit(1, 'gizmo-1'),
+      ownershipUnit(2, 'gizmo-1', 'Publisher'),
+    ],
+  })
+  assert.equal(
+    validateAgentRecord(candidate, 'plan', [], '', {
+      assignedGizmoId: 'gizmo-1',
+    }),
+    '',
+  )
+})
+
 test('rejects a plan that invents a different focused-issue Gizmo ID', () => {
   assert.match(
     validateAgentRecord(plan(), 'plan', [], '', {
@@ -154,12 +186,63 @@ test('rejects a plan that invents a different focused-issue Gizmo ID', () => {
   )
 })
 
+test('rejects multi-PR delivery for a trusted focused-issue Gizmo ID', () => {
+  assert.match(
+    validateAgentRecord(stackedPlan(), 'plan', [], '', {
+      assignedGizmoId: 'gizmo-1',
+    }),
+    /requires one-PR delivery/,
+  )
+})
+
+test('rejects a different sole slice ID for a trusted focused issue', () => {
+  const candidate = plan({
+    slices: [slice(1, 'gizmo-2', 'Validator', 'None', '200')],
+  })
+  assert.match(
+    validateAgentRecord(candidate, 'plan', [], '', {
+      assignedGizmoId: 'gizmo-1',
+    }),
+    /sole PR slice must use the trusted focused-issue Gizmo ID/,
+  )
+})
+
+test('rejects a different ownership-unit ID for a trusted focused issue', () => {
+  const candidate = plan({
+    ownershipUnits: [ownershipUnit(1, 'gizmo-2')],
+  })
+  assert.match(
+    validateAgentRecord(candidate, 'plan', [], '', {
+      assignedGizmoId: 'gizmo-1',
+    }),
+    /every ownership unit must use the trusted focused-issue Gizmo ID/,
+  )
+})
+
 test('rejects an invalid trusted focused-issue Gizmo ID', () => {
   assert.match(
     validateAgentRecord(plan(), 'plan', [], '', {
       assignedGizmoId: 'Gizmo 1',
     }),
     /trusted assigned Gizmo ID is invalid/,
+  )
+})
+
+test('accepts predecessor-free independent PRs at the 2,000-line ceiling', () => {
+  assert.equal(validateAgentRecord(boundedMultiPlan(), 'plan'), '')
+})
+
+test('rejects stacked PRs at the 2,000-line ceiling', () => {
+  assert.match(
+    validateAgentRecord(boundedMultiPlan('Stacked PRs', 'gizmo-1'), 'plan'),
+    /requires independent PRs/,
+  )
+})
+
+test('rejects dependent independent PRs below the ceiling', () => {
+  assert.match(
+    validateAgentRecord(boundedMultiPlan('Independent PRs', 'gizmo-1'), 'plan'),
+    /independent PR slices must not declare predecessor Gizmos/,
   )
 })
 

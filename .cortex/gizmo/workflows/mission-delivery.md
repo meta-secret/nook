@@ -51,10 +51,14 @@ Agent count never determines PR count.
      Add records only for a required semantic size split above 2,000 or for
      genuinely independent delivery units. Team Agent count never triggers a
      split.
+   - Additional records at or below 2,000 use predecessor-free independent PRs,
+     never a stack.
    - Map one feature-slice Gizmo to each semantic PR slice. Do not increase PR
      or Gizmo count merely because multiple Team Agents are required.
    - For multi-PR delivery, persist each slice's canonical Gizmo ID as the
      matching focused issue's `gizmo_id`; later one-PR plans must retain it.
+     A trusted assigned ID permits exactly one slice and must appear on every
+     ownership unit.
    - Record the module DAG and provider-consumer contracts when applicable.
 3. **Assign team tasks.**
    - Name one functional owner for each capability.

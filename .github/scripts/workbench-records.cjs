@@ -349,6 +349,39 @@ function normalizedContractValue(value) {
   return value.toLocaleLowerCase('en-US')
 }
 
+function ownershipGizmoIds(ownershipBody) {
+  return ownershipBody
+    .trim()
+    .split('\n')
+    .filter((line) => line.trim())
+    .map((line) => /; Gizmo ID: ([a-z][a-z0-9-]{0,62});/.exec(line)?.[1])
+}
+
+function validateTrustedGizmoAssignment(
+  budgetFields,
+  slices,
+  assignedGizmoId,
+) {
+  if (!assignedGizmoId) return ''
+  if (
+    budgetFields.deliveryShape !== 'One PR' ||
+    budgetFields.sequenceMode !== 'One PR'
+  ) {
+    return 'trusted focused-issue Gizmo ID requires one-PR delivery'
+  }
+  if (slices.length !== 1 || slices[0].gizmoId !== assignedGizmoId) {
+    return 'the sole PR slice must use the trusted focused-issue Gizmo ID'
+  }
+  if (
+    ownershipGizmoIds(budgetFields.ownershipBody).some(
+      (gizmoId) => gizmoId !== assignedGizmoId,
+    )
+  ) {
+    return 'every ownership unit must use the trusted focused-issue Gizmo ID'
+  }
+  return ''
+}
+
 function validateGizmoMapping(budgetFields, slices) {
   const gizmoIds = slices.map((slice) => slice.gizmoId)
   const gizmoNames = slices.map((slice) =>
@@ -377,20 +410,16 @@ function validateGizmoMapping(budgetFields, slices) {
     return 'one-PR and independent PR slices must not declare predecessor Gizmos'
   }
 
-  const ownershipGizmoIds = budgetFields.ownershipBody
-    .trim()
-    .split('\n')
-    .filter((line) => line.trim())
-    .map((line) => /; Gizmo ID: ([a-z][a-z0-9-]{0,62});/.exec(line)?.[1])
+  const mappedOwnershipGizmoIds = ownershipGizmoIds(budgetFields.ownershipBody)
   const declaredGizmoIds = new Set(gizmoIds)
   if (
-    ownershipGizmoIds.some(
+    mappedOwnershipGizmoIds.some(
       (gizmoId) => !gizmoId || !declaredGizmoIds.has(gizmoId),
     )
   ) {
     return 'every ownership unit must reference a declared PR slice Gizmo ID'
   }
-  const referencedGizmoIds = new Set(ownershipGizmoIds)
+  const referencedGizmoIds = new Set(mappedOwnershipGizmoIds)
   if (gizmoIds.some((gizmoId) => !referencedGizmoIds.has(gizmoId))) {
     return 'every declared PR slice Gizmo must own at least one ownership unit'
   }
@@ -579,6 +608,13 @@ function validateAgentRecord(
     if (deliveryShape === 'Multiple PRs' && sequenceMode === 'One PR') {
       return 'multi-PR delivery requires independent or stacked sequence mode'
     }
+    if (
+      deliveryShape === 'Multiple PRs' &&
+      estimate <= 2_000 &&
+      sequenceMode !== 'Independent PRs'
+    ) {
+      return 'multi-PR delivery at or below 2,000 authored changed lines requires independent PRs'
+    }
     if (estimate > 2_000 && sequenceMode !== 'Stacked PRs') {
       return 'feature above 2,000 authored changed lines requires stacked PRs'
     }
@@ -661,6 +697,13 @@ function validateAgentRecord(
         return 'one-PR slice estimate must match the current PR estimate and be between 1 and 2,000'
       }
     }
+
+    const trustedGizmoRejection = validateTrustedGizmoAssignment(
+      budgetFields,
+      listedSlices,
+      assignedGizmoId,
+    )
+    if (trustedGizmoRejection) return trustedGizmoRejection
 
     const gizmoMappingRejection = validateGizmoMapping(
       budgetFields,

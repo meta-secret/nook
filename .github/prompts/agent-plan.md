@@ -97,9 +97,10 @@ estimate. Set `Delivery shape` to exactly `One PR` or `Multiple PRs`.
 Set `PR sequence mode` to exactly `One PR`, `Independent PRs`, or
 `Stacked PRs`. A one-PR delivery must use `One PR`. A feature above 2,000
 authored changed lines must use `Multiple PRs` and `Stacked PRs`; smaller
-multi-PR work may use `Independent PRs` when its slices do not depend on
-unmerged predecessor work. Exactly 2,000 authored changed lines may remain
-`One PR`.
+multi-PR work must use `Independent PRs` with every predecessor set to `None`.
+At or below 2,000, stacked delivery is invalid because additional records are
+allowed only for genuinely independent units. Exactly 2,000 authored changed
+lines may remain `One PR`.
 For a multi-PR feature, list each ordered, module-focused slice with its
 acceptance evidence. Identify the first or currently authorized slice
 separately. Its estimate must not exceed 2,000 authored changed lines. At 1,500
@@ -125,6 +126,9 @@ frontmatter, copy that exact trusted value into `Current Gizmo ID`, every
 ownership-unit `Gizmo ID`, and the sole numbered PR-slice `Gizmo ID`. Never
 invent or rename the Gizmo ID in a later per-issue plan. Legacy standalone
 issues without `gizmo_id` retain self-contained one-PR planning compatibility.
+The trusted assignment requires `Delivery shape` and `PR sequence mode` to be
+`One PR`, exactly one slice, and no other Gizmo ID anywhere in the ownership or
+slice mappings.
 
 For `One PR` and `Independent PRs`, set every predecessor to `None`. For
 `Stacked PRs`, the first predecessor is `None` and every later slice names the
@@ -193,7 +197,8 @@ retarget the immediate successor to `main`, update it from current
 `origin/main`, re-measure authored additions plus deletions, and validate the
 new exact head. If native stack operations are unavailable, require a blocked
 handoff instead of an informal branch chain or a new third-party dependency.
-Stacking is not required for every small, independent PR below the ceiling.
+At or below the ceiling, multiple PRs must be genuinely independent and
+predecessor-free; do not register them as a stack.
 
 Write the current slice as `<scope>; Acceptance evidence: <observable proof>`.
 Write every numbered PR slice in the mapped, estimated form defined above. Never use

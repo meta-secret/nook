@@ -52,9 +52,9 @@ For multiple package PRs:
 5. After each predecessor merges, Gizmo Prime retargets the immediate successor
    to `main`, updates it from current `origin/main`, re-measures authored
    additions plus deletions, runs full checks, and validates the new exact head.
-6. Small independent slices below the ceiling may be delivered from current
-   `origin/main`; stacking is not required when they do not depend on unmerged
-   predecessor work.
+6. Small independent slices at or below the ceiling may be delivered from
+   current `origin/main` only as predecessor-free independent PRs; do not
+   register them as a stack.
 7. Keep unrelated package changes separate even when they belong to one feature.
 
 Dependency direction must stay:

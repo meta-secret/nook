@@ -30,6 +30,8 @@ superseding new immutable Workbench plan.
   2,000 authored changed lines, or for genuinely independent delivery units.
 - Team Agent count never determines PR or feature-slice Gizmo count. Small
   features must not be fragmented merely because multiple teams participate.
+- Multiple records at or below 2,000 are allowed only for genuinely independent
+  predecessor-free PRs, never a stack.
 - Gizmo Prime routes authorized Team Agent tasks by the record's Gizmo ID,
   receives their existing typed handoffs directly, and aggregates accepted
   results under that record. The record performs no work and creates nothing.

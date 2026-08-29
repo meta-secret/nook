@@ -175,8 +175,9 @@ Sequence rules:
 - Local Git history is not preservation; a linked draft successor is.
 - Stacking is mandatory for a feature expected to exceed the ceiling and for an
   in-progress PR that may exceed or has exceeded it. Exactly 2,000 authored
-  changed lines may remain one PR. Stacking is not required for every small,
-  independent PR at or below the ceiling.
+  changed lines may remain one PR. At or below the ceiling, multiple PRs are
+  valid only for genuinely independent, predecessor-free units and must not be
+  registered as a stack.
 - Use GitHub's native Stacked Pull Requests through `gh stack` when available,
   or through the GitHub website. The branches must stay in the same repository,
   and GitHub must recognize the PRs as one stack; an informal chain of PR links
@@ -210,6 +211,8 @@ Sequence rules:
   one PR and one feature-slice Gizmo.
 - Gizmo Prime records additional feature-slice Gizmos only for a required
   semantic size split above 2,000 or for genuinely independent delivery units.
+- Multiple records at or below 2,000 must use independent predecessor-free PRs;
+  stacked delivery at or below the ceiling is invalid.
 - Team Agent count never determines PR or Gizmo count. Do not fragment a small
   feature merely because multiple teams or agents contribute to it.
 - Gizmo Prime alone owns the feature DAG, native GitHub stack, retargeting,
@@ -234,6 +237,9 @@ The Workbench task plan must state:
 - one declared slice Gizmo ID on every ownership unit, with multiple Team Agent
   units allowed to map to the same slice Gizmo;
 - a superseding immutable plan when scope or the estimate materially changes.
+
+A plan bound to a trusted focused-issue `gizmo_id` must declare one PR, one
+slice, and that same ID on the current slice and every ownership unit.
 
 An estimate is a design tool.
 

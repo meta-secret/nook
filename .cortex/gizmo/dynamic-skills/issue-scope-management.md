@@ -64,8 +64,8 @@ to generate bookkeeping.
    - Use same-repository predecessor branches as temporary GitHub bases,
      cross-link adjacent PRs, register them as one GitHub-recognized stack, and
      record bottom-up merge order. Prefer `gh stack`; the GitHub website is also
-     valid. Stacking is not required for small independent PRs below the
-     ceiling.
+     valid. At or below the ceiling, multiple PRs must remain genuinely
+     independent and predecessor-free; do not register them as a stack.
    - If native stack operations are unavailable, stop and record the delivery
      blocker. Do not use an informal PR chain or add a third-party dependency.
    - Open and link the successor draft PR before reducing an implemented PR.

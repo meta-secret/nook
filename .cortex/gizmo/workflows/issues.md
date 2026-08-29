@@ -44,9 +44,8 @@ Create a focused sequence when either condition holds:
 - genuinely independent delivery units justify separate PRs below that size.
 
 The first condition requires an ordered native GitHub Stacked Pull Request
-sequence. The second may use ordinary independent PRs from `main` when the
-slices do not depend on unmerged predecessor work; stacking is not required for
-every small PR.
+sequence. The second must use ordinary independent predecessor-free PRs from
+`main`; stacked delivery at or below 2,000 is invalid.
 
 Gizmo Prime records one named immutable feature-slice Gizmo Workbench record
 per semantic PR slice and owns the complete feature sequence. The record is not
@@ -175,7 +174,8 @@ Legacy standalone focused issues may omit `gizmo_id`. When the field is
 present, dispatch treats it as canonical trusted routing metadata: its syntax
 must be valid, it must never be changed to create a fresh identity, and the
 published per-issue plan must use it as `Current Gizmo ID` and its sole slice
-Gizmo ID.
+Gizmo ID. That plan must declare one PR and use the same ID on every ownership
+unit.
 
 - The owner must be an assignable Nook GitHub collaborator with write access.
 - The dispatch must provide exactly one of `issue_path` or `prompt`.

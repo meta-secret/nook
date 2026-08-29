@@ -545,6 +545,37 @@ fn pr_workbench_suite_loads_gizmo_mapping_tests() {
 }
 
 #[test]
+fn workbench_plans_bind_trusted_slices_and_bounded_independence() {
+    let validator = read(".github/scripts/workbench-records.cjs");
+    let prompt = read(".github/prompts/agent-plan.md");
+    let pull_requests = read(".cortex/gizmo/workflows/pull-requests.md");
+    let normalized_pull_requests = pull_requests
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    for required in [
+        "validateTrustedGizmoAssignment",
+        "trusted focused-issue Gizmo ID requires one-PR delivery",
+        "the sole PR slice must use the trusted focused-issue Gizmo ID",
+        "every ownership unit must use the trusted focused-issue Gizmo ID",
+        "multi-PR delivery at or below 2,000 authored changed lines requires independent PRs",
+    ] {
+        assert!(
+            validator.contains(required),
+            "Workbench validator is missing bounded Gizmo enforcement: {required}"
+        );
+    }
+    assert!(
+        prompt.contains("At or below 2,000, stacked delivery is invalid")
+            && prompt.contains("exactly one slice, and no other Gizmo ID")
+            && normalized_pull_requests.contains("must not be registered as a stack")
+            && normalized_pull_requests.contains("one PR, one slice"),
+        "planning policy must require one trusted slice and predecessor-free bounded independence"
+    );
+}
+
+#[test]
 fn substantial_agent_tasks_use_curated_session_memory() -> anyhow::Result<()> {
     let gitignore = read(".gitignore");
     let agent_map = read(".cortex/AGENTS.md");
