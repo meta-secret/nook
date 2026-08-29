@@ -154,7 +154,11 @@ pub(super) fn form_identity_indicates_destructive_action(form_identity: &str) ->
             "authorize transaction",
             "transaction authorization",
         ],
-    );
+    ) || (contains_any_word(&identity, &["authorize", "confirm"])
+        && (contains_any_word(
+            &identity,
+            &["transaction", "transactions", "payment", "payments"],
+        ) || contains_any_word(&identity, &["order", "orders"])));
     let locks_account_or_session = contains_any_word(&identity, &["lock", "freeze"])
         && contains_any_word(&identity, &["account", "session"]);
     changes_account_detail
@@ -288,6 +292,9 @@ mod tests {
             "Financial transaction",
             "Authorize transaction",
             "Transaction authorization",
+            "/transactions/123/authorize",
+            "/payments/123/confirm",
+            "/orders/123/confirm",
             "/auth/logoff",
             "Log off",
             "signoff",

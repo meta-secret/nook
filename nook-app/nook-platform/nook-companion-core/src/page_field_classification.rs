@@ -352,7 +352,7 @@ pub fn can_activate_authentication_route_control(
     {
         return false;
     }
-    if looks_like_login_advance_control_label(control_label) || has_matching_microsoft_authority {
+    if looks_like_login_advance_control_label(control_label) {
         return !form_identity.trim().is_empty()
             || (has_authentication_username && has_local_authentication_scope);
     }
@@ -666,7 +666,14 @@ mod tests {
             true,
             true
         ));
-        assert!(!decide("login-form", "Sign in to Google", true, true, true));
+        for label in [
+            "Sign in to Google",
+            "Sign in to Microsoft and delete account",
+            "Sign in to Microsoft and reset password",
+            "Sign in to Microsoft or Google",
+        ] {
+            assert!(!decide("login-form", label, true, true, true));
+        }
         assert!(!decide("", "Entrar", true, false, true));
     }
 
@@ -700,6 +707,7 @@ mod tests {
             ("login-form", "https://example.test/signin/google"),
             ("login-form", "https://example.test/signin/linkedin"),
             ("login-form", "https://example.test/signin/x.com"),
+            ("login-form", "https://example.test/signin/x"),
             ("login-form", "https://example.test/auth/close/account"),
             ("login-form", "https://example.test/auth/forgot/password"),
             (

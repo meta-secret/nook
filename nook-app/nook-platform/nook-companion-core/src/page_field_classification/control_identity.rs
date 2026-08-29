@@ -32,7 +32,10 @@ pub(super) fn label_names_external_authentication_provider(identity: &str) -> bo
 }
 
 pub(super) fn route_names_external_authentication_provider(identity: &str) -> bool {
-    identity_names_external_authentication_provider(identity, false)
+    let route = expand_identity_text(identity.split(['?', '#']).next().unwrap_or_default());
+    identity_names_external_authentication_provider(&route, false)
+        || (contains_any_word(&route, &["x"])
+            && contains_any_word(&route, &["login", "log in", "signin", "sign in"]))
 }
 
 fn has_open_ended_provider_selection_grammar(identity: &str) -> bool {
@@ -47,7 +50,9 @@ fn has_open_ended_provider_selection_grammar(identity: &str) -> bool {
 
 pub(super) fn looks_like_microsoft_primary_sign_in_label(label: &str) -> bool {
     let identity = expand_identity_text(label);
-    identity.starts_with("sign in to ") && contains_any_word(&identity, &["microsoft"])
+    identity.starts_with("sign in to ")
+        && contains_any_word(&identity, &["microsoft"])
+        && !label_names_external_authentication_provider(&identity.replace("microsoft", ""))
 }
 
 pub(super) fn looks_like_alternate_authentication_route_control_label(label: &str) -> bool {
