@@ -1,4 +1,4 @@
-import { execFile, spawn } from "node:child_process";
+import { execFile } from "node:child_process";
 import {
   copyFile,
   lstat,
@@ -136,27 +136,25 @@ export const runValidationCommand: ValidationRunner = async (
   args,
   options,
 ) => {
+  if (command !== "task")
+    throw new Error("Isolated validation may only invoke task");
   const cwd = process.cwd();
   const hostEnvironment = { ...process.env };
   process.chdir(options.cwd);
   restoreHostEnvironment(options.env, process.env);
   try {
-    if (command !== "task")
-      throw new Error("Isolated validation may only spawn task");
-    await new Promise<void>((resolveRun, rejectRun) => {
-      const child = spawn("task", [...args], { stdio: "inherit" });
-      child.once("error", rejectRun);
-      child.once("close", (code, signal) => {
-        const failure = signal
-          ? `terminated by signal ${signal}`
-          : code === 0
-            ? ""
-            : `exited with code ${code}`;
-        if (failure)
-          rejectRun(new Error(`${command} ${args.join(" ")} ${failure}`));
-        else resolveRun();
-      });
-    });
+    if (args[0] === "hive:verify" && args.length === 1)
+      await execFileAsync("task", ["hive:verify"]);
+    else if (
+      args[0] === "docker:ecosystem:fuzz" &&
+      args[1] === "FUZZ_SECONDS=20" &&
+      args.length === 2
+    )
+      await execFileAsync("task", [
+        "docker:ecosystem:fuzz",
+        "FUZZ_SECONDS=20",
+      ]);
+    else throw new Error("Isolated validation command is not allowlisted");
   } finally {
     restoreHostEnvironment(hostEnvironment, process.env);
     process.chdir(cwd);
@@ -581,10 +579,11 @@ export async function withValidationEnvironment<T>(
     await Promise.all([mkdir(bin), mkdir(home)]);
     await writeFile(docker, NETWORKLESS_DOCKER, { mode: 0o700 });
     const builder = base.NOOK_PR_BUILDX_BUILDER;
+    const hostHome = environment.HOME;
     if (builder) {
-      if (!/^[a-zA-Z0-9_.-]+$/u.test(builder) || !hostEnvironment.HOME)
+      if (!/^[a-zA-Z0-9_.-]+$/u.test(builder) || !hostHome)
         throw new Error("Invalid trusted Buildx instance metadata");
-      const buildx = join(hostEnvironment.HOME, ".docker", "buildx");
+      const buildx = join(hostHome, ".docker", "buildx");
       const source = join(buildx, "instances", builder);
       if (!(await lstat(source)).isFile())
         throw new Error(
