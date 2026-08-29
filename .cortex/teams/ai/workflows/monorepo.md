@@ -31,21 +31,26 @@ Use this workflow for feature work that touches more than one package.
 For multiple package PRs:
 
 1. Introduce or stabilize the narrowest owning interface first.
-2. For a feature expected to exceed 2,000 authored changed lines, create a
-   native GitHub Stacked Pull Request sequence in dependency order: keep the
-   branches in the same repository, register them as one GitHub-recognized
-   stack, and make each successor temporarily target its predecessor branch.
-   Prefer `gh stack`; the GitHub website is also valid. If native operations are
-   unavailable, stop instead of falling back to an informal chain or adding a
-   third-party dependency.
-3. Merge each predecessor before completing its consumers. Retarget the
-   immediate successor to `main`, update it from current `origin/main`,
-   re-measure, run full checks, and validate the new exact head after every
-   predecessor merge. Proceed bottom-up and squash each independently ready PR.
-4. Small independent PRs below the ceiling may start from current
+2. For a feature expected to exceed 2,000 authored changed lines, prepare
+   dependency-ordered semantic slices. Keep every slice at or below the 2,000
+   authored additions-plus-deletions ceiling and independently testable.
+3. Return each prepared slice to Gizmo Prime through a typed handoff that names
+   its scope, predecessor, stable interfaces, authored changed-line estimate,
+   exact handoff commit, and acceptance evidence. The AI worker does not create
+   or retarget branches or PRs, register a stack, request readiness, or merge.
+4. Gizmo Prime owns the complete PR lifecycle: same-repository branch and PR
+   creation, native GitHub stack registration through `gh stack` or the GitHub
+   website, predecessor bases, cross-links, full checks, exact-head readiness,
+   retargeting, and bottom-up squash merges. If native stack operations are
+   unavailable, Gizmo Prime stops instead of falling back to an informal chain
+   or adding a third-party dependency.
+5. After each predecessor merges, Gizmo Prime retargets the immediate successor
+   to `main`, updates it from current `origin/main`, re-measures authored
+   additions plus deletions, runs full checks, and validates the new exact head.
+6. Small independent slices below the ceiling may be delivered from current
    `origin/main`; stacking is not required when they do not depend on unmerged
    predecessor work.
-5. Keep unrelated package changes separate even when they belong to one feature.
+7. Keep unrelated package changes separate even when they belong to one feature.
 
 Dependency direction must stay:
 
