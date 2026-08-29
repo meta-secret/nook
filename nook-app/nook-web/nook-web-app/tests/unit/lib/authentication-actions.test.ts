@@ -2,20 +2,23 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 import {
   AuthenticationWorkflowAction,
   AuthenticatorCodeResponseKind,
+  GeneratedPasswordResponseKind,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 const actionMocks = vi.hoisted(() => ({
   fillLoginCredentials: vi.fn(() => true),
+  fillGeneratedPassword: vi.fn(() => true),
   fillOneTimeCode: vi.fn(() => true),
   findWorkflowPasskeyControl: vi.fn(),
   performRevalidation: vi.fn(),
   sendAuthenticatorCode: vi.fn(),
   sendLoginFill: vi.fn(),
+  sendGeneratePassword: vi.fn(),
   submitLoginForm: vi.fn(() => true),
 }))
 
 vi.mock('../../../../nook-web-shared/src/extension/password-forms', () => ({
-  fillGeneratedPassword: vi.fn(),
+  fillGeneratedPassword: actionMocks.fillGeneratedPassword,
   fillLoginCredentials: actionMocks.fillLoginCredentials,
   fillOneTimeCode: actionMocks.fillOneTimeCode,
   findWorkflowPasskeyControl: actionMocks.findWorkflowPasskeyControl,
@@ -63,7 +66,7 @@ vi.mock(
     sendAuthenticatorPickerOpenRuntimeMessage: vi.fn(),
     sendAuthenticatorPreviewRuntimeMessage: vi.fn(),
     sendDecodedRuntimeMessage: vi.fn(),
-    sendGeneratePasswordRuntimeMessage: vi.fn(),
+    sendGeneratePasswordRuntimeMessage: actionMocks.sendGeneratePassword,
     sendLoginOptionsRuntimeMessage: vi.fn(),
     sendLoginPickerOpenRuntimeMessage: vi.fn(),
     sendLoginSaveActionRuntimeMessage: vi.fn(),
@@ -91,6 +94,7 @@ vi.mock('../../../../nook-web-extension/src/content/autofill/state', () => ({
 import { fillAuthenticatorCode } from '../../../../nook-web-extension/src/content/autofill/authenticator-actions'
 import {
   fillAndSubmitAccount,
+  generatePasswordWithNook,
   proposePasskeyWithNook,
 } from '../../../../nook-web-extension/src/content/autofill/login-passkey-actions'
 
@@ -181,5 +185,29 @@ describe('revalidated authentication actions', () => {
     })
 
     expect(click).toHaveBeenCalledOnce()
+  })
+
+  test('binds generated password release and fill to one observation', async () => {
+    actionMocks.sendGeneratePassword.mockResolvedValue({
+      kind: 'delivered',
+      response: {
+        kind: GeneratedPasswordResponseKind.Generated,
+        password: 'generated-secret',
+      },
+    })
+
+    await generatePasswordWithNook({ workflow, ...controls() })
+
+    expect(actionMocks.performRevalidation).toHaveBeenCalledTimes(2)
+    expect(actionMocks.performRevalidation.mock.calls[1]?.[0]).toMatchObject({
+      expectedAction: AuthenticationWorkflowAction.GeneratePassword,
+      observationBinding: {
+        kind: 'required',
+        observationDigest: 'approved-observation',
+      },
+    })
+    expect(actionMocks.fillGeneratedPassword).toHaveBeenCalledWith(
+      expect.objectContaining({ password: 'generated-secret' }),
+    )
   })
 })

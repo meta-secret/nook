@@ -1,5 +1,6 @@
 import {
   authenticationPageObservationFacts,
+  PasswordFormScopeKind,
   refreshAuthenticationWorkflowObservation,
   type PasswordFormObservation,
 } from '../../../../nook-web-shared/src/extension/password-forms'
@@ -48,7 +49,22 @@ export async function performRevalidatedAuthenticationAction({
   observationBinding,
   act,
 }: RevalidatedAuthenticationActionArgs): Promise<boolean> {
+  const workflowIsAttachedToCurrentDocument = () => {
+    const root = workflow.root
+    const rootIsCurrent =
+      root === document ||
+      (root instanceof Node &&
+        root.isConnected &&
+        root.ownerDocument === document)
+    if (!rootIsCurrent) return false
+    return (
+      workflow.formScope.kind === PasswordFormScopeKind.Unowned ||
+      (workflow.formScope.owner.isConnected &&
+        workflow.formScope.owner.ownerDocument === document)
+    )
+  }
   const observeCurrentFacts = () => {
+    if (!workflowIsAttachedToCurrentDocument()) return undefined
     const currentWorkflow = refreshAuthenticationWorkflowObservation(workflow)
     const factsRequest: Parameters<
       typeof authenticationPageObservationFacts
@@ -63,6 +79,7 @@ export async function performRevalidatedAuthenticationAction({
     }
   }
   const approvedObservation = observeCurrentFacts()
+  if (!approvedObservation) return false
   const approvedObservationDigest = JSON.stringify(approvedObservation.facts)
   if (
     observationBinding.kind === AuthenticationObservationBindingKind.Required &&
@@ -93,6 +110,7 @@ export async function performRevalidatedAuthenticationAction({
   }
 
   const currentObservation = observeCurrentFacts()
+  if (!currentObservation) return false
   if (
     JSON.stringify(currentObservation.facts) !==
     JSON.stringify(approvedObservation.facts)

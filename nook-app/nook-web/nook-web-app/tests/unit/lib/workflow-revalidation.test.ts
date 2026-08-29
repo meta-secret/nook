@@ -87,6 +87,48 @@ describe('credential-bearing workflow revalidation', () => {
     expect(act).not.toHaveBeenCalled()
   })
 
+  test('refuses actuation after the observed workflow root is detached', async () => {
+    const root = document.createElement('section')
+    root.innerHTML = `
+      <input autocomplete="one-time-code" />
+      <button type="button">Verify code</button>
+    `
+    document.body.append(root)
+    const workflow = summarizeAuthenticationWorkflowForms(root)[0]
+    if (!workflow) throw new Error('expected an authentication workflow')
+    runtime.sendSnapshot.mockImplementation(async () => {
+      root.remove()
+      return {
+        kind: RuntimeMessageDeliveryKind.Delivered,
+        response: {
+          kind: AuthenticationWorkflowSnapshotResponseKind.Matched,
+          snapshot: {
+            kind: AuthenticationWorkflowKind.TotpChallenge,
+            stage: AuthenticationWorkflowStage.SecondFactor,
+            action: AuthenticationWorkflowAction.FillTotp,
+            currentStep: 2,
+            totalSteps: 3,
+            approvalRequirement: explicitUserApproval,
+            observationIndex: 0,
+          },
+        },
+      }
+    })
+    const act = vi.fn(() => true)
+
+    await expect(
+      performRevalidatedAuthenticationAction({
+        workflow,
+        expectedAction: AuthenticationWorkflowAction.FillTotp,
+        observationBinding: {
+          kind: AuthenticationObservationBindingKind.Unbound,
+        },
+        act,
+      }),
+    ).resolves.toBe(false)
+    expect(act).not.toHaveBeenCalled()
+  })
+
   test('acts synchronously on the approved current passkey control', async () => {
     document.body.innerHTML = `
       <button type="button" data-nook-passkey-control>Use passkey</button>

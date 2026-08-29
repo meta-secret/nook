@@ -575,6 +575,32 @@ export async function generatePasswordWithNook({
   }
   setStatus(nookTypedArgs0_22)
   try {
+    let releasedObservationBinding: AuthenticationObservationBinding = {
+      kind: AuthenticationObservationBindingKind.Unbound,
+    }
+    const releaseApproved = await performRevalidatedAuthenticationAction({
+      workflow,
+      expectedAction: AuthenticationWorkflowAction.GeneratePassword,
+      observationBinding: releasedObservationBinding,
+      act: ({ observationDigest }) => {
+        releasedObservationBinding = {
+          kind: AuthenticationObservationBindingKind.Required,
+          observationDigest,
+        }
+        return true
+      },
+    })
+    if (!releaseApproved) {
+      setStatus({
+        description,
+        continueButton,
+        text: translatedMessage(
+          BROWSER_MESSAGE_KEYS.WidgetGeneratePasswordFailed,
+        ),
+        enableContinue: true,
+      })
+      return
+    }
     const nookTypedArgs0_6: Parameters<
       typeof sendGeneratePasswordRuntimeMessage
     >[0] = {
@@ -611,13 +637,18 @@ export async function generatePasswordWithNook({
       return
     }
     const password = response.password
-    const nookTypedArgs0_25: Parameters<typeof fillGeneratedPassword>[0] = {
-      password,
-      kind: PasswordFormQueryKind.Scoped,
-      root: workflow.root,
-      formScope: workflow.formScope,
-    }
-    const filled = fillGeneratedPassword(nookTypedArgs0_25)
+    const filled = await performRevalidatedAuthenticationAction({
+      workflow,
+      expectedAction: AuthenticationWorkflowAction.GeneratePassword,
+      observationBinding: releasedObservationBinding,
+      act: ({ currentWorkflow }) =>
+        fillGeneratedPassword({
+          password,
+          kind: PasswordFormQueryKind.Scoped,
+          root: currentWorkflow.root,
+          formScope: currentWorkflow.formScope,
+        }),
+    })
     if (!filled) {
       const nookTypedArgs0_26: Parameters<typeof setStatus>[0] = {
         description,
