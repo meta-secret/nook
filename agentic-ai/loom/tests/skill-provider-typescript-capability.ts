@@ -9,6 +9,8 @@ export enum SubprocessCallKind {
   Namespace = 'namespace',
   RunCommand = 'runCommand',
   Spawn = 'spawn',
+  Worker = 'worker',
+  WorkerNamespace = 'workerNamespace',
 }
 
 export const CHILD_PROCESS_CALLS = new Map<string, SubprocessCallKind>([
@@ -19,6 +21,10 @@ export const CHILD_PROCESS_CALLS = new Map<string, SubprocessCallKind>([
   ['exec', SubprocessCallKind.Exec],
   ['execSync', SubprocessCallKind.Exec],
   ['fork', SubprocessCallKind.Fork],
+]);
+
+export const WORKER_THREAD_CALLS = new Map<string, SubprocessCallKind>([
+  ['Worker', SubprocessCallKind.Worker],
 ]);
 
 export type TaggedTemplateText = {
@@ -87,6 +93,50 @@ export function childProcessCapability(
   if (member === false)
     throw new Error('Dynamic child-process method selection is forbidden.');
   return CHILD_PROCESS_CALLS.get(member) ?? false;
+}
+
+export function workerThreadCapability(
+  request: ChildProcessMemberRequest,
+): SubprocessCallKind | false {
+  const [owner, member] = request;
+  if (owner !== SubprocessCallKind.WorkerNamespace) return false;
+  if (member === false)
+    throw new Error('Dynamic worker-thread member selection is forbidden.');
+  return WORKER_THREAD_CALLS.get(member) ?? false;
+}
+
+export function exactObjectProperty([object, name]: readonly [
+  ts.ObjectLiteralExpression,
+  string,
+]): ts.Expression | false {
+  const matches = object.properties.filter(
+    (candidate) =>
+      candidate.name !== undefined &&
+      (ts.isIdentifier(candidate.name) || ts.isStringLiteral(candidate.name)) &&
+      candidate.name.text === name,
+  );
+  const match = matches[0];
+  if (matches.length !== 1 || !match) return false;
+  if (ts.isPropertyAssignment(match)) return match.initializer;
+  return ts.isShorthandPropertyAssignment(match) ? match.name : false;
+}
+
+export function isStaticWorkerThreadsRequire(
+  expression: ts.Expression,
+): boolean {
+  if (
+    !ts.isCallExpression(expression) ||
+    !ts.isIdentifier(expression.expression) ||
+    expression.expression.text !== 'require' ||
+    expression.arguments.length !== 1
+  )
+    return false;
+  const [specifier] = expression.arguments;
+  return Boolean(
+    specifier &&
+    ts.isStringLiteral(specifier) &&
+    /^(?:node:)?worker_threads$/u.test(specifier.text),
+  );
 }
 
 export function serializeSubprocessCommand(

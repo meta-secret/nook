@@ -185,6 +185,81 @@ child[method]('bun', ['ignored.ts']);`),
   ).toEqual([]);
 });
 
+test('recovers subprocess capabilities from exact static object holders', () => {
+  expect(
+    extract(`
+import {spawnSync} from 'node:child_process';
+const direct={launch:spawnSync};
+const nested={commands:direct};
+const {launch:destructured}=direct;
+direct.launch('bun', ['scripts/facade.ts']);
+nested.commands.launch('bun', ['scripts/check.ts']);
+destructured('bun', ['scripts/destructured.ts']);
+const shorthand={spawnSync};
+shorthand.spawnSync('bun', ['scripts/shorthand.ts']);`),
+  ).toEqual([
+    "'bun' 'scripts/facade.ts'",
+    "'bun' 'scripts/check.ts'",
+    "'bun' 'scripts/destructured.ts'",
+    "'bun' 'scripts/shorthand.ts'",
+  ]);
+  expect(() =>
+    extract(`
+import {spawnSync} from 'node:child_process';
+const tools={launch:spawnSync};
+tools[input]('bun', ['scripts/ignored.ts']);`),
+  ).toThrow('Dynamic subprocess capability holder selection is forbidden.');
+  expect(
+    extract(
+      "const tools={launch(){}}; tools.launch('bun', ['scripts/ignored.ts']);",
+    ),
+  ).toEqual([]);
+});
+
+test('audits static worker entrypoints and rejects dynamic worker authority', () => {
+  const commands = extract(`
+import {Worker as ThreadWorker} from 'node:worker_threads';
+import * as threads from 'node:worker_threads';
+const {Worker:RequiredWorker}=require('worker_threads');
+const Launch=ThreadWorker;
+new Launch('./scripts/imported-worker.mjs');
+new threads.Worker('./scripts/namespaced-worker.mjs');
+new RequiredWorker('./scripts/required-worker.mjs');
+new Worker('./scripts/ambient-worker.mjs');`);
+  expect(commands).toEqual([
+    "'node' './scripts/imported-worker.mjs'",
+    "'node' './scripts/namespaced-worker.mjs'",
+    "'node' './scripts/required-worker.mjs'",
+    "'node' './scripts/ambient-worker.mjs'",
+  ]);
+  expect(
+    commands.map((source) => {
+      const inspection: ShellCommandInspection = {
+        positionalArguments: false,
+        source,
+        sourcePath: false,
+      };
+      return analyzeShellCommands(inspection).launches[0]?.specifier;
+    }),
+  ).toEqual([
+    './scripts/imported-worker.mjs',
+    './scripts/namespaced-worker.mjs',
+    './scripts/required-worker.mjs',
+    './scripts/ambient-worker.mjs',
+  ]);
+  expect(() => extract('new Worker(runtimePath);')).toThrow(
+    'Dynamic TypeScript worker entrypoint is forbidden.',
+  );
+  expect(() =>
+    extract("new Worker('data:text/javascript,postMessage(1)');"),
+  ).toThrow('Non-file TypeScript worker entrypoint is forbidden.');
+  expect(
+    extract(
+      "class Worker { constructor(value:string){} }; new Worker('ignored.ts');",
+    ),
+  ).toEqual([]);
+});
+
 test('extracts static Bun shell templates and rejects dynamic interpolation', () => {
   expect(
     extract(`

@@ -3,17 +3,24 @@ import { posix } from 'node:path';
 import {
   isRunCommandDeclaration,
   isStaticChildProcessRequire,
-  lexicalScope,
 } from './skill-provider-typescript-require.ts';
 import {
   bunShellTemplateCommand,
   childProcessCapability,
-  CHILD_PROCESS_CALLS,
+  exactObjectProperty,
+  isStaticWorkerThreadsRequire,
   serializeSubprocessCommand,
   staticMemberAccess,
   SubprocessCallKind,
   type BunShellTemplateRequest,
+  workerThreadCapability,
 } from './skill-provider-typescript-capability.ts';
+import {
+  collectBinding,
+  type BindingCollectionRequest,
+  type LexicalBinding,
+  type LexicalModel,
+} from './skill-provider-typescript-bindings.ts';
 
 export type TypeScriptSubprocessInspection = {
   readonly path: string;
@@ -24,20 +31,6 @@ type StaticCommand = {
   readonly shellSource: boolean;
   readonly words: readonly StaticText[];
 };
-type LexicalBinding = {
-  readonly capability: SubprocessCallKind | false;
-  readonly constant: boolean;
-  readonly declaration: ts.Node;
-  readonly importedFrom: string | false;
-  readonly initializer: ts.Expression | false;
-  readonly member: string | false;
-  readonly name: string;
-  readonly scope: ts.Node;
-};
-type LexicalModel = {
-  readonly bindings: readonly LexicalBinding[];
-  readonly path: string;
-};
 type ExpressionEvaluationRequest = {
   readonly depth: number;
   readonly expression: ts.Expression;
@@ -46,7 +39,7 @@ type ExpressionEvaluationRequest = {
   readonly visited: ReadonlySet<ts.Node>;
 };
 type CallCommandRequest = {
-  readonly call: ts.CallExpression;
+  readonly call: ts.CallExpression | ts.NewExpression;
   readonly kind: SubprocessCallKind;
   readonly model: LexicalModel;
 };
@@ -121,6 +114,21 @@ export function typescriptSubprocessCommands(
           commands.push(serializeSubprocessCommand(command));
       }
     }
+    if (ts.isNewExpression(node)) {
+      const capabilityRequest: CapabilityResolutionRequest = {
+        expression: node.expression,
+        location: node,
+        model,
+        visited: new Set(),
+      };
+      const kind = resolveCapability(capabilityRequest);
+      if (kind === SubprocessCallKind.Worker) {
+        const callRequest: CallCommandRequest = { call: node, kind, model };
+        const command = commandFromCall(callRequest);
+        if (command !== false)
+          commands.push(serializeSubprocessCommand(command));
+      }
+    }
     if (ts.isTaggedTemplateExpression(node)) {
       const capabilityRequest: CapabilityResolutionRequest = {
         expression: node.tag,
@@ -150,159 +158,6 @@ export function typescriptSubprocessCommands(
   visit(sourceFile);
   return commands;
 }
-type BindingCollectionRequest = {
-  readonly node: ts.Node;
-  readonly target: LexicalBinding[];
-};
-
-function collectBinding(request: BindingCollectionRequest): void {
-  const node = request.node;
-  if (ts.isVariableDeclaration(node) && ts.isObjectBindingPattern(node.name)) {
-    const declarationList = node.parent;
-    for (const element of node.name.elements) {
-      if (!ts.isIdentifier(element.name)) continue;
-      const binding: LexicalBinding = {
-        capability: false,
-        constant:
-          ts.isVariableDeclarationList(declarationList) &&
-          Boolean(declarationList.flags & ts.NodeFlags.Const),
-        declaration: element,
-        importedFrom: false,
-        initializer: node.initializer ?? false,
-        member: ts.isIdentifier(element.propertyName ?? element.name)
-          ? (element.propertyName ?? element.name).getText()
-          : false,
-        name: element.name.text,
-        scope: lexicalScope(node),
-      };
-      request.target.push(binding);
-    }
-    return;
-  }
-  if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
-    const declarationList = node.parent;
-    const binding: LexicalBinding = {
-      capability: false,
-      constant:
-        ts.isVariableDeclarationList(declarationList) &&
-        Boolean(declarationList.flags & ts.NodeFlags.Const),
-      declaration: node,
-      importedFrom: false,
-      initializer: node.initializer ?? false,
-      member: false,
-      name: node.name.text,
-      scope: lexicalScope(node),
-    };
-    request.target.push(binding);
-    return;
-  }
-  if (ts.isParameter(node) && ts.isIdentifier(node.name)) {
-    const binding: LexicalBinding = {
-      capability: false,
-      constant: false,
-      declaration: node,
-      importedFrom: false,
-      initializer: false,
-      member: false,
-      name: node.name.text,
-      scope: lexicalScope(node),
-    };
-    request.target.push(binding);
-    return;
-  }
-  if (ts.isFunctionDeclaration(node) && node.name) {
-    const binding: LexicalBinding = {
-      capability: isRunCommandDeclaration(node)
-        ? SubprocessCallKind.RunCommand
-        : false,
-      constant: true,
-      declaration: node,
-      importedFrom: false,
-      initializer: false,
-      member: false,
-      name: node.name.text,
-      scope: node.parent,
-    };
-    request.target.push(binding);
-    return;
-  }
-  if (
-    ts.isImportEqualsDeclaration(node) &&
-    ts.isExternalModuleReference(node.moduleReference) &&
-    node.moduleReference.expression &&
-    ts.isStringLiteral(node.moduleReference.expression)
-  ) {
-    const binding: LexicalBinding = {
-      capability: /^(?:node:)?child_process$/u.test(
-        node.moduleReference.expression.text,
-      )
-        ? SubprocessCallKind.Namespace
-        : false,
-      constant: true,
-      declaration: node,
-      importedFrom: node.moduleReference.expression.text,
-      initializer: false,
-      member: false,
-      name: node.name.text,
-      scope: node.getSourceFile(),
-    };
-    request.target.push(binding);
-    return;
-  }
-  if (!ts.isImportDeclaration(node) || !node.importClause) return;
-  const specifier = ts.isStringLiteral(node.moduleSpecifier)
-    ? node.moduleSpecifier.text
-    : '';
-  if (node.importClause.name) {
-    const binding: LexicalBinding = {
-      capability: false,
-      constant: true,
-      declaration: node.importClause,
-      importedFrom: specifier,
-      initializer: false,
-      member: 'default',
-      name: node.importClause.name.text,
-      scope: node.getSourceFile(),
-    };
-    request.target.push(binding);
-  }
-  const namedBindings = node.importClause.namedBindings;
-  if (namedBindings && ts.isNamespaceImport(namedBindings)) {
-    const binding: LexicalBinding = {
-      capability: /^(?:node:)?child_process$/u.test(specifier)
-        ? SubprocessCallKind.Namespace
-        : false,
-      constant: true,
-      declaration: namedBindings,
-      importedFrom: specifier,
-      initializer: false,
-      member: false,
-      name: namedBindings.name.text,
-      scope: node.getSourceFile(),
-    };
-    request.target.push(binding);
-  }
-  if (!namedBindings || !ts.isNamedImports(namedBindings)) return;
-  for (const element of namedBindings.elements) {
-    const imported = (element.propertyName ?? element.name).text;
-    const binding: LexicalBinding = {
-      capability: /^(?:node:)?child_process$/u.test(specifier)
-        ? (CHILD_PROCESS_CALLS.get(imported) ?? false)
-        : imported === 'runCommand' && /(?:^|\/)lib\/run\.ts$/u.test(specifier)
-          ? SubprocessCallKind.RunCommand
-          : false,
-      constant: true,
-      declaration: element,
-      importedFrom: specifier,
-      initializer: false,
-      member: imported,
-      name: element.name.text,
-      scope: node.getSourceFile(),
-    };
-    request.target.push(binding);
-  }
-}
-
 function resolveCapability(
   request: CapabilityResolutionRequest,
 ): SubprocessCallKind | false {
@@ -316,19 +171,40 @@ function resolveCapability(
       name: expression.text,
     };
     const binding = bindingAt(lookupRequest);
-    if (binding === false) return false;
+    if (binding === false)
+      return expression.text === 'Worker' ? SubprocessCallKind.Worker : false;
     if (binding.capability !== false) return binding.capability;
     if (!binding.constant || binding.initializer === false) return false;
     if (binding.member !== false) {
+      const objectRequest: ArrayResolutionRequest = {
+        expression: binding.initializer,
+        location: binding.initializer,
+        model: request.model,
+        visited,
+      };
+      const object = resolveObjectLiteral(objectRequest);
+      if (object !== false) {
+        const property = exactObjectProperty([object, binding.member]);
+        if (property === false) return false;
+        const propertyRequest: CapabilityResolutionRequest = {
+          expression: property,
+          location: property,
+          model: request.model,
+          visited,
+        };
+        return resolveCapability(propertyRequest);
+      }
       const ownerRequest: CapabilityResolutionRequest = {
         expression: binding.initializer,
         location: binding.initializer,
         model: request.model,
         visited,
       };
-      return resolveCapability(ownerRequest) === SubprocessCallKind.Namespace
-        ? (CHILD_PROCESS_CALLS.get(binding.member) ?? false)
-        : false;
+      const ownerCapability = resolveCapability(ownerRequest);
+      return (
+        childProcessCapability([ownerCapability, binding.member]) ||
+        workerThreadCapability([ownerCapability, binding.member])
+      );
     }
     const nestedRequest: CapabilityResolutionRequest = {
       expression: binding.initializer,
@@ -343,6 +219,11 @@ function resolveCapability(
     !hasBinding([request.model, request.location, 'require'])
   )
     return SubprocessCallKind.Namespace;
+  if (
+    isStaticWorkerThreadsRequire(expression) &&
+    !hasBinding([request.model, request.location, 'require'])
+  )
+    return SubprocessCallKind.WorkerNamespace;
   const access = staticMemberAccess(expression);
   if (access === false) return false;
   const [owner, member] = access;
@@ -353,13 +234,89 @@ function resolveCapability(
       ? SubprocessCallKind.Bun
       : false;
   }
+  const resolutionRequest: ArrayResolutionRequest = {
+    expression: owner,
+    location: request.location,
+    model: request.model,
+    visited,
+  };
+  const resolvedOwner = resolveObjectLiteral(resolutionRequest);
+  if (resolvedOwner !== false) {
+    if (member === false) {
+      if (objectContainsCapability([resolvedOwner, request, visited]))
+        throw new Error(
+          'Dynamic subprocess capability holder selection is forbidden.',
+        );
+      return false;
+    }
+    const property = exactObjectProperty([resolvedOwner, member]);
+    if (property === false) return false;
+    const propertyRequest: CapabilityResolutionRequest = {
+      expression: property,
+      location: property,
+      model: request.model,
+      visited,
+    };
+    return resolveCapability(propertyRequest);
+  }
   const ownerRequest: CapabilityResolutionRequest = {
     expression: owner,
     location: request.location,
     model: request.model,
     visited,
   };
-  return childProcessCapability([resolveCapability(ownerRequest), member]);
+  const ownerCapability = resolveCapability(ownerRequest);
+  return (
+    childProcessCapability([ownerCapability, member]) ||
+    workerThreadCapability([ownerCapability, member])
+  );
+}
+
+function resolveObjectLiteral(
+  request: ArrayResolutionRequest,
+): ts.ObjectLiteralExpression | false {
+  const resolved = resolveStaticExpression(request);
+  if (ts.isObjectLiteralExpression(resolved)) return resolved;
+  const access = staticMemberAccess(resolved);
+  if (access === false) return false;
+  const [owner, member] = access;
+  if (member === false) return false;
+  const ownerRequest: ArrayResolutionRequest = {
+    ...request,
+    expression: owner,
+    visited: new Set(request.visited).add(resolved),
+  };
+  const object = resolveObjectLiteral(ownerRequest);
+  if (object === false) return false;
+  const property = exactObjectProperty([object, member]);
+  if (property === false || request.visited.has(property)) return false;
+  const propertyRequest: ArrayResolutionRequest = {
+    ...request,
+    expression: property,
+    location: property,
+    visited: new Set(request.visited).add(property),
+  };
+  return resolveObjectLiteral(propertyRequest);
+}
+
+function objectContainsCapability([object, request, visited]: readonly [
+  ts.ObjectLiteralExpression,
+  CapabilityResolutionRequest,
+  ReadonlySet<ts.Node>,
+]): boolean {
+  return object.properties.some((property) => {
+    let expression: ts.Expression | false = false;
+    if (ts.isPropertyAssignment(property)) expression = property.initializer;
+    if (ts.isShorthandPropertyAssignment(property)) expression = property.name;
+    if (expression === false) return false;
+    const propertyRequest: CapabilityResolutionRequest = {
+      expression,
+      location: property,
+      model: request.model,
+      visited,
+    };
+    return resolveCapability(propertyRequest) !== false;
+  });
 }
 
 function bindingAt(request: BindingLookupRequest): LexicalBinding | false {
@@ -406,8 +363,23 @@ function lookupBinding([model, location, name]: readonly [
 }
 
 function commandFromCall(request: CallCommandRequest): StaticCommand | false {
-  const first = request.call.arguments[0];
+  const first = request.call.arguments?.[0];
   if (!first) throw new Error('Recognized subprocess call has no command.');
+  if (request.kind === SubprocessCallKind.Worker) {
+    const expressionRequest: CallExpressionRequest = {
+      expression: first,
+      request,
+    };
+    const entrypoint = evaluate(expressionRequest);
+    if (entrypoint.dynamic)
+      throw new Error('Dynamic TypeScript worker entrypoint is forbidden.');
+    if (/^[A-Za-z][A-Za-z+.-]*:/u.test(entrypoint.value))
+      throw new Error('Non-file TypeScript worker entrypoint is forbidden.');
+    return {
+      shellSource: false,
+      words: [{ dynamic: false, value: 'node' }, entrypoint],
+    };
+  }
   if (request.kind === SubprocessCallKind.Bun) {
     const expressionRequest: CallExpressionRequest = {
       expression: first,
@@ -435,7 +407,7 @@ function commandFromCall(request: CallCommandRequest): StaticCommand | false {
     };
     const module = evaluate(expressionRequest);
     const argumentRequest: OptionalCallExpressionRequest = {
-      expression: request.call.arguments[1] ?? false,
+      expression: request.call.arguments?.[1] ?? false,
       request,
     };
     const argumentsValue = callArguments(argumentRequest);
@@ -450,7 +422,7 @@ function commandFromCall(request: CallCommandRequest): StaticCommand | false {
   };
   const executable = evaluate(expressionRequest);
   const argumentRequest: OptionalCallExpressionRequest = {
-    expression: request.call.arguments[1] ?? false,
+    expression: request.call.arguments?.[1] ?? false,
     request,
   };
   const argumentsValue = callArguments(argumentRequest);
@@ -476,7 +448,7 @@ function commandFromCall(request: CallCommandRequest): StaticCommand | false {
 }
 
 function commandFromRunCommand(request: CallCommandRequest): StaticCommand {
-  const first = request.call.arguments[0];
+  const first = request.call.arguments?.[0];
   if (!first) throw new Error('runCommand requires one exact request.');
   const resolutionRequest: ArrayResolutionRequest = {
     expression: first,
@@ -506,21 +478,8 @@ function commandFromRunCommand(request: CallCommandRequest): StaticCommand {
   };
 }
 
-function exactObjectProperty([object, name]: readonly [
-  ts.ObjectLiteralExpression,
-  string,
-]): ts.Expression | false {
-  const matches = object.properties.filter(
-    (candidate) => candidate.name?.getText() === name,
-  );
-  const match = matches[0];
-  return matches.length === 1 && match && ts.isPropertyAssignment(match)
-    ? match.initializer
-    : false;
-}
-
 function isExactRunCommandDispatch(request: CallCommandRequest): boolean {
-  const [command, args] = request.call.arguments;
+  const [command, args] = request.call.arguments ?? [];
   if (!command || !args || !ts.isIdentifier(command)) return false;
   const binding = lookupBinding([request.model, command, command.text]);
   const initializer = binding === false ? false : binding.initializer;
