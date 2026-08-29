@@ -88,12 +88,15 @@ Agent count never determines PR count.
    - For `agent-implement.yml`, require trusted host formatting, change-budget
      and branch or PR identity validation, publication, and exact-head handoff.
    - For `rust-dependency-updates.yml` through `task ci-agent:fix`, require the
-     exact `CI_AGENT_FIX_PROFILE=rust-dependency-update` profile, an isolated
-     exact branch or PR identity, and dependency-update validation remotely
-     inside trusted GitHub Actions before publication.
+     exact `CI_AGENT_FIX_PROFILE=rust-dependency-update` profile, a clean exact
+     HEAD and index, hard-coded regular Rust dependency mission-file scope,
+     unchanged orchestration controls, and streamed dependency-update validation
+     without publication credentials remotely inside trusted GitHub Actions
+     before publication.
    - Require the dependency-update harness to publish and return the exact head
-     to Gizmo. Do not treat its remote pre-publication validation as a
-     developer-host local gate.
+     to Gizmo after verifying the PR number, base, head ref, and remote head SHA,
+     including on existing-PR reruns. Do not treat its remote pre-publication
+     validation as a developer-host local gate.
 5. **Integrate accepted commits.**
    - Integrate in deterministic dependency order.
    - Bind each downstream task to the exact integrated commit.

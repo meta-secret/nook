@@ -163,13 +163,15 @@ the ordinary committed-handoff sequence:
   `CI_AGENT_FIX_PROFILE=rust-dependency-update`**
   - Its bounded editors and ordinary workers have no independent Git or
     external delivery authority.
-  - The trusted GitHub Actions job preserves the isolated exact branch or PR
-    identity.
+  - The trusted GitHub Actions job rejects persisted checkout credentials,
+    freezes a clean exact HEAD and index, and rejects editor changes outside
+    regular Rust dependency mission files or to orchestration controls.
   - It runs its required integrated dependency-update validation remotely
-    inside that job before publication. This is not a developer-host local
-    gate.
+    with streamed output and without publication credentials inside that job
+    before publication. This is not a developer-host local gate.
   - The trusted harness commits, publishes, and returns the exact published
-    head to Gizmo.
+    head to Gizmo only after verifying the PR number, base, head ref, and
+    remote head SHA, including on existing-PR reruns.
 
 Neither exception grants publication authority to an ordinary worker. After
 either publication, Gizmo owns continuing review, validation, readiness, and

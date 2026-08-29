@@ -1,10 +1,11 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
+import { lstat } from "node:fs/promises";
+import { resolve, sep } from "node:path";
 import { chdir } from "node:process";
 import { promisify } from "node:util";
 
 import { CiAgentConfigLoadKind, loadConfig } from "./config.js";
 import {
-  branchExistsOnOrigin,
   createFixPr,
   createOctokit,
   findOpenPr,
@@ -81,13 +82,295 @@ type ValidationRunner = (
   options: { cwd: string; env: NodeJS.ProcessEnv },
 ) => Promise<void>;
 
-const runValidationCommand: ValidationRunner = async (
+export const runValidationCommand: ValidationRunner = async (
   command,
   args,
   options,
 ) => {
-  await execFileAsync(command, [...args], options);
+  await new Promise<void>((resolveRun, rejectRun) => {
+    const child = spawn(command, [...args], {
+      ...options,
+      stdio: "inherit",
+    });
+    child.once("error", rejectRun);
+    child.once("close", (code, signal) => {
+      if (signal) {
+        rejectRun(
+          new Error(
+            `${command} ${args.join(" ")} terminated by signal ${signal}`,
+          ),
+        );
+        return;
+      }
+      if (code !== 0) {
+        rejectRun(
+          new Error(`${command} ${args.join(" ")} exited with code ${code}`),
+        );
+        return;
+      }
+      resolveRun();
+    });
+  });
 };
+
+export type RepositoryBaseline = {
+  headSha: string;
+  indexTreeSha: string;
+};
+
+type ChangedPath = {
+  path: string;
+  status: string;
+};
+
+type BaselineModeLookup = (path: string) => Promise<string | undefined>;
+
+type GitConfigEntry = {
+  key: string;
+  value: string;
+};
+
+const RUST_DEPENDENCY_ROOTS = [
+  "agentic-ai/minds/",
+  "nook-app/nook-platform/",
+  "preflight/",
+] as const;
+
+function isAllowedRustDependencyPath(path: string): boolean {
+  if (!RUST_DEPENDENCY_ROOTS.some((root) => path.startsWith(root))) {
+    return false;
+  }
+  const basename = path.slice(path.lastIndexOf("/") + 1);
+  return (
+    basename === "Cargo.toml" ||
+    basename === "Cargo.lock" ||
+    path.endsWith(".rs")
+  );
+}
+
+function isOrchestrationControlPath(path: string): boolean {
+  const lower = path.toLowerCase();
+  const basename = lower.slice(lower.lastIndexOf("/") + 1);
+  return (
+    lower.startsWith(".github/") ||
+    lower.startsWith(".task/") ||
+    lower.startsWith(".cursor/") ||
+    lower.startsWith("scripts/") ||
+    lower.includes("/scripts/") ||
+    basename === "taskfile.yml" ||
+    basename === "taskfile.yaml" ||
+    basename === "makefile" ||
+    basename === "justfile" ||
+    basename === "build.rs" ||
+    basename === "dockerfile" ||
+    basename.startsWith("dockerfile.") ||
+    basename.includes("bake") ||
+    basename.startsWith("docker-compose")
+  );
+}
+
+function parseNulSeparated(value: string): string[] {
+  return value.split("\0").filter((entry) => entry.length > 0);
+}
+
+export function parsePorcelainStatus(output: string): ChangedPath[] {
+  const records = parseNulSeparated(output);
+  const changes: ChangedPath[] = [];
+  for (let index = 0; index < records.length; index += 1) {
+    const record = records[index]!;
+    if (record.length < 4 || record[2] !== " ") {
+      throw new Error("Malformed Git status record");
+    }
+    const status = record.slice(0, 2);
+    changes.push({ path: record.slice(3), status });
+    if (status.includes("R") || status.includes("C")) {
+      const source = records[index + 1];
+      if (!source) throw new Error("Malformed Git rename status record");
+      changes.push({ path: source, status });
+      index += 1;
+    }
+  }
+  return changes;
+}
+
+async function gitOutput(repoRoot: string, args: string[]): Promise<string> {
+  const { stdout } = await execFileAsync("git", ["-C", repoRoot, ...args], {
+    encoding: "utf8",
+  });
+  return stdout;
+}
+
+async function currentIndexTree(repoRoot: string): Promise<string> {
+  return (await gitOutput(repoRoot, ["write-tree"])).trim();
+}
+
+export async function captureRepositoryBaseline(
+  repoRoot: string,
+): Promise<RepositoryBaseline> {
+  const headSha = await revParse(repoRoot, "HEAD");
+  const headTreeSha = await revParse(repoRoot, "HEAD^{tree}");
+  const indexTreeSha = await currentIndexTree(repoRoot);
+  if (indexTreeSha !== headTreeSha) {
+    throw new Error("Trusted dependency-update baseline index is not clean");
+  }
+  if ((await collectChangedPaths(repoRoot)).length !== 0) {
+    throw new Error("Trusted dependency-update baseline checkout is not clean");
+  }
+  return { headSha, indexTreeSha };
+}
+
+export function assertRepositoryBaselineUnchanged(args: {
+  baseline: RepositoryBaseline;
+  currentHeadSha: string;
+  currentIndexTreeSha: string;
+}): void {
+  if (args.currentHeadSha !== args.baseline.headSha) {
+    throw new Error("Bounded editor changed the trusted baseline HEAD");
+  }
+  if (args.currentIndexTreeSha !== args.baseline.indexTreeSha) {
+    throw new Error("Bounded editor changed the trusted baseline index");
+  }
+}
+
+async function assertBaselineUnchanged(
+  repoRoot: string,
+  baseline: RepositoryBaseline,
+): Promise<void> {
+  assertRepositoryBaselineUnchanged({
+    baseline,
+    currentHeadSha: await revParse(repoRoot, "HEAD"),
+    currentIndexTreeSha: await currentIndexTree(repoRoot),
+  });
+}
+
+async function collectChangedPaths(repoRoot: string): Promise<ChangedPath[]> {
+  const status = await gitOutput(repoRoot, [
+    "status",
+    "--porcelain=v1",
+    "-z",
+    "--untracked-files=all",
+    "--",
+    ".",
+  ]);
+  return parsePorcelainStatus(status);
+}
+
+export async function assertRustDependencyUpdateChangeSet(
+  repoRoot: string,
+  changes: readonly ChangedPath[],
+  baselineModeForPath?: BaselineModeLookup,
+): Promise<void> {
+  if (changes.length === 0) {
+    throw new Error("Trusted dependency-update change set is empty");
+  }
+  const root = resolve(repoRoot);
+  for (const change of changes) {
+    if (change.path.startsWith("/") || change.path.split("/").includes("..")) {
+      throw new Error("Dependency-update path escapes the repository");
+    }
+    if (isOrchestrationControlPath(change.path)) {
+      throw new Error(
+        `Dependency update changed trusted orchestration control: ${change.path}`,
+      );
+    }
+    if (!isAllowedRustDependencyPath(change.path)) {
+      throw new Error(
+        `Dependency update changed forbidden path: ${change.path}`,
+      );
+    }
+    const absolutePath = resolve(root, change.path);
+    if (!absolutePath.startsWith(`${root}${sep}`)) {
+      throw new Error("Dependency-update path escapes the repository");
+    }
+    try {
+      const metadata = await lstat(absolutePath);
+      if (!metadata.isFile()) {
+        throw new Error(
+          `Dependency update produced a symlink or special file: ${change.path}`,
+        );
+      }
+    } catch (error: unknown) {
+      const code =
+        typeof error === "object" && error !== null && "code" in error
+          ? String(error.code)
+          : "";
+      if (code !== "ENOENT" || !change.status.includes("D")) throw error;
+      const baselineMode = await baselineModeForPath?.(change.path);
+      if (baselineMode !== "100644" && baselineMode !== "100755") {
+        throw new Error(
+          `Dependency update deleted a symlink or special file: ${change.path}`,
+        );
+      }
+    }
+  }
+}
+
+async function baselineMode(
+  repoRoot: string,
+  baseline: RepositoryBaseline,
+  path: string,
+): Promise<string | undefined> {
+  const output = await gitOutput(repoRoot, [
+    "ls-tree",
+    baseline.headSha,
+    "--",
+    path,
+  ]);
+  const match = /^(\d{6})\s/u.exec(output);
+  return match?.[1];
+}
+
+async function assertTrustedChangeSet(
+  repoRoot: string,
+  baseline: RepositoryBaseline,
+): Promise<void> {
+  await assertRustDependencyUpdateChangeSet(
+    repoRoot,
+    await collectChangedPaths(repoRoot),
+    (path) => baselineMode(repoRoot, baseline, path),
+  );
+}
+
+export function assertNoPersistedGitCredentials(
+  entries: readonly GitConfigEntry[],
+): void {
+  for (const entry of entries) {
+    const key = entry.key.toLowerCase();
+    const value = entry.value.toLowerCase();
+    const keyOrValue = `${key}\n${value}`;
+    const forbidden =
+      (key.startsWith("http.") && key.endsWith(".extraheader")) ||
+      key === "credential.helper" ||
+      (key.startsWith("credential.") && key.endsWith(".helper")) ||
+      keyOrValue.includes("authorization:") ||
+      keyOrValue.includes("x-access-token") ||
+      keyOrValue.includes("github_pat_") ||
+      /https?:\/\/[^/\s]+@/u.test(keyOrValue);
+    if (forbidden) {
+      throw new Error(
+        "Persisted Git publication credential detected in config",
+      );
+    }
+  }
+}
+
+function parseGitConfig(output: string): GitConfigEntry[] {
+  return parseNulSeparated(output).map((record) => {
+    const separator = record.indexOf("\n");
+    if (separator < 1) throw new Error("Malformed Git config record");
+    return {
+      key: record.slice(0, separator),
+      value: record.slice(separator + 1),
+    };
+  });
+}
+
+async function assertCheckoutHasNoPersistedCredentials(
+  repoRoot: string,
+): Promise<void> {
+  const config = await gitOutput(repoRoot, ["config", "--null", "--list"]);
+  assertNoPersistedGitCredentials(parseGitConfig(config));
+}
 
 export function resolveCiAgentFixProfile(
   value: string | undefined,
@@ -142,10 +425,7 @@ export async function runRustDependencyUpdateValidation(
   for (const validation of RUST_DEPENDENCY_UPDATE_VALIDATION_COMMANDS) {
     await runner("task", validation.args, {
       cwd: repoRoot,
-      env: createValidationEnvironment(
-        hostEnvironment,
-        validation.environment,
-      ),
+      env: createValidationEnvironment(hostEnvironment, validation.environment),
     });
   }
 }
@@ -163,6 +443,7 @@ type PublishedFixIdentity = {
   actualHeadRef: string;
   actualHeadSha: string;
   actualPrNumber: number;
+  actualRemoteHeadSha: string;
   expectedBaseRef: string;
   expectedHeadRef: string;
   expectedHeadSha: string;
@@ -187,6 +468,11 @@ export function assertPublishedFixIdentity(
       `Published PR head SHA changed: expected ${identity.expectedHeadSha}, got ${identity.actualHeadSha}`,
     );
   }
+  if (identity.actualRemoteHeadSha !== identity.expectedHeadSha) {
+    throw new Error(
+      `Published remote branch SHA changed: expected ${identity.expectedHeadSha}, got ${identity.actualRemoteHeadSha}`,
+    );
+  }
   if (identity.actualBaseRef !== identity.expectedBaseRef) {
     throw new Error(
       `Published PR base changed: expected ${identity.expectedBaseRef}, got ${identity.actualBaseRef}`,
@@ -195,12 +481,72 @@ export function assertPublishedFixIdentity(
   return identity.expectedHeadSha;
 }
 
+type PublishedPullRequest = {
+  base: { ref: string };
+  head: { ref: string; sha: string };
+  number: number;
+};
+
+export async function verifyPublishedFix(args: {
+  expectedBaseRef: string;
+  expectedHeadRef: string;
+  expectedHeadSha?: string;
+  expectedPrNumber: number;
+  fetchPullRequest: () => Promise<PublishedPullRequest>;
+  fetchRemoteHeadSha: () => Promise<string>;
+}): Promise<string> {
+  const [pullRequest, remoteHeadSha] = await Promise.all([
+    args.fetchPullRequest(),
+    args.fetchRemoteHeadSha(),
+  ]);
+  return assertPublishedFixIdentity({
+    actualBaseRef: pullRequest.base.ref,
+    actualHeadRef: pullRequest.head.ref,
+    actualHeadSha: pullRequest.head.sha,
+    actualPrNumber: pullRequest.number,
+    actualRemoteHeadSha: remoteHeadSha,
+    expectedBaseRef: args.expectedBaseRef,
+    expectedHeadRef: args.expectedHeadRef,
+    expectedHeadSha: args.expectedHeadSha ?? remoteHeadSha,
+    expectedPrNumber: args.expectedPrNumber,
+  });
+}
+
 async function runValidationWithoutPublicationCredentials(
   repoRoot: string,
 ): Promise<void> {
   await withValidationEnvironment(process.env, (validationEnvironment) =>
     runRustDependencyUpdateValidation(repoRoot, validationEnvironment),
   );
+}
+
+async function verifyLiveFixPublication(args: {
+  expectedHeadSha?: string;
+  fixBranch: string;
+  octokit: ReturnType<typeof createOctokit>;
+  prNumber: number;
+  repoRef: ReturnType<typeof parseRepository>;
+}): Promise<string> {
+  return verifyPublishedFix({
+    expectedBaseRef: "main",
+    expectedHeadRef: args.fixBranch,
+    ...(args.expectedHeadSha ? { expectedHeadSha: args.expectedHeadSha } : {}),
+    expectedPrNumber: args.prNumber,
+    fetchPullRequest: async () => {
+      const { data } = await args.octokit.rest.pulls.get({
+        ...args.repoRef,
+        pull_number: args.prNumber,
+      });
+      return data;
+    },
+    fetchRemoteHeadSha: async () => {
+      const { data } = await args.octokit.rest.repos.getBranch({
+        ...args.repoRef,
+        branch: args.fixBranch,
+      });
+      return data.commit.sha;
+    },
+  });
 }
 
 export async function runCiFix(): Promise<string | undefined> {
@@ -224,7 +570,15 @@ export async function runCiFix(): Promise<string | undefined> {
   let publishedHead: string | undefined;
   if (openPr.kind === OpenPrLookupKind.Found) {
     prNumber = openPr.number;
-    log.info(`Open PR already exists for ${fixBranch} (#${prNumber})`);
+    publishedHead = await verifyLiveFixPublication({
+      fixBranch,
+      octokit,
+      prNumber,
+      repoRef,
+    });
+    log.info(
+      `Existing PR #${prNumber} exact head ${publishedHead} verified and handed to the continuing Gizmo owner`,
+    );
   } else {
     const cursorApiKey = process.env.CURSOR_API_KEY?.trim();
     if (!cursorApiKey) {
@@ -242,9 +596,16 @@ export async function runCiFix(): Promise<string | undefined> {
       return undefined;
     }
     const config = loadedConfig.config;
+    let baseline: RepositoryBaseline | undefined;
+    if (profile === CiAgentFixProfile.RustDependencyUpdate) {
+      await assertCheckoutHasNoPersistedCredentials(repoRoot);
+      baseline = await captureRepositoryBaseline(repoRoot);
+    }
 
     const prompt = await loadPrompt(config);
     await runFixAgent(config, prompt, isolationForFixProfile(profile));
+
+    if (baseline) await assertBaselineUnchanged(repoRoot, baseline);
 
     if (!(await hasWorkingTreeChanges(repoRoot))) {
       console.log(
@@ -254,18 +615,21 @@ export async function runCiFix(): Promise<string | undefined> {
     }
 
     if (profile === CiAgentFixProfile.RustDependencyUpdate) {
+      if (!baseline) {
+        throw new Error("Rust dependency update baseline was not captured");
+      }
       await validateThenPublish({
-        validate: () => runValidationWithoutPublicationCredentials(repoRoot),
+        validate: async () => {
+          await assertBaselineUnchanged(repoRoot, baseline);
+          await assertTrustedChangeSet(repoRoot, baseline);
+          await runValidationWithoutPublicationCredentials(repoRoot);
+          await assertBaselineUnchanged(repoRoot, baseline);
+          await assertTrustedChangeSet(repoRoot, baseline);
+        },
         publish: () => pushFixBranch(repoRoot, fixBranch, runId),
       });
     } else {
       await pushFixBranch(repoRoot, fixBranch, runId);
-    }
-
-    if (!(await branchExistsOnOrigin(octokit, repoRef, fixBranch))) {
-      throw new Error(
-        `Fix branch ${fixBranch} was not found on origin after push`,
-      );
     }
 
     openPr = await findOpenPr(octokit, repoRef, fixBranch);
@@ -282,19 +646,12 @@ export async function runCiFix(): Promise<string | undefined> {
       );
     }
     const localHead = await revParse(repoRoot, "HEAD");
-    const { data: publishedPr } = await octokit.rest.pulls.get({
-      ...repoRef,
-      pull_number: prNumber,
-    });
-    publishedHead = assertPublishedFixIdentity({
-      actualBaseRef: publishedPr.base.ref,
-      actualHeadRef: publishedPr.head.ref,
-      actualHeadSha: publishedPr.head.sha,
-      actualPrNumber: publishedPr.number,
-      expectedBaseRef: "main",
-      expectedHeadRef: fixBranch,
+    publishedHead = await verifyLiveFixPublication({
       expectedHeadSha: localHead,
-      expectedPrNumber: prNumber,
+      fixBranch,
+      octokit,
+      prNumber,
+      repoRef,
     });
     log.info(
       `PR #${prNumber} exact head ${publishedHead} verified and handed to the continuing Gizmo owner`,

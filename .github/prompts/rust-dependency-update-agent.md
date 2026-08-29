@@ -27,6 +27,16 @@ exits, runs the fixed integrated validation sequence, and only then commits and
 publishes the isolated dependency-update branch. This boundary is selected only
 by the exact trusted profile `CI_AGENT_FIX_PROFILE=rust-dependency-update`.
 
+Before this editor starts, the trusted host rejects persisted Git authentication
+configuration and records a clean exact baseline HEAD and index. After the editor
+exits and again immediately before publication, it fails closed if either changed.
+Before running any Task target, it inventories every changed and untracked path.
+Only regular `Cargo.toml`, `Cargo.lock`, and `.rs` files under the mission roots
+below are eligible; symlinks, special files, build scripts, Taskfiles, workflows,
+scripts, Docker or bake definitions, and every other orchestration-control change
+are rejected by trusted host code. These rules are fixed in the harness and are
+not configurable through this prompt or the environment.
+
 ## Coordination procedure
 
 1. Record the exact 40-character baseline commit.
@@ -87,6 +97,11 @@ This validation runs remotely inside trusted GitHub Actions, not as a
 developer-host local gate. The validation subprocess does not receive Cursor
 or GitHub publication credentials. The trusted harness restores publication
 credentials only after validation succeeds.
+
+Validation output is streamed by the trusted host, and a nonzero exit or signal
+prevents commit and publication. Existing-PR reruns and new publications both
+finish by verifying the expected PR number, base, head ref, and exact remote head
+SHA before returning that SHA to Gizmo.
 
 The sequence covers every local-provider Playwright e2e spec and extension
 e2e. The fuzz and Hive targets validate their separate workspaces.
