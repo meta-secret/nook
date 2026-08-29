@@ -123,6 +123,7 @@ test('explicit Taskfile selections join the runnable graph', () => {
     'command task --taskfile scripts/commands.yml audit',
     'exec task -t scripts/commands.yml audit',
     'env SAFE=1 command task --taskfile=scripts/commands.yml audit',
+    'CF_PROJECT=$PROJECT task --taskfile scripts/commands.yml audit',
   ]) {
     const sources = new Map([
       ['package.json', `{"scripts":{"audit":"${command}"}}`],

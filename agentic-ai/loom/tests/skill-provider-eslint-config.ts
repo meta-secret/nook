@@ -106,8 +106,12 @@ function commandReferences([
       continue;
     }
     if (mightSelectTaskfile([words, start])) {
-      if (runtime.dynamic)
+      if (runtime.dynamic) {
+        const wrapped = words[start + 1];
+        const wrappedName = posix.basename(wrapped?.value ?? '');
+        if (wrappedName !== 'task' && wrappedName !== 'go-task') continue;
         throw new Error('Dynamic Task dispatch wrapper is forbidden.');
+      }
       const dispatchRequest = {
         command: runtime,
         environment: new Map(),
@@ -299,11 +303,7 @@ function commandSegments(
 
 function firstCommandWord(words: readonly ShellWord[]): number {
   let index = 0;
-  while (
-    /^[A-Za-z_]\w*=/u.test(words[index]?.value ?? '') &&
-    !(words[index]?.dynamic ?? false)
-  )
-    index += 1;
+  while (/^[A-Za-z_]\w*=/u.test(words[index]?.value ?? '')) index += 1;
   if (words[index]?.value === 'env') {
     index += 1;
     while (/^[A-Za-z_]\w*=/u.test(words[index]?.value ?? '')) index += 1;
