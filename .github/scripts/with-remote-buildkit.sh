@@ -92,4 +92,4 @@ fi
 
 echo "Using healthy ARC remote BuildKit builder $builder" >&2
 "$docker_cli" buildx use "$builder"
-"$@"
+DOCKER="$docker_cli" "$@"

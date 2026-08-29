@@ -365,8 +365,8 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
     let root = repository_root();
     for (path, invocation_count) in [
         (".github/scripts/verify-wasm-gha-cache.sh", 1),
-        (".github/scripts/with-healthy-buildkit.sh", 7),
-        (".github/scripts/with-remote-buildkit.sh", 3),
+        (".github/scripts/with-healthy-buildkit.sh", 8),
+        (".github/scripts/with-remote-buildkit.sh", 4),
         ("infra/tasks/bake-cache.yml", 13),
     ] {
         let source = read(&root, path);
@@ -378,6 +378,13 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
             .collect();
         assert_eq!(assignments, TRUSTED_DOCKER_PATHS, "{path} selector drift");
         assert_eq!(source.matches("\"$docker_cli\"").count(), invocation_count);
+        if path.contains("with-") {
+            assert_eq!(
+                source.matches("DOCKER=\"$docker_cli\" \"$@\"").count(),
+                1,
+                "{path} must propagate the trusted Docker CLI to wrapped Task commands"
+            );
+        }
         for forbidden in ["${DOCKER", "docker_bin", "PATH=", "command -v docker"] {
             assert!(!source.contains(forbidden), "{path} permits {forbidden}");
         }

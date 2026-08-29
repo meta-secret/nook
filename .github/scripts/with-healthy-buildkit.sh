@@ -159,4 +159,4 @@ else
 fi
 
 "$docker_cli" buildx use "$builder"
-"$@"
+DOCKER="$docker_cli" "$@"
