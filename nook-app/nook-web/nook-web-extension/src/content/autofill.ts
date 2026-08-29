@@ -1,11 +1,11 @@
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import {
-  authentication_enrollment_workflow_match,
   authentication_workflow_pilot_presentation_capability,
   AuthenticationWorkflowSnapshotResponseKind,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   authenticationPageObservationFacts,
+  pageHasManualCheckpoint,
   summarizeAuthenticationWorkflowForms,
 } from '../../../nook-web-shared/src/extension/password-forms'
 import { isRuntimeNookVaultAppUrl } from '../lib/simple-vault-runtime'
@@ -20,6 +20,10 @@ import {
   AUTHENTICATION_VIEWPORT_EVENTS,
   authenticationMutationImpact,
 } from './autofill/authentication-surface-observation'
+import {
+  approvedEnrollmentHints,
+  authenticationEnrollmentObservationFacts,
+} from './autofill/authentication-enrollment-observation'
 import {
   cancelPendingLoginPickerRequest,
   RuntimeMessageDeliveryKind,
@@ -55,12 +59,20 @@ import { loadPilotVaultConnection, remountWidget } from './autofill/workflow-ui'
 import {
   detectEnrollmentHints,
   enrollmentCeremonyActive,
+  enrollmentWidgetHeldAfterSave,
+  releaseEnrollmentWidgetHold,
+  renderEnrollmentActions,
 } from './enrollment-flow'
 
 async function performScanAndRender(): Promise<void> {
   if (widgetState.dismissed) return
   if (saveOfferState.confirmationActive) return
   if (enrollmentCeremonyActive()) return
+  const postSaveWidget = enrollmentWidgetHeldAfterSave()
+  const preservePostSaveWidget = postSaveWidget.kind === 'held'
+  const removeUnavailableWidget = (): void => {
+    if (!preservePostSaveWidget) removeScannedWidget()
+  }
   const sequence = ++scanState.sequence
   if (saveOfferState.display.kind === SaveOfferDisplayKind.Visible) {
     const { offer } = saveOfferState.display
@@ -95,34 +107,79 @@ async function performScanAndRender(): Promise<void> {
     enrollmentHints.qr ||
     (enrollmentHints.backupCodes && workflowForms.length === 0)
   ) {
-    const enrollmentMatch = authentication_enrollment_workflow_match(
-      enrollmentHints.qr,
-      recoveryCopy,
-      pageHasManualCheckpoint(document),
-    )
-    if (
-      enrollmentMatch.kind !== 'matched' ||
-      authentication_workflow_pilot_presentation_capability(
-        enrollmentMatch.snapshot,
-      ) !== 'propose-action'
-    ) {
-      removeScannedWidget()
-      return
+    const actionContextArgs: Parameters<
+      typeof invalidateAuthenticationActionContext
+    >[0] = {
+      actionState: authenticationActionState,
+      widget: widgetState,
     }
+    invalidateAuthenticationActionContext(actionContextArgs)
     cancelPendingAuthenticatorPickerRequest()
     cancelPendingLoginPickerRequest()
+    const observationRequest: Parameters<
+      typeof authenticationEnrollmentObservationFacts
+    >[0] = {
+      authenticatorSetupPresent: enrollmentHints.qr,
+      backupCodesPresent: enrollmentHints.backupCodes,
+      manualCheckpointPresent: pageHasManualCheckpoint(document),
+    }
+    const message: Parameters<
+      typeof sendAuthenticationWorkflowSnapshotRuntimeMessage
+    >[0] = {
+      type: AuthenticationWorkflowSnapshotMessageType.NookAuthenticationWorkflowSnapshot,
+      payload: {
+        origin: location.origin,
+        observations: [
+          authenticationEnrollmentObservationFacts(observationRequest),
+        ],
+      },
+    }
+    const delivery =
+      await sendAuthenticationWorkflowSnapshotRuntimeMessage(message)
+    if (sequence !== scanState.sequence) return
+    if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
+      removeUnavailableWidget()
+      return
+    }
+    const { workflow: response } = delivery.response
+    if (
+      response.kind !== AuthenticationWorkflowSnapshotResponseKind.Matched ||
+      !('snapshot' in response)
+    ) {
+      removeUnavailableWidget()
+      return
+    }
     const vaultConnection = await loadPilotVaultConnection()
     if (sequence !== scanState.sequence) return
-    const nookTypedArgs0_0: Parameters<typeof renderEnrollmentWidget>[0] = {
-      hints: enrollmentHints,
-      action: enrollmentMatch.snapshot.action,
-      vaultConnection,
+    if (
+      postSaveWidget.kind === 'held' &&
+      postSaveWidget.host.panel.isConnected
+    ) {
+      const approvedHintsRequest: Parameters<
+        typeof approvedEnrollmentHints
+      >[0] = {
+        hints: enrollmentHints,
+        snapshot: response.snapshot,
+      }
+      const approvedActions: Parameters<typeof renderEnrollmentActions>[0] = {
+        host: postSaveWidget.host,
+        hints: approvedEnrollmentHints(approvedHintsRequest),
+      }
+      releaseEnrollmentWidgetHold()
+      renderEnrollmentActions(approvedActions)
+    } else {
+      const nookTypedArgs0_0: Parameters<typeof renderEnrollmentWidget>[0] = {
+        hints: enrollmentHints,
+        snapshot: response.snapshot,
+        vaultConnection,
+      }
+      releaseEnrollmentWidgetHold()
+      renderEnrollmentWidget(nookTypedArgs0_0)
     }
-    renderEnrollmentWidget(nookTypedArgs0_0)
     return
   }
   if (workflowForms.length === 0) {
-    removeScannedWidget()
+    removeUnavailableWidget()
     return
   }
 
@@ -148,7 +205,7 @@ async function performScanAndRender(): Promise<void> {
     await sendAuthenticationWorkflowSnapshotRuntimeMessage(message)
   if (sequence !== scanState.sequence) return
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
-    removeScannedWidget()
+    removeUnavailableWidget()
     return
   }
   const { workflow: response, loginMatches } = delivery.response
@@ -156,7 +213,7 @@ async function performScanAndRender(): Promise<void> {
     response.kind !== AuthenticationWorkflowSnapshotResponseKind.Matched ||
     !('snapshot' in response)
   ) {
-    removeScannedWidget()
+    removeUnavailableWidget()
     return
   }
   const { snapshot } = response
@@ -168,7 +225,7 @@ async function performScanAndRender(): Promise<void> {
   }
   const selected = workflowForms[snapshot.observationIndex]
   if (!selected) {
-    removeScannedWidget()
+    removeUnavailableWidget()
     return
   }
   const vaultConnection = await loadPilotVaultConnection()

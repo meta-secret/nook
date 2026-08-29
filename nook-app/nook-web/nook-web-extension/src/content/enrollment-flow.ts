@@ -130,8 +130,22 @@ export type EnrollmentFlowHost = EnrollmentFlowViewHost & {
   requestWorkflowReclassification: () => void
 }
 
-/** Keep the post-save enrollment widget from being rebuilt by scanAndRender. */
-let holdEnrollmentWidgetAfterSave = false
+enum EnrollmentWidgetHoldKind {
+  Idle = 'idle',
+  Held = 'held',
+}
+
+export type EnrollmentWidgetHold =
+  | { kind: EnrollmentWidgetHoldKind.Idle }
+  | {
+      kind: EnrollmentWidgetHoldKind.Held
+      host: EnrollmentFlowHost
+    }
+
+/** Keep the post-save confirmation while Rust classifies the next action. */
+let enrollmentWidgetHold: EnrollmentWidgetHold = {
+  kind: EnrollmentWidgetHoldKind.Idle,
+}
 
 enum ActiveEnrollmentCeremonyKind {
   Idle = 'idle',
@@ -221,7 +235,7 @@ async function dismissStagedEnrollment({
 
 export async function cancelActiveEnrollmentCeremony(): Promise<void> {
   enrollmentAuthorizationGeneration += 1
-  holdEnrollmentWidgetAfterSave = false
+  enrollmentWidgetHold = { kind: EnrollmentWidgetHoldKind.Idle }
   stopPendingEnrollmentWatch()
   const ceremony = activeEnrollmentCeremony
   activeEnrollmentCeremony = { kind: ActiveEnrollmentCeremonyKind.Idle }
@@ -254,6 +268,10 @@ async function commitStagedEnrollment({
   authorizationGeneration,
 }: CommitStagedEnrollmentArgs): Promise<void> {
   if (!enrollmentCeremonyIsCurrent(authorizationGeneration)) return
+  enrollmentWidgetHold = {
+    kind: EnrollmentWidgetHoldKind.Held,
+    host,
+  }
   const nookTypedArgs0_0: Parameters<typeof setHostDescription>[0] = {
     host,
     text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollWorking),
@@ -283,17 +301,7 @@ async function commitStagedEnrollment({
       text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollSaved),
     }
     setHostDescription(nookTypedArgs0_1)
-    if (detectEnrollmentHints().backupCodes) {
-      const nookTypedArgs0_2: Parameters<typeof renderEnrollmentActions>[0] = {
-        host,
-        hints: detectEnrollmentHints(),
-      }
-      renderEnrollmentActions(nookTypedArgs0_2)
-    }
-    // Success pages often mention backup codes; without this hold, the next
-    // MutationObserver scan rebuilds the enrollment CTA and wipes the saved
-    // confirmation before the user (or e2e) can observe it.
-    holdEnrollmentWidgetAfterSave = true
+    host.requestWorkflowReclassification()
   } else if (
     confirmDelivery.kind === RuntimeMessageDeliveryKind.Delivered &&
     confirmDelivery.response.kind ===
@@ -302,6 +310,7 @@ async function commitStagedEnrollment({
     confirmDelivery.response.reason === 'authenticator-locked'
   ) {
     completeEnrollmentCeremony(authorizationGeneration)
+    enrollmentWidgetHold = { kind: EnrollmentWidgetHoldKind.Idle }
     const nookTypedArgs0_3: Parameters<typeof setHostDescription>[0] = {
       host,
       text: lockedEnrollMessage(host),
@@ -309,6 +318,7 @@ async function commitStagedEnrollment({
     setHostDescription(nookTypedArgs0_3)
   } else {
     completeEnrollmentCeremony(authorizationGeneration)
+    enrollmentWidgetHold = { kind: EnrollmentWidgetHoldKind.Idle }
     const nookTypedArgs0_4: Parameters<typeof setHostDescription>[0] = {
       host,
       text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollFailed),
@@ -386,7 +396,7 @@ async function beginEnrollmentCeremony({
   candidate,
 }: BeginEnrollmentCeremonyArgs): Promise<void> {
   const authorizationGeneration = beginActiveEnrollmentCeremony(host)
-  holdEnrollmentWidgetAfterSave = false
+  enrollmentWidgetHold = { kind: EnrollmentWidgetHoldKind.Idle }
   const nookTypedArgs0_8: Parameters<typeof setHostDescription>[0] = {
     host,
     text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollStaging),
@@ -794,11 +804,15 @@ async function startQrEnrollment({
 }
 
 export function enrollmentCeremonyActive(): boolean {
-  return enrollmentEvidenceWatchActive() || holdEnrollmentWidgetAfterSave
+  return enrollmentEvidenceWatchActive()
+}
+
+export function enrollmentWidgetHeldAfterSave(): EnrollmentWidgetHold {
+  return enrollmentWidgetHold
 }
 
 export function releaseEnrollmentWidgetHold(): void {
-  holdEnrollmentWidgetAfterSave = false
+  enrollmentWidgetHold = { kind: EnrollmentWidgetHoldKind.Idle }
 }
 
 type RenderEnrollmentActionsArgs = {

@@ -1,6 +1,16 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 import {
+  AuthenticationWorkflowAction,
+  AuthenticationWorkflowKind,
+  AuthenticationWorkflowStage,
+  type AuthenticationWorkflowSnapshot,
+} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
+  approvedEnrollmentHints,
+  authenticationEnrollmentObservationFacts,
+} from '../../../../nook-web-extension/src/content/autofill/authentication-enrollment-observation'
+import {
   AUTHENTICATION_MUTATION_ATTRIBUTE_FILTER,
   authenticationMutationImpact,
   mutationBelongsOnlyToMountedWidget,
@@ -47,6 +57,71 @@ function observation(form: HTMLFormElement): PasswordFormObservation {
 afterEach(() => document.body.replaceChildren())
 
 describe('authentication surface mutation filtering', () => {
+  test('reports direct enrollment evidence without inventing form controls', () => {
+    const facts = authenticationEnrollmentObservationFacts({
+      authenticatorSetupPresent: true,
+      backupCodesPresent: true,
+      manualCheckpointPresent: true,
+    })
+
+    expect(facts).toMatchObject({
+      fields: {
+        usernameFieldCount: 0,
+        currentPasswordFieldCount: 0,
+        newPasswordFieldCount: 0,
+        genericPasswordFieldCount: 0,
+        oneTimeCodeFieldCount: 0,
+      },
+      ceremony: {
+        manualCheckpoint: 'present',
+        advanceControl: 'absent',
+      },
+      authenticator: {
+        authenticatorSetup: 'present',
+        backupCodes: 'present',
+        passkeyControl: 'absent',
+        matchingPasskeyAccountCount: 0,
+      },
+      detailedAdvanceControl: { kind: 'absent' },
+    })
+  })
+
+  test('adapts only the closed Rust-approved enrollment action', () => {
+    const bothHints = { qr: true, backupCodes: true }
+    const recovery: AuthenticationWorkflowSnapshot = {
+      kind: AuthenticationWorkflowKind.TotpEnrollment,
+      stage: AuthenticationWorkflowStage.Recovery,
+      action: AuthenticationWorkflowAction.SaveBackupCodes,
+      currentStep: 4,
+      totalSteps: 5,
+      approvalRequirement: 'explicit-user-approval',
+      observationIndex: 0,
+    }
+    expect(
+      approvedEnrollmentHints({ hints: bothHints, snapshot: recovery }),
+    ).toEqual({ qr: false, backupCodes: true })
+
+    const setup: AuthenticationWorkflowSnapshot = {
+      ...recovery,
+      stage: AuthenticationWorkflowStage.Setup,
+      action: AuthenticationWorkflowAction.EnrollAuthenticator,
+      currentStep: 2,
+    }
+    expect(
+      approvedEnrollmentHints({ hints: bothHints, snapshot: setup }),
+    ).toEqual({ qr: true, backupCodes: false })
+
+    const manual: AuthenticationWorkflowSnapshot = {
+      ...recovery,
+      stage: AuthenticationWorkflowStage.Manual,
+      action: AuthenticationWorkflowAction.TakeOver,
+      approvalRequirement: 'takeover-required',
+    }
+    expect(
+      approvedEnrollmentHints({ hints: bothHints, snapshot: manual }),
+    ).toEqual({ qr: false, backupCodes: false })
+  })
+
   test('ignores mutations owned entirely by the mounted extension widget', () => {
     const host = document.createElement('section')
     const child = document.createElement('button')

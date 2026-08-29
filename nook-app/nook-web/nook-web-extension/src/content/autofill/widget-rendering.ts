@@ -12,16 +12,15 @@ import {
   authentication_workflow_saved_login_capability,
   type AuthenticationWorkflowSnapshot,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { approvedEnrollmentHints } from './authentication-enrollment-observation'
 import {
   detectEnrollmentHints,
   renderEnrollmentActions,
   type EnrollmentPageHints,
 } from '../enrollment-flow'
+import { hasEnrollmentSection } from '../enrollment-flow-view'
 import { startRevalidatedBackupCodeEnrollment } from './backup-code-workflow-action'
-import {
-  selectedEnrollmentHints,
-  supplementalEnrollmentHints,
-} from './enrollment-action-presentation'
+import { supplementalEnrollmentHints } from './enrollment-action-presentation'
 import {
   cancelPendingAuthenticatorPickerRequest,
   continueWithAuthenticator,
@@ -57,13 +56,13 @@ import {
 
 type RenderEnrollmentWidgetArgs = {
   hints: EnrollmentPageHints
-  action: AuthenticationWorkflowAction
+  snapshot: AuthenticationWorkflowSnapshot
   vaultConnection: PilotVaultConnection
 }
 
 export function renderEnrollmentWidget({
   hints,
-  action,
+  snapshot,
   vaultConnection,
 }: RenderEnrollmentWidgetArgs): void {
   const actionContextArgs: Parameters<
@@ -79,10 +78,19 @@ export function renderEnrollmentWidget({
     removeWidget()
     return
   }
+  if (
+    authentication_workflow_pilot_presentation_capability(snapshot) !==
+    'propose-action'
+  ) {
+    removeWidget()
+    return
+  }
   const workflowKey = [
     'enrollment',
     hints.qr ? 'qr' : '',
     hints.backupCodes ? 'backup' : '',
+    snapshot.action,
+    snapshot.stage,
     vaultConnection.connected ? 'connected' : 'disconnected',
     vaultConnection.vaultName ?? '',
   ].join(':')
@@ -91,13 +99,20 @@ export function renderEnrollmentWidget({
     widgetState.workflowKey.kind === WidgetWorkflowKeyKind.Assigned &&
     widgetState.workflowKey.key === workflowKey
   ) {
-    return
+    const renderedWidget = widgetState.host.element.shadowRoot
+    if (renderedWidget && hasEnrollmentSection(renderedWidget)) return
   }
   if (widgetState.host.kind === WidgetHostKind.Attached) removeWidget()
+  widgetState.beginEnrollmentWorkflow(workflowKey)
+  const approvedHintsRequest: Parameters<typeof approvedEnrollmentHints>[0] = {
+    hints,
+    snapshot,
+  }
+  const approvedHints = approvedEnrollmentHints(approvedHintsRequest)
   const nookTypedArgs0_0: Parameters<typeof createWidgetShell>[0] = {
-    copy: enrollmentCopy(hints),
-    currentStep: 1,
-    totalSteps: 1,
+    copy: enrollmentCopy(approvedHints),
+    currentStep: snapshot.currentStep,
+    totalSteps: snapshot.totalSteps,
   }
   const shell = createWidgetShell(nookTypedArgs0_0)
   const { body, step, title, description, continueButton } = shell
@@ -125,7 +140,7 @@ export function renderEnrollmentWidget({
   }
   const nookTypedArgs1_0: Parameters<typeof renderEnrollmentActions>[0] = {
     host: buildEnrollmentFlowHost(nookTypedArgs0_2),
-    hints: selectedEnrollmentHints(action),
+    hints: approvedHints,
   }
   renderEnrollmentActions(nookTypedArgs1_0)
 }

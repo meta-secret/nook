@@ -139,9 +139,9 @@ impl AuthenticationPageObservationFactsBatch {
 mod tests {
     use super::*;
     use crate::{
-        AuthenticationAdvanceControlObservation, AuthenticationUsernameEvidence,
-        AuthenticationWorkflowKind, PageControlActionability, PageControlOwnership,
-        PageControlSemantics,
+        AuthenticationAdvanceControlObservation, AuthenticationPilotPresentationCapability,
+        AuthenticationUsernameEvidence, AuthenticationWorkflowAction, AuthenticationWorkflowKind,
+        PageControlActionability, PageControlOwnership, PageControlSemantics,
     };
 
     fn password_login() -> AuthenticationPageObservationFacts {
@@ -169,6 +169,77 @@ mod tests {
             ),
             ..Default::default()
         }
+    }
+
+    fn direct_enrollment(
+        authenticator_setup: AuthenticationAuthenticatorSetupObservation,
+        backup_codes: AuthenticationBackupCodesObservation,
+        manual_checkpoint: AuthenticationManualCheckpoint,
+    ) -> AuthenticationPageObservationFacts {
+        AuthenticationPageObservationFacts {
+            ceremony: AuthenticationCeremonyObservationFacts {
+                manual_checkpoint,
+                ..Default::default()
+            },
+            authenticator: AuthenticationAuthenticatorObservationFacts {
+                authenticator_setup,
+                backup_codes,
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn direct_enrollment_facts_preserve_rust_action_and_presentation_policy() -> anyhow::Result<()>
+    {
+        let setup = AuthenticationPageObservationFactsBatch {
+            observations: vec![direct_enrollment(
+                AuthenticationAuthenticatorSetupObservation::Present,
+                AuthenticationBackupCodesObservation::Absent,
+                AuthenticationManualCheckpoint::Absent,
+            )],
+        }
+        .classify()
+        .snapshot()?;
+        assert_eq!(
+            setup.action,
+            AuthenticationWorkflowAction::EnrollAuthenticator
+        );
+        assert_eq!(
+            setup.pilot_presentation_capability(),
+            AuthenticationPilotPresentationCapability::ProposeAction
+        );
+
+        let recovery = AuthenticationPageObservationFactsBatch {
+            observations: vec![direct_enrollment(
+                AuthenticationAuthenticatorSetupObservation::Present,
+                AuthenticationBackupCodesObservation::Present,
+                AuthenticationManualCheckpoint::Absent,
+            )],
+        }
+        .classify()
+        .snapshot()?;
+        assert_eq!(
+            recovery.action,
+            AuthenticationWorkflowAction::SaveBackupCodes
+        );
+
+        let checkpoint = AuthenticationPageObservationFactsBatch {
+            observations: vec![direct_enrollment(
+                AuthenticationAuthenticatorSetupObservation::Present,
+                AuthenticationBackupCodesObservation::Present,
+                AuthenticationManualCheckpoint::Present,
+            )],
+        }
+        .classify()
+        .snapshot()?;
+        assert_eq!(checkpoint.action, AuthenticationWorkflowAction::TakeOver);
+        assert_eq!(
+            checkpoint.pilot_presentation_capability(),
+            AuthenticationPilotPresentationCapability::Hidden
+        );
+        Ok(())
     }
 
     #[test]
