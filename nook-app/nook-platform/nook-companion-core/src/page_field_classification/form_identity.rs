@@ -5,9 +5,9 @@ use super::control_identity::{
     route_names_external_authentication_provider,
 };
 use super::{
-    AuthenticationUsernameEvidence, contains_any_word, expand_identity_text,
-    looks_like_non_authentication_submit_control_label,
-    looks_like_password_update_submit_control_label,
+    contains_any_word, expand_identity_text, looks_like_non_authentication_submit_control_label,
+    looks_like_password_update_submit_control_label, AuthenticationUsernameEvidence,
+    PASSKEY_OR_PLATFORM_AUTHENTICATOR_WORDS,
 };
 pub(super) fn identity_indicates_explicit_authentication_route(identity: &str) -> bool {
     contains_any_word(
@@ -150,7 +150,7 @@ fn destination_names_passkey_enrollment_or_management(identity: &str) -> bool {
 
 fn destination_names_passkey_authentication_route(destination_identity: &str) -> bool {
     let identity = expand_identity_text(destination_identity);
-    contains_any_word(&identity, &["passkey", "pass key", "webauthn"])
+    contains_any_word(&identity, PASSKEY_OR_PLATFORM_AUTHENTICATOR_WORDS)
         && identity_indicates_explicit_authentication_route(&identity)
         && !destination_names_passkey_enrollment_or_management(&identity)
         && !identity_names_registered_external_authentication_provider(destination_identity)
@@ -166,8 +166,10 @@ pub(super) fn passkey_destination_has_disallowed_action_or_provider(
         destination_names_passkey_authentication_route(&content_identity);
     let content_identity_text = expand_identity_text(&content_identity);
     let passkey_enrollment_route =
-        contains_any_word(&content_identity_text, &["passkey", "pass key", "webauthn"])
-            && destination_names_passkey_enrollment_or_management(&content_identity_text);
+        contains_any_word(
+            &content_identity_text,
+            PASSKEY_OR_PLATFORM_AUTHENTICATOR_WORDS,
+        ) && destination_names_passkey_enrollment_or_management(&content_identity_text);
     passkey_enrollment_route
         || control_destination_has_disallowed_route_action(destination_identity)
         || control_destination_indicates_alternate_provider(
@@ -220,6 +222,9 @@ fn identity_indicates_authenticator_enrollment(identity: &str) -> bool {
             "register",
             "create",
             "enable",
+            "add",
+            "configure",
+            "activate",
         ],
     ) && contains_any_word(
         &identity,
@@ -444,6 +449,9 @@ mod tests {
             ("mfa-enrollment-form", "/auth/mfa/enroll"),
             ("totp-setup-form", "/auth/totp/setup"),
             ("authenticator-enable-form", "/account/authenticator/enable"),
+            ("mfa-add-form", "/auth/mfa/add"),
+            ("totp-configure-form", "/auth/totp/configure"),
+            ("authenticator-activate-form", "/auth/mfa/activate"),
         ] {
             assert!(
                 !one_time_code_control_has_authentication_context(

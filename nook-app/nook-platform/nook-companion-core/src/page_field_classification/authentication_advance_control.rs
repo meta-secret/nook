@@ -16,9 +16,8 @@ use super::form_identity::{
     identity_indicates_explicit_authentication_route,
 };
 use super::{
-    AuthenticationUsernameEvidence, contains_any_word, expand_identity_text,
-    looks_like_non_authentication_submit_control_label,
-    looks_like_password_update_submit_control_label,
+    contains_any_word, expand_identity_text, looks_like_non_authentication_submit_control_label,
+    looks_like_password_update_submit_control_label, AuthenticationUsernameEvidence,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -371,6 +370,31 @@ mod tests {
     }
 
     #[test]
+    fn ambiguous_semantic_submits_require_advance_label_evidence() {
+        let mut verify = login_control();
+        verify.password_field_count = 0;
+        verify.one_time_code_field_count = 1;
+        verify.form_identity = "otp-challenge-form".to_owned();
+        verify.destination_identity = "https://login.example.test/auth/mfa/verify".to_owned();
+        verify.semantic_submit_control_count = 2;
+        verify.label = "Verify".to_owned();
+        assert!(authentication_advance_control_is_safe(&verify));
+
+        for label in ["Use recovery code", "Trust this device"] {
+            let mut alternate = verify.clone();
+            alternate.label = label.to_owned();
+            assert!(
+                !authentication_advance_control_is_safe(&alternate),
+                "{label}"
+            );
+        }
+
+        let mut unique_continue = verify;
+        unique_continue.semantic_submit_control_count = 1;
+        unique_continue.label = "Continue".to_owned();
+        assert!(authentication_advance_control_is_safe(&unique_continue));
+    }
+
     fn primary_oauth_authorization_routes_are_accepted() {
         for destination in [
             "https://login.example.test/oauth2/authorize",

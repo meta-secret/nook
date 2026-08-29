@@ -10,8 +10,8 @@ use crate::page_field_classification::form_identity::{
     identity_indicates_explicit_login_route, one_time_code_control_has_authentication_context,
 };
 use crate::page_field_classification::{
-    AuthenticationUsernameEvidence, contains_any_word, expand_identity_text,
-    looks_like_login_advance_control_label, looks_like_supported_localized_login_control_label,
+    contains_any_word, expand_identity_text, looks_like_login_advance_control_label,
+    looks_like_supported_localized_login_control_label, AuthenticationUsernameEvidence,
 };
 
 pub(super) fn has_positive_login_identity(
@@ -87,7 +87,10 @@ pub(super) fn accepts_authentication_advance(
 ) -> bool {
     let accepted_semantic_submit = authentication_scope_owns_control
         && matches!(observation.semantics, PageControlSemantics::SemanticSubmit)
-        && semantic_submit_ceremony_present;
+        && semantic_submit_ceremony_present
+        && (observation.semantic_submit_control_count == 1
+            || looks_like_login_advance_control_label(&observation.label)
+            || looks_like_explicit_authentication_advance_control_label(&observation.label));
     let accepted_scoped_activation = authentication_scope_owns_control
         && matches!(observation.semantics, PageControlSemantics::Activation)
         && semantic_submit_ceremony_present

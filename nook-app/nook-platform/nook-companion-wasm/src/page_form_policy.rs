@@ -302,5 +302,27 @@ mod tests {
                 ),
             );
         assert!(!authentication_passkey_control_candidate_is_safe(rejected));
+
+        let security_key_enrollment =
+            nook_companion_core::AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(
+                login_advance_observation(
+                    "https://login.example.test/auth/security-key/create",
+                    "Use security key",
+                ),
+            );
+        assert!(!authentication_passkey_control_candidate_is_safe(
+            security_key_enrollment
+        ));
+
+        let mut signup =
+            login_advance_observation("https://login.example.test/auth/passkey", "Use passkey");
+        signup.new_password_field_count = 1;
+        let signup_candidate =
+            nook_companion_core::AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(
+                signup,
+            );
+        assert!(!authentication_passkey_control_candidate_is_safe(
+            signup_candidate
+        ));
     }
 }

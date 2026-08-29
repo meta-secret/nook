@@ -17,7 +17,7 @@ pub use authentication_advance_control::{
     AuthenticationAdvanceControlDecision, AuthenticationAdvanceControlObservation,
     PageControlActionability, PageControlOwnership, PageControlSemantics,
 };
-pub use destination_identity::{CanonicalControlDestination, canonicalize_control_destination};
+pub use destination_identity::{canonicalize_control_destination, CanonicalControlDestination};
 pub use one_time_code_progression::looks_like_one_time_code_auto_submit_signal;
 
 /// Validate one bounded advance-control observation for exact browser actuation.
@@ -132,6 +132,18 @@ const LOGIN_PATH_WORDS: &[&str] = &[
     "live.com",
 ];
 
+pub(super) const PASSKEY_OR_PLATFORM_AUTHENTICATOR_WORDS: &[&str] = &[
+    "pass key",
+    "passkey",
+    "webauthn",
+    "security key",
+    "hardware key",
+    "fido",
+    "touch id",
+    "face id",
+    "windows hello",
+];
+
 /// True when form/path/ancestor context looks like a login surface.
 #[must_use]
 pub fn has_login_context(observation: &LoginContextObservation) -> bool {
@@ -222,20 +234,7 @@ pub fn looks_like_passkey_control_label(label: &str) -> bool {
             "disable",
             "deactivate",
         ],
-    ) && contains_any_word(
-        &identity,
-        &[
-            "pass key",
-            "passkey",
-            "webauthn",
-            "security key",
-            "hardware key",
-            "fido",
-            "touch id",
-            "face id",
-            "windows hello",
-        ],
-    )
+    ) && contains_any_word(&identity, PASSKEY_OR_PLATFORM_AUTHENTICATOR_WORDS)
 }
 
 /// True when a checkbox/control label looks like terms / privacy acceptance.
@@ -423,6 +422,9 @@ pub(crate) fn authentication_passkey_control_is_safe(
     if !has_authentication_context {
         return false;
     }
+    if passkey_new_password_ceremony_lacks_assertion_state(observation, &destination) {
+        return false;
+    }
     !form_identity::form_identity_indicates_destructive_action(&destination.route_identity)
         && !form_identity::control_destination_indicates_non_authentication_route(
             &destination.route_identity,
@@ -430,6 +432,15 @@ pub(crate) fn authentication_passkey_control_is_safe(
         && !form_identity::passkey_destination_has_disallowed_action_or_provider(
             &destination.route_identity,
         )
+}
+
+fn passkey_new_password_ceremony_lacks_assertion_state(
+    observation: &AuthenticationAdvanceControlObservation,
+    destination: &CanonicalControlDestination,
+) -> bool {
+    observation.new_password_field_count > 0
+        && !form_identity::identity_indicates_explicit_login_route(&destination.path_identity)
+        && !form_identity::identity_indicates_explicit_login_route(&destination.route_identity)
 }
 
 /// Decide whether bounded form and destination identities describe a safe authentication route.

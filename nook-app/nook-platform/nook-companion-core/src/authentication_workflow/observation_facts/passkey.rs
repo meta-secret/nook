@@ -1,5 +1,5 @@
 use crate::page_field_classification::{
-    AuthenticationAdvanceControlObservation, authentication_passkey_control_is_safe,
+    authentication_passkey_control_is_safe, AuthenticationAdvanceControlObservation,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -161,6 +161,9 @@ mod tests {
             "https://login.example.test/auth/passkey/enroll",
             "https://login.example.test/auth/passkey/setup",
             "https://login.example.test/webauthn/enable",
+            "https://login.example.test/auth/security-key/create",
+            "https://login.example.test/auth/fido2/create",
+            "https://login.example.test/auth/hardware-key/enroll",
         ] {
             let mut observation = passkey_control("Use passkey");
             observation.destination_identity = destination.to_owned();
@@ -171,5 +174,50 @@ mod tests {
                 "{destination}"
             );
         }
+    }
+
+    #[test]
+    fn passkey_label_aliases_reject_matching_enrollment_routes() {
+        for (label, destination) in [
+            (
+                "Use security key",
+                "https://login.example.test/auth/security-key/create",
+            ),
+            ("Use FIDO", "https://login.example.test/auth/fido2/create"),
+        ] {
+            let mut observation = passkey_control(label);
+            observation.destination_identity = destination.to_owned();
+            let candidate =
+                AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(observation);
+            assert!(
+                !authentication_passkey_control_candidate_is_safe(&candidate),
+                "{label} {destination}"
+            );
+        }
+    }
+
+    #[test]
+    fn new_password_passkey_ceremonies_require_explicit_login_assertion_routes() {
+        let mut signup = passkey_control("Use passkey");
+        signup.new_password_field_count = 1;
+        signup.form_identity = "auth-form".to_owned();
+        signup.destination_identity = "https://login.example.test/auth/passkey".to_owned();
+        assert!(!authentication_passkey_control_candidate_is_safe(
+            &AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(signup.clone())
+        ));
+        assert!(!authentication_passkey_control_candidate_is_safe(
+            &AuthenticationDetailedPasskeyControlCandidateObservation::ExplicitlyMarked({
+                let mut marked = signup;
+                marked.label = "Continue".to_owned();
+                marked
+            })
+        ));
+
+        let mut assertion = passkey_control("Use passkey");
+        assertion.new_password_field_count = 1;
+        assertion.destination_identity = "https://login.example.test/webauthn/login".to_owned();
+        assert!(authentication_passkey_control_candidate_is_safe(
+            &AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(assertion)
+        ));
     }
 }
