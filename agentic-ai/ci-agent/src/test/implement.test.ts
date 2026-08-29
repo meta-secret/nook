@@ -27,20 +27,20 @@ function deliveryArgs(log: string[]) {
 test("oversized implementation is pushed and preserved before budget rejection", async () => {
   const events: string[] = [];
   const args = deliveryArgs(events);
+  const budgetError = new Error(
+    "exceeds the 2000 authored changed-line budget: 2001",
+  );
   args.assertBudget = async () => {
     events.push("budget");
-    throw new Error("exceeds the 2000 authored changed-line budget: 2001");
+    throw budgetError;
   };
-  await assert.rejects(
-    preserve(args),
-    /exceeds the 2000 authored changed-line budget: 2001/,
-  );
-  assert.deepEqual(events, ["push", "verify-origin", "budget"]);
+  await assert.rejects(preserve(args), (error) => error === budgetError);
+  assert.deepEqual(events, ["budget", "push", "verify-origin"]);
 });
 
 test("bounded implementation keeps the normal push, budget, and PR creation path", async () => {
   const events: string[] = [];
   assert.equal(await preserve(deliveryArgs(events)), 73);
 
-  assert.equal(events.join(), "push,verify-origin,budget,find-pr,create-pr");
+  assert.equal(events.join(), "budget,push,verify-origin,find-pr,create-pr");
 });

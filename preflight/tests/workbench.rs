@@ -840,7 +840,7 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
         "validateAgentRecord",
         "remotePath.startsWith('plans/')",
         "NOOK_WORKBENCH_SOURCE_TASK_FILE",
-        "NOOK_WORKBENCH_ASSIGNED_GIZMO_ID",
+        "?ref=main",
         "assignedGizmoId",
         "Refusing invalid Workbench plan",
         "Refusing source-task file inside the public Nook checkout",
@@ -869,9 +869,9 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
     );
     let implement = read("agentic-ai/ci-agent/src/main/implement.ts");
     let ordered = [
+        "assertBudget()",
         "pushBranch()",
         "verifyBranch()",
-        "assertBudget()",
         "findPr()",
         "createPr()",
     ]

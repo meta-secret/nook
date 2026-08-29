@@ -15,32 +15,58 @@ const SourceTaskFileKind = Object.freeze({
   Present: 'present',
 })
 
-function parsePlanFrontmatterGizmoId(content) {
+const gizmoIdPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+const issuePathPattern = /^issues\/[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9._-]+)*\.md$/
+
+function frontmatterValues(content, field) {
   const frontmatterMatch = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(content)
-  if (!frontmatterMatch) {
-    return { kind: 'invalid', message: 'missing YAML frontmatter' }
+  if (!frontmatterMatch) return false
+  const pattern = new RegExp(`^${field}:\\s*(.*?)\\s*$`, 'gm')
+  return [...frontmatterMatch[1].matchAll(pattern)].map((match) => match[1].trim())
+}
+
+function parsePlanFrontmatter(content) {
+  const issue = frontmatterValues(content, 'issue')
+  const gizmoId = frontmatterValues(content, 'gizmo_id')
+  if (!issue || !gizmoId || issue.length !== 1 || gizmoId.length !== 1) {
+    return { kind: 'invalid', message: 'YAML frontmatter requires one issue and gizmo_id' }
   }
-  const gizmoIdRows = [
-    ...frontmatterMatch[1].matchAll(/^gizmo_id:\s*(.*?)\s*$/gm),
-  ]
-  if (gizmoIdRows.length !== 1) {
-    return {
-      kind: 'invalid',
-      message: 'YAML frontmatter requires exactly one gizmo_id',
-    }
-  }
-  const value = gizmoIdRows[0][1].trim()
-  if (value === 'null' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value)) {
+  if (gizmoId[0] === 'null' || !gizmoIdPattern.test(gizmoId[0])) {
     return { kind: 'invalid', message: 'YAML frontmatter gizmo_id is invalid' }
   }
-  return { kind: 'valid', value }
+  const issuePath = issue[0] === 'null' ? '' : issue[0]
+  if (issuePath && (!issuePathPattern.test(issuePath) || issuePath.includes('..'))) {
+    return { kind: 'invalid', message: 'YAML frontmatter issue path is invalid' }
+  }
+  return { kind: 'valid', gizmoId: gizmoId[0], issuePath }
+}
+
+function fetchRemoteIssueAssignment(issuePath) {
+  try {
+    const content = execFileSync(
+      'gh',
+      ['api', `repos/${repository}/contents/${issuePath}?ref=main`, '--jq', '.content | @base64d'],
+      {
+        encoding: 'utf8',
+        maxBuffer: 64 * 1024,
+        stdio: ['ignore', 'pipe', 'ignore'],
+      },
+    )
+    if (Buffer.byteLength(content, 'utf8') > 32_000) return { kind: 'invalid' }
+    const gizmoId = frontmatterValues(content, 'gizmo_id')
+    if (!gizmoId || gizmoId.length > 1) return { kind: 'invalid' }
+    if (gizmoId.length === 0 || gizmoId[0] === 'null') return { kind: 'legacy' }
+    return gizmoIdPattern.test(gizmoId[0])
+      ? { kind: 'assigned', value: gizmoId[0] }
+      : { kind: 'invalid' }
+  } catch {
+    return { kind: 'invalid' }
+  }
 }
 
 const repository =
   process.env.NOOK_WORKBENCH_REPOSITORY || 'meta-secret/nook-workbench'
 const expectedSha = process.env.NOOK_WORKBENCH_EXPECTED_SHA?.trim()
-const assignedGizmoId =
-  process.env.NOOK_WORKBENCH_ASSIGNED_GIZMO_ID?.trim() || ''
 let sourceTaskFile = { kind: SourceTaskFileKind.Missing }
 if (typeof process.env.NOOK_WORKBENCH_SOURCE_TASK_FILE === 'string') {
   const path = process.env.NOOK_WORKBENCH_SOURCE_TASK_FILE.trim()
@@ -94,6 +120,19 @@ if (remotePath.startsWith('plans/')) {
     process.exit(8)
   }
   const sourceTask = readFileSync(sourceTaskPath, 'utf8')
+  const planFrontmatter = parsePlanFrontmatter(localContent)
+  if (planFrontmatter.kind === 'invalid') {
+    console.error(`Refusing invalid Workbench plan: ${planFrontmatter.message}`)
+    process.exit(7)
+  }
+  const assignment = planFrontmatter.issuePath
+    ? fetchRemoteIssueAssignment(planFrontmatter.issuePath)
+    : { kind: 'legacy' }
+  if (assignment.kind === 'invalid') {
+    console.error('Refusing invalid Workbench plan: trusted remote issue could not be validated')
+    process.exit(7)
+  }
+  const assignedGizmoId = assignment.kind === 'assigned' ? assignment.value : ''
   const rejection = validateAgentRecord(localContent, 'plan', [], sourceTask, {
     assignedGizmoId,
   })
@@ -105,12 +144,7 @@ if (remotePath.startsWith('plans/')) {
     /^- Current Gizmo ID:\s*([a-z0-9]+(?:-[a-z0-9]+)*)\s*$/m.exec(
       localContent,
     )?.[1] || ''
-  const frontmatterGizmoId = parsePlanFrontmatterGizmoId(localContent)
-  if (frontmatterGizmoId.kind === 'invalid') {
-    console.error(`Refusing invalid Workbench plan: ${frontmatterGizmoId.message}`)
-    process.exit(7)
-  }
-  if (frontmatterGizmoId.value !== currentGizmoId) {
+  if (planFrontmatter.gizmoId !== currentGizmoId) {
     console.error(
       'Refusing invalid Workbench plan: YAML frontmatter gizmo_id must match the validated Current Gizmo ID',
     )

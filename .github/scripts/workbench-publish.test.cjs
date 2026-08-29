@@ -8,14 +8,10 @@ const test = require('node:test')
 const repositoryRoot = resolve(__dirname, '../..')
 const publisherPath = join(__dirname, 'workbench-publish.cjs')
 
-function plan(gizmoId, frontmatterGizmoId = gizmoId) {
+function plan(gizmoId, frontmatterGizmoId = gizmoId, issuePath = 'null') {
   return `---
-title: "Publisher validation"
-feature: publisher-validation
-issue: null
+issue: ${issuePath}
 gizmo_id: ${frontmatterGizmoId}
-started_at: 2026-08-29T00:00:00Z
-agent: codex
 ---
 
 # Task plan
@@ -62,7 +58,13 @@ Validate interactive plan publication.
 `
 }
 
-function publish(candidate, assignedGizmoId = '') {
+function issue(gizmoId) {
+  const field = gizmoId === '' ? '' : `gizmo_id: ${gizmoId}\n`
+  return `---\ntitle: Focused issue\n${field}---\n\n# Focused issue\n`
+}
+
+function publish(candidate, { assignedGizmoId = '', remoteIssue = '' } = {}) {
+  const { NOOK_WORKBENCH_ASSIGNED_GIZMO_ID: _ignored, ...inheritedEnv } = process.env
   const scratch = mkdtempSync(join(tmpdir(), 'nook-workbench-publish-'))
   const binDirectory = join(scratch, 'bin')
   const localPlan = join(scratch, 'plan.md')
@@ -74,8 +76,14 @@ function publish(candidate, assignedGizmoId = '') {
     ghPath,
     `#!/usr/bin/env node
 const { appendFileSync } = require('node:fs')
-appendFileSync(process.env.GH_CALLS, JSON.stringify(process.argv.slice(2)) + '\\n')
-process.exit(process.argv.includes('PUT') ? 0 : 1)
+const args = process.argv.slice(2)
+appendFileSync(process.env.GH_CALLS, JSON.stringify(args) + '\\n')
+if (args.includes('PUT')) process.exit(0)
+if (args[1]?.includes('/contents/issues/') && process.env.REMOTE_ISSUE) {
+  process.stdout.write(process.env.REMOTE_ISSUE)
+  process.exit(0)
+}
+process.exit(1)
 `,
   )
   chmodSync(ghPath, 0o755)
@@ -90,11 +98,12 @@ process.exit(process.argv.includes('PUT') ? 0 : 1)
       cwd: repositoryRoot,
       encoding: 'utf8',
       env: {
-        ...process.env,
+        ...inheritedEnv,
         GH_CALLS: ghCalls,
-        NOOK_WORKBENCH_ASSIGNED_GIZMO_ID: assignedGizmoId,
+        ...(assignedGizmoId ? { NOOK_WORKBENCH_ASSIGNED_GIZMO_ID: assignedGizmoId } : {}),
         NOOK_WORKBENCH_SOURCE_TASK_FILE: sourceTask,
         PATH: `${binDirectory}${delimiter}${process.env.PATH || ''}`,
+        REMOTE_ISSUE: remoteIssue,
       },
     },
   )
@@ -103,31 +112,23 @@ process.exit(process.argv.includes('PUT') ? 0 : 1)
   return { result, calls }
 }
 
-test('publishes a direct plan whose frontmatter matches its validated body ID', () => {
-  const { result, calls } = publish(plan('2fa-slice'))
-  assert.equal(result.status, 0, result.stderr)
-  assert.match(calls, /"PUT"/)
-})
-
-test('publishes a trusted focused-issue plan with one matching ID', () => {
-  const { result, calls } = publish(plan('focused-slice'), 'focused-slice')
-  assert.equal(result.status, 0, result.stderr)
-  assert.match(calls, /"PUT"/)
-})
-
-test('rejects a concrete frontmatter and body Gizmo ID mismatch', () => {
-  const { result, calls } = publish(
-    plan('body-slice', 'other-slice'),
-    'body-slice',
-  )
-  assert.equal(result.status, 7)
-  assert.match(result.stderr, /gizmo_id must match the validated Current Gizmo ID/)
-  assert.equal(calls, '')
-})
-
-test('rejects a null plan frontmatter Gizmo ID', () => {
-  const { result, calls } = publish(plan('body-slice', 'null'))
-  assert.equal(result.status, 7)
-  assert.match(result.stderr, /YAML frontmatter gizmo_id is invalid/)
-  assert.equal(calls, '')
-})
+const focusedIssue = 'issues/focused.md'
+for (const [name, candidate, options, status, rejection] of [
+  ['publishes a direct self-contained plan', plan('2fa-slice'), {}, 0],
+  ['binds an issue-backed plan to the remote ID', plan('focused-slice', 'focused-slice', focusedIssue), { remoteIssue: issue('focused-slice') }, 0],
+  ['rejects a remote ID mismatch', plan('local-slice', 'local-slice', focusedIssue), { remoteIssue: issue('remote-slice') }, 7],
+  ['ignores an incorrect caller ID', plan('remote-slice', 'remote-slice', focusedIssue), { assignedGizmoId: 'wrong-caller-id', remoteIssue: issue('remote-slice') }, 0],
+  ['accepts a legacy issue without an ID', plan('legacy-slice', 'legacy-slice', focusedIssue), { remoteIssue: issue('') }, 0],
+  ['accepts a legacy issue with null ID', plan('legacy-slice', 'legacy-slice', focusedIssue), { remoteIssue: issue('null') }, 0],
+  ['rejects body and frontmatter mismatch', plan('body-slice', 'other-slice'), {}, 7, /gizmo_id must match/],
+  ['rejects null plan Gizmo ID', plan('body-slice', 'null'), {}, 7, /gizmo_id is invalid/],
+]) {
+  test(name, () => {
+    const { result, calls } = publish(candidate, options)
+    assert.equal(result.status, status, result.stderr)
+    if (rejection) assert.match(result.stderr, rejection)
+    if (options.remoteIssue) assert.match(calls, /contents\/issues\/focused\.md\?ref=main/)
+    if (status === 0) assert.match(calls, /"PUT"/)
+    else assert.doesNotMatch(calls, /"PUT"/)
+  })
+}

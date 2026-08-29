@@ -34,14 +34,17 @@ type PreserveImplementedBranchArgs = {
 export async function preserveImplementedBranchBeforePr(
   args: PreserveImplementedBranchArgs,
 ): Promise<number> {
+  const budgetResult = await args.assertBudget().then(
+    () => ({ kind: "accepted" as const }),
+    (error: unknown) => ({ kind: "rejected" as const, error }),
+  );
   await args.pushBranch();
   if (!(await args.verifyBranch())) {
     throw new Error(
       `Agent branch ${args.agentBranch} was not found on origin after push`,
     );
   }
-
-  await args.assertBudget();
+  if (budgetResult.kind === "rejected") throw budgetResult.error;
 
   const openPr = await args.findPr();
   if (openPr.kind === OpenPrLookupKind.Found) {

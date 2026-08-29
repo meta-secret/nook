@@ -134,9 +134,8 @@ for (const [label, replacement, rejection] of [
   ['duplicate name', ['Gizmo name: Publisher', 'Gizmo name: Validator'], /unique Gizmo name/],
   ['empty name', ['Gizmo name: Validator', 'Gizmo name:   '], /requires at least two consecutively numbered slices/],
 ]) {
-  test(`rejects a Gizmo ${label}`, () => {
-    assert.match(validate(stackedPlan().replace(...replacement)), rejection)
-  })
+  test(`rejects a Gizmo ${label}`, () =>
+    assert.match(validate(stackedPlan().replace(...replacement)), rejection))
 }
 
 test('rejects a declared Gizmo without ownership-unit mapping', () => {
@@ -196,64 +195,28 @@ test('accepts multiple ownership units bound to one trusted Gizmo ID', () => {
   assert.equal(validate(candidate, 'gizmo-1'), '')
 })
 
-test('rejects a plan that invents a different focused-issue Gizmo ID', () => {
-  assert.match(
-    validate(plan(), 'gizmo-2'),
-    /trusted focused-issue Gizmo ID/,
-  )
-})
-
-test('rejects multi-PR delivery for a trusted focused-issue Gizmo ID', () => {
-  assert.match(
-    validate(stackedPlan(), 'gizmo-1'),
-    /requires one-PR delivery/,
-  )
-})
-
-test('rejects a different sole slice ID for a trusted focused issue', () => {
-  const candidate = plan({
-    slices: [slice(1, 'gizmo-2', 'Validator', 'None', '200')],
-  })
-  assert.match(
-    validate(candidate, 'gizmo-1'),
-    /sole PR slice must use the trusted focused-issue Gizmo ID/,
-  )
-})
-
-test('rejects a different ownership-unit ID for a trusted focused issue', () => {
-  const candidate = plan({
-    ownershipUnits: [ownershipUnit(1, 'gizmo-2')],
-  })
-  assert.match(
-    validate(candidate, 'gizmo-1'),
-    /every ownership unit must use the trusted focused-issue Gizmo ID/,
-  )
-})
-
-test('rejects an invalid trusted focused-issue Gizmo ID', () => {
-  assert.match(
-    validate(plan(), 'Gizmo 1'),
-    /trusted assigned Gizmo ID is invalid/,
-  )
-})
+for (const [name, candidate, assignedId, rejection] of [
+  ['a different plan ID', plan(), 'gizmo-2', /trusted focused-issue Gizmo ID/],
+  ['multi-PR delivery', stackedPlan(), 'gizmo-1', /requires one-PR delivery/],
+  ['a different sole slice ID', plan({ slices: [slice(1, 'gizmo-2', 'Validator', 'None', '200')] }), 'gizmo-1', /sole PR slice must use/],
+  ['a different ownership ID', plan({ ownershipUnits: [ownershipUnit(1, 'gizmo-2')] }), 'gizmo-1', /every ownership unit must use/],
+  ['an invalid trusted ID', plan(), 'Gizmo 1', /trusted assigned Gizmo ID is invalid/],
+]) {
+  test(`rejects ${name} for a trusted focused issue`, () =>
+    assert.match(validate(candidate, assignedId), rejection))
+}
 
 test('accepts predecessor-free independent PRs at the 2,000-line ceiling', () => {
   assert.equal(validate(boundedMultiPlan()), '')
 })
 
-test('rejects stacked PRs at the 2,000-line ceiling', () => {
-  assert.match(
-    validate(boundedMultiPlan('Stacked PRs', 'gizmo-1')),
-    /requires independent PRs/,
-  )
-})
-
-test('rejects dependent independent PRs below the ceiling', () => {
-  assert.match(
-    validate(boundedMultiPlan('Independent PRs', 'gizmo-1')),
-    /independent PR slices must not declare predecessor Gizmos/,
-  )
-})
+for (const [name, mode, rejection] of [
+  ['stacked PRs at the ceiling', 'Stacked PRs', /requires independent PRs/],
+  ['dependent independent PRs', 'Independent PRs', /must not declare predecessor/],
+]) {
+  test(`rejects ${name}`, () =>
+    assert.match(validate(boundedMultiPlan(mode, 'gizmo-1')), rejection))
+}
 
 test('rejects a nonconsecutive stacked Gizmo predecessor', () => {
   const candidate = stackedPlan().replace(
