@@ -2,6 +2,7 @@ import type {
   ConfigurationMapping,
   ConfigurationNode,
 } from './skill-provider-command-types.ts';
+import { tokenizeShell } from './skill-provider-shell-tokenizer.ts';
 
 type WorkflowCommandRequest = {
   readonly action: boolean;
@@ -136,9 +137,24 @@ function collectStepRuns(request: StepRunRequest): void {
 }
 
 function assertNoProtectedCommandFileMutation(source: string): void {
-  if (!/\$\{?GITHUB_ENV\}?/u.test(source)) return;
+  const words = tokenizeShell(source).filter(
+    (token) => typeof token !== 'string',
+  );
+  if (
+    !words.some(
+      (word) => word.value === '$GITHUB_ENV' || word.value === '${GITHUB_ENV}',
+    )
+  )
+    return;
   for (const name of EXECUTION_ENVIRONMENT_NAMES)
-    if (source.includes(name))
+    if (
+      words.some(
+        (word) =>
+          !word.dynamic &&
+          (word.value.startsWith(`${name}=`) ||
+            word.value.startsWith(`${name}<<`)),
+      )
+    )
       throw new Error(`${name} workflow command-file mutation is forbidden.`);
 }
 

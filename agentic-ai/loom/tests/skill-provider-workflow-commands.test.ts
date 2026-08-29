@@ -50,6 +50,7 @@ test('rejects implicit shell startup hooks before flattening run steps', () => {
 test('rejects execution environment mutations through GITHUB_ENV', () => {
   for (const mutation of [
     `echo 'NODE_OPTIONS=--require=./scripts/facade.cjs' >> "$GITHUB_ENV"`,
+    `echo 'NODE_''OPTIONS=--require=./scripts/facade.cjs' >> "$GITHUB_ENV"`,
     `printf 'BASH_ENV=%s\\n' scripts/facade.sh >> "\${GITHUB_ENV}"`,
   ]) {
     const document: ConfigurationNode = {
