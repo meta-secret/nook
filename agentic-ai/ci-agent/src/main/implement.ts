@@ -149,7 +149,7 @@ export function resolveImplementPrTarget(input: ImplementPrTargetInput) {
 type NativeStackMember = {
   number: number;
   state?: string;
-  merged_at?: string | null;
+  merged_at?: unknown;
   head?: { ref?: string };
 };
 
@@ -358,12 +358,19 @@ export enum CiImplementationMode {
 type CiImplementationPhases = {
   deliver: () => Promise<void>;
   edit: () => Promise<CiEditOutcome>;
+  legacyPrExists: () => Promise<boolean>;
   mode: CiImplementationMode;
 };
 
 export async function runCiImplementationPhases(
   phases: CiImplementationPhases,
 ): Promise<void> {
+  if (
+    phases.mode === CiImplementationMode.LegacyMonolithic &&
+    (await phases.legacyPrExists())
+  ) {
+    return;
+  }
   const outcome = await phases.edit();
   if (
     phases.mode === CiImplementationMode.LegacyMonolithic &&
@@ -371,6 +378,27 @@ export async function runCiImplementationPhases(
   ) {
     await phases.deliver();
   }
+}
+
+async function legacyStandalonePrExists(): Promise<boolean> {
+  const repository = process.env.GITHUB_REPOSITORY?.trim();
+  const runId = process.env.GITHUB_RUN_ID?.trim();
+  if (!repository || !runId) {
+    throw new Error("GITHUB_REPOSITORY and GITHUB_RUN_ID are required");
+  }
+  const target = resolveTargetFromEnvironment();
+  if (target.kind === ImplementPrTargetKind.Stacked) return false;
+  const existing = await findOpenPr(
+    createOctokit(),
+    parseRepository(repository),
+    target.branch,
+  );
+  if (existing.kind === OpenPrLookupKind.NotFound) return false;
+  if (existing.baseBranch !== target.baseBranch) {
+    throw new Error("Existing standalone implementation PR has a changed base");
+  }
+  log.info(`PR #${existing.number} is already open; skipping legacy rerun`);
+  return true;
 }
 
 export async function runCiEdit(): Promise<CiEditOutcome> {
@@ -413,6 +441,7 @@ export async function runCiEditOnly(): Promise<void> {
   await runCiImplementationPhases({
     deliver: runCiDeliver,
     edit: runCiEdit,
+    legacyPrExists: () => Promise.resolve(false),
     mode: CiImplementationMode.EditOnly,
   });
 }
@@ -421,6 +450,7 @@ export async function runCiImplement(): Promise<void> {
   await runCiImplementationPhases({
     deliver: runCiDeliver,
     edit: runCiEdit,
+    legacyPrExists: legacyStandalonePrExists,
     mode: CiImplementationMode.LegacyMonolithic,
   });
 }
@@ -471,7 +501,7 @@ export async function runCiDeliver(): Promise<void> {
         repoRef,
         target.branch,
         runId,
-        undefined,
+        "agent implementation",
         target.baseBranch,
       );
     },
@@ -489,9 +519,9 @@ export async function runCiDeliver(): Promise<void> {
     },
     pushBranch: () => pushFixBranch(repoRoot, target.branch, runId),
     verifyBranch: () => branchExistsOnOrigin(octokit, repoRef, target.branch),
-    verifyPublishedHead:
-      target.kind === ImplementPrTargetKind.Stacked
-        ? async () => {
+    ...(target.kind === ImplementPrTargetKind.Stacked
+      ? {
+          verifyPublishedHead: async () => {
             const localHead = await revParse(repoRoot, "HEAD");
             const { data: pull } = await octokit.rest.pulls.get({
               ...repoRef,
@@ -507,8 +537,9 @@ export async function runCiDeliver(): Promise<void> {
                 "Stacked publication did not advance the exact frozen PR head",
               );
             }
-          }
-        : undefined,
+          },
+        }
+      : {}),
   });
   log.info(
     `PR #${prNumber} opened; delivery verified and handed to the continuing owner`,

@@ -83,7 +83,10 @@ async function createSandboxedAgent(config: CiAgentConfig) {
         sandboxOptions: { enabled: true },
       },
     });
-    return { agent, sandboxHome };
+    return {
+      agent,
+      cleanup: () => rm(sandboxHome, { recursive: true, force: true }),
+    };
   } catch (error) {
     await rm(sandboxHome, { recursive: true, force: true });
     throw error;
@@ -100,6 +103,55 @@ async function createLegacyAgent(config: CiAgentConfig) {
       sandboxOptions: { enabled: false },
     },
   });
+}
+
+async function runCreatedAgent(
+  agent: Awaited<ReturnType<typeof Agent.create>>,
+  prompt: string,
+  waitOptions: ReturnType<typeof loadAgentWaitOptions>,
+): Promise<void> {
+  try {
+    let run;
+    try {
+      run = await agent.send(prompt, {
+        onDelta: ({ update }) => {
+          logInteractionUpdate(update);
+        },
+      });
+      log.info(`Agent run started (id ${run.id})`);
+    } catch (err) {
+      if (err instanceof CursorAgentError) {
+        throw new Error(`Cursor agent startup failed: ${err.message}`);
+      }
+      throw err;
+    }
+
+    const result = await waitWithHeartbeat(
+      "Agent",
+      () => run.wait(),
+      waitOptions,
+    );
+    if (result.status === "error") {
+      const detail = result.error?.message?.trim();
+      throw new Error(
+        `Cursor agent run failed (run id ${result.id})${detail ? `: ${detail}` : ""}`,
+      );
+    }
+    if (result.status === "cancelled") {
+      throw new Error(`Cursor agent run cancelled (run id ${result.id})`);
+    }
+
+    log.info(`Agent finished (${result.status})`);
+    finishInteractionLog();
+  } finally {
+    try {
+      await agent[Symbol.asyncDispose]();
+      log.info("Agent disposed");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      log.info(`Agent dispose warning: ${message}`);
+    }
+  }
 }
 
 export async function runFixAgent(
@@ -119,67 +171,19 @@ export async function runFixAgent(
   // the local agent can spawn a shell; local child processes inherit env.
   // Cursor SDK 1.0.28 consumes the trusted per-user policy while
   // sandboxOptions makes unsupported hosts fail closed.
-  const hostEnvironment =
-    isolation === AgentIsolation.Strict ? { ...process.env } : {};
-  let sandboxHome: string | undefined;
-  try {
-    const created =
-      isolation === AgentIsolation.Strict
-        ? await createSandboxedAgent(config)
-        : { agent: await createLegacyAgent(config) };
-    const { agent } = created;
-    if ("sandboxHome" in created) sandboxHome = created.sandboxHome;
+  if (isolation === AgentIsolation.Strict) {
+    const hostEnvironment = { ...process.env };
     try {
-      let run;
+      const created = await createSandboxedAgent(config);
       try {
-        run = await agent.send(prompt, {
-          onDelta: ({ update }) => {
-            logInteractionUpdate(update);
-          },
-        });
-        log.info(`Agent run started (id ${run.id})`);
-      } catch (err) {
-        if (err instanceof CursorAgentError) {
-          throw new Error(`Cursor agent startup failed: ${err.message}`);
-        }
-        throw err;
-      }
-
-      const result = await waitWithHeartbeat(
-        "Agent",
-        () => run.wait(),
-        waitOptions,
-      );
-      if (result.status === "error") {
-        const detail = result.error?.message?.trim();
-        throw new Error(
-          `Cursor agent run failed (run id ${result.id})${detail ? `: ${detail}` : ""}`,
-        );
-      }
-      if (result.status === "cancelled") {
-        throw new Error(`Cursor agent run cancelled (run id ${result.id})`);
-      }
-
-      log.info(`Agent finished (${result.status})`);
-      finishInteractionLog();
-    } finally {
-      try {
-        await agent[Symbol.asyncDispose]();
-        log.info("Agent disposed");
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
-        log.info(`Agent dispose warning: ${message}`);
-      }
-    }
-  } finally {
-    try {
-      if (sandboxHome) {
-        await rm(sandboxHome, { recursive: true, force: true });
+        await runCreatedAgent(created.agent, prompt, waitOptions);
+      } finally {
+        await created.cleanup();
       }
     } finally {
-      if (isolation === AgentIsolation.Strict) {
-        restoreHostEnvironment(hostEnvironment, process.env);
-      }
+      restoreHostEnvironment(hostEnvironment, process.env);
     }
+    return;
   }
+  await runCreatedAgent(await createLegacyAgent(config), prompt, waitOptions);
 }

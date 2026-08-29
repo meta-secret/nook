@@ -252,7 +252,24 @@ test("bounded implementation keeps the normal push, budget, and PR creation path
   );
 });
 
-test("legacy implement delivers once while explicit edit-only never delivers", async () => {
+test("legacy implement short-circuits an existing PR and otherwise delivers once", async () => {
+  const existingEvents: string[] = [];
+  await runCiImplementationPhases({
+    deliver: async () => {
+      existingEvents.push("deliver");
+    },
+    edit: async () => {
+      existingEvents.push("edit");
+      return CiEditOutcome.Changed;
+    },
+    legacyPrExists: async () => {
+      existingEvents.push("find-pr");
+      return true;
+    },
+    mode: CiImplementationMode.LegacyMonolithic,
+  });
+  assert.deepEqual(existingEvents, ["find-pr"]);
+
   const legacyEvents: string[] = [];
   await runCiImplementationPhases({
     deliver: async () => {
@@ -262,9 +279,13 @@ test("legacy implement delivers once while explicit edit-only never delivers", a
       legacyEvents.push("edit");
       return CiEditOutcome.Changed;
     },
+    legacyPrExists: async () => {
+      legacyEvents.push("find-pr");
+      return false;
+    },
     mode: CiImplementationMode.LegacyMonolithic,
   });
-  assert.deepEqual(legacyEvents, ["edit", "deliver"]);
+  assert.deepEqual(legacyEvents, ["find-pr", "edit", "deliver"]);
 
   const editOnlyEvents: string[] = [];
   await runCiImplementationPhases({
@@ -274,6 +295,10 @@ test("legacy implement delivers once while explicit edit-only never delivers", a
     edit: async () => {
       editOnlyEvents.push("edit");
       return CiEditOutcome.Changed;
+    },
+    legacyPrExists: async () => {
+      editOnlyEvents.push("find-pr");
+      return true;
     },
     mode: CiImplementationMode.EditOnly,
   });
