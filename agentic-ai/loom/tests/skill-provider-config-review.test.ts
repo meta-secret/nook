@@ -82,8 +82,7 @@ test('production hydration loads every statically reached shell target', async (
   ]);
   const readSource = async (path: string): Promise<string> => {
     const source = storedSources.get(path);
-    if (source === undefined)
-      throw new Error(`Unexpected source read: ${path}`);
+    if (!source) throw new Error(`Unexpected source read: ${path}`);
     return source;
   };
   const graph: ConfigurationScriptGraph = {
