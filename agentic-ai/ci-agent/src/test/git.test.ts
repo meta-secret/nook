@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { promisify } from "node:util";
 
 import {
+  configureGitForCi,
   countAuthoredNumstat,
   hasWorkingTreeChanges,
   summarizeAuthoredNumstat,
@@ -72,6 +73,35 @@ describe("countAuthoredNumstat", () => {
 });
 
 describe("implementation working tree", () => {
+  it("marks the worktree safe before inspecting its state", async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), "nook-ci-agent-safe-"));
+    const repoRoot = join(tempRoot, "repo");
+    const globalConfig = join(tempRoot, "global.gitconfig");
+    const hadGlobalConfig = Object.hasOwn(process.env, "GIT_CONFIG_GLOBAL");
+    const previousGlobalConfig = process.env.GIT_CONFIG_GLOBAL ?? "";
+    process.env.GIT_CONFIG_GLOBAL = globalConfig;
+    try {
+      await mkdir(repoRoot);
+      await execFileAsync("git", ["-C", repoRoot, "init"]);
+      await configureGitForCi(repoRoot);
+      await writeFile(join(repoRoot, "README.md"), "base\n");
+      await execFileAsync("git", ["-C", repoRoot, "add", "README.md"]);
+      await execFileAsync("git", ["-C", repoRoot, "commit", "-m", "base"]);
+      const { stdout } = await execFileAsync("git", [
+        "config",
+        "--global",
+        "--get-all",
+        "safe.directory",
+      ]);
+      assert.deepEqual(stdout.trim().split("\n"), [repoRoot, "*"]);
+      assert.equal(await hasWorkingTreeChanges(repoRoot), false);
+    } finally {
+      if (hadGlobalConfig) process.env.GIT_CONFIG_GLOBAL = previousGlobalConfig;
+      else delete process.env.GIT_CONFIG_GLOBAL;
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
   it("excludes forced runtime artifacts while retaining authored changes", async () => {
     const repoRoot = await mkdtemp(join(tmpdir(), "nook-ci-agent-git-"));
     try {

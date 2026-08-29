@@ -267,6 +267,9 @@ export async function validateStackDeliveryState(args: {
       predecessorPull.merged ||
       predecessorPull.merged_at ||
       predecessorPull.head.ref !== args.predecessorBranch ||
+      predecessorPull.head.repo?.full_name !==
+        `${args.repoRef.owner}/${args.repoRef.repo}` ||
+      predecessorPull.head.sha !== args.baseSha ||
       predecessorPull.base.ref !== "main"
     ) {
       throw new Error("Live stacked predecessor must remain open and unmerged");
@@ -413,6 +416,7 @@ export async function runCiEdit(): Promise<CiEditOutcome> {
   const repoRoot = process.env.REPO_ROOT?.trim() || process.cwd();
   const target = resolveTargetFromEnvironment();
   chdir(repoRoot);
+  await configureGitForCi(repoRoot);
   const loadedConfig = loadConfig();
   if (loadedConfig.kind === CiAgentConfigLoadKind.MissingApiKey) {
     if (target.kind === ImplementPrTargetKind.Stacked) {
@@ -464,13 +468,13 @@ export async function runCiDeliver(): Promise<void> {
   const repoRoot = process.env.REPO_ROOT?.trim() || process.cwd();
   const target = resolveTargetFromEnvironment();
   chdir(repoRoot);
+  const octokit = createOctokit();
+  await configureGitForCi(repoRoot, octokit);
   if (!(await hasWorkingTreeChanges(repoRoot))) {
     throw new Error("Trusted delivery requires implementation changes");
   }
 
-  const octokit = createOctokit();
   const repoRef = parseRepository(repository);
-  await configureGitForCi(repoRoot, octokit);
   if (target.kind === ImplementPrTargetKind.Stacked) {
     await validateStackDeliveryState({
       octokit,

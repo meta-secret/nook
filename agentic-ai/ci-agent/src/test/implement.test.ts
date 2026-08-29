@@ -51,7 +51,7 @@ type StackScenario = {
   mainSha: string;
   predecessor: {
     base: { ref: string; sha: string };
-    head: { ref: string; sha: string };
+    head: { ref: string; repo: { full_name: string }; sha: string };
     merge_commit_sha: string;
     merged: boolean;
     merged_at: string;
@@ -84,7 +84,11 @@ function premergeScenario(): StackScenario {
     mainSha: MAIN_SHA,
     predecessor: {
       base: { ref: "main", sha: PREDECESSOR_PARENT_SHA },
-      head: { ref: PREDECESSOR, sha: PREDECESSOR_HEAD_SHA },
+      head: {
+        ref: PREDECESSOR,
+        repo: { full_name: "meta-secret/nook" },
+        sha: BASE_SHA,
+      },
       merge_commit_sha: "",
       merged: false,
       merged_at: "",
@@ -141,6 +145,7 @@ function postmergeScenario() {
   scenario.predecessor.merged = true;
   scenario.predecessor.merged_at = "2026-08-29T00:00:00Z";
   scenario.predecessor.state = PullState.Closed;
+  scenario.predecessor.head.sha = PREDECESSOR_HEAD_SHA;
   scenario.stacks[0].pull_requests[0] = {
     head: { ref: PREDECESSOR },
     merged_at: "2026-08-29T00:00:00Z",
@@ -443,6 +448,21 @@ describe("validateStackDeliveryState", () => {
     scenario.predecessor.state = PullState.Closed;
     await assert.rejects(
       validateScenario(scenario),
+      /must remain open and unmerged/,
+    );
+  });
+
+  it("rejects a forked or advanced live predecessor", async () => {
+    const forked = premergeScenario();
+    forked.predecessor.head.repo.full_name = "untrusted/nook";
+    await assert.rejects(
+      validateScenario(forked),
+      /must remain open and unmerged/,
+    );
+    const advanced = premergeScenario();
+    advanced.predecessor.head.sha = PREDECESSOR_HEAD_SHA;
+    await assert.rejects(
+      validateScenario(advanced),
       /must remain open and unmerged/,
     );
   });
