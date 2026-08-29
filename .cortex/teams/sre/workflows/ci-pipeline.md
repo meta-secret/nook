@@ -623,16 +623,40 @@ runs weekly and can be started manually. It installs the pinned
 The audit covers every direct library declared in those `Cargo.toml` manifests.
 It does not audit only the current lockfile's transitive graph.
 
-If any audit reports a newer release, the workflow starts the existing
-isolated CI agent on the general ARC scale set. The agent updates **all** outdated direct
-Rust dependencies and makes compatibility fixes. It runs the required
-validation before the CI-agent harness commits, pushes, and opens the PR:
+If any audit reports a newer release, the workflow invokes `task ci-agent:fix`
+with `CI_AGENT_FIX_PROFILE=rust-dependency-update` on the general ARC scale set.
+This scheduled workflow and Task entrypoint are a narrow trusted remote GitHub
+Actions publisher exception, not an ordinary Team Agent worker. The profile
+enforces strict editor isolation and trusted-host validation before publication.
+The bounded editor updates **all** outdated direct Rust dependencies and makes
+necessary compatibility fixes inside an isolated update. It has no publication
+authority.
+
+Before any push, trusted workflow tooling runs the required broad validation
+remotely against that isolated update:
 
 ```bash
 WASM_BUILD_MODE=prod task ci:pr:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
 task docker:ecosystem:fuzz FUZZ_SECONDS=20
 task hive:verify
 ```
+
+The publisher exception fails closed unless all of these boundaries hold:
+
+- the diff is bounded to the audited Rust dependency updates and their
+  necessary compatibility changes;
+- workflow tooling comes from the trusted workflow source, and publication
+  credentials remain controlled by that tooling rather than the bounded
+  editor;
+- the expected publication branch and pull-request identity are exact and
+  unambiguous; and
+- after commit, push, and pull-request creation, the publisher resolves and
+  returns the exact published head SHA, branch, and PR identity to Gizmo.
+
+That handoff resumes the ordinary delivery boundary. Gizmo owns continuing
+hosted review, replacement exact-head validation, readiness, and merge. The
+publisher's pre-push security validation remains required but does not replace
+those exact-head gates.
 
 `ci:pr:e2e` validates the product path:
 

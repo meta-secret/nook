@@ -57,6 +57,7 @@ jobs:
       FIX_BRANCH: fix/rust-dependencies-${{ github.run_id }}
       GITHUB_REPOSITORY: ${{ github.repository }}
       GITHUB_RUN_ID: ${{ github.run_id }}
+      CI_AGENT_FIX_PROFILE: rust-dependency-update
       CI_AGENT_PROMPT_FILE: .github/prompts/rust-dependency-update-agent.md
       CI_FIX_LABEL: Rust dependency update
       CI_AGENT_TIMEOUT_MS: '21600000'
