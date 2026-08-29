@@ -28,4 +28,52 @@ describe('lintProseDensity', () => {
     };
     expect(lintProseDensity(lintProseDensityArgs)).toEqual([]);
   });
+
+  test('reconstructs a dense sentence across hard-wrapped prose', () => {
+    const content = [
+      'A stacked successor declares immutable branch metadata and historical',
+      'predecessor values. Before claim, the workflow requires the same-repository',
+      'successor branch and exactly one open successor pull request and a live',
+      'pre-merge base and authenticated metadata and a frozen starting SHA.',
+    ].join('\n');
+    const lintArgs: LintProseDensityArgs = {
+      filePath: 'wrapped.md',
+      content,
+    };
+    const findings = lintProseDensity(lintArgs);
+    expect(
+      findings.some((finding) => finding.excerpt.startsWith('Before claim')),
+    ).toBe(true);
+  });
+
+  test('checks dense list items without joining sibling items', () => {
+    const content = [
+      '- Require the same-repository successor branch and exactly one open successor',
+      '  pull request and a live pre-merge base and authenticated metadata and a',
+      '  frozen starting SHA and complete containment evidence before claim.',
+      '- Recheck stack adjacency.',
+    ].join('\n');
+    const lintArgs: LintProseDensityArgs = {
+      filePath: 'list.md',
+      content,
+    };
+    const findings = lintProseDensity(lintArgs);
+    expect(findings.some((finding) => finding.line === 1)).toBe(true);
+    expect(findings.some((finding) => finding.line === 4)).toBe(false);
+  });
+
+  test('accepts concise structured action lists', () => {
+    const content = [
+      '- Require a same-repository successor branch.',
+      '- Require exactly one open successor pull request.',
+      '- Validate the recorded predecessor.',
+      '- Recheck stack adjacency before delivery.',
+      '- Fail closed on incomplete metadata.',
+    ].join('\n');
+    const lintArgs: LintProseDensityArgs = {
+      filePath: 'actions.md',
+      content,
+    };
+    expect(lintProseDensity(lintArgs)).toEqual([]);
+  });
 });

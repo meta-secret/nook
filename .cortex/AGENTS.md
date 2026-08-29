@@ -175,6 +175,14 @@ lifecycle authority.
 
 Agents must keep Cortex retrieval proportional to their assigned work.
 
+The [Cortex Writer](teams/ai/dynamic-skills/cortex-writer.md) is global
+read-only policy for every Cortex author.
+
+- Load it directly before creating or editing `.cortex` Markdown.
+- Apply it within the assigned team's existing write scope.
+- Do not open the AI knowledge graph only to load this policy.
+- Loading the policy does not grant access to other AI documents.
+
 1. Read the [root context router](knowledge-graph.md).
 2. Classify the request as Gizmo delivery control, AI, development core,
    security, SRE, web development, or shared integration.
