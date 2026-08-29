@@ -26,12 +26,15 @@ import { stopPendingSaveWatch } from './login-save'
 import {
   AuthenticatorPickerKind,
   LoginPickerKind,
+  WidgetHostKind,
+  WidgetWorkflowRootKind,
   authenticationActionState,
   pickerState,
   scanState,
   widgetState,
 } from './state'
 import { removeWidget, translatedMessage } from './workflow-ui'
+import { cancelActiveEnrollmentCeremony } from '../enrollment-flow'
 
 export function removeScannedWidget(): void {
   cancelPendingAuthenticatorPickerRequest()
@@ -62,9 +65,12 @@ export const routeAutofillMessage: AutofillMessageListener =
       authenticationActionState.invalidate()
       widgetState.busy = false
       clearAuthenticationSurface()
-      const response: Parameters<typeof sendResponse>[0] = { ok: true }
-      sendResponse(response)
-      return false
+      const enrollmentCancellation = cancelActiveEnrollmentCeremony()
+      void enrollmentCancellation.finally(() => {
+        const response: Parameters<typeof sendResponse>[0] = { ok: true }
+        sendResponse(response)
+      })
+      return true
     }
     if (
       sender.id === chrome.runtime.id &&
@@ -75,10 +81,21 @@ export const routeAutofillMessage: AutofillMessageListener =
       authenticationActionState.invalidate()
       widgetState.busy = false
       clearAuthenticationSurface()
-      scanState.schedule()
-      const response: Parameters<typeof sendResponse>[0] = { ok: true }
-      sendResponse(response)
-      return false
+      widgetState.dismissed = false
+      const enrollmentCancellation = cancelActiveEnrollmentCeremony()
+      if (
+        widgetState.host.kind === WidgetHostKind.Attached &&
+        widgetState.renderedWorkflowRoot.kind ===
+          WidgetWorkflowRootKind.Assigned
+      ) {
+        widgetState.host.element.inert = true
+      }
+      void enrollmentCancellation.finally(() => {
+        scanState.schedule()
+        const response: Parameters<typeof sendResponse>[0] = { ok: true }
+        sendResponse(response)
+      })
+      return true
     }
     if (
       sender.id === chrome.runtime.id &&
@@ -134,6 +151,7 @@ export const routeAutofillMessage: AutofillMessageListener =
       const nookTypedArgs0_2: Parameters<typeof sendResponse>[0] = { ok: true }
       sendResponse(nookTypedArgs0_2)
       widgetState.busy = true
+      const actionGeneration = authenticationActionState.begin()
       pending.continueButton.disabled = true
       const nookTypedArgs0_1: Parameters<typeof fillAndSubmitAccount>[0] = {
         account: message.payload.account,
@@ -142,8 +160,10 @@ export const routeAutofillMessage: AutofillMessageListener =
         title: pending.title,
         description: pending.description,
         continueButton: pending.continueButton,
+        actionGeneration,
       }
       void fillAndSubmitAccount(nookTypedArgs0_1).finally(() => {
+        if (!authenticationActionState.isCurrent(actionGeneration)) return
         widgetState.busy = false
         if (
           pending.continueButton.isConnected &&
@@ -198,6 +218,7 @@ export const routeAutofillMessage: AutofillMessageListener =
     const nookTypedArgs0_4: Parameters<typeof sendResponse>[0] = { ok: true }
     sendResponse(nookTypedArgs0_4)
     widgetState.busy = true
+    const actionGeneration = authenticationActionState.begin()
     pending.continueButton.disabled = true
     const nookTypedArgs0_3: Parameters<typeof fillAuthenticatorCode>[0] = {
       account: message.payload.account,
@@ -206,8 +227,10 @@ export const routeAutofillMessage: AutofillMessageListener =
       title: pending.title,
       description: pending.description,
       continueButton: pending.continueButton,
+      actionGeneration,
     }
     void fillAuthenticatorCode(nookTypedArgs0_3).finally(() => {
+      if (!authenticationActionState.isCurrent(actionGeneration)) return
       widgetState.busy = false
       if (
         pending.continueButton.isConnected &&

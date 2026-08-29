@@ -58,6 +58,7 @@ export {
   sendAuthenticatorBackupAttachRuntimeMessage,
   sendAuthenticatorCodeRuntimeMessage,
   sendAuthenticatorEnrollmentConfirmRuntimeMessage,
+  sendAuthenticatorEnrollmentDismissRuntimeMessage,
   sendAuthenticatorEnrollmentStageRuntimeMessage,
   sendAuthenticatorOptionsRuntimeMessage,
   sendAuthenticatorPickerOpenRuntimeMessage,
@@ -112,6 +113,7 @@ type FillAndSubmitAccountArgs = {
   title: HTMLHeadingElement
   description: HTMLParagraphElement
   continueButton: HTMLButtonElement
+  actionGeneration: number
 }
 
 export async function fillAndSubmitAccount({
