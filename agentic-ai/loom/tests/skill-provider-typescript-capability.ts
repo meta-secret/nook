@@ -49,6 +49,7 @@ export type SerializedSubprocessCommand = {
 };
 export type SubprocessCwdRequest = {
   readonly allowDynamicCwd: boolean;
+  readonly allowDynamicEnvironment: boolean;
   readonly call: ts.CallExpression | ts.NewExpression;
   readonly evaluate: (expression: ts.Expression) => TaggedTemplateText;
   readonly kind: SubprocessCallKind;
@@ -175,9 +176,11 @@ export function assertReflectInvocationTarget([adapter, target]: readonly [
   throw new Error('Indirect Reflect subprocess invocation is forbidden.');
 }
 
-export function assertUnsupportedCallCapability(
-  capability: SubprocessCallKind | false,
-): void {
+export function assertUnsupportedCallCapability([
+  capability,
+  sourcePath,
+  call,
+]: readonly [SubprocessCallKind | false, string, string]): void {
   if (
     capability === false ||
     capability === SubprocessCallKind.ReflectApply ||
@@ -186,7 +189,9 @@ export function assertUnsupportedCallCapability(
     capability === SubprocessCallKind.ReflectNamespace
   )
     return;
-  throw new Error('Subprocess capability passed to unsupported call.');
+  throw new Error(
+    `Subprocess capability passed to unsupported call in ${sourcePath}: ${call}`,
+  );
 }
 
 export function dynamicImportCapability(
@@ -338,13 +343,14 @@ function assertSubprocessEnvironment([request, object]: readonly [
     throw new Error('Dynamic TypeScript subprocess environment is forbidden.');
   if (environment !== false) {
     const environmentObject = request.resolveObject(environment);
+    if (environmentObject === false && request.allowDynamicEnvironment) return;
     if (environmentObject === false)
       throw new Error(
-        'Dynamic TypeScript subprocess environment is forbidden.',
+        `Dynamic TypeScript subprocess environment is forbidden in ${request.sourcePath}.`,
       );
     if (environmentObject.properties.length > 0)
       throw new Error(
-        'Nonempty TypeScript subprocess environment is forbidden.',
+        `Nonempty TypeScript subprocess environment is forbidden in ${request.sourcePath}.`,
       );
   }
 }

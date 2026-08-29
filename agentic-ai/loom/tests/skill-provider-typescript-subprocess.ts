@@ -33,11 +33,15 @@ import {
   type BindingCollectionRequest,
   type BindingLookupRequest,
   dynamicCwdExemptions,
+  dynamicEnvironmentExemptions,
   hasBinding,
+  importedMember,
   isDynamicCwdExempt,
+  isDynamicEnvironmentExempt,
   type LexicalBinding,
   type LexicalModel,
   lookupBinding,
+  nodePromisifyTarget,
 } from './skill-provider-typescript-bindings.ts';
 
 export type TypeScriptSubprocessInspection = {
@@ -109,6 +113,8 @@ export function typescriptSubprocessCommands(
   const model: LexicalModel = {
     bindings,
     dynamicCwdExemptions: dynamicCwdExemptions(exemptionRequest),
+    dynamicEnvironmentExemptions:
+      dynamicEnvironmentExemptions(exemptionRequest),
     path: inspection.path,
   };
   const commands: string[] = [];
@@ -120,8 +126,10 @@ export function typescriptSubprocessCommands(
         model,
         visited: new Set(),
       };
-      const kind = resolveCapability(capabilityRequest);
-      if (kind === false)
+      const adapterTarget = nodePromisifyTarget([node, model]);
+      const kind =
+        adapterTarget === false ? resolveCapability(capabilityRequest) : false;
+      if (kind === false && adapterTarget === false)
         for (const argument of node.arguments) {
           const argumentRequest: CapabilityResolutionRequest = {
             expression: argument,
@@ -129,7 +137,11 @@ export function typescriptSubprocessCommands(
             model,
             visited: new Set(),
           };
-          assertUnsupportedCallCapability(resolveCapability(argumentRequest));
+          assertUnsupportedCallCapability([
+            resolveCapability(argumentRequest),
+            model.path,
+            node.getText(),
+          ]);
         }
       if (kind !== false) {
         if (isReflectInvocation(kind)) {
@@ -204,6 +216,18 @@ function resolveCapability(
   if (request.visited.has(request.expression)) return false;
   const visited = new Set(request.visited).add(request.expression);
   const expression = unwrapExpression(request.expression);
+  if (ts.isCallExpression(expression)) {
+    const target = nodePromisifyTarget([expression, request.model]);
+    if (target !== false) {
+      const targetRequest: CapabilityResolutionRequest = {
+        expression: target,
+        location: expression,
+        model: request.model,
+        visited,
+      };
+      return resolveCapability(targetRequest);
+    }
+  }
   const importedCapability = dynamicImportCapability(expression);
   if (importedCapability !== false) return importedCapability;
   if (ts.isIdentifier(expression)) {
@@ -384,6 +408,10 @@ function commandFromCall(request: CallCommandRequest): StaticCommand | false {
   if (!first) throw new Error('Recognized subprocess call has no command.');
   const cwdRequest: SubprocessCwdRequest = {
     allowDynamicCwd: isDynamicCwdExempt([request.model, request.call]),
+    allowDynamicEnvironment: isDynamicEnvironmentExempt([
+      request.model,
+      request.call,
+    ]),
     call: request.call,
     evaluate: (expression) => {
       const expressionRequest: CallExpressionRequest = { expression, request };
@@ -956,35 +984,6 @@ function evaluatePathCall([request, call]: readonly [
     dynamic: false,
     value: name === 'join' ? posix.join(...text) : posix.resolve(...text),
   };
-}
-
-function importedMember([expression, location, model]: readonly [
-  ts.Expression,
-  ts.Node,
-  LexicalModel,
-]): readonly [string, string] | false {
-  if (ts.isIdentifier(expression)) {
-    const binding = lookupBinding([model, location, expression.text]);
-    return binding !== false && binding.importedFrom && binding.member
-      ? [binding.importedFrom, binding.member]
-      : false;
-  }
-  if (
-    ts.isPropertyAccessExpression(expression) &&
-    ts.isIdentifier(expression.expression)
-  ) {
-    const binding = lookupBinding([
-      model,
-      location,
-      expression.expression.text,
-    ]);
-    return binding !== false &&
-      binding.importedFrom &&
-      (!binding.member || binding.member === 'default')
-      ? [binding.importedFrom, expression.name.text]
-      : false;
-  }
-  return false;
 }
 
 function unwrapExpression(expression: ts.Expression): ts.Expression {

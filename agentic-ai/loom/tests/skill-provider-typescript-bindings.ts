@@ -24,6 +24,7 @@ export type LexicalBinding = {
 export type LexicalModel = {
   readonly bindings: readonly LexicalBinding[];
   readonly dynamicCwdExemptions: readonly ts.FunctionDeclaration[];
+  readonly dynamicEnvironmentExemptions?: readonly ts.FunctionDeclaration[];
   readonly path: string;
 };
 
@@ -42,6 +43,15 @@ const DYNAMIC_CWD_EXEMPTIONS: readonly DynamicCwdExemption[] = [
     digest: '766be918ab58c5e1721d05b89fcfe3759f510387da364afa30832db6cd0a6e92',
     functionName: 'runCommand',
     path: 'agentic-ai/loom/src/executable-skills/package-gate.ts',
+  },
+];
+const DYNAMIC_ENVIRONMENT_EXEMPTIONS: readonly DynamicCwdExemption[] = [
+  // The exact helper is reachable only through the proven git/tar snapshot
+  // calls and receives the runtime contract's audited platform allowlist.
+  {
+    digest: 'fa7e1e512f530c597366bbe7e65ae321f911aa6da7951e99d54fed1f978ab95c',
+    functionName: 'captureIsolatedCommand',
+    path: 'agentic-ai/loom/src/module-experts/runtime-contract.ts',
   },
 ];
 
@@ -66,6 +76,27 @@ export function dynamicCwdExemptions(
   });
 }
 
+export function dynamicEnvironmentExemptions(
+  request: DynamicCwdExemptionRequest,
+): readonly ts.FunctionDeclaration[] {
+  return DYNAMIC_ENVIRONMENT_EXEMPTIONS.flatMap((exemption) => {
+    if (
+      request.path !== exemption.path &&
+      !request.path.endsWith(`/${exemption.path}`)
+    )
+      return [];
+    const matches = request.sourceFile.statements.filter(
+      (node): node is ts.FunctionDeclaration =>
+        ts.isFunctionDeclaration(node) &&
+        node.name?.text === exemption.functionName,
+    );
+    const match = matches[0];
+    if (matches.length !== 1 || !match) return [];
+    const digest = createHash('sha256').update(match.getText()).digest('hex');
+    return digest === exemption.digest ? [match] : [];
+  });
+}
+
 export function isDynamicCwdExempt([model, location]: readonly [
   LexicalModel,
   ts.Node,
@@ -73,6 +104,23 @@ export function isDynamicCwdExempt([model, location]: readonly [
   let node = location;
   for (;;) {
     if (model.dynamicCwdExemptions.some((candidate) => candidate === node))
+      return true;
+    if (!node.parent) return false;
+    node = node.parent;
+  }
+}
+
+export function isDynamicEnvironmentExempt([model, location]: readonly [
+  LexicalModel,
+  ts.Node,
+]): boolean {
+  let node = location;
+  for (;;) {
+    if (
+      model.dynamicEnvironmentExemptions?.some(
+        (candidate) => candidate === node,
+      )
+    )
       return true;
     if (!node.parent) return false;
     node = node.parent;
@@ -304,4 +352,48 @@ export function collectBinding(request: BindingCollectionRequest): void {
     };
     request.target.push(binding);
   }
+}
+
+export function importedMember([expression, location, model]: readonly [
+  ts.Expression,
+  ts.Node,
+  LexicalModel,
+]): readonly [string, string] | false {
+  if (ts.isIdentifier(expression)) {
+    const binding = lookupBinding([model, location, expression.text]);
+    return binding !== false && binding.importedFrom && binding.member
+      ? [binding.importedFrom, binding.member]
+      : false;
+  }
+  if (
+    ts.isPropertyAccessExpression(expression) &&
+    ts.isIdentifier(expression.expression)
+  ) {
+    const binding = lookupBinding([
+      model,
+      location,
+      expression.expression.text,
+    ]);
+    return binding !== false &&
+      binding.importedFrom &&
+      (!binding.member || binding.member === 'default')
+      ? [binding.importedFrom, expression.name.text]
+      : false;
+  }
+  return false;
+}
+
+export function nodePromisifyTarget([call, model]: readonly [
+  ts.CallExpression,
+  LexicalModel,
+]): ts.Expression | false {
+  const imported = importedMember([call.expression, call, model]);
+  const [target] = call.arguments;
+  return imported !== false &&
+    /^(?:node:)?util$/u.test(imported[0]) &&
+    imported[1] === 'promisify' &&
+    call.arguments.length === 1 &&
+    target
+    ? target
+    : false;
 }

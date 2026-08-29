@@ -286,7 +286,7 @@ test('fails closed when ordinary calls receive execution capabilities', () => {
     "import {fork} from 'node:child_process'; const launch=fork; invoke(launch);",
   ])
     expect(() => extract(source)).toThrow(
-      'Subprocess capability passed to unsupported call.',
+      'Subprocess capability passed to unsupported call',
     );
   expect(
     extract(`
@@ -295,6 +295,22 @@ const Bun={spawn(){}};
 class Worker {}
 invoke(spawnSync); invoke(Bun.spawn); invoke(Worker);`),
   ).toEqual([]);
+});
+
+test('propagates subprocess capability through exact Node promisify', () => {
+  expect(
+    extract(`
+import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
+const execFileAsync=promisify(execFile);
+execFileAsync('bun', ['scripts/facade.ts']);`),
+  ).toEqual(["'bun' 'scripts/facade.ts'"]);
+  expect(() =>
+    extract(`
+import {execFile} from 'node:child_process';
+const promisify=(value:unknown)=>value;
+promisify(execFile);`),
+  ).toThrow('Subprocess capability passed to unsupported call');
 });
 
 test('recovers subprocess capabilities from exact static object holders', () => {
@@ -406,8 +422,30 @@ spawnSync('bun', ['scripts/facade.ts'], {cwd:'nested',env:{}});`),
     "import {spawnSync} from 'node:child_process'; spawnSync('git', ['status'], {env:{NODE_OPTIONS:'--require ./hook.cjs'}});",
   ])
     expect(() => extract(source)).toThrow(
-      /(?:Dynamic|Nonempty) TypeScript subprocess environment is forbidden\./,
+      /(?:Dynamic|Nonempty) TypeScript subprocess environment is forbidden/,
     );
+});
+
+test('pins the isolated command environment to its exact function AST', async () => {
+  const path = 'agentic-ai/loom/src/module-experts/runtime-contract.ts';
+  const sourcePath = resolve(import.meta.dir, '../../..', path);
+  const source = await Bun.file(sourcePath).text();
+  const inspection: TypeScriptSubprocessInspection = { path, source };
+  expect(typescriptSubprocessCommands(inspection)).toEqual([]);
+  const driftedInspection: TypeScriptSubprocessInspection = {
+    path,
+    source: source.replace('env: request.environment,', 'env: process.env,'),
+  };
+  expect(() => typescriptSubprocessCommands(driftedInspection)).toThrow(
+    'Dynamic TypeScript subprocess environment is forbidden in',
+  );
+  const widenedInspection: TypeScriptSubprocessInspection = {
+    path,
+    source: `${source}\ncaptureIsolatedCommand({args:[],command:runtimeCommand,cwd:'.',environment:{}});`,
+  };
+  expect(() => typescriptSubprocessCommands(widenedInspection)).toThrow(
+    'Dynamic TypeScript subprocess executable is forbidden',
+  );
 });
 
 test('pins the sole dynamic package cwd exemption to its exact function AST', async () => {
