@@ -85,6 +85,7 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "Prepare isolated implementation worktree",
         "IMPLEMENTATION_REPO_ROOT=$implementation_root",
         "REPO_ROOT: ${{ env.IMPLEMENTATION_REPO_ROOT }}",
+        "node \"$GITHUB_WORKSPACE/agentic-ai/ci-agent/dist/main/main.js\" edit",
         "node \"$GITHUB_WORKSPACE/agentic-ai/ci-agent/dist/main/main.js\" deliver",
         "Rejected unsafe implementation worklog artifact.",
         "ASSIGNED_GIZMO_ID: ${{ steps.workbench.outputs.gizmo_id }}",

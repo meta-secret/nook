@@ -83,7 +83,9 @@ pub(super) fn assert_contract(workflow: &str) -> anyhow::Result<()> {
     assert!(
         workflow.contains("Run sandboxed implementation agent")
             && workflow.contains("Validate, commit, and publish implementation")
+            && workflow.contains("dist/main/main.js\" edit")
             && workflow.contains("dist/main/main.js\" deliver")
+            && !workflow.contains("dist/main/main.js\" implement")
             && !workflow.contains(
                 "CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}\n          NOOK_GITHUB_PAT"
             ),

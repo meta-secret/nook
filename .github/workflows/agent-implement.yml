@@ -737,7 +737,7 @@ jobs:
           test -f "$plan" && test ! -L "$plan"
           test "$(wc -c < "$plan")" -le 65536
           test "$(sha256sum "$plan" | cut -d' ' -f1)" = "$VALIDATED_PLAN_SHA256"
-          node "$GITHUB_WORKSPACE/agentic-ai/ci-agent/dist/main/main.js" implement
+          node "$GITHUB_WORKSPACE/agentic-ai/ci-agent/dist/main/main.js" edit
 
       - name: Format implementation on trusted host
         id: format
