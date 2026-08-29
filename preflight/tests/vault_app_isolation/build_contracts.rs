@@ -411,14 +411,14 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
             1,
             "{path} must isolate Docker plugin discovery"
         );
-        assert!(source.contains("cp -RP -- \"$docker_config_source/contexts\""));
+        assert!(source.contains(
+            "if [ -z \"${GITHUB_ACTIONS:-}\" ] && [ -e \"$docker_config_source/contexts\" ]; then"
+        ));
         assert!(source.contains("Docker contexts must not contain symlinks"));
         assert!(source.contains("export BUILDX_CONFIG=\"$trusted_docker_config/buildx\""));
         assert!(source.contains("any(keys[]; explode | any(. > 127))"));
-        assert!(source.contains(
-            "current_context=\"$(DOCKER_CONFIG=\"$docker_config_source\" \"$docker_cli\" context show)\""
-        ));
         assert!(source.contains("(.key | ascii_downcase) != \"credsstore\""));
+        assert!(source.contains("(.key | ascii_downcase) != \"currentcontext\""));
         assert!(source.contains("(.key | ascii_downcase) != \"credhelpers\""));
         assert!(source.contains(
             "ln -s \"$buildx_cli\" \"$trusted_docker_config/cli-plugins/docker-buildx\""

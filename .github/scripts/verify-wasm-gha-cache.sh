@@ -36,7 +36,7 @@ prepare_trusted_docker() {
     rm -rf -- "$trusted_docker_config"
   }
   trap cleanup_docker_config EXIT
-  if [ -e "$docker_config_source/contexts" ]; then
+  if [ -z "${GITHUB_ACTIONS:-}" ] && [ -e "$docker_config_source/contexts" ]; then
     cp -RP -- "$docker_config_source/contexts" "$trusted_docker_config/contexts"
     if find "$trusted_docker_config/contexts" -type l -print -quit | grep -q .; then
       echo "Docker contexts must not contain symlinks" >&2
@@ -52,7 +52,7 @@ prepare_trusted_docker() {
         echo "trusted jq is unavailable in GitHub Actions" >&2
         exit 127
       fi
-      "$jq_cli" 'if any(keys[]; explode | any(. > 127)) then error("non-ASCII Docker config key") else with_entries(select((.key | ascii_downcase) != "clipluginsextradirs" and (.key | ascii_downcase) != "credsstore" and (.key | ascii_downcase) != "credhelpers")) end' \
+      "$jq_cli" 'if any(keys[]; explode | any(. > 127)) then error("non-ASCII Docker config key") else with_entries(select((.key | ascii_downcase) != "currentcontext" and (.key | ascii_downcase) != "clipluginsextradirs" and (.key | ascii_downcase) != "credsstore" and (.key | ascii_downcase) != "credhelpers")) end' \
         "$docker_config_source/config.json" >"$trusted_docker_config/config.json"
     else
       current_context="$(DOCKER_CONFIG="$docker_config_source" "$docker_cli" context show)"
