@@ -1,4 +1,5 @@
 import {
+  WebsiteAuthenticatorResponseStatus,
   type WebsiteAuthenticatorOption,
   type WebsiteLoginAccountOption,
 } from '../../lib/login-fill-messages'
@@ -331,7 +332,15 @@ export async function websiteLoginOptions({
     forbiddenReason: 'login-forbidden-origin',
   }
   const access = await availableWebsiteGrants(nookTypedArgs0_6)
-  if ('response' in access) return access.response
+  if ('response' in access) {
+    if (
+      access.response.ok &&
+      access.response.status === WebsiteAuthenticatorResponseStatus.Unavailable
+    ) {
+      openCompanionLauncherBestEffort(OpenCompanionLauncherIntent.Default)
+    }
+    return access.response
+  }
 
   const nookTypedArgs0_0: Parameters<typeof loginAccountsForOrigin>[0] = {
     grants: access.grants,
