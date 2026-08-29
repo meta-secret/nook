@@ -86,6 +86,7 @@ export {
   findUsernameFields,
   findPasskeyControl,
   oneTimeCodeFieldSelectors,
+  pageHasManualCheckpoint,
   pageHasPasskeyControl,
   PasskeyControlLookupKind,
   PasswordFormScopeKind,
@@ -142,7 +143,7 @@ export type PasswordFormObservation = {
 type AuthenticationObservationFactsRequest = {
   observation: PasswordFormObservation;
   authenticatorSetupHint: boolean;
-  backupCodesHint: boolean;
+  backupCodesCopy: string;
 };
 type PasswordFormSummaryRequest = PasswordFormScopeQuery;
 function passwordFieldQuery(
@@ -408,7 +409,7 @@ export function findWorkflowPasskeyControl(
 export function authenticationPageObservationFacts({
   observation,
   authenticatorSetupHint,
-  backupCodesHint,
+  backupCodesCopy,
 }: AuthenticationObservationFactsRequest): AuthenticationPageObservationFacts {
   const controlRoot = scopedControlRoot(observation);
   const authenticationUsername = usernameEvidence(observation);
@@ -624,7 +625,7 @@ export function authenticationPageObservationFacts({
     },
     authenticator: {
       authenticatorSetup: authenticatorSetupHint ? "present" : "absent",
-      backupCodes: backupCodesHint ? "present" : "absent",
+      backupCodesCopy,
       passkeyControl:
         passkeyControls.length > 0
           ? passkeyControlPresent

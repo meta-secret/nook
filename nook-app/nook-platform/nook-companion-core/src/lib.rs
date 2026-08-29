@@ -57,6 +57,7 @@ pub use authentication_workflow::{
     AuthenticationWorkflowSnapshot, AuthenticationWorkflowSnapshotError,
     AuthenticationWorkflowStage, MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
     MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS, authentication_form_observation_priority,
+    authentication_enrollment_pilot_presentation_capability,
     authentication_page_observation_facts_match_binding,
     authentication_page_observation_facts_priority, authentication_page_observations_are_valid,
     authentication_passkey_control_candidate_is_safe,

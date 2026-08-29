@@ -20,18 +20,36 @@ pub enum AuthenticationAuthenticatorSetupObservation {
 pub enum AuthenticationBackupCodesObservation {
     #[default]
     Absent,
-    /// Visible recovery material with at least one Rust-extracted backup-code candidate.
+    /// Visible recovery-code issuance or preservation copy.
     Present,
 }
 
-/// Require both recovery copy and an extracted candidate before exposing a save action.
+/// Classify non-secret recovery copy before consent. Candidate extraction is deferred
+/// until the user approves the save action.
 #[must_use]
 pub fn classify_authentication_backup_codes_observation(
     text: &str,
 ) -> AuthenticationBackupCodesObservation {
-    if crate::page_has_backup_code_hint(text)
-        && !crate::extract_backup_code_candidates(text).is_empty()
-    {
+    let normalized = text.to_ascii_lowercase();
+    let recovery_subject = ["backup codes", "recovery codes", "emergency codes"]
+        .iter()
+        .any(|phrase| normalized.contains(phrase));
+    let preservation_instruction = [
+        "save",
+        "store",
+        "keep",
+        "download",
+        "print",
+        "copy",
+        "generated",
+    ]
+    .iter()
+    .any(|word| {
+        normalized
+            .split(|c: char| !c.is_ascii_alphanumeric())
+            .any(|token| token == *word)
+    });
+    if recovery_subject && preservation_instruction {
         AuthenticationBackupCodesObservation::Present
     } else {
         AuthenticationBackupCodesObservation::Absent
@@ -44,7 +62,8 @@ pub fn classify_authentication_backup_codes_observation(
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct AuthenticationAuthenticatorObservationFacts {
     pub authenticator_setup: AuthenticationAuthenticatorSetupObservation,
-    pub backup_codes: AuthenticationBackupCodesObservation,
+    /// Bounded, non-secret heading/action copy; recovery candidates are never transported here.
+    pub backup_codes_copy: String,
     pub passkey_control: AuthenticationPasskeyControlObservation,
     pub matching_passkey_account_count: u32,
     /// Detailed evidence is classified in Rust; the legacy presence flag is ignored.
@@ -60,11 +79,17 @@ impl AuthenticationAuthenticatorObservationFacts {
         )
     }
 
-    pub(super) const fn backup_codes_hint(&self) -> bool {
+    pub(super) fn backup_codes_hint(&self) -> bool {
         matches!(
-            self.backup_codes,
+            classify_authentication_backup_codes_observation(&self.backup_codes_copy),
             AuthenticationBackupCodesObservation::Present
         )
+    }
+
+    pub(super) fn is_bounded(&self) -> bool {
+        self.backup_codes_copy.len() <= crate::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
+            && self.matching_passkey_account_count <= crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT
+            && self.detailed_passkey_control.is_bounded()
     }
 
     pub(super) fn passkey_control_present(
@@ -81,16 +106,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn backup_code_observation_requires_an_extracted_candidate() {
+    fn backup_code_observation_requires_recovery_preservation_copy() {
         assert_eq!(
             classify_authentication_backup_codes_observation("Use a backup code instead"),
             AuthenticationBackupCodesObservation::Absent
         );
         assert_eq!(
             classify_authentication_backup_codes_observation(
-                "Save your backup codes\nA1B2-C3D4-E5F6"
+                "Save your backup codes in a secure place"
             ),
             AuthenticationBackupCodesObservation::Present
         );
+        for ordinary_otp in ["Authenticator code\n123456", "One-time code\n123456"] {
+            assert_eq!(
+                classify_authentication_backup_codes_observation(ordinary_otp),
+                AuthenticationBackupCodesObservation::Absent
+            );
+        }
     }
 }

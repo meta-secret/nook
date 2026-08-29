@@ -71,6 +71,10 @@ impl AuthenticationPageObservation {
 impl AuthenticationWorkflowSnapshot {
     const fn candidate_priority(self) -> AuthenticationWorkflowCandidatePriority {
         match (self.kind, self.action) {
+            (
+                AuthenticationWorkflowKind::TotpEnrollment,
+                AuthenticationWorkflowAction::SaveBackupCodes,
+            ) => AuthenticationWorkflowCandidatePriority::RecoveryEnrollment,
             (AuthenticationWorkflowKind::TotpEnrollment, _) => {
                 AuthenticationWorkflowCandidatePriority::Enrollment
             }
@@ -106,6 +110,7 @@ enum AuthenticationWorkflowCandidatePriority {
     Signup,
     CredentialChangeOrPasskeySetup,
     SavedLogin,
+    RecoveryEnrollment,
     SecondFactorOrPasskeyUse,
     Enrollment,
 }
@@ -196,6 +201,24 @@ mod tests {
             );
             assert_eq!(snapshot.observation_index, expected_index);
         }
+        Ok(())
+    }
+
+    #[test]
+    fn active_otp_challenge_outranks_page_wide_recovery_copy() -> anyhow::Result<()> {
+        let otp = AuthenticationPageObservation {
+            one_time_code_field_count: 1,
+            ..Default::default()
+        };
+        let recovery = AuthenticationPageObservation {
+            username_field_count: 1,
+            backup_codes_hint: true,
+            ..Default::default()
+        };
+        let snapshot = classify_authentication_workflow_candidates(&[recovery, otp]).snapshot()?;
+        assert_eq!(snapshot.kind, AuthenticationWorkflowKind::TotpChallenge);
+        assert_eq!(snapshot.action, AuthenticationWorkflowAction::FillTotp);
+        assert_eq!(snapshot.observation_index, 1);
         Ok(())
     }
 }

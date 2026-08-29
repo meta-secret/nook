@@ -45,7 +45,7 @@ describe('website one-time-code fields', () => {
     const facts = authenticationPageObservationFacts({
       observation,
       authenticatorSetupHint: false,
-      backupCodesHint: false,
+      backupCodesCopy: '',
     })
     expect(facts.ceremony.oneTimeCodeHandlerSignals).toEqual([
       'oninput=this.form.requestSubmit()',
@@ -63,7 +63,7 @@ describe('website one-time-code fields', () => {
     const facts = authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
-      backupCodesHint: false,
+      backupCodesCopy: '',
     })
     expect(facts.ceremony.oneTimeCodeHandlerSignals).toEqual([
       'oninput=this.form.requestSubmit()',
@@ -85,7 +85,7 @@ describe('website one-time-code fields', () => {
     const facts = authenticationPageObservationFacts({
       observation,
       authenticatorSetupHint: false,
-      backupCodesHint: false,
+      backupCodesCopy: '',
     })
     const detailed = facts.detailedAdvanceControl
     if (!detailed || detailed.kind !== 'observed') {
@@ -116,7 +116,7 @@ describe('website one-time-code fields', () => {
     const facts = authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
-      backupCodesHint: false,
+      backupCodesCopy: '',
     })
     expect(facts.detailedAdvanceControl).toMatchObject({
       kind: 'observed',
@@ -135,7 +135,7 @@ describe('website one-time-code fields', () => {
     const facts = authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
-      backupCodesHint: false,
+      backupCodesCopy: '',
     })
     expect(facts.detailedAdvanceControl).toEqual({ kind: 'absent' })
     expect(facts.ceremony.advanceControl).toBe('implicit-submission')
@@ -368,7 +368,7 @@ describe('website one-time-code fields', () => {
     const facts = authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
-      backupCodesHint: false,
+      backupCodesCopy: '',
     })
     expect(facts.ceremony.authenticationContext).toMatchObject({
       formIdentity: expect.stringContaining('Login'),
@@ -383,7 +383,7 @@ describe('website one-time-code fields', () => {
     const defaultDestination = authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
-      backupCodesHint: false,
+      backupCodesCopy: '',
     })
     const defaultAuthenticationContext =
       defaultDestination.ceremony.authenticationContext
@@ -513,7 +513,7 @@ describe('website one-time-code fields', () => {
     const facts = authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
-      backupCodesHint: false,
+      backupCodesCopy: '',
     })
     const authenticationContext = facts.ceremony.authenticationContext
     if (!authenticationContext) {
@@ -536,7 +536,7 @@ describe('website one-time-code fields', () => {
     const facts = authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
-      backupCodesHint: false,
+      backupCodesCopy: '',
     })
     expect(facts.detailedAdvanceControl).toMatchObject({
       kind: 'observed',
@@ -686,7 +686,7 @@ describe('website one-time-code fields', () => {
     const facts = authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
-      backupCodesHint: false,
+      backupCodesCopy: '',
     })
     expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
       kind: 'candidates',
@@ -749,7 +749,7 @@ describe('website one-time-code fields', () => {
     const facts = authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
-      backupCodesHint: false,
+      backupCodesCopy: '',
     })
     expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
       kind: 'candidates',
