@@ -40,8 +40,13 @@ index. Focused Markdown files replace sub-issues.
 
 Create a focused sequence when either condition holds:
 
-- the complete feature is expected to exceed 3,000 authored changed lines; or
+- the complete feature is expected to exceed 2,000 authored changed lines; or
 - separate module ownership makes independent slices safer below that size.
+
+The first condition requires an ordered native GitHub Stacked Pull Request
+sequence. The second may use ordinary independent PRs from `main` when the
+slices do not depend on unmerged predecessor work; stacking is not required for
+every small PR.
 
 The feature `README.md` must record:
 
@@ -52,11 +57,19 @@ The feature `README.md` must record:
 - feature-level acceptance criteria;
 - current completion status.
 
-For a split, record the full-work commit, semantic boundary, ordered PR links,
-completing owner, and preservation checklist before changing the first PR.
+Oversized stack requirements:
 
-The preservation checklist must map implementation, tests, migrations, and
-documentation to a named PR slice.
+- Before changing the first PR, record the full-work commit, semantic boundary,
+  ordered PR links, predecessor-based temporary GitHub bases, completing owner,
+  merge order, and preservation checklist.
+- Create and maintain the same-repository GitHub stack with native `gh stack`
+  operations when available, or the GitHub website.
+- Require GitHub to recognize the PRs as one stack; links and base branches
+  alone are insufficient.
+- If native stack operations are unavailable, stop and record the blocker
+  instead of creating an informal stack or adding a third-party dependency.
+- Map implementation, tests, migrations, and documentation to a named PR slice
+  in the preservation checklist.
 
 Line-count optimization is not a valid split strategy.
 
@@ -71,13 +84,18 @@ After a slice merges:
 
 1. Update its issue and the feature index.
 2. Publish the required worklog and statistics.
-3. Choose one owner for the next dependency-free issue.
-4. If the current agent continues, claim the issue as `in_progress` before
-   starting its branch from current Nook `origin/main`.
-5. If bounded automation will continue, set `status: ready` and `automation:
+3. For an oversized stack, retarget the immediate successor from its predecessor
+   branch to `main`, update it from current Nook `origin/main`, re-measure its
+   authored additions plus deletions, and validate the new exact head. Preserve
+   GitHub's native stack state while proceeding bottom-up.
+4. Choose one owner for the next dependency-free issue.
+5. If the current agent continues a small independent sequence, claim the issue
+   as `in_progress` before starting its branch from current Nook `origin/main`.
+   For a declared stack, continue on the already linked successor branch.
+6. If bounded automation will continue, set `status: ready` and `automation:
 agent`.
-6. Explicitly dispatch that issue's exact `issue_path`.
-7. In that case, the current agent must not also start the issue.
+7. Explicitly dispatch that issue's exact `issue_path`.
+8. In that case, the current agent must not also start the issue.
 
 - The feature remains incomplete while any required issue remains incomplete.
 - Do not convert remaining requested functionality into an optional follow-up.
@@ -255,6 +273,7 @@ The plan must contain:
 - consecutively numbered `Ownership units`, one per capability;
 - a `Public or cross-module interfaces` value;
 - a `Delivery shape` value;
+- a `PR sequence mode` value;
 - a `Current PR estimated authored changed lines` value;
 - a `Current PR slice and acceptance evidence` value;
 - a `PR slices and acceptance evidence` value;

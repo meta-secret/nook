@@ -41,6 +41,11 @@ const planBudgetFields = [
     pattern: /^- Delivery shape:\s*(?:One PR|Multiple PRs)\s*$/m,
   },
   {
+    label: 'PR sequence mode',
+    pattern:
+      /^- PR sequence mode:\s*(?:One PR|Independent PRs|Stacked PRs)\s*$/m,
+  },
+  {
     label: 'Current PR estimated authored changed lines',
     pattern:
       /^- Current PR estimated authored changed lines:\s*(?:0|[1-9]\d*|[1-9]\d{0,2}(?:,\d{3})+)\s*$/m,
@@ -218,6 +223,7 @@ function parseBudgetFields(budgetSection) {
     'Current PR estimated authored changed lines',
   )
   const deliveryShape = parseBudgetFieldValue(budgetSection, 'Delivery shape')
+  const sequenceMode = parseBudgetFieldValue(budgetSection, 'PR sequence mode')
   const publicInterfaces = parseBudgetFieldValue(
     budgetSection,
     'Public or cross-module interfaces',
@@ -236,6 +242,7 @@ function parseBudgetFields(budgetSection) {
     estimate.kind === 'invalid' ||
     currentPrEstimate.kind === 'invalid' ||
     deliveryShape.kind === 'invalid' ||
+    sequenceMode.kind === 'invalid' ||
     publicInterfaces.kind === 'invalid' ||
     currentSlice.kind === 'invalid' ||
     sequenceStart < 0 ||
@@ -254,6 +261,7 @@ function parseBudgetFields(budgetSection) {
     estimate: Number(estimate.value.replaceAll(',', '')),
     currentPrEstimate: Number(currentPrEstimate.value.replaceAll(',', '')),
     deliveryShape: deliveryShape.value,
+    sequenceMode: sequenceMode.value,
     publicInterfaces: publicInterfaces.value,
     currentSlice: currentSlice.value,
     sequenceBody: budgetSection.slice(sequenceStart + sequenceMarker.length),
@@ -427,6 +435,7 @@ function validateAgentRecord(candidate, kind, secrets = [], sourceTask = '') {
     const estimate = budgetFields.estimate
     const currentPrEstimate = budgetFields.currentPrEstimate
     const deliveryShape = budgetFields.deliveryShape
+    const sequenceMode = budgetFields.sequenceMode
     const currentSlice = parseSliceContract(budgetFields.currentSlice, false)
     if (!currentSlice.valid) {
       return 'missing or empty plan field: Current PR slice and acceptance evidence'
@@ -435,17 +444,26 @@ function validateAgentRecord(candidate, kind, secrets = [], sourceTask = '') {
     if (estimate < 1 || currentPrEstimate < 1) {
       return 'authored changed-line estimates must be positive integers'
     }
-    if (currentPrEstimate > 3_000) {
-      return 'current PR estimate exceeds 3,000 authored changed lines'
+    if (currentPrEstimate > 2_000) {
+      return 'current PR estimate exceeds 2,000 authored changed lines'
     }
     if (estimate < currentPrEstimate) {
       return 'feature estimate must be at least the current PR estimate'
     }
-    if (deliveryShape === 'One PR' && estimate > 3_000) {
-      return 'one-PR plan exceeds 3,000 authored changed lines'
+    if (deliveryShape === 'One PR' && estimate > 2_000) {
+      return 'one-PR plan exceeds 2,000 authored changed lines'
     }
     if (deliveryShape === 'One PR' && estimate !== currentPrEstimate) {
       return 'one-PR feature and current PR estimates must match'
+    }
+    if (deliveryShape === 'One PR' && sequenceMode !== 'One PR') {
+      return 'one-PR delivery requires one-PR sequence mode'
+    }
+    if (deliveryShape === 'Multiple PRs' && sequenceMode === 'One PR') {
+      return 'multi-PR delivery requires independent or stacked sequence mode'
+    }
+    if (estimate > 2_000 && sequenceMode !== 'Stacked PRs') {
+      return 'feature above 2,000 authored changed lines requires stacked PRs'
     }
 
     const sequenceBody = budgetFields.sequenceBody

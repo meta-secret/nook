@@ -78,7 +78,7 @@ export async function runCiImplement(): Promise<void> {
     const budgetArgs = {
       repoRoot,
       baseRef: "origin/main",
-      maximumLines: 3_000,
+      maximumLines: 2_000,
     };
     await assertAuthoredChangeBudget(budgetArgs);
 

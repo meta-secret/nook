@@ -11,8 +11,9 @@ Use this workflow for feature work that touches more than one package.
    merge** (`gh pr merge --squash`). Never merge commit or rebase merge. See
    [pull requests](../../../gizmo/workflows/pull-requests.md#squash-merge-only---no-exceptions).
    0c. Estimate authored changed lines and map package ownership before editing.
-   If the change approaches 3,000 lines, split it into ordered package- or
-   layer-focused PRs. Follow
+   At 1,500 lines, perform mandatory split planning. If the complete feature is
+   expected to exceed 2,000 lines, or the current PR may reach that ceiling,
+   split it into ordered package- or layer-focused stacked PRs. Follow
    [pull request size](../../../gizmo/workflows/pull-requests.md#pull-request-size-and-modularity).
 1. Identify the lowest package that should own the behavior.
 2. Put portable logic and domain models in `nook-core`; keep browser I/O and JS-friendly conversion in `nook-wasm`.
@@ -30,9 +31,21 @@ Use this workflow for feature work that touches more than one package.
 For multiple package PRs:
 
 1. Introduce or stabilize the narrowest owning interface first.
-2. Merge that slice before changing its consumers.
-3. Start each consumer slice from current `origin/main`.
-4. Keep unrelated package changes separate even when they belong to one feature.
+2. For a feature expected to exceed 2,000 authored changed lines, create a
+   native GitHub Stacked Pull Request sequence in dependency order: keep the
+   branches in the same repository, register them as one GitHub-recognized
+   stack, and make each successor temporarily target its predecessor branch.
+   Prefer `gh stack`; the GitHub website is also valid. If native operations are
+   unavailable, stop instead of falling back to an informal chain or adding a
+   third-party dependency.
+3. Merge each predecessor before completing its consumers. Retarget the
+   immediate successor to `main`, update it from current `origin/main`,
+   re-measure, run full checks, and validate the new exact head after every
+   predecessor merge. Proceed bottom-up and squash each independently ready PR.
+4. Small independent PRs below the ceiling may start from current
+   `origin/main`; stacking is not required when they do not depend on unmerged
+   predecessor work.
+5. Keep unrelated package changes separate even when they belong to one feature.
 
 Dependency direction must stay:
 

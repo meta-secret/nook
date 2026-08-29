@@ -58,13 +58,25 @@ to generate bookkeeping.
 3. Treat every other active task as read-only.
 4. Update the existing record or create a focused non-duplicate.
 5. Bound the work:
-   - Record the ordered issue and PR sequence for a feature above 3,000
-     authored changed lines.
+   - Record an ordered native GitHub Stacked Pull Request sequence for a feature
+     above 2,000 authored changed lines or an in-progress PR that may reach the
+     ceiling.
+   - Use same-repository predecessor branches as temporary GitHub bases,
+     cross-link adjacent PRs, register them as one GitHub-recognized stack, and
+     record bottom-up merge order. Prefer `gh stack`; the GitHub website is also
+     valid. Stacking is not required for small independent PRs below the
+     ceiling.
+   - If native stack operations are unavailable, stop and record the delivery
+     blocker. Do not use an informal PR chain or add a third-party dependency.
    - Open and link the successor draft PR before reducing an implemented PR.
    - Record a preservation inventory for every removed file and behavior.
    - Keep each issue inside one cohesive module, package, layer, or
      responsibility.
    - Keep acceptance criteria independently deliverable and testable.
+   - After each predecessor merges, retarget the immediate successor to `main`,
+     update it from current `origin/main`, re-measure authored additions plus
+     deletions, and validate the new exact head before its bottom-up squash
+     merge.
 6. Link the parent feature, dependencies, historical issue context, and Nook
    PR.
 7. Publish a worklog before completion or blocked handoff.

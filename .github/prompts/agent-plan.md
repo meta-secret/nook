@@ -70,6 +70,7 @@ body, with each heading exactly once and in this order:
 1. Capability: ; Functional owner: ; Expertise provider: ; Expertise allowed code paths: ; Expertise allowed test paths: ; Expertise forbidden paths: ; Expertise consumer interfaces: ; Expertise acceptance evidence: ; Capability acceptance evidence:
 - Public or cross-module interfaces:
 - Delivery shape:
+- PR sequence mode:
 - Current PR estimated authored changed lines:
 - Current PR slice and acceptance evidence:
 - PR slices and acceptance evidence:
@@ -90,12 +91,19 @@ Estimate additions and deletions for authored source, tests, documentation,
 configuration, scripts, and workflow code. Exclude generated files, lockfiles,
 snapshots, vendored sources, binary artifacts, and pure renames from the
 estimate. Set `Delivery shape` to exactly `One PR` or `Multiple PRs`.
+Set `PR sequence mode` to exactly `One PR`, `Independent PRs`, or
+`Stacked PRs`. A one-PR delivery must use `One PR`. A feature above 2,000
+authored changed lines must use `Multiple PRs` and `Stacked PRs`; smaller
+multi-PR work may use `Independent PRs` when its slices do not depend on
+unmerged predecessor work.
 For a multi-PR feature, list each ordered, module-focused slice with its
 acceptance evidence. Identify the first or currently authorized slice
-separately. Its estimate must not exceed 3,000 authored changed lines. At 2,500
-lines, inventory the logical domain changes and require an ordered stacked-PR
-sequence before implementation expands further. Use `None` when no public or
-cross-module interface changes.
+separately. Its estimate must not exceed 2,000 authored changed lines. At 1,500
+lines, inventory the logical domain changes and perform mandatory split
+planning before implementation expands further. When the complete feature is
+expected to exceed 2,000 lines, or an in-progress PR may reach that ceiling,
+require an ordered native GitHub Stacked Pull Request sequence. Use `None` when
+no public or cross-module interface changes.
 
 Add one consecutively numbered `Ownership units` row per capability. Set each
 `Functional owner` to exactly `Gizmo`, `AI`, `Development core`, `Security`,
@@ -126,10 +134,17 @@ and linked draft PR from the last full-work commit before any scope reduction.
 Require a Workbench inventory that maps every removed file and behavior to a
 successor PR.
 
-Model a stacked sequence with GitHub base branches. Each successor draft PR
-temporarily targets its predecessor branch. After the predecessor merges,
-retarget the successor to `main`, update it from `origin/main`, re-measure it,
-and validate the new exact head.
+For an oversized feature sequence or in-progress ceiling split, require a
+same-repository stack recognized by GitHub's native Stacked Pull Requests.
+Prefer `gh stack` for creation, submission, linking, and synchronization; the
+GitHub website is also valid. Each successor draft PR temporarily targets its
+predecessor branch and cross-links the adjacent PRs and bottom-up merge order.
+After each predecessor squash-merges with full checks and exact-head readiness,
+retarget the immediate successor to `main`, update it from current
+`origin/main`, re-measure authored additions plus deletions, and validate the
+new exact head. If native stack operations are unavailable, require a blocked
+handoff instead of an informal branch chain or a new third-party dependency.
+Stacking is not required for every small, independent PR below the ceiling.
 
 Write the current slice as `<scope>; Acceptance evidence: <observable proof>`.
 Write every numbered PR slice in the same form. Never use `None`, `N/A`, or

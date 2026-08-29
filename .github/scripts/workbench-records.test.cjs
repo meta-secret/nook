@@ -35,6 +35,7 @@ Deliver a durable two-phase agent context record.
 ${baseOwnershipUnit}
 - Public or cross-module interfaces: Plan validation contract
 - Delivery shape: One PR
+- PR sequence mode: One PR
 - Current PR estimated authored changed lines: 240
 - Current PR slice and acceptance evidence: Validator change; Acceptance evidence: Contract tests pass
 - PR slices and acceptance evidence: Validator change; Acceptance evidence: Contract tests pass
@@ -211,6 +212,7 @@ for (const field of [
   'Ownership units',
   'Public or cross-module interfaces',
   'Delivery shape',
+  'PR sequence mode',
   'Current PR estimated authored changed lines',
   'Current PR slice and acceptance evidence',
   'PR slices and acceptance evidence',
@@ -401,7 +403,7 @@ test('rejects an over-budget one-PR plan', () => {
     )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /current PR estimate exceeds 3,000 authored changed lines/,
+    /current PR estimate exceeds 2,000 authored changed lines/,
   )
 })
 
@@ -412,7 +414,49 @@ test('rejects a one-PR shape for an over-budget feature', () => {
   )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /one-PR plan exceeds 3,000 authored changed lines/,
+    /one-PR plan exceeds 2,000 authored changed lines/,
+  )
+})
+
+test('accepts a one-PR plan at the 2,000-line ceiling', () => {
+  const atCeiling = validPlan
+    .replace(
+      'Estimated authored changed lines: 240',
+      'Estimated authored changed lines: 2,000',
+    )
+    .replace(
+      'Current PR estimated authored changed lines: 240',
+      'Current PR estimated authored changed lines: 2,000',
+    )
+  assert.equal(validateAgentRecord(atCeiling, 'plan'), '')
+})
+
+test('requires stacked PRs for an over-budget multi-PR feature', () => {
+  const independent = validPlan
+    .replace(
+      'Estimated authored changed lines: 240',
+      'Estimated authored changed lines: 2,001',
+    )
+    .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
+    .replace('PR sequence mode: One PR', 'PR sequence mode: Independent PRs')
+    .replace(
+      '- PR slices and acceptance evidence: Validator change; Acceptance evidence: Contract tests pass',
+      '- PR slices and acceptance evidence:\n1. Validator change; Acceptance evidence: Contract tests pass\n2. Publisher adoption; Acceptance evidence: Integration checks pass.',
+    )
+  assert.match(
+    validateAgentRecord(independent, 'plan'),
+    /feature above 2,000 authored changed lines requires stacked PRs/,
+  )
+})
+
+test('rejects a sequence mode that contradicts one-PR delivery', () => {
+  const invalid = validPlan.replace(
+    'PR sequence mode: One PR',
+    'PR sequence mode: Stacked PRs',
+  )
+  assert.match(
+    validateAgentRecord(invalid, 'plan'),
+    /one-PR delivery requires one-PR sequence mode/,
   )
 })
 
@@ -424,7 +468,7 @@ test('rejects a feature estimate below its current PR estimate', () => {
     )
     .replace(
       'Current PR estimated authored changed lines: 240',
-      'Current PR estimated authored changed lines: 2,999',
+      'Current PR estimated authored changed lines: 1,999',
     )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
@@ -453,6 +497,7 @@ test('accepts a bounded current slice for a multi-PR feature', () => {
       'Delivery shape: One PR',
       'Delivery shape: Multiple PRs',
     )
+    .replace('PR sequence mode: One PR', 'PR sequence mode: Stacked PRs')
     .replace(
       '- PR slices and acceptance evidence: Validator change; Acceptance evidence: Contract tests pass',
       '- PR slices and acceptance evidence:\n1. Validator change; Acceptance evidence: Contract tests pass\n2. Publisher adoption; Acceptance evidence: Integration checks pass.',
@@ -463,6 +508,7 @@ test('accepts a bounded current slice for a multi-PR feature', () => {
 test('rejects a multi-PR current slice omitted from its ordered sequence', () => {
   const invalid = validPlan
     .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
+    .replace('PR sequence mode: One PR', 'PR sequence mode: Independent PRs')
     .replace(
       '- PR slices and acceptance evidence: Validator change; Acceptance evidence: Contract tests pass',
       '- PR slices and acceptance evidence:\n1. Storage schema; Acceptance evidence: Domain tests pass.\n2. Publisher adoption; Acceptance evidence: Integration checks pass.',
@@ -483,6 +529,7 @@ test('rejects a multi-PR plan without an ordered sequence', () => {
       'Delivery shape: One PR',
       'Delivery shape: Multiple PRs',
     )
+    .replace('PR sequence mode: One PR', 'PR sequence mode: Stacked PRs')
     .replace(
       'PR slices and acceptance evidence: Validator change; Acceptance evidence: Contract tests pass',
       'PR slices and acceptance evidence: None',
@@ -496,6 +543,7 @@ test('rejects a multi-PR plan without an ordered sequence', () => {
 test('rejects multi-PR slices without acceptance evidence', () => {
   const invalid = validPlan
     .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
+    .replace('PR sequence mode: One PR', 'PR sequence mode: Independent PRs')
     .replace(
       'PR slices and acceptance evidence: Validator change; Acceptance evidence: Contract tests pass',
       'PR slices and acceptance evidence:\n1. Storage\n2. UI',
@@ -513,6 +561,7 @@ for (const sequence of [
   test(`rejects nonconsecutive multi-PR sequence: ${sequence.split('\n')[1]}`, () => {
     const invalid = validPlan
       .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
+      .replace('PR sequence mode: One PR', 'PR sequence mode: Independent PRs')
       .replace(
         '- PR slices and acceptance evidence: Validator change; Acceptance evidence: Contract tests pass',
         `- PR slices and acceptance evidence:\n${sequence}`,
@@ -600,6 +649,7 @@ test('rejects multiple slices declared as one PR', () => {
 test('rejects a placeholder scope in a multi-PR slice', () => {
   const invalid = validPlan
     .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
+    .replace('PR sequence mode: One PR', 'PR sequence mode: Independent PRs')
     .replace(
       '- PR slices and acceptance evidence: Validator change; Acceptance evidence: Contract tests pass',
       '- PR slices and acceptance evidence:\n1. None; Acceptance evidence: Contract tests pass.\n2. Publisher adoption; Acceptance evidence: Integration checks pass.',
