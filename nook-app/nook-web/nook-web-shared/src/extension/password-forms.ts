@@ -260,6 +260,10 @@ function isLocallyAdjacentToOwnedForm(
   control: HTMLElement,
   owner: HTMLFormElement,
 ): boolean {
+  const containingForm = control.closest("form");
+  if (containingForm && containingForm !== owner) {
+    return false;
+  }
   const panel = owner.parentElement;
   if (
     !panel ||

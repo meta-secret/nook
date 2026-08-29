@@ -323,6 +323,30 @@ describe('website one-time-code fields', () => {
     })
   })
 
+  test('does not transport a passkey control contained by a sibling form', () => {
+    document.body.innerHTML = `
+      <div class="login-panel">
+        <form id="password-login" action="/login">
+          <input autocomplete="username" />
+          <input type="password" autocomplete="current-password" />
+          <button type="submit">Sign in</button>
+        </form>
+        <form id="passkey-login" action="/webauthn">
+          <a href="/webauthn">Use passkey</a>
+        </form>
+      </div>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.authenticator.detailedPasskeyControl).toEqual({
+      kind: 'absent',
+    })
+  })
+
   test('transports a locally adjacent form-less passkey alternative with a credential form', () => {
     document.body.innerHTML = `
       <div class="login-panel">
