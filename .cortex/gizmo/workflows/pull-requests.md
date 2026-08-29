@@ -142,7 +142,7 @@ Report these separately because they do not represent authored functionality:
 - Inventory every logical domain, capability, package, layer, migration, and
   public-interface change already present in the PR.
 - If the complete feature is expected to exceed the ceiling, or the remaining
-  work may bring the current PR to or across it, define at least two semantic
+  work may bring the current PR beyond it, define at least two semantic
   PR slices as an ordered GitHub Stacked Pull Request sequence in Workbench
   before continuing.
 - Each slice owns complete capabilities or module responsibilities together
@@ -173,8 +173,9 @@ Sequence rules:
 
 - Local Git history is not preservation; a linked draft successor is.
 - Stacking is mandatory for a feature expected to exceed the ceiling and for an
-  in-progress PR that may reach or has crossed it. It is not required for every
-  small, independent PR below the ceiling.
+  in-progress PR that may exceed or has exceeded it. Exactly 2,000 authored
+  changed lines may remain one PR. Stacking is not required for every small,
+  independent PR at or below the ceiling.
 - Use GitHub's native Stacked Pull Requests through `gh stack` when available,
   or through the GitHub website. The branches must stay in the same repository,
   and GitHub must recognize the PRs as one stack; an informal chain of PR links
@@ -195,22 +196,41 @@ Sequence rules:
   stacked base to `main`, update it from current `origin/main`, re-measure its
   authored additions plus deletions, and validate the new exact head.
 - Continue until the complete Workbench outcome is merged.
-- The same agent owns every PR in the declared sequence unless Workbench records
-  an explicit owner handoff.
+- Gizmo Prime owns the complete declared sequence and creates exactly one named
+  feature-slice Gizmo for each semantic PR slice. Each slice Gizmo coordinates
+  its Team Agents and returns a typed handoff; it owns no GitHub or Workbench
+  lifecycle state and cannot create another Gizmo.
 - Scope reduction without a linked preservation PR is a P1 delivery failure.
+
+### Adaptive Gizmo cardinality
+
+- One feature at or below 2,000 authored additions plus deletions defaults to
+  one PR and one feature-slice Gizmo.
+- Gizmo Prime creates additional feature-slice Gizmos only for a required
+  semantic size split above 2,000 or for genuinely independent delivery units.
+- Team Agent count never determines PR or Gizmo count. Do not fragment a small
+  feature merely because multiple teams or agents contribute to it.
+- Gizmo Prime alone owns the feature DAG, native GitHub stack, retargeting,
+  exact-head readiness, squash merge, and Workbench lifecycle.
 
 ### Required plan
 
 The Workbench task plan must state:
 
+- Gizmo Prime as the mission controller;
+- the current feature-slice Gizmo ID;
 - the estimated authored changed lines;
 - the files, packages, modules, or layers expected to change;
 - the public or cross-module interfaces involved;
 - whether one PR can deliver the complete feature;
 - the PR sequence mode: `One PR`, `Independent PRs`, or `Stacked PRs`;
 - the current PR slice and its authored changed-line estimate;
-- the ordered PR slices when more than one PR is needed;
+- every consecutively numbered PR slice with its positive authored changed-line
+  estimate at or below 2,000, unique Gizmo ID and name, and predecessor Gizmo;
 - the acceptance evidence for each slice;
+- slice estimates whose sum equals the complete feature estimate;
+- one declared slice Gizmo ID on every ownership unit, with multiple Team Agent
+  units allowed to map to the same slice Gizmo;
 - a superseding immutable plan when scope or the estimate materially changes.
 
 An estimate is a design tool.

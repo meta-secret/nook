@@ -59,8 +59,8 @@ to generate bookkeeping.
 4. Update the existing record or create a focused non-duplicate.
 5. Bound the work:
    - Record an ordered native GitHub Stacked Pull Request sequence for a feature
-     above 2,000 authored changed lines or an in-progress PR that may reach the
-     ceiling.
+     above 2,000 authored changed lines or an in-progress PR that may exceed the
+     ceiling. Exactly 2,000 may remain one PR.
    - Use same-repository predecessor branches as temporary GitHub bases,
      cross-link adjacent PRs, register them as one GitHub-recognized stack, and
      record bottom-up merge order. Prefer `gh stack`; the GitHub website is also
@@ -73,6 +73,9 @@ to generate bookkeeping.
    - Keep each issue inside one cohesive module, package, layer, or
      responsibility.
    - Keep acceptance criteria independently deliverable and testable.
+   - Record one positive authored additions-plus-deletions estimate at or below
+     2,000 for every consecutively numbered slice; require their sum to equal
+     the complete feature estimate.
    - After each predecessor merges, retarget the immediate successor to `main`,
      update it from current `origin/main`, re-measure authored additions plus
      deletions, and validate the new exact head before its bottom-up squash

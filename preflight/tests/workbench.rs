@@ -341,8 +341,11 @@ fn team_work_distinguishes_owner_vocabulary_from_implementation_expertise() -> a
         );
     }
     for required in [
+        "- Mission controller:",
+        "- Current Gizmo ID:",
         "- Ownership units:",
         "Functional owner:",
+        "Gizmo ID:",
         "Expertise provider:",
         "Expertise allowed code paths:",
         "Expertise allowed test paths:",
@@ -358,22 +361,22 @@ fn team_work_distinguishes_owner_vocabulary_from_implementation_expertise() -> a
             "automated planning must require expertise contract field: {required}"
         );
     }
-    // The planning prompt carries the review policy for Gizmo's delivery semantics.
+    // The planning prompt carries the review policy for Gizmo Prime's delivery semantics.
     assert!(
         normalized_agent_plan.contains(
-            "`Functional owner` to exactly `Gizmo`, `AI`, `Development core`, `Security`, `SRE`, or `Web development`"
+            "`Functional owner` to exactly `Gizmo Prime`, `AI`, `Development core`, `Security`, `SRE`, or `Web development`"
         ) && normalized_agent_plan.contains(
-            "Use `Gizmo` only for coordination, integration, or lifecycle capabilities"
+            "Use `Gizmo Prime` only for coordination, integration, or lifecycle capabilities"
         ) && normalized_agent_plan.contains(
                 "An `Expertise provider` must be exactly `AI`, `Development core`, `Security`, `SRE`, or `Web development`"
-            ) && normalized_agent_plan.contains("Gizmo is never an expertise provider"),
-        "planning review policy must reserve Gizmo for coordination, integration, or lifecycle and exclude it from expertise provision"
+            ) && normalized_agent_plan.contains("Gizmo Prime is never an expertise provider"),
+        "planning review policy must reserve Gizmo Prime for coordination, integration, or lifecycle and exclude it from expertise provision"
     );
     // The JavaScript validator enforces only role vocabularies, not capability semantics.
     assert!(
         workbench_validator.contains("const functionalOwnerPattern =")
             && workbench_validator
-                .contains("'Gizmo|AI|Development core|Security|SRE|Web development'")
+                .contains("'Gizmo Prime|Gizmo|AI|Development core|Security|SRE|Web development'")
             && workbench_validator.contains("const expertiseProviderPattern =")
             && workbench_validator.contains("'AI|Development core|Security|SRE|Web development'")
             && workbench_validator.contains("(${functionalOwnerPattern})")
@@ -591,12 +594,18 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
         "## Constraints and exclusions",
         "## Change budget and PR sequence",
         "Estimated authored changed lines",
+        "Mission controller",
+        "Current Gizmo ID",
         "Owning modules, packages, or layers",
         "Public or cross-module interfaces",
         "Delivery shape",
         "Current PR estimated authored changed lines",
         "Current PR slice and acceptance evidence",
-        "PR slices and acceptance evidence",
+        "PR slices, estimates, and acceptance evidence",
+        "Predecessor Gizmo ID",
+        "Every slice estimate must be at or below 2,000",
+        "Team Agent count never determines PR or Gizmo count",
+        "Functional owner` to exactly `Gizmo Prime`",
         "## Initial plan",
         "## Completion evidence",
         "## Safety review",

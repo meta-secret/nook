@@ -41,12 +41,17 @@ index. Focused Markdown files replace sub-issues.
 Create a focused sequence when either condition holds:
 
 - the complete feature is expected to exceed 2,000 authored changed lines; or
-- separate module ownership makes independent slices safer below that size.
+- genuinely independent delivery units justify separate PRs below that size.
 
 The first condition requires an ordered native GitHub Stacked Pull Request
 sequence. The second may use ordinary independent PRs from `main` when the
 slices do not depend on unmerged predecessor work; stacking is not required for
 every small PR.
+
+Gizmo Prime creates one named feature-slice Gizmo per semantic PR slice and
+owns the complete feature sequence. Team Agent count never determines slice,
+PR, or Gizmo count; a small feature is not split merely because multiple teams
+contribute.
 
 The feature `README.md` must record:
 
@@ -263,6 +268,8 @@ not a copy, transcript, or sentence-by-sentence paraphrase of the user's prompt.
 
 The plan must contain:
 
+- a `Mission controller` value fixed to `Gizmo Prime`;
+- a `Current Gizmo ID` matching the current and first PR slice;
 - the agent's own complete interpretation of the desired outcome;
 - material functional, workflow, security, and delivery requirements;
 - explicit constraints, assumptions, and exclusions;
@@ -270,13 +277,17 @@ The plan must contain:
 - a `Change budget and PR sequence` section;
 - an `Estimated authored changed lines` value;
 - an `Owning modules, packages, or layers` value;
-- consecutively numbered `Ownership units`, one per capability;
+- consecutively numbered `Ownership units`, one per capability, each referencing
+  a declared PR-slice `Gizmo ID`;
 - a `Public or cross-module interfaces` value;
 - a `Delivery shape` value;
 - a `PR sequence mode` value;
 - a `Current PR estimated authored changed lines` value;
 - a `Current PR slice and acceptance evidence` value;
-- a `PR slices and acceptance evidence` value;
+- a `PR slices, estimates, and acceptance evidence` value whose consecutively
+  numbered rows each declare one unique Gizmo ID and name, predecessor mapping,
+  positive estimate at most 2,000, and acceptance evidence; the estimates must
+  sum to the complete feature estimate;
 - expected completion evidence; and
 - a safety review confirming that no raw prompt, transcript, secret, private
   data, raw log, local path, or unnecessary infrastructure detail is present.

@@ -20,6 +20,14 @@ const recordSections = {
 
 const planBudgetFields = [
   {
+    label: 'Mission controller',
+    pattern: /^- Mission controller:\s*Gizmo Prime\s*$/m,
+  },
+  {
+    label: 'Current Gizmo ID',
+    pattern: /^- Current Gizmo ID:\s*[a-z][a-z0-9-]{0,62}\s*$/m,
+  },
+  {
     label: 'Estimated authored changed lines',
     pattern:
       /^- Estimated authored changed lines:\s*(?:0|[1-9]\d*|[1-9]\d{0,2}(?:,\d{3})+)\s*$/m,
@@ -55,8 +63,8 @@ const planBudgetFields = [
     pattern: /^- Current PR slice and acceptance evidence:\s*\S.+$/im,
   },
   {
-    label: 'PR slices and acceptance evidence',
-    pattern: /^- PR slices and acceptance evidence:\s*(?:\S.*)?$/m,
+    label: 'PR slices, estimates, and acceptance evidence',
+    pattern: /^- PR slices, estimates, and acceptance evidence:\s*$/m,
   },
 ]
 
@@ -105,7 +113,7 @@ function parseBudgetFieldValue(budgetSection, label) {
 }
 
 const functionalOwnerPattern =
-  'Gizmo|AI|Development core|Security|SRE|Web development'
+  'Gizmo Prime|Gizmo|AI|Development core|Security|SRE|Web development'
 const expertiseProviderPattern =
   'AI|Development core|Security|SRE|Web development'
 
@@ -136,7 +144,7 @@ function validateOwnershipUnits(ownershipBody) {
   if (lines.length === 0) return 'plan requires at least one ownership unit'
 
   const unitPattern = new RegExp(
-    `^(\\d+)\\. Capability: (.+?); Functional owner: (${functionalOwnerPattern}); Expertise provider: (None|${expertiseProviderPattern}); Expertise allowed code paths: (.+?); Expertise allowed test paths: (.+?); Expertise forbidden paths: (.+?); Expertise consumer interfaces: (.+?); Expertise acceptance evidence: (.+?); Capability acceptance evidence: (.+?)$`,
+    `^(\\d+)\\. Capability: (.+?); Gizmo ID: ([a-z][a-z0-9-]{0,62}); Functional owner: (${functionalOwnerPattern}); Expertise provider: (None|${expertiseProviderPattern}); Expertise allowed code paths: (.+?); Expertise allowed test paths: (.+?); Expertise forbidden paths: (.+?); Expertise consumer interfaces: (.+?); Expertise acceptance evidence: (.+?); Capability acceptance evidence: (.+?)$`,
   )
 
   for (let index = 0; index < lines.length; index += 1) {
@@ -149,6 +157,7 @@ function validateOwnershipUnits(ownershipBody) {
       ,
       ,
       capability,
+      ,
       functionalOwner,
       expertiseProvider,
       allowedCodePaths,
@@ -210,6 +219,14 @@ function validateOwnershipUnits(ownershipBody) {
 }
 
 function parseBudgetFields(budgetSection) {
+  const missionController = parseBudgetFieldValue(
+    budgetSection,
+    'Mission controller',
+  )
+  const currentGizmoId = parseBudgetFieldValue(
+    budgetSection,
+    'Current Gizmo ID',
+  )
   const owningBoundary = parseBudgetFieldValue(
     budgetSection,
     'Owning modules, packages, or layers',
@@ -232,12 +249,14 @@ function parseBudgetFields(budgetSection) {
     budgetSection,
     'Current PR slice and acceptance evidence',
   )
-  const sequenceMarker = '- PR slices and acceptance evidence:'
+  const sequenceMarker = '- PR slices, estimates, and acceptance evidence:'
   const sequenceStart = budgetSection.indexOf(sequenceMarker)
   const ownershipMarker = '- Ownership units:'
   const ownershipStart = budgetSection.indexOf(ownershipMarker)
   const ownershipEnd = budgetSection.indexOf('- Public or cross-module interfaces:')
   if (
+    missionController.kind === 'invalid' ||
+    currentGizmoId.kind === 'invalid' ||
     owningBoundary.kind === 'invalid' ||
     estimate.kind === 'invalid' ||
     currentPrEstimate.kind === 'invalid' ||
@@ -253,6 +272,8 @@ function parseBudgetFields(budgetSection) {
   }
   return {
     kind: 'valid',
+    missionController: missionController.value,
+    currentGizmoId: currentGizmoId.value,
     owningBoundary: owningBoundary.value,
     ownershipBody: budgetSection.slice(
       ownershipStart + ownershipMarker.length,
@@ -269,7 +290,16 @@ function parseBudgetFields(budgetSection) {
 }
 
 function parseSliceContract(value, numbered) {
-  const emptyContract = { valid: false, number: 0, scope: '', evidence: '' }
+  const emptyContract = {
+    valid: false,
+    number: 0,
+    scope: '',
+    gizmoId: '',
+    gizmoName: '',
+    predecessorGizmoId: '',
+    estimate: 0,
+    evidence: '',
+  }
   let contractText = value.trim()
   let number = 0
 
@@ -283,23 +313,88 @@ function parseSliceContract(value, numbered) {
     if (optionalNumberMatch) contractText = optionalNumberMatch[1]
   }
 
-  const contractMatch = contractText.match(
-    /^(.+?)\s*;\s*Acceptance evidence:\s*(.+?)\s*$/i,
-  )
+  const contractMatch = numbered
+    ? contractText.match(
+        /^Gizmo ID:\s*([a-z][a-z0-9-]{0,62})\s*;\s*Gizmo name:\s*(.+?)\s*;\s*Predecessor Gizmo ID:\s*(None|[a-z][a-z0-9-]{0,62})\s*;\s*(.+?)\s*;\s*Estimated authored changed lines:\s*(0|[1-9]\d*|[1-9]\d{0,2}(?:,\d{3})+)\s*;\s*Acceptance evidence:\s*(.+?)\s*$/i,
+      )
+    : contractText.match(
+        /^(.+?)\s*;\s*Acceptance evidence:\s*(.+?)\s*$/i,
+      )
   if (!contractMatch) return emptyContract
 
-  const scope = contractMatch[1].trim()
-  const evidence = contractMatch[2].trim()
+  const gizmoId = numbered ? contractMatch[1] : ''
+  const gizmoName = numbered ? contractMatch[2].trim() : ''
+  const predecessorGizmoId = numbered ? contractMatch[3] : ''
+  const scope = contractMatch[numbered ? 4 : 1].trim()
+  const estimate = numbered
+    ? Number(contractMatch[5].replaceAll(',', ''))
+    : 0
+  const evidence = contractMatch[numbered ? 6 : 2].trim()
   return {
-    valid: !isPlaceholder(scope) && !isPlaceholder(evidence),
+    valid:
+      !isPlaceholder(scope) &&
+      !isPlaceholder(gizmoName) &&
+      !isPlaceholder(evidence),
     number,
     scope,
+    gizmoId,
+    gizmoName,
+    predecessorGizmoId,
+    estimate,
     evidence,
   }
 }
 
 function normalizedContractValue(value) {
   return value.toLocaleLowerCase('en-US')
+}
+
+function validateGizmoMapping(budgetFields, slices) {
+  const gizmoIds = slices.map((slice) => slice.gizmoId)
+  const gizmoNames = slices.map((slice) =>
+    normalizedContractValue(slice.gizmoName.trim()),
+  )
+  if (new Set(gizmoIds).size !== gizmoIds.length) {
+    return 'every PR slice must declare a unique Gizmo ID'
+  }
+  if (new Set(gizmoNames).size !== gizmoNames.length) {
+    return 'every PR slice must declare a unique Gizmo name'
+  }
+  if (budgetFields.currentGizmoId !== gizmoIds[0]) {
+    return 'current Gizmo ID must match the first PR slice Gizmo ID'
+  }
+
+  if (budgetFields.sequenceMode === 'Stacked PRs') {
+    if (slices[0].predecessorGizmoId !== 'None') {
+      return 'the first stacked PR slice must have no predecessor Gizmo'
+    }
+    for (let index = 1; index < slices.length; index += 1) {
+      if (slices[index].predecessorGizmoId !== slices[index - 1].gizmoId) {
+        return 'stacked PR slice predecessors must follow consecutive Gizmo order'
+      }
+    }
+  } else if (slices.some((slice) => slice.predecessorGizmoId !== 'None')) {
+    return 'one-PR and independent PR slices must not declare predecessor Gizmos'
+  }
+
+  const ownershipGizmoIds = budgetFields.ownershipBody
+    .trim()
+    .split('\n')
+    .filter((line) => line.trim())
+    .map((line) => /; Gizmo ID: ([a-z][a-z0-9-]{0,62});/.exec(line)?.[1])
+  const declaredGizmoIds = new Set(gizmoIds)
+  if (
+    ownershipGizmoIds.some(
+      (gizmoId) => !gizmoId || !declaredGizmoIds.has(gizmoId),
+    )
+  ) {
+    return 'every ownership unit must reference a declared PR slice Gizmo ID'
+  }
+  const referencedGizmoIds = new Set(ownershipGizmoIds)
+  if (gizmoIds.some((gizmoId) => !referencedGizmoIds.has(gizmoId))) {
+    return 'every declared PR slice Gizmo must own at least one ownership unit'
+  }
+  return ''
 }
 
 function validateBudgetFieldStructure(candidate, budgetSection) {
@@ -404,6 +499,9 @@ function validateAgentRecord(candidate, kind, secrets = [], sourceTask = '') {
   }
 
   if (kind === 'plan') {
+    if (/^- (?:Parent|Child|Nested) Gizmo(?: ID)?:/mi.test(candidate)) {
+      return 'nested or child Gizmo fields are forbidden'
+    }
     const budgetStart =
       candidate.indexOf('## Change budget and PR sequence') +
       '## Change budget and PR sequence'.length
@@ -467,6 +565,7 @@ function validateAgentRecord(candidate, kind, secrets = [], sourceTask = '') {
     }
 
     const sequenceBody = budgetFields.sequenceBody
+    let listedSlices = []
     if (deliveryShape === 'Multiple PRs') {
       const sliceLines = sequenceBody
         .trim()
@@ -475,11 +574,26 @@ function validateAgentRecord(candidate, kind, secrets = [], sourceTask = '') {
       const orderedSlices = sliceLines.map((line) =>
         parseSliceContract(line, true),
       )
+      listedSlices = orderedSlices
       const hasExactSequence = orderedSlices.every(
         (slice, index) => slice.valid && slice.number === index + 1,
       )
       if (sliceLines.length < 2 || !hasExactSequence) {
-        return 'multi-PR plan requires at least two ordered slices with acceptance evidence'
+        return 'multi-PR plan requires at least two consecutively numbered slices with estimates and acceptance evidence'
+      }
+      if (
+        orderedSlices.some(
+          (slice) => slice.estimate < 1 || slice.estimate > 2_000,
+        )
+      ) {
+        return 'every PR slice estimate must be between 1 and 2,000 authored changed lines'
+      }
+      const sliceEstimateTotal = orderedSlices.reduce(
+        (total, slice) => total + slice.estimate,
+        0,
+      )
+      if (sliceEstimateTotal !== estimate) {
+        return 'PR slice estimates must sum to the complete feature estimate'
       }
       const firstSlice = orderedSlices[0]
       if (
@@ -490,6 +604,9 @@ function validateAgentRecord(candidate, kind, secrets = [], sourceTask = '') {
       ) {
         return 'multi-PR plan requires its first slice to match the current PR contract'
       }
+      if (firstSlice.estimate !== currentPrEstimate) {
+        return 'multi-PR plan requires its first slice estimate to match the current PR estimate'
+      }
     } else {
       const sliceLines = sequenceBody
         .trim()
@@ -499,22 +616,38 @@ function validateAgentRecord(candidate, kind, secrets = [], sourceTask = '') {
         valid: false,
         number: 0,
         scope: '',
+        estimate: 0,
         evidence: '',
       }
       if (sliceLines.length === 1) {
-        sequenceSlice = parseSliceContract(sliceLines[0], false)
+        sequenceSlice = parseSliceContract(sliceLines[0], true)
       }
+      listedSlices = [sequenceSlice]
       if (
         sliceLines.length !== 1 ||
         !sequenceSlice.valid ||
+        sequenceSlice.number !== 1 ||
         normalizedContractValue(sequenceSlice.scope) !==
           normalizedContractValue(currentSlice.scope) ||
         normalizedContractValue(sequenceSlice.evidence) !==
           normalizedContractValue(currentSlice.evidence)
       ) {
-        return 'one-PR plan requires one slice matching the current PR contract'
+        return 'one-PR plan requires one numbered slice matching the current PR contract'
+      }
+      if (
+        sequenceSlice.estimate < 1 ||
+        sequenceSlice.estimate > 2_000 ||
+        sequenceSlice.estimate !== currentPrEstimate
+      ) {
+        return 'one-PR slice estimate must match the current PR estimate and be between 1 and 2,000'
       }
     }
+
+    const gizmoMappingRejection = validateGizmoMapping(
+      budgetFields,
+      listedSlices,
+    )
+    if (gizmoMappingRejection) return gizmoMappingRejection
   }
 
   const concreteSecrets = secrets.filter(

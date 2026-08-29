@@ -12,7 +12,7 @@ Use this workflow for feature work that touches more than one package.
    [pull requests](../../../gizmo/workflows/pull-requests.md#squash-merge-only---no-exceptions).
    0c. Estimate authored changed lines and map package ownership before editing.
    At 1,500 lines, perform mandatory split planning. If the complete feature is
-   expected to exceed 2,000 lines, or the current PR may reach that ceiling,
+   expected to exceed 2,000 lines, or the current PR may exceed that ceiling,
    split it into ordered package- or layer-focused stacked PRs. Follow
    [pull request size](../../../gizmo/workflows/pull-requests.md#pull-request-size-and-modularity).
 1. Identify the lowest package that should own the behavior.
@@ -31,13 +31,15 @@ Use this workflow for feature work that touches more than one package.
 For multiple package PRs:
 
 1. Introduce or stabilize the narrowest owning interface first.
-2. For a feature expected to exceed 2,000 authored changed lines, prepare
-   dependency-ordered semantic slices. Keep every slice at or below the 2,000
-   authored additions-plus-deletions ceiling and independently testable.
-3. Return each prepared slice to Gizmo Prime through a typed handoff that names
-   its scope, predecessor, stable interfaces, authored changed-line estimate,
-   exact handoff commit, and acceptance evidence. The AI worker does not create
-   or retarget branches or PRs, register a stack, request readiness, or merge.
+2. Keep AI work inside its assigned semantic PR slice. A feature-slice Gizmo,
+   not the number of Team Agents, coordinates the dependency-ordered work for
+   that slice. Exactly 2,000 authored changed lines may remain one PR.
+3. Return the AI Team Agent handoff to the assigned feature-slice Gizmo. The
+   slice Gizmo returns a typed slice handoff to Gizmo Prime naming scope,
+   predecessor, stable interfaces, authored changed-line estimate, exact
+   handoff commits, and acceptance evidence. Neither the AI worker nor the
+   slice Gizmo creates or retargets PRs, registers a stack, requests readiness,
+   or merges.
 4. Gizmo Prime owns the complete PR lifecycle: same-repository branch and PR
    creation, native GitHub stack registration through `gh stack` or the GitHub
    website, predecessor bases, cross-links, full checks, exact-head readiness,

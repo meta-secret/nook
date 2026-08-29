@@ -2,11 +2,20 @@
 
 ## Outcome
 
-Gizmo delivers each implementation mission through bounded team subagents.
+Gizmo Prime delivers each implementation mission through bounded Team Agents.
 
-Gizmo owns integrated and external delivery state. The active harness alone
-owns worker-attempt lifecycle. Gizmo never implements the feature or a
-resulting fix.
+Gizmo Prime is the single existing root Gizmo mission owner and owns integrated
+and external delivery state. The active harness alone owns worker-attempt
+lifecycle. Gizmo Prime never implements the feature or a resulting fix.
+
+For one feature or PR, Gizmo Prime creates one named feature-slice Gizmo by
+default. That controller owns one semantic PR slice, coordinates its Team
+Agents, and returns a typed handoff to Gizmo Prime. Additional feature-slice
+Gizmos exist only for a semantic split when the feature is expected to exceed
+or actually grows beyond 2,000 authored additions plus deletions, or for
+genuinely independent delivery units. Team Agent count never determines PR
+count. A feature-slice Gizmo cannot create Gizmos or worker attempts and owns no
+process lifecycle or delivery state.
 
 ## Required authorities
 
@@ -38,7 +47,10 @@ resulting fix.
 2. **Plan delivery.**
    - Publish the Workbench task plan before implementation edits.
    - Estimate authored changed lines.
-   - Split work that exceeds the current PR size boundary.
+   - Keep exactly 2,000 authored changed lines eligible for one PR; split only
+     when the expected or actual feature exceeds the current PR size boundary.
+   - Map one feature-slice Gizmo to each semantic PR slice. Do not increase PR
+     or Gizmo count merely because multiple Team Agents are required.
    - Record the module DAG and provider-consumer contracts when applicable.
 3. **Assign team tasks.**
    - Name one functional owner for each capability.
@@ -57,6 +69,8 @@ resulting fix.
    - Verify each commit against its baseline and write scope.
    - Verify the team's focused tests and Cortex evidence.
    - Reject incomplete or out-of-scope handoffs.
+   - Require each feature-slice Gizmo to return its typed slice handoff to Gizmo
+     Prime; slice controllers never mutate the overall feature DAG.
 5. **Integrate accepted commits.**
    - Integrate in deterministic dependency order.
    - Bind each downstream task to the exact integrated commit.
