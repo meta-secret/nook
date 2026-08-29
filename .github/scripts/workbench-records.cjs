@@ -18,6 +18,9 @@ const recordSections = {
   ],
 }
 
+const gizmoIdGrammar = '[a-z0-9]+(?:-[a-z0-9]+)*'
+const gizmoIdPattern = new RegExp(`^${gizmoIdGrammar}$`)
+
 const planBudgetFields = [
   {
     label: 'Mission controller',
@@ -25,7 +28,7 @@ const planBudgetFields = [
   },
   {
     label: 'Current Gizmo ID',
-    pattern: /^- Current Gizmo ID:\s*[a-z][a-z0-9-]{0,62}\s*$/m,
+    pattern: new RegExp(`^- Current Gizmo ID:\\s*${gizmoIdGrammar}\\s*$`, 'm'),
   },
   {
     label: 'Estimated authored changed lines',
@@ -144,7 +147,7 @@ function validateOwnershipUnits(ownershipBody) {
   if (lines.length === 0) return 'plan requires at least one ownership unit'
 
   const unitPattern = new RegExp(
-    `^(\\d+)\\. Capability: (.+?); Gizmo ID: ([a-z][a-z0-9-]{0,62}); Functional owner: (${functionalOwnerPattern}); Expertise provider: (None|${expertiseProviderPattern}); Expertise allowed code paths: (.+?); Expertise allowed test paths: (.+?); Expertise forbidden paths: (.+?); Expertise consumer interfaces: (.+?); Expertise acceptance evidence: (.+?); Capability acceptance evidence: (.+?)$`,
+    `^(\\d+)\\. Capability: (.+?); Gizmo ID: (${gizmoIdGrammar}); Functional owner: (${functionalOwnerPattern}); Expertise provider: (None|${expertiseProviderPattern}); Expertise allowed code paths: (.+?); Expertise allowed test paths: (.+?); Expertise forbidden paths: (.+?); Expertise consumer interfaces: (.+?); Expertise acceptance evidence: (.+?); Capability acceptance evidence: (.+?)$`,
   )
 
   for (let index = 0; index < lines.length; index += 1) {
@@ -315,7 +318,7 @@ function parseSliceContract(value, numbered) {
 
   const contractMatch = numbered
     ? contractText.match(
-        /^Gizmo ID:\s*([a-z][a-z0-9-]{0,62})\s*;\s*Gizmo name:\s*(.+?)\s*;\s*Predecessor Gizmo ID:\s*(None|[a-z][a-z0-9-]{0,62})\s*;\s*(.+?)\s*;\s*Estimated authored changed lines:\s*(0|[1-9]\d*|[1-9]\d{0,2}(?:,\d{3})+)\s*;\s*Acceptance evidence:\s*(.+?)\s*$/i,
+        /^Gizmo ID:\s*([a-z0-9-]+)\s*;\s*Gizmo name:\s*(.+?)\s*;\s*Predecessor Gizmo ID:\s*(None|[a-z0-9-]+)\s*;\s*(.+?)\s*;\s*Estimated authored changed lines:\s*(0|[1-9]\d*|[1-9]\d{0,2}(?:,\d{3})+)\s*;\s*Acceptance evidence:\s*(.+?)\s*$/i,
       )
     : contractText.match(
         /^(.+?)\s*;\s*Acceptance evidence:\s*(.+?)\s*$/i,
@@ -330,8 +333,14 @@ function parseSliceContract(value, numbered) {
     ? Number(contractMatch[5].replaceAll(',', ''))
     : 0
   const evidence = contractMatch[numbered ? 6 : 2].trim()
+  const validGizmoIds =
+    !numbered ||
+    (gizmoIdPattern.test(gizmoId) &&
+      (predecessorGizmoId === 'None' ||
+        gizmoIdPattern.test(predecessorGizmoId)))
   return {
     valid:
+      validGizmoIds &&
       !isPlaceholder(scope) &&
       !isPlaceholder(gizmoName) &&
       !isPlaceholder(evidence),
@@ -350,11 +359,14 @@ function normalizedContractValue(value) {
 }
 
 function ownershipGizmoIds(ownershipBody) {
+  const ownershipGizmoIdPattern = new RegExp(
+    `; Gizmo ID: (${gizmoIdGrammar});`,
+  )
   return ownershipBody
     .trim()
     .split('\n')
     .filter((line) => line.trim())
-    .map((line) => /; Gizmo ID: ([a-z][a-z0-9-]{0,62});/.exec(line)?.[1])
+    .map((line) => ownershipGizmoIdPattern.exec(line)?.[1])
 }
 
 function validateTrustedGizmoAssignment(
@@ -557,7 +569,7 @@ function validateAgentRecord(
       typeof trustedContext.assignedGizmoId === 'string'
         ? trustedContext.assignedGizmoId.trim()
         : ''
-    if (assignedGizmoId && !/^[a-z][a-z0-9-]{0,62}$/.test(assignedGizmoId)) {
+    if (assignedGizmoId && !gizmoIdPattern.test(assignedGizmoId)) {
       return 'trusted assigned Gizmo ID is invalid'
     }
     if (

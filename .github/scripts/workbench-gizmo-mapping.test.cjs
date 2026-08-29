@@ -162,6 +162,38 @@ test('accepts a plan bound to its trusted focused-issue Gizmo ID', () => {
   )
 })
 
+test('accepts a canonical Gizmo ID that starts with a digit', () => {
+  const canonicalId = '2fa-slice'
+  const candidate = plan({
+    currentGizmoId: canonicalId,
+    ownershipUnits: [ownershipUnit(1, canonicalId)],
+    slices: [slice(1, canonicalId, 'Validator', 'None', '200')],
+  })
+  assert.equal(
+    validateAgentRecord(candidate, 'plan', [], '', {
+      assignedGizmoId: canonicalId,
+    }),
+    '',
+  )
+})
+
+for (const invalidId of ['slice--one', 'slice-']) {
+  test(`rejects noncanonical Gizmo ID ${invalidId}`, () => {
+    const candidate = plan({
+      currentGizmoId: invalidId,
+      ownershipUnits: [ownershipUnit(1, invalidId)],
+      slices: [slice(1, invalidId, 'Validator', 'None', '200')],
+    })
+    assert.notEqual(validateAgentRecord(candidate, 'plan'), '')
+    assert.match(
+      validateAgentRecord(plan(), 'plan', [], '', {
+        assignedGizmoId: invalidId,
+      }),
+      /trusted assigned Gizmo ID is invalid/,
+    )
+  })
+}
+
 test('accepts multiple ownership units bound to one trusted Gizmo ID', () => {
   const candidate = plan({
     ownershipUnits: [
