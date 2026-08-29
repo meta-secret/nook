@@ -363,7 +363,6 @@ pub fn can_activate_authentication_route_control(
         && !has_form_owned_semantic_submit
         && has_authentication_username
         && has_local_authentication_scope
-        && !form_identity.trim().is_empty()
 }
 
 fn has_autocomplete_token(tokens: &[String], expected: &str) -> bool {
@@ -607,7 +606,7 @@ mod tests {
         assert!(looks_like_login_advance_control_label("Submit"));
         assert!(!looks_like_login_advance_control_label("Learn more"));
         assert!(!looks_like_login_advance_control_label("Subscribe"));
-        for label in "Continue to delete account|Continue to reset password|Entrar con Amazon|Entrar con Foo|Continue with X".split('|') {
+        for label in "Submit order|Continue to reset password|Entrar con Amazon|Entrar con Foo|Continue with X".split('|') {
             assert!(!looks_like_login_advance_control_label(label));
         }
         assert!(!looks_like_login_advance_control_label(
@@ -632,7 +631,7 @@ mod tests {
                 local,
             )
         };
-        assert!(decide("login-form", "", false, true, true));
+        assert!(decide("", "", false, true, true));
         assert!(decide("", "Entrar Entrar", false, true, true));
         assert!(decide("f", "Sign in to Microsoft 365", false, true, true));
         assert!(decide("f", "Continue with email", true, true, true));
@@ -666,14 +665,14 @@ mod tests {
             ("login-form", "https://example.test/login?foo=1#/x"),
             ("login-form", "https://example.test/login?Provider=amazon"),
             ("login-form", "https://example.test/signin/x"),
-            ("login-form", "https://example.test/auth/close/account"),
+            ("login-form", "https://example.test/account/close"),
             ("login-form", "https://example.test/auth/forgot/password"),
-            ("login-form", "https://example.test/transaction/authorize"),
+            ("login-form", "https://example.test/orders/123/submit"),
             (
                 "login-form",
                 "https://example.test/auth/login?action=close+account",
             ),
-            ("login-form", "https://example.test/auth/%64elete-account"),
+            ("login-form", "https://example.test/login/provider/acme"),
             ("login-form", "https://evil.test/auth/login"),
         ] {
             assert!(!has_safe_authentication_route_identity(

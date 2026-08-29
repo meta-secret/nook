@@ -386,11 +386,11 @@ describe('website one-time-code fields', () => {
   })
 
   test.each([
-    ['login-form', true],
+    ['', true],
     ['delete-account', false],
   ])('gates implicit username-only submit for %s', (formId, allowed) => {
     window.history.replaceState({}, '', '/account')
-    document.body.innerHTML = `<form id="${formId}"><input autocomplete="username" /></form>`
+    document.body.innerHTML = `<form id="${formId}" action="/login"><input autocomplete="username" /></form>`
     document.querySelector('form')?.addEventListener('submit', (event) => {
       event.preventDefault()
     })

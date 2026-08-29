@@ -38,6 +38,7 @@ pub(super) fn route_names_external_authentication_provider(identity: &str) -> bo
                 .split(['&', '#'])
                 .any(|component| component.split('=').next() == Some("provider"))
         })
+        || contains_any_word(&route, &["provider"])
         || ((contains_any_word(&route, &["x"]) || contains_any_word(&fragment, &["x"]))
             && contains_any_word(&route, &["login", "log in", "signin", "sign in"]))
 }

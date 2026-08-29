@@ -130,33 +130,34 @@ pub(super) fn form_identity_indicates_destructive_action(form_identity: &str) ->
                 &["email", "username", "user name", "phone", "profile"],
             ) || (contains_any_word(&identity, &["account detail", "details"])
                 && !contains_any_word(&identity, &["password", "credential", "credentials"])));
-    let transaction_action = contains_any_word(
-        &identity,
-        &[
-            "pay",
-            "payment",
-            "checkout",
-            "purchase",
-            "buy",
-            "place order",
-            "confirm order",
-            "cart",
-            "transfer",
-            "wire",
-            "withdraw",
-            "withdrawal",
-            "deposit",
-            "send money",
-            "financial transaction",
-            "authorize transaction",
-            "transaction authorization",
-        ],
-    ) || (contains_any_word(&identity, &["authorize", "confirm"])
-        && (contains_any_word(
+    let transaction_action =
+        contains_any_word(
             &identity,
-            &["transaction", "transactions", "payment", "payments"],
-        ) || contains_any_word(&identity, &["order", "orders"])));
-    let locks_account_or_session = contains_any_word(&identity, &["lock", "freeze"])
+            &[
+                "pay",
+                "payment",
+                "checkout",
+                "purchase",
+                "buy",
+                "place order",
+                "confirm order",
+                "cart",
+                "transfer",
+                "wire",
+                "withdraw",
+                "withdrawal",
+                "deposit",
+                "send money",
+                "financial transaction",
+                "authorize transaction",
+                "transaction authorization",
+            ],
+        ) || (contains_any_word(&identity, &["authorize", "confirm", "submit"])
+            && (contains_any_word(
+                &identity,
+                &["transaction", "transactions", "payment", "payments"],
+            ) || contains_any_word(&identity, &["order", "orders"])));
+    let locks_account_or_session = contains_any_word(&identity, &["lock", "freeze", "close"])
         && contains_any_word(&identity, &["account", "session"]);
     changes_account_detail
         || transaction_action
