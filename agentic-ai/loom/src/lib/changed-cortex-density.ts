@@ -25,20 +25,13 @@ export type LintChangedCortexDensityArgs = {
 export function lintChangedCortexDensity(
   args: LintChangedCortexDensityArgs,
 ): ChangedCortexDensityReport {
-  const trackedArgs: GitPathsArgs = {
-    arguments: [
-      'diff',
-      '--name-only',
-      '--diff-filter=ACMR',
-      '-z',
-      args.baseSha,
-      '--',
-      '.cortex',
-    ],
+  const comparisonCommit = mergeBase(args);
+  const trackedArgs: ChangedCortexPathsArgs = {
+    comparisonCommit,
     repoRoot: args.repoRoot,
   };
-  const tracked = gitPaths(trackedArgs);
-  const untrackedArgs: GitPathsArgs = {
+  const tracked = changedCortexPaths(trackedArgs);
+  const untrackedArgs: GitOutputArgs = {
     arguments: [
       'ls-files',
       '--others',
@@ -51,7 +44,12 @@ export function lintChangedCortexDensity(
   };
   const untracked = gitPaths(untrackedArgs);
   const untrackedPaths = new Set(untracked);
-  const checkedPaths = [...new Set([...tracked, ...untracked])]
+  const trackedByCurrentPath = new Map(
+    tracked.map((change) => [change.currentPath, change]),
+  );
+  const checkedPaths = [
+    ...new Set([...trackedByCurrentPath.keys(), ...untracked]),
+  ]
     .filter(isPersistentCortexMarkdownPath)
     .filter((relativePath) => {
       const fileArgs: IsRegularFileArgs = {
@@ -67,9 +65,11 @@ export function lintChangedCortexDensity(
       content: readFileSync(path.join(args.repoRoot, relativePath), 'utf8'),
     };
     const spans = lintProseDensitySpans(lintArgs);
+    const trackedChange = trackedByCurrentPath.get(relativePath);
     const rangeArgs: ChangedLineRangesArgs = {
-      baseSha: args.baseSha,
-      relativePath,
+      comparisonCommit,
+      currentPath: relativePath,
+      previousPath: trackedChange?.previousPath ?? relativePath,
       repoRoot: args.repoRoot,
     };
     const addedLines = untrackedPaths.has(relativePath)
@@ -88,10 +88,71 @@ export function lintChangedCortexDensity(
   return { checkedPaths, findings };
 }
 
-type GitPathsArgs = {
+type GitOutputArgs = {
   readonly arguments: readonly string[];
   readonly repoRoot: string;
 };
+
+type ChangedCortexPath = {
+  readonly currentPath: string;
+  readonly previousPath: string;
+};
+
+type ChangedCortexPathsArgs = {
+  readonly comparisonCommit: string;
+  readonly repoRoot: string;
+};
+
+function changedCortexPaths(args: ChangedCortexPathsArgs): ChangedCortexPath[] {
+  const statusArgs: GitOutputArgs = {
+    arguments: [
+      'diff',
+      '--name-status',
+      '--diff-filter=AMR',
+      '--find-renames',
+      '-z',
+      args.comparisonCommit,
+      '--',
+    ],
+    repoRoot: args.repoRoot,
+  };
+  const tokens = gitPaths(statusArgs);
+  const changes: ChangedCortexPath[] = [];
+  for (let index = 0; index < tokens.length;) {
+    const status = tokens[index];
+    index += 1;
+    if (status === undefined) failChangedCortexGit('missing diff status');
+    if (/^R\d{1,3}$/u.test(status)) {
+      const previousPath = tokens[index];
+      const currentPath = tokens[index + 1];
+      index += 2;
+      if (previousPath === undefined || currentPath === undefined) {
+        failChangedCortexGit('incomplete rename record');
+      }
+      if (isPersistentCortexMarkdownPath(currentPath)) {
+        const change: ChangedCortexPath = { currentPath, previousPath };
+        changes.push(change);
+      }
+      continue;
+    }
+    if (status !== 'A' && status !== 'M') {
+      failChangedCortexGit(`unsupported diff status ${status}`);
+    }
+    const currentPath = tokens[index];
+    index += 1;
+    if (currentPath === undefined) {
+      failChangedCortexGit('missing changed path');
+    }
+    if (isPersistentCortexMarkdownPath(currentPath)) {
+      const change: ChangedCortexPath = {
+        currentPath,
+        previousPath: currentPath,
+      };
+      changes.push(change);
+    }
+  }
+  return changes;
+}
 
 type ChangedLineRange = {
   readonly end: number;
@@ -104,21 +165,27 @@ const ALL_LINES: ChangedLineRange = {
 };
 
 type ChangedLineRangesArgs = {
-  readonly baseSha: string;
-  readonly relativePath: string;
+  readonly comparisonCommit: string;
+  readonly currentPath: string;
+  readonly previousPath: string;
   readonly repoRoot: string;
 };
 
 function changedLineRanges(args: ChangedLineRangesArgs): ChangedLineRange[] {
-  const diffArgs: GitPathsArgs = {
+  const pathArguments =
+    args.previousPath === args.currentPath
+      ? [args.currentPath]
+      : [args.previousPath, args.currentPath];
+  const diffArgs: GitOutputArgs = {
     arguments: [
       'diff',
+      '--find-renames',
       '--unified=0',
       '--no-ext-diff',
       '--no-color',
-      args.baseSha,
+      args.comparisonCommit,
       '--',
-      args.relativePath,
+      ...pathArguments,
     ],
     repoRoot: args.repoRoot,
   };
@@ -129,20 +196,26 @@ function changedLineRanges(args: ChangedLineRangesArgs): ChangedLineRange[] {
       const count = match[2] === undefined ? 1 : Number(match[2]);
       return { count, start };
     })
-    .filter((range) => range.count > 0)
-    .map((range) => ({
-      start: range.start,
-      end: range.start + range.count - 1,
-    }));
+    .map((range) =>
+      range.count > 0
+        ? {
+            start: range.start,
+            end: range.start + range.count - 1,
+          }
+        : {
+            start: Math.max(1, range.start - 1),
+            end: Math.max(1, range.start),
+          },
+    );
 }
 
-function gitPaths(args: GitPathsArgs): string[] {
+function gitPaths(args: GitOutputArgs): string[] {
   return gitOutput(args)
     .split('\0')
     .filter((entry) => entry.length > 0);
 }
 
-function gitOutput(args: GitPathsArgs): string {
+function gitOutput(args: GitOutputArgs): string {
   const commandArgs: RunCommandArgs = {
     command: 'git',
     args: args.arguments,
@@ -157,6 +230,28 @@ function gitOutput(args: GitPathsArgs): string {
     loomFailureDetail(failureArgs);
   }
   return output.stdout;
+}
+
+function mergeBase(args: LintChangedCortexDensityArgs): string {
+  const mergeBaseArgs: GitOutputArgs = {
+    arguments: ['merge-base', 'HEAD', args.baseSha],
+    repoRoot: args.repoRoot,
+  };
+  const comparisonCommit = gitOutput(mergeBaseArgs).trim();
+  if (!/^[0-9a-f]{40}$/u.test(comparisonCommit)) {
+    failChangedCortexGit(
+      `git merge-base returned an invalid commit: ${comparisonCommit}`,
+    );
+  }
+  return comparisonCommit;
+}
+
+function failChangedCortexGit(message: string): never {
+  const failureArgs: LoomFailureDetailArgs = {
+    code: LoomFailureCode.CommandFailed,
+    text: `Unable to select changed Cortex Markdown: ${message}`,
+  };
+  return loomFailureDetail(failureArgs);
 }
 
 type IntersectsAddedLinesArgs = {
