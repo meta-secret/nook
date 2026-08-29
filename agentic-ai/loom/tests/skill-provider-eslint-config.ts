@@ -122,6 +122,7 @@ function commandReferences([
       positionalArguments: false,
       required: true,
       requiresExecuteMode: false,
+      shellRuntime: false,
       specifier: posix.relative(posix.dirname(importer), selected),
       taskInclude: false,
       workingDirectory: directory,

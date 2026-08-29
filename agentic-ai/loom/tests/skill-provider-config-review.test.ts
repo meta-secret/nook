@@ -88,3 +88,77 @@ test('Node action subprocesses join the runnable configuration graph', () => {
     /(?:Unauthorized application edge|reaches provider|runtime boundary)/u,
   );
 });
+
+test('shell runtimes audit tracked scripts regardless of suffix', () => {
+  const sources = new Map([
+    ['package.json', '{"scripts":{"audit":"bash scripts/facade.bash"}}'],
+    ['scripts/facade.bash', `bun ${PROVIDER}`],
+    [PROVIDER, 'export {};'],
+  ]);
+  const graph: ConfigurationScriptGraph = {
+    executablePaths: new Set(),
+    roots: ['package.json'],
+    sources,
+    symlinkPaths: new Set(),
+  };
+  expect(() => configurationScriptPaths(graph)).toThrow(
+    /(?:reaches provider|runtime boundary)/u,
+  );
+});
+
+test('find command-executing predicates fail closed', () => {
+  for (const predicate of ['-exec', '-execdir', '-ok', '-okdir']) {
+    const sources = new Map([
+      [
+        'package.json',
+        `{"scripts":{"audit":"find . ${predicate} bun scripts/facade.ts \\\\;"}}`,
+      ],
+    ]);
+    const graph: ConfigurationScriptGraph = {
+      executablePaths: new Set(),
+      roots: ['package.json'],
+      sources,
+      symlinkPaths: new Set(),
+    };
+    expect(() => configurationScriptPaths(graph), predicate).toThrow(
+      'Find command-executing predicate is forbidden',
+    );
+  }
+});
+
+test('github-script module loads and subprocesses join the graph', () => {
+  for (const script of [
+    'require(`${process.env.GITHUB_WORKSPACE}/scripts/facade.cjs`)',
+    "const {execFileSync}=require('node:child_process'); execFileSync('bun',['scripts/facade.cjs']);",
+  ]) {
+    const workflow = `jobs:\n  audit:\n    steps:\n      - uses: actions/github-script@v9\n        with:\n          script: ${JSON.stringify(script)}`;
+    const sources = new Map([
+      ['.github/workflows/audit.yml', workflow],
+      ['scripts/facade.cjs', `require('../${PROVIDER}');`],
+      [PROVIDER, 'export {};'],
+    ]);
+    const graph: ConfigurationScriptGraph = {
+      executablePaths: new Set(),
+      roots: ['.github/workflows/audit.yml'],
+      sources,
+      symlinkPaths: new Set(),
+    };
+    expect(() => configurationScriptPaths(graph), script).toThrow(
+      /(?:reaches provider|runtime boundary)/u,
+    );
+  }
+});
+
+test('github-script rejects dynamic module loading', () => {
+  const workflow = `jobs:\n  audit:\n    steps:\n      - uses: actions/github-script@v9\n        with:\n          script: require(modulePath)`;
+  const sources = new Map([['.github/workflows/audit.yml', workflow]]);
+  const graph: ConfigurationScriptGraph = {
+    executablePaths: new Set(),
+    roots: ['.github/workflows/audit.yml'],
+    sources,
+    symlinkPaths: new Set(),
+  };
+  expect(() => configurationScriptPaths(graph)).toThrow(
+    'Dynamic github-script module load is forbidden',
+  );
+});

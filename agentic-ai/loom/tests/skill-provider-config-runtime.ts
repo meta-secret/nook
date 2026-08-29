@@ -45,8 +45,22 @@ export function isRunnableConfiguration(path: string): boolean {
     /(^|\/)Taskfile(?:\.[^/]*)?\.ya?ml$/u.test(path) ||
     /^\.task\/(?:[^/]+\/)*[^/]+\.ya?ml$/u.test(path) ||
     /(^|\/)vite\.config\.(?:[cm]?[jt]s)$/u.test(path) ||
+    /(^|\/)svelte\.config\.(?:[cm]?[jt]s)$/u.test(path) ||
     /^\.github\/workflows\/[^/]+\.ya?ml$/u.test(path) ||
     /^\.github\/actions\/(?:[^/]+\/)*action\.ya?ml$/u.test(path)
+  );
+}
+
+export function isActionManifest(path: string): boolean {
+  return /(^|\/)action\.ya?ml$/u.test(path);
+}
+
+export function actionSourceRequiresContent(path: string): boolean {
+  return (
+    isActionManifest(path) ||
+    /\.(?:[cm]?tsx?|[cm]?jsx?)$/u.test(path) ||
+    posix.extname(path) === '' ||
+    path.endsWith('package.json')
   );
 }
 

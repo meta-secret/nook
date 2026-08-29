@@ -76,6 +76,35 @@ export function workflowCommandSources(
   return commands;
 }
 
+export function workflowGithubScriptSources(
+  request: WorkflowCommandRequest,
+): readonly string[] {
+  const root = mapping(request.document);
+  if (request.action) {
+    const runs = mapping(root.runs ?? false);
+    return githubScriptSources(runs.steps ?? false);
+  }
+  return Object.values(mapping(root.jobs ?? false)).flatMap((job) =>
+    githubScriptSources(mapping(job).steps ?? false),
+  );
+}
+
+function githubScriptSources(steps: ConfigurationNode): readonly string[] {
+  if (!Array.isArray(steps)) return [];
+  return steps.flatMap((step) => {
+    const node = mapping(step);
+    if (
+      typeof node.uses !== 'string' ||
+      !node.uses.startsWith('actions/github-script@')
+    )
+      return [];
+    const source = mapping(node.with ?? false).script;
+    if (typeof source !== 'string')
+      throw new Error('github-script step has no static script body.');
+    return [source];
+  });
+}
+
 function collectStepRuns(request: StepRunRequest): void {
   if (!Array.isArray(request.steps)) return;
   for (const step of request.steps) {

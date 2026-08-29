@@ -17,6 +17,7 @@ export type ShellLaunchArgument = {
 export type ShellScriptLaunch = {
   readonly positionalArguments: readonly ShellLaunchArgument[];
   readonly requiresExecuteMode: boolean;
+  readonly shellRuntime: boolean;
   readonly specifier: string;
   readonly workingDirectory: string;
 };
@@ -105,6 +106,7 @@ export type RuntimeExecutable = {
 export type LaunchRequest = {
   readonly launch: RuntimeExecutable;
   readonly requiresExecuteMode?: true;
+  readonly shellRuntime?: true;
   readonly state: ShellParseState;
 };
 

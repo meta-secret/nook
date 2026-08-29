@@ -729,6 +729,13 @@ function analyzeRuntime(request: RuntimeCommandRequest): void {
     assertAuditedSource([request.runtime, request.state, request.words]);
     return;
   }
+  if (
+    request.runtime === 'find' &&
+    request.words.some((word) =>
+      ['-exec', '-execdir', '-ok', '-okdir'].includes(word.value),
+    )
+  )
+    throw new Error('Find command-executing predicate is forbidden.');
   if (request.state.functions.has('command_not_found_handle'))
     throw new Error('Shell command-not-found hooks are forbidden.');
   const directExecutable = staticWord(request.runtime);
@@ -794,7 +801,11 @@ function analyzeShellRuntime(request: RuntimeCommandRequest): void {
     executable,
     arguments: request.words.slice(index + 1),
   };
-  const launchRequest: LaunchRequest = { launch, state: request.state };
+  const launchRequest: LaunchRequest = {
+    launch,
+    shellRuntime: true,
+    state: request.state,
+  };
   addLaunch(launchRequest);
 }
 
@@ -927,6 +938,7 @@ function addLaunch(request: LaunchRequest): void {
   const scriptLaunch: ShellScriptLaunch = {
     positionalArguments,
     requiresExecuteMode: request.requiresExecuteMode === true,
+    shellRuntime: request.shellRuntime === true,
     specifier: value,
     workingDirectory: request.state.cwd,
   };

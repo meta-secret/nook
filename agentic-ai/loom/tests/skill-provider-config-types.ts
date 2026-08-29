@@ -30,6 +30,7 @@ export type ConfigurationReference = {
   readonly positionalArguments: readonly ShellLaunchArgument[] | false;
   readonly required: boolean;
   readonly requiresExecuteMode: boolean;
+  readonly shellRuntime: boolean;
   readonly specifier: string;
   readonly taskInclude: boolean;
   readonly workingDirectory: string;
@@ -38,12 +39,14 @@ export type ConfigurationReferenceRequest = {
   readonly inspection: ConfigurationReferenceInspection;
   readonly positionalArguments: readonly ShellLaunchArgument[] | false;
   readonly sources: ReadonlyMap<string, string>;
+  readonly shellRuntime: boolean;
   readonly workingDirectory: string;
 };
 export type PendingConfiguration = {
   readonly depth: number;
   readonly importer: string;
   readonly positionalArguments: readonly ShellLaunchArgument[] | false;
+  readonly shellRuntime: boolean;
   readonly workingDirectory: string;
 };
 export type RepositoryBackedPackageSpecifierRequest = {

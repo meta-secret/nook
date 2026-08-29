@@ -4,8 +4,6 @@ import { violatesSkillProviderBoundary } from './skill-provider-boundary.test.ts
 import {
   type ConfigurationReferenceInspection,
   type ConfigurationScriptGraph,
-  type ExecutableProviderReferenceInspection,
-  executableSourceReferencesProvider,
   executableScriptViolatesBoundary,
   ShellExecutablePolicy,
 } from './skill-provider-executable-script.ts';
@@ -32,14 +30,18 @@ import {
   taskIncludeSpecifiers,
 } from './skill-provider-config-commands.ts';
 import {
+  actionSourceRequiresContent,
   ACTION_SOURCE_SUFFIXES,
   CONFIGURATION_GRAPH_LIMITS as LIMITS,
+  isActionManifest,
   isRepositoryBackedPackageSpecifier,
   isRunnableConfiguration,
   normalizeConfigurationShellSource,
   resolutionCandidates,
   specializePositionalArguments,
 } from './skill-provider-config-runtime.ts';
+import { githubScriptConfigurationReferences } from './skill-provider-github-script.ts';
+import { pathsContainingProviderRoot } from './skill-provider-config-test-helpers.ts';
 import {
   eslintConfigurationReferences,
   type EslintConfigurationRequest,
@@ -68,45 +70,13 @@ const CONFIGURATION_SCRIPT_EXTENSION = /\.(?:[cm]?tsx?|[cm]?jsx?|sh)$/u;
 const actionTranspilerOptions: ActionTranspilerOptions = { loader: 'tsx' };
 const ACTION_IMPORT_SCANNER = new Bun.Transpiler(actionTranspilerOptions);
 
-async function pathsContainingProviderRoot(
-  paths: readonly string[],
-): Promise<readonly string[]> {
-  const matches: string[] = [];
-  for (const path of paths) {
-    const source = await Bun.file(join(REPOSITORY_ROOT, path)).text();
-    const referenceInspection: ExecutableProviderReferenceInspection = {
-      path,
-      source,
-    };
-    if (
-      path.includes(PROVIDER_ROOT) ||
-      executableSourceReferencesProvider(referenceInspection)
-    ) {
-      matches.push(path);
-    }
-  }
-  return matches;
-}
-
-function isActionManifest(path: string): boolean {
-  return /(^|\/)action\.ya?ml$/u.test(path);
-}
-
-function actionSourceRequiresContent(path: string): boolean {
-  return (
-    isActionManifest(path) ||
-    EXECUTABLE_SOURCE_EXTENSION.test(path) ||
-    posix.extname(path) === '' ||
-    path.endsWith('package.json')
-  );
-}
-
 export function configurationScriptPaths(
   graph: ConfigurationScriptGraph,
 ): readonly string[] {
   const pending: PendingConfiguration[] = graph.roots.map((importer) => ({
     importer,
     positionalArguments: false,
+    shellRuntime: false,
     depth: 0,
     workingDirectory: importer.endsWith('package.json')
       ? posix.dirname(importer).replace(/^\.$/u, '')
@@ -125,7 +95,7 @@ export function configurationScriptPaths(
       next.positionalArguments.length > LIMITS.arguments
     )
       throw new Error('Runnable configuration arguments exceed their bound.');
-    const visitKey = `${importer}\0${next.workingDirectory}\0${JSON.stringify(next.positionalArguments)}`;
+    const visitKey = `${importer}\0${next.shellRuntime}\0${next.workingDirectory}\0${JSON.stringify(next.positionalArguments)}`;
     if (new TextEncoder().encode(visitKey).byteLength > LIMITS.stateBytes)
       throw new Error('Runnable configuration state exceeds its byte bound.');
     if (visited.has(visitKey)) continue;
@@ -165,6 +135,7 @@ export function configurationScriptPaths(
     const configurationRequest = {
       inspection: referenceInspection,
       positionalArguments: next.positionalArguments,
+      shellRuntime: next.shellRuntime,
       sources: graph.sources,
       workingDirectory: next.workingDirectory,
     };
@@ -204,6 +175,7 @@ export function configurationScriptPaths(
           graph.executablePaths.has(dependency));
       if (
         reference.taskInclude ||
+        reference.shellRuntime ||
         CONFIGURATION_SCRIPT_EXTENSION.test(dependency) ||
         isExtensionlessExecutable
       ) {
@@ -230,7 +202,7 @@ export function configurationScriptPaths(
           throw new Error(`Article adapter violates boundary: ${dependency}`);
         }
         const boundaryInspection = {
-          path: dependency,
+          path: reference.shellRuntime ? `${dependency}.sh` : dependency,
           roots: new Set(graph.roots),
           shellPolicy: ShellExecutablePolicy.TrackedConfiguration,
           source: specializedSource,
@@ -257,6 +229,7 @@ export function configurationScriptPaths(
         const pendingConfiguration: PendingConfiguration = {
           importer: dependency,
           positionalArguments: reference.positionalArguments,
+          shellRuntime: reference.shellRuntime,
           depth: next.depth + 1,
           workingDirectory: reference.workingDirectory,
         };
@@ -287,7 +260,10 @@ function configurationScriptReferences(request: ConfigurationReferenceRequest) {
       path: inspection.importer,
       source: inspection.source,
     };
-    const launches = runnableCommandSources(commandInspection).flatMap(
+    const commands = request.shellRuntime
+      ? [inspection.source.replace(/^#![^\n]*(?:\n|$)/u, '')]
+      : runnableCommandSources(commandInspection);
+    const launches = commands.flatMap(
       (source): readonly ShellScriptLaunch[] => {
         const shellInspection = {
           positionalArguments: request.positionalArguments,
@@ -301,7 +277,7 @@ function configurationScriptReferences(request: ConfigurationReferenceRequest) {
       },
     );
     const eslintRequest: EslintConfigurationRequest = {
-      commands: runnableCommandSources(commandInspection),
+      commands,
       importer: inspection.importer,
       sources: request.sources,
       workingDirectory: request.workingDirectory,
@@ -313,6 +289,7 @@ function configurationScriptReferences(request: ConfigurationReferenceRequest) {
         positionalArguments: launch.positionalArguments,
         required: true,
         requiresExecuteMode: launch.requiresExecuteMode,
+        shellRuntime: launch.shellRuntime,
         specifier: launch.specifier,
         taskInclude: false,
         workingDirectory: posix
@@ -329,11 +306,21 @@ function configurationScriptReferences(request: ConfigurationReferenceRequest) {
           positionalArguments: false as const,
           required: true,
           requiresExecuteMode: false,
+          shellRuntime: false,
           specifier,
           taskInclude: true,
           workingDirectory: request.workingDirectory,
         })),
       );
+    const githubScriptRequest = {
+      importer: inspection.importer,
+      positionalArguments: request.positionalArguments,
+      source: inspection.source,
+      workingDirectory: request.workingDirectory,
+    };
+    references.push(
+      ...githubScriptConfigurationReferences(githubScriptRequest),
+    );
     return references;
   }
   const specializationRequest = {
@@ -348,6 +335,7 @@ function configurationScriptReferences(request: ConfigurationReferenceRequest) {
     positionalArguments: false,
     required: false,
     requiresExecuteMode: false,
+    shellRuntime: false,
     specifier: imported.path,
     taskInclude: false,
     workingDirectory: request.workingDirectory,
@@ -376,6 +364,7 @@ function configurationScriptReferences(request: ConfigurationReferenceRequest) {
         positionalArguments: launch.positionalArguments,
         required: true,
         requiresExecuteMode: launch.requiresExecuteMode,
+        shellRuntime: launch.shellRuntime,
         specifier: launch.specifier,
         taskInclude: false,
         workingDirectory: posix
@@ -643,6 +632,7 @@ test('classifies every runnable configuration category at root and nested bounda
     '.github/actions/nested/action.yaml',
     '.github/actions/evil\n/action.yml',
     'vite.config.ts',
+    'nested/svelte.config.js',
   ];
   const candidates = [
     ...expected,
@@ -656,6 +646,7 @@ test('classifies every runnable configuration category at root and nested bounda
     '.github/actions/evil\n/not-action.yml',
     '.github/actions/evil\n/action.yml/child',
     'nested/vite.config.css',
+    'nested/svelte.config.css',
   ];
   expect(candidates.filter(isRunnableConfiguration)).toEqual(expected);
 });
