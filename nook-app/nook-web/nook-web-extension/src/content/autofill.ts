@@ -33,7 +33,6 @@ import { removeScannedWidget } from './autofill/message-router'
 import {
   SaveOfferDisplayKind,
   SavePageWatchKind,
-  ScanScheduleKind,
   WidgetWorkflowKeyKind,
   saveOfferState,
   scanState,
@@ -175,10 +174,6 @@ async function scanAndRender(): Promise<void> {
 }
 
 function scheduleScan() {
-  if (scanState.scheduleState.kind === ScanScheduleKind.Scheduled) {
-    window.clearTimeout(scanState.scheduleState.timer)
-  }
-
   scanState.scheduleTimer(() =>
     window.setTimeout(() => {
       scanState.clearPendingTimer()

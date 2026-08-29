@@ -128,6 +128,25 @@
     })
   }
 
+  function stayReady(): void {
+    window.close()
+  }
+
+  function refreshAuthenticationSurfaces(): void {
+    const query: Parameters<typeof chrome.tabs.query>[0] = {}
+    chrome.tabs.query(query, (tabs) => {
+      for (const tab of tabs) {
+        if (typeof tab.id !== 'number') continue
+        const message: Parameters<typeof chrome.tabs.sendMessage>[1] = {
+          type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces,
+        }
+        void chrome.tabs.sendMessage(tab.id, message).catch(() => {
+          // Restricted pages may not host the Nook content script.
+        })
+      }
+    })
+  }
+
   function beginPairing(device: ExtensionDeviceProtectionResult): void {
     busy = true
     error = ''
@@ -171,10 +190,7 @@
     error = ''
     try {
       const device = await action()
-      const message: Parameters<typeof chrome.runtime.sendMessage>[0] = {
-        type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces,
-      }
-      chrome.runtime.sendMessage(message, () => void chrome.runtime.lastError)
+      refreshAuthenticationSurfaces()
       enterToolbarMenu(device)
     } catch (caught) {
       busy = false
@@ -273,6 +289,14 @@
         onclick={openSimpleVault}
       >
         {translatePlain(I18N_KEYS.ExtensionSetupOpenSimpleVault)}
+      </button>
+      <button
+        type="button"
+        class="menu-secondary-action"
+        data-testid="stay-ready-btn"
+        onclick={stayReady}
+      >
+        {translatePlain(I18N_KEYS.ExtensionCompanionStayReady)}
       </button>
       {#if pairingCandidate.kind === PairingCandidateKind.Selected}
         <button

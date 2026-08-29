@@ -327,6 +327,7 @@ async function buildChromeLocales() {
         widgetLoginDescription: {
           message: catalog.extension.widget.login_description,
         },
+        widgetFillLogin: { message: catalog.extension.widget.continue },
         widgetSignupTitle: { message: catalog.extension.widget.signup_title },
         widgetSignupDescription: {
           message: catalog.extension.widget.signup_description,

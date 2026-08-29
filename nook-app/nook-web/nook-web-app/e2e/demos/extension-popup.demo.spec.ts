@@ -133,6 +133,7 @@ test('keeps the extension toolbar popup focused on one next action', async ({
     'Connected to Personal vault',
   )
   await expect(page.getByTestId('open-simple-vault-btn')).toBeVisible()
+  await expect(page.getByTestId('stay-ready-btn')).toHaveText('Stay ready')
   await expect(page.getByTestId('pair-another-vault-btn')).toHaveClass(
     /menu-secondary-action/,
   )

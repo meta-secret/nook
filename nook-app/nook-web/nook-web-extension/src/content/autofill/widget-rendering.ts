@@ -3,6 +3,7 @@ import type { PasswordFormObservation } from '../../../../nook-web-shared/src/ex
 import {
   authWidgetStartsCollapsed,
   isTrustedAuthAction,
+  shouldOfferOpenVault,
 } from '../../lib/auth-widget-policy'
 import { type WebsiteLoginMatchAvailability } from '../../lib/auth-workflow-messages'
 import {
@@ -299,6 +300,38 @@ export function renderWidget({
       void continueWithNook(nookTypedArgs0_7)
     }
   })
+
+  if (shouldOfferOpenVault(loginMatches)) {
+    const openVaultButton = document.createElement('button')
+    openVaultButton.type = 'button'
+    openVaultButton.className = 'secondary-button'
+    openVaultButton.textContent = translatedMessage(
+      BROWSER_MESSAGE_KEYS.WidgetOpenVault,
+    )
+    openVaultButton.addEventListener('click', (event) => {
+      if (!isTrustedAuthAction(event.isTrusted)) return
+      const message: Parameters<typeof chrome.runtime.sendMessage>[0] = {
+        type: 'nook:open-simple-vault',
+      }
+      void chrome.runtime.sendMessage(message)
+    })
+    body.append(openVaultButton)
+  }
+
+  const takeOverButton = document.createElement('button')
+  takeOverButton.type = 'button'
+  takeOverButton.className = 'text-button'
+  takeOverButton.textContent = translatedMessage(
+    BROWSER_MESSAGE_KEYS.WidgetTakeOver,
+  )
+  takeOverButton.addEventListener('click', (event) => {
+    if (!isTrustedAuthAction(event.isTrusted)) return
+    cancelPendingAuthenticatorPickerRequest()
+    cancelPendingLoginPickerRequest()
+    widgetState.dismissed = true
+    removeWidget()
+  })
+  body.append(takeOverButton)
 
   const nookTypedArgs0_1: Parameters<
     typeof mountWidgetShell

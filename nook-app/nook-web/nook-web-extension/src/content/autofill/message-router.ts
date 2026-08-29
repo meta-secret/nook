@@ -1,4 +1,5 @@
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
+import { ExtensionRuntimeRequestType } from '../../lib/extension-runtime-request-type'
 import { summarizeAuthenticationWorkflowForms } from '../../../../nook-web-shared/src/extension/password-forms'
 import {
   isWebsiteAuthenticatorCanceledMessage,
@@ -25,6 +26,7 @@ import {
   AuthenticatorPickerKind,
   LoginPickerKind,
   pickerState,
+  scanState,
   widgetState,
 } from './state'
 import { removeWidget, translatedMessage } from './workflow-ui'
@@ -44,6 +46,17 @@ export const routeAutofillMessage: AutofillMessageListener =
   (runtimeMessage, sender, sendResponse) => {
     if (!runtimeMessage || typeof runtimeMessage !== 'object') return false
     const message = runtimeMessage
+    if (
+      sender.id === chrome.runtime.id &&
+      'type' in message &&
+      message.type === ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces
+    ) {
+      widgetState.dismissed = false
+      scanState.schedule()
+      const response: Parameters<typeof sendResponse>[0] = { ok: true }
+      sendResponse(response)
+      return false
+    }
     if (
       sender.id === chrome.runtime.id &&
       isQueryLoginDetectionMessage(message)

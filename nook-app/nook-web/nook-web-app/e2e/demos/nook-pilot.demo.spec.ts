@@ -108,6 +108,7 @@ test('open trusted pairing from disconnected Nook Pilot', async ({ page }) => {
 
   const widget = page.locator('#nook-auth-widget')
   await expect(widget.getByText('Ready to sign in')).toBeVisible()
+  await expect(widget.getByRole('button', { name: 'Take over' })).toBeVisible()
   await expect(widget.getByTestId('nook-auth-gate-vault-status')).toHaveText(
     'Vault not connected',
   )
