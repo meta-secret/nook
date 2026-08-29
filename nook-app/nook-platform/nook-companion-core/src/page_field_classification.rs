@@ -70,7 +70,7 @@ pub fn expand_identity_text(value: &str) -> String {
                 with_breaks.push(' ');
             }
         }
-        if *c == '_' || *c == '-' || *c == '.' {
+        if matches!(*c, '_' | '-' | '.' | '/') {
             with_breaks.push(' ');
         } else {
             with_breaks.push(*c);
@@ -489,6 +489,10 @@ mod tests {
             "verification code"
         );
         assert_eq!(expand_identity_text("login_email"), "login email");
+        assert_eq!(
+            expand_identity_text("/auth/close/account"),
+            "auth close account"
+        );
     }
 
     #[test]
@@ -579,6 +583,10 @@ mod tests {
             "Continue with Google"
         ));
         assert!(!looks_like_login_advance_control_label(
+            "Continue with LinkedIn"
+        ));
+        assert!(!looks_like_login_advance_control_label("Continue with X"));
+        assert!(!looks_like_login_advance_control_label(
             &"x".repeat(MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1)
         ));
     }
@@ -606,6 +614,14 @@ mod tests {
             ("login-form", "https://example.test/register"),
             ("login-form", "https://example.test/reset-password"),
             ("login-form", "https://example.test/signin/google"),
+            ("login-form", "https://example.test/signin/linkedin"),
+            ("login-form", "https://example.test/signin/x.com"),
+            ("login-form", "https://example.test/auth/close/account"),
+            ("login-form", "https://example.test/auth/forgot/password"),
+            (
+                "login-form",
+                "https://example.test/auth/authorize/transaction",
+            ),
             (
                 "login-form",
                 "https://example.test/auth/login?action=close+account",

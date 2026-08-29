@@ -15,7 +15,10 @@ pub(super) fn identity_names_external_authentication_provider(identity: &str) ->
             "gitlab",
             "git lab",
             "linkedin",
+            "linked in",
             "twitter",
+            "x",
+            "x com",
             "okta",
         ],
     )
