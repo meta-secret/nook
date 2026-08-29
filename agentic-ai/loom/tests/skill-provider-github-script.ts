@@ -1,4 +1,5 @@
 import ts from 'typescript';
+import { posix } from 'node:path';
 import { analyzeShellCommands } from './skill-provider-command-boundary.ts';
 import type { ShellLaunchArgument } from './skill-provider-command-types.ts';
 import type { ConfigurationNode } from './skill-provider-command-types.ts';
@@ -77,7 +78,11 @@ export function githubScriptConfigurationReferences(
         shellRuntime: launch.shellRuntime,
         specifier: launch.specifier,
         taskInclude: false,
-        workingDirectory: launch.workingDirectory,
+        workingDirectory: posix
+          .normalize(
+            posix.join(request.workingDirectory, launch.workingDirectory),
+          )
+          .replace(/^\.$/u, ''),
       })),
     ];
   });

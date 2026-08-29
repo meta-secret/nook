@@ -1,4 +1,5 @@
 import ts from 'typescript';
+import { posix } from 'node:path';
 import { lexicalScope } from './skill-provider-typescript-require.ts';
 
 type ExecBinding = { readonly scope: ts.Node };
@@ -61,6 +62,10 @@ export function githubScriptExecCommands(source: string): readonly string[] {
 }
 
 function execCommand(request: ExecCallRequest): string {
+  if (request.call.arguments.length > 3)
+    throw new Error(
+      `Ambiguous github-script ${request.member} arguments are forbidden.`,
+    );
   const command = request.call.arguments[0];
   if (!command || staticText(command) === false)
     throw new Error(
@@ -81,7 +86,81 @@ function execCommand(request: ExecCallRequest): string {
       parts.push(shellQuote(staticText(argument) as string));
     }
   }
-  return parts.join(' ');
+  const source = parts.join(' ');
+  const cwd = execCwd([request.call.arguments[2], request.member]);
+  return cwd === false ? source : `cd ${shellQuote(cwd)} && ${source}`;
+}
+
+function execCwd([options, member]: readonly [
+  ts.Expression | undefined,
+  string,
+]): string | false {
+  if (!options) return false;
+  if (!ts.isObjectLiteralExpression(options))
+    throw new Error(`Dynamic github-script ${member} options are forbidden.`);
+  let cwd: string | false = false;
+  const names = new Set<string>();
+  for (const property of options.properties) {
+    if (ts.isSpreadAssignment(property))
+      throw new Error(`Spread github-script ${member} options are forbidden.`);
+    if (!ts.isPropertyAssignment(property))
+      throw new Error(
+        `Ambiguous github-script ${member} options are forbidden.`,
+      );
+    const name = propertyName(property.name);
+    if (name === false || names.has(name))
+      throw new Error(
+        `Ambiguous github-script ${member} options are forbidden.`,
+      );
+    names.add(name);
+    if (name === 'cwd') {
+      const value = staticText(property.initializer);
+      if (value === false)
+        throw new Error(`Dynamic github-script ${member} cwd is forbidden.`);
+      cwd = repositoryCwd(value);
+    } else assertStaticInertOption([name, property.initializer, member]);
+  }
+  return cwd;
+}
+
+function propertyName(name: ts.PropertyName): string | false {
+  return ts.isIdentifier(name) ||
+    ts.isStringLiteral(name) ||
+    ts.isNoSubstitutionTemplateLiteral(name)
+    ? name.text
+    : false;
+}
+
+function assertStaticInertOption([name, value, member]: readonly [
+  string,
+  ts.Expression,
+  string,
+]): void {
+  if (
+    /^(?:failOnStdErr|ignoreReturnCode|silent|windowsHide|windowsVerbatimArguments)$/u.test(
+      name,
+    ) &&
+    (value.kind === ts.SyntaxKind.TrueKeyword ||
+      value.kind === ts.SyntaxKind.FalseKeyword)
+  )
+    return;
+  if (name === 'delay' && ts.isNumericLiteral(value)) return;
+  throw new Error(
+    `Dynamic github-script ${member} option ${name} is forbidden.`,
+  );
+}
+
+function repositoryCwd(value: string): string | false {
+  if (
+    value.includes('\\') ||
+    /[\0\r\n]/u.test(value) ||
+    /^(?:\/|[A-Za-z]:)/u.test(value)
+  )
+    throw new Error('github-script exec cwd escapes the repository.');
+  const normalized = posix.normalize(value);
+  if (normalized === '..' || normalized.startsWith('../'))
+    throw new Error('github-script exec cwd escapes the repository.');
+  return normalized === '.' ? false : normalized;
 }
 
 function staticText(expression: ts.Expression): string | false {
