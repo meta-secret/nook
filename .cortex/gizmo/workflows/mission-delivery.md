@@ -94,6 +94,8 @@ Agent count never determines PR count.
    - Immediately obtain remote evidence for the pushed head.
    - Use a focused `task remote TASK_NAME=web:build` command only when it helps
      iteration.
+   - Use a focused `task remote TASK_NAME=web:e2e` command only when it helps
+     iteration.
    - When the head is validation-ready, dispatch complete exact-head validation
      immediately instead of requiring focused tasks first.
 7. **Validate and repair through teams.**
