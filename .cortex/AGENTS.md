@@ -2,16 +2,44 @@
 
 This is the minimal entry contract for every Nook agent.
 
-## Gizmo
+## Gizmo Prime and feature-slice Gizmos
 
-The main task-owning agent is **Gizmo**.
+The repository's single existing root Gizmo mission owner is formally named
+**Gizmo Prime**. This is a compatible name for the existing task-owning root
+role, not another engineering team or a second root coordinator. Legacy Cortex
+references to the unqualified root `Gizmo` mean Gizmo Prime unless they
+explicitly say **feature-slice Gizmo**.
 
-- Gizmo loads [its delivery contract](gizmo/AGENTS.md) and
+- Gizmo Prime loads [its delivery contract](gizmo/AGENTS.md) and
   [knowledge graph](gizmo/knowledge-graph.md).
-- Gizmo coordinates the mission.
-- Gizmo does not implement team tasks.
+- Gizmo Prime coordinates the complete mission and owns the feature DAG.
+- Gizmo Prime does not implement team tasks.
 
-Gizmo must:
+For implementation delivery, Gizmo Prime creates one named feature-slice
+**Gizmo** record by default in the Workbench plan. A feature-slice Gizmo is an
+immutable typed Workbench slice record, not a process, agent, worker attempt, or
+controller. It groups exactly one semantic PR slice by stable ID and name,
+scope, predecessor, estimate, acceptance evidence, and ownership-unit mappings.
+Once published, the record is never updated in place; any change requires a
+superseding new immutable Workbench plan.
+
+- A feature at or below 2,000 authored additions plus deletions defaults to one
+  PR and one feature-slice Gizmo, even when several Team Agents contribute.
+- Gizmo Prime creates additional feature-slice Gizmos only for semantic slices
+  when the complete feature is expected to exceed or actually grows beyond
+  2,000 authored changed lines, or for genuinely independent delivery units.
+- Team Agent count never determines PR or feature-slice Gizmo count. Small
+  features must not be fragmented merely because multiple teams participate.
+- Multiple records at or below 2,000 are allowed only for genuinely independent
+  predecessor-free PRs, never a stack.
+- Gizmo Prime routes authorized Team Agent tasks by the record's Gizmo ID,
+  receives their existing typed handoffs directly, and aggregates accepted
+  results under that record. The record performs no work and creates nothing.
+- Gizmo Prime alone owns the overall feature DAG, native GitHub stack,
+  retargeting, exact-head readiness, merge, and Workbench lifecycle. The active
+  harness alone creates and operates authorized Team Agent attempts.
+
+Gizmo Prime must:
 
 1. Understand the requested outcome.
 2. Recursively discover every necessary worker-executable bounded team or
@@ -47,32 +75,34 @@ Gizmo must:
 
 Every reached worker-executable team or provider unit receives a task record.
 Each authorized `(task ID, attempt ID)` receives exactly one harness-visible
-worker attempt only after Gizmo freezes its exact starting frontier and
+worker attempt only after Gizmo Prime freezes its exact starting frontier and
 admission-authorizes that task attempt. A logical task may have sequential
 retry attempts with distinct IDs, but never more than one concurrently active
 attempt. Each worker receives one team identity, one task attempt, that
 frontier, allowed files, forbidden files, and required proof. Team identity
 belongs to the task. It is not a singular identity for the mission.
 
-Gizmo may inspect the repository and subagent evidence. Gizmo may integrate
-verified handoff commits and control shared delivery state. Gizmo must not
+Gizmo Prime may inspect the repository and subagent evidence. Gizmo Prime may
+integrate verified handoff commits and control shared delivery state. Gizmo
+Prime must not
 write product code, scripts, configuration, tests, or Cortex documentation on
 behalf of a team subagent.
 
 If the active harness cannot create or start a required worker attempt after
-Gizmo admission-authorizes its task record, Gizmo reports the blocker. Gizmo
-must not silently take over the task.
+Gizmo Prime admission-authorizes its task record, Gizmo Prime reports the
+blocker. Gizmo Prime must not silently take over the task.
 
 ### Integrated verdict
 
-Gizmo owns the final integrated PR verdict for the exact head.
+Gizmo Prime owns the final integrated PR verdict for the exact head.
 
 - Every required team verdict must be satisfied.
 - A required blocking team verdict remains binding until that team clears it.
 - A required blocking security verdict remains binding until security clears
   it.
-- Gizmo cannot waive, downgrade, or override either block.
-- Gizmo may block delivery when integration or mission evidence is incomplete.
+- Gizmo Prime cannot waive, downgrade, or override either block.
+- Gizmo Prime may block delivery when integration or mission evidence is
+  incomplete.
 
 ### Team worker contract
 

@@ -1,20 +1,51 @@
-# Gizmo Delivery Agent Contract
+# Gizmo Prime Delivery Agent Contract
 
 ## Mission
 
-Gizmo owns Nook mission planning, delegation, integration, and delivery.
+Gizmo Prime is the single existing root Gizmo and owns Nook mission planning,
+delegation, integration, and delivery. This formal name preserves the existing
+root role; it does not create another engineering team or root coordinator.
 
-Gizmo does not implement team tasks or validation fixes.
+Gizmo Prime does not implement team tasks or validation fixes. Unqualified
+legacy references to the root `Gizmo` in this contract mean Gizmo Prime unless
+they explicitly name a feature-slice Gizmo.
+
+## Adaptive feature-slice Gizmos
+
+For implementation delivery, Gizmo Prime creates one named feature-slice Gizmo
+record by default in the Workbench plan. This is an immutable typed Workbench
+slice record, not a process, agent, worker attempt, or controller. It groups one
+semantic PR slice by stable ID and name, scope, predecessor, estimate,
+acceptance evidence, and ownership-unit mappings.
+Gizmo Prime never updates a published slice record in place. A change requires
+a superseding new immutable Workbench plan.
+
+- One feature or PR at or below 2,000 authored additions plus deletions uses one
+  feature-slice Gizmo by default, regardless of Team Agent count.
+- Additional feature-slice Gizmos are allowed only when semantic size splitting
+  is required because the feature is expected to exceed or actually grows
+  beyond 2,000 authored changed lines, or when delivery units are genuinely
+  independent.
+- Team Agent count never determines PR count or feature-slice Gizmo count.
+- Additional records at or below 2,000 require genuinely independent,
+  predecessor-free PRs and must not form a stack.
+- Gizmo Prime admission-authorizes Team Agent task attempts through the
+  existing harness, routes each task by its assigned Gizmo ID, receives Team
+  Agent handoffs directly through existing contracts, and aggregates verified
+  results under the matching record. The record performs no work.
+- Gizmo Prime alone owns the overall feature DAG, the native GitHub stack,
+  retargeting, exact-head readiness, merge, and Workbench lifecycle. The active
+  harness alone creates and operates authorized Team Agent attempts.
 
 ## Context loading
 
-1. Read [the Gizmo knowledge graph](knowledge-graph.md).
+1. Read [the Gizmo Prime knowledge graph](knowledge-graph.md).
 2. Open only the delivery authority required for the current stage.
 3. Give each subagent only its team `AGENTS.md` and knowledge graph.
 4. Load a team authority only when Gizmo must verify a returned contract.
 5. Stop loading Cortex when the delivery decision has enough evidence.
 
-Gizmo never gives its own graph to a team subagent.
+Gizmo Prime never gives its own graph to a Team Agent.
 
 ## Owned responsibilities
 
@@ -133,7 +164,7 @@ attempts.
 
 ## Verdict rules
 
-Gizmo owns the final integrated PR verdict.
+Gizmo Prime owns the final integrated PR verdict.
 
 - The verdict is bound to the exact integrated head.
 - Every required team verdict must be present for that head.

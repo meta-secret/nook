@@ -2,16 +2,40 @@ const assert = require('node:assert/strict')
 const test = require('node:test')
 
 const { validateAgentRecord } = require('./workbench-records.cjs')
+require('./workbench-gizmo-mapping.test.cjs')
+require('./workbench-publish.test.cjs')
 
 const baseOwnershipUnit =
-  '1. Capability: Workbench agent record validation; Functional owner: AI; Expertise provider: None; Expertise allowed code paths: None; Expertise allowed test paths: None; Expertise forbidden paths: None; Expertise consumer interfaces: None; Expertise acceptance evidence: None; Capability acceptance evidence: Contract tests pass'
+  '1. Capability: Workbench agent record validation; Gizmo ID: gizmo-1; Functional owner: AI; Expertise provider: None; Expertise allowed code paths: None; Expertise allowed test paths: None; Expertise forbidden paths: None; Expertise consumer interfaces: None; Expertise acceptance evidence: None; Capability acceptance evidence: Contract tests pass'
 
 const expertiseOwnershipUnit =
-  '1. Capability: Workbench agent record validation; Functional owner: AI; Expertise provider: Web development; Expertise allowed code paths: .github/scripts/workbench-records.cjs; Expertise allowed test paths: .github/scripts/workbench-records.test.cjs; Expertise forbidden paths: .cortex/teams/ai,.cortex/shared; Expertise consumer interfaces: Plan input and validation result; Expertise acceptance evidence: Focused validator tests pass; Capability acceptance evidence: Published plans reject incomplete contracts'
+  '1. Capability: Workbench agent record validation; Gizmo ID: gizmo-1; Functional owner: AI; Expertise provider: Web development; Expertise allowed code paths: .github/scripts/workbench-records.cjs; Expertise allowed test paths: .github/scripts/workbench-records.test.cjs; Expertise forbidden paths: .cortex/teams/ai,.cortex/shared; Expertise consumer interfaces: Plan input and validation result; Expertise acceptance evidence: Focused validator tests pass; Capability acceptance evidence: Published plans reject incomplete contracts'
 const securityOwnershipUnit =
-  '1. Capability: Cryptographic architecture review; Functional owner: Security; Expertise provider: None; Expertise allowed code paths: None; Expertise allowed test paths: None; Expertise forbidden paths: None; Expertise consumer interfaces: None; Expertise acceptance evidence: None; Capability acceptance evidence: Security architecture evidence is current'
+  '1. Capability: Cryptographic architecture review; Gizmo ID: gizmo-1; Functional owner: Security; Expertise provider: None; Expertise allowed code paths: None; Expertise allowed test paths: None; Expertise forbidden paths: None; Expertise consumer interfaces: None; Expertise acceptance evidence: None; Capability acceptance evidence: Security architecture evidence is current'
 const gizmoOwnershipUnit =
-  '1. Capability: Integrated pull request delivery; Functional owner: Gizmo; Expertise provider: None; Expertise allowed code paths: None; Expertise allowed test paths: None; Expertise forbidden paths: None; Expertise consumer interfaces: None; Expertise acceptance evidence: None; Capability acceptance evidence: Integrated readiness evidence is complete'
+  '1. Capability: Integrated pull request delivery; Gizmo ID: gizmo-1; Functional owner: Gizmo Prime; Expertise provider: None; Expertise allowed code paths: None; Expertise allowed test paths: None; Expertise forbidden paths: None; Expertise consumer interfaces: None; Expertise acceptance evidence: None; Capability acceptance evidence: Integrated readiness evidence is complete'
+const secondGizmoOwnershipUnit =
+  '2. Capability: Publisher adoption; Gizmo ID: gizmo-2; Functional owner: AI; Expertise provider: None; Expertise allowed code paths: None; Expertise allowed test paths: None; Expertise forbidden paths: None; Expertise consumer interfaces: None; Expertise acceptance evidence: None; Capability acceptance evidence: Integration checks pass'
+
+function sliceContract(number, id, name, predecessor, scope, estimate, evidence) {
+  return `${number}. Gizmo ID: ${id}; Gizmo name: ${name}; Predecessor Gizmo ID: ${predecessor}; ${scope}; Estimated authored changed lines: ${estimate}; Acceptance evidence: ${evidence}`
+}
+
+function sequenceField(...slices) {
+  return `- PR slices, estimates, and acceptance evidence:\n${slices.join('\n')}`
+}
+
+const validSequenceField = sequenceField(
+  sliceContract(
+    1,
+    'gizmo-1',
+    'Workbench validator',
+    'None',
+    'Validator change',
+    '240',
+    'Contract tests pass',
+  ),
+)
 
 const validPlan = `# Task plan
 
@@ -29,15 +53,18 @@ Deliver a durable two-phase agent context record.
 
 ## Change budget and PR sequence
 
+- Mission controller: Gizmo Prime
+- Current Gizmo ID: gizmo-1
 - Estimated authored changed lines: 240
 - Owning modules, packages, or layers: Workbench agent records
 - Ownership units:
 ${baseOwnershipUnit}
 - Public or cross-module interfaces: Plan validation contract
 - Delivery shape: One PR
+- PR sequence mode: One PR
 - Current PR estimated authored changed lines: 240
 - Current PR slice and acceptance evidence: Validator change; Acceptance evidence: Contract tests pass
-- PR slices and acceptance evidence: Validator change; Acceptance evidence: Contract tests pass
+${validSequenceField}
 
 ## Initial plan
 
@@ -78,6 +105,24 @@ Planning stopped at the user-authorization boundary.
 
 - The user must select and request a direction.
 `
+
+function validTwoGizmoStackedPlan() {
+  return validPlan
+    .replace(baseOwnershipUnit, `${baseOwnershipUnit}\n${secondGizmoOwnershipUnit}`)
+    .replace(
+      'Estimated authored changed lines: 240',
+      'Estimated authored changed lines: 2,240',
+    )
+    .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
+    .replace('PR sequence mode: One PR', 'PR sequence mode: Stacked PRs')
+    .replace(
+      validSequenceField,
+      sequenceField(
+        sliceContract(1, 'gizmo-1', 'Validator', 'None', 'Validator change', '240', 'Contract tests pass'),
+        sliceContract(2, 'gizmo-2', 'Publisher', 'gizmo-1', 'Publisher adoption', '2,000', 'Integration checks pass.'),
+      ),
+    )
+}
 
 test('accepts a synthesized task plan', () => {
   assert.equal(validateAgentRecord(validPlan, 'plan'), '')
@@ -206,14 +251,17 @@ test('rejects empty required sections', () => {
 })
 
 for (const field of [
+  'Mission controller',
+  'Current Gizmo ID',
   'Estimated authored changed lines',
   'Owning modules, packages, or layers',
   'Ownership units',
   'Public or cross-module interfaces',
   'Delivery shape',
+  'PR sequence mode',
   'Current PR estimated authored changed lines',
   'Current PR slice and acceptance evidence',
-  'PR slices and acceptance evidence',
+  'PR slices, estimates, and acceptance evidence',
 ]) {
   test(`rejects a plan without ${field}`, () => {
     const missing = validPlan.replace(
@@ -255,9 +303,17 @@ test('accepts security as an expertise provider', () => {
   assert.equal(validateAgentRecord(securityExpertisePlan, 'plan'), '')
 })
 
-test('accepts Gizmo as a functional owner', () => {
+test('accepts Gizmo Prime as a functional owner', () => {
   const gizmoPlan = validPlan.replace(baseOwnershipUnit, gizmoOwnershipUnit)
   assert.equal(validateAgentRecord(gizmoPlan, 'plan'), '')
+})
+
+test('accepts legacy Gizmo as the Gizmo Prime functional owner', () => {
+  const legacyGizmoPlan = validPlan.replace(
+    baseOwnershipUnit,
+    gizmoOwnershipUnit.replace('Functional owner: Gizmo Prime', 'Functional owner: Gizmo'),
+  )
+  assert.equal(validateAgentRecord(legacyGizmoPlan, 'plan'), '')
 })
 
 test('rejects Gizmo as an expertise provider', () => {
@@ -316,12 +372,21 @@ test('rejects the functional owner as its own expertise provider', () => {
 
 test('accepts multiple independently owned capability units', () => {
   const secondUnit =
-    '2. Capability: Deployment validation; Functional owner: SRE; Expertise provider: None; Expertise allowed code paths: None; Expertise allowed test paths: None; Expertise forbidden paths: None; Expertise consumer interfaces: None; Expertise acceptance evidence: None; Capability acceptance evidence: Hosted deployment checks pass'
+    '2. Capability: Deployment validation; Gizmo ID: gizmo-1; Functional owner: SRE; Expertise provider: None; Expertise allowed code paths: None; Expertise allowed test paths: None; Expertise forbidden paths: None; Expertise consumer interfaces: None; Expertise acceptance evidence: None; Capability acceptance evidence: Hosted deployment checks pass'
   const multiTeamPlan = validPlan.replace(
     baseOwnershipUnit,
     `${baseOwnershipUnit}\n${secondUnit}`,
   )
   assert.equal(validateAgentRecord(multiTeamPlan, 'plan'), '')
+})
+
+test('accepts a 200-line one-Gizmo plan with multiple ownership units', () => {
+  const secondUnit =
+    '2. Capability: Plan publication; Gizmo ID: gizmo-1; Functional owner: AI; Expertise provider: None; Expertise allowed code paths: None; Expertise allowed test paths: None; Expertise forbidden paths: None; Expertise consumer interfaces: None; Expertise acceptance evidence: None; Capability acceptance evidence: Publication checks pass'
+  const plan = validPlan
+    .replaceAll('authored changed lines: 240', 'authored changed lines: 200')
+    .replace(baseOwnershipUnit, `${baseOwnershipUnit}\n${secondUnit}`)
+  assert.equal(validateAgentRecord(plan, 'plan'), '')
 })
 
 test('rejects broad prose instead of exact expertise paths', () => {
@@ -401,7 +466,7 @@ test('rejects an over-budget one-PR plan', () => {
     )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /current PR estimate exceeds 3,000 authored changed lines/,
+    /current PR estimate exceeds 2,000 authored changed lines/,
   )
 })
 
@@ -412,7 +477,56 @@ test('rejects a one-PR shape for an over-budget feature', () => {
   )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /one-PR plan exceeds 3,000 authored changed lines/,
+    /one-PR plan exceeds 2,000 authored changed lines/,
+  )
+})
+
+test('accepts a one-PR plan at the 2,000-line ceiling', () => {
+  const atCeiling = validPlan
+    .replace(
+      'Estimated authored changed lines: 240',
+      'Estimated authored changed lines: 2,000',
+    )
+    .replace(
+      'Current PR estimated authored changed lines: 240',
+      'Current PR estimated authored changed lines: 2,000',
+    )
+    .replace(
+      'Estimated authored changed lines: 240; Acceptance evidence: Contract tests pass',
+      'Estimated authored changed lines: 2,000; Acceptance evidence: Contract tests pass',
+    )
+  assert.equal(validateAgentRecord(atCeiling, 'plan'), '')
+})
+
+test('requires stacked PRs for an over-budget multi-PR feature', () => {
+  const independent = validPlan
+    .replace(
+      'Estimated authored changed lines: 240',
+      'Estimated authored changed lines: 2,001',
+    )
+    .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
+    .replace('PR sequence mode: One PR', 'PR sequence mode: Independent PRs')
+    .replace(
+      validSequenceField,
+      sequenceField(
+        sliceContract(1, 'gizmo-1', 'Validator', 'None', 'Validator change', '240', 'Contract tests pass'),
+        sliceContract(2, 'gizmo-2', 'Publisher', 'None', 'Publisher adoption', '1,761', 'Integration checks pass.'),
+      ),
+    )
+  assert.match(
+    validateAgentRecord(independent, 'plan'),
+    /feature above 2,000 authored changed lines requires stacked PRs/,
+  )
+})
+
+test('rejects a sequence mode that contradicts one-PR delivery', () => {
+  const invalid = validPlan.replace(
+    'PR sequence mode: One PR',
+    'PR sequence mode: Stacked PRs',
+  )
+  assert.match(
+    validateAgentRecord(invalid, 'plan'),
+    /one-PR delivery requires one-PR sequence mode/,
   )
 })
 
@@ -424,7 +538,7 @@ test('rejects a feature estimate below its current PR estimate', () => {
     )
     .replace(
       'Current PR estimated authored changed lines: 240',
-      'Current PR estimated authored changed lines: 2,999',
+      'Current PR estimated authored changed lines: 1,999',
     )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
@@ -444,32 +558,126 @@ test('rejects different feature and current PR estimates for one PR', () => {
 })
 
 test('accepts a bounded current slice for a multi-PR feature', () => {
-  const multiPr = validPlan
+  const multiPr = validTwoGizmoStackedPlan()
+  assert.equal(validateAgentRecord(multiPr, 'plan'), '')
+})
+
+test('rejects a multi-PR slice without an authored-line estimate', () => {
+  const invalid = validPlan
     .replace(
       'Estimated authored changed lines: 240',
       'Estimated authored changed lines: 12,000',
     )
     .replace(
-      'Delivery shape: One PR',
-      'Delivery shape: Multiple PRs',
+      'Current PR estimated authored changed lines: 240',
+      'Current PR estimated authored changed lines: 1,000',
+    )
+    .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
+    .replace('PR sequence mode: One PR', 'PR sequence mode: Stacked PRs')
+    .replace(
+      validSequenceField,
+      `- PR slices, estimates, and acceptance evidence:\n1. Gizmo ID: gizmo-1; Gizmo name: Validator; Predecessor Gizmo ID: None; Validator change; Acceptance evidence: Contract tests pass\n${sliceContract(2, 'gizmo-2', 'Publisher', 'gizmo-1', 'Publisher adoption', '1,000', 'Integration checks pass.')}`,
+    )
+  assert.match(
+    validateAgentRecord(invalid, 'plan'),
+    /consecutively numbered slices with estimates and acceptance evidence/,
+  )
+})
+
+test('rejects undersized slice coverage for a 12,000-line feature', () => {
+  const invalid = validPlan
+    .replace(
+      'Estimated authored changed lines: 240',
+      'Estimated authored changed lines: 12,000',
     )
     .replace(
-      '- PR slices and acceptance evidence: Validator change; Acceptance evidence: Contract tests pass',
-      '- PR slices and acceptance evidence:\n1. Validator change; Acceptance evidence: Contract tests pass\n2. Publisher adoption; Acceptance evidence: Integration checks pass.',
+      'Current PR estimated authored changed lines: 240',
+      'Current PR estimated authored changed lines: 1,000',
     )
-  assert.equal(validateAgentRecord(multiPr, 'plan'), '')
+    .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
+    .replace('PR sequence mode: One PR', 'PR sequence mode: Stacked PRs')
+    .replace(
+      validSequenceField,
+      sequenceField(
+        sliceContract(1, 'gizmo-1', 'Validator', 'None', 'Validator change', '1,000', 'Contract tests pass'),
+        sliceContract(2, 'gizmo-2', 'Publisher', 'gizmo-1', 'Publisher adoption', '1,000', 'Integration checks pass.'),
+      ),
+    )
+  assert.match(
+    validateAgentRecord(invalid, 'plan'),
+    /PR slice estimates must sum to the complete feature estimate/,
+  )
+})
+
+test('rejects an individual PR slice above 2,000 lines', () => {
+  const invalid = validPlan
+    .replace(
+      'Estimated authored changed lines: 240',
+      'Estimated authored changed lines: 2,241',
+    )
+    .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
+    .replace('PR sequence mode: One PR', 'PR sequence mode: Stacked PRs')
+    .replace(
+      validSequenceField,
+      sequenceField(
+        sliceContract(1, 'gizmo-1', 'Validator', 'None', 'Validator change', '240', 'Contract tests pass'),
+        sliceContract(2, 'gizmo-2', 'Publisher', 'gizmo-1', 'Publisher adoption', '2,001', 'Integration checks pass.'),
+      ),
+    )
+  assert.match(
+    validateAgentRecord(invalid, 'plan'),
+    /every PR slice estimate must be between 1 and 2,000 authored changed lines/,
+  )
+})
+
+test('rejects a zero-line PR slice estimate', () => {
+  const invalid = validPlan
+    .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
+    .replace('PR sequence mode: One PR', 'PR sequence mode: Independent PRs')
+    .replace(
+      validSequenceField,
+      sequenceField(
+        sliceContract(1, 'gizmo-1', 'Validator', 'None', 'Validator change', '240', 'Contract tests pass'),
+        sliceContract(2, 'gizmo-2', 'Publisher', 'None', 'Publisher adoption', '0', 'Integration checks pass.'),
+      ),
+    )
+  assert.match(
+    validateAgentRecord(invalid, 'plan'),
+    /every PR slice estimate must be between 1 and 2,000 authored changed lines/,
+  )
 })
 
 test('rejects a multi-PR current slice omitted from its ordered sequence', () => {
   const invalid = validPlan
     .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
+    .replace('PR sequence mode: One PR', 'PR sequence mode: Independent PRs')
     .replace(
-      '- PR slices and acceptance evidence: Validator change; Acceptance evidence: Contract tests pass',
-      '- PR slices and acceptance evidence:\n1. Storage schema; Acceptance evidence: Domain tests pass.\n2. Publisher adoption; Acceptance evidence: Integration checks pass.',
+      validSequenceField,
+      sequenceField(
+        sliceContract(1, 'gizmo-1', 'Storage', 'None', 'Storage schema', '120', 'Domain tests pass.'),
+        sliceContract(2, 'gizmo-2', 'Publisher', 'None', 'Publisher adoption', '120', 'Integration checks pass.'),
+      ),
     )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
     /first slice to match the current PR contract/,
+  )
+})
+
+test('rejects a first slice estimate that differs from the current PR estimate', () => {
+  const invalid = validPlan
+    .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
+    .replace('PR sequence mode: One PR', 'PR sequence mode: Independent PRs')
+    .replace(
+      validSequenceField,
+      sequenceField(
+        sliceContract(1, 'gizmo-1', 'Validator', 'None', 'Validator change', '120', 'Contract tests pass'),
+        sliceContract(2, 'gizmo-2', 'Publisher', 'None', 'Publisher adoption', '120', 'Integration checks pass.'),
+      ),
+    )
+  assert.match(
+    validateAgentRecord(invalid, 'plan'),
+    /first slice estimate to match the current PR estimate/,
   )
 })
 
@@ -483,43 +691,46 @@ test('rejects a multi-PR plan without an ordered sequence', () => {
       'Delivery shape: One PR',
       'Delivery shape: Multiple PRs',
     )
+    .replace('PR sequence mode: One PR', 'PR sequence mode: Stacked PRs')
     .replace(
-      'PR slices and acceptance evidence: Validator change; Acceptance evidence: Contract tests pass',
-      'PR slices and acceptance evidence: None',
+      validSequenceField,
+      '- PR slices, estimates, and acceptance evidence:\nNone',
     )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /multi-PR plan requires at least two ordered slices with acceptance evidence/,
+    /multi-PR plan requires at least two consecutively numbered slices with estimates and acceptance evidence/,
   )
 })
 
 test('rejects multi-PR slices without acceptance evidence', () => {
   const invalid = validPlan
     .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
+    .replace('PR sequence mode: One PR', 'PR sequence mode: Independent PRs')
     .replace(
-      'PR slices and acceptance evidence: Validator change; Acceptance evidence: Contract tests pass',
-      'PR slices and acceptance evidence:\n1. Storage\n2. UI',
+      validSequenceField,
+      '- PR slices, estimates, and acceptance evidence:\n1. Storage; Estimated authored changed lines: 120\n2. UI; Estimated authored changed lines: 120',
     )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /multi-PR plan requires at least two ordered slices with acceptance evidence/,
+    /multi-PR plan requires at least two consecutively numbered slices with estimates and acceptance evidence/,
   )
 })
 
 for (const sequence of [
-  '1. Storage; Acceptance evidence: Contract tests pass.\n1. UI; Acceptance evidence: Integration checks pass.',
-  '1. Storage; Acceptance evidence: Contract tests pass.\n3. UI; Acceptance evidence: Integration checks pass.',
+  `${sliceContract(1, 'gizmo-1', 'Storage', 'None', 'Storage', '120', 'Contract tests pass.')}\n${sliceContract(1, 'gizmo-2', 'UI', 'None', 'UI', '120', 'Integration checks pass.')}`,
+  `${sliceContract(1, 'gizmo-1', 'Storage', 'None', 'Storage', '120', 'Contract tests pass.')}\n${sliceContract(3, 'gizmo-2', 'UI', 'None', 'UI', '120', 'Integration checks pass.')}`,
 ]) {
   test(`rejects nonconsecutive multi-PR sequence: ${sequence.split('\n')[1]}`, () => {
     const invalid = validPlan
       .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
+      .replace('PR sequence mode: One PR', 'PR sequence mode: Independent PRs')
       .replace(
-        '- PR slices and acceptance evidence: Validator change; Acceptance evidence: Contract tests pass',
-        `- PR slices and acceptance evidence:\n${sequence}`,
+        validSequenceField,
+        `- PR slices, estimates, and acceptance evidence:\n${sequence}`,
       )
     assert.match(
       validateAgentRecord(invalid, 'plan'),
-      /multi-PR plan requires at least two ordered slices with acceptance evidence/,
+      /multi-PR plan requires at least two consecutively numbered slices with estimates and acceptance evidence/,
     )
   })
 }
@@ -588,36 +799,45 @@ test('rejects a placeholder current slice with concrete evidence', () => {
 
 test('rejects multiple slices declared as one PR', () => {
   const invalid = validPlan.replace(
-    '- PR slices and acceptance evidence: Validator change; Acceptance evidence: Contract tests pass',
-    '- PR slices and acceptance evidence:\n1. Validator schema; Acceptance evidence: Contract tests pass.\n2. Publisher adoption; Acceptance evidence: Integration checks pass.',
+    validSequenceField,
+    sequenceField(
+      sliceContract(1, 'gizmo-1', 'Validator', 'None', 'Validator schema', '120', 'Contract tests pass.'),
+      sliceContract(2, 'gizmo-2', 'Publisher', 'None', 'Publisher adoption', '120', 'Integration checks pass.'),
+    ),
   )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /one-PR plan requires one slice matching the current PR contract/,
+    /one-PR plan requires one numbered slice matching the current PR contract/,
   )
 })
 
 test('rejects a placeholder scope in a multi-PR slice', () => {
   const invalid = validPlan
     .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
+    .replace('PR sequence mode: One PR', 'PR sequence mode: Independent PRs')
     .replace(
-      '- PR slices and acceptance evidence: Validator change; Acceptance evidence: Contract tests pass',
-      '- PR slices and acceptance evidence:\n1. None; Acceptance evidence: Contract tests pass.\n2. Publisher adoption; Acceptance evidence: Integration checks pass.',
+      validSequenceField,
+      sequenceField(
+        sliceContract(1, 'gizmo-1', 'Validator', 'None', 'None', '120', 'Contract tests pass.'),
+        sliceContract(2, 'gizmo-2', 'Publisher', 'None', 'Publisher adoption', '120', 'Integration checks pass.'),
+      ),
     )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /multi-PR plan requires at least two ordered slices with acceptance evidence/,
+    /multi-PR plan requires at least two consecutively numbered slices with estimates and acceptance evidence/,
   )
 })
 
 test('rejects a one-PR sequence that contradicts the current slice', () => {
   const invalid = validPlan.replace(
-    '- PR slices and acceptance evidence: Validator change; Acceptance evidence: Contract tests pass',
-    '- PR slices and acceptance evidence: Storage migration; Acceptance evidence: Migration tests pass',
+    validSequenceField,
+    sequenceField(
+      sliceContract(1, 'gizmo-1', 'Storage', 'None', 'Storage migration', '240', 'Migration tests pass'),
+    ),
   )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /one-PR plan requires one slice matching the current PR contract/,
+    /one-PR plan requires one numbered slice matching the current PR contract/,
   )
 })
 

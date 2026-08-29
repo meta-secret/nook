@@ -45,9 +45,11 @@ Model text.
   const renderArgs = { index };
   const markdown = renderCortexIndexMarkdown(renderArgs);
   expect(markdown).toContain('# Cortex Context Router');
-  expect(markdown).toContain('## Gizmo route');
-  expect(markdown).toContain('[Gizmo](gizmo/knowledge-graph.md)');
-  expect(markdown).not.toContain('[Gizmo](teams/gizmo/knowledge-graph.md)');
+  expect(markdown).toContain('## Gizmo Prime route');
+  expect(markdown).toContain('[Gizmo Prime](gizmo/knowledge-graph.md)');
+  expect(markdown).not.toContain(
+    '[Gizmo Prime](teams/gizmo/knowledge-graph.md)',
+  );
   expect(markdown).toContain('## Team routes');
   expect(markdown).toContain('[AI](teams/ai/knowledge-graph.md)');
   expect(markdown).toContain('[Security](teams/security/knowledge-graph.md)');
@@ -68,7 +70,7 @@ test('renders the complete canonical Cortex context router', () => {
 
   const requiredSections = [
     '## Entry contract',
-    '## Gizmo route',
+    '## Gizmo Prime route',
     '## Team routes',
     '## Shared route',
     '## Routing rules',
@@ -108,7 +110,13 @@ test('renders the complete canonical Cortex context router', () => {
     'immutable generation restart; do not implicitly or selectively invalidate',
   );
   expect(markdown).toContain(
-    'attempt. Parent-\nowned Gizmo control operations remain outside',
+    'attempt. Parent-\nowned Gizmo Prime control operations remain outside',
+  );
+  expect(markdown).toContain(
+    'Feature-slice Gizmos are immutable typed Workbench slice records created by',
+  );
+  expect(markdown).toContain(
+    'it is not a process,\n  agent, worker attempt, or controller and owns no lifecycle state.',
   );
   expect(markdown).toContain(
     'Every authorized `(task ID, attempt ID)` receives exactly one harness-',

@@ -104,7 +104,7 @@ ownership until merge or a concrete blocked handoff:
 
 ### Size boundary
 
-- An implementation pull request targets no more than **3,000 authored changed
+- An implementation pull request targets no more than **2,000 authored changed
   lines**.
 - Treat this as a planning ceiling because review, validation, conflict
   resolution, and repair costs rise sharply above it.
@@ -137,12 +137,14 @@ Report these separately because they do not represent authored functionality:
 
 - Do not exclude tests or delete-heavy refactors from the authored estimate.
 - Do not pad, compress, or mechanically reorganize code to fit the number.
-- Treat 2,500 authored changed lines as a mandatory split-planning warning.
+- Treat 1,500 authored changed lines as a mandatory split-planning warning.
 - Stop implementation and re-estimate the complete requested outcome.
 - Inventory every logical domain, capability, package, layer, migration, and
   public-interface change already present in the PR.
-- If the remaining work may cross the ceiling, define at least two semantic PR
-  slices in Workbench before continuing.
+- If the complete feature is expected to exceed the ceiling, or the remaining
+  work may bring the current PR beyond it, define at least two semantic
+  PR slices as an ordered GitHub Stacked Pull Request sequence in Workbench
+  before continuing.
 - Each slice owns complete capabilities or module responsibilities together
   with their tests and documentation.
 - If implementation crosses the ceiling, stop expanding that PR.
@@ -156,11 +158,13 @@ implementation crosses the ceiling:
 1. Identify the last full-work commit and publish a superseding Workbench plan.
 2. Divide the complete outcome along domain, capability, package, layer, or
    stable-interface boundaries.
-3. Materialize every slice as an ordered focused issue.
+3. Materialize every slice as an ordered focused issue whose `gizmo_id`
+   frontmatter exactly matches the canonical Gizmo ID in that plan slice.
 4. Record which complete implementation, tests, migrations, and documentation
    belong to each slice.
-5. Branch the successor from the full-work commit and open it as a linked draft
-   stacked PR before changing the first PR.
+5. Branch the successor from the full-work commit, register the predecessor and
+   successor as a native GitHub stack, and open the successor as a linked draft
+   PR before changing the first PR.
 6. Cross-link all PR descriptions and Workbench records.
 7. Prove every file and behavior exists in the ordered PR sequence, using the
    Workbench checklist plus `numstat`, `name-status`, or `range-diff` evidence.
@@ -169,29 +173,73 @@ implementation crosses the ceiling:
 Sequence rules:
 
 - Local Git history is not preservation; a linked draft successor is.
+- Stacking is mandatory for a feature expected to exceed the ceiling and for an
+  in-progress PR that may exceed or has exceeded it. Exactly 2,000 authored
+  changed lines may remain one PR. At or below the ceiling, multiple PRs are
+  valid only for genuinely independent, predecessor-free units and must not be
+  registered as a stack.
+- Use GitHub's native Stacked Pull Requests through `gh stack` when available,
+  or through the GitHub website. The branches must stay in the same repository,
+  and GitHub must recognize the PRs as one stack; an informal chain of PR links
+  or base branches is not a substitute.
+- Prefer `gh stack init <bottom> <successor> ...` for bottom-to-top local stack
+  adoption and `gh stack submit` to push and create or update the GitHub stack.
+  `gh stack link <bottom-pr> <successor-pr> ...` may register existing PRs.
+- If neither native `gh stack` operations nor the GitHub website stack controls
+  are available, stop and report the delivery blocker. Do not silently fall
+  back to an unrecognized branch chain or add a third-party stacking tool.
 - Preserve a coherent bounded capability, not a line-count-selected portion.
-- Complete the first PR before its successor.
+- Complete the stack bottom-up, one PR at a time. Every PR must independently
+  satisfy its full checks, actionable review resolution, and exact-head
+  readiness before it is squash-merged; upper layers do not bypass those gates.
 - Model the stack with GitHub base branches: each successor temporarily targets
   its predecessor branch and links the preceding and following PRs.
-- After the first PR merges, update the successor from `origin/main`, change its
-  temporary stacked base to `main`, re-measure, and validate.
+- After each predecessor merges, change the immediate successor's temporary
+  stacked base to `main`, update it from current `origin/main`, re-measure its
+  authored additions plus deletions, and validate the new exact head.
 - Continue until the complete Workbench outcome is merged.
-- The same agent owns every PR in the declared sequence unless Workbench records
-  an explicit owner handoff.
+- Gizmo Prime owns the complete declared sequence and records exactly one named
+  immutable feature-slice Gizmo Workbench record for each semantic PR slice.
+  Gizmo Prime coordinates Team Agent work, receives existing handoffs directly,
+  and aggregates verified results under the matching record. A slice record is
+  not a process or controller and owns no lifecycle state.
 - Scope reduction without a linked preservation PR is a P1 delivery failure.
+
+### Adaptive Gizmo cardinality
+
+- One feature at or below 2,000 authored additions plus deletions defaults to
+  one PR and one feature-slice Gizmo.
+- Gizmo Prime records additional feature-slice Gizmos only for a required
+  semantic size split above 2,000 or for genuinely independent delivery units.
+- Multiple records at or below 2,000 must use independent predecessor-free PRs;
+  stacked delivery at or below the ceiling is invalid.
+- Team Agent count never determines PR or Gizmo count. Do not fragment a small
+  feature merely because multiple teams or agents contribute to it.
+- Gizmo Prime alone owns the feature DAG, native GitHub stack, retargeting,
+  exact-head readiness, squash merge, and Workbench lifecycle.
 
 ### Required plan
 
 The Workbench task plan must state:
 
+- Gizmo Prime as the mission controller;
+- the current feature-slice Gizmo ID;
 - the estimated authored changed lines;
 - the files, packages, modules, or layers expected to change;
 - the public or cross-module interfaces involved;
 - whether one PR can deliver the complete feature;
+- the PR sequence mode: `One PR`, `Independent PRs`, or `Stacked PRs`;
 - the current PR slice and its authored changed-line estimate;
-- the ordered PR slices when more than one PR is needed;
+- every consecutively numbered PR slice with its positive authored changed-line
+  estimate at or below 2,000, unique Gizmo ID and name, and predecessor Gizmo;
 - the acceptance evidence for each slice;
+- slice estimates whose sum equals the complete feature estimate;
+- one declared slice Gizmo ID on every ownership unit, with multiple Team Agent
+  units allowed to map to the same slice Gizmo;
 - a superseding immutable plan when scope or the estimate materially changes.
+
+A plan bound to a trusted focused-issue `gizmo_id` must declare one PR, one
+slice, and that same ID on the current slice and every ownership unit.
 
 An estimate is a design tool.
 
@@ -233,6 +281,10 @@ Each slice must be:
 - Use one Workbench feature summary for the full outcome.
 - Create one focused issue for each independently mergeable slice.
 - Record dependencies and order in the feature index.
+- When the complete feature is expected to exceed 2,000 authored changed lines,
+  the ordered issues must be delivered as the native GitHub Stacked Pull
+  Request sequence defined above. A smaller set of independent PRs may instead
+  branch from `main` when it does not depend on unmerged predecessor work.
 
 Then repeat this loop:
 
@@ -240,12 +292,17 @@ Then repeat this loop:
 2. Validate and squash-merge its pull request.
 3. Update the feature and issue records.
 4. Fetch current `origin/main`.
-5. Start the next ready issue on a new branch.
+5. For an oversized stacked sequence, retarget the immediate successor to
+   `main`, update it from `origin/main`, re-measure, and validate its new exact
+   head. For a small independent sequence, start the next ready issue on a new
+   branch from `origin/main`.
 6. Continue until the feature acceptance criteria are complete.
 
 - Remaining slices are required delivery work.
   - Do not label them optional because the first pull request merged.
-- Do not keep one long-lived branch for the full sequence.
+- Do not use one long-lived PR for the full sequence. Each stacked slice keeps
+  its own branch and PR until its predecessor merges and it becomes the next
+  `main`-based PR.
 
 See [issues.md](issues.md#multi-pr-feature-sequences) for Workbench ownership.
 

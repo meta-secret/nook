@@ -1,10 +1,10 @@
-# Gizmo Knowledge Graph
+# Gizmo Prime Knowledge Graph
 
 Load only the category required for the current delivery stage.
 
 ## Delivery contract
 
-- [Gizmo agent contract](AGENTS.md)
+- [Gizmo Prime agent contract](AGENTS.md)
 
 ## Architecture and ownership
 
