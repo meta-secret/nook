@@ -191,13 +191,20 @@ independent run. A blob-SHA conflict rejects a duplicate claim of the same
 issue without collapsing unrelated pending dispatches.
 
 Legacy focused issues and manual prompts start from `main`. A stacked successor
-issue instead declares both `stack_branch` and `stack_predecessor_branch` in
-frontmatter. Before claim, the workflow requires both same-repository branches
-and exactly one open successor PR whose temporary base is the predecessor. It
-then checks out and advances that existing successor branch, measures the
-2,000-line budget against `origin/<stack_predecessor_branch>`, and preserves the
-predecessor as the PR base. Missing, partial, malformed, or stale stack metadata
-fails closed before the issue is claimed.
+issue instead declares immutable `stack_branch` and historical
+`stack_predecessor_branch` values. Before claim, the workflow requires the same-
+repository successor branch and exactly one open successor PR. It accepts only
+the live pre-merge state, where that PR still targets an existing recorded
+predecessor, or the post-merge state, where the same PR has been retargeted to
+`main` and the predecessor may be gone. The authored-line budget uses that live
+base. Any other base or incomplete metadata fails closed.
+
+The workflow checkout remains pinned to `github.workflow_sha` while local
+actions, Taskfiles, validators, prompts, and credentials are used. Successor
+source is fetched into a separate detached implementation worktree and is
+passed only as the CI agent's bounded `REPO_ROOT`. Trusted tooling creates a
+disposable planning worktree from that source; only plan or worklog artifacts
+cross back to trusted validation and publication code.
 
 ### Major-change authorization
 

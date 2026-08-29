@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
 
+import type { CiAgentConfig } from "../main/config.js";
 import {
+  loadPrompt,
   resolveAgentTask,
   resolveMajorChangeAuthorization,
 } from "../main/prompt.js";
@@ -39,5 +44,44 @@ describe("resolveAgentTask", () => {
 
   it("throws when the explicit prompt is missing", () => {
     assert.throws(() => resolveAgentTask(), /AGENT_PROMPT is required/);
+  });
+});
+
+describe("loadPrompt", () => {
+  it("loads executable instructions only from the trusted tooling root", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "nook-ci-agent-prompt-"));
+    const toolingRoot = join(parent, "tooling");
+    const repoRoot = join(parent, "implementation");
+    await Promise.all([
+      mkdir(join(toolingRoot, ".github", "prompts"), { recursive: true }),
+      mkdir(join(repoRoot, ".github", "prompts"), { recursive: true }),
+    ]);
+    await Promise.all([
+      writeFile(
+        join(toolingRoot, ".github", "prompts", "agent.md"),
+        "Trusted: ${AGENT_TASK}",
+      ),
+      writeFile(
+        join(repoRoot, ".github", "prompts", "agent.md"),
+        "Untrusted successor prompt",
+      ),
+    ]);
+    const config: CiAgentConfig = {
+      repoRoot,
+      toolingRoot,
+      cursorApiKey: "test-key",
+      githubRepository: "meta-secret/nook",
+      githubRunId: "42",
+      fixBranch: "codex/successor",
+      fixLabel: "focused issue",
+      promptFile: ".github/prompts/agent.md",
+      modelId: "test-model",
+    };
+    process.env.AGENT_PROMPT = "bounded task";
+    try {
+      assert.equal(await loadPrompt(config), "Trusted: bounded task");
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
   });
 });

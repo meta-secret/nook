@@ -40,6 +40,7 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "WORKBENCH_REPOSITORY: meta-secret/nook-workbench",
         "WORKBENCH_PLAN_FILE: .nook-workbench-plan.md",
         "WORKBENCH_SUMMARY_FILE: .nook-workbench-worklog.md",
+        "CI_AGENT_TOOLING_ROOT: ${{ github.workspace }}",
         "major_change_authorized:",
         "MAJOR_CHANGE_AUTHORIZED=$MAJOR_CHANGE_AUTHORIZED",
         "CI_AGENT_TIMEOUT_MS: \"18000000\"",
@@ -56,13 +57,22 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "stack_branch",
         "stack_predecessor_branch",
         "must provide both stack_branch and stack_predecessor_branch",
-        "stack branches must already exist in the Nook repository",
-        "must have exactly one same-repository open PR based on stack_predecessor_branch",
+        "stack_branch must exist in the Nook repository",
+        "stack_branch must have exactly one same-repository open PR",
+        "recorded predecessor must exist while it remains the live PR base",
+        "successor PR must target its recorded predecessor or main",
         "ISSUE_STACK_BRANCH: ${{ steps.workbench.outputs.stack_branch }}",
+        "ISSUE_STACK_LIVE_BASE_BRANCH: ${{ steps.workbench.outputs.stack_live_base_branch }}",
         "ISSUE_STACK_PREDECESSOR_BRANCH: ${{ steps.workbench.outputs.stack_predecessor_branch }}",
         "AGENT_PR_BASE_BRANCH=$base_branch",
         "AGENT_PR_TARGET_KIND=$target_kind",
-        "ref: ${{ steps.task.outputs.checkout_ref }}",
+        "Checkout trusted workflow tooling",
+        "ref: ${{ github.workflow_sha }}",
+        "Prepare isolated implementation worktree",
+        "IMPLEMENTATION_REPO_ROOT=$implementation_root",
+        "REPO_ROOT: ${{ env.IMPLEMENTATION_REPO_ROOT }}",
+        "task ci-agent:host:run CI_AGENT_CMD=implement",
+        "Rejected unsafe implementation worklog artifact.",
         "ASSIGNED_GIZMO_ID: ${{ steps.workbench.outputs.gizmo_id }}",
         "assignedGizmoId: process.env.ASSIGNED_GIZMO_ID",
         "const currentGizmoIdMatch = /^- Current Gizmo ID:\\s*([a-z0-9]+(?:-[a-z0-9]+)*)\\s*$/m",
@@ -152,9 +162,16 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         !workflow.contains("`gizmo_id: ${process.env.ASSIGNED_GIZMO_ID || 'null'}`"),
         "published plan frontmatter must persist the validated Current Gizmo ID"
     );
+    assert!(
+        workflow.matches("uses: actions/checkout@v7").count() == 1
+            && !workflow.contains("ref: ${{ steps.task.outputs.checkout_ref }}"),
+        "unreviewed implementation source must not replace the trusted workflow checkout"
+    );
     for required in [
-        "git worktree add --detach",
-        "REPO_ROOT=\"$planning_root\" task ci-agent:run",
+        "git -C \"$IMPLEMENTATION_REPO_ROOT\" worktree add --detach",
+        "REPO_ROOT=\"$planning_root\" task ci-agent:host:run CI_AGENT_CMD=agent",
+        "artifact_ready",
+        "[ ! -L \"$1\" ]",
     ] {
         assert!(
             plan_script.contains(required),
@@ -842,8 +859,9 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
     }
     assert!(
         prompt_loader.contains("process.env.MAJOR_CHANGE_AUTHORIZED === \"true\"")
-            && prompt_loader.contains("${MAJOR_CHANGE_AUTHORIZATION}"),
-        "agent prompt loading must derive major-change authorization from trusted workflow metadata"
+            && prompt_loader.contains("${MAJOR_CHANGE_AUTHORIZATION}")
+            && prompt_loader.contains("join(config.toolingRoot, config.promptFile)"),
+        "agent prompts must use trusted workflow metadata and tooling"
     );
 
     for required in [
@@ -905,15 +923,23 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
         ordered.iter().all(Option::is_some) && ordered.is_sorted(),
         "branch preservation sequence drifted"
     );
+    let trusted_checkout_position = workflow
+        .find("Checkout trusted workflow tooling")
+        .context("bounded automation must check out its trusted tooling")?;
     let claim_position = workflow
         .find("Claim ready Workbench issue")
         .context("bounded automation must claim its focused issue")?;
-    let checkout_position = workflow
-        .find("Checkout implementation branch")
-        .context("bounded automation must check out its validated implementation branch")?;
+    let implementation_position = workflow
+        .find("Prepare isolated implementation worktree")
+        .context("bounded automation must isolate implementation source")?;
+    let local_action_position = workflow
+        .find("uses: ./.github/actions/nook-docker-setup")
+        .context("bounded automation must retain its trusted local setup action")?;
     assert!(
-        claim_position < checkout_position,
-        "stack metadata must be validated before checkout"
+        trusted_checkout_position < claim_position
+            && claim_position < implementation_position
+            && trusted_checkout_position < local_action_position,
+        "trusted tooling must remain separate from the validated implementation worktree"
     );
     Ok(())
 }

@@ -109,10 +109,8 @@ export function resolveImplementPrTarget(input: ImplementPrTargetInput) {
   if (input.kind !== ImplementPrTargetKind.Stacked) {
     throw new Error(`Unknown implement PR target kind: ${input.kind}`);
   }
-  if (input.branch === input.baseBranch || input.baseBranch === "main") {
-    throw new Error(
-      "Stacked implement PRs require a distinct predecessor branch",
-    );
+  if (input.branch === input.baseBranch) {
+    throw new Error("Stacked implement PRs require a distinct live base branch");
   }
   return {
     ...input,

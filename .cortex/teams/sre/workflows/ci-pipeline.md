@@ -221,8 +221,10 @@ See [issues](../../../gizmo/workflows/issues.md),
 - Requires an assigned Nook GitHub collaborator for issue mode.
 - Preserves a focused issue's validated `stack_branch` and
   `stack_predecessor_branch`: stacked successors continue on the existing
-  same-repository branch and PR, target the predecessor, and measure their
-  authored-line budget from that predecessor instead of `main`.
+  same-repository branch and PR and measure against either the still-live
+  predecessor base or `main` after bottom-up retargeting.
+- Pins executable workflow tooling to `github.workflow_sha`; unreviewed
+  successor source lives only in a separate bounded implementation worktree.
 - Classifies and publishes the planning result before implementation.
 - An unauthorized major direction publishes a validated blocker and stops.
 - An authorized or ordinary bounded task continues through Cursor SDK

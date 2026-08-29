@@ -46,6 +46,7 @@ jobs:
       WORKBENCH_REPOSITORY: meta-secret/nook-workbench
       WORKBENCH_PLAN_FILE: .nook-workbench-plan.md
       WORKBENCH_SUMMARY_FILE: .nook-workbench-worklog.md
+      CI_AGENT_TOOLING_ROOT: ${{ github.workspace }}
     steps:
       - name: Validate dispatch inputs
         env:
@@ -65,6 +66,14 @@ jobs:
             echo "::error::continuing_owner must be a lowercase GitHub login."
             exit 1
           fi
+
+      - name: Checkout trusted workflow tooling
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+          ref: ${{ github.workflow_sha }}
+          token: ${{ secrets.NOOK_GITHUB_PAT }}
 
       - name: Claim ready Workbench issue
         id: workbench
@@ -164,12 +173,9 @@ jobs:
                 return
               }
               try {
-                await Promise.all([
-                  github.rest.repos.getBranch({ ...context.repo, branch: stackBranch }),
-                  github.rest.repos.getBranch({ ...context.repo, branch: stackPredecessorBranch }),
-                ])
+                await github.rest.repos.getBranch({ ...context.repo, branch: stackBranch })
               } catch {
-                core.setFailed(`${path} stack branches must already exist in the Nook repository`)
+                core.setFailed(`${path} stack_branch must exist in the Nook repository`)
                 return
               }
               const { data: stackPulls } = await github.rest.pulls.list({
@@ -179,12 +185,22 @@ jobs:
                 per_page: 2,
               })
               const stackPull = stackPulls[0]
-              if (
-                stackPulls.length !== 1 ||
-                stackPull.head.repo?.full_name !== `${context.repo.owner}/${context.repo.repo}` ||
-                stackPull.base.ref !== stackPredecessorBranch
-              ) {
-                core.setFailed(`${path} stack_branch must have exactly one same-repository open PR based on stack_predecessor_branch`)
+              if (stackPulls.length !== 1 || stackPull.head.repo?.full_name !== `${context.repo.owner}/${context.repo.repo}`) {
+                core.setFailed(`${path} stack_branch must have exactly one same-repository open PR`)
+                return
+              }
+              if (stackPull.base.ref === stackPredecessorBranch) {
+                try {
+                  await github.rest.repos.getBranch({ ...context.repo, branch: stackPredecessorBranch })
+                } catch {
+                  core.setFailed(`${path} recorded predecessor must exist while it remains the live PR base`)
+                  return
+                }
+                core.setOutput('stack_live_base_branch', stackPredecessorBranch)
+              } else if (stackPull.base.ref === 'main') {
+                core.setOutput('stack_live_base_branch', 'main')
+              } else {
+                core.setFailed(`${path} successor PR must target its recorded predecessor or main`)
                 return
               }
             }
@@ -241,6 +257,7 @@ jobs:
           MAJOR_CHANGE_AUTHORIZED: ${{ inputs.major_change_authorized }}
           RUN_ID: ${{ github.run_id }}
           ISSUE_STACK_BRANCH: ${{ steps.workbench.outputs.stack_branch }}
+          ISSUE_STACK_LIVE_BASE_BRANCH: ${{ steps.workbench.outputs.stack_live_base_branch }}
           ISSUE_STACK_PREDECESSOR_BRANCH: ${{ steps.workbench.outputs.stack_predecessor_branch }}
           WORKBENCH_SLUG: ${{ steps.workbench.outputs.slug }}
         run: |
@@ -256,7 +273,7 @@ jobs:
             continuing_owner="$MANUAL_CONTINUING_OWNER"
           elif [ -n "$ISSUE_STACK_BRANCH" ]; then
             branch="$ISSUE_STACK_BRANCH"
-            base_branch="$ISSUE_STACK_PREDECESSOR_BRANCH"
+            base_branch="$ISSUE_STACK_LIVE_BASE_BRANCH"
             checkout_ref="$ISSUE_STACK_BRANCH"
             target_kind="stacked"
             title="Implement ${ISSUE_TITLE}"
@@ -319,13 +336,28 @@ jobs:
           echo "ready=true" >> "$GITHUB_OUTPUT"
           echo "checkout_ref=$checkout_ref" >> "$GITHUB_OUTPUT"
 
-      - name: Checkout implementation branch
+      - name: Prepare isolated implementation worktree
         if: steps.task.outputs.ready == 'true'
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-          ref: ${{ steps.task.outputs.checkout_ref }}
-          token: ${{ secrets.NOOK_GITHUB_PAT }}
+        env:
+          IMPLEMENTATION_REF: ${{ steps.task.outputs.checkout_ref }}
+          TRUSTED_WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          set -euo pipefail
+          trusted_head="$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)"
+          if [ "$trusted_head" != "$TRUSTED_WORKFLOW_SHA" ]; then
+            echo "::error::Trusted tooling checkout moved away from the workflow SHA."
+            exit 1
+          fi
+          implementation_root="$RUNNER_TEMP/nook-implementation-${GITHUB_RUN_ID}"
+          if [ -e "$implementation_root" ]; then
+            echo "::error::Implementation worktree path already exists."
+            exit 1
+          fi
+          git -C "$GITHUB_WORKSPACE" fetch --no-tags origin \
+            "refs/heads/${IMPLEMENTATION_REF}:refs/remotes/origin/${IMPLEMENTATION_REF}"
+          git -C "$GITHUB_WORKSPACE" worktree add --detach "$implementation_root" \
+            "refs/remotes/origin/${IMPLEMENTATION_REF}"
+          echo "IMPLEMENTATION_REPO_ROOT=$implementation_root" >> "$GITHUB_ENV"
 
       - name: Validate continuing GitHub owner
         if: steps.task.outputs.ready == 'true'
@@ -367,14 +399,16 @@ jobs:
         if: steps.task.outputs.ready == 'true'
         run: task setup WASM_BUILD_MODE=prod
 
-      - name: Verify checkout for agent bind-mount
+      - name: Verify trusted tooling and implementation worktree
         if: steps.task.outputs.ready == 'true'
+        env:
+          TRUSTED_WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: |
           set -euo pipefail
-          echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
-          ls -la "$GITHUB_WORKSPACE/.git"
-          git -C "$GITHUB_WORKSPACE" rev-parse --git-dir
-          git -C "$GITHUB_WORKSPACE" status -sb
+          test "$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)" = "$TRUSTED_WORKFLOW_SHA"
+          test "$IMPLEMENTATION_REPO_ROOT" != "$GITHUB_WORKSPACE"
+          git -C "$IMPLEMENTATION_REPO_ROOT" rev-parse --git-dir
+          git -C "$IMPLEMENTATION_REPO_ROOT" status -sb
 
       - name: Run task-planning agent
         id: planning
@@ -384,6 +418,7 @@ jobs:
           CI_AGENT_PROMPT_FILE: .github/prompts/agent-plan.md
           CI_AGENT_TIMEOUT_MS: "600000"
           ASSIGNED_GIZMO_ID: ${{ steps.workbench.outputs.gizmo_id }}
+          IMPLEMENTATION_REPO_ROOT: ${{ env.IMPLEMENTATION_REPO_ROOT }}
         run: task ci-agent:plan
 
       - name: Validate and publish Workbench task plan
@@ -476,9 +511,9 @@ jobs:
         env:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
           NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
-          REPO_ROOT: ${{ github.workspace }}
+          REPO_ROOT: ${{ env.IMPLEMENTATION_REPO_ROOT }}
           WASM_BUILD_MODE: prod
-        run: task ci-agent:implement
+        run: task ci-agent:host:run CI_AGENT_CMD=implement
 
       - name: Publish Workbench result
         if: >-
@@ -499,6 +534,7 @@ jobs:
           CURSOR_SECRET: ${{ secrets.CURSOR_API_KEY }}
           NOOK_SECRET: ${{ secrets.NOOK_GITHUB_PAT }}
           CONTINUING_AGENT_OWNER: ${{ env.CONTINUING_AGENT_OWNER }}
+          IMPLEMENTATION_REPO_ROOT: ${{ env.IMPLEMENTATION_REPO_ROOT }}
         with:
           github-token: ${{ secrets.NOOK_GITHUB_PAT }}
           retries: 3
@@ -547,7 +583,19 @@ jobs:
                 body: `@${continuingOwner} this workflow assigned you PR #${pull.number}. Continue only this PR's recorded scope through review, exact-head validation, and squash merge.`,
               })
             }
-            const summaryPath = `${process.env.GITHUB_WORKSPACE}/${process.env.WORKBENCH_SUMMARY_FILE}`
+            const implementationSummaryPath = `${process.env.IMPLEMENTATION_REPO_ROOT}/${process.env.WORKBENCH_SUMMARY_FILE}`
+            const planningSummaryPath = `${process.env.GITHUB_WORKSPACE}/${process.env.WORKBENCH_SUMMARY_FILE}`
+            const implementationSummaryExists = fs.existsSync(implementationSummaryPath)
+            if (implementationSummaryExists) {
+              const artifact = fs.lstatSync(implementationSummaryPath)
+              if (!artifact.isFile() || artifact.isSymbolicLink() || artifact.size > 65536) {
+                core.setFailed('Rejected unsafe implementation worklog artifact.')
+                return
+              }
+            }
+            const summaryPath = implementationSummaryExists
+              ? implementationSummaryPath
+              : planningSummaryPath
             const fallbackSummary = [
                   '# Automated agent work summary',
                   '',

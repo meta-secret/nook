@@ -95,14 +95,23 @@ describe("resolveImplementPrTarget", () => {
     );
   });
 
-  it("fails closed for incomplete or malformed stack targets", () => {
-    assert.throws(() =>
+  it("bases a retargeted stacked successor and its budget on main", () => {
+    assert.deepEqual(
       resolveImplementPrTarget({
         branch: "codex/feature-successor",
         baseBranch: "main",
         kind: ImplementPrTargetKind.Stacked,
       }),
+      {
+        kind: ImplementPrTargetKind.Stacked,
+        branch: "codex/feature-successor",
+        baseBranch: "main",
+        budgetBaseRef: "origin/main",
+      },
     );
+  });
+
+  it("fails closed for incomplete or malformed stack targets", () => {
     assert.throws(() =>
       resolveImplementPrTarget({
         branch: "codex/feature-successor",

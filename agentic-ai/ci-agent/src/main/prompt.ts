@@ -21,7 +21,7 @@ export function resolveMajorChangeAuthorization(): string {
 }
 
 export async function loadPrompt(config: CiAgentConfig): Promise<string> {
-  const path = join(config.repoRoot, config.promptFile);
+  const path = join(config.toolingRoot, config.promptFile);
   let template: string;
   try {
     template = await readFile(path, "utf8");

@@ -1,5 +1,6 @@
 export type CiAgentConfig = {
   repoRoot: string;
+  toolingRoot: string;
   cursorApiKey: string;
   githubRepository: string;
   githubRunId: string;
@@ -25,6 +26,7 @@ export function loadConfig(): CiAgentConfigLoad {
   }
 
   const githubRunId = process.env.GITHUB_RUN_ID?.trim() ?? "";
+  const repoRoot = process.env.REPO_ROOT?.trim() || process.cwd();
   const fixBranch =
     process.env.AGENT_BRANCH?.trim() ||
     process.env.FIX_BRANCH?.trim() ||
@@ -33,7 +35,8 @@ export function loadConfig(): CiAgentConfigLoad {
   return {
     kind: CiAgentConfigLoadKind.Ready,
     config: {
-      repoRoot: process.env.REPO_ROOT?.trim() || process.cwd(),
+      repoRoot,
+      toolingRoot: process.env.CI_AGENT_TOOLING_ROOT?.trim() || repoRoot,
       cursorApiKey,
       githubRepository: process.env.GITHUB_REPOSITORY?.trim() ?? "",
       githubRunId,
