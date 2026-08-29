@@ -83,6 +83,7 @@ See [issues](../../../gizmo/workflows/issues.md),
   - Trigger: Manual
   - Purpose: Debug e2e on a PR branch
   - GitHub PAT: Only for `sync-live`
+
 ### Workflow details
 
 **`remote.yml`**
@@ -316,6 +317,7 @@ Cancellation is scoped to work that a newer run actually supersedes:
   - Scope: Global production release group
   - Cancel active run: No
   - Reason: Serialize stateful publication without interrupting a deployment.
+
 ## Production release strategy
 
 Production releases use immutable semantic-version tags. The tag records the
@@ -590,6 +592,7 @@ PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label.
 - **`e2e-pr.yml`, `web-research.yml`**
   - Runner: general ARC plus container ARC for Playwright
   - Purpose: Manual and research work scales independently
+
 ## Why local-provider e2e vs sync-live
 
 Real provider API calls are slow and brittle at CI scale. Nook therefore:
@@ -649,6 +652,11 @@ The publisher exception fails closed unless all of these boundaries hold:
   `persist-credentials: false`, and the publication PAT exists only in the
   trusted host process environment, is withheld from Git checkout configuration
   and the strict editor, and is used only after validation;
+- before editing, trusted tooling freezes the absolute Git directory, common
+  directory, and complete effective configuration, then verifies them again
+  after editing and validation; every later trusted Git command also disables
+  hooks, filesystem monitors, and commit signing so editor-created Git metadata
+  cannot execute with restored publication credentials;
 - `CI_AGENT_TIMEOUT_MS=10800000` bounds the editor to three hours of the
   six-hour job, reserving the other three-hour half for trusted validation and
   publication;

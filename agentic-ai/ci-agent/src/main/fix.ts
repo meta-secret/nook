@@ -17,6 +17,7 @@ import {
   hasWorkingTreeChanges,
   pushFixBranch,
   revParse,
+  trustedGitArgs,
 } from "./git.js";
 import { createLogger } from "./logger.js";
 import { loadPrompt } from "./prompt.js";
@@ -109,6 +110,13 @@ export const runValidationCommand: ValidationRunner = async (
 export type RepositoryBaseline = {
   headSha: string;
   indexTreeSha: string;
+  gitMetadata: GitMetadataBaseline;
+};
+
+export type GitMetadataBaseline = {
+  commonDirectory: string;
+  configuration: string;
+  gitDirectory: string;
 };
 
 type ChangedPath = {
@@ -178,14 +186,56 @@ export function parsePorcelainStatus(output: string): ChangedPath[] {
 }
 
 async function gitOutput(repoRoot: string, args: string[]): Promise<string> {
-  const { stdout } = await execFileAsync("git", ["-C", repoRoot, ...args], {
-    encoding: "utf8",
-  });
+  const { stdout } = await execFileAsync(
+    "git",
+    trustedGitArgs(repoRoot, args),
+    {
+      encoding: "utf8",
+    },
+  );
   return stdout;
 }
 
 async function currentIndexTree(repoRoot: string): Promise<string> {
   return (await gitOutput(repoRoot, ["write-tree"])).trim();
+}
+
+export async function captureGitMetadataBaseline(
+  repoRoot: string,
+): Promise<GitMetadataBaseline> {
+  const [commonDirectory, configuration, gitDirectory] = await Promise.all([
+    gitOutput(repoRoot, [
+      "rev-parse",
+      "--path-format=absolute",
+      "--git-common-dir",
+    ]),
+    gitOutput(repoRoot, [
+      "config",
+      "--null",
+      "--show-origin",
+      "--show-scope",
+      "--list",
+    ]),
+    gitOutput(repoRoot, ["rev-parse", "--absolute-git-dir"]),
+  ]);
+  return {
+    commonDirectory: commonDirectory.trim(),
+    configuration,
+    gitDirectory: gitDirectory.trim(),
+  };
+}
+
+export function assertGitMetadataBaselineUnchanged(args: {
+  baseline: GitMetadataBaseline;
+  current: GitMetadataBaseline;
+}): void {
+  if (
+    args.current.commonDirectory !== args.baseline.commonDirectory ||
+    args.current.gitDirectory !== args.baseline.gitDirectory ||
+    args.current.configuration !== args.baseline.configuration
+  ) {
+    throw new Error("Bounded editor changed trusted Git metadata");
+  }
 }
 
 export async function captureRepositoryBaseline(
@@ -200,11 +250,15 @@ export async function captureRepositoryBaseline(
   if ((await collectChangedPaths(repoRoot)).length !== 0) {
     throw new Error("Trusted dependency-update baseline checkout is not clean");
   }
-  return { headSha, indexTreeSha };
+  return {
+    gitMetadata: await captureGitMetadataBaseline(repoRoot),
+    headSha,
+    indexTreeSha,
+  };
 }
 
 export function assertRepositoryBaselineUnchanged(args: {
-  baseline: RepositoryBaseline;
+  baseline: Pick<RepositoryBaseline, "headSha" | "indexTreeSha">;
   currentHeadSha: string;
   currentIndexTreeSha: string;
 }): void {
@@ -224,6 +278,10 @@ async function assertBaselineUnchanged(
     baseline,
     currentHeadSha: await revParse(repoRoot, "HEAD"),
     currentIndexTreeSha: await currentIndexTree(repoRoot),
+  });
+  assertGitMetadataBaselineUnchanged({
+    baseline: baseline.gitMetadata,
+    current: await captureGitMetadataBaseline(repoRoot),
   });
 }
 

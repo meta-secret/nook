@@ -5,6 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import {
+  assertGitMetadataBaselineUnchanged,
   assertNoPersistedGitCredentials,
   assertPublishedFixIdentity,
   assertRepositoryBaselineUnchanged,
@@ -139,6 +140,26 @@ test("baseline HEAD and index mutations fail closed", () => {
           [field]: value,
         }),
       message,
+    );
+});
+
+test("Git directory and effective configuration mutations fail closed", () => {
+  const baseline = {
+    commonDirectory: "/repo/.git",
+    configuration: "global\0file:/trusted\0user.name\ntrusted\0",
+    gitDirectory: "/repo/.git",
+  };
+  for (const current of [
+    { ...baseline, commonDirectory: "/repo/attacker.git" },
+    { ...baseline, gitDirectory: "/repo/attacker.git" },
+    {
+      ...baseline,
+      configuration: `${baseline.configuration}local\0file:.git/config\0core.hookspath\nattacker-hooks\0`,
+    },
+  ])
+    assert.throws(
+      () => assertGitMetadataBaselineUnchanged({ baseline, current }),
+      /changed trusted Git metadata/,
     );
 });
 
