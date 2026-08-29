@@ -361,7 +361,7 @@ describe('runtime message adapters', () => {
         action: 0,
         currentStep: 1,
         totalSteps: 3,
-        requiresHumanApproval: true,
+        approvalRequirement: 'explicit-user-approval',
         observationIndex: 0,
       },
     }
@@ -377,6 +377,28 @@ describe('runtime message adapters', () => {
         AuthenticationWorkflowSnapshotResponseKind.Matched,
       )
     }
+  })
+
+  test('rejects the legacy ambiguous workflow approval boolean', async () => {
+    const response = {
+      ok: true,
+      snapshot: {
+        kind: 0,
+        stage: 0,
+        action: 0,
+        currentStep: 1,
+        totalSteps: 3,
+        requiresHumanApproval: true,
+        observationIndex: 0,
+      },
+    }
+    installRuntimeMock({ kind: RuntimeMockKind.Response, response })
+
+    const delivery = await sendAuthenticationWorkflowSnapshotRuntimeMessage(
+      workflowSnapshotMessage,
+    )
+
+    expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
   })
 
   test('decodes a concrete authenticator preview through Rust', async () => {
@@ -630,7 +652,7 @@ describe('runtime message adapters', () => {
         action: 0,
         currentStep: -1,
         totalSteps: 300,
-        requiresHumanApproval: true,
+        approvalRequirement: 'explicit-user-approval',
         observationIndex: -1,
       },
     }

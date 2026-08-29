@@ -221,9 +221,9 @@ impl NookAuthenticationWorkflowSnapshot {
         self.0.total_steps
     }
 
-    #[wasm_bindgen(getter, js_name = requiresHumanApproval)]
-    pub fn requires_human_approval(&self) -> bool {
-        self.0.requires_human_approval
+    #[wasm_bindgen(getter, js_name = approvalRequirement)]
+    pub fn approval_requirement(&self) -> nook_core::AuthenticationApprovalRequirement {
+        self.0.approval_requirement
     }
 
     #[wasm_bindgen(getter, js_name = observationIndex)]

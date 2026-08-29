@@ -7,6 +7,7 @@ import {
   AuthenticationWorkflowKind,
   AuthenticationWorkflowStage,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm'
+import type { AuthenticationApprovalRequirement } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm'
 import type {
   WebsiteLoginSaveActionResponse,
   WebsiteLoginSaveOfferResponse,
@@ -31,6 +32,8 @@ export const demoSufficientAuthenticationOutcome =
   AuthenticationOutcomeVerdict.Sufficient
 export const demoInsufficientAuthenticationOutcome =
   AuthenticationOutcomeVerdict.Insufficient
+const demoExplicitUserApproval =
+  'explicit-user-approval' satisfies AuthenticationApprovalRequirement
 export const demoDomainEnumArgs = {
   generatePasswordMessageType:
     GeneratePasswordRequestType.NookWebsiteGeneratePassword,
@@ -47,6 +50,7 @@ export const demoDomainEnumArgs = {
     generatePasswordAction: AuthenticationWorkflowAction.GeneratePassword,
     fillTotpAction: AuthenticationWorkflowAction.FillTotp,
     createPasskeyAction: AuthenticationWorkflowAction.CreatePasskey,
+    explicitUserApproval: demoExplicitUserApproval,
   },
   authenticatorProtocol: {
     optionsMessageType:
@@ -223,7 +227,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
               action: authenticationWorkflow.createPasskeyAction,
               currentStep: 1,
               totalSteps: 3,
-              requiresHumanApproval: true,
+              approvalRequirement: authenticationWorkflow.explicitUserApproval,
               observationIndex: 0,
             },
           }
@@ -342,7 +346,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
               action: authenticationWorkflow.generatePasswordAction,
               currentStep: 2,
               totalSteps: 5,
-              requiresHumanApproval: true,
+              approvalRequirement: authenticationWorkflow.explicitUserApproval,
               observationIndex: 0,
             },
           }
@@ -366,7 +370,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
               action: authenticationWorkflow.continueAction,
               currentStep: 1,
               totalSteps: 3,
-              requiresHumanApproval: true,
+              approvalRequirement: authenticationWorkflow.explicitUserApproval,
               observationIndex: 0,
             },
           }
@@ -453,7 +457,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
               action: authenticationWorkflow.continueAction,
               currentStep: 1,
               totalSteps: 3,
-              requiresHumanApproval: true,
+              approvalRequirement: authenticationWorkflow.explicitUserApproval,
               observationIndex: 0,
             },
           }
@@ -483,7 +487,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
             action: authenticationWorkflow.continueAction,
             currentStep: 1,
             totalSteps: 3,
-            requiresHumanApproval: true,
+            approvalRequirement: authenticationWorkflow.explicitUserApproval,
             observationIndex: 0,
           },
         }

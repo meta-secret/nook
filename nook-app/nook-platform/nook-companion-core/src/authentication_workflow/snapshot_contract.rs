@@ -14,7 +14,7 @@ impl AuthenticationWorkflowSnapshot {
         if self.current_step == 0
             || self.total_steps == 0
             || self.current_step > self.total_steps
-            || !self.requires_human_approval
+            || !self.approval_requirement_matches_action()
             || self.observation_index >= MAX_AUTHENTICATION_WORKFLOW_OBSERVATION_INDEX_EXCLUSIVE
         {
             return false;
@@ -106,8 +106,9 @@ impl AuthenticationWorkflowSnapshot {
 #[cfg(test)]
 mod tests {
     use super::super::{
-        AuthenticationPageObservation, AuthenticationWorkflowAction, AuthenticationWorkflowKind,
-        AuthenticationWorkflowMatch, AuthenticationWorkflowSnapshot, AuthenticationWorkflowStage,
+        AuthenticationApprovalRequirement, AuthenticationPageObservation,
+        AuthenticationWorkflowAction, AuthenticationWorkflowKind, AuthenticationWorkflowMatch,
+        AuthenticationWorkflowSnapshot, AuthenticationWorkflowStage,
         MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS, classify_authentication_workflow,
         classify_authentication_workflow_candidates,
     };
@@ -209,7 +210,9 @@ mod tests {
                                 action,
                                 current_step,
                                 total_steps,
-                                requires_human_approval: true,
+                                approval_requirement: AuthenticationApprovalRequirement::for_action(
+                                    action,
+                                ),
                                 observation_index: 0,
                             };
                             if !accepted.matches_classifier_contract() {
@@ -257,7 +260,7 @@ mod tests {
             action: AuthenticationWorkflowAction::ContinueWithNook,
             current_step: 1,
             total_steps: 3,
-            requires_human_approval: true,
+            approval_requirement: AuthenticationApprovalRequirement::ExplicitUserApproval,
             observation_index: maximum_exclusive - 1,
         };
         assert!(snapshot.matches_classifier_contract());
