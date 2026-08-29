@@ -46,17 +46,23 @@ describe('account picker authorization cleanup', () => {
       storageKeys: Object.keys(storedPickers),
       cancellations: [
         {
-          type: 'nook:website-authenticator-canceled',
-          payload: {
-            origin: 'https://login.example.test',
-            requestId: 'authenticator-request',
+          tabId: 7,
+          message: {
+            type: 'nook:website-authenticator-canceled',
+            payload: {
+              origin: 'https://login.example.test',
+              requestId: 'authenticator-request',
+            },
           },
         },
         {
-          type: 'nook:website-login-canceled',
-          payload: {
-            origin: 'https://login.example.test',
-            requestId: 'login-request',
+          tabId: 7,
+          message: {
+            type: 'nook:website-login-canceled',
+            payload: {
+              origin: 'https://login.example.test',
+              requestId: 'login-request',
+            },
           },
         },
       ],
@@ -68,21 +74,44 @@ describe('account picker authorization cleanup', () => {
       await import('../src/background/service-worker/account-pickers')
     let storageReads = 0
     globalThis.chrome = {
+      runtime: {},
       storage: {
         session: {
-          get: () => {
+          get: (_key, callback) => {
             storageReads += 1
+            callback({})
           },
+          set: (_items, callback) => callback(),
+          remove: (_key, callback) => callback(),
         },
       },
     } as typeof chrome
 
-    const generation = accountPickers.beginAccountPickerAuthorizationCleanup()
+    const generation =
+      await accountPickers.beginAccountPickerAuthorizationCleanup()
     const result = await accountPickers.loadLoginPicker('persisted-request')
-    accountPickers.completeAccountPickerAuthorizationCleanup(generation)
+    await accountPickers.completeAccountPickerAuthorizationCleanup(generation)
 
     expect(result).toEqual({ kind: 'unavailable' })
     expect(storageReads).toBe(0)
+  })
+
+  test('rejects picker rehydration after a worker restart during cleanup', async () => {
+    const { loadLoginPicker } =
+      await import('../src/background/service-worker/account-pickers')
+    globalThis.chrome = {
+      runtime: {},
+      storage: {
+        session: {
+          get: (_key, callback) =>
+            callback({ 'nook.extension.account-picker-cleanup': true }),
+        },
+      },
+    } as typeof chrome
+
+    expect(await loadLoginPicker('persisted-request')).toEqual({
+      kind: 'unavailable',
+    })
   })
 
   test('scrubs in-memory requests before persistence cleanup', async () => {

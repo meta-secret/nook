@@ -232,7 +232,7 @@ export async function queryAuthenticatorPicker({
   if (loaded.kind === AuthenticatorPickerLoadKind.Unavailable) {
     return { ok: false, reason: 'authenticator-picker-expired' }
   }
-  const { request } = loaded
+  const { request, authorizationGeneration } = loaded
   const grants = (await passwordPairingGrants()).filter((grant) =>
     request.allowedVaultStoreIds.includes(grant.vaultStoreId),
   )
@@ -241,6 +241,9 @@ export async function queryAuthenticatorPicker({
     query: message.payload.query,
   }
   const accounts = await authenticatorAccounts(nookTypedArgs0_1)
+  if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
+    return { ok: false, reason: 'authenticator-picker-expired' }
+  }
   return { ok: true, origin: request.origin, accounts }
 }
 
@@ -268,7 +271,7 @@ export async function selectAuthenticatorPicker({
   if (loaded.kind === AuthenticatorPickerLoadKind.Unavailable) {
     return { ok: false, reason: 'authenticator-picker-expired' }
   }
-  const { request } = loaded
+  const { request, authorizationGeneration } = loaded
   const grants = (await passwordPairingGrants()).filter((grant) =>
     request.allowedVaultStoreIds.includes(grant.vaultStoreId),
   )
@@ -284,6 +287,9 @@ export async function selectAuthenticatorPicker({
   )
   if (!selected) {
     return { ok: false, reason: 'authenticator-picker-selection-invalid' }
+  }
+  if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
+    return { ok: false, reason: 'authenticator-picker-expired' }
   }
   try {
     const acknowledgeArgs: Parameters<
