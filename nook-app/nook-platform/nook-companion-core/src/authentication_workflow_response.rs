@@ -1,8 +1,8 @@
 //! Typed runtime response boundary for authentication workflow snapshots.
 
 use crate::authentication_workflow::{
-    AuthenticationWorkflowAction, AuthenticationWorkflowKind, AuthenticationWorkflowSnapshot,
-    AuthenticationWorkflowStage,
+    AuthenticationApprovalRequirement, AuthenticationWorkflowAction, AuthenticationWorkflowKind,
+    AuthenticationWorkflowSnapshot, AuthenticationWorkflowStage,
 };
 use serde::{Deserialize, Serialize, Serializer};
 use tsify::Tsify;
@@ -16,7 +16,7 @@ pub struct AuthenticationWorkflowSnapshotWire {
     action: AuthenticationWorkflowAction,
     current_step: u8,
     total_steps: u8,
-    requires_human_approval: bool,
+    approval_requirement: AuthenticationApprovalRequirement,
     observation_index: u32,
 }
 
@@ -28,7 +28,7 @@ impl AuthenticationWorkflowSnapshotWire {
             action: self.action,
             current_step: self.current_step,
             total_steps: self.total_steps,
-            requires_human_approval: self.requires_human_approval,
+            approval_requirement: self.approval_requirement,
             observation_index: self.observation_index,
         };
         if snapshot.matches_classifier_contract() {
@@ -146,9 +146,51 @@ mod tests {
     use super::*;
 
     #[test]
+    fn enforces_closed_approval_requirements() -> anyhow::Result<()> {
+        for mismatched in [
+            r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":1,"totalSteps":3,"approvalRequirement":"takeover-required","observationIndex":0}}"#,
+            r#"{"ok":true,"snapshot":{"kind":0,"stage":5,"action":6,"currentStep":1,"totalSteps":3,"approvalRequirement":"explicit-user-approval","observationIndex":0}}"#,
+        ] {
+            let wire =
+                serde_json::from_str::<AuthenticationWorkflowSnapshotResponseWire>(mismatched)?;
+            assert_eq!(
+                decode_authentication_workflow_snapshot_response(wire),
+                Err(AuthenticationWorkflowSnapshotResponseDecodeError)
+            );
+        }
+
+        let takeover = serde_json::from_str::<AuthenticationWorkflowSnapshotResponseWire>(
+            r#"{"ok":true,"snapshot":{"kind":0,"stage":5,"action":6,"currentStep":1,"totalSteps":3,"approvalRequirement":"takeover-required","observationIndex":0}}"#,
+        )?;
+        assert!(matches!(
+            decode_authentication_workflow_snapshot_response(takeover)?,
+            AuthenticationWorkflowSnapshotResponse::Matched {
+                snapshot: AuthenticationWorkflowSnapshot {
+                    approval_requirement: AuthenticationApprovalRequirement::TakeoverRequired,
+                    ..
+                },
+                ..
+            }
+        ));
+
+        for legacy_or_unknown in [
+            r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":1,"totalSteps":3,"requiresHumanApproval":true,"observationIndex":0}}"#,
+            r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":1,"totalSteps":3,"approvalRequirement":"automatic","observationIndex":0}}"#,
+        ] {
+            assert!(
+                serde_json::from_str::<AuthenticationWorkflowSnapshotResponseWire>(
+                    legacy_or_unknown
+                )
+                .is_err()
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
     fn enforces_the_rust_snapshot_contract() -> anyhow::Result<()> {
         let valid = serde_json::from_str::<AuthenticationWorkflowSnapshotResponseWire>(
-            r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":1,"totalSteps":3,"requiresHumanApproval":true,"observationIndex":0}}"#,
+            r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":1,"totalSteps":3,"approvalRequirement":"explicit-user-approval","observationIndex":0}}"#,
         )?;
         assert!(matches!(
             decode_authentication_workflow_snapshot_response(valid)?,
@@ -157,7 +199,7 @@ mod tests {
 
         assert!(
             serde_json::from_str::<AuthenticationWorkflowSnapshotResponseWire>(
-                r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":-1,"totalSteps":300,"requiresHumanApproval":true,"observationIndex":-1}}"#,
+                r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":-1,"totalSteps":300,"approvalRequirement":"explicit-user-approval","observationIndex":-1}}"#,
             )
             .is_err()
         );
@@ -189,7 +231,7 @@ mod tests {
         let contradictory_matched = serde_json::from_str::<
             AuthenticationWorkflowSnapshotResponseWire,
         >(
-            r#"{"ok":false,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":1,"totalSteps":3,"requiresHumanApproval":true,"observationIndex":0}}"#,
+            r#"{"ok":false,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":1,"totalSteps":3,"approvalRequirement":"explicit-user-approval","observationIndex":0}}"#,
         )?;
         assert_eq!(
             decode_authentication_workflow_snapshot_response(contradictory_matched),
@@ -197,7 +239,7 @@ mod tests {
         );
 
         let impossible_snapshot = serde_json::from_str::<AuthenticationWorkflowSnapshotResponseWire>(
-            r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":6,"currentStep":1,"totalSteps":3,"requiresHumanApproval":true,"observationIndex":0}}"#,
+            r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":6,"currentStep":1,"totalSteps":3,"approvalRequirement":"takeover-required","observationIndex":0}}"#,
         )?;
         assert_eq!(
             decode_authentication_workflow_snapshot_response(impossible_snapshot),
@@ -207,18 +249,10 @@ mod tests {
         let out_of_bounds_observation = serde_json::from_str::<
             AuthenticationWorkflowSnapshotResponseWire,
         >(
-            r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":1,"totalSteps":3,"requiresHumanApproval":true,"observationIndex":20}}"#,
+            r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":1,"totalSteps":3,"approvalRequirement":"explicit-user-approval","observationIndex":20}}"#,
         )?;
         assert_eq!(
             decode_authentication_workflow_snapshot_response(out_of_bounds_observation),
-            Err(AuthenticationWorkflowSnapshotResponseDecodeError)
-        );
-
-        let unapproved_snapshot = serde_json::from_str::<AuthenticationWorkflowSnapshotResponseWire>(
-            r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":1,"totalSteps":3,"requiresHumanApproval":false,"observationIndex":0}}"#,
-        )?;
-        assert_eq!(
-            decode_authentication_workflow_snapshot_response(unapproved_snapshot),
             Err(AuthenticationWorkflowSnapshotResponseDecodeError)
         );
 
