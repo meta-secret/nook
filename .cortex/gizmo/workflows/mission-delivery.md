@@ -113,6 +113,11 @@ Agent count never determines PR count.
    - Immediately choose remote evidence for every pushed coherent head.
    - If the head is not ready for complete validation, dispatch at least one
      relevant focused `task remote TASK_NAME=<name>` job.
+   - Use `task remote TASK_NAME=web:build` for focused build-only web evidence.
+   - Use `task remote TASK_NAME=web:e2e` separately for direct-Pod browser
+     proof. Never batch the build and browser tasks together.
+   - After focused evidence returns, reassess whether the head is
+     validation-ready. Do not flow unconditionally into complete validation.
    - If the head is validation-ready, dispatch complete exact-head validation
      immediately. Focused tasks are optional on that path.
 7. **Validate and repair through teams.**
