@@ -17,6 +17,23 @@ afterEach(() => {
 })
 
 describe('classified login activation', () => {
+  test('advances a form-less username-only login whose page path is the destination', () => {
+    window.history.replaceState({}, '', '/account/sign-in')
+    document.body.innerHTML = `
+      <div role="form" class="signin-panel">
+        <input autocomplete="username" name="email" type="email" />
+        <button id="next" type="button">Continue</button>
+      </div>
+    `
+    let advanced = false
+    document.querySelector('#next')?.addEventListener('click', () => {
+      advanced = true
+    })
+
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
+    expect(advanced).toBe(true)
+  })
+
   test('advances a username-only login through an external form-associated control', () => {
     document.body.innerHTML = `
       <form id="login" action="/auth/login">

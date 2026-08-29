@@ -274,6 +274,31 @@ describe('website one-time-code fields', () => {
     })
   })
 
+  test('transports a passkey-only form-associated control for Rust selection', () => {
+    document.body.innerHTML = `
+      <form id="passkey-login" action="/login">
+        <button type="button">Sign in with a passkey</button>
+      </form>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
+      kind: 'candidates',
+      observation: [
+        {
+          kind: 'labeled',
+          observation: {
+            label: expect.stringContaining('passkey'),
+          },
+        },
+      ],
+    })
+  })
+
   test('keeps standalone explicitly marked passkey controls locally scoped', () => {
     document.body.innerHTML = `
       <button type="button" data-nook-passkey-control>Continue</button>

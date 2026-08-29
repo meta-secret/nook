@@ -171,12 +171,17 @@ void companionWasmReady.then(() => {
   const nookTypedArgs0_1: Parameters<typeof observer.observe>[1] = {
     attributes: true,
     attributeFilter: [
+      'action',
       'aria-disabled',
       'aria-hidden',
+      'aria-label',
       'autocomplete',
       'class',
+      'data-nook-passkey-control',
       'disabled',
+      'formaction',
       'hidden',
+      'href',
       'id',
       'name',
       'style',

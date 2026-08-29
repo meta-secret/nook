@@ -259,9 +259,11 @@ function scopedControlRoot({
 function controlAssociatesWithObservation({
   control,
   formScope,
+  root,
 }: {
   control: HTMLElement;
   formScope: PasswordFormScope;
+  root: ParentNode;
 }): boolean {
   if (formScope.kind === PasswordFormScopeKind.Owned) {
     if (
@@ -276,7 +278,7 @@ function controlAssociatesWithObservation({
     control instanceof HTMLButtonElement ||
     control instanceof HTMLInputElement
   ) {
-    return !control.form;
+    return !control.form || root === control.ownerDocument;
   }
   return true;
 }
@@ -439,6 +441,7 @@ export function findWorkflowPasskeyControl(
         !controlAssociatesWithObservation({
           control,
           formScope: observation.formScope,
+          root: observation.root,
         })
       ) {
         return false;
@@ -479,6 +482,7 @@ export function authenticationPageObservationFacts({
       controlAssociatesWithObservation({
         control,
         formScope: observation.formScope,
+        root: observation.root,
       }),
   );
   const oneTimeCodeQuery: Parameters<typeof findOneTimeCodeFields>[0] = {

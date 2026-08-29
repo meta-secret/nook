@@ -92,7 +92,7 @@ function authenticationControlDestination(
   control: LoginAdvanceControl,
 ): string {
   if (!control.form) {
-    return control.ownerDocument.defaultView?.location.origin ?? "";
+    return control.ownerDocument.defaultView?.location.href ?? "";
   }
   const request: AuthenticationRouteDestinationRequest = {
     form: control.form,
