@@ -47,6 +47,10 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "automation: agent",
         "status: in_progress",
         "gizmo_id",
+        "const stackMetadataKeys = ['stack_branch', 'stack_predecessor_branch']",
+        "new RegExp(`^\\\\s*${key}\\\\s*:`, 'm').test(frontmatter)",
+        "presentStackMetadata.length > 0",
+        "Stacked successor dispatch requires the later runtime support; retry after it lands.",
         "const parsedGizmoId = value(frontmatter, 'gizmo_id')",
         "parsedGizmoId === null || parsedGizmoId === ''",
         "typeof parsedGizmoId === 'string'",
@@ -155,6 +159,16 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
     let claim_position = workflow
         .find("Claim ready Workbench issue")
         .context("the workflow must claim the requested Workbench issue")?;
+    let stack_guard_position = workflow
+        .find("presentStackMetadata.length > 0")
+        .context("the workflow must reject focused issues carrying stack metadata")?;
+    let claim_mutation_position = workflow
+        .find("github.rest.repos.createOrUpdateFileContents")
+        .context("the workflow must claim the requested Workbench issue atomically")?;
+    assert!(
+        stack_guard_position < claim_mutation_position,
+        "stacked focused issues must fail before the Workbench claim is mutated"
+    );
     let docker_position = workflow
         .find("Docker setup")
         .context("the workflow must set up Docker")?;
