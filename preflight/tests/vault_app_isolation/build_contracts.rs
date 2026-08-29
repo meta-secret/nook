@@ -415,6 +415,8 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
         assert!(source.contains("Docker contexts must not contain symlinks"));
         assert!(source.contains("export BUILDX_CONFIG=\"$trusted_docker_config/buildx\""));
         assert!(source.contains("any(keys[]; explode | any(. > 127))"));
+        assert!(source.contains("(.key | ascii_downcase) != \"credsstore\""));
+        assert!(source.contains("(.key | ascii_downcase) != \"credhelpers\""));
         assert!(
             source.find("if [ -f \"$docker_config_source/config.json\" ]; then")
                 < source.find("if [ -x /usr/local/bin/jq ]; then"),
@@ -639,14 +641,14 @@ fi
     fs::create_dir_all(&malicious_config)?;
     fs::write(
         malicious_config.join("config.json"),
-        "{\n\"\\u0063LIPLUGINSEXTRADIRS\"\n:\n[\"/tmp/untrusted\"],\n\"auths\":{}\n}",
+        "{\n\"\\u0063LIPLUGINSEXTRADIRS\"\n:\n[\"/tmp/untrusted\"],\n\"CrEdSsToRe\":\"untrusted\",\n\"CrEdHeLpErS\":{\"registry.dev.nokey.sh\":\"untrusted\"},\n\"auths\":{}\n}",
     )?;
     let sanitized_plugin = Command::new("bash")
         .arg(&wrapper)
         .args([
             "bash",
             "-c",
-            "! grep -Eqi 'clipluginsextradirs|u0063lipluginsextradirs' \"$DOCKER_CONFIG/config.json\"",
+            "! grep -Eqi 'clipluginsextradirs|u0063lipluginsextradirs|credsstore|credhelpers|untrusted' \"$DOCKER_CONFIG/config.json\"",
         ])
         .env("DOCKER_CONFIG", &malicious_config)
         .output()?;

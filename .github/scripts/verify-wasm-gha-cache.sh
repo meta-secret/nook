@@ -51,7 +51,7 @@ prepare_trusted_docker() {
       echo "trusted jq is unavailable" >&2
       exit 127
     fi
-    "$jq_cli" 'if any(keys[]; explode | any(. > 127)) then error("non-ASCII Docker config key") else with_entries(select((.key | ascii_downcase) != "clipluginsextradirs")) end' \
+    "$jq_cli" 'if any(keys[]; explode | any(. > 127)) then error("non-ASCII Docker config key") else with_entries(select((.key | ascii_downcase) != "clipluginsextradirs" and (.key | ascii_downcase) != "credsstore" and (.key | ascii_downcase) != "credhelpers")) end' \
       "$docker_config_source/config.json" >"$trusted_docker_config/config.json"
     chmod 600 "$trusted_docker_config/config.json"
   fi
