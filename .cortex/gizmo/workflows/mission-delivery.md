@@ -92,7 +92,8 @@ Agent count never determines PR count.
    - Do not add broad local builds, tests, e2e, container product gates, local
      review, or duplicate hosted-check mirrors before the push.
    - Immediately obtain remote evidence for the pushed head.
-   - Use a focused `task remote` command only when it helps iteration.
+   - Use a focused `task remote TASK_NAME=web:build` command only when it helps
+     iteration.
    - When the head is validation-ready, dispatch complete exact-head validation
      immediately instead of requiring focused tasks first.
 7. **Validate and repair through teams.**
