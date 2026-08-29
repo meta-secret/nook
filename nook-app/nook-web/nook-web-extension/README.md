@@ -9,6 +9,9 @@ device protection, the in-page **Nook Pilot** authentication HUD, minimal DOM
 observation/fill integration, and background coordination. The HUD reports the
 current Rust-classified authentication workflow, progress, site context, next
 approved action, and manual takeover without becoming a second vault interface.
+Every direct page action is re-observed in the same form scope immediately
+before actuation; a changed observation, Rust decision, session, or enrollment
+generation cancels the stale action.
 
 On OTP challenges, the same widget detects standard one-time-code fields. It
 asks the unlocked Rust/WASM session for safe authenticator labels, requires the
@@ -20,7 +23,9 @@ On authenticator setup pages, the Pilot can offer **Add 2FA from this page** and
 **Save backup codes**. Those actions run only after a trusted click: QR decode
 and recovery-code extraction stay local, Rust/WASM validates the payload, and
 the user confirms before any vault write. Cancelling clears transient secrets
-and writes no event.
+and writes no event. Recovery-code evidence takes precedence when a setup QR is
+still visible, and a stale asynchronously returned verification code is
+scrubbed without touching the page.
 
 For ordinary websites, the extension also provides explicit passkey save and
 use prompts. It intercepts non-conditional WebAuthn create/get calls, asks the

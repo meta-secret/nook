@@ -267,7 +267,7 @@ nook-auth2 ─┬─> nook-authenticator-domain
 | `nook-vault-simple`         | Independent Svelte 5 Simple Vault application                                                                                                                     |
 | `nook-vault-sentinel`       | Independent Svelte 5 Sentinel Vault application                                                                                                                   |
 | `nook-web-app`              | Public site and unified local e2e harness                                                                                                                         |
-| `nook-web-extension`        | Simple-only Manifest V3 companion (Nook Pilot: login HUD, credential fill, takeover)                                                                              |
+| `nook-web-extension`        | Simple-only Manifest V3 companion (Nook Pilot: Rust-approved authentication actions, credential fill, and explicit takeover)                                      |
 | `nook-web-shared`           | Presentation/browser glue safe to share between vault apps                                                                                                        |
 
 Inside `nook-web-shared/src/vault-app/lib`, browser-owned modules are grouped by

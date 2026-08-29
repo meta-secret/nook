@@ -47,7 +47,7 @@ application capability checks enforce the vault-type boundary.
 | `simple.nokey.sh`                 | Complete vault UI, unlock, consent, device management, recovery, and settings                                 |
 | Extension toolbar action          | Create or unlock the extension device; companion home always offers stay-ready and optional Open Simple Vault |
 | Extension background/WASM runtime | Local device key, selected identity, encrypted state, sync, domain matching, and fill authorization           |
-| In-page auth gate                 | Universal Continue with Nook gate plus optional open/unlock/select/fill/save actions                          |
+| In-page auth gate                 | One Rust-approved authentication action plus compact, dismiss, takeover, and progress controls                |
 | Content script                    | DOM detection and the minimum selected fill payload; never vault search, crypto, or provider credentials      |
 
 Authenticator items remain standalone.
@@ -216,20 +216,29 @@ The in-page auth gate is the visible HUD for **Nook Pilot**, an
 extension-owned authentication control plane. Nook Pilot follows the reusable
 workflow shape `Observe -> Understand -> Propose -> Approve -> Act -> Verify ->
 Save`. It reports where the user is in a login, signup, password-change,
-passkey, or second-factor ceremony and offers one safe next action plus manual
-takeover.
+passkey, or second-factor ceremony and offers one safe Rust-approved next
+action plus manual takeover.
 
 The layers have intentionally different responsibilities:
 
 - content scripts are sensors and actuators: they report bounded, non-secret
   structural observations and perform only the selected DOM action;
-- `nook-core` is the flight computer: it classifies the workflow, stage,
-  progress, allowed next action, and approval requirement;
+- `nook-companion-core` is the flight computer: it classifies the workflow,
+  stage, progress, allowed next action, approval requirement, and whether Pilot
+  may present that action;
 - the extension background/offscreen runtime is the control plane: it binds
   requests to the sender tab/origin and holds the unlocked encrypted session;
 - the widget is the cockpit HUD: it renders safe state and consent, never vault
   contents or secret material;
 - Simple Vault remains the complete management and recovery surface.
+
+Pilot observations cross the Rust/WASM boundary as named evidence and bounded
+quantities. The widget consumes the Rust-owned presentation capability and
+closed action; it does not maintain a second TypeScript action allowlist.
+Before a direct page action, the content script re-observes the same form scope
+and rejects the action when the observation digest or Rust decision changed.
+Direct authenticator setup and backup-code pages use the same Rust classifier
+before Pilot may render an enrollment action.
 
 The initial production slice classifies login (including email-first /
 username-only steps used by Microsoft, Slack, and similar SSO shells),
@@ -265,8 +274,14 @@ over.
 Pilot-guided 2FA enrollment stages an otpauth setup in extension memory after
 consent.
 It fills the verification code via Rust/WASM.
+An asynchronously returned verification code is consumed only while the same
+enrollment authorization generation remains current; stale code material is
+scrubbed without touching the page.
 It encrypts the authenticator only after Sufficient outcome evidence.
-Consented backup-code capture follows.
+Consented backup-code capture follows. When recovery codes appear while the
+setup QR remains visible, the recovery action takes precedence. New QR or
+recovery-code evidence immediately invalidates the prior page action before
+the debounced Rust reclassification completes.
 Secrets never appear in the HUD.
 
 The companion popup “Ready / Connected” state means the extension device is
@@ -312,12 +327,22 @@ icon → title → description → primary action pattern as the extension devic
 form so every site gets a universal authentication surface instead of forcing
 users through site-specific login chrome.
 
+Credential-shaped fields are not sufficient by themselves. At least one
+visible, enabled control must be able to advance the detected authentication
+ceremony. For an auto-submit second-factor challenge, its visible, enabled
+one-time-code input is the advancing control; a separate submit button is not
+required. Inert account, profile, newsletter, and settings fields do not mount
+the HUD.
+
 The gate must:
 
 - be visibly Nook-owned and keyboard accessible;
 - be draggable so the user can move it away from site chrome;
 - support collapsing to a compact Nook mark and expanding again;
 - preserve current/total progress in the compact state and accessible label;
+- scope an explicit collapse choice to the current Rust-classified workflow;
+- start compact for a login flow until the extension confirms at least one
+  saved origin match, while safe non-login actions start expanded;
 - support dismissal without blocking the host page;
 - show the requesting hostname, Rust-classified workflow, current step, and
   manual takeover without exposing a username, password, TOTP code, setup key,
@@ -329,6 +354,8 @@ The gate must:
 - keep Open vault as an optional secondary action;
 - never request a vault password, recovery secret, or provider credential;
 - never silently fill or submit;
+- invalidate in-flight actions when the workflow, session, or enrollment
+  generation changes;
 - when more than one login matches the page origin, open an extension-owned
   searchable login picker that shows usernames (and host/vault labels) only
   inside the extension document; keep those labels out of the host-page DOM and

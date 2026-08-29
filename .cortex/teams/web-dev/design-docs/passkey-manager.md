@@ -89,6 +89,13 @@ matches exist. Proposals require human approval in the Pilot gate, then only
 activate the site's own WebAuthn entry point so the existing consent chooser
 runs. Automatic submit/sign-up remains out of scope.
 
+The page entry point must be an exact visible, enabled passkey control approved
+by Rust policy. A confident workflow or an ordinary authentication advance
+control is not enough to infer one. The content script re-observes the same
+form scope immediately before activation and fails closed when the observation
+or Rust decision changed. Locked, unavailable, or invalid account lookup state
+never becomes a zero-match Create proposal.
+
 The extension prompt is visually Nook-owned but a website can imitate any
 in-page UI. It therefore never asks for recovery material, provider tokens, or
 vault passwords. Device authorization remains in the extension-owned popup and
