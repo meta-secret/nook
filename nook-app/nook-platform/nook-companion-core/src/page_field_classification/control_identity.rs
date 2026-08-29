@@ -1,3 +1,4 @@
+use super::form_identity::identity_indicates_explicit_login_route;
 use super::{
     contains_any_word, expand_identity_text, looks_like_unrestricted_login_advance_control_label,
 };
@@ -50,12 +51,16 @@ pub(super) fn route_names_external_authentication_provider(identity: &str) -> bo
         || identity.split(['?', '#']).any(|metadata| {
             metadata.split('&').any(|component| {
                 let key = expand_identity_text(component.split('=').next().unwrap_or_default());
-                ["provider", "identity provider", "idp"].contains(&key.trim_end_matches(" id"))
+                let root = key
+                    .strip_suffix(" id")
+                    .or_else(|| key.strip_suffix(" name"))
+                    .unwrap_or(&key);
+                ["provider", "identity provider", "idp"].contains(&root)
             })
         })
         || contains_any_word(&route, &["provider", "idp"])
         || segments.iter().enumerate().any(|(index, segment)| {
-            matches!(segment.as_str(), "login" | "signin")
+            identity_indicates_explicit_login_route(segment)
                 && segments
                     .get(index + 1)
                     .is_some_and(|tail| !is_local_tail(tail) || segments.get(index + 2).is_some())

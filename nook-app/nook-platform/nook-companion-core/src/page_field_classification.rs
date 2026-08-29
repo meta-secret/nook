@@ -266,10 +266,16 @@ fn looks_like_unrestricted_login_advance_control_label(label: &str) -> bool {
     {
         return false;
     }
-    ["anmelden", "anmelden anmelden"].contains(&identity.as_str())
-        || ["se connecter", "se connecter se connecter"].contains(&identity.as_str())
+    repeated_localized_login_label(&identity)
         || contains_any_word(&identity, LOGIN_ADVANCE_WORDS)
         || contains_any_word(&identity, &["submit"])
+}
+
+fn repeated_localized_login_label(identity: &str) -> bool {
+    let tokens = identity.split_whitespace().collect::<Vec<_>>();
+    !tokens.is_empty()
+        && (tokens.iter().all(|token| *token == "anmelden")
+            || (tokens.len() % 2 == 0 && tokens.chunks(2).all(|pair| pair == ["se", "connecter"])))
 }
 
 /// True when a semantic submit explicitly describes a non-authentication action.
@@ -613,10 +619,10 @@ mod tests {
 
     #[test]
     fn login_advance_labels_require_authentication_words() {
-        for label in "Next|SignIn|signin|Sign   In|Login|Log\tin|Submit|Entrar|Entrar Entrar|Anmelden Anmelden|Se connecter Se connecter".split('|') {
+        for label in "Next|SignIn|signin|Sign   In|Login|Log\tin|Submit|Entrar|Entrar Entrar Entrar|Anmelden Anmelden Anmelden|Se connecter Se connecter Se connecter".split('|') {
             assert!(looks_like_login_advance_control_label(label));
         }
-        for label in "Learn more|Subscribe|Submit order|Continue to reset password|Entrar con Amazon|Entrar con Foo|Anmelden Foo|Se connecter Amazon|Continue with X".split('|') {
+        for label in "Learn more|Subscribe|Submit order|Continue to reset password|Entrar con Amazon|Entrar con Foo|Anmelden Anmelden Foo|Se connecter Se connecter Amazon|Continue with X".split('|') {
             assert!(!looks_like_login_advance_control_label(label));
         }
         let oversized = "x".repeat(MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1);
@@ -657,13 +663,13 @@ mod tests {
         let safe = |form, destination| {
             has_safe_authentication_route_identity("https://example.test", form, destination)
         };
-        for destination in "https://example.test/login?notprovider=x&continue=https://mail.google.com|https://example.test/auth/login?x=1|https://example.test/v3/signin/identifier|https://example.test/signin/callback|https://example.test/login/v2".split('|') {
+        for destination in "https://example.test/login?notprovider=x&notprovider_name=acme&continue=https://mail.google.com|https://example.test/auth/login?x=1|https://example.test/v3/signin/identifier|https://example.test/auth/sign-in/identifier|https://example.test/signin/callback|https://example.test/login/v2".split('|') {
             assert!(safe("login-form", destination), "{destination}");
         }
         for form in "reset-password|signup-form|google-login|passkey-login".split('|') {
             assert!(!safe(form, "https://example.test/auth/login"));
         }
-        for destination in "https://example.test/login?provider|https://example.test/login?providerId=custom|https://example.test/login?idp_id=custom|https://example.test/login#idpId=custom|https://example.test/login#provider_id=custom|https://example.test/login?next=/home#google|https://example.test/login#provider=acme|https://example.test/login?next=/home#provider=acme|https://example.test/login?identity_provider=amazon|https://example.test/signin/x|https://example.test/signin/auth0|https://example.test/signin/callback/acme|https://example.test/account/close|https://example.test/login/amazon|https://example.test/orders/123/submit|https://example.test/auth/login?action=close+account|https://example.test/auth/provider/acme|https://example.test/auth/idp/acme|https://example.test/login/provider/acme|https://example.test/login/discord".split('|') {
+        for destination in "https://example.test/login?provider|https://example.test/login?providerId=custom|https://example.test/login?provider_name=custom|https://example.test/login?idp_id=custom|https://example.test/login?idp_name=custom|https://example.test/login?identityProviderName=custom|https://example.test/login#idpId=custom|https://example.test/login#providerName=custom|https://example.test/login#provider_id=custom|https://example.test/login?next=/home#google|https://example.test/login#provider=acme|https://example.test/login?next=/home#provider=acme|https://example.test/login?identity_provider=amazon|https://example.test/signin/x|https://example.test/signin/auth0|https://example.test/sign-in/auth0|https://example.test/sign_in/auth0|https://example.test/sign.in/auth0|https://example.test/log-in/auth0|https://example.test/log_in/auth0|https://example.test/signin/callback/acme|https://example.test/account/close|https://example.test/login/amazon|https://example.test/orders/123/submit|https://example.test/auth/login?action=close+account|https://example.test/auth/provider/acme|https://example.test/auth/idp/acme|https://example.test/login/provider/acme|https://example.test/login/discord".split('|') {
             assert!(!safe("login-form", destination), "{destination}");
         }
         let oversized = "x".repeat(MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1);

@@ -20,7 +20,7 @@ pub(super) fn identity_indicates_explicit_authentication_route(identity: &str) -
         ],
     )
 }
-fn identity_indicates_explicit_login_route(identity: &str) -> bool {
+pub(super) fn identity_indicates_explicit_login_route(identity: &str) -> bool {
     let identity = expand_identity_text(identity);
     contains_any_word(&identity, &["login", "log in", "signin", "sign in"])
 }
