@@ -68,6 +68,76 @@ export function restoreShellState([target, snapshot]: readonly [
   target.positionalArguments = snapshot.positionalArguments;
 }
 
+export function mergeConditionalShellState([target, snapshot]: readonly [
+  ShellParseState,
+  ShellParseState,
+]): void {
+  if (
+    !mapsEqual([target.aliases, snapshot.aliases]) ||
+    !mapsEqual([target.functions, snapshot.functions])
+  )
+    throw new Error('Conditional shell definition mutation is forbidden.');
+  if (
+    target.cwd !== snapshot.cwd ||
+    target.cwdProtected !== snapshot.cwdProtected ||
+    target.cwdUnknown !== snapshot.cwdUnknown
+  ) {
+    target.cwd = '';
+    target.cwdProtected ||= snapshot.cwdProtected;
+    target.cwdUnknown = true;
+  }
+  for (const name of new Set([
+    ...target.environment.keys(),
+    ...snapshot.environment.keys(),
+  ])) {
+    const after = target.environment.get(name);
+    const before = snapshot.environment.get(name);
+    if (after?.source === before?.source && after?.value === before?.value)
+      continue;
+    target.environment.set(name, mergedWord([before, after]));
+  }
+  const afterArguments = target.positionalArguments;
+  const beforeArguments = snapshot.positionalArguments;
+  if (afterArguments === beforeArguments) return;
+  if (!afterArguments || !beforeArguments) {
+    const available = afterArguments || beforeArguments;
+    if (!available) return;
+    target.positionalArguments = [...available.keys()].map((index) =>
+      mergedWord([
+        beforeArguments ? beforeArguments[index] : undefined,
+        afterArguments ? afterArguments[index] : undefined,
+      ]),
+    );
+    return;
+  }
+  const length = Math.max(afterArguments.length, beforeArguments.length);
+  const merged: ShellWord[] = [];
+  for (let index = 0; index < length; index += 1)
+    merged.push(mergedWord([beforeArguments[index], afterArguments[index]]));
+  target.positionalArguments = merged;
+}
+
+function mergedWord([before, after]: readonly [
+  ShellWord | undefined,
+  ShellWord | undefined,
+]): ShellWord {
+  return {
+    dynamic: true,
+    source: `${before?.source ?? ''}|${after?.source ?? ''}`,
+    value: `${before?.value ?? ''}|${after?.value ?? ''}`,
+  };
+}
+
+function mapsEqual([left, right]: readonly [
+  ReadonlyMap<string, string>,
+  ReadonlyMap<string, string>,
+]): boolean {
+  return (
+    left.size === right.size &&
+    [...left].every(([name, value]) => right.get(name) === value)
+  );
+}
+
 export function shellStdinConsumer(words: readonly ShellWord[]): boolean {
   let index = 0;
   while (['builtin', 'command', 'exec'].includes(words[index]?.value ?? ''))

@@ -14,6 +14,22 @@ export function isShellCommentStart([source, index, wordActive]: readonly [
   return source[index] === '#' && !wordActive;
 }
 
+export function hasUnquotedExpansion(source: string): boolean {
+  let quote = '';
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index] ?? '';
+    if (quote) {
+      if (character === '\\' && quote === '"') index += 1;
+      else if (character === quote) quote = '';
+      continue;
+    }
+    if (character === '"' || character === "'") quote = character;
+    else if (character === '\\') index += 1;
+    else if ('[{}*?'.includes(character)) return true;
+  }
+  return false;
+}
+
 export function tokenizeShell(source: string): readonly ShellToken[] {
   const tokens: ShellToken[] = [];
   let value = '';

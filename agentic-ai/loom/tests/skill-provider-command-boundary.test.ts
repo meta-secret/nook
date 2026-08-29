@@ -14,10 +14,17 @@ const PROTECTED =
 const PROTECTED_ROOT = PROTECTED.slice(0, PROTECTED.lastIndexOf('/'));
 
 function inspectShell(source: string) {
+  return inspectScript([source, false]);
+}
+
+function inspectScript([source, sourcePath]: readonly [
+  string,
+  string | false,
+]) {
   const inspection: ShellCommandInspection = {
     positionalArguments: false,
     source,
-    sourcePath: false,
+    sourcePath,
   };
   return analyzeShellCommands(inspection);
 }
@@ -80,6 +87,12 @@ test('preserves shell execution semantics around state and branches', () => {
     `case x in x) bun ${PROTECTED};; esac`,
     `ROOT=${PROTECTED_ROOT}; false && ROOT=scripts; bun "$ROOT/cli.ts"`,
     `bash -c 'bun "$1"' _ ${PROTECTED}`,
+    `set -- ${PROTECTED}; set -- scripts/safe.ts | cat; bun "$1"`,
+    `cd ${PROTECTED_ROOT}; cd scripts | cat; bun cli.ts`,
+    `alias audit="bun ${PROTECTED}"; unalias audit | cat; audit`,
+    `audit(){ bun ${PROTECTED}; }; unset -f audit | cat; audit`,
+    `true && set -- ${PROTECTED}; bun "$1"`,
+    `ROOT=scripts; true && ROOT=${PROTECTED_ROOT}; bun "$ROOT/cli.ts"`,
   ])
     expect(() => inspectProtected(source), source).toThrow();
 });
@@ -139,11 +152,17 @@ test('closes the exact-head shell review batch', () => {
     `command_not_found_handle(){ bun ${PROTECTED}; }; definitely_missing_xyz`,
     `test -v 'x[$(bun ${PROTECTED})]'`,
     `test "$(bun ${PROTECTED})" -eq 1`,
+    `NODE_OPTIONS=--require=${PROTECTED} node scripts/safe.js`,
+    `bun ".cortex/teams/ai/dynamic-skills/example-skill/"scr?pts/src/cli.ts`,
+    `npm exec -- bun ${PROTECTED}`,
   ])
     expect(() => inspectProtected(source), source).toThrow();
   expect(() =>
     inspectShell('ROOT=scripts; cd "$ROOT"; bun safe.ts'),
   ).not.toThrow();
+  expect(() => inspectShell('npm exec -- bun scripts/safe.ts')).toThrow(
+    'Unsupported npm exec command form',
+  );
   expect(() => inspectShell('cd "$RESEARCH_DIR"; echo ok')).not.toThrow();
   expect(() =>
     inspectShell(
@@ -157,9 +176,29 @@ test('closes the exact-head shell review batch', () => {
     const sourceRequest: AuditedSourceRequest = {
       source: seam.specifier,
       sourcePath: seam.sourcePath,
+      targetPath: seam.targetPath,
     };
     expect(isAuditedSource(sourceRequest), seam.sourcePath).toBeTrue();
+    const mismatchedRequest: AuditedSourceRequest = {
+      ...sourceRequest,
+      targetPath: `other/${seam.targetPath}`,
+    };
+    expect(isAuditedSource(mismatchedRequest), seam.sourcePath).toBeFalse();
   }
+  const hostedTest =
+    'nook-app/nook-web/nook-web-extension/scripts/hosted-extension.test.sh';
+  expect(() =>
+    inspectScript([
+      'SCRIPT_DIR=nook-app/nook-web/nook-web-extension/scripts; source "$SCRIPT_DIR/hosted-extension.sh"',
+      hostedTest,
+    ]),
+  ).not.toThrow();
+  expect(() =>
+    inspectScript([
+      `cd ${PROTECTED_ROOT}; source ./hosted-extension.sh`,
+      hostedTest,
+    ]),
+  ).toThrow('Unsupported sourced shell execution');
   expect(() =>
     inspectShell('env TOKEN="${DYNAMIC}" true; sed -E "s/\\x1b\\[[0-9;]*m//g"'),
   ).not.toThrow();

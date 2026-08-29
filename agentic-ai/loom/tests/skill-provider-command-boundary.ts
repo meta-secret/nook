@@ -4,7 +4,10 @@ import {
   shellSubstitutionBodies,
   type ShellStructureInspection,
 } from './skill-provider-shell-structure.ts';
-import { tokenizeShell } from './skill-provider-shell-tokenizer.ts';
+import {
+  hasUnquotedExpansion,
+  tokenizeShell,
+} from './skill-provider-shell-tokenizer.ts';
 import {
   aliasInvocationSource,
   applyAliasMutation,
@@ -22,10 +25,7 @@ import {
   resolveWord,
   staticWord,
 } from './skill-provider-shell-environment.ts';
-import {
-  isAuditedSource,
-  type AuditedSourceRequest,
-} from './skill-provider-sourced-seams.ts';
+import { assertAuditedSource } from './skill-provider-sourced-seams.ts';
 import {
   applyCd,
   applyParentMutation,
@@ -33,6 +33,7 @@ import {
   assertSafeShellRuntime,
   hasArithmeticTestExecution,
   isolatedShellState,
+  mergeConditionalShellState,
   nodeInspectExecutables,
   normalizedRuntime,
   restoreShellState,
@@ -172,7 +173,7 @@ function analyzeCommandSource(request: ShellCommandRequest): void {
   const tokens = tokenizeShell(structure.source);
   let command: ShellWord[] = [];
   let conditionalState: ShellParseState | false = false;
-  let pipelineEnvironment: Map<string, ShellWord> | false = false;
+  let pipelineState: ShellParseState | false = false;
   const subshells: ShellParseState[] = [];
   for (const token of [...tokens, ShellSeparator.Newline]) {
     if (request.state.casePattern) {
@@ -192,10 +193,10 @@ function analyzeCommandSource(request: ShellCommandRequest): void {
       continue;
     }
     if (command.length > 0) {
-      if (pipelineEnvironment !== false && shellStdinConsumer(command))
+      if (pipelineState !== false && shellStdinConsumer(command))
         throw new Error('Shell pipeline input is forbidden.');
-      if (token === ShellSeparator.Pipe && pipelineEnvironment === false)
-        pipelineEnvironment = new Map(request.state.environment);
+      if (token === ShellSeparator.Pipe && pipelineState === false)
+        pipelineState = isolatedShellState(request.state);
       request.state.commandCount += 1;
       if (request.state.commandCount > MAX_SHELL_COMMANDS)
         throw new Error('Shell command count exceeds its bound.');
@@ -211,15 +212,13 @@ function analyzeCommandSource(request: ShellCommandRequest): void {
       };
       analyzeCommand(commandRequest);
       command = [];
-      if (pipelineEnvironment !== false) {
-        request.state.environment.clear();
-        for (const [name, value] of pipelineEnvironment)
-          request.state.environment.set(name, value);
-        if (token !== ShellSeparator.Pipe) pipelineEnvironment = false;
+      if (pipelineState !== false) {
+        restoreShellState([request.state, pipelineState]);
+        if (token !== ShellSeparator.Pipe) pipelineState = false;
       }
     }
     if (conditionalState !== false) {
-      restoreShellState([request.state, conditionalState]);
+      mergeConditionalShellState([request.state, conditionalState]);
       conditionalState = false;
     }
     if (token === ShellSeparator.And || token === ShellSeparator.Or)
@@ -656,6 +655,11 @@ function consumeEnvPrefix(request: EnvPrefixRequest): number {
 
 function analyzeRuntime(request: RuntimeCommandRequest): void {
   if (request.runtime === 'bun' || request.runtime === 'node') {
+    if (
+      request.runtime === 'node' &&
+      request.state.environment.has('NODE_OPTIONS')
+    )
+      throw new Error('NODE_OPTIONS execution is forbidden.');
     const executableRequest: RuntimeExecutableRequest = {
       booleanOptions:
         request.runtime === 'bun' ? BUN_BOOLEAN_OPTIONS : NODE_BOOLEAN_OPTIONS,
@@ -694,7 +698,7 @@ function analyzeRuntime(request: RuntimeCommandRequest): void {
         : option?.value.startsWith('--call=')
           ? staticWord(option.value.slice('--call='.length))
           : false;
-    if (!source) return;
+    if (!source) throw new Error('Unsupported npm exec command form.');
     if (source.dynamic)
       throw new Error('Dynamic npm exec command is forbidden.');
     const nestedRequest: ShellCommandRequest = {
@@ -723,21 +727,8 @@ function analyzeRuntime(request: RuntimeCommandRequest): void {
   )
     throw new Error('Arithmetic test operand execution is forbidden.');
   if (request.runtime === 'source' || request.runtime === '.') {
-    const executable = request.words[0];
-    if (request.runtime === '.' && !executable) return;
-    const sourceRequest: AuditedSourceRequest = {
-      source: executable?.source ?? '',
-      sourcePath: request.state.sourcePath,
-    };
-    if (
-      executable &&
-      request.words.length === 1 &&
-      isAuditedSource(sourceRequest)
-    )
-      return;
-    throw new Error(
-      `Unsupported sourced shell execution in ${request.state.sourcePath || 'inline'}: ${executable?.source ?? 'missing'}`,
-    );
+    assertAuditedSource([request.runtime, request.state, request.words]);
+    return;
   }
   if (request.state.functions.has('command_not_found_handle'))
     throw new Error('Shell command-not-found hooks are forbidden.');
@@ -906,10 +897,7 @@ function runtimeExecutable(
 
 function executableIsStatic(word: ShellWord): boolean {
   if (/^'[\s\S]*'$/u.test(word.source)) return true;
-  if (
-    !/^['"]/u.test(word.source) &&
-    (/[{}*?]/u.test(word.value) || word.value.includes('['))
-  )
+  if (hasUnquotedExpansion(word.source))
     throw new Error('Shell expansion in an executable is forbidden.');
   if (word.value.startsWith('/'))
     throw new Error('Absolute runtime entry point is forbidden.');

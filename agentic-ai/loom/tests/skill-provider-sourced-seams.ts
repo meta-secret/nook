@@ -8,6 +8,7 @@ export type AuditedSourceSeam = {
 export type AuditedSourceRequest = {
   readonly source: string;
   readonly sourcePath: string | false;
+  readonly targetPath: string | false;
 };
 
 export const AUDITED_SOURCE_SEAMS: readonly AuditedSourceSeam[] = [
@@ -21,7 +22,7 @@ export const AUDITED_SOURCE_SEAMS: readonly AuditedSourceSeam[] = [
     marker: '/etc/os-release',
     sourcePath,
     specifier: '/etc/os-release',
-    targetPath: false,
+    targetPath: '/etc/os-release',
   })),
   {
     digest: 'd0414467deac76fd3d5ba4b36a2de6ee4813f7a99bbb6db83b4ef58d3a0cb0bd',
@@ -74,7 +75,36 @@ export function isAuditedSource(request: AuditedSourceRequest): boolean {
     (seam) =>
       seam.sourcePath === request.sourcePath &&
       (seam.specifier === specifier || seam.marker === specifier) &&
+      seam.targetPath === request.targetPath &&
       seamDigestMatches(seam),
+  );
+}
+
+export function assertAuditedSource([runtime, state, words]: readonly [
+  string,
+  ShellParseState,
+  readonly ShellWord[],
+]): void {
+  const executable = words[0];
+  if (runtime === '.' && !executable) return;
+  if (executable && words.length === 1) {
+    const wordRequest: WordEnvironmentRequest = {
+      environment: state.environment,
+      word: executable,
+    };
+    const target = resolveWord(wordRequest);
+    const request: AuditedSourceRequest = {
+      source: executable.source,
+      sourcePath: state.sourcePath,
+      targetPath:
+        target.dynamic || state.cwdUnknown
+          ? false
+          : posix.normalize(posix.join(state.cwd, target.value)),
+    };
+    if (isAuditedSource(request)) return;
+  }
+  throw new Error(
+    `Unsupported sourced shell execution in ${state.sourcePath || 'inline'}: ${executable?.source ?? 'missing'}`,
   );
 }
 
@@ -87,4 +117,10 @@ function seamDigestMatches(seam: AuditedSourceSeam): boolean {
 }
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { posix, resolve } from 'node:path';
+import { resolveWord } from './skill-provider-shell-environment.ts';
+import type {
+  ShellParseState,
+  ShellWord,
+  WordEnvironmentRequest,
+} from './skill-provider-command-types.ts';
