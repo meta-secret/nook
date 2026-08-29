@@ -11,78 +11,50 @@ type GrantAccessResponse =
     }
   | { response: { ok: false; reason: string } }
 
-let grantAccessResponse: GrantAccessResponse = {
-  response: {
-    ok: true,
-    status: WebsiteAuthenticatorResponseStatus.Unavailable,
-  },
+type ExtensionWindowRequest = {
+  url: string
 }
-const availableWebsiteGrants = mock(() =>
-  Promise.resolve(grantAccessResponse),
-)
-const openedUrls: string[] = []
-Object.assign(globalThis, {
-  chrome: {
-    runtime: {
-      getURL: (path: string) => `chrome-extension://nook/${path}`,
-    },
-    windows: {
-      create: ({ url }: Parameters<typeof chrome.windows.create>[0]) => {
-        openedUrls.push(url)
-        return Promise.resolve({})
-      },
-    },
-  } as typeof chrome,
-})
-const openCompanionLauncherBestEffort = mock(
-  (intent: OpenCompanionLauncherIntent) => {
-    if (intent !== OpenCompanionLauncherIntent.Default) return
-    void chrome.windows.create({
-      url: chrome.runtime.getURL('popup/index.html'),
-      type: 'popup',
-      focused: true,
-    })
-  },
-)
-const unusedAsyncDependency = mock(() =>
-  Promise.reject(new Error('unused login options test dependency')),
-)
-
-mock.module('../src/background/service-worker/pairing-identity', () => ({
-  availableWebsiteGrants,
-  getSessionStorage: unusedAsyncDependency,
-  isAuthorizedWebsiteSender: mock(() => false),
-  passwordPairingGrants: unusedAsyncDependency,
-  removeSessionStorage: unusedAsyncDependency,
-  sendSessionMessage: unusedAsyncDependency,
-  setSessionStorage: unusedAsyncDependency,
-}))
-
-mock.module('../src/background/pairing-grants', () => ({
-  extensionSessionGrantIdentity: mock(() => ({
-    vaultStoreId: 'unused',
-    deviceId: 'unused',
-  })),
-}))
-
-mock.module('../src/offscreen/session-request-adapter', () => ({
-  extensionSessionInteractiveDeadline: mock(() => ({
-    deadlineMs: 4_000,
-  })),
-  MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE: { kind: 'default' },
-}))
-
-mock.module('../src/background/service-worker/session-lifecycle', () => ({
-  SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS: 4_000,
-  ensureExtensionSessionDocument: unusedAsyncDependency,
-  isUnlockedSessionStatus: mock(() => false),
-  openCompanionLauncherBestEffort,
-}))
 
 describe('websiteLoginOptions', () => {
   test('opens one trusted companion surface when Continue finds no grant', async () => {
+    Object.assign(globalThis, {
+      __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
+    })
     const { websiteLoginOptions } =
       await import('../src/background/service-worker/account-pickers')
+    let grantAccessResponse: GrantAccessResponse = {
+      response: {
+        ok: true,
+        status: WebsiteAuthenticatorResponseStatus.Unavailable,
+      },
+    }
+    const availableWebsiteGrants = mock(() =>
+      Promise.resolve(grantAccessResponse),
+    )
+    const openedUrls: string[] = []
+    const extensionRuntimeUrl = mock(
+      (path: string) => `chrome-extension://nook/${path}`,
+    )
+    const openExtensionWindow = mock(({ url }: ExtensionWindowRequest) => {
+      openedUrls.push(url)
+    })
+    const openCompanionLauncherBestEffort = mock(
+      (intent: OpenCompanionLauncherIntent) => {
+        if (intent !== OpenCompanionLauncherIntent.Default) return
+        const extensionWindowRequest: ExtensionWindowRequest = {
+          url: extensionRuntimeUrl('popup/index.html'),
+        }
+        openExtensionWindow(extensionWindowRequest)
+      },
+    )
+    const loginAccountsForOrigin = mock(() =>
+      Promise.reject(new Error('unused login options test dependency')),
+    )
+    const dependencies = {
+      availableWebsiteGrants,
+      loginAccountsForOrigin,
+      openCompanionLauncherBestEffort,
+    }
     const response = await websiteLoginOptions({
       message: { payload: { origin: 'https://example.test' } },
       sender: {
@@ -90,6 +62,7 @@ describe('websiteLoginOptions', () => {
         url: 'https://example.test/login',
         tab: { id: 42 },
       },
+      dependencies,
     })
 
     expect(response).toEqual({
@@ -100,6 +73,7 @@ describe('websiteLoginOptions', () => {
     expect(openCompanionLauncherBestEffort).toHaveBeenCalledWith(
       OpenCompanionLauncherIntent.Default,
     )
+    expect(openExtensionWindow).toHaveBeenCalledTimes(1)
     expect(openedUrls).toEqual(['chrome-extension://nook/popup/index.html'])
 
     grantAccessResponse = {
@@ -112,6 +86,7 @@ describe('websiteLoginOptions', () => {
         url: 'https://example.test/login',
         tab: { id: 42 },
       },
+      dependencies,
     })
 
     expect(rejectedResponse).toEqual({
@@ -119,6 +94,7 @@ describe('websiteLoginOptions', () => {
       reason: 'login-forbidden-origin',
     })
     expect(openCompanionLauncherBestEffort).toHaveBeenCalledTimes(1)
+    expect(openExtensionWindow).toHaveBeenCalledTimes(1)
     expect(openedUrls).toEqual(['chrome-extension://nook/popup/index.html'])
   })
 })
