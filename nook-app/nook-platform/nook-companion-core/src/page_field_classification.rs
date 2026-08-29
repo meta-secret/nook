@@ -327,6 +327,36 @@ pub fn has_safe_authentication_route_identity(
         || form_identity::destination_has_safe_login_identity(&destination.path_identity)
 }
 
+/// Decide whether a locally scoped control may advance a safe authentication route.
+#[must_use]
+pub fn can_activate_authentication_route_control(
+    source_origin: &str,
+    form_identity: &str,
+    destination_identity: &str,
+    control_label: &str,
+    is_semantic_submit: bool,
+    has_authentication_username: bool,
+    has_local_authentication_scope: bool,
+) -> bool {
+    if !has_safe_authentication_route_identity(source_origin, form_identity, destination_identity)
+        || control_label.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
+    {
+        return false;
+    }
+    if looks_like_login_advance_control_label(control_label) {
+        return !form_identity.trim().is_empty()
+            || (has_authentication_username && has_local_authentication_scope);
+    }
+    is_semantic_submit
+        && has_authentication_username
+        && has_local_authentication_scope
+        && !form_identity::form_identity_indicates_destructive_action(control_label)
+        && !looks_like_non_authentication_submit_control_label(control_label)
+        && !control_identity::looks_like_password_recovery_route_control_label(control_label)
+        && !control_identity::looks_like_registration_route_control_label(control_label)
+        && !control_identity::looks_like_alternate_authentication_route_control_label(control_label)
+}
+
 fn has_autocomplete_token(tokens: &[String], expected: &str) -> bool {
     tokens
         .iter()
@@ -586,6 +616,9 @@ mod tests {
             "Continue with Amazon"
         ));
         assert!(!looks_like_login_advance_control_label("Continue Google"));
+        assert!(looks_like_login_advance_control_label(
+            "Sign in to Microsoft 365"
+        ));
         assert!(!looks_like_login_advance_control_label(
             "Continue with LinkedIn"
         ));
@@ -593,6 +626,39 @@ mod tests {
         assert!(!looks_like_login_advance_control_label(
             &"x".repeat(MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1)
         ));
+    }
+
+    #[test]
+    fn activation_accepts_only_bounded_semantic_username_scope_evidence() {
+        let decide = |form: &str, label: &str, semantic, username, local| {
+            can_activate_authentication_route_control(
+                "https://example.test",
+                form,
+                "https://example.test/auth/login",
+                label,
+                semantic,
+                username,
+                local,
+            )
+        };
+        assert!(decide("login-form", "Entrar", true, true, true));
+        assert!(decide("", "Entrar", true, true, true));
+        assert!(decide(
+            "login-form",
+            "Sign in to Microsoft 365",
+            false,
+            false,
+            false
+        ));
+        assert!(!decide(
+            "login-form",
+            "Continue with Amazon",
+            true,
+            true,
+            true
+        ));
+        assert!(!decide("login-form", "Continue Google", true, true, true));
+        assert!(!decide("", "Entrar", true, false, true));
     }
 
     #[test]

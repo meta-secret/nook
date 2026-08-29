@@ -45,12 +45,17 @@ fn has_open_ended_provider_selection_grammar(identity: &str) -> bool {
     })
 }
 
+fn has_branded_primary_sign_in_grammar(identity: &str) -> bool {
+    identity.starts_with("sign in to ")
+}
+
 pub(super) fn looks_like_alternate_authentication_route_control_label(label: &str) -> bool {
     let identity = expand_identity_text(label);
     if contains_any_word(&identity, &["passkey", "saml", "sso"]) {
         return true;
     }
-    label_names_external_authentication_provider(&identity)
+    (label_names_external_authentication_provider(&identity)
+        && !has_branded_primary_sign_in_grammar(&identity))
         || (looks_like_unrestricted_login_advance_control_label(label)
             && has_open_ended_provider_selection_grammar(&identity))
 }

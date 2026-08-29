@@ -124,6 +124,28 @@ pub fn has_safe_authentication_route_identity(
 
 #[wasm_bindgen]
 #[must_use]
+pub fn can_activate_authentication_route_control(
+    source_origin: &str,
+    form_identity: &str,
+    destination_identity: &str,
+    control_label: &str,
+    is_semantic_submit: bool,
+    has_authentication_username: bool,
+    has_local_authentication_scope: bool,
+) -> bool {
+    nook_companion_core::can_activate_authentication_route_control(
+        source_origin,
+        form_identity,
+        destination_identity,
+        control_label,
+        is_semantic_submit,
+        has_authentication_username,
+        has_local_authentication_scope,
+    )
+}
+
+#[wasm_bindgen]
+#[must_use]
 pub fn authentication_form_observation_priority(
     observation: nook_companion_core::AuthenticationPageObservation,
 ) -> u8 {
@@ -172,7 +194,15 @@ mod tests {
             "login-form",
             "https://example.test/signin/x.com",
         ));
-
+        assert!(can_activate_authentication_route_control(
+            "https://example.test",
+            "login-form",
+            "https://example.test/auth/login",
+            "Entrar",
+            true,
+            true,
+            true,
+        ));
         let login = nook_companion_core::AuthenticationPageObservation {
             current_password_field_count: 1,
             ..Default::default()
