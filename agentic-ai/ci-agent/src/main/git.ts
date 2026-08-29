@@ -404,11 +404,9 @@ async function pushAuthenticatedBranch(repoRoot: string): Promise<void> {
         GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`,
       }
     : process.env;
-  await execFileAsync(
-    "git",
-    trustedGitArgs(repoRoot, ["push", "-u", "origin", "HEAD"]),
-    { env: authEnv },
-  );
+  await execFileAsync("git", ["-C", repoRoot, "push", "-u", "origin", "HEAD"], {
+    env: authEnv,
+  });
 }
 
 export async function pushFixBranch(
@@ -437,6 +435,7 @@ export async function pushFixBranch(
     `Fix main CI failure (run ${runId}).`;
 
   await trustedGit(repoRoot, ["commit", "-m", commitMessage]);
+  await trustedGit(repoRoot, ["config", "core.hooksPath", "/dev/null"]);
   await pushAuthenticatedBranch(repoRoot);
   log.info(`Pushed ${fixBranch}`);
 }
