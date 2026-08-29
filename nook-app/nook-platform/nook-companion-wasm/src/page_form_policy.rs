@@ -110,6 +110,45 @@ pub fn looks_like_login_advance_control_label(label: &str) -> bool {
 
 #[wasm_bindgen]
 #[must_use]
+pub fn has_safe_authentication_route_identity(
+    source_origin: &str,
+    form_identity: &str,
+    destination_identity: &str,
+) -> bool {
+    nook_companion_core::has_safe_authentication_route_identity(
+        source_origin,
+        form_identity,
+        destination_identity,
+    )
+}
+
+#[wasm_bindgen]
+#[must_use]
+#[expect(clippy::too_many_arguments, reason = "typed WASM policy boundary")]
+pub fn can_activate_authentication_route_control(
+    source_origin: &str,
+    form_identity: &str,
+    destination_identity: &str,
+    control_label: &str,
+    control_machine_identity: &str,
+    has_concrete_control: bool,
+    has_authentication_username: bool,
+    has_local_authentication_scope: bool,
+) -> bool {
+    nook_companion_core::can_activate_authentication_route_control(
+        source_origin,
+        form_identity,
+        destination_identity,
+        control_label,
+        control_machine_identity,
+        has_concrete_control,
+        has_authentication_username,
+        has_local_authentication_scope,
+    )
+}
+
+#[wasm_bindgen]
+#[must_use]
 pub fn authentication_form_observation_priority(
     observation: nook_companion_core::AuthenticationPageObservation,
 ) -> u8 {
@@ -147,8 +186,42 @@ mod tests {
             false,
         );
         assert!(looks_like_username_field(&username));
-        assert!(looks_like_login_advance_control_label("Continue"));
-
+        assert!(looks_like_login_advance_control_label("Entrar Entrar"));
+        assert!(has_safe_authentication_route_identity(
+            "https://example.test",
+            "login-form",
+            "https://example.test/auth/login?x=1",
+        ));
+        assert!(!has_safe_authentication_route_identity(
+            "https://example.test",
+            "login-form",
+            "https://example.test/login?provider",
+        ));
+        assert!(!can_activate_authentication_route_control(
+            "https://example.test",
+            "login-form",
+            "https://example.test/auth/login",
+            "Continue",
+            "reset-password",
+            true,
+            true,
+            true,
+        ));
+        for has_concrete_control in [false, true] {
+            assert_eq!(
+                can_activate_authentication_route_control(
+                    "https://example.test",
+                    "login-form",
+                    "https://example.test/auth/login",
+                    "",
+                    "",
+                    has_concrete_control,
+                    true,
+                    true,
+                ),
+                !has_concrete_control,
+            );
+        }
         let login = nook_companion_core::AuthenticationPageObservation {
             current_password_field_count: 1,
             ..Default::default()

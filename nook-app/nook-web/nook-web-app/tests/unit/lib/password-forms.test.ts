@@ -79,7 +79,7 @@ describe('website one-time-code fields', () => {
   test('returns no workflow for ordinary pages and email-only newsletters', () => {
     document.body.innerHTML = `
       <main><p>Documentation</p></main>
-      <form><input type="email" name="newsletter-email" /></form>
+      <form><input type="email" name="newsletter-email" /><button>Submit</button></form>
     `
 
     expect(summarizeAuthenticationWorkflowForms()).toEqual([])
@@ -286,7 +286,7 @@ describe('website one-time-code fields', () => {
   })
 
   test('fills username-only then advances common multi-step login controls', () => {
-    for (const label of ['Next', 'Login', 'signin', 'Sign   In', 'Log\tin']) {
+    for (const label of ['Continue with email', 'Sign in using password']) {
       document.body.innerHTML = `
         <form id="login-form">
           <input autocomplete="username" name="email" type="email" />
@@ -310,6 +310,125 @@ describe('website one-time-code fields', () => {
         document.querySelector<HTMLInputElement>('[name="email"]')?.value,
       ).toBe('pilot@nook.test')
     }
+  })
+
+  test.each([
+    ['Amazon provider', '<button>Continue with Amazon</button>', ''],
+    ['labelled provider', '<input type="submit" aria-labelledby="p" />', ''],
+    [
+      'titled provider',
+      '<input type="submit" title="Continue with Amazon" />',
+      '',
+    ],
+    ['destructive action', '<button id="delete-account">Continue</button>', ''],
+    ['provider', '<button name="provider" value="acme">Continue</button>', ''],
+    ['unlabeled control', '<button type="button"></button>', ''],
+    ['hidden ancestor', '<button name="continue"></button>', 'hidden'],
+  ])('skips %s before advancing login', (_, control, parentAttrs) => {
+    document.body.innerHTML = `
+      <form id="login-form">
+        <input autocomplete="username" name="email" type="email" />
+        <span id="p">Continue with Amazon</span>
+        <span ${parentAttrs}>${control}</span>
+        <button id="login-next" type="button">Continue</button>
+      </form>
+    `
+    const activatedControls: string[] = []
+    for (const control of document.querySelectorAll<HTMLInputElement>(
+      'button, input[type="submit"]',
+    )) {
+      control.addEventListener('click', () =>
+        activatedControls.push(control.id),
+      )
+    }
+
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
+    expect(activatedControls).toEqual(['login-next'])
+  })
+
+  test('advances a native semantic submit through a safe login route', () => {
+    document.body.innerHTML = `
+      <form id="account-step" action="/auth/login">
+        <input autocomplete="username" name="email" type="email" />
+        <input id="login-next" type="submit" />
+      </form>
+    `
+    let activated = false
+    document.querySelector('#login-next')?.addEventListener('click', () => {
+      activated = true
+    })
+
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
+    expect(activated).toBe(true)
+  })
+
+  test.each([
+    ['<button aria-label="Anmelden" title="Anmelden">Anmelden</button>', true],
+    [
+      '<button aria-label="Se connecter" title="Se connecter">Se connecter</button>',
+      true,
+    ],
+    ['<button type="submit">Supprimer le compte</button>', false],
+    ['<form id="f"><button>Entrar</button></form>', false],
+  ])('gates form-less localized control %s', (control, expected) => {
+    window.history.replaceState({}, '', '/')
+    document.body.innerHTML = `
+      <div role="form" class="signin-panel">
+        <input data-qa="login_email" name="email" type="email" />
+        ${control}
+      </div>
+    `
+    const workflow = summarizeAuthenticationWorkflowForms()[0]
+    expect(workflow?.formScope.kind).toBe(PasswordFormScopeKind.Unowned)
+    const submissionArgs: Parameters<typeof submitLoginForm>[0] = {
+      kind: PasswordFormQueryKind.Scoped,
+      root: workflow?.root ?? document,
+      formScope: workflow?.formScope ?? {
+        kind: PasswordFormScopeKind.Unowned,
+      },
+    }
+
+    expect(submitLoginForm(submissionArgs)).toBe(expected)
+  })
+
+  test.each([
+    ['', '', true],
+    ['', '<button type="button">Help</button>', true],
+    ['delete-account', '', false],
+  ])(
+    'gates implicit username-only submit for %s',
+    (formId, control, allowed) => {
+      window.history.replaceState({}, '', '/account')
+      document.body.innerHTML = `<form id="${formId}" action="/login"><input autocomplete="username" />${control}</form>`
+      document.querySelector('form')?.addEventListener('submit', (event) => {
+        event.preventDefault()
+      })
+
+      expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(allowed)
+    },
+  )
+
+  test.each([
+    ['destructive same-origin action', '/settings/delete-account'],
+    ['external provider', '/signin/google'],
+    ['password recovery', '/reset-password'],
+    ['registration', '/register'],
+  ])('does not advance a username-only login through %s', (_, route) => {
+    document.body.innerHTML = `
+      <form id="login-form" action="/auth/login">
+        <input autocomplete="username" name="email" type="email" />
+        <button id="alternate-route" type="submit" formaction="${route}">Continue</button>
+      </form>
+    `
+    let activated = false
+    document
+      .querySelector('#alternate-route')
+      ?.addEventListener('click', () => {
+        activated = true
+      })
+
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(false)
+    expect(activated).toBe(false)
   })
 
   test('groups externally associated controls with their form owner', () => {
