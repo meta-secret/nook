@@ -131,6 +131,17 @@ export function getSessionStorage(
   })
 }
 
+export function getAllSessionStorage(): Promise<Record<string, unknown>> {
+  // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
+  return new Promise((resolve, reject) => {
+    chrome.storage.session.get((items) => {
+      const message = chrome.runtime.lastError?.message
+      if (message) reject(new Error(message))
+      else resolve(items)
+    })
+  })
+}
+
 export function removeSessionStorage(key: string): Promise<void> {
   // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
   return new Promise((resolve, reject) => {

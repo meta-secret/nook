@@ -18,8 +18,14 @@ import {
   MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
 } from '../../offscreen/session-request-adapter'
 import {
+  AccountPickerSurfaceKind,
   LoginPickerLoadKind,
+  type AccountPickerSurface,
+  accountPickerAuthorizationGeneration,
+  accountPickerAuthorizationIsCurrent,
   authorizedWebsiteGrant,
+  closeAccountPickerSurface,
+  emptyAccountPickerSurface,
   isLoginPickerSender,
   loadLoginPicker,
   loginAccountsForOrigin,
@@ -79,6 +85,10 @@ export async function openWebsiteLoginPicker({
   message,
   sender,
 }: OpenWebsiteLoginPickerArgs): Promise<LoginPickerOpenResponse> {
+  const authorizationGeneration = accountPickerAuthorizationGeneration()
+  if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
+    return { ok: true, status: LoginPickerOpenStatus.Locked }
+  }
   const nookTypedArgs0_0: Parameters<typeof availableWebsiteGrants>[0] = {
     origin: message.payload.origin,
     sender,
@@ -104,17 +114,24 @@ export async function openWebsiteLoginPicker({
   }
 
   const requestId = randomNonce()
-  const request: Parameters<typeof storeLoginPicker>[0] = {
+  const request: Parameters<typeof storeLoginPicker>[0]['request'] = {
     requestId,
     origin: message.payload.origin,
     tabId: sender.tab.id,
     allowedVaultStoreIds: access.grants.map((grant) => grant.vaultStoreId),
     expiresAt: Date.now() + LOGIN_PICKER_TTL_MS,
   }
-  await storeLoginPicker(request)
+  const storeArgs: Parameters<typeof storeLoginPicker>[0] = {
+    request,
+    authorizationGeneration,
+  }
+  if (!(await storeLoginPicker(storeArgs))) {
+    return { ok: true, status: LoginPickerOpenStatus.Locked }
+  }
   const pickerUrl = new URL(chrome.runtime.getURL('popup/index.html'))
   pickerUrl.searchParams.set('intent', 'login-picker')
   pickerUrl.searchParams.set('request', requestId)
+  let createdSurface: AccountPickerSurface = emptyAccountPickerSurface()
   try {
     if (chrome.windows?.create) {
       const nookTypedArgs0_1: Parameters<typeof chrome.windows.create>[0] = {
@@ -124,16 +141,40 @@ export async function openWebsiteLoginPicker({
         height: 620,
         focused: true,
       }
-      await chrome.windows.create(nookTypedArgs0_1)
+      const createdWindow = await chrome.windows.create(nookTypedArgs0_1)
+      if (
+        createdWindow &&
+        typeof createdWindow === 'object' &&
+        'id' in createdWindow &&
+        typeof createdWindow.id === 'number'
+      ) {
+        createdSurface = {
+          kind: AccountPickerSurfaceKind.Window,
+          id: createdWindow.id,
+        }
+      }
     } else {
       const nookTypedArgs0_2: Parameters<typeof chrome.tabs.create>[0] = {
         url: pickerUrl.toString(),
       }
-      await chrome.tabs.create(nookTypedArgs0_2)
+      const createdTab = await chrome.tabs.create(nookTypedArgs0_2)
+      if ('id' in createdTab && typeof createdTab.id === 'number') {
+        createdSurface = {
+          kind: AccountPickerSurfaceKind.Tab,
+          id: createdTab.id,
+        }
+      }
     }
   } catch {
     await removeLoginPicker(requestId)
     return { ok: false, reason: 'login-picker-open-failed' }
+  }
+  if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
+    await Promise.allSettled([
+      removeLoginPicker(requestId),
+      closeAccountPickerSurface(createdSurface),
+    ])
+    return { ok: true, status: LoginPickerOpenStatus.Locked }
   }
   return {
     ok: true,

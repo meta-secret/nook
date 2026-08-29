@@ -47,9 +47,15 @@ import {
   isWebsitePasskeyOptionsMessage,
   isWebsitePasskeyPerformMessage,
 } from '../lib/webauthn-messages'
-import { websiteLoginOptions } from './service-worker/account-pickers'
+import {
+  beginAccountPickerAuthorizationCleanup,
+  clearPendingAccountPickers,
+  completeAccountPickerAuthorizationCleanup,
+  websiteLoginOptions,
+} from './service-worker/account-pickers'
 import {
   cancelAuthenticatorPicker,
+  clearStagedAuthenticatorEnrollments,
   openWebsiteAuthenticatorPicker,
   queryAuthenticatorPicker,
   selectAuthenticatorPicker,
@@ -125,7 +131,11 @@ import {
 const extensionLifecycleRoutingDependencies: Parameters<
   typeof routeExtensionLifecycleMessage
 >[0]['dependencies'] = {
+  beginAccountPickerAuthorizationCleanup,
+  clearPendingAccountPickers,
+  clearStagedAuthenticatorEnrollments,
   closeExtensionSessionDocument,
+  completeAccountPickerAuthorizationCleanup,
   ensureExtensionSessionDocument,
   extensionSessionDocument,
   handlePairingStateQuery,
