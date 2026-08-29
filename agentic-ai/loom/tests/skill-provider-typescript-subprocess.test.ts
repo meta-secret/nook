@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { resolve } from 'node:path';
 import {
   typescriptSubprocessCommands,
   type TypeScriptSubprocessInspection,
@@ -292,7 +293,8 @@ runExternal({command:'tar',cwd:runtimeRoot});`),
 
 test('pins the sole dynamic package cwd exemption to its exact function AST', async () => {
   const path = 'agentic-ai/loom/src/executable-skills/package-gate.ts';
-  const source = await Bun.file(path).text();
+  const sourcePath = resolve(import.meta.dir, '../../..', path);
+  const source = await Bun.file(sourcePath).text();
   const inspection: TypeScriptSubprocessInspection = { path, source };
   expect(typescriptSubprocessCommands(inspection)).toEqual([
     "'bun' 'install' '--frozen-lockfile'",
