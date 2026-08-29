@@ -20,6 +20,8 @@ For implementation delivery, Gizmo Prime creates one named feature-slice
 immutable typed Workbench slice record, not a process, agent, worker attempt, or
 controller. It groups exactly one semantic PR slice by stable ID and name,
 scope, predecessor, estimate, acceptance evidence, and ownership-unit mappings.
+Once published, the record is never updated in place; any change requires a
+superseding new immutable Workbench plan.
 
 - A feature at or below 2,000 authored additions plus deletions defaults to one
   PR and one feature-slice Gizmo, even when several Team Agents contribute.

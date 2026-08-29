@@ -14,9 +14,11 @@ coordination, Workbench, pull requests, readiness, and merge state.
 
 - [Gizmo Prime](gizmo/knowledge-graph.md) owns delivery control and the final
   integrated PR verdict.
-- Feature-slice Gizmos are immutable typed Workbench slice records created and
-  updated by Gizmo Prime. Each groups exactly one semantic PR slice; it is not
-  a process, agent, worker attempt, or controller and owns no lifecycle state.
+- Feature-slice Gizmos are immutable typed Workbench slice records created by
+  Gizmo Prime. Each groups exactly one semantic PR slice; it is not a process,
+  agent, worker attempt, or controller and owns no lifecycle state. A changed
+  record requires a superseding new immutable plan; published records are never
+  updated in place.
 
 ## Team routes
 

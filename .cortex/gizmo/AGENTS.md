@@ -17,6 +17,8 @@ record by default in the Workbench plan. This is an immutable typed Workbench
 slice record, not a process, agent, worker attempt, or controller. It groups one
 semantic PR slice by stable ID and name, scope, predecessor, estimate,
 acceptance evidence, and ownership-unit mappings.
+Gizmo Prime never updates a published slice record in place. A change requires
+a superseding new immutable Workbench plan.
 
 - One feature or PR at or below 2,000 authored additions plus deletions uses one
   feature-slice Gizmo by default, regardless of Team Agent count.

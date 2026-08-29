@@ -47,8 +47,10 @@ Agent count never determines PR count.
 2. **Plan delivery.**
    - Publish the Workbench task plan before implementation edits.
    - Estimate authored changed lines.
-   - Keep exactly 2,000 authored changed lines eligible for one PR; split only
-     when the expected or actual feature exceeds the current PR size boundary.
+   - At or below 2,000 authored changed lines, default to one PR and one record.
+     Add records only for a required semantic size split above 2,000 or for
+     genuinely independent delivery units. Team Agent count never triggers a
+     split.
    - Map one feature-slice Gizmo to each semantic PR slice. Do not increase PR
      or Gizmo count merely because multiple Team Agents are required.
    - Record the module DAG and provider-consumer contracts when applicable.

@@ -136,6 +136,8 @@ exactly one semantic PR slice. Gizmo Prime creates additional records only for
 a semantic split above 2,000 authored changed lines or genuinely independent
 delivery units. Team Agent count never determines PR or Gizmo count, and small
 features must not be fragmented merely because multiple teams participate.
+Published records are never updated in place; changes require a superseding new
+immutable Workbench plan.
 Gizmo Prime admission-authorizes Team Agent task attempts through the existing
 harness, routes tasks by assigned Gizmo ID, receives existing typed handoffs
 directly, and aggregates verified results under each record. Do not introduce a

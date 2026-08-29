@@ -2,6 +2,7 @@ const assert = require('node:assert/strict')
 const test = require('node:test')
 
 const { validateAgentRecord } = require('./workbench-records.cjs')
+require('./workbench-gizmo-mapping.test.cjs')
 
 const baseOwnershipUnit =
   '1. Capability: Workbench agent record validation; Gizmo ID: gizmo-1; Functional owner: AI; Expertise provider: None; Expertise allowed code paths: None; Expertise allowed test paths: None; Expertise forbidden paths: None; Expertise consumer interfaces: None; Expertise acceptance evidence: None; Capability acceptance evidence: Contract tests pass'

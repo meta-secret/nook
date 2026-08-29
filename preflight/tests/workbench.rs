@@ -483,6 +483,7 @@ fn feature_slice_gizmos_are_passive_workbench_records() {
         "receives existing typed handoffs directly",
         "existing typed handoff directly to Gizmo Prime",
         "introduces no new handoff transport",
+        "changes require a superseding new immutable Workbench plan",
     ] {
         assert!(
             policy.contains(required),
@@ -499,12 +500,34 @@ fn feature_slice_gizmos_are_passive_workbench_records() {
         "return the ai team agent handoff to the assigned feature-slice gizmo",
         "non-team slice controller",
         "that controller owns",
+        "created and updated by gizmo prime",
     ] {
         assert!(
             !normalized.contains(forbidden),
             "feature-slice Gizmo must remain a passive record: {forbidden}"
         );
     }
+}
+
+#[test]
+fn pr_workbench_suite_loads_gizmo_mapping_tests() {
+    let pr_workflow = read(".github/workflows/pr.yml");
+    let pr_suite = read(".github/scripts/workbench-records.test.cjs");
+    let mapping_suite = read(".github/scripts/workbench-gizmo-mapping.test.cjs");
+
+    assert!(
+        pr_workflow.contains("node --test .github/scripts/workbench-records.test.cjs"),
+        "PR CI must invoke the Workbench record suite"
+    );
+    assert!(
+        pr_suite.contains("require('./workbench-gizmo-mapping.test.cjs')"),
+        "the PR-invoked Workbench suite must load Gizmo mapping tests"
+    );
+    assert!(
+        mapping_suite.contains("rejects one-PR delivery with multiple Gizmos")
+            && mapping_suite.contains("rejects an over-2,000 feature represented by one Gizmo"),
+        "the transitively loaded suite must retain bounded Gizmo mapping regressions"
+    );
 }
 
 #[test]
