@@ -20,6 +20,21 @@ impl NookVaultManager {
             session_unlocked,
         ))
     }
+
+    pub fn selected_vault_identity_context_request(
+        &self,
+        store_id: &str,
+    ) -> Result<NookIdentityDirectorySnapshotRequest, JsError> {
+        let store_id = nook_core::StoreId::parse(store_id)
+            .map_err(|error| JsError::new(&error.to_string()))?;
+        let session_app_id = self.device.public_app_id();
+        let session_unlocked = !self.device.identity_private_key.is_empty();
+        Ok(NookIdentityDirectorySnapshotRequest::for_selected_vault(
+            session_app_id,
+            session_unlocked,
+            store_id,
+        ))
+    }
 }
 
 #[cfg(test)]

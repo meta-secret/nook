@@ -39,6 +39,15 @@ async function openProtectionOverlay(page: Page): Promise<void> {
   })
 }
 
+async function expectDeviceKeyRecoveryInitiationAvailable(
+  page: Page,
+): Promise<void> {
+  await expect(page.getByTestId('login-unlock-method-keys')).toBeEnabled({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await expect(page.getByTestId('unlock-vault-btn')).toBeEnabled()
+}
+
 async function readRecoveryStorage(
   page: Page,
 ): Promise<RecoveryStorageSnapshot> {
@@ -223,6 +232,7 @@ test('keeps recovery reachable when the identity directory is corrupt', async ({
   )
 
   await page.reload()
+  await expectDeviceKeyRecoveryInitiationAvailable(page)
   await openProtectionOverlay(page)
   const recovery = page.getByTestId('device-protection-recovery-btn')
   await expect(recovery).toHaveText('Reset this browser')
@@ -263,6 +273,7 @@ test('uses a safe full reset when the identity directory is missing', async ({
   )
 
   await page.reload()
+  await expectDeviceKeyRecoveryInitiationAvailable(page)
   await openProtectionOverlay(page)
   page.once('dialog', (dialog) => dialog.accept())
   await page.getByTestId('device-protection-recovery-btn').click()

@@ -22,10 +22,6 @@
   import SecretVault from '$lib/components/SecretVault.svelte'
   import VaultAdmin from '$lib/components/VaultAdmin.svelte'
   import DevicesAccessDashboard from '$lib/components/DevicesAccessDashboard.svelte'
-  import {
-    type DevicesAccessHostMount,
-    DevicesAccessHostMountKind,
-  } from '$lib/components/devices-access-dashboard-state'
   import VaultBottomNav from '$lib/components/VaultBottomNav.svelte'
   import VaultSecurityGuideBanner from '$lib/components/VaultSecurityGuideBanner.svelte'
   import VaultSettingsAccordion from '$lib/components/settings/VaultSettingsAccordion.svelte'
@@ -45,6 +41,12 @@
     SecretEditorModeKind,
     type SecretEditorMode,
   } from './authenticated-vault-workspace-state'
+  import {
+    WorkspaceRoute,
+    WorkspaceRouteLookupKind,
+    workspaceRouteFromPath,
+  } from '$lib/app/workspace-route'
+  import { applyWorkspaceRoute, pushWorkspaceRoute } from '$lib/vault/ui'
 
   const SUPPORTS_EXTENSION = configured_vault_application_supports_extension()
 
@@ -60,6 +62,8 @@
     onExtensionConnect,
     onSettingsReconnect,
     onEditorOpenChange,
+    headerDevicesAccessRequestGeneration = 0,
+    onHeaderDevicesAccessRequestHandled = () => {},
   }: {
     vault: VaultState
     extensionSetupState: ExtensionSetupOffer
@@ -72,6 +76,8 @@
     onExtensionConnect: () => void
     onSettingsReconnect: () => void
     onEditorOpenChange: (open: boolean) => void
+    headerDevicesAccessRequestGeneration?: number
+    onHeaderDevicesAccessRequestHandled?: () => void
   } = $props()
 
   const appVersion = '0.1.0'
@@ -80,9 +86,7 @@
     kind: SecretEditorModeKind.Closed,
   })
   let secretsEditorResetKey = $state(0)
-  let devicesAccessHost = $state<DevicesAccessHostMount>({
-    kind: DevicesAccessHostMountKind.Unmounted,
-  })
+  let devicesAccessReturnRoute = $state(WorkspaceRoute.Vault)
   const secretsNoteEditorOpen = $derived(
     secretsAddOpen &&
       secretsAddFormType.kind === SecretEditorModeKind.Adding &&
@@ -108,25 +112,45 @@
     onEditorOpenChange(false)
   }
 
-  function captureDevicesAccessHost(element: HTMLDivElement) {
-    devicesAccessHost = {
-      kind: DevicesAccessHostMountKind.Mounted,
-      element,
+  function openDevicesAccessFromHeader() {
+    const currentRoute = workspaceRouteFromPath(window.location.pathname)
+    if (
+      currentRoute.kind === WorkspaceRouteLookupKind.Workspace &&
+      currentRoute.route === WorkspaceRoute.DevicesAccess
+    ) {
+      return
     }
-    return {
-      destroy() {
-        devicesAccessHost = { kind: DevicesAccessHostMountKind.Unmounted }
-      },
+
+    leaveSecretsEditor()
+    devicesAccessReturnRoute =
+      currentRoute.kind === WorkspaceRouteLookupKind.Workspace &&
+      currentRoute.route !== WorkspaceRoute.DevicesAccess
+        ? currentRoute.route
+        : WorkspaceRoute.Vault
+    const settingsRequest: Parameters<typeof vault.openSettings>[0] = {
+      section: SettingsSection.DevicesAccess,
+      accordion: SettingsAccordionSection.Devices,
     }
+    vault.openSettings(settingsRequest)
   }
 
-  async function closeDevicesAccess(): Promise<void> {
-    vault.closeSettings()
+  $effect(() => {
+    if (headerDevicesAccessRequestGeneration === 0) return
+    openDevicesAccessFromHeader()
+    onHeaderDevicesAccessRequestHandled()
+  })
+
+  async function closeDevicesAccess() {
+    pushWorkspaceRoute(devicesAccessReturnRoute)
+    const routeApplication: Parameters<typeof applyWorkspaceRoute>[0] = {
+      state: vault,
+      route: devicesAccessReturnRoute,
+    }
+    applyWorkspaceRoute(routeApplication)
     await tick()
-    if (devicesAccessHost.kind === DevicesAccessHostMountKind.Unmounted) return
-    devicesAccessHost.element
+    document
       .querySelector<HTMLButtonElement>(
-        '[data-testid="vault-devices-access-tab"]',
+        '[data-testid="header-devices-access-btn"]',
       )
       ?.focus()
   }
@@ -137,7 +161,6 @@
 </script>
 
 <div
-  use:captureDevicesAccessHost
   class:authenticated-shell-editor={secretsAddOpen}
   class="authenticated-shell flex w-full min-w-0 max-w-full flex-col overflow-hidden rounded-xl bg-card shadow-sm [touch-action:pan-y_pinch-zoom] sm:border sm:border-border/60"
   data-testid="authenticated-shell"
@@ -360,14 +383,6 @@
       onSelectSecrets={() => {
         leaveSecretsEditor()
         vault.closeSettings()
-      }}
-      onSelectDevicesAccess={() => {
-        leaveSecretsEditor()
-        const settingsRequest: Parameters<typeof vault.openSettings>[0] = {
-          section: SettingsSection.DevicesAccess,
-          accordion: SettingsAccordionSection.Devices,
-        }
-        vault.openSettings(settingsRequest)
       }}
       onSelectOnboard={() => {
         leaveSecretsEditor()

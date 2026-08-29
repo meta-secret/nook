@@ -23,7 +23,7 @@ test.describe('devices and access passkey inventory', () => {
     page,
   }) => {
     await connectLocalVault(page)
-    await page.getByTestId('vault-devices-access-tab').click()
+    await page.getByTestId('header-devices-access-btn').click()
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })

@@ -526,7 +526,10 @@ export async function authorizeDeviceProtection(
   }
 
   if (restoreDevicesAccess) {
-    await page.getByTestId('vault-devices-access-tab').click()
+    await page.evaluate(() => {
+      history.pushState(history.state, '', '/devices-access')
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    })
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })

@@ -178,6 +178,7 @@
 
   let devicesAccessOpen = $state(loginDevicesAccessRouteOpen())
   let devicesAccessTrigger = $state(DevicesAccessTriggerKind.Header)
+  let devicesAccessReturnRoute = $state(WorkspaceRoute.Vault)
   let devicesAccessHost = $state<DevicesAccessHostMount>({
     kind: DevicesAccessHostMountKind.Unmounted,
   })
@@ -218,9 +219,43 @@
       ?.focus()
   }
 
+  async function focusIdentityContextWhenAvailable(): Promise<void> {
+    for (let frame = 0; frame < 30; frame += 1) {
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => resolve()),
+      )
+
+      const activeElement = document.activeElement
+      if (
+        activeElement !== document.body &&
+        activeElement !== document.documentElement
+      ) {
+        return
+      }
+
+      if (
+        document.querySelector('[data-testid="login-vault-identity-loading"]')
+      ) {
+        continue
+      }
+      const remountedButton = document.querySelector<HTMLButtonElement>(
+        '[data-testid="login-review-identities"]',
+      )
+      if (remountedButton) {
+        remountedButton.focus()
+        return
+      }
+    }
+  }
+
   async function openDevicesAccess(
     trigger: DevicesAccessTriggerKind,
   ): Promise<void> {
+    const currentRoute = workspaceRouteFromPath(window.location.pathname)
+    devicesAccessReturnRoute =
+      currentRoute.kind === WorkspaceRouteLookupKind.Workspace
+        ? currentRoute.route
+        : WorkspaceRoute.Vault
     devicesAccessTrigger = trigger
     devicesAccessOpen = true
     pushWorkspaceRoute(WorkspaceRoute.DevicesAccess)
@@ -235,19 +270,24 @@
 
   async function closeDevicesAccess(): Promise<void> {
     devicesAccessOpen = false
-    pushWorkspaceRoute(WorkspaceRoute.Vault)
+    pushWorkspaceRoute(devicesAccessReturnRoute)
     const applyWorkspaceRouteArgs2: Parameters<typeof applyWorkspaceRoute>[0] =
       {
         state: vault,
-        route: WorkspaceRoute.Vault,
+        route: devicesAccessReturnRoute,
       }
     applyWorkspaceRoute(applyWorkspaceRouteArgs2)
     await tick()
     const testId =
       devicesAccessTrigger === DevicesAccessTriggerKind.Nudge
         ? 'devices-access-nudge-review'
-        : 'login-devices-access'
+        : devicesAccessTrigger === DevicesAccessTriggerKind.IdentityContext
+          ? 'login-review-identities'
+          : 'login-devices-access'
     focusHostButton(testId)
+    if (devicesAccessTrigger === DevicesAccessTriggerKind.IdentityContext) {
+      await focusIdentityContextWhenAvailable()
+    }
   }
 
   onMount(() => {
@@ -258,7 +298,10 @@
     try {
       const readDevicesAccessNudgeStorageArgs: Parameters<
         typeof readDevicesAccessNudgeStorage
-      >[0] = { storage: localStorage, storageKey: devicesAccessNudgeStorageKey }
+      >[0] = {
+        storage: localStorage,
+        storageKey: devicesAccessNudgeStorageKey,
+      }
       devicesAccessNudgePreference = parseDevicesAccessNudgePreference(
         readDevicesAccessNudgeStorage(readDevicesAccessNudgeStorageArgs),
       )
@@ -695,6 +738,8 @@
               {isUnlocking}
               {onUnlock}
               {onUnlockWithPassword}
+              onOpenDevicesAccess={() =>
+                openDevicesAccess(DevicesAccessTriggerKind.IdentityContext)}
               {onSwitchVault}
               onCreateAnotherVault={onCreateDeviceVault}
               onImportFromSync={() => {
