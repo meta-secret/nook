@@ -1,4 +1,5 @@
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
+import { ExtensionRuntimeRequestType } from '../../lib/extension-runtime-request-type'
 import {
   isWebsiteAuthenticatorCanceledMessage,
   isWebsiteAuthenticatorSelectedMessage,
@@ -16,15 +17,18 @@ import {
   fillAndSubmitAccount,
   setStatus,
 } from './login-passkey-actions'
+import { stopPendingSaveWatch } from './login-save'
 import {
   AuthenticatorPickerKind,
   LoginPickerKind,
   pickerState,
+  scanState,
   widgetState,
 } from './state'
 import { removeWidget, translatedMessage } from './workflow-ui'
 
 export function removeScannedWidget(): void {
+  stopPendingSaveWatch()
   cancelPendingAuthenticatorPickerRequest()
   cancelPendingLoginPickerRequest()
   removeWidget()
@@ -39,6 +43,32 @@ export const routeAutofillMessage: AutofillMessageListener =
   (runtimeMessage, sender, sendResponse) => {
     if (!runtimeMessage || typeof runtimeMessage !== 'object') return false
     const message = runtimeMessage
+    if (
+      sender.id === chrome.runtime.id &&
+      'type' in message &&
+      message.type === ExtensionRuntimeRequestType.ClearAuthenticationSurface
+    ) {
+      scanState.sequence += 1
+      widgetState.busy = false
+      removeScannedWidget()
+      const response: Parameters<typeof sendResponse>[0] = { ok: true }
+      sendResponse(response)
+      return false
+    }
+    if (
+      sender.id === chrome.runtime.id &&
+      'type' in message &&
+      message.type === ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces
+    ) {
+      scanState.sequence += 1
+      widgetState.busy = false
+      widgetState.dismissed = false
+      removeScannedWidget()
+      scanState.schedule()
+      const response: Parameters<typeof sendResponse>[0] = { ok: true }
+      sendResponse(response)
+      return false
+    }
     if (
       sender.id === chrome.runtime.id &&
       isWebsiteLoginCanceledMessage(message) &&

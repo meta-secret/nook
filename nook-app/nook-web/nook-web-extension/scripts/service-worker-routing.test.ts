@@ -36,15 +36,18 @@ const beginAccountPickerAuthorizationCleanup = mock(() =>
   }),
 )
 const clearPendingAccountPickers = mock(() => Promise.resolve())
+const clearMountedAuthenticationSurfaces = mock(() => Promise.resolve())
 const clearStagedAuthenticatorEnrollments = mock(() => {})
 const rebindStagedAuthenticatorEnrollmentsAuthorization = mock(() => {})
 const completeAccountPickerAuthorizationCleanup = mock(() => Promise.resolve())
 const releaseAccountPickerAuthorizationCleanup = mock(() => {})
+const refreshAuthenticationSurfaces = mock(() => Promise.resolve())
 
 const lifecycleDependencies: ExtensionLifecycleRoutingDependencies = {
   accountPickerAuthorizationCleanupPending,
   beginAccountPickerAuthorizationCleanup,
   clearPendingAccountPickers,
+  clearMountedAuthenticationSurfaces,
   clearStagedAuthenticatorEnrollments,
   closeExtensionSessionDocument: unusedAsyncDependency,
   completeAccountPickerAuthorizationCleanup,
@@ -54,6 +57,11 @@ const lifecycleDependencies: ExtensionLifecycleRoutingDependencies = {
   hasPairingApprovedType: mock(() => false),
   importLocalEventLogUpdate: unusedAsyncDependency,
   importPairingAfterCompanionReady: unusedAsyncDependency,
+  isExtensionAuthenticationSurfacesRefreshMessage: (message) =>
+    !!message &&
+    typeof message === 'object' &&
+    'type' in message &&
+    message.type === ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces,
   isExtensionPairingStateQueryMessage: mock(() => false),
   isExtensionSessionEnsureMessage: (message) =>
     !!message &&
@@ -67,6 +75,7 @@ const lifecycleDependencies: ExtensionLifecycleRoutingDependencies = {
   openSimpleVault: mock(() => {}),
   releaseAccountPickerAuthorizationCleanup,
   rebindStagedAuthenticatorEnrollmentsAuthorization,
+  refreshAuthenticationSurfaces,
 }
 
 const externalDependencies: ExternalCompanionRoutingDependencies = {
@@ -124,6 +133,27 @@ describe('service worker routing', () => {
     expect(ensureExtensionSessionDocument).toHaveBeenCalledTimes(1)
   })
 
+  test('refreshes mounted authentication surfaces from an authorized sender', async () => {
+    const { routeExtensionLifecycleMessage } =
+      await import('../src/background/service-worker/extension-lifecycle-routing')
+    const sendResponse = mock(() => {})
+
+    expect(
+      routeExtensionLifecycleMessage({
+        dependencies: lifecycleDependencies,
+        message: {
+          type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces,
+        },
+        sender: { id: 'nook-extension' },
+        sendResponse,
+      }),
+    ).toBe(true)
+    await flushResponses()
+
+    expect(refreshAuthenticationSurfaces).toHaveBeenCalled()
+    expect(sendResponse).toHaveBeenCalledWith({ ok: true })
+  })
+
   test('keeps picker authorization invalid until lock cleanup finishes', async () => {
     const events: string[] = []
     let pickerCleanupCount = 0
@@ -139,6 +169,10 @@ describe('service worker routing', () => {
       clearPendingAccountPickers: () => {
         pickerCleanupCount += 1
         events.push(`pickers-cleared-${pickerCleanupCount}`)
+        return Promise.resolve()
+      },
+      clearMountedAuthenticationSurfaces: () => {
+        events.push('surfaces-cleared')
         return Promise.resolve()
       },
       clearStagedAuthenticatorEnrollments: () => {
@@ -172,12 +206,14 @@ describe('service worker routing', () => {
     ).toBe(true)
     await flushResponses()
     await flushResponses()
+    await flushResponses()
 
     expect(events).toEqual([
       'authorization-invalidated',
       'session-closed',
       'enrollments-cleared',
       'pickers-cleared-1',
+      'surfaces-cleared',
       'pickers-cleared-2',
       'enrollments-cleared',
       'authorization-restored-epoch-4',

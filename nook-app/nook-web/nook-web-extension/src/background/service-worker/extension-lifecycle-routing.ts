@@ -33,6 +33,7 @@ export type ExtensionLifecycleRoutingDependencies = {
   accountPickerAuthorizationCleanupPending: typeof AccountPickers.accountPickerAuthorizationCleanupPending
   beginAccountPickerAuthorizationCleanup: typeof AccountPickers.beginAccountPickerAuthorizationCleanup
   clearPendingAccountPickers: typeof AccountPickers.clearPendingAccountPickers
+  clearMountedAuthenticationSurfaces: typeof SessionLifecycle.clearMountedAuthenticationSurfaces
   clearStagedAuthenticatorEnrollments: typeof AuthenticatorOperations.clearStagedAuthenticatorEnrollments
   rebindStagedAuthenticatorEnrollmentsAuthorization: typeof AuthenticatorOperations.rebindStagedAuthenticatorEnrollmentsAuthorization
   closeExtensionSessionDocument: typeof SessionLifecycle.closeExtensionSessionDocument
@@ -43,6 +44,7 @@ export type ExtensionLifecycleRoutingDependencies = {
   hasPairingApprovedType: typeof PairingIdentity.hasPairingApprovedType
   importLocalEventLogUpdate: typeof PairingImport.importLocalEventLogUpdate
   importPairingAfterCompanionReady: typeof PairingImport.importPairingAfterCompanionReady
+  isExtensionAuthenticationSurfacesRefreshMessage: typeof SessionRuntimeMessages.isExtensionAuthenticationSurfacesRefreshMessage
   isExtensionPairingStateQueryMessage: typeof PairingState.isExtensionPairingStateQueryMessage
   isExtensionSessionEnsureMessage: typeof SessionRuntimeMessages.isExtensionSessionEnsureMessage
   isExtensionSessionExpiryMessage: typeof SessionRuntimeMessages.isExtensionSessionExpiryMessage
@@ -51,6 +53,7 @@ export type ExtensionLifecycleRoutingDependencies = {
   openExtensionPairing: typeof PairingIdentity.openExtensionPairing
   openSimpleVault: typeof SessionLifecycle.openSimpleVault
   releaseAccountPickerAuthorizationCleanup: typeof AccountPickers.releaseAccountPickerAuthorizationCleanup
+  refreshAuthenticationSurfaces: typeof SessionLifecycle.refreshAuthenticationSurfaces
 }
 
 type MessageResponse = Parameters<
@@ -82,6 +85,7 @@ const pairingLaunchFailureResponse: MessageResponse = {
 type ClearAuthorizationStateArgs = {
   beginAccountPickerAuthorizationCleanup: typeof AccountPickers.beginAccountPickerAuthorizationCleanup
   clearPendingAccountPickers: typeof AccountPickers.clearPendingAccountPickers
+  clearMountedAuthenticationSurfaces: typeof SessionLifecycle.clearMountedAuthenticationSurfaces
   clearStagedAuthenticatorEnrollments: typeof AuthenticatorOperations.clearStagedAuthenticatorEnrollments
   closeExtensionSessionDocument: typeof SessionLifecycle.closeExtensionSessionDocument
   completeAccountPickerAuthorizationCleanup: typeof AccountPickers.completeAccountPickerAuthorizationCleanup
@@ -105,6 +109,7 @@ type AuthorizationCleanupStart =
 async function clearAuthorizationState({
   beginAccountPickerAuthorizationCleanup,
   clearPendingAccountPickers,
+  clearMountedAuthenticationSurfaces,
   clearStagedAuthenticatorEnrollments,
   closeExtensionSessionDocument,
   completeAccountPickerAuthorizationCleanup,
@@ -130,6 +135,11 @@ async function clearAuthorizationState({
   clearStagedAuthenticatorEnrollments()
   try {
     await clearPendingAccountPickers()
+  } catch {
+    failed = true
+  }
+  try {
+    await clearMountedAuthenticationSurfaces()
   } catch {
     failed = true
   }
@@ -194,6 +204,7 @@ export function routeExtensionLifecycleMessage({
   const {
     beginAccountPickerAuthorizationCleanup,
     clearPendingAccountPickers,
+    clearMountedAuthenticationSurfaces,
     clearStagedAuthenticatorEnrollments,
     closeExtensionSessionDocument,
     completeAccountPickerAuthorizationCleanup,
@@ -203,6 +214,7 @@ export function routeExtensionLifecycleMessage({
     hasPairingApprovedType,
     importLocalEventLogUpdate,
     importPairingAfterCompanionReady,
+    isExtensionAuthenticationSurfacesRefreshMessage,
     isExtensionPairingStateQueryMessage,
     isExtensionSessionEnsureMessage,
     isExtensionSessionExpiryMessage,
@@ -212,6 +224,7 @@ export function routeExtensionLifecycleMessage({
     openSimpleVault,
     releaseAccountPickerAuthorizationCleanup,
     rebindStagedAuthenticatorEnrollmentsAuthorization,
+    refreshAuthenticationSurfaces,
   } = dependencies
   if (isExtensionPairingStateQueryMessage(message)) {
     const queryContext: Parameters<typeof handlePairingStateQuery>[0] = {
@@ -232,6 +245,17 @@ export function routeExtensionLifecycleMessage({
     return true
   }
 
+  if (isExtensionAuthenticationSurfacesRefreshMessage(message)) {
+    if (!isExtensionRuntimeSender(sender)) {
+      sendResponse(forbiddenSenderResponse)
+      return false
+    }
+    void refreshAuthenticationSurfaces()
+      .then(() => sendResponse(successResponse))
+      .catch(() => sendResponse(sessionRuntimeFailureResponse))
+    return true
+  }
+
   if (isExtensionSessionLockMessage(message)) {
     const senderUrlAllowed =
       !('url' in sender) ||
@@ -244,6 +268,7 @@ export function routeExtensionLifecycleMessage({
     const cleanupArgs: ClearAuthorizationStateArgs = {
       beginAccountPickerAuthorizationCleanup,
       clearPendingAccountPickers,
+      clearMountedAuthenticationSurfaces,
       clearStagedAuthenticatorEnrollments,
       closeExtensionSessionDocument,
       completeAccountPickerAuthorizationCleanup,
@@ -268,6 +293,7 @@ export function routeExtensionLifecycleMessage({
     const cleanupArgs: ClearAuthorizationStateArgs = {
       beginAccountPickerAuthorizationCleanup,
       clearPendingAccountPickers,
+      clearMountedAuthenticationSurfaces,
       clearStagedAuthenticatorEnrollments,
       closeExtensionSessionDocument,
       completeAccountPickerAuthorizationCleanup,
@@ -286,7 +312,11 @@ export function routeExtensionLifecycleMessage({
       sendResponse(forbiddenSenderResponse)
       return false
     }
-    void importPairingAfterCompanionReady(message).then(sendResponse)
+    void importPairingAfterCompanionReady(message)
+      .then(async (response) => {
+        if (response.ok) await refreshAuthenticationSurfaces()
+      })
+      .then(sendResponse)
     return true
   }
 
@@ -307,6 +337,7 @@ export function routeExtensionLifecycleMessage({
             const cleanupArgs: ClearAuthorizationStateArgs = {
               beginAccountPickerAuthorizationCleanup,
               clearPendingAccountPickers,
+              clearMountedAuthenticationSurfaces,
               clearStagedAuthenticatorEnrollments,
               closeExtensionSessionDocument,
               completeAccountPickerAuthorizationCleanup,
@@ -326,6 +357,7 @@ export function routeExtensionLifecycleMessage({
             rebindStagedAuthenticatorEnrollmentsAuthorization(
               cleanupStart.authorizationGeneration,
             )
+            await refreshAuthenticationSurfaces()
             await completeAccountPickerAuthorizationCleanup(
               cleanupStart.authorizationGeneration,
               false,

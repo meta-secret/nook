@@ -67,7 +67,7 @@ type AuthenticationOutcomeRead =
     }
   | { kind: AuthenticationOutcomeReadKind.Unavailable }
 
-function stopPendingSaveWatch(): void {
+export function stopPendingSaveWatch(): void {
   if (saveOfferState.watch.kind === SavePageWatchKind.Idle) return
   const { watch } = saveOfferState.watch
   if ('timer' in watch) {
