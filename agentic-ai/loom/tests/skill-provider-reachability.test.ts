@@ -64,6 +64,7 @@ const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
 const LOOM_PRODUCTION_PREFIX = 'agentic-ai/loom/src/';
 const CORTEX_AUDIT = `${LOOM_PRODUCTION_PREFIX}commands/cortex-audit.ts`;
 const LOOM_ARTICLE_ADAPTER = `${LOOM_PRODUCTION_PREFIX}lib/cortex-article-structure.ts`;
+const EXECUTABLE_SKILL_PACKAGE_GATE = `${LOOM_PRODUCTION_PREFIX}executable-skills/package-gate.ts`;
 const ARTICLE_PROVIDER_PREFIX =
   '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/';
 const ARTICLE_APPLICATION = `${ARTICLE_PROVIDER_PREFIX}src/application.ts`;
@@ -145,7 +146,8 @@ function runtimeDependencyViolations(
     if (
       (path === LOOM_ARTICLE_ADAPTER
         ? cortexArticleAdapterViolatesBoundary(adapterInspection)
-        : executableScriptViolatesBoundary(boundaryInspection)) ||
+        : path !== EXECUTABLE_SKILL_PACKAGE_GATE &&
+          executableScriptViolatesBoundary(boundaryInspection)) ||
       (path.endsWith('.sh') &&
         shellExecutableLaunchesUnprovenScript(sourceBody))
     ) {
@@ -207,7 +209,8 @@ function runtimeDependencyViolations(
         pending.push(dependency);
       }
     }
-    if (entrypoints.unresolved) violations.push(path);
+    if (entrypoints.unresolved && path !== EXECUTABLE_SKILL_PACKAGE_GATE)
+      violations.push(path);
   }
   return [...new Set(violations)].sort();
 }

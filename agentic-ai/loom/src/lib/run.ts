@@ -25,7 +25,6 @@ export function runCommand(input: RunCommandArgs): CommandOutput {
   const spawnOptions: SpawnSyncOptionsWithStringEncoding = {
     cwd,
     encoding: 'utf8',
-    env: process.env,
   };
   const result = spawnSync(command, [...args], spawnOptions);
   if (result.error) {

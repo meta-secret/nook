@@ -223,6 +223,7 @@ type AuditPackageRequest = AuditExecutableSkillPackageFilesRequest & {
 
 function auditPackage(request: AuditPackageRequest): void {
   const { collector, npmPackages, repoRoot, skillPackage, tracked } = request;
+  auditPackageDirectoryChain(request);
   const packageFiles = tracked.filter(
     (file) =>
       file.path === skillPackage.skillPath ||
@@ -308,6 +309,23 @@ function auditPackage(request: AuditPackageRequest): void {
       skillPackage,
     };
     auditDocuments(documentsRequest);
+  }
+}
+
+function auditPackageDirectoryChain(request: AuditPackageRequest): void {
+  const { collector, repoRoot, skillPackage } = request;
+  const segments = skillPackage.scriptsRoot.split('/');
+  for (let length = 1; length <= segments.length; length += 1) {
+    const relativePath = segments.slice(0, length).join('/');
+    try {
+      const metadata = lstatSync(path.join(repoRoot, relativePath));
+      if (metadata.isDirectory() && !metadata.isSymbolicLink()) continue;
+    } catch {
+      // The bounded finding below owns missing and unsafe directory nodes.
+    }
+    addFinding(collector)(relativePath)(
+      'executable-skill path components must be real directories',
+    );
   }
 }
 

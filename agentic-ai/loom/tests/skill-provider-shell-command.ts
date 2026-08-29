@@ -12,9 +12,38 @@ import type {
 const REDIRECTION = /^(?:\d+)?(?:>>?|<<?|<>|>&|<&|&>>?)/u;
 const ASSIGNMENT = /^[A-Za-z_]\w*\+?=/u;
 const ABSOLUTE_RUNTIME =
-  /^\/(?:usr\/(?:local\/)?bin|opt\/homebrew\/bin)\/(bun|node|bash|sh)$|^\/bin\/(bash|sh)$/u;
+  /^\/(?:usr\/(?:local\/)?bin|opt\/homebrew\/bin)\/(bun|node|bash|sh|env)$|^\/bin\/(bash|sh|env)$/u;
 const SCRIPT_DIRECTORY_EXPRESSION =
   /^\$\(dirname (?:-- )?["']?(?:\$0|\$\{BASH_SOURCE\[0\]\})["']?\)$/u;
+
+export const PROTECTED_SKILL_PATH =
+  /(?:\.agents\/skills|\.cortex\/(?:gizmo|shared|teams\/[^/]+)\/dynamic-skills\/[^/]+\/scripts)\//u;
+
+export function looksLikeRepositoryScript(value: string): boolean {
+  if (value.includes('*') || value.includes('?') || value.includes('['))
+    return PROTECTED_SKILL_PATH.test(value);
+  if (/^(?:build|coverage|dist|target)\//u.test(value)) return false;
+  return (
+    !/^(?:[a-z]+:|\/)/u.test(value) &&
+    !value.includes('node_modules/.bin/') &&
+    /[/.]/u.test(value)
+  );
+}
+
+export function assertNoDynamicShellRuntimeScript([words, index]: readonly [
+  readonly ShellWord[],
+  number,
+]): void {
+  if (
+    words
+      .slice(index + 1)
+      .some(
+        (candidate) =>
+          !candidate.dynamic && looksLikeRepositoryScript(candidate.value),
+      )
+  )
+    throw new Error('Dynamic shell runtime option construction is forbidden.');
+}
 
 export function withoutLeadingRedirections(
   input: readonly ShellWord[],
@@ -26,14 +55,32 @@ export function withoutLeadingRedirections(
       index += 1;
       continue;
     }
-    const match = value.match(REDIRECTION)?.[0];
+    const source = words[index]?.source ?? '';
+    const match = source.match(REDIRECTION)?.[0];
     if (!match) break;
-    const count = match === value ? 2 : 1;
+    const count = match === source ? 2 : 1;
     if (count === 2 && !words[index + 1])
       throw new Error('Shell redirection has no target.');
     words.splice(index, count);
   }
   return words;
+}
+
+export function hasLeadingStdinRedirection(
+  words: readonly ShellWord[],
+): boolean {
+  for (let index = 0; index < words.length;) {
+    const word = words[index] as ShellWord;
+    if (ASSIGNMENT.test(word.value)) {
+      index += 1;
+      continue;
+    }
+    const match = word.source.match(REDIRECTION)?.[0];
+    if (!match) return false;
+    if (/^0*</u.test(match)) return true;
+    index += match === word.source ? 2 : 1;
+  }
+  return false;
 }
 
 export function normalizedRuntime(value: string): string {
@@ -150,6 +197,12 @@ export function shellStdinConsumer(words: readonly ShellWord[]): boolean {
   if (!['bash', 'sh'].includes(normalizedRuntime(words[index]?.value ?? '')))
     return false;
   return words.slice(index + 1).every((word) => word.value.startsWith('-'));
+}
+
+export function shellRuntimeUsesStdinRedirection(
+  words: readonly ShellWord[],
+): boolean {
+  return words.some((word) => /^0*</u.test(word.source));
 }
 
 export function assertSafeShellRuntime([

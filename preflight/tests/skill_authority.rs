@@ -124,27 +124,14 @@ fn active_root_guidance_uses_cortex_skill_authority() -> anyhow::Result<()> {
     }
     application_roots.sort();
     let taskfile = std::fs::read_to_string(root.join(".task/agentic-ai.yml"))?;
-    let declared = taskfile
-        .lines()
-        .find_map(|line| line.strip_prefix("  SKILL_APPLICATION_DIRS: "))
-        .ok_or_else(|| anyhow::anyhow!("Taskfile must declare SKILL_APPLICATION_DIRS"))?;
-    let mut declared_roots = declared.split_ascii_whitespace().collect::<Vec<_>>();
-    declared_roots.sort_unstable();
-    let actual_roots = application_roots
-        .iter()
-        .map(|path| {
-            path.strip_prefix(&root)
-                .map(|relative| relative.to_string_lossy().replace('\\', "/"))
-        })
-        .collect::<Result<Vec<_>, _>>()?;
     anyhow::ensure!(
-        declared_roots == actual_roots,
-        "skills Task inventory must equal canonical executable packages"
+        !taskfile.contains("SKILL_APPLICATION_DIRS"),
+        "skills tasks cannot maintain a manual executable-package inventory"
     );
-    let exhaustive_loop = "for skill_dir in {{.SKILL_APPLICATION_DIRS}}; do";
+    let package_gate = "agentic-ai/loom/src/executable-skills/package-gate-cli.ts";
     anyhow::ensure!(
-        taskfile.matches(exhaustive_loop).count() == 3,
-        "skills install, format, and verify must each consume the complete package inventory"
+        taskfile.matches(package_gate).count() == 3,
+        "skills install, format, and verify must use canonical package discovery"
     );
     let mut pending = vec![prompt_root.clone()];
     pending.extend(application_roots);
