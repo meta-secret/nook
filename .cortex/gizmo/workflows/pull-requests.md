@@ -158,7 +158,8 @@ implementation crosses the ceiling:
 1. Identify the last full-work commit and publish a superseding Workbench plan.
 2. Divide the complete outcome along domain, capability, package, layer, or
    stable-interface boundaries.
-3. Materialize every slice as an ordered focused issue.
+3. Materialize every slice as an ordered focused issue whose `gizmo_id`
+   frontmatter exactly matches the canonical Gizmo ID in that plan slice.
 4. Record which complete implementation, tests, migrations, and documentation
    belong to each slice.
 5. Branch the successor from the full-work commit, register the predecessor and

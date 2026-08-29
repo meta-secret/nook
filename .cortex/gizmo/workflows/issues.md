@@ -149,6 +149,8 @@ Every focused issue follows
 
 - YAML frontmatter with title, lifecycle status, priority, automation mode,
   owner, timestamps, source issues, related PRs, and dependencies;
+- a canonical lowercase-hyphenated `gizmo_id` in every focused issue
+  materialized from a multi-PR plan, copied from that plan's matching slice;
 - context and an observable outcome;
 - explicit included and excluded scope;
 - testable acceptance criteria and required coverage;
@@ -168,6 +170,12 @@ status: ready
 automation: agent
 owner: <nook-github-collaborator>
 ```
+
+Legacy standalone focused issues may omit `gizmo_id`. When the field is
+present, dispatch treats it as canonical trusted routing metadata: its syntax
+must be valid, it must never be changed to create a fresh identity, and the
+published per-issue plan must use it as `Current Gizmo ID` and its sole slice
+Gizmo ID.
 
 - The owner must be an assignable Nook GitHub collaborator with write access.
 - The dispatch must provide exactly one of `issue_path` or `prompt`.
@@ -271,6 +279,8 @@ The plan must contain:
 
 - a `Mission controller` value fixed to `Gizmo Prime`;
 - a `Current Gizmo ID` matching the current and first PR slice;
+- for a focused issue with canonical `gizmo_id`, a `Current Gizmo ID` matching
+  that trusted issue value exactly;
 - the agent's own complete interpretation of the desired outcome;
 - material functional, workflow, security, and delivery requirements;
 - explicit constraints, assumptions, and exclusions;
@@ -312,6 +322,7 @@ Use the checked-in publisher for interactive work:
 
 ```bash
 NOOK_WORKBENCH_SOURCE_TASK_FILE=/absolute/private/source-task.md \
+NOOK_WORKBENCH_ASSIGNED_GIZMO_ID=<focused-issue-gizmo-id> \
   node .github/scripts/workbench-publish.cjs \
   /absolute/path/to/local-plan.md \
   plans/<feature>/<timestamp>-<task>.md \
@@ -321,13 +332,17 @@ NOOK_WORKBENCH_SOURCE_TASK_FILE=/absolute/private/source-task.md \
 - Keep the source-task file outside the checkout.
   - It lets the publisher reject copied prompt text.
   - Do not publish it.
+- Set `NOOK_WORKBENCH_ASSIGNED_GIZMO_ID` from trusted focused-issue frontmatter
+  when publishing a per-issue plan; omit it for direct or legacy standalone
+  plans without a canonical assignment.
 - The bounded worker:
   1. uses a dedicated planning LLM turn;
   2. validates and publishes the plan; and
   3. begins implementation only after publication.
 - A missing or rejected plan blocks implementation.
 - A valid multi-PR plan also blocks bounded implementation.
-  1. Materialize the Workbench feature summary and focused issues.
+  1. Materialize the Workbench feature summary and focused issues, copying each
+     plan slice's canonical Gizmo ID into its issue's `gizmo_id` frontmatter.
   2. Dispatch the first focused issue with a bounded one-PR plan.
 
 ## Worklog requirement

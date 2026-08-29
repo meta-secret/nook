@@ -18,6 +18,8 @@ const SourceTaskFileKind = Object.freeze({
 const repository =
   process.env.NOOK_WORKBENCH_REPOSITORY || 'meta-secret/nook-workbench'
 const expectedSha = process.env.NOOK_WORKBENCH_EXPECTED_SHA?.trim()
+const assignedGizmoId =
+  process.env.NOOK_WORKBENCH_ASSIGNED_GIZMO_ID?.trim() || ''
 let sourceTaskFile = { kind: SourceTaskFileKind.Missing }
 if (typeof process.env.NOOK_WORKBENCH_SOURCE_TASK_FILE === 'string') {
   const path = process.env.NOOK_WORKBENCH_SOURCE_TASK_FILE.trim()
@@ -71,7 +73,9 @@ if (remotePath.startsWith('plans/')) {
     process.exit(8)
   }
   const sourceTask = readFileSync(sourceTaskPath, 'utf8')
-  const rejection = validateAgentRecord(localContent, 'plan', [], sourceTask)
+  const rejection = validateAgentRecord(localContent, 'plan', [], sourceTask, {
+    assignedGizmoId,
+  })
   if (rejection) {
     console.error(`Refusing invalid Workbench plan: ${rejection}`)
     process.exit(7)

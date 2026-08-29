@@ -46,6 +46,12 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "status: ready",
         "automation: agent",
         "status: in_progress",
+        "gizmo_id",
+        "ASSIGNED_GIZMO_ID: ${{ steps.workbench.outputs.gizmo_id }}",
+        "assignedGizmoId: process.env.ASSIGNED_GIZMO_ID",
+        "`gizmo_id: ${process.env.ASSIGNED_GIZMO_ID || 'null'}`",
+        "assignedGizmoId && !/^[a-z][a-z0-9-]{0,62}$/.test(assignedGizmoId)",
+        "gizmoIdRows.length > 1",
         "continuing_owner:",
         "A prompt-backed run requires continuing_owner.",
         "continuing_owner must be a lowercase GitHub login.",
@@ -87,6 +93,14 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
             "Workbench agent workflow is missing: {required}"
         );
     }
+    assert!(
+        workflow
+            .matches("ASSIGNED_GIZMO_ID: ${{ steps.workbench.outputs.gizmo_id }}")
+            .count()
+            == 2
+            && !workflow.contains("ASSIGNED_GIZMO_ID: ${{ env.ASSIGNED_GIZMO_ID }}"),
+        "planning and validation must consume the trusted claim-step Gizmo ID output"
+    );
     for required in [
         "git worktree add --detach",
         "REPO_ROOT=\"$planning_root\" task ci-agent:run",
@@ -682,6 +696,7 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
         "Every slice estimate must be at or below 2,000",
         "Team Agent count never determines PR or Gizmo count",
         "Functional owner` to exactly `Gizmo Prime`",
+        "canonical `gizmo_id`",
         "## Initial plan",
         "## Completion evidence",
         "## Safety review",
@@ -725,6 +740,8 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
         "validateAgentRecord",
         "remotePath.startsWith('plans/')",
         "NOOK_WORKBENCH_SOURCE_TASK_FILE",
+        "NOOK_WORKBENCH_ASSIGNED_GIZMO_ID",
+        "assignedGizmoId",
         "Refusing invalid Workbench plan",
         "Refusing source-task file inside the public Nook checkout",
     ] {

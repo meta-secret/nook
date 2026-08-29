@@ -472,7 +472,13 @@ function containsSourceTaskExcerpt(candidate, sourceTask) {
   return false
 }
 
-function validateAgentRecord(candidate, kind, secrets = [], sourceTask = '') {
+function validateAgentRecord(
+  candidate,
+  kind,
+  secrets = [],
+  sourceTask = '',
+  trustedContext = {},
+) {
   if (!candidate || Buffer.byteLength(candidate, 'utf8') > 12_000) {
     return 'missing or larger than 12 KB'
   }
@@ -517,6 +523,19 @@ function validateAgentRecord(candidate, kind, secrets = [], sourceTask = '') {
     const budgetFields = parseBudgetFields(budgetSection)
     if (budgetFields.kind === 'invalid') {
       return 'plan budget fields could not be parsed'
+    }
+    const assignedGizmoId =
+      typeof trustedContext.assignedGizmoId === 'string'
+        ? trustedContext.assignedGizmoId.trim()
+        : ''
+    if (assignedGizmoId && !/^[a-z][a-z0-9-]{0,62}$/.test(assignedGizmoId)) {
+      return 'trusted assigned Gizmo ID is invalid'
+    }
+    if (
+      assignedGizmoId &&
+      budgetFields.currentGizmoId !== assignedGizmoId
+    ) {
+      return 'current Gizmo ID must match the trusted focused-issue Gizmo ID'
     }
     if (isPlaceholder(budgetFields.owningBoundary)) {
       return 'missing or empty plan field: Owning modules, packages, or layers'

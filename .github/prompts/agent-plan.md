@@ -120,6 +120,12 @@ deletions. The first slice estimate must equal
 to `Estimated authored changed lines`. Missing, zero, oversized, or incomplete
 slice estimates are invalid.
 
+When the task source is a focused Workbench issue with canonical `gizmo_id`
+frontmatter, copy that exact trusted value into `Current Gizmo ID`, every
+ownership-unit `Gizmo ID`, and the sole numbered PR-slice `Gizmo ID`. Never
+invent or rename the Gizmo ID in a later per-issue plan. Legacy standalone
+issues without `gizmo_id` retain self-contained one-PR planning compatibility.
+
 For `One PR` and `Independent PRs`, set every predecessor to `None`. For
 `Stacked PRs`, the first predecessor is `None` and every later slice names the
 immediately preceding Gizmo ID. IDs and names must be unique, and each Gizmo

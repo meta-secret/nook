@@ -41,6 +41,8 @@ For multiple package PRs:
    handoff commits, and evidence under that record. This introduces no new
    handoff transport. The AI worker does not create or retarget PRs, register a
    stack, request readiness, or merge.
+   A focused issue materialized from a multi-PR plan carries this canonical ID
+   as `gizmo_id`; its later bounded one-PR plan must not replace it.
 4. Gizmo Prime owns the complete PR lifecycle: same-repository branch and PR
    creation, native GitHub stack registration through `gh stack` or the GitHub
    website, predecessor bases, cross-links, full checks, exact-head readiness,

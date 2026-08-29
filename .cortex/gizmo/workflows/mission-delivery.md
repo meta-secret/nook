@@ -53,6 +53,8 @@ Agent count never determines PR count.
      split.
    - Map one feature-slice Gizmo to each semantic PR slice. Do not increase PR
      or Gizmo count merely because multiple Team Agents are required.
+   - For multi-PR delivery, persist each slice's canonical Gizmo ID as the
+     matching focused issue's `gizmo_id`; later one-PR plans must retain it.
    - Record the module DAG and provider-consumer contracts when applicable.
 3. **Assign team tasks.**
    - Name one functional owner for each capability.
@@ -65,7 +67,8 @@ Agent count never determines PR count.
      and exact frontier data.
    - Validate the computed batch, select and admission-authorize ready task
      records, freeze their exact starting frontiers, and supply their contracts
-     to the active harness with the assigned Gizmo ID in plan/task context.
+     to the active harness with the trusted focused-issue Gizmo ID in plan/task
+     context when one is assigned.
 4. **Accept implementation handoffs.**
    - Wait for each required dependency or terminal barrier.
    - Verify each commit against its baseline and write scope.

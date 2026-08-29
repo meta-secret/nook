@@ -136,6 +136,33 @@ test('rejects a current Gizmo that differs from the first slice', () => {
   assert.match(validateAgentRecord(candidate, 'plan'), /current Gizmo ID must match/)
 })
 
+test('accepts a plan bound to its trusted focused-issue Gizmo ID', () => {
+  assert.equal(
+    validateAgentRecord(plan(), 'plan', [], '', {
+      assignedGizmoId: 'gizmo-1',
+    }),
+    '',
+  )
+})
+
+test('rejects a plan that invents a different focused-issue Gizmo ID', () => {
+  assert.match(
+    validateAgentRecord(plan(), 'plan', [], '', {
+      assignedGizmoId: 'gizmo-2',
+    }),
+    /trusted focused-issue Gizmo ID/,
+  )
+})
+
+test('rejects an invalid trusted focused-issue Gizmo ID', () => {
+  assert.match(
+    validateAgentRecord(plan(), 'plan', [], '', {
+      assignedGizmoId: 'Gizmo 1',
+    }),
+    /trusted assigned Gizmo ID is invalid/,
+  )
+})
+
 test('rejects a nonconsecutive stacked Gizmo predecessor', () => {
   const candidate = stackedPlan().replace(
     'Predecessor Gizmo ID: gizmo-1; Publisher',

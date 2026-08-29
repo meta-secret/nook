@@ -109,6 +109,17 @@ jobs:
               core.setFailed(`${path} must have status: ready and automation: agent`)
               return
             }
+            const frontmatter = body.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/)?.[1] || ''
+            const gizmoIdRows = [...frontmatter.matchAll(/^gizmo_id:\s*(.+)$/gm)]
+            if (gizmoIdRows.length > 1) {
+              core.setFailed(`${path} has duplicate canonical gizmo_id fields`)
+              return
+            }
+            const assignedGizmoId = String(value(frontmatter, 'gizmo_id')).trim()
+            if (assignedGizmoId && !/^[a-z][a-z0-9-]{0,62}$/.test(assignedGizmoId)) {
+              core.setFailed(`${path} has an invalid canonical gizmo_id`)
+              return
+            }
 
             const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
             const continuingOwner = String(value(body, 'owner')).trim()
@@ -144,6 +155,7 @@ jobs:
             core.setOutput('url', `https://github.com/${owner}/${repo}/blob/main/${path}`)
             core.setOutput('slug', path.replace(/^issues\//, '').replace(/\.md$/, '').replaceAll('/', '-'))
             core.setOutput('continuing_owner', continuingOwner)
+            core.setOutput('gizmo_id', assignedGizmoId)
 
       - name: Configure agent task
         id: task
@@ -274,6 +286,7 @@ jobs:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
           CI_AGENT_PROMPT_FILE: .github/prompts/agent-plan.md
           CI_AGENT_TIMEOUT_MS: "600000"
+          ASSIGNED_GIZMO_ID: ${{ steps.workbench.outputs.gizmo_id }}
         run: task ci-agent:plan
 
       - name: Validate and publish Workbench task plan
@@ -290,6 +303,7 @@ jobs:
           WORKBENCH_SUMMARY_FILE: ${{ env.WORKBENCH_SUMMARY_FILE }}
           WORKBENCH_REPOSITORY: ${{ env.WORKBENCH_REPOSITORY }}
           CURSOR_SECRET: ${{ secrets.CURSOR_API_KEY }}
+          ASSIGNED_GIZMO_ID: ${{ steps.workbench.outputs.gizmo_id }}
         with:
           github-token: ${{ secrets.NOOK_GITHUB_PAT }}
           retries: 3
@@ -317,7 +331,9 @@ jobs:
             }
             const candidate = fs.readFileSync(localPath, 'utf8').trim()
             const sourceTask = process.env.AGENT_PROMPT
-            const rejection = validateAgentRecord(candidate, 'plan', secrets, sourceTask)
+            const rejection = validateAgentRecord(candidate, 'plan', secrets, sourceTask, {
+              assignedGizmoId: process.env.ASSIGNED_GIZMO_ID,
+            })
             if (rejection) {
               core.setFailed(`Rejected agent-authored Workbench task plan: ${rejection}.`)
               return
@@ -327,6 +343,7 @@ jobs:
               `title: ${JSON.stringify(process.env.TASK_TITLE)}`,
               `feature: ${process.env.TASK_FEATURE}`,
               `issue: ${process.env.ISSUE_PATH || 'null'}`,
+              `gizmo_id: ${process.env.ASSIGNED_GIZMO_ID || 'null'}`,
               `started_at: ${process.env.TASK_PLAN_STARTED_AT}`,
               'agent: cursor',
               '---',

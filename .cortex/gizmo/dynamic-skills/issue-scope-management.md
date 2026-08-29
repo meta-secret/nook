@@ -76,6 +76,9 @@ to generate bookkeeping.
    - Record one positive authored additions-plus-deletions estimate at or below
      2,000 for every consecutively numbered slice; require their sum to equal
      the complete feature estimate.
+   - Copy each multi-PR plan slice's stable Gizmo ID into the canonical
+     `gizmo_id` frontmatter of its focused issue. Later plans must retain that
+     identity rather than inventing a new one.
    - After each predecessor merges, retarget the immediate successor to `main`,
      update it from current `origin/main`, re-measure authored additions plus
      deletions, and validate the new exact head before its bottom-up squash
