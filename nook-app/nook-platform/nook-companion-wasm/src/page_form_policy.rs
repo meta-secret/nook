@@ -255,4 +255,52 @@ mod tests {
         };
         assert_eq!(authentication_form_observation_priority(login), 4);
     }
+
+    fn login_advance_observation(
+        destination: &str,
+        label: &str,
+    ) -> nook_companion_core::AuthenticationAdvanceControlObservation {
+        nook_companion_core::AuthenticationAdvanceControlObservation {
+            actionability: nook_companion_core::PageControlActionability::Actionable,
+            ownership: nook_companion_core::PageControlOwnership::OwnedForm,
+            semantics: nook_companion_core::PageControlSemantics::SemanticSubmit,
+            authentication_username: nook_companion_core::AuthenticationUsernameEvidence::Explicit,
+            password_field_count: 1,
+            new_password_field_count: 0,
+            one_time_code_field_count: 0,
+            semantic_submit_control_count: 1,
+            source_origin: "https://login.example.test".to_owned(),
+            form_identity: "login-form".to_owned(),
+            destination_identity: destination.to_owned(),
+            label: label.to_owned(),
+        }
+    }
+
+    #[test]
+    fn authentication_advance_control_wasm_export_accepts_and_rejects_observations() {
+        assert!(authentication_advance_control_is_safe(
+            login_advance_observation("https://login.example.test/auth/login", "Sign in",)
+        ));
+        assert!(!authentication_advance_control_is_safe(
+            login_advance_observation("https://login.example.test/register", "Sign in",)
+        ));
+    }
+
+    #[test]
+    fn authentication_passkey_control_wasm_export_accepts_and_rejects_candidates() {
+        let accepted =
+            nook_companion_core::AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(
+                login_advance_observation("https://login.example.test/auth/passkey", "Use passkey"),
+            );
+        assert!(authentication_passkey_control_candidate_is_safe(accepted));
+
+        let rejected =
+            nook_companion_core::AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(
+                login_advance_observation(
+                    "https://login.example.test/auth/passkey/enroll",
+                    "Use passkey",
+                ),
+            );
+        assert!(!authentication_passkey_control_candidate_is_safe(rejected));
+    }
 }

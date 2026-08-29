@@ -1,4 +1,5 @@
 use super::control_identity::{
+    identity_names_registered_external_authentication_provider,
     looks_like_auxiliary_authentication_control_label,
     looks_like_password_recovery_route_control_label, looks_like_registration_route_control_label,
     route_names_external_authentication_provider,
@@ -38,7 +39,10 @@ fn normalized_route(identity: &str) -> String {
 pub(super) fn control_destination_indicates_generic_oauth_authorization_route(
     destination_identity: &str,
 ) -> bool {
-    normalized_route(destination_identity) == "/oauth2/authorize"
+    let route = normalized_route(destination_identity);
+    matches!(route.as_str(), "/oauth2/authorize" | "/oauth/authorize")
+        || route.ends_with("/oauth2/authorize")
+        || route.ends_with("/oauth/authorize")
 }
 fn control_destination_indicates_alternate_provider(
     destination_identity: &str,
@@ -124,6 +128,34 @@ pub(super) fn destination_has_disallowed_action_or_provider(
         )
 }
 
+fn destination_names_passkey_enrollment_or_management(identity: &str) -> bool {
+    contains_any_word(
+        identity,
+        &[
+            "create",
+            "enable",
+            "enroll",
+            "enrollment",
+            "setup",
+            "set up",
+            "register",
+            "registration",
+            "add",
+            "manage",
+            "management",
+            "configure",
+        ],
+    )
+}
+
+fn destination_names_passkey_authentication_route(destination_identity: &str) -> bool {
+    let identity = expand_identity_text(destination_identity);
+    contains_any_word(&identity, &["passkey", "pass key", "webauthn"])
+        && identity_indicates_explicit_authentication_route(&identity)
+        && !destination_names_passkey_enrollment_or_management(&identity)
+        && !identity_names_registered_external_authentication_provider(destination_identity)
+}
+
 pub(super) fn passkey_destination_has_disallowed_action_or_provider(
     destination_identity: &str,
 ) -> bool {
@@ -131,13 +163,13 @@ pub(super) fn passkey_destination_has_disallowed_action_or_provider(
         &destination_without_oauth_form_post_metadata(destination_identity),
     );
     let passkey_authentication_route =
-        identity_indicates_explicit_authentication_route(&content_identity)
-            && contains_any_word(
-                &expand_identity_text(&content_identity),
-                &["passkey", "pass key", "webauthn"],
-            )
-            && !route_names_external_authentication_provider(&content_identity);
-    control_destination_has_disallowed_route_action(destination_identity)
+        destination_names_passkey_authentication_route(&content_identity);
+    let content_identity_text = expand_identity_text(&content_identity);
+    let passkey_enrollment_route =
+        contains_any_word(&content_identity_text, &["passkey", "pass key", "webauthn"])
+            && destination_names_passkey_enrollment_or_management(&content_identity_text);
+    passkey_enrollment_route
+        || control_destination_has_disallowed_route_action(destination_identity)
         || control_destination_indicates_alternate_provider(
             destination_identity
                 .split_once('#')
@@ -145,7 +177,8 @@ pub(super) fn passkey_destination_has_disallowed_action_or_provider(
             false,
         )
         || (looks_like_non_authentication_submit_control_label(&content_identity)
-            && !control_destination_indicates_safe_post_login_route(destination_identity))
+            && !control_destination_indicates_safe_post_login_route(destination_identity)
+            && !passkey_authentication_route)
         || (control_destination_indicates_alternate_provider(&content_identity, false)
             && !passkey_authentication_route)
 }
@@ -174,12 +207,47 @@ pub(super) fn identity_indicates_one_time_code_authentication_context(identity: 
             ],
         )
 }
+
+fn identity_indicates_authenticator_enrollment(identity: &str) -> bool {
+    let identity = expand_identity_text(identity);
+    contains_any_word(
+        &identity,
+        &[
+            "enroll",
+            "enrollment",
+            "setup",
+            "set up",
+            "register",
+            "create",
+            "enable",
+        ],
+    ) && contains_any_word(
+        &identity,
+        &[
+            "otp",
+            "totp",
+            "2 fa",
+            "2fa",
+            "mfa",
+            "two factor",
+            "one time code",
+            "authenticator",
+        ],
+    )
+}
+
 pub(super) fn one_time_code_control_has_authentication_context(
     authentication_username: AuthenticationUsernameEvidence,
     form_identity: &str,
     destination_identity: &str,
     label: &str,
 ) -> bool {
+    if [form_identity, destination_identity, label]
+        .into_iter()
+        .any(identity_indicates_authenticator_enrollment)
+    {
+        return false;
+    }
     matches!(
         authentication_username,
         AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
@@ -368,6 +436,31 @@ mod tests {
                 evidence, "", "", ""
             ));
         }
+    }
+
+    #[test]
+    fn authenticator_enrollment_identities_do_not_supply_otp_authentication_context() {
+        for (form_identity, destination_identity) in [
+            ("mfa-enrollment-form", "/auth/mfa/enroll"),
+            ("totp-setup-form", "/auth/totp/setup"),
+            ("authenticator-enable-form", "/account/authenticator/enable"),
+        ] {
+            assert!(
+                !one_time_code_control_has_authentication_context(
+                    AuthenticationUsernameEvidence::Explicit,
+                    form_identity,
+                    destination_identity,
+                    "Continue",
+                ),
+                "{form_identity} {destination_identity}"
+            );
+        }
+        assert!(one_time_code_control_has_authentication_context(
+            AuthenticationUsernameEvidence::Explicit,
+            "otp-challenge-form",
+            "/auth/mfa/verify",
+            "Continue",
+        ));
     }
 
     #[test]

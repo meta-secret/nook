@@ -143,7 +143,29 @@ mod tests {
             observation.destination_identity = destination.to_owned();
             let candidate =
                 AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(observation);
-            assert!(authentication_passkey_control_candidate_is_safe(&candidate));
+            assert!(
+                authentication_passkey_control_candidate_is_safe(&candidate),
+                "{destination}"
+            );
+        }
+    }
+
+    #[test]
+    fn same_origin_passkey_enrollment_routes_are_rejected() {
+        for destination in [
+            "https://login.example.test/auth/passkey/create",
+            "https://login.example.test/auth/passkey/enroll",
+            "https://login.example.test/auth/passkey/setup",
+            "https://login.example.test/webauthn/enable",
+        ] {
+            let mut observation = passkey_control("Use passkey");
+            observation.destination_identity = destination.to_owned();
+            let candidate =
+                AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(observation);
+            assert!(
+                !authentication_passkey_control_candidate_is_safe(&candidate),
+                "{destination}"
+            );
         }
     }
 }

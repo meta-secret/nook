@@ -326,4 +326,54 @@ mod tests {
         continue_control.label = "Continue".to_owned();
         assert!(authentication_advance_control_is_safe(&continue_control));
     }
+
+    #[test]
+    fn credential_update_destinations_require_new_password_evidence() {
+        for (destination, label) in [
+            ("https://login.example.test/register", "Create account"),
+            ("https://login.example.test/auth/recover", "Reset password"),
+            (
+                "https://login.example.test/account/update-password",
+                "Update password",
+            ),
+        ] {
+            let mut control = login_control();
+            control.new_password_field_count = 1;
+            control.destination_identity = destination.to_owned();
+            control.label = label.to_owned();
+            assert!(
+                authentication_advance_control_is_safe(&control),
+                "{destination}"
+            );
+        }
+
+        let mut destructive = login_control();
+        destructive.new_password_field_count = 1;
+        destructive.destination_identity =
+            "https://login.example.test/register/delete-account".to_owned();
+        destructive.label = "Create account".to_owned();
+        assert!(!authentication_advance_control_is_safe(&destructive));
+
+        let mut provider = login_control();
+        provider.new_password_field_count = 1;
+        provider.destination_identity =
+            "https://login.example.test/register?provider=google".to_owned();
+        provider.label = "Create account".to_owned();
+        assert!(!authentication_advance_control_is_safe(&provider));
+    }
+
+    #[test]
+    fn primary_oauth_authorization_routes_are_accepted() {
+        for destination in [
+            "https://login.example.test/oauth2/authorize",
+            "https://login.example.test/oauth/authorize",
+        ] {
+            let mut control = login_control();
+            control.destination_identity = destination.to_owned();
+            assert!(
+                authentication_advance_control_is_safe(&control),
+                "{destination}"
+            );
+        }
+    }
 }

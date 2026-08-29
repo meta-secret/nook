@@ -31,6 +31,10 @@ fn identity_names_external_authentication_provider(
 pub(super) fn label_names_external_authentication_provider(identity: &str) -> bool {
     identity_names_external_authentication_provider(identity, true)
 }
+
+pub(super) fn identity_names_registered_external_authentication_provider(identity: &str) -> bool {
+    identity_names_external_authentication_provider(identity, false)
+}
 pub(super) fn route_names_external_authentication_provider(identity: &str) -> bool {
     let route = expand_identity_text(identity.split(['?', '#']).next().unwrap_or_default());
     let fragment = expand_identity_text(identity.split_once('#').map_or("", |(_, value)| value));
