@@ -26,11 +26,9 @@ describe('classified login activation', () => {
       </form>
     `
     let activated = false
-    document
-      .querySelector('#delete-account')
-      ?.addEventListener('click', () => {
-        activated = true
-      })
+    document.querySelector('#delete-account')?.addEventListener('click', () => {
+      activated = true
+    })
     document.querySelector('form')?.addEventListener('submit', (event) => {
       event.preventDefault()
     })
