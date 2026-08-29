@@ -21,15 +21,7 @@ pub(super) fn has_positive_login_identity(
 ) -> bool {
     let owned_semantic_submit = authentication_scope_owns_control
         && matches!(observation.semantics, PageControlSemantics::SemanticSubmit);
-    matches!(
-        observation.authentication_username,
-        AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
-    ) || identity_indicates_explicit_login_route(&observation.form_identity)
-        || (owned_semantic_submit
-            && matches!(
-                observation.authentication_username,
-                AuthenticationUsernameEvidence::StandardsBasedEmail
-            ))
+    identity_indicates_explicit_login_route(&observation.form_identity)
         || (owned_semantic_submit
             && (looks_like_explicit_authentication_advance_control_label(&observation.label)
                 || destination_has_safe_login_identity(positive_destination_identity)))

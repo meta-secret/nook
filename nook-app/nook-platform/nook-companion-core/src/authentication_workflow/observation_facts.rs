@@ -355,7 +355,7 @@ mod tests {
                     one_time_code_field_count: 0,
                     semantic_submit_control_count: 1,
                     source_origin: "https://example.test".to_owned(),
-                    form_identity: String::new(),
+                    form_identity: "login".to_owned(),
                     destination_identity: String::new(),
                     label: "Continue".to_owned(),
                 },

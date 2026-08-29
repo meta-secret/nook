@@ -335,13 +335,18 @@ mod tests {
     }
 
     #[test]
-    fn standards_email_is_positive_evidence_for_owned_semantic_password_login() {
+    fn standards_email_password_submit_requires_login_specific_identity() {
         let standards_email_submit = AuthenticationAdvanceControlObservation {
             authentication_username: AuthenticationUsernameEvidence::StandardsBasedEmail,
             password_field_count: 1,
             form_identity: String::new(),
             label: "Siguiente".to_owned(),
             ..localized_identity_submit()
+        };
+        assert!(!advances_authentication(&standards_email_submit));
+        let explicit_login = AuthenticationAdvanceControlObservation {
+            form_identity: "login".to_owned(),
+            ..standards_email_submit.clone()
         };
         for ownership in [
             PageControlOwnership::OwnedForm,
@@ -350,7 +355,7 @@ mod tests {
             assert!(advances_authentication(
                 &AuthenticationAdvanceControlObservation {
                     ownership,
-                    ..standards_email_submit.clone()
+                    ..explicit_login.clone()
                 }
             ));
         }
@@ -369,7 +374,7 @@ mod tests {
 
         let non_submit_email_control = AuthenticationAdvanceControlObservation {
             semantics: PageControlSemantics::Activation,
-            ..standards_email_submit
+            ..explicit_login
         };
         assert!(!advances_authentication(&non_submit_email_control));
     }
@@ -511,6 +516,17 @@ mod tests {
         };
 
         assert!(!advances_authentication(&reauthentication));
+        for authentication_username in [
+            AuthenticationUsernameEvidence::Strong,
+            AuthenticationUsernameEvidence::Explicit,
+        ] {
+            assert!(!advances_authentication(
+                &AuthenticationAdvanceControlObservation {
+                    authentication_username,
+                    ..reauthentication.clone()
+                }
+            ));
+        }
         assert!(!advances_authentication(
             &AuthenticationAdvanceControlObservation {
                 destination_identity: "/account/confirm?next=/login".to_owned(),
@@ -934,16 +950,14 @@ mod tests {
             &localized_destructive_password_submit
         ));
 
-        let positively_identified_password_submit = AuthenticationAdvanceControlObservation {
+        let login_specific_password_submit = AuthenticationAdvanceControlObservation {
             authentication_username: AuthenticationUsernameEvidence::Strong,
-            form_identity: String::new(),
+            form_identity: "login".to_owned(),
             password_field_count: 1,
             label: "Continuar".to_owned(),
             ..localized_identity_submit.clone()
         };
-        assert!(advances_authentication(
-            &positively_identified_password_submit
-        ));
+        assert!(advances_authentication(&login_specific_password_submit));
 
         let inert_next = AuthenticationAdvanceControlObservation {
             actionability: PageControlActionability::Inert,
