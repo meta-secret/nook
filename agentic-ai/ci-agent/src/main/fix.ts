@@ -122,6 +122,7 @@ export const RUST_DEPENDENCY_UPDATE_VALIDATION_COMMANDS: readonly ValidationComm
       args: ["docker:ecosystem:fuzz", "FUZZ_SECONDS=20"],
       environment: {},
     },
+    { args: ["hive:verify"], environment: {} },
   ];
 
 type ValidationRunner = (
@@ -142,24 +143,27 @@ export const runValidationCommand: ValidationRunner = async (
   process.chdir(options.cwd);
   restoreHostEnvironment(options.env, process.env);
   try {
-    if (
-      args[0] !== "docker:ecosystem:fuzz" ||
-      args[1] !== "FUZZ_SECONDS=20" ||
-      args.length !== 2
-    )
-      throw new Error("Isolated validation command is not allowlisted");
-    await new Promise<void>((resolveRun, rejectRun) => {
-      const child = spawn(
-        "task",
-        ["docker:ecosystem:fuzz", "FUZZ_SECONDS=20"],
-        { stdio: "inherit" },
-      );
-      child.once("error", rejectRun);
-      child.once("close", (code, signal) => {
-        if (code === 0 && !signal) resolveRun();
-        else rejectRun(new Error("Isolated validation command failed"));
+    const wait = (fuzz: boolean) =>
+      new Promise<void>((resolveRun, rejectRun) => {
+        const child = fuzz
+          ? spawn("task", ["docker:ecosystem:fuzz", "FUZZ_SECONDS=20"], {
+              stdio: "inherit",
+            })
+          : spawn("task", ["hive:verify"], { stdio: "inherit" });
+        child.once("error", rejectRun);
+        child.once("close", (code, signal) => {
+          if (code === 0 && !signal) resolveRun();
+          else rejectRun(new Error("Isolated validation command failed"));
+        });
       });
-    });
+    if (args[0] === "hive:verify" && args.length === 1) await wait(false);
+    else if (
+      args[0] === "docker:ecosystem:fuzz" &&
+      args[1] === "FUZZ_SECONDS=20" &&
+      args.length === 2
+    )
+      await wait(true);
+    else throw new Error("Isolated validation command is not allowlisted");
   } finally {
     restoreHostEnvironment(hostEnvironment, process.env);
     process.chdir(cwd);
@@ -807,10 +811,13 @@ export async function runCiFix(): Promise<CiFixOutcome> {
         "--force",
         `origin/${fixBranch}`,
       ]);
+      const auditedBase = (
+        await gitOutput(repoRoot, ["merge-base", "origin/main", "HEAD"])
+      ).trim();
       await assertTrustedChangeSet(
         repoRoot,
-        "origin/main",
-        await collectCommittedChangeSet(repoRoot, "origin/main"),
+        auditedBase,
+        await collectCommittedChangeSet(repoRoot, auditedBase),
       );
       await runValidationWithoutPublicationCredentials(repoRoot);
     }

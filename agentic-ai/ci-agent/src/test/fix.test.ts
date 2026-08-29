@@ -134,7 +134,7 @@ test("validation isolates secrets, preserves wrapper vars, and denies network ov
           assert.equal(env.BUILDX_BUILDER, builder);
         },
       );
-      assert.deepEqual(names, ["docker:ecosystem:fuzz"]);
+      assert.deepEqual(names, ["docker:ecosystem:fuzz", "hive:verify"]);
     });
     assert.equal(
       await readFile(log, "utf8"),

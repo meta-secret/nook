@@ -72,9 +72,9 @@ migration, and returns a non-Git handoff with focused tests.
 
 ## Trusted host validation
 
-After editor completion, the trusted host runs fuzz on the Hive runner
-before any commit or push. Browser e2e and Hive verify run through PR CI
-after publication:
+After editor completion, the trusted host runs Hive and fuzz on the Hive
+runner before any commit or push. Browser e2e runs through PR CI after
+publication:
 
 ```bash
 WASM_BUILD_MODE=prod task ci:pr:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
@@ -83,7 +83,6 @@ task hive:verify
 ```
 
 This covers every local-provider Playwright e2e spec, and the
-   extension e2e. The fuzz target validates its workspace on the Hive runner.
-Hive verify runs through PR CI after publication. In-job fuzz failure blocks
-publication; verify PR/base/head and remote SHA before returning to Gizmo.
-Never kill Docker or commit secrets or raw logs.
+   extension e2e. The fuzz and Hive targets validate their separate workspaces
+on the Hive runner. Failure blocks publication; verify PR/base/head and remote
+SHA before returning to Gizmo. Never kill Docker or commit secrets or raw logs.

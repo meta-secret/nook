@@ -33,6 +33,38 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
+  name: arc-hive-runner-restricted-egress
+  namespace: arc-runners
+spec:
+  podSelector:
+    matchLabels:
+      nook.nokey.sh/role: arc-hive-runner
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: nook-buildkit
+      ports:
+        - protocol: TCP
+          port: 1234
+    - ports:
+        - protocol: TCP
+          port: 443
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
   name: arc-controller-default-deny-ingress
   namespace: arc-systems
 spec:
