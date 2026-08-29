@@ -121,12 +121,12 @@ function changedCortexPaths(args: ChangedCortexPathsArgs): ChangedCortexPath[] {
   for (let index = 0; index < tokens.length;) {
     const status = tokens[index];
     index += 1;
-    if (status === undefined) failChangedCortexGit('missing diff status');
+    if (typeof status !== 'string') failChangedCortexGit('missing diff status');
     if (/^R\d{1,3}$/u.test(status)) {
       const previousPath = tokens[index];
       const currentPath = tokens[index + 1];
       index += 2;
-      if (previousPath === undefined || currentPath === undefined) {
+      if (typeof previousPath !== 'string' || typeof currentPath !== 'string') {
         failChangedCortexGit('incomplete rename record');
       }
       if (isPersistentCortexMarkdownPath(currentPath)) {
@@ -140,7 +140,7 @@ function changedCortexPaths(args: ChangedCortexPathsArgs): ChangedCortexPath[] {
     }
     const currentPath = tokens[index];
     index += 1;
-    if (currentPath === undefined) {
+    if (typeof currentPath !== 'string') {
       failChangedCortexGit('missing changed path');
     }
     if (isPersistentCortexMarkdownPath(currentPath)) {
@@ -193,7 +193,7 @@ function changedLineRanges(args: ChangedLineRangesArgs): ChangedLineRange[] {
   return [...diff.matchAll(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/gmu)]
     .map((match) => {
       const start = Number(match[1]);
-      const count = match[2] === undefined ? 1 : Number(match[2]);
+      const count = typeof match[2] === 'string' ? Number(match[2]) : 1;
       return { count, start };
     })
     .map((range) =>
