@@ -10,7 +10,7 @@ test.describe('devices and access identity cancellation', () => {
     })
     await installPasskeyMock(page)
     await connectLocalVault(page)
-    await page.getByTestId('vault-devices-access-tab').click()
+    await page.getByTestId('header-devices-access-btn').click()
     await page.getByTestId('devices-access-add-identity').click()
     await expect(
       page.getByTestId('devices-access-add-identity-flow'),
@@ -88,7 +88,7 @@ test.describe('devices and access identity cancellation', () => {
     await expect(page.getByTestId('devices-access-dashboard')).toHaveCount(0)
     await expect.poll(() => deviceProtectionVerifying(page)).toBe(false)
     await expect.poll(() => identityCreationPending(page)).toBe(false)
-    await page.getByTestId('vault-devices-access-tab').click()
+    await page.getByTestId('header-devices-access-btn').click()
     await expect(
       page.getByTestId('devices-access-identity-option'),
     ).toHaveCount(1)

@@ -77,6 +77,7 @@ export function shouldShowDevicesAccessNudge({
 
 export enum DevicesAccessTriggerKind {
   Header = "header",
+  IdentityContext = "identity-context",
   Nudge = "nudge",
 }
 

@@ -60,7 +60,10 @@
       passwordEntries.length > 0,
   )
   const deviceKeysAvailable = $derived(
-    deviceKeysUnlock.kind !== DeviceKeysUnlockCapabilityKind.Unavailable,
+    deviceKeysUnlock.kind === DeviceKeysUnlockCapabilityKind.Available,
+  )
+  const deviceKeysUnavailable = $derived(
+    deviceKeysUnlock.kind === DeviceKeysUnlockCapabilityKind.Unavailable,
   )
   const isPasswordUnlock = $derived(
     unlockMethod === UnlockMethod.Password && showPasswordUnlockOption,
@@ -79,10 +82,12 @@
         passwordEntries.length === 1 &&
         selectedPasswordEntry.kind === PasswordEntrySelectionKind.NotSelected
       ) {
-        const onSelectPasswordEntryArgs: Parameters<typeof onSelectPasswordEntry>[0] = {
+        const onSelectPasswordEntryArgs: Parameters<
+          typeof onSelectPasswordEntry
+        >[0] = {
           kind: PasswordEntrySelectionKind.Selected,
           entryId: passwordEntries[0]!.id,
-        };
+        }
         onSelectPasswordEntry(onSelectPasswordEntryArgs)
       }
       onConsumeLoginPasswordPrompt()
@@ -91,7 +96,7 @@
 
   $effect(() => {
     if (
-      !deviceKeysAvailable &&
+      deviceKeysUnavailable &&
       showPasswordUnlockOption &&
       unlockMethod === UnlockMethod.Keys
     ) {
@@ -105,10 +110,12 @@
       passwordEntries.length === 1 &&
       selectedPasswordEntry.kind === PasswordEntrySelectionKind.NotSelected
     ) {
-      const onSelectPasswordEntryArgs2: Parameters<typeof onSelectPasswordEntry>[0] = {
+      const onSelectPasswordEntryArgs2: Parameters<
+        typeof onSelectPasswordEntry
+      >[0] = {
         kind: PasswordEntrySelectionKind.Selected,
         entryId: passwordEntries[0]!.id,
-      };
+      }
       onSelectPasswordEntry(onSelectPasswordEntryArgs2)
     }
   })
@@ -190,7 +197,7 @@
       {/if}
     </div>
 
-    {#if !deviceKeysAvailable}
+    {#if deviceKeysUnavailable}
       <p
         class="text-sm text-pretty text-muted-foreground"
         data-testid="login-device-keys-unavailable"
@@ -217,10 +224,12 @@
                   : 'border-border bg-muted/20 text-muted-foreground hover:bg-accent hover:text-foreground'}"
                 data-testid="login-password-entry-{entry.id}"
                 onclick={() => {
-                  const onSelectPasswordEntryArgs3: Parameters<typeof onSelectPasswordEntry>[0] = {
+                  const onSelectPasswordEntryArgs3: Parameters<
+                    typeof onSelectPasswordEntry
+                  >[0] = {
                     kind: PasswordEntrySelectionKind.Selected,
                     entryId: entry.id,
-                  };
+                  }
                   onSelectPasswordEntry(onSelectPasswordEntryArgs3)
                 }}
               >

@@ -37,12 +37,22 @@ test.describe('login unlock flow (local-first)', () => {
     })
     await expect(page.getByTestId('login-local-vault-detected')).toBeVisible()
     await expect(page.getByTestId('login-local-unlock-step')).toBeVisible()
+    const identityContext = page.getByTestId('login-vault-identity-context')
+    await expect(identityContext).toBeVisible()
+    await expect(
+      identityContext.getByTestId('login-vault-linked-identities'),
+    ).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    await expect(identityContext).toContainText('Current browser')
+    await expect(identityContext).toContainText(
+      'A backup password opens this vault directly',
+    )
     await expect(page.getByTestId('login-unlock-method-keys')).toBeVisible()
     await expect(page.getByTestId('login-unlock-method-password')).toBeVisible()
     await expect(page.getByTestId('login-unlock-method-keys')).toHaveAttribute(
       'aria-checked',
       'true',
     )
+    await expect(page.getByTestId('login-unlock-method-keys')).toBeEnabled()
     await expect(page.getByTestId('login-password-input')).not.toBeVisible()
   })
 
@@ -163,6 +173,30 @@ test.describe('login unlock flow (local-first)', () => {
     if (await joinClose.isVisible()) {
       await joinClose.click()
     }
+
+    const reviewIdentities = page.getByTestId('login-review-identities')
+    await expect(reviewIdentities).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    await reviewIdentities.click()
+    await expect(page.getByTestId('devices-access-back')).toBeFocused()
+    await page.getByTestId('devices-access-back').click()
+    await expect(reviewIdentities).toBeFocused()
+    await page.keyboard.press('Tab')
+    const focusAfterTab = await page.evaluate(
+      () => document.activeElement?.getAttribute('data-testid') ?? '',
+    )
+    expect(focusAfterTab).not.toBe('login-review-identities')
+    await page.evaluate(async () => {
+      for (let frame = 0; frame < 35; frame += 1) {
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => resolve()),
+        )
+      }
+    })
+    expect(
+      await page.evaluate(
+        () => document.activeElement?.getAttribute('data-testid') ?? '',
+      ),
+    ).toBe(focusAfterTab)
 
     await unlockVaultOnLogin(page, {
       entryLabel: 'Recovery',

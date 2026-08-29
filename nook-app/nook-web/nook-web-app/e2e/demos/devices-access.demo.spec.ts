@@ -1,13 +1,48 @@
 import { expect, test } from '../fixtures'
+import { UnlockMethod } from '$lib/components/login/login-unlock-state'
 import {
   addVaultPassword,
   connectLocalVault,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   installPasskeyMock,
   prepareTwoProtectedIdentitiesWithoutVault,
+  selectLoginUnlockMethod,
 } from '../helpers'
 
 const BEAT_MS = 650
+
+test('keeps access reachable in the compact authenticated header', async ({
+  page,
+}) => {
+  await connectLocalVault(page)
+  await page.setViewportSize({ width: 320, height: 844 })
+
+  const headerDevicesAccess = page.getByTestId('header-devices-access-btn')
+  await expect(headerDevicesAccess).toBeVisible()
+  await expect(headerDevicesAccess).toBeInViewport()
+  await page.getByTestId('header-mobile-tools-btn').click()
+  const mobileTools = page.getByTestId('header-mobile-tools')
+  await expect(mobileTools.getByTestId('header-language-select')).toBeVisible()
+  await expect(
+    mobileTools.getByTestId('header-mobile-theme-toggle-btn'),
+  ).toBeVisible()
+  await expect(
+    mobileTools.getByTestId('header-mobile-help-open-btn'),
+  ).toBeVisible()
+  await expect(
+    mobileTools.getByTestId('header-mobile-lock-vault-btn'),
+  ).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(
+    320,
+  )
+  await page.waitForTimeout(BEAT_MS)
+  await page.keyboard.press('Escape')
+
+  await headerDevicesAccess.click()
+  await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+})
 
 test('walk the access chain from passkey to app to vaults', async ({
   page,
@@ -19,10 +54,36 @@ test('walk the access chain from passkey to app to vaults', async ({
   await connectLocalVault(page)
   await addVaultPassword(page, 'Travel recovery', 'demo recovery passphrase')
 
-  await page.getByTestId('vault-devices-access-tab').click()
+  await page.getByTestId('header-lock-vault-btn').click()
+  await expect(page.getByTestId('login-local-vault-detected')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  const identityContext = page.getByTestId('login-vault-identity-context')
+  await expect(
+    identityContext.getByTestId('login-vault-linked-identities'),
+  ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  await expect(identityContext).toContainText('Current browser')
+  await page.waitForTimeout(BEAT_MS)
+
+  await selectLoginUnlockMethod(page, UnlockMethod.Password)
+  await page
+    .getByTestId('login-password-entry-list')
+    .getByRole('button', { name: 'Travel recovery' })
+    .click()
+  await page
+    .getByTestId('login-password-input')
+    .fill('demo recovery passphrase')
+  await page.getByTestId('unlock-vault-btn').click()
+  await expect(page.getByTestId('vault-admin-panel')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await expect(page.getByTestId('vault-devices-access-tab')).toHaveCount(0)
+  await page.getByTestId('header-devices-access-btn').click()
   await expect(page).toHaveURL(/\/devices-access$/)
   const dashboard = page.getByTestId('devices-access-dashboard')
   await expect(dashboard).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  await page.getByTestId('devices-access-unlock-identity').click()
+  await page.getByTestId('device-protection-unlock-btn').click()
   const identityRail = page.getByTestId('devices-access-identity-rail')
   const identityOptions = page.getByTestId('devices-access-identity-option')
   const keyInventory = page.getByTestId('devices-access-key-inventory')
