@@ -49,11 +49,12 @@ pub(super) fn route_names_external_authentication_provider(identity: &str) -> bo
     identity_names_external_authentication_provider(identity, false)
         || identity.split(['?', '#']).any(|metadata| {
             metadata.split('&').any(|component| {
-                ["provider", "identity provider", "idp"].contains(
+                ["provider", "provider id", "identity provider", "idp"].contains(
                     &expand_identity_text(component.split('=').next().unwrap_or_default()).as_str(),
                 )
             })
         })
+        || contains_any_word(&route, &["provider", "idp"])
         || segments
             .windows(2)
             .any(|pair| matches!(pair[0].as_str(), "login" | "signin") && !is_local_tail(&pair[1]))
@@ -72,6 +73,7 @@ fn has_open_ended_provider_selection_grammar(identity: &str) -> bool {
                 ["email" | "password"]
                     | ["email", "address"]
                     | ["your", "email"]
+                    | ["your", "email", "address"]
                     | ["your", "password", "to", "sign", "in"]
             )
     })

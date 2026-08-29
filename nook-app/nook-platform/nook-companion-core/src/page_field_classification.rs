@@ -613,7 +613,7 @@ mod tests {
 
     #[test]
     fn login_advance_labels_require_authentication_words() {
-        for label in "Next|SignIn|signin|Sign   In|Login|Log\tin|Submit|Anmelden Anmelden|Se connecter Se connecter".split('|') {
+        for label in "Next|SignIn|signin|Sign   In|Login|Log\tin|Submit|Entrar|Entrar Entrar|Anmelden Anmelden|Se connecter Se connecter".split('|') {
             assert!(looks_like_login_advance_control_label(label));
         }
         for label in "Learn more|Subscribe|Submit order|Continue to reset password|Entrar con Amazon|Entrar con Foo|Anmelden Foo|Se connecter Amazon|Continue with X".split('|') {
@@ -642,12 +642,10 @@ mod tests {
         };
         assert!(decide("", "", false, true, true));
         assert!(!decide("", "", true, true, true));
-        assert!(decide("", "Entrar Entrar", false, true, true));
-        for label in "Sign in to Microsoft 365|Continue with email address|Continue with your email|Use your password to sign in|Se connecter|Anmelden".split('|') {
+        for label in "Sign in to Microsoft 365|Continue with email address|Continue with your email|Continue with your email address|Use your password to sign in|Se connecter|Anmelden".split('|') {
             assert!(decide("f", label, true, true, true));
         }
-        assert!(!decide("f", "Continue with Amazon", true, true, true));
-        for label in "Sign in to Google|Sign in to Amazon|Amazon login|Discord login|machine:delete-account|machine:reset-password|machine:create-account|machine:google|machine:passkey|machine:provider=acme|Sign in to Microsoft and reset password|Sign in to Microsoft or Google".split('|') {
+        for label in "Continue with Amazon|Sign in to Google|Sign in to Amazon|Amazon login|Discord login|machine:delete-account|machine:reset-password|machine:create-account|machine:google|machine:passkey|machine:provider=acme|Sign in to Microsoft and reset password|Sign in to Microsoft or Google".split('|') {
             assert!(!decide("login-form", label, true, true, true));
         }
         assert!(!decide("f", "Entrar", true, true, false));
@@ -665,7 +663,7 @@ mod tests {
         for form in "reset-password|signup-form|google-login|passkey-login".split('|') {
             assert!(!safe(form, "https://example.test/auth/login"));
         }
-        for destination in "https://example.test/login?provider|https://example.test/login?next=/home#google|https://example.test/login#provider=acme|https://example.test/login?next=/home#provider=acme|https://example.test/login?identity_provider=amazon|https://example.test/signin/x|https://example.test/signin/auth0|https://example.test/account/close|https://example.test/login/amazon|https://example.test/orders/123/submit|https://example.test/auth/login?action=close+account|https://example.test/login/provider/acme|https://example.test/login/discord".split('|') {
+        for destination in "https://example.test/login?provider|https://example.test/login?providerId=custom|https://example.test/login#provider_id=custom|https://example.test/login?next=/home#google|https://example.test/login#provider=acme|https://example.test/login?next=/home#provider=acme|https://example.test/login?identity_provider=amazon|https://example.test/signin/x|https://example.test/signin/auth0|https://example.test/account/close|https://example.test/login/amazon|https://example.test/orders/123/submit|https://example.test/auth/login?action=close+account|https://example.test/auth/provider/acme|https://example.test/auth/idp/acme|https://example.test/login/provider/acme|https://example.test/login/discord".split('|') {
             assert!(!safe("login-form", destination), "{destination}");
         }
         assert!(!safe(
