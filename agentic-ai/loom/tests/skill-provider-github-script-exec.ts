@@ -91,10 +91,8 @@ function execCommand(request: ExecCallRequest): string {
   return cwd === false ? source : `cd ${shellQuote(cwd)} && ${source}`;
 }
 
-function execCwd([options, member]: readonly [
-  ts.Expression | false,
-  string,
-]): string | false {
+function execCwd([options, member]: readonly [ts.Expression | false, string]):
+  string | false {
   if (options === false) return false;
   if (!ts.isObjectLiteralExpression(options))
     throw new Error(`Dynamic github-script ${member} options are forbidden.`);
