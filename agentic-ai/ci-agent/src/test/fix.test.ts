@@ -1,8 +1,17 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import {
+  chmod,
+  mkdtemp,
+  mkdir,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { promisify } from "node:util";
 
 import {
   assertGitMetadataBaselineUnchanged,
@@ -10,6 +19,7 @@ import {
   assertPublishedFixIdentity,
   assertRepositoryBaselineUnchanged,
   assertRustDependencyUpdateChangeSet,
+  CI_FIX_SKIPPED,
   isolationForFixProfile,
   resolveCiAgentFixProfile,
   runValidationCommand,
@@ -18,7 +28,10 @@ import {
   verifyPublishedFix,
   withValidationEnvironment,
 } from "../main/fix.js";
+import type { CiFixOutcome } from "../main/fix.js";
 import { AgentIsolation } from "../main/run-agent.js";
+
+const execFileAsync = promisify(execFile);
 
 test("rust dependency update profile selects strict isolation", () => {
   const profile = resolveCiAgentFixProfile("rust-dependency-update");
@@ -40,7 +53,7 @@ test("dependency validation runs fixed commands in order with exact overrides", 
     NOOK_GITHUB_PAT: "github-secret",
     GITHUB_TOKEN: "github-token",
   };
-  const baseEnvironment = { HOME: "/home/runner", PATH: "/bin" };
+  const baseEnvironment = { PATH: "/bin" };
   await runRustDependencyUpdateValidation(
     "/repo",
     {
@@ -77,17 +90,52 @@ test("dependency validation runs fixed commands in order with exact overrides", 
       assert.equal(secret in env, false);
 });
 
-test("publication credentials are absent during validation and restored after", async () => {
+test("validation strips secrets and forces Docker workloads offline", async () => {
+  const root = await mkdtemp(join(tmpdir(), "nook-validation-test-"));
+  const bin = join(root, "bin");
+  const log = join(root, "docker.log");
+  await mkdir(bin);
+  const realDocker = join(bin, "docker");
+  await writeFile(realDocker, `#!/bin/sh\nprintf '%s\\n' "$*" >> '${log}'\n`);
+  await chmod(realDocker, 0o700);
   const hostEnvironment: NodeJS.ProcessEnv = {
-    PATH: "/bin",
+    PATH: bin,
+    HOME: "/trusted/home",
     CURSOR_API_KEY: "cursor",
     NOOK_GITHUB_PAT: "github",
+    SCCACHE_S3_ACCESS_KEY_FILE: "/trusted/sccache-access",
   };
   const original = { ...hostEnvironment };
-  await withValidationEnvironment(hostEnvironment, async (environment) => {
-    assert.deepEqual(environment, { PATH: "/bin" });
-  });
-  assert.deepEqual(hostEnvironment, original);
+  try {
+    await withValidationEnvironment(hostEnvironment, async (environment) => {
+      for (const secret of [
+        "CURSOR_API_KEY",
+        "NOOK_GITHUB_PAT",
+        "SCCACHE_S3_ACCESS_KEY_FILE",
+      ])
+        assert.equal(secret in environment, false);
+      assert.notEqual(environment.HOME, original.HOME);
+      await execFileAsync("docker", ["buildx", "build", "."], {
+        env: environment,
+      });
+      await execFileAsync("docker", ["run", "image"], { env: environment });
+      await assert.rejects(
+        execFileAsync("docker", ["exec", "container", "cargo", "test"], {
+          env: environment,
+        }),
+        /Blocked Docker operation/,
+      );
+    });
+    assert.equal(
+      await import("node:fs/promises").then(({ readFile }) =>
+        readFile(log, "utf8"),
+      ),
+      "buildx build --network none .\nrun --network none image\n",
+    );
+    assert.deepEqual(hostEnvironment, original);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("validation failure prevents publication", async () => {
@@ -127,19 +175,16 @@ test("baseline HEAD and index mutations fail closed", () => {
     headSha: "a".repeat(40),
     indexTreeSha: "b".repeat(40),
   };
-  for (const [field, value, message] of [
-    ["currentHeadSha", "c".repeat(40), /baseline HEAD/],
-    ["currentIndexTreeSha", "d".repeat(40), /baseline index/],
-  ] as const)
+  for (const current of [
+    {
+      currentHeadSha: "c".repeat(40),
+      currentIndexTreeSha: baseline.indexTreeSha,
+    },
+    { currentHeadSha: baseline.headSha, currentIndexTreeSha: "d".repeat(40) },
+  ])
     assert.throws(
-      () =>
-        assertRepositoryBaselineUnchanged({
-          baseline,
-          currentHeadSha: baseline.headSha,
-          currentIndexTreeSha: baseline.indexTreeSha,
-          [field]: value,
-        }),
-      message,
+      () => assertRepositoryBaselineUnchanged({ baseline, ...current }),
+      /baseline (?:HEAD|index)/,
     );
 });
 
@@ -180,34 +225,33 @@ test("dependency update scope accepts only regular Rust mission files", async ()
       root,
       allowed.map((path) => ({ path, status: " M" })),
     );
+    const rejects = (
+      path: string,
+      status: string,
+      message: RegExp,
+      lookup = async () => "",
+    ) =>
+      assert.rejects(
+        assertRustDependencyUpdateChangeSet(root, [{ path, status }], lookup),
+        message,
+      );
 
     for (const [path, message] of [
       ["README.md", /forbidden path/],
       ["nook-app/nook-platform/Taskfile.yml", /orchestration control/],
       ["nook-app/nook-platform/build.rs", /orchestration control/],
     ] as const)
-      await assert.rejects(
-        assertRustDependencyUpdateChangeSet(root, [{ path, status: " M" }]),
-        message,
-      );
+      await rejects(path, " M", message);
 
     const symlinkPath = "preflight/src/linked.rs";
     await mkdir(join(root, "preflight/src"), { recursive: true });
     await symlink(join(root, allowed[3]!), join(root, symlinkPath));
-    await assert.rejects(
-      assertRustDependencyUpdateChangeSet(root, [
-        { path: symlinkPath, status: "??" },
-      ]),
-      /symlink or special file/,
-    );
-
-    await assert.rejects(
-      assertRustDependencyUpdateChangeSet(
-        root,
-        [{ path: "preflight/src/deleted.rs", status: " D" }],
-        async () => "120000",
-      ),
+    await rejects(symlinkPath, "??", /symlink or special file/);
+    await rejects(
+      "preflight/src/deleted.rs",
+      " D",
       /deleted a symlink or special file/,
+      async () => "120000",
     );
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -245,6 +289,14 @@ const PUBLISHED_IDENTITY = {
 };
 
 test("new publication exact identity succeeds and mismatches fail closed", () => {
+  const published: CiFixOutcome = {
+    headSha: "a".repeat(40),
+    kind: "published",
+  };
+  assert.deepEqual(
+    [CI_FIX_SKIPPED.kind, published.kind],
+    ["skipped", "published"],
+  );
   assert.equal(assertPublishedFixIdentity(PUBLISHED_IDENTITY), "a".repeat(40));
   const mismatches = [
     { actualPrNumber: 1209 },

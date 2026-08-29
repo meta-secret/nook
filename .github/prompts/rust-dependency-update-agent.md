@@ -50,7 +50,10 @@ not configurable through this prompt or the environment.
 4. Partition writer tasks by functional owner and allowed path.
 5. Assign each dependency, lockfile, source, and test task to exactly one
    semantic team identity.
-6. Integrate only verified commit handoffs.
+6. Integrate each writer's verified non-Git handoff: its bounded working-tree
+   diff, owned-path inventory, and focused summary. Commit handoffs do not apply
+   inside this publisher exception because changing HEAD or the index fails the
+   trusted baseline check.
 7. Finish the bounded working-tree edit without running validation or Git.
 8. Let the trusted host validate and publish before returning the exact head to
    the normal Gizmo PR-delivery workflow.
@@ -78,8 +81,10 @@ The dependency-specific contract also names:
 The worker loads only its named team context and task-relevant authorities. It
 must not load Gizmo context or another team's graph. It preserves standard
 Cargo version strings, updates only owned lockfiles, and makes the smallest API
-migration. In this trusted publisher profile, the bounded editor returns
-working-tree changes and a focused summary without using Git or Task.
+migration. In this trusted publisher profile, every writer returns that
+explicit non-Git handoff without using Git or Task. The trusted host verifies
+and combines those working-tree artifacts, then alone commits the accepted
+integrated result.
 
 ## Trusted host integrated validation
 
@@ -94,9 +99,12 @@ task hive:verify
 ```
 
 This validation runs remotely inside trusted GitHub Actions, not as a
-developer-host local gate. The validation subprocess does not receive Cursor
-or GitHub publication credentials. The trusted harness restores publication
-credentials only after validation succeeds.
+developer-host local gate. The validation subprocess receives a fresh HOME
+without Cursor, GitHub, registry, or compiler-cache credentials. Trusted host
+tooling replaces Docker with an immutable wrapper that forces every BuildKit
+`RUN` and validation container onto `network=none`; unknown Docker operations
+fail closed. The trusted harness restores publication credentials only after
+validation succeeds.
 
 Validation output is streamed by the trusted host, and a nonzero exit or signal
 prevents commit and publication. Existing-PR reruns and new publications both

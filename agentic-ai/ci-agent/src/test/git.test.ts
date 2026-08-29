@@ -173,8 +173,9 @@ describe("implementation working tree", () => {
       ]);
       assert.match(stdout.trim(), /^[0-9a-f]{40}$/u);
     } finally {
-      if (previousToken === undefined) delete process.env.NOOK_GITHUB_PAT;
-      else process.env.NOOK_GITHUB_PAT = previousToken;
+      if (typeof previousToken === "string")
+        process.env.NOOK_GITHUB_PAT = previousToken;
+      else delete process.env.NOOK_GITHUB_PAT;
       await rm(tempRoot, { recursive: true, force: true });
     }
   });

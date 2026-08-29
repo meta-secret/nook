@@ -1,6 +1,7 @@
 import { execFile, spawn } from "node:child_process";
-import { lstat } from "node:fs/promises";
-import { resolve, sep } from "node:path";
+import { chmod, lstat, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve, sep } from "node:path";
 import { chdir } from "node:process";
 import { promisify } from "node:util";
 
@@ -35,6 +36,10 @@ export enum CiAgentFixProfile {
   RustDependencyUpdate = "rust-dependency-update",
 }
 
+export const CI_FIX_SKIPPED = { kind: "skipped" } as const;
+export type CiFixOutcome =
+  typeof CI_FIX_SKIPPED | { headSha: string; kind: "published" };
+
 const VALIDATION_ENV_ALLOWLIST = new Set([
   "BUILDKIT_PROGRESS",
   "BUILDX_BUILDER",
@@ -43,17 +48,34 @@ const VALIDATION_ENV_ALLOWLIST = new Set([
   "DOCKER_HOST",
   "FORCE_COLOR",
   "GITHUB_ACTIONS",
-  "HOME",
   "LANG",
   "LC_ALL",
   "NO_COLOR",
   "PATH",
-  "RUNNER_TEMP",
   "RUNNER_TOOL_CACHE",
   "SHELL",
   "TERM",
   "TMPDIR",
 ]);
+
+const NETWORKLESS_DOCKER = `#!/bin/sh
+set -eu
+real=\${NOOK_VALIDATION_DOCKER:?}
+case "\${1:-}" in
+  build) shift; exec "$real" build --network none "$@" ;;
+  buildx)
+    sub=\${2:-}; shift 2
+    case "$sub" in
+      bake) exec "$real" buildx bake --set '*.network=none' "$@" ;;
+      build) exec "$real" buildx build --network none "$@" ;;
+      inspect|use|version) exec "$real" buildx "$sub" "$@" ;;
+      *) echo "Blocked Docker buildx operation during isolated validation: $sub" >&2; exit 97 ;;
+    esac ;;
+  run) shift; exec "$real" run --network none "$@" ;;
+  container|cp|create|image|images|inspect|ps|rm|version) exec "$real" "$@" ;;
+  *) echo "Blocked Docker operation during isolated validation: \${1:-<empty>}" >&2; exit 97 ;;
+esac
+`;
 
 type ValidationCommand = {
   args: readonly string[];
@@ -442,12 +464,39 @@ export async function withValidationEnvironment<T>(
   operation: (sanitized: NodeJS.ProcessEnv) => Promise<T>,
 ): Promise<T> {
   const hostEnvironment = { ...environment };
-  const validationEnvironment = createValidationEnvironment(hostEnvironment);
-  restoreHostEnvironment(validationEnvironment, environment);
+  const isolatedRoot = await mkdtemp(join(tmpdir(), "nook-validation-"));
   try {
+    const base = createValidationEnvironment(hostEnvironment);
+    const { stdout } = await execFileAsync(
+      "/bin/sh",
+      ["-c", "command -v docker"],
+      {
+        encoding: "utf8",
+        env: base,
+      },
+    );
+    const bin = join(isolatedRoot, "bin");
+    const home = join(isolatedRoot, "home");
+    const docker = join(bin, "docker");
+    await mkdir(bin);
+    await mkdir(home);
+    await writeFile(docker, NETWORKLESS_DOCKER, { mode: 0o700 });
+    await chmod(docker, 0o700);
+    restoreHostEnvironment(
+      {
+        ...base,
+        DOCKER: docker,
+        HOME: home,
+        NOOK_VALIDATION_DOCKER: stdout.trim(),
+        PATH: `${bin}:${base.PATH || ""}`,
+        SCCACHE_OPTIONAL: "1",
+      },
+      environment,
+    );
     return await operation(environment);
   } finally {
     restoreHostEnvironment(hostEnvironment, environment);
+    await rm(isolatedRoot, { recursive: true, force: true });
   }
 }
 
@@ -573,7 +622,7 @@ async function verifyLiveFixPublication(args: {
   });
 }
 
-export async function runCiFix(): Promise<string> {
+export async function runCiFix(): Promise<CiFixOutcome> {
   const repository = process.env.GITHUB_REPOSITORY?.trim();
   const runId = process.env.GITHUB_RUN_ID?.trim();
   if (!repository || !runId) {
@@ -593,17 +642,20 @@ export async function runCiFix(): Promise<string> {
 
   let openPr = await findOpenPr(octokit, repoRef, fixBranch);
   let prNumber: number;
-  let publishedHead = "";
+  let outcome: CiFixOutcome;
   if (openPr.kind === OpenPrLookupKind.Found) {
     prNumber = openPr.number;
-    publishedHead = await verifyLiveFixPublication({
-      fixBranch,
-      octokit,
-      prNumber,
-      repoRef,
-    });
+    outcome = {
+      headSha: await verifyLiveFixPublication({
+        fixBranch,
+        octokit,
+        prNumber,
+        repoRef,
+      }),
+      kind: "published",
+    };
     log.info(
-      `Existing PR #${prNumber} exact head ${publishedHead} verified and handed to the continuing Gizmo owner`,
+      `Existing PR #${prNumber} exact head ${outcome.headSha} verified and handed to the continuing Gizmo owner`,
     );
   } else {
     const cursorApiKey = process.env.CURSOR_API_KEY?.trim();
@@ -614,12 +666,12 @@ export async function runCiFix(): Promise<string> {
       console.log(
         "Add repository secret CURSOR_API_KEY (Cursor Dashboard → Integrations → User API Keys).",
       );
-      return "";
+      return CI_FIX_SKIPPED;
     }
 
     const loadedConfig = loadConfig();
     if (loadedConfig.kind === CiAgentConfigLoadKind.MissingApiKey) {
-      return "";
+      return CI_FIX_SKIPPED;
     }
     const config = loadedConfig.config;
     let baseline: RepositoryBaseline | false = false;
@@ -637,7 +689,7 @@ export async function runCiFix(): Promise<string> {
       console.log(
         "::warning::Agent finished but working tree is clean — nothing to push.",
       );
-      return "";
+      return CI_FIX_SKIPPED;
     }
 
     if (profile === CiAgentFixProfile.RustDependencyUpdate) {
@@ -672,24 +724,24 @@ export async function runCiFix(): Promise<string> {
       );
     }
     const localHead = await revParse(repoRoot, "HEAD");
-    publishedHead = await verifyLiveFixPublication({
-      expectedHeadSha: localHead,
-      fixBranch,
-      octokit,
-      prNumber,
-      repoRef,
-    });
+    outcome = {
+      headSha: await verifyLiveFixPublication({
+        expectedHeadSha: localHead,
+        fixBranch,
+        octokit,
+        prNumber,
+        repoRef,
+      }),
+      kind: "published",
+    };
     log.info(
-      `PR #${prNumber} exact head ${publishedHead} verified and handed to the continuing Gizmo owner`,
+      `PR #${prNumber} exact head ${outcome.headSha} verified and handed to the continuing Gizmo owner`,
     );
   }
 
   const fixLabel = process.env.CI_FIX_LABEL?.trim() || "main CI";
   log.info(
-    `PR #${prNumber} opened for review; no automatic merge is configured`,
+    `PR #${prNumber} is open without automatic merge; ${fixLabel} run ${runId} requires explicit merge authorization`,
   );
-  log.info(
-    `Done — ${fixLabel} run ${runId} requires explicit merge authorization`,
-  );
-  return publishedHead;
+  return outcome;
 }

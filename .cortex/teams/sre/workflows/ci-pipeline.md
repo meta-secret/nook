@@ -657,6 +657,11 @@ The publisher exception fails closed unless all of these boundaries hold:
   after editing and validation; every later trusted Git command also disables
   hooks, filesystem monitors, and commit signing so editor-created Git metadata
   cannot execute with restored publication credentials;
+- validation uses a fresh HOME with publication, registry, and compiler-cache
+  credentials absent; its trusted Docker wrapper forces BuildKit `RUN` and
+  runtime containers onto `network=none` and rejects unknown Docker operations,
+  so editor-authored Rust and build scripts cannot reach secrets or external
+  services;
 - `CI_AGENT_TIMEOUT_MS=10800000` bounds the editor to three hours of the
   six-hour job, reserving the other three-hour half for trusted validation and
   publication;
