@@ -24,10 +24,6 @@ observations and does not inspect the repository. Failed observations are not
 accepted provider evidence, and its output cannot satisfy an ordinary provider
 edge or claim ordinary-contract compliance.
 
-The static `loom:agent-workflow:cortex-audit` workflow instead uses its separate
-`FindingSynthesizer` profile and `CortexSynthesis` result. Those identities do
-not alias this registry's structural aggregator.
-
 #### Future ordinary boundary
 
 Future ordinary accepted-evidence synthesis must use a distinct typed role,
@@ -346,7 +342,6 @@ Examples include:
 - heading and knowledge-graph coverage;
 - canonical skill-card registration and harness-mirror absence;
 - exact duplicate blocks;
-- migration-ledger monotonicity;
 - source-size and closed-vocabulary checks;
 - existence of named Task entrypoints.
 
@@ -360,7 +355,7 @@ Examples include:
 - evaluating architectural tradeoffs;
 - deciding whether a repeated procedure is stable enough to compile.
 
-The expert may propose a typed Loom leaf or reviewed static graph.
+The expert may propose a typed Loom leaf.
 The proposal names inputs, outputs, failure behavior, and residual semantic
 policy.
 

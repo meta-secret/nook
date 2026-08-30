@@ -789,7 +789,6 @@ fn substantial_agent_tasks_use_curated_session_memory() -> anyhow::Result<()> {
         "## Workflow improvement review",
         "### Instruction classification",
         "### Loom extraction procedure",
-        "task loom:agent-workflow:cortex-audit",
         "task loom:cortex-session-clean",
         "## Pull-request completion contract",
     ] {

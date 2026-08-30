@@ -102,7 +102,6 @@ It is not a native worker label or harness configuration key.
 Write-capable module tasks are separate implementation assignments governed by
 subagent delegation.
 
-Loom may still run reviewed read-only static workflows.
 Its JSONL streams, result files, and Markdown views are optional human or audit
 evidence for native harness delegation.
 They never gate dispatch, continuation, retry, join, or completion.

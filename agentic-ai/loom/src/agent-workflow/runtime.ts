@@ -2,8 +2,6 @@ import type {
   AgentProfile,
   AgentTaskExecution,
   GitCommit,
-  LoomLeafTaskExecution,
-  TaskTerminal,
   TaskTerminalKind,
   WorkflowAttemptNumber,
   WorkflowRunId,
@@ -40,72 +38,13 @@ type WorkflowTaskInvocationBase<TTask extends string> = {
   readonly observe: RuntimeActivityObserver;
 };
 
-export type AgentWorkflowTaskInvocation<
+export type AgentExecutionInvocation<
   TTask extends string,
   TAgent extends string,
 > = WorkflowTaskInvocationBase<TTask> & {
   readonly execution: AgentTaskExecution<TAgent>;
   readonly agentProfile: AgentProfile<TAgent>;
 };
-
-export type LoomLeafWorkflowTaskInvocation<TTask extends string> =
-  WorkflowTaskInvocationBase<TTask> & {
-    readonly execution: LoomLeafTaskExecution;
-  };
-
-export type WorkflowTaskInvocation<
-  TTask extends string,
-  TAgent extends string,
-> =
-  | AgentWorkflowTaskInvocation<TTask, TAgent>
-  | LoomLeafWorkflowTaskInvocation<TTask>;
-
-export interface WorkflowTaskRuntime<
-  TTask extends string,
-  TAgent extends string,
-> {
-  start(
-    invocation: WorkflowTaskInvocation<TTask, TAgent>,
-  ): WorkflowTaskAttempt<TTask>;
-}
-
-export enum TaskStopReason {
-  Timeout = 'timeout',
-  WorkflowCancellation = 'workflow-cancellation',
-}
-
-export type TaskStopRequest = {
-  readonly reason: TaskStopReason;
-  readonly hardDeadlineMs: number;
-};
-
-export enum TaskTeardownKind {
-  Confirmed = 'confirmed',
-}
-
-export type ConfirmedTaskTeardown = {
-  readonly kind: TaskTeardownKind.Confirmed;
-};
-
-export interface WorkflowTaskAttempt<TTask extends string> {
-  readonly completion: Promise<TaskTerminal<TTask>>;
-  stop(request: TaskStopRequest): Promise<ConfirmedTaskTeardown>;
-}
-
-export class UnconfirmedTaskTeardownError extends Error {
-  readonly task: string;
-
-  constructor(task: string) {
-    super(`Task ${task} did not confirm teardown before its hard deadline.`);
-    this.name = 'UnconfirmedTaskTeardownError';
-    this.task = task;
-  }
-}
-
-export type AgentExecutionInvocation<
-  TTask extends string,
-  TAgent extends string,
-> = AgentWorkflowTaskInvocation<TTask, TAgent>;
 
 export type AgentExecutionCompletion = {
   readonly threadId: string;
