@@ -24,6 +24,21 @@ Cortex is optimized for AI legibility and structure:
 - Project structure is dynamic; documents must not contain static directory trees.
 - ASCII graphics are hard for AI agents to parse; diagrams must use Mermaid (` ```mermaid `) or structured lists.
 
+## Ownership and composition
+
+This card is the single canonical generic Cortex writing policy.
+
+- The task's team identity owns the meaning and edits in its Cortex scope.
+- Loom adds this card, Cortex article structure, and Cortex consistency when a
+  write claim overlaps `.cortex/**`.
+- The three cards form the canonical Cortex authoring bundle.
+- A team-specific authoring skill may add domain rules.
+- That skill must use a domain-specific name.
+- It must not wrap, copy, rename, or partially restate this card.
+- Loading this AI-owned policy does not add an AI team identity.
+- A separate AI task is required only when AI-owned routing, tooling, or Cortex
+  governance must change.
+
 ## Problem Pattern
 
 A writer packs many constraints, identities, failure modes, and commands into
