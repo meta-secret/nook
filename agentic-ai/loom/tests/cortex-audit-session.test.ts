@@ -11,10 +11,26 @@ import { expect, test } from 'bun:test';
 import {
   listCortexMarkdownFiles,
   listPersistentCortexMarkdownFiles,
+  publishedBaseCandidatesForEvent,
   runCortexAuditFromDirectory,
 } from '../src/commands/cortex-audit.ts';
 import type { CortexAuditReport } from '../src/commands/cortex-audit.ts';
 import { CortexStructureFindingCode } from '../src/lib/cortex-document-structure.ts';
+
+test('uses the pre-push commit for push stability audits', () => {
+  const before = '1'.repeat(40);
+  const base = '2'.repeat(40);
+  expect(publishedBaseCandidatesForEvent({ before })).toEqual([
+    before,
+    'origin/main',
+  ]);
+  expect(
+    publishedBaseCandidatesForEvent({
+      before,
+      pull_request: { base: { sha: base } },
+    }),
+  ).toEqual([base, 'origin/main']);
+});
 
 test('excludes temporary session memory from persistent Cortex documents', () => {
   const cortexRoot = mkdtempSync(path.join(tmpdir(), 'cortex-session-audit-'));

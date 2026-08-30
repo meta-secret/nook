@@ -200,7 +200,17 @@ describe('agent attempt journal', () => {
       };
       expect(() =>
         replayAgentAttemptJournal(secretBearingActivityRequest),
-      ).toThrow('runtime activity');
+      ).toThrow('event fields are invalid');
+      const extraEventFieldRequest = {
+        events: parsedEvents.map((event) => ({
+          ...event,
+          prompt: 'secret-bearing prompt',
+        })),
+        knownCortexIdentifiers,
+      };
+      expect(() => replayAgentAttemptJournal(extraEventFieldRequest)).toThrow(
+        'event fields are invalid',
+      );
       const malformedParentEvents = parsedEvents.map((event) => ({
         ...event,
         parent: { kind: AgentAttemptParentKind.AgentAttempt },
@@ -210,7 +220,7 @@ describe('agent attempt journal', () => {
         knownCortexIdentifiers,
       };
       expect(() => replayAgentAttemptJournal(malformedParentRequest)).toThrow(
-        'lineage',
+        'identity is invalid',
       );
       const excessiveDepthEvents = parsedEvents.map((event) => ({
         ...event,
@@ -490,7 +500,7 @@ describe('agent attempt journal', () => {
     };
     const currentReplayRequest = { events: [currentWithoutAdapter] };
     expect(() => replayAgentAttemptJournal(currentReplayRequest)).toThrow(
-      'identity is invalid',
+      'event fields are invalid',
     );
 
     const unsupportedVersion = {

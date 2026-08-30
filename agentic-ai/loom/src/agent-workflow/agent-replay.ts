@@ -47,6 +47,22 @@ const PARENT_KINDS = new Set<string>(Object.values(AgentAttemptParentKind));
 const PROCESSING_WORKFLOW_NAMES = new Set<string>(
   Object.values(DelegatedAgentWorkflowName),
 );
+const EVENT_METADATA_KEYS = [
+  'adapter',
+  'runId',
+  'workflow',
+  'workflowVersion',
+  'sourceCommit',
+  'task',
+  'agent',
+  'attempt',
+  'depth',
+  'parent',
+  'sequence',
+  'actionId',
+  'occurredAt',
+] as const;
+
 export function replayAgentAttemptJournal(
   request: ReplayAgentAttemptJournalRequest,
 ): ReplayedAgentAttempt {
@@ -61,6 +77,9 @@ export function replayAgentAttemptJournal(
   for (const [index, event] of request.events.entries()) {
     if (!AGENT_EVENT_KINDS.has(event.kind)) {
       throw new Error('Agent attempt journal contains an unknown event kind.');
+    }
+    if (!eventHasExactKeys(event)) {
+      throw new Error('Agent attempt journal event fields are invalid.');
     }
     if (terminal) {
       throw new Error(
@@ -134,9 +153,9 @@ export function replayAgentAttemptJournal(
         throw new Error('Agent attempt view was projected before its result.');
       }
       if (
+        !validMaterializedView(event.view) ||
         event.view.presence !== MaterializedViewPresence.Recorded ||
         event.view.eventHighWaterMark !== event.sequence - 1 ||
-        !validProjection(event.view.projection) ||
         !VIEW_AUTHOR_KINDS.has(event.view.authorKind)
       ) {
         throw new Error(
@@ -209,7 +228,9 @@ function assertValidIdentity(event: AgentAttemptEventMetadata): void {
     event.attempt < 1 ||
     !Number.isSafeInteger(event.depth) ||
     event.depth < 1 ||
-    event.depth > MAX_AGENT_HIERARCHY_DEPTH
+    event.depth > MAX_AGENT_HIERARCHY_DEPTH ||
+    (event.parent.kind === AgentAttemptParentKind.AgentAttempt &&
+      Object.keys(event.parent).length !== 4)
   ) {
     throw new Error('Agent attempt journal identity is invalid.');
   }
@@ -239,7 +260,56 @@ function safeIdentifier(value: string): boolean {
 
 function validProjection(projection: ProjectionReference): boolean {
   return (
-    projection.path.trim() !== '' && /^[0-9a-f]{64}$/.test(projection.sha256)
+    Object.keys(projection).length === 2 &&
+    Object.hasOwn(projection, 'path') &&
+    Object.hasOwn(projection, 'sha256') &&
+    projection.path.trim() !== '' &&
+    /^[0-9a-f]{64}$/.test(projection.sha256)
+  );
+}
+
+function validMaterializedView(view: MaterializedViewReference): boolean {
+  if (view.presence !== MaterializedViewPresence.Recorded) return false;
+  const expected = new Set([
+    'presence',
+    'authorKind',
+    'eventHighWaterMark',
+    'projection',
+  ]);
+  const keys = Object.keys(view);
+  return (
+    keys.length === expected.size &&
+    keys.every((key) => expected.has(key)) &&
+    validProjection(view.projection)
+  );
+}
+
+function eventHasExactKeys(event: AgentAttemptEvent): boolean {
+  const fieldsByKind: Record<AgentAttemptEventKind, readonly string[]> = {
+    [AgentAttemptEventKind.AttemptStarted]: [],
+    [AgentAttemptEventKind.RuntimeActivity]: ['activity', 'cortexReferences'],
+    [AgentAttemptEventKind.ResultProjected]: ['result'],
+    [AgentAttemptEventKind.ViewProjected]: ['view'],
+    [AgentAttemptEventKind.AttemptTerminalRecorded]: [
+      'terminalKind',
+      'result',
+      'view',
+    ],
+  };
+  const expected = new Set([
+    ...EVENT_METADATA_KEYS,
+    'kind',
+    ...fieldsByKind[event.kind],
+  ]);
+  const keys = Object.keys(event);
+  if (
+    event.kind === AgentAttemptEventKind.RuntimeActivity &&
+    Object.hasOwn(event, 'evidenceSha256')
+  ) {
+    expected.add('evidenceSha256');
+  }
+  return (
+    keys.length === expected.size && keys.every((key) => expected.has(key))
   );
 }
 

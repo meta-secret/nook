@@ -65,7 +65,8 @@ type PublishedIdentifierRegistryResolution = {
   readonly findings: readonly CortexIdentifierFinding[];
 };
 
-type GitHubPullRequestEvent = {
+export type GitHubRepositoryPolicyEvent = {
+  readonly before?: string;
   readonly pull_request?: {
     readonly base?: { readonly sha?: string };
   };
@@ -338,14 +339,29 @@ function publishedBaseCandidates(): readonly string[] {
     try {
       const event = JSON.parse(
         readFileSync(eventPath, 'utf8'),
-      ) as GitHubPullRequestEvent;
-      const baseSha = event.pull_request?.base?.sha;
-      if (baseSha && /^[0-9a-f]{40}$/u.test(baseSha)) {
-        return [baseSha, 'origin/main'];
-      }
+      ) as GitHubRepositoryPolicyEvent;
+      return publishedBaseCandidatesForEvent(event);
     } catch {
       return ['origin/main'];
     }
+  }
+  return ['origin/main'];
+}
+
+export function publishedBaseCandidatesForEvent(
+  event: GitHubRepositoryPolicyEvent,
+): readonly string[] {
+  const baseSha = event.pull_request?.base?.sha;
+  if (baseSha && /^[0-9a-f]{40}$/u.test(baseSha)) {
+    return [baseSha, 'origin/main'];
+  }
+  const beforeSha = event.before;
+  if (
+    beforeSha &&
+    /^[0-9a-f]{40}$/u.test(beforeSha) &&
+    beforeSha !== '0000000000000000000000000000000000000000'
+  ) {
+    return [beforeSha, 'origin/main'];
   }
   return ['origin/main'];
 }
