@@ -279,6 +279,9 @@ function autocompleteTokens(field: HTMLInputElement): string[] {
     .filter(Boolean);
 }
 
+const loginAdvanceControlSelector =
+  'button[type="submit"], input[type="submit"], button:not([type]), button[type="button"], input[type="button"]';
+
 function hasLoginContext(field: HTMLInputElement): boolean {
   const form = field.form;
   const ancestorIdentities: string[] = [];
@@ -295,14 +298,24 @@ function hasLoginContext(field: HTMLInputElement): boolean {
     container = container.parentElement;
     depth += 1;
   }
-  const advanceControlRoot = form ? form : field.parentElement;
-  const advanceControls = advanceControlRoot
+  const advanceControls = form
     ? Array.from(
-        advanceControlRoot.querySelectorAll<HTMLElement>(
-          'button[type="submit"], input[type="submit"], button:not([type]), button[type="button"], input[type="button"]',
+        form.ownerDocument.querySelectorAll<HTMLElement>(
+          loginAdvanceControlSelector,
         ),
+      ).filter(
+        (control) =>
+          (control instanceof HTMLButtonElement ||
+            control instanceof HTMLInputElement) &&
+          control.form === form,
       )
-    : [];
+    : field.parentElement
+      ? Array.from(
+          field.parentElement.querySelectorAll<HTMLElement>(
+            loginAdvanceControlSelector,
+          ),
+        )
+      : [];
   const advanceControlLabels = advanceControls.map((control) =>
     [
       control.textContent ?? "",

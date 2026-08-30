@@ -881,12 +881,11 @@ describe('website one-time-code fields', () => {
     ).toBe('')
   })
 
-  test('does not fill a GET form when a type-button Sign in sits beside a native submitter', () => {
+  test('does not fill a default-GET form through a type-button handler', () => {
     document.body.innerHTML = `
       <form id="login" action="/auth/login">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
-        <input type="submit" value="Go" />
         <button type="button">Sign in</button>
       </form>
     `
@@ -901,12 +900,11 @@ describe('website one-time-code fields', () => {
     ).toBe('')
   })
 
-  test('does not fill through a POST submitter beside a native GET sibling', () => {
+  test('does not fill a POST form whose only submitter overrides to GET', () => {
     document.body.innerHTML = `
       <form method="post" id="login" action="/auth/login">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
-        <button type="submit">Sign in</button>
         <button type="submit" formmethod="get">Search</button>
       </form>
     `

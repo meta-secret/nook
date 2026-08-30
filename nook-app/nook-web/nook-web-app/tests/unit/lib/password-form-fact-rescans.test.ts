@@ -69,7 +69,7 @@ describe('authentication fact rescans', () => {
     expect(authenticationFactMutationRequiresScan(labelMutation)).toBe(true)
     document.body.innerHTML = `
       <span id="passkey-label"><strong>Use passkey</strong></span>
-      <button type="button" aria-labelledby="passkey-label"><svg></svg></button>
+      <div data-nook-passkey-control aria-labelledby="passkey-label"><svg></svg></div>
     `
     const referencedLabel = document.querySelector('strong')
     const referencedLabelChild = referencedLabel?.childNodes[0]
@@ -82,6 +82,17 @@ describe('authentication fact rescans', () => {
     expect(
       authenticationFactMutationRequiresScan(referencedLabelMutation),
     ).toBe(true)
+    document.body.innerHTML = `
+      <div data-nook-passkey-control><strong>Add passkey</strong></div>
+    `
+    const markedLabel = document.querySelector('strong')?.childNodes[0]
+    const markedMutation: Parameters<
+      typeof authenticationFactMutationRequiresScan
+    >[0] = {
+      type: 'characterData',
+      target: markedLabel ? markedLabel : document.body,
+    }
+    expect(authenticationFactMutationRequiresScan(markedMutation)).toBe(true)
     document.body.innerHTML = `
       <form method="post" aria-label="Login" action="/login" role="form">
         <input autocomplete="username" />

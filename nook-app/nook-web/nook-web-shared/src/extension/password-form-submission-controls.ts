@@ -524,15 +524,6 @@ export function formHasDialogSubmitter(form: HTMLFormElement): boolean {
   });
 }
 
-function explicitFormMethodBlocksDisclosure(form: HTMLFormElement): boolean {
-  const methodRequest: HtmlSubmissionMethodRequest = {
-    element: form,
-    name: "method",
-  };
-  const method = presentHtmlSubmissionMethod(methodRequest);
-  return method !== false && submissionMethodBlocksCredentialDisclosure(method);
-}
-
 export function selectedSubmitterBlocksCredentialDisclosure({
   form,
   selectedSubmitter,
@@ -551,13 +542,11 @@ export function selectedSubmitterBlocksCredentialDisclosure({
         );
       }
       return (
-        explicitFormMethodBlocksDisclosure(form) ||
-        formHasGetMethodSubmitter(form)
+        formBlocksCredentialDisclosure(form) || formHasGetMethodSubmitter(form)
       );
     }
     return (
-      formHasGetMethodSubmitter(form) ||
-      explicitFormMethodBlocksDisclosure(form)
+      formHasGetMethodSubmitter(form) || formBlocksCredentialDisclosure(form)
     );
   }
   if (
@@ -567,9 +556,10 @@ export function selectedSubmitterBlocksCredentialDisclosure({
   ) {
     return true;
   }
-  return (
-    explicitFormMethodBlocksDisclosure(form) || formHasDialogSubmitter(form)
-  );
+  if (!formHasSemanticSubmitter(form) && formBlocksCredentialDisclosure(form)) {
+    return true;
+  }
+  return formHasGetMethodSubmitter(form) || formHasDialogSubmitter(form);
 }
 
 export function canRequestImplicitAuthenticationSubmit({

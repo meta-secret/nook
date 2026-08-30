@@ -39,6 +39,17 @@ describe('authentication field detection', () => {
     expect(observedAuthenticationWorkflow().summary.usernameFieldCount).toBe(1)
   })
 
+  test('uses an externally associated authentication control', () => {
+    document.body.innerHTML = `
+      <form id="login" method="post" action="/next">
+        <input type="email" name="primary" />
+        <input type="password" autocomplete="current-password" />
+      </form>
+      <button type="submit" form="login">Sign in</button>
+    `
+    expect(observedAuthenticationWorkflow().summary.usernameFieldCount).toBe(1)
+  })
+
   test('preserves the conventional user id for Rust username classification', () => {
     document.body.innerHTML = `
       <form method="post" action="/auth/login">
