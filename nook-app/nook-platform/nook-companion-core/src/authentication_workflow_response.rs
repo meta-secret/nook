@@ -1,8 +1,9 @@
 //! Typed runtime response boundary for authentication workflow snapshots.
 
 use crate::authentication_workflow::{
-    AuthenticationApprovalRequirement, AuthenticationWorkflowAction, AuthenticationWorkflowKind,
-    AuthenticationWorkflowSnapshot, AuthenticationWorkflowStage,
+    AuthenticationApprovalRequirement, AuthenticationSavedLoginCapability,
+    AuthenticationWorkflowAction, AuthenticationWorkflowKind, AuthenticationWorkflowSnapshot,
+    AuthenticationWorkflowStage,
 };
 use serde::{Deserialize, Serialize, Serializer};
 use tsify::Tsify;
@@ -230,6 +231,22 @@ pub fn decode_authentication_workflow_runtime_response(
             return Err(AuthenticationWorkflowRuntimeResponseDecodeError);
         }
     };
+    let login_matches_match_workflow = match (login_matches, &workflow) {
+        (WebsiteLoginMatchAvailability::Ready { count: 0 }, _) => true,
+        (
+            WebsiteLoginMatchAvailability::Ready { .. },
+            AuthenticationWorkflowSnapshotResponse::Matched { snapshot, .. },
+        ) => {
+            snapshot.saved_login_capability() == AuthenticationSavedLoginCapability::FillSavedLogin
+        }
+        (WebsiteLoginMatchAvailability::Ready { .. }, _) => false,
+        (WebsiteLoginMatchAvailability::Locked | WebsiteLoginMatchAvailability::Unavailable, _) => {
+            true
+        }
+    };
+    if !login_matches_match_workflow {
+        return Err(AuthenticationWorkflowRuntimeResponseDecodeError);
+    }
     Ok(AuthenticationWorkflowRuntimeResponse {
         workflow,
         login_matches,
@@ -410,6 +427,27 @@ mod tests {
                     .is_err()
             );
         }
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_ready_login_matches_without_a_saved_login_capability() -> anyhow::Result<()> {
+        for contradictory in [
+            r#"{"workflow":{"ok":true},"loginMatches":{"kind":"ready","count":1}}"#,
+            r#"{"workflow":{"ok":true,"snapshot":{"kind":0,"stage":0,"action":4,"currentStep":1,"totalSteps":3,"approvalRequirement":"explicit-user-approval","savedLoginCapability":"unavailable","observationIndex":0}},"loginMatches":{"kind":"ready","count":1}}"#,
+        ] {
+            let wire =
+                serde_json::from_str::<AuthenticationWorkflowRuntimeResponseWire>(contradictory)?;
+            assert_eq!(
+                decode_authentication_workflow_runtime_response(wire),
+                Err(AuthenticationWorkflowRuntimeResponseDecodeError)
+            );
+        }
+
+        let consistent = serde_json::from_str::<AuthenticationWorkflowRuntimeResponseWire>(
+            r#"{"workflow":{"ok":true,"snapshot":{"kind":0,"stage":0,"action":4,"currentStep":1,"totalSteps":3,"approvalRequirement":"explicit-user-approval","savedLoginCapability":"fill-saved-login","observationIndex":0}},"loginMatches":{"kind":"ready","count":1}}"#,
+        )?;
+        assert!(decode_authentication_workflow_runtime_response(consistent).is_ok());
         Ok(())
     }
 }
