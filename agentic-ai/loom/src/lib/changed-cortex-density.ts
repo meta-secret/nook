@@ -72,9 +72,10 @@ export function lintChangedCortexDensity(
       previousPath: trackedChange?.previousPath ?? relativePath,
       repoRoot: args.repoRoot,
     };
-    const addedLines = untrackedPaths.has(relativePath)
-      ? [ALL_LINES]
-      : changedLineRanges(rangeArgs);
+    const addedLines =
+      untrackedPaths.has(relativePath) || trackedChange?.inspectAll === true
+        ? [ALL_LINES]
+        : changedLineRanges(rangeArgs);
     return spans
       .filter((finding) => {
         const intersectionArgs: IntersectsAddedLinesArgs = {
@@ -95,6 +96,7 @@ type GitOutputArgs = {
 
 type ChangedCortexPath = {
   readonly currentPath: string;
+  readonly inspectAll: boolean;
   readonly previousPath: string;
 };
 
@@ -108,7 +110,7 @@ function changedCortexPaths(args: ChangedCortexPathsArgs): ChangedCortexPath[] {
     arguments: [
       'diff',
       '--name-status',
-      '--diff-filter=AMR',
+      '--diff-filter=AMRT',
       '--find-renames',
       '-z',
       args.comparisonCommit,
@@ -132,6 +134,7 @@ function changedCortexPaths(args: ChangedCortexPathsArgs): ChangedCortexPath[] {
       if (isPersistentCortexMarkdownPath(currentPath)) {
         const change: ChangedCortexPath = {
           currentPath,
+          inspectAll: !isPersistentCortexMarkdownPath(previousPath),
           previousPath: isPersistentCortexMarkdownPath(previousPath)
             ? previousPath
             : currentPath,
@@ -140,7 +143,7 @@ function changedCortexPaths(args: ChangedCortexPathsArgs): ChangedCortexPath[] {
       }
       continue;
     }
-    if (status !== 'A' && status !== 'M') {
+    if (status !== 'A' && status !== 'M' && status !== 'T') {
       failChangedCortexGit(`unsupported diff status ${status}`);
     }
     const currentPath = tokens[index];
@@ -151,6 +154,7 @@ function changedCortexPaths(args: ChangedCortexPathsArgs): ChangedCortexPath[] {
     if (isPersistentCortexMarkdownPath(currentPath)) {
       const change: ChangedCortexPath = {
         currentPath,
+        inspectAll: status === 'A' || status === 'T',
         previousPath: currentPath,
       };
       changes.push(change);

@@ -31,7 +31,7 @@ describe('lintProseDensity', () => {
 
   test('ignores quoted command output and log excerpts', () => {
     const content = [
-      '> command output includes one actor and another actor and a branch and a',
+      '> Command output: includes one actor and another actor and a branch and a',
       '> credential and a failure mode and a recovery path and enough quoted detail',
       '> to exceed the density threshold without becoming authored Cortex prose.',
     ].join('\n');
@@ -40,6 +40,19 @@ describe('lintProseDensity', () => {
       content,
     };
     expect(lintProseDensity(lintArgs)).toEqual([]);
+  });
+
+  test('checks normative blockquote callouts', () => {
+    const content = [
+      '> **Warning:** The workflow requires the successor branch and the open pull',
+      '> request and the predecessor metadata and the frozen base SHA and the',
+      '> containment proof and the delivery state before any claim can proceed.',
+    ].join('\n');
+    const lintArgs: LintProseDensityArgs = {
+      filePath: 'callout.md',
+      content,
+    };
+    expect(lintProseDensity(lintArgs).length).toBeGreaterThan(0);
   });
 
   test('reconstructs a dense sentence across hard-wrapped prose', () => {

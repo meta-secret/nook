@@ -1,4 +1,4 @@
-import type { Nodes, Paragraph } from 'mdast';
+import type { Blockquote, Nodes, Paragraph } from 'mdast';
 import remarkGfm from 'remark-gfm';
 import remarkParse from 'remark-parse';
 import { unified } from 'unified';
@@ -53,7 +53,7 @@ type InspectMarkdownNodeArgs = {
 };
 
 function inspectMarkdownNode(args: InspectMarkdownNodeArgs): void {
-  if (args.node.type === 'blockquote') return;
+  if (args.node.type === 'blockquote' && isQuotedOutput(args.node)) return;
   if (args.node.type === 'paragraph') {
     const paragraphArgs: InspectParagraphArgs = {
       filePath: args.filePath,
@@ -68,6 +68,13 @@ function inspectMarkdownNode(args: InspectMarkdownNodeArgs): void {
     const childArgs: InspectMarkdownNodeArgs = { ...args, node: child };
     inspectMarkdownNode(childArgs);
   }
+}
+
+function isQuotedOutput(blockquote: Blockquote): boolean {
+  const text = markdownText(blockquote).replace(/\s+/gu, ' ').trim();
+  return /^(?:command output|log (?:excerpt|output)|stderr|stdout)\s*:/iu.test(
+    text,
+  );
 }
 
 type InspectParagraphArgs = {

@@ -1,6 +1,13 @@
 import { execFileSync } from 'node:child_process';
 import type { ExecFileSyncOptionsWithStringEncoding } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { expect, test } from 'bun:test';
@@ -180,6 +187,47 @@ test('checks full destinations promoted from nonpersistent sources', () => {
     ]);
   } finally {
     rmSync(fixture.repoRoot, REMOVE_OPTIONS);
+  }
+});
+
+test('checks a full regular file promoted from a symlink type change', () => {
+  const repoRoot = mkdtempSync(
+    path.join(tmpdir(), 'type-changed-cortex-density-'),
+  );
+  try {
+    const cortexRoot = path.join(repoRoot, '.cortex');
+    const directoryOptions = { recursive: true } as const;
+    mkdirSync(cortexRoot, directoryOptions);
+    writeFileSync(
+      path.join(repoRoot, 'source.md'),
+      '- The external source remains outside persistent Cortex.\n',
+    );
+    const destinationPath = path.join(cortexRoot, 'promoted.md');
+    symlinkSync('../source.md', destinationPath);
+    const initArgs: GitArgs = { arguments: ['init', '-q'], repoRoot };
+    git(initArgs);
+    const baselineArgs: CommitAllArgs = {
+      message: 'symlink baseline',
+      repoRoot,
+    };
+    const baseSha = commitAll(baselineArgs);
+
+    unlinkSync(destinationPath);
+    writeFileSync(
+      destinationPath,
+      'The promoted policy has one rule and another rule and another rule and another rule and another rule and another rule and now requires full density review.\n',
+    );
+    const reportArgs: LintFixtureArgs = { baseSha, repoRoot };
+    const report = lintFixture(reportArgs);
+    expect(report.checkedPaths).toEqual(['.cortex/promoted.md']);
+    expect(report.findings.length).toBeGreaterThan(0);
+    expect(
+      report.findings.every(
+        (finding) => finding.file === '.cortex/promoted.md',
+      ),
+    ).toBe(true);
+  } finally {
+    rmSync(repoRoot, REMOVE_OPTIONS);
   }
 });
 
