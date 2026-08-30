@@ -1,8 +1,13 @@
-import { can_activate_authentication_route_control } from "./nook-companion-wasm/nook_companion_wasm.js";
+import {
+  can_activate_authentication_route_control,
+  looks_like_login_advance_control_label,
+} from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
   isAuthUsernameField,
+  nearestUnownedAuthContainer,
   PasswordFormScopeKind,
   type PasswordFormScope,
+  type UnownedAuthContainerRequest,
 } from "./password-form-fields";
 
 export enum PasswordFormQueryKind {
@@ -507,7 +512,11 @@ export function selectedSubmitterBlocksCredentialDisclosure({
     }
     return explicitFormMethodBlocksDisclosure(form);
   }
-  if (formHasSemanticSubmitter(form) && formUsesGetSubmission(form)) {
+  if (
+    formHasSemanticSubmitter(form) &&
+    formUsesGetSubmission(form) &&
+    !formHasRustClassifiableAdvanceControl(form)
+  ) {
     return true;
   }
   return (
@@ -644,14 +653,17 @@ function canActivateAuthenticationRouteControl(
   }
 
   const sharesOwnedForm = Boolean(form && form === query.usernameField.form);
+  const unownedScopeRequest: UnownedLocalScopeRequest = {
+    root: query.root,
+    field: query.usernameField,
+    control,
+  };
   const hasLocalUnownedScope =
     !form &&
     !query.usernameField.form &&
     query.kind === PasswordFormQueryKind.Scoped &&
     query.formScope.kind === PasswordFormScopeKind.Unowned &&
-    query.root instanceof Element &&
-    query.root.contains(control) &&
-    query.root.contains(query.usernameField);
+    unownedQueryHasLocalScope(unownedScopeRequest);
 
   return can_activate_authentication_route_control(
     sourceOrigin,
@@ -725,6 +737,47 @@ function formHasAriaDisabledSemanticSubmitter(form: HTMLFormElement): boolean {
         isDisabledByAncestorAria(control))
     );
   });
+}
+
+export function formHasRustClassifiableAdvanceControl(
+  form: HTMLFormElement,
+): boolean {
+  return Array.from(
+    form.ownerDocument.querySelectorAll<HTMLElement>(
+      authenticationAdvanceControlSelector,
+    ),
+  ).some((control) => {
+    if (controlIsInert(control)) return false;
+    const owner = associatedAuthenticationForm(control);
+    return (
+      owner.kind === PasswordFormScopeKind.Owned &&
+      owner.owner === form &&
+      looks_like_login_advance_control_label(controlLabel(control))
+    );
+  });
+}
+
+type UnownedLocalScopeRequest = {
+  root: ParentNode;
+  field: HTMLInputElement;
+  control: HTMLElement;
+};
+
+function unownedQueryHasLocalScope({
+  root,
+  field,
+  control,
+}: UnownedLocalScopeRequest): boolean {
+  if (root instanceof Element) {
+    return root.contains(control) && root.contains(field);
+  }
+  if (!(root instanceof Document)) return false;
+  const containerRequest: UnownedAuthContainerRequest = {
+    field,
+    root: field.ownerDocument,
+  };
+  const container = nearestUnownedAuthContainer(containerRequest);
+  return container instanceof Element && container.contains(control);
 }
 
 export function formHasSemanticSubmitter(form: HTMLFormElement): boolean {

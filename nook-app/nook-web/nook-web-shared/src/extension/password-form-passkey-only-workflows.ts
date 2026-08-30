@@ -18,6 +18,8 @@ import {
   controlLabel,
   formBlocksCredentialDisclosure,
   formHasPostMethodSubmitter,
+  formHasRustClassifiableAdvanceControl,
+  formHasSemanticSubmitter,
   MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
   PasswordFormQueryKind,
   type PasswordFormScopeQuery,
@@ -312,20 +314,14 @@ function unownedScopeLooksProgressing(root: ParentNode): boolean {
 
 function ownedFormLooksProgressing({
   form,
+  summary,
 }: OwnedFormProgressionRequest): boolean {
-  return Array.from(
-    form.ownerDocument.querySelectorAll<HTMLElement>(
-      authenticationAdvanceControlSelector,
-    ),
-  ).some((control) => {
-    if (controlIsInert(control)) return false;
-    const owner = associatedAuthenticationForm(control);
-    return (
-      owner.kind === PasswordFormScopeKind.Owned &&
-      owner.owner === form &&
-      looks_like_login_advance_control_label(controlLabel(control))
-    );
-  });
+  if (formHasRustClassifiableAdvanceControl(form)) return true;
+  if (formHasSemanticSubmitter(form)) return false;
+  return (
+    (summary.currentPasswordFieldCount > 0 || summary.usernameFieldCount > 0) &&
+    typeof form.requestSubmit === "function"
+  );
 }
 
 function takeBoundedPriorityWorkflows<

@@ -651,6 +651,7 @@ function containerIsFormlessAuthenticationScope({
   }
   return (
     containerHasUnownedCredentialCluster(container) &&
+    !containerHasGenericTypeButtonControls(container) &&
     !typeButtonPromotionSwallowsForeignScope(promotionRequest)
   );
 }

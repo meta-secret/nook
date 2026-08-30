@@ -296,6 +296,12 @@ export default defineConfig(({ mode }) => {
       isolate: true,
       pool: 'forks',
       fileParallelism: false,
+      maxWorkers: 1,
+      poolOptions: {
+        forks: {
+          isolate: true,
+        },
+      },
     },
   }
 })
