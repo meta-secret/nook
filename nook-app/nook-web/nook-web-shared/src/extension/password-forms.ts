@@ -949,7 +949,7 @@ export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
   const form = anchor.form;
   if (form) {
     const activation = activateApprovedOwnedAdvanceControl(request, form);
-    if (activation.kind === "activated") return activation.submitted;
+    if (activation.kind === "activated") return true;
   }
 
   if (!passwordField) {
