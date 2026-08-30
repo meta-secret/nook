@@ -836,6 +836,30 @@ describe('authentication workflow ranking', () => {
     ).toBe(true)
   })
 
+  test('keeps a Rust-classifiable login when vetoed password forms fill the shortlist', () => {
+    const decoys = Array.from(
+      { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS * 2 },
+      (_, index) =>
+        `<form method="post" id="delete-${index}" action="/account/delete"><input autocomplete="username" /><input type="password" autocomplete="current-password" /><button type="submit">Delete account</button></form>`,
+    ).join('')
+    document.body.innerHTML = `
+      ${decoys}
+      <form method="post" id="password-login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS)
+    expect(
+      observations.some(
+        (observation) => ownedFormId(observation) === 'password-login',
+      ),
+    ).toBe(true)
+  })
+
   test('keeps a progressing password login when non-progressing OTP forms fill the bound', () => {
     const otpForms = Array.from(
       { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS },

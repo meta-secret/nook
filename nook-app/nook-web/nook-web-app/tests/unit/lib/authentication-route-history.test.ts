@@ -27,6 +27,33 @@ describe('authentication route history', () => {
     expect(routes).toEqual(['/login', '/login/verify', '/login/verify'])
   })
 
+  test('notifies on Navigation API same-document entry changes', () => {
+    const listeners: Array<() => void> = []
+    const navigation = {
+      addEventListener(type: string, listener: () => void) {
+        if (type === 'currententrychange') listeners.push(listener)
+      },
+      removeEventListener(type: string, listener: () => void) {
+        const index = listeners.indexOf(listener)
+        if (index >= 0) listeners.splice(index, 1)
+      },
+    }
+    Object.defineProperty(window, 'navigation', {
+      configurable: true,
+      value: navigation,
+    })
+    const routes: string[] = []
+    const stop = observeAuthenticationRouteHistory(() => {
+      routes.push(location.pathname)
+    })
+    listeners[0]?.()
+    stop()
+    listeners[0]?.()
+    Reflect.deleteProperty(window, 'navigation')
+    expect(routes).toEqual(['/'])
+    expect(listeners).toHaveLength(0)
+  })
+
   test('notifies on hashchange without DOM mutations', () => {
     const routes: string[] = []
     const stop = observeAuthenticationRouteHistory(() => {

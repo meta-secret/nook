@@ -472,6 +472,30 @@ describe('website one-time-code fields', () => {
     expect(submissions).toBe(1)
   })
 
+  test('does not fill after username input drops POST and no approved submitter remains', () => {
+    document.body.innerHTML = `
+      <form method="post" id="login" action="/auth/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Delete account</button>
+      </form>
+    `
+    document
+      .querySelector('input[autocomplete="username"]')
+      ?.addEventListener('input', () => {
+        document.querySelector('form')?.removeAttribute('method')
+      })
+    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: { username: 'vault-user', password: 'vault-pass' },
+      kind: PasswordFormQueryKind.Root,
+      root: document,
+    }
+    expect(fillLoginCredentials(fillArgs)).toBe(false)
+    expect(
+      document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
+    ).toBe('')
+  })
+
   test('uses the OTP form destination instead of an auxiliary control destination', () => {
     document.body.innerHTML = `
       <form method="post" id="otp-login" action="/mfa/challenge">

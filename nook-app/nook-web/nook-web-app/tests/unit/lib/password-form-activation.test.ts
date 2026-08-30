@@ -211,7 +211,7 @@ describe('classified login activation', () => {
     expect(activated).toBe('submit')
   })
 
-  test('activates the Rust-approved type-button instead of posting the form action', () => {
+  test('does not treat leftover type-button formaction as a safe login destination', () => {
     document.body.innerHTML = `
       <form method="post" id="login" action="/account/delete">
         <input autocomplete="username" />
@@ -228,8 +228,8 @@ describe('classified login activation', () => {
       activated = 'form'
     })
 
-    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
-    expect(activated).toBe('safe')
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(false)
+    expect(activated).toBe('')
   })
 
   test('advances a form-less username-only login whose page path is the destination', () => {

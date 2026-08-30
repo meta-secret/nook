@@ -29,6 +29,44 @@ export function isAuthenticationRouteHistoryMessage(
   );
 }
 
+type NavigationCurrentEntryChangeListener = () => void;
+
+type SameDocumentNavigationObserver = {
+  addEventListener(
+    type: "currententrychange",
+    listener: NavigationCurrentEntryChangeListener,
+  ): void;
+  removeEventListener(
+    type: "currententrychange",
+    listener: NavigationCurrentEntryChangeListener,
+  ): void;
+};
+
+function sameDocumentNavigationObserver():
+  SameDocumentNavigationObserver | false {
+  const navigation = Reflect.get(window, "navigation");
+  if (
+    typeof navigation !== "object" ||
+    !navigation ||
+    typeof Reflect.get(navigation, "addEventListener") !== "function" ||
+    typeof Reflect.get(navigation, "removeEventListener") !== "function"
+  ) {
+    return false;
+  }
+  return navigation as SameDocumentNavigationObserver;
+}
+
+function observeSameDocumentNavigation(
+  onNavigate: NavigationCurrentEntryChangeListener,
+): () => void {
+  const navigation = sameDocumentNavigationObserver();
+  if (!navigation) return () => {};
+  navigation.addEventListener("currententrychange", onNavigate);
+  return () => {
+    navigation.removeEventListener("currententrychange", onNavigate);
+  };
+}
+
 export function observeAuthenticationRouteHistory(
   onNavigate: () => void,
 ): () => void {
@@ -44,10 +82,12 @@ export function observeAuthenticationRouteHistory(
   };
   window.addEventListener("popstate", onNavigate);
   window.addEventListener("hashchange", onNavigate);
+  const stopNavigation = observeSameDocumentNavigation(onNavigate);
   return () => {
     history.pushState = pushState;
     history.replaceState = replaceState;
     window.removeEventListener("popstate", onNavigate);
     window.removeEventListener("hashchange", onNavigate);
+    stopNavigation();
   };
 }

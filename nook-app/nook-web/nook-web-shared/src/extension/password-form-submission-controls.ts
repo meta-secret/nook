@@ -178,6 +178,7 @@ export function controlDestinationIdentity({
   if (
     (control instanceof HTMLButtonElement ||
       control instanceof HTMLInputElement) &&
+    controlHasNativeSubmitSemantics(control) &&
     control.hasAttribute("formaction")
   ) {
     return control.formAction;
@@ -506,6 +507,9 @@ export function selectedSubmitterBlocksCredentialDisclosure({
     }
     return explicitFormMethodBlocksDisclosure(form);
   }
+  if (formHasSemanticSubmitter(form) && formUsesGetSubmission(form)) {
+    return true;
+  }
   return (
     explicitFormMethodBlocksDisclosure(form) || formHasDialogSubmitter(form)
   );
@@ -578,7 +582,11 @@ export function authenticationRouteDestination({
   form,
   control,
 }: AuthenticationRouteDestinationRequest): string {
-  if (control?.hasAttribute("formaction")) {
+  if (
+    control &&
+    controlHasNativeSubmitSemantics(control) &&
+    control.hasAttribute("formaction")
+  ) {
     return boundedAuthenticationDestination(control.formAction);
   }
   return ownedFormDestinationIdentity(form);
