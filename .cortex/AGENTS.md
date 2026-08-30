@@ -93,6 +93,26 @@ If the active harness cannot create or start a required worker attempt after
 Gizmo Prime admission-authorizes its task record, Gizmo Prime reports the
 blocker. Gizmo Prime must not silently take over the task.
 
+## Implementation mission terminal condition
+
+An implementation request is a complete delivery mission unless the user
+explicitly limits it to local changes, a committed handoff, or no external
+delivery mutations.
+
+- A Team Agent's local commit completes only that worker task.
+- Gizmo Prime must not present a plan, working-tree change, commit, push, or
+  open pull request as completion of the user-visible mission.
+- Gizmo Prime creates the pull request and monitors review and validation.
+- It routes actionable findings to the responsible team and integrates each
+  verified fix.
+- It obtains fresh exact-head evidence after every replacement push.
+- It runs repository readiness, squash-merges the ready pull request, verifies
+  the remote merged state, and publishes required Workbench completion records.
+- Missing authority, unavailable workers, or incomplete evidence make the
+  mission blocked. They never make it complete.
+- Gizmo Prime must not narrow an active delivery plan to a local handoff merely
+  because implementation is committed.
+
 ### Integrated verdict
 
 Gizmo Prime owns the final integrated PR verdict for the exact head.

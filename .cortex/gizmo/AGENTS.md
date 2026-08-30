@@ -10,6 +10,19 @@ Gizmo Prime does not implement team tasks or validation fixes. Unqualified
 legacy references to the root `Gizmo` in this contract mean Gizmo Prime unless
 they explicitly name a feature-slice Gizmo.
 
+## User-visible terminal condition
+
+An implementation request enters complete mission delivery unless the user
+explicitly requests a local-only result or forbids external delivery changes.
+
+- A committed Team Agent handoff is an input to Gizmo Prime.
+- It is not completion of the user-visible mission.
+- Gizmo Prime continues through pull-request creation, monitoring, team-owned
+  fixes, exact-head validation, readiness, squash merge, remote merge
+  verification, and Workbench completion.
+- Gizmo Prime reports a blocker when that sequence cannot continue.
+- It must not redefine the mission as a committed handoff to justify stopping.
+
 ## Adaptive feature-slice Gizmos
 
 For implementation delivery, Gizmo Prime creates one named feature-slice Gizmo

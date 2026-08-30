@@ -34,6 +34,10 @@ export type AuditTeamCortexAuthorityRequest = {
   readonly source: string;
 };
 
+export type AuditGizmoCortexAuthorityRequest = {
+  readonly source: string;
+};
+
 type ExpectedTeamAuthority = {
   readonly identity: string;
   readonly contextDirectory: string;
@@ -43,6 +47,7 @@ type ExpectedTeamAuthority = {
 
 const TEAM_CATALOG_PATH = 'agentic-ai/loom/src/team-agents/catalog.ts';
 const TEAM_AUTHORITY_PATH = '.cortex/AGENTS.md';
+const GIZMO_AUTHORITY_PATH = '.cortex/gizmo/AGENTS.md';
 const PARENT_OWNED_LIFECYCLE_BOUNDARY =
   'The active harness owns creation, communication, scheduling, retries, cancellation, barriers, synthesis, and delivery lifecycle state.';
 const EXPECTED_TEAM_AUTHORITIES = new Map<TeamKey, ExpectedTeamAuthority>([
@@ -122,6 +127,29 @@ const TEAM_AUTHORITY_CONTRACT_SECTIONS: readonly MarkdownContractSection[] = [
       'A web-development worker loads `teams/web-dev/AGENTS.md` and `teams/web-dev/knowledge-graph.md`.',
     ],
   },
+  {
+    heading: '## Implementation mission terminal condition',
+    requiredMarkers: [
+      "A Team Agent's local commit completes only that worker task.",
+      'Gizmo Prime creates the pull request and monitors review and validation.',
+      'It runs repository readiness, squash-merges the ready pull request, verifies the remote merged state, and publishes required Workbench completion records.',
+      'Missing authority, unavailable workers, or incomplete evidence make the mission blocked. They never make it complete.',
+      'Gizmo Prime must not narrow an active delivery plan to a local handoff merely because implementation is committed.',
+    ],
+  },
+];
+
+const GIZMO_AUTHORITY_CONTRACT_SECTIONS: readonly MarkdownContractSection[] = [
+  {
+    heading: '## User-visible terminal condition',
+    requiredMarkers: [
+      'A committed Team Agent handoff is an input to Gizmo Prime.',
+      'It is not completion of the user-visible mission.',
+      'Gizmo Prime continues through pull-request creation, monitoring, team-owned fixes, exact-head validation, readiness, squash merge, remote merge verification, and Workbench completion.',
+      'Gizmo Prime reports a blocker when that sequence cannot continue.',
+      'It must not redefine the mission as a committed handoff to justify stopping.',
+    ],
+  },
 ];
 
 export function auditTeamAgents(
@@ -149,6 +177,13 @@ export function auditTeamAuthorities(
     source: authoritySource,
   };
   findings.push(...auditTeamCortexAuthority(cortexAuthorityRequest));
+  const gizmoSource = existsSync(join(request.repoRoot, GIZMO_AUTHORITY_PATH))
+    ? readFileSync(join(request.repoRoot, GIZMO_AUTHORITY_PATH), 'utf8')
+    : '';
+  const gizmoRequest: AuditGizmoCortexAuthorityRequest = {
+    source: gizmoSource,
+  };
+  findings.push(...auditGizmoCortexAuthority(gizmoRequest));
   for (const skillPath of CORTEX_AUTHORING_SKILL_PATHS) {
     if (!existsSync(join(request.repoRoot, skillPath))) {
       const finding: TeamAuthorityAuditFinding = {
@@ -242,6 +277,25 @@ export function auditTeamCortexAuthority(
       code: 'cortex-team-contract-semantic-drift',
       path: TEAM_AUTHORITY_PATH,
       message: `Canonical Cortex team contract drifted in ${drift.heading}: ${drift.missingMarkers.join(', ')}`,
+    };
+    findings.push(finding);
+  }
+  return findings;
+}
+
+export function auditGizmoCortexAuthority(
+  request: AuditGizmoCortexAuthorityRequest,
+): readonly TeamAuthorityAuditFinding[] {
+  const findings: TeamAuthorityAuditFinding[] = [];
+  const contractAuditRequest: MarkdownContractAuditRequest = {
+    sections: GIZMO_AUTHORITY_CONTRACT_SECTIONS,
+    source: request.source,
+  };
+  for (const drift of auditMarkdownContractSections(contractAuditRequest)) {
+    const finding: TeamAuthorityAuditFinding = {
+      code: 'cortex-gizmo-contract-semantic-drift',
+      path: GIZMO_AUTHORITY_PATH,
+      message: `Canonical Gizmo contract drifted in ${drift.heading}: ${drift.missingMarkers.join(', ')}`,
     };
     findings.push(finding);
   }
