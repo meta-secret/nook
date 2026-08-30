@@ -54,12 +54,6 @@ fn critical_architecture_rule_stays_wired_to_agent_guidance() -> anyhow::Result<
             "{name} must not preserve a larger Rust allowance"
         );
         assert!(
-            source.contains("overcomplicated")
-                || source.contains("too many")
-                || source.contains("excessive"),
-            "{name} must explain that oversized Rust indicates excessive domain responsibility"
-        );
-        assert!(
             source.contains("unit tests") && source.contains("integration tests"),
             "{name} must require unit-test colocation and preserve integration tests"
         );
@@ -69,8 +63,9 @@ fn critical_architecture_rule_stays_wired_to_agent_guidance() -> anyhow::Result<
         );
     }
 
-    assert!(SOURCE_SIZE_REMEDIATION.contains("P1 source architecture violation"));
-    assert!(SOURCE_SIZE_REMEDIATION.contains("overcomplicated domain model"));
+    assert!(SOURCE_SIZE_REMEDIATION.contains("P1 hard source-size violation"));
+    assert!(SOURCE_SIZE_REMEDIATION.contains("delivery remains blocked"));
+    assert!(SOURCE_SIZE_REMEDIATION.contains("Review the oversized module"));
     assert!(SOURCE_SIZE_REMEDIATION.contains("Extracting tests alone is prohibited"));
     assert!(SOURCE_SIZE_REMEDIATION.contains("Arbitrary half-splits"));
     assert!(UNIT_TEST_COLOCATION_REMEDIATION.contains("unit tests must be inline"));

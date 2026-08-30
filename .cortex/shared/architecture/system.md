@@ -364,7 +364,6 @@ See [architecture/engineering-harness.md](../../teams/sre/architecture/engineeri
   - Loom owns deterministic tools and typed admission calculations.
   - Hive owns durable task state and isolated execution.
   - One delivery owner integrates results and mutates shared lifecycle state.
-
 Hive lives in `agentic-ai/minds/hive` and is deployed only through the
 domain-owned Hive commands flattened into the `infra/Taskfile.yml` command
 surface for the dedicated k0s host. It is a

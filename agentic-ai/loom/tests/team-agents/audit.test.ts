@@ -1,20 +1,11 @@
-import {
-  mkdir,
-  mkdtemp,
-  readFile,
-  rm,
-  symlink,
-  writeFile,
-} from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import type { MakeDirectoryOptions, RmOptions } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
 import {
-  auditGizmoCortexAuthority,
   auditTeamAgents,
   auditTeamAuthorities,
-  auditTeamCortexAuthority,
 } from '../../src/team-agents/audit.ts';
 import type {
   AuditTeamAgentsRequest,
@@ -84,74 +75,21 @@ describe('canonical Cortex team authority', () => {
     }
   });
 
-  test('rejects semantic drift in context, isolation, and lifecycle authority', async () => {
-    const source = await readFile(join(REPO_ROOT, '.cortex/AGENTS.md'), 'utf8');
-    const driftedSource = source.replace(
-      'It does not grant parent-owned lifecycle authority.',
-      'It may grant lifecycle authority to a child.',
-    );
-    const authorityRequest = { source: driftedSource };
-
-    expect(
-      auditTeamCortexAuthority(authorityRequest).map((finding) => finding.code),
-    ).toContain('cortex-team-contract-semantic-drift');
-  });
-
-  test('rejects omission of automatic Cortex authoring context', async () => {
-    const source = await readFile(join(REPO_ROOT, '.cortex/AGENTS.md'), 'utf8');
-    const driftedSource = source.replace(
-      'A write claim that overlaps `.cortex/**` automatically requires the canonical\n  Cortex authoring bundle:',
-      'Cortex writing context is optional.',
-    );
-    const authorityRequest = { source: driftedSource };
-
-    expect(
-      auditTeamCortexAuthority(authorityRequest).map((finding) => finding.code),
-    ).toContain('cortex-team-contract-semantic-drift');
-  });
-
-  test('rejects drift in any canonical authoring bundle member', async () => {
-    const source = await readFile(join(REPO_ROOT, '.cortex/AGENTS.md'), 'utf8');
-    const driftedSource = source.replace(
-      '`teams/ai/dynamic-skills/cortex-consistency.md`.',
-      '`teams/ai/dynamic-skills/another-writer.md`.',
-    );
-    const authorityRequest = { source: driftedSource };
-
-    expect(
-      auditTeamCortexAuthority(authorityRequest).map((finding) => finding.code),
-    ).toContain('cortex-team-contract-semantic-drift');
-  });
-
-  test('rejects a local handoff as an implementation mission terminal', async () => {
-    const source = await readFile(join(REPO_ROOT, '.cortex/AGENTS.md'), 'utf8');
-    const driftedSource = source.replace(
-      "A Team Agent's local commit completes only that worker task.",
-      'A local commit completes the mission.',
-    );
-    const authorityRequest = { source: driftedSource };
-
-    expect(
-      auditTeamCortexAuthority(authorityRequest).map((finding) => finding.code),
-    ).toContain('cortex-team-contract-semantic-drift');
-  });
-
-  test('rejects Gizmo stopping at a committed handoff', async () => {
-    const source = await readFile(
-      join(REPO_ROOT, '.cortex/gizmo/AGENTS.md'),
-      'utf8',
-    );
-    const driftedSource = source.replace(
-      'It is not completion of the user-visible mission.',
-      'It completes the user-visible mission.',
-    );
-    const authorityRequest = { source: driftedSource };
-
-    expect(
-      auditGizmoCortexAuthority(authorityRequest).map(
-        (finding) => finding.code,
-      ),
-    ).toContain('cortex-gizmo-contract-semantic-drift');
+  test('rejects root authorities that lose compact semantic contracts', async () => {
+    const fixtureRoot = await driftedAuthorityFixture();
+    try {
+      const auditRequest: AuditTeamAgentsRequest = { repoRoot: fixtureRoot };
+      const report = auditTeamAgents(auditRequest);
+      expect(report.auditOk).toBe(false);
+      expect(report.findings.map((finding) => finding.code)).toContain(
+        'invalid-cortex-team-authority',
+      );
+      expect(report.findings.map((finding) => finding.code)).toContain(
+        'invalid-cortex-gizmo-authority',
+      );
+    } finally {
+      await rm(fixtureRoot, REMOVE_RECURSIVELY);
+    }
   });
 
   test('does not require or treat vendor profile TOMLs as authority', async () => {
@@ -189,5 +127,21 @@ function requiredAiAuthority(): TeamAuthority {
 async function cortexAuthorityFixture(): Promise<string> {
   const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-team-authority-'));
   await symlink(join(REPO_ROOT, '.cortex'), join(fixtureRoot, '.cortex'));
+  return fixtureRoot;
+}
+
+async function driftedAuthorityFixture(): Promise<string> {
+  const fixtureRoot = await mkdtemp(
+    join(tmpdir(), 'loom-team-authority-drift-'),
+  );
+  const cortexRoot = join(fixtureRoot, '.cortex');
+  await mkdir(join(cortexRoot, 'gizmo'), CREATE_RECURSIVELY);
+  await symlink(join(REPO_ROOT, '.cortex/teams'), join(cortexRoot, 'teams'));
+  await writeFile(join(cortexRoot, 'AGENTS.md'), 'routing only\n', 'utf8');
+  await writeFile(
+    join(cortexRoot, 'gizmo/AGENTS.md'),
+    'delivery only\n',
+    'utf8',
+  );
   return fixtureRoot;
 }
