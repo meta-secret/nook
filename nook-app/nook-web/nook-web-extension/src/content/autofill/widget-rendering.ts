@@ -1,8 +1,15 @@
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 import { isTrustedAuthAction } from '../../lib/auth-widget-policy'
-import type { AuthenticationWorkflowSnapshotView } from '../../lib/auth-workflow-messages'
-import { AuthenticationWorkflowAction } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
+  authenticationWorkflowApprovalsMatch,
+  type AuthenticationWorkflowApproval,
+  type AuthenticationWorkflowSnapshotView,
+} from '../../lib/auth-workflow-messages'
+import {
+  AuthenticationWorkflowAction,
+  type AuthenticationPageObservationFacts,
+} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   detectEnrollmentHints,
   renderEnrollmentActions,
@@ -19,9 +26,12 @@ import {
   proposePasskeyWithNook,
 } from './login-passkey-actions'
 import {
+  AuthenticatorPickerKind,
+  LoginPickerKind,
   WidgetHostKind,
   WidgetWorkflowKeyKind,
   WidgetWorkflowRootKind,
+  pickerState,
   widgetState,
 } from './state'
 import {
@@ -53,6 +63,12 @@ export function renderEnrollmentWidget({
     vaultConnection.connected ? 'connected' : 'disconnected',
     vaultConnection.vaultName ?? '',
   ].join(':')
+  if (pickerState.login.kind === LoginPickerKind.Open) {
+    cancelPendingLoginPickerRequest()
+  }
+  if (pickerState.authenticator.kind === AuthenticatorPickerKind.Open) {
+    cancelPendingAuthenticatorPickerRequest()
+  }
   if (
     widgetState.host.kind === WidgetHostKind.Attached &&
     widgetState.workflowKey.kind === WidgetWorkflowKeyKind.Assigned &&
@@ -101,12 +117,14 @@ export function renderEnrollmentWidget({
 type RenderWidgetArgs = {
   snapshot: AuthenticationWorkflowSnapshotView
   workflow: PasswordFormObservation
+  facts: AuthenticationPageObservationFacts
   vaultConnection: PilotVaultConnection
 }
 
 export function renderWidget({
   snapshot,
   workflow,
+  facts,
   vaultConnection,
 }: RenderWidgetArgs): void {
   if (widgetState.dismissed) {
@@ -123,6 +141,32 @@ export function renderWidget({
     vaultConnection.connected ? 'connected' : 'disconnected',
     vaultConnection.vaultName ?? '',
   ].join(':')
+  const currentApproval: AuthenticationWorkflowApproval = {
+    workflowKey,
+    facts,
+  }
+  if (pickerState.login.kind === LoginPickerKind.Open) {
+    const approvalPair: Parameters<
+      typeof authenticationWorkflowApprovalsMatch
+    >[0] = {
+      approved: pickerState.login.request.approval,
+      current: currentApproval,
+    }
+    if (!authenticationWorkflowApprovalsMatch(approvalPair)) {
+      cancelPendingLoginPickerRequest()
+    }
+  }
+  if (pickerState.authenticator.kind === AuthenticatorPickerKind.Open) {
+    const approvalPair: Parameters<
+      typeof authenticationWorkflowApprovalsMatch
+    >[0] = {
+      approved: pickerState.authenticator.request.approval,
+      current: currentApproval,
+    }
+    if (!authenticationWorkflowApprovalsMatch(approvalPair)) {
+      cancelPendingAuthenticatorPickerRequest()
+    }
+  }
   if (
     widgetState.host.kind === WidgetHostKind.Attached &&
     widgetState.workflowKey.kind === WidgetWorkflowKeyKind.Assigned &&
@@ -136,6 +180,14 @@ export function renderWidget({
         widgetState.renderedWorkflowRoot.observation.formScope.owner ===
           workflow.formScope.owner))
   ) {
+    const renderedWorkflowRoot: Parameters<
+      typeof widgetState.setRenderedWorkflowRoot
+    >[0] = {
+      kind: WidgetWorkflowRootKind.Assigned,
+      observation: workflow,
+      facts,
+    }
+    widgetState.setRenderedWorkflowRoot(renderedWorkflowRoot)
     return
   }
   if (widgetState.host.kind === WidgetHostKind.Attached) removeWidget()
@@ -211,6 +263,7 @@ export function renderWidget({
         description,
         continueButton,
         action: snapshot.action,
+        workflow,
       }
       void proposePasskeyWithNook(nookTypedArgs0_6)
     } else {
@@ -246,6 +299,7 @@ export function renderWidget({
   >[0]['workflowRoot'] = {
     kind: WidgetWorkflowRootKind.Assigned,
     observation: workflow,
+    facts,
   }
   const nookTypedArgs0_8: Parameters<typeof mountWidgetShell>[0] = {
     shell,

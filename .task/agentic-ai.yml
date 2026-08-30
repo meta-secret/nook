@@ -4,26 +4,25 @@ vars:
   REPO_ROOT:
     sh: 'if [ -n "${REPO_ROOT:-}" ]; then printf "%s" "$REPO_ROOT"; else git rev-parse --show-toplevel; fi'
   CI_AGENT_DIR: agentic-ai/ci-agent
-  SKILL_APPLICATION_DIRS: .cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts
 
 tasks:
   skills:install:
     desc: Install every executable skill package with its frozen lockfile.
     silent: true
     cmds:
-      - set -euo pipefail; bun "{{.REPO_ROOT}}/agentic-ai/loom/src/executable-skills/repository-cli.ts" "{{.REPO_ROOT}}"; for skill_dir in {{.SKILL_APPLICATION_DIRS}}; do (cd "{{.REPO_ROOT}}/$skill_dir" && bun install --frozen-lockfile 1>&2); done
+      - bun "{{.REPO_ROOT}}/agentic-ai/loom/src/executable-skills/package-gate-cli.ts" install "{{.REPO_ROOT}}"
 
   skills:format:
     desc: Format every executable skill package.
     deps: [skills:install]
     cmds:
-      - set -euo pipefail; for skill_dir in {{.SKILL_APPLICATION_DIRS}}; do (cd "{{.REPO_ROOT}}/$skill_dir" && bun run format); done
+      - bun "{{.REPO_ROOT}}/agentic-ai/loom/src/executable-skills/package-gate-cli.ts" format "{{.REPO_ROOT}}"
 
   skills:verify:
     desc: Verify every executable skill package.
     deps: [skills:install]
     cmds:
-      - set -euo pipefail; for skill_dir in {{.SKILL_APPLICATION_DIRS}}; do (cd "{{.REPO_ROOT}}/$skill_dir" && bun run verify); done
+      - bun "{{.REPO_ROOT}}/agentic-ai/loom/src/executable-skills/package-gate-cli.ts" verify "{{.REPO_ROOT}}"
 
   loom:install:
     desc: Install Loom Bun dependencies with a frozen lockfile.
@@ -174,30 +173,6 @@ tasks:
     deps: [loom:install]
     cmds:
       - task loom:default FAMILY=cortexSessionClean
-
-  loom:agent-workflow:cortex-audit:
-    desc: Run the event-sourced Cortex full-GC workflow under workflow/processing (BASELINE=<40-char-sha>, PLAN=1 for dry-run).
-    deps: [loom:install]
-    requires:
-      vars: [BASELINE]
-    env:
-      LOOM_WORKFLOW_BASELINE: '{{.BASELINE}}'
-      LOOM_WORKFLOW_PLAN: '{{default "0" .PLAN}}'
-    cmds:
-      - |
-        set -euo pipefail
-        if [ "$LOOM_WORKFLOW_PLAN" = "1" ]; then
-          bun run --cwd agentic-ai/loom agent-workflow -- \
-            cortex-full-garbage-collection \
-            --baseline "$LOOM_WORKFLOW_BASELINE" \
-            --working-directory "{{.REPO_ROOT}}" \
-            --plan
-        else
-          bun run --cwd agentic-ai/loom agent-workflow -- \
-            cortex-full-garbage-collection \
-            --baseline "$LOOM_WORKFLOW_BASELINE" \
-            --working-directory "{{.REPO_ROOT}}"
-        fi
 
   loom:module-delivery:validate:
     desc: Validate and dry-run one reviewed module delivery plan (PLAN=<plan.json>).

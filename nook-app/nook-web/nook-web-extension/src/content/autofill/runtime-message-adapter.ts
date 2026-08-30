@@ -1,6 +1,10 @@
 import { companionWasmReady } from '../../../../nook-web-shared/src/extension/companion-ready'
 import type { GeneratePasswordRequest } from '../../../../nook-web-shared/src/extension/runtime-messages'
-import type { AuthenticationWorkflowSnapshotMessage } from '../../lib/auth-workflow-messages'
+import {
+  isAuthenticationPageObservationView,
+  type AuthenticationPageObservationView,
+  type AuthenticationWorkflowSnapshotMessage,
+} from '../../lib/auth-workflow-messages'
 import type {
   AuthenticatorPickerCancelMessage,
   WebsiteAuthenticatorPickerOpenMessage,
@@ -82,6 +86,16 @@ export enum RuntimeMessageDeliveryKind {
 export type RuntimeMessageDelivery<Response> =
   | { kind: RuntimeMessageDeliveryKind.Delivered; response: Response }
   | { kind: RuntimeMessageDeliveryKind.Unavailable }
+
+export type AuthenticationWorkflowSnapshotRuntimeResponse = {
+  verdict: AuthenticationWorkflowSnapshotResponse
+  selectedFacts?: AuthenticationPageObservationView
+}
+
+type AuthenticationWorkflowSnapshotRoutingWire =
+  AuthenticationWorkflowSnapshotResponseWire & {
+    selectedFacts?: unknown
+  }
 
 export type ExtensionRuntimeRequest =
   | AuthenticationOutcomeClassifyMessage
@@ -296,18 +310,34 @@ export async function sendAuthenticatorPickerOpenRuntimeMessage(
 
 export async function sendAuthenticationWorkflowSnapshotRuntimeMessage(
   message: AuthenticationWorkflowSnapshotMessage,
-): Promise<RuntimeMessageDelivery<AuthenticationWorkflowSnapshotResponse>> {
+): Promise<
+  RuntimeMessageDelivery<AuthenticationWorkflowSnapshotRuntimeResponse>
+> {
   const delivery = await sendRuntimeMessage(message)
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
     return unavailable()
   }
   try {
     await companionWasmReady
-    const responseWire =
-      delivery.response as AuthenticationWorkflowSnapshotResponseWire
+    const routingWire =
+      delivery.response as AuthenticationWorkflowSnapshotRoutingWire
+    const { selectedFacts, ...responseWire } = routingWire
+    const verdictWire =
+      responseWire as AuthenticationWorkflowSnapshotResponseWire
+    const verdict =
+      decode_authentication_workflow_snapshot_response(verdictWire)
+    if ('snapshot' in verdict) {
+      if (!isAuthenticationPageObservationView(selectedFacts)) {
+        return unavailable()
+      }
+      return {
+        kind: RuntimeMessageDeliveryKind.Delivered,
+        response: { verdict, selectedFacts },
+      }
+    }
     return {
       kind: RuntimeMessageDeliveryKind.Delivered,
-      response: decode_authentication_workflow_snapshot_response(responseWire),
+      response: { verdict },
     }
   } catch {
     return unavailable()

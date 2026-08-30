@@ -15,14 +15,14 @@ try {
   )
 }
 
-const result = spawnSync(viteBin, ['build', '--config', 'vite.config.ts'], {
-  cwd: fixtureRoot,
-  stdio: 'inherit',
-  env: {
-    ...process.env,
-    PATH: `/usr/local/bun/bin:${process.env.PATH ?? ''}`,
+const result = spawnSync(
+  process.execPath,
+  [viteBin, 'build', '--config', 'vite.config.ts'],
+  {
+    cwd: fixtureRoot,
+    stdio: 'inherit',
   },
-})
+)
 
 if (result.status !== 0) {
   process.exit(result.status ?? 1)

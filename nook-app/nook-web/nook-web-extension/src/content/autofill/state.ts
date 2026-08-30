@@ -1,5 +1,7 @@
+import type { AuthenticationPageObservationFacts } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 import type { WebsiteLoginSaveOfferView } from '../../lib/login-save-messages'
+import type { AuthenticationWorkflowApproval } from '../../lib/auth-workflow-messages'
 
 export type WidgetPosition = { left: number; top: number }
 
@@ -11,6 +13,7 @@ type PendingAuthenticatorPicker = {
   description: HTMLParagraphElement
   continueButton: HTMLButtonElement
   timeoutId: number
+  approval: AuthenticationWorkflowApproval
 }
 
 type PendingLoginPicker = PendingAuthenticatorPicker
@@ -22,6 +25,7 @@ export enum ScanScheduleKind {
 export type ScanSchedule =
   | { kind: ScanScheduleKind.Idle }
   | { kind: ScanScheduleKind.Scheduled; timer: number }
+export type AuthenticationScanMutationBatch = MutationRecord[]
 export enum WidgetHostKind {
   Detached = 'detached',
   Attached = 'attached',
@@ -48,6 +52,7 @@ export type WidgetWorkflowRoot =
   | {
       kind: WidgetWorkflowRootKind.Assigned
       observation: PasswordFormObservation
+      facts: AuthenticationPageObservationFacts
     }
 export enum WidgetPlacementKind {
   Unpositioned = 'unpositioned',
@@ -100,16 +105,25 @@ export type PendingSaveWatch = {
 
 class ScanState {
   private currentSchedule: ScanSchedule = { kind: ScanScheduleKind.Idle }
+  private scheduleStartedAt = 0
   sequence = 0
-  schedule: () => void = () => {}
+  schedule: (mutations?: AuthenticationScanMutationBatch) => void = () => {}
   get scheduleState(): ScanSchedule {
     return this.currentSchedule
+  }
+  remainingScanDelay(debounceMs: number): number {
+    if (this.currentSchedule.kind !== ScanScheduleKind.Scheduled) {
+      this.scheduleStartedAt = Date.now()
+      return debounceMs
+    }
+    return Math.max(0, debounceMs - (Date.now() - this.scheduleStartedAt))
   }
   scheduleTimer(timer: number): void {
     this.currentSchedule = { kind: ScanScheduleKind.Scheduled, timer }
   }
   clearPendingTimer(): void {
     this.currentSchedule = { kind: ScanScheduleKind.Idle }
+    this.scheduleStartedAt = 0
   }
 }
 

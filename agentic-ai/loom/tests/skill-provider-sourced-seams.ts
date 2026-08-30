@@ -10,6 +10,81 @@ export type AuditedSourceRequest = {
   readonly sourcePath: string | false;
   readonly targetPath: string | false;
 };
+export type AuditedRuntimeSourceRequest = {
+  readonly path: string;
+  readonly source: string;
+};
+
+const AUDITED_RUNTIME_SOURCES = new Map([
+  [
+    '.github/scripts/arc-hive-render-contract.ts',
+    'c2967a2f817ccd9326a0005247fb0cab89f410b2f422ab18cba7f0b43219d5e8',
+  ],
+  [
+    'infra/sim/kubernetes-cache/contracts.ts',
+    '6497fdf6579ce20a577a1613785baa2009562855c5ec5837ad990b717040aafc',
+  ],
+  [
+    '.github/scripts/format-host-apply.test.sh',
+    '7af6e59c95f952a7dec0b8ac4e2a4fe9d4fcd932af85a29fa528442b7c394f94',
+  ],
+  [
+    'agentic-ai/ci-agent/scripts/exit-smoke.mjs',
+    'acdc9208aa99cbedbbcac688316622757a58ea67a9df408ed0b1a6c4b536b423',
+  ],
+  [
+    '.github/scripts/with-healthy-buildkit.sh',
+    '798779bc3ca3625d32aae0e60bf80fa0655c82ba6a265589149291eb34573f70',
+  ],
+  [
+    '.github/scripts/with-remote-buildkit.sh',
+    '37092dc116525202e3348f15f2fd63872d2621390a5a64497774e2a9c6feb301',
+  ],
+  [
+    '.github/scripts/services-network-repair-test.ts',
+    '936746c2aee4f6cb8b3525222d7619ab7796aa541314a466db98150a8f7fe006',
+  ],
+  [
+    '.github/scripts/k0s-cni-migration-test.ts',
+    '1399fa145b50cb4c97c7f409380c899be9c57b05db150d6e0424b1598e709ea9',
+  ],
+  [
+    '.github/scripts/k0s-firewall-rollback-test.ts',
+    '5b9fbf0739db31d91e535ad8b779f0c2cdfcfc8d484cec9679c3a9010d03fa9f',
+  ],
+  [
+    '.github/scripts/remote-task-batch.sh',
+    '5e080e77ac462a6de1339b55ab26ad0b8a240128975621acf8163ae3d4e90c49',
+  ],
+  [
+    'infra/operator-ssh.ts',
+    '4a8bddcf4f0ceef6426306157f70d450ecfc4ce894cbc6aaae5b4646548a3da6',
+  ],
+  [
+    'infra/providers/ovh-dedicated.ts',
+    'e32c98b4f3c280cf994e44b78a9df3d636beaefff82701d86b5ebaeff43a9b15',
+  ],
+  [
+    'nook-app/nook-web/nook-web-app/scripts/verify-app-isolation.ts',
+    'b1a958b0499e73241a967d5540c3615e66a91be43a4f1a53e9cdeccd8f85f417',
+  ],
+  [
+    'nook-app/nook-web/nook-web-extension/scripts/hosted-extension.sh',
+    '920eda984b215b325800af8e56f6af3ebf699a93f0aec0cb52b41792b16edfe9',
+  ],
+  [
+    'nook-app/nook-web/nook-web-extension/scripts/setup-brave-vault.mjs',
+    '648f9893b06dd4a896608919686c7d85b45f121ca5c44e4870233d52548c7657',
+  ],
+  [
+    'nook-app/nook-web/nook-web-extension/scripts/setup-brave-vault.sh',
+    '6b977f77b3e2724e71ee6bc4011946ff60ff46398f0940307b9cf7fd20a7c153',
+  ],
+  [
+    'nook-app/nook-web/nook-web-extension/scripts/test-hosted-smoke.sh',
+    '8d10b7f14d6bc03ded1128899a018d213b92a1864c45266c9dc4382bfd6842a2',
+  ],
+]);
 
 export const AUDITED_SOURCE_SEAMS: readonly AuditedSourceSeam[] = [
   ...[
@@ -74,7 +149,9 @@ export function isAuditedSource(request: AuditedSourceRequest): boolean {
   return AUDITED_SOURCE_SEAMS.some(
     (seam) =>
       seam.sourcePath === request.sourcePath &&
-      (seam.specifier === specifier || seam.marker === specifier) &&
+      (seam.specifier === specifier ||
+        seam.marker === specifier ||
+        seam.targetPath === specifier) &&
       seam.targetPath === request.targetPath &&
       seamDigestMatches(seam),
   );
@@ -124,3 +201,16 @@ import type {
   ShellWord,
   WordEnvironmentRequest,
 } from './skill-provider-command-types.ts';
+
+export function isAuditedRuntimeSource(
+  request: AuditedRuntimeSourceRequest,
+): boolean {
+  const expected = AUDITED_RUNTIME_SOURCES.get(request.path);
+  if (typeof expected !== 'string') return false;
+  const actual = new Bun.CryptoHasher('sha256')
+    .update(request.source)
+    .digest('hex');
+  if (actual !== expected)
+    throw new Error(`Audited runtime source has drifted: ${request.path}`);
+  return true;
+}

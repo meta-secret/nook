@@ -56,11 +56,6 @@ reuse a narrower validation result, or dispatch through an unvalidated path.
 Report the missing typed-runtime capability to Gizmo and wait for compatible
 executable enforcement.
 
-The reviewed `loom:agent-workflow:cortex-audit` SDK path is a legacy standalone
-read-only workflow outside ordinary Gizmo multi-team admission. Its internal
-static scheduler does not prove or enforce this contract and must not be used
-to claim, authorize, or execute ordinary multi-team delegation.
-
 ## Deterministic work belongs to tools
 
 Simple does not mean agent-shaped.
@@ -91,15 +86,16 @@ It makes these properties deterministic:
 - result shape;
 - lifecycle state.
 
-## Gizmo
+## Gizmo Prime and feature-slice Gizmos
 
-Exactly one Gizmo owns delivery.
+Exactly one Gizmo Prime—the existing root Gizmo—owns delivery. This formal name
+does not add an engineering team or another root coordinator.
 
-Gizmo owns:
+Gizmo Prime owns:
 
 - Workbench planning and lifecycle records;
 - architectural synthesis;
-- shared-file edits;
+- shared-file serialization, exact writer grants, and integration;
 - integration decisions;
 - branch and pull-request state;
 - review replies and thread resolution;
@@ -108,7 +104,22 @@ Gizmo owns:
 - the final completion report.
 
 Team subagents must not mutate those surfaces.
-The active harness may coordinate subagents on Gizmo's behalf.
+The active harness may coordinate subagents on Gizmo Prime's behalf.
+
+### Adaptive cardinality
+
+- Gizmo Prime creates one named immutable feature-slice Gizmo Workbench record
+  by default for one semantic PR slice.
+- It records additional feature-slice Gizmos only when the feature is expected
+  to exceed or actually grows beyond 2,000 authored additions plus deletions
+  and needs semantic PR slices, or for genuinely independent delivery units.
+- Team Agent count never determines this cardinality.
+- A feature-slice Gizmo record groups Team Agent contracts and accepted results
+  for exactly one PR slice. It is not a process, agent, worker attempt,
+  controller, or team identity and performs no coordination or handoff.
+- Gizmo Prime routes task contracts by their assigned Gizmo ID, receives Team
+  Agent handoffs directly, and aggregates verified results under the record.
+  Only the existing harness operates the admission-authorized attempts.
 
 This rule preserves
 [agent feature ownership](../dynamic-skills/agent-feature-ownership.md).
@@ -448,16 +459,20 @@ Module-oriented work follows
 - Give every write-capable worker an isolated workspace.
 - Verify every returned commit against its exact baseline and allowed paths.
 - Bind every downstream task to the exact integrated provider commit.
-- Keep shared files and integrated or external delivery state with Gizmo.
+- Keep shared-file serialization, writer grants, integration, and external
+  delivery state with Gizmo. An assigned worker may edit only an exact shared
+  file named by its frozen grant.
 
 The plan declares a task-specific hierarchy depth bound.
 The frozen worker graph records parent lineage and bounded authority for every
 worker-executable team or provider task.
 Those fields support validation and result aggregation; they do not authorize
-an active worker to create another worker. Only Gizmo may add a newly discovered
-dependency through a replacement immutable generation, and only the harness
-may create its attempt after Gizmo admission-authorizes it and freezes its
-frontier following old-generation disposition.
+an active worker to create another worker. The assigned Gizmo ID in plan and
+task context binds Team Agent work to its passive slice record, but only Gizmo
+Prime may add a newly discovered dependency through a replacement immutable
+generation, and only the harness may create its attempt after Gizmo Prime
+admission-authorizes it and freezes its frontier following old-generation
+disposition.
 `ModuleExpertEvidence`, Markdown, and `parentActions` are recommendations.
 They do not authorize worker creation or lifecycle mutations.
 
@@ -584,23 +599,6 @@ It remains separate from disposable `.cortex/.session/` reflection memory.
 
 ## Safe delegation patterns
 
-### Full Cortex garbage collection
-
-A full-tree Cortex audit MUST fan out when two or more document families are in
-scope.
-
-Useful read-only partitions include:
-
-- workflows and references;
-- design docs and product specs;
-- dynamic skills and entry points;
-- code, Task, and CI evidence.
-
-Gizmo resolves conflicting findings and assigns the final edit to an AI team
-subagent.
-
-A topic-local one-hop consistency check does not require fan-out.
-
 ### Structural coherence
 
 Use the
@@ -616,10 +614,6 @@ or Cortex structure is the requested maintenance surface.
   structural `Completed` and `Failed` observations, cannot satisfy ordinary
   provider edges, and must not be reused for future ordinary accepted-evidence
   synthesis.
-- The separate legacy static `loom:agent-workflow:cortex-audit` lane uses
-  `FindingSynthesizer` and `CortexSynthesis` under its own all-terminal
-  diagnostic contract. It does not alias the structural identities and cannot
-  satisfy ordinary provider edges.
 - Future ordinary synthesis requires a distinct typed role, profile, and result
   contract before implementation; no such identity or runtime support is
   declared here, so ordinary dispatch remains fail-closed.
@@ -714,9 +708,6 @@ This delegation workflow still owns the worker boundary:
 - Gizmo defines and reviews the integration; and
 - child workers do not acquire delivery authority.
 
-The architecture boundary is defined in
-[agent-workflow-orchestration.md](../../teams/ai/design-docs/agent-workflow-orchestration.md).
-
 ## Validation
 
 Before integration, verify:
@@ -774,8 +765,6 @@ Before integration, verify:
 - before ordinary multi-team dispatch, the installed typed validator and
   focused tests encoded and enforced the complete admission contract; otherwise
   execution failed closed before any attempt;
-- the legacy standalone read-only Cortex-audit SDK workflow was not used to
-  claim, authorize, or execute ordinary multi-team delegation;
 - Gizmo validated each computed batch, selected and admission-authorized task
   records, and froze and owned every exact starting frontier;
 - the active harness created and operated attempts only for Gizmo-authorized

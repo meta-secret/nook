@@ -1,7 +1,6 @@
 import { auditCortexArticleStructure } from '../src/audit.ts';
 import {
   CortexArticleContractKind,
-  CORTEX_ARTICLE_MIGRATION_LEDGER_PATH,
   type AuditCortexArticleStructureRequest,
   type CortexArticleDocument,
   type CortexArticleFinding,
@@ -10,8 +9,6 @@ import {
 
 export type MakeAuditRequest = {
   readonly documents: readonly CortexArticleDocument[];
-  readonly migrationBaselineEntries?: readonly string[] | false;
-  readonly migrationLedgerContent?: string | false;
 };
 
 export type MakeDocumentRequest = {
@@ -34,11 +31,6 @@ export function makeAuditRequest(
   return {
     kind: CortexArticleContractKind.Request,
     documents: request.documents,
-    migrationBaselineEntries: request.migrationBaselineEntries ?? false,
-    migrationLedger: {
-      relativePath: CORTEX_ARTICLE_MIGRATION_LEDGER_PATH,
-      content: request.migrationLedgerContent ?? false,
-    },
   };
 }
 

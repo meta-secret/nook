@@ -30,15 +30,20 @@ import {
   applyCd,
   applyParentMutation,
   applySetPositional,
+  assertNoDynamicShellRuntimeScript,
   assertSafeShellRuntime,
   hasArithmeticTestExecution,
+  hasLeadingStdinRedirection,
   isolatedShellState,
   mergeConditionalShellState,
   nodeInspectExecutables,
   normalizedRuntime,
+  PROTECTED_SKILL_PATH,
   restoreShellState,
   shellStdinConsumer,
+  shellRuntimeUsesStdinRedirection,
   withoutLeadingRedirections,
+  looksLikeRepositoryScript,
 } from './skill-provider-shell-command.ts';
 import {
   ShellSeparator,
@@ -68,8 +73,6 @@ export type {
 const MAX_SHELL_COMMANDS = 4_096;
 const MAX_SHELL_DEPTH = 8;
 const MAX_COMMAND_NORMALIZATIONS = 32;
-const PROTECTED_SKILL_PATH =
-  /(?:\.agents\/skills|\.cortex\/(?:gizmo|shared|teams\/[^/]+)\/dynamic-skills\/[^/]+\/scripts)\//u;
 const PROTECTED_SKILL_FRAGMENTS = [
   '.cortex',
   'dynamic-skills',
@@ -92,12 +95,12 @@ const BUN_SUBCOMMANDS = new Set(
 );
 const NODE_BOOLEAN_OPTIONS = new Set('--check --test --version -v'.split(' '));
 const NODE_VALUE_OPTIONS = new Set(
-  '--conditions --require --import --loader --experimental-loader --env-file --input-type -e --eval --print -p'.split(
+  '--conditions --require --import --loader --experimental-loader --env-file --env-file-if-exists --input-type -e --eval --print -p'.split(
     ' ',
   ),
 );
 const EXECUTABLE_RUNTIME_OPTIONS = new Set(
-  '--cwd --preload --require --import --loader --experimental-loader --eval -e --print -p'.split(
+  '--cwd --preload --require --import --loader --experimental-loader --env-file --env-file-if-exists --eval -e --print -p'.split(
     ' ',
   ),
 );
@@ -234,9 +237,10 @@ function analyzeCommandSource(request: ShellCommandRequest): void {
     if (token === ShellSeparator.Case) request.state.casePattern = true;
   }
 }
-
 function analyzeCommand(request: RuntimeCommandRequest): void {
   const words = [...withoutLeadingRedirections(request.words)];
+  if (hasLeadingStdinRedirection(request.words) && shellStdinConsumer(words))
+    throw new Error('Shell runtime stdin redirection is forbidden.');
   for (const word of words)
     for (const source of shellSubstitutionBodies(word.source))
       analyzeSubstitution([request, source]);
@@ -403,9 +407,8 @@ function analyzeResolvedCommand(resolved: ResolvedCommandRequest): void {
       throw new Error(
         `Dynamic protected-skill command construction is forbidden: ${command.source}`,
       );
-    if (command.source.includes('{{')) return;
     throw new Error(
-      `Unknown dynamic executable is forbidden: ${command.source}`,
+      `Unknown dynamic executable is forbidden in ${request.state.sourcePath || 'inline'}: ${command.source}`,
     );
   }
   index += 1;
@@ -597,7 +600,7 @@ function wordHasProtectedMarkers(word: ShellWord): boolean {
   );
 }
 
-function consumeEnvPrefix(request: EnvPrefixRequest): number {
+export function consumeEnvPrefix(request: EnvPrefixRequest): number {
   let index = request.start;
   let options = true;
   while (index < request.words.length) {
@@ -730,6 +733,13 @@ function analyzeRuntime(request: RuntimeCommandRequest): void {
     assertAuditedSource([request.runtime, request.state, request.words]);
     return;
   }
+  if (
+    posix.basename(request.runtime) === 'find' &&
+    request.words.some((word) =>
+      ['-exec', '-execdir', '-ok', '-okdir'].includes(word.value),
+    )
+  )
+    throw new Error('Find command-executing predicate is forbidden.');
   if (request.state.functions.has('command_not_found_handle'))
     throw new Error('Shell command-not-found hooks are forbidden.');
   const directExecutable = staticWord(request.runtime);
@@ -738,18 +748,25 @@ function analyzeRuntime(request: RuntimeCommandRequest): void {
       executable: directExecutable,
       arguments: request.words,
     };
-    const launchRequest: LaunchRequest = { launch, state: request.state };
+    const launchRequest: LaunchRequest = {
+      launch,
+      requiresExecuteMode: true,
+      state: request.state,
+    };
     addLaunch(launchRequest);
   }
 }
 
 function analyzeShellRuntime(request: RuntimeCommandRequest): void {
+  if (shellRuntimeUsesStdinRedirection(request.words))
+    throw new Error('Shell runtime stdin redirection is forbidden.');
   let index = 0;
   let commandString = false;
   while (index < request.words.length) {
     const word = request.words[index] as ShellWord;
-    if (!word.value.startsWith('-') || word.value === '-') break;
     if (word.dynamic) {
+      assertNoDynamicShellRuntimeScript([request.words, index]);
+      if (!word.value.startsWith('-') || word.value === '-') return;
       const argumentsRequest: WordsEnvironmentRequest = {
         words: request.words.slice(index),
         environment: request.state.environment,
@@ -760,6 +777,7 @@ function analyzeShellRuntime(request: RuntimeCommandRequest): void {
         );
       return;
     }
+    if (!word.value.startsWith('-') || word.value === '-') break;
     if (word.value === '--') {
       index += 1;
       break;
@@ -776,25 +794,26 @@ function analyzeShellRuntime(request: RuntimeCommandRequest): void {
     throw new Error('Shell process-substitution input is forbidden.');
   if (!executableIsStatic(executable)) return;
   if (commandString) {
-    const positionalArguments = request.state.positionalArguments;
-    request.state.positionalArguments = request.words.slice(index + 2);
+    const nestedState = isolatedShellState(request.state);
+    nestedState.positionalArguments = request.words.slice(index + 2);
     const nestedRequest: ShellCommandRequest = {
       depth: request.depth + 1,
       source: executable.value,
-      state: request.state,
+      state: nestedState,
     };
-    try {
-      analyzeCommandSource(nestedRequest);
-    } finally {
-      request.state.positionalArguments = positionalArguments;
-    }
+    analyzeCommandSource(nestedRequest);
+    request.state.commandCount = nestedState.commandCount;
     return;
   }
   const launch: RuntimeExecutable = {
     executable,
     arguments: request.words.slice(index + 1),
   };
-  const launchRequest: LaunchRequest = { launch, state: request.state };
+  const launchRequest: LaunchRequest = {
+    launch,
+    shellRuntime: true,
+    state: request.state,
+  };
   addLaunch(launchRequest);
 }
 
@@ -814,12 +833,13 @@ function runtimeExecutable(
     if (word.dynamic) {
       if (
         request.words
-          .slice(index)
-          .some((candidate) => PROTECTED_SKILL_PATH.test(candidate.value))
+          .slice(index + 1)
+          .some(
+            (candidate) =>
+              !candidate.dynamic && looksLikeRepositoryScript(candidate.value),
+          )
       )
-        throw new Error(
-          'Dynamic protected-skill runtime option construction is forbidden.',
-        );
+        throw new Error('Dynamic runtime option construction is forbidden.');
       return false;
     }
     const option = word.value.split('=')[0] ?? '';
@@ -841,12 +861,14 @@ function runtimeExecutable(
       if (value.dynamic) {
         if (
           request.words
-            .slice(index + 1)
-            .some((candidate) => PROTECTED_SKILL_PATH.test(candidate.value))
+            .slice(index + 2)
+            .some(
+              (candidate) =>
+                !candidate.dynamic &&
+                looksLikeRepositoryScript(candidate.value),
+            )
         )
-          throw new Error(
-            'Dynamic protected-skill runtime option value is forbidden.',
-          );
+          throw new Error('Dynamic runtime option value is forbidden.');
         return false;
       }
       index += 1;
@@ -856,16 +878,6 @@ function runtimeExecutable(
   if (index === request.words.length) return false;
   const executable = request.words[index] as ShellWord;
   if (!executableIsStatic(executable)) {
-    if (
-      executable.source.includes('{{') &&
-      !wordHasProtectedMarkers(executable)
-    )
-      return false;
-    if (
-      (request.runtime === 'task' || request.runtime === 'go-task') &&
-      /^\{\{\.[A-Za-z_]\w*\}\}$/u.test(executable.source)
-    )
-      return false;
     throw new Error(
       `Dynamic ${request.runtime} executable construction is forbidden: ${executable.source}`,
     );
@@ -932,21 +944,13 @@ function addLaunch(request: LaunchRequest): void {
     value: word.value,
   }));
   const scriptLaunch: ShellScriptLaunch = {
-    specifier: value,
     positionalArguments,
+    requiresExecuteMode: request.requiresExecuteMode === true,
+    shellRuntime: request.shellRuntime === true,
+    specifier: value,
+    workingDirectory: request.state.cwd,
   };
   request.state.launches.push(scriptLaunch);
-}
-
-function looksLikeRepositoryScript(value: string): boolean {
-  if (value.includes('*') || value.includes('?') || value.includes('['))
-    return PROTECTED_SKILL_PATH.test(value);
-  if (/^(?:build|coverage|dist|target)\//u.test(value)) return false;
-  return (
-    !/^(?:[a-z]+:|\/)/u.test(value) &&
-    !value.includes('node_modules/.bin/') &&
-    /[/.]/u.test(value)
-  );
 }
 
 function expandPositionalWords(

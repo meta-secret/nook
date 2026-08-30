@@ -43,7 +43,7 @@ export enum OpenPrLookupKind {
 }
 
 export type OpenPrLookup =
-  | { kind: OpenPrLookupKind.Found; number: number }
+  | { kind: OpenPrLookupKind.Found; number: number; baseBranch: string }
   | { kind: OpenPrLookupKind.NotFound };
 
 export function parseRepository(fullName: string): RepoRef {
@@ -106,7 +106,11 @@ export async function findOpenPr(
   });
   const match = data[0];
   return match
-    ? { kind: OpenPrLookupKind.Found, number: match.number }
+    ? {
+        kind: OpenPrLookupKind.Found,
+        number: match.number,
+        baseBranch: match.base.ref,
+      }
     : { kind: OpenPrLookupKind.NotFound };
 }
 
@@ -132,6 +136,7 @@ export async function createFixPr(
   headBranch: string,
   runId: string,
   fixLabel = "main CI",
+  baseBranch = "main",
 ): Promise<number> {
   const { owner, repo } = repoRef;
   const title =
@@ -152,13 +157,18 @@ export async function createFixPr(
       repo,
       title,
       head: headBranch,
-      base: "main",
+      base: baseBranch,
       body: requestedBody,
     });
     return data.number;
   } catch (err: unknown) {
     const existing = await findOpenPr(octokit, repoRef, headBranch);
     if (existing.kind === OpenPrLookupKind.Found) {
+      if (existing.baseBranch !== baseBranch) {
+        throw new Error(
+          `Open PR for ${headBranch} targets ${existing.baseBranch}, expected ${baseBranch}`,
+        );
+      }
       return existing.number;
     }
     throw err;
@@ -228,10 +238,7 @@ export function requiredPrWorkflows(paths: string[]): RequiredPrWorkflow[] {
   }
   // Product PRs run ecosystem jobs inside pr.yml. Only minds-only PRs still
   // require the thin rust-ecosystem.yml entry point.
-  if (
-    paths.some(isRustEcosystemPath) &&
-    paths.every(isMainPrIgnoredPath)
-  ) {
+  if (paths.some(isRustEcosystemPath) && paths.every(isMainPrIgnoredPath)) {
     required.push(RUST_ECOSYSTEM_PR_WORKFLOW);
   }
   if (paths.some((path) => !isMainPrIgnoredPath(path))) {
@@ -393,15 +400,17 @@ export async function inspectPrFeedback(
     | { kind: PaginationKind.NextPage; cursor: string }
     | { kind: PaginationKind.Complete } = { kind: PaginationKind.FirstPage };
   while (pagination.kind !== PaginationKind.Complete) {
-    const page: ReviewThreadPage =
-      await octokit.graphql<ReviewThreadPage>(REVIEW_THREADS_QUERY, {
+    const page: ReviewThreadPage = await octokit.graphql<ReviewThreadPage>(
+      REVIEW_THREADS_QUERY,
+      {
         owner,
         repo,
         number: prNumber,
         ...(pagination.kind === PaginationKind.NextPage
           ? { cursor: pagination.cursor }
           : {}),
-      });
+      },
+    );
     const threads: ReviewThreads = page.repository.pullRequest.reviewThreads;
     unresolvedThreads += threads.nodes.filter(
       (thread) => !thread.isResolved,
@@ -456,9 +465,13 @@ export async function inspectPrFeedback(
   const approvalReaction = requestReactions.some(
     (reaction) => reaction.content === "+1" && isCodexReviewer(reaction.user),
   );
-  const cleanComment = issueComments.some((comment) =>
-    evidenceFollowsTransition(comment.created_at ?? "", currentHeadTransition) &&
-    isCleanCodexReviewComment(comment.body ?? "", comment.user, pr.head.sha),
+  const cleanComment = issueComments.some(
+    (comment) =>
+      evidenceFollowsTransition(
+        comment.created_at ?? "",
+        currentHeadTransition,
+      ) &&
+      isCleanCodexReviewComment(comment.body ?? "", comment.user, pr.head.sha),
   );
 
   const substantiveComments = issueComments.filter(
@@ -469,8 +482,7 @@ export async function inspectPrFeedback(
         cursorMarker,
         marker,
         user: comment.user,
-      }) &&
-      !isCodexCleanReviewStatusComment(comment.body ?? "", comment.user),
+      }) && !isCodexCleanReviewStatusComment(comment.body ?? "", comment.user),
   );
   const currentIterationComments =
     currentHeadTransition.state === HeadTransitionState.Observed
@@ -505,8 +517,7 @@ export async function inspectPrFeedback(
       const reviewerLogin = comment.user?.login;
       return {
         isReply: typeof comment.in_reply_to_id === "number",
-        reviewerLogin:
-          typeof reviewerLogin === "string" ? reviewerLogin : "",
+        reviewerLogin: typeof reviewerLogin === "string" ? reviewerLogin : "",
         reviewId:
           typeof comment.pull_request_review_id === "number"
             ? comment.pull_request_review_id
@@ -640,9 +651,7 @@ export function isRepositoryStatusComment(
       body: input.body,
       user: input.user,
     }) ||
-    (["OWNER", "MEMBER", "COLLABORATOR"].includes(
-      input.authorAssociation,
-    ) &&
+    (["OWNER", "MEMBER", "COLLABORATOR"].includes(input.authorAssociation) &&
       /^cursor review\n\n<!-- nook-cursor-review:[^\s<>]+ -->$/.test(
         input.body.trim(),
       )) ||
@@ -679,7 +688,9 @@ function evidenceFollowsTransition(
   return evidenceAt.length === 0 || evidenceAt >= transition.at;
 }
 
-function isGitHubActionsBot(user: RepositoryStatusCommentInput["user"]): boolean {
+function isGitHubActionsBot(
+  user: RepositoryStatusCommentInput["user"],
+): boolean {
   return (
     typeof user === "object" &&
     !!user &&

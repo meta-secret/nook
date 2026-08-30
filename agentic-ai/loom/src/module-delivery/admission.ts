@@ -35,6 +35,9 @@ import type {
 } from './evidence.ts';
 import type { AgentAttemptParent } from '../agent-workflow/domain.ts';
 import type { TeamKey } from '../team-agents/catalog.ts';
+import { admitCortexAuthoringContext } from './cortex-context.ts';
+import type { AdmitCortexAuthoringContextRequest } from './cortex-context.ts';
+import type { TeamTaskContext } from '../team-agents/context.ts';
 import type {
   ModuleDeliveryNodeV2,
   ModuleDeliveryResourceClaims,
@@ -134,6 +137,7 @@ type AttemptIdentity = Readonly<{
 export type ModuleDeliveryAdmission = AttemptIdentity & {
   readonly startingFrontier: string;
   readonly resources: ModuleDeliveryResourceClaims;
+  readonly context?: TeamTaskContext;
   readonly team: TeamKey;
   readonly functionalOwner: TeamKey;
   readonly acceptanceOwner: TeamKey;
@@ -588,6 +592,18 @@ export function selectModuleDeliveryAdmissions(
             }),
           )
         : Object.freeze([]);
+    const contextFields: { context?: TeamTaskContext } = {};
+    if (node.kind === ModuleDeliveryTaskKind.Write && node.cortexAuthoring) {
+      const contextAdmissionRequest: AdmitCortexAuthoringContextRequest = {
+        repositoryRoot: authority.repositoryRoot,
+        startingFrontier: startingFrontier(frontierRequest),
+        node,
+        resources,
+      };
+      contextFields.context = admitCortexAuthoringContext(
+        contextAdmissionRequest,
+      );
+    }
     const admissionValue: ModuleDeliveryAdmission = {
       taskId,
       attempt: nextAttempt(attemptRequest),
@@ -595,6 +611,7 @@ export function selectModuleDeliveryAdmissions(
       planDigest: request.state.planDigest,
       startingFrontier: startingFrontier(frontierRequest),
       resources,
+      ...contextFields,
       team: node.team,
       functionalOwner: node.functionalOwner,
       acceptanceOwner: node.acceptanceOwner,

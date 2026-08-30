@@ -66,10 +66,12 @@ jobs:
             exit 1
           fi
 
-      - name: Checkout
+      - name: Checkout trusted workflow tooling
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.workflow_sha }}
           token: ${{ secrets.NOOK_GITHUB_PAT }}
 
       - name: Claim ready Workbench issue
@@ -109,6 +111,209 @@ jobs:
               core.setFailed(`${path} must have status: ready and automation: agent`)
               return
             }
+            const frontmatter = body.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/)?.[1] || ''
+            const gizmoIdRows = [...frontmatter.matchAll(/^gizmo_id:\s*(.*)$/gm)]
+            if (gizmoIdRows.length > 1) {
+              core.setFailed(`${path} has duplicate canonical gizmo_id fields`)
+              return
+            }
+            const rawGizmoId = gizmoIdRows[0]?.[1].trim() || ''
+            const assignedGizmoId = rawGizmoId === 'null' ? '' : rawGizmoId
+            if (assignedGizmoId && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(assignedGizmoId)) {
+              core.setFailed(`${path} has an invalid canonical gizmo_id`)
+              return
+            }
+            const stackBranchRows = [...frontmatter.matchAll(/^stack_branch:\s*(.+)$/gm)]
+            const stackPredecessorRows = [...frontmatter.matchAll(/^stack_predecessor_branch:\s*(.+)$/gm)]
+            if (stackBranchRows.length > 1 || stackPredecessorRows.length > 1) {
+              core.setFailed(`${path} has duplicate canonical stack branch fields`)
+              return
+            }
+            const stackBranch = String(value(frontmatter, 'stack_branch')).trim()
+            const stackPredecessorBranch = String(value(frontmatter, 'stack_predecessor_branch')).trim()
+            if (Boolean(stackBranch) !== Boolean(stackPredecessorBranch)) {
+              core.setFailed(`${path} must provide both stack_branch and stack_predecessor_branch`)
+              return
+            }
+            const validBranch = (branch) => {
+              if (
+                !branch || branch.length > 255 || branch === '@' ||
+                branch.startsWith('-') || branch.startsWith('/') ||
+                branch.endsWith('/') || branch.endsWith('.') ||
+                branch.includes('..') || branch.includes('//') ||
+                branch.includes('@{') || /[\u0000-\u0020\u007f~^:?*\[\\]/u.test(branch)
+              ) return false
+              return branch.split('/').every(
+                (component) => !component.startsWith('.') && !component.endsWith('.lock'),
+              )
+            }
+            if (stackBranch) {
+              if (!assignedGizmoId) {
+                core.setFailed(`${path} stack metadata requires a canonical gizmo_id`)
+                return
+              }
+              if (!validBranch(stackBranch) || !validBranch(stackPredecessorBranch)) {
+                core.setFailed(`${path} has malformed stack branch metadata`)
+                return
+              }
+              if (stackBranch === stackPredecessorBranch) {
+                core.setFailed(`${path} stack branch must differ from its predecessor branch`)
+                return
+              }
+              try {
+                await github.rest.repos.getBranch({ ...context.repo, branch: stackBranch })
+              } catch {
+                core.setFailed(`${path} stack_branch must exist in the Nook repository`)
+                return
+              }
+              const { data: stackPulls } = await github.rest.pulls.list({
+                ...context.repo,
+                state: 'open',
+                head: `${context.repo.owner}:${stackBranch}`,
+                per_page: 2,
+              })
+              const stackPull = stackPulls[0]
+              if (stackPulls.length !== 1 || stackPull.head.repo?.full_name !== `${context.repo.owner}/${context.repo.repo}`) {
+                core.setFailed(`${path} stack_branch must have exactly one same-repository open PR`)
+                return
+              }
+              let nativeStacks
+              try {
+                nativeStacks = await github.paginate('GET /repos/{owner}/{repo}/stacks', {
+                  ...context.repo,
+                  per_page: 100,
+                  headers: { accept: 'application/vnd.github.nebula-preview+json' },
+                })
+              } catch {
+                core.setFailed(`${path} GitHub native stack membership is unavailable`)
+                return
+              }
+              const nativeStackMatches = nativeStacks.map((nativeStack) => {
+                const members = Array.isArray(nativeStack.pull_requests) ? nativeStack.pull_requests : []
+                return {
+                  members,
+                  nativeStack,
+                  successorIndex: members.findIndex((member) => member.number === stackPull.number),
+                }
+              }).filter(({ successorIndex }) => successorIndex >= 0)
+              if (
+                nativeStackMatches.length !== 1 ||
+                nativeStackMatches[0].nativeStack.open !== true ||
+                nativeStackMatches[0].nativeStack.base?.ref !== 'main'
+              ) {
+                core.setFailed(`${path} stack_branch must belong to exactly one open GitHub native stack based on main`)
+                return
+              }
+              const { members, successorIndex } = nativeStackMatches[0]
+              const nativeSuccessor = members[successorIndex]
+              const nativePredecessor = members[successorIndex - 1]
+              if (
+                successorIndex <= 0 ||
+                nativeSuccessor.head?.ref !== stackBranch ||
+                nativePredecessor?.head?.ref !== stackPredecessorBranch
+              ) {
+                core.setFailed(`${path} stack_branch must immediately follow stack_predecessor_branch in its GitHub native stack`)
+                return
+              }
+              let predecessorPull
+              try {
+                predecessorPull = (await github.rest.pulls.get({
+                  ...context.repo,
+                  pull_number: nativePredecessor.number,
+                })).data
+              } catch {
+                core.setFailed(`${path} predecessor PR verification is unavailable`)
+                return
+              }
+              if (stackPull.base.ref === stackPredecessorBranch) {
+                try {
+                  await github.rest.repos.getBranch({ ...context.repo, branch: stackPredecessorBranch })
+                } catch {
+                  core.setFailed(`${path} recorded predecessor must exist while it remains the live PR base`)
+                  return
+                }
+                if (
+                  nativePredecessor.state !== 'open' || nativePredecessor.merged_at ||
+                  predecessorPull.state !== 'open' || predecessorPull.merged || predecessorPull.merged_at ||
+                  predecessorPull.head.ref !== stackPredecessorBranch || predecessorPull.base.ref !== 'main'
+                ) {
+                  core.setFailed(`${path} recorded predecessor must remain open and unmerged while it is the live PR base`)
+                  return
+                }
+                core.setOutput('stack_live_base_branch', stackPredecessorBranch)
+              } else if (stackPull.base.ref === 'main') {
+                let mainBranch
+                try {
+                  const mainResponse = await github.rest.repos.getBranch({
+                    ...context.repo,
+                    branch: 'main',
+                  })
+                  mainBranch = mainResponse.data
+                } catch {
+                  core.setFailed(`${path} predecessor merge verification is unavailable`)
+                  return
+                }
+                if (
+                  nativePredecessor.state !== 'closed' || !nativePredecessor.merged_at ||
+                  predecessorPull.merged !== true || !predecessorPull.merged_at ||
+                  predecessorPull.base.ref !== 'main' || !predecessorPull.merge_commit_sha
+                ) {
+                  core.setFailed(`${path} cannot target main before its native-stack predecessor is merged`)
+                  return
+                }
+                let mergeCommit
+                let predecessorHeadCommit
+                let mergeToMain
+                let mainToSuccessor
+                try {
+                  const responses = await Promise.all([
+                    github.rest.repos.getCommit({ ...context.repo, ref: predecessorPull.merge_commit_sha }),
+                    github.rest.repos.getCommit({ ...context.repo, ref: predecessorPull.head.sha }),
+                    github.rest.repos.compareCommitsWithBasehead({
+                      ...context.repo,
+                      basehead: `${predecessorPull.merge_commit_sha}...${mainBranch.commit.sha}`,
+                    }),
+                    github.rest.repos.compareCommitsWithBasehead({
+                      ...context.repo,
+                      basehead: `${mainBranch.commit.sha}...${stackPull.head.sha}`,
+                    }),
+                  ])
+                  mergeCommit = responses[0].data
+                  predecessorHeadCommit = responses[1].data
+                  mergeToMain = responses[2].data
+                  mainToSuccessor = responses[3].data
+                } catch {
+                  core.setFailed(`${path} predecessor squash and main-frontier verification is unavailable`)
+                  return
+                }
+                const mergeIsOnMain = mergeToMain.behind_by === 0 && ['ahead', 'identical'].includes(mergeToMain.status)
+                const squashShape =
+                  predecessorPull.merge_commit_sha !== predecessorPull.head.sha &&
+                  mergeCommit.parents.length === 1 &&
+                  mergeCommit.parents[0]?.sha === predecessorPull.base.sha &&
+                  mergeCommit.commit.tree.sha === predecessorHeadCommit.commit.tree.sha
+                if (!squashShape || !mergeIsOnMain) {
+                  core.setFailed(`${path} native-stack predecessor must be squash-merged into main`)
+                  return
+                }
+                const containsMain = mainToSuccessor.behind_by === 0 && ['ahead', 'identical'].includes(mainToSuccessor.status)
+                if (!containsMain || stackPull.base.sha !== mainBranch.commit.sha) {
+                  core.setFailed(`${path} retargeted successor must contain the current main frontier`)
+                  return
+                }
+                core.setOutput('stack_live_base_branch', 'main')
+              } else {
+                core.setFailed(`${path} successor PR must target its recorded predecessor or main`)
+                return
+              }
+              if (!/^[0-9a-f]{40}$/.test(stackPull.head.sha) || !/^[0-9a-f]{40}$/.test(stackPull.base.sha)) {
+                core.setFailed(`${path} successor PR did not expose immutable head/base SHAs`)
+                return
+              }
+              core.setOutput('stack_pr_number', String(stackPull.number))
+              core.setOutput('stack_start_head_sha', stackPull.head.sha)
+              core.setOutput('stack_live_base_sha', stackPull.base.sha)
+            }
 
             const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
             const continuingOwner = String(value(body, 'owner')).trim()
@@ -144,6 +349,9 @@ jobs:
             core.setOutput('url', `https://github.com/${owner}/${repo}/blob/main/${path}`)
             core.setOutput('slug', path.replace(/^issues\//, '').replace(/\.md$/, '').replaceAll('/', '-'))
             core.setOutput('continuing_owner', continuingOwner)
+            core.setOutput('gizmo_id', assignedGizmoId)
+            core.setOutput('stack_branch', stackBranch)
+            core.setOutput('stack_predecessor_branch', stackPredecessorBranch)
 
       - name: Configure agent task
         id: task
@@ -158,17 +366,36 @@ jobs:
           MANUAL_CONTINUING_OWNER: ${{ inputs.continuing_owner }}
           MAJOR_CHANGE_AUTHORIZED: ${{ inputs.major_change_authorized }}
           RUN_ID: ${{ github.run_id }}
+          ISSUE_STACK_BRANCH: ${{ steps.workbench.outputs.stack_branch }}
+          ISSUE_STACK_LIVE_BASE_BRANCH: ${{ steps.workbench.outputs.stack_live_base_branch }}
+          ISSUE_STACK_LIVE_BASE_SHA: ${{ steps.workbench.outputs.stack_live_base_sha }}
+          ISSUE_STACK_PREDECESSOR_BRANCH: ${{ steps.workbench.outputs.stack_predecessor_branch }}
+          ISSUE_STACK_PR_NUMBER: ${{ steps.workbench.outputs.stack_pr_number }}
+          ISSUE_STACK_START_HEAD_SHA: ${{ steps.workbench.outputs.stack_start_head_sha }}
           WORKBENCH_SLUG: ${{ steps.workbench.outputs.slug }}
         run: |
           set -euo pipefail
-          delim="AGENT_EOF_${RUN_ID}"
           if [ -n "$DISPATCH_PROMPT" ]; then
             branch="agent/prompt-${RUN_ID}"
+            base_branch="main"
+            checkout_ref="main"
+            target_kind="standalone"
             title="Agent implement (run ${RUN_ID})"
             task="$DISPATCH_PROMPT"
             continuing_owner="$MANUAL_CONTINUING_OWNER"
+          elif [ -n "$ISSUE_STACK_BRANCH" ]; then
+            branch="$ISSUE_STACK_BRANCH"
+            base_branch="$ISSUE_STACK_LIVE_BASE_BRANCH"
+            checkout_ref="$ISSUE_STACK_BRANCH"
+            target_kind="stacked"
+            title="Implement ${ISSUE_TITLE}"
+            task="$(printf 'Nook Workbench issue `%s`: %s\nURL: %s\n\n%s' "$ISSUE_PATH" "$ISSUE_TITLE" "$ISSUE_URL" "$ISSUE_BODY")"
+            continuing_owner="$ISSUE_CONTINUING_OWNER"
           else
             branch="agent/workbench-${WORKBENCH_SLUG}-${RUN_ID}"
+            base_branch="main"
+            checkout_ref="main"
+            target_kind="standalone"
             title="Implement ${ISSUE_TITLE}"
             task="$(printf 'Nook Workbench issue `%s`: %s\nURL: %s\n\n%s' "$ISSUE_PATH" "$ISSUE_TITLE" "$ISSUE_URL" "$ISSUE_BODY")"
             continuing_owner="$ISSUE_CONTINUING_OWNER"
@@ -178,48 +405,156 @@ jobs:
           plan_started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           plan_timestamp="$(printf '%s' "$plan_started_at" | tr ':' '-')"
           plan_path="plans/${feature}/${plan_timestamp}-run-${RUN_ID}.md"
-          {
-            echo "AGENT_BRANCH=$branch"
-            echo "FIX_BRANCH=$branch"
-            echo "AGENT_PROMPT<<${delim}"
-            printf '%s\n' "$task"
-            echo "${delim}"
-            echo "AGENT_PR_TITLE<<${delim}"
-            printf '%s\n' "$title"
-            echo "${delim}"
-            echo "AGENT_COMMIT_MESSAGE<<${delim}"
-            printf '%s\n' "$title"
-            echo "${delim}"
-            echo "TASK_FEATURE=$feature"
-            echo "TASK_PLAN_PATH=$plan_path"
-            echo "TASK_PLAN_STARTED_AT=$plan_started_at"
-            echo "TASK_TITLE=$title"
-            echo "CONTINUING_AGENT_OWNER=$continuing_owner"
-            echo "MAJOR_CHANGE_AUTHORIZED=$MAJOR_CHANGE_AUTHORIZED"
-            echo "AGENT_PR_BODY<<${delim}"
+          pr_body="$(
             printf '%s\n' "## Summary"
             if [ -n "$ISSUE_URL" ]; then
               printf '%s\n' "Agent implementation for [\`${ISSUE_PATH}\`](${ISSUE_URL})."
             else
               printf '%s\n' "Agent implementation from a manual workflow prompt."
             fi
-            printf '%s\n' ""
-            printf '%s\n' "## Ownership"
-            printf '%s\n' "Continuing agent: \`${continuing_owner}\`"
+            printf '%s\n' "" "## Ownership" "Continuing agent: \`${continuing_owner}\`"
             if [ -n "$ISSUE_URL" ]; then
               printf '%s\n' "Owned scope: \`${ISSUE_PATH}\`"
             else
               printf '%s\n' "Owned scope: manual prompt run \`${RUN_ID}\`"
             fi
-            printf '%s\n' ""
-            printf '%s\n' "## Test plan"
-            printf '%s\n' "- [ ] CI green on this PR"
-            echo "${delim}"
+            printf '%s\n' "" "## Test plan" "- [ ] CI green on this PR"
+          )"
+          while :; do
+            random_suffix="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
+            test "${#random_suffix}" -eq 64
+            delim="AGENT_EOF_${random_suffix}"
+            collision=false
+            for value in "$task" "$title" "$pr_body"; do
+              if printf '%s\n' "$value" | grep -Fqx -- "$delim"; then
+                collision=true
+                break
+              fi
+            done
+            [ "$collision" = false ] && break
+          done
+          emit_multiline_env() {
+            printf '%s<<%s\n%s\n%s\n' "$1" "$delim" "$2" "$delim"
+          }
+          {
+            echo "AGENT_BRANCH=$branch"
+            echo "FIX_BRANCH=$branch"
+            echo "AGENT_PR_BASE_BRANCH=$base_branch"
+            echo "AGENT_PR_BASE_SHA=$ISSUE_STACK_LIVE_BASE_SHA"
+            echo "AGENT_PR_NUMBER=$ISSUE_STACK_PR_NUMBER"
+            echo "AGENT_PR_PREDECESSOR_BRANCH=$ISSUE_STACK_PREDECESSOR_BRANCH"
+            echo "AGENT_PR_START_HEAD_SHA=$ISSUE_STACK_START_HEAD_SHA"
+            echo "AGENT_PR_TARGET_KIND=$target_kind"
+            emit_multiline_env "AGENT_PROMPT" "$task"
+            emit_multiline_env "AGENT_PR_TITLE" "$title"
+            emit_multiline_env "AGENT_COMMIT_MESSAGE" "$title"
+            echo "TASK_FEATURE=$feature"
+            echo "TASK_PLAN_PATH=$plan_path"
+            echo "TASK_PLAN_STARTED_AT=$plan_started_at"
+            emit_multiline_env "TASK_TITLE" "$title"
+            echo "CONTINUING_AGENT_OWNER=$continuing_owner"
+            echo "MAJOR_CHANGE_AUTHORIZED=$MAJOR_CHANGE_AUTHORIZED"
+            emit_multiline_env "AGENT_PR_BODY" "$pr_body"
           } >> "$GITHUB_ENV"
           echo "ready=true" >> "$GITHUB_OUTPUT"
+          echo "checkout_ref=$checkout_ref" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve standalone prompt rerun
+        id: rerun
+        if: steps.task.outputs.ready == 'true' && inputs.prompt != ''
+        uses: actions/github-script@v9
+        env:
+          AGENT_BRANCH: ${{ env.AGENT_BRANCH }}
+        with:
+          github-token: ${{ secrets.NOOK_GITHUB_PAT }}
+          retries: 3
+          script: |
+            const pulls = await github.rest.pulls.list({
+              ...context.repo,
+              state: 'all',
+              head: `${context.repo.owner}:${process.env.AGENT_BRANCH}`,
+              per_page: 2,
+            })
+            if (pulls.data.length > 1) {
+              core.setFailed(`Multiple open PRs use standalone branch ${process.env.AGENT_BRANCH}`)
+              return
+            }
+            const candidate = pulls.data[0]
+            if (candidate && (candidate.head.repo?.full_name !== `${context.repo.owner}/${context.repo.repo}` || candidate.base.ref !== 'main')) {
+              core.setFailed('Existing standalone implementation PR has an unexpected repository or base')
+              return
+            }
+            if (candidate) {
+              const { data: pull } = await github.rest.pulls.get({
+                ...context.repo,
+                pull_number: candidate.number,
+              })
+              if (pull.state === 'open') {
+                core.setOutput('terminal', 'true')
+                core.setOutput('terminal_reason', 'open')
+                return
+              }
+              if (pull.merged) {
+                core.setOutput('terminal', 'true')
+                core.setOutput('terminal_reason', 'merged')
+                return
+              }
+              core.setFailed(`Standalone implementation PR #${pull.number} was closed without merge; preserve it for explicit recovery`)
+              return
+            }
+            try {
+              await github.rest.repos.getBranch({
+                ...context.repo,
+                branch: process.env.AGENT_BRANCH,
+              })
+              core.setFailed(`Standalone implementation branch ${process.env.AGENT_BRANCH} exists without a PR; preserve it for explicit recovery`)
+              return
+            } catch (error) {
+              if (error.status !== 404) throw error
+            }
+            core.setOutput('terminal', 'false')
+
+      - name: Prepare isolated implementation worktree
+        if: steps.task.outputs.ready == 'true' && steps.rerun.outputs.terminal != 'true'
+        env:
+          IMPLEMENTATION_REF: ${{ steps.task.outputs.checkout_ref }}
+          NOOK_TOKEN: ${{ secrets.NOOK_GITHUB_PAT }}
+          TRUSTED_WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          set -euo pipefail
+          trusted_head="$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)"
+          if [ "$trusted_head" != "$TRUSTED_WORKFLOW_SHA" ]; then
+            echo "::error::Trusted tooling checkout moved away from the workflow SHA."
+            exit 1
+          fi
+          implementation_root="$RUNNER_TEMP/nook-implementation-${GITHUB_RUN_ID}"
+          if [ -e "$implementation_root" ]; then
+            echo "::error::Implementation worktree path already exists."
+            exit 1
+          fi
+          auth="$(printf 'x-access-token:%s' "$NOOK_TOKEN" | base64 | tr -d '\n')"
+          GIT_CONFIG_COUNT=1 \
+          GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+          GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
+          git -C "$GITHUB_WORKSPACE" fetch --no-tags origin \
+            "refs/heads/${IMPLEMENTATION_REF}:refs/remotes/origin/${IMPLEMENTATION_REF}"
+          implementation_sha="$(git -C "$GITHUB_WORKSPACE" rev-parse "refs/remotes/origin/${IMPLEMENTATION_REF}")"
+          test "$implementation_sha" = "${AGENT_PR_START_HEAD_SHA:-$implementation_sha}"
+          if [ "$AGENT_PR_TARGET_KIND" = stacked ]; then
+            GIT_CONFIG_COUNT=1 \
+            GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+            GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
+            git -C "$GITHUB_WORKSPACE" fetch --no-tags origin \
+              "refs/heads/${AGENT_PR_BASE_BRANCH}:refs/nook/validated-base"
+            test "$(git -C "$GITHUB_WORKSPACE" rev-parse refs/nook/validated-base)" = "$AGENT_PR_BASE_SHA"
+          fi
+          unset auth NOOK_TOKEN
+          git -C "$GITHUB_WORKSPACE" worktree add --detach "$implementation_root" \
+            "refs/remotes/origin/${IMPLEMENTATION_REF}"
+          echo "IMPLEMENTATION_REPO_ROOT=$implementation_root" >> "$GITHUB_ENV"
 
       - name: Validate continuing GitHub owner
-        if: steps.task.outputs.ready == 'true'
+        if: steps.task.outputs.ready == 'true' && steps.rerun.outputs.terminal != 'true'
         uses: actions/github-script@v9
         env:
           CONTINUING_AGENT_OWNER: ${{ env.CONTINUING_AGENT_OWNER }}
@@ -236,49 +571,57 @@ jobs:
               core.setFailed(`${username} must be an assignable Nook collaborator with write access`)
             }
 
-      - name: Docker setup
-        if: steps.task.outputs.ready == 'true'
-        uses: ./.github/actions/nook-docker-setup
-        with:
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
-
-      - name: Setup Task
-        if: steps.task.outputs.ready == 'true'
-        uses: go-task/setup-task@v2
-        with:
-          version: 3.52.0
-
       - name: Expose Actions Node.js runtime
-        if: steps.task.outputs.ready == 'true'
+        if: steps.task.outputs.ready == 'true' && steps.rerun.outputs.terminal != 'true'
         uses: ./.github/actions/nook-node-setup
 
-      - name: Build split Rust/WASM and web images
-        if: steps.task.outputs.ready == 'true'
-        run: task setup WASM_BUILD_MODE=prod
+      - name: Install pinned Bun formatter runtime
+        if: steps.task.outputs.ready == 'true' && steps.rerun.outputs.terminal != 'true'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
 
-      - name: Verify checkout for agent bind-mount
-        if: steps.task.outputs.ready == 'true'
+      - name: Install pinned rustfmt
+        if: steps.task.outputs.ready == 'true' && steps.rerun.outputs.terminal != 'true'
+        uses: dtolnay/rust-toolchain@1.97.0
+        with:
+          components: rustfmt
+
+      - name: Prepare direct host tooling
+        if: steps.task.outputs.ready == 'true' && steps.rerun.outputs.terminal != 'true'
         run: |
           set -euo pipefail
-          echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
-          ls -la "$GITHUB_WORKSPACE/.git"
-          git -C "$GITHUB_WORKSPACE" rev-parse --git-dir
-          git -C "$GITHUB_WORKSPACE" status -sb
+          node -e "const [major,minor]=process.versions.node.split('.').map(Number); if(major<22||(major===22&&minor<13)) process.exit(1)"
+          npm ci --ignore-scripts --include=dev --prefix "$GITHUB_WORKSPACE/agentic-ai/ci-agent"
+          npm run build --prefix "$GITHUB_WORKSPACE/agentic-ai/ci-agent"
+          bun install --cwd "$GITHUB_WORKSPACE/.github/formatting" --frozen-lockfile --ignore-scripts
+          rustfmt --version
+
+      - name: Verify trusted tooling and implementation worktree
+        if: steps.task.outputs.ready == 'true' && steps.rerun.outputs.terminal != 'true'
+        env:
+          TRUSTED_WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)" = "$TRUSTED_WORKFLOW_SHA"
+          test "$IMPLEMENTATION_REPO_ROOT" != "$GITHUB_WORKSPACE"
+          git -C "$IMPLEMENTATION_REPO_ROOT" rev-parse --git-dir
+          git -C "$IMPLEMENTATION_REPO_ROOT" status -sb
 
       - name: Run task-planning agent
         id: planning
-        if: steps.task.outputs.ready == 'true'
+        if: steps.task.outputs.ready == 'true' && steps.rerun.outputs.terminal != 'true'
         env:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
           CI_AGENT_PROMPT_FILE: .github/prompts/agent-plan.md
           CI_AGENT_TIMEOUT_MS: "600000"
-        run: task ci-agent:plan
+          ASSIGNED_GIZMO_ID: ${{ steps.workbench.outputs.gizmo_id }}
+          IMPLEMENTATION_REPO_ROOT: ${{ env.IMPLEMENTATION_REPO_ROOT }}
+        run: bash "$GITHUB_WORKSPACE/.github/scripts/ci-agent-plan.sh"
 
       - name: Validate and publish Workbench task plan
         id: plan
-        if: steps.planning.outcome == 'success'
+        if: steps.planning.outcome == 'success' && steps.rerun.outputs.terminal != 'true'
         uses: actions/github-script@v9
         env:
           ISSUE_PATH: ${{ steps.workbench.outputs.path }}
@@ -290,10 +633,12 @@ jobs:
           WORKBENCH_SUMMARY_FILE: ${{ env.WORKBENCH_SUMMARY_FILE }}
           WORKBENCH_REPOSITORY: ${{ env.WORKBENCH_REPOSITORY }}
           CURSOR_SECRET: ${{ secrets.CURSOR_API_KEY }}
+          ASSIGNED_GIZMO_ID: ${{ steps.workbench.outputs.gizmo_id }}
         with:
           github-token: ${{ secrets.NOOK_GITHUB_PAT }}
           retries: 3
           script: |
+            const crypto = require('node:crypto')
             const fs = require('node:fs')
             const { validateAgentRecord } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/workbench-records.cjs`)
             const [owner, repo] = process.env.WORKBENCH_REPOSITORY.split('/')
@@ -317,9 +662,20 @@ jobs:
             }
             const candidate = fs.readFileSync(localPath, 'utf8').trim()
             const sourceTask = process.env.AGENT_PROMPT
-            const rejection = validateAgentRecord(candidate, 'plan', secrets, sourceTask)
+            const rejection = validateAgentRecord(candidate, 'plan', secrets, sourceTask, {
+              assignedGizmoId: process.env.ASSIGNED_GIZMO_ID,
+            })
             if (rejection) {
               core.setFailed(`Rejected agent-authored Workbench task plan: ${rejection}.`)
+              return
+            }
+            const validatedPlan = `${candidate}\n`
+            fs.writeFileSync(localPath, validatedPlan, { encoding: 'utf8', mode: 0o600 })
+            core.setOutput('sha256', crypto.createHash('sha256').update(validatedPlan).digest('hex'))
+            const currentGizmoIdMatch = /^- Current Gizmo ID:\s*([a-z0-9]+(?:-[a-z0-9]+)*)\s*$/m.exec(candidate)
+            const currentGizmoId = currentGizmoIdMatch?.[1]
+            if (!currentGizmoId) {
+              core.setFailed('Validated Workbench task plan is missing its Current Gizmo ID.')
               return
             }
             const plan = [
@@ -327,6 +683,7 @@ jobs:
               `title: ${JSON.stringify(process.env.TASK_TITLE)}`,
               `feature: ${process.env.TASK_FEATURE}`,
               `issue: ${process.env.ISSUE_PATH || 'null'}`,
+              `gizmo_id: ${currentGizmoId}`,
               `started_at: ${process.env.TASK_PLAN_STARTED_AT}`,
               'agent: cursor',
               '---',
@@ -350,19 +707,82 @@ jobs:
               return
             }
 
-      - name: Run ci-agent implement
-        id: implement
-        if: steps.plan.outcome == 'success' && steps.plan.outputs.authorization_blocked != 'true'
+      - name: Materialize validated implementation plan
+        if: steps.plan.outcome == 'success' && steps.plan.outputs.authorization_blocked != 'true' && steps.rerun.outputs.terminal != 'true'
+        env:
+          EXPECTED_PLAN_SHA256: ${{ steps.plan.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+          source_plan="$GITHUB_WORKSPACE/$WORKBENCH_PLAN_FILE"
+          implementation_plan="$IMPLEMENTATION_REPO_ROOT/$WORKBENCH_PLAN_FILE"
+          test -f "$source_plan" && test ! -L "$source_plan"
+          test "$(wc -c < "$source_plan")" -le 65536
+          test ! -e "$implementation_plan" && test ! -L "$implementation_plan"
+          test "$(sha256sum "$source_plan" | cut -d' ' -f1)" = "$EXPECTED_PLAN_SHA256"
+          install -m 0444 "$source_plan" "$implementation_plan"
+          test "$(sha256sum "$implementation_plan" | cut -d' ' -f1)" = "$EXPECTED_PLAN_SHA256"
+          echo "VALIDATED_PLAN_SHA256=$EXPECTED_PLAN_SHA256" >> "$GITHUB_ENV"
+
+      - name: Run sandboxed implementation agent
+        id: agent_edit
+        if: steps.rerun.outputs.terminal == 'true' || (steps.plan.outcome == 'success' && steps.plan.outputs.authorization_blocked != 'true')
         env:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
-          NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
-          REPO_ROOT: ${{ github.workspace }}
+          IMPLEMENTATION_TERMINAL: ${{ steps.rerun.outputs.terminal }}
+          IMPLEMENTATION_TERMINAL_REASON: ${{ steps.rerun.outputs.terminal_reason }}
+          REPO_ROOT: ${{ env.IMPLEMENTATION_REPO_ROOT }}
           WASM_BUILD_MODE: prod
-        run: task ci-agent:implement
+        run: |
+          set -euo pipefail
+          if [ "$IMPLEMENTATION_TERMINAL" = true ]; then
+            echo "Standalone implementation PR is $IMPLEMENTATION_TERMINAL_REASON; skipping rerun."
+            exit 0
+          fi
+          plan="$REPO_ROOT/$WORKBENCH_PLAN_FILE"
+          test -f "$plan" && test ! -L "$plan"
+          test "$(wc -c < "$plan")" -le 65536
+          test "$(sha256sum "$plan" | cut -d' ' -f1)" = "$VALIDATED_PLAN_SHA256"
+          CI_AGENT_TOOLING_ROOT="$GITHUB_WORKSPACE" \
+            node "$GITHUB_WORKSPACE/agentic-ai/ci-agent/dist/main/main.js" edit
+          bash "$GITHUB_WORKSPACE/.github/scripts/ci-agent-change-detect.sh"
+
+      - name: Format implementation on trusted host
+        id: format
+        if: steps.agent_edit.outputs.changed == 'true' && steps.rerun.outputs.terminal != 'true'
+        env:
+          TRUSTED_WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)" = "$TRUSTED_WORKFLOW_SHA"
+          test "$IMPLEMENTATION_REPO_ROOT" != "$GITHUB_WORKSPACE"
+          changed_files="$RUNNER_TEMP/nook-format-${GITHUB_RUN_ID}.files"
+          git -C "$IMPLEMENTATION_REPO_ROOT" diff --name-only -z HEAD > "$changed_files"
+          git -C "$IMPLEMENTATION_REPO_ROOT" ls-files --others --exclude-standard -z >> "$changed_files"
+          NOOK_REPO_ROOT="$IMPLEMENTATION_REPO_ROOT" \
+          NOOK_FORMATTER_ROOT="$GITHUB_WORKSPACE/.github/formatting" \
+          FORMAT_CHANGED_FILES="$changed_files" \
+            bash "$GITHUB_WORKSPACE/.github/formatting/format.sh"
+
+      - name: Validate, commit, and publish implementation
+        id: implement
+        if: steps.rerun.outputs.terminal == 'true' || (steps.agent_edit.outputs.changed == 'true' && steps.format.outcome == 'success')
+        env:
+          IMPLEMENTATION_TERMINAL: ${{ steps.rerun.outputs.terminal }}
+          IMPLEMENTATION_TERMINAL_REASON: ${{ steps.rerun.outputs.terminal_reason }}
+          NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
+          REPO_ROOT: ${{ env.IMPLEMENTATION_REPO_ROOT }}
+        run: |
+          if [ "$IMPLEMENTATION_TERMINAL" = true ]; then
+            echo "Standalone implementation PR is $IMPLEMENTATION_TERMINAL_REASON; delivery is idempotently complete."
+            exit 0
+          fi
+          CI_AGENT_TOOLING_ROOT="$GITHUB_WORKSPACE" \
+            node "$GITHUB_WORKSPACE/agentic-ai/ci-agent/dist/main/main.js" deliver
 
       - name: Publish Workbench result
         if: >-
           always() &&
+          steps.rerun.outputs.terminal != 'true' &&
           (steps.task.outputs.ready == 'true' ||
            steps.workbench.outputs.found == 'true')
         uses: actions/github-script@v9
@@ -379,6 +799,7 @@ jobs:
           CURSOR_SECRET: ${{ secrets.CURSOR_API_KEY }}
           NOOK_SECRET: ${{ secrets.NOOK_GITHUB_PAT }}
           CONTINUING_AGENT_OWNER: ${{ env.CONTINUING_AGENT_OWNER }}
+          IMPLEMENTATION_REPO_ROOT: ${{ env.IMPLEMENTATION_REPO_ROOT }}
         with:
           github-token: ${{ secrets.NOOK_GITHUB_PAT }}
           retries: 3
@@ -427,7 +848,19 @@ jobs:
                 body: `@${continuingOwner} this workflow assigned you PR #${pull.number}. Continue only this PR's recorded scope through review, exact-head validation, and squash merge.`,
               })
             }
-            const summaryPath = `${process.env.GITHUB_WORKSPACE}/${process.env.WORKBENCH_SUMMARY_FILE}`
+            const implementationSummaryPath = `${process.env.IMPLEMENTATION_REPO_ROOT}/${process.env.WORKBENCH_SUMMARY_FILE}`
+            const planningSummaryPath = `${process.env.GITHUB_WORKSPACE}/${process.env.WORKBENCH_SUMMARY_FILE}`
+            const implementationSummaryExists = fs.existsSync(implementationSummaryPath)
+            if (implementationSummaryExists) {
+              const artifact = fs.lstatSync(implementationSummaryPath)
+              if (!artifact.isFile() || artifact.isSymbolicLink() || artifact.size > 65536) {
+                core.setFailed('Rejected unsafe implementation worklog artifact.')
+                return
+              }
+            }
+            const summaryPath = implementationSummaryExists
+              ? implementationSummaryPath
+              : planningSummaryPath
             const fallbackSummary = [
                   '# Automated agent work summary',
                   '',

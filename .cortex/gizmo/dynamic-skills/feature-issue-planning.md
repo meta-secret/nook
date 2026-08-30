@@ -31,7 +31,9 @@ Nook feature.
 2. Choose one stable, lowercase kebab-case feature directory.
 3. Create or update the feature `README.md` from the Workbench template.
 4. Record product decisions, open questions, current state, and references.
-5. Create focused issue files with testable acceptance criteria.
+5. Create focused issue files with testable acceptance criteria. When they
+   materialize a multi-PR plan, copy each slice's canonical Gizmo ID into its
+   issue's `gizmo_id` frontmatter.
 6. Link dependencies explicitly and order the feature index by execution need.
 7. Assign lifecycle state:
    - Leave drafts `status: proposed` and `automation: manual`.

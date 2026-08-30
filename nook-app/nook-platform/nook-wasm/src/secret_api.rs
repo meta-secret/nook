@@ -408,7 +408,10 @@ mod wasm_tests {
         assert_eq!(snapshot.action_name(), "continue-with-nook");
         assert_eq!(snapshot.current_step(), 1);
         assert_eq!(snapshot.total_steps(), 3);
-        assert!(snapshot.requires_human_approval());
+        assert_eq!(
+            snapshot.approval_requirement(),
+            nook_core::AuthenticationApprovalRequirement::ExplicitUserApproval
+        );
         assert_eq!(snapshot.observation_index(), 0);
         Ok(())
     }

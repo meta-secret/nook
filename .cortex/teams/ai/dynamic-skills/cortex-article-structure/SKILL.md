@@ -111,8 +111,9 @@ Hierarchy represents containment, not decoration.
 
 Avoid H4-H6 unless the information remains useful as a navigable article.
 
-Every heading added, removed, renamed, reordered, or re-parented must receive the
-same change in the document's owning knowledge graph.
+Knowledge graphs index documents, not headings. A heading-only change does not
+change the owning graph. Update the graph when document ownership, path, or
+discoverability changes.
 
 ## Standard action blocks
 
@@ -154,7 +155,6 @@ It rejects mechanically provable failures:
 - empty substantive H2 or H3 articles, including mapless articles;
 - excessive consecutive prose blocks without structural relief;
 - explicitly procedure-labeled articles that contain no ordered list;
-- invalid or growing migration-ledger entries.
 
 The audit uses Markdown syntax semantics only.
 
@@ -184,18 +184,6 @@ The application is currently an in-process Loom dependency with no command,
 network, write, scheduling, or lifecycle authority. Strict YAML discovery and
 invocation are deferred to a follow-up slice.
 
-## Migration
-
-The repository-wide adoption is delivered through bounded PRs.
-
-1. `.cortex/article-structure-migration.txt` names legacy documents that remain.
-2. Each migration PR removes every document it brings into compliance.
-3. New Cortex documents cannot enter the ledger.
-4. The ledger must never grow after its baseline.
-5. Delete the ledger after the final document migrates.
-
-The final state has no exemptions.
-
 ## Application checklist
 
 - [ ] State the purpose or outcome of each article.
@@ -204,7 +192,8 @@ The final state has no exemptions.
 - [ ] Use nested items only for real ownership or branching.
 - [ ] Keep explanations detailed where the reasoning matters.
 - [ ] Keep sentences and list items cognitively simple.
-- [ ] Update the owning knowledge graph with every heading change.
+- [ ] Update the owning graph only for document ownership, path, or
+      discoverability changes.
 - [ ] Verify that the rewrite preserves exact product and policy meaning.
 
 ## Validation

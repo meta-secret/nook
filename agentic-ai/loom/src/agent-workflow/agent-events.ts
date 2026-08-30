@@ -16,6 +16,7 @@ import type {
   RuntimeActivityObservation,
   WorkflowRuntimeActivityKind,
 } from './events.ts';
+import type { CortexReference } from './cortex-references.ts';
 
 export enum AgentAttemptEventKind {
   AttemptStarted = 'attempt-started',
@@ -37,6 +38,7 @@ export type AgentAttemptEventMetadata = {
   readonly depth: number;
   readonly parent: AgentAttemptParent;
   readonly sequence: WorkflowEventSequence;
+  readonly actionId: string;
   readonly occurredAt: IsoTimestamp;
 };
 
@@ -47,7 +49,8 @@ export type AgentAttemptStartedEvent = AgentAttemptEventMetadata & {
 export type AgentRuntimeActivityEvent = AgentAttemptEventMetadata & {
   readonly kind: AgentAttemptEventKind.RuntimeActivity;
   readonly activity: WorkflowRuntimeActivityKind;
-  readonly detail: string;
+  readonly evidenceSha256?: string;
+  readonly cortexReferences: readonly CortexReference[];
 };
 
 export type AgentResultProjectedEvent = AgentAttemptEventMetadata & {
@@ -83,10 +86,10 @@ export type AgentAttemptEventWithoutMetadata =
 
 export function runtimeActivityEvent(
   observation: RuntimeActivityObservation,
-): AgentAttemptEventWithoutMetadata {
+): Omit<AgentRuntimeActivityEvent, keyof AgentAttemptEventMetadata> {
   return {
     kind: AgentAttemptEventKind.RuntimeActivity,
     activity: observation.activity,
-    detail: observation.detail,
+    cortexReferences: observation.cortexReferences ?? [],
   };
 }

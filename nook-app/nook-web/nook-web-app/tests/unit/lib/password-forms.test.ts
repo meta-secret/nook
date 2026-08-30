@@ -1,597 +1,983 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import {
+  authenticationPageObservationFacts,
   fillLoginCredentials,
   fillOneTimeCode,
-  findOneTimeCodeFields,
-  findPasskeyControl,
-  pageHasPasskeyControl,
-  PasskeyControlLookupKind,
   PasswordFormQueryKind,
   PasswordFormScopeKind,
   submitLoginForm,
   summarizeAuthenticationWorkflowForms,
-  summarizePasswordForms,
+  type PasswordFormObservation,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 
-const wholeDocumentOneTimeCodeFieldQuery: Parameters<
-  typeof findOneTimeCodeFields
->[0] = {}
 const wholeDocumentPasswordFormSubmission: Parameters<
   typeof submitLoginForm
 >[0] = { kind: PasswordFormQueryKind.Root, root: document }
+
+function observedAuthenticationWorkflow(): PasswordFormObservation {
+  const observation = summarizeAuthenticationWorkflowForms()[0]
+  if (!observation) throw new Error('expected an authentication workflow')
+  return observation
+}
 
 afterEach(() => {
   document.body.replaceChildren()
 })
 
 describe('website one-time-code fields', () => {
-  test('detects standard and common OTP fields without treating card security codes as 2FA', () => {
+  test('preserves executable OTP handler attribute names at the Rust boundary', () => {
     document.body.innerHTML = `
-      <form>
-        <input autocomplete="one-time-code" inputmode="numeric" />
-        <input name="totp-token" type="tel" />
-        <input name="otp-backup" style="display: none" />
-        <div hidden><input id="mfa-preloaded" /></div>
-        <input name="card-security-code" />
-      </form>
-    `
-
-    expect(
-      findOneTimeCodeFields(wholeDocumentOneTimeCodeFieldQuery),
-    ).toHaveLength(2)
-    expect(summarizePasswordForms()).toMatchObject({
-      passwordFieldCount: 0,
-      oneTimeCodeFieldCount: 2,
-      formCount: 1,
-    })
-  })
-
-  test('detects Namecheap-like OTP fields from placeholder and camelCase attributes', () => {
-    document.body.innerHTML = `
-      <div role="dialog">
-        <h1>Enter OTP Code</h1>
-        <p>Open the two-factor authentication app on your device.</p>
+      <form method="post" id="otp-login" action="/mfa/challenge">
         <input
-          id="Code"
-          name="Code"
-          type="text"
-          placeholder="Enter OTP Code"
+          autocomplete="one-time-code"
+          oninput="this.form.requestSubmit()"
         />
-        <button type="submit">Submit</button>
-      </div>
-      <form>
-        <label for="verify">Verification code</label>
-        <input id="verify" name="VerificationCode" type="tel" />
+        <button type="submit">Verify code</button>
       </form>
-      <input name="hotpot-special" type="text" placeholder="Favorite dish" />
     `
 
-    const fields = findOneTimeCodeFields(wholeDocumentOneTimeCodeFieldQuery)
-    expect(fields.map((field) => field.name)).toEqual([
-      'Code',
-      'VerificationCode',
+    const observation = observedAuthenticationWorkflow()
+    const facts = authenticationPageObservationFacts({
+      observation,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.ceremony.oneTimeCodeHandlerSignals).toEqual([
+      'oninput=this.form.requestSubmit()',
     ])
-    expect(summarizeAuthenticationWorkflowForms()[0]?.summary).toMatchObject({
-      oneTimeCodeFieldCount: 1,
-    })
   })
 
-  test('returns no workflow for ordinary pages and email-only newsletters', () => {
+  test('transports OTP handlers as independent Rust policy candidates', () => {
     document.body.innerHTML = `
-      <main><p>Documentation</p></main>
-      <form><input type="email" name="newsletter-email" /></form>
-    `
-
-    expect(summarizeAuthenticationWorkflowForms()).toEqual([])
-  })
-
-  test('detects Microsoft-like email-first login without autocomplete=username', () => {
-    document.body.innerHTML = `
-      <form id="loginForm">
-        <input
-          type="email"
-          name="loginfmt"
-          id="i0116"
-          placeholder="Email, phone, or Skype"
-          aria-label="Enter your email, phone, or Skype."
-        />
-        <button type="submit" id="idSIButton9">Next</button>
+      <form method="post" id="otp-login" action="/mfa/challenge">
+        <input autocomplete="one-time-code" onchange="validateCode()" />
+        <input autocomplete="one-time-code" oninput="this.form.requestSubmit()" />
       </form>
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
-    expect(observations).toHaveLength(1)
-    expect(observations[0]?.summary).toMatchObject({
-      usernameFieldCount: 1,
-      passwordFieldCount: 0,
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
     })
-    const loginFillArgs: Parameters<typeof fillLoginCredentials>[0] = {
-      credentials: { username: 'user@contoso.com', password: '' },
-      kind: PasswordFormQueryKind.Root,
-      root: document,
-    }
-    expect(fillLoginCredentials(loginFillArgs)).toBe(true)
-    expect(
-      document.querySelector<HTMLInputElement>('[name="loginfmt"]')?.value,
-    ).toBe('user@contoso.com')
+    expect(facts.ceremony.oneTimeCodeHandlerSignals).toEqual([
+      'oninput=this.form.requestSubmit()',
+      'onchange=validateCode()',
+    ])
   })
 
-  test('detects Slack-like login_email fields from data-qa identity', () => {
+  test('transports every scoped advance-control candidate for Rust selection', () => {
     document.body.innerHTML = `
-      <div class="p-login_container">
-        <input
-          id="email"
-          type="email"
-          data-qa="login_email"
-          placeholder="name@work-email.com"
-        />
-        <button type="button" data-qa="signin_button">Sign In</button>
-      </div>
-    `
-
-    const observations = summarizeAuthenticationWorkflowForms()
-    expect(observations).toHaveLength(1)
-    expect(observations[0]?.summary).toMatchObject({
-      usernameFieldCount: 1,
-      passwordFieldCount: 0,
-    })
-  })
-
-  test('detects Facebook-like email/pass login under an aria-hidden ancestor', () => {
-    document.body.innerHTML = `
-      <div aria-hidden="true">
-        <form id="login_form">
-          <input
-            type="text"
-            name="email"
-            id="email"
-            placeholder="Email or phone number"
-          />
-          <input
-            type="password"
-            name="pass"
-            id="pass"
-            placeholder="Password"
-            autocomplete="current-password"
-          />
-          <button type="submit" name="login" id="loginbutton">Log in</button>
-        </form>
-      </div>
-    `
-
-    const observations = summarizeAuthenticationWorkflowForms()
-    expect(observations).toHaveLength(1)
-    expect(observations[0]?.summary).toMatchObject({
-      usernameFieldCount: 1,
-      passwordFieldCount: 1,
-      currentPasswordFieldCount: 1,
-    })
-    const loginFillArgs: Parameters<typeof fillLoginCredentials>[0] = {
-      credentials: {
-        username: 'pilot@nook.test',
-        password: 'extension-fill-password',
-      },
-      kind: PasswordFormQueryKind.Root,
-      root: document,
-    }
-    expect(fillLoginCredentials(loginFillArgs)).toBe(true)
-    expect(document.querySelector<HTMLInputElement>('#email')?.value).toBe(
-      'pilot@nook.test',
-    )
-    expect(document.querySelector<HTMLInputElement>('#pass')?.value).toBe(
-      'extension-fill-password',
-    )
-  })
-
-  test('still ignores a field that itself is aria-hidden', () => {
-    document.body.innerHTML = `
-      <form>
-        <input
-          type="text"
-          name="email"
-          autocomplete="username"
-          aria-hidden="true"
-        />
-        <input
-          type="password"
-          name="pass"
-          autocomplete="current-password"
-          aria-hidden="true"
-        />
-        <button type="submit">Log in</button>
-      </form>
-    `
-
-    expect(summarizeAuthenticationWorkflowForms()).toEqual([])
-  })
-
-  test('detects Tier-1 popular-site login shells', () => {
-    const shells: Array<{ html: string; username: number; password: number }> =
-      [
-        {
-          html: `
-            <form id="gaia_loginform">
-              <input type="email" name="identifier" id="identifierId" autocomplete="username" />
-              <button type="submit">Next</button>
-            </form>
-          `,
-          username: 1,
-          password: 0,
-        },
-        {
-          html: `
-            <form class="signin">
-              <input type="text" id="account_name_text_field" name="accountName" autocomplete="username" />
-              <input type="password" id="password_text_field" name="password" autocomplete="current-password" />
-              <button type="submit">Sign In</button>
-            </form>
-          `,
-          username: 1,
-          password: 1,
-        },
-        {
-          html: `
-            <form name="signIn">
-              <input type="email" name="email" id="ap_email" autocomplete="username" />
-              <button type="submit" id="continue">Continue</button>
-            </form>
-          `,
-          username: 1,
-          password: 0,
-        },
-        {
-          html: `
-            <form>
-              <input type="text" name="login" id="login_field" autocomplete="username" />
-              <input type="password" name="password" id="password" autocomplete="current-password" />
-              <button type="submit">Sign in</button>
-            </form>
-          `,
-          username: 1,
-          password: 1,
-        },
-        {
-          html: `
-            <form class="login__form">
-              <input type="text" id="username" name="session_key" autocomplete="username" />
-              <input type="password" id="password" name="session_password" autocomplete="current-password" />
-              <button type="submit">Sign in</button>
-            </form>
-          `,
-          username: 1,
-          password: 1,
-        },
-        {
-          html: `
-            <form>
-              <input type="text" name="text" autocomplete="username" data-testid="ocfEnterTextTextInput" />
-              <button type="submit">Next</button>
-            </form>
-          `,
-          username: 1,
-          password: 0,
-        },
-      ]
-
-    for (const shell of shells) {
-      document.body.innerHTML = shell.html
-      const observations = summarizeAuthenticationWorkflowForms()
-      expect(observations).toHaveLength(1)
-      expect(observations[0]?.summary).toMatchObject({
-        usernameFieldCount: shell.username,
-        passwordFieldCount: shell.password,
-      })
-      document.body.replaceChildren()
-    }
-  })
-
-  test('fills username-only then advances common multi-step login controls', () => {
-    for (const label of ['Next', 'Login', 'signin', 'Sign   In', 'Log\tin']) {
-      document.body.innerHTML = `
-        <form id="login-form">
-          <input autocomplete="username" name="email" type="email" />
-          <button id="next" type="button">${label}</button>
-        </form>
-      `
-      let advanced = false
-      document.querySelector('#next')?.addEventListener('click', () => {
-        advanced = true
-      })
-
-      const loginFillArgs: Parameters<typeof fillLoginCredentials>[0] = {
-        credentials: { username: 'pilot@nook.test', password: '' },
-        kind: PasswordFormQueryKind.Root,
-        root: document,
-      }
-      expect(fillLoginCredentials(loginFillArgs)).toBe(true)
-      expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
-      expect(advanced).toBe(true)
-      expect(
-        document.querySelector<HTMLInputElement>('[name="email"]')?.value,
-      ).toBe('pilot@nook.test')
-    }
-  })
-
-  test('groups externally associated controls with their form owner', () => {
-    document.body.innerHTML = `
-      <form id="login"><input autocomplete="username" /></form>
-      <input form="login" type="password" autocomplete="current-password" />
-    `
-
-    const observations = summarizeAuthenticationWorkflowForms()
-    expect(observations).toHaveLength(1)
-    expect(observations[0]?.formScope.kind).toBe('owned')
-    expect(observations[0]?.summary).toMatchObject({
-      usernameFieldCount: 1,
-      currentPasswordFieldCount: 1,
-    })
-  })
-
-  test('ignores closed-dropdown password fields inside the same page form', () => {
-    document.body.innerHTML = `
-      <form id="aspnetForm">
-        <div class="gb-dropdown">
-          <div class="gb-dropdown__holder" style="display: none">
-            <input name="LoginUserName" type="text" />
-            <input id="header-password" name="LoginPassword" type="password" />
-          </div>
-        </div>
-        <fieldset class="loginForm">
-          <input name="LoginUserName" type="text" />
-          <input
-            id="main-password"
-            name="LoginPassword"
-            type="password"
-            autocomplete="on"
-          />
-          <button type="submit">Sign in</button>
-        </fieldset>
-      </form>
-    `
-
-    const observations = summarizeAuthenticationWorkflowForms()
-    expect(observations).toHaveLength(1)
-    expect(observations[0]?.summary).toMatchObject({
-      passwordFieldCount: 1,
-      genericPasswordFieldCount: 1,
-      currentPasswordFieldCount: 0,
-    })
-    const loginFillArgs: Parameters<typeof fillLoginCredentials>[0] = {
-      credentials: { username: 'pilot', password: 'secret' },
-      kind: PasswordFormQueryKind.Root,
-      root: document,
-    }
-    expect(fillLoginCredentials(loginFillArgs)).toBe(true)
-    expect(
-      document.querySelector<HTMLInputElement>('#header-password')?.value,
-    ).toBe('')
-    expect(
-      document.querySelector<HTMLInputElement>('#main-password')?.value,
-    ).toBe('secret')
-  })
-
-  test('does not surface a closed header-only login as a pilot workflow', () => {
-    document.body.innerHTML = `
-      <form id="aspnetForm">
-        <div class="gb-dropdown__holder" style="display: none">
-          <input name="LoginUserName" type="text" />
-          <input name="LoginPassword" type="password" />
-        </div>
-        <main><p>Marketing homepage</p></main>
-      </form>
-    `
-
-    expect(summarizeAuthenticationWorkflowForms()).toEqual([])
-  })
-
-  test('keeps unowned login controls isolated from owned signup fields', () => {
-    document.body.innerHTML = `
-      <form id="signup">
-        <input autocomplete="username" />
-        <input type="password" autocomplete="new-password" />
-      </form>
-      <section>
+      <form method="post" id="login" action="/login">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
-      </section>
+        <button type="submit">Delete account</button>
+        <button type="submit">Sign in</button>
+      </form>
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
-    expect(observations).toHaveLength(2)
-    expect(observations.map(({ summary }) => summary)).toEqual(
+    const observation = observedAuthenticationWorkflow()
+    const facts = authenticationPageObservationFacts({
+      observation,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    const detailed = facts.detailedAdvanceControl
+    if (!detailed || detailed.kind !== 'observed') {
+      throw new Error('expected observed advance-control candidates')
+    }
+    expect(detailed.observations).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          currentPasswordFieldCount: 0,
-          newPasswordFieldCount: 1,
+          label: expect.stringContaining('Delete account'),
         }),
         expect.objectContaining({
-          currentPasswordFieldCount: 1,
-          newPasswordFieldCount: 0,
+          label: expect.stringContaining('Sign in'),
         }),
       ]),
     )
   })
 
-  test('keeps separate unowned auth containers isolated', () => {
+  test('resolves aria-labelledby control names for Rust classification', () => {
     document.body.innerHTML = `
-      <div class="signup-panel">
-        <input autocomplete="username" />
-        <input type="password" autocomplete="new-password" />
-        <button type="submit">Create account</button>
-      </div>
-      <div class="login-panel">
+      <form method="post" action="/session">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
-        <button type="submit">Sign in</button>
-      </div>
-    `
-
-    const observations = summarizeAuthenticationWorkflowForms()
-    expect(observations).toHaveLength(2)
-    expect(observations.map(({ summary }) => summary)).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          currentPasswordFieldCount: 0,
-          newPasswordFieldCount: 1,
-        }),
-        expect.objectContaining({
-          currentPasswordFieldCount: 1,
-          newPasswordFieldCount: 0,
-        }),
-      ]),
-    )
-  })
-
-  test('prioritizes active OTP and login forms before low-confidence candidates', () => {
-    document.body.innerHTML = Array.from(
-      { length: 20 },
-      (_, index) => `
-        <form id="signup-${index}">
-          <input autocomplete="username" />
-          <input type="password" autocomplete="new-password" />
-        </form>`,
-    ).join('')
-    document.body.insertAdjacentHTML(
-      'beforeend',
-      `<form id="login">
-        <input autocomplete="username" />
-        <input type="password" autocomplete="current-password" />
-      </form>`,
-    )
-
-    const observations = summarizeAuthenticationWorkflowForms()
-    const firstScope = observations[0]?.formScope
-    expect(firstScope?.kind).toBe('owned')
-    expect(firstScope?.kind === 'owned' ? firstScope.owner.id : '').toBe(
-      'login',
-    )
-  })
-
-  test('fills a visible username instead of a hidden autocomplete token', () => {
-    document.body.innerHTML = `
-      <form>
-        <input type="hidden" autocomplete="username" value="token" />
-        <input id="visible-email" type="email" />
-        <input id="password" type="password" autocomplete="current-password" />
+        <span id="submit-name">Sign in</span>
+        <button type="submit" aria-labelledby="submit-name"></button>
       </form>
     `
 
-    const loginFillArgs: Parameters<typeof fillLoginCredentials>[0] = {
-      credentials: { username: 'pilot', password: 'secret' },
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [{ label: expect.stringContaining('Sign in') }],
+    })
+  })
+
+  test('transports implicit owned-form submission evidence without a control', () => {
+    document.body.innerHTML = `
+      <form method="post" aria-label="Login" action="/session">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+      </form>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.detailedAdvanceControl).toEqual({ kind: 'absent' })
+    expect(facts.ceremony.advanceControl).toBe('implicit-submission')
+  })
+
+  test('rejects implicit GET password submission before fill', () => {
+    document.body.innerHTML = `
+      <form method="get" aria-label="Login" action="/session">
+        <input autocomplete="username" />
+        <input id="secret" type="password" autocomplete="current-password" />
+      </form>
+    `
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.ceremony.advanceControl).toBe('absent')
+    expect(facts.ceremony.implicitSubmissionMethod).toBe('get')
+    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: { username: 'vault-user', password: 'vault-pass' },
       kind: PasswordFormQueryKind.Root,
       root: document,
     }
-    expect(fillLoginCredentials(loginFillArgs)).toBe(true)
-    expect(
-      document.querySelector<HTMLInputElement>('[type="hidden"]')?.value,
-    ).toBe('token')
-    expect(
-      document.querySelector<HTMLInputElement>('#visible-email')?.value,
-    ).toBe('pilot')
+    expect(fillLoginCredentials(fillArgs)).toBe(false)
+    expect((document.querySelector('#secret') as HTMLInputElement).value).toBe(
+      '',
+    )
   })
 
-  test('does not claim a div-based login was submitted', () => {
+  test('rejects dialog-method password submission before fill', () => {
     document.body.innerHTML = `
-      <section>
+      <form method="dialog" aria-label="Login">
+        <input autocomplete="username" />
+        <input id="secret" type="password" autocomplete="current-password" />
+      </form>
+    `
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.ceremony.advanceControl).toBe('absent')
+    expect(facts.ceremony.implicitSubmissionMethod).toBe('dialog')
+    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: { username: 'vault-user', password: 'vault-pass' },
+      kind: PasswordFormQueryKind.Root,
+      root: document,
+    }
+    expect(fillLoginCredentials(fillArgs)).toBe(false)
+    expect((document.querySelector('#secret') as HTMLInputElement).value).toBe(
+      '',
+    )
+  })
+
+  test('marks a hidden semantic submitter inert and allows implicit submission', () => {
+    document.body.innerHTML = `
+      <form method="post" aria-label="Login" action="/session">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
-        <button type="button">Sign in</button>
-      </section>
-    `
-
-    const submissionArgs: Parameters<typeof submitLoginForm>[0] = {
-      kind: PasswordFormQueryKind.Scoped,
-      root: document,
-      formScope: { kind: PasswordFormScopeKind.Unowned },
-    }
-    expect(submitLoginForm(submissionArgs)).toBe(false)
-  })
-
-  test('does not claim a disabled submit control was activated', () => {
-    document.body.innerHTML = `
-      <form>
-        <input type="password" autocomplete="current-password" />
-        <button type="submit" disabled>Sign in</button>
+        <div hidden><button type="submit">Continue</button></div>
       </form>
     `
-
-    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(false)
-  })
-
-  test('reports submission only when the form emits a submit event', () => {
-    document.body.innerHTML = `
-      <form>
-        <input type="password" autocomplete="current-password" />
-        <button type="submit">Sign in</button>
-      </form>
-    `
+    let submitted = false
     document.querySelector('form')?.addEventListener('submit', (event) => {
       event.preventDefault()
+      submitted = true
     })
 
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [
+        { actionability: 'inert', label: expect.stringContaining('Continue') },
+      ],
+    })
+    expect(facts.ceremony.advanceControl).toBe('implicit-submission')
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
+    expect(submitted).toBe(true)
+  })
+
+  test('marks a native-inert semantic submitter inert and allows implicit submission', () => {
+    document.body.innerHTML = `
+      <form method="post" aria-label="Login" action="/session">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <div inert><button type="submit">Continue</button></div>
+      </form>
+    `
+    let submitted = false
+    document.querySelector('form')?.addEventListener('submit', (event) => {
+      event.preventDefault()
+      submitted = true
+    })
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [
+        { actionability: 'inert', label: expect.stringContaining('Continue') },
+      ],
+    })
+    expect(facts.ceremony.advanceControl).toBe('implicit-submission')
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
+    expect(submitted).toBe(true)
+  })
+
+  test('rescans actionability when an ancestor becomes native-inert', () => {
+    document.body.innerHTML = `
+      <form method="post" aria-label="Login" action="/session">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <div id="panel"><button type="submit">Continue</button></div>
+      </form>
+    `
+    const before = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(before.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [
+        {
+          actionability: 'actionable',
+          label: expect.stringContaining('Continue'),
+        },
+      ],
+    })
+
+    document.querySelector('#panel')?.setAttribute('inert', '')
+    const after = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(after.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [
+        { actionability: 'inert', label: expect.stringContaining('Continue') },
+      ],
+    })
+  })
+
+  test('rescans actionability when an ancestor becomes aria-disabled', () => {
+    document.body.innerHTML = `
+      <form method="post" aria-label="Login" action="/session">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <div id="panel"><button type="submit">Continue</button></div>
+      </form>
+    `
+    const before = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(before.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [
+        {
+          actionability: 'actionable',
+          label: expect.stringContaining('Continue'),
+        },
+      ],
+    })
+
+    document.querySelector('#panel')?.setAttribute('aria-disabled', 'true')
+    const after = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(after.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [
+        { actionability: 'inert', label: expect.stringContaining('Continue') },
+      ],
+    })
+  })
+
+  test('infers implicit submission when the only semantic submitter is inert', () => {
+    document.body.innerHTML = `<form method="post" action="/auth/login"><input autocomplete="username" /><button type="submit" disabled>Sign in</button></form>`
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [{ actionability: 'inert' }],
+    })
+    expect(facts.ceremony.advanceControl).toBe('implicit-submission')
+  })
+
+  test('uses image submit alt text as bounded control identity', () => {
+    document.body.innerHTML = `<form method="post" id="login" action="/auth/login"><input autocomplete="username" /><input type="image" alt="Sign in" /></form>`
+    document
+      .querySelector('form')
+      ?.addEventListener('submit', (event) => event.preventDefault())
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [{ label: expect.stringContaining('Sign in') }],
+    })
     expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
   })
 
-  test('fills the first enabled OTP field through the native value setter', () => {
+  test('resolves default and relative form destinations before Rust classification', () => {
+    window.history.replaceState({}, '', '/account/sign-in')
     document.body.innerHTML = `
-      <input autocomplete="one-time-code" disabled />
-      <input id="otp-code" type="tel" />
+      <form method="post" aria-label="Login" action="../session">
+        <input autocomplete="username" />
+        <button type="submit">Continue</button>
+      </form>
     `
-    const field = document.querySelector<HTMLInputElement>('#otp-code')
-    let inputEvents = 0
-    field?.addEventListener('input', () => inputEvents++)
 
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.ceremony.authenticationContext).toMatchObject({
+      formIdentity: expect.stringContaining('Login'),
+      destinationIdentity: `${location.origin}/session`,
+    })
+    expect(facts.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [{ destinationIdentity: `${location.origin}/session` }],
+    })
+
+    document.querySelector('form')?.removeAttribute('action')
+    const defaultDestination = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    const defaultAuthenticationContext =
+      defaultDestination.ceremony.authenticationContext
+    if (!defaultAuthenticationContext) {
+      throw new Error('expected default authentication context')
+    }
+    expect(defaultAuthenticationContext.destinationIdentity).toBe(location.href)
+  })
+
+  test('isolates an oversized submitter so a sibling login control can still transport', () => {
+    const oversizedLabel = `Sign in ${'x'.repeat(600)}`
+    document.body.innerHTML = `
+      <form method="post" aria-label="Login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">${oversizedLabel}</button>
+        <button type="submit">Continue</button>
+      </form>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [{ label: expect.stringContaining('Continue') }],
+    })
+    const observation = facts.detailedAdvanceControl
+    if (!observation || observation.kind !== 'observed') {
+      throw new Error('expected observed advance control')
+    }
+    expect(
+      observation.observations.every((candidate) =>
+        candidate.label.includes('Continue'),
+      ),
+    ).toBe(true)
+  })
+
+  test('transports a passkey-only destructive form identity instead of the document', () => {
+    document.body.innerHTML = `
+      <form method="post" id="delete-account" action="/login">
+        <button type="button" data-nook-passkey-control>Continue</button>
+      </form>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
+      kind: 'candidates',
+      observation: [
+        {
+          kind: 'explicitly-marked',
+          observation: {
+            ownership: 'owned-form',
+            formIdentity: expect.stringContaining('delete-account'),
+          },
+        },
+      ],
+    })
+  })
+
+  test('submits a classified username-only login whose form action is omitted', () => {
+    window.history.replaceState({}, '', '/auth/login')
+    document.body.innerHTML = `
+      <form method="post" aria-label="Login">
+        <input autocomplete="username" />
+        <button type="submit">Continue</button>
+      </form>
+    `
+    let submissions = 0
+    document.querySelector('form')?.addEventListener('submit', (event) => {
+      event.preventDefault()
+      submissions += 1
+    })
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [{ destinationIdentity: location.href }],
+    })
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
+    expect(submissions).toBe(1)
+  })
+
+  test('does not fill after username input drops POST and no approved submitter remains', () => {
+    document.body.innerHTML = `
+      <form method="post" id="login" action="/auth/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Delete account</button>
+      </form>
+    `
+    document
+      .querySelector('input[autocomplete="username"]')
+      ?.addEventListener('input', () => {
+        document.querySelector('form')?.removeAttribute('method')
+      })
+    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: { username: 'vault-user', password: 'vault-pass' },
+      kind: PasswordFormQueryKind.Root,
+      root: document,
+    }
+    expect(fillLoginCredentials(fillArgs)).toBe(false)
+    expect(
+      document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
+    ).toBe('')
+  })
+
+  test('uses the OTP form destination instead of an auxiliary control destination', () => {
+    document.body.innerHTML = `
+      <form method="post" id="otp-login" action="/mfa/challenge">
+        <input autocomplete="one-time-code" oninput="this.form.requestSubmit()" />
+        <button type="button" formaction="/cancel">Cancel</button>
+        <button type="submit">Verify code</button>
+      </form>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    const authenticationContext = facts.ceremony.authenticationContext
+    if (!authenticationContext) {
+      throw new Error('expected OTP authentication context')
+    }
+    expect(authenticationContext.destinationIdentity).toBe(
+      `${location.origin}/mfa/challenge`,
+    )
+  })
+
+  test('transports externally associated submit controls with owned-form scope', () => {
+    document.body.innerHTML = `
+      <form method="post" id="login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+      </form>
+      <button form="login" type="submit">Sign in</button>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [
+        {
+          ownership: 'owned-form',
+          semanticSubmitControlCount: 1,
+          destinationIdentity: `${location.origin}/login`,
+        },
+      ],
+    })
+  })
+
+  test('marks a fieldset-disabled submitter inert and allows implicit submission', () => {
+    document.body.innerHTML = `
+      <form method="post" aria-label="Login" action="/session">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <fieldset disabled>
+          <button type="submit">Continue</button>
+        </fieldset>
+      </form>
+    `
+    let submitted = false
+    document.querySelector('form')?.addEventListener('submit', (event) => {
+      event.preventDefault()
+      submitted = true
+    })
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [{ actionability: 'inert' }],
+    })
+    expect(facts.ceremony.advanceControl).toBe('implicit-submission')
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
+    expect(submitted).toBe(true)
+  })
+
+  test('transports a form-contained passkey link with owned-form scope', () => {
+    document.body.innerHTML = `
+      <form method="post" id="passkey-login" action="/login">
+        <a href="/webauthn">Use passkey</a>
+      </form>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
+      kind: 'candidates',
+      observation: [
+        {
+          kind: 'labeled',
+          observation: {
+            ownership: 'owned-form',
+            formIdentity: expect.stringContaining('passkey-login'),
+            label: expect.stringContaining('passkey'),
+          },
+        },
+      ],
+    })
+  })
+
+  test('transports a passkey-only form-associated control for Rust selection', () => {
+    document.body.innerHTML = `
+      <form method="post" id="passkey-login" action="/login">
+        <button type="button">Sign in with a passkey</button>
+      </form>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
+      kind: 'candidates',
+      observation: [
+        {
+          kind: 'labeled',
+          observation: {
+            label: expect.stringContaining('passkey'),
+          },
+        },
+      ],
+    })
+  })
+
+  test('transports an input passkey control labeled by its value', () => {
+    document.body.innerHTML = `
+      <form method="post" id="passkey-login" action="/login">
+        <input type="button" value="Use passkey" />
+      </form>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
+      kind: 'candidates',
+      observation: [
+        {
+          kind: 'labeled',
+          observation: { label: expect.stringContaining('Use passkey') },
+        },
+      ],
+    })
+  })
+
+  test('transports an icon-only passkey control labeled by aria-label', () => {
+    document.body.innerHTML = `
+      <form method="post" id="passkey-login" action="/login">
+        <button type="button" aria-label="Use passkey"><svg></svg></button>
+      </form>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
+      kind: 'candidates',
+      observation: [
+        {
+          kind: 'labeled',
+          observation: { label: expect.stringContaining('Use passkey') },
+        },
+      ],
+    })
+  })
+
+  test('keeps standalone explicitly marked passkey controls locally scoped', () => {
+    document.body.innerHTML = `
+      <button type="button" data-nook-passkey-control>Continue</button>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
+      kind: 'candidates',
+      observation: [
+        {
+          kind: 'explicitly-marked',
+          observation: {
+            ownership: 'locally-scoped',
+            label: expect.stringContaining('Continue'),
+          },
+        },
+      ],
+    })
+  })
+
+  test('does not transport a passkey control contained by a sibling form', () => {
+    document.body.innerHTML = `
+      <div class="login-panel">
+        <form method="post" id="password-login" action="/login">
+          <input autocomplete="username" />
+          <input type="password" autocomplete="current-password" />
+          <button type="submit">Sign in</button>
+        </form>
+        <form method="post" id="passkey-login" action="/webauthn">
+          <a href="/webauthn">Use passkey</a>
+        </form>
+      </div>
+    `
+
+    const observation = summarizeAuthenticationWorkflowForms().find(
+      (workflow) =>
+        workflow.formScope.kind === PasswordFormScopeKind.Owned &&
+        workflow.formScope.owner.id === 'password-login',
+    )
+    if (!observation) {
+      throw new Error('expected the password-login workflow')
+    }
+    const facts = authenticationPageObservationFacts({
+      observation,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.authenticator.detailedPasskeyControl).toEqual({
+      kind: 'absent',
+    })
+  })
+
+  test('transports a locally adjacent form-less passkey alternative with a credential form', () => {
+    document.body.innerHTML = `
+      <div class="login-panel">
+        <form method="post" id="login" action="/login">
+          <input autocomplete="username" />
+          <input type="password" autocomplete="current-password" />
+          <button type="submit">Sign in</button>
+        </form>
+        <button type="button">Sign in with a passkey</button>
+      </div>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
+      kind: 'candidates',
+      observation: [
+        {
+          kind: 'labeled',
+          observation: {
+            ownership: 'locally-scoped',
+            label: expect.stringContaining('passkey'),
+          },
+        },
+      ],
+    })
+  })
+
+  test('does not bind a shared-parent passkey to either sibling form', () => {
+    document.body.innerHTML = `
+      <div class="login-panel">
+        <form method="post" id="login" action="/login">
+          <input autocomplete="username" />
+          <input type="password" autocomplete="current-password" />
+          <button type="submit">Sign in</button>
+        </form>
+        <form method="post" id="signup" action="/signup">
+          <input autocomplete="username" />
+          <input type="password" autocomplete="new-password" />
+          <button type="submit">Create account</button>
+        </form>
+        <button type="button" data-nook-passkey-control>Enroll passkey</button>
+      </div>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    const login = observations.find(
+      (observation) =>
+        observation.formScope.kind === PasswordFormScopeKind.Owned &&
+        observation.formScope.owner.id === 'login',
+    )
+    const signup = observations.find(
+      (observation) =>
+        observation.formScope.kind === PasswordFormScopeKind.Owned &&
+        observation.formScope.owner.id === 'signup',
+    )
+    if (!login || !signup) {
+      throw new Error('expected sibling login and signup workflows')
+    }
+    expect(
+      authenticationPageObservationFacts({
+        observation: login,
+        authenticatorSetupHint: false,
+        backupCodesHint: false,
+      }).authenticator.detailedPasskeyControl,
+    ).toEqual({ kind: 'absent' })
+    expect(
+      authenticationPageObservationFacts({
+        observation: signup,
+        authenticatorSetupHint: false,
+        backupCodesHint: false,
+      }).authenticator.detailedPasskeyControl,
+    ).toEqual({ kind: 'absent' })
+  })
+
+  test('counts only actionable semantic submitters for Rust ambiguity', () => {
+    document.body.innerHTML = `
+      <form method="post" aria-label="Login" action="/auth/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Proceed</button>
+        <button type="submit" disabled>Cancel</button>
+      </form>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: expect.arrayContaining([
+        expect.objectContaining({
+          label: expect.stringContaining('Proceed'),
+          semanticSubmitControlCount: 1,
+        }),
+      ]),
+    })
+  })
+
+  test('does not write the password after username events switch the form to GET', () => {
+    document.body.innerHTML = `
+      <form method="post" id="login" action="/auth/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+    document
+      .querySelector('input[autocomplete="username"]')
+      ?.addEventListener('input', () => {
+        document.querySelector('form')?.setAttribute('method', 'get')
+      })
+    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: { username: 'vault-user', password: 'vault-pass' },
+      kind: PasswordFormQueryKind.Root,
+      root: document,
+    }
+    expect(fillLoginCredentials(fillArgs)).toBe(false)
+    expect(
+      document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
+    ).toBe('')
+  })
+
+  test('clears the password after password events switch the form to GET', () => {
+    document.body.innerHTML = `
+      <form method="post" id="login" action="/auth/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+    document
+      .querySelector('input[type="password"]')
+      ?.addEventListener('change', () =>
+        document.querySelector('form')?.setAttribute('method', 'get'),
+      )
+    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: { username: 'vault-user', password: 'vault-pass' },
+      kind: PasswordFormQueryKind.Root,
+      root: document,
+    }
+    expect(fillLoginCredentials(fillArgs)).toBe(false)
+    expect(
+      document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
+    ).toBe('')
+  })
+
+  test('does not fill a default-GET form through a type-button handler', () => {
+    document.body.innerHTML = `
+      <form id="login" action="/auth/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="button">Sign in</button>
+      </form>
+    `
+    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: { username: 'vault-user', password: 'vault-pass' },
+      kind: PasswordFormQueryKind.Root,
+      root: document,
+    }
+    expect(fillLoginCredentials(fillArgs)).toBe(false)
+    expect(
+      document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
+    ).toBe('')
+  })
+
+  test('does not fill a POST form whose only submitter overrides to GET', () => {
+    document.body.innerHTML = `
+      <form method="post" id="login" action="/auth/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit" formmethod="get">Search</button>
+      </form>
+    `
+    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: { username: 'vault-user', password: 'vault-pass' },
+      kind: PasswordFormQueryKind.Root,
+      root: document,
+    }
+    expect(fillLoginCredentials(fillArgs)).toBe(false)
+    expect(
+      document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
+    ).toBe('')
+  })
+
+  test('does not trust aria-disabled on a native GET sibling', () => {
+    document.body.innerHTML = `
+      <form method="post" id="login" action="/auth/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+        <button type="submit" formmethod="get" aria-disabled="true">Search</button>
+      </form>
+    `
+    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: { username: 'vault-user', password: 'vault-pass' },
+      kind: PasswordFormQueryKind.Root,
+      root: document,
+    }
+    expect(fillLoginCredentials(fillArgs)).toBe(false)
+    expect(
+      document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
+    ).toBe('')
+  })
+
+  test('fills a POST login whose type-button advance control carries leftover GET formmethod', () => {
+    document.body.innerHTML = `
+      <form method="post" id="login" action="/auth/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="button" formmethod="get">Sign in</button>
+      </form>
+    `
+    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: { username: 'vault-user', password: 'vault-pass' },
+      kind: PasswordFormQueryKind.Root,
+      root: document,
+    }
+    expect(fillLoginCredentials(fillArgs)).toBe(true)
+    expect(
+      document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
+    ).toBe('vault-pass')
+  })
+
+  test('fills the OTP field that owns the recognized auto-submit handler', () => {
+    document.body.innerHTML = `
+      <input autocomplete="one-time-code" />
+      <input
+        id="otp-code"
+        autocomplete="one-time-code"
+        oninput="this.form.requestSubmit()"
+      />
+    `
+    const first = document.querySelector<HTMLInputElement>(
+      'input[autocomplete="one-time-code"]',
+    )
+    const field = document.querySelector<HTMLInputElement>('#otp-code')
     const oneTimeCodeFillArgs: Parameters<typeof fillOneTimeCode>[0] = {
       code: '123456',
       kind: PasswordFormQueryKind.Root,
       root: document,
     }
     expect(fillOneTimeCode(oneTimeCodeFillArgs)).toBe(true)
+    expect(first?.value).toBe('')
     expect(field?.value).toBe('123456')
-    expect(inputEvents).toBe(1)
-    expect(document.activeElement).toBe(field)
-  })
-})
-
-describe('passkey control detection', () => {
-  test('does not treat password inputs with webauthn autocomplete as passkey controls', () => {
-    document.body.innerHTML = `
-      <form>
-        <input autocomplete="section-login username" name="email" type="email" />
-        <input
-          autocomplete="section-login current-password webauthn"
-          name="password"
-          type="password"
-        />
-        <button type="submit">Sign in</button>
-      </form>
-    `
-
-    expect(pageHasPasskeyControl()).toBe(false)
-    expect(summarizeAuthenticationWorkflowForms()[0]?.summary).toMatchObject({
-      passkeyControlPresent: false,
-      currentPasswordFieldCount: 1,
-    })
-  })
-
-  test('detects marked and labeled passkey controls', () => {
-    document.body.innerHTML = `
-      <button type="button" data-nook-passkey-control>Continue</button>
-    `
-    const marked = findPasskeyControl()
-    expect(marked.kind).toBe(PasskeyControlLookupKind.Found)
-    if (marked.kind === PasskeyControlLookupKind.Found) {
-      expect(marked.control.getAttribute('data-nook-passkey-control')).toBe('')
-    }
-
-    document.body.innerHTML = `
-      <button type="button">Sign in with a passkey</button>
-    `
-    const labeled = findPasskeyControl()
-    expect(labeled.kind).toBe(PasskeyControlLookupKind.Found)
-    if (labeled.kind === PasskeyControlLookupKind.Found) {
-      expect(labeled.control.textContent).toContain('passkey')
-    }
-    expect(pageHasPasskeyControl()).toBe(true)
   })
 })

@@ -9,9 +9,6 @@ This index catalogs the durable design authorities and their current status.
 - **[core-beliefs.md](core-beliefs.md)**
   - Description: Agent-first core operating principles
   - Status: Verified
-- **[agent-workflow-orchestration.md](../../../teams/ai/design-docs/agent-workflow-orchestration.md)**
-  - Description: Cortex, Loom, local Codex experts, flat lineage, and delivery-owner boundaries for deterministic multi-agent workflows
-  - Status: Architecture decision
 - **[hive-isolated-agent-platform.md](../../../teams/sre/design-docs/hive-isolated-agent-platform.md)**
   - Description: Stateful k0s/Kata Hive architecture, components, trust boundaries, task DAG, Main repair delivery, caching, and Taskfile operations
   - Status: Implemented

@@ -24,7 +24,7 @@ const EXECUTABLE_PACKAGE_PATH = new RegExp(
 const DECLARED_OWNER_PATH = new RegExp(`^${OWNER_ROOT}/`, 'u');
 const CONFIG_HASHES = {
   prettier: '5342eced2ab6be14cc6716a764019f8a037da054a5c10c5c69ed428a43f739cb',
-  eslint: 'b313fdacd4b3546a85f6eef821483b427157aea6e7d8b5a51877d78b8fb7130c',
+  eslint: '041f64bd112d38d0cbff3acf6ef1f7ddf40e5329fa93c7e5c07720f0bd50c0a1',
   typescript:
     '28526bdfb8bdaba4bbe5eb8b4e45f47c3bbf966e99a42424e7e0573d1014c95a',
 } as const;
@@ -223,6 +223,7 @@ type AuditPackageRequest = AuditExecutableSkillPackageFilesRequest & {
 
 function auditPackage(request: AuditPackageRequest): void {
   const { collector, npmPackages, repoRoot, skillPackage, tracked } = request;
+  auditPackageDirectoryChain(request);
   const packageFiles = tracked.filter(
     (file) =>
       file.path === skillPackage.skillPath ||
@@ -308,6 +309,23 @@ function auditPackage(request: AuditPackageRequest): void {
       skillPackage,
     };
     auditDocuments(documentsRequest);
+  }
+}
+
+function auditPackageDirectoryChain(request: AuditPackageRequest): void {
+  const { collector, repoRoot, skillPackage } = request;
+  const segments = skillPackage.scriptsRoot.split('/');
+  for (let length = 1; length <= segments.length; length += 1) {
+    const relativePath = segments.slice(0, length).join('/');
+    try {
+      const metadata = lstatSync(path.join(repoRoot, relativePath));
+      if (metadata.isDirectory() && !metadata.isSymbolicLink()) continue;
+    } catch {
+      // The bounded finding below owns missing and unsafe directory nodes.
+    }
+    addFinding(collector)(relativePath)(
+      'executable-skill path components must be real directories',
+    );
   }
 }
 
@@ -420,18 +438,10 @@ function auditProjectConfigs(request: AuditDocumentsRequest): void {
     path.join(repoRoot, scriptsRoot, 'eslint.config.js'),
     'utf8',
   );
-  const rulePath = path.posix.relative(
-    scriptsRoot,
-    'tooling/eslint-rules/no-raw-object-arguments.js',
-  );
-  const normalizedEslint = eslint.replace(
-    rulePath,
-    '<tooling>/eslint-rules/no-raw-object-arguments.js',
-  );
   for (const [configPath, source, expected] of [
     [`${scriptsRoot}/.prettierrc`, prettier, CONFIG_HASHES.prettier],
     [`${scriptsRoot}/tsconfig.json`, tsconfig, CONFIG_HASHES.typescript],
-    [`${scriptsRoot}/eslint.config.js`, normalizedEslint, CONFIG_HASHES.eslint],
+    [`${scriptsRoot}/eslint.config.js`, eslint, CONFIG_HASHES.eslint],
   ] as const) {
     const actual = new Bun.CryptoHasher('sha256').update(source).digest('hex');
     if (actual !== expected) {

@@ -97,7 +97,21 @@ Does not apply to:
 - `rg "type Result<|type Maybe<" agentic-ai` should find none
 - `task preflight:typescript-state`
 - Loom: `bun run verify` in `agentic-ai/loom`
-- `task loom:pre-push` before push
+- The worker that owns the changed scope runs the applicable checks above plus
+  the affected package's focused typecheck and behavior tests, retains required
+  browser evidence, formats every allowed source or Cortex file, commits one
+  coherent exact handoff, and returns the commit and evidence without pushing.
+  Changes under `agentic-ai/` and Loom remain AI-worker work. A Web worker
+  applies this skill only to web-owned implementation or through an explicit
+  Web expertise task; the skill does not grant generic ownership of
+  `agentic-ai/` or Loom.
+- Gizmo integrates the formatted handoff and runs `task loom:pre-push` on the
+  combined head. If that gate formats team-owned content, Gizmo returns the
+  exact diff to its owning worker for a fresh formatted commit instead of
+  committing it. After reintegration and a clean gate, Gizmo pushes and
+  immediately obtains remote evidence for that head: at least one relevant
+  focused remote task when it is not validation-ready, or complete exact-head
+  validation immediately when it is ready. Gizmo then owns readiness and merge.
 
 For Loom's one-parameter function rule, see
 [typescript-single-parameter.md](typescript-single-parameter.md).

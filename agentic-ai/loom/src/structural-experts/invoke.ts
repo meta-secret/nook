@@ -22,6 +22,7 @@ import { decodeWorkflowTaskOutput } from '../agent-workflow/structured-result-co
 import { WorkflowRuntimeActivityKind } from '../agent-workflow/events.ts';
 import type { RuntimeActivityObservation } from '../agent-workflow/events.ts';
 import { replayAgentAttemptJournal } from '../agent-workflow/agent-replay.ts';
+import { publishedCortexIdentifiersAtCommit } from '../lib/cortex-identifiers.ts';
 import { auditStructuralExperts } from './audit.ts';
 import { structuralExpertProfile, StructuralExpertKind } from './catalog.ts';
 import { validateStructuralOutputScope } from './output-scope.ts';
@@ -330,7 +331,11 @@ export async function verifyStructuralExpertInvocationResult(
   }
   let replayed: ReturnType<typeof replayAgentAttemptJournal>;
   try {
-    const replayRequest = { events };
+    const knownCortexIdentifiers = publishedCortexIdentifiersAtCommit({
+      repoRoot: resolve(result.runDirectory, '../../../..'),
+      sourceCommit: result.sourceCommit,
+    });
+    const replayRequest = { events, knownCortexIdentifiers };
     replayed = replayAgentAttemptJournal(replayRequest);
   } catch {
     verificationFailed();

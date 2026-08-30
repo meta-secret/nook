@@ -11,8 +11,9 @@ Use this workflow for feature work that touches more than one package.
    merge** (`gh pr merge --squash`). Never merge commit or rebase merge. See
    [pull requests](../../../gizmo/workflows/pull-requests.md#squash-merge-only---no-exceptions).
    0c. Estimate authored changed lines and map package ownership before editing.
-   If the change approaches 3,000 lines, split it into ordered package- or
-   layer-focused PRs. Follow
+   At 1,500 lines, perform mandatory split planning. If the complete feature is
+   expected to exceed 2,000 lines, or the current PR may exceed that ceiling,
+   split it into ordered package- or layer-focused stacked PRs. Follow
    [pull request size](../../../gizmo/workflows/pull-requests.md#pull-request-size-and-modularity).
 1. Identify the lowest package that should own the behavior.
 2. Put portable logic and domain models in `nook-core`; keep browser I/O and JS-friendly conversion in `nook-wasm`.
@@ -22,17 +23,50 @@ Use this workflow for feature work that touches more than one package.
 6. Add or update tests in the owning package (`nook-core` Rust tests for domain logic; Playwright for UI flows).
 7. Add new app routine commands to the nearest owning Taskfile: web-family tasks under `nook-app/nook-web/Taskfile.yml` , Docker tasks under `nook-app/nook-platform/docker/Taskfile.yml`, CI tasks under `nook-app/ci/Taskfile.yml`, and repo-level non-app commands under the root `Taskfile.yml` or root `.task/`.
 8. Update `.cortex` docs when architecture or workflow changes.
-9. Run `task loom:pre-push`, commit, and push.
-   Trigger complete validation when the head is ready for the final gate.
-   - Use a focused hosted task only when it shortens diagnosis of a known failure.
-   - Do not run local `task check` for agent work.
+9. Run required formatters and commit every resulting mutation in the allowed
+   AI paths. Gizmo integrates that coherent handoff and runs
+   `task loom:pre-push`.
+   - If hygiene mutates AI-owned source or Cortex content, the AI team returns
+     a fresh formatted commit. Gizmo reintegrates it and reruns hygiene before
+     pushing.
+   - Do not add broad local builds, tests, e2e, container product gates, or
+     duplicate hosted-check mirrors before push.
+   - If the pushed head is not validation-ready, Gizmo dispatches at least one
+     relevant focused hosted task immediately.
+   - When the head is validation-ready, Gizmo dispatches complete exact-head
+     validation immediately. Focused tasks are optional on that path.
+   - Gizmo obtains fresh exact-head remote evidence after every replacement
+     push.
 
 For multiple package PRs:
 
 1. Introduce or stabilize the narrowest owning interface first.
-2. Merge that slice before changing its consumers.
-3. Start each consumer slice from current `origin/main`.
-4. Keep unrelated package changes separate even when they belong to one feature.
+2. Keep AI work inside the semantic PR slice identified by its assigned Gizmo
+   ID. The feature-slice Gizmo is a passive immutable Workbench record, not a
+   process or controller. Team Agent count does not determine record or PR
+   count. Exactly 2,000 authored changed lines may remain one PR.
+3. Return the AI Team Agent's existing typed handoff directly to Gizmo Prime;
+   bind it to the assigned Gizmo ID through existing plan/task context. Gizmo
+   Prime aggregates scope, predecessor, stable interfaces, estimate, exact
+   handoff commits, and evidence under that record. This introduces no new
+   handoff transport. The AI worker does not create or retarget PRs, register a
+   stack, request readiness, or merge.
+   A focused issue materialized from a multi-PR plan carries this canonical ID
+   as `gizmo_id`; its later bounded one-PR plan must not replace it.
+4. Gizmo Prime owns the complete PR lifecycle: same-repository branch and PR
+   creation, native GitHub stack registration through `gh stack` or the GitHub
+   website, predecessor bases, cross-links, full checks, exact-head readiness,
+   retargeting, and bottom-up squash merges. If native stack operations are
+   unavailable, Gizmo Prime stops instead of falling back to an informal chain
+   or adding a third-party dependency.
+5. After each predecessor merges, Gizmo Prime retargets the immediate successor
+   to `main`, updates it from current `origin/main`, re-measures authored
+   additions plus deletions, and dispatches complete validation for the new
+   exact head.
+6. Small independent slices at or below the ceiling may be delivered from
+   current `origin/main` only as predecessor-free independent PRs; do not
+   register them as a stack.
+7. Keep unrelated package changes separate even when they belong to one feature.
 
 Dependency direction must stay:
 

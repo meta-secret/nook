@@ -7,6 +7,7 @@ import {
   AuthenticationWorkflowKind,
   AuthenticationWorkflowStage,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm'
+import type { AuthenticationApprovalRequirement } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm'
 import type {
   WebsiteLoginSaveActionResponse,
   WebsiteLoginSaveOfferResponse,
@@ -31,6 +32,8 @@ export const demoSufficientAuthenticationOutcome =
   AuthenticationOutcomeVerdict.Sufficient
 export const demoInsufficientAuthenticationOutcome =
   AuthenticationOutcomeVerdict.Insufficient
+const demoExplicitUserApproval =
+  'explicit-user-approval' satisfies AuthenticationApprovalRequirement
 export const demoDomainEnumArgs = {
   generatePasswordMessageType:
     GeneratePasswordRequestType.NookWebsiteGeneratePassword,
@@ -47,6 +50,7 @@ export const demoDomainEnumArgs = {
     generatePasswordAction: AuthenticationWorkflowAction.GeneratePassword,
     fillTotpAction: AuthenticationWorkflowAction.FillTotp,
     createPasskeyAction: AuthenticationWorkflowAction.CreatePasskey,
+    explicitUserApproval: demoExplicitUserApproval,
   },
   authenticatorProtocol: {
     optionsMessageType:
@@ -113,9 +117,16 @@ export type DemoChromeStubArgs = {
 export function installDemoChromeStub(args: DemoChromeStubArgs) {
   type RuntimeMessage = {
     type: string
-    payload?: { secretId?: string }
+    payload?: { secretId?: string; observations?: unknown[] }
   }
   type RuntimeCallback = (response?: unknown) => void
+  type AuthenticationSnapshotResponse = {
+    snapshot?: { observationIndex?: number }
+  }
+  type AuthenticationSnapshotResponseAdapterRequest = {
+    message: RuntimeMessage
+    response: unknown
+  }
   type StagedSaveOffer = {
     offerId: string
     decision: NookWebsiteLoginSaveDecision.Create
@@ -223,7 +234,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
               action: authenticationWorkflow.createPasskeyAction,
               currentStep: 1,
               totalSteps: 3,
-              requiresHumanApproval: false,
+              approvalRequirement: authenticationWorkflow.explicitUserApproval,
               observationIndex: 0,
             },
           }
@@ -342,7 +353,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
               action: authenticationWorkflow.generatePasswordAction,
               currentStep: 2,
               totalSteps: 5,
-              requiresHumanApproval: false,
+              approvalRequirement: authenticationWorkflow.explicitUserApproval,
               observationIndex: 0,
             },
           }
@@ -366,7 +377,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
               action: authenticationWorkflow.continueAction,
               currentStep: 1,
               totalSteps: 3,
-              requiresHumanApproval: false,
+              approvalRequirement: authenticationWorkflow.explicitUserApproval,
               observationIndex: 0,
             },
           }
@@ -453,7 +464,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
               action: authenticationWorkflow.continueAction,
               currentStep: 1,
               totalSteps: 3,
-              requiresHumanApproval: false,
+              approvalRequirement: authenticationWorkflow.explicitUserApproval,
               observationIndex: 0,
             },
           }
@@ -483,7 +494,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
             action: authenticationWorkflow.continueAction,
             currentStep: 1,
             totalSteps: 3,
-            requiresHumanApproval: false,
+            approvalRequirement: authenticationWorkflow.explicitUserApproval,
             observationIndex: 0,
           },
         }
@@ -554,6 +565,33 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     }
   }
 
+  const adaptAuthenticationSnapshotResponse = ({
+    message,
+    response,
+  }: AuthenticationSnapshotResponseAdapterRequest): unknown => {
+    if (
+      message.type !== 'nook:authentication-workflow-snapshot' ||
+      typeof response !== 'object' ||
+      !response
+    ) {
+      return response
+    }
+    const { observationIndex } = (response as AuthenticationSnapshotResponse)
+      .snapshot ?? { observationIndex: -1 }
+    const observations = message.payload?.observations ?? []
+    if (
+      typeof observationIndex !== 'number' ||
+      !Number.isInteger(observationIndex) ||
+      observationIndex < 0 ||
+      observationIndex >= observations.length
+    ) {
+      return response
+    }
+    const selectedFacts = observations[observationIndex]
+    if (!selectedFacts) return response
+    return { ...response, selectedFacts }
+  }
+
   if (barcodeRawValue) {
     class FakeBarcodeDetector {
       async detect() {
@@ -593,7 +631,11 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
           demoWindow.__nookDemoRuntimeMessageTypes ??= []
           demoWindow.__nookDemoRuntimeMessageTypes.push(message.type)
         }
-        const response = responseFor(message)
+        const responseRequest: AuthenticationSnapshotResponseAdapterRequest = {
+          message,
+          response: responseFor(message),
+        }
+        const response = adaptAuthenticationSnapshotResponse(responseRequest)
         if (callback) queueMicrotask(() => callback(response))
       },
     },

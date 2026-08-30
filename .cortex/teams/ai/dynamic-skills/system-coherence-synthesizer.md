@@ -53,10 +53,6 @@ diagnostic identities. Failed observations never count as accepted provider
 evidence, and the legacy output cannot satisfy an ordinary provider edge,
 authorize implementation, or claim ordinary-contract compliance.
 
-The separate legacy `loom:agent-workflow:cortex-audit` lane uses
-`FindingSynthesizer` and `CortexSynthesis` under its own all-terminal diagnostic
-contract. Neither identity aliases this structural profile or result.
-
 #### Future contract
 
 Future ordinary accepted-evidence synthesis requires a distinct typed role,

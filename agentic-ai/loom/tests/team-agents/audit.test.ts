@@ -1,11 +1,4 @@
-import {
-  mkdir,
-  mkdtemp,
-  readFile,
-  rm,
-  symlink,
-  writeFile,
-} from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import type { MakeDirectoryOptions, RmOptions } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -13,7 +6,6 @@ import { describe, expect, test } from 'bun:test';
 import {
   auditTeamAgents,
   auditTeamAuthorities,
-  auditTeamCortexAuthority,
 } from '../../src/team-agents/audit.ts';
 import type {
   AuditTeamAgentsRequest,
@@ -83,17 +75,21 @@ describe('canonical Cortex team authority', () => {
     }
   });
 
-  test('rejects semantic drift in context, isolation, and lifecycle authority', async () => {
-    const source = await readFile(join(REPO_ROOT, '.cortex/AGENTS.md'), 'utf8');
-    const driftedSource = source.replace(
-      'It does not grant parent-owned lifecycle authority.',
-      'It may grant lifecycle authority to a child.',
-    );
-    const authorityRequest = { source: driftedSource };
-
-    expect(
-      auditTeamCortexAuthority(authorityRequest).map((finding) => finding.code),
-    ).toContain('cortex-team-contract-semantic-drift');
+  test('rejects root authorities that lose compact semantic contracts', async () => {
+    const fixtureRoot = await driftedAuthorityFixture();
+    try {
+      const auditRequest: AuditTeamAgentsRequest = { repoRoot: fixtureRoot };
+      const report = auditTeamAgents(auditRequest);
+      expect(report.auditOk).toBe(false);
+      expect(report.findings.map((finding) => finding.code)).toContain(
+        'invalid-cortex-team-authority',
+      );
+      expect(report.findings.map((finding) => finding.code)).toContain(
+        'invalid-cortex-gizmo-authority',
+      );
+    } finally {
+      await rm(fixtureRoot, REMOVE_RECURSIVELY);
+    }
   });
 
   test('does not require or treat vendor profile TOMLs as authority', async () => {
@@ -131,5 +127,21 @@ function requiredAiAuthority(): TeamAuthority {
 async function cortexAuthorityFixture(): Promise<string> {
   const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-team-authority-'));
   await symlink(join(REPO_ROOT, '.cortex'), join(fixtureRoot, '.cortex'));
+  return fixtureRoot;
+}
+
+async function driftedAuthorityFixture(): Promise<string> {
+  const fixtureRoot = await mkdtemp(
+    join(tmpdir(), 'loom-team-authority-drift-'),
+  );
+  const cortexRoot = join(fixtureRoot, '.cortex');
+  await mkdir(join(cortexRoot, 'gizmo'), CREATE_RECURSIVELY);
+  await symlink(join(REPO_ROOT, '.cortex/teams'), join(cortexRoot, 'teams'));
+  await writeFile(join(cortexRoot, 'AGENTS.md'), 'routing only\n', 'utf8');
+  await writeFile(
+    join(cortexRoot, 'gizmo/AGENTS.md'),
+    'delivery only\n',
+    'utf8',
+  );
   return fixtureRoot;
 }

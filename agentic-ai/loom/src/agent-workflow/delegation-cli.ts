@@ -45,6 +45,11 @@ import {
 } from './delegation-aggregation.ts';
 import type { FinalizeDelegationRunInput } from './delegation-aggregation.ts';
 import { renderDelegationPlanTree } from './delegation-plan-tree.ts';
+import { registeredCortexIdentifiersAtCommit } from '../lib/cortex-identifiers.ts';
+import {
+  assertCortexReferences,
+  type CortexReference,
+} from './cortex-references.ts';
 
 const HELP = `Loom delegated agent journal
 
@@ -106,6 +111,7 @@ type DelegationStartResponse = {
 type DelegationActivity = {
   readonly activity: WorkflowRuntimeActivityKind;
   readonly detail: string;
+  readonly cortexReferences?: readonly CortexReference[];
 };
 
 type DelegationRecordRequest = {
@@ -208,6 +214,17 @@ async function record(
   const serialized = await readFile(commandLine.requestPath, 'utf8');
   const request = JSON.parse(serialized) as DelegationRecordRequest;
   assertRequest(request);
+  const knownCortexIdentifiers = registeredCortexIdentifiersAtCommit({
+    repoRoot: commandLine.workingDirectory,
+    sourceCommit: request.sourceCommit,
+  });
+  for (const activity of request.activities) {
+    const referenceArgs = {
+      references: activity.cortexReferences ?? [],
+      knownIdentifiers: knownCortexIdentifiers,
+    } as const;
+    assertCortexReferences(referenceArgs);
+  }
   const terminal = normalizedTerminal(request.terminal);
   const runDirectory = resolve(
     commandLine.workingDirectory,
@@ -246,6 +263,7 @@ async function record(
     depth: request.depth,
     parent: request.parent,
     now: () => new Date().toISOString(),
+    knownCortexIdentifiers,
   };
   const journal = new AgentAttemptJournal<string>(journalConfiguration);
   await journal.initialize();
@@ -253,7 +271,7 @@ async function record(
     const event: AgentAttemptEventWithoutMetadata = {
       kind: AgentAttemptEventKind.RuntimeActivity,
       activity: activity.activity,
-      detail: activity.detail,
+      cortexReferences: activity.cortexReferences ?? [],
     };
     await journal.append(event);
   }
@@ -350,6 +368,20 @@ function assertRequest(request: DelegationRecordRequest): void {
       'Delegation journal request identity or terminal is invalid.',
     );
   }
+  if (!terminalHasExactKeys(request.terminal)) {
+    throw new Error('Delegation journal request terminal is invalid.');
+  }
+  if (
+    (request.terminal.kind === TaskTerminalKind.Completed &&
+      (typeof request.terminal.threadId !== 'string' ||
+        request.terminal.threadId.trim() === '')) ||
+    (request.terminal.kind !== TaskTerminalKind.Completed &&
+      (typeof request.terminal.summary !== 'string' ||
+        request.terminal.summary.trim() === '' ||
+        request.terminal.summary.length > 4096))
+  ) {
+    throw new Error('Delegation journal request terminal is invalid.');
+  }
   for (const activity of request.activities) {
     if (
       !activity ||
@@ -358,6 +390,11 @@ function assertRequest(request: DelegationRecordRequest): void {
     ) {
       throw new Error('Delegation journal request activity is invalid.');
     }
+    const referenceArgs = {
+      references: activity.cortexReferences ?? [],
+      knownIdentifiers: false,
+    } as const;
+    assertCortexReferences(referenceArgs);
   }
   if (request.terminal.kind === TaskTerminalKind.Completed) {
     const view = request.terminal.output.materializedViewMarkdown;
@@ -376,7 +413,14 @@ function assertRequest(request: DelegationRecordRequest): void {
 function normalizedTerminal(
   terminal: TaskTerminal<string>,
 ): TaskTerminal<string> {
-  if (terminal.kind !== TaskTerminalKind.Completed) return terminal;
+  if (terminal.kind !== TaskTerminalKind.Completed) {
+    return {
+      kind: terminal.kind,
+      task: terminal.task,
+      attempt: terminal.attempt,
+      summary: terminal.summary,
+    };
+  }
   if (
     terminal.output.resultKind === WorkflowResultKind.ModuleExpertEvidence ||
     terminal.output.resultKind === WorkflowResultKind.CodeRefactoringEvidence ||
@@ -389,9 +433,24 @@ function normalizedTerminal(
     );
   }
   return {
-    ...terminal,
+    kind: terminal.kind,
+    task: terminal.task,
+    attempt: terminal.attempt,
+    threadId: terminal.threadId,
     output: decodeWorkflowTaskOutput(JSON.stringify(terminal.output)),
   };
+}
+
+function terminalHasExactKeys(terminal: TaskTerminal<string>): boolean {
+  const expected = new Set(
+    terminal.kind === TaskTerminalKind.Completed
+      ? ['kind', 'task', 'attempt', 'threadId', 'output']
+      : ['kind', 'task', 'attempt', 'summary'],
+  );
+  const keys = Object.keys(terminal);
+  return (
+    keys.length === expected.size && keys.every((key) => expected.has(key))
+  );
 }
 
 function safeFilesystemIdentifier(value: string): boolean {

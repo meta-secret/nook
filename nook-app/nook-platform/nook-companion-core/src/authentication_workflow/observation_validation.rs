@@ -23,6 +23,7 @@ pub fn authentication_page_observations_are_valid(
             ]
             .into_iter()
             .all(|count| count <= MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT)
+                && observation.password_field_count() <= MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT
         })
 }
 
@@ -49,6 +50,15 @@ mod tests {
         }];
         assert!(!authentication_page_observations_are_valid(
             &excessive_count
+        ));
+
+        let combined_password_overflow = [AuthenticationPageObservation {
+            current_password_field_count: MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT / 2,
+            generic_password_field_count: MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT / 2 + 1,
+            ..Default::default()
+        }];
+        assert!(!authentication_page_observations_are_valid(
+            &combined_password_overflow
         ));
 
         let excessive_pages = vec![

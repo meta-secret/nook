@@ -4,9 +4,27 @@
 //! module owns the product decision about which workflow is present, where the
 //! user is in it, and which action Nook may offer next.
 
+mod candidate_selection;
+mod observation_facts;
 mod observation_validation;
+mod snapshot_contract;
 mod vocabulary;
 
+pub use candidate_selection::{
+    AuthenticationFormObservationPriority, authentication_form_observation_priority,
+    classify_authentication_workflow_candidates,
+};
+pub use observation_facts::{
+    AuthenticationAuthenticatorObservationFacts, AuthenticationAuthenticatorSetupObservation,
+    AuthenticationBackupCodesObservation, AuthenticationCeremonyContextObservation,
+    AuthenticationCeremonyObservationFacts, AuthenticationDetailedAdvanceControlObservation,
+    AuthenticationDetailedPasskeyControlCandidateObservation,
+    AuthenticationDetailedPasskeyControlObservation, AuthenticationFieldObservationFacts,
+    AuthenticationPageObservationFacts, AuthenticationPageObservationFactsBatch,
+    AuthenticationPasskeyControlObservation, authentication_page_observation_facts_priority,
+    authentication_passkey_control_candidate_is_safe,
+    authentication_passkey_control_evidence_is_safe,
+};
 pub use observation_validation::{
     MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
     authentication_page_observations_are_valid,
@@ -18,6 +36,84 @@ pub use vocabulary::{
 use crate::website_passkey_proposal::{WebsitePasskeyProposal, propose_website_passkey};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum AuthenticationManualCheckpoint {
+    #[default]
+    Absent,
+    Present,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum AuthenticationEnrollmentEvidence {
+    #[default]
+    Absent,
+    AuthenticatorSetup,
+    BackupCodes,
+    AuthenticatorSetupAndBackupCodes,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum AuthenticationAdvanceControlEvidence {
+    #[default]
+    Absent,
+    Present,
+    /// The browser owns a form that supports submission without a control element.
+    ImplicitSubmission,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum AuthenticationOneTimeCodeProgressionEvidence {
+    #[default]
+    AdvanceControlRequired,
+    AutoSubmitObserved,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum AuthenticationPasskeyEvidence {
+    #[default]
+    Absent,
+    Control,
+    VaultAccounts {
+        account_count: u32,
+    },
+    ControlAndVaultAccounts {
+        account_count: u32,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum AuthenticationApprovalRequirement {
+    ExplicitUserApproval,
+    TakeoverRequired,
+}
+
+impl AuthenticationApprovalRequirement {
+    #[must_use]
+    pub const fn for_action(action: AuthenticationWorkflowAction) -> Self {
+        if matches!(action, AuthenticationWorkflowAction::TakeOver) {
+            Self::TakeoverRequired
+        } else {
+            Self::ExplicitUserApproval
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
@@ -70,7 +166,7 @@ pub struct AuthenticationWorkflowSnapshot {
     pub action: AuthenticationWorkflowAction,
     pub current_step: u8,
     pub total_steps: u8,
-    pub requires_human_approval: bool,
+    pub approval_requirement: AuthenticationApprovalRequirement,
     pub observation_index: u32,
 }
 
@@ -124,77 +220,27 @@ impl AuthenticationWorkflowSnapshot {
             action,
             current_step,
             total_steps,
-            requires_human_approval: true,
+            approval_requirement: AuthenticationApprovalRequirement::for_action(action),
             observation_index: 0,
         }
     }
-}
 
-const fn workflow_candidate_priority(snapshot: AuthenticationWorkflowSnapshot) -> u8 {
-    match (snapshot.kind, snapshot.action) {
-        (AuthenticationWorkflowKind::TotpEnrollment, _) => 8,
-        (AuthenticationWorkflowKind::TotpChallenge, _)
-        | (AuthenticationWorkflowKind::Login, AuthenticationWorkflowAction::UsePasskey) => 7,
-        (AuthenticationWorkflowKind::Login, AuthenticationWorkflowAction::ContinueWithNook) => 6,
-        (AuthenticationWorkflowKind::Login, AuthenticationWorkflowAction::CreatePasskey)
-        | (AuthenticationWorkflowKind::PasswordChange, _)
-        | (AuthenticationWorkflowKind::Signup, AuthenticationWorkflowAction::UsePasskey) => 5,
-        (AuthenticationWorkflowKind::Signup, _) => 4,
-        (AuthenticationWorkflowKind::Login, _) => 2,
-        (AuthenticationWorkflowKind::Manual, _) => 1,
+    #[must_use]
+    pub const fn approval_requirement_matches_action(self) -> bool {
+        matches!(
+            (
+                self.approval_requirement,
+                AuthenticationApprovalRequirement::for_action(self.action)
+            ),
+            (
+                AuthenticationApprovalRequirement::ExplicitUserApproval,
+                AuthenticationApprovalRequirement::ExplicitUserApproval,
+            ) | (
+                AuthenticationApprovalRequirement::TakeoverRequired,
+                AuthenticationApprovalRequirement::TakeoverRequired,
+            )
+        )
     }
-}
-
-/// Rank browser form observations before the host applies its bounded scan.
-///
-/// This preserves the structural priority independently of DOM ownership:
-/// active OTP, current-password login, single generic password, other
-/// password forms, then username/passkey-only surfaces.
-#[must_use]
-pub const fn authentication_form_observation_priority(
-    observation: AuthenticationPageObservation,
-) -> u8 {
-    if observation.one_time_code_field_count > 0 {
-        5
-    } else if observation.current_password_field_count > 0 {
-        4
-    } else if observation.generic_password_field_count == 1 {
-        3
-    } else if observation.password_field_count() > 0 {
-        2
-    } else {
-        1
-    }
-}
-
-#[must_use]
-pub fn classify_authentication_workflow_candidates(
-    observations: &[AuthenticationPageObservation],
-) -> AuthenticationWorkflowMatch {
-    if !authentication_page_observations_are_valid(observations) {
-        return AuthenticationWorkflowMatch::Rejected;
-    }
-
-    let mut selected = AuthenticationWorkflowMatch::NoMatch;
-    for (index, observation) in observations.iter().copied().enumerate() {
-        let AuthenticationWorkflowMatch::Matched(mut candidate) =
-            classify_authentication_workflow(observation)
-        else {
-            continue;
-        };
-        candidate.observation_index = u32::try_from(index).unwrap_or(u32::MAX);
-        let replace = match selected {
-            AuthenticationWorkflowMatch::NoMatch => true,
-            AuthenticationWorkflowMatch::Rejected => false,
-            AuthenticationWorkflowMatch::Matched(current) => {
-                workflow_candidate_priority(candidate) > workflow_candidate_priority(current)
-            }
-        };
-        if replace {
-            selected = AuthenticationWorkflowMatch::Matched(candidate);
-        }
-    }
-    selected
 }
 
 const fn classify_enrollment_workflow(
@@ -259,10 +305,14 @@ const fn apply_passkey_proposal(
         WebsitePasskeyProposal::None => snapshot,
         WebsitePasskeyProposal::UsePasskey { .. } => {
             snapshot.action = AuthenticationWorkflowAction::UsePasskey;
+            snapshot.approval_requirement =
+                AuthenticationApprovalRequirement::for_action(snapshot.action);
             snapshot
         }
         WebsitePasskeyProposal::CreatePasskey => {
             snapshot.action = AuthenticationWorkflowAction::CreatePasskey;
+            snapshot.approval_requirement =
+                AuthenticationApprovalRequirement::for_action(snapshot.action);
             snapshot
         }
     }
@@ -367,8 +417,12 @@ pub const fn classify_authentication_workflow(
             observation,
             AuthenticationWorkflowSnapshot::new(
                 AuthenticationWorkflowKind::Login,
-                AuthenticationWorkflowStage::Credentials,
-                AuthenticationWorkflowAction::TakeOver,
+                credentials_or_manual(observation.manual_checkpoint_present),
+                if observation.manual_checkpoint_present {
+                    AuthenticationWorkflowAction::TakeOver
+                } else {
+                    AuthenticationWorkflowAction::ContinueWithNook
+                },
                 1,
                 3,
             ),
@@ -425,7 +479,10 @@ mod tests {
         assert_eq!(login.kind, AuthenticationWorkflowKind::Login);
         assert_eq!(login.action, AuthenticationWorkflowAction::ContinueWithNook);
         assert_eq!((login.current_step, login.total_steps), (1, 3));
-        assert!(login.requires_human_approval);
+        assert_eq!(
+            login.approval_requirement,
+            AuthenticationApprovalRequirement::ExplicitUserApproval
+        );
 
         let password_login = AuthenticationPageObservation {
             current_password_field_count: 1,
@@ -492,6 +549,10 @@ mod tests {
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Signup);
         assert_eq!(snapshot.stage, AuthenticationWorkflowStage::Manual);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::TakeOver);
+        assert_eq!(
+            snapshot.approval_requirement,
+            AuthenticationApprovalRequirement::TakeoverRequired
+        );
         Ok(())
     }
 
@@ -671,7 +732,10 @@ mod tests {
         let snapshot = classify_authentication_workflow(login).snapshot()?;
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Login);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::UsePasskey);
-        assert!(snapshot.requires_human_approval);
+        assert_eq!(
+            snapshot.approval_requirement,
+            AuthenticationApprovalRequirement::ExplicitUserApproval
+        );
         Ok(())
     }
 
@@ -697,6 +761,20 @@ mod tests {
         let snapshot = classify_authentication_workflow(passkey_only).snapshot()?;
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Login);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::CreatePasskey);
+        Ok(())
+    }
+
+    #[test]
+    fn manual_passkey_only_login_yields_to_manual_takeover() -> anyhow::Result<()> {
+        let passkey_only = AuthenticationPageObservation {
+            passkey_control_present: true,
+            manual_checkpoint_present: true,
+            ..observation()
+        };
+        let snapshot = classify_authentication_workflow(passkey_only).snapshot()?;
+        assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Login);
+        assert_eq!(snapshot.stage, AuthenticationWorkflowStage::Manual);
+        assert_eq!(snapshot.action, AuthenticationWorkflowAction::TakeOver);
         Ok(())
     }
 

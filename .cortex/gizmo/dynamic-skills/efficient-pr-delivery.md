@@ -2,11 +2,13 @@
 
 ## Purpose
 
-Minimize agent wall time by formatting locally and using the configured GitHub
-Actions runner for focused tasks while iterating. Spend the complete PR
-pipeline only on a ready head, then carry ready PRs directly through squash
-merge. Trusted Rust gates may use ARC while runtime-dependent gates remain
-hosted.
+Minimize agent wall time with remote-first validation. Run only pre-push
+hygiene locally, promptly publish each coherent head, and obtain exact-head
+remote evidence immediately. A head that is not validation-ready requires at
+least one relevant focused remote task. Dispatch complete validation
+immediately when the head is validation-ready; focused tasks are optional on
+that path.
+Trusted Rust gates may use ARC while runtime-dependent gates remain hosted.
 
 ## Problem Pattern
 
@@ -27,9 +29,10 @@ Write `prLand` domain requests as nested YAML (for example `prLand.validate` wit
 ```bash
 task loom:pre-push
 git commit …
-task pr:review-local
 git push -u origin HEAD
-task remote TASK_NAME=<name>   # focused iteration
+# Required when the head is not validation-ready:
+task remote TASK_NAME=<name>
+# As soon as the head is validation-ready:
 task loom:pr-land CONFIG=path/to/agent-owned/pr-land-validate.yaml
 task loom:pr-land CONFIG=path/to/agent-owned/pr-land-ready.yaml
 gh pr merge <number> --squash
@@ -40,6 +43,13 @@ See [Loom tools](../../teams/ai/references/loom-tools.md).
 Delivery rules:
 
 - Do not run `task check` or `task ci:pr` as a local product gate.
+- Do not run broad local builds, tests, e2e, container product gates, advisory
+  review, or duplicate hosted-check mirrors before push.
+- Exactly two trusted GitHub Actions publishers bypass ordinary worker commit
+  handoffs. See the root
+  [team worker contract](../../AGENTS.md#team-worker-contract). Neither bounded
+  editor has independent Git authority. Gizmo continues either published head
+  without duplicate integration or advisory local review.
 - `task loom:pr-land CONFIG=<pr-land-merge-check-request.yaml>` summarizes
   readiness.
 - Loom never squash-merges.
@@ -72,9 +82,9 @@ Does not apply to:
 ## Examples
 
 - Before: format → push → `task check` ‖ PR CI → merge after both green.
-- After: `task loom:pre-push` → local Codex review → push → focused remote →
-  exact-head Cloud review stabilization → complete validation → ready → squash
-  merge.
+- After: `task loom:pre-push` → commit and push → required relevant focused
+  remote evidence when not ready, or immediate exact-head Cloud review
+  stabilization and complete validation when ready → squash merge.
 - Before: discover stale-base requirements after a failed merge command.
 - After: `task pr:preflight` / Loom ready reports the blocker before merge.
 
@@ -82,14 +92,22 @@ Does not apply to:
 
 - [ ] Establish the branch and PR path from current `origin/main`.
 - [ ] Run `task loom:pre-push` before every push.
-- [ ] Commit the coherent formatted change.
-- [ ] Run advisory `task pr:review-local` before the first owner-authored push.
-- [ ] For a harness-created PR, run local review after handoff instead.
-- [ ] Push; use focused hosted tasks instead of a local product gate.
+- [ ] Route formatter mutations in team-owned source or Cortex files back to
+      that team for a fresh formatted commit.
+- [ ] Commit only deterministic integration state as Gizmo.
+- [ ] Promptly push without another local product or review gate.
+- [ ] If the pushed head is not validation-ready, dispatch at least one
+      relevant focused hosted task immediately.
+- [ ] When the head is validation-ready, dispatch complete validation
+      immediately without requiring a focused task first.
 - [ ] Stabilize one exact-head Codex review before complete validation.
 - [ ] Address current findings as one coherent batch before dispatching complete
       validation.
 - [ ] Inspect and address all feedback already present.
+- [ ] After every replacement push, obtain fresh exact-head remote evidence.
+- [ ] Promote an evidence-backed durable discovery when justified; no promotion
+      is required when no candidate qualifies.
+- [ ] If promotion changes the head, repeat hosted validation.
 - [ ] Run `task loom:pr-land CONFIG=<pr-land-ready-request.yaml>` on the exact head.
 - [ ] Squash-merge immediately when readiness succeeds, then report duration.
 - [ ] Publish Workbench issue, worklog, and agent statistics.

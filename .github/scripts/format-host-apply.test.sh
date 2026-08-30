@@ -79,8 +79,6 @@ for required in \
     || { echo "format-host-apply test: missing shared TypeScript formatter contract: $required" >&2; exit 1; }
 done
 for required in \
-  'tooling/eslint-rules/no-raw-object-arguments.js' \
-  'shared_tooling_files+=' \
   '.cortex/gizmo/dynamic-skills/*/scripts/*' \
   '.cortex/shared/dynamic-skills/*/scripts/*' \
   '.cortex/teams/*/dynamic-skills/*/scripts/*' \
@@ -148,8 +146,7 @@ mkdir -p \
   "$fixture_root/nook-app/nook-web/nook-web-shared/src/vault-app" \
   "$fixture_root/nook-app/nook-web/nook-vault-simple/src" \
   "$fixture_root/nook-app/nook-web/nook-vault-sentinel/src" \
-  "$fixture_root/preflight/src" \
-  "$fixture_root/tooling/eslint-rules"
+  "$fixture_root/preflight/src"
 cp "$scripts_dir/format-host-apply.sh" "$fixture_root/.github/scripts/format-host-apply.sh"
 cp "$scripts_dir/../../.task/agentic-ai.yml" "$fixture_root/.task/agentic-ai.yml"
 cp "$formatter_dir/format.sh" "$fixture_root/.github/formatting/format.sh"
@@ -218,7 +215,6 @@ printf 'baseline\n' >"$fixture_root/nook-app/nook-web/nook-web-shared/src/vault-
 printf 'baseline\n' >"$fixture_root/nook-app/nook-web/nook-vault-simple/src/simple.svelte"
 printf 'baseline\n' >"$fixture_root/nook-app/nook-web/nook-vault-sentinel/src/sentinel.svelte"
 printf 'baseline\n' >"$fixture_root/README.md"
-printf 'baseline\n' >"$fixture_root/tooling/eslint-rules/no-raw-object-arguments.js"
 (
   cd "$fixture_root"
   git init -q
@@ -228,7 +224,6 @@ printf 'baseline\n' >"$fixture_root/tooling/eslint-rules/no-raw-object-arguments
   git commit -qm baseline
   git update-ref refs/remotes/origin/main HEAD
   printf 'unrelated\n' >README.md
-  printf 'const changed = true;\n' >tooling/eslint-rules/no-raw-object-arguments.js
   printf 'const loom = true;\n' >agentic-ai/loom/src/loom.ts
   printf 'const application = true;\n' >.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/demo/src/application.ts
   printf 'const helper = true;\n' >.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/scripts/helper.ts
@@ -267,7 +262,6 @@ printf '%s\n' \
   'src/scripts/helper.ts' \
   'src/research.ts' \
   'src/web-app.ts' \
-  'tooling/eslint-rules/no-raw-object-arguments.js' \
   | sort >"$fixture_root/expected.log"
 sort "$fixture_root/format.log" >"$fixture_root/actual.log"
 cmp -s "$fixture_root/expected.log" "$fixture_root/actual.log" \

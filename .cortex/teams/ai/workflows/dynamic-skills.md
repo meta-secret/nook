@@ -122,7 +122,10 @@ When applying a skill to code:
 4. Preserve package boundaries in [`.cortex/shared/architecture/system.md`](../../../shared/architecture/system.md).
 5. Add or update tests when the refactor changes behavior or protects a durable
    invariant.
-6. Run `task loom:pre-push` before pushing. For implementation tasks, commit and
-   push the coherent iteration. Run focused hosted tasks as useful. Trigger
-   complete validation with `task pr:validate` when the head is ready for the
-   final gate.
+6. Run the focused worker proof and required formatters. Commit every resulting
+   mutation in the allowed paths and return the exact handoff to Gizmo. If
+   integrated pre-push hygiene mutates AI-owned content, the AI team returns a
+   fresh formatted commit. Gizmo reintegrates, reruns hygiene, and pushes.
+   Gizmo dispatches at least one relevant focused hosted task when the pushed
+   head is not validation-ready. Gizmo dispatches complete exact-head
+   validation immediately when the head is ready.

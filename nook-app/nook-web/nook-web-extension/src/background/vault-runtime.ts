@@ -4,13 +4,13 @@ import {
   CompanionAuthenticationWorkflowMatchKind,
   classify_companion_authentication_outcome,
   classify_companion_authentication_outcome_with_default_timeout,
-  classify_companion_authentication_workflow,
+  classify_companion_authentication_workflow_facts,
   companion_authentication_workflow_match_kind,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type {
   AuthenticationOutcomeClassification,
   AuthenticationOutcomeObservation,
-  AuthenticationPageObservations,
+  AuthenticationPageObservationFactsBatch,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import initNookWasm, {
   configure_vault_application,
@@ -141,10 +141,10 @@ export type AuthenticationWorkflowSnapshot =
     }
 
 export async function authenticationWorkflowSnapshot(
-  input: AuthenticationPageObservations,
+  input: AuthenticationPageObservationFactsBatch,
 ): Promise<AuthenticationWorkflowSnapshot> {
   await companionWasmReady
-  const workflowMatch = classify_companion_authentication_workflow(input)
+  const workflowMatch = classify_companion_authentication_workflow_facts(input)
   const matchKind = companion_authentication_workflow_match_kind(workflowMatch)
   if (matchKind === CompanionAuthenticationWorkflowMatchKind.Rejected) {
     throw new Error('authentication workflow observations were rejected')

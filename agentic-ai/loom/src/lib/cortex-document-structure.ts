@@ -4,7 +4,6 @@ import { fromMarkdown } from 'mdast-util-from-markdown';
 import type { Heading, Link, Parent, Root, RootContent } from 'mdast';
 
 export enum CortexStructureFindingCode {
-  InvalidMigrationLedger = 'invalid-migration-ledger',
   InvalidTitle = 'invalid-title',
   ProhibitedNavigation = 'prohibited-navigation',
   ProhibitedHtml = 'prohibited-html',
@@ -44,8 +43,6 @@ export type CortexDocumentSource = {
 export type AuditCortexDocumentStructureArgs = {
   readonly documents: readonly CortexDocumentSource[];
   readonly excludedDocumentPaths: ReadonlySet<string>;
-  readonly migrationBaselineEntries: readonly string[] | false;
-  readonly migrationLedgerPath: string;
   readonly repoRoot: string;
 };
 
@@ -75,6 +72,23 @@ type ValidateMarkdownSyntaxArgs = {
 export type AuditCortexMarkdownSyntaxArgs = {
   readonly documents: readonly CortexDocumentSource[];
 };
+
+export type NormalizedCortexMarkdownArgs = {
+  readonly relativePath: string;
+  readonly content: string;
+};
+
+export function normalizedCortexMarkdown(
+  args: NormalizedCortexMarkdownArgs,
+): string {
+  return args.relativePath.endsWith('/SKILL.md') ||
+    args.relativePath === 'SKILL.md'
+    ? args.content.replace(
+        /^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/u,
+        (frontmatter) => frontmatter.replace(/[^\r\n]/gu, ' '),
+      )
+    : args.content;
+}
 
 type ValidateIndexArgs = {
   readonly indexDocument: ParsedDocument;
@@ -305,6 +319,17 @@ function normalizeCortexRelativePath(filePath: string): string {
 
 function parseDocument(document: CortexDocumentSource): ParsedDocument {
   const root = fromMarkdown(document.content);
+  const fragments = headingFragmentsForRoot(root);
+  return { ...document, root, fragments };
+}
+
+export function markdownHeadingFragments(
+  markdown: string,
+): ReadonlySet<string> {
+  return headingFragmentsForRoot(fromMarkdown(markdown));
+}
+
+function headingFragmentsForRoot(root: Root): ReadonlySet<string> {
   const slugger = new GithubSlugger();
   const fragments = new Set<string>();
   for (const node of root.children) {
@@ -314,7 +339,7 @@ function parseDocument(document: CortexDocumentSource): ParsedDocument {
       fragments.add(slug);
     }
   }
-  return { ...document, root, fragments };
+  return fragments;
 }
 
 function validateDocument(args: ValidateDocumentArgs): void {

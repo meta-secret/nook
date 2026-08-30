@@ -2,6 +2,8 @@
 
 #[path = "workbench/harness_neutral.rs"]
 mod harness_neutral;
+#[path = "workbench/stacked_runtime.rs"]
+mod stacked_runtime;
 
 use anyhow::Context as _;
 use std::{
@@ -40,12 +42,61 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "WORKBENCH_REPOSITORY: meta-secret/nook-workbench",
         "WORKBENCH_PLAN_FILE: .nook-workbench-plan.md",
         "WORKBENCH_SUMMARY_FILE: .nook-workbench-worklog.md",
+        "CI_AGENT_TOOLING_ROOT=\"$GITHUB_WORKSPACE\"",
         "major_change_authorized:",
         "MAJOR_CHANGE_AUTHORIZED=$MAJOR_CHANGE_AUTHORIZED",
         "CI_AGENT_TIMEOUT_MS: \"18000000\"",
         "status: ready",
         "automation: agent",
         "status: in_progress",
+        "gizmo_id",
+        "const rawGizmoId = gizmoIdRows[0]?.[1].trim() || ''",
+        "const assignedGizmoId = rawGizmoId === 'null' ? '' : rawGizmoId",
+        "stack_branch",
+        "stack_predecessor_branch",
+        "must provide both stack_branch and stack_predecessor_branch",
+        "stack_branch must exist in the Nook repository",
+        "stack_branch must have exactly one same-repository open PR",
+        "GET /repos/{owner}/{repo}/stacks",
+        "application/vnd.github.nebula-preview+json",
+        "GitHub native stack membership is unavailable",
+        "must belong to exactly one open GitHub native stack based on main",
+        "successorIndex <= 0",
+        "must immediately follow stack_predecessor_branch in its GitHub native stack",
+        "recorded predecessor must exist while it remains the live PR base",
+        "recorded predecessor must remain open and unmerged while it is the live PR base",
+        "cannot target main before its native-stack predecessor is merged",
+        "mergeCommit.parents[0]?.sha === predecessorPull.base.sha",
+        "mergeCommit.commit.tree.sha === predecessorHeadCommit.commit.tree.sha",
+        "native-stack predecessor must be squash-merged into main",
+        "retargeted successor must contain the current main frontier",
+        "successor PR must target its recorded predecessor or main",
+        "ISSUE_STACK_BRANCH: ${{ steps.workbench.outputs.stack_branch }}",
+        "ISSUE_STACK_LIVE_BASE_BRANCH: ${{ steps.workbench.outputs.stack_live_base_branch }}",
+        "ISSUE_STACK_LIVE_BASE_SHA: ${{ steps.workbench.outputs.stack_live_base_sha }}",
+        "ISSUE_STACK_PREDECESSOR_BRANCH: ${{ steps.workbench.outputs.stack_predecessor_branch }}",
+        "ISSUE_STACK_PR_NUMBER: ${{ steps.workbench.outputs.stack_pr_number }}",
+        "ISSUE_STACK_START_HEAD_SHA: ${{ steps.workbench.outputs.stack_start_head_sha }}",
+        "AGENT_PR_BASE_BRANCH=$base_branch",
+        "AGENT_PR_BASE_SHA=$ISSUE_STACK_LIVE_BASE_SHA",
+        "AGENT_PR_TARGET_KIND=$target_kind",
+        "Checkout trusted workflow tooling",
+        "ref: ${{ github.workflow_sha }}",
+        "Prepare isolated implementation worktree",
+        "IMPLEMENTATION_REPO_ROOT=$implementation_root",
+        "REPO_ROOT: ${{ env.IMPLEMENTATION_REPO_ROOT }}",
+        "node \"$GITHUB_WORKSPACE/agentic-ai/ci-agent/dist/main/main.js\" edit",
+        "node \"$GITHUB_WORKSPACE/agentic-ai/ci-agent/dist/main/main.js\" deliver",
+        "Rejected unsafe implementation worklog artifact.",
+        "ASSIGNED_GIZMO_ID: ${{ steps.workbench.outputs.gizmo_id }}",
+        "assignedGizmoId: process.env.ASSIGNED_GIZMO_ID",
+        "const currentGizmoIdMatch = /^- Current Gizmo ID:\\s*([a-z0-9]+(?:-[a-z0-9]+)*)\\s*$/m",
+        "const currentGizmoId = currentGizmoIdMatch?.[1]",
+        "Validated Workbench task plan is missing its Current Gizmo ID.",
+        "`gizmo_id: ${currentGizmoId}`",
+        "assignedGizmoId && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(assignedGizmoId)",
+        "frontmatter.matchAll(/^gizmo_id:\\s*(.*)$/gm)",
+        "gizmoIdRows.length > 1",
         "continuing_owner:",
         "A prompt-backed run requires continuing_owner.",
         "continuing_owner must be a lowercase GitHub login.",
@@ -63,10 +114,33 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "github.rest.repos.getContent({ owner, repo, path, ref: 'main' })",
         "Claim ready Workbench issue",
         "Run task-planning agent",
-        "task ci-agent:plan",
+        "bash \"$GITHUB_WORKSPACE/.github/scripts/ci-agent-plan.sh\"",
         "uses: ./.github/actions/nook-node-setup",
-        "uses: go-task/setup-task@v2",
+        "uses: oven-sh/setup-bun@v2",
+        "uses: dtolnay/rust-toolchain@1.97.0",
+        "npm ci --ignore-scripts --include=dev --prefix",
+        "bun install --cwd",
+        "Format implementation on trusted host",
         "Validate and publish Workbench task plan",
+        "Resolve standalone prompt rerun",
+        "if: steps.task.outputs.ready == 'true' && inputs.prompt != ''",
+        "Multiple open PRs use standalone branch",
+        "Existing standalone implementation PR has an unexpected repository or base",
+        "state: 'all'",
+        "github.rest.pulls.get",
+        "pull.state === 'open'",
+        "pull.merged",
+        "was closed without merge; preserve it for explicit recovery",
+        "github.rest.repos.getBranch",
+        "exists without a PR; preserve it for explicit recovery",
+        "error.status !== 404",
+        "steps.rerun.outputs.terminal != 'true'",
+        "Standalone implementation PR is $IMPLEMENTATION_TERMINAL_REASON; skipping rerun.",
+        "Standalone implementation PR is $IMPLEMENTATION_TERMINAL_REASON; delivery is idempotently complete.",
+        "Materialize validated implementation plan",
+        "VALIDATED_PLAN_SHA256=$EXPECTED_PLAN_SHA256",
+        "sha256sum \"$implementation_plan\"",
+        "sha256sum \"$plan\"",
         "Publish Workbench result",
         "MULTI_PR_PLAN: ${{ steps.plan.outputs.multi_pr }}",
         "Materialize the feature and ordered focused issues",
@@ -87,9 +161,101 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
             "Workbench agent workflow is missing: {required}"
         );
     }
+    let accepts_stack_claim = |native: bool,
+                               adjacent: bool,
+                               retargeted: bool,
+                               predecessor_open: bool,
+                               merged: bool,
+                               squash: bool,
+                               current_main: bool| {
+        native
+            && adjacent
+            && ((retargeted && merged && squash && current_main)
+                || (!retargeted && predecessor_open))
+    };
+    assert!(
+        !accepts_stack_claim(false, true, false, true, false, false, false),
+        "an informal PR chain must not pass as a native stack"
+    );
+    assert!(
+        !accepts_stack_claim(true, false, false, true, false, false, false),
+        "a non-adjacent native-stack predecessor must be rejected"
+    );
+    assert!(
+        !accepts_stack_claim(true, true, false, false, false, false, false),
+        "a closed unmerged predecessor must be rejected"
+    );
+    assert!(
+        accepts_stack_claim(true, true, false, true, false, false, false),
+        "an adjacent successor with an open predecessor must remain claimable"
+    );
+    assert!(
+        !accepts_stack_claim(true, true, true, false, false, false, false),
+        "retargeting to main before predecessor merge must be rejected"
+    );
+    assert!(
+        !accepts_stack_claim(true, true, true, false, true, true, false),
+        "a successor behind the current main frontier must be rejected"
+    );
+    assert!(
+        accepts_stack_claim(true, true, true, false, true, true, true),
+        "a current successor after predecessor squash merge must remain claimable"
+    );
+    assert!(
+        workflow
+            .matches("ASSIGNED_GIZMO_ID: ${{ steps.workbench.outputs.gizmo_id }}")
+            .count()
+            == 2
+            && !workflow.contains("ASSIGNED_GIZMO_ID: ${{ env.ASSIGNED_GIZMO_ID }}"),
+        "planning and validation must consume the trusted claim-step Gizmo ID output"
+    );
+    assert!(
+        !workflow.contains("value(frontmatter, 'gizmo_id')"),
+        "Gizmo IDs must retain their raw frontmatter scalar spelling"
+    );
+    let canonical_gizmo_id = |gizmo_id: &str| {
+        gizmo_id.split('-').all(|segment| {
+            !segment.is_empty()
+                && segment
+                    .bytes()
+                    .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
+        })
+    };
+    fn assigned_gizmo_id(raw: &str) -> &str {
+        if raw == "null" { "" } else { raw }
+    }
+    for accepted in ["2fa-slice", "123", "true", "false"] {
+        assert!(
+            canonical_gizmo_id(assigned_gizmo_id(accepted)),
+            "rejected: {accepted}"
+        );
+    }
+    for rejected in ["null", "", "slice--one", "slice-"] {
+        assert!(
+            !canonical_gizmo_id(assigned_gizmo_id(rejected)),
+            "unexpected assignment: {rejected}"
+        );
+    }
+    assert!(
+        !workflow.contains("`gizmo_id: ${process.env.ASSIGNED_GIZMO_ID || 'null'}`"),
+        "published plan frontmatter must persist the validated Current Gizmo ID"
+    );
+    assert!(
+        !workflow.contains("presentStackMetadata")
+            && !workflow.contains("Stacked successor dispatch requires the later runtime support"),
+        "successor runtime support must replace the bottom-only stack rejection"
+    );
+    assert!(
+        workflow.matches("uses: actions/checkout@v7").count() == 1
+            && workflow.contains("persist-credentials: false")
+            && !workflow.contains("ref: ${{ steps.task.outputs.checkout_ref }}"),
+        "unreviewed implementation source must not replace the trusted workflow checkout"
+    );
     for required in [
-        "git worktree add --detach",
-        "REPO_ROOT=\"$planning_root\" task ci-agent:run",
+        "git -C \"$IMPLEMENTATION_REPO_ROOT\" worktree add --detach",
+        "node \"$ROOT/agentic-ai/ci-agent/dist/main/main.js\" plan",
+        "artifact_ready",
+        "[ ! -L \"$1\" ]",
     ] {
         assert!(
             plan_script.contains(required),
@@ -133,18 +299,42 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
     let claim_position = workflow
         .find("Claim ready Workbench issue")
         .context("the workflow must claim the requested Workbench issue")?;
-    let docker_position = workflow
-        .find("Docker setup")
-        .context("the workflow must set up Docker")?;
+    let stack_parser_position = workflow
+        .find("const stackBranchRows")
+        .context("the successor workflow must parse trusted stack metadata")?;
+    let claim_mutation_position = workflow
+        .find("github.rest.repos.createOrUpdateFileContents")
+        .context("the workflow must claim the requested Workbench issue atomically")?;
     assert!(
-        claim_position < docker_position,
+        stack_parser_position < claim_mutation_position,
+        "trusted stack metadata must be validated before the Workbench claim is mutated"
+    );
+    let tooling_position = workflow
+        .find("Prepare direct host tooling")
+        .context("the workflow must prepare direct host tooling")?;
+    assert!(
+        claim_position < tooling_position,
         "the workflow must atomically claim a Workbench record before expensive setup"
     );
     let plan_position = workflow
         .find("Validate and publish Workbench task plan")
         .context("the workflow must validate and publish its Workbench plan")?;
+    let trusted_plan_validation_position = workflow
+        .find("const rejection = validateAgentRecord(candidate, 'plan'")
+        .context("the workflow must validate the candidate plan with trusted context")?;
+    let current_gizmo_position = workflow
+        .find("const currentGizmoIdMatch")
+        .context("the workflow must extract the validated Current Gizmo ID")?;
+    let persisted_gizmo_position = workflow
+        .find("`gizmo_id: ${currentGizmoId}`")
+        .context("the workflow must persist the validated Current Gizmo ID")?;
+    assert!(
+        trusted_plan_validation_position < current_gizmo_position
+            && current_gizmo_position < persisted_gizmo_position,
+        "Current Gizmo ID must be extracted only after trusted validation and then persisted"
+    );
     let implementation_position = workflow
-        .find("Run ci-agent implement")
+        .find("Run sandboxed implementation agent")
         .context("the workflow must run bounded implementation")?;
     assert!(
         plan_position < implementation_position,
@@ -160,17 +350,13 @@ fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> 
     let issue_workflow = read(".cortex/gizmo/workflows/issues.md");
     let pull_request_workflow = read(".cortex/gizmo/workflows/pull-requests.md");
     let ownership_skill = read(".cortex/gizmo/dynamic-skills/agent-feature-ownership.md");
+    let normalized_agent_map = agent_map.split_whitespace().collect::<Vec<_>>().join(" ");
 
-    for required in [
-        "agents mutate only their owned feature",
-        "Another active agent's work is read-only",
-        "wait for an explicit user, owner, or orchestrator handoff",
-    ] {
-        assert!(
-            agent_map.contains(required),
-            "agent map is missing ownership guard: {required}"
-        );
-    }
+    assert!(
+        agent_map.contains("gizmo/dynamic-skills/agent-feature-ownership.md")
+            && normalized_agent_map.contains("Another active agent's work is read-only"),
+        "root routing must preserve the universal ownership boundary and link its authority"
+    );
 
     for required in [
         "Treat every other active task as read-only",
@@ -232,21 +418,13 @@ fn team_work_distinguishes_owner_vocabulary_from_implementation_expertise() -> a
         .collect::<Vec<_>>()
         .join(" ");
 
-    for required in [
-        "functional owner",
-        "expertise provider",
-        "explicit expertise contract",
-        "named consumer-team code and tests",
-        "smallest explicitly linked set of",
-        "foreign-team skills as required read-only engineering policy",
-        "read-only engineering policy",
-        "only when the foreign team will change files",
-    ] {
-        assert!(
-            normalized_agent_map.contains(required),
-            "root agent routing is missing matrix ownership contract: {required}"
-        );
-    }
+    assert!(
+        normalized_agent_map.contains("foreign-team skill as read-only engineering policy")
+            && normalized_agent_map
+                .contains("foreign-team writer requires an explicit expertise task")
+            && normalized_agent_map.contains("gizmo/AGENTS.md"),
+        "root routing must preserve the cross-team boundary and route operational details to Gizmo"
+    );
 
     assert!(
         document_map.contains("foreign-team implementation requirement")
@@ -341,8 +519,11 @@ fn team_work_distinguishes_owner_vocabulary_from_implementation_expertise() -> a
         );
     }
     for required in [
+        "- Mission controller:",
+        "- Current Gizmo ID:",
         "- Ownership units:",
         "Functional owner:",
+        "Gizmo ID:",
         "Expertise provider:",
         "Expertise allowed code paths:",
         "Expertise allowed test paths:",
@@ -358,22 +539,22 @@ fn team_work_distinguishes_owner_vocabulary_from_implementation_expertise() -> a
             "automated planning must require expertise contract field: {required}"
         );
     }
-    // The planning prompt carries the review policy for Gizmo's delivery semantics.
+    // The planning prompt carries the review policy for Gizmo Prime's delivery semantics.
     assert!(
         normalized_agent_plan.contains(
-            "`Functional owner` to exactly `Gizmo`, `AI`, `Development core`, `Security`, `SRE`, or `Web development`"
+            "`Functional owner` to exactly `Gizmo Prime`, `AI`, `Development core`, `Security`, `SRE`, or `Web development`"
         ) && normalized_agent_plan.contains(
-            "Use `Gizmo` only for coordination, integration, or lifecycle capabilities"
+            "Use `Gizmo Prime` only for coordination, integration, or lifecycle capabilities"
         ) && normalized_agent_plan.contains(
                 "An `Expertise provider` must be exactly `AI`, `Development core`, `Security`, `SRE`, or `Web development`"
-            ) && normalized_agent_plan.contains("Gizmo is never an expertise provider"),
-        "planning review policy must reserve Gizmo for coordination, integration, or lifecycle and exclude it from expertise provision"
+            ) && normalized_agent_plan.contains("Gizmo Prime is never an expertise provider"),
+        "planning review policy must reserve Gizmo Prime for coordination, integration, or lifecycle and exclude it from expertise provision"
     );
     // The JavaScript validator enforces only role vocabularies, not capability semantics.
     assert!(
         workbench_validator.contains("const functionalOwnerPattern =")
             && workbench_validator
-                .contains("'Gizmo|AI|Development core|Security|SRE|Web development'")
+                .contains("'Gizmo Prime|Gizmo|AI|Development core|Security|SRE|Web development'")
             && workbench_validator.contains("const expertiseProviderPattern =")
             && workbench_validator.contains("'AI|Development core|Security|SRE|Web development'")
             && workbench_validator.contains("(${functionalOwnerPattern})")
@@ -452,7 +633,118 @@ fn team_work_distinguishes_owner_vocabulary_from_implementation_expertise() -> a
 }
 
 #[test]
-fn substantial_agent_tasks_use_curated_session_memory() -> anyhow::Result<()> {
+fn feature_slice_gizmos_are_passive_workbench_records() {
+    let policy_paths = [
+        ".cortex/AGENTS.md",
+        ".cortex/knowledge-graph.md",
+        ".cortex/gizmo/AGENTS.md",
+        ".cortex/gizmo/workflows/issues.md",
+        ".cortex/gizmo/workflows/mission-delivery.md",
+        ".cortex/gizmo/workflows/pull-requests.md",
+        ".cortex/gizmo/workflows/subagent-delegation.md",
+        ".cortex/teams/ai/workflows/monorepo.md",
+        ".github/prompts/agent-plan.md",
+    ];
+    let policy = policy_paths
+        .iter()
+        .map(|path| read(path))
+        .collect::<Vec<_>>()
+        .join("\n")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let normalized = policy.to_lowercase();
+
+    for required in [
+        "immutable typed Workbench slice record, not a process, agent, worker attempt, or controller",
+        "routes tasks by assigned Gizmo ID",
+        "receives existing typed handoffs directly",
+        "existing typed handoff directly to Gizmo Prime",
+        "introduces no new handoff transport",
+        "changes require a superseding new immutable Workbench plan",
+    ] {
+        assert!(
+            policy.contains(required),
+            "feature-slice record policy is missing: {required}"
+        );
+    }
+
+    for forbidden in [
+        "feature-slice gizmo coordinates",
+        "slice gizmo coordinates",
+        "coordinates its required team agents",
+        "returns a typed slice handoff",
+        "return its typed slice handoff",
+        "return the ai team agent handoff to the assigned feature-slice gizmo",
+        "non-team slice controller",
+        "that controller owns",
+        "created and updated by gizmo prime",
+    ] {
+        assert!(
+            !normalized.contains(forbidden),
+            "feature-slice Gizmo must remain a passive record: {forbidden}"
+        );
+    }
+}
+
+#[test]
+fn pr_workbench_suite_loads_split_contract_tests() {
+    let pr_workflow = read(".github/workflows/pr.yml");
+    let pr_suite = read(".github/scripts/workbench-records.test.cjs");
+    let mapping_suite = read(".github/scripts/workbench-gizmo-mapping.test.cjs");
+
+    assert!(
+        pr_workflow.contains("node --test .github/scripts/workbench-records.test.cjs"),
+        "PR CI must invoke the Workbench record suite"
+    );
+    assert!(
+        pr_suite.contains("require('./workbench-gizmo-mapping.test.cjs')"),
+        "the PR-invoked Workbench suite must load Gizmo mapping tests"
+    );
+    assert!(
+        pr_suite.contains("require('./workbench-publish.test.cjs')"),
+        "the PR-invoked Workbench suite must load publisher tests"
+    );
+    assert!(
+        mapping_suite.contains("rejects one-PR delivery with multiple Gizmos")
+            && mapping_suite.contains("rejects an over-2,000 feature represented by one Gizmo"),
+        "the transitively loaded suite must retain bounded Gizmo mapping regressions"
+    );
+}
+
+#[test]
+fn workbench_plans_bind_trusted_slices_and_bounded_independence() {
+    let validator = read(".github/scripts/workbench-records.cjs");
+    let prompt = read(".github/prompts/agent-plan.md");
+    let pull_requests = read(".cortex/gizmo/workflows/pull-requests.md");
+    let normalized_pull_requests = pull_requests
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    for required in [
+        "validateTrustedGizmoAssignment",
+        "trusted focused-issue Gizmo ID requires one-PR delivery",
+        "the sole PR slice must use the trusted focused-issue Gizmo ID",
+        "every ownership unit must use the trusted focused-issue Gizmo ID",
+        "multi-PR delivery at or below 2,000 authored changed lines requires independent PRs",
+    ] {
+        assert!(
+            validator.contains(required),
+            "Workbench validator is missing bounded Gizmo enforcement: {required}"
+        );
+    }
+    assert!(
+        prompt.contains("At or below 2,000, stacked delivery is invalid")
+            && prompt.contains("exactly one slice, and no other Gizmo ID")
+            && normalized_pull_requests.contains("must not be registered as a stack")
+            && normalized_pull_requests.contains("one PR, one slice"),
+        "planning policy must require one trusted slice and predecessor-free bounded independence"
+    );
+}
+
+#[test]
+fn cortex_promotions_use_optional_curated_session_memory() -> anyhow::Result<()> {
     let gitignore = read(".gitignore");
     let agent_map = read(".cortex/AGENTS.md");
     let coding_workflow = read(".cortex/gizmo/workflows/mission-delivery.md");
@@ -469,11 +761,12 @@ fn substantial_agent_tasks_use_curated_session_memory() -> anyhow::Result<()> {
         agent_map.contains("dynamic-skills/self-improvement.md")
             && coding_workflow.contains("dynamic-skills/self-improvement.md")
             && pull_request_workflow.contains("dynamic-skills/self-improvement.md"),
-        "agent entry points must invoke the canonical self-improvement skill"
+        "delivery entry points must link the canonical self-improvement skill"
     );
     assert!(
-        pull_request_workflow.contains("completion contract"),
-        "pull-request readiness must invoke the canonical completion contract"
+        pull_request_workflow.contains("self-improvement review")
+            && pull_request_workflow.contains("No promotion is required"),
+        "pull-request readiness must make evidence-backed promotion conditional"
     );
     for required in [
         "## Knowledge classification",
@@ -485,7 +778,6 @@ fn substantial_agent_tasks_use_curated_session_memory() -> anyhow::Result<()> {
         "## Workflow improvement review",
         "### Instruction classification",
         "### Loom extraction procedure",
-        "task loom:agent-workflow:cortex-audit",
         "task loom:cortex-session-clean",
         "## Pull-request completion contract",
     ] {
@@ -494,11 +786,8 @@ fn substantial_agent_tasks_use_curated_session_memory() -> anyhow::Result<()> {
             "self-improvement skill is missing: {required}"
         );
     }
-    assert!(
-        self_improvement.contains("## Task lifecycle")
-            && self_improvement.contains("Create one temporary file for every substantial task"),
-        "the canonical skill must own the complete self-improvement lifecycle"
-    );
+    assert!(self_improvement.contains("A session file is optional"));
+    assert!(self_improvement.contains("No Cortex update is a valid outcome"));
     assert!(
         agent_tasks
             .matches("- task loom:cortex-session-clean")
@@ -571,6 +860,8 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
         "## Decisions",
         "## Validation",
         "## Remaining work",
+        "${VALIDATED_PLAN}",
+        "authoritative even if a workspace file is later changed",
     ] {
         assert!(
             prompt.contains(required),
@@ -591,12 +882,19 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
         "## Constraints and exclusions",
         "## Change budget and PR sequence",
         "Estimated authored changed lines",
+        "Mission controller",
+        "Current Gizmo ID",
         "Owning modules, packages, or layers",
         "Public or cross-module interfaces",
         "Delivery shape",
         "Current PR estimated authored changed lines",
         "Current PR slice and acceptance evidence",
-        "PR slices and acceptance evidence",
+        "PR slices, estimates, and acceptance evidence",
+        "Predecessor Gizmo ID",
+        "Every slice estimate must be at or below 2,000",
+        "Team Agent count never determines PR or Gizmo count",
+        "Functional owner` to exactly `Gizmo Prime`",
+        "canonical `gizmo_id`",
         "## Initial plan",
         "## Completion evidence",
         "## Safety review",
@@ -632,14 +930,23 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
     }
     assert!(
         prompt_loader.contains("process.env.MAJOR_CHANGE_AUTHORIZED === \"true\"")
-            && prompt_loader.contains("${MAJOR_CHANGE_AUTHORIZATION}"),
-        "agent prompt loading must derive major-change authorization from trusted workflow metadata"
+            && prompt_loader.contains("${MAJOR_CHANGE_AUTHORIZATION}")
+            && prompt_loader
+                .contains("Validated implementation plan hash changed before agent start")
+            && prompt_loader.contains("join(config.toolingRoot, config.promptFile)")
+            && prompt_loader.find(".replaceAll(\"${AGENT_TASK}\"")
+                < prompt_loader.find(".replaceAll(\"${VALIDATED_PLAN}\""),
+        "agent prompts must use trusted workflow metadata and tooling"
     );
 
     for required in [
         "validateAgentRecord",
         "remotePath.startsWith('plans/')",
         "NOOK_WORKBENCH_SOURCE_TASK_FILE",
+        "NOOK_WORKBENCH_ASSIGNED_ISSUE_PATH",
+        "NOOK_WORKBENCH_ASSIGNED_GIZMO_ID",
+        "?ref=main",
+        "assignedGizmoId",
         "Refusing invalid Workbench plan",
         "Refusing source-task file inside the public Nook checkout",
     ] {
@@ -665,16 +972,6 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
         materialization_position < block_position,
         "bounded automation must identify the materialization action before blocking"
     );
-    let implement = read("agentic-ai/ci-agent/src/main/implement.ts");
-    let budget_position = implement
-        .find("assertAuthoredChangeBudget(budgetArgs)")
-        .context("bounded implementation must enforce the authored diff budget")?;
-    let push_position = implement
-        .find("pushFixBranch(repoRoot, agentBranch, runId)")
-        .context("bounded implementation must push its bounded branch")?;
-    assert!(
-        budget_position < push_position,
-        "bounded implementation must enforce the authored diff budget before push"
-    );
+    stacked_runtime::assert_contract(&workflow)?;
     Ok(())
 }

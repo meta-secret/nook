@@ -40,8 +40,18 @@ index. Focused Markdown files replace sub-issues.
 
 Create a focused sequence when either condition holds:
 
-- the complete feature is expected to exceed 3,000 authored changed lines; or
-- separate module ownership makes independent slices safer below that size.
+- the complete feature is expected to exceed 2,000 authored changed lines; or
+- genuinely independent delivery units justify separate PRs below that size.
+
+The first condition requires an ordered native GitHub Stacked Pull Request
+sequence. The second must use ordinary independent predecessor-free PRs from
+`main`; stacked delivery at or below 2,000 is invalid.
+
+Gizmo Prime records one named immutable feature-slice Gizmo Workbench record
+per semantic PR slice and owns the complete feature sequence. The record is not
+a running agent or controller. Team Agent count never determines slice, PR, or
+Gizmo count; a small feature is not split merely because multiple teams
+contribute.
 
 The feature `README.md` must record:
 
@@ -52,11 +62,19 @@ The feature `README.md` must record:
 - feature-level acceptance criteria;
 - current completion status.
 
-For a split, record the full-work commit, semantic boundary, ordered PR links,
-completing owner, and preservation checklist before changing the first PR.
+Oversized stack requirements:
 
-The preservation checklist must map implementation, tests, migrations, and
-documentation to a named PR slice.
+- Before changing the first PR, record the full-work commit, semantic boundary,
+  ordered PR links, predecessor-based temporary GitHub bases, completing owner,
+  merge order, and preservation checklist.
+- Create and maintain the same-repository GitHub stack with native `gh stack`
+  operations when available, or the GitHub website.
+- Require GitHub to recognize the PRs as one stack; links and base branches
+  alone are insufficient.
+- If native stack operations are unavailable, stop and record the blocker
+  instead of creating an informal stack or adding a third-party dependency.
+- Map implementation, tests, migrations, and documentation to a named PR slice
+  in the preservation checklist.
 
 Line-count optimization is not a valid split strategy.
 
@@ -71,13 +89,18 @@ After a slice merges:
 
 1. Update its issue and the feature index.
 2. Publish the required worklog and statistics.
-3. Choose one owner for the next dependency-free issue.
-4. If the current agent continues, claim the issue as `in_progress` before
-   starting its branch from current Nook `origin/main`.
-5. If bounded automation will continue, set `status: ready` and `automation:
+3. For an oversized stack, retarget the immediate successor from its predecessor
+   branch to `main`, update it from current Nook `origin/main`, re-measure its
+   authored additions plus deletions, and validate the new exact head. Preserve
+   GitHub's native stack state while proceeding bottom-up.
+4. Choose one owner for the next dependency-free issue.
+5. If the current agent continues a small independent sequence, claim the issue
+   as `in_progress` before starting its branch from current Nook `origin/main`.
+   For a declared stack, continue on the already linked successor branch.
+6. If bounded automation will continue, set `status: ready` and `automation:
 agent`.
-6. Explicitly dispatch that issue's exact `issue_path`.
-7. In that case, the current agent must not also start the issue.
+7. Explicitly dispatch that issue's exact `issue_path`.
+8. In that case, the current agent must not also start the issue.
 
 - The feature remains incomplete while any required issue remains incomplete.
 - Do not convert remaining requested functionality into an optional follow-up.
@@ -125,6 +148,8 @@ Every focused issue follows
 
 - YAML frontmatter with title, lifecycle status, priority, automation mode,
   owner, timestamps, source issues, related PRs, and dependencies;
+- a canonical lowercase-hyphenated `gizmo_id` in every focused issue
+  materialized from a multi-PR plan, copied from that plan's matching slice;
 - context and an observable outcome;
 - explicit included and excluded scope;
 - testable acceptance criteria and required coverage;
@@ -144,6 +169,13 @@ status: ready
 automation: agent
 owner: <nook-github-collaborator>
 ```
+
+Legacy standalone focused issues may omit `gizmo_id`. When the field is
+present, dispatch treats it as canonical trusted routing metadata: its syntax
+must be valid, it must never be changed to create a fresh identity, and the
+published per-issue plan must use it as `Current Gizmo ID` and its sole slice
+Gizmo ID. That plan must declare one PR and use the same ID on every ownership
+unit.
 
 - The owner must be an assignable Nook GitHub collaborator with write access.
 - The dispatch must provide exactly one of `issue_path` or `prompt`.
@@ -245,6 +277,10 @@ not a copy, transcript, or sentence-by-sentence paraphrase of the user's prompt.
 
 The plan must contain:
 
+- a `Mission controller` value fixed to `Gizmo Prime`;
+- a `Current Gizmo ID` matching the current and first PR slice;
+- for a focused issue with canonical `gizmo_id`, a `Current Gizmo ID` matching
+  that trusted issue value exactly;
 - the agent's own complete interpretation of the desired outcome;
 - material functional, workflow, security, and delivery requirements;
 - explicit constraints, assumptions, and exclusions;
@@ -252,12 +288,17 @@ The plan must contain:
 - a `Change budget and PR sequence` section;
 - an `Estimated authored changed lines` value;
 - an `Owning modules, packages, or layers` value;
-- consecutively numbered `Ownership units`, one per capability;
+- consecutively numbered `Ownership units`, one per capability, each referencing
+  a declared PR-slice `Gizmo ID`;
 - a `Public or cross-module interfaces` value;
 - a `Delivery shape` value;
+- a `PR sequence mode` value;
 - a `Current PR estimated authored changed lines` value;
 - a `Current PR slice and acceptance evidence` value;
-- a `PR slices and acceptance evidence` value;
+- a `PR slices, estimates, and acceptance evidence` value whose consecutively
+  numbered rows each declare one unique Gizmo ID and name, predecessor mapping,
+  positive estimate at most 2,000, and acceptance evidence; the estimates must
+  sum to the complete feature estimate;
 - expected completion evidence; and
 - a safety review confirming that no raw prompt, transcript, secret, private
   data, raw log, local path, or unnecessary infrastructure detail is present.
@@ -281,6 +322,8 @@ Use the checked-in publisher for interactive work:
 
 ```bash
 NOOK_WORKBENCH_SOURCE_TASK_FILE=/absolute/private/source-task.md \
+NOOK_WORKBENCH_ASSIGNED_ISSUE_PATH=issues/<feature>/<issue>.md \
+NOOK_WORKBENCH_ASSIGNED_GIZMO_ID=<focused-issue-gizmo-id> \
   node .github/scripts/workbench-publish.cjs \
   /absolute/path/to/local-plan.md \
   plans/<feature>/<timestamp>-<task>.md \
@@ -290,13 +333,17 @@ NOOK_WORKBENCH_SOURCE_TASK_FILE=/absolute/private/source-task.md \
 - Keep the source-task file outside the checkout.
   - It lets the publisher reject copied prompt text.
   - Do not publish it.
+- Set the assigned issue path and `NOOK_WORKBENCH_ASSIGNED_GIZMO_ID` from the
+  trusted focused-issue dispatch when publishing its plan. For legacy issues,
+  set only the issue path; omit both fields for direct standalone plans.
 - The bounded worker:
   1. uses a dedicated planning LLM turn;
   2. validates and publishes the plan; and
   3. begins implementation only after publication.
 - A missing or rejected plan blocks implementation.
 - A valid multi-PR plan also blocks bounded implementation.
-  1. Materialize the Workbench feature summary and focused issues.
+  1. Materialize the Workbench feature summary and focused issues, copying each
+     plan slice's canonical Gizmo ID into its issue's `gizmo_id` frontmatter.
   2. Dispatch the first focused issue with a bounded one-PR plan.
 
 ## Worklog requirement

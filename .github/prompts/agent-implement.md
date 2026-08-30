@@ -4,6 +4,13 @@ You are implementing a task for the Nook monorepo via the **coding-bro** workflo
 
 ${AGENT_TASK}
 
+## Trusted validated plan
+
+The following exact plan was validated and hash-bound by trusted workflow
+tooling. It is authoritative even if a workspace file is later changed.
+
+${VALIDATED_PLAN}
+
 ## Context
 
 - Repository: ${GITHUB_REPOSITORY}
@@ -34,20 +41,26 @@ it directly; this alone does not require an expertise provider.
 
 ## Execution environment
 
-The job runs `task setup` before you start. Use repository Task targets for all
-allowed actions.
+The bounded editor has no repository credentials, network access, container
+runtime, or Task runner. This is the trusted `agent-implement.yml` publication
+exception to ordinary worker commit handoffs. Only after the sandboxed editor
+exits, trusted host tooling formats the isolated implementation, validates its
+change budget and branch or PR identity, commits it, and publishes the branch
+and PR.
 
 **Product validation runs on configured GitHub Actions workers after the harness
 opens the PR. Trusted Rust gates may use ARC; runtime-dependent gates stay
-hosted.** Your required local action is host-applied formatting only. Do not run
-`task check` / `task ci:pr` before finishing. The harness returns the PR to Gizmo
-and posts a direct mention. Gizmo runs advisory local review after handoff. It
-may use `task remote` for focused execution, then runs `task pr:validate`. Gizmo
-stabilizes exact-head Codex review before dispatching GitHub Actions. A bounded
+hosted.** Do not run `task check` / `task ci:pr` before finishing. The trusted
+publisher verifies the exact published head and returns the PR to Gizmo with a
+direct mention. Gizmo does not run advisory local review after handoff. If the
+head is not validation-ready, Gizmo immediately dispatches at least one
+relevant focused `task remote` job. If it is validation-ready, Gizmo immediately
+runs `task pr:validate`, which stabilizes exact-head Codex review before
+dispatching GitHub Actions. Hosted Repository policy and PR verification
+enforce the UI-demo and other product or publication contracts. A bounded
 timeout keeps review unavailability from blocking those checks. Gizmo never
-activates another review provider. Use
-repository Task targets; do not replace them with
-hand-written `docker run` commands.
+activates another review provider. This bounded worker must not invoke Task or
+a container runtime.
 
 ## Steps
 
@@ -59,12 +72,13 @@ hand-written `docker run` commands.
    team's authorities. Load `.cortex/shared/architecture/system.md` or one
    shared skill only when the task names that cross-team dependency; never scan
    the shared tree by default.
-3. **Always run `task format`** (host-applied) before finishing so the harness
-   commits a formatted tree. When UI-facing paths change, pass the UI demo
-   contract against the base ref when practical.
-4. Do not run `task check`, `task ci:pr`, full suites, builds, or e2e in this
-   bounded worker. Gizmo runs focused and complete hosted execution after the
-   harness publishes the branch and PR.
+3. Do not run formatting, Task commands, full suites, builds, or e2e in this
+   bounded worker. The trusted harness applies the deterministic repository
+   formatter after the editor exits. It then validates the change budget and
+   branch or PR identity. It then commits and publishes the isolated implementation.
+   Gizmo owns focused and complete hosted execution from that exact head, where
+   Repository policy and PR verification enforce the UI-demo and other product
+   or publication contracts.
 5. If part of the request is too large, risky, blocked, or out of scope, follow
    `.cortex/gizmo/workflows/issues.md` (update/create Workbench Markdown records)
    rather than silently dropping work.
@@ -82,9 +96,9 @@ hand-written `docker run` commands.
 
 - Do **not** run any `git` commands — the harness commits and pushes `${AGENT_BRANCH}` after you finish.
 - Do **not** create, monitor, or merge a PR from this bounded worker. The harness
-  opens the PR after you finish and returns it to Gizmo. Gizmo runs advisory
-  local review on the committed head, then stabilizes one exact-head Codex
-  review before complete validation. For failures, comments, or conflicts,
+  opens the PR after you finish and returns its exact published head to Gizmo.
+  Gizmo stabilizes one exact-head Codex review through complete validation. For
+  failures, comments, or conflicts,
   Gizmo dispatches scoped fixes to the responsible team agents and integrates
   their verified handoffs. Gizmo runs exact-head readiness and squash-merges
   without separate merge authorization.
@@ -92,6 +106,9 @@ hand-written `docker run` commands.
 - Keep the diff focused on the requested task.
 - Stay in the harness-provided isolated workspace. Return the work to the
   parent through the harness commit handoff.
-- Follow `.cortex/gizmo/workflows/pull-requests.md` (squash merge only) and `.cortex/teams/sre/dynamic-skills/docker-container-harness.md` (never kill Docker daemon).
-- Follow `.cortex/teams/sre/dynamic-skills/github-actions-only-validation.md`: format
-  locally; product gates run on GitHub Actions.
+- Follow `.cortex/gizmo/workflows/pull-requests.md` (squash merge only) and
+  `.cortex/teams/sre/workflows/ci-operations.md` (this Kubernetes-native worker
+  must not invoke a container runtime).
+- Follow `.cortex/teams/sre/dynamic-skills/github-actions-only-validation.md`:
+  trusted host tooling formats and publishes the change; product and policy
+  gates run on GitHub Actions.

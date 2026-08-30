@@ -15,14 +15,6 @@ export type VerifyCortexArticleStructureResultRequest = {
   readonly result: CortexArticleStructureResult;
 };
 
-type VerifyMigrationLedgerRequest = {
-  readonly baselineEntries: readonly string[] | false;
-  readonly catalog: ReadonlySet<string>;
-  readonly expected: CortexArticleFinding[];
-  readonly ledgerContent: string | false;
-  readonly ledgerPath: string;
-};
-
 type VerifyDocumentRequest = {
   readonly document: CortexArticleDocument;
   readonly expected: CortexArticleFinding[];
@@ -77,83 +69,11 @@ function independentlyDeriveFindings(
   request: AuditCortexArticleStructureRequest,
 ): CortexArticleFinding[] {
   const expected: CortexArticleFinding[] = [];
-  const catalog = new Set(
-    request.documents.map((document) => document.relativePath),
-  );
-  const ledgerRequest: VerifyMigrationLedgerRequest = {
-    baselineEntries: request.migrationBaselineEntries,
-    catalog,
-    expected,
-    ledgerContent: request.migrationLedger.content,
-    ledgerPath: request.migrationLedger.relativePath,
-  };
-  const exemptions = verifyMigrationLedger(ledgerRequest);
   for (const document of request.documents) {
-    if (exemptions.has(document.relativePath)) continue;
     const documentRequest: VerifyDocumentRequest = { document, expected };
     verifyDocument(documentRequest);
   }
   return expected;
-}
-
-function verifyMigrationLedger(
-  request: VerifyMigrationLedgerRequest,
-): ReadonlySet<string> {
-  const exemptions = new Set<string>();
-  if (request.ledgerContent === false) return exemptions;
-  const baseline =
-    request.baselineEntries === false
-      ? false
-      : new Set(request.baselineEntries);
-  const lines = request.ledgerContent.split(/\r?\n/u);
-  for (let index = 0; index < lines.length; index += 1) {
-    const entry = (lines.at(index) ?? '').trim();
-    if (entry.length === 0 || entry.startsWith('#')) continue;
-    const messageRequest: InvalidLedgerMessageRequest = {
-      baseline,
-      catalog: request.catalog,
-      entry,
-      exemptions,
-    };
-    const message = invalidLedgerMessage(messageRequest);
-    if (message === false) {
-      exemptions.add(entry);
-      continue;
-    }
-    const finding: CortexArticleFinding = {
-      code: CortexArticleFindingCode.InvalidMigrationLedger,
-      file: request.ledgerPath,
-      line: index + 1,
-      message,
-    };
-    request.expected.push(finding);
-  }
-  return exemptions;
-}
-
-type InvalidLedgerMessageRequest = {
-  readonly baseline: ReadonlySet<string> | false;
-  readonly catalog: ReadonlySet<string>;
-  readonly entry: string;
-  readonly exemptions: ReadonlySet<string>;
-};
-
-function invalidLedgerMessage(
-  request: InvalidLedgerMessageRequest,
-): string | false {
-  if (request.exemptions.has(request.entry)) {
-    return `Duplicate article-structure migration exemption: ${request.entry}`;
-  }
-  if (!request.catalog.has(request.entry)) {
-    return `Article-structure exemption is not a Cortex Markdown file: ${request.entry}`;
-  }
-  if (request.baseline === false) {
-    return `Article-structure exemption cannot be verified without the migration baseline: ${request.entry}`;
-  }
-  if (!request.baseline.has(request.entry)) {
-    return `Article-structure exemption was added after the baseline: ${request.entry}`;
-  }
-  return false;
 }
 
 function verifyDocument(request: VerifyDocumentRequest): void {

@@ -2,11 +2,20 @@
 
 ## Outcome
 
-Gizmo delivers each implementation mission through bounded team subagents.
+Gizmo Prime delivers each implementation mission through bounded Team Agents.
 
-Gizmo owns integrated and external delivery state. The active harness alone
-owns worker-attempt lifecycle. Gizmo never implements the feature or a
-resulting fix.
+Gizmo Prime is the single existing root Gizmo mission owner and owns integrated
+and external delivery state. The active harness alone owns worker-attempt
+lifecycle. Gizmo Prime never implements the feature or a resulting fix.
+
+For one feature or PR, Gizmo Prime creates one named immutable feature-slice
+Gizmo record in the Workbench plan by default. The record groups one semantic
+PR slice by stable ID and name, scope, predecessor, estimate, acceptance
+evidence, and ownership-unit mappings. It is not a process, agent, worker
+attempt, or controller. Additional records exist only for a semantic split when
+the feature is expected to exceed or actually grows beyond 2,000 authored
+additions plus deletions, or for genuinely independent delivery units. Team
+Agent count never determines PR count.
 
 ## Required authorities
 
@@ -24,6 +33,21 @@ resulting fix.
   [major architectural initiative rule](../../teams/ai/dynamic-skills/self-improvement.md#user-authority-for-major-architectural-initiatives)
   when a proposed direction is broad, novel, or cross-cutting.
 
+## Terminal condition
+
+An implementation mission continues through the complete delivery procedure.
+A worker handoff, local commit, pushed branch, or open pull request is an
+intermediate state.
+
+Stop before merge only when:
+
+- the user explicitly limited the request to an intermediate state;
+- the user prohibited the required external mutation; or
+- a concrete blocker prevents further progress.
+
+Report the exact blocker in the final case. Never report an intermediate state
+as completed delivery.
+
 ## Mission procedure
 
 1. **Interpret the mission.**
@@ -38,7 +62,18 @@ resulting fix.
 2. **Plan delivery.**
    - Publish the Workbench task plan before implementation edits.
    - Estimate authored changed lines.
-   - Split work that exceeds the current PR size boundary.
+   - At or below 2,000 authored changed lines, default to one PR and one record.
+     Add records only for a required semantic size split above 2,000 or for
+     genuinely independent delivery units. Team Agent count never triggers a
+     split.
+   - Additional records at or below 2,000 use predecessor-free independent PRs,
+     never a stack.
+   - Map one feature-slice Gizmo to each semantic PR slice. Do not increase PR
+     or Gizmo count merely because multiple Team Agents are required.
+   - For multi-PR delivery, persist each slice's canonical Gizmo ID as the
+     matching focused issue's `gizmo_id`; later one-PR plans must retain it.
+     A trusted assigned ID permits exactly one slice and must appear on every
+     ownership unit.
    - Record the module DAG and provider-consumer contracts when applicable.
 3. **Assign team tasks.**
    - Name one functional owner for each capability.
@@ -51,31 +86,65 @@ resulting fix.
      and exact frontier data.
    - Validate the computed batch, select and admission-authorize ready task
      records, freeze their exact starting frontiers, and supply their contracts
-     to the active harness.
+     to the active harness with the trusted focused-issue Gizmo ID in plan/task
+     context when one is assigned.
 4. **Accept implementation handoffs.**
    - Wait for each required dependency or terminal barrier.
    - Verify each commit against its baseline and write scope.
    - Verify the team's focused tests and Cortex evidence.
+   - Verify that the team ran required formatters and committed all mutations
+     in its allowed source or Cortex paths.
    - Reject incomplete or out-of-scope handoffs.
+   - Receive each Team Agent's existing typed handoff directly. Do not add a
+     slice-process transport or intermediate agent.
+   - Aggregate each verified handoff under its assigned passive Gizmo record.
+   - Treat exactly two trusted GitHub Actions publishers as narrow exceptions
+     to the ordinary committed-handoff sequence:
+     `agent-implement.yml` and `rust-dependency-updates.yml` through
+     `task ci-agent:fix` with `CI_AGENT_FIX_PROFILE=rust-dependency-update`.
+     Follow the root [team worker contract](../../AGENTS.md#team-worker-contract)
+     for their isolation, publication, and exact-head verification rules.
 5. **Integrate accepted commits.**
    - Integrate in deterministic dependency order.
    - Bind each downstream task to the exact integrated commit.
    - Keep shared files and integrated or external delivery-state mutations
      serialized under Gizmo.
 6. **Prepare the integrated head.**
+   - For either accepted trusted publication, continue from its exact published
+     head. Do not require a duplicate integration commit.
+   - Immediately resume Gizmo ownership of PR, review, and validation work.
+   - Do not add advisory local review after the publisher handoff.
+   - Use immediate focused remote evidence or complete exact-head validation.
+     Hosted Repository policy and PR verification enforce the UI-demo and
+     other product or publication contracts.
    - Run `task loom:pre-push` before each push.
-   - Commit and push the coherent integrated change.
-   - Run the required advisory review before the first owner-authored push.
-   - Use `task remote TASK_NAME=web:build` for focused web build evidence.
-   - Use `task remote TASK_NAME=web:e2e` for focused browser evidence.
-   - Dispatch each focused command separately.
+   - Gizmo may commit deterministic integration-only state.
+   - If pre-push hygiene mutates team-owned source or Cortex content, do not
+     author or commit that diff as Gizmo.
+   - Return the diff to the responsible team for a fresh formatted commit.
+   - Reintegrate that commit and rerun `task loom:pre-push` before pushing.
+   - Promptly commit any integration-only state and push the coherent head.
+   - Do not add broad local builds, tests, e2e, container product gates, local
+     review, or duplicate hosted-check mirrors before the push.
+   - Immediately choose remote evidence for every pushed coherent head.
+   - If the head is not ready for complete validation, dispatch at least one
+     relevant focused `task remote TASK_NAME=<name>` job.
+   - Use `task remote TASK_NAME=web:build` for focused build-only web evidence.
+   - Use `task remote TASK_NAME=web:e2e` separately for direct-Pod browser
+     proof. Never batch the build and browser tasks together.
+   - After focused evidence returns, reassess whether the head is
+     validation-ready. Do not flow unconditionally into complete validation.
+   - If the head is validation-ready, dispatch complete exact-head validation
+     immediately. Focused tasks are optional on that path.
 7. **Validate and repair through teams.**
    - Trigger the repository-owned exact-head review and validation path.
    - Route each review or CI finding to its functional owner.
    - Admission-authorize a bounded fix task from the current integrated head
      and request its attempt through the active harness.
-   - Require a verified fix commit and focused evidence.
-   - Integrate the fix, push, and validate the replacement head.
+   - Require a verified coherent fix commit. Remote evidence follows after
+     Gizmo integrates and pushes it.
+   - Integrate the fix, promptly push, and obtain fresh exact-head remote
+     validation for the replacement head.
    - Gizmo must not edit the implementation to resolve a finding.
 8. **Collect required verdicts.**
    - Require a verdict from every team whose acceptance is mandatory.
@@ -88,11 +157,23 @@ resulting fix.
    - Keep the PR blocked while any required team verdict is blocking.
    - Keep the PR blocked while a required security verdict is blocking.
    - Never waive or override either block.
-10. **Finish delivery.**
-    - Run the exact-head readiness audit.
+10. **Promote durable discoveries when justified.**
+    - Apply the
+      [self-improvement review](../../teams/ai/dynamic-skills/self-improvement.md#self-improvement-review)
+      only when the work revealed a durable lesson or Cortex defect.
+    - No Cortex update is required when no candidate qualifies.
+    - When a promotion is justified, integrate its clean committed handoff into
+      the same PR.
+    - If promotion changes the head, rerun pre-push hygiene through the owning
+      teams, push, and obtain fresh exact-head hosted validation.
+    - When promotion changes the head, recollect every required team and
+      security verdict that is not explicitly head-stable.
+    - When promotion changes the head, issue the final integrated verdict for
+      that promoted exact head before readiness. Never carry a stale
+      pre-promotion verdict forward.
+11. **Finish delivery.**
+    - Run the exact-head readiness audit after any justified promotion.
     - Squash-merge when readiness succeeds.
-    - Ask the AI team to complete the
-      [self-improvement lifecycle](../../teams/ai/dynamic-skills/self-improvement.md).
     - Publish the Workbench issue update, linked worklog, and
       [agent statistics](agent-statistics.md).
     - Report duration and any authorized remaining work.
@@ -133,4 +214,5 @@ Delivery is complete only when:
 - actionable review threads are resolved;
 - all required team and security verdicts are satisfied;
 - `task pr:ready PR=<number>` succeeds; and
+- the pull request is squash-merged and remote state confirms the merge; and
 - Workbench completion records are published.
