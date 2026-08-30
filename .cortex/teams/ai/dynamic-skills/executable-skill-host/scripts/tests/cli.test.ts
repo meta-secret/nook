@@ -1,12 +1,26 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  CortexArticleRequestDecodeError,
+  decodeCortexArticleRequest,
+} from '../../../cortex-article-structure/scripts/src/codec.ts';
+import {
+  CortexArticleContractKind,
+  CortexArticleSemanticKind,
+  CORTEX_ARTICLE_DETAIL_TEXT_LIMIT,
+  CORTEX_ARTICLE_PATH_LIMIT,
+  type AuditCortexArticleStructureRequest,
+} from '../../../cortex-article-structure/scripts/src/domain.ts';
+import {
   dispatchSkillYamlText,
   finalizeSkillCliResponse,
   runSkillCli,
   type FinalSkillCliResponseRequest,
   type RunSkillCliRequest,
 } from '../src/cli.ts';
-import { SKILL_TOOLS_LIST_INVOKE } from '../src/skill-action-registry.ts';
+import {
+  listDiscoverableSkillActions,
+  SKILL_TOOLS_LIST_INVOKE,
+} from '../src/skill-action-registry.ts';
 import {
   SkillCommandIssue,
   SkillCommandPhase,
@@ -18,6 +32,10 @@ import {
   parseSkillYamlText,
   type UntrustedSkillYamlNode,
 } from '../src/skill-yaml-codec.ts';
+import {
+  validateSkillInput,
+  type SkillSchemaValidationRequest,
+} from '../src/skill-schema-validator.ts';
 type CliResponse = {
   readonly ok: boolean;
   readonly family?: string;
@@ -51,8 +69,43 @@ type CliResponse = {
 function parseResponse(yaml: string): CliResponse {
   return Bun.YAML.parse(yaml) as CliResponse;
 }
+type ArticleRequestInput = {
+  readonly heading: string;
+  readonly relativePath: string;
+};
+function articleRequest(
+  input: ArticleRequestInput,
+): AuditCortexArticleStructureRequest {
+  return {
+    kind: CortexArticleContractKind.Request,
+    documents: [
+      {
+        relativePath: input.relativePath,
+        blocks: [
+          {
+            depth: 2,
+            kind: CortexArticleSemanticKind.Heading,
+            line: 1,
+            text: input.heading,
+          },
+        ],
+      },
+    ],
+  };
+}
+function providerFailurePath(
+  request: AuditCortexArticleStructureRequest,
+): string {
+  try {
+    decodeCortexArticleRequest(JSON.stringify(request));
+  } catch (error) {
+    if (error instanceof CortexArticleRequestDecodeError) return error.path;
+    throw error;
+  }
+  throw new Error('Expected provider rejection.');
+}
 describe('provider-neutral executable skill YAML host', () => {
-  test('discovers the closed tools-list action', async () => {
+  test('discovers the closed tools-list and article audit actions', async () => {
     const request: RunSkillCliRequest = { argv: [] };
     const outcome = await runSkillCli(request);
     const response = parseResponse(outcome.yaml);
@@ -61,7 +114,7 @@ describe('provider-neutral executable skill YAML host', () => {
     expect(response.ok).toBe(true);
     const actions = response.result?.actions;
     if (!actions) throw new Error('Missing discovered actions.');
-    expect(actions).toHaveLength(1);
+    expect(actions).toHaveLength(2);
     const action = actions[0];
     if (!action) throw new Error('Missing tools-list action.');
     expect(action.description).not.toBeEmpty();
@@ -80,6 +133,91 @@ describe('provider-neutral executable skill YAML host', () => {
     for (const argv of [[], ['--tools-list']]) {
       const invocationRequest: RunSkillCliRequest = { argv };
       expect((await runSkillCli(invocationRequest)).exitCode).toBe(0);
+    }
+  });
+  test('executes the article action through its validated provider contract', () => {
+    const action = listDiscoverableSkillActions().actions.at(1);
+    if (!action) throw new Error('Missing article action.');
+    const outcome = dispatchSkillYamlText(action.exampleYaml);
+    const response = parseResponse(outcome.yaml);
+    expect(outcome.exitCode).toBe(0);
+    expect(response.family).toBe(SkillRequestFamily.CortexArticleStructure);
+    expect(response.operation).toBe('audit');
+    expect(response.result).toMatchObject({ findings: [] });
+    const invalid = dispatchSkillYamlText(
+      action.exampleYaml.replace(
+        'documents:',
+        'secret: MARKER\n    documents:',
+      ),
+    );
+    expect(invalid.exitCode).toBe(2);
+    expect(invalid.yaml).not.toContain('MARKER');
+  });
+  test('aligns discovered and provider UTF-16 string limits', () => {
+    const action = listDiscoverableSkillActions().actions.at(1);
+    if (!action) throw new Error('Missing article action.');
+    const boundaryPath = `.cortex/${'😀'.repeat(2_042)}a.md`;
+    const boundaryHeading = '😀'.repeat(1_900);
+    expect(boundaryPath.length).toBe(CORTEX_ARTICLE_PATH_LIMIT);
+    expect(boundaryHeading.length).toBe(CORTEX_ARTICLE_DETAIL_TEXT_LIMIT);
+    const overflowPath = `${boundaryPath.slice(0, -3)}a.md`;
+    const overflowHeading = `${boundaryHeading}a`;
+    expect(overflowPath.length).toBe(CORTEX_ARTICLE_PATH_LIMIT + 1);
+    expect(overflowHeading.length).toBe(CORTEX_ARTICLE_DETAIL_TEXT_LIMIT + 1);
+    const accepted = articleRequest({
+      heading: boundaryHeading,
+      relativePath: boundaryPath,
+    });
+    const validationRequest: SkillSchemaValidationRequest = {
+      path: 'cortexArticleStructure.audit',
+      schema: action.inputSchema,
+      value: accepted,
+    };
+    expect(validateSkillInput(validationRequest).ok).toBe(true);
+    expect(() =>
+      decodeCortexArticleRequest(JSON.stringify(accepted)),
+    ).not.toThrow();
+    const wrapped = {
+      [SkillRequestFamily.CortexArticleStructure]: {
+        audit: accepted,
+      },
+    };
+    expect(dispatchSkillYamlText(JSON.stringify(wrapped)).exitCode).toBe(0);
+
+    for (const [request, schemaPath, providerPath] of [
+      [
+        articleRequest({
+          heading: 'Heading',
+          relativePath: overflowPath,
+        }),
+        'cortexArticleStructure.audit.documents[0].relativePath',
+        'documents[0].relativePath',
+      ],
+      [
+        articleRequest({
+          heading: overflowHeading,
+          relativePath: '.cortex/example.md',
+        }),
+        'cortexArticleStructure.audit.documents[0].blocks[0].text',
+        'documents[0].blocks[0].text',
+      ],
+    ] as const) {
+      const rejectedValidationRequest: SkillSchemaValidationRequest = {
+        path: 'cortexArticleStructure.audit',
+        schema: action.inputSchema,
+        value: request,
+      };
+      const validation = validateSkillInput(rejectedValidationRequest);
+      expect(validation.ok).toBe(false);
+      if (validation.ok) throw new Error('Expected schema rejection.');
+      expect(validation.path).toBe(schemaPath);
+      expect(providerFailurePath(request)).toBe(providerPath);
+      const rejectedWrapped = {
+        [SkillRequestFamily.CortexArticleStructure]: { audit: request },
+      };
+      expect(
+        dispatchSkillYamlText(JSON.stringify(rejectedWrapped)).exitCode,
+      ).toBe(2);
     }
   });
   test('executes tools-list and rejects CLI flags', async () => {

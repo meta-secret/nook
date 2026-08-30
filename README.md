@@ -336,8 +336,8 @@ They are code, not skill-card mirrors. Use `task skills:install` and
 `task skills:verify` for the pinned Cortex article project gate.
 `task loom:verify` additionally applies the repository AST capability and
 exact-consumer boundary. The Cortex article application is currently consumed
-in-process by Loom. The provider-neutral strict YAML host is available through
-`task skills:tools-list`; article activation remains a dependent slice.
+in-process by Loom. Agents can discover and invoke its static action through
+`task skills:tools-list` and one inline-YAML `task skills:run` request.
 
 ```sh
 task web:dev

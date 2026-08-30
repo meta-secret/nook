@@ -1,9 +1,14 @@
 export enum SkillRequestFamily {
   ToolsList = 'skillToolsList',
+  CortexArticleStructure = 'cortexArticleStructure',
 }
 
 export enum SkillToolsOperation {
   List = 'list',
+}
+
+export enum CortexArticleStructureOperation {
+  Audit = 'audit',
 }
 
 export enum SkillCommandPhase {
@@ -35,9 +40,9 @@ export const SKILL_HOST_REQUEST_BYTE_LIMIT = 64 * 1_024;
 export type SkillStringSchema = {
   readonly type: `${SkillSchemaType.String}`;
   readonly enum?: readonly string[];
-  readonly maxLength?: number;
+  readonly maxUtf16CodeUnits?: number;
   readonly maxTrimmedLines?: number;
-  readonly maxTrimmedLineLength?: number;
+  readonly maxTrimmedLineUtf16CodeUnits?: number;
   readonly pattern?: string;
 };
 
@@ -93,7 +98,7 @@ export type SkillInputSchema =
 export type DiscoverableSkillAction = {
   readonly skillId: string;
   readonly family: SkillRequestFamily;
-  readonly operation: SkillToolsOperation;
+  readonly operation: CortexArticleStructureOperation | SkillToolsOperation;
   readonly description: string;
   readonly exampleRequest: string;
   readonly exampleYaml: string;
