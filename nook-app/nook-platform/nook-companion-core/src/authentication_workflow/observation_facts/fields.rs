@@ -32,11 +32,6 @@ impl AuthenticationFieldObservationFacts {
         ]
         .into_iter()
         .all(|count| count <= crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT)
-            && self
-                .current_password_field_count
-                .saturating_add(self.new_password_field_count)
-                .saturating_add(self.generic_password_field_count)
-                <= crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT
     }
 
     /// Validate that detailed control evidence describes these same fields and scope.
