@@ -102,6 +102,44 @@ describe('authentication workflow routing', () => {
     })
   })
 
+  test('preserves a matched workflow when optional login availability fails', async () => {
+    for (const failure of ['rejected', 'timeout', 'invalid-response']) {
+      const dependencies = {
+        companionWasmReady: Promise.resolve(),
+        authenticationPasskeyEvidenceIsSafe: () => true,
+        matchingPasskeyAccountCountForOriginSafe: async () => 2,
+        authenticationWorkflowSnapshot: async () => ({
+          kind: 'matched',
+          snapshot: { observationIndex: 0, action: 4 },
+        }),
+        authenticationWorkflowSavedLoginCapability: () => 'fill-saved-login',
+        websiteLoginMatchAvailability: async () => {
+          throw new Error(failure)
+        },
+      } as AuthenticationWorkflowRoutingDependencies
+      const request: Parameters<
+        typeof authenticationWorkflowMessageResponse
+      >[0] = {
+        message,
+        sender,
+        dependencies,
+      }
+
+      await expect(
+        authenticationWorkflowMessageResponse(request),
+      ).resolves.toMatchObject({
+        workflow: {
+          ok: true,
+          snapshot: { observationIndex: 0, action: 4 },
+        },
+        loginMatches: { kind: 'unavailable' },
+        selectedFacts: {
+          authenticator: { matchingPasskeyAccountCount: 2 },
+        },
+      })
+    }
+  })
+
   test('contains a synchronous evidence-classifier exception', async () => {
     const dependencies = {
       companionWasmReady: Promise.resolve(),

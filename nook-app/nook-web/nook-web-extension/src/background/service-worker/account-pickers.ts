@@ -23,6 +23,7 @@ import {
   getSessionStorage,
   isAuthorizedWebsiteSender,
   passwordPairingGrants,
+  passiveAvailableWebsiteGrants,
   removeSessionStorage,
   sendSessionMessage,
   setSessionStorage,
@@ -331,12 +332,14 @@ type WebsiteLoginOptionsArgs = {
 
 type WebsiteLoginOptionsDependencies = {
   availableWebsiteGrants: typeof availableWebsiteGrants
+  passiveAvailableWebsiteGrants: typeof passiveAvailableWebsiteGrants
   loginAccountsForOrigin: typeof loginAccountsForOrigin
   openCompanionLauncherBestEffort: typeof openCompanionLauncherBestEffort
 }
 
 const websiteLoginOptionsDependencies: WebsiteLoginOptionsDependencies = {
   availableWebsiteGrants,
+  passiveAvailableWebsiteGrants,
   loginAccountsForOrigin,
   openCompanionLauncherBestEffort,
 }
@@ -357,8 +360,10 @@ async function websiteLoginOptionsResponse({
     sender,
     forbiddenReason: 'login-forbidden-origin',
   }
-  const access =
-    await resolvedDependencies.availableWebsiteGrants(nookTypedArgs0_6)
+  const grantsProbe = openUnavailableCompanion
+    ? resolvedDependencies.availableWebsiteGrants
+    : resolvedDependencies.passiveAvailableWebsiteGrants
+  const access = await grantsProbe(nookTypedArgs0_6)
   if ('response' in access) {
     if (
       access.response.ok &&
@@ -394,11 +399,13 @@ export async function websiteLoginOptions(
 type WebsiteLoginMatchAvailabilityArgs = {
   origin: string
   sender: chrome.runtime.MessageSender
+  dependencies?: WebsiteLoginOptionsDependencies
 }
 
 export async function websiteLoginMatchAvailability({
   origin,
   sender,
+  dependencies,
 }: WebsiteLoginMatchAvailabilityArgs): Promise<WebsiteLoginMatchAvailability> {
   const message: WebsiteLoginOptionsArgs['message'] = {
     type: WebsiteLoginOptionsMessageType.NookWebsiteLoginOptions,
@@ -407,6 +414,7 @@ export async function websiteLoginMatchAvailability({
   const response = await websiteLoginOptionsResponse({
     message,
     sender,
+    dependencies,
     openUnavailableCompanion: false,
   })
   return decode_website_login_match_availability(

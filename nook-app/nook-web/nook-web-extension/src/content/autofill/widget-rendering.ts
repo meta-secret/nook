@@ -264,6 +264,7 @@ export function renderWidget({
       snapshot.action === AuthenticationWorkflowAction.UsePasskey ||
       snapshot.action === AuthenticationWorkflowAction.CreatePasskey
     ) {
+      cancelPendingLoginPickerRequest()
       const nookTypedArgs0_6: Parameters<typeof proposePasskeyWithNook>[0] = {
         description,
         continueButton,

@@ -6,7 +6,9 @@ type GrantAccessResponse =
   | {
       response: {
         ok: true
-        status: WebsiteAuthenticatorResponseStatus.Unavailable
+        status:
+          | WebsiteAuthenticatorResponseStatus.Unavailable
+          | WebsiteAuthenticatorResponseStatus.Locked
       }
     }
   | { response: { ok: false; reason: string } }
@@ -20,7 +22,7 @@ describe('websiteLoginOptions', () => {
     Object.assign(globalThis, {
       __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
     })
-    const { websiteLoginOptions } =
+    const { websiteLoginMatchAvailability, websiteLoginOptions } =
       await import('../src/background/service-worker/account-pickers')
     let grantAccessResponse: GrantAccessResponse = {
       response: {
@@ -29,6 +31,9 @@ describe('websiteLoginOptions', () => {
       },
     }
     const availableWebsiteGrants = mock(() =>
+      Promise.resolve(grantAccessResponse),
+    )
+    const passiveAvailableWebsiteGrants = mock(() =>
       Promise.resolve(grantAccessResponse),
     )
     const openedUrls: string[] = []
@@ -52,6 +57,7 @@ describe('websiteLoginOptions', () => {
     )
     const dependencies = {
       availableWebsiteGrants,
+      passiveAvailableWebsiteGrants,
       loginAccountsForOrigin,
       openCompanionLauncherBestEffort,
     }
@@ -77,6 +83,26 @@ describe('websiteLoginOptions', () => {
     expect(openedUrls).toEqual([
       'chrome-extension://nook/popup/index.html?intent=pair',
     ])
+
+    grantAccessResponse = {
+      response: {
+        ok: true,
+        status: WebsiteAuthenticatorResponseStatus.Locked,
+      },
+    }
+    const passiveResponse = await websiteLoginMatchAvailability({
+      origin: 'https://example.test',
+      sender: {
+        id: 'nook-extension',
+        url: 'https://example.test/login',
+        tab: { id: 42 },
+      },
+      dependencies,
+    })
+    expect(passiveResponse).toEqual({ kind: 'locked' })
+    expect(passiveAvailableWebsiteGrants).toHaveBeenCalledTimes(1)
+    expect(availableWebsiteGrants).toHaveBeenCalledTimes(1)
+    expect(openCompanionLauncherBestEffort).toHaveBeenCalledTimes(1)
 
     grantAccessResponse = {
       response: { ok: false, reason: 'login-forbidden-origin' },

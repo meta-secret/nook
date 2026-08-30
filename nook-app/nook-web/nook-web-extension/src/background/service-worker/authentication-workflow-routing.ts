@@ -104,13 +104,19 @@ export async function authenticationWorkflowMessageResponse({
       const capability = authenticationWorkflowSavedLoginCapability(
         result.snapshot,
       )
-      const loginMatches =
-        capability === 'fill-saved-login'
-          ? await websiteLoginMatchAvailability({
-              origin: message.payload.origin,
-              sender,
-            })
-          : { kind: 'unavailable' as const }
+      let loginMatches: WebsiteLoginMatchAvailability = {
+        kind: 'unavailable',
+      }
+      if (capability === 'fill-saved-login') {
+        try {
+          loginMatches = await websiteLoginMatchAvailability({
+            origin: message.payload.origin,
+            sender,
+          })
+        } catch {
+          loginMatches = { kind: 'unavailable' }
+        }
+      }
       return {
         workflow: { ok: true, snapshot: result.snapshot },
         loginMatches,

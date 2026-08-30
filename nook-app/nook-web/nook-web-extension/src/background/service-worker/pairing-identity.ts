@@ -746,7 +746,29 @@ export async function availableWebsiteGrants({
   origin,
   sender,
   forbiddenReason,
-}: AvailableWebsiteGrantsArgs): Promise<
+}: AvailableWebsiteGrantsArgs): Promise<WebsiteGrantAccess> {
+  return websiteGrants({
+    origin,
+    sender,
+    forbiddenReason,
+    openLockedCompanion: true,
+  })
+}
+
+export async function passiveAvailableWebsiteGrants({
+  origin,
+  sender,
+  forbiddenReason,
+}: AvailableWebsiteGrantsArgs): Promise<WebsiteGrantAccess> {
+  return websiteGrants({
+    origin,
+    sender,
+    forbiddenReason,
+    openLockedCompanion: false,
+  })
+}
+
+type WebsiteGrantAccess =
   | { grants: StoredExtensionPairingGrant[] }
   | {
       response:
@@ -758,7 +780,17 @@ export async function availableWebsiteGrants({
               | WebsiteAuthenticatorResponseStatus.Locked
           }
     }
-> {
+
+type WebsiteGrantsArgs = AvailableWebsiteGrantsArgs & {
+  openLockedCompanion: boolean
+}
+
+async function websiteGrants({
+  origin,
+  sender,
+  forbiddenReason,
+  openLockedCompanion,
+}: WebsiteGrantsArgs): Promise<WebsiteGrantAccess> {
   const nookTypedArgs0_8: Parameters<typeof isAuthorizedWebsiteSender>[0] = {
     sender,
     origin,
@@ -777,13 +809,18 @@ export async function availableWebsiteGrants({
   }
   await ensureExtensionSessionDocument()
   const queueExpiresAt = Date.now() + SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS
+  const queue = openLockedCompanion
+    ? extensionSessionInteractiveDeadline(queueExpiresAt)
+    : extensionSessionProbeDeadline(queueExpiresAt)
   const nookTypedArgs0_9: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-status',
-    payload: { queue: extensionSessionInteractiveDeadline(queueExpiresAt) },
+    payload: { queue },
   }
   const status = await sendSessionMessage(nookTypedArgs0_9)
   if (!isUnlockedSessionStatus(status)) {
-    openCompanionLauncherBestEffort(OpenCompanionLauncherIntent.Default)
+    if (openLockedCompanion) {
+      openCompanionLauncherBestEffort(OpenCompanionLauncherIntent.Default)
+    }
     return {
       response: {
         ok: true,
