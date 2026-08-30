@@ -735,6 +735,82 @@ describe('authentication observation bounds', () => {
     expect(liveApprovedAuthenticationWorkflow(liveRequest)).toBe(false)
   })
 
+  test('does not count or fill credential fields inside an inert ancestor', () => {
+    document.body.innerHTML = `
+      <form aria-label="Login" action="/auth/login">
+        <div inert>
+          <input id="dormant-user" autocomplete="username" />
+          <input id="dormant-pass" type="password" autocomplete="current-password" />
+        </div>
+        <button type="submit">Sign in</button>
+      </form>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    const observation = observations[0]
+    if (!observation) {
+      throw new Error('expected a workflow for the live submitter')
+    }
+    const facts = authenticationPageObservationFacts({
+      observation,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.fields.usernameFieldCount).toBe(0)
+    expect(facts.fields.currentPasswordFieldCount).toBe(0)
+    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: {
+        username: 'vault-user',
+        password: 'vault-pass',
+      },
+      kind: PasswordFormQueryKind.Root,
+      root: document,
+    }
+    expect(fillLoginCredentials(fillArgs)).toBe(false)
+    expect(
+      (document.querySelector('#dormant-user') as HTMLInputElement).value,
+    ).toBe('')
+    expect(
+      (document.querySelector('#dormant-pass') as HTMLInputElement).value,
+    ).toBe('')
+  })
+
+  test('fills live credentials and leaves inert sibling fields untouched', () => {
+    document.body.innerHTML = `
+      <form aria-label="Login" action="/auth/login">
+        <div inert>
+          <input id="dormant-user" autocomplete="username" />
+          <input id="dormant-pass" type="password" autocomplete="current-password" />
+        </div>
+        <input id="live-user" autocomplete="username" />
+        <input id="live-pass" type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+
+    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: {
+        username: 'vault-user',
+        password: 'vault-pass',
+      },
+      kind: PasswordFormQueryKind.Root,
+      root: document,
+    }
+    expect(fillLoginCredentials(fillArgs)).toBe(true)
+    expect(
+      (document.querySelector('#live-user') as HTMLInputElement).value,
+    ).toBe('vault-user')
+    expect(
+      (document.querySelector('#live-pass') as HTMLInputElement).value,
+    ).toBe('vault-pass')
+    expect(
+      (document.querySelector('#dormant-user') as HTMLInputElement).value,
+    ).toBe('')
+    expect(
+      (document.querySelector('#dormant-pass') as HTMLInputElement).value,
+    ).toBe('')
+  })
+
   test('keeps a password login when OTP forms with vetoed submitters fill the bound', () => {
     const otpForms = Array.from(
       { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS },
