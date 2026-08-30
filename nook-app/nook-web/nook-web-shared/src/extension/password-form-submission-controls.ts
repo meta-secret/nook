@@ -535,7 +535,7 @@ export function selectedSubmitterBlocksCredentialDisclosure({
   if (
     formHasSemanticSubmitter(form) &&
     formUsesGetSubmission(form) &&
-    !formHasRustClassifiableAdvanceControl(form)
+    !formHasPostMethodSubmitter(form)
   ) {
     return true;
   }

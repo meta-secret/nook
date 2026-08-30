@@ -779,7 +779,10 @@ describe('classified login activation', () => {
       kind: PasswordFormQueryKind.Root,
       root: document,
     }
-    expect(fillLoginCredentials(fillArgs)).toBe(true)
+    expect(fillLoginCredentials(fillArgs)).toBe(false)
+    expect(
+      document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
+    ).toBe('')
     expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(false)
     expect(submitted).toBe(false)
   })

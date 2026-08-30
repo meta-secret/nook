@@ -151,23 +151,36 @@ export function liveApprovedAuthenticationWorkflow({
     authenticatorSetupHint,
     backupCodesHint,
   };
-  return classifiedAuthenticationWorkflowObservations(classifiedRequest).some(
-    (candidate) => {
-      const scopePair: AuthenticationWorkflowScopePair = {
-        left: candidate.observation,
-        right: approved.observation,
-      };
-      const factsPair: ApprovedAuthenticationFactsPair = {
-        live: candidate.facts,
-        approved: approved.facts,
-      };
-      return (
-        authenticationWorkflowScopesMatch(scopePair) &&
-        approvedAuthenticationContextMatches(factsPair) &&
-        approvedFieldSemanticsMatch(factsPair) &&
-        rustWorkflowSemantics(candidate.facts) ===
-          rustWorkflowSemantics(approved.facts)
-      );
-    },
+  const live = classifiedAuthenticationWorkflowObservations(classifiedRequest);
+  const batchRequest: Parameters<
+    typeof classify_companion_authentication_workflow_facts
+  >[0] = {
+    observations: live.map((candidate) => candidate.facts),
+  };
+  const batchMatch =
+    classify_companion_authentication_workflow_facts(batchRequest);
+  const matchKind = companion_authentication_workflow_match_kind(batchMatch);
+  if (
+    matchKind !== CompanionAuthenticationWorkflowMatchKind.Matched ||
+    !("snapshot" in batchMatch)
+  ) {
+    return false;
+  }
+  const selected = live[batchMatch.snapshot.observationIndex];
+  if (!selected) return false;
+  const scopePair: AuthenticationWorkflowScopePair = {
+    left: selected.observation,
+    right: approved.observation,
+  };
+  const factsPair: ApprovedAuthenticationFactsPair = {
+    live: selected.facts,
+    approved: approved.facts,
+  };
+  return (
+    authenticationWorkflowScopesMatch(scopePair) &&
+    approvedAuthenticationContextMatches(factsPair) &&
+    approvedFieldSemanticsMatch(factsPair) &&
+    rustWorkflowSemantics(selected.facts) ===
+      rustWorkflowSemantics(approved.facts)
   );
 }

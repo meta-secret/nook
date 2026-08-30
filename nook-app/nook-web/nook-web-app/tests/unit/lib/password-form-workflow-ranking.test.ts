@@ -196,6 +196,30 @@ describe('authentication workflow ranking', () => {
     ).toBe(true)
   })
 
+  test('keeps a password login when unsafe Use passkey forms fill the shortlist', () => {
+    const decoys = Array.from(
+      { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS * 2 },
+      (_, index) =>
+        `<form method="post" id="enroll-${index}" action="/login"><input autocomplete="username" /><input type="password" autocomplete="current-password" /><button type="button" class="delete-account">Use passkey</button></form>`,
+    ).join('')
+    document.body.innerHTML = `
+      ${decoys}
+      <form method="post" id="password-login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS)
+    expect(
+      observations.some(
+        (observation) => ownedFormId(observation) === 'password-login',
+      ),
+    ).toBe(true)
+  })
+
   test('ranks a Rust-safe passkey login ahead of enrollment candidates at the bound', () => {
     const decoys = Array.from(
       { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS },

@@ -43,6 +43,32 @@ export const authenticationFactObserverOptions = {
   subtree: true,
 } as const satisfies MutationObserverInit;
 
+export const AUTHENTICATION_FACT_SCAN_DEBOUNCE_MS = 150;
+
+const authenticationFactCharacterDataScopeSelector =
+  'a, button, form, input, label, legend, select, textarea, [role="button"], [role="form"], [aria-label], [title]';
+
+export type AuthenticationFactMutation = {
+  type: MutationRecord["type"];
+  target: Node;
+};
+
+export function authenticationFactMutationRequiresScan(
+  mutation: AuthenticationFactMutation,
+): boolean {
+  if (mutation.type !== "characterData") return true;
+  const node = mutation.target;
+  const element =
+    node instanceof Text
+      ? node.parentElement
+      : node instanceof Element
+        ? node
+        : false;
+  return Boolean(
+    element && element.closest(authenticationFactCharacterDataScopeSelector),
+  );
+}
+
 export const AUTHENTICATION_SUBMIT_VALUE_SOURCE =
   "nook-authentication-submit-value-v1";
 

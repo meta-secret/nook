@@ -1,8 +1,4 @@
-import {
-  looks_like_login_advance_control_label,
-  looks_like_passkey_control_label,
-  looks_like_passkey_enrollment_or_management_label,
-} from "./nook-companion-wasm/nook_companion_wasm.js";
+import { looks_like_login_advance_control_label } from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
   findOneTimeCodeFields,
   findPasskeyControls,
@@ -101,11 +97,16 @@ type ShortlistWorkflowsRequest<
 > = {
   fieldBearing: Observation[];
   independent: Observation[];
+  passkeyControlIsSafe: PasskeyControlIsSafe<Observation>;
 };
 
-type OwnedFormProgressionRequest = {
+type OwnedFormProgressionRequest<
+  Observation extends RankableWorkflowObservation,
+> = {
   form: HTMLFormElement;
   summary: RankableWorkflowSummary;
+  observation: Observation;
+  passkeyControlIsSafe: PasskeyControlIsSafe<Observation>;
 };
 
 type CollectPasskeyOnlyScopesRequest = {
@@ -259,6 +260,7 @@ export function appendIndependentPasskeyOnlyWorkflows<
   const shortlistRequest: ShortlistWorkflowsRequest<Observation> = {
     fieldBearing,
     independent,
+    passkeyControlIsSafe,
   };
   const rankingCandidates = shortlistWorkflowsForFactsRanking(shortlistRequest);
   const ranked = rankingCandidates.map((observation) => {
@@ -267,10 +269,14 @@ export function appendIndependentPasskeyOnlyWorkflows<
       passkeyCandidates,
       passkeyControlIsSafe,
     };
+    const progressionRequest: CheapWorkflowProgressionRequest<Observation> = {
+      observation,
+      passkeyControlIsSafe,
+    };
     return {
       observation,
       safe: observationHasSafePasskey(safetyRequest),
-      priority: cheapWorkflowLooksProgressing(observation)
+      priority: cheapWorkflowLooksProgressing(progressionRequest)
         ? observationPriority(observation)
         : 0,
     };
@@ -282,22 +288,48 @@ export function appendIndependentPasskeyOnlyWorkflows<
   return takeRankedWorkflowObservations(rankedRequest);
 }
 
+type CheapWorkflowProgressionRequest<
+  Observation extends RankableWorkflowObservation,
+> = {
+  observation: Observation;
+  passkeyControlIsSafe: PasskeyControlIsSafe<Observation>;
+};
+
+type TakeBoundedPriorityWorkflowsRequest<
+  Observation extends RankableWorkflowObservation,
+> = {
+  observations: RankableWorkflowObservationList<Observation>;
+  passkeyControlIsSafe: PasskeyControlIsSafe<Observation>;
+};
+
 function shortlistWorkflowsForFactsRanking<
   Observation extends RankableWorkflowObservation,
 >({
   fieldBearing,
   independent,
+  passkeyControlIsSafe,
 }: ShortlistWorkflowsRequest<Observation>): Observation[] {
+  const boundedRequest: TakeBoundedPriorityWorkflowsRequest<Observation> = {
+    observations: fieldBearing,
+    passkeyControlIsSafe,
+  };
   return [
-    ...takeBoundedPriorityWorkflows(fieldBearing),
+    ...takeBoundedPriorityWorkflows(boundedRequest),
     ...independent.slice(0, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS),
   ];
 }
 
-function cheapWorkflowPriority(
-  observation: RankableWorkflowObservation,
-): number {
-  if (!cheapWorkflowLooksProgressing(observation)) return 1;
+function cheapWorkflowPriority<
+  Observation extends RankableWorkflowObservation,
+>({
+  observation,
+  passkeyControlIsSafe,
+}: CheapWorkflowProgressionRequest<Observation>): number {
+  const progressionRequest: CheapWorkflowProgressionRequest<Observation> = {
+    observation,
+    passkeyControlIsSafe,
+  };
+  if (!cheapWorkflowLooksProgressing(progressionRequest)) return 1;
   if (observation.summary.oneTimeCodeFieldCount > 0) return 5;
   if (observation.summary.currentPasswordFieldCount > 0) return 4;
   if (observation.summary.genericPasswordFieldCount === 1) return 3;
@@ -316,24 +348,25 @@ function unownedScopeLooksProgressing(root: ParentNode): boolean {
   });
 }
 
-function ownedFormLooksProgressing({
+function ownedFormLooksProgressing<
+  Observation extends RankableWorkflowObservation,
+>({
   form,
   summary,
-}: OwnedFormProgressionRequest): boolean {
+  observation,
+  passkeyControlIsSafe,
+}: OwnedFormProgressionRequest<Observation>): boolean {
   if (formHasRustClassifiableAdvanceControl(form)) return true;
   if (formHasSemanticSubmitter(form)) return false;
-  const ownedPasskeyScope: PasswordFormScope = {
-    kind: PasswordFormScopeKind.Owned,
-    owner: form,
-  };
-  const ownedPasskeyObservation: RankableWorkflowObservation = {
-    root: form,
-    formScope: ownedPasskeyScope,
-    summary,
+  const passkeyCandidates = findPasskeyControls(form);
+  const safetyRequest: ObservationHasSafePasskeyRequest<Observation> = {
+    observation,
+    passkeyCandidates,
+    passkeyControlIsSafe,
   };
   if (
     summary.passkeyControlPresent &&
-    !cheapScopeHasSafePasskey(ownedPasskeyObservation)
+    !observationHasSafePasskey(safetyRequest)
   ) {
     return false;
   }
@@ -345,11 +378,18 @@ function ownedFormLooksProgressing({
 
 function takeBoundedPriorityWorkflows<
   Observation extends RankableWorkflowObservation,
->(observations: RankableWorkflowObservationList<Observation>): Observation[] {
+>({
+  observations,
+  passkeyControlIsSafe,
+}: TakeBoundedPriorityWorkflowsRequest<Observation>): Observation[] {
   const selected: Array<BoundedPriorityWorkflowEntry<Observation>> = [];
   for (const observation of observations) {
-    const priority = cheapWorkflowPriority(observation);
-    const progressing = cheapWorkflowLooksProgressing(observation);
+    const progressionRequest: CheapWorkflowProgressionRequest<Observation> = {
+      observation,
+      passkeyControlIsSafe,
+    };
+    const priority = cheapWorkflowPriority(progressionRequest);
+    const progressing = cheapWorkflowLooksProgressing(progressionRequest);
     if (selected.length < MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS * 2) {
       const selectedEntry: BoundedPriorityWorkflowEntry<Observation> = {
         observation,
@@ -387,33 +427,31 @@ function takeBoundedPriorityWorkflows<
   return selected.map((entry) => entry.observation);
 }
 
-function cheapScopeHasSafePasskey(
-  observation: RankableWorkflowObservation,
-): boolean {
+function cheapWorkflowLooksProgressing<
+  Observation extends RankableWorkflowObservation,
+>({
+  observation,
+  passkeyControlIsSafe,
+}: CheapWorkflowProgressionRequest<Observation>): boolean {
   const root =
     observation.formScope.kind === PasswordFormScopeKind.Owned
       ? observation.formScope.owner
       : observation.root;
-  return findPasskeyControls(root).some(({ control }) => {
-    if (controlIsInert(control)) return false;
-    const label = controlLabel(control);
-    return (
-      looks_like_passkey_control_label(label) &&
-      !looks_like_passkey_enrollment_or_management_label(label)
-    );
-  });
-}
-
-function cheapWorkflowLooksProgressing(
-  observation: RankableWorkflowObservation,
-): boolean {
-  if (cheapScopeHasSafePasskey(observation)) return true;
+  const passkeyCandidates = findPasskeyControls(root);
+  const safetyRequest: ObservationHasSafePasskeyRequest<Observation> = {
+    observation,
+    passkeyCandidates,
+    passkeyControlIsSafe,
+  };
+  if (observationHasSafePasskey(safetyRequest)) return true;
   if (observation.formScope.kind === PasswordFormScopeKind.Unowned) {
     return unownedScopeLooksProgressing(observation.root);
   }
-  const progressionRequest: OwnedFormProgressionRequest = {
+  const progressionRequest: OwnedFormProgressionRequest<Observation> = {
     form: observation.formScope.owner,
     summary: observation.summary,
+    observation,
+    passkeyControlIsSafe,
   };
   return (
     (!formBlocksCredentialDisclosure(observation.formScope.owner) ||

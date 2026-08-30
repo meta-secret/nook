@@ -1,5 +1,7 @@
 import { isAuthenticationRouteHistoryMessage } from '../../../nook-web-shared/src/extension/authentication-route-history'
 import {
+  AUTHENTICATION_FACT_SCAN_DEBOUNCE_MS,
+  authenticationFactMutationRequiresScan,
   authenticationFactObserverOptions,
   isAuthenticationSubmitValueMessage,
   observeAuthenticationSubmitValueAssignments,
@@ -154,16 +156,26 @@ async function scanAndRender(): Promise<void> {
   renderWidget(nookTypedArgs0_1)
 }
 
-function scheduleScan() {
+function scheduleScan(mutations?: MutationRecord[]) {
+  if (
+    Array.isArray(mutations) &&
+    mutations.length > 0 &&
+    !mutations.some(authenticationFactMutationRequiresScan)
+  ) {
+    return
+  }
   if (scanState.scheduleState.kind === ScanScheduleKind.Scheduled) {
     window.clearTimeout(scanState.scheduleState.timer)
   }
+  const delay = scanState.remainingScanDelay(
+    AUTHENTICATION_FACT_SCAN_DEBOUNCE_MS,
+  )
 
   scanState.scheduleTimer(
     window.setTimeout(() => {
       scanState.clearPendingTimer()
       void scanAndRender()
-    }, 150),
+    }, delay),
   )
 }
 

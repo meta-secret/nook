@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from 'vitest'
 import {
   AUTHENTICATION_SUBMIT_VALUE_SOURCE,
   authenticationFactAttributeFilter,
+  authenticationFactMutationRequiresScan,
   authenticationFactObserverOptions,
   isAuthenticationSubmitValueMessage,
   notifyAuthenticationSubmitValueAssigned,
@@ -47,6 +48,25 @@ describe('authentication fact rescans', () => {
       ]),
     )
     expect(authenticationFactObserverOptions.characterData).toBe(true)
+    const ticker = document.createTextNode('0')
+    const label = document.createElement('button')
+    label.textContent = 'Sign in'
+    document.body.append(ticker, label)
+    const tickerMutation: Parameters<
+      typeof authenticationFactMutationRequiresScan
+    >[0] = {
+      type: 'characterData',
+      target: ticker,
+    }
+    const labelChild = label.childNodes[0]
+    const labelMutation: Parameters<
+      typeof authenticationFactMutationRequiresScan
+    >[0] = {
+      type: 'characterData',
+      target: labelChild ? labelChild : label,
+    }
+    expect(authenticationFactMutationRequiresScan(tickerMutation)).toBe(false)
+    expect(authenticationFactMutationRequiresScan(labelMutation)).toBe(true)
     document.body.innerHTML = `
       <form method="post" aria-label="Login" action="/login" role="form">
         <input autocomplete="username" />

@@ -102,16 +102,25 @@ export type PendingSaveWatch = {
 
 class ScanState {
   private currentSchedule: ScanSchedule = { kind: ScanScheduleKind.Idle }
+  private scheduleStartedAt = 0
   sequence = 0
-  schedule: () => void = () => {}
+  schedule: (mutations?: MutationRecord[]) => void = () => {}
   get scheduleState(): ScanSchedule {
     return this.currentSchedule
+  }
+  remainingScanDelay(debounceMs: number): number {
+    if (this.currentSchedule.kind !== ScanScheduleKind.Scheduled) {
+      this.scheduleStartedAt = Date.now()
+      return debounceMs
+    }
+    return Math.max(0, debounceMs - (Date.now() - this.scheduleStartedAt))
   }
   scheduleTimer(timer: number): void {
     this.currentSchedule = { kind: ScanScheduleKind.Scheduled, timer }
   }
   clearPendingTimer(): void {
     this.currentSchedule = { kind: ScanScheduleKind.Idle }
+    this.scheduleStartedAt = 0
   }
 }
 

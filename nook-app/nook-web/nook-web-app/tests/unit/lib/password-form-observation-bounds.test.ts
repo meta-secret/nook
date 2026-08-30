@@ -430,4 +430,43 @@ describe('authentication observation bounds', () => {
     expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
     expect(submitted).toBe(true)
   })
+
+  test('rejects a previously approved login after a higher-priority OTP workflow appears', () => {
+    document.body.innerHTML = `
+      <form method="post" id="login" aria-label="Login" action="/auth/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+    const classifiedRequest: Parameters<
+      typeof classifiedAuthenticationWorkflowObservations
+    >[0] = {
+      workflowForms: summarizeAuthenticationWorkflowForms(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    }
+    const approved =
+      classifiedAuthenticationWorkflowObservations(classifiedRequest)[0]
+    if (!approved) {
+      throw new Error('expected the login workflow')
+    }
+    const otp = document.createElement('form')
+    otp.method = 'post'
+    otp.id = 'otp'
+    otp.action = '/auth/verify'
+    otp.setAttribute('aria-label', 'Verify')
+    otp.innerHTML = `
+      <input autocomplete="one-time-code" />
+      <button type="submit">Verify</button>
+    `
+    document.body.prepend(otp)
+    const liveCheck: Parameters<typeof liveApprovedAuthenticationWorkflow>[0] =
+      {
+        approved,
+        authenticatorSetupHint: false,
+        backupCodesHint: false,
+      }
+    expect(liveApprovedAuthenticationWorkflow(liveCheck)).toBe(false)
+  })
 })
