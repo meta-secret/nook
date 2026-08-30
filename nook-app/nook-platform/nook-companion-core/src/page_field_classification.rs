@@ -9,6 +9,7 @@ mod control_identity;
 mod destination_identity;
 mod form_identity;
 mod one_time_code_progression;
+mod passkey;
 
 /// Maximum byte length for each DOM-controlled authentication identity string.
 pub const MAX_AUTHENTICATION_CONTROL_TEXT_BYTES: usize = 512;
@@ -20,6 +21,10 @@ pub use authentication_advance_control::{
 };
 pub use destination_identity::{CanonicalControlDestination, canonicalize_control_destination};
 pub use one_time_code_progression::looks_like_one_time_code_auto_submit_signal;
+pub(super) use passkey::PASSKEY_OR_PLATFORM_AUTHENTICATOR_WORDS;
+pub use passkey::{
+    looks_like_passkey_control_label, looks_like_passkey_enrollment_or_management_label,
+};
 
 /// Validate one bounded advance-control observation for exact browser actuation.
 #[must_use]
@@ -133,18 +138,6 @@ const LOGIN_PATH_WORDS: &[&str] = &[
     "live.com",
 ];
 
-pub(super) const PASSKEY_OR_PLATFORM_AUTHENTICATOR_WORDS: &[&str] = &[
-    "pass key",
-    "passkey",
-    "webauthn",
-    "security key",
-    "hardware key",
-    "fido",
-    "touch id",
-    "face id",
-    "windows hello",
-];
-
 /// True when form/path/ancestor context looks like a login surface.
 #[must_use]
 pub fn has_login_context(observation: &LoginContextObservation) -> bool {
@@ -218,48 +211,6 @@ pub fn looks_like_one_time_code_field(field: &PageInputFieldObservation) -> bool
     }
     one_time_code_positive(&identity)
         || has_autocomplete_token(&field.autocomplete_tokens, "one-time-code")
-}
-
-/// True when a labeled control advertises passkey / `WebAuthn` / platform authenticator.
-#[must_use]
-pub fn looks_like_passkey_control_label(label: &str) -> bool {
-    let identity = expand_identity_text(label);
-    !contains_any_word(
-        &identity,
-        &[
-            "delete",
-            "remove",
-            "revoke",
-            "unlink",
-            "disconnect",
-            "disable",
-            "deactivate",
-        ],
-    ) && contains_any_word(&identity, PASSKEY_OR_PLATFORM_AUTHENTICATOR_WORDS)
-}
-
-const PASSKEY_ENROLLMENT_OR_MANAGEMENT_WORDS: &[&str] = &[
-    "add",
-    "create",
-    "enable",
-    "enroll",
-    "enrollment",
-    "register",
-    "registration",
-    "manage",
-    "management",
-    "settings",
-    "set up",
-    "setup",
-    "configure",
-];
-
-/// True when a passkey-looking label describes enrollment or management, not login.
-#[must_use]
-pub fn looks_like_passkey_enrollment_or_management_label(label: &str) -> bool {
-    let identity = expand_identity_text(label);
-    contains_any_word(&identity, PASSKEY_OR_PLATFORM_AUTHENTICATOR_WORDS)
-        && contains_any_word(&identity, PASSKEY_ENROLLMENT_OR_MANAGEMENT_WORDS)
 }
 
 /// True when a checkbox/control label looks like terms / privacy acceptance.
@@ -939,14 +890,6 @@ mod tests {
 
     #[test]
     fn passkey_and_manual_checkpoint_labels() {
-        assert!(looks_like_passkey_control_label("Sign in with passkey"));
-        assert!(!looks_like_passkey_control_label("Continue"));
-        assert!(looks_like_passkey_enrollment_or_management_label(
-            "Add passkey"
-        ));
-        assert!(!looks_like_passkey_enrollment_or_management_label(
-            "Sign in with a passkey"
-        ));
         assert!(looks_like_manual_checkpoint_label("I agree to the Terms"));
         assert!(looks_like_email_verification_body(
             "Please verify your email to continue"
@@ -1003,7 +946,7 @@ mod tests {
         let safe = |form, destination| {
             has_safe_authentication_route_identity("https://example.test", form, destination)
         };
-        for destination in "https://example.test/login?notprovider=x&notconnection=enterprise&continue=https://mail.google.com|https://example.test/auth/login?x=1|https://example.test/v3/signin/identifier|https://example.test/auth/sign-in/identifier|https://example.test/authentication/login|https://example.test/v2/auth/signin|https://example.test/signin/callback|https://example.test/login/v2".split('|') {
+        for destination in "https://example.test/login?notprovider=x&notconnection=enterprise&continue=https://mail.google.com|https://example.test/auth/login?x=1|https://example.test/v3/signin/identifier|https://example.test/auth/sign-in/identifier|https://example.test/account/sign-in|https://example.test/authentication/login|https://example.test/v2/auth/signin|https://example.test/signin/callback|https://example.test/login/v2".split('|') {
             assert!(safe("login-form", destination), "{destination}");
         }
         for form in "reset-password|signup-form|google-login|passkey-login".split('|') {

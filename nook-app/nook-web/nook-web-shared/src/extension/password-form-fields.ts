@@ -286,7 +286,7 @@ function hasLoginContext(field: HTMLInputElement): boolean {
     depth += 1;
   }
   const advanceControl = (form ?? field.parentElement)?.querySelector(
-    'button[type="submit"], input[type="submit"], button:not([type])',
+    'button[type="submit"], input[type="submit"], button:not([type]), button[type="button"], input[type="button"]',
   );
   const doc = field.ownerDocument;
   const observation = new NookLoginContextObservation(

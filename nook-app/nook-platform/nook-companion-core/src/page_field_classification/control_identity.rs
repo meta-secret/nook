@@ -63,7 +63,7 @@ pub(super) fn route_names_external_authentication_provider(identity: &str) -> bo
             && (!segments[..index].iter().all(|prefix| {
                 matches!(
                     prefix.as_str(),
-                    "auth" | "authentication" | "common" | "users"
+                    "account" | "auth" | "authentication" | "common" | "users"
                 ) || is_version(prefix)
             }) || !(tails.is_empty() || matches!(tails, [tail] if is_local_tail(tail))))
     });

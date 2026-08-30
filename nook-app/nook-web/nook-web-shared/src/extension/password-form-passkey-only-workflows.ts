@@ -322,13 +322,18 @@ function ownedFormLooksProgressing({
 }: OwnedFormProgressionRequest): boolean {
   if (formHasRustClassifiableAdvanceControl(form)) return true;
   if (formHasSemanticSubmitter(form)) return false;
+  const ownedPasskeyScope: PasswordFormScope = {
+    kind: PasswordFormScopeKind.Owned,
+    owner: form,
+  };
+  const ownedPasskeyObservation: RankableWorkflowObservation = {
+    root: form,
+    formScope: ownedPasskeyScope,
+    summary,
+  };
   if (
     summary.passkeyControlPresent &&
-    !cheapScopeHasSafePasskey({
-      root: form,
-      formScope: { kind: PasswordFormScopeKind.Owned, owner: form },
-      summary,
-    })
+    !cheapScopeHasSafePasskey(ownedPasskeyObservation)
   ) {
     return false;
   }
