@@ -1,7 +1,7 @@
 import { companionWasmReady } from "./companion-ready";
 import {
   authentication_advance_control_is_safe,
-  authentication_form_observation_priority,
+  authentication_page_observation_facts_priority,
   authentication_passkey_control_candidate_is_safe,
   looks_like_one_time_code_auto_submit_signal,
   strongest_authentication_username_evidence,
@@ -10,7 +10,6 @@ import type {
   AuthenticationAdvanceControlObservation,
   AuthenticationDetailedPasskeyControlCandidateObservation,
   AuthenticationDetailedPasskeyControlObservation,
-  AuthenticationPageObservation,
   AuthenticationPageObservationFacts,
   AuthenticationPasskeyControlObservation,
   AuthenticationUsernameEvidence,
@@ -238,37 +237,28 @@ export function summarizePasswordForms(): PasswordFormSummary {
   return summarizeRoot(nookTypedArgs0_9);
 }
 
+const emptyPasswordFormSummary: PasswordFormSummary = {
+  passwordFieldCount: 0,
+  currentPasswordFieldCount: 0,
+  newPasswordFieldCount: 0,
+  genericPasswordFieldCount: 0,
+  usernameFieldCount: 0,
+  oneTimeCodeFieldCount: 0,
+  manualCheckpointPresent: false,
+  passkeyControlPresent: false,
+  formCount: 0,
+  observedAt: 0,
+};
+
 function passwordFormPriority(observation: PasswordFormObservation): number {
-  const { summary } = observation;
-  const reduced: AuthenticationPageObservation = {
-    usernameFieldCount: summary.usernameFieldCount,
-    currentPasswordFieldCount: summary.currentPasswordFieldCount,
-    newPasswordFieldCount: summary.newPasswordFieldCount,
-    genericPasswordFieldCount: summary.genericPasswordFieldCount,
-    oneTimeCodeFieldCount: summary.oneTimeCodeFieldCount,
-    manualCheckpointPresent: summary.manualCheckpointPresent,
-    authenticatorSetupHint: false,
-    backupCodesHint: false,
-    passkeyControlPresent: summary.passkeyControlPresent,
-    matchingPasskeyAccountCount: 0,
-  };
-  const facts = authenticationPageObservationFacts({
-    observation,
-    authenticatorSetupHint: false,
-    backupCodesHint: false,
-  });
-  const passwordFields =
-    facts.fields.currentPasswordFieldCount +
-    facts.fields.genericPasswordFieldCount +
-    facts.fields.newPasswordFieldCount;
-  const progressing =
-    facts.detailedAdvanceControl.kind !== "absent" ||
-    facts.authenticator.detailedPasskeyControl.kind !== "absent" ||
-    facts.ceremony.manualCheckpoint === "present" ||
-    (facts.ceremony.advanceControl === "implicit-submission" &&
-      passwordFields > 0);
-  return (
-    authentication_form_observation_priority(reduced) + (progressing ? 32 : 0)
+  const factsRequest: Parameters<typeof authenticationPageObservationFacts>[0] =
+    {
+      observation,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    };
+  return authentication_page_observation_facts_priority(
+    authenticationPageObservationFacts(factsRequest),
   );
 }
 
@@ -678,6 +668,7 @@ export function summarizeAuthenticationWorkflowForms(): PasswordFormObservation[
     summarizeRoot,
     passwordFormPriority,
     passkeyCandidateIsRustSafe,
+    emptyPasswordFormSummary,
   );
   if (authFieldCount === 0) {
     return passkeyOnly;

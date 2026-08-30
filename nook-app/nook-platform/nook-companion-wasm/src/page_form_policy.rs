@@ -202,6 +202,15 @@ pub fn authentication_form_observation_priority(
 
 #[wasm_bindgen]
 #[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn authentication_page_observation_facts_priority(
+    facts: nook_companion_core::AuthenticationPageObservationFacts,
+) -> u8 {
+    facts.form_priority().value()
+}
+
+#[wasm_bindgen]
+#[must_use]
 pub fn parse_page_input_type(value: &str) -> nook_companion_core::PageInputType {
     nook_companion_core::PageInputType::parse(value)
 }

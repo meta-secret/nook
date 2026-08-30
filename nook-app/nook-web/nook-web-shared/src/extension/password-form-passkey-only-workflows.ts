@@ -20,10 +20,21 @@ type PasskeyOnlyWorkflowObservation<Summary> = {
   summary: Summary;
 };
 
+type PasskeyOnlyScope = {
+  root: ParentNode;
+  formScope: PasswordFormScope;
+};
+
 type PasskeyControlIsSafe<Observation> = (
   candidate: PasskeyControlCandidate,
   observation: Observation,
 ) => boolean;
+
+type RankedPasskeyObservation<Observation> = {
+  observation: Observation;
+  safe: boolean;
+  priority: number;
+};
 
 export function summarizePasskeyOnlyWorkflowForms<Summary>(
   root: Document,
@@ -34,93 +45,39 @@ export function summarizePasskeyOnlyWorkflowForms<Summary>(
   passkeyControlIsSafe: PasskeyControlIsSafe<
     PasskeyOnlyWorkflowObservation<Summary>
   >,
+  emptySummary: Summary,
 ): Array<PasskeyOnlyWorkflowObservation<Summary>> {
   if (!pageHasPasskeyControl(root)) return [];
   const passkeyCandidates = findPasskeyControls(root);
-  const passkeyForms = [
-    ...new Set(
-      passkeyCandidates.flatMap(({ control }) => {
-        if (
-          (control instanceof HTMLButtonElement ||
-            control instanceof HTMLInputElement) &&
-          control.form
-        ) {
-          return [control.form];
-        }
-        const owner = control.closest("form");
-        return owner instanceof HTMLFormElement ? [owner] : [];
-      }),
-    ),
-  ];
-  const observations = passkeyForms.map((form) => {
-    const formScope: PasswordFormScope = {
-      kind: PasswordFormScopeKind.Owned,
-      owner: form,
-    };
+  const scopes = collectPasskeyOnlyScopes(root, passkeyCandidates);
+  const boundedScopes = takePreferredPasskeyOnlyScopes(
+    scopes,
+    passkeyCandidates,
+    passkeyControlIsSafe,
+    emptySummary,
+  );
+  const ranked = boundedScopes.map((scope) => {
     const summaryArgs: PasswordFormScopeQuery = {
       kind: PasswordFormQueryKind.Scoped,
-      root,
-      formScope,
+      root: scope.root,
+      formScope: scope.formScope,
+    };
+    const observation = {
+      root: scope.root,
+      formScope: scope.formScope,
+      summary: summarizeRoot(summaryArgs),
     };
     return {
-      root,
-      formScope,
-      summary: summarizeRoot(summaryArgs),
-    };
-  });
-  const formlessPasskeys = passkeyCandidates.filter(({ control }) => {
-    if (
-      control instanceof HTMLButtonElement ||
-      control instanceof HTMLInputElement
-    ) {
-      return !control.form;
-    }
-    return !(control.closest("form") instanceof HTMLFormElement);
-  });
-  const localPasskeyRoots = [
-    ...new Set(
-      formlessPasskeys.map(({ control }) =>
-        localUnownedPasskeyContainer({ field: control, root }),
+      observation,
+      safe: observationHasSafePasskey(
+        observation,
+        passkeyCandidates,
+        passkeyControlIsSafe,
       ),
-    ),
-  ];
-  for (const localRoot of localPasskeyRoots) {
-    const formScope: PasswordFormScope = {
-      kind: PasswordFormScopeKind.Unowned,
+      priority: observationPriority(observation),
     };
-    const summaryArgs: PasswordFormScopeQuery = {
-      kind: PasswordFormQueryKind.Scoped,
-      root: localRoot,
-      formScope,
-    };
-    observations.push({
-      root: localRoot,
-      formScope,
-      summary: summarizeRoot(summaryArgs),
-    });
-  }
-  return observations
-    .sort((left, right) => {
-      const safeDelta =
-        Number(
-          observationHasSafePasskey(
-            right,
-            passkeyCandidates,
-            passkeyControlIsSafe,
-          ),
-        ) -
-        Number(
-          observationHasSafePasskey(
-            left,
-            passkeyCandidates,
-            passkeyControlIsSafe,
-          ),
-        );
-      return safeDelta === 0
-        ? observationPriority(right) - observationPriority(left)
-        : safeDelta;
-    })
-    .slice(0, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS);
+  });
+  return takeRankedPasskeyObservations(ranked);
 }
 
 export function appendIndependentPasskeyOnlyWorkflows<
@@ -160,28 +117,110 @@ export function appendIndependentPasskeyOnlyWorkflows<
     });
   });
   const passkeyCandidates = findPasskeyControls(document);
-  return [...fieldBearing, ...independent]
+  const ranked = [...fieldBearing, ...independent].map((observation) => ({
+    observation,
+    safe: observationHasSafePasskey(
+      observation,
+      passkeyCandidates,
+      passkeyControlIsSafe,
+    ),
+    priority: observationPriority(observation),
+  }));
+  return takeRankedPasskeyObservations(ranked);
+}
+
+function collectPasskeyOnlyScopes(
+  root: Document,
+  passkeyCandidates: PasskeyControlCandidate[],
+): PasskeyOnlyScope[] {
+  const passkeyForms = [
+    ...new Set(
+      passkeyCandidates.flatMap(({ control }) => {
+        if (
+          (control instanceof HTMLButtonElement ||
+            control instanceof HTMLInputElement) &&
+          control.form
+        ) {
+          return [control.form];
+        }
+        const owner = control.closest("form");
+        return owner instanceof HTMLFormElement ? [owner] : [];
+      }),
+    ),
+  ];
+  const scopes: PasskeyOnlyScope[] = passkeyForms.map((form) => ({
+    root,
+    formScope: {
+      kind: PasswordFormScopeKind.Owned,
+      owner: form,
+    },
+  }));
+  const formlessPasskeys = passkeyCandidates.filter(({ control }) => {
+    if (
+      control instanceof HTMLButtonElement ||
+      control instanceof HTMLInputElement
+    ) {
+      return !control.form;
+    }
+    return !(control.closest("form") instanceof HTMLFormElement);
+  });
+  const localPasskeyRoots = [
+    ...new Set(
+      formlessPasskeys.map(({ control }) =>
+        localUnownedPasskeyContainer({ field: control, root }),
+      ),
+    ),
+  ];
+  for (const localRoot of localPasskeyRoots) {
+    scopes.push({
+      root: localRoot,
+      formScope: {
+        kind: PasswordFormScopeKind.Unowned,
+      },
+    });
+  }
+  return scopes;
+}
+
+function takePreferredPasskeyOnlyScopes<Summary>(
+  scopes: PasskeyOnlyScope[],
+  passkeyCandidates: PasskeyControlCandidate[],
+  passkeyControlIsSafe: PasskeyControlIsSafe<
+    PasskeyOnlyWorkflowObservation<Summary>
+  >,
+  emptySummary: Summary,
+): PasskeyOnlyScope[] {
+  const ranked = scopes.map((scope) => {
+    const stub: PasskeyOnlyWorkflowObservation<Summary> = {
+      root: scope.root,
+      formScope: scope.formScope,
+      summary: emptySummary,
+    };
+    return {
+      scope,
+      safe: observationHasSafePasskey(
+        stub,
+        passkeyCandidates,
+        passkeyControlIsSafe,
+      ),
+    };
+  });
+  ranked.sort((left, right) => Number(right.safe) - Number(left.safe));
+  return ranked
+    .slice(0, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS)
+    .map((entry) => entry.scope);
+}
+
+function takeRankedPasskeyObservations<Observation>(
+  ranked: Array<RankedPasskeyObservation<Observation>>,
+): Observation[] {
+  return ranked
     .sort((left, right) => {
-      const safeDelta =
-        Number(
-          observationHasSafePasskey(
-            right,
-            passkeyCandidates,
-            passkeyControlIsSafe,
-          ),
-        ) -
-        Number(
-          observationHasSafePasskey(
-            left,
-            passkeyCandidates,
-            passkeyControlIsSafe,
-          ),
-        );
-      return safeDelta === 0
-        ? observationPriority(right) - observationPriority(left)
-        : safeDelta;
+      const safeDelta = Number(right.safe) - Number(left.safe);
+      return safeDelta === 0 ? right.priority - left.priority : safeDelta;
     })
-    .slice(0, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS);
+    .slice(0, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS)
+    .map((entry) => entry.observation);
 }
 
 function observationHasSafePasskey<

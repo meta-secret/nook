@@ -713,6 +713,54 @@ describe('authentication observation bounds', () => {
     expect(liveApprovedAuthenticationWorkflow(liveRequest)).toBe(false)
   })
 
+  test('keeps a password login when OTP forms with vetoed submitters fill the bound', () => {
+    const otpForms = Array.from(
+      { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS },
+      (_, index) =>
+        `<form id="otp-${index}" action="/otp"><input autocomplete="one-time-code" inputmode="numeric" /><button type="submit">Delete account</button></form>`,
+    ).join('')
+    document.body.innerHTML = `
+      ${otpForms}
+      <form id="password-login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS)
+    expect(
+      observations.some(
+        (observation) => ownedFormId(observation) === 'password-login',
+      ),
+    ).toBe(true)
+  })
+
+  test('summarizes a bounded passkey-only candidate set before ranking', () => {
+    const decoys = Array.from(
+      { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS + 8 },
+      (_, index) =>
+        `<form id="manage-${index}" action="/passkeys"><button type="button">Add passkey</button></form>`,
+    ).join('')
+    document.body.innerHTML = `
+      ${decoys}
+      <form id="passkey-login" action="/login">
+        <button type="button">Sign in with a passkey</button>
+      </form>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations.length).toBeLessThanOrEqual(
+      MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
+    )
+    expect(
+      observations.some(
+        (observation) => ownedFormId(observation) === 'passkey-login',
+      ),
+    ).toBe(true)
+  })
+
   test('keeps a progressing password login when non-progressing OTP forms fill the bound', () => {
     const otpForms = Array.from(
       { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS },

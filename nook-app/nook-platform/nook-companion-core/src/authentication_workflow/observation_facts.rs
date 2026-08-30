@@ -305,6 +305,39 @@ mod tests {
     }
 
     #[test]
+    fn rust_rejected_otp_controls_do_not_keep_progressing_form_priority() {
+        let otp = AuthenticationPageObservationFacts {
+            fields: AuthenticationFieldObservationFacts {
+                one_time_code_field_count: 1,
+                ..Default::default()
+            },
+            detailed_advance_control: AuthenticationDetailedAdvanceControlObservation::observed(
+                AuthenticationAdvanceControlObservation {
+                    actionability: PageControlActionability::Actionable,
+                    ownership: PageControlOwnership::OwnedForm,
+                    semantics: PageControlSemantics::SemanticSubmit,
+                    authentication_username: AuthenticationUsernameEvidence::Absent,
+                    password_field_count: 0,
+                    new_password_field_count: 0,
+                    one_time_code_field_count: 1,
+                    semantic_submit_control_count: 1,
+                    source_origin: "https://example.test".to_owned(),
+                    form_identity: "otp".to_owned(),
+                    destination_identity: "https://example.test/otp".to_owned(),
+                    label: "Delete account".to_owned(),
+                    machine_identity: "delete-account".to_owned(),
+                },
+            ),
+            ..Default::default()
+        };
+        assert_eq!(
+            otp.form_priority(),
+            AuthenticationFormObservationPriority::default()
+        );
+        assert!(password_login().form_priority() > otp.form_priority());
+    }
+
+    #[test]
     fn unbounded_high_priority_facts_are_isolated_before_form_selection() {
         let valid_priority = password_login().form_priority();
         let mut unbounded = password_login();
