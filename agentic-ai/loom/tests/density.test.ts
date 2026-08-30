@@ -42,6 +42,29 @@ describe('lintProseDensity', () => {
     expect(lintProseDensity(lintArgs)).toEqual([]);
   });
 
+  test('checks normative prose after labeled output in one blockquote', () => {
+    const content = [
+      '> Command output: includes one actor and another actor and a branch and a',
+      '> credential and a failure mode and a recovery path and enough quoted detail',
+      '> to exceed the density threshold without becoming authored Cortex prose.',
+      '>',
+      '> Log excerpt: includes one request and another request and a retry and a',
+      '> timeout and a failure and a recovery and enough operational detail to',
+      '> exceed the density threshold without becoming authored Cortex prose.',
+      '>',
+      '> **Requirement:** The workflow requires the successor branch and the open',
+      '> pull request and the predecessor metadata and the frozen base SHA and the',
+      '> containment proof and the delivery state before any claim can proceed.',
+    ].join('\n');
+    const lintArgs: LintProseDensityArgs = {
+      filePath: 'mixed-callout.md',
+      content,
+    };
+    const findings = lintProseDensity(lintArgs);
+    expect(findings.some((finding) => finding.line === 9)).toBe(true);
+    expect(findings.some((finding) => finding.line < 9)).toBe(false);
+  });
+
   test('checks normative blockquote callouts', () => {
     const content = [
       '> **Warning:** The workflow requires the successor branch and the open pull',

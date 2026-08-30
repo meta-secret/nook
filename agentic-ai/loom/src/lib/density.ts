@@ -1,4 +1,4 @@
-import type { Blockquote, Nodes, Paragraph, TableCell } from 'mdast';
+import type { Nodes, Paragraph, TableCell } from 'mdast';
 import remarkGfm from 'remark-gfm';
 import remarkParse from 'remark-parse';
 import { unified } from 'unified';
@@ -53,8 +53,8 @@ type InspectMarkdownNodeArgs = {
 };
 
 function inspectMarkdownNode(args: InspectMarkdownNodeArgs): void {
-  if (args.node.type === 'blockquote' && isQuotedOutput(args.node)) return;
   if (args.node.type === 'paragraph' || args.node.type === 'tableCell') {
+    if (args.node.type === 'paragraph' && isQuotedOutput(args.node)) return;
     if (args.node.type === 'tableCell' && isIndexPointerCell(args.node)) return;
     const proseBlockArgs: InspectProseBlockArgs = {
       filePath: args.filePath,
@@ -71,8 +71,8 @@ function inspectMarkdownNode(args: InspectMarkdownNodeArgs): void {
   }
 }
 
-function isQuotedOutput(blockquote: Blockquote): boolean {
-  const text = markdownText(blockquote).replace(/\s+/gu, ' ').trim();
+function isQuotedOutput(paragraph: Paragraph): boolean {
+  const text = markdownText(paragraph).replace(/\s+/gu, ' ').trim();
   return /^(?:command output|log (?:excerpt|output)|stderr|stdout)\s*:/iu.test(
     text,
   );
