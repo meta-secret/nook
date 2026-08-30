@@ -13,11 +13,10 @@ type PendingAuthenticatorPicker = {
   description: HTMLParagraphElement
   continueButton: HTMLButtonElement
   timeoutId: number
-}
-
-type PendingLoginPicker = PendingAuthenticatorPicker & {
   approval: AuthenticationWorkflowApproval
 }
+
+type PendingLoginPicker = PendingAuthenticatorPicker
 export enum ScanScheduleKind {
   Idle = 'idle',
   Scheduled = 'scheduled',

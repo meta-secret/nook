@@ -26,6 +26,7 @@ import {
   proposePasskeyWithNook,
 } from './login-passkey-actions'
 import {
+  AuthenticatorPickerKind,
   LoginPickerKind,
   WidgetHostKind,
   WidgetWorkflowKeyKind,
@@ -64,6 +65,9 @@ export function renderEnrollmentWidget({
   ].join(':')
   if (pickerState.login.kind === LoginPickerKind.Open) {
     cancelPendingLoginPickerRequest()
+  }
+  if (pickerState.authenticator.kind === AuthenticatorPickerKind.Open) {
+    cancelPendingAuthenticatorPickerRequest()
   }
   if (
     widgetState.host.kind === WidgetHostKind.Attached &&
@@ -137,11 +141,11 @@ export function renderWidget({
     vaultConnection.connected ? 'connected' : 'disconnected',
     vaultConnection.vaultName ?? '',
   ].join(':')
+  const currentApproval: AuthenticationWorkflowApproval = {
+    workflowKey,
+    facts,
+  }
   if (pickerState.login.kind === LoginPickerKind.Open) {
-    const currentApproval: AuthenticationWorkflowApproval = {
-      workflowKey,
-      facts,
-    }
     const approvalPair: Parameters<
       typeof authenticationWorkflowApprovalsMatch
     >[0] = {
@@ -150,6 +154,17 @@ export function renderWidget({
     }
     if (!authenticationWorkflowApprovalsMatch(approvalPair)) {
       cancelPendingLoginPickerRequest()
+    }
+  }
+  if (pickerState.authenticator.kind === AuthenticatorPickerKind.Open) {
+    const approvalPair: Parameters<
+      typeof authenticationWorkflowApprovalsMatch
+    >[0] = {
+      approved: pickerState.authenticator.request.approval,
+      current: currentApproval,
+    }
+    if (!authenticationWorkflowApprovalsMatch(approvalPair)) {
+      cancelPendingAuthenticatorPickerRequest()
     }
   }
   if (

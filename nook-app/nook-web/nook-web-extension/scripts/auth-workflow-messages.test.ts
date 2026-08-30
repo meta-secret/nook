@@ -76,6 +76,25 @@ describe('authentication workflow snapshot messages', () => {
     ).toBe(false)
   })
 
+  test('invalidates an authenticator picker across OTP challenge facts', () => {
+    const approvedFacts = validMessage.payload.observations[0]
+    expect(
+      authenticationWorkflowApprovalsMatch({
+        approved: { workflowKey: 'login:otp', facts: approvedFacts },
+        current: {
+          workflowKey: 'login:otp',
+          facts: {
+            ...approvedFacts,
+            ceremony: {
+              ...approvedFacts.ceremony,
+              oneTimeCodeHandlerSignal: 'onchange=submitNewChallenge()',
+            },
+          },
+        },
+      }),
+    ).toBe(false)
+  })
+
   test('accepts bounded structural page observations', () => {
     expect(isAuthenticationWorkflowSnapshotMessage(validMessage)).toBe(true)
   })

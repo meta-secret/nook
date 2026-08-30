@@ -921,6 +921,26 @@ describe('website one-time-code fields', () => {
     ).toBe('')
   })
 
+  test('does not trust aria-disabled on a native GET sibling', () => {
+    document.body.innerHTML = `
+      <form method="post" id="login" action="/auth/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+        <button type="submit" formmethod="get" aria-disabled="true">Search</button>
+      </form>
+    `
+    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: { username: 'vault-user', password: 'vault-pass' },
+      kind: PasswordFormQueryKind.Root,
+      root: document,
+    }
+    expect(fillLoginCredentials(fillArgs)).toBe(false)
+    expect(
+      document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
+    ).toBe('')
+  })
+
   test('fills a POST login whose type-button advance control carries leftover GET formmethod', () => {
     document.body.innerHTML = `
       <form method="post" id="login" action="/auth/login">

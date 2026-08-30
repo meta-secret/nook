@@ -460,13 +460,29 @@ export function formBlocksCredentialDisclosure(form: HTMLFormElement): boolean {
   return submissionMethodBlocksCredentialDisclosure(formSubmissionMethod(form));
 }
 
+function controlIsNativelyDisabledOrInert(control: HTMLElement): boolean {
+  if (
+    (controlHasDisabledProperty(control) && control.disabled) ||
+    isDisabledByAncestorFieldset(control)
+  ) {
+    return true;
+  }
+  let element: HTMLElement = control;
+  for (;;) {
+    if (element.hasAttribute("inert") || element.inert) return true;
+    const parent = element.parentElement;
+    if (!(parent instanceof HTMLElement)) return false;
+    element = parent;
+  }
+}
+
 export function formHasGetMethodSubmitter(form: HTMLFormElement): boolean {
   return Array.from(
     form.ownerDocument.querySelectorAll<HTMLElement>(
       semanticSubmitControlSelector,
     ),
   ).some((control) => {
-    if (controlIsInert(control)) return false;
+    if (controlIsNativelyDisabledOrInert(control)) return false;
     const owner = associatedAuthenticationForm(control);
     return (
       owner.kind === PasswordFormScopeKind.Owned &&
