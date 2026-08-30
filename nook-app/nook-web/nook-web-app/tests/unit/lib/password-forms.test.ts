@@ -7,7 +7,6 @@ import {
   PasswordFormScopeKind,
   submitLoginForm,
   summarizeAuthenticationWorkflowForms,
-  summarizePasswordForms,
   type PasswordFormObservation,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 
