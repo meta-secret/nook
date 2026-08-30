@@ -138,16 +138,11 @@ type AuthenticationObservationFactsRequest = {
   backupCodesHint: boolean;
 };
 
-type NativeInputValueMutation = {
-  input: HTMLInputElement;
-  value: string;
-};
+type NativeInputValueMutation = { input: HTMLInputElement; value: string };
 
 type PasswordFormSummaryRequest = PasswordFormScopeQuery;
 
-export type OneTimeCodeFillRequest = PasswordFormScopeQuery & {
-  code: string;
-};
+export type OneTimeCodeFillRequest = PasswordFormScopeQuery & { code: string };
 
 export type LoginCredentialsFillRequest = PasswordFormScopeQuery & {
   credentials: LoginCredentials;
@@ -762,6 +757,10 @@ export function fillLoginCredentials(
     return true;
   }
   const passwordField = passwordFields[0];
+  const approvedPasswordForm = passwordField.form;
+  const passwordFieldRemainsEligible = (): boolean =>
+    passwordField.form === approvedPasswordForm &&
+    findPasswordFields(passwordFieldQuery(request)).includes(passwordField);
   function formBlocksFill(form: HTMLFormElement): boolean {
     const advanceRequest: OwnedAdvanceControlRequest = { request, form };
     const disclosureRequest: Parameters<
@@ -772,25 +771,25 @@ export function fillLoginCredentials(
     };
     return selectedSubmitterBlocksCredentialDisclosure(disclosureRequest);
   }
-  if (passwordField.form && formBlocksFill(passwordField.form)) {
-    return false;
+  function passwordFieldBlocksFill(): boolean {
+    if (!passwordFieldRemainsEligible()) return true;
+    return approvedPasswordForm ? formBlocksFill(approvedPasswordForm) : false;
   }
+  if (passwordFieldBlocksFill()) return false;
   if (usernameField) {
     const nookTypedArgs0_21: Parameters<typeof setNativeInputValue>[0] = {
       input: usernameField,
       value: request.credentials.username,
     };
     setNativeInputValue(nookTypedArgs0_21);
-    if (passwordField.form && formBlocksFill(passwordField.form)) {
-      return false;
-    }
+    if (passwordFieldBlocksFill()) return false;
   }
   const nookTypedArgs0_22: Parameters<typeof setNativeInputValue>[0] = {
     input: passwordField,
     value: request.credentials.password,
   };
   setNativeInputValue(nookTypedArgs0_22);
-  if (passwordField.form && formBlocksFill(passwordField.form)) {
+  if (passwordFieldBlocksFill()) {
     nookTypedArgs0_22.value = "";
     setNativeInputValue(nookTypedArgs0_22);
     return false;

@@ -25,6 +25,37 @@ afterEach(() => {
 })
 
 describe('passkey control detection', () => {
+  test('keeps a safe login after POST forms with actionable GET siblings', () => {
+    const decoys = Array.from(
+      { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS * 2 },
+      (_, index) => `
+        <form method="post" id="decoy-${index}" action="/login">
+          <input autocomplete="username" />
+          <input type="password" autocomplete="current-password" />
+          <button type="submit">Sign in</button>
+          <button type="submit" formmethod="get">Search</button>
+        </form>`,
+    ).join('')
+    document.body.innerHTML = `${decoys}
+      <form method="post" id="safe-login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>`
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations.length).toBeLessThanOrEqual(
+      MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
+    )
+    expect(
+      observations.some(
+        (observation) =>
+          observation.formScope.kind === PasswordFormScopeKind.Owned &&
+          observation.formScope.owner.id === 'safe-login',
+      ),
+    ).toBe(true)
+  })
+
   test('rejects a newly safe passkey candidate without approved account facts', () => {
     document.body.innerHTML = `
       <form method="post" id="password-login" action="/auth/login">

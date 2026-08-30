@@ -26,6 +26,7 @@ import {
   controlSubmissionMethod,
   countedSemanticSubmitControls,
   formBlocksCredentialDisclosure,
+  formHasGetMethodSubmitter,
   formHasPostMethodSubmitter,
   formHasRustClassifiableAdvanceControl,
   MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
@@ -456,6 +457,7 @@ function cheapWorkflowLooksProgressing<
     return unownedScopeLooksProgressing(observation);
   }
   return (
+    !formHasGetMethodSubmitter(observation.formScope.owner) &&
     (!formBlocksCredentialDisclosure(observation.formScope.owner) ||
       formHasPostMethodSubmitter(observation.formScope.owner)) &&
     formHasRustClassifiableAdvanceControl(observation.formScope.owner)

@@ -213,6 +213,36 @@ describe('authentication field detection', () => {
     ).toBe('')
   })
 
+  test.each([
+    ['input', 'reassign'],
+    ['change', 'disassociate'],
+    ['input', 'retag'],
+  ] as const)(
+    'does not disclose a password after username %s handlers %s its field',
+    (eventName, mutation) => {
+      document.body.innerHTML = `
+        <form method="post" id="approved"><button type="submit">Sign in</button></form>
+        <form method="post" id="other"></form>
+        <input id="username" autocomplete="username" form="approved" />
+        <input id="password" type="password" autocomplete="current-password" form="approved" />
+      `
+      const username = document.querySelector('#username') as HTMLInputElement
+      const password = document.querySelector('#password') as HTMLInputElement
+      username.addEventListener(eventName, () => {
+        if (mutation === 'reassign') password.setAttribute('form', 'other')
+        if (mutation === 'disassociate') password.removeAttribute('form')
+        if (mutation === 'retag') password.type = 'text'
+      })
+      const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+        credentials: { username: 'vault-user', password: 'vault-pass' },
+        kind: PasswordFormQueryKind.Root,
+        root: document,
+      }
+      expect(fillLoginCredentials(fillArgs)).toBe(false)
+      expect(password.value).toBe('')
+    },
+  )
+
   test('transports an external form-associated passkey control with owned-form scope', () => {
     document.body.innerHTML = `
       <form method="post" id="login" action="/login">
