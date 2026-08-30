@@ -43,12 +43,18 @@ Use this skill whenever a request touches code, scripts, infrastructure, tests, 
     records. It does not select or admit records or snapshot or change
     frontiers.
 14. Apply the root [team worker contract](../../AGENTS.md#team-worker-contract).
-15. Follow [subagent delegation](../workflows/subagent-delegation.md) for
+15. Resolve the task's dynamic skill paths from its resource claims and named
+    domain-specific skills.
+    - A write claim that overlaps `.cortex/**` adds the canonical Cortex
+      authoring bundle.
+    - A team-specific authoring skill adds only domain policy.
+    - It does not wrap or duplicate the canonical bundle.
+16. Follow [subagent delegation](../workflows/subagent-delegation.md) for
    dispatch and integration.
-16. Route cross-team dependencies through Gizmo.
-17. Require each team to implement its own tests, Cortex updates, and review
+17. Route cross-team dependencies through Gizmo.
+18. Require each team to implement its own tests, Cortex updates, and review
    fixes for its assigned task.
-18. Follow [Team-oriented development](../workflows/team-oriented-development.md)
+19. Follow [Team-oriented development](../workflows/team-oriented-development.md)
    for team-specific execution and validation.
 
 When a unit changes a security boundary, name security acceptance separately
@@ -65,9 +71,11 @@ An expertise worker loads only the provider team's context. Its task includes
 one named, frozen consumer contract as read-only metadata. It does not load the
 consumer team's graph, and it cannot redefine the functional contract.
 
-A functional owner may load a foreign-team skill when its selected authority
-names that skill as required engineering policy. The skill remains read-only.
-Applying it to owner-written code does not create an expertise provider.
+Loom automatically adds the canonical Cortex authoring bundle when the task's
+write claims overlap `.cortex/**`. A functional owner may load another
+foreign-team skill when its selected authority names that skill as required
+engineering policy. Skills remain read-only policy. Applying them to
+owner-written files does not create an expertise provider.
 
 ## Scope
 

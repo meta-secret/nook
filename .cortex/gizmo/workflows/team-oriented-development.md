@@ -84,6 +84,11 @@ These are entry points, not bulk context manifests.
 - It does not preload the rest of its team corpus.
 - It does not load shared or foreign-team documents unless the task contract
   names that dependency.
+- Loom adds the canonical Cortex authoring bundle when the task's write claims
+  overlap `.cortex/**`.
+- Loom composes that bundle with the smallest selected team-specific skills.
+- A team-specific authoring skill contains only domain-specific additions. It
+  does not wrap or duplicate a canonical authoring skill.
 - It may load a foreign-team skill read-only when a selected team authority
   names that skill as required engineering policy.
 - Skill consumption alone does not create an expertise provider.
@@ -91,6 +96,7 @@ These are entry points, not bulk context manifests.
 This workflow adds team-specific context to the universal worker contract:
 
 - exactly one task team identity;
+- a dynamic skill list resolved separately from that identity;
 - that team's entry points and task-relevant authorities;
 - team-owned review and validation findings; and
 - for an expertise task, the provider-team identity plus the functional owner,

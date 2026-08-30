@@ -33,6 +33,21 @@ Agent count never determines PR count.
   [major architectural initiative rule](../../teams/ai/dynamic-skills/self-improvement.md#user-authority-for-major-architectural-initiatives)
   when a proposed direction is broad, novel, or cross-cutting.
 
+## Terminal condition
+
+An implementation mission continues through the complete delivery procedure.
+A worker handoff, local commit, pushed branch, or open pull request is an
+intermediate state.
+
+Stop before merge only when:
+
+- the user explicitly limited the request to an intermediate state;
+- the user prohibited the required external mutation; or
+- a concrete blocker prevents further progress.
+
+Report the exact blocker in the final case. Never report an intermediate state
+as completed delivery.
+
 ## Mission procedure
 
 1. **Interpret the mission.**
@@ -196,4 +211,5 @@ Delivery is complete only when:
 - actionable review threads are resolved;
 - all required team and security verdicts are satisfied;
 - `task pr:ready PR=<number>` succeeds; and
+- the pull request is squash-merged and remote state confirms the merge; and
 - Workbench completion records are published.

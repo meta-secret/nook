@@ -79,8 +79,9 @@ worker attempt only after Gizmo Prime freezes its exact starting frontier and
 admission-authorizes that task attempt. A logical task may have sequential
 retry attempts with distinct IDs, but never more than one concurrently active
 attempt. Each worker receives one team identity, one task attempt, that
-frontier, allowed files, forbidden files, and required proof. Team identity
-belongs to the task. It is not a singular identity for the mission.
+frontier, allowed files, forbidden files, required proof, and resolved skill
+paths. Team identity belongs to the task. It is not a singular identity for
+the mission.
 
 Gizmo Prime may inspect the repository and subagent evidence. Gizmo Prime may
 integrate verified handoff commits and control shared delivery state. Gizmo
@@ -91,6 +92,27 @@ behalf of a team subagent.
 If the active harness cannot create or start a required worker attempt after
 Gizmo Prime admission-authorizes its task record, Gizmo Prime reports the
 blocker. Gizmo Prime must not silently take over the task.
+
+## Implementation mission terminal condition
+
+An implementation request is a complete delivery mission unless the user
+explicitly selects any intermediate terminal state, including local changes, a
+committed handoff, a pushed branch, or an open pull request, or prohibits a
+required external delivery mutation.
+
+- A Team Agent's local commit completes only that worker task.
+- Gizmo Prime must not present a plan, working-tree change, commit, push, or
+  open pull request as completion of the user-visible mission.
+- Gizmo Prime creates the pull request and monitors review and validation.
+- It routes actionable findings to the responsible team and integrates each
+  verified fix.
+- It obtains fresh exact-head evidence after every replacement push.
+- It runs repository readiness, squash-merges the ready pull request, verifies
+  the remote merged state, and publishes required Workbench completion records.
+- Missing authority, unavailable workers, or incomplete evidence make the
+  mission blocked. They never make it complete.
+- Gizmo Prime must not narrow an active delivery plan to a local handoff merely
+  because implementation is committed.
 
 ### Integrated verdict
 
@@ -126,6 +148,20 @@ Gizmo supplies a bounded task contract for that identity.
   acceptance criteria.
 - It gives the worker only its own team entry points and task-relevant
   authorities.
+- Loom resolves the task's dynamic skill paths separately from its team
+  identity.
+- A write claim that overlaps `.cortex/**` automatically requires the canonical
+  Cortex authoring bundle:
+  - `teams/ai/dynamic-skills/cortex-writer.md`;
+  - `teams/ai/dynamic-skills/cortex-article-structure/SKILL.md`; and
+  - `teams/ai/dynamic-skills/cortex-consistency.md`.
+- Before dispatching a team-owned Cortex writing task, Gizmo includes a typed
+  `cortexAuthoring` grant in the immutable Loom generation. Canonical admission
+  validates its candidate batch, lease, exact frontier, team-owned writes, and
+  any exact serialized shared-file grants before supplying context paths to the
+  harness.
+- Team-specific authoring skills contain only domain-specific additions. They
+  must not wrap, copy, or rename a canonical Cortex authoring skill.
 - It requires an isolated workspace and verified handoff for write-capable
   work.
 - The worker applies any task-scoped formatter named by its contract and owns
@@ -214,9 +250,11 @@ Agents must keep Cortex retrieval proportional to their assigned work.
 2. Classify the request as Gizmo delivery control, AI, development core,
    security, SRE, web development, or shared integration.
 3. Load exactly one Gizmo or team `AGENTS.md` and its knowledge graph.
-4. Select the smallest set of documents that owns the task.
-5. Read only the relevant headings inside those documents.
-6. Stop loading Cortex when the assigned contract can be executed safely.
+4. Resolve dynamic skill paths from the task's claims and selected
+   domain-specific skills.
+5. Select the smallest set of documents that owns the task.
+6. Read only the relevant headings inside those documents.
+7. Stop loading Cortex when the assigned contract can be executed safely.
 
 The team assignment selects the context entry point:
 
@@ -241,11 +279,12 @@ The following behavior is prohibited:
 - using broad Cortex dumps when targeted search or one document is enough; and
 - retaining unrelated team material in a worker's task contract.
 
-A task-relevant team authority may name the smallest explicitly linked set of
-foreign-team skills as required read-only engineering policy. The functional
-owner may apply those skills to its own code without delegating implementation.
-An expertise contract is required only when the foreign team will change
-files.
+Loom automatically adds the canonical Cortex authoring bundle when a task's
+write claims overlap `.cortex/**`. A task-relevant team authority may add the
+smallest explicitly linked set of foreign-team skills as required read-only
+engineering policy. The functional owner may apply those skills to its own
+files without delegating implementation. An expertise contract is required
+only when the foreign team will change files.
 
 ## Multi-team requests
 

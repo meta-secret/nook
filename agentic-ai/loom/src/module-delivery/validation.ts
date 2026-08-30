@@ -5,7 +5,20 @@ import {
 } from '../agent-workflow/domain.ts';
 import type { TaskResourcePatternPair } from '../agent-workflow/domain.ts';
 import { MODULE_EXPERT_CATALOG } from '../module-experts/catalog.ts';
-import type { ModuleExpertProfile } from '../module-experts/catalog.ts';
+import {
+  cortexWriteAuthorized,
+  expectedParentOwnedExclusions,
+  isPureCortexTask,
+  validateCortexAuthoring as cortexAuthoringFindings,
+} from './cortex-authoring-validation.ts';
+import { validateModuleScope as moduleScopeFindings } from './module-scope-validation.ts';
+import { cortexContextPrecedence } from './cortex-context-topology.ts';
+import type { ModuleScopeValidationRequest } from './module-scope-validation.ts';
+import type {
+  CortexAuthoringValidationRequest,
+  CortexWriteAuthorizationRequest,
+  ParentOwnedExclusionsRequest,
+} from './cortex-authoring-validation.ts';
 import {
   decodeCompatibleModuleDeliveryPlan,
   moduleDeliveryPlanDigest,
@@ -17,13 +30,13 @@ import {
   MAX_MODULE_DELIVERY_CONCURRENCY,
   MAX_MODULE_DELIVERY_NODES,
   REQUIRED_PARENT_OWNED_RESOURCES,
+  CORTEX_TEAM_WRITER_EXPERT,
   ModuleDeliveryBaselineKind,
   ModuleDeliveryCompatibilityStatus,
   ModuleDeliveryExecutionPrecedenceReason,
   ModuleDeliveryIssueCode,
   ModuleDeliveryTaskKind,
   ModuleDeliveryValidationStatus,
-  moduleDeliveryTaskTeam,
 } from './domain.ts';
 import type {
   ModuleDeliveryEdgeContract,
@@ -62,22 +75,6 @@ type UniqueListRequest = {
   readonly state: ValidationState;
   readonly path: string;
   readonly values: readonly string[];
-};
-
-type ModuleScopeRequest = {
-  readonly state: ValidationState;
-  readonly path: string;
-  readonly node: ModuleDeliveryNodeV2;
-  readonly profile: ModuleExpertProfile;
-};
-
-type ResourceClaimScopeRequest = {
-  readonly claim: string;
-  readonly moduleRoot: string;
-};
-
-type ProfileProtectedWriteRequest = ModuleScopeRequest & {
-  readonly claim: string;
 };
 
 type ClaimPair = {
@@ -262,7 +259,11 @@ function validateNodes(state: ValidationState): void {
     const profile = MODULE_EXPERT_CATALOG.find(
       (entry) => entry.name === node.expert,
     );
-    if (!profile) {
+    const pureCortexTask = isPureCortexTask(node);
+    if (
+      !profile &&
+      !(pureCortexTask && node.expert === CORTEX_TEAM_WRITER_EXPERT)
+    ) {
       const request: IssueRequest = {
         state,
         code: ModuleDeliveryIssueCode.UnknownExpert,
@@ -270,9 +271,16 @@ function validateNodes(state: ValidationState): void {
         message: `Expert ${node.expert} is not registered.`,
       };
       issue(request);
-    } else {
-      const scopeRequest: ModuleScopeRequest = { state, path, node, profile };
-      validateModuleScope(scopeRequest);
+    } else if (profile) {
+      const scopeRequest: ModuleScopeValidationRequest = {
+        path,
+        node,
+        profile,
+      };
+      for (const finding of moduleScopeFindings(scopeRequest)) {
+        const findingRequest: IssueRequest = { state, ...finding };
+        issue(findingRequest);
+      }
     }
     const nodeRequest: NodeValidationRequest = { state, path, node };
     validateOwnership(nodeRequest);
@@ -281,6 +289,11 @@ function validateNodes(state: ValidationState): void {
     validateTaskKind(nodeRequest);
     validateBaseline(nodeRequest);
     validateAgentDepth(nodeRequest);
+    const cortexRequest: CortexAuthoringValidationRequest = { node, path };
+    for (const finding of cortexAuthoringFindings(cortexRequest)) {
+      const findingRequest: IssueRequest = { state, ...finding };
+      issue(findingRequest);
+    }
     validateClaims(nodeRequest);
     validateExclusions(nodeRequest);
   }
@@ -319,86 +332,8 @@ function validateOwnership(request: NodeValidationRequest): void {
   }
 }
 
-function validateModuleScope(request: ModuleScopeRequest): void {
-  const teamRequest = {
-    kind: request.node.kind,
-    moduleRoot: request.node.moduleRoot,
-    expertContextPaths: request.profile.canonicalContextPaths,
-  };
-  const expectedTeam = moduleDeliveryTaskTeam(teamRequest);
-  if (request.node.team !== expectedTeam) {
-    const issueRequest: IssueRequest = {
-      state: request.state,
-      code: ModuleDeliveryIssueCode.TeamOwnershipMismatch,
-      path: `${request.path}.team`,
-      message: `${request.node.taskId} requires task team ${expectedTeam}.`,
-    };
-    issue(issueRequest);
-  }
-  if (!request.profile.moduleRoots.includes(request.node.moduleRoot)) {
-    const issueRequest: IssueRequest = {
-      state: request.state,
-      code: ModuleDeliveryIssueCode.ModuleOwnershipMismatch,
-      path: `${request.path}.moduleRoot`,
-      message: `${request.node.moduleRoot} is not a canonical module root for ${request.node.expert}.`,
-    };
-    issue(issueRequest);
-  }
-  for (const claim of request.node.resources.write) {
-    const scopeRequest: ResourceClaimScopeRequest = {
-      claim,
-      moduleRoot: request.node.moduleRoot,
-    };
-    if (!claimIsInsideModuleRoot(scopeRequest)) {
-      const issueRequest: IssueRequest = {
-        state: request.state,
-        code: ModuleDeliveryIssueCode.WriteScopeMismatch,
-        path: `${request.path}.resources.write`,
-        message: `Write ${claim} escapes canonical module root ${request.node.moduleRoot}.`,
-      };
-      issue(issueRequest);
-    }
-    const protectedRequest: ProfileProtectedWriteRequest = {
-      ...request,
-      claim,
-    };
-    validateProfileProtectedWrite(protectedRequest);
-  }
-}
-
-function validateProfileProtectedWrite(
-  request: ProfileProtectedWriteRequest,
-): void {
-  const generatedPaths = request.profile.generatedScopePaths.map(
-    (scope) => scope.path,
-  );
-  const protectedPaths = [...request.profile.excludedPaths, ...generatedPaths];
-  for (const protectedPath of protectedPaths) {
-    const pair: TaskResourcePatternPair = {
-      first: request.claim,
-      second: `${protectedPath}/**`,
-    };
-    if (taskResourcePatternsOverlap(pair)) {
-      const issueRequest: IssueRequest = {
-        state: request.state,
-        code: ModuleDeliveryIssueCode.WriteScopeMismatch,
-        path: `${request.path}.resources.write`,
-        message: `Write ${request.claim} overlaps expert-protected path ${protectedPath}.`,
-      };
-      issue(issueRequest);
-    }
-  }
-}
-
-function claimIsInsideModuleRoot(request: ResourceClaimScopeRequest): boolean {
-  return (
-    request.claim === request.moduleRoot ||
-    request.claim.startsWith(`${request.moduleRoot}/`)
-  );
-}
-
 function validateNodeLists(request: NodeValidationRequest): void {
-  const lists = [
+  const lists: readonly (readonly [string, readonly string[]])[] = [
     [`${request.path}.dependencies`, request.node.dependencies],
     [`${request.path}.resources.read`, request.node.resources.read],
     [`${request.path}.resources.write`, request.node.resources.write],
@@ -412,6 +347,19 @@ function validateNodeLists(request: NodeValidationRequest): void {
     ],
     [`${request.path}.acceptance.commands`, request.node.acceptance.commands],
     [`${request.path}.acceptance.evidence`, request.node.acceptance.evidence],
+    ...(request.node.kind === ModuleDeliveryTaskKind.Write &&
+    request.node.cortexAuthoring
+      ? [
+          [
+            `${request.path}.cortexAuthoring.selectedSkillPaths`,
+            request.node.cortexAuthoring.selectedSkillPaths,
+          ] as const,
+          [
+            `${request.path}.cortexAuthoring.sharedWriteClaims`,
+            request.node.cortexAuthoring.sharedWriteClaims,
+          ] as const,
+        ]
+      : []),
   ] as const;
   for (const [path, values] of lists) {
     const uniqueRequest: UniqueListRequest = {
@@ -654,6 +602,15 @@ function validateClaims(request: NodeValidationRequest): void {
         second: protectedClaim,
       };
       if (taskResourcePatternsOverlap(pair)) {
+        const authorizationRequest: CortexWriteAuthorizationRequest = {
+          node: request.node,
+          claim: write,
+        };
+        if (
+          protectedClaim === '.cortex/**' &&
+          cortexWriteAuthorized(authorizationRequest)
+        )
+          continue;
         const issueRequest: IssueRequest = {
           state: request.state,
           code: ModuleDeliveryIssueCode.ParentOwnedWrite,
@@ -682,7 +639,11 @@ function validateClaimList(request: ClaimListValidationRequest): void {
 
 function validateExclusions(request: NodeValidationRequest): void {
   const actual = [...request.node.parentOwnedExclusions].sort();
-  const expected = [...request.state.plan.parentOwnedResources].sort();
+  const exclusionRequest: ParentOwnedExclusionsRequest = {
+    plan: request.state.plan,
+    node: request.node,
+  };
+  const expected = [...expectedParentOwnedExclusions(exclusionRequest)].sort();
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
     const issueRequest: IssueRequest = {
       state: request.state,
@@ -887,6 +848,15 @@ function buildExecutionTopologyRequest(
         addExecutionConstraint(constraint);
       }
     }
+  }
+  for (const precedence of cortexContextPrecedence(state.plan)) {
+    const constraint = {
+      request,
+      predecessorTaskId: precedence.writerTaskId,
+      successorTaskId: precedence.consumerTaskId,
+      reason: ModuleDeliveryExecutionPrecedenceReason.ResourceConflict,
+    };
+    addExecutionConstraint(constraint);
   }
   return request;
 }

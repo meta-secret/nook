@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
 import {
+  auditGizmoCortexAuthority,
   auditTeamAgents,
   auditTeamAuthorities,
   auditTeamCortexAuthority,
@@ -94,6 +95,63 @@ describe('canonical Cortex team authority', () => {
     expect(
       auditTeamCortexAuthority(authorityRequest).map((finding) => finding.code),
     ).toContain('cortex-team-contract-semantic-drift');
+  });
+
+  test('rejects omission of automatic Cortex authoring context', async () => {
+    const source = await readFile(join(REPO_ROOT, '.cortex/AGENTS.md'), 'utf8');
+    const driftedSource = source.replace(
+      'A write claim that overlaps `.cortex/**` automatically requires the canonical\n  Cortex authoring bundle:',
+      'Cortex writing context is optional.',
+    );
+    const authorityRequest = { source: driftedSource };
+
+    expect(
+      auditTeamCortexAuthority(authorityRequest).map((finding) => finding.code),
+    ).toContain('cortex-team-contract-semantic-drift');
+  });
+
+  test('rejects drift in any canonical authoring bundle member', async () => {
+    const source = await readFile(join(REPO_ROOT, '.cortex/AGENTS.md'), 'utf8');
+    const driftedSource = source.replace(
+      '`teams/ai/dynamic-skills/cortex-consistency.md`.',
+      '`teams/ai/dynamic-skills/another-writer.md`.',
+    );
+    const authorityRequest = { source: driftedSource };
+
+    expect(
+      auditTeamCortexAuthority(authorityRequest).map((finding) => finding.code),
+    ).toContain('cortex-team-contract-semantic-drift');
+  });
+
+  test('rejects a local handoff as an implementation mission terminal', async () => {
+    const source = await readFile(join(REPO_ROOT, '.cortex/AGENTS.md'), 'utf8');
+    const driftedSource = source.replace(
+      "A Team Agent's local commit completes only that worker task.",
+      'A local commit completes the mission.',
+    );
+    const authorityRequest = { source: driftedSource };
+
+    expect(
+      auditTeamCortexAuthority(authorityRequest).map((finding) => finding.code),
+    ).toContain('cortex-team-contract-semantic-drift');
+  });
+
+  test('rejects Gizmo stopping at a committed handoff', async () => {
+    const source = await readFile(
+      join(REPO_ROOT, '.cortex/gizmo/AGENTS.md'),
+      'utf8',
+    );
+    const driftedSource = source.replace(
+      'It is not completion of the user-visible mission.',
+      'It completes the user-visible mission.',
+    );
+    const authorityRequest = { source: driftedSource };
+
+    expect(
+      auditGizmoCortexAuthority(authorityRequest).map(
+        (finding) => finding.code,
+      ),
+    ).toContain('cortex-gizmo-contract-semantic-drift');
   });
 
   test('does not require or treat vendor profile TOMLs as authority', async () => {
