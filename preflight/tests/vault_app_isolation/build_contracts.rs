@@ -375,7 +375,7 @@ fn scheduled_nightly_live_sync_is_retired() -> anyhow::Result<()> {
 fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
     let root = repository_root();
     for (path, invocation_count) in [
-        (".github/scripts/verify-wasm-gha-cache.sh", 3),
+        (".github/scripts/verify-wasm-gha-cache.sh", 4),
         (".github/scripts/with-healthy-buildkit.sh", 10),
         (".github/scripts/with-remote-buildkit.sh", 5),
         ("infra/tasks/bake-cache.yml", 14),
@@ -417,9 +417,9 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
         assert!(source.contains("unset BUILDX_BUILDER"));
         assert!(source.contains("unset DOCKER_HOST DOCKER_CONTEXT BUILDKIT_HOST"));
         assert!(source.contains("any(keys[]; explode | any(. > 127))"));
-        assert!(source.contains("(.key | ascii_downcase) != \"credsstore\""));
-        assert!(source.contains("(.key | ascii_downcase) != \"currentcontext\""));
-        assert!(source.contains("(.key | ascii_downcase) != \"credhelpers\""));
+        for rejected_key in ["credsstore", "currentcontext", "credhelpers", "proxies"] {
+            assert!(source.contains(&format!("(.key | ascii_downcase) != \"{rejected_key}\"")));
+        }
         assert!(source.contains(
             "ln -s \"$buildx_cli\" \"$trusted_docker_config/cli-plugins/docker-buildx\""
         ));
@@ -534,7 +534,7 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
         "case \"${NOOK_BUILDKIT_REMOTE:-}\" in",
         "\"Driver\":\"remote\"",
         "buildx use \"$builder\"",
-        "promotion_wrapper=(\"$repo_root/.github/scripts/with-healthy-buildkit.sh\")",
+        "\"$repo_root/.github/scripts/with-healthy-buildkit.sh\" \"$docker_cli\" buildx bake",
     ] {
         assert!(verifier.contains(required), "verifier missing {required}");
     }
@@ -645,14 +645,14 @@ fi
     fs::create_dir_all(&malicious_config)?;
     fs::write(
         malicious_config.join("config.json"),
-        "{\n\"\\u0063LIPLUGINSEXTRADIRS\"\n:\n[\"/tmp/untrusted\"],\n\"CrEdSsToRe\":\"untrusted\",\n\"CrEdHeLpErS\":{\"registry.dev.nokey.sh\":\"untrusted\"},\n\"auths\":{}\n}",
+        "{\n\"\\u0063LIPLUGINSEXTRADIRS\"\n:\n[\"/tmp/untrusted\"],\n\"CrEdSsToRe\":\"untrusted\",\n\"CrEdHeLpErS\":{\"registry.dev.nokey.sh\":\"untrusted\"},\n\"PrOxIeS\":{\"default\":{\"httpsProxy\":\"https://proxy.invalid\"}},\n\"auths\":{}\n}",
     )?;
     let sanitized_plugin = Command::new("bash")
         .arg(&wrapper)
         .args([
             "bash",
             "-c",
-            "grep -Fq '\"auths\": {}' \"$DOCKER_CONFIG/config.json\" && ! grep -Eqi 'currentcontext|clipluginsextradirs|u0063lipluginsextradirs|credsstore|credhelpers|untrusted' \"$DOCKER_CONFIG/config.json\"",
+            "grep -Fq '\"auths\": {}' \"$DOCKER_CONFIG/config.json\" && ! grep -Eqi 'currentcontext|clipluginsextradirs|u0063lipluginsextradirs|credsstore|credhelpers|proxies|proxy.invalid|untrusted' \"$DOCKER_CONFIG/config.json\"",
         ])
         .env("DOCKER_CONFIG", &malicious_config)
         .env("FAKE_DOCKER_LOG", &docker_log)

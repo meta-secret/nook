@@ -62,7 +62,7 @@ tasks:
               echo "trusted jq is unavailable in GitHub Actions" >&2
               exit 127
             fi
-            "$jq_cli" 'if any(keys[]; explode | any(. > 127)) then error("non-ASCII Docker config key") else with_entries(select((.key | ascii_downcase) != "currentcontext" and (.key | ascii_downcase) != "clipluginsextradirs" and (.key | ascii_downcase) != "credsstore" and (.key | ascii_downcase) != "credhelpers")) end' \
+            "$jq_cli" 'if any(keys[]; explode | any(. > 127)) then error("non-ASCII Docker config key") else with_entries(select((.key | ascii_downcase) != "currentcontext" and (.key | ascii_downcase) != "clipluginsextradirs" and (.key | ascii_downcase) != "credsstore" and (.key | ascii_downcase) != "credhelpers" and (.key | ascii_downcase) != "proxies")) end' \
               "$docker_config_source/config.json" >"$trusted_docker_config/config.json"
           else
             current_context="$(DOCKER_CONFIG="$docker_config_source" "$docker_cli" context show)"

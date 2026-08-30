@@ -52,7 +52,7 @@ prepare_trusted_docker() {
         echo "trusted jq is unavailable in GitHub Actions" >&2
         exit 127
       fi
-      "$jq_cli" 'if any(keys[]; explode | any(. > 127)) then error("non-ASCII Docker config key") else with_entries(select((.key | ascii_downcase) != "currentcontext" and (.key | ascii_downcase) != "clipluginsextradirs" and (.key | ascii_downcase) != "credsstore" and (.key | ascii_downcase) != "credhelpers")) end' \
+      "$jq_cli" 'if any(keys[]; explode | any(. > 127)) then error("non-ASCII Docker config key") else with_entries(select((.key | ascii_downcase) != "currentcontext" and (.key | ascii_downcase) != "clipluginsextradirs" and (.key | ascii_downcase) != "credsstore" and (.key | ascii_downcase) != "credhelpers" and (.key | ascii_downcase) != "proxies")) end' \
         "$docker_config_source/config.json" >"$trusted_docker_config/config.json"
     else
       current_context="$(DOCKER_CONFIG="$docker_config_source" "$docker_cli" context show)"
@@ -122,7 +122,6 @@ if [ "${NOOK_WASM_CACHE_PROMOTION_ENABLED:-}" = "1" ]; then
       exit 2
       ;;
   esac
-  promotion_wrapper=()
   case "${NOOK_BUILDKIT_REMOTE:-}" in
     1)
       case "${NOOK_BUILDKIT_ADDR:-}" in
@@ -137,26 +136,30 @@ if [ "${NOOK_WASM_CACHE_PROMOTION_ENABLED:-}" = "1" ]; then
         "$builder" "$builder" "$NOOK_BUILDKIT_ADDR" >"$BUILDX_CONFIG/instances/$builder"
       chmod 600 "$BUILDX_CONFIG/instances/$builder"
       "$docker_cli" buildx use "$builder"
+      "$docker_cli" buildx bake \
+        --progress=plain \
+        "${bake_args[@]}" \
+        --set "builder-wasm-deps-cache-proof.output=type=cacheonly" \
+        --set "builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref},mode=max,compression=zstd,force-compression=true,timeout=10m" \
+        --set "builder-wasm-deps-cache-proof.cache-from=type=registry,ref=${registry_host}/nook/remote-buildcache/nook-rust-wasm-deps-input-v3:fingerprint-${deps_fingerprint},ignore-error=true" \
+        --set "builder-wasm-deps-cache-proof.cache-from+=type=registry,ref=${registry_host}/nook/buildcache/nook-rust-wasm-source-v3:buildcache,ignore-error=true" \
+        builder-wasm-deps-cache-proof
       ;;
     '')
-      promotion_wrapper=("$repo_root/.github/scripts/with-healthy-buildkit.sh")
+      "$repo_root/.github/scripts/with-healthy-buildkit.sh" "$docker_cli" buildx bake \
+        --progress=plain \
+        "${bake_args[@]}" \
+        --set "builder-wasm-deps-cache-proof.output=type=cacheonly" \
+        --set "builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref},mode=max,compression=zstd,force-compression=true,timeout=10m" \
+        --set "builder-wasm-deps-cache-proof.cache-from=type=registry,ref=${registry_host}/nook/remote-buildcache/nook-rust-wasm-deps-input-v3:fingerprint-${deps_fingerprint},ignore-error=true" \
+        --set "builder-wasm-deps-cache-proof.cache-from+=type=registry,ref=${registry_host}/nook/buildcache/nook-rust-wasm-source-v3:buildcache,ignore-error=true" \
+        builder-wasm-deps-cache-proof
       ;;
     *)
       echo "NOOK_BUILDKIT_REMOTE must be 1 or unset" >&2
       exit 2
       ;;
   esac
-  # Publish from the already-selected node-local rootless BuildKit shard. A
-  # repair solve never imports the ref it is replacing: independent input and
-  # source refs may accelerate it, while a miss rebuilds from source.
-  "${promotion_wrapper[@]}" "$docker_cli" buildx bake \
-    --progress=plain \
-    "${bake_args[@]}" \
-    --set "builder-wasm-deps-cache-proof.output=type=cacheonly" \
-    --set "builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref},mode=max,compression=zstd,force-compression=true,timeout=10m" \
-    --set "builder-wasm-deps-cache-proof.cache-from=type=registry,ref=${registry_host}/nook/remote-buildcache/nook-rust-wasm-deps-input-v3:fingerprint-${deps_fingerprint},ignore-error=true" \
-    --set "builder-wasm-deps-cache-proof.cache-from+=type=registry,ref=${registry_host}/nook/buildcache/nook-rust-wasm-source-v3:buildcache,ignore-error=true" \
-    builder-wasm-deps-cache-proof
 fi
 
 bun "$repo_root/.github/scripts/verify-registry-cache-blobs.ts" "$cache_ref"
