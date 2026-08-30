@@ -303,6 +303,18 @@ function hasLoginContext(field: HTMLInputElement): boolean {
         ),
       )
     : [];
+  const advanceControlLabels = advanceControls.map((control) =>
+    [
+      control.textContent ?? "",
+      control.getAttribute("aria-label") ?? "",
+      control.getAttribute("title") ?? "",
+      control instanceof HTMLInputElement ? control.value : "",
+    ].join(" "),
+  );
+  const authenticationAdvanceControlLabel =
+    advanceControlLabels.find((label) =>
+      looks_like_login_advance_control_label(label),
+    ) ?? advanceControlLabels.join(" ");
   const doc = field.ownerDocument;
   const observation = new NookLoginContextObservation(
     form
@@ -314,13 +326,7 @@ function hasLoginContext(field: HTMLInputElement): boolean {
         ].join(" ")
       : "",
     ancestorIdentities,
-    advanceControls
-      .flatMap((control) => [
-        control.textContent ?? "",
-        control.getAttribute("aria-label") ?? "",
-        control instanceof HTMLInputElement ? control.value : "",
-      ])
-      .join(" "),
+    authenticationAdvanceControlLabel,
     `${doc.defaultView?.location?.pathname ?? ""} ${doc.defaultView?.location?.hostname ?? ""}`,
   );
   try {

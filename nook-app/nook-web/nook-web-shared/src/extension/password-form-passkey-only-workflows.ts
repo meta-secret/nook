@@ -70,6 +70,7 @@ type RankedPasskeyObservation<Observation> = {
   observation: Observation;
   safe: boolean;
   priority: number;
+  progressing: boolean;
 };
 
 type IndexedPasskeyCandidates = {
@@ -217,6 +218,7 @@ export function summarizePasskeyOnlyWorkflowForms<Summary>({
     observation: entry.observation,
     safe: entry.safe,
     priority: observationPriority(entry.observation),
+    progressing: entry.safe,
   }));
   return takeRankedPasskeyObservations(ranked);
 }
@@ -268,10 +270,15 @@ export function appendIndependentPasskeyOnlyWorkflows<
       passkeyCandidates,
       passkeyControlIsSafe,
     };
+    const progressionRequest: CheapWorkflowProgressionRequest<Observation> = {
+      observation,
+      passkeyControlIsSafe,
+    };
     return {
       observation,
       safe: observationHasSafePasskey(safetyRequest),
       priority: observationPriority(observation),
+      progressing: cheapWorkflowLooksProgressing(progressionRequest),
     };
   });
   const rankedRequest: TakeRankedWorkflowObservationsRequest<Observation> = {
@@ -701,9 +708,17 @@ function takeRankedWorkflowObservations<Observation>({
     selectedSet.add(entry.observation);
   };
   for (const entry of byPriority) {
-    if (fieldBearingSet.has(entry.observation)) {
+    if (fieldBearingSet.has(entry.observation) && entry.progressing) {
       take(entry);
       break;
+    }
+  }
+  if (selected.length === 0) {
+    for (const entry of byPriority) {
+      if (fieldBearingSet.has(entry.observation)) {
+        take(entry);
+        break;
+      }
     }
   }
   for (const entry of byPriority) {
