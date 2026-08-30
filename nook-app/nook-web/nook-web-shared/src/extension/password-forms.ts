@@ -369,7 +369,6 @@ function transportableControlObservation(
     ? [observation]
     : [];
 }
-
 type PasskeyCandidateSafetyRequest = {
   candidate: { control: HTMLElement; explicitlyMarked: boolean };
   observation: PasswordFormObservation;
@@ -550,6 +549,8 @@ export function authenticationPageObservationFacts({
     isPreferred: (candidate) =>
       candidate.observation.actionability === "actionable" &&
       authentication_passkey_control_candidate_is_safe(candidate),
+    isNextPreferred: (candidate) =>
+      candidate.observation.actionability === "actionable",
   };
   const boundedPasskeyCandidates =
     boundAuthenticationControlObservations(passkeyBoundRequest);

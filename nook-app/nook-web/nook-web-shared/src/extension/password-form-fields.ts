@@ -557,6 +557,13 @@ function localActivationControlLabel(control: Element): string {
     .trim();
 }
 
+const formlessTypeButtonSelector =
+  'button[type="button"], input[type="button"], [role="button"]';
+
+function containerHasTypeButtonControls(container: Element): boolean {
+  return Boolean(container.querySelector(formlessTypeButtonSelector));
+}
+
 function containerHasUnambiguousAuthenticationActivation(
   container: Element,
 ): boolean {
@@ -565,13 +572,46 @@ function containerHasUnambiguousAuthenticationActivation(
 
 function labeledTypeButtonActivationControls(container: Element): Element[] {
   return Array.from(
-    container.querySelectorAll(
-      'button[type="button"], input[type="button"], [role="button"]',
-    ),
+    container.querySelectorAll(formlessTypeButtonSelector),
   ).filter((control) =>
     looks_like_login_advance_control_label(
       localActivationControlLabel(control),
     ),
+  );
+}
+
+function containerHasSemanticSubmitControl(container: Element): boolean {
+  return Boolean(
+    container.querySelector(
+      'button[type="submit"], input[type="submit"], button:not([type])',
+    ),
+  );
+}
+
+function containerLooksLikeExplicitAuthSurface(container: Element): boolean {
+  return container.matches(
+    'dialog, [role="dialog"], [role="form"], [id*="login" i], [id*="signin" i], [id*="signup" i], [id*="reset" i], [class*="login" i], [class*="signin" i], [class*="signup" i], [class*="reset" i]',
+  );
+}
+
+function containerIsFormlessAuthenticationScope({
+  container,
+  field,
+}: TypeButtonPromotionScopeRequest): boolean {
+  if (containerHasSemanticSubmitControl(container)) return true;
+  const promotionRequest: TypeButtonPromotionScopeRequest = {
+    container,
+    field,
+  };
+  if (
+    containerHasUnambiguousAuthenticationActivation(container) &&
+    !typeButtonPromotionSwallowsForeignScope(promotionRequest)
+  ) {
+    return true;
+  }
+  return (
+    containerLooksLikeExplicitAuthSurface(container) &&
+    !containerHasTypeButtonControls(container)
   );
 }
 
@@ -606,39 +646,22 @@ export function nearestUnownedAuthContainer({
 }: UnownedAuthContainerRequest): ParentNode {
   let container = field.parentElement;
   while (container && container !== root) {
-    const explicitAuthContainer = container.matches(
-      'dialog, [role="dialog"], [role="form"], [id*="login" i], [id*="signin" i], [id*="signup" i], [id*="reset" i], [class*="login" i], [class*="signin" i], [class*="signup" i], [class*="reset" i]',
-    );
-    const hasSubmitControl = Boolean(
-      container.querySelector(
-        'button[type="submit"], input[type="submit"], button:not([type])',
-      ),
-    );
-    if (explicitAuthContainer || hasSubmitControl) {
-      return container;
-    }
-    const promotionRequest: TypeButtonPromotionScopeRequest = {
+    const scopeRequest: TypeButtonPromotionScopeRequest = {
       container,
       field,
     };
-    if (
-      containerHasUnambiguousAuthenticationActivation(container) &&
-      !typeButtonPromotionSwallowsForeignScope(promotionRequest)
-    ) {
+    if (containerIsFormlessAuthenticationScope(scopeRequest)) {
       return container;
     }
     container = container.parentElement;
   }
   const parent = field.parentElement;
   if (parent instanceof HTMLElement && parent !== root) {
-    const parentPromotionRequest: TypeButtonPromotionScopeRequest = {
+    const parentScopeRequest: TypeButtonPromotionScopeRequest = {
       container: parent,
       field,
     };
-    if (!(
-      containerHasUnambiguousAuthenticationActivation(parent) &&
-      typeButtonPromotionSwallowsForeignScope(parentPromotionRequest)
-    )) {
+    if (containerIsFormlessAuthenticationScope(parentScopeRequest)) {
       return parent;
     }
   }

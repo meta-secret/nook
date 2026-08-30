@@ -82,13 +82,20 @@ describe('website one-time-code fields', () => {
       authenticatorSetupHint: false,
       backupCodesHint: false,
     })
-    expect(facts.detailedAdvanceControl).toMatchObject({
-      kind: 'observed',
-      observations: expect.arrayContaining([
-        { label: expect.stringContaining('Delete account') },
-        { label: expect.stringContaining('Sign in') },
+    const detailed = facts.detailedAdvanceControl
+    if (detailed.kind !== 'observed') {
+      throw new Error('expected observed advance-control candidates')
+    }
+    expect(detailed.observations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: expect.stringContaining('Delete account'),
+        }),
+        expect.objectContaining({
+          label: expect.stringContaining('Sign in'),
+        }),
       ]),
-    })
+    )
   })
 
   test('resolves aria-labelledby control names for Rust classification', () => {

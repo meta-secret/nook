@@ -62,12 +62,21 @@ type HtmlSubmissionMethodRequest = {
   name: string;
 };
 
+type AuthenticationControlPreference<AuthenticationControlObservation> = (
+  candidate: AuthenticationControlObservation,
+) => boolean;
+
 type BoundedAuthenticationControlObservationsRequest<
   AuthenticationControlObservation,
 > = {
   candidates: AuthenticationControlObservation[];
-  isPreferred: (candidate: AuthenticationControlObservation) => boolean;
+  isPreferred: AuthenticationControlPreference<AuthenticationControlObservation>;
+  isNextPreferred?: AuthenticationControlPreference<AuthenticationControlObservation>;
 };
+
+function neverNextPreferred(): boolean {
+  return false;
+}
 
 type SelectedSubmitterDisclosureRequest = {
   form: HTMLFormElement;
@@ -293,10 +302,16 @@ export function boundAuthenticationControlObservations<
 >({
   candidates,
   isPreferred,
+  isNextPreferred = neverNextPreferred,
 }: BoundedAuthenticationControlObservationsRequest<AuthenticationControlObservation>): AuthenticationControlObservation[] {
   const preferred = candidates.filter(isPreferred);
-  const remaining = candidates.filter((candidate) => !isPreferred(candidate));
-  return [...preferred, ...remaining].slice(
+  const nextPreferred = candidates.filter(
+    (candidate) => !isPreferred(candidate) && isNextPreferred(candidate),
+  );
+  const remaining = candidates.filter(
+    (candidate) => !isPreferred(candidate) && !isNextPreferred(candidate),
+  );
+  return [...preferred, ...nextPreferred, ...remaining].slice(
     0,
     MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
   );
@@ -626,7 +641,9 @@ function canActivateAuthenticationRouteControl(
     !query.usernameField.form &&
     query.kind === PasswordFormQueryKind.Scoped &&
     query.formScope.kind === PasswordFormScopeKind.Unowned &&
-    query.root !== control.ownerDocument;
+    query.root instanceof Element &&
+    query.root.contains(control) &&
+    query.root.contains(query.usernameField);
 
   return can_activate_authentication_route_control(
     sourceOrigin,
