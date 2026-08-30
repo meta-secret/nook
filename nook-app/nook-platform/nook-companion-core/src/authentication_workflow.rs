@@ -516,6 +516,7 @@ mod tests {
                 1,
                 3,
             )
+            .with_saved_login_capability()
         );
         Ok(())
     }

@@ -1,3 +1,5 @@
+/// <reference path="../../../../nook-web-extension/src/chrome.d.ts" />
+
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { AuthenticationWorkflowAction } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
@@ -12,7 +14,7 @@ const renderState = vi.hoisted(() => ({
   pickerState: {
     login: { kind: 'closed' } as {
       kind: string
-      request?: { approval: object }
+      request?: { approval: Record<string, never> }
     },
     authenticator: { kind: 'closed' },
   },
@@ -129,7 +131,18 @@ import { renderWidget } from '../../../../nook-web-extension/src/content/autofil
 const workflow = {
   root: document,
   formScope: { kind: 'unowned' },
-  summary: {},
+  summary: {
+    passwordFieldCount: 0,
+    currentPasswordFieldCount: 0,
+    newPasswordFieldCount: 0,
+    genericPasswordFieldCount: 0,
+    usernameFieldCount: 0,
+    oneTimeCodeFieldCount: 0,
+    manualCheckpointPresent: false,
+    passkeyControlPresent: true,
+    formCount: 0,
+    observedAt: 0,
+  },
 } as Parameters<typeof renderWidget>[0]['workflow']
 
 const snapshot = {
@@ -195,10 +208,10 @@ describe('passkey workflow saved-login fallback', () => {
   })
 
   test('omits saved login for empty and unavailable matches', () => {
-    for (const loginMatches of [
-      { kind: 'ready', count: 0 },
-      { kind: 'unavailable' },
-    ]) {
+    const unavailableMatches: Array<
+      Parameters<typeof renderWidget>[0]['loginMatches']
+    > = [{ kind: 'ready', count: 0 }, { kind: 'unavailable' }]
+    for (const loginMatches of unavailableMatches) {
       document.body.replaceChildren()
       renderPasskeyWidget({ loginMatches })
       expect(savedLoginButton()).toBe(false)

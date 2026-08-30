@@ -109,10 +109,14 @@ export async function authenticationWorkflowMessageResponse({
       }
       if (capability === 'fill-saved-login') {
         try {
-          loginMatches = await websiteLoginMatchAvailability({
+          const availabilityRequest: Parameters<
+            typeof websiteLoginMatchAvailability
+          >[0] = {
             origin: message.payload.origin,
             sender,
-          })
+          }
+          loginMatches =
+            await websiteLoginMatchAvailability(availabilityRequest)
         } catch {
           loginMatches = { kind: 'unavailable' }
         }

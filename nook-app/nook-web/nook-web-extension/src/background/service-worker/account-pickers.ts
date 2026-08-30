@@ -390,10 +390,11 @@ async function websiteLoginOptionsResponse({
 export async function websiteLoginOptions(
   args: WebsiteLoginOptionsArgs,
 ): Promise<unknown> {
-  return websiteLoginOptionsResponse({
+  const responseRequest: WebsiteLoginOptionsResponseArgs = {
     ...args,
     openUnavailableCompanion: true,
-  })
+  }
+  return websiteLoginOptionsResponse(responseRequest)
 }
 
 type WebsiteLoginMatchAvailabilityArgs = {
@@ -411,12 +412,13 @@ export async function websiteLoginMatchAvailability({
     type: WebsiteLoginOptionsMessageType.NookWebsiteLoginOptions,
     payload: { origin },
   }
-  const response = await websiteLoginOptionsResponse({
+  const responseRequest: WebsiteLoginOptionsResponseArgs = {
     message,
     sender,
     dependencies,
     openUnavailableCompanion: false,
-  })
+  }
+  const response = await websiteLoginOptionsResponse(responseRequest)
   return decode_website_login_match_availability(
     response as WebsiteLoginOptionsWireValue,
   )

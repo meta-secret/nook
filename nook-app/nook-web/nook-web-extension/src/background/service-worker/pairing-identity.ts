@@ -747,12 +747,13 @@ export async function availableWebsiteGrants({
   sender,
   forbiddenReason,
 }: AvailableWebsiteGrantsArgs): Promise<WebsiteGrantAccess> {
-  return websiteGrants({
+  const request: WebsiteGrantsArgs = {
     origin,
     sender,
     forbiddenReason,
     openLockedCompanion: true,
-  })
+  }
+  return websiteGrants(request)
 }
 
 export async function passiveAvailableWebsiteGrants({
@@ -760,12 +761,13 @@ export async function passiveAvailableWebsiteGrants({
   sender,
   forbiddenReason,
 }: AvailableWebsiteGrantsArgs): Promise<WebsiteGrantAccess> {
-  return websiteGrants({
+  const request: WebsiteGrantsArgs = {
     origin,
     sender,
     forbiddenReason,
     openLockedCompanion: false,
-  })
+  }
+  return websiteGrants(request)
 }
 
 type WebsiteGrantAccess =

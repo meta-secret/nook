@@ -324,8 +324,10 @@ export async function sendAuthenticationWorkflowSnapshotRuntimeMessage(
     const routingWire =
       delivery.response as AuthenticationWorkflowSnapshotRoutingWire
     const { selectedFacts, ...responseWire } = routingWire
+    const authenticationWorkflowResponseWire: AuthenticationWorkflowRuntimeResponseWire =
+      responseWire
     const runtimeResponse = decode_authentication_workflow_runtime_response(
-      responseWire as AuthenticationWorkflowRuntimeResponseWire,
+      authenticationWorkflowResponseWire,
     )
     const { workflow: verdict, loginMatches } = runtimeResponse
     if ('snapshot' in verdict) {
