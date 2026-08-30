@@ -35,11 +35,6 @@ import type {
 } from './evidence.ts';
 import type { AgentAttemptParent } from '../agent-workflow/domain.ts';
 import type { TeamKey } from '../team-agents/catalog.ts';
-import { resolveTeamTaskContext } from '../team-agents/context.ts';
-import type {
-  TeamTaskContext,
-  TeamTaskContextRequest,
-} from '../team-agents/context.ts';
 import type {
   ModuleDeliveryNodeV2,
   ModuleDeliveryResourceClaims,
@@ -139,7 +134,6 @@ type AttemptIdentity = Readonly<{
 export type ModuleDeliveryAdmission = AttemptIdentity & {
   readonly startingFrontier: string;
   readonly resources: ModuleDeliveryResourceClaims;
-  readonly context: TeamTaskContext;
   readonly team: TeamKey;
   readonly functionalOwner: TeamKey;
   readonly acceptanceOwner: TeamKey;
@@ -594,13 +588,6 @@ export function selectModuleDeliveryAdmissions(
             }),
           )
         : Object.freeze([]);
-    const contextRequest: TeamTaskContextRequest = {
-      repositoryRoot: authority.repositoryRoot,
-      team: node.team,
-      readClaims: resources.read,
-      writeClaims: resources.write,
-      selectedSkillPaths: [],
-    };
     const admissionValue: ModuleDeliveryAdmission = {
       taskId,
       attempt: nextAttempt(attemptRequest),
@@ -608,7 +595,6 @@ export function selectModuleDeliveryAdmissions(
       planDigest: request.state.planDigest,
       startingFrontier: startingFrontier(frontierRequest),
       resources,
-      context: resolveTeamTaskContext(contextRequest),
       team: node.team,
       functionalOwner: node.functionalOwner,
       acceptanceOwner: node.acceptanceOwner,

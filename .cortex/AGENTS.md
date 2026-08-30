@@ -155,6 +155,10 @@ Gizmo supplies a bounded task contract for that identity.
   - `teams/ai/dynamic-skills/cortex-writer.md`;
   - `teams/ai/dynamic-skills/cortex-article-structure/SKILL.md`; and
   - `teams/ai/dynamic-skills/cortex-consistency.md`.
+- Before dispatching a team-owned Cortex writing task, Gizmo runs
+  `task loom:cortex-team-task:admit REQUEST=<request.json>` and supplies the
+  admitted context paths to the harness. Module-delivery admission is not a
+  substitute because module tasks reserve `.cortex/**` for the parent.
 - Team-specific authoring skills contain only domain-specific additions. They
   must not wrap, copy, or rename a canonical Cortex authoring skill.
 - It requires an isolated workspace and verified handoff for write-capable

@@ -276,15 +276,9 @@ export function copyModuleDeliveryAdmission(
     evidenceSurface: Object.freeze([...admission.resources.evidenceSurface]),
   };
   const parentLineage: AgentAttemptParent = { ...admission.parentLineage };
-  const context = {
-    ...admission.context,
-    contextPaths: Object.freeze([...admission.context.contextPaths]),
-    skillPaths: Object.freeze([...admission.context.skillPaths]),
-  };
   return {
     ...admission,
     resources: Object.freeze(resources),
-    context: Object.freeze(context),
     parentLineage: Object.freeze(parentLineage),
     acceptanceRequirements: Object.freeze([
       ...admission.acceptanceRequirements,
