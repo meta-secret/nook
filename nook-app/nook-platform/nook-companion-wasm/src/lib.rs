@@ -28,6 +28,7 @@ pub fn validate_extension_session_request(
 
 #[wasm_bindgen]
 #[must_use]
+#[allow(clippy::needless_pass_by_value)] // wasm-bindgen owns the decoded ABI value.
 pub fn decode_extension_session_status_response(
     response: nook_companion_core::ExtensionSessionStatusResponseWire,
 ) -> nook_companion_core::ExtensionSessionStatusAvailability {
