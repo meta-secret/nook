@@ -242,17 +242,29 @@ export function isRenderedControl(control: HTMLElement): boolean {
   }
 }
 
+function htmlEnumeratedSubmissionMethod(
+  token: string,
+): PageControlSubmissionMethod {
+  const normalized = token.trim().toLowerCase();
+  if (normalized === "post") return PageControlSubmissionMethod.Post;
+  if (normalized === "dialog") return PageControlSubmissionMethod.Absent;
+  return PageControlSubmissionMethod.Get;
+}
+
+function presentHtmlSubmissionMethod(
+  element: Element,
+  name: string,
+): PageControlSubmissionMethod | false {
+  if (!element.hasAttribute(name)) return false;
+  const token = element.getAttribute(name);
+  return htmlEnumeratedSubmissionMethod(token ? token : "");
+}
+
 export function controlSubmissionMethod(
   control: HTMLElement,
 ): PageControlSubmissionMethod {
-  if (control.hasAttribute("formmethod")) {
-    const override = (control.getAttribute("formmethod") ?? "")
-      .trim()
-      .toLowerCase();
-    return override === "post" || override === "dialog"
-      ? PageControlSubmissionMethod.Post
-      : PageControlSubmissionMethod.Get;
-  }
+  const formmethod = presentHtmlSubmissionMethod(control, "formmethod");
+  if (formmethod !== false) return formmethod;
   if (
     (control instanceof HTMLButtonElement ||
       control instanceof HTMLInputElement) &&
@@ -264,11 +276,8 @@ export function controlSubmissionMethod(
   if (owner.kind !== PasswordFormScopeKind.Owned) {
     return PageControlSubmissionMethod.Absent;
   }
-  const method = owner.owner.getAttribute("method");
-  if (method && method.trim().toLowerCase() === "get") {
-    return PageControlSubmissionMethod.Get;
-  }
-  return PageControlSubmissionMethod.Absent;
+  const method = presentHtmlSubmissionMethod(owner.owner, "method");
+  return method === false ? PageControlSubmissionMethod.Absent : method;
 }
 
 export function controlMachineIdentity(control: HTMLElement): string {
@@ -301,8 +310,10 @@ export function controlLabel(control: HTMLElement): string {
 }
 
 export function formUsesGetSubmission(form: HTMLFormElement): boolean {
-  const method = form.getAttribute("method");
-  return Boolean(method) && method.trim().toLowerCase() === "get";
+  return (
+    presentHtmlSubmissionMethod(form, "method") ===
+    PageControlSubmissionMethod.Get
+  );
 }
 
 export function canRequestImplicitAuthenticationSubmit(
