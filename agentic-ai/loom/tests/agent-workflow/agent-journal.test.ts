@@ -343,7 +343,7 @@ describe('agent attempt journal', () => {
         failingOutputConfiguration,
       );
 
-      await expect(journal.initialize()).resolves.toBeUndefined();
+      await journal.initialize();
       const events = await readFile(journal.eventsPath, 'utf8');
       expect(events).toContain('"actionId":"a0001"');
     } finally {
