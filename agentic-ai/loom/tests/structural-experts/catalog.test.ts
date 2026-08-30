@@ -5,7 +5,6 @@ import {
   AgentAttemptAdapterKind,
   WorkflowResultKind,
 } from '../../src/agent-workflow/domain.ts';
-import { CortexAuditAgent } from '../../src/agent-workflow/cortex-workflow.ts';
 import {
   auditStructuralExpertProfiles,
   auditStructuralExpertCortexAuthority,
@@ -107,14 +106,6 @@ test('registers two bounded repository readers and one legacy diagnostic aggrega
   );
   expect(diagnosticAggregator?.runtimeBehaviorContract).toContain(
     'Neither terminal observations nor this diagnostic aggregate can satisfy an ordinary provider edge',
-  );
-  expect(`${CortexAuditAgent.FindingSynthesizer}`).toBe('finding-synthesizer');
-  expect(`${WorkflowResultKind.CortexSynthesis}`).toBe('cortex-synthesis');
-  expect(CortexAuditAgent.FindingSynthesizer).not.toBe(
-    diagnosticAggregator?.name,
-  );
-  expect(WorkflowResultKind.CortexSynthesis).not.toBe(
-    diagnosticAggregator?.resultKind,
   );
   expect(`${AgentAttemptAdapterKind.StructuralExpertInvocation}`).toBe(
     'structural-expert-invocation',

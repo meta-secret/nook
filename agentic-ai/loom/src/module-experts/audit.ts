@@ -32,7 +32,6 @@ import {
 } from './cargo-workspace.ts';
 import type { DiscoverCargoWorkspaceArgs } from './cargo-workspace.ts';
 import {
-  AGENT_WORKFLOW_CLI,
   MODULE_EXPERT_CLI,
   MODULE_EXPERT_TRUSTED_RUNTIME,
   auditModuleExpertRuntimeRouting,
@@ -807,16 +806,12 @@ function validateRuntimePolicy(context: ModuleExpertValidationContext): void {
 }
 
 function validateRuntimeRouting(context: ModuleExpertValidationContext): void {
-  const agentWorkflowCliPath = join(context.repoRoot, AGENT_WORKFLOW_CLI);
   const moduleExpertCliPath = join(context.repoRoot, MODULE_EXPERT_CLI);
   const trustedRuntimePath = join(
     context.repoRoot,
     MODULE_EXPERT_TRUSTED_RUNTIME,
   );
   const auditArgs: AuditModuleExpertRuntimeRoutingArgs = {
-    agentWorkflowCliSource: existsSync(agentWorkflowCliPath)
-      ? readFileSync(agentWorkflowCliPath, 'utf8')
-      : '',
     moduleExpertCliSource: existsSync(moduleExpertCliPath)
       ? readFileSync(moduleExpertCliPath, 'utf8')
       : '',

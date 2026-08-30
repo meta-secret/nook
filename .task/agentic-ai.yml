@@ -174,30 +174,6 @@ tasks:
     cmds:
       - task loom:default FAMILY=cortexSessionClean
 
-  loom:agent-workflow:cortex-audit:
-    desc: Run the event-sourced Cortex full-GC workflow under workflow/processing (BASELINE=<40-char-sha>, PLAN=1 for dry-run).
-    deps: [loom:install]
-    requires:
-      vars: [BASELINE]
-    env:
-      LOOM_WORKFLOW_BASELINE: '{{.BASELINE}}'
-      LOOM_WORKFLOW_PLAN: '{{default "0" .PLAN}}'
-    cmds:
-      - |
-        set -euo pipefail
-        if [ "$LOOM_WORKFLOW_PLAN" = "1" ]; then
-          bun run --cwd agentic-ai/loom agent-workflow -- \
-            cortex-full-garbage-collection \
-            --baseline "$LOOM_WORKFLOW_BASELINE" \
-            --working-directory "{{.REPO_ROOT}}" \
-            --plan
-        else
-          bun run --cwd agentic-ai/loom agent-workflow -- \
-            cortex-full-garbage-collection \
-            --baseline "$LOOM_WORKFLOW_BASELINE" \
-            --working-directory "{{.REPO_ROOT}}"
-        fi
-
   loom:module-delivery:validate:
     desc: Validate and dry-run one reviewed module delivery plan (PLAN=<plan.json>).
     deps: [loom:install]
