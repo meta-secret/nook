@@ -8,19 +8,34 @@ use super::{
 const MAX_AUTHENTICATION_WORKFLOW_OBSERVATION_INDEX_EXCLUSIVE: u32 = 20;
 
 const fn saved_login_capability_matches_contract(snapshot: AuthenticationWorkflowSnapshot) -> bool {
-    !matches!(
+    match (
+        snapshot.kind,
+        snapshot.stage,
+        snapshot.action,
         snapshot.saved_login_capability,
-        AuthenticationSavedLoginCapability::FillSavedLogin
-    ) || matches!(
-        (snapshot.kind, snapshot.stage, snapshot.action),
+    ) {
         (
             AuthenticationWorkflowKind::Login,
             AuthenticationWorkflowStage::Credentials,
-            AuthenticationWorkflowAction::ContinueWithNook
-                | AuthenticationWorkflowAction::UsePasskey
-                | AuthenticationWorkflowAction::CreatePasskey,
+            AuthenticationWorkflowAction::ContinueWithNook,
+            AuthenticationSavedLoginCapability::FillSavedLogin,
         )
-    )
+        | (
+            AuthenticationWorkflowKind::Login,
+            AuthenticationWorkflowStage::Credentials,
+            AuthenticationWorkflowAction::UsePasskey | AuthenticationWorkflowAction::CreatePasskey,
+            AuthenticationSavedLoginCapability::FillSavedLogin
+            | AuthenticationSavedLoginCapability::Unavailable,
+        ) => true,
+        (
+            AuthenticationWorkflowKind::Login,
+            AuthenticationWorkflowStage::Credentials,
+            AuthenticationWorkflowAction::ContinueWithNook,
+            AuthenticationSavedLoginCapability::Unavailable,
+        ) => false,
+        (_, _, _, AuthenticationSavedLoginCapability::Unavailable) => true,
+        (_, _, _, AuthenticationSavedLoginCapability::FillSavedLogin) => false,
+    }
 }
 
 impl AuthenticationWorkflowSnapshot {
@@ -154,6 +169,26 @@ mod tests {
             }
             .saved_login_capability(),
             AuthenticationSavedLoginCapability::Unavailable
+        );
+
+        let continue_without_saved_login = AuthenticationWorkflowSnapshot {
+            saved_login_capability: AuthenticationSavedLoginCapability::Unavailable,
+            ..valid
+        };
+        assert!(!continue_without_saved_login.matches_classifier_contract());
+
+        let passkey_without_saved_login = AuthenticationWorkflowSnapshot {
+            action: AuthenticationWorkflowAction::UsePasskey,
+            saved_login_capability: AuthenticationSavedLoginCapability::Unavailable,
+            ..valid
+        };
+        assert!(passkey_without_saved_login.matches_classifier_contract());
+        assert!(
+            AuthenticationWorkflowSnapshot {
+                saved_login_capability: AuthenticationSavedLoginCapability::FillSavedLogin,
+                ..passkey_without_saved_login
+            }
+            .matches_classifier_contract()
         );
     }
 
