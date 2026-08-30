@@ -120,6 +120,18 @@ describe('extension origin isolation', () => {
     expect(autofill?.type).toBe('module')
   })
 
+  test('installs a MAIN-world authentication route hook at document start', () => {
+    const scripts = defaultManifest().content_scripts
+    expect(
+      scripts.some(
+        (script) =>
+          script.world === 'MAIN' &&
+          script.run_at === 'document_start' &&
+          script.js.includes('content/authentication-route-page.js'),
+      ),
+    ).toBe(true)
+  })
+
   test('installs isolated transport and page-world WebAuthn bridges at document start', () => {
     const scripts = defaultManifest().content_scripts
     expect(

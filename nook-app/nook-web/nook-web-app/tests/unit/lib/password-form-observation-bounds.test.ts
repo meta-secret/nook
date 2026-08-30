@@ -345,6 +345,28 @@ describe('authentication observation bounds', () => {
     })
   })
 
+  test('keeps an actionable passkey sibling when field-bearing forms fill the bound', () => {
+    const passwordForms = Array.from(
+      { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS },
+      (_, index) =>
+        `<form id="password-${index}" action="/login"><input autocomplete="username" /><input type="password" autocomplete="current-password" /><button type="submit">Sign in</button></form>`,
+    ).join('')
+    document.body.innerHTML = `
+      ${passwordForms}
+      <form id="passkey-login" action="/login">
+        <button type="button">Sign in with a passkey</button>
+      </form>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS)
+    expect(
+      observations.some(
+        (observation) => ownedFormId(observation) === 'passkey-login',
+      ),
+    ).toBe(true)
+  })
+
   test('keeps an actionable passkey login after hidden template forms fill the bound', () => {
     const hiddenTemplates = Array.from(
       { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS },

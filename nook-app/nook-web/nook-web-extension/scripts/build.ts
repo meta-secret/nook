@@ -80,7 +80,7 @@ async function companionWasmBytesDefine(entrypoint: string): Promise<{
 }> {
   // Content autofill must not fetch chrome-extension WASM (or use import.meta);
   // embed the package bytes so classic content scripts can initialize Pilot.
-  if (!entrypoint.includes('/content/')) {
+  if (!entrypoint.includes('/content/autofill.ts')) {
     return { __NOOK_COMPANION_WASM_BYTES__: JSON.stringify('') }
   }
   const wasmPath = join(
@@ -587,6 +587,7 @@ await mkdir(distDir, { recursive: true })
 await Promise.all([
   buildEntrypoint('src/background/service-worker.ts', 'background'),
   buildEntrypoint('src/content/autofill.ts', 'content'),
+  buildEntrypoint('src/content/authentication-route-page.ts', 'content'),
   buildEntrypoint('src/content/webauthn-content.ts', 'content'),
   buildEntrypoint('src/content/webauthn-page.ts', 'content'),
   buildEntrypoint('src/content/simple-vault-bridge.ts', 'content'),

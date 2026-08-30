@@ -897,6 +897,11 @@ function activateApprovedOwnedAdvanceControl(
       ),
     )
       .filter((control) => control.form === form)
+      .sort(
+        (left, right) =>
+          Number(right.matches(semanticSubmitControlSelector)) -
+          Number(left.matches(semanticSubmitControlSelector)),
+      )
       .find((control) => {
         if (!isRenderedControl(control)) return false;
         const factsRequest: PageControlObservationRequest = {

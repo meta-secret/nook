@@ -139,6 +139,31 @@ describe('classified login activation', () => {
     expect(submitted).toBe(true)
   })
 
+  test('prefers the semantic submitter over an earlier generic Continue button', () => {
+    document.body.innerHTML = `
+      <form aria-label="Login" action="/session">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button id="helper" type="button">Continue</button>
+        <button id="submit" type="submit">Sign in</button>
+      </form>
+    `
+    let activated = ''
+    document.querySelector('#helper')?.addEventListener('click', () => {
+      activated = 'helper'
+    })
+    document.querySelector('#submit')?.addEventListener('click', () => {
+      activated = 'submit'
+    })
+    document.querySelector('form')?.addEventListener('submit', (event) => {
+      event.preventDefault()
+      if (activated === '') activated = 'form'
+    })
+
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
+    expect(activated).toBe('submit')
+  })
+
   test('activates the Rust-approved type-button instead of posting the form action', () => {
     document.body.innerHTML = `
       <form id="login" action="/account/delete">

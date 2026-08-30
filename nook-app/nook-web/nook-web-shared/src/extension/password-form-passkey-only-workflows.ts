@@ -121,11 +121,16 @@ export function appendIndependentPasskeyOnlyWorkflows<
         existing.root === observation.root,
     );
   });
+  const passkeyCandidates = findPasskeyControls(document);
   return [...fieldBearing, ...independent]
-    .sort(
-      // eslint-disable-next-line max-params -- Array.sort owns the comparator callback signature.
-      (left, right) => observationPriority(right) - observationPriority(left),
-    )
+    .sort((left, right) => {
+      const actionableDelta =
+        Number(observationHasActionablePasskey(right, passkeyCandidates)) -
+        Number(observationHasActionablePasskey(left, passkeyCandidates));
+      return actionableDelta === 0
+        ? observationPriority(right) - observationPriority(left)
+        : actionableDelta;
+    })
     .slice(0, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS);
 }
 
