@@ -524,6 +524,8 @@ function decodeNode(
     path: `${path}.cortexAuthoring`,
   };
   const cortexAuthoring = decodeCortexAuthoring(cortexAuthoringRequest);
+  if (new Set(common.resources.read).size !== common.resources.read.length)
+    fail(`${path}.resources.read: authored read claims must be unique.`);
   const resourceCompositionRequest: CortexAuthoringResourceCompositionRequest =
     {
       team: common.team,
@@ -538,10 +540,13 @@ function decodeNode(
     fail(
       `${path}.cortexAuthoring.selectedSkillPaths: ${unauthorizedSkill} was not authorized by the submitted read claims.`,
     );
+  const resources = composeCortexAuthoringResources(resourceCompositionRequest);
+  if (resources.read.length > 128)
+    fail(`${path}.resources.read: composed read claims exceed 128 entries.`);
   return {
     kind: ModuleDeliveryTaskKind.Write,
     ...common,
-    resources: composeCortexAuthoringResources(resourceCompositionRequest),
+    resources,
     cortexAuthoring,
     workspace,
   };

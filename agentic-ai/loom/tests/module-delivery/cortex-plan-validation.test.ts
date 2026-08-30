@@ -185,21 +185,50 @@ describe('Cortex module-delivery plan validation', () => {
 
   test('treats resolved context as a generation read hazard', () => {
     const aiRequest: CortexNodeRequest = {
-      taskId: 'ai-writer-skill-update',
+      taskId: 'zzz-policy-writer',
       team: TeamKey.Ai,
       write: [CORTEX_AUTHORING_SKILL_PATHS[0]],
       selectedSkillPaths: [],
       sharedWriteClaims: [],
     };
-    const result = validate([cortexNode(aiRequest), sreNode()]);
+    const consumer: ModuleDeliveryWriteNodeV2 = {
+      ...sreNode(),
+      taskId: 'aaa-consumer',
+    };
+    const result = validate([cortexNode(aiRequest), consumer]);
     expect(result.status).toBe(ModuleDeliveryValidationStatus.Accepted);
     if (result.status !== ModuleDeliveryValidationStatus.Accepted) return;
     const precedence: ModuleDeliveryExecutionPrecedence = {
-      predecessorTaskId: 'ai-writer-skill-update',
-      successorTaskId: 'sre-cortex-writer',
+      predecessorTaskId: 'zzz-policy-writer',
+      successorTaskId: 'aaa-consumer',
       reason: ModuleDeliveryExecutionPrecedenceReason.ResourceConflict,
       requiresIntegratedWriterFrontier: true,
     };
     expect(result.executionPrecedence).toContainEqual(precedence);
+    expect(result.waves).toEqual([['zzz-policy-writer'], ['aaa-consumer']]);
+  });
+
+  test('rejects authored duplicate and over-capacity composed reads', () => {
+    const duplicate: ModuleDeliveryWriteNodeV2 = {
+      ...sreNode(),
+      resources: {
+        ...sreNode().resources,
+        read: [SRE_SKILL, SRE_SKILL],
+      },
+    };
+    expect(codes(validate([duplicate]))).toContain(
+      ModuleDeliveryIssueCode.InvalidField,
+    );
+
+    const authoredReads = [SRE_SKILL];
+    for (let index = 0; index < 127; index += 1)
+      authoredReads.push(`docs/context-${index}.md`);
+    const overCapacity: ModuleDeliveryWriteNodeV2 = {
+      ...sreNode(),
+      resources: { ...sreNode().resources, read: authoredReads },
+    };
+    expect(codes(validate([overCapacity]))).toContain(
+      ModuleDeliveryIssueCode.InvalidField,
+    );
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { chmodSync } from 'node:fs';
+import { chmodSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
 import {
@@ -164,6 +164,11 @@ describe('Cortex module-delivery admission', () => {
         };
       const authority =
         createModuleDeliveryGenerationAuthority(generationRequest);
+      rmSync(join(fixture.sourceRoot, CORTEX_AUTHORING_SKILL_PATHS[1]));
+      fixtureGit(fixture)(['add', '--all']);
+      fixtureGit(fixture)(['commit', '--quiet', '-m', 'checkout drift']);
+      const replacementCommit = fixtureGit(fixture)(['rev-parse', 'HEAD']);
+      fixtureGit(fixture)(['replace', sourceCommit, replacementCommit]);
       const stateRequest: CreateModuleDeliveryAdmissionStateRequest = {
         authority,
         acceptedPlan: accepted,

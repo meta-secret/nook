@@ -1,11 +1,11 @@
-import { runCommand } from '../lib/run.ts';
-import type { RunCommandArgs } from '../lib/run.ts';
-import { resolveTeamTaskContext } from '../team-agents/context.ts';
+import { composeTeamTaskContextPaths } from '../team-agents/context.ts';
 import type {
   TeamTaskContext,
-  TeamTaskContextRequest,
+  TeamTaskContextPathRequest,
 } from '../team-agents/context.ts';
 import { ModuleDeliveryTaskKind } from './domain.ts';
+import { runModuleDeliveryGit } from './git-command.ts';
+import type { GitCommandRequest } from './git-command.ts';
 import type {
   ModuleDeliveryNodeV2,
   ModuleDeliveryResourceClaims,
@@ -26,25 +26,24 @@ export function admitCortexAuthoringContext(
     !request.node.cortexAuthoring
   )
     throw new Error('Cortex authoring context requires a write task.');
-  const contextRequest: TeamTaskContextRequest = {
-    repositoryRoot: request.repositoryRoot,
+  const contextRequest: TeamTaskContextPathRequest = {
     team: request.node.team,
-    readClaims: request.resources.read,
     writeClaims: request.resources.write,
     selectedSkillPaths: request.node.cortexAuthoring.selectedSkillPaths,
   };
-  const context = resolveTeamTaskContext(contextRequest);
+  const context = composeTeamTaskContextPaths(contextRequest);
   for (const path of context.contextPaths) {
-    const command: RunCommandArgs = {
-      command: 'git',
+    const command: GitCommandRequest = {
       args: ['ls-tree', request.startingFrontier, '--', path],
       cwd: request.repositoryRoot,
+      allowFailure: true,
     };
-    const result = runCommand(command);
+    const result = runModuleDeliveryGit(command);
+    const stdout = result.stdout.toString('utf8');
     if (
       result.exitCode !== 0 ||
-      !/^100(?:644|755) blob /u.test(result.stdout) ||
-      !result.stdout.endsWith(`\t${path}\n`)
+      !/^100(?:644|755) blob /u.test(stdout) ||
+      !stdout.endsWith(`\t${path}\n`)
     )
       throw new Error(
         `Cortex authoring context is not a committed regular file: ${path}.`,

@@ -12,6 +12,7 @@ import {
   validateCortexAuthoring as cortexAuthoringFindings,
 } from './cortex-authoring-validation.ts';
 import { validateModuleScope as moduleScopeFindings } from './module-scope-validation.ts';
+import { cortexContextPrecedence } from './cortex-context-topology.ts';
 import type { ModuleScopeValidationRequest } from './module-scope-validation.ts';
 import type {
   CortexAuthoringValidationRequest,
@@ -847,6 +848,15 @@ function buildExecutionTopologyRequest(
         addExecutionConstraint(constraint);
       }
     }
+  }
+  for (const precedence of cortexContextPrecedence(state.plan)) {
+    const constraint = {
+      request,
+      predecessorTaskId: precedence.writerTaskId,
+      successorTaskId: precedence.consumerTaskId,
+      reason: ModuleDeliveryExecutionPrecedenceReason.ResourceConflict,
+    };
+    addExecutionConstraint(constraint);
   }
   return request;
 }
