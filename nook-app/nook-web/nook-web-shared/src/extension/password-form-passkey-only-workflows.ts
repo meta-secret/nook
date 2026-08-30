@@ -133,10 +133,11 @@ function shortlistWorkflowsForFactsRanking<Observation>(
     0,
     MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
   );
-  const reserved = fieldBearing.at(-1);
-  const selected = reserved && !leading.includes(reserved)
-    ? [...leading, reserved]
-    : leading;
+  const reserved = fieldBearing[fieldBearing.length - 1];
+  const selected =
+    fieldBearing.length > MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS && reserved
+      ? [...leading, reserved]
+      : leading;
   return [
     ...selected,
     ...independent.slice(0, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS),
