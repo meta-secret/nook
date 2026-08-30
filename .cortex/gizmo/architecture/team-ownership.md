@@ -86,8 +86,8 @@ Skill ownership is separate from implementation delegation.
 - The functional owner applies that bundle while editing its own Cortex.
 - A team-specific authoring skill contains only its domain-specific additions.
 - It must not wrap or duplicate a canonical authoring skill.
-- A functional owner may also load a specifically linked foreign-team skill as
-  read-only engineering policy.
+- A functional owner implementing its own capability may load a specifically
+  linked foreign-team skill as read-only engineering policy.
 - An expertise contract is required only when a subagent from the skill-owning
   team will change files.
 

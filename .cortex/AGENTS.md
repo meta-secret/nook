@@ -281,10 +281,10 @@ The following behavior is prohibited:
 
 Loom automatically adds the canonical Cortex authoring bundle when a task's
 write claims overlap `.cortex/**`. A task-relevant team authority may add the
-smallest explicitly linked set of domain-specific foreign-team skills as
-read-only engineering policy. The functional owner may apply those skills to
-its own files without delegating implementation. An expertise contract is
-required only when the foreign team will change files.
+smallest explicitly linked set of foreign-team skills as required read-only
+engineering policy. The functional owner may apply those skills to its own
+files without delegating implementation. An expertise contract is required
+only when the foreign team will change files.
 
 ## Multi-team requests
 
