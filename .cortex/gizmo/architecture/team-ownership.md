@@ -80,9 +80,14 @@ their required barriers.
 
 Skill ownership is separate from implementation delegation.
 
-- A functional owner may load a specifically linked foreign-team skill as
+- A task has one team identity and a dynamic list of skill paths.
+- Loom derives universal skills from the task's resource claims.
+- A Cortex write claim automatically adds the AI-owned Cortex authoring bundle.
+- The functional owner applies that bundle while editing its own Cortex.
+- A team-specific authoring skill contains only its domain-specific additions.
+- It must not wrap or duplicate a canonical authoring skill.
+- A functional owner may also load a specifically linked foreign-team skill as
   read-only engineering policy.
-- It may apply that policy while implementing its own capability.
 - An expertise contract is required only when a subagent from the skill-owning
   team will change files.
 

@@ -7,6 +7,7 @@ import type {
 } from '../lib/markdown-contract.ts';
 import { TEAM_AUTHORITY_CATALOG, TeamKey } from './catalog.ts';
 import type { TeamAuthority } from './catalog.ts';
+import { CORTEX_AUTHORING_SKILL_PATHS } from './context.ts';
 
 export type TeamAuthorityAuditFinding = {
   readonly code: string;
@@ -105,6 +106,9 @@ const TEAM_AUTHORITY_CONTRACT_SECTIONS: readonly MarkdownContractSection[] = [
       'Gizmo supplies a bounded task contract for that identity.',
       'It requires an isolated workspace and verified handoff for write-capable work.',
       'It does not grant parent-owned lifecycle authority.',
+      "Loom resolves the task's dynamic skill paths separately from its team identity.",
+      'A write claim that overlaps `.cortex/**` automatically requires the canonical Cortex authoring bundle:',
+      'Team-specific authoring skills contain only domain-specific additions.',
       'The active harness owns worker creation and native worker labels or names.',
       'Repository profile files are not semantic, capability, context, model, or lifecycle authority.',
     ],
@@ -145,6 +149,16 @@ export function auditTeamAuthorities(
     source: authoritySource,
   };
   findings.push(...auditTeamCortexAuthority(cortexAuthorityRequest));
+  for (const skillPath of CORTEX_AUTHORING_SKILL_PATHS) {
+    if (!existsSync(join(request.repoRoot, skillPath))) {
+      const finding: TeamAuthorityAuditFinding = {
+        code: 'missing-cortex-authoring-skill',
+        path: skillPath,
+        message: `Canonical Cortex authoring skill is missing: ${skillPath}`,
+      };
+      findings.push(finding);
+    }
+  }
   if (request.authorities.length !== EXPECTED_TEAM_AUTHORITIES.size) {
     const finding: TeamAuthorityAuditFinding = {
       code: 'invalid-team-authority-count',

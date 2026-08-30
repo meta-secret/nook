@@ -96,6 +96,19 @@ describe('canonical Cortex team authority', () => {
     ).toContain('cortex-team-contract-semantic-drift');
   });
 
+  test('rejects omission of automatic Cortex authoring context', async () => {
+    const source = await readFile(join(REPO_ROOT, '.cortex/AGENTS.md'), 'utf8');
+    const driftedSource = source.replace(
+      'A write claim that overlaps `.cortex/**` automatically requires the canonical\n  Cortex authoring bundle:',
+      'Cortex writing context is optional.',
+    );
+    const authorityRequest = { source: driftedSource };
+
+    expect(
+      auditTeamCortexAuthority(authorityRequest).map((finding) => finding.code),
+    ).toContain('cortex-team-contract-semantic-drift');
+  });
+
   test('does not require or treat vendor profile TOMLs as authority', async () => {
     const fixtureRoot = await cortexAuthorityFixture();
     const vendorProfilePath = join(
