@@ -418,6 +418,45 @@ describe('website one-time-code fields', () => {
     })
   })
 
+  test('rescans a readonly username field after it becomes editable', () => {
+    document.body.innerHTML = `
+      <form aria-label="Login" action="/auth/login">
+        <input autocomplete="username" readonly />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+    expect(observedAuthenticationWorkflow().summary.usernameFieldCount).toBe(0)
+    document
+      .querySelector('input[autocomplete="username"]')
+      ?.removeAttribute('readonly')
+    expect(observedAuthenticationWorkflow().summary.usernameFieldCount).toBe(1)
+  })
+
+  test('rescans a text field after data-testid or placeholder identify it', () => {
+    document.body.innerHTML = `
+      <form aria-label="Login" action="/auth/login">
+        <input id="user" type="text" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+    expect(observedAuthenticationWorkflow().summary.usernameFieldCount).toBe(0)
+    const field = document.querySelector('#user')
+    if (!field) {
+      throw new Error('expected the unclassified username field')
+    }
+    field.setAttribute('placeholder', 'Email or username')
+    expect(observedAuthenticationWorkflow().summary.usernameFieldCount).toBe(1)
+    field.removeAttribute('placeholder')
+    expect(observedAuthenticationWorkflow().summary.usernameFieldCount).toBe(0)
+    field.setAttribute('data-testid', 'username')
+    expect(observedAuthenticationWorkflow().summary.usernameFieldCount).toBe(1)
+    field.removeAttribute('data-testid')
+    field.setAttribute('data-qa', 'login_email')
+    expect(observedAuthenticationWorkflow().summary.usernameFieldCount).toBe(1)
+  })
+
   test('rescans OTP handler facts when oninput or onchange mutate', () => {
     document.body.innerHTML = `
       <form id="otp-login" action="/mfa/challenge">

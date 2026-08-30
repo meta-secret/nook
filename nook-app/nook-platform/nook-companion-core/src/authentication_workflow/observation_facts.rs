@@ -649,4 +649,61 @@ mod tests {
                 if snapshot.kind == AuthenticationWorkflowKind::TotpChallenge
         ));
     }
+
+    #[test]
+    fn otp_auto_submit_survives_only_when_a_rust_recognized_handler_is_kept() {
+        let invalid = "oninput=validate_requestSubmit()".to_owned();
+        let mut signals = vec![invalid; crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT as usize];
+        let invalid_only = AuthenticationPageObservationFacts {
+            fields: AuthenticationFieldObservationFacts {
+                one_time_code_field_count: 1,
+                ..Default::default()
+            },
+            ceremony: AuthenticationCeremonyObservationFacts {
+                one_time_code_handler_signals: signals.clone(),
+                authentication_context: AuthenticationCeremonyContextObservation {
+                    authentication_username: AuthenticationUsernameEvidence::Absent,
+                    source_origin: "https://example.test".to_owned(),
+                    form_identity: "otp verification".to_owned(),
+                    destination_identity: "https://example.test/login/verify".to_owned(),
+                },
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert_eq!(
+            AuthenticationPageObservationFactsBatch {
+                observations: vec![invalid_only],
+            }
+            .classify(),
+            AuthenticationWorkflowMatch::NoMatch
+        );
+
+        *signals.last_mut().expect("handler capacity") = "oninput=this.form.submit()".to_owned();
+        let kept_submit = AuthenticationPageObservationFacts {
+            fields: AuthenticationFieldObservationFacts {
+                one_time_code_field_count: 1,
+                ..Default::default()
+            },
+            ceremony: AuthenticationCeremonyObservationFacts {
+                one_time_code_handler_signals: signals,
+                authentication_context: AuthenticationCeremonyContextObservation {
+                    authentication_username: AuthenticationUsernameEvidence::Absent,
+                    source_origin: "https://example.test".to_owned(),
+                    form_identity: "otp verification".to_owned(),
+                    destination_identity: "https://example.test/login/verify".to_owned(),
+                },
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(matches!(
+            AuthenticationPageObservationFactsBatch {
+                observations: vec![kept_submit],
+            }
+            .classify(),
+            AuthenticationWorkflowMatch::Matched(snapshot)
+                if snapshot.kind == AuthenticationWorkflowKind::TotpChallenge
+        ));
+    }
 }

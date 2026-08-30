@@ -224,6 +224,12 @@ mod tests {
         assert!(looks_like_one_time_code_auto_submit_signal(
             "oninput=this.form.requestSubmit()"
         ));
+        assert!(looks_like_one_time_code_auto_submit_signal(
+            "oninput=this.form.submit()"
+        ));
+        assert!(!looks_like_one_time_code_auto_submit_signal(
+            "oninput=validate_requestSubmit()"
+        ));
 
         let username = NookPageInputFieldObservation::new(
             nook_companion_core::PageInputType::Text,
