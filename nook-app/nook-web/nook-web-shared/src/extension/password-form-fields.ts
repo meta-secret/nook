@@ -295,9 +295,14 @@ function hasLoginContext(field: HTMLInputElement): boolean {
     container = container.parentElement;
     depth += 1;
   }
-  const advanceControl = (form ?? field.parentElement)?.querySelector(
-    'button[type="submit"], input[type="submit"], button:not([type]), button[type="button"], input[type="button"]',
-  );
+  const advanceControlRoot = form ? form : field.parentElement;
+  const advanceControls = advanceControlRoot
+    ? Array.from(
+        advanceControlRoot.querySelectorAll<HTMLElement>(
+          'button[type="submit"], input[type="submit"], button:not([type]), button[type="button"], input[type="button"]',
+        ),
+      )
+    : [];
   const doc = field.ownerDocument;
   const observation = new NookLoginContextObservation(
     form
@@ -309,13 +314,13 @@ function hasLoginContext(field: HTMLInputElement): boolean {
         ].join(" ")
       : "",
     ancestorIdentities,
-    advanceControl
-      ? [
-          advanceControl.textContent ?? "",
-          advanceControl.getAttribute("aria-label") ?? "",
-          (advanceControl as HTMLInputElement).value ?? "",
-        ].join(" ")
-      : "",
+    advanceControls
+      .flatMap((control) => [
+        control.textContent ?? "",
+        control.getAttribute("aria-label") ?? "",
+        control instanceof HTMLInputElement ? control.value : "",
+      ])
+      .join(" "),
     `${doc.defaultView?.location?.pathname ?? ""} ${doc.defaultView?.location?.hostname ?? ""}`,
   );
   try {

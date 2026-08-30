@@ -152,12 +152,30 @@ export function liveApprovedAuthenticationWorkflow({
     authenticatorSetupHint,
     backupCodesHint,
   };
-  const live = classifiedAuthenticationWorkflowObservations(
-    classifiedRequest,
-  ).map((candidate) => {
+  const liveCandidates =
+    classifiedAuthenticationWorkflowObservations(classifiedRequest);
+  const approvedPasskeyEvidence =
+    approved.facts.authenticator.detailedPasskeyControl;
+  const approvedPasskeyEvidenceIsSafe = approvedPasskeyEvidence
+    ? authentication_passkey_control_evidence_is_safe(approvedPasskeyEvidence)
+    : false;
+  if (
+    !approvedPasskeyEvidenceIsSafe &&
+    liveCandidates.some((candidate) => {
+      const passkeyEvidence =
+        candidate.facts.authenticator.detailedPasskeyControl;
+      return passkeyEvidence
+        ? authentication_passkey_control_evidence_is_safe(passkeyEvidence)
+        : false;
+    })
+  ) {
+    return false;
+  }
+  const live = liveCandidates.map((candidate) => {
     const passkeyEvidence =
       candidate.facts.authenticator.detailedPasskeyControl;
     const matchingPasskeyAccountCount =
+      passkeyEvidence &&
       authentication_passkey_control_evidence_is_safe(passkeyEvidence)
         ? approved.facts.authenticator.matchingPasskeyAccountCount
         : 0;

@@ -63,19 +63,7 @@ export function renderEnrollmentWidget({
     vaultConnection.vaultName ?? '',
   ].join(':')
   if (pickerState.login.kind === LoginPickerKind.Open) {
-    const currentApproval: AuthenticationWorkflowApproval = {
-      workflowKey,
-      facts,
-    }
-    const approvalPair: Parameters<
-      typeof authenticationWorkflowApprovalsMatch
-    >[0] = {
-      approved: pickerState.login.request.approval,
-      current: currentApproval,
-    }
-    if (!authenticationWorkflowApprovalsMatch(approvalPair)) {
-      cancelPendingLoginPickerRequest()
-    }
+    cancelPendingLoginPickerRequest()
   }
   if (
     widgetState.host.kind === WidgetHostKind.Attached &&
@@ -149,6 +137,21 @@ export function renderWidget({
     vaultConnection.connected ? 'connected' : 'disconnected',
     vaultConnection.vaultName ?? '',
   ].join(':')
+  if (pickerState.login.kind === LoginPickerKind.Open) {
+    const currentApproval: AuthenticationWorkflowApproval = {
+      workflowKey,
+      facts,
+    }
+    const approvalPair: Parameters<
+      typeof authenticationWorkflowApprovalsMatch
+    >[0] = {
+      approved: pickerState.login.request.approval,
+      current: currentApproval,
+    }
+    if (!authenticationWorkflowApprovalsMatch(approvalPair)) {
+      cancelPendingLoginPickerRequest()
+    }
+  }
   if (
     widgetState.host.kind === WidgetHostKind.Attached &&
     widgetState.workflowKey.kind === WidgetWorkflowKeyKind.Assigned &&

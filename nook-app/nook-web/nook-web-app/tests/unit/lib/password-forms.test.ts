@@ -857,6 +857,30 @@ describe('website one-time-code fields', () => {
     ).toBe('')
   })
 
+  test('clears the password after password events switch the form to GET', () => {
+    document.body.innerHTML = `
+      <form method="post" id="login" action="/auth/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+    document
+      .querySelector('input[type="password"]')
+      ?.addEventListener('change', () =>
+        document.querySelector('form')?.setAttribute('method', 'get'),
+      )
+    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: { username: 'vault-user', password: 'vault-pass' },
+      kind: PasswordFormQueryKind.Root,
+      root: document,
+    }
+    expect(fillLoginCredentials(fillArgs)).toBe(false)
+    expect(
+      document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
+    ).toBe('')
+  })
+
   test('does not fill a GET form when a type-button Sign in sits beside a native submitter', () => {
     document.body.innerHTML = `
       <form id="login" action="/auth/login">

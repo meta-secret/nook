@@ -27,6 +27,18 @@ afterEach(() => {
 })
 
 describe('authentication field detection', () => {
+  test('uses an authentication control after a generic help button', () => {
+    document.body.innerHTML = `
+      <form method="post" action="/next">
+        <input type="text" />
+        <input type="password" autocomplete="current-password" />
+        <button type="button">Help</button>
+        <button type="submit">Sign in</button>
+      </form>
+    `
+    expect(observedAuthenticationWorkflow().summary.usernameFieldCount).toBe(1)
+  })
+
   test('preserves the conventional user id for Rust username classification', () => {
     document.body.innerHTML = `
       <form method="post" action="/auth/login">

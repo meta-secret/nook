@@ -729,7 +729,6 @@ export function summarizeAuthenticationWorkflowForms(): PasswordFormObservation[
   };
   return appendIndependentPasskeyOnlyWorkflows(mergeRequest);
 }
-
 export function fillOneTimeCode(request: OneTimeCodeFillRequest): boolean {
   const nookTypedArgs0_16 = passwordFieldQuery(request);
   const field = preferredOneTimeCodeFillField(
@@ -744,7 +743,6 @@ export function fillOneTimeCode(request: OneTimeCodeFillRequest): boolean {
   field.focus();
   return true;
 }
-
 export function fillLoginCredentials(
   request: LoginCredentialsFillRequest,
 ): boolean {
@@ -753,7 +751,6 @@ export function fillLoginCredentials(
   const nookTypedArgs0_19 = passwordFieldQuery(request);
   const usernameCandidates = findUsernameFields(nookTypedArgs0_19);
   const usernameField = usernameCandidates[0];
-
   if (passwordFields.length === 0) {
     if (!usernameField) return false;
     const nookTypedArgs0_20: Parameters<typeof setNativeInputValue>[0] = {
@@ -793,9 +790,13 @@ export function fillLoginCredentials(
     value: request.credentials.password,
   };
   setNativeInputValue(nookTypedArgs0_22);
+  if (passwordField.form && formBlocksFill(passwordField.form)) {
+    nookTypedArgs0_22.value = "";
+    setNativeInputValue(nookTypedArgs0_22);
+    return false;
+  }
   return true;
 }
-
 export function fillGeneratedPassword(
   request: GeneratedPasswordFillRequest,
 ): boolean {
@@ -819,7 +820,6 @@ export function fillGeneratedPassword(
   newPasswordFields[0]?.focus();
   return true;
 }
-
 export function readLoginCredentials(
   request: PasswordFormScopeQuery,
 ): LoginCredentialsLookup {

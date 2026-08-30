@@ -325,7 +325,9 @@ function unownedScopeLooksProgressing(
   )
     return false;
   const controls = Array.from(
-    root.querySelectorAll<HTMLElement>(authenticationAdvanceControlSelector),
+    root.querySelectorAll<HTMLButtonElement | HTMLInputElement>(
+      authenticationAdvanceControlSelector,
+    ),
   ).filter((control) => !controlIsInert(control) && !control.form);
   const semanticSubmitControlCount = countedSemanticSubmitControls(controls);
   const fieldQuery: PasswordFieldQuery = { root, formScope };
@@ -368,7 +370,7 @@ function unownedScopeLooksProgressing(
         facts.formIdentity,
         facts.destinationIdentity,
         facts.label,
-        facts.machineIdentity,
+        facts.machineIdentity ?? "",
       ]) && authentication_advance_control_is_safe(facts)
     );
   });
@@ -388,8 +390,7 @@ function takeBoundedPriorityWorkflows<
       passkeyControlIsSafe,
     };
     const priority = observationPriority(observation);
-    const progressing =
-      priority > 1 || cheapWorkflowLooksProgressing(progressionRequest);
+    const progressing = cheapWorkflowLooksProgressing(progressionRequest);
     if (selected.length < MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS * 2) {
       const selectedEntry: BoundedPriorityWorkflowEntry<Observation> = {
         observation,

@@ -830,7 +830,7 @@ export function formHasRustClassifiableAdvanceControl(
         observation.formIdentity,
         observation.destinationIdentity,
         observation.label,
-        observation.machineIdentity,
+        observation.machineIdentity ?? "",
       ]) && authentication_advance_control_is_safe(observation)
     );
   });

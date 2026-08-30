@@ -176,13 +176,13 @@ describe('authentication fact rescans', () => {
   test('rescans a text field after data-testid or placeholder identify it', () => {
     document.body.innerHTML = `
       <form method="post" aria-label="Login" action="/auth/login">
-        <input id="user" type="text" />
+        <input id="contact-field" type="text" />
         <input type="password" autocomplete="current-password" />
         <button type="submit">Sign in</button>
       </form>
     `
     expect(observedAuthenticationWorkflow().summary.usernameFieldCount).toBe(0)
-    const field = document.querySelector('#user')
+    const field = document.querySelector('#contact-field')
     if (!field) {
       throw new Error('expected the unclassified username field')
     }
