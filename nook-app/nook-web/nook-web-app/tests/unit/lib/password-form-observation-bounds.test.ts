@@ -436,6 +436,24 @@ describe('authentication observation bounds', () => {
     ).toBe(true)
   })
 
+  test('caps oversized field-bearing pages before facts ranking', () => {
+    document.body.innerHTML = Array.from(
+      { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS * 2 },
+      (_, index) =>
+        `<form method="post" id="password-${index}" action="/login"><input autocomplete="username" /><input type="password" autocomplete="current-password" /><button type="submit">Sign in</button></form>`,
+    ).join('')
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations.length).toBeLessThanOrEqual(
+      MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
+    )
+    expect(
+      observations.some(
+        (observation) => ownedFormId(observation) === 'password-0',
+      ),
+    ).toBe(true)
+  })
+
   test('keeps a passkey-only form when the only password field is a hidden decoy', () => {
     document.body.innerHTML = `
       <form method="post" id="passkey-login" action="/login">

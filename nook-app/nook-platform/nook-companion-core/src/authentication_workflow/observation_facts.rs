@@ -470,6 +470,38 @@ mod tests {
     }
 
     #[test]
+    fn implicit_get_password_submission_is_rejected() {
+        let facts = AuthenticationPageObservationFacts {
+            fields: AuthenticationFieldObservationFacts {
+                username_field_count: 1,
+                current_password_field_count: 1,
+                ..Default::default()
+            },
+            ceremony: AuthenticationCeremonyObservationFacts {
+                authentication_context: AuthenticationCeremonyContextObservation {
+                    authentication_username: AuthenticationUsernameEvidence::Strong,
+                    source_origin: "https://example.test".to_owned(),
+                    form_identity: "login".to_owned(),
+                    destination_identity: "https://example.test/session".to_owned(),
+                },
+                advance_control: AuthenticationAdvanceControlEvidence::ImplicitSubmission,
+                implicit_submission_method: PageControlSubmissionMethod::Get,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        assert!(!matches!(
+            AuthenticationPageObservationFactsBatch {
+                observations: vec![facts],
+            }
+            .classify(),
+            AuthenticationWorkflowMatch::Matched(snapshot)
+                if snapshot.kind == AuthenticationWorkflowKind::Login
+        ));
+    }
+
+    #[test]
     fn implicit_credential_creation_admits_register_destinations() {
         let facts = AuthenticationPageObservationFacts {
             fields: AuthenticationFieldObservationFacts {

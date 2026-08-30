@@ -24,6 +24,7 @@ export const authenticationFactAttributeFilter = [
   "name",
   "onchange",
   "oninput",
+  "open",
   "placeholder",
   "readonly",
   "role",

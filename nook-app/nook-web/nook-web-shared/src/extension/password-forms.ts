@@ -48,6 +48,7 @@ import {
   controlLabel,
   controlMachineIdentity,
   controlSubmissionMethod,
+  formUsesGetSubmission,
   isRenderedControl,
   observeSubmit,
   requestImplicitAuthenticationSubmit,
@@ -626,12 +627,25 @@ export function authenticationPageObservationFacts({
       manualCheckpoint: observation.summary.manualCheckpointPresent
         ? "present"
         : "absent",
+      implicitSubmissionMethod:
+        observation.formScope.kind === PasswordFormScopeKind.Owned &&
+        formUsesGetSubmission(observation.formScope.owner)
+          ? "get"
+          : observation.formScope.kind === PasswordFormScopeKind.Owned
+            ? "post"
+            : "absent",
       advanceControl:
         observation.formScope.kind === PasswordFormScopeKind.Owned &&
         !advanceControls.some(
           (control) =>
             control.matches(semanticSubmitControlSelector) &&
             !controlIsInert(control),
+        ) &&
+        !(
+          observation.summary.currentPasswordFieldCount +
+            observation.summary.genericPasswordFieldCount +
+            observation.summary.newPasswordFieldCount >
+            0 && formUsesGetSubmission(observation.formScope.owner)
         )
           ? "implicit-submission"
           : "absent",
@@ -785,6 +799,9 @@ export function fillLoginCredentials(
   }
 
   const passwordField = passwordFields[0];
+  if (passwordField.form && formUsesGetSubmission(passwordField.form)) {
+    return false;
+  }
   if (usernameField) {
     const nookTypedArgs0_21: Parameters<typeof setNativeInputValue>[0] = {
       input: usernameField,

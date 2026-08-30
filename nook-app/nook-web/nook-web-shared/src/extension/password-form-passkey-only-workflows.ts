@@ -109,7 +109,11 @@ export function appendIndependentPasskeyOnlyWorkflows<
     });
   });
   const passkeyCandidates = findPasskeyControls(document);
-  const ranked = [...fieldBearing, ...independent].map((observation) => ({
+  const rankingCandidates = shortlistWorkflowsForFactsRanking(
+    fieldBearing,
+    independent,
+  );
+  const ranked = rankingCandidates.map((observation) => ({
     observation,
     safe: observationHasSafePasskey(
       observation,
@@ -119,6 +123,24 @@ export function appendIndependentPasskeyOnlyWorkflows<
     priority: observationPriority(observation),
   }));
   return takeRankedWorkflowObservations(fieldBearing, ranked);
+}
+
+function shortlistWorkflowsForFactsRanking<Observation>(
+  fieldBearing: Observation[],
+  independent: Observation[],
+): Observation[] {
+  const leading = fieldBearing.slice(
+    0,
+    MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
+  );
+  const reserved = fieldBearing.at(-1);
+  const selected = reserved && !leading.includes(reserved)
+    ? [...leading, reserved]
+    : leading;
+  return [
+    ...selected,
+    ...independent.slice(0, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS),
+  ];
 }
 
 function collectPasskeyOnlyScopes(

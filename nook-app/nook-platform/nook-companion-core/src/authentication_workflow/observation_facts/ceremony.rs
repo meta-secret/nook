@@ -5,9 +5,9 @@ use crate::authentication_workflow::{
 };
 use crate::page_field_classification::{
     AuthenticationAdvanceControlDecision, AuthenticationAdvanceControlObservation,
-    AuthenticationUsernameEvidence, has_safe_authentication_route_identity,
-    has_safe_credential_update_route_identity, looks_like_one_time_code_auto_submit_signal,
-    one_time_code_ceremony_context_is_authenticated,
+    AuthenticationUsernameEvidence, PageControlSubmissionMethod,
+    has_safe_authentication_route_identity, has_safe_credential_update_route_identity,
+    looks_like_one_time_code_auto_submit_signal, one_time_code_ceremony_context_is_authenticated,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -128,6 +128,9 @@ pub struct AuthenticationCeremonyObservationFacts {
     pub manual_checkpoint: AuthenticationManualCheckpoint,
     /// Explicit `present` remains legacy-only; `implicit-submission` is validated with context.
     pub advance_control: AuthenticationAdvanceControlEvidence,
+    /// Effective form method for implicit submission; GET must not admit password logins.
+    #[serde(default)]
+    pub implicit_submission_method: PageControlSubmissionMethod,
 }
 
 impl AuthenticationCeremonyObservationFacts {
@@ -169,7 +172,8 @@ impl AuthenticationCeremonyObservationFacts {
         matches!(
             self.advance_control,
             AuthenticationAdvanceControlEvidence::ImplicitSubmission
-        ) && fields.one_time_code_field_count == 0
+        ) && !password_implicit_submission_uses_get(self, fields)
+            && fields.one_time_code_field_count == 0
             && [
                 fields.current_password_field_count,
                 fields.generic_password_field_count,
@@ -198,4 +202,18 @@ impl AuthenticationCeremonyObservationFacts {
                 )
             }
     }
+}
+
+fn password_implicit_submission_uses_get(
+    ceremony: &AuthenticationCeremonyObservationFacts,
+    fields: AuthenticationFieldObservationFacts,
+) -> bool {
+    (fields.current_password_field_count
+        + fields.generic_password_field_count
+        + fields.new_password_field_count)
+        > 0
+        && matches!(
+            ceremony.implicit_submission_method,
+            PageControlSubmissionMethod::Get
+        )
 }

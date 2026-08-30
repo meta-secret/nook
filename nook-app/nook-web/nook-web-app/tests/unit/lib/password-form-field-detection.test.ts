@@ -339,4 +339,21 @@ describe('authentication field detection', () => {
       ),
     ).toBe(false)
   })
+
+  test('rescans a closed dialog after it opens', () => {
+    document.body.innerHTML = `
+      <dialog>
+        <section>
+          <div><input autocomplete="username" /></div>
+          <div><input type="password" autocomplete="current-password" /></div>
+          <button type="button">Sign in</button>
+        </section>
+      </dialog>
+    `
+    expect(summarizeAuthenticationWorkflowForms()).toEqual([])
+    document.querySelector('dialog')?.setAttribute('open', '')
+    const observation = observedAuthenticationWorkflow()
+    expect(observation.summary.usernameFieldCount).toBe(1)
+    expect(observation.summary.passwordFieldCount).toBe(1)
+  })
 })

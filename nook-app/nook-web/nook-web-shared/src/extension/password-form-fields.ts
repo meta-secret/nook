@@ -102,6 +102,7 @@ const oneTimeCodeCandidateSelector = [
 
 function isRenderedInput(field: HTMLInputElement): boolean {
   if (field.type === "hidden") return false;
+  if (field.closest("dialog:not([open])")) return false;
   // Cookie/consent layers often mark large subtrees aria-hidden while the
   // login fields remain CSS-visible and focusable (common on Meta). Only the
   // field itself is rejected for aria-hidden; ancestors still fail on hidden /
@@ -115,7 +116,8 @@ function isRenderedInput(field: HTMLInputElement): boolean {
       element.hidden ||
       element.hasAttribute("inert") ||
       element.inert ||
-      element.getAttribute("aria-disabled") === "true"
+      element.getAttribute("aria-disabled") === "true" ||
+      (element instanceof HTMLDialogElement && !element.open)
     ) {
       return false;
     }

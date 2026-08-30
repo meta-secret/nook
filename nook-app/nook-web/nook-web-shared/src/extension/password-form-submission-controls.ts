@@ -223,6 +223,7 @@ export function boundAuthenticationControlObservations<Candidate>(
 }
 
 export function isRenderedControl(control: HTMLElement): boolean {
+  if (control.closest("dialog:not([open])")) return false;
   let element: HTMLElement = control;
   for (;;) {
     const style = getComputedStyle(element);
@@ -232,6 +233,7 @@ export function isRenderedControl(control: HTMLElement): boolean {
       element.hasAttribute("inert") ||
       element.inert ||
       element.getAttribute("aria-disabled") === "true" ||
+      (element instanceof HTMLDialogElement && !element.open) ||
       !rendered
     ) {
       return false;

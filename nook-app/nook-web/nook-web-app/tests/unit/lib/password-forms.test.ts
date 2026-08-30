@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import {
   authenticationPageObservationFacts,
+  fillLoginCredentials,
   fillOneTimeCode,
   findOneTimeCodeFields,
   PasswordFormQueryKind,
@@ -130,6 +131,31 @@ describe('website one-time-code fields', () => {
     })
     expect(facts.detailedAdvanceControl).toEqual({ kind: 'absent' })
     expect(facts.ceremony.advanceControl).toBe('implicit-submission')
+  })
+
+  test('rejects implicit GET password submission before fill', () => {
+    document.body.innerHTML = `
+      <form method="get" aria-label="Login" action="/session">
+        <input autocomplete="username" />
+        <input id="secret" type="password" autocomplete="current-password" />
+      </form>
+    `
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.ceremony.advanceControl).toBe('absent')
+    expect(facts.ceremony.implicitSubmissionMethod).toBe('get')
+    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: { username: 'vault-user', password: 'vault-pass' },
+      kind: PasswordFormQueryKind.Root,
+      root: document,
+    }
+    expect(fillLoginCredentials(fillArgs)).toBe(false)
+    expect(
+      (document.querySelector('#secret') as HTMLInputElement).value,
+    ).toBe('')
   })
 
   test('marks a hidden semantic submitter inert and allows implicit submission', () => {

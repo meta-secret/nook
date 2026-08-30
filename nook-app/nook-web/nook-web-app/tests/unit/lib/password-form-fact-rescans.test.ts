@@ -33,6 +33,7 @@ describe('authentication fact rescans', () => {
         'method',
         'onchange',
         'oninput',
+        'open',
         'placeholder',
         'readonly',
         'role',
@@ -222,5 +223,22 @@ describe('authentication fact rescans', () => {
       kind: 'observed',
       observations: [{ submissionMethod: 'post' }],
     })
+  })
+
+  test('rescans a closed dialog after it opens', () => {
+    document.body.innerHTML = `
+      <dialog>
+        <form method="post" action="/auth/login">
+          <input autocomplete="username" />
+          <input type="password" autocomplete="current-password" />
+          <button type="submit">Sign in</button>
+        </form>
+      </dialog>
+    `
+    expect(summarizeAuthenticationWorkflowForms()).toHaveLength(0)
+    document.querySelector('dialog')?.setAttribute('open', '')
+    expect(
+      summarizeAuthenticationWorkflowForms()[0]?.summary.passwordFieldCount,
+    ).toBe(1)
   })
 })
