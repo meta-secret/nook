@@ -1,4 +1,5 @@
 import type { PrePushRequest } from '../codec/args/pre-push.ts';
+import { lintChangedCortexDensity } from '../lib/changed-cortex-density.ts';
 import { findRepoRoot, requireBun } from '../lib/repo.ts';
 import { runCommand } from '../lib/run.ts';
 import {
@@ -76,6 +77,25 @@ export async function runPrePush(
     };
     loomFailureDetail(loomFailureDetailArgs3);
   }
+
+  const densityArgs = { baseSha, repoRoot };
+  const density = lintChangedCortexDensity(densityArgs);
+  if (density.findings.length > 0) {
+    const detail = density.findings
+      .map(
+        (finding) =>
+          `${finding.file}:${finding.line}: ${finding.reason}: ${finding.excerpt}`,
+      )
+      .join('\n');
+    const densityFailureArgs: LoomFailureDetailArgs = {
+      code: LoomFailureCode.CortexAuditFailed,
+      text: `Cortex Writer density failed for changed Markdown:\n${detail}`,
+    };
+    loomFailureDetail(densityFailureArgs);
+  }
+  messages.push(
+    `Cortex Writer density passed for ${density.checkedPaths.length} changed Markdown file(s)`,
+  );
 
   const contractArgs: RunCommandArgs = {
     command: 'bash',
