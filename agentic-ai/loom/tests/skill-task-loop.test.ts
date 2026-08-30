@@ -14,6 +14,8 @@ import {
   runExecutableSkillPackageGate,
   type ExecutableSkillCommandRequest,
 } from '../src/executable-skills/package-gate.ts';
+import { readTrackedRepositoryFiles } from '../src/executable-skills/repository.ts';
+import { isRunnableConfiguration } from './skill-provider-config-runtime.ts';
 
 const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
 const TASKFILE_PATH = join(REPOSITORY_ROOT, '.task', 'agentic-ai.yml');
@@ -142,6 +144,17 @@ test('skills tasks delegate discovery and execution to the canonical gate', asyn
     expect(taskfile).toContain(`package-gate-cli.ts" ${action}`);
   }
   expect(taskfile).toContain('deps: [skills:install]');
+  expect(taskfile.match(/src\/cli\.ts/gu)).toHaveLength(2);
+  expect(taskfile).toContain('"--request-yaml=$NOOK_SKILL_REQUEST_YAML"');
+  expect(taskfile).toContain('NOOK_SKILL_REQUEST_YAML:');
+  expect(taskfile).toContain('--tools-list');
+  const consumers: string[] = [];
+  for (const file of readTrackedRepositoryFiles(REPOSITORY_ROOT)) {
+    if (!isRunnableConfiguration(file.path)) continue;
+    const source = await readFile(join(REPOSITORY_ROOT, file.path), 'utf8');
+    if (/skills:(?:run|tools-list)/u.test(source)) consumers.push(file.path);
+  }
+  expect(consumers).toEqual(['.task/agentic-ai.yml']);
 });
 
 test('verify runs every discovered package in deterministic order', async () => {
