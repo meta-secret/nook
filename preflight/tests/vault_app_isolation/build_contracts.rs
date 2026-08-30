@@ -1,4 +1,48 @@
 use super::*;
+const TRUSTED_DOCKER_PATHS: [&str; 3] = [
+    "/usr/local/bin/docker",
+    "/usr/bin/docker",
+    "/opt/homebrew/bin/docker",
+];
+const TRUSTED_BUILDX_PATHS: [&str; 6] = [
+    "/usr/local/lib/docker/cli-plugins/docker-buildx",
+    "/usr/local/libexec/docker/cli-plugins/docker-buildx",
+    "/usr/lib/docker/cli-plugins/docker-buildx",
+    "/usr/libexec/docker/cli-plugins/docker-buildx",
+    "/opt/homebrew/lib/docker/cli-plugins/docker-buildx",
+    "/Applications/Docker.app/Contents/Resources/cli-plugins/docker-buildx",
+];
+const TRUSTED_JQ_PATHS: [&str; 3] = ["/usr/local/bin/jq", "/usr/bin/jq", "/opt/homebrew/bin/jq"];
+const TRUSTED_DOCKER_SELECTOR: &str =
+    "if [ -x /usr/local/bin/docker ]; then docker_cli=/usr/local/bin/docker
+elif [ -x /usr/bin/docker ]; then docker_cli=/usr/bin/docker
+elif [ -x /opt/homebrew/bin/docker ]; then docker_cli=/opt/homebrew/bin/docker
+else
+echo \"trusted Docker CLI is unavailable\" >&2
+exit 127
+fi";
+
+fn docker_script_fixture(
+    root: &std::path::Path,
+    relative: &str,
+    directory: &std::path::Path,
+    fake_docker: &std::path::Path,
+) -> anyhow::Result<std::path::PathBuf> {
+    let fake = fake_docker.to_string_lossy();
+    let mut source = read(root, relative);
+    for candidate in TRUSTED_DOCKER_PATHS {
+        anyhow::ensure!(source.matches(candidate).count() == 2);
+        source = source.replace(candidate, &fake);
+    }
+    for candidate in TRUSTED_BUILDX_PATHS {
+        anyhow::ensure!(source.matches(candidate).count() == 2);
+        source = source.replace(candidate, &fake);
+    }
+    anyhow::ensure!(source.matches(fake.as_ref()).count() == 18);
+    let fixture = directory.join("wrapper.sh");
+    fs::write(&fixture, source)?;
+    Ok(fixture)
+}
 
 #[test]
 fn fast_wasm_build_reuses_manifest_keyed_dependencies_outside_the_source_mount()
@@ -18,7 +62,6 @@ fn fast_wasm_build_reuses_manifest_keyed_dependencies_outside_the_source_mount()
                 .contains("- setup:rust\n"),
         "the mounted fast path must not build the source-sealed Rust image"
     );
-
     let app_tasks = read(&root, "nook-app/Taskfile.yml");
     let platform_tasks = read(&root, "nook-app/nook-platform/Taskfile.yml");
     assert!(
@@ -48,14 +91,12 @@ fn fast_wasm_build_reuses_manifest_keyed_dependencies_outside_the_source_mount()
             "{label} must never pass buildx --builder or keep BUILDX_BUILDER/DOCKER_LOAD_BUILDER vars"
         );
     }
-
     let docker_tasks = read(&root, "nook-app/nook-platform/docker/Taskfile.yml");
     assert!(
         docker_tasks.contains("CARGO_TARGET_DIR=/opt/nook/cargo-target")
             && docker_tasks.contains("{{.DOCKER_RUST_FAST_IMAGE}}"),
         "the mounted build must use the dependency image target directory outside the bind mount"
     );
-
     let dockerfile = read(
         &root,
         "nook-app/nook-platform/docker/rust/product.Dockerfile",
@@ -313,7 +354,6 @@ fn scheduled_nightly_live_sync_is_retired() -> anyhow::Result<()> {
         !root.join(".github/workflows/e2e-nightly.yml").exists(),
         "live-provider sync checks must not have a scheduled workflow"
     );
-
     let manual_e2e = read(&root, ".github/workflows/e2e-pr.yml");
     assert!(
         manual_e2e.contains("- sync-live")
@@ -327,16 +367,86 @@ fn scheduled_nightly_live_sync_is_retired() -> anyhow::Result<()> {
     );
     Ok(())
 }
-
 #[test]
 fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
     let root = repository_root();
+    for (path, invocation_count) in [
+        (".github/scripts/verify-wasm-gha-cache.sh", 4),
+        (".github/scripts/with-healthy-buildkit.sh", 10),
+        (".github/scripts/with-remote-buildkit.sh", 5),
+        ("infra/tasks/bake-cache.yml", 14),
+    ] {
+        let source = read(&root, path);
+        let normalized = source.lines().map(str::trim).collect::<Vec<_>>().join("\n");
+        assert_eq!(normalized.matches(TRUSTED_DOCKER_SELECTOR).count(), 1);
+        let assignments: Vec<_> = source
+            .lines()
+            .filter_map(|line| line.split_once("docker_cli=").map(|entry| entry.1.trim()))
+            .collect();
+        assert_eq!(assignments, TRUSTED_DOCKER_PATHS, "{path} selector drift");
+        let buildx_assignments: Vec<_> = source
+            .lines()
+            .filter_map(|line| line.split_once("buildx_cli=").map(|entry| entry.1.trim()))
+            .collect();
+        assert_eq!(
+            buildx_assignments, TRUSTED_BUILDX_PATHS,
+            "{path} Buildx selector drift"
+        );
+        let jq_assignments: Vec<_> = source
+            .lines()
+            .filter_map(|line| line.split_once("jq_cli=").map(|entry| entry.1.trim()))
+            .collect();
+        assert_eq!(jq_assignments, TRUSTED_JQ_PATHS, "{path} jq selector drift");
+        assert_eq!(source.matches("\"$docker_cli\"").count(), invocation_count);
+        assert_eq!(
+            source
+                .matches("export DOCKER_CONFIG=\"$trusted_docker_config\"")
+                .count(),
+            1,
+            "{path} must isolate Docker plugin discovery"
+        );
+        assert!(source.contains(
+            "if [ -z \"${GITHUB_ACTIONS:-}\" ] && [ -e \"$docker_config_source/contexts\" ]; then"
+        ));
+        assert!(source.contains("Docker contexts must not contain symlinks"));
+        assert!(source.contains("export BUILDX_CONFIG=\"$trusted_docker_config/buildx\""));
+        assert!(source.contains("unset BUILDX_BUILDER"));
+        assert!(source.contains("unset DOCKER_HOST DOCKER_CONTEXT BUILDKIT_HOST"));
+        assert!(source.contains("export PATH=/usr/bin:/bin"));
+        assert!(source.contains("any(keys[]; explode | any(. > 127))"));
+        for rejected_key in ["credsstore", "currentcontext", "credhelpers", "proxies"] {
+            assert!(source.contains(&format!("(.key | ascii_downcase) != \"{rejected_key}\"")));
+        }
+        assert!(source.contains(
+            "/bin/ln -s \"$buildx_cli\" \"$trusted_docker_config/cli-plugins/docker-buildx\""
+        ));
+        assert!(source.contains("chmod 600 \"$trusted_docker_config/config.json\""));
+        if path.contains("with-") {
+            let propagation_count = usize::from(path.contains("with-remote"))
+                + usize::from(path.contains("with-healthy")) * 2;
+            assert_eq!(
+                source.matches("DOCKER=\"$docker_cli\" \"$@\"").count(),
+                propagation_count,
+                "{path} must propagate the trusted Docker CLI to wrapped Task commands"
+            );
+        }
+        for forbidden in ["${DOCKER:-", "${DOCKER}", "docker_bin", "command -v docker"] {
+            assert!(!source.contains(forbidden), "{path} permits {forbidden}");
+        }
+        assert!(!source.lines().any(|line| {
+            let command = line.trim_start();
+            !command.starts_with('#')
+                && !command.contains("echo ")
+                && command
+                    .split_whitespace()
+                    .any(|word| word.trim_matches(['\'', '"', ';', '&', '|', '(', ')']) == "docker")
+        }));
+    }
     let pr = read(&root, ".github/workflows/pr.yml");
     assert!(
         !pr.contains("docker buildx prune") && !pr.contains("BUILDX_BUILDER"),
         "PR workflow must delegate builder health and selection to the wrapper"
     );
-
     let ci = read(&root, "nook-app/ci/Taskfile.yml");
     for required in [
         "task: _buildx:healthy",
@@ -352,7 +462,6 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
             "delivery CI must enter the health-checked BuildKit wrapper: {required}"
         );
     }
-
     let wrapper = read(&root, ".github/scripts/with-healthy-buildkit.sh");
     for required in [
         "builder=\"${NOOK_PR_BUILDX_BUILDER:-}\"",
@@ -370,6 +479,8 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
         "rm --force \"$container\"",
         "volume rm --force \"$state_volume\"",
         "--driver docker-container",
+        "--driver-opt \"image=$hosted_buildkit_image\"",
+        "registry.dev.nokey.sh/moby/buildkit:buildx-stable-1",
         "--bootstrap",
         "Using healthy job-scoped BuildKit builder",
         "buildx use \"$builder\"",
@@ -389,6 +500,10 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
     let remote_wrapper = read(&root, ".github/scripts/with-remote-buildkit.sh");
     for required in [
         "ARC requires a valid job-scoped remote BuildKit builder",
+        "tcp://nook-buildkit.arc-runners.svc.cluster.local:1234",
+        "\"Driver\":\"remote\"",
+        "\"Endpoint\":\"%s\"",
+        ">\"$BUILDX_CONFIG/instances/$builder\"",
         "buildx inspect \"$builder\" --bootstrap",
         "buildx build",
         "--output type=cacheonly",
@@ -400,6 +515,20 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
             "ARC remote BuildKit wrapper missing client-only contract: {required}"
         );
     }
+    let verifier = read(&root, ".github/scripts/verify-wasm-gha-cache.sh");
+    assert!(
+        verifier.find("if [ \"${NOOK_WASM_CACHE_PROMOTION_ENABLED:-}\" = \"1\" ]; then")
+            < verifier.find("  prepare_trusted_docker"),
+        "verification-only mode must not require Docker, Buildx, or jq"
+    );
+    for required in [
+        "case \"${NOOK_BUILDKIT_REMOTE:-}\" in",
+        "\"Driver\":\"remote\"",
+        "buildx use \"$builder\"",
+        "\"$repo_root/.github/scripts/with-healthy-buildkit.sh\" \"$docker_cli\" buildx bake",
+    ] {
+        assert!(verifier.contains(required), "verifier missing {required}");
+    }
     assert!(
         ci.contains("if test \"${NOOK_BUILDKIT_REMOTE:-}\" = \"1\"; then")
             && ci.contains(".github/scripts/with-remote-buildkit.sh")
@@ -408,7 +537,6 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
     );
     Ok(())
 }
-
 #[test]
 fn stuck_pr_buildkit_probe_is_killed_and_replaced_within_its_deadline() -> anyhow::Result<()> {
     let root = repository_root();
@@ -418,7 +546,6 @@ fn stuck_pr_buildkit_probe_is_killed_and_replaced_within_its_deadline() -> anyho
         std::process::id()
     ));
     fs::create_dir_all(&temp)?;
-
     let fake_docker = temp.join("docker");
     let docker_log = temp.join("docker.log");
     let child_pid_file = temp.join("docker-child.pid");
@@ -428,6 +555,10 @@ fn stuck_pr_buildkit_probe_is_killed_and_replaced_within_its_deadline() -> anyho
         r#"#!/usr/bin/env bash
 set -euo pipefail
 printf '%s\n' "$*" >> "$FAKE_DOCKER_LOG"
+if [ "${1:-}" = context ] && [ "${2:-}" = show ]; then
+  printf '%s\n' desktop-linux
+  exit 0
+fi
 if [ "${1:-}" = buildx ] && [ "${2:-}" = inspect ]; then
   sleep 30 &
   child_pid=$!
@@ -439,21 +570,39 @@ fi
     let mut permissions = fs::metadata(&fake_docker)?.permissions();
     permissions.set_mode(0o755);
     fs::set_permissions(&fake_docker, permissions)?;
-
+    for utility in ["ln", "mktemp"] {
+        std::os::unix::fs::symlink(&fake_docker, temp.join(utility))?;
+    }
+    let wrapper = docker_script_fixture(
+        &root,
+        ".github/scripts/with-healthy-buildkit.sh",
+        &temp,
+        &fake_docker,
+    )?;
     let started = Instant::now();
     let output = Command::new("bash")
-        .arg(root.join(".github/scripts/with-healthy-buildkit.sh"))
-        .args(["bash", "-c", "printf ok > \"$1\"", "nook-test"])
+        .arg(&wrapper)
+        .args([
+            "bash",
+            "-c",
+            "test -z \"${BUILDX_BUILDER+x}${DOCKER_HOST+x}${DOCKER_CONTEXT+x}${BUILDKIT_HOST+x}\" && printf ok > \"$1\"",
+            "nook-test",
+        ])
         .arg(&command_marker)
-        .env("DOCKER", &fake_docker)
+        .env("DOCKER_CONFIG", temp.join("docker-config"))
         .env("FAKE_DOCKER_LOG", &docker_log)
         .env("FAKE_DOCKER_CHILD_PID", &child_pid_file)
         .env("NOOK_PR_BUILDX_BUILDER", "nook-pr-timeout-test")
         .env("NOOK_BUILDKIT_HEALTH_TIMEOUT_SECONDS", "1")
         .env("NOOK_BUILDKIT_CLEANUP_TIMEOUT_SECONDS", "2")
+        .env("GITHUB_ACTIONS", "true")
+        .env("BUILDX_BUILDER", "poisoned-builder")
+        .env("DOCKER_HOST", "tcp://attacker.invalid:2375")
+        .env("DOCKER_CONTEXT", "attacker")
+        .env("BUILDKIT_HOST", "tcp://attacker.invalid:1234")
+        .env("PATH", format!("{}:{}", temp.display(), std::env::var("PATH")?))
         .output()?;
     let elapsed = started.elapsed();
-
     assert!(
         output.status.success(),
         "wrapper failed: {}",
@@ -473,14 +622,18 @@ fi
             .success(),
         "timed Docker child {child_pid:?} survived process-group cleanup"
     );
-
     let calls = fs::read_to_string(&docker_log)?;
+    assert!(
+        !calls
+            .lines()
+            .any(|call| call.starts_with("-d ") || call.starts_with("-s "))
+    );
     for required in [
         "buildx inspect nook-pr-timeout-test --bootstrap",
         "rm --force buildx_buildkit_nook-pr-timeout-test0",
         "buildx rm --force nook-pr-timeout-test",
         "volume rm --force buildx_buildkit_nook-pr-timeout-test0_state",
-        "buildx create --name nook-pr-timeout-test --driver docker-container --bootstrap",
+        "buildx create --name nook-pr-timeout-test --driver docker-container --driver-opt image=registry.dev.nokey.sh/moby/buildkit:buildx-stable-1 --bootstrap",
         "buildx use nook-pr-timeout-test",
     ] {
         assert!(
@@ -488,11 +641,54 @@ fi
             "missing recovery call: {required}"
         );
     }
-
+    let malicious_config = temp.join("malicious-docker-config");
+    fs::create_dir_all(&malicious_config)?;
+    fs::write(
+        malicious_config.join("config.json"),
+        "{\n\"\\u0063LIPLUGINSEXTRADIRS\"\n:\n[\"/tmp/untrusted\"],\n\"CrEdSsToRe\":\"untrusted\",\n\"CrEdHeLpErS\":{\"registry.dev.nokey.sh\":\"untrusted\"},\n\"PrOxIeS\":{\"default\":{\"httpsProxy\":\"https://proxy.invalid\"}},\n\"auths\":{}\n}",
+    )?;
+    let sanitized_plugin = Command::new("bash")
+        .arg(&wrapper)
+        .args([
+            "bash",
+            "-c",
+            "grep -Fq '\"auths\": {}' \"$DOCKER_CONFIG/config.json\" && ! grep -Eqi 'currentcontext|clipluginsextradirs|u0063lipluginsextradirs|credsstore|credhelpers|proxies|proxy.invalid|untrusted' \"$DOCKER_CONFIG/config.json\"",
+        ])
+        .env("DOCKER_CONFIG", &malicious_config)
+        .env("FAKE_DOCKER_LOG", &docker_log)
+        .env("GITHUB_ACTIONS", "true")
+        .output()?;
+    assert!(
+        sanitized_plugin.status.success(),
+        "structural Docker config sanitizer failed: {}",
+        String::from_utf8_lossy(&sanitized_plugin.stderr)
+    );
+    fs::write(
+        malicious_config.join("config.json"),
+        "{\"cliPluginsExtraDir\\u017f\":[\"/tmp/untrusted\"]}",
+    )?;
+    let unicode_folded = Command::new("bash")
+        .arg(&wrapper)
+        .arg("true")
+        .env("DOCKER_CONFIG", &malicious_config)
+        .env("GITHUB_ACTIONS", "true")
+        .output()?;
+    assert!(!unicode_folded.status.success());
+    assert!(
+        String::from_utf8_lossy(&unicode_folded.stderr).contains("non-ASCII Docker config key")
+    );
+    fs::remove_file(malicious_config.join("config.json"))?;
+    std::os::unix::fs::symlink("/", malicious_config.join("contexts"))?;
+    let linked_contexts = Command::new("bash")
+        .arg(&wrapper)
+        .arg("true")
+        .env("DOCKER_CONFIG", &malicious_config)
+        .output()?;
+    assert!(!linked_contexts.status.success());
+    assert!(String::from_utf8_lossy(&linked_contexts.stderr).contains("must not contain symlinks"));
     fs::remove_dir_all(temp)?;
     Ok(())
 }
-
 #[test]
 fn local_delivery_uses_daemon_buildkit_instead_of_a_shared_container() -> anyhow::Result<()> {
     let root = repository_root();
@@ -502,7 +698,6 @@ fn local_delivery_uses_daemon_buildkit_instead_of_a_shared_container() -> anyhow
         std::process::id()
     ));
     fs::create_dir_all(&temp)?;
-
     let fake_docker = temp.join("docker");
     let docker_log = temp.join("docker.log");
     let command_marker = temp.join("command-ran");
@@ -517,17 +712,26 @@ printf '%s\n' "$*" >> "$FAKE_DOCKER_LOG"
     let mut permissions = fs::metadata(&fake_docker)?.permissions();
     permissions.set_mode(0o755);
     fs::set_permissions(&fake_docker, permissions)?;
-
+    let wrapper = docker_script_fixture(
+        &root,
+        ".github/scripts/with-healthy-buildkit.sh",
+        &temp,
+        &fake_docker,
+    )?;
     let output = Command::new("bash")
-        .arg(root.join(".github/scripts/with-healthy-buildkit.sh"))
-        .args(["bash", "-c", "printf ok > \"$1\"", "nook-test"])
+        .arg(&wrapper)
+        .args([
+            "bash",
+            "-c",
+            "test -z \"${BUILDX_BUILDER+x}\" && printf ok > \"$1\"",
+            "nook-test",
+        ])
         .arg(&command_marker)
-        .env("DOCKER", &fake_docker)
+        .env("DOCKER_CONFIG", temp.join("docker-config"))
         .env("FAKE_DOCKER_LOG", &docker_log)
         .env_remove("NOOK_PR_BUILDX_BUILDER")
-        .env_remove("BUILDX_BUILDER")
+        .env("BUILDX_BUILDER", "poisoned-builder")
         .output()?;
-
     assert!(
         output.status.success(),
         "wrapper failed: {}",
@@ -545,11 +749,10 @@ printf '%s\n' "$*" >> "$FAKE_DOCKER_LOG"
         String::from_utf8_lossy(&output.stderr).contains("Using default docker buildx builder"),
         "local delivery must advertise the default builder path"
     );
-
     let refused = Command::new("bash")
-        .arg(root.join(".github/scripts/with-healthy-buildkit.sh"))
+        .arg(wrapper)
         .args(["true"])
-        .env("DOCKER", &fake_docker)
+        .env("DOCKER_CONFIG", temp.join("docker-config"))
         .env("NOOK_PR_BUILDX_BUILDER", "nook-pr")
         .output()?;
     assert!(
@@ -560,7 +763,6 @@ printf '%s\n' "$*" >> "$FAKE_DOCKER_LOG"
         String::from_utf8_lossy(&refused.stderr).contains("refusing shared BuildKit builder name"),
         "refusal must name the shared builder hazard"
     );
-
     fs::remove_dir_all(temp)?;
     Ok(())
 }
@@ -592,14 +794,28 @@ fi
     permissions.set_mode(0o755);
     fs::set_permissions(&fake_docker, permissions)?;
 
-    let wrapper = root.join(".github/scripts/with-remote-buildkit.sh");
+    let wrapper = docker_script_fixture(
+        &root,
+        ".github/scripts/with-remote-buildkit.sh",
+        &temp,
+        &fake_docker,
+    )?;
     let output = Command::new("bash")
         .arg(&wrapper)
-        .args(["bash", "-c", "printf ok > \"$1\"", "nook-test"])
+        .args([
+            "bash",
+            "-c",
+            "grep -Fq '\"Driver\":\"remote\"' \"$BUILDX_CONFIG/instances/nook-arc-run-1\" && grep -Fq '\"Endpoint\":\"tcp://nook-buildkit.arc-runners.svc.cluster.local:1234\"' \"$BUILDX_CONFIG/instances/nook-arc-run-1\" && printf ok > \"$1\"",
+            "nook-test",
+        ])
         .arg(&command_marker)
-        .env("DOCKER", &fake_docker)
+        .env("DOCKER_CONFIG", temp.join("docker-config"))
         .env("FAKE_DOCKER_LOG", &docker_log)
         .env("NOOK_PR_BUILDX_BUILDER", "nook-arc-run-1")
+        .env(
+            "NOOK_BUILDKIT_ADDR",
+            "tcp://nook-buildkit.arc-runners.svc.cluster.local:1234",
+        )
         .output()?;
     assert!(
         output.status.success(),
@@ -637,10 +853,14 @@ fi
         .arg(&wrapper)
         .args(["bash", "-c", "printf bad > \"$1\"", "nook-test"])
         .arg(&command_marker)
-        .env("DOCKER", &fake_docker)
+        .env("DOCKER_CONFIG", temp.join("docker-config"))
         .env("FAKE_DOCKER_LOG", &docker_log)
         .env("FAIL_REMOTE_PROBE", "1")
         .env("NOOK_PR_BUILDX_BUILDER", "nook-arc-run-2")
+        .env(
+            "NOOK_BUILDKIT_ADDR",
+            "tcp://nook-buildkit.arc-runners.svc.cluster.local:1234",
+        )
         .output()?;
     assert_eq!(failed.status.code(), Some(19));
     assert!(!command_marker.exists());
