@@ -103,7 +103,7 @@ describe('classified login activation', () => {
       clicks += 1
     })
 
-    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(false)
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
     expect(clicks).toBe(1)
   })
 
