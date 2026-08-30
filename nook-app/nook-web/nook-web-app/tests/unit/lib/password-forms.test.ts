@@ -83,7 +83,7 @@ describe('website one-time-code fields', () => {
       backupCodesHint: false,
     })
     const detailed = facts.detailedAdvanceControl
-    if (detailed.kind !== 'observed') {
+    if (!detailed || detailed.kind !== 'observed') {
       throw new Error('expected observed advance-control candidates')
     }
     expect(detailed.observations).toEqual(

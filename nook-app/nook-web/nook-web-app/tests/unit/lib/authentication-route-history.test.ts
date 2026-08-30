@@ -33,7 +33,7 @@ describe('authentication route history', () => {
       addEventListener(type: string, listener: () => void) {
         if (type === 'currententrychange') listeners.push(listener)
       },
-      removeEventListener(type: string, listener: () => void) {
+      removeEventListener(_type: string, listener: () => void) {
         const index = listeners.indexOf(listener)
         if (index >= 0) listeners.splice(index, 1)
       },

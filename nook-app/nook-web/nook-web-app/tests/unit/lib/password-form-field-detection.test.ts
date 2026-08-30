@@ -30,7 +30,7 @@ describe('authentication field detection', () => {
   test('uses an authentication control after a generic help button', () => {
     document.body.innerHTML = `
       <form method="post" action="/next">
-        <input type="text" />
+        <input type="email" name="primary" />
         <input type="password" autocomplete="current-password" />
         <button type="button">Help</button>
         <button type="submit">Sign in</button>
