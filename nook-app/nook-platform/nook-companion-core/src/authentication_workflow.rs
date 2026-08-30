@@ -260,7 +260,7 @@ impl AuthenticationWorkflowSnapshot {
     }
 
     #[must_use]
-    pub const fn requires_login_match_availability(self) -> bool {
+    pub fn requires_login_match_availability(self) -> bool {
         self.saved_login_capability() == AuthenticationSavedLoginCapability::FillSavedLogin
             && matches!(
                 self.action,
