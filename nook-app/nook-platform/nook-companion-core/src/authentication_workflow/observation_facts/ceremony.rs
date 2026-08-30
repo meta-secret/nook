@@ -214,6 +214,6 @@ fn password_implicit_submission_uses_get(
         > 0
         && matches!(
             ceremony.implicit_submission_method,
-            PageControlSubmissionMethod::Get
+            PageControlSubmissionMethod::Get | PageControlSubmissionMethod::Dialog
         )
 }

@@ -785,7 +785,7 @@ describe('classified login activation', () => {
   })
 
   test('does not submit GET-default formmethod overrides after filling passwords', () => {
-    for (const formmethod of ['get', '', 'invalid']) {
+    for (const formmethod of ['get', '', 'invalid', 'dialog']) {
       document.body.innerHTML = `
         <form id="login" method="post" action="/auth/login">
           <input autocomplete="username" />

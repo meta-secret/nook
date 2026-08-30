@@ -14,6 +14,7 @@ export enum PageControlSubmissionMethod {
   Absent = "absent",
   Post = "post",
   Get = "get",
+  Dialog = "dialog",
 }
 
 export type PasswordFormScopeQuery =
@@ -249,7 +250,7 @@ function htmlEnumeratedSubmissionMethod(
 ): PageControlSubmissionMethod {
   const normalized = token.trim().toLowerCase();
   if (normalized === "post") return PageControlSubmissionMethod.Post;
-  if (normalized === "dialog") return PageControlSubmissionMethod.Absent;
+  if (normalized === "dialog") return PageControlSubmissionMethod.Dialog;
   return PageControlSubmissionMethod.Get;
 }
 
@@ -311,9 +312,23 @@ export function controlLabel(control: HTMLElement): string {
   ].join(" ");
 }
 
-export function formUsesGetSubmission(form: HTMLFormElement): boolean {
+export function formSubmissionMethod(
+  form: HTMLFormElement,
+): PageControlSubmissionMethod {
   const method = presentHtmlSubmissionMethod(form, "method");
-  return method === false || method === PageControlSubmissionMethod.Get;
+  return method === false ? PageControlSubmissionMethod.Get : method;
+}
+
+export function formUsesGetSubmission(form: HTMLFormElement): boolean {
+  return formSubmissionMethod(form) === PageControlSubmissionMethod.Get;
+}
+
+export function formBlocksCredentialDisclosure(form: HTMLFormElement): boolean {
+  const method = formSubmissionMethod(form);
+  return (
+    method === PageControlSubmissionMethod.Get ||
+    method === PageControlSubmissionMethod.Dialog
+  );
 }
 
 export function canRequestImplicitAuthenticationSubmit(
@@ -353,7 +368,7 @@ export function requestImplicitAuthenticationSubmit(
     !sourceOrigin ||
     formHasSemanticSubmitter(form) ||
     typeof form.requestSubmit !== "function" ||
-    (hasAuthenticationPassword && formUsesGetSubmission(form))
+    (hasAuthenticationPassword && formBlocksCredentialDisclosure(form))
   ) {
     return false;
   }

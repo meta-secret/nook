@@ -66,6 +66,7 @@ pub enum PageControlSubmissionMethod {
     Absent,
     Post,
     Get,
+    Dialog,
 }
 
 /// Browser-collected structure for one possible authentication advance control.
@@ -148,7 +149,11 @@ impl AuthenticationAdvanceControlObservation {
     /// Decide whether this DOM-extracted control can advance the observed ceremony.
     #[must_use]
     pub fn classify(&self) -> AuthenticationAdvanceControlDecision {
-        if !self.is_bounded() || matches!(self.submission_method, PageControlSubmissionMethod::Get)
+        if !self.is_bounded()
+            || matches!(
+                self.submission_method,
+                PageControlSubmissionMethod::Get | PageControlSubmissionMethod::Dialog
+            )
         {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
@@ -432,6 +437,9 @@ mod tests {
 
         control.submission_method = PageControlSubmissionMethod::Post;
         assert!(authentication_advance_control_is_safe(&control));
+
+        control.submission_method = PageControlSubmissionMethod::Dialog;
+        assert!(!authentication_advance_control_is_safe(&control));
     }
 
     #[test]

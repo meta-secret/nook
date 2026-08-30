@@ -158,6 +158,31 @@ describe('website one-time-code fields', () => {
     ).toBe('')
   })
 
+  test('rejects dialog-method password submission before fill', () => {
+    document.body.innerHTML = `
+      <form method="dialog" aria-label="Login">
+        <input autocomplete="username" />
+        <input id="secret" type="password" autocomplete="current-password" />
+      </form>
+    `
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.ceremony.advanceControl).toBe('absent')
+    expect(facts.ceremony.implicitSubmissionMethod).toBe('dialog')
+    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: { username: 'vault-user', password: 'vault-pass' },
+      kind: PasswordFormQueryKind.Root,
+      root: document,
+    }
+    expect(fillLoginCredentials(fillArgs)).toBe(false)
+    expect(
+      (document.querySelector('#secret') as HTMLInputElement).value,
+    ).toBe('')
+  })
+
   test('marks a hidden semantic submitter inert and allows implicit submission', () => {
     document.body.innerHTML = `
       <form method="post" aria-label="Login" action="/session">
