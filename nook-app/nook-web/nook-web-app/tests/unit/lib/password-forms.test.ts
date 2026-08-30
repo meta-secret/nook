@@ -708,5 +708,4 @@ describe('website one-time-code fields', () => {
       ]),
     })
   })
-
 })
