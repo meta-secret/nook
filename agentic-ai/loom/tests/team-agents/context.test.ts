@@ -6,6 +6,14 @@ import {
 import type { TeamTaskContextRequest } from '../../src/team-agents/context.ts';
 import { TeamKey } from '../../src/team-agents/catalog.ts';
 import { join } from 'node:path';
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 
 const REPO_ROOT = join(import.meta.dir, '../../../..');
 const SRE_CONTEXT_PATHS = [
@@ -143,6 +151,34 @@ describe('team task context', () => {
       expect(() => resolveTeamTaskContext(selectedRequest)).toThrow(
         'exact existing task-authorized Cortex Markdown files',
       );
+    }
+  });
+
+  test('rejects a non-regular automatic authoring bundle member', () => {
+    const repositoryRoot = mkdtempSync(join(tmpdir(), 'nook-cortex-context-'));
+    const directoryOptions = { recursive: true } as const;
+    const removalOptions = { recursive: true, force: true } as const;
+    try {
+      for (const path of CORTEX_AUTHORING_SKILL_PATHS) {
+        const absolute = join(repositoryRoot, path);
+        mkdirSync(join(absolute, '..'), directoryOptions);
+        writeFileSync(absolute, 'skill\n');
+      }
+      const symlinkPath = join(repositoryRoot, CORTEX_AUTHORING_SKILL_PATHS[0]);
+      rmSync(symlinkPath);
+      symlinkSync('/tmp', symlinkPath);
+      const request: TeamTaskContextRequest = {
+        repositoryRoot,
+        team: TeamKey.Sre,
+        readClaims: [],
+        writeClaims: ['.cortex/teams/sre/workflows/quality.md'],
+        selectedSkillPaths: [],
+      };
+      expect(() => resolveTeamTaskContext(request)).toThrow(
+        'existing regular files',
+      );
+    } finally {
+      rmSync(repositoryRoot, removalOptions);
     }
   });
 });

@@ -49,6 +49,14 @@ export function resolveTeamTaskContext(
   const automaticSkills = writesCortex(request.writeClaims)
     ? CORTEX_AUTHORING_SKILL_PATHS
     : [];
+  if (
+    automaticSkills.some(
+      (path) => !isRegularFile(join(request.repositoryRoot, path)),
+    )
+  )
+    throw new Error(
+      'Canonical Cortex authoring skills must be existing regular files.',
+    );
   const automaticSkillPaths: readonly string[] = automaticSkills;
   const selectedSkills = [...new Set(request.selectedSkillPaths)]
     .filter((path) => !automaticSkillPaths.includes(path))

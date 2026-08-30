@@ -100,7 +100,7 @@ Gizmo Prime owns:
 
 - Workbench planning and lifecycle records;
 - architectural synthesis;
-- shared-file edits;
+- shared-file serialization, exact writer grants, and integration;
 - integration decisions;
 - branch and pull-request state;
 - review replies and thread resolution;
@@ -464,7 +464,9 @@ Module-oriented work follows
 - Give every write-capable worker an isolated workspace.
 - Verify every returned commit against its exact baseline and allowed paths.
 - Bind every downstream task to the exact integrated provider commit.
-- Keep shared files and integrated or external delivery state with Gizmo.
+- Keep shared-file serialization, writer grants, integration, and external
+  delivery state with Gizmo. An assigned worker may edit only an exact shared
+  file named by its frozen grant.
 
 The plan declares a task-specific hierarchy depth bound.
 The frozen worker graph records parent lineage and bounded authority for every

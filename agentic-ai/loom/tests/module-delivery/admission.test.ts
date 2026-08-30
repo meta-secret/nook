@@ -16,6 +16,7 @@ import {
 import type { FixtureFileWrite } from './worktree-test-support.ts';
 
 import {
+  CORTEX_TEAM_WRITER_EXPERT,
   REQUIRED_PARENT_OWNED_RESOURCES,
   ModuleDeliveryAdmissionSelectionStatus,
   ModuleDeliveryAttemptDispositionKind,
@@ -37,6 +38,7 @@ import {
   selectModuleDeliveryAdmissions,
   verifyModuleDeliveryEvidenceSubmission,
 } from '../../src/module-delivery/index.ts';
+import { CORTEX_AUTHORING_SKILL_PATHS } from '../../src/team-agents/context.ts';
 
 import type {
   AcceptedModuleDeliveryEvidence,
@@ -420,6 +422,136 @@ function acceptEvidence(
 }
 
 describe('module delivery admission authority', () => {
+  test('admits a frozen Cortex team writer with exact shared-file authority', () => {
+    const cortexFixture = createGitFixture();
+    const write = (relativePath: string): void => {
+      const fileWrite: FixtureFileWrite = {
+        fixture: cortexFixture,
+        relativePath,
+        contents: `${relativePath}\n`,
+      };
+      writeFixtureFile(fileWrite);
+    };
+    try {
+      const sreContext = [
+        '.cortex/teams/sre/AGENTS.md',
+        '.cortex/teams/sre/knowledge-graph.md',
+      ] as const;
+      const sreSkill =
+        '.cortex/teams/sre/dynamic-skills/github-actions-only-validation.md';
+      for (const path of [
+        ...sreContext,
+        ...CORTEX_AUTHORING_SKILL_PATHS,
+        sreSkill,
+      ])
+        write(path);
+      fixtureGit(cortexFixture)(['add', '--all']);
+      fixtureGit(cortexFixture)(['commit', '--quiet', '-m', 'cortex context']);
+      const sourceCommit = fixtureGit(cortexFixture)(['rev-parse', 'HEAD']);
+      const cortexPlan: ModuleDeliveryPlanV2 = {
+        version: 2,
+        generation: 7,
+        sourceCommit,
+        maxConcurrency: 1,
+        maxAgentDepth: 3,
+        maxAttempts: 2,
+        parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
+        parentJoin: {
+          kind: ModuleDeliveryJoinKind.OrderedCommitHandoffs,
+          owner: 'gizmo-prime',
+          validationCommands: ['task loom:verify'],
+        },
+        nodes: [
+          {
+            kind: ModuleDeliveryTaskKind.Write,
+            taskId: 'sre-cortex-writer',
+            team: TeamKey.Sre,
+            functionalOwner: TeamKey.Sre,
+            acceptanceOwner: TeamKey.Sre,
+            parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
+            expert: CORTEX_TEAM_WRITER_EXPERT,
+            moduleRoot: '.cortex/teams/sre',
+            consumerOutcome: 'SRE guidance and its shared index are current.',
+            baseline: {
+              kind: ModuleDeliveryBaselineKind.SourceCommit,
+              sourceCommit,
+            },
+            agentDepthLimit: 3,
+            dependencies: [],
+            resources: {
+              read: [sreSkill],
+              write: [
+                '.cortex/teams/sre/workflows/quality.md',
+                '.cortex/shared/product-specs/index.md',
+              ],
+              evidenceSurface: [],
+            },
+            cortexAuthoring: {
+              selectedSkillPaths: [sreSkill],
+              sharedWriteClaims: ['.cortex/shared/product-specs/index.md'],
+            },
+            parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES.filter(
+              (claim) => claim !== '.cortex/**',
+            ),
+            acceptance: {
+              commands: ['task cortex:audit'],
+              evidence: ['SRE Cortex guidance is indexed and audited.'],
+            },
+            workspace: {
+              kind: ModuleDeliveryWorkspaceKind.IsolatedWorktree,
+              expectedCommitHandoff: true,
+            },
+          },
+        ],
+        edgeContracts: [],
+      };
+      const accepted = validate(cortexPlan);
+      const generationRequest: CreateModuleDeliveryGenerationAuthorityRequest =
+        {
+          acceptedPlan: accepted,
+          expectedLineage: lineage(accepted),
+          repositoryRoot: cortexFixture.sourceRoot,
+        };
+      const authority =
+        createModuleDeliveryGenerationAuthority(generationRequest);
+      const stateRequest: CreateModuleDeliveryAdmissionStateRequest = {
+        authority,
+        acceptedPlan: accepted,
+        headCommit: sourceCommit,
+        integratedWriterFrontiers: [],
+        acceptedEvidence: [],
+      };
+      const state = createModuleDeliveryAdmissionState(stateRequest);
+      const selectionRequest: SelectModuleDeliveryAdmissionsRequest = {
+        authority,
+        acceptedPlan: accepted,
+        state,
+      };
+      const selection = selectModuleDeliveryAdmissions(selectionRequest);
+      const admission = selection.admissions[0];
+      expect(admission?.generation).toBe(7);
+      expect(admission?.startingFrontier).toBe(sourceCommit);
+      expect(admission?.context?.contextPaths).toEqual([
+        ...sreContext,
+        ...CORTEX_AUTHORING_SKILL_PATHS,
+        sreSkill,
+      ]);
+      const leaseRequest: RecordModuleDeliveryAttemptLeasesRequest = {
+        authority,
+        state,
+        admissions: selection.admissions,
+      };
+      const recorded = recordModuleDeliveryAttemptLeases(leaseRequest);
+      expect(recorded.leases).toHaveLength(1);
+      expect(recorded.leases[0]?.planDigest).toBe(accepted.planDigest);
+      expect(recorded.leases[0]?.context?.skillPaths).toEqual([
+        ...CORTEX_AUTHORING_SKILL_PATHS,
+        sreSkill,
+      ]);
+    } finally {
+      disposeGitFixture(cortexFixture);
+    }
+  });
   test('selects the maximal safe set and rejects unproven writer frontiers', () => {
     const active = runtime(validate(PLAN));
     const first = select(active);

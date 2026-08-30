@@ -213,23 +213,6 @@ tasks:
         esac
         bun run --cwd agentic-ai/loom module-delivery -- --plan "$plan"
 
-  loom:cortex-team-task:admit:
-    desc: Admit one typed team-owned Cortex writing task (REQUEST=<request.json>).
-    deps: [loom:install]
-    requires:
-      vars: [REQUEST]
-    cmds:
-      - |
-        set -euo pipefail
-        request="{{.REQUEST}}"
-        case "$request" in
-          /*) ;;
-          *) request="{{.REPO_ROOT}}/$request" ;;
-        esac
-        bun run --cwd agentic-ai/loom cortex-team-task -- \
-          --request "$request" \
-          --working-directory "{{.REPO_ROOT}}"
-
   loom:agent-delegation:start:
     desc: Start one declared ordinary delegation run (PLAN=<plan.json>).
     deps: [loom:install]

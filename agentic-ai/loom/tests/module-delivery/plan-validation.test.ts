@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
 import {
+  CORTEX_TEAM_WRITER_EXPERT,
   REQUIRED_PARENT_OWNED_RESOURCES,
   ModuleDeliveryBaselineKind,
   ModuleDeliveryIssueCode,
@@ -550,6 +551,89 @@ describe('reviewed module delivery plan', () => {
 });
 
 describe('task execution and canonical ownership', () => {
+  test('admits team Cortex scope and only exact serialized shared grants', () => {
+    const cortexNode: ModuleDeliveryWriteNodeV2 = {
+      kind: ModuleDeliveryTaskKind.Write,
+      taskId: 'sre-cortex-writer',
+      team: TeamKey.Sre,
+      functionalOwner: TeamKey.Sre,
+      acceptanceOwner: TeamKey.Sre,
+      parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
+      expert: CORTEX_TEAM_WRITER_EXPERT,
+      moduleRoot: '.cortex/teams/sre',
+      consumerOutcome: 'SRE guidance and the shared index are current.',
+      baseline: {
+        kind: ModuleDeliveryBaselineKind.SourceCommit,
+        sourceCommit: SOURCE_COMMIT,
+      },
+      agentDepthLimit: 2,
+      dependencies: [],
+      resources: {
+        read: ['.cortex/teams/sre/dynamic-skills/quality.md'],
+        write: [
+          '.cortex/teams/sre/workflows/quality.md',
+          '.cortex/shared/product-specs/index.md',
+        ],
+        evidenceSurface: [],
+      },
+      cortexAuthoring: {
+        selectedSkillPaths: ['.cortex/teams/sre/dynamic-skills/quality.md'],
+        sharedWriteClaims: ['.cortex/shared/product-specs/index.md'],
+      },
+      parentOwnedExclusions: PARENT_OWNED_RESOURCES.filter(
+        (claim) => claim !== '.cortex/**',
+      ),
+      acceptance: {
+        commands: ['task cortex:audit'],
+        evidence: ['SRE guidance is indexed and audited.'],
+      },
+      workspace: {
+        kind: ModuleDeliveryWorkspaceKind.IsolatedWorktree,
+        expectedCommitHandoff: true,
+      },
+    };
+    const cortexFixture: PlanFixture = {
+      nodes: [cortexNode],
+      edgeContracts: [],
+    };
+    const valid = validate(plan(cortexFixture));
+    expect(valid.status).toBe(ModuleDeliveryValidationStatus.Accepted);
+
+    const foreignWrite: ModuleDeliveryWriteNodeV2 = {
+      ...cortexNode,
+      resources: {
+        ...cortexNode.resources,
+        write: ['.cortex/teams/security/workflows/quality.md'],
+      },
+      cortexAuthoring: {
+        selectedSkillPaths: ['.cortex/teams/sre/dynamic-skills/quality.md'],
+        sharedWriteClaims: [],
+      },
+    };
+    const foreignFixture: PlanFixture = {
+      nodes: [foreignWrite],
+      edgeContracts: [],
+    };
+    expect(codes(validate(plan(foreignFixture)))).toContain(
+      ModuleDeliveryIssueCode.ParentOwnedWrite,
+    );
+
+    const broadSharedGrant: ModuleDeliveryWriteNodeV2 = {
+      ...cortexNode,
+      resources: { ...cortexNode.resources, write: ['.cortex/shared/**'] },
+      cortexAuthoring: {
+        selectedSkillPaths: ['.cortex/teams/sre/dynamic-skills/quality.md'],
+        sharedWriteClaims: ['.cortex/shared/**'],
+      },
+    };
+    const broadSharedFixture: PlanFixture = {
+      nodes: [broadSharedGrant],
+      edgeContracts: [],
+    };
+    expect(codes(validate(plan(broadSharedFixture)))).toContain(
+      ModuleDeliveryIssueCode.InvalidField,
+    );
+  });
   test('keeps implementation ownership separate from expert routing', () => {
     expect(WASM_NODE.expert).toBe('internal_api_expert');
     expect(WASM_NODE.team).toBe(TeamKey.DevelopmentCore);

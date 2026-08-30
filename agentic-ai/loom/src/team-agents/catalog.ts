@@ -81,3 +81,18 @@ export function teamAuthority(teamKey: TeamKey): TeamAuthority | false {
     false
   );
 }
+
+export function teamCortexRoot(teamKey: TeamKey): string {
+  switch (teamKey) {
+    case TeamKey.Ai:
+      return '.cortex/teams/ai';
+    case TeamKey.DevelopmentCore:
+      return '.cortex/teams/dev-core';
+    case TeamKey.Security:
+      return '.cortex/teams/security';
+    case TeamKey.Sre:
+      return '.cortex/teams/sre';
+    case TeamKey.WebDevelopment:
+      return '.cortex/teams/web-dev';
+  }
+}

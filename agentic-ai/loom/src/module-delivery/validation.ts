@@ -6,6 +6,7 @@ import {
 import type { TaskResourcePatternPair } from '../agent-workflow/domain.ts';
 import { MODULE_EXPERT_CATALOG } from '../module-experts/catalog.ts';
 import type { ModuleExpertProfile } from '../module-experts/catalog.ts';
+import { teamCortexRoot } from '../team-agents/catalog.ts';
 import {
   decodeCompatibleModuleDeliveryPlan,
   moduleDeliveryPlanDigest,
@@ -17,6 +18,7 @@ import {
   MAX_MODULE_DELIVERY_CONCURRENCY,
   MAX_MODULE_DELIVERY_NODES,
   REQUIRED_PARENT_OWNED_RESOURCES,
+  CORTEX_TEAM_WRITER_EXPERT,
   ModuleDeliveryBaselineKind,
   ModuleDeliveryCompatibilityStatus,
   ModuleDeliveryExecutionPrecedenceReason,
@@ -74,6 +76,10 @@ type ModuleScopeRequest = {
 type ResourceClaimScopeRequest = {
   readonly claim: string;
   readonly moduleRoot: string;
+};
+type CortexWriteAuthorizationRequest = {
+  readonly node: ModuleDeliveryNodeV2;
+  readonly claim: string;
 };
 
 type ProfileProtectedWriteRequest = ModuleScopeRequest & {
@@ -262,7 +268,11 @@ function validateNodes(state: ValidationState): void {
     const profile = MODULE_EXPERT_CATALOG.find(
       (entry) => entry.name === node.expert,
     );
-    if (!profile) {
+    const pureCortexTask = isPureCortexTask(node);
+    if (
+      !profile &&
+      !(pureCortexTask && node.expert === CORTEX_TEAM_WRITER_EXPERT)
+    ) {
       const request: IssueRequest = {
         state,
         code: ModuleDeliveryIssueCode.UnknownExpert,
@@ -270,7 +280,7 @@ function validateNodes(state: ValidationState): void {
         message: `Expert ${node.expert} is not registered.`,
       };
       issue(request);
-    } else {
+    } else if (profile) {
       const scopeRequest: ModuleScopeRequest = { state, path, node, profile };
       validateModuleScope(scopeRequest);
     }
@@ -281,6 +291,7 @@ function validateNodes(state: ValidationState): void {
     validateTaskKind(nodeRequest);
     validateBaseline(nodeRequest);
     validateAgentDepth(nodeRequest);
+    validateCortexAuthoring(nodeRequest);
     validateClaims(nodeRequest);
     validateExclusions(nodeRequest);
   }
@@ -326,7 +337,7 @@ function validateModuleScope(request: ModuleScopeRequest): void {
     expertContextPaths: request.profile.canonicalContextPaths,
   };
   const expectedTeam = moduleDeliveryTaskTeam(teamRequest);
-  if (request.node.team !== expectedTeam) {
+  if (!isPureCortexTask(request.node) && request.node.team !== expectedTeam) {
     const issueRequest: IssueRequest = {
       state: request.state,
       code: ModuleDeliveryIssueCode.TeamOwnershipMismatch,
@@ -335,7 +346,10 @@ function validateModuleScope(request: ModuleScopeRequest): void {
     };
     issue(issueRequest);
   }
-  if (!request.profile.moduleRoots.includes(request.node.moduleRoot)) {
+  if (
+    !isPureCortexTask(request.node) &&
+    !request.profile.moduleRoots.includes(request.node.moduleRoot)
+  ) {
     const issueRequest: IssueRequest = {
       state: request.state,
       code: ModuleDeliveryIssueCode.ModuleOwnershipMismatch,
@@ -345,6 +359,12 @@ function validateModuleScope(request: ModuleScopeRequest): void {
     issue(issueRequest);
   }
   for (const claim of request.node.resources.write) {
+    if (
+      isCortexClaim(claim) &&
+      request.node.kind === ModuleDeliveryTaskKind.Write &&
+      request.node.cortexAuthoring
+    )
+      continue;
     const scopeRequest: ResourceClaimScopeRequest = {
       claim,
       moduleRoot: request.node.moduleRoot,
@@ -398,7 +418,7 @@ function claimIsInsideModuleRoot(request: ResourceClaimScopeRequest): boolean {
 }
 
 function validateNodeLists(request: NodeValidationRequest): void {
-  const lists = [
+  const lists: readonly (readonly [string, readonly string[]])[] = [
     [`${request.path}.dependencies`, request.node.dependencies],
     [`${request.path}.resources.read`, request.node.resources.read],
     [`${request.path}.resources.write`, request.node.resources.write],
@@ -412,6 +432,19 @@ function validateNodeLists(request: NodeValidationRequest): void {
     ],
     [`${request.path}.acceptance.commands`, request.node.acceptance.commands],
     [`${request.path}.acceptance.evidence`, request.node.acceptance.evidence],
+    ...(request.node.kind === ModuleDeliveryTaskKind.Write &&
+    request.node.cortexAuthoring
+      ? [
+          [
+            `${request.path}.cortexAuthoring.selectedSkillPaths`,
+            request.node.cortexAuthoring.selectedSkillPaths,
+          ] as const,
+          [
+            `${request.path}.cortexAuthoring.sharedWriteClaims`,
+            request.node.cortexAuthoring.sharedWriteClaims,
+          ] as const,
+        ]
+      : []),
   ] as const;
   for (const [path, values] of lists) {
     const uniqueRequest: UniqueListRequest = {
@@ -628,6 +661,115 @@ function validateAgentDepth(request: NodeValidationRequest): void {
   }
 }
 
+function validateCortexAuthoring(request: NodeValidationRequest): void {
+  if (
+    request.node.kind !== ModuleDeliveryTaskKind.Write ||
+    !request.node.cortexAuthoring
+  )
+    return;
+  const { selectedSkillPaths, sharedWriteClaims } =
+    request.node.cortexAuthoring;
+  if (!request.node.resources.write.some(isCortexClaim)) {
+    const issueRequest: IssueRequest = {
+      state: request.state,
+      code: ModuleDeliveryIssueCode.InvalidField,
+      path: `${request.path}.cortexAuthoring`,
+      message: 'Cortex authoring requires at least one Cortex write.',
+    };
+    issue(issueRequest);
+  }
+  for (const skillPath of selectedSkillPaths) {
+    if (
+      !isValidTaskResourceClaim(skillPath) ||
+      skillPath.includes('*') ||
+      !skillPath.startsWith('.cortex/') ||
+      !skillPath.includes('/dynamic-skills/') ||
+      !skillPath.endsWith('.md')
+    ) {
+      const issueRequest: IssueRequest = {
+        state: request.state,
+        code: ModuleDeliveryIssueCode.InvalidField,
+        path: `${request.path}.cortexAuthoring.selectedSkillPaths`,
+        message: `Selected Cortex skill path is invalid: ${skillPath}.`,
+      };
+      issue(issueRequest);
+    }
+  }
+  for (const sharedClaim of sharedWriteClaims) {
+    if (
+      !isValidTaskResourceClaim(sharedClaim) ||
+      sharedClaim.includes('*') ||
+      !sharedClaim.startsWith('.cortex/') ||
+      sharedClaim.startsWith('.cortex/teams/') ||
+      !request.node.resources.write.includes(sharedClaim)
+    ) {
+      const issueRequest: IssueRequest = {
+        state: request.state,
+        code: ModuleDeliveryIssueCode.InvalidField,
+        path: `${request.path}.cortexAuthoring.sharedWriteClaims`,
+        message: `Shared Cortex grant must be an exact assigned write claim: ${sharedClaim}.`,
+      };
+      issue(issueRequest);
+    }
+  }
+  for (const write of request.node.resources.write.filter(isCortexClaim)) {
+    const authorizationRequest: CortexWriteAuthorizationRequest = {
+      node: request.node,
+      claim: write,
+    };
+    if (!cortexWriteAuthorized(authorizationRequest)) {
+      const issueRequest: IssueRequest = {
+        state: request.state,
+        code: ModuleDeliveryIssueCode.ParentOwnedWrite,
+        path: `${request.path}.resources.write`,
+        message: `Cortex write lacks team or explicit shared-file authority: ${write}.`,
+      };
+      issue(issueRequest);
+    }
+  }
+  if (
+    isPureCortexTask(request.node) &&
+    (request.node.expert !== CORTEX_TEAM_WRITER_EXPERT ||
+      request.node.moduleRoot !== teamCortexRoot(request.node.team))
+  ) {
+    const issueRequest: IssueRequest = {
+      state: request.state,
+      code: ModuleDeliveryIssueCode.ModuleOwnershipMismatch,
+      path: `${request.path}.moduleRoot`,
+      message:
+        'A pure Cortex task must use its team root and the Cortex team writer expert.',
+    };
+    issue(issueRequest);
+  }
+}
+
+function isCortexClaim(claim: string): boolean {
+  return claim === '.cortex' || claim.startsWith('.cortex/');
+}
+
+function isPureCortexTask(node: ModuleDeliveryNodeV2): boolean {
+  return (
+    node.kind === ModuleDeliveryTaskKind.Write &&
+    node.cortexAuthoring !== undefined &&
+    node.resources.write.length > 0 &&
+    node.resources.write.every(isCortexClaim)
+  );
+}
+
+function cortexWriteAuthorized(
+  request: CortexWriteAuthorizationRequest,
+): boolean {
+  const { node, claim } = request;
+  if (node.kind !== ModuleDeliveryTaskKind.Write || !node.cortexAuthoring)
+    return false;
+  const teamRoot = teamCortexRoot(node.team);
+  return (
+    claim === teamRoot ||
+    claim.startsWith(`${teamRoot}/`) ||
+    node.cortexAuthoring.sharedWriteClaims.includes(claim)
+  );
+}
+
 function validateClaims(request: NodeValidationRequest): void {
   const readRequest: ClaimListValidationRequest = {
     state: request.state,
@@ -654,6 +796,15 @@ function validateClaims(request: NodeValidationRequest): void {
         second: protectedClaim,
       };
       if (taskResourcePatternsOverlap(pair)) {
+        const authorizationRequest: CortexWriteAuthorizationRequest = {
+          node: request.node,
+          claim: write,
+        };
+        if (
+          protectedClaim === '.cortex/**' &&
+          cortexWriteAuthorized(authorizationRequest)
+        )
+          continue;
         const issueRequest: IssueRequest = {
           state: request.state,
           code: ModuleDeliveryIssueCode.ParentOwnedWrite,
@@ -682,7 +833,16 @@ function validateClaimList(request: ClaimListValidationRequest): void {
 
 function validateExclusions(request: NodeValidationRequest): void {
   const actual = [...request.node.parentOwnedExclusions].sort();
-  const expected = [...request.state.plan.parentOwnedResources].sort();
+  const expected = request.state.plan.parentOwnedResources
+    .filter(
+      (claim) =>
+        claim !== '.cortex/**' ||
+        !(
+          request.node.kind === ModuleDeliveryTaskKind.Write &&
+          request.node.cortexAuthoring
+        ),
+    )
+    .sort();
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
     const issueRequest: IssueRequest = {
       state: request.state,

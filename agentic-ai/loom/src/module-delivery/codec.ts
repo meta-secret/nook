@@ -30,6 +30,7 @@ import { TeamKey } from '../team-agents/catalog.ts';
 import type {
   CompatibleModuleDeliveryPlanDecode,
   ModuleDeliveryBaseline,
+  ModuleDeliveryCortexAuthoring,
   ModuleDeliveryEdgeContract,
   ModuleDeliveryIssue,
   ModuleDeliveryNodeV2,
@@ -147,6 +148,29 @@ enum ModulePlanWriteNodeField {
   TaskId = 'taskId',
   Team = 'team',
   Workspace = 'workspace',
+}
+enum ModulePlanCortexWriteNodeField {
+  Acceptance = 'acceptance',
+  AcceptanceOwner = 'acceptanceOwner',
+  AgentDepthLimit = 'agentDepthLimit',
+  Baseline = 'baseline',
+  ConsumerOutcome = 'consumerOutcome',
+  CortexAuthoring = 'cortexAuthoring',
+  Dependencies = 'dependencies',
+  Expert = 'expert',
+  FunctionalOwner = 'functionalOwner',
+  Kind = 'kind',
+  ModuleRoot = 'moduleRoot',
+  ParentLineage = 'parentLineage',
+  ParentOwnedExclusions = 'parentOwnedExclusions',
+  Resources = 'resources',
+  TaskId = 'taskId',
+  Team = 'team',
+  Workspace = 'workspace',
+}
+enum ModulePlanCortexAuthoringField {
+  SelectedSkillPaths = 'selectedSkillPaths',
+  SharedWriteClaims = 'sharedWriteClaims',
 }
 enum LegacyModulePlanReadOnlyNodeField {
   Acceptance = 'acceptance',
@@ -506,7 +530,9 @@ function decodeNode(
       );
     }
   } else if (kind === ModuleDeliveryTaskKind.Write) {
-    fields.requireExactKeys(ModulePlanWriteNodeField);
+    if (Object.hasOwn(request.value, 'cortexAuthoring'))
+      fields.requireExactKeys(ModulePlanCortexWriteNodeField);
+    else fields.requireExactKeys(ModulePlanWriteNodeField);
   } else if (kind === ModuleDeliveryTaskKind.ReadOnly) {
     fields.requireExactKeys(ModulePlanReadOnlyNodeField);
   } else if (kind === ModuleDeliveryTaskKind.EvidenceSynthesis) {
@@ -611,13 +637,34 @@ function decodeNode(
   ) {
     fail(`${path}.workspace.kind: unsupported workspace kind.`);
   }
+  const cortexAuthoringRequest: ModulePlanObjectDecodeRequest = {
+    record: Object.hasOwn(request.value, 'cortexAuthoring')
+      ? fields.recordField('cortexAuthoring')
+      : {},
+    path: `${path}.cortexAuthoring`,
+  };
+  const cortexAuthoring = Object.hasOwn(request.value, 'cortexAuthoring')
+    ? decodeCortexAuthoring(cortexAuthoringRequest)
+    : undefined;
   return {
     kind: ModuleDeliveryTaskKind.Write,
     ...common,
+    ...(cortexAuthoring ? { cortexAuthoring } : {}),
     workspace: {
       kind: ModuleDeliveryWorkspaceKind.IsolatedWorktree,
       expectedCommitHandoff: workspaceFields.trueValue('expectedCommitHandoff'),
     },
+  };
+}
+
+function decodeCortexAuthoring(
+  request: ModulePlanObjectDecodeRequest,
+): ModuleDeliveryCortexAuthoring {
+  const fields = new ModulePlanFields(request);
+  fields.requireExactKeys(ModulePlanCortexAuthoringField);
+  return {
+    selectedSkillPaths: fields.stringList('selectedSkillPaths'),
+    sharedWriteClaims: fields.stringList('sharedWriteClaims'),
   };
 }
 
@@ -908,6 +955,18 @@ function digestNode(lookup: ModulePlanDigestNodeLookup) {
     ...(node.kind === ModuleDeliveryTaskKind.EvidenceSynthesis
       ? {
           evidenceInput: { ...node.evidenceInput, expectedProducers },
+        }
+      : {}),
+    ...(node.kind === ModuleDeliveryTaskKind.Write && node.cortexAuthoring
+      ? {
+          cortexAuthoring: {
+            selectedSkillPaths: [
+              ...node.cortexAuthoring.selectedSkillPaths,
+            ].sort(),
+            sharedWriteClaims: [
+              ...node.cortexAuthoring.sharedWriteClaims,
+            ].sort(),
+          },
         }
       : {}),
   };

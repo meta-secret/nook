@@ -234,7 +234,7 @@ Exactly one delivery owner controls:
 
 - Workbench planning;
 - graph and contract synthesis;
-- shared-file edits and commit integration;
+- shared-file serialization, exact writer grants, and commit integration;
 - branch and PR state;
 - validation and review;
 - readiness, merge, and completion records.
