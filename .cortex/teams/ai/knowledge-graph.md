@@ -54,4 +54,4 @@ Use these workflows for AI-owned skills and cross-package changes.
 
 ## Loom reference
 
-- [Loom tools and admission](references/loom-tools.md)
+- [Loom tools](references/loom-tools.md)

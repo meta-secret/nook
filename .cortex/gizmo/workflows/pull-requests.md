@@ -53,7 +53,8 @@ ownership until merge or a concrete blocked handoff:
    - Split larger features into an ordered PR sequence.
    - Create the first feature branch.
    - Define the first PR's title, body, and scope.
-   - Create ignored `.cortex/.session/` memory for substantial work.
+   - Create ignored `.cortex/.session/` memory only when temporary notes
+     materially help the work.
 2. **Implement functionality** — dispatch the requested code, documentation,
    and test changes to the responsible teams. Integrate only verified commit
    handoffs. Focused build and test feedback runs through the configured
@@ -385,8 +386,9 @@ admission-authorizes that task record and submits the bounded contract to the
 active harness, which creates and runs the attempt. The responsible team
 implements it and preserves its owning interfaces and acceptance evidence.
 
-Capture meaningful discoveries and evidence in `.cortex/.session/`. The session
-file remains provisional and untracked.
+When temporary notes materially help, capture meaningful discoveries and
+evidence in `.cortex/.session/`. Any session file remains provisional and
+untracked.
 
 ### 3. Push an exact remote-executable commit
 
