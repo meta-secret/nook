@@ -236,12 +236,9 @@ describe('authentication workflow ranking', () => {
     `
 
     const observations = summarizeAuthenticationWorkflowForms()
-    expect(observations).toHaveLength(MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS)
-    expect(
-      observations.some(
-        (observation) => ownedFormId(observation) === 'passkey-login',
-      ),
-    ).toBe(true)
+    const ownedFormIds = observations.map(ownedFormId)
+    expect(ownedFormIds).toHaveLength(MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS)
+    expect(ownedFormIds).toContain('passkey-login')
   })
 
   test('keeps a Rust-safe Sign in control when destructive submitters fill the bound', () => {
