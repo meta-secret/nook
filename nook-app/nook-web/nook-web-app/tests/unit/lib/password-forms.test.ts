@@ -293,7 +293,14 @@ describe('website one-time-code fields', () => {
 
   test('watches remaining fact-bearing identities used by observation facts', () => {
     expect(authenticationFactAttributeFilter).toEqual(
-      expect.arrayContaining(['alt', 'role', 'title', 'value']),
+      expect.arrayContaining([
+        'alt',
+        'onchange',
+        'oninput',
+        'role',
+        'title',
+        'value',
+      ]),
     )
     expect(authenticationFactObserverOptions.characterData).toBe(true)
     document.body.innerHTML = `
@@ -336,6 +343,47 @@ describe('website one-time-code fields', () => {
         },
       ],
     })
+  })
+
+  test('rescans OTP handler facts when oninput or onchange mutate', () => {
+    document.body.innerHTML = `
+      <form id="otp-login" action="/mfa/challenge">
+        <input autocomplete="one-time-code" />
+        <button type="submit">Verify code</button>
+      </form>
+    `
+    const field = document.querySelector('input')
+    if (!field) {
+      throw new Error('expected OTP field')
+    }
+
+    const before = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(before.ceremony.oneTimeCodeHandlerSignals).toEqual([])
+
+    field.setAttribute('oninput', 'this.form.requestSubmit()')
+    field.setAttribute('onchange', 'validateCode()')
+    const afterAdd = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(afterAdd.ceremony.oneTimeCodeHandlerSignals).toEqual([
+      'onchange=validateCode()',
+      'oninput=this.form.requestSubmit()',
+    ])
+
+    field.removeAttribute('oninput')
+    field.removeAttribute('onchange')
+    const afterRemove = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(afterRemove.ceremony.oneTimeCodeHandlerSignals).toEqual([])
   })
 
   test('submits a classified username-only login whose form action is omitted', () => {

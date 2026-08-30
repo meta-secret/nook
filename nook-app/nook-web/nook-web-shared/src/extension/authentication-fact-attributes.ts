@@ -15,6 +15,8 @@ export const authenticationFactAttributeFilter = [
   "href",
   "id",
   "name",
+  "onchange",
+  "oninput",
   "role",
   "style",
   "title",
