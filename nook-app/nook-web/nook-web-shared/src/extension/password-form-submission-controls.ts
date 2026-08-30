@@ -1,11 +1,17 @@
 import {
+  authentication_advance_control_is_safe,
   can_activate_authentication_route_control,
-  looks_like_login_advance_control_label,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
+import type { AuthenticationAdvanceControlObservation } from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
+  findOneTimeCodeFields,
+  findPasswordFields,
+  hasAutocompleteToken,
   isAuthUsernameField,
   nearestUnownedAuthContainer,
   PasswordFormScopeKind,
+  usernameEvidence,
+  type PasswordFieldQuery,
   type PasswordFormScope,
   type UnownedAuthContainerRequest,
 } from "./password-form-fields";
@@ -768,17 +774,64 @@ function formHasAriaDisabledSemanticSubmitter(form: HTMLFormElement): boolean {
 export function formHasRustClassifiableAdvanceControl(
   form: HTMLFormElement,
 ): boolean {
-  return Array.from(
+  const formScope: PasswordFormScope = {
+    kind: PasswordFormScopeKind.Owned,
+    owner: form,
+  };
+  const fieldQuery: PasswordFieldQuery = {
+    root: form.ownerDocument,
+    formScope,
+  };
+  const passwordFields = findPasswordFields(fieldQuery);
+  const newPasswordFieldCount = passwordFields.filter((field) => {
+    const tokenRequest: Parameters<typeof hasAutocompleteToken>[0] = {
+      field,
+      expected: "new-password",
+    };
+    return hasAutocompleteToken(tokenRequest);
+  }).length;
+  const oneTimeCodeFieldCount = findOneTimeCodeFields(fieldQuery).length;
+  const controls = Array.from(
     form.ownerDocument.querySelectorAll<HTMLElement>(
       authenticationAdvanceControlSelector,
     ),
-  ).some((control) => {
+  ).filter((control) => {
     if (controlIsInert(control)) return false;
     const owner = associatedAuthenticationForm(control);
+    return owner.kind === PasswordFormScopeKind.Owned && owner.owner === form;
+  });
+  const semanticSubmitControlCount = countedSemanticSubmitControls(controls);
+  return controls.some((control) => {
+    const destinationRequest: ControlDestinationIdentityRequest = {
+      control,
+      formScope,
+    };
+    const observation: AuthenticationAdvanceControlObservation = {
+      actionability: "actionable",
+      ownership: "owned-form",
+      semantics: control.matches(semanticSubmitControlSelector)
+        ? "semantic-submit"
+        : "activation",
+      authenticationUsername: usernameEvidence(fieldQuery),
+      passwordFieldCount: passwordFields.length,
+      newPasswordFieldCount,
+      oneTimeCodeFieldCount,
+      semanticSubmitControlCount,
+      sourceOrigin: form.ownerDocument.defaultView?.location.origin ?? "",
+      formIdentity: ownedFormIdentity(form),
+      destinationIdentity: controlDestinationIdentity(destinationRequest),
+      label: controlLabel(control),
+      machineIdentity: controlMachineIdentity(control),
+      submissionMethod: controlSubmissionMethod(control),
+    };
     return (
-      owner.kind === PasswordFormScopeKind.Owned &&
-      owner.owner === form &&
-      looks_like_login_advance_control_label(controlLabel(control))
+      authenticationFactStringsAreTransportable([
+        observation.sourceOrigin,
+        observation.formIdentity,
+        observation.destinationIdentity,
+        observation.label,
+        observation.machineIdentity,
+      ]) && authentication_advance_control_is_safe(observation)
     );
   });
 }

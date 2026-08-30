@@ -151,7 +151,26 @@ export function liveApprovedAuthenticationWorkflow({
     authenticatorSetupHint,
     backupCodesHint,
   };
-  const live = classifiedAuthenticationWorkflowObservations(classifiedRequest);
+  const live = classifiedAuthenticationWorkflowObservations(
+    classifiedRequest,
+  ).map((candidate) => {
+    const scopePair: AuthenticationWorkflowScopePair = {
+      left: candidate.observation,
+      right: approved.observation,
+    };
+    if (!authenticationWorkflowScopesMatch(scopePair)) return candidate;
+    return {
+      ...candidate,
+      facts: {
+        ...candidate.facts,
+        authenticator: {
+          ...candidate.facts.authenticator,
+          matchingPasskeyAccountCount:
+            approved.facts.authenticator.matchingPasskeyAccountCount,
+        },
+      },
+    };
+  });
   const batchRequest: Parameters<
     typeof classify_companion_authentication_workflow_facts
   >[0] = {

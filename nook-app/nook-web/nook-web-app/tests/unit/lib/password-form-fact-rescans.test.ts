@@ -68,6 +68,21 @@ describe('authentication fact rescans', () => {
     expect(authenticationFactMutationRequiresScan(tickerMutation)).toBe(false)
     expect(authenticationFactMutationRequiresScan(labelMutation)).toBe(true)
     document.body.innerHTML = `
+      <span id="passkey-label"><strong>Use passkey</strong></span>
+      <button type="button" aria-labelledby="passkey-label"><svg></svg></button>
+    `
+    const referencedLabel = document.querySelector('strong')
+    const referencedLabelChild = referencedLabel?.childNodes[0]
+    const referencedLabelMutation: Parameters<
+      typeof authenticationFactMutationRequiresScan
+    >[0] = {
+      type: 'characterData',
+      target: referencedLabelChild ? referencedLabelChild : document.body,
+    }
+    expect(
+      authenticationFactMutationRequiresScan(referencedLabelMutation),
+    ).toBe(true)
+    document.body.innerHTML = `
       <form method="post" aria-label="Login" action="/login" role="form">
         <input autocomplete="username" />
         <input type="submit" value="Delete" title="Remove account" />

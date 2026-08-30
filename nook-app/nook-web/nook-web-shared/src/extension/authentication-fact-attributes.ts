@@ -48,10 +48,32 @@ export const AUTHENTICATION_FACT_SCAN_DEBOUNCE_MS = 150;
 const authenticationFactCharacterDataScopeSelector =
   'a, button, form, input, label, legend, select, textarea, [role="button"], [role="form"], [aria-label], [title]';
 
+const authenticationFactLabelledControlSelector =
+  'a[href][aria-labelledby], button[aria-labelledby], input[type="button"][aria-labelledby], input[type="image"][aria-labelledby], input[type="submit"][aria-labelledby], [role="button"][aria-labelledby]';
+
 export type AuthenticationFactMutation = {
   type: MutationRecord["type"];
   target: Node;
 };
+
+function characterDataLabelsAuthenticationControl(element: Element): boolean {
+  const referencedIds = new Set<string>();
+  let labelElement: Element | false = element;
+  while (labelElement) {
+    if (labelElement.id) referencedIds.add(labelElement.id);
+    labelElement = labelElement.parentElement ?? false;
+  }
+  if (referencedIds.size === 0) return false;
+  return Array.from(
+    element.ownerDocument.querySelectorAll<HTMLElement>(
+      authenticationFactLabelledControlSelector,
+    ),
+  ).some((control) =>
+    (control.getAttribute("aria-labelledby") ?? "")
+      .split(/\s+/u)
+      .some((id) => referencedIds.has(id)),
+  );
+}
 
 export function authenticationFactMutationRequiresScan(
   mutation: AuthenticationFactMutation,
@@ -65,7 +87,9 @@ export function authenticationFactMutationRequiresScan(
         ? node
         : false;
   return Boolean(
-    element && element.closest(authenticationFactCharacterDataScopeSelector),
+    element &&
+    (element.closest(authenticationFactCharacterDataScopeSelector) ||
+      characterDataLabelsAuthenticationControl(element)),
   );
 }
 

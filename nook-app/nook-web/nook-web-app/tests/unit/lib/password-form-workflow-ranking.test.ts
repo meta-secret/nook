@@ -497,6 +497,43 @@ describe('authentication workflow ranking', () => {
     expect(liveApprovedAuthenticationWorkflow(liveRequest)).toBe(false)
   })
 
+  test('preserves enriched passkey matches during live approval checks', () => {
+    document.body.innerHTML = `
+      <form method="post" id="login" aria-label="Login" action="/auth/login">
+        <button type="button">Use passkey</button>
+      </form>
+    `
+    const workflow = observedAuthenticationWorkflow()
+    const approvedRequest: Parameters<
+      typeof classifiedAuthenticationWorkflowObservations
+    >[0] = {
+      workflowForms: [workflow],
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    }
+    const classified =
+      classifiedAuthenticationWorkflowObservations(approvedRequest)[0]
+    if (!classified) throw new Error('expected an approved passkey workflow')
+    const approved = {
+      ...classified,
+      facts: {
+        ...classified.facts,
+        authenticator: {
+          ...classified.facts.authenticator,
+          matchingPasskeyAccountCount: 1,
+        },
+      },
+    }
+    const liveRequest: Parameters<
+      typeof liveApprovedAuthenticationWorkflow
+    >[0] = {
+      approved,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    }
+    expect(liveApprovedAuthenticationWorkflow(liveRequest)).toBe(true)
+  })
+
   test('keeps a password login when OTP forms with vetoed submitters fill the bound', () => {
     const otpForms = Array.from(
       { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS },
@@ -889,6 +926,30 @@ describe('authentication workflow ranking', () => {
       { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS * 2 },
       (_, index) =>
         `<form method="post" id="delete-${index}" action="/account/delete"><input autocomplete="username" /><input type="password" autocomplete="current-password" /><button type="submit">Delete account</button></form>`,
+    ).join('')
+    document.body.innerHTML = `
+      ${decoys}
+      <form method="post" id="password-login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS)
+    expect(
+      observations.some(
+        (observation) => ownedFormId(observation) === 'password-login',
+      ),
+    ).toBe(true)
+  })
+
+  test('keeps a safe login when destructive Sign in forms fill the shortlist', () => {
+    const decoys = Array.from(
+      { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS * 2 },
+      (_, index) =>
+        `<form method="post" id="delete-${index}" action="/account/delete"><input autocomplete="username" /><input type="password" autocomplete="current-password" /><button id="delete-account-${index}" type="submit">Sign in</button></form>`,
     ).join('')
     document.body.innerHTML = `
       ${decoys}
