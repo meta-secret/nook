@@ -795,7 +795,8 @@ mod tests {
             AuthenticationWorkflowMatch::NoMatch
         );
 
-        *signals.last_mut().expect("handler capacity") = "oninput=this.form.submit()".to_owned();
+        let last = signals.len() - 1;
+        signals[last] = "oninput=this.form.submit()".to_owned();
         let kept_submit = AuthenticationPageObservationFacts {
             fields: AuthenticationFieldObservationFacts {
                 one_time_code_field_count: 1,

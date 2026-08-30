@@ -422,11 +422,7 @@ function takePreferredPasskeyOnlyObservations<Summary>(
     if (!safe && !scopeHasOneTimeCodeField(scope)) continue;
     const lowest = preferred.reduce((current, entry) => {
       if (entry.priority < current.priority) return entry;
-      if (
-        entry.priority === current.priority &&
-        !entry.safe &&
-        current.safe
-      ) {
+      if (entry.priority === current.priority && !entry.safe && current.safe) {
         return entry;
       }
       return current;
