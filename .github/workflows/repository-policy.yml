@@ -25,7 +25,6 @@ on:
       - README.md
       - agentic-ai/loom/**
       - preflight/**
-      - tooling/eslint-rules/**
 
 permissions:
   contents: read
@@ -60,7 +59,7 @@ jobs:
           runner_placement_changed=false
           while IFS= read -r changed_file; do
             case "$changed_file" in
-              .agents/skills/* | .claude/skills/* | .codex/hooks.json | .cortex/* | .cursor/rules.md | .cursor/skills/* | .github/formatting/* | .github/prompts/* | .github/scripts/format-host-apply.sh | .github/scripts/format-host-apply.test.sh | .github/workflows/repository-policy.yml | .task/agentic-ai.yml | AGENTS.md | CODEX.md | README.md | agentic-ai/loom/* | .cortex/*/dynamic-skills/*/scripts/* | preflight/* | tooling/eslint-rules/*)
+              .agents/skills/* | .claude/skills/* | .codex/hooks.json | .cortex/* | .cursor/rules.md | .cursor/skills/* | .github/formatting/* | .github/prompts/* | .github/scripts/format-host-apply.sh | .github/scripts/format-host-apply.test.sh | .github/workflows/repository-policy.yml | .task/agentic-ai.yml | AGENTS.md | CODEX.md | README.md | agentic-ai/loom/* | .cortex/*/dynamic-skills/*/scripts/* | preflight/*)
                 loom_changed=true
                 ;;
             esac

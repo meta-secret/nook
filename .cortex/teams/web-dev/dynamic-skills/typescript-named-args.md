@@ -2,15 +2,13 @@
 
 ## Purpose
 
-In authored TypeScript, object parameter contracts and object call arguments
-must both be named and typed.
+In authored Nook Web TypeScript, object parameter contracts and object call
+arguments must both be named and typed.
 
 ## Scope
 
-Applies to:
-
-- `agentic-ai/loom` authored TypeScript;
-- all authored production TypeScript and Svelte under `nook-app/nook-web`.
+Applies to all authored production TypeScript and Svelte under
+`nook-app/nook-web`.
 
 There is no production-source migration allowlist. Every function-valued prop,
 local helper, callback, method, and exported function must use a named semantic
@@ -99,44 +97,30 @@ Rules:
 
 ## Enforcement
 
-The two linters enforce one contract:
+The Nook Web `nook-typed-api/no-raw-object-arguments` linter enforces this
+contract. It:
 
-- **Loom:** `loom/no-raw-object-arguments` rejects object-literal call
-  arguments.
-  - It includes statically resolvable spread-array elements.
-  - It includes literals selected by assignment, conditional, logical, or
-    sequence results.
-  - Its walk stops at function boundaries, so object literals returned by
-    function-valued arguments remain valid.
-- **Nook web:** `nook-typed-api/no-raw-object-arguments` enforces the same call
-  contract.
-- **Both implementations:**
-  - reject inline object parameter types;
-  - require an explicit type on named object-literal arguments;
-  - reject generic or operation-only parameter names such as `Args`,
-    `WriteArgs`, `PickArgs`, and `PutArgs`;
-  - recursively inspect wrapped and qualified type references;
-  - reject inline array and tuple annotations in shorthand and generic form;
-  - require named semantic contracts for maps, sets, and records;
-  - reject imported generic names as bypasses; and
-  - reject object-valued parameter defaults, including literals, arrays,
-    constructed class values, named bindings, and object-returning factory
-    calls.
-- **Defaults:** apply them at the call site or inside the function body after
-  reading the named contract.
-- **Wrapped expressions:** both rules inspect enclosing TypeScript syntax and
-  call-site assignment, conditional, logical, or sequence expressions.
-  - Loom also inspects statically resolvable object values from spread arrays.
+- rejects inline object parameter types;
+- requires an explicit type on named object-literal arguments;
+- rejects generic or operation-only parameter names such as `Args`,
+  `WriteArgs`, `PickArgs`, and `PutArgs`;
+- recursively inspects wrapped and qualified type references;
+- rejects inline array and tuple annotations in shorthand and generic form;
+- requires named semantic contracts for maps, sets, and records;
+- rejects imported generic names as bypasses;
+- rejects object-valued parameter defaults, including literals, arrays,
+  constructed class values, named bindings, and object-returning factory calls;
+- inspects enclosing TypeScript syntax and call-site assignment, conditional,
+  logical, or sequence expressions; and
+- inspects statically resolvable object values from spread arrays.
 
-The rule is configured in:
+Apply defaults at the call site or inside the function body after reading the
+named contract.
 
-- `agentic-ai/loom/eslint.config.js` defines
-  `loom/no-raw-object-arguments`;
-- `nook-app/nook-web/eslint.config.js` uses
-  `nook-typed-api/no-raw-object-arguments`.
+The rule is configured in `nook-app/nook-web/eslint.config.js`.
 
 ```bash
-task loom:verify
+task web:lint
 ```
 
 ## Application Checklist
@@ -145,4 +129,4 @@ task loom:verify
 - [ ] Search function and method declarations for inline object parameter types.
 - [ ] Prefer exported arg types from the callee module.
 - [ ] Prefer Rust-generated types for domain-owned boundary contracts.
-- [ ] Keep the applicable Loom or web lint task green.
+- [ ] Keep the Web lint task green.

@@ -59,7 +59,6 @@ const EXPECTED_PROFILES = [
     allowedEvidenceFiles: [
       'Taskfile.yml',
       '.github/formatting/format.sh',
-      'tooling/eslint-rules/no-raw-object-arguments.js',
       'agentic-ai/loom/eslint.config.js',
       'agentic-ai/loom/package.json',
     ],

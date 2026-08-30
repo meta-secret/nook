@@ -285,8 +285,8 @@ Loom authored TypeScript follows [typescript-domain-structure.md](../../.cortex/
   ([typescript-no-unknown.md](../../.cortex/teams/web-dev/dynamic-skills/typescript-no-unknown.md))
 - discovery `inputSchema` constants are typed `ObjectJsonSchema`, built with
   `objectJsonSchema` / field enums (not raw `{ type: 'object', ... } as const`)
-- call sites pass named typed args values, never inline `{ ... }` object
-  literals ([typescript-named-args.md](../../.cortex/teams/web-dev/dynamic-skills/typescript-named-args.md))
+- reusable and public object contracts use semantic types or interfaces;
+  clear one-use local literals and inline shapes are permitted
 
 Enforced by `task preflight:typescript-state`, Loom ESLint (`max-params`,
 `no-restricted-types`), and `task loom:verify`.

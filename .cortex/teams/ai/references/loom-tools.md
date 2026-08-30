@@ -69,12 +69,12 @@ and [typescript-named-args.md](../../web-dev/dynamic-skills/typescript-named-arg
 - existing generic-value APIs are staged migration debt and must not expand
 - toolsList `inputSchema` values are typed `ObjectJsonSchema` (not raw object
   bags); field names come from field enums
-- call sites must not pass raw object literals; name a typed args value first
-- object parameters must use named semantic types or interfaces; inline object
-  parameter annotations and generic contract names are prohibited
-- mechanically enforced by ESLint `max-params: 1`, `no-restricted-types`, and
-  `loom/no-raw-object-arguments` in `agentic-ai/loom`
-- review enforces generic-value containment while the existing debt is migrated
+- reusable and public object contracts use semantic types or interfaces;
+  clear one-use local literals and inline shapes are permitted
+- mechanically enforced by ESLint `max-params: 1` and
+  `no-restricted-types` in `agentic-ai/loom`
+- review enforces semantic reusable and public contracts plus generic-value
+  containment while the existing debt is migrated
 
 Enforced by `task preflight:typescript-state` across the repository, plus
 `task loom:verify` (includes ESLint) for Loom-local rules.
