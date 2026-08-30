@@ -16,14 +16,6 @@ type AddFindingRequest = {
   readonly message: string;
 };
 
-type ReadMigrationExemptionsRequest = {
-  readonly catalog: ReadonlySet<string>;
-  readonly findings: CortexArticleFinding[];
-  readonly migrationBaselineEntries: readonly string[] | false;
-  readonly migrationLedgerContent: string | false;
-  readonly migrationLedgerRelativePath: string;
-};
-
 type AuditDocumentRequest = {
   readonly document: CortexArticleDocument;
   readonly findings: CortexArticleFinding[];
@@ -39,13 +31,6 @@ type OwnedSectionBlocksRequest = {
   readonly headingIndex: number;
 };
 
-type InvalidLedgerMessageRequest = {
-  readonly baseline: ReadonlySet<string> | false;
-  readonly catalog: ReadonlySet<string>;
-  readonly entry: string;
-  readonly exemptions: ReadonlySet<string>;
-};
-
 const MAX_CONSECUTIVE_PARAGRAPHS = 3;
 const PROCEDURE_HEADING =
   /\b(procedures?|runbooks?|steps|ordered deliver(?:y|ies)|delivery sequences?)\b/i;
@@ -54,79 +39,11 @@ export function auditCortexArticleStructure(
   request: AuditCortexArticleStructureRequest,
 ): CortexArticleFinding[] {
   const findings: CortexArticleFinding[] = [];
-  const catalog = new Set(
-    request.documents.map((document) => document.relativePath),
-  );
-  const exemptionRequest: ReadMigrationExemptionsRequest = {
-    catalog,
-    findings,
-    migrationBaselineEntries: request.migrationBaselineEntries,
-    migrationLedgerContent: request.migrationLedger.content,
-    migrationLedgerRelativePath: request.migrationLedger.relativePath,
-  };
-  const exemptions = readMigrationExemptions(exemptionRequest);
-
   for (const document of request.documents) {
-    if (exemptions.has(document.relativePath)) continue;
     const documentRequest: AuditDocumentRequest = { document, findings };
     auditDocument(documentRequest);
   }
   return findings;
-}
-
-function readMigrationExemptions(
-  request: ReadMigrationExemptionsRequest,
-): ReadonlySet<string> {
-  if (request.migrationLedgerContent === false) return new Set<string>();
-  const exemptions = new Set<string>();
-  const baseline =
-    request.migrationBaselineEntries === false
-      ? false
-      : new Set(request.migrationBaselineEntries);
-  const lines = request.migrationLedgerContent.split(/\r?\n/u);
-
-  for (let index = 0; index < lines.length; index += 1) {
-    const entry = (lines.at(index) ?? '').trim();
-    if (entry.length === 0 || entry.startsWith('#')) continue;
-    const messageRequest: InvalidLedgerMessageRequest = {
-      baseline,
-      catalog: request.catalog,
-      entry,
-      exemptions,
-    };
-    const message = invalidLedgerMessage(messageRequest);
-    if (message !== false) {
-      const findingRequest: AddFindingRequest = {
-        findings: request.findings,
-        code: CortexArticleFindingCode.InvalidMigrationLedger,
-        file: request.migrationLedgerRelativePath,
-        line: index + 1,
-        message,
-      };
-      addFinding(findingRequest);
-      continue;
-    }
-    exemptions.add(entry);
-  }
-  return exemptions;
-}
-
-function invalidLedgerMessage(
-  request: InvalidLedgerMessageRequest,
-): string | false {
-  if (request.exemptions.has(request.entry)) {
-    return `Duplicate article-structure migration exemption: ${request.entry}`;
-  }
-  if (!request.catalog.has(request.entry)) {
-    return `Article-structure exemption is not a Cortex Markdown file: ${request.entry}`;
-  }
-  if (request.baseline === false) {
-    return `Article-structure exemption cannot be verified without the migration baseline: ${request.entry}`;
-  }
-  if (!request.baseline.has(request.entry)) {
-    return `Article-structure exemption was added after the baseline: ${request.entry}`;
-  }
-  return false;
 }
 
 function auditDocument(request: AuditDocumentRequest): void {
