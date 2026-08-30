@@ -25,6 +25,83 @@ afterEach(() => {
 })
 
 describe('authentication fact rescans', () => {
+  test('ignores unrelated animation attributes but rescans auth scopes', () => {
+    document.body.innerHTML = `
+      <div id="animation"></div>
+      <section id="login-shell">
+        <form id="login" method="post">
+          <input id="username" autocomplete="username" />
+          <button id="submit" type="submit">Sign in</button>
+        </form>
+      </section>
+      <button id="external" type="submit" form="login">Continue</button>
+      <section id="label-shell"><span id="passkey-label">Use passkey</span></section>
+      <div id="passkey" data-nook-passkey-control aria-labelledby="passkey-label"></div>
+    `
+    const mutationFor = (
+      target: Element,
+    ): Parameters<typeof authenticationFactMutationRequiresScan>[0] => ({
+      type: 'attributes',
+      target,
+    })
+    const animation = document.querySelector('#animation')
+    const username = document.querySelector('#username')
+    const loginShell = document.querySelector('#login-shell')
+    const external = document.querySelector('#external')
+    const passkey = document.querySelector('#passkey')
+    const passkeyLabel = document.querySelector('#passkey-label')
+    const labelShell = document.querySelector('#label-shell')
+    if (
+      !animation ||
+      !username ||
+      !loginShell ||
+      !external ||
+      !passkey ||
+      !passkeyLabel ||
+      !labelShell
+    ) {
+      throw new Error('expected authentication mutation fixtures')
+    }
+
+    expect(authenticationFactMutationRequiresScan(mutationFor(animation))).toBe(
+      false,
+    )
+    expect(
+      authenticationFactMutationRequiresScan({
+        ...mutationFor(animation),
+        attributeName: 'style',
+      }),
+    ).toBe(false)
+    for (const relevant of [
+      username,
+      loginShell,
+      external,
+      passkey,
+      passkeyLabel,
+      labelShell,
+    ]) {
+      expect(
+        authenticationFactMutationRequiresScan(mutationFor(relevant)),
+      ).toBe(true)
+    }
+    passkeyLabel.id = 'renamed-passkey-label'
+    expect(
+      authenticationFactMutationRequiresScan({
+        ...mutationFor(passkeyLabel),
+        attributeName: 'id',
+        oldValue: 'passkey-label',
+      }),
+    ).toBe(true)
+    passkey.removeAttribute('data-nook-passkey-control')
+    expect(
+      authenticationFactMutationRequiresScan({
+        ...mutationFor(passkey),
+        attributeName: 'data-nook-passkey-control',
+        oldValue: '',
+      }),
+    ).toBe(true)
+  })
+
   test('watches remaining fact-bearing identities used by observation facts', () => {
     expect(authenticationFactAttributeFilter).toEqual(
       expect.arrayContaining([

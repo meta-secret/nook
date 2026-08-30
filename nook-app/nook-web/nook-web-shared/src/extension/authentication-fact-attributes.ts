@@ -37,6 +37,7 @@ export const authenticationFactAttributeFilter = [
 
 export const authenticationFactObserverOptions = {
   attributes: true,
+  attributeOldValue: true,
   attributeFilter: [...authenticationFactAttributeFilter],
   childList: true,
   characterData: true,
@@ -51,17 +52,39 @@ const authenticationFactCharacterDataScopeSelector =
 const authenticationFactLabelledControlSelector =
   'a[href][aria-labelledby], button[aria-labelledby], input[type="button"][aria-labelledby], input[type="image"][aria-labelledby], input[type="submit"][aria-labelledby], [role="button"][aria-labelledby], [data-nook-passkey-control][aria-labelledby]';
 
+const authenticationFactElementSelector =
+  'a, button, form, iframe, input, label, legend, select, textarea, [role="button"], [role="form"], [data-nook-manual-checkpoint], [data-nook-passkey-control]';
+
+const authenticationFactNestedScopeSelector =
+  'a, button, input, label, legend, select, textarea, [role="button"], [data-nook-passkey-control]';
+
 export type AuthenticationFactMutation = {
   type: MutationRecord["type"];
   target: Node;
+  attributeName?: MutationRecord["attributeName"];
+  oldValue?: MutationRecord["oldValue"];
 };
 
-function characterDataLabelsAuthenticationControl(element: Element): boolean {
+type LabelledAuthenticationControlDependency = {
+  element: Element;
+  previousId: string | false;
+};
+
+function elementLabelsAuthenticationControl({
+  element,
+  previousId,
+}: LabelledAuthenticationControlDependency): boolean {
   const referencedIds = new Set<string>();
+  if (previousId) referencedIds.add(previousId);
   let labelElement: Element | false = element;
   while (labelElement) {
     if (labelElement.id) referencedIds.add(labelElement.id);
     labelElement = labelElement.parentElement ?? false;
+  }
+  for (const labelledDescendant of element.querySelectorAll<HTMLElement>(
+    "[id]",
+  )) {
+    referencedIds.add(labelledDescendant.id);
   }
   if (referencedIds.size === 0) return false;
   return Array.from(
@@ -75,9 +98,43 @@ function characterDataLabelsAuthenticationControl(element: Element): boolean {
   );
 }
 
+function attributeTargetCanAffectAuthenticationFacts(
+  mutation: AuthenticationFactMutation,
+): boolean {
+  const element = mutation.target instanceof Element ? mutation.target : false;
+  if (!element) return false;
+  if (
+    mutation.attributeName === "data-nook-manual-checkpoint" ||
+    mutation.attributeName === "data-nook-passkey-control" ||
+    (mutation.attributeName === "role" &&
+      (mutation.oldValue === "button" || mutation.oldValue === "form"))
+  ) {
+    return true;
+  }
+  if (
+    element.matches(authenticationFactElementSelector) ||
+    element.closest(authenticationFactNestedScopeSelector) ||
+    element.querySelector(authenticationFactElementSelector)
+  ) {
+    return true;
+  }
+  const previousId =
+    mutation.attributeName === "id" && mutation.oldValue
+      ? mutation.oldValue
+      : false;
+  const dependency: LabelledAuthenticationControlDependency = {
+    element,
+    previousId,
+  };
+  return elementLabelsAuthenticationControl(dependency);
+}
+
 export function authenticationFactMutationRequiresScan(
   mutation: AuthenticationFactMutation,
 ): boolean {
+  if (mutation.type === "attributes") {
+    return attributeTargetCanAffectAuthenticationFacts(mutation);
+  }
   if (mutation.type !== "characterData") return true;
   const node = mutation.target;
   const element =
@@ -86,10 +143,14 @@ export function authenticationFactMutationRequiresScan(
       : node instanceof Element
         ? node
         : false;
+  if (!element) return false;
+  const dependency: LabelledAuthenticationControlDependency = {
+    element,
+    previousId: false,
+  };
   return Boolean(
-    element &&
-    (element.closest(authenticationFactCharacterDataScopeSelector) ||
-      characterDataLabelsAuthenticationControl(element)),
+    element.closest(authenticationFactCharacterDataScopeSelector) ||
+    elementLabelsAuthenticationControl(dependency),
   );
 }
 
