@@ -65,8 +65,7 @@ const RECURSIVE_DIRECTORY_OPTIONS: { readonly recursive: true } = {
 };
 
 export type AgentAttemptJournalAdapter =
-  | AgentAttemptAdapterKind.GenericDelegationRecorder
-  | AgentAttemptAdapterKind.StaticWorkflowScheduler;
+  AgentAttemptAdapterKind.GenericDelegationRecorder;
 
 export type AgentAttemptJournalConfiguration = {
   readonly adapter: AgentAttemptJournalAdapter;

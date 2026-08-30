@@ -460,15 +460,6 @@ explicitly starts complete PR validation with
 pipeline. Local Task mirrors below remain available for humans. Main-fix PRs
 use `FULL_E2E=1` to request the Main-equivalent browser suites.
 
-For a read-only, event-sourced Cortex garbage-collection audit, run
-**`task loom:agent-workflow:cortex-audit BASELINE=<40-character-commit-sha>`**.
-Each reached agent writes an
-immutable JSONL attempt stream under the gitignored
-**`workflow/processing/<workflow>/<run>/agents/`** tree. Agents also author
-bounded Markdown materialized views there. Loom verifies those projections
-before a parent aggregates them into the next-level view and, finally, the root
-workflow view.
-
 Project-scoped module experts use stable semantic role names defined by the
 [Cortex registry](.cortex/teams/ai/architecture/module-experts.md). Universal
 worker behavior follows the [root Cortex contract](.cortex/AGENTS.md). The
@@ -518,7 +509,6 @@ and [workflow](.cortex/teams/ai/workflows/structural-refactoring.md).
 ```sh
 task loom:pre-push         # required Gizmo-owned integrated pre-push hygiene
 task loom:cortex-session-clean # assert temporary agent memory is removed
-task loom:agent-workflow:cortex-audit BASELINE=<40-character-commit-sha> # event streams plus hierarchical read models
 task loom:agent-delegation:record REQUEST=<request.json> # ordinary delegated attempt journal and view
 task loom:module-experts:validate # named read-only expert and production-module routing audit
 task loom:module-experts:invoke REQUEST=<request.json> # invoke one isolated named expert

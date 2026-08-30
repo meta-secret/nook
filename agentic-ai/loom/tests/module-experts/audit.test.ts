@@ -826,50 +826,36 @@ describe('module expert audit', () => {
   });
 
   test('rejects generic and module-expert runtime routing drift', () => {
-    const safeGenericSource =
-      'const runtime = new CodexSdkAgentRuntime<Task, Agent>();';
     const safeModuleCliSource = 'invokeModuleExpert(invokeArgs);';
     const safeTrustedRuntimeSource =
       'executeIsolatedModuleExpertAgent(executionArgs); consumeIsolatedModuleExpertExecution(consumeArgs);';
     const moduleRoutingMutations: readonly AuditModuleExpertRuntimeRoutingArgs[] =
       [
         {
-          agentWorkflowCliSource: safeGenericSource,
           moduleExpertCliSource: 'validateModuleExpertRequest(request);',
           trustedRuntimeSource: safeTrustedRuntimeSource,
         },
         {
-          agentWorkflowCliSource: safeGenericSource,
           moduleExpertCliSource:
             'invokeModuleExpert(invokeArgs); new CodexSdkAgentRuntime<string, string>();',
           trustedRuntimeSource: safeTrustedRuntimeSource,
         },
         {
-          agentWorkflowCliSource: safeGenericSource,
           moduleExpertCliSource: safeModuleCliSource,
           trustedRuntimeSource:
             'executeIsolatedModuleExpertAgent(executionArgs); consumeIsolatedModuleExpertExecution(consumeArgs); new CodexSdkAgentRuntime<string, string>();',
         },
         {
-          agentWorkflowCliSource: safeGenericSource,
           moduleExpertCliSource: safeModuleCliSource,
           trustedRuntimeSource:
             'consumeIsolatedModuleExpertExecution(consumeArgs);',
         },
         {
-          agentWorkflowCliSource: safeGenericSource,
           moduleExpertCliSource: safeModuleCliSource,
           trustedRuntimeSource:
             'executeIsolatedModuleExpertAgent(executionArgs);',
         },
       ];
-    const genericRoutingDrift: AuditModuleExpertRuntimeRoutingArgs = {
-      agentWorkflowCliSource:
-        '// new CodexSdkAgentRuntime<Task, Agent>();\nconst runtime = new ModuleExpertCodexSdkAgentRuntime<Task, Agent>();',
-      moduleExpertCliSource: safeModuleCliSource,
-      trustedRuntimeSource: safeTrustedRuntimeSource,
-    };
-
     for (const mutation of moduleRoutingMutations) {
       expect(
         auditModuleExpertRuntimeRouting(mutation).map(
@@ -877,11 +863,6 @@ describe('module expert audit', () => {
         ),
       ).toEqual(['unsafe-module-expert-runtime-routing']);
     }
-    expect(
-      auditModuleExpertRuntimeRouting(genericRoutingDrift).map(
-        (finding) => finding.code,
-      ),
-    ).toEqual(['unsafe-generic-runtime-routing']);
   });
 
   for (const mutation of GENERATED_MARKER_MUTATIONS) {

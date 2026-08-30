@@ -53,7 +53,8 @@ ownership until merge or a concrete blocked handoff:
    - Split larger features into an ordered PR sequence.
    - Create the first feature branch.
    - Define the first PR's title, body, and scope.
-   - Create ignored `.cortex/.session/` memory for substantial work.
+   - Create ignored `.cortex/.session/` memory only when temporary notes
+     materially help the work.
 2. **Implement functionality** — dispatch the requested code, documentation,
    and test changes to the responsible teams. Integrate only verified commit
    handoffs. Focused build and test feedback runs through the configured
@@ -97,11 +98,11 @@ ownership until merge or a concrete blocked handoff:
 6. **Fix Nook's failed PR workflow.** Inspect CI and app logs. Dispatch the
    finding to its responsible team. Integrate the verified fix commit, run
    pre-push hygiene, and push the complete fix. Validate the replacement head.
-7. **Complete agent self-improvement for substantial work before final
-   readiness.** Ask the AI team to follow the canonical
-   [completion contract](../../teams/ai/dynamic-skills/self-improvement.md#pull-request-completion-contract).
-   Integrate its clean committed handoff into the same PR. If promotion changes
-   the head, repeat complete hosted validation.
+7. **Promote durable discoveries when justified.** Apply the canonical
+   [self-improvement review](../../teams/ai/dynamic-skills/self-improvement.md#self-improvement-review)
+   when the work revealed a durable lesson or Cortex defect. No promotion is
+   required when no candidate qualifies. If a promotion changes the head,
+   repeat complete hosted validation.
 8. **Merge automatically when ready.** Require a current branch, green
    repository-owned checks, resolved actionable comments, every required team
    and security verdict, and the exact-head readiness audit. Then squash-merge
@@ -349,7 +350,7 @@ flowchart TD
   H --> PUSH[8 Gizmo integrates fix + pre-push + push]
   PUSH --> D
   G -->|yes| C[9 Address comments]
-  C --> SI[10 Complete substantial-task self-improvement]
+  C --> SI[10 Review durable discoveries when justified]
   SI -->|promotion changed head| E
   SI -->|head unchanged| R[Run exact-head readiness audit]
   R -->|blocked| H
@@ -385,8 +386,9 @@ admission-authorizes that task record and submits the bounded contract to the
 active harness, which creates and runs the attempt. The responsible team
 implements it and preserves its owning interfaces and acceptance evidence.
 
-Capture meaningful discoveries and evidence in `.cortex/.session/`. The session
-file remains provisional and untracked.
+When temporary notes materially help, capture meaningful discoveries and
+evidence in `.cortex/.session/`. Any session file remains provisional and
+untracked.
 
 ### 3. Push an exact remote-executable commit
 
@@ -670,10 +672,11 @@ remote `pr.yml` evidence.
 
 ### 8. Merge and finish
 
-For a substantial task, complete the checklist in
-[Agent self-improvement](../../teams/ai/dynamic-skills/self-improvement.md#pull-request-completion-contract).
-Integrate its clean committed handoff before final readiness. If promotion
-changes the head, repeat complete hosted validation.
+When the work revealed a durable lesson or Cortex defect, apply
+[Agent self-improvement](../../teams/ai/dynamic-skills/self-improvement.md#self-improvement-review).
+No promotion is required when no candidate qualifies. Integrate any justified
+clean committed promotion before final readiness. If promotion changes the
+head, repeat complete hosted validation.
 
 Merge only when all readiness conditions pass:
 
@@ -783,10 +786,9 @@ See [mission delivery](mission-delivery.md) for the delivery procedure.
 10. Keep Codex as the sole automatic provider. Do not activate Cursor Bugbot,
     Claude, CodeRabbit, or other optional reviews.
 11. Address and resolve actionable comments.
-12. Before final readiness, ask the AI team to complete the canonical
-    self-improvement contract for substantial work. Integrate its clean
-    committed handoff and repeat hosted validation if promotion changes the
-    head.
+12. Before final readiness, promote durable discoveries only when the
+    self-improvement review finds an evidence-backed candidate. Repeat hosted
+    validation if promotion changes the head.
 13. On failure, dispatch the issue to its responsible team.
 14. Integrate and promptly push the verified fix, then obtain fresh exact-head
     validation for the replacement head.

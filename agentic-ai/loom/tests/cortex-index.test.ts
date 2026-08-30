@@ -45,12 +45,11 @@ Model text.
   const renderArgs = { index };
   const markdown = renderCortexIndexMarkdown(renderArgs);
   expect(markdown).toContain('# Cortex Context Router');
-  expect(markdown).toContain('## Gizmo Prime route');
+  expect(markdown).toContain('## Owning contexts');
   expect(markdown).toContain('[Gizmo Prime](gizmo/knowledge-graph.md)');
   expect(markdown).not.toContain(
     '[Gizmo Prime](teams/gizmo/knowledge-graph.md)',
   );
-  expect(markdown).toContain('## Team routes');
   expect(markdown).toContain('[AI](teams/ai/knowledge-graph.md)');
   expect(markdown).toContain('[Security](teams/security/knowledge-graph.md)');
   expect(markdown).toContain('[Shared knowledge](shared/knowledge-graph.md)');
@@ -70,60 +69,26 @@ test('renders the complete canonical Cortex context router', () => {
 
   const requiredSections = [
     '## Entry contract',
-    '## Gizmo Prime route',
-    '## Team routes',
-    '## Shared route',
-    '## Routing rules',
+    '## Owning contexts',
+    '## Shared dependency route',
   ];
   for (const section of requiredSections) {
     expect(markdown).toContain(section);
   }
 
   const teamOwnershipContracts = [
-    '[AI](teams/ai/knowledge-graph.md) owns Cortex, Loom, agent skills, agent',
-    '[Development core](teams/dev-core/knowledge-graph.md) owns portable Rust,',
-    '[Security](teams/security/knowledge-graph.md) owns security architecture,',
-    '[SRE](teams/sre/knowledge-graph.md) owns CI/CD, clusters, deployments,',
-    '[Web development](teams/web-dev/knowledge-graph.md) owns TypeScript and Svelte',
+    '[AI](teams/ai/knowledge-graph.md): Cortex, Loom, agent skills, workflows,',
+    '[Development core](teams/dev-core/knowledge-graph.md): portable Rust, vault',
+    '[Security](teams/security/knowledge-graph.md): security architecture,',
+    '[SRE](teams/sre/knowledge-graph.md): CI/CD, clusters, deployments, runners,',
+    '[Web development](teams/web-dev/knowledge-graph.md): TypeScript, Svelte,',
   ];
   for (const contract of teamOwnershipContracts) {
     expect(markdown).toContain(contract);
   }
 
-  const routingRules = markdown.match(/^\d+\. /gm) ?? [];
-  expect(routingRules).toHaveLength(20);
-  expect(markdown).toContain(
-    'Loom/Nook computes eligible candidates, conflicts, capacity, leases, and',
-  );
-  expect(markdown).toContain(
-    'admission-authorizes one exact attempt ID per selection, and freezes and owns',
-  );
-  expect(markdown).toContain("those attempts' starting frontiers.");
-  expect(markdown).toContain(
-    'alone creates and operates attempts and never selects or admits records or',
-  );
-  expect(markdown).toContain(
-    'the complete old generation for immutable generation restart.',
-  );
-  expect(markdown).toContain('Worker termination does not release a lease.');
-  expect(markdown).toContain(
-    'immutable generation restart; do not implicitly or selectively invalidate',
-  );
-  expect(markdown).toContain(
-    'attempt. Parent-\nowned Gizmo Prime control operations remain outside',
-  );
-  expect(markdown).toContain(
-    'Feature-slice Gizmos are immutable typed Workbench slice records created by',
-  );
-  expect(markdown).toContain(
-    'it is not a process,\n  agent, worker attempt, or controller and owns no lifecycle state.',
-  );
-  expect(markdown).toContain(
-    'Every authorized `(task ID, attempt ID)` receives exactly one harness-',
-  );
-  expect(markdown).toContain(
-    'sequential retries but never more than one concurrently active attempt.',
-  );
+  expect(markdown).toContain('return to the selected owning context');
+  expect(markdown).toContain('foreign-team write requirement to Gizmo Prime');
 });
 
 test('stripDocumentNavigation strips relationships and document map', () => {

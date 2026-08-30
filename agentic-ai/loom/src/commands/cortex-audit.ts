@@ -139,35 +139,17 @@ export async function runCortexAuditFromDirectory(
     }
   }
 
-  const documentMapBaselineArgs: MigrationBaselineEntriesArgs = {
-    ledgerPath: DOCUMENT_MAP_MIGRATION_LEDGER_PATH,
-    markerPath: DOCUMENT_MAP_SKILL_PATH,
-    repoRoot,
-  };
   const structureAuditArgs: AuditCortexDocumentStructureArgs = {
     documents,
     excludedDocumentPaths: syntaxInvalidPaths,
-    migrationBaselineEntries: migrationBaselineEntries(documentMapBaselineArgs),
-    migrationLedgerPath: path.join(cortexRoot, 'document-map-migration.txt'),
     repoRoot,
   };
   const downstreamStructureFindings = auditCortexDocumentStructure(
     structureAuditArgs,
   ).filter((finding) => !syntaxInvalidPaths.has(finding.file));
   const structureFindings = [...syntaxFindings, ...downstreamStructureFindings];
-  const articleBaselineArgs: MigrationBaselineEntriesArgs = {
-    ledgerPath: ARTICLE_MIGRATION_LEDGER_PATH,
-    markerPath: ARTICLE_STRUCTURE_SKILL_PATH,
-    repoRoot,
-  };
   const articleStructureAuditArgs: AuditCortexArticleStructureArgs = {
     documents,
-    migrationBaselineEntries: migrationBaselineEntries(articleBaselineArgs),
-    migrationLedgerPath: path.join(
-      cortexRoot,
-      'article-structure-migration.txt',
-    ),
-    repoRoot,
   };
   const articleStructureFindings = auditCortexArticleStructure(
     articleStructureAuditArgs,
@@ -278,115 +260,6 @@ function trackedHarnessSkillPaths(repoRoot: string): string[] {
   } catch {
     return [...HARNESS_SKILL_ROOTS];
   }
-}
-
-const DOCUMENT_MAP_MIGRATION_LEDGER_PATH = '.cortex/document-map-migration.txt';
-const DOCUMENT_MAP_SKILL_PATH =
-  '.cortex/teams/ai/dynamic-skills/cortex-document-map.md';
-const ARTICLE_MIGRATION_LEDGER_PATH = '.cortex/article-structure-migration.txt';
-const ARTICLE_STRUCTURE_SKILL_PATH =
-  '.cortex/teams/ai/dynamic-skills/cortex-article-structure/SKILL.md';
-
-type ReadGitTextArgs = {
-  readonly relativePath: string;
-  readonly repoRoot: string;
-  readonly revision: string;
-};
-
-type MigrationBaselineEntriesArgs = {
-  readonly ledgerPath: string;
-  readonly markerPath: string;
-  readonly repoRoot: string;
-};
-
-function migrationBaselineEntries(
-  args: MigrationBaselineEntriesArgs,
-): readonly string[] | false {
-  const headLedgerArgs: ReadGitTextArgs = {
-    relativePath: args.ledgerPath,
-    repoRoot: args.repoRoot,
-    revision: 'HEAD',
-  };
-  const headLedger = readGitText(headLedgerArgs);
-  if (headLedger === false) {
-    const headSkillArgs: GitRevisionHasMarkerArgs = {
-      markerPath: args.markerPath,
-      repoRoot: args.repoRoot,
-      revision: 'HEAD',
-    };
-    return gitRevisionHasMarker(headSkillArgs) ? [] : false;
-  }
-  if (!worktreeLedgerMatchesHead(args)) {
-    return ledgerEntries(headLedger);
-  }
-  const parentLedgerArgs: ReadGitTextArgs = {
-    relativePath: args.ledgerPath,
-    repoRoot: args.repoRoot,
-    revision: 'HEAD^',
-  };
-  const parentLedger = readGitText(parentLedgerArgs);
-  if (parentLedger !== false) {
-    return ledgerEntries(parentLedger);
-  }
-  const parentSkillArgs: GitRevisionHasMarkerArgs = {
-    markerPath: args.markerPath,
-    repoRoot: args.repoRoot,
-    revision: 'HEAD^',
-  };
-  return gitRevisionHasMarker(parentSkillArgs) ? [] : false;
-}
-
-type GitRevisionHasMarkerArgs = {
-  readonly markerPath: string;
-  readonly repoRoot: string;
-  readonly revision: string;
-};
-
-function gitRevisionHasMarker(args: GitRevisionHasMarkerArgs): boolean {
-  const readArgs: ReadGitTextArgs = {
-    relativePath: args.markerPath,
-    repoRoot: args.repoRoot,
-    revision: args.revision,
-  };
-  return readGitText(readArgs) !== false;
-}
-
-function worktreeLedgerMatchesHead(
-  args: MigrationBaselineEntriesArgs,
-): boolean {
-  const commandArgs = ['diff', '--quiet', 'HEAD', '--', args.ledgerPath];
-  const options: ExecFileSyncOptionsWithStringEncoding = {
-    cwd: args.repoRoot,
-    encoding: 'utf8',
-    stdio: ['ignore', 'ignore', 'ignore'],
-  };
-  try {
-    execFileSync('git', commandArgs, options);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function readGitText(args: ReadGitTextArgs): string | false {
-  const commandArgs = ['show', `${args.revision}:${args.relativePath}`];
-  const options: ExecFileSyncOptionsWithStringEncoding = {
-    cwd: args.repoRoot,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'ignore'],
-  };
-  try {
-    return execFileSync('git', commandArgs, options);
-  } catch {
-    return false;
-  }
-}
-
-function ledgerEntries(content: string): readonly string[] {
-  return content
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0 && !line.startsWith('#'));
 }
 
 export function listPersistentCortexMarkdownFiles(root: string): string[] {

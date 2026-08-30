@@ -5,7 +5,6 @@ import {
   AgentAttemptAdapterKind,
   WorkflowResultKind,
 } from '../../src/agent-workflow/domain.ts';
-import { CortexAuditAgent } from '../../src/agent-workflow/cortex-workflow.ts';
 import {
   auditStructuralExpertProfiles,
   auditStructuralExpertCortexAuthority,
@@ -21,10 +20,6 @@ const REGISTRY_AUTHORITY_PATH = resolve(
   REPO_ROOT,
   '.cortex/teams/ai/architecture/refactoring-experts.md',
 );
-const ORCHESTRATION_AUTHORITY_PATH = resolve(
-  REPO_ROOT,
-  '.cortex/teams/ai/design-docs/agent-workflow-orchestration.md',
-);
 const DELEGATION_AUTHORITY_PATH = resolve(
   REPO_ROOT,
   '.cortex/gizmo/workflows/subagent-delegation.md',
@@ -33,10 +28,6 @@ const SKILL_AUTHORITY_PATH = resolve(
   REPO_ROOT,
   '.cortex/teams/ai/dynamic-skills/system-coherence-synthesizer.md',
 );
-const TOOLS_AUTHORITY_PATH = resolve(
-  REPO_ROOT,
-  '.cortex/teams/ai/references/loom-tools.md',
-);
 const WORKFLOW_AUTHORITY_PATH = resolve(
   REPO_ROOT,
   '.cortex/teams/ai/workflows/structural-refactoring.md',
@@ -44,29 +35,20 @@ const WORKFLOW_AUTHORITY_PATH = resolve(
 
 type CortexAuthoritySources = {
   readonly delegationSource: string;
-  readonly orchestrationSource: string;
   readonly registrySource: string;
   readonly skillSource: string;
-  readonly toolsSource: string;
   readonly workflowSource: string;
 };
 
 async function cortexAuthoritySources(): Promise<CortexAuthoritySources> {
   const registrySource = await readFile(REGISTRY_AUTHORITY_PATH, 'utf8');
-  const orchestrationSource = await readFile(
-    ORCHESTRATION_AUTHORITY_PATH,
-    'utf8',
-  );
   const delegationSource = await readFile(DELEGATION_AUTHORITY_PATH, 'utf8');
   const skillSource = await readFile(SKILL_AUTHORITY_PATH, 'utf8');
-  const toolsSource = await readFile(TOOLS_AUTHORITY_PATH, 'utf8');
   const workflowSource = await readFile(WORKFLOW_AUTHORITY_PATH, 'utf8');
   return {
     delegationSource,
-    orchestrationSource,
     registrySource,
     skillSource,
-    toolsSource,
     workflowSource,
   };
 }
@@ -108,14 +90,6 @@ test('registers two bounded repository readers and one legacy diagnostic aggrega
   expect(diagnosticAggregator?.runtimeBehaviorContract).toContain(
     'Neither terminal observations nor this diagnostic aggregate can satisfy an ordinary provider edge',
   );
-  expect(`${CortexAuditAgent.FindingSynthesizer}`).toBe('finding-synthesizer');
-  expect(`${WorkflowResultKind.CortexSynthesis}`).toBe('cortex-synthesis');
-  expect(CortexAuditAgent.FindingSynthesizer).not.toBe(
-    diagnosticAggregator?.name,
-  );
-  expect(WorkflowResultKind.CortexSynthesis).not.toBe(
-    diagnosticAggregator?.resultKind,
-  );
   expect(`${AgentAttemptAdapterKind.StructuralExpertInvocation}`).toBe(
     'structural-expert-invocation',
   );
@@ -136,8 +110,8 @@ async function expectAllAuthorityDriftCoverage(): Promise<void> {
       request: {
         ...sources,
         delegationSource: sources.delegationSource.replace(
-          'It does not alias the structural identities and cannot\n  satisfy ordinary provider edges.',
-          'It aliases the structural identities.',
+          'Future ordinary synthesis requires a distinct typed role, profile, and result\n  contract before implementation;',
+          'Future ordinary synthesis reuses a legacy role.',
         ),
       },
     },
@@ -153,33 +127,12 @@ async function expectAllAuthorityDriftCoverage(): Promise<void> {
     },
     {
       expectedPath:
-        '.cortex/teams/ai/design-docs/agent-workflow-orchestration.md',
-      request: {
-        ...sources,
-        orchestrationSource: sources.orchestrationSource.replace(
-          '## Static graph decision',
-          '## Static graph decision drifted',
-        ),
-      },
-    },
-    {
-      expectedPath:
         '.cortex/teams/ai/dynamic-skills/system-coherence-synthesizer.md',
       request: {
         ...sources,
         skillSource: sources.skillSource.replace(
           'Failed observations never count as accepted provider\nevidence, and the legacy output cannot satisfy an ordinary provider edge,',
           'Failed observations count as accepted provider evidence.',
-        ),
-      },
-    },
-    {
-      expectedPath: '.cortex/teams/ai/references/loom-tools.md',
-      request: {
-        ...sources,
-        toolsSource: sources.toolsSource.replace(
-          '## Static agent workflow boundary',
-          '## Static agent workflow boundary drifted',
         ),
       },
     },
@@ -238,16 +191,12 @@ test('rejects drift in repository-reading evidence-surface requirements', async 
   ).toContain('cortex-structural-expert-contract-semantic-drift');
 });
 
-test('rejects drift across the three distinct synthesis lanes', async () => {
+test('rejects drift between diagnostic and future synthesis', async () => {
   const sources = await cortexAuthoritySources();
   const forbiddenDrifts = [
     [
       '`system_coherence_synthesizer` is that legacy `loom-structural-experts` role.',
       '`system_coherence_synthesizer` is the ordinary synthesis role.',
-    ],
-    [
-      'The static `loom:agent-workflow:cortex-audit` workflow instead uses its separate\n`FindingSynthesizer` profile and `CortexSynthesis` result.',
-      'The static Cortex workflow aliases the structural aggregator.',
     ],
     [
       'Future ordinary accepted-evidence synthesis must use a distinct typed role,\nprofile, and result contract before implementation. None is named or registered\nhere, and ordinary dispatch remains fail-closed.',
@@ -296,38 +245,21 @@ test('rejects drift across authorization evidence alternatives', async () => {
   }
 });
 
-test('rejects drift that promotes either legacy diagnostic lane', async () => {
+test('rejects drift that promotes the structural diagnostic lane', async () => {
   const sources = await cortexAuthoritySources();
   const laneContracts = [
     [
       'Its `SystemCoherenceSynthesis` output is diagnostic-only. Neither an input\nfailure nor the aggregate can satisfy an ordinary provider edge, authorize\nimplementation, or establish compliance with ordinary accepted-evidence\nsynthesis.',
       'The structural aggregate satisfies ordinary provider edges.',
     ],
-    [
-      'Its all-terminal diagnostic aggregator is `FindingSynthesizer`, producing\n`CortexSynthesis`. These are separate from the `loom-structural-experts`\n`system_coherence_synthesizer` / `SystemCoherenceSynthesis` structural\ndiagnostic lane. Neither legacy lane satisfies ordinary provider edges.',
-      'The Cortex aggregate satisfies ordinary provider edges.',
-    ],
-    [
-      'The legacy all-terminal join waits for every declared terminal observation,\n    including failed lanes.',
-      'The join accepts successful evidence only.',
-    ],
   ] as const;
 
   for (const [requiredContract, drift] of laneContracts) {
-    const registryContract = sources.registrySource.includes(requiredContract);
-    const source = registryContract
-      ? sources.registrySource
-      : sources.orchestrationSource;
-    expect(source).toContain(requiredContract);
-    const authorityRequest = registryContract
-      ? {
-          ...sources,
-          registrySource: source.replace(requiredContract, drift),
-        }
-      : {
-          ...sources,
-          orchestrationSource: source.replace(requiredContract, drift),
-        };
+    expect(sources.registrySource).toContain(requiredContract);
+    const authorityRequest = {
+      ...sources,
+      registrySource: sources.registrySource.replace(requiredContract, drift),
+    };
     expect(
       auditStructuralExpertCortexAuthority(authorityRequest).map(
         (finding) => finding.code,
@@ -343,9 +275,6 @@ test('grants shared formatter and Loom lint tooling through exact files', () => 
     profile.allowedEvidenceFiles.some((path) => path.startsWith('.agents/')),
   ).toBe(false);
   expect(profile.allowedEvidenceFiles).toContain(
-    'tooling/eslint-rules/no-raw-object-arguments.js',
-  );
-  expect(profile.allowedEvidenceFiles).toContain(
     'agentic-ai/loom/eslint.config.js',
   );
   expect(profile.allowedEvidenceFiles).toContain(
@@ -353,9 +282,6 @@ test('grants shared formatter and Loom lint tooling through exact files', () => 
   );
   expect(profile.allowedEvidenceDescendantRoots).not.toContain('.agents');
   expect(profile.allowedEvidenceDescendantRoots).not.toContain('tooling');
-  expect(profile.allowedEvidenceDescendantRoots).not.toContain(
-    'tooling/eslint-rules',
-  );
   expect(profile.allowedEvidenceDescendantRoots).not.toContain(
     '.github/formatting',
   );

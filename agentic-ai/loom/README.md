@@ -1,129 +1,13 @@
 # Loom
 
-Loom runs mechanical Cortex tools and reviewed static agent workflows.
+Loom runs mechanical Cortex tools and deterministic validation for delegated
+agent work, module delivery, module experts, and structural experts.
 
 Policy stays in `.cortex`.
 
 Mechanical leaf tools use the existing Bun domain-YAML protocol.
 
-Agent workflow topology is compiled TypeScript.
-
-It is never supplied through YAML or generated from a prompt.
-
 Humans do not use Loom interactively. AI agents and Task wrappers do.
-
-## Static agent workflow module
-
-Agent workflow code is isolated under:
-
-```text
-src/agent-workflow/
-```
-
-The module owns:
-
-- the reviewed workflow catalog;
-- graph validation;
-- explicit parallel targets and joins;
-- resource claims;
-- task attempts and terminal results;
-- append-only events;
-- result projections;
-- Codex SDK worker execution.
-
-The `loom-agent-workflow` CLI is separate from the leaf-tool `loom` CLI.
-
-It selects a compiled catalog entry.
-
-It accepts only bounded runtime inputs.
-
-It does not accept a graph file.
-
-The first catalog entry is `cortex-full-garbage-collection`.
-
-The repository Task wrapper is the canonical executable entrypoint:
-
-```bash
-task loom:agent-workflow:cortex-audit BASELINE=<40-character-commit-sha>
-```
-
-Add `PLAN=1` to validate and print the compiled topology without starting a
-worker.
-
-Its fixed flow is:
-
-```text
-resolve baseline
-  -> audit workflows and references ----------\
-  -> audit design docs and product specs ------+
-  -> audit dynamic skills and entry points ----+-> evidence join
-  -> audit runtime, Task, and CI ---------------+       |
-  -> mechanical cortex audit ------------------/       v
-                                              synthesize findings
-```
-
-The workflow is read-only.
-
-Its workflow lane reports duplicated prose, deterministic leaf candidates,
-compiled workflow candidates, safe parallel lanes, and policy that must remain
-semantic judgment.
-
-It uses one exact source commit.
-
-Before and after every Codex attempt, Loom verifies that `HEAD` still matches
-that commit and that the worktree is clean, including untracked files.
-
-It returns typed evidence and a typed synthesis.
-
-It does not edit files or mutate GitHub or Workbench state.
-
-### Local event store and semantic views
-
-A local workflow run writes processing evidence beneath
-`workflow/processing/<workflow>/<run-id>/`.
-
-The run `events.jsonl` journal is authoritative for local scheduling.
-
-Each reached agent attempt has an isolated append-only action stream beneath
-`agents/<task>/attempt-<n>/events.jsonl`.
-
-Completed agents author bounded Markdown semantic views in their typed output.
-Loom persists and hashes those views without granting workers filesystem write
-access.
-
-Failed attempts receive explicitly Loom-authored failure views.
-
-Parents consume child views and typed artifacts, reconcile them, and author the
-next aggregate view. The declared root materializer produces the run `view.md`.
-
-Agent result files, agent views, the final run result, and the root view are
-projections.
-
-Current replay validates identity, sequence, and terminal references.
-
-Scheduler-state resume is not implemented.
-
-Events are bounded and secret-sanitized.
-
-They do not contain prompts, reasoning, credentials, secrets, or raw command
-output.
-
-Runtime errors are normalized before they are appended.
-
-Events contain a bounded category and sanitized detail.
-
-They do not contain raw SDK errors, stacks, or command failure objects.
-
-Every event carries the workflow version and exact source commit.
-
-Adapter-bearing attempt streams currently use workflow version `2.0.0`.
-Version `1.0.0` is a legacy pre-provenance schema. Loom rejects it with local
-cleanup or explicit migration guidance. Replay never infers a missing adapter.
-
-Terminal projections are content-hashed and referenced by journal events.
-
-Local software-development workflows remain local.
-Hive is outside this workflow architecture.
 
 ## Module expert catalog
 
@@ -401,8 +285,8 @@ Loom authored TypeScript follows [typescript-domain-structure.md](../../.cortex/
   ([typescript-no-unknown.md](../../.cortex/teams/web-dev/dynamic-skills/typescript-no-unknown.md))
 - discovery `inputSchema` constants are typed `ObjectJsonSchema`, built with
   `objectJsonSchema` / field enums (not raw `{ type: 'object', ... } as const`)
-- call sites pass named typed args values, never inline `{ ... }` object
-  literals ([typescript-named-args.md](../../.cortex/teams/web-dev/dynamic-skills/typescript-named-args.md))
+- reusable and public object contracts use semantic types or interfaces;
+  clear one-use local literals and inline shapes are permitted
 
 Enforced by `task preflight:typescript-state`, Loom ESLint (`max-params`,
 `no-restricted-types`), and `task loom:verify`.

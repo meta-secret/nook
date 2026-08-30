@@ -66,9 +66,8 @@ The universal
 applies here and to every ordinary multi-team delegation path. The currently
 installed validator does not enforce the complete canonical admission contract,
 so this module-delivery path fails closed before dispatch. Its narrower schema
-or tests cannot authorize this path. Markdown policy, manual review, or the
-legacy standalone read-only Cortex-audit workflow cannot substitute for the
-missing typed runtime.
+or tests cannot authorize this path. Markdown policy and manual review cannot
+substitute for the missing typed runtime.
 
 ### Execution graph and admission
 

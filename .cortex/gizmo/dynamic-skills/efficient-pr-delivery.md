@@ -105,8 +105,8 @@ Does not apply to:
       validation.
 - [ ] Inspect and address all feedback already present.
 - [ ] After every replacement push, obtain fresh exact-head remote evidence.
-- [ ] Complete substantial-task self-improvement and integrate its clean
-      committed handoff before final readiness.
+- [ ] Promote an evidence-backed durable discovery when justified; no promotion
+      is required when no candidate qualifies.
 - [ ] If promotion changes the head, repeat hosted validation.
 - [ ] Run `task loom:pr-land CONFIG=<pr-land-ready-request.yaml>` on the exact head.
 - [ ] Squash-merge immediately when readiness succeeds, then report duration.

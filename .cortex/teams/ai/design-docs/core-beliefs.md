@@ -105,10 +105,10 @@ These are the core engineering beliefs that guide the development of Nook. Becau
   7. Gizmo integrates verified fixes and runs Loom pre-push. Team-owned
      formatter mutations return to their owners for a fresh committed handoff
      before Gizmo pushes and obtains fresh exact-head validation.
-  8. Before final readiness, the AI team completes substantial-task
-     self-improvement and returns its clean committed handoff.
-  9. Gizmo integrates any promotion and runs Loom pre-push. It repeats hosted
-     validation if the head changes.
+  8. Before final readiness, the AI team reviews self-improvement only when the
+     work revealed a durable lesson or Cortex defect.
+  9. When a candidate qualifies, Gizmo integrates its clean committed promotion
+     and runs Loom pre-push. It repeats hosted validation if the head changes.
   10. Gizmo runs readiness and completes the squash merge.
 - **Do not stop at push or readiness.** Gizmo owns the PR through squash merge
   unless concretely blocked.

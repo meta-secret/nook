@@ -56,11 +56,6 @@ reuse a narrower validation result, or dispatch through an unvalidated path.
 Report the missing typed-runtime capability to Gizmo and wait for compatible
 executable enforcement.
 
-The reviewed `loom:agent-workflow:cortex-audit` SDK path is a legacy standalone
-read-only workflow outside ordinary Gizmo multi-team admission. Its internal
-static scheduler does not prove or enforce this contract and must not be used
-to claim, authorize, or execute ordinary multi-team delegation.
-
 ## Deterministic work belongs to tools
 
 Simple does not mean agent-shaped.
@@ -604,23 +599,6 @@ It remains separate from disposable `.cortex/.session/` reflection memory.
 
 ## Safe delegation patterns
 
-### Full Cortex garbage collection
-
-A full-tree Cortex audit MUST fan out when two or more document families are in
-scope.
-
-Useful read-only partitions include:
-
-- workflows and references;
-- design docs and product specs;
-- dynamic skills and entry points;
-- code, Task, and CI evidence.
-
-Gizmo resolves conflicting findings and assigns the final edit to an AI team
-subagent.
-
-A topic-local one-hop consistency check does not require fan-out.
-
 ### Structural coherence
 
 Use the
@@ -636,10 +614,6 @@ or Cortex structure is the requested maintenance surface.
   structural `Completed` and `Failed` observations, cannot satisfy ordinary
   provider edges, and must not be reused for future ordinary accepted-evidence
   synthesis.
-- The separate legacy static `loom:agent-workflow:cortex-audit` lane uses
-  `FindingSynthesizer` and `CortexSynthesis` under its own all-terminal
-  diagnostic contract. It does not alias the structural identities and cannot
-  satisfy ordinary provider edges.
 - Future ordinary synthesis requires a distinct typed role, profile, and result
   contract before implementation; no such identity or runtime support is
   declared here, so ordinary dispatch remains fail-closed.
@@ -734,9 +708,6 @@ This delegation workflow still owns the worker boundary:
 - Gizmo defines and reviews the integration; and
 - child workers do not acquire delivery authority.
 
-The architecture boundary is defined in
-[agent-workflow-orchestration.md](../../teams/ai/design-docs/agent-workflow-orchestration.md).
-
 ## Validation
 
 Before integration, verify:
@@ -794,8 +765,6 @@ Before integration, verify:
 - before ordinary multi-team dispatch, the installed typed validator and
   focused tests encoded and enforced the complete admission contract; otherwise
   execution failed closed before any attempt;
-- the legacy standalone read-only Cortex-audit SDK workflow was not used to
-  claim, authorize, or execute ordinary multi-team delegation;
 - Gizmo validated each computed batch, selected and admission-authorized task
   records, and froze and owned every exact starting frontier;
 - the active harness created and operated attempts only for Gizmo-authorized

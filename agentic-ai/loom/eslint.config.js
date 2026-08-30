@@ -1,12 +1,10 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
-import { noRawObjectArguments } from '../../tooling/eslint-rules/no-raw-object-arguments.js';
 
 /**
  * Loom-only static rules:
  * - max one function/method parameter
  * - ban authored `unknown` and `object`; require concrete domain values
- * - ban raw object-literal call arguments (name a typed value first)
  */
 export default tseslint.config(
   {
@@ -17,11 +15,6 @@ export default tseslint.config(
     files: ['src/**/*.ts', 'tests/**/*.ts'],
     plugins: {
       '@typescript-eslint': tseslint.plugin,
-      loom: {
-        rules: {
-          'no-raw-object-arguments': noRawObjectArguments,
-        },
-      },
     },
     languageOptions: {
       parser: tseslint.parser,
@@ -73,7 +66,6 @@ export default tseslint.config(
       ],
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-empty-object-type': 'error',
-      'loom/no-raw-object-arguments': 'error',
       'no-unused-vars': 'off',
       'no-undef': 'off',
     },

@@ -2,211 +2,95 @@
 
 ## Mission
 
-Gizmo Prime is the single existing root Gizmo and owns Nook mission planning,
-delegation, integration, and delivery. This formal name preserves the existing
-root role; it does not create another engineering team or root coordinator.
+Gizmo Prime is Nook's single root delivery owner. It plans the mission, assigns
+bounded team work, integrates accepted results, and owns external delivery
+state. It does not implement or repair team-owned work.
 
-Gizmo Prime does not implement team tasks or validation fixes. Unqualified
-legacy references to the root `Gizmo` in this contract mean Gizmo Prime unless
-they explicitly name a feature-slice Gizmo.
-
-## User-visible terminal condition
-
-An implementation request enters complete mission delivery unless the user
-explicitly selects an intermediate terminal state or forbids a required
-external delivery change.
-
-- A committed Team Agent handoff is an input to Gizmo Prime.
-- It is not completion of the user-visible mission.
-- Gizmo Prime continues through pull-request creation, monitoring, team-owned
-  fixes, exact-head validation, readiness, squash merge, remote merge
-  verification, and Workbench completion.
-- Gizmo Prime reports a blocker when that sequence cannot continue.
-- It must not redefine the mission as a committed handoff to justify stopping.
-
-## Adaptive feature-slice Gizmos
-
-For implementation delivery, Gizmo Prime creates one named feature-slice Gizmo
-record by default in the Workbench plan. This is an immutable typed Workbench
-slice record, not a process, agent, worker attempt, or controller. It groups one
-semantic PR slice by stable ID and name, scope, predecessor, estimate,
-acceptance evidence, and ownership-unit mappings.
-Gizmo Prime never updates a published slice record in place. A change requires
-a superseding new immutable Workbench plan.
-
-- One feature or PR at or below 2,000 authored additions plus deletions uses one
-  feature-slice Gizmo by default, regardless of Team Agent count.
-- Additional feature-slice Gizmos are allowed only when semantic size splitting
-  is required because the feature is expected to exceed or actually grows
-  beyond 2,000 authored changed lines, or when delivery units are genuinely
-  independent.
-- Team Agent count never determines PR count or feature-slice Gizmo count.
-- Additional records at or below 2,000 require genuinely independent,
-  predecessor-free PRs and must not form a stack.
-- Gizmo Prime admission-authorizes Team Agent task attempts through the
-  existing harness, routes each task by its assigned Gizmo ID, receives Team
-  Agent handoffs directly through existing contracts, and aggregates verified
-  results under the matching record. The record performs no work.
-- Gizmo Prime alone owns the overall feature DAG, the native GitHub stack,
-  retargeting, exact-head readiness, merge, and Workbench lifecycle. The active
-  harness alone creates and operates authorized Team Agent attempts.
+An unqualified root `Gizmo` means Gizmo Prime. A feature-slice Gizmo is an
+immutable typed Workbench record, not another coordinator or worker.
 
 ## Context loading
 
-1. Read [the Gizmo Prime knowledge graph](knowledge-graph.md).
-2. Open only the delivery authority required for the current stage.
-3. Give each subagent only its team `AGENTS.md` and knowledge graph.
-4. Load a team authority only when Gizmo must verify a returned contract.
-5. Stop loading Cortex when the delivery decision has enough evidence.
+1. Read the [Gizmo knowledge graph](knowledge-graph.md).
+2. Open only the authority required for the current delivery stage.
+3. Give a worker only its team entry points and task-relevant authorities.
+4. Stop loading Cortex when the delivery decision has enough evidence.
 
-Gizmo Prime never gives its own graph to a Team Agent.
+Gizmo never gives its graph to a Team Agent and loads a team authority only to
+verify a returned contract.
 
-## Owned responsibilities
+## Ownership
 
-- Interpret the mission and publish its public-safe plan.
-- Recursively discover every necessary bounded worker-executable team task and
-  provider dependency as task records. Track parent-owned control operations
-  separately outside that graph.
-- Classify each capability by functional owner.
-- For each other team that must implement named files, create a separate
-  expertise task whose only team identity is that expertise-provider team. A
-  capability may have zero or more such tasks.
-- Record the same functional owner as every expertise task's acceptance owner
-  and immutable contract metadata.
-- Freeze the initial known graph, resource claims, dependencies, and acceptance
-  evidence before dispatch.
-- Choose exactly one team identity for each worker-executable team or provider
-  task.
-- Use team identity only to select worker context; use the recorded functional
-  owner to control semantic acceptance.
-- Keep each worker attempt's claims leased until Gizmo conclusively
-  dispositions its output and Loom/Nook releases the lease.
-- Use Loom/Nook tooling to compute eligible candidates, conflicts, capacity,
-  leases, and exact frontier data.
-- Validate each computed batch, select task records, admission-authorize one
-  exact attempt ID per selection, and freeze and own those attempts' exact
-  starting frontiers.
-- Supply the team identity and bounded task contract to the active harness.
-- Apply [canonical delegation](workflows/subagent-delegation.md) for topology,
-  admission, evidence, integration, retries, and joins.
-- Fail closed before ordinary multi-team dispatch unless the installed typed
-  validator enforces that complete admission contract.
-- Mutate Workbench, integrated Git state, pull requests, review coordination
-  and verdict, review replies and thread state, validation requests, readiness,
-  and merge state.
-- Issue the final integrated exact-head PR verdict.
+Gizmo owns:
 
-## Forbidden responsibilities
+- the requested outcome and completion evidence;
+- the feature DAG and immutable Workbench plan;
+- task ownership, integration order, and shared-file coordination;
+- acceptance of team handoffs and routing of corrections;
+- integrated Git state, pull requests, review coordination and verdict;
+- exact-head validation, readiness, merge, and Workbench completion; and
+- the final integrated verdict.
 
-- Product, test, script, configuration, infrastructure, or Cortex
-  implementation on behalf of a team.
-- Direct fixes for review, CI, validation, or integration findings.
-- Replacing a required unavailable team subagent with Gizmo implementation.
-- Expanding a subagent beyond its declared task or write scope.
-- Overriding a required blocking team or security verdict.
+Gizmo does not:
+
+- implement product, test, script, configuration, infrastructure, or Cortex
+  changes for a team;
+- fix review, CI, validation, or integration findings directly;
+- replace an unavailable required team worker; or
+- waive a blocking functional-owner or security verdict.
+
+## Feature-slice records
+
+One feature at or below 2,000 authored additions plus deletions uses one PR and
+one feature-slice record, regardless of worker count. A feature above 2,000
+uses a semantic stack whose every slice stays within the limit. Additional
+sub-limit records are allowed only for genuinely independent predecessor-free
+delivery units. Published records are immutable; a change requires a
+superseding plan.
+
+Every team task records its feature-slice ID. The record groups scope,
+predecessor, estimate, acceptance evidence, and ownership mappings but performs
+no work and owns no lifecycle state.
+
+## Team routing
+
+Each worker-executable task has exactly one team identity. When another team's
+expertise is needed to change named files, Gizmo creates a separate expertise
+task for that provider team and records the functional owner as its acceptance
+owner. Security review does not transfer implementation ownership.
+
+A worker receives a bounded contract with an exact baseline, allowed and
+forbidden paths, dependencies, resource claims, and acceptance evidence. It
+returns the typed or committed handoff required by that contract. Gizmo routes
+foreign-team needs and integrates only accepted evidence.
+
+The [canonical delegation workflow](workflows/subagent-delegation.md) is the
+sole operational authority for task discovery, immutable generations,
+admission, attempts, leases, evidence, retries, provider joins, and harness
+lifecycle boundaries. This contract does not restate those mechanics.
 
 ## Delivery procedure
 
-1. Define the requested outcome and completion evidence.
-2. Recursively discover initial bounded worker-executable team and provider
-   task records and provider edges; track parent-owned control operations
-   separately.
-3. Select exactly one team identity for every worker-executable team or
-   provider task.
-4. Freeze the initial known graph before dispatch.
-5. Validate Loom/Nook's computed candidate batch, select ready task records,
-   admission-authorize one exact attempt ID per selection, freeze those
-   attempts' exact starting frontiers, and supply their contracts to the active
-   harness.
-6. Request creation and other attempt-lifecycle operations through the active
-   harness and observe its returned results.
-7. Verify each returned result against its task identity, starting frontier,
-   resource scope, and acceptance evidence.
-8. Route every implementation finding back to its responsible team.
-9. Request a normal retry only on the exact frozen task contract and acceptance
-   evidence with fresh isolated attempt state. Start a new immutable generation
-   for any contract or acceptance change.
-10. Use the all-task barrier only for the final parent-owned join.
-11. Validate the integrated exact head and record the final verdict.
-12. Complete readiness, merge, and Workbench publication when the verdict is
-   ready.
+1. Define the requested outcome and terminal evidence.
+2. Discover bounded team and provider tasks and publish the immutable plan.
+3. Apply canonical delegation to authorize work through the active harness.
+4. Verify returned results and route findings to their responsible teams.
+5. Integrate accepted handoffs and obtain the required exact-head verdicts.
+6. Complete the user-selected terminal state.
 
-Use the root [team worker contract](../AGENTS.md#team-worker-contract) for
-universal requirements. Use
-[subagent delegation](workflows/subagent-delegation.md) for operational worker
-rules.
+For a normal implementation mission, completion includes pull-request
+creation, exact-head validation, readiness, squash merge, remote verification,
+and Workbench completion. A worker commit is an input, not mission completion.
+Missing authority, an unavailable required worker, or incomplete evidence is a
+blocker rather than a reason for Gizmo to take over team work.
 
-Gizmo adds delivery-specific decisions. It selects the functional owner,
-freezes each team task, routes expertise handoffs to the recorded functional
-owner for acceptance, integrates accepted handoffs, and controls shared
-integrated and external delivery state. The active harness alone owns
-worker-attempt lifecycle.
+## Verdict
 
-Direct providers form edge-local readiness barriers.
+The final verdict is bound to the exact integrated head. Every required
+functional-owner and security verdict must be present and satisfied. A head
+change invalidates evidence that is not head-stable. Gizmo may block incomplete
+delivery but cannot downgrade or override another owner's block.
 
-- A write provider must be terminal-successful, accepted, commit-verified, and
-  integrated into the consumer's Git frontier.
-- A repository-reading read-only provider must be terminal-successful,
-  accepted, exact-source verified, and accepted into parent task state.
-- An evidence-only synthesis provider must have empty repository read claims,
-  write claims, and evidence surface. Its generation freezes provider edges,
-  expected producer identities, typed input schema, and acceptance criteria;
-  Gizmo binds exact accepted evidence and provenance identities when
-  authorizing the ready attempt.
-- Read-only evidence does not enter Git ancestry.
-- Its task record names the exact repository evidence surface and resource
-  claims, or its empty repository claims and frozen evidence-input contract for
-  evidence-only synthesis. Admission-time binding of matching accepted
-  artifacts is not a plan mutation.
-- A consumer attempt leases the evidence-surface claims it relies on.
-- Readiness does not wait for unrelated tasks.
-
-Hazard ordering, stale evidence that requires re-execution, and late-plan
-mutation follow the canonical complete generation restart; failed topology
-returns to Gizmo instead of waiting. Accepted consumers are never implicitly or
-selectively invalidated.
-
-An active worker never dispatches another worker. If it discovers a missing
-dependency, it returns the need to Gizmo. Gizmo conclusively dispositions the
-old attempt, creates a replacement immutable generation with the provider as a
-separate task and explicit functional owner. Loom/Nook computes the replacement
-candidate data, Gizmo validates and admission-authorizes records and freezes
-their frontiers, and the harness creates a fresh attempt for every authorized
-replacement-generation record after old-generation disposition. Surviving same
-logical tasks receive retries; newly discovered providers receive first
-attempts.
-
-## Verdict rules
-
-Gizmo Prime owns the final integrated PR verdict.
-
-- The verdict is bound to the exact integrated head.
-- Every required team verdict must be present for that head.
-- Security supplies the required verdict for security architecture,
-  cryptographic policy, trust boundaries, and security acceptance.
-- A blocking team verdict remains blocking until that same owner clears it.
-- A blocking security verdict remains blocking until security clears it.
-- Gizmo cannot waive, downgrade, or override either block.
-- Gizmo may block delivery when integration or mission evidence is incomplete.
-- A head change invalidates earlier verdicts whose evidence is not head-stable.
-
-## Validation
-
-Completion proves:
-
-- every worker-executable team or provider task stayed inside one declared team
-  boundary;
-- every worker-executable team or provider task recorded its functional owner
-  separately from its context-selecting team identity;
-- parent-owned Gizmo control operations stayed outside the worker graph and had
-  no worker team identity or harness-created attempt;
-- every expertise handoff was semantically accepted by its recorded functional
-  owner before integration;
-- every authorized `(task ID, attempt ID)` mapped to exactly one harness-visible
-  worker attempt, with no more than one concurrently active attempt per logical
-  task;
-- no active leased worker attempt created another worker attempt;
-- every accepted writer returned a verified commit;
-- every required team and security verdict is satisfied;
-- the final verdict names the exact integrated head; and
-- Gizmo did not implement or fix a team-owned unit.
+Use [mission delivery](workflows/mission-delivery.md) for the end-to-end
+sequence and [pull requests](workflows/pull-requests.md) for GitHub, validation,
+readiness, and merge details.

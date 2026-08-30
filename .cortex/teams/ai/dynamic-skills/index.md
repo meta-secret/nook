@@ -18,7 +18,7 @@ Harness profile directories must not mirror or redefine these cards.
 - **[typescript-rust-automation-only.md](../../../shared/dynamic-skills/typescript-rust-automation-only.md)**
   - Purpose: **P1 hard rule:** prohibit repository-authored Python and use Bun/TypeScript, Rust, and Taskfiles for automation
 - **[source-file-size.md](../../../shared/dynamic-skills/source-file-size.md)**
-  - Purpose: **P1 / most critical structure rule:** every authored file, including Rust, has one 1,000-line ceiling; oversized Rust signals excessive domain responsibility and requires cohesive decomposition
+  - Purpose: **P1 / most critical structure rule:** every authored file, including Rust, has one non-bypassable 1,000-line ceiling; a violation requires architectural review and cohesive decomposition
 - **[cortex-writer.md](cortex-writer.md)**
   - Purpose: **P1 / critical `.cortex` writing rule:** split long dense sentences into short sentences, bullets, and lists; reserve tables for compact repeated fields or exact mappings
 - **[cortex-article-structure/SKILL.md](cortex-article-structure/SKILL.md)**
@@ -94,7 +94,7 @@ Harness profile directories must not mirror or redefine these cards.
 - **[docker-container-harness.md](../../sre/dynamic-skills/docker-container-harness.md)**
   - Purpose: Prohibit Dockerfile cache mounts and killing the Docker daemon; enforce exact dependency pinning and Bun lockfiles
 - **[self-improvement.md](self-improvement.md)**
-  - Purpose: Capture provisional discoveries, promote durable knowledge, and extract stable workflow mechanics into reviewed Loom tools and graphs
+  - Purpose: Optionally capture provisional discoveries, promote evidenced durable knowledge, and extract only fully deterministic behavior into typed Loom leaves
 
 ## How to add one
 

@@ -1,95 +1,14 @@
-# Reference: Loom tools and static agent workflows
+# Reference: Loom Tools
 
 ## Overview
 
 - **Role:** Loom is the Bun tool runner for mechanical Cortex rites.
 - **Caller:** Agents call it. Humans do not use it interactively.
 - **Leaf protocol:** Domain YAML exposes mechanical leaf operations.
-- **Static workflows:** A separate module and CLI own reviewed graphs.
-  - They may call leaf operations through typed adapters.
 - **Module expert audit:** A separate typed catalog validates named read-only
   experts and complete production-module routing.
 
-See
-[agent-workflow-orchestration.md](../design-docs/agent-workflow-orchestration.md).
-
 Full package docs: [`agentic-ai/loom/README.md`](../../../../agentic-ai/loom/README.md).
-
-## Static agent workflow boundary
-
-The existing static SDK workflow is a legacy standalone reviewed read-only
-path outside Gizmo multi-team admission. Its scheduler selects its fixed graph's
-tasks and invokes the SDK directly. It cannot claim, authorize, or execute the
-ordinary multi-team delegation contract, and it is not an implementation
-worker path.
-
-Static workflows live under:
-
-```text
-agentic-ai/loom/src/agent-workflow/
-```
-
-Static workflow rules are:
-
-- Compile topology as TypeScript.
-- Select one reviewed catalog entry through the workflow CLI.
-- Accept bounded runtime inputs such as an exact source commit.
-- Accept no YAML graph.
-- Generate no tasks or edges from prompts or Cortex prose.
-- Use `cortex-full-garbage-collection` as the first catalog entry.
-
-Use the repository Task wrapper:
-
-```bash
-task loom:agent-workflow:cortex-audit BASELINE=<40-character-commit-sha>
-task loom:module-experts:validate
-```
-
-Add `PLAN=1` for topology validation without worker execution.
-
-Without `PLAN=1`, `loom:agent-workflow:cortex-audit` executes only that narrow
-legacy standalone read-only contract. Its success is not evidence that the
-installed runtime enforces ordinary multi-team admission.
-
-That workflow contains:
-
-- an exact-baseline task;
-- four fixed read-only agent audits and one mechanical audit in parallel;
-  - a legacy all-terminal diagnostic-observation join;
-- one `FindingSynthesizer` diagnostic aggregation task producing
-  `CortexSynthesis`; its output cannot satisfy an ordinary provider edge or
-  claim accepted-evidence synthesis compliance;
-- the existing `cortexAudit` leaf.
-
-Completed and failed lane observations remain available to that diagnostic
-aggregator. Failed observations are not accepted provider evidence.
-This lane is separate from the `loom-structural-experts`
-`system_coherence_synthesizer` / `SystemCoherenceSynthesis` diagnostic lane.
-
-The workflow audit lane also classifies:
-
-- duplicated procedure prose;
-- deterministic leaf candidates;
-- compiled workflow candidates;
-- safe parallel evidence lanes; and
-- policy that must remain semantic judgment.
-
-- **Attempt gate:** Fail closed unless `HEAD` matches the requested baseline and
-  the worktree is clean before and after execution.
-  - Include untracked files in cleanliness.
-- **Local authority:** Write the run journal under
-  `workflow/processing/<workflow>/<run-id>/events.jsonl`.
-  - It alone owns local scheduling state.
-  - Write one action stream per reached agent attempt under `agents/<task>/`.
-  - Persist agent-authored Markdown as the attempt `view.md`.
-  - Persist the declared materializer's Markdown as the run `view.md`.
-  - Content-hash streams and projections before referencing them from the run
-    journal.
-  - Parents consume views and typed artifacts by default. Raw streams are
-    diagnostic evidence.
-- **Durability:** The workflow implementation is local-only.
-  - Hive is outside local software-development orchestration.
-- **Protocol scope:** The YAML rules below apply only to Loom leaf tools.
 
 ## Invoke a leaf tool
 
@@ -150,12 +69,12 @@ and [typescript-named-args.md](../../web-dev/dynamic-skills/typescript-named-arg
 - existing generic-value APIs are staged migration debt and must not expand
 - toolsList `inputSchema` values are typed `ObjectJsonSchema` (not raw object
   bags); field names come from field enums
-- call sites must not pass raw object literals; name a typed args value first
-- object parameters must use named semantic types or interfaces; inline object
-  parameter annotations and generic contract names are prohibited
-- mechanically enforced by ESLint `max-params: 1`, `no-restricted-types`, and
-  `loom/no-raw-object-arguments` in `agentic-ai/loom`
-- review enforces generic-value containment while the existing debt is migrated
+- reusable and public object contracts use semantic types or interfaces;
+  clear one-use local literals and inline shapes are permitted
+- mechanically enforced by ESLint `max-params: 1` and
+  `no-restricted-types` in `agentic-ai/loom`
+- review enforces semantic reusable and public contracts plus generic-value
+  containment while the existing debt is migrated
 
 Enforced by `task preflight:typescript-state` across the repository, plus
 `task loom:verify` (includes ESLint) for Loom-local rules.
