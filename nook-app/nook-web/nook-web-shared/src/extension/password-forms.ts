@@ -872,8 +872,17 @@ export function readLoginCredentials(
   };
 }
 
+enum OwnedAdvanceControlActivationKind {
+  Absent = "absent",
+  Activated = "activated",
+}
+
 type OwnedAdvanceControlActivation =
-  { kind: "absent" } | { kind: "activated"; submitted: boolean };
+  | { kind: OwnedAdvanceControlActivationKind.Absent }
+  | {
+      kind: OwnedAdvanceControlActivationKind.Activated;
+      submitted: boolean;
+    };
 
 function activateApprovedOwnedAdvanceControl(
   request: PasswordFormScopeQuery,
@@ -921,17 +930,20 @@ function activateApprovedOwnedAdvanceControl(
           authentication_advance_control_is_safe(transported)
         );
       });
-  if (!approved) return { kind: "absent" };
+  if (!approved) return { kind: OwnedAdvanceControlActivationKind.Absent };
   if (!approved.matches(semanticSubmitControlSelector)) {
     approved.click();
-    return { kind: "activated", submitted: true };
+    return {
+      kind: OwnedAdvanceControlActivationKind.Activated,
+      submitted: true,
+    };
   }
   const submission: Parameters<typeof observeSubmit>[0] = {
     form,
     action: () => approved.click(),
   };
   observeSubmit(submission);
-  return { kind: "activated", submitted: true };
+  return { kind: OwnedAdvanceControlActivationKind.Activated, submitted: true };
 }
 
 export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
@@ -947,7 +959,9 @@ export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
   const form = anchor.form;
   if (form) {
     const activation = activateApprovedOwnedAdvanceControl(request, form);
-    if (activation.kind === "activated") return true;
+    if (activation.kind === OwnedAdvanceControlActivationKind.Activated) {
+      return true;
+    }
   }
 
   if (!passwordField) {
