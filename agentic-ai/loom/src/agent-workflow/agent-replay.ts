@@ -18,9 +18,12 @@ import type {
   ProjectionReference,
 } from './domain.ts';
 import { assertCurrentAgentAttemptWorkflowVersion } from './agent-attempt-version.ts';
+import { assertCortexReferences } from './cortex-references.ts';
+import { cortexActionId } from './agent-event-renderer.ts';
 
 export type ReplayAgentAttemptJournalRequest = {
   readonly events: readonly AgentAttemptEvent[];
+  readonly knownCortexIdentifiers?: ReadonlySet<string>;
 };
 
 export type ReplayedAgentAttempt = {
@@ -44,7 +47,21 @@ const PARENT_KINDS = new Set<string>(Object.values(AgentAttemptParentKind));
 const PROCESSING_WORKFLOW_NAMES = new Set<string>(
   Object.values(DelegatedAgentWorkflowName),
 );
-const MAX_RUNTIME_ACTIVITY_DETAIL_LENGTH = 1024;
+const EVENT_METADATA_KEYS = [
+  'adapter',
+  'runId',
+  'workflow',
+  'workflowVersion',
+  'sourceCommit',
+  'task',
+  'agent',
+  'attempt',
+  'depth',
+  'parent',
+  'sequence',
+  'actionId',
+  'occurredAt',
+] as const;
 
 export function replayAgentAttemptJournal(
   request: ReplayAgentAttemptJournalRequest,
@@ -61,6 +78,9 @@ export function replayAgentAttemptJournal(
     if (!AGENT_EVENT_KINDS.has(event.kind)) {
       throw new Error('Agent attempt journal contains an unknown event kind.');
     }
+    if (!eventHasExactKeys(event)) {
+      throw new Error('Agent attempt journal event fields are invalid.');
+    }
     if (terminal) {
       throw new Error(
         'Agent attempt journal contains an event after terminal.',
@@ -70,6 +90,9 @@ export function replayAgentAttemptJournal(
       throw new Error(
         `Agent attempt journal sequence ${event.sequence} must equal ${index + 1}.`,
       );
+    }
+    if (event.actionId !== cortexActionId(event.sequence)) {
+      throw new Error('Agent attempt journal action identity is invalid.');
     }
     assertCurrentAgentAttemptWorkflowVersion(event.workflowVersion);
     const identityPair: AgentAttemptIdentityPair = {
@@ -99,12 +122,28 @@ export function replayAgentAttemptJournal(
     if (
       event.kind === AgentAttemptEventKind.RuntimeActivity &&
       (!RUNTIME_ACTIVITY_KINDS.has(event.activity) ||
-        event.detail.length > MAX_RUNTIME_ACTIVITY_DETAIL_LENGTH ||
-        containsForbiddenControl(event.detail))
+        Object.hasOwn(event, 'detail') ||
+        ('evidenceSha256' in event &&
+          !/^[0-9a-f]{64}$/u.test(event.evidenceSha256)))
     ) {
       throw new Error(
         'Agent attempt journal contains unknown runtime activity.',
       );
+    }
+    if (event.kind === AgentAttemptEventKind.RuntimeActivity) {
+      if (
+        event.cortexReferences.length > 0 &&
+        !request.knownCortexIdentifiers
+      ) {
+        throw new Error(
+          'Agent attempt journal Cortex references require a source-bound registry.',
+        );
+      }
+      const referenceArgs = {
+        references: event.cortexReferences,
+        knownIdentifiers: request.knownCortexIdentifiers ?? false,
+      } as const;
+      assertCortexReferences(referenceArgs);
     }
     if (event.kind === AgentAttemptEventKind.ViewProjected) {
       if (sawView) {
@@ -114,9 +153,9 @@ export function replayAgentAttemptJournal(
         throw new Error('Agent attempt view was projected before its result.');
       }
       if (
+        !validMaterializedView(event.view) ||
         event.view.presence !== MaterializedViewPresence.Recorded ||
         event.view.eventHighWaterMark !== event.sequence - 1 ||
-        !validProjection(event.view.projection) ||
         !VIEW_AUTHOR_KINDS.has(event.view.authorKind)
       ) {
         throw new Error(
@@ -189,7 +228,9 @@ function assertValidIdentity(event: AgentAttemptEventMetadata): void {
     event.attempt < 1 ||
     !Number.isSafeInteger(event.depth) ||
     event.depth < 1 ||
-    event.depth > MAX_AGENT_HIERARCHY_DEPTH
+    event.depth > MAX_AGENT_HIERARCHY_DEPTH ||
+    (event.parent.kind === AgentAttemptParentKind.AgentAttempt &&
+      Object.keys(event.parent).length !== 4)
   ) {
     throw new Error('Agent attempt journal identity is invalid.');
   }
@@ -217,18 +258,58 @@ function safeIdentifier(value: string): boolean {
   return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value);
 }
 
-function containsForbiddenControl(value: string): boolean {
-  return Array.from(value).some((character) => {
-    const code = character.charCodeAt(0);
-    return (
-      code === 127 || (code < 32 && code !== 9 && code !== 10 && code !== 13)
-    );
-  });
-}
-
 function validProjection(projection: ProjectionReference): boolean {
   return (
-    projection.path.trim() !== '' && /^[0-9a-f]{64}$/.test(projection.sha256)
+    Object.keys(projection).length === 2 &&
+    Object.hasOwn(projection, 'path') &&
+    Object.hasOwn(projection, 'sha256') &&
+    projection.path.trim() !== '' &&
+    /^[0-9a-f]{64}$/.test(projection.sha256)
+  );
+}
+
+function validMaterializedView(view: MaterializedViewReference): boolean {
+  if (view.presence !== MaterializedViewPresence.Recorded) return false;
+  const expected = new Set([
+    'presence',
+    'authorKind',
+    'eventHighWaterMark',
+    'projection',
+  ]);
+  const keys = Object.keys(view);
+  return (
+    keys.length === expected.size &&
+    keys.every((key) => expected.has(key)) &&
+    validProjection(view.projection)
+  );
+}
+
+function eventHasExactKeys(event: AgentAttemptEvent): boolean {
+  const fieldsByKind: Record<AgentAttemptEventKind, readonly string[]> = {
+    [AgentAttemptEventKind.AttemptStarted]: [],
+    [AgentAttemptEventKind.RuntimeActivity]: ['activity', 'cortexReferences'],
+    [AgentAttemptEventKind.ResultProjected]: ['result'],
+    [AgentAttemptEventKind.ViewProjected]: ['view'],
+    [AgentAttemptEventKind.AttemptTerminalRecorded]: [
+      'terminalKind',
+      'result',
+      'view',
+    ],
+  };
+  const expected = new Set([
+    ...EVENT_METADATA_KEYS,
+    'kind',
+    ...fieldsByKind[event.kind],
+  ]);
+  const keys = Object.keys(event);
+  if (
+    event.kind === AgentAttemptEventKind.RuntimeActivity &&
+    Object.hasOwn(event, 'evidenceSha256')
+  ) {
+    expected.add('evidenceSha256');
+  }
+  return (
+    keys.length === expected.size && keys.every((key) => expected.has(key))
   );
 }
 

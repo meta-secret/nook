@@ -10,6 +10,26 @@
 
 Full package docs: [`agentic-ai/loom/README.md`](../../../../agentic-ai/loom/README.md).
 
+## Agent action references
+
+`.cortex/identifiers.json` assigns stable compact identifiers to Cortex
+categories and selected documents or headings. Category IDs use `CX-<NAME>`;
+document and item IDs add a five-character random suffix. Published IDs are
+never removed or reassigned when a title or locator changes. Each entry carries
+an immutable authority key; the Cortex audit compares those assignments with
+the registry at the pull request's exact published base commit. The audit fails
+closed when an established base cannot be resolved.
+
+Every persisted agent-attempt event receives an action ID derived from its
+one-based event sequence, such as `a0002`. Runtime activities may attach bounded
+registered Cortex references whose relation is one of `loaded`, `cited`,
+`applied`, or `validated`. Loom persists the event before emitting its compact
+summary to stderr, and optional display failure cannot block the journal.
+
+These records expose auditable actions and cited authority, not private
+reasoning. Event counts are diagnostic activity signals and are not an effort,
+quality, or billing measure.
+
 ## Invoke a leaf tool
 
 Defaultable tools use a Task alias and an in-code example:
