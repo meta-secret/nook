@@ -112,6 +112,7 @@ export function appendIndependentPasskeyOnlyWorkflows<
   const rankingCandidates = shortlistWorkflowsForFactsRanking(
     fieldBearing,
     independent,
+    observationPriority,
   );
   const ranked = rankingCandidates.map((observation) => ({
     observation,
@@ -128,20 +129,33 @@ export function appendIndependentPasskeyOnlyWorkflows<
 function shortlistWorkflowsForFactsRanking<Observation>(
   fieldBearing: Observation[],
   independent: Observation[],
+  observationPriority: (observation: Observation) => number,
 ): Observation[] {
-  const leading = fieldBearing.slice(
-    0,
-    MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
-  );
-  const reserved = fieldBearing[fieldBearing.length - 1];
-  const selected =
-    fieldBearing.length > MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS && reserved
-      ? [...leading, reserved]
-      : leading;
   return [
-    ...selected,
+    ...takeBoundedPriorityWorkflows(fieldBearing, observationPriority),
     ...independent.slice(0, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS),
   ];
+}
+
+function takeBoundedPriorityWorkflows<Observation>(
+  observations: Observation[],
+  observationPriority: (observation: Observation) => number,
+): Observation[] {
+  const selected: Array<{ observation: Observation; priority: number }> = [];
+  for (const observation of observations) {
+    const priority = observationPriority(observation);
+    if (selected.length < MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS) {
+      selected.push({ observation, priority });
+      continue;
+    }
+    const lowest = selected.reduce((current, entry) =>
+      entry.priority < current.priority ? entry : current,
+    );
+    if (priority > lowest.priority) {
+      selected[selected.indexOf(lowest)] = { observation, priority };
+    }
+  }
+  return selected.map((entry) => entry.observation);
 }
 
 function collectPasskeyOnlyScopes(

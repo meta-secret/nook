@@ -872,6 +872,33 @@ describe('authentication observation bounds', () => {
     ).toBe(true)
   })
 
+  test('keeps a middle password login when non-progressing forms surround the ranking cap', () => {
+    const leading = Array.from(
+      { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS },
+      (_, index) =>
+        `<form method="post" id="otp-${index}" action="/otp"><input autocomplete="one-time-code" inputmode="numeric" /></form>`,
+    ).join('')
+    document.body.innerHTML = `
+      ${leading}
+      <form method="post" id="password-login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+      <form method="post" id="otp-trailing" action="/otp"><input autocomplete="one-time-code" inputmode="numeric" /></form>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations.length).toBeLessThanOrEqual(
+      MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
+    )
+    expect(
+      observations.some(
+        (observation) => ownedFormId(observation) === 'password-login',
+      ),
+    ).toBe(true)
+  })
+
   test('keeps a progressing password login when non-progressing OTP forms fill the bound', () => {
     const otpForms = Array.from(
       { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS },

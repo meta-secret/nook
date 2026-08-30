@@ -386,6 +386,25 @@ describe('classified login activation', () => {
     expect(activatedControls).toEqual(['login-next'])
   })
 
+  test('does not report submit when a required field blocks the semantic submitter', () => {
+    document.body.innerHTML = `
+      <form method="post" action="/session">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <input name="tenant" required />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+    let submitted = false
+    document.querySelector('form')?.addEventListener('submit', (event) => {
+      event.preventDefault()
+      submitted = true
+    })
+
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(false)
+    expect(submitted).toBe(false)
+  })
+
   test('advances a native semantic submit through a safe login route', () => {
     document.body.innerHTML = `
       <form method="post" id="account-step" action="/auth/login">

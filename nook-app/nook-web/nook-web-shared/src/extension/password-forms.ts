@@ -951,8 +951,10 @@ function activateApprovedOwnedAdvanceControl(
     form,
     action: () => approved.click(),
   };
-  observeSubmit(submission);
-  return { kind: OwnedAdvanceControlActivationKind.Activated, submitted: true };
+  return {
+    kind: OwnedAdvanceControlActivationKind.Activated,
+    submitted: observeSubmit(submission),
+  };
 }
 
 export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
@@ -969,7 +971,7 @@ export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
   if (form) {
     const activation = activateApprovedOwnedAdvanceControl(request, form);
     if (activation.kind === OwnedAdvanceControlActivationKind.Activated) {
-      return true;
+      return activation.submitted;
     }
   }
 
