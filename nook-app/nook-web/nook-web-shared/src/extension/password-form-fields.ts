@@ -443,8 +443,10 @@ function fieldHasOneTimeCodeAutoSubmitHandler(
   });
 }
 
+type OneTimeCodeFieldList = HTMLInputElement[];
+
 export function preferredOneTimeCodeFillField(
-  fields: HTMLInputElement[],
+  fields: OneTimeCodeFieldList,
 ): HTMLInputElement | false {
   const preferred = fields.find(fieldHasOneTimeCodeAutoSubmitHandler);
   return preferred ? preferred : (fields[0] ?? false);

@@ -155,6 +155,8 @@ type RankedPasskeyObservationList<Observation> = Array<
   RankedPasskeyObservation<Observation>
 >;
 
+type RankableWorkflowObservationList<Observation> = Observation[];
+
 type PreferredPasskeyObservationResult<Summary> = {
   observation: PasskeyOnlyWorkflowObservation<Summary>;
   safe: boolean;
@@ -319,7 +321,7 @@ function ownedFormLooksProgressing({
 
 function takeBoundedPriorityWorkflows<
   Observation extends RankableWorkflowObservation,
->(observations: Observation[]): Observation[] {
+>(observations: RankableWorkflowObservationList<Observation>): Observation[] {
   const selected: Array<BoundedPriorityWorkflowEntry<Observation>> = [];
   for (const observation of observations) {
     const priority = cheapWorkflowPriority(observation);
@@ -548,7 +550,7 @@ function takePreferredPasskeyOnlyObservations<Summary>({
       root: scope.root,
       formScope: scope.formScope,
     };
-    const observation = {
+    const observation: PasskeyOnlyWorkflowObservation<Summary> = {
       root: scope.root,
       formScope: scope.formScope,
       summary: summarizeRoot(summaryArgs),

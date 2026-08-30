@@ -62,13 +62,14 @@ export function observeAuthenticationSubmitValueAssignments(
       return originalGet.call(this);
     },
     set(next: string) {
-      const previous = originalGet.call(this);
-      originalSet.call(this, next);
+      const input = this as HTMLInputElement;
+      const previous = originalGet.call(input);
+      originalSet.call(input, next);
       if (
         previous !== next &&
-        (this.type === "submit" ||
-          this.type === "image" ||
-          this.type === "button")
+        (input.type === "submit" ||
+          input.type === "image" ||
+          input.type === "button")
       ) {
         onChange();
       }

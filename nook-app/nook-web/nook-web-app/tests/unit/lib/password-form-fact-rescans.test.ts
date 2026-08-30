@@ -270,7 +270,7 @@ describe('authentication fact rescans', () => {
     document.body.innerHTML = `
       <div class="signin-panel">
         <input autocomplete="username" />
-        <input id="advance" type="button" value="Next" />
+        <input id="advance" type="button" value="More options" />
       </div>
     `
     const advance = document.querySelector('#advance')

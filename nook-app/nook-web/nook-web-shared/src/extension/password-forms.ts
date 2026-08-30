@@ -54,7 +54,6 @@ import {
   controlSubmissionMethod,
   formBlocksCredentialDisclosure,
   selectedSubmitterBlocksCredentialDisclosure,
-  submissionMethodBlocksCredentialDisclosure,
   formSubmissionMethod,
   PageControlSubmissionMethod,
   isRenderedControl,

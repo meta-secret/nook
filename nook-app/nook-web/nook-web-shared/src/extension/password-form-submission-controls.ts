@@ -533,6 +533,7 @@ export function requestImplicitAuthenticationSubmit({
   if (
     !sourceOrigin ||
     formHasSemanticSubmitter(form) ||
+    formHasAriaDisabledSemanticSubmitter(form) ||
     typeof form.requestSubmit !== "function" ||
     (hasAuthenticationPassword && formBlocksCredentialDisclosure(form))
   ) {
@@ -679,6 +680,26 @@ export function clickAdvanceControl(
     return true;
   }
   return false;
+}
+
+function formHasAriaDisabledSemanticSubmitter(form: HTMLFormElement): boolean {
+  return Array.from(
+    form.ownerDocument.querySelectorAll<HTMLElement>(
+      semanticSubmitControlSelector,
+    ),
+  ).some((control) => {
+    if (
+      !(control instanceof HTMLButtonElement) &&
+      !(control instanceof HTMLInputElement)
+    ) {
+      return false;
+    }
+    return (
+      control.form === form &&
+      (control.getAttribute("aria-disabled") === "true" ||
+        isDisabledByAncestorAria(control))
+    );
+  });
 }
 
 export function formHasSemanticSubmitter(form: HTMLFormElement): boolean {
