@@ -857,5 +857,12 @@ describe('authentication observation bounds', () => {
     }
     expect(liveApprovedAuthenticationWorkflow(staleCheck)).toBe(false)
     expect(liveApprovedAuthenticationWorkflow(refreshedCheck)).toBe(true)
+    let submitted = false
+    document.querySelector('form')?.addEventListener('submit', (event) => {
+      event.preventDefault()
+      submitted = true
+    })
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
+    expect(submitted).toBe(true)
   })
 })

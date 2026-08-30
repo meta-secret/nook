@@ -49,7 +49,7 @@ export function summarizePasskeyOnlyWorkflowForms<Summary>(
   if (!pageHasPasskeyControl(root)) return [];
   const passkeyCandidates = findPasskeyControls(root);
   const scopes = collectPasskeyOnlyScopes(root, passkeyCandidates);
-  const ranked = scopes.map((scope) => {
+  const fieldRanked = scopes.map((scope) => {
     const summaryArgs: PasswordFormScopeQuery = {
       kind: PasswordFormQueryKind.Scoped,
       root: scope.root,
@@ -67,9 +67,16 @@ export function summarizePasskeyOnlyWorkflowForms<Summary>(
         passkeyCandidates,
         passkeyControlIsSafe,
       ),
-      priority: observationPriority(observation),
     };
   });
+  fieldRanked.sort((left, right) => Number(right.safe) - Number(left.safe));
+  const ranked = fieldRanked
+    .slice(0, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS)
+    .map((entry) => ({
+      observation: entry.observation,
+      safe: entry.safe,
+      priority: observationPriority(entry.observation),
+    }));
   return takeRankedPasskeyObservations(ranked);
 }
 

@@ -225,6 +225,7 @@ export function isRenderedControl(control: HTMLElement): boolean {
       element.hidden ||
       element.hasAttribute("inert") ||
       element.inert ||
+      element.getAttribute("aria-disabled") === "true" ||
       !rendered
     ) {
       return false;
