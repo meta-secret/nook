@@ -282,9 +282,8 @@ describe('agent attempt journal', () => {
     try {
       const failingOutputConfiguration: AgentAttemptJournalConfiguration = {
         ...configuration(runDirectory),
-        compactOutput: () => {
-          throw new Error('Output unavailable.');
-        },
+        compactOutput: async () =>
+          Promise.reject(new Error('Output unavailable.')),
       };
       const journal = new AgentAttemptJournal<'inspect'>(
         failingOutputConfiguration,

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import type { RmOptions } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -46,6 +46,11 @@ describe('Cortex identifiers', () => {
     const repoRoot = await fixtureRepository();
     try {
       const registryPath = join(repoRoot, '.cortex', 'identifiers.json');
+      await writeFile(join(repoRoot, 'outside.md'), '# Outside\n', 'utf8');
+      await symlink(
+        '../outside.md',
+        join(repoRoot, '.cortex', 'linked-policy.md'),
+      );
       const invalidRegistry = {
         schemaVersion: 1,
         entries: [
@@ -78,6 +83,13 @@ describe('Cortex identifiers', () => {
             title: 'Noncanonical locator',
             locator: '.cortex/nested/../policy.md',
           },
+          {
+            id: 'CX-AI-2R6T8',
+            kind: CortexIdentifierKind.Document,
+            categoryId: 'CX-AI',
+            title: 'Linked locator',
+            locator: '.cortex/linked-policy.md',
+          },
         ],
       };
       await writeFile(registryPath, JSON.stringify(invalidRegistry), 'utf8');
@@ -87,6 +99,7 @@ describe('Cortex identifiers', () => {
           'Cortex locator .cortex/policy.md#missing-item has no matching heading.',
           'Cortex locator .cortex/policy.md is duplicated.',
           'Cortex locator .cortex/nested/../policy.md is not canonical.',
+          'Cortex locator .cortex/linked-policy.md does not name a regular Cortex document.',
         ]),
       );
       const unknownReferenceArgs = {
@@ -99,6 +112,19 @@ describe('Cortex identifiers', () => {
         knownIdentifiers: new Set(['CX-AI']),
       };
       expect(() => assertCortexReferences(unknownReferenceArgs)).toThrow(
+        'invalid Cortex reference',
+      );
+      const extraFieldArgs = {
+        references: [
+          {
+            id: 'CX-AI',
+            relation: CortexReferenceRelation.Applied,
+            prompt: 'must not persist',
+          },
+        ],
+        knownIdentifiers: new Set(['CX-AI']),
+      } as never;
+      expect(() => assertCortexReferences(extraFieldArgs)).toThrow(
         'invalid Cortex reference',
       );
     } finally {

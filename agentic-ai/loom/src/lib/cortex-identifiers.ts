@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import {
   asUntrustedYamlNode,
@@ -228,6 +228,15 @@ function validateLocator(args: ValidateLocatorArgs): void {
   if (!absolutePath.startsWith(cortexRoot) || !existsSync(absolutePath)) {
     args.findings.push(
       finding(`Cortex locator ${args.entry.locator} does not exist.`),
+    );
+    return;
+  }
+  const locatorStat = lstatSync(absolutePath);
+  if (locatorStat.isSymbolicLink() || !locatorStat.isFile()) {
+    args.findings.push(
+      finding(
+        `Cortex locator ${args.entry.locator} does not name a regular Cortex document.`,
+      ),
     );
     return;
   }

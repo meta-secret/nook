@@ -89,7 +89,7 @@ export type AgentAttemptJournalConfiguration = {
   readonly parent: AgentAttemptParent;
   readonly now: () => IsoTimestamp;
   readonly knownCortexIdentifiers?: ReadonlySet<string>;
-  readonly compactOutput?: (line: string) => void;
+  readonly compactOutput?: (line: string) => void | Promise<void>;
 };
 
 export type ModuleExpertAttemptJournalConfiguration = Omit<
@@ -275,9 +275,11 @@ export class AgentAttemptJournal<TTask extends string> {
     await appendOperation;
     const compactOutput =
       this.configuration.compactOutput ??
-      ((line: string) => process.stderr.write(line));
+      ((line: string): void => {
+        process.stderr.write(line);
+      });
     try {
-      compactOutput(renderAgentAttemptEvent(completeEvent));
+      await compactOutput(renderAgentAttemptEvent(completeEvent));
     } catch {
       // Compact human evidence is optional and cannot gate the journal.
     }

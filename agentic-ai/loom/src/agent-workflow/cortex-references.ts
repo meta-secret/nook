@@ -28,6 +28,14 @@ export function assertCortexReferences(args: AssertCortexReferencesArgs): void {
   const seen = new Set<string>();
   for (const reference of args.references) {
     if (
+      !reference ||
+      typeof reference !== 'object' ||
+      Array.isArray(reference) ||
+      Object.keys(reference).length !== 2 ||
+      !Object.hasOwn(reference, 'id') ||
+      !Object.hasOwn(reference, 'relation') ||
+      typeof reference.id !== 'string' ||
+      typeof reference.relation !== 'string' ||
       !validCortexIdentifier(reference.id) ||
       !CORTEX_REFERENCE_RELATIONS.has(reference.relation) ||
       seen.has(`${reference.id}:${reference.relation}`) ||
