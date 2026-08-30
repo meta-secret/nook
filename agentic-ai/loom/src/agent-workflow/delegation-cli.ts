@@ -214,6 +214,16 @@ async function record(
   const serialized = await readFile(commandLine.requestPath, 'utf8');
   const request = JSON.parse(serialized) as DelegationRecordRequest;
   assertRequest(request);
+  const knownCortexIdentifiers = registeredCortexIdentifiers(
+    commandLine.workingDirectory,
+  );
+  for (const activity of request.activities) {
+    const referenceArgs = {
+      references: activity.cortexReferences ?? [],
+      knownIdentifiers: knownCortexIdentifiers,
+    } as const;
+    assertCortexReferences(referenceArgs);
+  }
   const terminal = normalizedTerminal(request.terminal);
   const runDirectory = resolve(
     commandLine.workingDirectory,
@@ -252,9 +262,7 @@ async function record(
     depth: request.depth,
     parent: request.parent,
     now: () => new Date().toISOString(),
-    knownCortexIdentifiers: registeredCortexIdentifiers(
-      commandLine.workingDirectory,
-    ),
+    knownCortexIdentifiers,
   };
   const journal = new AgentAttemptJournal<string>(journalConfiguration);
   await journal.initialize();

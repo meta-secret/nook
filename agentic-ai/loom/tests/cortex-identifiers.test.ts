@@ -71,6 +71,13 @@ describe('Cortex identifiers', () => {
             title: 'Duplicate locator',
             locator: '.cortex/policy.md',
           },
+          {
+            id: 'CX-AI-9N5Q7',
+            kind: CortexIdentifierKind.Document,
+            categoryId: 'CX-AI',
+            title: 'Noncanonical locator',
+            locator: '.cortex/nested/../policy.md',
+          },
         ],
       };
       await writeFile(registryPath, JSON.stringify(invalidRegistry), 'utf8');
@@ -79,6 +86,7 @@ describe('Cortex identifiers', () => {
         expect.arrayContaining([
           'Cortex locator .cortex/policy.md#missing-item has no matching heading.',
           'Cortex locator .cortex/policy.md is duplicated.',
+          'Cortex locator .cortex/nested/../policy.md is not canonical.',
         ]),
       );
       const unknownReferenceArgs = {
@@ -93,6 +101,30 @@ describe('Cortex identifiers', () => {
       expect(() => assertCortexReferences(unknownReferenceArgs)).toThrow(
         'invalid Cortex reference',
       );
+    } finally {
+      await rm(repoRoot, REMOVE_OPTIONS);
+    }
+  });
+
+  test('derives heading fragments from Markdown syntax', async () => {
+    const repoRoot = await fixtureRepository();
+    try {
+      await writeFile(
+        join(repoRoot, '.cortex', 'policy.md'),
+        [
+          '# Policy',
+          '',
+          '```markdown',
+          '## Event evidence',
+          '```',
+          '',
+          'Event *evidence*',
+          '----------------',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+      expect(auditCortexIdentifierRegistry(repoRoot).findings).toEqual([]);
     } finally {
       await rm(repoRoot, REMOVE_OPTIONS);
     }

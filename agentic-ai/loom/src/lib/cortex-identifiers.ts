@@ -1,6 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import GithubSlugger from 'github-slugger';
 import {
   asUntrustedYamlNode,
   isRecord,
@@ -10,6 +9,7 @@ import {
   validCortexCategoryIdentifier,
   validCortexScopedIdentifier,
 } from '../agent-workflow/cortex-references.ts';
+import { markdownHeadingFragments } from './cortex-document-structure.ts';
 
 export const CORTEX_IDENTIFIER_REGISTRY_PATH = '.cortex/identifiers.json';
 export const CORTEX_IDENTIFIER_SCHEMA_VERSION = 1;
@@ -219,6 +219,12 @@ function validateLocator(args: ValidateLocatorArgs): void {
   }
   const absolutePath = path.resolve(args.repoRoot, relativePath);
   const cortexRoot = `${path.resolve(args.repoRoot, '.cortex')}${path.sep}`;
+  if (path.posix.normalize(relativePath) !== relativePath) {
+    args.findings.push(
+      finding(`Cortex locator ${args.entry.locator} is not canonical.`),
+    );
+    return;
+  }
   if (!absolutePath.startsWith(cortexRoot) || !existsSync(absolutePath)) {
     args.findings.push(
       finding(`Cortex locator ${args.entry.locator} does not exist.`),
@@ -241,22 +247,12 @@ function validateLocator(args: ValidateLocatorArgs): void {
   }
   if (
     fragment &&
-    !headingFragments(readFileSync(absolutePath, 'utf8')).has(fragment)
+    !markdownHeadingFragments(readFileSync(absolutePath, 'utf8')).has(fragment)
   ) {
     args.findings.push(
       finding(`Cortex locator ${args.entry.locator} has no matching heading.`),
     );
   }
-}
-
-function headingFragments(markdown: string): ReadonlySet<string> {
-  const slugger = new GithubSlugger();
-  return new Set(
-    markdown.split(/\r?\n/u).flatMap((line) => {
-      const match = /^(?:#{1,6})\s+(.+?)\s*#*$/u.exec(line);
-      return match?.[1] ? [slugger.slug(match[1])] : [];
-    }),
-  );
 }
 
 function finding(message: string): CortexIdentifierFinding {

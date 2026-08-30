@@ -172,7 +172,6 @@ describe('delegated agent journal CLI', () => {
       const admissionProcess = Bun.spawn(admissionCommand, spawnOptions);
       expect(await admissionProcess.exited).toBe(0);
       await new Response(admissionProcess.stdout).text();
-      await writeFile(requestPath, JSON.stringify(request), 'utf8');
       const command = [
         process.execPath,
         delegationCli,
@@ -182,15 +181,29 @@ describe('delegated agent journal CLI', () => {
         '--working-directory',
         workingDirectory,
       ];
-      const processResult = Bun.spawn(command, spawnOptions);
-      const exitCode = await processResult.exited;
-      const stdout = await new Response(processResult.stdout).text();
-      const stderr = await new Response(processResult.stderr).text();
-      expect(exitCode).toBe(0);
-      expect(stdout).toContain('events.jsonl');
-      expect(stderr).toContain(
-        '[inspect-contract/attempt-1:a0002] runtime-activity turn-completed CX-AI:applied',
+
+      const unknownReferenceRequest = {
+        ...request,
+        activities: [
+          {
+            ...request.activities[0],
+            cortexReferences: [
+              {
+                id: 'CX-AI-4D7NQ',
+                relation: CortexReferenceRelation.Applied,
+              },
+            ],
+          },
+        ],
+      };
+      await writeFile(
+        requestPath,
+        JSON.stringify(unknownReferenceRequest),
+        'utf8',
       );
+      const unknownReferenceProcess = Bun.spawn(command, spawnOptions);
+      expect(await unknownReferenceProcess.exited).not.toBe(0);
+      await new Response(unknownReferenceProcess.stderr).text();
       const attemptDirectory = join(
         workingDirectory,
         'workflow',
@@ -200,6 +213,18 @@ describe('delegated agent journal CLI', () => {
         'agents',
         request.task,
         'attempt-1',
+      );
+      await expect(stat(attemptDirectory)).rejects.toThrow();
+
+      await writeFile(requestPath, JSON.stringify(request), 'utf8');
+      const processResult = Bun.spawn(command, spawnOptions);
+      const exitCode = await processResult.exited;
+      const stdout = await new Response(processResult.stdout).text();
+      const stderr = await new Response(processResult.stderr).text();
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain('events.jsonl');
+      expect(stderr).toContain(
+        '[inspect-contract/attempt-1:a0002] runtime-activity turn-completed CX-AI:applied',
       );
       expect(await readFile(join(attemptDirectory, 'view.md'), 'utf8')).toBe(
         '# Contract view\n\nConsistent.\n',
