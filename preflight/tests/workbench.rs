@@ -786,11 +786,8 @@ fn cortex_promotions_use_optional_curated_session_memory() -> anyhow::Result<()>
             "self-improvement skill is missing: {required}"
         );
     }
-    assert!(
-        self_improvement.contains("## Task lifecycle")
-            && self_improvement.contains("Create one temporary file for every substantial task"),
-        "the canonical skill must own the complete self-improvement lifecycle"
-    );
+    assert!(self_improvement.contains("A session file is optional"));
+    assert!(self_improvement.contains("No Cortex update is a valid outcome"));
     assert!(
         agent_tasks
             .matches("- task loom:cortex-session-clean")

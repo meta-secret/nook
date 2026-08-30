@@ -157,10 +157,13 @@ as completed delivery.
    - Keep the PR blocked while any required team verdict is blocking.
    - Keep the PR blocked while a required security verdict is blocking.
    - Never waive or override either block.
-10. **Complete substantial-task self-improvement.**
-    - Before final readiness, ask the AI team to complete the
-      [self-improvement lifecycle](../../teams/ai/dynamic-skills/self-improvement.md).
-    - Integrate the clean committed promotion handoff into the same PR.
+10. **Promote durable discoveries when justified.**
+    - Apply the
+      [self-improvement review](../../teams/ai/dynamic-skills/self-improvement.md#self-improvement-review)
+      only when the work revealed a durable lesson or Cortex defect.
+    - No Cortex update is required when no candidate qualifies.
+    - When a promotion is justified, integrate its clean committed handoff into
+      the same PR.
     - If promotion changes the head, rerun pre-push hygiene through the owning
       teams, push, and obtain fresh exact-head hosted validation.
     - When promotion changes the head, recollect every required team and
@@ -169,7 +172,7 @@ as completed delivery.
       that promoted exact head before readiness. Never carry a stale
       pre-promotion verdict forward.
 11. **Finish delivery.**
-    - Run the exact-head readiness audit only after required self-improvement.
+    - Run the exact-head readiness audit after any justified promotion.
     - Squash-merge when readiness succeeds.
     - Publish the Workbench issue update, linked worklog, and
       [agent statistics](agent-statistics.md).
