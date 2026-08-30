@@ -39,11 +39,6 @@ const AUDIT_REQUEST: AuditCortexArticleStructureRequest = {
       ],
     },
   ],
-  migrationBaselineEntries: false,
-  migrationLedger: {
-    relativePath: '.cortex/article-structure-migration.txt',
-    content: false,
-  },
 };
 
 function resultWith(

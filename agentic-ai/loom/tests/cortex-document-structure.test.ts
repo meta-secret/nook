@@ -30,12 +30,6 @@ function audit(documents: readonly CortexDocumentSource[]) {
   const args: AuditCortexDocumentStructureArgs = {
     documents,
     excludedDocumentPaths: new Set(),
-    migrationBaselineEntries: false,
-    migrationLedgerPath: path.join(
-      REPO_ROOT,
-      '.cortex',
-      'document-map-migration.txt',
-    ),
     repoRoot: REPO_ROOT,
   };
   return auditCortexDocumentStructure(args);

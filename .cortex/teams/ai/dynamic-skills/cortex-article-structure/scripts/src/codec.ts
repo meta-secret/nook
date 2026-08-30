@@ -8,14 +8,12 @@ import {
   CORTEX_ARTICLE_FINDING_LIMIT,
   CORTEX_ARTICLE_FINDING_MESSAGE_LIMIT,
   CORTEX_ARTICLE_HEADING_DEPTH_LIMIT,
-  CORTEX_ARTICLE_MIGRATION_LEDGER_PATH,
   CORTEX_ARTICLE_PATH_LIMIT,
   CORTEX_ARTICLE_REQUEST_BYTE_LIMIT,
   CORTEX_ARTICLE_RESULT_BYTE_LIMIT,
   type AuditCortexArticleStructureRequest,
   type CortexArticleDocument,
   type CortexArticleFinding,
-  type CortexArticleMigrationLedger,
   type CortexArticleSemanticBlock,
   type CortexArticleStructureResult,
 } from './domain.ts';
@@ -32,16 +30,9 @@ type CortexArticleBlockTransport = {
   readonly text: string | false;
 };
 
-type CortexArticleMigrationLedgerTransport = {
-  readonly relativePath: string | false;
-  readonly content: string | false;
-};
-
 type CortexArticleRequestTransport = {
   readonly kind: string | false;
   readonly documents: readonly CortexArticleDocumentTransport[] | false;
-  readonly migrationBaselineEntries: readonly string[] | false;
-  readonly migrationLedger: CortexArticleMigrationLedgerTransport | false;
 };
 
 type CortexArticleRequestDecodeFailure = {
@@ -61,11 +52,6 @@ type DecodeDocumentRequest = {
 type DecodeBlockRequest = {
   readonly path: string;
   readonly transport: CortexArticleBlockTransport;
-};
-
-type DecodeLedgerRequest = {
-  readonly path: string;
-  readonly transport: CortexArticleMigrationLedgerTransport;
 };
 
 type FindingContributorRequest = {
@@ -89,7 +75,6 @@ type ExactKeyValue =
   | CortexArticleRequestTransport
   | CortexArticleDocumentTransport
   | CortexArticleBlockTransport
-  | CortexArticleMigrationLedgerTransport
   | CortexArticleResultTransport
   | CortexArticleFindingTransport;
 
@@ -125,16 +110,10 @@ type DiagnosticShape = {
   readonly suffix: string;
 };
 
-const REQUEST_KEYS = [
-  'kind',
-  'documents',
-  'migrationBaselineEntries',
-  'migrationLedger',
-] as const;
+const REQUEST_KEYS = ['kind', 'documents'] as const;
 const DOCUMENT_KEYS = ['relativePath', 'blocks'] as const;
 const SIMPLE_BLOCK_KEYS = ['kind', 'line'] as const;
 const HEADING_BLOCK_KEYS = ['depth', 'kind', 'line', 'text'] as const;
-const LEDGER_KEYS = ['relativePath', 'content'] as const;
 const RESULT_KEYS = ['kind', 'findings'] as const;
 const FINDING_KEYS = ['code', 'file', 'line', 'message'] as const;
 const FINDING_CODES = new Set<string>(Object.values(CortexArticleFindingCode));
@@ -173,9 +152,6 @@ const failInvalidBlockKind = requestFailure(
 );
 const failNonmonotonicLine = requestFailure(
   'Cortex article block lines must be strictly ordered.',
-);
-const failInvalidLedger = requestFailure(
-  'Invalid Cortex article migration ledger.',
 );
 const failFindingCapacity = requestFailure(
   'Cortex article request finding capacity exceeds its bound.',
@@ -231,12 +207,6 @@ export function decodeCortexArticleRequest(
   ) {
     throw failInvalidRequest('documents');
   }
-  if (!isCortexMarkdownPathArrayOrFalse(transport.migrationBaselineEntries)) {
-    throw failInvalidRequest('migrationBaselineEntries');
-  }
-  if (!transport.migrationLedger) {
-    throw failInvalidRequest('migrationLedger');
-  }
   const documents: CortexArticleDocument[] = [];
   const documentPaths = new Set<string>();
   for (const [index, documentTransport] of transport.documents.entries()) {
@@ -252,16 +222,9 @@ export function decodeCortexArticleRequest(
     documentPaths.add(document.relativePath);
     documents.push(document);
   }
-  const ledgerRequest: DecodeLedgerRequest = {
-    path: 'migrationLedger',
-    transport: transport.migrationLedger,
-  };
-  const migrationLedger = decodeLedger(ledgerRequest);
   const request: AuditCortexArticleStructureRequest = {
     kind: CortexArticleContractKind.Request,
     documents,
-    migrationBaselineEntries: transport.migrationBaselineEntries,
-    migrationLedger,
   };
   assertRequestFindingCapacity(request);
   return request;
@@ -414,30 +377,6 @@ function isSimpleSemanticKind(
   );
 }
 
-function decodeLedger(
-  request: DecodeLedgerRequest,
-): CortexArticleMigrationLedger {
-  const { path, transport } = request;
-  if (!transport) throw failInvalidLedger(path);
-  const exactKeysRequest: ExactKeysPathRequest = {
-    value: transport,
-    expected: LEDGER_KEYS,
-    path,
-  };
-  const exactKeysPath = invalidExactKeysPath(exactKeysRequest);
-  if (exactKeysPath !== false) throw failInvalidLedger(exactKeysPath);
-  if (transport.relativePath !== CORTEX_ARTICLE_MIGRATION_LEDGER_PATH) {
-    throw failInvalidLedger(`${path}.relativePath`);
-  }
-  if (!isBoundedLedgerContent(transport.content)) {
-    throw failInvalidLedger(`${path}.content`);
-  }
-  return {
-    relativePath: transport.relativePath,
-    content: transport.content,
-  };
-}
-
 function decodeFinding(
   transport: CortexArticleFindingTransport,
 ): CortexArticleFinding {
@@ -475,39 +414,6 @@ function decodeFinding(
 }
 
 function isCanonicalFinding(request: CanonicalFindingRequest): boolean {
-  if (request.code === CortexArticleFindingCode.InvalidMigrationLedger) {
-    if (request.file !== CORTEX_ARTICLE_MIGRATION_LEDGER_PATH) return false;
-    const shapes: readonly DiagnosticShape[] = [
-      {
-        minimumDetailLength: 1,
-        prefix: 'Duplicate article-structure migration exemption: ',
-        suffix: '',
-      },
-      {
-        minimumDetailLength: 1,
-        prefix: 'Article-structure exemption is not a Cortex Markdown file: ',
-        suffix: '',
-      },
-      {
-        minimumDetailLength: 1,
-        prefix: 'Article-structure exemption was added after the baseline: ',
-        suffix: '',
-      },
-      {
-        minimumDetailLength: 1,
-        prefix:
-          'Article-structure exemption cannot be verified without the migration baseline: ',
-        suffix: '',
-      },
-    ];
-    return shapes.some((shape) => {
-      const matchRequest: MatchDiagnosticShapeRequest = {
-        message: request.message,
-        shape,
-      };
-      return matchesDiagnosticShape(matchRequest);
-    });
-  }
   if (!isCortexMarkdownPath(request.file)) return false;
   const shape = findingDiagnosticShape(request.code);
   const matchRequest: MatchDiagnosticShapeRequest = {
@@ -587,9 +493,6 @@ function assertRequestFindingCapacity(
 function findingContributorPath(request: FindingContributorRequest): string {
   const finding = request.findings.at(-1);
   if (!finding) return 'documents';
-  if (finding.file === CORTEX_ARTICLE_MIGRATION_LEDGER_PATH) {
-    return 'migrationLedger.content';
-  }
   const documentIndex = request.request.documents.findIndex(
     (document) => document.relativePath === finding.file,
   );
@@ -654,17 +557,6 @@ function contractPath(request: ContractPathRequest): string {
     : `${request.parent}[${JSON.stringify(request.field)}]`;
 }
 
-function isCortexMarkdownPathArrayOrFalse(
-  value: readonly string[] | false,
-): value is readonly string[] | false {
-  return (
-    value === false ||
-    (Array.isArray(value) &&
-      value.length <= CORTEX_ARTICLE_DOCUMENT_LIMIT &&
-      value.every((entry) => isCortexMarkdownPath(entry)))
-  );
-}
-
 function isCortexMarkdownPath(value: string | false): value is string {
   return (
     isSafeRelativePath(value) &&
@@ -678,14 +570,6 @@ function isBoundedDetail(value: string | false): value is string {
     typeof value === 'string' &&
     value.length <= CORTEX_ARTICLE_DETAIL_TEXT_LIMIT
   );
-}
-
-function isBoundedLedgerContent(value: string | false): boolean {
-  if (value === false) return true;
-  if (typeof value !== 'string') return false;
-  return value
-    .split(/\r?\n/u)
-    .every((line) => line.trim().length <= CORTEX_ARTICLE_DETAIL_TEXT_LIMIT);
 }
 
 function isPositiveLine(value: number | false): value is number {

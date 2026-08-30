@@ -4,7 +4,6 @@ import { fromMarkdown } from 'mdast-util-from-markdown';
 import type { Heading, Link, Parent, Root, RootContent } from 'mdast';
 
 export enum CortexStructureFindingCode {
-  InvalidMigrationLedger = 'invalid-migration-ledger',
   InvalidTitle = 'invalid-title',
   ProhibitedNavigation = 'prohibited-navigation',
   ProhibitedHtml = 'prohibited-html',
@@ -44,8 +43,6 @@ export type CortexDocumentSource = {
 export type AuditCortexDocumentStructureArgs = {
   readonly documents: readonly CortexDocumentSource[];
   readonly excludedDocumentPaths: ReadonlySet<string>;
-  readonly migrationBaselineEntries: readonly string[] | false;
-  readonly migrationLedgerPath: string;
   readonly repoRoot: string;
 };
 

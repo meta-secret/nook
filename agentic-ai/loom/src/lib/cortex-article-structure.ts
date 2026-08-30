@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import type { Nodes, RootContent } from 'mdast';
 import remarkGfm from 'remark-gfm';
 import remarkParse from 'remark-parse';
@@ -7,7 +6,6 @@ import { executeCortexArticleStructureApplication } from '../../../../.cortex/te
 import {
   CortexArticleContractKind,
   CortexArticleSemanticKind,
-  CORTEX_ARTICLE_MIGRATION_LEDGER_PATH,
   type AuditCortexArticleStructureRequest,
   type CortexArticleDocument,
   type CortexArticleFinding,
@@ -22,9 +20,6 @@ export {
 
 export type AuditCortexArticleStructureArgs = {
   readonly documents: readonly CortexDocumentSource[];
-  readonly migrationBaselineEntries: readonly string[] | false;
-  readonly migrationLedgerPath: string;
-  readonly repoRoot: string;
 };
 
 type SemanticDocumentRequest = {
@@ -52,11 +47,6 @@ export function auditCortexArticleStructure(
   const request: AuditCortexArticleStructureRequest = {
     kind: CortexArticleContractKind.Request,
     documents,
-    migrationBaselineEntries: args.migrationBaselineEntries,
-    migrationLedger: {
-      relativePath: CORTEX_ARTICLE_MIGRATION_LEDGER_PATH,
-      content: readMigrationLedger(args.migrationLedgerPath),
-    },
   };
   return [...executeCortexArticleStructureApplication(request).findings];
 }
@@ -116,14 +106,6 @@ function semanticBlock(
       : CortexArticleSemanticKind.Structure,
     line,
   };
-}
-
-function readMigrationLedger(ledgerPath: string): string | false {
-  try {
-    return readFileSync(ledgerPath, 'utf8');
-  } catch {
-    return false;
-  }
 }
 
 function isVisibleArticleNode(node: RootContent): boolean {
