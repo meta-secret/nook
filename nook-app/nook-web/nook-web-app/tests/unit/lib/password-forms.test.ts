@@ -290,6 +290,35 @@ describe('website one-time-code fields', () => {
     expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(false)
   })
 
+  test('isolates a candidate whose raw form identity exceeds the bound', () => {
+    document.body.innerHTML = `
+      <form
+        id="${'n'.repeat(500)}"
+        class="delete-account"
+        aria-label="Login"
+        action="/login"
+      >
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Continue</button>
+      </form>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    const formIdentity = facts.ceremony.authenticationContext?.formIdentity
+    if (!formIdentity) {
+      throw new Error('expected form identity')
+    }
+    expect(formIdentity).toContain('delete-account')
+    expect(new TextEncoder().encode(formIdentity).length).toBeGreaterThan(512)
+    expect(facts.detailedAdvanceControl).toMatchObject({ kind: 'absent' })
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(false)
+  })
+
   test('isolates a control whose machine identity would lose a destructive suffix', () => {
     document.body.innerHTML = `
       <form aria-label="Login" action="/login">
@@ -497,7 +526,7 @@ describe('website one-time-code fields', () => {
   test('keeps a login submitter when a shared form has too many candidates', () => {
     const navButtons = Array.from(
       { length: MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT },
-      (_, index) => `<button type="button">Nav ${index}</button>`,
+      (_, index) => `<button type="submit">Nav ${index}</button>`,
     ).join('')
     document.body.innerHTML = `
       <form aria-label="Login" action="/login">
@@ -523,6 +552,41 @@ describe('website one-time-code fields', () => {
     expect(
       facts.detailedAdvanceControl.observations.some((candidate) =>
         candidate.label.includes('Sign in'),
+      ),
+    ).toBe(true)
+    expect(
+      facts.detailedAdvanceControl.observations.every(
+        (candidate) =>
+          candidate.semanticSubmitControlCount <=
+          MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
+      ),
+    ).toBe(true)
+  })
+
+  test('bounds OTP handler candidates before transport', () => {
+    const fields = Array.from(
+      { length: 51 },
+      () =>
+        '<input autocomplete="one-time-code" oninput="this.form.requestSubmit()" onchange="validateCode()" />',
+    ).join('')
+    document.body.innerHTML = `
+      <form id="otp-login" action="/mfa/challenge">
+        ${fields}
+        <button type="submit">Verify code</button>
+      </form>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.ceremony.oneTimeCodeHandlerSignals.length).toBe(
+      MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
+    )
+    expect(
+      facts.ceremony.oneTimeCodeHandlerSignals.some((signal) =>
+        signal.includes('requestSubmit'),
       ),
     ).toBe(true)
   })

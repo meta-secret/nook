@@ -1,6 +1,7 @@
 import { authenticationFactObserverOptions } from '../../../nook-web-shared/src/extension/authentication-fact-attributes'
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import { AuthenticationWorkflowSnapshotResponseKind } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { authenticationFactStringsAreTransportable } from '../../../nook-web-shared/src/extension/password-form-submission-controls'
 import {
   authenticationPageObservationFacts,
   summarizeAuthenticationWorkflowForms,
@@ -103,7 +104,7 @@ async function scanAndRender(): Promise<void> {
     type: AuthenticationWorkflowSnapshotMessageType.NookAuthenticationWorkflowSnapshot,
     payload: {
       origin: location.origin,
-      observations: workflowForms.map((observation) => {
+      observations: workflowForms.flatMap((observation) => {
         const factsRequest: Parameters<
           typeof authenticationPageObservationFacts
         >[0] = {
@@ -111,7 +112,16 @@ async function scanAndRender(): Promise<void> {
           authenticatorSetupHint: enrollmentHints.qr,
           backupCodesHint: enrollmentHints.backupCodes,
         }
-        return authenticationPageObservationFacts(factsRequest)
+        const facts = authenticationPageObservationFacts(factsRequest)
+        const authenticationContext = facts.ceremony.authenticationContext
+        return authenticationContext &&
+          authenticationFactStringsAreTransportable([
+            authenticationContext.sourceOrigin,
+            authenticationContext.formIdentity,
+            authenticationContext.destinationIdentity,
+          ])
+          ? [facts]
+          : []
       }),
     },
   }

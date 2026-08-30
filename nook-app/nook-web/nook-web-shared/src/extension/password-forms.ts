@@ -39,6 +39,7 @@ import {
   authenticationPolicyTextFits,
   authenticationRouteDestination,
   boundAuthenticationControlObservations,
+  MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
   canRequestImplicitAuthenticationSubmit,
   clickAdvanceControl,
   controlDestinationIdentity,
@@ -338,7 +339,7 @@ function observedFormIdentity({
     owner.getAttribute("role") ?? "",
     owner.getAttribute("aria-label") ?? "",
   ].join(" ");
-  return authenticationPolicyTextFits(identity) ? identity : "";
+  return identity;
 }
 
 function observedFormDestination({
@@ -435,7 +436,10 @@ function pageControlObservation({
     passwordFieldCount: observation.summary.passwordFieldCount,
     newPasswordFieldCount: observation.summary.newPasswordFieldCount,
     oneTimeCodeFieldCount: observation.summary.oneTimeCodeFieldCount,
-    semanticSubmitControlCount: semanticSubmitControls.length,
+    semanticSubmitControlCount: Math.min(
+      semanticSubmitControls.length,
+      MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
+    ),
     sourceOrigin: location.origin,
     formIdentity: owned
       ? ownedFormIdentity(controlForm.owner)
@@ -529,15 +533,16 @@ export function authenticationPageObservationFacts({
     root: observation.root,
     formScope: observation.formScope,
   };
-  const oneTimeCodeHandlerSignals = findOneTimeCodeFields(
-    oneTimeCodeQuery,
-  ).flatMap((field) =>
-    ["oninput", "onchange"].flatMap((attribute) => {
-      const handler = field.getAttribute(attribute);
-      if (typeof handler !== "string") return [];
-      const signal = `${attribute}=${handler}`;
-      return authenticationPolicyTextFits(signal) ? [signal] : [];
-    }),
+  const oneTimeCodeHandlerSignals = boundAuthenticationControlObservations(
+    findOneTimeCodeFields(oneTimeCodeQuery).flatMap((field) =>
+      ["oninput", "onchange"].flatMap((attribute) => {
+        const handler = field.getAttribute(attribute);
+        if (typeof handler !== "string") return [];
+        const signal = `${attribute}=${handler}`;
+        return authenticationPolicyTextFits(signal) ? [signal] : [];
+      }),
+    ),
+    (signal) => signal.includes("requestSubmit"),
   );
   let detailedAdvanceControl: AuthenticationPageObservationFacts["detailedAdvanceControl"] =
     { kind: PasskeyControlLookupKind.Absent };

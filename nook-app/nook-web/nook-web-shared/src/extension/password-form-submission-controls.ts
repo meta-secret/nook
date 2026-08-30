@@ -71,8 +71,7 @@ export function rawOwnedFormIdentity(form: HTMLFormElement): string {
 }
 
 export function ownedFormIdentity(form: HTMLFormElement): string {
-  const identity = rawOwnedFormIdentity(form);
-  return authenticationPolicyTextFits(identity) ? identity : "";
+  return rawOwnedFormIdentity(form);
 }
 
 export function ownedFormDestinationIdentity(form: HTMLFormElement): string {
