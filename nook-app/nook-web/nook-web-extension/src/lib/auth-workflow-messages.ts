@@ -10,6 +10,26 @@ export type AuthenticationPageObservationView =
   AuthenticationPageObservationFacts
 export type AuthenticationWorkflowSnapshotView = AuthenticationWorkflowSnapshot
 
+export type AuthenticationWorkflowApproval = {
+  workflowKey: string
+  facts: AuthenticationPageObservationFacts
+}
+
+type AuthenticationWorkflowApprovalPair = {
+  approved: AuthenticationWorkflowApproval
+  current: AuthenticationWorkflowApproval
+}
+
+export function authenticationWorkflowApprovalsMatch({
+  approved,
+  current,
+}: AuthenticationWorkflowApprovalPair): boolean {
+  return (
+    approved.workflowKey === current.workflowKey &&
+    JSON.stringify(approved.facts) === JSON.stringify(current.facts)
+  )
+}
+
 export enum AuthenticationWorkflowSnapshotMessageType {
   NookAuthenticationWorkflowSnapshot = 'nook:authentication-workflow-snapshot',
 }

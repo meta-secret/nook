@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import {
+  classifiedAuthenticationWorkflowObservations,
+  liveApprovedAuthenticationWorkflow,
+} from '../../../../nook-web-shared/src/extension/password-form-classified-observations'
+import {
   findPasskeyControl,
   findWorkflowPasskeyControl,
   pageHasPasskeyControl,
@@ -21,6 +25,44 @@ afterEach(() => {
 })
 
 describe('passkey control detection', () => {
+  test('reranks an inserted safe passkey scope with origin match facts', () => {
+    document.body.innerHTML = `
+      <form method="post" id="approved-passkey" action="/auth/login">
+        <button type="button">Use passkey</button>
+      </form>
+    `
+    const workflow = observedAuthenticationWorkflow()
+    const classified = classifiedAuthenticationWorkflowObservations({
+      workflowForms: [workflow],
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })[0]
+    if (!classified) throw new Error('expected an approved passkey workflow')
+    const approved = {
+      ...classified,
+      facts: {
+        ...classified.facts,
+        authenticator: {
+          ...classified.facts.authenticator,
+          matchingPasskeyAccountCount: 1,
+        },
+      },
+    }
+    document
+      .querySelector('form')
+      ?.insertAdjacentHTML(
+        'beforebegin',
+        '<form method="post" id="inserted-passkey" action="/auth/login"><button type="button">Use passkey</button></form>',
+      )
+    expect(
+      liveApprovedAuthenticationWorkflow({
+        approved,
+        authenticatorSetupHint: false,
+        backupCodesHint: false,
+      }),
+    ).toBe(false)
+  })
+
   test('does not treat password inputs with webauthn autocomplete as passkey controls', () => {
     document.body.innerHTML = `
       <form method="post">

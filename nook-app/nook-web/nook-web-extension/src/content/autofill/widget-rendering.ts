@@ -1,7 +1,11 @@
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 import { isTrustedAuthAction } from '../../lib/auth-widget-policy'
-import type { AuthenticationWorkflowSnapshotView } from '../../lib/auth-workflow-messages'
+import {
+  authenticationWorkflowApprovalsMatch,
+  type AuthenticationWorkflowApproval,
+  type AuthenticationWorkflowSnapshotView,
+} from '../../lib/auth-workflow-messages'
 import {
   AuthenticationWorkflowAction,
   type AuthenticationPageObservationFacts,
@@ -22,9 +26,11 @@ import {
   proposePasskeyWithNook,
 } from './login-passkey-actions'
 import {
+  LoginPickerKind,
   WidgetHostKind,
   WidgetWorkflowKeyKind,
   WidgetWorkflowRootKind,
+  pickerState,
   widgetState,
 } from './state'
 import {
@@ -56,6 +62,21 @@ export function renderEnrollmentWidget({
     vaultConnection.connected ? 'connected' : 'disconnected',
     vaultConnection.vaultName ?? '',
   ].join(':')
+  if (pickerState.login.kind === LoginPickerKind.Open) {
+    const currentApproval: AuthenticationWorkflowApproval = {
+      workflowKey,
+      facts,
+    }
+    const approvalPair: Parameters<
+      typeof authenticationWorkflowApprovalsMatch
+    >[0] = {
+      approved: pickerState.login.request.approval,
+      current: currentApproval,
+    }
+    if (!authenticationWorkflowApprovalsMatch(approvalPair)) {
+      cancelPendingLoginPickerRequest()
+    }
+  }
   if (
     widgetState.host.kind === WidgetHostKind.Attached &&
     widgetState.workflowKey.kind === WidgetWorkflowKeyKind.Assigned &&

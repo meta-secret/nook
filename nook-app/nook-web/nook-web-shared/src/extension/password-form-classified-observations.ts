@@ -2,6 +2,7 @@ import {
   classify_companion_authentication_workflow_facts,
   companion_authentication_workflow_match_kind,
   CompanionAuthenticationWorkflowMatchKind,
+  authentication_passkey_control_evidence_is_safe,
   type AuthenticationPageObservationFacts,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
@@ -154,19 +155,19 @@ export function liveApprovedAuthenticationWorkflow({
   const live = classifiedAuthenticationWorkflowObservations(
     classifiedRequest,
   ).map((candidate) => {
-    const scopePair: AuthenticationWorkflowScopePair = {
-      left: candidate.observation,
-      right: approved.observation,
-    };
-    if (!authenticationWorkflowScopesMatch(scopePair)) return candidate;
+    const passkeyEvidence =
+      candidate.facts.authenticator.detailedPasskeyControl;
+    const matchingPasskeyAccountCount =
+      authentication_passkey_control_evidence_is_safe(passkeyEvidence)
+        ? approved.facts.authenticator.matchingPasskeyAccountCount
+        : 0;
     return {
       ...candidate,
       facts: {
         ...candidate.facts,
         authenticator: {
           ...candidate.facts.authenticator,
-          matchingPasskeyAccountCount:
-            approved.facts.authenticator.matchingPasskeyAccountCount,
+          matchingPasskeyAccountCount,
         },
       },
     };

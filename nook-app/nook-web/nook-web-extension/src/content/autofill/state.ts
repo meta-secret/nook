@@ -1,6 +1,7 @@
 import type { AuthenticationPageObservationFacts } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 import type { WebsiteLoginSaveOfferView } from '../../lib/login-save-messages'
+import type { AuthenticationWorkflowApproval } from '../../lib/auth-workflow-messages'
 
 export type WidgetPosition = { left: number; top: number }
 
@@ -14,7 +15,9 @@ type PendingAuthenticatorPicker = {
   timeoutId: number
 }
 
-type PendingLoginPicker = PendingAuthenticatorPicker
+type PendingLoginPicker = PendingAuthenticatorPicker & {
+  approval: AuthenticationWorkflowApproval
+}
 export enum ScanScheduleKind {
   Idle = 'idle',
   Scheduled = 'scheduled',

@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import type { AuthenticationPasskeyControlObservation } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-import { isAuthenticationWorkflowSnapshotMessage } from '../src/lib/auth-workflow-messages'
+import {
+  authenticationWorkflowApprovalsMatch,
+  isAuthenticationWorkflowSnapshotMessage,
+} from '../src/lib/auth-workflow-messages'
 
 const passkeyControlPresent =
   'present' satisfies AuthenticationPasskeyControlObservation
@@ -44,6 +47,35 @@ const validMessage = {
 }
 
 describe('authentication workflow snapshot messages', () => {
+  test('invalidates pending approval after an action or fact transition', () => {
+    const facts = validMessage.payload.observations[0]
+    const approved = { workflowKey: 'login:continue', facts }
+    expect(
+      authenticationWorkflowApprovalsMatch({
+        approved,
+        current: { workflowKey: 'login:continue', facts },
+      }),
+    ).toBe(true)
+    expect(
+      authenticationWorkflowApprovalsMatch({
+        approved,
+        current: { workflowKey: 'otp:fill', facts },
+      }),
+    ).toBe(false)
+    expect(
+      authenticationWorkflowApprovalsMatch({
+        approved,
+        current: {
+          workflowKey: 'login:continue',
+          facts: {
+            ...facts,
+            fields: { ...facts.fields, oneTimeCodeFieldCount: 1 },
+          },
+        },
+      }),
+    ).toBe(false)
+  })
+
   test('accepts bounded structural page observations', () => {
     expect(isAuthenticationWorkflowSnapshotMessage(validMessage)).toBe(true)
   })

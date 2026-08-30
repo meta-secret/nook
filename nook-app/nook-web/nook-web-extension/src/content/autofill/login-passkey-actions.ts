@@ -33,6 +33,7 @@ import {
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   LoginPickerKind,
+  WidgetWorkflowKeyKind,
   WidgetWorkflowRootKind,
   pickerState,
   widgetState,
@@ -397,6 +398,14 @@ async function openLoginPicker({
     cancelLoginPickerRequest(requestId)
     return
   }
+  if (
+    !approvedWorkflowIsStillCurrent(workflow) ||
+    widgetState.workflowKey.kind !== WidgetWorkflowKeyKind.Assigned ||
+    widgetState.renderedWorkflowRoot.kind !== WidgetWorkflowRootKind.Assigned
+  ) {
+    cancelLoginPickerRequest(requestId)
+    return
+  }
   const timeoutId = window.setTimeout(
     () => {
       if (
@@ -431,6 +440,10 @@ async function openLoginPicker({
     description,
     continueButton,
     timeoutId,
+    approval: {
+      workflowKey: widgetState.workflowKey.key,
+      facts: widgetState.renderedWorkflowRoot.facts,
+    },
   }
   pickerState.openLogin(nookTypedArgs0_4)
   const nookTypedArgs0_19: Parameters<typeof setFlightProgress>[0] = {
