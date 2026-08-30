@@ -930,10 +930,8 @@ function activateApprovedOwnedAdvanceControl(
     form,
     action: () => approved.click(),
   };
-  return {
-    kind: "activated",
-    submitted: observeSubmit(submission),
-  };
+  observeSubmit(submission);
+  return { kind: "activated", submitted: true };
 }
 
 export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
