@@ -291,6 +291,17 @@ mod tests {
             .classify(),
             AuthenticationWorkflowMatch::Matched(_)
         ));
+
+        let mut observation = password_login();
+        observation.fields.current_password_field_count = 50;
+        observation.fields.generic_password_field_count = 51;
+        assert_eq!(
+            AuthenticationPageObservationFactsBatch {
+                observations: vec![observation],
+            }
+            .classify(),
+            AuthenticationWorkflowMatch::Rejected
+        );
     }
 
     #[test]

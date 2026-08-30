@@ -47,6 +47,9 @@ export function classifiedAuthenticationWorkflowObservations({
         fields.newPasswordFieldCount,
         fields.genericPasswordFieldCount,
         fields.oneTimeCodeFieldCount,
+        fields.currentPasswordFieldCount +
+          fields.newPasswordFieldCount +
+          fields.genericPasswordFieldCount,
       ].every((count) => count <= MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT)
       ? [{ observation, facts }]
       : [];
