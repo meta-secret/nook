@@ -53,6 +53,14 @@ import type {
   TrustedStructuralExecution,
 } from '../structural-experts/trusted-runtime.ts';
 import { assertCurrentAgentAttemptWorkflowVersion } from './agent-attempt-version.ts';
+import {
+  assertCortexReferences,
+  type AssertCortexReferencesArgs,
+} from './cortex-references.ts';
+import {
+  cortexActionId,
+  renderAgentAttemptEvent,
+} from './agent-event-renderer.ts';
 import type {
   ModuleExpertJournalAuthority,
   ModuleExpertJournalBinding,
@@ -80,6 +88,8 @@ export type AgentAttemptJournalConfiguration = {
   readonly depth: number;
   readonly parent: AgentAttemptParent;
   readonly now: () => IsoTimestamp;
+  readonly knownCortexIdentifiers?: ReadonlySet<string>;
+  readonly compactOutput?: (line: string) => void | Promise<void>;
 };
 
 export type ModuleExpertAttemptJournalConfiguration = Omit<
@@ -223,11 +233,29 @@ export class AgentAttemptJournal<TTask extends string> {
     if (this.finalized) {
       throw new Error('Cannot append to a finalized agent attempt journal.');
     }
-    if (
-      event.kind === AgentAttemptEventKind.RuntimeActivity &&
-      (event.detail.length > 1024 || containsForbiddenControl(event.detail))
-    ) {
-      throw new Error('Agent runtime activity detail must be bounded.');
+    if (!eventHasExactKeys(event)) {
+      throw new Error('Agent attempt event fields are invalid.');
+    }
+    if (event.kind === AgentAttemptEventKind.RuntimeActivity) {
+      if (
+        'evidenceSha256' in event &&
+        !/^[0-9a-f]{64}$/u.test(event.evidenceSha256)
+      ) {
+        throw new Error('Agent runtime activity evidence digest is invalid.');
+      }
+      if (
+        event.cortexReferences.length > 0 &&
+        !this.configuration.knownCortexIdentifiers
+      ) {
+        throw new Error(
+          'Agent runtime activity Cortex references require a source-bound registry.',
+        );
+      }
+      const referenceArgs: AssertCortexReferencesArgs = {
+        references: event.cortexReferences,
+        knownIdentifiers: this.configuration.knownCortexIdentifiers ?? false,
+      };
+      assertCortexReferences(referenceArgs);
     }
     this.sequence += 1;
     const occurredAt = this.configuration.now();
@@ -246,6 +274,7 @@ export class AgentAttemptJournal<TTask extends string> {
       depth: this.configuration.depth,
       parent: this.configuration.parent,
       sequence: this.sequence,
+      actionId: cortexActionId(this.sequence),
       occurredAt,
     };
     const completeEvent = { ...metadata, ...event } as AgentAttemptEvent;
@@ -255,6 +284,16 @@ export class AgentAttemptJournal<TTask extends string> {
     });
     this.pendingAppend = appendOperation;
     await appendOperation;
+    const compactOutput =
+      this.configuration.compactOutput ??
+      ((line: string): void => {
+        process.stderr.write(line);
+      });
+    try {
+      await compactOutput(renderAgentAttemptEvent(completeEvent));
+    } catch {
+      // Compact human evidence is optional and cannot gate the journal.
+    }
     return completeEvent;
   }
 
@@ -479,6 +518,37 @@ export class AgentAttemptJournal<TTask extends string> {
       filename,
     );
   }
+}
+
+function eventHasExactKeys(event: AgentAttemptEventWithoutMetadata): boolean {
+  if (event.kind === AgentAttemptEventKind.RuntimeActivity) {
+    const expected = new Set(['kind', 'activity', 'cortexReferences']);
+    const keys = Object.keys(event);
+    return (
+      (keys.length === expected.size ||
+        (keys.length === expected.size + 1 &&
+          keys.includes('evidenceSha256'))) &&
+      keys.every((key) => expected.has(key) || key === 'evidenceSha256')
+    );
+  }
+  const expectedByKind: Record<AgentAttemptEventKind, ReadonlySet<string>> = {
+    [AgentAttemptEventKind.AttemptStarted]: new Set(['kind']),
+    [AgentAttemptEventKind.RuntimeActivity]: new Set(),
+    [AgentAttemptEventKind.ResultProjected]: new Set(['kind', 'result']),
+    [AgentAttemptEventKind.ViewProjected]: new Set(['kind', 'view']),
+    [AgentAttemptEventKind.AttemptTerminalRecorded]: new Set([
+      'kind',
+      'terminalKind',
+      'result',
+      'view',
+    ]),
+  };
+  const expected = expectedByKind[event.kind];
+  if (!expected) return false;
+  const keys = Object.keys(event);
+  return (
+    keys.length === expected.size && keys.every((key) => expected.has(key))
+  );
 }
 
 export function createModuleExpertAttemptJournal<TTask extends string>(

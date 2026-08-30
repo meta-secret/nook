@@ -28,7 +28,9 @@ import type { ReplayAgentAttemptJournalRequest } from '../../src/agent-workflow/
 import {
   CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
   LEGACY_AGENT_ATTEMPT_WORKFLOW_VERSION,
+  PROVENANCE_AGENT_ATTEMPT_WORKFLOW_VERSION,
 } from '../../src/agent-workflow/agent-attempt-version.ts';
+import { CortexReferenceRelation } from '../../src/agent-workflow/cortex-references.ts';
 
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
 const FIXED_TIME = '2026-08-21T00:00:00.000Z';
@@ -45,7 +47,9 @@ describe('agent attempt journal', () => {
       const activityEvent: AgentAttemptEventWithoutMetadata = {
         kind: AgentAttemptEventKind.RuntimeActivity,
         activity: WorkflowRuntimeActivityKind.TurnCompleted,
-        detail: 'Codex turn completed.',
+        cortexReferences: [
+          { id: 'CX-AI', relation: CortexReferenceRelation.Applied },
+        ],
       };
       await journal.append(activityEvent);
       const terminal: CompletedTaskTerminal<'inspect'> = {
@@ -68,21 +72,58 @@ describe('agent attempt journal', () => {
         .trim()
         .split('\n')
         .map((line) => JSON.parse(line) as AgentAttemptEvent);
+      const knownCortexIdentifiers = new Set(['CX-AI']);
       const replayRequest: ReplayAgentAttemptJournalRequest = {
         events: parsedEvents,
+        knownCortexIdentifiers,
       };
       const replay = replayAgentAttemptJournal(replayRequest);
       expect(processing.events.sha256).toBe(sha256(events));
       expect(replay.terminalKind).toBe(TaskTerminalKind.Completed);
+      const unregisteredReferenceEvents = parsedEvents.map((event) =>
+        event.kind === AgentAttemptEventKind.RuntimeActivity
+          ? {
+              ...event,
+              cortexReferences: [
+                {
+                  id: 'CX-AI-7K3M2',
+                  relation: CortexReferenceRelation.Applied,
+                },
+              ],
+            }
+          : event,
+      );
+      expect(() =>
+        replayAgentAttemptJournal({
+          events: unregisteredReferenceEvents,
+          knownCortexIdentifiers,
+        }),
+      ).toThrow('invalid Cortex reference');
+      expect(parsedEvents.map((event) => event.actionId)).toEqual([
+        'a0001',
+        'a0002',
+        'a0003',
+        'a0004',
+        'a0005',
+      ]);
+      const expectedReferencedEvent = {
+        cortexReferences: [
+          { id: 'CX-AI', relation: CortexReferenceRelation.Applied },
+        ],
+      };
+      expect(parsedEvents[1]).toMatchObject(expectedReferencedEvent);
       const firstEvent = parsedEvents[0]!;
       const unknownKindEvent = {
         ...firstEvent,
         kind: 'future-agent-event',
         sequence: 2,
+        actionId: 'a0002',
       } as never as AgentAttemptEvent;
-      const shiftedEvents = parsedEvents
-        .slice(1)
-        .map((event) => ({ ...event, sequence: event.sequence + 1 }));
+      const shiftedEvents = parsedEvents.slice(1).map((event) => ({
+        ...event,
+        sequence: event.sequence + 1,
+        actionId: `a${(event.sequence + 1).toString().padStart(4, '0')}`,
+      }));
       const unknownKindEvents = [
         firstEvent,
         unknownKindEvent,
@@ -90,9 +131,20 @@ describe('agent attempt journal', () => {
       ];
       const unknownKindRequest: ReplayAgentAttemptJournalRequest = {
         events: unknownKindEvents,
+        knownCortexIdentifiers,
       };
       expect(() => replayAgentAttemptJournal(unknownKindRequest)).toThrow(
         'unknown event kind',
+      );
+      const invalidActionIdentity = parsedEvents.map((event) =>
+        event.sequence === 2 ? { ...event, actionId: 'a9999' } : event,
+      );
+      const invalidActionRequest = {
+        events: invalidActionIdentity,
+        knownCortexIdentifiers,
+      };
+      expect(() => replayAgentAttemptJournal(invalidActionRequest)).toThrow(
+        'action identity is invalid',
       );
       const mismatchedEvents = parsedEvents.map((event) =>
         event.kind === AgentAttemptEventKind.AttemptTerminalRecorded
@@ -104,6 +156,7 @@ describe('agent attempt journal', () => {
       );
       const mismatchedReplayRequest: ReplayAgentAttemptJournalRequest = {
         events: mismatchedEvents,
+        knownCortexIdentifiers,
       };
       expect(() => replayAgentAttemptJournal(mismatchedReplayRequest)).toThrow(
         'terminal result differs from its projection event',
@@ -114,6 +167,7 @@ describe('agent attempt journal', () => {
           const shiftedTerminal: AgentAttemptEvent = {
             ...event,
             sequence: event.sequence + 1,
+            actionId: `a${(event.sequence + 1).toString().padStart(4, '0')}`,
           };
           duplicateViewEvents.push(shiftedTerminal);
           continue;
@@ -123,38 +177,59 @@ describe('agent attempt journal', () => {
           const duplicateView: AgentAttemptEvent = {
             ...event,
             sequence: event.sequence + 1,
+            actionId: `a${(event.sequence + 1).toString().padStart(4, '0')}`,
           };
           duplicateViewEvents.push(duplicateView);
         }
       }
       const duplicateViewReplayRequest: ReplayAgentAttemptJournalRequest = {
         events: duplicateViewEvents,
+        knownCortexIdentifiers,
       };
       expect(() =>
         replayAgentAttemptJournal(duplicateViewReplayRequest),
       ).toThrow('duplicate views');
-      const oversizedActivityEvents = parsedEvents.map((event) =>
+      const secretBearingActivityEvents = parsedEvents.map((event) =>
         event.kind === AgentAttemptEventKind.RuntimeActivity
-          ? { ...event, detail: 'x'.repeat(1025) }
+          ? { ...event, detail: 'secret-bearing free-form text' }
           : event,
       );
-      const oversizedActivityRequest = { events: oversizedActivityEvents };
-      expect(() => replayAgentAttemptJournal(oversizedActivityRequest)).toThrow(
-        'runtime activity',
+      const secretBearingActivityRequest = {
+        events: secretBearingActivityEvents,
+        knownCortexIdentifiers,
+      };
+      expect(() =>
+        replayAgentAttemptJournal(secretBearingActivityRequest),
+      ).toThrow('event fields are invalid');
+      const extraEventFieldRequest = {
+        events: parsedEvents.map((event) => ({
+          ...event,
+          prompt: 'secret-bearing prompt',
+        })),
+        knownCortexIdentifiers,
+      };
+      expect(() => replayAgentAttemptJournal(extraEventFieldRequest)).toThrow(
+        'event fields are invalid',
       );
       const malformedParentEvents = parsedEvents.map((event) => ({
         ...event,
         parent: { kind: AgentAttemptParentKind.AgentAttempt },
       })) as never as readonly AgentAttemptEvent[];
-      const malformedParentRequest = { events: malformedParentEvents };
+      const malformedParentRequest = {
+        events: malformedParentEvents,
+        knownCortexIdentifiers,
+      };
       expect(() => replayAgentAttemptJournal(malformedParentRequest)).toThrow(
-        'lineage',
+        'identity is invalid',
       );
       const excessiveDepthEvents = parsedEvents.map((event) => ({
         ...event,
         depth: 4,
       }));
-      const excessiveDepthRequest = { events: excessiveDepthEvents };
+      const excessiveDepthRequest = {
+        events: excessiveDepthEvents,
+        knownCortexIdentifiers,
+      };
       expect(() => replayAgentAttemptJournal(excessiveDepthRequest)).toThrow(
         'identity is invalid',
       );
@@ -166,7 +241,10 @@ describe('agent attempt journal', () => {
             }
           : event,
       );
-      const mismatchedAdapterRequest = { events: mismatchedAdapterEvents };
+      const mismatchedAdapterRequest = {
+        events: mismatchedAdapterEvents,
+        knownCortexIdentifiers,
+      };
       expect(() => replayAgentAttemptJournal(mismatchedAdapterRequest)).toThrow(
         'identity changed within the stream',
       );
@@ -174,7 +252,10 @@ describe('agent attempt journal', () => {
         ...event,
         adapter: 'caller-forged-adapter',
       })) as never as readonly AgentAttemptEvent[];
-      const unknownAdapterRequest = { events: unknownAdapterEvents };
+      const unknownAdapterRequest = {
+        events: unknownAdapterEvents,
+        knownCortexIdentifiers,
+      };
       expect(() => replayAgentAttemptJournal(unknownAdapterRequest)).toThrow(
         'identity is invalid',
       );
@@ -193,7 +274,10 @@ describe('agent attempt journal', () => {
           },
         };
       }) as readonly AgentAttemptEvent[];
-      const wrongAuthorRequest = { events: wrongAuthorEvents };
+      const wrongAuthorRequest = {
+        events: wrongAuthorEvents,
+        knownCortexIdentifiers,
+      };
       expect(() => replayAgentAttemptJournal(wrongAuthorRequest)).toThrow(
         'view author',
       );
@@ -241,6 +325,68 @@ describe('agent attempt journal', () => {
           MaterializedViewAuthorKind.LoomRuntime,
         );
       }
+    } finally {
+      await rm(runDirectory, removeOptions);
+    }
+  });
+
+  test('does not let compact output failure gate journal persistence', async () => {
+    const runDirectory = await mkdtemp(join(tmpdir(), 'loom-agent-output-'));
+    const removeOptions: RmOptions = { recursive: true, force: true };
+    try {
+      const failingOutputConfiguration: AgentAttemptJournalConfiguration = {
+        ...configuration(runDirectory),
+        compactOutput: async () =>
+          Promise.reject(new Error('Output unavailable.')),
+      };
+      const journal = new AgentAttemptJournal<'inspect'>(
+        failingOutputConfiguration,
+      );
+
+      await journal.initialize();
+      const events = await readFile(journal.eventsPath, 'utf8');
+      expect(events).toContain('"actionId":"a0001"');
+    } finally {
+      await rm(runDirectory, removeOptions);
+    }
+  });
+
+  test('requires a source-bound registry for referenced activity', async () => {
+    const runDirectory = await mkdtemp(join(tmpdir(), 'loom-agent-registry-'));
+    const removeOptions: RmOptions = { recursive: true, force: true };
+    try {
+      const configured = configuration(runDirectory);
+      const missingRegistryConfiguration: AgentAttemptJournalConfiguration = {
+        adapter: configured.adapter,
+        runDirectory: configured.runDirectory,
+        runId: configured.runId,
+        workflow: configured.workflow,
+        workflowVersion: configured.workflowVersion,
+        sourceCommit: configured.sourceCommit,
+        task: configured.task,
+        agent: configured.agent,
+        attempt: configured.attempt,
+        depth: configured.depth,
+        parent: configured.parent,
+        now: configured.now,
+      };
+      const journal = new AgentAttemptJournal<'inspect'>(
+        missingRegistryConfiguration,
+      );
+      await journal.initialize();
+      const referencedActivity: AgentAttemptEventWithoutMetadata = {
+        kind: AgentAttemptEventKind.RuntimeActivity,
+        activity: WorkflowRuntimeActivityKind.TurnCompleted,
+        cortexReferences: [
+          { id: 'CX-AI', relation: CortexReferenceRelation.Applied },
+        ],
+      };
+      await expect(journal.append(referencedActivity)).rejects.toThrow(
+        'source-bound registry',
+      );
+      expect(
+        (await readFile(journal.eventsPath, 'utf8')).split('\n'),
+      ).toHaveLength(2);
     } finally {
       await rm(runDirectory, removeOptions);
     }
@@ -340,6 +486,7 @@ describe('agent attempt journal', () => {
       depth: 1,
       parent: { kind: AgentAttemptParentKind.WorkflowRoot },
       sequence: 1,
+      actionId: 'a0001',
       occurredAt: FIXED_TIME,
     } as never as AgentAttemptEvent;
     const legacyReplayRequest = { events: [legacyWithoutAdapter] };
@@ -353,16 +500,25 @@ describe('agent attempt journal', () => {
     };
     const currentReplayRequest = { events: [currentWithoutAdapter] };
     expect(() => replayAgentAttemptJournal(currentReplayRequest)).toThrow(
-      'identity is invalid',
+      'event fields are invalid',
     );
 
     const unsupportedVersion = {
       ...legacyWithoutAdapter,
-      workflowVersion: '3.0.0',
+      workflowVersion: '4.0.0',
     };
     const unsupportedReplayRequest = { events: [unsupportedVersion] };
     expect(() => replayAgentAttemptJournal(unsupportedReplayRequest)).toThrow(
       'version is unsupported',
+    );
+
+    const provenanceVersion = {
+      ...legacyWithoutAdapter,
+      workflowVersion: PROVENANCE_AGENT_ATTEMPT_WORKFLOW_VERSION,
+    };
+    const provenanceRequest = { events: [provenanceVersion] };
+    expect(() => replayAgentAttemptJournal(provenanceRequest)).toThrow(
+      'predates compact action identities',
     );
   });
 });
@@ -381,6 +537,8 @@ function configuration(runDirectory: string): AgentAttemptJournalConfiguration {
     depth: 1,
     parent: { kind: AgentAttemptParentKind.WorkflowRoot },
     now: () => FIXED_TIME,
+    knownCortexIdentifiers: new Set(['CX-AI']),
+    compactOutput: () => {},
   };
 }
 

@@ -19,6 +19,7 @@ import {
   auditCortexMarkdownSyntax,
   auditCortexDocumentStructure,
   CortexStructureFindingCode,
+  normalizedCortexMarkdown,
   type AuditCortexMarkdownSyntaxArgs,
   type AuditCortexDocumentStructureArgs,
   type CortexDocumentSource,
@@ -33,6 +34,14 @@ import {
   auditTrackedExecutableSkillPackages,
   type ExecutableSkillPackageFinding,
 } from '../executable-skills/repository.ts';
+import {
+  auditCortexIdentifierStability,
+  auditCortexIdentifierRegistry,
+  CORTEX_IDENTIFIER_REGISTRY_PATH,
+  decodeCortexIdentifierRegistry,
+  type CortexIdentifierRegistry,
+  type CortexIdentifierFinding,
+} from '../lib/cortex-identifiers.ts';
 export type CortexAuditReport = {
   readonly brokenLinks: BrokenLink[];
   readonly invalidExecutableSkillPackages: readonly ExecutableSkillPackageFinding[];
@@ -42,12 +51,25 @@ export type CortexAuditReport = {
   readonly densityFindings: DensityFinding[];
   readonly structureFindings: CortexStructureFinding[];
   readonly articleStructureFindings: CortexArticleFinding[];
+  readonly identifierFindings: readonly CortexIdentifierFinding[];
   readonly auditOk: boolean;
 };
 
 export type RunCortexAuditFromDirectoryArgs = {
   readonly request: CortexAuditRequest;
   readonly startDirectory: string;
+};
+
+type PublishedIdentifierRegistryResolution = {
+  readonly registry: CortexIdentifierRegistry | false;
+  readonly findings: readonly CortexIdentifierFinding[];
+};
+
+export type GitHubRepositoryPolicyEvent = {
+  readonly before?: string;
+  readonly pull_request?: {
+    readonly base?: { readonly sha?: string };
+  };
 };
 
 export async function runCortexAudit(
@@ -214,6 +236,20 @@ export async function runCortexAuditFromDirectory(
     : [];
 
   const prohibitedHarnessSkillPaths = trackedHarnessSkillPaths(repoRoot);
+  const identifierAudit = auditCortexIdentifierRegistry(repoRoot);
+  const publishedResolution = publishedIdentifierRegistry(repoRoot);
+  const stabilityFindings =
+    identifierAudit.registry && publishedResolution.registry
+      ? auditCortexIdentifierStability({
+          current: identifierAudit.registry,
+          published: publishedResolution.registry,
+        })
+      : [];
+  const identifierFindings = [
+    ...identifierAudit.findings,
+    ...publishedResolution.findings,
+    ...stabilityFindings,
+  ];
 
   return {
     brokenLinks,
@@ -224,6 +260,7 @@ export async function runCortexAuditFromDirectory(
     densityFindings,
     structureFindings,
     articleStructureFindings,
+    identifierFindings,
     auditOk:
       brokenLinks.length === 0 &&
       executableSkillPackageFindings.length === 0 &&
@@ -232,8 +269,101 @@ export async function runCortexAuditFromDirectory(
       prohibitedHarnessSkillPaths.length === 0 &&
       densityFindings.length === 0 &&
       structureFindings.length === 0 &&
-      articleStructureFindings.length === 0,
+      articleStructureFindings.length === 0 &&
+      identifierFindings.length === 0,
   };
+}
+
+function publishedIdentifierRegistry(
+  repoRoot: string,
+): PublishedIdentifierRegistryResolution {
+  if (!existsSync(path.join(repoRoot, '.git'))) {
+    return { registry: false, findings: [] };
+  }
+  const options: ExecFileSyncOptionsWithStringEncoding = {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  };
+  const candidates = publishedBaseCandidates();
+  const baseCommit = candidates.find((candidate) => {
+    try {
+      execFileSync(
+        'git',
+        ['rev-parse', '--verify', `${candidate}^{commit}`],
+        options,
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  });
+  if (!baseCommit) {
+    return {
+      registry: false,
+      findings: [
+        {
+          file: CORTEX_IDENTIFIER_REGISTRY_PATH,
+          message:
+            'Published Cortex identifier baseline could not be resolved.',
+        },
+      ],
+    };
+  }
+  try {
+    const serialized = execFileSync(
+      'git',
+      ['show', `${baseCommit}:${CORTEX_IDENTIFIER_REGISTRY_PATH}`],
+      options,
+    );
+    const registry = decodeCortexIdentifierRegistry(serialized);
+    return registry
+      ? { registry, findings: [] }
+      : {
+          registry: false,
+          findings: [
+            {
+              file: CORTEX_IDENTIFIER_REGISTRY_PATH,
+              message: 'Published Cortex identifier registry is invalid.',
+            },
+          ],
+        };
+  } catch {
+    return { registry: false, findings: [] };
+  }
+}
+
+function publishedBaseCandidates(): readonly string[] {
+  const eventPath = process.env.GITHUB_EVENT_PATH;
+  if (eventPath && existsSync(eventPath)) {
+    try {
+      const event = JSON.parse(
+        readFileSync(eventPath, 'utf8'),
+      ) as GitHubRepositoryPolicyEvent;
+      return publishedBaseCandidatesForEvent(event);
+    } catch {
+      return ['origin/main'];
+    }
+  }
+  return ['origin/main'];
+}
+
+export function publishedBaseCandidatesForEvent(
+  event: GitHubRepositoryPolicyEvent,
+): readonly string[] {
+  const baseSha = event.pull_request?.base?.sha;
+  if (baseSha && /^[0-9a-f]{40}$/u.test(baseSha)) {
+    return [baseSha];
+  }
+  const beforeSha = event.before;
+  if (
+    beforeSha &&
+    /^[0-9a-f]{40}$/u.test(beforeSha) &&
+    beforeSha !== '0000000000000000000000000000000000000000'
+  ) {
+    return [beforeSha];
+  }
+  return ['origin/main'];
 }
 
 const HARNESS_SKILL_ROOTS = [
@@ -384,11 +514,10 @@ function isExecutableSkillScriptsDirectory(
 
 function readCortexMarkdown(filePath: string): string {
   const content = readFileSync(filePath, 'utf8');
-  return filePath.endsWith(`${path.sep}SKILL.md`)
-    ? content.replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/u, (frontmatter) =>
-        frontmatter.replace(/[^\r\n]/gu, ' '),
-      )
-    : content;
+  return normalizedCortexMarkdown({
+    relativePath: filePath.replaceAll(path.sep, '/'),
+    content,
+  });
 }
 
 function skillDiagnosticName(filePath: string): string {

@@ -44,6 +44,12 @@ jobs:
         with:
           fetch-depth: 2
 
+      - name: Fetch pre-push registry baseline
+        if: github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000'
+        env:
+          BASELINE_SHA: ${{ github.event.before }}
+        run: git fetch --no-tags --depth=1 origin "$BASELINE_SHA"
+
       - name: Classify policy paths
         id: policy-paths
         env:
