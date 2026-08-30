@@ -97,7 +97,6 @@ fn fast_wasm_build_reuses_manifest_keyed_dependencies_outside_the_source_mount()
             && docker_tasks.contains("{{.DOCKER_RUST_FAST_IMAGE}}"),
         "the mounted build must use the dependency image target directory outside the bind mount"
     );
-
     let dockerfile = read(
         &root,
         "nook-app/nook-platform/docker/rust/product.Dockerfile",
@@ -413,6 +412,7 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
         assert!(source.contains("export BUILDX_CONFIG=\"$trusted_docker_config/buildx\""));
         assert!(source.contains("unset BUILDX_BUILDER"));
         assert!(source.contains("unset DOCKER_HOST DOCKER_CONTEXT BUILDKIT_HOST"));
+        assert!(source.contains("export PATH=/usr/bin:/bin"));
         assert!(source.contains("any(keys[]; explode | any(. > 127))"));
         for rejected_key in ["credsstore", "currentcontext", "credhelpers", "proxies"] {
             assert!(source.contains(&format!("(.key | ascii_downcase) != \"{rejected_key}\"")));
@@ -430,13 +430,7 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
                 "{path} must propagate the trusted Docker CLI to wrapped Task commands"
             );
         }
-        for forbidden in [
-            "${DOCKER:-",
-            "${DOCKER}",
-            "docker_bin",
-            "PATH=",
-            "command -v docker",
-        ] {
+        for forbidden in ["${DOCKER:-", "${DOCKER}", "docker_bin", "command -v docker"] {
             assert!(!source.contains(forbidden), "{path} permits {forbidden}");
         }
         assert!(!source.lines().any(|line| {
@@ -576,7 +570,9 @@ fi
     let mut permissions = fs::metadata(&fake_docker)?.permissions();
     permissions.set_mode(0o755);
     fs::set_permissions(&fake_docker, permissions)?;
-    std::os::unix::fs::symlink(&fake_docker, temp.join("ln"))?;
+    for utility in ["ln", "mktemp"] {
+        std::os::unix::fs::symlink(&fake_docker, temp.join(utility))?;
+    }
     let wrapper = docker_script_fixture(
         &root,
         ".github/scripts/with-healthy-buildkit.sh",
@@ -627,7 +623,11 @@ fi
         "timed Docker child {child_pid:?} survived process-group cleanup"
     );
     let calls = fs::read_to_string(&docker_log)?;
-    assert!(!calls.starts_with("-s ") && !calls.contains("\n-s "));
+    assert!(
+        !calls
+            .lines()
+            .any(|call| call.starts_with("-d ") || call.starts_with("-s "))
+    );
     for required in [
         "buildx inspect nook-pr-timeout-test --bootstrap",
         "rm --force buildx_buildkit_nook-pr-timeout-test0",

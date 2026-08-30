@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
 set -euo pipefail
+caller_path="$PATH"
+export PATH=/usr/bin:/bin
 
 if [ "$#" -eq 0 ]; then
   echo "usage: $0 <command> [args...]" >&2
@@ -104,7 +106,7 @@ esac
 
 run_with_daemon_builder() {
   echo "Using default docker buildx builder (Taskfiles must not pass --builder)" >&2
-  DOCKER="$docker_cli" "$@"
+  PATH="$caller_path" DOCKER="$docker_cli" "$@"
 }
 
 if [ -z "$builder" ]; then
@@ -229,4 +231,4 @@ else
 fi
 
 "$docker_cli" buildx use "$builder"
-DOCKER="$docker_cli" "$@"
+  PATH="$caller_path" DOCKER="$docker_cli" "$@"

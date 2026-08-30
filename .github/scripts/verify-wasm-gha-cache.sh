@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+caller_path="$PATH"
+export PATH=/usr/bin:/bin
 
 repo_root="${REPO_ROOT:-$(git rev-parse --show-toplevel)}"
 prepare_trusted_docker() {
@@ -165,5 +167,5 @@ if [ "${NOOK_WASM_CACHE_PROMOTION_ENABLED:-}" = "1" ]; then
   esac
 fi
 
-bun "$repo_root/.github/scripts/verify-registry-cache-blobs.ts" "$cache_ref"
+PATH="$caller_path" bun "$repo_root/.github/scripts/verify-registry-cache-blobs.ts" "$cache_ref"
 echo "verified ARC-published WASM dependency cache blob integrity for $cache_scope"

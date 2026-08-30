@@ -4,6 +4,8 @@
 # build or export through the Kubernetes BuildKit service, but it never owns a
 # container runtime or daemon lifecycle.
 set -euo pipefail
+caller_path="$PATH"
+export PATH=/usr/bin:/bin
 
 if [ "$#" -eq 0 ]; then
   echo "usage: $0 <command> [args...]" >&2
@@ -168,4 +170,4 @@ fi
 
 echo "Using healthy ARC remote BuildKit builder $builder" >&2
 "$docker_cli" buildx use "$builder"
-DOCKER="$docker_cli" "$@"
+PATH="$caller_path" DOCKER="$docker_cli" "$@"
