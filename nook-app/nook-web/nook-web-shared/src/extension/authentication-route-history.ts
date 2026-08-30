@@ -13,7 +13,12 @@ export function notifyAuthenticationRouteChanged(): void {
 export function isAuthenticationRouteHistoryMessage(
   event: MessageEvent,
 ): boolean {
-  if (event.origin !== location.origin || event.source !== window) {
+  if (
+    location.origin === "null" ||
+    event.origin === "null" ||
+    event.origin !== location.origin ||
+    event.source !== window
+  ) {
     return false;
   }
   const data = event.data;
