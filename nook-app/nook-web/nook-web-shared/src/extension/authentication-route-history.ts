@@ -34,12 +34,12 @@ export function observeAuthenticationRouteHistory(
 ): () => void {
   const pushState = history.pushState.bind(history);
   const replaceState = history.replaceState.bind(history);
-  history.pushState = function (data, unused, url) {
-    pushState(data, unused, url);
+  history.pushState = function (...args) {
+    pushState(...args);
     onNavigate();
   };
-  history.replaceState = function (data, unused, url) {
-    replaceState(data, unused, url);
+  history.replaceState = function (...args) {
+    replaceState(...args);
     onNavigate();
   };
   window.addEventListener("popstate", onNavigate);

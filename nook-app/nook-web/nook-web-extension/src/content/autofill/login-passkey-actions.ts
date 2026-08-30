@@ -107,7 +107,11 @@ export function approvedWorkflowIsStillCurrent(
 ): boolean {
   const rendered = widgetState.renderedWorkflowRoot
   if (rendered.kind !== WidgetWorkflowRootKind.Assigned) return false
-  if (!authenticationWorkflowScopesMatch(rendered.observation, workflow)) {
+  const scopePair: Parameters<typeof authenticationWorkflowScopesMatch>[0] = {
+    left: rendered.observation,
+    right: workflow,
+  }
+  if (!authenticationWorkflowScopesMatch(scopePair)) {
     return false
   }
   const hints = detectEnrollmentHints()

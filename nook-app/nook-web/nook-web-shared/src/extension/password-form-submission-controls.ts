@@ -47,6 +47,49 @@ type FormSubmissionObservation = {
   action: () => void;
 };
 
+type ObservedFormIdentityRequest = {
+  root: ParentNode;
+  formScope: PasswordFormScope;
+};
+
+type ControlDestinationIdentityRequest = {
+  control: HTMLElement;
+  formScope: PasswordFormScope;
+};
+
+type HtmlSubmissionMethodRequest = {
+  element: Element;
+  name: string;
+};
+
+type BoundedAuthenticationControlObservationsRequest<
+  AuthenticationControlObservation,
+> = {
+  candidates: AuthenticationControlObservation[];
+  isPreferred: (candidate: AuthenticationControlObservation) => boolean;
+};
+
+type SelectedSubmitterDisclosureRequest = {
+  form: HTMLFormElement;
+  selectedSubmitter: LoginAdvanceControl | false;
+};
+
+type ImplicitAuthenticationSubmitCapabilityRequest = {
+  form: HTMLFormElement;
+  sourceOrigin: string;
+  destinationIdentity: string;
+  hasAuthenticationUsername: boolean;
+  hasAuthenticationPassword: boolean;
+};
+
+type ImplicitAuthenticationSubmitRequest = {
+  form: HTMLFormElement;
+  hasAuthenticationUsername: boolean;
+  hasAuthenticationPassword: boolean;
+};
+
+type AuthenticationFactTexts = string[];
+
 export const MAX_AUTHENTICATION_CONTROL_TEXT_BYTES = 512;
 export const MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT = 100;
 export const MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS = 20;
@@ -60,7 +103,7 @@ export function authenticationPolicyTextFits(value: string): boolean {
 }
 
 export function authenticationFactStringsAreTransportable(
-  values: string[],
+  values: AuthenticationFactTexts,
 ): boolean {
   return values.every(authenticationPolicyTextFits);
 }
@@ -82,10 +125,10 @@ export function ownedFormIdentity(form: HTMLFormElement): string {
   return rawOwnedFormIdentity(form);
 }
 
-export function observedFormIdentity(
-  root: ParentNode,
-  formScope: PasswordFormScope,
-): string {
+export function observedFormIdentity({
+  root,
+  formScope,
+}: ObservedFormIdentityRequest): string {
   const owner =
     formScope.kind === PasswordFormScopeKind.Owned ? formScope.owner : root;
   if (!(owner instanceof Element)) return "";
@@ -114,10 +157,10 @@ export function ownedFormDestinationIdentity(form: HTMLFormElement): string {
   return boundedAuthenticationDestination(rawFormDestinationIdentity(form));
 }
 
-export function controlDestinationIdentity(
-  control: HTMLElement,
-  formScope: PasswordFormScope,
-): string {
+export function controlDestinationIdentity({
+  control,
+  formScope,
+}: ControlDestinationIdentityRequest): string {
   if (control instanceof HTMLAnchorElement) {
     return control.href;
   }
@@ -211,10 +254,12 @@ export function controlIsInert(control: HTMLElement): boolean {
   );
 }
 
-export function boundAuthenticationControlObservations<Candidate>(
-  candidates: Candidate[],
-  isPreferred: (candidate: Candidate) => boolean,
-): Candidate[] {
+export function boundAuthenticationControlObservations<
+  AuthenticationControlObservation,
+>({
+  candidates,
+  isPreferred,
+}: BoundedAuthenticationControlObservationsRequest<AuthenticationControlObservation>): AuthenticationControlObservation[] {
   const preferred = candidates.filter(isPreferred);
   const remaining = candidates.filter((candidate) => !isPreferred(candidate));
   return [...preferred, ...remaining].slice(
@@ -254,10 +299,10 @@ function htmlEnumeratedSubmissionMethod(
   return PageControlSubmissionMethod.Get;
 }
 
-function presentHtmlSubmissionMethod(
-  element: Element,
-  name: string,
-): PageControlSubmissionMethod | false {
+function presentHtmlSubmissionMethod({
+  element,
+  name,
+}: HtmlSubmissionMethodRequest): PageControlSubmissionMethod | false {
   if (!element.hasAttribute(name)) return false;
   const token = element.getAttribute(name);
   return htmlEnumeratedSubmissionMethod(token ? token : "");
@@ -279,13 +324,21 @@ export function controlSubmissionMethod(
   if (!controlHasNativeSubmitSemantics(control)) {
     return PageControlSubmissionMethod.Absent;
   }
-  const formmethod = presentHtmlSubmissionMethod(control, "formmethod");
+  const formmethodRequest: HtmlSubmissionMethodRequest = {
+    element: control,
+    name: "formmethod",
+  };
+  const formmethod = presentHtmlSubmissionMethod(formmethodRequest);
   if (formmethod !== false) return formmethod;
   const owner = associatedAuthenticationForm(control);
   if (owner.kind !== PasswordFormScopeKind.Owned) {
     return PageControlSubmissionMethod.Absent;
   }
-  const method = presentHtmlSubmissionMethod(owner.owner, "method");
+  const methodRequest: HtmlSubmissionMethodRequest = {
+    element: owner.owner,
+    name: "method",
+  };
+  const method = presentHtmlSubmissionMethod(methodRequest);
   return method === false ? PageControlSubmissionMethod.Get : method;
 }
 
@@ -321,7 +374,11 @@ export function controlLabel(control: HTMLElement): string {
 export function formSubmissionMethod(
   form: HTMLFormElement,
 ): PageControlSubmissionMethod {
-  const method = presentHtmlSubmissionMethod(form, "method");
+  const methodRequest: HtmlSubmissionMethodRequest = {
+    element: form,
+    name: "method",
+  };
+  const method = presentHtmlSubmissionMethod(methodRequest);
   return method === false ? PageControlSubmissionMethod.Get : method;
 }
 
@@ -358,31 +415,49 @@ export function formHasDialogSubmitter(form: HTMLFormElement): boolean {
   });
 }
 
-export function selectedSubmitterBlocksCredentialDisclosure(
-  form: HTMLFormElement,
-  selectedSubmitter: LoginAdvanceControl | false,
-): boolean {
-  if (selectedSubmitter) {
-    return submissionMethodBlocksCredentialDisclosure(
-      controlSubmissionMethod(selectedSubmitter),
-    );
-  }
-  return formBlocksCredentialDisclosure(form) || formHasDialogSubmitter(form);
+function explicitFormMethodBlocksDisclosure(form: HTMLFormElement): boolean {
+  const methodRequest: HtmlSubmissionMethodRequest = {
+    element: form,
+    name: "method",
+  };
+  const method = presentHtmlSubmissionMethod(methodRequest);
+  return method !== false && submissionMethodBlocksCredentialDisclosure(method);
 }
 
-export function canRequestImplicitAuthenticationSubmit(
-  form: HTMLFormElement,
-  sourceOrigin: string,
-  destinationIdentity: string,
-  hasAuthenticationUsername: boolean,
-  hasAuthenticationPassword: boolean,
-): boolean {
+export function selectedSubmitterBlocksCredentialDisclosure({
+  form,
+  selectedSubmitter,
+}: SelectedSubmitterDisclosureRequest): boolean {
+  if (selectedSubmitter) {
+    const formmethodRequest: HtmlSubmissionMethodRequest = {
+      element: selectedSubmitter,
+      name: "formmethod",
+    };
+    const formmethod = presentHtmlSubmissionMethod(formmethodRequest);
+    if (formmethod !== false) {
+      return submissionMethodBlocksCredentialDisclosure(formmethod);
+    }
+    return explicitFormMethodBlocksDisclosure(form);
+  }
   return (
-    authenticationFactStringsAreTransportable([
-      sourceOrigin,
-      rawOwnedFormIdentity(form),
-      destinationIdentity,
-    ]) &&
+    explicitFormMethodBlocksDisclosure(form) || formHasDialogSubmitter(form)
+  );
+}
+
+export function canRequestImplicitAuthenticationSubmit({
+  form,
+  sourceOrigin,
+  destinationIdentity,
+  hasAuthenticationUsername,
+  hasAuthenticationPassword,
+}: ImplicitAuthenticationSubmitCapabilityRequest): boolean {
+  const transportableFacts: AuthenticationFactTexts = [
+    sourceOrigin,
+    rawOwnedFormIdentity(form),
+    destinationIdentity,
+  ];
+  return (
+    authenticationFactStringsAreTransportable(transportableFacts) &&
     can_activate_authentication_route_control(
       sourceOrigin,
       ownedFormIdentity(form),
@@ -397,11 +472,11 @@ export function canRequestImplicitAuthenticationSubmit(
   );
 }
 
-export function requestImplicitAuthenticationSubmit(
-  form: HTMLFormElement,
-  hasAuthenticationUsername: boolean,
-  hasAuthenticationPassword: boolean,
-): boolean {
+export function requestImplicitAuthenticationSubmit({
+  form,
+  hasAuthenticationUsername,
+  hasAuthenticationPassword,
+}: ImplicitAuthenticationSubmitRequest): boolean {
   const sourceOrigin = form.ownerDocument.defaultView?.location.origin;
   if (
     !sourceOrigin ||
@@ -414,21 +489,21 @@ export function requestImplicitAuthenticationSubmit(
   const destinationRequest: AuthenticationRouteDestinationRequest = {
     form,
   };
-  if (
-    !canRequestImplicitAuthenticationSubmit(
-      form,
-      sourceOrigin,
-      authenticationRouteDestination(destinationRequest),
-      hasAuthenticationUsername,
-      hasAuthenticationPassword,
-    )
-  ) {
+  const capabilityRequest: ImplicitAuthenticationSubmitCapabilityRequest = {
+    form,
+    sourceOrigin,
+    destinationIdentity: authenticationRouteDestination(destinationRequest),
+    hasAuthenticationUsername,
+    hasAuthenticationPassword,
+  };
+  if (!canRequestImplicitAuthenticationSubmit(capabilityRequest)) {
     return false;
   }
-  return observeSubmit({
+  const submission: FormSubmissionObservation = {
     form,
     action: () => form.requestSubmit(),
-  });
+  };
+  return observeSubmit(submission);
 }
 
 export function authenticationRouteDestination({
@@ -566,7 +641,7 @@ export function formHasSemanticSubmitter(form: HTMLFormElement): boolean {
     ) {
       return false;
     }
-    return control.form === form;
+    return control.form === form && !controlIsInert(control);
   });
 }
 

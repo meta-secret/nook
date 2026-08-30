@@ -141,11 +141,14 @@ export function renderWidget({
         widgetState.renderedWorkflowRoot.observation.formScope.owner ===
           workflow.formScope.owner))
   ) {
-    widgetState.setRenderedWorkflowRoot({
+    const renderedWorkflowRoot: Parameters<
+      typeof widgetState.setRenderedWorkflowRoot
+    >[0] = {
       kind: WidgetWorkflowRootKind.Assigned,
       observation: workflow,
       facts,
-    })
+    }
+    widgetState.setRenderedWorkflowRoot(renderedWorkflowRoot)
     return
   }
   if (widgetState.host.kind === WidgetHostKind.Attached) removeWidget()

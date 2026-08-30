@@ -41,6 +41,21 @@ type PageInputClassificationRequest = {
   loginContext: boolean;
 };
 
+type AssociatedFormFieldSelectorRequest = {
+  selector: string;
+  formId: string;
+};
+
+type TypeButtonPromotionScopeRequest = {
+  container: Element;
+  field: HTMLElement;
+};
+
+export type UnownedAuthContainerRequest = {
+  field: HTMLElement;
+  root: ParentNode;
+};
+
 export type AutocompleteTokenMatchRequest = {
   field: HTMLInputElement;
   expected: string;
@@ -53,7 +68,7 @@ export const usernameFieldSelectors = [
   'input[type="text"][autocomplete~="username" i]',
   'input[type="text"][name*="user" i]',
   'input[type="text"][name*="email" i]',
-  'input[type="text"][id*="user" i]',
+  'input[type="text"][id*="username" i]',
   'input[type="text"][id*="email" i]',
   // Popular SSO / email-first login field names (Microsoft, Google, Slack, …).
   'input[name="loginfmt" i]',
@@ -132,7 +147,10 @@ function isRenderedInput(field: HTMLInputElement): boolean {
   return true;
 }
 
-function associatedFormFieldSelector(selector: string, formId: string): string {
+function associatedFormFieldSelector({
+  selector,
+  formId,
+}: AssociatedFormFieldSelectorRequest): string {
   return selector
     .split(",")
     .map((part) => `${part.trim()}[form="${CSS.escape(formId)}"]`)
@@ -155,8 +173,12 @@ function findFields({
       }
     }
     if (owner.id) {
+      const associatedSelectorRequest: AssociatedFormFieldSelectorRequest = {
+        selector,
+        formId: owner.id,
+      };
       const associated = owner.ownerDocument.querySelectorAll<HTMLInputElement>(
-        associatedFormFieldSelector(selector, owner.id),
+        associatedFormFieldSelector(associatedSelectorRequest),
       );
       for (const field of associated) {
         if (!seen.has(field) && field.form === owner) {
@@ -173,12 +195,11 @@ function findFields({
       if (formScope.kind !== PasswordFormScopeKind.Unowned || field.form) {
         return false;
       }
-      return (
-        nearestUnownedAuthContainer({
-          field,
-          root: field.ownerDocument,
-        }) === root
-      );
+      const containerRequest: UnownedAuthContainerRequest = {
+        field,
+        root: field.ownerDocument,
+      };
+      return nearestUnownedAuthContainer(containerRequest) === root;
     },
   );
 }
@@ -217,10 +238,16 @@ function associatedLabelText(field: HTMLInputElement): string {
   return parts.join(" ");
 }
 
+function fieldIdentityId(field: HTMLInputElement): string {
+  return /username|email|login|account|identifier/i.test(field.id)
+    ? field.id
+    : "";
+}
+
 function rawFieldIdentityText(field: HTMLInputElement): string {
   return [
     field.name,
-    field.id,
+    fieldIdentityId(field),
     field.placeholder,
     field.title,
     field.getAttribute("aria-label") ?? "",
@@ -518,10 +545,10 @@ function unownedCredentialFieldCount(root: ParentNode): number {
   ).filter((field) => !field.form && isRenderedInput(field)).length;
 }
 
-function typeButtonPromotionSwallowsForeignScope(
-  container: Element,
-  field: HTMLElement,
-): boolean {
+function typeButtonPromotionSwallowsForeignScope({
+  container,
+  field,
+}: TypeButtonPromotionScopeRequest): boolean {
   const [activation] = labeledTypeButtonActivationControls(container);
   if (!activation) return false;
   let scope = activation.parentElement;
@@ -538,10 +565,7 @@ function typeButtonPromotionSwallowsForeignScope(
 export function nearestUnownedAuthContainer({
   field,
   root,
-}: {
-  field: HTMLElement;
-  root: ParentNode;
-}): ParentNode {
+}: UnownedAuthContainerRequest): ParentNode {
   let container = field.parentElement;
   while (container && container !== root) {
     const explicitAuthContainer = container.matches(
@@ -555,37 +579,113 @@ export function nearestUnownedAuthContainer({
     if (explicitAuthContainer || hasSubmitControl) {
       return container;
     }
+    const promotionRequest: TypeButtonPromotionScopeRequest = {
+      container,
+      field,
+    };
     if (
       containerHasUnambiguousAuthenticationActivation(container) &&
-      !typeButtonPromotionSwallowsForeignScope(container, field)
+      !typeButtonPromotionSwallowsForeignScope(promotionRequest)
     ) {
       return container;
     }
     container = container.parentElement;
   }
   const parent = field.parentElement;
-  if (
-    parent instanceof HTMLElement &&
-    parent !== root &&
-    !(
+  if (parent instanceof HTMLElement && parent !== root) {
+    const parentPromotionRequest: TypeButtonPromotionScopeRequest = {
+      container: parent,
+      field,
+    };
+    if (!(
       containerHasUnambiguousAuthenticationActivation(parent) &&
-      typeButtonPromotionSwallowsForeignScope(parent, field)
-    )
-  ) {
-    return parent;
+      typeButtonPromotionSwallowsForeignScope(parentPromotionRequest)
+    )) {
+      return parent;
+    }
   }
   return field;
+}
+
+export type LocalOwnedFormAdjacencyRequest = {
+  control: HTMLElement;
+  owner: HTMLFormElement;
+};
+
+export function isLocallyAdjacentToOwnedForm({
+  control,
+  owner,
+}: LocalOwnedFormAdjacencyRequest): boolean {
+  const containingForm = control.closest("form");
+  if (containingForm && containingForm !== owner) {
+    return false;
+  }
+  const panel = owner.parentElement;
+  if (
+    !panel ||
+    panel === owner.ownerDocument.body ||
+    panel === owner.ownerDocument.documentElement
+  ) {
+    return false;
+  }
+  if (
+    (control instanceof HTMLButtonElement ||
+      control instanceof HTMLInputElement) &&
+    control.form
+  ) {
+    return false;
+  }
+  const formsInPanel = Array.from(panel.querySelectorAll("form"));
+  return formsInPanel.length === 1 && formsInPanel[0] === owner
+    ? panel.contains(control)
+    : false;
+}
+
+export type ControlObservationAssociationRequest = {
+  control: HTMLElement;
+  formScope: PasswordFormScope;
+  root: ParentNode;
+};
+
+export function controlAssociatesWithObservation({
+  control,
+  formScope,
+}: ControlObservationAssociationRequest): boolean {
+  if (formScope.kind === PasswordFormScopeKind.Owned) {
+    const adjacencyRequest: LocalOwnedFormAdjacencyRequest = {
+      control,
+      owner: formScope.owner,
+    };
+    if (
+      control instanceof HTMLButtonElement ||
+      control instanceof HTMLInputElement
+    ) {
+      return (
+        control.form === formScope.owner ||
+        isLocallyAdjacentToOwnedForm(adjacencyRequest)
+      );
+    }
+    return (
+      formScope.owner.contains(control) ||
+      isLocallyAdjacentToOwnedForm(adjacencyRequest)
+    );
+  }
+  if (
+    control instanceof HTMLButtonElement ||
+    control instanceof HTMLInputElement
+  ) {
+    return !control.form;
+  }
+  return !control.closest("form");
 }
 
 export function localUnownedPasskeyContainer({
   field,
   root,
-}: {
-  field: HTMLElement;
-  root: ParentNode;
-}): ParentNode {
+}: UnownedAuthContainerRequest): ParentNode {
   const documentRoot = field.ownerDocument;
-  const nearest = nearestUnownedAuthContainer({ field, root });
+  const nearestRequest: UnownedAuthContainerRequest = { field, root };
+  const nearest = nearestUnownedAuthContainer(nearestRequest);
   if (
     nearest !== root &&
     nearest !== documentRoot.body &&
@@ -601,7 +701,7 @@ export function localUnownedPasskeyContainer({
   ) {
     return parent;
   }
-  return field;
+  return root;
 }
 
 export function pageHasManualCheckpoint(root: ParentNode): boolean {

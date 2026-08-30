@@ -69,10 +69,20 @@ type LiveApprovedAuthenticationWorkflowRequest = {
   backupCodesHint: boolean;
 };
 
-export function authenticationWorkflowScopesMatch(
-  left: PasswordFormObservation,
-  right: PasswordFormObservation,
-): boolean {
+type AuthenticationWorkflowScopePair = {
+  left: PasswordFormObservation;
+  right: PasswordFormObservation;
+};
+
+type ApprovedAuthenticationFactsPair = {
+  live: AuthenticationPageObservationFacts;
+  approved: AuthenticationPageObservationFacts;
+};
+
+export function authenticationWorkflowScopesMatch({
+  left,
+  right,
+}: AuthenticationWorkflowScopePair): boolean {
   if (left.formScope.kind !== right.formScope.kind) return false;
   if (left.formScope.kind === PasswordFormScopeKind.Owned) {
     return (
@@ -83,10 +93,10 @@ export function authenticationWorkflowScopesMatch(
   return left.root === right.root;
 }
 
-function approvedAuthenticationContextMatches(
-  live: AuthenticationPageObservationFacts,
-  approved: AuthenticationPageObservationFacts,
-): boolean {
+function approvedAuthenticationContextMatches({
+  live,
+  approved,
+}: ApprovedAuthenticationFactsPair): boolean {
   const liveContext = live.ceremony.authenticationContext;
   const approvedContext = approved.ceremony.authenticationContext;
   if (!liveContext || !approvedContext) return false;
@@ -106,18 +116,21 @@ function approvedAuthenticationContextMatches(
 }
 
 function approvedFieldSemanticsMatch(
-  live: AuthenticationPageObservationFacts,
-  approved: AuthenticationPageObservationFacts,
+  request: ApprovedAuthenticationFactsPair,
 ): boolean {
-  return approvedAuthenticationContextMatches(live, approved);
+  return approvedAuthenticationContextMatches(request);
 }
 
 function rustWorkflowSemantics(
   facts: AuthenticationPageObservationFacts,
 ): string {
-  const workflowMatch = classify_companion_authentication_workflow_facts({
+  const workflowMatchRequest: Parameters<
+    typeof classify_companion_authentication_workflow_facts
+  >[0] = {
     observations: [facts],
-  });
+  };
+  const workflowMatch =
+    classify_companion_authentication_workflow_facts(workflowMatchRequest);
   const matchKind = companion_authentication_workflow_match_kind(workflowMatch);
   if (
     matchKind !== CompanionAuthenticationWorkflowMatchKind.Matched ||
@@ -139,14 +152,22 @@ export function liveApprovedAuthenticationWorkflow({
     backupCodesHint,
   };
   return classifiedAuthenticationWorkflowObservations(classifiedRequest).some(
-    (candidate) =>
-      authenticationWorkflowScopesMatch(
-        candidate.observation,
-        approved.observation,
-      ) &&
-      approvedAuthenticationContextMatches(candidate.facts, approved.facts) &&
-      approvedFieldSemanticsMatch(candidate.facts, approved.facts) &&
-      rustWorkflowSemantics(candidate.facts) ===
-        rustWorkflowSemantics(approved.facts),
+    (candidate) => {
+      const scopePair: AuthenticationWorkflowScopePair = {
+        left: candidate.observation,
+        right: approved.observation,
+      };
+      const factsPair: ApprovedAuthenticationFactsPair = {
+        live: candidate.facts,
+        approved: approved.facts,
+      };
+      return (
+        authenticationWorkflowScopesMatch(scopePair) &&
+        approvedAuthenticationContextMatches(factsPair) &&
+        approvedFieldSemanticsMatch(factsPair) &&
+        rustWorkflowSemantics(candidate.facts) ===
+          rustWorkflowSemantics(approved.facts)
+      );
+    },
   );
 }
