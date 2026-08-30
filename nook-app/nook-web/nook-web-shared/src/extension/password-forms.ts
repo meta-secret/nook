@@ -285,7 +285,10 @@ function isLocallyAdjacentToOwnedForm(
   ) {
     return false;
   }
-  return panel.contains(control);
+  const formsInPanel = Array.from(panel.querySelectorAll("form"));
+  return formsInPanel.length === 1 && formsInPanel[0] === owner
+    ? panel.contains(control)
+    : false;
 }
 
 function controlAssociatesWithObservation({

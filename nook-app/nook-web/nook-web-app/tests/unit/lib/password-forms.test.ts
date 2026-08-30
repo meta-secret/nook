@@ -632,6 +632,53 @@ describe('website one-time-code fields', () => {
     })
   })
 
+  test('does not bind a shared-parent passkey to either sibling form', () => {
+    document.body.innerHTML = `
+      <div class="login-panel">
+        <form id="login" action="/login">
+          <input autocomplete="username" />
+          <input type="password" autocomplete="current-password" />
+          <button type="submit">Sign in</button>
+        </form>
+        <form id="signup" action="/signup">
+          <input autocomplete="username" />
+          <input type="password" autocomplete="new-password" />
+          <button type="submit">Create account</button>
+        </form>
+        <button type="button" data-nook-passkey-control>Enroll passkey</button>
+      </div>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    const login = observations.find(
+      (observation) =>
+        observation.formScope.kind === PasswordFormScopeKind.Owned &&
+        observation.formScope.owner.id === 'login',
+    )
+    const signup = observations.find(
+      (observation) =>
+        observation.formScope.kind === PasswordFormScopeKind.Owned &&
+        observation.formScope.owner.id === 'signup',
+    )
+    if (!login || !signup) {
+      throw new Error('expected sibling login and signup workflows')
+    }
+    expect(
+      authenticationPageObservationFacts({
+        observation: login,
+        authenticatorSetupHint: false,
+        backupCodesHint: false,
+      }).authenticator.detailedPasskeyControl,
+    ).toEqual({ kind: 'absent' })
+    expect(
+      authenticationPageObservationFacts({
+        observation: signup,
+        authenticatorSetupHint: false,
+        backupCodesHint: false,
+      }).authenticator.detailedPasskeyControl,
+    ).toEqual({ kind: 'absent' })
+  })
+
   test('counts only actionable semantic submitters for Rust ambiguity', () => {
     document.body.innerHTML = `
       <form aria-label="Login" action="/auth/login">

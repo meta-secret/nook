@@ -583,4 +583,36 @@ describe('authentication observation bounds', () => {
     expect(username.value).toBe('')
     expect(password.value).toBe('')
   })
+
+  test('keeps a direct-body form-less passkey observable', () => {
+    document.body.replaceChildren()
+    const passkey = document.createElement('button')
+    passkey.type = 'button'
+    passkey.textContent = 'Sign in with a passkey'
+    document.body.append(passkey)
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    const selected = observations[0]
+    if (!selected) {
+      throw new Error('expected a direct-body passkey workflow')
+    }
+    expect(selected.summary.passkeyControlPresent).toBe(true)
+    expect(
+      authenticationPageObservationFacts({
+        observation: selected,
+        authenticatorSetupHint: false,
+        backupCodesHint: false,
+      }).authenticator.detailedPasskeyControl,
+    ).toMatchObject({
+      kind: 'candidates',
+      observation: [
+        {
+          kind: 'labeled',
+          observation: {
+            label: expect.stringContaining('passkey'),
+          },
+        },
+      ],
+    })
+  })
 })

@@ -389,14 +389,20 @@ export type PasskeyControlCandidate = {
   explicitlyMarked: boolean;
 };
 
+const passkeyControlSelector =
+  '[data-nook-passkey-control], button, a[href], [role="button"], input[type="button"], input[type="submit"]';
+
 export function findPasskeyControls(
   root: ParentNode = document,
 ): PasskeyControlCandidate[] {
-  const controls = Array.from(
-    root.querySelectorAll?.<HTMLElement>(
-      '[data-nook-passkey-control], button, a[href], [role="button"], input[type="button"], input[type="submit"]',
-    ) ?? [],
+  const descendants = Array.from(
+    root.querySelectorAll?.<HTMLElement>(passkeyControlSelector) ?? [],
   );
+  const rooted =
+    root instanceof HTMLElement && root.matches(passkeyControlSelector)
+      ? [root]
+      : [];
+  const controls = [...rooted, ...descendants];
   const candidates = controls.flatMap((control) => {
     const explicitlyMarked = control.hasAttribute("data-nook-passkey-control");
     const labeled = (
