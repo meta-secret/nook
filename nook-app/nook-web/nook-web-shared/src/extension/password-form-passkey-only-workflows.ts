@@ -67,7 +67,7 @@ export function summarizePasskeyOnlyWorkflowForms<Summary>(
       summary: summarizeRoot(summaryArgs),
     };
   });
-  const hasFormlessPasskey = passkeyCandidates.some(({ control }) => {
+  const formlessPasskeys = passkeyCandidates.filter(({ control }) => {
     if (
       control instanceof HTMLButtonElement ||
       control instanceof HTMLInputElement
@@ -76,17 +76,24 @@ export function summarizePasskeyOnlyWorkflowForms<Summary>(
     }
     return !(control.closest("form") instanceof HTMLFormElement);
   });
-  if (hasFormlessPasskey || observations.length === 0) {
+  const localPasskeyRoots = [
+    ...new Set(
+      formlessPasskeys.map(({ control }) =>
+        nearestUnownedPasskeyContainer(control, root),
+      ),
+    ),
+  ];
+  for (const localRoot of localPasskeyRoots) {
     const formScope: PasswordFormScope = {
       kind: PasswordFormScopeKind.Unowned,
     };
     const summaryArgs: PasswordFormScopeQuery = {
       kind: PasswordFormQueryKind.Scoped,
-      root,
+      root: localRoot,
       formScope,
     };
     observations.push({
-      root,
+      root: localRoot,
       formScope,
       summary: summarizeRoot(summaryArgs),
     });
@@ -166,6 +173,30 @@ export function appendIndependentPasskeyOnlyWorkflows<
         : safeDelta;
     })
     .slice(0, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS);
+}
+
+function nearestUnownedPasskeyContainer(
+  control: HTMLElement,
+  root: Document,
+): ParentNode {
+  let container = control.parentElement;
+  while (
+    container &&
+    container !== root.body &&
+    container !== root.documentElement
+  ) {
+    if (
+      container.matches(
+        'dialog, [role="dialog"], [role="form"], [id*="login" i], [id*="signin" i], [id*="signup" i], [id*="reset" i], [class*="login" i], [class*="signin" i], [class*="signup" i], [class*="reset" i]',
+      )
+    ) {
+      return container;
+    }
+    container = container.parentElement;
+  }
+  return control.parentElement instanceof HTMLElement
+    ? control.parentElement
+    : root;
 }
 
 function observationHasSafePasskey<

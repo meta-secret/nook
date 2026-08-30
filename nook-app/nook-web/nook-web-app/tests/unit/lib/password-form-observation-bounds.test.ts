@@ -523,4 +523,34 @@ describe('authentication observation bounds', () => {
       ]),
     })
   })
+
+  test('keeps a form-less passkey observation inside its local container', () => {
+    document.body.innerHTML = `
+      <div class="signin-panel">
+        <input autocomplete="username" />
+      </div>
+      <div class="password-panel">
+        <input type="password" autocomplete="current-password" />
+      </div>
+      <div class="passkey-panel">
+        <button type="button">Sign in with a passkey</button>
+      </div>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(
+      observations.some((observation) => observation.root === document),
+    ).toBe(false)
+    const passkey = observations.find(
+      (observation) =>
+        observation.formScope.kind === PasswordFormScopeKind.Unowned &&
+        observation.root instanceof HTMLElement &&
+        observation.root.classList.contains('passkey-panel'),
+    )
+    if (!passkey) {
+      throw new Error('expected a locally scoped passkey observation')
+    }
+    expect(passkey.summary.usernameFieldCount).toBe(0)
+    expect(passkey.summary.passwordFieldCount).toBe(0)
+  })
 })
