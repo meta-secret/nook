@@ -50,6 +50,7 @@ export function summarizePasskeyOnlyWorkflowForms<Summary>(
   passkeyControlIsSafe: PasskeyControlIsSafe<
     PasskeyOnlyWorkflowObservation<Summary>
   >,
+  emptySummary: Summary,
 ): Array<PasskeyOnlyWorkflowObservation<Summary>> {
   if (!pageHasPasskeyControl(root)) return [];
   const passkeyCandidates = findPasskeyControls(root);
@@ -60,6 +61,7 @@ export function summarizePasskeyOnlyWorkflowForms<Summary>(
     summarizeRoot,
     passkeyControlIsSafe,
     indexed,
+    emptySummary,
   );
   const ranked = preferred.map((entry) => ({
     observation: entry.observation,
@@ -206,6 +208,17 @@ function passkeyCandidatesForScope(
   );
 }
 
+function scopeHasPasswordField(scope: PasskeyOnlyScope): boolean {
+  const queryRoot =
+    scope.formScope.kind === PasswordFormScopeKind.Owned
+      ? scope.formScope.owner
+      : scope.root;
+  return (
+    queryRoot.querySelector('input[type="password"]') instanceof
+    HTMLInputElement
+  );
+}
+
 function takePreferredPasskeyOnlyObservations<Summary>(
   scopes: PasskeyOnlyScope[],
   summarizeRoot: (query: PasswordFormScopeQuery) => Summary,
@@ -213,17 +226,44 @@ function takePreferredPasskeyOnlyObservations<Summary>(
     PasskeyOnlyWorkflowObservation<Summary>
   >,
   indexed: IndexedPasskeyCandidates,
+  emptySummary: Summary,
 ): Array<{
   observation: PasskeyOnlyWorkflowObservation<Summary>;
   safe: boolean;
 }> {
+  const ordered = [...scopes].sort((left, right) => {
+    return (
+      Number(scopeHasPasswordField(left)) - Number(scopeHasPasswordField(right))
+    );
+  });
   const preferred: Array<{
     observation: PasskeyOnlyWorkflowObservation<Summary>;
     safe: boolean;
   }> = [];
   let safeCount = 0;
-  for (const scope of scopes) {
-    if (safeCount >= MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS) break;
+  for (const scope of ordered) {
+    if (
+      safeCount >= MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS &&
+      preferred.length >= MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS
+    ) {
+      break;
+    }
+    const scopedCandidates = passkeyCandidatesForScope(scope, indexed);
+    const cheapSafe = observationHasSafePasskey(
+      {
+        root: scope.root,
+        formScope: scope.formScope,
+        summary: emptySummary,
+      },
+      scopedCandidates,
+      passkeyControlIsSafe,
+    );
+    if (
+      preferred.length >= MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS &&
+      !cheapSafe
+    ) {
+      continue;
+    }
     const summaryArgs: PasswordFormScopeQuery = {
       kind: PasswordFormQueryKind.Scoped,
       root: scope.root,
@@ -236,7 +276,7 @@ function takePreferredPasskeyOnlyObservations<Summary>(
     };
     const safe = observationHasSafePasskey(
       observation,
-      passkeyCandidatesForScope(scope, indexed),
+      scopedCandidates,
       passkeyControlIsSafe,
     );
     if (preferred.length < MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS) {
