@@ -257,6 +257,47 @@ describe('classified login activation', () => {
     expect(advanced).toBe(true)
   })
 
+  test('does not activate an external GET submitter after filling passwords', () => {
+    document.body.innerHTML = `
+      <form id="login" action="/auth/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+      </form>
+      <button id="sign-in" type="submit" form="login" formmethod="get">
+        Sign in
+      </button>
+    `
+    let clicked = false
+    document.querySelector('#sign-in')?.addEventListener('click', () => {
+      clicked = true
+    })
+    document.querySelector('form')?.addEventListener('submit', (event) => {
+      event.preventDefault()
+    })
+    const form = document.querySelector('form')
+    if (!form) {
+      throw new Error('expected login form')
+    }
+    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: {
+        username: 'user@example.test',
+        password: 'secret',
+      },
+      kind: PasswordFormQueryKind.Scoped,
+      root: form,
+      formScope: { kind: PasswordFormScopeKind.Owned, owner: form },
+    }
+    expect(fillLoginCredentials(fillArgs)).toBe(true)
+    expect(
+      submitLoginForm({
+        kind: PasswordFormQueryKind.Scoped,
+        root: form,
+        formScope: { kind: PasswordFormScopeKind.Owned, owner: form },
+      }),
+    ).toBe(false)
+    expect(clicked).toBe(false)
+  })
+
   test('advances a username-only login through an external form-associated control', () => {
     document.body.innerHTML = `
       <form id="login" action="/auth/login">
@@ -699,6 +740,29 @@ describe('classified login activation', () => {
 
     expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
     expect(activated).toEqual(['safe'])
+  })
+
+  test('does not submit a GET formmethod override after filling passwords', () => {
+    document.body.innerHTML = `
+      <form id="login" method="post" action="/auth/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+      </form>
+      <button id="unsafe" type="submit" form="login" formmethod="get">Sign in</button>
+    `
+    let submitted = false
+    document.querySelector('form')?.addEventListener('submit', (event) => {
+      event.preventDefault()
+      submitted = true
+    })
+    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: { username: 'vault-user', password: 'vault-pass' },
+      kind: PasswordFormQueryKind.Root,
+      root: document,
+    }
+    expect(fillLoginCredentials(fillArgs)).toBe(true)
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(false)
+    expect(submitted).toBe(false)
   })
 
   test('does not submit a form outside the requested root', () => {

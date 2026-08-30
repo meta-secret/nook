@@ -132,8 +132,8 @@ pub use outcome_evidence::{
 pub use page_field_classification::{
     AuthenticationAdvanceControlDecision, AuthenticationAdvanceControlObservation,
     AuthenticationUsernameEvidence, PageControlActionability, PageControlOwnership,
-    PageControlSemantics, authentication_advance_control_is_safe, authentication_username_evidence,
-    strongest_authentication_username_evidence,
+    PageControlSemantics, PageControlSubmissionMethod, authentication_advance_control_is_safe,
+    authentication_username_evidence, strongest_authentication_username_evidence,
 };
 pub use page_field_classification::{
     CanonicalControlDestination, LoginContextObservation, MAX_AUTHENTICATION_CONTROL_TEXT_BYTES,

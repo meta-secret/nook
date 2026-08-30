@@ -47,6 +47,7 @@ import {
   controlIsInert,
   controlLabel,
   controlMachineIdentity,
+  controlSubmissionMethod,
   isRenderedControl,
   observeSubmit,
   requestImplicitAuthenticationSubmit,
@@ -430,6 +431,7 @@ function pageControlObservation({
     destinationIdentity: controlDestination(destinationRequest),
     label: controlLabel(control),
     machineIdentity: controlMachineIdentity(control),
+    submissionMethod: controlSubmissionMethod(control),
   };
 }
 

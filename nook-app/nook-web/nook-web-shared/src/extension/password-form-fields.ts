@@ -479,7 +479,7 @@ export function nearestUnownedAuthContainer({
     );
     const hasSubmitControl = Boolean(
       container.querySelector(
-        'button[type="submit"], input[type="submit"], button:not([type])',
+        'button[type="submit"], input[type="submit"], button:not([type]), button[type="button"], input[type="button"]',
       ),
     );
     if (explicitAuthContainer || hasSubmitControl) return container;

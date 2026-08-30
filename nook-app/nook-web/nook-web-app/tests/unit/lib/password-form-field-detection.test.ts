@@ -25,6 +25,30 @@ afterEach(() => {
 })
 
 describe('authentication field detection', () => {
+  test('keeps form-less fields together with a sibling Sign in button', () => {
+    document.body.innerHTML = `
+      <div class="panel">
+        <div><input autocomplete="username" /></div>
+        <div><input type="password" autocomplete="current-password" /></div>
+        <button type="button">Sign in</button>
+      </div>
+    `
+    const observation = summarizeAuthenticationWorkflowForms()[0]
+    if (!observation) {
+      throw new Error('expected a form-less login workflow')
+    }
+    expect(observation.summary.usernameFieldCount).toBe(1)
+    expect(observation.summary.passwordFieldCount).toBe(1)
+    const facts = authenticationPageObservationFacts({
+      observation,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+    })
+  })
+
   test('keeps a passkey-only form when the only password field is a hidden decoy', () => {
     document.body.innerHTML = `
       <form id="passkey-login" action="/login">
@@ -214,5 +238,25 @@ describe('authentication field detection', () => {
     expect(summarizeAuthenticationWorkflowForms()[0]?.summary).toMatchObject({
       oneTimeCodeFieldCount: 1,
     })
+  })
+
+  test('scopes form-less credentials with a sibling type-button advance control', () => {
+    document.body.innerHTML = `
+      <div class="signin-panel">
+        <div><input autocomplete="username" /></div>
+        <div><input type="password" autocomplete="current-password" /></div>
+        <button type="button">Sign in</button>
+      </div>
+    `
+    const observation = observedAuthenticationWorkflow()
+    expect(observation.summary.usernameFieldCount).toBe(1)
+    expect(observation.summary.passwordFieldCount).toBe(1)
+    expect(
+      authenticationPageObservationFacts({
+        observation,
+        authenticatorSetupHint: false,
+        backupCodesHint: false,
+      }).detailedAdvanceControl.kind,
+    ).toBe('observed')
   })
 })

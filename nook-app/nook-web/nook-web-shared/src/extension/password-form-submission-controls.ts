@@ -10,6 +10,12 @@ export enum PasswordFormQueryKind {
   Scoped = "scoped",
 }
 
+export enum PageControlSubmissionMethod {
+  Absent = "absent",
+  Post = "post",
+  Get = "get",
+}
+
 export type PasswordFormScopeQuery =
   | { kind: PasswordFormQueryKind.Root; root: ParentNode }
   | {
@@ -236,6 +242,33 @@ export function isRenderedControl(control: HTMLElement): boolean {
   }
 }
 
+export function controlSubmissionMethod(
+  control: HTMLElement,
+): PageControlSubmissionMethod {
+  const override = control.getAttribute("formmethod");
+  if (override) {
+    return override.trim().toLowerCase() === "get"
+      ? PageControlSubmissionMethod.Get
+      : PageControlSubmissionMethod.Post;
+  }
+  if (
+    (control instanceof HTMLButtonElement ||
+      control instanceof HTMLInputElement) &&
+    control.type === "button"
+  ) {
+    return PageControlSubmissionMethod.Absent;
+  }
+  const owner = associatedAuthenticationForm(control);
+  if (owner.kind !== PasswordFormScopeKind.Owned) {
+    return PageControlSubmissionMethod.Absent;
+  }
+  const method = owner.owner.getAttribute("method");
+  if (method && method.trim().toLowerCase() === "get") {
+    return PageControlSubmissionMethod.Get;
+  }
+  return PageControlSubmissionMethod.Absent;
+}
+
 export function controlMachineIdentity(control: HTMLElement): string {
   const namedValue =
     control instanceof HTMLButtonElement || control instanceof HTMLInputElement
@@ -263,6 +296,11 @@ export function controlLabel(control: HTMLElement): string {
       : "",
     labelledBy,
   ].join(" ");
+}
+
+export function formUsesGetSubmission(form: HTMLFormElement): boolean {
+  const method = form.getAttribute("method");
+  return method !== null && method.trim().toLowerCase() === "get";
 }
 
 export function canRequestImplicitAuthenticationSubmit(
@@ -301,7 +339,8 @@ export function requestImplicitAuthenticationSubmit(
   if (
     !sourceOrigin ||
     formHasSemanticSubmitter(form) ||
-    typeof form.requestSubmit !== "function"
+    typeof form.requestSubmit !== "function" ||
+    (hasAuthenticationPassword && formUsesGetSubmission(form))
   ) {
     return false;
   }

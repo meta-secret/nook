@@ -356,6 +356,7 @@ mod tests {
             destination_identity: destination.to_owned(),
             label: label.to_owned(),
             machine_identity: String::new(),
+            submission_method: nook_companion_core::PageControlSubmissionMethod::Absent,
         }
     }
 

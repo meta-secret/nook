@@ -57,6 +57,17 @@ pub enum PageControlSemantics {
     SemanticSubmit,
 }
 
+/// The effective HTML submission method for one observed activation control.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum PageControlSubmissionMethod {
+    #[default]
+    Absent,
+    Post,
+    Get,
+}
+
 /// Browser-collected structure for one possible authentication advance control.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
@@ -77,6 +88,9 @@ pub struct AuthenticationAdvanceControlObservation {
     /// `id` and `name=value` machine identity used by the legacy activation veto.
     #[serde(default)]
     pub machine_identity: String,
+    /// Native form submission method; GET must not activate password fill.
+    #[serde(default)]
+    pub submission_method: PageControlSubmissionMethod,
 }
 
 /// Portable outcome for one observed authentication advance control.
@@ -134,7 +148,8 @@ impl AuthenticationAdvanceControlObservation {
     /// Decide whether this DOM-extracted control can advance the observed ceremony.
     #[must_use]
     pub fn classify(&self) -> AuthenticationAdvanceControlDecision {
-        if !self.is_bounded() {
+        if !self.is_bounded() || matches!(self.submission_method, PageControlSubmissionMethod::Get)
+        {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
         let Some(destination) =
@@ -273,6 +288,7 @@ mod tests {
             destination_identity: "https://login.example.test/auth/login".to_owned(),
             label: "Sign in".to_owned(),
             machine_identity: String::new(),
+            submission_method: PageControlSubmissionMethod::Absent,
         }
     }
 
@@ -406,6 +422,16 @@ mod tests {
         unique_continue.semantic_submit_control_count = 1;
         unique_continue.label = "Continue".to_owned();
         assert!(authentication_advance_control_is_safe(&unique_continue));
+    }
+
+    #[test]
+    fn get_submitters_do_not_advance_authentication() {
+        let mut control = login_control();
+        control.submission_method = PageControlSubmissionMethod::Get;
+        assert!(!authentication_advance_control_is_safe(&control));
+
+        control.submission_method = PageControlSubmissionMethod::Post;
+        assert!(authentication_advance_control_is_safe(&control));
     }
 
     #[test]

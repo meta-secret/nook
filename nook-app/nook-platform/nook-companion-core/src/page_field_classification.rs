@@ -16,6 +16,7 @@ pub const MAX_AUTHENTICATION_CONTROL_TEXT_BYTES: usize = 512;
 pub use authentication_advance_control::{
     AuthenticationAdvanceControlDecision, AuthenticationAdvanceControlObservation,
     PageControlActionability, PageControlOwnership, PageControlSemantics,
+    PageControlSubmissionMethod,
 };
 pub use destination_identity::{CanonicalControlDestination, canonicalize_control_destination};
 pub use one_time_code_progression::looks_like_one_time_code_auto_submit_signal;
