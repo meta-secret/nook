@@ -68,11 +68,15 @@ scope, and apply the pattern with normal coding workflow and validation.
 
 Executable applications remain owned by their semantic skill card. Use the
 folder form `<dynamic-skills>/<slug>/SKILL.md` and put the ordinary Bun and
-TypeScript project under its co-located `scripts/` directory. The project must
-have a frozen lockfile, package manifest, TypeScript and ESLint configuration,
-focused `src/` and `tests/`, and the repository 1,000-line source limit. It must
-not contain another `SKILL.md` or become a harness mirror. Discover actions
-with `task skills:tools-list`. Invoke one with
+TypeScript project under its co-located `scripts/` directory. Each project must
+include:
+
+- a frozen lockfile and package manifest;
+- TypeScript and ESLint configuration; and
+- focused `src/` and `tests/` within the 1,000-line source limit.
+
+It must not contain another `SKILL.md` or become a harness mirror. Discover
+actions with `task skills:tools-list`. Invoke one with
 `task skills:run REQUEST_YAML='<strict-yaml>'`. Static applications return
 validated data or plans; the active harness owns agent and subagent lifecycle.
 
