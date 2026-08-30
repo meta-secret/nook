@@ -2,7 +2,7 @@
 
 use super::{contains_any_word, expand_identity_text};
 
-pub(super) const PASSKEY_OR_PLATFORM_AUTHENTICATOR_WORDS: &[&str] = &[
+pub(crate) const PASSKEY_OR_PLATFORM_AUTHENTICATOR_WORDS: &[&str] = &[
     "pass key",
     "passkey",
     "webauthn",
