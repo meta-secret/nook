@@ -331,6 +331,21 @@ export function formBlocksCredentialDisclosure(form: HTMLFormElement): boolean {
   );
 }
 
+export function formHasDialogSubmitter(form: HTMLFormElement): boolean {
+  return Array.from(
+    form.ownerDocument.querySelectorAll<HTMLElement>(
+      authenticationAdvanceControlSelector,
+    ),
+  ).some((control) => {
+    const owner = associatedAuthenticationForm(control);
+    return (
+      owner.kind === PasswordFormScopeKind.Owned &&
+      owner.owner === form &&
+      controlSubmissionMethod(control) === PageControlSubmissionMethod.Dialog
+    );
+  });
+}
+
 export function canRequestImplicitAuthenticationSubmit(
   form: HTMLFormElement,
   sourceOrigin: string,

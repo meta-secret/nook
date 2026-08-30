@@ -49,7 +49,9 @@ import {
   controlMachineIdentity,
   controlSubmissionMethod,
   formBlocksCredentialDisclosure,
+  formHasDialogSubmitter,
   formSubmissionMethod,
+  PageControlSubmissionMethod,
   isRenderedControl,
   observeSubmit,
   requestImplicitAuthenticationSubmit,
@@ -631,7 +633,7 @@ export function authenticationPageObservationFacts({
       implicitSubmissionMethod:
         observation.formScope.kind === PasswordFormScopeKind.Owned
           ? formSubmissionMethod(observation.formScope.owner)
-          : "absent",
+          : PageControlSubmissionMethod.Absent,
       advanceControl:
         observation.formScope.kind === PasswordFormScopeKind.Owned &&
         !advanceControls.some(
@@ -797,7 +799,11 @@ export function fillLoginCredentials(
   }
 
   const passwordField = passwordFields[0];
-  if (passwordField.form && formBlocksCredentialDisclosure(passwordField.form)) {
+  if (
+    passwordField.form &&
+    (formBlocksCredentialDisclosure(passwordField.form) ||
+      formHasDialogSubmitter(passwordField.form))
+  ) {
     return false;
   }
   if (usernameField) {
