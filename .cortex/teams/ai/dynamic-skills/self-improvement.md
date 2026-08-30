@@ -293,100 +293,30 @@ architecture.
 
 ## Workflow improvement review
 
-Use reflection to find repeated workflow policy that can become reliable
-execution.
-
-Run this review when session evidence reveals:
-
-- duplicated workflow prose;
-- repeated manual mechanical steps;
-- recurring independent investigations;
-- unclear ownership between Cortex, Task, and Loom; or
-- workflow friction that increased delivery cost or risk.
-
-Do not run a broad workflow audit for every substantial task. Keep a local
-review to the touched workflow and its one-hop authorities. Use the compiled
-Cortex full-garbage-collection workflow when two or more document families need
-independent evidence.
+Review the touched workflow and its one-hop authorities when evidence reveals
+duplicated prose, repeated deterministic work, unclear ownership, or recurring
+friction. Do not run a broad workflow audit merely because a task was
+substantial.
 
 ### Instruction classification
 
-Classify each candidate instruction before changing its owner.
-
-- **Semantic policy or judgment:** Keep it in the owning Cortex authority.
-  - Examples include tradeoffs, classification, architectural synthesis, and
-    exception handling.
-- **Deterministic leaf:** Move it to Loom, Task, or another typed tool.
-  - Its output must follow entirely from declared inputs.
-  - Do not create an agent task for a mechanical assertion.
-- **Bounded semantic task:** Delegate it when the generic delegation criteria
-  are satisfied.
-  - Give each worker the same exact baseline.
-  - Keep the worker read-only or give it an isolated disjoint write scope.
-  - Define inputs, typed or structured output, acceptance evidence, and the
-    parent-owned join before dispatch.
-- **Compiled workflow candidate:** Consider it only when task identities,
-  dependencies, parallel groups, joins, resources, timeouts, results, and
-  terminal routes are stable.
-- **Delivery-owner-only action:** Return shared-edit and synthesis evidence to
-  Gizmo. Gizmo owns Workbench, GitHub, readiness, and merge.
-- **Ephemeral instruction:** Reject it when it is task-specific, speculative,
-  or insufficiently evidenced.
-
-Follow [Subagent delegation](../../../gizmo/workflows/subagent-delegation.md) for the full
-worker contract and safe parallelism rules.
+- Keep semantic policy and judgment in the owning Cortex authority.
+- Move deterministic assertions to Loom, Task, or another typed tool.
+- Delegate bounded semantic evidence only under the canonical
+  [subagent contract](../../../gizmo/workflows/subagent-delegation.md).
+- Return shared-edit and synthesis decisions to Gizmo.
+- Reject task-specific or speculative instructions.
 
 ### Loom extraction procedure
 
-1. Find the owning workflow through the root or responsible team graph.
-2. Inspect its linked skill, Loom reference, Task entrypoint, tests, and current
-   implementation evidence.
-3. Search the existing Loom leaf tools and compiled workflow catalog before
-   proposing new machinery.
-4. Record duplicated steps and classify each instruction using the categories
-   above.
-5. Identify independent semantic lanes.
-   - Parallelize only lanes with the same immutable baseline.
-   - Require non-overlapping resources and independent acceptance evidence.
-   - Define the join before dispatch.
-6. Move deterministic assertions into a typed leaf.
-7. Use bounded subagents for semantic evidence collection.
-8. Promote a repeated stable graph only as a reviewed TypeScript catalog
-   change.
-   - Define fixed task IDs and dependency edges.
-   - Define explicit parallel targets and joins.
-   - Define read and write resource claims.
-   - Define timeouts, result types, terminal routes, and skipped results.
-9. Keep runtime inputs bounded to a reviewed catalog entry, an exact source
-   commit, and declared scalar values.
-10. Replace duplicated procedural prose with links to the canonical Cortex
-    authority and Loom entrypoint.
-11. Validate graph structure, dry-run projection, execution behavior, Cortex
-    coherence, and the updated exact head.
-
-Workflow processing views may inform reflection after their hashes and source
-identity are verified.
-
-They are execution evidence, not durable Cortex authority by themselves.
-
-- `workflow/processing/` keeps run events and semantic projections through
-  aggregation and handoff.
-- `.cortex/.session/` keeps disposable task reflection memory.
-- Promote a processing discovery only after Gizmo validates it
-  against code, tests, and the owning Cortex documents.
-
-The audit may propose a graph. Gizmo reviews it and assigns accepted Cortex
-changes to an AI team subagent.
+1. Find the owning workflow and inspect its linked implementation and tests.
+2. Classify duplicated instructions by the categories above.
+3. Move only fully deterministic behavior into a typed leaf.
+4. Replace duplicated procedure with a link to the canonical authority.
+5. Validate behavior and Cortex coherence.
 
 Never parse Markdown, YAML, prompts, session notes, or model output into
-executable topology. Never let a workflow rewrite its own compiled graph at
-runtime.
-
-The static graph boundary is defined in
-[Agent workflow orchestration](../design-docs/agent-workflow-orchestration.md).
-The existing `loom:agent-workflow:cortex-audit` SDK path is a legacy standalone
-reviewed read-only workflow outside Gizmo multi-team admission. It cannot claim,
-authorize, or execute the ordinary multi-team delegation contract.
+executable topology. Processing artifacts are evidence, not durable authority.
 
 ## Task lifecycle
 
@@ -496,7 +426,7 @@ For each candidate, record:
 - fixed inputs and outputs;
 - dependencies and possible parallel lanes;
 - resource claims;
-- the proposed Loom leaf, compiled workflow, or retained prose;
+- the proposed typed leaf or retained prose;
 - evidence and acceptance checks; and
 - why a rejected candidate should remain prose or ephemeral.
 
@@ -527,25 +457,13 @@ Before returning promotion and cleanup evidence to Gizmo:
 2. Run required formatters. Include every resulting mutation in the AI team's
    allowed paths.
 3. Run `task loom:cortex-audit` against the formatted promotion tree.
-4. For a broad multi-family review, the legacy standalone reviewed read-only
-   audit may run against the exact clean baseline:
-
-   ```bash
-   task loom:agent-workflow:cortex-audit BASELINE=<40-character-commit-sha>
-   ```
-
-   This command uses its own static scheduler and SDK path. It does not perform
-   Gizmo admission, does not prove the ordinary multi-team contract, and must
-   not be used for implementation delegation.
-
-5. For a compiled workflow change, validate its dry run and focused behavior.
-6. Delete the local session file.
-7. Run `task loom:cortex-session-clean`.
-8. Confirm `git ls-files .cortex/.session` prints nothing.
-9. If any formatter changed the tree after step 3, rerun
-   `task loom:cortex-audit` and repeat steps 6-8 before committing.
-10. Commit the coherent audited promotion handoff. Do not push it.
-11. Return the exact commit, worker-focused proof, promotion, and cleanup
+4. Delete the local session file.
+5. Run `task loom:cortex-session-clean`.
+6. Confirm `git ls-files .cortex/.session` prints nothing.
+7. If any formatter changed the tree after step 3, rerun
+   `task loom:cortex-audit` and repeat steps 4-6 before committing.
+8. Commit the coherent audited promotion handoff. Do not push it.
+9. Return the exact commit, worker-focused proof, promotion, and cleanup
     evidence to Gizmo.
 
 Do not add broad local builds, tests, e2e, container product gates, or duplicate

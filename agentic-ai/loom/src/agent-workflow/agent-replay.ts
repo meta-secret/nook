@@ -5,7 +5,6 @@ import {
   DelegatedAgentWorkflowName,
   MaterializedViewAuthorKind,
   MaterializedViewPresence,
-  StaticAgentWorkflowName,
   TaskTerminalKind,
 } from './domain.ts';
 import { WorkflowRuntimeActivityKind } from './events.ts';
@@ -42,10 +41,9 @@ const VIEW_AUTHOR_KINDS = new Set<string>(
   Object.values(MaterializedViewAuthorKind),
 );
 const PARENT_KINDS = new Set<string>(Object.values(AgentAttemptParentKind));
-const PROCESSING_WORKFLOW_NAMES = new Set<string>([
-  ...Object.values(StaticAgentWorkflowName),
-  ...Object.values(DelegatedAgentWorkflowName),
-]);
+const PROCESSING_WORKFLOW_NAMES = new Set<string>(
+  Object.values(DelegatedAgentWorkflowName),
+);
 const MAX_RUNTIME_ACTIVITY_DETAIL_LENGTH = 1024;
 
 export function replayAgentAttemptJournal(

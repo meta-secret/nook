@@ -46,23 +46,6 @@ export type AgentSourceStabilityCheck = {
   readonly phase: AgentSourceStabilityPhase;
 };
 
-export class CodexSdkAgentRuntime<
-  TTask extends string,
-  TAgent extends string,
-> implements AgentTaskRuntime<TTask, TAgent> {
-  readonly codex = new Codex();
-
-  async executeAgent(
-    invocation: AgentExecutionInvocation<TTask, TAgent>,
-  ): Promise<AgentExecutionCompletion> {
-    const execution: GuardedAgentExecution<TTask, TAgent> = {
-      codex: this.codex,
-      invocation,
-    };
-    return executeGuardedAgent(execution);
-  }
-}
-
 export class ModuleExpertCodexSdkAgentRuntime<
   TTask extends string,
   TAgent extends string,

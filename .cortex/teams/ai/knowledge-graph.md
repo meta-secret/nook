@@ -12,7 +12,6 @@ Use these documents for AI runtime design and read-only expert routing.
 
 - [Module expert registry](architecture/module-experts.md)
 - [Structural refactoring expert registry](architecture/refactoring-experts.md)
-- [Agent workflow orchestration](design-docs/agent-workflow-orchestration.md)
 - [Core agent-first beliefs](design-docs/core-beliefs.md)
 - [Design document catalog](design-docs/index.md)
 
@@ -55,4 +54,4 @@ Use these workflows for AI-owned skills and cross-package changes.
 
 ## Loom reference
 
-- [Loom tools and static agent workflows](references/loom-tools.md)
+- [Loom tools and admission](references/loom-tools.md)

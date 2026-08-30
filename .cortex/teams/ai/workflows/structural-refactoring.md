@@ -84,20 +84,11 @@ entrypoint, skills, or context. When resolving a finding requires foreign-team
 semantic ownership, it reports the dependency and Gizmo routes the responsible
 team.
 
-The existing compiled full Cortex garbage-collection workflow may be used when
-two or more document families need independent diagnostic observations. Its
-legacy `FindingSynthesizer` / `CortexSynthesis` lane is documented in
-[agent workflow orchestration](../design-docs/agent-workflow-orchestration.md)
-and is separate from the structural lane below. Neither is ordinary admitted
-delegation.
-
 ## Synthesize system coherence
 
 This section defines the legacy `loom-structural-experts`
 `system_coherence_synthesizer` and its `SystemCoherenceSynthesis` diagnostic
-result. It is not the `loom:agent-workflow:cortex-audit` aggregator; that static
-workflow uses `FindingSynthesizer` and `CortexSynthesis` under a separate
-all-terminal diagnostic contract.
+result. It is not ordinary admitted delegation.
 
 ### Readiness
 
@@ -150,7 +141,8 @@ Gizmo reviews every finding before assigning edits.
 6. Assign dependent consumer changes after their provider contract is
    accepted.
 7. Update canonical Cortex cards when durable guidance changes.
-8. Update the owning knowledge graph when document headings or paths change.
+8. Update the owning knowledge graph when document ownership, path, or
+   discoverability changes.
 9. Run the validation owned by each edit group.
 
 Shared registries, lockfiles, generated bindings, and lifecycle state remain
@@ -161,7 +153,7 @@ serialized.
 A proposal moves into Loom or Task only through a reviewed implementation.
 
 1. Prove that output follows entirely from declared inputs.
-2. Search existing typed leaves and compiled workflows.
+2. Search existing typed leaves and deterministic tools.
 3. Define typed input, output, and failure behavior.
 4. Add behavior-focused tests for the deterministic contract.
 5. Add or update the canonical Task entrypoint.
@@ -183,7 +175,7 @@ A structural refactor is complete when:
 - legacy material is removed or labeled historical;
 - deterministic mechanics have typed enforcement or remain explicit proposals;
 - tracked harness skill mirrors remain absent;
-- the knowledge graph matches the final headings;
+- the knowledge graph indexes every owned document exactly once;
 - the updated exact head passes its required gates.
 
 Running the same semantic audit again should not propose equivalent churn.

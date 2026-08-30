@@ -6,9 +6,9 @@ import { describe, expect, test } from 'bun:test';
 import {
   AgentAttemptAdapterKind,
   AgentAttemptParentKind,
+  DelegatedAgentWorkflowName,
   MaterializedViewAuthorKind,
   MaterializedViewPresence,
-  StaticAgentWorkflowName,
   TaskTerminalKind,
   WorkflowResultKind,
 } from '../../src/agent-workflow/domain.ts';
@@ -162,7 +162,7 @@ describe('agent attempt journal', () => {
         event.kind === AgentAttemptEventKind.AttemptTerminalRecorded
           ? {
               ...event,
-              adapter: AgentAttemptAdapterKind.GenericDelegationRecorder,
+              adapter: AgentAttemptAdapterKind.ModuleExpertInvocation,
             }
           : event,
       );
@@ -331,7 +331,7 @@ describe('agent attempt journal', () => {
     const legacyWithoutAdapter = {
       kind: AgentAttemptEventKind.AttemptStarted,
       runId: 'run-1',
-      workflow: StaticAgentWorkflowName.CortexFullGarbageCollection,
+      workflow: DelegatedAgentWorkflowName.AgentWork,
       workflowVersion: LEGACY_AGENT_ATTEMPT_WORKFLOW_VERSION,
       sourceCommit: SOURCE_COMMIT,
       task: 'inspect',
@@ -369,10 +369,10 @@ describe('agent attempt journal', () => {
 
 function configuration(runDirectory: string): AgentAttemptJournalConfiguration {
   return {
-    adapter: AgentAttemptAdapterKind.StaticWorkflowScheduler,
+    adapter: AgentAttemptAdapterKind.GenericDelegationRecorder,
     runDirectory,
     runId: 'run-1',
-    workflow: StaticAgentWorkflowName.CortexFullGarbageCollection,
+    workflow: DelegatedAgentWorkflowName.AgentWork,
     workflowVersion: CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
     sourceCommit: SOURCE_COMMIT,
     task: 'inspect',

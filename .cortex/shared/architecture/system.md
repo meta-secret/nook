@@ -361,38 +361,9 @@ See [architecture/engineering-harness.md](../../teams/sre/architecture/engineeri
 - **Ownership boundaries:** Agent workflow policy, scheduling, deterministic
   tools, and durable execution remain separate.
   - Cortex Markdown owns semantic delegation contracts.
-  - Loom owns deterministic tools and a legacy standalone reviewed read-only
-    static agent workflow engine outside Gizmo multi-team admission.
+  - Loom owns deterministic tools and typed admission calculations.
   - Hive owns durable task state and isolated execution.
   - One delivery owner integrates results and mutates shared lifecycle state.
-- **Compiled topology:** Loom agent workflows are compiled TypeScript
-  definitions in `agentic-ai/loom/src/agent-workflow/`.
-  - The separate workflow CLI selects one reviewed catalog entry.
-  - It does not accept graph topology from YAML.
-  - It does not generate topology from prompts or Cortex prose.
-  - The first entry is the read-only `cortex-full-garbage-collection` workflow.
-- **Current authority:** Local runs use an append-only event journal as their
-  run authority.
-  - The current static workflow implementation runs locally through its own
-    scheduler and SDK path. It cannot claim, authorize, or execute the ordinary
-    multi-team admission contract.
-  - It does not materialize Hive tasks.
-  - Every agent attempt owns a child action stream with explicit parent
-    lineage.
-  - Every completed agent authors a Markdown semantic view that Loom persists
-    and hashes.
-  - Parent materializers aggregate child views recursively until the root view
-    reaches the delivery owner.
-  - Local processing evidence lives under ignored `workflow/processing/`.
-- **Future authority:** A future Hive adapter will use Neo4j for durable
-  lifecycle authority.
-  - The local journal must not compete with Neo4j for scheduling authority.
-  - The experimental Lace fixture will be deleted after Loom runs the static
-    graph.
-
-See
-[design-docs/agent-workflow-orchestration.md](../../teams/ai/design-docs/agent-workflow-orchestration.md)
-for the staged architecture.
 
 Hive lives in `agentic-ai/minds/hive` and is deployed only through the
 domain-owned Hive commands flattened into the `infra/Taskfile.yml` command
