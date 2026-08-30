@@ -122,6 +122,23 @@ describe('classified login activation', () => {
     expect(submitted).toBe(true)
   })
 
+  test('implicitly submits a password-only step that has no username field', () => {
+    document.body.innerHTML = `
+      <form aria-label="Login" action="/session">
+        <input type="password" autocomplete="current-password" />
+        <button type="button">Show password</button>
+      </form>
+    `
+    let submitted = false
+    document.querySelector('form')?.addEventListener('submit', (event) => {
+      event.preventDefault()
+      submitted = true
+    })
+
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
+    expect(submitted).toBe(true)
+  })
+
   test('activates the Rust-approved type-button instead of posting the form action', () => {
     document.body.innerHTML = `
       <form id="login" action="/account/delete">

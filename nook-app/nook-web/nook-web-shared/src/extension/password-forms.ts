@@ -913,7 +913,9 @@ export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
   const nookTypedArgs0_26 = passwordFieldQuery(request);
   const passwordField = findPasswordFields(nookTypedArgs0_26)[0];
   const nookTypedArgs0_27 = passwordFieldQuery(request);
-  const usernameField = findUsernameFields(nookTypedArgs0_27)[0];
+  const usernameFields = findUsernameFields(nookTypedArgs0_27);
+  const usernameField = usernameFields[0];
+  const hasAuthenticationUsername = usernameFields.some(isAuthUsernameField);
   const anchor = passwordField ?? usernameField;
   if (!anchor) return false;
 
@@ -938,7 +940,7 @@ export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
         form,
         sourceOrigin,
         authenticationRouteDestination(destinationRequest),
-        isAuthUsernameField(usernameField),
+        hasAuthenticationUsername,
       )
     ) {
       return false;
@@ -968,7 +970,7 @@ export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
       form,
       sourceOrigin,
       authenticationRouteDestination(destinationRequest),
-      isAuthUsernameField(usernameField),
+      hasAuthenticationUsername,
     )
   ) {
     return false;

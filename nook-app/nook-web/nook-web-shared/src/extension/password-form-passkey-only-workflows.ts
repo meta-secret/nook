@@ -5,6 +5,8 @@ import {
   type PasswordFormScope,
 } from "./password-form-fields";
 import {
+  associatedAuthenticationForm,
+  controlIsInert,
   MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
   PasswordFormQueryKind,
   type PasswordFormScopeQuery,
@@ -81,9 +83,27 @@ export function summarizePasskeyOnlyWorkflowForms<Summary>(
     });
   }
   return observations
-    .sort(
-      // eslint-disable-next-line max-params -- Array.sort owns the comparator callback signature.
-      (left, right) => observationPriority(right) - observationPriority(left),
-    )
+    .sort((left, right) => {
+      const actionableDelta =
+        Number(observationHasActionablePasskey(right, passkeyCandidates)) -
+        Number(observationHasActionablePasskey(left, passkeyCandidates));
+      return actionableDelta === 0
+        ? observationPriority(right) - observationPriority(left)
+        : actionableDelta;
+    })
     .slice(0, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS);
+}
+
+function observationHasActionablePasskey<Summary>(
+  observation: PasskeyOnlyWorkflowObservation<Summary>,
+  passkeyCandidates: Array<{ control: HTMLElement }>,
+): boolean {
+  return passkeyCandidates.some(({ control }) => {
+    if (controlIsInert(control)) return false;
+    const owner = associatedAuthenticationForm(control);
+    return observation.formScope.kind === PasswordFormScopeKind.Owned
+      ? owner.kind === PasswordFormScopeKind.Owned &&
+          owner.owner === observation.formScope.owner
+      : owner.kind === PasswordFormScopeKind.Unowned;
+  });
 }
