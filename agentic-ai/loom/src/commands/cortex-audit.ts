@@ -19,6 +19,7 @@ import {
   auditCortexMarkdownSyntax,
   auditCortexDocumentStructure,
   CortexStructureFindingCode,
+  normalizedCortexMarkdown,
   type AuditCortexMarkdownSyntaxArgs,
   type AuditCortexDocumentStructureArgs,
   type CortexDocumentSource,
@@ -497,11 +498,10 @@ function isExecutableSkillScriptsDirectory(
 
 function readCortexMarkdown(filePath: string): string {
   const content = readFileSync(filePath, 'utf8');
-  return filePath.endsWith(`${path.sep}SKILL.md`)
-    ? content.replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/u, (frontmatter) =>
-        frontmatter.replace(/[^\r\n]/gu, ' '),
-      )
-    : content;
+  return normalizedCortexMarkdown({
+    relativePath: filePath.replaceAll(path.sep, '/'),
+    content,
+  });
 }
 
 function skillDiagnosticName(filePath: string): string {

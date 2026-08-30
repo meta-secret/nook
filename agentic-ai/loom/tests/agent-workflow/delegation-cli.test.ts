@@ -219,6 +219,37 @@ describe('delegated agent journal CLI', () => {
       );
       await expect(stat(attemptDirectory)).rejects.toThrow();
 
+      const extraTerminalFieldRequest = {
+        ...request,
+        terminal: {
+          ...request.terminal,
+          prompt: 'must not persist',
+        },
+      };
+      await writeFile(
+        requestPath,
+        JSON.stringify(extraTerminalFieldRequest),
+        'utf8',
+      );
+      const extraTerminalProcess = Bun.spawn(command, spawnOptions);
+      expect(await extraTerminalProcess.exited).not.toBe(0);
+      await new Response(extraTerminalProcess.stderr).text();
+      await expect(stat(attemptDirectory)).rejects.toThrow();
+
+      const mismatchedSourceRequest = {
+        ...request,
+        sourceCommit: SOURCE_COMMIT,
+      };
+      await writeFile(
+        requestPath,
+        JSON.stringify(mismatchedSourceRequest),
+        'utf8',
+      );
+      const mismatchedSourceProcess = Bun.spawn(command, spawnOptions);
+      expect(await mismatchedSourceProcess.exited).not.toBe(0);
+      await new Response(mismatchedSourceProcess.stderr).text();
+      await expect(stat(attemptDirectory)).rejects.toThrow();
+
       await writeFile(requestPath, JSON.stringify(request), 'utf8');
       const processResult = Bun.spawn(command, spawnOptions);
       const exitCode = await processResult.exited;

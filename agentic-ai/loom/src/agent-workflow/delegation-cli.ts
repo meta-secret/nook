@@ -369,6 +369,20 @@ function assertRequest(request: DelegationRecordRequest): void {
       'Delegation journal request identity or terminal is invalid.',
     );
   }
+  if (!terminalHasExactKeys(request.terminal)) {
+    throw new Error('Delegation journal request terminal is invalid.');
+  }
+  if (
+    (request.terminal.kind === TaskTerminalKind.Completed &&
+      (typeof request.terminal.threadId !== 'string' ||
+        request.terminal.threadId.trim() === '')) ||
+    (request.terminal.kind !== TaskTerminalKind.Completed &&
+      (typeof request.terminal.summary !== 'string' ||
+        request.terminal.summary.trim() === '' ||
+        request.terminal.summary.length > 4096))
+  ) {
+    throw new Error('Delegation journal request terminal is invalid.');
+  }
   for (const activity of request.activities) {
     if (
       !activity ||
@@ -400,7 +414,14 @@ function assertRequest(request: DelegationRecordRequest): void {
 function normalizedTerminal(
   terminal: TaskTerminal<string>,
 ): TaskTerminal<string> {
-  if (terminal.kind !== TaskTerminalKind.Completed) return terminal;
+  if (terminal.kind !== TaskTerminalKind.Completed) {
+    return {
+      kind: terminal.kind,
+      task: terminal.task,
+      attempt: terminal.attempt,
+      summary: terminal.summary,
+    };
+  }
   if (
     terminal.output.resultKind === WorkflowResultKind.ModuleExpertEvidence ||
     terminal.output.resultKind === WorkflowResultKind.CodeRefactoringEvidence ||
@@ -413,9 +434,24 @@ function normalizedTerminal(
     );
   }
   return {
-    ...terminal,
+    kind: terminal.kind,
+    task: terminal.task,
+    attempt: terminal.attempt,
+    threadId: terminal.threadId,
     output: decodeWorkflowTaskOutput(JSON.stringify(terminal.output)),
   };
+}
+
+function terminalHasExactKeys(terminal: TaskTerminal<string>): boolean {
+  const expected = new Set(
+    terminal.kind === TaskTerminalKind.Completed
+      ? ['kind', 'task', 'attempt', 'threadId', 'output']
+      : ['kind', 'task', 'attempt', 'summary'],
+  );
+  const keys = Object.keys(terminal);
+  return (
+    keys.length === expected.size && keys.every((key) => expected.has(key))
+  );
 }
 
 function safeFilesystemIdentifier(value: string): boolean {

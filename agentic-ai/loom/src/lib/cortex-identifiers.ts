@@ -11,7 +11,10 @@ import {
   validCortexCategoryIdentifier,
   validCortexScopedIdentifier,
 } from '../agent-workflow/cortex-references.ts';
-import { markdownHeadingFragments } from './cortex-document-structure.ts';
+import {
+  markdownHeadingFragments,
+  normalizedCortexMarkdown,
+} from './cortex-document-structure.ts';
 
 export const CORTEX_IDENTIFIER_REGISTRY_PATH = '.cortex/identifiers.json';
 export const CORTEX_IDENTIFIER_SCHEMA_VERSION = 1;
@@ -196,13 +199,19 @@ export function registeredCortexIdentifiersAtCommit(
     stdio: ['ignore', 'pipe', 'ignore'],
   };
   try {
-    const serialized = execFileSync(
+    const checkoutCommit = execFileSync('git', ['rev-parse', 'HEAD'], options)
+      .trim()
+      .toLowerCase();
+    if (checkoutCommit !== args.sourceCommit.toLowerCase()) {
+      return new Set<string>();
+    }
+    const cortexChanges = execFileSync(
       'git',
-      ['show', `${args.sourceCommit}:${CORTEX_IDENTIFIER_REGISTRY_PATH}`],
+      ['status', '--porcelain', '--untracked-files=all', '--', '.cortex'],
       options,
     );
-    const registry = decodeCortexIdentifierRegistry(serialized);
-    return registry ? cortexIdentifierSet(registry) : new Set<string>();
+    if (cortexChanges.trim() !== '') return new Set<string>();
+    return registeredCortexIdentifiers(args.repoRoot);
   } catch {
     return new Set<string>();
   }
@@ -301,11 +310,15 @@ function validEntryIdentifier(entry: CortexIdentifierEntry): boolean {
 
 function validateLocator(args: ValidateLocatorArgs): void {
   const [relativePath, fragment, ...extra] = args.entry.locator.split('#');
+  const locatorSegments = relativePath?.split('/') ?? [];
   if (
     extra.length > 0 ||
     !relativePath ||
     !relativePath.startsWith('.cortex/') ||
-    !relativePath.endsWith('.md')
+    !relativePath.endsWith('.md') ||
+    locatorSegments.includes('.session') ||
+    locatorSegments.includes('scripts') ||
+    locatorSegments.includes('node_modules')
   ) {
     args.findings.push(
       finding(`Cortex locator ${args.entry.locator} is invalid.`),
@@ -359,7 +372,12 @@ function validateLocator(args: ValidateLocatorArgs): void {
   }
   if (
     fragment &&
-    !markdownHeadingFragments(readFileSync(absolutePath, 'utf8')).has(fragment)
+    !markdownHeadingFragments(
+      normalizedCortexMarkdown({
+        relativePath,
+        content: readFileSync(absolutePath, 'utf8'),
+      }),
+    ).has(fragment)
   ) {
     args.findings.push(
       finding(`Cortex locator ${args.entry.locator} has no matching heading.`),

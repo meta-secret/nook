@@ -1,4 +1,11 @@
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import type { RmOptions } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -59,6 +66,12 @@ describe('Cortex identifiers', () => {
         'utf8',
       );
       await symlink('../outside', join(repoRoot, '.cortex', 'external'));
+      await mkdir(join(repoRoot, '.cortex', 'scripts'));
+      await writeFile(
+        join(repoRoot, '.cortex', 'scripts', 'README.md'),
+        '# Script package\n',
+        'utf8',
+      );
       const invalidRegistry = {
         schemaVersion: 1,
         entries: [
@@ -119,6 +132,14 @@ describe('Cortex identifiers', () => {
             title: 'Empty category',
             locator: '.cortex/policy.md',
           },
+          {
+            id: 'CX-AI-6W2Y4',
+            kind: CortexIdentifierKind.Document,
+            authority: 'script-package',
+            categoryId: 'CX-AI',
+            title: 'Script package',
+            locator: '.cortex/scripts/README.md',
+          },
         ],
       };
       await writeFile(registryPath, JSON.stringify(invalidRegistry), 'utf8');
@@ -131,6 +152,7 @@ describe('Cortex identifiers', () => {
           'Cortex locator .cortex/linked-policy.md does not name a regular Cortex document.',
           'Cortex locator .cortex/external/policy.md escapes the Cortex root.',
           'Cortex identifier CX-AI-5V9X2 has an invalid category.',
+          'Cortex locator .cortex/scripts/README.md is invalid.',
         ]),
       );
       const unknownReferenceArgs = {
@@ -182,6 +204,52 @@ describe('Cortex identifiers', () => {
         'utf8',
       );
       expect(auditCortexIdentifierRegistry(repoRoot).findings).toEqual([]);
+    } finally {
+      await rm(repoRoot, REMOVE_OPTIONS);
+    }
+  });
+
+  test('excludes skill frontmatter from registered fragments', async () => {
+    const repoRoot = await fixtureRepository();
+    try {
+      const skillRoot = join(repoRoot, '.cortex', 'skill');
+      await mkdir(skillRoot);
+      await writeFile(
+        join(skillRoot, 'SKILL.md'),
+        [
+          '---',
+          'name: synthetic',
+          'description: card',
+          '---',
+          '',
+          '# Skill card',
+          '',
+          '## Real guidance',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+      const registryPath = join(repoRoot, '.cortex', 'identifiers.json');
+      const registry = JSON.parse(await readFile(registryPath, 'utf8')) as {
+        schemaVersion: 1;
+        entries: Record<string, string>[];
+      };
+      registry.entries.push({
+        id: 'CX-AI-8M4P6',
+        kind: CortexIdentifierKind.Item,
+        authority: 'frontmatter-heading',
+        categoryId: 'CX-AI',
+        title: 'Frontmatter heading',
+        locator: '.cortex/skill/SKILL.md#name-synthetic-description-card',
+      });
+      await writeFile(registryPath, JSON.stringify(registry), 'utf8');
+      expect(
+        auditCortexIdentifierRegistry(repoRoot).findings.map(
+          (finding) => finding.message,
+        ),
+      ).toContain(
+        'Cortex locator .cortex/skill/SKILL.md#name-synthetic-description-card has no matching heading.',
+      );
     } finally {
       await rm(repoRoot, REMOVE_OPTIONS);
     }

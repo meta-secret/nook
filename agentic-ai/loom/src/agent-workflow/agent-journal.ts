@@ -233,6 +233,9 @@ export class AgentAttemptJournal<TTask extends string> {
     if (this.finalized) {
       throw new Error('Cannot append to a finalized agent attempt journal.');
     }
+    if (!eventHasExactKeys(event)) {
+      throw new Error('Agent attempt event fields are invalid.');
+    }
     if (
       event.kind === AgentAttemptEventKind.RuntimeActivity &&
       (event.detail.length > 1024 || containsForbiddenControl(event.detail))
@@ -515,6 +518,32 @@ export class AgentAttemptJournal<TTask extends string> {
       filename,
     );
   }
+}
+
+function eventHasExactKeys(event: AgentAttemptEventWithoutMetadata): boolean {
+  const expectedByKind: Record<AgentAttemptEventKind, ReadonlySet<string>> = {
+    [AgentAttemptEventKind.AttemptStarted]: new Set(['kind']),
+    [AgentAttemptEventKind.RuntimeActivity]: new Set([
+      'kind',
+      'activity',
+      'detail',
+      'cortexReferences',
+    ]),
+    [AgentAttemptEventKind.ResultProjected]: new Set(['kind', 'result']),
+    [AgentAttemptEventKind.ViewProjected]: new Set(['kind', 'view']),
+    [AgentAttemptEventKind.AttemptTerminalRecorded]: new Set([
+      'kind',
+      'terminalKind',
+      'result',
+      'view',
+    ]),
+  };
+  const expected = expectedByKind[event.kind];
+  if (!expected) return false;
+  const keys = Object.keys(event);
+  return (
+    keys.length === expected.size && keys.every((key) => expected.has(key))
+  );
 }
 
 export function createModuleExpertAttemptJournal<TTask extends string>(

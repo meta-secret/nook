@@ -73,6 +73,23 @@ export type AuditCortexMarkdownSyntaxArgs = {
   readonly documents: readonly CortexDocumentSource[];
 };
 
+export type NormalizedCortexMarkdownArgs = {
+  readonly relativePath: string;
+  readonly content: string;
+};
+
+export function normalizedCortexMarkdown(
+  args: NormalizedCortexMarkdownArgs,
+): string {
+  return args.relativePath.endsWith('/SKILL.md') ||
+    args.relativePath === 'SKILL.md'
+    ? args.content.replace(
+        /^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/u,
+        (frontmatter) => frontmatter.replace(/[^\r\n]/gu, ' '),
+      )
+    : args.content;
+}
+
 type ValidateIndexArgs = {
   readonly indexDocument: ParsedDocument;
   readonly catalog: ReadonlyMap<string, ParsedDocument>;
