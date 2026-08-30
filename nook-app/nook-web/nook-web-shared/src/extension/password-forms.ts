@@ -921,10 +921,11 @@ function activateApprovedOwnedAdvanceControl(
     approved.click();
     return true;
   }
-  return observeSubmit({
+  observeSubmit({
     form,
     action: () => approved.click(),
   });
+  return true;
 }
 
 export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
