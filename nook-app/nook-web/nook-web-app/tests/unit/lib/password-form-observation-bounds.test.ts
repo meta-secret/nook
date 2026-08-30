@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, test } from 'vitest'
-import { classifiedAuthenticationWorkflowObservations } from '../../../../nook-web-shared/src/extension/password-form-classified-observations'
+import {
+  classifiedAuthenticationWorkflowObservations,
+  liveApprovedAuthenticationWorkflow,
+} from '../../../../nook-web-shared/src/extension/password-form-classified-observations'
 import {
   MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
   MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
@@ -614,5 +617,21 @@ describe('authentication observation bounds', () => {
         },
       ],
     })
+  })
+
+  test('rejects a previously approved workflow after its destination turns destructive', () => {
+    document.body.innerHTML = `
+      <form id="login" aria-label="Login" action="/auth/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+    const workflow = observedAuthenticationWorkflow()
+    expect(liveApprovedAuthenticationWorkflow(workflow)).toBeTruthy()
+    document
+      .querySelector('form')
+      ?.setAttribute('action', '/settings/delete-account')
+    expect(liveApprovedAuthenticationWorkflow(workflow)).toBe(false)
   })
 })
