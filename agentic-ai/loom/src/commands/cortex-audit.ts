@@ -34,7 +34,11 @@ import {
   type ExecutableSkillPackageFinding,
 } from '../executable-skills/repository.ts';
 import {
+  auditCortexIdentifierStability,
   auditCortexIdentifierRegistry,
+  CORTEX_IDENTIFIER_REGISTRY_PATH,
+  decodeCortexIdentifierRegistry,
+  type CortexIdentifierRegistry,
   type CortexIdentifierFinding,
 } from '../lib/cortex-identifiers.ts';
 export type CortexAuditReport = {
@@ -219,7 +223,19 @@ export async function runCortexAuditFromDirectory(
     : [];
 
   const prohibitedHarnessSkillPaths = trackedHarnessSkillPaths(repoRoot);
-  const identifierFindings = auditCortexIdentifierRegistry(repoRoot).findings;
+  const identifierAudit = auditCortexIdentifierRegistry(repoRoot);
+  const publishedRegistry = originMainIdentifierRegistry(repoRoot);
+  const stabilityFindings =
+    identifierAudit.registry && publishedRegistry
+      ? auditCortexIdentifierStability({
+          current: identifierAudit.registry,
+          published: publishedRegistry,
+        })
+      : [];
+  const identifierFindings = [
+    ...identifierAudit.findings,
+    ...stabilityFindings,
+  ];
 
   return {
     brokenLinks,
@@ -242,6 +258,26 @@ export async function runCortexAuditFromDirectory(
       articleStructureFindings.length === 0 &&
       identifierFindings.length === 0,
   };
+}
+
+function originMainIdentifierRegistry(
+  repoRoot: string,
+): CortexIdentifierRegistry | false {
+  const options: ExecFileSyncOptionsWithStringEncoding = {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  };
+  try {
+    const serialized = execFileSync(
+      'git',
+      ['show', `origin/main:${CORTEX_IDENTIFIER_REGISTRY_PATH}`],
+      options,
+    );
+    return decodeCortexIdentifierRegistry(serialized);
+  } catch {
+    return false;
+  }
 }
 
 const HARNESS_SKILL_ROOTS = [

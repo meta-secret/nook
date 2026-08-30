@@ -1,4 +1,4 @@
-import { existsSync, lstatSync, readFileSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import {
   asUntrustedYamlNode,
@@ -23,6 +23,7 @@ export enum CortexIdentifierKind {
 export type CortexIdentifierEntry = {
   readonly id: string;
   readonly kind: CortexIdentifierKind;
+  readonly authority: string;
   readonly categoryId?: string;
   readonly title: string;
   readonly locator: string;
@@ -41,6 +42,11 @@ export type CortexIdentifierFinding = {
 export type CortexIdentifierAudit = {
   readonly registry: CortexIdentifierRegistry | false;
   readonly findings: readonly CortexIdentifierFinding[];
+};
+
+export type AuditCortexIdentifierStabilityArgs = {
+  readonly current: CortexIdentifierRegistry;
+  readonly published: CortexIdentifierRegistry;
 };
 
 type ValidateEntriesArgs = {
@@ -109,6 +115,62 @@ export function cortexIdentifierSet(
   return new Set(registry.entries.map((entry) => entry.id));
 }
 
+export function decodeCortexIdentifierRegistry(
+  serialized: string,
+): CortexIdentifierRegistry | false {
+  let value: UntrustedYamlNode;
+  try {
+    value = asUntrustedYamlNode(JSON.parse(serialized) as UntrustedYamlNode);
+  } catch {
+    return false;
+  }
+  if (
+    !isRecord(value) ||
+    value.schemaVersion !== CORTEX_IDENTIFIER_SCHEMA_VERSION ||
+    !Array.isArray(value.entries)
+  ) {
+    return false;
+  }
+  const entries = value.entries.map(decodeEntry);
+  if (entries.some((entry) => entry === false)) return false;
+  return {
+    schemaVersion: CORTEX_IDENTIFIER_SCHEMA_VERSION,
+    entries: entries.filter(
+      (entry): entry is CortexIdentifierEntry => entry !== false,
+    ),
+  };
+}
+
+export function auditCortexIdentifierStability(
+  args: AuditCortexIdentifierStabilityArgs,
+): readonly CortexIdentifierFinding[] {
+  const currentById = new Map(
+    args.current.entries.map((entry) => [entry.id, entry]),
+  );
+  return args.published.entries.flatMap((publishedEntry) => {
+    const currentEntry = currentById.get(publishedEntry.id);
+    if (!currentEntry) {
+      return [
+        finding(
+          `Published Cortex identifier ${publishedEntry.id} was removed; retain its assignment or an explicit tombstone.`,
+        ),
+      ];
+    }
+    if (
+      currentEntry.kind !== publishedEntry.kind ||
+      currentEntry.categoryId !== publishedEntry.categoryId ||
+      currentEntry.authority !== publishedEntry.authority
+    ) {
+      return [
+        finding(
+          `Published Cortex identifier ${publishedEntry.id} was reassigned to a different authority.`,
+        ),
+      ];
+    }
+    return [];
+  });
+}
+
 export function registeredCortexIdentifiers(
   repoRoot: string,
 ): ReadonlySet<string> {
@@ -129,6 +191,8 @@ function decodeEntry(value: UntrustedYamlNode): CortexIdentifierEntry | false {
   const decodedKind = kind as CortexIdentifierKind;
   if (
     typeof value.id !== 'string' ||
+    typeof value.authority !== 'string' ||
+    !/^[a-z0-9][a-z0-9-]{1,63}$/u.test(value.authority) ||
     typeof value.title !== 'string' ||
     value.title.trim() === '' ||
     typeof value.locator !== 'string'
@@ -140,6 +204,7 @@ function decodeEntry(value: UntrustedYamlNode): CortexIdentifierEntry | false {
     return {
       id: value.id,
       kind: decodedKind,
+      authority: value.authority,
       title: value.title,
       locator: value.locator,
     };
@@ -148,6 +213,7 @@ function decodeEntry(value: UntrustedYamlNode): CortexIdentifierEntry | false {
   return {
     id: value.id,
     kind: decodedKind,
+    authority: value.authority,
     categoryId: value.categoryId,
     title: value.title,
     locator: value.locator,
@@ -217,8 +283,9 @@ function validateLocator(args: ValidateLocatorArgs): void {
     );
     return;
   }
-  const absolutePath = path.resolve(args.repoRoot, relativePath);
-  const cortexRoot = `${path.resolve(args.repoRoot, '.cortex')}${path.sep}`;
+  const realRepoRoot = realpathSync(args.repoRoot);
+  const absolutePath = path.resolve(realRepoRoot, relativePath);
+  const cortexRoot = `${realpathSync(path.resolve(realRepoRoot, '.cortex'))}${path.sep}`;
   if (path.posix.normalize(relativePath) !== relativePath) {
     args.findings.push(
       finding(`Cortex locator ${args.entry.locator} is not canonical.`),
@@ -237,6 +304,13 @@ function validateLocator(args: ValidateLocatorArgs): void {
       finding(
         `Cortex locator ${args.entry.locator} does not name a regular Cortex document.`,
       ),
+    );
+    return;
+  }
+  const realTarget = realpathSync(absolutePath);
+  if (!realTarget.startsWith(cortexRoot)) {
+    args.findings.push(
+      finding(`Cortex locator ${args.entry.locator} escapes the Cortex root.`),
     );
     return;
   }

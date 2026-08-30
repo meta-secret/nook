@@ -15,7 +15,9 @@ Full package docs: [`agentic-ai/loom/README.md`](../../../../agentic-ai/loom/REA
 `.cortex/identifiers.json` assigns stable compact identifiers to Cortex
 categories and selected documents or headings. Category IDs use `CX-<NAME>`;
 document and item IDs add a five-character random suffix. Published IDs are
-never reassigned when a title or locator changes.
+never removed or reassigned when a title or locator changes. Each entry carries
+an immutable authority key; the Cortex audit compares those assignments with
+the published `origin/main` registry.
 
 Every persisted agent-attempt event receives an action ID derived from its
 one-based event sequence, such as `a0002`. Runtime activities may attach bounded

@@ -48,6 +48,7 @@ describe('delegated agent journal CLI', () => {
           {
             id: 'CX-AI',
             kind: 'category',
+            authority: 'ai',
             title: 'AI',
             locator: '.cortex/knowledge-graph.md',
           },

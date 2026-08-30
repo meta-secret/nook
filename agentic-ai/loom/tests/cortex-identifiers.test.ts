@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
 import {
   auditCortexIdentifierRegistry,
+  auditCortexIdentifierStability,
   CortexIdentifierKind,
   cortexIdentifierSet,
 } from '../src/lib/cortex-identifiers.ts';
@@ -51,6 +52,13 @@ describe('Cortex identifiers', () => {
         '../outside.md',
         join(repoRoot, '.cortex', 'linked-policy.md'),
       );
+      await mkdir(join(repoRoot, 'outside'));
+      await writeFile(
+        join(repoRoot, 'outside', 'policy.md'),
+        '# Outside policy\n',
+        'utf8',
+      );
+      await symlink('../outside', join(repoRoot, '.cortex', 'external'));
       const invalidRegistry = {
         schemaVersion: 1,
         entries: [
@@ -58,6 +66,7 @@ describe('Cortex identifiers', () => {
           {
             id: 'CX-AI-4D7NQ',
             kind: CortexIdentifierKind.Document,
+            authority: 'document',
             categoryId: 'CX-AI',
             title: 'Document',
             locator: '.cortex/policy.md',
@@ -65,6 +74,7 @@ describe('Cortex identifiers', () => {
           {
             id: 'CX-AI-7K3M2',
             kind: CortexIdentifierKind.Item,
+            authority: 'missing-item',
             categoryId: 'CX-AI',
             title: 'Missing item',
             locator: '.cortex/policy.md#missing-item',
@@ -72,6 +82,7 @@ describe('Cortex identifiers', () => {
           {
             id: 'CX-AI-8M4P6',
             kind: CortexIdentifierKind.Document,
+            authority: 'duplicate-locator',
             categoryId: 'CX-AI',
             title: 'Duplicate locator',
             locator: '.cortex/policy.md',
@@ -79,6 +90,7 @@ describe('Cortex identifiers', () => {
           {
             id: 'CX-AI-9N5Q7',
             kind: CortexIdentifierKind.Document,
+            authority: 'noncanonical-locator',
             categoryId: 'CX-AI',
             title: 'Noncanonical locator',
             locator: '.cortex/nested/../policy.md',
@@ -86,9 +98,18 @@ describe('Cortex identifiers', () => {
           {
             id: 'CX-AI-2R6T8',
             kind: CortexIdentifierKind.Document,
+            authority: 'linked-locator',
             categoryId: 'CX-AI',
             title: 'Linked locator',
             locator: '.cortex/linked-policy.md',
+          },
+          {
+            id: 'CX-AI-3T7V9',
+            kind: CortexIdentifierKind.Document,
+            authority: 'linked-directory-locator',
+            categoryId: 'CX-AI',
+            title: 'Linked directory locator',
+            locator: '.cortex/external/policy.md',
           },
         ],
       };
@@ -100,6 +121,7 @@ describe('Cortex identifiers', () => {
           'Cortex locator .cortex/policy.md is duplicated.',
           'Cortex locator .cortex/nested/../policy.md is not canonical.',
           'Cortex locator .cortex/linked-policy.md does not name a regular Cortex document.',
+          'Cortex locator .cortex/external/policy.md escapes the Cortex root.',
         ]),
       );
       const unknownReferenceArgs = {
@@ -155,6 +177,50 @@ describe('Cortex identifiers', () => {
       await rm(repoRoot, REMOVE_OPTIONS);
     }
   });
+
+  test('rejects removal or reassignment of published identifiers', async () => {
+    const repoRoot = await fixtureRepository();
+    try {
+      const currentAudit = auditCortexIdentifierRegistry(repoRoot);
+      expect(currentAudit.registry).not.toBe(false);
+      if (!currentAudit.registry) throw new Error('Expected current registry.');
+      const published = {
+        ...currentAudit.registry,
+        entries: [
+          ...currentAudit.registry.entries,
+          {
+            id: 'CX-AI-8M4P6',
+            kind: CortexIdentifierKind.Document,
+            authority: 'retired-policy',
+            categoryId: 'CX-AI',
+            title: 'Retired policy',
+            locator: '.cortex/retired-policy.md',
+          },
+        ],
+      };
+      const reassigned = {
+        ...currentAudit.registry,
+        entries: currentAudit.registry.entries.map((entry) =>
+          entry.id === 'CX-AI-4D7NQ'
+            ? { ...entry, authority: 'different-policy' }
+            : entry,
+        ),
+      };
+      expect(
+        auditCortexIdentifierStability({
+          current: reassigned,
+          published,
+        }).map((finding) => finding.message),
+      ).toEqual(
+        expect.arrayContaining([
+          'Published Cortex identifier CX-AI-4D7NQ was reassigned to a different authority.',
+          'Published Cortex identifier CX-AI-8M4P6 was removed; retain its assignment or an explicit tombstone.',
+        ]),
+      );
+    } finally {
+      await rm(repoRoot, REMOVE_OPTIONS);
+    }
+  });
 });
 
 async function fixtureRepository(): Promise<string> {
@@ -178,6 +244,7 @@ async function fixtureRepository(): Promise<string> {
       {
         id: 'CX-AI-4D7NQ',
         kind: CortexIdentifierKind.Document,
+        authority: 'policy',
         categoryId: 'CX-AI',
         title: 'Policy',
         locator: '.cortex/policy.md',
@@ -185,6 +252,7 @@ async function fixtureRepository(): Promise<string> {
       {
         id: 'CX-AI-7K3M2',
         kind: CortexIdentifierKind.Item,
+        authority: 'event-evidence',
         categoryId: 'CX-AI',
         title: 'Event evidence',
         locator: '.cortex/policy.md#event-evidence',
@@ -203,6 +271,7 @@ function categoryEntry(): Record<string, string> {
   return {
     id: 'CX-AI',
     kind: CortexIdentifierKind.Category,
+    authority: 'ai',
     title: 'AI',
     locator: '.cortex/knowledge-graph.md',
   };

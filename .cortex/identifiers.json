@@ -4,48 +4,56 @@
     {
       "id": "CX-GIZ",
       "kind": "category",
+      "authority": "gizmo-prime",
       "title": "Gizmo Prime",
       "locator": ".cortex/gizmo/knowledge-graph.md"
     },
     {
       "id": "CX-AI",
       "kind": "category",
+      "authority": "ai",
       "title": "AI",
       "locator": ".cortex/teams/ai/knowledge-graph.md"
     },
     {
       "id": "CX-CORE",
       "kind": "category",
+      "authority": "development-core",
       "title": "Development core",
       "locator": ".cortex/teams/dev-core/knowledge-graph.md"
     },
     {
       "id": "CX-SEC",
       "kind": "category",
+      "authority": "security",
       "title": "Security",
       "locator": ".cortex/teams/security/knowledge-graph.md"
     },
     {
       "id": "CX-SRE",
       "kind": "category",
+      "authority": "sre",
       "title": "SRE",
       "locator": ".cortex/teams/sre/knowledge-graph.md"
     },
     {
       "id": "CX-WEB",
       "kind": "category",
+      "authority": "web-development",
       "title": "Web development",
       "locator": ".cortex/teams/web-dev/knowledge-graph.md"
     },
     {
       "id": "CX-SHARED",
       "kind": "category",
+      "authority": "shared",
       "title": "Shared",
       "locator": ".cortex/shared/knowledge-graph.md"
     },
     {
       "id": "CX-AI-4D7NQ",
       "kind": "document",
+      "authority": "loom-tools",
       "categoryId": "CX-AI",
       "title": "Loom tools",
       "locator": ".cortex/teams/ai/references/loom-tools.md"
@@ -53,6 +61,7 @@
     {
       "id": "CX-AI-7K3M2",
       "kind": "item",
+      "authority": "agent-action-references",
       "categoryId": "CX-AI",
       "title": "Agent action references",
       "locator": ".cortex/teams/ai/references/loom-tools.md#agent-action-references"
