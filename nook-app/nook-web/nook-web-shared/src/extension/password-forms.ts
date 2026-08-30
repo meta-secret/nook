@@ -4,7 +4,6 @@ import {
   authentication_page_observation_facts_priority,
   authentication_passkey_control_candidate_is_safe,
   looks_like_one_time_code_auto_submit_signal,
-  strongest_authentication_username_evidence,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import type {
   AuthenticationAdvanceControlObservation,
@@ -15,7 +14,6 @@ import type {
   AuthenticationUsernameEvidence,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
-  authenticationUsernameEvidence,
   findPasskeyControls,
   findOneTimeCodeFields,
   findPasswordFields,
@@ -29,6 +27,7 @@ import {
   pageHasPasskeyControl,
   PasskeyControlLookupKind,
   PasswordFormScopeKind,
+  usernameEvidence,
 } from "./password-form-fields";
 import type {
   ControlObservationAssociationRequest,
@@ -300,19 +299,6 @@ function scopedAdvanceControls(
   });
 }
 
-function usernameEvidence(
-  observation: PasswordFormObservation,
-): AuthenticationUsernameEvidence {
-  const usernameQuery: Parameters<typeof findUsernameFields>[0] = {
-    root: observation.root,
-    formScope: observation.formScope,
-  };
-  const evidence = findUsernameFields(usernameQuery).map(
-    authenticationUsernameEvidence,
-  );
-  return strongest_authentication_username_evidence(evidence);
-}
-
 type PageControlObservationRequest = {
   observation: PasswordFormObservation;
   control: HTMLElement;
@@ -369,9 +355,8 @@ function transportableControlObservation(
 ): AuthenticationAdvanceControlObservation[] {
   const observation = pageControlObservation(request);
   if (
-    submissionMethodBlocksCredentialDisclosure(
-      observation.submissionMethod || PageControlSubmissionMethod.Absent,
-    )
+    observation.submissionMethod === PageControlSubmissionMethod.Get ||
+    observation.submissionMethod === PageControlSubmissionMethod.Dialog
   )
     return [];
   return authenticationFactStringsAreTransportable([
@@ -954,13 +939,25 @@ function activateApprovedOwnedAdvanceControl({
       submitted: true,
     };
   }
-  const submission: Parameters<typeof observeSubmit>[0] = {
+  const clickSubmission: Parameters<typeof observeSubmit>[0] = {
     form,
-    action: () => form.requestSubmit(approved),
+    action: () => approved.click(),
   };
+  const submitted = observeSubmit(clickSubmission);
+  if (
+    !submitted &&
+    approved instanceof HTMLInputElement &&
+    approved.type === "image"
+  ) {
+    clickSubmission.action = () => form.requestSubmit(approved);
+    return {
+      kind: OwnedAdvanceControlActivationKind.Activated,
+      submitted: observeSubmit(clickSubmission),
+    };
+  }
   return {
     kind: OwnedAdvanceControlActivationKind.Activated,
-    submitted: observeSubmit(submission),
+    submitted,
   };
 }
 

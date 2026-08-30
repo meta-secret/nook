@@ -94,6 +94,8 @@ export const MAX_AUTHENTICATION_CONTROL_TEXT_BYTES = 512;
 export const MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT = 100;
 export const MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS = 20;
 
+type SemanticSubmitControlList = HTMLElement[];
+
 function utf8ByteLength(value: string): number {
   return new TextEncoder().encode(value).length;
 }
@@ -227,9 +229,28 @@ function isDisabledByAncestorFieldset(control: HTMLElement): boolean {
   return false;
 }
 
+function controlHasDisabledProperty(
+  control: HTMLElement,
+): control is
+  | HTMLButtonElement
+  | HTMLInputElement
+  | HTMLSelectElement
+  | HTMLTextAreaElement
+  | HTMLFieldSetElement
+  | HTMLOptionElement {
+  return (
+    control instanceof HTMLButtonElement ||
+    control instanceof HTMLInputElement ||
+    control instanceof HTMLSelectElement ||
+    control instanceof HTMLTextAreaElement ||
+    control instanceof HTMLFieldSetElement ||
+    control instanceof HTMLOptionElement
+  );
+}
+
 export function controlIsEffectivelyDisabled(control: HTMLElement): boolean {
   return (
-    control.matches(":disabled") ||
+    (controlHasDisabledProperty(control) && control.disabled) ||
     isDisabledByAncestorFieldset(control) ||
     control.getAttribute("aria-disabled") === "true" ||
     isDisabledByAncestorAria(control)
@@ -254,7 +275,9 @@ export function controlIsInert(control: HTMLElement): boolean {
   );
 }
 
-export function countedSemanticSubmitControls(controls: HTMLElement[]): number {
+export function countedSemanticSubmitControls(
+  controls: SemanticSubmitControlList,
+): number {
   return Math.min(
     controls.filter(
       (control) =>

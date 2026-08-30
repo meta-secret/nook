@@ -123,16 +123,54 @@ type TakePreferredPasskeyOnlyObservationsRequest<Summary> = {
   emptySummary: Summary;
 };
 
+type BoundedPriorityWorkflowEntry<Observation> = {
+  observation: Observation;
+  priority: number;
+  progressing: boolean;
+};
+
+type PreferredPasskeyObservationEntry<Summary> = {
+  observation: PasskeyOnlyWorkflowObservation<Summary>;
+  safe: boolean;
+  priority: number;
+};
+
+type UnownedPasskeyOnlyScope = {
+  root: ParentNode;
+  formScope: { kind: typeof PasswordFormScopeKind.Unowned };
+};
+
+type OwnedPasskeyOnlyScope = {
+  root: ParentNode;
+  formScope: {
+    kind: typeof PasswordFormScopeKind.Owned;
+    owner: HTMLFormElement;
+  };
+};
+
+type PasskeyControlCandidateList = PasskeyControlCandidate[];
+
+type RankedPasskeyObservationList<Observation> = Array<
+  RankedPasskeyObservation<Observation>
+>;
+
+type PreferredPasskeyObservationResult<Summary> = {
+  observation: PasskeyOnlyWorkflowObservation<Summary>;
+  safe: boolean;
+};
+
+type ObservationWithScope = {
+  root: ParentNode;
+  formScope: PasswordFormScope;
+};
+
 type TakeRankedWorkflowObservationsRequest<Observation> = {
   fieldBearing: Observation[];
   ranked: Array<RankedPasskeyObservation<Observation>>;
 };
 
 type ObservationHasSafePasskeyRequest<
-  Observation extends {
-    root: ParentNode;
-    formScope: PasswordFormScope;
-  },
+  Observation extends ObservationWithScope,
 > = {
   observation: Observation;
   passkeyCandidates: PasskeyControlCandidate[];
@@ -281,19 +319,22 @@ function ownedFormLooksProgressing({
 function takeBoundedPriorityWorkflows<
   Observation extends RankableWorkflowObservation,
 >(observations: Observation[]): Observation[] {
-  const selected: Array<{
-    observation: Observation;
-    priority: number;
-    progressing: boolean;
-  }> = [];
+  const selected: Array<BoundedPriorityWorkflowEntry<Observation>> = [];
   for (const observation of observations) {
     const priority = cheapWorkflowPriority(observation);
     const progressing = cheapWorkflowLooksProgressing(observation);
     if (selected.length < MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS * 2) {
-      selected.push({ observation, priority, progressing });
+      const selectedEntry: BoundedPriorityWorkflowEntry<Observation> = {
+        observation,
+        priority,
+        progressing,
+      };
+      selected.push(selectedEntry);
       continue;
     }
-    const lowest = selected.reduce((current, entry) => {
+    const lowest = selected.reduce((...pair) => {
+      const current = pair[0];
+      const entry = pair[1];
       if (entry.priority < current.priority) return entry;
       if (
         entry.priority === current.priority &&
@@ -308,11 +349,12 @@ function takeBoundedPriorityWorkflows<
       priority > lowest.priority ||
       (priority === lowest.priority && progressing && !lowest.progressing)
     ) {
-      selected[selected.indexOf(lowest)] = {
+      const replacement: BoundedPriorityWorkflowEntry<Observation> = {
         observation,
         priority,
         progressing,
       };
+      selected[selected.indexOf(lowest)] = replacement;
     }
   }
   return selected.map((entry) => entry.observation);
@@ -354,13 +396,17 @@ function collectPasskeyOnlyScopes({
       }),
     ),
   ];
-  const scopes: PasskeyOnlyScope[] = passkeyForms.map((form) => ({
-    root,
-    formScope: {
-      kind: PasswordFormScopeKind.Owned,
-      owner: form,
-    },
-  }));
+  const scopes: PasskeyOnlyScope[] = [];
+  for (const form of passkeyForms) {
+    const ownedScope: OwnedPasskeyOnlyScope = {
+      root,
+      formScope: {
+        kind: PasswordFormScopeKind.Owned,
+        owner: form,
+      },
+    };
+    scopes.push(ownedScope);
+  }
   const formlessPasskeys = passkeyCandidates.filter(({ control }) => {
     if (
       control instanceof HTMLButtonElement ||
@@ -382,18 +428,19 @@ function collectPasskeyOnlyScopes({
     ),
   ];
   for (const localRoot of localPasskeyRoots) {
-    scopes.push({
+    const unownedScope: UnownedPasskeyOnlyScope = {
       root: localRoot,
       formScope: {
         kind: PasswordFormScopeKind.Unowned,
       },
-    });
+    };
+    scopes.push(unownedScope);
   }
   return scopes;
 }
 
 function indexPasskeyCandidatesByScope(
-  passkeyCandidates: PasskeyControlCandidate[],
+  passkeyCandidates: PasskeyControlCandidateList,
 ): IndexedPasskeyCandidates {
   const owned = new Map<HTMLFormElement, PasskeyControlCandidate[]>();
   const unowned: PasskeyControlCandidate[] = [];
@@ -458,15 +505,10 @@ function takePreferredPasskeyOnlyObservations<Summary>({
   passkeyControlIsSafe,
   indexed,
   emptySummary,
-}: TakePreferredPasskeyOnlyObservationsRequest<Summary>): Array<{
-  observation: PasskeyOnlyWorkflowObservation<Summary>;
-  safe: boolean;
-}> {
-  const preferred: Array<{
-    observation: PasskeyOnlyWorkflowObservation<Summary>;
-    safe: boolean;
-    priority: number;
-  }> = [];
+}: TakePreferredPasskeyOnlyObservationsRequest<Summary>): Array<
+  PreferredPasskeyObservationResult<Summary>
+> {
+  const preferred: Array<PreferredPasskeyObservationEntry<Summary>> = [];
   for (const scope of scopes) {
     if (scopeHasPasswordField(scope)) {
       continue;
@@ -518,12 +560,19 @@ function takePreferredPasskeyOnlyObservations<Summary>({
     };
     const safe = observationHasSafePasskey(safetyRequest);
     const priority = observationPriority(observation);
+    const preferredEntry: PreferredPasskeyObservationEntry<Summary> = {
+      observation,
+      safe,
+      priority,
+    };
     if (preferred.length < MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS) {
-      preferred.push({ observation, safe, priority });
+      preferred.push(preferredEntry);
       continue;
     }
     if (!safe && !scopeHasOneTimeCodeField(scope)) continue;
-    const lowest = preferred.reduce((current, entry) => {
+    const lowest = preferred.reduce((...pair) => {
+      const current = pair[0];
+      const entry = pair[1];
       if (entry.priority < current.priority) return entry;
       if (entry.priority === current.priority && !entry.safe && current.safe) {
         return entry;
@@ -534,14 +583,14 @@ function takePreferredPasskeyOnlyObservations<Summary>({
       priority > lowest.priority ||
       (priority === lowest.priority && safe && !lowest.safe)
     ) {
-      preferred[preferred.indexOf(lowest)] = { observation, safe, priority };
+      preferred[preferred.indexOf(lowest)] = preferredEntry;
     }
   }
   return preferred;
 }
 
 function takeRankedPasskeyObservations<Observation>(
-  ranked: Array<RankedPasskeyObservation<Observation>>,
+  ranked: RankedPasskeyObservationList<Observation>,
 ): Observation[] {
   return ranked
     .sort((...pair) => {

@@ -11,6 +11,7 @@ import {
   looks_like_passkey_control_label,
   looks_like_username_field,
   parse_page_input_type,
+  strongest_authentication_username_evidence,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import type { AuthenticationUsernameEvidence } from "./nook-companion-wasm/nook_companion_wasm.js";
 
@@ -239,7 +240,9 @@ function associatedLabelText(field: HTMLInputElement): string {
 }
 
 function fieldIdentityId(field: HTMLInputElement): string {
-  return /username|email|login|account|identifier/i.test(field.id)
+  return /username|email|login|account|identifier|otp|totp|mfa|2fa|one-?time|verif/i.test(
+    field.id,
+  )
     ? field.id
     : "";
 }
@@ -323,6 +326,19 @@ function pageInputObservation({
     rawFieldIdentityText(field),
     loginContext,
   );
+}
+
+export function usernameEvidence(
+  observation: PasswordFieldQuery,
+): AuthenticationUsernameEvidence {
+  const usernameQuery: Parameters<typeof findUsernameFields>[0] = {
+    root: observation.root,
+    formScope: observation.formScope,
+  };
+  const evidence = findUsernameFields(usernameQuery).map(
+    authenticationUsernameEvidence,
+  );
+  return strongest_authentication_username_evidence(evidence);
 }
 
 export function authenticationUsernameEvidence(
@@ -687,6 +703,7 @@ export function localUnownedPasskeyContainer({
   const nearestRequest: UnownedAuthContainerRequest = { field, root };
   const nearest = nearestUnownedAuthContainer(nearestRequest);
   if (
+    nearest !== field &&
     nearest !== root &&
     nearest !== documentRoot.body &&
     nearest !== documentRoot.documentElement

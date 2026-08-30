@@ -55,7 +55,7 @@ export function observeAuthenticationSubmitValueAssignments(
   }
   const originalGet = descriptor.get;
   const originalSet = descriptor.set;
-  Object.defineProperty(HTMLInputElement.prototype, "value", {
+  const valueProperty: PropertyDescriptor = {
     configurable: true,
     enumerable: descriptor.enumerable,
     get() {
@@ -71,7 +71,8 @@ export function observeAuthenticationSubmitValueAssignments(
         onChange();
       }
     },
-  });
+  };
+  Object.defineProperty(HTMLInputElement.prototype, "value", valueProperty);
   return () => {
     Object.defineProperty(HTMLInputElement.prototype, "value", descriptor);
   };
