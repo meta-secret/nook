@@ -80,6 +80,15 @@ export function analyzeSkillHostSource(
       const dependency = posix.normalize(
         posix.join(posix.dirname(relativePath), node.moduleSpecifier.text),
       );
+      const crossSkill =
+        relativePath === HOST_REGISTRY &&
+        [`${ARTICLE_ROOT}action.ts`, `${ARTICLE_ROOT}domain.ts`].includes(
+          dependency,
+        );
+      if (crossSkill) {
+        erase(node);
+        return;
+      }
       if (!dependency.startsWith(HOST_ROOT))
         throw new Error('Host imports must remain inside its scripts project.');
     }
@@ -242,6 +251,7 @@ test('all tracked executable application sources pass the AST capability gate', 
 test('rejects dangerous capabilities from every host layer', async () => {
   const host = await Bun.file(join(REPOSITORY_ROOT, HOST_CLI)).text();
   const registry = `${HOST_ROOT}skill-action-registry.ts`;
+  const schema = `${HOST_ROOT}skill-schema-validator.ts`;
   const fixtures = [
     [HOST_CLI, 'process.env.SECRET;'],
     [HOST_CLI, 'const secret = "secret"; console.log(secret);'],
@@ -258,6 +268,7 @@ test('rejects dangerous capabilities from every host layer', async () => {
     [HOST_CLI, "import { readFileSync as fetch, statSync } from 'node:fs';"],
     [YAML_CODEC, "import x from 'arbitrary-package';"],
     [registry, "import { spawn } from 'node:child_process';"],
+    [schema, "void import('./skill-command-domain.ts');"],
   ] as const;
   for (const [path, source] of fixtures) {
     const request = { relativePath: path, source };

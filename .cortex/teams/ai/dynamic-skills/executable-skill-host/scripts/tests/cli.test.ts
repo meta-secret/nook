@@ -6,7 +6,10 @@ import {
   type FinalSkillCliResponseRequest,
   type RunSkillCliRequest,
 } from '../src/cli.ts';
-import { SKILL_TOOLS_LIST_INVOKE } from '../src/skill-action-registry.ts';
+import {
+  listDiscoverableSkillActions,
+  SKILL_TOOLS_LIST_INVOKE,
+} from '../src/skill-action-registry.ts';
 import {
   SkillCommandIssue,
   SkillCommandPhase,
@@ -52,7 +55,7 @@ function parseResponse(yaml: string): CliResponse {
   return Bun.YAML.parse(yaml) as CliResponse;
 }
 describe('provider-neutral executable skill YAML host', () => {
-  test('discovers the closed tools-list action', async () => {
+  test('discovers the closed tools-list and article audit actions', async () => {
     const request: RunSkillCliRequest = { argv: [] };
     const outcome = await runSkillCli(request);
     const response = parseResponse(outcome.yaml);
@@ -61,7 +64,7 @@ describe('provider-neutral executable skill YAML host', () => {
     expect(response.ok).toBe(true);
     const actions = response.result?.actions;
     if (!actions) throw new Error('Missing discovered actions.');
-    expect(actions).toHaveLength(1);
+    expect(actions).toHaveLength(2);
     const action = actions[0];
     if (!action) throw new Error('Missing tools-list action.');
     expect(action.description).not.toBeEmpty();
@@ -81,6 +84,24 @@ describe('provider-neutral executable skill YAML host', () => {
       const invocationRequest: RunSkillCliRequest = { argv };
       expect((await runSkillCli(invocationRequest)).exitCode).toBe(0);
     }
+  });
+  test('executes the article action through its validated provider contract', () => {
+    const action = listDiscoverableSkillActions().actions.at(1);
+    if (!action) throw new Error('Missing article action.');
+    const outcome = dispatchSkillYamlText(action.exampleYaml);
+    const response = parseResponse(outcome.yaml);
+    expect(outcome.exitCode).toBe(0);
+    expect(response.family).toBe(SkillRequestFamily.CortexArticleStructure);
+    expect(response.operation).toBe('audit');
+    expect(response.result).toMatchObject({ findings: [] });
+    const invalid = dispatchSkillYamlText(
+      action.exampleYaml.replace(
+        'documents:',
+        'secret: MARKER\n    documents:',
+      ),
+    );
+    expect(invalid.exitCode).toBe(2);
+    expect(invalid.yaml).not.toContain('MARKER');
   });
   test('executes tools-list and rejects CLI flags', async () => {
     const outcome = dispatchSkillYamlText('skillToolsList:\n  list: {}\n');
