@@ -16,8 +16,10 @@ import { cortexArticleAdapterViolatesBoundary } from './cortex-article-adapter-b
 import {
   assertConfigurationSourceBoundary,
   CORTEX_AUDIT,
+  expectedProviderReferences,
   isApplicationDependency,
   isAuthorizedApplicationEdge,
+  isConfigurationProviderPackage,
   LOOM_ARTICLE_ADAPTER,
   PROVIDER_APPLICATION,
   PROVIDER_DOMAIN,
@@ -57,20 +59,16 @@ import type {
   ActionDependencyResolution,
   ActionLoaderFixture,
   ActionRuntimeGraph,
-  ActionTranspilerOptions,
   ApplicationConsumerEdge,
   ConfigurationReference,
   ConfigurationReferenceRequest,
   GitHubActionDocument,
   PendingConfiguration,
 } from './skill-provider-config-types.ts';
-
 const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
 const EXECUTABLE_SOURCE_EXTENSION = /\.(?:[cm]?tsx?|[cm]?jsx?)$/u;
 const CONFIGURATION_SCRIPT_EXTENSION = /\.(?:[cm]?tsx?|[cm]?jsx?|sh)$/u;
-const actionTranspilerOptions: ActionTranspilerOptions = { loader: 'tsx' };
-const ACTION_IMPORT_SCANNER = new Bun.Transpiler(actionTranspilerOptions);
-
+const ACTION_IMPORT_SCANNER = new Bun.Transpiler({ loader: 'tsx' });
 export function configurationScriptPaths(
   graph: ConfigurationScriptGraph,
 ): readonly string[] {
@@ -580,7 +578,7 @@ test('only the Loom semantic adapter reaches the provider', async () => {
     executablePaths: new Set(
       tracked.filter((file) => file.mode === '100755').map((file) => file.path),
     ),
-    roots: configPaths.filter((path) => path !== PROVIDER_PACKAGE),
+    roots: configPaths.filter((path) => !isConfigurationProviderPackage(path)),
     sources: actionSources,
     symlinkPaths,
   };
@@ -596,13 +594,15 @@ test('only the Loom semantic adapter reaches the provider', async () => {
   expect(
     await configTestHelpers.pathsContainingProviderRoot(productionPaths),
   ).toEqual([LOOM_ARTICLE_ADAPTER]);
-  expect(
+  const providerReferences =
     await configTestHelpers.pathsContainingProviderRoot([
       ...configPaths,
       ...reachableActionPaths,
       ...reachableScriptPaths,
-    ]),
-  ).toEqual([PROVIDER_PACKAGE, LOOM_ARTICLE_ADAPTER].sort());
+    ]);
+  expect([...new Set(providerReferences)].sort()).toEqual(
+    expectedProviderReferences(allPaths),
+  );
   const activeAudit = await Bun.file(
     join(REPOSITORY_ROOT, 'agentic-ai/loom/src/commands/cortex-audit.ts'),
   ).text();

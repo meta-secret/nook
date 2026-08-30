@@ -4,7 +4,7 @@ import {
   type ConfigurationScriptGraph,
   type ExecutableProviderReferenceInspection,
 } from './skill-provider-executable-script.ts';
-import { PROVIDER_ROOT } from './skill-provider-config-application.ts';
+import { isApplicationDependency } from './skill-provider-config-application.ts';
 import { assertRunnableConfigurationBytes } from './skill-provider-config-commands.ts';
 
 const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
@@ -67,7 +67,7 @@ export async function pathsContainingProviderRoot(
     const source = await Bun.file(join(REPOSITORY_ROOT, path)).text();
     const inspection: ExecutableProviderReferenceInspection = { path, source };
     if (
-      path.includes(PROVIDER_ROOT) ||
+      isApplicationDependency(path) ||
       executableSourceReferencesProvider(inspection)
     )
       matches.push(path);

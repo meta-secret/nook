@@ -61,8 +61,10 @@ lifecycle authority. Run its project gate with `task skills:verify`.
 Run `task loom:verify` for the recursive AST capability audit and exact
 Loom-consumer boundary.
 
-The discoverable strict-YAML host, tools listing, and invocation command are a
-follow-up slice and are not exposed by the current application.
+Use `task skills:tools-list` for the closed action catalog and schemas. Use
+`task skills:run REQUEST_YAML='<strict-yaml>'` to pass one complete YAML
+document as one CLI argument. The host does not read request files or stdin.
+It returns validated data only; the active harness owns agent lifecycle.
 
 ## TypeScript domain structure
 
