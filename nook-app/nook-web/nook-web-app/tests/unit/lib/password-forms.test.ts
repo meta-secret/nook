@@ -363,9 +363,13 @@ describe('website one-time-code fields', () => {
     expect(authenticationFactAttributeFilter).toEqual(
       expect.arrayContaining([
         'alt',
+        'data-qa',
+        'data-testid',
         'inert',
         'onchange',
         'oninput',
+        'placeholder',
+        'readonly',
         'role',
         'title',
         'value',

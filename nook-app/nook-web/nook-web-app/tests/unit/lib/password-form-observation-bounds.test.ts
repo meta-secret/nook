@@ -182,6 +182,30 @@ describe('authentication observation bounds', () => {
     ).toBe(true)
   })
 
+  test('prefers Rust-valid OTP submit handlers when decoy requestSubmit strings fill the bound', () => {
+    const decoys = Array.from(
+      { length: MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT },
+      () =>
+        '<input autocomplete="one-time-code" oninput="validate_requestSubmit()" />',
+    ).join('')
+    document.body.innerHTML = `
+      <form id="otp-login" action="/mfa/challenge">
+        ${decoys}
+        <input autocomplete="one-time-code" oninput="this.form.submit()" />
+        <button type="submit">Verify code</button>
+      </form>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.ceremony.oneTimeCodeHandlerSignals[0]).toBe(
+      'oninput=this.form.submit()',
+    )
+  })
+
   test('uses the current page destination for form-less OTP auto-submit', () => {
     window.history.replaceState({}, '', '/login/verify')
     document.body.innerHTML = `

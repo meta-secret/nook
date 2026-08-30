@@ -3,6 +3,7 @@ import {
   authentication_advance_control_is_safe,
   authentication_form_observation_priority,
   authentication_passkey_control_candidate_is_safe,
+  looks_like_one_time_code_auto_submit_signal,
   strongest_authentication_username_evidence,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import type {
@@ -546,7 +547,7 @@ export function authenticationPageObservationFacts({
         return authenticationPolicyTextFits(signal) ? [signal] : [];
       }),
     ),
-    (signal) => signal.includes("requestSubmit"),
+    (signal) => looks_like_one_time_code_auto_submit_signal(signal),
   );
   let detailedAdvanceControl: AuthenticationPageObservationFacts["detailedAdvanceControl"] =
     { kind: PasskeyControlLookupKind.Absent };
