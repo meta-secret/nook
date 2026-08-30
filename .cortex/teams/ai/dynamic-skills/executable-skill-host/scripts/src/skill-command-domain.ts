@@ -40,9 +40,9 @@ export const SKILL_HOST_REQUEST_BYTE_LIMIT = 64 * 1_024;
 export type SkillStringSchema = {
   readonly type: `${SkillSchemaType.String}`;
   readonly enum?: readonly string[];
-  readonly maxLength?: number;
+  readonly maxUtf16CodeUnits?: number;
   readonly maxTrimmedLines?: number;
-  readonly maxTrimmedLineLength?: number;
+  readonly maxTrimmedLineUtf16CodeUnits?: number;
   readonly pattern?: string;
 };
 

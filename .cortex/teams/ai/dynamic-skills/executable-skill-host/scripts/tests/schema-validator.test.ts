@@ -100,13 +100,13 @@ test('uses bracket grammar for known hyphenated fields', () => {
   };
   expect(skillCommandPath(request)).toBe('root["known-field"]');
 });
-test('counts string limits in Unicode code points', () => {
+test('counts string limits in UTF-16 code units', () => {
   for (const [schema, accepted, rejected] of [
-    [{ type: SkillSchemaType.String, maxLength: 2 }, '😀a', '😀ab'],
+    [{ type: SkillSchemaType.String, maxUtf16CodeUnits: 2 }, '😀', '😀a'],
     [
-      { type: SkillSchemaType.String, maxTrimmedLineLength: 2 },
+      { type: SkillSchemaType.String, maxTrimmedLineUtf16CodeUnits: 2 },
+      '  😀  ',
       '  😀a  ',
-      '  😀ab  ',
     ],
   ] as const) {
     const acceptedRequest: SkillSchemaValidationRequest = {
