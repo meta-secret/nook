@@ -350,17 +350,13 @@ fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> 
     let issue_workflow = read(".cortex/gizmo/workflows/issues.md");
     let pull_request_workflow = read(".cortex/gizmo/workflows/pull-requests.md");
     let ownership_skill = read(".cortex/gizmo/dynamic-skills/agent-feature-ownership.md");
+    let normalized_agent_map = agent_map.split_whitespace().collect::<Vec<_>>().join(" ");
 
-    for required in [
-        "agents mutate only their owned feature",
-        "Another active agent's work is read-only",
-        "wait for an explicit user, owner, or orchestrator handoff",
-    ] {
-        assert!(
-            agent_map.contains(required),
-            "agent map is missing ownership guard: {required}"
-        );
-    }
+    assert!(
+        agent_map.contains("gizmo/dynamic-skills/agent-feature-ownership.md")
+            && normalized_agent_map.contains("Another active agent's work is read-only"),
+        "root routing must preserve the universal ownership boundary and link its authority"
+    );
 
     for required in [
         "Treat every other active task as read-only",
@@ -422,21 +418,13 @@ fn team_work_distinguishes_owner_vocabulary_from_implementation_expertise() -> a
         .collect::<Vec<_>>()
         .join(" ");
 
-    for required in [
-        "functional owner",
-        "expertise provider",
-        "explicit expertise contract",
-        "named consumer-team code and tests",
-        "smallest explicitly linked set of",
-        "foreign-team skills as required read-only engineering policy",
-        "read-only engineering policy",
-        "only when the foreign team will change files",
-    ] {
-        assert!(
-            normalized_agent_map.contains(required),
-            "root agent routing is missing matrix ownership contract: {required}"
-        );
-    }
+    assert!(
+        normalized_agent_map.contains("foreign-team skill as read-only engineering policy")
+            && normalized_agent_map
+                .contains("foreign-team writer requires an explicit expertise task")
+            && normalized_agent_map.contains("gizmo/AGENTS.md"),
+        "root routing must preserve the cross-team boundary and route operational details to Gizmo"
+    );
 
     assert!(
         document_map.contains("foreign-team implementation requirement")
@@ -756,7 +744,7 @@ fn workbench_plans_bind_trusted_slices_and_bounded_independence() {
 }
 
 #[test]
-fn substantial_agent_tasks_use_curated_session_memory() -> anyhow::Result<()> {
+fn cortex_promotions_use_optional_curated_session_memory() -> anyhow::Result<()> {
     let gitignore = read(".gitignore");
     let agent_map = read(".cortex/AGENTS.md");
     let coding_workflow = read(".cortex/gizmo/workflows/mission-delivery.md");
@@ -773,11 +761,12 @@ fn substantial_agent_tasks_use_curated_session_memory() -> anyhow::Result<()> {
         agent_map.contains("dynamic-skills/self-improvement.md")
             && coding_workflow.contains("dynamic-skills/self-improvement.md")
             && pull_request_workflow.contains("dynamic-skills/self-improvement.md"),
-        "agent entry points must invoke the canonical self-improvement skill"
+        "delivery entry points must link the canonical self-improvement skill"
     );
     assert!(
-        pull_request_workflow.contains("completion contract"),
-        "pull-request readiness must invoke the canonical completion contract"
+        pull_request_workflow.contains("self-improvement review")
+            && pull_request_workflow.contains("No promotion is required"),
+        "pull-request readiness must make evidence-backed promotion conditional"
     );
     for required in [
         "## Knowledge classification",

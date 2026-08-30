@@ -2,14 +2,15 @@
 
 ## Priority
 
-This is Nook's most critical code-structure rule. A violation is a P1
-architecture finding and blocks delivery.
+This is a hard, non-bypassable delivery gate. A violation is P1 and blocks
+delivery until the file is brought within the limit through a cohesive change.
 
 ## Purpose
 
 Keep authored source modules small enough to preserve clear ownership,
-dependency direction, reviewability, and behavior-focused testing. A hard-limit
-failure requires architectural refactoring, not cosmetic redistribution.
+dependency direction, reviewability, and behavior-focused testing. Crossing the
+threshold proves a gate violation; review still determines the cohesive domain
+or architectural seam needed to correct it.
 
 ## Hard Limits
 
@@ -18,11 +19,11 @@ failure requires architectural refactoring, not cosmetic redistribution.
   allowlists, baselines, grandfathered violations, or changed-file-only
   exceptions.
 
-Rust receives no larger allowance. A Rust file above 1,000 lines is evidence
-that its domain model is overcomplicated or the module owns too many production
-responsibilities. Colocated focused unit tests do not justify retaining an
-oversized production abstraction; decompose the production model and keep each
-new module's tests with the behavior it owns.
+Rust receives no larger allowance. A Rust file above 1,000 lines must be
+reviewed and decomposed along a cohesive domain or architectural seam; line
+count alone does not diagnose which responsibility is wrong. Colocated focused
+unit tests do not justify retaining an oversized production abstraction. Keep
+each new module's tests with the behavior it owns.
 
 ## Problem Pattern
 
@@ -126,9 +127,10 @@ crosses the uniform 1,000-line limit or Rust unit tests live in an external
 module under `src`. Its failure message directs the agent to architectural
 decomposition and explicitly rejects test-file and arbitrary splits.
 
-Static line counting cannot prove cohesion or dependency direction. Contract
-tests keep this critical guidance wired into Cortex and scanner diagnostics.
-Code review must verify the actual architectural seam.
+Static line counting proves only that the hard delivery gate passed or failed.
+It cannot prove cohesion, identify the defective responsibility, or establish
+dependency direction. Contract tests keep the limit wired into Cortex and
+scanner diagnostics; code review verifies the actual decomposition seam.
 
 ## Validation
 
