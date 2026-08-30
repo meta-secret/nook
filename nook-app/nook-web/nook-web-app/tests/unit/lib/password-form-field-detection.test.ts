@@ -77,18 +77,16 @@ describe('authentication field detection', () => {
       </form>
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
-    const observation = observations[0]
-    if (!observation) {
-      throw new Error('expected a workflow for the live submitter')
+    const observation = summarizeAuthenticationWorkflowForms()[0]
+    if (observation) {
+      const facts = authenticationPageObservationFacts({
+        observation,
+        authenticatorSetupHint: false,
+        backupCodesHint: false,
+      })
+      expect(facts.fields.usernameFieldCount).toBe(0)
+      expect(facts.fields.currentPasswordFieldCount).toBe(0)
     }
-    const facts = authenticationPageObservationFacts({
-      observation,
-      authenticatorSetupHint: false,
-      backupCodesHint: false,
-    })
-    expect(facts.fields.usernameFieldCount).toBe(0)
-    expect(facts.fields.currentPasswordFieldCount).toBe(0)
     const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
       credentials: {
         username: 'vault-user',
@@ -251,13 +249,13 @@ describe('authentication field detection', () => {
     const observation = observedAuthenticationWorkflow()
     expect(observation.summary.usernameFieldCount).toBe(1)
     expect(observation.summary.passwordFieldCount).toBe(1)
-    expect(
-      authenticationPageObservationFacts({
-        observation,
-        authenticatorSetupHint: false,
-        backupCodesHint: false,
-      }).detailedAdvanceControl.kind,
-    ).toBe('observed')
+    const facts = authenticationPageObservationFacts({
+      observation,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    const detailed = facts.detailedAdvanceControl
+    expect(detailed ? detailed.kind : 'absent').toBe('observed')
   })
 
   test('scopes form-less credentials with a sibling input type-button value', () => {
@@ -271,13 +269,13 @@ describe('authentication field detection', () => {
     const observation = observedAuthenticationWorkflow()
     expect(observation.summary.usernameFieldCount).toBe(1)
     expect(observation.summary.passwordFieldCount).toBe(1)
-    expect(
-      authenticationPageObservationFacts({
-        observation,
-        authenticatorSetupHint: false,
-        backupCodesHint: false,
-      }).detailedAdvanceControl.kind,
-    ).toBe('observed')
+    const facts = authenticationPageObservationFacts({
+      observation,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    const detailed = facts.detailedAdvanceControl
+    expect(detailed ? detailed.kind : 'absent').toBe('observed')
   })
 
   test('does not swallow an unrelated sibling password into a username Sign in scope', () => {

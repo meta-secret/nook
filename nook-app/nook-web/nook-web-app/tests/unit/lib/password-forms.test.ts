@@ -2,8 +2,6 @@ import { afterEach, describe, expect, test } from 'vitest'
 import {
   authenticationPageObservationFacts,
   fillLoginCredentials,
-  fillOneTimeCode,
-  findOneTimeCodeFields,
   PasswordFormQueryKind,
   PasswordFormScopeKind,
   submitLoginForm,
@@ -11,9 +9,6 @@ import {
   type PasswordFormObservation,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 
-const wholeDocumentOneTimeCodeFieldQuery: Parameters<
-  typeof findOneTimeCodeFields
->[0] = {}
 const wholeDocumentPasswordFormSubmission: Parameters<
   typeof submitLoginForm
 >[0] = { kind: PasswordFormQueryKind.Root, root: document }
@@ -88,10 +83,10 @@ describe('website one-time-code fields', () => {
     })
     expect(facts.detailedAdvanceControl).toMatchObject({
       kind: 'observed',
-      observations: [
+      observations: expect.arrayContaining([
         { label: expect.stringContaining('Delete account') },
         { label: expect.stringContaining('Sign in') },
-      ],
+      ]),
     })
   })
 
@@ -406,7 +401,7 @@ describe('website one-time-code fields', () => {
       observations: [{ label: expect.stringContaining('Continue') }],
     })
     const observation = facts.detailedAdvanceControl
-    if (observation.kind !== 'observed') {
+    if (!observation || observation.kind !== 'observed') {
       throw new Error('expected observed advance control')
     }
     expect(

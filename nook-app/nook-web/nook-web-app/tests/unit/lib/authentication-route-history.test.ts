@@ -34,6 +34,7 @@ describe('authentication route history', () => {
     })
 
     window.location.hash = '#/login'
+    window.dispatchEvent(new HashChangeEvent('hashchange'))
     stop()
     window.location.hash = '#/ignored'
 

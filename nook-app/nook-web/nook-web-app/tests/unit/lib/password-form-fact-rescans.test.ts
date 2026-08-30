@@ -212,7 +212,8 @@ describe('authentication fact rescans', () => {
       authenticatorSetupHint: false,
       backupCodesHint: false,
     })
-    expect(before.detailedAdvanceControl.kind).toBe('absent')
+    const beforeControl = before.detailedAdvanceControl
+    expect(beforeControl ? beforeControl.kind : 'absent').toBe('absent')
     document.querySelector('form')?.setAttribute('method', 'post')
     const after = authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),

@@ -141,7 +141,7 @@ export function controlDestinationIdentity(
 }
 
 export const authenticationAdvanceControlSelector =
-  'button[type="submit"], input[type="submit"], input[type="image"], button:not([type]), button[type="button"]';
+  'button[type="submit"], input[type="submit"], input[type="image"], button:not([type]), button[type="button"], input[type="button"]';
 
 export const semanticSubmitControlSelector =
   'button[type="submit"], input[type="submit"], input[type="image"], button:not([type])';
@@ -329,12 +329,17 @@ export function formUsesGetSubmission(form: HTMLFormElement): boolean {
   return formSubmissionMethod(form) === PageControlSubmissionMethod.Get;
 }
 
-export function formBlocksCredentialDisclosure(form: HTMLFormElement): boolean {
-  const method = formSubmissionMethod(form);
+export function submissionMethodBlocksCredentialDisclosure(
+  method: PageControlSubmissionMethod,
+): boolean {
   return (
     method === PageControlSubmissionMethod.Get ||
     method === PageControlSubmissionMethod.Dialog
   );
+}
+
+export function formBlocksCredentialDisclosure(form: HTMLFormElement): boolean {
+  return submissionMethodBlocksCredentialDisclosure(formSubmissionMethod(form));
 }
 
 export function formHasDialogSubmitter(form: HTMLFormElement): boolean {
@@ -358,10 +363,8 @@ export function selectedSubmitterBlocksCredentialDisclosure(
   selectedSubmitter: LoginAdvanceControl | false,
 ): boolean {
   if (selectedSubmitter) {
-    const method = controlSubmissionMethod(selectedSubmitter);
-    return (
-      method === PageControlSubmissionMethod.Get ||
-      method === PageControlSubmissionMethod.Dialog
+    return submissionMethodBlocksCredentialDisclosure(
+      controlSubmissionMethod(selectedSubmitter),
     );
   }
   return formBlocksCredentialDisclosure(form) || formHasDialogSubmitter(form);
@@ -513,7 +516,7 @@ function canActivateAuthenticationRouteControl(
 export function clickAdvanceControl(
   request: LoginAdvanceControlRequest,
 ): boolean {
-  const ownedScope =
+  const ownedScope: PasswordFormScope =
     request.kind === PasswordFormQueryKind.Scoped &&
     request.formScope.kind === PasswordFormScopeKind.Owned
       ? { kind: PasswordFormScopeKind.Owned, owner: request.formScope.owner }
@@ -563,7 +566,7 @@ export function formHasSemanticSubmitter(form: HTMLFormElement): boolean {
     ) {
       return false;
     }
-    return control.form === form && !controlIsInert(control);
+    return control.form === form;
   });
 }
 

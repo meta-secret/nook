@@ -50,6 +50,7 @@ import {
   controlSubmissionMethod,
   formBlocksCredentialDisclosure,
   selectedSubmitterBlocksCredentialDisclosure,
+  submissionMethodBlocksCredentialDisclosure,
   formSubmissionMethod,
   PageControlSubmissionMethod,
   isRenderedControl,
@@ -253,14 +254,12 @@ const emptyPasswordFormSummary: PasswordFormSummary = {
 };
 
 function passwordFormPriority(observation: PasswordFormObservation): number {
-  const factsRequest: Parameters<typeof authenticationPageObservationFacts>[0] =
-    {
+  return authentication_page_observation_facts_priority(
+    authenticationPageObservationFacts({
       observation,
       authenticatorSetupHint: false,
       backupCodesHint: false,
-    };
-  return authentication_page_observation_facts_priority(
-    authenticationPageObservationFacts(factsRequest),
+    }),
   );
 }
 
@@ -440,12 +439,14 @@ function transportableControlObservation(
   request: PageControlObservationRequest,
 ): AuthenticationAdvanceControlObservation[] {
   const observation = pageControlObservation(request);
+  if (submissionMethodBlocksCredentialDisclosure(observation.submissionMethod))
+    return [];
   return authenticationFactStringsAreTransportable([
     observation.sourceOrigin,
     observation.formIdentity,
     observation.destinationIdentity,
     observation.label,
-    observation.machineIdentity,
+    controlMachineIdentity(request.control),
   ])
     ? [observation]
     : [];

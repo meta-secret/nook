@@ -202,7 +202,7 @@ function takeBoundedPriorityWorkflows<
   for (const observation of observations) {
     const priority = cheapWorkflowPriority(observation);
     const progressing = cheapWorkflowLooksProgressing(observation);
-    if (selected.length < MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS) {
+    if (selected.length < MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS * 2) {
       selected.push({ observation, priority, progressing });
       continue;
     }

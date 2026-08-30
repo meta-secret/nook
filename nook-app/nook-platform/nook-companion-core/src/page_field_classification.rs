@@ -118,8 +118,8 @@ const LOGIN_SURFACE_WORDS: &[&str] = &[
 ];
 
 const LOGIN_ADVANCE_WORDS: &[&str] = &[
-    "next", "continue", "signin", "sign-in", "sign in", "login", "log-in", "log in", "verify",
-    "entrar",
+    "next", "continue", "proceed", "signin", "sign-in", "sign in", "login", "log-in", "log in",
+    "verify", "entrar",
 ];
 
 const LOGIN_PATH_WORDS: &[&str] = &[
@@ -925,7 +925,7 @@ mod tests {
 
     #[test]
     fn login_advance_labels_require_authentication_words() {
-        for label in "Next|SignIn|signin|Sign   In|Login|Log\tin|Submit|Entrar|Entrar Entrar Entrar|Anmelden Anmelden Anmelden|Se connecter Se connecter Se connecter".split('|') {
+        for label in "Next|Proceed|SignIn|signin|Sign   In|Login|Log\tin|Submit|Entrar|Entrar Entrar Entrar|Anmelden Anmelden Anmelden|Se connecter Se connecter Se connecter".split('|') {
             assert!(looks_like_login_advance_control_label(label));
         }
         for label in "Learn more|Subscribe|Submit order|Continue to reset password|Entrar con Amazon|Entrar con Foo|Anmelden Anmelden Foo|Se connecter Se connecter Amazon|Continue with X".split('|') {

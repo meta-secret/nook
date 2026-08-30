@@ -32,6 +32,20 @@ function ownedFormId(observation: PasswordFormObservation): string {
     : ''
 }
 
+function detailedAdvance(
+  facts: ReturnType<typeof authenticationPageObservationFacts>,
+) {
+  const detailed = facts.detailedAdvanceControl
+  return detailed ? detailed : { kind: 'absent' as const }
+}
+
+function handlerSignals(
+  facts: ReturnType<typeof authenticationPageObservationFacts>,
+) {
+  const signals = facts.ceremony.oneTimeCodeHandlerSignals
+  return signals ? signals : []
+}
+
 afterEach(() => {
   document.body.replaceChildren()
 })
@@ -132,20 +146,20 @@ describe('authentication observation bounds', () => {
       authenticatorSetupHint: false,
       backupCodesHint: false,
     })
-    expect(facts.detailedAdvanceControl.kind).toBe('observed')
-    if (facts.detailedAdvanceControl.kind !== 'observed') {
+    const advance = detailedAdvance(facts)
+    if (advance.kind !== 'observed') {
       throw new Error('expected observed advance controls')
     }
-    expect(facts.detailedAdvanceControl.observations).toHaveLength(
+    expect(advance.observations).toHaveLength(
       MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
     )
     expect(
-      facts.detailedAdvanceControl.observations.some((candidate) =>
+      advance.observations.some((candidate) =>
         candidate.label.includes('Sign in'),
       ),
     ).toBe(true)
     expect(
-      facts.detailedAdvanceControl.observations.every(
+      advance.observations.every(
         (candidate) =>
           candidate.semanticSubmitControlCount <=
           MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
@@ -171,13 +185,11 @@ describe('authentication observation bounds', () => {
       authenticatorSetupHint: false,
       backupCodesHint: false,
     })
-    expect(facts.ceremony.oneTimeCodeHandlerSignals.length).toBe(
+    expect(handlerSignals(facts).length).toBe(
       MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
     )
     expect(
-      facts.ceremony.oneTimeCodeHandlerSignals.some((signal) =>
-        signal.includes('requestSubmit'),
-      ),
+      handlerSignals(facts).some((signal) => signal.includes('requestSubmit')),
     ).toBe(true)
   })
 
@@ -200,9 +212,7 @@ describe('authentication observation bounds', () => {
       authenticatorSetupHint: false,
       backupCodesHint: false,
     })
-    expect(facts.ceremony.oneTimeCodeHandlerSignals[0]).toBe(
-      'oninput=this.form.submit()',
-    )
+    expect(handlerSignals(facts)[0]).toBe('oninput=this.form.submit()')
   })
 
   test('uses the current page destination for form-less OTP auto-submit', () => {

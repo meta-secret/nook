@@ -27,6 +27,12 @@ function ownedFormId(observation: PasswordFormObservation): string {
     : ''
 }
 
+function observedAuthenticationWorkflow(): PasswordFormObservation {
+  const observation = summarizeAuthenticationWorkflowForms()[0]
+  if (!observation) throw new Error('expected an authentication workflow')
+  return observation
+}
+
 afterEach(() => {
   document.body.replaceChildren()
 })
