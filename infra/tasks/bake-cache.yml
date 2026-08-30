@@ -13,7 +13,77 @@ tasks:
     cmds:
       - |
         set -euo pipefail
-        docker_bin="${DOCKER:-docker}"
+        export PATH=/usr/bin:/bin
+        if [ -x /usr/local/bin/docker ]; then docker_cli=/usr/local/bin/docker
+        elif [ -x /usr/bin/docker ]; then docker_cli=/usr/bin/docker
+        elif [ -x /opt/homebrew/bin/docker ]; then docker_cli=/opt/homebrew/bin/docker
+        else
+          echo "trusted Docker CLI is unavailable" >&2
+          exit 127
+        fi
+        if [ -x /usr/local/lib/docker/cli-plugins/docker-buildx ]; then buildx_cli=/usr/local/lib/docker/cli-plugins/docker-buildx
+        elif [ -x /usr/local/libexec/docker/cli-plugins/docker-buildx ]; then buildx_cli=/usr/local/libexec/docker/cli-plugins/docker-buildx
+        elif [ -x /usr/lib/docker/cli-plugins/docker-buildx ]; then buildx_cli=/usr/lib/docker/cli-plugins/docker-buildx
+        elif [ -x /usr/libexec/docker/cli-plugins/docker-buildx ]; then buildx_cli=/usr/libexec/docker/cli-plugins/docker-buildx
+        elif [ -x /opt/homebrew/lib/docker/cli-plugins/docker-buildx ]; then buildx_cli=/opt/homebrew/lib/docker/cli-plugins/docker-buildx
+        elif [ -x /Applications/Docker.app/Contents/Resources/cli-plugins/docker-buildx ]; then buildx_cli=/Applications/Docker.app/Contents/Resources/cli-plugins/docker-buildx
+        else
+          echo "trusted Docker Buildx plugin is unavailable" >&2
+          exit 127
+        fi
+        docker_config_source="${DOCKER_CONFIG:-${HOME:?HOME is required when DOCKER_CONFIG is unset}/.docker}"
+        case "$docker_config_source" in
+          /*) ;;
+          *)
+            echo "Docker config path must be absolute" >&2
+            exit 2
+            ;;
+        esac
+        trusted_docker_config="$(mktemp -d "${TMPDIR:-/tmp}/nook-docker-config.XXXXXX")"
+        chmod 700 "$trusted_docker_config"
+        mkdir -m 700 "$trusted_docker_config/cli-plugins"
+        /bin/ln -s "$buildx_cli" "$trusted_docker_config/cli-plugins/docker-buildx"
+        cleanup_docker_config() {
+          rm -rf -- "$trusted_docker_config"
+        }
+        trap cleanup_docker_config EXIT
+        if [ -z "${GITHUB_ACTIONS:-}" ] && [ -e "$docker_config_source/contexts" ]; then
+          cp -RP -- "$docker_config_source/contexts" "$trusted_docker_config/contexts"
+          if find "$trusted_docker_config/contexts" -type l -print -quit | grep -q .; then
+            echo "Docker contexts must not contain symlinks" >&2
+            exit 2
+          fi
+        fi
+        if [ -f "$docker_config_source/config.json" ]; then
+          if [ -n "${GITHUB_ACTIONS:-}" ]; then
+            if [ -x /usr/local/bin/jq ]; then jq_cli=/usr/local/bin/jq
+            elif [ -x /usr/bin/jq ]; then jq_cli=/usr/bin/jq
+            elif [ -x /opt/homebrew/bin/jq ]; then jq_cli=/opt/homebrew/bin/jq
+            else
+              echo "trusted jq is unavailable in GitHub Actions" >&2
+              exit 127
+            fi
+            "$jq_cli" 'if any(keys[]; explode | any(. > 127)) then error("non-ASCII Docker config key") else with_entries(select((.key | ascii_downcase) != "currentcontext" and (.key | ascii_downcase) != "clipluginsextradirs" and (.key | ascii_downcase) != "credsstore" and (.key | ascii_downcase) != "credhelpers" and (.key | ascii_downcase) != "proxies")) end' \
+              "$docker_config_source/config.json" >"$trusted_docker_config/config.json"
+          else
+            current_context="$(DOCKER_CONFIG="$docker_config_source" "$docker_cli" context show)"
+            case "$current_context" in
+              ''|default) printf '{}\n' >"$trusted_docker_config/config.json" ;;
+              *[!a-zA-Z0-9_.-]*)
+                echo "Docker context name contains unsupported characters" >&2
+                exit 2
+                ;;
+              *) printf '{"currentContext":"%s"}\n' "$current_context" >"$trusted_docker_config/config.json" ;;
+            esac
+          fi
+          chmod 600 "$trusted_docker_config/config.json"
+        fi
+        export DOCKER_CONFIG="$trusted_docker_config"
+        export BUILDX_CONFIG="$trusted_docker_config/buildx"
+        unset BUILDX_BUILDER
+        if [ -n "${GITHUB_ACTIONS:-}" ]; then
+          unset DOCKER_HOST DOCKER_CONTEXT BUILDKIT_HOST
+        fi
         repo_root="$(git rev-parse --show-toplevel)"
         sim_dir="$repo_root/infra/sim/bake-cache"
         zot_image="{{.BAKE_CACHE_ZOT_IMAGE}}"
@@ -45,16 +115,17 @@ tasks:
           printf '%s\n' "$crate_a_input_orig" >"$crate_a_input"
           printf '%s\n' "$crate_b_input_orig" >"$crate_b_input"
           if [ -n "$builder" ]; then
-            "$docker_bin" buildx rm -f "$builder" >/dev/null 2>&1
+            "$docker_cli" buildx rm -f "$builder" >/dev/null 2>&1
           fi
-          "$docker_bin" rm -f "$zot_name" >/dev/null 2>&1
-          "$docker_bin" network rm "$network" >/dev/null 2>&1
+          "$docker_cli" rm -f "$zot_name" >/dev/null 2>&1
+          "$docker_cli" network rm "$network" >/dev/null 2>&1
           if [ -n "$buildkit_cfg" ]; then
             rm -f "$buildkit_cfg"
           fi
           if [ -n "$proof_log" ]; then
             rm -f "$proof_log"
           fi
+          rm -rf -- "$trusted_docker_config"
         }
         trap cleanup EXIT
 
@@ -97,10 +168,10 @@ tasks:
         create_builder() {
           local name="$1"
           if [ -n "$builder" ]; then
-            "$docker_bin" buildx rm -f "$builder" >/dev/null 2>&1 || true
+            "$docker_cli" buildx rm -f "$builder" >/dev/null 2>&1 || true
           fi
           builder="$name"
-          "$docker_bin" buildx create \
+          "$docker_cli" buildx create \
             --name "$builder" \
             --driver docker-container \
             --driver-opt "network=${network}" \
@@ -128,7 +199,7 @@ tasks:
             CONSUMER_EXACT_AVAILABLE="${BAKE_SIM_CONSUMER_EXACT_AVAILABLE:-}" \
             HIVE_EXACT_AVAILABLE="${BAKE_SIM_HIVE_EXACT_AVAILABLE:-}" \
             NOOK_REGISTRY_CACHE_HOST="$registry_ref" \
-            "$docker_bin" buildx bake \
+            "$docker_cli" buildx bake \
             --progress=plain \
             -f "$sim_dir/docker-bake.hcl" \
             --set "*.context=$sim_dir" \
@@ -147,7 +218,7 @@ tasks:
         registry_ref_code() {
           local repository="$1"
           local tag="${2:-buildcache}"
-          "$docker_bin" run --rm --network "$network" curlimages/curl:8.12.1 \
+          "$docker_cli" run --rm --network "$network" curlimages/curl:8.12.1 \
             -sS -o /dev/null -w "%{http_code}" \
             -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json" \
             "http://${registry_ref}/v2/${repository}/manifests/${tag}"
@@ -171,7 +242,7 @@ tasks:
           local repository="$1"
           local source_tag="$2"
           local stable_tag="$3"
-          "$docker_bin" run --rm --network "$network" curlimages/curl:8.12.1 \
+          "$docker_cli" run --rm --network "$network" curlimages/curl:8.12.1 \
             sh -euc '
               manifest="$(mktemp)"
               headers="$(mktemp)"
@@ -196,8 +267,8 @@ tasks:
           "  insecure = true" \
           >"$buildkit_cfg"
 
-        "$docker_bin" network create "$network" >/dev/null
-        "$docker_bin" run -d \
+        "$docker_cli" network create "$network" >/dev/null
+        "$docker_cli" run -d \
           --name "$zot_name" \
           --platform linux/amd64 \
           --network "$network" \
@@ -207,7 +278,7 @@ tasks:
 
         ready=0
         for _ in $(seq 1 60); do
-          if "$docker_bin" run --rm --network "$network" curlimages/curl:8.12.1 \
+          if "$docker_cli" run --rm --network "$network" curlimages/curl:8.12.1 \
             -fsS "http://${registry_ref}/v2/" >/dev/null 2>&1; then
             ready=1
             break
@@ -837,8 +908,8 @@ tasks:
         require_cached_step "$proof_log" "bake-sim-parent-expensive"
         require_cached_step "$proof_log" "bake-sim-leaf-expensive"
         builder_container="buildx_buildkit_${builder}0"
-        "$docker_bin" restart "$builder_container" >/dev/null
-        "$docker_bin" buildx inspect "$builder" --bootstrap >/dev/null
+        "$docker_cli" restart "$builder_container" >/dev/null
+        "$docker_cli" buildx inspect "$builder" --bootstrap >/dev/null
         bake_plain "$proof_log" combined-leaf
         require_cached_step "$proof_log" "bake-sim-parent-expensive"
         require_cached_step "$proof_log" "bake-sim-leaf-expensive"

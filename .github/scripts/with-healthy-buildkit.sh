@@ -1,15 +1,86 @@
 #!/usr/bin/env bash
 
 set -euo pipefail
+caller_path="$PATH"
+export PATH=/usr/bin:/bin
 
 if [ "$#" -eq 0 ]; then
   echo "usage: $0 <command> [args...]" >&2
   exit 2
 fi
 
-docker_bin="${DOCKER:-docker}"
 health_timeout="${NOOK_BUILDKIT_HEALTH_TIMEOUT_SECONDS:-60}"
 cleanup_timeout="${NOOK_BUILDKIT_CLEANUP_TIMEOUT_SECONDS:-15}"
+if [ -x /usr/local/bin/docker ]; then docker_cli=/usr/local/bin/docker
+elif [ -x /usr/bin/docker ]; then docker_cli=/usr/bin/docker
+elif [ -x /opt/homebrew/bin/docker ]; then docker_cli=/opt/homebrew/bin/docker
+else
+  echo "trusted Docker CLI is unavailable" >&2
+  exit 127
+fi
+if [ -x /usr/local/lib/docker/cli-plugins/docker-buildx ]; then buildx_cli=/usr/local/lib/docker/cli-plugins/docker-buildx
+elif [ -x /usr/local/libexec/docker/cli-plugins/docker-buildx ]; then buildx_cli=/usr/local/libexec/docker/cli-plugins/docker-buildx
+elif [ -x /usr/lib/docker/cli-plugins/docker-buildx ]; then buildx_cli=/usr/lib/docker/cli-plugins/docker-buildx
+elif [ -x /usr/libexec/docker/cli-plugins/docker-buildx ]; then buildx_cli=/usr/libexec/docker/cli-plugins/docker-buildx
+elif [ -x /opt/homebrew/lib/docker/cli-plugins/docker-buildx ]; then buildx_cli=/opt/homebrew/lib/docker/cli-plugins/docker-buildx
+elif [ -x /Applications/Docker.app/Contents/Resources/cli-plugins/docker-buildx ]; then buildx_cli=/Applications/Docker.app/Contents/Resources/cli-plugins/docker-buildx
+else
+  echo "trusted Docker Buildx plugin is unavailable" >&2
+  exit 127
+fi
+docker_config_source="${DOCKER_CONFIG:-${HOME:?HOME is required when DOCKER_CONFIG is unset}/.docker}"
+case "$docker_config_source" in
+  /*) ;;
+  *)
+    echo "Docker config path must be absolute" >&2
+    exit 2
+    ;;
+esac
+trusted_docker_config="$(mktemp -d "${TMPDIR:-/tmp}/nook-docker-config.XXXXXX")"
+chmod 700 "$trusted_docker_config"
+mkdir -m 700 "$trusted_docker_config/cli-plugins"
+/bin/ln -s "$buildx_cli" "$trusted_docker_config/cli-plugins/docker-buildx"
+cleanup_docker_config() {
+  rm -rf -- "$trusted_docker_config"
+}
+trap cleanup_docker_config EXIT
+if [ -z "${GITHUB_ACTIONS:-}" ] && [ -e "$docker_config_source/contexts" ]; then
+  cp -RP -- "$docker_config_source/contexts" "$trusted_docker_config/contexts"
+  if find "$trusted_docker_config/contexts" -type l -print -quit | grep -q .; then
+    echo "Docker contexts must not contain symlinks" >&2
+    exit 2
+  fi
+fi
+if [ -f "$docker_config_source/config.json" ]; then
+  if [ -n "${GITHUB_ACTIONS:-}" ]; then
+    if [ -x /usr/local/bin/jq ]; then jq_cli=/usr/local/bin/jq
+    elif [ -x /usr/bin/jq ]; then jq_cli=/usr/bin/jq
+    elif [ -x /opt/homebrew/bin/jq ]; then jq_cli=/opt/homebrew/bin/jq
+    else
+      echo "trusted jq is unavailable in GitHub Actions" >&2
+      exit 127
+    fi
+    "$jq_cli" 'if any(keys[]; explode | any(. > 127)) then error("non-ASCII Docker config key") else with_entries(select((.key | ascii_downcase) != "currentcontext" and (.key | ascii_downcase) != "clipluginsextradirs" and (.key | ascii_downcase) != "credsstore" and (.key | ascii_downcase) != "credhelpers" and (.key | ascii_downcase) != "proxies")) end' \
+      "$docker_config_source/config.json" >"$trusted_docker_config/config.json"
+  else
+    current_context="$(DOCKER_CONFIG="$docker_config_source" "$docker_cli" context show)"
+    case "$current_context" in
+      ''|default) printf '{}\n' >"$trusted_docker_config/config.json" ;;
+      *[!a-zA-Z0-9_.-]*)
+        echo "Docker context name contains unsupported characters" >&2
+        exit 2
+        ;;
+      *) printf '{"currentContext":"%s"}\n' "$current_context" >"$trusted_docker_config/config.json" ;;
+    esac
+  fi
+  chmod 600 "$trusted_docker_config/config.json"
+fi
+export DOCKER_CONFIG="$trusted_docker_config"
+export BUILDX_CONFIG="$trusted_docker_config/buildx"
+unset BUILDX_BUILDER
+if [ -n "${GITHUB_ACTIONS:-}" ]; then
+  unset DOCKER_HOST DOCKER_CONTEXT BUILDKIT_HOST
+fi
 
 # Never default to a shared docker-container builder. Delivery used to reuse
 # `nook-pr` across local and self-hosted runs; one wedged or concurrent build
@@ -35,7 +106,7 @@ esac
 
 run_with_daemon_builder() {
   echo "Using default docker buildx builder (Taskfiles must not pass --builder)" >&2
-  "$@"
+  PATH="$caller_path" DOCKER="$docker_cli" "$@"
 }
 
 if [ -z "$builder" ]; then
@@ -49,6 +120,12 @@ case "$builder" in
     exit 2
     ;;
 esac
+
+hosted_buildkit_image="registry.dev.nokey.sh/moby/buildkit:buildx-stable-1"
+mkdir -m 700 -p "$BUILDX_CONFIG/instances"
+printf '{"Name":"%s","Driver":"docker-container","Nodes":[{"Name":"%s0","Endpoint":"default","Platforms":null,"DriverOpts":{"image":"%s"},"Flags":null,"Files":null}],"Dynamic":false}\n' \
+  "$builder" "$builder" "$hosted_buildkit_image" >"$BUILDX_CONFIG/instances/$builder"
+chmod 600 "$BUILDX_CONFIG/instances/$builder"
 
 container="buildx_buildkit_${builder}0"
 state_volume="${container}_state"
@@ -86,8 +163,8 @@ run_with_timeout() {
 }
 
 probe_builder() {
-  "$docker_bin" buildx inspect "$builder" --bootstrap >/dev/null 2>&1 &&
-    "$docker_bin" buildx build \
+  "$docker_cli" buildx inspect "$builder" --bootstrap >/dev/null 2>&1 &&
+    "$docker_cli" buildx build \
       --builder "$builder" \
       --file "$probe_context/Dockerfile" \
       --output type=cacheonly \
@@ -99,14 +176,14 @@ remove_unhealthy_builder() {
   echo "Removing unhealthy BuildKit builder $builder" >&2
 
   local status=0
-  run_with_timeout "$cleanup_timeout" "$docker_bin" rm --force "$container" >/dev/null 2>&1 || status=$?
+  run_with_timeout "$cleanup_timeout" "$docker_cli" rm --force "$container" >/dev/null 2>&1 || status=$?
   if [ "$status" -eq 124 ]; then
     echo "timed out force-removing BuildKit container $container" >&2
     return 1
   fi
 
   status=0
-  run_with_timeout "$cleanup_timeout" "$docker_bin" buildx rm --force "$builder" >/dev/null 2>&1 || status=$?
+  run_with_timeout "$cleanup_timeout" "$docker_cli" buildx rm --force "$builder" >/dev/null 2>&1 || status=$?
   if [ "$status" -eq 124 ]; then
     echo "timed out removing BuildKit builder registration $builder" >&2
     return 1
@@ -114,7 +191,7 @@ remove_unhealthy_builder() {
 
   # The direct container kill is what unblocks a wedged daemon. Remove any
   # orphaned state volume too so the replacement cannot inherit corrupt state.
-  run_with_timeout "$cleanup_timeout" "$docker_bin" volume rm --force "$state_volume" >/dev/null 2>&1 || true
+  run_with_timeout "$cleanup_timeout" "$docker_cli" volume rm --force "$state_volume" >/dev/null 2>&1 || true
 }
 
 probe_status=0
@@ -137,9 +214,10 @@ else
 
   create_status=0
   run_with_timeout "$health_timeout" \
-    "$docker_bin" buildx create \
+    "$docker_cli" buildx create \
       --name "$builder" \
       --driver docker-container \
+      --driver-opt "image=$hosted_buildkit_image" \
       --bootstrap || create_status=$?
   if [ "$create_status" -eq 124 ]; then
     echo "timed out bootstrapping replacement BuildKit builder $builder" >&2
@@ -152,5 +230,5 @@ else
   fi
 fi
 
-"$docker_bin" buildx use "$builder"
-"$@"
+"$docker_cli" buildx use "$builder"
+  PATH="$caller_path" DOCKER="$docker_cli" "$@"
