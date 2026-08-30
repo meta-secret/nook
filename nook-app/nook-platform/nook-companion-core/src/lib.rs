@@ -143,7 +143,8 @@ pub use page_field_classification::{
     looks_like_login_advance_control_label, looks_like_manual_checkpoint_label,
     looks_like_non_authentication_submit_control_label,
     looks_like_one_time_code_auto_submit_signal, looks_like_one_time_code_field,
-    looks_like_passkey_control_label, looks_like_username_field,
+    looks_like_passkey_control_label, looks_like_passkey_enrollment_or_management_label,
+    looks_like_username_field,
 };
 pub use vault_host_policy::{
     DEFAULT_SIMPLE_VAULT_URL, VaultHostPolicyError, belongs_to_sentinel_vault,

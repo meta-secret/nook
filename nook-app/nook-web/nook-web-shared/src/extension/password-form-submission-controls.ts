@@ -454,6 +454,22 @@ export function formBlocksCredentialDisclosure(form: HTMLFormElement): boolean {
   return submissionMethodBlocksCredentialDisclosure(formSubmissionMethod(form));
 }
 
+export function formHasGetMethodSubmitter(form: HTMLFormElement): boolean {
+  return Array.from(
+    form.ownerDocument.querySelectorAll<HTMLElement>(
+      semanticSubmitControlSelector,
+    ),
+  ).some((control) => {
+    if (controlIsInert(control)) return false;
+    const owner = associatedAuthenticationForm(control);
+    return (
+      owner.kind === PasswordFormScopeKind.Owned &&
+      owner.owner === form &&
+      controlSubmissionMethod(control) === PageControlSubmissionMethod.Get
+    );
+  });
+}
+
 export function formHasPostMethodSubmitter(form: HTMLFormElement): boolean {
   return Array.from(
     form.ownerDocument.querySelectorAll<HTMLElement>(
@@ -509,8 +525,12 @@ export function selectedSubmitterBlocksCredentialDisclosure({
       if (formmethod !== false) {
         return submissionMethodBlocksCredentialDisclosure(formmethod);
       }
+      return explicitFormMethodBlocksDisclosure(form);
     }
-    return explicitFormMethodBlocksDisclosure(form);
+    return (
+      formHasGetMethodSubmitter(form) ||
+      explicitFormMethodBlocksDisclosure(form)
+    );
   }
   if (
     formHasSemanticSubmitter(form) &&

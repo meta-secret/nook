@@ -238,6 +238,30 @@ pub fn looks_like_passkey_control_label(label: &str) -> bool {
     ) && contains_any_word(&identity, PASSKEY_OR_PLATFORM_AUTHENTICATOR_WORDS)
 }
 
+const PASSKEY_ENROLLMENT_OR_MANAGEMENT_WORDS: &[&str] = &[
+    "add",
+    "create",
+    "enable",
+    "enroll",
+    "enrollment",
+    "register",
+    "registration",
+    "manage",
+    "management",
+    "settings",
+    "set up",
+    "setup",
+    "configure",
+];
+
+/// True when a passkey-looking label describes enrollment or management, not login.
+#[must_use]
+pub fn looks_like_passkey_enrollment_or_management_label(label: &str) -> bool {
+    let identity = expand_identity_text(label);
+    contains_any_word(&identity, PASSKEY_OR_PLATFORM_AUTHENTICATOR_WORDS)
+        && contains_any_word(&identity, PASSKEY_ENROLLMENT_OR_MANAGEMENT_WORDS)
+}
+
 /// True when a checkbox/control label looks like terms / privacy acceptance.
 #[must_use]
 pub fn looks_like_manual_checkpoint_label(label: &str) -> bool {
@@ -917,6 +941,12 @@ mod tests {
     fn passkey_and_manual_checkpoint_labels() {
         assert!(looks_like_passkey_control_label("Sign in with passkey"));
         assert!(!looks_like_passkey_control_label("Continue"));
+        assert!(looks_like_passkey_enrollment_or_management_label(
+            "Add passkey"
+        ));
+        assert!(!looks_like_passkey_enrollment_or_management_label(
+            "Sign in with a passkey"
+        ));
         assert!(looks_like_manual_checkpoint_label("I agree to the Terms"));
         assert!(looks_like_email_verification_body(
             "Please verify your email to continue"

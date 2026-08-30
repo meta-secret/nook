@@ -104,6 +104,12 @@ pub fn looks_like_passkey_control_label(label: &str) -> bool {
 
 #[wasm_bindgen]
 #[must_use]
+pub fn looks_like_passkey_enrollment_or_management_label(label: &str) -> bool {
+    nook_companion_core::looks_like_passkey_enrollment_or_management_label(label)
+}
+
+#[wasm_bindgen]
+#[must_use]
 pub fn looks_like_manual_checkpoint_label(label: &str) -> bool {
     nook_companion_core::looks_like_manual_checkpoint_label(label)
 }

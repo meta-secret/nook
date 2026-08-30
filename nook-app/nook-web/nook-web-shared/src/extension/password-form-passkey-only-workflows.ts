@@ -1,4 +1,8 @@
-import { looks_like_login_advance_control_label } from "./nook-companion-wasm/nook_companion_wasm.js";
+import {
+  looks_like_login_advance_control_label,
+  looks_like_passkey_control_label,
+  looks_like_passkey_enrollment_or_management_label,
+} from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
   findOneTimeCodeFields,
   findPasskeyControls,
@@ -318,6 +322,16 @@ function ownedFormLooksProgressing({
 }: OwnedFormProgressionRequest): boolean {
   if (formHasRustClassifiableAdvanceControl(form)) return true;
   if (formHasSemanticSubmitter(form)) return false;
+  if (
+    summary.passkeyControlPresent &&
+    !cheapScopeHasSafePasskey({
+      root: form,
+      formScope: { kind: PasswordFormScopeKind.Owned, owner: form },
+      summary,
+    })
+  ) {
+    return false;
+  }
   return (
     (summary.currentPasswordFieldCount > 0 || summary.usernameFieldCount > 0) &&
     typeof form.requestSubmit === "function"
@@ -368,10 +382,27 @@ function takeBoundedPriorityWorkflows<
   return selected.map((entry) => entry.observation);
 }
 
+function cheapScopeHasSafePasskey(
+  observation: RankableWorkflowObservation,
+): boolean {
+  const root =
+    observation.formScope.kind === PasswordFormScopeKind.Owned
+      ? observation.formScope.owner
+      : observation.root;
+  return findPasskeyControls(root).some(({ control }) => {
+    if (controlIsInert(control)) return false;
+    const label = controlLabel(control);
+    return (
+      looks_like_passkey_control_label(label) &&
+      !looks_like_passkey_enrollment_or_management_label(label)
+    );
+  });
+}
+
 function cheapWorkflowLooksProgressing(
   observation: RankableWorkflowObservation,
 ): boolean {
-  if (observation.summary.passkeyControlPresent) return true;
+  if (cheapScopeHasSafePasskey(observation)) return true;
   if (observation.formScope.kind === PasswordFormScopeKind.Unowned) {
     return unownedScopeLooksProgressing(observation.root);
   }

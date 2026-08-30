@@ -811,6 +811,26 @@ describe('website one-time-code fields', () => {
     ).toBe('')
   })
 
+  test('does not fill a GET form when a type-button Sign in sits beside a native submitter', () => {
+    document.body.innerHTML = `
+      <form id="login" action="/auth/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <input type="submit" value="Go" />
+        <button type="button">Sign in</button>
+      </form>
+    `
+    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: { username: 'vault-user', password: 'vault-pass' },
+      kind: PasswordFormQueryKind.Root,
+      root: document,
+    }
+    expect(fillLoginCredentials(fillArgs)).toBe(false)
+    expect(
+      document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
+    ).toBe('')
+  })
+
   test('fills a POST login whose type-button advance control carries leftover GET formmethod', () => {
     document.body.innerHTML = `
       <form method="post" id="login" action="/auth/login">
