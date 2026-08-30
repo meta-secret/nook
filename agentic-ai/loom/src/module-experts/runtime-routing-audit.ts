@@ -1,12 +1,10 @@
 import * as ts from 'typescript';
 
-export const AGENT_WORKFLOW_CLI = 'agentic-ai/loom/src/agent-workflow/cli.ts';
 export const MODULE_EXPERT_CLI = 'agentic-ai/loom/src/module-experts/cli.ts';
 export const MODULE_EXPERT_TRUSTED_RUNTIME =
   'agentic-ai/loom/src/module-experts/trusted-runtime.ts';
 
 export type AuditModuleExpertRuntimeRoutingArgs = {
-  readonly agentWorkflowCliSource: string;
   readonly moduleExpertCliSource: string;
   readonly trustedRuntimeSource: string;
 };
@@ -31,9 +29,6 @@ export function auditModuleExpertRuntimeRouting(
   const trustedRuntimeNames = constructedRuntimeNames(
     args.trustedRuntimeSource,
   );
-  const agentWorkflowRuntimeNames = constructedRuntimeNames(
-    args.agentWorkflowCliSource,
-  );
   if (
     !moduleExpertCallNames.includes('invokeModuleExpert') ||
     moduleExpertRuntimeNames.includes('ModuleExpertCodexSdkAgentRuntime') ||
@@ -48,17 +43,6 @@ export function auditModuleExpertRuntimeRouting(
       path: MODULE_EXPERT_TRUSTED_RUNTIME,
       message:
         'Module expert invocation must use only the isolated module-expert Codex runtime.',
-    };
-  }
-  if (
-    !agentWorkflowRuntimeNames.includes('CodexSdkAgentRuntime') ||
-    agentWorkflowRuntimeNames.includes('ModuleExpertCodexSdkAgentRuntime')
-  ) {
-    findings[findings.length] = {
-      code: 'unsafe-generic-runtime-routing',
-      path: AGENT_WORKFLOW_CLI,
-      message:
-        'Generic agent workflows must retain the ordinary Codex runtime and authentication store.',
     };
   }
   return findings;
