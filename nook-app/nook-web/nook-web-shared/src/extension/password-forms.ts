@@ -872,10 +872,13 @@ export function readLoginCredentials(
   };
 }
 
+type OwnedAdvanceControlActivation =
+  { kind: "absent" } | { kind: "activated"; submitted: boolean };
+
 function activateApprovedOwnedAdvanceControl(
   request: PasswordFormScopeQuery,
   form: HTMLFormElement,
-): boolean {
+): OwnedAdvanceControlActivation {
   const formWithinRequestRoot =
     request.root === form.ownerDocument ||
     (request.root instanceof Node && request.root.contains(form));
@@ -918,16 +921,19 @@ function activateApprovedOwnedAdvanceControl(
           authentication_advance_control_is_safe(transported)
         );
       });
-  if (!approved) return false;
+  if (!approved) return { kind: "absent" };
   if (!approved.matches(semanticSubmitControlSelector)) {
     approved.click();
-    return true;
+    return { kind: "activated", submitted: true };
   }
-  observeSubmit({
+  const submission: Parameters<typeof observeSubmit>[0] = {
     form,
     action: () => approved.click(),
-  });
-  return true;
+  };
+  return {
+    kind: "activated",
+    submitted: observeSubmit(submission),
+  };
 }
 
 export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
@@ -941,8 +947,9 @@ export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
   if (!anchor) return false;
 
   const form = anchor.form;
-  if (form && activateApprovedOwnedAdvanceControl(request, form)) {
-    return true;
+  if (form) {
+    const activation = activateApprovedOwnedAdvanceControl(request, form);
+    if (activation.kind === "activated") return activation.submitted;
   }
 
   if (!passwordField) {
