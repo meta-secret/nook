@@ -119,6 +119,21 @@ describe('passkey control detection', () => {
     )
   })
 
+  test('binds a type-button passkey control even when formmethod is get', () => {
+    document.body.innerHTML = `
+      <form method="post" id="login" action="/auth/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="button" formmethod="get">Use passkey</button>
+      </form>
+    `
+    const control = findWorkflowPasskeyControl(observedAuthenticationWorkflow())
+    expect(control.kind).toBe(PasskeyControlLookupKind.Found)
+    if (control.kind === PasskeyControlLookupKind.Found) {
+      expect(control.control.textContent).toContain('passkey')
+    }
+  })
+
   test('does not bind a GET passkey submitter that would disclose a typed password', () => {
     document.body.innerHTML = `
       <form method="post" id="login" action="/auth/login">

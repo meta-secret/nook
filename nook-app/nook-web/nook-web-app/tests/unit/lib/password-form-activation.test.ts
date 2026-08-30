@@ -784,6 +784,25 @@ describe('classified login activation', () => {
     expect(submitted).toBe(false)
   })
 
+  test('does not fill a form whose method token is a whitespace-padded post', () => {
+    document.body.innerHTML = `
+      <form method=" post " id="login" action="/auth/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: { username: 'vault-user', password: 'vault-pass' },
+      kind: PasswordFormQueryKind.Root,
+      root: document,
+    }
+    expect(fillLoginCredentials(fillArgs)).toBe(false)
+    expect(
+      document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
+    ).toBe('')
+  })
+
   test('does not fill or submit a dialog-method password form', () => {
     document.body.innerHTML = `
       <form method="dialog" id="login">
@@ -884,7 +903,7 @@ describe('classified login activation', () => {
   })
 
   test('does not submit GET-default formmethod overrides after filling passwords', () => {
-    for (const formmethod of ['get', '', 'invalid']) {
+    for (const formmethod of ['get', '', 'invalid', ' post ']) {
       document.body.innerHTML = `
         <form id="login" method="post" action="/auth/login">
           <input autocomplete="username" />

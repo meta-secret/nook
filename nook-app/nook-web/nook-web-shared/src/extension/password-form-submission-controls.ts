@@ -248,7 +248,7 @@ export function isRenderedControl(control: HTMLElement): boolean {
 function htmlEnumeratedSubmissionMethod(
   token: string,
 ): PageControlSubmissionMethod {
-  const normalized = token.trim().toLowerCase();
+  const normalized = token.toLowerCase();
   if (normalized === "post") return PageControlSubmissionMethod.Post;
   if (normalized === "dialog") return PageControlSubmissionMethod.Dialog;
   return PageControlSubmissionMethod.Get;
@@ -266,8 +266,6 @@ function presentHtmlSubmissionMethod(
 export function controlSubmissionMethod(
   control: HTMLElement,
 ): PageControlSubmissionMethod {
-  const formmethod = presentHtmlSubmissionMethod(control, "formmethod");
-  if (formmethod !== false) return formmethod;
   if (
     (control instanceof HTMLButtonElement ||
       control instanceof HTMLInputElement) &&
@@ -275,6 +273,8 @@ export function controlSubmissionMethod(
   ) {
     return PageControlSubmissionMethod.Absent;
   }
+  const formmethod = presentHtmlSubmissionMethod(control, "formmethod");
+  if (formmethod !== false) return formmethod;
   const owner = associatedAuthenticationForm(control);
   if (owner.kind !== PasswordFormScopeKind.Owned) {
     return PageControlSubmissionMethod.Absent;

@@ -395,10 +395,21 @@ function takePreferredPasskeyOnlyObservations<Summary>(
       continue;
     }
     if (!safe && !scopeHasOneTimeCodeField(scope)) continue;
-    const lowest = preferred.reduce((current, entry) =>
-      entry.priority < current.priority ? entry : current,
-    );
-    if (priority > lowest.priority) {
+    const lowest = preferred.reduce((current, entry) => {
+      if (entry.priority < current.priority) return entry;
+      if (
+        entry.priority === current.priority &&
+        !entry.safe &&
+        current.safe
+      ) {
+        return entry;
+      }
+      return current;
+    });
+    if (
+      priority > lowest.priority ||
+      (priority === lowest.priority && safe && !lowest.safe)
+    ) {
       preferred[preferred.indexOf(lowest)] = { observation, safe, priority };
     }
   }
