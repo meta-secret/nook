@@ -217,6 +217,43 @@ export function registeredCortexIdentifiersAtCommit(
   }
 }
 
+export function publishedCortexIdentifiersAtCommit(
+  args: RegisteredCortexIdentifiersAtCommitArgs,
+): ReadonlySet<string> {
+  if (!/^[0-9a-f]{40}$/u.test(args.sourceCommit)) return new Set<string>();
+  const options: ExecFileSyncOptionsWithStringEncoding = {
+    cwd: args.repoRoot,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  };
+  try {
+    execFileSync(
+      'git',
+      ['cat-file', '-e', `${args.sourceCommit}^{commit}`],
+      options,
+    );
+    const serialized = execFileSync(
+      'git',
+      ['show', `${args.sourceCommit}:${CORTEX_IDENTIFIER_REGISTRY_PATH}`],
+      options,
+    );
+    const registry = decodeCortexIdentifierRegistry(serialized);
+    if (!registry) return new Set<string>();
+    const ids = new Set<string>();
+    const authorities = new Set<string>();
+    for (const entry of registry.entries) {
+      if (ids.has(entry.id) || authorities.has(entry.authority)) {
+        return new Set<string>();
+      }
+      ids.add(entry.id);
+      authorities.add(entry.authority);
+    }
+    return ids;
+  } catch {
+    return new Set<string>();
+  }
+}
+
 function decodeEntry(value: UntrustedYamlNode): CortexIdentifierEntry | false {
   if (!isRecord(value)) return false;
   const kind = value.kind;

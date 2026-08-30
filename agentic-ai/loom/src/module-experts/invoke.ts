@@ -45,6 +45,7 @@ import type { AuditModuleExpertsArgs } from './audit.ts';
 import { MODULE_EXPERT_CATALOG } from './catalog.ts';
 import type { ModuleExpertProfile } from './catalog.ts';
 import { verifyModuleExpertParentAuthorization } from './parent-authorization.ts';
+import { publishedCortexIdentifiersAtCommit } from '../lib/cortex-identifiers.ts';
 import type {
   ModuleExpertChildRequest,
   VerifyModuleExpertParentAuthorizationArgs,
@@ -425,7 +426,11 @@ export async function verifyModuleExpertInvocationResult(
   }
   let replayed: ReturnType<typeof replayAgentAttemptJournal>;
   try {
-    const replayRequest = { events };
+    const knownCortexIdentifiers = publishedCortexIdentifiersAtCommit({
+      repoRoot: resolve(result.runDirectory, '../../../..'),
+      sourceCommit: result.sourceCommit,
+    });
+    const replayRequest = { events, knownCortexIdentifiers };
     replayed = replayAgentAttemptJournal(replayRequest);
   } catch {
     processingVerificationFailed();

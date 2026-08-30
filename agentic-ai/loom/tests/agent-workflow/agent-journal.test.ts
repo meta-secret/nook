@@ -72,12 +72,33 @@ describe('agent attempt journal', () => {
         .trim()
         .split('\n')
         .map((line) => JSON.parse(line) as AgentAttemptEvent);
+      const knownCortexIdentifiers = new Set(['CX-AI']);
       const replayRequest: ReplayAgentAttemptJournalRequest = {
         events: parsedEvents,
+        knownCortexIdentifiers,
       };
       const replay = replayAgentAttemptJournal(replayRequest);
       expect(processing.events.sha256).toBe(sha256(events));
       expect(replay.terminalKind).toBe(TaskTerminalKind.Completed);
+      const unregisteredReferenceEvents = parsedEvents.map((event) =>
+        event.kind === AgentAttemptEventKind.RuntimeActivity
+          ? {
+              ...event,
+              cortexReferences: [
+                {
+                  id: 'CX-AI-7K3M2',
+                  relation: CortexReferenceRelation.Applied,
+                },
+              ],
+            }
+          : event,
+      );
+      expect(() =>
+        replayAgentAttemptJournal({
+          events: unregisteredReferenceEvents,
+          knownCortexIdentifiers,
+        }),
+      ).toThrow('invalid Cortex reference');
       expect(parsedEvents.map((event) => event.actionId)).toEqual([
         'a0001',
         'a0002',
@@ -110,6 +131,7 @@ describe('agent attempt journal', () => {
       ];
       const unknownKindRequest: ReplayAgentAttemptJournalRequest = {
         events: unknownKindEvents,
+        knownCortexIdentifiers,
       };
       expect(() => replayAgentAttemptJournal(unknownKindRequest)).toThrow(
         'unknown event kind',
@@ -117,7 +139,10 @@ describe('agent attempt journal', () => {
       const invalidActionIdentity = parsedEvents.map((event) =>
         event.sequence === 2 ? { ...event, actionId: 'a9999' } : event,
       );
-      const invalidActionRequest = { events: invalidActionIdentity };
+      const invalidActionRequest = {
+        events: invalidActionIdentity,
+        knownCortexIdentifiers,
+      };
       expect(() => replayAgentAttemptJournal(invalidActionRequest)).toThrow(
         'action identity is invalid',
       );
@@ -131,6 +156,7 @@ describe('agent attempt journal', () => {
       );
       const mismatchedReplayRequest: ReplayAgentAttemptJournalRequest = {
         events: mismatchedEvents,
+        knownCortexIdentifiers,
       };
       expect(() => replayAgentAttemptJournal(mismatchedReplayRequest)).toThrow(
         'terminal result differs from its projection event',
@@ -158,6 +184,7 @@ describe('agent attempt journal', () => {
       }
       const duplicateViewReplayRequest: ReplayAgentAttemptJournalRequest = {
         events: duplicateViewEvents,
+        knownCortexIdentifiers,
       };
       expect(() =>
         replayAgentAttemptJournal(duplicateViewReplayRequest),
@@ -169,6 +196,7 @@ describe('agent attempt journal', () => {
       );
       const secretBearingActivityRequest = {
         events: secretBearingActivityEvents,
+        knownCortexIdentifiers,
       };
       expect(() =>
         replayAgentAttemptJournal(secretBearingActivityRequest),
@@ -177,7 +205,10 @@ describe('agent attempt journal', () => {
         ...event,
         parent: { kind: AgentAttemptParentKind.AgentAttempt },
       })) as never as readonly AgentAttemptEvent[];
-      const malformedParentRequest = { events: malformedParentEvents };
+      const malformedParentRequest = {
+        events: malformedParentEvents,
+        knownCortexIdentifiers,
+      };
       expect(() => replayAgentAttemptJournal(malformedParentRequest)).toThrow(
         'lineage',
       );
@@ -185,7 +216,10 @@ describe('agent attempt journal', () => {
         ...event,
         depth: 4,
       }));
-      const excessiveDepthRequest = { events: excessiveDepthEvents };
+      const excessiveDepthRequest = {
+        events: excessiveDepthEvents,
+        knownCortexIdentifiers,
+      };
       expect(() => replayAgentAttemptJournal(excessiveDepthRequest)).toThrow(
         'identity is invalid',
       );
@@ -197,7 +231,10 @@ describe('agent attempt journal', () => {
             }
           : event,
       );
-      const mismatchedAdapterRequest = { events: mismatchedAdapterEvents };
+      const mismatchedAdapterRequest = {
+        events: mismatchedAdapterEvents,
+        knownCortexIdentifiers,
+      };
       expect(() => replayAgentAttemptJournal(mismatchedAdapterRequest)).toThrow(
         'identity changed within the stream',
       );
@@ -205,7 +242,10 @@ describe('agent attempt journal', () => {
         ...event,
         adapter: 'caller-forged-adapter',
       })) as never as readonly AgentAttemptEvent[];
-      const unknownAdapterRequest = { events: unknownAdapterEvents };
+      const unknownAdapterRequest = {
+        events: unknownAdapterEvents,
+        knownCortexIdentifiers,
+      };
       expect(() => replayAgentAttemptJournal(unknownAdapterRequest)).toThrow(
         'identity is invalid',
       );
@@ -224,7 +264,10 @@ describe('agent attempt journal', () => {
           },
         };
       }) as readonly AgentAttemptEvent[];
-      const wrongAuthorRequest = { events: wrongAuthorEvents };
+      const wrongAuthorRequest = {
+        events: wrongAuthorEvents,
+        knownCortexIdentifiers,
+      };
       expect(() => replayAgentAttemptJournal(wrongAuthorRequest)).toThrow(
         'view author',
       );

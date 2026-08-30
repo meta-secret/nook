@@ -23,6 +23,7 @@ import { cortexActionId } from './agent-event-renderer.ts';
 
 export type ReplayAgentAttemptJournalRequest = {
   readonly events: readonly AgentAttemptEvent[];
+  readonly knownCortexIdentifiers?: ReadonlySet<string>;
 };
 
 export type ReplayedAgentAttempt = {
@@ -111,9 +112,17 @@ export function replayAgentAttemptJournal(
       );
     }
     if (event.kind === AgentAttemptEventKind.RuntimeActivity) {
+      if (
+        event.cortexReferences.length > 0 &&
+        !request.knownCortexIdentifiers
+      ) {
+        throw new Error(
+          'Agent attempt journal Cortex references require a source-bound registry.',
+        );
+      }
       const referenceArgs = {
         references: event.cortexReferences,
-        knownIdentifiers: false,
+        knownIdentifiers: request.knownCortexIdentifiers ?? false,
       } as const;
       assertCortexReferences(referenceArgs);
     }
