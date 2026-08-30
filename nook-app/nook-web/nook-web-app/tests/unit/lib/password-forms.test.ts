@@ -153,9 +153,9 @@ describe('website one-time-code fields', () => {
       root: document,
     }
     expect(fillLoginCredentials(fillArgs)).toBe(false)
-    expect(
-      (document.querySelector('#secret') as HTMLInputElement).value,
-    ).toBe('')
+    expect((document.querySelector('#secret') as HTMLInputElement).value).toBe(
+      '',
+    )
   })
 
   test('rejects dialog-method password submission before fill', () => {
@@ -178,9 +178,9 @@ describe('website one-time-code fields', () => {
       root: document,
     }
     expect(fillLoginCredentials(fillArgs)).toBe(false)
-    expect(
-      (document.querySelector('#secret') as HTMLInputElement).value,
-    ).toBe('')
+    expect((document.querySelector('#secret') as HTMLInputElement).value).toBe(
+      '',
+    )
   })
 
   test('marks a hidden semantic submitter inert and allows implicit submission', () => {
