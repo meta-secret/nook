@@ -128,7 +128,7 @@ describe('authentication fact rescans', () => {
     document.body.innerHTML = `
       <form method="post" aria-label="Login" action="/auth/login">
         <label id="email-label">Email</label>
-        <input id="user" type="text" />
+        <input id="contact" type="text" />
         <input type="password" autocomplete="current-password" />
         <iframe id="gate" title="Verification"></iframe>
         <button type="submit">Sign in</button>
@@ -138,7 +138,7 @@ describe('authentication fact rescans', () => {
     expect(
       observedAuthenticationWorkflow().summary.manualCheckpointPresent,
     ).toBe(false)
-    document.querySelector('#email-label')?.setAttribute('for', 'user')
+    document.querySelector('#email-label')?.setAttribute('for', 'contact')
     expect(observedAuthenticationWorkflow().summary.usernameFieldCount).toBe(1)
     document
       .querySelector('#gate')

@@ -3,6 +3,8 @@ import {
   authenticationPageObservationFacts,
   fillLoginCredentials,
   findOneTimeCodeFields,
+  findPasswordFields,
+  findUsernameFields,
   PasswordFormQueryKind,
   PasswordFormScopeKind,
   summarizeAuthenticationWorkflowForms,
@@ -25,6 +27,54 @@ afterEach(() => {
 })
 
 describe('authentication field detection', () => {
+  test('preserves the conventional user id for Rust username classification', () => {
+    document.body.innerHTML = `
+      <form method="post" action="/auth/login">
+        <input id="user" type="text" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+    expect(observedAuthenticationWorkflow().summary.usernameFieldCount).toBe(1)
+  })
+
+  test('returns externally associated fields in document order', () => {
+    document.body.innerHTML = `
+      <input id="before-user" form="login" autocomplete="username" />
+      <input id="before-password" form="login" type="password" />
+      <input id="before-otp" form="login" autocomplete="one-time-code" />
+      <form id="login" method="post" action="/auth/login">
+        <input id="inside-user" autocomplete="username" />
+        <input id="inside-password" type="password" />
+        <input id="inside-otp" autocomplete="one-time-code" />
+      </form>
+      <input id="after-user" form="login" autocomplete="username" />
+      <input id="after-password" form="login" type="password" />
+      <input id="after-otp" form="login" autocomplete="one-time-code" />
+    `
+    const owner = document.querySelector<HTMLFormElement>('#login')
+    if (!owner) throw new Error('expected the owned authentication form')
+    const query: Parameters<typeof findUsernameFields>[0] = {
+      root: document,
+      formScope: { kind: PasswordFormScopeKind.Owned, owner },
+    }
+    expect(findUsernameFields(query).map((field) => field.id)).toEqual([
+      'before-user',
+      'inside-user',
+      'after-user',
+    ])
+    expect(findPasswordFields(query).map((field) => field.id)).toEqual([
+      'before-password',
+      'inside-password',
+      'after-password',
+    ])
+    expect(findOneTimeCodeFields(query).map((field) => field.id)).toEqual([
+      'before-otp',
+      'inside-otp',
+      'after-otp',
+    ])
+  })
+
   test('keeps form-less fields together with a sibling Sign in button', () => {
     document.body.innerHTML = `
       <div class="panel">

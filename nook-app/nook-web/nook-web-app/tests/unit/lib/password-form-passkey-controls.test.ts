@@ -4,9 +4,11 @@ import {
   findWorkflowPasskeyControl,
   pageHasPasskeyControl,
   PasskeyControlLookupKind,
+  PasswordFormScopeKind,
   summarizeAuthenticationWorkflowForms,
   type PasswordFormObservation,
 } from '../../../../nook-web-shared/src/extension/password-forms'
+import { MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS } from '../../../../nook-web-shared/src/extension/password-form-submission-controls'
 
 function observedAuthenticationWorkflow(): PasswordFormObservation {
   const observation = summarizeAuthenticationWorkflowForms()[0]
@@ -167,5 +169,48 @@ describe('passkey control detection', () => {
     expect(control.kind).toBe(PasskeyControlLookupKind.Found)
     if (control.kind === PasskeyControlLookupKind.Found)
       expect(control.control.id).toBe('safe')
+  })
+
+  test('keeps a safe implicit login after destructive implicit decoys', () => {
+    const decoys = Array.from(
+      { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS * 2 },
+      (_, index) =>
+        `<form method="post" id="delete-${index}" action="/account/delete"><input autocomplete="username" /><input type="password" autocomplete="current-password" /></form>`,
+    ).join('')
+    document.body.innerHTML = `
+      ${decoys}
+      <form method="post" id="safe-login" action="/auth/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+      </form>
+    `
+    expect(
+      summarizeAuthenticationWorkflowForms().some(
+        (observation) =>
+          observation.formScope.kind === PasswordFormScopeKind.Owned &&
+          observation.formScope.owner.id === 'safe-login',
+      ),
+    ).toBe(true)
+  })
+
+  test('keeps a Rust-safe unowned control after destructive label decoys', () => {
+    const decoys = Array.from(
+      { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS * 2 },
+      (_, index) =>
+        `<section><input autocomplete="username" /><button id="delete-account-${index}" type="button">Sign in</button></section>`,
+    ).join('')
+    document.body.innerHTML = `
+      ${decoys}
+      <section id="safe-login">
+        <input autocomplete="username" />
+        <button type="button">Sign in</button>
+      </section>
+    `
+    expect(
+      summarizeAuthenticationWorkflowForms().some(
+        (observation) =>
+          observation.root === document.querySelector('#safe-login'),
+      ),
+    ).toBe(true)
   })
 })

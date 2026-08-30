@@ -1,37 +1,43 @@
-import { looks_like_login_advance_control_label } from "./nook-companion-wasm/nook_companion_wasm.js";
+import { authentication_advance_control_is_safe } from "./nook-companion-wasm/nook_companion_wasm.js";
+import type { AuthenticationAdvanceControlObservation } from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
   findOneTimeCodeFields,
   findPasskeyControls,
   findPasswordFields,
   findUsernameFields,
+  hasAutocompleteToken,
   localUnownedPasskeyContainer,
   pageHasPasskeyControl,
   PasswordFormScopeKind,
+  usernameEvidence,
   type PasskeyControlCandidate,
+  type PasswordFieldQuery,
   type PasswordFormScope,
   type UnownedAuthContainerRequest,
 } from "./password-form-fields";
 import {
   associatedAuthenticationForm,
   authenticationAdvanceControlSelector,
+  authenticationFactStringsAreTransportable,
+  controlDestinationIdentity,
   controlIsInert,
   controlLabel,
+  controlMachineIdentity,
+  controlSubmissionMethod,
+  countedSemanticSubmitControls,
   formBlocksCredentialDisclosure,
   formHasPostMethodSubmitter,
   formHasRustClassifiableAdvanceControl,
-  formHasSemanticSubmitter,
   MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
+  observedFormIdentity,
   PasswordFormQueryKind,
+  semanticSubmitControlSelector,
   type PasswordFormScopeQuery,
 } from "./password-form-submission-controls";
 
 type RankableWorkflowSummary = {
   oneTimeCodeFieldCount: number;
-  currentPasswordFieldCount: number;
-  genericPasswordFieldCount: number;
   passwordFieldCount: number;
-  usernameFieldCount: number;
-  passkeyControlPresent: boolean;
 };
 
 type PasskeyOnlyWorkflowObservation<Summary> = {
@@ -98,15 +104,7 @@ type ShortlistWorkflowsRequest<
   fieldBearing: Observation[];
   independent: Observation[];
   passkeyControlIsSafe: PasskeyControlIsSafe<Observation>;
-};
-
-type OwnedFormProgressionRequest<
-  Observation extends RankableWorkflowObservation,
-> = {
-  form: HTMLFormElement;
-  summary: RankableWorkflowSummary;
-  observation: Observation;
-  passkeyControlIsSafe: PasskeyControlIsSafe<Observation>;
+  observationPriority: (observation: Observation) => number;
 };
 
 type CollectPasskeyOnlyScopesRequest = {
@@ -261,6 +259,7 @@ export function appendIndependentPasskeyOnlyWorkflows<
     fieldBearing,
     independent,
     passkeyControlIsSafe,
+    observationPriority,
   };
   const rankingCandidates = shortlistWorkflowsForFactsRanking(shortlistRequest);
   const ranked = rankingCandidates.map((observation) => {
@@ -269,16 +268,10 @@ export function appendIndependentPasskeyOnlyWorkflows<
       passkeyCandidates,
       passkeyControlIsSafe,
     };
-    const progressionRequest: CheapWorkflowProgressionRequest<Observation> = {
-      observation,
-      passkeyControlIsSafe,
-    };
     return {
       observation,
       safe: observationHasSafePasskey(safetyRequest),
-      priority: cheapWorkflowLooksProgressing(progressionRequest)
-        ? observationPriority(observation)
-        : 0,
+      priority: observationPriority(observation),
     };
   });
   const rankedRequest: TakeRankedWorkflowObservationsRequest<Observation> = {
@@ -300,6 +293,7 @@ type TakeBoundedPriorityWorkflowsRequest<
 > = {
   observations: RankableWorkflowObservationList<Observation>;
   passkeyControlIsSafe: PasskeyControlIsSafe<Observation>;
+  observationPriority: (observation: Observation) => number;
 };
 
 function shortlistWorkflowsForFactsRanking<
@@ -308,10 +302,12 @@ function shortlistWorkflowsForFactsRanking<
   fieldBearing,
   independent,
   passkeyControlIsSafe,
+  observationPriority,
 }: ShortlistWorkflowsRequest<Observation>): Observation[] {
   const boundedRequest: TakeBoundedPriorityWorkflowsRequest<Observation> = {
     observations: fieldBearing,
     passkeyControlIsSafe,
+    observationPriority,
   };
   return [
     ...takeBoundedPriorityWorkflows(boundedRequest),
@@ -319,61 +315,63 @@ function shortlistWorkflowsForFactsRanking<
   ];
 }
 
-function cheapWorkflowPriority<
-  Observation extends RankableWorkflowObservation,
->({
-  observation,
-  passkeyControlIsSafe,
-}: CheapWorkflowProgressionRequest<Observation>): number {
-  const progressionRequest: CheapWorkflowProgressionRequest<Observation> = {
-    observation,
-    passkeyControlIsSafe,
-  };
-  if (!cheapWorkflowLooksProgressing(progressionRequest)) return 1;
-  if (observation.summary.oneTimeCodeFieldCount > 0) return 5;
-  if (observation.summary.currentPasswordFieldCount > 0) return 4;
-  if (observation.summary.genericPasswordFieldCount === 1) return 3;
-  if (observation.summary.passwordFieldCount > 0) return 2;
-  if (observation.summary.usernameFieldCount > 0) return 2;
-  return 1;
-}
-
-function unownedScopeLooksProgressing(root: ParentNode): boolean {
-  if (!(root instanceof Document || root instanceof Element)) return false;
-  return Array.from(
-    root.querySelectorAll<HTMLElement>(authenticationAdvanceControlSelector),
-  ).some((control) => {
-    if (controlIsInert(control)) return false;
-    return looks_like_login_advance_control_label(controlLabel(control));
-  });
-}
-
-function ownedFormLooksProgressing<
-  Observation extends RankableWorkflowObservation,
->({
-  form,
-  summary,
-  observation,
-  passkeyControlIsSafe,
-}: OwnedFormProgressionRequest<Observation>): boolean {
-  if (formHasRustClassifiableAdvanceControl(form)) return true;
-  if (formHasSemanticSubmitter(form)) return false;
-  const passkeyCandidates = findPasskeyControls(form);
-  const safetyRequest: ObservationHasSafePasskeyRequest<Observation> = {
-    observation,
-    passkeyCandidates,
-    passkeyControlIsSafe,
-  };
+function unownedScopeLooksProgressing(
+  observation: RankableWorkflowObservation,
+): boolean {
+  const { root, formScope, summary } = observation;
   if (
-    summary.passkeyControlPresent &&
-    !observationHasSafePasskey(safetyRequest)
-  ) {
+    formScope.kind !== PasswordFormScopeKind.Unowned ||
+    !(root instanceof Document || root instanceof Element)
+  )
     return false;
-  }
-  return (
-    (summary.currentPasswordFieldCount > 0 || summary.usernameFieldCount > 0) &&
-    typeof form.requestSubmit === "function"
-  );
+  const controls = Array.from(
+    root.querySelectorAll<HTMLElement>(authenticationAdvanceControlSelector),
+  ).filter((control) => !controlIsInert(control) && !control.form);
+  const semanticSubmitControlCount = countedSemanticSubmitControls(controls);
+  const fieldQuery: PasswordFieldQuery = { root, formScope };
+  const passwordFields = findPasswordFields(fieldQuery);
+  const newPasswordFieldCount = passwordFields.filter((field) => {
+    const tokenRequest: Parameters<typeof hasAutocompleteToken>[0] = {
+      field,
+      expected: "new-password",
+    };
+    return hasAutocompleteToken(tokenRequest);
+  }).length;
+  return controls.some((control) => {
+    const destinationRequest: Parameters<typeof controlDestinationIdentity>[0] =
+      { control, formScope };
+    const identityRequest: Parameters<typeof observedFormIdentity>[0] = {
+      root,
+      formScope,
+    };
+    const facts: AuthenticationAdvanceControlObservation = {
+      actionability: "actionable",
+      ownership: "locally-scoped",
+      semantics: control.matches(semanticSubmitControlSelector)
+        ? "semantic-submit"
+        : "activation",
+      authenticationUsername: usernameEvidence(fieldQuery),
+      passwordFieldCount: summary.passwordFieldCount,
+      newPasswordFieldCount,
+      oneTimeCodeFieldCount: summary.oneTimeCodeFieldCount,
+      semanticSubmitControlCount,
+      sourceOrigin: control.ownerDocument.defaultView?.location.origin ?? "",
+      formIdentity: observedFormIdentity(identityRequest),
+      destinationIdentity: controlDestinationIdentity(destinationRequest),
+      label: controlLabel(control),
+      machineIdentity: controlMachineIdentity(control),
+      submissionMethod: controlSubmissionMethod(control),
+    };
+    return (
+      authenticationFactStringsAreTransportable([
+        facts.sourceOrigin,
+        facts.formIdentity,
+        facts.destinationIdentity,
+        facts.label,
+        facts.machineIdentity,
+      ]) && authentication_advance_control_is_safe(facts)
+    );
+  });
 }
 
 function takeBoundedPriorityWorkflows<
@@ -381,6 +379,7 @@ function takeBoundedPriorityWorkflows<
 >({
   observations,
   passkeyControlIsSafe,
+  observationPriority,
 }: TakeBoundedPriorityWorkflowsRequest<Observation>): Observation[] {
   const selected: Array<BoundedPriorityWorkflowEntry<Observation>> = [];
   for (const observation of observations) {
@@ -388,8 +387,9 @@ function takeBoundedPriorityWorkflows<
       observation,
       passkeyControlIsSafe,
     };
-    const priority = cheapWorkflowPriority(progressionRequest);
-    const progressing = cheapWorkflowLooksProgressing(progressionRequest);
+    const priority = observationPriority(observation);
+    const progressing =
+      priority > 1 || cheapWorkflowLooksProgressing(progressionRequest);
     if (selected.length < MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS * 2) {
       const selectedEntry: BoundedPriorityWorkflowEntry<Observation> = {
         observation,
@@ -445,18 +445,12 @@ function cheapWorkflowLooksProgressing<
   };
   if (observationHasSafePasskey(safetyRequest)) return true;
   if (observation.formScope.kind === PasswordFormScopeKind.Unowned) {
-    return unownedScopeLooksProgressing(observation.root);
+    return unownedScopeLooksProgressing(observation);
   }
-  const progressionRequest: OwnedFormProgressionRequest<Observation> = {
-    form: observation.formScope.owner,
-    summary: observation.summary,
-    observation,
-    passkeyControlIsSafe,
-  };
   return (
     (!formBlocksCredentialDisclosure(observation.formScope.owner) ||
       formHasPostMethodSubmitter(observation.formScope.owner)) &&
-    ownedFormLooksProgressing(progressionRequest)
+    formHasRustClassifiableAdvanceControl(observation.formScope.owner)
   );
 }
 

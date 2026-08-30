@@ -189,6 +189,15 @@ function findFields({
         }
       }
     }
+    fields.sort((...pair) => {
+      const left = pair[0];
+      const right = pair[1];
+      if (left === right) return 0;
+      return left.compareDocumentPosition(right) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+        ? -1
+        : 1;
+    });
     return fields;
   }
   return Array.from(root.querySelectorAll<HTMLInputElement>(selector)).filter(
@@ -241,9 +250,10 @@ function associatedLabelText(field: HTMLInputElement): string {
 }
 
 function fieldIdentityId(field: HTMLInputElement): string {
-  return /username|email|login|account|identifier|otp|totp|mfa|2fa|one-?time|verif/i.test(
-    field.id,
-  )
+  return field.id.toLowerCase() === "user" ||
+    /username|email|login|account|identifier|otp|totp|mfa|2fa|one-?time|verif/i.test(
+      field.id,
+    )
     ? field.id
     : "";
 }
