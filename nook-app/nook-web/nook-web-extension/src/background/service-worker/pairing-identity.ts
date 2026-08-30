@@ -13,6 +13,7 @@ import {
 import { companionWasmReady } from '../../../../nook-web-shared/src/extension/companion-ready'
 import { OpenCompanionLauncherIntent } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
 import { ExtensionConnectScope } from '../../../../nook-web-shared/src/extension/extension-connect-scope'
+import { DeviceProtectionStatus } from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm.js'
 import { runtimeSimpleVaultUrl } from '../../lib/simple-vault-runtime'
 import { WebsiteAuthenticatorResponseStatus } from '../../lib/login-fill-messages'
 import {
@@ -359,6 +360,44 @@ function unlockedSessionDevice(response: unknown): UnlockedSessionDeviceParse {
       devicePublicKey: device.devicePublicKey,
       deviceSigningPublicKey: device.deviceSigningPublicKey,
     },
+  }
+}
+
+export enum WebsiteSessionStatusTransportKind {
+  Unavailable = 'unavailable',
+  Locked = 'locked',
+  Unlocked = 'unlocked',
+}
+
+export function websiteSessionStatusTransport(
+  response: unknown,
+): WebsiteSessionStatusTransportKind {
+  if (
+    !response ||
+    typeof response !== 'object' ||
+    !('ok' in response) ||
+    response.ok !== true ||
+    !('status' in response)
+  ) {
+    return WebsiteSessionStatusTransportKind.Unavailable
+  }
+  if (response.status === DeviceProtectionStatus.Unlocked) {
+    return unlockedSessionDevice(response).kind ===
+      UnlockedSessionDeviceParseKind.Parsed
+      ? WebsiteSessionStatusTransportKind.Unlocked
+      : WebsiteSessionStatusTransportKind.Unavailable
+  }
+  switch (response.status) {
+    case DeviceProtectionStatus.Error:
+    case DeviceProtectionStatus.Loading:
+    case DeviceProtectionStatus.Missing:
+    case DeviceProtectionStatus.Passkey:
+    case DeviceProtectionStatus.Pin:
+    case DeviceProtectionStatus.PinSetup:
+    case DeviceProtectionStatus.Plaintext:
+      return WebsiteSessionStatusTransportKind.Locked
+    default:
+      return WebsiteSessionStatusTransportKind.Unavailable
   }
 }
 
@@ -819,16 +858,33 @@ async function websiteGrants({
     payload: { queue },
   }
   const status = await sendSessionMessage(nookTypedArgs0_9)
-  if (!isUnlockedSessionStatus(status)) {
-    if (openLockedCompanion) {
+  const sessionStatus = websiteSessionStatusTransport(status)
+  if (openLockedCompanion) {
+    if (sessionStatus !== WebsiteSessionStatusTransportKind.Unlocked) {
       openCompanionLauncherBestEffort(OpenCompanionLauncherIntent.Default)
+      return {
+        response: {
+          ok: true,
+          status: WebsiteAuthenticatorResponseStatus.Locked,
+        },
+      }
     }
+    return { grants }
+  }
+  if (sessionStatus === WebsiteSessionStatusTransportKind.Unavailable) {
     return {
       response: {
         ok: true,
-        status: WebsiteAuthenticatorResponseStatus.Locked,
+        status: WebsiteAuthenticatorResponseStatus.Unavailable,
       },
     }
   }
-  return { grants }
+  return sessionStatus === WebsiteSessionStatusTransportKind.Unlocked
+    ? { grants }
+    : {
+        response: {
+          ok: true,
+          status: WebsiteAuthenticatorResponseStatus.Locked,
+        },
+      }
 }
