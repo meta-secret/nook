@@ -124,14 +124,6 @@ pub fn authentication_workflow_saved_login_capability(
 }
 
 #[wasm_bindgen]
-#[must_use]
-pub fn authentication_workflow_requires_login_match_availability(
-    snapshot: nook_companion_core::AuthenticationWorkflowSnapshot,
-) -> bool {
-    snapshot.requires_login_match_availability()
-}
-
-#[wasm_bindgen]
 pub fn decode_authenticator_backup_attach_response(
     response: nook_companion_core::AuthenticatorBackupAttachResponseWire,
 ) -> Result<nook_companion_core::AuthenticatorBackupAttachResponse, wasm_bindgen::JsError> {
@@ -775,15 +767,6 @@ mod tests {
             authentication_workflow_saved_login_capability(valid),
             nook_companion_core::AuthenticationSavedLoginCapability::FillSavedLogin
         );
-        assert!(!authentication_workflow_requires_login_match_availability(
-            valid
-        ));
-        assert!(authentication_workflow_requires_login_match_availability(
-            nook_companion_core::AuthenticationWorkflowSnapshot {
-                action: nook_companion_core::AuthenticationWorkflowAction::UsePasskey,
-                ..valid
-            }
-        ));
         assert_eq!(
             authentication_workflow_saved_login_capability(
                 nook_companion_core::AuthenticationWorkflowSnapshot {

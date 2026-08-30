@@ -258,16 +258,6 @@ impl AuthenticationWorkflowSnapshot {
             AuthenticationSavedLoginCapability::Unavailable
         }
     }
-
-    #[must_use]
-    pub const fn requires_login_match_availability(self) -> bool {
-        self.saved_login_capability() == AuthenticationSavedLoginCapability::FillSavedLogin
-            && matches!(
-                self.action,
-                AuthenticationWorkflowAction::UsePasskey
-                    | AuthenticationWorkflowAction::CreatePasskey
-            )
-    }
 }
 
 const fn classify_enrollment_workflow(

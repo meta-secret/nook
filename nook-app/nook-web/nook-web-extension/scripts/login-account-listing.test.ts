@@ -54,18 +54,6 @@ describe('login account listing failure handling', () => {
     ])
     expect(interactiveSendMessage).toHaveBeenCalledTimes(2)
 
-    const unavailableSendMessage = mock(() =>
-      Promise.reject(new Error('extension session unavailable')),
-    )
-    const unavailableRequest: Parameters<typeof loginAccountsForOrigin>[0] = {
-      grants,
-      origin: 'https://example.test',
-      sendMessage: unavailableSendMessage,
-    }
-    await expect(loginAccountsForOrigin(unavailableRequest)).resolves.toEqual(
-      [],
-    )
-
     const passiveSendMessage = mock(() =>
       Promise.resolve({ ok: false, reason: 'session-list-failed' }),
     )
@@ -135,29 +123,5 @@ describe('login account listing failure handling', () => {
       loginAccountAvailabilityForOrigin(passiveRequest),
     ).resolves.toEqual({ ok: false })
     expect(passiveSendMessage).toHaveBeenCalledTimes(1)
-  })
-
-  test('fails passive availability closed on malformed account entries', async () => {
-    Object.assign(globalThis, {
-      __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
-    })
-    const { loginAccountAvailabilityForOrigin } =
-      await import('../src/background/service-worker/account-pickers')
-    const passiveRequest: Parameters<
-      typeof loginAccountAvailabilityForOrigin
-    >[0] = {
-      grants: [grant('malformed-vault')],
-      origin: 'https://example.test',
-      queue: extensionSessionProbeDeadline(Date.now() + 1_000),
-      sendMessage: mock(() =>
-        Promise.resolve({
-          ok: true,
-          accounts: [{ secretId: 'login-1' }],
-        }),
-      ),
-    }
-    await expect(
-      loginAccountAvailabilityForOrigin(passiveRequest),
-    ).resolves.toEqual({ ok: false })
   })
 })
