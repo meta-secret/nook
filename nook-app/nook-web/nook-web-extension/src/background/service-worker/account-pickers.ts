@@ -1,6 +1,5 @@
 import {
   WebsiteAuthenticatorResponseStatus,
-  WebsiteLoginOptionsMessageType,
   type WebsiteAuthenticatorOption,
   type WebsiteLoginAccountOption,
 } from '../../lib/login-fill-messages'
@@ -465,7 +464,6 @@ export async function websiteLoginMatchAvailability({
   dependencies,
 }: WebsiteLoginMatchAvailabilityArgs): Promise<WebsiteLoginMatchAvailability> {
   const message: WebsiteLoginOptionsArgs['message'] = {
-    type: WebsiteLoginOptionsMessageType.NookWebsiteLoginOptions,
     payload: { origin },
   }
   const responseRequest: WebsiteLoginOptionsResponseArgs = {

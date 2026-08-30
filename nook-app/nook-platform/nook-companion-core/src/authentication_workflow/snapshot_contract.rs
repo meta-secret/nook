@@ -8,33 +8,30 @@ use super::{
 const MAX_AUTHENTICATION_WORKFLOW_OBSERVATION_INDEX_EXCLUSIVE: u32 = 20;
 
 const fn saved_login_capability_matches_contract(snapshot: AuthenticationWorkflowSnapshot) -> bool {
-    match (
-        snapshot.kind,
-        snapshot.stage,
-        snapshot.action,
-        snapshot.saved_login_capability,
-    ) {
+    let is_login_credentials = matches!(
+        (snapshot.kind, snapshot.stage),
         (
             AuthenticationWorkflowKind::Login,
-            AuthenticationWorkflowStage::Credentials,
-            AuthenticationWorkflowAction::ContinueWithNook,
-            AuthenticationSavedLoginCapability::FillSavedLogin,
+            AuthenticationWorkflowStage::Credentials
         )
-        | (
-            AuthenticationWorkflowKind::Login,
-            AuthenticationWorkflowStage::Credentials,
-            AuthenticationWorkflowAction::UsePasskey | AuthenticationWorkflowAction::CreatePasskey,
-            AuthenticationSavedLoginCapability::FillSavedLogin
-            | AuthenticationSavedLoginCapability::Unavailable,
-        ) => true,
-        (
-            AuthenticationWorkflowKind::Login,
-            AuthenticationWorkflowStage::Credentials,
-            AuthenticationWorkflowAction::ContinueWithNook,
-            AuthenticationSavedLoginCapability::Unavailable,
-        ) => false,
-        (_, _, _, AuthenticationSavedLoginCapability::Unavailable) => true,
-        (_, _, _, AuthenticationSavedLoginCapability::FillSavedLogin) => false,
+    );
+    match snapshot.action {
+        AuthenticationWorkflowAction::ContinueWithNook => {
+            is_login_credentials
+                && matches!(
+                    snapshot.saved_login_capability,
+                    AuthenticationSavedLoginCapability::FillSavedLogin
+                )
+        }
+        AuthenticationWorkflowAction::UsePasskey | AuthenticationWorkflowAction::CreatePasskey
+            if is_login_credentials =>
+        {
+            true
+        }
+        _ => matches!(
+            snapshot.saved_login_capability,
+            AuthenticationSavedLoginCapability::Unavailable
+        ),
     }
 }
 
