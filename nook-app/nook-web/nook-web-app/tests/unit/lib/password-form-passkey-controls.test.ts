@@ -119,6 +119,19 @@ describe('passkey control detection', () => {
     )
   })
 
+  test('does not bind a GET passkey submitter that would disclose a typed password', () => {
+    document.body.innerHTML = `
+      <form method="post" id="login" action="/auth/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit" formmethod="get">Use passkey</button>
+      </form>
+    `
+    expect(
+      findWorkflowPasskeyControl(observedAuthenticationWorkflow()).kind,
+    ).toBe(PasskeyControlLookupKind.Absent)
+  })
+
   test('binds the exact later passkey candidate approved by Rust', () => {
     document.body.innerHTML = `<form method="post" id="login" action="/auth/login"><input autocomplete="username" /><button id="inert" disabled>Use passkey</button><button id="safe">Use passkey</button></form>`
     const control = findWorkflowPasskeyControl(observedAuthenticationWorkflow())

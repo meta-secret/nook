@@ -804,6 +804,25 @@ describe('classified login activation', () => {
     expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(false)
   })
 
+  test('fills when a GET-default form has a POST Sign in override', () => {
+    document.body.innerHTML = `
+      <form id="login" action="/auth/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+      </form>
+      <button type="submit" form="login" formmethod="post">Sign in</button>
+    `
+    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: { username: 'vault-user', password: 'vault-pass' },
+      kind: PasswordFormQueryKind.Root,
+      root: document,
+    }
+    expect(fillLoginCredentials(fillArgs)).toBe(true)
+    expect(
+      document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
+    ).toBe('vault-pass')
+  })
+
   test('fills a POST login when a visible dialog Cancel sits beside Sign in', () => {
     document.body.innerHTML = `
       <form method="post" id="login" action="/auth/login">

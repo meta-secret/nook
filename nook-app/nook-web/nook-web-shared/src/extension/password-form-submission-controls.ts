@@ -351,7 +351,6 @@ export function selectedSubmitterBlocksCredentialDisclosure(
   form: HTMLFormElement,
   selectedSubmitter: LoginAdvanceControl | false,
 ): boolean {
-  if (formBlocksCredentialDisclosure(form)) return true;
   if (selectedSubmitter) {
     const method = controlSubmissionMethod(selectedSubmitter);
     return (
@@ -359,7 +358,7 @@ export function selectedSubmitterBlocksCredentialDisclosure(
       method === PageControlSubmissionMethod.Dialog
     );
   }
-  return formHasDialogSubmitter(form);
+  return formBlocksCredentialDisclosure(form) || formHasDialogSubmitter(form);
 }
 
 export function canRequestImplicitAuthenticationSubmit(

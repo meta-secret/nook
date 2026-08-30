@@ -11,10 +11,21 @@ import {
 import {
   associatedAuthenticationForm,
   controlIsInert,
+  formBlocksCredentialDisclosure,
   MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
   PasswordFormQueryKind,
+  semanticSubmitControlSelector,
   type PasswordFormScopeQuery,
 } from "./password-form-submission-controls";
+
+type RankableWorkflowSummary = {
+  oneTimeCodeFieldCount: number;
+  currentPasswordFieldCount: number;
+  genericPasswordFieldCount: number;
+  passwordFieldCount: number;
+  usernameFieldCount: number;
+  passkeyControlPresent: boolean;
+};
 
 type PasskeyOnlyWorkflowObservation<Summary> = {
   root: ParentNode;
@@ -61,6 +72,7 @@ export function summarizePasskeyOnlyWorkflowForms<Summary>(
   const preferred = takePreferredPasskeyOnlyObservations(
     scopes,
     summarizeRoot,
+    observationPriority,
     passkeyControlIsSafe,
     indexed,
     emptySummary,
@@ -77,6 +89,7 @@ export function appendIndependentPasskeyOnlyWorkflows<
   Observation extends {
     root: ParentNode;
     formScope: PasswordFormScope;
+    summary: RankableWorkflowSummary;
   },
 >(
   fieldBearing: Observation[],
@@ -113,7 +126,6 @@ export function appendIndependentPasskeyOnlyWorkflows<
   const rankingCandidates = shortlistWorkflowsForFactsRanking(
     fieldBearing,
     independent,
-    observationPriority,
   );
   const ranked = rankingCandidates.map((observation) => ({
     observation,
@@ -127,24 +139,59 @@ export function appendIndependentPasskeyOnlyWorkflows<
   return takeRankedWorkflowObservations(fieldBearing, ranked);
 }
 
-function shortlistWorkflowsForFactsRanking<Observation>(
-  fieldBearing: Observation[],
-  independent: Observation[],
-  observationPriority: (observation: Observation) => number,
-): Observation[] {
+function shortlistWorkflowsForFactsRanking<
+  Observation extends {
+    formScope: PasswordFormScope;
+    summary: RankableWorkflowSummary;
+  },
+>(fieldBearing: Observation[], independent: Observation[]): Observation[] {
   return [
-    ...takeBoundedPriorityWorkflows(fieldBearing, observationPriority),
+    ...takeBoundedPriorityWorkflows(fieldBearing),
     ...independent.slice(0, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS),
   ];
 }
 
-function takeBoundedPriorityWorkflows<Observation>(
-  observations: Observation[],
-  observationPriority: (observation: Observation) => number,
-): Observation[] {
+function cheapWorkflowPriority(observation: {
+  formScope: PasswordFormScope;
+  summary: RankableWorkflowSummary;
+}): number {
+  const progressing =
+    observation.summary.passkeyControlPresent ||
+    (observation.formScope.kind === PasswordFormScopeKind.Owned &&
+      !formBlocksCredentialDisclosure(observation.formScope.owner) &&
+      ownedFormLooksProgressing(
+        observation.formScope.owner,
+        observation.summary,
+      ));
+  if (!progressing) return 1;
+  if (observation.summary.oneTimeCodeFieldCount > 0) return 5;
+  if (observation.summary.currentPasswordFieldCount > 0) return 4;
+  if (observation.summary.genericPasswordFieldCount === 1) return 3;
+  if (observation.summary.passwordFieldCount > 0) return 2;
+  return 1;
+}
+
+function ownedFormLooksProgressing(
+  form: HTMLFormElement,
+  summary: RankableWorkflowSummary,
+): boolean {
+  return Boolean(
+    form.querySelector(semanticSubmitControlSelector) ||
+    ((summary.currentPasswordFieldCount > 0 ||
+      summary.usernameFieldCount > 0) &&
+      typeof form.requestSubmit === "function"),
+  );
+}
+
+function takeBoundedByCheapPriority<
+  Observation extends {
+    formScope: PasswordFormScope;
+    summary: RankableWorkflowSummary;
+  },
+>(observations: Observation[]): Observation[] {
   const selected: Array<{ observation: Observation; priority: number }> = [];
   for (const observation of observations) {
-    const priority = observationPriority(observation);
+    const priority = cheapWorkflowPriority(observation);
     if (selected.length < MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS) {
       selected.push({ observation, priority });
       continue;
@@ -157,6 +204,27 @@ function takeBoundedPriorityWorkflows<Observation>(
     }
   }
   return selected.map((entry) => entry.observation);
+}
+
+function takeBoundedPriorityWorkflows<
+  Observation extends {
+    formScope: PasswordFormScope;
+    summary: RankableWorkflowSummary;
+  },
+>(observations: Observation[]): Observation[] {
+  const passwordBearing: Observation[] = [];
+  const rest: Observation[] = [];
+  for (const observation of observations) {
+    if (observation.summary.passwordFieldCount > 0) {
+      passwordBearing.push(observation);
+    } else {
+      rest.push(observation);
+    }
+  }
+  return [
+    ...takeBoundedByCheapPriority(passwordBearing),
+    ...takeBoundedByCheapPriority(rest),
+  ];
 }
 
 function collectPasskeyOnlyScopes(
@@ -266,6 +334,9 @@ function scopeHasOneTimeCodeField(scope: PasskeyOnlyScope): boolean {
 function takePreferredPasskeyOnlyObservations<Summary>(
   scopes: PasskeyOnlyScope[],
   summarizeRoot: (query: PasswordFormScopeQuery) => Summary,
+  observationPriority: (
+    observation: PasskeyOnlyWorkflowObservation<Summary>,
+  ) => number,
   passkeyControlIsSafe: PasskeyControlIsSafe<
     PasskeyOnlyWorkflowObservation<Summary>
   >,
@@ -278,17 +349,11 @@ function takePreferredPasskeyOnlyObservations<Summary>(
   const preferred: Array<{
     observation: PasskeyOnlyWorkflowObservation<Summary>;
     safe: boolean;
+    priority: number;
   }> = [];
-  let safeCount = 0;
   for (const scope of scopes) {
     if (scopeHasPasswordField(scope)) {
       continue;
-    }
-    if (
-      safeCount >= MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS &&
-      preferred.length >= MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS
-    ) {
-      break;
     }
     const scopedCandidates = passkeyCandidatesForScope(scope, indexed);
     const cheapSafe =
@@ -324,16 +389,18 @@ function takePreferredPasskeyOnlyObservations<Summary>(
       scopedCandidates,
       passkeyControlIsSafe,
     );
+    const priority = observationPriority(observation);
     if (preferred.length < MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS) {
-      preferred.push({ observation, safe });
-      if (safe) safeCount += 1;
+      preferred.push({ observation, safe, priority });
       continue;
     }
-    if (!safe) continue;
-    const replaceAt = preferred.findIndex((entry) => !entry.safe);
-    if (replaceAt < 0) break;
-    preferred[replaceAt] = { observation, safe };
-    safeCount += 1;
+    if (!safe && !scopeHasOneTimeCodeField(scope)) continue;
+    const lowest = preferred.reduce((current, entry) =>
+      entry.priority < current.priority ? entry : current,
+    );
+    if (priority > lowest.priority) {
+      preferred[preferred.indexOf(lowest)] = { observation, safe, priority };
+    }
   }
   return preferred;
 }

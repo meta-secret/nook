@@ -432,6 +432,10 @@ pub(crate) fn authentication_passkey_control_is_safe(
         || (!explicitly_marked && !looks_like_passkey_control_label(&observation.label))
         || form_identity::form_identity_indicates_destructive_action(&observation.label)
         || form_identity::identity_has_authentication_control_veto(&observation.machine_identity)
+        || matches!(
+            observation.submission_method,
+            PageControlSubmissionMethod::Get | PageControlSubmissionMethod::Dialog
+        )
         || label_names_passkey_enrollment_or_management
         || label_names_device_management
         || form_identity::form_identity_indicates_destructive_action(&observation.form_identity)

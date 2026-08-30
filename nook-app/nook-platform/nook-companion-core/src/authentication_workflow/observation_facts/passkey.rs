@@ -161,6 +161,18 @@ mod tests {
         assert!(!authentication_passkey_control_candidate_is_safe(
             &unsafe_candidate
         ));
+
+        let mut get_submitter = passkey_control("Use passkey");
+        get_submitter.submission_method = PageControlSubmissionMethod::Get;
+        get_submitter.password_field_count = 1;
+        assert!(!authentication_passkey_control_candidate_is_safe(
+            &AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(get_submitter)
+        ));
+        let mut dialog_submitter = passkey_control("Use passkey");
+        dialog_submitter.submission_method = PageControlSubmissionMethod::Dialog;
+        assert!(!authentication_passkey_control_candidate_is_safe(
+            &AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(dialog_submitter)
+        ));
     }
 
     #[test]
