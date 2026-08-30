@@ -39,6 +39,7 @@ export function lintProseDensitySpans(
   const inspectArgs: InspectMarkdownNodeArgs = {
     filePath,
     findings,
+    insideBlockquote: false,
     node: root,
   };
   inspectMarkdownNode(inspectArgs);
@@ -49,12 +50,19 @@ export function lintProseDensitySpans(
 type InspectMarkdownNodeArgs = {
   readonly filePath: string;
   readonly findings: DensityFindingSpan[];
+  readonly insideBlockquote: boolean;
   readonly node: Nodes;
 };
 
 function inspectMarkdownNode(args: InspectMarkdownNodeArgs): void {
   if (args.node.type === 'paragraph' || args.node.type === 'tableCell') {
-    if (args.node.type === 'paragraph' && isQuotedOutput(args.node)) return;
+    if (
+      args.node.type === 'paragraph' &&
+      args.insideBlockquote &&
+      hasQuotedOutputLabel(args.node)
+    ) {
+      return;
+    }
     if (args.node.type === 'tableCell' && isIndexPointerCell(args.node)) return;
     const proseBlockArgs: InspectProseBlockArgs = {
       filePath: args.filePath,
@@ -66,12 +74,17 @@ function inspectMarkdownNode(args: InspectMarkdownNodeArgs): void {
   }
   if (!('children' in args.node)) return;
   for (const child of args.node.children) {
-    const childArgs: InspectMarkdownNodeArgs = { ...args, node: child };
+    const childArgs: InspectMarkdownNodeArgs = {
+      ...args,
+      insideBlockquote:
+        args.insideBlockquote || args.node.type === 'blockquote',
+      node: child,
+    };
     inspectMarkdownNode(childArgs);
   }
 }
 
-function isQuotedOutput(paragraph: Paragraph): boolean {
+function hasQuotedOutputLabel(paragraph: Paragraph): boolean {
   const text = markdownText(paragraph).replace(/\s+/gu, ' ').trim();
   return /^(?:command output|log (?:excerpt|output)|stderr|stdout)\s*:/iu.test(
     text,

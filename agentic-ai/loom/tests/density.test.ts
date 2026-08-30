@@ -42,6 +42,33 @@ describe('lintProseDensity', () => {
     expect(lintProseDensity(lintArgs)).toEqual([]);
   });
 
+  test('checks ordinary paragraphs that begin with an output label', () => {
+    const content = [
+      'Command output: Require the successor branch and the open pull request and',
+      'the predecessor metadata and the frozen base SHA and the containment proof',
+      'and the delivery state before any claim can proceed.',
+    ].join('\n');
+    const lintArgs: LintProseDensityArgs = {
+      filePath: 'authored-output-label.md',
+      content,
+    };
+    expect(lintProseDensity(lintArgs).length).toBeGreaterThan(0);
+  });
+
+  test('checks list items that begin with an output label', () => {
+    const content = [
+      '- Log output: Require the successor branch and the open pull request and the',
+      '  predecessor metadata and the frozen base SHA and the containment proof and',
+      '  the delivery state before any claim can proceed.',
+    ].join('\n');
+    const lintArgs: LintProseDensityArgs = {
+      filePath: 'authored-output-list.md',
+      content,
+    };
+    const findings = lintProseDensity(lintArgs);
+    expect(findings.some((finding) => finding.line === 1)).toBe(true);
+  });
+
   test('checks normative prose after labeled output in one blockquote', () => {
     const content = [
       '> Command output: includes one actor and another actor and a branch and a',
