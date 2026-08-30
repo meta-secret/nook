@@ -7,6 +7,7 @@ import {
   ModuleDeliveryExecutionPrecedenceReason,
   ModuleDeliveryIssueCode,
   ModuleDeliveryJoinKind,
+  ModuleDeliveryOwner,
   ModuleDeliveryTaskKind,
   ModuleDeliveryValidationStatus,
   ModuleDeliveryWorkspaceKind,
@@ -131,6 +132,44 @@ describe('Cortex module-delivery plan validation', () => {
       ...CORTEX_AUTHORING_SKILL_PATHS,
       SRE_SKILL,
     ]);
+  });
+
+  test('admits only an exact Gizmo grant owned by Gizmo Prime and written by AI', () => {
+    const claim = '.cortex/gizmo/workflows/subagent-delegation.md';
+    const gizmo: ModuleDeliveryWriteNodeV2 = {
+      ...cortexNode({
+        taskId: 'gizmo-workflow',
+        team: TeamKey.Ai,
+        write: [claim],
+        selectedSkillPaths: [],
+        sharedWriteClaims: [claim],
+      }),
+      functionalOwner: ModuleDeliveryOwner.GizmoPrime,
+      acceptanceOwner: ModuleDeliveryOwner.GizmoPrime,
+    };
+    expect(validate([gizmo]).status).toBe(
+      ModuleDeliveryValidationStatus.Accepted,
+    );
+    for (const invalid of [
+      { ...gizmo, team: TeamKey.Sre },
+      { ...gizmo, acceptanceOwner: TeamKey.Ai },
+      {
+        ...gizmo,
+        resources: { ...gizmo.resources, write: ['.cortex/gizmo/**'] },
+        cortexAuthoring: {
+          selectedSkillPaths: [],
+          sharedWriteClaims: ['.cortex/gizmo/**'],
+        },
+      },
+    ])
+      expect(validate([invalid]).status).toBe(
+        ModuleDeliveryValidationStatus.Rejected,
+      );
+    const forgedOwner = structuredClone(gizmo);
+    Object.assign(forgedOwner, { functionalOwner: 'forged-owner' });
+    expect(validate([forgedOwner]).status).toBe(
+      ModuleDeliveryValidationStatus.Rejected,
+    );
   });
 
   test('rejects foreign, broad, and authority-file grants', () => {

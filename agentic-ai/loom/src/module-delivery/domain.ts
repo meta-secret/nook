@@ -10,6 +10,12 @@ export const MAX_MODULE_DELIVERY_AGENT_DEPTH = 3;
 export const MAX_MODULE_DELIVERY_ATTEMPTS = 5;
 export const CORTEX_TEAM_WRITER_EXPERT = 'cortex_team_writer';
 
+export enum ModuleDeliveryOwner {
+  GizmoPrime = 'gizmo-prime',
+}
+
+export type ModuleDeliveryOwnerIdentity = TeamKey | ModuleDeliveryOwner;
+
 export const REQUIRED_PARENT_OWNED_RESOURCES = [
   '.cortex/**',
   '.github/**',
@@ -27,6 +33,22 @@ export enum ModuleDeliveryTaskKind {
   EvidenceSynthesis = 'evidence-synthesis',
   Write = 'write',
 }
+
+export enum ModuleDeliveryTaskProfile {
+  Ordinary = 'ordinary-team-task',
+}
+
+export const ORDINARY_TASK_WRITE_ROOTS = {
+  [TeamKey.Ai]: ['agentic-ai/loom'],
+  [TeamKey.DevelopmentCore]: [
+    'nook-app/nook-platform',
+    'preflight',
+    'agentic-ai/minds',
+  ],
+  [TeamKey.Security]: [],
+  [TeamKey.Sre]: ['infra', 'nook-app/ci', '.task', 'agentic-ai/ci-agent'],
+  [TeamKey.WebDevelopment]: ['nook-app/nook-web'],
+} as const;
 
 export type ModuleDeliveryTaskTeamRequest = {
   readonly kind: ModuleDeliveryTaskKind;
@@ -102,8 +124,8 @@ export type ModuleDeliveryCortexAuthoring = {
 export type ModuleDeliveryExpectedProducerIdentity = {
   readonly taskId: string;
   readonly team: TeamKey;
-  readonly functionalOwner: TeamKey;
-  readonly acceptanceOwner: TeamKey;
+  readonly functionalOwner: ModuleDeliveryOwnerIdentity;
+  readonly acceptanceOwner: ModuleDeliveryOwnerIdentity;
 };
 
 export type ModuleDeliveryEvidenceInputContract = {
@@ -114,8 +136,8 @@ export type ModuleDeliveryEvidenceInputContract = {
 type ModuleDeliveryNodeFields = {
   readonly taskId: string;
   readonly team: TeamKey;
-  readonly functionalOwner: TeamKey;
-  readonly acceptanceOwner: TeamKey;
+  readonly functionalOwner: ModuleDeliveryOwnerIdentity;
+  readonly acceptanceOwner: ModuleDeliveryOwnerIdentity;
   readonly parentLineage: AgentAttemptParent;
   readonly expert: string;
   readonly moduleRoot: string;

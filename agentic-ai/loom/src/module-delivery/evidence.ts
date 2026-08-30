@@ -19,6 +19,7 @@ import type {
 } from './admission.ts';
 import type {
   ModuleDeliveryNodeV2,
+  ModuleDeliveryOwnerIdentity,
   ValidatedModuleDeliveryPlan,
 } from './domain.ts';
 import type { GitCommandRequest } from './git-command.ts';
@@ -52,8 +53,8 @@ export type ModuleDeliveryAcceptedProviderEvidenceIdentity = Readonly<{
   taskId: string;
   attempt: number;
   producerTeam: TeamKey;
-  functionalOwner: TeamKey;
-  acceptanceOwner: TeamKey;
+  functionalOwner: ModuleDeliveryOwnerIdentity;
+  acceptanceOwner: ModuleDeliveryOwnerIdentity;
   sourceCommit: string;
   verifiedHeadCommit: string;
   artifactIdentity: string;
@@ -95,8 +96,8 @@ type EvidenceSourceProvenanceContent = Readonly<{
   taskId: string;
   attempt: number;
   producerTeam: TeamKey;
-  functionalOwner: TeamKey;
-  acceptanceOwner: TeamKey;
+  functionalOwner: ModuleDeliveryOwnerIdentity;
+  acceptanceOwner: ModuleDeliveryOwnerIdentity;
   verdict: ModuleDeliveryEvidenceVerdict;
   claimIdentities: readonly ModuleDeliveryEvidenceClaimIdentity[];
   acceptanceRequirements: readonly string[];

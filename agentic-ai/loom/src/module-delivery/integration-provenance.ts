@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto';
 import { lstatSync, readFileSync, readlinkSync, realpathSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
-
 import { gitText, runModuleDeliveryGit } from './git-command.ts';
 import { pathExists } from './workspace-paths.ts';
 import {
@@ -28,6 +27,7 @@ import type {
 import type { TeamKey } from '../team-agents/catalog.ts';
 import type {
   ModuleDeliveryNode,
+  ModuleDeliveryOwnerIdentity,
   ValidatedModuleDeliveryPlan,
 } from './domain.ts';
 import type {
@@ -60,8 +60,8 @@ export type ModuleDeliveryReadOnlyEvidenceSubmission = Readonly<{
   planDigest: string;
   sourceCommit: string;
   producerTeam: TeamKey;
-  functionalOwner: TeamKey;
-  acceptanceOwner: TeamKey;
+  functionalOwner: ModuleDeliveryOwnerIdentity;
+  acceptanceOwner: ModuleDeliveryOwnerIdentity;
   acceptanceRequirements: readonly string[];
   claimIdentities: readonly ModuleDeliveryEvidenceClaimIdentity[];
   acceptedProviderEvidence: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
@@ -151,7 +151,7 @@ export type ModuleDeliveryHandoffSubmission = Readonly<{
 export type ModuleDeliveryWriteProviderSubmission = Readonly<{
   kind: ModuleDeliveryProviderSubmissionKind.Write;
   generation: number;
-  acceptedByTeam: TeamKey;
+  acceptedByTeam: ModuleDeliveryOwnerIdentity;
   verdict: ModuleDeliveryEvidenceVerdict;
   handoff: ModuleDeliveryHandoffSubmission;
 }>;
@@ -167,7 +167,7 @@ export type AcceptedModuleDeliveryWrite = Readonly<{
   planDigest: string;
   startingFrontier: string;
   integrationCommit: string;
-  acceptedByTeam: TeamKey;
+  acceptedByTeam: ModuleDeliveryOwnerIdentity;
   handoff: ModuleDeliveryHandoffSubmission;
 }>;
 
