@@ -99,6 +99,14 @@ pub fn decode_authentication_workflow_runtime_response(
 }
 
 #[wasm_bindgen]
+pub fn decode_website_login_match_availability(
+    response: nook_companion_core::WebsiteLoginOptionsWireValue,
+) -> Result<nook_companion_core::WebsiteLoginMatchAvailability, wasm_bindgen::JsError> {
+    nook_companion_core::decode_website_login_match_availability(response)
+        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+}
+
+#[wasm_bindgen]
 #[must_use]
 pub fn authentication_workflow_saved_login_capability(
     snapshot: nook_companion_core::AuthenticationWorkflowSnapshot,
@@ -742,6 +750,8 @@ mod tests {
             total_steps: 3,
             approval_requirement:
                 nook_companion_core::AuthenticationApprovalRequirement::ExplicitUserApproval,
+            saved_login_capability:
+                nook_companion_core::AuthenticationSavedLoginCapability::FillSavedLogin,
             observation_index: 0,
         };
         assert_eq!(
@@ -763,7 +773,67 @@ mod tests {
 #[cfg(all(test, target_arch = "wasm32"))]
 mod wasm_tests {
     use nook_companion_core::{ExtensionPersistenceArea, ExtensionPersistenceObservation};
+    use serde::{Deserialize, Serialize};
     use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[derive(Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct WorkflowSnapshotFixture {
+        kind: u8,
+        stage: u8,
+        action: u8,
+        current_step: u8,
+        total_steps: u8,
+        approval_requirement: &'static str,
+        saved_login_capability: &'static str,
+        observation_index: u32,
+    }
+
+    #[derive(Serialize)]
+    struct WorkflowFixture {
+        ok: bool,
+        snapshot: WorkflowSnapshotFixture,
+    }
+
+    #[derive(Serialize)]
+    struct LoginMatchesFixture {
+        kind: &'static str,
+        count: u32,
+    }
+
+    #[derive(Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct RuntimeResponseFixture {
+        workflow: WorkflowFixture,
+        login_matches: LoginMatchesFixture,
+    }
+
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct RuntimeResponseResult {
+        login_matches: LoginMatchesResult,
+    }
+
+    #[derive(Deserialize)]
+    struct LoginMatchesResult {
+        kind: String,
+        count: u32,
+    }
+
+    #[derive(Serialize)]
+    struct LockedLoginOptionsFixture {
+        ok: bool,
+        status: &'static str,
+    }
+
+    #[derive(Deserialize)]
+    struct LoginAvailabilityResult {
+        kind: String,
+    }
+
+    fn js_error(error: impl std::fmt::Display) -> wasm_bindgen::JsError {
+        wasm_bindgen::JsError::new(&error.to_string())
+    }
 
     #[wasm_bindgen_test]
     fn persistence_observation_round_trips_the_numeric_wasm_enum()
@@ -777,6 +847,58 @@ mod wasm_tests {
         let decoded: ExtensionPersistenceObservation = serde_wasm_bindgen::from_value(js_value)?;
 
         assert_eq!(decoded, observation);
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn runtime_response_bridge_accepts_the_complete_js_envelope()
+    -> Result<(), wasm_bindgen::JsError> {
+        let fixture = RuntimeResponseFixture {
+            workflow: WorkflowFixture {
+                ok: true,
+                snapshot: WorkflowSnapshotFixture {
+                    kind: 0,
+                    stage: 0,
+                    action: 4,
+                    current_step: 1,
+                    total_steps: 3,
+                    approval_requirement: "explicit-user-approval",
+                    saved_login_capability: "fill-saved-login",
+                    observation_index: 0,
+                },
+            },
+            login_matches: LoginMatchesFixture {
+                kind: "ready",
+                count: 2,
+            },
+        };
+        let js_input = serde_wasm_bindgen::to_value(&fixture).map_err(js_error)?;
+        let wire = serde_wasm_bindgen::from_value(js_input).map_err(js_error)?;
+        let decoded = super::decode_authentication_workflow_runtime_response(wire)?;
+        let js_output = serde_wasm_bindgen::to_value(&decoded).map_err(js_error)?;
+        let result: RuntimeResponseResult =
+            serde_wasm_bindgen::from_value(js_output).map_err(js_error)?;
+
+        assert_eq!(result.login_matches.kind, "ready");
+        assert_eq!(result.login_matches.count, 2);
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn login_match_bridge_accepts_the_website_options_js_envelope()
+    -> Result<(), wasm_bindgen::JsError> {
+        let js_input = serde_wasm_bindgen::to_value(&LockedLoginOptionsFixture {
+            ok: true,
+            status: "locked",
+        })
+        .map_err(js_error)?;
+        let wire = serde_wasm_bindgen::from_value(js_input).map_err(js_error)?;
+        let decoded = super::decode_website_login_match_availability(wire)?;
+        let js_output = serde_wasm_bindgen::to_value(&decoded).map_err(js_error)?;
+        let result: LoginAvailabilityResult =
+            serde_wasm_bindgen::from_value(js_output).map_err(js_error)?;
+
+        assert_eq!(result.kind, "locked");
         Ok(())
     }
 }

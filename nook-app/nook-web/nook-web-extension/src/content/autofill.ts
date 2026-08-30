@@ -133,7 +133,7 @@ async function scanAndRender(): Promise<void> {
     return
   }
   const { response } = delivery
-  const { verdict } = response
+  const { verdict, loginMatches } = response
   if (
     verdict.kind !== AuthenticationWorkflowSnapshotResponseKind.Matched ||
     !('snapshot' in verdict) ||
@@ -154,6 +154,7 @@ async function scanAndRender(): Promise<void> {
     snapshot,
     workflow: selected.observation,
     facts: response.selectedFacts,
+    loginMatches,
     vaultConnection,
   }
   renderWidget(nookTypedArgs0_1)

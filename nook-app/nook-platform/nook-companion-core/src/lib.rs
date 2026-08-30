@@ -66,7 +66,7 @@ pub use authentication_workflow_response::{
     WebsiteLoginMatchAvailability, WebsiteLoginMatchAvailabilityKind,
     WebsiteLoginMatchAvailabilityWire, WebsiteLoginMatchAvailabilityWithCountWire,
     WebsiteLoginMatchAvailabilityWithoutCountWire, decode_authentication_workflow_runtime_response,
-    decode_authentication_workflow_snapshot_response,
+    decode_authentication_workflow_snapshot_response, decode_website_login_match_availability,
 };
 pub use authenticator_backup_attach_response::{
     AuthenticatorBackupAttachResponse, AuthenticatorBackupAttachResponseDecodeError,
@@ -160,7 +160,8 @@ pub use vault_host_policy::{
 };
 pub use website_login_options_response::{
     WebsiteLoginAccountOption, WebsiteLoginOptions, WebsiteLoginOptionsDecodeError,
-    WebsiteLoginOptionsWireValue, decode_website_login_options, decode_website_login_options_json,
+    WebsiteLoginOptionsWireValue, decode_website_login_match_availability,
+    decode_website_login_options, decode_website_login_options_json,
 };
 pub use website_login_save_offer_response::{
     WebsiteLoginSaveActionResponse, WebsiteLoginSaveOfferResponse,

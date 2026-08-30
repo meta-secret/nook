@@ -1,8 +1,14 @@
 import {
   WebsiteAuthenticatorResponseStatus,
+  WebsiteLoginOptionsMessageType,
   type WebsiteAuthenticatorOption,
   type WebsiteLoginAccountOption,
 } from '../../lib/login-fill-messages'
+import {
+  decode_website_login_match_availability,
+  type WebsiteLoginMatchAvailability,
+  type WebsiteLoginOptionsWireValue,
+} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { OpenCompanionLauncherIntent } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
 import {
   extensionSessionGrantIdentity,
@@ -335,11 +341,16 @@ const websiteLoginOptionsDependencies: WebsiteLoginOptionsDependencies = {
   openCompanionLauncherBestEffort,
 }
 
-export async function websiteLoginOptions({
+type WebsiteLoginOptionsResponseArgs = WebsiteLoginOptionsArgs & {
+  openUnavailableCompanion: boolean
+}
+
+async function websiteLoginOptionsResponse({
   message,
   sender,
   dependencies,
-}: WebsiteLoginOptionsArgs): Promise<unknown> {
+  openUnavailableCompanion,
+}: WebsiteLoginOptionsResponseArgs): Promise<unknown> {
   const resolvedDependencies = dependencies ?? websiteLoginOptionsDependencies
   const nookTypedArgs0_6: Parameters<typeof availableWebsiteGrants>[0] = {
     origin: message.payload.origin,
@@ -351,7 +362,9 @@ export async function websiteLoginOptions({
   if ('response' in access) {
     if (
       access.response.ok &&
-      access.response.status === WebsiteAuthenticatorResponseStatus.Unavailable
+      access.response.status ===
+        WebsiteAuthenticatorResponseStatus.Unavailable &&
+      openUnavailableCompanion
     ) {
       resolvedDependencies.openCompanionLauncherBestEffort(
         OpenCompanionLauncherIntent.Pair,
@@ -367,6 +380,38 @@ export async function websiteLoginOptions({
   const accounts =
     await resolvedDependencies.loginAccountsForOrigin(nookTypedArgs0_0)
   return { ok: true, status: 'ready', accounts }
+}
+
+export async function websiteLoginOptions(
+  args: WebsiteLoginOptionsArgs,
+): Promise<unknown> {
+  return websiteLoginOptionsResponse({
+    ...args,
+    openUnavailableCompanion: true,
+  })
+}
+
+type WebsiteLoginMatchAvailabilityArgs = {
+  origin: string
+  sender: chrome.runtime.MessageSender
+}
+
+export async function websiteLoginMatchAvailability({
+  origin,
+  sender,
+}: WebsiteLoginMatchAvailabilityArgs): Promise<WebsiteLoginMatchAvailability> {
+  const message: WebsiteLoginOptionsArgs['message'] = {
+    type: WebsiteLoginOptionsMessageType.NookWebsiteLoginOptions,
+    payload: { origin },
+  }
+  const response = await websiteLoginOptionsResponse({
+    message,
+    sender,
+    openUnavailableCompanion: false,
+  })
+  return decode_website_login_match_availability(
+    response as WebsiteLoginOptionsWireValue,
+  )
 }
 
 function loginPickerStorageKey(requestId: string): string {

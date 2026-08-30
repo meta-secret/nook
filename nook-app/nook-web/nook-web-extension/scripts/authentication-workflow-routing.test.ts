@@ -19,6 +19,7 @@ const message = {
     ],
   },
 } as unknown as AuthenticationWorkflowSnapshotMessage
+const sender = {} as chrome.runtime.MessageSender
 
 describe('authentication workflow routing', () => {
   test('waits for companion WASM before classifying cold-start passkey evidence', async () => {
@@ -43,11 +44,14 @@ describe('authentication workflow routing', () => {
         )
         return { kind: 'matched', snapshot: { observationIndex: 0 } }
       },
+      authenticationWorkflowSavedLoginCapability: () => 'fill-saved-login',
+      websiteLoginMatchAvailability: async () => ({ kind: 'ready', count: 2 }),
     } as unknown as AuthenticationWorkflowRoutingDependencies
 
     const request: Parameters<typeof authenticationWorkflowMessageResponse>[0] =
       {
         message,
+        sender,
         dependencies,
       }
     const response = authenticationWorkflowMessageResponse(request)
@@ -56,7 +60,8 @@ describe('authentication workflow routing', () => {
 
     resolveReady()
     await expect(response).resolves.toMatchObject({
-      ok: true,
+      workflow: { ok: true },
+      loginMatches: { kind: 'ready', count: 2 },
       selectedFacts: {
         authenticator: { matchingPasskeyAccountCount: 2 },
       },
@@ -79,16 +84,22 @@ describe('authentication workflow routing', () => {
         )
         return { kind: 'no-match' }
       },
+      authenticationWorkflowSavedLoginCapability: () => 'unavailable',
+      websiteLoginMatchAvailability: async () => ({ kind: 'unavailable' }),
     } as unknown as AuthenticationWorkflowRoutingDependencies
 
     const request: Parameters<typeof authenticationWorkflowMessageResponse>[0] =
       {
         message,
+        sender,
         dependencies,
       }
     await expect(
       authenticationWorkflowMessageResponse(request),
-    ).resolves.toEqual({ ok: true })
+    ).resolves.toEqual({
+      workflow: { ok: true },
+      loginMatches: { kind: 'unavailable' },
+    })
   })
 
   test('contains a synchronous evidence-classifier exception', async () => {
@@ -99,18 +110,21 @@ describe('authentication workflow routing', () => {
       },
       matchingPasskeyAccountCountForOriginSafe: async () => 0,
       authenticationWorkflowSnapshot: async () => ({ kind: 'no-match' }),
+      authenticationWorkflowSavedLoginCapability: () => 'unavailable',
+      websiteLoginMatchAvailability: async () => ({ kind: 'unavailable' }),
     } as unknown as AuthenticationWorkflowRoutingDependencies
 
     const request: Parameters<typeof authenticationWorkflowMessageResponse>[0] =
       {
         message,
+        sender,
         dependencies,
       }
     await expect(
       authenticationWorkflowMessageResponse(request),
     ).resolves.toEqual({
-      ok: false,
-      reason: 'workflow-snapshot-failed',
+      workflow: { ok: false, reason: 'workflow-snapshot-failed' },
+      loginMatches: { kind: 'unavailable' },
     })
   })
 })

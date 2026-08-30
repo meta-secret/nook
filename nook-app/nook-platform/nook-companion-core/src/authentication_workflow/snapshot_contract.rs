@@ -20,6 +20,22 @@ impl AuthenticationWorkflowSnapshot {
             return false;
         }
 
+        if matches!(
+            self.saved_login_capability,
+            AuthenticationSavedLoginCapability::FillSavedLogin
+        ) && !matches!(
+            (self.kind, self.stage, self.action),
+            (
+                AuthenticationWorkflowKind::Login,
+                AuthenticationWorkflowStage::Credentials,
+                AuthenticationWorkflowAction::ContinueWithNook
+                    | AuthenticationWorkflowAction::UsePasskey
+                    | AuthenticationWorkflowAction::CreatePasskey,
+            )
+        ) {
+            return false;
+        }
+
         matches!(
             (
                 self.kind,
@@ -123,6 +139,7 @@ mod tests {
             current_step: 1,
             total_steps: 3,
             approval_requirement: AuthenticationApprovalRequirement::ExplicitUserApproval,
+            saved_login_capability: AuthenticationSavedLoginCapability::FillSavedLogin,
             observation_index: 0,
         };
         assert_eq!(
@@ -238,6 +255,18 @@ mod tests {
                                 approval_requirement: AuthenticationApprovalRequirement::for_action(
                                     action,
                                 ),
+                                saved_login_capability: if matches!(
+                                    (kind, stage, action),
+                                    (
+                                        AuthenticationWorkflowKind::Login,
+                                        AuthenticationWorkflowStage::Credentials,
+                                        AuthenticationWorkflowAction::ContinueWithNook,
+                                    )
+                                ) {
+                                    AuthenticationSavedLoginCapability::FillSavedLogin
+                                } else {
+                                    AuthenticationSavedLoginCapability::Unavailable
+                                },
                                 observation_index: 0,
                             };
                             if !accepted.matches_classifier_contract() {
@@ -286,6 +315,7 @@ mod tests {
             current_step: 1,
             total_steps: 3,
             approval_requirement: AuthenticationApprovalRequirement::ExplicitUserApproval,
+            saved_login_capability: AuthenticationSavedLoginCapability::FillSavedLogin,
             observation_index: maximum_exclusive - 1,
         };
         assert!(snapshot.matches_classifier_contract());

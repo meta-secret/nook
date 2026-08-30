@@ -235,6 +235,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
               currentStep: 1,
               totalSteps: 3,
               approvalRequirement: authenticationWorkflow.explicitUserApproval,
+              savedLoginCapability: 'unavailable',
               observationIndex: 0,
             },
           }
@@ -354,6 +355,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
               currentStep: 2,
               totalSteps: 5,
               approvalRequirement: authenticationWorkflow.explicitUserApproval,
+              savedLoginCapability: 'unavailable',
               observationIndex: 0,
             },
           }
@@ -378,6 +380,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
               currentStep: 1,
               totalSteps: 3,
               approvalRequirement: authenticationWorkflow.explicitUserApproval,
+              savedLoginCapability: 'fill-saved-login',
               observationIndex: 0,
             },
           }
@@ -465,6 +468,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
               currentStep: 1,
               totalSteps: 3,
               approvalRequirement: authenticationWorkflow.explicitUserApproval,
+              savedLoginCapability: 'fill-saved-login',
               observationIndex: 0,
             },
           }
@@ -495,6 +499,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
             currentStep: 1,
             totalSteps: 3,
             approvalRequirement: authenticationWorkflow.explicitUserApproval,
+            savedLoginCapability: 'fill-saved-login',
             observationIndex: 0,
           },
         }
@@ -585,11 +590,24 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
       observationIndex < 0 ||
       observationIndex >= observations.length
     ) {
-      return response
+      return {
+        workflow: response,
+        loginMatches: { kind: 'unavailable' },
+      }
     }
     const selectedFacts = observations[observationIndex]
-    if (!selectedFacts) return response
-    return { ...response, selectedFacts }
+    if (!selectedFacts) {
+      return {
+        workflow: response,
+        loginMatches: { kind: 'unavailable' },
+      }
+    }
+    const loginMatches = loginPilotFlow
+      ? { kind: 'locked' as const }
+      : savePilotFlow
+        ? { kind: 'ready' as const, count: 1 }
+        : { kind: 'unavailable' as const }
+    return { workflow: response, loginMatches, selectedFacts }
   }
 
   if (barcodeRawValue) {

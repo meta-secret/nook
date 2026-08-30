@@ -9,6 +9,7 @@ import {
 import {
   AuthenticationWorkflowAction,
   type AuthenticationPageObservationFacts,
+  type WebsiteLoginMatchAvailability,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   detectEnrollmentHints,
@@ -118,6 +119,7 @@ type RenderWidgetArgs = {
   snapshot: AuthenticationWorkflowSnapshotView
   workflow: PasswordFormObservation
   facts: AuthenticationPageObservationFacts
+  loginMatches: WebsiteLoginMatchAvailability
   vaultConnection: PilotVaultConnection
 }
 
@@ -125,6 +127,7 @@ export function renderWidget({
   snapshot,
   workflow,
   facts,
+  loginMatches,
   vaultConnection,
 }: RenderWidgetArgs): void {
   if (widgetState.dismissed) {
@@ -138,6 +141,8 @@ export function renderWidget({
     snapshot.currentStep,
     snapshot.totalSteps,
     snapshot.observationIndex,
+    loginMatches.kind,
+    'count' in loginMatches ? loginMatches.count : 0,
     vaultConnection.connected ? 'connected' : 'disconnected',
     vaultConnection.vaultName ?? '',
   ].join(':')
@@ -294,6 +299,32 @@ export function renderWidget({
   })
 
   body.append(takeOverButton)
+  const passkeyAction =
+    snapshot.action === AuthenticationWorkflowAction.UsePasskey ||
+    snapshot.action === AuthenticationWorkflowAction.CreatePasskey
+  const savedLoginActionAvailable =
+    loginMatches.kind === 'locked' ||
+    (loginMatches.kind === 'ready' && loginMatches.count > 0)
+  if (passkeyAction && savedLoginActionAvailable) {
+    const savedLoginButton = document.createElement('button')
+    savedLoginButton.type = 'button'
+    savedLoginButton.className = 'text-button'
+    savedLoginButton.textContent = translatedMessage(
+      BROWSER_MESSAGE_KEYS.WidgetContinue,
+    )
+    savedLoginButton.addEventListener('click', (event) => {
+      if (!isTrustedAuthAction(event.isTrusted)) return
+      const nookTypedArgs0_10: Parameters<typeof continueWithNook>[0] = {
+        step,
+        title,
+        description,
+        continueButton: savedLoginButton,
+        workflow,
+      }
+      void continueWithNook(nookTypedArgs0_10)
+    })
+    body.append(savedLoginButton)
+  }
   const nookTypedArgs0_1: Parameters<
     typeof mountWidgetShell
   >[0]['workflowRoot'] = {
