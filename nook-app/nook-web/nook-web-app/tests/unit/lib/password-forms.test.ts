@@ -5,6 +5,7 @@ import {
 } from '../../../../nook-web-shared/src/extension/authentication-fact-attributes'
 import {
   authenticationPageObservationFacts,
+  fillLoginCredentials,
   fillOneTimeCode,
   findOneTimeCodeFields,
   PasswordFormQueryKind,
@@ -195,6 +196,43 @@ describe('website one-time-code fields', () => {
     expect(facts.ceremony.advanceControl).toBe('implicit-submission')
     expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
     expect(submitted).toBe(true)
+  })
+
+  test('excludes credential fields inside an inert ancestor from facts and fill', () => {
+    document.body.innerHTML = `
+      <form aria-label="Login" action="/auth/login">
+        <div inert>
+          <input autocomplete="username" />
+          <input type="password" autocomplete="current-password" />
+        </div>
+        <button type="submit">Sign in</button>
+      </form>
+    `
+    expect(summarizePasswordForms()).toMatchObject({
+      usernameFieldCount: 0,
+      passwordFieldCount: 0,
+    })
+    expect(summarizeAuthenticationWorkflowForms()).toEqual([])
+    const username = document.querySelector<HTMLInputElement>(
+      'input[autocomplete="username"]',
+    )
+    const password = document.querySelector<HTMLInputElement>(
+      'input[type="password"]',
+    )
+    if (!username || !password) {
+      throw new Error('expected inert username and password fields')
+    }
+    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: {
+        username: 'user@example.test',
+        password: 'secret',
+      },
+      kind: PasswordFormQueryKind.Root,
+      root: document,
+    }
+    expect(fillLoginCredentials(fillArgs)).toBe(false)
+    expect(username.value).toBe('')
+    expect(password.value).toBe('')
   })
 
   test('rescans actionability when an ancestor becomes native-inert', () => {

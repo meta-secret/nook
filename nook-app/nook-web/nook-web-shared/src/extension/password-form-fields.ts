@@ -110,7 +110,12 @@ function isRenderedInput(field: HTMLInputElement): boolean {
   }
   let element = field as HTMLElement;
   while (true) {
-    if (element.hidden) {
+    if (
+      element.hidden ||
+      element.hasAttribute("inert") ||
+      element.inert ||
+      element.getAttribute("aria-disabled") === "true"
+    ) {
       return false;
     }
     const style = element.ownerDocument.defaultView?.getComputedStyle(element);
@@ -124,23 +129,45 @@ function isRenderedInput(field: HTMLInputElement): boolean {
   return true;
 }
 
+function associatedFormFieldSelector(selector: string, formId: string): string {
+  return selector
+    .split(",")
+    .map((part) => `${part.trim()}[form="${CSS.escape(formId)}"]`)
+    .join(",");
+}
+
 function findFields({
   root,
   selector,
   formScope,
 }: ScopedInputFieldQuery): HTMLInputElement[] {
-  const queryRoot =
-    formScope?.kind === PasswordFormScopeKind.Owned
-      ? formScope.owner.ownerDocument
-      : root;
-  return Array.from(
-    queryRoot.querySelectorAll<HTMLInputElement>(selector),
-  ).filter((field) =>
-    !formScope
-      ? true
-      : formScope.kind === PasswordFormScopeKind.Unowned
-        ? !field.form
-        : field.form === formScope.owner,
+  if (formScope?.kind === PasswordFormScopeKind.Owned) {
+    const owner = formScope.owner;
+    const seen = new Set<HTMLInputElement>();
+    const fields: HTMLInputElement[] = [];
+    for (const field of owner.querySelectorAll<HTMLInputElement>(selector)) {
+      if (field.form === owner) {
+        seen.add(field);
+        fields.push(field);
+      }
+    }
+    if (owner.id) {
+      const associated = owner.ownerDocument.querySelectorAll<HTMLInputElement>(
+        associatedFormFieldSelector(selector, owner.id),
+      );
+      for (const field of associated) {
+        if (!seen.has(field) && field.form === owner) {
+          seen.add(field);
+          fields.push(field);
+        }
+      }
+    }
+    return fields;
+  }
+  return Array.from(root.querySelectorAll<HTMLInputElement>(selector)).filter(
+    (field) =>
+      !formScope ||
+      (formScope.kind === PasswordFormScopeKind.Unowned && !field.form),
   );
 }
 

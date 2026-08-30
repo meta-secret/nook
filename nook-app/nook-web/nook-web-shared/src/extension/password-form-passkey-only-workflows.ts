@@ -36,6 +36,11 @@ type RankedPasskeyObservation<Observation> = {
   priority: number;
 };
 
+type IndexedPasskeyCandidates = {
+  owned: Map<HTMLFormElement, PasskeyControlCandidate[]>;
+  unowned: PasskeyControlCandidate[];
+};
+
 export function summarizePasskeyOnlyWorkflowForms<Summary>(
   root: Document,
   summarizeRoot: (query: PasswordFormScopeQuery) => Summary,
@@ -48,35 +53,19 @@ export function summarizePasskeyOnlyWorkflowForms<Summary>(
 ): Array<PasskeyOnlyWorkflowObservation<Summary>> {
   if (!pageHasPasskeyControl(root)) return [];
   const passkeyCandidates = findPasskeyControls(root);
+  const indexed = indexPasskeyCandidatesByScope(passkeyCandidates);
   const scopes = collectPasskeyOnlyScopes(root, passkeyCandidates);
-  const fieldRanked = scopes.map((scope) => {
-    const summaryArgs: PasswordFormScopeQuery = {
-      kind: PasswordFormQueryKind.Scoped,
-      root: scope.root,
-      formScope: scope.formScope,
-    };
-    const observation = {
-      root: scope.root,
-      formScope: scope.formScope,
-      summary: summarizeRoot(summaryArgs),
-    };
-    return {
-      observation,
-      safe: observationHasSafePasskey(
-        observation,
-        passkeyCandidates,
-        passkeyControlIsSafe,
-      ),
-    };
-  });
-  fieldRanked.sort((left, right) => Number(right.safe) - Number(left.safe));
-  const ranked = fieldRanked
-    .slice(0, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS)
-    .map((entry) => ({
-      observation: entry.observation,
-      safe: entry.safe,
-      priority: observationPriority(entry.observation),
-    }));
+  const preferred = takePreferredPasskeyOnlyObservations(
+    scopes,
+    summarizeRoot,
+    passkeyControlIsSafe,
+    indexed,
+  );
+  const ranked = preferred.map((entry) => ({
+    observation: entry.observation,
+    safe: entry.safe,
+    priority: observationPriority(entry.observation),
+  }));
   return takeRankedPasskeyObservations(ranked);
 }
 
@@ -180,6 +169,88 @@ function collectPasskeyOnlyScopes(
     });
   }
   return scopes;
+}
+
+function indexPasskeyCandidatesByScope(
+  passkeyCandidates: PasskeyControlCandidate[],
+): IndexedPasskeyCandidates {
+  const owned = new Map<HTMLFormElement, PasskeyControlCandidate[]>();
+  const unowned: PasskeyControlCandidate[] = [];
+  for (const candidate of passkeyCandidates) {
+    if (controlIsInert(candidate.control)) continue;
+    const owner = associatedAuthenticationForm(candidate.control);
+    if (owner.kind === PasswordFormScopeKind.Owned) {
+      const existing = owned.get(owner.owner);
+      if (existing) {
+        existing.push(candidate);
+      } else {
+        owned.set(owner.owner, [candidate]);
+      }
+      continue;
+    }
+    unowned.push(candidate);
+  }
+  return { owned, unowned };
+}
+
+function passkeyCandidatesForScope(
+  scope: PasskeyOnlyScope,
+  indexed: IndexedPasskeyCandidates,
+): PasskeyControlCandidate[] {
+  if (scope.formScope.kind === PasswordFormScopeKind.Owned) {
+    const owned = indexed.owned.get(scope.formScope.owner);
+    return owned ? owned : [];
+  }
+  return indexed.unowned.filter((candidate) =>
+    scope.root.contains(candidate.control),
+  );
+}
+
+function takePreferredPasskeyOnlyObservations<Summary>(
+  scopes: PasskeyOnlyScope[],
+  summarizeRoot: (query: PasswordFormScopeQuery) => Summary,
+  passkeyControlIsSafe: PasskeyControlIsSafe<
+    PasskeyOnlyWorkflowObservation<Summary>
+  >,
+  indexed: IndexedPasskeyCandidates,
+): Array<{
+  observation: PasskeyOnlyWorkflowObservation<Summary>;
+  safe: boolean;
+}> {
+  const preferred: Array<{
+    observation: PasskeyOnlyWorkflowObservation<Summary>;
+    safe: boolean;
+  }> = [];
+  let safeCount = 0;
+  for (const scope of scopes) {
+    if (safeCount >= MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS) break;
+    const summaryArgs: PasswordFormScopeQuery = {
+      kind: PasswordFormQueryKind.Scoped,
+      root: scope.root,
+      formScope: scope.formScope,
+    };
+    const observation = {
+      root: scope.root,
+      formScope: scope.formScope,
+      summary: summarizeRoot(summaryArgs),
+    };
+    const safe = observationHasSafePasskey(
+      observation,
+      passkeyCandidatesForScope(scope, indexed),
+      passkeyControlIsSafe,
+    );
+    if (preferred.length < MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS) {
+      preferred.push({ observation, safe });
+      if (safe) safeCount += 1;
+      continue;
+    }
+    if (!safe) continue;
+    const replaceAt = preferred.findIndex((entry) => !entry.safe);
+    if (replaceAt < 0) break;
+    preferred[replaceAt] = { observation, safe };
+    safeCount += 1;
+  }
+  return preferred;
 }
 
 function takeRankedPasskeyObservations<Observation>(
