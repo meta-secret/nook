@@ -259,4 +259,21 @@ describe('authentication field detection', () => {
       }).detailedAdvanceControl.kind,
     ).toBe('observed')
   })
+
+  test('does not treat a generic type-button as a form-less auth container', () => {
+    document.body.innerHTML = `
+      <section>
+        <div><input autocomplete="username" /></div>
+        <div><input type="password" autocomplete="current-password" /></div>
+        <button type="button">Close</button>
+      </section>
+    `
+    expect(
+      summarizeAuthenticationWorkflowForms().some(
+        (observation) =>
+          observation.summary.usernameFieldCount === 1 &&
+          observation.summary.passwordFieldCount === 1,
+      ),
+    ).toBe(false)
+  })
 })
