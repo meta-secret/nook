@@ -40,6 +40,7 @@ import type { AdmitCortexAuthoringContextRequest } from './cortex-context.ts';
 import type { TeamTaskContext } from '../team-agents/context.ts';
 import type {
   ModuleDeliveryNodeV2,
+  ModuleDeliveryOwnerIdentity,
   ModuleDeliveryResourceClaims,
   ValidatedModuleDeliveryPlan,
 } from './domain.ts';
@@ -139,8 +140,8 @@ export type ModuleDeliveryAdmission = AttemptIdentity & {
   readonly resources: ModuleDeliveryResourceClaims;
   readonly context?: TeamTaskContext;
   readonly team: TeamKey;
-  readonly functionalOwner: TeamKey;
-  readonly acceptanceOwner: TeamKey;
+  readonly functionalOwner: ModuleDeliveryOwnerIdentity;
+  readonly acceptanceOwner: ModuleDeliveryOwnerIdentity;
   readonly parentLineage: AgentAttemptParent;
   readonly acceptanceRequirements: readonly string[];
   readonly authorizedProviderEvidence: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];

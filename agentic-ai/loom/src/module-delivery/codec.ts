@@ -15,6 +15,7 @@ import {
   ModuleDeliveryEvidenceInputSchema,
   ModuleDeliveryIssueCode,
   ModuleDeliveryJoinKind,
+  ModuleDeliveryOwner,
   ModuleDeliveryTaskKind,
   ModuleDeliveryWorkspaceKind,
   moduleDeliveryTaskTeam,
@@ -51,6 +52,7 @@ type ModuleDeliveryTeamDecodeRequest = {
   readonly value: string;
   readonly path: string;
 };
+type ModuleDeliveryOwnerDecodeRequest = ModuleDeliveryTeamDecodeRequest;
 type ModulePlanIndexedProducerRequest = {
   readonly value: UntrustedYamlNode;
   readonly index: number;
@@ -436,13 +438,13 @@ function decodeNode(
       : fields.string('team'),
     path,
   };
-  const functionalOwnerRequest: ModuleDeliveryTeamDecodeRequest = {
+  const functionalOwnerRequest: ModuleDeliveryOwnerDecodeRequest = {
     value: request.legacy
       ? teamRequest.value
       : fields.string('functionalOwner'),
     path: `${path}.functionalOwner`,
   };
-  const acceptanceOwnerRequest: ModuleDeliveryTeamDecodeRequest = {
+  const acceptanceOwnerRequest: ModuleDeliveryOwnerDecodeRequest = {
     value: request.legacy
       ? teamRequest.value
       : fields.string('acceptanceOwner'),
@@ -469,8 +471,8 @@ function decodeNode(
   const common = {
     taskId: fields.identifier('taskId'),
     team: decodeTeam(teamRequest),
-    functionalOwner: decodeTeam(functionalOwnerRequest),
-    acceptanceOwner: decodeTeam(acceptanceOwnerRequest),
+    functionalOwner: decodeOwner(functionalOwnerRequest),
+    acceptanceOwner: decodeOwner(acceptanceOwnerRequest),
     parentLineage,
     expert,
     moduleRoot,
@@ -611,6 +613,12 @@ function decodeTeam(request: ModuleDeliveryTeamDecodeRequest): TeamKey {
   return request.value as TeamKey;
 }
 
+function decodeOwner(request: ModuleDeliveryOwnerDecodeRequest) {
+  if (request.value === ModuleDeliveryOwner.GizmoPrime)
+    return ModuleDeliveryOwner.GizmoPrime;
+  return decodeTeam(request);
+}
+
 function legacyTaskTeam(request: LegacyTaskTeamRequest): TeamKey {
   const profile = MODULE_EXPERT_CATALOG.find(
     ({ name }) => name === request.expert,
@@ -689,19 +697,19 @@ function decodeExpectedProducer(
     value: fields.string('team'),
     path: `${path}.team`,
   };
-  const functionalOwnerRequest: ModuleDeliveryTeamDecodeRequest = {
+  const functionalOwnerRequest: ModuleDeliveryOwnerDecodeRequest = {
     value: fields.string('functionalOwner'),
     path: `${path}.functionalOwner`,
   };
-  const acceptanceOwnerRequest: ModuleDeliveryTeamDecodeRequest = {
+  const acceptanceOwnerRequest: ModuleDeliveryOwnerDecodeRequest = {
     value: fields.string('acceptanceOwner'),
     path: `${path}.acceptanceOwner`,
   };
   return {
     taskId: fields.identifier('taskId'),
     team: decodeTeam(teamRequest),
-    functionalOwner: decodeTeam(functionalOwnerRequest),
-    acceptanceOwner: decodeTeam(acceptanceOwnerRequest),
+    functionalOwner: decodeOwner(functionalOwnerRequest),
+    acceptanceOwner: decodeOwner(acceptanceOwnerRequest),
   };
 }
 

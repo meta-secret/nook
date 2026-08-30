@@ -29,6 +29,7 @@ import {
   MAX_MODULE_DELIVERY_ATTEMPTS,
   MAX_MODULE_DELIVERY_CONCURRENCY,
   MAX_MODULE_DELIVERY_NODES,
+  ORDINARY_TASK_WRITE_ROOTS,
   REQUIRED_PARENT_OWNED_RESOURCES,
   CORTEX_TEAM_WRITER_EXPERT,
   ModuleDeliveryBaselineKind,
@@ -36,6 +37,7 @@ import {
   ModuleDeliveryExecutionPrecedenceReason,
   ModuleDeliveryIssueCode,
   ModuleDeliveryTaskKind,
+  ModuleDeliveryTaskProfile,
   ModuleDeliveryValidationStatus,
 } from './domain.ts';
 import type {
@@ -256,13 +258,15 @@ function indexNodes(state: ValidationState): void {
 function validateNodes(state: ValidationState): void {
   for (const [index, node] of state.plan.nodes.entries()) {
     const path = `$.nodes[${index}]`;
+    const nodeRequest: NodeValidationRequest = { state, path, node };
     const profile = MODULE_EXPERT_CATALOG.find(
       (entry) => entry.name === node.expert,
     );
-    const pureCortexTask = isPureCortexTask(node);
-    if (
+    if (node.expert === ModuleDeliveryTaskProfile.Ordinary)
+      validateOrdinaryTask(nodeRequest);
+    else if (
       !profile &&
-      !(pureCortexTask && node.expert === CORTEX_TEAM_WRITER_EXPERT)
+      !(isPureCortexTask(node) && node.expert === CORTEX_TEAM_WRITER_EXPERT)
     ) {
       const request: IssueRequest = {
         state,
@@ -282,7 +286,6 @@ function validateNodes(state: ValidationState): void {
         issue(findingRequest);
       }
     }
-    const nodeRequest: NodeValidationRequest = { state, path, node };
     validateOwnership(nodeRequest);
     validateNodeLists(nodeRequest);
     validateDependencies(nodeRequest);
@@ -297,6 +300,42 @@ function validateNodes(state: ValidationState): void {
     validateClaims(nodeRequest);
     validateExclusions(nodeRequest);
   }
+}
+
+function validateOrdinaryTask(request: NodeValidationRequest): void {
+  const { node } = request;
+  const writeRoots = ORDINARY_TASK_WRITE_ROOTS[node.team];
+  const writesAuthorized =
+    node.kind !== ModuleDeliveryTaskKind.Write ||
+    node.resources.write.every(
+      (write) =>
+        (write === node.moduleRoot ||
+          write.startsWith(`${node.moduleRoot}/`)) &&
+        writeRoots.some(
+          (root) => write === root || write.startsWith(`${root}/`),
+        ) &&
+        MODULE_EXPERT_CATALOG.every((profile) =>
+          profile.generatedScopePaths.every(
+            (scope) =>
+              !taskResourcePatternsOverlap({
+                first: write,
+                second: `${scope.path}/**`,
+              }),
+          ),
+        ),
+    );
+  if (
+    isValidTaskResourceClaim(node.moduleRoot) &&
+    !node.moduleRoot.includes('*') &&
+    writesAuthorized
+  )
+    return;
+  issue({
+    state: request.state,
+    code: ModuleDeliveryIssueCode.ModuleOwnershipMismatch,
+    path: `${request.path}.moduleRoot`,
+    message: 'Ordinary task ownership or bounded scope is invalid.',
+  });
 }
 
 function validateOwnership(request: NodeValidationRequest): void {
