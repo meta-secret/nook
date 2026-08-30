@@ -60,6 +60,20 @@ describe('passkey control detection', () => {
     expect(pageHasPasskeyControl()).toBe(true)
   })
 
+  test('binds a passkey link on a method-less form as an owned control', () => {
+    document.body.innerHTML = `
+      <form id="login">
+        <input autocomplete="username" />
+        <a href="/webauthn">Use passkey</a>
+      </form>
+    `
+    const control = findWorkflowPasskeyControl(observedAuthenticationWorkflow())
+    expect(control.kind).toBe(PasskeyControlLookupKind.Found)
+    if (control.kind === PasskeyControlLookupKind.Found) {
+      expect(control.control.textContent).toContain('passkey')
+    }
+  })
+
   test('binds a form-contained passkey link as an owned control', () => {
     document.body.innerHTML = `
       <form method="post" id="login" action="/login">

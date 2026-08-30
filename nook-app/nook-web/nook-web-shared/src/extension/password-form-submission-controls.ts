@@ -263,14 +263,20 @@ function presentHtmlSubmissionMethod(
   return htmlEnumeratedSubmissionMethod(token ? token : "");
 }
 
+function controlHasNativeSubmitSemantics(control: HTMLElement): boolean {
+  if (control instanceof HTMLButtonElement) {
+    return control.type !== "button" && control.type !== "reset";
+  }
+  return (
+    control instanceof HTMLInputElement &&
+    (control.type === "submit" || control.type === "image")
+  );
+}
+
 export function controlSubmissionMethod(
   control: HTMLElement,
 ): PageControlSubmissionMethod {
-  if (
-    (control instanceof HTMLButtonElement ||
-      control instanceof HTMLInputElement) &&
-    control.type === "button"
-  ) {
+  if (!controlHasNativeSubmitSemantics(control)) {
     return PageControlSubmissionMethod.Absent;
   }
   const formmethod = presentHtmlSubmissionMethod(control, "formmethod");

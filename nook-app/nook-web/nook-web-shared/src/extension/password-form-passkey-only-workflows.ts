@@ -2,6 +2,7 @@ import {
   findOneTimeCodeFields,
   findPasskeyControls,
   findPasswordFields,
+  findUsernameFields,
   localUnownedPasskeyContainer,
   pageHasPasskeyControl,
   PasswordFormScopeKind,
@@ -10,6 +11,7 @@ import {
 } from "./password-form-fields";
 import {
   associatedAuthenticationForm,
+  authenticationAdvanceControlSelector,
   controlIsInert,
   formBlocksCredentialDisclosure,
   MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
@@ -141,6 +143,7 @@ export function appendIndependentPasskeyOnlyWorkflows<
 
 function shortlistWorkflowsForFactsRanking<
   Observation extends {
+    root: ParentNode;
     formScope: PasswordFormScope;
     summary: RankableWorkflowSummary;
   },
@@ -152,6 +155,7 @@ function shortlistWorkflowsForFactsRanking<
 }
 
 function cheapWorkflowPriority(observation: {
+  root: ParentNode;
   formScope: PasswordFormScope;
   summary: RankableWorkflowSummary;
 }): number {
@@ -162,13 +166,23 @@ function cheapWorkflowPriority(observation: {
       ownedFormLooksProgressing(
         observation.formScope.owner,
         observation.summary,
-      ));
+      )) ||
+    (observation.formScope.kind === PasswordFormScopeKind.Unowned &&
+      unownedScopeLooksProgressing(observation.root));
   if (!progressing) return 1;
   if (observation.summary.oneTimeCodeFieldCount > 0) return 5;
   if (observation.summary.currentPasswordFieldCount > 0) return 4;
   if (observation.summary.genericPasswordFieldCount === 1) return 3;
   if (observation.summary.passwordFieldCount > 0) return 2;
   return 1;
+}
+
+function unownedScopeLooksProgressing(root: ParentNode): boolean {
+  return Boolean(
+    root instanceof Document || root instanceof Element
+      ? root.querySelector(authenticationAdvanceControlSelector)
+      : false,
+  );
 }
 
 function ownedFormLooksProgressing(
@@ -185,6 +199,7 @@ function ownedFormLooksProgressing(
 
 function takeBoundedByCheapPriority<
   Observation extends {
+    root: ParentNode;
     formScope: PasswordFormScope;
     summary: RankableWorkflowSummary;
   },
@@ -208,6 +223,7 @@ function takeBoundedByCheapPriority<
 
 function takeBoundedPriorityWorkflows<
   Observation extends {
+    root: ParentNode;
     formScope: PasswordFormScope;
     summary: RankableWorkflowSummary;
   },
@@ -331,6 +347,14 @@ function scopeHasOneTimeCodeField(scope: PasskeyOnlyScope): boolean {
   return findOneTimeCodeFields(fieldQuery).length > 0;
 }
 
+function scopeHasUsernameField(scope: PasskeyOnlyScope): boolean {
+  const fieldQuery: Parameters<typeof findUsernameFields>[0] = {
+    root: scope.root,
+    formScope: scope.formScope,
+  };
+  return findUsernameFields(fieldQuery).length > 0;
+}
+
 function takePreferredPasskeyOnlyObservations<Summary>(
   scopes: PasskeyOnlyScope[],
   summarizeRoot: (query: PasswordFormScopeQuery) => Summary,
@@ -370,7 +394,8 @@ function takePreferredPasskeyOnlyObservations<Summary>(
     if (
       preferred.length >= MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS &&
       !cheapSafe &&
-      !scopeHasOneTimeCodeField(scope)
+      !scopeHasOneTimeCodeField(scope) &&
+      !scopeHasUsernameField(scope)
     ) {
       continue;
     }

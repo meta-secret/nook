@@ -491,6 +491,59 @@ describe('authentication workflow ranking', () => {
     ).toBe(true)
   })
 
+  test('keeps a later form-less Sign in after twenty unowned password decoys', () => {
+    const decoys = Array.from(
+      { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS },
+      (_, index) =>
+        `<div id="decoy-${index}"><input type="password" autocomplete="current-password" /></div>`,
+    ).join('')
+    document.body.innerHTML = `
+      ${decoys}
+      <div id="login-panel">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="button">Sign in</button>
+      </div>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations.length).toBeLessThanOrEqual(
+      MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
+    )
+    expect(
+      observations.some(
+        (observation) =>
+          observation.root instanceof Element &&
+          observation.root.id === 'login-panel',
+      ),
+    ).toBe(true)
+  })
+
+  test('keeps a later username passkey login after twenty empty-summary scopes', () => {
+    const decoys = Array.from(
+      { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS },
+      (_, index) =>
+        `<form method="post" id="manage-${index}" action="/passkeys"><button type="button">Add passkey</button></form>`,
+    ).join('')
+    document.body.innerHTML = `
+      ${decoys}
+      <form method="post" id="username-passkey" action="/session">
+        <input autocomplete="username" />
+        <button type="button">Use passkey</button>
+      </form>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations.length).toBeLessThanOrEqual(
+      MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
+    )
+    expect(
+      observations.some(
+        (observation) => ownedFormId(observation) === 'username-passkey',
+      ),
+    ).toBe(true)
+  })
+
   test('keeps a later OTP passkey challenge after twenty safe passkey logins', () => {
     const decoys = Array.from(
       { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS },
