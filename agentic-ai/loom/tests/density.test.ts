@@ -102,4 +102,46 @@ describe('lintProseDensity', () => {
     };
     expect(lintProseDensity(lintArgs)).toEqual([]);
   });
+
+  test('checks dense table cells', () => {
+    const content = [
+      '| Stage | Requirements |',
+      '| --- | --- |',
+      '| Claim | Require the successor branch and the open pull request and the predecessor metadata and the frozen base SHA and the containment proof and the delivery state before any claim can proceed. |',
+    ].join('\n');
+    const lintArgs: LintProseDensityArgs = {
+      filePath: 'table.md',
+      content,
+    };
+    const findings = lintProseDensity(lintArgs);
+    expect(findings.some((finding) => finding.line === 3)).toBe(true);
+  });
+
+  test('keeps table cells as independent prose blocks', () => {
+    const content = [
+      '| Claim checks | Delivery checks |',
+      '| --- | --- |',
+      '| Validate the branch and pull request before claim. | Recheck the base SHA and containment proof before delivery. |',
+    ].join('\n');
+    const lintArgs: LintProseDensityArgs = {
+      filePath: 'table.md',
+      content,
+    };
+    expect(lintProseDensity(lintArgs)).toEqual([]);
+  });
+
+  test('ignores one-line index cells that only point elsewhere', () => {
+    const summary =
+      'Successor claim validation and immutable metadata and branch ancestry and frozen base verification and containment checks and exact-head delivery evidence and trusted publication details';
+    const content = [
+      '| Topic | Authority |',
+      '| --- | --- |',
+      `| Delivery | [${summary}](workflows/delivery.md) |`,
+    ].join('\n');
+    const lintArgs: LintProseDensityArgs = {
+      filePath: 'index.md',
+      content,
+    };
+    expect(lintProseDensity(lintArgs)).toEqual([]);
+  });
 });

@@ -1,4 +1,4 @@
-import type { Blockquote, Nodes, Paragraph } from 'mdast';
+import type { Blockquote, Nodes, Paragraph, TableCell } from 'mdast';
 import remarkGfm from 'remark-gfm';
 import remarkParse from 'remark-parse';
 import { unified } from 'unified';
@@ -54,13 +54,14 @@ type InspectMarkdownNodeArgs = {
 
 function inspectMarkdownNode(args: InspectMarkdownNodeArgs): void {
   if (args.node.type === 'blockquote' && isQuotedOutput(args.node)) return;
-  if (args.node.type === 'paragraph') {
-    const paragraphArgs: InspectParagraphArgs = {
+  if (args.node.type === 'paragraph' || args.node.type === 'tableCell') {
+    if (args.node.type === 'tableCell' && isIndexPointerCell(args.node)) return;
+    const proseBlockArgs: InspectProseBlockArgs = {
       filePath: args.filePath,
       findings: args.findings,
-      paragraph: args.node,
+      proseBlock: args.node,
     };
-    inspectParagraph(paragraphArgs);
+    inspectProseBlock(proseBlockArgs);
     return;
   }
   if (!('children' in args.node)) return;
@@ -77,16 +78,32 @@ function isQuotedOutput(blockquote: Blockquote): boolean {
   );
 }
 
-type InspectParagraphArgs = {
+function isIndexPointerCell(tableCell: TableCell): boolean {
+  if (tableCell.position?.start.line !== tableCell.position?.end.line) {
+    return false;
+  }
+  const hasPointer = tableCell.children.some(
+    (child) => child.type === 'link' || child.type === 'linkReference',
+  );
+  if (!hasPointer) return false;
+  const outsidePointerText = tableCell.children
+    .filter((child) => child.type !== 'link' && child.type !== 'linkReference')
+    .map(markdownText)
+    .join('')
+    .trim();
+  return outsidePointerText.length === 0;
+}
+
+type InspectProseBlockArgs = {
   readonly filePath: string;
   readonly findings: DensityFindingSpan[];
-  readonly paragraph: Paragraph;
+  readonly proseBlock: Paragraph | TableCell;
 };
 
-function inspectParagraph(args: InspectParagraphArgs): void {
-  const text = markdownText(args.paragraph).replace(/\s+/gu, ' ').trim();
+function inspectProseBlock(args: InspectProseBlockArgs): void {
+  const text = markdownText(args.proseBlock).replace(/\s+/gu, ' ').trim();
   if (text.length === 0) return;
-  const line = args.paragraph.position?.start.line ?? 1;
+  const line = args.proseBlock.position?.start.line ?? 1;
   for (const sentence of text.split(/(?<=[.!?])\s+/u)) {
     const sentenceArgs: AddSentenceFindingsArgs = {
       ...args,
@@ -97,13 +114,13 @@ function inspectParagraph(args: InspectParagraphArgs): void {
   }
 }
 
-type AddSentenceFindingsArgs = InspectParagraphArgs & {
+type AddSentenceFindingsArgs = InspectProseBlockArgs & {
   readonly line: number;
   readonly sentence: string;
 };
 
 function addSentenceFindings(args: AddSentenceFindingsArgs): void {
-  const endLine = args.paragraph.position?.end.line ?? args.line;
+  const endLine = args.proseBlock.position?.end.line ?? args.line;
   const findingBase = {
     file: args.filePath,
     line: args.line,
