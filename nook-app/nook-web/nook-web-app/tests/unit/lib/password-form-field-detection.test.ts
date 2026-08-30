@@ -260,6 +260,26 @@ describe('authentication field detection', () => {
     ).toBe('observed')
   })
 
+  test('scopes form-less credentials with a sibling input type-button value', () => {
+    document.body.innerHTML = `
+      <section>
+        <div><input autocomplete="username" /></div>
+        <div><input type="password" autocomplete="current-password" /></div>
+        <input type="button" value="Sign in" />
+      </section>
+    `
+    const observation = observedAuthenticationWorkflow()
+    expect(observation.summary.usernameFieldCount).toBe(1)
+    expect(observation.summary.passwordFieldCount).toBe(1)
+    expect(
+      authenticationPageObservationFacts({
+        observation,
+        authenticatorSetupHint: false,
+        backupCodesHint: false,
+      }).detailedAdvanceControl.kind,
+    ).toBe('observed')
+  })
+
   test('does not treat a generic type-button as a form-less auth container', () => {
     document.body.innerHTML = `
       <section>

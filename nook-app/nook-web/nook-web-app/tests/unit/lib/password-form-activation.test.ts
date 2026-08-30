@@ -742,27 +742,29 @@ describe('classified login activation', () => {
     expect(activated).toEqual(['safe'])
   })
 
-  test('does not submit a GET formmethod override after filling passwords', () => {
-    document.body.innerHTML = `
-      <form id="login" method="post" action="/auth/login">
-        <input autocomplete="username" />
-        <input type="password" autocomplete="current-password" />
-      </form>
-      <button id="unsafe" type="submit" form="login" formmethod="get">Sign in</button>
-    `
-    let submitted = false
-    document.querySelector('form')?.addEventListener('submit', (event) => {
-      event.preventDefault()
-      submitted = true
-    })
-    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
-      credentials: { username: 'vault-user', password: 'vault-pass' },
-      kind: PasswordFormQueryKind.Root,
-      root: document,
+  test('does not submit GET-default formmethod overrides after filling passwords', () => {
+    for (const formmethod of ['get', '', 'invalid']) {
+      document.body.innerHTML = `
+        <form id="login" method="post" action="/auth/login">
+          <input autocomplete="username" />
+          <input type="password" autocomplete="current-password" />
+        </form>
+        <button id="unsafe" type="submit" form="login" formmethod="${formmethod}">Sign in</button>
+      `
+      let submitted = false
+      document.querySelector('form')?.addEventListener('submit', (event) => {
+        event.preventDefault()
+        submitted = true
+      })
+      const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+        credentials: { username: 'vault-user', password: 'vault-pass' },
+        kind: PasswordFormQueryKind.Root,
+        root: document,
+      }
+      expect(fillLoginCredentials(fillArgs)).toBe(true)
+      expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(false)
+      expect(submitted).toBe(false)
     }
-    expect(fillLoginCredentials(fillArgs)).toBe(true)
-    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(false)
-    expect(submitted).toBe(false)
   })
 
   test('does not submit a form outside the requested root', () => {

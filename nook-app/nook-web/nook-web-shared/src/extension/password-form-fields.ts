@@ -467,10 +467,15 @@ export function pageHasPasskeyControl(root: ParentNode = document): boolean {
 }
 
 function localActivationControlLabel(control: Element): string {
+  const value =
+    control instanceof HTMLInputElement || control instanceof HTMLButtonElement
+      ? control.value
+      : "";
   return [
     control.textContent ?? "",
     control.getAttribute("aria-label") ?? "",
     control.getAttribute("title") ?? "",
+    value,
   ]
     .join(" ")
     .trim();

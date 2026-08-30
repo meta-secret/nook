@@ -245,11 +245,13 @@ export function isRenderedControl(control: HTMLElement): boolean {
 export function controlSubmissionMethod(
   control: HTMLElement,
 ): PageControlSubmissionMethod {
-  const override = control.getAttribute("formmethod");
-  if (override) {
-    return override.trim().toLowerCase() === "get"
-      ? PageControlSubmissionMethod.Get
-      : PageControlSubmissionMethod.Post;
+  if (control.hasAttribute("formmethod")) {
+    const override = (control.getAttribute("formmethod") ?? "")
+      .trim()
+      .toLowerCase();
+    return override === "post" || override === "dialog"
+      ? PageControlSubmissionMethod.Post
+      : PageControlSubmissionMethod.Get;
   }
   if (
     (control instanceof HTMLButtonElement ||
