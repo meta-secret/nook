@@ -15,6 +15,7 @@ function loginPilotStubArgs(messages: Record<string, ChromeMessage>) {
     localizedMessages: messages,
     ...demoDomainEnumArgs,
     loginPilotFlow: true,
+    recordRuntimeMessageTypes: true,
   }
 }
 
@@ -221,6 +222,18 @@ test('guide a login through the Nook Pilot control plane', async ({ page }) => {
   await expect(widget.getByTestId('nook-auth-gate-vault-status')).toHaveText(
     'Connected to Demo vault',
   )
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (
+            window as typeof window & {
+              __nookDemoRuntimeMessageTypes?: string[]
+            }
+          ).__nookDemoRuntimeMessageTypes ?? [],
+      ),
+    )
+    .not.toContain('nook:website-login-options')
   await demoBeat(page)
 
   await widget.getByRole('button', { name: 'Continue with Nook' }).click()
