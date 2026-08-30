@@ -674,6 +674,30 @@ describe('authentication workflow ranking', () => {
     ).toBe(true)
   })
 
+  test('keeps a login whose Sign in submitter is associated from outside the form', () => {
+    const decoys = Array.from(
+      { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS * 2 },
+      (_, index) =>
+        `<form method="get" id="search-${index}" action="/search"><input type="password" autocomplete="current-password" /></form>`,
+    ).join('')
+    document.body.innerHTML = `
+      ${decoys}
+      <form method="post" id="login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+      </form>
+      <button type="submit" form="login">Sign in</button>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations.length).toBeLessThanOrEqual(
+      MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
+    )
+    expect(
+      observations.some((observation) => ownedFormId(observation) === 'login'),
+    ).toBe(true)
+  })
+
   test('summarizes a bounded passkey-only candidate set before ranking', () => {
     const decoys = Array.from(
       { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS + 8 },

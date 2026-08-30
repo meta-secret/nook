@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from 'vitest'
 import {
   authenticationFactAttributeFilter,
   authenticationFactObserverOptions,
+  observeAuthenticationSubmitValueAssignments,
 } from '../../../../nook-web-shared/src/extension/authentication-fact-attributes'
 import {
   authenticationPageObservationFacts,
@@ -224,6 +225,45 @@ describe('authentication fact rescans', () => {
       kind: 'observed',
       observations: [{ submissionMethod: 'post' }],
     })
+  })
+
+  test('rescans after a submit input value property assignment', () => {
+    document.body.innerHTML = `
+      <form method="post" aria-label="Login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <input id="advance" type="submit" value="Resend code" />
+      </form>
+    `
+    const submitter = document.querySelector('#advance')
+    if (!(submitter instanceof HTMLInputElement)) {
+      throw new Error('expected the submit input')
+    }
+    const before = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(before.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [{ label: expect.stringContaining('Resend code') }],
+    })
+    let rescans = 0
+    const stop = observeAuthenticationSubmitValueAssignments(() => {
+      rescans += 1
+    })
+    submitter.value = 'Verify code'
+    expect(rescans).toBe(1)
+    const after = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(after.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [{ label: expect.stringContaining('Verify code') }],
+    })
+    stop()
   })
 
   test('rescans a closed dialog after it opens', () => {

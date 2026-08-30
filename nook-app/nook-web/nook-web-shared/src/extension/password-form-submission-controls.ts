@@ -254,6 +254,17 @@ export function controlIsInert(control: HTMLElement): boolean {
   );
 }
 
+export function countedSemanticSubmitControls(controls: HTMLElement[]): number {
+  return Math.min(
+    controls.filter(
+      (control) =>
+        control.matches(semanticSubmitControlSelector) &&
+        !controlIsInert(control),
+    ).length,
+    MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
+  );
+}
+
 export function boundAuthenticationControlObservations<
   AuthenticationControlObservation,
 >({

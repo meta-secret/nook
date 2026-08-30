@@ -15,9 +15,9 @@ import {
   authenticationAdvanceControlSelector,
   controlIsInert,
   formBlocksCredentialDisclosure,
+  formHasSemanticSubmitter,
   MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
   PasswordFormQueryKind,
-  semanticSubmitControlSelector,
   type PasswordFormScopeQuery,
 } from "./password-form-submission-controls";
 
@@ -271,7 +271,7 @@ function ownedFormLooksProgressing({
   summary,
 }: OwnedFormProgressionRequest): boolean {
   return Boolean(
-    form.querySelector(semanticSubmitControlSelector) ||
+    formHasSemanticSubmitter(form) ||
     ((summary.currentPasswordFieldCount > 0 ||
       summary.usernameFieldCount > 0) &&
       typeof form.requestSubmit === "function"),

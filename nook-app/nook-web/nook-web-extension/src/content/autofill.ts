@@ -1,5 +1,8 @@
 import { isAuthenticationRouteHistoryMessage } from '../../../nook-web-shared/src/extension/authentication-route-history'
-import { authenticationFactObserverOptions } from '../../../nook-web-shared/src/extension/authentication-fact-attributes'
+import {
+  authenticationFactObserverOptions,
+  observeAuthenticationSubmitValueAssignments,
+} from '../../../nook-web-shared/src/extension/authentication-fact-attributes'
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import { AuthenticationWorkflowSnapshotResponseKind } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { classifiedAuthenticationWorkflowObservations } from '../../../nook-web-shared/src/extension/password-form-classified-observations'
@@ -174,6 +177,7 @@ void companionWasmReady.then(() => {
 
   const observer = new MutationObserver(scheduleScan)
   observer.observe(document.documentElement, authenticationFactObserverOptions)
+  observeAuthenticationSubmitValueAssignments(scheduleScan)
   window.addEventListener('message', (event) => {
     if (!isAuthenticationRouteHistoryMessage(event)) return
     scheduleScan()

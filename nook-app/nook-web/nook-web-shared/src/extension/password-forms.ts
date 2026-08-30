@@ -43,7 +43,7 @@ import {
   authenticationFactStringsAreTransportable,
   authenticationPolicyTextFits,
   boundAuthenticationControlObservations,
-  MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
+  countedSemanticSubmitControls,
   observedFormDestination,
   observedFormIdentity,
   clickAdvanceControl,
@@ -256,7 +256,6 @@ const emptyPasswordFormSummary: PasswordFormSummary = {
   formCount: 0,
   observedAt: 0,
 };
-
 function passwordFormPriority(observation: PasswordFormObservation): number {
   const factsRequest: AuthenticationObservationFactsRequest = {
     observation,
@@ -318,6 +317,7 @@ type PageControlObservationRequest = {
   observation: PasswordFormObservation;
   control: HTMLElement;
   authenticationUsername: AuthenticationUsernameEvidence;
+  semanticSubmitControlCount: number;
   explicitlyLocallyScoped?: boolean;
 };
 
@@ -326,12 +326,8 @@ function pageControlObservation({
   control,
   authenticationUsername,
   explicitlyLocallyScoped = false,
+  semanticSubmitControlCount,
 }: PageControlObservationRequest): AuthenticationAdvanceControlObservation {
-  const semanticSubmitControls = scopedAdvanceControls(observation).filter(
-    (candidate) =>
-      candidate.matches(semanticSubmitControlSelector) &&
-      !controlIsInert(candidate),
-  );
   const semanticSubmit = control.matches(semanticSubmitControlSelector);
   const controlForm = associatedAuthenticationForm(control);
   const owned = controlForm.kind === PasswordFormScopeKind.Owned;
@@ -356,10 +352,7 @@ function pageControlObservation({
     passwordFieldCount: observation.summary.passwordFieldCount,
     newPasswordFieldCount: observation.summary.newPasswordFieldCount,
     oneTimeCodeFieldCount: observation.summary.oneTimeCodeFieldCount,
-    semanticSubmitControlCount: Math.min(
-      semanticSubmitControls.length,
-      MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
-    ),
+    semanticSubmitControlCount,
     sourceOrigin: location.origin,
     formIdentity: owned
       ? ownedFormIdentity(controlForm.owner)
@@ -411,6 +404,9 @@ function passkeyCandidateIsRustSafe({
     observation,
     control,
     authenticationUsername: usernameEvidence(observation),
+    semanticSubmitControlCount: countedSemanticSubmitControls(
+      scopedAdvanceControls(observation),
+    ),
     explicitlyLocallyScoped:
       (observation.root === document &&
         observation.formScope.kind === PasswordFormScopeKind.Unowned) ||
@@ -469,6 +465,8 @@ export function authenticationPageObservationFacts({
   const controlRoot = scopedControlRoot(observation);
   const authenticationUsername = usernameEvidence(observation);
   const advanceControls = scopedAdvanceControls(observation);
+  const semanticSubmitControlCount =
+    countedSemanticSubmitControls(advanceControls);
   const passkeyControls = findPasskeyControls(controlRoot).filter(
     ({ control }) => {
       const associationRequest: ControlObservationAssociationRequest = {
@@ -507,6 +505,7 @@ export function authenticationPageObservationFacts({
       observation,
       control,
       authenticationUsername,
+      semanticSubmitControlCount,
     };
     return transportableControlObservation(request);
   });
@@ -540,6 +539,7 @@ export function authenticationPageObservationFacts({
         observation,
         control,
         authenticationUsername,
+        semanticSubmitControlCount,
         explicitlyLocallyScoped:
           (observation.root === document &&
             observation.formScope.kind === PasswordFormScopeKind.Unowned) ||
@@ -926,6 +926,9 @@ function findApprovedOwnedAdvanceControl({
           observation,
           control,
           authenticationUsername: usernameEvidence(observation),
+          semanticSubmitControlCount: countedSemanticSubmitControls(
+            scopedAdvanceControls(observation),
+          ),
         };
         const [transported] = transportableControlObservation(factsRequest);
         return (
@@ -970,7 +973,6 @@ export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
   const hasAuthenticationUsername = usernameFields.some(isAuthUsernameField);
   const anchor = passwordField ?? usernameField;
   if (!anchor) return false;
-
   const form = anchor.form;
   if (form) {
     const activationRequest: OwnedAdvanceControlRequest = { request, form };
@@ -979,7 +981,6 @@ export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
       return activation.submitted;
     }
   }
-
   if (!passwordField) {
     const nookNamedArgs0_4: Parameters<typeof clickAdvanceControl>[0] = {
       ...request,

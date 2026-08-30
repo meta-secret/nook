@@ -42,3 +42,37 @@ export const authenticationFactObserverOptions = {
   characterData: true,
   subtree: true,
 } as const satisfies MutationObserverInit;
+
+export function observeAuthenticationSubmitValueAssignments(
+  onChange: () => void,
+): () => void {
+  const descriptor = Object.getOwnPropertyDescriptor(
+    HTMLInputElement.prototype,
+    "value",
+  );
+  if (!descriptor || !descriptor.get || !descriptor.set) {
+    return () => {};
+  }
+  const originalGet = descriptor.get;
+  const originalSet = descriptor.set;
+  Object.defineProperty(HTMLInputElement.prototype, "value", {
+    configurable: true,
+    enumerable: descriptor.enumerable,
+    get() {
+      return originalGet.call(this);
+    },
+    set(next: string) {
+      const previous = originalGet.call(this);
+      originalSet.call(this, next);
+      if (
+        previous !== next &&
+        (this.type === "submit" || this.type === "image")
+      ) {
+        onChange();
+      }
+    },
+  });
+  return () => {
+    Object.defineProperty(HTMLInputElement.prototype, "value", descriptor);
+  };
+}
