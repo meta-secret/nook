@@ -295,6 +295,7 @@ export default defineConfig(({ mode }) => {
       setupFiles: ['tests/unit/setup-wasm.ts'],
       isolate: true,
       pool: 'forks',
+      fileParallelism: false,
     },
   }
 })

@@ -560,8 +560,15 @@ function localActivationControlLabel(control: Element): string {
 const formlessTypeButtonSelector =
   'button[type="button"], input[type="button"], [role="button"]';
 
-function containerHasTypeButtonControls(container: Element): boolean {
-  return Boolean(container.querySelector(formlessTypeButtonSelector));
+function containerHasGenericTypeButtonControls(container: Element): boolean {
+  return Array.from(
+    container.querySelectorAll(formlessTypeButtonSelector),
+  ).some(
+    (control) =>
+      !looks_like_login_advance_control_label(
+        localActivationControlLabel(control),
+      ),
+  );
 }
 
 function containerHasUnambiguousAuthenticationActivation(
@@ -578,6 +585,32 @@ function labeledTypeButtonActivationControls(container: Element): Element[] {
       localActivationControlLabel(control),
     ),
   );
+}
+
+function containerIsDocumentShell(container: Element): boolean {
+  return container === container.ownerDocument.documentElement;
+}
+
+function unownedCredentialFields(root: ParentNode): HTMLInputElement[] {
+  return Array.from(
+    root.querySelectorAll<HTMLInputElement>(
+      'input[type="password"], input[autocomplete~="username" i], input[autocomplete~="email" i], input[autocomplete~="one-time-code" i]',
+    ),
+  ).filter((field) => !field.form && isRenderedInput(field));
+}
+
+function containerHasUnownedCredentialCluster(container: Element): boolean {
+  const fields = unownedCredentialFields(container);
+  const passwords = fields.filter((field) => field.type === "password").length;
+  const otps = fields.filter((field) => {
+    const tokenRequest: AutocompleteTokenMatchRequest = {
+      field,
+      expected: "one-time-code",
+    };
+    return hasAutocompleteToken(tokenRequest);
+  }).length;
+  const usernames = fields.length - passwords - otps;
+  return otps > 0 || (usernames > 0 && passwords > 0);
 }
 
 function containerHasSemanticSubmitControl(container: Element): boolean {
@@ -598,6 +631,7 @@ function containerIsFormlessAuthenticationScope({
   container,
   field,
 }: TypeButtonPromotionScopeRequest): boolean {
+  if (containerIsDocumentShell(container)) return false;
   if (containerHasSemanticSubmitControl(container)) return true;
   const promotionRequest: TypeButtonPromotionScopeRequest = {
     container,
@@ -609,18 +643,20 @@ function containerIsFormlessAuthenticationScope({
   ) {
     return true;
   }
-  return (
+  if (
     containerLooksLikeExplicitAuthSurface(container) &&
-    !containerHasTypeButtonControls(container)
+    !containerHasGenericTypeButtonControls(container)
+  ) {
+    return true;
+  }
+  return (
+    containerHasUnownedCredentialCluster(container) &&
+    !typeButtonPromotionSwallowsForeignScope(promotionRequest)
   );
 }
 
 function unownedCredentialFieldCount(root: ParentNode): number {
-  return Array.from(
-    root.querySelectorAll<HTMLInputElement>(
-      'input[type="password"], input[autocomplete~="username" i], input[autocomplete~="email" i], input[autocomplete~="one-time-code" i]',
-    ),
-  ).filter((field) => !field.form && isRenderedInput(field)).length;
+  return unownedCredentialFields(root).length;
 }
 
 function typeButtonPromotionSwallowsForeignScope({
