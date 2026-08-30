@@ -37,6 +37,31 @@ describe('classified login activation', () => {
     expect(activated).toBe(false)
   })
 
+  test('activates a submitter in the first legend of a disabled fieldset', () => {
+    document.body.innerHTML = `
+      <form aria-label="Login" action="/auth/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <fieldset disabled>
+          <legend>
+            <button id="sign-in" type="submit" formaction="/auth/login">Sign in</button>
+          </legend>
+          <button type="submit">Cancel</button>
+        </fieldset>
+      </form>
+    `
+    let activated = ''
+    document.querySelector('#sign-in')?.addEventListener('click', () => {
+      activated = 'sign-in'
+    })
+    document.querySelector('form')?.addEventListener('submit', (event) => {
+      event.preventDefault()
+    })
+
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
+    expect(activated).toBe('sign-in')
+  })
+
   test('does not activate a Continue control whose class is destructive', () => {
     document.body.innerHTML = `
       <form aria-label="Login" action="/auth/login">

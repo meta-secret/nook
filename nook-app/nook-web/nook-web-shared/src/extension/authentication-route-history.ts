@@ -2,10 +2,12 @@ export const AUTHENTICATION_ROUTE_HISTORY_SOURCE =
   "nook-authentication-route-v1";
 
 export function notifyAuthenticationRouteChanged(): void {
+  const targetOrigin = location.origin;
+  if (targetOrigin === "null") return;
   const message: Parameters<typeof window.postMessage>[0] = {
     source: AUTHENTICATION_ROUTE_HISTORY_SOURCE,
   };
-  window.postMessage(message, location.origin);
+  window.postMessage(message, targetOrigin);
 }
 
 export function isAuthenticationRouteHistoryMessage(

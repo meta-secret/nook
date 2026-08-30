@@ -52,4 +52,36 @@ describe('authentication route history', () => {
       'nook-authentication-route-v1',
     )
   })
+
+  test('does not post route notifications to an opaque origin', () => {
+    const posted: Array<{ message: unknown; targetOrigin: string }> = []
+    const originalPostMessage = window.postMessage.bind(window)
+    window.postMessage = ((message: unknown, targetOrigin: string) => {
+      posted.push({ message, targetOrigin })
+      if (targetOrigin === 'null') {
+        throw new Error('opaque origin')
+      }
+    }) as typeof window.postMessage
+    const originalOrigin = location.origin
+    Object.defineProperty(location, 'origin', {
+      configurable: true,
+      value: 'null',
+    })
+    expect(() => notifyAuthenticationRouteChanged()).not.toThrow()
+    expect(posted).toEqual([])
+    Object.defineProperty(location, 'origin', {
+      configurable: true,
+      value: originalOrigin,
+    })
+    window.postMessage = originalPostMessage
+    expect(
+      isAuthenticationRouteHistoryMessage(
+        new MessageEvent('message', {
+          data: { source: AUTHENTICATION_ROUTE_HISTORY_SOURCE },
+          origin: 'null',
+          source: window,
+        }),
+      ),
+    ).toBe(false)
+  })
 })

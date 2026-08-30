@@ -155,12 +155,36 @@ export function associatedAuthenticationForm(
     : { kind: PasswordFormScopeKind.Unowned };
 }
 
+function isDisabledByAncestorFieldset(control: HTMLElement): boolean {
+  let ancestor = control.parentElement;
+  while (ancestor) {
+    if (
+      ancestor instanceof HTMLFieldSetElement &&
+      ancestor.hasAttribute("disabled")
+    ) {
+      const firstLegend = [...ancestor.children].find(
+        (child) => child instanceof HTMLLegendElement,
+      );
+      if (!(
+        firstLegend instanceof HTMLLegendElement &&
+        firstLegend.contains(control)
+      )) {
+        return true;
+      }
+    }
+    ancestor = ancestor.parentElement;
+  }
+  return false;
+}
+
 export function controlIsEffectivelyDisabled(control: HTMLElement): boolean {
-  return (
-    ((control instanceof HTMLButtonElement ||
+  const ownDisabled =
+    (control instanceof HTMLButtonElement ||
       control instanceof HTMLInputElement) &&
-      (control.matches(":disabled") ||
-        Boolean(control.closest("fieldset[disabled]")))) ||
+    control.disabled;
+  return (
+    ownDisabled ||
+    isDisabledByAncestorFieldset(control) ||
     control.getAttribute("aria-disabled") === "true"
   );
 }
