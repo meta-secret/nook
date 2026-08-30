@@ -43,16 +43,19 @@ impl<'de> Deserialize<'de> for ExtensionSessionDeviceProtectionStatusWire {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct ExtensionSessionDeviceWire {
-    device_id: String,
-    device_public_key: String,
-    device_signing_public_key: String,
+    #[serde(rename = "deviceId")]
+    id: String,
+    #[serde(rename = "devicePublicKey")]
+    public_key: String,
+    #[serde(rename = "deviceSigningPublicKey")]
+    signing_public_key: String,
 }
 
 impl ExtensionSessionDeviceWire {
     fn is_complete(&self) -> bool {
-        !self.device_id.trim().is_empty()
-            && !self.device_public_key.trim().is_empty()
-            && !self.device_signing_public_key.trim().is_empty()
+        !self.id.trim().is_empty()
+            && !self.public_key.trim().is_empty()
+            && !self.signing_public_key.trim().is_empty()
     }
 }
 
@@ -77,7 +80,7 @@ pub enum ExtensionSessionStatusAvailability {
 
 #[must_use]
 pub fn decode_extension_session_status_response(
-    response: ExtensionSessionStatusResponseWire,
+    response: &ExtensionSessionStatusResponseWire,
 ) -> ExtensionSessionStatusAvailability {
     if !response.ok {
         return ExtensionSessionStatusAvailability::Unavailable;
@@ -108,7 +111,7 @@ mod tests {
 
     fn decode(json: &str) -> anyhow::Result<ExtensionSessionStatusAvailability> {
         let wire = serde_json::from_str::<ExtensionSessionStatusResponseWire>(json)?;
-        Ok(decode_extension_session_status_response(wire))
+        Ok(decode_extension_session_status_response(&wire))
     }
 
     #[test]

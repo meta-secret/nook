@@ -31,7 +31,7 @@ pub fn validate_extension_session_request(
 pub fn decode_extension_session_status_response(
     response: nook_companion_core::ExtensionSessionStatusResponseWire,
 ) -> nook_companion_core::ExtensionSessionStatusAvailability {
-    nook_companion_core::decode_extension_session_status_response(response)
+    nook_companion_core::decode_extension_session_status_response(&response)
 }
 
 #[wasm_bindgen]
