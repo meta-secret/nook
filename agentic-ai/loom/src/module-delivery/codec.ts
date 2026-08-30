@@ -9,6 +9,7 @@ import type {
   ModulePlanTransportList,
 } from './codec-fields.ts';
 import {
+  CORTEX_TEAM_WRITER_EXPERT,
   MODULE_DELIVERY_PLAN_VERSION,
   ModuleDeliveryBaselineKind,
   ModuleDeliveryCompatibilityStatus,
@@ -20,7 +21,7 @@ import {
   ModuleDeliveryWorkspaceKind,
   moduleDeliveryTaskTeam,
 } from './domain.ts';
-import { TeamKey } from '../team-agents/catalog.ts';
+import { TeamKey, teamCortexRoot } from '../team-agents/catalog.ts';
 import {
   composeCortexAuthoringResources,
   unauthorizedSelectedSkill,
@@ -52,7 +53,9 @@ type ModuleDeliveryTeamDecodeRequest = {
   readonly value: string;
   readonly path: string;
 };
-type ModuleDeliveryOwnerDecodeRequest = ModuleDeliveryTeamDecodeRequest;
+type ModuleDeliveryOwnerDecodeRequest = ModuleDeliveryTeamDecodeRequest & {
+  readonly allowGizmoPrime: boolean;
+};
 type ModulePlanIndexedProducerRequest = {
   readonly value: UntrustedYamlNode;
   readonly index: number;
@@ -438,17 +441,26 @@ function decodeNode(
       : fields.string('team'),
     path,
   };
+  const allowGizmoPrime =
+    !request.legacy &&
+    kind === ModuleDeliveryTaskKind.Write &&
+    teamRequest.value === TeamKey.Ai &&
+    expert === CORTEX_TEAM_WRITER_EXPERT &&
+    moduleRoot === teamCortexRoot(TeamKey.Ai) &&
+    Object.hasOwn(request.value, 'cortexAuthoring');
   const functionalOwnerRequest: ModuleDeliveryOwnerDecodeRequest = {
     value: request.legacy
       ? teamRequest.value
       : fields.string('functionalOwner'),
     path: `${path}.functionalOwner`,
+    allowGizmoPrime,
   };
   const acceptanceOwnerRequest: ModuleDeliveryOwnerDecodeRequest = {
     value: request.legacy
       ? teamRequest.value
       : fields.string('acceptanceOwner'),
     path: `${path}.acceptanceOwner`,
+    allowGizmoPrime,
   };
   const parentLineageRequest: ModulePlanObjectDecodeRequest = {
     record: request.legacy
@@ -614,7 +626,10 @@ function decodeTeam(request: ModuleDeliveryTeamDecodeRequest): TeamKey {
 }
 
 function decodeOwner(request: ModuleDeliveryOwnerDecodeRequest) {
-  if (request.value === ModuleDeliveryOwner.GizmoPrime)
+  if (
+    request.allowGizmoPrime &&
+    request.value === ModuleDeliveryOwner.GizmoPrime
+  )
     return ModuleDeliveryOwner.GizmoPrime;
   return decodeTeam(request);
 }
@@ -700,10 +715,12 @@ function decodeExpectedProducer(
   const functionalOwnerRequest: ModuleDeliveryOwnerDecodeRequest = {
     value: fields.string('functionalOwner'),
     path: `${path}.functionalOwner`,
+    allowGizmoPrime: true,
   };
   const acceptanceOwnerRequest: ModuleDeliveryOwnerDecodeRequest = {
     value: fields.string('acceptanceOwner'),
     path: `${path}.acceptanceOwner`,
+    allowGizmoPrime: true,
   };
   return {
     taskId: fields.identifier('taskId'),

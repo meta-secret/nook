@@ -59,7 +59,6 @@ type ValidationState = {
 
 type DependencyReachability = ReadonlyMap<string, ReadonlySet<string>>;
 type ExecutionDependencies = ReadonlyMap<string, ReadonlySet<string>>;
-
 type NodeValidationRequest = {
   readonly state: ValidationState;
   readonly path: string;
@@ -306,24 +305,25 @@ function validateOrdinaryTask(request: NodeValidationRequest): void {
   const { node } = request;
   const writeRoots = ORDINARY_TASK_WRITE_ROOTS[node.team];
   const writesAuthorized =
-    node.kind !== ModuleDeliveryTaskKind.Write ||
-    node.resources.write.every(
-      (write) =>
-        (write === node.moduleRoot ||
-          write.startsWith(`${node.moduleRoot}/`)) &&
-        writeRoots.some(
-          (root) => write === root || write.startsWith(`${root}/`),
-        ) &&
-        MODULE_EXPERT_CATALOG.every((profile) =>
-          profile.generatedScopePaths.every(
-            (scope) =>
-              !taskResourcePatternsOverlap({
-                first: write,
-                second: `${scope.path}/**`,
-              }),
+    node.kind !== ModuleDeliveryTaskKind.EvidenceSynthesis &&
+    (node.kind !== ModuleDeliveryTaskKind.Write ||
+      node.resources.write.every(
+        (write) =>
+          (write === node.moduleRoot ||
+            write.startsWith(`${node.moduleRoot}/`)) &&
+          writeRoots.some(
+            (root) => write === root || write.startsWith(`${root}/`),
+          ) &&
+          MODULE_EXPERT_CATALOG.every((profile) =>
+            profile.generatedScopePaths.every(
+              (scope) =>
+                !taskResourcePatternsOverlap({
+                  first: write,
+                  second: `${scope.path}/**`,
+                }),
+            ),
           ),
-        ),
-    );
+      ));
   if (
     isValidTaskResourceClaim(node.moduleRoot) &&
     !node.moduleRoot.includes('*') &&

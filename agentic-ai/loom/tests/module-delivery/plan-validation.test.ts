@@ -5,7 +5,6 @@ import {
   ModuleDeliveryBaselineKind,
   ModuleDeliveryIssueCode,
   ModuleDeliveryJoinKind,
-  ModuleDeliveryOwner,
   ModuleDeliveryEvidenceInputSchema,
   ModuleDeliveryExecutionPrecedenceReason,
   ModuleDeliveryTaskKind,
@@ -323,8 +322,8 @@ describe('reviewed module delivery plan', () => {
         dependencies: [],
       }),
       team: TeamKey.Security,
-      functionalOwner: ModuleDeliveryOwner.GizmoPrime,
-      acceptanceOwner: ModuleDeliveryOwner.GizmoPrime,
+      functionalOwner: TeamKey.Ai,
+      acceptanceOwner: TeamKey.Ai,
     };
     for (const team of [TeamKey.Security, TeamKey.Sre])
       expect(accepted({ ...security, team })).toBe(true);
@@ -336,8 +335,8 @@ describe('reviewed module delivery plan', () => {
         write: ['infra/**'],
       }),
       team: TeamKey.Sre,
-      functionalOwner: ModuleDeliveryOwner.GizmoPrime,
-      acceptanceOwner: ModuleDeliveryOwner.GizmoPrime,
+      functionalOwner: TeamKey.Ai,
+      acceptanceOwner: TeamKey.Ai,
     };
     expect(accepted(sreWrite)).toBe(true);
     const forgedTeam = structuredClone(security);

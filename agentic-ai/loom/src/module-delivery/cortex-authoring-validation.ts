@@ -39,6 +39,16 @@ export function validateCortexAuthoring(
   const findings: CortexAuthoringFinding[] = [];
   const { selectedSkillPaths, sharedWriteClaims } =
     request.node.cortexAuthoring;
+  const gizmoOwned =
+    request.node.functionalOwner === ModuleDeliveryOwner.GizmoPrime ||
+    request.node.acceptanceOwner === ModuleDeliveryOwner.GizmoPrime;
+  if (gizmoOwned && !isGizmoPrimeCortexTask(request.node)) {
+    findings.push({
+      code: ModuleDeliveryIssueCode.AcceptanceOwnershipMismatch,
+      path: `${request.path}.functionalOwner`,
+      message: 'Gizmo Prime may own only an exact Gizmo Cortex grant task.',
+    });
+  }
   if (!request.node.resources.write.some(isCortexClaim)) {
     const finding: CortexAuthoringFinding = {
       code: ModuleDeliveryIssueCode.InvalidField,
@@ -118,6 +128,30 @@ export function isPureCortexTask(node: ModuleDeliveryNodeV2): boolean {
     Boolean(node.cortexAuthoring) &&
     node.resources.write.length > 0 &&
     node.resources.write.every(isCortexClaim)
+  );
+}
+
+export function isGizmoPrimeCortexTask(node: ModuleDeliveryNodeV2): boolean {
+  if (
+    !isPureCortexTask(node) ||
+    node.kind !== ModuleDeliveryTaskKind.Write ||
+    !node.cortexAuthoring
+  )
+    return false;
+  const { sharedWriteClaims } = node.cortexAuthoring;
+  return (
+    node.team === TeamKey.Ai &&
+    node.functionalOwner === ModuleDeliveryOwner.GizmoPrime &&
+    node.acceptanceOwner === ModuleDeliveryOwner.GizmoPrime &&
+    node.expert === CORTEX_TEAM_WRITER_EXPERT &&
+    node.moduleRoot === teamCortexRoot(TeamKey.Ai) &&
+    sharedWriteClaims.length === node.resources.write.length &&
+    node.resources.write.every(
+      (claim) =>
+        claim.startsWith('.cortex/gizmo/') &&
+        !claim.includes('*') &&
+        sharedWriteClaims.includes(claim),
+    )
   );
 }
 
