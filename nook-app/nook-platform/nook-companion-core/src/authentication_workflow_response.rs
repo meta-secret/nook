@@ -232,7 +232,12 @@ pub fn decode_authentication_workflow_runtime_response(
         }
     };
     let login_matches_match_workflow = match (login_matches, &workflow) {
-        (WebsiteLoginMatchAvailability::Ready { count: 0 }, _) => true,
+        (
+            WebsiteLoginMatchAvailability::Ready { count: 0 }
+            | WebsiteLoginMatchAvailability::Locked
+            | WebsiteLoginMatchAvailability::Unavailable,
+            _,
+        ) => true,
         (
             WebsiteLoginMatchAvailability::Ready { .. },
             AuthenticationWorkflowSnapshotResponse::Matched { snapshot, .. },
@@ -240,9 +245,6 @@ pub fn decode_authentication_workflow_runtime_response(
             snapshot.saved_login_capability() == AuthenticationSavedLoginCapability::FillSavedLogin
         }
         (WebsiteLoginMatchAvailability::Ready { .. }, _) => false,
-        (WebsiteLoginMatchAvailability::Locked | WebsiteLoginMatchAvailability::Unavailable, _) => {
-            true
-        }
     };
     if !login_matches_match_workflow {
         return Err(AuthenticationWorkflowRuntimeResponseDecodeError);

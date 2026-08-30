@@ -196,7 +196,7 @@ describe('websiteLoginOptions', () => {
       accounts: [],
     })
     expect(loginAccountsForOrigin).toHaveBeenCalledTimes(1)
-    expect(availabilityRequests).toHaveLength(2)
+    expect(availabilityRequests).toHaveLength(3)
 
     grantAccessResponse = {
       response: { ok: false, reason: 'login-forbidden-origin' },
