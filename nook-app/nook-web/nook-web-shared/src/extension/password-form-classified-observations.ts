@@ -5,6 +5,8 @@ import {
 } from "./password-form-submission-controls";
 import {
   authenticationPageObservationFacts,
+  PasswordFormScopeKind,
+  summarizeAuthenticationWorkflowForms,
   type PasswordFormObservation,
 } from "./password-forms";
 
@@ -54,4 +56,58 @@ export function classifiedAuthenticationWorkflowObservations({
       ? [{ observation, facts }]
       : [];
   });
+}
+
+type LiveApprovedAuthenticationWorkflowRequest = {
+  approved: ClassifiedAuthenticationWorkflowObservation;
+  authenticatorSetupHint: boolean;
+  backupCodesHint: boolean;
+};
+
+function authenticationWorkflowScopesMatch(
+  left: PasswordFormObservation,
+  right: PasswordFormObservation,
+): boolean {
+  if (left.formScope.kind !== right.formScope.kind) return false;
+  if (left.formScope.kind === PasswordFormScopeKind.Owned) {
+    return (
+      right.formScope.kind === PasswordFormScopeKind.Owned &&
+      left.formScope.owner === right.formScope.owner
+    );
+  }
+  return left.root === right.root;
+}
+
+function approvedAuthenticationContextMatches(
+  live: AuthenticationPageObservationFacts,
+  approved: AuthenticationPageObservationFacts,
+): boolean {
+  const liveContext = live.ceremony.authenticationContext;
+  const approvedContext = approved.ceremony.authenticationContext;
+  if (!liveContext || !approvedContext) return false;
+  return (
+    liveContext.sourceOrigin === approvedContext.sourceOrigin &&
+    liveContext.formIdentity === approvedContext.formIdentity &&
+    liveContext.destinationIdentity === approvedContext.destinationIdentity
+  );
+}
+
+export function liveApprovedAuthenticationWorkflow({
+  approved,
+  authenticatorSetupHint,
+  backupCodesHint,
+}: LiveApprovedAuthenticationWorkflowRequest): boolean {
+  const classifiedRequest: ClassifiedAuthenticationWorkflowRequest = {
+    workflowForms: summarizeAuthenticationWorkflowForms(),
+    authenticatorSetupHint,
+    backupCodesHint,
+  };
+  return classifiedAuthenticationWorkflowObservations(classifiedRequest).some(
+    (candidate) =>
+      authenticationWorkflowScopesMatch(
+        candidate.observation,
+        approved.observation,
+      ) &&
+      approvedAuthenticationContextMatches(candidate.facts, approved.facts),
+  );
 }

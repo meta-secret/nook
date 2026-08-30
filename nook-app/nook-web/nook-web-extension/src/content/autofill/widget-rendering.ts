@@ -2,7 +2,10 @@ import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 import { isTrustedAuthAction } from '../../lib/auth-widget-policy'
 import type { AuthenticationWorkflowSnapshotView } from '../../lib/auth-workflow-messages'
-import { AuthenticationWorkflowAction } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
+  AuthenticationWorkflowAction,
+  type AuthenticationPageObservationFacts,
+} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   detectEnrollmentHints,
   renderEnrollmentActions,
@@ -101,12 +104,14 @@ export function renderEnrollmentWidget({
 type RenderWidgetArgs = {
   snapshot: AuthenticationWorkflowSnapshotView
   workflow: PasswordFormObservation
+  facts: AuthenticationPageObservationFacts
   vaultConnection: PilotVaultConnection
 }
 
 export function renderWidget({
   snapshot,
   workflow,
+  facts,
   vaultConnection,
 }: RenderWidgetArgs): void {
   if (widgetState.dismissed) {
@@ -247,6 +252,7 @@ export function renderWidget({
   >[0]['workflowRoot'] = {
     kind: WidgetWorkflowRootKind.Assigned,
     observation: workflow,
+    facts,
   }
   const nookTypedArgs0_8: Parameters<typeof mountWidgetShell>[0] = {
     shell,

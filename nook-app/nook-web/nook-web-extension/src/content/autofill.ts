@@ -144,6 +144,7 @@ async function scanAndRender(): Promise<void> {
   const nookTypedArgs0_1: Parameters<typeof renderWidget>[0] = {
     snapshot,
     workflow: selected.observation,
+    facts: selected.facts,
     vaultConnection,
   }
   renderWidget(nookTypedArgs0_1)

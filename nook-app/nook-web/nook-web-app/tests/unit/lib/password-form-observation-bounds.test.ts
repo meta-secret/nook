@@ -628,10 +628,29 @@ describe('authentication observation bounds', () => {
       </form>
     `
     const workflow = observedAuthenticationWorkflow()
-    expect(liveApprovedAuthenticationWorkflow(workflow)).toBeTruthy()
+    const approvedRequest: Parameters<
+      typeof classifiedAuthenticationWorkflowObservations
+    >[0] = {
+      workflowForms: [workflow],
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    }
+    const approved =
+      classifiedAuthenticationWorkflowObservations(approvedRequest)[0]
+    if (!approved) {
+      throw new Error('expected an approved login workflow')
+    }
+    const liveRequest: Parameters<
+      typeof liveApprovedAuthenticationWorkflow
+    >[0] = {
+      approved,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    }
+    expect(liveApprovedAuthenticationWorkflow(liveRequest)).toBe(true)
     document
       .querySelector('form')
       ?.setAttribute('action', '/settings/delete-account')
-    expect(liveApprovedAuthenticationWorkflow(workflow)).toBe(false)
+    expect(liveApprovedAuthenticationWorkflow(liveRequest)).toBe(false)
   })
 })
