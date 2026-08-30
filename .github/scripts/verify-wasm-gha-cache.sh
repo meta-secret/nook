@@ -1,8 +1,81 @@
 #!/usr/bin/env bash
 set -euo pipefail
+caller_path="$PATH"
+export PATH=/usr/bin:/bin
 
 repo_root="${REPO_ROOT:-$(git rev-parse --show-toplevel)}"
-docker_bin="${DOCKER:-docker}"
+prepare_trusted_docker() {
+  if [ -x /usr/local/bin/docker ]; then docker_cli=/usr/local/bin/docker
+  elif [ -x /usr/bin/docker ]; then docker_cli=/usr/bin/docker
+  elif [ -x /opt/homebrew/bin/docker ]; then docker_cli=/opt/homebrew/bin/docker
+  else
+    echo "trusted Docker CLI is unavailable" >&2
+    exit 127
+  fi
+  if [ -x /usr/local/lib/docker/cli-plugins/docker-buildx ]; then buildx_cli=/usr/local/lib/docker/cli-plugins/docker-buildx
+  elif [ -x /usr/local/libexec/docker/cli-plugins/docker-buildx ]; then buildx_cli=/usr/local/libexec/docker/cli-plugins/docker-buildx
+  elif [ -x /usr/lib/docker/cli-plugins/docker-buildx ]; then buildx_cli=/usr/lib/docker/cli-plugins/docker-buildx
+  elif [ -x /usr/libexec/docker/cli-plugins/docker-buildx ]; then buildx_cli=/usr/libexec/docker/cli-plugins/docker-buildx
+  elif [ -x /opt/homebrew/lib/docker/cli-plugins/docker-buildx ]; then buildx_cli=/opt/homebrew/lib/docker/cli-plugins/docker-buildx
+  elif [ -x /Applications/Docker.app/Contents/Resources/cli-plugins/docker-buildx ]; then buildx_cli=/Applications/Docker.app/Contents/Resources/cli-plugins/docker-buildx
+  else
+    echo "trusted Docker Buildx plugin is unavailable" >&2
+    exit 127
+  fi
+  docker_config_source="${DOCKER_CONFIG:-${HOME:?HOME is required when DOCKER_CONFIG is unset}/.docker}"
+  case "$docker_config_source" in
+    /*) ;;
+    *)
+      echo "Docker config path must be absolute" >&2
+      exit 2
+      ;;
+  esac
+  trusted_docker_config="$(mktemp -d "${TMPDIR:-/tmp}/nook-docker-config.XXXXXX")"
+  chmod 700 "$trusted_docker_config"
+  mkdir -m 700 "$trusted_docker_config/cli-plugins"
+  /bin/ln -s "$buildx_cli" "$trusted_docker_config/cli-plugins/docker-buildx"
+  cleanup_docker_config() {
+    rm -rf -- "$trusted_docker_config"
+  }
+  trap cleanup_docker_config EXIT
+  if [ -z "${GITHUB_ACTIONS:-}" ] && [ -e "$docker_config_source/contexts" ]; then
+    cp -RP -- "$docker_config_source/contexts" "$trusted_docker_config/contexts"
+    if find "$trusted_docker_config/contexts" -type l -print -quit | grep -q .; then
+      echo "Docker contexts must not contain symlinks" >&2
+      exit 2
+    fi
+  fi
+  if [ -f "$docker_config_source/config.json" ]; then
+    if [ -n "${GITHUB_ACTIONS:-}" ]; then
+      if [ -x /usr/local/bin/jq ]; then jq_cli=/usr/local/bin/jq
+      elif [ -x /usr/bin/jq ]; then jq_cli=/usr/bin/jq
+      elif [ -x /opt/homebrew/bin/jq ]; then jq_cli=/opt/homebrew/bin/jq
+      else
+        echo "trusted jq is unavailable in GitHub Actions" >&2
+        exit 127
+      fi
+      "$jq_cli" 'if any(keys[]; explode | any(. > 127)) then error("non-ASCII Docker config key") else with_entries(select((.key | ascii_downcase) != "currentcontext" and (.key | ascii_downcase) != "clipluginsextradirs" and (.key | ascii_downcase) != "credsstore" and (.key | ascii_downcase) != "credhelpers" and (.key | ascii_downcase) != "proxies")) end' \
+        "$docker_config_source/config.json" >"$trusted_docker_config/config.json"
+    else
+      current_context="$(DOCKER_CONFIG="$docker_config_source" "$docker_cli" context show)"
+      case "$current_context" in
+        ''|default) printf '{}\n' >"$trusted_docker_config/config.json" ;;
+        *[!a-zA-Z0-9_.-]*)
+          echo "Docker context name contains unsupported characters" >&2
+          exit 2
+          ;;
+        *) printf '{"currentContext":"%s"}\n' "$current_context" >"$trusted_docker_config/config.json" ;;
+      esac
+    fi
+    chmod 600 "$trusted_docker_config/config.json"
+  fi
+  export DOCKER_CONFIG="$trusted_docker_config"
+  export BUILDX_CONFIG="$trusted_docker_config/buildx"
+  unset BUILDX_BUILDER
+  if [ -n "${GITHUB_ACTIONS:-}" ]; then
+    unset DOCKER_HOST DOCKER_CONTEXT BUILDKIT_HOST
+  fi
+}
 cache_scope="${GHA_RUST_WASM_DEPS_SCOPE:?missing GHA_RUST_WASM_DEPS_SCOPE}"
 deps_fingerprint="${NOOK_RUST_DEPS_INPUT_FINGERPRINT:?missing NOOK_RUST_DEPS_INPUT_FINGERPRINT}"
 sccache_mode="${SCCACHE_S3_MODE:-external}"
@@ -43,18 +116,56 @@ if [ "${NOOK_WASM_CACHE_PROMOTION_ENABLED:-}" = "1" ]; then
     echo "portable WASM cache promotion is restricted to trusted Main pushes" >&2
     exit 2
   fi
-  # Publish from the already-selected node-local rootless BuildKit shard. A
-  # repair solve never imports the ref it is replacing: independent input and
-  # source refs may accelerate it, while a miss rebuilds from source.
-  "$docker_bin" buildx bake \
-    --progress=plain \
-    "${bake_args[@]}" \
-    --set "builder-wasm-deps-cache-proof.output=type=cacheonly" \
-    --set "builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref},mode=max,compression=zstd,force-compression=true,timeout=10m" \
-    --set "builder-wasm-deps-cache-proof.cache-from=type=registry,ref=${registry_host}/nook/remote-buildcache/nook-rust-wasm-deps-input-v3:fingerprint-${deps_fingerprint},ignore-error=true" \
-    --set "builder-wasm-deps-cache-proof.cache-from+=type=registry,ref=${registry_host}/nook/buildcache/nook-rust-wasm-source-v3:buildcache,ignore-error=true" \
-    builder-wasm-deps-cache-proof
+  prepare_trusted_docker
+  builder="${NOOK_PR_BUILDX_BUILDER:-}"
+  case "$builder" in
+    ''|nook-pr|*[!a-zA-Z0-9_.-]*)
+      echo "ARC requires a valid job-scoped remote BuildKit builder" >&2
+      exit 2
+      ;;
+  esac
+  # Publish from the already-selected node-local rootless BuildKit shard.
+  # The repair solve never imports the ref it is replacing.
+  # Independent inputs may accelerate it, while a miss rebuilds from source.
+  case "${NOOK_BUILDKIT_REMOTE:-}" in
+    1)
+      case "${NOOK_BUILDKIT_ADDR:-}" in
+        tcp://nook-buildkit.arc-runners.svc.cluster.local:1234) ;;
+        *)
+          echo "ARC BuildKit address must be tcp://nook-buildkit.arc-runners.svc.cluster.local:1234" >&2
+          exit 2
+          ;;
+      esac
+      mkdir -m 700 -p "$BUILDX_CONFIG/instances"
+      printf '{"Name":"%s","Driver":"remote","Nodes":[{"Name":"%s0","Endpoint":"%s","Platforms":null,"DriverOpts":null,"Flags":null,"Files":null}],"Dynamic":false}\n' \
+        "$builder" "$builder" "$NOOK_BUILDKIT_ADDR" >"$BUILDX_CONFIG/instances/$builder"
+      chmod 600 "$BUILDX_CONFIG/instances/$builder"
+      "$docker_cli" buildx use "$builder"
+      "$docker_cli" buildx bake \
+        --progress=plain \
+        "${bake_args[@]}" \
+        --set "builder-wasm-deps-cache-proof.output=type=cacheonly" \
+        --set "builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref},mode=max,compression=zstd,force-compression=true,timeout=10m" \
+        --set "builder-wasm-deps-cache-proof.cache-from=type=registry,ref=${registry_host}/nook/remote-buildcache/nook-rust-wasm-deps-input-v3:fingerprint-${deps_fingerprint},ignore-error=true" \
+        --set "builder-wasm-deps-cache-proof.cache-from+=type=registry,ref=${registry_host}/nook/buildcache/nook-rust-wasm-source-v3:buildcache,ignore-error=true" \
+        builder-wasm-deps-cache-proof
+      ;;
+    '')
+      "$repo_root/.github/scripts/with-healthy-buildkit.sh" "$docker_cli" buildx bake \
+        --progress=plain \
+        "${bake_args[@]}" \
+        --set "builder-wasm-deps-cache-proof.output=type=cacheonly" \
+        --set "builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref},mode=max,compression=zstd,force-compression=true,timeout=10m" \
+        --set "builder-wasm-deps-cache-proof.cache-from=type=registry,ref=${registry_host}/nook/remote-buildcache/nook-rust-wasm-deps-input-v3:fingerprint-${deps_fingerprint},ignore-error=true" \
+        --set "builder-wasm-deps-cache-proof.cache-from+=type=registry,ref=${registry_host}/nook/buildcache/nook-rust-wasm-source-v3:buildcache,ignore-error=true" \
+        builder-wasm-deps-cache-proof
+      ;;
+    *)
+      echo "NOOK_BUILDKIT_REMOTE must be 1 or unset" >&2
+      exit 2
+      ;;
+  esac
 fi
 
-bun "$repo_root/.github/scripts/verify-registry-cache-blobs.ts" "$cache_ref"
+PATH="$caller_path" bun "$repo_root/.github/scripts/verify-registry-cache-blobs.ts" "$cache_ref"
 echo "verified ARC-published WASM dependency cache blob integrity for $cache_scope"
