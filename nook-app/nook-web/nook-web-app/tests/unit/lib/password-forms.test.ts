@@ -167,6 +167,36 @@ describe('website one-time-code fields', () => {
     expect(submitted).toBe(true)
   })
 
+  test('marks a native-inert semantic submitter inert and allows implicit submission', () => {
+    document.body.innerHTML = `
+      <form aria-label="Login" action="/session">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <div inert><button type="submit">Continue</button></div>
+      </form>
+    `
+    let submitted = false
+    document.querySelector('form')?.addEventListener('submit', (event) => {
+      event.preventDefault()
+      submitted = true
+    })
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [
+        { actionability: 'inert', label: expect.stringContaining('Continue') },
+      ],
+    })
+    expect(facts.ceremony.advanceControl).toBe('implicit-submission')
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
+    expect(submitted).toBe(true)
+  })
+
   test('infers implicit submission when the only semantic submitter is inert', () => {
     document.body.innerHTML = `<form action="/auth/login"><input autocomplete="username" /><button type="submit" disabled>Sign in</button></form>`
     const facts = authenticationPageObservationFacts({

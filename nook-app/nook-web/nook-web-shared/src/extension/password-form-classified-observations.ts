@@ -1,4 +1,9 @@
-import type { AuthenticationPageObservationFacts } from "./nook-companion-wasm/nook_companion_wasm.js";
+import {
+  classify_companion_authentication_workflow_facts,
+  companion_authentication_workflow_match_kind,
+  CompanionAuthenticationWorkflowMatchKind,
+  type AuthenticationPageObservationFacts,
+} from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
   authenticationFactStringsAreTransportable,
   MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
@@ -88,8 +93,38 @@ function approvedAuthenticationContextMatches(
   return (
     liveContext.sourceOrigin === approvedContext.sourceOrigin &&
     liveContext.formIdentity === approvedContext.formIdentity &&
-    liveContext.destinationIdentity === approvedContext.destinationIdentity
+    liveContext.destinationIdentity === approvedContext.destinationIdentity &&
+    live.fields.usernameFieldCount === approved.fields.usernameFieldCount &&
+    live.fields.currentPasswordFieldCount ===
+      approved.fields.currentPasswordFieldCount &&
+    live.fields.newPasswordFieldCount === approved.fields.newPasswordFieldCount &&
+    live.fields.genericPasswordFieldCount ===
+      approved.fields.genericPasswordFieldCount &&
+    live.fields.oneTimeCodeFieldCount === approved.fields.oneTimeCodeFieldCount
   );
+}
+
+function approvedFieldSemanticsMatch(
+  live: AuthenticationPageObservationFacts,
+  approved: AuthenticationPageObservationFacts,
+): boolean {
+  return approvedAuthenticationContextMatches(live, approved);
+}
+
+function rustWorkflowSemantics(
+  facts: AuthenticationPageObservationFacts,
+): string {
+  const workflowMatch = classify_companion_authentication_workflow_facts({
+    observations: [facts],
+  });
+  const matchKind = companion_authentication_workflow_match_kind(workflowMatch);
+  if (
+    matchKind !== CompanionAuthenticationWorkflowMatchKind.Matched ||
+    !("snapshot" in workflowMatch)
+  ) {
+    return String(matchKind);
+  }
+  return `${matchKind}:${workflowMatch.snapshot.kind}:${workflowMatch.snapshot.action}`;
 }
 
 export function liveApprovedAuthenticationWorkflow({
@@ -108,6 +143,9 @@ export function liveApprovedAuthenticationWorkflow({
         candidate.observation,
         approved.observation,
       ) &&
-      approvedAuthenticationContextMatches(candidate.facts, approved.facts),
+      approvedAuthenticationContextMatches(candidate.facts, approved.facts) &&
+      approvedFieldSemanticsMatch(candidate.facts, approved.facts) &&
+      rustWorkflowSemantics(candidate.facts) ===
+        rustWorkflowSemantics(approved.facts),
   );
 }

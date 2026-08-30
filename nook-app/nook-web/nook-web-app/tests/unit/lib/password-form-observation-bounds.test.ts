@@ -653,4 +653,63 @@ describe('authentication observation bounds', () => {
       ?.setAttribute('action', '/settings/delete-account')
     expect(liveApprovedAuthenticationWorkflow(liveRequest)).toBe(false)
   })
+
+  test('rejects a previously approved workflow after password field semantics change', () => {
+    document.body.innerHTML = `
+      <form id="login" aria-label="Login" action="/auth/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+    const workflow = observedAuthenticationWorkflow()
+    const approvedRequest: Parameters<
+      typeof classifiedAuthenticationWorkflowObservations
+    >[0] = {
+      workflowForms: [workflow],
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    }
+    const approved =
+      classifiedAuthenticationWorkflowObservations(approvedRequest)[0]
+    if (!approved) {
+      throw new Error('expected an approved login workflow')
+    }
+    const liveRequest: Parameters<
+      typeof liveApprovedAuthenticationWorkflow
+    >[0] = {
+      approved,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    }
+    expect(liveApprovedAuthenticationWorkflow(liveRequest)).toBe(true)
+    document
+      .querySelector('input[type="password"]')
+      ?.setAttribute('autocomplete', 'new-password')
+    expect(liveApprovedAuthenticationWorkflow(liveRequest)).toBe(false)
+  })
+
+  test('keeps a progressing password login when non-progressing OTP forms fill the bound', () => {
+    const otpForms = Array.from(
+      { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS },
+      (_, index) =>
+        `<form id="otp-${index}" action="/otp"><input autocomplete="one-time-code" inputmode="numeric" /></form>`,
+    ).join('')
+    document.body.innerHTML = `
+      ${otpForms}
+      <form id="password-login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS)
+    expect(
+      observations.some(
+        (observation) => ownedFormId(observation) === 'password-login',
+      ),
+    ).toBe(true)
+  })
 })

@@ -208,7 +208,9 @@ export function isRenderedControl(control: HTMLElement): boolean {
   for (;;) {
     const style = getComputedStyle(element);
     const rendered = style.display !== "none" && style.visibility !== "hidden";
-    if (element.hidden || !rendered) return false;
+    if (element.hidden || element.hasAttribute("inert") || element.inert || !rendered) {
+      return false;
+    }
     const parent = element.parentElement;
     if (!(parent instanceof HTMLElement)) return true;
     element = parent;

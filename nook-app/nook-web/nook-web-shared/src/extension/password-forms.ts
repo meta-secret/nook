@@ -237,8 +237,9 @@ export function summarizePasswordForms(): PasswordFormSummary {
   return summarizeRoot(nookTypedArgs0_9);
 }
 
-function passwordFormPriority({ summary }: PasswordFormObservation): number {
-  const observation: AuthenticationPageObservation = {
+function passwordFormPriority(observation: PasswordFormObservation): number {
+  const { summary } = observation;
+  const reduced: AuthenticationPageObservation = {
     usernameFieldCount: summary.usernameFieldCount,
     currentPasswordFieldCount: summary.currentPasswordFieldCount,
     newPasswordFieldCount: summary.newPasswordFieldCount,
@@ -250,7 +251,24 @@ function passwordFormPriority({ summary }: PasswordFormObservation): number {
     passkeyControlPresent: summary.passkeyControlPresent,
     matchingPasskeyAccountCount: 0,
   };
-  return authentication_form_observation_priority(observation);
+  const facts = authenticationPageObservationFacts({
+    observation,
+    authenticatorSetupHint: false,
+    backupCodesHint: false,
+  });
+  const passwordFields =
+    facts.fields.currentPasswordFieldCount +
+    facts.fields.genericPasswordFieldCount +
+    facts.fields.newPasswordFieldCount;
+  const progressing =
+    facts.detailedAdvanceControl.kind !== "absent" ||
+    facts.authenticator.detailedPasskeyControl.kind !== "absent" ||
+    facts.ceremony.manualCheckpoint === "present" ||
+    (facts.ceremony.advanceControl === "implicit-submission" &&
+      passwordFields > 0);
+  return (
+    authentication_form_observation_priority(reduced) + (progressing ? 32 : 0)
+  );
 }
 
 function scopedControlRoot({
