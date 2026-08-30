@@ -286,6 +286,7 @@ async function loginAccountListForOrigin({
   failClosed,
 }: LoginAccountListForOriginArgs): Promise<LoginAccountAvailability> {
   const accounts: WebsiteLoginAccountOption[] = []
+  let receivedValidResponse = false
   const needle = query.trim().toLowerCase()
   for (const grant of grants) {
     const request: Parameters<typeof sendSessionMessage>[0] = {
@@ -314,6 +315,7 @@ async function loginAccountListForOrigin({
       if (failClosed) return { ok: false }
       continue
     }
+    receivedValidResponse = true
     for (const account of sessionResponseAccounts(response)) {
       if (
         !account ||
@@ -327,6 +329,7 @@ async function loginAccountListForOrigin({
         !('websiteHost' in account) ||
         typeof account.websiteHost !== 'string'
       ) {
+        if (failClosed) return { ok: false }
         continue
       }
       const option: WebsiteLoginAccountOption = {
@@ -351,7 +354,7 @@ async function loginAccountListForOrigin({
       accounts.push(option)
     }
   }
-  return { ok: true, accounts }
+  return receivedValidResponse ? { ok: true, accounts } : { ok: false }
 }
 
 export async function loginAccountAvailabilityForOrigin(
