@@ -97,12 +97,14 @@ export function observedFormDestination(formScope: PasswordFormScope): string {
     : boundedAuthenticationDestination(location.href);
 }
 
+function rawFormDestinationIdentity(form: HTMLFormElement): string {
+  return form.hasAttribute("action")
+    ? form.action
+    : (form.ownerDocument.defaultView?.location.href ?? "");
+}
+
 export function ownedFormDestinationIdentity(form: HTMLFormElement): string {
-  return boundedAuthenticationDestination(
-    form.hasAttribute("action")
-      ? form.action
-      : (form.ownerDocument.defaultView?.location.href ?? ""),
-  );
+  return boundedAuthenticationDestination(rawFormDestinationIdentity(form));
 }
 
 export function controlDestinationIdentity(
@@ -110,25 +112,25 @@ export function controlDestinationIdentity(
   formScope: PasswordFormScope,
 ): string {
   if (control instanceof HTMLAnchorElement) {
-    return boundedAuthenticationDestination(control.href);
+    return control.href;
   }
   if (
     (control instanceof HTMLButtonElement ||
       control instanceof HTMLInputElement) &&
     control.hasAttribute("formaction")
   ) {
-    return boundedAuthenticationDestination(control.formAction);
+    return control.formAction;
   }
   if (
     (control instanceof HTMLButtonElement ||
       control instanceof HTMLInputElement) &&
     control.form
   ) {
-    return ownedFormDestinationIdentity(control.form);
+    return rawFormDestinationIdentity(control.form);
   }
   return formScope.kind === PasswordFormScopeKind.Owned
-    ? ownedFormDestinationIdentity(formScope.owner)
-    : boundedAuthenticationDestination(location.href);
+    ? rawFormDestinationIdentity(formScope.owner)
+    : location.href;
 }
 
 export const authenticationAdvanceControlSelector =
@@ -157,7 +159,8 @@ export function controlIsEffectivelyDisabled(control: HTMLElement): boolean {
   return (
     ((control instanceof HTMLButtonElement ||
       control instanceof HTMLInputElement) &&
-      control.matches(":disabled")) ||
+      (control.matches(":disabled") ||
+        Boolean(control.closest("fieldset[disabled]")))) ||
     control.getAttribute("aria-disabled") === "true"
   );
 }
@@ -188,6 +191,14 @@ export function isRenderedControl(control: HTMLElement): boolean {
     if (!(parent instanceof HTMLElement)) return true;
     element = parent;
   }
+}
+
+export function controlMachineIdentity(control: HTMLElement): string {
+  const namedValue =
+    control instanceof HTMLButtonElement || control instanceof HTMLInputElement
+      ? `${control.name}=${control.value}`
+      : "";
+  return `${control.id} ${namedValue} ${control.getAttribute("class") ?? ""}`;
 }
 
 export function controlLabel(control: HTMLElement): string {
@@ -318,7 +329,7 @@ function canActivateAuthenticationRouteControl(
     identityContainer?.getAttribute("aria-label") ?? "",
   ].join(" ");
   const destinationIdentity = authenticationControlDestination(control);
-  const machineIdentity = `${control.id} ${control.name}=${control.value}`;
+  const machineIdentity = controlMachineIdentity(control);
   if (
     !destinationIdentity ||
     !authenticationFactStringsAreTransportable([

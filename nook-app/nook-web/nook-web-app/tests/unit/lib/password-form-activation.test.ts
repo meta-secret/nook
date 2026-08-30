@@ -58,8 +58,10 @@ describe('classified login activation', () => {
     })
 
     const loginFillArgs: Parameters<typeof fillLoginCredentials>[0] = {
-      username: 'user@example.test',
-      password: 'secret',
+      credentials: {
+        username: 'user@example.test',
+        password: 'secret',
+      },
       kind: PasswordFormQueryKind.Root,
       root: document,
     }
@@ -197,8 +199,16 @@ describe('classified login activation', () => {
     document.querySelector('#next')?.addEventListener('click', () => {
       advanced = true
     })
+    const workflow = summarizeAuthenticationWorkflowForms()[0]
+    const submissionArgs: Parameters<typeof submitLoginForm>[0] = {
+      kind: PasswordFormQueryKind.Scoped,
+      root: workflow?.root ?? document,
+      formScope: workflow?.formScope ?? {
+        kind: PasswordFormScopeKind.Unowned,
+      },
+    }
 
-    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
+    expect(submitLoginForm(submissionArgs)).toBe(true)
     expect(advanced).toBe(true)
   })
 
@@ -232,7 +242,7 @@ describe('classified login activation', () => {
   test('fills username-only then advances common multi-step login controls', () => {
     for (const label of ['Continue with email', 'Sign in using password']) {
       document.body.innerHTML = `
-        <form id="login-form">
+        <form id="login-form" action="/auth/login">
           <input autocomplete="username" name="email" type="email" />
           <button id="next" type="button">${label}</button>
         </form>
@@ -270,7 +280,7 @@ describe('classified login activation', () => {
     ['hidden ancestor', '<button name="continue"></button>', 'hidden'],
   ])('skips %s before advancing login', (_, control, parentAttrs) => {
     document.body.innerHTML = `
-      <form id="login-form">
+      <form id="login-form" action="/auth/login">
         <input autocomplete="username" name="email" type="email" />
         <span id="p">Continue with Amazon</span>
         <span ${parentAttrs}>${control}</span>

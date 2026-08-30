@@ -635,7 +635,11 @@ pub fn strongest_authentication_username_evidence(
 
 /// Decide whether a locally scoped control may advance a safe authentication route.
 #[must_use]
-#[expect(clippy::too_many_arguments, reason = "typed WASM policy boundary")]
+#[expect(
+    clippy::too_many_arguments,
+    clippy::fn_params_excessive_bools,
+    reason = "typed WASM policy boundary"
+)]
 pub fn can_activate_authentication_route_control(
     source_origin: &str,
     form_identity: &str,
@@ -928,7 +932,7 @@ mod tests {
 
     #[test]
     fn activation_accepts_only_bounded_semantic_username_scope_evidence() {
-        let decide = |form: &str, label: &str, concrete, username, local| {
+        let decide = |form: &str, label: &str, concrete, username, local, password| {
             let (machine, visible_label) = label
                 .strip_prefix("machine:")
                 .map_or(("", label), |machine| (machine, "Continue"));
@@ -941,42 +945,22 @@ mod tests {
                 concrete,
                 username,
                 local,
-                false,
+                password,
             )
         };
-        assert!(decide("", "", false, true, true));
-        assert!(!decide("", "", true, true, true));
+        assert!(decide("", "", false, true, true, false));
+        assert!(!decide("", "", true, true, true, false));
         for label in "Sign in to Microsoft 365|Continue with email address|Continue with your email|Continue with your email address|Use your password to sign in|Se connecter|Anmelden".split('|') {
-            assert!(decide("f", label, true, true, true));
+            assert!(decide("f", label, true, true, true, false));
         }
-        assert!(decide("login-form", "Sign in", true, true, true));
+        assert!(decide("login-form", "Sign in", true, true, true, false));
         for label in "Continue with Amazon|Sign in to Google|Sign in to Amazon|Amazon login|Discord login|machine:delete-account|machine:reset-password|machine:create-account|machine:google|machine:passkey|machine:provider=acme|Sign in to Microsoft and reset password|Sign in to Microsoft or Google".split('|') {
-            assert!(!decide("login-form", label, true, true, true));
+            assert!(!decide("login-form", label, true, true, true, false));
         }
-        assert!(!decide("f", "Entrar", true, true, false));
-        assert!(!decide("f", "Supprimer le compte", true, true, true));
-        assert!(can_activate_authentication_route_control(
-            "https://example.test",
-            "login",
-            "https://example.test/session",
-            "",
-            "",
-            false,
-            false,
-            true,
-            true,
-        ));
-        assert!(!can_activate_authentication_route_control(
-            "https://example.test",
-            "login",
-            "https://example.test/session",
-            "",
-            "",
-            false,
-            false,
-            true,
-            false,
-        ));
+        assert!(!decide("f", "Entrar", true, true, false, false));
+        assert!(!decide("f", "Supprimer le compte", true, true, true, false));
+        assert!(decide("", "", false, false, true, true));
+        assert!(!decide("", "", false, false, true, false));
     }
 
     #[test]

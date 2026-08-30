@@ -136,7 +136,11 @@ pub fn has_safe_authentication_route_identity(
 
 #[wasm_bindgen]
 #[must_use]
-#[expect(clippy::too_many_arguments, reason = "typed WASM policy boundary")]
+#[expect(
+    clippy::too_many_arguments,
+    clippy::fn_params_excessive_bools,
+    reason = "typed WASM policy boundary"
+)]
 pub fn can_activate_authentication_route_control(
     source_origin: &str,
     form_identity: &str,

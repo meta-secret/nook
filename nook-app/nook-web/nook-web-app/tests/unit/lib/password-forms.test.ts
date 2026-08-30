@@ -8,6 +8,7 @@ import {
   fillOneTimeCode,
   findOneTimeCodeFields,
   PasswordFormQueryKind,
+  PasswordFormScopeKind,
   submitLoginForm,
   summarizeAuthenticationWorkflowForms,
   summarizePasswordForms,
@@ -68,8 +69,8 @@ describe('website one-time-code fields', () => {
       backupCodesHint: false,
     })
     expect(facts.ceremony.oneTimeCodeHandlerSignals).toEqual([
-      'onchange=validateCode()',
       'oninput=this.form.requestSubmit()',
+      'onchange=validateCode()',
     ])
   })
 
@@ -319,7 +320,7 @@ describe('website one-time-code fields', () => {
       observations: [
         {
           label: expect.stringContaining('Delete'),
-          formIdentity: expect.stringContaining('form'),
+          formIdentity: expect.stringContaining('Login'),
         },
       ],
     })
@@ -339,7 +340,7 @@ describe('website one-time-code fields', () => {
       observations: [
         {
           label: expect.stringContaining('Sign in'),
-          formIdentity: expect.stringContaining('search'),
+          formIdentity: expect.stringContaining('Login'),
         },
       ],
     })
@@ -372,8 +373,8 @@ describe('website one-time-code fields', () => {
       backupCodesHint: false,
     })
     expect(afterAdd.ceremony.oneTimeCodeHandlerSignals).toEqual([
-      'onchange=validateCode()',
       'oninput=this.form.requestSubmit()',
+      'onchange=validateCode()',
     ])
 
     field.removeAttribute('oninput')
@@ -582,8 +583,16 @@ describe('website one-time-code fields', () => {
       </div>
     `
 
+    const observation = summarizeAuthenticationWorkflowForms().find(
+      (workflow) =>
+        workflow.formScope.kind === PasswordFormScopeKind.Owned &&
+        workflow.formScope.owner.id === 'password-login',
+    )
+    if (!observation) {
+      throw new Error('expected the password-login workflow')
+    }
     const facts = authenticationPageObservationFacts({
-      observation: observedAuthenticationWorkflow(),
+      observation,
       authenticatorSetupHint: false,
       backupCodesHint: false,
     })
@@ -690,8 +699,8 @@ describe('website one-time-code fields', () => {
     expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
       kind: 'candidates',
       observation: [
-        { observation: { actionability: 'inert' } },
         { observation: { actionability: 'actionable' } },
+        { observation: { actionability: 'inert' } },
       ],
     })
   })

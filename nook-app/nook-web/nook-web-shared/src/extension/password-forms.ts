@@ -3,6 +3,7 @@ import {
   authentication_advance_control_is_safe,
   authentication_form_observation_priority,
   authentication_passkey_control_candidate_is_safe,
+  looks_like_login_advance_control_label,
   strongest_authentication_username_evidence,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import type {
@@ -45,6 +46,7 @@ import {
   controlDestinationIdentity,
   controlIsInert,
   controlLabel,
+  controlMachineIdentity,
   isRenderedControl,
   observeSubmit,
   requestImplicitAuthenticationSubmit,
@@ -420,12 +422,7 @@ function pageControlObservation({
       : observedFormIdentity(observation.root, observation.formScope),
     destinationIdentity: controlDestination(destinationRequest),
     label: controlLabel(control),
-    machineIdentity: `${control.id} ${
-      control instanceof HTMLButtonElement ||
-      control instanceof HTMLInputElement
-        ? `${control.name}=${control.value}`
-        : ""
-    }`,
+    machineIdentity: controlMachineIdentity(control),
   };
 }
 
@@ -539,8 +536,8 @@ export function authenticationPageObservationFacts({
   const boundedAdvanceObservations = boundAuthenticationControlObservations(
     advanceObservations,
     (candidate) =>
-      candidate.semantics === "semantic-submit" &&
-      candidate.actionability === "actionable",
+      candidate.actionability === "actionable" &&
+      authentication_advance_control_is_safe(candidate),
   );
   if (boundedAdvanceObservations.length > 0) {
     detailedAdvanceControl = {
@@ -914,11 +911,10 @@ function activateApprovedOwnedAdvanceControl(
     approved.click();
     return true;
   }
-  observeSubmit({
+  return observeSubmit({
     form,
     action: () => approved.click(),
   });
-  return true;
 }
 
 export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
