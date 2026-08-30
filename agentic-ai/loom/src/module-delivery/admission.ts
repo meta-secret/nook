@@ -592,7 +592,7 @@ export function selectModuleDeliveryAdmissions(
             }),
           )
         : Object.freeze([]);
-    let context: TeamTaskContext | undefined;
+    const contextFields: { context?: TeamTaskContext } = {};
     if (node.kind === ModuleDeliveryTaskKind.Write && node.cortexAuthoring) {
       const contextAdmissionRequest: AdmitCortexAuthoringContextRequest = {
         repositoryRoot: authority.repositoryRoot,
@@ -600,7 +600,9 @@ export function selectModuleDeliveryAdmissions(
         node,
         resources,
       };
-      context = admitCortexAuthoringContext(contextAdmissionRequest);
+      contextFields.context = admitCortexAuthoringContext(
+        contextAdmissionRequest,
+      );
     }
     const admissionValue: ModuleDeliveryAdmission = {
       taskId,
@@ -609,7 +611,7 @@ export function selectModuleDeliveryAdmissions(
       planDigest: request.state.planDigest,
       startingFrontier: startingFrontier(frontierRequest),
       resources,
-      ...(context ? { context } : {}),
+      ...contextFields,
       team: node.team,
       functionalOwner: node.functionalOwner,
       acceptanceOwner: node.acceptanceOwner,

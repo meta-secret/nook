@@ -639,41 +639,37 @@ function decodeNode(
   ) {
     fail(`${path}.workspace.kind: unsupported workspace kind.`);
   }
+  const workspace = {
+    kind: ModuleDeliveryWorkspaceKind.IsolatedWorktree,
+    expectedCommitHandoff: workspaceFields.trueValue('expectedCommitHandoff'),
+  } as const;
+  if (!Object.hasOwn(request.value, 'cortexAuthoring')) {
+    return {
+      kind: ModuleDeliveryTaskKind.Write,
+      ...common,
+      workspace,
+    };
+  }
   const cortexAuthoringRequest: ModulePlanObjectDecodeRequest = {
-    record: Object.hasOwn(request.value, 'cortexAuthoring')
-      ? fields.recordField('cortexAuthoring')
-      : {},
+    record: fields.recordField('cortexAuthoring'),
     path: `${path}.cortexAuthoring`,
   };
-  const cortexAuthoring = Object.hasOwn(request.value, 'cortexAuthoring')
-    ? decodeCortexAuthoring(cortexAuthoringRequest)
-    : undefined;
+  const cortexAuthoring = decodeCortexAuthoring(cortexAuthoringRequest);
   const contextPathRequest: TeamTaskContextPathRequest = {
     team: common.team,
     writeClaims: common.resources.write,
-    selectedSkillPaths: cortexAuthoring?.selectedSkillPaths ?? [],
+    selectedSkillPaths: cortexAuthoring.selectedSkillPaths,
   };
-  const context = cortexAuthoring
-    ? composeTeamTaskContextPaths(contextPathRequest)
-    : undefined;
+  const context = composeTeamTaskContextPaths(contextPathRequest);
   return {
     kind: ModuleDeliveryTaskKind.Write,
     ...common,
-    ...(context
-      ? {
-          resources: {
-            ...common.resources,
-            read: [
-              ...new Set([...context.contextPaths, ...common.resources.read]),
-            ],
-          },
-        }
-      : {}),
-    ...(cortexAuthoring ? { cortexAuthoring } : {}),
-    workspace: {
-      kind: ModuleDeliveryWorkspaceKind.IsolatedWorktree,
-      expectedCommitHandoff: workspaceFields.trueValue('expectedCommitHandoff'),
+    resources: {
+      ...common.resources,
+      read: [...new Set([...context.contextPaths, ...common.resources.read])],
     },
+    cortexAuthoring,
+    workspace,
   };
 }
 

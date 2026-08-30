@@ -114,7 +114,7 @@ export function isCortexClaim(claim: string): boolean {
 export function isPureCortexTask(node: ModuleDeliveryNodeV2): boolean {
   return (
     node.kind === ModuleDeliveryTaskKind.Write &&
-    node.cortexAuthoring !== undefined &&
+    Boolean(node.cortexAuthoring) &&
     node.resources.write.length > 0 &&
     node.resources.write.every(isCortexClaim)
   );
