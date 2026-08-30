@@ -197,6 +197,43 @@ describe('website one-time-code fields', () => {
     expect(submitted).toBe(true)
   })
 
+  test('rescans actionability when an ancestor becomes native-inert', () => {
+    document.body.innerHTML = `
+      <form aria-label="Login" action="/session">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <div id="panel"><button type="submit">Continue</button></div>
+      </form>
+    `
+    const before = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(before.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [
+        {
+          actionability: 'actionable',
+          label: expect.stringContaining('Continue'),
+        },
+      ],
+    })
+
+    document.querySelector('#panel')?.setAttribute('inert', '')
+    const after = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(after.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [
+        { actionability: 'inert', label: expect.stringContaining('Continue') },
+      ],
+    })
+  })
+
   test('infers implicit submission when the only semantic submitter is inert', () => {
     document.body.innerHTML = `<form action="/auth/login"><input autocomplete="username" /><button type="submit" disabled>Sign in</button></form>`
     const facts = authenticationPageObservationFacts({
@@ -326,6 +363,7 @@ describe('website one-time-code fields', () => {
     expect(authenticationFactAttributeFilter).toEqual(
       expect.arrayContaining([
         'alt',
+        'inert',
         'onchange',
         'oninput',
         'role',

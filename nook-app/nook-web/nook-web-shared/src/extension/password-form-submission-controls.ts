@@ -165,12 +165,10 @@ function isDisabledByAncestorFieldset(control: HTMLElement): boolean {
       const firstLegend = [...ancestor.children].find(
         (child) => child instanceof HTMLLegendElement,
       );
-      if (
-        !(
-          firstLegend instanceof HTMLLegendElement &&
-          firstLegend.contains(control)
-        )
-      ) {
+      if (!(
+        firstLegend instanceof HTMLLegendElement &&
+        firstLegend.contains(control)
+      )) {
         return true;
       }
     }
@@ -188,7 +186,12 @@ export function controlIsEffectivelyDisabled(control: HTMLElement): boolean {
 }
 
 export function controlIsInert(control: HTMLElement): boolean {
-  return controlIsEffectivelyDisabled(control) || !isRenderedControl(control);
+  return (
+    controlIsEffectivelyDisabled(control) ||
+    !isRenderedControl(control) ||
+    control.hasAttribute("inert") ||
+    control.inert
+  );
 }
 
 export function boundAuthenticationControlObservations<Candidate>(
@@ -208,7 +211,12 @@ export function isRenderedControl(control: HTMLElement): boolean {
   for (;;) {
     const style = getComputedStyle(element);
     const rendered = style.display !== "none" && style.visibility !== "hidden";
-    if (element.hidden || element.hasAttribute("inert") || element.inert || !rendered) {
+    if (
+      element.hidden ||
+      element.hasAttribute("inert") ||
+      element.inert ||
+      !rendered
+    ) {
       return false;
     }
     const parent = element.parentElement;
