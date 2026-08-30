@@ -70,4 +70,58 @@ describe('login account listing failure handling', () => {
     ).resolves.toEqual({ ok: false })
     expect(passiveSendMessage).toHaveBeenCalledTimes(1)
   })
+
+  test('isolates rejected grant transports interactively but fails the passive aggregate closed', async () => {
+    Object.assign(globalThis, {
+      __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
+    })
+    const { loginAccountAvailabilityForOrigin, loginAccountsForOrigin } =
+      await import('../src/background/service-worker/account-pickers')
+    const grants = [grant('failed-vault'), grant('healthy-vault')]
+    const interactiveSendMessage = mock()
+      .mockRejectedValueOnce(new Error('extension session unavailable'))
+      .mockResolvedValueOnce({
+        ok: true,
+        accounts: [
+          {
+            secretId: 'login-1',
+            username: 'person@example.test',
+            websiteUrl: 'https://example.test/login',
+            websiteHost: 'example.test',
+          },
+        ],
+      })
+    const interactiveRequest: Parameters<typeof loginAccountsForOrigin>[0] = {
+      grants,
+      origin: 'https://example.test',
+      sendMessage: interactiveSendMessage,
+    }
+    await expect(loginAccountsForOrigin(interactiveRequest)).resolves.toEqual([
+      {
+        vaultStoreId: 'healthy-vault',
+        vaultName: 'healthy-vault',
+        secretId: 'login-1',
+        username: 'person@example.test',
+        websiteUrl: 'https://example.test/login',
+        websiteHost: 'example.test',
+      },
+    ])
+    expect(interactiveSendMessage).toHaveBeenCalledTimes(2)
+
+    const passiveSendMessage = mock(() =>
+      Promise.reject(new Error('extension session unavailable')),
+    )
+    const passiveRequest: Parameters<
+      typeof loginAccountAvailabilityForOrigin
+    >[0] = {
+      grants,
+      origin: 'https://example.test',
+      queue: extensionSessionProbeDeadline(Date.now() + 1_000),
+      sendMessage: passiveSendMessage,
+    }
+    await expect(
+      loginAccountAvailabilityForOrigin(passiveRequest),
+    ).resolves.toEqual({ ok: false })
+    expect(passiveSendMessage).toHaveBeenCalledTimes(1)
+  })
 })

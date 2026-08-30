@@ -296,7 +296,13 @@ async function loginAccountListForOrigin({
         queue,
       },
     }
-    const response = await sendMessage(request)
+    let response: Awaited<ReturnType<typeof sendSessionMessage>>
+    try {
+      response = await sendMessage(request)
+    } catch {
+      if (failClosed) return { ok: false }
+      continue
+    }
     if (
       !response ||
       typeof response !== 'object' ||
