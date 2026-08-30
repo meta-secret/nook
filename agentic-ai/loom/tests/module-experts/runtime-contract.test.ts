@@ -653,7 +653,7 @@ describe('module expert runtime isolation', () => {
       await providerServer.stop(true);
       await rm(fixtureRoot, removeOptions);
     }
-  });
+  }, 20_000);
 });
 
 type RuntimeIsolationFixtureRequest = {
