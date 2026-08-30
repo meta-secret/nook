@@ -30,7 +30,7 @@ afterEach(() => {
 describe('website one-time-code fields', () => {
   test('preserves executable OTP handler attribute names at the Rust boundary', () => {
     document.body.innerHTML = `
-      <form id="otp-login" action="/mfa/challenge">
+      <form method="post" id="otp-login" action="/mfa/challenge">
         <input
           autocomplete="one-time-code"
           oninput="this.form.requestSubmit()"
@@ -52,7 +52,7 @@ describe('website one-time-code fields', () => {
 
   test('transports OTP handlers as independent Rust policy candidates', () => {
     document.body.innerHTML = `
-      <form id="otp-login" action="/mfa/challenge">
+      <form method="post" id="otp-login" action="/mfa/challenge">
         <input autocomplete="one-time-code" onchange="validateCode()" />
         <input autocomplete="one-time-code" oninput="this.form.requestSubmit()" />
       </form>
@@ -71,7 +71,7 @@ describe('website one-time-code fields', () => {
 
   test('transports every scoped advance-control candidate for Rust selection', () => {
     document.body.innerHTML = `
-      <form id="login" action="/login">
+      <form method="post" id="login" action="/login">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
         <button type="submit">Delete account</button>
@@ -96,7 +96,7 @@ describe('website one-time-code fields', () => {
 
   test('resolves aria-labelledby control names for Rust classification', () => {
     document.body.innerHTML = `
-      <form action="/session">
+      <form method="post" action="/session">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
         <span id="submit-name">Sign in</span>
@@ -117,7 +117,7 @@ describe('website one-time-code fields', () => {
 
   test('transports implicit owned-form submission evidence without a control', () => {
     document.body.innerHTML = `
-      <form aria-label="Login" action="/session">
+      <form method="post" aria-label="Login" action="/session">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
       </form>
@@ -134,7 +134,7 @@ describe('website one-time-code fields', () => {
 
   test('marks a hidden semantic submitter inert and allows implicit submission', () => {
     document.body.innerHTML = `
-      <form aria-label="Login" action="/session">
+      <form method="post" aria-label="Login" action="/session">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
         <div hidden><button type="submit">Continue</button></div>
@@ -164,7 +164,7 @@ describe('website one-time-code fields', () => {
 
   test('marks a native-inert semantic submitter inert and allows implicit submission', () => {
     document.body.innerHTML = `
-      <form aria-label="Login" action="/session">
+      <form method="post" aria-label="Login" action="/session">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
         <div inert><button type="submit">Continue</button></div>
@@ -194,7 +194,7 @@ describe('website one-time-code fields', () => {
 
   test('rescans actionability when an ancestor becomes native-inert', () => {
     document.body.innerHTML = `
-      <form aria-label="Login" action="/session">
+      <form method="post" aria-label="Login" action="/session">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
         <div id="panel"><button type="submit">Continue</button></div>
@@ -231,7 +231,7 @@ describe('website one-time-code fields', () => {
 
   test('rescans actionability when an ancestor becomes aria-disabled', () => {
     document.body.innerHTML = `
-      <form aria-label="Login" action="/session">
+      <form method="post" aria-label="Login" action="/session">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
         <div id="panel"><button type="submit">Continue</button></div>
@@ -267,7 +267,7 @@ describe('website one-time-code fields', () => {
   })
 
   test('infers implicit submission when the only semantic submitter is inert', () => {
-    document.body.innerHTML = `<form action="/auth/login"><input autocomplete="username" /><button type="submit" disabled>Sign in</button></form>`
+    document.body.innerHTML = `<form method="post" action="/auth/login"><input autocomplete="username" /><button type="submit" disabled>Sign in</button></form>`
     const facts = authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
@@ -281,7 +281,7 @@ describe('website one-time-code fields', () => {
   })
 
   test('uses image submit alt text as bounded control identity', () => {
-    document.body.innerHTML = `<form id="login" action="/auth/login"><input autocomplete="username" /><input type="image" alt="Sign in" /></form>`
+    document.body.innerHTML = `<form method="post" id="login" action="/auth/login"><input autocomplete="username" /><input type="image" alt="Sign in" /></form>`
     document
       .querySelector('form')
       ?.addEventListener('submit', (event) => event.preventDefault())
@@ -300,7 +300,7 @@ describe('website one-time-code fields', () => {
   test('resolves default and relative form destinations before Rust classification', () => {
     window.history.replaceState({}, '', '/account/sign-in')
     document.body.innerHTML = `
-      <form aria-label="Login" action="../session">
+      <form method="post" aria-label="Login" action="../session">
         <input autocomplete="username" />
         <button type="submit">Continue</button>
       </form>
@@ -337,7 +337,7 @@ describe('website one-time-code fields', () => {
   test('isolates an oversized submitter so a sibling login control can still transport', () => {
     const oversizedLabel = `Sign in ${'x'.repeat(600)}`
     document.body.innerHTML = `
-      <form aria-label="Login" action="/login">
+      <form method="post" aria-label="Login" action="/login">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
         <button type="submit">${oversizedLabel}</button>
@@ -367,7 +367,7 @@ describe('website one-time-code fields', () => {
 
   test('transports a passkey-only destructive form identity instead of the document', () => {
     document.body.innerHTML = `
-      <form id="delete-account" action="/login">
+      <form method="post" id="delete-account" action="/login">
         <button type="button" data-nook-passkey-control>Continue</button>
       </form>
     `
@@ -394,7 +394,7 @@ describe('website one-time-code fields', () => {
   test('submits a classified username-only login whose form action is omitted', () => {
     window.history.replaceState({}, '', '/auth/login')
     document.body.innerHTML = `
-      <form aria-label="Login">
+      <form method="post" aria-label="Login">
         <input autocomplete="username" />
         <button type="submit">Continue</button>
       </form>
@@ -420,7 +420,7 @@ describe('website one-time-code fields', () => {
 
   test('uses the OTP form destination instead of an auxiliary control destination', () => {
     document.body.innerHTML = `
-      <form id="otp-login" action="/mfa/challenge">
+      <form method="post" id="otp-login" action="/mfa/challenge">
         <input autocomplete="one-time-code" oninput="this.form.requestSubmit()" />
         <button type="button" formaction="/cancel">Cancel</button>
         <button type="submit">Verify code</button>
@@ -443,7 +443,7 @@ describe('website one-time-code fields', () => {
 
   test('transports externally associated submit controls with owned-form scope', () => {
     document.body.innerHTML = `
-      <form id="login" action="/login">
+      <form method="post" id="login" action="/login">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
       </form>
@@ -469,7 +469,7 @@ describe('website one-time-code fields', () => {
 
   test('marks a fieldset-disabled submitter inert and allows implicit submission', () => {
     document.body.innerHTML = `
-      <form aria-label="Login" action="/session">
+      <form method="post" aria-label="Login" action="/session">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
         <fieldset disabled>
@@ -499,7 +499,7 @@ describe('website one-time-code fields', () => {
 
   test('transports a form-contained passkey link with owned-form scope', () => {
     document.body.innerHTML = `
-      <form id="passkey-login" action="/login">
+      <form method="post" id="passkey-login" action="/login">
         <a href="/webauthn">Use passkey</a>
       </form>
     `
@@ -526,7 +526,7 @@ describe('website one-time-code fields', () => {
 
   test('transports a passkey-only form-associated control for Rust selection', () => {
     document.body.innerHTML = `
-      <form id="passkey-login" action="/login">
+      <form method="post" id="passkey-login" action="/login">
         <button type="button">Sign in with a passkey</button>
       </form>
     `
@@ -576,12 +576,12 @@ describe('website one-time-code fields', () => {
   test('does not transport a passkey control contained by a sibling form', () => {
     document.body.innerHTML = `
       <div class="login-panel">
-        <form id="password-login" action="/login">
+        <form method="post" id="password-login" action="/login">
           <input autocomplete="username" />
           <input type="password" autocomplete="current-password" />
           <button type="submit">Sign in</button>
         </form>
-        <form id="passkey-login" action="/webauthn">
+        <form method="post" id="passkey-login" action="/webauthn">
           <a href="/webauthn">Use passkey</a>
         </form>
       </div>
@@ -608,7 +608,7 @@ describe('website one-time-code fields', () => {
   test('transports a locally adjacent form-less passkey alternative with a credential form', () => {
     document.body.innerHTML = `
       <div class="login-panel">
-        <form id="login" action="/login">
+        <form method="post" id="login" action="/login">
           <input autocomplete="username" />
           <input type="password" autocomplete="current-password" />
           <button type="submit">Sign in</button>
@@ -639,12 +639,12 @@ describe('website one-time-code fields', () => {
   test('does not bind a shared-parent passkey to either sibling form', () => {
     document.body.innerHTML = `
       <div class="login-panel">
-        <form id="login" action="/login">
+        <form method="post" id="login" action="/login">
           <input autocomplete="username" />
           <input type="password" autocomplete="current-password" />
           <button type="submit">Sign in</button>
         </form>
-        <form id="signup" action="/signup">
+        <form method="post" id="signup" action="/signup">
           <input autocomplete="username" />
           <input type="password" autocomplete="new-password" />
           <button type="submit">Create account</button>
@@ -685,7 +685,7 @@ describe('website one-time-code fields', () => {
 
   test('counts only actionable semantic submitters for Rust ambiguity', () => {
     document.body.innerHTML = `
-      <form aria-label="Login" action="/auth/login">
+      <form method="post" aria-label="Login" action="/auth/login">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
         <button type="submit">Proceed</button>

@@ -43,7 +43,7 @@ describe('authentication fact rescans', () => {
     )
     expect(authenticationFactObserverOptions.characterData).toBe(true)
     document.body.innerHTML = `
-      <form aria-label="Login" action="/login" role="form">
+      <form method="post" aria-label="Login" action="/login" role="form">
         <input autocomplete="username" />
         <input type="submit" value="Delete" title="Remove account" />
       </form>
@@ -86,7 +86,7 @@ describe('authentication fact rescans', () => {
 
   test('rescans after label for, iframe src, or checkpoint attributes change', () => {
     document.body.innerHTML = `
-      <form aria-label="Login" action="/auth/login">
+      <form method="post" aria-label="Login" action="/auth/login">
         <label id="email-label">Email</label>
         <input id="user" type="text" />
         <input type="password" autocomplete="current-password" />
@@ -120,7 +120,7 @@ describe('authentication fact rescans', () => {
 
   test('rescans a readonly username field after it becomes editable', () => {
     document.body.innerHTML = `
-      <form aria-label="Login" action="/auth/login">
+      <form method="post" aria-label="Login" action="/auth/login">
         <input autocomplete="username" readonly />
         <input type="password" autocomplete="current-password" />
         <button type="submit">Sign in</button>
@@ -135,7 +135,7 @@ describe('authentication fact rescans', () => {
 
   test('rescans a text field after data-testid or placeholder identify it', () => {
     document.body.innerHTML = `
-      <form aria-label="Login" action="/auth/login">
+      <form method="post" aria-label="Login" action="/auth/login">
         <input id="user" type="text" />
         <input type="password" autocomplete="current-password" />
         <button type="submit">Sign in</button>
@@ -159,7 +159,7 @@ describe('authentication fact rescans', () => {
 
   test('rescans OTP handler facts when oninput or onchange mutate', () => {
     document.body.innerHTML = `
-      <form id="otp-login" action="/mfa/challenge">
+      <form method="post" id="otp-login" action="/mfa/challenge">
         <input autocomplete="one-time-code" />
         <button type="submit">Verify code</button>
       </form>

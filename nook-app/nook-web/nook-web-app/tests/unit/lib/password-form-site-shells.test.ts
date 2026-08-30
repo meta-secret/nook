@@ -13,7 +13,7 @@ describe('popular-site login shells', () => {
   test('returns no workflow for ordinary pages and email-only newsletters', () => {
     document.body.innerHTML = `
       <main><p>Documentation</p></main>
-      <form><input type="email" name="newsletter-email" /><button>Submit</button></form>
+      <form method="post"><input type="email" name="newsletter-email" /><button>Submit</button></form>
     `
 
     expect(summarizeAuthenticationWorkflowForms()).toEqual([])
@@ -21,7 +21,7 @@ describe('popular-site login shells', () => {
 
   test('detects Microsoft-like email-first login without autocomplete=username', () => {
     document.body.innerHTML = `
-      <form id="loginForm">
+      <form method="post" id="loginForm">
         <input
           type="email"
           name="loginfmt"
@@ -74,7 +74,7 @@ describe('popular-site login shells', () => {
   test('detects Facebook-like email/pass login under an aria-hidden ancestor', () => {
     document.body.innerHTML = `
       <div aria-hidden="true">
-        <form id="login_form">
+        <form method="post" id="login_form">
           <input
             type="text"
             name="email"
@@ -119,7 +119,7 @@ describe('popular-site login shells', () => {
 
   test('still ignores a field that itself is aria-hidden', () => {
     document.body.innerHTML = `
-      <form>
+      <form method="post">
         <input
           type="text"
           name="email"
@@ -144,7 +144,7 @@ describe('popular-site login shells', () => {
       [
         {
           html: `
-            <form id="gaia_loginform">
+            <form method="post" id="gaia_loginform">
               <input type="email" name="identifier" id="identifierId" autocomplete="username" />
               <button type="submit">Next</button>
             </form>
@@ -154,7 +154,7 @@ describe('popular-site login shells', () => {
         },
         {
           html: `
-            <form class="signin">
+            <form method="post" class="signin">
               <input type="text" id="account_name_text_field" name="accountName" autocomplete="username" />
               <input type="password" id="password_text_field" name="password" autocomplete="current-password" />
               <button type="submit">Sign In</button>
@@ -165,7 +165,7 @@ describe('popular-site login shells', () => {
         },
         {
           html: `
-            <form name="signIn">
+            <form method="post" name="signIn">
               <input type="email" name="email" id="ap_email" autocomplete="username" />
               <button type="submit" id="continue">Continue</button>
             </form>
@@ -175,7 +175,7 @@ describe('popular-site login shells', () => {
         },
         {
           html: `
-            <form>
+            <form method="post">
               <input type="text" name="login" id="login_field" autocomplete="username" />
               <input type="password" name="password" id="password" autocomplete="current-password" />
               <button type="submit">Sign in</button>
@@ -186,7 +186,7 @@ describe('popular-site login shells', () => {
         },
         {
           html: `
-            <form class="login__form">
+            <form method="post" class="login__form">
               <input type="text" id="username" name="session_key" autocomplete="username" />
               <input type="password" id="password" name="session_password" autocomplete="current-password" />
               <button type="submit">Sign in</button>
@@ -197,7 +197,7 @@ describe('popular-site login shells', () => {
         },
         {
           html: `
-            <form>
+            <form method="post">
               <input type="text" name="text" autocomplete="username" data-testid="ocfEnterTextTextInput" />
               <button type="submit">Next</button>
             </form>

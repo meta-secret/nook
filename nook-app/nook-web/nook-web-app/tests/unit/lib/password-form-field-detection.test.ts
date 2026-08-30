@@ -51,7 +51,7 @@ describe('authentication field detection', () => {
 
   test('keeps a passkey-only form when the only password field is a hidden decoy', () => {
     document.body.innerHTML = `
-      <form id="passkey-login" action="/login">
+      <form method="post" id="passkey-login" action="/login">
         <input type="password" hidden autocomplete="current-password" />
         <button type="button">Sign in with a passkey</button>
       </form>
@@ -68,7 +68,7 @@ describe('authentication field detection', () => {
 
   test('does not count or fill credential fields inside an inert ancestor', () => {
     document.body.innerHTML = `
-      <form aria-label="Login" action="/auth/login">
+      <form method="post" aria-label="Login" action="/auth/login">
         <div inert>
           <input id="dormant-user" autocomplete="username" />
           <input id="dormant-pass" type="password" autocomplete="current-password" />
@@ -108,7 +108,7 @@ describe('authentication field detection', () => {
 
   test('fills live credentials and leaves inert sibling fields untouched', () => {
     document.body.innerHTML = `
-      <form aria-label="Login" action="/auth/login">
+      <form method="post" aria-label="Login" action="/auth/login">
         <div inert>
           <input id="dormant-user" autocomplete="username" />
           <input id="dormant-pass" type="password" autocomplete="current-password" />
@@ -144,7 +144,7 @@ describe('authentication field detection', () => {
 
   test('transports an external form-associated passkey control with owned-form scope', () => {
     document.body.innerHTML = `
-      <form id="login" action="/login">
+      <form method="post" id="login" action="/login">
         <input autocomplete="username" />
       </form>
       <button type="button" form="login">Sign in with a passkey</button>
@@ -191,7 +191,7 @@ describe('authentication field detection', () => {
 
   test('detects standard and common OTP fields without treating card security codes as 2FA', () => {
     document.body.innerHTML = `
-      <form>
+      <form method="post">
         <input autocomplete="one-time-code" inputmode="numeric" />
         <input name="totp-token" type="tel" />
         <input name="otp-backup" style="display: none" />
@@ -223,7 +223,7 @@ describe('authentication field detection', () => {
         />
         <button type="submit">Submit</button>
       </div>
-      <form>
+      <form method="post">
         <label for="verify">Verification code</label>
         <input id="verify" name="VerificationCode" type="tel" />
       </form>

@@ -744,7 +744,7 @@ describe('classified login activation', () => {
 
   test('does not submit an omitted form method after filling passwords', () => {
     document.body.innerHTML = `
-      <form method="post" id="login" action="/auth/login">
+      <form id="login" action="/auth/login">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
         <button id="sign-in" type="submit">Sign in</button>

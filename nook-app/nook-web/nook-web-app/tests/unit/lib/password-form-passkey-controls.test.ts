@@ -21,7 +21,7 @@ afterEach(() => {
 describe('passkey control detection', () => {
   test('does not treat password inputs with webauthn autocomplete as passkey controls', () => {
     document.body.innerHTML = `
-      <form>
+      <form method="post">
         <input autocomplete="section-login username" name="email" type="email" />
         <input
           autocomplete="section-login current-password webauthn"
@@ -62,7 +62,7 @@ describe('passkey control detection', () => {
 
   test('binds a form-contained passkey link as an owned control', () => {
     document.body.innerHTML = `
-      <form id="login" action="/login">
+      <form method="post" id="login" action="/login">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
         <a href="/webauthn">Use passkey</a>
@@ -77,7 +77,7 @@ describe('passkey control detection', () => {
 
   test('does not bind a passkey-only Continue control owned by a destructive form', () => {
     document.body.innerHTML = `
-      <form id="delete-account" action="/login">
+      <form method="post" id="delete-account" action="/login">
         <button type="button" data-nook-passkey-control>Continue</button>
       </form>
     `
@@ -87,7 +87,7 @@ describe('passkey control detection', () => {
 
   test('does not bind a marked passkey control whose machine identity is destructive', () => {
     document.body.innerHTML = `
-      <form id="login" action="/auth/login">
+      <form method="post" id="login" action="/auth/login">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
         <button id="delete-account" type="button" data-nook-passkey-control>Continue</button>
@@ -99,7 +99,7 @@ describe('passkey control detection', () => {
 
   test('recomputes live field facts before activating a passkey control', () => {
     document.body.innerHTML = `
-      <form id="login" action="/auth/passkey">
+      <form method="post" id="login" action="/auth/passkey">
         <button type="button">Use passkey</button>
       </form>
     `
@@ -120,7 +120,7 @@ describe('passkey control detection', () => {
   })
 
   test('binds the exact later passkey candidate approved by Rust', () => {
-    document.body.innerHTML = `<form id="login" action="/auth/login"><input autocomplete="username" /><button id="inert" disabled>Use passkey</button><button id="safe">Use passkey</button></form>`
+    document.body.innerHTML = `<form method="post" id="login" action="/auth/login"><input autocomplete="username" /><button id="inert" disabled>Use passkey</button><button id="safe">Use passkey</button></form>`
     const control = findWorkflowPasskeyControl(observedAuthenticationWorkflow())
     expect(control.kind).toBe(PasskeyControlLookupKind.Found)
     if (control.kind === PasskeyControlLookupKind.Found)

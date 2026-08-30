@@ -41,7 +41,7 @@ describe('authentication observation bounds', () => {
   test('does not strip destructive query evidence from an oversized destination', () => {
     const query = `action=delete-account&state=${'a'.repeat(600)}`
     document.body.innerHTML = `
-      <form aria-label="Login" action="/login?${query}">
+      <form method="post" aria-label="Login" action="/login?${query}">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
         <button type="submit">Continue</button>
@@ -62,7 +62,7 @@ describe('authentication observation bounds', () => {
 
   test('isolates a candidate whose raw form identity exceeds the bound', () => {
     document.body.innerHTML = `
-      <form
+      <form method="post"
         id="${'n'.repeat(500)}"
         class="delete-account"
         aria-label="Login"
@@ -91,7 +91,7 @@ describe('authentication observation bounds', () => {
 
   test('isolates a control whose machine identity would lose a destructive suffix', () => {
     document.body.innerHTML = `
-      <form aria-label="Login" action="/login">
+      <form method="post" aria-label="Login" action="/login">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
         <button
@@ -120,7 +120,7 @@ describe('authentication observation bounds', () => {
       (_, index) => `<button type="submit">Nav ${index}</button>`,
     ).join('')
     document.body.innerHTML = `
-      <form aria-label="Login" action="/login">
+      <form method="post" aria-label="Login" action="/login">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
         ${navButtons}
@@ -161,7 +161,7 @@ describe('authentication observation bounds', () => {
         '<input autocomplete="one-time-code" oninput="this.form.requestSubmit()" onchange="validateCode()" />',
     ).join('')
     document.body.innerHTML = `
-      <form id="otp-login" action="/mfa/challenge">
+      <form method="post" id="otp-login" action="/mfa/challenge">
         ${fields}
         <button type="submit">Verify code</button>
       </form>
@@ -189,7 +189,7 @@ describe('authentication observation bounds', () => {
         '<input autocomplete="one-time-code" oninput="validate_requestSubmit()" />',
     ).join('')
     document.body.innerHTML = `
-      <form id="otp-login" action="/mfa/challenge">
+      <form method="post" id="otp-login" action="/mfa/challenge">
         ${decoys}
         <input autocomplete="one-time-code" oninput="this.form.submit()" />
         <button type="submit">Verify code</button>
@@ -230,7 +230,7 @@ describe('authentication observation bounds', () => {
 
   test('indexes classified facts against the same filtered workflow forms', () => {
     document.body.innerHTML = `
-      <form
+      <form method="post"
         id="${'n'.repeat(500)}"
         class="delete-account"
         aria-label="Login"
@@ -240,7 +240,7 @@ describe('authentication observation bounds', () => {
         <input type="password" autocomplete="current-password" />
         <button type="submit">Continue</button>
       </form>
-      <form id="safe-login" action="/login">
+      <form method="post" id="safe-login" action="/login">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
         <button type="submit">Sign in</button>
@@ -268,10 +268,10 @@ describe('authentication observation bounds', () => {
     const decoys = Array.from(
       { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS },
       (_, index) =>
-        `<form id="decoy-${index}" action="/login"><button type="button">Use passkey</button></form>`,
+        `<form method="post" id="decoy-${index}" action="/login"><button type="button">Use passkey</button></form>`,
     ).join('')
     document.body.innerHTML = `
-      <form id="passkey-login" action="/login">
+      <form method="post" id="passkey-login" action="/login">
         <button type="button">Sign in with a passkey</button>
       </form>
       ${decoys}
@@ -292,13 +292,13 @@ describe('authentication observation bounds', () => {
       (_, index) => `<input autocomplete="username" name="extra-${index}" />`,
     ).join('')
     document.body.innerHTML = `
-      <form id="overflow-login" action="/login">
+      <form method="post" id="overflow-login" action="/login">
         <input autocomplete="username" />
         ${extraUsernames}
         <input type="password" autocomplete="current-password" />
         <button type="submit">Continue</button>
       </form>
-      <form id="safe-login" action="/login">
+      <form method="post" id="safe-login" action="/login">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
         <button type="submit">Sign in</button>
@@ -333,13 +333,13 @@ describe('authentication observation bounds', () => {
       (_, index) => `<input type="password" name="generic-${index}" />`,
     ).join('')
     document.body.innerHTML = `
-      <form id="overflow-login" action="/login">
+      <form method="post" id="overflow-login" action="/login">
         <input autocomplete="username" />
         ${currentPasswords}
         ${genericPasswords}
         <button type="submit">Continue</button>
       </form>
-      <form id="safe-login" action="/login">
+      <form method="post" id="safe-login" action="/login">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
         <button type="submit">Sign in</button>
@@ -366,12 +366,12 @@ describe('authentication observation bounds', () => {
   test('gives a sibling passkey-only form its own observation', () => {
     document.body.innerHTML = `
       <div class="login-panel">
-        <form id="password-login" action="/login">
+        <form method="post" id="password-login" action="/login">
           <input autocomplete="username" />
           <input type="password" autocomplete="current-password" />
           <button type="submit">Sign in</button>
         </form>
-        <form id="passkey-login" action="/webauthn">
+        <form method="post" id="passkey-login" action="/webauthn">
           <a href="/webauthn">Use passkey</a>
         </form>
       </div>
@@ -418,11 +418,11 @@ describe('authentication observation bounds', () => {
     const passwordForms = Array.from(
       { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS },
       (_, index) =>
-        `<form id="password-${index}" action="/login"><input autocomplete="username" /><input type="password" autocomplete="current-password" /><button type="submit">Sign in</button></form>`,
+        `<form method="post" id="password-${index}" action="/login"><input autocomplete="username" /><input type="password" autocomplete="current-password" /><button type="submit">Sign in</button></form>`,
     ).join('')
     document.body.innerHTML = `
       ${passwordForms}
-      <form id="passkey-login" action="/login">
+      <form method="post" id="passkey-login" action="/login">
         <button type="button">Sign in with a passkey</button>
       </form>
     `
@@ -438,7 +438,7 @@ describe('authentication observation bounds', () => {
 
   test('keeps a passkey-only form when the only password field is a hidden decoy', () => {
     document.body.innerHTML = `
-      <form id="passkey-login" action="/login">
+      <form method="post" id="passkey-login" action="/login">
         <input type="password" hidden autocomplete="current-password" />
         <button type="button">Sign in with a passkey</button>
       </form>
@@ -461,11 +461,11 @@ describe('authentication observation bounds', () => {
     const passkeyForms = Array.from(
       { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS },
       (_, index) =>
-        `<form id="passkey-${index}" action="/login"><button type="button">Sign in with a passkey</button></form>`,
+        `<form method="post" id="passkey-${index}" action="/login"><button type="button">Sign in with a passkey</button></form>`,
     ).join('')
     document.body.innerHTML = `
       ${passkeyForms}
-      <form id="password-login" action="/login">
+      <form method="post" id="password-login" action="/login">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
         <button type="submit">Sign in</button>
@@ -485,11 +485,11 @@ describe('authentication observation bounds', () => {
     const decoys = Array.from(
       { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS },
       (_, index) =>
-        `<form id="enroll-${index}" action="/auth/passkey"><input autocomplete="username" /><input type="password" autocomplete="new-password" /><button type="button">Use passkey</button></form>`,
+        `<form method="post" id="enroll-${index}" action="/auth/passkey"><input autocomplete="username" /><input type="password" autocomplete="new-password" /><button type="button">Use passkey</button></form>`,
     ).join('')
     document.body.innerHTML = `
       ${decoys}
-      <form id="passkey-login" action="/login">
+      <form method="post" id="passkey-login" action="/login">
         <button type="button">Sign in with a passkey</button>
       </form>
     `
@@ -507,13 +507,13 @@ describe('authentication observation bounds', () => {
     const decoys = Array.from(
       { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS },
       (_, index) =>
-        `<form id="enroll-${index}" action="/login"><button type="button">${
+        `<form method="post" id="enroll-${index}" action="/login"><button type="button">${
           index % 2 === 0 ? 'Add passkey' : 'Manage passkeys'
         }</button></form>`,
     ).join('')
     document.body.innerHTML = `
       ${decoys}
-      <form id="passkey-login" action="/login">
+      <form method="post" id="passkey-login" action="/login">
         <button type="button">Sign in with a passkey</button>
       </form>
     `
@@ -534,7 +534,7 @@ describe('authentication observation bounds', () => {
         `<button type="submit" name="aux-${index}">Delete account</button>`,
     ).join('')
     document.body.innerHTML = `
-      <form aria-label="Login" action="/auth/login">
+      <form method="post" aria-label="Login" action="/auth/login">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
         ${decoys}
@@ -570,11 +570,11 @@ describe('authentication observation bounds', () => {
     const hiddenTemplates = Array.from(
       { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS },
       (_, index) =>
-        `<form id="template-${index}" action="/login" hidden><button type="button">Use passkey</button></form>`,
+        `<form method="post" id="template-${index}" action="/login" hidden><button type="button">Use passkey</button></form>`,
     ).join('')
     document.body.innerHTML = `
       ${hiddenTemplates}
-      <form id="passkey-login" action="/login">
+      <form method="post" id="passkey-login" action="/login">
         <button type="button">Sign in with a passkey</button>
       </form>
     `
@@ -595,7 +595,7 @@ describe('authentication observation bounds', () => {
         `<button type="button">${index % 2 === 0 ? 'Add passkey' : 'Manage passkeys'}</button>`,
     ).join('')
     document.body.innerHTML = `
-      <form aria-label="Login" action="/login">
+      <form method="post" aria-label="Login" action="/login">
         ${decoys}
         <button id="passkey-login" type="button">Sign in with a passkey</button>
       </form>
@@ -712,7 +712,7 @@ describe('authentication observation bounds', () => {
 
   test('rejects a previously approved workflow after its destination turns destructive', () => {
     document.body.innerHTML = `
-      <form id="login" aria-label="Login" action="/auth/login">
+      <form method="post" id="login" aria-label="Login" action="/auth/login">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
         <button type="submit">Sign in</button>
@@ -747,7 +747,7 @@ describe('authentication observation bounds', () => {
 
   test('rejects a previously approved workflow after password field semantics change', () => {
     document.body.innerHTML = `
-      <form id="login" aria-label="Login" action="/auth/login">
+      <form method="post" id="login" aria-label="Login" action="/auth/login">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
         <button type="submit">Sign in</button>
@@ -784,11 +784,11 @@ describe('authentication observation bounds', () => {
     const otpForms = Array.from(
       { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS },
       (_, index) =>
-        `<form id="otp-${index}" action="/otp"><input autocomplete="one-time-code" inputmode="numeric" /><button type="submit">Delete account</button></form>`,
+        `<form method="post" id="otp-${index}" action="/otp"><input autocomplete="one-time-code" inputmode="numeric" /><button type="submit">Delete account</button></form>`,
     ).join('')
     document.body.innerHTML = `
       ${otpForms}
-      <form id="password-login" action="/login">
+      <form method="post" id="password-login" action="/login">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
         <button type="submit">Sign in</button>
@@ -808,11 +808,11 @@ describe('authentication observation bounds', () => {
     const decoys = Array.from(
       { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS + 8 },
       (_, index) =>
-        `<form id="manage-${index}" action="/passkeys"><button type="button">Add passkey</button></form>`,
+        `<form method="post" id="manage-${index}" action="/passkeys"><button type="button">Add passkey</button></form>`,
     ).join('')
     document.body.innerHTML = `
       ${decoys}
-      <form id="passkey-login" action="/login">
+      <form method="post" id="passkey-login" action="/login">
         <button type="button">Sign in with a passkey</button>
       </form>
     `
@@ -832,13 +832,13 @@ describe('authentication observation bounds', () => {
     const decoys = Array.from(
       { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS + 8 },
       (_, index) =>
-        `<form id="enroll-${index}" action="/auth/passkey"></form>
+        `<form method="post" id="enroll-${index}" action="/auth/passkey"></form>
          <input type="password" autocomplete="new-password" form="enroll-${index}" />
          <button type="button" form="enroll-${index}">Use passkey</button>`,
     ).join('')
     document.body.innerHTML = `
       ${decoys}
-      <form id="passkey-login" action="/login">
+      <form method="post" id="passkey-login" action="/login">
         <button type="button">Sign in with a passkey</button>
       </form>
     `
@@ -858,11 +858,11 @@ describe('authentication observation bounds', () => {
     const otpForms = Array.from(
       { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS },
       (_, index) =>
-        `<form id="otp-${index}" action="/otp"><input autocomplete="one-time-code" inputmode="numeric" /></form>`,
+        `<form method="post" id="otp-${index}" action="/otp"><input autocomplete="one-time-code" inputmode="numeric" /></form>`,
     ).join('')
     document.body.innerHTML = `
       ${otpForms}
-      <form id="password-login" action="/login">
+      <form method="post" id="password-login" action="/login">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
         <button type="submit">Sign in</button>
@@ -880,7 +880,7 @@ describe('authentication observation bounds', () => {
 
   test('refreshes approved facts when the snapshot key stays the same', () => {
     document.body.innerHTML = `
-      <form aria-label="Login" action="/login">
+      <form method="post" aria-label="Login" action="/login">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
         <button type="submit">Sign in</button>
