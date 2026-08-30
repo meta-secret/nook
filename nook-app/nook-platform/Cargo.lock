@@ -1925,6 +1925,7 @@ version = "1.0.0"
 dependencies = [
  "getrandom 0.2.17",
  "nook-companion-core",
+ "serde",
  "serde-wasm-bindgen",
  "wasm-bindgen",
  "wasm-bindgen-test",
