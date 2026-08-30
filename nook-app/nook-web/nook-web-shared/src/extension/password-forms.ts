@@ -56,7 +56,10 @@ import {
   type LoginAdvanceControl,
   type PasswordFormScopeQuery,
 } from "./password-form-submission-controls";
-import { summarizePasskeyOnlyWorkflowForms } from "./password-form-passkey-only-workflows";
+import {
+  appendIndependentPasskeyOnlyWorkflows,
+  summarizePasskeyOnlyWorkflowForms,
+} from "./password-form-passkey-only-workflows";
 
 export {
   findOneTimeCodeFields,
@@ -663,12 +666,13 @@ export function summarizeAuthenticationWorkflowForms(): PasswordFormObservation[
     allPasswordFields.length +
     authUsernameFields.length +
     allOneTimeCodeFields.length;
+  const passkeyOnly = summarizePasskeyOnlyWorkflowForms(
+    root,
+    summarizeRoot,
+    passwordFormPriority,
+  );
   if (authFieldCount === 0) {
-    return summarizePasskeyOnlyWorkflowForms(
-      root,
-      summarizeRoot,
-      passwordFormPriority,
-    );
+    return passkeyOnly;
   }
 
   const forms = Array.from(
@@ -737,9 +741,10 @@ export function summarizeAuthenticationWorkflowForms(): PasswordFormObservation[
     };
     observations.push(nookTypedArgs0_3);
   }
-  return observations.sort(
-    // eslint-disable-next-line max-params -- Array.sort owns the comparator callback signature.
-    (left, right) => passwordFormPriority(right) - passwordFormPriority(left),
+  return appendIndependentPasskeyOnlyWorkflows(
+    observations,
+    passkeyOnly,
+    passwordFormPriority,
   );
 }
 

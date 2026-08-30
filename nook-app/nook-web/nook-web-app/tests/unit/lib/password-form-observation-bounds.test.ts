@@ -258,6 +258,57 @@ describe('authentication observation bounds', () => {
     ).toBe(true)
   })
 
+  test('gives a sibling passkey-only form its own observation', () => {
+    document.body.innerHTML = `
+      <div class="login-panel">
+        <form id="password-login" action="/login">
+          <input autocomplete="username" />
+          <input type="password" autocomplete="current-password" />
+          <button type="submit">Sign in</button>
+        </form>
+        <form id="passkey-login" action="/webauthn">
+          <a href="/webauthn">Use passkey</a>
+        </form>
+      </div>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    const password = observations.find(
+      (observation) => ownedFormId(observation) === 'password-login',
+    )
+    const passkey = observations.find(
+      (observation) => ownedFormId(observation) === 'passkey-login',
+    )
+    if (!password || !passkey) {
+      throw new Error('expected independent password and passkey workflows')
+    }
+    expect(
+      authenticationPageObservationFacts({
+        observation: password,
+        authenticatorSetupHint: false,
+        backupCodesHint: false,
+      }).authenticator.detailedPasskeyControl,
+    ).toEqual({ kind: 'absent' })
+    expect(
+      authenticationPageObservationFacts({
+        observation: passkey,
+        authenticatorSetupHint: false,
+        backupCodesHint: false,
+      }).authenticator.detailedPasskeyControl,
+    ).toMatchObject({
+      kind: 'candidates',
+      observation: [
+        {
+          kind: 'labeled',
+          observation: {
+            ownership: 'owned-form',
+            label: expect.stringContaining('passkey'),
+          },
+        },
+      ],
+    })
+  })
+
   test('keeps an actionable passkey login after hidden template forms fill the bound', () => {
     const hiddenTemplates = Array.from(
       { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS },

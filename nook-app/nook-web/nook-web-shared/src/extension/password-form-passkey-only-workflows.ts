@@ -13,7 +13,7 @@ import {
 } from "./password-form-submission-controls";
 
 type PasskeyOnlyWorkflowObservation<Summary> = {
-  root: Document;
+  root: ParentNode;
   formScope: PasswordFormScope;
   summary: Summary;
 };
@@ -91,6 +91,41 @@ export function summarizePasskeyOnlyWorkflowForms<Summary>(
         ? observationPriority(right) - observationPriority(left)
         : actionableDelta;
     })
+    .slice(0, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS);
+}
+
+export function appendIndependentPasskeyOnlyWorkflows<
+  Observation extends {
+    root: ParentNode;
+    formScope: PasswordFormScope;
+  },
+>(
+  fieldBearing: Observation[],
+  passkeyOnly: Observation[],
+  observationPriority: (observation: Observation) => number,
+): Observation[] {
+  const ownedForms = new Set(
+    fieldBearing.flatMap((observation) =>
+      observation.formScope.kind === PasswordFormScopeKind.Owned
+        ? [observation.formScope.owner]
+        : [],
+    ),
+  );
+  const independent = passkeyOnly.filter((observation) => {
+    if (observation.formScope.kind === PasswordFormScopeKind.Owned) {
+      return !ownedForms.has(observation.formScope.owner);
+    }
+    return !fieldBearing.some(
+      (existing) =>
+        existing.formScope.kind === PasswordFormScopeKind.Unowned &&
+        existing.root === observation.root,
+    );
+  });
+  return [...fieldBearing, ...independent]
+    .sort(
+      // eslint-disable-next-line max-params -- Array.sort owns the comparator callback signature.
+      (left, right) => observationPriority(right) - observationPriority(left),
+    )
     .slice(0, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS);
 }
 
