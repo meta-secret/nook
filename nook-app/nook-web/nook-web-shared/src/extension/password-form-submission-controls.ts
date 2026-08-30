@@ -300,7 +300,7 @@ export function controlLabel(control: HTMLElement): string {
 
 export function formUsesGetSubmission(form: HTMLFormElement): boolean {
   const method = form.getAttribute("method");
-  return method !== null && method.trim().toLowerCase() === "get";
+  return Boolean(method) && method.trim().toLowerCase() === "get";
 }
 
 export function canRequestImplicitAuthenticationSubmit(

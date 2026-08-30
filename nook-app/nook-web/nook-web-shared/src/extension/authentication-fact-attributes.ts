@@ -15,6 +15,7 @@ export const authenticationFactAttributeFilter = [
   "for",
   "form",
   "formaction",
+  "formmethod",
   "hidden",
   "href",
   "id",

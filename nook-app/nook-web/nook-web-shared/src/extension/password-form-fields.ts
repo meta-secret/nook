@@ -5,6 +5,7 @@ import {
   authentication_username_evidence,
   has_login_context,
   looks_like_email_verification_body,
+  looks_like_login_advance_control_label,
   looks_like_manual_checkpoint_label,
   looks_like_one_time_code_field,
   looks_like_passkey_control_label,
@@ -465,6 +466,31 @@ export function pageHasPasskeyControl(root: ParentNode = document): boolean {
   return findPasskeyControl(root).kind === PasskeyControlLookupKind.Found;
 }
 
+function localActivationControlLabel(control: Element): string {
+  return [
+    control.textContent ?? "",
+    control.getAttribute("aria-label") ?? "",
+    control.getAttribute("title") ?? "",
+  ]
+    .join(" ")
+    .trim();
+}
+
+function containerHasUnambiguousAuthenticationActivation(
+  container: Element,
+): boolean {
+  const activationControls = Array.from(
+    container.querySelectorAll(
+      'button[type="button"], input[type="button"], [role="button"]',
+    ),
+  ).filter((control) =>
+    looks_like_login_advance_control_label(
+      localActivationControlLabel(control),
+    ),
+  );
+  return activationControls.length === 1;
+}
+
 export function nearestUnownedAuthContainer({
   field,
   root,
@@ -479,10 +505,16 @@ export function nearestUnownedAuthContainer({
     );
     const hasSubmitControl = Boolean(
       container.querySelector(
-        'button[type="submit"], input[type="submit"], button:not([type]), button[type="button"], input[type="button"]',
+        'button[type="submit"], input[type="submit"], button:not([type])',
       ),
     );
-    if (explicitAuthContainer || hasSubmitControl) return container;
+    if (
+      explicitAuthContainer ||
+      hasSubmitControl ||
+      containerHasUnambiguousAuthenticationActivation(container)
+    ) {
+      return container;
+    }
     container = container.parentElement;
   }
   return field.parentElement instanceof HTMLElement

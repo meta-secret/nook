@@ -28,6 +28,7 @@ describe('authentication fact rescans', () => {
         'data-testid',
         'data-nook-manual-checkpoint',
         'for',
+        'formmethod',
         'inert',
         'onchange',
         'oninput',

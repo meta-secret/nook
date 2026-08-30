@@ -242,11 +242,11 @@ describe('authentication field detection', () => {
 
   test('scopes form-less credentials with a sibling type-button advance control', () => {
     document.body.innerHTML = `
-      <div class="signin-panel">
+      <section>
         <div><input autocomplete="username" /></div>
         <div><input type="password" autocomplete="current-password" /></div>
         <button type="button">Sign in</button>
-      </div>
+      </section>
     `
     const observation = observedAuthenticationWorkflow()
     expect(observation.summary.usernameFieldCount).toBe(1)
