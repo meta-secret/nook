@@ -16,12 +16,25 @@ import {
 
 const REPO_ROOT = resolve(import.meta.dir, '../../../..');
 
+const AUTHENTICATION_BINDING_CONSUMERS = [
+  'nook-app/nook-web/nook-web-extension/src/background/service-worker/authentication-workflow-routing.ts',
+  'nook-app/nook-web/nook-web-extension/src/content/autofill/state.ts',
+  'nook-app/nook-web/nook-web-shared/src/extension/password-form-classified-observations.ts',
+  'nook-app/nook-web/nook-web-shared/src/extension/password-form-passkey-only-workflows.ts',
+  'nook-app/nook-web/nook-web-shared/src/extension/password-form-submission-controls.ts',
+] as const;
+
 test('discovers exact production JSON binding resolver configurations', () => {
   const discovered = discoverInternalApiConsumerPaths(REPO_ROOT);
   expect(discovered.filter((path) => path.endsWith('.json'))).toEqual([
     ...INTERNAL_API_EXPERT_JSON_CONSUMER_SCOPE_PATHS,
   ]);
   expect(discovered).toEqual(INTERNAL_API_EXPERT_CONSUMER_SCOPE_PATHS);
+  expect(
+    discovered.filter((path) =>
+      AUTHENTICATION_BINDING_CONSUMERS.some((consumer) => consumer === path),
+    ),
+  ).toEqual([...AUTHENTICATION_BINDING_CONSUMERS]);
 });
 
 test('parses bounded JSON and JSONC configs without broad JSON discovery', async () => {
