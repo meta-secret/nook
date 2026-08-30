@@ -5,7 +5,7 @@ use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum ExtensionSessionDeviceProtectionStatusWire {
     Loading,
     Missing,
@@ -15,6 +15,8 @@ pub enum ExtensionSessionDeviceProtectionStatusWire {
     PinSetup,
     Unlocked,
     Error,
+    #[default]
+    Unknown,
 }
 
 impl<'de> Deserialize<'de> for ExtensionSessionDeviceProtectionStatusWire {
@@ -38,7 +40,7 @@ impl<'de> Deserialize<'de> for ExtensionSessionDeviceProtectionStatusWire {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct ExtensionSessionDeviceWire {
     device_id: String,
@@ -59,8 +61,10 @@ impl ExtensionSessionDeviceWire {
 #[tsify(from_wasm_abi)]
 pub struct ExtensionSessionStatusResponseWire {
     ok: bool,
-    status: Option<ExtensionSessionDeviceProtectionStatusWire>,
-    device: Option<ExtensionSessionDeviceWire>,
+    #[serde(default)]
+    status: ExtensionSessionDeviceProtectionStatusWire,
+    #[serde(default)]
+    device: ExtensionSessionDeviceWire,
 }
 
 #[wasm_bindgen]
@@ -79,27 +83,22 @@ pub fn decode_extension_session_status_response(
         return ExtensionSessionStatusAvailability::Unavailable;
     }
     match response.status {
-        Some(
-            ExtensionSessionDeviceProtectionStatusWire::Missing
-            | ExtensionSessionDeviceProtectionStatusWire::Plaintext
-            | ExtensionSessionDeviceProtectionStatusWire::Passkey
-            | ExtensionSessionDeviceProtectionStatusWire::Pin,
-        ) => ExtensionSessionStatusAvailability::Locked,
-        Some(ExtensionSessionDeviceProtectionStatusWire::Unlocked)
-            if response
-                .device
-                .as_ref()
-                .is_some_and(ExtensionSessionDeviceWire::is_complete) =>
-        {
+        ExtensionSessionDeviceProtectionStatusWire::Missing
+        | ExtensionSessionDeviceProtectionStatusWire::Plaintext
+        | ExtensionSessionDeviceProtectionStatusWire::Passkey
+        | ExtensionSessionDeviceProtectionStatusWire::Pin => {
+            ExtensionSessionStatusAvailability::Locked
+        }
+        ExtensionSessionDeviceProtectionStatusWire::Unlocked if response.device.is_complete() => {
             ExtensionSessionStatusAvailability::Unlocked
         }
-        Some(
-            ExtensionSessionDeviceProtectionStatusWire::Loading
-            | ExtensionSessionDeviceProtectionStatusWire::PinSetup
-            | ExtensionSessionDeviceProtectionStatusWire::Error
-            | ExtensionSessionDeviceProtectionStatusWire::Unlocked,
-        )
-        | None => ExtensionSessionStatusAvailability::Unavailable,
+        ExtensionSessionDeviceProtectionStatusWire::Loading
+        | ExtensionSessionDeviceProtectionStatusWire::PinSetup
+        | ExtensionSessionDeviceProtectionStatusWire::Error
+        | ExtensionSessionDeviceProtectionStatusWire::Unlocked
+        | ExtensionSessionDeviceProtectionStatusWire::Unknown => {
+            ExtensionSessionStatusAvailability::Unavailable
+        }
     }
 }
 
