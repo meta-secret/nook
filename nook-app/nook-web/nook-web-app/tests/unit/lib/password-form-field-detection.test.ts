@@ -4,6 +4,7 @@ import {
   fillLoginCredentials,
   findOneTimeCodeFields,
   PasswordFormQueryKind,
+  PasswordFormScopeKind,
   summarizeAuthenticationWorkflowForms,
   summarizePasswordForms,
   type PasswordFormObservation,
@@ -24,6 +25,23 @@ afterEach(() => {
 })
 
 describe('authentication field detection', () => {
+  test('keeps a passkey-only form when the only password field is a hidden decoy', () => {
+    document.body.innerHTML = `
+      <form id="passkey-login" action="/login">
+        <input type="password" hidden autocomplete="current-password" />
+        <button type="button">Sign in with a passkey</button>
+      </form>
+    `
+
+    expect(
+      summarizeAuthenticationWorkflowForms().some(
+        (observation) =>
+          observation.formScope.kind === PasswordFormScopeKind.Owned &&
+          observation.formScope.owner.id === 'passkey-login',
+      ),
+    ).toBe(true)
+  })
+
   test('does not count or fill credential fields inside an inert ancestor', () => {
     document.body.innerHTML = `
       <form aria-label="Login" action="/auth/login">

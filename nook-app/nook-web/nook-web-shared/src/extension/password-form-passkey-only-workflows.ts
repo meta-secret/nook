@@ -1,5 +1,6 @@
 import {
   findPasskeyControls,
+  findPasswordFields,
   localUnownedPasskeyContainer,
   pageHasPasskeyControl,
   PasswordFormScopeKind,
@@ -209,16 +210,11 @@ function passkeyCandidatesForScope(
 }
 
 function scopeHasPasswordField(scope: PasskeyOnlyScope): boolean {
-  if (scope.formScope.kind === PasswordFormScopeKind.Owned) {
-    return Array.from(scope.formScope.owner.elements).some(
-      (element) =>
-        element instanceof HTMLInputElement && element.type === "password",
-    );
-  }
-  return (
-    scope.root.querySelector('input[type="password"]') instanceof
-    HTMLInputElement
-  );
+  const fieldQuery: Parameters<typeof findPasswordFields>[0] = {
+    root: scope.root,
+    formScope: scope.formScope,
+  };
+  return findPasswordFields(fieldQuery).length > 0;
 }
 
 function takePreferredPasskeyOnlyObservations<Summary>(

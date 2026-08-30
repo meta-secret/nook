@@ -27,6 +27,19 @@ describe('authentication route history', () => {
     expect(routes).toEqual(['/login', '/login/verify', '/login/verify'])
   })
 
+  test('notifies on hashchange without DOM mutations', () => {
+    const routes: string[] = []
+    const stop = observeAuthenticationRouteHistory(() => {
+      routes.push(location.hash)
+    })
+
+    window.location.hash = '#/login'
+    stop()
+    window.location.hash = '#/ignored'
+
+    expect(routes).toEqual(['#/login'])
+  })
+
   test('bridges MAIN-world navigation to the isolated listener', () => {
     const posted: Array<{ message: unknown; targetOrigin: string }> = []
     const originalPostMessage = window.postMessage.bind(window)

@@ -43,9 +43,11 @@ export function observeAuthenticationRouteHistory(
     onNavigate();
   };
   window.addEventListener("popstate", onNavigate);
+  window.addEventListener("hashchange", onNavigate);
   return () => {
     history.pushState = pushState;
     history.replaceState = replaceState;
     window.removeEventListener("popstate", onNavigate);
+    window.removeEventListener("hashchange", onNavigate);
   };
 }
