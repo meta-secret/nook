@@ -454,39 +454,47 @@ function transportableControlObservation(
 export function findWorkflowPasskeyControl(
   observation: PasswordFormObservation,
 ): PasskeyControlLookup {
-  const authenticationUsername = usernameEvidence(observation);
-  const candidate = findPasskeyControls(scopedControlRoot(observation)).find(
-    ({ control, explicitlyMarked }) => {
-      if (
-        !controlAssociatesWithObservation({
-          control,
-          formScope: observation.formScope,
-          root: observation.root,
-        })
-      ) {
-        return false;
-      }
-      if (!isRenderedControl(control)) return false;
-      const factsRequest: PageControlObservationRequest = {
-        observation,
+  const summaryRequest: Parameters<typeof summarizeRoot>[0] = {
+    kind: PasswordFormQueryKind.Scoped,
+    root: observation.root,
+    formScope: observation.formScope,
+  };
+  const liveObservation: PasswordFormObservation = {
+    ...observation,
+    summary: summarizeRoot(summaryRequest),
+  };
+  const authenticationUsername = usernameEvidence(liveObservation);
+  const candidate = findPasskeyControls(
+    scopedControlRoot(liveObservation),
+  ).find(({ control, explicitlyMarked }) => {
+    if (
+      !controlAssociatesWithObservation({
         control,
-        authenticationUsername,
-        explicitlyLocallyScoped:
-          (observation.root === document &&
-            observation.formScope.kind === PasswordFormScopeKind.Unowned) ||
-          (observation.formScope.kind === PasswordFormScopeKind.Owned &&
-            isLocallyAdjacentToOwnedForm(control, observation.formScope.owner)),
-      };
-      const [transported] = transportableControlObservation(factsRequest);
-      if (!transported) return false;
-      const evidence: AuthenticationDetailedPasskeyControlCandidateObservation =
-        {
-          kind: explicitlyMarked ? "explicitly-marked" : "labeled",
-          observation: transported,
-        };
-      return authentication_passkey_control_candidate_is_safe(evidence);
-    },
-  );
+        formScope: liveObservation.formScope,
+        root: liveObservation.root,
+      })
+    ) {
+      return false;
+    }
+    if (!isRenderedControl(control)) return false;
+    const factsRequest: PageControlObservationRequest = {
+      observation: liveObservation,
+      control,
+      authenticationUsername,
+      explicitlyLocallyScoped:
+        (observation.root === document &&
+          observation.formScope.kind === PasswordFormScopeKind.Unowned) ||
+        (observation.formScope.kind === PasswordFormScopeKind.Owned &&
+          isLocallyAdjacentToOwnedForm(control, observation.formScope.owner)),
+    };
+    const [transported] = transportableControlObservation(factsRequest);
+    if (!transported) return false;
+    const evidence: AuthenticationDetailedPasskeyControlCandidateObservation = {
+      kind: explicitlyMarked ? "explicitly-marked" : "labeled",
+      observation: transported,
+    };
+    return authentication_passkey_control_candidate_is_safe(evidence);
+  });
   return candidate
     ? { kind: PasskeyControlLookupKind.Found, control: candidate.control }
     : { kind: PasskeyControlLookupKind.Absent };

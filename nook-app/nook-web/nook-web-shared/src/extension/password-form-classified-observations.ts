@@ -1,5 +1,8 @@
 import type { AuthenticationPageObservationFacts } from "./nook-companion-wasm/nook_companion_wasm.js";
-import { authenticationFactStringsAreTransportable } from "./password-form-submission-controls";
+import {
+  authenticationFactStringsAreTransportable,
+  MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
+} from "./password-form-submission-controls";
 import {
   authenticationPageObservationFacts,
   type PasswordFormObservation,
@@ -31,12 +34,20 @@ export function classifiedAuthenticationWorkflowObservations({
     };
     const facts = authenticationPageObservationFacts(factsRequest);
     const authenticationContext = facts.ceremony.authenticationContext;
+    const fields = facts.fields;
     return authenticationContext &&
       authenticationFactStringsAreTransportable([
         authenticationContext.sourceOrigin,
         authenticationContext.formIdentity,
         authenticationContext.destinationIdentity,
-      ])
+      ]) &&
+      [
+        fields.usernameFieldCount,
+        fields.currentPasswordFieldCount,
+        fields.newPasswordFieldCount,
+        fields.genericPasswordFieldCount,
+        fields.oneTimeCodeFieldCount,
+      ].every((count) => count <= MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT)
       ? [{ observation, facts }]
       : [];
   });

@@ -258,6 +258,42 @@ describe('authentication observation bounds', () => {
     ).toBe(true)
   })
 
+  test('isolates a scope whose classified field count exceeds the bound', () => {
+    const extraUsernames = Array.from(
+      { length: MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT },
+      (_, index) => `<input autocomplete="username" name="extra-${index}" />`,
+    ).join('')
+    document.body.innerHTML = `
+      <form id="overflow-login" action="/login">
+        <input autocomplete="username" />
+        ${extraUsernames}
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Continue</button>
+      </form>
+      <form id="safe-login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+
+    const classifiedRequest: Parameters<
+      typeof classifiedAuthenticationWorkflowObservations
+    >[0] = {
+      workflowForms: summarizeAuthenticationWorkflowForms(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    }
+    const classified =
+      classifiedAuthenticationWorkflowObservations(classifiedRequest)
+    const selected = classified[0]
+    if (!selected) {
+      throw new Error('expected the transportable login workflow')
+    }
+    expect(classified).toHaveLength(1)
+    expect(ownedFormId(selected.observation)).toBe('safe-login')
+  })
+
   test('gives a sibling passkey-only form its own observation', () => {
     document.body.innerHTML = `
       <div class="login-panel">

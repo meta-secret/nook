@@ -238,6 +238,26 @@ mod tests {
     }
 
     #[test]
+    fn oversized_sibling_field_counts_reject_the_entire_fact_batch() {
+        let mut oversized = password_login();
+        oversized.fields.username_field_count = crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT + 1;
+        assert_eq!(
+            AuthenticationPageObservationFactsBatch {
+                observations: vec![password_login(), oversized],
+            }
+            .classify(),
+            AuthenticationWorkflowMatch::Rejected
+        );
+        assert!(matches!(
+            AuthenticationPageObservationFactsBatch {
+                observations: vec![password_login()],
+            }
+            .classify(),
+            AuthenticationWorkflowMatch::Matched(_)
+        ));
+    }
+
+    #[test]
     fn excessive_flat_counts_are_rejected_before_progression_reduction() {
         let mut observation = AuthenticationPageObservationFacts::default();
         observation.fields.username_field_count =

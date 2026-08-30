@@ -97,6 +97,28 @@ describe('passkey control detection', () => {
     expect(control.kind).toBe(PasskeyControlLookupKind.Absent)
   })
 
+  test('recomputes live field facts before activating a passkey control', () => {
+    document.body.innerHTML = `
+      <form id="login" action="/auth/passkey">
+        <button type="button">Use passkey</button>
+      </form>
+    `
+    const stale = observedAuthenticationWorkflow()
+    expect(stale.summary.newPasswordFieldCount).toBe(0)
+    expect(findWorkflowPasskeyControl(stale).kind).toBe(
+      PasskeyControlLookupKind.Found,
+    )
+    document
+      .querySelector('form')
+      ?.insertAdjacentHTML(
+        'afterbegin',
+        '<input type="password" autocomplete="new-password" />',
+      )
+    expect(findWorkflowPasskeyControl(stale).kind).toBe(
+      PasskeyControlLookupKind.Absent,
+    )
+  })
+
   test('binds the exact later passkey candidate approved by Rust', () => {
     document.body.innerHTML = `<form id="login" action="/auth/login"><input autocomplete="username" /><button id="inert" disabled>Use passkey</button><button id="safe">Use passkey</button></form>`
     const control = findWorkflowPasskeyControl(observedAuthenticationWorkflow())
