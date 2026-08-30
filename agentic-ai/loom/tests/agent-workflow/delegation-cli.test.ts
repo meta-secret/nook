@@ -9,6 +9,7 @@ import {
 import type { RmOptions } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { describe, expect, test } from 'bun:test';
 import {
   AgentAttemptAdapterKind,
@@ -59,10 +60,11 @@ describe('delegated agent journal CLI', () => {
         JSON.stringify(registry),
         'utf8',
       );
+      const sourceCommit = commitFixture(workingDirectory);
       const requestPath = join(workingDirectory, 'request.json');
       const request = {
         runId: 'ordinary-coding-run',
-        sourceCommit: SOURCE_COMMIT,
+        sourceCommit,
         task: 'inspect-contract',
         agent: 'contract-auditor',
         attempt: 1,
@@ -518,3 +520,17 @@ describe('delegated agent journal CLI', () => {
     }
   });
 });
+
+function commitFixture(workingDirectory: string): string {
+  const options = { cwd: workingDirectory, encoding: 'utf8' } as const;
+  execFileSync('git', ['init', '--quiet'], options);
+  execFileSync('git', ['config', 'user.name', 'Loom Test'], options);
+  execFileSync(
+    'git',
+    ['config', 'user.email', 'loom@example.invalid'],
+    options,
+  );
+  execFileSync('git', ['add', '.cortex'], options);
+  execFileSync('git', ['commit', '--quiet', '-m', 'fixture'], options);
+  return execFileSync('git', ['rev-parse', 'HEAD'], options).trim();
+}

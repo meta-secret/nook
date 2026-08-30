@@ -1,4 +1,6 @@
 import { existsSync, lstatSync, readFileSync, realpathSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import type { ExecFileSyncOptionsWithStringEncoding } from 'node:child_process';
 import path from 'node:path';
 import {
   asUntrustedYamlNode,
@@ -47,6 +49,11 @@ export type CortexIdentifierAudit = {
 export type AuditCortexIdentifierStabilityArgs = {
   readonly current: CortexIdentifierRegistry;
   readonly published: CortexIdentifierRegistry;
+};
+
+export type RegisteredCortexIdentifiersAtCommitArgs = {
+  readonly repoRoot: string;
+  readonly sourceCommit: string;
 };
 
 type ValidateEntriesArgs = {
@@ -180,6 +187,27 @@ export function registeredCortexIdentifiers(
     : new Set<string>();
 }
 
+export function registeredCortexIdentifiersAtCommit(
+  args: RegisteredCortexIdentifiersAtCommitArgs,
+): ReadonlySet<string> {
+  const options: ExecFileSyncOptionsWithStringEncoding = {
+    cwd: args.repoRoot,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  };
+  try {
+    const serialized = execFileSync(
+      'git',
+      ['show', `${args.sourceCommit}:${CORTEX_IDENTIFIER_REGISTRY_PATH}`],
+      options,
+    );
+    const registry = decodeCortexIdentifierRegistry(serialized);
+    return registry ? cortexIdentifierSet(registry) : new Set<string>();
+  } catch {
+    return new Set<string>();
+  }
+}
+
 function decodeEntry(value: UntrustedYamlNode): CortexIdentifierEntry | false {
   if (!isRecord(value)) return false;
   const kind = value.kind;
@@ -247,8 +275,9 @@ function validateEntries(args: ValidateEntriesArgs): void {
     ids.add(entry.id);
     locators.add(entry.locator);
     if (
-      entry.categoryId &&
-      (!categoryIds.has(entry.categoryId) ||
+      entry.kind !== CortexIdentifierKind.Category &&
+      (!entry.categoryId ||
+        !categoryIds.has(entry.categoryId) ||
         !entry.id.startsWith(`${entry.categoryId}-`))
     ) {
       args.findings.push(

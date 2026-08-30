@@ -45,7 +45,7 @@ import {
 } from './delegation-aggregation.ts';
 import type { FinalizeDelegationRunInput } from './delegation-aggregation.ts';
 import { renderDelegationPlanTree } from './delegation-plan-tree.ts';
-import { registeredCortexIdentifiers } from '../lib/cortex-identifiers.ts';
+import { registeredCortexIdentifiersAtCommit } from '../lib/cortex-identifiers.ts';
 import {
   assertCortexReferences,
   type CortexReference,
@@ -214,9 +214,10 @@ async function record(
   const serialized = await readFile(commandLine.requestPath, 'utf8');
   const request = JSON.parse(serialized) as DelegationRecordRequest;
   assertRequest(request);
-  const knownCortexIdentifiers = registeredCortexIdentifiers(
-    commandLine.workingDirectory,
-  );
+  const knownCortexIdentifiers = registeredCortexIdentifiersAtCommit({
+    repoRoot: commandLine.workingDirectory,
+    sourceCommit: request.sourceCommit,
+  });
   for (const activity of request.activities) {
     const referenceArgs = {
       references: activity.cortexReferences ?? [],

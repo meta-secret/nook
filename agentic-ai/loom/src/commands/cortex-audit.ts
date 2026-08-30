@@ -59,6 +59,17 @@ export type RunCortexAuditFromDirectoryArgs = {
   readonly startDirectory: string;
 };
 
+type PublishedIdentifierRegistryResolution = {
+  readonly registry: CortexIdentifierRegistry | false;
+  readonly findings: readonly CortexIdentifierFinding[];
+};
+
+type GitHubPullRequestEvent = {
+  readonly pull_request?: {
+    readonly base?: { readonly sha?: string };
+  };
+};
+
 export async function runCortexAudit(
   request: CortexAuditRequest,
 ): Promise<CortexAuditReport> {
@@ -224,16 +235,17 @@ export async function runCortexAuditFromDirectory(
 
   const prohibitedHarnessSkillPaths = trackedHarnessSkillPaths(repoRoot);
   const identifierAudit = auditCortexIdentifierRegistry(repoRoot);
-  const publishedRegistry = originMainIdentifierRegistry(repoRoot);
+  const publishedResolution = publishedIdentifierRegistry(repoRoot);
   const stabilityFindings =
-    identifierAudit.registry && publishedRegistry
+    identifierAudit.registry && publishedResolution.registry
       ? auditCortexIdentifierStability({
           current: identifierAudit.registry,
-          published: publishedRegistry,
+          published: publishedResolution.registry,
         })
       : [];
   const identifierFindings = [
     ...identifierAudit.findings,
+    ...publishedResolution.findings,
     ...stabilityFindings,
   ];
 
@@ -260,24 +272,81 @@ export async function runCortexAuditFromDirectory(
   };
 }
 
-function originMainIdentifierRegistry(
+function publishedIdentifierRegistry(
   repoRoot: string,
-): CortexIdentifierRegistry | false {
+): PublishedIdentifierRegistryResolution {
+  if (!existsSync(path.join(repoRoot, '.git'))) {
+    return { registry: false, findings: [] };
+  }
   const options: ExecFileSyncOptionsWithStringEncoding = {
     cwd: repoRoot,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'ignore'],
   };
+  const candidates = publishedBaseCandidates();
+  const baseCommit = candidates.find((candidate) => {
+    try {
+      execFileSync(
+        'git',
+        ['rev-parse', '--verify', `${candidate}^{commit}`],
+        options,
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  });
+  if (!baseCommit) {
+    return {
+      registry: false,
+      findings: [
+        {
+          file: CORTEX_IDENTIFIER_REGISTRY_PATH,
+          message:
+            'Published Cortex identifier baseline could not be resolved.',
+        },
+      ],
+    };
+  }
   try {
     const serialized = execFileSync(
       'git',
-      ['show', `origin/main:${CORTEX_IDENTIFIER_REGISTRY_PATH}`],
+      ['show', `${baseCommit}:${CORTEX_IDENTIFIER_REGISTRY_PATH}`],
       options,
     );
-    return decodeCortexIdentifierRegistry(serialized);
+    const registry = decodeCortexIdentifierRegistry(serialized);
+    return registry
+      ? { registry, findings: [] }
+      : {
+          registry: false,
+          findings: [
+            {
+              file: CORTEX_IDENTIFIER_REGISTRY_PATH,
+              message: 'Published Cortex identifier registry is invalid.',
+            },
+          ],
+        };
   } catch {
-    return false;
+    return { registry: false, findings: [] };
   }
+}
+
+function publishedBaseCandidates(): readonly string[] {
+  const eventPath = process.env.GITHUB_EVENT_PATH;
+  if (eventPath && existsSync(eventPath)) {
+    try {
+      const event = JSON.parse(
+        readFileSync(eventPath, 'utf8'),
+      ) as GitHubPullRequestEvent;
+      const baseSha = event.pull_request?.base?.sha;
+      if (baseSha && /^[0-9a-f]{40}$/u.test(baseSha)) {
+        return [baseSha, 'origin/main'];
+      }
+    } catch {
+      return ['origin/main'];
+    }
+  }
+  return ['origin/main'];
 }
 
 const HARNESS_SKILL_ROOTS = [

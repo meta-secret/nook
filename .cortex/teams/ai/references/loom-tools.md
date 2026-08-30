@@ -17,7 +17,8 @@ categories and selected documents or headings. Category IDs use `CX-<NAME>`;
 document and item IDs add a five-character random suffix. Published IDs are
 never removed or reassigned when a title or locator changes. Each entry carries
 an immutable authority key; the Cortex audit compares those assignments with
-the published `origin/main` registry.
+the registry at the pull request's exact published base commit. The audit fails
+closed when an established base cannot be resolved.
 
 Every persisted agent-attempt event receives an action ID derived from its
 one-based event sequence, such as `a0002`. Runtime activities may attach bounded

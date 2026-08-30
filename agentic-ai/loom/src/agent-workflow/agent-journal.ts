@@ -240,6 +240,14 @@ export class AgentAttemptJournal<TTask extends string> {
       throw new Error('Agent runtime activity detail must be bounded.');
     }
     if (event.kind === AgentAttemptEventKind.RuntimeActivity) {
+      if (
+        event.cortexReferences.length > 0 &&
+        !this.configuration.knownCortexIdentifiers
+      ) {
+        throw new Error(
+          'Agent runtime activity Cortex references require a source-bound registry.',
+        );
+      }
       const referenceArgs: AssertCortexReferencesArgs = {
         references: event.cortexReferences,
         knownIdentifiers: this.configuration.knownCortexIdentifiers ?? false,

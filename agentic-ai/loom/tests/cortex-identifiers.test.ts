@@ -111,6 +111,14 @@ describe('Cortex identifiers', () => {
             title: 'Linked directory locator',
             locator: '.cortex/external/policy.md',
           },
+          {
+            id: 'CX-AI-5V9X2',
+            kind: CortexIdentifierKind.Document,
+            authority: 'empty-category',
+            categoryId: '',
+            title: 'Empty category',
+            locator: '.cortex/policy.md',
+          },
         ],
       };
       await writeFile(registryPath, JSON.stringify(invalidRegistry), 'utf8');
@@ -122,6 +130,7 @@ describe('Cortex identifiers', () => {
           'Cortex locator .cortex/nested/../policy.md is not canonical.',
           'Cortex locator .cortex/linked-policy.md does not name a regular Cortex document.',
           'Cortex locator .cortex/external/policy.md escapes the Cortex root.',
+          'Cortex identifier CX-AI-5V9X2 has an invalid category.',
         ]),
       );
       const unknownReferenceArgs = {

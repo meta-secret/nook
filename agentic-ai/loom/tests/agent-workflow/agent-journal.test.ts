@@ -297,6 +297,48 @@ describe('agent attempt journal', () => {
     }
   });
 
+  test('requires a source-bound registry for referenced activity', async () => {
+    const runDirectory = await mkdtemp(join(tmpdir(), 'loom-agent-registry-'));
+    const removeOptions: RmOptions = { recursive: true, force: true };
+    try {
+      const configured = configuration(runDirectory);
+      const missingRegistryConfiguration: AgentAttemptJournalConfiguration = {
+        adapter: configured.adapter,
+        runDirectory: configured.runDirectory,
+        runId: configured.runId,
+        workflow: configured.workflow,
+        workflowVersion: configured.workflowVersion,
+        sourceCommit: configured.sourceCommit,
+        task: configured.task,
+        agent: configured.agent,
+        attempt: configured.attempt,
+        depth: configured.depth,
+        parent: configured.parent,
+        now: configured.now,
+      };
+      const journal = new AgentAttemptJournal<'inspect'>(
+        missingRegistryConfiguration,
+      );
+      await journal.initialize();
+      const referencedActivity: AgentAttemptEventWithoutMetadata = {
+        kind: AgentAttemptEventKind.RuntimeActivity,
+        activity: WorkflowRuntimeActivityKind.TurnCompleted,
+        detail: 'Referenced activity.',
+        cortexReferences: [
+          { id: 'CX-AI', relation: CortexReferenceRelation.Applied },
+        ],
+      };
+      await expect(journal.append(referencedActivity)).rejects.toThrow(
+        'source-bound registry',
+      );
+      expect(
+        (await readFile(journal.eventsPath, 'utf8')).split('\n'),
+      ).toHaveLength(2);
+    } finally {
+      await rm(runDirectory, removeOptions);
+    }
+  });
+
   test('rejects module expert evidence from a generic journal adapter', async () => {
     const runDirectory = await mkdtemp(join(tmpdir(), 'loom-agent-origin-'));
     const removeOptions: RmOptions = { recursive: true, force: true };
