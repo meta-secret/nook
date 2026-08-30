@@ -35,6 +35,7 @@ import {
   SavePageWatchKind,
   ScanScheduleKind,
   WidgetWorkflowKeyKind,
+  type AuthenticationScanMutationBatch,
   saveOfferState,
   scanState,
   widgetState,
@@ -156,7 +157,7 @@ async function scanAndRender(): Promise<void> {
   renderWidget(nookTypedArgs0_1)
 }
 
-function scheduleScan(mutations?: MutationRecord[]) {
+function scheduleScan(mutations?: AuthenticationScanMutationBatch) {
   if (
     Array.isArray(mutations) &&
     mutations.length > 0 &&

@@ -23,6 +23,7 @@ export enum ScanScheduleKind {
 export type ScanSchedule =
   | { kind: ScanScheduleKind.Idle }
   | { kind: ScanScheduleKind.Scheduled; timer: number }
+export type AuthenticationScanMutationBatch = MutationRecord[]
 export enum WidgetHostKind {
   Detached = 'detached',
   Attached = 'attached',
@@ -104,7 +105,7 @@ class ScanState {
   private currentSchedule: ScanSchedule = { kind: ScanScheduleKind.Idle }
   private scheduleStartedAt = 0
   sequence = 0
-  schedule: (mutations?: MutationRecord[]) => void = () => {}
+  schedule: (mutations?: AuthenticationScanMutationBatch) => void = () => {}
   get scheduleState(): ScanSchedule {
     return this.currentSchedule
   }
