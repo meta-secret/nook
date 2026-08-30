@@ -1,20 +1,13 @@
 import { createHash } from 'node:crypto';
-import {
-  UntrustedYamlPropertyPresence,
-  isRecord,
-  untrustedYamlProperty,
-} from '../lib/guards.ts';
-import {
-  fieldNamesOf,
-  type RequestFieldVocabulary,
-} from '../codec/field-vocabulary.ts';
+import { isRecord } from '../lib/guards.ts';
 import { AgentAttemptParentKind } from '../agent-workflow/domain.ts';
 import { MODULE_EXPERT_CATALOG } from '../module-experts/catalog.ts';
+import type { UntrustedYamlMap, UntrustedYamlNode } from '../lib/guards.ts';
+import { ModulePlanDecodeFailure, ModulePlanFields } from './codec-fields.ts';
 import type {
-  UntrustedYamlMap,
-  UntrustedYamlNode,
-  UntrustedYamlPropertyArgs,
-} from '../lib/guards.ts';
+  ModulePlanObjectDecodeRequest,
+  ModulePlanTransportList,
+} from './codec-fields.ts';
 import {
   MODULE_DELIVERY_PLAN_VERSION,
   ModuleDeliveryBaselineKind,
@@ -27,8 +20,11 @@ import {
   moduleDeliveryTaskTeam,
 } from './domain.ts';
 import { TeamKey } from '../team-agents/catalog.ts';
-import { composeTeamTaskContextPaths } from '../team-agents/context.ts';
-import type { TeamTaskContextPathRequest } from '../team-agents/context.ts';
+import {
+  composeCortexAuthoringResources,
+  unauthorizedSelectedSkill,
+} from './cortex-authoring-codec.ts';
+import type { CortexAuthoringResourceCompositionRequest } from './cortex-authoring-codec.ts';
 import type {
   CompatibleModuleDeliveryPlanDecode,
   ModuleDeliveryBaseline,
@@ -45,18 +41,11 @@ import type {
 
 const MAX_SERIALIZED_PLAN_BYTES = 262_144;
 
-type ModulePlanObjectDecodeRequest = {
-  readonly record: UntrustedYamlMap;
-  readonly path: string;
-};
-
 type ModulePlanIndexedNodeRequest = {
   readonly value: UntrustedYamlNode;
   readonly index: number;
   readonly legacy: boolean;
 };
-
-type ModulePlanTransportList = readonly UntrustedYamlNode[];
 
 type ModuleDeliveryTeamDecodeRequest = {
   readonly value: string;
@@ -277,126 +266,6 @@ enum ModulePlanExpectedProducerField {
   FunctionalOwner = 'functionalOwner',
   TaskId = 'taskId',
   Team = 'team',
-}
-
-class ModulePlanDecodeFailure extends Error {}
-
-class ModulePlanFields {
-  readonly record: UntrustedYamlMap;
-  readonly path: string;
-
-  constructor(request: ModulePlanObjectDecodeRequest) {
-    this.record = request.record;
-    this.path = request.path;
-  }
-
-  requireExactKeys<FieldName extends string>(
-    vocabulary: RequestFieldVocabulary<FieldName>,
-  ): void {
-    const actual = Object.keys(this.record).sort();
-    const expected = [...fieldNamesOf(vocabulary)].sort();
-    if (JSON.stringify(actual) !== JSON.stringify(expected)) {
-      fail(`${this.path}: expected exactly ${expected.join(', ')}.`);
-    }
-  }
-
-  string(key: string): string {
-    const value = this.value(key);
-    if (
-      typeof value !== 'string' ||
-      value.trim() === '' ||
-      value.length > 4096 ||
-      hasControlCharacter(value)
-    ) {
-      fail(`${this.path}.${key}: expected a bounded non-empty string.`);
-    }
-    return value;
-  }
-
-  identifier(key: string): string {
-    const value = this.string(key);
-    if (!/^[a-z][a-z0-9_-]{0,63}$/u.test(value)) {
-      fail(`${this.path}.${key}: expected a stable lowercase identifier.`);
-    }
-    return value;
-  }
-
-  positiveInteger(key: string): number {
-    const value = this.value(key);
-    if (
-      typeof value !== 'number' ||
-      !Number.isSafeInteger(value) ||
-      value <= 0
-    ) {
-      fail(`${this.path}.${key}: expected a positive integer.`);
-    }
-    return value;
-  }
-
-  trueValue(key: string): true {
-    if (this.value(key) !== true) {
-      fail(`${this.path}.${key}: expected true.`);
-    }
-    return true;
-  }
-
-  nonEmptyStringList(key: string): readonly string[] {
-    const values = this.stringList(key);
-    if (values.length === 0) {
-      fail(`${this.path}.${key}: expected a non-empty string array.`);
-    }
-    return values;
-  }
-
-  stringList(key: string): readonly string[] {
-    const value = this.value(key);
-    if (!Array.isArray(value) || value.length > 128) {
-      fail(`${this.path}.${key}: expected a bounded string array.`);
-    }
-    for (const entry of value) {
-      if (
-        typeof entry !== 'string' ||
-        entry.trim() === '' ||
-        entry.length > 4096 ||
-        hasControlCharacter(entry)
-      ) {
-        fail(`${this.path}.${key}: expected bounded non-empty entries.`);
-      }
-    }
-    return value;
-  }
-
-  recordField(key: string): UntrustedYamlMap {
-    const value = this.value(key);
-    if (!isRecord(value)) fail(`${this.path}.${key}: expected an object.`);
-    return value;
-  }
-
-  nodeList(key: string): ModulePlanTransportList {
-    const value = this.value(key);
-    if (!Array.isArray(value) || value.length === 0) {
-      fail(`${this.path}.${key}: expected a non-empty array.`);
-    }
-    return value;
-  }
-
-  list(key: string): ModulePlanTransportList {
-    const value = this.value(key);
-    if (!Array.isArray(value)) fail(`${this.path}.${key}: expected an array.`);
-    return value;
-  }
-
-  private value(key: string): UntrustedYamlNode {
-    const propertyRequest: UntrustedYamlPropertyArgs = {
-      record: this.record,
-      key,
-    };
-    const property = untrustedYamlProperty(propertyRequest);
-    if (property.presence === UntrustedYamlPropertyPresence.Absent) {
-      fail(`${this.path}.${key}: required field is missing.`);
-    }
-    return property.value;
-  }
 }
 
 export function decodeCompatibleModuleDeliveryPlan(
@@ -655,19 +524,24 @@ function decodeNode(
     path: `${path}.cortexAuthoring`,
   };
   const cortexAuthoring = decodeCortexAuthoring(cortexAuthoringRequest);
-  const contextPathRequest: TeamTaskContextPathRequest = {
-    team: common.team,
-    writeClaims: common.resources.write,
-    selectedSkillPaths: cortexAuthoring.selectedSkillPaths,
-  };
-  const context = composeTeamTaskContextPaths(contextPathRequest);
+  const resourceCompositionRequest: CortexAuthoringResourceCompositionRequest =
+    {
+      team: common.team,
+      resources: common.resources,
+      cortexAuthoring,
+      path: `${path}.cortexAuthoring`,
+    };
+  const unauthorizedSkill = unauthorizedSelectedSkill(
+    resourceCompositionRequest,
+  );
+  if (unauthorizedSkill !== false)
+    fail(
+      `${path}.cortexAuthoring.selectedSkillPaths: ${unauthorizedSkill} was not authorized by the submitted read claims.`,
+    );
   return {
     kind: ModuleDeliveryTaskKind.Write,
     ...common,
-    resources: {
-      ...common.resources,
-      read: [...new Set([...context.contextPaths, ...common.resources.read])],
-    },
+    resources: composeCortexAuthoringResources(resourceCompositionRequest),
     cortexAuthoring,
     workspace,
   };

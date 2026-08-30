@@ -148,6 +148,26 @@ describe('Cortex module-delivery plan validation', () => {
     expect(codes(validate([foreign]))).toContain(
       ModuleDeliveryIssueCode.ParentOwnedWrite,
     );
+    const unauthorizedSkillRequest: CortexNodeRequest = {
+      taskId: 'unauthorized-skill',
+      team: TeamKey.Sre,
+      write: ['.cortex/teams/sre/workflows/quality.md'],
+      selectedSkillPaths: [
+        '.cortex/teams/security/dynamic-skills/security-review.md',
+      ],
+      sharedWriteClaims: [],
+    };
+    const unauthorizedSkillNode: ModuleDeliveryWriteNodeV2 = {
+      ...cortexNode(unauthorizedSkillRequest),
+      resources: {
+        read: [],
+        write: unauthorizedSkillRequest.write,
+        evidenceSurface: [],
+      },
+    };
+    expect(codes(validate([unauthorizedSkillNode]))).toContain(
+      ModuleDeliveryIssueCode.InvalidField,
+    );
     for (const claim of ['.cortex/shared/**', '.cortex/AGENTS.md']) {
       const invalid: ModuleDeliveryWriteNodeV2 = {
         ...sreNode(),
