@@ -32,6 +32,11 @@ export type TeamTaskContext = {
   readonly skillPaths: readonly string[];
 };
 
+export type TeamTaskContextPathRequest = Pick<
+  TeamTaskContextRequest,
+  'team' | 'writeClaims' | 'selectedSkillPaths'
+>;
+
 type SkillReadAuthorizationRequest = {
   readonly claim: string;
   readonly path: string;
@@ -40,8 +45,6 @@ type SkillReadAuthorizationRequest = {
 export function resolveTeamTaskContext(
   request: TeamTaskContextRequest,
 ): TeamTaskContext {
-  const authority = teamAuthority(request.team);
-  if (!authority) throw new Error(`Unknown team authority: ${request.team}`);
   assertValidReadClaims(request.readClaims);
   assertValidWriteClaims(request.writeClaims);
   assertValidSkillPaths(request);
@@ -57,6 +60,18 @@ export function resolveTeamTaskContext(
     throw new Error(
       'Canonical Cortex authoring skills must be existing regular files.',
     );
+  const pathRequest: TeamTaskContextPathRequest = request;
+  return composeTeamTaskContextPaths(pathRequest);
+}
+
+export function composeTeamTaskContextPaths(
+  request: TeamTaskContextPathRequest,
+): TeamTaskContext {
+  const authority = teamAuthority(request.team);
+  if (!authority) throw new Error(`Unknown team authority: ${request.team}`);
+  const automaticSkills = writesCortex(request.writeClaims)
+    ? CORTEX_AUTHORING_SKILL_PATHS
+    : [];
   const automaticSkillPaths: readonly string[] = automaticSkills;
   const selectedSkills = [...new Set(request.selectedSkillPaths)]
     .filter((path) => !automaticSkillPaths.includes(path))

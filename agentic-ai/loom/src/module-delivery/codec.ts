@@ -27,6 +27,8 @@ import {
   moduleDeliveryTaskTeam,
 } from './domain.ts';
 import { TeamKey } from '../team-agents/catalog.ts';
+import { composeTeamTaskContextPaths } from '../team-agents/context.ts';
+import type { TeamTaskContextPathRequest } from '../team-agents/context.ts';
 import type {
   CompatibleModuleDeliveryPlanDecode,
   ModuleDeliveryBaseline,
@@ -646,9 +648,27 @@ function decodeNode(
   const cortexAuthoring = Object.hasOwn(request.value, 'cortexAuthoring')
     ? decodeCortexAuthoring(cortexAuthoringRequest)
     : undefined;
+  const contextPathRequest: TeamTaskContextPathRequest = {
+    team: common.team,
+    writeClaims: common.resources.write,
+    selectedSkillPaths: cortexAuthoring?.selectedSkillPaths ?? [],
+  };
+  const context = cortexAuthoring
+    ? composeTeamTaskContextPaths(contextPathRequest)
+    : undefined;
   return {
     kind: ModuleDeliveryTaskKind.Write,
     ...common,
+    ...(context
+      ? {
+          resources: {
+            ...common.resources,
+            read: [
+              ...new Set([...context.contextPaths, ...common.resources.read]),
+            ],
+          },
+        }
+      : {}),
     ...(cortexAuthoring ? { cortexAuthoring } : {}),
     workspace: {
       kind: ModuleDeliveryWorkspaceKind.IsolatedWorktree,
