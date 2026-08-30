@@ -337,6 +337,7 @@ export function formHasDialogSubmitter(form: HTMLFormElement): boolean {
       authenticationAdvanceControlSelector,
     ),
   ).some((control) => {
+    if (controlIsInert(control)) return false;
     const owner = associatedAuthenticationForm(control);
     return (
       owner.kind === PasswordFormScopeKind.Owned &&

@@ -1,4 +1,5 @@
 import {
+  findOneTimeCodeFields,
   findPasskeyControls,
   findPasswordFields,
   localUnownedPasskeyContainer,
@@ -254,6 +255,14 @@ function scopeHasPasswordField(scope: PasskeyOnlyScope): boolean {
   return findPasswordFields(fieldQuery).length > 0;
 }
 
+function scopeHasOneTimeCodeField(scope: PasskeyOnlyScope): boolean {
+  const fieldQuery: Parameters<typeof findOneTimeCodeFields>[0] = {
+    root: scope.root,
+    formScope: scope.formScope,
+  };
+  return findOneTimeCodeFields(fieldQuery).length > 0;
+}
+
 function takePreferredPasskeyOnlyObservations<Summary>(
   scopes: PasskeyOnlyScope[],
   summarizeRoot: (query: PasswordFormScopeQuery) => Summary,
@@ -295,7 +304,8 @@ function takePreferredPasskeyOnlyObservations<Summary>(
       );
     if (
       preferred.length >= MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS &&
-      !cheapSafe
+      !cheapSafe &&
+      !scopeHasOneTimeCodeField(scope)
     ) {
       continue;
     }

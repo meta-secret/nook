@@ -822,6 +822,31 @@ describe('authentication observation bounds', () => {
     ).toBe(true)
   })
 
+  test('keeps an OTP passkey login after empty-summary scopes fill the bound', () => {
+    const decoys = Array.from(
+      { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS },
+      (_, index) =>
+        `<form method="post" id="manage-${index}" action="/passkeys"><button type="button">Add passkey</button></form>`,
+    ).join('')
+    document.body.innerHTML = `
+      ${decoys}
+      <form method="post" id="otp-passkey" action="/verify">
+        <input autocomplete="one-time-code" inputmode="numeric" />
+        <button type="button">Use passkey</button>
+      </form>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations.length).toBeLessThanOrEqual(
+      MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
+    )
+    expect(
+      observations.some(
+        (observation) => ownedFormId(observation) === 'otp-passkey',
+      ),
+    ).toBe(true)
+  })
+
   test('summarizes a bounded passkey-only candidate set before ranking', () => {
     const decoys = Array.from(
       { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS + 8 },
