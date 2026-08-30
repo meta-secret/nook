@@ -2,6 +2,7 @@ import {
   findPasskeyControls,
   pageHasPasskeyControl,
   PasswordFormScopeKind,
+  type PasskeyControlCandidate,
   type PasswordFormScope,
 } from "./password-form-fields";
 import {
@@ -18,12 +19,20 @@ type PasskeyOnlyWorkflowObservation<Summary> = {
   summary: Summary;
 };
 
+type PasskeyControlIsSafe<Observation> = (
+  candidate: PasskeyControlCandidate,
+  observation: Observation,
+) => boolean;
+
 export function summarizePasskeyOnlyWorkflowForms<Summary>(
   root: Document,
   summarizeRoot: (query: PasswordFormScopeQuery) => Summary,
   observationPriority: (
     observation: PasskeyOnlyWorkflowObservation<Summary>,
   ) => number,
+  passkeyControlIsSafe: PasskeyControlIsSafe<
+    PasskeyOnlyWorkflowObservation<Summary>
+  >,
 ): Array<PasskeyOnlyWorkflowObservation<Summary>> {
   if (!pageHasPasskeyControl(root)) return [];
   const passkeyCandidates = findPasskeyControls(root);
@@ -84,12 +93,24 @@ export function summarizePasskeyOnlyWorkflowForms<Summary>(
   }
   return observations
     .sort((left, right) => {
-      const actionableDelta =
-        Number(observationHasActionablePasskey(right, passkeyCandidates)) -
-        Number(observationHasActionablePasskey(left, passkeyCandidates));
-      return actionableDelta === 0
+      const safeDelta =
+        Number(
+          observationHasSafePasskey(
+            right,
+            passkeyCandidates,
+            passkeyControlIsSafe,
+          ),
+        ) -
+        Number(
+          observationHasSafePasskey(
+            left,
+            passkeyCandidates,
+            passkeyControlIsSafe,
+          ),
+        );
+      return safeDelta === 0
         ? observationPriority(right) - observationPriority(left)
-        : actionableDelta;
+        : safeDelta;
     })
     .slice(0, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS);
 }
@@ -103,6 +124,7 @@ export function appendIndependentPasskeyOnlyWorkflows<
   fieldBearing: Observation[],
   passkeyOnly: Observation[],
   observationPriority: (observation: Observation) => number,
+  passkeyControlIsSafe: PasskeyControlIsSafe<Observation>,
 ): Observation[] {
   const ownedForms = new Set(
     fieldBearing.flatMap((observation) =>
@@ -124,26 +146,46 @@ export function appendIndependentPasskeyOnlyWorkflows<
   const passkeyCandidates = findPasskeyControls(document);
   return [...fieldBearing, ...independent]
     .sort((left, right) => {
-      const actionableDelta =
-        Number(observationHasActionablePasskey(right, passkeyCandidates)) -
-        Number(observationHasActionablePasskey(left, passkeyCandidates));
-      return actionableDelta === 0
+      const safeDelta =
+        Number(
+          observationHasSafePasskey(
+            right,
+            passkeyCandidates,
+            passkeyControlIsSafe,
+          ),
+        ) -
+        Number(
+          observationHasSafePasskey(
+            left,
+            passkeyCandidates,
+            passkeyControlIsSafe,
+          ),
+        );
+      return safeDelta === 0
         ? observationPriority(right) - observationPriority(left)
-        : actionableDelta;
+        : safeDelta;
     })
     .slice(0, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS);
 }
 
-function observationHasActionablePasskey<Summary>(
-  observation: PasskeyOnlyWorkflowObservation<Summary>,
-  passkeyCandidates: Array<{ control: HTMLElement }>,
+function observationHasSafePasskey<
+  Observation extends {
+    root: ParentNode;
+    formScope: PasswordFormScope;
+  },
+>(
+  observation: Observation,
+  passkeyCandidates: PasskeyControlCandidate[],
+  passkeyControlIsSafe: PasskeyControlIsSafe<Observation>,
 ): boolean {
-  return passkeyCandidates.some(({ control }) => {
-    if (controlIsInert(control)) return false;
-    const owner = associatedAuthenticationForm(control);
-    return observation.formScope.kind === PasswordFormScopeKind.Owned
-      ? owner.kind === PasswordFormScopeKind.Owned &&
+  return passkeyCandidates.some((candidate) => {
+    if (controlIsInert(candidate.control)) return false;
+    const owner = associatedAuthenticationForm(candidate.control);
+    const belongs =
+      observation.formScope.kind === PasswordFormScopeKind.Owned
+        ? owner.kind === PasswordFormScopeKind.Owned &&
           owner.owner === observation.formScope.owner
-      : owner.kind === PasswordFormScopeKind.Unowned;
+        : owner.kind === PasswordFormScopeKind.Unowned;
+    return belongs && passkeyControlIsSafe(candidate, observation);
   });
 }

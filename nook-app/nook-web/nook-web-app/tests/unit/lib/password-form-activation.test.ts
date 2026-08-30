@@ -37,6 +37,26 @@ describe('classified login activation', () => {
     expect(activated).toBe(false)
   })
 
+  test('does not activate a Continue control whose class is destructive', () => {
+    document.body.innerHTML = `
+      <form aria-label="Login" action="/auth/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button class="delete-account" type="button">Continue</button>
+      </form>
+    `
+    let activated = false
+    document.querySelector('.delete-account')?.addEventListener('click', () => {
+      activated = true
+    })
+    document.querySelector('form')?.addEventListener('submit', (event) => {
+      event.preventDefault()
+    })
+
+    submitLoginForm(wholeDocumentPasswordFormSubmission)
+    expect(activated).toBe(false)
+  })
+
   test('does not implicitly submit after fill changes the form destination', () => {
     document.body.innerHTML = `
       <form aria-label="Login" action="/login">

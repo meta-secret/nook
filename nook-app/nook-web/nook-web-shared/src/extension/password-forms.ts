@@ -3,7 +3,6 @@ import {
   authentication_advance_control_is_safe,
   authentication_form_observation_priority,
   authentication_passkey_control_candidate_is_safe,
-  looks_like_login_advance_control_label,
   strongest_authentication_username_evidence,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import type {
@@ -441,6 +440,33 @@ function transportableControlObservation(
     : [];
 }
 
+function passkeyCandidateIsRustSafe(
+  {
+    control,
+    explicitlyMarked,
+  }: { control: HTMLElement; explicitlyMarked: boolean },
+  observation: PasswordFormObservation,
+): boolean {
+  if (!isRenderedControl(control)) return false;
+  const factsRequest: PageControlObservationRequest = {
+    observation,
+    control,
+    authenticationUsername: usernameEvidence(observation),
+    explicitlyLocallyScoped:
+      (observation.root === document &&
+        observation.formScope.kind === PasswordFormScopeKind.Unowned) ||
+      (observation.formScope.kind === PasswordFormScopeKind.Owned &&
+        isLocallyAdjacentToOwnedForm(control, observation.formScope.owner)),
+  };
+  const [transported] = transportableControlObservation(factsRequest);
+  if (!transported) return false;
+  const evidence: AuthenticationDetailedPasskeyControlCandidateObservation = {
+    kind: explicitlyMarked ? "explicitly-marked" : "labeled",
+    observation: transported,
+  };
+  return authentication_passkey_control_candidate_is_safe(evidence);
+}
+
 /** Bind the first DOM candidate that Rust accepts in the approved workflow scope. */
 export function findWorkflowPasskeyControl(
   observation: PasswordFormObservation,
@@ -454,38 +480,20 @@ export function findWorkflowPasskeyControl(
     ...observation,
     summary: summarizeRoot(summaryRequest),
   };
-  const authenticationUsername = usernameEvidence(liveObservation);
   const candidate = findPasskeyControls(
     scopedControlRoot(liveObservation),
-  ).find(({ control, explicitlyMarked }) => {
-    if (
-      !controlAssociatesWithObservation({
+  ).find(
+    ({ control, explicitlyMarked }) =>
+      controlAssociatesWithObservation({
         control,
         formScope: liveObservation.formScope,
         root: liveObservation.root,
-      })
-    ) {
-      return false;
-    }
-    if (!isRenderedControl(control)) return false;
-    const factsRequest: PageControlObservationRequest = {
-      observation: liveObservation,
-      control,
-      authenticationUsername,
-      explicitlyLocallyScoped:
-        (observation.root === document &&
-          observation.formScope.kind === PasswordFormScopeKind.Unowned) ||
-        (observation.formScope.kind === PasswordFormScopeKind.Owned &&
-          isLocallyAdjacentToOwnedForm(control, observation.formScope.owner)),
-    };
-    const [transported] = transportableControlObservation(factsRequest);
-    if (!transported) return false;
-    const evidence: AuthenticationDetailedPasskeyControlCandidateObservation = {
-      kind: explicitlyMarked ? "explicitly-marked" : "labeled",
-      observation: transported,
-    };
-    return authentication_passkey_control_candidate_is_safe(evidence);
-  });
+      }) &&
+      passkeyCandidateIsRustSafe(
+        { control, explicitlyMarked },
+        liveObservation,
+      ),
+  );
   return candidate
     ? { kind: PasskeyControlLookupKind.Found, control: candidate.control }
     : { kind: PasskeyControlLookupKind.Absent };
@@ -669,6 +677,7 @@ export function summarizeAuthenticationWorkflowForms(): PasswordFormObservation[
     root,
     summarizeRoot,
     passwordFormPriority,
+    passkeyCandidateIsRustSafe,
   );
   if (authFieldCount === 0) {
     return passkeyOnly;
@@ -744,6 +753,7 @@ export function summarizeAuthenticationWorkflowForms(): PasswordFormObservation[
     observations,
     passkeyOnly,
     passwordFormPriority,
+    passkeyCandidateIsRustSafe,
   );
 }
 

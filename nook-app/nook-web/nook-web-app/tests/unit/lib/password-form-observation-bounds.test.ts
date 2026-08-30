@@ -367,6 +367,69 @@ describe('authentication observation bounds', () => {
     ).toBe(true)
   })
 
+  test('ranks a Rust-safe passkey login ahead of enrollment candidates at the bound', () => {
+    const decoys = Array.from(
+      { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS },
+      (_, index) =>
+        `<form id="enroll-${index}" action="/login"><button type="button">${
+          index % 2 === 0 ? 'Add passkey' : 'Manage passkeys'
+        }</button></form>`,
+    ).join('')
+    document.body.innerHTML = `
+      ${decoys}
+      <form id="passkey-login" action="/login">
+        <button type="button">Sign in with a passkey</button>
+      </form>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS)
+    expect(
+      observations.some(
+        (observation) => ownedFormId(observation) === 'passkey-login',
+      ),
+    ).toBe(true)
+  })
+
+  test('keeps a Rust-safe Sign in control when destructive submitters fill the bound', () => {
+    const decoys = Array.from(
+      { length: MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT },
+      (_, index) =>
+        `<button type="submit" name="aux-${index}">Delete account</button>`,
+    ).join('')
+    document.body.innerHTML = `
+      <form aria-label="Login" action="/auth/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        ${decoys}
+        <button id="sign-in" type="submit">Sign in</button>
+      </form>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: expect.arrayContaining([
+        expect.objectContaining({
+          label: expect.stringContaining('Sign in'),
+        }),
+      ]),
+    })
+    let activated = ''
+    document.querySelector('#sign-in')?.addEventListener('click', () => {
+      activated = 'sign-in'
+    })
+    document.querySelector('form')?.addEventListener('submit', (event) => {
+      event.preventDefault()
+    })
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
+    expect(activated).toBe('sign-in')
+  })
+
   test('keeps an actionable passkey login after hidden template forms fill the bound', () => {
     const hiddenTemplates = Array.from(
       { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS },
