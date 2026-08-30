@@ -180,9 +180,9 @@ article-structure findings are accepted.
 Mechanical checks cannot decide whether a list reflects the correct semantics.
 The author still owns hierarchy, meaning, and consistency review.
 
-The application remains an in-process Loom dependency with no command, network,
-write, scheduling, or lifecycle authority. The static executable-skill host
-also exposes its validated audit action through strict YAML.
+The application is currently an in-process Loom dependency with no command,
+network, write, scheduling, or lifecycle authority. Strict YAML article
+activation remains a dependent slice.
 
 ## Application checklist
 

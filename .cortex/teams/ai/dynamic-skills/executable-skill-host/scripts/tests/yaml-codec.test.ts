@@ -59,7 +59,7 @@ test('accepts anchor-like text inside quoted, plain, commented, and block scalar
 test('rejects duplicate mapping keys at root and nested levels', () => {
   for (const yaml of [
     'skillToolsList: {}\nskillToolsList: {}\n',
-    'cortexArticleStructure:\n  audit:\n    kind: first\n    kind: second\n',
+    'skillToolsList:\n  list:\n    kind: first\n    kind: second\n',
   ]) {
     const outcome = parseSkillYamlText(yaml);
     expect(outcome.ok).toBe(false);
@@ -78,7 +78,7 @@ test('rejects multiple YAML documents instead of selecting one', () => {
 test('rejects tagged keys before conversion can collapse them', () => {
   for (const yaml of [
     '!!binary YXVkaXQ=: hidden\naudit: visible\n',
-    'cortexArticleStructure:\n  !!binary YXVkaXQ=: hidden\n  audit: visible\n',
+    'skillToolsList:\n  !!binary bGlzdA==: hidden\n  list: visible\n',
   ]) {
     const outcome = parseSkillYamlText(yaml);
     expect(outcome.ok).toBe(false);

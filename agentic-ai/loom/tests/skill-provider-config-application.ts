@@ -17,7 +17,6 @@ export const HOST_ROOT =
 export const HOST_CLI = `${HOST_ROOT}/src/cli.ts`;
 export const HOST_REGISTRY = `${HOST_ROOT}/src/skill-action-registry.ts`;
 export const HOST_PACKAGE = `${HOST_ROOT}/package.json`;
-export const ARTICLE_ACTION = `${PROVIDER_ROOT}/src/action.ts`;
 export const LOOM_ARTICLE_ADAPTER =
   'agentic-ai/loom/src/lib/cortex-article-structure.ts';
 export const CORTEX_AUDIT = 'agentic-ai/loom/src/commands/cortex-audit.ts';
@@ -53,11 +52,6 @@ export function isAuthorizedApplicationEdge(
     return edge.importer === CORTEX_AUDIT;
   if (edge.dependency === HOST_CLI)
     return edge.importer === '.task/agentic-ai.yml';
-  if (
-    edge.importer === HOST_REGISTRY &&
-    (edge.dependency === ARTICLE_ACTION || edge.dependency === PROVIDER_DOMAIN)
-  )
-    return true;
   if (
     edge.importer.startsWith(`${HOST_ROOT}/src/`) &&
     edge.dependency.startsWith(`${HOST_ROOT}/src/`)
