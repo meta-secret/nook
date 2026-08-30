@@ -16,7 +16,9 @@ import {
 } from '../pairing-grants'
 import {
   extensionSessionInteractiveDeadline,
+  extensionSessionProbeDeadline,
   MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+  type ExtensionSessionQueue,
 } from '../../offscreen/session-request-adapter'
 import {
   availableWebsiteGrants,
@@ -263,23 +265,43 @@ type LoginAccountsForOriginArgs = {
   query?: string
 }
 
-export async function loginAccountsForOrigin({
+type LoginAccountAvailabilityForOriginArgs = LoginAccountsForOriginArgs & {
+  queue: ExtensionSessionQueue
+  sendMessage?: typeof sendSessionMessage
+}
+
+type LoginAccountAvailability =
+  { ok: true; accounts: WebsiteLoginAccountOption[] } | { ok: false }
+
+export async function loginAccountAvailabilityForOrigin({
   grants,
   origin,
   query = '',
-}: LoginAccountsForOriginArgs): Promise<WebsiteLoginAccountOption[]> {
+  queue,
+  sendMessage = sendSessionMessage,
+}: LoginAccountAvailabilityForOriginArgs): Promise<LoginAccountAvailability> {
   const accounts: WebsiteLoginAccountOption[] = []
   const needle = query.trim().toLowerCase()
   for (const grant of grants) {
-    const nookTypedArgs0_5: Parameters<typeof sendSessionMessage>[0] = {
+    const request: Parameters<typeof sendSessionMessage>[0] = {
       type: 'nook:extension-session-list-logins',
       payload: {
         ...extensionSessionGrantIdentity(grant),
         origin,
-        queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+        queue,
       },
     }
-    const response = await sendSessionMessage(nookTypedArgs0_5)
+    const response = await sendMessage(request)
+    if (
+      !response ||
+      typeof response !== 'object' ||
+      !('ok' in response) ||
+      response.ok !== true ||
+      !('accounts' in response) ||
+      !Array.isArray(response.accounts)
+    ) {
+      return { ok: false }
+    }
     for (const account of sessionResponseAccounts(response)) {
       if (
         !account ||
@@ -317,7 +339,22 @@ export async function loginAccountsForOrigin({
       accounts.push(option)
     }
   }
-  return accounts
+  return { ok: true, accounts }
+}
+
+export async function loginAccountsForOrigin({
+  grants,
+  origin,
+  query = '',
+}: LoginAccountsForOriginArgs): Promise<WebsiteLoginAccountOption[]> {
+  const request: LoginAccountAvailabilityForOriginArgs = {
+    grants,
+    origin,
+    query,
+    queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+  }
+  const result = await loginAccountAvailabilityForOrigin(request)
+  return result.ok ? result.accounts : []
 }
 
 type WebsiteLoginOptionsArgs = {
@@ -334,6 +371,7 @@ type WebsiteLoginOptionsDependencies = {
   availableWebsiteGrants: typeof availableWebsiteGrants
   passiveAvailableWebsiteGrants: typeof passiveAvailableWebsiteGrants
   loginAccountsForOrigin: typeof loginAccountsForOrigin
+  loginAccountAvailabilityForOrigin: typeof loginAccountAvailabilityForOrigin
   openCompanionLauncherBestEffort: typeof openCompanionLauncherBestEffort
 }
 
@@ -341,6 +379,7 @@ const websiteLoginOptionsDependencies: WebsiteLoginOptionsDependencies = {
   availableWebsiteGrants,
   passiveAvailableWebsiteGrants,
   loginAccountsForOrigin,
+  loginAccountAvailabilityForOrigin,
   openCompanionLauncherBestEffort,
 }
 
@@ -378,12 +417,29 @@ async function websiteLoginOptionsResponse({
     return access.response
   }
 
-  const nookTypedArgs0_0: Parameters<typeof loginAccountsForOrigin>[0] = {
-    grants: access.grants,
-    origin: message.payload.origin,
+  let accounts: WebsiteLoginAccountOption[]
+  if (openUnavailableCompanion) {
+    const accountRequest: Parameters<typeof loginAccountsForOrigin>[0] = {
+      grants: access.grants,
+      origin: message.payload.origin,
+    }
+    accounts = await resolvedDependencies.loginAccountsForOrigin(accountRequest)
+  } else {
+    const queueExpiresAt = Date.now() + SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS
+    const accountRequest: LoginAccountAvailabilityForOriginArgs = {
+      grants: access.grants,
+      origin: message.payload.origin,
+      queue: extensionSessionProbeDeadline(queueExpiresAt),
+    }
+    const availability =
+      await resolvedDependencies.loginAccountAvailabilityForOrigin(
+        accountRequest,
+      )
+    if (!availability.ok) {
+      return { ok: false, reason: 'login-options-unavailable' }
+    }
+    accounts = availability.accounts
   }
-  const accounts =
-    await resolvedDependencies.loginAccountsForOrigin(nookTypedArgs0_0)
   return { ok: true, status: 'ready', accounts }
 }
 
