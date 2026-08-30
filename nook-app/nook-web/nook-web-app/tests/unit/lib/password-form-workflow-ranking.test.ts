@@ -643,6 +643,31 @@ describe('authentication workflow ranking', () => {
     ).toBe(true)
   })
 
+  test('keeps a progressing username-only login after non-progressing password decoys', () => {
+    const decoys = Array.from(
+      { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS },
+      (_, index) =>
+        `<form method="get" id="password-${index}" action="/search"><input type="password" autocomplete="current-password" /></form>`,
+    ).join('')
+    document.body.innerHTML = `
+      ${decoys}
+      <form method="post" id="username-login" action="/login">
+        <input autocomplete="username" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations.length).toBeLessThanOrEqual(
+      MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
+    )
+    expect(
+      observations.some(
+        (observation) => ownedFormId(observation) === 'username-login',
+      ),
+    ).toBe(true)
+  })
+
   test('summarizes a bounded passkey-only candidate set before ranking', () => {
     const decoys = Array.from(
       { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS + 8 },

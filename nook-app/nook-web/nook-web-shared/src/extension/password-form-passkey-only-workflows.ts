@@ -159,17 +159,7 @@ function cheapWorkflowPriority(observation: {
   formScope: PasswordFormScope;
   summary: RankableWorkflowSummary;
 }): number {
-  const progressing =
-    observation.summary.passkeyControlPresent ||
-    (observation.formScope.kind === PasswordFormScopeKind.Owned &&
-      !formBlocksCredentialDisclosure(observation.formScope.owner) &&
-      ownedFormLooksProgressing(
-        observation.formScope.owner,
-        observation.summary,
-      )) ||
-    (observation.formScope.kind === PasswordFormScopeKind.Unowned &&
-      unownedScopeLooksProgressing(observation.root));
-  if (!progressing) return 1;
+  if (!cheapWorkflowLooksProgressing(observation)) return 1;
   if (observation.summary.oneTimeCodeFieldCount > 0) return 5;
   if (observation.summary.currentPasswordFieldCount > 0) return 4;
   if (observation.summary.genericPasswordFieldCount === 1) return 3;
@@ -197,30 +187,6 @@ function ownedFormLooksProgressing(
   );
 }
 
-function takeBoundedByCheapPriority<
-  Observation extends {
-    root: ParentNode;
-    formScope: PasswordFormScope;
-    summary: RankableWorkflowSummary;
-  },
->(observations: Observation[]): Observation[] {
-  const selected: Array<{ observation: Observation; priority: number }> = [];
-  for (const observation of observations) {
-    const priority = cheapWorkflowPriority(observation);
-    if (selected.length < MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS) {
-      selected.push({ observation, priority });
-      continue;
-    }
-    const lowest = selected.reduce((current, entry) =>
-      entry.priority < current.priority ? entry : current,
-    );
-    if (priority > lowest.priority) {
-      selected[selected.indexOf(lowest)] = { observation, priority };
-    }
-  }
-  return selected.map((entry) => entry.observation);
-}
-
 function takeBoundedPriorityWorkflows<
   Observation extends {
     root: ParentNode;
@@ -228,19 +194,59 @@ function takeBoundedPriorityWorkflows<
     summary: RankableWorkflowSummary;
   },
 >(observations: Observation[]): Observation[] {
-  const passwordBearing: Observation[] = [];
-  const rest: Observation[] = [];
+  const selected: Array<{
+    observation: Observation;
+    priority: number;
+    progressing: boolean;
+  }> = [];
   for (const observation of observations) {
-    if (observation.summary.passwordFieldCount > 0) {
-      passwordBearing.push(observation);
-    } else {
-      rest.push(observation);
+    const priority = cheapWorkflowPriority(observation);
+    const progressing = cheapWorkflowLooksProgressing(observation);
+    if (selected.length < MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS) {
+      selected.push({ observation, priority, progressing });
+      continue;
+    }
+    const lowest = selected.reduce((current, entry) => {
+      if (entry.priority < current.priority) return entry;
+      if (
+        entry.priority === current.priority &&
+        !entry.progressing &&
+        current.progressing
+      ) {
+        return entry;
+      }
+      return current;
+    });
+    if (
+      priority > lowest.priority ||
+      (priority === lowest.priority && progressing && !lowest.progressing)
+    ) {
+      selected[selected.indexOf(lowest)] = {
+        observation,
+        priority,
+        progressing,
+      };
     }
   }
-  return [
-    ...takeBoundedByCheapPriority(passwordBearing),
-    ...takeBoundedByCheapPriority(rest),
-  ];
+  return selected.map((entry) => entry.observation);
+}
+
+function cheapWorkflowLooksProgressing(observation: {
+  root: ParentNode;
+  formScope: PasswordFormScope;
+  summary: RankableWorkflowSummary;
+}): boolean {
+  return (
+    observation.summary.passkeyControlPresent ||
+    (observation.formScope.kind === PasswordFormScopeKind.Owned &&
+      !formBlocksCredentialDisclosure(observation.formScope.owner) &&
+      ownedFormLooksProgressing(
+        observation.formScope.owner,
+        observation.summary,
+      )) ||
+    (observation.formScope.kind === PasswordFormScopeKind.Unowned &&
+      unownedScopeLooksProgressing(observation.root))
+  );
 }
 
 function collectPasskeyOnlyScopes(
