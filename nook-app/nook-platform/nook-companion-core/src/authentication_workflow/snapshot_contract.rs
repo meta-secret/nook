@@ -7,6 +7,22 @@ use super::{
 
 const MAX_AUTHENTICATION_WORKFLOW_OBSERVATION_INDEX_EXCLUSIVE: u32 = 20;
 
+const fn saved_login_capability_matches_contract(snapshot: AuthenticationWorkflowSnapshot) -> bool {
+    !matches!(
+        snapshot.saved_login_capability,
+        AuthenticationSavedLoginCapability::FillSavedLogin
+    ) || matches!(
+        (snapshot.kind, snapshot.stage, snapshot.action),
+        (
+            AuthenticationWorkflowKind::Login,
+            AuthenticationWorkflowStage::Credentials,
+            AuthenticationWorkflowAction::ContinueWithNook
+                | AuthenticationWorkflowAction::UsePasskey
+                | AuthenticationWorkflowAction::CreatePasskey,
+        )
+    )
+}
+
 impl AuthenticationWorkflowSnapshot {
     /// Whether this snapshot is one of the complete tuples emitted by the classifier.
     #[must_use]
@@ -15,24 +31,9 @@ impl AuthenticationWorkflowSnapshot {
             || self.total_steps == 0
             || self.current_step > self.total_steps
             || !self.approval_requirement_matches_action()
+            || !saved_login_capability_matches_contract(self)
             || self.observation_index >= MAX_AUTHENTICATION_WORKFLOW_OBSERVATION_INDEX_EXCLUSIVE
         {
-            return false;
-        }
-
-        if matches!(
-            self.saved_login_capability,
-            AuthenticationSavedLoginCapability::FillSavedLogin
-        ) && !matches!(
-            (self.kind, self.stage, self.action),
-            (
-                AuthenticationWorkflowKind::Login,
-                AuthenticationWorkflowStage::Credentials,
-                AuthenticationWorkflowAction::ContinueWithNook
-                    | AuthenticationWorkflowAction::UsePasskey
-                    | AuthenticationWorkflowAction::CreatePasskey,
-            )
-        ) {
             return false;
         }
 
