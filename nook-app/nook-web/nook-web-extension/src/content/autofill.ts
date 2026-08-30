@@ -1,4 +1,4 @@
-import { authenticationFactAttributeFilter } from '../../../nook-web-shared/src/extension/authentication-fact-attributes'
+import { authenticationFactObserverOptions } from '../../../nook-web-shared/src/extension/authentication-fact-attributes'
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import { AuthenticationWorkflowSnapshotResponseKind } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
@@ -169,11 +169,5 @@ void companionWasmReady.then(() => {
   void scanAndRender()
 
   const observer = new MutationObserver(scheduleScan)
-  const nookTypedArgs0_1: Parameters<typeof observer.observe>[1] = {
-    attributes: true,
-    attributeFilter: [...authenticationFactAttributeFilter],
-    childList: true,
-    subtree: true,
-  }
-  observer.observe(document.documentElement, nookTypedArgs0_1)
+  observer.observe(document.documentElement, authenticationFactObserverOptions)
 })

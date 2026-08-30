@@ -33,13 +33,16 @@ import type {
 } from "./password-form-fields";
 import type { PasswordFieldQuery } from "./password-form-fields";
 import {
+  associatedAuthenticationForm,
   authenticationAdvanceControlSelector,
   authenticationFactStringsAreTransportable,
   authenticationPolicyTextFits,
   authenticationRouteDestination,
+  boundAuthenticationControlObservations,
   canRequestImplicitAuthenticationSubmit,
   clickAdvanceControl,
   controlDestinationIdentity,
+  controlIsInert,
   controlLabel,
   isRenderedControl,
   formHasSemanticSubmitter,
@@ -410,29 +413,17 @@ function pageControlObservation({
   const semanticSubmitControls = scopedAdvanceControls(observation).filter(
     (candidate) =>
       candidate.matches(semanticSubmitControlSelector) &&
-      !(candidate as HTMLButtonElement | HTMLInputElement).disabled &&
-      candidate.getAttribute("aria-disabled") !== "true" &&
-      isRenderedControl(candidate),
+      !controlIsInert(candidate),
   );
   const semanticSubmit = control.matches(semanticSubmitControlSelector);
-  const controlForm =
-    (control instanceof HTMLButtonElement ||
-      control instanceof HTMLInputElement) &&
-    control.form
-      ? { kind: PasswordFormScopeKind.Owned, owner: control.form }
-      : { kind: PasswordFormScopeKind.Unowned };
+  const controlForm = associatedAuthenticationForm(control);
   const owned = controlForm.kind === PasswordFormScopeKind.Owned;
   const destinationRequest: ControlDestinationRequest = {
     control,
     formScope: observation.formScope,
   };
   return {
-    actionability:
-      (control as HTMLButtonElement).disabled ||
-      control.getAttribute("aria-disabled") === "true" ||
-      !isRenderedControl(control)
-        ? "inert"
-        : "actionable",
+    actionability: controlIsInert(control) ? "inert" : "actionable",
     ownership: owned
       ? "owned-form"
       : explicitlyLocallyScoped ||
@@ -558,10 +549,16 @@ export function authenticationPageObservationFacts({
     };
     return transportableControlObservation(request);
   });
-  if (advanceObservations.length > 0) {
+  const boundedAdvanceObservations = boundAuthenticationControlObservations(
+    advanceObservations,
+    (candidate) =>
+      candidate.semantics === "semantic-submit" &&
+      candidate.actionability === "actionable",
+  );
+  if (boundedAdvanceObservations.length > 0) {
     detailedAdvanceControl = {
       kind: "observed",
-      observations: advanceObservations,
+      observations: boundedAdvanceObservations,
     };
   }
   let detailedPasskeyControl: AuthenticationDetailedPasskeyControlObservation =
@@ -587,10 +584,14 @@ export function authenticationPageObservationFacts({
       );
     },
   );
-  if (passkeyCandidates.length > 0) {
+  const boundedPasskeyCandidates = boundAuthenticationControlObservations(
+    passkeyCandidates,
+    (candidate) => candidate.observation.actionability === "actionable",
+  );
+  if (boundedPasskeyCandidates.length > 0) {
     detailedPasskeyControl = {
       kind: "candidates",
-      observation: passkeyCandidates,
+      observation: boundedPasskeyCandidates,
     };
   }
   const contextFormIdentity = observedFormIdentity(observation);
@@ -621,7 +622,7 @@ export function authenticationPageObservationFacts({
         !advanceControls.some(
           (control) =>
             control.matches(semanticSubmitControlSelector) &&
-            isRenderedControl(control),
+            !controlIsInert(control),
         )
           ? "implicit-submission"
           : "absent",

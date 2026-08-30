@@ -21,3 +21,11 @@ export const authenticationFactAttributeFilter = [
   "type",
   "value",
 ] as const;
+
+export const authenticationFactObserverOptions = {
+  attributes: true,
+  attributeFilter: [...authenticationFactAttributeFilter],
+  childList: true,
+  characterData: true,
+  subtree: true,
+} as const satisfies MutationObserverInit;

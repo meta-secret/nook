@@ -41,6 +41,7 @@ type FormSubmissionObservation = {
 };
 
 export const MAX_AUTHENTICATION_CONTROL_TEXT_BYTES = 512;
+export const MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT = 100;
 
 function utf8ByteLength(value: string): number {
   return new TextEncoder().encode(value).length;
@@ -113,6 +114,47 @@ export const authenticationAdvanceControlSelector =
 
 export const semanticSubmitControlSelector =
   'button[type="submit"], input[type="submit"], input[type="image"], button:not([type])';
+
+export function associatedAuthenticationForm(
+  control: HTMLElement,
+): PasswordFormScope {
+  if (
+    (control instanceof HTMLButtonElement ||
+      control instanceof HTMLInputElement) &&
+    control.form
+  ) {
+    return { kind: PasswordFormScopeKind.Owned, owner: control.form };
+  }
+  const owner = control.closest("form");
+  return owner instanceof HTMLFormElement
+    ? { kind: PasswordFormScopeKind.Owned, owner }
+    : { kind: PasswordFormScopeKind.Unowned };
+}
+
+export function controlIsEffectivelyDisabled(control: HTMLElement): boolean {
+  return (
+    ((control instanceof HTMLButtonElement ||
+      control instanceof HTMLInputElement) &&
+      control.matches(":disabled")) ||
+    control.getAttribute("aria-disabled") === "true"
+  );
+}
+
+export function controlIsInert(control: HTMLElement): boolean {
+  return controlIsEffectivelyDisabled(control) || !isRenderedControl(control);
+}
+
+export function boundAuthenticationControlObservations<Candidate>(
+  candidates: Candidate[],
+  isPreferred: (candidate: Candidate) => boolean,
+): Candidate[] {
+  const preferred = candidates.filter(isPreferred);
+  const remaining = candidates.filter((candidate) => !isPreferred(candidate));
+  return [...preferred, ...remaining].slice(
+    0,
+    MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
+  );
+}
 
 export function isRenderedControl(control: HTMLElement): boolean {
   let element: HTMLElement = control;
@@ -277,11 +319,7 @@ export function clickAdvanceControl(
     ) {
       continue;
     }
-    if (
-      control.disabled ||
-      control.getAttribute("aria-disabled") === "true" ||
-      !isRenderedControl(control)
-    ) {
+    if (controlIsInert(control)) {
       continue;
     }
     const activationRequest: AuthenticationRouteControlRequest = {
@@ -310,7 +348,7 @@ export function formHasSemanticSubmitter(form: HTMLFormElement): boolean {
     ) {
       return false;
     }
-    return control.form === form && isRenderedControl(control);
+    return control.form === form && !controlIsInert(control);
   });
 }
 

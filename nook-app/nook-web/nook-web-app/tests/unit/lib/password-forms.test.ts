@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, test } from 'vitest'
-import { authenticationFactAttributeFilter } from '../../../../nook-web-shared/src/extension/authentication-fact-attributes'
+import {
+  authenticationFactAttributeFilter,
+  authenticationFactObserverOptions,
+} from '../../../../nook-web-shared/src/extension/authentication-fact-attributes'
+import { MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT } from '../../../../nook-web-shared/src/extension/password-form-submission-controls'
 import {
   authenticationPageObservationFacts,
   fillLoginCredentials,
@@ -165,14 +169,18 @@ describe('website one-time-code fields', () => {
     expect(submitted).toBe(true)
   })
 
-  test('does not infer implicit submission when an inert submitter exists', () => {
+  test('infers implicit submission when the only semantic submitter is inert', () => {
     document.body.innerHTML = `<form action="/auth/login"><input autocomplete="username" /><button type="submit" disabled>Sign in</button></form>`
     const facts = authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
     })
-    expect(facts.ceremony.advanceControl).toBe('absent')
+    expect(facts.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [{ actionability: 'inert' }],
+    })
+    expect(facts.ceremony.advanceControl).toBe('implicit-submission')
   })
 
   test('uses image submit alt text as bounded control identity', () => {
@@ -337,6 +345,7 @@ describe('website one-time-code fields', () => {
     expect(authenticationFactAttributeFilter).toEqual(
       expect.arrayContaining(['alt', 'role', 'title', 'value']),
     )
+    expect(authenticationFactObserverOptions.characterData).toBe(true)
     document.body.innerHTML = `
       <form aria-label="Login" action="/login" role="form">
         <input autocomplete="username" />
@@ -450,6 +459,96 @@ describe('website one-time-code fields', () => {
           ownership: 'owned-form',
           semanticSubmitControlCount: 1,
           destinationIdentity: `${location.origin}/login`,
+        },
+      ],
+    })
+  })
+
+  test('marks a fieldset-disabled submitter inert and allows implicit submission', () => {
+    document.body.innerHTML = `
+      <form aria-label="Login" action="/session">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <fieldset disabled>
+          <button type="submit">Continue</button>
+        </fieldset>
+      </form>
+    `
+    let submitted = false
+    document.querySelector('form')?.addEventListener('submit', (event) => {
+      event.preventDefault()
+      submitted = true
+    })
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [{ actionability: 'inert' }],
+    })
+    expect(facts.ceremony.advanceControl).toBe('implicit-submission')
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
+    expect(submitted).toBe(true)
+  })
+
+  test('keeps a login submitter when a shared form has too many candidates', () => {
+    const navButtons = Array.from(
+      { length: MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT },
+      (_, index) => `<button type="button">Nav ${index}</button>`,
+    ).join('')
+    document.body.innerHTML = `
+      <form aria-label="Login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        ${navButtons}
+        <button type="submit">Sign in</button>
+      </form>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.detailedAdvanceControl.kind).toBe('observed')
+    if (facts.detailedAdvanceControl.kind !== 'observed') {
+      throw new Error('expected observed advance controls')
+    }
+    expect(facts.detailedAdvanceControl.observations).toHaveLength(
+      MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
+    )
+    expect(
+      facts.detailedAdvanceControl.observations.some((candidate) =>
+        candidate.label.includes('Sign in'),
+      ),
+    ).toBe(true)
+  })
+
+  test('transports a form-contained passkey link with owned-form scope', () => {
+    document.body.innerHTML = `
+      <form id="passkey-login" action="/login">
+        <a href="/webauthn">Use passkey</a>
+      </form>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
+      kind: 'candidates',
+      observation: [
+        {
+          kind: 'labeled',
+          observation: {
+            ownership: 'owned-form',
+            formIdentity: expect.stringContaining('passkey-login'),
+            label: expect.stringContaining('passkey'),
+          },
         },
       ],
     })
