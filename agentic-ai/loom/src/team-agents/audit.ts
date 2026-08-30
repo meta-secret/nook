@@ -1,12 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join, normalize } from 'node:path';
-import { auditMarkdownContractSections } from '../lib/markdown-contract.ts';
-import type {
-  MarkdownContractAuditRequest,
-  MarkdownContractSection,
-} from '../lib/markdown-contract.ts';
 import { TEAM_AUTHORITY_CATALOG, TeamKey } from './catalog.ts';
 import type { TeamAuthority } from './catalog.ts';
+import { CORTEX_AUTHORING_SKILL_PATHS } from './context.ts';
 
 export type TeamAuthorityAuditFinding = {
   readonly code: string;
@@ -29,10 +25,6 @@ export type AuditTeamAgentsRequest = {
   readonly repoRoot: string;
 };
 
-export type AuditTeamCortexAuthorityRequest = {
-  readonly source: string;
-};
-
 type ExpectedTeamAuthority = {
   readonly identity: string;
   readonly contextDirectory: string;
@@ -42,6 +34,19 @@ type ExpectedTeamAuthority = {
 
 const TEAM_CATALOG_PATH = 'agentic-ai/loom/src/team-agents/catalog.ts';
 const TEAM_AUTHORITY_PATH = '.cortex/AGENTS.md';
+const GIZMO_AUTHORITY_PATH = '.cortex/gizmo/AGENTS.md';
+const TEAM_AUTHORITY_MARKERS = [
+  '## Mandatory context selection',
+  '## Team worker contract',
+  'exactly one team identity',
+  'canonical typed\nCortex authoring composition',
+] as const;
+const GIZMO_AUTHORITY_MARKERS = [
+  'single root delivery owner',
+  'does not implement or repair team-owned work',
+  'exactly one team identity',
+  'final verdict is bound to the exact integrated head',
+] as const;
 const PARENT_OWNED_LIFECYCLE_BOUNDARY =
   'The active harness owns creation, communication, scheduling, retries, cancellation, barriers, synthesis, and delivery lifecycle state.';
 const EXPECTED_TEAM_AUTHORITIES = new Map<TeamKey, ExpectedTeamAuthority>([
@@ -97,29 +102,6 @@ const EXPECTED_TEAM_AUTHORITIES = new Map<TeamKey, ExpectedTeamAuthority>([
   ],
 ]);
 
-const TEAM_AUTHORITY_CONTRACT_SECTIONS: readonly MarkdownContractSection[] = [
-  {
-    heading: '### Team worker contract',
-    requiredMarkers: [
-      'Gizmo assigns each implementation task to exactly one team identity:',
-      'Gizmo supplies a bounded task contract for that identity.',
-      'It requires an isolated workspace and verified handoff for write-capable work.',
-      'It does not grant parent-owned lifecycle authority.',
-      'The active harness owns worker creation and native worker labels or names.',
-      'Repository profile files are not semantic, capability, context, model, or lifecycle authority.',
-    ],
-  },
-  {
-    heading: '## Mandatory context selection',
-    requiredMarkers: [
-      'Load exactly one Gizmo or team `AGENTS.md` and its knowledge graph.',
-      'Select the smallest set of documents that owns the task.',
-      'An AI worker loads `teams/ai/AGENTS.md` and `teams/ai/knowledge-graph.md`.',
-      'A web-development worker loads `teams/web-dev/AGENTS.md` and `teams/web-dev/knowledge-graph.md`.',
-    ],
-  },
-];
-
 export function auditTeamAgents(
   request: AuditTeamAgentsRequest,
 ): TeamAuthorityAuditReport {
@@ -141,10 +123,51 @@ export function auditTeamAuthorities(
   )
     ? readFileSync(join(request.repoRoot, TEAM_AUTHORITY_PATH), 'utf8')
     : '';
-  const cortexAuthorityRequest: AuditTeamCortexAuthorityRequest = {
-    source: authoritySource,
-  };
-  findings.push(...auditTeamCortexAuthority(cortexAuthorityRequest));
+  const gizmoSource = existsSync(join(request.repoRoot, GIZMO_AUTHORITY_PATH))
+    ? readFileSync(join(request.repoRoot, GIZMO_AUTHORITY_PATH), 'utf8')
+    : '';
+  if (authoritySource.length === 0) {
+    findings.push({
+      code: 'missing-cortex-team-authority',
+      path: TEAM_AUTHORITY_PATH,
+      message: 'Canonical Cortex team authority is missing.',
+    });
+  }
+  if (gizmoSource.length === 0) {
+    findings.push({
+      code: 'missing-cortex-gizmo-authority',
+      path: GIZMO_AUTHORITY_PATH,
+      message: 'Canonical Gizmo authority is missing.',
+    });
+  }
+  for (const marker of TEAM_AUTHORITY_MARKERS) {
+    if (!authoritySource.includes(marker)) {
+      findings.push({
+        code: 'invalid-cortex-team-authority',
+        path: TEAM_AUTHORITY_PATH,
+        message: `Canonical Cortex team authority is missing marker: ${marker}`,
+      });
+    }
+  }
+  for (const marker of GIZMO_AUTHORITY_MARKERS) {
+    if (!gizmoSource.includes(marker)) {
+      findings.push({
+        code: 'invalid-cortex-gizmo-authority',
+        path: GIZMO_AUTHORITY_PATH,
+        message: `Canonical Gizmo authority is missing marker: ${marker}`,
+      });
+    }
+  }
+  for (const skillPath of CORTEX_AUTHORING_SKILL_PATHS) {
+    if (!existsSync(join(request.repoRoot, skillPath))) {
+      const finding: TeamAuthorityAuditFinding = {
+        code: 'missing-cortex-authoring-skill',
+        path: skillPath,
+        message: `Canonical Cortex authoring skill is missing: ${skillPath}`,
+      };
+      findings.push(finding);
+    }
+  }
   if (request.authorities.length !== EXPECTED_TEAM_AUTHORITIES.size) {
     const finding: TeamAuthorityAuditFinding = {
       code: 'invalid-team-authority-count',
@@ -213,25 +236,6 @@ export function auditTeamAuthorities(
     authorityCount: request.authorities.length,
     auditOk: findings.length === 0,
   };
-}
-
-export function auditTeamCortexAuthority(
-  request: AuditTeamCortexAuthorityRequest,
-): readonly TeamAuthorityAuditFinding[] {
-  const findings: TeamAuthorityAuditFinding[] = [];
-  const contractAuditRequest: MarkdownContractAuditRequest = {
-    sections: TEAM_AUTHORITY_CONTRACT_SECTIONS,
-    source: request.source,
-  };
-  for (const drift of auditMarkdownContractSections(contractAuditRequest)) {
-    const finding: TeamAuthorityAuditFinding = {
-      code: 'cortex-team-contract-semantic-drift',
-      path: TEAM_AUTHORITY_PATH,
-      message: `Canonical Cortex team contract drifted in ${drift.heading}: ${drift.missingMarkers.join(', ')}`,
-    };
-    findings.push(finding);
-  }
-  return findings;
 }
 
 function safeRepositoryPath(path: string): boolean {

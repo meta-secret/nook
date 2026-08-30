@@ -6,6 +6,7 @@ import {
   isExtensionPairedVaultUnlockRequestMessage,
 } from '../../../nook-web-shared/src/extension/runtime-messages'
 import { normalizeOpenCompanionLauncherMessage } from '../../../nook-web-shared/src/extension/companion-launcher-message-adapter'
+import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import { isAuthenticationWorkflowSnapshotMessage } from '../lib/auth-workflow-messages'
 import {
   isAuthenticatorPickerCancelMessage,
@@ -99,6 +100,10 @@ import {
 } from './service-worker/extension-lifecycle-routing'
 import { routeExternalCompanionMessage } from './service-worker/external-companion-routing'
 import {
+  authenticationPasskeyEvidenceIsSafe,
+  authenticationWorkflowMessageResponse,
+} from './service-worker/authentication-workflow-routing'
+import {
   closeExtensionSessionDocument,
   ensureExtensionSessionDocument,
   extensionSessionDocument,
@@ -112,7 +117,6 @@ import {
   isExtensionSessionLockMessage,
 } from './service-worker/session-runtime-messages'
 import {
-  AuthenticationWorkflowSnapshotKind,
   authenticationWorkflowSnapshot,
   classifyAuthenticationOutcome,
   generateSuggestedPassword,
@@ -319,44 +323,23 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
       sendResponse(nookTypedArgs0_2)
       return false
     }
-    const needsPasskeyLookup = message.payload.observations.some(
-      (observation) => observation.passkeyControlPresent,
+    const workflowDependencies: Parameters<
+      typeof authenticationWorkflowMessageResponse
+    >[0]['dependencies'] = {
+      companionWasmReady,
+      authenticationPasskeyEvidenceIsSafe,
+      authenticationWorkflowSnapshot,
+      matchingPasskeyAccountCountForOriginSafe,
+    }
+    const workflowRequest: Parameters<
+      typeof authenticationWorkflowMessageResponse
+    >[0] = {
+      message,
+      dependencies: workflowDependencies,
+    }
+    void authenticationWorkflowMessageResponse(workflowRequest).then(
+      sendResponse,
     )
-    void (
-      needsPasskeyLookup
-        ? matchingPasskeyAccountCountForOriginSafe(message.payload.origin)
-        : Promise.resolve(0)
-    )
-      .then((matchingPasskeyAccountCount) => {
-        const observations = message.payload.observations.map(
-          (observation) => ({
-            ...observation,
-            matchingPasskeyAccountCount: observation.passkeyControlPresent
-              ? matchingPasskeyAccountCount
-              : 0,
-          }),
-        )
-        const workflowInput: Parameters<
-          typeof authenticationWorkflowSnapshot
-        >[0] = { observations }
-        return authenticationWorkflowSnapshot(workflowInput)
-      })
-      .then((result) => {
-        const matchedResponse: Parameters<typeof sendResponse>[0] = {
-          ok: true,
-          ...(result.kind === AuthenticationWorkflowSnapshotKind.Matched
-            ? { snapshot: result.snapshot }
-            : {}),
-        }
-        return sendResponse(matchedResponse)
-      })
-      .catch(() => {
-        const nookArrowArgs10: Parameters<typeof sendResponse>[0] = {
-          ok: false,
-          reason: 'workflow-snapshot-failed',
-        }
-        return sendResponse(nookArrowArgs10)
-      })
     return true
   }
 

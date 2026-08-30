@@ -1,7 +1,15 @@
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from 'node:fs/promises';
 import type { RmOptions } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { describe, expect, test } from 'bun:test';
 import {
   AgentAttemptAdapterKind,
@@ -19,6 +27,7 @@ import { WorkflowRuntimeActivityKind } from '../../src/agent-workflow/events.ts'
 import { CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION } from '../../src/agent-workflow/agent-attempt-version.ts';
 import { readVerifiedBarrierAttempt } from '../../src/agent-workflow/attempt-verification.ts';
 import type { ReadParentAttemptArgs } from '../../src/agent-workflow/attempt-verification.ts';
+import { CortexReferenceRelation } from '../../src/agent-workflow/cortex-references.ts';
 
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
 
@@ -27,10 +36,35 @@ describe('delegated agent journal CLI', () => {
     const workingDirectory = await mkdtemp(join(tmpdir(), 'loom-delegation-'));
     const removeOptions: RmOptions = { recursive: true, force: true };
     try {
+      const cortexDirectory = join(workingDirectory, '.cortex');
+      await mkdir(cortexDirectory);
+      await writeFile(
+        join(cortexDirectory, 'knowledge-graph.md'),
+        '# Knowledge graph\n',
+        'utf8',
+      );
+      const registry = {
+        schemaVersion: 1,
+        entries: [
+          {
+            id: 'CX-AI',
+            kind: 'category',
+            authority: 'ai',
+            title: 'AI',
+            locator: '.cortex/knowledge-graph.md',
+          },
+        ],
+      };
+      await writeFile(
+        join(cortexDirectory, 'identifiers.json'),
+        JSON.stringify(registry),
+        'utf8',
+      );
+      const sourceCommit = commitFixture(workingDirectory);
       const requestPath = join(workingDirectory, 'request.json');
       const request = {
         runId: 'ordinary-coding-run',
-        sourceCommit: SOURCE_COMMIT,
+        sourceCommit,
         task: 'inspect-contract',
         agent: 'contract-auditor',
         attempt: 1,
@@ -40,6 +74,9 @@ describe('delegated agent journal CLI', () => {
           {
             activity: WorkflowRuntimeActivityKind.TurnCompleted,
             detail: 'Contract inspection completed.',
+            cortexReferences: [
+              { id: 'CX-AI', relation: CortexReferenceRelation.Applied },
+            ],
           },
         ],
         terminal: {
@@ -138,7 +175,6 @@ describe('delegated agent journal CLI', () => {
       const admissionProcess = Bun.spawn(admissionCommand, spawnOptions);
       expect(await admissionProcess.exited).toBe(0);
       await new Response(admissionProcess.stdout).text();
-      await writeFile(requestPath, JSON.stringify(request), 'utf8');
       const command = [
         process.execPath,
         delegationCli,
@@ -148,11 +184,29 @@ describe('delegated agent journal CLI', () => {
         '--working-directory',
         workingDirectory,
       ];
-      const processResult = Bun.spawn(command, spawnOptions);
-      const exitCode = await processResult.exited;
-      const stdout = await new Response(processResult.stdout).text();
-      expect(exitCode).toBe(0);
-      expect(stdout).toContain('events.jsonl');
+
+      const unknownReferenceRequest = {
+        ...request,
+        activities: [
+          {
+            ...request.activities[0],
+            cortexReferences: [
+              {
+                id: 'CX-AI-4D7NQ',
+                relation: CortexReferenceRelation.Applied,
+              },
+            ],
+          },
+        ],
+      };
+      await writeFile(
+        requestPath,
+        JSON.stringify(unknownReferenceRequest),
+        'utf8',
+      );
+      const unknownReferenceProcess = Bun.spawn(command, spawnOptions);
+      expect(await unknownReferenceProcess.exited).not.toBe(0);
+      await new Response(unknownReferenceProcess.stderr).text();
       const attemptDirectory = join(
         workingDirectory,
         'workflow',
@@ -162,6 +216,49 @@ describe('delegated agent journal CLI', () => {
         'agents',
         request.task,
         'attempt-1',
+      );
+      await expect(stat(attemptDirectory)).rejects.toThrow();
+
+      const extraTerminalFieldRequest = {
+        ...request,
+        terminal: {
+          ...request.terminal,
+          prompt: 'must not persist',
+        },
+      };
+      await writeFile(
+        requestPath,
+        JSON.stringify(extraTerminalFieldRequest),
+        'utf8',
+      );
+      const extraTerminalProcess = Bun.spawn(command, spawnOptions);
+      expect(await extraTerminalProcess.exited).not.toBe(0);
+      await new Response(extraTerminalProcess.stderr).text();
+      await expect(stat(attemptDirectory)).rejects.toThrow();
+
+      const mismatchedSourceRequest = {
+        ...request,
+        sourceCommit: SOURCE_COMMIT,
+      };
+      await writeFile(
+        requestPath,
+        JSON.stringify(mismatchedSourceRequest),
+        'utf8',
+      );
+      const mismatchedSourceProcess = Bun.spawn(command, spawnOptions);
+      expect(await mismatchedSourceProcess.exited).not.toBe(0);
+      await new Response(mismatchedSourceProcess.stderr).text();
+      await expect(stat(attemptDirectory)).rejects.toThrow();
+
+      await writeFile(requestPath, JSON.stringify(request), 'utf8');
+      const processResult = Bun.spawn(command, spawnOptions);
+      const exitCode = await processResult.exited;
+      const stdout = await new Response(processResult.stdout).text();
+      const stderr = await new Response(processResult.stderr).text();
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain('events.jsonl');
+      expect(stderr).toContain(
+        '[inspect-contract/attempt-1:a0002] runtime-activity turn-completed CX-AI:applied',
       );
       expect(await readFile(join(attemptDirectory, 'view.md'), 'utf8')).toBe(
         '# Contract view\n\nConsistent.\n',
@@ -176,6 +273,10 @@ describe('delegated agent journal CLI', () => {
       )
         .trim()
         .split('\n');
+      expect(eventLines.join('\n')).not.toContain(
+        'Contract inspection completed.',
+      );
+      expect(eventLines.join('\n')).not.toContain('"detail"');
       expect(
         eventLines.every(
           (line) =>
@@ -187,6 +288,10 @@ describe('delegated agent journal CLI', () => {
             ),
         ),
       ).toBe(true);
+      for (const [index, line] of eventLines.entries()) {
+        const expectedActionId = `"actionId":"a${(index + 1).toString().padStart(4, '0')}"`;
+        expect(line).toContain(expectedActionId);
+      }
       const finalizationPath = join(workingDirectory, 'finalization.json');
       const finalizationRequest = {
         runId: request.runId,
@@ -450,3 +555,17 @@ describe('delegated agent journal CLI', () => {
     }
   });
 });
+
+function commitFixture(workingDirectory: string): string {
+  const options = { cwd: workingDirectory, encoding: 'utf8' } as const;
+  execFileSync('git', ['init', '--quiet'], options);
+  execFileSync('git', ['config', 'user.name', 'Loom Test'], options);
+  execFileSync(
+    'git',
+    ['config', 'user.email', 'loom@example.invalid'],
+    options,
+  );
+  execFileSync('git', ['add', '.cortex'], options);
+  execFileSync('git', ['commit', '--quiet', '-m', 'fixture'], options);
+  return execFileSync('git', ['rev-parse', 'HEAD'], options).trim();
+}

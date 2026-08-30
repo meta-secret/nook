@@ -132,6 +132,19 @@ mod tests {
     }
 
     #[test]
+    fn rejects_named_helpers_that_only_mention_request_submit() {
+        assert!(looks_like_one_time_code_auto_submit_signal(
+            "oninput=this.form.submit()"
+        ));
+        assert!(!looks_like_one_time_code_auto_submit_signal(
+            "oninput=validate_requestSubmit()"
+        ));
+        assert!(!looks_like_one_time_code_auto_submit_signal(
+            "onchange=validate_requestSubmit()"
+        ));
+    }
+
+    #[test]
     fn rejects_oversized_handler_signals_before_scanning() {
         let oversized = format!(
             "oninput=this.form.submit(){}",

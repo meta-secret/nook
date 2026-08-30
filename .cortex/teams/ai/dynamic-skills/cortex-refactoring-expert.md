@@ -25,10 +25,6 @@ ownership.
 6. Propose the smallest meaning-preserving correction.
 7. Preserve uncertainty for the delivery owner.
 
-Use the legacy standalone compiled full Cortex garbage-collection workflow when
-two or more document families need independent diagnostic observations. Its
-all-terminal aggregation is not ordinary accepted-evidence synthesis.
-
 ## Scope
 
 The expert is read-only and nondelegating.

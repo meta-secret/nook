@@ -48,11 +48,6 @@ const validRequest: AuditCortexArticleStructureRequest = {
       ],
     },
   ],
-  migrationBaselineEntries: false,
-  migrationLedger: {
-    relativePath: '.cortex/article-structure-migration.txt',
-    content: false,
-  },
 };
 
 const validResult: CortexArticleStructureResult = {
@@ -109,20 +104,6 @@ test('accepts active diagnostics for every finding code', () => {
         line: 5,
         message:
           'Procedure-like article #Recovery procedure must expose its action sequence as an ordered list.',
-      },
-      {
-        code: CortexArticleFindingCode.InvalidMigrationLedger,
-        file: '.cortex/article-structure-migration.txt',
-        line: 2,
-        message:
-          'Duplicate article-structure migration exemption: .cortex/example.md',
-      },
-      {
-        code: CortexArticleFindingCode.InvalidMigrationLedger,
-        file: '.cortex/article-structure-migration.txt',
-        line: 3,
-        message:
-          'Article-structure exemption cannot be verified without the migration baseline: .cortex/example.md',
       },
     ],
   };
@@ -209,23 +190,7 @@ test('rejects duplicate documents and nonmonotonic source lines', () => {
   );
 });
 
-test('requires the canonical migration ledger path', () => {
-  const request = {
-    ...validRequest,
-    migrationLedger: {
-      ...validRequest.migrationLedger,
-      relativePath: '.cortex/other-ledger.txt',
-    },
-  };
-  expect(() => decodeCortexArticleRequest(JSON.stringify(request))).toThrow(
-    'Invalid Cortex article migration ledger',
-  );
-  expect(requestFailurePath(JSON.stringify(request))).toBe(
-    'migrationLedger.relativePath',
-  );
-});
-
-test('bounds heading and migration-entry diagnostic details', () => {
+test('bounds heading diagnostic details', () => {
   const boundaryHeading = {
     depth: 2,
     kind: CortexArticleSemanticKind.Heading,
@@ -239,10 +204,6 @@ test('bounds heading and migration-entry diagnostic details', () => {
   const boundaryRequest = {
     ...validRequest,
     documents: [boundaryDocument],
-    migrationLedger: {
-      ...validRequest.migrationLedger,
-      content: `# ${'x'.repeat(CORTEX_ARTICLE_DETAIL_TEXT_LIMIT - 2)}`,
-    },
   };
   expect(() =>
     decodeCortexArticleRequest(JSON.stringify(boundaryRequest)),
@@ -260,17 +221,6 @@ test('bounds heading and migration-entry diagnostic details', () => {
   expect(() =>
     decodeCortexArticleRequest(JSON.stringify(overflowHeadingRequest)),
   ).toThrow('Invalid Cortex article heading block');
-
-  const overflowLedgerRequest = {
-    ...validRequest,
-    migrationLedger: {
-      ...validRequest.migrationLedger,
-      content: 'x'.repeat(CORTEX_ARTICLE_DETAIL_TEXT_LIMIT + 1),
-    },
-  };
-  expect(() =>
-    decodeCortexArticleRequest(JSON.stringify(overflowLedgerRequest)),
-  ).toThrow('Invalid Cortex article migration ledger');
 });
 
 test('bounds paths, source lines, codes, and finding messages', () => {
@@ -310,21 +260,6 @@ test('bounds paths, source lines, codes, and finding messages', () => {
   expect(() =>
     decodeCortexArticleRequest(JSON.stringify(longPathRequest)),
   ).toThrow('Invalid Cortex article document');
-
-  const ledgerFinding = {
-    code: CortexArticleFindingCode.InvalidMigrationLedger,
-    file: '.cortex/not-the-ledger.txt',
-    line: 1,
-    message:
-      'Duplicate article-structure migration exemption: .cortex/example.md',
-  };
-  const ledgerResult = {
-    kind: CortexArticleContractKind.Result,
-    findings: [ledgerFinding],
-  };
-  expect(() => decodeCortexArticleResult(JSON.stringify(ledgerResult))).toThrow(
-    'Invalid Cortex article finding diagnostics',
-  );
 });
 
 test('rejects control characters in request and result paths', () => {

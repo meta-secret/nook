@@ -19,6 +19,7 @@ import {
   auditCortexMarkdownSyntax,
   auditCortexDocumentStructure,
   CortexStructureFindingCode,
+  normalizedCortexMarkdown,
   type AuditCortexMarkdownSyntaxArgs,
   type AuditCortexDocumentStructureArgs,
   type CortexDocumentSource,
@@ -33,6 +34,14 @@ import {
   auditTrackedExecutableSkillPackages,
   type ExecutableSkillPackageFinding,
 } from '../executable-skills/repository.ts';
+import {
+  auditCortexIdentifierStability,
+  auditCortexIdentifierRegistry,
+  CORTEX_IDENTIFIER_REGISTRY_PATH,
+  decodeCortexIdentifierRegistry,
+  type CortexIdentifierRegistry,
+  type CortexIdentifierFinding,
+} from '../lib/cortex-identifiers.ts';
 export type CortexAuditReport = {
   readonly brokenLinks: BrokenLink[];
   readonly invalidExecutableSkillPackages: readonly ExecutableSkillPackageFinding[];
@@ -42,12 +51,25 @@ export type CortexAuditReport = {
   readonly densityFindings: DensityFinding[];
   readonly structureFindings: CortexStructureFinding[];
   readonly articleStructureFindings: CortexArticleFinding[];
+  readonly identifierFindings: readonly CortexIdentifierFinding[];
   readonly auditOk: boolean;
 };
 
 export type RunCortexAuditFromDirectoryArgs = {
   readonly request: CortexAuditRequest;
   readonly startDirectory: string;
+};
+
+type PublishedIdentifierRegistryResolution = {
+  readonly registry: CortexIdentifierRegistry | false;
+  readonly findings: readonly CortexIdentifierFinding[];
+};
+
+export type GitHubRepositoryPolicyEvent = {
+  readonly before?: string;
+  readonly pull_request?: {
+    readonly base?: { readonly sha?: string };
+  };
 };
 
 export async function runCortexAudit(
@@ -139,35 +161,17 @@ export async function runCortexAuditFromDirectory(
     }
   }
 
-  const documentMapBaselineArgs: MigrationBaselineEntriesArgs = {
-    ledgerPath: DOCUMENT_MAP_MIGRATION_LEDGER_PATH,
-    markerPath: DOCUMENT_MAP_SKILL_PATH,
-    repoRoot,
-  };
   const structureAuditArgs: AuditCortexDocumentStructureArgs = {
     documents,
     excludedDocumentPaths: syntaxInvalidPaths,
-    migrationBaselineEntries: migrationBaselineEntries(documentMapBaselineArgs),
-    migrationLedgerPath: path.join(cortexRoot, 'document-map-migration.txt'),
     repoRoot,
   };
   const downstreamStructureFindings = auditCortexDocumentStructure(
     structureAuditArgs,
   ).filter((finding) => !syntaxInvalidPaths.has(finding.file));
   const structureFindings = [...syntaxFindings, ...downstreamStructureFindings];
-  const articleBaselineArgs: MigrationBaselineEntriesArgs = {
-    ledgerPath: ARTICLE_MIGRATION_LEDGER_PATH,
-    markerPath: ARTICLE_STRUCTURE_SKILL_PATH,
-    repoRoot,
-  };
   const articleStructureAuditArgs: AuditCortexArticleStructureArgs = {
     documents,
-    migrationBaselineEntries: migrationBaselineEntries(articleBaselineArgs),
-    migrationLedgerPath: path.join(
-      cortexRoot,
-      'article-structure-migration.txt',
-    ),
-    repoRoot,
   };
   const articleStructureFindings = auditCortexArticleStructure(
     articleStructureAuditArgs,
@@ -232,6 +236,20 @@ export async function runCortexAuditFromDirectory(
     : [];
 
   const prohibitedHarnessSkillPaths = trackedHarnessSkillPaths(repoRoot);
+  const identifierAudit = auditCortexIdentifierRegistry(repoRoot);
+  const publishedResolution = publishedIdentifierRegistry(repoRoot);
+  const stabilityFindings =
+    identifierAudit.registry && publishedResolution.registry
+      ? auditCortexIdentifierStability({
+          current: identifierAudit.registry,
+          published: publishedResolution.registry,
+        })
+      : [];
+  const identifierFindings = [
+    ...identifierAudit.findings,
+    ...publishedResolution.findings,
+    ...stabilityFindings,
+  ];
 
   return {
     brokenLinks,
@@ -242,6 +260,7 @@ export async function runCortexAuditFromDirectory(
     densityFindings,
     structureFindings,
     articleStructureFindings,
+    identifierFindings,
     auditOk:
       brokenLinks.length === 0 &&
       executableSkillPackageFindings.length === 0 &&
@@ -250,8 +269,101 @@ export async function runCortexAuditFromDirectory(
       prohibitedHarnessSkillPaths.length === 0 &&
       densityFindings.length === 0 &&
       structureFindings.length === 0 &&
-      articleStructureFindings.length === 0,
+      articleStructureFindings.length === 0 &&
+      identifierFindings.length === 0,
   };
+}
+
+function publishedIdentifierRegistry(
+  repoRoot: string,
+): PublishedIdentifierRegistryResolution {
+  if (!existsSync(path.join(repoRoot, '.git'))) {
+    return { registry: false, findings: [] };
+  }
+  const options: ExecFileSyncOptionsWithStringEncoding = {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  };
+  const candidates = publishedBaseCandidates();
+  const baseCommit = candidates.find((candidate) => {
+    try {
+      execFileSync(
+        'git',
+        ['rev-parse', '--verify', `${candidate}^{commit}`],
+        options,
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  });
+  if (!baseCommit) {
+    return {
+      registry: false,
+      findings: [
+        {
+          file: CORTEX_IDENTIFIER_REGISTRY_PATH,
+          message:
+            'Published Cortex identifier baseline could not be resolved.',
+        },
+      ],
+    };
+  }
+  try {
+    const serialized = execFileSync(
+      'git',
+      ['show', `${baseCommit}:${CORTEX_IDENTIFIER_REGISTRY_PATH}`],
+      options,
+    );
+    const registry = decodeCortexIdentifierRegistry(serialized);
+    return registry
+      ? { registry, findings: [] }
+      : {
+          registry: false,
+          findings: [
+            {
+              file: CORTEX_IDENTIFIER_REGISTRY_PATH,
+              message: 'Published Cortex identifier registry is invalid.',
+            },
+          ],
+        };
+  } catch {
+    return { registry: false, findings: [] };
+  }
+}
+
+function publishedBaseCandidates(): readonly string[] {
+  const eventPath = process.env.GITHUB_EVENT_PATH;
+  if (eventPath && existsSync(eventPath)) {
+    try {
+      const event = JSON.parse(
+        readFileSync(eventPath, 'utf8'),
+      ) as GitHubRepositoryPolicyEvent;
+      return publishedBaseCandidatesForEvent(event);
+    } catch {
+      return ['origin/main'];
+    }
+  }
+  return ['origin/main'];
+}
+
+export function publishedBaseCandidatesForEvent(
+  event: GitHubRepositoryPolicyEvent,
+): readonly string[] {
+  const baseSha = event.pull_request?.base?.sha;
+  if (baseSha && /^[0-9a-f]{40}$/u.test(baseSha)) {
+    return [baseSha];
+  }
+  const beforeSha = event.before;
+  if (
+    beforeSha &&
+    /^[0-9a-f]{40}$/u.test(beforeSha) &&
+    beforeSha !== '0000000000000000000000000000000000000000'
+  ) {
+    return [beforeSha];
+  }
+  return ['origin/main'];
 }
 
 const HARNESS_SKILL_ROOTS = [
@@ -278,115 +390,6 @@ function trackedHarnessSkillPaths(repoRoot: string): string[] {
   } catch {
     return [...HARNESS_SKILL_ROOTS];
   }
-}
-
-const DOCUMENT_MAP_MIGRATION_LEDGER_PATH = '.cortex/document-map-migration.txt';
-const DOCUMENT_MAP_SKILL_PATH =
-  '.cortex/teams/ai/dynamic-skills/cortex-document-map.md';
-const ARTICLE_MIGRATION_LEDGER_PATH = '.cortex/article-structure-migration.txt';
-const ARTICLE_STRUCTURE_SKILL_PATH =
-  '.cortex/teams/ai/dynamic-skills/cortex-article-structure/SKILL.md';
-
-type ReadGitTextArgs = {
-  readonly relativePath: string;
-  readonly repoRoot: string;
-  readonly revision: string;
-};
-
-type MigrationBaselineEntriesArgs = {
-  readonly ledgerPath: string;
-  readonly markerPath: string;
-  readonly repoRoot: string;
-};
-
-function migrationBaselineEntries(
-  args: MigrationBaselineEntriesArgs,
-): readonly string[] | false {
-  const headLedgerArgs: ReadGitTextArgs = {
-    relativePath: args.ledgerPath,
-    repoRoot: args.repoRoot,
-    revision: 'HEAD',
-  };
-  const headLedger = readGitText(headLedgerArgs);
-  if (headLedger === false) {
-    const headSkillArgs: GitRevisionHasMarkerArgs = {
-      markerPath: args.markerPath,
-      repoRoot: args.repoRoot,
-      revision: 'HEAD',
-    };
-    return gitRevisionHasMarker(headSkillArgs) ? [] : false;
-  }
-  if (!worktreeLedgerMatchesHead(args)) {
-    return ledgerEntries(headLedger);
-  }
-  const parentLedgerArgs: ReadGitTextArgs = {
-    relativePath: args.ledgerPath,
-    repoRoot: args.repoRoot,
-    revision: 'HEAD^',
-  };
-  const parentLedger = readGitText(parentLedgerArgs);
-  if (parentLedger !== false) {
-    return ledgerEntries(parentLedger);
-  }
-  const parentSkillArgs: GitRevisionHasMarkerArgs = {
-    markerPath: args.markerPath,
-    repoRoot: args.repoRoot,
-    revision: 'HEAD^',
-  };
-  return gitRevisionHasMarker(parentSkillArgs) ? [] : false;
-}
-
-type GitRevisionHasMarkerArgs = {
-  readonly markerPath: string;
-  readonly repoRoot: string;
-  readonly revision: string;
-};
-
-function gitRevisionHasMarker(args: GitRevisionHasMarkerArgs): boolean {
-  const readArgs: ReadGitTextArgs = {
-    relativePath: args.markerPath,
-    repoRoot: args.repoRoot,
-    revision: args.revision,
-  };
-  return readGitText(readArgs) !== false;
-}
-
-function worktreeLedgerMatchesHead(
-  args: MigrationBaselineEntriesArgs,
-): boolean {
-  const commandArgs = ['diff', '--quiet', 'HEAD', '--', args.ledgerPath];
-  const options: ExecFileSyncOptionsWithStringEncoding = {
-    cwd: args.repoRoot,
-    encoding: 'utf8',
-    stdio: ['ignore', 'ignore', 'ignore'],
-  };
-  try {
-    execFileSync('git', commandArgs, options);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function readGitText(args: ReadGitTextArgs): string | false {
-  const commandArgs = ['show', `${args.revision}:${args.relativePath}`];
-  const options: ExecFileSyncOptionsWithStringEncoding = {
-    cwd: args.repoRoot,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'ignore'],
-  };
-  try {
-    return execFileSync('git', commandArgs, options);
-  } catch {
-    return false;
-  }
-}
-
-function ledgerEntries(content: string): readonly string[] {
-  return content
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0 && !line.startsWith('#'));
 }
 
 export function listPersistentCortexMarkdownFiles(root: string): string[] {
@@ -511,11 +514,10 @@ function isExecutableSkillScriptsDirectory(
 
 function readCortexMarkdown(filePath: string): string {
   const content = readFileSync(filePath, 'utf8');
-  return filePath.endsWith(`${path.sep}SKILL.md`)
-    ? content.replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/u, (frontmatter) =>
-        frontmatter.replace(/[^\r\n]/gu, ' '),
-      )
-    : content;
+  return normalizedCortexMarkdown({
+    relativePath: filePath.replaceAll(path.sep, '/'),
+    content,
+  });
 }
 
 function skillDiagnosticName(filePath: string): string {

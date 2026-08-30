@@ -85,7 +85,7 @@ test('save a freshly submitted login through Nook Pilot', async ({ page }) => {
           <p class="eyebrow">Example account</p>
           <h1>Welcome back</h1>
           <p class="intro">Sign in once. Nook can offer to save the login after verified success.</p>
-          <form id="login-form">
+          <form id="login-form" method="post">
             <label>Email<input autocomplete="username" name="email" type="email"></label>
             <label>Password<input autocomplete="current-password" name="password" type="password"></label>
             <button type="submit">Sign in</button>

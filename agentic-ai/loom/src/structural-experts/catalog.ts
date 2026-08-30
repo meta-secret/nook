@@ -45,7 +45,6 @@ const COMMON_CONTEXT = [
 const CODE_REFACTORING_FILES = [
   'Taskfile.yml',
   '.github/formatting/format.sh',
-  'tooling/eslint-rules/no-raw-object-arguments.js',
   'agentic-ai/loom/eslint.config.js',
   'agentic-ai/loom/package.json',
 ] as const;
@@ -63,13 +62,11 @@ const CODE_REFACTORING_DESCENDANT_ROOTS = [
 const CORTEX_REFACTORING_FILES = [
   'README.md',
   'Taskfile.yml',
-  'agentic-ai/loom/src/agent-workflow/cortex-workflow.ts',
   'agentic-ai/loom/src/codec/args/cortex-audit.ts',
   'agentic-ai/loom/src/commands/cortex-audit.ts',
   'agentic-ai/loom/src/lib/cortex-article-structure.ts',
   'agentic-ai/loom/src/lib/cortex-document-structure.ts',
   'agentic-ai/loom/src/lib/cortex-index.ts',
-  'agentic-ai/loom/tests/agent-workflow/cortex-workflow.test.ts',
   'agentic-ai/loom/tests/cortex-article-structure.test.ts',
   'agentic-ai/loom/tests/cortex-audit-session.test.ts',
   'agentic-ai/loom/tests/cortex-document-structure.test.ts',

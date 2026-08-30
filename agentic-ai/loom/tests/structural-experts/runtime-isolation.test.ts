@@ -101,7 +101,6 @@ test('materializes only exact shared formatter and lint tooling', async () => {
     throw new Error('Code refactoring profile is missing.');
   const exactRefactoringFiles = [
     '.github/formatting/format.sh',
-    'tooling/eslint-rules/no-raw-object-arguments.js',
     'agentic-ai/loom/eslint.config.js',
   ];
   for (const relativePath of exactRefactoringFiles) {
@@ -138,11 +137,6 @@ test('materializes only exact shared formatter and lint tooling', async () => {
       for (const relativePath of exactRefactoringFiles) {
         await access(join(isolation.repositorySnapshot, relativePath));
       }
-      expect(
-        await readdir(
-          join(isolation.repositorySnapshot, 'tooling/eslint-rules'),
-        ),
-      ).toEqual(['no-raw-object-arguments.js']);
       expect(
         await readdir(join(isolation.repositorySnapshot, '.github/formatting')),
       ).toEqual(['format.sh']);

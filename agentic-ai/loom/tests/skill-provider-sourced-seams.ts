@@ -26,7 +26,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     '.github/scripts/format-host-apply.test.sh',
-    '2774564698cebb96f2bf1a16e9d2acd3866ae078894de2aa5004b84c401c1b05',
+    '7af6e59c95f952a7dec0b8ac4e2a4fe9d4fcd932af85a29fa528442b7c394f94',
   ],
   [
     'agentic-ai/ci-agent/scripts/exit-smoke.mjs',

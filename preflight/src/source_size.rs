@@ -7,7 +7,7 @@ use syn::{Attribute, Expr, Item, ItemMacro, ItemMod, Lit, LitStr, Meta, Token};
 
 pub const AUTHORED_SOURCE_LINE_LIMIT: usize = 1_000;
 
-pub const SOURCE_SIZE_REMEDIATION: &str = "P1 source architecture violation: every authored source file is limited to 1,000 lines. An oversized Rust module indicates an overcomplicated domain model or too many production responsibilities; split it along cohesive domain, capability, ownership, lifecycle, or dependency boundaries with narrow interfaces. Extracting tests alone is prohibited. Arbitrary half-splits and numbered part modules are prohibited.";
+pub const SOURCE_SIZE_REMEDIATION: &str = "P1 hard source-size violation: every authored source file is limited to 1,000 lines and delivery remains blocked until the violation is removed. Review the oversized module and split it along a cohesive domain, capability, ownership, lifecycle, or dependency boundary with narrow interfaces. Extracting tests alone is prohibited. Arbitrary half-splits and numbered part modules are prohibited.";
 pub const UNIT_TEST_COLOCATION_REMEDIATION: &str = "P1 Rust test architecture violation: unit tests must be inline with the focused implementation module. Split production by domain or architectural responsibility and colocate each abstraction's tests. Separate crate-level tests are reserved for integration tests.";
 
 const SOURCE_EXTENSIONS: &[&str] = &[

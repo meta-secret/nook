@@ -24,6 +24,21 @@ Cortex is optimized for AI legibility and structure:
 - Project structure is dynamic; documents must not contain static directory trees.
 - ASCII graphics are hard for AI agents to parse; diagrams must use Mermaid (` ```mermaid `) or structured lists.
 
+## Ownership and composition
+
+This card is the single canonical generic Cortex writing policy.
+
+- The task's team identity owns the meaning and edits in its Cortex scope.
+- Loom adds this card, Cortex article structure, and Cortex consistency when a
+  write claim overlaps `.cortex/**`.
+- The three cards form the canonical Cortex authoring bundle.
+- A team-specific authoring skill may add domain rules.
+- That skill must use a domain-specific name.
+- It must not wrap, copy, rename, or partially restate this card.
+- Loading this AI-owned policy does not add an AI team identity.
+- A separate AI task is required only when AI-owned routing, tooling, or Cortex
+  governance must change.
+
 ## Problem Pattern
 
 A writer packs many constraints, identities, failure modes, and commands into
@@ -184,6 +199,12 @@ Full rewritten example:
 - Run the consistency GC in
   [Cortex consistency](cortex-consistency.md) for the touched topic.
 - For implementation tasks that include `.cortex` edits:
-  1. run `task loom:pre-push`;
-  2. commit and push; and
-  3. use the normal hosted validation path.
+  1. run required formatters and commit every allowed AI source or Cortex
+     mutation in the coherent handoff;
+  2. have Gizmo integrate the handoff and run `task loom:pre-push`;
+  3. return any new formatter mutation in AI-owned content for a fresh AI
+     commit before Gizmo reintegrates, reruns hygiene, and pushes; and
+  4. Gizmo dispatches at least one relevant focused remote task when the pushed
+     head is not validation-ready, or complete exact-head validation immediately
+     when it is ready.
+- Gizmo obtains fresh exact-head remote evidence after every replacement push.

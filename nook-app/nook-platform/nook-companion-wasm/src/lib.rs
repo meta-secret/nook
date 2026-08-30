@@ -212,6 +212,32 @@ pub fn classify_companion_authentication_workflow(
 }
 
 #[wasm_bindgen]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn classify_companion_authentication_workflow_facts(
+    input: nook_companion_core::AuthenticationPageObservationFactsBatch,
+) -> nook_companion_core::AuthenticationWorkflowMatch {
+    input.classify()
+}
+
+#[wasm_bindgen]
+#[must_use]
+pub fn authentication_username_evidence(
+    field: &NookPageInputFieldObservation,
+) -> nook_companion_core::AuthenticationUsernameEvidence {
+    nook_companion_core::authentication_username_evidence(field.as_core())
+}
+
+#[wasm_bindgen]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn strongest_authentication_username_evidence(
+    evidence: Vec<nook_companion_core::AuthenticationUsernameEvidence>,
+) -> nook_companion_core::AuthenticationUsernameEvidence {
+    nook_companion_core::strongest_authentication_username_evidence(&evidence)
+}
+
+#[wasm_bindgen]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompanionAuthenticationWorkflowMatchKind {
     NoMatch,
@@ -638,6 +664,55 @@ mod tests {
                 classify_companion_authentication_workflow(input)
             ),
             CompanionAuthenticationWorkflowMatchKind::Rejected
+        );
+    }
+
+    #[test]
+    fn detailed_workflow_wasm_export_rejects_unbounded_handler_facts() {
+        let input = nook_companion_core::AuthenticationPageObservationFactsBatch {
+            observations: vec![nook_companion_core::AuthenticationPageObservationFacts {
+                ceremony: nook_companion_core::AuthenticationCeremonyObservationFacts {
+                    one_time_code_handler_signal: "x"
+                        .repeat(nook_companion_core::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1),
+                    ..Default::default()
+                },
+                ..Default::default()
+            }],
+        };
+        assert_eq!(
+            companion_authentication_workflow_match_kind(
+                classify_companion_authentication_workflow_facts(input)
+            ),
+            CompanionAuthenticationWorkflowMatchKind::Rejected
+        );
+    }
+
+    #[test]
+    fn username_evidence_exports_preserve_core_classification_and_ordering() {
+        let field = NookPageInputFieldObservation::new(
+            nook_companion_core::PageInputType::Email,
+            false,
+            false,
+            vec!["email".to_owned()],
+            "account email".to_owned(),
+            true,
+        );
+        assert_eq!(
+            authentication_username_evidence(&field),
+            nook_companion_core::AuthenticationUsernameEvidence::Strong
+        );
+        assert_eq!(
+            strongest_authentication_username_evidence(vec![
+                nook_companion_core::AuthenticationUsernameEvidence::Absent,
+                nook_companion_core::AuthenticationUsernameEvidence::StandardsBasedEmail,
+                nook_companion_core::AuthenticationUsernameEvidence::Explicit,
+                nook_companion_core::AuthenticationUsernameEvidence::Strong,
+            ]),
+            nook_companion_core::AuthenticationUsernameEvidence::Explicit
+        );
+        assert_eq!(
+            strongest_authentication_username_evidence(Vec::new()),
+            nook_companion_core::AuthenticationUsernameEvidence::Absent
         );
     }
 }

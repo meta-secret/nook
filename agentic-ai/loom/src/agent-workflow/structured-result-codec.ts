@@ -34,8 +34,6 @@ const MAX_MODULE_EXPERT_AUTHORIZATIONS = 100;
 
 const STANDARD_WORKFLOW_RESULT_KINDS = [
   WorkflowResultKind.CortexEvidence,
-  WorkflowResultKind.CortexSynthesis,
-  WorkflowResultKind.LoomLeafEvidence,
 ] as const;
 
 const MODULE_EXPERT_CONTINUATION_FIELDS = [
@@ -309,10 +307,7 @@ export function decodeWorkflowTaskOutput(
   if (!isModuleExpertEvidence) {
     return {
       ...outputFields,
-      resultKind: resultKindValue as
-        | WorkflowResultKind.CortexEvidence
-        | WorkflowResultKind.CortexSynthesis
-        | WorkflowResultKind.LoomLeafEvidence,
+      resultKind: resultKindValue as WorkflowResultKind.CortexEvidence,
     };
   }
   return {

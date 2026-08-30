@@ -83,6 +83,7 @@ See [issues](../../../gizmo/workflows/issues.md),
   - Trigger: Manual
   - Purpose: Debug e2e on a PR branch
   - GitHub PAT: Only for `sync-live`
+
 ### Workflow details
 
 **`remote.yml`**
@@ -316,6 +317,7 @@ Cancellation is scoped to work that a newer run actually supersedes:
   - Scope: Global production release group
   - Cancel active run: No
   - Reason: Serialize stateful publication without interrupting a deployment.
+
 ## Production release strategy
 
 Production releases use immutable semantic-version tags. The tag records the
@@ -590,6 +592,7 @@ PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label.
 - **`e2e-pr.yml`, `web-research.yml`**
   - Runner: general ARC plus container ARC for Playwright
   - Purpose: Manual and research work scales independently
+
 ## Why local-provider e2e vs sync-live
 
 Real provider API calls are slow and brittle at CI scale. Nook therefore:
@@ -623,16 +626,45 @@ runs weekly and can be started manually. It installs the pinned
 The audit covers every direct library declared in those `Cargo.toml` manifests.
 It does not audit only the current lockfile's transitive graph.
 
-If any audit reports a newer release, the workflow starts the existing
-isolated CI agent on the general ARC scale set. The agent updates **all** outdated direct
-Rust dependencies and makes compatibility fixes. It runs the required
-validation before the CI-agent harness commits, pushes, and opens the PR:
+On an outdated result, `task ci-agent:fix` runs on general ARC with
+`CI_AGENT_FIX_PROFILE=rust-dependency-update`. This narrow trusted Actions
+publisher is not an ordinary Team Agent: its isolated editor updates every
+outdated direct dependency and necessary compatibility code without Git,
+validation, credentials, or publication authority.
+
+Before any push, trusted workflow tooling runs the required broad validation
+remotely against that isolated update:
 
 ```bash
 WASM_BUILD_MODE=prod task ci:pr:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
 task docker:ecosystem:fuzz FUZZ_SECONDS=20
 task hive:verify
 ```
+
+The trusted host fails closed unless:
+
+- the diff contains only regular Rust dependency mission files and compatibility
+  changes;
+- trusted workflow checkout uses `persist-credentials: false`; the isolated
+  editor never receives the PAT. An existing-PR rerun may apply the token
+  only to a host Git fetch of the audited refs, then remove it before
+  isolated validation;
+- frozen HEAD, index, Git/common directories, and effective configuration remain
+  exact after editing and validation, while trusted Git disables hooks,
+  filesystem monitors, and signing;
+- validation's fresh HOME contains no publication, registry, or compiler-cache
+  credentials. The immutable Docker wrapper injects `network=none` for the
+  `docker run` form used by trusted validation and rejects unknown wrapper
+  operations. Alternate Docker CLI forms are not the trusted validation path;
+- the three-hour `CI_AGENT_TIMEOUT_MS=10800000` leaves half of the six-hour job
+  for validation/publication; and
+- exact branch/PR identity is unambiguous and the publisher returns its verified
+  remote head SHA to Gizmo after commit, push, and PR creation.
+
+That handoff resumes the ordinary delivery boundary. Gizmo owns continuing
+hosted review, replacement exact-head validation, readiness, and merge. The
+publisher's pre-push security validation remains required but does not replace
+those exact-head gates.
 
 `ci:pr:e2e` validates the product path:
 
@@ -650,8 +682,8 @@ task hive:verify
   - It creates disposable external-provider state.
   - It requires provider secrets.
 - No workflow merges the harness-owned PR from a check event.
-  - A task-owning agent runs the standard readiness audit.
-  - The agent squash-merges when readiness succeeds.
+  - Gizmo runs the standard readiness audit.
+  - Gizmo squash-merges when readiness succeeds.
 
 **One web server per Playwright process is enough.** CI serves static `dist/` via `vite preview`; workers share that HTTP endpoint. Isolation is at the browser layer:
 
@@ -673,15 +705,16 @@ UI demo rules:
   - They run serially with one worker.
   - PR CI avoids the cost of the full browser suite.
 
-**Run the contract on the host before the first push** (and after any later UI
-edit) so Verify does not discover a missing demo:
+**After integration, Gizmo runs the contract on the host before the first
+push** (and after any later UI edit) so Verify does not discover a missing demo:
 
 ```bash
 git fetch origin main
 .github/scripts/ui-demo-contract.sh "$(git rev-parse origin/main)"
 ```
 
-Combine with unconditional `task format` — see
+The integrated `task loom:pre-push` call combines this contract with
+unconditional host formatting — see
 [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md).
 
 The `ui-demo` Playwright project runs Chromium headlessly at 1280x720.
@@ -728,8 +761,9 @@ The Playwright project catalog and command grouping live in
 
 ## Task commands
 
-Product checks run remotely in containerized jobs. The mandatory local format
-command reuses one content-addressed tool-only image across worktrees. The root
+Product checks run remotely in containerized jobs. The mandatory integrated
+pre-push hygiene reuses one content-addressed tool-only formatter image across
+worktrees. The root
 `Taskfile.yml` is the repo entrypoint; app commands are included through
 `nook-app/Taskfile.yml`, with
 cross-package app tasks in `nook-app/ci/Taskfile.yml`, Docker tasks in
@@ -738,8 +772,9 @@ cross-package app tasks in `nook-app/ci/Taskfile.yml`, Docker tasks in
 `nook-web-extension/` / `nook-platform/`:
 
 ```bash
-# Agent-required local action before every push
-task format                         # host-applied format only
+# Gizmo-required local action after integration and before every push; route
+# team-owned formatter diffs back to their owner and repeat until clean
+task loom:pre-push                  # host-applied format + UI demo contract
 
 # Optional local mirrors (humans / deep debug — not agent merge gates)
 task check                          # format, clippy, unit tests, wasm-bindgen tests, web build (dev/no-opt wasm)
@@ -887,12 +922,23 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 - Missing or unchanged base coverage reuses the current artifact for comparison without another Docker solve.
 - Use remote CI as the **sole PR product validation gate**.
 
-**Agent remote commands:**
+**Gizmo remote commands:**
 
-- Agents use `task remote TASK_NAME=<name>` for one focused command.
-- Agents use `task remote TASK_NAMES=<a>,<b>` to reuse one job for a batch.
-- When the branch is ready, agents run `task pr:validate PR=<number>` or add
-  `FULL_E2E=1`.
+- Ordinary Team Agents format every changed file in their allowed scope and
+  return coherent exact committed handoffs. They do not push, dispatch remote
+  work, or operate external PR/check state.
+- After integration, Gizmo runs `task loom:pre-push` and inspects every
+  host-applied change. If formatting changes team-owned source or Cortex, Gizmo
+  routes that exact diff to the responsible Team Agent for a fresh formatted
+  commit, reintegrates it, and repeats pre-push rather than authoring or
+  committing the diff itself. Gizmo pushes only after pre-push is clean.
+- Every pushed head receives remote evidence immediately. For a
+  non-validation-ready head, Gizmo uses `task remote TASK_NAME=<name>` for at
+  least one relevant focused command; `TASK_NAMES=<a>,<b>` may reuse one job for
+  a relevant focused batch.
+- When the pushed branch is validation-ready, Gizmo immediately runs
+  `task pr:validate PR=<number>` or adds `FULL_E2E=1`. Focused tasks are optional
+  for that head and never replace complete validation.
 - Validation first requests one idempotent exact-head Codex review.
 - Current findings stop dispatch so they can be repaired as one coherent batch.
 - Review unavailability is bounded to 600 seconds when no current findings are
@@ -981,8 +1027,8 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
   A Main final-image cache therefore cannot substitute a stale source snapshot.
 - Main and release jobs import neither candidate nor stable formatter tags.
 - Hosted promotion independently fingerprints the exact committed source SHA.
-- Agents still run build, test, proof, and validation tasks remotely. Local
-  execution remains available only for explicit rare-case debugging.
+- Gizmo still dispatches build, test, proof, and validation tasks remotely.
+  Local execution remains available only for explicit rare-case debugging.
 - Commit-scoped local publish requires a clean worktree. Dirty builds remain
   local and cannot poison the committed PR scope.
 - The formatter dependency candidate is the exception because its targets

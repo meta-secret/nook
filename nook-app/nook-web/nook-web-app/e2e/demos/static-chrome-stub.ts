@@ -117,9 +117,16 @@ export type DemoChromeStubArgs = {
 export function installDemoChromeStub(args: DemoChromeStubArgs) {
   type RuntimeMessage = {
     type: string
-    payload?: { secretId?: string }
+    payload?: { secretId?: string; observations?: unknown[] }
   }
   type RuntimeCallback = (response?: unknown) => void
+  type AuthenticationSnapshotResponse = {
+    snapshot?: { observationIndex?: number }
+  }
+  type AuthenticationSnapshotResponseAdapterRequest = {
+    message: RuntimeMessage
+    response: unknown
+  }
   type StagedSaveOffer = {
     offerId: string
     decision: NookWebsiteLoginSaveDecision.Create
@@ -558,6 +565,33 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     }
   }
 
+  const adaptAuthenticationSnapshotResponse = ({
+    message,
+    response,
+  }: AuthenticationSnapshotResponseAdapterRequest): unknown => {
+    if (
+      message.type !== 'nook:authentication-workflow-snapshot' ||
+      typeof response !== 'object' ||
+      !response
+    ) {
+      return response
+    }
+    const { observationIndex } = (response as AuthenticationSnapshotResponse)
+      .snapshot ?? { observationIndex: -1 }
+    const observations = message.payload?.observations ?? []
+    if (
+      typeof observationIndex !== 'number' ||
+      !Number.isInteger(observationIndex) ||
+      observationIndex < 0 ||
+      observationIndex >= observations.length
+    ) {
+      return response
+    }
+    const selectedFacts = observations[observationIndex]
+    if (!selectedFacts) return response
+    return { ...response, selectedFacts }
+  }
+
   if (barcodeRawValue) {
     class FakeBarcodeDetector {
       async detect() {
@@ -597,7 +631,11 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
           demoWindow.__nookDemoRuntimeMessageTypes ??= []
           demoWindow.__nookDemoRuntimeMessageTypes.push(message.type)
         }
-        const response = responseFor(message)
+        const responseRequest: AuthenticationSnapshotResponseAdapterRequest = {
+          message,
+          response: responseFor(message),
+        }
+        const response = adaptAuthenticationSnapshotResponse(responseRequest)
         if (callback) queueMicrotask(() => callback(response))
       },
     },

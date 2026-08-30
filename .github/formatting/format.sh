@@ -16,7 +16,6 @@ hive_console_files=()
 loom_files=()
 skill_application_files=()
 skill_application_roots=()
-shared_tooling_files=()
 while IFS= read -r -d '' path; do
   if [[ ! -f "$repo_root/$path" || -L "$repo_root/$path" ]]; then
     continue
@@ -54,9 +53,6 @@ while IFS= read -r -d '' path; do
       skill_root="${BASH_REMATCH[1]}"
       skill_application_roots+=("$skill_root")
       skill_application_files+=("${BASH_REMATCH[3]}")
-      ;;
-    tooling/eslint-rules/no-raw-object-arguments.js)
-      shared_tooling_files+=("$path")
       ;;
   esac
 done <"$changed_files"
@@ -115,7 +111,4 @@ if [[ "${#skill_application_files[@]}" -gt 0 ]]; then
     skill_path="${skill_application_files[$index]}"
     format_changed_files "$repo_root/$skill_root/.prettierrc" "$repo_root/$skill_root" "$skill_path"
   done
-fi
-if [[ "${#shared_tooling_files[@]}" -gt 0 ]]; then
-  format_changed_files "$default_config" "$repo_root" "${shared_tooling_files[@]}"
 fi

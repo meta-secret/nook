@@ -36,10 +36,8 @@ export type AuditStructuralExpertProfilesRequest =
 
 export type AuditStructuralExpertCortexAuthorityRequest = {
   readonly delegationSource: string;
-  readonly orchestrationSource: string;
   readonly registrySource: string;
   readonly skillSource: string;
-  readonly toolsSource: string;
   readonly workflowSource: string;
 };
 
@@ -61,7 +59,6 @@ const EXPECTED_PROFILES = [
     allowedEvidenceFiles: [
       'Taskfile.yml',
       '.github/formatting/format.sh',
-      'tooling/eslint-rules/no-raw-object-arguments.js',
       'agentic-ai/loom/eslint.config.js',
       'agentic-ai/loom/package.json',
     ],
@@ -103,13 +100,11 @@ const EXPECTED_PROFILES = [
     allowedEvidenceFiles: [
       'README.md',
       'Taskfile.yml',
-      'agentic-ai/loom/src/agent-workflow/cortex-workflow.ts',
       'agentic-ai/loom/src/codec/args/cortex-audit.ts',
       'agentic-ai/loom/src/commands/cortex-audit.ts',
       'agentic-ai/loom/src/lib/cortex-article-structure.ts',
       'agentic-ai/loom/src/lib/cortex-document-structure.ts',
       'agentic-ai/loom/src/lib/cortex-index.ts',
-      'agentic-ai/loom/tests/agent-workflow/cortex-workflow.test.ts',
       'agentic-ai/loom/tests/cortex-article-structure.test.ts',
       'agentic-ai/loom/tests/cortex-audit-session.test.ts',
       'agentic-ai/loom/tests/cortex-document-structure.test.ts',
@@ -141,13 +136,10 @@ const STRUCTURAL_EXPERT_CATALOG_PATH =
   'agentic-ai/loom/src/structural-experts/catalog.ts';
 const STRUCTURAL_EXPERT_CORTEX_AUTHORITY_PATH =
   '.cortex/teams/ai/architecture/refactoring-experts.md';
-const CORTEX_WORKFLOW_ORCHESTRATION_AUTHORITY_PATH =
-  '.cortex/teams/ai/design-docs/agent-workflow-orchestration.md';
 const SUBAGENT_DELEGATION_AUTHORITY_PATH =
   '.cortex/gizmo/workflows/subagent-delegation.md';
 const SYSTEM_COHERENCE_SKILL_AUTHORITY_PATH =
   '.cortex/teams/ai/dynamic-skills/system-coherence-synthesizer.md';
-const LOOM_TOOLS_AUTHORITY_PATH = '.cortex/teams/ai/references/loom-tools.md';
 const STRUCTURAL_REFACTORING_WORKFLOW_AUTHORITY_PATH =
   '.cortex/teams/ai/workflows/structural-refactoring.md';
 const STRUCTURAL_EXPERT_REGISTRY_CONTRACT_SECTIONS: readonly MarkdownContractSection[] =
@@ -158,8 +150,6 @@ const STRUCTURAL_EXPERT_REGISTRY_CONTRACT_SECTIONS: readonly MarkdownContractSec
         '`system_coherence_synthesizer` is that legacy `loom-structural-experts` role.',
         'It receives verified typed `Completed` and `Failed` structural terminal observations and does not inspect the repository.',
         'Failed observations are not accepted provider evidence, and its output cannot satisfy an ordinary provider edge or claim ordinary-contract compliance.',
-        'The static `loom:agent-workflow:cortex-audit` workflow instead uses its separate `FindingSynthesizer` profile and `CortexSynthesis` result.',
-        "Those identities do not alias this registry's structural aggregator.",
         'Future ordinary accepted-evidence synthesis must use a distinct typed role, profile, and result contract before implementation.',
         'None is named or registered here, and ordinary dispatch remains fail-closed.',
       ],
@@ -210,26 +200,6 @@ const STRUCTURAL_EXPERT_REGISTRY_CONTRACT_SECTIONS: readonly MarkdownContractSec
       ],
     },
   ];
-const CORTEX_WORKFLOW_ORCHESTRATION_CONTRACT_SECTIONS: readonly MarkdownContractSection[] =
-  [
-    {
-      heading: '## Static graph decision',
-      requiredMarkers: [
-        'The existing `loom:agent-workflow:cortex-audit` command is a legacy standalone read-only workflow.',
-        'Its all-terminal diagnostic aggregator is `FindingSynthesizer`, producing `CortexSynthesis`.',
-        'These are separate from the `loom-structural-experts` `system_coherence_synthesizer` / `SystemCoherenceSynthesis` structural diagnostic lane.',
-        'Neither legacy lane satisfies ordinary provider edges.',
-      ],
-    },
-    {
-      heading: '## First compiled workflow',
-      requiredMarkers: [
-        'The legacy all-terminal join waits for every declared terminal observation, including failed lanes.',
-        '`FindingSynthesizer` deduplicates findings and authors the root `CortexSynthesis` aggregate view.',
-        'A failed observation is never accepted provider evidence. Neither it nor the aggregate output can satisfy an ordinary provider edge or claim the future accepted-evidence synthesis contract.',
-      ],
-    },
-  ];
 const SUBAGENT_DELEGATION_CONTRACT_SECTIONS: readonly MarkdownContractSection[] =
   [
     {
@@ -237,8 +207,6 @@ const SUBAGENT_DELEGATION_CONTRACT_SECTIONS: readonly MarkdownContractSection[] 
       requiredMarkers: [
         '`system_coherence_synthesizer` and `SystemCoherenceSynthesis` remain legacy `loom-structural-experts` diagnostic identities.',
         'They accept verified structural `Completed` and `Failed` observations, cannot satisfy ordinary provider edges, and must not be reused for future ordinary accepted-evidence synthesis.',
-        'The separate legacy static `loom:agent-workflow:cortex-audit` lane uses `FindingSynthesizer` and `CortexSynthesis` under its own all-terminal diagnostic contract.',
-        'It does not alias the structural identities and cannot satisfy ordinary provider edges.',
         'Future ordinary synthesis requires a distinct typed role, profile, and result contract before implementation; no such identity or runtime support is declared here, so ordinary dispatch remains fail-closed.',
       ],
     },
@@ -251,24 +219,11 @@ const SYSTEM_COHERENCE_SKILL_CONTRACT_SECTIONS: readonly MarkdownContractSection
         "the `loom-structural-experts` parent-authorized all-terminal observation barrier's verified `StructuralExpertPlan` child projections with `Completed` or `Failed` status;",
         '`system_coherence_synthesizer` and `SystemCoherenceSynthesis` are legacy diagnostic identities.',
         'Failed observations never count as accepted provider evidence, and the legacy output cannot satisfy an ordinary provider edge, authorize implementation, or claim ordinary-contract compliance.',
-        'The separate legacy `loom:agent-workflow:cortex-audit` lane uses `FindingSynthesizer` and `CortexSynthesis` under its own all-terminal diagnostic contract.',
         'Future ordinary accepted-evidence synthesis requires a distinct typed role, profile, and result contract before implementation.',
         'This card does not name or provide that contract. Universal ordinary dispatch remains fail-closed.',
       ],
     },
   ];
-const LOOM_TOOLS_CONTRACT_SECTIONS: readonly MarkdownContractSection[] = [
-  {
-    heading: '## Static agent workflow boundary',
-    requiredMarkers: [
-      'a legacy all-terminal diagnostic-observation join;',
-      'one `FindingSynthesizer` diagnostic aggregation task producing `CortexSynthesis`; its output cannot satisfy an ordinary provider edge or claim accepted-evidence synthesis compliance;',
-      'Completed and failed lane observations remain available to that diagnostic aggregator.',
-      'Failed observations are not accepted provider evidence.',
-      'This lane is separate from the `loom-structural-experts` `system_coherence_synthesizer` / `SystemCoherenceSynthesis` diagnostic lane.',
-    ],
-  },
-];
 const STRUCTURAL_REFACTORING_WORKFLOW_CONTRACT_SECTIONS: readonly MarkdownContractSection[] =
   [
     {
@@ -284,7 +239,6 @@ const STRUCTURAL_REFACTORING_WORKFLOW_CONTRACT_SECTIONS: readonly MarkdownContra
       heading: '## Synthesize system coherence',
       requiredMarkers: [
         'This section defines the legacy `loom-structural-experts` `system_coherence_synthesizer` and its `SystemCoherenceSynthesis` diagnostic result.',
-        'It is not the `loom:agent-workflow:cortex-audit` aggregator; that static workflow uses `FindingSynthesizer` and `CortexSynthesis` under a separate all-terminal diagnostic contract.',
         'The role waits for the `loom-structural-experts` parent-authorized structural all-terminal observation barrier and accepts the verified `StructuralExpertPlan` child projections with `Completed` or `Failed` status.',
         'Preserves disagreements and failed observations without calling failures accepted provider evidence.',
         '`SystemCoherenceSynthesis` is diagnostic-only. It cannot satisfy an ordinary provider edge, authorize implementation, or claim ordinary accepted-evidence synthesis compliance.',
@@ -321,13 +275,6 @@ export function auditStructuralExpertProfiles(
   const registrySource = existsSync(authorityPath)
     ? readFileSync(authorityPath, 'utf8')
     : '';
-  const orchestrationPath = join(
-    request.repoRoot,
-    CORTEX_WORKFLOW_ORCHESTRATION_AUTHORITY_PATH,
-  );
-  const orchestrationSource = existsSync(orchestrationPath)
-    ? readFileSync(orchestrationPath, 'utf8')
-    : '';
   const delegationPath = join(
     request.repoRoot,
     SUBAGENT_DELEGATION_AUTHORITY_PATH,
@@ -342,10 +289,6 @@ export function auditStructuralExpertProfiles(
   const skillSource = existsSync(skillPath)
     ? readFileSync(skillPath, 'utf8')
     : '';
-  const toolsPath = join(request.repoRoot, LOOM_TOOLS_AUTHORITY_PATH);
-  const toolsSource = existsSync(toolsPath)
-    ? readFileSync(toolsPath, 'utf8')
-    : '';
   const workflowPath = join(
     request.repoRoot,
     STRUCTURAL_REFACTORING_WORKFLOW_AUTHORITY_PATH,
@@ -355,10 +298,8 @@ export function auditStructuralExpertProfiles(
     : '';
   const authorityRequest: AuditStructuralExpertCortexAuthorityRequest = {
     delegationSource,
-    orchestrationSource,
     registrySource,
     skillSource,
-    toolsSource,
     workflowSource,
   };
   findings.push(...auditStructuralExpertCortexAuthority(authorityRequest));
@@ -551,13 +492,6 @@ export function auditStructuralExpertCortexAuthority(
     source: request.registrySource,
   };
   auditAuthorityContract(registryAuditRequest);
-  const orchestrationAuditRequest: AuditAuthorityContractRequest = {
-    findings,
-    path: CORTEX_WORKFLOW_ORCHESTRATION_AUTHORITY_PATH,
-    sections: CORTEX_WORKFLOW_ORCHESTRATION_CONTRACT_SECTIONS,
-    source: request.orchestrationSource,
-  };
-  auditAuthorityContract(orchestrationAuditRequest);
   const delegationAuditRequest: AuditAuthorityContractRequest = {
     findings,
     path: SUBAGENT_DELEGATION_AUTHORITY_PATH,
@@ -572,13 +506,6 @@ export function auditStructuralExpertCortexAuthority(
     source: request.skillSource,
   };
   auditAuthorityContract(skillAuditRequest);
-  const toolsAuditRequest: AuditAuthorityContractRequest = {
-    findings,
-    path: LOOM_TOOLS_AUTHORITY_PATH,
-    sections: LOOM_TOOLS_CONTRACT_SECTIONS,
-    source: request.toolsSource,
-  };
-  auditAuthorityContract(toolsAuditRequest);
   const workflowAuditRequest: AuditAuthorityContractRequest = {
     findings,
     path: STRUCTURAL_REFACTORING_WORKFLOW_AUTHORITY_PATH,

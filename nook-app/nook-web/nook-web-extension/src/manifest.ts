@@ -170,6 +170,13 @@ export function createManifest(
         world: ContentScriptWorld.Main,
       },
       {
+        matches: ['<all_urls>'],
+        exclude_matches: vaultAppExclusions,
+        js: ['content/authentication-route-page.js'],
+        run_at: ContentScriptRunAt.DocumentStart,
+        world: ContentScriptWorld.Main,
+      },
+      {
         matches: [simpleVaultMatch],
         exclude_matches: sentinel_vault_match_patterns(simpleVaultBaseUrl),
         js: ['content/simple-vault-bridge.js'],

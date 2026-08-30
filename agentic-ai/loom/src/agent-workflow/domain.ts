@@ -1,17 +1,11 @@
-export enum StaticAgentWorkflowName {
-  CortexFullGarbageCollection = 'cortex-full-garbage-collection',
-}
-
 export enum DelegatedAgentWorkflowName {
   AgentWork = 'delegated-agent-work',
 }
 
-export type AgentProcessingWorkflowName =
-  StaticAgentWorkflowName | DelegatedAgentWorkflowName;
+export type AgentProcessingWorkflowName = DelegatedAgentWorkflowName;
 
 export enum WorkflowExecutorKind {
   Agent = 'agent',
-  LoomLeaf = 'loom-leaf',
 }
 
 export enum AgentWorkspacePolicy {
@@ -21,7 +15,6 @@ export enum AgentWorkspacePolicy {
 export enum AgentAttemptAdapterKind {
   GenericDelegationRecorder = 'generic-delegation-recorder',
   ModuleExpertInvocation = 'module-expert-invocation',
-  StaticWorkflowScheduler = 'static-workflow-scheduler',
   StructuralExpertInvocation = 'structural-expert-invocation',
 }
 
@@ -31,18 +24,6 @@ export enum AgentReasoningEffort {
   High = 'high',
 }
 
-export enum TaskTargetKind {
-  Task = 'task',
-  Parallel = 'parallel',
-  Join = 'join',
-  None = 'none',
-}
-
-export enum JoinCompletionPolicy {
-  AllCompleted = 'all-completed',
-  AllTerminal = 'all-terminal',
-}
-
 export enum TaskTerminalKind {
   Completed = 'completed',
   Failed = 'failed',
@@ -50,13 +31,6 @@ export enum TaskTerminalKind {
   Cancelled = 'cancelled',
   TimedOut = 'timed-out',
   Skipped = 'skipped',
-}
-
-export enum WorkflowTerminalKind {
-  Completed = 'completed',
-  CompletedWithFailures = 'completed-with-failures',
-  Cancelled = 'cancelled',
-  Failed = 'failed',
 }
 
 export enum WorkflowArtifactKind {
@@ -74,8 +48,6 @@ export enum WorkflowResultKind {
   CodeRefactoringEvidence = 'code-refactoring-evidence',
   CortexEvidence = 'cortex-evidence',
   CortexRefactoringEvidence = 'cortex-refactoring-evidence',
-  CortexSynthesis = 'cortex-synthesis',
-  LoomLeafEvidence = 'loom-leaf-evidence',
   ModuleDevelopmentPlan = 'module-development-plan',
   ModuleExpertEvidence = 'module-expert-evidence',
   StructuralExpertPlan = 'structural-expert-plan',
@@ -96,59 +68,12 @@ export type AgentProfile<TAgent extends string> = {
   readonly reasoningEffort: AgentReasoningEffort;
 };
 
-export enum LoomLeafKind {
-  VerifyGitBaseline = 'verify-git-baseline',
-  CortexAudit = 'cortex-audit',
-}
-
 export type AgentTaskExecution<TAgent extends string> = {
   readonly kind: WorkflowExecutorKind.Agent;
   readonly agent: TAgent;
   readonly instruction: string;
   readonly resultKind: WorkflowResultKind;
 };
-
-export type CortexAuditLeafExecution = {
-  readonly kind: WorkflowExecutorKind.LoomLeaf;
-  readonly leaf: LoomLeafKind.CortexAudit;
-  readonly includeDensityLint: boolean;
-};
-
-export type VerifyGitBaselineLeafExecution = {
-  readonly kind: WorkflowExecutorKind.LoomLeaf;
-  readonly leaf: LoomLeafKind.VerifyGitBaseline;
-};
-
-export type LoomLeafTaskExecution =
-  CortexAuditLeafExecution | VerifyGitBaselineLeafExecution;
-
-export type StaticTaskExecution<TAgent extends string> =
-  AgentTaskExecution<TAgent> | LoomLeafTaskExecution;
-
-export type NoTaskTarget = {
-  readonly kind: TaskTargetKind.None;
-};
-
-export type SingleTaskTarget<TTask extends string> = {
-  readonly kind: TaskTargetKind.Task;
-  readonly task: TTask;
-};
-
-export type ParallelTaskTarget<TTask extends string> = {
-  readonly kind: TaskTargetKind.Parallel;
-  readonly tasks: readonly TTask[];
-};
-
-export type JoinTaskTarget<TJoin extends string> = {
-  readonly kind: TaskTargetKind.Join;
-  readonly join: TJoin;
-};
-
-export type TaskOutcomeTarget<TTask extends string, TJoin extends string> =
-  | NoTaskTarget
-  | SingleTaskTarget<TTask>
-  | ParallelTaskTarget<TTask>
-  | JoinTaskTarget<TJoin>;
 
 export type TaskResourceClaims = {
   readonly read: readonly string[];
@@ -372,59 +297,6 @@ function globBasenamesOverlap(pair: TaskResourcePatternPair): boolean {
   return literal.endsWith(glob.slice(1));
 }
 
-export type StaticTaskDefinition<
-  TTask extends string,
-  TAgent extends string,
-  TJoin extends string,
-> = {
-  readonly name: TTask;
-  readonly execution: StaticTaskExecution<TAgent>;
-  readonly completed: TaskOutcomeTarget<TTask, TJoin>;
-  readonly failed: TaskOutcomeTarget<TTask, TJoin>;
-  readonly resources: TaskResourceClaims;
-  readonly timeoutMs: number;
-};
-
-export type StaticJoinDefinition<TTask extends string, TJoin extends string> = {
-  readonly name: TJoin;
-  readonly policy: JoinCompletionPolicy;
-  readonly arrivals: readonly TTask[];
-  readonly completed: TaskOutcomeTarget<TTask, TJoin>;
-};
-
-export type StaticAgentRegistry<TAgent extends string> = {
-  readonly [TName in TAgent]: AgentProfile<TName>;
-};
-
-export type StaticTaskRegistry<
-  TTask extends string,
-  TAgent extends string,
-  TJoin extends string,
-> = {
-  readonly [TName in TTask]: StaticTaskDefinition<TTask, TAgent, TJoin>;
-};
-
-export type StaticJoinRegistry<TTask extends string, TJoin extends string> = {
-  readonly [TName in TJoin]: StaticJoinDefinition<TTask, TJoin>;
-};
-
-export type StaticAgentWorkflowDefinition<
-  TTask extends string,
-  TAgent extends string,
-  TJoin extends string,
-> = {
-  readonly name: StaticAgentWorkflowName;
-  readonly version: WorkflowVersion;
-  readonly entry: TTask;
-  readonly materializedViewTask: TTask;
-  readonly taskNames: readonly TTask[];
-  readonly agentNames: readonly TAgent[];
-  readonly joinNames: readonly TJoin[];
-  readonly agents: StaticAgentRegistry<TAgent>;
-  readonly tasks: StaticTaskRegistry<TTask, TAgent, TJoin>;
-  readonly joins: StaticJoinRegistry<TTask, TJoin>;
-};
-
 export type WorkflowFinding = {
   readonly severity: WorkflowFindingSeverity;
   readonly title: string;
@@ -613,7 +485,6 @@ export enum LoomExtractionClassification {
 
 export enum LoomExtractionTarget {
   LoomLeaf = 'loom-leaf',
-  LoomStaticWorkflow = 'loom-static-workflow',
   TaskEntrypoint = 'task-entrypoint',
 }
 
@@ -687,10 +558,7 @@ type WorkflowTaskOutputFields = {
 };
 
 export type StandardWorkflowTaskOutput = WorkflowTaskOutputFields & {
-  readonly resultKind:
-    | WorkflowResultKind.CortexEvidence
-    | WorkflowResultKind.CortexSynthesis
-    | WorkflowResultKind.LoomLeafEvidence;
+  readonly resultKind: WorkflowResultKind.CortexEvidence;
   readonly continuation?: never;
   readonly moduleExpertAuthorizations?: never;
   readonly structuralExpertAuthorizations?: never;
@@ -765,7 +633,6 @@ export enum MaterializedViewPresence {
 
 export enum MaterializedViewAuthorKind {
   Agent = 'agent',
-  LoomLeaf = 'loom-leaf',
   LoomRuntime = 'loom-runtime',
 }
 
@@ -804,7 +671,6 @@ export type AgentAttemptParent = WorkflowRootParent | ParentAgentAttempt;
 
 export enum TaskProcessingKind {
   AgentAttempt = 'agent-attempt',
-  WorkflowTask = 'workflow-task',
 }
 
 export type AgentAttemptProcessingReference = {
@@ -814,14 +680,7 @@ export type AgentAttemptProcessingReference = {
   readonly view: MaterializedViewReference;
 };
 
-export type WorkflowTaskProcessingReference = {
-  readonly kind: TaskProcessingKind.WorkflowTask;
-  readonly result: ProjectionReference;
-  readonly view: MaterializedViewReference;
-};
-
-export type TaskProcessingReference =
-  AgentAttemptProcessingReference | WorkflowTaskProcessingReference;
+export type TaskProcessingReference = AgentAttemptProcessingReference;
 
 export type CompletedTaskTerminal<TTask extends string> = {
   readonly kind: TaskTerminalKind.Completed;
@@ -873,20 +732,3 @@ export type TaskTerminal<TTask extends string> =
   | CancelledTaskTerminal<TTask>
   | TimedOutTaskTerminal<TTask>
   | SkippedTaskTerminal<TTask>;
-
-export type WorkflowTaskTerminalSequence<TTask extends string> =
-  readonly TaskTerminal<TTask>[];
-
-export type WorkflowRunTerminal<TTask extends string> = {
-  readonly kind: WorkflowTerminalKind;
-  readonly runId: WorkflowRunId;
-  readonly workflow: StaticAgentWorkflowName;
-  readonly version: WorkflowVersion;
-  readonly sourceCommit: GitCommit;
-  readonly taskTerminals: WorkflowTaskTerminalSequence<TTask>;
-  readonly materializedView: MaterializedViewReference;
-  readonly startedAt: IsoTimestamp;
-  readonly finishedAt: IsoTimestamp;
-};
-
-export const noTasks: NoTaskTarget = { kind: TaskTargetKind.None };

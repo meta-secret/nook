@@ -5,6 +5,7 @@
 //! user is in it, and which action Nook may offer next.
 
 mod candidate_selection;
+mod observation_facts;
 mod observation_validation;
 mod snapshot_contract;
 mod vocabulary;
@@ -12,6 +13,17 @@ mod vocabulary;
 pub use candidate_selection::{
     AuthenticationFormObservationPriority, authentication_form_observation_priority,
     classify_authentication_workflow_candidates,
+};
+pub use observation_facts::{
+    AuthenticationAuthenticatorObservationFacts, AuthenticationAuthenticatorSetupObservation,
+    AuthenticationBackupCodesObservation, AuthenticationCeremonyContextObservation,
+    AuthenticationCeremonyObservationFacts, AuthenticationDetailedAdvanceControlObservation,
+    AuthenticationDetailedPasskeyControlCandidateObservation,
+    AuthenticationDetailedPasskeyControlObservation, AuthenticationFieldObservationFacts,
+    AuthenticationPageObservationFacts, AuthenticationPageObservationFactsBatch,
+    AuthenticationPasskeyControlObservation, authentication_page_observation_facts_priority,
+    authentication_passkey_control_candidate_is_safe,
+    authentication_passkey_control_evidence_is_safe,
 };
 pub use observation_validation::{
     MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
@@ -24,6 +36,65 @@ pub use vocabulary::{
 use crate::website_passkey_proposal::{WebsitePasskeyProposal, propose_website_passkey};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum AuthenticationManualCheckpoint {
+    #[default]
+    Absent,
+    Present,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum AuthenticationEnrollmentEvidence {
+    #[default]
+    Absent,
+    AuthenticatorSetup,
+    BackupCodes,
+    AuthenticatorSetupAndBackupCodes,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum AuthenticationAdvanceControlEvidence {
+    #[default]
+    Absent,
+    Present,
+    /// The browser owns a form that supports submission without a control element.
+    ImplicitSubmission,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum AuthenticationOneTimeCodeProgressionEvidence {
+    #[default]
+    AdvanceControlRequired,
+    AutoSubmitObserved,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum AuthenticationPasskeyEvidence {
+    #[default]
+    Absent,
+    Control,
+    VaultAccounts {
+        account_count: u32,
+    },
+    ControlAndVaultAccounts {
+        account_count: u32,
+    },
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]

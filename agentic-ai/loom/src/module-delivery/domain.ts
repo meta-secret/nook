@@ -8,6 +8,7 @@ export const MAX_MODULE_DELIVERY_NODES = 64;
 export const MAX_MODULE_DELIVERY_CONCURRENCY = 16;
 export const MAX_MODULE_DELIVERY_AGENT_DEPTH = 3;
 export const MAX_MODULE_DELIVERY_ATTEMPTS = 5;
+export const CORTEX_TEAM_WRITER_EXPERT = 'cortex_team_writer';
 
 export const REQUIRED_PARENT_OWNED_RESOURCES = [
   '.cortex/**',
@@ -93,6 +94,11 @@ export type ModuleDeliveryAcceptance = {
   readonly evidence: readonly string[];
 };
 
+export type ModuleDeliveryCortexAuthoring = {
+  readonly selectedSkillPaths: readonly string[];
+  readonly sharedWriteClaims: readonly string[];
+};
+
 export type ModuleDeliveryExpectedProducerIdentity = {
   readonly taskId: string;
   readonly team: TeamKey;
@@ -133,6 +139,7 @@ export type ModuleDeliveryEvidenceSynthesisNodeV2 = ModuleDeliveryNodeFields & {
 
 export type ModuleDeliveryWriteNodeV2 = ModuleDeliveryNodeFields & {
   readonly kind: ModuleDeliveryTaskKind.Write;
+  readonly cortexAuthoring?: ModuleDeliveryCortexAuthoring;
   readonly workspace: {
     readonly kind: ModuleDeliveryWorkspaceKind.IsolatedWorktree;
     readonly expectedCommitHandoff: true;

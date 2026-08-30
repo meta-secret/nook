@@ -41,8 +41,9 @@ When a task touches durable behavior, verify the related cortex surface.
 5. Fix obsolete facts in the same PR.
 6. Mark historical context as historical when it must remain.
 7. Remove or rewrite guidance that conflicts.
-8. Update the owning root or team knowledge graph and `AGENTS.md` links when
-   headings or paths change.
+8. Update the owning root or team knowledge graph when document ownership,
+   path, or discoverability changes. Update direct heading links when their
+   target heading changes.
 
 Verification checklist:
 
@@ -150,9 +151,15 @@ task loom:cortex-audit
   harness skill mirrors.
 - Semantic conflicts still require agent judgment.
 - For implementation tasks:
-  1. run `task loom:pre-push`;
-  2. commit and push; and
-  3. use the normal hosted validation path.
+  1. run required formatters and commit every allowed AI source or Cortex
+     mutation in the coherent handoff;
+  2. have Gizmo integrate the handoff and run `task loom:pre-push`;
+  3. return any new formatter mutation in AI-owned content for a fresh AI
+     commit before Gizmo reintegrates, reruns hygiene, and pushes; and
+  4. Gizmo dispatches at least one relevant focused remote task when the pushed
+     head is not validation-ready, or complete exact-head validation immediately
+     when it is ready.
+- Gizmo obtains fresh exact-head remote evidence after every replacement push.
 
 For a full Cortex GC request, report:
 

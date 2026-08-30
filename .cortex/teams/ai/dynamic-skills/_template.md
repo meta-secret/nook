@@ -40,9 +40,13 @@ Does not apply to:
 
 ## Validation
 
-Run the smallest relevant hosted tasks first. For implementation tasks, run
-`task format`, commit and push, use `task remote` for focused execution, then
-explicitly trigger complete validation with `task pr:validate`.
+For implementation tasks, run focused proof and required formatters. Commit
+every resulting mutation in the allowed source or Cortex paths. Gizmo
+integrates the handoff and runs `task loom:pre-push`. If hygiene mutates those
+team-owned paths, the team returns a fresh formatted commit before Gizmo
+reintegrates, reruns hygiene, and pushes. Gizmo dispatches a relevant focused
+remote task when the pushed head is not validation-ready. Gizmo dispatches
+complete exact-head validation immediately when the head is ready.
 
 For a docs-only Cortex change, run the focused checks named by
 [Cortex document navigation](cortex-document-map.md#validation).

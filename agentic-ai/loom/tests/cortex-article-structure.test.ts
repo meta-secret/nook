@@ -1,6 +1,4 @@
 import path from 'node:path';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { expect, test } from 'bun:test';
 import {
   auditCortexArticleStructure,
@@ -27,13 +25,6 @@ function makeDocument(args: MakeDocumentArgs): CortexDocumentSource {
 function audit(documents: readonly CortexDocumentSource[]) {
   const args: AuditCortexArticleStructureArgs = {
     documents,
-    migrationBaselineEntries: false,
-    migrationLedgerPath: path.join(
-      REPO_ROOT,
-      '.cortex',
-      'article-structure-migration.txt',
-    ),
-    repoRoot: REPO_ROOT,
   };
   return auditCortexArticleStructure(args);
 }
@@ -578,28 +569,4 @@ Literal examples do not create structural articles.
   };
   const document = makeDocument(documentArgs);
   expect(audit([document])).toEqual([]);
-});
-
-test('rejects article migration exemptions added after the baseline', () => {
-  const repositoryRoot = mkdtempSync(path.join(tmpdir(), 'article-ledger-'));
-  try {
-    const cortexRoot = path.join(repositoryRoot, '.cortex');
-    mkdirSync(cortexRoot);
-    const ledgerPath = path.join(cortexRoot, 'article-structure-migration.txt');
-    writeFileSync(ledgerPath, '.cortex/structured.md\n');
-    const document = makeDocument(STRUCTURED_DOCUMENT_ARGS);
-    const args: AuditCortexArticleStructureArgs = {
-      documents: [document],
-      migrationBaselineEntries: [],
-      migrationLedgerPath: ledgerPath,
-      repoRoot: repositoryRoot,
-    };
-    const findings = auditCortexArticleStructure(args);
-    expect(findings.map((finding) => finding.code)).toContain(
-      CortexArticleFindingCode.InvalidMigrationLedger,
-    );
-  } finally {
-    const removeOptions = { recursive: true, force: true } as const;
-    rmSync(repositoryRoot, removeOptions);
-  }
 });
