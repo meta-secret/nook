@@ -804,6 +804,26 @@ describe('classified login activation', () => {
     expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(false)
   })
 
+  test('fills a POST login when a visible dialog Cancel sits beside Sign in', () => {
+    document.body.innerHTML = `
+      <form method="post" id="login" action="/auth/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+        <button type="submit" formmethod="dialog">Cancel</button>
+      </form>
+    `
+    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: { username: 'vault-user', password: 'vault-pass' },
+      kind: PasswordFormQueryKind.Root,
+      root: document,
+    }
+    expect(fillLoginCredentials(fillArgs)).toBe(true)
+    expect(
+      document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
+    ).toBe('vault-pass')
+  })
+
   test('fills a POST login when an inert dialog submitter is also present', () => {
     document.body.innerHTML = `
       <form method="post" id="login" action="/auth/login">

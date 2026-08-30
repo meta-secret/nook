@@ -347,6 +347,21 @@ export function formHasDialogSubmitter(form: HTMLFormElement): boolean {
   });
 }
 
+export function selectedSubmitterBlocksCredentialDisclosure(
+  form: HTMLFormElement,
+  selectedSubmitter: LoginAdvanceControl | false,
+): boolean {
+  if (formBlocksCredentialDisclosure(form)) return true;
+  if (selectedSubmitter) {
+    const method = controlSubmissionMethod(selectedSubmitter);
+    return (
+      method === PageControlSubmissionMethod.Get ||
+      method === PageControlSubmissionMethod.Dialog
+    );
+  }
+  return formHasDialogSubmitter(form);
+}
+
 export function canRequestImplicitAuthenticationSubmit(
   form: HTMLFormElement,
   sourceOrigin: string,

@@ -49,7 +49,7 @@ import {
   controlMachineIdentity,
   controlSubmissionMethod,
   formBlocksCredentialDisclosure,
-  formHasDialogSubmitter,
+  selectedSubmitterBlocksCredentialDisclosure,
   formSubmissionMethod,
   PageControlSubmissionMethod,
   isRenderedControl,
@@ -87,7 +87,6 @@ export {
 } from "./password-form-submission-controls";
 
 void companionWasmReady;
-
 const passkeyControlAbsent =
   "absent" satisfies AuthenticationPasskeyControlObservation;
 const passkeyControlPresent =
@@ -100,9 +99,7 @@ export type PasswordFormSummary = {
   genericPasswordFieldCount: number;
   usernameFieldCount: number;
   oneTimeCodeFieldCount: number;
-  /** CAPTCHA, terms acceptance, or email-verification style human gate. */
   manualCheckpointPresent: boolean;
-  /** Visible passkey / WebAuthn control the user can activate. */
   passkeyControlPresent: boolean;
   formCount: number;
   observedAt: number;
@@ -801,8 +798,10 @@ export function fillLoginCredentials(
   const passwordField = passwordFields[0];
   if (
     passwordField.form &&
-    (formBlocksCredentialDisclosure(passwordField.form) ||
-      formHasDialogSubmitter(passwordField.form))
+    selectedSubmitterBlocksCredentialDisclosure(
+      passwordField.form,
+      findApprovedOwnedAdvanceControl(request, passwordField.form),
+    )
   ) {
     return false;
   }
@@ -897,10 +896,10 @@ type OwnedAdvanceControlActivation =
       submitted: boolean;
     };
 
-function activateApprovedOwnedAdvanceControl(
+function findApprovedOwnedAdvanceControl(
   request: PasswordFormScopeQuery,
   form: HTMLFormElement,
-): OwnedAdvanceControlActivation {
+): LoginAdvanceControl | false {
   const formWithinRequestRoot =
     request.root === form.ownerDocument ||
     (request.root instanceof Node && request.root.contains(form));
@@ -917,9 +916,9 @@ function activateApprovedOwnedAdvanceControl(
             candidate.formScope.kind === PasswordFormScopeKind.Owned &&
             candidate.formScope.owner === form,
         ) ?? false);
-  const approved =
+  return (
     observation &&
-    Array.from(
+    (Array.from(
       form.ownerDocument.querySelectorAll<LoginAdvanceControl>(
         authenticationAdvanceControlSelector,
       ),
@@ -942,7 +941,16 @@ function activateApprovedOwnedAdvanceControl(
           Boolean(transported) &&
           authentication_advance_control_is_safe(transported)
         );
-      });
+      }) ??
+      false)
+  );
+}
+
+function activateApprovedOwnedAdvanceControl(
+  request: PasswordFormScopeQuery,
+  form: HTMLFormElement,
+): OwnedAdvanceControlActivation {
+  const approved = findApprovedOwnedAdvanceControl(request, form);
   if (!approved) return { kind: OwnedAdvanceControlActivationKind.Absent };
   if (!approved.matches(semanticSubmitControlSelector)) {
     approved.click();
@@ -951,13 +959,9 @@ function activateApprovedOwnedAdvanceControl(
       submitted: true,
     };
   }
-  const submission: Parameters<typeof observeSubmit>[0] = {
-    form,
-    action: () => approved.click(),
-  };
   return {
     kind: OwnedAdvanceControlActivationKind.Activated,
-    submitted: observeSubmit(submission),
+    submitted: observeSubmit({ form, action: () => approved.click() }),
   };
 }
 
