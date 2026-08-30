@@ -497,6 +497,41 @@ describe('authentication workflow ranking', () => {
     ).toBe(true)
   })
 
+  test('keeps a later form-less Sign in after inert unowned password decoys fill the shortlist', () => {
+    const decoys = Array.from(
+      { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS * 2 },
+      (_, index) => {
+        const control =
+          index % 3 === 0
+            ? '<button type="button" disabled>Continue</button>'
+            : index % 3 === 1
+              ? '<button type="button" hidden>Next</button>'
+              : '<button type="button">Delete account</button>'
+        return `<div id="decoy-${index}"><input type="password" autocomplete="current-password" />${control}</div>`
+      },
+    ).join('')
+    document.body.innerHTML = `
+      ${decoys}
+      <div id="login-panel">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="button">Sign in</button>
+      </div>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations.length).toBeLessThanOrEqual(
+      MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
+    )
+    expect(
+      observations.some(
+        (observation) =>
+          observation.root instanceof Element &&
+          observation.root.id === 'login-panel',
+      ),
+    ).toBe(true)
+  })
+
   test('keeps a later form-less Sign in after twenty unowned password decoys', () => {
     const decoys = Array.from(
       { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS },

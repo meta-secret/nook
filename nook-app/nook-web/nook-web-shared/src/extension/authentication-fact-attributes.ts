@@ -43,6 +43,37 @@ export const authenticationFactObserverOptions = {
   subtree: true,
 } as const satisfies MutationObserverInit;
 
+export const AUTHENTICATION_SUBMIT_VALUE_SOURCE =
+  "nook-authentication-submit-value-v1";
+
+export function notifyAuthenticationSubmitValueAssigned(): void {
+  const targetOrigin = location.origin;
+  if (targetOrigin === "null") return;
+  const message: Parameters<typeof window.postMessage>[0] = {
+    source: AUTHENTICATION_SUBMIT_VALUE_SOURCE,
+  };
+  window.postMessage(message, targetOrigin);
+}
+
+export function isAuthenticationSubmitValueMessage(
+  event: MessageEvent,
+): boolean {
+  if (
+    location.origin === "null" ||
+    event.origin === "null" ||
+    event.origin !== location.origin ||
+    event.source !== window
+  ) {
+    return false;
+  }
+  const data = event.data;
+  return (
+    typeof data === "object" &&
+    Boolean(data) &&
+    data.source === AUTHENTICATION_SUBMIT_VALUE_SOURCE
+  );
+}
+
 export function observeAuthenticationSubmitValueAssignments(
   onChange: () => void,
 ): () => void {

@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import {
+  AUTHENTICATION_SUBMIT_VALUE_SOURCE,
   authenticationFactAttributeFilter,
   authenticationFactObserverOptions,
+  isAuthenticationSubmitValueMessage,
+  notifyAuthenticationSubmitValueAssigned,
   observeAuthenticationSubmitValueAssignments,
 } from '../../../../nook-web-shared/src/extension/authentication-fact-attributes'
 import {
@@ -305,5 +308,63 @@ describe('authentication fact rescans', () => {
     expect(
       summarizeAuthenticationWorkflowForms()[0]?.summary.passwordFieldCount,
     ).toBe(1)
+  })
+
+  test('bridges MAIN-world submit value assignments to the isolated listener', () => {
+    const posted: Array<{ message: unknown; targetOrigin: string }> = []
+    const originalPostMessage = window.postMessage.bind(window)
+    window.postMessage = ((message: unknown, targetOrigin: string) => {
+      posted.push({ message, targetOrigin })
+    }) as typeof window.postMessage
+    notifyAuthenticationSubmitValueAssigned()
+    window.postMessage = originalPostMessage
+
+    expect(posted).toEqual([
+      {
+        message: { source: AUTHENTICATION_SUBMIT_VALUE_SOURCE },
+        targetOrigin: location.origin,
+      },
+    ])
+    const event = new MessageEvent('message', {
+      data: { source: AUTHENTICATION_SUBMIT_VALUE_SOURCE },
+      origin: location.origin,
+      source: window,
+    })
+    expect(isAuthenticationSubmitValueMessage(event)).toBe(true)
+    expect(AUTHENTICATION_SUBMIT_VALUE_SOURCE).toBe(
+      'nook-authentication-submit-value-v1',
+    )
+  })
+
+  test('does not post submit-value notifications to an opaque origin', () => {
+    const posted: Array<{ message: unknown; targetOrigin: string }> = []
+    const originalPostMessage = window.postMessage.bind(window)
+    window.postMessage = ((message: unknown, targetOrigin: string) => {
+      posted.push({ message, targetOrigin })
+      if (targetOrigin === 'null') {
+        throw new Error('opaque origin')
+      }
+    }) as typeof window.postMessage
+    const originalOrigin = location.origin
+    Object.defineProperty(location, 'origin', {
+      configurable: true,
+      value: 'null',
+    })
+    expect(() => notifyAuthenticationSubmitValueAssigned()).not.toThrow()
+    expect(posted).toEqual([])
+    Object.defineProperty(location, 'origin', {
+      configurable: true,
+      value: originalOrigin,
+    })
+    window.postMessage = originalPostMessage
+    expect(
+      isAuthenticationSubmitValueMessage(
+        new MessageEvent('message', {
+          data: { source: AUTHENTICATION_SUBMIT_VALUE_SOURCE },
+          origin: 'null',
+          source: window,
+        }),
+      ),
+    ).toBe(false)
   })
 })

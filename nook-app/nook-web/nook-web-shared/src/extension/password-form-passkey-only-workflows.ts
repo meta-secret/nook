@@ -1,3 +1,4 @@
+import { looks_like_login_advance_control_label } from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
   findOneTimeCodeFields,
   findPasskeyControls,
@@ -14,6 +15,7 @@ import {
   associatedAuthenticationForm,
   authenticationAdvanceControlSelector,
   controlIsInert,
+  controlLabel,
   formBlocksCredentialDisclosure,
   formHasPostMethodSubmitter,
   formHasSemanticSubmitter,
@@ -300,11 +302,13 @@ function cheapWorkflowPriority(
 }
 
 function unownedScopeLooksProgressing(root: ParentNode): boolean {
-  return Boolean(
-    root instanceof Document || root instanceof Element
-      ? root.querySelector(authenticationAdvanceControlSelector)
-      : false,
-  );
+  if (!(root instanceof Document || root instanceof Element)) return false;
+  return Array.from(
+    root.querySelectorAll<HTMLElement>(authenticationAdvanceControlSelector),
+  ).some((control) => {
+    if (controlIsInert(control)) return false;
+    return looks_like_login_advance_control_label(controlLabel(control));
+  });
 }
 
 function ownedFormLooksProgressing({

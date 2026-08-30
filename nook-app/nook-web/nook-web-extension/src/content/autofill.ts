@@ -1,6 +1,7 @@
 import { isAuthenticationRouteHistoryMessage } from '../../../nook-web-shared/src/extension/authentication-route-history'
 import {
   authenticationFactObserverOptions,
+  isAuthenticationSubmitValueMessage,
   observeAuthenticationSubmitValueAssignments,
 } from '../../../nook-web-shared/src/extension/authentication-fact-attributes'
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
@@ -179,7 +180,12 @@ void companionWasmReady.then(() => {
   observer.observe(document.documentElement, authenticationFactObserverOptions)
   observeAuthenticationSubmitValueAssignments(scheduleScan)
   window.addEventListener('message', (event) => {
-    if (!isAuthenticationRouteHistoryMessage(event)) return
+    if (
+      !isAuthenticationRouteHistoryMessage(event) &&
+      !isAuthenticationSubmitValueMessage(event)
+    ) {
+      return
+    }
     scheduleScan()
   })
 })
