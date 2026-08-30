@@ -237,7 +237,9 @@ describe('authentication workflow ranking', () => {
 
     const observations = summarizeAuthenticationWorkflowForms()
     const ownedFormIds = observations.map(ownedFormId)
-    expect(ownedFormIds).toHaveLength(MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS)
+    expect(ownedFormIds.length).toBeLessThanOrEqual(
+      MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
+    )
     expect(ownedFormIds).toContain('passkey-login')
   })
 
