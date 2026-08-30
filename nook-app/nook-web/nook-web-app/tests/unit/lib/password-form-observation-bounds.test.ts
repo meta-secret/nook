@@ -436,6 +436,27 @@ describe('authentication observation bounds', () => {
     ).toBe(true)
   })
 
+  test('keeps a passkey-only form when the only password field is a hidden decoy', () => {
+    document.body.innerHTML = `
+      <form id="passkey-login" action="/login">
+        <input type="password" hidden autocomplete="current-password" />
+        <button type="button">Sign in with a passkey</button>
+      </form>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(
+      observations.some(
+        (observation) => ownedFormId(observation) === 'passkey-login',
+      ),
+    ).toBe(true)
+    expect(
+      observations.find(
+        (observation) => ownedFormId(observation) === 'passkey-login',
+      )?.summary.passwordFieldCount,
+    ).toBe(0)
+  })
+
   test('keeps a password login when Rust-safe passkey-only forms fill the bound', () => {
     const passkeyForms = Array.from(
       { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS },
