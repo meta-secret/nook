@@ -30,6 +30,7 @@ describe('authentication fact rescans', () => {
         'for',
         'formmethod',
         'inert',
+        'method',
         'onchange',
         'oninput',
         'placeholder',
@@ -195,5 +196,31 @@ describe('authentication fact rescans', () => {
       backupCodesHint: false,
     })
     expect(afterRemove.ceremony.oneTimeCodeHandlerSignals).toEqual([])
+  })
+
+  test('rescans submission method when a form method attribute changes', () => {
+    document.body.innerHTML = `
+      <form id="login" method="get" action="/auth/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+    const before = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(before.detailedAdvanceControl.kind).toBe('absent')
+    document.querySelector('form')?.setAttribute('method', 'post')
+    const after = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(after.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [{ submissionMethod: 'post' }],
+    })
   })
 })

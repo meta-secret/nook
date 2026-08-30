@@ -20,6 +20,7 @@ export const authenticationFactAttributeFilter = [
   "href",
   "id",
   "inert",
+  "method",
   "name",
   "onchange",
   "oninput",

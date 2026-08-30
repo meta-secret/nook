@@ -720,10 +720,11 @@ export function summarizeAuthenticationWorkflowForms(): PasswordFormObservation[
     ...allOneTimeCodeFields,
   ].filter((field) => !field.form);
   const unownedContainers = new Set(
-    unownedFields.map((field) => {
+    unownedFields.flatMap((field) => {
       const nookArrowArgs2: Parameters<typeof nearestUnownedAuthContainer>[0] =
         { field, root };
-      return nearestUnownedAuthContainer(nookArrowArgs2);
+      const container = nearestUnownedAuthContainer(nookArrowArgs2);
+      return container === field ? [] : [container];
     }),
   );
   for (const container of unownedContainers) {

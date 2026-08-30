@@ -19,7 +19,7 @@ afterEach(() => {
 describe('classified login activation', () => {
   test('does not activate a Continue control whose machine identity is destructive', () => {
     document.body.innerHTML = `
-      <form aria-label="Login" action="/auth/login">
+      <form method="post" aria-label="Login" action="/auth/login">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
         <button id="delete-account" type="submit">Continue</button>
@@ -39,7 +39,7 @@ describe('classified login activation', () => {
 
   test('activates a submitter in the first legend of a disabled fieldset', () => {
     document.body.innerHTML = `
-      <form aria-label="Login" action="/auth/login">
+      <form method="post" aria-label="Login" action="/auth/login">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
         <fieldset disabled>
@@ -64,7 +64,7 @@ describe('classified login activation', () => {
 
   test('does not activate a Continue control whose class is destructive', () => {
     document.body.innerHTML = `
-      <form aria-label="Login" action="/auth/login">
+      <form method="post" aria-label="Login" action="/auth/login">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
         <button class="delete-account" type="button">Continue</button>
@@ -84,7 +84,7 @@ describe('classified login activation', () => {
 
   test('does not implicitly submit after fill changes the form destination', () => {
     document.body.innerHTML = `
-      <form aria-label="Login" action="/login">
+      <form method="post" aria-label="Login" action="/login">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
         <button type="button">Show password</button>
@@ -117,7 +117,7 @@ describe('classified login activation', () => {
 
   test('does not click a username-only submitter twice when click cancels submit', () => {
     document.body.innerHTML = `
-      <form aria-label="Login" action="/auth/login">
+      <form method="post" aria-label="Login" action="/auth/login">
         <input autocomplete="username" name="email" type="email" />
         <button id="next" type="submit">Proceed</button>
       </form>
@@ -134,7 +134,7 @@ describe('classified login activation', () => {
 
   test('activates a Rust-approved neutral username-only submitter', () => {
     document.body.innerHTML = `
-      <form aria-label="Login" action="/auth/login">
+      <form method="post" aria-label="Login" action="/auth/login">
         <input autocomplete="username" name="email" type="email" />
         <button id="next" type="submit">Proceed</button>
       </form>
@@ -153,7 +153,7 @@ describe('classified login activation', () => {
 
   test('implicitly submits a password form that only has a non-submit button', () => {
     document.body.innerHTML = `
-      <form aria-label="Login" action="/session">
+      <form method="post" aria-label="Login" action="/session">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
         <button type="button">Show password</button>
@@ -171,7 +171,7 @@ describe('classified login activation', () => {
 
   test('implicitly submits a password-only step that has no username field', () => {
     document.body.innerHTML = `
-      <form aria-label="Login" action="/session">
+      <form method="post" aria-label="Login" action="/session">
         <input type="password" autocomplete="current-password" />
         <button type="button">Show password</button>
       </form>
@@ -188,7 +188,7 @@ describe('classified login activation', () => {
 
   test('prefers the semantic submitter over an earlier generic Continue button', () => {
     document.body.innerHTML = `
-      <form aria-label="Login" action="/session">
+      <form method="post" aria-label="Login" action="/session">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
         <button id="helper" type="button">Continue</button>
@@ -213,7 +213,7 @@ describe('classified login activation', () => {
 
   test('activates the Rust-approved type-button instead of posting the form action', () => {
     document.body.innerHTML = `
-      <form id="login" action="/account/delete">
+      <form method="post" id="login" action="/account/delete">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
         <button id="safe" type="button" formaction="/login">Sign in</button>
@@ -259,7 +259,7 @@ describe('classified login activation', () => {
 
   test('does not activate an external GET submitter after filling passwords', () => {
     document.body.innerHTML = `
-      <form id="login" action="/auth/login">
+      <form method="post" id="login" action="/auth/login">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
       </form>
@@ -300,7 +300,7 @@ describe('classified login activation', () => {
 
   test('advances a username-only login through an external form-associated control', () => {
     document.body.innerHTML = `
-      <form id="login" action="/auth/login">
+      <form method="post" id="login" action="/auth/login">
         <input autocomplete="username" name="email" type="email" />
       </form>
       <button id="next" type="submit" form="login">Continue</button>
@@ -328,7 +328,7 @@ describe('classified login activation', () => {
   test('fills username-only then advances common multi-step login controls', () => {
     for (const label of ['Continue with email', 'Sign in using password']) {
       document.body.innerHTML = `
-        <form id="login-form" action="/auth/login">
+        <form method="post" id="login-form" action="/auth/login">
           <input autocomplete="username" name="email" type="email" />
           <button id="next" type="button">${label}</button>
         </form>
@@ -366,7 +366,7 @@ describe('classified login activation', () => {
     ['hidden ancestor', '<button name="continue"></button>', 'hidden'],
   ])('skips %s before advancing login', (_, control, parentAttrs) => {
     document.body.innerHTML = `
-      <form id="login-form" action="/auth/login">
+      <form method="post" id="login-form" action="/auth/login">
         <input autocomplete="username" name="email" type="email" />
         <span id="p">Continue with Amazon</span>
         <span ${parentAttrs}>${control}</span>
@@ -388,7 +388,7 @@ describe('classified login activation', () => {
 
   test('advances a native semantic submit through a safe login route', () => {
     document.body.innerHTML = `
-      <form id="account-step" action="/auth/login">
+      <form method="post" id="account-step" action="/auth/login">
         <input autocomplete="username" name="email" type="email" />
         <input id="login-next" type="submit" />
       </form>
@@ -409,7 +409,7 @@ describe('classified login activation', () => {
       true,
     ],
     ['<button type="submit">Supprimer le compte</button>', false],
-    ['<form id="f"><button>Entrar</button></form>', false],
+    ['<form method="post" id="f"><button>Entrar</button></form>', false],
   ])('gates form-less localized control %s', (control, expected) => {
     window.history.replaceState({}, '', '/')
     document.body.innerHTML = `
@@ -439,7 +439,7 @@ describe('classified login activation', () => {
     'gates implicit username-only submit for %s',
     (formId, control, allowed) => {
       window.history.replaceState({}, '', '/account')
-      document.body.innerHTML = `<form id="${formId}" action="/login"><input autocomplete="username" />${control}</form>`
+      document.body.innerHTML = `<form method="post" id="${formId}" action="/login"><input autocomplete="username" />${control}</form>`
       document.querySelector('form')?.addEventListener('submit', (event) => {
         event.preventDefault()
       })
@@ -455,7 +455,7 @@ describe('classified login activation', () => {
     ['registration', '/register'],
   ])('does not advance a username-only login through %s', (_, route) => {
     document.body.innerHTML = `
-      <form id="login-form" action="/auth/login">
+      <form method="post" id="login-form" action="/auth/login">
         <input autocomplete="username" name="email" type="email" />
         <button id="alternate-route" type="submit" formaction="${route}">Continue</button>
       </form>
@@ -473,7 +473,7 @@ describe('classified login activation', () => {
 
   test('groups externally associated controls with their form owner', () => {
     document.body.innerHTML = `
-      <form id="login"><input autocomplete="username" /></form>
+      <form method="post" id="login"><input autocomplete="username" /></form>
       <input form="login" type="password" autocomplete="current-password" />
     `
 
@@ -488,7 +488,7 @@ describe('classified login activation', () => {
 
   test('ignores closed-dropdown password fields inside the same page form', () => {
     document.body.innerHTML = `
-      <form id="aspnetForm">
+      <form method="post" id="aspnetForm">
         <div class="gb-dropdown">
           <div class="gb-dropdown__holder" style="display: none">
             <input name="LoginUserName" type="text" />
@@ -531,7 +531,7 @@ describe('classified login activation', () => {
 
   test('does not surface a closed header-only login as a pilot workflow', () => {
     document.body.innerHTML = `
-      <form id="aspnetForm">
+      <form method="post" id="aspnetForm">
         <div class="gb-dropdown__holder" style="display: none">
           <input name="LoginUserName" type="text" />
           <input name="LoginPassword" type="password" />
@@ -545,7 +545,7 @@ describe('classified login activation', () => {
 
   test('keeps unowned login controls isolated from owned signup fields', () => {
     document.body.innerHTML = `
-      <form id="signup">
+      <form method="post" id="signup">
         <input autocomplete="username" />
         <input type="password" autocomplete="new-password" />
       </form>
@@ -605,14 +605,14 @@ describe('classified login activation', () => {
     document.body.innerHTML = Array.from(
       { length: 20 },
       (_, index) => `
-        <form id="signup-${index}">
+        <form method="post" id="signup-${index}">
           <input autocomplete="username" />
           <input type="password" autocomplete="new-password" />
         </form>`,
     ).join('')
     document.body.insertAdjacentHTML(
       'beforeend',
-      `<form id="login">
+      `<form method="post" id="login">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
       </form>`,
@@ -628,7 +628,7 @@ describe('classified login activation', () => {
 
   test('fills a visible username instead of a hidden autocomplete token', () => {
     document.body.innerHTML = `
-      <form>
+      <form method="post">
         <input type="hidden" autocomplete="username" value="token" />
         <input id="visible-email" type="email" />
         <input id="password" type="password" autocomplete="current-password" />
@@ -668,7 +668,7 @@ describe('classified login activation', () => {
 
   test('does not activate a submitter inside an aria-disabled panel', () => {
     document.body.innerHTML = `
-      <form aria-label="Login" action="/auth/login">
+      <form method="post" aria-label="Login" action="/auth/login">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
         <div aria-disabled="true">
@@ -690,7 +690,7 @@ describe('classified login activation', () => {
 
   test('does not claim a disabled submit control was activated', () => {
     document.body.innerHTML = `
-      <form>
+      <form method="post">
         <input type="password" autocomplete="current-password" />
         <button type="submit" disabled>Sign in</button>
       </form>
@@ -701,7 +701,7 @@ describe('classified login activation', () => {
 
   test('reports submission only when the form emits a submit event', () => {
     document.body.innerHTML = `
-      <form>
+      <form method="post">
         <input type="password" autocomplete="current-password" />
         <button type="submit">Sign in</button>
       </form>
@@ -714,7 +714,7 @@ describe('classified login activation', () => {
   })
 
   test('submits the exact later control approved by Rust', () => {
-    document.body.innerHTML = `<form id="login" action="/auth/login"><input autocomplete="username" /><input type="password" /><button id="unsafe" type="submit" formaction="/register">Continue</button><button id="safe" type="submit">Sign in</button></form>`
+    document.body.innerHTML = `<form method="post" id="login" action="/auth/login"><input autocomplete="username" /><input type="password" /><button id="unsafe" type="submit" formaction="/register">Continue</button><button id="safe" type="submit">Sign in</button></form>`
     const activated: string[] = []
     for (const control of document.querySelectorAll<HTMLButtonElement>(
       'button',
@@ -728,7 +728,7 @@ describe('classified login activation', () => {
   })
 
   test('submits the exact approved external form-associated control', () => {
-    document.body.innerHTML = `<form id="login" action="/auth/login"><input autocomplete="username" /><input type="password" /></form><button id="unsafe" type="submit" form="login" formaction="/register">Continue</button><button id="safe" type="submit" form="login">Sign in</button>`
+    document.body.innerHTML = `<form method="post" id="login" action="/auth/login"><input autocomplete="username" /><input type="password" /></form><button id="unsafe" type="submit" form="login" formaction="/register">Continue</button><button id="safe" type="submit" form="login">Sign in</button>`
     const activated: string[] = []
     for (const control of document.querySelectorAll<HTMLButtonElement>(
       'button',
@@ -740,6 +740,29 @@ describe('classified login activation', () => {
 
     expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
     expect(activated).toEqual(['safe'])
+  })
+
+  test('does not submit an omitted form method after filling passwords', () => {
+    document.body.innerHTML = `
+      <form method="post" id="login" action="/auth/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button id="sign-in" type="submit">Sign in</button>
+      </form>
+    `
+    let submitted = false
+    document.querySelector('form')?.addEventListener('submit', (event) => {
+      event.preventDefault()
+      submitted = true
+    })
+    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: { username: 'vault-user', password: 'vault-pass' },
+      kind: PasswordFormQueryKind.Root,
+      root: document,
+    }
+    expect(fillLoginCredentials(fillArgs)).toBe(true)
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(false)
+    expect(submitted).toBe(false)
   })
 
   test('does not submit GET-default formmethod overrides after filling passwords', () => {
@@ -768,7 +791,7 @@ describe('classified login activation', () => {
   })
 
   test('does not submit a form outside the requested root', () => {
-    document.body.innerHTML = `<form id="outside" action="/auth/login"><button id="submit" type="submit">Sign in</button></form><section id="scope"><input form="outside" type="password" /></section>`
+    document.body.innerHTML = `<form method="post" id="outside" action="/auth/login"><button id="submit" type="submit">Sign in</button></form><section id="scope"><input form="outside" type="password" /></section>`
     let activated = false
     document
       .querySelector<HTMLButtonElement>('#submit')

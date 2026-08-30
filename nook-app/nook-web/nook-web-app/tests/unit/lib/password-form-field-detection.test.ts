@@ -280,6 +280,49 @@ describe('authentication field detection', () => {
     ).toBe('observed')
   })
 
+  test('does not swallow an unrelated sibling password into a username Sign in scope', () => {
+    document.body.innerHTML = `
+      <section>
+        <div>
+          <input autocomplete="username" />
+          <button type="button">Sign in</button>
+        </div>
+        <input id="unrelated-pass" type="password" autocomplete="current-password" />
+      </section>
+    `
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(
+      observations.some(
+        (observation) =>
+          observation.summary.usernameFieldCount === 1 &&
+          observation.summary.passwordFieldCount === 0,
+      ),
+    ).toBe(true)
+    expect(
+      observations.some(
+        (observation) => observation.summary.passwordFieldCount > 0,
+      ),
+    ).toBe(false)
+    const usernameOnly = observations.find(
+      (observation) =>
+        observation.summary.usernameFieldCount === 1 &&
+        observation.summary.passwordFieldCount === 0,
+    )
+    if (!usernameOnly) {
+      throw new Error('expected a username-only Sign in scope')
+    }
+    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: { username: 'vault-user', password: 'vault-pass' },
+      kind: PasswordFormQueryKind.Scoped,
+      root: usernameOnly.root,
+      formScope: usernameOnly.formScope,
+    }
+    expect(fillLoginCredentials(fillArgs)).toBe(true)
+    expect(
+      (document.querySelector('#unrelated-pass') as HTMLInputElement).value,
+    ).toBe('')
+  })
+
   test('does not treat a generic type-button as a form-less auth container', () => {
     document.body.innerHTML = `
       <section>

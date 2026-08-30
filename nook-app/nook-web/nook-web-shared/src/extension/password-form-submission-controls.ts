@@ -277,7 +277,7 @@ export function controlSubmissionMethod(
     return PageControlSubmissionMethod.Absent;
   }
   const method = presentHtmlSubmissionMethod(owner.owner, "method");
-  return method === false ? PageControlSubmissionMethod.Absent : method;
+  return method === false ? PageControlSubmissionMethod.Get : method;
 }
 
 export function controlMachineIdentity(control: HTMLElement): string {
@@ -310,10 +310,8 @@ export function controlLabel(control: HTMLElement): string {
 }
 
 export function formUsesGetSubmission(form: HTMLFormElement): boolean {
-  return (
-    presentHtmlSubmissionMethod(form, "method") ===
-    PageControlSubmissionMethod.Get
-  );
+  const method = presentHtmlSubmissionMethod(form, "method");
+  return method === false || method === PageControlSubmissionMethod.Get;
 }
 
 export function canRequestImplicitAuthenticationSubmit(

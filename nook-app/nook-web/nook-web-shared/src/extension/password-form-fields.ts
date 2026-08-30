@@ -166,9 +166,18 @@ function findFields({
     return fields;
   }
   return Array.from(root.querySelectorAll<HTMLInputElement>(selector)).filter(
-    (field) =>
-      !formScope ||
-      (formScope.kind === PasswordFormScopeKind.Unowned && !field.form),
+    (field) => {
+      if (!formScope) return true;
+      if (formScope.kind !== PasswordFormScopeKind.Unowned || field.form) {
+        return false;
+      }
+      return (
+        nearestUnownedAuthContainer({
+          field,
+          root: field.ownerDocument,
+        }) === root
+      );
+    },
   );
 }
 
@@ -484,7 +493,11 @@ function localActivationControlLabel(control: Element): string {
 function containerHasUnambiguousAuthenticationActivation(
   container: Element,
 ): boolean {
-  const activationControls = Array.from(
+  return labeledTypeButtonActivationControls(container).length === 1;
+}
+
+function labeledTypeButtonActivationControls(container: Element): Element[] {
+  return Array.from(
     container.querySelectorAll(
       'button[type="button"], input[type="button"], [role="button"]',
     ),
@@ -493,7 +506,31 @@ function containerHasUnambiguousAuthenticationActivation(
       localActivationControlLabel(control),
     ),
   );
-  return activationControls.length === 1;
+}
+
+function unownedCredentialFieldCount(root: ParentNode): number {
+  return Array.from(
+    root.querySelectorAll<HTMLInputElement>(
+      'input[type="password"], input[autocomplete~="username" i], input[autocomplete~="email" i], input[autocomplete~="one-time-code" i]',
+    ),
+  ).filter((field) => !field.form && isRenderedInput(field)).length;
+}
+
+function typeButtonPromotionSwallowsForeignScope(
+  container: Element,
+  field: HTMLElement,
+): boolean {
+  const [activation] = labeledTypeButtonActivationControls(container);
+  if (!activation) return false;
+  let scope = activation.parentElement;
+  while (scope && container.contains(scope)) {
+    if (unownedCredentialFieldCount(scope) > 0 && !scope.contains(field)) {
+      return true;
+    }
+    if (scope === container) break;
+    scope = scope.parentElement;
+  }
+  return false;
 }
 
 export function nearestUnownedAuthContainer({
@@ -513,18 +550,29 @@ export function nearestUnownedAuthContainer({
         'button[type="submit"], input[type="submit"], button:not([type])',
       ),
     );
+    if (explicitAuthContainer || hasSubmitControl) {
+      return container;
+    }
     if (
-      explicitAuthContainer ||
-      hasSubmitControl ||
-      containerHasUnambiguousAuthenticationActivation(container)
+      containerHasUnambiguousAuthenticationActivation(container) &&
+      !typeButtonPromotionSwallowsForeignScope(container, field)
     ) {
       return container;
     }
     container = container.parentElement;
   }
-  return field.parentElement instanceof HTMLElement
-    ? field.parentElement
-    : root;
+  const parent = field.parentElement;
+  if (
+    parent instanceof HTMLElement &&
+    parent !== root &&
+    !(
+      containerHasUnambiguousAuthenticationActivation(parent) &&
+      typeButtonPromotionSwallowsForeignScope(parent, field)
+    )
+  ) {
+    return parent;
+  }
+  return field;
 }
 
 export function localUnownedPasskeyContainer({
