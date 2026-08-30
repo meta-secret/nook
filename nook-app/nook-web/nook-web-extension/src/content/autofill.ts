@@ -133,14 +133,16 @@ async function scanAndRender(): Promise<void> {
     return
   }
   const { response } = delivery
+  const { verdict } = response
   if (
-    response.kind !== AuthenticationWorkflowSnapshotResponseKind.Matched ||
-    !('snapshot' in response)
+    verdict.kind !== AuthenticationWorkflowSnapshotResponseKind.Matched ||
+    !('snapshot' in verdict) ||
+    !response.selectedFacts
   ) {
     removeScannedWidget()
     return
   }
-  const { snapshot } = response
+  const { snapshot } = verdict
   const selected = classifiedWorkflows[snapshot.observationIndex]
   if (!selected) {
     removeScannedWidget()
@@ -151,7 +153,7 @@ async function scanAndRender(): Promise<void> {
   const nookTypedArgs0_1: Parameters<typeof renderWidget>[0] = {
     snapshot,
     workflow: selected.observation,
-    facts: selected.facts,
+    facts: response.selectedFacts,
     vaultConnection,
   }
   renderWidget(nookTypedArgs0_1)

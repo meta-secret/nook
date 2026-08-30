@@ -123,6 +123,45 @@ function isDetailedPasskeyControl(
   )
 }
 
+export function isAuthenticationPageObservationView(
+  value: unknown,
+): value is AuthenticationPageObservationView {
+  if (!value || typeof value !== 'object') return false
+  const observation = value as AuthenticationPageObservationView
+  const { fields, ceremony, authenticator } = observation
+  const authenticationContext = ceremony?.authenticationContext
+  return (
+    Boolean(fields && ceremony && authenticator) &&
+    [
+      fields.usernameFieldCount,
+      fields.currentPasswordFieldCount,
+      fields.newPasswordFieldCount,
+      fields.genericPasswordFieldCount,
+      fields.oneTimeCodeFieldCount,
+      authenticator.matchingPasskeyAccountCount,
+    ].every(isCount) &&
+    ['absent', 'present'].includes(ceremony.manualCheckpoint) &&
+    ['advance-control-required', 'auto-submit-observed'].includes(
+      ceremony.oneTimeCodeProgression,
+    ) &&
+    typeof ceremony.oneTimeCodeHandlerSignal === 'string' &&
+    (!('oneTimeCodeHandlerSignals' in ceremony) ||
+      (Array.isArray(ceremony.oneTimeCodeHandlerSignals) &&
+        ceremony.oneTimeCodeHandlerSignals.every(
+          (signal) => typeof signal === 'string',
+        ))) &&
+    Boolean(authenticationContext) &&
+    typeof authenticationContext?.sourceOrigin === 'string' &&
+    typeof authenticationContext.formIdentity === 'string' &&
+    typeof authenticationContext.destinationIdentity === 'string' &&
+    ['absent', 'present'].includes(authenticator.authenticatorSetup) &&
+    ['absent', 'present'].includes(authenticator.backupCodes) &&
+    ['absent', 'present'].includes(authenticator.passkeyControl) &&
+    isDetailedAdvanceControl(observation.detailedAdvanceControl) &&
+    isDetailedPasskeyControl(authenticator.detailedPasskeyControl)
+  )
+}
+
 export function isAuthenticationWorkflowSnapshotMessage(
   message: unknown,
 ): message is AuthenticationWorkflowSnapshotMessage {
@@ -145,40 +184,5 @@ export function isAuthenticationWorkflowSnapshotMessage(
   ) {
     return false
   }
-  return message.payload.observations.every((value) => {
-    if (!value || typeof value !== 'object') return false
-    const observation = value as AuthenticationPageObservationView
-    const { fields, ceremony, authenticator } = observation
-    const authenticationContext = ceremony?.authenticationContext
-    return (
-      Boolean(fields && ceremony && authenticator) &&
-      [
-        fields.usernameFieldCount,
-        fields.currentPasswordFieldCount,
-        fields.newPasswordFieldCount,
-        fields.genericPasswordFieldCount,
-        fields.oneTimeCodeFieldCount,
-        authenticator.matchingPasskeyAccountCount,
-      ].every(isCount) &&
-      ['absent', 'present'].includes(ceremony.manualCheckpoint) &&
-      ['advance-control-required', 'auto-submit-observed'].includes(
-        ceremony.oneTimeCodeProgression,
-      ) &&
-      typeof ceremony.oneTimeCodeHandlerSignal === 'string' &&
-      (!('oneTimeCodeHandlerSignals' in ceremony) ||
-        (Array.isArray(ceremony.oneTimeCodeHandlerSignals) &&
-          ceremony.oneTimeCodeHandlerSignals.every(
-            (signal) => typeof signal === 'string',
-          ))) &&
-      Boolean(authenticationContext) &&
-      typeof authenticationContext?.sourceOrigin === 'string' &&
-      typeof authenticationContext.formIdentity === 'string' &&
-      typeof authenticationContext.destinationIdentity === 'string' &&
-      ['absent', 'present'].includes(authenticator.authenticatorSetup) &&
-      ['absent', 'present'].includes(authenticator.backupCodes) &&
-      ['absent', 'present'].includes(authenticator.passkeyControl) &&
-      isDetailedAdvanceControl(observation.detailedAdvanceControl) &&
-      isDetailedPasskeyControl(authenticator.detailedPasskeyControl)
-    )
-  })
+  return message.payload.observations.every(isAuthenticationPageObservationView)
 }

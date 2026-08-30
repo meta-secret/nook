@@ -41,7 +41,7 @@ describe('authentication workflow routing', () => {
         events.push(
           `snapshot:${observations[0]?.authenticator.matchingPasskeyAccountCount}`,
         )
-        return { kind: 'no-match' }
+        return { kind: 'matched', snapshot: { observationIndex: 0 } }
       },
     } as unknown as AuthenticationWorkflowRoutingDependencies
 
@@ -55,7 +55,12 @@ describe('authentication workflow routing', () => {
     expect(events).toEqual([])
 
     resolveReady()
-    await expect(response).resolves.toEqual({ ok: true })
+    await expect(response).resolves.toMatchObject({
+      ok: true,
+      selectedFacts: {
+        authenticator: { matchingPasskeyAccountCount: 2 },
+      },
+    })
     expect(events).toEqual([
       'evidence-classified',
       'passkeys-counted',

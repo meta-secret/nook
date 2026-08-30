@@ -4,6 +4,7 @@ import {
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT } from '../../../../nook-web-shared/src/extension/password-form-submission-controls'
 import type {
+  AuthenticationPageObservationView,
   AuthenticationWorkflowSnapshotMessage,
   AuthenticationWorkflowSnapshotView,
 } from '../../lib/auth-workflow-messages'
@@ -24,7 +25,11 @@ export function authenticationPasskeyEvidenceIsSafe(
 }
 
 export type AuthenticationWorkflowRoutingResponse =
-  | { ok: true; snapshot?: AuthenticationWorkflowSnapshotView }
+  | {
+      ok: true
+      snapshot?: AuthenticationWorkflowSnapshotView
+      selectedFacts?: AuthenticationPageObservationView
+    }
   | { ok: false; reason: 'workflow-snapshot-failed' }
 
 export type AuthenticationWorkflowRoutingRequest = {
@@ -75,9 +80,15 @@ export async function authenticationWorkflowMessageResponse({
       observations,
     }
     const result = await authenticationWorkflowSnapshot(snapshotRequest)
+    if ('snapshot' in result) {
+      const selectedFacts = observations[result.snapshot.observationIndex]
+      if (!selectedFacts) {
+        throw new Error('selected authentication workflow facts were absent')
+      }
+      return { ok: true, snapshot: result.snapshot, selectedFacts }
+    }
     return {
       ok: true,
-      ...('snapshot' in result ? { snapshot: result.snapshot } : {}),
     }
   } catch {
     return { ok: false, reason: 'workflow-snapshot-failed' }

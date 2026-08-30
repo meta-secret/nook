@@ -353,6 +353,35 @@ describe('runtime message adapters', () => {
   })
 
   test('decodes a valid workflow snapshot through Rust', async () => {
+    const selectedFacts = {
+      fields: {
+        usernameFieldCount: 0,
+        currentPasswordFieldCount: 0,
+        newPasswordFieldCount: 0,
+        genericPasswordFieldCount: 0,
+        oneTimeCodeFieldCount: 0,
+      },
+      ceremony: {
+        oneTimeCodeProgression: 'advance-control-required',
+        oneTimeCodeHandlerSignal: '',
+        authenticationContext: {
+          authenticationUsername: 'absent',
+          sourceOrigin: 'https://example.test',
+          formIdentity: 'passkey-login',
+          destinationIdentity: '/login',
+        },
+        manualCheckpoint: 'absent',
+        advanceControl: 'absent',
+      },
+      authenticator: {
+        authenticatorSetup: 'absent',
+        backupCodes: 'absent',
+        passkeyControl: 'present',
+        matchingPasskeyAccountCount: 2,
+        detailedPasskeyControl: { kind: 'absent' },
+      },
+      detailedAdvanceControl: { kind: 'absent' },
+    }
     const response = {
       ok: true,
       snapshot: {
@@ -364,6 +393,7 @@ describe('runtime message adapters', () => {
         approvalRequirement: 'explicit-user-approval',
         observationIndex: 0,
       },
+      selectedFacts,
     }
     installRuntimeMock({ kind: RuntimeMockKind.Response, response })
 
@@ -373,9 +403,10 @@ describe('runtime message adapters', () => {
 
     expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Delivered)
     if (delivery.kind === RuntimeMessageDeliveryKind.Delivered) {
-      expect(delivery.response.kind).toBe(
+      expect(delivery.response.verdict.kind).toBe(
         AuthenticationWorkflowSnapshotResponseKind.Matched,
       )
+      expect(delivery.response.selectedFacts).toEqual(selectedFacts)
     }
   })
 
