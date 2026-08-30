@@ -139,6 +139,18 @@ test('accepts the exact canonical executable-skill package schema', async () => 
   }
 });
 
+test('accepts a declared static YAML host execution kind', async () => {
+  const overrides: FixtureOverrides = {
+    manifest: { ...MANIFEST, executionKind: 'static-yaml-read-only' },
+  };
+  const repoRoot = await packageFixture(overrides);
+  try {
+    expect(audit(repoRoot)(trackedFiles())).toEqual([]);
+  } finally {
+    await rm(repoRoot, REMOVE_OPTIONS);
+  }
+});
+
 test('rejects unsafe tracked modes and tracked node_modules', async () => {
   const repoRoot = await packageFixture();
   try {

@@ -555,7 +555,8 @@ function auditManifest(request: AuditManifestRequest): void {
   if (
     document.schemaVersion !== 1 ||
     document.id !== skillPackage.slug ||
-    document.executionKind !== 'in-process-read-only' ||
+    (document.executionKind !== 'in-process-read-only' &&
+      document.executionKind !== 'static-yaml-read-only') ||
     typeof document.requestKind !== 'string' ||
     document.requestKind.length === 0 ||
     typeof document.resultKind !== 'string' ||

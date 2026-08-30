@@ -181,8 +181,8 @@ Mechanical checks cannot decide whether a list reflects the correct semantics.
 The author still owns hierarchy, meaning, and consistency review.
 
 The application is currently an in-process Loom dependency with no command,
-network, write, scheduling, or lifecycle authority. Strict YAML discovery and
-invocation are deferred to a follow-up slice.
+network, write, scheduling, or lifecycle authority. Strict YAML article
+activation remains a dependent slice.
 
 ## Application checklist
 

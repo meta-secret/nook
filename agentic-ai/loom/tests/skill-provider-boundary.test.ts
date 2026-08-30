@@ -674,6 +674,9 @@ export function referencesSkillProvider(specifier: string): boolean {
     framed.includes('/.agents/skills/') ||
     framed.includes(
       '/.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/',
+    ) ||
+    framed.includes(
+      '/.cortex/teams/ai/dynamic-skills/executable-skill-host/scripts/',
     )
   );
 }

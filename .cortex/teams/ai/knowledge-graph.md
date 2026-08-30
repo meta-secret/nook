@@ -25,6 +25,7 @@ Use these skills when creating, moving, reviewing, or repairing Cortex.
 - [Cortex consistency](dynamic-skills/cortex-consistency.md)
 - [Cortex refactoring expert](dynamic-skills/cortex-refactoring-expert.md)
 - [Dynamic skill authoring](dynamic-skills/dynamic-skill-authoring.md)
+- [Executable skill host](dynamic-skills/executable-skill-host/SKILL.md)
 - [Skill template](dynamic-skills/_template.md)
 - [Project skill registry](dynamic-skills/index.md)
 

@@ -24,6 +24,24 @@ tasks:
     cmds:
       - bun "{{.REPO_ROOT}}/agentic-ai/loom/src/executable-skills/package-gate-cli.ts" verify "{{.REPO_ROOT}}"
 
+  skills:run:
+    desc: Run one executable skill action from strict YAML (REQUEST_YAML='<yaml>').
+    deps: [skills:install]
+    requires:
+      vars: [REQUEST_YAML]
+    env:
+      NOOK_SKILL_REQUEST_YAML: '{{.REQUEST_YAML}}'
+    cmds:
+      - >-
+        bun "{{.REPO_ROOT}}/.cortex/teams/ai/dynamic-skills/executable-skill-host/scripts/src/cli.ts"
+        "--request-yaml=$NOOK_SKILL_REQUEST_YAML"
+
+  skills:tools-list:
+    desc: List executable skill actions, schemas, and resolved YAML examples.
+    deps: [skills:install]
+    cmds:
+      - bun "{{.REPO_ROOT}}/.cortex/teams/ai/dynamic-skills/executable-skill-host/scripts/src/cli.ts" --tools-list
+
   loom:install:
     desc: Install Loom Bun dependencies with a frozen lockfile.
     dir: agentic-ai/loom

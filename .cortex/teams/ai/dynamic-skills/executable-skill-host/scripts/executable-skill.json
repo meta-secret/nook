@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "executable-skill-host",
+  "executionKind": "static-yaml-read-only",
+  "requestKind": "strict-domain-yaml-v1",
+  "resultKind": "strict-domain-yaml-response-v1",
+  "policyPaths": [
+    ".cortex/teams/ai/dynamic-skills/executable-skill-host/SKILL.md"
+  ],
+  "limits": {
+    "requestBytes": 65536,
+    "resultBytes": 8454144
+  }
+}
