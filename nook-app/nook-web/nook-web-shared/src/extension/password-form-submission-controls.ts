@@ -523,9 +523,15 @@ export function selectedSubmitterBlocksCredentialDisclosure({
       };
       const formmethod = presentHtmlSubmissionMethod(formmethodRequest);
       if (formmethod !== false) {
-        return submissionMethodBlocksCredentialDisclosure(formmethod);
+        return (
+          submissionMethodBlocksCredentialDisclosure(formmethod) ||
+          formHasGetMethodSubmitter(form)
+        );
       }
-      return explicitFormMethodBlocksDisclosure(form);
+      return (
+        explicitFormMethodBlocksDisclosure(form) ||
+        formHasGetMethodSubmitter(form)
+      );
     }
     return (
       formHasGetMethodSubmitter(form) ||

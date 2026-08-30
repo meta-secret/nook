@@ -627,6 +627,52 @@ describe('website one-time-code fields', () => {
     })
   })
 
+  test('transports an input passkey control labeled by its value', () => {
+    document.body.innerHTML = `
+      <form method="post" id="passkey-login" action="/login">
+        <input type="button" value="Use passkey" />
+      </form>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
+      kind: 'candidates',
+      observation: [
+        {
+          kind: 'labeled',
+          observation: { label: expect.stringContaining('Use passkey') },
+        },
+      ],
+    })
+  })
+
+  test('transports an icon-only passkey control labeled by aria-label', () => {
+    document.body.innerHTML = `
+      <form method="post" id="passkey-login" action="/login">
+        <button type="button" aria-label="Use passkey"><svg></svg></button>
+      </form>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
+      kind: 'candidates',
+      observation: [
+        {
+          kind: 'labeled',
+          observation: { label: expect.stringContaining('Use passkey') },
+        },
+      ],
+    })
+  })
+
   test('keeps standalone explicitly marked passkey controls locally scoped', () => {
     document.body.innerHTML = `
       <button type="button" data-nook-passkey-control>Continue</button>
@@ -818,6 +864,26 @@ describe('website one-time-code fields', () => {
         <input type="password" autocomplete="current-password" />
         <input type="submit" value="Go" />
         <button type="button">Sign in</button>
+      </form>
+    `
+    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: { username: 'vault-user', password: 'vault-pass' },
+      kind: PasswordFormQueryKind.Root,
+      root: document,
+    }
+    expect(fillLoginCredentials(fillArgs)).toBe(false)
+    expect(
+      document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
+    ).toBe('')
+  })
+
+  test('does not fill through a POST submitter beside a native GET sibling', () => {
+    document.body.innerHTML = `
+      <form method="post" id="login" action="/auth/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+        <button type="submit" formmethod="get">Search</button>
       </form>
     `
     const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {

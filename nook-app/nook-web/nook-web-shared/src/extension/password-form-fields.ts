@@ -509,13 +509,7 @@ export function findPasskeyControls(
   const controls = [...rooted, ...descendants];
   const candidates = controls.flatMap((control) => {
     const explicitlyMarked = control.hasAttribute("data-nook-passkey-control");
-    const labeled = (
-      control.textContent ??
-      control.getAttribute("aria-label") ??
-      control.getAttribute("title") ??
-      (control as HTMLInputElement).value ??
-      ""
-    ).trim();
+    const labeled = localActivationControlLabel(control);
     return explicitlyMarked ||
       (labeled && looks_like_passkey_control_label(labeled))
       ? [{ control, explicitlyMarked }]
@@ -543,6 +537,14 @@ export function pageHasPasskeyControl(root: ParentNode = document): boolean {
 }
 
 function localActivationControlLabel(control: Element): string {
+  const labelledBy = (control.getAttribute("aria-labelledby") ?? "")
+    .split(/\s+/u)
+    .filter(Boolean)
+    .flatMap((id) => {
+      const label = control.ownerDocument.getElementById(id);
+      return label ? [label.textContent ?? ""] : [];
+    })
+    .join(" ");
   const value =
     control instanceof HTMLInputElement || control instanceof HTMLButtonElement
       ? control.value
@@ -551,7 +553,9 @@ function localActivationControlLabel(control: Element): string {
     control.textContent ?? "",
     control.getAttribute("aria-label") ?? "",
     control.getAttribute("title") ?? "",
+    control.getAttribute("alt") ?? "",
     value,
+    labelledBy,
   ]
     .join(" ")
     .trim();
