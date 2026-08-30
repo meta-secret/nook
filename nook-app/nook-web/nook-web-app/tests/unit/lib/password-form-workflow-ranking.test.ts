@@ -674,6 +674,32 @@ describe('authentication workflow ranking', () => {
     ).toBe(true)
   })
 
+  test('keeps a GET form whose approved submitter posts after non-progressing decoys fill the bound', () => {
+    const decoys = Array.from(
+      { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS * 2 },
+      (_, index) =>
+        `<form method="get" id="search-${index}" action="/search"><input type="password" autocomplete="current-password" /></form>`,
+    ).join('')
+    document.body.innerHTML = `
+      ${decoys}
+      <form id="password-login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit" formmethod="post">Sign in</button>
+      </form>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations.length).toBeLessThanOrEqual(
+      MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
+    )
+    expect(
+      observations.some(
+        (observation) => ownedFormId(observation) === 'password-login',
+      ),
+    ).toBe(true)
+  })
+
   test('keeps a login whose Sign in submitter is associated from outside the form', () => {
     const decoys = Array.from(
       { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS * 2 },

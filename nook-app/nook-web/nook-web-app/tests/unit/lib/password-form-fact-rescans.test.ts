@@ -266,6 +266,30 @@ describe('authentication fact rescans', () => {
     stop()
   })
 
+  test('rescans after a type-button value property assignment', () => {
+    document.body.innerHTML = `
+      <div class="signin-panel">
+        <input autocomplete="username" />
+        <input id="advance" type="button" value="Next" />
+      </div>
+    `
+    const advance = document.querySelector('#advance')
+    if (!(advance instanceof HTMLInputElement)) {
+      throw new Error('expected the type-button control')
+    }
+    expect(summarizeAuthenticationWorkflowForms()).toHaveLength(0)
+    let rescans = 0
+    const stop = observeAuthenticationSubmitValueAssignments(() => {
+      rescans += 1
+    })
+    advance.value = 'Sign in'
+    expect(rescans).toBe(1)
+    expect(summarizeAuthenticationWorkflowForms()[0]?.formScope.kind).toBe(
+      'unowned',
+    )
+    stop()
+  })
+
   test('rescans a closed dialog after it opens', () => {
     document.body.innerHTML = `
       <dialog>

@@ -433,6 +433,22 @@ export function formBlocksCredentialDisclosure(form: HTMLFormElement): boolean {
   return submissionMethodBlocksCredentialDisclosure(formSubmissionMethod(form));
 }
 
+export function formHasPostMethodSubmitter(form: HTMLFormElement): boolean {
+  return Array.from(
+    form.ownerDocument.querySelectorAll<HTMLElement>(
+      semanticSubmitControlSelector,
+    ),
+  ).some((control) => {
+    if (controlIsInert(control)) return false;
+    const owner = associatedAuthenticationForm(control);
+    return (
+      owner.kind === PasswordFormScopeKind.Owned &&
+      owner.owner === form &&
+      controlSubmissionMethod(control) === PageControlSubmissionMethod.Post
+    );
+  });
+}
+
 export function formHasDialogSubmitter(form: HTMLFormElement): boolean {
   return Array.from(
     form.ownerDocument.querySelectorAll<HTMLElement>(
@@ -463,13 +479,15 @@ export function selectedSubmitterBlocksCredentialDisclosure({
   selectedSubmitter,
 }: SelectedSubmitterDisclosureRequest): boolean {
   if (selectedSubmitter) {
-    const formmethodRequest: HtmlSubmissionMethodRequest = {
-      element: selectedSubmitter,
-      name: "formmethod",
-    };
-    const formmethod = presentHtmlSubmissionMethod(formmethodRequest);
-    if (formmethod !== false) {
-      return submissionMethodBlocksCredentialDisclosure(formmethod);
+    if (controlHasNativeSubmitSemantics(selectedSubmitter)) {
+      const formmethodRequest: HtmlSubmissionMethodRequest = {
+        element: selectedSubmitter,
+        name: "formmethod",
+      };
+      const formmethod = presentHtmlSubmissionMethod(formmethodRequest);
+      if (formmethod !== false) {
+        return submissionMethodBlocksCredentialDisclosure(formmethod);
+      }
     }
     return explicitFormMethodBlocksDisclosure(form);
   }

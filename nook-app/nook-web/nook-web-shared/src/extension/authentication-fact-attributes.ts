@@ -66,7 +66,9 @@ export function observeAuthenticationSubmitValueAssignments(
       originalSet.call(this, next);
       if (
         previous !== next &&
-        (this.type === "submit" || this.type === "image")
+        (this.type === "submit" ||
+          this.type === "image" ||
+          this.type === "button")
       ) {
         onChange();
       }

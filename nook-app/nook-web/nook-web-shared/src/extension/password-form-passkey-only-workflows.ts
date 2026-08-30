@@ -15,6 +15,7 @@ import {
   authenticationAdvanceControlSelector,
   controlIsInert,
   formBlocksCredentialDisclosure,
+  formHasPostMethodSubmitter,
   formHasSemanticSubmitter,
   MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
   PasswordFormQueryKind,
@@ -372,7 +373,8 @@ function cheapWorkflowLooksProgressing(
     summary: observation.summary,
   };
   return (
-    !formBlocksCredentialDisclosure(observation.formScope.owner) &&
+    (!formBlocksCredentialDisclosure(observation.formScope.owner) ||
+      formHasPostMethodSubmitter(observation.formScope.owner)) &&
     ownedFormLooksProgressing(progressionRequest)
   );
 }

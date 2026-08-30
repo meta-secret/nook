@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from 'vitest'
 import {
   authenticationPageObservationFacts,
   fillLoginCredentials,
+  fillOneTimeCode,
   PasswordFormQueryKind,
   PasswordFormScopeKind,
   submitLoginForm,
@@ -753,5 +754,71 @@ describe('website one-time-code fields', () => {
         }),
       ]),
     })
+  })
+
+  test('does not write the password after username events switch the form to GET', () => {
+    document.body.innerHTML = `
+      <form method="post" id="login" action="/auth/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+    document
+      .querySelector('input[autocomplete="username"]')
+      ?.addEventListener('input', () => {
+        document.querySelector('form')?.setAttribute('method', 'get')
+      })
+    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: { username: 'vault-user', password: 'vault-pass' },
+      kind: PasswordFormQueryKind.Root,
+      root: document,
+    }
+    expect(fillLoginCredentials(fillArgs)).toBe(false)
+    expect(
+      document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
+    ).toBe('')
+  })
+
+  test('fills a POST login whose type-button advance control carries leftover GET formmethod', () => {
+    document.body.innerHTML = `
+      <form method="post" id="login" action="/auth/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="button" formmethod="get">Sign in</button>
+      </form>
+    `
+    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: { username: 'vault-user', password: 'vault-pass' },
+      kind: PasswordFormQueryKind.Root,
+      root: document,
+    }
+    expect(fillLoginCredentials(fillArgs)).toBe(true)
+    expect(
+      document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
+    ).toBe('vault-pass')
+  })
+
+  test('fills the OTP field that owns the recognized auto-submit handler', () => {
+    document.body.innerHTML = `
+      <input autocomplete="one-time-code" />
+      <input
+        id="otp-code"
+        autocomplete="one-time-code"
+        oninput="this.form.requestSubmit()"
+      />
+    `
+    const first = document.querySelector<HTMLInputElement>(
+      'input[autocomplete="one-time-code"]',
+    )
+    const field = document.querySelector<HTMLInputElement>('#otp-code')
+    const oneTimeCodeFillArgs: Parameters<typeof fillOneTimeCode>[0] = {
+      code: '123456',
+      kind: PasswordFormQueryKind.Root,
+      root: document,
+    }
+    expect(fillOneTimeCode(oneTimeCodeFillArgs)).toBe(true)
+    expect(first?.value).toBe('')
+    expect(field?.value).toBe('123456')
   })
 })

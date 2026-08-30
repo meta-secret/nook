@@ -19,6 +19,7 @@ import {
   findPasswordFields,
   findUsernameFields,
   hasAutocompleteToken,
+  preferredOneTimeCodeFillField,
   isAuthUsernameField,
   controlAssociatesWithObservation,
   isLocallyAdjacentToOwnedForm,
@@ -731,7 +732,9 @@ export function summarizeAuthenticationWorkflowForms(): PasswordFormObservation[
 
 export function fillOneTimeCode(request: OneTimeCodeFillRequest): boolean {
   const nookTypedArgs0_16 = passwordFieldQuery(request);
-  const field = findOneTimeCodeFields(nookTypedArgs0_16)[0];
+  const field = preferredOneTimeCodeFillField(
+    findOneTimeCodeFields(nookTypedArgs0_16),
+  );
   if (!field) return false;
   const nookTypedArgs0_17: Parameters<typeof setNativeInputValue>[0] = {
     input: field,
@@ -761,22 +764,19 @@ export function fillLoginCredentials(
     usernameField.focus();
     return true;
   }
-
   const passwordField = passwordFields[0];
-  if (passwordField.form) {
-    const advanceRequest: OwnedAdvanceControlRequest = {
-      request,
-      form: passwordField.form,
-    };
+  function formBlocksFill(form: HTMLFormElement): boolean {
+    const advanceRequest: OwnedAdvanceControlRequest = { request, form };
     const disclosureRequest: Parameters<
       typeof selectedSubmitterBlocksCredentialDisclosure
     >[0] = {
-      form: passwordField.form,
+      form,
       selectedSubmitter: findApprovedOwnedAdvanceControl(advanceRequest),
     };
-    if (selectedSubmitterBlocksCredentialDisclosure(disclosureRequest)) {
-      return false;
-    }
+    return selectedSubmitterBlocksCredentialDisclosure(disclosureRequest);
+  }
+  if (passwordField.form && formBlocksFill(passwordField.form)) {
+    return false;
   }
   if (usernameField) {
     const nookTypedArgs0_21: Parameters<typeof setNativeInputValue>[0] = {
@@ -784,6 +784,9 @@ export function fillLoginCredentials(
       value: request.credentials.username,
     };
     setNativeInputValue(nookTypedArgs0_21);
+    if (passwordField.form && formBlocksFill(passwordField.form)) {
+      return false;
+    }
   }
   const nookTypedArgs0_22: Parameters<typeof setNativeInputValue>[0] = {
     input: passwordField,

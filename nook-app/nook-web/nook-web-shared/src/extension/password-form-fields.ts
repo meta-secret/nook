@@ -9,6 +9,7 @@ import {
   looks_like_manual_checkpoint_label,
   looks_like_one_time_code_field,
   looks_like_passkey_control_label,
+  looks_like_one_time_code_auto_submit_signal,
   looks_like_username_field,
   parse_page_input_type,
   strongest_authentication_username_evidence,
@@ -428,6 +429,25 @@ export function findOneTimeCodeFields({
     fields.push(field);
   }
   return fields;
+}
+
+function fieldHasOneTimeCodeAutoSubmitHandler(
+  field: HTMLInputElement,
+): boolean {
+  return ["oninput", "onchange"].some((attribute) => {
+    const handler = field.getAttribute(attribute);
+    return (
+      typeof handler === "string" &&
+      looks_like_one_time_code_auto_submit_signal(`${attribute}=${handler}`)
+    );
+  });
+}
+
+export function preferredOneTimeCodeFillField(
+  fields: HTMLInputElement[],
+): HTMLInputElement | false {
+  const preferred = fields.find(fieldHasOneTimeCodeAutoSubmitHandler);
+  return preferred ? preferred : (fields[0] ?? false);
 }
 
 export function hasAutocompleteToken({
