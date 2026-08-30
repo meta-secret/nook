@@ -429,7 +429,8 @@ function pageControlObservation({
   return {
     actionability:
       (control as HTMLButtonElement).disabled ||
-      control.getAttribute("aria-disabled") === "true"
+      control.getAttribute("aria-disabled") === "true" ||
+      !isRenderedControl(control)
         ? "inert"
         : "actionable",
     ownership: owned
@@ -617,8 +618,10 @@ export function authenticationPageObservationFacts({
         : "absent",
       advanceControl:
         observation.formScope.kind === PasswordFormScopeKind.Owned &&
-        !advanceControls.some((control) =>
-          control.matches(semanticSubmitControlSelector),
+        !advanceControls.some(
+          (control) =>
+            control.matches(semanticSubmitControlSelector) &&
+            isRenderedControl(control),
         )
           ? "implicit-submission"
           : "absent",

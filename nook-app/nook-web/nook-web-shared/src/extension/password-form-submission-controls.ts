@@ -310,7 +310,7 @@ export function formHasSemanticSubmitter(form: HTMLFormElement): boolean {
     ) {
       return false;
     }
-    return control.form === form;
+    return control.form === form && isRenderedControl(control);
   });
 }
 
