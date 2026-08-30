@@ -578,7 +578,9 @@ export function authenticationPageObservationFacts({
   );
   const boundedPasskeyCandidates = boundAuthenticationControlObservations(
     passkeyCandidates,
-    (candidate) => candidate.observation.actionability === "actionable",
+    (candidate) =>
+      candidate.observation.actionability === "actionable" &&
+      authentication_passkey_control_candidate_is_safe(candidate),
   );
   if (boundedPasskeyCandidates.length > 0) {
     detailedPasskeyControl = {

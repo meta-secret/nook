@@ -451,4 +451,35 @@ describe('authentication observation bounds', () => {
       ),
     ).toBe(true)
   })
+
+  test('keeps a Rust-safe passkey candidate when enrollment controls fill the bound', () => {
+    const decoys = Array.from(
+      { length: MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT },
+      (_, index) =>
+        `<button type="button">${index % 2 === 0 ? 'Add passkey' : 'Manage passkeys'}</button>`,
+    ).join('')
+    document.body.innerHTML = `
+      <form aria-label="Login" action="/login">
+        ${decoys}
+        <button id="passkey-login" type="button">Sign in with a passkey</button>
+      </form>
+    `
+
+    expect(
+      authenticationPageObservationFacts({
+        observation: observedAuthenticationWorkflow(),
+        authenticatorSetupHint: false,
+        backupCodesHint: false,
+      }).authenticator.detailedPasskeyControl,
+    ).toMatchObject({
+      kind: 'candidates',
+      observation: expect.arrayContaining([
+        expect.objectContaining({
+          observation: expect.objectContaining({
+            label: expect.stringContaining('Sign in with a passkey'),
+          }),
+        }),
+      ]),
+    })
+  })
 })
