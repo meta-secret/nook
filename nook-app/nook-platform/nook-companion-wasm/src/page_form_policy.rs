@@ -8,6 +8,12 @@ pub struct NookPageInputFieldObservation {
     inner: nook_companion_core::PageInputFieldObservation,
 }
 
+impl NookPageInputFieldObservation {
+    pub(crate) const fn as_core(&self) -> &nook_companion_core::PageInputFieldObservation {
+        &self.inner
+    }
+}
+
 #[wasm_bindgen]
 impl NookPageInputFieldObservation {
     #[wasm_bindgen(constructor)]
@@ -98,6 +104,12 @@ pub fn looks_like_passkey_control_label(label: &str) -> bool {
 
 #[wasm_bindgen]
 #[must_use]
+pub fn looks_like_passkey_enrollment_or_management_label(label: &str) -> bool {
+    nook_companion_core::looks_like_passkey_enrollment_or_management_label(label)
+}
+
+#[wasm_bindgen]
+#[must_use]
 pub fn looks_like_manual_checkpoint_label(label: &str) -> bool {
     nook_companion_core::looks_like_manual_checkpoint_label(label)
 }
@@ -130,7 +142,11 @@ pub fn has_safe_authentication_route_identity(
 
 #[wasm_bindgen]
 #[must_use]
-#[expect(clippy::too_many_arguments, reason = "typed WASM policy boundary")]
+#[expect(
+    clippy::too_many_arguments,
+    clippy::fn_params_excessive_bools,
+    reason = "typed WASM policy boundary"
+)]
 pub fn can_activate_authentication_route_control(
     source_origin: &str,
     form_identity: &str,
@@ -140,6 +156,7 @@ pub fn can_activate_authentication_route_control(
     has_concrete_control: bool,
     has_authentication_username: bool,
     has_local_authentication_scope: bool,
+    has_authentication_password: bool,
 ) -> bool {
     nook_companion_core::can_activate_authentication_route_control(
         source_origin,
@@ -150,6 +167,7 @@ pub fn can_activate_authentication_route_control(
         has_concrete_control,
         has_authentication_username,
         has_local_authentication_scope,
+        has_authentication_password,
     )
 }
 
@@ -173,10 +191,28 @@ pub fn authentication_passkey_control_candidate_is_safe(
 
 #[wasm_bindgen]
 #[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn authentication_passkey_control_evidence_is_safe(
+    evidence: nook_companion_core::AuthenticationDetailedPasskeyControlObservation,
+) -> bool {
+    nook_companion_core::authentication_passkey_control_evidence_is_safe(&evidence)
+}
+
+#[wasm_bindgen]
+#[must_use]
 pub fn authentication_form_observation_priority(
     observation: nook_companion_core::AuthenticationPageObservation,
 ) -> u8 {
     nook_companion_core::authentication_form_observation_priority(observation)
+}
+
+#[wasm_bindgen]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn authentication_page_observation_facts_priority(
+    facts: nook_companion_core::AuthenticationPageObservationFacts,
+) -> u8 {
+    nook_companion_core::authentication_page_observation_facts_priority(facts)
 }
 
 #[wasm_bindgen]
@@ -202,6 +238,12 @@ mod tests {
         assert!(looks_like_one_time_code_field(&otp));
         assert!(looks_like_one_time_code_auto_submit_signal(
             "oninput=this.form.requestSubmit()"
+        ));
+        assert!(looks_like_one_time_code_auto_submit_signal(
+            "oninput=this.form.submit()"
+        ));
+        assert!(!looks_like_one_time_code_auto_submit_signal(
+            "oninput=validate_requestSubmit()"
         ));
 
         let username = NookPageInputFieldObservation::new(
@@ -233,6 +275,7 @@ mod tests {
             true,
             true,
             true,
+            false,
         ));
         for has_concrete_control in [false, true] {
             assert_eq!(
@@ -245,15 +288,60 @@ mod tests {
                     has_concrete_control,
                     true,
                     true,
+                    false,
                 ),
                 !has_concrete_control,
             );
         }
+        assert!(can_activate_authentication_route_control(
+            "https://example.test",
+            "login-form",
+            "https://example.test/session",
+            "",
+            "",
+            false,
+            false,
+            true,
+            true,
+        ));
+        assert!(!can_activate_authentication_route_control(
+            "https://example.test",
+            "login-form",
+            "https://example.test/auth/login",
+            "Continue",
+            "",
+            true,
+            false,
+            true,
+            true,
+        ));
         let login = nook_companion_core::AuthenticationPageObservation {
             current_password_field_count: 1,
             ..Default::default()
         };
         assert_eq!(authentication_form_observation_priority(login), 4);
+        assert_eq!(
+            authentication_page_observation_facts_priority(
+                nook_companion_core::AuthenticationPageObservationFacts::default()
+            ),
+            1
+        );
+        let login_facts = nook_companion_core::AuthenticationPageObservationFacts {
+            fields: nook_companion_core::AuthenticationFieldObservationFacts {
+                username_field_count: 1,
+                current_password_field_count: 1,
+                ..Default::default()
+            },
+            detailed_advance_control:
+                nook_companion_core::AuthenticationDetailedAdvanceControlObservation::observed(
+                    login_advance_observation("https://login.example.test/auth/login", "Sign in"),
+                ),
+            ..Default::default()
+        };
+        assert_eq!(
+            authentication_page_observation_facts_priority(login_facts),
+            4
+        );
     }
 
     fn login_advance_observation(
@@ -273,6 +361,8 @@ mod tests {
             form_identity: "login-form".to_owned(),
             destination_identity: destination.to_owned(),
             label: label.to_owned(),
+            machine_identity: String::new(),
+            submission_method: nook_companion_core::PageControlSubmissionMethod::Absent,
         }
     }
 

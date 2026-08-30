@@ -53,7 +53,8 @@ pub use authentication_workflow::{
     AuthenticationWorkflowSnapshot, AuthenticationWorkflowSnapshotError,
     AuthenticationWorkflowStage, MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
     MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS, authentication_form_observation_priority,
-    authentication_page_observations_are_valid, authentication_passkey_control_candidate_is_safe,
+    authentication_page_observation_facts_priority, authentication_page_observations_are_valid,
+    authentication_passkey_control_candidate_is_safe,
     authentication_passkey_control_evidence_is_safe, classify_authentication_workflow,
     classify_authentication_workflow_candidates,
 };
@@ -131,8 +132,8 @@ pub use outcome_evidence::{
 pub use page_field_classification::{
     AuthenticationAdvanceControlDecision, AuthenticationAdvanceControlObservation,
     AuthenticationUsernameEvidence, PageControlActionability, PageControlOwnership,
-    PageControlSemantics, authentication_advance_control_is_safe, authentication_username_evidence,
-    strongest_authentication_username_evidence,
+    PageControlSemantics, PageControlSubmissionMethod, authentication_advance_control_is_safe,
+    authentication_username_evidence, strongest_authentication_username_evidence,
 };
 pub use page_field_classification::{
     CanonicalControlDestination, LoginContextObservation, MAX_AUTHENTICATION_CONTROL_TEXT_BYTES,
@@ -142,7 +143,8 @@ pub use page_field_classification::{
     looks_like_login_advance_control_label, looks_like_manual_checkpoint_label,
     looks_like_non_authentication_submit_control_label,
     looks_like_one_time_code_auto_submit_signal, looks_like_one_time_code_field,
-    looks_like_passkey_control_label, looks_like_username_field,
+    looks_like_passkey_control_label, looks_like_passkey_enrollment_or_management_label,
+    looks_like_username_field,
 };
 pub use vault_host_policy::{
     DEFAULT_SIMPLE_VAULT_URL, VaultHostPolicyError, belongs_to_sentinel_vault,

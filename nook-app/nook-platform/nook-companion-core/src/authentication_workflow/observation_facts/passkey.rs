@@ -117,7 +117,7 @@ mod tests {
     use super::*;
     use crate::{
         AuthenticationUsernameEvidence, PageControlActionability, PageControlOwnership,
-        PageControlSemantics,
+        PageControlSemantics, PageControlSubmissionMethod,
     };
 
     fn passkey_control(label: &str) -> AuthenticationAdvanceControlObservation {
@@ -134,6 +134,8 @@ mod tests {
             form_identity: "login-form".to_owned(),
             destination_identity: "https://login.example.test/auth/login".to_owned(),
             label: label.to_owned(),
+            machine_identity: String::new(),
+            submission_method: PageControlSubmissionMethod::Absent,
         }
     }
 
@@ -158,6 +160,30 @@ mod tests {
             AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(unsafe_route);
         assert!(!authentication_passkey_control_candidate_is_safe(
             &unsafe_candidate
+        ));
+
+        let mut get_submitter = passkey_control("Use passkey");
+        get_submitter.submission_method = PageControlSubmissionMethod::Get;
+        get_submitter.password_field_count = 1;
+        assert!(!authentication_passkey_control_candidate_is_safe(
+            &AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(get_submitter)
+        ));
+        let mut dialog_submitter = passkey_control("Use passkey");
+        dialog_submitter.submission_method = PageControlSubmissionMethod::Dialog;
+        assert!(!authentication_passkey_control_candidate_is_safe(
+            &AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(dialog_submitter)
+        ));
+    }
+
+    #[test]
+    fn explicitly_marked_passkey_candidates_retain_destructive_machine_identity_vetoes() {
+        let mut observation = passkey_control("Continue");
+        observation.machine_identity = "delete-account =".to_owned();
+        let candidate =
+            AuthenticationDetailedPasskeyControlCandidateObservation::ExplicitlyMarked(observation);
+
+        assert!(!authentication_passkey_control_candidate_is_safe(
+            &candidate
         ));
     }
 

@@ -18,12 +18,17 @@ pub struct AuthenticationFieldObservationFacts {
 
 impl AuthenticationFieldObservationFacts {
     pub(super) fn is_bounded(self) -> bool {
+        let password_field_count = self
+            .current_password_field_count
+            .saturating_add(self.new_password_field_count)
+            .saturating_add(self.generic_password_field_count);
         [
             self.username_field_count,
             self.current_password_field_count,
             self.new_password_field_count,
             self.generic_password_field_count,
             self.one_time_code_field_count,
+            password_field_count,
         ]
         .into_iter()
         .all(|count| count <= crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT)

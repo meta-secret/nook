@@ -293,6 +293,15 @@ export default defineConfig(({ mode }) => {
       exclude: ['e2e/**', 'node_modules/**'],
       environment: 'happy-dom',
       setupFiles: ['tests/unit/setup-wasm.ts'],
+      isolate: true,
+      pool: 'forks',
+      fileParallelism: false,
+      maxWorkers: 1,
+      poolOptions: {
+        forks: {
+          isolate: true,
+        },
+      },
     },
   }
 })

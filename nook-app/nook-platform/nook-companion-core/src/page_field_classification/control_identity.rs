@@ -63,7 +63,7 @@ pub(super) fn route_names_external_authentication_provider(identity: &str) -> bo
             && (!segments[..index].iter().all(|prefix| {
                 matches!(
                     prefix.as_str(),
-                    "auth" | "authentication" | "common" | "users"
+                    "account" | "auth" | "authentication" | "common" | "users"
                 ) || is_version(prefix)
             }) || !(tails.is_empty() || matches!(tails, [tail] if is_local_tail(tail))))
     });
@@ -139,6 +139,7 @@ pub(super) fn looks_like_explicit_authentication_advance_control_label(label: &s
         &["signin", "sign-in", "sign in", "login", "log-in", "log in"],
     )
 }
+
 pub(super) fn looks_like_one_time_code_resend_control_label(label: &str) -> bool {
     contains_any_word(
         &expand_identity_text(label),
