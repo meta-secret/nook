@@ -436,6 +436,30 @@ describe('authentication observation bounds', () => {
     ).toBe(true)
   })
 
+  test('keeps a password login when Rust-safe passkey-only forms fill the bound', () => {
+    const passkeyForms = Array.from(
+      { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS },
+      (_, index) =>
+        `<form id="passkey-${index}" action="/login"><button type="button">Sign in with a passkey</button></form>`,
+    ).join('')
+    document.body.innerHTML = `
+      ${passkeyForms}
+      <form id="password-login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS)
+    expect(
+      observations.some(
+        (observation) => ownedFormId(observation) === 'password-login',
+      ),
+    ).toBe(true)
+  })
+
   test('ranks a real passkey login ahead of new-password scopes at the bound', () => {
     const decoys = Array.from(
       { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS },
@@ -840,6 +864,32 @@ describe('authentication observation bounds', () => {
       { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS + 8 },
       (_, index) =>
         `<form id="manage-${index}" action="/passkeys"><button type="button">Add passkey</button></form>`,
+    ).join('')
+    document.body.innerHTML = `
+      ${decoys}
+      <form id="passkey-login" action="/login">
+        <button type="button">Sign in with a passkey</button>
+      </form>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations.length).toBeLessThanOrEqual(
+      MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
+    )
+    expect(
+      observations.some(
+        (observation) => ownedFormId(observation) === 'passkey-login',
+      ),
+    ).toBe(true)
+  })
+
+  test('does not treat an external new-password field as a passkey-only scope', () => {
+    const decoys = Array.from(
+      { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS + 8 },
+      (_, index) =>
+        `<form id="enroll-${index}" action="/auth/passkey"></form>
+         <input type="password" autocomplete="new-password" form="enroll-${index}" />
+         <button type="button" form="enroll-${index}">Use passkey</button>`,
     ).join('')
     document.body.innerHTML = `
       ${decoys}

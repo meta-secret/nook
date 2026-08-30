@@ -117,7 +117,7 @@ export function appendIndependentPasskeyOnlyWorkflows<
     ),
     priority: observationPriority(observation),
   }));
-  return takeRankedPasskeyObservations(ranked);
+  return takeRankedWorkflowObservations(fieldBearing, ranked);
 }
 
 function collectPasskeyOnlyScopes(
@@ -209,12 +209,14 @@ function passkeyCandidatesForScope(
 }
 
 function scopeHasPasswordField(scope: PasskeyOnlyScope): boolean {
-  const queryRoot =
-    scope.formScope.kind === PasswordFormScopeKind.Owned
-      ? scope.formScope.owner
-      : scope.root;
+  if (scope.formScope.kind === PasswordFormScopeKind.Owned) {
+    return Array.from(scope.formScope.owner.elements).some(
+      (element) =>
+        element instanceof HTMLInputElement && element.type === "password",
+    );
+  }
   return (
-    queryRoot.querySelector('input[type="password"]') instanceof
+    scope.root.querySelector('input[type="password"]') instanceof
     HTMLInputElement
   );
 }
@@ -231,17 +233,15 @@ function takePreferredPasskeyOnlyObservations<Summary>(
   observation: PasskeyOnlyWorkflowObservation<Summary>;
   safe: boolean;
 }> {
-  const ordered = [...scopes].sort((left, right) => {
-    return (
-      Number(scopeHasPasswordField(left)) - Number(scopeHasPasswordField(right))
-    );
-  });
   const preferred: Array<{
     observation: PasskeyOnlyWorkflowObservation<Summary>;
     safe: boolean;
   }> = [];
   let safeCount = 0;
-  for (const scope of ordered) {
+  for (const scope of scopes) {
+    if (scopeHasPasswordField(scope)) {
+      continue;
+    }
     if (
       safeCount >= MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS &&
       preferred.length >= MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS
@@ -249,15 +249,17 @@ function takePreferredPasskeyOnlyObservations<Summary>(
       break;
     }
     const scopedCandidates = passkeyCandidatesForScope(scope, indexed);
-    const cheapSafe = observationHasSafePasskey(
-      {
-        root: scope.root,
-        formScope: scope.formScope,
-        summary: emptySummary,
-      },
-      scopedCandidates,
-      passkeyControlIsSafe,
-    );
+    const cheapSafe =
+      !scopeHasPasswordField(scope) &&
+      observationHasSafePasskey(
+        {
+          root: scope.root,
+          formScope: scope.formScope,
+          summary: emptySummary,
+        },
+        scopedCandidates,
+        passkeyControlIsSafe,
+      );
     if (
       preferred.length >= MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS &&
       !cheapSafe
@@ -298,11 +300,48 @@ function takeRankedPasskeyObservations<Observation>(
 ): Observation[] {
   return ranked
     .sort((left, right) => {
-      const safeDelta = Number(right.safe) - Number(left.safe);
-      return safeDelta === 0 ? right.priority - left.priority : safeDelta;
+      const priorityDelta = right.priority - left.priority;
+      return priorityDelta === 0
+        ? Number(right.safe) - Number(left.safe)
+        : priorityDelta;
     })
     .slice(0, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS)
     .map((entry) => entry.observation);
+}
+
+function takeRankedWorkflowObservations<Observation>(
+  fieldBearing: Observation[],
+  ranked: Array<RankedPasskeyObservation<Observation>>,
+): Observation[] {
+  const fieldBearingSet = new Set(fieldBearing);
+  const byPriority = [...ranked].sort((left, right) => {
+    const priorityDelta = right.priority - left.priority;
+    return priorityDelta === 0
+      ? Number(right.safe) - Number(left.safe)
+      : priorityDelta;
+  });
+  const selected: Observation[] = [];
+  const selectedSet = new Set<Observation>();
+  const take = (entry: RankedPasskeyObservation<Observation>) => {
+    if (selectedSet.has(entry.observation)) return;
+    if (selected.length >= MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS) return;
+    selected.push(entry.observation);
+    selectedSet.add(entry.observation);
+  };
+  for (const entry of byPriority) {
+    if (fieldBearingSet.has(entry.observation)) {
+      take(entry);
+      break;
+    }
+  }
+  for (const entry of byPriority) {
+    if (entry.safe && !fieldBearingSet.has(entry.observation)) {
+      take(entry);
+      break;
+    }
+  }
+  for (const entry of byPriority) take(entry);
+  return selected;
 }
 
 function observationHasSafePasskey<
