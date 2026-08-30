@@ -41,7 +41,7 @@ tasks:
         trusted_docker_config="$(mktemp -d "${TMPDIR:-/tmp}/nook-docker-config.XXXXXX")"
         chmod 700 "$trusted_docker_config"
         mkdir -m 700 "$trusted_docker_config/cli-plugins"
-        ln -s "$buildx_cli" "$trusted_docker_config/cli-plugins/docker-buildx"
+        /bin/ln -s "$buildx_cli" "$trusted_docker_config/cli-plugins/docker-buildx"
         cleanup_docker_config() {
           rm -rf -- "$trusted_docker_config"
         }

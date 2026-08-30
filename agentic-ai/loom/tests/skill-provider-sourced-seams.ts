@@ -34,11 +34,11 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     '.github/scripts/with-healthy-buildkit.sh',
-    'c9920664ccd43c7e7c0107d67f9c430fb08269abe02a22739b553fcc02f30ea3',
+    '70452c052f61165dd800be6fee258492808d8902e0b2355f8ae589b75b74741e',
   ],
   [
     '.github/scripts/with-remote-buildkit.sh',
-    '227da3806f894a944cf163268bd15c8d98b7cf67c71ddf0f7c43c7ea3abcd189',
+    'c8a3c84b196207d9ff95aad0b263db6adf30c8ab8502b8b6869d3b228dfb29ed',
   ],
   [
     '.github/scripts/services-network-repair-test.ts',

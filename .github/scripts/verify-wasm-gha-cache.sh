@@ -31,7 +31,7 @@ prepare_trusted_docker() {
   trusted_docker_config="$(mktemp -d "${TMPDIR:-/tmp}/nook-docker-config.XXXXXX")"
   chmod 700 "$trusted_docker_config"
   mkdir -m 700 "$trusted_docker_config/cli-plugins"
-  ln -s "$buildx_cli" "$trusted_docker_config/cli-plugins/docker-buildx"
+  /bin/ln -s "$buildx_cli" "$trusted_docker_config/cli-plugins/docker-buildx"
   cleanup_docker_config() {
     rm -rf -- "$trusted_docker_config"
   }
@@ -122,6 +122,9 @@ if [ "${NOOK_WASM_CACHE_PROMOTION_ENABLED:-}" = "1" ]; then
       exit 2
       ;;
   esac
+  # Publish from the already-selected node-local rootless BuildKit shard.
+  # The repair solve never imports the ref it is replacing.
+  # Independent inputs may accelerate it, while a miss rebuilds from source.
   case "${NOOK_BUILDKIT_REMOTE:-}" in
     1)
       case "${NOOK_BUILDKIT_ADDR:-}" in

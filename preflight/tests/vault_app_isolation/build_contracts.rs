@@ -1,5 +1,4 @@
 use super::*;
-
 const TRUSTED_DOCKER_PATHS: [&str; 3] = [
     "/usr/local/bin/docker",
     "/usr/bin/docker",
@@ -63,7 +62,6 @@ fn fast_wasm_build_reuses_manifest_keyed_dependencies_outside_the_source_mount()
                 .contains("- setup:rust\n"),
         "the mounted fast path must not build the source-sealed Rust image"
     );
-
     let app_tasks = read(&root, "nook-app/Taskfile.yml");
     let platform_tasks = read(&root, "nook-app/nook-platform/Taskfile.yml");
     assert!(
@@ -93,7 +91,6 @@ fn fast_wasm_build_reuses_manifest_keyed_dependencies_outside_the_source_mount()
             "{label} must never pass buildx --builder or keep BUILDX_BUILDER/DOCKER_LOAD_BUILDER vars"
         );
     }
-
     let docker_tasks = read(&root, "nook-app/nook-platform/docker/Taskfile.yml");
     assert!(
         docker_tasks.contains("CARGO_TARGET_DIR=/opt/nook/cargo-target")
@@ -421,7 +418,7 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
             assert!(source.contains(&format!("(.key | ascii_downcase) != \"{rejected_key}\"")));
         }
         assert!(source.contains(
-            "ln -s \"$buildx_cli\" \"$trusted_docker_config/cli-plugins/docker-buildx\""
+            "/bin/ln -s \"$buildx_cli\" \"$trusted_docker_config/cli-plugins/docker-buildx\""
         ));
         assert!(source.contains("chmod 600 \"$trusted_docker_config/config.json\""));
         if path.contains("with-") {
@@ -579,6 +576,7 @@ fi
     let mut permissions = fs::metadata(&fake_docker)?.permissions();
     permissions.set_mode(0o755);
     fs::set_permissions(&fake_docker, permissions)?;
+    std::os::unix::fs::symlink(&fake_docker, temp.join("ln"))?;
     let wrapper = docker_script_fixture(
         &root,
         ".github/scripts/with-healthy-buildkit.sh",
@@ -606,6 +604,7 @@ fi
         .env("DOCKER_HOST", "tcp://attacker.invalid:2375")
         .env("DOCKER_CONTEXT", "attacker")
         .env("BUILDKIT_HOST", "tcp://attacker.invalid:1234")
+        .env("PATH", format!("{}:{}", temp.display(), std::env::var("PATH")?))
         .output()?;
     let elapsed = started.elapsed();
     assert!(
@@ -628,6 +627,7 @@ fi
         "timed Docker child {child_pid:?} survived process-group cleanup"
     );
     let calls = fs::read_to_string(&docker_log)?;
+    assert!(!calls.starts_with("-s ") && !calls.contains("\n-s "));
     for required in [
         "buildx inspect nook-pr-timeout-test --bootstrap",
         "rm --force buildx_buildkit_nook-pr-timeout-test0",
