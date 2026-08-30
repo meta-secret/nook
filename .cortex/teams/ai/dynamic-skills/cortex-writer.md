@@ -101,7 +101,28 @@ Checklist for every new or edited `.cortex` sentence:
 
 ## Mechanical lint
 
-Use Loom for a heuristic density pass over `.cortex`:
+The normal pre-push path checks changed Cortex Markdown automatically.
+
+```bash
+task loom:pre-push
+```
+
+This changed-file gate has bounded scope.
+
+- It compares the working branch with its merge base against `origin/main`.
+- It checks prose blocks touched by additions or deletion boundaries.
+- A pure rename within persistent Cortex keeps its source ancestry.
+- A rename from outside persistent Cortex checks the full destination.
+- A Git type change into regular Cortex Markdown checks the full file.
+- Content edited during a rename remains in scope.
+- It also checks untracked Cortex Markdown.
+- It reconstructs prose across ordinary hard-wrapped lines.
+- It checks each list-item paragraph independently.
+- It excludes labeled command or log output in blockquotes.
+- It also excludes fenced code and structural Markdown blocks.
+- It does not audit unchanged legacy prose.
+
+Use Loom configuration for an explicit full-corpus density pass:
 
 ```yaml
 cortexAudit:
@@ -112,7 +133,7 @@ cortexAudit:
 task loom:run CONFIG=path/to/cortex-audit-density.yaml
 ```
 
-Loom flags long sentences and heavy semicolon / "and" joins.
+Loom flags long sentences and heavy semicolon or "and" joins.
 
 It does not rewrite meaning. The agent still owns the edit.
 
