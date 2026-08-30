@@ -13,7 +13,11 @@ import {
 import { companionWasmReady } from '../../../../nook-web-shared/src/extension/companion-ready'
 import { OpenCompanionLauncherIntent } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
 import { ExtensionConnectScope } from '../../../../nook-web-shared/src/extension/extension-connect-scope'
-import { DeviceProtectionStatus } from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm.js'
+import {
+  decode_extension_session_status_response,
+  ExtensionSessionStatusAvailability,
+  type ExtensionSessionStatusResponseWire,
+} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { runtimeSimpleVaultUrl } from '../../lib/simple-vault-runtime'
 import { WebsiteAuthenticatorResponseStatus } from '../../lib/login-fill-messages'
 import {
@@ -363,41 +367,16 @@ function unlockedSessionDevice(response: unknown): UnlockedSessionDeviceParse {
   }
 }
 
-export enum WebsiteSessionStatusTransportKind {
-  Unavailable = 'unavailable',
-  Locked = 'locked',
-  Unlocked = 'unlocked',
-}
+export { ExtensionSessionStatusAvailability }
 
 export function websiteSessionStatusTransport(
   response: unknown,
-): WebsiteSessionStatusTransportKind {
-  if (
-    !response ||
-    typeof response !== 'object' ||
-    !('ok' in response) ||
-    response.ok !== true ||
-    !('status' in response)
-  ) {
-    return WebsiteSessionStatusTransportKind.Unavailable
-  }
-  if (response.status === DeviceProtectionStatus.Unlocked) {
-    return unlockedSessionDevice(response).kind ===
-      UnlockedSessionDeviceParseKind.Parsed
-      ? WebsiteSessionStatusTransportKind.Unlocked
-      : WebsiteSessionStatusTransportKind.Unavailable
-  }
-  switch (response.status) {
-    case DeviceProtectionStatus.Error:
-    case DeviceProtectionStatus.Loading:
-    case DeviceProtectionStatus.Missing:
-    case DeviceProtectionStatus.Passkey:
-    case DeviceProtectionStatus.Pin:
-    case DeviceProtectionStatus.PinSetup:
-    case DeviceProtectionStatus.Plaintext:
-      return WebsiteSessionStatusTransportKind.Locked
-    default:
-      return WebsiteSessionStatusTransportKind.Unavailable
+): ExtensionSessionStatusAvailability {
+  try {
+    const wire = response as ExtensionSessionStatusResponseWire
+    return decode_extension_session_status_response(wire)
+  } catch {
+    return ExtensionSessionStatusAvailability.Unavailable
   }
 }
 
@@ -858,9 +837,10 @@ async function websiteGrants({
     payload: { queue },
   }
   const status = await sendSessionMessage(nookTypedArgs0_9)
+  await companionWasmReady
   const sessionStatus = websiteSessionStatusTransport(status)
   if (openLockedCompanion) {
-    if (sessionStatus !== WebsiteSessionStatusTransportKind.Unlocked) {
+    if (sessionStatus !== ExtensionSessionStatusAvailability.Unlocked) {
       openCompanionLauncherBestEffort(OpenCompanionLauncherIntent.Default)
       return {
         response: {
@@ -871,7 +851,7 @@ async function websiteGrants({
     }
     return { grants }
   }
-  if (sessionStatus === WebsiteSessionStatusTransportKind.Unavailable) {
+  if (sessionStatus === ExtensionSessionStatusAvailability.Unavailable) {
     return {
       response: {
         ok: true,
@@ -879,7 +859,7 @@ async function websiteGrants({
       },
     }
   }
-  return sessionStatus === WebsiteSessionStatusTransportKind.Unlocked
+  return sessionStatus === ExtensionSessionStatusAvailability.Unlocked
     ? { grants }
     : {
         response: {

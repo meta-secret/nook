@@ -262,6 +262,7 @@ type LoginAccountsForOriginArgs = {
   grants: StoredExtensionPairingGrant[]
   origin: string
   query?: string
+  sendMessage?: typeof sendSessionMessage
 }
 
 type LoginAccountAvailabilityForOriginArgs = LoginAccountsForOriginArgs & {
@@ -272,13 +273,18 @@ type LoginAccountAvailabilityForOriginArgs = LoginAccountsForOriginArgs & {
 type LoginAccountAvailability =
   { ok: true; accounts: WebsiteLoginAccountOption[] } | { ok: false }
 
-export async function loginAccountAvailabilityForOrigin({
+type LoginAccountListForOriginArgs = LoginAccountAvailabilityForOriginArgs & {
+  failClosed: boolean
+}
+
+async function loginAccountListForOrigin({
   grants,
   origin,
   query = '',
   queue,
   sendMessage = sendSessionMessage,
-}: LoginAccountAvailabilityForOriginArgs): Promise<LoginAccountAvailability> {
+  failClosed,
+}: LoginAccountListForOriginArgs): Promise<LoginAccountAvailability> {
   const accounts: WebsiteLoginAccountOption[] = []
   const needle = query.trim().toLowerCase()
   for (const grant of grants) {
@@ -299,7 +305,8 @@ export async function loginAccountAvailabilityForOrigin({
       !('accounts' in response) ||
       !Array.isArray(response.accounts)
     ) {
-      return { ok: false }
+      if (failClosed) return { ok: false }
+      continue
     }
     for (const account of sessionResponseAccounts(response)) {
       if (
@@ -341,18 +348,31 @@ export async function loginAccountAvailabilityForOrigin({
   return { ok: true, accounts }
 }
 
+export async function loginAccountAvailabilityForOrigin(
+  args: LoginAccountAvailabilityForOriginArgs,
+): Promise<LoginAccountAvailability> {
+  const request: LoginAccountListForOriginArgs = {
+    ...args,
+    failClosed: true,
+  }
+  return loginAccountListForOrigin(request)
+}
+
 export async function loginAccountsForOrigin({
   grants,
   origin,
   query = '',
+  sendMessage = sendSessionMessage,
 }: LoginAccountsForOriginArgs): Promise<WebsiteLoginAccountOption[]> {
-  const request: LoginAccountAvailabilityForOriginArgs = {
+  const request: LoginAccountListForOriginArgs = {
     grants,
     origin,
     query,
+    sendMessage,
     queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+    failClosed: false,
   }
-  const result = await loginAccountAvailabilityForOrigin(request)
+  const result = await loginAccountListForOrigin(request)
   return result.ok ? result.accounts : []
 }
 

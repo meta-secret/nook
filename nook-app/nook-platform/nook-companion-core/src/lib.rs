@@ -22,6 +22,7 @@ mod backup_code_candidates;
 mod extension_pairing_state;
 mod extension_persistence;
 mod extension_session_protocol;
+mod extension_session_status_response;
 mod extension_vault_event;
 mod generated_password_response;
 mod oauth_origin_policy;
@@ -119,6 +120,11 @@ pub use extension_session_protocol::{
     ExtensionSessionRequestValidation, ExtensionSessionRequestWire, LoginPickerOpenResponse,
     LoginPickerOpenResponseDecodeError, LoginPickerOpenResponseWire,
     decode_login_picker_open_response, validate_extension_session_request_json,
+};
+pub use extension_session_status_response::{
+    ExtensionSessionDeviceProtectionStatusWire, ExtensionSessionDeviceWire,
+    ExtensionSessionStatusAvailability, ExtensionSessionStatusResponseWire,
+    decode_extension_session_status_response,
 };
 pub use extension_vault_event::{EXTENSION_VAULT_EVENT_TYPESCRIPT, ExtensionVaultEventPayload};
 pub use generated_password_response::{

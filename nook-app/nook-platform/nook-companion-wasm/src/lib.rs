@@ -27,6 +27,14 @@ pub fn validate_extension_session_request(
 }
 
 #[wasm_bindgen]
+#[must_use]
+pub fn decode_extension_session_status_response(
+    response: nook_companion_core::ExtensionSessionStatusResponseWire,
+) -> nook_companion_core::ExtensionSessionStatusAvailability {
+    nook_companion_core::decode_extension_session_status_response(response)
+}
+
+#[wasm_bindgen]
 pub fn decode_website_login_options(
     response: nook_companion_core::WebsiteLoginOptionsWireValue,
 ) -> Result<nook_companion_core::WebsiteLoginOptions, wasm_bindgen::JsError> {
@@ -778,6 +786,22 @@ mod wasm_tests {
 
     #[derive(Serialize)]
     #[serde(rename_all = "camelCase")]
+    struct SessionDeviceFixture {
+        device_id: &'static str,
+        device_public_key: &'static str,
+        device_signing_public_key: &'static str,
+    }
+
+    #[derive(Serialize)]
+    struct SessionStatusFixture {
+        ok: bool,
+        status: u8,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        device: Option<SessionDeviceFixture>,
+    }
+
+    #[derive(Serialize)]
+    #[serde(rename_all = "camelCase")]
     struct WorkflowSnapshotFixture {
         kind: u8,
         stage: u8,
@@ -847,6 +871,58 @@ mod wasm_tests {
         let decoded: ExtensionPersistenceObservation = serde_wasm_bindgen::from_value(js_value)?;
 
         assert_eq!(decoded, observation);
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn session_status_bridge_classifies_supported_device_states()
+    -> Result<(), wasm_bindgen::JsError> {
+        for (status, expected) in [
+            (
+                0,
+                nook_companion_core::ExtensionSessionStatusAvailability::Unavailable,
+            ),
+            (
+                4,
+                nook_companion_core::ExtensionSessionStatusAvailability::Locked,
+            ),
+            (
+                5,
+                nook_companion_core::ExtensionSessionStatusAvailability::Unavailable,
+            ),
+            (
+                7,
+                nook_companion_core::ExtensionSessionStatusAvailability::Unavailable,
+            ),
+        ] {
+            let fixture = SessionStatusFixture {
+                ok: true,
+                status,
+                device: None,
+            };
+            let js_input = serde_wasm_bindgen::to_value(&fixture).map_err(js_error)?;
+            let wire = serde_wasm_bindgen::from_value(js_input).map_err(js_error)?;
+            assert_eq!(
+                super::decode_extension_session_status_response(wire),
+                expected
+            );
+        }
+
+        let unlocked = SessionStatusFixture {
+            ok: true,
+            status: 6,
+            device: Some(SessionDeviceFixture {
+                device_id: "device",
+                device_public_key: "public",
+                device_signing_public_key: "signing",
+            }),
+        };
+        let js_input = serde_wasm_bindgen::to_value(&unlocked).map_err(js_error)?;
+        let wire = serde_wasm_bindgen::from_value(js_input).map_err(js_error)?;
+        assert_eq!(
+            super::decode_extension_session_status_response(wire),
+            nook_companion_core::ExtensionSessionStatusAvailability::Unlocked
+        );
         Ok(())
     }
 
