@@ -2,7 +2,10 @@ import {
   BROWSER_MESSAGE_KEYS,
   type BrowserMessageKey,
 } from '../../lib/browser-message-keys'
-import { liveApprovedAuthenticationWorkflow } from '../../../../nook-web-shared/src/extension/password-form-classified-observations'
+import {
+  authenticationWorkflowScopesMatch,
+  liveApprovedAuthenticationWorkflow,
+} from '../../../../nook-web-shared/src/extension/password-form-classified-observations'
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 import { detectEnrollmentHints } from '../enrollment-flow'
 import {
@@ -104,7 +107,9 @@ export function approvedWorkflowIsStillCurrent(
 ): boolean {
   const rendered = widgetState.renderedWorkflowRoot
   if (rendered.kind !== WidgetWorkflowRootKind.Assigned) return false
-  if (rendered.observation !== workflow) return false
+  if (!authenticationWorkflowScopesMatch(rendered.observation, workflow)) {
+    return false
+  }
   const hints = detectEnrollmentHints()
   const liveRequest: Parameters<typeof liveApprovedAuthenticationWorkflow>[0] =
     {

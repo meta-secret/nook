@@ -237,19 +237,6 @@ export function summarizePasswordForms(): PasswordFormSummary {
   return summarizeRoot(nookTypedArgs0_9);
 }
 
-const emptyPasswordFormSummary: PasswordFormSummary = {
-  passwordFieldCount: 0,
-  currentPasswordFieldCount: 0,
-  newPasswordFieldCount: 0,
-  genericPasswordFieldCount: 0,
-  usernameFieldCount: 0,
-  oneTimeCodeFieldCount: 0,
-  manualCheckpointPresent: false,
-  passkeyControlPresent: false,
-  formCount: 0,
-  observedAt: 0,
-};
-
 function passwordFormPriority(observation: PasswordFormObservation): number {
   const factsRequest: Parameters<typeof authenticationPageObservationFacts>[0] =
     {
@@ -668,7 +655,6 @@ export function summarizeAuthenticationWorkflowForms(): PasswordFormObservation[
     summarizeRoot,
     passwordFormPriority,
     passkeyCandidateIsRustSafe,
-    emptyPasswordFormSummary,
   );
   if (authFieldCount === 0) {
     return passkeyOnly;

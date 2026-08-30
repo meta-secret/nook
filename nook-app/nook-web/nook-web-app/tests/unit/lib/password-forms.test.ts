@@ -365,12 +365,15 @@ describe('website one-time-code fields', () => {
         'alt',
         'data-qa',
         'data-testid',
+        'data-nook-manual-checkpoint',
+        'for',
         'inert',
         'onchange',
         'oninput',
         'placeholder',
         'readonly',
         'role',
+        'src',
         'title',
         'value',
       ]),
@@ -416,6 +419,40 @@ describe('website one-time-code fields', () => {
         },
       ],
     })
+  })
+
+  test('rescans after label for, iframe src, or checkpoint attributes change', () => {
+    document.body.innerHTML = `
+      <form aria-label="Login" action="/auth/login">
+        <label id="email-label">Email</label>
+        <input id="user" type="text" />
+        <input type="password" autocomplete="current-password" />
+        <iframe id="gate" title="Verification"></iframe>
+        <button type="submit">Sign in</button>
+      </form>
+    `
+    expect(observedAuthenticationWorkflow().summary.usernameFieldCount).toBe(0)
+    expect(
+      observedAuthenticationWorkflow().summary.manualCheckpointPresent,
+    ).toBe(false)
+    document.querySelector('#email-label')?.setAttribute('for', 'user')
+    expect(observedAuthenticationWorkflow().summary.usernameFieldCount).toBe(1)
+    document
+      .querySelector('#gate')
+      ?.setAttribute('src', 'https://hcaptcha.test')
+    expect(
+      observedAuthenticationWorkflow().summary.manualCheckpointPresent,
+    ).toBe(true)
+    document.querySelector('#gate')?.removeAttribute('src')
+    expect(
+      observedAuthenticationWorkflow().summary.manualCheckpointPresent,
+    ).toBe(false)
+    document
+      .querySelector('#gate')
+      ?.setAttribute('data-nook-manual-checkpoint', '')
+    expect(
+      observedAuthenticationWorkflow().summary.manualCheckpointPresent,
+    ).toBe(true)
   })
 
   test('rescans a readonly username field after it becomes editable', () => {

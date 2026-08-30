@@ -436,6 +436,28 @@ describe('authentication observation bounds', () => {
     ).toBe(true)
   })
 
+  test('ranks a real passkey login ahead of new-password scopes at the bound', () => {
+    const decoys = Array.from(
+      { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS },
+      (_, index) =>
+        `<form id="enroll-${index}" action="/auth/passkey"><input autocomplete="username" /><input type="password" autocomplete="new-password" /><button type="button">Use passkey</button></form>`,
+    ).join('')
+    document.body.innerHTML = `
+      ${decoys}
+      <form id="passkey-login" action="/login">
+        <button type="button">Sign in with a passkey</button>
+      </form>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS)
+    expect(
+      observations.some(
+        (observation) => ownedFormId(observation) === 'passkey-login',
+      ),
+    ).toBe(true)
+  })
+
   test('ranks a Rust-safe passkey login ahead of enrollment candidates at the bound', () => {
     const decoys = Array.from(
       { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS },
@@ -783,5 +805,57 @@ describe('authentication observation bounds', () => {
         (observation) => ownedFormId(observation) === 'password-login',
       ),
     ).toBe(true)
+  })
+
+  test('refreshes approved facts when the snapshot key stays the same', () => {
+    document.body.innerHTML = `
+      <form aria-label="Login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+    const classifiedRequest: Parameters<
+      typeof classifiedAuthenticationWorkflowObservations
+    >[0] = {
+      workflowForms: summarizeAuthenticationWorkflowForms(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    }
+    const first =
+      classifiedAuthenticationWorkflowObservations(classifiedRequest)[0]
+    if (!first) {
+      throw new Error('expected the login workflow')
+    }
+    document
+      .querySelector('input[type="password"]')
+      ?.setAttribute('autocomplete', 'password')
+    const refreshedRequest: Parameters<
+      typeof classifiedAuthenticationWorkflowObservations
+    >[0] = {
+      workflowForms: summarizeAuthenticationWorkflowForms(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    }
+    const refreshed =
+      classifiedAuthenticationWorkflowObservations(refreshedRequest)[0]
+    if (!refreshed) {
+      throw new Error('expected the refreshed login workflow')
+    }
+    const staleCheck: Parameters<typeof liveApprovedAuthenticationWorkflow>[0] =
+      {
+        approved: first,
+        authenticatorSetupHint: false,
+        backupCodesHint: false,
+      }
+    const refreshedCheck: Parameters<
+      typeof liveApprovedAuthenticationWorkflow
+    >[0] = {
+      approved: refreshed,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    }
+    expect(liveApprovedAuthenticationWorkflow(staleCheck)).toBe(false)
+    expect(liveApprovedAuthenticationWorkflow(refreshedCheck)).toBe(true)
   })
 })

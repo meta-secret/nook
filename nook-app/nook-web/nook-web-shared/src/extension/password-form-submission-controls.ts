@@ -181,8 +181,18 @@ export function controlIsEffectivelyDisabled(control: HTMLElement): boolean {
   return (
     control.matches(":disabled") ||
     isDisabledByAncestorFieldset(control) ||
-    control.getAttribute("aria-disabled") === "true"
+    control.getAttribute("aria-disabled") === "true" ||
+    isDisabledByAncestorAria(control)
   );
+}
+
+function isDisabledByAncestorAria(control: HTMLElement): boolean {
+  let ancestor = control.parentElement;
+  while (ancestor) {
+    if (ancestor.getAttribute("aria-disabled") === "true") return true;
+    ancestor = ancestor.parentElement;
+  }
+  return false;
 }
 
 export function controlIsInert(control: HTMLElement): boolean {

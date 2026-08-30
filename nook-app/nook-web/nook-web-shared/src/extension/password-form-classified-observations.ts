@@ -69,7 +69,7 @@ type LiveApprovedAuthenticationWorkflowRequest = {
   backupCodesHint: boolean;
 };
 
-function authenticationWorkflowScopesMatch(
+export function authenticationWorkflowScopesMatch(
   left: PasswordFormObservation,
   right: PasswordFormObservation,
 ): boolean {
@@ -97,7 +97,8 @@ function approvedAuthenticationContextMatches(
     live.fields.usernameFieldCount === approved.fields.usernameFieldCount &&
     live.fields.currentPasswordFieldCount ===
       approved.fields.currentPasswordFieldCount &&
-    live.fields.newPasswordFieldCount === approved.fields.newPasswordFieldCount &&
+    live.fields.newPasswordFieldCount ===
+      approved.fields.newPasswordFieldCount &&
     live.fields.genericPasswordFieldCount ===
       approved.fields.genericPasswordFieldCount &&
     live.fields.oneTimeCodeFieldCount === approved.fields.oneTimeCodeFieldCount

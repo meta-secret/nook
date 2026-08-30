@@ -45,18 +45,11 @@ export function summarizePasskeyOnlyWorkflowForms<Summary>(
   passkeyControlIsSafe: PasskeyControlIsSafe<
     PasskeyOnlyWorkflowObservation<Summary>
   >,
-  emptySummary: Summary,
 ): Array<PasskeyOnlyWorkflowObservation<Summary>> {
   if (!pageHasPasskeyControl(root)) return [];
   const passkeyCandidates = findPasskeyControls(root);
   const scopes = collectPasskeyOnlyScopes(root, passkeyCandidates);
-  const boundedScopes = takePreferredPasskeyOnlyScopes(
-    scopes,
-    passkeyCandidates,
-    passkeyControlIsSafe,
-    emptySummary,
-  );
-  const ranked = boundedScopes.map((scope) => {
+  const ranked = scopes.map((scope) => {
     const summaryArgs: PasswordFormScopeQuery = {
       kind: PasswordFormQueryKind.Scoped,
       root: scope.root,
@@ -180,35 +173,6 @@ function collectPasskeyOnlyScopes(
     });
   }
   return scopes;
-}
-
-function takePreferredPasskeyOnlyScopes<Summary>(
-  scopes: PasskeyOnlyScope[],
-  passkeyCandidates: PasskeyControlCandidate[],
-  passkeyControlIsSafe: PasskeyControlIsSafe<
-    PasskeyOnlyWorkflowObservation<Summary>
-  >,
-  emptySummary: Summary,
-): PasskeyOnlyScope[] {
-  const ranked = scopes.map((scope) => {
-    const stub: PasskeyOnlyWorkflowObservation<Summary> = {
-      root: scope.root,
-      formScope: scope.formScope,
-      summary: emptySummary,
-    };
-    return {
-      scope,
-      safe: observationHasSafePasskey(
-        stub,
-        passkeyCandidates,
-        passkeyControlIsSafe,
-      ),
-    };
-  });
-  ranked.sort((left, right) => Number(right.safe) - Number(left.safe));
-  return ranked
-    .slice(0, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS)
-    .map((entry) => entry.scope);
 }
 
 function takeRankedPasskeyObservations<Observation>(

@@ -625,6 +625,28 @@ describe('classified login activation', () => {
     expect(submitLoginForm(submissionArgs)).toBe(false)
   })
 
+  test('does not activate a submitter inside an aria-disabled panel', () => {
+    document.body.innerHTML = `
+      <form aria-label="Login" action="/auth/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <div aria-disabled="true">
+          <button id="sign-in" type="submit">Sign in</button>
+        </div>
+      </form>
+    `
+    let activated = false
+    document.querySelector('#sign-in')?.addEventListener('click', () => {
+      activated = true
+    })
+    document.querySelector('form')?.addEventListener('submit', (event) => {
+      event.preventDefault()
+    })
+
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(false)
+    expect(activated).toBe(false)
+  })
+
   test('does not claim a disabled submit control was activated', () => {
     document.body.innerHTML = `
       <form>
