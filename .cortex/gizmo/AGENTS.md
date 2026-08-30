@@ -13,7 +13,8 @@ they explicitly name a feature-slice Gizmo.
 ## User-visible terminal condition
 
 An implementation request enters complete mission delivery unless the user
-explicitly requests a local-only result or forbids external delivery changes.
+explicitly selects an intermediate terminal state or forbids a required
+external delivery change.
 
 - A committed Team Agent handoff is an input to Gizmo Prime.
 - It is not completion of the user-visible mission.

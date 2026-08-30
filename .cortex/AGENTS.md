@@ -96,8 +96,9 @@ blocker. Gizmo Prime must not silently take over the task.
 ## Implementation mission terminal condition
 
 An implementation request is a complete delivery mission unless the user
-explicitly limits it to local changes, a committed handoff, or no external
-delivery mutations.
+explicitly selects any intermediate terminal state, including local changes, a
+committed handoff, a pushed branch, or an open pull request, or prohibits a
+required external delivery mutation.
 
 - A Team Agent's local commit completes only that worker task.
 - Gizmo Prime must not present a plan, working-tree change, commit, push, or

@@ -110,6 +110,19 @@ describe('canonical Cortex team authority', () => {
     ).toContain('cortex-team-contract-semantic-drift');
   });
 
+  test('rejects drift in any canonical authoring bundle member', async () => {
+    const source = await readFile(join(REPO_ROOT, '.cortex/AGENTS.md'), 'utf8');
+    const driftedSource = source.replace(
+      '`teams/ai/dynamic-skills/cortex-consistency.md`.',
+      '`teams/ai/dynamic-skills/another-writer.md`.',
+    );
+    const authorityRequest = { source: driftedSource };
+
+    expect(
+      auditTeamCortexAuthority(authorityRequest).map((finding) => finding.code),
+    ).toContain('cortex-team-contract-semantic-drift');
+  });
+
   test('rejects a local handoff as an implementation mission terminal', async () => {
     const source = await readFile(join(REPO_ROOT, '.cortex/AGENTS.md'), 'utf8');
     const driftedSource = source.replace(

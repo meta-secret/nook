@@ -113,6 +113,9 @@ const TEAM_AUTHORITY_CONTRACT_SECTIONS: readonly MarkdownContractSection[] = [
       'It does not grant parent-owned lifecycle authority.',
       "Loom resolves the task's dynamic skill paths separately from its team identity.",
       'A write claim that overlaps `.cortex/**` automatically requires the canonical Cortex authoring bundle:',
+      '`teams/ai/dynamic-skills/cortex-writer.md`;',
+      '`teams/ai/dynamic-skills/cortex-article-structure/SKILL.md`; and',
+      '`teams/ai/dynamic-skills/cortex-consistency.md`.',
       'Team-specific authoring skills contain only domain-specific additions.',
       'The active harness owns worker creation and native worker labels or names.',
       'Repository profile files are not semantic, capability, context, model, or lifecycle authority.',
@@ -130,6 +133,7 @@ const TEAM_AUTHORITY_CONTRACT_SECTIONS: readonly MarkdownContractSection[] = [
   {
     heading: '## Implementation mission terminal condition',
     requiredMarkers: [
+      'explicitly selects any intermediate terminal state, including local changes, a committed handoff, a pushed branch, or an open pull request, or prohibits a required external delivery mutation.',
       "A Team Agent's local commit completes only that worker task.",
       'Gizmo Prime creates the pull request and monitors review and validation.',
       'It runs repository readiness, squash-merges the ready pull request, verifies the remote merged state, and publishes required Workbench completion records.',
@@ -143,6 +147,7 @@ const GIZMO_AUTHORITY_CONTRACT_SECTIONS: readonly MarkdownContractSection[] = [
   {
     heading: '## User-visible terminal condition',
     requiredMarkers: [
+      'explicitly selects an intermediate terminal state or forbids a required external delivery change.',
       'A committed Team Agent handoff is an input to Gizmo Prime.',
       'It is not completion of the user-visible mission.',
       'Gizmo Prime continues through pull-request creation, monitoring, team-owned fixes, exact-head validation, readiness, squash merge, remote merge verification, and Workbench completion.',

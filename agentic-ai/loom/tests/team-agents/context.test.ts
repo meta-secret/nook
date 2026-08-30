@@ -5,7 +5,9 @@ import {
 } from '../../src/team-agents/context.ts';
 import type { TeamTaskContextRequest } from '../../src/team-agents/context.ts';
 import { TeamKey } from '../../src/team-agents/catalog.ts';
+import { join } from 'node:path';
 
+const REPO_ROOT = join(import.meta.dir, '../../../..');
 const SRE_CONTEXT_PATHS = [
   '.cortex/teams/sre/AGENTS.md',
   '.cortex/teams/sre/knowledge-graph.md',
@@ -16,7 +18,9 @@ const SRE_DELTA_SKILL =
 describe('team task context', () => {
   test('keeps team identity separate from dynamically selected skills', () => {
     const request: TeamTaskContextRequest = {
+      repositoryRoot: REPO_ROOT,
       team: TeamKey.Sre,
+      readClaims: ['.cortex/teams/sre/dynamic-skills/**'],
       writeClaims: ['infra/arc/**'],
       selectedSkillPaths: [SRE_DELTA_SKILL],
     };
@@ -37,7 +41,9 @@ describe('team task context', () => {
     '**/*.md',
   ])('automatically composes Cortex authoring skills for %s', (writeClaim) => {
     const request: TeamTaskContextRequest = {
+      repositoryRoot: REPO_ROOT,
       team: TeamKey.Sre,
+      readClaims: ['.cortex/teams/sre/dynamic-skills/**'],
       writeClaims: [writeClaim],
       selectedSkillPaths: [SRE_DELTA_SKILL],
     };
@@ -57,7 +63,9 @@ describe('team task context', () => {
 
   test('does not attach authoring skills for Cortex reads', () => {
     const request: TeamTaskContextRequest = {
+      repositoryRoot: REPO_ROOT,
       team: TeamKey.Sre,
+      readClaims: [],
       writeClaims: [],
       selectedSkillPaths: [],
     };
@@ -69,7 +77,9 @@ describe('team task context', () => {
 
   test('deduplicates a selected canonical authoring skill', () => {
     const request: TeamTaskContextRequest = {
+      repositoryRoot: REPO_ROOT,
       team: TeamKey.Sre,
+      readClaims: [],
       writeClaims: ['.cortex/teams/sre/**'],
       selectedSkillPaths: [CORTEX_AUTHORING_SKILL_PATHS[0]],
     };
@@ -82,17 +92,23 @@ describe('team task context', () => {
 
   test('rejects unsafe claims and non-Cortex skill paths', () => {
     const unsafeClaim: TeamTaskContextRequest = {
+      repositoryRoot: REPO_ROOT,
       team: TeamKey.Sre,
+      readClaims: [],
       writeClaims: ['../.cortex/**'],
       selectedSkillPaths: [],
     };
     const invalidSkill: TeamTaskContextRequest = {
+      repositoryRoot: REPO_ROOT,
       team: TeamKey.Sre,
+      readClaims: ['README.md'],
       writeClaims: [],
       selectedSkillPaths: ['README.md'],
     };
     const nonSkillCortexPath: TeamTaskContextRequest = {
+      repositoryRoot: REPO_ROOT,
       team: TeamKey.Sre,
+      readClaims: ['.cortex/teams/sre/workflows/quality.md'],
       writeClaims: [],
       selectedSkillPaths: ['.cortex/teams/sre/workflows/quality.md'],
     };
@@ -100,10 +116,33 @@ describe('team task context', () => {
       'canonical resource paths',
     );
     expect(() => resolveTeamTaskContext(invalidSkill)).toThrow(
-      'canonical Cortex Markdown paths',
+      'exact existing task-authorized Cortex Markdown files',
     );
     expect(() => resolveTeamTaskContext(nonSkillCortexPath)).toThrow(
-      'canonical Cortex Markdown paths',
+      'exact existing task-authorized Cortex Markdown files',
     );
+  });
+
+  test('rejects wildcard, missing, and unreadable selected skills', () => {
+    const request: TeamTaskContextRequest = {
+      repositoryRoot: REPO_ROOT,
+      team: TeamKey.Sre,
+      readClaims: ['.cortex/teams/sre/dynamic-skills/**'],
+      writeClaims: [],
+      selectedSkillPaths: [],
+    };
+    for (const selectedSkillPath of [
+      '.cortex/teams/sre/dynamic-skills/*.md',
+      '.cortex/teams/sre/dynamic-skills/missing.md',
+      '.cortex/teams/security/dynamic-skills/browser-extension-release-security.md',
+    ]) {
+      const selectedRequest: TeamTaskContextRequest = {
+        ...request,
+        selectedSkillPaths: [selectedSkillPath],
+      };
+      expect(() => resolveTeamTaskContext(selectedRequest)).toThrow(
+        'exact existing task-authorized Cortex Markdown files',
+      );
+    }
   });
 });

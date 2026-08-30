@@ -536,6 +536,11 @@ describe('module delivery admission authority', () => {
     const active = runtime(validate(PLAN));
     const admission = select(active).admissions[0];
     if (!admission) throw new Error('Admission is missing.');
+    expect(admission.context.team).toBe(admission.team);
+    expect(admission.context.contextPaths).toEqual([
+      '.cortex/teams/dev-core/AGENTS.md',
+      '.cortex/teams/dev-core/knowledge-graph.md',
+    ]);
     const forgedState: ModuleDeliveryAdmissionState = { ...active.state };
     const forgedSelectionRequest: SelectModuleDeliveryAdmissionsRequest = {
       authority: active.authority,
