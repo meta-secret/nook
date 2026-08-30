@@ -36,11 +36,8 @@ describe('websiteLoginOptions', () => {
     Object.assign(globalThis, {
       __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
     })
-    const {
-      loginAccountAvailabilityForOrigin,
-      websiteLoginMatchAvailability,
-      websiteLoginOptions,
-    } = await import('../src/background/service-worker/account-pickers')
+    const { websiteLoginMatchAvailability, websiteLoginOptions } =
+      await import('../src/background/service-worker/account-pickers')
     let grantAccessResponse: GrantAccessResponse = {
       response: {
         ok: true,

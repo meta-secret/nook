@@ -1,4 +1,4 @@
-/// <reference path="../../../../nook-web-extension/src/chrome.d.ts" />
+import '../../../../nook-web-extension/src/chrome.d.ts'
 
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { AuthenticationWorkflowAction } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
