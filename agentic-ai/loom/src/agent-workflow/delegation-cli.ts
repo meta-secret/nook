@@ -45,6 +45,11 @@ import {
 } from './delegation-aggregation.ts';
 import type { FinalizeDelegationRunInput } from './delegation-aggregation.ts';
 import { renderDelegationPlanTree } from './delegation-plan-tree.ts';
+import { registeredCortexIdentifiers } from '../lib/cortex-identifiers.ts';
+import {
+  assertCortexReferences,
+  type CortexReference,
+} from './cortex-references.ts';
 
 const HELP = `Loom delegated agent journal
 
@@ -106,6 +111,7 @@ type DelegationStartResponse = {
 type DelegationActivity = {
   readonly activity: WorkflowRuntimeActivityKind;
   readonly detail: string;
+  readonly cortexReferences?: readonly CortexReference[];
 };
 
 type DelegationRecordRequest = {
@@ -246,6 +252,9 @@ async function record(
     depth: request.depth,
     parent: request.parent,
     now: () => new Date().toISOString(),
+    knownCortexIdentifiers: registeredCortexIdentifiers(
+      commandLine.workingDirectory,
+    ),
   };
   const journal = new AgentAttemptJournal<string>(journalConfiguration);
   await journal.initialize();
@@ -254,6 +263,7 @@ async function record(
       kind: AgentAttemptEventKind.RuntimeActivity,
       activity: activity.activity,
       detail: activity.detail,
+      cortexReferences: activity.cortexReferences ?? [],
     };
     await journal.append(event);
   }
@@ -358,6 +368,11 @@ function assertRequest(request: DelegationRecordRequest): void {
     ) {
       throw new Error('Delegation journal request activity is invalid.');
     }
+    const referenceArgs = {
+      references: activity.cortexReferences ?? [],
+      knownIdentifiers: false,
+    } as const;
+    assertCortexReferences(referenceArgs);
   }
   if (request.terminal.kind === TaskTerminalKind.Completed) {
     const view = request.terminal.output.materializedViewMarkdown;

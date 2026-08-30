@@ -18,6 +18,8 @@ import type {
   ProjectionReference,
 } from './domain.ts';
 import { assertCurrentAgentAttemptWorkflowVersion } from './agent-attempt-version.ts';
+import { assertCortexReferences } from './cortex-references.ts';
+import { cortexActionId } from './agent-event-renderer.ts';
 
 export type ReplayAgentAttemptJournalRequest = {
   readonly events: readonly AgentAttemptEvent[];
@@ -71,6 +73,9 @@ export function replayAgentAttemptJournal(
         `Agent attempt journal sequence ${event.sequence} must equal ${index + 1}.`,
       );
     }
+    if (event.actionId !== cortexActionId(event.sequence)) {
+      throw new Error('Agent attempt journal action identity is invalid.');
+    }
     assertCurrentAgentAttemptWorkflowVersion(event.workflowVersion);
     const identityPair: AgentAttemptIdentityPair = {
       expected: first,
@@ -105,6 +110,13 @@ export function replayAgentAttemptJournal(
       throw new Error(
         'Agent attempt journal contains unknown runtime activity.',
       );
+    }
+    if (event.kind === AgentAttemptEventKind.RuntimeActivity) {
+      const referenceArgs = {
+        references: event.cortexReferences,
+        knownIdentifiers: false,
+      } as const;
+      assertCortexReferences(referenceArgs);
     }
     if (event.kind === AgentAttemptEventKind.ViewProjected) {
       if (sawView) {

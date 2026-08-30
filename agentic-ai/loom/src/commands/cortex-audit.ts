@@ -33,6 +33,10 @@ import {
   auditTrackedExecutableSkillPackages,
   type ExecutableSkillPackageFinding,
 } from '../executable-skills/repository.ts';
+import {
+  auditCortexIdentifierRegistry,
+  type CortexIdentifierFinding,
+} from '../lib/cortex-identifiers.ts';
 export type CortexAuditReport = {
   readonly brokenLinks: BrokenLink[];
   readonly invalidExecutableSkillPackages: readonly ExecutableSkillPackageFinding[];
@@ -42,6 +46,7 @@ export type CortexAuditReport = {
   readonly densityFindings: DensityFinding[];
   readonly structureFindings: CortexStructureFinding[];
   readonly articleStructureFindings: CortexArticleFinding[];
+  readonly identifierFindings: readonly CortexIdentifierFinding[];
   readonly auditOk: boolean;
 };
 
@@ -214,6 +219,7 @@ export async function runCortexAuditFromDirectory(
     : [];
 
   const prohibitedHarnessSkillPaths = trackedHarnessSkillPaths(repoRoot);
+  const identifierFindings = auditCortexIdentifierRegistry(repoRoot).findings;
 
   return {
     brokenLinks,
@@ -224,6 +230,7 @@ export async function runCortexAuditFromDirectory(
     densityFindings,
     structureFindings,
     articleStructureFindings,
+    identifierFindings,
     auditOk:
       brokenLinks.length === 0 &&
       executableSkillPackageFindings.length === 0 &&
@@ -232,7 +239,8 @@ export async function runCortexAuditFromDirectory(
       prohibitedHarnessSkillPaths.length === 0 &&
       densityFindings.length === 0 &&
       structureFindings.length === 0 &&
-      articleStructureFindings.length === 0,
+      articleStructureFindings.length === 0 &&
+      identifierFindings.length === 0,
   };
 }
 

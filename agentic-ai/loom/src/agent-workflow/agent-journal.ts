@@ -53,6 +53,14 @@ import type {
   TrustedStructuralExecution,
 } from '../structural-experts/trusted-runtime.ts';
 import { assertCurrentAgentAttemptWorkflowVersion } from './agent-attempt-version.ts';
+import {
+  assertCortexReferences,
+  type AssertCortexReferencesArgs,
+} from './cortex-references.ts';
+import {
+  cortexActionId,
+  renderAgentAttemptEvent,
+} from './agent-event-renderer.ts';
 import type {
   ModuleExpertJournalAuthority,
   ModuleExpertJournalBinding,
@@ -80,6 +88,8 @@ export type AgentAttemptJournalConfiguration = {
   readonly depth: number;
   readonly parent: AgentAttemptParent;
   readonly now: () => IsoTimestamp;
+  readonly knownCortexIdentifiers?: ReadonlySet<string>;
+  readonly compactOutput?: (line: string) => void;
 };
 
 export type ModuleExpertAttemptJournalConfiguration = Omit<
@@ -229,6 +239,13 @@ export class AgentAttemptJournal<TTask extends string> {
     ) {
       throw new Error('Agent runtime activity detail must be bounded.');
     }
+    if (event.kind === AgentAttemptEventKind.RuntimeActivity) {
+      const referenceArgs: AssertCortexReferencesArgs = {
+        references: event.cortexReferences,
+        knownIdentifiers: this.configuration.knownCortexIdentifiers ?? false,
+      };
+      assertCortexReferences(referenceArgs);
+    }
     this.sequence += 1;
     const occurredAt = this.configuration.now();
     if (Number.isNaN(Date.parse(occurredAt))) {
@@ -246,6 +263,7 @@ export class AgentAttemptJournal<TTask extends string> {
       depth: this.configuration.depth,
       parent: this.configuration.parent,
       sequence: this.sequence,
+      actionId: cortexActionId(this.sequence),
       occurredAt,
     };
     const completeEvent = { ...metadata, ...event } as AgentAttemptEvent;
@@ -255,6 +273,14 @@ export class AgentAttemptJournal<TTask extends string> {
     });
     this.pendingAppend = appendOperation;
     await appendOperation;
+    const compactOutput =
+      this.configuration.compactOutput ??
+      ((line: string) => process.stderr.write(line));
+    try {
+      compactOutput(renderAgentAttemptEvent(completeEvent));
+    } catch {
+      // Compact human evidence is optional and cannot gate the journal.
+    }
     return completeEvent;
   }
 

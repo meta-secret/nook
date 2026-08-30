@@ -1,3 +1,4 @@
+import type { CortexReference } from './cortex-references.ts';
 export enum WorkflowRuntimeActivityKind {
   ThreadStarted = 'thread-started',
   TurnStarted = 'turn-started',
@@ -14,4 +15,5 @@ export enum WorkflowRuntimeActivityKind {
 export type RuntimeActivityObservation = {
   readonly activity: WorkflowRuntimeActivityKind;
   readonly detail: string;
+  readonly cortexReferences?: readonly CortexReference[];
 };

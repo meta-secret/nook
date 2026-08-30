@@ -390,6 +390,12 @@ ${gizmoIndexRows}
         },
       ],
       articleStructureFindings: [],
+      identifierFindings: [
+        {
+          file: '.cortex/identifiers.json',
+          message: 'Cortex identifier registry is missing.',
+        },
+      ],
       auditOk: false,
     };
     expect(report).toEqual(expectedReport);

@@ -1,4 +1,11 @@
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from 'node:fs/promises';
 import type { RmOptions } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -19,6 +26,7 @@ import { WorkflowRuntimeActivityKind } from '../../src/agent-workflow/events.ts'
 import { CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION } from '../../src/agent-workflow/agent-attempt-version.ts';
 import { readVerifiedBarrierAttempt } from '../../src/agent-workflow/attempt-verification.ts';
 import type { ReadParentAttemptArgs } from '../../src/agent-workflow/attempt-verification.ts';
+import { CortexReferenceRelation } from '../../src/agent-workflow/cortex-references.ts';
 
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
 
@@ -27,6 +35,29 @@ describe('delegated agent journal CLI', () => {
     const workingDirectory = await mkdtemp(join(tmpdir(), 'loom-delegation-'));
     const removeOptions: RmOptions = { recursive: true, force: true };
     try {
+      const cortexDirectory = join(workingDirectory, '.cortex');
+      await mkdir(cortexDirectory);
+      await writeFile(
+        join(cortexDirectory, 'knowledge-graph.md'),
+        '# Knowledge graph\n',
+        'utf8',
+      );
+      const registry = {
+        schemaVersion: 1,
+        entries: [
+          {
+            id: 'CX-AI',
+            kind: 'category',
+            title: 'AI',
+            locator: '.cortex/knowledge-graph.md',
+          },
+        ],
+      };
+      await writeFile(
+        join(cortexDirectory, 'identifiers.json'),
+        JSON.stringify(registry),
+        'utf8',
+      );
       const requestPath = join(workingDirectory, 'request.json');
       const request = {
         runId: 'ordinary-coding-run',
@@ -40,6 +71,9 @@ describe('delegated agent journal CLI', () => {
           {
             activity: WorkflowRuntimeActivityKind.TurnCompleted,
             detail: 'Contract inspection completed.',
+            cortexReferences: [
+              { id: 'CX-AI', relation: CortexReferenceRelation.Applied },
+            ],
           },
         ],
         terminal: {
@@ -151,8 +185,12 @@ describe('delegated agent journal CLI', () => {
       const processResult = Bun.spawn(command, spawnOptions);
       const exitCode = await processResult.exited;
       const stdout = await new Response(processResult.stdout).text();
+      const stderr = await new Response(processResult.stderr).text();
       expect(exitCode).toBe(0);
       expect(stdout).toContain('events.jsonl');
+      expect(stderr).toContain(
+        '[inspect-contract/attempt-1:a0002] runtime-activity turn-completed CX-AI:applied',
+      );
       const attemptDirectory = join(
         workingDirectory,
         'workflow',
@@ -187,6 +225,10 @@ describe('delegated agent journal CLI', () => {
             ),
         ),
       ).toBe(true);
+      for (const [index, line] of eventLines.entries()) {
+        const expectedActionId = `"actionId":"a${(index + 1).toString().padStart(4, '0')}"`;
+        expect(line).toContain(expectedActionId);
+      }
       const finalizationPath = join(workingDirectory, 'finalization.json');
       const finalizationRequest = {
         runId: request.runId,

@@ -9,6 +9,22 @@ Mechanical leaf tools use the existing Bun domain-YAML protocol.
 
 Humans do not use Loom interactively. AI agents and Task wrappers do.
 
+## Delegated agent action references
+
+Every persisted agent-attempt event has a compact action identifier derived
+from its sequence, such as `a0002`. Runtime activities may also name registered
+Cortex guidance with a `loaded`, `cited`, `applied`, or `validated` relation.
+
+The registry lives at `.cortex/identifiers.json`. Loom validates references
+before persistence and prints a compact action summary to stderr after the
+journal write, while machine-readable responses remain on stdout. These records
+trace observable actions and references; they never contain private reasoning,
+prompts, credentials, secrets, or raw command output.
+
+Adapter-bearing attempt streams use workflow version `3.0.0`. Earlier versions
+do not contain action identities and require local cleanup or explicit
+migration rather than inferred replay data.
+
 ## Module expert catalog
 
 Named read-only semantic roles are defined in
