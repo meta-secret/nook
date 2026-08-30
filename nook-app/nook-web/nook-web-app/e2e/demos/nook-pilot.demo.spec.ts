@@ -95,7 +95,7 @@ test('open trusted pairing from disconnected Nook Pilot', async ({ page }) => {
         <main>
           <h1>Welcome back</h1>
           <p>Sign in to continue to your account.</p>
-          <form>
+          <form method="post">
             <input aria-label="Email" autocomplete="username" type="email" />
             <input aria-label="Password" autocomplete="current-password" type="password" />
             <button type="submit">Sign in</button>
@@ -193,7 +193,7 @@ test('guide a login through the Nook Pilot control plane', async ({ page }) => {
           <p class="eyebrow">Example account</p>
           <h1>Welcome back</h1>
           <p class="intro">Sign in to continue to your dashboard.</p>
-          <form id="login-form">
+          <form id="login-form" method="post">
             <label>Email<input autocomplete="username" name="email" type="email"></label>
             <label>Password<input autocomplete="current-password" name="password" type="password"></label>
             <button type="submit">Sign in</button>
@@ -313,7 +313,7 @@ test('fill a Namecheap-like OTP challenge through Nook Pilot', async ({
             Open the two-factor authentication app on your device and verify
             your identity for your account <strong>pilot</strong>.
           </p>
-          <form id="otp-form">
+          <form id="otp-form" method="post">
             <input
               id="Code"
               name="Code"
@@ -409,7 +409,7 @@ test('classify contextual email-first facts through Nook Pilot', async ({
       <body>
         <main>
           <h1>Iniciar sesión</h1>
-          <form id="loginForm">
+          <form id="loginForm" method="post">
             <input
               type="email"
               name="email"
@@ -521,7 +521,7 @@ test('detect a Facebook-like login under an aria-hidden consent layer', async ({
         <div aria-hidden="true">
           <main>
             <h1>facebook</h1>
-            <form id="login_form">
+            <form id="login_form" method="post">
               <input
                 type="text"
                 name="email"
