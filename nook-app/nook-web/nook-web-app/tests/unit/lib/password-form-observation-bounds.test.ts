@@ -6,6 +6,7 @@ import {
 } from '../../../../nook-web-shared/src/extension/password-form-submission-controls'
 import {
   authenticationPageObservationFacts,
+  fillLoginCredentials,
   PasswordFormQueryKind,
   PasswordFormScopeKind,
   submitLoginForm,
@@ -552,5 +553,34 @@ describe('authentication observation bounds', () => {
     }
     expect(passkey.summary.usernameFieldCount).toBe(0)
     expect(passkey.summary.passwordFieldCount).toBe(0)
+    expect(
+      observations.some(
+        (observation) =>
+          observation.summary.usernameFieldCount > 0 &&
+          observation.summary.passwordFieldCount > 0,
+      ),
+    ).toBe(false)
+
+    const username = document.querySelector<HTMLInputElement>(
+      '.signin-panel input',
+    )
+    const password = document.querySelector<HTMLInputElement>(
+      '.password-panel input',
+    )
+    if (!username || !password) {
+      throw new Error('expected separate username and password fields')
+    }
+    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: {
+        username: 'user@example.test',
+        password: 'secret',
+      },
+      kind: PasswordFormQueryKind.Scoped,
+      root: passkey.root,
+      formScope: passkey.formScope,
+    }
+    expect(fillLoginCredentials(fillArgs)).toBe(false)
+    expect(username.value).toBe('')
+    expect(password.value).toBe('')
   })
 })

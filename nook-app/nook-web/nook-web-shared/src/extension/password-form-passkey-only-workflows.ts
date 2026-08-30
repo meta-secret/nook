@@ -1,5 +1,6 @@
 import {
   findPasskeyControls,
+  localUnownedPasskeyContainer,
   pageHasPasskeyControl,
   PasswordFormScopeKind,
   type PasskeyControlCandidate,
@@ -79,7 +80,7 @@ export function summarizePasskeyOnlyWorkflowForms<Summary>(
   const localPasskeyRoots = [
     ...new Set(
       formlessPasskeys.map(({ control }) =>
-        nearestUnownedPasskeyContainer(control, root),
+        localUnownedPasskeyContainer({ field: control, root }),
       ),
     ),
   ];
@@ -144,11 +145,19 @@ export function appendIndependentPasskeyOnlyWorkflows<
     if (observation.formScope.kind === PasswordFormScopeKind.Owned) {
       return !ownedForms.has(observation.formScope.owner);
     }
-    return !fieldBearing.some(
-      (existing) =>
-        existing.formScope.kind === PasswordFormScopeKind.Unowned &&
-        existing.root === observation.root,
-    );
+    return !fieldBearing.some((existing) => {
+      if (existing.formScope.kind !== PasswordFormScopeKind.Unowned) {
+        return false;
+      }
+      if (existing.root === observation.root) {
+        return true;
+      }
+      return (
+        observation.root instanceof Node &&
+        existing.root instanceof Node &&
+        observation.root.contains(existing.root)
+      );
+    });
   });
   const passkeyCandidates = findPasskeyControls(document);
   return [...fieldBearing, ...independent]
@@ -175,30 +184,6 @@ export function appendIndependentPasskeyOnlyWorkflows<
     .slice(0, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS);
 }
 
-function nearestUnownedPasskeyContainer(
-  control: HTMLElement,
-  root: Document,
-): ParentNode {
-  let container = control.parentElement;
-  while (
-    container &&
-    container !== root.body &&
-    container !== root.documentElement
-  ) {
-    if (
-      container.matches(
-        'dialog, [role="dialog"], [role="form"], [id*="login" i], [id*="signin" i], [id*="signup" i], [id*="reset" i], [class*="login" i], [class*="signin" i], [class*="signup" i], [class*="reset" i]',
-      )
-    ) {
-      return container;
-    }
-    container = container.parentElement;
-  }
-  return control.parentElement instanceof HTMLElement
-    ? control.parentElement
-    : root;
-}
-
 function observationHasSafePasskey<
   Observation extends {
     root: ParentNode;
@@ -216,7 +201,8 @@ function observationHasSafePasskey<
       observation.formScope.kind === PasswordFormScopeKind.Owned
         ? owner.kind === PasswordFormScopeKind.Owned &&
           owner.owner === observation.formScope.owner
-        : owner.kind === PasswordFormScopeKind.Unowned;
+        : owner.kind === PasswordFormScopeKind.Unowned &&
+          observation.root.contains(candidate.control);
     return belongs && passkeyControlIsSafe(candidate, observation);
   });
 }

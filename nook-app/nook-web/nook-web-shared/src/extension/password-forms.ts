@@ -22,6 +22,7 @@ import {
   findUsernameFields,
   hasAutocompleteToken,
   isAuthUsernameField,
+  nearestUnownedAuthContainer,
   pageHasManualCheckpoint,
   pageHasPasskeyControl,
   PasskeyControlLookupKind,
@@ -137,11 +138,6 @@ type NativeInputValueMutation = {
 };
 
 type PasswordFormSummaryRequest = PasswordFormScopeQuery;
-
-type UnownedAuthenticationContainerQuery = {
-  field: HTMLElement;
-  root: ParentNode;
-};
 
 export type OneTimeCodeFillRequest = PasswordFormScopeQuery & {
   code: string;
@@ -638,26 +634,6 @@ export function authenticationPageObservationFacts({
     },
     detailedAdvanceControl,
   };
-}
-
-function nearestUnownedAuthContainer({
-  field,
-  root,
-}: UnownedAuthenticationContainerQuery): ParentNode {
-  let container = field.parentElement;
-  while (container && container !== root) {
-    const explicitAuthContainer = container.matches(
-      'dialog, [role="dialog"], [role="form"], [id*="login" i], [id*="signin" i], [id*="signup" i], [id*="reset" i], [class*="login" i], [class*="signin" i], [class*="signup" i], [class*="reset" i]',
-    );
-    const hasSubmitControl = Boolean(
-      container.querySelector(
-        'button[type="submit"], input[type="submit"], button:not([type])',
-      ),
-    );
-    if (explicitAuthContainer || hasSubmitControl) return container;
-    container = container.parentElement;
-  }
-  return root;
 }
 
 export function summarizeAuthenticationWorkflowForms(): PasswordFormObservation[] {

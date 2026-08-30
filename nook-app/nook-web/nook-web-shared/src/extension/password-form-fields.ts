@@ -432,6 +432,58 @@ export function pageHasPasskeyControl(root: ParentNode = document): boolean {
   return findPasskeyControl(root).kind === PasskeyControlLookupKind.Found;
 }
 
+export function nearestUnownedAuthContainer({
+  field,
+  root,
+}: {
+  field: HTMLElement;
+  root: ParentNode;
+}): ParentNode {
+  let container = field.parentElement;
+  while (container && container !== root) {
+    const explicitAuthContainer = container.matches(
+      'dialog, [role="dialog"], [role="form"], [id*="login" i], [id*="signin" i], [id*="signup" i], [id*="reset" i], [class*="login" i], [class*="signin" i], [class*="signup" i], [class*="reset" i]',
+    );
+    const hasSubmitControl = Boolean(
+      container.querySelector(
+        'button[type="submit"], input[type="submit"], button:not([type])',
+      ),
+    );
+    if (explicitAuthContainer || hasSubmitControl) return container;
+    container = container.parentElement;
+  }
+  return field.parentElement instanceof HTMLElement
+    ? field.parentElement
+    : root;
+}
+
+export function localUnownedPasskeyContainer({
+  field,
+  root,
+}: {
+  field: HTMLElement;
+  root: ParentNode;
+}): ParentNode {
+  const documentRoot = field.ownerDocument;
+  const nearest = nearestUnownedAuthContainer({ field, root });
+  if (
+    nearest !== root &&
+    nearest !== documentRoot.body &&
+    nearest !== documentRoot.documentElement
+  ) {
+    return nearest;
+  }
+  const parent = field.parentElement;
+  if (
+    parent &&
+    parent !== documentRoot.body &&
+    parent !== documentRoot.documentElement
+  ) {
+    return parent;
+  }
+  return field;
+}
+
 export function pageHasManualCheckpoint(root: ParentNode): boolean {
   const doc = root.ownerDocument ?? document;
   if (
