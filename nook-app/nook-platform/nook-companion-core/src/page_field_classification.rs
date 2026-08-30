@@ -645,6 +645,7 @@ pub fn can_activate_authentication_route_control(
     has_concrete_control: bool,
     has_authentication_username: bool,
     has_local_authentication_scope: bool,
+    has_authentication_password: bool,
 ) -> bool {
     if !has_safe_authentication_route_identity(source_origin, form_identity, destination_identity)
         || control_label.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
@@ -667,7 +668,7 @@ pub fn can_activate_authentication_route_control(
     }
     control_label.is_empty()
         && !has_concrete_control
-        && has_authentication_username
+        && (has_authentication_username || has_authentication_password)
         && has_local_authentication_scope
 }
 
@@ -940,6 +941,7 @@ mod tests {
                 concrete,
                 username,
                 local,
+                false,
             )
         };
         assert!(decide("", "", false, true, true));
@@ -953,6 +955,28 @@ mod tests {
         }
         assert!(!decide("f", "Entrar", true, true, false));
         assert!(!decide("f", "Supprimer le compte", true, true, true));
+        assert!(can_activate_authentication_route_control(
+            "https://example.test",
+            "login",
+            "https://example.test/session",
+            "",
+            "",
+            false,
+            false,
+            true,
+            true,
+        ));
+        assert!(!can_activate_authentication_route_control(
+            "https://example.test",
+            "login",
+            "https://example.test/session",
+            "",
+            "",
+            false,
+            false,
+            true,
+            false,
+        ));
     }
 
     #[test]

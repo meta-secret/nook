@@ -216,6 +216,7 @@ export function canRequestImplicitAuthenticationSubmit(
   sourceOrigin: string,
   destinationIdentity: string,
   hasAuthenticationUsername: boolean,
+  hasAuthenticationPassword: boolean,
 ): boolean {
   return (
     authenticationFactStringsAreTransportable([
@@ -232,8 +233,42 @@ export function canRequestImplicitAuthenticationSubmit(
       false,
       hasAuthenticationUsername,
       true,
+      hasAuthenticationPassword,
     )
   );
+}
+
+export function requestImplicitAuthenticationSubmit(
+  form: HTMLFormElement,
+  hasAuthenticationUsername: boolean,
+  hasAuthenticationPassword: boolean,
+): boolean {
+  const sourceOrigin = form.ownerDocument.defaultView?.location.origin;
+  if (
+    !sourceOrigin ||
+    formHasSemanticSubmitter(form) ||
+    typeof form.requestSubmit !== "function"
+  ) {
+    return false;
+  }
+  const destinationRequest: AuthenticationRouteDestinationRequest = {
+    form,
+  };
+  if (
+    !canRequestImplicitAuthenticationSubmit(
+      form,
+      sourceOrigin,
+      authenticationRouteDestination(destinationRequest),
+      hasAuthenticationUsername,
+      hasAuthenticationPassword,
+    )
+  ) {
+    return false;
+  }
+  return observeSubmit({
+    form,
+    action: () => form.requestSubmit(),
+  });
 }
 
 export function authenticationRouteDestination({
@@ -314,6 +349,7 @@ function canActivateAuthenticationRouteControl(
     true,
     isAuthUsernameField(query.usernameField),
     sharesOwnedForm || hasLocalUnownedScope,
+    false,
   );
 }
 

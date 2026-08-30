@@ -37,19 +37,17 @@ import {
   authenticationAdvanceControlSelector,
   authenticationFactStringsAreTransportable,
   authenticationPolicyTextFits,
-  authenticationRouteDestination,
   boundAuthenticationControlObservations,
   MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
   observedFormDestination,
   observedFormIdentity,
-  canRequestImplicitAuthenticationSubmit,
   clickAdvanceControl,
   controlDestinationIdentity,
   controlIsInert,
   controlLabel,
   isRenderedControl,
-  formHasSemanticSubmitter,
   observeSubmit,
+  requestImplicitAuthenticationSubmit,
   ownedFormIdentity,
   PasswordFormQueryKind,
   semanticSubmitControlSelector,
@@ -154,10 +152,6 @@ export type LoginCredentialsFillRequest = PasswordFormScopeQuery & {
 
 export type GeneratedPasswordFillRequest = PasswordFormScopeQuery & {
   password: string;
-};
-
-type AuthenticationRouteDestinationRequest = {
-  form: HTMLFormElement;
 };
 
 function setNativeInputValue({ input, value }: NativeInputValueMutation): void {
@@ -948,53 +942,11 @@ export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
       usernameField,
     };
     if (clickAdvanceControl(nookNamedArgs0_4)) return true;
-    const sourceOrigin = form?.ownerDocument.defaultView?.location.origin;
-    if (!form || !sourceOrigin || formHasSemanticSubmitter(form)) return false;
-    const destinationRequest: AuthenticationRouteDestinationRequest = {
-      form,
-    };
-    if (
-      !canRequestImplicitAuthenticationSubmit(
-        form,
-        sourceOrigin,
-        authenticationRouteDestination(destinationRequest),
-        hasAuthenticationUsername,
-      )
-    ) {
-      return false;
-    }
-    return observeSubmit({
-      form,
-      action: () => form.requestSubmit(),
-    });
   }
-
-  if (!form) {
-    return false;
-  }
-  const sourceOrigin = form.ownerDocument.defaultView?.location.origin;
-  if (
-    !sourceOrigin ||
-    formHasSemanticSubmitter(form) ||
-    typeof form.requestSubmit !== "function"
-  ) {
-    return false;
-  }
-  const destinationRequest: AuthenticationRouteDestinationRequest = {
+  if (!form) return false;
+  return requestImplicitAuthenticationSubmit(
     form,
-  };
-  if (
-    !canRequestImplicitAuthenticationSubmit(
-      form,
-      sourceOrigin,
-      authenticationRouteDestination(destinationRequest),
-      hasAuthenticationUsername,
-    )
-  ) {
-    return false;
-  }
-  return observeSubmit({
-    form,
-    action: () => form.requestSubmit(),
-  });
+    hasAuthenticationUsername,
+    Boolean(passwordField),
+  );
 }

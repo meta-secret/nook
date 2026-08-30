@@ -63,6 +63,29 @@ describe('authentication workflow routing', () => {
     ])
   })
 
+  test('bounds matching passkey account counts before classification', async () => {
+    const dependencies = {
+      companionWasmReady: Promise.resolve(),
+      authenticationPasskeyEvidenceIsSafe: () => true,
+      matchingPasskeyAccountCountForOriginSafe: async () => 101,
+      authenticationWorkflowSnapshot: async ({ observations }) => {
+        expect(observations[0]?.authenticator.matchingPasskeyAccountCount).toBe(
+          100,
+        )
+        return { kind: 'no-match' }
+      },
+    } as unknown as AuthenticationWorkflowRoutingDependencies
+
+    const request: Parameters<typeof authenticationWorkflowMessageResponse>[0] =
+      {
+        message,
+        dependencies,
+      }
+    await expect(
+      authenticationWorkflowMessageResponse(request),
+    ).resolves.toEqual({ ok: true })
+  })
+
   test('contains a synchronous evidence-classifier exception', async () => {
     const dependencies = {
       companionWasmReady: Promise.resolve(),

@@ -2,6 +2,7 @@ import {
   authentication_passkey_control_evidence_is_safe,
   type AuthenticationDetailedPasskeyControlObservation,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT } from '../../../../nook-web-shared/src/extension/password-form-submission-controls'
 import type {
   AuthenticationWorkflowSnapshotMessage,
   AuthenticationWorkflowSnapshotView,
@@ -60,7 +61,10 @@ export async function authenticationWorkflowMessageResponse({
           ...observation.authenticator,
           matchingPasskeyAccountCount:
             passkeyEvidenceIsSafe[observationIndex] === true
-              ? matchingPasskeyAccountCount
+              ? Math.min(
+                  matchingPasskeyAccountCount,
+                  MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
+                )
               : 0,
         },
       }),

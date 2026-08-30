@@ -146,6 +146,7 @@ pub fn can_activate_authentication_route_control(
     has_concrete_control: bool,
     has_authentication_username: bool,
     has_local_authentication_scope: bool,
+    has_authentication_password: bool,
 ) -> bool {
     nook_companion_core::can_activate_authentication_route_control(
         source_origin,
@@ -156,6 +157,7 @@ pub fn can_activate_authentication_route_control(
         has_concrete_control,
         has_authentication_username,
         has_local_authentication_scope,
+        has_authentication_password,
     )
 }
 
@@ -248,6 +250,7 @@ mod tests {
             true,
             true,
             true,
+            false,
         ));
         for has_concrete_control in [false, true] {
             assert_eq!(
@@ -260,10 +263,33 @@ mod tests {
                     has_concrete_control,
                     true,
                     true,
+                    false,
                 ),
                 !has_concrete_control,
             );
         }
+        assert!(can_activate_authentication_route_control(
+            "https://example.test",
+            "login-form",
+            "https://example.test/session",
+            "",
+            "",
+            false,
+            false,
+            true,
+            true,
+        ));
+        assert!(!can_activate_authentication_route_control(
+            "https://example.test",
+            "login-form",
+            "https://example.test/auth/login",
+            "Continue",
+            "",
+            true,
+            false,
+            true,
+            true,
+        ));
         let login = nook_companion_core::AuthenticationPageObservation {
             current_password_field_count: 1,
             ..Default::default()

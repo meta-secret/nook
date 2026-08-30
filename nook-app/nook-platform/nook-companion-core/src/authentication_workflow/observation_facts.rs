@@ -280,6 +280,17 @@ mod tests {
             .classify(),
             AuthenticationWorkflowMatch::Rejected
         );
+
+        let mut observation = password_login();
+        observation.authenticator.matching_passkey_account_count =
+            crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT;
+        assert!(matches!(
+            AuthenticationPageObservationFactsBatch {
+                observations: vec![observation],
+            }
+            .classify(),
+            AuthenticationWorkflowMatch::Matched(_)
+        ));
     }
 
     #[test]
