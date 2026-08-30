@@ -1,6 +1,7 @@
 import {
   authentication_passkey_control_evidence_is_safe,
   authentication_workflow_saved_login_capability,
+  authentication_workflow_requires_login_match_availability,
   type AuthenticationSavedLoginCapability,
   type AuthenticationDetailedPasskeyControlObservation,
   type WebsiteLoginMatchAvailability,
@@ -20,6 +21,7 @@ export type AuthenticationWorkflowRoutingDependencies = {
   authenticationPasskeyEvidenceIsSafe: typeof authenticationPasskeyEvidenceIsSafe
   authenticationWorkflowSnapshot: typeof VaultRuntime.authenticationWorkflowSnapshot
   authenticationWorkflowSavedLoginCapability: typeof authenticationWorkflowSavedLoginCapability
+  authenticationWorkflowRequiresLoginMatchAvailability: typeof authenticationWorkflowRequiresLoginMatchAvailability
   matchingPasskeyAccountCountForOriginSafe: typeof PasskeyOperations.matchingPasskeyAccountCountForOriginSafe
   websiteLoginMatchAvailability: typeof AccountPickers.websiteLoginMatchAvailability
 }
@@ -34,6 +36,12 @@ export function authenticationWorkflowSavedLoginCapability(
   snapshot: AuthenticationWorkflowSnapshotView,
 ): AuthenticationSavedLoginCapability {
   return authentication_workflow_saved_login_capability(snapshot)
+}
+
+export function authenticationWorkflowRequiresLoginMatchAvailability(
+  snapshot: AuthenticationWorkflowSnapshotView,
+): boolean {
+  return authentication_workflow_requires_login_match_availability(snapshot)
 }
 
 export type AuthenticationWorkflowRoutingResponse = {
@@ -60,6 +68,7 @@ export async function authenticationWorkflowMessageResponse({
     authenticationPasskeyEvidenceIsSafe,
     authenticationWorkflowSnapshot,
     authenticationWorkflowSavedLoginCapability,
+    authenticationWorkflowRequiresLoginMatchAvailability,
     matchingPasskeyAccountCountForOriginSafe,
     websiteLoginMatchAvailability,
   } = dependencies
@@ -107,7 +116,10 @@ export async function authenticationWorkflowMessageResponse({
       let loginMatches: WebsiteLoginMatchAvailability = {
         kind: 'unavailable',
       }
-      if (capability === 'fill-saved-login') {
+      if (
+        capability === 'fill-saved-login' &&
+        authenticationWorkflowRequiresLoginMatchAvailability(result.snapshot)
+      ) {
         try {
           const availabilityRequest: Parameters<
             typeof websiteLoginMatchAvailability

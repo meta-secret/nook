@@ -45,6 +45,7 @@ describe('authentication workflow routing', () => {
         return { kind: 'matched', snapshot: { observationIndex: 0 } }
       },
       authenticationWorkflowSavedLoginCapability: () => 'fill-saved-login',
+      authenticationWorkflowRequiresLoginMatchAvailability: () => true,
       websiteLoginMatchAvailability: async () => ({ kind: 'ready', count: 2 }),
     } as unknown as AuthenticationWorkflowRoutingDependencies
 
@@ -113,6 +114,7 @@ describe('authentication workflow routing', () => {
           snapshot: { observationIndex: 0, action: 4 },
         }),
         authenticationWorkflowSavedLoginCapability: () => 'fill-saved-login',
+        authenticationWorkflowRequiresLoginMatchAvailability: () => true,
         websiteLoginMatchAvailability: async () => {
           throw new Error(failure)
         },
@@ -138,6 +140,35 @@ describe('authentication workflow routing', () => {
         },
       })
     }
+  })
+
+  test('does not probe saved-login availability for ordinary Continue workflows', async () => {
+    let availabilityCalls = 0
+    const dependencies = {
+      companionWasmReady: Promise.resolve(),
+      authenticationPasskeyEvidenceIsSafe: () => false,
+      matchingPasskeyAccountCountForOriginSafe: async () => 0,
+      authenticationWorkflowSnapshot: async () => ({
+        kind: 'matched',
+        snapshot: { observationIndex: 0, action: 0 },
+      }),
+      authenticationWorkflowSavedLoginCapability: () => 'fill-saved-login',
+      authenticationWorkflowRequiresLoginMatchAvailability: () => false,
+      websiteLoginMatchAvailability: async () => {
+        availabilityCalls += 1
+        return { kind: 'ready', count: 1 }
+      },
+    } as AuthenticationWorkflowRoutingDependencies
+    const request: Parameters<typeof authenticationWorkflowMessageResponse>[0] =
+      { message, sender, dependencies }
+
+    await expect(
+      authenticationWorkflowMessageResponse(request),
+    ).resolves.toMatchObject({
+      workflow: { ok: true, snapshot: { action: 0 } },
+      loginMatches: { kind: 'unavailable' },
+    })
+    expect(availabilityCalls).toBe(0)
   })
 
   test('contains a synchronous evidence-classifier exception', async () => {
