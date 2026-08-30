@@ -15,6 +15,7 @@ import {
   WebsiteAuthenticatorPickerOpenMessageType,
 } from '../../lib/authenticator-picker-messages'
 import {
+  approvedWorkflowIsStillCurrent,
   RuntimeMessageDeliveryKind,
   sendAuthenticatorCodeRuntimeMessage,
   sendAuthenticatorPickerOpenRuntimeMessage,
@@ -41,6 +42,18 @@ export async function fillAuthenticatorCode({
   description,
   continueButton,
 }: FillAuthenticatorCodeArgs): Promise<boolean> {
+  if (!approvedWorkflowIsStillCurrent(workflow)) {
+    const nookTypedArgs0_staleAuth: Parameters<typeof setStatus>[0] = {
+      description,
+      continueButton,
+      text: translatedMessage(
+        BROWSER_MESSAGE_KEYS.WidgetAuthenticatorFillFailed,
+      ),
+      enableContinue: true,
+    }
+    setStatus(nookTypedArgs0_staleAuth)
+    return false
+  }
   const message: Parameters<typeof sendAuthenticatorCodeRuntimeMessage>[0] = {
     type: WebsiteAuthenticatorFillMessageType.NookWebsiteAuthenticatorFill,
     payload: {
@@ -97,6 +110,19 @@ export async function fillAuthenticatorCode({
   const codeValue = response.code
   const code = { value: codeValue }
   response.code = ''
+  if (!approvedWorkflowIsStillCurrent(workflow)) {
+    code.value = ''
+    const nookTypedArgs0_staleAuthFill: Parameters<typeof setStatus>[0] = {
+      description,
+      continueButton,
+      text: translatedMessage(
+        BROWSER_MESSAGE_KEYS.WidgetAuthenticatorFillFailed,
+      ),
+      enableContinue: true,
+    }
+    setStatus(nookTypedArgs0_staleAuthFill)
+    return false
+  }
   const nookTypedArgs0_4: Parameters<typeof fillOneTimeCode>[0] = {
     code: code.value,
     kind: PasswordFormQueryKind.Scoped,
@@ -159,6 +185,18 @@ export async function continueWithAuthenticator({
     widgetState.busy ||
     pickerState.authenticator.kind === AuthenticatorPickerKind.Open
   ) {
+    return
+  }
+  if (!approvedWorkflowIsStillCurrent(workflow)) {
+    const nookTypedArgs0_staleContinueAuth: Parameters<typeof setStatus>[0] = {
+      description,
+      continueButton,
+      text: translatedMessage(
+        BROWSER_MESSAGE_KEYS.WidgetAuthenticatorFillFailed,
+      ),
+      enableContinue: true,
+    }
+    setStatus(nookTypedArgs0_staleContinueAuth)
     return
   }
   widgetState.busy = true
