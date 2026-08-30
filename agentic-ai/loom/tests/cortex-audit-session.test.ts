@@ -20,16 +20,13 @@ import { CortexStructureFindingCode } from '../src/lib/cortex-document-structure
 test('uses the pre-push commit for push stability audits', () => {
   const before = '1'.repeat(40);
   const base = '2'.repeat(40);
-  expect(publishedBaseCandidatesForEvent({ before })).toEqual([
-    before,
-    'origin/main',
-  ]);
+  expect(publishedBaseCandidatesForEvent({ before })).toEqual([before]);
   expect(
     publishedBaseCandidatesForEvent({
       before,
       pull_request: { base: { sha: base } },
     }),
-  ).toEqual([base, 'origin/main']);
+  ).toEqual([base]);
 });
 
 test('excludes temporary session memory from persistent Cortex documents', () => {

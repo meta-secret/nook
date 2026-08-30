@@ -353,7 +353,7 @@ export function publishedBaseCandidatesForEvent(
 ): readonly string[] {
   const baseSha = event.pull_request?.base?.sha;
   if (baseSha && /^[0-9a-f]{40}$/u.test(baseSha)) {
-    return [baseSha, 'origin/main'];
+    return [baseSha];
   }
   const beforeSha = event.before;
   if (
@@ -361,7 +361,7 @@ export function publishedBaseCandidatesForEvent(
     /^[0-9a-f]{40}$/u.test(beforeSha) &&
     beforeSha !== '0000000000000000000000000000000000000000'
   ) {
-    return [beforeSha, 'origin/main'];
+    return [beforeSha];
   }
   return ['origin/main'];
 }
