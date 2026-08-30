@@ -46,8 +46,6 @@ const PARENT_KINDS = new Set<string>(Object.values(AgentAttemptParentKind));
 const PROCESSING_WORKFLOW_NAMES = new Set<string>(
   Object.values(DelegatedAgentWorkflowName),
 );
-const MAX_RUNTIME_ACTIVITY_DETAIL_LENGTH = 1024;
-
 export function replayAgentAttemptJournal(
   request: ReplayAgentAttemptJournalRequest,
 ): ReplayedAgentAttempt {
@@ -104,8 +102,9 @@ export function replayAgentAttemptJournal(
     if (
       event.kind === AgentAttemptEventKind.RuntimeActivity &&
       (!RUNTIME_ACTIVITY_KINDS.has(event.activity) ||
-        event.detail.length > MAX_RUNTIME_ACTIVITY_DETAIL_LENGTH ||
-        containsForbiddenControl(event.detail))
+        Object.hasOwn(event, 'detail') ||
+        ('evidenceSha256' in event &&
+          !/^[0-9a-f]{64}$/u.test(event.evidenceSha256)))
     ) {
       throw new Error(
         'Agent attempt journal contains unknown runtime activity.',
@@ -227,15 +226,6 @@ function assertValidIdentity(event: AgentAttemptEventMetadata): void {
 
 function safeIdentifier(value: string): boolean {
   return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value);
-}
-
-function containsForbiddenControl(value: string): boolean {
-  return Array.from(value).some((character) => {
-    const code = character.charCodeAt(0);
-    return (
-      code === 127 || (code < 32 && code !== 9 && code !== 10 && code !== 13)
-    );
-  });
 }
 
 function validProjection(projection: ProjectionReference): boolean {

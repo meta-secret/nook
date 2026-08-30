@@ -47,7 +47,6 @@ describe('agent attempt journal', () => {
       const activityEvent: AgentAttemptEventWithoutMetadata = {
         kind: AgentAttemptEventKind.RuntimeActivity,
         activity: WorkflowRuntimeActivityKind.TurnCompleted,
-        detail: 'Codex turn completed.',
         cortexReferences: [
           { id: 'CX-AI', relation: CortexReferenceRelation.Applied },
         ],
@@ -163,15 +162,17 @@ describe('agent attempt journal', () => {
       expect(() =>
         replayAgentAttemptJournal(duplicateViewReplayRequest),
       ).toThrow('duplicate views');
-      const oversizedActivityEvents = parsedEvents.map((event) =>
+      const secretBearingActivityEvents = parsedEvents.map((event) =>
         event.kind === AgentAttemptEventKind.RuntimeActivity
-          ? { ...event, detail: 'x'.repeat(1025) }
+          ? { ...event, detail: 'secret-bearing free-form text' }
           : event,
       );
-      const oversizedActivityRequest = { events: oversizedActivityEvents };
-      expect(() => replayAgentAttemptJournal(oversizedActivityRequest)).toThrow(
-        'runtime activity',
-      );
+      const secretBearingActivityRequest = {
+        events: secretBearingActivityEvents,
+      };
+      expect(() =>
+        replayAgentAttemptJournal(secretBearingActivityRequest),
+      ).toThrow('runtime activity');
       const malformedParentEvents = parsedEvents.map((event) => ({
         ...event,
         parent: { kind: AgentAttemptParentKind.AgentAttempt },
@@ -323,7 +324,6 @@ describe('agent attempt journal', () => {
       const referencedActivity: AgentAttemptEventWithoutMetadata = {
         kind: AgentAttemptEventKind.RuntimeActivity,
         activity: WorkflowRuntimeActivityKind.TurnCompleted,
-        detail: 'Referenced activity.',
         cortexReferences: [
           { id: 'CX-AI', relation: CortexReferenceRelation.Applied },
         ],

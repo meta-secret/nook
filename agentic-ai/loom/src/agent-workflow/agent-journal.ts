@@ -236,13 +236,13 @@ export class AgentAttemptJournal<TTask extends string> {
     if (!eventHasExactKeys(event)) {
       throw new Error('Agent attempt event fields are invalid.');
     }
-    if (
-      event.kind === AgentAttemptEventKind.RuntimeActivity &&
-      (event.detail.length > 1024 || containsForbiddenControl(event.detail))
-    ) {
-      throw new Error('Agent runtime activity detail must be bounded.');
-    }
     if (event.kind === AgentAttemptEventKind.RuntimeActivity) {
+      if (
+        'evidenceSha256' in event &&
+        !/^[0-9a-f]{64}$/u.test(event.evidenceSha256)
+      ) {
+        throw new Error('Agent runtime activity evidence digest is invalid.');
+      }
       if (
         event.cortexReferences.length > 0 &&
         !this.configuration.knownCortexIdentifiers
@@ -521,14 +521,19 @@ export class AgentAttemptJournal<TTask extends string> {
 }
 
 function eventHasExactKeys(event: AgentAttemptEventWithoutMetadata): boolean {
+  if (event.kind === AgentAttemptEventKind.RuntimeActivity) {
+    const expected = new Set(['kind', 'activity', 'cortexReferences']);
+    const keys = Object.keys(event);
+    return (
+      (keys.length === expected.size ||
+        (keys.length === expected.size + 1 &&
+          keys.includes('evidenceSha256'))) &&
+      keys.every((key) => expected.has(key) || key === 'evidenceSha256')
+    );
+  }
   const expectedByKind: Record<AgentAttemptEventKind, ReadonlySet<string>> = {
     [AgentAttemptEventKind.AttemptStarted]: new Set(['kind']),
-    [AgentAttemptEventKind.RuntimeActivity]: new Set([
-      'kind',
-      'activity',
-      'detail',
-      'cortexReferences',
-    ]),
+    [AgentAttemptEventKind.RuntimeActivity]: new Set(),
     [AgentAttemptEventKind.ResultProjected]: new Set(['kind', 'result']),
     [AgentAttemptEventKind.ViewProjected]: new Set(['kind', 'view']),
     [AgentAttemptEventKind.AttemptTerminalRecorded]: new Set([

@@ -271,7 +271,6 @@ async function record(
     const event: AgentAttemptEventWithoutMetadata = {
       kind: AgentAttemptEventKind.RuntimeActivity,
       activity: activity.activity,
-      detail: activity.detail,
       cortexReferences: activity.cortexReferences ?? [],
     };
     await journal.append(event);

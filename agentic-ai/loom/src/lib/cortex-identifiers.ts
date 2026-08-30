@@ -260,6 +260,7 @@ function decodeEntry(value: UntrustedYamlNode): CortexIdentifierEntry | false {
 function validateEntries(args: ValidateEntriesArgs): void {
   const ids = new Set<string>();
   const locators = new Set<string>();
+  const authorities = new Set<string>();
   const categoryIds = new Set(
     args.entries
       .filter((entry) => entry.kind === CortexIdentifierKind.Category)
@@ -281,8 +282,14 @@ function validateEntries(args: ValidateEntriesArgs): void {
         finding(`Cortex locator ${entry.locator} is duplicated.`),
       );
     }
+    if (authorities.has(entry.authority)) {
+      args.findings.push(
+        finding(`Cortex authority ${entry.authority} is duplicated.`),
+      );
+    }
     ids.add(entry.id);
     locators.add(entry.locator);
+    authorities.add(entry.authority);
     if (
       entry.kind !== CortexIdentifierKind.Category &&
       (!entry.categoryId ||

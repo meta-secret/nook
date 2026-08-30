@@ -395,10 +395,10 @@ describe('module expert invocation runtime', () => {
         events.some(
           (event) =>
             event.kind === 'runtime-activity' &&
-            event.activity === WorkflowRuntimeActivityKind.RuntimeError &&
-            event.detail === 'Module expert runtime failed.',
+            event.activity === WorkflowRuntimeActivityKind.RuntimeError,
         ),
       ).toBe(true);
+      expect(eventsSerialized).not.toContain('"detail"');
       const replayRequest = { events };
       expect(replayAgentAttemptJournal(replayRequest).terminalKind).toBe(
         TaskTerminalKind.Failed,

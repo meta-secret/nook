@@ -273,6 +273,10 @@ describe('delegated agent journal CLI', () => {
       )
         .trim()
         .split('\n');
+      expect(eventLines.join('\n')).not.toContain(
+        'Contract inspection completed.',
+      );
+      expect(eventLines.join('\n')).not.toContain('"detail"');
       expect(
         eventLines.every(
           (line) =>

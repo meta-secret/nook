@@ -95,7 +95,7 @@ describe('Cortex identifiers', () => {
           {
             id: 'CX-AI-8M4P6',
             kind: CortexIdentifierKind.Document,
-            authority: 'duplicate-locator',
+            authority: 'document',
             categoryId: 'CX-AI',
             title: 'Duplicate locator',
             locator: '.cortex/policy.md',
@@ -148,6 +148,7 @@ describe('Cortex identifiers', () => {
         expect.arrayContaining([
           'Cortex locator .cortex/policy.md#missing-item has no matching heading.',
           'Cortex locator .cortex/policy.md is duplicated.',
+          'Cortex authority document is duplicated.',
           'Cortex locator .cortex/nested/../policy.md is not canonical.',
           'Cortex locator .cortex/linked-policy.md does not name a regular Cortex document.',
           'Cortex locator .cortex/external/policy.md escapes the Cortex root.',

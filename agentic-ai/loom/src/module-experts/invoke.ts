@@ -19,6 +19,7 @@ import {
 } from '../agent-workflow/domain.ts';
 import type {
   AgentAttemptEvent,
+  AgentAttemptEventWithoutMetadata,
   AgentRuntimeActivityEvent,
   AgentAttemptTerminalRecordedEvent,
 } from '../agent-workflow/agent-events.ts';
@@ -61,7 +62,6 @@ export { decodeModuleExpertInvocationRequest } from './request-codec.ts';
 export type { ModuleExpertInvocationRequest } from './request-codec.ts';
 
 const MAX_ACTIVITY_COUNT = 256;
-const SELECTED_CONTEXT_EVIDENCE_PREFIX = 'Module expert selected context: ';
 
 export type ModuleExpertInvocationResult = {
   readonly runDirectory: string;
@@ -190,9 +190,12 @@ export async function invokeModuleExpert(
   await journal.initialize();
   const selectedContextObservation: RuntimeActivityObservation = {
     activity: WorkflowRuntimeActivityKind.SourceReadCompleted,
-    detail: `${SELECTED_CONTEXT_EVIDENCE_PREFIX}${JSON.stringify(request.selectedContextPaths)}`,
+    detail: 'Module expert context selected.',
   };
-  const selectedContextEvent = runtimeActivityEvent(selectedContextObservation);
+  const selectedContextEvent: AgentAttemptEventWithoutMetadata = {
+    ...runtimeActivityEvent(selectedContextObservation),
+    evidenceSha256: sha256(JSON.stringify(request.selectedContextPaths)),
+  };
   await journal.append(selectedContextEvent);
   let activityCount = 1;
   const observe = async (
@@ -451,8 +454,8 @@ export async function verifyModuleExpertInvocationResult(
     selectedContextEvent.kind !== AgentAttemptEventKind.RuntimeActivity ||
     selectedContextEvent.activity !==
       WorkflowRuntimeActivityKind.SourceReadCompleted ||
-    selectedContextEvent.detail !==
-      `${SELECTED_CONTEXT_EVIDENCE_PREFIX}${JSON.stringify(result.selectedContextPaths)}` ||
+    selectedContextEvent.evidenceSha256 !==
+      sha256(JSON.stringify(result.selectedContextPaths)) ||
     projectedTerminal.task !== result.task ||
     projectedTerminal.attempt !== result.attempt ||
     projectedTerminal.kind !== result.terminal.kind ||
