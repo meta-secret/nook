@@ -18,8 +18,10 @@ Cortex guidance with a `loaded`, `cited`, `applied`, or `validated` relation.
 The registry lives at `.cortex/identifiers.json`. Loom validates references
 before persistence and prints a compact action summary to stderr after the
 journal write, while machine-readable responses remain on stdout. These records
-trace observable actions and references; they never contain private reasoning,
-prompts, credentials, secrets, or raw command output.
+trace observable actions and references. Action metadata persists only typed
+activity kinds, Cortex references, and optional evidence digests; free-form
+adapter observations remain transient. Existing result and view projections
+remain governed by their structured evidence contracts.
 
 Adapter-bearing attempt streams use workflow version `3.0.0`. Earlier versions
 do not contain action identities and require local cleanup or explicit
