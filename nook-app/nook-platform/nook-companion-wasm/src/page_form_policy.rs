@@ -206,7 +206,7 @@ pub fn authentication_form_observation_priority(
 pub fn authentication_page_observation_facts_priority(
     facts: nook_companion_core::AuthenticationPageObservationFacts,
 ) -> u8 {
-    facts.form_priority().value()
+    nook_companion_core::authentication_page_observation_facts_priority(facts)
 }
 
 #[wasm_bindgen]
@@ -314,6 +314,28 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(authentication_form_observation_priority(login), 4);
+        assert_eq!(
+            authentication_page_observation_facts_priority(
+                nook_companion_core::AuthenticationPageObservationFacts::default()
+            ),
+            1
+        );
+        let login_facts = nook_companion_core::AuthenticationPageObservationFacts {
+            fields: nook_companion_core::AuthenticationFieldObservationFacts {
+                username_field_count: 1,
+                current_password_field_count: 1,
+                ..Default::default()
+            },
+            detailed_advance_control:
+                nook_companion_core::AuthenticationDetailedAdvanceControlObservation::observed(
+                    login_advance_observation("https://login.example.test/auth/login", "Sign in"),
+                ),
+            ..Default::default()
+        };
+        assert_eq!(
+            authentication_page_observation_facts_priority(login_facts),
+            4
+        );
     }
 
     fn login_advance_observation(

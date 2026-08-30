@@ -101,6 +101,14 @@ impl AuthenticationPageObservationFacts {
     }
 }
 
+/// Rank one browser form observation from typed facts before the host applies its bounded scan.
+#[must_use]
+pub fn authentication_page_observation_facts_priority(
+    facts: AuthenticationPageObservationFacts,
+) -> u8 {
+    facts.form_priority().value()
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
@@ -330,11 +338,17 @@ mod tests {
             ),
             ..Default::default()
         };
+        let otp_priority = otp.clone().form_priority();
         assert_eq!(
-            otp.form_priority(),
+            otp_priority,
             AuthenticationFormObservationPriority::default()
         );
-        assert!(password_login().form_priority() > otp.form_priority());
+        assert_eq!(authentication_page_observation_facts_priority(otp), 1);
+        assert!(password_login().form_priority() > otp_priority);
+        assert_eq!(
+            authentication_page_observation_facts_priority(password_login()),
+            4
+        );
     }
 
     #[test]

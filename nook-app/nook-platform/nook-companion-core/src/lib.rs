@@ -53,7 +53,8 @@ pub use authentication_workflow::{
     AuthenticationWorkflowSnapshot, AuthenticationWorkflowSnapshotError,
     AuthenticationWorkflowStage, MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
     MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS, authentication_form_observation_priority,
-    authentication_page_observations_are_valid, authentication_passkey_control_candidate_is_safe,
+    authentication_page_observation_facts_priority, authentication_page_observations_are_valid,
+    authentication_passkey_control_candidate_is_safe,
     authentication_passkey_control_evidence_is_safe, classify_authentication_workflow,
     classify_authentication_workflow_candidates,
 };
