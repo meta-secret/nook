@@ -1,11 +1,8 @@
 import { authenticationFactObserverOptions } from '../../../nook-web-shared/src/extension/authentication-fact-attributes'
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import { AuthenticationWorkflowSnapshotResponseKind } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-import { authenticationFactStringsAreTransportable } from '../../../nook-web-shared/src/extension/password-form-submission-controls'
-import {
-  authenticationPageObservationFacts,
-  summarizeAuthenticationWorkflowForms,
-} from '../../../nook-web-shared/src/extension/password-forms'
+import { classifiedAuthenticationWorkflowObservations } from '../../../nook-web-shared/src/extension/password-form-classified-observations'
+import { summarizeAuthenticationWorkflowForms } from '../../../nook-web-shared/src/extension/password-forms'
 import { isRuntimeNookVaultAppUrl } from '../lib/simple-vault-runtime'
 import {
   AuthenticationWorkflowSnapshotMessageType,
@@ -98,31 +95,26 @@ async function scanAndRender(): Promise<void> {
     return
   }
 
+  const classifiedRequest: Parameters<
+    typeof classifiedAuthenticationWorkflowObservations
+  >[0] = {
+    workflowForms,
+    authenticatorSetupHint: enrollmentHints.qr,
+    backupCodesHint: enrollmentHints.backupCodes,
+  }
+  const classifiedWorkflows =
+    classifiedAuthenticationWorkflowObservations(classifiedRequest)
+  if (classifiedWorkflows.length === 0) {
+    removeScannedWidget()
+    return
+  }
   const message: Parameters<
     typeof sendAuthenticationWorkflowSnapshotRuntimeMessage
   >[0] = {
     type: AuthenticationWorkflowSnapshotMessageType.NookAuthenticationWorkflowSnapshot,
     payload: {
       origin: location.origin,
-      observations: workflowForms.flatMap((observation) => {
-        const factsRequest: Parameters<
-          typeof authenticationPageObservationFacts
-        >[0] = {
-          observation,
-          authenticatorSetupHint: enrollmentHints.qr,
-          backupCodesHint: enrollmentHints.backupCodes,
-        }
-        const facts = authenticationPageObservationFacts(factsRequest)
-        const authenticationContext = facts.ceremony.authenticationContext
-        return authenticationContext &&
-          authenticationFactStringsAreTransportable([
-            authenticationContext.sourceOrigin,
-            authenticationContext.formIdentity,
-            authenticationContext.destinationIdentity,
-          ])
-          ? [facts]
-          : []
-      }),
+      observations: classifiedWorkflows.map(({ facts }) => facts),
     },
   }
   const delivery =
@@ -141,7 +133,7 @@ async function scanAndRender(): Promise<void> {
     return
   }
   const { snapshot } = response
-  const selected = workflowForms[snapshot.observationIndex]
+  const selected = classifiedWorkflows[snapshot.observationIndex]
   if (!selected) {
     removeScannedWidget()
     return
@@ -150,7 +142,7 @@ async function scanAndRender(): Promise<void> {
   if (sequence !== scanState.sequence) return
   const nookTypedArgs0_1: Parameters<typeof renderWidget>[0] = {
     snapshot,
-    workflow: selected,
+    workflow: selected.observation,
     vaultConnection,
   }
   renderWidget(nookTypedArgs0_1)

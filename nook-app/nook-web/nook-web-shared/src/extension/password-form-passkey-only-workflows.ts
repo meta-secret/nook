@@ -5,18 +5,24 @@ import {
   type PasswordFormScope,
 } from "./password-form-fields";
 import {
+  MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
   PasswordFormQueryKind,
   type PasswordFormScopeQuery,
 } from "./password-form-submission-controls";
 
-export function summarizePasskeyOnlyWorkflowForms<Summary>(
-  root: Document,
-  summarizeRoot: (query: PasswordFormScopeQuery) => Summary,
-): Array<{
+type PasskeyOnlyWorkflowObservation<Summary> = {
   root: Document;
   formScope: PasswordFormScope;
   summary: Summary;
-}> {
+};
+
+export function summarizePasskeyOnlyWorkflowForms<Summary>(
+  root: Document,
+  summarizeRoot: (query: PasswordFormScopeQuery) => Summary,
+  observationPriority: (
+    observation: PasskeyOnlyWorkflowObservation<Summary>,
+  ) => number,
+): Array<PasskeyOnlyWorkflowObservation<Summary>> {
   if (!pageHasPasskeyControl(root)) return [];
   const passkeyCandidates = findPasskeyControls(root);
   const passkeyForms = [
@@ -74,5 +80,10 @@ export function summarizePasskeyOnlyWorkflowForms<Summary>(
       summary: summarizeRoot(summaryArgs),
     });
   }
-  return observations;
+  return observations
+    .sort(
+      // eslint-disable-next-line max-params -- Array.sort owns the comparator callback signature.
+      (left, right) => observationPriority(right) - observationPriority(left),
+    )
+    .slice(0, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS);
 }

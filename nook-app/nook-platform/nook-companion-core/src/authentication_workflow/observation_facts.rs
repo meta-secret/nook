@@ -492,11 +492,32 @@ mod tests {
             "https://example.test/checkout/confirm".to_owned();
         assert_eq!(
             AuthenticationPageObservationFactsBatch {
-                observations: vec![otp],
+                observations: vec![otp.clone()],
             }
             .classify(),
             AuthenticationWorkflowMatch::NoMatch
         );
+
+        otp.ceremony.authentication_context.form_identity = String::new();
+        otp.ceremony.authentication_context.destination_identity = String::new();
+        assert_eq!(
+            AuthenticationPageObservationFactsBatch {
+                observations: vec![otp.clone()],
+            }
+            .classify(),
+            AuthenticationWorkflowMatch::NoMatch
+        );
+
+        otp.ceremony.authentication_context.destination_identity =
+            "https://example.test/login/verify".to_owned();
+        assert!(matches!(
+            AuthenticationPageObservationFactsBatch {
+                observations: vec![otp],
+            }
+            .classify(),
+            AuthenticationWorkflowMatch::Matched(snapshot)
+                if snapshot.kind == AuthenticationWorkflowKind::TotpChallenge
+        ));
     }
 
     #[test]

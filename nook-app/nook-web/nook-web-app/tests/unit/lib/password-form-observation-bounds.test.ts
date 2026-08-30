@@ -1,0 +1,260 @@
+import { afterEach, describe, expect, test } from 'vitest'
+import { classifiedAuthenticationWorkflowObservations } from '../../../../nook-web-shared/src/extension/password-form-classified-observations'
+import {
+  MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
+  MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
+} from '../../../../nook-web-shared/src/extension/password-form-submission-controls'
+import {
+  authenticationPageObservationFacts,
+  PasswordFormQueryKind,
+  PasswordFormScopeKind,
+  submitLoginForm,
+  summarizeAuthenticationWorkflowForms,
+  type PasswordFormObservation,
+} from '../../../../nook-web-shared/src/extension/password-forms'
+
+const wholeDocumentPasswordFormSubmission: Parameters<
+  typeof submitLoginForm
+>[0] = { kind: PasswordFormQueryKind.Root, root: document }
+
+function observedAuthenticationWorkflow(): PasswordFormObservation {
+  const observation = summarizeAuthenticationWorkflowForms()[0]
+  if (!observation) throw new Error('expected an authentication workflow')
+  return observation
+}
+
+function ownedFormId(observation: PasswordFormObservation): string {
+  return observation.formScope.kind === PasswordFormScopeKind.Owned
+    ? observation.formScope.owner.id
+    : ''
+}
+
+afterEach(() => {
+  document.body.replaceChildren()
+})
+
+describe('authentication observation bounds', () => {
+  test('does not strip destructive query evidence from an oversized destination', () => {
+    const query = `action=delete-account&state=${'a'.repeat(600)}`
+    document.body.innerHTML = `
+      <form aria-label="Login" action="/login?${query}">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Continue</button>
+      </form>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.detailedAdvanceControl).toMatchObject({
+      kind: 'absent',
+    })
+    expect(facts.ceremony.authenticationContext?.destinationIdentity).toBe('')
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(false)
+  })
+
+  test('isolates a candidate whose raw form identity exceeds the bound', () => {
+    document.body.innerHTML = `
+      <form
+        id="${'n'.repeat(500)}"
+        class="delete-account"
+        aria-label="Login"
+        action="/login"
+      >
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Continue</button>
+      </form>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    const formIdentity = facts.ceremony.authenticationContext?.formIdentity
+    if (!formIdentity) {
+      throw new Error('expected form identity')
+    }
+    expect(formIdentity).toContain('delete-account')
+    expect(new TextEncoder().encode(formIdentity).length).toBeGreaterThan(512)
+    expect(facts.detailedAdvanceControl).toMatchObject({ kind: 'absent' })
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(false)
+  })
+
+  test('isolates a control whose machine identity would lose a destructive suffix', () => {
+    document.body.innerHTML = `
+      <form aria-label="Login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button
+          id="${'n'.repeat(500)}"
+          name="action"
+          value="delete-account"
+          type="submit"
+        >Sign in</button>
+      </form>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.detailedAdvanceControl).toMatchObject({
+      kind: 'absent',
+    })
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(false)
+  })
+
+  test('keeps a login submitter when a shared form has too many candidates', () => {
+    const navButtons = Array.from(
+      { length: MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT },
+      (_, index) => `<button type="submit">Nav ${index}</button>`,
+    ).join('')
+    document.body.innerHTML = `
+      <form aria-label="Login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        ${navButtons}
+        <button type="submit">Sign in</button>
+      </form>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.detailedAdvanceControl.kind).toBe('observed')
+    if (facts.detailedAdvanceControl.kind !== 'observed') {
+      throw new Error('expected observed advance controls')
+    }
+    expect(facts.detailedAdvanceControl.observations).toHaveLength(
+      MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
+    )
+    expect(
+      facts.detailedAdvanceControl.observations.some((candidate) =>
+        candidate.label.includes('Sign in'),
+      ),
+    ).toBe(true)
+    expect(
+      facts.detailedAdvanceControl.observations.every(
+        (candidate) =>
+          candidate.semanticSubmitControlCount <=
+          MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
+      ),
+    ).toBe(true)
+  })
+
+  test('bounds OTP handler candidates before transport', () => {
+    const fields = Array.from(
+      { length: 51 },
+      () =>
+        '<input autocomplete="one-time-code" oninput="this.form.requestSubmit()" onchange="validateCode()" />',
+    ).join('')
+    document.body.innerHTML = `
+      <form id="otp-login" action="/mfa/challenge">
+        ${fields}
+        <button type="submit">Verify code</button>
+      </form>
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.ceremony.oneTimeCodeHandlerSignals.length).toBe(
+      MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
+    )
+    expect(
+      facts.ceremony.oneTimeCodeHandlerSignals.some((signal) =>
+        signal.includes('requestSubmit'),
+      ),
+    ).toBe(true)
+  })
+
+  test('uses the current page destination for form-less OTP auto-submit', () => {
+    window.history.replaceState({}, '', '/login/verify')
+    document.body.innerHTML = `
+      <input
+        autocomplete="one-time-code"
+        oninput="this.form.requestSubmit()"
+      />
+    `
+
+    const facts = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.ceremony.oneTimeCodeHandlerSignals).toEqual([
+      'oninput=this.form.requestSubmit()',
+    ])
+    expect(facts.ceremony.authenticationContext?.destinationIdentity).toBe(
+      location.href,
+    )
+  })
+
+  test('indexes classified facts against the same filtered workflow forms', () => {
+    document.body.innerHTML = `
+      <form
+        id="${'n'.repeat(500)}"
+        class="delete-account"
+        aria-label="Login"
+        action="/login"
+      >
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Continue</button>
+      </form>
+      <form id="safe-login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+
+    const classifiedRequest: Parameters<
+      typeof classifiedAuthenticationWorkflowObservations
+    >[0] = {
+      workflowForms: summarizeAuthenticationWorkflowForms(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    }
+    const classified =
+      classifiedAuthenticationWorkflowObservations(classifiedRequest)
+    const selected = classified[0]
+    if (!selected) {
+      throw new Error('expected the transportable login workflow')
+    }
+    expect(classified).toHaveLength(1)
+    expect(ownedFormId(selected.observation)).toBe('safe-login')
+  })
+
+  test('bounds passkey-only observations to the portable workflow batch', () => {
+    const decoys = Array.from(
+      { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS },
+      (_, index) =>
+        `<form id="decoy-${index}" action="/login"><button type="button">Use passkey</button></form>`,
+    ).join('')
+    document.body.innerHTML = `
+      <form id="passkey-login" action="/login">
+        <button type="button">Sign in with a passkey</button>
+      </form>
+      ${decoys}
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS)
+    expect(
+      observations.some(
+        (observation) => ownedFormId(observation) === 'passkey-login',
+      ),
+    ).toBe(true)
+  })
+})

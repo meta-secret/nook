@@ -42,6 +42,7 @@ type FormSubmissionObservation = {
 
 export const MAX_AUTHENTICATION_CONTROL_TEXT_BYTES = 512;
 export const MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT = 100;
+export const MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS = 20;
 
 function utf8ByteLength(value: string): number {
   return new TextEncoder().encode(value).length;
@@ -72,6 +73,28 @@ export function rawOwnedFormIdentity(form: HTMLFormElement): string {
 
 export function ownedFormIdentity(form: HTMLFormElement): string {
   return rawOwnedFormIdentity(form);
+}
+
+export function observedFormIdentity(
+  root: ParentNode,
+  formScope: PasswordFormScope,
+): string {
+  const owner =
+    formScope.kind === PasswordFormScopeKind.Owned ? formScope.owner : root;
+  if (!(owner instanceof Element)) return "";
+  return [
+    owner.id,
+    owner.className,
+    owner.getAttribute("name") ?? "",
+    owner.getAttribute("role") ?? "",
+    owner.getAttribute("aria-label") ?? "",
+  ].join(" ");
+}
+
+export function observedFormDestination(formScope: PasswordFormScope): string {
+  return formScope.kind === PasswordFormScopeKind.Owned
+    ? ownedFormDestinationIdentity(formScope.owner)
+    : boundedAuthenticationDestination(location.href);
 }
 
 export function ownedFormDestinationIdentity(form: HTMLFormElement): string {

@@ -40,6 +40,8 @@ import {
   authenticationRouteDestination,
   boundAuthenticationControlObservations,
   MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
+  observedFormDestination,
+  observedFormIdentity,
   canRequestImplicitAuthenticationSubmit,
   clickAdvanceControl,
   controlDestinationIdentity,
@@ -48,7 +50,6 @@ import {
   isRenderedControl,
   formHasSemanticSubmitter,
   observeSubmit,
-  ownedFormDestinationIdentity,
   ownedFormIdentity,
   PasswordFormQueryKind,
   semanticSubmitControlSelector,
@@ -325,30 +326,6 @@ function controlAssociatesWithObservation({
   return !control.closest("form");
 }
 
-function observedFormIdentity({
-  root,
-  formScope,
-}: PasswordFormObservation): string {
-  const owner =
-    formScope.kind === PasswordFormScopeKind.Owned ? formScope.owner : root;
-  if (!(owner instanceof Element)) return "";
-  const identity = [
-    owner.id,
-    owner.className,
-    owner.getAttribute("name") ?? "",
-    owner.getAttribute("role") ?? "",
-    owner.getAttribute("aria-label") ?? "",
-  ].join(" ");
-  return identity;
-}
-
-function observedFormDestination({
-  formScope,
-}: PasswordFormObservation): string {
-  if (formScope.kind !== PasswordFormScopeKind.Owned) return "";
-  return ownedFormDestinationIdentity(formScope.owner);
-}
-
 type ControlDestinationRequest = {
   control: HTMLElement;
   formScope: PasswordFormScope;
@@ -443,7 +420,7 @@ function pageControlObservation({
     sourceOrigin: location.origin,
     formIdentity: owned
       ? ownedFormIdentity(controlForm.owner)
-      : observedFormIdentity(observation),
+      : observedFormIdentity(observation.root, observation.formScope),
     destinationIdentity: controlDestination(destinationRequest),
     label: controlLabel(control),
     machineIdentity: `${control.id} ${
@@ -599,8 +576,13 @@ export function authenticationPageObservationFacts({
       observation: boundedPasskeyCandidates,
     };
   }
-  const contextFormIdentity = observedFormIdentity(observation);
-  const contextDestinationIdentity = observedFormDestination(observation);
+  const contextFormIdentity = observedFormIdentity(
+    observation.root,
+    observation.formScope,
+  );
+  const contextDestinationIdentity = observedFormDestination(
+    observation.formScope,
+  );
   return {
     fields: {
       usernameFieldCount: observation.summary.usernameFieldCount,
@@ -682,7 +664,11 @@ export function summarizeAuthenticationWorkflowForms(): PasswordFormObservation[
     authUsernameFields.length +
     allOneTimeCodeFields.length;
   if (authFieldCount === 0) {
-    return summarizePasskeyOnlyWorkflowForms(root, summarizeRoot);
+    return summarizePasskeyOnlyWorkflowForms(
+      root,
+      summarizeRoot,
+      passwordFormPriority,
+    );
   }
 
   const forms = Array.from(
