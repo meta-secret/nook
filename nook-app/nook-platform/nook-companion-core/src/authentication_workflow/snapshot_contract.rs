@@ -1,8 +1,8 @@
 //! Complete response-boundary contract for classifier-produced workflow snapshots.
 
 use super::{
-    AuthenticationWorkflowAction, AuthenticationWorkflowKind, AuthenticationWorkflowSnapshot,
-    AuthenticationWorkflowStage,
+    AuthenticationSavedLoginCapability, AuthenticationWorkflowAction, AuthenticationWorkflowKind,
+    AuthenticationWorkflowSnapshot, AuthenticationWorkflowStage,
 };
 
 const MAX_AUTHENTICATION_WORKFLOW_OBSERVATION_INDEX_EXCLUSIVE: u32 = 20;

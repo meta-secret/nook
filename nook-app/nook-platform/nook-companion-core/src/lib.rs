@@ -66,7 +66,7 @@ pub use authentication_workflow_response::{
     WebsiteLoginMatchAvailability, WebsiteLoginMatchAvailabilityKind,
     WebsiteLoginMatchAvailabilityWire, WebsiteLoginMatchAvailabilityWithCountWire,
     WebsiteLoginMatchAvailabilityWithoutCountWire, decode_authentication_workflow_runtime_response,
-    decode_authentication_workflow_snapshot_response, decode_website_login_match_availability,
+    decode_authentication_workflow_snapshot_response,
 };
 pub use authenticator_backup_attach_response::{
     AuthenticatorBackupAttachResponse, AuthenticatorBackupAttachResponseDecodeError,
