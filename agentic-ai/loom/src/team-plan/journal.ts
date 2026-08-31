@@ -1,11 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
+import { constants } from 'node:fs';
 import {
   lstat,
   link,
   mkdir,
   open,
-  readFile,
   realpath,
   rename,
   unlink,
@@ -105,6 +105,8 @@ type ParentSyncHook =
   | Readonly<{ presence: 'absent' }>
   | Readonly<{ presence: 'present'; run: () => void }>;
 
+const orphanedTeamPlanLocks = new Map<string, string>();
+
 export async function createTeamPlanJournal(
   request: CreateTeamPlanJournalRequest,
 ): Promise<void> {
@@ -117,21 +119,21 @@ export async function createTeamPlanJournal(
 export async function loadTeamPlanJournal(
   journalPath: string,
 ): Promise<TeamPlanJournal> {
-  const path = await canonicalExistingJournalPath(journalPath);
-  const serialized = await readFile(path, 'utf8');
-  return decodeTeamPlanJournal({ serialized, path });
+  const journalFile = await readTeamPlanJournalFile(journalPath);
+  return decodeTeamPlanJournal(journalFile);
 }
 
 export async function appendTeamPlanEvent(
   request: AppendTeamPlanEventRequest,
 ): Promise<void> {
-  const path = await canonicalExistingJournalPath(request.journalPath);
-  const current = await readFile(path, 'utf8');
-  const candidate = `${current}${serializeTeamPlanEvent(request.event)}`;
+  const current = await readTeamPlanJournalFile(request.journalPath);
+  const candidate = `${current.serialized}${serializeTeamPlanEvent(request.event)}`;
+  const path = current.path;
   decodeTeamPlanJournal({ serialized: candidate, path });
   await replaceFile({
     path,
     serialized: candidate,
+    mode: current.mode,
     beforeParentSync: parentSyncHook(request.beforeParentSync),
   });
 }
@@ -146,8 +148,7 @@ async function withTeamPlanJournalLockIdentity<T>(
   request: TeamPlanJournalLockRequest<T> &
     Readonly<{ lockIdentityPath?: string }>,
 ): Promise<T> {
-  const path = await canonicalExistingJournalPath(request.journalPath);
-  const journal = await loadTeamPlanJournal(path);
+  const journal = await loadTeamPlanJournal(request.journalPath);
   const identity = processStartIdentity(process.pid);
   if (!identity)
     throw new Error('Team Plan process lock identity is unavailable.');
@@ -438,14 +439,28 @@ export async function canonicalTeamPlanJournalPath(
   return resolve(parent, basename(requested));
 }
 
-async function canonicalExistingJournalPath(
-  journalPath: string,
-): Promise<string> {
-  const requested = resolve(journalPath);
-  const status = await lstat(requested);
-  if (status.isSymbolicLink() || !status.isFile())
-    throw new Error('Team Plan journal path is unsafe.');
-  return realpath(requested);
+async function readTeamPlanJournalFile(journalPath: string): Promise<{
+  readonly path: string;
+  readonly serialized: string;
+  readonly mode: number;
+}> {
+  const path = await canonicalTeamPlanJournalPath(journalPath);
+  const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    const opened = await handle.stat();
+    const serialized = await handle.readFile('utf8');
+    const named = await lstat(path);
+    if (
+      !opened.isFile() ||
+      !named.isFile() ||
+      opened.dev !== named.dev ||
+      opened.ino !== named.ino
+    )
+      throw new Error('Team Plan journal path is unsafe.');
+    return { path, serialized, mode: opened.mode & 0o777 };
+  } finally {
+    await handle.close();
+  }
 }
 
 function serializeTeamPlanEvent(event: TeamPlanEvent): string {
@@ -712,10 +727,14 @@ function acquireTeamPlanLock(request: {
     args: ['cat-file', 'blob', previousBlob],
   });
   const previousOwner = decodeLockOwner(serialized);
-  if (!staleTeamPlanLock(previousOwner))
+  if (
+    orphanedTeamPlanLocks.get(lockRef) !== previousBlob &&
+    !staleTeamPlanLock(previousOwner)
+  )
     throw new Error('Team Plan journal lock owner is still live.');
   if (!updateRef({ journal, args: [lockRef, ownerBlob, previousBlob] }))
     throw new Error('Team Plan journal lock changed during stale recovery.');
+  orphanedTeamPlanLocks.delete(lockRef);
 }
 
 function releaseTeamPlanLock(request: {
@@ -728,8 +747,10 @@ function releaseTeamPlanLock(request: {
       journal: request.journal,
       args: ['-d', request.lockRef, request.ownerBlob],
     })
-  )
+  ) {
+    orphanedTeamPlanLocks.set(request.lockRef, request.ownerBlob);
     throw new Error('Team Plan journal lock ownership changed.');
+  }
 }
 
 type TeamPlanGitArguments = readonly [string, string, string];
@@ -821,7 +842,7 @@ async function publishNewFile(request: {
   readonly serialized: string;
 }): Promise<void> {
   const { path } = request;
-  const temporary = await writeTemporaryFile(request);
+  const temporary = await writeTemporaryFile({ ...request, mode: 0o600 });
   try {
     await link(temporary, path);
     await unlink(temporary);
@@ -835,6 +856,7 @@ async function publishNewFile(request: {
 async function replaceFile(request: {
   readonly path: string;
   readonly serialized: string;
+  readonly mode: number;
   readonly beforeParentSync: ParentSyncHook;
 }): Promise<void> {
   const { path } = request;
@@ -881,14 +903,16 @@ function runParentSyncHook(hook: ParentSyncHook): void {
 async function writeTemporaryFile(request: {
   readonly path: string;
   readonly serialized: string;
+  readonly mode: number;
 }): Promise<string> {
   const { path, serialized } = request;
   const temporary = resolve(
     dirname(path),
     `.${basename(path)}.${randomUUID()}.tmp`,
   );
-  const handle = await open(temporary, 'wx');
+  const handle = await open(temporary, 'wx', request.mode);
   try {
+    await handle.chmod(request.mode);
     await handle.writeFile(serialized, 'utf8');
     await handle.sync();
   } finally {

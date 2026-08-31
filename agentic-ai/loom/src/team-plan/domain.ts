@@ -206,6 +206,7 @@ export function assertTeamPlanRecord(record: TeamPlanRecord): void {
     assertProviderSubmission(record.submission);
     return;
   }
+  if (record.kind !== TeamPlanRecordKind.FinalUnusable) invalidRecord();
   assertTeamPlanJournalRecord(record);
 }
 

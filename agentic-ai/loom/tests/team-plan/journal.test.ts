@@ -1,8 +1,18 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { spawnSync } from 'node:child_process';
-import { existsSync, linkSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  linkSync,
+  mkdirSync,
+  readFileSync,
+  statSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { hostname } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
 import {
@@ -267,6 +277,21 @@ describe('Team Plan journal', () => {
         action: async () => 'acquired',
       }),
     ).toBe('acquired');
+    const lockPath = join(fixture.sourceRoot, '.git', `${ref}.lock`);
+    mkdirSync(dirname(lockPath), { recursive: true });
+    await expect(
+      withTeamPlanJournalLock({
+        journalPath,
+        action: async () => writeFileSync(lockPath, 'block release\n'),
+      }),
+    ).rejects.toThrow('ownership changed');
+    unlinkSync(lockPath);
+    expect(
+      await withTeamPlanJournalLock({
+        journalPath,
+        action: async () => 'recovered',
+      }),
+    ).toBe('recovered');
   });
 
   test('rejects torn snapshots and nested attempt extensions', async () => {
@@ -305,6 +330,7 @@ describe('Team Plan journal', () => {
 
   test('keeps a renamed append when parent synchronization fails', async () => {
     const { journalPath, started } = await startedFixture();
+    chmodSync(journalPath, 0o600);
     const selected: TeamPlanSelectedEvent = {
       version: TEAM_PLAN_JOURNAL_VERSION,
       kind: TeamPlanEventKind.Selected,
@@ -328,6 +354,10 @@ describe('Team Plan journal', () => {
       }),
     ).rejects.toThrow('parent sync failed');
     expect((await loadTeamPlanJournal(journalPath)).events).toHaveLength(2);
+    expect(statSync(journalPath).mode & 0o777).toBe(0o600);
+    const alias = `${journalPath}.alias`;
+    symlinkSync(journalPath, alias);
+    await expect(loadTeamPlanJournal(alias)).rejects.toThrow();
   });
 
   test('durably tombstones discard and resumes under the original lock', async () => {
