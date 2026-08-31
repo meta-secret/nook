@@ -2,7 +2,6 @@ import { expect, test } from 'bun:test';
 import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
 import { TeamKey } from '../../src/team-agents/catalog.ts';
 import * as evidenceAuthority from '../../src/module-delivery/authority.ts';
-import * as moduleDelivery from '../../src/module-delivery/index.ts';
 
 import {
   REQUIRED_PARENT_OWNED_RESOURCES,
@@ -21,6 +20,7 @@ import {
   moduleDeliveryEvidenceArtifactDigest,
   recordModuleDeliveryAttemptDisposition,
   recordModuleDeliveryAttemptLeases,
+  restoreModuleDeliveryCanonicalEvidenceReceipt,
   selectModuleDeliveryAdmissions,
   verifyModuleDeliveryEvidenceSubmission,
 } from '../../src/module-delivery/index.ts';
@@ -109,8 +109,8 @@ function edge(request: EvidenceEdgeRequest): ModuleDeliveryEdgeContract {
   };
 }
 
-function runtime(): Runtime {
-  const fixture = createGitFixture();
+function runtime(existingFixture?: GitFixture): Runtime {
+  const fixture = existingFixture ?? createGitFixture();
   const provider: ModuleDeliveryReadOnlyNodeV2 = {
     kind: ModuleDeliveryTaskKind.ReadOnly,
     taskId: 'core-evidence',
@@ -338,7 +338,7 @@ function verify(
   return verifyModuleDeliveryEvidenceSubmission(verification);
 }
 
-test('rejects forged metadata, evidence capabilities, and authority-owned stale frontier', () => {
+test('rejects forged evidence and restores a canonical redacted receipt after restart', () => {
   const active = runtime();
   try {
     const leaseRequest: AdmittedLeaseRequest = {
@@ -390,9 +390,31 @@ test('rejects forged metadata, evidence capabilities, and authority-owned stale 
     const accepted = verify({ ...submissionRequest, candidate: exact });
     const receipt = moduleDeliveryAcceptedEvidenceIdentity(accepted);
     expect('evidence' in receipt).toBe(false);
-    expect('restoreModuleDeliveryAcceptedEvidence' in moduleDelivery).toBe(
-      false,
-    );
+    const replay = runtime(active.fixture);
+    const replayLease = admittedLease({
+      runtime: replay,
+      taskId: replay.provider.taskId,
+    });
+    const restored = restoreModuleDeliveryCanonicalEvidenceReceipt({
+      authority: replay.authority,
+      acceptedPlan: replay.accepted,
+      state: replay.state,
+      lease: replayLease,
+      acceptedEvidence: [],
+      receipt,
+    });
+    expect(restored.evidence.evidence).toEqual([]);
+    expect(restored.state.acceptedProviderEvidence).toEqual([receipt]);
+    expect(() =>
+      restoreModuleDeliveryCanonicalEvidenceReceipt({
+        authority: replay.authority,
+        acceptedPlan: replay.accepted,
+        state: replay.state,
+        lease: replayLease,
+        acceptedEvidence: [],
+        receipt,
+      }),
+    ).toThrow('already consumed');
 
     const forgedEvidence: AcceptedModuleDeliveryEvidence = {
       ...exact,
@@ -420,6 +442,59 @@ test('rejects forged metadata, evidence capabilities, and authority-owned stale 
     expect(() =>
       createModuleDeliveryAdmissionState(forgedStateRequest),
     ).toThrow('evidence authority is invalid');
+  } finally {
+    disposeGitFixture(active.fixture);
+  }
+});
+
+test('canonical redacted receipt replay rejects inconsistent lifecycle fields without key material', () => {
+  const active = runtime();
+  try {
+    const lease = admittedLease({
+      runtime: active,
+      taskId: active.provider.taskId,
+    });
+    const accepted = verify({
+      runtime: active,
+      lease,
+      acceptedProviderEvidence: [],
+      candidate: submission({
+        runtime: active,
+        lease,
+        acceptedProviderEvidence: [],
+      }),
+    });
+    const receipt = moduleDeliveryAcceptedEvidenceIdentity(accepted);
+    const inconsistent = [
+      { ...receipt, schemaVersion: 2 },
+      { ...receipt, generation: 2 },
+      { ...receipt, planDigest: 'f'.repeat(64) },
+      { ...receipt, taskId: active.providerB.taskId },
+      { ...receipt, attempt: 2 },
+      { ...receipt, sourceCommit: 'f'.repeat(40) },
+      { ...receipt, verifiedHeadCommit: 'f'.repeat(40) },
+      { ...receipt, acceptanceRequirements: ['different requirement'] },
+      { ...receipt, claimIdentities: [] },
+      { ...receipt, acceptedProviderEvidence: [receipt] },
+      Object.assign(structuredClone(receipt), { extra: true }),
+    ];
+    for (const candidate of inconsistent) {
+      const replay = runtime(active.fixture);
+      const replayLease = admittedLease({
+        runtime: replay,
+        taskId: replay.provider.taskId,
+      });
+      expect(() =>
+        restoreModuleDeliveryCanonicalEvidenceReceipt({
+          authority: replay.authority,
+          acceptedPlan: replay.accepted,
+          state: replay.state,
+          lease: replayLease,
+          acceptedEvidence: [],
+          receipt: candidate as ModuleDeliveryAcceptedProviderEvidenceIdentity,
+        }),
+      ).toThrow();
+    }
   } finally {
     disposeGitFixture(active.fixture);
   }
