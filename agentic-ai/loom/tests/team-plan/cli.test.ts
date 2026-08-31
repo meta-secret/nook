@@ -6,6 +6,7 @@ import {
   mkdtempSync,
   rmSync,
   statSync,
+  truncateSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -13,6 +14,7 @@ import { join } from 'node:path';
 
 import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
 import { LoomFailure, LoomFailureCode } from '../../src/loom-failure.ts';
+import { assertEvidenceBound } from '../../src/module-delivery/authority.ts';
 import {
   MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
   REQUIRED_PARENT_OWNED_RESOURCES,
@@ -31,6 +33,7 @@ import {
   runTeamPlanCli as runTeamPlanCliWithArguments,
 } from '../../src/team-plan/cli.ts';
 import { TeamPlanRecordKind } from '../../src/team-plan/domain.ts';
+import { assertTeamPlanAcceptedEvidenceReceipt } from '../../src/team-plan/domain.ts';
 import { MAX_TEAM_PLAN_JOURNAL_BYTES } from '../../src/team-plan/journal.ts';
 import {
   createGitFixture,
@@ -40,6 +43,7 @@ import {
 
 import type {
   ModuleDeliveryPlanV2,
+  ModuleDeliveryAcceptedProviderEvidenceIdentity,
   ModuleDeliveryReadOnlyNodeV2,
 } from '../../src/module-delivery/index.ts';
 import type {
@@ -64,6 +68,10 @@ type TestTeamPlanRequest = Readonly<{
 type WriteTeamPlanJsonRequest = Readonly<{
   path: string;
   value: ModuleDeliveryPlanV2 | TeamPlanRecord;
+}>;
+type NestedProviderEvidenceRequest = Readonly<{
+  depth: number;
+  entriesPerIdentity: number;
 }>;
 
 function runTeamPlanCli(request: TestTeamPlanCliArguments): Promise<number> {
@@ -139,6 +147,45 @@ function plan(request: TestTeamPlanRequest): ModuleDeliveryPlanV2 {
 
 function writeJson(request: WriteTeamPlanJsonRequest): void {
   writeFileSync(request.path, `${JSON.stringify(request.value)}\n`);
+}
+
+function nestedProviderEvidence(
+  request: NestedProviderEvidenceRequest,
+): ModuleDeliveryAcceptedProviderEvidenceIdentity {
+  const acceptanceRequirements = Array.from(
+    { length: request.entriesPerIdentity },
+    () => '界'.repeat(4096),
+  );
+  const claimIdentities = Array.from(
+    { length: request.entriesPerIdentity },
+    () => ({ claim: 'a'.repeat(4096), contentDigest: 'a'.repeat(64) }),
+  );
+  let children: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[] = [];
+  for (let index = request.depth - 1; index >= 0; index -= 1) {
+    const identity: ModuleDeliveryAcceptedProviderEvidenceIdentity = {
+      schemaVersion: MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
+      generation: 1,
+      planDigest: 'a'.repeat(64),
+      taskId: `provider-${index}`,
+      attempt: 1,
+      producerTeam: TeamKey.DevelopmentCore,
+      functionalOwner: TeamKey.Ai,
+      acceptanceOwner: TeamKey.Ai,
+      sourceCommit: 'a'.repeat(40),
+      verifiedHeadCommit: 'a'.repeat(40),
+      artifactIdentity: `provider-${index}/report.json`,
+      artifactDigest: 'a'.repeat(64),
+      sourceProvenanceDigest: 'a'.repeat(64),
+      verdict: ModuleDeliveryEvidenceVerdict.TerminalSuccess,
+      claimIdentities,
+      acceptanceRequirements,
+      acceptedProviderEvidence: children,
+    };
+    children = [identity];
+  }
+  const root = children[0];
+  if (!root) throw new Error('Nested provider evidence root is missing.');
+  return root;
 }
 
 test('dispatches every successful Team Plan command', async () => {
@@ -312,10 +359,98 @@ test('localizes visible parse failures through the Loom catalog', async () => {
   }
 });
 
+test('admits the complete permitted nested provider evidence ancestry', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'team-plan-cli-ancestry-'));
+  try {
+    const acceptedRoot = nestedProviderEvidence({
+      depth: 128,
+      entriesPerIdentity: 4,
+    });
+    const acceptedProviderEvidence = [acceptedRoot];
+    assertEvidenceBound(acceptedProviderEvidence);
+    assertTeamPlanAcceptedEvidenceReceipt(acceptedRoot);
+    const requestPath = join(root, 'nested-record.json');
+    writeJson({
+      path: requestPath,
+      value: {
+        kind: TeamPlanRecordKind.Provider,
+        submission: {
+          kind: ModuleDeliveryProviderSubmissionKind.ReadOnlyEvidence,
+          schemaVersion: MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
+          taskId: 'synthesis',
+          attempt: 1,
+          generation: 1,
+          planDigest: 'a'.repeat(64),
+          sourceCommit: 'a'.repeat(40),
+          producerTeam: TeamKey.Ai,
+          functionalOwner: TeamKey.Ai,
+          acceptanceOwner: TeamKey.Ai,
+          acceptanceRequirements: [],
+          claimIdentities: [],
+          acceptedProviderEvidence,
+          artifactIdentity: 'synthesis/report.json',
+          artifactDigest: 'a'.repeat(64),
+          verdict: ModuleDeliveryEvidenceVerdict.TerminalSuccess,
+          evidence: ['complete nested ancestry'],
+        },
+      },
+    });
+    const requestBytes = statSync(requestPath).size;
+    expect(requestBytes).toBeGreaterThan(4_194_304);
+    expect(requestBytes).toBeLessThanOrEqual(
+      MAX_TEAM_PLAN_RECORD_REQUEST_BYTES,
+    );
+    await expectTeamPlanCliFailure({
+      argv: [
+        'record',
+        '--journal',
+        join(root, 'missing-journal'),
+        '--request',
+        requestPath,
+      ],
+      code: LoomFailureCode.TeamPlanValidationFailed,
+    });
+  } finally {
+    rmSync(root, { recursive: true });
+  }
+});
+
+test('localizes non-file and oversized record failures', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'team-plan-cli-localized-file-'));
+  const oversized = join(root, 'oversized.json');
+  writeFileSync(oversized, '');
+  truncateSync(oversized, MAX_TEAM_PLAN_RECORD_REQUEST_BYTES + 1);
+  for (const requestPath of [root, oversized]) {
+    try {
+      await runTeamPlanCliWithArguments({
+        argv: [
+          'record',
+          '--journal',
+          join(root, 'journal'),
+          '--request',
+          requestPath,
+        ],
+        locale: 'ru-RU',
+      });
+      throw new Error('Expected localized record-file failure.');
+    } catch (cause) {
+      expect(cause).toBeInstanceOf(LoomFailure);
+      expect((cause as LoomFailure).code).toBe(
+        LoomFailureCode.TeamPlanValidationFailed,
+      );
+      expect(((cause as LoomFailure).cause as Error).message).toBe(
+        'Файл запроса записи Team Plan недопустим или слишком велик.',
+      );
+    }
+  }
+  rmSync(root, { recursive: true });
+});
+
 test('normalizes invalid record files and oversized journals', async () => {
   const root = mkdtempSync(join(tmpdir(), 'team-plan-cli-'));
   const request = join(root, 'request.json');
-  writeFileSync(request, 'x'.repeat(MAX_TEAM_PLAN_RECORD_REQUEST_BYTES + 1));
+  writeFileSync(request, '');
+  truncateSync(request, MAX_TEAM_PLAN_RECORD_REQUEST_BYTES + 1);
   for (const path of [root, request])
     await expectTeamPlanCliFailure({
       argv: ['record', '--journal', join(root, 'journal'), '--request', path],

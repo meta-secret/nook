@@ -7,6 +7,7 @@ import {
 } from './domain.ts';
 import { gitText, runModuleDeliveryGit } from './git-command.ts';
 import { decodeAndValidateModuleDeliveryPlan } from './validation.ts';
+import { MAX_EXPANDED_PROVIDER_EVIDENCE_IDENTITIES } from './evidence-limits.ts';
 
 import type {
   AgentAttemptParent,
@@ -30,7 +31,6 @@ import type {
 } from './evidence.ts';
 import type { AcceptedModuleDeliveryEvidence } from './integration-provenance.ts';
 
-const MAX_EXPANDED_PROVIDER_EVIDENCE_IDENTITIES = 128;
 export type AcceptedModuleDeliveryEvidenceInspection = {
   readonly authority: ModuleDeliveryGenerationAuthority;
   readonly evidence: AcceptedModuleDeliveryEvidence;

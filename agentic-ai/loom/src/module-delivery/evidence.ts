@@ -13,6 +13,7 @@ import {
   moduleDeliveryEvidenceSha256,
 } from './integration-provenance.ts';
 import {
+  MAX_MODULE_DELIVERY_ARTIFACT_IDENTITY_CODE_UNITS,
   MAX_MODULE_DELIVERY_EVIDENCE_ENTRIES,
   MAX_MODULE_DELIVERY_EVIDENCE_ENTRY_CODE_UNITS,
 } from './evidence-limits.ts';
@@ -538,7 +539,7 @@ function nodeFor(request: EvidenceNodeRequest): ModuleDeliveryNodeV2 {
 function validIdentity(identity: string): boolean {
   return (
     identity.length > 0 &&
-    identity.length <= 256 &&
+    identity.length <= MAX_MODULE_DELIVERY_ARTIFACT_IDENTITY_CODE_UNITS &&
     /^[a-zA-Z0-9][a-zA-Z0-9._:/-]*$/u.test(identity)
   );
 }
