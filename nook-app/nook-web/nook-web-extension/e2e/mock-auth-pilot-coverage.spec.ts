@@ -221,6 +221,7 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await expect(widget).toHaveCount(0)
       await loginPage.reload()
       widget = loginPage.locator('#nook-auth-widget')
+      await widget.getByTestId('nook-auth-gate-expand').click()
       await widget.getByRole('button', { name: 'Continue with Nook' }).click()
       await expect(
         widget.getByText(
