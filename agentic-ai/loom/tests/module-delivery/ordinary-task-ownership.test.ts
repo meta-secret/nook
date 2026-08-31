@@ -245,8 +245,21 @@ test('rejects globs spanning multiple owners', () => {
   ).toBe(true);
 });
 
-test('routes app Docker build definitions exclusively to SRE', () => {
+test('routes app build orchestration exclusively to SRE', () => {
   for (const write of [
+    'agentic-ai/minds/Taskfile.yml',
+    'nook-app/Taskfile.yml',
+    'nook-app/docker-bake.hcl',
+    'nook-app/nook-web/nook-web-extension/scripts/hosted-extension.sh',
+    'nook-app/nook-web/nook-web-extension/scripts/hosted-extension.test.sh',
+    'nook-app/nook-web/nook-web-extension/scripts/run-with-xvfb.sh',
+    'nook-app/nook-web/nook-web-extension/scripts/setup-brave-vault.mjs',
+    'nook-app/nook-web/nook-web-extension/scripts/setup-brave-vault.sh',
+    'nook-app/nook-web/nook-web-extension/scripts/setup-brave-vault.test.sh',
+    'nook-app/nook-web/nook-web-extension/scripts/test-e2e.sh',
+    'nook-app/nook-web/nook-web-extension/scripts/test-hosted-smoke.sh',
+    'nook-app/nook-web/nook-web-extension/scripts/test-hosted-smoke.test.sh',
+    'nook-app/nook-web/nook-web-extension/scripts/verify-deployment.sh',
     'nook-app/nook-web/nook-web-app/Dockerfile',
     'nook-app/nook-web/nook-web-app/docker-bake.hcl',
   ]) {
@@ -257,12 +270,23 @@ test('routes app Docker build definitions exclusively to SRE', () => {
       accepted(
         ordinaryWrite({
           team: TeamKey.WebDevelopment,
-          moduleRoot: 'nook-app/nook-web/nook-web-app',
+          moduleRoot: write,
           write,
         }),
       ),
     ).toBe(false);
   }
+});
+
+test('routes AI preflight contracts separately from SRE preflight', () => {
+  const contract = {
+    moduleRoot: 'preflight/tests/loom_contracts.rs',
+    write: 'preflight/tests/loom_contracts.rs',
+  } as const;
+  expect(accepted(ordinaryWrite({ team: TeamKey.Ai, ...contract }))).toBe(true);
+  expect(accepted(ordinaryWrite({ team: TeamKey.Sre, ...contract }))).toBe(
+    false,
+  );
 });
 
 test('separates portable platform Rust from operational ownership', () => {

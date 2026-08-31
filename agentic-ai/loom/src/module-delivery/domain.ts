@@ -39,8 +39,28 @@ export enum ModuleDeliveryTaskProfile {
   Ordinary = 'ordinary-team-task',
 }
 
+const SRE_EXACT_OPERATIONAL_FILES = [
+  'agentic-ai/minds/Taskfile.yml',
+  'nook-app/Taskfile.yml',
+  'nook-app/docker-bake.hcl',
+  'nook-app/nook-web/nook-web-extension/scripts/hosted-extension.sh',
+  'nook-app/nook-web/nook-web-extension/scripts/hosted-extension.test.sh',
+  'nook-app/nook-web/nook-web-extension/scripts/run-with-xvfb.sh',
+  'nook-app/nook-web/nook-web-extension/scripts/setup-brave-vault.mjs',
+  'nook-app/nook-web/nook-web-extension/scripts/setup-brave-vault.sh',
+  'nook-app/nook-web/nook-web-extension/scripts/setup-brave-vault.test.sh',
+  'nook-app/nook-web/nook-web-extension/scripts/test-e2e.sh',
+  'nook-app/nook-web/nook-web-extension/scripts/test-hosted-smoke.sh',
+  'nook-app/nook-web/nook-web-extension/scripts/test-hosted-smoke.test.sh',
+  'nook-app/nook-web/nook-web-extension/scripts/verify-deployment.sh',
+] as const;
+
 export const ORDINARY_TASK_WRITE_ROOTS = {
-  [TeamKey.Ai]: ['agentic-ai/loom', '.task/agentic-ai.yml'],
+  [TeamKey.Ai]: [
+    'agentic-ai/loom',
+    '.task/agentic-ai.yml',
+    'preflight/tests/loom_contracts.rs',
+  ],
   [TeamKey.DevelopmentCore]: [
     'agentic-ai/minds/Cargo.lock',
     'agentic-ai/minds/Cargo.toml',
@@ -64,6 +84,7 @@ export const ORDINARY_TASK_WRITE_ROOTS = {
   ],
   [TeamKey.Security]: [],
   [TeamKey.Sre]: [
+    ...SRE_EXACT_OPERATIONAL_FILES,
     'infra',
     'nook-app/ci',
     'nook-app/nook-platform/.cargo',
@@ -80,7 +101,6 @@ export const ORDINARY_TASK_WRITE_ROOTS = {
     'nook-app/nook-web/Taskfile.yml',
     'nook-app/nook-web/docker',
     'nook-app/nook-web/nook-web-extension/Taskfile.yml',
-    'nook-app/nook-web/nook-web-extension/scripts/verify-deployment.sh',
     'nook-app/nook-web/nook-web-app/Dockerfile',
     'nook-app/nook-web/nook-web-app/docker-bake.hcl',
     'preflight',
@@ -94,6 +114,7 @@ export const ORDINARY_TASK_WRITE_ROOTS = {
 } as const;
 
 const ORDINARY_TASK_FILE_ROOTS = new Set<string>([
+  ...SRE_EXACT_OPERATIONAL_FILES,
   '.task/agentic-ai.yml',
   'agentic-ai/minds/Cargo.lock',
   'agentic-ai/minds/Cargo.toml',
@@ -110,9 +131,9 @@ const ORDINARY_TASK_FILE_ROOTS = new Set<string>([
   'nook-app/nook-platform/Taskfile.yml',
   'nook-app/nook-web/nook-web-app/Dockerfile',
   'nook-app/nook-web/nook-web-app/docker-bake.hcl',
-  'nook-app/nook-web/nook-web-extension/scripts/verify-deployment.sh',
   'nook-app/nook-web/nook-web-extension/Taskfile.yml',
   'nook-app/nook-web/Taskfile.yml',
+  'preflight/tests/loom_contracts.rs',
 ]);
 
 export type ModuleDeliveryTaskTeamRequest = {
