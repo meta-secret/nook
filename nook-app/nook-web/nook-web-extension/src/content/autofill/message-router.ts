@@ -102,6 +102,7 @@ export const routeAutofillMessage: AutofillMessageListener =
       const nookTypedArgs0_1: Parameters<typeof fillAndSubmitAccount>[0] = {
         account: message.payload.account,
         workflow: pending.workflow,
+        approval: pending.approval,
         step: pending.step,
         title: pending.title,
         description: pending.description,

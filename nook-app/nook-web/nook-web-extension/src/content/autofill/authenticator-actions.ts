@@ -43,7 +43,7 @@ import {
 
 type FillAuthenticatorCodeArgs = {
   account: Pick<WebsiteAuthenticatorOption, 'vaultStoreId' | 'secretId'> & {
-    authorizationGeneration?: number
+    authorizationGeneration?: string
   }
   workflow: PasswordFormObservation
   approval: AuthenticationWorkflowApproval
@@ -129,7 +129,7 @@ export async function fillAuthenticatorCode({
       origin: location.origin,
       vaultStoreId: account.vaultStoreId,
       secretId: account.secretId,
-      ...(typeof account.authorizationGeneration === 'number'
+      ...(typeof account.authorizationGeneration === 'string'
         ? { authorizationGeneration: account.authorizationGeneration }
         : {}),
     },

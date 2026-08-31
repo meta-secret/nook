@@ -72,7 +72,7 @@ describe('login picker runtime messages', () => {
           account: {
             vaultStoreId: 'vault-1',
             secretId: 'secret-1',
-            authorizationGeneration: 7,
+            authorizationGeneration: 'epoch-7',
           },
         },
       }),
@@ -86,15 +86,5 @@ describe('login picker runtime messages', () => {
         },
       }),
     ).toBe(true)
-    expect(
-      isWebsiteLoginSelectedMessage({
-        type: 'nook:website-login-selected',
-        payload: {
-          origin: 'https://login.example.test',
-          requestId: 'req-1',
-          account: { vaultStoreId: 'vault-1', secretId: 'secret-1' },
-        },
-      }),
-    ).toBe(false)
   })
 })

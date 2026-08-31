@@ -17,7 +17,9 @@ type AuthenticationWorkflowControls = {
 }
 
 export type FillAndSubmitAccountArgs = {
-  account: Pick<WebsiteLoginAccountOption, 'vaultStoreId' | 'secretId'>
+  account: Pick<WebsiteLoginAccountOption, 'vaultStoreId' | 'secretId'> & {
+    authorizationGeneration: string
+  }
   workflow: PasswordFormObservation
   approval: AuthenticationWorkflowApproval
   step: HTMLParagraphElement

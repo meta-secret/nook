@@ -60,7 +60,7 @@ export type WebsiteAuthenticatorSelectedMessage = {
     origin: string
     requestId: string
     account: Pick<WebsiteAuthenticatorOption, 'vaultStoreId' | 'secretId'> & {
-      authorizationGeneration: number
+      authorizationGeneration: string
     }
   }
 }
@@ -191,8 +191,8 @@ export function isWebsiteAuthenticatorSelectedMessage(
   return (
     isNonEmptyString(account.vaultStoreId) &&
     isNonEmptyString(account.secretId) &&
-    Number.isInteger(account.authorizationGeneration) &&
-    account.authorizationGeneration >= 0
+    typeof account.authorizationGeneration === 'string' &&
+    account.authorizationGeneration.length > 0
   )
 }
 

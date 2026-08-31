@@ -11,6 +11,7 @@ import {
   AuthenticatorPickerLoadKind,
   type AccountPickerSurface,
   accountPickerAuthorizationGeneration,
+  accountPickerAuthorizationCleanupPending,
   accountPickerAuthorizationIsCurrent,
   authenticatorAccounts,
   authorizedWebsiteGrant,
@@ -90,18 +91,50 @@ type AuthenticatorPendingResponse =
 type WebsiteAuthenticatorOptionsArgs = {
   message: { payload: { origin: string } }
   sender: chrome.runtime.MessageSender
+  dependencies?: WebsiteAuthenticatorOptionsDependencies
 }
+
+type WebsiteAuthenticatorOptionsDependencies = {
+  accountPickerAuthorizationCleanupPending: typeof accountPickerAuthorizationCleanupPending
+  accountPickerAuthorizationGeneration: typeof accountPickerAuthorizationGeneration
+  accountPickerAuthorizationIsCurrent: typeof accountPickerAuthorizationIsCurrent
+  authenticatorAccounts: typeof authenticatorAccounts
+  availableWebsiteGrants: typeof availableWebsiteGrants
+}
+
+const websiteAuthenticatorOptionsDependencies: WebsiteAuthenticatorOptionsDependencies =
+  {
+    accountPickerAuthorizationCleanupPending,
+    accountPickerAuthorizationGeneration,
+    accountPickerAuthorizationIsCurrent,
+    authenticatorAccounts,
+    availableWebsiteGrants,
+  }
 
 export async function websiteAuthenticatorOptions({
   message,
   sender,
+  dependencies,
 }: WebsiteAuthenticatorOptionsArgs): Promise<AuthenticatorOptionsResponse> {
+  const resolvedDependencies =
+    dependencies ?? websiteAuthenticatorOptionsDependencies
+  const authorizationGeneration =
+    await resolvedDependencies.accountPickerAuthorizationGeneration()
+  if (
+    !resolvedDependencies.accountPickerAuthorizationIsCurrent(
+      authorizationGeneration,
+    ) ||
+    (await resolvedDependencies.accountPickerAuthorizationCleanupPending())
+  ) {
+    return { ok: false, reason: 'authenticator-locked' }
+  }
   const nookTypedArgs0_0: Parameters<typeof availableWebsiteGrants>[0] = {
     origin: message.payload.origin,
     sender,
     forbiddenReason: 'authenticator-forbidden-origin',
   }
-  const access = await availableWebsiteGrants(nookTypedArgs0_0)
+  const access =
+    await resolvedDependencies.availableWebsiteGrants(nookTypedArgs0_0)
   if ('response' in access) return access.response
 
   const authenticatorAccountsArgs: Parameters<typeof authenticatorAccounts>[0] =
@@ -109,7 +142,17 @@ export async function websiteAuthenticatorOptions({
       grants: access.grants,
       query: '',
     }
-  const accounts = await authenticatorAccounts(authenticatorAccountsArgs)
+  const accounts = await resolvedDependencies.authenticatorAccounts(
+    authenticatorAccountsArgs,
+  )
+  if (
+    !resolvedDependencies.accountPickerAuthorizationIsCurrent(
+      authorizationGeneration,
+    ) ||
+    (await resolvedDependencies.accountPickerAuthorizationCleanupPending())
+  ) {
+    return { ok: false, reason: 'authenticator-locked' }
+  }
   return {
     ok: true,
     status: WebsiteAuthenticatorResponseStatus.Ready,
@@ -126,7 +169,7 @@ export async function openWebsiteAuthenticatorPicker({
   message,
   sender,
 }: OpenWebsiteAuthenticatorPickerArgs): Promise<AuthenticatorPickerOpenResponse> {
-  const authorizationGeneration = accountPickerAuthorizationGeneration()
+  const authorizationGeneration = await accountPickerAuthorizationGeneration()
   if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
     return { ok: true, status: WebsiteAuthenticatorResponseStatus.Locked }
   }
@@ -361,7 +404,7 @@ type WebsiteAuthenticatorFillArgs = {
       origin: string
       vaultStoreId: string
       secretId: string
-      authorizationGeneration?: number
+      authorizationGeneration?: string
     }
   }
   sender: chrome.runtime.MessageSender
@@ -373,7 +416,7 @@ export async function websiteAuthenticatorFill({
 }: WebsiteAuthenticatorFillArgs): Promise<AuthenticatorCodeResponse> {
   const authorizationGeneration =
     message.payload.authorizationGeneration ??
-    accountPickerAuthorizationGeneration()
+    (await accountPickerAuthorizationGeneration())
   if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
     return { ok: false, reason: 'authenticator-locked' }
   }
@@ -452,7 +495,7 @@ export async function websiteAuthenticatorEnrollPreview({
 
 type StagedAuthenticatorEnrollment = {
   stageId: string
-  authorizationGeneration: number
+  authorizationGeneration: string
   origin: string
   vaultStoreId: string
   otpauthUri: string
@@ -467,7 +510,7 @@ const stagedAuthenticatorEnrollments = new Map<
 >()
 
 export function authenticatorEnrollmentAuthorizationIsCurrent(
-  authorizationGeneration: number,
+  authorizationGeneration: string,
 ): boolean {
   return accountPickerAuthorizationIsCurrent(authorizationGeneration)
 }
@@ -496,7 +539,7 @@ export function clearStagedAuthenticatorEnrollments(): void {
 }
 
 export function rebindStagedAuthenticatorEnrollmentsAuthorization(
-  authorizationGeneration: number,
+  authorizationGeneration: string,
 ): void {
   for (const staged of stagedAuthenticatorEnrollments.values()) {
     staged.authorizationGeneration = authorizationGeneration
@@ -514,7 +557,7 @@ export async function websiteAuthenticatorEnrollStage({
   message,
   sender,
 }: WebsiteAuthenticatorEnrollStageArgs): Promise<AuthenticatorStageResponse> {
-  const authorizationGeneration = accountPickerAuthorizationGeneration()
+  const authorizationGeneration = await accountPickerAuthorizationGeneration()
   if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
     return { ok: false, reason: 'authenticator-locked' }
   }

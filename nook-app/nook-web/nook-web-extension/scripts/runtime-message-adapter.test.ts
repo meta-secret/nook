@@ -206,6 +206,7 @@ describe('runtime message adapters', () => {
     const response = {
       ok: true,
       status: 'ready',
+      authorizationGeneration: 'epoch-1',
       accounts: [
         {
           vaultStoreId: 'vault-1',

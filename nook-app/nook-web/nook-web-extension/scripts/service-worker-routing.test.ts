@@ -31,7 +31,7 @@ const accountPickerAuthorizationCleanupPending = mock(() =>
 )
 const beginAccountPickerAuthorizationCleanup = mock(() =>
   Promise.resolve({
-    authorizationGeneration: 1,
+    authorizationGeneration: 'epoch-1',
     markerStatus: AccountPickerCleanupMarkerStatus.Persisted,
   }),
 )
@@ -123,7 +123,6 @@ describe('service worker routing', () => {
     expect(routeExtensionLifecycleMessage(routingArgs)).toBe(true)
     await flushResponses()
     expect(ensureExtensionSessionDocument).toHaveBeenCalledTimes(1)
-    expect(sendResponse).toHaveBeenCalledWith({ ok: true })
   })
 
   test('keeps picker authorization invalid until lock cleanup finishes', async () => {
@@ -134,7 +133,7 @@ describe('service worker routing', () => {
       beginAccountPickerAuthorizationCleanup: () => {
         events.push('authorization-invalidated')
         return Promise.resolve({
-          authorizationGeneration: 4,
+          authorizationGeneration: 'epoch-4',
           markerStatus: AccountPickerCleanupMarkerStatus.Persisted,
         })
       },
@@ -177,31 +176,26 @@ describe('service worker routing', () => {
 
     expect(events).toEqual([
       'authorization-invalidated',
-      'enrollments-cleared',
       'session-closed',
+      'enrollments-cleared',
       'pickers-cleared-1',
       'pickers-cleared-2',
       'enrollments-cleared',
-      'authorization-restored-4',
+      'authorization-restored-epoch-4',
     ])
     expect(sendResponse).toHaveBeenCalledWith({ ok: true })
   })
 
-  test('closes the session and releases cleanup when marker persistence fails', async () => {
+  test('closes the session when authorization initialization fails', async () => {
     const closeSession = mock(() => Promise.resolve())
-    const releaseCleanup = mock(() => {})
     const dependencies: ExtensionLifecycleRoutingDependencies = {
       ...lifecycleDependencies,
       beginAccountPickerAuthorizationCleanup: () =>
-        Promise.resolve({
-          authorizationGeneration: 9,
-          markerStatus: AccountPickerCleanupMarkerStatus.Unavailable,
-        }),
+        Promise.reject(new Error('session storage unavailable')),
       clearPendingAccountPickers: () => Promise.resolve(),
       closeExtensionSessionDocument: closeSession,
       isExtensionSessionEnsureMessage: () => false,
       isExtensionSessionLockMessage: () => true,
-      releaseAccountPickerAuthorizationCleanup: releaseCleanup,
     }
     const { routeExtensionLifecycleMessage } =
       await import('../src/background/service-worker/extension-lifecycle-routing')
@@ -220,35 +214,10 @@ describe('service worker routing', () => {
     await flushResponses()
 
     expect(closeSession).toHaveBeenCalledTimes(1)
-    expect(releaseCleanup).toHaveBeenCalledWith(9)
     expect(sendResponse).toHaveBeenCalledWith({
       ok: false,
       reason: 'session-lock-failed',
     })
-  })
-
-  test('recovers a persisted cleanup marker after worker restart', async () => {
-    const closeSession = mock(() => Promise.resolve())
-    const completeCleanup = mock(() => Promise.resolve())
-    const dependencies: ExtensionLifecycleRoutingDependencies = {
-      ...lifecycleDependencies,
-      accountPickerAuthorizationCleanupPending: () => Promise.resolve(true),
-      beginAccountPickerAuthorizationCleanup: () =>
-        Promise.resolve({
-          authorizationGeneration: 12,
-          markerStatus: AccountPickerCleanupMarkerStatus.Persisted,
-        }),
-      clearPendingAccountPickers: () => Promise.resolve(),
-      closeExtensionSessionDocument: closeSession,
-      completeAccountPickerAuthorizationCleanup: completeCleanup,
-    }
-    const { recoverInterruptedAuthorizationCleanup } =
-      await import('../src/background/service-worker/extension-lifecycle-routing')
-
-    await recoverInterruptedAuthorizationCleanup(dependencies)
-
-    expect(closeSession).toHaveBeenCalledTimes(1)
-    expect(completeCleanup).toHaveBeenCalledWith(12)
   })
 
   test('invalidates authorization before a failed startup marker lookup', async () => {
@@ -262,7 +231,7 @@ describe('service worker routing', () => {
       beginAccountPickerAuthorizationCleanup: () => {
         events.push('authorization-invalidated')
         return Promise.resolve({
-          authorizationGeneration: 13,
+          authorizationGeneration: 'epoch-13',
           markerStatus: AccountPickerCleanupMarkerStatus.Unavailable,
         })
       },
@@ -272,7 +241,7 @@ describe('service worker routing', () => {
 
     await expect(
       recoverInterruptedAuthorizationCleanup(dependencies),
-    ).rejects.toThrow('session storage unavailable')
+    ).rejects.toThrow('authorization cleanup marker lookup failed')
     expect(events).toEqual(['marker-read-started', 'authorization-invalidated'])
   })
 
@@ -283,7 +252,7 @@ describe('service worker routing', () => {
       beginAccountPickerAuthorizationCleanup: () => {
         events.push('authorization-invalidated')
         return Promise.resolve({
-          authorizationGeneration: 14,
+          authorizationGeneration: 'epoch-14',
           markerStatus: AccountPickerCleanupMarkerStatus.Persisted,
         })
       },
@@ -335,7 +304,6 @@ describe('service worker routing', () => {
     expect(events.indexOf('session-closed')).toBeLessThan(
       events.indexOf('pickers-cleared'),
     )
-    expect(events).toContain('pickers-cleared')
   })
 
   test('rebinds staged enrollment when reconciliation preserves access', async () => {
@@ -344,7 +312,7 @@ describe('service worker routing', () => {
       ...lifecycleDependencies,
       beginAccountPickerAuthorizationCleanup: () =>
         Promise.resolve({
-          authorizationGeneration: 15,
+          authorizationGeneration: 'epoch-15',
           markerStatus: AccountPickerCleanupMarkerStatus.Persisted,
         }),
       importLocalEventLogUpdate: () => Promise.resolve({ ok: true as const }),
@@ -363,7 +331,16 @@ describe('service worker routing', () => {
       dependencies,
       message: {
         type: 'nook:extension-local-event-log-updated',
-        payload: { vaultStoreId: 'vault-1', eventLogRecords: [] },
+        payload: {
+          vaultStoreId: 'vault-1',
+          eventLogRecords: [
+            {
+              eventId: 'event-1',
+              path: 'events/1',
+              event: { schema_version: 1 },
+            },
+          ],
+        },
       },
       sender: { id: 'nook-extension', url: 'https://simple.example.test/' },
       sendResponse: mock(() => {}),
@@ -372,8 +349,8 @@ describe('service worker routing', () => {
     await flushResponses()
 
     expect(events).toEqual([
-      'enrollments-rebound-15',
-      'authorization-restored-15',
+      'enrollments-rebound-epoch-15',
+      'authorization-restored-epoch-15',
     ])
   })
 

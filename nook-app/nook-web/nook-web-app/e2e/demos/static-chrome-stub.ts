@@ -214,6 +214,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
                 account: {
                   vaultStoreId: 'demo-vault',
                   secretId: 'demo-totp-1',
+                  authorizationGeneration: 'demo-authorization-epoch',
                 },
               },
             },
@@ -521,6 +522,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
         return {
           ok: true,
           status: 'ready',
+          authorizationGeneration: 'demo-authorization-epoch',
           accounts: [
             {
               vaultStoreId: 'demo-vault',
@@ -552,6 +554,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
                   account: {
                     vaultStoreId: 'demo-vault',
                     secretId: 'demo-login-1',
+                    authorizationGeneration: 'demo-authorization-epoch',
                   },
                 },
               },

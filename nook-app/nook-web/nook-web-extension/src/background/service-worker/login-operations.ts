@@ -85,7 +85,7 @@ export async function openWebsiteLoginPicker({
   message,
   sender,
 }: OpenWebsiteLoginPickerArgs): Promise<LoginPickerOpenResponse> {
-  const authorizationGeneration = accountPickerAuthorizationGeneration()
+  const authorizationGeneration = await accountPickerAuthorizationGeneration()
   if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
     return { ok: true, status: LoginPickerOpenStatus.Locked }
   }
@@ -659,7 +659,7 @@ type WebsiteLoginFillArgs = {
       origin: string
       vaultStoreId: string
       secretId: string
-      authorizationGeneration?: number
+      authorizationGeneration: string
     }
   }
   sender: chrome.runtime.MessageSender
@@ -669,9 +669,7 @@ export async function websiteLoginFill({
   message,
   sender,
 }: WebsiteLoginFillArgs): Promise<WebsiteLoginFillResponse> {
-  const authorizationGeneration =
-    message.payload.authorizationGeneration ??
-    accountPickerAuthorizationGeneration()
+  const authorizationGeneration = message.payload.authorizationGeneration
   if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
     return { ok: false, reason: 'login-locked' }
   }

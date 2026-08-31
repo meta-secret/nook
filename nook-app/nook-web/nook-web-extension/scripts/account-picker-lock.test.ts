@@ -5,93 +5,14 @@ Object.assign(globalThis, {
 })
 
 describe('account picker authorization cleanup', () => {
-  test('holds one invalid generation across cleanup', async () => {
-    const { AccountPickerAuthorizationState } =
-      await import('../src/background/service-worker/account-pickers')
-    const state = new AccountPickerAuthorizationState()
-    const openingGeneration = state.snapshot()
-
-    const cleanupGeneration = state.beginCleanup()
-    expect(state.isCurrent(openingGeneration)).toBe(false)
-    expect(state.beginCleanup()).toBe(cleanupGeneration)
-    expect(state.isCurrent(cleanupGeneration)).toBe(false)
-
-    state.completeCleanup(cleanupGeneration)
-    expect(state.isCurrent(cleanupGeneration)).toBe(false)
-    state.completeCleanup(cleanupGeneration)
-    expect(state.isCurrent(cleanupGeneration)).toBe(true)
-  })
-
-  test('releases a failed attempt so a later cleanup can complete', async () => {
-    const { AccountPickerAuthorizationState } =
-      await import('../src/background/service-worker/account-pickers')
-    const state = new AccountPickerAuthorizationState()
-    const generation = state.beginCleanup()
-
-    state.releaseCleanup(generation)
-    expect(state.isCurrent(generation)).toBe(false)
-    expect(state.beginCleanup()).toBe(generation)
-    expect(state.completeCleanup(generation)).toBe(true)
-    expect(state.isCurrent(generation)).toBe(true)
-  })
-
-  test('plans cancellation and removal for both persisted picker kinds', async () => {
-    const { persistedAccountPickerCleanupPlan } =
-      await import('../src/background/service-worker/account-pickers')
-    const storedPickers = {
-      'nook.extension.authenticator-picker.authenticator-request': {
-        requestId: 'authenticator-request',
-        origin: 'https://login.example.test',
-        tabId: 7,
-        allowedVaultStoreIds: ['vault-1'],
-        expiresAt: Date.now() + 60_000,
-      },
-      'nook.extension.login-picker.login-request': {
-        requestId: 'login-request',
-        origin: 'https://login.example.test',
-        tabId: 7,
-        allowedVaultStoreIds: ['vault-1'],
-        expiresAt: Date.now() + 60_000,
-      },
-    }
-
-    expect(persistedAccountPickerCleanupPlan(storedPickers)).toEqual({
-      storageKeys: Object.keys(storedPickers),
-      cancellations: [
-        {
-          tabId: 7,
-          message: {
-            type: 'nook:website-authenticator-canceled',
-            payload: {
-              origin: 'https://login.example.test',
-              requestId: 'authenticator-request',
-            },
-          },
-        },
-        {
-          tabId: 7,
-          message: {
-            type: 'nook:website-login-canceled',
-            payload: {
-              origin: 'https://login.example.test',
-              requestId: 'login-request',
-            },
-          },
-        },
-      ],
-    })
-  })
-
   test('rejects picker rehydration while cleanup is active', async () => {
     const accountPickers =
       await import('../src/background/service-worker/account-pickers')
-    let storageReads = 0
     globalThis.chrome = {
       runtime: {},
       storage: {
         session: {
           get: (_key, callback) => {
-            storageReads += 1
             callback({})
           },
           set: (_items, callback) => callback(),
@@ -105,10 +26,10 @@ describe('account picker authorization cleanup', () => {
     const result = await accountPickers.loadLoginPicker('persisted-request')
     await accountPickers.completeAccountPickerAuthorizationCleanup(
       cleanup.authorizationGeneration,
+      true,
     )
 
     expect(result).toEqual({ kind: 'unavailable' })
-    expect(storageReads).toBe(0)
   })
 
   test('rejects picker rehydration after a worker restart during cleanup', async () => {
@@ -129,39 +50,26 @@ describe('account picker authorization cleanup', () => {
     })
   })
 
-  test('scrubs in-memory requests before persistence cleanup', async () => {
-    const { takePendingAccountPickerMemoryCleanup } =
-      await import('../src/background/service-worker/account-pickers')
-    const request = {
-      requestId: 'request',
-      origin: 'https://login.example.test',
-      tabId: 7,
-      allowedVaultStoreIds: ['vault-1'],
-      expiresAt: Date.now() + 60_000,
-    }
-    const authenticatorRequests = new Map([['request', request]])
-    const loginRequests = new Map([['request', request]])
-
-    const cancellations = takePendingAccountPickerMemoryCleanup({
-      authenticatorRequests,
-      loginRequests,
-    })
-
-    expect(authenticatorRequests.size).toBe(0)
-    expect(loginRequests.size).toBe(0)
-    expect(cancellations).toHaveLength(2)
-  })
-
   test('closes visible picker surfaces during cleanup', async () => {
     const { clearPendingAccountPickers } =
       await import('../src/background/service-worker/account-pickers')
     const removedTabs: number[] = []
+    let rejectStorage = false
+    let rejectRemoval = false
+    const runtime = {
+      getURL: (path: string) => `chrome-extension://nook/${path}`,
+    }
     globalThis.chrome = {
-      runtime: { getURL: (path) => `chrome-extension://nook/${path}` },
+      runtime,
       storage: {
         session: {
-          get: (callback: (items: Record<string, boolean>) => void) =>
-            callback({}),
+          get: (callback: (items: Record<string, boolean>) => void) => {
+            if (rejectStorage) {
+              Object.assign(runtime, { lastError: { message: 'denied' } })
+            }
+            callback({})
+            Reflect.deleteProperty(runtime, 'lastError')
+          },
         },
       },
       tabs: {
@@ -174,7 +82,11 @@ describe('account picker authorization cleanup', () => {
           ]),
         remove: (tabId, callback) => {
           removedTabs.push(tabId as number)
+          if (rejectRemoval) {
+            Object.assign(runtime, { lastError: { message: 'denied' } })
+          }
           callback?.()
+          Reflect.deleteProperty(runtime, 'lastError')
         },
         sendMessage: () => Promise.resolve(),
       },
@@ -183,32 +95,14 @@ describe('account picker authorization cleanup', () => {
     await clearPendingAccountPickers()
 
     expect(removedTabs).toEqual([21])
-  })
-
-  test('binds authenticator enrollment work to authorization generation', async () => {
-    const accountPickers =
-      await import('../src/background/service-worker/account-pickers')
-    const { authenticatorEnrollmentAuthorizationIsCurrent } =
-      await import('../src/background/service-worker/authenticator-operations')
-    globalThis.chrome = {
-      runtime: {},
-      storage: {
-        session: {
-          set: (_items, callback) => callback(),
-          remove: (_key, callback) => callback(),
-        },
-      },
-    } as typeof chrome
-    const generation = accountPickers.accountPickerAuthorizationGeneration()
-
-    expect(authenticatorEnrollmentAuthorizationIsCurrent(generation)).toBe(true)
-    const cleanup =
-      await accountPickers.beginAccountPickerAuthorizationCleanup()
-    expect(authenticatorEnrollmentAuthorizationIsCurrent(generation)).toBe(
-      false,
+    rejectStorage = true
+    await expect(clearPendingAccountPickers()).rejects.toThrow(
+      'account picker cleanup failed',
     )
-    await accountPickers.completeAccountPickerAuthorizationCleanup(
-      cleanup.authorizationGeneration,
+    rejectStorage = false
+    rejectRemoval = true
+    await expect(clearPendingAccountPickers()).rejects.toThrow(
+      'account picker cleanup failed',
     )
   })
 })

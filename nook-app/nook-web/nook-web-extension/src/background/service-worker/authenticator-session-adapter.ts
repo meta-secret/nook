@@ -224,7 +224,7 @@ type SelectedAuthenticatorPageAcknowledgedArgs = {
   requestId: string
   vaultStoreId: string
   secretId: string
-  authorizationGeneration: number
+  authorizationGeneration: string
 }
 
 export async function selectedAuthenticatorPageAcknowledged({

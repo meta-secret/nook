@@ -64,7 +64,7 @@ export type WebsiteLoginRevealMessage = {
     origin: string
     vaultStoreId: string
     secretId: string
-    authorizationGeneration?: number
+    authorizationGeneration: string
   }
 }
 
@@ -89,7 +89,7 @@ export type WebsiteAuthenticatorFillMessage = {
     origin: string
     vaultStoreId: string
     secretId: string
-    authorizationGeneration?: number
+    authorizationGeneration?: string
   }
 }
 
@@ -139,9 +139,8 @@ export function isWebsiteAuthenticatorFillMessage(
     payload.vaultStoreId.length > 0 &&
     typeof payload.secretId === 'string' &&
     payload.secretId.length > 0 &&
-    (payload.authorizationGeneration === undefined ||
-      (Number.isInteger(payload.authorizationGeneration) &&
-        payload.authorizationGeneration >= 0))
+    typeof payload.authorizationGeneration === 'string' &&
+    payload.authorizationGeneration.length > 0
   )
 }
 
@@ -168,8 +167,8 @@ export function isWebsiteLoginRevealMessage(
     payload.vaultStoreId.length > 0 &&
     typeof payload.secretId === 'string' &&
     payload.secretId.length > 0 &&
-    (payload.authorizationGeneration === undefined ||
-      (Number.isInteger(payload.authorizationGeneration) &&
-        payload.authorizationGeneration >= 0))
+    (!('authorizationGeneration' in payload) ||
+      (typeof payload.authorizationGeneration === 'string' &&
+        payload.authorizationGeneration.length > 0))
   )
 }

@@ -118,20 +118,22 @@ async function clearAuthorizationState({
   closeSession,
   cleanupStart,
 }: ClearAuthorizationStateArgs): Promise<void> {
-  const startedCleanup =
+  const cleanupOperation =
     cleanupStart.kind === AuthorizationCleanupStartKind.Existing
-      ? cleanupStart.cleanup
-      : await beginAccountPickerAuthorizationCleanup()
+      ? Promise.resolve(cleanupStart.cleanup)
+      : beginAccountPickerAuthorizationCleanup()
+  const closeOperation = closeSession
+    ? closeExtensionSessionDocument().then(
+        () => false,
+        () => true,
+      )
+    : Promise.resolve(false)
+  const startedCleanup = await cleanupOperation
   const { authorizationGeneration, markerStatus } = startedCleanup
-  let failed = markerStatus === AccountPickerCleanupMarkerStatus.Unavailable
+  let failed =
+    markerStatus === AccountPickerCleanupMarkerStatus.Unavailable ||
+    (await closeOperation)
   clearStagedAuthenticatorEnrollments()
-  if (closeSession) {
-    try {
-      await closeExtensionSessionDocument()
-    } catch {
-      failed = true
-    }
-  }
   try {
     await clearPendingAccountPickers()
   } catch {
@@ -147,7 +149,7 @@ async function clearAuthorizationState({
     releaseAccountPickerAuthorizationCleanup(authorizationGeneration)
     throw new Error('authorization cleanup failed')
   }
-  await completeAccountPickerAuthorizationCleanup(authorizationGeneration)
+  await completeAccountPickerAuthorizationCleanup(authorizationGeneration, true)
 }
 
 export async function recoverInterruptedAuthorizationCleanup(
@@ -157,14 +159,20 @@ export async function recoverInterruptedAuthorizationCleanup(
     .accountPickerAuthorizationCleanupPending()
     .then(
       (pending) => ({ kind: 'resolved' as const, pending }),
-      (error: unknown) => ({ kind: 'rejected' as const, error }),
+      () => ({ kind: 'rejected' as const }),
     )
   const cleanup = await dependencies.beginAccountPickerAuthorizationCleanup()
   const lookup = await pendingLookup
-  if (lookup.kind === 'rejected') throw lookup.error
+  if (lookup.kind === 'rejected') {
+    dependencies.releaseAccountPickerAuthorizationCleanup(
+      cleanup.authorizationGeneration,
+    )
+    throw new Error('authorization cleanup marker lookup failed')
+  }
   if (!lookup.pending) {
     await dependencies.completeAccountPickerAuthorizationCleanup(
       cleanup.authorizationGeneration,
+      false,
     )
     return
   }
@@ -302,7 +310,7 @@ export function routeExtensionLifecycleMessage({
       .then(async (cleanupStart) => {
         try {
           const response = await importLocalEventLogUpdate(importArgs)
-          if (!response.ok && response.reason === 'event-log-access-revoked') {
+          if (!response.ok) {
             const cleanupArgs: ClearAuthorizationStateArgs = {
               beginAccountPickerAuthorizationCleanup,
               clearPendingAccountPickers,
@@ -327,6 +335,7 @@ export function routeExtensionLifecycleMessage({
             )
             await completeAccountPickerAuthorizationCleanup(
               cleanupStart.authorizationGeneration,
+              false,
             )
           }
           return response

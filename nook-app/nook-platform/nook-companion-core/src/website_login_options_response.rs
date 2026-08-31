@@ -20,6 +20,8 @@ pub struct WebsiteLoginAccountWire {
 pub enum WebsiteLoginOptionsAvailableWire {
     Ready {
         ok: bool,
+        #[serde(rename = "authorizationGeneration")]
+        authorization_generation: String,
         accounts: Vec<WebsiteLoginAccountWire>,
     },
     Locked {
@@ -67,6 +69,7 @@ pub struct WebsiteLoginAccountOption {
 pub enum WebsiteLoginOptions {
     Ready {
         kind: WebsiteLoginOptionsKind,
+        authorization_generation: String,
         accounts: Vec<WebsiteLoginAccountOption>,
     },
     Locked {
@@ -120,15 +123,19 @@ pub fn decode_website_login_options(
     match wire {
         WebsiteLoginOptionsWire::Available(WebsiteLoginOptionsAvailableWire::Ready {
             ok: true,
+            authorization_generation,
             accounts,
         }) => {
-            if accounts.iter().any(|account| {
-                account.vault_store_id.trim().is_empty() || account.secret_id.trim().is_empty()
-            }) {
+            if authorization_generation.trim().is_empty()
+                || accounts.iter().any(|account| {
+                    account.vault_store_id.trim().is_empty() || account.secret_id.trim().is_empty()
+                })
+            {
                 return Err(WebsiteLoginOptionsDecodeError::Malformed);
             }
             Ok(WebsiteLoginOptions::Ready {
                 kind: WebsiteLoginOptionsKind::Ready,
+                authorization_generation,
                 accounts: accounts
                     .into_iter()
                     .map(|account| WebsiteLoginAccountOption {
@@ -189,7 +196,7 @@ mod tests {
 
     #[test]
     fn decodes_every_login_options_variant_and_invariant() -> anyhow::Result<()> {
-        let ready = r#"{"ok":true,"status":"ready","accounts":[{"vaultStoreId":"vault","vaultName":"Personal","secretId":"secret","username":"alice","websiteUrl":"https://example.com","websiteHost":"example.com"}]}"#;
+        let ready = r#"{"ok":true,"status":"ready","authorizationGeneration":"epoch-1","accounts":[{"vaultStoreId":"vault","vaultName":"Personal","secretId":"secret","username":"alice","websiteUrl":"https://example.com","websiteHost":"example.com"}]}"#;
         assert!(matches!(
             decode_website_login_options_json(ready)?,
             WebsiteLoginOptions::Ready { .. }
@@ -211,7 +218,7 @@ mod tests {
             r#"{"ok":false,"status":"unavailable"}"#,
             r#"{"ok":true,"reason":"vault-locked"}"#,
             r#"{"ok":false,"reason":" "}"#,
-            r#"{"ok":true,"status":"ready","accounts":[{"vaultStoreId":"vault","vaultName":"Personal","secretId":"secret","username":"alice","websiteUrl":"https://example.com","websiteHost":"example.com","password":"foreign"}]}"#,
+            r#"{"ok":true,"status":"ready","authorizationGeneration":"epoch-1","accounts":[{"vaultStoreId":"vault","vaultName":"Personal","secretId":"secret","username":"alice","websiteUrl":"https://example.com","websiteHost":"example.com","password":"foreign"}]}"#,
         ] {
             assert!(decode_website_login_options_json(malformed).is_err());
         }
@@ -222,7 +229,7 @@ mod tests {
     fn derives_closed_login_match_availability() -> anyhow::Result<()> {
         for (serialized, expected) in [
             (
-                r#"{"ok":true,"status":"ready","accounts":[{"vaultStoreId":"vault","vaultName":"Personal","secretId":"secret","username":"alice","websiteUrl":"https://example.com","websiteHost":"example.com"}]}"#,
+                r#"{"ok":true,"status":"ready","authorizationGeneration":"epoch-1","accounts":[{"vaultStoreId":"vault","vaultName":"Personal","secretId":"secret","username":"alice","websiteUrl":"https://example.com","websiteHost":"example.com"}]}"#,
                 crate::WebsiteLoginMatchAvailability::Ready { count: 1 },
             ),
             (
