@@ -243,7 +243,15 @@ impl AuthenticationWorkflowSnapshot {
     }
 
     const fn with_saved_login_capability(mut self) -> Self {
-        self.saved_login_capability = AuthenticationSavedLoginCapability::FillSavedLogin;
+        if matches!(
+            (self.kind, self.stage),
+            (
+                AuthenticationWorkflowKind::Login,
+                AuthenticationWorkflowStage::Credentials
+            )
+        ) {
+            self.saved_login_capability = AuthenticationSavedLoginCapability::FillSavedLogin;
+        }
         self
     }
 
@@ -737,6 +745,10 @@ mod tests {
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::TotpChallenge);
         assert_eq!(snapshot.stage, AuthenticationWorkflowStage::Manual);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::TakeOver);
+        assert_eq!(
+            snapshot.saved_login_capability,
+            AuthenticationSavedLoginCapability::Unavailable
+        );
         assert_eq!(
             snapshot.pilot_presentation_capability(),
             AuthenticationPilotPresentationCapability::Hidden
