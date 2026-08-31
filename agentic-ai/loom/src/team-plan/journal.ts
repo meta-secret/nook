@@ -728,11 +728,14 @@ function releaseTeamPlanLock(request: {
     throw new Error('Team Plan journal lock ownership changed.');
 }
 
+type TeamPlanGitArguments = readonly [string, string, string];
+
 function updateRef(request: {
   readonly journal: TeamPlanJournal;
-  readonly args: readonly string[];
+  readonly args: TeamPlanGitArguments;
 }): boolean {
-  const result = spawnSync('git', ['update-ref', ...request.args], {
+  const args = request.args;
+  const result = spawnSync('git', ['update-ref', args[0], args[1], args[2]], {
     cwd: request.journal.started.repositoryRoot,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -787,12 +790,13 @@ function teamPlanLockRef(request: {
 
 type GitInvocation = Readonly<{
   cwd: string;
-  args: readonly string[];
+  args: TeamPlanGitArguments;
   input?: string;
 }>;
 
 function gitText(invocation: GitInvocation): string {
-  const result = spawnSync('git', [...invocation.args], {
+  const args = invocation.args;
+  const result = spawnSync('git', [args[0], args[1], args[2]], {
     cwd: invocation.cwd,
     encoding: 'utf8',
     input: 'input' in invocation ? invocation.input : '',
