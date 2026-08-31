@@ -5,6 +5,10 @@ import { resolve } from 'node:path';
 
 import { LoomFailureCode, loomFailureFromCause } from '../loom-failure.ts';
 import {
+  MAX_MODULE_DELIVERY_EVIDENCE_ENTRIES,
+  MAX_MODULE_DELIVERY_EVIDENCE_ENTRY_CODE_UNITS,
+} from '../module-delivery/evidence-limits.ts';
+import {
   discardFinalizedTeamPlan,
   finalizeTeamPlan,
   recordTeamPlan,
@@ -12,6 +16,7 @@ import {
   selectTeamPlan,
   startTeamPlan,
 } from './index.ts';
+import { teamPlanMessages } from './messages.ts';
 
 import type {
   TeamPlanRecord,
@@ -19,15 +24,13 @@ import type {
   TeamPlanStartRequest,
 } from './domain.ts';
 
-const HELP = `Usage:
-  loom-team-plan start --plan <plan.json> --journal <events.jsonl> --repository-root <repo>
-  loom-team-plan select --journal <events.jsonl>
-  loom-team-plan record --journal <events.jsonl> --request <result.json>
-  loom-team-plan restart --journal <events.jsonl> --plan <plan.json>
-  loom-team-plan finalize --journal <events.jsonl>
-  loom-team-plan discard --journal <events.jsonl> --run-id <id>
-`;
-const MAX_TEAM_PLAN_RECORD_REQUEST_BYTES = 1_048_576;
+const MAX_NON_EVIDENCE_RECORD_REQUEST_BYTES = 1_048_576;
+const MAX_SERIALIZED_JSON_BYTES_PER_CODE_UNIT = 6;
+export const MAX_TEAM_PLAN_RECORD_REQUEST_BYTES =
+  MAX_NON_EVIDENCE_RECORD_REQUEST_BYTES +
+  MAX_MODULE_DELIVERY_EVIDENCE_ENTRIES *
+    MAX_MODULE_DELIVERY_EVIDENCE_ENTRY_CODE_UNITS *
+    MAX_SERIALIZED_JSON_BYTES_PER_CODE_UNIT;
 const TEAM_PLAN_RUN_ID = /^[0-9a-f]{64}$/u;
 
 enum TeamPlanCommandKind {
@@ -71,6 +74,7 @@ type TeamPlanCommand =
 
 export type TeamPlanCliArguments = Readonly<{
   argv: readonly string[];
+  locale: string;
 }>;
 
 type CommandPathRequest = Readonly<{
@@ -78,17 +82,40 @@ type CommandPathRequest = Readonly<{
   index: number;
 }>;
 
+enum TeamPlanCommandParseKind {
+  Valid = 'valid',
+  Invalid = 'invalid',
+}
+
+type TeamPlanCommandParse =
+  | Readonly<{
+      kind: TeamPlanCommandParseKind.Valid;
+      command: TeamPlanCommand;
+    }>
+  | Readonly<{ kind: TeamPlanCommandParseKind.Invalid }>;
+
+enum CommandPathKind {
+  Valid = 'valid',
+  Invalid = 'invalid',
+}
+
+type CommandPath =
+  | Readonly<{ kind: CommandPathKind.Valid; path: string }>
+  | Readonly<{ kind: CommandPathKind.Invalid }>;
+
 export async function runTeamPlanCli(
   cliArguments: TeamPlanCliArguments,
 ): Promise<number> {
-  const command = parseTeamPlanCommand(cliArguments);
-  if (!command) {
-    console.error(HELP);
+  const parsed = parseTeamPlanCommand(cliArguments);
+  if (parsed.kind === TeamPlanCommandParseKind.Invalid) {
+    const messages = teamPlanMessages(cliArguments.locale);
+    console.error(messages.help);
     throw loomFailureFromCause({
       code: LoomFailureCode.TeamPlanValidationFailed,
-      cause: new Error('Team Plan command arguments are invalid.'),
+      cause: new Error(messages.invalidArguments),
     });
   }
+  const { command } = parsed;
   if (command.kind === TeamPlanCommandKind.Start) {
     const request: TeamPlanStartRequest = {
       planPath: command.planPath,
@@ -223,7 +250,7 @@ async function readTeamPlanRecordRequest(requestPath: string): Promise<string> {
 
 function parseTeamPlanCommand(
   cliArguments: TeamPlanCliArguments,
-): TeamPlanCommand | false {
+): TeamPlanCommandParse {
   const { argv } = cliArguments;
   const kind = argv[0];
   if (
@@ -233,8 +260,12 @@ function parseTeamPlanCommand(
     argv[1] === '--journal'
   ) {
     const journalPath = commandPathAt({ argv, index: 2 });
-    if (!journalPath) return false;
-    return { kind, journalPath };
+    if (journalPath.kind === CommandPathKind.Invalid)
+      return { kind: TeamPlanCommandParseKind.Invalid };
+    return {
+      kind: TeamPlanCommandParseKind.Valid,
+      command: { kind, journalPath: journalPath.path },
+    };
   }
   if (
     kind === TeamPlanCommandKind.Discard &&
@@ -245,12 +276,15 @@ function parseTeamPlanCommand(
     const journalPath = commandPathAt({ argv, index: 2 });
     const runId = argv[4];
     if (
-      !journalPath ||
+      journalPath.kind === CommandPathKind.Invalid ||
       typeof runId !== 'string' ||
       !TEAM_PLAN_RUN_ID.test(runId)
     )
-      return false;
-    return { kind, journalPath, runId };
+      return { kind: TeamPlanCommandParseKind.Invalid };
+    return {
+      kind: TeamPlanCommandParseKind.Valid,
+      command: { kind, journalPath: journalPath.path, runId },
+    };
   }
   if (
     (kind === TeamPlanCommandKind.Record ||
@@ -261,8 +295,19 @@ function parseTeamPlanCommand(
   ) {
     const journalPath = commandPathAt({ argv, index: 2 });
     const requestPath = commandPathAt({ argv, index: 4 });
-    if (!journalPath || !requestPath) return false;
-    return { kind, journalPath, requestPath };
+    if (
+      journalPath.kind === CommandPathKind.Invalid ||
+      requestPath.kind === CommandPathKind.Invalid
+    )
+      return { kind: TeamPlanCommandParseKind.Invalid };
+    return {
+      kind: TeamPlanCommandParseKind.Valid,
+      command: {
+        kind,
+        journalPath: journalPath.path,
+        requestPath: requestPath.path,
+      },
+    };
   }
   if (
     kind !== TeamPlanCommandKind.Start ||
@@ -271,24 +316,38 @@ function parseTeamPlanCommand(
     argv[3] !== '--journal' ||
     argv[5] !== '--repository-root'
   )
-    return false;
+    return { kind: TeamPlanCommandParseKind.Invalid };
   const planPath = commandPathAt({ argv, index: 2 });
   const journalPath = commandPathAt({ argv, index: 4 });
   const repositoryRoot = commandPathAt({ argv, index: 6 });
-  if (!planPath || !journalPath || !repositoryRoot) return false;
+  if (
+    planPath.kind === CommandPathKind.Invalid ||
+    journalPath.kind === CommandPathKind.Invalid ||
+    repositoryRoot.kind === CommandPathKind.Invalid
+  )
+    return { kind: TeamPlanCommandParseKind.Invalid };
   return {
-    kind,
-    planPath,
-    journalPath,
-    repositoryRoot,
+    kind: TeamPlanCommandParseKind.Valid,
+    command: {
+      kind,
+      planPath: planPath.path,
+      journalPath: journalPath.path,
+      repositoryRoot: repositoryRoot.path,
+    },
   };
 }
 
-function commandPathAt(request: CommandPathRequest): string | false {
+function commandPathAt(request: CommandPathRequest): CommandPath {
   const value = request.argv[request.index];
-  if (typeof value !== 'string' || value.startsWith('--')) return false;
-  return resolve(value);
+  if (typeof value !== 'string' || value.startsWith('--'))
+    return { kind: CommandPathKind.Invalid };
+  return { kind: CommandPathKind.Valid, path: resolve(value) };
 }
 
 if (import.meta.main)
-  process.exit(await runTeamPlanCli({ argv: process.argv.slice(2) }));
+  process.exit(
+    await runTeamPlanCli({
+      argv: process.argv.slice(2),
+      locale: process.env.LC_ALL || process.env.LANG || 'en',
+    }),
+  );
