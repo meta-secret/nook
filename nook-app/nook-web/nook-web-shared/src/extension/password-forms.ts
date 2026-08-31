@@ -20,7 +20,6 @@ import {
   findPasswordFields,
   findUsernameFields,
   hasAutocompleteToken,
-  preferredOneTimeCodeFillField,
   isAuthUsernameField,
   controlAssociatesWithObservation,
   isLocallyAdjacentToOwnedForm,
@@ -70,6 +69,13 @@ import {
   appendIndependentPasskeyOnlyWorkflows,
   summarizePasskeyOnlyWorkflowForms,
 } from "./password-form-passkey-only-workflows";
+import {
+  setNativeInputValue,
+  type LoginCredentials,
+  type LoginCredentialsFillRequest,
+  LoginCredentialsLookupKind,
+  type LoginCredentialsLookup,
+} from "./password-form-field-actions";
 
 export {
   findOneTimeCodeFields,
@@ -86,6 +92,19 @@ export type {
   PasskeyControlLookup,
   PasswordFormScope,
 } from "./password-form-fields";
+export {
+  clearLoginCredentials,
+  fillGeneratedPassword,
+  fillOneTimeCode,
+} from "./password-form-field-actions";
+export type {
+  GeneratedPasswordFillRequest,
+  LoginCredentials,
+  LoginCredentialsFillRequest,
+  LoginCredentialsLookup,
+  OneTimeCodeFillRequest,
+} from "./password-form-field-actions";
+export { LoginCredentialsLookupKind } from "./password-form-field-actions";
 export {
   PasswordFormQueryKind,
   type PasswordFormScopeQuery,
@@ -114,23 +133,6 @@ export type PasswordFormSummary = {
   observedAt: number;
 };
 
-export type LoginCredentials = {
-  username: string;
-  password: string;
-};
-
-export enum LoginCredentialsLookupKind {
-  Absent = "absent",
-  Found = "found",
-}
-
-export type LoginCredentialsLookup =
-  | { kind: LoginCredentialsLookupKind.Absent }
-  | {
-      kind: LoginCredentialsLookupKind.Found;
-      credentials: LoginCredentials;
-    };
-
 export type PasswordFormObservation = {
   root: ParentNode;
   formScope: PasswordFormScope;
@@ -143,37 +145,7 @@ type AuthenticationObservationFactsRequest = {
   backupCodesHint: boolean;
 };
 
-type NativeInputValueMutation = { input: HTMLInputElement; value: string };
-
 type PasswordFormSummaryRequest = PasswordFormScopeQuery;
-
-export type OneTimeCodeFillRequest = PasswordFormScopeQuery & { code: string };
-
-export type LoginCredentialsFillRequest = PasswordFormScopeQuery & {
-  credentials: LoginCredentials;
-};
-
-export type GeneratedPasswordFillRequest = PasswordFormScopeQuery & {
-  password: string;
-};
-
-function setNativeInputValue({ input, value }: NativeInputValueMutation): void {
-  const prototype = Object.getPrototypeOf(input) as HTMLInputElement;
-  const descriptor = Object.getOwnPropertyDescriptor(prototype, "value");
-  if (descriptor?.set) {
-    descriptor.set.call(input, value);
-  } else {
-    input.value = value;
-  }
-  const nookTypedArgs0_0: ConstructorParameters<typeof Event>[1] = {
-    bubbles: true,
-  };
-  input.dispatchEvent(new Event("input", nookTypedArgs0_0));
-  const nookTypedArgs0_1: ConstructorParameters<typeof Event>[1] = {
-    bubbles: true,
-  };
-  input.dispatchEvent(new Event("change", nookTypedArgs0_1));
-}
 
 function passwordFieldQuery(
   request: PasswordFormScopeQuery,
@@ -778,20 +750,6 @@ export function summarizeAuthenticationWorkflowForms(): PasswordFormObservation[
   };
   return appendIndependentPasskeyOnlyWorkflows(mergeRequest);
 }
-export function fillOneTimeCode(request: OneTimeCodeFillRequest): boolean {
-  const nookTypedArgs0_16 = passwordFieldQuery(request);
-  const field = preferredOneTimeCodeFillField(
-    findOneTimeCodeFields(nookTypedArgs0_16),
-  );
-  if (!field) return false;
-  const nookTypedArgs0_17: Parameters<typeof setNativeInputValue>[0] = {
-    input: field,
-    value: request.code,
-  };
-  setNativeInputValue(nookTypedArgs0_17);
-  field.focus();
-  return true;
-}
 export function fillLoginCredentials(
   request: LoginCredentialsFillRequest,
 ): boolean {
@@ -855,45 +813,6 @@ export function fillLoginCredentials(
     return false;
   }
   return true;
-}
-export function fillGeneratedPassword(
-  request: GeneratedPasswordFillRequest,
-): boolean {
-  const nookTypedArgs0_23 = passwordFieldQuery(request);
-  const passwordFields = findPasswordFields(nookTypedArgs0_23).filter(
-    (field) => !field.readOnly,
-  );
-  const newPasswordFields = passwordFields.filter((field) => {
-    const nookArrowArgs3: Parameters<typeof hasAutocompleteToken>[0] = {
-      field,
-      expected: "new-password",
-    };
-    return hasAutocompleteToken(nookArrowArgs3);
-  });
-  if (newPasswordFields.length === 0) return false;
-  for (const field of newPasswordFields) {
-    const nookTypedArgs0_24: Parameters<typeof setNativeInputValue>[0] = {
-      input: field,
-      value: request.password,
-    };
-    setNativeInputValue(nookTypedArgs0_24);
-  }
-  newPasswordFields[0]?.focus();
-  return true;
-}
-
-export function clearLoginCredentials(
-  request: PasswordFormScopeQuery,
-): void {
-  const clearField = (input: HTMLInputElement): void => {
-    const mutation: Parameters<typeof setNativeInputValue>[0] = {
-      input,
-      value: "",
-    };
-    setNativeInputValue(mutation);
-  };
-  findUsernameFields(passwordFieldQuery(request)).forEach(clearField);
-  findPasswordFields(passwordFieldQuery(request)).forEach(clearField);
 }
 export function readLoginCredentials(
   request: PasswordFormScopeQuery,
