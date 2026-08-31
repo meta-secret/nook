@@ -80,6 +80,21 @@ or second coordinator. See the [Gizmo contract](gizmo/AGENTS.md).
   does not use Python.
 - Keep `.cortex/.session/` temporary and physically clean before readiness.
 
+## Agent communication
+
+Every user-visible agent message starts with the pull request it currently
+serves.
+
+- Use `PR #<number> —` when the current work has a pull request.
+- Use `PR pending —` before that pull request exists.
+- Use `PR none —` when the assigned work intentionally has no pull request.
+- Recheck the identifier after pull-request creation or a stacked-PR
+  transition.
+- Apply the prefix to progress updates, questions, handoffs, and final
+  responses.
+- Do not add the prefix to code, logs, repository content, commit messages, or
+  machine-readable protocols.
+
 ## Cortex authoring
 
 A task whose write claims overlap `.cortex/**` requires the canonical typed
