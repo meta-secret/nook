@@ -656,6 +656,7 @@ describe('Team Plan journal', () => {
     await expect(
       discardTeamPlanJournal({
         journalPath,
+        expectedRunId: started.runId,
         discardArtifacts: () => Promise.resolve(),
         beforeParentSync: () => {
           if ((parentSyncs += 1) === 3) throw new Error('final sync failed');
@@ -666,6 +667,7 @@ describe('Team Plan journal', () => {
     await expect(
       discardTeamPlanJournal({
         journalPath,
+        expectedRunId: started.runId,
         discardArtifacts: () => Promise.resolve(),
         beforeParentSync: () => {
           throw new Error('retry sync observed');
@@ -674,6 +676,7 @@ describe('Team Plan journal', () => {
     ).rejects.toThrow('retry sync observed');
     await discardTeamPlanJournal({
       journalPath,
+      expectedRunId: started.runId,
       discardArtifacts: () => Promise.resolve(),
     });
   });
