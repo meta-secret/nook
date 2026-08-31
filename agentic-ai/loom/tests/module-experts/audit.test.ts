@@ -577,7 +577,9 @@ describe('module expert audit', () => {
       'nook-app/nook-web/nook-web-shared/src/extension/extension-connect-scope.ts',
     );
     const contextualAuthenticationConsumers = [
+      'nook-app/nook-web/nook-web-extension/src/background/service-worker/account-pickers.ts',
       'nook-app/nook-web/nook-web-extension/src/background/service-worker/authentication-workflow-routing.ts',
+      'nook-app/nook-web/nook-web-extension/src/background/service-worker/pairing-identity.ts',
       'nook-app/nook-web/nook-web-extension/src/content/autofill/state.ts',
       'nook-app/nook-web/nook-web-shared/src/extension/password-form-classified-observations.ts',
       'nook-app/nook-web/nook-web-shared/src/extension/password-form-passkey-only-workflows.ts',
