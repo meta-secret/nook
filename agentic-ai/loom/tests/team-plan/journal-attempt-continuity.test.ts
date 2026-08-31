@@ -108,8 +108,7 @@ async function continuityFixture() {
     sourceCommit: fixture.baselineCommit,
     repositoryRoot: fixture.sourceRoot,
     workspaceRoot: fixture.workspaceRoot,
-    generationRecordLimit:
-      validation.plan.nodes.length * validation.plan.maxAttempts,
+    generationRecordLimit: value.nodes.length * value.maxAttempts,
   };
   await createTeamPlanJournal({ journalPath, event: started });
   return { journalPath, started, value };
@@ -145,7 +144,6 @@ test('Team Plan journal continues attempts across generations', async () => {
       },
     },
   });
-
   const replacementText = `${JSON.stringify({ ...value, generation: 2 })}\n`;
   const replacement = decodeAndValidateModuleDeliveryPlan(replacementText);
   if (replacement.status !== ModuleDeliveryValidationStatus.Accepted)
@@ -161,8 +159,7 @@ test('Team Plan journal continues attempts across generations', async () => {
       planSha256: teamPlanSha256(replacementText),
       modulePlanDigest: replacement.planDigest,
       sourceCommit: started.sourceCommit,
-      generationRecordLimit:
-        replacement.plan.nodes.length * replacement.plan.maxAttempts,
+      generationRecordLimit: 2,
     },
   });
   const secondAttempt = {
