@@ -226,10 +226,24 @@ export function findPasswordFields({
   };
   return findFields(findArgs).filter(
     (field) =>
-      !field.matches(":disabled") &&
+      !inputIsEffectivelyDisabled(field) &&
       field.type === "password" &&
       isRenderedInput(field),
   );
+}
+
+function inputIsEffectivelyDisabled(field: HTMLInputElement): boolean {
+  if (field.disabled || field.matches(":disabled")) return true;
+  for (let ancestor = field.parentElement; ancestor; ancestor = ancestor.parentElement) {
+    if (!(ancestor instanceof HTMLFieldSetElement) || !ancestor.disabled) {
+      continue;
+    }
+    const firstLegend = Array.from(ancestor.children).find(
+      (child): child is HTMLLegendElement => child instanceof HTMLLegendElement,
+    );
+    if (!firstLegend?.contains(field)) return true;
+  }
+  return false;
 }
 
 function associatedLabelText(field: HTMLInputElement): string {

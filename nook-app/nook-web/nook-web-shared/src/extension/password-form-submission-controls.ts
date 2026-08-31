@@ -140,7 +140,9 @@ export function rawOwnedFormIdentity(form: HTMLFormElement): string {
     form.getAttribute("name") ?? "",
     form.getAttribute("class") ?? "",
     form.getAttribute("aria-label") ?? "",
-  ].join(" ");
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 export function ownedFormIdentity(form: HTMLFormElement): string {
@@ -160,7 +162,9 @@ export function observedFormIdentity({
     owner.getAttribute("name") ?? "",
     owner.getAttribute("role") ?? "",
     owner.getAttribute("aria-label") ?? "",
-  ].join(" ");
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 export function observedFormDestination(formScope: PasswordFormScope): string {

@@ -46,52 +46,82 @@ const validMessage = {
   },
 }
 
+function approvalMatcherDependencies(): Parameters<
+  typeof authenticationWorkflowApprovalsMatch
+>[1] {
+  let approvedFactsJson = ''
+  return {
+    bind: (approvedFacts) => {
+      approvedFactsJson = JSON.stringify(approvedFacts)
+      return {} as ReturnType<
+        Parameters<typeof authenticationWorkflowApprovalsMatch>[1]['bind']
+      >
+    },
+    matches: (_binding, currentFacts) =>
+      approvedFactsJson === JSON.stringify(currentFacts),
+  }
+}
+
 describe('authentication workflow snapshot messages', () => {
   test('invalidates pending approval after an action or fact transition', () => {
     const facts = validMessage.payload.observations[0]
     const approved = { workflowKey: 'login:continue', facts }
+    const dependencies = approvalMatcherDependencies()
     expect(
-      authenticationWorkflowApprovalsMatch({
-        approved,
-        current: { workflowKey: 'login:continue', facts },
-      }),
+      authenticationWorkflowApprovalsMatch(
+        {
+          approved,
+          current: { workflowKey: 'login:continue', facts },
+        },
+        dependencies,
+      ),
     ).toBe(true)
     expect(
-      authenticationWorkflowApprovalsMatch({
-        approved,
-        current: { workflowKey: 'otp:fill', facts },
-      }),
+      authenticationWorkflowApprovalsMatch(
+        {
+          approved,
+          current: { workflowKey: 'otp:fill', facts },
+        },
+        dependencies,
+      ),
     ).toBe(false)
     expect(
-      authenticationWorkflowApprovalsMatch({
-        approved,
-        current: {
-          workflowKey: 'login:continue',
-          facts: {
-            ...facts,
-            fields: { ...facts.fields, oneTimeCodeFieldCount: 1 },
+      authenticationWorkflowApprovalsMatch(
+        {
+          approved,
+          current: {
+            workflowKey: 'login:continue',
+            facts: {
+              ...facts,
+              fields: { ...facts.fields, oneTimeCodeFieldCount: 1 },
+            },
           },
         },
-      }),
+        dependencies,
+      ),
     ).toBe(false)
   })
 
   test('invalidates an authenticator picker across OTP challenge facts', () => {
     const approvedFacts = validMessage.payload.observations[0]
+    const dependencies = approvalMatcherDependencies()
     expect(
-      authenticationWorkflowApprovalsMatch({
-        approved: { workflowKey: 'login:otp', facts: approvedFacts },
-        current: {
-          workflowKey: 'login:otp',
-          facts: {
-            ...approvedFacts,
-            ceremony: {
-              ...approvedFacts.ceremony,
-              oneTimeCodeHandlerSignal: 'onchange=submitNewChallenge()',
+      authenticationWorkflowApprovalsMatch(
+        {
+          approved: { workflowKey: 'login:otp', facts: approvedFacts },
+          current: {
+            workflowKey: 'login:otp',
+            facts: {
+              ...approvedFacts,
+              ceremony: {
+                ...approvedFacts.ceremony,
+                oneTimeCodeHandlerSignal: 'onchange=submitNewChallenge()',
+              },
             },
           },
         },
-      }),
+        dependencies,
+      ),
     ).toBe(false)
   })
 

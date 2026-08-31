@@ -1,3 +1,5 @@
+/// <reference path="../../../../nook-web-extension/src/vite-env.d.ts" />
+
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE } from '../../../../nook-web-extension/src/offscreen/session-request-adapter'
 import { ExtensionSessionMessageType } from '../../../../nook-web-extension/src/offscreen/session-message-dispatch'

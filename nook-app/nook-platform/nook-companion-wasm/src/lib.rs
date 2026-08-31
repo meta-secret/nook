@@ -11,11 +11,11 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 mod page_form_policy;
 
-#[cfg(all(test, target_arch = "wasm32"))]
-mod authentication_contract_wasm_tests;
 mod authentication_observation_binding;
+mod authenticator_code_response;
 
 pub use authentication_observation_binding::*;
+pub use authenticator_code_response::*;
 pub use page_form_policy::*;
 
 #[wasm_bindgen(typescript_custom_section)]
