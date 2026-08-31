@@ -171,18 +171,33 @@ describe('prepareModuleWorktree', () => {
     }
   });
 
-  test('rejects relative executable search paths before launching Git', () => {
+  test('validates executable search paths for the host platform', () => {
     const fixture = createTrackedFixture();
     const hadPath = 'PATH' in process.env;
     const previousPath = process.env.PATH ?? '';
-    process.env.PATH = `relative-bin:${previousPath || '/usr/bin'}`;
     try {
+      process.env.PATH = `relative-bin:${previousPath || '/usr/bin'}`;
       expect(() =>
         runModuleDeliveryGit({
           cwd: fixture.sourceRoot,
           args: ['status', '--short'],
         }),
       ).toThrow('search path must contain absolute paths');
+      process.env.PATH = '\\\\server\\git';
+      let message = '';
+      try {
+        runModuleDeliveryGit({
+          cwd: fixture.sourceRoot,
+          args: ['status', '--short'],
+        });
+      } catch (error) {
+        message = error instanceof Error ? error.message : String(error);
+      }
+      if (process.platform === 'win32')
+        expect(message).not.toContain(
+          'search path must contain absolute paths',
+        );
+      else expect(message).toContain('search path must contain absolute paths');
     } finally {
       if (hadPath) process.env.PATH = previousPath;
       else delete process.env.PATH;

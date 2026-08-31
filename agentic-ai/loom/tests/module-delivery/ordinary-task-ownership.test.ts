@@ -150,6 +150,27 @@ test('routes the web Docker subtree exclusively to SRE', () => {
   ).toBe(false);
 });
 
+test('routes web Taskfile orchestration exclusively to SRE', () => {
+  for (const write of [
+    'nook-app/nook-web/Taskfile.yml',
+    'nook-app/nook-web/docker/Taskfile.yml',
+    'nook-app/nook-web/nook-web-extension/Taskfile.yml',
+  ]) {
+    expect(
+      accepted(ordinaryWrite({ team: TeamKey.Sre, moduleRoot: write, write })),
+    ).toBe(true);
+    expect(
+      accepted(
+        ordinaryWrite({
+          team: TeamKey.WebDevelopment,
+          moduleRoot: 'nook-app/nook-web',
+          write,
+        }),
+      ),
+    ).toBe(false);
+  }
+});
+
 test('rejects globs that overlap a more-specific foreign root', () => {
   expect(
     accepted(

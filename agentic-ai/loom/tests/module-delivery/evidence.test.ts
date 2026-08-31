@@ -13,7 +13,9 @@ import {
   ModuleDeliveryJoinKind,
   ModuleDeliveryProviderSubmissionKind,
   ModuleDeliveryTaskKind,
+  ModuleDeliveryTaskProfile,
   ModuleDeliveryValidationStatus,
+  ModuleDeliveryWorkspaceKind,
   createModuleDeliveryAdmissionState,
   createModuleDeliveryGenerationAuthority,
   decodeAndValidateModuleDeliveryPlan,
@@ -43,6 +45,7 @@ import type {
   ModuleDeliveryPlanV2,
   ModuleDeliveryReadOnlyEvidenceSubmission,
   ModuleDeliveryReadOnlyNodeV2,
+  ModuleDeliveryWriteNodeV2,
   RecordModuleDeliveryAttemptLeasesRequest,
   SelectModuleDeliveryAdmissionsRequest,
   ValidatedModuleDeliveryPlan,
@@ -69,13 +72,18 @@ type Runtime = {
   readonly synthesis: ModuleDeliveryEvidenceSynthesisNodeV2;
 };
 
+type AdmissionRuntime = Pick<Runtime, 'accepted' | 'authority' | 'state'>;
+type WriteRuntime = AdmissionRuntime & {
+  readonly writer: ModuleDeliveryWriteNodeV2;
+};
+
 type EvidenceEdgeRequest = {
   readonly providerTaskId: string;
   readonly consumerTaskId: string;
 };
 
 type AdmittedLeaseRequest = {
-  readonly runtime: Runtime;
+  readonly runtime: AdmissionRuntime;
   readonly taskId: string;
 };
 
@@ -243,6 +251,74 @@ function runtime(existingFixture?: GitFixture): Runtime {
     providerB,
     synthesis,
   };
+}
+
+function writeRuntime(fixture: GitFixture): WriteRuntime {
+  const writer: ModuleDeliveryWriteNodeV2 = {
+    kind: ModuleDeliveryTaskKind.Write,
+    taskId: 'core-writer',
+    team: TeamKey.DevelopmentCore,
+    functionalOwner: TeamKey.Ai,
+    acceptanceOwner: TeamKey.Ai,
+    parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
+    expert: ModuleDeliveryTaskProfile.Ordinary,
+    moduleRoot: CORE_ROOT,
+    consumerOutcome: 'The bounded core change is delivered.',
+    baseline: {
+      kind: ModuleDeliveryBaselineKind.SourceCommit,
+      sourceCommit: fixture.baselineCommit,
+    },
+    agentDepthLimit: 1,
+    dependencies: [],
+    resources: {
+      read: [],
+      write: [`${CORE_ROOT}/src/lib.rs`],
+      evidenceSurface: [],
+    },
+    parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
+    acceptance: {
+      commands: ['task core:test'],
+      evidence: ['Core tests pass.'],
+    },
+    workspace: {
+      kind: ModuleDeliveryWorkspaceKind.IsolatedWorktree,
+      expectedCommitHandoff: true,
+    },
+  };
+  const plan: ModuleDeliveryPlanV2 = {
+    version: 2,
+    generation: 1,
+    sourceCommit: fixture.baselineCommit,
+    maxConcurrency: 1,
+    maxAgentDepth: 1,
+    maxAttempts: 2,
+    parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
+    parentJoin: {
+      kind: ModuleDeliveryJoinKind.OrderedCommitHandoffs,
+      owner: 'delivery-owner',
+      validationCommands: ['task loom:verify'],
+    },
+    nodes: [writer],
+    edgeContracts: [],
+  };
+  const accepted = decodeAndValidateModuleDeliveryPlan(JSON.stringify(plan));
+  if (accepted.status !== ModuleDeliveryValidationStatus.Accepted)
+    throw new Error(JSON.stringify(accepted.issues));
+  const authority = createModuleDeliveryGenerationAuthority({
+    acceptedPlan: accepted,
+    repositoryRoot: fixture.sourceRoot,
+    expectedLineage: [
+      { taskId: writer.taskId, parentLineage: writer.parentLineage },
+    ],
+  });
+  const state = createModuleDeliveryAdmissionState({
+    authority,
+    acceptedPlan: accepted,
+    headCommit: fixture.baselineCommit,
+    integratedWriterFrontiers: [],
+    acceptedEvidence: [],
+  });
+  return { accepted, authority, state, writer };
 }
 
 function admittedLease(
@@ -497,6 +573,49 @@ test('canonical redacted receipt replay rejects inconsistent lifecycle fields wi
     }
   } finally {
     disposeGitFixture(active.fixture);
+  }
+});
+
+test('canonical receipt replay rejects write leases before consuming state', () => {
+  const fixture = createGitFixture();
+  try {
+    const active = writeRuntime(fixture);
+    const lease = admittedLease({
+      runtime: active,
+      taskId: active.writer.taskId,
+    });
+    const receipt: ModuleDeliveryAcceptedProviderEvidenceIdentity = {
+      schemaVersion: 1,
+      generation: lease.generation,
+      planDigest: lease.planDigest,
+      taskId: lease.taskId,
+      attempt: lease.attempt,
+      producerTeam: lease.team,
+      functionalOwner: lease.functionalOwner,
+      acceptanceOwner: lease.acceptanceOwner,
+      sourceCommit: lease.startingFrontier,
+      verifiedHeadCommit: active.state.headCommit,
+      artifactIdentity: 'evidence/core-writer.json',
+      artifactDigest: 'a'.repeat(64),
+      sourceProvenanceDigest: 'b'.repeat(64),
+      verdict: ModuleDeliveryEvidenceVerdict.TerminalSuccess,
+      claimIdentities: [],
+      acceptanceRequirements: lease.acceptanceRequirements,
+      acceptedProviderEvidence: [],
+    };
+    for (let attempt = 0; attempt < 2; attempt += 1)
+      expect(() =>
+        restoreModuleDeliveryCanonicalEvidenceReceipt({
+          authority: active.authority,
+          acceptedPlan: active.accepted,
+          state: active.state,
+          lease,
+          acceptedEvidence: [],
+          receipt,
+        }),
+      ).toThrow('cannot restore write tasks');
+  } finally {
+    disposeGitFixture(fixture);
   }
 });
 

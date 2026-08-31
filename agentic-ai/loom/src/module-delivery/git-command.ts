@@ -90,12 +90,13 @@ export function runModuleDeliveryGit(
 }
 
 function assertAbsoluteExecutableSearchPath(value: string): void {
-  const separator = process.platform === 'win32' ? ';' : ':';
+  const windows = process.platform === 'win32';
+  const separator = windows ? ';' : ':';
   for (const entry of value.split(separator))
     if (
-      !entry.startsWith('/') &&
-      !entry.startsWith('\\\\') &&
-      !/^[A-Za-z]:[\\/]/.test(entry)
+      windows
+        ? !entry.startsWith('\\\\') && !/^[A-Za-z]:[\\/]/.test(entry)
+        : !entry.startsWith('/')
     )
       throw new Error(
         'Git executable search path must contain absolute paths.',
