@@ -80,7 +80,6 @@ import {
   LoginCredentialsLookupKind,
   type LoginCredentialsLookup,
 } from "./password-form-field-actions";
-
 export {
   findOneTimeCodeFields,
   findPasswordFields,
@@ -154,7 +153,7 @@ function passwordFieldQuery(
   }
   return { root: request.root, formScope: request.formScope };
 }
-function summarizeRoot(
+export function summarizeRoot(
   request: PasswordFormSummaryRequest,
 ): PasswordFormSummary {
   const { root } = request;
@@ -315,7 +314,6 @@ function pageControlObservation({
     submissionMethod: controlSubmissionMethod(control),
   };
 }
-
 function transportableControlObservation(
   request: PageControlObservationRequest,
 ): AuthenticationAdvanceControlObservation[] {

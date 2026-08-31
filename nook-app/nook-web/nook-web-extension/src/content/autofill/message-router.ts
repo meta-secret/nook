@@ -94,6 +94,7 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     const nookTypedArgs0_1: Parameters<typeof fillAndSubmitAccount>[0] = {
       account: message.payload.account,
       workflow: pending.workflow,
+      approval: pending.approval,
       step: pending.step,
       title: pending.title,
       description: pending.description,
@@ -155,6 +156,7 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
   const nookTypedArgs0_3: Parameters<typeof fillAuthenticatorCode>[0] = {
     account: message.payload.account,
     workflow: pending.workflow,
+    approval: pending.approval,
     step: pending.step,
     title: pending.title,
     description: pending.description,
