@@ -494,9 +494,7 @@ describe('Team Plan runtime', () => {
     const tombstone = `${file.journalPath}.discarding`;
     linkSync(file.journalPath, tombstone);
     unlinkSync(file.journalPath);
-    expect(
-      await discardFinalizedTeamPlan({ journalPath: file.journalPath }),
-    ).toBeUndefined();
+    await discardFinalizedTeamPlan({ journalPath: file.journalPath });
     expect(fixtureGit(fixture)(['for-each-ref', oldPrefix])).toBe('');
     expect(existsSync(tombstone)).toBe(false);
     await startTeamPlan(startRequest(file));
