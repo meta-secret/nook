@@ -4,18 +4,7 @@ import remarkGfm from 'remark-gfm';
 import remarkParse from 'remark-parse';
 import { unified } from 'unified';
 
-export enum CortexContractContextId {
-  Ai = 'ai',
-  DevelopmentCore = 'development-core',
-  GizmoPrime = 'gizmo-prime',
-  RootAuthoring = 'root-authoring',
-  Security = 'security',
-  Shared = 'shared',
-  Sre = 'sre',
-  WebDevelopment = 'web-development',
-}
-
-export enum CortexContractTeam {
+enum CortexContractTeam {
   Ai = 'ai',
   DevelopmentCore = 'development-core',
   GizmoPrime = 'gizmo-prime',
@@ -45,7 +34,6 @@ export enum CortexPolicyContractKind {
 }
 
 type CortexPolicyContractBase = {
-  readonly owner: CortexContractTeam;
   readonly document: string;
   readonly areas: readonly CortexPolicyArea[];
   readonly capabilities: readonly CortexPolicyCapability[];
@@ -66,8 +54,6 @@ export type CortexPolicyContract =
   CortexGeneralPolicyContract | CortexPersistedRepresentationPolicyContract;
 
 export type CortexContextContract = {
-  readonly id: CortexContractContextId;
-  readonly owner: CortexContractTeam;
   readonly authorityDocument: string;
   readonly ownsAreas: readonly CortexPolicyArea[];
   readonly imports: readonly string[];
@@ -140,14 +126,11 @@ export function compileCortexContracts(
       });
     }
     const documentOwner = cortexDocumentOwner(policyPath);
-    if (
-      documentOwner.kind === CortexDocumentOwnerResolutionKind.Known &&
-      documentOwner.owner !== policy.owner
-    ) {
+    if (documentOwner.kind === CortexDocumentOwnerResolutionKind.Unrecognized) {
       findings.push({
         code: CortexContractFindingCode.InvalidPolicyOwner,
         file: policyPath,
-        message: `Cortex policy ${policyPath} declares owner ${policy.owner}, but its document owner is ${documentOwner.owner}.`,
+        message: `Cortex policy ${policyPath} is outside every recognized ownership path.`,
       });
     }
     const safeguardArgs: ValidatePolicySafeguardsArgs = {
@@ -166,12 +149,11 @@ export function compileCortexContracts(
       findings.push({
         code: CortexContractFindingCode.MissingAuthorityDocument,
         file: authorityPath,
-        message: `Cortex context ${context.id} references a missing authority document: ${authorityPath}`,
+        message: `Cortex context references a missing authority document: ${authorityPath}`,
       });
       continue;
     }
-    const contextOwner = validatedContextOwner({
-      context,
+    const contextOwner = resolveContextOwner({
       authorityPath,
       findings,
     });
@@ -199,15 +181,16 @@ function uniqueContexts(
 ): ReadonlyMap<string, CortexContextContract> {
   const entries = new Map<string, CortexContextContract>();
   for (const context of args.contexts) {
-    if (entries.has(context.id)) {
+    const authorityPath = normalizePath(context.authorityDocument);
+    if (entries.has(authorityPath)) {
       args.findings.push({
         code: CortexContractFindingCode.DuplicateContext,
-        file: '.cortex/AGENTS.md',
-        message: `Cortex context ID is duplicated: ${context.id}`,
+        file: authorityPath,
+        message: `Cortex context authority is registered more than once: ${authorityPath}`,
       });
       continue;
     }
-    entries.set(context.id, context);
+    entries.set(authorityPath, context);
   }
   return entries;
 }
@@ -238,7 +221,7 @@ function uniquePolicies(
 
 enum CortexDocumentOwnerResolutionKind {
   Known = 'known',
-  OutsideTeamPolicy = 'outside-team-policy',
+  Unrecognized = 'unrecognized',
 }
 
 type CortexDocumentOwnerResolution =
@@ -246,7 +229,7 @@ type CortexDocumentOwnerResolution =
       readonly kind: CortexDocumentOwnerResolutionKind.Known;
       readonly owner: CortexContractTeam;
     }
-  | { readonly kind: CortexDocumentOwnerResolutionKind.OutsideTeamPolicy };
+  | { readonly kind: CortexDocumentOwnerResolutionKind.Unrecognized };
 
 function cortexDocumentOwner(
   documentPath: string,
@@ -271,31 +254,27 @@ function cortexDocumentOwner(
       return { kind: CortexDocumentOwnerResolutionKind.Known, owner };
     }
   }
-  return { kind: CortexDocumentOwnerResolutionKind.OutsideTeamPolicy };
+  return { kind: CortexDocumentOwnerResolutionKind.Unrecognized };
 }
 
-type ValidatedContextOwnerArgs = {
-  readonly context: CortexContextContract;
+type ResolveContextOwnerArgs = {
   readonly authorityPath: string;
   readonly findings: CortexContractFinding[];
 };
 
-function validatedContextOwner(
-  args: ValidatedContextOwnerArgs,
-): CortexContractTeam {
+function resolveContextOwner(
+  args: ResolveContextOwnerArgs,
+): CortexDocumentOwnerResolution {
   const documentOwner = cortexDocumentOwner(args.authorityPath);
-  if (
-    documentOwner.kind === CortexDocumentOwnerResolutionKind.OutsideTeamPolicy
-  )
-    return args.context.owner;
-  if (documentOwner.owner !== args.context.owner) {
+  if (documentOwner.kind === CortexDocumentOwnerResolutionKind.Unrecognized) {
     args.findings.push({
       code: CortexContractFindingCode.InvalidContextOwner,
       file: args.authorityPath,
-      message: `Cortex context ${args.context.id} declares owner ${args.context.owner}, but its authority document owner is ${documentOwner.owner}.`,
+      message: `Cortex context authority is outside every recognized ownership path: ${args.authorityPath}`,
     });
+    return documentOwner;
   }
-  return documentOwner.owner;
+  return documentOwner;
 }
 
 type ValidatePolicySafeguardsArgs = {
@@ -349,7 +328,7 @@ function validatePolicySafeguards(args: ValidatePolicySafeguardsArgs): void {
 
 type ValidateContextArgs = {
   readonly context: CortexContextContract;
-  readonly contextOwner: CortexContractTeam;
+  readonly contextOwner: CortexDocumentOwnerResolution;
   readonly authority: CortexContractDocument;
   readonly policies: ReadonlyMap<string, CortexPolicyContract>;
   readonly findings: CortexContractFinding[];
@@ -363,7 +342,7 @@ function validateContextImports(args: ValidateContextArgs): void {
       args.findings.push({
         code: CortexContractFindingCode.UnknownPolicyImport,
         file: args.authority.relativePath,
-        message: `Cortex context ${args.context.id} imports an unknown policy document: ${policyPath}`,
+        message: `Cortex context ${args.context.authorityDocument} imports an unknown policy document: ${policyPath}`,
       });
       continue;
     }
@@ -383,7 +362,8 @@ function validateContextImports(args: ValidateContextArgs): void {
 
 function validatePolicyReachability(args: ValidateContextArgs): void {
   for (const policy of args.policies.values()) {
-    if (policy.owner === args.contextOwner) continue;
+    if (contextOwnsPolicy({ contextOwner: args.contextOwner, policy }))
+      continue;
     const coverageArgs: SharedPolicyAreaArgs = {
       contextAreas: args.context.ownsAreas,
       policyAreas: policy.areas,
@@ -397,7 +377,7 @@ function validatePolicyReachability(args: ValidateContextArgs): void {
       args.findings.push({
         code: CortexContractFindingCode.MissingPolicyImport,
         file: args.authority.relativePath,
-        message: `Cortex context ${args.context.id} owns an area covered by foreign policy ${policy.document} but does not import it.`,
+        message: `Cortex context ${args.context.authorityDocument} owns an area covered by foreign policy ${policy.document} but does not import it.`,
       });
       continue;
     }
@@ -423,6 +403,21 @@ function validatePolicyReachability(args: ValidateContextArgs): void {
   }
 }
 
+type ContextOwnsPolicyArgs = {
+  readonly contextOwner: CortexDocumentOwnerResolution;
+  readonly policy: CortexPolicyContract;
+};
+
+function contextOwnsPolicy(args: ContextOwnsPolicyArgs): boolean {
+  if (args.contextOwner.kind !== CortexDocumentOwnerResolutionKind.Known)
+    return false;
+  const policyOwner = cortexDocumentOwner(normalizePath(args.policy.document));
+  return (
+    policyOwner.kind === CortexDocumentOwnerResolutionKind.Known &&
+    policyOwner.owner === args.contextOwner.owner
+  );
+}
+
 type MissingPolicyReferenceArgs = {
   readonly context: CortexContextContract;
   readonly policy: CortexPolicyContract;
@@ -434,7 +429,7 @@ function missingPolicyReference(
   return {
     code: CortexContractFindingCode.MissingPolicyReference,
     file: args.context.authorityDocument,
-    message: `Cortex context ${args.context.id} imports policy ${args.policy.document} but its authority document does not reference it.`,
+    message: `Cortex context ${args.context.authorityDocument} imports policy ${args.policy.document} but its authority document does not reference it.`,
   };
 }
 
@@ -531,5 +526,5 @@ function sharesArea(args: SharedPolicyAreaArgs): boolean {
 }
 
 function normalizePath(filePath: string): string {
-  return filePath.replaceAll(path.sep, '/');
+  return path.posix.normalize(filePath.replaceAll('\\', '/'));
 }

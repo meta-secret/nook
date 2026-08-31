@@ -443,19 +443,19 @@ ${gizmoIndexRows}
           code: CortexContractFindingCode.MissingPolicyReference,
           file: '.cortex/AGENTS.md',
           message:
-            'Cortex context root-authoring imports policy .cortex/teams/ai/dynamic-skills/cortex-writer.md but its authority document does not reference it.',
+            'Cortex context .cortex/AGENTS.md imports policy .cortex/teams/ai/dynamic-skills/cortex-writer.md but its authority document does not reference it.',
         },
         {
           code: CortexContractFindingCode.MissingPolicyReference,
           file: '.cortex/AGENTS.md',
           message:
-            'Cortex context root-authoring imports policy .cortex/teams/ai/dynamic-skills/cortex-article-structure/SKILL.md but its authority document does not reference it.',
+            'Cortex context .cortex/AGENTS.md imports policy .cortex/teams/ai/dynamic-skills/cortex-article-structure/SKILL.md but its authority document does not reference it.',
         },
         {
           code: CortexContractFindingCode.MissingPolicyReference,
           file: '.cortex/AGENTS.md',
           message:
-            'Cortex context root-authoring imports policy .cortex/teams/ai/dynamic-skills/cortex-consistency.md but its authority document does not reference it.',
+            'Cortex context .cortex/AGENTS.md imports policy .cortex/teams/ai/dynamic-skills/cortex-consistency.md but its authority document does not reference it.',
         },
       ],
       auditOk: false,

@@ -5,9 +5,7 @@ import { CORTEX_CONTRACT_REGISTRY } from '../src/lib/cortex-contract-registry.ts
 import {
   compileCortexContracts,
   CortexCompatibilityEvidence,
-  CortexContractContextId,
   CortexContractFindingCode,
-  CortexContractTeam,
   CortexPolicyContractKind,
   CortexPolicyArea,
   CortexPolicyCapability,
@@ -49,8 +47,6 @@ test('rejects a foreign policy that covers an owned area without an import', () 
   const registry = {
     contexts: [
       {
-        id: CortexContractContextId.Sre,
-        owner: CortexContractTeam.Sre,
         authorityDocument: SRE_AUTHORITY,
         ownsAreas: [CortexPolicyArea.GithubTypescript],
         imports: [],
@@ -58,7 +54,6 @@ test('rejects a foreign policy that covers an owned area without an import', () 
     ],
     policies: [
       {
-        owner: CortexContractTeam.WebDevelopment,
         document: WEB_BOOLEAN_POLICY,
         kind: CortexPolicyContractKind.General,
         areas: [CortexPolicyArea.GithubTypescript],
@@ -126,46 +121,29 @@ test('requires the importing authority to reference the policy document', () => 
   );
 });
 
-test('rejects a policy owner that disagrees with its Cortex path', () => {
-  const registryArgs: ForeignTypescriptRegistryArgs = {
-    imports: [WEB_BOOLEAN_POLICY],
-  };
-  const registry = foreignTypescriptRegistry(registryArgs);
-  const mismatchedRegistry = {
-    ...registry,
-    policies: registry.policies.map((policy) => ({
-      ...policy,
-      owner: CortexContractTeam.Sre,
-    })),
-  } satisfies CortexContractRegistry;
-  const authorityArgs: TestCortexDocumentArgs = {
-    relativePath: SRE_AUTHORITY,
-    content: `# SRE\n\n- [Enum policy](../web-dev/dynamic-skills/typescript-enums-over-booleans.md)\n`,
-  };
-  const compileArgs: CompileTestCortexRegistryArgs = {
-    registry: mismatchedRegistry,
-    documents: [document(authorityArgs), defaultDocument(WEB_BOOLEAN_POLICY)],
-  };
-  const findings = compile(compileArgs);
-
-  expect(findings).toContainEqual(
-    expect.objectContaining({
-      code: CortexContractFindingCode.InvalidPolicyOwner,
-      file: WEB_BOOLEAN_POLICY,
-    }),
-  );
-});
-
-test('derives context ownership from the authority path before reachability', () => {
-  const registryArgs: ForeignTypescriptRegistryArgs = {
-    contextOwner: CortexContractTeam.WebDevelopment,
-    imports: [],
-  };
-  const registry = foreignTypescriptRegistry(registryArgs);
+test('rejects a context authority outside recognized ownership paths', () => {
+  const rogueAuthority = '.cortex/rogue/AGENTS.md';
+  const registry = {
+    contexts: [
+      {
+        authorityDocument: rogueAuthority,
+        ownsAreas: [CortexPolicyArea.GithubTypescript],
+        imports: [],
+      },
+    ],
+    policies: [
+      {
+        document: WEB_BOOLEAN_POLICY,
+        kind: CortexPolicyContractKind.General,
+        areas: [CortexPolicyArea.GithubTypescript],
+        capabilities: [],
+      },
+    ],
+  } as const satisfies CortexContractRegistry;
   const compileArgs: CompileTestCortexRegistryArgs = {
     registry,
     documents: [
-      defaultDocument(SRE_AUTHORITY),
+      defaultDocument(rogueAuthority),
       defaultDocument(WEB_BOOLEAN_POLICY),
     ],
   };
@@ -174,13 +152,65 @@ test('derives context ownership from the authority path before reachability', ()
   expect(findings).toContainEqual(
     expect.objectContaining({
       code: CortexContractFindingCode.InvalidContextOwner,
-      file: SRE_AUTHORITY,
+      file: rogueAuthority,
     }),
   );
   expect(findings).toContainEqual(
     expect.objectContaining({
       code: CortexContractFindingCode.MissingPolicyImport,
-      file: SRE_AUTHORITY,
+      file: rogueAuthority,
+    }),
+  );
+});
+
+test('normalizes traversal before resolving context ownership', () => {
+  const authoredAuthority = '.cortex/teams/web-dev/../../rogue/AGENTS.md';
+  const normalizedAuthority = '.cortex/rogue/AGENTS.md';
+  const registry = {
+    contexts: [
+      {
+        authorityDocument: authoredAuthority,
+        ownsAreas: [],
+        imports: [],
+      },
+    ],
+    policies: [],
+  } as const satisfies CortexContractRegistry;
+  const compileArgs: CompileTestCortexRegistryArgs = {
+    registry,
+    documents: [defaultDocument(authoredAuthority)],
+  };
+
+  expect(compile(compileArgs)).toContainEqual(
+    expect.objectContaining({
+      code: CortexContractFindingCode.InvalidContextOwner,
+      file: normalizedAuthority,
+    }),
+  );
+});
+
+test('rejects a policy outside recognized ownership paths', () => {
+  const roguePolicy = '.cortex/rogue/policy.md';
+  const registry = {
+    contexts: [],
+    policies: [
+      {
+        document: roguePolicy,
+        kind: CortexPolicyContractKind.General,
+        areas: [CortexPolicyArea.CortexAuthoring],
+        capabilities: [],
+      },
+    ],
+  } as const satisfies CortexContractRegistry;
+  const compileArgs: CompileTestCortexRegistryArgs = {
+    registry,
+    documents: [defaultDocument(roguePolicy)],
+  };
+
+  expect(compile(compileArgs)).toContainEqual(
+    expect.objectContaining({
+      code: CortexContractFindingCode.InvalidPolicyOwner,
+      file: roguePolicy,
     }),
   );
 });
@@ -338,7 +368,6 @@ test('requires persisted policy to reference its schema authority', () => {
 });
 
 type ForeignTypescriptRegistryArgs = {
-  readonly contextOwner?: CortexContractTeam;
   readonly imports: readonly string[];
 };
 
@@ -348,8 +377,6 @@ function foreignTypescriptRegistry(
   return {
     contexts: [
       {
-        id: CortexContractContextId.Sre,
-        owner: args.contextOwner ?? CortexContractTeam.Sre,
         authorityDocument: SRE_AUTHORITY,
         ownsAreas: [CortexPolicyArea.GithubTypescript],
         imports: args.imports,
@@ -357,7 +384,6 @@ function foreignTypescriptRegistry(
     ],
     policies: [
       {
-        owner: CortexContractTeam.WebDevelopment,
         document: WEB_BOOLEAN_POLICY,
         kind: CortexPolicyContractKind.General,
         areas: [CortexPolicyArea.GithubTypescript],
@@ -379,7 +405,6 @@ function persistedRustRegistry(
     contexts: [],
     policies: [
       {
-        owner: CortexContractTeam.DevelopmentCore,
         document: RUST_POLICY,
         kind: CortexPolicyContractKind.PersistedRepresentation,
         schemaAuthority: args.schemaAuthority,
@@ -388,7 +413,6 @@ function persistedRustRegistry(
         capabilities: [],
       },
       {
-        owner: CortexContractTeam.DevelopmentCore,
         document: SCHEMA_POLICY,
         kind: CortexPolicyContractKind.General,
         areas: [],

@@ -188,7 +188,10 @@ task loom:cortex-audit
 The command reports failures in `contractFindings`.
 
 - Context ownership and policy applicability determine required policy imports.
-- Authority paths determine context ownership before applicability is checked.
+- Authority and policy document paths are their contract identities.
+- The registry does not repeat owner names beside those paths.
+- Recognized authority paths determine context and policy ownership.
+- A registered contract path without a recognized owner fails the audit.
 - A foreign policy import requires a direct reference from the context authority.
 - Direct references use Markdown syntax-tree semantics.
 - Persisted-representation policy requires a schema-versioning authority.

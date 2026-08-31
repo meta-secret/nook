@@ -1,6 +1,4 @@
 import {
-  CortexContractContextId,
-  CortexContractTeam,
   CortexPolicyContractKind,
   CortexPolicyArea,
   type CortexContractRegistry,
@@ -15,8 +13,6 @@ export enum RegisteredCortexPolicyPath {
 export const CORTEX_CONTRACT_REGISTRY = {
   contexts: [
     {
-      id: CortexContractContextId.RootAuthoring,
-      owner: CortexContractTeam.GizmoPrime,
       authorityDocument: '.cortex/AGENTS.md',
       ownsAreas: [CortexPolicyArea.CortexAuthoring],
       imports: [
@@ -28,21 +24,18 @@ export const CORTEX_CONTRACT_REGISTRY = {
   ],
   policies: [
     {
-      owner: CortexContractTeam.Ai,
       document: RegisteredCortexPolicyPath.Writer,
       kind: CortexPolicyContractKind.General,
       areas: [CortexPolicyArea.CortexAuthoring],
       capabilities: [],
     },
     {
-      owner: CortexContractTeam.Ai,
       document: RegisteredCortexPolicyPath.ArticleStructure,
       kind: CortexPolicyContractKind.General,
       areas: [CortexPolicyArea.CortexAuthoring],
       capabilities: [],
     },
     {
-      owner: CortexContractTeam.Ai,
       document: RegisteredCortexPolicyPath.Consistency,
       kind: CortexPolicyContractKind.General,
       areas: [CortexPolicyArea.CortexAuthoring],
