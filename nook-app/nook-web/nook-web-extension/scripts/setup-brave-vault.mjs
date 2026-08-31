@@ -127,7 +127,7 @@ async function advanceCreateVaultWizardToFinalStep(page) {
 }
 
 async function ensurePinProtectedPopup(popupPage) {
-  const companionHome = popupPage.getByTestId('extension-companion-home')
+  const companionHome = popupPage.getByTestId('extension-toolbar-menu')
   if (await companionHome.isVisible().catch(() => false)) {
     return
   }

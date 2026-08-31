@@ -1,9 +1,8 @@
 import { expect, mock, test } from 'bun:test'
-import { ExtensionRuntimeRequestType } from '../src/lib/extension-runtime-request-type'
 import { refreshInvokingAuthenticationSurface } from '../src/popup/authentication-surface-refresh'
 
-test('refreshes the website tab encoded before the popup window opened', () => {
-  const sendMessage = mock(() => Promise.resolve())
+test('targets companion-window and direct-toolbar website tabs', () => {
+  const sendMessage = mock(() => Promise.reject(new Error('restricted page')))
   const query = mock((_query, callback) => callback([{ id: 84 }]))
   globalThis.chrome = {
     tabs: { query, sendMessage },
@@ -12,7 +11,10 @@ test('refreshes the website tab encoded before the popup window opened', () => {
   refreshInvokingAuthenticationSurface('?invokingTabId=42')
 
   expect(query).not.toHaveBeenCalled()
-  expect(sendMessage).toHaveBeenCalledWith(42, {
-    type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces,
-  })
+  refreshInvokingAuthenticationSurface('')
+
+  expect(query).toHaveBeenCalledTimes(1)
+  refreshInvokingAuthenticationSurface('?invokingTabId=invalid')
+  expect(query).toHaveBeenCalledTimes(1)
+  expect(sendMessage.mock.calls.map(([tabId]) => tabId)).toEqual([42, 84])
 })

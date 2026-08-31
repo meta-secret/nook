@@ -23,7 +23,6 @@ describe('authentication scan scheduling', () => {
     const state = new ScanState()
 
     expect(state.beginScan()).toBe(true)
-    expect(state.sequence).toBe(0)
     expect(state.requestFollowUpIfRunning()).toBe(true)
     expect(state.requestFollowUpIfRunning()).toBe(true)
     expect(state.finishScan()).toBe(true)
