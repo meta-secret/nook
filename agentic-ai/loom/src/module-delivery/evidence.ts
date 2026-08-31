@@ -342,6 +342,8 @@ function assertSynthesisInputs(request: SynthesisInputsRequest): void {
 export function restoreModuleDeliveryCanonicalEvidenceReceipt(
   request: RestoreCanonicalEvidenceReceiptRequest,
 ): AcceptedModuleDeliveryEvidence {
+  if (request.node.kind === ModuleDeliveryTaskKind.Write)
+    throw new Error('Canonical evidence receipts cannot restore write tasks.');
   const existing = request.acceptedEvidence.map((evidence) => {
     request.registry.assert({ authority: request.authority, evidence });
     return request.registry.identity(evidence);
