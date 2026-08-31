@@ -532,15 +532,10 @@ function relevantRefsDigest(repositoryRoot: string): string {
   for (const record of gitBytes(invocation).toString('utf8').split('\n')) {
     if (record.length === 0) continue;
     const [ref = '', objectId = '', symref = ''] = record.split('\0');
-    if (
-      ref.startsWith('refs/nook/module-delivery/') ||
-      ref.startsWith('refs/nook/team-plan/') ||
-      ref.startsWith('refs/nook/team-plan-locks/')
-    )
+    if (/^refs\/nook\/(module-delivery|team-plan(-locks)?)\//u.test(ref))
       continue;
-    if (ref.length === 0 || objectId.length === 0) {
+    if (ref.length === 0 || objectId.length === 0)
       throw new Error('Repository ref fingerprint record is malformed.');
-    }
     fields.push(
       Buffer.from(ref, 'utf8'),
       Buffer.from(objectId, 'ascii'),
