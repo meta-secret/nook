@@ -564,11 +564,9 @@ function journalGenerationCounters(
       executionPrecedence = validation.executionPrecedence;
       selectedLeaseCount = 0;
       recordedCount = 0;
-      const continuingTaskIds = new Set(
-        validation.plan.nodes.map(({ taskId }) => taskId),
-      );
+      const planIds = new Set(validation.plan.nodes.map((node) => node.taskId));
       for (const taskId of latestAttempts.keys())
-        if (!continuingTaskIds.has(taskId)) latestAttempts.delete(taskId);
+        if (!planIds.has(taskId)) latestAttempts.delete(taskId);
       acceptedTasks.clear();
       failedAttempts.clear();
     } else if (event.kind === TeamPlanEventKind.Selected) {
