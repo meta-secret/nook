@@ -916,6 +916,7 @@ export function observeSubmit({
     result: FormSubmissionResult.NotObserved,
   };
   let replayingApprovedSubmission = false;
+  let pagePreventedSubmission = false;
   const rejectSubmission = (event?: SubmitEvent) => {
     event?.preventDefault();
     event?.stopImmediatePropagation();
@@ -939,7 +940,12 @@ export function observeSubmit({
       state.result = FormSubmissionResult.Submitted;
       return;
     }
-    event.preventDefault();
+    const nativePreventDefault = event.preventDefault.bind(event);
+    event.preventDefault = () => {
+      pagePreventedSubmission = true;
+      nativePreventDefault();
+    };
+    nativePreventDefault();
     if (state.result !== FormSubmissionResult.Rejected) {
       state.result = FormSubmissionResult.Submitted;
     }
@@ -949,7 +955,8 @@ export function observeSubmit({
   if (
     approval &&
     state.result === FormSubmissionResult.Submitted &&
-    approval.isApproved()
+    approval.isApproved() &&
+    !pagePreventedSubmission
   ) {
     replayingApprovedSubmission = true;
     try {
