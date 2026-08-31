@@ -462,6 +462,16 @@ function assertSubprocessEnvironment([request, object]: readonly [
         throw new Error(
           `Unsafe TypeScript subprocess environment key ${property.name.text} in ${request.sourcePath}.`,
         );
+      if (
+        (property.name.text === 'PATH' || property.name.text === 'Path') &&
+        !isPlatformPathEnvironmentValue({
+          value: property.initializer,
+          name: property.name.text,
+        })
+      )
+        throw new Error(
+          `Unsafe TypeScript subprocess PATH value in ${request.sourcePath}.`,
+        );
       names.add(property.name.text);
     }
   }
@@ -510,6 +520,25 @@ function assertSubprocessEnvironment([request, object]: readonly [
     throw new Error(
       `TypeScript Worker eval authority is forbidden in ${request.sourcePath}.`,
     );
+}
+
+type PlatformPathEnvironmentValueRequest = {
+  readonly value: ts.Expression;
+  readonly name: 'PATH' | 'Path';
+};
+
+function isPlatformPathEnvironmentValue(
+  request: PlatformPathEnvironmentValueRequest,
+): boolean {
+  const { value, name } = request;
+  return (
+    ts.isPropertyAccessExpression(value) &&
+    value.name.text === name &&
+    ts.isPropertyAccessExpression(value.expression) &&
+    value.expression.name.text === 'env' &&
+    ts.isIdentifier(value.expression.expression) &&
+    value.expression.expression.text === 'process'
+  );
 }
 
 function isSafeSubprocessEnvironmentKey(name: string): boolean {

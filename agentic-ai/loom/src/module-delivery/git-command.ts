@@ -31,6 +31,8 @@ export function runModuleDeliveryGit(
     !/^@[0-9]+ \+0000$/u.test(request.commitTimestamp)
   )
     throw new Error('Git commit timestamp must be canonical UTC epoch time.');
+  assertAbsoluteExecutableSearchPath(process.env.PATH);
+  assertAbsoluteExecutableSearchPath(process.env.Path);
   const args = [
     '-c',
     'core.hooksPath=/dev/null',
@@ -84,6 +86,20 @@ export function runModuleDeliveryGit(
     throw new Error(`Git command failed (${exitCode})${detail}`);
   }
   return { exitCode, stdout, stderr };
+}
+
+function assertAbsoluteExecutableSearchPath(value: string | undefined): void {
+  if (value === undefined) return;
+  const separator = process.platform === 'win32' ? ';' : ':';
+  for (const entry of value.split(separator))
+    if (
+      !entry.startsWith('/') &&
+      !entry.startsWith('\\\\') &&
+      !/^[A-Za-z]:[\\/]/.test(entry)
+    )
+      throw new Error(
+        'Git executable search path must contain absolute paths.',
+      );
 }
 
 export function gitText(result: GitCommandResult): string {

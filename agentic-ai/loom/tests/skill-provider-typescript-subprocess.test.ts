@@ -499,6 +499,16 @@ spawnSync('git', ['status'], {env:{${environmentName}:requestValue}});`),
     ).toThrow(
       `Unsafe TypeScript subprocess environment key ${environmentName}`,
     );
+  for (const environment of [
+    "{PATH:'./bin:/usr/bin'}",
+    '{PATH:request.path}',
+    "{Path:'relative-bin'}",
+  ])
+    expect(() =>
+      extract(`
+import {spawnSync} from 'node:child_process';
+spawnSync('git', ['status'], {env:${environment}});`),
+    ).toThrow('Unsafe TypeScript subprocess PATH value');
 });
 
 test('rejects shell-enabled subprocess options', () => {

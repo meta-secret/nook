@@ -116,16 +116,13 @@ test('routes Hive Console writes to Web Development', () => {
 });
 
 test('requires recursive or file-shaped ordinary write claims', () => {
-  expect(
-    accepted(
-      ordinaryWrite({
-        team: TeamKey.Sre,
-        moduleRoot: 'infra',
-        write: 'infra',
-      }),
-    ),
-  ).toBe(false);
-  for (const write of ['infra/**', 'infra/main.tf'])
+  for (const write of ['infra', 'infra/k0s'])
+    expect(
+      accepted(
+        ordinaryWrite({ team: TeamKey.Sre, moduleRoot: 'infra', write }),
+      ),
+    ).toBe(false);
+  for (const write of ['infra/**', 'infra/k0s/**', 'infra/main.tf'])
     expect(
       accepted(
         ordinaryWrite({ team: TeamKey.Sre, moduleRoot: 'infra', write }),
@@ -151,6 +148,47 @@ test('routes the web Docker subtree exclusively to SRE', () => {
   expect(
     accepted(ordinaryWrite({ team: TeamKey.WebDevelopment, ...request })),
   ).toBe(false);
+});
+
+test('rejects globs that overlap a more-specific foreign root', () => {
+  expect(
+    accepted(
+      ordinaryWrite({
+        team: TeamKey.WebDevelopment,
+        moduleRoot: 'nook-app/nook-web/nook-web-app',
+        write: 'nook-app/nook-web/nook-web-app/*',
+      }),
+    ),
+  ).toBe(false);
+  expect(
+    accepted(
+      ordinaryWrite({
+        team: TeamKey.WebDevelopment,
+        moduleRoot: 'nook-app/nook-web/nook-web-app',
+        write: 'nook-app/nook-web/nook-web-app/src/*.ts',
+      }),
+    ),
+  ).toBe(true);
+});
+
+test('routes app Docker build definitions exclusively to SRE', () => {
+  for (const write of [
+    'nook-app/nook-web/nook-web-app/Dockerfile',
+    'nook-app/nook-web/nook-web-app/docker-bake.hcl',
+  ]) {
+    expect(
+      accepted(ordinaryWrite({ team: TeamKey.Sre, moduleRoot: write, write })),
+    ).toBe(true);
+    expect(
+      accepted(
+        ordinaryWrite({
+          team: TeamKey.WebDevelopment,
+          moduleRoot: 'nook-app/nook-web/nook-web-app',
+          write,
+        }),
+      ),
+    ).toBe(false);
+  }
 });
 
 test('separates portable platform Rust from operational ownership', () => {
