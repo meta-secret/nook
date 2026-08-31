@@ -107,6 +107,24 @@ creation, exact-head evidence, readiness, merge, remote verification, and
 Workbench completion. A worker commit is task completion, not mission
 completion.
 
+### Scheduled-task and PR scope
+
+- Codex scheduled tasks are prohibited. Do not create, suggest, or update a
+  Codex automation, heartbeat, reminder, recurring follow-up, or deferred task
+  for repository work.
+- An agent may plan its own sequencing, polling cadence, and bounded waits
+  inside the active task. That plan is ephemeral execution behavior. It must
+  not be materialized as a Codex scheduled task.
+- Repository-owned GitHub Actions, Workbench automation fields, and Hive
+  reconciliation are separate systems governed by their existing authorities.
+- A request to test, monitor, and merge a PR when ready remains one active
+  delivery task. Use bounded direct waits against that PR and merge it in the
+  same task when readiness is satisfied.
+- The target PR is the delivery scope. Consult `origin/main` only when the PR
+  workflow requires base freshness. Do not monitor, diagnose, or repair the
+  Main workflow or unrelated default-branch health unless the user explicitly
+  assigns that separate work.
+
 Use the detailed authority only when its stage is reached:
 
 - [Canonical delegation](gizmo/workflows/subagent-delegation.md) owns task,
