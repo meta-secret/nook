@@ -4,6 +4,11 @@ import type {
   AuthenticationDetailedPasskeyControlObservation,
   AuthenticationPageObservationFacts,
   AuthenticationWorkflowSnapshot,
+  AuthenticationPageObservationFactsBatch,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
+  authentication_page_observation_facts_match_binding,
+  bind_authentication_page_observation_facts,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 export type AuthenticationPageObservationView =
@@ -18,16 +23,44 @@ export type AuthenticationWorkflowApproval = {
 type AuthenticationWorkflowApprovalPair = {
   approved: AuthenticationWorkflowApproval
   current: AuthenticationWorkflowApproval
+  matcherDependencies?: AuthenticationWorkflowApprovalMatcherDependencies
 }
+
+type AuthenticationWorkflowApprovalMatcherDependencies = {
+  bind_authentication_page_observation_facts: typeof bind_authentication_page_observation_facts
+  authentication_page_observation_facts_match_binding: typeof authentication_page_observation_facts_match_binding
+}
+
+const authenticationWorkflowApprovalMatcherDependencies: AuthenticationWorkflowApprovalMatcherDependencies =
+  {
+    bind_authentication_page_observation_facts,
+    authentication_page_observation_facts_match_binding,
+  }
 
 export function authenticationWorkflowApprovalsMatch({
   approved,
   current,
+  matcherDependencies,
 }: AuthenticationWorkflowApprovalPair): boolean {
-  return (
-    approved.workflowKey === current.workflowKey &&
-    JSON.stringify(approved.facts) === JSON.stringify(current.facts)
-  )
+  const dependencies =
+    matcherDependencies ?? authenticationWorkflowApprovalMatcherDependencies
+  if (approved.workflowKey !== current.workflowKey) return false
+  const approvedBatch: AuthenticationPageObservationFactsBatch = {
+    observations: [approved.facts],
+  }
+  const currentBatch: AuthenticationPageObservationFactsBatch = {
+    observations: [current.facts],
+  }
+  try {
+    const binding =
+      dependencies.bind_authentication_page_observation_facts(approvedBatch)
+    return dependencies.authentication_page_observation_facts_match_binding(
+      binding,
+      currentBatch,
+    )
+  } catch {
+    return false
+  }
 }
 
 export enum AuthenticationWorkflowSnapshotMessageType {

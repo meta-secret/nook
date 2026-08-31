@@ -5,6 +5,7 @@
 //! user is in it, and which action Nook may offer next.
 
 mod candidate_selection;
+mod observation_binding;
 mod observation_facts;
 mod observation_validation;
 mod snapshot_contract;
@@ -14,10 +15,16 @@ pub use candidate_selection::{
     AuthenticationFormObservationPriority, authentication_form_observation_priority,
     classify_authentication_workflow_candidates,
 };
+pub use observation_binding::{
+    AuthenticationObservationBindingError, AuthenticationObservationBindingToken,
+    authentication_page_observation_facts_match_binding,
+    bind_authentication_page_observation_facts,
+};
 pub use observation_facts::{
     AuthenticationAuthenticatorObservationFacts, AuthenticationAuthenticatorSetupObservation,
     AuthenticationBackupCodesObservation, AuthenticationCeremonyContextObservation,
-    AuthenticationCeremonyObservationFacts, AuthenticationDetailedAdvanceControlObservation,
+    AuthenticationCeremonyObservationFacts, AuthenticationCredentialSubmissionFacts,
+    AuthenticationCredentialSubmissionObservation, AuthenticationDetailedAdvanceControlObservation,
     AuthenticationDetailedPasskeyControlCandidateObservation,
     AuthenticationDetailedPasskeyControlObservation, AuthenticationFieldObservationFacts,
     AuthenticationPageObservationFacts, AuthenticationPageObservationFactsBatch,

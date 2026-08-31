@@ -46,20 +46,45 @@ const validMessage = {
   },
 }
 
+function approvalMatcherDependencies(): Parameters<
+  typeof authenticationWorkflowApprovalsMatch
+>[0]['matcherDependencies'] {
+  let approvedFactsJson = ''
+  return {
+    bind_authentication_page_observation_facts: (approvedFacts) => {
+      approvedFactsJson = JSON.stringify(approvedFacts)
+      return {} as ReturnType<
+        NonNullable<
+          Parameters<
+            typeof authenticationWorkflowApprovalsMatch
+          >[0]['matcherDependencies']
+        >['bind_authentication_page_observation_facts']
+      >
+    },
+    authentication_page_observation_facts_match_binding: (
+      _binding,
+      currentFacts,
+    ) => approvedFactsJson === JSON.stringify(currentFacts),
+  }
+}
+
 describe('authentication workflow snapshot messages', () => {
   test('invalidates pending approval after an action or fact transition', () => {
     const facts = validMessage.payload.observations[0]
     const approved = { workflowKey: 'login:continue', facts }
+    const dependencies = approvalMatcherDependencies()
     expect(
       authenticationWorkflowApprovalsMatch({
         approved,
         current: { workflowKey: 'login:continue', facts },
+        matcherDependencies: dependencies,
       }),
     ).toBe(true)
     expect(
       authenticationWorkflowApprovalsMatch({
         approved,
         current: { workflowKey: 'otp:fill', facts },
+        matcherDependencies: dependencies,
       }),
     ).toBe(false)
     expect(
@@ -72,12 +97,14 @@ describe('authentication workflow snapshot messages', () => {
             fields: { ...facts.fields, oneTimeCodeFieldCount: 1 },
           },
         },
+        matcherDependencies: dependencies,
       }),
     ).toBe(false)
   })
 
   test('invalidates an authenticator picker across OTP challenge facts', () => {
     const approvedFacts = validMessage.payload.observations[0]
+    const dependencies = approvalMatcherDependencies()
     expect(
       authenticationWorkflowApprovalsMatch({
         approved: { workflowKey: 'login:otp', facts: approvedFacts },
@@ -91,6 +118,7 @@ describe('authentication workflow snapshot messages', () => {
             },
           },
         },
+        matcherDependencies: dependencies,
       }),
     ).toBe(false)
   })

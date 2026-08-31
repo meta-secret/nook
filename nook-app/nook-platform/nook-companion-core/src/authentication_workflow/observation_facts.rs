@@ -10,6 +10,7 @@ mod authenticator;
 mod ceremony;
 mod fields;
 mod passkey;
+mod submission;
 pub use authenticator::{
     AuthenticationAuthenticatorObservationFacts, AuthenticationAuthenticatorSetupObservation,
     AuthenticationBackupCodesObservation,
@@ -25,6 +26,9 @@ pub use passkey::{
     authentication_passkey_control_candidate_is_safe,
     authentication_passkey_control_evidence_is_safe,
 };
+pub use submission::{
+    AuthenticationCredentialSubmissionFacts, AuthenticationCredentialSubmissionObservation,
+};
 
 /// Raw browser facts grouped by the authentication domains that own their conversion.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
@@ -34,19 +38,22 @@ pub struct AuthenticationPageObservationFacts {
     pub fields: AuthenticationFieldObservationFacts,
     pub ceremony: AuthenticationCeremonyObservationFacts,
     pub authenticator: AuthenticationAuthenticatorObservationFacts,
+    /// Exact effective route whose method and actionability were approved for disclosure.
+    pub credential_submission: AuthenticationCredentialSubmissionObservation,
     /// Detailed control evidence is classified in Rust; the reduced ceremony flag stays fail-closed.
     #[serde(default)]
     pub detailed_advance_control: AuthenticationDetailedAdvanceControlObservation,
 }
 
 impl AuthenticationPageObservationFacts {
-    fn is_bounded(&self) -> bool {
+    pub(super) fn is_bounded(&self) -> bool {
         self.fields.is_bounded()
             && self.authenticator.matching_passkey_account_count
                 <= crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT
             && self.ceremony.is_bounded()
             && self.detailed_advance_control.is_bounded()
             && self.authenticator.detailed_passkey_control.is_bounded()
+            && self.credential_submission.is_bounded()
     }
 
     #[must_use]
@@ -117,6 +124,15 @@ pub struct AuthenticationPageObservationFactsBatch {
 }
 
 impl AuthenticationPageObservationFactsBatch {
+    pub(super) fn is_valid_binding(&self) -> bool {
+        !self.observations.is_empty()
+            && self.observations.len() <= crate::MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS
+            && self
+                .observations
+                .iter()
+                .all(AuthenticationPageObservationFacts::is_bounded)
+    }
+
     #[must_use]
     pub fn classify(&self) -> AuthenticationWorkflowMatch {
         if self.observations.len() > crate::MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS
@@ -159,6 +175,7 @@ mod tests {
             fields: AuthenticationFieldObservationFacts {
                 username_field_count: 1,
                 current_password_field_count: 1,
+                actionable_password_field_count: 1,
                 ..Default::default()
             },
             detailed_advance_control: AuthenticationDetailedAdvanceControlObservation::observed(
@@ -216,7 +233,7 @@ mod tests {
                 observations: vec![mismatched],
             }
             .classify(),
-            AuthenticationWorkflowMatch::NoMatch
+            AuthenticationWorkflowMatch::Rejected
         );
     }
 
@@ -444,6 +461,7 @@ mod tests {
             fields: AuthenticationFieldObservationFacts {
                 username_field_count: 1,
                 current_password_field_count: 1,
+                actionable_password_field_count: 1,
                 ..Default::default()
             },
             ceremony: AuthenticationCeremonyObservationFacts {
@@ -475,6 +493,7 @@ mod tests {
             fields: AuthenticationFieldObservationFacts {
                 username_field_count: 1,
                 current_password_field_count: 1,
+                actionable_password_field_count: 1,
                 ..Default::default()
             },
             ceremony: AuthenticationCeremonyObservationFacts {
@@ -507,6 +526,7 @@ mod tests {
             fields: AuthenticationFieldObservationFacts {
                 username_field_count: 1,
                 current_password_field_count: 1,
+                actionable_password_field_count: 1,
                 ..Default::default()
             },
             ceremony: AuthenticationCeremonyObservationFacts {
@@ -539,6 +559,7 @@ mod tests {
             fields: AuthenticationFieldObservationFacts {
                 username_field_count: 1,
                 new_password_field_count: 1,
+                actionable_password_field_count: 1,
                 ..Default::default()
             },
             ceremony: AuthenticationCeremonyObservationFacts {
@@ -570,6 +591,7 @@ mod tests {
             fields: AuthenticationFieldObservationFacts {
                 username_field_count: 1,
                 new_password_field_count: 1,
+                actionable_password_field_count: 1,
                 ..Default::default()
             },
             ceremony: AuthenticationCeremonyObservationFacts {

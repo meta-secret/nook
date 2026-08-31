@@ -10,6 +10,7 @@ import {
 import {
   authenticationPageObservationFacts,
   fillLoginCredentials,
+  FormSubmissionResult,
   PasswordFormQueryKind,
   PasswordFormScopeKind,
   submitLoginForm,
@@ -20,6 +21,10 @@ import {
 const wholeDocumentPasswordFormSubmission: Parameters<
   typeof submitLoginForm
 >[0] = { kind: PasswordFormQueryKind.Root, root: document }
+
+function didSubmit(request: Parameters<typeof submitLoginForm>[0]): boolean {
+  return submitLoginForm(request) === FormSubmissionResult.Submitted
+}
 
 function ownedFormId(observation: PasswordFormObservation): string {
   return observation.formScope.kind === PasswordFormScopeKind.Owned
@@ -278,7 +283,7 @@ describe('authentication workflow ranking', () => {
     document.querySelector('form')?.addEventListener('submit', (event) => {
       event.preventDefault()
     })
-    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
+    expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(true)
     expect(activated).toBe('sign-in')
   })
 

@@ -9,6 +9,7 @@ import type {
   AuthenticationAdvanceControlObservation,
   AuthenticationDetailedPasskeyControlCandidateObservation,
   AuthenticationDetailedPasskeyControlObservation,
+  AuthenticationCredentialSubmissionObservation,
   AuthenticationPageObservationFacts,
   AuthenticationPasskeyControlObservation,
   AuthenticationUsernameEvidence,
@@ -19,7 +20,6 @@ import {
   findPasswordFields,
   findUsernameFields,
   hasAutocompleteToken,
-  preferredOneTimeCodeFillField,
   isAuthUsernameField,
   controlAssociatesWithObservation,
   isLocallyAdjacentToOwnedForm,
@@ -55,6 +55,7 @@ import {
   formBlocksCredentialDisclosure,
   selectedSubmitterBlocksCredentialDisclosure,
   formSubmissionMethod,
+  FormSubmissionResult,
   PageControlSubmissionMethod,
   isRenderedControl,
   observeSubmit,
@@ -63,12 +64,22 @@ import {
   PasswordFormQueryKind,
   semanticSubmitControlSelector,
   type LoginAdvanceControl,
+  type FormSubmissionApproval,
   type PasswordFormScopeQuery,
 } from "./password-form-submission-controls";
 import {
   appendIndependentPasskeyOnlyWorkflows,
   summarizePasskeyOnlyWorkflowForms,
 } from "./password-form-passkey-only-workflows";
+import {
+  beginLoginCredentialFill,
+  clearLoginCredentials,
+  setNativeInputValue,
+  trackLoginCredentialField,
+  type LoginCredentialsFillRequest,
+  LoginCredentialsLookupKind,
+  type LoginCredentialsLookup,
+} from "./password-form-field-actions";
 
 export {
   findOneTimeCodeFields,
@@ -86,16 +97,32 @@ export type {
   PasswordFormScope,
 } from "./password-form-fields";
 export {
+  clearLoginCredentials,
+  fillGeneratedPassword,
+  fillOneTimeCode,
+} from "./password-form-field-actions";
+export type {
+  GeneratedPasswordFillRequest,
+  LoginCredentials,
+  LoginCredentialsFillRequest,
+  LoginCredentialsLookup,
+  OneTimeCodeFillRequest,
+} from "./password-form-field-actions";
+export { LoginCredentialsLookupKind } from "./password-form-field-actions";
+export {
+  FormSubmissionResult,
   PasswordFormQueryKind,
   type PasswordFormScopeQuery,
 } from "./password-form-submission-controls";
-
 void companionWasmReady;
 const passkeyControlAbsent =
   "absent" satisfies AuthenticationPasskeyControlObservation;
 const passkeyControlPresent =
   "present" satisfies AuthenticationPasskeyControlObservation;
-
+const credentialSubmissionAbsent =
+  "absent" satisfies AuthenticationCredentialSubmissionObservation["kind"];
+const credentialSubmissionObserved =
+  "observed" satisfies AuthenticationCredentialSubmissionObservation["kind"];
 export type PasswordFormSummary = {
   passwordFieldCount: number;
   currentPasswordFieldCount: number;
@@ -108,68 +135,17 @@ export type PasswordFormSummary = {
   formCount: number;
   observedAt: number;
 };
-
-export type LoginCredentials = {
-  username: string;
-  password: string;
-};
-
-export enum LoginCredentialsLookupKind {
-  Absent = "absent",
-  Found = "found",
-}
-
-export type LoginCredentialsLookup =
-  | { kind: LoginCredentialsLookupKind.Absent }
-  | {
-      kind: LoginCredentialsLookupKind.Found;
-      credentials: LoginCredentials;
-    };
-
 export type PasswordFormObservation = {
   root: ParentNode;
   formScope: PasswordFormScope;
   summary: PasswordFormSummary;
 };
-
 type AuthenticationObservationFactsRequest = {
   observation: PasswordFormObservation;
   authenticatorSetupHint: boolean;
   backupCodesHint: boolean;
 };
-
-type NativeInputValueMutation = { input: HTMLInputElement; value: string };
-
 type PasswordFormSummaryRequest = PasswordFormScopeQuery;
-
-export type OneTimeCodeFillRequest = PasswordFormScopeQuery & { code: string };
-
-export type LoginCredentialsFillRequest = PasswordFormScopeQuery & {
-  credentials: LoginCredentials;
-};
-
-export type GeneratedPasswordFillRequest = PasswordFormScopeQuery & {
-  password: string;
-};
-
-function setNativeInputValue({ input, value }: NativeInputValueMutation): void {
-  const prototype = Object.getPrototypeOf(input) as HTMLInputElement;
-  const descriptor = Object.getOwnPropertyDescriptor(prototype, "value");
-  if (descriptor?.set) {
-    descriptor.set.call(input, value);
-  } else {
-    input.value = value;
-  }
-  const nookTypedArgs0_0: ConstructorParameters<typeof Event>[1] = {
-    bubbles: true,
-  };
-  input.dispatchEvent(new Event("input", nookTypedArgs0_0));
-  const nookTypedArgs0_1: ConstructorParameters<typeof Event>[1] = {
-    bubbles: true,
-  };
-  input.dispatchEvent(new Event("change", nookTypedArgs0_1));
-}
-
 function passwordFieldQuery(
   request: PasswordFormScopeQuery,
 ): PasswordFieldQuery {
@@ -178,7 +154,6 @@ function passwordFieldQuery(
   }
   return { root: request.root, formScope: request.formScope };
 }
-
 function summarizeRoot(
   request: PasswordFormSummaryRequest,
 ): PasswordFormSummary {
@@ -204,7 +179,6 @@ function summarizeRoot(
     return hasAutocompleteToken(nookArrowArgs1);
   }).length;
   const forms = new Set<HTMLFormElement>();
-
   for (const field of [
     ...passwordFields,
     ...usernameFields,
@@ -214,7 +188,6 @@ function summarizeRoot(
       forms.add(field.form);
     }
   }
-
   return {
     passwordFieldCount: passwordFields.length,
     currentPasswordFieldCount,
@@ -229,7 +202,6 @@ function summarizeRoot(
     observedAt: Date.now(),
   };
 }
-
 export function summarizePasswordForms(): PasswordFormSummary {
   const nookTypedArgs0_9: PasswordFormSummaryRequest = {
     kind: PasswordFormQueryKind.Root,
@@ -237,7 +209,6 @@ export function summarizePasswordForms(): PasswordFormSummary {
   };
   return summarizeRoot(nookTypedArgs0_9);
 }
-
 const emptyPasswordFormSummary: PasswordFormSummary = {
   passwordFieldCount: 0,
   currentPasswordFieldCount: 0,
@@ -260,7 +231,6 @@ function passwordFormPriority(observation: PasswordFormObservation): number {
     authenticationPageObservationFacts(factsRequest),
   );
 }
-
 function scopedControlRoot({
   root,
   formScope,
@@ -269,7 +239,6 @@ function scopedControlRoot({
     ? formScope.owner.ownerDocument
     : root;
 }
-
 function scopedAdvanceControls(
   observation: PasswordFormObservation,
 ): HTMLElement[] {
@@ -293,7 +262,10 @@ function scopedAdvanceControls(
       : !control.form;
   });
 }
-
+type SemanticSubmitControlPair = [HTMLElement, HTMLElement];
+function semanticSubmitControlsFirst(...pair: SemanticSubmitControlPair): number {
+  return Number(pair[1].matches(semanticSubmitControlSelector)) - Number(pair[0].matches(semanticSubmitControlSelector));
+}
 type PageControlObservationRequest = {
   observation: PasswordFormObservation;
   control: HTMLElement;
@@ -301,7 +273,6 @@ type PageControlObservationRequest = {
   semanticSubmitControlCount: number;
   explicitlyLocallyScoped?: boolean;
 };
-
 function pageControlObservation({
   observation,
   control,
@@ -443,7 +414,7 @@ export function authenticationPageObservationFacts({
 }: AuthenticationObservationFactsRequest): AuthenticationPageObservationFacts {
   const controlRoot = scopedControlRoot(observation);
   const authenticationUsername = usernameEvidence(observation);
-  const advanceControls = scopedAdvanceControls(observation);
+  const advanceControls = scopedAdvanceControls(observation).sort(semanticSubmitControlsFirst);
   const semanticSubmitControlCount =
     countedSemanticSubmitControls(advanceControls);
   const passkeyControls = findPasskeyControls(controlRoot).filter(
@@ -477,6 +448,14 @@ export function authenticationPageObservationFacts({
   const oneTimeCodeHandlerSignals = boundAuthenticationControlObservations(
     oneTimeCodeBoundRequest,
   );
+  const passwordFieldQuery: PasswordFieldQuery = {
+    root: observation.root,
+    formScope: observation.formScope,
+  };
+  const passwordFields = findPasswordFields(passwordFieldQuery);
+  const readonlyPasswordFieldCount = passwordFields.filter(
+    (field) => field.readOnly,
+  ).length;
   let detailedAdvanceControl: AuthenticationPageObservationFacts["detailedAdvanceControl"] =
     { kind: PasskeyControlLookupKind.Absent };
   const advanceObservations = advanceControls.flatMap((control) => {
@@ -498,8 +477,7 @@ export function authenticationPageObservationFacts({
       candidate.actionability === "actionable" &&
       authentication_advance_control_is_safe(candidate),
   };
-  const boundedAdvanceObservations =
-    boundAuthenticationControlObservations(advanceBoundRequest);
+  const boundedAdvanceObservations = boundAuthenticationControlObservations(advanceBoundRequest);
   if (boundedAdvanceObservations.length > 0) {
     detailedAdvanceControl = {
       kind: "observed",
@@ -563,6 +541,57 @@ export function authenticationPageObservationFacts({
   const contextDestinationIdentity = observedFormDestination(
     observation.formScope,
   );
+  const implicitSubmissionAvailable =
+    observation.formScope.kind === PasswordFormScopeKind.Owned &&
+    !boundedAdvanceObservations.some(({ actionability }) => actionability === "actionable") &&
+    !advanceControls.some(
+      (control) =>
+        control.matches(semanticSubmitControlSelector) &&
+        !controlIsInert(control),
+    ) &&
+    !(
+      observation.summary.currentPasswordFieldCount +
+        observation.summary.genericPasswordFieldCount +
+        observation.summary.newPasswordFieldCount >
+        0 && formBlocksCredentialDisclosure(observation.formScope.owner)
+  );
+  let credentialSubmission: AuthenticationCredentialSubmissionObservation = {
+    kind: credentialSubmissionAbsent,
+  };
+  const selectedAdvanceObservation = boundedAdvanceObservations[0];
+  const selectedSubmissionMethod =
+    selectedAdvanceObservation?.submissionMethod;
+  if (
+    selectedAdvanceObservation &&
+    selectedAdvanceObservation.actionability === "actionable" &&
+    selectedSubmissionMethod &&
+    selectedSubmissionMethod !== PageControlSubmissionMethod.Absent
+  ) {
+    credentialSubmission = {
+      kind: credentialSubmissionObserved,
+      facts: {
+        actionability: selectedAdvanceObservation.actionability,
+        method: selectedSubmissionMethod,
+        sourceOrigin: selectedAdvanceObservation.sourceOrigin,
+        formIdentity: selectedAdvanceObservation.formIdentity,
+        destinationIdentity: selectedAdvanceObservation.destinationIdentity,
+      },
+    };
+  } else if (
+    implicitSubmissionAvailable &&
+    observation.formScope.kind === PasswordFormScopeKind.Owned
+  ) {
+    credentialSubmission = {
+      kind: credentialSubmissionObserved,
+      facts: {
+        actionability: "actionable",
+        method: formSubmissionMethod(observation.formScope.owner),
+        sourceOrigin: location.origin,
+        formIdentity: contextFormIdentity,
+        destinationIdentity: contextDestinationIdentity,
+      },
+    };
+  }
   return {
     fields: {
       usernameFieldCount: observation.summary.usernameFieldCount,
@@ -570,6 +599,9 @@ export function authenticationPageObservationFacts({
       newPasswordFieldCount: observation.summary.newPasswordFieldCount,
       genericPasswordFieldCount: observation.summary.genericPasswordFieldCount,
       oneTimeCodeFieldCount: observation.summary.oneTimeCodeFieldCount,
+      actionablePasswordFieldCount:
+        passwordFields.length - readonlyPasswordFieldCount,
+      readonlyPasswordFieldCount,
     },
     ceremony: {
       oneTimeCodeProgression: "advance-control-required",
@@ -588,19 +620,7 @@ export function authenticationPageObservationFacts({
         observation.formScope.kind === PasswordFormScopeKind.Owned
           ? formSubmissionMethod(observation.formScope.owner)
           : PageControlSubmissionMethod.Absent,
-      advanceControl:
-        observation.formScope.kind === PasswordFormScopeKind.Owned &&
-        !advanceControls.some(
-          (control) =>
-            control.matches(semanticSubmitControlSelector) &&
-            !controlIsInert(control),
-        ) &&
-        !(
-          observation.summary.currentPasswordFieldCount +
-            observation.summary.genericPasswordFieldCount +
-            observation.summary.newPasswordFieldCount >
-            0 && formBlocksCredentialDisclosure(observation.formScope.owner)
-        )
+      advanceControl: implicitSubmissionAvailable
           ? "implicit-submission"
           : "absent",
     },
@@ -614,6 +634,7 @@ export function authenticationPageObservationFacts({
       matchingPasskeyAccountCount: 0,
       detailedPasskeyControl,
     },
+    credentialSubmission,
     detailedAdvanceControl,
   };
 }
@@ -724,34 +745,29 @@ export function summarizeAuthenticationWorkflowForms(): PasswordFormObservation[
   };
   return appendIndependentPasskeyOnlyWorkflows(mergeRequest);
 }
-export function fillOneTimeCode(request: OneTimeCodeFillRequest): boolean {
-  const nookTypedArgs0_16 = passwordFieldQuery(request);
-  const field = preferredOneTimeCodeFillField(
-    findOneTimeCodeFields(nookTypedArgs0_16),
-  );
-  if (!field) return false;
-  const nookTypedArgs0_17: Parameters<typeof setNativeInputValue>[0] = {
-    input: field,
-    value: request.code,
-  };
-  setNativeInputValue(nookTypedArgs0_17);
-  field.focus();
-  return true;
-}
 export function fillLoginCredentials(
   request: LoginCredentialsFillRequest,
 ): boolean {
+  beginLoginCredentialFill(request);
   const nookTypedArgs0_18 = passwordFieldQuery(request);
-  const passwordFields = findPasswordFields(nookTypedArgs0_18);
+  const observedPasswordFields = findPasswordFields(nookTypedArgs0_18);
+  const passwordFields = observedPasswordFields.filter(
+    (field) => !field.readOnly,
+  );
   const nookTypedArgs0_19 = passwordFieldQuery(request);
   const usernameCandidates = findUsernameFields(nookTypedArgs0_19);
   const usernameField = usernameCandidates[0];
+  if (observedPasswordFields.length > 0 && passwordFields.length === 0) {
+    return false;
+  }
   if (passwordFields.length === 0) {
     if (!usernameField) return false;
-    const nookTypedArgs0_20: Parameters<typeof setNativeInputValue>[0] = {
+    const nookTypedArgs0_20: Parameters<typeof trackLoginCredentialField>[0] = {
       input: usernameField,
+      request,
       value: request.credentials.username,
     };
+    trackLoginCredentialField(nookTypedArgs0_20);
     setNativeInputValue(nookTypedArgs0_20);
     usernameField.focus();
     return true;
@@ -759,7 +775,7 @@ export function fillLoginCredentials(
   const passwordField = passwordFields[0];
   const approvedPasswordForm = passwordField.form;
   const passwordFieldRemainsEligible = (): boolean =>
-    passwordField.form === approvedPasswordForm &&
+    !passwordField.readOnly && passwordField.form === approvedPasswordForm &&
     findPasswordFields(passwordFieldQuery(request)).includes(passwordField);
   function formBlocksFill(form: HTMLFormElement): boolean {
     const advanceRequest: OwnedAdvanceControlRequest = { request, form };
@@ -777,46 +793,29 @@ export function fillLoginCredentials(
   }
   if (passwordFieldBlocksFill()) return false;
   if (usernameField) {
-    const nookTypedArgs0_21: Parameters<typeof setNativeInputValue>[0] = {
+    const nookTypedArgs0_21: Parameters<typeof trackLoginCredentialField>[0] = {
       input: usernameField,
+      request,
       value: request.credentials.username,
     };
+    trackLoginCredentialField(nookTypedArgs0_21);
     setNativeInputValue(nookTypedArgs0_21);
-    if (passwordFieldBlocksFill()) return false;
+    if (passwordFieldBlocksFill()) {
+      clearLoginCredentials(request);
+      return false;
+    }
   }
-  const nookTypedArgs0_22: Parameters<typeof setNativeInputValue>[0] = {
+  const nookTypedArgs0_22: Parameters<typeof trackLoginCredentialField>[0] = {
     input: passwordField,
+    request,
     value: request.credentials.password,
   };
+  trackLoginCredentialField(nookTypedArgs0_22);
   setNativeInputValue(nookTypedArgs0_22);
   if (passwordFieldBlocksFill()) {
-    nookTypedArgs0_22.value = "";
-    setNativeInputValue(nookTypedArgs0_22);
+    clearLoginCredentials(request);
     return false;
   }
-  return true;
-}
-export function fillGeneratedPassword(
-  request: GeneratedPasswordFillRequest,
-): boolean {
-  const nookTypedArgs0_23 = passwordFieldQuery(request);
-  const passwordFields = findPasswordFields(nookTypedArgs0_23);
-  const newPasswordFields = passwordFields.filter((field) => {
-    const nookArrowArgs3: Parameters<typeof hasAutocompleteToken>[0] = {
-      field,
-      expected: "new-password",
-    };
-    return hasAutocompleteToken(nookArrowArgs3);
-  });
-  if (newPasswordFields.length === 0) return false;
-  for (const field of newPasswordFields) {
-    const nookTypedArgs0_24: Parameters<typeof setNativeInputValue>[0] = {
-      input: field,
-      value: request.password,
-    };
-    setNativeInputValue(nookTypedArgs0_24);
-  }
-  newPasswordFields[0]?.focus();
   return true;
 }
 export function readLoginCredentials(
@@ -861,17 +860,20 @@ enum OwnedAdvanceControlActivationKind {
   Absent = "absent",
   Activated = "activated",
 }
-
 type OwnedAdvanceControlActivation =
   | { kind: OwnedAdvanceControlActivationKind.Absent }
   | {
       kind: OwnedAdvanceControlActivationKind.Activated;
-      submitted: boolean;
+      result: FormSubmissionResult;
     };
 
 type OwnedAdvanceControlRequest = {
-  request: PasswordFormScopeQuery;
+  request: LoginFormSubmissionRequest;
   form: HTMLFormElement;
+};
+
+export type LoginFormSubmissionRequest = PasswordFormScopeQuery & {
+  submissionApproval?: FormSubmissionApproval;
 };
 
 function findApprovedOwnedAdvanceControl({
@@ -902,11 +904,7 @@ function findApprovedOwnedAdvanceControl({
       ),
     )
       .filter((control) => control.form === form)
-      .sort(
-        (...pair) =>
-          Number(pair[1].matches(semanticSubmitControlSelector)) -
-          Number(pair[0].matches(semanticSubmitControlSelector)),
-      )
+      .sort(semanticSubmitControlsFirst)
       .find((control) => {
         if (!isRenderedControl(control)) return false;
         const factsRequest: PageControlObservationRequest = {
@@ -938,32 +936,34 @@ function activateApprovedOwnedAdvanceControl({
     approved.click();
     return {
       kind: OwnedAdvanceControlActivationKind.Activated,
-      submitted: true,
+      result: FormSubmissionResult.Submitted,
     };
   }
   const clickSubmission: Parameters<typeof observeSubmit>[0] = {
     form,
     action: () => approved.click(),
+    approval: request.submissionApproval ?? false,
+    expectedSubmitter: approved,
   };
-  const submitted = observeSubmit(clickSubmission);
+  const result = observeSubmit(clickSubmission);
   if (
-    !submitted &&
+    result === FormSubmissionResult.NotObserved &&
     approved instanceof HTMLInputElement &&
     approved.type === "image"
   ) {
     clickSubmission.action = () => form.requestSubmit(approved);
     return {
       kind: OwnedAdvanceControlActivationKind.Activated,
-      submitted: observeSubmit(clickSubmission),
+      result: observeSubmit(clickSubmission),
     };
   }
   return {
     kind: OwnedAdvanceControlActivationKind.Activated,
-    submitted,
+    result,
   };
 }
 
-export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
+export function submitLoginForm(request: LoginFormSubmissionRequest): FormSubmissionResult {
   const nookTypedArgs0_26 = passwordFieldQuery(request);
   const passwordField = findPasswordFields(nookTypedArgs0_26)[0];
   const nookTypedArgs0_27 = passwordFieldQuery(request);
@@ -971,13 +971,13 @@ export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
   const usernameField = usernameFields[0];
   const hasAuthenticationUsername = usernameFields.some(isAuthUsernameField);
   const anchor = passwordField ?? usernameField;
-  if (!anchor) return false;
+  if (!anchor) return FormSubmissionResult.NotObserved;
   const form = anchor.form;
   if (form) {
     const activationRequest: OwnedAdvanceControlRequest = { request, form };
     const activation = activateApprovedOwnedAdvanceControl(activationRequest);
     if (activation.kind === OwnedAdvanceControlActivationKind.Activated) {
-      return activation.submitted;
+      return activation.result;
     }
   }
   if (!passwordField) {
@@ -985,15 +985,16 @@ export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
       ...request,
       usernameField,
     };
-    if (clickAdvanceControl(nookNamedArgs0_4)) return true;
+    if (clickAdvanceControl(nookNamedArgs0_4)) return FormSubmissionResult.Submitted;
   }
-  if (!form) return false;
+  if (!form) return FormSubmissionResult.NotObserved;
   const implicitRequest: Parameters<
     typeof requestImplicitAuthenticationSubmit
   >[0] = {
     form,
     hasAuthenticationUsername,
     hasAuthenticationPassword: Boolean(passwordField),
+    approval: request.submissionApproval ?? false,
   };
   return requestImplicitAuthenticationSubmit(implicitRequest);
 }

@@ -279,7 +279,11 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
           enrollStaged = true
           return { ok: true, stageId: 'demo-enroll-stage' }
         case 'nook:website-authenticator-enroll-code':
-          return { ok: true, code: '482913' }
+          return {
+            ok: true,
+            code: '482913',
+            expiresAt: Date.now() + 30_000,
+          }
         case 'nook:authentication-outcome-classify': {
           const observation = (
             message as {

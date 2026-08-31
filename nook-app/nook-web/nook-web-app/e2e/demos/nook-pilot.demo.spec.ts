@@ -52,6 +52,7 @@ function totpPilotStubArgs(messages: Record<string, ChromeMessage>) {
       'nook:website-authenticator-fill': {
         ok: true,
         code: '482913',
+        expiresAt: Date.now() + 30_000,
       },
     },
   }

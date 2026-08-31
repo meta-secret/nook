@@ -330,6 +330,7 @@ mod tests {
             fields: nook_companion_core::AuthenticationFieldObservationFacts {
                 username_field_count: 1,
                 current_password_field_count: 1,
+                actionable_password_field_count: 1,
                 ..Default::default()
             },
             detailed_advance_control:

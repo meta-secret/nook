@@ -4,6 +4,13 @@ import {
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import type { AuthenticationAdvanceControlObservation } from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
+  FormSubmissionResult,
+  observeAuthenticationSubmission,
+  type AuthenticationSubmissionObservation,
+  type FormSubmissionApproval,
+} from "./authentication-direct-submit-bridge";
+export { FormSubmissionResult, type FormSubmissionApproval };
+import {
   findOneTimeCodeFields,
   findPasswordFields,
   hasAutocompleteToken,
@@ -56,6 +63,8 @@ type AuthenticationRouteDestinationRequest = {
 type FormSubmissionObservation = {
   form: HTMLFormElement;
   action: () => void;
+  approval: FormSubmissionApproval | false;
+  expectedSubmitter: LoginAdvanceControl | false;
 };
 
 type ObservedFormIdentityRequest = {
@@ -106,6 +115,7 @@ type ImplicitAuthenticationSubmitRequest = {
   form: HTMLFormElement;
   hasAuthenticationUsername: boolean;
   hasAuthenticationPassword: boolean;
+  approval: FormSubmissionApproval | false;
 };
 
 type AuthenticationFactTexts = string[];
@@ -140,7 +150,9 @@ export function rawOwnedFormIdentity(form: HTMLFormElement): string {
     form.getAttribute("name") ?? "",
     form.getAttribute("class") ?? "",
     form.getAttribute("aria-label") ?? "",
-  ].join(" ");
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 export function ownedFormIdentity(form: HTMLFormElement): string {
@@ -160,7 +172,9 @@ export function observedFormIdentity({
     owner.getAttribute("name") ?? "",
     owner.getAttribute("role") ?? "",
     owner.getAttribute("aria-label") ?? "",
-  ].join(" ");
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 export function observedFormDestination(formScope: PasswordFormScope): string {
@@ -594,7 +608,8 @@ export function requestImplicitAuthenticationSubmit({
   form,
   hasAuthenticationUsername,
   hasAuthenticationPassword,
-}: ImplicitAuthenticationSubmitRequest): boolean {
+  approval,
+}: ImplicitAuthenticationSubmitRequest): FormSubmissionResult {
   const sourceOrigin = form.ownerDocument.defaultView?.location.origin;
   if (
     !sourceOrigin ||
@@ -603,7 +618,7 @@ export function requestImplicitAuthenticationSubmit({
     typeof form.requestSubmit !== "function" ||
     (hasAuthenticationPassword && formBlocksCredentialDisclosure(form))
   ) {
-    return false;
+    return FormSubmissionResult.NotObserved;
   }
   const destinationRequest: AuthenticationRouteDestinationRequest = {
     form,
@@ -616,11 +631,13 @@ export function requestImplicitAuthenticationSubmit({
     hasAuthenticationPassword,
   };
   if (!canRequestImplicitAuthenticationSubmit(capabilityRequest)) {
-    return false;
+    return FormSubmissionResult.NotObserved;
   }
   const submission: FormSubmissionObservation = {
     form,
     action: () => form.requestSubmit(),
+    approval,
+    expectedSubmitter: false,
   };
   return observeSubmit(submission);
 }
@@ -884,17 +901,33 @@ export function formHasSemanticSubmitter(form: HTMLFormElement): boolean {
 export function observeSubmit({
   form,
   action,
-}: FormSubmissionObservation): boolean {
-  let submitted = false;
-  const markSubmitted = () => {
-    submitted = true;
+  approval,
+  expectedSubmitter,
+}: FormSubmissionObservation): FormSubmissionResult {
+  const directRouteMatches = () => {
+    if (!expectedSubmitter) return true;
+    const formScope: PasswordFormScope = {
+      kind: PasswordFormScopeKind.Owned,
+      owner: form,
+    };
+    const destinationRequest: ControlDestinationIdentityRequest = {
+      control: expectedSubmitter,
+      formScope,
+    };
+    const expectedDestination = controlDestinationIdentity(destinationRequest);
+    return (
+      formSubmissionMethod(form) ===
+        controlSubmissionMethod(expectedSubmitter) &&
+      ownedFormDestinationIdentity(form) ===
+        boundedAuthenticationDestination(expectedDestination)
+    );
   };
-  const listenerOptions: AddEventListenerOptions = {
-    capture: true,
-    once: true,
+  const observation: AuthenticationSubmissionObservation = {
+    form,
+    action,
+    approval,
+    expectedSubmitter,
+    directRouteApproved: directRouteMatches,
   };
-  form.addEventListener("submit", markSubmitted, listenerOptions);
-  action();
-  form.removeEventListener("submit", markSubmitted, true);
-  return submitted;
+  return observeAuthenticationSubmission(observation);
 }

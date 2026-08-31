@@ -200,7 +200,9 @@ export async function fillStagedEnrollmentCode({
   if (
     delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
     delivery.response.kind !== AuthenticatorCodeResponseKind.Ready ||
-    !('code' in delivery.response)
+    !('code' in delivery.response) ||
+    !('expiresAt' in delivery.response) ||
+    delivery.response.expiresAt <= Date.now()
   ) {
     return false
   }

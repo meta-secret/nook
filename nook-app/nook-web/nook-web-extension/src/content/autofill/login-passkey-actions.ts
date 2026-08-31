@@ -9,9 +9,11 @@ import {
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 import { detectEnrollmentHints } from '../enrollment-flow'
 import {
+  clearLoginCredentials,
   fillGeneratedPassword,
   fillLoginCredentials,
   findWorkflowPasskeyControl,
+  FormSubmissionResult,
   PasskeyControlLookupKind,
   PasswordFormQueryKind,
   submitLoginForm,
@@ -240,7 +242,11 @@ export async function fillAndSubmitAccount({
   const filled = fillLoginCredentials(nookTypedArgs0_4)
   credentials.password = ''
   credentials.username = ''
-  if (!filled) {
+  const postFillApproved = filled && approvedWorkflowIsStillCurrent(workflow)
+  if (filled && !postFillApproved) {
+    clearLoginCredentials(nookTypedArgs0_4)
+  }
+  if (!postFillApproved) {
     const nookTypedArgs0_5: Parameters<typeof setFlightProgress>[0] = {
       step,
       title,
@@ -258,12 +264,39 @@ export async function fillAndSubmitAccount({
     setStatus(nookTypedArgs0_6)
     return false
   }
+  const submissionApproval: NonNullable<
+    Parameters<typeof submitLoginForm>[0]['submissionApproval']
+  > = {
+    isApproved: () => approvedWorkflowIsStillCurrent(workflow),
+    reject: () => clearLoginCredentials(nookTypedArgs0_4),
+  }
   const nookTypedArgs0_7: Parameters<typeof submitLoginForm>[0] = {
     kind: PasswordFormQueryKind.Scoped,
     root: workflow.root,
     formScope: workflow.formScope,
+    submissionApproval,
   }
-  if (!submitLoginForm(nookTypedArgs0_7)) {
+  const submissionResult = submitLoginForm(nookTypedArgs0_7)
+  if (submissionResult === FormSubmissionResult.Rejected) {
+    const rejectedProgress: Parameters<typeof setFlightProgress>[0] = {
+      step,
+      title,
+      currentStep: 2,
+      totalSteps: 3,
+      titleKey: BROWSER_MESSAGE_KEYS.WidgetFillingTitle,
+    }
+    setFlightProgress(rejectedProgress)
+    const rejectedStatus: Parameters<typeof setStatus>[0] = {
+      description,
+      continueButton,
+      text: translatedMessage(BROWSER_MESSAGE_KEYS.WidgetFillFailed),
+      enableContinue: true,
+    }
+    setStatus(rejectedStatus)
+    continueButton.hidden = false
+    return false
+  }
+  if (submissionResult === FormSubmissionResult.NotObserved) {
     const nookTypedArgs0_8: Parameters<typeof setFlightProgress>[0] = {
       step,
       title,
