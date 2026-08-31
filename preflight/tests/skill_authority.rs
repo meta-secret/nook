@@ -73,7 +73,7 @@ fn active_root_guidance_uses_cortex_skill_authority() -> anyhow::Result<()> {
     anyhow::ensure!(
         readme.contains("Project skill semantics live only in team-owned Markdown under `.cortex`")
             && readme.contains(
-                "TypeScript projects co-located under the owning skill's `scripts/` directory"
+                "TypeScript packages co-located under the owning skill's `scripts/` directory"
             )
             && readme.contains("task loom:cortex-audit"),
         "README must distinguish Cortex semantics from executable applications"
