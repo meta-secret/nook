@@ -3,6 +3,7 @@ import { open } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { resolve } from 'node:path';
 
+import { LoomFailureCode, loomFailureFromCause } from '../loom-failure.ts';
 import {
   discardFinalizedTeamPlan,
   finalizeTeamPlan,
@@ -10,7 +11,7 @@ import {
   restartTeamPlan,
   selectTeamPlan,
   startTeamPlan,
-} from './runtime.ts';
+} from './index.ts';
 
 import type {
   TeamPlanRecord,
@@ -83,7 +84,10 @@ export async function runTeamPlanCli(
   const command = parseTeamPlanCommand(cliArguments);
   if (!command) {
     console.error(HELP);
-    return 2;
+    throw loomFailureFromCause({
+      code: LoomFailureCode.TeamPlanValidationFailed,
+      cause: new Error('Team Plan command arguments are invalid.'),
+    });
   }
   if (command.kind === TeamPlanCommandKind.Start) {
     const request: TeamPlanStartRequest = {
@@ -130,9 +134,23 @@ export async function runTeamPlanCli(
     return 0;
   }
   if (!('requestPath' in command))
-    throw new Error('Invalid Team Plan command.');
+    throw loomFailureFromCause({
+      code: LoomFailureCode.TeamPlanCommandFailed,
+      cause: new Error('Team Plan command dispatch is invalid.'),
+    });
   const serialized = await readTeamPlanRecordRequest(command.requestPath);
-  const record = JSON.parse(serialized) as TeamPlanRecord;
+  let record: TeamPlanRecord;
+  try {
+    record = JSON.parse(serialized) as TeamPlanRecord;
+  } catch (cause) {
+    throw loomFailureFromCause({
+      code: LoomFailureCode.TeamPlanValidationFailed,
+      cause:
+        cause instanceof Error
+          ? cause
+          : new Error('Team Plan record JSON is invalid.'),
+    });
+  }
   const request: TeamPlanRecordRequest = {
     journalPath: command.journalPath,
     record,
@@ -142,34 +160,64 @@ export async function runTeamPlanCli(
 }
 
 async function readTeamPlanRecordRequest(requestPath: string): Promise<string> {
-  const requestFile = await open(
-    requestPath,
-    constants.O_RDONLY | constants.O_NONBLOCK,
-  );
   try {
-    const requestStatus = await requestFile.stat();
-    if (
-      !requestStatus.isFile() ||
-      requestStatus.size > MAX_TEAM_PLAN_RECORD_REQUEST_BYTES
-    )
-      throw new Error('Team Plan record request file is invalid or oversized.');
-    const content = Buffer.alloc(MAX_TEAM_PLAN_RECORD_REQUEST_BYTES + 1);
-    let bytesRead = 0;
-    while (bytesRead < content.byteLength) {
-      const read = await requestFile.read(
-        content,
-        bytesRead,
-        content.byteLength - bytesRead,
-        bytesRead,
-      );
-      if (read.bytesRead === 0) break;
-      bytesRead += read.bytesRead;
+    const requestFile = await open(
+      requestPath,
+      constants.O_RDONLY | constants.O_NONBLOCK,
+    );
+    try {
+      const requestStatus = await requestFile.stat();
+      if (
+        !requestStatus.isFile() ||
+        requestStatus.size > MAX_TEAM_PLAN_RECORD_REQUEST_BYTES
+      )
+        throw loomFailureFromCause({
+          code: LoomFailureCode.TeamPlanValidationFailed,
+          cause: new Error(
+            'Team Plan record request file is invalid or oversized.',
+          ),
+        });
+      const content = Buffer.alloc(MAX_TEAM_PLAN_RECORD_REQUEST_BYTES + 1);
+      let bytesRead = 0;
+      while (bytesRead < content.byteLength) {
+        const read = await requestFile.read(
+          content,
+          bytesRead,
+          content.byteLength - bytesRead,
+          bytesRead,
+        );
+        if (read.bytesRead === 0) break;
+        bytesRead += read.bytesRead;
+      }
+      if (bytesRead > MAX_TEAM_PLAN_RECORD_REQUEST_BYTES)
+        throw loomFailureFromCause({
+          code: LoomFailureCode.TeamPlanValidationFailed,
+          cause: new Error('Team Plan record request is oversized.'),
+        });
+      try {
+        return new TextDecoder('utf-8', { fatal: true }).decode(
+          content.subarray(0, bytesRead),
+        );
+      } catch (cause) {
+        throw loomFailureFromCause({
+          code: LoomFailureCode.TeamPlanValidationFailed,
+          cause:
+            cause instanceof Error
+              ? cause
+              : new Error('Team Plan record request UTF-8 is invalid.'),
+        });
+      }
+    } finally {
+      await requestFile.close();
     }
-    if (bytesRead > MAX_TEAM_PLAN_RECORD_REQUEST_BYTES)
-      throw new Error('Team Plan record request is oversized.');
-    return content.subarray(0, bytesRead).toString('utf8');
-  } finally {
-    await requestFile.close();
+  } catch (cause) {
+    throw loomFailureFromCause({
+      code: LoomFailureCode.TeamPlanStorageFailed,
+      cause:
+        cause instanceof Error
+          ? cause
+          : new Error('Team Plan record request read failed.'),
+    });
   }
 }
 

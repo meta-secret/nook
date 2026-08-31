@@ -1,10 +1,17 @@
 import { afterEach, expect, spyOn, test } from 'bun:test';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
+import { LoomFailure, LoomFailureCode } from '../../src/loom-failure.ts';
 import {
   MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
   REQUIRED_PARENT_OWNED_RESOURCES,
@@ -20,6 +27,7 @@ import {
 } from '../../src/module-delivery/index.ts';
 import { runTeamPlanCli as runTeamPlanCliWithArguments } from '../../src/team-plan/cli.ts';
 import { TeamPlanRecordKind } from '../../src/team-plan/domain.ts';
+import { MAX_TEAM_PLAN_JOURNAL_BYTES } from '../../src/team-plan/journal.ts';
 import {
   createGitFixture,
   disposeGitFixture,
@@ -42,6 +50,20 @@ const fixtures: GitFixture[] = [];
 
 function runTeamPlanCli(argv: readonly string[]): Promise<number> {
   return runTeamPlanCliWithArguments({ argv });
+}
+
+async function expectTeamPlanCliFailure(request: {
+  readonly argv: readonly string[];
+  readonly code: LoomFailureCode;
+}): Promise<void> {
+  try {
+    await runTeamPlanCli(request.argv);
+    throw new Error('Expected Team Plan CLI failure.');
+  } catch (error) {
+    expect(error).toBeInstanceOf(LoomFailure);
+    expect((error as LoomFailure).code).toBe(request.code);
+    expect((error as LoomFailure).cause).toBeInstanceOf(Error);
+  }
 }
 
 afterEach(() => {
@@ -237,21 +259,17 @@ test('dispatches every successful Team Plan command', async () => {
     );
     const error = spyOn(console, 'error').mockImplementation(() => {});
     try {
-      expect(await runTeamPlanCli(['discard', '--journal', journalPath])).toBe(
-        2,
-      );
+      await expectTeamPlanCliFailure({
+        argv: ['discard', '--journal', journalPath],
+        code: LoomFailureCode.TeamPlanValidationFailed,
+      });
     } finally {
       error.mockRestore();
     }
-    await expect(
-      runTeamPlanCli([
-        'discard',
-        '--journal',
-        journalPath,
-        '--run-id',
-        '0'.repeat(64),
-      ]),
-    ).rejects.toThrow('run identity is stale');
+    await expectTeamPlanCliFailure({
+      argv: ['discard', '--journal', journalPath, '--run-id', '0'.repeat(64)],
+      code: LoomFailureCode.TeamPlanStorageFailed,
+    });
     expect(existsSync(journalPath)).toBe(true);
     expect(
       await runTeamPlanCli([
@@ -268,25 +286,51 @@ test('dispatches every successful Team Plan command', async () => {
   }
 }, 10_000);
 
-test('rejects non-files and oversized record requests before reading', async () => {
+test('normalizes invalid record files and oversized journals', async () => {
   const root = mkdtempSync(join(tmpdir(), 'team-plan-cli-'));
   const request = join(root, 'request.json');
   writeFileSync(request, 'x'.repeat(1_048_577));
   for (const path of [root, request])
-    await expect(
-      runTeamPlanCli([
-        'record',
-        '--journal',
-        join(root, 'journal'),
-        '--request',
-        path,
-      ]),
-    ).rejects.toThrow('invalid or oversized');
+    await expectTeamPlanCliFailure({
+      argv: ['record', '--journal', join(root, 'journal'), '--request', path],
+      code: LoomFailureCode.TeamPlanValidationFailed,
+    });
+  writeFileSync(request, '{');
+  await expectTeamPlanCliFailure({
+    argv: ['record', '--journal', join(root, 'journal'), '--request', request],
+    code: LoomFailureCode.TeamPlanValidationFailed,
+  });
+  writeFileSync(request, '{}\n');
+  await expectTeamPlanCliFailure({
+    argv: ['record', '--journal', join(root, 'journal'), '--request', request],
+    code: LoomFailureCode.TeamPlanValidationFailed,
+  });
+  writeFileSync(request, Buffer.from([0xc3, 0x28]));
+  await expectTeamPlanCliFailure({
+    argv: ['record', '--journal', join(root, 'journal'), '--request', request],
+    code: LoomFailureCode.TeamPlanValidationFailed,
+  });
+  await expectTeamPlanCliFailure({
+    argv: [
+      'record',
+      '--journal',
+      join(root, 'journal'),
+      '--request',
+      join(root, 'missing.json'),
+    ],
+    code: LoomFailureCode.TeamPlanStorageFailed,
+  });
+  const journal = join(root, 'oversized-journal.jsonl');
+  writeFileSync(journal, 'x'.repeat(MAX_TEAM_PLAN_JOURNAL_BYTES + 1));
+  await expectTeamPlanCliFailure({
+    argv: ['select', '--journal', journal],
+    code: LoomFailureCode.TeamPlanRecoveryFailed,
+  });
   rmSync(root, { recursive: true });
 });
 
 test.skipIf(process.platform === 'win32')(
-  'rejects a record request FIFO without waiting for a writer',
+  'rejects record and plan FIFOs without waiting for a writer',
   async () => {
     const root = mkdtempSync(join(tmpdir(), 'team-plan-cli-fifo-'));
     const request = join(root, 'request.fifo');
@@ -297,15 +341,37 @@ test.skipIf(process.platform === 'win32')(
       });
       if (created.status !== 0)
         throw new Error('Unable to create Team Plan request FIFO fixture.');
-      await expect(
-        runTeamPlanCli([
+      await expectTeamPlanCliFailure({
+        argv: [
           'record',
           '--journal',
           join(root, 'journal'),
           '--request',
           request,
-        ]),
-      ).rejects.toThrow('invalid or oversized');
+        ],
+        code: LoomFailureCode.TeamPlanValidationFailed,
+      });
+      const planPath = join(root, 'plan.fifo');
+      const planCreated = spawnSync('mkfifo', [planPath], {
+        env: { PATH: '/bin:/usr/bin:/usr/sbin' },
+        stdio: 'ignore',
+      });
+      if (planCreated.status !== 0)
+        throw new Error('Unable to create Team Plan plan FIFO fixture.');
+      const repositoryRoot = join(root, 'repository');
+      mkdirSync(repositoryRoot);
+      await expectTeamPlanCliFailure({
+        argv: [
+          'start',
+          '--plan',
+          planPath,
+          '--journal',
+          join(root, 'plan-journal'),
+          '--repository-root',
+          repositoryRoot,
+        ],
+        code: LoomFailureCode.TeamPlanValidationFailed,
+      });
     } finally {
       rmSync(root, { recursive: true });
     }
