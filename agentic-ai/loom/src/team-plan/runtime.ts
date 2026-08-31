@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { resolve } from 'node:path';
+import { resolve, sep } from 'node:path';
 
 import {
   ModuleDeliveryAdmissionSelectionStatus,
@@ -121,6 +121,11 @@ export async function startTeamPlan(
 ): Promise<TeamPlanSnapshot> {
   const repositoryRoot = await realpath(resolve(request.repositoryRoot));
   const journalPath = await canonicalTeamPlanJournalPath(request.journalPath);
+  if (
+    journalPath === repositoryRoot ||
+    journalPath.startsWith(`${repositoryRoot}${sep}`)
+  )
+    throw new Error('Team Plan journal must be outside the source repository.');
   const plan = await reviewedPlan(request.planPath);
   assertRepositoryAtSource({
     repositoryRoot,
@@ -290,6 +295,7 @@ export async function finalizeTeamPlan(
   return withLockedTeamPlanSession({
     journalPath: request.journalPath,
     action: async (session) => {
+      if (session.finalized) return teamPlanSnapshot(session);
       assertRunning(session);
       assertSessionRepositoryAtSource(session);
       session.integrationState = finalizeModuleDeliveryIntegration({
@@ -694,17 +700,15 @@ async function reviewedPlan(planPath: string) {
 async function assertReviewedPlanEvent(
   event: TeamPlanStartedEvent | TeamPlanRestartedEvent,
 ): Promise<ValidatedModuleDeliveryPlan> {
-  const current = await reviewedPlan(event.planPath);
+  const current = acceptedTeamPlan(event.planText);
   if (
-    current.path !== event.planPath ||
-    current.text !== event.planText ||
-    current.sha256 !== event.planSha256 ||
-    current.accepted.planDigest !== event.modulePlanDigest ||
-    current.accepted.plan.sourceCommit !== event.sourceCommit ||
-    generationRecordLimit(current.accepted) !== event.generationRecordLimit
+    teamPlanSha256(event.planText) !== event.planSha256 ||
+    current.planDigest !== event.modulePlanDigest ||
+    current.plan.sourceCommit !== event.sourceCommit ||
+    generationRecordLimit(current) !== event.generationRecordLimit
   )
-    throw new Error('Team Plan reviewed plan bytes have drifted.');
-  return current.accepted;
+    throw new Error('Team Plan persisted plan bytes are invalid.');
+  return current;
 }
 
 function pinPersistedRecord(request: {
