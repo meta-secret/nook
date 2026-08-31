@@ -206,8 +206,8 @@ fn loom_workflow_audits_every_cortex_change() {
     let root = repository_root();
     let workflow = read(&root, ".github/workflows/repository-policy.yml");
     assert!(
-        workflow.contains("fetch-depth: 2"),
-        "repository policy must retain the baseline parent for changed-path classification"
+        workflow.contains("fetch-depth: 0"),
+        "repository policy must retain full history for exact stacked-base availability"
     );
 
     assert!(
