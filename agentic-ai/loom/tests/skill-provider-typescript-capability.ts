@@ -554,9 +554,8 @@ function isSafeSubprocessEnvironmentValue(
     GIT_TERMINAL_PROMPT: '0',
     LC_ALL: 'C',
   };
-  const requiredLiteral = literals[name];
-  if (requiredLiteral !== undefined)
-    return ts.isStringLiteral(value) && value.text === requiredLiteral;
+  if (Object.hasOwn(literals, name))
+    return ts.isStringLiteral(value) && value.text === literals[name];
   if (name === 'GIT_AUTHOR_DATE' || name === 'GIT_COMMITTER_DATE')
     return (
       (ts.isStringLiteral(value) && /^@[0-9]+ \+0000$/u.test(value.text)) ||
