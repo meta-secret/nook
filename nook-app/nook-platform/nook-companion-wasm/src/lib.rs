@@ -11,6 +11,11 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 mod page_form_policy;
 
+#[cfg(all(test, target_arch = "wasm32"))]
+mod authentication_contract_wasm_tests;
+mod authentication_observation_binding;
+
+pub use authentication_observation_binding::*;
 pub use page_form_policy::*;
 
 #[wasm_bindgen(typescript_custom_section)]
@@ -136,14 +141,6 @@ pub fn decode_authenticator_backup_attach_response(
     response: nook_companion_core::AuthenticatorBackupAttachResponseWire,
 ) -> Result<nook_companion_core::AuthenticatorBackupAttachResponse, wasm_bindgen::JsError> {
     nook_companion_core::decode_authenticator_backup_attach_response(response)
-        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
-}
-
-#[wasm_bindgen]
-pub fn decode_authenticator_code_response(
-    response: nook_companion_core::AuthenticatorCodeResponseWire,
-) -> Result<nook_companion_core::AuthenticatorCodeResponse, wasm_bindgen::JsError> {
-    nook_companion_core::decode_authenticator_code_response(response)
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 

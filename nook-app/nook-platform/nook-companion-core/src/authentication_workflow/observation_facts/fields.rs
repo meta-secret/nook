@@ -14,6 +14,10 @@ pub struct AuthenticationFieldObservationFacts {
     pub new_password_field_count: u32,
     pub generic_password_field_count: u32,
     pub one_time_code_field_count: u32,
+    /// Password fields that remain writable and eligible for credential disclosure.
+    pub actionable_password_field_count: u32,
+    /// Password fields whose current `readonly` state prevents credential disclosure.
+    pub readonly_password_field_count: u32,
 }
 
 impl AuthenticationFieldObservationFacts {
@@ -22,16 +26,23 @@ impl AuthenticationFieldObservationFacts {
             .current_password_field_count
             .saturating_add(self.new_password_field_count)
             .saturating_add(self.generic_password_field_count);
-        [
+        let counts_are_bounded = [
             self.username_field_count,
             self.current_password_field_count,
             self.new_password_field_count,
             self.generic_password_field_count,
             self.one_time_code_field_count,
             password_field_count,
+            self.actionable_password_field_count,
+            self.readonly_password_field_count,
         ]
         .into_iter()
-        .all(|count| count <= crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT)
+        .all(|count| count <= crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT);
+        counts_are_bounded
+            && self
+                .actionable_password_field_count
+                .saturating_add(self.readonly_password_field_count)
+                == password_field_count
     }
 
     /// Validate that detailed control evidence describes these same fields and scope.

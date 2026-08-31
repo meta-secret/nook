@@ -42,11 +42,13 @@ pub use authentication_workflow::{
     AuthenticationAdvanceControlEvidence, AuthenticationApprovalRequirement,
     AuthenticationAuthenticatorObservationFacts, AuthenticationAuthenticatorSetupObservation,
     AuthenticationBackupCodesObservation, AuthenticationCeremonyContextObservation,
-    AuthenticationCeremonyObservationFacts, AuthenticationDetailedAdvanceControlObservation,
+    AuthenticationCeremonyObservationFacts, AuthenticationCredentialSubmissionFacts,
+    AuthenticationCredentialSubmissionObservation, AuthenticationDetailedAdvanceControlObservation,
     AuthenticationDetailedPasskeyControlCandidateObservation,
     AuthenticationDetailedPasskeyControlObservation, AuthenticationEnrollmentEvidence,
     AuthenticationFieldObservationFacts, AuthenticationFormObservationPriority,
-    AuthenticationManualCheckpoint, AuthenticationOneTimeCodeProgressionEvidence,
+    AuthenticationManualCheckpoint, AuthenticationObservationBindingError,
+    AuthenticationObservationBindingToken, AuthenticationOneTimeCodeProgressionEvidence,
     AuthenticationPageObservation, AuthenticationPageObservationFacts,
     AuthenticationPageObservationFactsBatch, AuthenticationPageObservations,
     AuthenticationPasskeyControlObservation, AuthenticationPasskeyEvidence,
@@ -54,10 +56,11 @@ pub use authentication_workflow::{
     AuthenticationWorkflowMatch, AuthenticationWorkflowSnapshot,
     AuthenticationWorkflowSnapshotError, AuthenticationWorkflowStage,
     MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
-    authentication_form_observation_priority, authentication_page_observation_facts_priority,
-    authentication_page_observations_are_valid, authentication_passkey_control_candidate_is_safe,
-    authentication_passkey_control_evidence_is_safe, classify_authentication_workflow,
-    classify_authentication_workflow_candidates,
+    authentication_form_observation_priority, authentication_page_observation_facts_match_binding,
+    authentication_page_observation_facts_priority, authentication_page_observations_are_valid,
+    authentication_passkey_control_candidate_is_safe,
+    authentication_passkey_control_evidence_is_safe, bind_authentication_page_observation_facts,
+    classify_authentication_workflow, classify_authentication_workflow_candidates,
 };
 pub use authentication_workflow_response::{
     AuthenticationWorkflowRuntimeResponse, AuthenticationWorkflowRuntimeResponseDecodeError,
@@ -75,7 +78,8 @@ pub use authenticator_backup_attach_response::{
     decode_authenticator_backup_attach_response,
 };
 pub use authenticator_code_response::{
-    AuthenticatorCodeResponse, AuthenticatorCodeResponseDecodeError, AuthenticatorCodeResponseKind,
+    AuthenticatorCodeExpiryEpochMilliseconds, AuthenticatorCodeResponse,
+    AuthenticatorCodeResponseDecodeError, AuthenticatorCodeResponseKind,
     AuthenticatorCodeResponseWire, decode_authenticator_code_response,
 };
 pub use authenticator_enrollment_response::{
