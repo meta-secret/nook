@@ -68,12 +68,15 @@ scope, and apply the pattern with normal coding workflow and validation.
 
 Executable applications remain owned by their semantic skill card. Use the
 folder form `<dynamic-skills>/<slug>/SKILL.md` and put the ordinary Bun and
-TypeScript project under its co-located `scripts/` directory. Each project must
+TypeScript package under its co-located `scripts/` directory. Each package must
 include:
 
-- a frozen lockfile and package manifest;
+- a package manifest registered by the `.cortex` Bun workspace;
 - TypeScript and ESLint configuration; and
 - focused `src/` and `tests/` within the 1,000-line source limit.
+
+The `.cortex` workspace owns one frozen lockfile and one hoisted dependency
+tree. A skill package must not contain its own lockfile or dependency tree.
 
 It must not contain another `SKILL.md` or become a harness mirror. Discover
 actions with `task skills:tools-list`. Invoke one with
@@ -94,7 +97,7 @@ task loom:skill-scaffold CONFIG=path/to/request.yaml
 
 The scaffold creates the prose-only `<slug>.md` form. When the skill needs a
 deterministic application, convert it in the same change to
-`<slug>/SKILL.md`, add the independent `scripts/` project, and update its index
+`<slug>/SKILL.md`, add the co-located `scripts/` package, and update its index
 link. Then fill the card content and verify with `task loom:cortex-audit`.
 
 See [loom-tools.md](../references/loom-tools.md).

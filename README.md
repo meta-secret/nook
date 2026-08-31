@@ -331,9 +331,10 @@ verify canonical links, catalog coverage, and the absence of tracked harness
 skill mirrors.
 
 Deterministic implementations of those semantics are ordinary Bun and
-TypeScript projects co-located under the owning skill's `scripts/` directory.
+TypeScript packages co-located under the owning skill's `scripts/` directory.
+They share the pinned `.cortex` Bun workspace and its hoisted dependency tree.
 They are code, not skill-card mirrors. Use `task skills:install` and
-`task skills:verify` for the pinned Cortex article project gate.
+`task skills:verify` for the executable-skill workspace gate.
 `task loom:verify` additionally applies the repository AST capability and
 exact-consumer boundary. The Cortex article application is currently consumed
 in-process by Loom. Agents can discover and invoke its static action through

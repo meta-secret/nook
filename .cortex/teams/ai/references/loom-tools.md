@@ -57,7 +57,7 @@ implementation is an ordinary Bun and TypeScript project in its owning
 the Cortex article application through a narrow in-process adapter. The
 application validates its request, audits it, independently verifies its
 result, and enforces contract bounds without command, network, write, agent, or
-lifecycle authority. Run its project gate with `task skills:verify`.
+lifecycle authority. Run the shared workspace gate with `task skills:verify`.
 Run `task loom:verify` for the recursive AST capability audit and exact
 Loom-consumer boundary.
 

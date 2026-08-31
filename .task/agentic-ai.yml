@@ -7,7 +7,7 @@ vars:
 
 tasks:
   skills:install:
-    desc: Install every executable skill package with its frozen lockfile.
+    desc: Install the executable-skill workspace with its frozen lockfile.
     silent: true
     cmds:
       - bun "{{.REPO_ROOT}}/agentic-ai/loom/src/executable-skills/package-gate-cli.ts" install "{{.REPO_ROOT}}"

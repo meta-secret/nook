@@ -14,6 +14,20 @@ export const EXECUTABLE_SKILL_DIAGNOSTIC_BYTE_LIMIT = 32_768;
 const FINDING_PATH_LIMIT = 512;
 const FINDING_ISSUE_LIMIT = 512;
 const CANONICAL_MODE = '100644';
+export const EXECUTABLE_SKILL_WORKSPACE_ROOT = '.cortex';
+const EXECUTABLE_SKILL_WORKSPACE_FILES = [
+  '.gitignore',
+  'bun.lock',
+  'bunfig.toml',
+  'package.json',
+] as const;
+const EXECUTABLE_SKILL_WORKSPACES = [
+  'gizmo/dynamic-skills/*/scripts',
+  'shared/dynamic-skills/*/scripts',
+  'teams/*/dynamic-skills/*/scripts',
+] as const;
+const EXECUTABLE_SKILL_WORKSPACE_NAME = '@nook/executable-skills-workspace';
+const EXECUTABLE_SKILL_BUNFIG = '[install]\nlinker = "hoisted"\n';
 const SKILL_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const OWNER_ROOT =
   '\\.cortex/(?:gizmo|shared|teams/(?:ai|dev-core|security|sre|web-dev))/dynamic-skills';
@@ -32,7 +46,6 @@ const CONFIG_HASHES = {
 const REQUIRED_PROJECT_FILES = [
   '.gitignore',
   '.prettierrc',
-  'bun.lock',
   'eslint.config.js',
   'executable-skill.json',
   'package.json',
@@ -179,15 +192,32 @@ function inspectExecutableSkillPackageFiles(
   const { repoRoot, tracked } = request;
   const collector: FindingCollector = { findings: [], bytes: 0 };
   const npmPackages = new Set<string>();
+  const skillPackages = executableSkillPackages(tracked);
   for (const file of tracked) {
     const skillPackage = executableSkillPackageFromPath(file.path);
+    if (
+      file.path.startsWith(`${EXECUTABLE_SKILL_WORKSPACE_ROOT}/node_modules/`)
+    ) {
+      addFinding(collector)(EXECUTABLE_SKILL_WORKSPACE_ROOT)(
+        'node_modules content cannot be tracked in the executable-skill workspace',
+      );
+    }
     if (skillPackage !== false && dangerousPath(file.path)) {
       addFinding(collector)('.cortex')(
         'tracked skill path contains unsafe characters',
       );
     }
   }
-  for (const skillPackage of executableSkillPackages(tracked)) {
+  const workspaceLock =
+    skillPackages.length > 0
+      ? auditExecutableSkillWorkspace({
+          collector,
+          repoRoot,
+          skillPackages,
+          tracked,
+        })
+      : false;
+  for (const skillPackage of skillPackages) {
     if (!DECLARED_OWNER_PATH.test(`${skillPackage.packageRoot}/`)) {
       addFinding(collector)('.cortex')(
         'tracked executable-skill package has an undeclared owner',
@@ -206,6 +236,7 @@ function inspectExecutableSkillPackageFiles(
       repoRoot,
       skillPackage,
       tracked,
+      workspaceLock,
     };
     auditPackage(packageRequest);
   }
@@ -215,14 +246,138 @@ function inspectExecutableSkillPackageFiles(
   };
 }
 
+type AuditWorkspaceRequest = AuditExecutableSkillPackageFilesRequest & {
+  readonly collector: FindingCollector;
+  readonly skillPackages: readonly ExecutableSkillPackage[];
+};
+
+function auditExecutableSkillWorkspace(
+  request: AuditWorkspaceRequest,
+): UntrustedYamlMap | false {
+  const { collector, repoRoot, skillPackages, tracked } = request;
+  const requiredPaths = EXECUTABLE_SKILL_WORKSPACE_FILES.map(
+    (name) => `${EXECUTABLE_SKILL_WORKSPACE_ROOT}/${name}`,
+  );
+  const documentsAreSafe = requiredPaths.every((required) => {
+    const trackedFile = tracked.find((file) => file.path === required);
+    if (!trackedFile) {
+      addFinding(collector)(required)(
+        'required executable-skill workspace file is missing',
+      );
+      return false;
+    }
+    if (trackedFile.mode !== CANONICAL_MODE) {
+      addFinding(collector)(required)(
+        `tracked executable-skill workspace files must use mode ${CANONICAL_MODE}`,
+      );
+      return false;
+    }
+    try {
+      const metadata = lstatSync(path.join(repoRoot, required));
+      if (metadata.isFile() && !metadata.isSymbolicLink()) return true;
+    } catch {
+      // The bounded finding below owns unsafe workspace documents.
+    }
+    addFinding(collector)(required)(
+      'executable-skill workspace document must be a regular file',
+    );
+    return false;
+  });
+  if (!documentsAreSafe) return false;
+  const packagePath = `${EXECUTABLE_SKILL_WORKSPACE_ROOT}/package.json`;
+  const lockPath = `${EXECUTABLE_SKILL_WORKSPACE_ROOT}/bun.lock`;
+  const packageDocument = parseJson({
+    collector,
+    json5: false,
+    relativePath: packagePath,
+    repoRoot,
+  });
+  const lock = parseJson({
+    collector,
+    json5: true,
+    relativePath: lockPath,
+    repoRoot,
+  });
+  const bunfigPath = `${EXECUTABLE_SKILL_WORKSPACE_ROOT}/bunfig.toml`;
+  const bunfig = readFileSync(path.join(repoRoot, bunfigPath), 'utf8');
+  if (bunfig !== EXECUTABLE_SKILL_BUNFIG) {
+    addFinding(collector)(bunfigPath)(
+      'executable-skill workspace must use the canonical hoisted linker',
+    );
+  }
+  if (packageDocument !== false) {
+    const workspaces = property(packageDocument)('workspaces');
+    if (
+      !sameKeys(packageDocument)([
+        'name',
+        'packageManager',
+        'private',
+        'workspaces',
+      ]) ||
+      packageDocument.name !== EXECUTABLE_SKILL_WORKSPACE_NAME ||
+      packageDocument.private !== true ||
+      packageDocument.packageManager !== 'bun@1.3.14' ||
+      !Array.isArray(workspaces) ||
+      JSON.stringify(workspaces) !== JSON.stringify(EXECUTABLE_SKILL_WORKSPACES)
+    ) {
+      addFinding(collector)(packagePath)(
+        'executable-skill workspace package must match the canonical policy',
+      );
+    }
+  }
+  if (lock !== false) {
+    const workspaces = property(lock)('workspaces');
+    const expectedWorkspaceKeys = [
+      '',
+      ...skillPackages.map((skillPackage) =>
+        skillPackage.scriptsRoot.slice(
+          `${EXECUTABLE_SKILL_WORKSPACE_ROOT}/`.length,
+        ),
+      ),
+    ];
+    const rootWorkspace = isRecord(workspaces)
+      ? property(workspaces)('')
+      : false;
+    if (
+      !sameKeys(lock)([
+        'configVersion',
+        'lockfileVersion',
+        'packages',
+        'workspaces',
+      ]) ||
+      lock.lockfileVersion !== 1 ||
+      lock.configVersion !== 1 ||
+      !isRecord(property(lock)('packages')) ||
+      !isRecord(workspaces) ||
+      !sameKeys(workspaces)(expectedWorkspaceKeys) ||
+      !isRecord(rootWorkspace) ||
+      !sameKeys(rootWorkspace)(['name']) ||
+      rootWorkspace.name !== EXECUTABLE_SKILL_WORKSPACE_NAME
+    ) {
+      addFinding(collector)(lockPath)(
+        'workspace lock must exactly cover the executable-skill packages',
+      );
+    }
+  }
+  return lock;
+}
+
 type AuditPackageRequest = AuditExecutableSkillPackageFilesRequest & {
   readonly collector: FindingCollector;
   readonly npmPackages: Set<string>;
   readonly skillPackage: ExecutableSkillPackage;
+  readonly workspaceLock: UntrustedYamlMap | false;
 };
 
 function auditPackage(request: AuditPackageRequest): void {
-  const { collector, npmPackages, repoRoot, skillPackage, tracked } = request;
+  const {
+    collector,
+    npmPackages,
+    repoRoot,
+    skillPackage,
+    tracked,
+    workspaceLock,
+  } = request;
   auditPackageDirectoryChain(request);
   const packageFiles = tracked.filter(
     (file) =>
@@ -238,6 +393,11 @@ function auditPackage(request: AuditPackageRequest): void {
     if (file.path.startsWith(`${skillPackage.scriptsRoot}/node_modules/`)) {
       addFinding(collector)(skillPackage.scriptsRoot)(
         'node_modules content cannot be tracked in an executable-skill package',
+      );
+    }
+    if (file.path === `${skillPackage.scriptsRoot}/bun.lock`) {
+      addFinding(collector)(file.path)(
+        'executable-skill packages must use the shared workspace lock',
       );
     }
     if (
@@ -281,7 +441,6 @@ function auditPackage(request: AuditPackageRequest): void {
     skillPackage.skillPath,
     `${skillPackage.scriptsRoot}/package.json`,
     `${skillPackage.scriptsRoot}/executable-skill.json`,
-    `${skillPackage.scriptsRoot}/bun.lock`,
     `${skillPackage.scriptsRoot}/tsconfig.json`,
     `${skillPackage.scriptsRoot}/eslint.config.js`,
     `${skillPackage.scriptsRoot}/.prettierrc`,
@@ -307,6 +466,7 @@ function auditPackage(request: AuditPackageRequest): void {
       npmPackages,
       repoRoot,
       skillPackage,
+      workspaceLock,
     };
     auditDocuments(documentsRequest);
   }
@@ -334,10 +494,12 @@ type AuditDocumentsRequest = {
   readonly npmPackages: Set<string>;
   readonly repoRoot: string;
   readonly skillPackage: ExecutableSkillPackage;
+  readonly workspaceLock: UntrustedYamlMap | false;
 };
 
 function auditDocuments(request: AuditDocumentsRequest): void {
-  const { collector, npmPackages, repoRoot, skillPackage } = request;
+  const { collector, npmPackages, repoRoot, skillPackage, workspaceLock } =
+    request;
   const skill = readFileSync(
     path.join(repoRoot, skillPackage.skillPath),
     'utf8',
@@ -369,7 +531,6 @@ function auditDocuments(request: AuditDocumentsRequest): void {
   }
   const packagePath = `${skillPackage.scriptsRoot}/package.json`;
   const manifestPath = `${skillPackage.scriptsRoot}/executable-skill.json`;
-  const lockPath = `${skillPackage.scriptsRoot}/bun.lock`;
   auditProjectConfigs(request);
   const packageRequest: ParseJsonRequest = {
     collector,
@@ -383,16 +544,9 @@ function auditDocuments(request: AuditDocumentsRequest): void {
     relativePath: manifestPath,
     repoRoot,
   };
-  const lockRequest: ParseJsonRequest = {
-    collector,
-    json5: true,
-    relativePath: lockPath,
-    repoRoot,
-  };
   const packageDocument = parseJson(packageRequest);
   const manifest = parseJson(manifestRequest);
-  const lock = parseJson(lockRequest);
-  if (packageDocument === false || manifest === false || lock === false) return;
+  if (packageDocument === false || manifest === false) return;
   const dependencies = property(packageDocument)('devDependencies');
   if (isRecord(dependencies)) {
     for (const name of Object.keys(dependencies)) {
@@ -411,16 +565,18 @@ function auditDocuments(request: AuditDocumentsRequest): void {
     manifestPath,
     skillPackage,
   };
-  const lockAudit: AuditLockRequest = {
-    collector,
-    lock,
-    lockPath,
-    packageDocument,
-    skillPackage,
-  };
   auditPackageDocument(packageAudit);
   auditManifest(manifestAudit);
-  auditLock(lockAudit);
+  if (workspaceLock !== false) {
+    const lockAudit: AuditLockRequest = {
+      collector,
+      lock: workspaceLock,
+      lockPath: `${EXECUTABLE_SKILL_WORKSPACE_ROOT}/bun.lock`,
+      packageDocument,
+      skillPackage,
+    };
+    auditLock(lockAudit);
+  }
 }
 
 function auditProjectConfigs(request: AuditDocumentsRequest): void {
@@ -586,14 +742,16 @@ type AuditLockRequest = {
 function auditLock(request: AuditLockRequest): void {
   const { collector, lock, lockPath, packageDocument, skillPackage } = request;
   const workspaces = property(lock)('workspaces');
-  const rootEntry = isRecord(workspaces)
-    ? Object.entries(workspaces).find(([key]) => key === '')
+  const workspacePath = skillPackage.scriptsRoot.slice(
+    `${EXECUTABLE_SKILL_WORKSPACE_ROOT}/`.length,
+  );
+  const workspace = isRecord(workspaces)
+    ? property(workspaces)(workspacePath)
     : false;
-  const root = rootEntry ? (rootEntry.at(1) ?? false) : false;
   const expectedName = `@nook/${skillPackage.slug}-skill`;
   const packages = property(lock)('packages');
-  const rootDependencies = isRecord(root)
-    ? property(root)('devDependencies')
+  const workspaceDependencies = isRecord(workspace)
+    ? property(workspace)('devDependencies')
     : false;
   const packageDependencies = property(packageDocument)('devDependencies');
   if (
@@ -606,15 +764,16 @@ function auditLock(request: AuditLockRequest): void {
     lock.lockfileVersion !== 1 ||
     lock.configVersion !== 1 ||
     !isRecord(packages) ||
-    !isRecord(root) ||
-    !sameKeys(root)(['devDependencies', 'name']) ||
-    root.name !== expectedName ||
-    !isRecord(rootDependencies) ||
+    !isRecord(workspace) ||
+    !sameKeys(workspace)(['devDependencies', 'name', 'version']) ||
+    workspace.name !== expectedName ||
+    workspace.version !== '0.1.0' ||
+    !isRecord(workspaceDependencies) ||
     !isRecord(packageDependencies) ||
-    !sameRecord(rootDependencies)(packageDependencies)
+    !sameRecord(workspaceDependencies)(packageDependencies)
   ) {
     addFinding(collector)(lockPath)(
-      'lock workspace must exactly match package identity and devDependencies',
+      'workspace lock entry must exactly match package identity and devDependencies',
     );
   }
 }

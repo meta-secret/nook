@@ -431,6 +431,7 @@ export function listCortexMarkdownFiles(root: string): string[] {
     for (const entry of readdirSync(current, directoryReadOptions)) {
       const full = path.join(current, entry.name);
       if (entry.isDirectory()) {
+        if (full === path.join(root, 'node_modules')) continue;
         const scriptsDirectoryArgs: IsExecutableSkillScriptsDirectoryArgs = {
           cortexRoot: root,
           candidate: full,
@@ -450,7 +451,6 @@ export function listCortexMarkdownFiles(root: string): string[] {
 const EXECUTABLE_SKILL_PROJECT_FILES = [
   '.gitignore',
   '.prettierrc',
-  'bun.lock',
   'eslint.config.js',
   'executable-skill.json',
   'package.json',

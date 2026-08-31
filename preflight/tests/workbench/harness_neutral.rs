@@ -17,6 +17,15 @@ const FORBIDDEN_AUTHORITY_REFERENCES: [&str; 6] = [
     "web_development_team_agent",
     ".codex/agents",
 ];
+const EXECUTABLE_SKILL_OWNERS: [&str; 7] = [
+    ".cortex/gizmo/dynamic-skills",
+    ".cortex/shared/dynamic-skills",
+    ".cortex/teams/ai/dynamic-skills",
+    ".cortex/teams/dev-core/dynamic-skills",
+    ".cortex/teams/security/dynamic-skills",
+    ".cortex/teams/sre/dynamic-skills",
+    ".cortex/teams/web-dev/dynamic-skills",
+];
 static TEMPORARY_DIRECTORY_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 struct TemporaryDirectory {
@@ -102,17 +111,9 @@ fn files_under(path: &Path, excluded_roots: &[PathBuf]) -> anyhow::Result<Vec<Pa
     Ok(files)
 }
 
-fn validated_executable_scripts(root: &Path) -> anyhow::Result<Vec<PathBuf>> {
-    let mut dependency_roots = Vec::new();
-    for owner in [
-        ".cortex/gizmo/dynamic-skills",
-        ".cortex/shared/dynamic-skills",
-        ".cortex/teams/ai/dynamic-skills",
-        ".cortex/teams/dev-core/dynamic-skills",
-        ".cortex/teams/security/dynamic-skills",
-        ".cortex/teams/sre/dynamic-skills",
-        ".cortex/teams/web-dev/dynamic-skills",
-    ] {
+fn validated_executable_workspace_dependencies(root: &Path) -> anyhow::Result<Vec<PathBuf>> {
+    let mut has_executable_package = false;
+    for owner in EXECUTABLE_SKILL_OWNERS {
         let owner_root = root.join(owner);
         for entry in fs::read_dir(owner_root)? {
             let skill_root = entry?.path();
@@ -126,23 +127,29 @@ fn validated_executable_scripts(root: &Path) -> anyhow::Result<Vec<PathBuf>> {
             {
                 continue;
             }
-            let dependency_root = scripts_root.join("node_modules");
-            match fs::symlink_metadata(&dependency_root) {
-                Ok(dependency_metadata) => {
-                    anyhow::ensure!(
-                        dependency_metadata.is_dir()
-                            && !dependency_metadata.file_type().is_symlink(),
-                        "executable-skill dependency root is unsafe: {}",
-                        dependency_root.display()
-                    );
-                    dependency_roots.push(dependency_root);
-                }
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                Err(error) => return Err(error.into()),
-            }
+            has_executable_package = true;
         }
     }
-    Ok(dependency_roots)
+    anyhow::ensure!(
+        has_executable_package
+            && is_regular_file(&root.join(".cortex/package.json"))
+            && is_regular_file(&root.join(".cortex/bun.lock"))
+            && is_regular_file(&root.join(".cortex/bunfig.toml")),
+        "executable-skill workspace is incomplete"
+    );
+    let dependency_root = root.join(".cortex/node_modules");
+    match fs::symlink_metadata(&dependency_root) {
+        Ok(dependency_metadata) => {
+            anyhow::ensure!(
+                dependency_metadata.is_dir() && !dependency_metadata.file_type().is_symlink(),
+                "executable-skill dependency root is unsafe: {}",
+                dependency_root.display()
+            );
+            Ok(vec![dependency_root])
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+        Err(error) => Err(error.into()),
+    }
 }
 
 fn is_kebab_slug(value: &str) -> bool {
@@ -167,7 +174,6 @@ fn is_canonical_scripts_root(path: &Path) -> bool {
     [
         ".gitignore",
         ".prettierrc",
-        "bun.lock",
         "eslint.config.js",
         "executable-skill.json",
         "package.json",
@@ -301,11 +307,11 @@ fn gizmo_dispatches_complete_harness_neutral_team_contracts() {
 #[test]
 fn repository_agent_authority_is_harness_neutral() -> anyhow::Result<()> {
     let root = repository_root();
-    let executable_scripts = validated_executable_scripts(&root)?;
+    let executable_dependencies = validated_executable_workspace_dependencies(&root)?;
     let mut authority_files = vec![root.join("AGENTS.md")];
     for authority_root in [".cortex", ".github/prompts"] {
         let exclusions = if authority_root == ".cortex" {
-            executable_scripts.as_slice()
+            executable_dependencies.as_slice()
         } else {
             &[]
         };
@@ -429,22 +435,41 @@ fn recursive_scan_rejects_directory_symlink() -> anyhow::Result<()> {
 
 #[cfg(unix)]
 #[test]
-fn recursive_scan_excludes_only_validated_skill_dependencies() -> anyhow::Result<()> {
+fn recursive_scan_excludes_only_validated_workspace_dependencies() -> anyhow::Result<()> {
     let fixture = TemporaryDirectory::create("skill-script-exclusion")?;
     let cortex_root = fixture.path.join(".cortex");
     let scripts_root = cortex_root.join("teams/ai/dynamic-skills/example/scripts");
-    let dependency_root = scripts_root.join("node_modules");
+    let dependency_root = cortex_root.join("node_modules");
     let unrelated_scripts = cortex_root.join("teams/ai/scripts");
+    for owner in EXECUTABLE_SKILL_OWNERS {
+        fs::create_dir_all(fixture.path.join(owner))?;
+    }
     fs::create_dir_all(&dependency_root)?;
+    fs::create_dir_all(scripts_root.join("src"))?;
+    fs::create_dir_all(scripts_root.join("tests"))?;
     fs::create_dir_all(&unrelated_scripts)?;
+    fs::write(cortex_root.join("package.json"), "{}")?;
+    fs::write(cortex_root.join("bun.lock"), "{}")?;
+    fs::write(cortex_root.join("bunfig.toml"), "linker = \"hoisted\"")?;
+    fs::write(scripts_root.parent().unwrap().join("SKILL.md"), "# Example")?;
+    for name in [
+        ".gitignore",
+        ".prettierrc",
+        "eslint.config.js",
+        "executable-skill.json",
+        "package.json",
+        "tsconfig.json",
+    ] {
+        fs::write(scripts_root.join(name), "")?;
+    }
     let target = fixture.path.join("target");
     fs::write(&target, "forbidden authority")?;
     symlink(&target, dependency_root.join("installed-bin"))?;
     let authored_symlink = scripts_root.join("unsafe");
     symlink(&target, &authored_symlink)?;
 
-    let exclusions = std::slice::from_ref(&dependency_root);
-    let error = files_under(&cortex_root, exclusions)
+    let exclusions = validated_executable_workspace_dependencies(&fixture.path)?;
+    let error = files_under(&cortex_root, &exclusions)
         .err()
         .context("authored executable scripts symlink must remain visible")?;
     assert!(
@@ -455,7 +480,7 @@ fn recursive_scan_excludes_only_validated_skill_dependencies() -> anyhow::Result
     );
     fs::remove_file(authored_symlink)?;
     symlink(&target, unrelated_scripts.join("unsafe"))?;
-    let error = files_under(&cortex_root, exclusions)
+    let error = files_under(&cortex_root, &exclusions)
         .err()
         .context("unrelated Cortex scripts symlink must remain visible")?;
     assert!(
