@@ -31,6 +31,19 @@ describe('backup-code presentation evidence', () => {
     expect(pageHasDocumentBackupCodeHint()).toBe(true)
   })
 
+  test('keeps digit-format instructions without mixing separate elements', () => {
+    document.body.innerHTML = `
+      <p>Save your 8-digit backup codes somewhere secure.</p>
+      <p>Enter one of your backup codes</p>
+      <p>Save this device</p>
+    `
+
+    expect(authenticationRecoveryCopy()).toBe(
+      'Save your 8-digit backup codes somewhere secure.',
+    )
+    expect(pageHasDocumentBackupCodeHint()).toBe(true)
+  })
+
   test('uses visible instructional paragraphs but excludes hidden and code-bearing copy', () => {
     document.body.innerHTML = `
       <h1>Backup codes</h1>

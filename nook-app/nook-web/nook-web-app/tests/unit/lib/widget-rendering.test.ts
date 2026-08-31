@@ -7,6 +7,7 @@ const actions = vi.hoisted(() => ({
   cancelLoginPicker: vi.fn(),
   continueWithNook: vi.fn(),
   proposePasskeyWithNook: vi.fn(),
+  startQrEnrollment: vi.fn(),
   events: [] as string[],
 }))
 
@@ -43,6 +44,7 @@ vi.mock(
 vi.mock('../../../../nook-web-extension/src/content/enrollment-flow', () => ({
   detectEnrollmentHints: () => ({ qr: false, backupCodes: false }),
   renderEnrollmentActions: vi.fn(),
+  startQrEnrollment: () => actions.startQrEnrollment(),
 }))
 
 vi.mock(
@@ -88,7 +90,7 @@ vi.mock('../../../../nook-web-extension/src/content/autofill/state', () => ({
 vi.mock(
   '../../../../nook-web-extension/src/content/autofill/widget-shell',
   () => ({
-    buildEnrollmentFlowHost: vi.fn(),
+    buildEnrollmentFlowHost: () => ({ isBusy: () => false }),
     enrollmentCopy: vi.fn(),
     createWidgetShell: () => {
       const host = document.createElement('aside')
@@ -233,5 +235,30 @@ describe('passkey workflow saved-login fallback', () => {
     expect(actions.events).toEqual(['cancel-login-picker', 'propose-passkey'])
     expect(actions.cancelLoginPicker).toHaveBeenCalledOnce()
     expect(actions.proposePasskeyWithNook).toHaveBeenCalledOnce()
+  })
+})
+
+describe('authenticator enrollment workflow', () => {
+  test('renders and dispatches the Rust-selected enrollment action', () => {
+    const enrollmentSnapshot = {
+      ...snapshot,
+      action: AuthenticationWorkflowAction.EnrollAuthenticator,
+    }
+    const args = {
+      snapshot: enrollmentSnapshot,
+      workflow,
+      facts: {},
+      loginMatches: { kind: 'unavailable' },
+      vaultConnection: { connected: true, vaultName: 'Personal' },
+    } as Parameters<typeof renderWidget>[0]
+
+    renderWidget(args)
+    const primary = document.querySelector<HTMLButtonElement>(
+      'button[data-primary="true"]',
+    )
+    primary?.click()
+
+    expect(primary?.textContent).toBe('widgetAddFromPage')
+    expect(actions.startQrEnrollment).toHaveBeenCalledOnce()
   })
 })

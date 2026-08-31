@@ -25,25 +25,15 @@ function isVisibleRecoveryCopy(element: HTMLElement): boolean {
 }
 
 type RecoveryCopyTexts = string[]
-type RecoveryCopyObservation = {
-  text: string
-  recoveryBearing: boolean
-}
-
 function boundedRecoveryCopy(texts: RecoveryCopyTexts): string {
-  const visibleCopy: RecoveryCopyObservation[] = texts
+  const recoveryCopy = texts
     .filter((text) => !contains_backup_code_candidate(text))
-    .map((text) => ({
-      text,
-      recoveryBearing:
+    .filter(
+      (text) =>
         classify_authentication_backup_codes_observation(text) === 'present',
-    }))
-  const prioritizedCopy = [
-    ...visibleCopy.filter(({ recoveryBearing }) => recoveryBearing),
-    ...visibleCopy.filter(({ recoveryBearing }) => !recoveryBearing),
-  ]
+    )
   let boundedCopy = ''
-  for (const { text } of prioritizedCopy) {
+  for (const text of recoveryCopy) {
     const separator = boundedCopy.length > 0 ? ' ' : ''
     const remaining =
       MAX_RECOVERY_COPY_CODE_POINTS - Array.from(boundedCopy + separator).length

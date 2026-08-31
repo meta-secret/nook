@@ -93,7 +93,13 @@ fn candidate_shape_matches(value: &str) -> bool {
         .chars()
         .filter(|c| !c.is_ascii_whitespace() && *c != '_' && *c != '-')
         .count();
-    compact_len >= MIN_CODE_LEN && trimmed.chars().any(|c| c.is_ascii_digit())
+    compact_len >= MIN_CODE_LEN
+        && trimmed
+            .chars()
+            .filter(|c| c.is_ascii_digit())
+            .take(2)
+            .count()
+            == 2
 }
 
 fn collapse_whitespace(value: &str) -> String {
@@ -239,6 +245,9 @@ mod tests {
         assert!(contains_backup_code_candidate("A1B2-C3D4-E5F6"));
         assert!(contains_backup_code_candidate(
             "Save your recovery codes: A1B2-C3D4-E5F6"
+        ));
+        assert!(!contains_backup_code_candidate(
+            "Save your 8-digit backup codes"
         ));
         assert!(!contains_backup_code_candidate("Save your backup codes"));
     }

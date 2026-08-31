@@ -640,10 +640,11 @@ type StartQrEnrollmentArgs = {
   section: HTMLElement
 }
 
-async function startQrEnrollment({
+export async function startQrEnrollment({
   host,
   section,
 }: StartQrEnrollmentArgs): Promise<void> {
+  releaseEnrollmentWidgetHold()
   host.title.textContent = host.translatedMessage(
     BROWSER_MESSAGE_KEYS.WidgetEnrollTitle,
   )
@@ -781,7 +782,6 @@ export function renderEnrollmentActions({
       labelKey: BROWSER_MESSAGE_KEYS.WidgetAddFromPage,
       onClick: (event) => {
         if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
-        releaseEnrollmentWidgetHold()
         const nookTypedArgs0_82: Parameters<typeof startQrEnrollment>[0] = {
           host,
           section,

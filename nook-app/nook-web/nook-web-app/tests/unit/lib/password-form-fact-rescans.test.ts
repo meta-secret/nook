@@ -155,6 +155,17 @@ describe('authentication fact rescans', () => {
       target: recoveryText ? recoveryText : recoveryParagraph,
     }
     expect(authenticationFactMutationRequiresScan(recoveryMutation)).toBe(true)
+    const recoveryVisibilityMutation: Parameters<
+      typeof authenticationFactMutationRequiresScan
+    >[0] = {
+      type: 'attributes',
+      target: recoveryParagraph,
+      attributeName: 'hidden',
+      oldValue: '',
+    }
+    expect(
+      authenticationFactMutationRequiresScan(recoveryVisibilityMutation),
+    ).toBe(true)
     document.body.innerHTML = `
       <span id="passkey-label"><strong>Use passkey</strong></span>
       <div data-nook-passkey-control aria-labelledby="passkey-label"><svg></svg></div>

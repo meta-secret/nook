@@ -15,6 +15,7 @@ import {
   detectEnrollmentHints,
   renderEnrollmentActions,
   startBackupCodeEnrollment,
+  startQrEnrollment,
   type EnrollmentPageHints,
 } from '../enrollment-flow'
 import { startRevalidatedBackupCodeEnrollment } from './backup-code-workflow-action'
@@ -217,6 +218,7 @@ export function renderWidget({
   const canContinueWithNook =
     snapshot.action === AuthenticationWorkflowAction.ContinueWithNook ||
     snapshot.action === AuthenticationWorkflowAction.FillTotp ||
+    snapshot.action === AuthenticationWorkflowAction.EnrollAuthenticator ||
     snapshot.action === AuthenticationWorkflowAction.SaveBackupCodes ||
     snapshot.action === AuthenticationWorkflowAction.GeneratePassword ||
     snapshot.action === AuthenticationWorkflowAction.UsePasskey ||
@@ -224,17 +226,19 @@ export function renderWidget({
   const continueMessageKey =
     snapshot.action === AuthenticationWorkflowAction.FillTotp
       ? BROWSER_MESSAGE_KEYS.WidgetFillAuthenticator
-      : snapshot.action === AuthenticationWorkflowAction.SaveBackupCodes
-        ? BROWSER_MESSAGE_KEYS.WidgetSaveBackupCodes
-        : snapshot.action === AuthenticationWorkflowAction.GeneratePassword
-          ? BROWSER_MESSAGE_KEYS.WidgetGeneratePassword
-          : snapshot.action === AuthenticationWorkflowAction.UsePasskey
-            ? BROWSER_MESSAGE_KEYS.WidgetUsePasskey
-            : snapshot.action === AuthenticationWorkflowAction.CreatePasskey
-              ? BROWSER_MESSAGE_KEYS.WidgetCreatePasskey
-              : canContinueWithNook
-                ? BROWSER_MESSAGE_KEYS.WidgetContinue
-                : BROWSER_MESSAGE_KEYS.WidgetTakeOver
+      : snapshot.action === AuthenticationWorkflowAction.EnrollAuthenticator
+        ? BROWSER_MESSAGE_KEYS.WidgetAddFromPage
+        : snapshot.action === AuthenticationWorkflowAction.SaveBackupCodes
+          ? BROWSER_MESSAGE_KEYS.WidgetSaveBackupCodes
+          : snapshot.action === AuthenticationWorkflowAction.GeneratePassword
+            ? BROWSER_MESSAGE_KEYS.WidgetGeneratePassword
+            : snapshot.action === AuthenticationWorkflowAction.UsePasskey
+              ? BROWSER_MESSAGE_KEYS.WidgetUsePasskey
+              : snapshot.action === AuthenticationWorkflowAction.CreatePasskey
+                ? BROWSER_MESSAGE_KEYS.WidgetCreatePasskey
+                : canContinueWithNook
+                  ? BROWSER_MESSAGE_KEYS.WidgetContinue
+                  : BROWSER_MESSAGE_KEYS.WidgetTakeOver
   continueButton.setAttribute(
     'aria-label',
     translatedMessage(continueMessageKey),
@@ -261,6 +265,26 @@ export function renderWidget({
           approval: currentApproval,
         }
       void continueWithAuthenticator(nookTypedArgs0_4)
+    } else if (
+      snapshot.action === AuthenticationWorkflowAction.EnrollAuthenticator
+    ) {
+      const hostRequest: Parameters<typeof buildEnrollmentFlowHost>[0] = {
+        panel: body,
+        step,
+        title,
+        description,
+        continueButton,
+        openVaultButton,
+      }
+      const host = buildEnrollmentFlowHost(hostRequest)
+      if (host.isBusy()) return
+      const section = document.createElement('section')
+      body.append(section)
+      const enrollmentRequest: Parameters<typeof startQrEnrollment>[0] = {
+        host,
+        section,
+      }
+      void startQrEnrollment(enrollmentRequest)
     } else if (
       snapshot.action === AuthenticationWorkflowAction.SaveBackupCodes
     ) {
