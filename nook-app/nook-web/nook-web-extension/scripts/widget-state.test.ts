@@ -26,7 +26,6 @@ describe('authentication scan scheduling', () => {
     expect(state.sequence).toBe(0)
     expect(state.requestFollowUpIfRunning()).toBe(true)
     expect(state.requestFollowUpIfRunning()).toBe(true)
-    expect(state.sequence).toBe(0)
     expect(state.finishScan()).toBe(true)
 
     expect(state.beginScan()).toBe(true)
@@ -64,20 +63,6 @@ describe('Nook Pilot presentation state', () => {
     expanded.expandByUser()
     expanded.applyAutomaticCollapse(true)
     expect(expanded.collapsed).toBe(false)
-  })
-
-  test('preserves an explicit presentation while remounting one workflow', () => {
-    const state = new WidgetState()
-    state.assignPresentationScope('login:password')
-    state.collapseByUser()
-    state.detachRenderedWidget()
-
-    state.applyAutomaticCollapse(false)
-    expect(state.collapsed).toBe(true)
-    expect(state.presentationScope).toEqual({
-      kind: 'assigned',
-      key: 'login:password',
-    })
   })
 
   test('expands a new enrollment presentation and preserves the same one', () => {

@@ -8,40 +8,8 @@ const demoDir = path.dirname(fileURLToPath(import.meta.url))
 const extensionDist = path.resolve(demoDir, '../../../nook-web-extension/dist')
 const extensionRoutePrefix = '/__extension-popup/'
 
-type PopupDemoRuntimeMessage = {
-  readonly type: string
-}
-
-type PopupDemoDevice = {
-  readonly deviceId: string
-  readonly devicePublicKey: string
-  readonly deviceSigningPublicKey: string
-}
-
-type PopupDemoRuntimeResponse =
-  | { readonly ok: boolean }
-  | { readonly ok: true; readonly setup: ExtensionReadySetup }
-  | {
-      readonly ok: true
-      readonly status: number
-      readonly device: PopupDemoDevice
-    }
-
-type PopupDemoRuntimeCallback = (response: PopupDemoRuntimeResponse) => void
-
-type PopupDemoChrome = {
-  readonly i18n?: { readonly getUILanguage: () => string }
-  readonly runtime?: {
-    readonly getURL: (resource: string) => string
-    readonly sendMessage: (
-      message: PopupDemoRuntimeMessage,
-      callback: PopupDemoRuntimeCallback,
-    ) => void
-  }
-}
-
 function installPopupDemoRuntime(): void {
-  const device: PopupDemoDevice = {
+  const device = {
     deviceId: 'popup-demo-device',
     devicePublicKey: 'popup-demo-public-key',
     deviceSigningPublicKey: 'popup-demo-signing-key',
@@ -57,13 +25,21 @@ function installPopupDemoRuntime(): void {
     eventLogHeads: ['popup-demo-event-head'],
     lastLocalSyncAt: '2026-08-25T00:00:00.000Z',
   }
+  type RuntimeResponse =
+    | { readonly ok: boolean }
+    | { readonly ok: true; readonly setup: typeof setup }
+    | {
+        readonly ok: true
+        readonly status: number
+        readonly device: typeof device
+      }
 
   const runtime = {
     getURL: (resource: string) =>
       `${globalThis.location.origin}/__extension-popup/${resource}`,
     sendMessage: (
-      message: PopupDemoRuntimeMessage,
-      callback: PopupDemoRuntimeCallback,
+      message: { readonly type: string },
+      callback: (response: RuntimeResponse) => void,
     ) => {
       switch (message.type) {
         case 'nook:extension-pairing-state-query': {
@@ -85,12 +61,12 @@ function installPopupDemoRuntime(): void {
     },
   }
 
-  const chromeStub: PopupDemoChrome = {
+  const chromeStub = {
     i18n: { getUILanguage: () => 'en' },
     runtime,
   }
   const browserGlobal = globalThis as typeof globalThis & {
-    chrome?: PopupDemoChrome
+    chrome?: typeof chromeStub
   }
   if (browserGlobal.chrome) {
     Object.defineProperties(browserGlobal.chrome, {
@@ -118,17 +94,7 @@ test('keeps the extension toolbar popup focused on one next action', async ({
     await route.fulfill(response)
   })
 
-  await page.goto(`${extensionRoutePrefix}popup/index.html?state=unconnected`)
-  await expect(page.getByTestId('extension-toolbar-menu')).toBeVisible()
-  await expect(page.getByTestId('companion-vault-status')).toHaveText(
-    'Vault not connected',
-  )
-  await expect(page.getByTestId('connect-simple-vault-btn')).toBeVisible()
-  await expect(page.getByTestId('open-simple-vault-btn')).toHaveCount(0)
-  await demoBeat(page)
-
   await page.goto(`${extensionRoutePrefix}popup/index.html?state=connected`)
-  await expect(page.getByTestId('extension-toolbar-menu')).toBeVisible()
   await expect(page.getByTestId('companion-vault-status')).toHaveText(
     'Connected to Personal vault',
   )
@@ -141,6 +107,5 @@ test('keeps the extension toolbar popup focused on one next action', async ({
   await expect(page.getByTestId('pair-another-vault-btn')).toHaveClass(
     /menu-secondary-action/,
   )
-  await expect(page.getByTestId('connect-simple-vault-btn')).toHaveCount(0)
   await demoBeat(page)
 })

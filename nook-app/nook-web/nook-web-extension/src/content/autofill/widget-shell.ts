@@ -151,6 +151,11 @@ const WIDGET_PANEL_STYLES = `
       object-fit: contain;
       pointer-events: none;
     }
+    .body .collapsed-mark {
+      width: 20px;
+      height: 20px;
+      border-radius: 5px;
+    }
     .collapsed-progress {
       position: absolute;
       right: -4px;
@@ -296,6 +301,7 @@ interface WidgetShell {
   continueButton: HTMLButtonElement
   collapseButton: HTMLButtonElement
   collapsedLaunch: HTMLButtonElement
+  nookMark: HTMLImageElement
 }
 
 type CreateWidgetMarkArgs = {
@@ -394,7 +400,7 @@ export function createWidgetShell({
   continueButton.type = 'button'
   continueButton.className = 'primary-button'
 
-  body.append(site, title, description, continueButton)
+  body.append(title, description, continueButton, site)
 
   const collapsedLaunch = document.createElement('button')
   collapsedLaunch.type = 'button'
@@ -413,11 +419,11 @@ export function createWidgetShell({
     className: 'collapsed-mark',
     size: 40,
   }
-  const collapsedMark = createWidgetMark(nookTypedArgs0_3)
+  const nookMark = createWidgetMark(nookTypedArgs0_3)
   const collapsedProgress = document.createElement('span')
   collapsedProgress.className = 'collapsed-progress'
   collapsedProgress.textContent = `${currentStep}/${totalSteps}`
-  collapsedLaunch.append(collapsedMark, collapsedProgress)
+  collapsedLaunch.append(nookMark, collapsedProgress)
 
   return {
     host,
@@ -430,6 +436,7 @@ export function createWidgetShell({
     continueButton,
     collapseButton,
     collapsedLaunch,
+    nookMark,
   }
 }
 
@@ -446,6 +453,8 @@ export function mountWidgetShell({
 }: MountWidgetShellArgs): void {
   const { host, panel, toolbar, body, collapseButton, collapsedLaunch } = shell
   const applyCollapsedState = (): void => {
+    const markParent = widgetState.collapsed ? collapsedLaunch : body
+    markParent.prepend(shell.nookMark)
     panel.classList.toggle('is-collapsed', widgetState.collapsed)
     collapseButton.hidden = widgetState.collapsed
     toolbar.hidden = widgetState.collapsed
