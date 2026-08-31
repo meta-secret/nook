@@ -61,8 +61,17 @@ Delivery rules:
   - Codex is the sole automatic provider. Cursor Bugbot remains inactive.
 - Inspect feedback again at the readiness boundary.
 - A later push invalidates the audit.
+- Keep PR monitoring in the active task with bounded direct waits. Never create
+  a Codex scheduled task, automation, heartbeat, reminder, or recurring
+  follow-up to finish delivery later.
+- Planning a bounded polling cadence is allowed as active-task execution
+  behavior. Persisting that plan as Codex scheduling state is prohibited.
+- Treat "merge when ready" as an instruction to test the PR, monitor its
+  exact-head evidence, and merge in the same delivery task after readiness.
 - Do not monitor the resulting Main workflow unless the user explicitly
   requested deployment or Main-failure work.
+- Do not diagnose or repair unrelated default-branch health. Consult
+  `origin/main` only for the PR's base and freshness requirements.
 
 ## Scope
 
@@ -110,6 +119,8 @@ Does not apply to:
 - [ ] If promotion changes the head, repeat hosted validation.
 - [ ] Run `task loom:pr-land CONFIG=<pr-land-ready-request.yaml>` on the exact head.
 - [ ] Squash-merge immediately when readiness succeeds, then report duration.
+- [ ] Keep monitoring in the active task; do not schedule a Codex follow-up.
+- [ ] Stop at the PR merge unless Main work was explicitly assigned.
 - [ ] Publish Workbench issue, worklog, and agent statistics.
 
 ## Validation
