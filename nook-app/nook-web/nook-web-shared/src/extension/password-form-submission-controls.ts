@@ -915,23 +915,53 @@ export function observeSubmit({
   const state: FormSubmissionObservationState = {
     result: FormSubmissionResult.NotObserved,
   };
+  let replayingApprovedSubmission = false;
+  const rejectSubmission = (event?: SubmitEvent) => {
+    event?.preventDefault();
+    event?.stopImmediatePropagation();
+    state.result = FormSubmissionResult.Rejected;
+    if (approval) approval.reject();
+  };
   const markSubmitted = (event: SubmitEvent) => {
+    if (!approval) {
+      state.result = FormSubmissionResult.Submitted;
+      return;
+    }
     const submitterMatches = event.submitter
       ? event.submitter === expectedSubmitter
       : expectedSubmitter === false;
-    if (approval && (!submitterMatches || !approval.isApproved())) {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      state.result = FormSubmissionResult.Rejected;
-      approval.reject();
+    if (!submitterMatches || !approval.isApproved()) {
+      rejectSubmission(event);
       return;
     }
+    if (replayingApprovedSubmission) {
+      event.stopImmediatePropagation();
+      state.result = FormSubmissionResult.Submitted;
+      return;
+    }
+    event.preventDefault();
     if (state.result !== FormSubmissionResult.Rejected) {
       state.result = FormSubmissionResult.Submitted;
     }
   };
   form.addEventListener("submit", markSubmitted, true);
   action();
+  if (
+    approval &&
+    state.result === FormSubmissionResult.Submitted &&
+    approval.isApproved()
+  ) {
+    replayingApprovedSubmission = true;
+    try {
+      if (expectedSubmitter) form.requestSubmit(expectedSubmitter);
+      else form.requestSubmit();
+    } catch {
+      rejectSubmission();
+    }
+    replayingApprovedSubmission = false;
+  } else if (approval && state.result === FormSubmissionResult.Submitted) {
+    rejectSubmission();
+  }
   form.removeEventListener("submit", markSubmitted, true);
   return state.result;
 }

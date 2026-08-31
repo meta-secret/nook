@@ -253,6 +253,37 @@ describe('credential submission observation facts', () => {
     ).toBe('')
   })
 
+  test('rejects a route changed by a submit handler after capture', () => {
+    document.body.innerHTML = `
+      <form method="post" id="login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+    const form = document.querySelector<HTMLFormElement>('#login')
+    if (!form) throw new Error('expected login form')
+    const approvedAction = form.action
+    const clearRequest = fillTrackedCredentials()
+    form.addEventListener('submit', () => {
+      form.action = '/capture'
+    })
+
+    expect(
+      submitLoginForm({
+        kind: PasswordFormQueryKind.Root,
+        root: document,
+        submissionApproval: {
+          isApproved: () => form.action === approvedAction,
+          reject: () => clearLoginCredentials(clearRequest),
+        },
+      }),
+    ).toBe(FormSubmissionResult.Rejected)
+    expect(
+      document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
+    ).toBe('')
+  })
+
   test('rejects a submitter override emitted by the approved click handler', () => {
     document.body.innerHTML = `
       <form method="post" id="login" action="/login">

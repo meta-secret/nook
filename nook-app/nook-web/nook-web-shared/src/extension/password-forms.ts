@@ -72,6 +72,7 @@ import {
   summarizePasskeyOnlyWorkflowForms,
 } from "./password-form-passkey-only-workflows";
 import {
+  clearLoginCredentials,
   setNativeInputValue,
   trackLoginCredentialField,
   type LoginCredentialsFillRequest,
@@ -152,7 +153,6 @@ function passwordFieldQuery(
   }
   return { root: request.root, formScope: request.formScope };
 }
-
 function summarizeRoot(
   request: PasswordFormSummaryRequest,
 ): PasswordFormSummary {
@@ -178,7 +178,6 @@ function summarizeRoot(
     return hasAutocompleteToken(nookArrowArgs1);
   }).length;
   const forms = new Set<HTMLFormElement>();
-
   for (const field of [
     ...passwordFields,
     ...usernameFields,
@@ -188,7 +187,6 @@ function summarizeRoot(
       forms.add(field.form);
     }
   }
-
   return {
     passwordFieldCount: passwordFields.length,
     currentPasswordFieldCount,
@@ -801,7 +799,10 @@ export function fillLoginCredentials(
     };
     trackLoginCredentialField(nookTypedArgs0_21);
     setNativeInputValue(nookTypedArgs0_21);
-    if (passwordFieldBlocksFill()) return false;
+    if (passwordFieldBlocksFill()) {
+      clearLoginCredentials(request);
+      return false;
+    }
   }
   const nookTypedArgs0_22: Parameters<typeof trackLoginCredentialField>[0] = {
     input: passwordField,
@@ -811,8 +812,7 @@ export function fillLoginCredentials(
   trackLoginCredentialField(nookTypedArgs0_22);
   setNativeInputValue(nookTypedArgs0_22);
   if (passwordFieldBlocksFill()) {
-    nookTypedArgs0_22.value = "";
-    setNativeInputValue(nookTypedArgs0_22);
+    clearLoginCredentials(request);
     return false;
   }
   return true;
