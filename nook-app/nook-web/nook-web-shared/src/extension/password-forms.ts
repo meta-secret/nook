@@ -96,6 +96,10 @@ const passkeyControlAbsent =
   "absent" satisfies AuthenticationPasskeyControlObservation;
 const passkeyControlPresent =
   "present" satisfies AuthenticationPasskeyControlObservation;
+const credentialSubmissionAbsent =
+  "absent" satisfies AuthenticationCredentialSubmissionObservation["kind"];
+const credentialSubmissionObserved =
+  "observed" satisfies AuthenticationCredentialSubmissionObservation["kind"];
 
 export type PasswordFormSummary = {
   passwordFieldCount: number;
@@ -584,21 +588,23 @@ export function authenticationPageObservationFacts({
         observation.summary.genericPasswordFieldCount +
         observation.summary.newPasswordFieldCount >
         0 && formBlocksCredentialDisclosure(observation.formScope.owner)
-    );
+  );
   let credentialSubmission: AuthenticationCredentialSubmissionObservation = {
-    kind: "absent",
+    kind: credentialSubmissionAbsent,
   };
   const selectedAdvanceObservation = boundedAdvanceObservations[0];
+  const selectedSubmissionMethod =
+    selectedAdvanceObservation?.submissionMethod;
   if (
     selectedAdvanceObservation &&
-    selectedAdvanceObservation.submissionMethod !==
-      PageControlSubmissionMethod.Absent
+    selectedSubmissionMethod &&
+    selectedSubmissionMethod !== PageControlSubmissionMethod.Absent
   ) {
     credentialSubmission = {
-      kind: "observed",
+      kind: credentialSubmissionObserved,
       facts: {
         actionability: selectedAdvanceObservation.actionability,
-        method: selectedAdvanceObservation.submissionMethod,
+        method: selectedSubmissionMethod,
         sourceOrigin: selectedAdvanceObservation.sourceOrigin,
         formIdentity: selectedAdvanceObservation.formIdentity,
         destinationIdentity: selectedAdvanceObservation.destinationIdentity,
@@ -609,7 +615,7 @@ export function authenticationPageObservationFacts({
     observation.formScope.kind === PasswordFormScopeKind.Owned
   ) {
     credentialSubmission = {
-      kind: "observed",
+      kind: credentialSubmissionObserved,
       facts: {
         actionability: "actionable",
         method: formSubmissionMethod(observation.formScope.owner),
