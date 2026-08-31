@@ -23,6 +23,16 @@ function authenticationFacts() {
   })
 }
 
+function fillTrackedCredentials() {
+  const request: Parameters<typeof fillLoginCredentials>[0] = {
+    credentials: { username: 'vault-user', password: 'vault-password' },
+    kind: PasswordFormQueryKind.Root,
+    root: document,
+  }
+  expect(fillLoginCredentials(request)).toBe(true)
+  return request
+}
+
 afterEach(() => {
   document.body.replaceChildren()
 })
@@ -179,17 +189,17 @@ describe('credential submission observation facts', () => {
     const button = form?.querySelector<HTMLButtonElement>('button')
     if (!form || !button) throw new Error('expected login controls')
     const approvedAction = form.action
-    const fillRequest: Parameters<typeof fillLoginCredentials>[0] = {
-      credentials: { username: 'vault-user', password: 'vault-password' },
-      kind: PasswordFormQueryKind.Root,
-      root: document,
-    }
-    expect(fillLoginCredentials(fillRequest)).toBe(true)
+    const fillRequest = fillTrackedCredentials()
     button.addEventListener('click', () => {
       const password = form.querySelector<HTMLInputElement>(
         'input[type="password"]',
       )
       if (password) password.style.display = 'none'
+      const userPassword = document.createElement('input')
+      userPassword.type = 'password'
+      userPassword.dataset.user = 'true'
+      userPassword.value = 'user-pin'
+      form.append(userPassword)
       form.action = '/capture'
     })
     const request: Parameters<typeof submitLoginForm>[0] = {
@@ -205,13 +215,16 @@ describe('credential submission observation facts', () => {
     expect(
       document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
     ).toBe('')
+    expect(document.querySelector<HTMLInputElement>('[data-user]')?.value).toBe(
+      'user-pin',
+    )
   })
 
   test('guards every submit emitted by one approved activation', () => {
     document.body.innerHTML = `
       <form method="post" id="login" action="/login">
-        <input autocomplete="username" value="vault-user" />
-        <input type="password" autocomplete="current-password" value="vault-password" />
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
         <button type="submit">Sign in</button>
       </form>
     `
@@ -224,10 +237,7 @@ describe('credential submission observation facts', () => {
       form.action = '/capture'
     })
     form.addEventListener('submit', (event) => event.preventDefault())
-    const clearRequest: Parameters<typeof clearLoginCredentials>[0] = {
-      kind: PasswordFormQueryKind.Root,
-      root: document,
-    }
+    const clearRequest = fillTrackedCredentials()
     const request: Parameters<typeof submitLoginForm>[0] = {
       kind: PasswordFormQueryKind.Root,
       root: document,
@@ -246,8 +256,8 @@ describe('credential submission observation facts', () => {
   test('rejects a submitter override emitted by the approved click handler', () => {
     document.body.innerHTML = `
       <form method="post" id="login" action="/login">
-        <input autocomplete="username" value="vault-user" />
-        <input type="password" autocomplete="current-password" value="vault-password" />
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
         <button type="submit" id="approved">Sign in</button>
         <button type="submit" id="alternate" formaction="/capture">Alternate</button>
       </form>
@@ -259,10 +269,7 @@ describe('credential submission observation facts', () => {
       throw new Error('expected login controls')
     approved.addEventListener('click', () => form.requestSubmit(alternate))
     form.addEventListener('submit', (event) => event.preventDefault())
-    const clearRequest: Parameters<typeof clearLoginCredentials>[0] = {
-      kind: PasswordFormQueryKind.Root,
-      root: document,
-    }
+    const clearRequest = fillTrackedCredentials()
 
     expect(
       submitLoginForm({

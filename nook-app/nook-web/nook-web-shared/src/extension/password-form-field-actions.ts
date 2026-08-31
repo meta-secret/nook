@@ -1,7 +1,6 @@
 import {
   findOneTimeCodeFields,
   findPasswordFields,
-  findUsernameFields,
   hasAutocompleteToken,
   PasswordFormScopeKind,
   preferredOneTimeCodeFillField,
@@ -147,12 +146,6 @@ export function clearLoginCredentials(
   };
   const key = loginCredentialFieldKey(request);
   const fields = filledLoginCredentialFields.get(key) ?? new Set();
-  findUsernameFields(passwordFieldQuery(request)).forEach((field) =>
-    fields.add(field),
-  );
-  findPasswordFields(passwordFieldQuery(request)).forEach((field) =>
-    fields.add(field),
-  );
   fields.forEach(clearField);
   filledLoginCredentialFields.delete(key);
 }
