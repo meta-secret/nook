@@ -115,14 +115,19 @@ test('routes Hive Console writes to Web Development', () => {
   ).toBe(true);
 });
 
-test('requires recursive or file-shaped ordinary write claims', () => {
-  for (const write of ['infra', 'infra/k0s'])
+test('requires bounded ordinary write claims and admits exact extensionless paths', () => {
+  for (const write of ['infra'])
     expect(
       accepted(
         ordinaryWrite({ team: TeamKey.Sre, moduleRoot: 'infra', write }),
       ),
     ).toBe(false);
-  for (const write of ['infra/**', 'infra/k0s/**', 'infra/main.tf'])
+  for (const write of [
+    'infra/**',
+    'infra/k0s/**',
+    'infra/main.tf',
+    'infra/k0s/scripts/k0s-worker-mesh-reconcile',
+  ])
     expect(
       accepted(
         ordinaryWrite({ team: TeamKey.Sre, moduleRoot: 'infra', write }),
