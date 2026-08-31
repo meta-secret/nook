@@ -150,6 +150,7 @@ export function isGizmoPrimeCortexTask(node: ModuleDeliveryNodeV2): boolean {
       (claim) =>
         claim.startsWith('.cortex/gizmo/') &&
         !claim.includes('*') &&
+        isMarkdownFileClaim(claim) &&
         sharedWriteClaims.includes(claim),
     )
   );
@@ -173,12 +174,17 @@ export function cortexWriteAuthorized(
 function explicitCortexGrant(request: CortexWriteAuthorizationRequest) {
   const { node, claim } = request;
   return (
-    claim.startsWith('.cortex/shared/') ||
-    (claim.startsWith('.cortex/gizmo/') &&
-      node.team === TeamKey.Ai &&
-      node.functionalOwner === ModuleDeliveryOwner.GizmoPrime &&
-      node.acceptanceOwner === ModuleDeliveryOwner.GizmoPrime)
+    isMarkdownFileClaim(claim) &&
+    (claim.startsWith('.cortex/shared/') ||
+      (claim.startsWith('.cortex/gizmo/') &&
+        node.team === TeamKey.Ai &&
+        node.functionalOwner === ModuleDeliveryOwner.GizmoPrime &&
+        node.acceptanceOwner === ModuleDeliveryOwner.GizmoPrime))
   );
+}
+
+function isMarkdownFileClaim(claim: string): boolean {
+  return claim.endsWith('.md');
 }
 
 export function expectedParentOwnedExclusions(

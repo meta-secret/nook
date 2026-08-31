@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
 import { TeamKey } from '../../src/team-agents/catalog.ts';
 import * as evidenceAuthority from '../../src/module-delivery/authority.ts';
+import * as moduleDelivery from '../../src/module-delivery/index.ts';
 
 import {
   REQUIRED_PARENT_OWNED_RESOURCES,
@@ -21,7 +22,6 @@ import {
   recordModuleDeliveryAttemptDisposition,
   recordModuleDeliveryAttemptLeases,
   selectModuleDeliveryAdmissions,
-  restoreModuleDeliveryAcceptedEvidence,
   verifyModuleDeliveryEvidenceSubmission,
 } from '../../src/module-delivery/index.ts';
 import {
@@ -109,7 +109,8 @@ function edge(request: EvidenceEdgeRequest): ModuleDeliveryEdgeContract {
   };
 }
 
-function runtime(fixture = createGitFixture()): Runtime {
+function runtime(): Runtime {
+  const fixture = createGitFixture();
   const provider: ModuleDeliveryReadOnlyNodeV2 = {
     kind: ModuleDeliveryTaskKind.ReadOnly,
     taskId: 'core-evidence',
@@ -388,33 +389,9 @@ test('rejects forged metadata, evidence capabilities, and authority-owned stale 
     }
     const accepted = verify({ ...submissionRequest, candidate: exact });
     const receipt = moduleDeliveryAcceptedEvidenceIdentity(accepted);
-    const replay = runtime(active.fixture);
-    const replayLease = admittedLease({
-      runtime: replay,
-      taskId: replay.provider.taskId,
-    });
-    const restoreRequest = {
-      authority: replay.authority,
-      acceptedPlan: replay.accepted,
-      repositoryRoot: replay.fixture.sourceRoot,
-      state: replay.state,
-      lease: replayLease,
-      acceptedEvidence: [],
-      receipt,
-    };
-    const extra = Object.assign(structuredClone(receipt), { extra: true });
-    for (const forged of [{ ...receipt, taskId: 'forged' }, extra])
-      expect(() =>
-        restoreModuleDeliveryAcceptedEvidence({
-          ...restoreRequest,
-          receipt: forged,
-        }),
-      ).toThrow();
-    const restored = restoreModuleDeliveryAcceptedEvidence(restoreRequest);
-    expect(restored.evidence.evidence).toEqual([]);
-    expect(restored.state.acceptedProviderEvidence).toEqual([receipt]);
-    expect(() => restoreModuleDeliveryAcceptedEvidence(restoreRequest)).toThrow(
-      'already consumed',
+    expect('evidence' in receipt).toBe(false);
+    expect('restoreModuleDeliveryAcceptedEvidence' in moduleDelivery).toBe(
+      false,
     );
 
     const forgedEvidence: AcceptedModuleDeliveryEvidence = {

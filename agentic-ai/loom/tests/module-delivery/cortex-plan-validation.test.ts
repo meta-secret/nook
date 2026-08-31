@@ -211,6 +211,17 @@ describe('Cortex module-delivery plan validation', () => {
           sharedWriteClaims: ['.cortex/gizmo/**'],
         },
       },
+      {
+        ...gizmo,
+        resources: {
+          ...gizmo.resources,
+          write: ['.cortex/gizmo/workflows'],
+        },
+        cortexAuthoring: {
+          selectedSkillPaths: [],
+          sharedWriteClaims: ['.cortex/gizmo/workflows'],
+        },
+      },
     ])
       expect(validate([invalid]).status).toBe(
         ModuleDeliveryValidationStatus.Rejected,
