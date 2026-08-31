@@ -13,7 +13,10 @@ import {
   ModuleDeliveryBaselineKind,
   ModuleDeliveryTaskKind,
 } from './domain.ts';
-import { validateModuleDeliveryEvidenceSubmission } from './evidence.ts';
+import {
+  restoreModuleDeliveryEvidenceReceipt,
+  validateModuleDeliveryEvidenceSubmission,
+} from './evidence.ts';
 import {
   assertModuleDeliveryCanonicalEvidenceTransition,
   assertModuleDeliveryIntegratedWriterFrontierCapability,
@@ -32,6 +35,7 @@ import type {
   ModuleDeliveryAcceptedProviderEvidenceIdentity,
   ModuleDeliveryEvidenceSubmissionValidation,
   ModuleDeliveryEvidenceSubmissionVerification,
+  RestoreModuleDeliveryAcceptedEvidenceRequest,
 } from './evidence.ts';
 import type { AgentAttemptParent } from '../agent-workflow/domain.ts';
 import type { TeamKey } from '../team-agents/catalog.ts';
@@ -66,7 +70,6 @@ import type {
   FrozenModuleDeliveryResourcesRequest,
   ResourceConflictRequest,
 } from './authority.ts';
-
 const AUTHORITY = Symbol('module-delivery-generation-authority');
 const admissionStateStoreAuthorities = {
   assertCanonicalTransition: assertModuleDeliveryCanonicalEvidenceTransition,
@@ -242,7 +245,6 @@ const evidenceAuthorities = new WeakMap<
   ModuleDeliveryGenerationAuthority
 >();
 const COMMIT = /^[0-9a-f]{40}$/u;
-
 export function createModuleDeliveryGenerationAuthority(
   request: CreateModuleDeliveryGenerationAuthorityRequest,
 ): ModuleDeliveryGenerationAuthority {
@@ -275,7 +277,6 @@ export function createModuleDeliveryGenerationAuthority(
   authorityStates.set(authority, authorityState);
   return authority;
 }
-
 export function assertModuleDeliveryGenerationAuthority(
   inspection: GenerationAuthorityInspection,
 ): void {
@@ -289,7 +290,6 @@ export function assertModuleDeliveryGenerationAuthority(
       'Module delivery generation authority is invalid or superseded.',
     );
 }
-
 export function moduleDeliveryAuthorityPlan(
   request: ModuleDeliveryAuthorityPlanRequest,
 ): ValidatedModuleDeliveryPlan {
@@ -297,7 +297,6 @@ export function moduleDeliveryAuthorityPlan(
     authorityStateForPlan(request).acceptedPlan,
   );
 }
-
 export function assertModuleDeliveryAuthorityRepository(
   inspection: ModuleDeliveryAuthorityRepositoryInspection,
 ): void {
@@ -312,20 +311,17 @@ export function assertModuleDeliveryAuthorityRepository(
   )
     throw new Error('Module delivery repository authority is invalid.');
 }
-
 export function assertAcceptedModuleDeliveryEvidence(
   inspection: AcceptedModuleDeliveryEvidenceInspection,
 ): void {
   requiredAuthority(inspection.authority).evidenceRegistry.assert(inspection);
 }
-
 export function moduleDeliveryAcceptedEvidenceIdentity(
   evidence: AcceptedModuleDeliveryEvidence,
 ): ModuleDeliveryAcceptedProviderEvidenceIdentity {
   const authority = authorityForAcceptedEvidence(evidence);
   return authority.evidenceRegistry.identity(evidence);
 }
-
 export function verifyModuleDeliveryEvidenceSubmission(
   verification: ModuleDeliveryEvidenceSubmissionVerification,
 ): AcceptedModuleDeliveryEvidence {
@@ -387,6 +383,43 @@ export function verifyModuleDeliveryEvidenceSubmission(
   evidenceAuthorities.set(accepted, verification.authority);
   acceptedEvidenceLeases.add(verification.lease);
   return accepted;
+}
+
+export function restoreModuleDeliveryAcceptedEvidence(
+  request: RestoreModuleDeliveryAcceptedEvidenceRequest,
+) {
+  const authority = authorityStateForPlan(request);
+  if (acceptedEvidenceLeases.has(request.lease))
+    throw new Error('Accepted evidence receipt lease is already consumed.');
+  assertModuleDeliveryAuthorityRepository(request);
+  assertModuleDeliveryAdmissionStateAuthority(request);
+  assertModuleDeliveryAttemptLeaseAuthority(request);
+  const evidence = restoreModuleDeliveryEvidenceReceipt({
+    ...request,
+    registry: authority.evidenceRegistry,
+    node: nodeFor({
+      plan: authority.acceptedPlan,
+      taskId: request.lease.taskId,
+    }),
+  });
+  evidenceAuthorities.set(evidence, request.authority);
+  const state = createModuleDeliveryAdmissionState({
+    ...request,
+    headCommit: request.state.headCommit,
+    integratedWriterFrontiers: request.state.integratedWriterFrontiers,
+    acceptedEvidence: [...request.acceptedEvidence, evidence],
+  });
+  acceptedEvidenceLeases.add(request.lease);
+  recordModuleDeliveryAttemptDisposition({
+    authority: request.authority,
+    state,
+    lease: request.lease,
+    outcome: {
+      kind: ModuleDeliveryAttemptDispositionKind.Accepted,
+      conclusion: ModuleDeliveryGenerationFenceKind.Accepted,
+    },
+  });
+  return Object.freeze({ evidence, state });
 }
 
 export function createModuleDeliveryAdmissionState(

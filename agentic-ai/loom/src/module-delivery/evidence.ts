@@ -1,6 +1,9 @@
 import { taskResourcePatternsOverlap } from '../agent-workflow/domain.ts';
-import { assertEvidenceBound } from './authority.ts';
-import { freezeProviderEvidenceIdentity } from './authority.ts';
+import {
+  assertEvidenceBound,
+  freezeProviderEvidenceIdentity,
+} from './authority.ts';
+import type { AcceptedModuleDeliveryEvidenceRegistry } from './authority.ts';
 import { ModuleDeliveryTaskKind } from './domain.ts';
 import { runModuleDeliveryGit } from './git-command.ts';
 import {
@@ -98,6 +101,8 @@ type EvidenceSourceProvenanceContent = Readonly<{
   producerTeam: TeamKey;
   functionalOwner: ModuleDeliveryOwnerIdentity;
   acceptanceOwner: ModuleDeliveryOwnerIdentity;
+  artifactIdentity: string;
+  artifactDigest: string;
   verdict: ModuleDeliveryEvidenceVerdict;
   claimIdentities: readonly ModuleDeliveryEvidenceClaimIdentity[];
   acceptanceRequirements: readonly string[];
@@ -134,6 +139,21 @@ type EvidenceNodeRequest = {
   readonly plan: ValidatedModuleDeliveryPlan;
   readonly taskId: string;
 };
+type RestoreEvidenceReceiptRequest =
+  RestoreModuleDeliveryAcceptedEvidenceRequest &
+    Readonly<{
+      registry: AcceptedModuleDeliveryEvidenceRegistry;
+      node: ModuleDeliveryNodeV2;
+    }>;
+export type RestoreModuleDeliveryAcceptedEvidenceRequest = Readonly<{
+  authority: ModuleDeliveryGenerationAuthority;
+  acceptedPlan: ValidatedModuleDeliveryPlan;
+  repositoryRoot: string;
+  state: ModuleDeliveryAdmissionState;
+  lease: ModuleDeliveryAttemptLease;
+  acceptedEvidence: readonly AcceptedModuleDeliveryEvidence[];
+  receipt: ModuleDeliveryAcceptedProviderEvidenceIdentity;
+}>;
 
 const COMMIT = /^[0-9a-f]{40}$/u;
 const DIGEST = /^[0-9a-f]{64}$/u;
@@ -320,8 +340,76 @@ function assertSynthesisInputs(request: SynthesisInputsRequest): void {
   }
 }
 
+export function restoreModuleDeliveryEvidenceReceipt(
+  request: RestoreEvidenceReceiptRequest,
+): AcceptedModuleDeliveryEvidence {
+  const existing = request.acceptedEvidence.map((evidence) => {
+    request.registry.assert({ authority: request.authority, evidence });
+    return request.registry.identity(evidence);
+  });
+  if (
+    JSON.stringify(existing) !==
+    JSON.stringify(request.state.acceptedProviderEvidence)
+  )
+    throw new Error('Accepted evidence receipt state is inconsistent.');
+  const claims = [request.lease.startingFrontier, request.state.headCommit].map(
+    (sourceCommit) =>
+      request.node.kind === ModuleDeliveryTaskKind.EvidenceSynthesis
+        ? []
+        : moduleDeliveryEvidenceClaimIdentities({
+            repositoryRoot: request.repositoryRoot,
+            sourceCommit,
+            evidenceSurface: request.node.resources.evidenceSurface,
+          }),
+  );
+  const sourceClaims = claims[0] ?? [];
+  const expected: ModuleDeliveryAcceptedProviderEvidenceIdentity = {
+    schemaVersion: MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
+    generation: request.lease.generation,
+    planDigest: request.lease.planDigest,
+    taskId: request.lease.taskId,
+    attempt: request.lease.attempt,
+    producerTeam: request.lease.team,
+    functionalOwner: request.lease.functionalOwner,
+    acceptanceOwner: request.lease.acceptanceOwner,
+    sourceCommit: request.lease.startingFrontier,
+    verifiedHeadCommit: request.state.headCommit,
+    artifactIdentity: request.receipt.artifactIdentity,
+    artifactDigest: request.receipt.artifactDigest,
+    sourceProvenanceDigest: request.receipt.sourceProvenanceDigest,
+    verdict: ModuleDeliveryEvidenceVerdict.TerminalSuccess,
+    claimIdentities: sourceClaims,
+    acceptanceRequirements: request.lease.acceptanceRequirements,
+    acceptedProviderEvidence: request.lease.authorizedProviderEvidence,
+  };
+  freezeProviderEvidenceIdentity(request.receipt);
+  if (
+    !validIdentity(request.receipt.artifactIdentity) ||
+    !DIGEST.test(request.receipt.artifactDigest) ||
+    request.receipt.sourceProvenanceDigest !==
+      sourceProvenanceDigest(request.receipt) ||
+    JSON.stringify(sourceClaims) !== JSON.stringify(claims[1]) ||
+    JSON.stringify(expected) !== JSON.stringify(request.receipt)
+  )
+    throw new Error('Accepted evidence receipt does not match its authority.');
+  const evidence: AcceptedModuleDeliveryEvidence = Object.freeze({
+    kind: ModuleDeliveryProviderSubmissionKind.ReadOnlyEvidence,
+    ...expected,
+    evidence: Object.freeze([]),
+  });
+  request.registry.register({
+    authority: request.authority,
+    evidence,
+    integratedTaskIds:
+      request.state.integratedWriterFrontiers[0]?.integratedTaskIds ?? [],
+  });
+  return evidence;
+}
+
 function sourceProvenanceDigest(
-  submission: ModuleDeliveryReadOnlyEvidenceSubmission,
+  submission:
+    | ModuleDeliveryReadOnlyEvidenceSubmission
+    | ModuleDeliveryAcceptedProviderEvidenceIdentity,
 ): string {
   const content: EvidenceSourceProvenanceContent = {
     sourceCommit: submission.sourceCommit,
@@ -332,6 +420,8 @@ function sourceProvenanceDigest(
     producerTeam: submission.producerTeam,
     functionalOwner: submission.functionalOwner,
     acceptanceOwner: submission.acceptanceOwner,
+    artifactIdentity: submission.artifactIdentity,
+    artifactDigest: submission.artifactDigest,
     verdict: submission.verdict,
     claimIdentities: submission.claimIdentities,
     acceptanceRequirements: submission.acceptanceRequirements,
