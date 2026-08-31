@@ -29,7 +29,11 @@ import {
 } from '../module-delivery/worktree-test-support.ts';
 
 import type { ModuleDeliveryPlanV2 } from '../../src/module-delivery/index.ts';
-import type { TeamPlanStartedEvent } from '../../src/team-plan/domain.ts';
+import type {
+  TeamPlanEvent,
+  TeamPlanSelectedEvent,
+  TeamPlanStartedEvent,
+} from '../../src/team-plan/domain.ts';
 import type { GitFixture } from '../module-delivery/worktree-test-support.ts';
 
 const fixtures: GitFixture[] = [];
@@ -86,12 +90,15 @@ function continuityPlan(sourceCommit: string): ModuleDeliveryPlanV2 {
   };
 }
 
-async function continuityFixture() {
+async function continuityFixture(
+  transform: (value: ModuleDeliveryPlanV2) => ModuleDeliveryPlanV2 = (value) =>
+    value,
+) {
   const fixture = createGitFixture();
   fixtures.push(fixture);
   const planPath = join(fixture.root, 'plan.json');
   const journalPath = join(fixture.root, 'journal.jsonl');
-  const value = continuityPlan(fixture.baselineCommit);
+  const value = transform(continuityPlan(fixture.baselineCommit));
   const planText = `${JSON.stringify(value)}\n`;
   const validation = decodeAndValidateModuleDeliveryPlan(planText);
   if (validation.status !== ModuleDeliveryValidationStatus.Accepted)
@@ -111,7 +118,7 @@ async function continuityFixture() {
     generationRecordLimit: value.nodes.length * value.maxAttempts,
   };
   await createTeamPlanJournal({ journalPath, event: started });
-  return { journalPath, started, value };
+  return { fixture, journalPath, started, value };
 }
 
 test('Team Plan journal continues attempts across generations', async () => {
@@ -183,4 +190,124 @@ test('Team Plan journal continues attempts across generations', async () => {
     sequence: 5,
     attempts: [secondAttempt],
   });
+});
+
+test('Team Plan journal keeps retries sequential until terminal closure', async () => {
+  const { fixture, journalPath, started } = await continuityFixture((value) => {
+    const provider = value.nodes[0];
+    if (!provider) throw new Error('Lifecycle provider is missing.');
+    return {
+      ...value,
+      nodes: [
+        {
+          ...provider,
+          taskId: 'downstream',
+          dependencies: ['consumer'],
+          consumerOutcome: 'Downstream uses consumer evidence.',
+          baseline: {
+            kind: ModuleDeliveryBaselineKind.IntegratedDependencies,
+            providerTaskIds: ['consumer'],
+          },
+        },
+        {
+          ...provider,
+          taskId: 'consumer',
+          dependencies: ['provider'],
+          consumerOutcome: 'Consumer uses provider evidence.',
+          baseline: {
+            kind: ModuleDeliveryBaselineKind.IntegratedDependencies,
+            providerTaskIds: ['provider'],
+          },
+        },
+        provider,
+      ],
+      edgeContracts: [
+        {
+          providerTaskId: 'provider',
+          consumerTaskId: 'consumer',
+          capability: 'provider capability',
+          publicTypes: ['ProviderResult'],
+          errors: ['ProviderError'],
+          behaviorInvariants: ['Provider evidence is deterministic.'],
+          securityInvariants: ['Provider state stays protected.'],
+          compatibilityExpectations: ['Consumer accepts provider evidence.'],
+          owningTests: ['provider contract test'],
+        },
+        {
+          providerTaskId: 'consumer',
+          consumerTaskId: 'downstream',
+          capability: 'consumer capability',
+          publicTypes: ['ConsumerResult'],
+          errors: ['ConsumerError'],
+          behaviorInvariants: ['Consumer evidence is deterministic.'],
+          securityInvariants: ['Consumer state stays protected.'],
+          compatibilityExpectations: ['Downstream accepts consumer evidence.'],
+          owningTests: ['consumer contract test'],
+        },
+      ],
+    };
+  });
+  const attempt = (number: number) => ({
+    taskId: 'provider',
+    attempt: number,
+    generation: 1,
+    planDigest: started.modulePlanDigest,
+  });
+  const selected = (request: {
+    readonly sequence: number;
+    readonly attempts: readonly ReturnType<typeof attempt>[];
+  }): TeamPlanSelectedEvent => ({
+    version: TEAM_PLAN_JOURNAL_VERSION,
+    kind: TeamPlanEventKind.Selected,
+    ...request,
+  });
+  const finalized = (sequence: number): TeamPlanEvent => ({
+    version: TEAM_PLAN_JOURNAL_VERSION,
+    kind: TeamPlanEventKind.Finalized,
+    sequence,
+    headCommit: fixture.baselineCommit,
+  });
+  await expect(
+    appendTeamPlanEvent({
+      journalPath,
+      event: selected({ sequence: 2, attempts: [attempt(1), attempt(2)] }),
+    }),
+  ).rejects.toThrow('repeats a logical task');
+  await expect(
+    appendTeamPlanEvent({ journalPath, event: finalized(2) }),
+  ).rejects.toThrow('nonterminal tasks');
+  await appendTeamPlanEvent({
+    journalPath,
+    event: selected({ sequence: 2, attempts: [attempt(1)] }),
+  });
+  const unusable = (request: {
+    readonly sequence: number;
+    readonly attempt: number;
+  }): TeamPlanEvent => ({
+    version: TEAM_PLAN_JOURNAL_VERSION,
+    kind: TeamPlanEventKind.Recorded,
+    sequence: request.sequence,
+    record: {
+      kind: TeamPlanRecordKind.FinalUnusable,
+      ...attempt(request.attempt),
+      conclusion: ModuleDeliveryGenerationFenceKind.Failed,
+    },
+  });
+  await appendTeamPlanEvent({
+    journalPath,
+    event: unusable({ sequence: 3, attempt: 1 }),
+  });
+  await expect(
+    appendTeamPlanEvent({ journalPath, event: finalized(4) }),
+  ).rejects.toThrow('nonterminal tasks');
+  await appendTeamPlanEvent({
+    journalPath,
+    event: selected({ sequence: 4, attempts: [attempt(2)] }),
+  });
+  await appendTeamPlanEvent({
+    journalPath,
+    event: unusable({ sequence: 5, attempt: 2 }),
+  });
+  await appendTeamPlanEvent({ journalPath, event: finalized(6) });
+  expect((await loadTeamPlanJournal(journalPath)).finalized).toBe(true);
 });
