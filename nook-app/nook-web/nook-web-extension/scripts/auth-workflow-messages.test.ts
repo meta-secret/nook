@@ -51,14 +51,18 @@ function approvalMatcherDependencies(): Parameters<
 >[1] {
   let approvedFactsJson = ''
   return {
-    bind: (approvedFacts) => {
+    bind_authentication_page_observation_facts: (approvedFacts) => {
       approvedFactsJson = JSON.stringify(approvedFacts)
       return {} as ReturnType<
-        Parameters<typeof authenticationWorkflowApprovalsMatch>[1]['bind']
+        Parameters<
+          typeof authenticationWorkflowApprovalsMatch
+        >[1]['bind_authentication_page_observation_facts']
       >
     },
-    matches: (_binding, currentFacts) =>
-      approvedFactsJson === JSON.stringify(currentFacts),
+    authentication_page_observation_facts_match_binding: (
+      _binding,
+      currentFacts,
+    ) => approvedFactsJson === JSON.stringify(currentFacts),
   }
 }
 

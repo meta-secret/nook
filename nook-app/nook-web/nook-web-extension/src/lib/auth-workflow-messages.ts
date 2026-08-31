@@ -26,14 +26,14 @@ type AuthenticationWorkflowApprovalPair = {
 }
 
 type AuthenticationWorkflowApprovalMatcherDependencies = {
-  bind: typeof bind_authentication_page_observation_facts
-  matches: typeof authentication_page_observation_facts_match_binding
+  bind_authentication_page_observation_facts: typeof bind_authentication_page_observation_facts
+  authentication_page_observation_facts_match_binding: typeof authentication_page_observation_facts_match_binding
 }
 
 const authenticationWorkflowApprovalMatcherDependencies: AuthenticationWorkflowApprovalMatcherDependencies =
   {
-    bind: bind_authentication_page_observation_facts,
-    matches: authentication_page_observation_facts_match_binding,
+    bind_authentication_page_observation_facts,
+    authentication_page_observation_facts_match_binding,
   }
 
 export function authenticationWorkflowApprovalsMatch(
@@ -48,8 +48,12 @@ export function authenticationWorkflowApprovalsMatch(
     observations: [current.facts],
   }
   try {
-    const binding = dependencies.bind(approvedBatch)
-    return dependencies.matches(binding, currentBatch)
+    const binding =
+      dependencies.bind_authentication_page_observation_facts(approvedBatch)
+    return dependencies.authentication_page_observation_facts_match_binding(
+      binding,
+      currentBatch,
+    )
   } catch {
     return false
   }
