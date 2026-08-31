@@ -2,6 +2,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 /// Bind the exact ordered browser facts through Rust's canonical representation.
 #[wasm_bindgen]
+#[allow(clippy::needless_pass_by_value)] // wasm-bindgen owns the decoded ABI value.
 pub fn bind_authentication_page_observation_facts(
     facts: nook_companion_core::AuthenticationPageObservationFactsBatch,
 ) -> Result<nook_companion_core::AuthenticationObservationBindingToken, wasm_bindgen::JsError> {
@@ -12,6 +13,7 @@ pub fn bind_authentication_page_observation_facts(
 /// Require current browser facts to equal the exact Rust-issued binding.
 #[wasm_bindgen]
 #[must_use]
+#[allow(clippy::needless_pass_by_value)] // wasm-bindgen owns the decoded ABI values.
 pub fn authentication_page_observation_facts_match_binding(
     binding: nook_companion_core::AuthenticationObservationBindingToken,
     facts: nook_companion_core::AuthenticationPageObservationFactsBatch,

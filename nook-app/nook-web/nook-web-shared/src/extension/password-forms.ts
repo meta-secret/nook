@@ -9,6 +9,7 @@ import type {
   AuthenticationAdvanceControlObservation,
   AuthenticationDetailedPasskeyControlCandidateObservation,
   AuthenticationDetailedPasskeyControlObservation,
+  AuthenticationCredentialSubmissionObservation,
   AuthenticationPageObservationFacts,
   AuthenticationPasskeyControlObservation,
   AuthenticationUsernameEvidence,
@@ -477,6 +478,14 @@ export function authenticationPageObservationFacts({
   const oneTimeCodeHandlerSignals = boundAuthenticationControlObservations(
     oneTimeCodeBoundRequest,
   );
+  const passwordFieldQuery: PasswordFieldQuery = {
+    root: observation.root,
+    formScope: observation.formScope,
+  };
+  const passwordFields = findPasswordFields(passwordFieldQuery);
+  const readonlyPasswordFieldCount = passwordFields.filter(
+    (field) => field.readOnly,
+  ).length;
   let detailedAdvanceControl: AuthenticationPageObservationFacts["detailedAdvanceControl"] =
     { kind: PasskeyControlLookupKind.Absent };
   const advanceObservations = advanceControls.flatMap((control) => {
@@ -563,6 +572,53 @@ export function authenticationPageObservationFacts({
   const contextDestinationIdentity = observedFormDestination(
     observation.formScope,
   );
+  const implicitSubmissionAvailable =
+    observation.formScope.kind === PasswordFormScopeKind.Owned &&
+    !advanceControls.some(
+      (control) =>
+        control.matches(semanticSubmitControlSelector) &&
+        !controlIsInert(control),
+    ) &&
+    !(
+      observation.summary.currentPasswordFieldCount +
+        observation.summary.genericPasswordFieldCount +
+        observation.summary.newPasswordFieldCount >
+        0 && formBlocksCredentialDisclosure(observation.formScope.owner)
+    );
+  let credentialSubmission: AuthenticationCredentialSubmissionObservation = {
+    kind: "absent",
+  };
+  const selectedAdvanceObservation = boundedAdvanceObservations[0];
+  if (
+    selectedAdvanceObservation &&
+    selectedAdvanceObservation.submissionMethod !==
+      PageControlSubmissionMethod.Absent
+  ) {
+    credentialSubmission = {
+      kind: "observed",
+      facts: {
+        actionability: selectedAdvanceObservation.actionability,
+        method: selectedAdvanceObservation.submissionMethod,
+        sourceOrigin: selectedAdvanceObservation.sourceOrigin,
+        formIdentity: selectedAdvanceObservation.formIdentity,
+        destinationIdentity: selectedAdvanceObservation.destinationIdentity,
+      },
+    };
+  } else if (
+    implicitSubmissionAvailable &&
+    observation.formScope.kind === PasswordFormScopeKind.Owned
+  ) {
+    credentialSubmission = {
+      kind: "observed",
+      facts: {
+        actionability: "actionable",
+        method: formSubmissionMethod(observation.formScope.owner),
+        sourceOrigin: location.origin,
+        formIdentity: contextFormIdentity,
+        destinationIdentity: contextDestinationIdentity,
+      },
+    };
+  }
   return {
     fields: {
       usernameFieldCount: observation.summary.usernameFieldCount,
@@ -570,6 +626,9 @@ export function authenticationPageObservationFacts({
       newPasswordFieldCount: observation.summary.newPasswordFieldCount,
       genericPasswordFieldCount: observation.summary.genericPasswordFieldCount,
       oneTimeCodeFieldCount: observation.summary.oneTimeCodeFieldCount,
+      actionablePasswordFieldCount:
+        passwordFields.length - readonlyPasswordFieldCount,
+      readonlyPasswordFieldCount,
     },
     ceremony: {
       oneTimeCodeProgression: "advance-control-required",
@@ -588,19 +647,7 @@ export function authenticationPageObservationFacts({
         observation.formScope.kind === PasswordFormScopeKind.Owned
           ? formSubmissionMethod(observation.formScope.owner)
           : PageControlSubmissionMethod.Absent,
-      advanceControl:
-        observation.formScope.kind === PasswordFormScopeKind.Owned &&
-        !advanceControls.some(
-          (control) =>
-            control.matches(semanticSubmitControlSelector) &&
-            !controlIsInert(control),
-        ) &&
-        !(
-          observation.summary.currentPasswordFieldCount +
-            observation.summary.genericPasswordFieldCount +
-            observation.summary.newPasswordFieldCount >
-            0 && formBlocksCredentialDisclosure(observation.formScope.owner)
-        )
+      advanceControl: implicitSubmissionAvailable
           ? "implicit-submission"
           : "absent",
     },
@@ -614,6 +661,7 @@ export function authenticationPageObservationFacts({
       matchingPasskeyAccountCount: 0,
       detailedPasskeyControl,
     },
+    credentialSubmission,
     detailedAdvanceControl,
   };
 }

@@ -41,7 +41,8 @@ fn observation_binding_bridge_round_trips_js_facts_and_rejects_route_drift()
     let approved = serde_wasm_bindgen::from_value(approved_js).map_err(js_error)?;
     let binding = crate::bind_authentication_page_observation_facts(approved)?;
     let binding_js = serde_wasm_bindgen::to_value(&binding).map_err(js_error)?;
-    let binding = serde_wasm_bindgen::from_value(binding_js).map_err(js_error)?;
+    let binding: nook_companion_core::AuthenticationObservationBindingToken =
+        serde_wasm_bindgen::from_value(binding_js).map_err(js_error)?;
 
     let unchanged_js =
         serde_wasm_bindgen::to_value(&password_facts(PageControlSubmissionMethod::Post))
