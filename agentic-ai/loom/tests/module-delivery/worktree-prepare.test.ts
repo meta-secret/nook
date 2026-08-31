@@ -171,6 +171,23 @@ describe('prepareModuleWorktree', () => {
     }
   });
 
+  test('rejects relative executable search paths before launching Git', () => {
+    const fixture = createTrackedFixture();
+    const previousPath = process.env.PATH;
+    process.env.PATH = `relative-bin:${previousPath ?? '/usr/bin'}`;
+    try {
+      expect(() =>
+        runModuleDeliveryGit({
+          cwd: fixture.sourceRoot,
+          args: ['status', '--short'],
+        }),
+      ).toThrow('search path must contain absolute paths');
+    } finally {
+      if (previousPath === undefined) delete process.env.PATH;
+      else process.env.PATH = previousPath;
+    }
+  });
+
   test('preserves trusted Git arguments within explicit input bounds', () => {
     const fixture = createTrackedFixture();
     const exact = runModuleDeliveryGit({

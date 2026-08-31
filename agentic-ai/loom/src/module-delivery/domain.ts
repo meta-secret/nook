@@ -1,4 +1,5 @@
 import { TeamKey } from '../team-agents/catalog.ts';
+import { taskResourcePatternsOverlap } from '../agent-workflow/domain.ts';
 import type { AgentAttemptParent } from '../agent-workflow/domain.ts';
 
 export const MODULE_DELIVERY_PLAN_VERSION = 2;
@@ -74,6 +75,8 @@ export const ORDINARY_TASK_WRITE_ROOTS = {
     'nook-app/nook-platform/nook-wasm/Taskfile.yml',
     'nook-app/nook-platform/nook-wasm/docker-bake.hcl',
     'nook-app/nook-web/docker',
+    'nook-app/nook-web/nook-web-app/Dockerfile',
+    'nook-app/nook-web/nook-web-app/docker-bake.hcl',
     'preflight',
     '.task',
     'agentic-ai/ci-agent',
@@ -91,19 +94,45 @@ export type ModuleDeliveryTaskTeamRequest = {
 };
 
 export function ordinaryTaskWriteTeam(write: string): TeamKey | false {
+  if (!write.includes('*')) return ordinaryTaskPathTeam(write);
   let owner: TeamKey | false = false;
   let ownerRootLength = -1;
+  let ambiguous = false;
   for (const team of Object.values(TeamKey)) {
     const roots: readonly string[] = ORDINARY_TASK_WRITE_ROOTS[team];
     for (const root of roots) {
       if (
-        (write === root || write.startsWith(`${root}/`)) &&
+        taskResourcePatternsOverlap({ first: write, second: root }) &&
+        root.length > ownerRootLength
+      ) {
+        owner = team;
+        ownerRootLength = root.length;
+        ambiguous = false;
+      } else if (
+        taskResourcePatternsOverlap({ first: write, second: root }) &&
+        root.length === ownerRootLength &&
+        owner !== team
+      ) {
+        ambiguous = true;
+      }
+    }
+  }
+  return ambiguous ? false : owner;
+}
+
+function ordinaryTaskPathTeam(path: string): TeamKey | false {
+  let owner: TeamKey | false = false;
+  let ownerRootLength = -1;
+  for (const team of Object.values(TeamKey)) {
+    const roots: readonly string[] = ORDINARY_TASK_WRITE_ROOTS[team];
+    for (const root of roots)
+      if (
+        (path === root || path.startsWith(`${root}/`)) &&
         root.length > ownerRootLength
       ) {
         owner = team;
         ownerRootLength = root.length;
       }
-    }
   }
   return owner;
 }
@@ -117,34 +146,19 @@ export type OrdinaryTaskWriteAuthorizationRequest = {
 export function ordinaryTaskWriteAuthorized(
   request: OrdinaryTaskWriteAuthorizationRequest,
 ): boolean {
-  const roots: readonly string[] = ORDINARY_TASK_WRITE_ROOTS[request.team];
-  const exactKnownDirectoryRoot =
-    request.write === request.moduleRoot &&
-    roots.includes(request.write) &&
-    !ordinaryFileWriteRoots.includes(request.write);
   return (
-    !exactKnownDirectoryRoot &&
+    ordinaryWriteClaimIsFileOrPattern(request.write) &&
     (request.write === request.moduleRoot ||
       request.write.startsWith(`${request.moduleRoot}/`)) &&
     ordinaryTaskWriteTeam(request.write) === request.team
   );
 }
 
-const ordinaryFileWriteRoots: readonly string[] = [
-  '.task/agentic-ai.yml',
-  'agentic-ai/minds/Cargo.lock',
-  'agentic-ai/minds/Cargo.toml',
-  'agentic-ai/minds/clippy.toml',
-  'agentic-ai/minds/hive/Cargo.toml',
-  'nook-app/nook-platform/Cargo.lock',
-  'nook-app/nook-platform/Cargo.toml',
-  'nook-app/nook-platform/nook-core/Dockerfile.dockerignore',
-  'nook-app/nook-platform/nook-core/coverage-floor.json',
-  'nook-app/nook-platform/nook-core/docker-bake.hcl',
-  'nook-app/nook-platform/nook-wasm/Dockerfile.dockerignore',
-  'nook-app/nook-platform/nook-wasm/Taskfile.yml',
-  'nook-app/nook-platform/nook-wasm/docker-bake.hcl',
-];
+function ordinaryWriteClaimIsFileOrPattern(write: string): boolean {
+  if (write.includes('*')) return true;
+  const basename = write.slice(write.lastIndexOf('/') + 1);
+  return basename.indexOf('.') > 0 || /^[A-Z][A-Za-z0-9_-]*$/.test(basename);
+}
 
 export function moduleDeliveryTaskTeam(
   request: ModuleDeliveryTaskTeamRequest,
