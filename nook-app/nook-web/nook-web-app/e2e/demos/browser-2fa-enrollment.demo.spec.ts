@@ -189,10 +189,11 @@ test('uses the paired demo vault for authenticator enrollment', async ({
   })
 
   const widget = page.locator('#nook-auth-widget')
+  await widget.getByTestId('nook-auth-gate-expand').click()
+  await expect(widget.locator('img.collapsed-mark')).toBeVisible()
   await expect(
     widget.getByRole('button', { name: 'Add 2FA from this page' }),
   ).toBeVisible()
-  await expect(widget.locator('img.collapsed-mark')).toBeVisible()
   await expect(
     page.locator('[data-bootstrap-sentinel="replacement-root"]'),
   ).toBeVisible()
@@ -234,7 +235,6 @@ test('uses the paired demo vault for authenticator enrollment', async ({
   await expect(
     widget.getByText('Authenticator saved to your vault.'),
   ).toBeVisible({ timeout: 30_000 })
-  await expect(widget.locator('img.collapsed-mark')).toBeVisible()
   await demoBeat(page)
 
   await widget.getByRole('button', { name: 'Save backup codes' }).click()
