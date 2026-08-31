@@ -80,7 +80,6 @@ import {
   LoginCredentialsLookupKind,
   type LoginCredentialsLookup,
 } from "./password-form-field-actions";
-
 export {
   findOneTimeCodeFields,
   findPasswordFields,
@@ -145,19 +144,6 @@ type AuthenticationObservationFactsRequest = {
   authenticatorSetupHint: boolean;
   backupCodesHint: boolean;
 };
-export function refreshAuthenticationWorkflowObservation(
-  observation: PasswordFormObservation,
-): PasswordFormObservation {
-  const summaryRequest: PasswordFormSummaryRequest = {
-    kind: PasswordFormQueryKind.Scoped,
-    root: observation.root,
-    formScope: observation.formScope,
-  };
-  return {
-    ...observation,
-    summary: summarizeRoot(summaryRequest),
-  };
-}
 type PasswordFormSummaryRequest = PasswordFormScopeQuery;
 function passwordFieldQuery(
   request: PasswordFormScopeQuery,
@@ -167,7 +153,7 @@ function passwordFieldQuery(
   }
   return { root: request.root, formScope: request.formScope };
 }
-function summarizeRoot(
+export function summarizeRoot(
   request: PasswordFormSummaryRequest,
 ): PasswordFormSummary {
   const { root } = request;
@@ -328,7 +314,6 @@ function pageControlObservation({
     submissionMethod: controlSubmissionMethod(control),
   };
 }
-
 function transportableControlObservation(
   request: PageControlObservationRequest,
 ): AuthenticationAdvanceControlObservation[] {

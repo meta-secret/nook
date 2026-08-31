@@ -17,6 +17,7 @@ import {
   WebsiteAuthenticatorPickerOpenMessageType,
 } from '../../lib/authenticator-picker-messages'
 import {
+  approvedWorkflowIsStillCurrent,
   RuntimeMessageDeliveryKind,
   sendAuthenticatorCodeRuntimeMessage,
   sendAuthenticatorPickerOpenRuntimeMessage,
@@ -52,7 +53,7 @@ type FillAuthenticatorCodeArgs = {
 
 type AuthenticatorFillFailureArgs = Omit<
   FillAuthenticatorCodeArgs,
-  'account' | 'workflow'
+  'account' | 'workflow' | 'approval'
 >
 
 function reportAuthenticatorFillFailure({
@@ -136,14 +137,17 @@ export async function fillAuthenticatorCode({
   if (
     response.kind !== AuthenticatorCodeResponseKind.Ready ||
     !('code' in response) ||
-    !('expiresAt' in response) ||
-    response.expiresAt <= Date.now()
+    !('expiresAt' in response)
   ) {
     return reportAuthenticatorFillFailure(failureUi)
   }
   const code = { value: response.code }
   const expiresAt = response.expiresAt
   response.code = ''
+  if (expiresAt <= Date.now()) {
+    code.value = ''
+    return reportAuthenticatorFillFailure(failureUi)
+  }
   const revalidationRequest: Parameters<
     typeof performRevalidatedAuthenticationAction
   >[0] = {

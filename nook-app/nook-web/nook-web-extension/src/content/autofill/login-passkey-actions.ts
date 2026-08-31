@@ -2,12 +2,7 @@ import {
   BROWSER_MESSAGE_KEYS,
   type BrowserMessageKey,
 } from '../../lib/browser-message-keys'
-import {
-  authenticationWorkflowScopesMatch,
-  liveApprovedAuthenticationWorkflow,
-} from '../../../../nook-web-shared/src/extension/password-form-classified-observations'
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
-import { detectEnrollmentHints } from '../enrollment-flow'
 import {
   clearLoginCredentials,
   fillGeneratedPassword,
@@ -19,7 +14,6 @@ import {
   submitLoginForm,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 import {
-  type WebsiteLoginAccountOption,
   WebsiteLoginOptionsMessageType,
   WebsiteLoginRevealMessageType,
 } from '../../lib/login-fill-messages'
@@ -40,6 +34,10 @@ import {
   pickerState,
   widgetState,
 } from './state'
+import {
+  approvedWorkflowIsStillCurrent,
+  setStatus,
+} from './authentication-workflow-ui-state'
 import { setFlightProgress, translatedMessage } from './workflow-ui'
 import {
   LoginFillDeliveryKind,
@@ -53,7 +51,6 @@ import {
   sendRuntimeMessageWithoutResponse,
 } from './runtime-message-adapter'
 import { GeneratePasswordRequestType } from '../../../../nook-web-shared/src/extension/runtime-messages'
-import type { AuthenticationWorkflowApproval } from '../../lib/auth-workflow-messages'
 import {
   AuthenticationObservationBindingKind,
   performRevalidatedAuthenticationAction,
@@ -62,6 +59,13 @@ import {
   RevalidatedAuthenticationActResultKind,
   type AuthenticationObservationBinding,
 } from './workflow-revalidation'
+import type {
+  ContinueWithNookArgs,
+  FillAndSubmitAccountArgs,
+  GeneratePasswordWithNookArgs,
+  OpenLoginPickerArgs,
+  ProposePasskeyWithNookArgs,
+} from './login-passkey-action-types'
 
 export {
   RuntimeMessageDeliveryKind,
@@ -92,10 +96,12 @@ export type {
   RuntimeMessageDelivery,
   RuntimeMessageResponseDecoder,
 } from './runtime-message-adapter'
+export {
+  approvedWorkflowIsStillCurrent,
+  setStatus,
+} from './authentication-workflow-ui-state'
 
-export type PasskeyWidgetAction =
-  | AuthenticationWorkflowAction.UsePasskey
-  | AuthenticationWorkflowAction.CreatePasskey
+export type { PasskeyWidgetAction } from './login-passkey-action-types'
 
 type PreparedPasskeyActuation = {
   act: () => RevalidatedAuthenticationActResultKind
@@ -105,58 +111,6 @@ const preparedPasskeyActuations = new WeakMap<
   HTMLButtonElement,
   PreparedPasskeyActuation
 >()
-
-type PasskeyWidgetStatusUpdate = {
-  description: HTMLParagraphElement
-  continueButton: HTMLButtonElement
-  text: string
-  enableContinue: boolean
-}
-
-export function setStatus({
-  description,
-  continueButton,
-  text,
-  enableContinue,
-}: PasskeyWidgetStatusUpdate): void {
-  description.textContent = text
-  continueButton.disabled = !enableContinue || widgetState.busy
-}
-
-export function approvedWorkflowIsStillCurrent(
-  workflow: PasswordFormObservation,
-): boolean {
-  const rendered = widgetState.renderedWorkflowRoot
-  if (rendered.kind !== WidgetWorkflowRootKind.Assigned) return false
-  const scopePair: Parameters<typeof authenticationWorkflowScopesMatch>[0] = {
-    left: rendered.observation,
-    right: workflow,
-  }
-  if (!authenticationWorkflowScopesMatch(scopePair)) {
-    return false
-  }
-  const hints = detectEnrollmentHints()
-  const liveRequest: Parameters<typeof liveApprovedAuthenticationWorkflow>[0] =
-    {
-      approved: {
-        observation: rendered.observation,
-        facts: rendered.facts,
-      },
-      authenticatorSetupHint: hints.qr,
-      backupCodesHint: hints.backupCodes,
-    }
-  return liveApprovedAuthenticationWorkflow(liveRequest)
-}
-
-type FillAndSubmitAccountArgs = {
-  account: Pick<WebsiteLoginAccountOption, 'vaultStoreId' | 'secretId'>
-  workflow: PasswordFormObservation
-  approval: AuthenticationWorkflowApproval
-  step: HTMLParagraphElement
-  title: HTMLHeadingElement
-  description: HTMLParagraphElement
-  continueButton: HTMLButtonElement
-}
 
 export async function fillAndSubmitAccount({
   account,
@@ -265,7 +219,9 @@ export async function fillAndSubmitAccount({
     password: response.password,
   }
   response.password = ''
-  let submissionResult = FormSubmissionResult.NotObserved
+  const submission: { result: FormSubmissionResult } = {
+    result: FormSubmissionResult.NotObserved,
+  }
   let filledRequest: Parameters<typeof fillLoginCredentials>[0] | false = false
   const fillRevalidationRequest: Parameters<
     typeof performRevalidatedAuthenticationAction
@@ -302,7 +258,7 @@ export async function fillAndSubmitAccount({
         formScope: postFillWorkflow.formScope,
         submissionApproval,
       }
-      submissionResult = submitLoginForm(submissionRequest)
+      submission.result = submitLoginForm(submissionRequest)
       return { kind: RevalidatedAuthenticationActResultKind.Acted }
     },
   }
@@ -335,7 +291,7 @@ export async function fillAndSubmitAccount({
     setStatus(nookTypedArgs0_6)
     return false
   }
-  if (submissionResult === FormSubmissionResult.Rejected) {
+  if (submission.result === FormSubmissionResult.Rejected) {
     const rejectedProgress: Parameters<typeof setFlightProgress>[0] = {
       step,
       title,
@@ -354,7 +310,7 @@ export async function fillAndSubmitAccount({
     continueButton.hidden = false
     return false
   }
-  if (submissionResult === FormSubmissionResult.NotObserved) {
+  if (submission.result === FormSubmissionResult.NotObserved) {
     const nookTypedArgs0_8: Parameters<typeof setFlightProgress>[0] = {
       step,
       title,
@@ -382,15 +338,6 @@ export async function fillAndSubmitAccount({
   )
   continueButton.hidden = true
   return true
-}
-
-type OpenLoginPickerArgs = {
-  workflow: PasswordFormObservation
-  approval: AuthenticationWorkflowApproval
-  step: HTMLParagraphElement
-  title: HTMLHeadingElement
-  description: HTMLParagraphElement
-  continueButton: HTMLButtonElement
 }
 
 async function openLoginPicker({
@@ -574,15 +521,6 @@ export function cancelPendingLoginPickerRequest(): void {
   cancelLoginPickerRequest(pending.requestId)
 }
 
-type GeneratePasswordWithNookArgs = {
-  workflow: PasswordFormObservation
-  approval: AuthenticationWorkflowApproval
-  step: HTMLParagraphElement
-  title: HTMLHeadingElement
-  description: HTMLParagraphElement
-  continueButton: HTMLButtonElement
-}
-
 export async function generatePasswordWithNook({
   workflow,
   approval,
@@ -615,7 +553,9 @@ export async function generatePasswordWithNook({
   try {
     let releasedObservationBinding: AuthenticationObservationBinding =
       requiredAuthenticationObservationBinding(approval.facts)
-    const releaseApproved = await performRevalidatedAuthenticationAction({
+    const releaseRequest: Parameters<
+      typeof performRevalidatedAuthenticationAction
+    >[0] = {
       workflow,
       expectedAction: AuthenticationWorkflowAction.GeneratePassword,
       observationBinding: releasedObservationBinding,
@@ -627,18 +567,21 @@ export async function generatePasswordWithNook({
         }
         return { kind: RevalidatedAuthenticationActResultKind.Acted }
       },
-    })
+    }
+    const releaseApproved =
+      await performRevalidatedAuthenticationAction(releaseRequest)
     if (
       releaseApproved.kind !== RevalidatedAuthenticationActionOutcomeKind.Acted
     ) {
-      setStatus({
+      const rejectedStatus: Parameters<typeof setStatus>[0] = {
         description,
         continueButton,
         text: translatedMessage(
           BROWSER_MESSAGE_KEYS.WidgetGeneratePasswordFailed,
         ),
         enableContinue: true,
-      })
+      }
+      setStatus(rejectedStatus)
       return
     }
     const nookTypedArgs0_6: Parameters<
@@ -680,22 +623,30 @@ export async function generatePasswordWithNook({
     response.password = ''
     const fillOutcome = await (async () => {
       try {
-        return await performRevalidatedAuthenticationAction({
+        const fillRequest: Parameters<
+          typeof performRevalidatedAuthenticationAction
+        >[0] = {
           workflow,
           expectedAction: AuthenticationWorkflowAction.GeneratePassword,
           observationBinding: releasedObservationBinding,
           approvalIsActive,
-          act: ({ currentWorkflow }) => ({
-            kind: fillGeneratedPassword({
+          act: ({ currentWorkflow }) => {
+            const generatedPasswordRequest: Parameters<
+              typeof fillGeneratedPassword
+            >[0] = {
               password: password.value,
               kind: PasswordFormQueryKind.Scoped,
               root: currentWorkflow.root,
               formScope: currentWorkflow.formScope,
-            })
-              ? RevalidatedAuthenticationActResultKind.Acted
-              : RevalidatedAuthenticationActResultKind.Failed,
-          }),
-        })
+            }
+            return {
+              kind: fillGeneratedPassword(generatedPasswordRequest)
+                ? RevalidatedAuthenticationActResultKind.Acted
+                : RevalidatedAuthenticationActResultKind.Failed,
+            }
+          },
+        }
+        return await performRevalidatedAuthenticationAction(fillRequest)
       } finally {
         password.value = ''
       }
@@ -728,14 +679,6 @@ export async function generatePasswordWithNook({
   }
 }
 
-type ProposePasskeyWithNookArgs = {
-  description: HTMLParagraphElement
-  continueButton: HTMLButtonElement
-  action: PasskeyWidgetAction
-  workflow: PasswordFormObservation
-  approval: AuthenticationWorkflowApproval
-}
-
 export async function proposePasskeyWithNook({
   description,
   continueButton,
@@ -749,7 +692,7 @@ export async function proposePasskeyWithNook({
     preparedPasskeyActuations.delete(continueButton)
     const actuationResult = preparedActuation.act()
     if (actuationResult !== RevalidatedAuthenticationActResultKind.Acted) {
-      setStatus({
+      const failedStatus: Parameters<typeof setStatus>[0] = {
         description,
         continueButton,
         text: translatedMessage(
@@ -759,17 +702,19 @@ export async function proposePasskeyWithNook({
             : BROWSER_MESSAGE_KEYS.WidgetFillFailed,
         ),
         enableContinue: true,
-      })
+      }
+      setStatus(failedStatus)
       return
     }
-    setStatus({
+    const startedStatus: Parameters<typeof setStatus>[0] = {
       description,
       continueButton,
       text: translatedMessage(
         BROWSER_MESSAGE_KEYS.WidgetPasskeyCeremonyStarted,
       ),
       enableContinue: false,
-    })
+    }
+    setStatus(startedStatus)
     continueButton.hidden = true
     return
   }
@@ -789,14 +734,15 @@ export async function proposePasskeyWithNook({
   const approvalIsActive = () =>
     !widgetState.dismissed && continueButton.isConnected
   try {
+    const observationBinding = requiredAuthenticationObservationBinding(
+      approval.facts,
+    )
     const revalidationRequest: Parameters<
       typeof performRevalidatedAuthenticationAction
     >[0] = {
       workflow,
       expectedAction: action,
-      observationBinding: {
-        ...requiredAuthenticationObservationBinding(approval.facts),
-      },
+      observationBinding,
       approvalIsActive,
       act: ({ currentWorkflow, revalidateCurrentWorkflow }) => {
         const control = findWorkflowPasskeyControl(currentWorkflow)
@@ -809,7 +755,7 @@ export async function proposePasskeyWithNook({
           return { kind: RevalidatedAuthenticationActResultKind.Failed }
         }
         const approvedControl = control.control
-        preparedPasskeyActuations.set(continueButton, {
+        const preparedActuation: PreparedPasskeyActuation = {
           act: () => {
             if (!approvalIsActive()) {
               return RevalidatedAuthenticationActResultKind.Failed
@@ -828,7 +774,8 @@ export async function proposePasskeyWithNook({
             liveControl.control.click()
             return RevalidatedAuthenticationActResultKind.Acted
           },
-        })
+        }
+        preparedPasskeyActuations.set(continueButton, preparedActuation)
         return { kind: RevalidatedAuthenticationActResultKind.Acted }
       },
     }
@@ -879,15 +826,6 @@ function copyTitleForWorkflow(
     return BROWSER_MESSAGE_KEYS.WidgetSignupTitle
   }
   return BROWSER_MESSAGE_KEYS.WidgetLoginTitle
-}
-
-type ContinueWithNookArgs = {
-  step: HTMLParagraphElement
-  title: HTMLHeadingElement
-  description: HTMLParagraphElement
-  continueButton: HTMLButtonElement
-  workflow: PasswordFormObservation
-  approval: AuthenticationWorkflowApproval
 }
 
 export async function continueWithNook({

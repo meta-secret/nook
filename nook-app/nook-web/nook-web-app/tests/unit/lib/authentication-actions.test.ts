@@ -5,8 +5,10 @@ import {
   GeneratedPasswordResponseKind,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type { AuthenticationWorkflowApproval } from '../../../../nook-web-extension/src/lib/auth-workflow-messages'
+import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 
 const actionMocks = vi.hoisted(() => ({
+  clearLoginCredentials: vi.fn(),
   fillLoginCredentials: vi.fn(() => true),
   fillGeneratedPassword: vi.fn(() => true),
   fillOneTimeCode: vi.fn(() => true),
@@ -19,10 +21,16 @@ const actionMocks = vi.hoisted(() => ({
 }))
 
 vi.mock('../../../../nook-web-shared/src/extension/password-forms', () => ({
+  clearLoginCredentials: actionMocks.clearLoginCredentials,
   fillGeneratedPassword: actionMocks.fillGeneratedPassword,
   fillLoginCredentials: actionMocks.fillLoginCredentials,
   fillOneTimeCode: actionMocks.fillOneTimeCode,
   findWorkflowPasskeyControl: actionMocks.findWorkflowPasskeyControl,
+  FormSubmissionResult: {
+    NotObserved: 'not-observed',
+    Submitted: 'submitted',
+    Rejected: 'rejected',
+  },
   PasskeyControlLookupKind: { Absent: 'absent', Found: 'found' },
   PasswordFormQueryKind: { Scoped: 'scoped' },
   submitLoginForm: actionMocks.submitLoginForm,
@@ -119,7 +127,7 @@ const workflow = {
   root: document,
   formScope: { kind: 'unowned' },
   summary: {},
-}
+} as unknown as PasswordFormObservation
 
 const approval: AuthenticationWorkflowApproval = {
   workflowKey: 'login:credentials',

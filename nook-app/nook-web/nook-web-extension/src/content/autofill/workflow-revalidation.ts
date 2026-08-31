@@ -1,10 +1,10 @@
 import {
   authenticationPageObservationFacts,
   PasswordFormScopeKind,
-  refreshAuthenticationWorkflowObservation,
   summarizeAuthenticationWorkflowForms,
   type PasswordFormObservation,
 } from '../../../../nook-web-shared/src/extension/password-forms'
+import { refreshAuthenticationWorkflowObservation } from '../../../../nook-web-shared/src/extension/authentication-workflow-observation-refresh'
 import { authenticationWorkflowScopesMatch } from '../../../../nook-web-shared/src/extension/password-form-classified-observations'
 import { detectEnrollmentHints } from '../enrollment-flow'
 import {
@@ -98,27 +98,38 @@ type AuthenticationControlIdentitySnapshot = {
 function authenticationControlIdentitySnapshot(
   workflow: PasswordFormObservation,
 ): AuthenticationControlIdentitySnapshot {
-  const scope =
+  const queryRoot =
     workflow.formScope.kind === PasswordFormScopeKind.Owned
-      ? workflow.formScope.owner
+      ? workflow.formScope.owner.ownerDocument
       : workflow.root
+  const controls = Array.from(
+    queryRoot.querySelectorAll<Element>(boundAuthenticationControlSelector),
+  )
+  if (workflow.formScope.kind === PasswordFormScopeKind.Unowned) {
+    return { controls }
+  }
+  const owner = workflow.formScope.owner
   return {
-    controls: Array.from(
-      scope.querySelectorAll<Element>(boundAuthenticationControlSelector),
+    controls: controls.filter((control) =>
+      'form' in control ? control.form === owner : owner.contains(control),
     ),
   }
 }
 
-function authenticationControlIdentitiesMatch(
-  approved: AuthenticationControlIdentitySnapshot,
-  current: AuthenticationControlIdentitySnapshot,
-): boolean {
-  return (
-    approved.controls.length === current.controls.length &&
-    approved.controls.every(
-      (control, index) => current.controls[index] === control,
-    )
-  )
+type AuthenticationControlIdentitiesMatchRequest = {
+  approved: AuthenticationControlIdentitySnapshot
+  current: AuthenticationControlIdentitySnapshot
+}
+
+function authenticationControlIdentitiesMatch({
+  approved,
+  current,
+}: AuthenticationControlIdentitiesMatchRequest): boolean {
+  if (approved.controls.length !== current.controls.length) return false
+  for (const [index, control] of approved.controls.entries()) {
+    if (current.controls[index] !== control) return false
+  }
+  return true
 }
 
 /**
@@ -239,16 +250,18 @@ export async function performRevalidatedAuthenticationAction({
   const currentFactsBatch: AuthenticationPageObservationFactsBatch = {
     observations: [currentObservation.facts],
   }
+  const currentIdentitiesMatchRequest: AuthenticationControlIdentitiesMatchRequest =
+    {
+      approved: approvedObservation.controlIdentities,
+      current: currentObservation.controlIdentities,
+    }
   if (
     currentObservation.selectedIndex !== approvedObservation.selectedIndex ||
     !authentication_page_observation_facts_match_binding(
       approvedObservationBindingToken,
       currentFactsBatch,
     ) ||
-    !authenticationControlIdentitiesMatch(
-      approvedObservation.controlIdentities,
-      currentObservation.controlIdentities,
-    ) ||
+    !authenticationControlIdentitiesMatch(currentIdentitiesMatchRequest) ||
     !approvalIsActive()
   ) {
     return rejected()
@@ -260,6 +273,11 @@ export async function performRevalidatedAuthenticationAction({
     const postActionFactsBatch: AuthenticationPageObservationFactsBatch = {
       observations: [postActionObservation.facts],
     }
+    const postActionIdentitiesMatchRequest: AuthenticationControlIdentitiesMatchRequest =
+      {
+        approved: approvedObservation.controlIdentities,
+        current: postActionObservation.controlIdentities,
+      }
     if (
       postActionObservation.selectedIndex !==
         approvedObservation.selectedIndex ||
@@ -267,10 +285,7 @@ export async function performRevalidatedAuthenticationAction({
         approvedObservationBindingToken,
         postActionFactsBatch,
       ) ||
-      !authenticationControlIdentitiesMatch(
-        approvedObservation.controlIdentities,
-        postActionObservation.controlIdentities,
-      )
+      !authenticationControlIdentitiesMatch(postActionIdentitiesMatchRequest)
     ) {
       return false
     }

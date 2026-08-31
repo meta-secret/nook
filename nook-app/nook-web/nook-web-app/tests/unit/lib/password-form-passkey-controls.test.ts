@@ -267,18 +267,21 @@ describe('passkey control detection', () => {
   })
 
   test('skips hidden and inert passkey candidates before exact actuation', () => {
+    document.body.innerHTML = `<button hidden>Use hidden passkey</button>`
+    expect(
+      findWorkflowPasskeyControl(observedAuthenticationWorkflow()).kind,
+    ).toBe(PasskeyControlLookupKind.Absent)
     document.body.innerHTML = `
-      <form action="/login">
+      <form method="post" id="login" action="/auth/login">
         <input autocomplete="username" />
-        <button hidden data-nook-passkey-control>Use hidden passkey</button>
-        <button disabled data-nook-passkey-control>Use inert passkey</button>
-        <button id="approved-passkey" data-nook-passkey-control>Use passkey</button>
+        <button id="inert" disabled>Use inert passkey</button>
+        <button id="safe">Use passkey</button>
       </form>
     `
     const control = findWorkflowPasskeyControl(observedAuthenticationWorkflow())
     expect(control).toMatchObject({
       kind: PasskeyControlLookupKind.Found,
-      control: document.querySelector('#approved-passkey'),
+      control: document.querySelector('#safe'),
     })
   })
 
