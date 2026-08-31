@@ -70,6 +70,10 @@ enum FormSubmissionObservationResult {
   Rejected = "rejected",
 }
 
+type FormSubmissionObservationState = {
+  result: FormSubmissionObservationResult;
+};
+
 type ObservedFormIdentityRequest = {
   root: ParentNode;
   formScope: PasswordFormScope;
@@ -905,21 +909,23 @@ export function observeSubmit({
   action,
   approval,
 }: FormSubmissionObservation): boolean {
-  let result = FormSubmissionObservationResult.Awaiting;
+  const state: FormSubmissionObservationState = {
+    result: FormSubmissionObservationResult.Awaiting,
+  };
   const markSubmitted = (event: SubmitEvent) => {
     if (approval && !approval.isApproved()) {
       event.preventDefault();
       event.stopImmediatePropagation();
-      result = FormSubmissionObservationResult.Rejected;
+      state.result = FormSubmissionObservationResult.Rejected;
       approval.reject();
       return;
     }
-    if (result !== FormSubmissionObservationResult.Rejected) {
-      result = FormSubmissionObservationResult.Submitted;
+    if (state.result !== FormSubmissionObservationResult.Rejected) {
+      state.result = FormSubmissionObservationResult.Submitted;
     }
   };
   form.addEventListener("submit", markSubmitted, true);
   action();
   form.removeEventListener("submit", markSubmitted, true);
-  return result === FormSubmissionObservationResult.Submitted;
+  return state.result === FormSubmissionObservationResult.Submitted;
 }
