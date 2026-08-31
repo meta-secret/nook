@@ -48,15 +48,17 @@ const validMessage = {
 
 function approvalMatcherDependencies(): Parameters<
   typeof authenticationWorkflowApprovalsMatch
->[1] {
+>[0]['matcherDependencies'] {
   let approvedFactsJson = ''
   return {
     bind_authentication_page_observation_facts: (approvedFacts) => {
       approvedFactsJson = JSON.stringify(approvedFacts)
       return {} as ReturnType<
-        Parameters<
-          typeof authenticationWorkflowApprovalsMatch
-        >[1]['bind_authentication_page_observation_facts']
+        NonNullable<
+          Parameters<
+            typeof authenticationWorkflowApprovalsMatch
+          >[0]['matcherDependencies']
+        >['bind_authentication_page_observation_facts']
       >
     },
     authentication_page_observation_facts_match_binding: (
@@ -72,37 +74,31 @@ describe('authentication workflow snapshot messages', () => {
     const approved = { workflowKey: 'login:continue', facts }
     const dependencies = approvalMatcherDependencies()
     expect(
-      authenticationWorkflowApprovalsMatch(
-        {
-          approved,
-          current: { workflowKey: 'login:continue', facts },
-        },
-        dependencies,
-      ),
+      authenticationWorkflowApprovalsMatch({
+        approved,
+        current: { workflowKey: 'login:continue', facts },
+        matcherDependencies: dependencies,
+      }),
     ).toBe(true)
     expect(
-      authenticationWorkflowApprovalsMatch(
-        {
-          approved,
-          current: { workflowKey: 'otp:fill', facts },
-        },
-        dependencies,
-      ),
+      authenticationWorkflowApprovalsMatch({
+        approved,
+        current: { workflowKey: 'otp:fill', facts },
+        matcherDependencies: dependencies,
+      }),
     ).toBe(false)
     expect(
-      authenticationWorkflowApprovalsMatch(
-        {
-          approved,
-          current: {
-            workflowKey: 'login:continue',
-            facts: {
-              ...facts,
-              fields: { ...facts.fields, oneTimeCodeFieldCount: 1 },
-            },
+      authenticationWorkflowApprovalsMatch({
+        approved,
+        current: {
+          workflowKey: 'login:continue',
+          facts: {
+            ...facts,
+            fields: { ...facts.fields, oneTimeCodeFieldCount: 1 },
           },
         },
-        dependencies,
-      ),
+        matcherDependencies: dependencies,
+      }),
     ).toBe(false)
   })
 
@@ -110,22 +106,20 @@ describe('authentication workflow snapshot messages', () => {
     const approvedFacts = validMessage.payload.observations[0]
     const dependencies = approvalMatcherDependencies()
     expect(
-      authenticationWorkflowApprovalsMatch(
-        {
-          approved: { workflowKey: 'login:otp', facts: approvedFacts },
-          current: {
-            workflowKey: 'login:otp',
-            facts: {
-              ...approvedFacts,
-              ceremony: {
-                ...approvedFacts.ceremony,
-                oneTimeCodeHandlerSignal: 'onchange=submitNewChallenge()',
-              },
+      authenticationWorkflowApprovalsMatch({
+        approved: { workflowKey: 'login:otp', facts: approvedFacts },
+        current: {
+          workflowKey: 'login:otp',
+          facts: {
+            ...approvedFacts,
+            ceremony: {
+              ...approvedFacts.ceremony,
+              oneTimeCodeHandlerSignal: 'onchange=submitNewChallenge()',
             },
           },
         },
-        dependencies,
-      ),
+        matcherDependencies: dependencies,
+      }),
     ).toBe(false)
   })
 

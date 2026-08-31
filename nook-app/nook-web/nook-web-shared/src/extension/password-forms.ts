@@ -71,7 +71,6 @@ import {
 } from "./password-form-passkey-only-workflows";
 import {
   setNativeInputValue,
-  type LoginCredentials,
   type LoginCredentialsFillRequest,
   LoginCredentialsLookupKind,
   type LoginCredentialsLookup,

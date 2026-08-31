@@ -1,5 +1,3 @@
-/// <reference path="../../../../nook-web-extension/src/vite-env.d.ts" />
-
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE } from '../../../../nook-web-extension/src/offscreen/session-request-adapter'
 import { ExtensionSessionMessageType } from '../../../../nook-web-extension/src/offscreen/session-message-dispatch'
@@ -24,6 +22,10 @@ vi.mock(
 
 import { stagedAuthenticatorCodeFromSession } from '../../../../nook-web-extension/src/background/service-worker/authenticator-session-adapter'
 import { handleAuthenticatorEnrollmentMessage } from '../../../../nook-web-extension/src/offscreen/authenticator-enrollment-session'
+
+declare global {
+  const __NOOK_SIMPLE_VAULT_URL__: string
+}
 
 beforeEach(() => {
   vi.clearAllMocks()

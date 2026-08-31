@@ -23,6 +23,7 @@ export type AuthenticationWorkflowApproval = {
 type AuthenticationWorkflowApprovalPair = {
   approved: AuthenticationWorkflowApproval
   current: AuthenticationWorkflowApproval
+  matcherDependencies?: AuthenticationWorkflowApprovalMatcherDependencies
 }
 
 type AuthenticationWorkflowApprovalMatcherDependencies = {
@@ -36,10 +37,13 @@ const authenticationWorkflowApprovalMatcherDependencies: AuthenticationWorkflowA
     authentication_page_observation_facts_match_binding,
   }
 
-export function authenticationWorkflowApprovalsMatch(
-  { approved, current }: AuthenticationWorkflowApprovalPair,
-  dependencies: AuthenticationWorkflowApprovalMatcherDependencies = authenticationWorkflowApprovalMatcherDependencies,
-): boolean {
+export function authenticationWorkflowApprovalsMatch({
+  approved,
+  current,
+  matcherDependencies,
+}: AuthenticationWorkflowApprovalPair): boolean {
+  const dependencies =
+    matcherDependencies ?? authenticationWorkflowApprovalMatcherDependencies
   if (approved.workflowKey !== current.workflowKey) return false
   const approvedBatch: AuthenticationPageObservationFactsBatch = {
     observations: [approved.facts],

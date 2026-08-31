@@ -75,7 +75,11 @@ export function fillOneTimeCode(request: OneTimeCodeFillRequest): boolean {
     findOneTimeCodeFields(passwordFieldQuery(request)),
   );
   if (!field) return false;
-  setNativeInputValue({ input: field, value: request.code });
+  const mutation: Parameters<typeof setNativeInputValue>[0] = {
+    input: field,
+    value: request.code,
+  };
+  setNativeInputValue(mutation);
   field.focus();
   return true;
 }
@@ -86,12 +90,20 @@ export function fillGeneratedPassword(
   const passwordFields = findPasswordFields(passwordFieldQuery(request)).filter(
     (field) => !field.readOnly,
   );
-  const newPasswordFields = passwordFields.filter((field) =>
-    hasAutocompleteToken({ field, expected: "new-password" }),
-  );
+  const newPasswordFields = passwordFields.filter((field) => {
+    const tokenRequest: Parameters<typeof hasAutocompleteToken>[0] = {
+      field,
+      expected: "new-password",
+    };
+    return hasAutocompleteToken(tokenRequest);
+  });
   if (newPasswordFields.length === 0) return false;
   for (const field of newPasswordFields) {
-    setNativeInputValue({ input: field, value: request.password });
+    const mutation: Parameters<typeof setNativeInputValue>[0] = {
+      input: field,
+      value: request.password,
+    };
+    setNativeInputValue(mutation);
   }
   newPasswordFields[0]?.focus();
   return true;
@@ -101,7 +113,11 @@ export function clearLoginCredentials(
   request: PasswordFormScopeQuery,
 ): void {
   const clearField = (input: HTMLInputElement): void => {
-    setNativeInputValue({ input, value: "" });
+    const mutation: Parameters<typeof setNativeInputValue>[0] = {
+      input,
+      value: "",
+    };
+    setNativeInputValue(mutation);
   };
   findUsernameFields(passwordFieldQuery(request)).forEach(clearField);
   findPasswordFields(passwordFieldQuery(request)).forEach(clearField);
