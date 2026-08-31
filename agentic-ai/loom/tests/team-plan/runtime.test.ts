@@ -292,6 +292,12 @@ describe('Team Plan runtime', () => {
       ...file,
       journalPath: join(aliasDirectory, 'events.jsonl'),
     };
+    await expect(
+      startTeamPlan({
+        ...startRequest(file),
+        journalPath: join(fixture.sourceRoot, 'events.jsonl'),
+      }),
+    ).rejects.toThrow('outside the source repository');
     await startTeamPlan(startRequest(aliased));
 
     const first = await selectTeamPlan({
@@ -345,7 +351,12 @@ describe('Team Plan runtime', () => {
       journalPath: aliased.journalPath,
     });
     expect(finalized.headCommit).toBe(fixture.baselineCommit);
-  });
+    unlinkSync(file.path);
+    expect(
+      await finalizeTeamPlan({ journalPath: aliased.journalPath }),
+    ).toEqual(finalized);
+    await discardFinalizedTeamPlan({ journalPath: aliased.journalPath });
+  }, 10_000);
 
   test('reconstructs an exact integrated writer frontier', async () => {
     const fixture = createGitFixture();
@@ -581,8 +592,9 @@ describe('Team Plan runtime', () => {
       }),
     ).rejects.toThrow('stale or was never selected');
     writeFileSync(moved.path, `${JSON.stringify(second)}\n`);
-    await expect(
-      selectTeamPlan({ journalPath: file.journalPath }),
-    ).rejects.toThrow('journal replay failed closed');
+    expect(
+      (await selectTeamPlan({ journalPath: file.journalPath })).snapshot
+        .generation,
+    ).toBe(2);
   });
 });
