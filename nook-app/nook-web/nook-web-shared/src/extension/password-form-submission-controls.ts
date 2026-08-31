@@ -917,6 +917,7 @@ export function observeSubmit({
     result: FormSubmissionResult.NotObserved,
   };
   let replayingApprovedSubmission = false;
+  let dispatchingPageSubmission = false;
   let pagePreventedSubmission = false;
   let directSubmissionAllowed = false;
   const rejectSubmission = (event?: SubmitEvent) => {
@@ -925,36 +926,71 @@ export function observeSubmit({
     state.result = FormSubmissionResult.Rejected;
     if (approval) approval.reject();
   };
-  const markSubmitted = (event: SubmitEvent) => {
-    if (!approval) {
-      state.result = FormSubmissionResult.Submitted;
-      return;
-    }
-    const submitterMatches = event.submitter
+  const submitterMatches = (event: SubmitEvent) =>
+    event.submitter
       ? event.submitter === expectedSubmitter
       : expectedSubmitter === false;
-    if (!submitterMatches || !approval.isApproved()) {
-      rejectSubmission(event);
-      return;
-    }
+  const directSubmissionMatchesExpected = () => {
+    if (!expectedSubmitter) return true;
+    const formScope: PasswordFormScope = {
+      kind: PasswordFormScopeKind.Owned,
+      owner: form,
+    };
+    const destinationRequest: ControlDestinationIdentityRequest = {
+      control: expectedSubmitter,
+      formScope,
+    };
+    return (
+      formSubmissionMethod(form) ===
+        controlSubmissionMethod(expectedSubmitter) &&
+      ownedFormDestinationIdentity(form) ===
+        boundedAuthenticationDestination(
+          controlDestinationIdentity(destinationRequest),
+        )
+    );
+  };
+  const mediateSubmission = (event: SubmitEvent) => {
+    if (event.target !== form || dispatchingPageSubmission) return;
     if (replayingApprovedSubmission) {
       event.stopImmediatePropagation();
       state.result = FormSubmissionResult.Submitted;
       return;
     }
-    if (state.result !== FormSubmissionResult.Rejected) {
-      state.result = FormSubmissionResult.Submitted;
-    }
-  };
-  const cancelOriginalSubmission = (event: SubmitEvent) => {
-    if (event.target !== form || replayingApprovedSubmission) return;
-    pagePreventedSubmission = event.defaultPrevented;
     event.preventDefault();
+    event.stopImmediatePropagation();
+    if (!submitterMatches(event) || (approval && !approval.isApproved())) {
+      rejectSubmission();
+      return;
+    }
+    const pageEventInit: SubmitEventInit = {
+      bubbles: true,
+      cancelable: true,
+      submitter: event.submitter,
+    };
+    const pageEvent = new SubmitEvent("submit", pageEventInit);
+    dispatchingPageSubmission = true;
+    form.dispatchEvent(pageEvent);
+    dispatchingPageSubmission = false;
+    pagePreventedSubmission = pageEvent.defaultPrevented;
+    if (state.result === FormSubmissionResult.Rejected) return;
+    if (!approval) {
+      state.result = FormSubmissionResult.Submitted;
+      return;
+    }
+    if (!approval.isApproved()) {
+      rejectSubmission();
+      return;
+    }
+    state.result = FormSubmissionResult.Submitted;
   };
   const stopDirectSubmitObservation = observeAuthenticationDirectSubmits(
     (submittedForm) => {
       if (submittedForm !== form) return true;
-      if (!approval || !approval.isApproved()) {
+      if (
+        !approval ||
+        !directSubmissionMatchesExpected() ||
+        !approval.isApproved()
+      ) {
         rejectSubmission();
         return false;
       }
@@ -963,9 +999,7 @@ export function observeSubmit({
       return true;
     },
   );
-  const submitEventTarget = form.ownerDocument.defaultView ?? window;
-  form.addEventListener("submit", markSubmitted, true);
-  submitEventTarget.addEventListener("submit", cancelOriginalSubmission);
+  form.ownerDocument.addEventListener("submit", mediateSubmission, true);
   try {
     action();
   } finally {
@@ -989,7 +1023,6 @@ export function observeSubmit({
   } else if (approval && state.result === FormSubmissionResult.Submitted) {
     rejectSubmission();
   }
-  form.removeEventListener("submit", markSubmitted, true);
-  submitEventTarget.removeEventListener("submit", cancelOriginalSubmission);
+  form.ownerDocument.removeEventListener("submit", mediateSubmission, true);
   return state.result;
 }

@@ -563,6 +563,7 @@ export function authenticationPageObservationFacts({
     selectedAdvanceObservation?.submissionMethod;
   if (
     selectedAdvanceObservation &&
+    selectedAdvanceObservation.actionability === "actionable" &&
     selectedSubmissionMethod &&
     selectedSubmissionMethod !== PageControlSubmissionMethod.Absent
   ) {

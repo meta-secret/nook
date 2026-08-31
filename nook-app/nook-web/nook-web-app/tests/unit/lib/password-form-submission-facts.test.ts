@@ -37,7 +37,10 @@ function fillTrackedCredentials() {
   return request
 }
 
+const testCleanups: Array<() => void> = []
+
 afterEach(() => {
+  for (const cleanup of testCleanups.splice(0).reverse()) cleanup()
   document.body.replaceChildren()
 })
 
@@ -67,6 +70,7 @@ describe('credential submission observation facts', () => {
       <form method="post" aria-label="Login" action="/session">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
+        <button type="submit" disabled formaction="/capture">Sign in</button>
       </form>
     `
 
@@ -257,44 +261,41 @@ describe('credential submission observation facts', () => {
     ).toBe('')
   })
 
-  test('rejects a route changed by a submit handler after capture', () => {
+  test('rejects a stopped direct submit that drops submitter routing', () => {
     document.body.innerHTML = `
-      <form method="post" id="login" action="/login">
+      <form method="get" id="login" action="/capture">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
-        <button type="submit">Sign in</button>
+        <button type="submit" formmethod="post" formaction="/login">Sign in</button>
       </form>
     `
     const form = document.querySelector<HTMLFormElement>('#login')
-    if (!form) throw new Error('expected login form')
-    const approvedAction = form.action
+    const button = form?.querySelector<HTMLButtonElement>('button')
+    if (!form || !button) throw new Error('expected login form')
+    const approvedAction = button.formAction
     const clearRequest = fillTrackedCredentials()
-    const stopIsolatedBridge = installIsolatedAuthenticationDirectSubmitBridge()
-    const stopPageBridge = installPageAuthenticationDirectSubmitBridge()
+    testCleanups.push(
+      installIsolatedAuthenticationDirectSubmitBridge(),
+      installPageAuthenticationDirectSubmitBridge(),
+    )
     const pageSubmit = HTMLFormElement.prototype.submit
-    form.addEventListener('submit', () => {
-      form.action = '/capture'
+    form.addEventListener('submit', (event) => {
+      event.stopPropagation()
       pageSubmit.call(form)
     })
-    try {
-      expect(
-        submitLoginForm({
-          kind: PasswordFormQueryKind.Root,
-          root: document,
-          submissionApproval: {
-            isApproved: () => form.action === approvedAction,
-            reject: () => clearLoginCredentials(clearRequest),
-          },
-        }),
-      ).toBe(FormSubmissionResult.Rejected)
-      expect(
-        document.querySelector<HTMLInputElement>('input[type="password"]')
-          ?.value,
-      ).toBe('')
-    } finally {
-      stopPageBridge()
-      stopIsolatedBridge()
-    }
+    expect(
+      submitLoginForm({
+        kind: PasswordFormQueryKind.Root,
+        root: document,
+        submissionApproval: {
+          isApproved: () => button.formAction === approvedAction,
+          reject: () => clearLoginCredentials(clearRequest),
+        },
+      }),
+    ).toBe(FormSubmissionResult.Rejected)
+    expect(
+      document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
+    ).toBe('')
   })
 
   test('preserves a page-managed cancelled login submission', () => {
@@ -341,19 +342,18 @@ describe('credential submission observation facts', () => {
       event.preventDefault()
     }
     window.addEventListener('submit', cancelAtWindow)
+    testCleanups.push(() =>
+      window.removeEventListener('submit', cancelAtWindow),
+    )
 
-    try {
-      expect(
-        submitLoginForm({
-          kind: PasswordFormQueryKind.Root,
-          root: document,
-          submissionApproval: { isApproved: () => true, reject: () => {} },
-        }),
-      ).toBe(FormSubmissionResult.Submitted)
-      expect(submissionCount).toBe(1)
-    } finally {
-      window.removeEventListener('submit', cancelAtWindow)
-    }
+    expect(
+      submitLoginForm({
+        kind: PasswordFormQueryKind.Root,
+        root: document,
+        submissionApproval: { isApproved: () => true, reject: () => {} },
+      }),
+    ).toBe(FormSubmissionResult.Submitted)
+    expect(submissionCount).toBe(1)
   })
 
   test('starts rollback tracking fresh for each fill attempt', () => {
