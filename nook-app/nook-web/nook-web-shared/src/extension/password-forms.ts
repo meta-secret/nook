@@ -483,8 +483,7 @@ export function authenticationPageObservationFacts({
       candidate.actionability === "actionable" &&
       authentication_advance_control_is_safe(candidate),
   };
-  const boundedAdvanceObservations =
-    boundAuthenticationControlObservations(advanceBoundRequest);
+  const boundedAdvanceObservations = boundAuthenticationControlObservations(advanceBoundRequest);
   if (boundedAdvanceObservations.length > 0) {
     detailedAdvanceControl = {
       kind: "observed",
@@ -550,6 +549,7 @@ export function authenticationPageObservationFacts({
   );
   const implicitSubmissionAvailable =
     observation.formScope.kind === PasswordFormScopeKind.Owned &&
+    !boundedAdvanceObservations.some(({ actionability }) => actionability === "actionable") &&
     !advanceControls.some(
       (control) =>
         control.matches(semanticSubmitControlSelector) &&
@@ -777,7 +777,7 @@ export function fillLoginCredentials(
   const passwordField = passwordFields[0];
   const approvedPasswordForm = passwordField.form;
   const passwordFieldRemainsEligible = (): boolean =>
-    passwordField.form === approvedPasswordForm &&
+    !passwordField.readOnly && passwordField.form === approvedPasswordForm &&
     findPasswordFields(passwordFieldQuery(request)).includes(passwordField);
   function formBlocksFill(form: HTMLFormElement): boolean {
     const advanceRequest: OwnedAdvanceControlRequest = { request, form };

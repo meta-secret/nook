@@ -900,21 +900,19 @@ export function observeSubmit({
   approval,
 }: FormSubmissionObservation): boolean {
   let submitted = false;
+  let rejected = false;
   const markSubmitted = (event: SubmitEvent) => {
     if (approval && !approval.isApproved()) {
       event.preventDefault();
       event.stopImmediatePropagation();
+      rejected = true;
       approval.reject();
       return;
     }
     submitted = true;
   };
-  const listenerOptions: AddEventListenerOptions = {
-    capture: true,
-    once: true,
-  };
-  form.addEventListener("submit", markSubmitted, listenerOptions);
+  form.addEventListener("submit", markSubmitted, true);
   action();
   form.removeEventListener("submit", markSubmitted, true);
-  return submitted;
+  return submitted && !rejected;
 }
