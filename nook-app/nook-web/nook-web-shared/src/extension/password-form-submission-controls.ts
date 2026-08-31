@@ -3,6 +3,7 @@ import {
   can_activate_authentication_route_control,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import type { AuthenticationAdvanceControlObservation } from "./nook-companion-wasm/nook_companion_wasm.js";
+import { observeAuthenticationDirectSubmits } from "./authentication-direct-submit-bridge";
 import {
   findOneTimeCodeFields,
   findPasswordFields,
@@ -917,7 +918,7 @@ export function observeSubmit({
   };
   let replayingApprovedSubmission = false;
   let pagePreventedSubmission = false;
-  let pageRequestedDirectSubmission = false;
+  let directSubmissionAllowed = false;
   const rejectSubmission = (event?: SubmitEvent) => {
     event?.preventDefault();
     event?.stopImmediatePropagation();
@@ -950,19 +951,25 @@ export function observeSubmit({
     pagePreventedSubmission = event.defaultPrevented;
     event.preventDefault();
   };
-  const nativeSubmit = HTMLFormElement.prototype.submit.bind(form);
-  const originalSubmit = form.submit;
-  if (approval) {
-    form.submit = () => {
-      pageRequestedDirectSubmission = true;
-    };
-  }
+  const stopDirectSubmitObservation = observeAuthenticationDirectSubmits(
+    (submittedForm) => {
+      if (submittedForm !== form) return true;
+      if (!approval || !approval.isApproved()) {
+        rejectSubmission();
+        return false;
+      }
+      state.result = FormSubmissionResult.Submitted;
+      directSubmissionAllowed = true;
+      return true;
+    },
+  );
+  const submitEventTarget = form.ownerDocument.defaultView ?? window;
   form.addEventListener("submit", markSubmitted, true);
-  form.ownerDocument.addEventListener("submit", cancelOriginalSubmission);
+  submitEventTarget.addEventListener("submit", cancelOriginalSubmission);
   try {
     action();
   } finally {
-    form.submit = originalSubmit;
+    stopDirectSubmitObservation();
   }
   if (
     approval &&
@@ -970,8 +977,7 @@ export function observeSubmit({
     approval.isApproved()
   ) {
     try {
-      if (pageRequestedDirectSubmission) nativeSubmit();
-      else if (!pagePreventedSubmission) {
+      if (!directSubmissionAllowed && !pagePreventedSubmission) {
         replayingApprovedSubmission = true;
         if (expectedSubmitter) form.requestSubmit(expectedSubmitter);
         else form.requestSubmit();
@@ -984,6 +990,6 @@ export function observeSubmit({
     rejectSubmission();
   }
   form.removeEventListener("submit", markSubmitted, true);
-  form.ownerDocument.removeEventListener("submit", cancelOriginalSubmission);
+  submitEventTarget.removeEventListener("submit", cancelOriginalSubmission);
   return state.result;
 }

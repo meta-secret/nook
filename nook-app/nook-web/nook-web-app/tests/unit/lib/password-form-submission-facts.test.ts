@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import {
+  installIsolatedAuthenticationDirectSubmitBridge,
+  installPageAuthenticationDirectSubmitBridge,
+} from '../../../../nook-web-shared/src/extension/authentication-direct-submit-bridge'
+import {
   authenticationPageObservationFacts,
   clearLoginCredentials,
   fillLoginCredentials,
@@ -265,24 +269,32 @@ describe('credential submission observation facts', () => {
     if (!form) throw new Error('expected login form')
     const approvedAction = form.action
     const clearRequest = fillTrackedCredentials()
+    const stopIsolatedBridge = installIsolatedAuthenticationDirectSubmitBridge()
+    const stopPageBridge = installPageAuthenticationDirectSubmitBridge()
+    const pageSubmit = HTMLFormElement.prototype.submit
     form.addEventListener('submit', () => {
       form.action = '/capture'
-      form.submit()
+      pageSubmit.call(form)
     })
-
-    expect(
-      submitLoginForm({
-        kind: PasswordFormQueryKind.Root,
-        root: document,
-        submissionApproval: {
-          isApproved: () => form.action === approvedAction,
-          reject: () => clearLoginCredentials(clearRequest),
-        },
-      }),
-    ).toBe(FormSubmissionResult.Rejected)
-    expect(
-      document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
-    ).toBe('')
+    try {
+      expect(
+        submitLoginForm({
+          kind: PasswordFormQueryKind.Root,
+          root: document,
+          submissionApproval: {
+            isApproved: () => form.action === approvedAction,
+            reject: () => clearLoginCredentials(clearRequest),
+          },
+        }),
+      ).toBe(FormSubmissionResult.Rejected)
+      expect(
+        document.querySelector<HTMLInputElement>('input[type="password"]')
+          ?.value,
+      ).toBe('')
+    } finally {
+      stopPageBridge()
+      stopIsolatedBridge()
+    }
   })
 
   test('preserves a page-managed cancelled login submission', () => {
@@ -311,6 +323,36 @@ describe('credential submission observation facts', () => {
       }),
     ).toBe(FormSubmissionResult.Submitted)
     expect(submissionCount).toBe(1)
+  })
+
+  test('preserves cancellation from a window bubble submit handler', () => {
+    document.body.innerHTML = `
+      <form method="post" id="login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+      </form>
+    `
+    fillTrackedCredentials()
+    let submissionCount = 0
+    const cancelAtWindow = (event: Event) => {
+      if (event.defaultPrevented) return
+      submissionCount += 1
+      event.preventDefault()
+    }
+    window.addEventListener('submit', cancelAtWindow)
+
+    try {
+      expect(
+        submitLoginForm({
+          kind: PasswordFormQueryKind.Root,
+          root: document,
+          submissionApproval: { isApproved: () => true, reject: () => {} },
+        }),
+      ).toBe(FormSubmissionResult.Submitted)
+      expect(submissionCount).toBe(1)
+    } finally {
+      window.removeEventListener('submit', cancelAtWindow)
+    }
   })
 
   test('starts rollback tracking fresh for each fill attempt', () => {

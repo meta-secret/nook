@@ -2,7 +2,10 @@ import {
   BROWSER_MESSAGE_KEYS,
   type BrowserMessageKey,
 } from '../lib/browser-message-keys'
+import { installIsolatedAuthenticationDirectSubmitBridge } from '../../../nook-web-shared/src/extension/authentication-direct-submit-bridge'
 export {}
+
+installIsolatedAuthenticationDirectSubmitBridge()
 
 import {
   WebsitePasskeyCeremony,
