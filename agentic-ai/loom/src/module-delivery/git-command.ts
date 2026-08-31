@@ -6,6 +6,8 @@ import type {
 } from 'node:child_process';
 
 const MAX_GIT_OUTPUT_BYTES = 16 * 1024 * 1024;
+const MAX_GIT_ARGUMENTS = 1024;
+const MAX_GIT_ARGUMENT_BYTES = 1024 * 1024;
 
 export type GitCommandRequest = {
   readonly cwd: string;
@@ -37,8 +39,16 @@ export function runModuleDeliveryGit(
     '-c',
     'core.untrackedCache=false',
     '--literal-pathspecs',
-    ...request.args,
   ];
+  if (request.args.length > MAX_GIT_ARGUMENTS)
+    throw new Error('Git command arguments exceed bounded input.');
+  let argumentBytes = 0;
+  for (const argument of request.args) {
+    argumentBytes += Buffer.byteLength(argument);
+    if (argumentBytes > MAX_GIT_ARGUMENT_BYTES)
+      throw new Error('Git command arguments exceed bounded input.');
+    args.push(argument);
+  }
   const options: SpawnSyncOptionsWithBufferEncoding = {
     cwd: request.cwd,
     env: {
