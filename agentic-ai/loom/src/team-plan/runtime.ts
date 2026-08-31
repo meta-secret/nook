@@ -55,6 +55,7 @@ import {
   assertTeamPlanFinalizedHead,
   assertTeamPlanLeaseFrontier,
   assertTeamPlanRef,
+  deleteTeamPlanAttemptArtifactOrphans,
   deleteTeamPlanRunRefs,
   pinTeamPlanFinalizedHead,
   pinTeamPlanLeaseFrontier,
@@ -504,6 +505,14 @@ function executeTeamPlanRecord(
     lease.planDigest !== identity.planDigest
   )
     throw new Error('Team Plan result is stale or was never selected.');
+  if (
+    !request.replay &&
+    request.record.kind === TeamPlanRecordKind.FinalUnusable
+  )
+    deleteTeamPlanAttemptArtifactOrphans({
+      run: runIdentity(request.session),
+      attempt: identity,
+    });
   let persisted: TeamPlanJournalRecord;
   if (request.record.kind === TeamPlanRecordKind.AcceptedWrite) {
     if (!request.replay)
