@@ -30,6 +30,78 @@ These records expose auditable actions and cited authority, not private
 reasoning. Event counts are diagnostic activity signals and are not an effort,
 quality, or billing measure.
 
+## Run a Team Plan
+
+Team Plan gives agents one durable command lifecycle for a reviewed module
+delivery plan. The journal stays outside the source repository.
+
+Invoke commands from the repository root:
+
+```bash
+task loom:team-plan:start PLAN=/absolute/path/to/plan.json JOURNAL=/absolute/path/to/events.jsonl
+task loom:team-plan:select JOURNAL=/absolute/path/to/events.jsonl
+task loom:team-plan:record JOURNAL=/absolute/path/to/events.jsonl REQUEST=/absolute/path/to/result.json
+task loom:team-plan:restart JOURNAL=/absolute/path/to/events.jsonl PLAN=/absolute/path/to/new-plan.json
+task loom:team-plan:finalize JOURNAL=/absolute/path/to/events.jsonl
+task loom:team-plan:discard JOURNAL=/absolute/path/to/events.jsonl
+```
+
+The installed `loom-team-plan` executable exposes the same six operations.
+Each successful operation prints one JSON value to stdout.
+
+Follow the lifecycle in order:
+
+1. Start one reviewed generation at its declared source commit.
+2. Select the next lease batch. Selection is durable before the leases return.
+3. Record one terminal result for each selected lease.
+   - The request path must identify a regular file.
+   - Loom uses one nonblocking open handle for the bounded read.
+4. Continue selection and recording until the generation reaches terminal
+   closure.
+5. Restart only from a quiescent run when a newer reviewed generation is
+   required.
+6. Finalize to persist the exact joined head commit.
+7. Discard only when the finalized journal and its run artifacts are no longer
+   needed for inspection or recovery.
+
+`restart` preserves the run identity. It also preserves monotonic attempt
+history for logical tasks. It does not merge a new plan into active leases.
+
+## Team Plan journal compatibility
+
+The canonical schema version is `2`. The source contract lives in
+[`team-plan/domain.ts`](../../../../agentic-ai/loom/src/team-plan/domain.ts).
+
+The journal is strict newline-delimited JSON:
+
+- Every event carries `version: 2`.
+- Every event carries its exact kind and contiguous one-based sequence.
+- `started` is first and freezes the run, plan, source, repository, workspace,
+  and generation-capacity identities.
+- `restarted` freezes one newer reviewed generation.
+- `selected` persists exact lease identities.
+- `recorded` persists one accepted or terminal-unusable lease result.
+- `finalized` persists the terminal head commit and ends the stream.
+
+Version 2 has no permissive compatibility decoder. Missing fields, extra
+fields, other versions, partial lines, invalid ordering, and trailing events
+fail closed. Incompatible future changes require an explicit versioned
+migration or deliberate cleanup.
+
+Recovery uses the complete journal:
+
+- Every mutation of an existing run takes the run's Git reference lock. It
+  replays the stream before appending.
+- Replay revalidates the reviewed plans, source state, lifecycle, leases,
+  terminal records, workspace, and run artifact references.
+- Replay rejects a damaged stream instead of truncating it.
+- Durable artifact references reconstruct accepted results after restart.
+- Interrupted discard uses a `.discarding` tombstone.
+- Resume accepts only a tombstone backed by the original journal inode.
+
+The package README owns the detailed command and recovery behavior. See
+[`Team Plan commands`](../../../../agentic-ai/loom/README.md#team-plan-commands).
+
 ## Invoke a leaf tool
 
 Defaultable tools use a Task alias and an in-code example:

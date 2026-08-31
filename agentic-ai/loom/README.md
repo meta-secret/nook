@@ -9,6 +9,95 @@ Mechanical leaf tools use the existing Bun domain-YAML protocol.
 
 Humans do not use Loom interactively. AI agents and Task wrappers do.
 
+## Team Plan commands
+
+Team Plan is the durable command surface for executing one reviewed module
+delivery plan across process restarts. The journal must live outside the source
+repository. The repository must remain at the source commit declared by the
+active plan when a command requires source state.
+
+Agents should use the Task wrappers from the repository root:
+
+```bash
+task loom:team-plan:start PLAN=/absolute/path/to/plan.json JOURNAL=/absolute/path/to/events.jsonl
+task loom:team-plan:select JOURNAL=/absolute/path/to/events.jsonl
+task loom:team-plan:record JOURNAL=/absolute/path/to/events.jsonl REQUEST=/absolute/path/to/result.json
+task loom:team-plan:restart JOURNAL=/absolute/path/to/events.jsonl PLAN=/absolute/path/to/new-plan.json
+task loom:team-plan:finalize JOURNAL=/absolute/path/to/events.jsonl
+task loom:team-plan:discard JOURNAL=/absolute/path/to/events.jsonl
+```
+
+The installed executable is `loom-team-plan`. It accepts the same `start`,
+`select`, `record`, `restart`, `finalize`, and `discard` arguments as the Task
+wrappers.
+
+The lifecycle is explicit:
+
+1. `start` validates the reviewed generation, source commit, repository root,
+   and journal capacity. It creates one new journal and materializes the run
+   workspace.
+2. `select` replays the journal and persists the next deterministic lease
+   batch before returning it. An empty lease list is valid when work is blocked
+   or already terminal.
+3. `record` consumes one selected lease. Its request must be a regular file.
+   Loom opens the file without waiting on special files and bounds the read on
+   that same open handle.
+4. Repeat `select` and `record` until every task is accepted, exhausts its
+   attempts, or becomes terminal through dependency failure.
+5. `restart` appends a newer reviewed generation. The current generation must
+   have no active leases. Logical task attempts remain monotonic across the
+   restart.
+6. `finalize` appends the exact joined head commit after terminal closure. A
+   repeated finalize of the same finalized run returns its existing snapshot.
+7. `discard` removes only a finalized journal and its run-owned durable
+   artifacts. Keep the finalized journal when later inspection or recovery is
+   still required.
+
+Every successful command prints one JSON value to stdout. Parse that value
+instead of scraping logs. Parse failures and rejected lifecycle transitions
+exit nonzero without appending an event.
+
+## Team Plan journal version 2
+
+The durable journal is newline-delimited JSON. Every line is one complete event
+with `version: 2`, an exact `kind`, and a contiguous one-based `sequence`.
+Unknown fields, missing fields, empty lines, trailing partial lines, and events
+after finalization are invalid.
+
+Version 2 has five event shapes:
+
+- `started` is sequence one. It freezes the run ID, reviewed plan text and
+  hashes, module-plan digest, source commit, canonical repository and workspace
+  roots, and the proven record capacity for the generation.
+- `restarted` freezes the corresponding reviewed-plan fields for a newer
+  generation. The original run identity and roots remain owned by `started`.
+- `selected` records the exact task, attempt, generation, and plan digest for
+  each returned lease.
+- `recorded` closes one active lease with `accepted-write`,
+  `accepted-evidence`, or `final-unusable`. Provider request envelopes are
+  converted to the accepted durable record during command execution.
+- `finalized` records the exact terminal head commit. It is the final event.
+
+Replay is the compatibility boundary. Loom accepts only the exact version 2
+schema and lifecycle; it does not infer missing data or silently upgrade an
+older journal. A future incompatible schema requires an explicit versioned
+migration or deliberate cleanup before the run can continue.
+
+Recovery also fails closed:
+
+- Each mutation of an existing run reloads and replays the complete journal
+  under the run's Git reference lock.
+- Replay revalidates reviewed plan content, sequence, generation, leases,
+  terminal records, source state, workspace identity, and durable artifact
+  references.
+- A torn, oversized, malformed, reordered, or lifecycle-invalid journal is
+  rejected. Loom does not truncate it to a plausible prefix.
+- Durable artifact references allow accepted results to be reconstructed after
+  a process restart.
+- An interrupted discard leaves a `<journal>.discarding` tombstone. A later
+  discard resumes only when the tombstone is the original journal inode; a
+  replacement or forged tombstone is rejected.
+
 ## Delegated agent action references
 
 Every persisted agent-attempt event has a compact action identifier derived
