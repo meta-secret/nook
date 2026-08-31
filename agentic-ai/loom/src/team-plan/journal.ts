@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { constants } from 'node:fs';
+import { readlinkSync } from 'node:fs';
 import {
   lstat,
   link,
@@ -25,7 +26,10 @@ import {
 } from './domain.ts';
 
 import type { TeamPlanEvent, TeamPlanStartedEvent } from './domain.ts';
-import type { ModuleDeliveryPlanV2 } from '../module-delivery/index.ts';
+import type {
+  ModuleDeliveryExecutionPrecedence,
+  ModuleDeliveryPlanV2,
+} from '../module-delivery/index.ts';
 
 export const MAX_TEAM_PLAN_JOURNAL_BYTES = 5_242_880;
 const MAX_TEAM_PLAN_PLAN_TEXT_BYTES = 262_144;
@@ -46,7 +50,8 @@ const MAX_TEAM_PLAN_RECORDS_PER_GENERATION = 320;
 const ZERO_COMMIT = '0'.repeat(40);
 const SHA256 = /^[0-9a-f]{64}$/u;
 const COMMIT = /^[0-9a-f]{40}$/u;
-const TASK_ID = /^[a-z0-9][a-z0-9-]{0,79}$/u;
+const TASK_ID = /^[a-z][a-z0-9_-]{0,63}$/u;
+const TEAM_PLAN_SYSTEM_PATH = '/bin:/usr/bin:/usr/sbin';
 
 const TEAM_PLAN_COMMON_FIELDS = 'version|kind|sequence';
 const TEAM_PLAN_STARTED_FIELDS = `${TEAM_PLAN_COMMON_FIELDS}|runId|planPath|planText|planSha256|modulePlanDigest|sourceCommit|repositoryRoot|workspaceRoot|generationRecordLimit`;
@@ -75,6 +80,7 @@ export type CreateTeamPlanJournalRequest = Readonly<{
 export type AppendTeamPlanEventRequest = Readonly<{
   journalPath: string;
   event: TeamPlanEvent;
+  beforeTemporarySync?: () => void;
   beforeParentSync?: () => void;
 }>;
 
@@ -134,6 +140,7 @@ export async function appendTeamPlanEvent(
     path,
     serialized: candidate,
     mode: current.mode,
+    beforeTemporarySync: parentSyncHook(request.beforeTemporarySync),
     beforeParentSync: parentSyncHook(request.beforeParentSync),
   });
 }
@@ -545,6 +552,7 @@ function journalGenerationCounters(
   let currentGeneration = 0;
   let currentPlanDigest = '';
   let currentPlan: ModuleDeliveryPlanV2 | false = false;
+  let executionPrecedence: readonly ModuleDeliveryExecutionPrecedence[] = [];
   const activeAttempts = new Map<string, string>();
   const latestAttempts = new Map<string, number>();
   const acceptedTasks = new Set<string>();
@@ -572,6 +580,7 @@ function journalGenerationCounters(
       currentGeneration = validation.plan.generation;
       currentPlanDigest = event.modulePlanDigest;
       currentPlan = validation.plan;
+      executionPrecedence = validation.executionPrecedence;
       selectedLeaseCount = 0;
       recordedCount = 0;
       latestAttempts.clear();
@@ -618,7 +627,12 @@ function journalGenerationCounters(
         throw new Error('Team Plan finalization has outstanding attempts.');
       if (!currentPlan)
         throw new Error('Team Plan finalization has no active plan.');
-      assertTerminalPlan({ currentPlan, acceptedTasks, failedAttempts });
+      assertTerminalPlan({
+        currentPlan,
+        executionPrecedence,
+        acceptedTasks,
+        failedAttempts,
+      });
       finalized = true;
     }
   }
@@ -642,6 +656,7 @@ function journalGenerationCounters(
 function assertTerminalPlan(
   request: Readonly<{
     currentPlan: ModuleDeliveryPlanV2;
+    executionPrecedence: readonly ModuleDeliveryExecutionPrecedence[];
     acceptedTasks: ReadonlySet<string>;
     failedAttempts: ReadonlyMap<string, number>;
   }>,
@@ -658,7 +673,10 @@ function assertTerminalPlan(
     for (const node of request.currentPlan.nodes) {
       if (
         !terminal.has(node.taskId) &&
-        node.dependencies.some((taskId) => failures.has(taskId))
+        request.executionPrecedence.some(
+          ({ predecessorTaskId, successorTaskId }) =>
+            successorTaskId === node.taskId && failures.has(predecessorTaskId),
+        )
       ) {
         terminal.add(node.taskId);
         failures.add(node.taskId);
@@ -770,6 +788,7 @@ function updateRef(request: {
     {
       cwd: request.journal.started.repositoryRoot,
       encoding: 'utf8',
+      env: { PATH: TEAM_PLAN_SYSTEM_PATH },
       stdio: ['ignore', 'pipe', 'pipe'],
     },
   );
@@ -837,6 +856,7 @@ function gitText(invocation: GitInvocation): string {
   const result = spawnSync('git', [args[0], args[1], args[2]], {
     cwd: invocation.cwd,
     encoding: 'utf8',
+    env: { PATH: TEAM_PLAN_SYSTEM_PATH },
     input: 'input' in invocation ? invocation.input : '',
     stdio: ['pipe', 'pipe', 'pipe'],
   });
@@ -865,6 +885,7 @@ async function replaceFile(request: {
   readonly path: string;
   readonly serialized: string;
   readonly mode: number;
+  readonly beforeTemporarySync: ParentSyncHook;
   readonly beforeParentSync: ParentSyncHook;
 }): Promise<void> {
   const { path } = request;
@@ -912,6 +933,7 @@ async function writeTemporaryFile(request: {
   readonly path: string;
   readonly serialized: string;
   readonly mode: number;
+  readonly beforeTemporarySync?: ParentSyncHook;
 }): Promise<string> {
   const { path, serialized } = request;
   const temporary = resolve(
@@ -922,11 +944,16 @@ async function writeTemporaryFile(request: {
   try {
     await handle.chmod(request.mode);
     await handle.writeFile(serialized, 'utf8');
+    if (request.beforeTemporarySync)
+      runParentSyncHook(request.beforeTemporarySync);
     await handle.sync();
-  } finally {
     await handle.close();
+    return temporary;
+  } catch (error) {
+    await handle.close().catch(() => false);
+    await removeTemporary(temporary);
+    throw error;
   }
-  return temporary;
 }
 
 async function syncParent(path: string): Promise<void> {
@@ -977,6 +1004,15 @@ function processStartIdentity(pid: number): string | false {
 }
 
 function processMachineIdentity(): string | false {
+  let namespace = 'host';
+  if (process.platform === 'linux') {
+    try {
+      namespace = readlinkSync('/proc/self/ns/pid');
+    } catch {
+      return false;
+    }
+    if (!/^pid:\[[0-9]+\]$/u.test(namespace)) return false;
+  }
   const boot = (
     process.platform === 'darwin'
       ? spawnSync('sysctl', ['-n', 'kern.boottime'], {
@@ -990,5 +1026,5 @@ function processMachineIdentity(): string | false {
           stdio: ['ignore', 'pipe', 'ignore'],
         })
   ).stdout.trim();
-  return boot ? `${hostname()}:${boot}` : false;
+  return boot ? `${hostname()}:${boot}:${namespace}` : false;
 }

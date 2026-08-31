@@ -6,6 +6,8 @@ import {
   linkSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
+  readlinkSync,
   statSync,
   symlinkSync,
   unlinkSync,
@@ -22,6 +24,7 @@ import {
   ModuleDeliveryJoinKind,
   ModuleDeliveryTaskKind,
   ModuleDeliveryValidationStatus,
+  ModuleDeliveryWorkspaceKind,
   TeamKey,
   decodeAndValidateModuleDeliveryPlan,
 } from '../../src/module-delivery/index.ts';
@@ -226,6 +229,9 @@ describe('Team Plan journal', () => {
     const boot = spawnSync(bootCommand[0] ?? '', bootCommand.slice(1), {
       encoding: 'utf8',
     }).stdout.trim();
+    const namespace =
+      process.platform === 'linux' ? readlinkSync('/proc/self/ns/pid') : 'host';
+    const machineIdentity = `${hostname()}:${boot}:${namespace}`;
     const owner = (request: {
       readonly processIdentity: string;
       readonly token: string;
@@ -234,7 +240,7 @@ describe('Team Plan journal', () => {
       fixture,
       name: 'live-lock.json',
       contents: owner({
-        processIdentity: `${hostname()}:${boot || 'boot-unavailable'}:${started}`,
+        processIdentity: `${machineIdentity}:${started}`,
         token: 'live',
       }),
     });
@@ -250,7 +256,7 @@ describe('Team Plan journal', () => {
       fixture,
       name: 'foreign-lock.json',
       contents: owner({
-        processIdentity: `${hostname()}:foreign-boot:reused`,
+        processIdentity: `${hostname()}:${boot}:foreign-namespace:reused`,
         token: 'foreign',
       }),
     });
@@ -266,7 +272,7 @@ describe('Team Plan journal', () => {
       fixture,
       name: 'stale-lock.json',
       contents: owner({
-        processIdentity: `${hostname()}:${boot}:reused`,
+        processIdentity: `${machineIdentity}:reused`,
         token: 'stale',
       }),
     });
@@ -302,6 +308,22 @@ describe('Team Plan journal', () => {
       }),
     ).toBe('acquired-symbolic-name');
     expect(fixtureGit(fixture)(['rev-parse', targetRef])).toBe(stale);
+
+    const shadowGit = join(fixture.sourceRoot, 'git');
+    writeFileSync(shadowGit, '#!/bin/sh\nexit 93\n');
+    chmodSync(shadowGit, 0o755);
+    const originalPath = process.env.PATH || '/usr/bin:/bin';
+    process.env.PATH = `.:${originalPath}`;
+    try {
+      expect(
+        await withTeamPlanJournalLock({
+          journalPath,
+          action: async () => 'canonical-git',
+        }),
+      ).toBe('canonical-git');
+    } finally {
+      process.env.PATH = originalPath;
+    }
   });
 
   test('rejects torn snapshots and nested attempt extensions', async () => {
@@ -380,6 +402,38 @@ describe('Team Plan journal', () => {
     const fifo = join(fixture.root, 'journal.fifo');
     expect(spawnSync('mkfifo', [fifo]).status).toBe(0);
     await expect(loadTeamPlanJournal(fifo)).rejects.toThrow('unsafe');
+  });
+
+  test('cleans a partial temporary append for an underscore task', async () => {
+    const { fixture, journalPath, started } = await startedFixture((value) => ({
+      ...value,
+      nodes: value.nodes.map((node) => ({ ...node, taskId: 'read_only' })),
+    }));
+    await expect(
+      appendTeamPlanEvent({
+        journalPath,
+        event: {
+          version: TEAM_PLAN_JOURNAL_VERSION,
+          kind: TeamPlanEventKind.Selected,
+          sequence: 2,
+          attempts: [
+            {
+              taskId: 'read_only',
+              attempt: 1,
+              generation: 1,
+              planDigest: started.modulePlanDigest,
+            },
+          ],
+        },
+        beforeTemporarySync: () => {
+          throw new Error('temporary sync failed');
+        },
+      }),
+    ).rejects.toThrow('temporary sync failed');
+    expect(
+      readdirSync(fixture.root).filter((path) => path.endsWith('.tmp')),
+    ).toEqual([]);
+    expect((await loadTeamPlanJournal(journalPath)).events).toHaveLength(1);
   });
 
   test('durably tombstones discard and resumes under the original lock', async () => {
@@ -618,6 +672,80 @@ describe('Team Plan journal', () => {
       event: unusable({ sequence: 5, attempt: 2 }),
     });
     await appendTeamPlanEvent({ journalPath, event: finalized(6) });
+    expect((await loadTeamPlanJournal(journalPath)).finalized).toBe(true);
+  });
+
+  test('propagates terminal failure through derived execution precedence', async () => {
+    const { fixture, journalPath, started } = await startedFixture((value) => {
+      const reader = value.nodes[0];
+      if (!reader) throw new Error('Precedence reader is missing.');
+      const root = 'nook-app/nook-platform/nook-core';
+      return {
+        ...value,
+        nodes: [
+          {
+            ...reader,
+            taskId: 'reader',
+            resources: {
+              read: [`${root}/**`],
+              write: [],
+              evidenceSurface: [`${root}/**`],
+            },
+          },
+          {
+            ...reader,
+            kind: ModuleDeliveryTaskKind.Write,
+            taskId: 'writer',
+            resources: {
+              read: [`${root}/**`],
+              write: [`${root}/src/**`],
+              evidenceSurface: [],
+            },
+            workspace: {
+              kind: ModuleDeliveryWorkspaceKind.IsolatedWorktree,
+              expectedCommitHandoff: true,
+            },
+          },
+        ],
+      };
+    });
+    const attempt = {
+      taskId: 'writer',
+      attempt: 1,
+      generation: 1,
+      planDigest: started.modulePlanDigest,
+    };
+    await appendTeamPlanEvent({
+      journalPath,
+      event: {
+        version: TEAM_PLAN_JOURNAL_VERSION,
+        kind: TeamPlanEventKind.Selected,
+        sequence: 2,
+        attempts: [attempt],
+      },
+    });
+    await appendTeamPlanEvent({
+      journalPath,
+      event: {
+        version: TEAM_PLAN_JOURNAL_VERSION,
+        kind: TeamPlanEventKind.Recorded,
+        sequence: 3,
+        record: {
+          kind: TeamPlanRecordKind.FinalUnusable,
+          ...attempt,
+          conclusion: ModuleDeliveryGenerationFenceKind.Failed,
+        },
+      },
+    });
+    await appendTeamPlanEvent({
+      journalPath,
+      event: {
+        version: TEAM_PLAN_JOURNAL_VERSION,
+        kind: TeamPlanEventKind.Finalized,
+        sequence: 4,
+        headCommit: fixture.baselineCommit,
+      },
+    });
     expect((await loadTeamPlanJournal(journalPath)).finalized).toBe(true);
   });
 
