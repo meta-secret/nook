@@ -917,6 +917,7 @@ export function observeSubmit({
   };
   let replayingApprovedSubmission = false;
   let pagePreventedSubmission = false;
+  let pageRequestedDirectSubmission = false;
   const rejectSubmission = (event?: SubmitEvent) => {
     event?.preventDefault();
     event?.stopImmediatePropagation();
@@ -950,18 +951,31 @@ export function observeSubmit({
       state.result = FormSubmissionResult.Submitted;
     }
   };
+  const nativeSubmit = HTMLFormElement.prototype.submit.bind(form);
+  const originalSubmit = form.submit;
+  if (approval) {
+    form.submit = () => {
+      pageRequestedDirectSubmission = true;
+    };
+  }
   form.addEventListener("submit", markSubmitted, true);
-  action();
+  try {
+    action();
+  } finally {
+    form.submit = originalSubmit;
+  }
   if (
     approval &&
     state.result === FormSubmissionResult.Submitted &&
-    approval.isApproved() &&
-    !pagePreventedSubmission
+    approval.isApproved()
   ) {
-    replayingApprovedSubmission = true;
     try {
-      if (expectedSubmitter) form.requestSubmit(expectedSubmitter);
-      else form.requestSubmit();
+      if (pageRequestedDirectSubmission) nativeSubmit();
+      else if (!pagePreventedSubmission) {
+        replayingApprovedSubmission = true;
+        if (expectedSubmitter) form.requestSubmit(expectedSubmitter);
+        else form.requestSubmit();
+      }
     } catch {
       rejectSubmission();
     }

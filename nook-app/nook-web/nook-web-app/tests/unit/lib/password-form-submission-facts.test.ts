@@ -267,6 +267,7 @@ describe('credential submission observation facts', () => {
     const clearRequest = fillTrackedCredentials()
     form.addEventListener('submit', () => {
       form.action = '/capture'
+      form.submit()
     })
 
     expect(
@@ -282,6 +283,33 @@ describe('credential submission observation facts', () => {
     expect(
       document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
     ).toBe('')
+  })
+
+  test('preserves a page-managed cancelled login submission', () => {
+    document.body.innerHTML = `
+      <form method="post" id="login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+    const form = document.querySelector<HTMLFormElement>('#login')
+    if (!form) throw new Error('expected login form')
+    fillTrackedCredentials()
+    let submissionCount = 0
+    form.addEventListener('submit', (event) => {
+      submissionCount += 1
+      event.preventDefault()
+    })
+
+    expect(
+      submitLoginForm({
+        kind: PasswordFormQueryKind.Root,
+        root: document,
+        submissionApproval: { isApproved: () => true, reject: () => {} },
+      }),
+    ).toBe(FormSubmissionResult.Submitted)
+    expect(submissionCount).toBe(1)
   })
 
   test('rejects a submitter override emitted by the approved click handler', () => {
