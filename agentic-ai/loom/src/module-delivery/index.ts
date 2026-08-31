@@ -10,7 +10,6 @@ export {
   recordModuleDeliveryAttemptLeases,
   moduleDeliveryAcceptedEvidenceIdentity,
   restartModuleDeliveryGeneration,
-  restoreModuleDeliveryCanonicalEvidenceReceipt,
   selectModuleDeliveryAdmissions,
   verifyModuleDeliveryEvidenceSubmission,
 } from './admission.ts';
@@ -35,7 +34,6 @@ export type {
   ModuleDeliveryAcceptedProviderEvidenceIdentity,
   ModuleDeliveryEvidenceArtifactDigestRequest,
   ModuleDeliveryEvidenceDigestRequest,
-  RestoreModuleDeliveryCanonicalEvidenceReceiptRequest,
 } from './evidence.ts';
 export {
   MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,

@@ -22,10 +22,10 @@ import {
   moduleDeliveryEvidenceArtifactDigest,
   recordModuleDeliveryAttemptDisposition,
   recordModuleDeliveryAttemptLeases,
-  restoreModuleDeliveryCanonicalEvidenceReceipt,
   selectModuleDeliveryAdmissions,
   verifyModuleDeliveryEvidenceSubmission,
 } from '../../src/module-delivery/index.ts';
+import { restoreModuleDeliveryCanonicalEvidenceReceipt } from '../../src/module-delivery/admission.ts';
 import {
   createGitFixture,
   disposeGitFixture,
