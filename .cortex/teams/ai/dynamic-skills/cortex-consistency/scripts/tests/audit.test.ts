@@ -83,3 +83,33 @@ test('rejects context ownership disguised by traversal', () => {
     }),
   );
 });
+
+test('rejects a non-authority document under a recognized owner', () => {
+  const nonAuthority = '.cortex/teams/sre/dynamic-skills/typescript-policy.md';
+  const compileRequest = request([
+    '../web-dev/dynamic-skills/typescript-enums-over-booleans.md',
+  ]);
+  const invalidRequest: CompileCortexContractsRequest = {
+    ...compileRequest,
+    registry: {
+      ...compileRequest.registry,
+      contexts: [
+        {
+          authorityDocument: nonAuthority,
+          ownsAreas: [CortexPolicyArea.GithubTypescript],
+          imports: [POLICY],
+        },
+      ],
+    },
+    documents: [
+      { relativePath: nonAuthority, references: [POLICY] },
+      { relativePath: POLICY, references: [] },
+    ],
+  };
+  expect(compileCortexContracts(invalidRequest)).toContainEqual(
+    expect.objectContaining({
+      code: CortexContractFindingCode.InvalidContextOwner,
+      file: nonAuthority,
+    }),
+  );
+});

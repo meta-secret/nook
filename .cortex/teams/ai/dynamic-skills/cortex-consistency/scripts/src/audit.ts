@@ -190,16 +190,38 @@ type ResolveContextOwnerArgs = {
 function resolveContextOwner(
   args: ResolveContextOwnerArgs,
 ): CortexDocumentOwnerResolution {
-  const documentOwner = cortexDocumentOwner(args.authorityPath);
+  const documentOwner = cortexContextOwner(args.authorityPath);
   if (documentOwner.kind === CortexDocumentOwnerResolutionKind.Unrecognized) {
     args.findings.push({
       code: CortexContractFindingCode.InvalidContextOwner,
       file: args.authorityPath,
-      message: `Cortex context authority is outside every recognized ownership path: ${args.authorityPath}`,
+      message: `Cortex context authority is not a canonical AGENTS.md document: ${args.authorityPath}`,
     });
     return documentOwner;
   }
   return documentOwner;
+}
+
+function cortexContextOwner(
+  authorityPath: string,
+): CortexDocumentOwnerResolution {
+  const authorities: readonly (readonly [string, CortexContractTeam])[] = [
+    ['.cortex/AGENTS.md', CortexContractTeam.GizmoPrime],
+    ['.cortex/gizmo/AGENTS.md', CortexContractTeam.GizmoPrime],
+    ['.cortex/shared/AGENTS.md', CortexContractTeam.Shared],
+    ['.cortex/teams/ai/AGENTS.md', CortexContractTeam.Ai],
+    ['.cortex/teams/dev-core/AGENTS.md', CortexContractTeam.DevelopmentCore],
+    ['.cortex/teams/security/AGENTS.md', CortexContractTeam.Security],
+    ['.cortex/teams/sre/AGENTS.md', CortexContractTeam.Sre],
+    ['.cortex/teams/web-dev/AGENTS.md', CortexContractTeam.WebDevelopment],
+  ];
+  const authority = authorities.find(([path]) => path === authorityPath);
+  return authority
+    ? {
+        kind: CortexDocumentOwnerResolutionKind.Known,
+        owner: authority[1],
+      }
+    : { kind: CortexDocumentOwnerResolutionKind.Unrecognized };
 }
 
 type ValidatePolicySafeguardsArgs = {
