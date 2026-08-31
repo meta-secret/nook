@@ -105,6 +105,7 @@ import { routeExternalCompanionMessage } from './service-worker/external-compani
 import {
   authenticationPasskeyEvidenceIsSafe,
   authenticationWorkflowMessageResponse,
+  authenticationWorkflowRequiresLoginMatchAvailability,
   authenticationWorkflowSavedLoginCapability,
 } from './service-worker/authentication-workflow-routing'
 import {
@@ -333,6 +334,7 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
       companionWasmReady,
       authenticationPasskeyEvidenceIsSafe,
       authenticationWorkflowSnapshot,
+      authenticationWorkflowRequiresLoginMatchAvailability,
       authenticationWorkflowSavedLoginCapability,
       matchingPasskeyAccountCountForOriginSafe,
       websiteLoginMatchAvailability,
