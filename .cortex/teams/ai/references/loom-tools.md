@@ -43,7 +43,7 @@ task loom:team-plan:select JOURNAL=/absolute/path/to/events.jsonl
 task loom:team-plan:record JOURNAL=/absolute/path/to/events.jsonl REQUEST=/absolute/path/to/result.json
 task loom:team-plan:restart JOURNAL=/absolute/path/to/events.jsonl PLAN=/absolute/path/to/new-plan.json
 task loom:team-plan:finalize JOURNAL=/absolute/path/to/events.jsonl
-task loom:team-plan:discard JOURNAL=/absolute/path/to/events.jsonl
+task loom:team-plan:discard JOURNAL=/absolute/path/to/events.jsonl RUN_ID=<runId-from-start>
 ```
 
 The installed `loom-team-plan` executable exposes the same six operations.
@@ -51,7 +51,8 @@ Each successful operation prints one JSON value to stdout.
 
 Follow the lifecycle in order:
 
-1. Start one reviewed generation at its declared source commit.
+1. Start one reviewed generation at its declared source commit. Save the
+   immutable `runId` from the returned JSON snapshot.
 2. Select the next lease batch. Selection is durable before the leases return.
 3. Record one terminal result for each selected lease.
    - The request path must identify a regular file.
@@ -62,10 +63,12 @@ Follow the lifecycle in order:
    required.
 6. Finalize to persist the exact joined head commit.
 7. Discard only when the finalized journal and its run artifacts are no longer
-   needed for inspection or recovery.
+   needed for inspection or recovery. Pass the exact `runId` returned by
+   `start`.
 
 `restart` preserves the run identity. It also preserves monotonic attempt
 history for logical tasks. It does not merge a new plan into active leases.
+Missing, malformed, or stale discard identity cannot delete the journal.
 
 ## Team Plan journal compatibility
 
@@ -96,7 +99,8 @@ Recovery uses the complete journal:
   terminal records, workspace, and run artifact references.
 - Replay rejects a damaged stream instead of truncating it.
 - Durable artifact references reconstruct accepted results after restart.
-- Interrupted discard uses a `.discarding` tombstone.
+- Interrupted discard uses a `.discarding` tombstone and the same expected run
+  ID.
 - Resume accepts only a tombstone backed by the original journal inode.
 
 The package README owns the detailed command and recovery behavior. See

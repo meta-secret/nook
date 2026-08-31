@@ -24,7 +24,7 @@ task loom:team-plan:select JOURNAL=/absolute/path/to/events.jsonl
 task loom:team-plan:record JOURNAL=/absolute/path/to/events.jsonl REQUEST=/absolute/path/to/result.json
 task loom:team-plan:restart JOURNAL=/absolute/path/to/events.jsonl PLAN=/absolute/path/to/new-plan.json
 task loom:team-plan:finalize JOURNAL=/absolute/path/to/events.jsonl
-task loom:team-plan:discard JOURNAL=/absolute/path/to/events.jsonl
+task loom:team-plan:discard JOURNAL=/absolute/path/to/events.jsonl RUN_ID=<runId-from-start>
 ```
 
 The installed executable is `loom-team-plan`. It accepts the same `start`,
@@ -34,8 +34,8 @@ wrappers.
 The lifecycle is explicit:
 
 1. `start` validates the reviewed generation, source commit, repository root,
-   and journal capacity. It creates one new journal and materializes the run
-   workspace.
+   and journal capacity. It creates one new journal and returns a snapshot with
+   the immutable `runId`.
 2. `select` replays the journal and persists the next deterministic lease
    batch before returning it. An empty lease list is valid when work is blocked
    or already terminal.
@@ -49,9 +49,13 @@ The lifecycle is explicit:
    restart.
 6. `finalize` appends the exact joined head commit after terminal closure. A
    repeated finalize of the same finalized run returns its existing snapshot.
-7. `discard` removes only a finalized journal and its run-owned durable
-   artifacts. Keep the finalized journal when later inspection or recovery is
-   still required.
+7. `discard` requires the immutable `runId` returned by `start`. It removes only
+   that expected finalized journal and its run-owned durable artifacts. A
+   missing, malformed, or stale run ID cannot delete the journal.
+
+Keep the finalized journal when later inspection or recovery is still
+required. Read `runId` from command JSON output; do not derive it from a path or
+mutable workspace state.
 
 Every successful command prints one JSON value to stdout. Parse that value
 instead of scraping logs. Parse failures and rejected lifecycle transitions
@@ -95,8 +99,8 @@ Recovery also fails closed:
 - Durable artifact references allow accepted results to be reconstructed after
   a process restart.
 - An interrupted discard leaves a `<journal>.discarding` tombstone. A later
-  discard resumes only when the tombstone is the original journal inode; a
-  replacement or forged tombstone is rejected.
+  discard must present the same `runId`. It resumes only when the tombstone is
+  the original journal inode; a replacement or forged tombstone is rejected.
 
 ## Delegated agent action references
 
