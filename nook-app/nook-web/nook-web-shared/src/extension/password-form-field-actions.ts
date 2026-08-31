@@ -8,6 +8,7 @@ import {
 } from "./password-form-fields";
 import {
   PasswordFormQueryKind,
+  PasswordFormScopeKind,
   type PasswordFormScopeQuery,
 } from "./password-form-submission-controls";
 
@@ -39,6 +40,31 @@ export type GeneratedPasswordFillRequest = PasswordFormScopeQuery & {
 };
 
 type NativeInputValueMutation = { input: HTMLInputElement; value: string };
+
+const filledLoginCredentialFields = new WeakMap<
+  object,
+  Set<HTMLInputElement>
+>();
+
+function loginCredentialFieldKey(request: PasswordFormScopeQuery): object {
+  if (
+    request.kind === PasswordFormQueryKind.Scoped &&
+    request.formScope.kind === PasswordFormScopeKind.Owned
+  ) {
+    return request.formScope.owner;
+  }
+  return request.root;
+}
+
+export function trackLoginCredentialField(
+  request: PasswordFormScopeQuery,
+  field: HTMLInputElement,
+): void {
+  const key = loginCredentialFieldKey(request);
+  const tracked = filledLoginCredentialFields.get(key) ?? new Set();
+  tracked.add(field);
+  filledLoginCredentialFields.set(key, tracked);
+}
 
 function passwordFieldQuery(
   request: PasswordFormScopeQuery,
@@ -119,6 +145,14 @@ export function clearLoginCredentials(
     };
     setNativeInputValue(mutation);
   };
-  findUsernameFields(passwordFieldQuery(request)).forEach(clearField);
-  findPasswordFields(passwordFieldQuery(request)).forEach(clearField);
+  const key = loginCredentialFieldKey(request);
+  const fields = filledLoginCredentialFields.get(key) ?? new Set();
+  findUsernameFields(passwordFieldQuery(request)).forEach((field) =>
+    fields.add(field),
+  );
+  findPasswordFields(passwordFieldQuery(request)).forEach((field) =>
+    fields.add(field),
+  );
+  fields.forEach(clearField);
+  filledLoginCredentialFields.delete(key);
 }

@@ -170,8 +170,8 @@ describe('credential submission observation facts', () => {
   test('rejects a route changed by the selected submitter click handler', () => {
     document.body.innerHTML = `
       <form method="post" id="login" action="/login">
-        <input autocomplete="username" value="vault-user" />
-        <input type="password" autocomplete="current-password" value="vault-password" />
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
         <button type="submit">Sign in</button>
       </form>
     `
@@ -179,19 +179,25 @@ describe('credential submission observation facts', () => {
     const button = form?.querySelector<HTMLButtonElement>('button')
     if (!form || !button) throw new Error('expected login controls')
     const approvedAction = form.action
-    button.addEventListener('click', () => {
-      form.action = '/capture'
-    })
-    const clearRequest: Parameters<typeof clearLoginCredentials>[0] = {
+    const fillRequest: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: { username: 'vault-user', password: 'vault-password' },
       kind: PasswordFormQueryKind.Root,
       root: document,
     }
+    expect(fillLoginCredentials(fillRequest)).toBe(true)
+    button.addEventListener('click', () => {
+      const password = form.querySelector<HTMLInputElement>(
+        'input[type="password"]',
+      )
+      if (password) password.style.display = 'none'
+      form.action = '/capture'
+    })
     const request: Parameters<typeof submitLoginForm>[0] = {
       kind: PasswordFormQueryKind.Root,
       root: document,
       submissionApproval: {
         isApproved: () => form.action === approvedAction,
-        reject: () => clearLoginCredentials(clearRequest),
+        reject: () => clearLoginCredentials(fillRequest),
       },
     }
 

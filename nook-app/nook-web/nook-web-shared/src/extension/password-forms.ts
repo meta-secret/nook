@@ -73,6 +73,7 @@ import {
 } from "./password-form-passkey-only-workflows";
 import {
   setNativeInputValue,
+  trackLoginCredentialField,
   type LoginCredentialsFillRequest,
   LoginCredentialsLookupKind,
   type LoginCredentialsLookup,
@@ -120,7 +121,6 @@ const credentialSubmissionAbsent =
   "absent" satisfies AuthenticationCredentialSubmissionObservation["kind"];
 const credentialSubmissionObserved =
   "observed" satisfies AuthenticationCredentialSubmissionObservation["kind"];
-
 export type PasswordFormSummary = {
   passwordFieldCount: number;
   currentPasswordFieldCount: number;
@@ -133,19 +133,16 @@ export type PasswordFormSummary = {
   formCount: number;
   observedAt: number;
 };
-
 export type PasswordFormObservation = {
   root: ParentNode;
   formScope: PasswordFormScope;
   summary: PasswordFormSummary;
 };
-
 type AuthenticationObservationFactsRequest = {
   observation: PasswordFormObservation;
   authenticatorSetupHint: boolean;
   backupCodesHint: boolean;
 };
-
 type PasswordFormSummaryRequest = PasswordFormScopeQuery;
 function passwordFieldQuery(
   request: PasswordFormScopeQuery,
@@ -773,6 +770,7 @@ export function fillLoginCredentials(
       input: usernameField,
       value: request.credentials.username,
     };
+    trackLoginCredentialField(request, usernameField);
     setNativeInputValue(nookTypedArgs0_20);
     usernameField.focus();
     return true;
@@ -802,6 +800,7 @@ export function fillLoginCredentials(
       input: usernameField,
       value: request.credentials.username,
     };
+    trackLoginCredentialField(request, usernameField);
     setNativeInputValue(nookTypedArgs0_21);
     if (passwordFieldBlocksFill()) return false;
   }
@@ -809,6 +808,7 @@ export function fillLoginCredentials(
     input: passwordField,
     value: request.credentials.password,
   };
+  trackLoginCredentialField(request, passwordField);
   setNativeInputValue(nookTypedArgs0_22);
   if (passwordFieldBlocksFill()) {
     nookTypedArgs0_22.value = "";
