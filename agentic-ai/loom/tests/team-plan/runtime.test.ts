@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
+import { spawnSync } from 'node:child_process';
 import {
   existsSync,
   linkSync,
@@ -11,6 +12,7 @@ import {
 import { join } from 'node:path';
 
 import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
+import { LoomFailure, LoomFailureCode } from '../../src/loom-failure.ts';
 import {
   MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
   REQUIRED_PARENT_OWNED_RESOURCES,
@@ -38,6 +40,7 @@ import {
   selectTeamPlan,
   startTeamPlan,
 } from '../../src/team-plan/index.ts';
+import { readBoundedTeamPlanBytes } from '../../src/team-plan/runtime-durability.ts';
 import {
   createGitFixture,
   disposeGitFixture,
@@ -282,6 +285,68 @@ function evidenceRecord(
 }
 
 describe('Team Plan runtime', () => {
+  test('reads every short plan chunk and rejects non-files and malformed UTF-8', async () => {
+    const source = Buffer.from('short-read-plan');
+    const bytes = await readBoundedTeamPlanBytes({
+      maximumBytes: source.length,
+      reader: {
+        read: async ({ buffer, offset, length, position }) => {
+          const bytesRead = Math.min(2, length, source.length - position);
+          if (bytesRead > 0)
+            source.copy(buffer, offset, position, position + bytesRead);
+          return { bytesRead };
+        },
+      },
+    });
+    expect(bytes.equals(source)).toBe(true);
+
+    const fixture = createGitFixture();
+    fixtures.push(fixture);
+    const node = fixtureReadNode([fixture, 'provider']);
+    const file = fixturePlanFile([fixture, [node], [], 1]);
+    const fifo = join(fixture.root, 'plan.fifo');
+    const fifoResult = spawnSync('/usr/bin/mkfifo', [fifo], { env: {} });
+    expect(fifoResult.status).toBe(0);
+    await expect(
+      startTeamPlan({ ...startRequest(file), planPath: fifo }),
+    ).rejects.toMatchObject({
+      code: LoomFailureCode.TeamPlanValidationFailed,
+    });
+
+    const malformed = join(fixture.root, 'malformed-plan.json');
+    writeFileSync(malformed, Buffer.from([0xc3, 0x28]));
+    await expect(
+      startTeamPlan({ ...startRequest(file), planPath: malformed }),
+    ).rejects.toMatchObject({
+      code: LoomFailureCode.TeamPlanValidationFailed,
+    });
+    await expect(
+      startTeamPlan({
+        ...startRequest(file),
+        planPath: join(fixture.root, 'missing-plan.json'),
+      }),
+    ).rejects.toMatchObject({ code: LoomFailureCode.TeamPlanStorageFailed });
+  });
+
+  test('normalizes replay failures and retains their cause', async () => {
+    const fixture = createGitFixture();
+    fixtures.push(fixture);
+    const node = fixtureReadNode([fixture, 'provider']);
+    const file = fixturePlanFile([fixture, [node], [], 1]);
+    await startTeamPlan(startRequest(file));
+    writeFileSync(file.journalPath, 'not-json\n');
+    try {
+      await selectTeamPlan({ journalPath: file.journalPath });
+      throw new Error('Expected Team Plan recovery to fail.');
+    } catch (error) {
+      expect(error).toBeInstanceOf(LoomFailure);
+      expect((error as LoomFailure).code).toBe(
+        LoomFailureCode.TeamPlanRecoveryFailed,
+      );
+      expect((error as LoomFailure).cause).toBeInstanceOf(Error);
+    }
+  });
+
   test('reconstructs evidence barriers and releases exact retry leases', async () => {
     const fixture = createGitFixture();
     fixtures.push(fixture);

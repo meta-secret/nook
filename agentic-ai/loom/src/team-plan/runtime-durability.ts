@@ -1,6 +1,9 @@
 import { spawnSync } from 'node:child_process';
-import { lstat, open, realpath } from 'node:fs/promises';
+import { O_NONBLOCK, O_RDONLY } from 'node:constants';
+import { open, realpath } from 'node:fs/promises';
 import { resolve } from 'node:path';
+
+import { LoomFailureCode, loomFailureFromCause } from '../loom-failure.ts';
 
 import type { SpawnSyncOptionsWithStringEncoding } from 'node:child_process';
 import type { ModuleDeliveryAttemptLease } from '../module-delivery/index.ts';
@@ -22,33 +25,100 @@ export type TeamPlanRefIdentity = TeamPlanRunIdentity &
     object: string;
   }>;
 
+export type TeamPlanByteReader = Readonly<{
+  read: (request: {
+    readonly buffer: Buffer;
+    readonly offset: number;
+    readonly length: number;
+    readonly position: number;
+  }) => Promise<Readonly<{ bytesRead: number }>>;
+}>;
+
+export async function readBoundedTeamPlanBytes(request: {
+  readonly reader: TeamPlanByteReader;
+  readonly maximumBytes: number;
+}): Promise<Buffer> {
+  const bytes = Buffer.alloc(request.maximumBytes + 1);
+  let total = 0;
+  while (total < bytes.length) {
+    const result = await request.reader.read({
+      buffer: bytes,
+      offset: total,
+      length: bytes.length - total,
+      position: total,
+    });
+    if (!Number.isSafeInteger(result.bytesRead) || result.bytesRead < 0)
+      throw new Error('Team Plan plan reader returned an invalid byte count.');
+    if (result.bytesRead === 0) break;
+    total += result.bytesRead;
+  }
+  if (total > request.maximumBytes)
+    throw loomFailureFromCause({
+      code: LoomFailureCode.TeamPlanValidationFailed,
+      cause: new Error('Team Plan reviewed plan bytes are oversized.'),
+    });
+  return bytes.subarray(0, total);
+}
+
 export async function readBoundedTeamPlanFile(request: {
   readonly planPath: string;
   readonly maximumBytes: number;
 }): Promise<Readonly<{ path: string; text: string }>> {
-  const path = await realpath(resolve(request.planPath));
-  const handle = await open(path, 'r');
+  let path: string;
+  try {
+    path = await realpath(resolve(request.planPath));
+  } catch (cause) {
+    throw loomFailureFromCause({
+      code: LoomFailureCode.TeamPlanStorageFailed,
+      cause: cause instanceof Error ? cause : new Error('Plan path failed.'),
+    });
+  }
+  let handle;
+  try {
+    handle = await open(path, O_RDONLY | O_NONBLOCK);
+  } catch (cause) {
+    throw loomFailureFromCause({
+      code: LoomFailureCode.TeamPlanStorageFailed,
+      cause: cause instanceof Error ? cause : new Error('Plan open failed.'),
+    });
+  }
   try {
     const stat = await handle.stat();
-    if (!stat.isFile() || stat.size > request.maximumBytes)
-      throw new Error('Team Plan reviewed plan bytes are oversized.');
-    const bytes = Buffer.alloc(request.maximumBytes + 1);
-    const result = await handle.read(bytes, 0, bytes.length, 0);
-    if (result.bytesRead > request.maximumBytes)
-      throw new Error('Team Plan reviewed plan bytes are oversized.');
-    return { path, text: bytes.subarray(0, result.bytesRead).toString('utf8') };
+    if (!stat.isFile())
+      throw loomFailureFromCause({
+        code: LoomFailureCode.TeamPlanValidationFailed,
+        cause: new Error('Team Plan reviewed plan path is not a regular file.'),
+      });
+    if (stat.size > request.maximumBytes)
+      throw loomFailureFromCause({
+        code: LoomFailureCode.TeamPlanValidationFailed,
+        cause: new Error('Team Plan reviewed plan bytes are oversized.'),
+      });
+    const bytes = await readBoundedTeamPlanBytes({
+      reader: {
+        read: ({ buffer, offset, length, position }) =>
+          handle.read(buffer, offset, length, position),
+      },
+      maximumBytes: request.maximumBytes,
+    });
+    let text: string;
+    try {
+      text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    } catch (cause) {
+      throw loomFailureFromCause({
+        code: LoomFailureCode.TeamPlanValidationFailed,
+        cause:
+          cause instanceof Error ? cause : new Error('UTF-8 decode failed.'),
+      });
+    }
+    return { path, text };
+  } catch (cause) {
+    throw loomFailureFromCause({
+      code: LoomFailureCode.TeamPlanStorageFailed,
+      cause: cause instanceof Error ? cause : new Error('Plan read failed.'),
+    });
   } finally {
     await handle.close();
-  }
-}
-
-export async function teamPlanPathExists(path: string): Promise<boolean> {
-  try {
-    await lstat(path);
-    return true;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
-    throw error;
   }
 }
 
@@ -197,9 +267,22 @@ export function teamPlanGitText(invocation: {
     stdio: ['pipe', 'pipe', 'pipe'],
   };
   if ('input' in invocation) options.input = invocation.input;
-  const result = spawnSync('git', invocation.args, options);
+  let result;
+  try {
+    result = spawnSync('git', invocation.args, options);
+  } catch (cause) {
+    throw loomFailureFromCause({
+      code: LoomFailureCode.TeamPlanCommandFailed,
+      cause: cause instanceof Error ? cause : new Error('Git failed.'),
+    });
+  }
   if (result.status !== 0)
-    throw new Error(result.stderr.trim() || 'Team Plan Git operation failed.');
+    throw loomFailureFromCause({
+      code: LoomFailureCode.TeamPlanCommandFailed,
+      cause:
+        result.error ??
+        new Error(result.stderr.trim() || 'Team Plan Git operation failed.'),
+    });
   return result.stdout.replace(/\0+$/u, '').trim();
 }
 

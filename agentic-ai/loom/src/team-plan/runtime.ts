@@ -3,6 +3,7 @@ import { mkdir, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve, sep } from 'node:path';
 
+import { LoomFailureCode, loomFailureFromCause } from '../loom-failure.ts';
 import {
   ModuleDeliveryAdmissionSelectionStatus,
   ModuleDeliveryAttemptDispositionKind,
@@ -59,7 +60,6 @@ import {
   teamPlanFinalizedHeadRef,
   teamPlanGitText,
   teamPlanLeaseFrontierRef,
-  teamPlanPathExists,
   teamPlanRunRefPrefix,
   teamPlanRunRefsEmpty,
 } from './runtime-durability.ts';
@@ -125,8 +125,6 @@ export async function startTeamPlan(
 ): Promise<TeamPlanSnapshot> {
   const repositoryRoot = await realpath(resolve(request.repositoryRoot));
   const journalPath = await canonicalTeamPlanJournalPath(request.journalPath);
-  if (await teamPlanPathExists(`${journalPath}.discarding`))
-    throw new Error('Team Plan journal discard is still in progress.');
   if (
     journalPath === repositoryRoot ||
     journalPath.startsWith(`${repositoryRoot}${sep}`)
@@ -413,8 +411,11 @@ async function materializeTeamPlanSession(
     return session;
   } catch (error) {
     cleanupTeamPlanSession(session);
-    throw new Error('Team Plan journal replay failed closed.', {
-      cause: error,
+    throw loomFailureFromCause({
+      code: LoomFailureCode.TeamPlanRecoveryFailed,
+      cause:
+        error instanceof Error ? error : new Error('Journal replay failed.'),
+      message: 'Team Plan journal replay failed closed.',
     });
   }
 }
@@ -917,9 +918,11 @@ function teamPlanSnapshot(session: TeamPlanSession): TeamPlanSnapshot {
 function acceptedTeamPlan(planText: string): ValidatedModuleDeliveryPlan {
   const validation = decodeAndValidateModuleDeliveryPlan(planText);
   if (validation.status !== ModuleDeliveryValidationStatus.Accepted)
-    throw new Error(
-      `Team Plan is invalid: ${JSON.stringify(validation.issues)}`,
-    );
+    throw loomFailureFromCause({
+      code: LoomFailureCode.TeamPlanValidationFailed,
+      cause: new Error(JSON.stringify(validation.issues)),
+      message: 'Team Plan is invalid.',
+    });
   return validation;
 }
 

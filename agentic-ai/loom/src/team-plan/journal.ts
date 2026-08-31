@@ -220,6 +220,8 @@ export async function discardTeamPlanJournal(
     action: async () => {
       if (!lockJournal.finalized)
         throw new Error('Only a finalized Team Plan run may be discarded.');
+      if (lockJournal.started.runId !== request.expectedRunId)
+        throw new Error('Team Plan discard run identity is stale.');
       if ((await pathExists(path)) && (await pathExists(tombstone)))
         await resumeDiscardTombstone({ path, tombstone });
       const loaded = await loadTeamPlanJournal(activePath);

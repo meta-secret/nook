@@ -706,6 +706,7 @@ describe('Team Plan journal', () => {
     await expect(
       discardTeamPlanJournal({
         journalPath,
+        expectedRunId: started.runId,
         discardArtifacts: () => Promise.resolve(),
       }),
     ).rejects.toThrow('already in use');
@@ -734,6 +735,24 @@ describe('Team Plan journal', () => {
     ).rejects.toThrow('discard is still in progress');
     expect(existsSync(journalPath)).toBe(false);
     expect(existsSync(`${journalPath}.discarding`)).toBe(true);
+  });
+
+  test('rejects stale discard identity before resuming its tombstone', async () => {
+    const { journalPath, started } = await startedFixture();
+    await finalizeStartedFixture({ journalPath, started });
+    const tombstone = `${journalPath}.discarding`;
+    linkSync(journalPath, tombstone);
+    await expect(
+      discardTeamPlanJournal({
+        journalPath,
+        expectedRunId: 'f'.repeat(64),
+        discardArtifacts: async () => {
+          throw new Error('Stale discard reached artifact cleanup.');
+        },
+      }),
+    ).rejects.toThrow('identity is stale');
+    expect(existsSync(journalPath)).toBe(true);
+    expect(existsSync(tombstone)).toBe(true);
   });
 
   test('proves bounded generation capacity before journal creation', async () => {
