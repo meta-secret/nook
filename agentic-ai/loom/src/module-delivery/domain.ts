@@ -52,7 +52,13 @@ export const ORDINARY_TASK_WRITE_ROOTS = {
     'agentic-ai/minds/lace',
   ],
   [TeamKey.Security]: [],
-  [TeamKey.Sre]: ['infra', 'nook-app/ci', '.task', 'agentic-ai/ci-agent'],
+  [TeamKey.Sre]: [
+    'infra',
+    'nook-app/ci',
+    'nook-app/nook-web/docker',
+    '.task',
+    'agentic-ai/ci-agent',
+  ],
   [TeamKey.WebDevelopment]: [
     'nook-app/nook-web',
     'agentic-ai/minds/hive-console',
@@ -65,15 +71,58 @@ export type ModuleDeliveryTaskTeamRequest = {
   readonly expertContextPaths: readonly string[];
 };
 
+export function ordinaryTaskWriteTeam(write: string): TeamKey | false {
+  let owner: TeamKey | false = false;
+  let ownerRootLength = -1;
+  for (const team of Object.values(TeamKey)) {
+    const roots: readonly string[] = ORDINARY_TASK_WRITE_ROOTS[team];
+    for (const root of roots) {
+      if (
+        (write === root || write.startsWith(`${root}/`)) &&
+        root.length > ownerRootLength
+      ) {
+        owner = team;
+        ownerRootLength = root.length;
+      }
+    }
+  }
+  return owner;
+}
+
+export type OrdinaryTaskWriteAuthorizationRequest = {
+  readonly team: TeamKey;
+  readonly moduleRoot: string;
+  readonly write: string;
+};
+
+export function ordinaryTaskWriteAuthorized(
+  request: OrdinaryTaskWriteAuthorizationRequest,
+): boolean {
+  const roots: readonly string[] = ORDINARY_TASK_WRITE_ROOTS[request.team];
+  const exactKnownDirectoryRoot =
+    request.write === request.moduleRoot &&
+    roots.includes(request.write) &&
+    !ordinaryFileWriteRoots.includes(request.write);
+  return (
+    !exactKnownDirectoryRoot &&
+    (request.write === request.moduleRoot ||
+      request.write.startsWith(`${request.moduleRoot}/`)) &&
+    ordinaryTaskWriteTeam(request.write) === request.team
+  );
+}
+
+const ordinaryFileWriteRoots: readonly string[] = [
+  'agentic-ai/minds/Cargo.lock',
+  'agentic-ai/minds/Cargo.toml',
+  'agentic-ai/minds/clippy.toml',
+  'agentic-ai/minds/hive/Cargo.toml',
+];
+
 export function moduleDeliveryTaskTeam(
   request: ModuleDeliveryTaskTeamRequest,
 ): TeamKey | false {
   if (request.kind === ModuleDeliveryTaskKind.Write) {
-    if (request.moduleRoot.startsWith('nook-app/nook-platform/'))
-      return TeamKey.DevelopmentCore;
-    if (request.moduleRoot.startsWith('nook-app/nook-web/'))
-      return TeamKey.WebDevelopment;
-    return false;
+    return ordinaryTaskWriteTeam(request.moduleRoot);
   }
   if (request.expertContextPaths.includes('.cortex/teams/ai/AGENTS.md'))
     return TeamKey.Ai;

@@ -114,3 +114,41 @@ test('routes Hive Console writes to Web Development', () => {
     ),
   ).toBe(true);
 });
+
+test('requires recursive or file-shaped ordinary write claims', () => {
+  expect(
+    accepted(
+      ordinaryWrite({
+        team: TeamKey.Sre,
+        moduleRoot: 'infra',
+        write: 'infra',
+      }),
+    ),
+  ).toBe(false);
+  for (const write of ['infra/**', 'infra/main.tf'])
+    expect(
+      accepted(
+        ordinaryWrite({ team: TeamKey.Sre, moduleRoot: 'infra', write }),
+      ),
+    ).toBe(true);
+  expect(
+    accepted(
+      ordinaryWrite({
+        team: TeamKey.DevelopmentCore,
+        moduleRoot: 'agentic-ai/minds/Cargo.lock',
+        write: 'agentic-ai/minds/Cargo.lock',
+      }),
+    ),
+  ).toBe(true);
+});
+
+test('routes the web Docker subtree exclusively to SRE', () => {
+  const request = {
+    moduleRoot: 'nook-app/nook-web/docker',
+    write: 'nook-app/nook-web/docker/web.Dockerfile',
+  } as const;
+  expect(accepted(ordinaryWrite({ team: TeamKey.Sre, ...request }))).toBe(true);
+  expect(
+    accepted(ordinaryWrite({ team: TeamKey.WebDevelopment, ...request })),
+  ).toBe(false);
+});

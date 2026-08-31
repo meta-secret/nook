@@ -29,7 +29,7 @@ import {
   MAX_MODULE_DELIVERY_ATTEMPTS,
   MAX_MODULE_DELIVERY_CONCURRENCY,
   MAX_MODULE_DELIVERY_NODES,
-  ORDINARY_TASK_WRITE_ROOTS,
+  ordinaryTaskWriteAuthorized,
   REQUIRED_PARENT_OWNED_RESOURCES,
   CORTEX_TEAM_WRITER_EXPERT,
   ModuleDeliveryBaselineKind,
@@ -303,17 +303,16 @@ function validateNodes(state: ValidationState): void {
 
 function validateOrdinaryTask(request: NodeValidationRequest): void {
   const { node } = request;
-  const writeRoots = ORDINARY_TASK_WRITE_ROOTS[node.team];
   const writesAuthorized =
     node.kind !== ModuleDeliveryTaskKind.EvidenceSynthesis &&
     (node.kind !== ModuleDeliveryTaskKind.Write ||
       node.resources.write.every(
         (write) =>
-          (write === node.moduleRoot ||
-            write.startsWith(`${node.moduleRoot}/`)) &&
-          writeRoots.some(
-            (root) => write === root || write.startsWith(`${root}/`),
-          ) &&
+          ordinaryTaskWriteAuthorized({
+            team: node.team,
+            moduleRoot: node.moduleRoot,
+            write,
+          }) &&
           MODULE_EXPERT_CATALOG.every((profile) =>
             profile.generatedScopePaths.every(
               (scope) =>
