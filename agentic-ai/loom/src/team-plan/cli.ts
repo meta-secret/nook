@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { readFile, stat } from 'node:fs/promises';
+import { open } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 import {
@@ -114,15 +114,7 @@ export async function runTeamPlanCli(argv: readonly string[]): Promise<number> {
   }
   if (!('requestPath' in command))
     throw new Error('Invalid Team Plan command.');
-  const requestStatus = await stat(command.requestPath);
-  if (
-    !requestStatus.isFile() ||
-    requestStatus.size > MAX_TEAM_PLAN_RECORD_REQUEST_BYTES
-  )
-    throw new Error('Team Plan record request file is invalid or oversized.');
-  const serialized = await readFile(command.requestPath, 'utf8');
-  if (Buffer.byteLength(serialized) > MAX_TEAM_PLAN_RECORD_REQUEST_BYTES)
-    throw new Error('Team Plan record request is oversized.');
+  const serialized = await readTeamPlanRecordRequest(command.requestPath);
   const record = JSON.parse(serialized) as TeamPlanRecord;
   const request: TeamPlanRecordRequest = {
     journalPath: command.journalPath,
@@ -130,6 +122,35 @@ export async function runTeamPlanCli(argv: readonly string[]): Promise<number> {
   };
   console.log(JSON.stringify(await recordTeamPlan(request)));
   return 0;
+}
+
+async function readTeamPlanRecordRequest(requestPath: string): Promise<string> {
+  const requestFile = await open(requestPath, 'r');
+  try {
+    const requestStatus = await requestFile.stat();
+    if (
+      !requestStatus.isFile() ||
+      requestStatus.size > MAX_TEAM_PLAN_RECORD_REQUEST_BYTES
+    )
+      throw new Error('Team Plan record request file is invalid or oversized.');
+    const content = Buffer.alloc(MAX_TEAM_PLAN_RECORD_REQUEST_BYTES + 1);
+    let bytesRead = 0;
+    while (bytesRead < content.byteLength) {
+      const read = await requestFile.read(
+        content,
+        bytesRead,
+        content.byteLength - bytesRead,
+        bytesRead,
+      );
+      if (read.bytesRead === 0) break;
+      bytesRead += read.bytesRead;
+    }
+    if (bytesRead > MAX_TEAM_PLAN_RECORD_REQUEST_BYTES)
+      throw new Error('Team Plan record request is oversized.');
+    return content.subarray(0, bytesRead).toString('utf8');
+  } finally {
+    await requestFile.close();
+  }
 }
 
 function parseTeamPlanCommand(
