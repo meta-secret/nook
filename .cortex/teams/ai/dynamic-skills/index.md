@@ -60,7 +60,7 @@ Harness profile directories must not mirror or redefine these cards.
 - **[system-coherence-synthesizer.md](system-coherence-synthesizer.md)**
   - Purpose: Reconcile verified code and Cortex evidence without repository access or write authority
 - **[rust-coding.md](../../dev-core/dynamic-skills/rust-coding.md)**
-  - Purpose: Keep Rust domain models precise: replace string tags, sentinel values, and cross-workflow `Option<T>` fields with enums and per-variant structs
+  - Purpose: Keep Rust domain models precise: replace booleans, string tags, sentinel values, and cross-workflow `Option<T>` fields with enums and per-variant structs
 - **[rust-macro-minimization.md](../../dev-core/dynamic-skills/rust-macro-minimization.md)**
   - Purpose: Prohibit repository-defined Rust macros; prefer explicit structs, implementations, functions, and control flow over hidden code generation
 - **[rust-typescript-code-separation.md](../../dev-core/dynamic-skills/rust-typescript-code-separation.md)**
@@ -73,6 +73,8 @@ Harness profile directories must not mirror or redefine these cards.
   - Purpose: Encapsulate serial async work behind enqueue, idle, and reset operations instead of exposing mutable promise chains
 - **[typescript-explicit-state.md](../../web-dev/dynamic-skills/typescript-explicit-state.md)**
   - Purpose: Replace authored `undefined`/`null` state with semantic unions while retaining complete `void` unit/effect returns; reject every value-or-void contract, including nested generics and returns
+- **[typescript-enums-over-booleans.md](../../web-dev/dynamic-skills/typescript-enums-over-booleans.md)**
+  - Purpose: Replace authored domain, state, policy, mode, configuration, and owned-contract booleans with semantic enums; retain booleans only at required boundaries or as immediately consumed predicates
 - **[typescript-domain-structure.md](../../web-dev/dynamic-skills/typescript-domain-structure.md)**
   - Purpose: Nest same-prefix closed vocabularies into parent objects + operation enums; use field enums instead of string sets; ban hand-rolled TypeScript `Result`/`Maybe`
 - **[typescript-single-parameter.md](../../web-dev/dynamic-skills/typescript-single-parameter.md)**
