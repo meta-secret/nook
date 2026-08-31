@@ -941,15 +941,14 @@ export function observeSubmit({
       state.result = FormSubmissionResult.Submitted;
       return;
     }
-    const nativePreventDefault = event.preventDefault.bind(event);
-    event.preventDefault = () => {
-      pagePreventedSubmission = true;
-      nativePreventDefault();
-    };
-    nativePreventDefault();
     if (state.result !== FormSubmissionResult.Rejected) {
       state.result = FormSubmissionResult.Submitted;
     }
+  };
+  const cancelOriginalSubmission = (event: SubmitEvent) => {
+    if (event.target !== form || replayingApprovedSubmission) return;
+    pagePreventedSubmission = event.defaultPrevented;
+    event.preventDefault();
   };
   const nativeSubmit = HTMLFormElement.prototype.submit.bind(form);
   const originalSubmit = form.submit;
@@ -959,6 +958,7 @@ export function observeSubmit({
     };
   }
   form.addEventListener("submit", markSubmitted, true);
+  form.ownerDocument.addEventListener("submit", cancelOriginalSubmission);
   try {
     action();
   } finally {
@@ -984,5 +984,6 @@ export function observeSubmit({
     rejectSubmission();
   }
   form.removeEventListener("submit", markSubmitted, true);
+  form.ownerDocument.removeEventListener("submit", cancelOriginalSubmission);
   return state.result;
 }

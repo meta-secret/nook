@@ -69,6 +69,10 @@ export function trackLoginCredentialField({
   filledLoginCredentialFields.set(key, tracked);
 }
 
+export function beginLoginCredentialFill(request: PasswordFormScopeQuery): void {
+  filledLoginCredentialFields.delete(loginCredentialFieldKey(request));
+}
+
 function passwordFieldQuery(
   request: PasswordFormScopeQuery,
 ): PasswordFieldQuery {

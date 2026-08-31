@@ -72,6 +72,7 @@ import {
   summarizePasskeyOnlyWorkflowForms,
 } from "./password-form-passkey-only-workflows";
 import {
+  beginLoginCredentialFill,
   clearLoginCredentials,
   setNativeInputValue,
   trackLoginCredentialField,
@@ -238,7 +239,6 @@ function scopedControlRoot({
     ? formScope.owner.ownerDocument
     : root;
 }
-
 function scopedAdvanceControls(
   observation: PasswordFormObservation,
 ): HTMLElement[] {
@@ -273,7 +273,6 @@ type PageControlObservationRequest = {
   semanticSubmitControlCount: number;
   explicitlyLocallyScoped?: boolean;
 };
-
 function pageControlObservation({
   observation,
   control,
@@ -748,6 +747,7 @@ export function summarizeAuthenticationWorkflowForms(): PasswordFormObservation[
 export function fillLoginCredentials(
   request: LoginCredentialsFillRequest,
 ): boolean {
+  beginLoginCredentialFill(request);
   const nookTypedArgs0_18 = passwordFieldQuery(request);
   const observedPasswordFields = findPasswordFields(nookTypedArgs0_18);
   const passwordFields = observedPasswordFields.filter(

@@ -298,6 +298,7 @@ describe('credential submission observation facts', () => {
     fillTrackedCredentials()
     let submissionCount = 0
     form.addEventListener('submit', (event) => {
+      if (event.defaultPrevented) return
       submissionCount += 1
       event.preventDefault()
     })
@@ -310,6 +311,34 @@ describe('credential submission observation facts', () => {
       }),
     ).toBe(FormSubmissionResult.Submitted)
     expect(submissionCount).toBe(1)
+  })
+
+  test('starts rollback tracking fresh for each fill attempt', () => {
+    document.body.innerHTML = `
+      <form method="post" id="login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+      </form>
+    `
+    const form = document.querySelector<HTMLFormElement>('#login')
+    const oldPassword = form?.querySelector<HTMLInputElement>(
+      'input[type="password"]',
+    )
+    if (!form || !oldPassword) throw new Error('expected login controls')
+    fillTrackedCredentials()
+    oldPassword.value = 'user-retained'
+    form.innerHTML = `
+      <input autocomplete="username" />
+      <input type="password" autocomplete="current-password" />
+    `
+    const latestFill = fillTrackedCredentials()
+
+    clearLoginCredentials(latestFill)
+
+    expect(oldPassword.value).toBe('user-retained')
+    expect(
+      form.querySelector<HTMLInputElement>('input[type="password"]')?.value,
+    ).toBe('')
   })
 
   test('rejects a submitter override emitted by the approved click handler', () => {
