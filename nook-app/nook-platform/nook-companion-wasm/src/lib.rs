@@ -12,9 +12,11 @@ use wasm_bindgen::prelude::wasm_bindgen;
 mod page_form_policy;
 
 mod authentication_observation_binding;
+mod authentication_workflow;
 mod authenticator_code_response;
 
 pub use authentication_observation_binding::*;
+pub use authentication_workflow::*;
 pub use authenticator_code_response::*;
 pub use page_form_policy::*;
 
@@ -97,46 +99,6 @@ pub fn decode_authentication_outcome_response(
 }
 
 #[wasm_bindgen]
-pub fn decode_authentication_workflow_snapshot_response(
-    response: nook_companion_core::AuthenticationWorkflowSnapshotResponseWire,
-) -> Result<nook_companion_core::AuthenticationWorkflowSnapshotResponse, wasm_bindgen::JsError> {
-    nook_companion_core::decode_authentication_workflow_snapshot_response(response)
-        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
-}
-
-#[wasm_bindgen]
-pub fn decode_authentication_workflow_runtime_response(
-    response: nook_companion_core::AuthenticationWorkflowRuntimeResponseWire,
-) -> Result<nook_companion_core::AuthenticationWorkflowRuntimeResponse, wasm_bindgen::JsError> {
-    nook_companion_core::decode_authentication_workflow_runtime_response(response)
-        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
-}
-
-#[wasm_bindgen]
-pub fn decode_website_login_match_availability(
-    response: nook_companion_core::WebsiteLoginOptionsWireValue,
-) -> Result<nook_companion_core::WebsiteLoginMatchAvailability, wasm_bindgen::JsError> {
-    nook_companion_core::decode_website_login_match_availability(response)
-        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
-}
-
-#[wasm_bindgen]
-#[must_use]
-pub fn authentication_workflow_saved_login_capability(
-    snapshot: nook_companion_core::AuthenticationWorkflowSnapshot,
-) -> nook_companion_core::AuthenticationSavedLoginCapability {
-    snapshot.saved_login_capability()
-}
-
-#[wasm_bindgen]
-#[must_use]
-pub fn authentication_workflow_requires_login_match_availability(
-    snapshot: nook_companion_core::AuthenticationWorkflowSnapshot,
-) -> bool {
-    snapshot.requires_login_match_availability()
-}
-
-#[wasm_bindgen]
 pub fn decode_authenticator_backup_attach_response(
     response: nook_companion_core::AuthenticatorBackupAttachResponseWire,
 ) -> Result<nook_companion_core::AuthenticatorBackupAttachResponse, wasm_bindgen::JsError> {
@@ -192,6 +154,12 @@ pub fn page_has_backup_code_hint(text: &str) -> bool {
 
 #[wasm_bindgen]
 #[must_use]
+pub fn contains_backup_code_candidate(text: &str) -> bool {
+    nook_companion_core::contains_backup_code_candidate(text)
+}
+
+#[wasm_bindgen]
+#[must_use]
 #[allow(clippy::needless_pass_by_value)]
 pub fn extract_backup_code_candidates(text: String) -> Vec<String> {
     nook_companion_core::extract_backup_code_candidates(&text)
@@ -242,24 +210,6 @@ pub fn matching_extension_persistence_stores(
 
 #[wasm_bindgen]
 #[must_use]
-#[allow(clippy::needless_pass_by_value)]
-pub fn classify_companion_authentication_workflow(
-    input: nook_companion_core::AuthenticationPageObservations,
-) -> nook_companion_core::AuthenticationWorkflowMatch {
-    nook_companion_core::classify_authentication_workflow_candidates(&input.observations)
-}
-
-#[wasm_bindgen]
-#[must_use]
-#[allow(clippy::needless_pass_by_value)]
-pub fn classify_companion_authentication_workflow_facts(
-    input: nook_companion_core::AuthenticationPageObservationFactsBatch,
-) -> nook_companion_core::AuthenticationWorkflowMatch {
-    input.classify()
-}
-
-#[wasm_bindgen]
-#[must_use]
 pub fn authentication_username_evidence(
     field: &NookPageInputFieldObservation,
 ) -> nook_companion_core::AuthenticationUsernameEvidence {
@@ -273,33 +223,6 @@ pub fn strongest_authentication_username_evidence(
     evidence: Vec<nook_companion_core::AuthenticationUsernameEvidence>,
 ) -> nook_companion_core::AuthenticationUsernameEvidence {
     nook_companion_core::strongest_authentication_username_evidence(&evidence)
-}
-
-#[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CompanionAuthenticationWorkflowMatchKind {
-    NoMatch,
-    Rejected,
-    Matched,
-}
-
-#[wasm_bindgen]
-#[must_use]
-#[allow(clippy::needless_pass_by_value)]
-pub fn companion_authentication_workflow_match_kind(
-    workflow_match: nook_companion_core::AuthenticationWorkflowMatch,
-) -> CompanionAuthenticationWorkflowMatchKind {
-    match workflow_match {
-        nook_companion_core::AuthenticationWorkflowMatch::NoMatch => {
-            CompanionAuthenticationWorkflowMatchKind::NoMatch
-        }
-        nook_companion_core::AuthenticationWorkflowMatch::Rejected => {
-            CompanionAuthenticationWorkflowMatchKind::Rejected
-        }
-        nook_companion_core::AuthenticationWorkflowMatch::Matched(_) => {
-            CompanionAuthenticationWorkflowMatchKind::Matched
-        }
-    }
 }
 
 #[wasm_bindgen]
@@ -782,6 +705,10 @@ mod tests {
             }
         ));
         assert_eq!(
+            authentication_workflow_pilot_presentation_capability(valid),
+            nook_companion_core::AuthenticationPilotPresentationCapability::ProposeAction
+        );
+        assert_eq!(
             authentication_workflow_saved_login_capability(
                 nook_companion_core::AuthenticationWorkflowSnapshot {
                     stage: nook_companion_core::AuthenticationWorkflowStage::Recovery,
@@ -790,12 +717,52 @@ mod tests {
             ),
             nook_companion_core::AuthenticationSavedLoginCapability::Unavailable
         );
+        assert_eq!(
+            authentication_workflow_pilot_presentation_capability(
+                nook_companion_core::AuthenticationWorkflowSnapshot {
+                    stage: nook_companion_core::AuthenticationWorkflowStage::Recovery,
+                    ..valid
+                }
+            ),
+            nook_companion_core::AuthenticationPilotPresentationCapability::Hidden
+        );
+    }
+
+    #[test]
+    fn backup_code_classifier_bridge_preserves_typed_variants() {
+        assert_eq!(
+            classify_authentication_backup_codes_observation("Use a backup code instead", false),
+            nook_companion_core::AuthenticationBackupCodesObservation::Absent
+        );
+        assert_eq!(
+            classify_authentication_backup_codes_observation(
+                "Save your recovery codes in a secure place",
+                false,
+            ),
+            nook_companion_core::AuthenticationBackupCodesObservation::Present
+        );
+    }
+
+    #[test]
+    fn enrollment_match_bridge_preserves_selected_recovery_action() {
+        let nook_companion_core::AuthenticationWorkflowMatch::Matched(snapshot) =
+            authentication_enrollment_workflow_match(true, "Save these recovery codes", false)
+        else {
+            panic!("expected a selected enrollment workflow");
+        };
+        assert_eq!(
+            snapshot.action,
+            nook_companion_core::AuthenticationWorkflowAction::SaveBackupCodes
+        );
     }
 }
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod wasm_tests {
-    use nook_companion_core::{ExtensionPersistenceArea, ExtensionPersistenceObservation};
+    use nook_companion_core::{
+        AuthenticationBackupCodesObservation, ExtensionPersistenceArea,
+        ExtensionPersistenceObservation,
+    };
     use serde::{Deserialize, Serialize};
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -990,6 +957,29 @@ mod wasm_tests {
             serde_wasm_bindgen::from_value(js_output).map_err(js_error)?;
 
         assert_eq!(result.kind, "locked");
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn backup_code_classifier_round_trips_both_typed_wasm_variants()
+    -> Result<(), serde_wasm_bindgen::Error> {
+        for (text, expected) in [
+            (
+                "Use a backup code instead",
+                AuthenticationBackupCodesObservation::Absent,
+            ),
+            (
+                "Save your backup codes in a secure place",
+                AuthenticationBackupCodesObservation::Present,
+            ),
+        ] {
+            let classified = super::classify_authentication_backup_codes_observation(text, false);
+            let js_value = serde_wasm_bindgen::to_value(&classified)?;
+            let decoded: AuthenticationBackupCodesObservation =
+                serde_wasm_bindgen::from_value(js_value)?;
+            assert_eq!(classified, expected);
+            assert_eq!(decoded, expected);
+        }
         Ok(())
     }
 }

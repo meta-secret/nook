@@ -13,7 +13,7 @@ mod passkey;
 mod submission;
 pub use authenticator::{
     AuthenticationAuthenticatorObservationFacts, AuthenticationAuthenticatorSetupObservation,
-    AuthenticationBackupCodesObservation,
+    AuthenticationBackupCodesObservation, classify_authentication_backup_codes_observation,
 };
 pub use ceremony::{
     AuthenticationCeremonyContextObservation, AuthenticationCeremonyObservationFacts,
@@ -48,8 +48,7 @@ pub struct AuthenticationPageObservationFacts {
 impl AuthenticationPageObservationFacts {
     pub(super) fn is_bounded(&self) -> bool {
         self.fields.is_bounded()
-            && self.authenticator.matching_passkey_account_count
-                <= crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT
+            && self.authenticator.is_bounded()
             && self.ceremony.is_bounded()
             && self.detailed_advance_control.is_bounded()
             && self.authenticator.detailed_passkey_control.is_bounded()

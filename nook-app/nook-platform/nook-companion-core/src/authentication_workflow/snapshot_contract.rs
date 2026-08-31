@@ -35,6 +35,101 @@ const fn saved_login_capability_matches_contract(snapshot: AuthenticationWorkflo
     }
 }
 
+const fn classifier_tuple_matches_contract(snapshot: AuthenticationWorkflowSnapshot) -> bool {
+    matches!(
+        (
+            snapshot.kind,
+            snapshot.stage,
+            snapshot.action,
+            snapshot.current_step,
+            snapshot.total_steps,
+        ),
+        (
+            AuthenticationWorkflowKind::Login,
+            AuthenticationWorkflowStage::Credentials,
+            AuthenticationWorkflowAction::ContinueWithNook
+                | AuthenticationWorkflowAction::UsePasskey
+                | AuthenticationWorkflowAction::CreatePasskey,
+            1,
+            3,
+        ) | (
+            AuthenticationWorkflowKind::Login,
+            AuthenticationWorkflowStage::Manual,
+            AuthenticationWorkflowAction::TakeOver,
+            1,
+            3,
+        ) | (
+            AuthenticationWorkflowKind::Signup,
+            AuthenticationWorkflowStage::Credentials,
+            AuthenticationWorkflowAction::GeneratePassword
+                | AuthenticationWorkflowAction::UsePasskey
+                | AuthenticationWorkflowAction::CreatePasskey,
+            2,
+            5,
+        ) | (
+            AuthenticationWorkflowKind::Signup,
+            AuthenticationWorkflowStage::Manual,
+            AuthenticationWorkflowAction::TakeOver,
+            2,
+            5,
+        ) | (
+            AuthenticationWorkflowKind::PasswordChange,
+            AuthenticationWorkflowStage::Credentials,
+            AuthenticationWorkflowAction::GeneratePassword,
+            2,
+            4,
+        ) | (
+            AuthenticationWorkflowKind::PasswordChange,
+            AuthenticationWorkflowStage::Manual,
+            AuthenticationWorkflowAction::TakeOver,
+            2,
+            4,
+        ) | (
+            AuthenticationWorkflowKind::TotpChallenge,
+            AuthenticationWorkflowStage::SecondFactor,
+            AuthenticationWorkflowAction::FillTotp | AuthenticationWorkflowAction::TakeOver,
+            2,
+            3,
+        ) | (
+            AuthenticationWorkflowKind::TotpChallenge,
+            AuthenticationWorkflowStage::Manual,
+            AuthenticationWorkflowAction::TakeOver,
+            2,
+            3,
+        ) | (
+            AuthenticationWorkflowKind::TotpEnrollment,
+            AuthenticationWorkflowStage::Setup,
+            AuthenticationWorkflowAction::EnrollAuthenticator,
+            2,
+            5,
+        ) | (
+            AuthenticationWorkflowKind::TotpEnrollment,
+            AuthenticationWorkflowStage::Verification,
+            AuthenticationWorkflowAction::FillTotp,
+            3,
+            5,
+        ) | (
+            AuthenticationWorkflowKind::TotpEnrollment,
+            AuthenticationWorkflowStage::Recovery,
+            AuthenticationWorkflowAction::SaveBackupCodes,
+            4,
+            5,
+        ) | (
+            AuthenticationWorkflowKind::TotpEnrollment,
+            AuthenticationWorkflowStage::Manual,
+            AuthenticationWorkflowAction::TakeOver,
+            2..=4,
+            5,
+        ) | (
+            AuthenticationWorkflowKind::Manual,
+            AuthenticationWorkflowStage::Manual,
+            AuthenticationWorkflowAction::TakeOver,
+            1,
+            1,
+        )
+    )
+}
+
 impl AuthenticationWorkflowSnapshot {
     /// Whether this snapshot is one of the complete tuples emitted by the classifier.
     #[must_use]
@@ -49,86 +144,7 @@ impl AuthenticationWorkflowSnapshot {
             return false;
         }
 
-        matches!(
-            (
-                self.kind,
-                self.stage,
-                self.action,
-                self.current_step,
-                self.total_steps,
-            ),
-            (
-                AuthenticationWorkflowKind::Login,
-                AuthenticationWorkflowStage::Credentials,
-                AuthenticationWorkflowAction::ContinueWithNook
-                    | AuthenticationWorkflowAction::UsePasskey
-                    | AuthenticationWorkflowAction::CreatePasskey,
-                1,
-                3,
-            ) | (
-                AuthenticationWorkflowKind::Login,
-                AuthenticationWorkflowStage::Manual,
-                AuthenticationWorkflowAction::TakeOver,
-                1,
-                3,
-            ) | (
-                AuthenticationWorkflowKind::Signup,
-                AuthenticationWorkflowStage::Credentials,
-                AuthenticationWorkflowAction::GeneratePassword
-                    | AuthenticationWorkflowAction::UsePasskey
-                    | AuthenticationWorkflowAction::CreatePasskey,
-                2,
-                5,
-            ) | (
-                AuthenticationWorkflowKind::Signup,
-                AuthenticationWorkflowStage::Manual,
-                AuthenticationWorkflowAction::TakeOver,
-                2,
-                5,
-            ) | (
-                AuthenticationWorkflowKind::PasswordChange,
-                AuthenticationWorkflowStage::Credentials,
-                AuthenticationWorkflowAction::GeneratePassword,
-                2,
-                4,
-            ) | (
-                AuthenticationWorkflowKind::PasswordChange,
-                AuthenticationWorkflowStage::Manual,
-                AuthenticationWorkflowAction::TakeOver,
-                2,
-                4,
-            ) | (
-                AuthenticationWorkflowKind::TotpChallenge,
-                AuthenticationWorkflowStage::SecondFactor,
-                AuthenticationWorkflowAction::FillTotp | AuthenticationWorkflowAction::TakeOver,
-                2,
-                3,
-            ) | (
-                AuthenticationWorkflowKind::TotpEnrollment,
-                AuthenticationWorkflowStage::Setup,
-                AuthenticationWorkflowAction::EnrollAuthenticator,
-                2,
-                5,
-            ) | (
-                AuthenticationWorkflowKind::TotpEnrollment,
-                AuthenticationWorkflowStage::Verification,
-                AuthenticationWorkflowAction::FillTotp,
-                3,
-                5,
-            ) | (
-                AuthenticationWorkflowKind::TotpEnrollment,
-                AuthenticationWorkflowStage::Recovery,
-                AuthenticationWorkflowAction::TakeOver,
-                4,
-                5,
-            ) | (
-                AuthenticationWorkflowKind::Manual,
-                AuthenticationWorkflowStage::Manual,
-                AuthenticationWorkflowAction::TakeOver,
-                1,
-                1,
-            )
-        )
+        classifier_tuple_matches_contract(self)
     }
 }
 
@@ -272,6 +288,7 @@ mod tests {
             AuthenticationWorkflowAction::UsePasskey,
             AuthenticationWorkflowAction::CreatePasskey,
             AuthenticationWorkflowAction::TakeOver,
+            AuthenticationWorkflowAction::SaveBackupCodes,
         ];
 
         for kind in kinds {

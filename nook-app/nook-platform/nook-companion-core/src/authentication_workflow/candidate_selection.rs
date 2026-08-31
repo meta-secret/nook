@@ -71,8 +71,16 @@ impl AuthenticationPageObservation {
 impl AuthenticationWorkflowSnapshot {
     const fn candidate_priority(self) -> AuthenticationWorkflowCandidatePriority {
         match (self.kind, self.action) {
+            (
+                AuthenticationWorkflowKind::TotpEnrollment,
+                AuthenticationWorkflowAction::SaveBackupCodes,
+            ) => AuthenticationWorkflowCandidatePriority::RecoveryEnrollment,
+            (
+                AuthenticationWorkflowKind::TotpEnrollment,
+                AuthenticationWorkflowAction::EnrollAuthenticator,
+            ) => AuthenticationWorkflowCandidatePriority::Enrollment,
             (AuthenticationWorkflowKind::TotpEnrollment, _) => {
-                AuthenticationWorkflowCandidatePriority::Enrollment
+                AuthenticationWorkflowCandidatePriority::VerificationOrChallenge
             }
             (AuthenticationWorkflowKind::TotpChallenge, _)
             | (AuthenticationWorkflowKind::Login, AuthenticationWorkflowAction::UsePasskey) => {
@@ -106,8 +114,10 @@ enum AuthenticationWorkflowCandidatePriority {
     Signup,
     CredentialChangeOrPasskeySetup,
     SavedLogin,
+    RecoveryEnrollment,
     SecondFactorOrPasskeyUse,
     Enrollment,
+    VerificationOrChallenge,
 }
 
 /// Rank a browser form observation for a bounded host scan.
@@ -196,6 +206,27 @@ mod tests {
             );
             assert_eq!(snapshot.observation_index, expected_index);
         }
+        Ok(())
+    }
+
+    #[test]
+    fn active_otp_verification_outranks_page_wide_enrollment_copy() -> anyhow::Result<()> {
+        let otp = AuthenticationPageObservation {
+            one_time_code_field_count: 1,
+            authenticator_setup_hint: true,
+            backup_codes_hint: true,
+            ..Default::default()
+        };
+        let recovery = AuthenticationPageObservation {
+            username_field_count: 1,
+            authenticator_setup_hint: true,
+            backup_codes_hint: true,
+            ..Default::default()
+        };
+        let snapshot = classify_authentication_workflow_candidates(&[recovery, otp]).snapshot()?;
+        assert_eq!(snapshot.kind, AuthenticationWorkflowKind::TotpEnrollment);
+        assert_eq!(snapshot.action, AuthenticationWorkflowAction::FillTotp);
+        assert_eq!(snapshot.observation_index, 1);
         Ok(())
     }
 }

@@ -7,10 +7,18 @@ import {
   observeAuthenticationSubmitValueAssignments,
 } from '../../../nook-web-shared/src/extension/authentication-fact-attributes'
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
-import { AuthenticationWorkflowSnapshotResponseKind } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
+  authentication_enrollment_workflow_match,
+  authentication_workflow_pilot_presentation_capability,
+  AuthenticationWorkflowSnapshotResponseKind,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { classifiedAuthenticationWorkflowObservations } from '../../../nook-web-shared/src/extension/password-form-classified-observations'
-import { summarizeAuthenticationWorkflowForms } from '../../../nook-web-shared/src/extension/password-forms'
+import {
+  pageHasManualCheckpoint,
+  summarizeAuthenticationWorkflowForms,
+} from '../../../nook-web-shared/src/extension/password-forms'
 import { isRuntimeNookVaultAppUrl } from '../lib/simple-vault-runtime'
+import { authenticationRecoveryEvidence } from '../lib/backup-code-candidates'
 import {
   AuthenticationWorkflowSnapshotMessageType,
   MAX_AUTHENTICATION_WORKFLOW_TRANSPORT_OBSERVATIONS,
@@ -46,7 +54,7 @@ import {
 } from './autofill/widget-rendering'
 import { loadPilotVaultConnection } from './autofill/workflow-ui'
 import {
-  detectEnrollmentHints,
+  detectEnrollmentHintsFromRecoveryCopy,
   enrollmentCeremonyActive,
 } from './enrollment-flow'
 
@@ -75,7 +83,9 @@ async function scanAndRender(): Promise<void> {
     beginPendingSaveWatch(pendingOffer.offer)
     return
   }
-  const enrollmentHints = detectEnrollmentHints()
+  const [recoveryCopy, backupCodesHint] = authenticationRecoveryEvidence()
+  const enrollmentHints = detectEnrollmentHintsFromRecoveryCopy(recoveryCopy)
+  enrollmentHints.backupCodes = backupCodesHint
   const workflowForms = summarizeAuthenticationWorkflowForms().slice(
     0,
     MAX_AUTHENTICATION_WORKFLOW_TRANSPORT_OBSERVATIONS,
@@ -84,15 +94,30 @@ async function scanAndRender(): Promise<void> {
   // of an active OTP challenge so Rust can keep code fill as the primary action,
   // while a direct backup-code-only page still exposes the save ceremony.
   if (
-    enrollmentHints.qr ||
-    (enrollmentHints.backupCodes && workflowForms.length === 0)
+    (enrollmentHints.qr || enrollmentHints.backupCodes) &&
+    workflowForms.length === 0
   ) {
+    const enrollmentMatch = authentication_enrollment_workflow_match(
+      enrollmentHints.qr,
+      recoveryCopy,
+      pageHasManualCheckpoint(document),
+    )
+    if (
+      enrollmentMatch.kind !== 'matched' ||
+      authentication_workflow_pilot_presentation_capability(
+        enrollmentMatch.snapshot,
+      ) !== 'propose-action'
+    ) {
+      removeScannedWidget()
+      return
+    }
     cancelPendingAuthenticatorPickerRequest()
     cancelPendingLoginPickerRequest()
     const vaultConnection = await loadPilotVaultConnection()
     if (sequence !== scanState.sequence) return
     const nookTypedArgs0_0: Parameters<typeof renderEnrollmentWidget>[0] = {
       hints: enrollmentHints,
+      snapshot: enrollmentMatch.snapshot,
       vaultConnection,
     }
     renderEnrollmentWidget(nookTypedArgs0_0)
@@ -144,6 +169,12 @@ async function scanAndRender(): Promise<void> {
   }
   const { snapshot } = verdict
   const selected = classifiedWorkflows[snapshot.observationIndex]
+  if (
+    authentication_workflow_pilot_presentation_capability(snapshot) === 'hidden'
+  ) {
+    removeScannedWidget()
+    return
+  }
   if (!selected) {
     removeScannedWidget()
     return

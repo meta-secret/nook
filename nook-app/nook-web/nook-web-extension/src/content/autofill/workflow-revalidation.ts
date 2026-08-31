@@ -6,7 +6,8 @@ import {
 } from '../../../../nook-web-shared/src/extension/password-forms'
 import { refreshAuthenticationWorkflowObservation } from '../../../../nook-web-shared/src/extension/authentication-workflow-observation-refresh'
 import { authenticationWorkflowScopesMatch } from '../../../../nook-web-shared/src/extension/password-form-classified-observations'
-import { detectEnrollmentHints } from '../enrollment-flow'
+import { pageHasDocumentBackupCodeHint } from '../../lib/backup-code-candidates'
+import { pageHasQrEnrollmentHint } from '../../lib/page-qr-capture'
 import {
   authentication_page_observation_facts_match_binding,
   AuthenticationWorkflowSnapshotResponseKind,
@@ -172,19 +173,20 @@ export async function performRevalidatedAuthenticationAction({
         }
       return authenticationWorkflowScopesMatch(scopePair)
     })
-    if (selectedIndex < 0 && workflow.root !== document) {
+    if (selectedIndex < 0) {
       candidates = [refreshAuthenticationWorkflowObservation(workflow)]
       selectedIndex = 0
     }
     if (selectedIndex < 0) return false
-    const hints = detectEnrollmentHints()
+    const authenticatorSetupHint = pageHasQrEnrollmentHint()
+    const backupCodesHint = pageHasDocumentBackupCodeHint()
     const observations = candidates.map((candidate) => {
       const factsRequest: Parameters<
         typeof authenticationPageObservationFacts
       >[0] = {
         observation: candidate,
-        authenticatorSetupHint: hints.qr,
-        backupCodesHint: hints.backupCodes,
+        authenticatorSetupHint,
+        backupCodesCopy: backupCodesHint ? 'Save backup codes' : '',
       }
       return authenticationPageObservationFacts(factsRequest)
     })

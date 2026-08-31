@@ -35,7 +35,7 @@ const validMessage = {
         },
         authenticator: {
           authenticatorSetup: 'absent',
-          backupCodes: 'absent',
+          backupCodesCopy: '',
           passkeyControl: 'absent',
           matchingPasskeyAccountCount: 0,
           detailedPasskeyControl: { kind: 'absent' },
@@ -125,6 +125,29 @@ describe('authentication workflow snapshot messages', () => {
 
   test('accepts bounded structural page observations', () => {
     expect(isAuthenticationWorkflowSnapshotMessage(validMessage)).toBe(true)
+  })
+
+  test('rejects invalid or oversized recovery copy', () => {
+    const observation = validMessage.payload.observations[0]
+    for (const backupCodesCopy of [42, 'x'.repeat(129)]) {
+      expect(
+        isAuthenticationWorkflowSnapshotMessage({
+          ...validMessage,
+          payload: {
+            ...validMessage.payload,
+            observations: [
+              {
+                ...observation,
+                authenticator: {
+                  ...observation.authenticator,
+                  backupCodesCopy,
+                },
+              },
+            ],
+          },
+        }),
+      ).toBe(false)
+    }
   })
 
   test('accepts the generated passkey presence representation', () => {

@@ -58,6 +58,65 @@ function totpPilotStubArgs(messages: Record<string, ChromeMessage>) {
   }
 }
 
+function backupCodePilotStubArgs(messages: Record<string, ChromeMessage>) {
+  const { authenticationWorkflow } = demoDomainEnumArgs
+  return {
+    localizedMessages: messages,
+    ...demoDomainEnumArgs,
+    responsesByType: {
+      'nook:authentication-workflow-snapshot': {
+        ok: true,
+        snapshot: {
+          kind: authenticationWorkflow.totpEnrollmentKind,
+          stage: authenticationWorkflow.recoveryStage,
+          action: authenticationWorkflow.saveBackupCodesAction,
+          currentStep: 4,
+          totalSteps: 5,
+          approvalRequirement: authenticationWorkflow.explicitUserApproval,
+          savedLoginCapability: 'unavailable',
+          observationIndex: 0,
+        },
+      },
+    },
+  }
+}
+
+test('approve backup-code extraction only after a fresh Pilot decision', async ({
+  page,
+}) => {
+  const messages = await loadPilotMessages()
+  const stubArgs = backupCodePilotStubArgs(messages)
+
+  await page.addInitScript(installDemoChromeStub, stubArgs)
+  await page.goto('/')
+  await page.setContent(`<!doctype html>
+    <html>
+      <head><title>Recovery codes</title></head>
+      <body>
+        <main>
+          <h1>${'Account recovery details '.repeat(8)}</h1>
+          <p>Save these recovery codes somewhere secure.</p>
+          <ul>
+            <li>A1B2-C3D4-E5F6</li>
+            <li>G7H8-I9J0-K1L2</li>
+          </ul>
+        </main>
+      </body>
+    </html>`)
+  await page.evaluate(installDemoChromeStub, stubArgs)
+  await injectPilotAutofill(page)
+
+  const widget = page.locator('#nook-auth-widget')
+  const saveButton = widget.getByRole('button', { name: 'Save backup codes' })
+  await expect(saveButton).toBeVisible()
+  await expect(widget).toContainText('4/5')
+  await expect(widget.getByText('A1B2-C3D4-E5F6')).toHaveCount(0)
+  await saveButton.click()
+  await expect(widget.getByText('A1B2-C3D4-E5F6')).toBeVisible()
+  await expect(widget.getByText('G7H8-I9J0-K1L2')).toBeVisible()
+  await demoBeat(page)
+})
+
 test('open trusted pairing from disconnected Nook Pilot', async ({ page }) => {
   const messages = await loadPilotMessages()
   const stubArgs = unavailableLoginPilotStubArgs(messages)

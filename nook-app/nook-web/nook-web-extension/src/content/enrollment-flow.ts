@@ -2,8 +2,12 @@ import {
   BROWSER_MESSAGE_KEYS,
   type BrowserMessageKey,
 } from '../lib/browser-message-keys'
-import { pageHasDocumentBackupCodeHint } from '../lib/backup-code-candidates'
 import {
+  authenticationRecoveryEvidence,
+  recoveryCopyHasBackupCodeHint,
+} from '../lib/backup-code-candidates'
+import {
+  AuthenticationWorkflowAction,
   AuthenticatorEnrollmentConfirmResponseKind,
   AuthenticatorEnrollmentStageResponseKind,
   AuthenticatorPreviewResponseKind,
@@ -56,13 +60,23 @@ import {
   type BackupEnrollmentHost,
   startBackupEnrollment,
 } from './enrollment-backup-flow'
+import { startRevalidatedEnrollmentAction } from './autofill/backup-code-workflow-action'
 
 export type { EnrollmentPageHints } from './enrollment-flow-view'
 
 export function detectEnrollmentHints(): EnrollmentPageHints {
+  const [copy, backupCodes] = authenticationRecoveryEvidence()
+  const hints = detectEnrollmentHintsFromRecoveryCopy(copy)
+  hints.backupCodes = backupCodes
+  return hints
+}
+
+export function detectEnrollmentHintsFromRecoveryCopy(
+  recoveryCopy: string,
+): EnrollmentPageHints {
   return {
     qr: pageHasQrEnrollmentHint(),
-    backupCodes: pageHasDocumentBackupCodeHint(),
+    backupCodes: recoveryCopyHasBackupCodeHint(recoveryCopy),
   }
 }
 
@@ -630,10 +644,11 @@ type StartQrEnrollmentArgs = {
   section: HTMLElement
 }
 
-async function startQrEnrollment({
+export async function startQrEnrollment({
   host,
   section,
 }: StartQrEnrollmentArgs): Promise<void> {
+  releaseEnrollmentWidgetHold()
   host.title.textContent = host.translatedMessage(
     BROWSER_MESSAGE_KEYS.WidgetEnrollTitle,
   )
@@ -724,6 +739,34 @@ type RenderEnrollmentActionsArgs = {
   hints: EnrollmentPageHints
 }
 
+type StartBackupCodeEnrollmentArgs = {
+  host: EnrollmentFlowHost
+  section?: HTMLElement
+}
+
+/** Begin recovery-code extraction only after the trusted action has been approved. */
+export function startBackupCodeEnrollment({
+  host,
+  section = createEnrollmentSection(host.panel),
+}: StartBackupCodeEnrollmentArgs): void {
+  releaseEnrollmentWidgetHold()
+  const backupHost: BackupEnrollmentHost = {
+    ...host,
+    returnToActions: () => {
+      const actionsContext: Parameters<typeof renderEnrollmentActions>[0] = {
+        host,
+        hints: detectEnrollmentHints(),
+      }
+      renderEnrollmentActions(actionsContext)
+    },
+  }
+  const backupEnrollment: Parameters<typeof startBackupEnrollment>[0] = {
+    host: backupHost,
+    section,
+  }
+  void startBackupEnrollment(backupEnrollment)
+}
+
 export function renderEnrollmentActions({
   host,
   hints,
@@ -743,12 +786,20 @@ export function renderEnrollmentActions({
       labelKey: BROWSER_MESSAGE_KEYS.WidgetAddFromPage,
       onClick: (event) => {
         if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
-        releaseEnrollmentWidgetHold()
-        const nookTypedArgs0_82: Parameters<typeof startQrEnrollment>[0] = {
+        const enrollmentRequest: Parameters<
+          typeof startRevalidatedEnrollmentAction
+        >[0] = {
           host,
-          section,
+          action: AuthenticationWorkflowAction.EnrollAuthenticator,
+          start: () => {
+            const startRequest: Parameters<typeof startQrEnrollment>[0] = {
+              host,
+              section,
+            }
+            void startQrEnrollment(startRequest)
+          },
         }
-        void startQrEnrollment(nookTypedArgs0_82)
+        void startRevalidatedEnrollmentAction(enrollmentRequest)
       },
     }
     buttons.push(createSecondaryButton(nookTypedArgs1_10))
@@ -760,24 +811,19 @@ export function renderEnrollmentActions({
       labelKey: BROWSER_MESSAGE_KEYS.WidgetSaveBackupCodes,
       onClick: (event) => {
         if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
-        releaseEnrollmentWidgetHold()
-        const backupHost: BackupEnrollmentHost = {
-          ...host,
-          returnToActions: () => {
-            const actionsContext: Parameters<
-              typeof renderEnrollmentActions
-            >[0] = {
-              host,
-              hints: detectEnrollmentHints(),
-            }
-            renderEnrollmentActions(actionsContext)
+        const backupRequest: Parameters<
+          typeof startRevalidatedEnrollmentAction
+        >[0] = {
+          host,
+          action: AuthenticationWorkflowAction.SaveBackupCodes,
+          start: () => {
+            const startRequest: Parameters<
+              typeof startBackupCodeEnrollment
+            >[0] = { host, section }
+            startBackupCodeEnrollment(startRequest)
           },
         }
-        const backupEnrollment: Parameters<typeof startBackupEnrollment>[0] = {
-          host: backupHost,
-          section,
-        }
-        void startBackupEnrollment(backupEnrollment)
+        void startRevalidatedEnrollmentAction(backupRequest)
       },
     }
     buttons.push(createSecondaryButton(nookTypedArgs1_11))

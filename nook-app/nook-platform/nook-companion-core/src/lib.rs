@@ -52,15 +52,17 @@ pub use authentication_workflow::{
     AuthenticationPageObservation, AuthenticationPageObservationFacts,
     AuthenticationPageObservationFactsBatch, AuthenticationPageObservations,
     AuthenticationPasskeyControlObservation, AuthenticationPasskeyEvidence,
-    AuthenticationSavedLoginCapability, AuthenticationWorkflowAction, AuthenticationWorkflowKind,
-    AuthenticationWorkflowMatch, AuthenticationWorkflowSnapshot,
-    AuthenticationWorkflowSnapshotError, AuthenticationWorkflowStage,
-    MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
+    AuthenticationPilotPresentationCapability, AuthenticationSavedLoginCapability,
+    AuthenticationWorkflowAction, AuthenticationWorkflowKind, AuthenticationWorkflowMatch,
+    AuthenticationWorkflowSnapshot, AuthenticationWorkflowSnapshotError,
+    AuthenticationWorkflowStage, MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
+    MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS, authentication_enrollment_workflow_match,
     authentication_form_observation_priority, authentication_page_observation_facts_match_binding,
     authentication_page_observation_facts_priority, authentication_page_observations_are_valid,
     authentication_passkey_control_candidate_is_safe,
     authentication_passkey_control_evidence_is_safe, bind_authentication_page_observation_facts,
-    classify_authentication_workflow, classify_authentication_workflow_candidates,
+    classify_authentication_backup_codes_observation, classify_authentication_workflow,
+    classify_authentication_workflow_candidates,
 };
 pub use authentication_workflow_response::{
     AuthenticationWorkflowRuntimeResponse, AuthenticationWorkflowRuntimeResponseDecodeError,
@@ -104,7 +106,9 @@ pub use authenticator_preview_response::{
     AuthenticatorPreviewResponseDecodeError, AuthenticatorPreviewResponseKind,
     AuthenticatorPreviewResponseWire, decode_authenticator_preview_response,
 };
-pub use backup_code_candidates::{extract_backup_code_candidates, page_has_backup_code_hint};
+pub use backup_code_candidates::{
+    contains_backup_code_candidate, extract_backup_code_candidates, page_has_backup_code_hint,
+};
 pub use extension_pairing_state::{
     CreateExtensionPairingStateInput, EXTENSION_GRANT_KEY_PREFIX, EXTENSION_SETUP_KEY,
     ExtensionConnectScope, ExtensionPairingEntry, ExtensionPairingGrantApproval,

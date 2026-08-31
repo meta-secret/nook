@@ -19,6 +19,22 @@ pub fn page_has_backup_code_hint(text: &str) -> bool {
     contains_recovery_hint(text)
 }
 
+/// True when plaintext contains at least one recovery-code-shaped line.
+///
+/// This deliberately exposes only a boolean so pre-approval browser scans do
+/// not receive or retain extracted secret candidates.
+#[must_use]
+pub fn contains_backup_code_candidate(text: &str) -> bool {
+    text.split(['\n', '\r']).any(|line| {
+        candidate_shape_matches(line)
+            || line
+                .split(|character: char| {
+                    !(character.is_ascii_alphanumeric() || matches!(character, '_' | '-'))
+                })
+                .any(candidate_shape_matches)
+    })
+}
+
 /// Extract unique backup-code-looking lines from plaintext page content.
 #[must_use]
 pub fn extract_backup_code_candidates(text: &str) -> Vec<String> {
@@ -41,39 +57,45 @@ pub fn extract_backup_code_candidates(text: &str) -> Vec<String> {
 
 fn normalize_candidate(value: &str) -> BackupCodeCandidate {
     let trimmed = collapse_whitespace(value.trim());
-    if trimmed.len() < MIN_CODE_LEN || trimmed.len() > MAX_CODE_LEN || !matches_code_line(&trimmed)
-    {
+    if !candidate_shape_matches(&trimmed) {
         return BackupCodeCandidate::Rejected;
+    }
+    BackupCodeCandidate::Accepted(trimmed)
+}
+
+fn candidate_shape_matches(value: &str) -> bool {
+    let trimmed = value.trim();
+    if trimmed.len() < MIN_CODE_LEN || trimmed.len() > MAX_CODE_LEN || !matches_code_line(trimmed) {
+        return false;
     }
     if trimmed.contains("://")
         || trimmed.contains('@')
         || trimmed.contains("  ")
-        || contains_recovery_hint(&trimmed)
+        || contains_recovery_hint(trimmed)
     {
-        return BackupCodeCandidate::Rejected;
+        return false;
     }
-    let words: Vec<&str> = trimmed.split(' ').collect();
-    if words.len() > 2 {
-        return BackupCodeCandidate::Rejected;
+    let mut words = trimmed.split(' ');
+    let Some(first_word) = words.next() else {
+        return false;
+    };
+    let second_word = words.next();
+    if words.next().is_some() {
+        return false;
     }
-    if words.len() == 2
-        && words
-            .iter()
-            .all(|word| word.chars().all(|c| c.is_ascii_alphabetic()))
-    {
-        return BackupCodeCandidate::Rejected;
+    if second_word.is_some_and(|word| {
+        first_word.chars().all(|c| c.is_ascii_alphabetic())
+            && word.chars().all(|c| c.is_ascii_alphabetic())
+    }) {
+        return false;
     }
-    let compact: String = trimmed
+    let compact_len = trimmed
         .chars()
         .filter(|c| !c.is_ascii_whitespace() && *c != '_' && *c != '-')
-        .collect();
-    if compact.len() < MIN_CODE_LEN {
-        return BackupCodeCandidate::Rejected;
-    }
-    if !compact.chars().any(|c| c.is_ascii_digit()) {
-        return BackupCodeCandidate::Rejected;
-    }
-    BackupCodeCandidate::Accepted(trimmed)
+        .count();
+    compact_len >= MIN_CODE_LEN
+        && trimmed.chars().any(|c| c.is_ascii_digit())
+        && !trimmed.to_ascii_lowercase().ends_with("-digit")
 }
 
 fn collapse_whitespace(value: &str) -> String {
@@ -212,6 +234,19 @@ mod tests {
         assert!(page_has_backup_code_hint(
             "Enable 2FA codes for your account"
         ));
+    }
+
+    #[test]
+    fn candidate_detection_does_not_return_secret_material() {
+        assert!(contains_backup_code_candidate("A1B2-C3D4-E5F6"));
+        assert!(contains_backup_code_candidate(
+            "Save your recovery codes: A1B2-C3D4-E5F6"
+        ));
+        assert!(contains_backup_code_candidate("ABCD-EFGH-IJK1"));
+        assert!(!contains_backup_code_candidate(
+            "Save your 8-digit backup codes"
+        ));
+        assert!(!contains_backup_code_candidate("Save your backup codes"));
     }
 
     #[test]

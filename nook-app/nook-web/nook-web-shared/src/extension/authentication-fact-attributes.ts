@@ -47,13 +47,13 @@ export const authenticationFactObserverOptions = {
 export const AUTHENTICATION_FACT_SCAN_DEBOUNCE_MS = 150;
 
 const authenticationFactCharacterDataScopeSelector =
-  'a, button, form, input, label, legend, select, textarea, [role="button"], [role="form"], [aria-label], [title], [data-nook-passkey-control]';
+  'a, button, form, h1, h2, h3, h4, h5, h6, input, label, legend, p, select, textarea, [role="button"], [role="form"], [role="heading"], [aria-label], [title], [data-nook-passkey-control]';
 
 const authenticationFactLabelledControlSelector =
   'a[href][aria-labelledby], button[aria-labelledby], input[type="button"][aria-labelledby], input[type="image"][aria-labelledby], input[type="submit"][aria-labelledby], [role="button"][aria-labelledby], [data-nook-passkey-control][aria-labelledby]';
 
 const authenticationFactElementSelector =
-  'a, button, form, iframe, input, label, legend, select, textarea, [role="button"], [role="form"], [data-nook-manual-checkpoint], [data-nook-passkey-control]';
+  'a, button, form, h1, h2, h3, h4, h5, h6, iframe, input, label, legend, p, select, textarea, [role="button"], [role="form"], [role="heading"], [data-nook-manual-checkpoint], [data-nook-passkey-control]';
 
 const authenticationFactNestedScopeSelector =
   'a, button, input, label, legend, select, textarea, [role="button"], [data-nook-passkey-control]';
