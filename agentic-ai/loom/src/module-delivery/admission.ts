@@ -13,10 +13,7 @@ import {
   ModuleDeliveryBaselineKind,
   ModuleDeliveryTaskKind,
 } from './domain.ts';
-import {
-  restoreModuleDeliveryEvidenceReceipt,
-  validateModuleDeliveryEvidenceSubmission,
-} from './evidence.ts';
+import { validateModuleDeliveryEvidenceSubmission } from './evidence.ts';
 import {
   assertModuleDeliveryCanonicalEvidenceTransition,
   assertModuleDeliveryIntegratedWriterFrontierCapability,
@@ -35,7 +32,6 @@ import type {
   ModuleDeliveryAcceptedProviderEvidenceIdentity,
   ModuleDeliveryEvidenceSubmissionValidation,
   ModuleDeliveryEvidenceSubmissionVerification,
-  RestoreModuleDeliveryAcceptedEvidenceRequest,
 } from './evidence.ts';
 import type { AgentAttemptParent } from '../agent-workflow/domain.ts';
 import type { TeamKey } from '../team-agents/catalog.ts';
@@ -383,43 +379,6 @@ export function verifyModuleDeliveryEvidenceSubmission(
   evidenceAuthorities.set(accepted, verification.authority);
   acceptedEvidenceLeases.add(verification.lease);
   return accepted;
-}
-
-export function restoreModuleDeliveryAcceptedEvidence(
-  request: RestoreModuleDeliveryAcceptedEvidenceRequest,
-) {
-  const authority = authorityStateForPlan(request);
-  if (acceptedEvidenceLeases.has(request.lease))
-    throw new Error('Accepted evidence receipt lease is already consumed.');
-  assertModuleDeliveryAuthorityRepository(request);
-  assertModuleDeliveryAdmissionStateAuthority(request);
-  assertModuleDeliveryAttemptLeaseAuthority(request);
-  const evidence = restoreModuleDeliveryEvidenceReceipt({
-    ...request,
-    registry: authority.evidenceRegistry,
-    node: nodeFor({
-      plan: authority.acceptedPlan,
-      taskId: request.lease.taskId,
-    }),
-  });
-  evidenceAuthorities.set(evidence, request.authority);
-  const state = createModuleDeliveryAdmissionState({
-    ...request,
-    headCommit: request.state.headCommit,
-    integratedWriterFrontiers: request.state.integratedWriterFrontiers,
-    acceptedEvidence: [...request.acceptedEvidence, evidence],
-  });
-  acceptedEvidenceLeases.add(request.lease);
-  recordModuleDeliveryAttemptDisposition({
-    authority: request.authority,
-    state,
-    lease: request.lease,
-    outcome: {
-      kind: ModuleDeliveryAttemptDispositionKind.Accepted,
-      conclusion: ModuleDeliveryGenerationFenceKind.Accepted,
-    },
-  });
-  return Object.freeze({ evidence, state });
 }
 
 export function createModuleDeliveryAdmissionState(

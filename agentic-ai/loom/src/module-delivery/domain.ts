@@ -43,11 +43,20 @@ export const ORDINARY_TASK_WRITE_ROOTS = {
   [TeamKey.DevelopmentCore]: [
     'nook-app/nook-platform',
     'preflight',
-    'agentic-ai/minds',
+    'agentic-ai/minds/Cargo.lock',
+    'agentic-ai/minds/Cargo.toml',
+    'agentic-ai/minds/clippy.toml',
+    'agentic-ai/minds/hive/Cargo.toml',
+    'agentic-ai/minds/hive/src',
+    'agentic-ai/minds/hive/tests',
+    'agentic-ai/minds/lace',
   ],
   [TeamKey.Security]: [],
   [TeamKey.Sre]: ['infra', 'nook-app/ci', '.task', 'agentic-ai/ci-agent'],
-  [TeamKey.WebDevelopment]: ['nook-app/nook-web'],
+  [TeamKey.WebDevelopment]: [
+    'nook-app/nook-web',
+    'agentic-ai/minds/hive-console',
+  ],
 } as const;
 
 export type ModuleDeliveryTaskTeamRequest = {
