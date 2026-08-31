@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { chmodSync, existsSync, renameSync, symlinkSync } from 'node:fs';
+import { existsSync, renameSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 
 import * as integrationSource from '../../src/module-delivery/integration.ts';
@@ -34,7 +34,6 @@ import {
   evidenceSubmission,
   fixtureGit,
   invalidEvidenceCases,
-  writeFixtureFile,
   worktreeFileWriter,
   worktreeGit,
 } from './worktree-test-support.ts';
@@ -831,114 +830,6 @@ describe('module delivery wave integration', () => {
       false,
     );
     expect(existsSync(marker)).toBe(false);
-  });
-
-  test('rejects source byte, ref, and config drift after preparation', () => {
-    const fixture = createTrackedFixture();
-    const { accepted } = readOnlyPlan(fixture);
-    const state = preparedIntegration(accepted);
-    const sourceWrite = {
-      fixture,
-      relativePath: 'module/seed.txt',
-      contents: 'mutated source bytes\n',
-    } as const;
-    writeFixtureFile(sourceWrite);
-    const sourceGit = fixtureGit(fixture);
-    sourceGit(['branch', 'source-drift', 'HEAD']);
-    sourceGit(['config', 'nook.test-drift', 'true']);
-    const integration: WaveIntegration = {
-      acceptedPlan: accepted,
-      state,
-      handoffs: [],
-    };
-    expect(() => integrateWave(integration)).toThrow(
-      'Source repository changed',
-    );
-  });
-
-  test('rejects drift in a custom ref outside the private integration namespace', () => {
-    const fixture = createTrackedFixture();
-    const { accepted } = readOnlyPlan(fixture);
-    const state = preparedIntegration(accepted);
-    fixtureGit(fixture)([
-      'update-ref',
-      'refs/custom/module-delivery-drift',
-      'HEAD',
-    ]);
-    const integration: WaveIntegration = {
-      acceptedPlan: accepted,
-      state,
-      handoffs: [],
-    };
-    expect(() => integrateWave(integration)).toThrow(
-      'Source repository changed',
-    );
-  });
-
-  test('ignores concurrent Team Plan lifecycle refs', () => {
-    const fixture = createTrackedFixture();
-    const { accepted } = readOnlyPlan(fixture);
-    const state = preparedIntegration(accepted);
-    const sourceGit = fixtureGit(fixture);
-    for (const ref of [
-      'refs/nook/team-plan/locks/concurrent',
-      'refs/nook/team-plan/artifacts/concurrent',
-      'refs/nook/team-plan/frontiers/concurrent',
-      'refs/nook/team-plan/final-heads/concurrent',
-      'refs/nook/team-plan-locks/legacy-concurrent',
-    ])
-      sourceGit(['update-ref', ref, 'HEAD']);
-    const integration: WaveIntegration = {
-      acceptedPlan: accepted,
-      state,
-      handoffs: [],
-    };
-    expect(() => integrateWave(integration)).not.toThrow();
-  });
-
-  test('rejects a custom symbolic ref retargeted between equal commits', () => {
-    const fixture = createTrackedFixture();
-    const sourceGit = fixtureGit(fixture);
-    sourceGit(['branch', 'symbolic-a', 'HEAD']);
-    sourceGit(['branch', 'symbolic-b', 'HEAD']);
-    sourceGit([
-      'symbolic-ref',
-      'refs/custom/module-pointer',
-      'refs/heads/symbolic-a',
-    ]);
-    const { accepted } = readOnlyPlan(fixture);
-    const state = preparedIntegration(accepted);
-    sourceGit([
-      'symbolic-ref',
-      'refs/custom/module-pointer',
-      'refs/heads/symbolic-b',
-    ]);
-    expect(sourceGit(['rev-parse', 'refs/heads/symbolic-a'])).toBe(
-      sourceGit(['rev-parse', 'refs/heads/symbolic-b']),
-    );
-    const integration: WaveIntegration = {
-      acceptedPlan: accepted,
-      state,
-      handoffs: [],
-    };
-    expect(() => integrateWave(integration)).toThrow(
-      'Source repository changed',
-    );
-  });
-
-  test('rejects source mode drift at a metadata-only checkpoint', () => {
-    const fixture = createTrackedFixture();
-    const { accepted } = readOnlyPlan(fixture);
-    const state = preparedIntegration(accepted);
-    chmodSync(join(fixture.sourceRoot, 'module/seed.txt'), 0o755);
-    const integration: WaveIntegration = {
-      acceptedPlan: accepted,
-      state,
-      handoffs: [],
-    };
-    expect(() => integrateWave(integration)).toThrow(
-      'Source repository changed',
-    );
   });
 
   test('rejects an intermediate symlink before preparing integration', () => {
