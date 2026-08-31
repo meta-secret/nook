@@ -462,11 +462,17 @@ function assertSubprocessEnvironment([request, object]: readonly [
         throw new Error(
           `Unsafe TypeScript subprocess environment key ${property.name.text} in ${request.sourcePath}.`,
         );
+      const pathEnvironmentKey =
+        property.name.text === PlatformPathEnvironmentKey.Posix
+          ? PlatformPathEnvironmentKey.Posix
+          : property.name.text === PlatformPathEnvironmentKey.Windows
+            ? PlatformPathEnvironmentKey.Windows
+            : false;
       if (
-        (property.name.text === 'PATH' || property.name.text === 'Path') &&
+        pathEnvironmentKey !== false &&
         !isPlatformPathEnvironmentValue({
           value: property.initializer,
-          name: property.name.text,
+          name: pathEnvironmentKey,
         })
       )
         throw new Error(
@@ -522,9 +528,14 @@ function assertSubprocessEnvironment([request, object]: readonly [
     );
 }
 
+enum PlatformPathEnvironmentKey {
+  Posix = 'PATH',
+  Windows = 'Path',
+}
+
 type PlatformPathEnvironmentValueRequest = {
   readonly value: ts.Expression;
-  readonly name: 'PATH' | 'Path';
+  readonly name: PlatformPathEnvironmentKey;
 };
 
 function isPlatformPathEnvironmentValue(
@@ -532,7 +543,7 @@ function isPlatformPathEnvironmentValue(
 ): boolean {
   const { value, name } = request;
   return (
-    (name === 'PATH' &&
+    (name === PlatformPathEnvironmentKey.Posix &&
       ts.isStringLiteral(value) &&
       value.text === '/bin:/usr/bin:/usr/sbin') ||
     (ts.isPropertyAccessExpression(value) &&
