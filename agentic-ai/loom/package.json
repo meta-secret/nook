@@ -9,7 +9,8 @@
     "loom-agent-delegation": "./src/agent-workflow/delegation-cli.ts",
     "loom-module-delivery": "./src/module-delivery/cli.ts",
     "loom-module-experts": "./src/module-experts/cli.ts",
-    "loom-structural-experts": "./src/structural-experts/cli.ts"
+    "loom-structural-experts": "./src/structural-experts/cli.ts",
+    "loom-team-plan": "./src/team-plan/cli.ts"
   },
   "scripts": {
     "loom": "bun run src/cli.ts",
@@ -17,6 +18,7 @@
     "module-delivery": "bun run src/module-delivery/cli.ts",
     "module-experts": "bun run src/module-experts/cli.ts",
     "structural-experts": "bun run src/structural-experts/cli.ts",
+    "team-plan": "bun run src/team-plan/cli.ts",
     "check": "tsc --noEmit",
     "lint": "eslint src tests",
     "format": "prettier --config .prettierrc --write \"src/**/*.ts\" \"tests/**/*.ts\" \"*.{ts,json,md}\" .prettierrc",
