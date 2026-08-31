@@ -477,16 +477,14 @@ export function restartModuleDeliveryGeneration(
     throw new Error(
       'Generation restart requires authoritative terminal release evidence.',
     );
-  const acceptedPlan = trustedModuleDeliveryPlanSnapshot(request.acceptedPlan);
+  const { acceptedPlan } = freezeModuleDeliveryAdmissionSource({
+    acceptedPlan: request.acceptedPlan,
+    repositoryRoot: authority.repositoryRoot,
+  });
   if (acceptedPlan.plan.generation <= request.previousState.generation)
     throw new Error(
       'A superseding module plan requires a newer immutable generation.',
     );
-  const authenticationRequest: AuthenticateModuleDeliverySourceCommitRequest = {
-    repositoryRoot: authority.repositoryRoot,
-    sourceCommit: acceptedPlan.plan.sourceCommit,
-  };
-  authenticateModuleDeliverySourceCommit(authenticationRequest);
   const lineageRequest: ExpectedLineageMapRequest = {
     acceptedPlan,
     entries: request.expectedLineage,

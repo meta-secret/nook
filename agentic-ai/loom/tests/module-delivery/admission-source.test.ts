@@ -11,7 +11,10 @@ import {
   ModuleDeliveryValidationStatus,
   ModuleDeliveryWorkspaceKind,
   TeamKey,
+  createModuleDeliveryAdmissionState,
+  createModuleDeliveryGenerationAuthority,
   decodeAndValidateModuleDeliveryPlan,
+  restartModuleDeliveryGeneration,
 } from '../../src/module-delivery/index.ts';
 import { freezeModuleDeliveryAdmissionSource } from '../../src/module-delivery/admission-source.ts';
 import {
@@ -29,6 +32,7 @@ import type {
 
 function acceptedPlan(request: {
   readonly sourceCommit: string;
+  readonly generation: number;
   readonly moduleRoot: string;
   readonly write: string;
 }): ValidatedModuleDeliveryPlan {
@@ -58,7 +62,7 @@ function acceptedPlan(request: {
   };
   const plan: ModuleDeliveryPlanV2 = {
     version: MODULE_DELIVERY_PLAN_VERSION,
-    generation: 1,
+    generation: request.generation,
     sourceCommit: request.sourceCommit,
     maxConcurrency: 1,
     maxAgentDepth: 1,
@@ -92,6 +96,7 @@ test('classifies exact writes against the frozen source tree', () => {
     const sourceCommit = fixtureGit(fixture)(['rev-parse', 'HEAD']);
     const acceptedFile = acceptedPlan({
       sourceCommit,
+      generation: 1,
       moduleRoot: 'infra/k0s/scripts',
       write: exactPath,
     });
@@ -104,6 +109,7 @@ test('classifies exact writes against the frozen source tree', () => {
 
     const acceptedDirectory = acceptedPlan({
       sourceCommit,
+      generation: 2,
       moduleRoot: 'infra/k0s',
       write: 'infra/k0s/scripts',
     });
@@ -111,6 +117,31 @@ test('classifies exact writes against the frozen source tree', () => {
       freezeModuleDeliveryAdmissionSource({
         acceptedPlan: acceptedDirectory,
         repositoryRoot: fixture.sourceRoot,
+      }),
+    ).toThrow('names a source directory');
+
+    const expectedLineage = acceptedFile.plan.nodes.map((node) => ({
+      taskId: node.taskId,
+      parentLineage: node.parentLineage,
+    }));
+    const authority = createModuleDeliveryGenerationAuthority({
+      acceptedPlan: acceptedFile,
+      expectedLineage,
+      repositoryRoot: fixture.sourceRoot,
+    });
+    const previousState = createModuleDeliveryAdmissionState({
+      authority,
+      acceptedPlan: acceptedFile,
+      headCommit: sourceCommit,
+      integratedWriterFrontiers: [],
+      acceptedEvidence: [],
+    });
+    expect(() =>
+      restartModuleDeliveryGeneration({
+        authority,
+        acceptedPlan: acceptedDirectory,
+        previousState,
+        expectedLineage,
       }),
     ).toThrow('names a source directory');
   } finally {
