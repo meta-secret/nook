@@ -13,7 +13,7 @@ import type { TeamKey } from './catalog.ts';
 export const CORTEX_AUTHORING_SKILL_PATHS = [
   '.cortex/teams/ai/dynamic-skills/cortex-writer.md',
   '.cortex/teams/ai/dynamic-skills/cortex-article-structure/SKILL.md',
-  '.cortex/teams/ai/dynamic-skills/cortex-consistency.md',
+  '.cortex/teams/ai/dynamic-skills/cortex-consistency/SKILL.md',
 ] as const;
 
 const CORTEX_RESOURCE_CLAIM = '.cortex/**';

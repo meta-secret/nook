@@ -435,9 +435,9 @@ ${gizmoIndexRows}
         },
         {
           code: CortexContractFindingCode.MissingPolicyDocument,
-          file: '.cortex/teams/ai/dynamic-skills/cortex-consistency.md',
+          file: '.cortex/teams/ai/dynamic-skills/cortex-consistency/SKILL.md',
           message:
-            'Cortex policy references a missing document: .cortex/teams/ai/dynamic-skills/cortex-consistency.md',
+            'Cortex policy references a missing document: .cortex/teams/ai/dynamic-skills/cortex-consistency/SKILL.md',
         },
         {
           code: CortexContractFindingCode.MissingPolicyReference,
@@ -455,7 +455,7 @@ ${gizmoIndexRows}
           code: CortexContractFindingCode.MissingPolicyReference,
           file: '.cortex/AGENTS.md',
           message:
-            'Cortex context .cortex/AGENTS.md imports policy .cortex/teams/ai/dynamic-skills/cortex-consistency.md but its authority document does not reference it.',
+            'Cortex context .cortex/AGENTS.md imports policy .cortex/teams/ai/dynamic-skills/cortex-consistency/SKILL.md but its authority document does not reference it.',
         },
       ],
       auditOk: false,

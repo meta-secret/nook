@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { expect, test } from 'bun:test';
-import { CORTEX_CONTRACT_REGISTRY } from '../src/lib/cortex-contract-registry.ts';
 import {
+  CORTEX_CONTRACT_REGISTRY,
   compileCortexContracts,
   CortexCompatibilityEvidence,
   CortexContractFindingCode,

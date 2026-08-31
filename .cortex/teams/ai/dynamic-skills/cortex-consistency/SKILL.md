@@ -1,3 +1,8 @@
+---
+name: cortex-consistency
+description: Compile typed Cortex policy contracts and audit documentation consistency.
+---
+
 # Cortex Consistency — Garbage Collector
 
 ## Priority
@@ -53,7 +58,7 @@ Verification checklist:
 - [ ] Named commands, packages, and paths still exist.
 - [ ] Superseded designs are labeled historical.
 - [ ] Dead links and orphan index rows are gone.
-- [ ] New prose follows [cortex-writer.md](cortex-writer.md).
+- [ ] New prose follows [cortex-writer.md](../cortex-writer.md).
 
 Conflict resolution order:
 
@@ -81,7 +86,7 @@ Default task scope:
 A full-tree GC follows this ownership model:
 
 1. Follow
-   [subagent delegation](../../../gizmo/workflows/subagent-delegation.md).
+   [subagent delegation](../../../../gizmo/workflows/subagent-delegation.md).
 2. When multiple document families are in scope, delegate read-only evidence
    collection by family.
 3. Keep one task owner responsible for conflict resolution and the final edit.
@@ -123,7 +128,7 @@ After:
 - [ ] Open the owning `.cortex` docs and nearby index links.
 - [ ] Diff claims against code, Taskfiles, and CI workflows.
 - [ ] Resolve conflicts with the resolution order above.
-- [ ] Apply [cortex-writer.md](cortex-writer.md) to every edit.
+- [ ] Apply [cortex-writer.md](../cortex-writer.md) to every edit.
 - [ ] Update indexes when files move, split, or become historical.
 
 ## Validation
@@ -146,7 +151,7 @@ task loom:cortex-audit
 
 - For density findings, set `includeDensityLint: true` in the cortexAudit
   request.
-- See [Loom tools](../references/loom-tools.md).
+- See [Loom tools](../../references/loom-tools.md).
 - Loom checks broken relative links, skill-index sync, and prohibited tracked
   harness skill mirrors.
 - Semantic conflicts still require agent judgment.
@@ -174,10 +179,12 @@ For a full Cortex GC request, report:
 
 The ownership boundary is explicit:
 
-- This skill owns the semantic rules below.
-- Loom owns their deterministic TypeScript enforcement.
+- This skill's co-located TypeScript application owns the contract types,
+  registry, ownership mapping, policy checks, and deterministic verification.
+- Loom only discovers repository Markdown and adapts parsed references into the
+  skill request.
 - Markdown does not become executable state.
-- The rules remain beside the consistency procedure that authors must follow.
+- The rules and their executable policy remain beside this procedure.
 
 Run the compiler through the normal Cortex consistency command:
 

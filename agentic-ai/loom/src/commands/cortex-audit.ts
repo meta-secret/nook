@@ -41,10 +41,10 @@ import {
   type CortexIdentifierFinding,
 } from '../lib/cortex-identifiers.ts';
 import {
+  CORTEX_CONTRACT_REGISTRY,
   compileCortexContracts,
   type CortexContractFinding,
 } from '../lib/cortex-contracts.ts';
-import { CORTEX_CONTRACT_REGISTRY } from '../lib/cortex-contract-registry.ts';
 export type CortexAuditReport = {
   readonly brokenLinks: BrokenLink[];
   readonly invalidExecutableSkillPackages: readonly ExecutableSkillPackageFinding[];

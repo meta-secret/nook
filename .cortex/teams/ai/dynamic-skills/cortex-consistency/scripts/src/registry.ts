@@ -2,11 +2,11 @@ import {
   CortexPolicyContractKind,
   CortexPolicyArea,
   type CortexContractRegistry,
-} from './cortex-contracts.ts';
+} from './domain.ts';
 
 export enum RegisteredCortexPolicyPath {
   ArticleStructure = '.cortex/teams/ai/dynamic-skills/cortex-article-structure/SKILL.md',
-  Consistency = '.cortex/teams/ai/dynamic-skills/cortex-consistency.md',
+  Consistency = '.cortex/teams/ai/dynamic-skills/cortex-consistency/SKILL.md',
   Writer = '.cortex/teams/ai/dynamic-skills/cortex-writer.md',
 }
 

@@ -204,7 +204,7 @@ Cortex authoring composition:
 
 - `teams/ai/dynamic-skills/cortex-writer.md`;
 - `teams/ai/dynamic-skills/cortex-article-structure/SKILL.md`; and
-- `teams/ai/dynamic-skills/cortex-consistency.md`.
+- `teams/ai/dynamic-skills/cortex-consistency/SKILL.md`.
 
 Gizmo gives the writer these three authorities with its bounded file scope.
 Team-specific authoring skills may add domain policy but must not copy or

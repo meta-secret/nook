@@ -75,7 +75,7 @@ If no specification exists for a new feature or item type:
 Keep specifications accurate and current:
 
 - Mark status accurately in [`.cortex/shared/product-specs/index.md`](../../../shared/product-specs/index.md) (`Draft`, `Active`, `Implemented`, `Verified`, `Historical`).
-- Garbage-collect obsolete product claims under [cortex-consistency.md](cortex-consistency.md).
+- Garbage-collect obsolete product claims under [cortex-consistency](cortex-consistency/SKILL.md).
 - Ensure code, tests, and specifications agree.
 
 ## Scope

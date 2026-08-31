@@ -17,6 +17,12 @@ const DOMAIN_IMPORT =
   '../../../../.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/domain.ts';
 const DOCUMENT_SOURCE_IMPORT =
   '../../../../.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/src/cortex-document-structure.ts';
+const CONSISTENCY_APPLICATION_IMPORT =
+  '../../../../.cortex/teams/ai/dynamic-skills/cortex-consistency/scripts/src/application.ts';
+const CONSISTENCY_DOMAIN_IMPORT =
+  '../../../../.cortex/teams/ai/dynamic-skills/cortex-consistency/scripts/src/domain.ts';
+const CONSISTENCY_REGISTRY_IMPORT =
+  '../../../../.cortex/teams/ai/dynamic-skills/cortex-consistency/scripts/src/registry.ts';
 const FORBIDDEN_ADAPTER_GLOBALS = new Set([
   'Bun',
   'Deno',
@@ -120,7 +126,13 @@ function isAllowedImport(node: ts.ImportDeclaration): boolean {
     );
   }
   if (specifier === DOCUMENT_SOURCE_IMPORT) return clause.isTypeOnly;
-  return specifier === APPLICATION_IMPORT || specifier === DOMAIN_IMPORT;
+  return (
+    specifier === APPLICATION_IMPORT ||
+    specifier === DOMAIN_IMPORT ||
+    specifier === CONSISTENCY_APPLICATION_IMPORT ||
+    specifier === CONSISTENCY_DOMAIN_IMPORT ||
+    specifier === CONSISTENCY_REGISTRY_IMPORT
+  );
 }
 
 function isAllowedExport(node: ts.ExportDeclaration): boolean {
@@ -129,7 +141,11 @@ function isAllowedExport(node: ts.ExportDeclaration): boolean {
     Boolean(
       specifier &&
       ts.isStringLiteral(specifier) &&
-      specifier.text === DOMAIN_IMPORT,
+      [
+        DOMAIN_IMPORT,
+        CONSISTENCY_DOMAIN_IMPORT,
+        CONSISTENCY_REGISTRY_IMPORT,
+      ].includes(specifier.text),
     ) &&
     Boolean(node.exportClause && ts.isNamedExports(node.exportClause)) &&
     !node.attributes

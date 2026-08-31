@@ -25,7 +25,7 @@ Harness profile directories must not mirror or redefine these cards.
   - Purpose: **P1 / critical `.cortex` article rule:** expose semantic Markdown hierarchy; authored HTML nodes are prohibited, while literal HTML belongs in inline or block code
 - **[executable-skill-host/SKILL.md](executable-skill-host/SKILL.md)**
   - Purpose: Discover and invoke the closed executable-skill catalog through one strict bounded YAML argument
-- **[cortex-consistency.md](cortex-consistency.md)**
+- **[cortex-consistency](cortex-consistency/SKILL.md)**
   - Purpose: **P1 / critical `.cortex` GC rule:** verify docs are current, agree with each other, and agree with the code
 - **[product-spec-lifecycle.md](product-spec-lifecycle.md)**
   - Purpose: **P1 / critical product spec rule:** read owning product specs before implementation; update specs on new knowledge from chat, tasks, or PR iterations

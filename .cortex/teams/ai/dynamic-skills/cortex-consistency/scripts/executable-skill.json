@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "cortex-consistency",
+  "executionKind": "in-process-read-only",
+  "requestKind": "cortex-consistency-compile-v1",
+  "resultKind": "cortex-consistency-findings-v1",
+  "policyPaths": [
+    ".cortex/teams/ai/dynamic-skills/cortex-consistency/SKILL.md"
+  ],
+  "limits": {
+    "requestBytes": 4194304,
+    "resultBytes": 1048576
+  }
+}

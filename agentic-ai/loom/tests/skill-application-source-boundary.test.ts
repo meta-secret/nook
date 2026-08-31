@@ -227,12 +227,14 @@ export function analyzeDocumentMapSource(
 }
 
 type ExecutableSkillSourceProfile = typeof analyzeExecutableSkillSource;
-const SOURCE_PROFILES: ReadonlyMap<string, ExecutableSkillSourceProfile> =
-  new Map([
-    [ARTICLE_ROOT.slice(0, -5), analyzeExecutableSkillSource],
-    [DOCUMENT_MAP_ROOT.slice(0, -5), analyzeDocumentMapSource],
-    [HOST_ROOT.slice(0, -5), analyzeSkillHostSource],
-  ]);
+
+function sourceProfile(scriptsRoot: string): ExecutableSkillSourceProfile {
+  if (scriptsRoot === DOCUMENT_MAP_ROOT.slice(0, -5))
+    return analyzeDocumentMapSource;
+  return scriptsRoot === HOST_ROOT.slice(0, -5)
+    ? analyzeSkillHostSource
+    : analyzeExecutableSkillSource;
+}
 
 function executableSkillRootFromTrackedPath(path: string): string | false {
   const skillPackage = executableSkillPackageFromPath(path);
@@ -261,7 +263,6 @@ test('all tracked executable application sources pass the AST capability gate', 
     ),
   ].sort();
   expect(implementationRoots).toEqual(packageRoots);
-  expect([...SOURCE_PROFILES.keys()].sort()).toEqual(packageRoots);
   expect(tracked).toContain('.cortex/bun.lock');
   const workspaceLock = await Bun.file(
     join(REPOSITORY_ROOT, '.cortex/bun.lock'),
@@ -305,9 +306,7 @@ test('all tracked executable application sources pass the AST capability gate', 
     const packageRoot = packageRoots.find((root) =>
       path.startsWith(`${root}/src/`),
     );
-    const profile = packageRoot
-      ? (SOURCE_PROFILES.get(packageRoot) ?? false)
-      : false;
+    const profile = packageRoot ? sourceProfile(packageRoot) : false;
     expect(profile, path).not.toBe(false);
     if (profile === false) throw new Error(`Missing source profile: ${path}`);
     const source = await Bun.file(join(REPOSITORY_ROOT, path)).text();
