@@ -239,6 +239,24 @@ test('accepts a reference-style Markdown link', () => {
   expect(compile(compileArgs)).toEqual([]);
 });
 
+test('accepts a Markdown link to a policy heading', () => {
+  const registryArgs: ForeignTypescriptRegistryArgs = {
+    imports: [WEB_BOOLEAN_POLICY],
+  };
+  const registry = foreignTypescriptRegistry(registryArgs);
+  const authorityArgs: TestCortexDocumentArgs = {
+    relativePath: SRE_AUTHORITY,
+    content:
+      '# SRE\n\n[Enum validation](../web-dev/dynamic-skills/typescript-enums-over-booleans.md#validation)\n',
+  };
+  const compileArgs: CompileTestCortexRegistryArgs = {
+    registry,
+    documents: [document(authorityArgs), defaultDocument(WEB_BOOLEAN_POLICY)],
+  };
+
+  expect(compile(compileArgs)).toEqual([]);
+});
+
 test('rejects persisted representation policy without compatibility evidence', () => {
   const registryArgs: PersistedRustRegistryArgs = {
     schemaAuthority: SCHEMA_POLICY,

@@ -259,12 +259,10 @@ export async function runCortexAuditFromDirectory(
     ...publishedResolution.findings,
     ...stabilityFindings,
   ];
-  const contractFindings = identifierAudit.registry
-    ? compileCortexContracts({
-        registry: CORTEX_CONTRACT_REGISTRY,
-        documents: allDocuments,
-      })
-    : [];
+  const contractFindings = compileCortexContracts({
+    registry: CORTEX_CONTRACT_REGISTRY,
+    documents: allDocuments,
+  });
 
   return {
     brokenLinks,

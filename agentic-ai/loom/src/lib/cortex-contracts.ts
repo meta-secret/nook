@@ -447,13 +447,19 @@ function referencesDocument(args: CortexDocumentReferenceArgs): boolean {
   const authorityPath = normalizePath(args.authority.relativePath);
   const target = normalizePath(args.targetPath);
   return markdownReferences(args.authority.content).some((reference) => {
-    const resolved = reference.startsWith('.cortex/')
-      ? normalizePath(reference)
+    const documentReference = stripDocumentFragment(reference);
+    const resolved = documentReference.startsWith('.cortex/')
+      ? normalizePath(documentReference)
       : path.posix.normalize(
-          path.posix.join(path.posix.dirname(authorityPath), reference),
+          path.posix.join(path.posix.dirname(authorityPath), documentReference),
         );
     return resolved === target;
   });
+}
+
+function stripDocumentFragment(reference: string): string {
+  const fragmentIndex = reference.indexOf('#');
+  return fragmentIndex === -1 ? reference : reference.slice(0, fragmentIndex);
 }
 
 type MarkdownReferenceCollection = {
