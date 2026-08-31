@@ -13,9 +13,7 @@ const wholeDocumentPasswordFormSubmission: Parameters<
   typeof submitLoginForm
 >[0] = { kind: PasswordFormQueryKind.Root, root: document }
 
-function loginFormWasSubmitted(
-  request: Parameters<typeof submitLoginForm>[0],
-): boolean {
+function didSubmit(request: Parameters<typeof submitLoginForm>[0]): boolean {
   return submitLoginForm(request) === FormSubmissionResult.Submitted
 }
 
@@ -40,9 +38,7 @@ describe('classified login activation', () => {
       event.preventDefault()
     })
 
-    expect(loginFormWasSubmitted(wholeDocumentPasswordFormSubmission)).toBe(
-      false,
-    )
+    expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(false)
     expect(activated).toBe(false)
   })
 
@@ -67,9 +63,7 @@ describe('classified login activation', () => {
       event.preventDefault()
     })
 
-    expect(loginFormWasSubmitted(wholeDocumentPasswordFormSubmission)).toBe(
-      true,
-    )
+    expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(true)
     expect(activated).toBe('sign-in')
   })
 
@@ -89,7 +83,7 @@ describe('classified login activation', () => {
       event.preventDefault()
     })
 
-    loginFormWasSubmitted(wholeDocumentPasswordFormSubmission)
+    didSubmit(wholeDocumentPasswordFormSubmission)
     expect(activated).toBe(false)
   })
 
@@ -122,9 +116,7 @@ describe('classified login activation', () => {
       root: document,
     }
     expect(fillLoginCredentials(loginFillArgs)).toBe(true)
-    expect(loginFormWasSubmitted(wholeDocumentPasswordFormSubmission)).toBe(
-      false,
-    )
+    expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(false)
     expect(submitted).toBe(false)
   })
 
@@ -141,9 +133,7 @@ describe('classified login activation', () => {
       clicks += 1
     })
 
-    expect(loginFormWasSubmitted(wholeDocumentPasswordFormSubmission)).toBe(
-      false,
-    )
+    expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(false)
     expect(clicks).toBe(1)
   })
 
@@ -162,9 +152,7 @@ describe('classified login activation', () => {
       event.preventDefault()
     })
 
-    expect(loginFormWasSubmitted(wholeDocumentPasswordFormSubmission)).toBe(
-      true,
-    )
+    expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(true)
     expect(advanced).toBe(true)
   })
 
@@ -182,9 +170,7 @@ describe('classified login activation', () => {
       submitted = true
     })
 
-    expect(loginFormWasSubmitted(wholeDocumentPasswordFormSubmission)).toBe(
-      true,
-    )
+    expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(true)
     expect(submitted).toBe(true)
   })
 
@@ -201,9 +187,7 @@ describe('classified login activation', () => {
       submitted = true
     })
 
-    expect(loginFormWasSubmitted(wholeDocumentPasswordFormSubmission)).toBe(
-      true,
-    )
+    expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(true)
     expect(submitted).toBe(true)
   })
 
@@ -228,9 +212,7 @@ describe('classified login activation', () => {
       if (activated === '') activated = 'form'
     })
 
-    expect(loginFormWasSubmitted(wholeDocumentPasswordFormSubmission)).toBe(
-      true,
-    )
+    expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(true)
     expect(activated).toBe('submit')
   })
 
@@ -251,9 +233,7 @@ describe('classified login activation', () => {
       activated = 'form'
     })
 
-    expect(loginFormWasSubmitted(wholeDocumentPasswordFormSubmission)).toBe(
-      false,
-    )
+    expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(false)
     expect(activated).toBe('')
   })
 
@@ -278,7 +258,7 @@ describe('classified login activation', () => {
       },
     }
 
-    expect(loginFormWasSubmitted(submissionArgs)).toBe(true)
+    expect(didSubmit(submissionArgs)).toBe(true)
     expect(advanced).toBe(true)
   })
 
@@ -317,7 +297,7 @@ describe('classified login activation', () => {
       document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
     ).toBe('')
     expect(
-      loginFormWasSubmitted({
+      didSubmit({
         kind: PasswordFormQueryKind.Scoped,
         root: form,
         formScope: { kind: PasswordFormScopeKind.Owned, owner: form },
@@ -344,7 +324,7 @@ describe('classified login activation', () => {
     if (!form) throw new Error('expected login form')
 
     expect(
-      loginFormWasSubmitted({
+      didSubmit({
         kind: PasswordFormQueryKind.Scoped,
         root: form,
         formScope: { kind: PasswordFormScopeKind.Owned, owner: form },
@@ -372,9 +352,7 @@ describe('classified login activation', () => {
         root: document,
       }
       expect(fillLoginCredentials(loginFillArgs)).toBe(true)
-      expect(loginFormWasSubmitted(wholeDocumentPasswordFormSubmission)).toBe(
-        true,
-      )
+      expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(true)
       expect(advanced).toBe(true)
       expect(
         document.querySelector<HTMLInputElement>('[name="email"]')?.value,
@@ -412,9 +390,7 @@ describe('classified login activation', () => {
       )
     }
 
-    expect(loginFormWasSubmitted(wholeDocumentPasswordFormSubmission)).toBe(
-      true,
-    )
+    expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(true)
     expect(activatedControls).toEqual(['login-next'])
   })
 
@@ -433,9 +409,7 @@ describe('classified login activation', () => {
       submitted = true
     })
 
-    expect(loginFormWasSubmitted(wholeDocumentPasswordFormSubmission)).toBe(
-      false,
-    )
+    expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(false)
     expect(submitted).toBe(false)
   })
 
@@ -451,9 +425,7 @@ describe('classified login activation', () => {
       activated = true
     })
 
-    expect(loginFormWasSubmitted(wholeDocumentPasswordFormSubmission)).toBe(
-      true,
-    )
+    expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(true)
     expect(activated).toBe(true)
   })
 
@@ -483,7 +455,7 @@ describe('classified login activation', () => {
       },
     }
 
-    expect(loginFormWasSubmitted(submissionArgs)).toBe(expected)
+    expect(didSubmit(submissionArgs)).toBe(expected)
   })
 
   test.each([
@@ -499,9 +471,7 @@ describe('classified login activation', () => {
         event.preventDefault()
       })
 
-      expect(loginFormWasSubmitted(wholeDocumentPasswordFormSubmission)).toBe(
-        allowed,
-      )
+      expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(allowed)
     },
   )
 
@@ -524,9 +494,7 @@ describe('classified login activation', () => {
         activated = true
       })
 
-    expect(loginFormWasSubmitted(wholeDocumentPasswordFormSubmission)).toBe(
-      false,
-    )
+    expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(false)
     expect(activated).toBe(false)
   })
 
@@ -722,7 +690,7 @@ describe('classified login activation', () => {
       root: document,
       formScope: { kind: PasswordFormScopeKind.Unowned },
     }
-    expect(loginFormWasSubmitted(submissionArgs)).toBe(false)
+    expect(didSubmit(submissionArgs)).toBe(false)
   })
 
   test('does not activate a submitter inside an aria-disabled panel', () => {
@@ -743,9 +711,7 @@ describe('classified login activation', () => {
       event.preventDefault()
     })
 
-    expect(loginFormWasSubmitted(wholeDocumentPasswordFormSubmission)).toBe(
-      false,
-    )
+    expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(false)
     expect(activated).toBe(false)
   })
 
@@ -757,9 +723,7 @@ describe('classified login activation', () => {
       </form>
     `
 
-    expect(loginFormWasSubmitted(wholeDocumentPasswordFormSubmission)).toBe(
-      false,
-    )
+    expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(false)
   })
 
   test('reports submission only when the form emits a submit event', () => {
@@ -773,9 +737,7 @@ describe('classified login activation', () => {
       event.preventDefault()
     })
 
-    expect(loginFormWasSubmitted(wholeDocumentPasswordFormSubmission)).toBe(
-      true,
-    )
+    expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(true)
   })
 
   test('submits the exact later control approved by Rust', () => {
@@ -788,9 +750,7 @@ describe('classified login activation', () => {
     document
       .querySelector('form')
       ?.addEventListener('submit', (event) => event.preventDefault())
-    expect(loginFormWasSubmitted(wholeDocumentPasswordFormSubmission)).toBe(
-      true,
-    )
+    expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(true)
     expect(activated).toEqual(['safe'])
   })
 
@@ -805,9 +765,7 @@ describe('classified login activation', () => {
       .querySelector('form')
       ?.addEventListener('submit', (event) => event.preventDefault())
 
-    expect(loginFormWasSubmitted(wholeDocumentPasswordFormSubmission)).toBe(
-      true,
-    )
+    expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(true)
     expect(activated).toEqual(['safe'])
   })
 
@@ -833,9 +791,7 @@ describe('classified login activation', () => {
     expect(
       document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
     ).toBe('')
-    expect(loginFormWasSubmitted(wholeDocumentPasswordFormSubmission)).toBe(
-      false,
-    )
+    expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(false)
     expect(submitted).toBe(false)
   })
 
@@ -875,9 +831,7 @@ describe('classified login activation', () => {
     expect(
       document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
     ).toBe('')
-    expect(loginFormWasSubmitted(wholeDocumentPasswordFormSubmission)).toBe(
-      false,
-    )
+    expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(false)
   })
 
   test('fills when a GET-default form has a POST Sign in override', () => {
@@ -956,9 +910,7 @@ describe('classified login activation', () => {
     expect(
       document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
     ).toBe('')
-    expect(loginFormWasSubmitted(wholeDocumentPasswordFormSubmission)).toBe(
-      false,
-    )
+    expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(false)
   })
 
   test('does not submit GET-default formmethod overrides after filling passwords', () => {
@@ -985,9 +937,7 @@ describe('classified login activation', () => {
         document.querySelector<HTMLInputElement>('input[type="password"]')
           ?.value,
       ).toBe('')
-      expect(loginFormWasSubmitted(wholeDocumentPasswordFormSubmission)).toBe(
-        false,
-      )
+      expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(false)
       expect(submitted).toBe(false)
     }
   })
@@ -1003,9 +953,7 @@ describe('classified login activation', () => {
     const root = document.querySelector<HTMLElement>('#scope')
     if (!root) throw new Error('expected scoped authentication root')
 
-    expect(
-      loginFormWasSubmitted({ kind: PasswordFormQueryKind.Root, root }),
-    ).toBe(false)
+    expect(didSubmit({ kind: PasswordFormQueryKind.Root, root })).toBe(false)
     expect(activated).toBe(false)
   })
 

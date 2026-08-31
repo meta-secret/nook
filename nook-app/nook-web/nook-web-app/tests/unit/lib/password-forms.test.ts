@@ -15,9 +15,7 @@ const wholeDocumentPasswordFormSubmission: Parameters<
   typeof submitLoginForm
 >[0] = { kind: PasswordFormQueryKind.Root, root: document }
 
-function loginFormWasSubmitted(
-  request: Parameters<typeof submitLoginForm>[0],
-): boolean {
+function didSubmit(request: Parameters<typeof submitLoginForm>[0]): boolean {
   return submitLoginForm(request) === FormSubmissionResult.Submitted
 }
 
@@ -219,9 +217,7 @@ describe('website one-time-code fields', () => {
       ],
     })
     expect(facts.ceremony.advanceControl).toBe('implicit-submission')
-    expect(loginFormWasSubmitted(wholeDocumentPasswordFormSubmission)).toBe(
-      true,
-    )
+    expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(true)
     expect(submitted).toBe(true)
   })
 
@@ -251,9 +247,7 @@ describe('website one-time-code fields', () => {
       ],
     })
     expect(facts.ceremony.advanceControl).toBe('implicit-submission')
-    expect(loginFormWasSubmitted(wholeDocumentPasswordFormSubmission)).toBe(
-      true,
-    )
+    expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(true)
     expect(submitted).toBe(true)
   })
 
@@ -359,9 +353,7 @@ describe('website one-time-code fields', () => {
       kind: 'observed',
       observations: [{ label: expect.stringContaining('Sign in') }],
     })
-    expect(loginFormWasSubmitted(wholeDocumentPasswordFormSubmission)).toBe(
-      true,
-    )
+    expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(true)
   })
 
   test('resolves default and relative form destinations before Rust classification', () => {
@@ -481,9 +473,7 @@ describe('website one-time-code fields', () => {
       kind: 'observed',
       observations: [{ destinationIdentity: location.href }],
     })
-    expect(loginFormWasSubmitted(wholeDocumentPasswordFormSubmission)).toBe(
-      true,
-    )
+    expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(true)
     expect(submissions).toBe(1)
   })
 
@@ -586,9 +576,7 @@ describe('website one-time-code fields', () => {
       observations: [{ actionability: 'inert' }],
     })
     expect(facts.ceremony.advanceControl).toBe('implicit-submission')
-    expect(loginFormWasSubmitted(wholeDocumentPasswordFormSubmission)).toBe(
-      true,
-    )
+    expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(true)
     expect(submitted).toBe(true)
   })
 

@@ -111,7 +111,6 @@ export {
   PasswordFormQueryKind,
   type PasswordFormScopeQuery,
 } from "./password-form-submission-controls";
-
 void companionWasmReady;
 const passkeyControlAbsent =
   "absent" satisfies AuthenticationPasskeyControlObservation;
@@ -272,7 +271,8 @@ function scopedAdvanceControls(
       : !control.form;
   });
 }
-function semanticSubmitControlsFirst(...pair: [HTMLElement, HTMLElement]): number {
+type SemanticSubmitControlPair = [HTMLElement, HTMLElement];
+function semanticSubmitControlsFirst(...pair: SemanticSubmitControlPair): number {
   return Number(pair[1].matches(semanticSubmitControlSelector)) - Number(pair[0].matches(semanticSubmitControlSelector));
 }
 type PageControlObservationRequest = {

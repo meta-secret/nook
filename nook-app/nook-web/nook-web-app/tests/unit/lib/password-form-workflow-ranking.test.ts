@@ -22,9 +22,7 @@ const wholeDocumentPasswordFormSubmission: Parameters<
   typeof submitLoginForm
 >[0] = { kind: PasswordFormQueryKind.Root, root: document }
 
-function loginFormWasSubmitted(
-  request: Parameters<typeof submitLoginForm>[0],
-): boolean {
+function didSubmit(request: Parameters<typeof submitLoginForm>[0]): boolean {
   return submitLoginForm(request) === FormSubmissionResult.Submitted
 }
 
@@ -285,9 +283,7 @@ describe('authentication workflow ranking', () => {
     document.querySelector('form')?.addEventListener('submit', (event) => {
       event.preventDefault()
     })
-    expect(loginFormWasSubmitted(wholeDocumentPasswordFormSubmission)).toBe(
-      true,
-    )
+    expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(true)
     expect(activated).toBe('sign-in')
   })
 
