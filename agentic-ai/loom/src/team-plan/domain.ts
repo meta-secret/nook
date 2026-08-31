@@ -1,19 +1,20 @@
-import {
-  ModuleDeliveryOwner,
-  ModuleDeliveryProviderSubmissionKind,
-  TeamKey,
-} from '../module-delivery/index.ts';
+import { TeamKey } from '../team-agents/catalog.ts';
+import { ModuleDeliveryOwner } from '../module-delivery/domain.ts';
 import type {
-  ModuleDeliveryAcceptedProviderEvidenceIdentity,
   ModuleDeliveryAttemptLease,
   ModuleDeliveryGenerationFenceKind,
-  ModuleDeliveryIntegratedWriterFrontierCapability,
+} from '../module-delivery/admission.ts';
+import type {
+  ModuleDeliveryAcceptedProviderEvidenceIdentity,
+  ModuleDeliveryEvidenceClaimIdentity,
+} from '../module-delivery/evidence.ts';
+import type { ModuleDeliveryIntegratedWriterFrontierCapability } from '../module-delivery/integration.ts';
+import type {
   ModuleDeliveryProviderSubmission,
   ModuleDeliveryReadOnlyEvidenceSubmission,
   ModuleDeliveryWriteProviderSubmission,
-  ModuleWorktreeHandle,
-} from '../module-delivery/index.ts';
-import type { ModuleDeliveryEvidenceClaimIdentity } from '../module-delivery/evidence.ts';
+} from '../module-delivery/integration-provenance.ts';
+import type { ModuleWorktreeHandle } from '../module-delivery/workspace.ts';
 
 export const TEAM_PLAN_JOURNAL_VERSION = 2;
 
@@ -273,7 +274,7 @@ function assertProviderSubmission(
   submission: ModuleDeliveryProviderSubmission,
 ): void {
   if (!submission || typeof submission !== 'object') invalidRecord();
-  if (submission.kind === ModuleDeliveryProviderSubmissionKind.Write) {
+  if (submission.kind === 'write') {
     assertKeys([submission, 'kind|generation|acceptedByTeam|verdict|handoff']);
     assertNumberFields({ values: [submission.generation] });
     assertTextFields({
@@ -320,8 +321,7 @@ function assertWorkspace(workspace: ModuleWorktreeHandle): void {
 function assertReadOnlySubmission(
   submission: ModuleDeliveryReadOnlyEvidenceSubmission,
 ): void {
-  if (submission.kind !== ModuleDeliveryProviderSubmissionKind.ReadOnlyEvidence)
-    invalidRecord();
+  if (submission.kind !== 'read-only-evidence') invalidRecord();
   assertKeys([
     submission,
     'kind|schemaVersion|taskId|attempt|generation|planDigest|sourceCommit|producerTeam|functionalOwner|acceptanceOwner|acceptanceRequirements|claimIdentities|acceptedProviderEvidence|artifactIdentity|artifactDigest|verdict|evidence',
