@@ -18,7 +18,7 @@ import {
   summarizeAuthenticationWorkflowForms,
 } from '../../../nook-web-shared/src/extension/password-forms'
 import { isRuntimeNookVaultAppUrl } from '../lib/simple-vault-runtime'
-import { authenticationRecoveryCopy } from '../lib/backup-code-candidates'
+import { authenticationRecoveryEvidence } from '../lib/backup-code-candidates'
 import {
   AuthenticationWorkflowSnapshotMessageType,
   MAX_AUTHENTICATION_WORKFLOW_TRANSPORT_OBSERVATIONS,
@@ -83,8 +83,9 @@ async function scanAndRender(): Promise<void> {
     beginPendingSaveWatch(pendingOffer.offer)
     return
   }
-  const recoveryCopy = authenticationRecoveryCopy()
+  const [recoveryCopy, backupCodesHint] = authenticationRecoveryEvidence()
   const enrollmentHints = detectEnrollmentHintsFromRecoveryCopy(recoveryCopy)
+  enrollmentHints.backupCodes = backupCodesHint
   const workflowForms = summarizeAuthenticationWorkflowForms().slice(
     0,
     MAX_AUTHENTICATION_WORKFLOW_TRANSPORT_OBSERVATIONS,
@@ -116,7 +117,7 @@ async function scanAndRender(): Promise<void> {
     if (sequence !== scanState.sequence) return
     const nookTypedArgs0_0: Parameters<typeof renderEnrollmentWidget>[0] = {
       hints: enrollmentHints,
-      action: enrollmentMatch.snapshot.action,
+      snapshot: enrollmentMatch.snapshot,
       vaultConnection,
     }
     renderEnrollmentWidget(nookTypedArgs0_0)

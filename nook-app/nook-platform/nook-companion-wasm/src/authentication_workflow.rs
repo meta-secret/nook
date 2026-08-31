@@ -1,5 +1,3 @@
-//! Typed WASM boundary for portable authentication workflow policy.
-
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
@@ -57,20 +55,6 @@ pub fn classify_authentication_backup_codes_observation(
     candidate_present: bool,
 ) -> nook_companion_core::AuthenticationBackupCodesObservation {
     nook_companion_core::classify_authentication_backup_codes_observation(text, candidate_present)
-}
-
-#[wasm_bindgen]
-#[must_use]
-pub fn authentication_enrollment_pilot_presentation_capability(
-    authenticator_setup_hint: bool,
-    backup_codes_copy: &str,
-    manual_checkpoint_present: bool,
-) -> nook_companion_core::AuthenticationPilotPresentationCapability {
-    nook_companion_core::authentication_enrollment_pilot_presentation_capability(
-        authenticator_setup_hint,
-        backup_codes_copy,
-        manual_checkpoint_present,
-    )
 }
 
 #[wasm_bindgen]

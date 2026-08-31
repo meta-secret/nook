@@ -9,17 +9,19 @@ import {
   RevalidatedAuthenticationActResultKind,
 } from './workflow-revalidation'
 
-type StartRevalidatedBackupCodeEnrollmentArgs = {
+type StartRevalidatedEnrollmentActionArgs = {
   workflow?: PasswordFormObservation
   host: EnrollmentFlowHost
+  action: AuthenticationWorkflowAction
   start: () => void
 }
 
-export async function startRevalidatedBackupCodeEnrollment({
+export async function startRevalidatedEnrollmentAction({
   workflow = documentAuthenticationWorkflowObservation(),
   host,
+  action,
   start,
-}: StartRevalidatedBackupCodeEnrollmentArgs): Promise<boolean> {
+}: StartRevalidatedEnrollmentActionArgs): Promise<boolean> {
   if (host.isBusy()) return false
   host.setBusy(true)
   let started = false
@@ -33,7 +35,7 @@ export async function startRevalidatedBackupCodeEnrollment({
       typeof performRevalidatedAuthenticationAction
     >[0] = {
       workflow,
-      expectedAction: AuthenticationWorkflowAction.SaveBackupCodes,
+      expectedAction: action,
       observationBinding,
       approvalIsActive: () => host.isBusy() && host.panel.isConnected,
       act: () => {

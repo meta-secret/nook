@@ -18,7 +18,7 @@ import {
   startQrEnrollment,
   type EnrollmentPageHints,
 } from '../enrollment-flow'
-import { startRevalidatedBackupCodeEnrollment } from './backup-code-workflow-action'
+import { startRevalidatedEnrollmentAction } from './backup-code-workflow-action'
 import {
   selectedEnrollmentHints,
   supplementalEnrollmentHints,
@@ -53,13 +53,13 @@ import { removeWidget, translatedMessage, workflowCopy } from './workflow-ui'
 
 type RenderEnrollmentWidgetArgs = {
   hints: EnrollmentPageHints
-  action: AuthenticationWorkflowAction
+  snapshot: AuthenticationWorkflowSnapshotView
   vaultConnection: PilotVaultConnection
 }
 
 export function renderEnrollmentWidget({
   hints,
-  action,
+  snapshot,
   vaultConnection,
 }: RenderEnrollmentWidgetArgs): void {
   if (widgetState.dismissed) {
@@ -68,6 +68,9 @@ export function renderEnrollmentWidget({
   }
   const workflowKey = [
     'enrollment',
+    snapshot.action,
+    snapshot.currentStep,
+    snapshot.totalSteps,
     hints.qr ? 'qr' : '',
     hints.backupCodes ? 'backup' : '',
     vaultConnection.connected ? 'connected' : 'disconnected',
@@ -91,8 +94,8 @@ export function renderEnrollmentWidget({
   const nookTypedArgs0_0: Parameters<typeof createWidgetShell>[0] = {
     copy: enrollmentCopy(hints),
     vaultConnection,
-    currentStep: 1,
-    totalSteps: 1,
+    currentStep: snapshot.currentStep,
+    totalSteps: snapshot.totalSteps,
   }
   const shell = createWidgetShell(nookTypedArgs0_0)
   const { body, step, title, description, continueButton, openVaultButton } =
@@ -119,7 +122,7 @@ export function renderEnrollmentWidget({
   }
   const nookTypedArgs1_0: Parameters<typeof renderEnrollmentActions>[0] = {
     host: buildEnrollmentFlowHost(nookTypedArgs0_2),
-    hints: selectedEnrollmentHints(action),
+    hints: selectedEnrollmentHints(snapshot.action),
   }
   renderEnrollmentActions(nookTypedArgs1_0)
 }
@@ -206,8 +209,13 @@ export function renderWidget({
   }
   if (widgetState.host.kind === WidgetHostKind.Attached) removeWidget()
 
+  const enrollmentAction =
+    snapshot.action === AuthenticationWorkflowAction.EnrollAuthenticator ||
+    snapshot.action === AuthenticationWorkflowAction.SaveBackupCodes
   const nookTypedArgs0_3: Parameters<typeof createWidgetShell>[0] = {
-    copy: workflowCopy(snapshot.kind),
+    copy: enrollmentAction
+      ? enrollmentCopy(selectedEnrollmentHints(snapshot.action))
+      : workflowCopy(snapshot.kind),
     vaultConnection,
     currentStep: snapshot.currentStep,
     totalSteps: snapshot.totalSteps,
@@ -266,26 +274,7 @@ export function renderWidget({
         }
       void continueWithAuthenticator(nookTypedArgs0_4)
     } else if (
-      snapshot.action === AuthenticationWorkflowAction.EnrollAuthenticator
-    ) {
-      const hostRequest: Parameters<typeof buildEnrollmentFlowHost>[0] = {
-        panel: body,
-        step,
-        title,
-        description,
-        continueButton,
-        openVaultButton,
-      }
-      const host = buildEnrollmentFlowHost(hostRequest)
-      if (host.isBusy()) return
-      const section = document.createElement('section')
-      body.append(section)
-      const enrollmentRequest: Parameters<typeof startQrEnrollment>[0] = {
-        host,
-        section,
-      }
-      void startQrEnrollment(enrollmentRequest)
-    } else if (
+      snapshot.action === AuthenticationWorkflowAction.EnrollAuthenticator ||
       snapshot.action === AuthenticationWorkflowAction.SaveBackupCodes
     ) {
       const hostRequest: Parameters<typeof buildEnrollmentFlowHost>[0] = {
@@ -297,18 +286,32 @@ export function renderWidget({
         openVaultButton,
       }
       const host = buildEnrollmentFlowHost(hostRequest)
-      const backupRequest: Parameters<
-        typeof startRevalidatedBackupCodeEnrollment
+      const enrollmentRequest: Parameters<
+        typeof startRevalidatedEnrollmentAction
       >[0] = {
         workflow,
         host,
+        action: snapshot.action,
         start: () => {
-          const startRequest: Parameters<typeof startBackupCodeEnrollment>[0] =
-            { host }
-          startBackupCodeEnrollment(startRequest)
+          if (
+            snapshot.action === AuthenticationWorkflowAction.SaveBackupCodes
+          ) {
+            const startRequest: Parameters<
+              typeof startBackupCodeEnrollment
+            >[0] = { host }
+            startBackupCodeEnrollment(startRequest)
+          } else {
+            const section = document.createElement('section')
+            body.append(section)
+            const startRequest: Parameters<typeof startQrEnrollment>[0] = {
+              host,
+              section,
+            }
+            void startQrEnrollment(startRequest)
+          }
         },
       }
-      void startRevalidatedBackupCodeEnrollment(backupRequest)
+      void startRevalidatedEnrollmentAction(enrollmentRequest)
     } else if (
       snapshot.action === AuthenticationWorkflowAction.GeneratePassword
     ) {

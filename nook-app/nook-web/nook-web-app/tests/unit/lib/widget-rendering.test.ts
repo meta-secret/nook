@@ -6,7 +6,9 @@ import { AuthenticationWorkflowAction } from '../../../../nook-web-shared/src/ex
 const actions = vi.hoisted(() => ({
   cancelLoginPicker: vi.fn(),
   continueWithNook: vi.fn(),
+  enrollmentCopy: vi.fn(),
   proposePasskeyWithNook: vi.fn(),
+  revalidateEnrollment: vi.fn(),
   startQrEnrollment: vi.fn(),
   events: [] as string[],
 }))
@@ -31,6 +33,7 @@ const renderState = vi.hoisted(() => ({
 type MountTestWidgetShellArgs = {
   shell: { host: HTMLElement }
 }
+type RevalidatedEnrollmentRequest = { start: () => void }
 
 vi.mock('../../../../nook-web-extension/src/lib/auth-widget-policy', () => ({
   isTrustedAuthAction: () => true,
@@ -46,6 +49,19 @@ vi.mock('../../../../nook-web-extension/src/content/enrollment-flow', () => ({
   renderEnrollmentActions: vi.fn(),
   startQrEnrollment: () => actions.startQrEnrollment(),
 }))
+
+vi.mock(
+  '../../../../nook-web-extension/src/content/autofill/backup-code-workflow-action',
+  () => ({
+    startRevalidatedEnrollmentAction: async (
+      request: RevalidatedEnrollmentRequest,
+    ) => {
+      actions.revalidateEnrollment(request)
+      request.start()
+      return true
+    },
+  }),
+)
 
 vi.mock(
   '../../../../nook-web-extension/src/content/autofill/authenticator-actions',
@@ -91,7 +107,7 @@ vi.mock(
   '../../../../nook-web-extension/src/content/autofill/widget-shell',
   () => ({
     buildEnrollmentFlowHost: () => ({ isBusy: () => false }),
-    enrollmentCopy: vi.fn(),
+    enrollmentCopy: actions.enrollmentCopy,
     createWidgetShell: () => {
       const host = document.createElement('aside')
       host.id = 'widget-host'
@@ -259,6 +275,8 @@ describe('authenticator enrollment workflow', () => {
     primary?.click()
 
     expect(primary?.textContent).toBe('widgetAddFromPage')
+    expect(actions.enrollmentCopy).toHaveBeenCalledOnce()
+    expect(actions.revalidateEnrollment).toHaveBeenCalledOnce()
     expect(actions.startQrEnrollment).toHaveBeenCalledOnce()
   })
 })

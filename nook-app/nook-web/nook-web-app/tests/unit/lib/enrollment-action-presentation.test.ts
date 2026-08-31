@@ -12,12 +12,17 @@ describe('Rust-selected enrollment presentation', () => {
     ).toEqual({ qr: false, backupCodes: true })
   })
 
-  test('does not duplicate a primary recovery action as a supplemental action', () => {
-    expect(
-      supplementalEnrollmentHints({
-        action: AuthenticationWorkflowAction.SaveBackupCodes,
-        detected: { qr: true, backupCodes: true },
-      }),
-    ).toEqual({ qr: false, backupCodes: false })
+  test('does not duplicate a Rust-selected enrollment action', () => {
+    for (const action of [
+      AuthenticationWorkflowAction.EnrollAuthenticator,
+      AuthenticationWorkflowAction.SaveBackupCodes,
+    ]) {
+      expect(
+        supplementalEnrollmentHints({
+          action,
+          detected: { qr: true, backupCodes: true },
+        }),
+      ).toEqual({ qr: false, backupCodes: false })
+    }
   })
 })

@@ -109,6 +109,7 @@ test('approve backup-code extraction only after a fresh Pilot decision', async (
   const widget = page.locator('#nook-auth-widget')
   const saveButton = widget.getByRole('button', { name: 'Save backup codes' })
   await expect(saveButton).toBeVisible()
+  await expect(widget).toContainText('4/5')
   await expect(widget.getByText('A1B2-C3D4-E5F6')).toHaveCount(0)
   await saveButton.click()
   await expect(widget.getByText('A1B2-C3D4-E5F6')).toBeVisible()

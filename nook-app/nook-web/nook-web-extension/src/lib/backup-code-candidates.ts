@@ -58,7 +58,7 @@ function boundedRecoveryCopy(texts: RecoveryCopyTexts): RecoveryCopyEvidence {
 }
 
 /** Collect bounded instructional copy without reading code-list or input values. */
-function authenticationRecoveryEvidence(): RecoveryCopyEvidence {
+export function authenticationRecoveryEvidence(): RecoveryCopyEvidence {
   if (typeof document.querySelectorAll !== 'function') {
     return boundedRecoveryCopy(
       (document.body?.innerText ?? '').split(/[\r\n]+/),

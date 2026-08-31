@@ -1,11 +1,9 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { AuthenticationWorkflowAction } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-
 const mocks = vi.hoisted(() => ({
   revalidate: vi.fn(),
   startEnrollment: vi.fn(),
 }))
-
 vi.mock(
   '../../../../nook-web-extension/src/content/autofill/workflow-revalidation',
   () => ({
@@ -15,11 +13,8 @@ vi.mock(
     performRevalidatedAuthenticationAction: mocks.revalidate,
   }),
 )
-
-import { startRevalidatedBackupCodeEnrollment } from '../../../../nook-web-extension/src/content/autofill/backup-code-workflow-action'
-
+import { startRevalidatedEnrollmentAction } from '../../../../nook-web-extension/src/content/autofill/backup-code-workflow-action'
 beforeEach(() => vi.clearAllMocks())
-
 describe('backup-code workflow action', () => {
   function connectedHost() {
     let busy = false
@@ -33,7 +28,6 @@ describe('backup-code workflow action', () => {
       },
     }
   }
-
   test('starts extraction only inside a fresh Rust-approved action', async () => {
     mocks.revalidate.mockImplementation(async (request) => request.act())
     const workflow = {
@@ -44,9 +38,10 @@ describe('backup-code workflow action', () => {
     const host = connectedHost()
 
     await expect(
-      startRevalidatedBackupCodeEnrollment({
+      startRevalidatedEnrollmentAction({
         workflow,
         host,
+        action: AuthenticationWorkflowAction.SaveBackupCodes,
         start: mocks.startEnrollment,
       } as never),
     ).resolves.toBe(true)
@@ -63,9 +58,10 @@ describe('backup-code workflow action', () => {
     mocks.revalidate.mockResolvedValue(false)
 
     await expect(
-      startRevalidatedBackupCodeEnrollment({
+      startRevalidatedEnrollmentAction({
         workflow: {} as never,
         host: connectedHost() as never,
+        action: AuthenticationWorkflowAction.SaveBackupCodes,
         start: mocks.startEnrollment,
       }),
     ).resolves.toBe(false)
@@ -90,12 +86,13 @@ describe('backup-code workflow action', () => {
         summary: {},
       },
       host,
+      action: AuthenticationWorkflowAction.SaveBackupCodes,
       start: mocks.startEnrollment,
     }
 
-    const first = startRevalidatedBackupCodeEnrollment(request as never)
+    const first = startRevalidatedEnrollmentAction(request as never)
     await expect(
-      startRevalidatedBackupCodeEnrollment(request as never),
+      startRevalidatedEnrollmentAction(request as never),
     ).resolves.toBe(false)
     expect(mocks.revalidate).toHaveBeenCalledOnce()
     release?.()

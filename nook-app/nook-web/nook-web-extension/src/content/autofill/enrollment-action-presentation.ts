@@ -19,7 +19,8 @@ export function supplementalEnrollmentHints({
   action,
   detected,
 }: SupplementalEnrollmentHintsRequest): EnrollmentPageHints {
-  return action === AuthenticationWorkflowAction.SaveBackupCodes
+  return action === AuthenticationWorkflowAction.SaveBackupCodes ||
+    action === AuthenticationWorkflowAction.EnrollAuthenticator
     ? { qr: false, backupCodes: false }
     : detected
 }
