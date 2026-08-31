@@ -9,6 +9,7 @@ const actions = vi.hoisted(() => ({
   enrollmentCopy: vi.fn(),
   proposePasskeyWithNook: vi.fn(),
   revalidateEnrollment: vi.fn(),
+  remountWidget: vi.fn(),
   startQrEnrollment: vi.fn(),
   events: [] as string[],
 }))
@@ -26,6 +27,15 @@ const renderState = vi.hoisted(() => ({
     host: { kind: 'detached' },
     workflowKey: { kind: 'unassigned' },
     renderedWorkflowRoot: { kind: 'unassigned' },
+    presentationScope: { kind: 'unassigned' },
+    collapsed: false,
+    userSelectedCollapse: false,
+    applyAutomaticCollapse(value: boolean) {
+      if (!this.userSelectedCollapse) this.collapsed = value
+    },
+    assignPresentationScope(value: string) {
+      this.presentationScope = { kind: 'assigned', key: value }
+    },
     setRenderedWorkflowRoot: vi.fn(),
   },
 }))
@@ -34,8 +44,11 @@ type MountTestWidgetShellArgs = {
   shell: { host: HTMLElement }
 }
 type RevalidatedEnrollmentRequest = { start: () => void }
+type AuthWidgetTestInput = { loginMatches: { kind: string } }
 
 vi.mock('../../../../nook-web-extension/src/lib/auth-widget-policy', () => ({
+  authWidgetStartsCollapsed: ({ loginMatches }: AuthWidgetTestInput) =>
+    loginMatches.kind !== 'ready',
   isTrustedAuthAction: () => true,
 }))
 
@@ -100,6 +113,7 @@ vi.mock('../../../../nook-web-extension/src/content/autofill/state', () => ({
     Assigned: 'assigned',
   },
   pickerState: renderState.pickerState,
+  scanState: { schedule: vi.fn() },
   widgetState: renderState.widgetState,
 }))
 
@@ -135,6 +149,7 @@ vi.mock(
 vi.mock(
   '../../../../nook-web-extension/src/content/autofill/workflow-ui',
   () => ({
+    remountWidget: actions.remountWidget,
     removeWidget: vi.fn(),
     translatedMessage: (key: string) => key,
     workflowCopy: () => ({
@@ -192,7 +207,7 @@ function renderPasskeyWidget({ loginMatches }: RenderPasskeyWidgetArgs): void {
 function savedLoginButton(): HTMLButtonElement | false {
   return (
     Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find(
-      (button) => button.textContent === 'widgetContinue',
+      (button) => button.textContent === 'widgetFillLogin',
     ) ?? false
   )
 }
@@ -203,37 +218,45 @@ beforeEach(() => {
   actions.events.length = 0
   renderState.pickerState.login = { kind: 'closed' }
   renderState.pickerState.authenticator = { kind: 'closed' }
+  renderState.widgetState.host = { kind: 'detached' }
+  renderState.widgetState.workflowKey = { kind: 'unassigned' }
+  renderState.widgetState.renderedWorkflowRoot = { kind: 'unassigned' }
+  renderState.widgetState.presentationScope = { kind: 'unassigned' }
+  renderState.widgetState.collapsed = false
+  renderState.widgetState.userSelectedCollapse = false
 })
 
 describe('passkey workflow saved-login fallback', () => {
-  test('renders and invokes saved login for ready matches', () => {
-    renderPasskeyWidget({ loginMatches: { kind: 'ready', count: 2 } })
-
-    const savedLogin = savedLoginButton()
-    if (savedLogin) savedLogin.click()
-
-    expect(savedLoginButton()).not.toBe(false)
-    expect(actions.continueWithNook).toHaveBeenCalledOnce()
-  })
-
-  test('renders saved login for a locked vault', () => {
-    renderPasskeyWidget({ loginMatches: { kind: 'locked' } })
-    const savedLogin = savedLoginButton()
-    if (savedLogin) savedLogin.click()
-
-    expect(savedLoginButton()).not.toBe(false)
-    expect(actions.continueWithNook).toHaveBeenCalledOnce()
-  })
-
-  test('omits saved login for empty and unavailable matches', () => {
-    const unavailableMatches: Array<
+  test('keeps saved-login markup indistinguishable across availability', () => {
+    const availabilityStates: Array<
       Parameters<typeof renderWidget>[0]['loginMatches']
-    > = [{ kind: 'ready', count: 0 }, { kind: 'unavailable' }]
-    for (const loginMatches of unavailableMatches) {
+    > = [
+      { kind: 'ready', count: 2 },
+      { kind: 'ready', count: 0 },
+      { kind: 'locked' },
+      { kind: 'unavailable' },
+    ]
+    for (const loginMatches of availabilityStates) {
       document.body.replaceChildren()
       renderPasskeyWidget({ loginMatches })
-      expect(savedLoginButton()).toBe(false)
+      expect(savedLoginButton()).not.toBe(false)
     }
+  })
+
+  test('preserves an explicit collapse choice across availability remounts', () => {
+    renderPasskeyWidget({ loginMatches: { kind: 'locked' } })
+    renderState.widgetState.host = {
+      kind: 'attached',
+      element: document.createElement('aside'),
+    }
+    renderState.widgetState.workflowKey = { kind: 'assigned', key: 'locked' }
+    renderState.widgetState.collapsed = true
+    renderState.widgetState.userSelectedCollapse = true
+
+    renderPasskeyWidget({ loginMatches: { kind: 'ready', count: 1 } })
+
+    expect(actions.remountWidget).toHaveBeenCalledOnce()
+    expect(renderState.widgetState.collapsed).toBe(true)
   })
 
   test('cancels a pending login picker before primary passkey activation', () => {

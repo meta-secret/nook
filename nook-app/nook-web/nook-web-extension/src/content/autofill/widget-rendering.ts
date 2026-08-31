@@ -53,7 +53,12 @@ import {
   mountWidgetShell,
 } from './widget-shell'
 import type { PilotVaultConnection } from './workflow-ui'
-import { removeWidget, translatedMessage, workflowCopy } from './workflow-ui'
+import {
+  remountWidget,
+  removeWidget,
+  translatedMessage,
+  workflowCopy,
+} from './workflow-ui'
 
 type RenderEnrollmentWidgetArgs = {
   hints: EnrollmentPageHints
@@ -207,7 +212,13 @@ export function renderWidget({
     widgetState.setRenderedWorkflowRoot(renderedWorkflowRoot)
     return
   }
-  if (widgetState.host.kind === WidgetHostKind.Attached) removeWidget()
+  const preservesPresentation =
+    widgetState.presentationScope.kind === WidgetWorkflowKeyKind.Assigned &&
+    widgetState.presentationScope.key === presentationScope
+  if (widgetState.host.kind === WidgetHostKind.Attached) {
+    if (preservesPresentation) remountWidget()
+    else removeWidget()
+  }
 
   const presentationInput: Parameters<typeof authWidgetStartsCollapsed>[0] = {
     savedLoginCapability: snapshot.savedLoginCapability,
