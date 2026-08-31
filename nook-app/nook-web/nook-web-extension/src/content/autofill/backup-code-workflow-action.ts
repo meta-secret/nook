@@ -1,7 +1,5 @@
-import {
-  documentAuthenticationWorkflowObservation,
-  type PasswordFormObservation,
-} from '../../../../nook-web-shared/src/extension/password-forms'
+import { type PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
+import { documentAuthenticationWorkflowObservation } from '../../../../nook-web-shared/src/extension/document-authentication-workflow-observation'
 import { AuthenticationWorkflowAction } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type { EnrollmentFlowHost } from '../enrollment-flow'
 import {

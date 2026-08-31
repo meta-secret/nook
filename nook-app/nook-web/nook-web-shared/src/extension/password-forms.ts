@@ -24,6 +24,8 @@ import {
   controlAssociatesWithObservation,
   isLocallyAdjacentToOwnedForm,
   nearestUnownedAuthContainer,
+  pageHasManualCheckpoint,
+  pageHasPasskeyControl,
   PasskeyControlLookupKind,
   PasswordFormScopeKind,
   usernameEvidence,
@@ -79,20 +81,9 @@ import {
   type LoginCredentialsLookup,
 } from "./password-form-field-actions";
 import {
+  emptyPasswordFormSummary,
   passwordFieldQuery,
-  summarizeRoot,
-  type PasswordFormObservation,
-  type PasswordFormSummary,
-} from './password-form-summaries'
-export {
-  documentAuthenticationWorkflowObservation,
-  summarizePasswordForms,
-  summarizeRoot,
-} from './password-form-summaries'
-export type {
-  PasswordFormObservation,
-  PasswordFormSummary,
-} from './password-form-summaries'
+} from './password-form-summary-state'
 export {
   findOneTimeCodeFields,
   findPasswordFields,
@@ -136,24 +127,80 @@ const credentialSubmissionAbsent =
   "absent" satisfies AuthenticationCredentialSubmissionObservation["kind"];
 const credentialSubmissionObserved =
   "observed" satisfies AuthenticationCredentialSubmissionObservation["kind"];
+export type PasswordFormSummary = {
+  passwordFieldCount: number;
+  currentPasswordFieldCount: number;
+  newPasswordFieldCount: number;
+  genericPasswordFieldCount: number;
+  usernameFieldCount: number;
+  oneTimeCodeFieldCount: number;
+  manualCheckpointPresent: boolean;
+  passkeyControlPresent: boolean;
+  formCount: number;
+  observedAt: number;
+};
+export type PasswordFormObservation = {
+  root: ParentNode;
+  formScope: PasswordFormScope;
+  summary: PasswordFormSummary;
+};
 type AuthenticationObservationFactsRequest = {
   observation: PasswordFormObservation;
   authenticatorSetupHint: boolean;
   backupCodesHint?: boolean;
   backupCodesCopy?: string;
 };
-const emptyPasswordFormSummary: PasswordFormSummary = {
-  passwordFieldCount: 0,
-  currentPasswordFieldCount: 0,
-  newPasswordFieldCount: 0,
-  genericPasswordFieldCount: 0,
-  usernameFieldCount: 0,
-  oneTimeCodeFieldCount: 0,
-  manualCheckpointPresent: false,
-  passkeyControlPresent: false,
-  formCount: 0,
-  observedAt: 0,
-};
+type PasswordFormSummaryRequest = PasswordFormScopeQuery;
+export function summarizeRoot(
+  request: PasswordFormSummaryRequest,
+): PasswordFormSummary {
+  const { root } = request;
+  const passwordFields = findPasswordFields(passwordFieldQuery(request));
+  const usernameFields = findUsernameFields(passwordFieldQuery(request));
+  const oneTimeCodeFields = findOneTimeCodeFields(passwordFieldQuery(request));
+  const currentPasswordFieldCount = passwordFields.filter((field) => {
+    const tokenRequest: Parameters<typeof hasAutocompleteToken>[0] = {
+      field,
+      expected: "current-password",
+    };
+    return hasAutocompleteToken(tokenRequest);
+  }).length;
+  const newPasswordFieldCount = passwordFields.filter((field) => {
+    const tokenRequest: Parameters<typeof hasAutocompleteToken>[0] = {
+      field,
+      expected: "new-password",
+    };
+    return hasAutocompleteToken(tokenRequest);
+  }).length;
+  const forms = new Set<HTMLFormElement>();
+  for (const field of [
+    ...passwordFields,
+    ...usernameFields,
+    ...oneTimeCodeFields,
+  ]) {
+    if (field.form) forms.add(field.form);
+  }
+  return {
+    passwordFieldCount: passwordFields.length,
+    currentPasswordFieldCount,
+    newPasswordFieldCount,
+    genericPasswordFieldCount:
+      passwordFields.length - currentPasswordFieldCount - newPasswordFieldCount,
+    usernameFieldCount: usernameFields.length,
+    oneTimeCodeFieldCount: oneTimeCodeFields.length,
+    manualCheckpointPresent: pageHasManualCheckpoint(root),
+    passkeyControlPresent: pageHasPasskeyControl(root),
+    formCount: forms.size,
+    observedAt: Date.now(),
+  };
+}
+export function summarizePasswordForms(): PasswordFormSummary {
+  const request: PasswordFormSummaryRequest = {
+    kind: PasswordFormQueryKind.Root,
+    root: document,
+  };
+  return summarizeRoot(request);
+}
 function passwordFormPriority(observation: PasswordFormObservation): number {
   const factsRequest: AuthenticationObservationFactsRequest = {
     observation,
