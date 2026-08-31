@@ -9,6 +9,7 @@
     clippy::uninlined_format_args
 )]
 
+mod account_picker_authorization;
 mod authentication_outcome_response;
 mod authentication_workflow;
 mod authentication_workflow_response;
@@ -33,6 +34,7 @@ mod website_login_options_response;
 mod website_login_save_offer_response;
 mod website_passkey_proposal;
 
+pub use account_picker_authorization::AccountPickerAuthorizationLifecycle;
 pub use authentication_outcome_response::{
     AuthenticationOutcomeResponse, AuthenticationOutcomeResponseDecodeError,
     AuthenticationOutcomeResponseKind, AuthenticationOutcomeResponseWire,

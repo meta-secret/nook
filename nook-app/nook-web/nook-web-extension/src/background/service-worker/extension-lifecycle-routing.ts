@@ -14,6 +14,9 @@ import type * as PairingImport from './pairing-import'
 import type * as PairingStateQuery from './pairing-state-query'
 import type * as SessionLifecycle from './session-lifecycle'
 import type * as SessionRuntimeMessages from './session-runtime-messages'
+import type * as AccountPickers from './account-pickers'
+import { AccountPickerCleanupMarkerStatus } from './account-pickers'
+import type * as AuthenticatorOperations from './authenticator-operations'
 import {
   LoginDetectionStatus,
   isQueryActiveTabLoginDetectionMessage,
@@ -32,7 +35,13 @@ type ExtensionLifecycleRoutingArgs = {
 }
 
 export type ExtensionLifecycleRoutingDependencies = {
+  accountPickerAuthorizationCleanupPending: typeof AccountPickers.accountPickerAuthorizationCleanupPending
+  beginAccountPickerAuthorizationCleanup: typeof AccountPickers.beginAccountPickerAuthorizationCleanup
+  clearPendingAccountPickers: typeof AccountPickers.clearPendingAccountPickers
+  clearStagedAuthenticatorEnrollments: typeof AuthenticatorOperations.clearStagedAuthenticatorEnrollments
+  rebindStagedAuthenticatorEnrollmentsAuthorization: typeof AuthenticatorOperations.rebindStagedAuthenticatorEnrollmentsAuthorization
   closeExtensionSessionDocument: typeof SessionLifecycle.closeExtensionSessionDocument
+  completeAccountPickerAuthorizationCleanup: typeof AccountPickers.completeAccountPickerAuthorizationCleanup
   ensureExtensionSessionDocument: typeof SessionLifecycle.ensureExtensionSessionDocument
   extensionSessionDocument: typeof SessionLifecycle.extensionSessionDocument
   handlePairingStateQuery: typeof PairingStateQuery.handlePairingStateQuery
@@ -47,6 +56,7 @@ export type ExtensionLifecycleRoutingDependencies = {
   openExtensionPairing: typeof PairingIdentity.openExtensionPairing
   openSimpleVault: typeof SessionLifecycle.openSimpleVault
   queryActiveTabLoginDetection: typeof SessionLifecycle.queryActiveTabLoginDetection
+  releaseAccountPickerAuthorizationCleanup: typeof AccountPickers.releaseAccountPickerAuthorizationCleanup
 }
 
 type MessageResponse = Parameters<
@@ -75,6 +85,108 @@ const pairingLaunchFailureResponse: MessageResponse = {
   reason: 'pairing-launch-failed',
 }
 
+type ClearAuthorizationStateArgs = {
+  beginAccountPickerAuthorizationCleanup: typeof AccountPickers.beginAccountPickerAuthorizationCleanup
+  clearPendingAccountPickers: typeof AccountPickers.clearPendingAccountPickers
+  clearStagedAuthenticatorEnrollments: typeof AuthenticatorOperations.clearStagedAuthenticatorEnrollments
+  closeExtensionSessionDocument: typeof SessionLifecycle.closeExtensionSessionDocument
+  completeAccountPickerAuthorizationCleanup: typeof AccountPickers.completeAccountPickerAuthorizationCleanup
+  releaseAccountPickerAuthorizationCleanup: typeof AccountPickers.releaseAccountPickerAuthorizationCleanup
+  closeSession: boolean
+  cleanupStart: AuthorizationCleanupStart
+}
+
+enum AuthorizationCleanupStartKind {
+  Begin = 'begin',
+  Existing = 'existing',
+}
+
+type AuthorizationCleanupStart =
+  | { kind: AuthorizationCleanupStartKind.Begin }
+  | {
+      kind: AuthorizationCleanupStartKind.Existing
+      cleanup: AccountPickers.AccountPickerAuthorizationCleanupStart
+    }
+
+async function clearAuthorizationState({
+  beginAccountPickerAuthorizationCleanup,
+  clearPendingAccountPickers,
+  clearStagedAuthenticatorEnrollments,
+  closeExtensionSessionDocument,
+  completeAccountPickerAuthorizationCleanup,
+  releaseAccountPickerAuthorizationCleanup,
+  closeSession,
+  cleanupStart,
+}: ClearAuthorizationStateArgs): Promise<void> {
+  const cleanupOperation =
+    cleanupStart.kind === AuthorizationCleanupStartKind.Existing
+      ? Promise.resolve(cleanupStart.cleanup)
+      : beginAccountPickerAuthorizationCleanup()
+  const closeOperation = closeSession
+    ? closeExtensionSessionDocument().then(
+        () => false,
+        () => true,
+      )
+    : Promise.resolve(false)
+  const startedCleanup = await cleanupOperation
+  const { authorizationGeneration, markerStatus } = startedCleanup
+  let failed =
+    markerStatus === AccountPickerCleanupMarkerStatus.Unavailable ||
+    (await closeOperation)
+  clearStagedAuthenticatorEnrollments()
+  try {
+    await clearPendingAccountPickers()
+  } catch {
+    failed = true
+  }
+  try {
+    await clearPendingAccountPickers()
+  } catch {
+    failed = true
+  }
+  clearStagedAuthenticatorEnrollments()
+  if (failed) {
+    releaseAccountPickerAuthorizationCleanup(authorizationGeneration)
+    throw new Error('authorization cleanup failed')
+  }
+  await completeAccountPickerAuthorizationCleanup(authorizationGeneration, true)
+}
+
+export async function recoverInterruptedAuthorizationCleanup(
+  dependencies: ExtensionLifecycleRoutingDependencies,
+): Promise<void> {
+  const pendingLookup = dependencies
+    .accountPickerAuthorizationCleanupPending()
+    .then(
+      (pending) => ({ kind: 'resolved' as const, pending }),
+      () => ({ kind: 'rejected' as const }),
+    )
+  const cleanup = await dependencies.beginAccountPickerAuthorizationCleanup()
+  const lookup = await pendingLookup
+  if (lookup.kind === 'rejected') {
+    dependencies.releaseAccountPickerAuthorizationCleanup(
+      cleanup.authorizationGeneration,
+    )
+    throw new Error('authorization cleanup marker lookup failed')
+  }
+  if (!lookup.pending) {
+    await dependencies.completeAccountPickerAuthorizationCleanup(
+      cleanup.authorizationGeneration,
+      false,
+    )
+    return
+  }
+  const cleanupArgs: ClearAuthorizationStateArgs = {
+    ...dependencies,
+    closeSession: true,
+    cleanupStart: {
+      kind: AuthorizationCleanupStartKind.Existing,
+      cleanup,
+    },
+  }
+  await clearAuthorizationState(cleanupArgs)
+}
+
 export enum ExtensionLifecycleRoutingResult {
   Unhandled = 'unhandled',
 }
@@ -86,7 +198,11 @@ export function routeExtensionLifecycleMessage({
   sendResponse,
 }: ExtensionLifecycleRoutingArgs): boolean | ExtensionLifecycleRoutingResult {
   const {
+    beginAccountPickerAuthorizationCleanup,
+    clearPendingAccountPickers,
+    clearStagedAuthenticatorEnrollments,
     closeExtensionSessionDocument,
+    completeAccountPickerAuthorizationCleanup,
     ensureExtensionSessionDocument,
     extensionSessionDocument,
     handlePairingStateQuery,
@@ -101,6 +217,8 @@ export function routeExtensionLifecycleMessage({
     openExtensionPairing,
     openSimpleVault,
     queryActiveTabLoginDetection,
+    releaseAccountPickerAuthorizationCleanup,
+    rebindStagedAuthenticatorEnrollmentsAuthorization,
   } = dependencies
   if (isExtensionPairingStateQueryMessage(message)) {
     const queryContext: Parameters<typeof handlePairingStateQuery>[0] = {
@@ -130,7 +248,17 @@ export function routeExtensionLifecycleMessage({
       sendResponse(forbiddenSenderResponse)
       return false
     }
-    void closeExtensionSessionDocument()
+    const cleanupArgs: ClearAuthorizationStateArgs = {
+      beginAccountPickerAuthorizationCleanup,
+      clearPendingAccountPickers,
+      clearStagedAuthenticatorEnrollments,
+      closeExtensionSessionDocument,
+      completeAccountPickerAuthorizationCleanup,
+      releaseAccountPickerAuthorizationCleanup,
+      closeSession: true,
+      cleanupStart: { kind: AuthorizationCleanupStartKind.Begin },
+    }
+    void clearAuthorizationState(cleanupArgs)
       .then(() => sendResponse(successResponse))
       .catch(() => sendResponse(sessionLockFailureResponse))
     return true
@@ -144,9 +272,19 @@ export function routeExtensionLifecycleMessage({
       sendResponse(forbiddenSenderResponse)
       return false
     }
-    void closeExtensionSessionDocument().then(() =>
-      sendResponse(successResponse),
-    )
+    const cleanupArgs: ClearAuthorizationStateArgs = {
+      beginAccountPickerAuthorizationCleanup,
+      clearPendingAccountPickers,
+      clearStagedAuthenticatorEnrollments,
+      closeExtensionSessionDocument,
+      completeAccountPickerAuthorizationCleanup,
+      releaseAccountPickerAuthorizationCleanup,
+      closeSession: true,
+      cleanupStart: { kind: AuthorizationCleanupStartKind.Begin },
+    }
+    void clearAuthorizationState(cleanupArgs)
+      .then(() => sendResponse(successResponse))
+      .catch(() => sendResponse(sessionLockFailureResponse))
     return true
   }
 
@@ -168,7 +306,47 @@ export function routeExtensionLifecycleMessage({
       vaultStoreId: message.payload.vaultStoreId,
       eventLogRecords: message.payload.eventLogRecords,
     }
-    void importLocalEventLogUpdate(importArgs).then(sendResponse)
+    void beginAccountPickerAuthorizationCleanup()
+      .then(async (cleanupStart) => {
+        try {
+          const response = await importLocalEventLogUpdate(importArgs)
+          if (!response.ok) {
+            const cleanupArgs: ClearAuthorizationStateArgs = {
+              beginAccountPickerAuthorizationCleanup,
+              clearPendingAccountPickers,
+              clearStagedAuthenticatorEnrollments,
+              closeExtensionSessionDocument,
+              completeAccountPickerAuthorizationCleanup,
+              releaseAccountPickerAuthorizationCleanup,
+              closeSession: true,
+              cleanupStart: {
+                kind: AuthorizationCleanupStartKind.Existing,
+                cleanup: cleanupStart,
+              },
+            }
+            try {
+              await clearAuthorizationState(cleanupArgs)
+            } catch {
+              // Authorization remains invalid while browser cleanup is retried.
+            }
+          } else {
+            rebindStagedAuthenticatorEnrollmentsAuthorization(
+              cleanupStart.authorizationGeneration,
+            )
+            await completeAccountPickerAuthorizationCleanup(
+              cleanupStart.authorizationGeneration,
+              false,
+            )
+          }
+          return response
+        } catch (error) {
+          releaseAccountPickerAuthorizationCleanup(
+            cleanupStart.authorizationGeneration,
+          )
+          throw error
+        }
+      })
+      .then(sendResponse)
     return true
   }
 

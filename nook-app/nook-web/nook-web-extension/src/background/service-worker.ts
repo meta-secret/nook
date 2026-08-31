@@ -48,11 +48,18 @@ import {
   isWebsitePasskeyPerformMessage,
 } from '../lib/webauthn-messages'
 import {
+  accountPickerAuthorizationCleanupPending,
+  beginAccountPickerAuthorizationCleanup,
+  clearPendingAccountPickers,
+  completeAccountPickerAuthorizationCleanup,
+  releaseAccountPickerAuthorizationCleanup,
   websiteLoginMatchAvailability,
   websiteLoginOptions,
 } from './service-worker/account-pickers'
 import {
   cancelAuthenticatorPicker,
+  clearStagedAuthenticatorEnrollments,
+  rebindStagedAuthenticatorEnrollmentsAuthorization,
   openWebsiteAuthenticatorPicker,
   queryAuthenticatorPicker,
   selectAuthenticatorPicker,
@@ -99,6 +106,7 @@ import {
 } from './service-worker/passkey-operations'
 import {
   ExtensionLifecycleRoutingResult,
+  recoverInterruptedAuthorizationCleanup,
   routeExtensionLifecycleMessage,
 } from './service-worker/extension-lifecycle-routing'
 import { routeExternalCompanionMessage } from './service-worker/external-companion-routing'
@@ -130,7 +138,13 @@ import {
 const extensionLifecycleRoutingDependencies: Parameters<
   typeof routeExtensionLifecycleMessage
 >[0]['dependencies'] = {
+  accountPickerAuthorizationCleanupPending,
+  beginAccountPickerAuthorizationCleanup,
+  clearPendingAccountPickers,
+  clearStagedAuthenticatorEnrollments,
+  rebindStagedAuthenticatorEnrollmentsAuthorization,
   closeExtensionSessionDocument,
+  completeAccountPickerAuthorizationCleanup,
   ensureExtensionSessionDocument,
   extensionSessionDocument,
   handlePairingStateQuery,
@@ -145,7 +159,14 @@ const extensionLifecycleRoutingDependencies: Parameters<
   openExtensionPairing,
   openSimpleVault,
   queryActiveTabLoginDetection,
+  releaseAccountPickerAuthorizationCleanup,
 }
+
+void recoverInterruptedAuthorizationCleanup(
+  extensionLifecycleRoutingDependencies,
+).catch(() => {
+  // The persisted cleanup marker keeps picker rehydration fail-closed.
+})
 
 const externalCompanionRoutingDependencies: Parameters<
   typeof routeExternalCompanionMessage

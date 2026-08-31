@@ -42,7 +42,9 @@ import {
 } from './workflow-revalidation'
 
 type FillAuthenticatorCodeArgs = {
-  account: Pick<WebsiteAuthenticatorOption, 'vaultStoreId' | 'secretId'>
+  account: Pick<WebsiteAuthenticatorOption, 'vaultStoreId' | 'secretId'> & {
+    authorizationGeneration?: string
+  }
   workflow: PasswordFormObservation
   approval: AuthenticationWorkflowApproval
   step: HTMLParagraphElement
@@ -127,6 +129,9 @@ export async function fillAuthenticatorCode({
       origin: location.origin,
       vaultStoreId: account.vaultStoreId,
       secretId: account.secretId,
+      ...(typeof account.authorizationGeneration === 'string'
+        ? { authorizationGeneration: account.authorizationGeneration }
+        : {}),
     },
   }
   const delivery = await sendAuthenticatorCodeRuntimeMessage(message)

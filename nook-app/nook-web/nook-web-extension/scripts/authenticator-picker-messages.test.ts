@@ -73,6 +73,7 @@ describe('authenticator picker messages', () => {
           account: {
             vaultStoreId: 'vault-1',
             secretId: 'secret-1',
+            authorizationGeneration: 'epoch-7',
           },
         },
       }),

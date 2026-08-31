@@ -169,6 +169,7 @@ export async function fillAndSubmitAccount({
       origin: location.origin,
       vaultStoreId: account.vaultStoreId,
       secretId: account.secretId,
+      authorizationGeneration: account.authorizationGeneration,
     },
   }
   const delivery = await sendLoginFillMessage(nookTypedArgs0_2)
@@ -950,7 +951,10 @@ export async function continueWithNook({
 
     if (accounts.length === 1) {
       const nookTypedArgs0_41: Parameters<typeof fillAndSubmitAccount>[0] = {
-        account: accounts[0],
+        account: {
+          ...accounts[0],
+          authorizationGeneration: response.authorizationGeneration,
+        },
         workflow,
         approval,
         step,

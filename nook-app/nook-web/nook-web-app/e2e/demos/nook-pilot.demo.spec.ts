@@ -310,7 +310,7 @@ test('guide a login through the Nook Pilot control plane', async ({ page }) => {
       'Choose a saved username in the Nook window. Matching logins for this site are listed there.',
     ),
   ).toBeVisible()
-  // Login choices cross the browser boundary through the concrete Rust/WASM
+  // Epoch-bound login choices cross the browser boundary through Rust/WASM
   // response decoder. The page must never receive the account identifiers or
   // credentials that belong to the companion picker.
   await expect(widget.getByText('pilot@example.test')).toHaveCount(0)

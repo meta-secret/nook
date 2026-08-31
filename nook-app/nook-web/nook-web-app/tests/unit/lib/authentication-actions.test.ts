@@ -175,7 +175,11 @@ describe('revalidated authentication actions', () => {
 
     await expect(
       fillAndSubmitAccount({
-        account: { vaultStoreId: 'vault', secretId: 'login' },
+        account: {
+          vaultStoreId: 'vault',
+          secretId: 'login',
+          authorizationGeneration: 'epoch-1',
+        },
         workflow,
         approval,
         ...controls(),
@@ -304,7 +308,11 @@ describe('revalidated authentication actions', () => {
 
     await expect(
       fillAndSubmitAccount({
-        account: { vaultStoreId: 'vault', secretId: 'login' },
+        account: {
+          vaultStoreId: 'vault',
+          secretId: 'login',
+          authorizationGeneration: 'epoch-1',
+        },
         workflow,
         approval,
         ...controls(),

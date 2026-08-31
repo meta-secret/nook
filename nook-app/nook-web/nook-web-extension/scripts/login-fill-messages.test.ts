@@ -27,6 +27,7 @@ describe('website login fill runtime messages', () => {
           origin: 'https://login.example.com',
           vaultStoreId: 'store_test',
           secretId: 'secret_totp',
+          authorizationGeneration: 'epoch-7',
         },
       }),
     ).toBe(true)
@@ -37,6 +38,7 @@ describe('website login fill runtime messages', () => {
           origin: 'https://login.example.com',
           vaultStoreId: 'store_test',
           secretId: 'secret_test',
+          authorizationGeneration: 'epoch-7',
         },
       }),
     ).toBe(true)

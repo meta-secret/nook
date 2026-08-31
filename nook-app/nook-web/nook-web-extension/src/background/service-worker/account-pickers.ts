@@ -8,6 +8,14 @@ import {
   type WebsiteLoginMatchAvailability,
   type WebsiteLoginOptionsWireValue,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
+  WebsiteAuthenticatorCanceledMessageType,
+  type WebsiteAuthenticatorCanceledMessage,
+} from '../../lib/authenticator-picker-messages'
+import {
+  WebsiteLoginCanceledMessageType,
+  type WebsiteLoginCanceledMessage,
+} from '../../lib/login-picker-messages'
 import { OpenCompanionLauncherIntent } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
 import {
   extensionSessionGrantIdentity,
@@ -21,6 +29,7 @@ import {
 } from '../../offscreen/session-request-adapter'
 import {
   availableWebsiteGrants,
+  getAllSessionStorage,
   getSessionStorage,
   isAuthorizedWebsiteSender,
   passwordPairingGrants,
@@ -52,12 +61,228 @@ export const LOGIN_PICKER_TTL_MS = 5 * 60 * 1000
 const AUTHENTICATOR_PICKER_STORAGE_PREFIX =
   'nook.extension.authenticator-picker.'
 const LOGIN_PICKER_STORAGE_PREFIX = 'nook.extension.login-picker.'
+export {
+  ACCOUNT_PICKER_CLEANUP_STORAGE_KEY,
+  AccountPickerCleanupMarkerStatus,
+  accountPickerAuthorizationCleanupPending,
+  accountPickerAuthorizationGeneration,
+  accountPickerAuthorizationIsCurrent,
+  beginAccountPickerAuthorizationCleanup,
+  completeAccountPickerAuthorizationCleanup,
+  releaseAccountPickerAuthorizationCleanup,
+} from './account-picker-authorization'
+export type { AccountPickerAuthorizationCleanupStart } from './account-picker-authorization'
+import {
+  ACCOUNT_PICKER_CLEANUP_STORAGE_KEY,
+  accountPickerAuthorizationCleanupPending,
+  accountPickerAuthorizationGeneration,
+  accountPickerAuthorizationIsCurrent,
+} from './account-picker-authorization'
 
 const pendingAuthenticatorPickers = new Map<
   string,
   PendingAuthenticatorPicker
 >()
 const pendingLoginPickers = new Map<string, PendingLoginPicker>()
+
+export enum AccountPickerSurfaceKind {
+  None = 'none',
+  Tab = 'tab',
+  Window = 'window',
+}
+
+export type AccountPickerSurface =
+  | { kind: AccountPickerSurfaceKind.None }
+  | { kind: AccountPickerSurfaceKind.Tab; id: number }
+  | { kind: AccountPickerSurfaceKind.Window; id: number }
+
+export function emptyAccountPickerSurface(): AccountPickerSurface {
+  return { kind: AccountPickerSurfaceKind.None }
+}
+
+export async function closeAccountPickerSurface(
+  surface: AccountPickerSurface,
+): Promise<void> {
+  if (surface.kind === AccountPickerSurfaceKind.Window) {
+    const windows = chrome.windows as typeof chrome.windows & {
+      remove?: (windowId: number) => Promise<void>
+    }
+    if (windows.remove) await windows.remove(surface.id)
+    return
+  }
+  if (surface.kind === AccountPickerSurfaceKind.Tab) {
+    const tabs = chrome.tabs as typeof chrome.tabs & {
+      remove: (tabId: number) => Promise<void>
+    }
+    await tabs.remove(surface.id)
+  }
+}
+
+type PendingAccountPickerMemoryCleanupArgs = {
+  authenticatorRequests: Map<string, PendingAuthenticatorPicker>
+  loginRequests: Map<string, PendingLoginPicker>
+}
+
+type AccountPickerCancellation = {
+  tabId: number
+  message: WebsiteAuthenticatorCanceledMessage | WebsiteLoginCanceledMessage
+}
+
+type AccountPickerSurfaceRemovalArgs = [number, () => void]
+type RemoveAccountPickerSurface = (
+  ...args: AccountPickerSurfaceRemovalArgs
+) => void
+
+export function takePendingAccountPickerMemoryCleanup({
+  authenticatorRequests,
+  loginRequests,
+}: PendingAccountPickerMemoryCleanupArgs): AccountPickerCancellation[] {
+  const cancellations: AccountPickerCancellation[] = [
+    ...Array.from(authenticatorRequests.values(), (request) => ({
+      tabId: request.tabId,
+      message: {
+        type: WebsiteAuthenticatorCanceledMessageType.NookWebsiteAuthenticatorCanceled,
+        payload: { origin: request.origin, requestId: request.requestId },
+      },
+    })),
+    ...Array.from(loginRequests.values(), (request) => ({
+      tabId: request.tabId,
+      message: {
+        type: WebsiteLoginCanceledMessageType.NookWebsiteLoginCanceled,
+        payload: { origin: request.origin, requestId: request.requestId },
+      },
+    })),
+  ]
+  authenticatorRequests.clear()
+  loginRequests.clear()
+  return cancellations
+}
+
+export type PersistedAccountPickerCleanupPlan = {
+  storageKeys: string[]
+  cancellations: AccountPickerCancellation[]
+}
+
+export type PersistedAccountPickerStorage = Record<string, unknown>
+
+export function persistedAccountPickerCleanupPlan(
+  stored: PersistedAccountPickerStorage,
+): PersistedAccountPickerCleanupPlan {
+  const storageKeys: string[] = []
+  const cancellations: PersistedAccountPickerCleanupPlan['cancellations'] = []
+  for (const [key, value] of Object.entries(stored)) {
+    if (key.startsWith(AUTHENTICATOR_PICKER_STORAGE_PREFIX)) {
+      storageKeys.push(key)
+      if (isPendingAuthenticatorPicker(value)) {
+        const cancellation: WebsiteAuthenticatorCanceledMessage = {
+          type: WebsiteAuthenticatorCanceledMessageType.NookWebsiteAuthenticatorCanceled,
+          payload: { origin: value.origin, requestId: value.requestId },
+        }
+        const targetedCancellation: AccountPickerCancellation = {
+          tabId: value.tabId,
+          message: cancellation,
+        }
+        cancellations.push(targetedCancellation)
+      }
+    } else if (key.startsWith(LOGIN_PICKER_STORAGE_PREFIX)) {
+      storageKeys.push(key)
+      if (isPendingAuthenticatorPicker(value)) {
+        const cancellation: WebsiteLoginCanceledMessage = {
+          type: WebsiteLoginCanceledMessageType.NookWebsiteLoginCanceled,
+          payload: { origin: value.origin, requestId: value.requestId },
+        }
+        const targetedCancellation: AccountPickerCancellation = {
+          tabId: value.tabId,
+          message: cancellation,
+        }
+        cancellations.push(targetedCancellation)
+      }
+    }
+  }
+  return { storageKeys, cancellations }
+}
+
+async function clearPersistedAccountPickers(): Promise<void> {
+  const plan = persistedAccountPickerCleanupPlan(await getAllSessionStorage())
+  await Promise.allSettled(
+    plan.cancellations.map(({ tabId, message }) =>
+      chrome.tabs.sendMessage(tabId, message),
+    ),
+  )
+  const removals = await Promise.allSettled(
+    plan.storageKeys.map(removeSessionStorage),
+  )
+  if (removals.some((result) => result.status === 'rejected')) {
+    throw new Error('account picker storage removal failed')
+  }
+}
+
+async function closeVisibleAccountPickerSurfaces(): Promise<void> {
+  const pickerSurfaceQuery: Parameters<typeof chrome.tabs.query>[0] = {}
+  const pickerSurfaceTabs = await new Promise<chrome.tabs.Tab[]>((resolve) => {
+    chrome.tabs.query(pickerSurfaceQuery, resolve)
+  })
+  const pickerSurfaceTabIds = pickerSurfaceTabs.flatMap((tab) => {
+    if (
+      !('id' in tab) ||
+      typeof tab.id !== 'number' ||
+      !('url' in tab) ||
+      typeof tab.url !== 'string'
+    ) {
+      return []
+    }
+    if (!tab.url.startsWith(chrome.runtime.getURL('popup/index.html'))) {
+      return []
+    }
+    const intent = new URL(tab.url).searchParams.get('intent')
+    return intent === 'login-picker' || intent === 'authenticator-picker'
+      ? [tab.id]
+      : []
+  })
+  const removals = await Promise.allSettled(
+    pickerSurfaceTabIds.map(
+      (tabId) =>
+        // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
+        new Promise<void>((resolve, reject) => {
+          const tabs = chrome.tabs as typeof chrome.tabs & {
+            remove: RemoveAccountPickerSurface
+          }
+          const removed = () => {
+            const error = chrome.runtime.lastError
+            if (error) reject(new Error(error.message))
+            else resolve()
+          }
+          const removeArgs: Parameters<typeof tabs.remove> = [tabId, removed]
+          tabs.remove(...removeArgs)
+        }),
+    ),
+  )
+  if (removals.some((result) => result.status === 'rejected')) {
+    throw new Error('account picker surface removal failed')
+  }
+}
+
+export async function clearPendingAccountPickers(): Promise<void> {
+  const memoryCleanupArgs: PendingAccountPickerMemoryCleanupArgs = {
+    authenticatorRequests: pendingAuthenticatorPickers,
+    loginRequests: pendingLoginPickers,
+  }
+  const memoryCancellations =
+    takePendingAccountPickerMemoryCleanup(memoryCleanupArgs)
+  const memoryDelivery = Promise.allSettled(
+    memoryCancellations.map(({ tabId, message }) =>
+      chrome.tabs.sendMessage(tabId, message),
+    ),
+  )
+  const cleanup = await Promise.allSettled([
+    clearPersistedAccountPickers(),
+    closeVisibleAccountPickerSurfaces(),
+  ])
+  await memoryDelivery
+  if (cleanup.some((result) => result.status === 'rejected')) {
+    throw new Error('account picker cleanup failed')
+  }
+}
 
 function sessionResponseAccounts(response: unknown): unknown[] {
   if (
@@ -103,14 +328,30 @@ function isPendingAuthenticatorPicker(
   )
 }
 
-export async function storeAuthenticatorPicker(
-  request: PendingAuthenticatorPicker,
-): Promise<void> {
+type StoreAuthenticatorPickerArgs = {
+  request: PendingAuthenticatorPicker
+  authorizationGeneration: string
+}
+
+export async function storeAuthenticatorPicker({
+  request,
+  authorizationGeneration,
+}: StoreAuthenticatorPickerArgs): Promise<boolean> {
+  if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
+    return false
+  }
+  if (await accountPickerAuthorizationCleanupPending()) return false
   pendingAuthenticatorPickers.set(request.requestId, request)
   const nookTypedArgs0_0: Parameters<typeof setSessionStorage>[0] = {
     [authenticatorPickerStorageKey(request.requestId)]: request,
   }
   await setSessionStorage(nookTypedArgs0_0)
+  if (accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
+    return true
+  }
+  pendingAuthenticatorPickers.delete(request.requestId)
+  await removeSessionStorage(authenticatorPickerStorageKey(request.requestId))
+  return false
 }
 
 export async function removeAuthenticatorPicker(
@@ -129,12 +370,26 @@ export type AuthenticatorPickerLoad =
   | {
       kind: AuthenticatorPickerLoadKind.Available
       request: PendingAuthenticatorPicker
+      authorizationGeneration: string
     }
   | { kind: AuthenticatorPickerLoadKind.Unavailable }
 
 export async function loadAuthenticatorPicker(
   requestId: string,
 ): Promise<AuthenticatorPickerLoad> {
+  const authorizationGeneration = await accountPickerAuthorizationGeneration()
+  if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
+    return { kind: AuthenticatorPickerLoadKind.Unavailable }
+  }
+  const cleanupStorage = await getSessionStorage(
+    ACCOUNT_PICKER_CLEANUP_STORAGE_KEY,
+  )
+  if (
+    cleanupStorage[ACCOUNT_PICKER_CLEANUP_STORAGE_KEY] === true ||
+    !accountPickerAuthorizationIsCurrent(authorizationGeneration)
+  ) {
+    return { kind: AuthenticatorPickerLoadKind.Unavailable }
+  }
   let request = pendingAuthenticatorPickers.get(requestId)
   if (!request) {
     const key = authenticatorPickerStorageKey(requestId)
@@ -146,6 +401,9 @@ export async function loadAuthenticatorPicker(
       if (stored) await removeSessionStorage(key)
       return { kind: AuthenticatorPickerLoadKind.Unavailable }
     }
+    if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
+      return { kind: AuthenticatorPickerLoadKind.Unavailable }
+    }
     request = stored
     pendingAuthenticatorPickers.set(requestId, request)
   }
@@ -153,7 +411,11 @@ export async function loadAuthenticatorPicker(
     await removeAuthenticatorPicker(requestId)
     return { kind: AuthenticatorPickerLoadKind.Unavailable }
   }
-  return { kind: AuthenticatorPickerLoadKind.Available, request }
+  return {
+    kind: AuthenticatorPickerLoadKind.Available,
+    request,
+    authorizationGeneration,
+  }
 }
 
 export function isAuthenticatorPickerSender(
@@ -396,6 +658,9 @@ type WebsiteLoginOptionsArgs = {
 }
 
 type WebsiteLoginOptionsDependencies = {
+  accountPickerAuthorizationCleanupPending: typeof accountPickerAuthorizationCleanupPending
+  accountPickerAuthorizationGeneration: typeof accountPickerAuthorizationGeneration
+  accountPickerAuthorizationIsCurrent: typeof accountPickerAuthorizationIsCurrent
   availableWebsiteGrants: typeof availableWebsiteGrants
   passiveAvailableWebsiteGrants: typeof passiveAvailableWebsiteGrants
   loginAccountsForOrigin: typeof loginAccountsForOrigin
@@ -404,6 +669,9 @@ type WebsiteLoginOptionsDependencies = {
 }
 
 const websiteLoginOptionsDependencies: WebsiteLoginOptionsDependencies = {
+  accountPickerAuthorizationCleanupPending,
+  accountPickerAuthorizationGeneration,
+  accountPickerAuthorizationIsCurrent,
   availableWebsiteGrants,
   passiveAvailableWebsiteGrants,
   loginAccountsForOrigin,
@@ -422,6 +690,16 @@ async function websiteLoginOptionsResponse({
   openUnavailableCompanion,
 }: WebsiteLoginOptionsResponseArgs): Promise<unknown> {
   const resolvedDependencies = dependencies ?? websiteLoginOptionsDependencies
+  const authorizationGeneration =
+    await resolvedDependencies.accountPickerAuthorizationGeneration()
+  if (
+    !resolvedDependencies.accountPickerAuthorizationIsCurrent(
+      authorizationGeneration,
+    ) ||
+    (await resolvedDependencies.accountPickerAuthorizationCleanupPending())
+  ) {
+    return { ok: false, reason: 'login-options-unavailable' }
+  }
   const nookTypedArgs0_6: Parameters<typeof availableWebsiteGrants>[0] = {
     origin: message.payload.origin,
     sender,
@@ -468,7 +746,15 @@ async function websiteLoginOptionsResponse({
     }
     accounts = availability.accounts
   }
-  return { ok: true, status: 'ready', accounts }
+  if (
+    !resolvedDependencies.accountPickerAuthorizationIsCurrent(
+      authorizationGeneration,
+    ) ||
+    (await resolvedDependencies.accountPickerAuthorizationCleanupPending())
+  ) {
+    return { ok: false, reason: 'login-options-unavailable' }
+  }
+  return { ok: true, status: 'ready', authorizationGeneration, accounts }
 }
 
 export async function websiteLoginOptions(
@@ -515,14 +801,30 @@ function isPendingLoginPicker(value: unknown): value is PendingLoginPicker {
   return isPendingAuthenticatorPicker(value)
 }
 
-export async function storeLoginPicker(
-  request: PendingLoginPicker,
-): Promise<void> {
+type StoreLoginPickerArgs = {
+  request: PendingLoginPicker
+  authorizationGeneration: string
+}
+
+export async function storeLoginPicker({
+  request,
+  authorizationGeneration,
+}: StoreLoginPickerArgs): Promise<boolean> {
+  if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
+    return false
+  }
+  if (await accountPickerAuthorizationCleanupPending()) return false
   pendingLoginPickers.set(request.requestId, request)
   const nookTypedArgs0_7: Parameters<typeof setSessionStorage>[0] = {
     [loginPickerStorageKey(request.requestId)]: request,
   }
   await setSessionStorage(nookTypedArgs0_7)
+  if (accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
+    return true
+  }
+  pendingLoginPickers.delete(request.requestId)
+  await removeSessionStorage(loginPickerStorageKey(request.requestId))
+  return false
 }
 
 export async function removeLoginPicker(requestId: string): Promise<void> {
@@ -536,18 +838,38 @@ export enum LoginPickerLoadKind {
 }
 
 export type LoginPickerLoad =
-  | { kind: LoginPickerLoadKind.Available; request: PendingLoginPicker }
+  | {
+      kind: LoginPickerLoadKind.Available
+      request: PendingLoginPicker
+      authorizationGeneration: string
+    }
   | { kind: LoginPickerLoadKind.Unavailable }
 
 export async function loadLoginPicker(
   requestId: string,
 ): Promise<LoginPickerLoad> {
+  const authorizationGeneration = await accountPickerAuthorizationGeneration()
+  if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
+    return { kind: LoginPickerLoadKind.Unavailable }
+  }
+  const cleanupStorage = await getSessionStorage(
+    ACCOUNT_PICKER_CLEANUP_STORAGE_KEY,
+  )
+  if (
+    cleanupStorage[ACCOUNT_PICKER_CLEANUP_STORAGE_KEY] === true ||
+    !accountPickerAuthorizationIsCurrent(authorizationGeneration)
+  ) {
+    return { kind: LoginPickerLoadKind.Unavailable }
+  }
   let request = pendingLoginPickers.get(requestId)
   if (!request) {
     const key = loginPickerStorageKey(requestId)
     const stored = (await getSessionStorage(key))[key]
     if (!isPendingLoginPicker(stored) || stored.requestId !== requestId) {
       if (stored) await removeSessionStorage(key)
+      return { kind: LoginPickerLoadKind.Unavailable }
+    }
+    if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
       return { kind: LoginPickerLoadKind.Unavailable }
     }
     request = stored
@@ -557,7 +879,11 @@ export async function loadLoginPicker(
     await removeLoginPicker(requestId)
     return { kind: LoginPickerLoadKind.Unavailable }
   }
-  return { kind: LoginPickerLoadKind.Available, request }
+  return {
+    kind: LoginPickerLoadKind.Available,
+    request,
+    authorizationGeneration,
+  }
 }
 
 export function isLoginPickerSender(
