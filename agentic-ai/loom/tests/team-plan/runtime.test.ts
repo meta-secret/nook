@@ -571,6 +571,53 @@ describe('Team Plan runtime', () => {
     expect(existsSync(file.journalPath)).toBe(false);
   });
 
+  test('retires an unjournaled artifact ref before another disposition', async () => {
+    const fixture = createGitFixture();
+    fixtures.push(fixture);
+    const file = fixturePlanFile([
+      fixture,
+      [fixtureReadNode([fixture, 'orphaned-provider'])],
+    ]);
+    const started = await startTeamPlan(startRequest(file));
+    const selected = await selectTeamPlan({ journalPath: file.journalPath });
+    const lease = selected.leases[0];
+    if (!lease) throw new Error('Orphan recovery lease is missing.');
+    const artifactPath = join(fixture.root, 'orphaned-artifact.json');
+    writeFileSync(artifactPath, '{"orphaned":true}\n');
+    const artifactObject = fixtureGit(fixture)([
+      'hash-object',
+      '-w',
+      artifactPath,
+    ]);
+    const artifactPrefix = `${runRef({ file })}/${lease.generation}/${lease.taskId}/${lease.attempt}`;
+    fixtureGit(fixture)([
+      'update-ref',
+      `${artifactPrefix}/${TeamPlanRecordKind.AcceptedEvidence}`,
+      artifactObject,
+    ]);
+
+    await recordTeamPlan({
+      journalPath: file.journalPath,
+      record: {
+        kind: TeamPlanRecordKind.FinalUnusable,
+        taskId: lease.taskId,
+        attempt: lease.attempt,
+        generation: lease.generation,
+        planDigest: lease.planDigest,
+        conclusion: ModuleDeliveryGenerationFenceKind.Failed,
+      },
+    });
+    expect(fixtureGit(fixture)(['for-each-ref', `${artifactPrefix}/`])).toBe(
+      '',
+    );
+    await finalizeTeamPlan({ journalPath: file.journalPath });
+    await discardFinalizedTeamPlan({
+      journalPath: file.journalPath,
+      runId: started.runId,
+    });
+    expect(existsSync(file.journalPath)).toBe(false);
+  });
+
   test('pins large evidence outside the bounded journal', async () => {
     const fixture = createGitFixture();
     fixtures.push(fixture);

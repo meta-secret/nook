@@ -8,6 +8,7 @@ import { LoomFailureCode, loomFailureFromCause } from '../loom-failure.ts';
 import type { SpawnSyncOptionsWithStringEncoding } from 'node:child_process';
 import type { ModuleDeliveryAttemptLease } from '../module-delivery/index.ts';
 import type { TeamPlanAttemptIdentity } from './domain.ts';
+import { TeamPlanRecordKind } from './domain.ts';
 
 export enum TeamPlanObjectType {
   Blob = 'blob',
@@ -189,6 +190,38 @@ export function teamPlanRunRefsEmpty(run: TeamPlanRunIdentity): boolean {
 
 export function teamPlanRunRefPrefix(run: TeamPlanRunIdentity): string {
   return `refs/nook/team-plan/${run.runId}`;
+}
+
+export function deleteTeamPlanAttemptArtifactOrphans(request: {
+  readonly run: TeamPlanRunIdentity;
+  readonly attempt: TeamPlanAttemptIdentity;
+}): void {
+  const { run, attempt } = request;
+  const prefix = `${teamPlanRunRefPrefix(run)}/${attempt.generation}/${attempt.taskId}/${attempt.attempt}`;
+  const actual = teamPlanGitText({
+    cwd: run.repositoryRoot,
+    args: ['for-each-ref', '--format=%(refname)%09%(objectname)', `${prefix}/`],
+  });
+  if (!actual) return;
+  const allowed = new Set([
+    `${prefix}/${TeamPlanRecordKind.AcceptedWrite}`,
+    `${prefix}/${TeamPlanRecordKind.AcceptedEvidence}`,
+  ]);
+  const refs = actual.split('\n').map((line) => {
+    const fields = line.split('\t');
+    const ref = fields[0];
+    const object = fields[1];
+    if (fields.length !== 2 || !ref || !object || !allowed.has(ref))
+      throw new Error('Team Plan attempt artifact ref is forged.');
+    return { ref, object };
+  });
+  teamPlanGitText({
+    cwd: run.repositoryRoot,
+    args: ['update-ref', '--stdin'],
+    input: `start\n${refs
+      .map(({ ref, object }) => `delete ${ref} ${object}`)
+      .join('\n')}\nprepare\ncommit\n`,
+  });
 }
 
 export function pinTeamPlanLeaseFrontier(request: {
