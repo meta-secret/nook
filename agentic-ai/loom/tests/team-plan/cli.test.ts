@@ -5,6 +5,7 @@ import {
   mkdirSync,
   mkdtempSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -25,7 +26,10 @@ import {
   moduleDeliveryEvidenceArtifactDigest,
   moduleDeliveryEvidenceClaimIdentities,
 } from '../../src/module-delivery/index.ts';
-import { runTeamPlanCli as runTeamPlanCliWithArguments } from '../../src/team-plan/cli.ts';
+import {
+  MAX_TEAM_PLAN_RECORD_REQUEST_BYTES,
+  runTeamPlanCli as runTeamPlanCliWithArguments,
+} from '../../src/team-plan/cli.ts';
 import { TeamPlanRecordKind } from '../../src/team-plan/domain.ts';
 import { MAX_TEAM_PLAN_JOURNAL_BYTES } from '../../src/team-plan/journal.ts';
 import {
@@ -48,16 +52,29 @@ import type { GitFixture } from '../module-delivery/worktree-test-support.ts';
 const MODULE_ROOT = 'nook-app/nook-platform/nook-core';
 const fixtures: GitFixture[] = [];
 
-function runTeamPlanCli(argv: readonly string[]): Promise<number> {
-  return runTeamPlanCliWithArguments({ argv });
+type TestTeamPlanCliArguments = Readonly<{ argv: readonly string[] }>;
+type ExpectedTeamPlanCliFailure = Readonly<{
+  argv: readonly string[];
+  code: LoomFailureCode;
+}>;
+type TestTeamPlanRequest = Readonly<{
+  sourceCommit: string;
+  generation: number;
+}>;
+type WriteTeamPlanJsonRequest = Readonly<{
+  path: string;
+  value: ModuleDeliveryPlanV2 | TeamPlanRecord;
+}>;
+
+function runTeamPlanCli(request: TestTeamPlanCliArguments): Promise<number> {
+  return runTeamPlanCliWithArguments({ argv: request.argv, locale: 'en' });
 }
 
-async function expectTeamPlanCliFailure(request: {
-  readonly argv: readonly string[];
-  readonly code: LoomFailureCode;
-}): Promise<void> {
+async function expectTeamPlanCliFailure(
+  request: ExpectedTeamPlanCliFailure,
+): Promise<void> {
   try {
-    await runTeamPlanCli(request.argv);
+    await runTeamPlanCli({ argv: request.argv });
     throw new Error('Expected Team Plan CLI failure.');
   } catch (error) {
     expect(error).toBeInstanceOf(LoomFailure);
@@ -101,9 +118,7 @@ function readNode(sourceCommit: string): ModuleDeliveryReadOnlyNodeV2 {
   };
 }
 
-function plan(
-  request: Readonly<{ sourceCommit: string; generation: number }>,
-): ModuleDeliveryPlanV2 {
+function plan(request: TestTeamPlanRequest): ModuleDeliveryPlanV2 {
   return {
     version: 2,
     generation: request.generation,
@@ -122,12 +137,7 @@ function plan(
   };
 }
 
-function writeJson(
-  request: Readonly<{
-    path: string;
-    value: ModuleDeliveryPlanV2 | TeamPlanRecord;
-  }>,
-): void {
+function writeJson(request: WriteTeamPlanJsonRequest): void {
   writeFileSync(request.path, `${JSON.stringify(request.value)}\n`);
 }
 
@@ -146,18 +156,22 @@ test('dispatches every successful Team Plan command', async () => {
   });
   try {
     expect(
-      await runTeamPlanCli([
-        'start',
-        '--plan',
-        firstPlanPath,
-        '--journal',
-        journalPath,
-        '--repository-root',
-        fixture.sourceRoot,
-      ]),
+      await runTeamPlanCli({
+        argv: [
+          'start',
+          '--plan',
+          firstPlanPath,
+          '--journal',
+          journalPath,
+          '--repository-root',
+          fixture.sourceRoot,
+        ],
+      }),
     ).toBe(0);
     const started = JSON.parse(output.at(-1) ?? '') as TeamPlanSnapshot;
-    expect(await runTeamPlanCli(['select', '--journal', journalPath])).toBe(0);
+    expect(
+      await runTeamPlanCli({ argv: ['select', '--journal', journalPath] }),
+    ).toBe(0);
     const firstSelection = JSON.parse(
       output.at(-1) ?? '',
     ) as TeamPlanSelectionReceipt;
@@ -176,13 +190,9 @@ test('dispatches every successful Team Plan command', async () => {
       },
     });
     expect(
-      await runTeamPlanCli([
-        'record',
-        '--journal',
-        journalPath,
-        '--request',
-        recordPath,
-      ]),
+      await runTeamPlanCli({
+        argv: ['record', '--journal', journalPath, '--request', recordPath],
+      }),
     ).toBe(0);
 
     writeFileSync(join(fixture.sourceRoot, 'generation.txt'), 'two\n');
@@ -195,21 +205,19 @@ test('dispatches every successful Team Plan command', async () => {
       value: plan({ sourceCommit: secondCommit, generation: 2 }),
     });
     expect(
-      await runTeamPlanCli([
-        'restart',
-        '--journal',
-        journalPath,
-        '--plan',
-        secondPlanPath,
-      ]),
+      await runTeamPlanCli({
+        argv: ['restart', '--journal', journalPath, '--plan', secondPlanPath],
+      }),
     ).toBe(0);
-    expect(await runTeamPlanCli(['select', '--journal', journalPath])).toBe(0);
+    expect(
+      await runTeamPlanCli({ argv: ['select', '--journal', journalPath] }),
+    ).toBe(0);
     const secondSelection = JSON.parse(
       output.at(-1) ?? '',
     ) as TeamPlanSelectionReceipt;
     const secondLease = secondSelection.leases[0];
     if (!secondLease) throw new Error('Second CLI lease is missing.');
-    const evidence = ['provider completed'];
+    const evidence = Array.from({ length: 128 }, () => '界'.repeat(4096));
     const artifactIdentity = 'provider/report.json';
     writeJson({
       path: recordPath,
@@ -245,18 +253,19 @@ test('dispatches every successful Team Plan command', async () => {
         },
       },
     });
-    expect(
-      await runTeamPlanCli([
-        'record',
-        '--journal',
-        journalPath,
-        '--request',
-        recordPath,
-      ]),
-    ).toBe(0);
-    expect(await runTeamPlanCli(['finalize', '--journal', journalPath])).toBe(
-      0,
+    const requestBytes = statSync(recordPath).size;
+    expect(requestBytes).toBeGreaterThan(1_048_576);
+    expect(requestBytes).toBeLessThanOrEqual(
+      MAX_TEAM_PLAN_RECORD_REQUEST_BYTES,
     );
+    expect(
+      await runTeamPlanCli({
+        argv: ['record', '--journal', journalPath, '--request', recordPath],
+      }),
+    ).toBe(0);
+    expect(
+      await runTeamPlanCli({ argv: ['finalize', '--journal', journalPath] }),
+    ).toBe(0);
     const error = spyOn(console, 'error').mockImplementation(() => {});
     try {
       await expectTeamPlanCliFailure({
@@ -272,24 +281,41 @@ test('dispatches every successful Team Plan command', async () => {
     });
     expect(existsSync(journalPath)).toBe(true);
     expect(
-      await runTeamPlanCli([
-        'discard',
-        '--journal',
-        journalPath,
-        '--run-id',
-        started.runId,
-      ]),
+      await runTeamPlanCli({
+        argv: ['discard', '--journal', journalPath, '--run-id', started.runId],
+      }),
     ).toBe(0);
     expect(existsSync(journalPath)).toBe(false);
   } finally {
     log.mockRestore();
   }
-}, 10_000);
+}, 30_000);
+
+test('localizes visible parse failures through the Loom catalog', async () => {
+  const error = spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    await runTeamPlanCliWithArguments({ argv: [], locale: 'ru-RU' });
+    throw new Error('Expected localized Team Plan CLI failure.');
+  } catch (cause) {
+    expect(cause).toBeInstanceOf(LoomFailure);
+    expect((cause as LoomFailure).code).toBe(
+      LoomFailureCode.TeamPlanValidationFailed,
+    );
+    expect(((cause as LoomFailure).cause as Error).message).toBe(
+      'Аргументы команды Team Plan недопустимы.',
+    );
+    expect(error).toHaveBeenCalledWith(
+      expect.stringContaining('Использование'),
+    );
+  } finally {
+    error.mockRestore();
+  }
+});
 
 test('normalizes invalid record files and oversized journals', async () => {
   const root = mkdtempSync(join(tmpdir(), 'team-plan-cli-'));
   const request = join(root, 'request.json');
-  writeFileSync(request, 'x'.repeat(1_048_577));
+  writeFileSync(request, 'x'.repeat(MAX_TEAM_PLAN_RECORD_REQUEST_BYTES + 1));
   for (const path of [root, request])
     await expectTeamPlanCliFailure({
       argv: ['record', '--journal', join(root, 'journal'), '--request', path],

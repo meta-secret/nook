@@ -12,6 +12,10 @@ import {
   ModuleDeliveryProviderSubmissionKind,
   moduleDeliveryEvidenceSha256,
 } from './integration-provenance.ts';
+import {
+  MAX_MODULE_DELIVERY_EVIDENCE_ENTRIES,
+  MAX_MODULE_DELIVERY_EVIDENCE_ENTRY_CODE_UNITS,
+} from './evidence-limits.ts';
 
 import type { TaskResourcePatternPair } from '../agent-workflow/domain.ts';
 import type { TeamKey } from '../team-agents/catalog.ts';
@@ -542,11 +546,11 @@ function validIdentity(identity: string): boolean {
 function validEvidenceEntries(entries: readonly string[]): boolean {
   return (
     entries.length > 0 &&
-    entries.length <= 128 &&
+    entries.length <= MAX_MODULE_DELIVERY_EVIDENCE_ENTRIES &&
     entries.every(
       (entry) =>
         entry.trim().length > 0 &&
-        entry.length <= 4096 &&
+        entry.length <= MAX_MODULE_DELIVERY_EVIDENCE_ENTRY_CODE_UNITS &&
         [...entry].every((character) => {
           const code = character.charCodeAt(0);
           return code > 31 && code !== 127;
