@@ -6,6 +6,15 @@ import type {
 } from 'node:child_process';
 
 const MAX_GIT_OUTPUT_BYTES = 16 * 1024 * 1024;
+const PROCESS_LAUNCH_ENVIRONMENT_KEYS = [
+  'COMSPEC',
+  'PATH',
+  'Path',
+  'PATHEXT',
+  'SYSTEMROOT',
+  'SystemRoot',
+  'WINDIR',
+] as const;
 
 export type GitCommandRequest = {
   readonly cwd: string;
@@ -21,10 +30,11 @@ export type GitCommandResult = {
   readonly stderr: string;
 };
 
-function scrubbedGitEnvironment(): NodeJS.ProcessEnv {
+function minimalGitEnvironment(): NodeJS.ProcessEnv {
   const environment: NodeJS.ProcessEnv = {};
-  for (const [name, value] of Object.entries(process.env)) {
-    if (!name.startsWith('GIT_')) environment[name] = value;
+  for (const name of PROCESS_LAUNCH_ENVIRONMENT_KEYS) {
+    const value = process.env[name];
+    if (typeof value === 'string') environment[name] = value;
   }
   environment.GIT_CONFIG_GLOBAL = '/dev/null';
   environment.GIT_CONFIG_NOSYSTEM = '1';
@@ -47,7 +57,7 @@ export function runModuleDeliveryGit(
     '--literal-pathspecs',
     ...request.args,
   ];
-  const environment = scrubbedGitEnvironment();
+  const environment = minimalGitEnvironment();
   if (request.indexFile) environment.GIT_INDEX_FILE = request.indexFile;
   if (request.commitTimestamp) {
     if (!/^@[0-9]+ \+0000$/u.test(request.commitTimestamp)) {

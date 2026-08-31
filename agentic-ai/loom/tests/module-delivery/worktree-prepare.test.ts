@@ -13,6 +13,10 @@ import {
   prepareModuleWorktree,
 } from '../../src/module-delivery/index.ts';
 import {
+  gitText,
+  runModuleDeliveryGit,
+} from '../../src/module-delivery/git-command.ts';
+import {
   createGitFixture,
   disposeGitFixture,
   fixtureGit,
@@ -148,5 +152,22 @@ describe('prepareModuleWorktree', () => {
       else delete process.env.GIT_CONFIG_GLOBAL;
     }
     expect(existsSync(marker)).toBe(false);
+  });
+
+  test('does not inherit ambient process environment in Git commands', () => {
+    const fixture = createTrackedFixture();
+    const hadEmail = 'EMAIL' in process.env;
+    const previousEmail = process.env.EMAIL ?? '';
+    process.env.EMAIL = 'ambient-authority@nook.invalid';
+    try {
+      const result = runModuleDeliveryGit({
+        cwd: fixture.sourceRoot,
+        args: ['var', 'GIT_AUTHOR_IDENT'],
+      });
+      expect(gitText(result)).not.toContain('ambient-authority@nook.invalid');
+    } finally {
+      if (hadEmail) process.env.EMAIL = previousEmail;
+      else delete process.env.EMAIL;
+    }
   });
 });
