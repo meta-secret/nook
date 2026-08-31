@@ -916,9 +916,9 @@ export function observeSubmit({
     result: FormSubmissionResult.NotObserved,
   };
   const markSubmitted = (event: SubmitEvent) => {
-    const submitterMatches = expectedSubmitter
+    const submitterMatches = event.submitter
       ? event.submitter === expectedSubmitter
-      : event.submitter === null;
+      : expectedSubmitter === false;
     if (approval && (!submitterMatches || !approval.isApproved())) {
       event.preventDefault();
       event.stopImmediatePropagation();
