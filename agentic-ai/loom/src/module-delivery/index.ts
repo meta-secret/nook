@@ -58,6 +58,7 @@ export {
   integrateVerifiedModuleDeliveryTask,
   prepareModuleIntegration,
 } from './integration.ts';
+export { restoreModuleDeliveryIntegrationEvidence } from './integration-evidence-replay.ts';
 export * from './domain.ts';
 export type {
   CleanupModuleWorktreeRequest,

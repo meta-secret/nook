@@ -117,51 +117,46 @@ import type {
   PrepareModuleWorktreeRequest,
 } from './workspace.ts';
 import type { ModuleDeliveryAttemptLease } from './admission.ts';
-
 const INTEGRATION_TASK_ID = 'module-delivery-integration';
-
 type ModuleGitInvocation = {
   readonly cwd: string;
   readonly args: readonly string[];
   readonly allowFailure?: boolean;
 };
-
 type ExpectedHandoff = {
   readonly node: WriteModuleDeliveryNode;
   readonly baselineCommit: string;
   readonly submission: ModuleDeliveryHandoffSubmission;
 };
-
 type ExpectedHandoffVerification = {
   readonly expected: ExpectedHandoff;
   readonly acceptedPlan: ValidatedModuleDeliveryPlan;
 };
-
 type ValidatedWaveApplication = {
   readonly state: ModuleIntegrationState;
   readonly expectedHandoffs: readonly ExpectedHandoff[];
   readonly provenance: ModuleIntegrationProvenance;
 };
-
 type AdvancedIntegrationStateRequest = {
   readonly previousState: ModuleIntegrationState;
   readonly nextState: ModuleIntegrationState;
   readonly provenance: ModuleIntegrationProvenance;
   readonly writerFrontiers: readonly ModuleDeliveryIntegratedWriterFrontierCapability[];
 };
-
 type ProviderLeaseInspection = {
   readonly authority: ModuleDeliveryGenerationAuthority;
   readonly acceptedPlan: ValidatedModuleDeliveryPlan;
   readonly lease: ModuleDeliveryAttemptLease;
   readonly submission: ModuleDeliveryProviderSubmission;
 };
-
 type RefreshedWriterFrontiersRequest = Readonly<{
   authority: ModuleDeliveryGenerationAuthority;
   state: ModuleIntegrationState;
 }>;
-
+type IntegrationStateUpdate = readonly [
+  ModuleIntegrationState,
+  Partial<ModuleIntegrationState>,
+];
 export type ModuleDeliveryIntegratedWriterFrontierCapability = Readonly<{
   taskId: string;
   attempt: number;
@@ -170,7 +165,6 @@ export type ModuleDeliveryIntegratedWriterFrontierCapability = Readonly<{
   headCommit: string;
   integratedTaskIds: readonly string[];
 }>;
-
 export type AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest =
   Readonly<{
     capability: ModuleDeliveryIntegratedWriterFrontierCapability;
@@ -182,7 +176,6 @@ export type AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest =
     headCommit: string;
     integratedTaskIds: readonly string[];
   }>;
-
 type IntegratedWriterFrontierProvenance = Readonly<{
   authority: ModuleDeliveryGenerationAuthority;
   taskId: string;
@@ -192,9 +185,7 @@ type IntegratedWriterFrontierProvenance = Readonly<{
   headCommit: string;
   integratedTaskIds: readonly string[];
 }>;
-
 type MintIntegratedWriterFrontierRequest = IntegratedWriterFrontierProvenance;
-
 const ZERO_COMMIT = '0'.repeat(40);
 const PROHIBITED_MATERIALIZATION_FILES = new Set([
   '.gitattributes',
@@ -213,11 +204,10 @@ const STATE_WRITER_FRONTIERS = new WeakMap<
   ModuleIntegrationState,
   readonly ModuleDeliveryIntegratedWriterFrontierCapability[]
 >();
-
 function mintIntegratedWriterFrontier(
   request: MintIntegratedWriterFrontierRequest,
 ): ModuleDeliveryIntegratedWriterFrontierCapability {
-  const integratedTaskIds = Object.freeze([...request.integratedTaskIds]);
+  const integratedTaskIds = Object.freeze(request.integratedTaskIds.slice());
   const capabilityValue: ModuleDeliveryIntegratedWriterFrontierCapability = {
     taskId: request.taskId,
     attempt: request.attempt,
@@ -227,14 +217,14 @@ function mintIntegratedWriterFrontier(
     integratedTaskIds,
   };
   const capability = Object.freeze(capabilityValue);
-  const provenance: IntegratedWriterFrontierProvenance = {
-    ...request,
-    integratedTaskIds,
-  };
+  const provenance: IntegratedWriterFrontierProvenance = Object.assign(
+    {},
+    request,
+    { integratedTaskIds },
+  );
   WRITER_FRONTIER_PROVENANCE.set(capability, Object.freeze(provenance));
   return capability;
 }
-
 export function assertModuleDeliveryIntegratedWriterFrontierCapability(
   request: AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest,
 ): void {
@@ -252,7 +242,6 @@ export function assertModuleDeliveryIntegratedWriterFrontierCapability(
   )
     throw new Error('Integrated writer frontier capability is invalid.');
 }
-
 export function assertModuleDeliveryCanonicalEvidenceTransition(
   request: AssertModuleDeliveryCanonicalEvidenceTransitionRequest,
 ): void {
@@ -267,25 +256,24 @@ export function assertModuleDeliveryCanonicalEvidenceTransition(
   )
     throw new Error('Canonical evidence transition is invalid.');
 }
-
 function canonicalEvidenceTransition(
   request: CanonicalEvidenceTransitionProvenance,
 ): ModuleDeliveryCanonicalEvidenceTransition {
-  const integratedTaskIds = Object.freeze([...request.integratedTaskIds]);
+  const integratedTaskIds = Object.freeze(request.integratedTaskIds.slice());
   const transitionValue: ModuleDeliveryCanonicalEvidenceTransition = {
     previousHeadCommit: request.previousHeadCommit,
     canonicalHeadCommit: request.canonicalHeadCommit,
     integratedTaskIds,
   };
   const transition = Object.freeze(transitionValue);
-  const provenance: CanonicalEvidenceTransitionProvenance = {
-    ...request,
-    integratedTaskIds,
-  };
+  const provenance: CanonicalEvidenceTransitionProvenance = Object.assign(
+    {},
+    request,
+    { integratedTaskIds },
+  );
   CANONICAL_EVIDENCE_TRANSITIONS.set(transition, Object.freeze(provenance));
   return transition;
 }
-
 function gitRequest(invocation: ModuleGitInvocation): GitCommandRequest {
   if ('allowFailure' in invocation) {
     return {
@@ -474,10 +462,17 @@ function refreshedWriterFrontiers(
 function writerFrontiers(
   state: ModuleIntegrationState,
 ): readonly ModuleDeliveryIntegratedWriterFrontierCapability[] {
-  const capabilities = STATE_WRITER_FRONTIERS.get(state);
-  if (!capabilities)
-    throw new Error('Module integration writer frontier is invalid.');
+  const capabilities =
+    STATE_WRITER_FRONTIERS.get(state) ??
+    state.admissionState.integratedWriterFrontiers;
   return capabilities;
+}
+
+function updatedIntegrationState([
+  state,
+  updates,
+]: IntegrationStateUpdate): ModuleIntegrationState {
+  return Object.assign({}, state, updates);
 }
 
 export function prepareModuleIntegration(
@@ -714,12 +709,11 @@ export function integrateVerifiedModuleDeliveryTask(
     };
     const headCommit = applyAndValidateWave(application);
     try {
-      const provisionalState: ModuleIntegrationState = {
-        ...request.state,
-        integratedTaskIds: [...request.state.integratedTaskIds, taskId],
-        acceptedWrites: [
-          ...request.state.acceptedWrites,
-          {
+      const provisionalState = updatedIntegrationState([
+        request.state,
+        {
+          integratedTaskIds: request.state.integratedTaskIds.concat(taskId),
+          acceptedWrites: request.state.acceptedWrites.concat({
             taskId,
             attempt: request.submission.handoff.attempt,
             generation: request.submission.generation,
@@ -728,19 +722,21 @@ export function integrateVerifiedModuleDeliveryTask(
             integrationCommit: headCommit,
             acceptedByTeam: request.submission.acceptedByTeam,
             handoff: request.submission.handoff,
-          },
-        ],
-        headCommit,
-      };
+          }),
+          headCommit,
+        },
+      ]);
       const waveCountRequest: ModuleIntegrationCompletedWaveCountRequest = {
         acceptedPlan: request.acceptedPlan,
         state: provisionalState,
       };
-      const stateWithWrite: ModuleIntegrationState = {
-        ...provisionalState,
-        completedWaveCount:
-          moduleIntegrationCompletedWaveCount(waveCountRequest),
-      };
+      const stateWithWrite = updatedIntegrationState([
+        provisionalState,
+        {
+          completedWaveCount:
+            moduleIntegrationCompletedWaveCount(waveCountRequest),
+        },
+      ]);
       const frontierRequest: RefreshedWriterFrontiersRequest = {
         authority: request.authority,
         state: stateWithWrite,
@@ -754,10 +750,10 @@ export function integrateVerifiedModuleDeliveryTask(
         acceptedEvidence: stateWithWrite.acceptedEvidence,
       };
       const admissionState = createModuleDeliveryAdmissionState(stateRequest);
-      const nextState: ModuleIntegrationState = {
-        ...stateWithWrite,
-        admissionState,
-      };
+      const nextState = updatedIntegrationState([
+        stateWithWrite,
+        { admissionState },
+      ]);
       const advance: AdvancedIntegrationStateRequest = {
         previousState: request.state,
         nextState,
@@ -801,18 +797,20 @@ export function integrateVerifiedModuleDeliveryTask(
     authorizedProviderEvidence,
   };
   const accepted = verifyModuleDeliveryEvidenceSubmission(evidenceRequest);
-  const provisionalState: ModuleIntegrationState = {
-    ...request.state,
-    acceptedEvidence: [...request.state.acceptedEvidence, accepted],
-  };
+  const provisionalState = updatedIntegrationState([
+    request.state,
+    { acceptedEvidence: request.state.acceptedEvidence.concat(accepted) },
+  ]);
   const waveCountRequest: ModuleIntegrationCompletedWaveCountRequest = {
     acceptedPlan: request.acceptedPlan,
     state: provisionalState,
   };
-  const stateWithEvidence: ModuleIntegrationState = {
-    ...provisionalState,
-    completedWaveCount: moduleIntegrationCompletedWaveCount(waveCountRequest),
-  };
+  const stateWithEvidence = updatedIntegrationState([
+    provisionalState,
+    {
+      completedWaveCount: moduleIntegrationCompletedWaveCount(waveCountRequest),
+    },
+  ]);
   const capabilities = writerFrontiers(request.state);
   const stateRequest: CreateModuleDeliveryAdmissionStateRequest = {
     authority: request.authority,
@@ -822,10 +820,10 @@ export function integrateVerifiedModuleDeliveryTask(
     acceptedEvidence: stateWithEvidence.acceptedEvidence,
   };
   const admissionState = createModuleDeliveryAdmissionState(stateRequest);
-  const nextState: ModuleIntegrationState = {
-    ...stateWithEvidence,
-    admissionState,
-  };
+  const nextState = updatedIntegrationState([
+    stateWithEvidence,
+    { admissionState },
+  ]);
   const advance: AdvancedIntegrationStateRequest = {
     previousState: request.state,
     nextState,
@@ -923,12 +921,14 @@ export function finalizeModuleDeliveryIntegration(
     integratedTaskIds: request.state.integratedTaskIds,
   };
   const writerTaskIds = validatedCanonicalWriterClosure(canonicalInspection);
-  const finalizedState: ModuleIntegrationState = {
-    ...request.state,
-    phase: ModuleIntegrationPhase.Finalized,
-    completedWaveCount: request.acceptedPlan.waves.length,
-    headCommit: canonicalHead,
-  };
+  const finalizedState = updatedIntegrationState([
+    request.state,
+    {
+      phase: ModuleIntegrationPhase.Finalized,
+      completedWaveCount: request.acceptedPlan.waves.length,
+      headCommit: canonicalHead,
+    },
+  ]);
   const frontierRequest: RefreshedWriterFrontiersRequest = {
     authority: request.authority,
     state: finalizedState,
@@ -951,10 +951,10 @@ export function finalizeModuleDeliveryIntegration(
     canonicalTransition,
   };
   const admissionState = prepareFinalModuleDeliveryAdmissionState(stateRequest);
-  const nextState: ModuleIntegrationState = {
-    ...finalizedState,
-    admissionState,
-  };
+  const nextState = updatedIntegrationState([
+    finalizedState,
+    { admissionState },
+  ]);
   const advance: AdvancedIntegrationStateRequest = {
     previousState: request.state,
     nextState,
