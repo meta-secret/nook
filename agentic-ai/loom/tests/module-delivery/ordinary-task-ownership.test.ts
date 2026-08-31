@@ -171,6 +171,23 @@ test('routes web Taskfile orchestration exclusively to SRE', () => {
   }
 });
 
+test('routes the extension deployment verifier exclusively to SRE', () => {
+  const write =
+    'nook-app/nook-web/nook-web-extension/scripts/verify-deployment.sh';
+  expect(
+    accepted(ordinaryWrite({ team: TeamKey.Sre, moduleRoot: write, write })),
+  ).toBe(true);
+  expect(
+    accepted(
+      ordinaryWrite({
+        team: TeamKey.WebDevelopment,
+        moduleRoot: 'nook-app/nook-web/nook-web-extension',
+        write,
+      }),
+    ),
+  ).toBe(false);
+});
+
 test('rejects globs that overlap a more-specific foreign root', () => {
   expect(
     accepted(
@@ -244,7 +261,7 @@ test('separates portable platform Rust from operational ownership', () => {
   }
 });
 
-test('keeps the AI task registry out of broad SRE task ownership', () => {
+test('keeps exact-file deletion and descendants in separate ownership', () => {
   const aiRegistry = {
     moduleRoot: '.task/agentic-ai.yml',
     write: '.task/agentic-ai.yml',
@@ -255,6 +272,20 @@ test('keeps the AI task registry out of broad SRE task ownership', () => {
   expect(accepted(ordinaryWrite({ team: TeamKey.Sre, ...aiRegistry }))).toBe(
     false,
   );
+  for (const write of [
+    '.task/agentic-ai.yml/child.yml',
+    '.task/agentic-ai.yml/**',
+  ])
+    for (const team of [TeamKey.Ai, TeamKey.Sre])
+      expect(
+        accepted(
+          ordinaryWrite({
+            team,
+            moduleRoot: team === TeamKey.Ai ? '.task/agentic-ai.yml' : '.task',
+            write,
+          }),
+        ),
+      ).toBe(false);
   expect(
     accepted(
       ordinaryWrite({

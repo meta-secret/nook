@@ -39,10 +39,13 @@ afterEach(() => {
   for (const fixture of fixtures.splice(0)) disposeGitFixture(fixture);
 });
 
-function createWorkspace(): ModuleWorktreeHandle {
+function createWorkspace(taskId = 'module-task'): ModuleWorktreeHandle {
   const fixture = createGitFixture();
   fixtures.push(fixture);
-  const request = prepareRequest(fixture);
+  const request: PrepareModuleWorktreeRequest = {
+    ...prepareRequest(fixture),
+    taskId,
+  };
   const workspace = prepareModuleWorktree(request);
   workspaces.push(workspace);
   return workspace;
@@ -72,13 +75,14 @@ function commitPath(active: ModuleWorktreeHandle): void {
 }
 
 describe('verifyModuleCommitHandoff', () => {
-  test('accepts one clean direct-child commit inside declared claims', () => {
-    const active = createWorkspace();
+  test('accepts an underscore write-task through worktree handoff', () => {
+    const active = createWorkspace('writer_with_underscore');
     commitPath(active);
     const request = verificationRequest(active);
     const handoff = verifyModuleCommitHandoff(request);
     expect(handoff.changedPaths).toEqual(['module/feature.ts']);
     expect(handoff.commit).toMatch(/^[0-9a-f]{40}$/);
+    expect(handoff.taskId).toBe('writer_with_underscore');
   });
 
   test('rejects dirty and out-of-scope handoffs', () => {

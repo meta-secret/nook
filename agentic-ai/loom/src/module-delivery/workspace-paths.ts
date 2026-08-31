@@ -3,7 +3,7 @@ import { dirname, isAbsolute, relative, resolve } from 'node:path';
 
 export const EXACT_GIT_COMMIT = /^[0-9a-f]{40}$/u;
 export const EXACT_PLAN_DIGEST = /^[0-9a-f]{64}$/u;
-export const CANONICAL_TASK_ID = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
+export const CANONICAL_TASK_ID = /^[a-z][a-z0-9_-]{0,63}$/u;
 export const CANONICAL_GIT_PATH = /^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/u;
 
 export type CanonicalDirectoryRequest = {

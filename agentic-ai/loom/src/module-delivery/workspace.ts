@@ -113,7 +113,7 @@ function validatePrepareRequest(request: PrepareModuleWorktreeRequest): void {
       'Module plan digest must be an exact lowercase SHA-256 digest.',
     );
   }
-  if (!CANONICAL_TASK_ID.test(request.taskId) || request.taskId.length > 80) {
+  if (!CANONICAL_TASK_ID.test(request.taskId)) {
     throw new Error('Module task id is noncanonical.');
   }
   if (!Number.isSafeInteger(request.attempt) || request.attempt < 1) {
