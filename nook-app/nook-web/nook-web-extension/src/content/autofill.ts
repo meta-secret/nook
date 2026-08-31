@@ -52,6 +52,7 @@ import {
   renderEnrollmentWidget,
   renderWidget,
 } from './autofill/widget-rendering'
+import { clampMountedWidgetPosition } from './autofill/widget-position'
 import { loadPilotVaultConnection } from './autofill/workflow-ui'
 import {
   detectEnrollmentHintsFromRecoveryCopy,
@@ -229,6 +230,7 @@ void companionWasmReady.then(() => {
     return
   }
   document.addEventListener('submit', captureSubmittedLogin, true)
+  window.addEventListener('resize', clampMountedWidgetPosition)
   void scanAndRender()
 
   const observer = new MutationObserver(scheduleScan)

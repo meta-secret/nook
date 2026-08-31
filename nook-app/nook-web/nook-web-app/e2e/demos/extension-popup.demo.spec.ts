@@ -40,15 +40,8 @@ function installPopupDemoRuntime(): void {
       callback: (response: RuntimeResponse) => void,
     ) => {
       switch (message.type) {
-        case 'nook:extension-pairing-state-query': {
-          const connected =
-            new URLSearchParams(globalThis.location.search).get('state') ===
-            'connected'
-          callback(connected ? { ok: true, setup } : { ok: false })
-          return
-        }
-        case 'nook:ensure-extension-session-runtime':
-          callback({ ok: true })
+        case 'nook:extension-pairing-state-query':
+          callback({ ok: true, setup })
           return
         case 'nook:extension-session-status':
           callback({ ok: true, status: 6, device })
@@ -86,10 +79,9 @@ test('keeps the extension toolbar popup focused on one next action', async ({
   await page.route(`**${extensionRoutePrefix}**`, async (route: Route) => {
     const requestPath = new URL(route.request().url()).pathname
     const relativePath = requestPath.slice(extensionRoutePrefix.length)
-    const response: Parameters<Route['fulfill']>[0] = {
+    await route.fulfill({
       path: path.join(extensionDist, relativePath),
-    }
-    await route.fulfill(response)
+    })
   })
 
   await page.goto(`${extensionRoutePrefix}popup/index.html?state=connected`)

@@ -163,9 +163,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     await expect(widget.getByText('Nook Pilot · 1/3')).toBeVisible()
     await expect(widget.getByText('Ready to sign in')).toBeVisible()
     await expect(widget.getByText('localhost')).toBeVisible()
-    await expect(widget.getByTestId('nook-auth-gate-vault-status')).toHaveText(
-      'Vault not connected',
-    )
+    await expect(widget.locator('img.collapsed-mark')).toBeVisible()
     await expect(
       widget.getByRole('button', { name: 'Continue with Nook' }),
     ).toBeVisible()

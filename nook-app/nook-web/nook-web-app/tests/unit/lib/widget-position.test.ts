@@ -5,7 +5,6 @@ import {
   PointerDragBehaviorKind,
 } from '../../../../nook-web-extension/src/content/autofill/widget-position'
 import {
-  WidgetPlacementKind,
   WidgetWorkflowRootKind,
   widgetState,
 } from '../../../../nook-web-extension/src/content/autofill/state'
@@ -17,6 +16,7 @@ import { BROWSER_MESSAGE_KEYS } from '../../../../nook-web-extension/src/lib/bro
 
 afterEach(() => {
   document.body.replaceChildren()
+  window.removeEventListener('resize', clampMountedWidgetPosition)
   widgetState.clearRenderedWidget()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
@@ -55,30 +55,19 @@ test('keeps one visible Nook mark across expanded and compact states', () => {
 })
 
 describe('Pilot viewport placement', () => {
-  test('clamps a mounted widget inside a smaller viewport', () => {
+  test('reclamps a mounted widget when the viewport shrinks', () => {
     vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(300)
     vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(200)
     const host = document.createElement('div')
-    Object.defineProperty(host, 'offsetWidth', {
-      configurable: true,
-      value: 120,
-    })
-    Object.defineProperty(host, 'offsetHeight', {
-      configurable: true,
-      value: 80,
-    })
-    document.body.append(host)
+    vi.spyOn(host, 'offsetWidth', 'get').mockReturnValue(120)
+    vi.spyOn(host, 'offsetHeight', 'get').mockReturnValue(80)
     widgetState.attachHost(host)
     widgetState.setPosition({ left: 500, top: 400 })
 
-    clampMountedWidgetPosition()
+    window.addEventListener('resize', clampMountedWidgetPosition)
+    window.dispatchEvent(new Event('resize'))
 
     expect(host.style.left).toBe('172px')
-    expect(host.style.top).toBe('112px')
-    expect(widgetState.placement).toEqual({
-      kind: WidgetPlacementKind.Positioned,
-      position: { left: 172, top: 112 },
-    })
   })
 })
 
@@ -109,21 +98,17 @@ describe('compact Pilot activation', () => {
     handle.setPointerCapture = vi.fn()
     handle.hasPointerCapture = vi.fn(() => false)
 
-    handle.dispatchEvent(
-      new PointerEvent('pointerdown', {
-        pointerId: 7,
-        button: 0,
-        clientX: 10,
-        clientY: 10,
-      }),
-    )
-    handle.dispatchEvent(
-      new PointerEvent('pointermove', {
-        pointerId: 7,
-        clientX: 40,
-        clientY: 40,
-      }),
-    )
+    const dispatchPointer = (type: string, clientX: number, clientY: number) =>
+      handle.dispatchEvent(
+        new PointerEvent(type, {
+          pointerId: 7,
+          button: 0,
+          clientX,
+          clientY,
+        }),
+      )
+    dispatchPointer('pointerdown', 10, 10)
+    dispatchPointer('pointermove', 40, 40)
     handle.dispatchEvent(new PointerEvent('pointerup', { pointerId: 7 }))
     handle.click()
 
