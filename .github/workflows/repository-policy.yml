@@ -44,6 +44,12 @@ jobs:
         with:
           fetch-depth: 2
 
+      - name: Fetch pull-request registry baseline
+        if: github.event_name == 'pull_request'
+        env:
+          BASELINE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: git fetch --no-tags --depth=1 origin "$BASELINE_SHA"
+
       - name: Fetch pre-push registry baseline
         if: github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000'
         env:

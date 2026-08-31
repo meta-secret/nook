@@ -101,7 +101,6 @@ Loom enforces:
 The co-located read-only TypeScript application owns the deterministic
 Markdown parser, graph-topology diagnostics, and legacy index migration
 rendering. The project is automatically installed and verified with every
-executable skill.
-Its bounded audit action remains dormant until the static YAML host registers
-it. The action does not read or write repository files, spawn processes, or
-coordinate agents.
+executable skill. Discover its bounded audit action with
+`task skills:tools-list`. The action does not read or write repository files,
+spawn processes, or coordinate agents.
