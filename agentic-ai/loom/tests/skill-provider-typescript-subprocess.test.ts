@@ -491,6 +491,14 @@ run({indexFile:'index'});`),
     expect(() => extract(source)).toThrow(
       'Dynamic TypeScript subprocess environment is forbidden',
     );
+  for (const environmentName of ['BASH_ENV', 'NODE_OPTIONS', 'CUSTOM_VALUE'])
+    expect(() =>
+      extract(`
+import {spawnSync} from 'node:child_process';
+spawnSync('git', ['status'], {env:{${environmentName}:requestValue}});`),
+    ).toThrow(
+      `Unsafe TypeScript subprocess environment key ${environmentName}`,
+    );
 });
 
 test('rejects shell-enabled subprocess options', () => {

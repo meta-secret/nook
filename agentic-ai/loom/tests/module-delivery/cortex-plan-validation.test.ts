@@ -127,7 +127,7 @@ function ordinaryDevCoreWrite(): ModuleDeliveryWriteNodeV2 {
   const node = cortexNode({
     taskId: 'dev-core-write',
     team: TeamKey.DevelopmentCore,
-    write: ['preflight/**'],
+    write: ['nook-app/nook-platform/nook-core/src/**'],
     selectedSkillPaths: [],
     sharedWriteClaims: [],
   });
@@ -137,7 +137,7 @@ function ordinaryDevCoreWrite(): ModuleDeliveryWriteNodeV2 {
     functionalOwner: TeamKey.DevelopmentCore,
     acceptanceOwner: TeamKey.DevelopmentCore,
     expert: ModuleDeliveryTaskProfile.Ordinary,
-    moduleRoot: 'preflight',
+    moduleRoot: 'nook-app/nook-platform/nook-core',
     parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
   };
 }
