@@ -233,7 +233,7 @@ mod tests {
                 observations: vec![mismatched],
             }
             .classify(),
-            AuthenticationWorkflowMatch::NoMatch
+            AuthenticationWorkflowMatch::Rejected
         );
     }
 
