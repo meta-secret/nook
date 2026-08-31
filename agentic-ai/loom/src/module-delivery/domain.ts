@@ -39,10 +39,8 @@ export enum ModuleDeliveryTaskProfile {
 }
 
 export const ORDINARY_TASK_WRITE_ROOTS = {
-  [TeamKey.Ai]: ['agentic-ai/loom'],
+  [TeamKey.Ai]: ['agentic-ai/loom', '.task/agentic-ai.yml'],
   [TeamKey.DevelopmentCore]: [
-    'nook-app/nook-platform',
-    'preflight',
     'agentic-ai/minds/Cargo.lock',
     'agentic-ai/minds/Cargo.toml',
     'agentic-ai/minds/clippy.toml',
@@ -50,12 +48,33 @@ export const ORDINARY_TASK_WRITE_ROOTS = {
     'agentic-ai/minds/hive/src',
     'agentic-ai/minds/hive/tests',
     'agentic-ai/minds/lace',
+    'nook-app/nook-platform/Cargo.lock',
+    'nook-app/nook-platform/Cargo.toml',
+    'nook-app/nook-platform/fuzz',
+    'nook-app/nook-platform/nook-app-common',
+    'nook-app/nook-platform/nook-auth2',
+    'nook-app/nook-platform/nook-authenticator-domain',
+    'nook-app/nook-platform/nook-companion-core',
+    'nook-app/nook-platform/nook-companion-wasm',
+    'nook-app/nook-platform/nook-core',
+    'nook-app/nook-platform/nook-event-log',
+    'nook-app/nook-platform/nook-replication',
+    'nook-app/nook-platform/nook-wasm',
   ],
   [TeamKey.Security]: [],
   [TeamKey.Sre]: [
     'infra',
     'nook-app/ci',
+    'nook-app/nook-platform',
+    'nook-app/nook-platform/fuzz/.cargo',
+    'nook-app/nook-platform/nook-core/Dockerfile.dockerignore',
+    'nook-app/nook-platform/nook-core/coverage-floor.json',
+    'nook-app/nook-platform/nook-core/docker-bake.hcl',
+    'nook-app/nook-platform/nook-wasm/Dockerfile.dockerignore',
+    'nook-app/nook-platform/nook-wasm/Taskfile.yml',
+    'nook-app/nook-platform/nook-wasm/docker-bake.hcl',
     'nook-app/nook-web/docker',
+    'preflight',
     '.task',
     'agentic-ai/ci-agent',
   ],
@@ -112,10 +131,19 @@ export function ordinaryTaskWriteAuthorized(
 }
 
 const ordinaryFileWriteRoots: readonly string[] = [
+  '.task/agentic-ai.yml',
   'agentic-ai/minds/Cargo.lock',
   'agentic-ai/minds/Cargo.toml',
   'agentic-ai/minds/clippy.toml',
   'agentic-ai/minds/hive/Cargo.toml',
+  'nook-app/nook-platform/Cargo.lock',
+  'nook-app/nook-platform/Cargo.toml',
+  'nook-app/nook-platform/nook-core/Dockerfile.dockerignore',
+  'nook-app/nook-platform/nook-core/coverage-floor.json',
+  'nook-app/nook-platform/nook-core/docker-bake.hcl',
+  'nook-app/nook-platform/nook-wasm/Dockerfile.dockerignore',
+  'nook-app/nook-platform/nook-wasm/Taskfile.yml',
+  'nook-app/nook-platform/nook-wasm/docker-bake.hcl',
 ];
 
 export function moduleDeliveryTaskTeam(

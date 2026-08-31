@@ -458,6 +458,10 @@ function assertSubprocessEnvironment([request, object]: readonly [
         throw new Error(
           `Dynamic TypeScript subprocess environment is forbidden in ${request.sourcePath}.`,
         );
+      if (!isSafeSubprocessEnvironmentKey(property.name.text))
+        throw new Error(
+          `Unsafe TypeScript subprocess environment key ${property.name.text} in ${request.sourcePath}.`,
+        );
       names.add(property.name.text);
     }
   }
@@ -506,6 +510,26 @@ function assertSubprocessEnvironment([request, object]: readonly [
     throw new Error(
       `TypeScript Worker eval authority is forbidden in ${request.sourcePath}.`,
     );
+}
+
+function isSafeSubprocessEnvironmentKey(name: string): boolean {
+  return (
+    name === 'COMSPEC' ||
+    name === 'GIT_AUTHOR_DATE' ||
+    name === 'GIT_COMMITTER_DATE' ||
+    name === 'GIT_CONFIG_GLOBAL' ||
+    name === 'GIT_CONFIG_NOSYSTEM' ||
+    name === 'GIT_INDEX_FILE' ||
+    name === 'GIT_NO_REPLACE_OBJECTS' ||
+    name === 'GIT_TERMINAL_PROMPT' ||
+    name === 'LC_ALL' ||
+    name === 'PATH' ||
+    name === 'Path' ||
+    name === 'PATHEXT' ||
+    name === 'SYSTEMROOT' ||
+    name === 'SystemRoot' ||
+    name === 'WINDIR'
+  );
 }
 
 export function subprocessArgumentList(

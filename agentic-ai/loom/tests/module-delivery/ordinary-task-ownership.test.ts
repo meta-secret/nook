@@ -152,3 +152,57 @@ test('routes the web Docker subtree exclusively to SRE', () => {
     accepted(ordinaryWrite({ team: TeamKey.WebDevelopment, ...request })),
   ).toBe(false);
 });
+
+test('separates portable platform Rust from operational ownership', () => {
+  const rust = {
+    moduleRoot: 'nook-app/nook-platform/nook-core',
+    write: 'nook-app/nook-platform/nook-core/src/lib.rs',
+  } as const;
+  expect(
+    accepted(ordinaryWrite({ team: TeamKey.DevelopmentCore, ...rust })),
+  ).toBe(true);
+  for (const request of [
+    {
+      moduleRoot: 'nook-app/nook-platform/fuzz/.cargo/audit.toml',
+      write: 'nook-app/nook-platform/fuzz/.cargo/audit.toml',
+    },
+    {
+      moduleRoot: 'nook-app/nook-platform/nook-core/docker-bake.hcl',
+      write: 'nook-app/nook-platform/nook-core/docker-bake.hcl',
+    },
+    {
+      moduleRoot: 'nook-app/nook-platform/docker',
+      write: 'nook-app/nook-platform/docker/sccache-report.sh',
+    },
+    { moduleRoot: 'preflight', write: 'preflight/tests/infra.rs' },
+  ] as const) {
+    expect(
+      accepted(ordinaryWrite({ team: TeamKey.DevelopmentCore, ...request })),
+    ).toBe(false);
+    expect(accepted(ordinaryWrite({ team: TeamKey.Sre, ...request }))).toBe(
+      true,
+    );
+  }
+});
+
+test('keeps the AI task registry out of broad SRE task ownership', () => {
+  const aiRegistry = {
+    moduleRoot: '.task/agentic-ai.yml',
+    write: '.task/agentic-ai.yml',
+  } as const;
+  expect(accepted(ordinaryWrite({ team: TeamKey.Ai, ...aiRegistry }))).toBe(
+    true,
+  );
+  expect(accepted(ordinaryWrite({ team: TeamKey.Sre, ...aiRegistry }))).toBe(
+    false,
+  );
+  expect(
+    accepted(
+      ordinaryWrite({
+        team: TeamKey.Sre,
+        moduleRoot: '.task',
+        write: '.task/ci-workflows.yml',
+      }),
+    ),
+  ).toBe(true);
+});
