@@ -80,6 +80,7 @@ export type AppendTeamPlanEventRequest = Readonly<{
   journalPath: string;
   event: TeamPlanEvent;
   beforeTemporarySync?: () => void;
+  afterTemporaryCleanupSync?: () => void;
   beforeParentSync?: () => void;
 }>;
 
@@ -93,11 +94,14 @@ type ExactFieldRequest = Readonly<{
   fields: readonly string[];
 }>;
 
-type TeamPlanLockOwner = Readonly<{
+type TeamPlanLockOwnerFields = Readonly<{
   pid: number;
   processIdentity: string;
   token: string;
 }>;
+type TeamPlanLockOwner =
+  | TeamPlanLockOwnerFields
+  | (TeamPlanLockOwnerFields & Readonly<{ version: 2 }>);
 
 type TeamPlanGenerationCapacityRequest = Readonly<{
   journalBytes: number;
@@ -140,6 +144,9 @@ export async function appendTeamPlanEvent(
     serialized: candidate,
     mode: current.mode,
     beforeTemporarySync: parentSyncHook(request.beforeTemporarySync),
+    afterTemporaryCleanupSync: parentSyncHook(
+      request.afterTemporaryCleanupSync,
+    ),
     beforeParentSync: parentSyncHook(request.beforeParentSync),
   });
 }
@@ -159,6 +166,7 @@ async function withTeamPlanJournalLockIdentity<T>(
   if (!identity)
     throw new Error('Team Plan process lock identity is unavailable.');
   const owner: TeamPlanLockOwner = {
+    version: 2,
     pid: process.pid,
     processIdentity: identity,
     token: randomUUID(),
@@ -199,7 +207,12 @@ export async function discardTeamPlanJournal(
 ): Promise<void> {
   const path = await canonicalTeamPlanJournalPath(request.journalPath);
   const tombstone = `${path}.discarding`;
-  const activePath = (await pathExists(path)) ? path : tombstone;
+  const sourcePresent = await pathExists(path);
+  const tombstonePresent = await pathExists(tombstone);
+  const artifactsMayAlreadyBeDiscarded = !sourcePresent;
+  if (sourcePresent && tombstonePresent)
+    await resumeDiscardTombstone({ path, tombstone });
+  const activePath = sourcePresent && !tombstonePresent ? path : tombstone;
   await withTeamPlanJournalLockIdentity({
     journalPath: activePath,
     lockIdentityPath: path,
@@ -216,7 +229,7 @@ export async function discardTeamPlanJournal(
         });
       await request.discardArtifacts({
         journal,
-        artifactsMayAlreadyBeDiscarded: activePath === tombstone,
+        artifactsMayAlreadyBeDiscarded,
       });
       request.beforeParentSync?.();
       await syncParent(tombstone);
@@ -465,7 +478,13 @@ async function readTeamPlanJournalFile(journalPath: string): Promise<{
     if (!opened.isFile()) throw new Error('Team Plan journal path is unsafe.');
     const serialized = await handle.readFile('utf8');
     const named = await lstat(path);
-    if (!named.isFile() || opened.dev !== named.dev || opened.ino !== named.ino)
+    if (
+      !named.isFile() ||
+      opened.nlink !== 1 ||
+      named.nlink !== 1 ||
+      opened.dev !== named.dev ||
+      opened.ino !== named.ino
+    )
       throw new Error('Team Plan journal path is unsafe.');
     return { path, serialized, mode: opened.mode & 0o777 };
   } finally {
@@ -803,9 +822,17 @@ function decodeLockOwner(serialized: string): TeamPlanLockOwner {
       cause: error,
     });
   }
+  if (!owner || typeof owner !== 'object')
+    throw new Error('Team Plan journal lock owner is malformed.');
+  const ownerFields = Object.keys(owner).sort();
+  const currentVersion = 'version' in owner && owner.version === 2;
   if (
-    JSON.stringify(Object.keys(owner).sort()) !==
-      JSON.stringify(['pid', 'processIdentity', 'token']) ||
+    JSON.stringify(ownerFields) !==
+      JSON.stringify(
+        currentVersion
+          ? ['pid', 'processIdentity', 'token', 'version']
+          : ['pid', 'processIdentity', 'token'],
+      ) ||
     !Number.isSafeInteger(owner.pid) ||
     owner.pid < 1 ||
     typeof owner.processIdentity !== 'string' ||
@@ -819,19 +846,35 @@ function decodeLockOwner(serialized: string): TeamPlanLockOwner {
 
 function staleTeamPlanLock(owner: TeamPlanLockOwner): boolean {
   const machineIdentity = processMachineIdentity();
-  if (
-    !machineIdentity ||
-    !owner.processIdentity.startsWith(`${machineIdentity}:`)
-  )
-    return false;
+  if (!machineIdentity) return false;
+  let ownerMachineIdentity = machineIdentity;
+  if (!owner.processIdentity.startsWith(`${ownerMachineIdentity}:`)) {
+    const legacyIdentity = legacyMachineIdentity(machineIdentity);
+    if (
+      !legacyIdentity ||
+      !owner.processIdentity.startsWith(`${legacyIdentity}:`)
+    )
+      return false;
+    ownerMachineIdentity = legacyIdentity;
+  }
   const currentIdentity = processStartIdentity(owner.pid);
-  if (currentIdentity) return currentIdentity !== owner.processIdentity;
+  if (currentIdentity) {
+    const ownerComparableIdentity = `${ownerMachineIdentity}:${currentIdentity.slice(machineIdentity.length + 1)}`;
+    return ownerComparableIdentity !== owner.processIdentity;
+  }
   try {
     process.kill(owner.pid, 0);
     return false;
   } catch (error) {
     return nodeErrorCode(error as NodeJS.ErrnoException) === 'ESRCH';
   }
+}
+
+function legacyMachineIdentity(machineIdentity: string): string | false {
+  const hostSuffix = ':host';
+  return process.platform === 'darwin' && machineIdentity.endsWith(hostSuffix)
+    ? machineIdentity.slice(0, -hostSuffix.length)
+    : false;
 }
 
 function teamPlanLockRef(request: {
@@ -885,6 +928,7 @@ async function replaceFile(request: {
   readonly serialized: string;
   readonly mode: number;
   readonly beforeTemporarySync: ParentSyncHook;
+  readonly afterTemporaryCleanupSync: ParentSyncHook;
   readonly beforeParentSync: ParentSyncHook;
 }): Promise<void> {
   const { path } = request;
@@ -920,6 +964,23 @@ async function publishDiscardTombstone(request: {
   await syncParent(request.path);
 }
 
+async function resumeDiscardTombstone(request: {
+  readonly path: string;
+  readonly tombstone: string;
+}): Promise<void> {
+  const source = await lstat(request.path);
+  const existing = await lstat(request.tombstone);
+  if (
+    source.dev !== existing.dev ||
+    source.ino !== existing.ino ||
+    source.nlink !== 2 ||
+    existing.nlink !== 2
+  )
+    throw new Error('Team Plan discard tombstone is forged.');
+  await unlink(request.path);
+  await syncParent(request.path);
+}
+
 function parentSyncHook(hook?: () => void): ParentSyncHook {
   return hook ? { presence: 'present', run: hook } : { presence: 'absent' };
 }
@@ -933,6 +994,7 @@ async function writeTemporaryFile(request: {
   readonly serialized: string;
   readonly mode: number;
   readonly beforeTemporarySync?: ParentSyncHook;
+  readonly afterTemporaryCleanupSync?: ParentSyncHook;
 }): Promise<string> {
   const { path, serialized } = request;
   const temporary = resolve(
@@ -951,6 +1013,8 @@ async function writeTemporaryFile(request: {
   } catch (error) {
     await handle.close().catch(() => false);
     await removeTemporary(temporary);
+    if (request.afterTemporaryCleanupSync)
+      runParentSyncHook(request.afterTemporaryCleanupSync);
     throw error;
   }
 }
@@ -969,7 +1033,9 @@ async function removeTemporary(path: string): Promise<void> {
     await unlink(path);
   } catch (error) {
     if (nodeErrorCode(error as NodeJS.ErrnoException) !== 'ENOENT') throw error;
+    return;
   }
+  await syncParent(path);
 }
 
 async function pathExists(path: string): Promise<boolean> {

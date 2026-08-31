@@ -239,10 +239,12 @@ describe('Team Plan journal', () => {
     const live = ownerBlob({
       fixture,
       name: 'live-lock.json',
-      contents: owner({
+      contents: `${JSON.stringify({
+        version: 2,
+        pid: process.pid,
         processIdentity: `${machineIdentity}:${started}`,
         token: 'live',
-      }),
+      })}\n`,
     });
     fixtureGit(fixture)(['update-ref', ref, live]);
     await expect(
@@ -256,7 +258,10 @@ describe('Team Plan journal', () => {
       fixture,
       name: 'foreign-lock.json',
       contents: owner({
-        processIdentity: `${hostname()}:${boot}:foreign-namespace:reused`,
+        processIdentity:
+          process.platform === 'linux'
+            ? `${hostname()}:${boot}:foreign-namespace:reused`
+            : `${hostname()}:foreign-boot:reused`,
         token: 'foreign',
       }),
     });
@@ -268,6 +273,31 @@ describe('Team Plan journal', () => {
       }),
     ).rejects.toThrow('already in use');
     fixtureGit(fixture)(['update-ref', '-d', ref, foreign]);
+    const legacy = ownerBlob({
+      fixture,
+      name: 'legacy-lock.json',
+      contents: owner({
+        processIdentity: `${hostname()}:${boot}:reused`,
+        token: 'legacy',
+      }),
+    });
+    fixtureGit(fixture)(['update-ref', ref, legacy]);
+    if (process.platform === 'darwin') {
+      expect(
+        await withTeamPlanJournalLock({
+          journalPath,
+          action: async () => 'migrated',
+        }),
+      ).toBe('migrated');
+    } else {
+      await expect(
+        withTeamPlanJournalLock({
+          journalPath,
+          action: async () => 'unreachable',
+        }),
+      ).rejects.toThrow('already in use');
+      fixtureGit(fixture)(['update-ref', '-d', ref, legacy]);
+    }
     const stale = ownerBlob({
       fixture,
       name: 'stale-lock.json',
@@ -280,7 +310,17 @@ describe('Team Plan journal', () => {
     expect(
       await withTeamPlanJournalLock({
         journalPath,
-        action: async () => 'acquired',
+        action: async () => {
+          const blob = fixtureGit(fixture)([
+            'rev-parse',
+            '--verify',
+            `${ref}^{blob}`,
+          ]);
+          expect(fixtureGit(fixture)(['cat-file', 'blob', blob])).toContain(
+            '"version":2',
+          );
+          return 'acquired';
+        },
       }),
     ).toBe('acquired');
     const lockPath = join(fixture.sourceRoot, '.git', `${ref}.lock`);
@@ -313,7 +353,16 @@ describe('Team Plan journal', () => {
     writeFileSync(shadowGit, '#!/bin/sh\nexit 93\n');
     chmodSync(shadowGit, 0o755);
     const originalPath = process.env.PATH || '/usr/bin:/bin';
+    const hadGitDirectory = 'GIT_DIR' in process.env;
+    const originalGitDirectory = process.env.GIT_DIR ?? '';
+    const hadGitCommonDirectory = 'GIT_COMMON_DIR' in process.env;
+    const originalGitCommonDirectory = process.env.GIT_COMMON_DIR ?? '';
+    const hadGitNamespace = 'GIT_NAMESPACE' in process.env;
+    const originalGitNamespace = process.env.GIT_NAMESPACE ?? '';
     process.env.PATH = `.:${originalPath}`;
+    process.env.GIT_DIR = join(fixture.root, 'hostile-git-dir');
+    process.env.GIT_COMMON_DIR = join(fixture.root, 'hostile-common-dir');
+    process.env.GIT_NAMESPACE = 'hostile';
     try {
       expect(
         await withTeamPlanJournalLock({
@@ -323,7 +372,32 @@ describe('Team Plan journal', () => {
       ).toBe('canonical-git');
     } finally {
       process.env.PATH = originalPath;
+      if (hadGitDirectory) process.env.GIT_DIR = originalGitDirectory;
+      else delete process.env.GIT_DIR;
+      if (hadGitCommonDirectory)
+        process.env.GIT_COMMON_DIR = originalGitCommonDirectory;
+      else delete process.env.GIT_COMMON_DIR;
+      if (hadGitNamespace) process.env.GIT_NAMESPACE = originalGitNamespace;
+      else delete process.env.GIT_NAMESPACE;
     }
+  });
+
+  test('rejects a hard-linked journal before lock acquisition', async () => {
+    const { fixture, journalPath } = await startedFixture();
+    linkSync(journalPath, `${journalPath}.alias`);
+    await expect(
+      withTeamPlanJournalLock({
+        journalPath,
+        action: async () => 'unreachable',
+      }),
+    ).rejects.toThrow('path is unsafe');
+    expect(
+      fixtureGit(fixture)([
+        'for-each-ref',
+        '--format=%(refname)',
+        lockRef({ fixture, journalPath }),
+      ]),
+    ).toBe('');
   });
 
   test('rejects torn snapshots and nested attempt extensions', async () => {
@@ -409,6 +483,7 @@ describe('Team Plan journal', () => {
       ...value,
       nodes: value.nodes.map((node) => ({ ...node, taskId: 'read_only' })),
     }));
+    let cleanupSynced = false;
     await expect(
       appendTeamPlanEvent({
         journalPath,
@@ -428,8 +503,12 @@ describe('Team Plan journal', () => {
         beforeTemporarySync: () => {
           throw new Error('temporary sync failed');
         },
+        afterTemporaryCleanupSync: () => {
+          cleanupSynced = true;
+        },
       }),
     ).rejects.toThrow('temporary sync failed');
+    expect(cleanupSynced).toBe(true);
     expect(
       readdirSync(fixture.root).filter((path) => path.endsWith('.tmp')),
     ).toEqual([]);

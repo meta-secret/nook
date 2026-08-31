@@ -875,6 +875,27 @@ describe('module delivery wave integration', () => {
     );
   });
 
+  test('ignores concurrent Team Plan lifecycle refs', () => {
+    const fixture = createTrackedFixture();
+    const { accepted } = readOnlyPlan(fixture);
+    const state = preparedIntegration(accepted);
+    const sourceGit = fixtureGit(fixture);
+    for (const ref of [
+      'refs/nook/team-plan/locks/concurrent',
+      'refs/nook/team-plan/artifacts/concurrent',
+      'refs/nook/team-plan/frontiers/concurrent',
+      'refs/nook/team-plan/final-heads/concurrent',
+      'refs/nook/team-plan-locks/legacy-concurrent',
+    ])
+      sourceGit(['update-ref', ref, 'HEAD']);
+    const integration: WaveIntegration = {
+      acceptedPlan: accepted,
+      state,
+      handoffs: [],
+    };
+    expect(() => integrateWave(integration)).not.toThrow();
+  });
+
   test('rejects a custom symbolic ref retargeted between equal commits', () => {
     const fixture = createTrackedFixture();
     const sourceGit = fixtureGit(fixture);
