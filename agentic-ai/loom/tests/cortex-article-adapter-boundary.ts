@@ -15,7 +15,8 @@ const APPLICATION_IMPORT =
   '../../../../.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/application.ts';
 const DOMAIN_IMPORT =
   '../../../../.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/domain.ts';
-const LOCAL_TYPE_IMPORT = './cortex-document-structure.ts';
+const DOCUMENT_SOURCE_IMPORT =
+  '../../../../.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/src/cortex-document-structure.ts';
 const FORBIDDEN_ADAPTER_GLOBALS = new Set([
   'Bun',
   'Deno',
@@ -118,7 +119,7 @@ function isAllowedImport(node: ts.ImportDeclaration): boolean {
       )?.text === 'unified',
     );
   }
-  if (specifier === LOCAL_TYPE_IMPORT) return clause.isTypeOnly;
+  if (specifier === DOCUMENT_SOURCE_IMPORT) return clause.isTypeOnly;
   return specifier === APPLICATION_IMPORT || specifier === DOMAIN_IMPORT;
 }
 

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "cortex-document-map",
+  "executionKind": "in-process-read-only",
+  "requestKind": "cortex-document-map-audit-v1",
+  "resultKind": "cortex-document-map-findings-v1",
+  "policyPaths": [
+    ".cortex/teams/ai/dynamic-skills/cortex-document-map/SKILL.md"
+  ],
+  "limits": {
+    "requestBytes": 4194304,
+    "resultBytes": 1048576
+  }
+}

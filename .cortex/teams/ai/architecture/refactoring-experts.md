@@ -260,7 +260,7 @@ The expert applies these canonical lenses:
 - [Cortex consistency](../dynamic-skills/cortex-consistency.md);
 - [Cortex writer](../dynamic-skills/cortex-writer.md);
 - [Cortex article structure](../dynamic-skills/cortex-article-structure/SKILL.md);
-- [Cortex document navigation](../dynamic-skills/cortex-document-map.md);
+- [Cortex document navigation](../dynamic-skills/cortex-document-map/SKILL.md);
 - [self-improvement instruction classification](../dynamic-skills/self-improvement.md#instruction-classification).
 
 A topic-local task reads the owning authority and its one-hop context.

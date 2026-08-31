@@ -11,7 +11,7 @@ import {
   type CortexArticleFinding,
   type CortexArticleSemanticBlock,
 } from '../../../../.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/domain.ts';
-import type { CortexDocumentSource } from './cortex-document-structure.ts';
+import type { CortexDocumentSource } from '../../../../.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/src/cortex-document-structure.ts';
 
 export {
   CortexArticleFindingCode,

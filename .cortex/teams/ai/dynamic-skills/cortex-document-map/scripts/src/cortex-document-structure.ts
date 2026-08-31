@@ -1,4 +1,6 @@
 import path from 'node:path';
+
+// Semantic implementation for the Cortex document-map executable skill.
 import GithubSlugger from 'github-slugger';
 import { fromMarkdown } from 'mdast-util-from-markdown';
 import type { Heading, Link, Parent, Root, RootContent } from 'mdast';

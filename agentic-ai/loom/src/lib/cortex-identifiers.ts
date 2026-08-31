@@ -14,7 +14,7 @@ import {
 import {
   markdownHeadingFragments,
   normalizedCortexMarkdown,
-} from './cortex-document-structure.ts';
+} from '../../../../.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/src/cortex-document-structure.ts';
 
 export const CORTEX_IDENTIFIER_REGISTRY_PATH = '.cortex/identifiers.json';
 export const CORTEX_IDENTIFIER_SCHEMA_VERSION = 1;

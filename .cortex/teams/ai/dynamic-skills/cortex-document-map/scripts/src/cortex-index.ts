@@ -1,4 +1,6 @@
 import path from 'node:path';
+
+// Legacy migration helpers remain deterministic and side-effect free.
 import GithubSlugger from 'github-slugger';
 import { fromMarkdown } from 'mdast-util-from-markdown';
 import type { Heading, Link, List, ListItem, Parent, RootContent } from 'mdast';
@@ -179,7 +181,7 @@ export function parseDocumentIndex(
   let contentStartIndex = root.children.length;
   if (mapIndex !== -1) {
     for (let index = mapIndex + 1; index < root.children.length; index += 1) {
-      const node = root.children[index];
+      const node = root.children.at(index);
       if (node?.type === 'heading' && node.depth === 2) {
         contentStartIndex = index;
         break;
@@ -343,7 +345,7 @@ export function stripDocumentNavigation(
   let introText = '';
   if (relIndex > 1) {
     const introStart = root.children[1]?.position?.start.offset;
-    const introEnd = root.children[relIndex - 1]?.position?.end.offset;
+    const introEnd = root.children.at(relIndex - 1)?.position?.end.offset;
     if (typeof introStart === 'number' && typeof introEnd === 'number') {
       introText = args.content.slice(introStart, introEnd).trim();
     }
@@ -351,7 +353,7 @@ export function stripDocumentNavigation(
 
   let contentStartIndex = root.children.length;
   for (let index = mapIndex + 1; index < root.children.length; index += 1) {
-    const node = root.children[index];
+    const node = root.children.at(index);
     if (node?.type === 'heading' && node.depth === 2) {
       contentStartIndex = index;
       break;
@@ -371,7 +373,7 @@ export function stripDocumentNavigation(
     return `${titleText}\n`;
   }
 
-  const firstContentNode = root.children[contentStartIndex];
+  const firstContentNode = root.children.at(contentStartIndex);
   if (!firstContentNode?.position) {
     return args.content;
   }

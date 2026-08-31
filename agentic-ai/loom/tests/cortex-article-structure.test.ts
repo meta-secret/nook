@@ -5,7 +5,7 @@ import {
   CortexArticleFindingCode,
 } from '../src/lib/cortex-article-structure.ts';
 import type { AuditCortexArticleStructureArgs } from '../src/lib/cortex-article-structure.ts';
-import type { CortexDocumentSource } from '../src/lib/cortex-document-structure.ts';
+import type { CortexDocumentSource } from '../../../.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/src/cortex-document-structure.ts';
 
 const REPO_ROOT = '/repo';
 
