@@ -44,6 +44,7 @@ function totpPilotStubArgs(messages: Record<string, ChromeMessage>) {
           currentStep: 2,
           totalSteps: 3,
           approvalRequirement: authenticationWorkflow.explicitUserApproval,
+          savedLoginCapability: 'unavailable',
           observationIndex: 0,
         },
       },

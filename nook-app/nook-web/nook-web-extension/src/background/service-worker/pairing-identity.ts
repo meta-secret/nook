@@ -13,6 +13,11 @@ import {
 import { companionWasmReady } from '../../../../nook-web-shared/src/extension/companion-ready'
 import { OpenCompanionLauncherIntent } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
 import { ExtensionConnectScope } from '../../../../nook-web-shared/src/extension/extension-connect-scope'
+import {
+  decode_extension_session_status_response,
+  ExtensionSessionStatusAvailability,
+  type ExtensionSessionStatusResponseWire,
+} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { runtimeSimpleVaultUrl } from '../../lib/simple-vault-runtime'
 import { WebsiteAuthenticatorResponseStatus } from '../../lib/login-fill-messages'
 import {
@@ -359,6 +364,19 @@ function unlockedSessionDevice(response: unknown): UnlockedSessionDeviceParse {
       devicePublicKey: device.devicePublicKey,
       deviceSigningPublicKey: device.deviceSigningPublicKey,
     },
+  }
+}
+
+export { ExtensionSessionStatusAvailability }
+
+export function websiteSessionStatusTransport(
+  response: unknown,
+): ExtensionSessionStatusAvailability {
+  try {
+    const wire = response as ExtensionSessionStatusResponseWire
+    return decode_extension_session_status_response(wire)
+  } catch {
+    return ExtensionSessionStatusAvailability.Unavailable
   }
 }
 
@@ -746,7 +764,31 @@ export async function availableWebsiteGrants({
   origin,
   sender,
   forbiddenReason,
-}: AvailableWebsiteGrantsArgs): Promise<
+}: AvailableWebsiteGrantsArgs): Promise<WebsiteGrantAccess> {
+  const request: WebsiteGrantsArgs = {
+    origin,
+    sender,
+    forbiddenReason,
+    openLockedCompanion: true,
+  }
+  return websiteGrants(request)
+}
+
+export async function passiveAvailableWebsiteGrants({
+  origin,
+  sender,
+  forbiddenReason,
+}: AvailableWebsiteGrantsArgs): Promise<WebsiteGrantAccess> {
+  const request: WebsiteGrantsArgs = {
+    origin,
+    sender,
+    forbiddenReason,
+    openLockedCompanion: false,
+  }
+  return websiteGrants(request)
+}
+
+type WebsiteGrantAccess =
   | { grants: StoredExtensionPairingGrant[] }
   | {
       response:
@@ -758,7 +800,17 @@ export async function availableWebsiteGrants({
               | WebsiteAuthenticatorResponseStatus.Locked
           }
     }
-> {
+
+type WebsiteGrantsArgs = AvailableWebsiteGrantsArgs & {
+  openLockedCompanion: boolean
+}
+
+async function websiteGrants({
+  origin,
+  sender,
+  forbiddenReason,
+  openLockedCompanion,
+}: WebsiteGrantsArgs): Promise<WebsiteGrantAccess> {
   const nookTypedArgs0_8: Parameters<typeof isAuthorizedWebsiteSender>[0] = {
     sender,
     origin,
@@ -777,19 +829,42 @@ export async function availableWebsiteGrants({
   }
   await ensureExtensionSessionDocument()
   const queueExpiresAt = Date.now() + SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS
+  const queue = openLockedCompanion
+    ? extensionSessionInteractiveDeadline(queueExpiresAt)
+    : extensionSessionProbeDeadline(queueExpiresAt)
   const nookTypedArgs0_9: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-status',
-    payload: { queue: extensionSessionInteractiveDeadline(queueExpiresAt) },
+    payload: { queue },
   }
   const status = await sendSessionMessage(nookTypedArgs0_9)
-  if (!isUnlockedSessionStatus(status)) {
-    openCompanionLauncherBestEffort(OpenCompanionLauncherIntent.Default)
+  await companionWasmReady
+  const sessionStatus = websiteSessionStatusTransport(status)
+  if (openLockedCompanion) {
+    if (sessionStatus !== ExtensionSessionStatusAvailability.Unlocked) {
+      openCompanionLauncherBestEffort(OpenCompanionLauncherIntent.Default)
+      return {
+        response: {
+          ok: true,
+          status: WebsiteAuthenticatorResponseStatus.Locked,
+        },
+      }
+    }
+    return { grants }
+  }
+  if (sessionStatus === ExtensionSessionStatusAvailability.Unavailable) {
     return {
       response: {
         ok: true,
-        status: WebsiteAuthenticatorResponseStatus.Locked,
+        status: WebsiteAuthenticatorResponseStatus.Unavailable,
       },
     }
   }
-  return { grants }
+  return sessionStatus === ExtensionSessionStatusAvailability.Unlocked
+    ? { grants }
+    : {
+        response: {
+          ok: true,
+          status: WebsiteAuthenticatorResponseStatus.Locked,
+        },
+      }
 }

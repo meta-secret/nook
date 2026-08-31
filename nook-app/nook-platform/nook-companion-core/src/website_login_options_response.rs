@@ -166,6 +166,23 @@ pub fn decode_website_login_options(
     }
 }
 
+pub fn decode_website_login_match_availability(
+    wire: WebsiteLoginOptionsWireValue,
+) -> Result<crate::WebsiteLoginMatchAvailability, WebsiteLoginOptionsDecodeError> {
+    Ok(match decode_website_login_options(wire)? {
+        WebsiteLoginOptions::Ready { accounts, .. } => {
+            crate::WebsiteLoginMatchAvailability::Ready {
+                count: u32::try_from(accounts.len())
+                    .map_err(|_| WebsiteLoginOptionsDecodeError::Malformed)?,
+            }
+        }
+        WebsiteLoginOptions::Locked { .. } => crate::WebsiteLoginMatchAvailability::Locked,
+        WebsiteLoginOptions::Unavailable { .. } | WebsiteLoginOptions::Rejected { .. } => {
+            crate::WebsiteLoginMatchAvailability::Unavailable
+        }
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -197,6 +214,32 @@ mod tests {
             r#"{"ok":true,"status":"ready","accounts":[{"vaultStoreId":"vault","vaultName":"Personal","secretId":"secret","username":"alice","websiteUrl":"https://example.com","websiteHost":"example.com","password":"foreign"}]}"#,
         ] {
             assert!(decode_website_login_options_json(malformed).is_err());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn derives_closed_login_match_availability() -> anyhow::Result<()> {
+        for (serialized, expected) in [
+            (
+                r#"{"ok":true,"status":"ready","accounts":[{"vaultStoreId":"vault","vaultName":"Personal","secretId":"secret","username":"alice","websiteUrl":"https://example.com","websiteHost":"example.com"}]}"#,
+                crate::WebsiteLoginMatchAvailability::Ready { count: 1 },
+            ),
+            (
+                r#"{"ok":true,"status":"locked"}"#,
+                crate::WebsiteLoginMatchAvailability::Locked,
+            ),
+            (
+                r#"{"ok":true,"status":"unavailable"}"#,
+                crate::WebsiteLoginMatchAvailability::Unavailable,
+            ),
+            (
+                r#"{"ok":false,"reason":"login-forbidden-origin"}"#,
+                crate::WebsiteLoginMatchAvailability::Unavailable,
+            ),
+        ] {
+            let wire = serde_json::from_str::<WebsiteLoginOptionsWireValue>(serialized)?;
+            assert_eq!(decode_website_login_match_availability(wire)?, expected);
         }
         Ok(())
     }

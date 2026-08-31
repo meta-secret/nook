@@ -1,11 +1,39 @@
 //! Complete response-boundary contract for classifier-produced workflow snapshots.
 
 use super::{
-    AuthenticationWorkflowAction, AuthenticationWorkflowKind, AuthenticationWorkflowSnapshot,
-    AuthenticationWorkflowStage,
+    AuthenticationSavedLoginCapability, AuthenticationWorkflowAction, AuthenticationWorkflowKind,
+    AuthenticationWorkflowSnapshot, AuthenticationWorkflowStage,
 };
 
 const MAX_AUTHENTICATION_WORKFLOW_OBSERVATION_INDEX_EXCLUSIVE: u32 = 20;
+
+const fn saved_login_capability_matches_contract(snapshot: AuthenticationWorkflowSnapshot) -> bool {
+    let is_login_credentials = matches!(
+        (snapshot.kind, snapshot.stage),
+        (
+            AuthenticationWorkflowKind::Login,
+            AuthenticationWorkflowStage::Credentials
+        )
+    );
+    match snapshot.action {
+        AuthenticationWorkflowAction::ContinueWithNook => {
+            is_login_credentials
+                && matches!(
+                    snapshot.saved_login_capability,
+                    AuthenticationSavedLoginCapability::FillSavedLogin
+                )
+        }
+        AuthenticationWorkflowAction::UsePasskey | AuthenticationWorkflowAction::CreatePasskey
+            if is_login_credentials =>
+        {
+            true
+        }
+        _ => matches!(
+            snapshot.saved_login_capability,
+            AuthenticationSavedLoginCapability::Unavailable
+        ),
+    }
+}
 
 impl AuthenticationWorkflowSnapshot {
     /// Whether this snapshot is one of the complete tuples emitted by the classifier.
@@ -15,6 +43,7 @@ impl AuthenticationWorkflowSnapshot {
             || self.total_steps == 0
             || self.current_step > self.total_steps
             || !self.approval_requirement_matches_action()
+            || !saved_login_capability_matches_contract(self)
             || self.observation_index >= MAX_AUTHENTICATION_WORKFLOW_OBSERVATION_INDEX_EXCLUSIVE
         {
             return false;
@@ -107,12 +136,58 @@ impl AuthenticationWorkflowSnapshot {
 mod tests {
     use super::super::{
         AuthenticationApprovalRequirement, AuthenticationPageObservation,
-        AuthenticationWorkflowAction, AuthenticationWorkflowKind, AuthenticationWorkflowMatch,
-        AuthenticationWorkflowSnapshot, AuthenticationWorkflowStage,
-        MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS, classify_authentication_workflow,
-        classify_authentication_workflow_candidates,
+        AuthenticationSavedLoginCapability, AuthenticationWorkflowAction,
+        AuthenticationWorkflowKind, AuthenticationWorkflowMatch, AuthenticationWorkflowSnapshot,
+        AuthenticationWorkflowStage, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
+        classify_authentication_workflow, classify_authentication_workflow_candidates,
     };
     use super::MAX_AUTHENTICATION_WORKFLOW_OBSERVATION_INDEX_EXCLUSIVE;
+
+    #[test]
+    fn saved_login_capability_requires_a_complete_login_snapshot() {
+        let valid = AuthenticationWorkflowSnapshot {
+            kind: AuthenticationWorkflowKind::Login,
+            stage: AuthenticationWorkflowStage::Credentials,
+            action: AuthenticationWorkflowAction::ContinueWithNook,
+            current_step: 1,
+            total_steps: 3,
+            approval_requirement: AuthenticationApprovalRequirement::ExplicitUserApproval,
+            saved_login_capability: AuthenticationSavedLoginCapability::FillSavedLogin,
+            observation_index: 0,
+        };
+        assert_eq!(
+            valid.saved_login_capability(),
+            AuthenticationSavedLoginCapability::FillSavedLogin
+        );
+        assert_eq!(
+            AuthenticationWorkflowSnapshot {
+                stage: AuthenticationWorkflowStage::Recovery,
+                ..valid
+            }
+            .saved_login_capability(),
+            AuthenticationSavedLoginCapability::Unavailable
+        );
+
+        let continue_without_saved_login = AuthenticationWorkflowSnapshot {
+            saved_login_capability: AuthenticationSavedLoginCapability::Unavailable,
+            ..valid
+        };
+        assert!(!continue_without_saved_login.matches_classifier_contract());
+
+        let passkey_without_saved_login = AuthenticationWorkflowSnapshot {
+            action: AuthenticationWorkflowAction::UsePasskey,
+            saved_login_capability: AuthenticationSavedLoginCapability::Unavailable,
+            ..valid
+        };
+        assert!(passkey_without_saved_login.matches_classifier_contract());
+        assert!(
+            AuthenticationWorkflowSnapshot {
+                saved_login_capability: AuthenticationSavedLoginCapability::FillSavedLogin,
+                ..passkey_without_saved_login
+            }
+            .matches_classifier_contract()
+        );
+    }
 
     fn classifier_outputs() -> Vec<(
         AuthenticationPageObservation,
@@ -213,6 +288,18 @@ mod tests {
                                 approval_requirement: AuthenticationApprovalRequirement::for_action(
                                     action,
                                 ),
+                                saved_login_capability: if matches!(
+                                    (kind, stage, action),
+                                    (
+                                        AuthenticationWorkflowKind::Login,
+                                        AuthenticationWorkflowStage::Credentials,
+                                        AuthenticationWorkflowAction::ContinueWithNook,
+                                    )
+                                ) {
+                                    AuthenticationSavedLoginCapability::FillSavedLogin
+                                } else {
+                                    AuthenticationSavedLoginCapability::Unavailable
+                                },
                                 observation_index: 0,
                             };
                             if !accepted.matches_classifier_contract() {
@@ -261,6 +348,7 @@ mod tests {
             current_step: 1,
             total_steps: 3,
             approval_requirement: AuthenticationApprovalRequirement::ExplicitUserApproval,
+            saved_login_capability: AuthenticationSavedLoginCapability::FillSavedLogin,
             observation_index: maximum_exclusive - 1,
         };
         assert!(snapshot.matches_classifier_contract());

@@ -27,6 +27,15 @@ pub fn validate_extension_session_request(
 }
 
 #[wasm_bindgen]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)] // wasm-bindgen owns the decoded ABI value.
+pub fn decode_extension_session_status_response(
+    response: nook_companion_core::ExtensionSessionStatusResponseWire,
+) -> nook_companion_core::ExtensionSessionStatusAvailability {
+    nook_companion_core::decode_extension_session_status_response(&response)
+}
+
+#[wasm_bindgen]
 pub fn decode_website_login_options(
     response: nook_companion_core::WebsiteLoginOptionsWireValue,
 ) -> Result<nook_companion_core::WebsiteLoginOptions, wasm_bindgen::JsError> {
@@ -88,6 +97,30 @@ pub fn decode_authentication_workflow_snapshot_response(
 ) -> Result<nook_companion_core::AuthenticationWorkflowSnapshotResponse, wasm_bindgen::JsError> {
     nook_companion_core::decode_authentication_workflow_snapshot_response(response)
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+}
+
+#[wasm_bindgen]
+pub fn decode_authentication_workflow_runtime_response(
+    response: nook_companion_core::AuthenticationWorkflowRuntimeResponseWire,
+) -> Result<nook_companion_core::AuthenticationWorkflowRuntimeResponse, wasm_bindgen::JsError> {
+    nook_companion_core::decode_authentication_workflow_runtime_response(response)
+        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+}
+
+#[wasm_bindgen]
+pub fn decode_website_login_match_availability(
+    response: nook_companion_core::WebsiteLoginOptionsWireValue,
+) -> Result<nook_companion_core::WebsiteLoginMatchAvailability, wasm_bindgen::JsError> {
+    nook_companion_core::decode_website_login_match_availability(response)
+        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+}
+
+#[wasm_bindgen]
+#[must_use]
+pub fn authentication_workflow_saved_login_capability(
+    snapshot: nook_companion_core::AuthenticationWorkflowSnapshot,
+) -> nook_companion_core::AuthenticationSavedLoginCapability {
+    snapshot.saved_login_capability()
 }
 
 #[wasm_bindgen]
@@ -715,12 +748,117 @@ mod tests {
             nook_companion_core::AuthenticationUsernameEvidence::Absent
         );
     }
+
+    #[test]
+    fn saved_login_capability_export_rejects_impossible_snapshots() {
+        let valid = nook_companion_core::AuthenticationWorkflowSnapshot {
+            kind: nook_companion_core::AuthenticationWorkflowKind::Login,
+            stage: nook_companion_core::AuthenticationWorkflowStage::Credentials,
+            action: nook_companion_core::AuthenticationWorkflowAction::ContinueWithNook,
+            current_step: 1,
+            total_steps: 3,
+            approval_requirement:
+                nook_companion_core::AuthenticationApprovalRequirement::ExplicitUserApproval,
+            saved_login_capability:
+                nook_companion_core::AuthenticationSavedLoginCapability::FillSavedLogin,
+            observation_index: 0,
+        };
+        assert_eq!(
+            authentication_workflow_saved_login_capability(valid),
+            nook_companion_core::AuthenticationSavedLoginCapability::FillSavedLogin
+        );
+        assert_eq!(
+            authentication_workflow_saved_login_capability(
+                nook_companion_core::AuthenticationWorkflowSnapshot {
+                    stage: nook_companion_core::AuthenticationWorkflowStage::Recovery,
+                    ..valid
+                }
+            ),
+            nook_companion_core::AuthenticationSavedLoginCapability::Unavailable
+        );
+    }
 }
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod wasm_tests {
     use nook_companion_core::{ExtensionPersistenceArea, ExtensionPersistenceObservation};
+    use serde::{Deserialize, Serialize};
     use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[derive(Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct SessionDeviceFixture {
+        device_id: &'static str,
+        device_public_key: &'static str,
+        device_signing_public_key: &'static str,
+    }
+
+    #[derive(Serialize)]
+    struct SessionStatusFixture {
+        ok: bool,
+        status: u8,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        device: Option<SessionDeviceFixture>,
+    }
+
+    #[derive(Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct WorkflowSnapshotFixture {
+        kind: u8,
+        stage: u8,
+        action: u8,
+        current_step: u8,
+        total_steps: u8,
+        approval_requirement: &'static str,
+        saved_login_capability: &'static str,
+        observation_index: u32,
+    }
+
+    #[derive(Serialize)]
+    struct WorkflowFixture {
+        ok: bool,
+        snapshot: WorkflowSnapshotFixture,
+    }
+
+    #[derive(Serialize)]
+    struct LoginMatchesFixture {
+        kind: &'static str,
+        count: u32,
+    }
+
+    #[derive(Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct RuntimeResponseFixture {
+        workflow: WorkflowFixture,
+        login_matches: LoginMatchesFixture,
+    }
+
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct RuntimeResponseResult {
+        login_matches: LoginMatchesResult,
+    }
+
+    #[derive(Deserialize)]
+    struct LoginMatchesResult {
+        kind: String,
+        count: u32,
+    }
+
+    #[derive(Serialize)]
+    struct LockedLoginOptionsFixture {
+        ok: bool,
+        status: &'static str,
+    }
+
+    #[derive(Deserialize)]
+    struct LoginAvailabilityResult {
+        kind: String,
+    }
+
+    fn js_error(error: impl std::fmt::Display) -> wasm_bindgen::JsError {
+        wasm_bindgen::JsError::new(&error.to_string())
+    }
 
     #[wasm_bindgen_test]
     fn persistence_observation_round_trips_the_numeric_wasm_enum()
@@ -734,6 +872,110 @@ mod wasm_tests {
         let decoded: ExtensionPersistenceObservation = serde_wasm_bindgen::from_value(js_value)?;
 
         assert_eq!(decoded, observation);
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn session_status_bridge_classifies_supported_device_states()
+    -> Result<(), wasm_bindgen::JsError> {
+        for (status, expected) in [
+            (
+                0,
+                nook_companion_core::ExtensionSessionStatusAvailability::Unavailable,
+            ),
+            (
+                4,
+                nook_companion_core::ExtensionSessionStatusAvailability::Locked,
+            ),
+            (
+                5,
+                nook_companion_core::ExtensionSessionStatusAvailability::Unavailable,
+            ),
+            (
+                7,
+                nook_companion_core::ExtensionSessionStatusAvailability::Unavailable,
+            ),
+        ] {
+            let fixture = SessionStatusFixture {
+                ok: true,
+                status,
+                device: None,
+            };
+            let js_input = serde_wasm_bindgen::to_value(&fixture).map_err(js_error)?;
+            let wire = serde_wasm_bindgen::from_value(js_input).map_err(js_error)?;
+            assert_eq!(
+                super::decode_extension_session_status_response(wire),
+                expected
+            );
+        }
+
+        let unlocked = SessionStatusFixture {
+            ok: true,
+            status: 6,
+            device: Some(SessionDeviceFixture {
+                device_id: "device",
+                device_public_key: "public",
+                device_signing_public_key: "signing",
+            }),
+        };
+        let js_input = serde_wasm_bindgen::to_value(&unlocked).map_err(js_error)?;
+        let wire = serde_wasm_bindgen::from_value(js_input).map_err(js_error)?;
+        assert_eq!(
+            super::decode_extension_session_status_response(wire),
+            nook_companion_core::ExtensionSessionStatusAvailability::Unlocked
+        );
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn runtime_response_bridge_accepts_the_complete_js_envelope()
+    -> Result<(), wasm_bindgen::JsError> {
+        let fixture = RuntimeResponseFixture {
+            workflow: WorkflowFixture {
+                ok: true,
+                snapshot: WorkflowSnapshotFixture {
+                    kind: 0,
+                    stage: 0,
+                    action: 4,
+                    current_step: 1,
+                    total_steps: 3,
+                    approval_requirement: "explicit-user-approval",
+                    saved_login_capability: "fill-saved-login",
+                    observation_index: 0,
+                },
+            },
+            login_matches: LoginMatchesFixture {
+                kind: "ready",
+                count: 2,
+            },
+        };
+        let js_input = serde_wasm_bindgen::to_value(&fixture).map_err(js_error)?;
+        let wire = serde_wasm_bindgen::from_value(js_input).map_err(js_error)?;
+        let decoded = super::decode_authentication_workflow_runtime_response(wire)?;
+        let js_output = serde_wasm_bindgen::to_value(&decoded).map_err(js_error)?;
+        let result: RuntimeResponseResult =
+            serde_wasm_bindgen::from_value(js_output).map_err(js_error)?;
+
+        assert_eq!(result.login_matches.kind, "ready");
+        assert_eq!(result.login_matches.count, 2);
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn login_match_bridge_accepts_the_website_options_js_envelope()
+    -> Result<(), wasm_bindgen::JsError> {
+        let js_input = serde_wasm_bindgen::to_value(&LockedLoginOptionsFixture {
+            ok: true,
+            status: "locked",
+        })
+        .map_err(js_error)?;
+        let wire = serde_wasm_bindgen::from_value(js_input).map_err(js_error)?;
+        let decoded = super::decode_website_login_match_availability(wire)?;
+        let js_output = serde_wasm_bindgen::to_value(&decoded).map_err(js_error)?;
+        let result: LoginAvailabilityResult =
+            serde_wasm_bindgen::from_value(js_output).map_err(js_error)?;
+
+        assert_eq!(result.kind, "locked");
         Ok(())
     }
 }

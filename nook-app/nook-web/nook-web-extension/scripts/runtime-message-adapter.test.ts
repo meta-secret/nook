@@ -383,16 +383,20 @@ describe('runtime message adapters', () => {
       detailedAdvanceControl: { kind: 'absent' },
     }
     const response = {
-      ok: true,
-      snapshot: {
-        kind: 0,
-        stage: 0,
-        action: 0,
-        currentStep: 1,
-        totalSteps: 3,
-        approvalRequirement: 'explicit-user-approval',
-        observationIndex: 0,
+      workflow: {
+        ok: true,
+        snapshot: {
+          kind: 0,
+          stage: 0,
+          action: 0,
+          currentStep: 1,
+          totalSteps: 3,
+          approvalRequirement: 'explicit-user-approval',
+          savedLoginCapability: 'fill-saved-login',
+          observationIndex: 0,
+        },
       },
+      loginMatches: { kind: 'ready', count: 2 },
       selectedFacts,
     }
     installRuntimeMock({ kind: RuntimeMockKind.Response, response })
@@ -407,21 +411,29 @@ describe('runtime message adapters', () => {
         AuthenticationWorkflowSnapshotResponseKind.Matched,
       )
       expect(delivery.response.selectedFacts).toEqual(selectedFacts)
+      expect(delivery.response.loginMatches).toEqual({
+        kind: 'ready',
+        count: 2,
+      })
     }
   })
 
   test('rejects the legacy ambiguous workflow approval boolean', async () => {
     const response = {
-      ok: true,
-      snapshot: {
-        kind: 0,
-        stage: 0,
-        action: 0,
-        currentStep: 1,
-        totalSteps: 3,
-        requiresHumanApproval: true,
-        observationIndex: 0,
+      workflow: {
+        ok: true,
+        snapshot: {
+          kind: 0,
+          stage: 0,
+          action: 0,
+          currentStep: 1,
+          totalSteps: 3,
+          requiresHumanApproval: true,
+          savedLoginCapability: 'fill-saved-login',
+          observationIndex: 0,
+        },
       },
+      loginMatches: { kind: 'unavailable' },
     }
     installRuntimeMock({ kind: RuntimeMockKind.Response, response })
 
@@ -676,16 +688,20 @@ describe('runtime message adapters', () => {
 
   test('rejects an out-of-range workflow snapshot through Rust', async () => {
     const response = {
-      ok: true,
-      snapshot: {
-        kind: 0,
-        stage: 0,
-        action: 0,
-        currentStep: -1,
-        totalSteps: 300,
-        approvalRequirement: 'explicit-user-approval',
-        observationIndex: -1,
+      workflow: {
+        ok: true,
+        snapshot: {
+          kind: 0,
+          stage: 0,
+          action: 0,
+          currentStep: -1,
+          totalSteps: 300,
+          approvalRequirement: 'explicit-user-approval',
+          savedLoginCapability: 'fill-saved-login',
+          observationIndex: -1,
+        },
       },
+      loginMatches: { kind: 'unavailable' },
     }
     installRuntimeMock({ kind: RuntimeMockKind.Response, response })
 

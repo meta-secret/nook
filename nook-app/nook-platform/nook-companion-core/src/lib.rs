@@ -22,6 +22,7 @@ mod backup_code_candidates;
 mod extension_pairing_state;
 mod extension_persistence;
 mod extension_session_protocol;
+mod extension_session_status_response;
 mod extension_vault_event;
 mod generated_password_response;
 mod oauth_origin_policy;
@@ -49,19 +50,24 @@ pub use authentication_workflow::{
     AuthenticationPageObservation, AuthenticationPageObservationFacts,
     AuthenticationPageObservationFactsBatch, AuthenticationPageObservations,
     AuthenticationPasskeyControlObservation, AuthenticationPasskeyEvidence,
-    AuthenticationWorkflowAction, AuthenticationWorkflowKind, AuthenticationWorkflowMatch,
-    AuthenticationWorkflowSnapshot, AuthenticationWorkflowSnapshotError,
-    AuthenticationWorkflowStage, MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
-    MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS, authentication_form_observation_priority,
-    authentication_page_observation_facts_priority, authentication_page_observations_are_valid,
-    authentication_passkey_control_candidate_is_safe,
+    AuthenticationSavedLoginCapability, AuthenticationWorkflowAction, AuthenticationWorkflowKind,
+    AuthenticationWorkflowMatch, AuthenticationWorkflowSnapshot,
+    AuthenticationWorkflowSnapshotError, AuthenticationWorkflowStage,
+    MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
+    authentication_form_observation_priority, authentication_page_observation_facts_priority,
+    authentication_page_observations_are_valid, authentication_passkey_control_candidate_is_safe,
     authentication_passkey_control_evidence_is_safe, classify_authentication_workflow,
     classify_authentication_workflow_candidates,
 };
 pub use authentication_workflow_response::{
-    AuthenticationWorkflowSnapshotResponse, AuthenticationWorkflowSnapshotResponseDecodeError,
-    AuthenticationWorkflowSnapshotResponseKind, AuthenticationWorkflowSnapshotResponseWire,
-    AuthenticationWorkflowSnapshotWire, decode_authentication_workflow_snapshot_response,
+    AuthenticationWorkflowRuntimeResponse, AuthenticationWorkflowRuntimeResponseDecodeError,
+    AuthenticationWorkflowRuntimeResponseWire, AuthenticationWorkflowSnapshotResponse,
+    AuthenticationWorkflowSnapshotResponseDecodeError, AuthenticationWorkflowSnapshotResponseKind,
+    AuthenticationWorkflowSnapshotResponseWire, AuthenticationWorkflowSnapshotWire,
+    WebsiteLoginMatchAvailability, WebsiteLoginMatchAvailabilityKind,
+    WebsiteLoginMatchAvailabilityWire, WebsiteLoginMatchAvailabilityWithCountWire,
+    WebsiteLoginMatchAvailabilityWithoutCountWire, decode_authentication_workflow_runtime_response,
+    decode_authentication_workflow_snapshot_response,
 };
 pub use authenticator_backup_attach_response::{
     AuthenticatorBackupAttachResponse, AuthenticatorBackupAttachResponseDecodeError,
@@ -115,6 +121,11 @@ pub use extension_session_protocol::{
     LoginPickerOpenResponseDecodeError, LoginPickerOpenResponseWire,
     decode_login_picker_open_response, validate_extension_session_request_json,
 };
+pub use extension_session_status_response::{
+    ExtensionSessionDeviceProtectionStatusWire, ExtensionSessionDeviceWire,
+    ExtensionSessionStatusAvailability, ExtensionSessionStatusResponseWire,
+    decode_extension_session_status_response,
+};
 pub use extension_vault_event::{EXTENSION_VAULT_EVENT_TYPESCRIPT, ExtensionVaultEventPayload};
 pub use generated_password_response::{
     GeneratedPasswordResponse, GeneratedPasswordResponseDecodeError, GeneratedPasswordResponseKind,
@@ -155,7 +166,8 @@ pub use vault_host_policy::{
 };
 pub use website_login_options_response::{
     WebsiteLoginAccountOption, WebsiteLoginOptions, WebsiteLoginOptionsDecodeError,
-    WebsiteLoginOptionsWireValue, decode_website_login_options, decode_website_login_options_json,
+    WebsiteLoginOptionsWireValue, decode_website_login_match_availability,
+    decode_website_login_options, decode_website_login_options_json,
 };
 pub use website_login_save_offer_response::{
     WebsiteLoginSaveActionResponse, WebsiteLoginSaveOfferResponse,

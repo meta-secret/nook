@@ -226,6 +226,11 @@ impl NookAuthenticationWorkflowSnapshot {
         self.0.approval_requirement
     }
 
+    #[wasm_bindgen(getter, js_name = savedLoginCapability)]
+    pub fn saved_login_capability(&self) -> nook_core::AuthenticationSavedLoginCapability {
+        self.0.saved_login_capability()
+    }
+
     #[wasm_bindgen(getter, js_name = observationIndex)]
     pub fn observation_index(&self) -> u32 {
         self.0.observation_index

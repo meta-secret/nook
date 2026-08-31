@@ -37,7 +37,7 @@ import {
   decode_login_picker_open_response,
   decode_authenticator_picker_open_response,
   decode_authentication_outcome_response,
-  decode_authentication_workflow_snapshot_response,
+  decode_authentication_workflow_runtime_response,
   decode_authenticator_backup_attach_response,
   decode_authenticator_code_response,
   decode_authenticator_enrollment_confirm_response,
@@ -49,8 +49,9 @@ import {
   decode_website_login_save_offer_response,
   decode_website_login_save_pending_response,
   decode_website_login_options,
+  type AuthenticationWorkflowRuntimeResponse,
+  type AuthenticationWorkflowRuntimeResponseWire,
   type AuthenticationWorkflowSnapshotResponse,
-  type AuthenticationWorkflowSnapshotResponseWire,
   type AuthenticatorBackupAttachResponse,
   type AuthenticatorBackupAttachResponseWire,
   type AuthenticatorCodeResponse,
@@ -89,11 +90,12 @@ export type RuntimeMessageDelivery<Response> =
 
 export type AuthenticationWorkflowSnapshotRuntimeResponse = {
   verdict: AuthenticationWorkflowSnapshotResponse
+  loginMatches: AuthenticationWorkflowRuntimeResponse['loginMatches']
   selectedFacts?: AuthenticationPageObservationView
 }
 
 type AuthenticationWorkflowSnapshotRoutingWire =
-  AuthenticationWorkflowSnapshotResponseWire & {
+  AuthenticationWorkflowRuntimeResponseWire & {
     selectedFacts?: unknown
   }
 
@@ -322,22 +324,24 @@ export async function sendAuthenticationWorkflowSnapshotRuntimeMessage(
     const routingWire =
       delivery.response as AuthenticationWorkflowSnapshotRoutingWire
     const { selectedFacts, ...responseWire } = routingWire
-    const verdictWire =
-      responseWire as AuthenticationWorkflowSnapshotResponseWire
-    const verdict =
-      decode_authentication_workflow_snapshot_response(verdictWire)
+    const authenticationWorkflowResponseWire: AuthenticationWorkflowRuntimeResponseWire =
+      responseWire
+    const runtimeResponse = decode_authentication_workflow_runtime_response(
+      authenticationWorkflowResponseWire,
+    )
+    const { workflow: verdict, loginMatches } = runtimeResponse
     if ('snapshot' in verdict) {
       if (!isAuthenticationPageObservationView(selectedFacts)) {
         return unavailable()
       }
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
-        response: { verdict, selectedFacts },
+        response: { verdict, loginMatches, selectedFacts },
       }
     }
     return {
       kind: RuntimeMessageDeliveryKind.Delivered,
-      response: { verdict },
+      response: { verdict, loginMatches },
     }
   } catch {
     return unavailable()

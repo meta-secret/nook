@@ -30,7 +30,8 @@ pub use observation_validation::{
     authentication_page_observations_are_valid,
 };
 pub use vocabulary::{
-    AuthenticationWorkflowAction, AuthenticationWorkflowKind, AuthenticationWorkflowStage,
+    AuthenticationSavedLoginCapability, AuthenticationWorkflowAction, AuthenticationWorkflowKind,
+    AuthenticationWorkflowStage,
 };
 
 use crate::website_passkey_proposal::{WebsitePasskeyProposal, propose_website_passkey};
@@ -167,6 +168,7 @@ pub struct AuthenticationWorkflowSnapshot {
     pub current_step: u8,
     pub total_steps: u8,
     pub approval_requirement: AuthenticationApprovalRequirement,
+    pub saved_login_capability: AuthenticationSavedLoginCapability,
     pub observation_index: u32,
 }
 
@@ -221,8 +223,14 @@ impl AuthenticationWorkflowSnapshot {
             current_step,
             total_steps,
             approval_requirement: AuthenticationApprovalRequirement::for_action(action),
+            saved_login_capability: AuthenticationSavedLoginCapability::Unavailable,
             observation_index: 0,
         }
+    }
+
+    const fn with_saved_login_capability(mut self) -> Self {
+        self.saved_login_capability = AuthenticationSavedLoginCapability::FillSavedLogin;
+        self
     }
 
     #[must_use]
@@ -240,6 +248,15 @@ impl AuthenticationWorkflowSnapshot {
                 AuthenticationApprovalRequirement::TakeoverRequired,
             )
         )
+    }
+
+    #[must_use]
+    pub const fn saved_login_capability(self) -> AuthenticationSavedLoginCapability {
+        if self.matches_classifier_contract() {
+            self.saved_login_capability
+        } else {
+            AuthenticationSavedLoginCapability::Unavailable
+        }
     }
 }
 
@@ -395,7 +412,8 @@ pub const fn classify_authentication_workflow(
                 AuthenticationWorkflowAction::ContinueWithNook,
                 1,
                 3,
-            ),
+            )
+            .with_saved_login_capability(),
         ));
     }
 
@@ -408,7 +426,8 @@ pub const fn classify_authentication_workflow(
                 AuthenticationWorkflowAction::ContinueWithNook,
                 1,
                 3,
-            ),
+            )
+            .with_saved_login_capability(),
         ));
     }
 
@@ -497,6 +516,7 @@ mod tests {
                 1,
                 3,
             )
+            .with_saved_login_capability()
         );
         Ok(())
     }
@@ -733,6 +753,10 @@ mod tests {
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Login);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::UsePasskey);
         assert_eq!(
+            snapshot.saved_login_capability,
+            AuthenticationSavedLoginCapability::FillSavedLogin
+        );
+        assert_eq!(
             snapshot.approval_requirement,
             AuthenticationApprovalRequirement::ExplicitUserApproval
         );
@@ -749,6 +773,10 @@ mod tests {
         let snapshot = classify_authentication_workflow(login).snapshot()?;
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Login);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::CreatePasskey);
+        assert_eq!(
+            snapshot.saved_login_capability,
+            AuthenticationSavedLoginCapability::FillSavedLogin
+        );
         Ok(())
     }
 
@@ -761,6 +789,10 @@ mod tests {
         let snapshot = classify_authentication_workflow(passkey_only).snapshot()?;
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Login);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::CreatePasskey);
+        assert_eq!(
+            snapshot.saved_login_capability,
+            AuthenticationSavedLoginCapability::Unavailable
+        );
         Ok(())
     }
 

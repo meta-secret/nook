@@ -47,7 +47,10 @@ import {
   isWebsitePasskeyOptionsMessage,
   isWebsitePasskeyPerformMessage,
 } from '../lib/webauthn-messages'
-import { websiteLoginOptions } from './service-worker/account-pickers'
+import {
+  websiteLoginMatchAvailability,
+  websiteLoginOptions,
+} from './service-worker/account-pickers'
 import {
   cancelAuthenticatorPicker,
   openWebsiteAuthenticatorPicker,
@@ -102,6 +105,7 @@ import { routeExternalCompanionMessage } from './service-worker/external-compani
 import {
   authenticationPasskeyEvidenceIsSafe,
   authenticationWorkflowMessageResponse,
+  authenticationWorkflowSavedLoginCapability,
 } from './service-worker/authentication-workflow-routing'
 import {
   closeExtensionSessionDocument,
@@ -329,12 +333,15 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
       companionWasmReady,
       authenticationPasskeyEvidenceIsSafe,
       authenticationWorkflowSnapshot,
+      authenticationWorkflowSavedLoginCapability,
       matchingPasskeyAccountCountForOriginSafe,
+      websiteLoginMatchAvailability,
     }
     const workflowRequest: Parameters<
       typeof authenticationWorkflowMessageResponse
     >[0] = {
       message,
+      sender,
       dependencies: workflowDependencies,
     }
     void authenticationWorkflowMessageResponse(workflowRequest).then(
