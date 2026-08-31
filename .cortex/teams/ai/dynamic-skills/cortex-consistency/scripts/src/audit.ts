@@ -78,10 +78,7 @@ export function compileCortexContracts(
       });
       continue;
     }
-    const contextOwner: CortexDocumentOwnerResolution = {
-      kind: CortexDocumentOwnerResolutionKind.Known,
-      owner: CORTEX_CONTEXT_OWNERS[authorityPath],
-    };
+    const contextOwner = cortexDocumentOwner(authorityPath);
     const contextArgs: ValidateContextArgs = {
       context,
       contextOwner,
@@ -194,20 +191,6 @@ function cortexDocumentOwner(
   return { kind: CortexDocumentOwnerResolutionKind.Unrecognized };
 }
 
-const CORTEX_CONTEXT_OWNERS: Readonly<
-  Record<CortexContextAuthorityDocument, CortexContractTeam>
-> = {
-  [CortexContextAuthorityDocument.Root]: CortexContractTeam.GizmoPrime,
-  [CortexContextAuthorityDocument.Gizmo]: CortexContractTeam.GizmoPrime,
-  [CortexContextAuthorityDocument.Shared]: CortexContractTeam.Shared,
-  [CortexContextAuthorityDocument.Ai]: CortexContractTeam.Ai,
-  [CortexContextAuthorityDocument.DevelopmentCore]:
-    CortexContractTeam.DevelopmentCore,
-  [CortexContextAuthorityDocument.Security]: CortexContractTeam.Security,
-  [CortexContextAuthorityDocument.Sre]: CortexContractTeam.Sre,
-  [CortexContextAuthorityDocument.WebDevelopment]:
-    CortexContractTeam.WebDevelopment,
-};
 type CortexContextAuthorityResolution =
   | {
       readonly kind: CortexDocumentOwnerResolutionKind.Known;
