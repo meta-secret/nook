@@ -77,6 +77,7 @@ export const ORDINARY_TASK_WRITE_ROOTS = {
     'nook-app/nook-web/Taskfile.yml',
     'nook-app/nook-web/docker',
     'nook-app/nook-web/nook-web-extension/Taskfile.yml',
+    'nook-app/nook-web/nook-web-extension/scripts/verify-deployment.sh',
     'nook-app/nook-web/nook-web-app/Dockerfile',
     'nook-app/nook-web/nook-web-app/docker-bake.hcl',
     'preflight',
@@ -96,6 +97,7 @@ export type ModuleDeliveryTaskTeamRequest = {
 };
 
 export function ordinaryTaskWriteTeam(write: string): TeamKey | false {
+  if (ordinaryTaskFileRootShadows(write)) return false;
   if (!write.includes('*')) return ordinaryTaskPathTeam(write);
   let owner: TeamKey | false = false;
   let ownerRootLength = -1;
@@ -129,7 +131,8 @@ function ordinaryTaskPathTeam(path: string): TeamKey | false {
     const roots: readonly string[] = ORDINARY_TASK_WRITE_ROOTS[team];
     for (const root of roots)
       if (
-        (path === root || path.startsWith(`${root}/`)) &&
+        (path === root ||
+          (!ordinaryPathIsFileShaped(root) && path.startsWith(`${root}/`))) &&
         root.length > ownerRootLength
       ) {
         owner = team;
@@ -157,9 +160,20 @@ export function ordinaryTaskWriteAuthorized(
 }
 
 function ordinaryWriteClaimIsFileOrPattern(write: string): boolean {
-  if (write.includes('*')) return true;
-  const basename = write.slice(write.lastIndexOf('/') + 1);
+  return write.includes('*') || ordinaryPathIsFileShaped(write);
+}
+
+function ordinaryPathIsFileShaped(path: string): boolean {
+  const basename = path.slice(path.lastIndexOf('/') + 1);
   return basename.indexOf('.') > 0 || /^[A-Z][A-Za-z0-9_-]*$/.test(basename);
+}
+
+function ordinaryTaskFileRootShadows(write: string): boolean {
+  for (const roots of Object.values(ORDINARY_TASK_WRITE_ROOTS))
+    for (const root of roots)
+      if (ordinaryPathIsFileShaped(root) && write.startsWith(`${root}/`))
+        return true;
+  return false;
 }
 
 export function moduleDeliveryTaskTeam(
