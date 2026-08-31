@@ -3,12 +3,12 @@ import {
   findPasswordFields,
   findUsernameFields,
   hasAutocompleteToken,
+  PasswordFormScopeKind,
   preferredOneTimeCodeFillField,
   type PasswordFieldQuery,
 } from "./password-form-fields";
 import {
   PasswordFormQueryKind,
-  PasswordFormScopeKind,
   type PasswordFormScopeQuery,
 } from "./password-form-submission-controls";
 
