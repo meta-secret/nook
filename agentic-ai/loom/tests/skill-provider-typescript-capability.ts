@@ -441,16 +441,25 @@ function assertSubprocessEnvironment([request, object]: readonly [
   if (environment === false && environmentProperties.length > 0)
     throw new Error('Dynamic TypeScript subprocess environment is forbidden.');
   if (environment !== false) {
-    const environmentObject = request.resolveObject(environment);
-    if (environmentObject === false && request.allowDynamicEnvironment) return;
-    if (environmentObject === false)
+    if (!ts.isObjectLiteralExpression(environment)) {
+      if (request.allowDynamicEnvironment) return;
       throw new Error(
         `Dynamic TypeScript subprocess environment is forbidden in ${request.sourcePath}.`,
       );
-    if (environmentObject.properties.length > 0)
-      throw new Error(
-        `Nonempty TypeScript subprocess environment is forbidden in ${request.sourcePath}.`,
-      );
+    }
+    const names = new Set<string>();
+    for (const property of environment.properties) {
+      if (
+        !ts.isPropertyAssignment(property) ||
+        (!ts.isIdentifier(property.name) &&
+          !ts.isStringLiteral(property.name)) ||
+        names.has(property.name.text)
+      )
+        throw new Error(
+          `Dynamic TypeScript subprocess environment is forbidden in ${request.sourcePath}.`,
+        );
+      names.add(property.name.text);
+    }
   }
   const shell = exactObjectProperty([object, 'shell']);
   const shellProperties = object.properties.filter(

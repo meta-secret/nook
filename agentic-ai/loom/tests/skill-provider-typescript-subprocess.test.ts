@@ -463,21 +463,33 @@ runExternal({command:'tar',cwd:runtimeRoot});`),
   ).toEqual([]);
 });
 
-test('rejects subprocess environment authority and permits exact empty env', () => {
+test('permits static-key subprocess environments and rejects dynamic maps', () => {
   expect(
     extract(`
 import {spawnSync} from 'node:child_process';
 spawnSync('bun', ['scripts/facade.ts'], {cwd:'nested',env:{}});`),
   ).toEqual(["cd 'nested' && 'bun' 'scripts/facade.ts'"]);
+  expect(
+    extract(`
+import {spawnSync} from 'node:child_process';
+function run(request:{indexFile?:string}) {
+  spawnSync('git', ['status'], {env:{
+    PATH:process.env.PATH,
+    GIT_CONFIG_NOSYSTEM:'1',
+    GIT_INDEX_FILE:request.indexFile,
+  }});
+}
+run({indexFile:'index'});`),
+  ).toEqual([]);
   for (const source of [
-    "import {spawnSync} from 'node:child_process'; spawnSync('bun', ['scripts/facade.ts'], {env:{NODE_OPTIONS:'--require ./hook.cjs'}});",
-    "import {execSync} from 'node:child_process'; execSync('bun scripts/facade.ts', {env:{BASH_ENV:'./hook.sh'}});",
     "import {fork} from 'node:child_process'; fork('scripts/facade.ts', [], {env:process.env});",
     "Bun.spawn(['bun', 'scripts/facade.ts'], {env:{...process.env}});",
-    "import {spawnSync} from 'node:child_process'; spawnSync('git', ['status'], {env:{NODE_OPTIONS:'--require ./hook.cjs'}});",
+    "import {spawnSync} from 'node:child_process'; const environment={PATH:process.env.PATH}; spawnSync('git', ['status'], {env:environment});",
+    "import {spawnSync} from 'node:child_process'; spawnSync('git', ['status'], {env:{[environmentName]:environmentValue}});",
+    "import {spawnSync} from 'node:child_process'; spawnSync('git', ['status'], {env:{PATH:process.env.PATH,PATH:'/usr/bin'}});",
   ])
     expect(() => extract(source)).toThrow(
-      /(?:Dynamic|Nonempty) TypeScript subprocess environment is forbidden/,
+      'Dynamic TypeScript subprocess environment is forbidden',
     );
 });
 
@@ -514,7 +526,6 @@ new Worker('./scripts/args.mjs', {execArgv:[],eval:false});`),
     "new Worker('./scripts/facade.mjs', {execArgv:[],execArgv:['--inspect']});",
     "new Worker('postMessage(1)', {eval:true});",
     "new Worker('./scripts/facade.mjs', {eval:false,eval:false});",
-    "new Worker('./scripts/facade.mjs', {env:{NODE_OPTIONS:'--require ./hook.cjs'}});",
   ])
     expect(() => extract(source)).toThrow();
   expect(
