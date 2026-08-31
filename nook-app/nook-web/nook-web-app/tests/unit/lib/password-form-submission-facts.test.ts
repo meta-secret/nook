@@ -3,6 +3,7 @@ import {
   authenticationPageObservationFacts,
   clearLoginCredentials,
   fillLoginCredentials,
+  FormSubmissionResult,
   PasswordFormQueryKind,
   submitLoginForm,
   summarizeAuthenticationWorkflowForms,
@@ -76,6 +77,25 @@ describe('credential submission observation facts', () => {
 
     expect(authenticationFacts().credentialSubmission).toEqual({
       kind: 'absent',
+    })
+  })
+
+  test('binds the same semantic control that activation prioritizes', () => {
+    document.body.innerHTML = `
+      <form method="post" id="login" action="/session">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="button">Continue</button>
+        <button type="submit" formaction="/approved-login">Sign in</button>
+      </form>
+    `
+
+    expect(authenticationFacts().credentialSubmission).toMatchObject({
+      kind: 'observed',
+      facts: {
+        method: 'post',
+        destinationIdentity: expect.stringContaining('/approved-login'),
+      },
     })
   })
 
@@ -175,7 +195,7 @@ describe('credential submission observation facts', () => {
       },
     }
 
-    expect(submitLoginForm(request)).toBe(false)
+    expect(submitLoginForm(request)).toBe(FormSubmissionResult.Rejected)
     expect(
       document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
     ).toBe('')
@@ -211,7 +231,7 @@ describe('credential submission observation facts', () => {
       },
     }
 
-    expect(submitLoginForm(request)).toBe(false)
+    expect(submitLoginForm(request)).toBe(FormSubmissionResult.Rejected)
     expect(
       document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
     ).toBe('')

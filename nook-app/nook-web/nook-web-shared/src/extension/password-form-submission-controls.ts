@@ -64,14 +64,14 @@ type FormSubmissionObservation = {
   approval: FormSubmissionApproval | false;
 };
 
-enum FormSubmissionObservationResult {
-  Awaiting = "awaiting",
+export enum FormSubmissionResult {
+  NotObserved = "not-observed",
   Submitted = "submitted",
   Rejected = "rejected",
 }
 
 type FormSubmissionObservationState = {
-  result: FormSubmissionObservationResult;
+  result: FormSubmissionResult;
 };
 
 type ObservedFormIdentityRequest = {
@@ -616,7 +616,7 @@ export function requestImplicitAuthenticationSubmit({
   hasAuthenticationUsername,
   hasAuthenticationPassword,
   approval,
-}: ImplicitAuthenticationSubmitRequest): boolean {
+}: ImplicitAuthenticationSubmitRequest): FormSubmissionResult {
   const sourceOrigin = form.ownerDocument.defaultView?.location.origin;
   if (
     !sourceOrigin ||
@@ -625,7 +625,7 @@ export function requestImplicitAuthenticationSubmit({
     typeof form.requestSubmit !== "function" ||
     (hasAuthenticationPassword && formBlocksCredentialDisclosure(form))
   ) {
-    return false;
+    return FormSubmissionResult.NotObserved;
   }
   const destinationRequest: AuthenticationRouteDestinationRequest = {
     form,
@@ -638,7 +638,7 @@ export function requestImplicitAuthenticationSubmit({
     hasAuthenticationPassword,
   };
   if (!canRequestImplicitAuthenticationSubmit(capabilityRequest)) {
-    return false;
+    return FormSubmissionResult.NotObserved;
   }
   const submission: FormSubmissionObservation = {
     form,
@@ -908,24 +908,24 @@ export function observeSubmit({
   form,
   action,
   approval,
-}: FormSubmissionObservation): boolean {
+}: FormSubmissionObservation): FormSubmissionResult {
   const state: FormSubmissionObservationState = {
-    result: FormSubmissionObservationResult.Awaiting,
+    result: FormSubmissionResult.NotObserved,
   };
   const markSubmitted = (event: SubmitEvent) => {
     if (approval && !approval.isApproved()) {
       event.preventDefault();
       event.stopImmediatePropagation();
-      state.result = FormSubmissionObservationResult.Rejected;
+      state.result = FormSubmissionResult.Rejected;
       approval.reject();
       return;
     }
-    if (state.result !== FormSubmissionObservationResult.Rejected) {
-      state.result = FormSubmissionObservationResult.Submitted;
+    if (state.result !== FormSubmissionResult.Rejected) {
+      state.result = FormSubmissionResult.Submitted;
     }
   };
   form.addEventListener("submit", markSubmitted, true);
   action();
   form.removeEventListener("submit", markSubmitted, true);
-  return state.result === FormSubmissionObservationResult.Submitted;
+  return state.result;
 }

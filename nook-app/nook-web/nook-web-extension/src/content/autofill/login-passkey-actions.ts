@@ -13,6 +13,7 @@ import {
   fillGeneratedPassword,
   fillLoginCredentials,
   findWorkflowPasskeyControl,
+  FormSubmissionResult,
   PasskeyControlLookupKind,
   PasswordFormQueryKind,
   submitLoginForm,
@@ -275,7 +276,27 @@ export async function fillAndSubmitAccount({
     formScope: workflow.formScope,
     submissionApproval,
   }
-  if (!submitLoginForm(nookTypedArgs0_7)) {
+  const submissionResult = submitLoginForm(nookTypedArgs0_7)
+  if (submissionResult === FormSubmissionResult.Rejected) {
+    const rejectedProgress: Parameters<typeof setFlightProgress>[0] = {
+      step,
+      title,
+      currentStep: 2,
+      totalSteps: 3,
+      titleKey: BROWSER_MESSAGE_KEYS.WidgetFillingTitle,
+    }
+    setFlightProgress(rejectedProgress)
+    const rejectedStatus: Parameters<typeof setStatus>[0] = {
+      description,
+      continueButton,
+      text: translatedMessage(BROWSER_MESSAGE_KEYS.WidgetFillFailed),
+      enableContinue: true,
+    }
+    setStatus(rejectedStatus)
+    continueButton.hidden = false
+    return false
+  }
+  if (submissionResult === FormSubmissionResult.NotObserved) {
     const nookTypedArgs0_8: Parameters<typeof setFlightProgress>[0] = {
       step,
       title,

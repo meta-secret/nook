@@ -9,6 +9,7 @@ import {
 } from '../../../../nook-web-shared/src/extension/password-form-submission-controls'
 import {
   authenticationPageObservationFacts,
+  FormSubmissionResult,
   PasswordFormQueryKind,
   PasswordFormScopeKind,
   submitLoginForm,
@@ -19,6 +20,12 @@ import {
 const wholeDocumentPasswordFormSubmission: Parameters<
   typeof submitLoginForm
 >[0] = { kind: PasswordFormQueryKind.Root, root: document }
+
+function loginFormWasSubmitted(
+  request: Parameters<typeof submitLoginForm>[0],
+): boolean {
+  return submitLoginForm(request) === FormSubmissionResult.Submitted
+}
 
 function observedAuthenticationWorkflow(): PasswordFormObservation {
   const observation = summarizeAuthenticationWorkflowForms()[0]
@@ -70,7 +77,9 @@ describe('authentication observation bounds', () => {
       kind: 'absent',
     })
     expect(facts.ceremony.authenticationContext?.destinationIdentity).toBe('')
-    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(false)
+    expect(loginFormWasSubmitted(wholeDocumentPasswordFormSubmission)).toBe(
+      false,
+    )
   })
 
   test('isolates a candidate whose raw form identity exceeds the bound', () => {
@@ -99,7 +108,9 @@ describe('authentication observation bounds', () => {
     expect(formIdentity).toContain('delete-account')
     expect(new TextEncoder().encode(formIdentity).length).toBeGreaterThan(512)
     expect(facts.detailedAdvanceControl).toMatchObject({ kind: 'absent' })
-    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(false)
+    expect(loginFormWasSubmitted(wholeDocumentPasswordFormSubmission)).toBe(
+      false,
+    )
   })
 
   test('isolates a control whose machine identity would lose a destructive suffix', () => {
@@ -124,7 +135,9 @@ describe('authentication observation bounds', () => {
     expect(facts.detailedAdvanceControl).toMatchObject({
       kind: 'absent',
     })
-    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(false)
+    expect(loginFormWasSubmitted(wholeDocumentPasswordFormSubmission)).toBe(
+      false,
+    )
   })
 
   test('keeps a login submitter when a shared form has too many candidates', () => {
@@ -427,7 +440,9 @@ describe('authentication observation bounds', () => {
       event.preventDefault()
       submitted = true
     })
-    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
+    expect(loginFormWasSubmitted(wholeDocumentPasswordFormSubmission)).toBe(
+      true,
+    )
     expect(submitted).toBe(true)
   })
 

@@ -55,6 +55,7 @@ import {
   formBlocksCredentialDisclosure,
   selectedSubmitterBlocksCredentialDisclosure,
   formSubmissionMethod,
+  FormSubmissionResult,
   PageControlSubmissionMethod,
   isRenderedControl,
   observeSubmit,
@@ -106,6 +107,7 @@ export type {
 } from "./password-form-field-actions";
 export { LoginCredentialsLookupKind } from "./password-form-field-actions";
 export {
+  FormSubmissionResult,
   PasswordFormQueryKind,
   type PasswordFormScopeQuery,
 } from "./password-form-submission-controls";
@@ -270,7 +272,9 @@ function scopedAdvanceControls(
       : !control.form;
   });
 }
-
+function semanticSubmitControlsFirst(...pair: [HTMLElement, HTMLElement]): number {
+  return Number(pair[1].matches(semanticSubmitControlSelector)) - Number(pair[0].matches(semanticSubmitControlSelector));
+}
 type PageControlObservationRequest = {
   observation: PasswordFormObservation;
   control: HTMLElement;
@@ -420,7 +424,7 @@ export function authenticationPageObservationFacts({
 }: AuthenticationObservationFactsRequest): AuthenticationPageObservationFacts {
   const controlRoot = scopedControlRoot(observation);
   const authenticationUsername = usernameEvidence(observation);
-  const advanceControls = scopedAdvanceControls(observation);
+  const advanceControls = scopedAdvanceControls(observation).sort(semanticSubmitControlsFirst);
   const semanticSubmitControlCount =
     countedSemanticSubmitControls(advanceControls);
   const passkeyControls = findPasskeyControls(controlRoot).filter(
@@ -861,7 +865,7 @@ type OwnedAdvanceControlActivation =
   | { kind: OwnedAdvanceControlActivationKind.Absent }
   | {
       kind: OwnedAdvanceControlActivationKind.Activated;
-      submitted: boolean;
+      result: FormSubmissionResult;
     };
 
 type OwnedAdvanceControlRequest = {
@@ -901,11 +905,7 @@ function findApprovedOwnedAdvanceControl({
       ),
     )
       .filter((control) => control.form === form)
-      .sort(
-        (...pair) =>
-          Number(pair[1].matches(semanticSubmitControlSelector)) -
-          Number(pair[0].matches(semanticSubmitControlSelector)),
-      )
+      .sort(semanticSubmitControlsFirst)
       .find((control) => {
         if (!isRenderedControl(control)) return false;
         const factsRequest: PageControlObservationRequest = {
@@ -937,7 +937,7 @@ function activateApprovedOwnedAdvanceControl({
     approved.click();
     return {
       kind: OwnedAdvanceControlActivationKind.Activated,
-      submitted: true,
+      result: FormSubmissionResult.Submitted,
     };
   }
   const clickSubmission: Parameters<typeof observeSubmit>[0] = {
@@ -945,25 +945,25 @@ function activateApprovedOwnedAdvanceControl({
     action: () => approved.click(),
     approval: request.submissionApproval ?? false,
   };
-  const submitted = observeSubmit(clickSubmission);
+  const result = observeSubmit(clickSubmission);
   if (
-    !submitted &&
+    result === FormSubmissionResult.NotObserved &&
     approved instanceof HTMLInputElement &&
     approved.type === "image"
   ) {
     clickSubmission.action = () => form.requestSubmit(approved);
     return {
       kind: OwnedAdvanceControlActivationKind.Activated,
-      submitted: observeSubmit(clickSubmission),
+      result: observeSubmit(clickSubmission),
     };
   }
   return {
     kind: OwnedAdvanceControlActivationKind.Activated,
-    submitted,
+    result,
   };
 }
 
-export function submitLoginForm(request: LoginFormSubmissionRequest): boolean {
+export function submitLoginForm(request: LoginFormSubmissionRequest): FormSubmissionResult {
   const nookTypedArgs0_26 = passwordFieldQuery(request);
   const passwordField = findPasswordFields(nookTypedArgs0_26)[0];
   const nookTypedArgs0_27 = passwordFieldQuery(request);
@@ -971,13 +971,13 @@ export function submitLoginForm(request: LoginFormSubmissionRequest): boolean {
   const usernameField = usernameFields[0];
   const hasAuthenticationUsername = usernameFields.some(isAuthUsernameField);
   const anchor = passwordField ?? usernameField;
-  if (!anchor) return false;
+  if (!anchor) return FormSubmissionResult.NotObserved;
   const form = anchor.form;
   if (form) {
     const activationRequest: OwnedAdvanceControlRequest = { request, form };
     const activation = activateApprovedOwnedAdvanceControl(activationRequest);
     if (activation.kind === OwnedAdvanceControlActivationKind.Activated) {
-      return activation.submitted;
+      return activation.result;
     }
   }
   if (!passwordField) {
@@ -985,9 +985,9 @@ export function submitLoginForm(request: LoginFormSubmissionRequest): boolean {
       ...request,
       usernameField,
     };
-    if (clickAdvanceControl(nookNamedArgs0_4)) return true;
+    if (clickAdvanceControl(nookNamedArgs0_4)) return FormSubmissionResult.Submitted;
   }
-  if (!form) return false;
+  if (!form) return FormSubmissionResult.NotObserved;
   const implicitRequest: Parameters<
     typeof requestImplicitAuthenticationSubmit
   >[0] = {
