@@ -131,9 +131,7 @@ async function websiteLoginOptionsResponse({
   ) {
     return { ok: false, reason: 'login-options-unavailable' }
   }
-  return openUnavailableCompanion
-    ? { ok: true, status: 'ready', authorizationGeneration, accounts }
-    : { ok: true, status: 'ready', accounts }
+  return { ok: true, status: 'ready', authorizationGeneration, accounts }
 }
 
 export async function websiteLoginOptions(
