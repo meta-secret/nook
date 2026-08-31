@@ -481,6 +481,11 @@ function run(request:{indexFile?:string}) {
 }
 run({indexFile:'index'});`),
   ).toEqual([]);
+  expect(
+    extract(`
+import {spawnSync} from 'node:child_process';
+spawnSync('git', ['status'], {env:{PATH:'/bin:/usr/bin:/usr/sbin'}});`),
+  ).toEqual([]);
   for (const source of [
     "import {fork} from 'node:child_process'; fork('scripts/facade.ts', [], {env:process.env});",
     "Bun.spawn(['bun', 'scripts/facade.ts'], {env:{...process.env}});",
@@ -501,8 +506,11 @@ spawnSync('git', ['status'], {env:{${environmentName}:requestValue}});`),
     );
   for (const environment of [
     "{PATH:'./bin:/usr/bin'}",
+    "{PATH:'/tmp:/bin:/usr/bin:/usr/sbin'}",
+    "{PATH:'/bin:/usr/bin:/usr/sbin:'}",
     '{PATH:request.path}',
     "{Path:'relative-bin'}",
+    "{Path:'/bin:/usr/bin:/usr/sbin'}",
   ])
     expect(() =>
       extract(`
