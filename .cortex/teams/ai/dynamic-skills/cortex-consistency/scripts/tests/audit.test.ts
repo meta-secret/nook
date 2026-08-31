@@ -1,8 +1,10 @@
 import { expect, test } from 'bun:test';
 import { compileCortexContracts } from '../src/audit.ts';
 import {
+  CortexCompatibilityEvidence,
   CortexContractFindingCode,
   CortexPolicyArea,
+  CortexPolicyCapability,
   CortexPolicyContractKind,
   type AuditCortexContractsArgs,
 } from '../src/domain.ts';
@@ -10,6 +12,9 @@ import {
 const AUTHORITY = '.cortex/teams/sre/AGENTS.md';
 const POLICY =
   '.cortex/teams/web-dev/dynamic-skills/typescript-enums-over-booleans.md';
+const RUST_POLICY = '.cortex/teams/dev-core/dynamic-skills/rust-coding.md';
+const SCHEMA_POLICY =
+  '.cortex/teams/dev-core/design-docs/vault-schema-versioning.md';
 
 function request(references: readonly string[]): AuditCortexContractsArgs {
   return {
@@ -132,4 +137,125 @@ test('preserves leading traversal so it cannot alias a canonical authority', () 
       file: escapedAuthority,
     }),
   );
+});
+
+test('rejects uncovered foreign policy and invalid policy ownership', () => {
+  const roguePolicy = '.cortex/rogue/policy.md';
+  const compileRequest = request([]);
+  expect(
+    compileCortexContracts({
+      ...compileRequest,
+      registry: {
+        ...compileRequest.registry,
+        contexts: [{ ...compileRequest.registry.contexts[0]!, imports: [] }],
+      },
+    }),
+  ).toContainEqual(
+    expect.objectContaining({
+      code: CortexContractFindingCode.MissingPolicyImport,
+      file: AUTHORITY,
+    }),
+  );
+  expect(
+    compileCortexContracts({
+      registry: {
+        contexts: [],
+        policies: [
+          {
+            document: roguePolicy,
+            kind: CortexPolicyContractKind.General,
+            areas: [CortexPolicyArea.CortexAuthoring],
+            capabilities: [],
+          },
+        ],
+      },
+      documents: [{ relativePath: roguePolicy, references: [] }],
+    }),
+  ).toContainEqual(
+    expect.objectContaining({
+      code: CortexContractFindingCode.InvalidPolicyOwner,
+      file: roguePolicy,
+    }),
+  );
+});
+
+type PersistedRequestArgs = {
+  readonly schemaAuthority: string;
+  readonly evidence: readonly CortexCompatibilityEvidence[];
+  readonly references?: readonly string[];
+};
+
+function persistedRequest(
+  args: PersistedRequestArgs,
+): AuditCortexContractsArgs {
+  return {
+    registry: {
+      contexts: [],
+      policies: [
+        {
+          document: RUST_POLICY,
+          kind: CortexPolicyContractKind.PersistedRepresentation,
+          schemaAuthority: args.schemaAuthority,
+          evidence: args.evidence,
+          areas: [],
+          capabilities: [],
+        },
+        {
+          document: SCHEMA_POLICY,
+          kind: CortexPolicyContractKind.General,
+          areas: [],
+          capabilities: [CortexPolicyCapability.SchemaVersioning],
+        },
+      ],
+    },
+    documents: [
+      { relativePath: RUST_POLICY, references: args.references ?? [] },
+      { relativePath: SCHEMA_POLICY, references: [] },
+    ],
+  };
+}
+
+test('requires compatibility evidence and a valid referenced schema authority', () => {
+  expect(
+    compileCortexContracts(
+      persistedRequest({ schemaAuthority: SCHEMA_POLICY, evidence: [] }),
+    ),
+  ).toContainEqual(
+    expect.objectContaining({
+      code: CortexContractFindingCode.MissingCompatibilityEvidence,
+    }),
+  );
+  expect(
+    compileCortexContracts(
+      persistedRequest({
+        schemaAuthority: '.cortex/missing.md',
+        evidence: [CortexCompatibilityEvidence.LegacyDecodeTest],
+      }),
+    ),
+  ).toContainEqual(
+    expect.objectContaining({
+      code: CortexContractFindingCode.InvalidSchemaAuthority,
+    }),
+  );
+  expect(
+    compileCortexContracts(
+      persistedRequest({
+        schemaAuthority: SCHEMA_POLICY,
+        evidence: [CortexCompatibilityEvidence.MigrationTest],
+      }),
+    ),
+  ).toContainEqual(
+    expect.objectContaining({
+      code: CortexContractFindingCode.MissingSchemaAuthorityReference,
+    }),
+  );
+  expect(
+    compileCortexContracts(
+      persistedRequest({
+        schemaAuthority: SCHEMA_POLICY,
+        evidence: [CortexCompatibilityEvidence.MigrationTest],
+        references: ['../design-docs/vault-schema-versioning.md'],
+      }),
+    ),
+  ).toEqual([]);
 });
