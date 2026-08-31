@@ -30,7 +30,7 @@ describe('backup-code presentation evidence', () => {
     `
 
     expect(authenticationRecoveryCopy()).toBe(
-      'Backup codes Save these recovery codes somewhere secure.',
+      'Save these recovery codes somewhere secure. Backup codes',
     )
     expect(authenticationRecoveryCopy()).not.toContain('hidden')
     expect(authenticationRecoveryCopy()).not.toContain('inactive')
@@ -47,5 +47,15 @@ describe('backup-code presentation evidence', () => {
       document.body.innerHTML = `<h1>${heading}</h1>`
       expect(pageHasDocumentBackupCodeHint()).toBe(false)
     }
+  })
+
+  test('prioritizes recovery evidence after long unrelated copy', () => {
+    document.body.innerHTML = `
+      <h1>${'Unrelated account details '.repeat(8)}</h1>
+      <p>Save these recovery codes somewhere secure.</p>
+    `
+
+    expect(authenticationRecoveryCopy()).toContain('Save these recovery codes')
+    expect(pageHasDocumentBackupCodeHint()).toBe(true)
   })
 })

@@ -14,10 +14,10 @@ describe('Rust-selected enrollment presentation', () => {
 
   test('does not duplicate a primary recovery action as a supplemental action', () => {
     expect(
-      supplementalEnrollmentHints(
-        AuthenticationWorkflowAction.SaveBackupCodes,
-        { qr: true, backupCodes: true },
-      ),
+      supplementalEnrollmentHints({
+        action: AuthenticationWorkflowAction.SaveBackupCodes,
+        detected: { qr: true, backupCodes: true },
+      }),
     ).toEqual({ qr: false, backupCodes: false })
   })
 })

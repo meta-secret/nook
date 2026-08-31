@@ -41,7 +41,7 @@ export function classifiedAuthenticationWorkflowObservations({
     >[0] = {
       observation,
       authenticatorSetupHint,
-      backupCodesHint,
+      backupCodesCopy: backupCodesHint ? "Save backup codes" : "",
     };
     const facts = authenticationPageObservationFacts(factsRequest);
     const authenticationContext = facts.ceremony.authenticationContext;

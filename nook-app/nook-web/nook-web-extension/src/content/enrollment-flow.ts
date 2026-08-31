@@ -56,6 +56,7 @@ import {
   type BackupEnrollmentHost,
   startBackupEnrollment,
 } from './enrollment-backup-flow'
+import { startRevalidatedBackupCodeEnrollment } from './autofill/backup-code-workflow-action'
 
 export type { EnrollmentPageHints } from './enrollment-flow-view'
 
@@ -788,11 +789,18 @@ export function renderEnrollmentActions({
       labelKey: BROWSER_MESSAGE_KEYS.WidgetSaveBackupCodes,
       onClick: (event) => {
         if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
-        const request: Parameters<typeof startBackupCodeEnrollment>[0] = {
+        const backupRequest: Parameters<
+          typeof startRevalidatedBackupCodeEnrollment
+        >[0] = {
           host,
-          section,
+          start: () => {
+            const startRequest: Parameters<
+              typeof startBackupCodeEnrollment
+            >[0] = { host, section }
+            startBackupCodeEnrollment(startRequest)
+          },
         }
-        startBackupCodeEnrollment(request)
+        void startRevalidatedBackupCodeEnrollment(backupRequest)
       },
     }
     buttons.push(createSecondaryButton(nookTypedArgs1_11))

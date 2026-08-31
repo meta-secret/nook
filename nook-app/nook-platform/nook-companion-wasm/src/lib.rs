@@ -236,6 +236,12 @@ pub fn page_has_backup_code_hint(text: &str) -> bool {
 
 #[wasm_bindgen]
 #[must_use]
+pub fn contains_backup_code_candidate(text: &str) -> bool {
+    nook_companion_core::contains_backup_code_candidate(text)
+}
+
+#[wasm_bindgen]
+#[must_use]
 #[allow(clippy::needless_pass_by_value)]
 pub fn extract_backup_code_candidates(text: String) -> Vec<String> {
     nook_companion_core::extract_backup_code_candidates(&text)

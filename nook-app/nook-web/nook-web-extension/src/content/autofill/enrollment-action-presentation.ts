@@ -10,10 +10,15 @@ export function selectedEnrollmentHints(
   }
 }
 
-export function supplementalEnrollmentHints(
-  action: AuthenticationWorkflowAction,
-  detected: EnrollmentPageHints,
-): EnrollmentPageHints {
+type SupplementalEnrollmentHintsRequest = {
+  action: AuthenticationWorkflowAction
+  detected: EnrollmentPageHints
+}
+
+export function supplementalEnrollmentHints({
+  action,
+  detected,
+}: SupplementalEnrollmentHintsRequest): EnrollmentPageHints {
   return action === AuthenticationWorkflowAction.SaveBackupCodes
     ? { qr: false, backupCodes: false }
     : detected

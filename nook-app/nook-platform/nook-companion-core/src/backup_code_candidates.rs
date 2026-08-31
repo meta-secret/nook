@@ -19,6 +19,16 @@ pub fn page_has_backup_code_hint(text: &str) -> bool {
     contains_recovery_hint(text)
 }
 
+/// True when plaintext contains at least one recovery-code-shaped line.
+///
+/// This deliberately exposes only a boolean so pre-approval browser scans do
+/// not receive or retain extracted secret candidates.
+#[must_use]
+pub fn contains_backup_code_candidate(text: &str) -> bool {
+    text.split(['\n', '\r'])
+        .any(|line| matches!(normalize_candidate(line), BackupCodeCandidate::Accepted(_)))
+}
+
 /// Extract unique backup-code-looking lines from plaintext page content.
 #[must_use]
 pub fn extract_backup_code_candidates(text: &str) -> Vec<String> {
@@ -212,6 +222,12 @@ mod tests {
         assert!(page_has_backup_code_hint(
             "Enable 2FA codes for your account"
         ));
+    }
+
+    #[test]
+    fn candidate_detection_does_not_return_secret_material() {
+        assert!(contains_backup_code_candidate("A1B2-C3D4-E5F6"));
+        assert!(!contains_backup_code_candidate("Save your backup codes"));
     }
 
     #[test]

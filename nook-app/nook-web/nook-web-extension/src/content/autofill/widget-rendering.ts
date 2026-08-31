@@ -14,6 +14,7 @@ import {
 import {
   detectEnrollmentHints,
   renderEnrollmentActions,
+  startBackupCodeEnrollment,
   type EnrollmentPageHints,
 } from '../enrollment-flow'
 import { startRevalidatedBackupCodeEnrollment } from './backup-code-workflow-action'
@@ -271,10 +272,19 @@ export function renderWidget({
         continueButton,
         openVaultButton,
       }
-      void startRevalidatedBackupCodeEnrollment({
+      const host = buildEnrollmentFlowHost(hostRequest)
+      const backupRequest: Parameters<
+        typeof startRevalidatedBackupCodeEnrollment
+      >[0] = {
         workflow,
-        host: buildEnrollmentFlowHost(hostRequest),
-      })
+        host,
+        start: () => {
+          const startRequest: Parameters<typeof startBackupCodeEnrollment>[0] =
+            { host }
+          startBackupCodeEnrollment(startRequest)
+        },
+      }
+      void startRevalidatedBackupCodeEnrollment(backupRequest)
     } else if (
       snapshot.action === AuthenticationWorkflowAction.GeneratePassword
     ) {
@@ -371,9 +381,11 @@ export function renderWidget({
   mountWidgetShell(nookTypedArgs0_8)
 
   const enrollmentHints = detectEnrollmentHints()
+  const supplementalHintsRequest: Parameters<
+    typeof supplementalEnrollmentHints
+  >[0] = { action: snapshot.action, detected: enrollmentHints }
   const supplementalHints = supplementalEnrollmentHints(
-    snapshot.action,
-    enrollmentHints,
+    supplementalHintsRequest,
   )
   if (supplementalHints.qr || supplementalHints.backupCodes) {
     const nookTypedArgs0_9: Parameters<typeof buildEnrollmentFlowHost>[0] = {
