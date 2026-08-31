@@ -13,7 +13,7 @@ import type {
   AuthenticationWorkflowSnapshotView,
 } from '../../lib/auth-workflow-messages'
 import type * as PasskeyOperations from './passkey-operations'
-import type * as AccountPickers from './account-pickers'
+import type * as LoginMatchAvailability from './login-match-availability'
 import type * as VaultRuntime from '../vault-runtime'
 
 export type AuthenticationWorkflowRoutingDependencies = {
@@ -23,7 +23,7 @@ export type AuthenticationWorkflowRoutingDependencies = {
   authenticationWorkflowSavedLoginCapability: typeof authenticationWorkflowSavedLoginCapability
   authenticationWorkflowRequiresLoginMatchAvailability: typeof authenticationWorkflowRequiresLoginMatchAvailability
   matchingPasskeyAccountCountForOriginSafe: typeof PasskeyOperations.matchingPasskeyAccountCountForOriginSafe
-  websiteLoginMatchAvailability: typeof AccountPickers.websiteLoginMatchAvailability
+  websiteLoginMatchAvailability: typeof LoginMatchAvailability.websiteLoginMatchAvailability
 }
 
 export function authenticationPasskeyEvidenceIsSafe(

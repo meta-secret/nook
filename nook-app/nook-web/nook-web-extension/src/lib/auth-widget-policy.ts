@@ -1,5 +1,7 @@
-import { type WebsiteLoginMatchAvailability } from './auth-workflow-messages'
-import type { AuthenticationSavedLoginCapability } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import type {
+  AuthenticationSavedLoginCapability,
+  WebsiteLoginMatchAvailability,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 export type CompactProgressState = {
   badge: string
   accessibleLabel: string

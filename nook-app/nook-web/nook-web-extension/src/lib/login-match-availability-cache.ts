@@ -1,18 +1,24 @@
-import type { WebsiteLoginMatchAvailabilityWire } from './auth-workflow-messages'
+import type { WebsiteLoginMatchAvailability } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 enum LoginMatchAvailabilityCacheEntryKind {
   Pending = 'pending',
   Settled = 'settled',
 }
 
+enum PendingLoginMatchFreshness {
+  Current = 'current',
+  RefreshRequired = 'refresh-required',
+}
+
 type LoginMatchAvailabilityCacheEntry =
   | {
       kind: LoginMatchAvailabilityCacheEntryKind.Pending
-      lookup: Promise<WebsiteLoginMatchAvailabilityWire>
+      lookup: Promise<WebsiteLoginMatchAvailability>
+      freshness: PendingLoginMatchFreshness
     }
   | {
       kind: LoginMatchAvailabilityCacheEntryKind.Settled
-      value: WebsiteLoginMatchAvailabilityWire
+      value: WebsiteLoginMatchAvailability
       expiresAt: number
     }
 
@@ -22,7 +28,7 @@ export type LoginMatchAvailabilityCacheOptions = {
 
 export type LoginMatchAvailabilityCacheRequest = {
   origin: string
-  load: () => Promise<WebsiteLoginMatchAvailabilityWire>
+  load: () => Promise<WebsiteLoginMatchAvailability>
   readTime?: () => number
 }
 
@@ -39,7 +45,7 @@ export class LoginMatchAvailabilityCache {
     origin,
     load,
     readTime = Date.now,
-  }: LoginMatchAvailabilityCacheRequest): Promise<WebsiteLoginMatchAvailabilityWire> {
+  }: LoginMatchAvailabilityCacheRequest): Promise<WebsiteLoginMatchAvailability> {
     const now = readTime()
     const existing = this.entries.get(origin)
     if (existing?.kind === LoginMatchAvailabilityCacheEntryKind.Pending) {
@@ -57,7 +63,8 @@ export class LoginMatchAvailabilityCache {
         const current = this.entries.get(origin)
         if (
           current?.kind === LoginMatchAvailabilityCacheEntryKind.Pending &&
-          current.lookup === lookup
+          current.lookup === lookup &&
+          current.freshness === PendingLoginMatchFreshness.Current
         ) {
           const entry: LoginMatchAvailabilityCacheEntry = {
             kind: LoginMatchAvailabilityCacheEntryKind.Settled,
@@ -65,6 +72,11 @@ export class LoginMatchAvailabilityCache {
             expiresAt: readTime() + this.options.ttlMs,
           }
           this.entries.set(origin, entry)
+        } else if (
+          current?.kind === LoginMatchAvailabilityCacheEntryKind.Pending &&
+          current.lookup === lookup
+        ) {
+          this.entries.delete(origin)
         }
         return value
       })
@@ -81,16 +93,36 @@ export class LoginMatchAvailabilityCache {
     const entry: LoginMatchAvailabilityCacheEntry = {
       kind: LoginMatchAvailabilityCacheEntryKind.Pending,
       lookup,
+      freshness: PendingLoginMatchFreshness.Current,
     }
     this.entries.set(origin, entry)
     return lookup
   }
 
   invalidate({ origin }: LoginMatchAvailabilityCacheInvalidation): void {
+    const current = this.entries.get(origin)
+    if (current?.kind === LoginMatchAvailabilityCacheEntryKind.Pending) {
+      const entry: LoginMatchAvailabilityCacheEntry = {
+        ...current,
+        freshness: PendingLoginMatchFreshness.RefreshRequired,
+      }
+      this.entries.set(origin, entry)
+      return
+    }
     this.entries.delete(origin)
   }
 
   invalidateAll(): void {
-    this.entries.clear()
+    for (const [origin, current] of this.entries) {
+      if (current.kind === LoginMatchAvailabilityCacheEntryKind.Pending) {
+        const entry: LoginMatchAvailabilityCacheEntry = {
+          ...current,
+          freshness: PendingLoginMatchFreshness.RefreshRequired,
+        }
+        this.entries.set(origin, entry)
+      } else {
+        this.entries.delete(origin)
+      }
+    }
   }
 }

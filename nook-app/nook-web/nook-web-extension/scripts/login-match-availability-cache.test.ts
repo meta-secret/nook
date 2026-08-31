@@ -4,7 +4,7 @@ import {
   type LoginMatchAvailabilityCacheOptions,
   type LoginMatchAvailabilityCacheRequest,
 } from '../src/lib/login-match-availability-cache'
-import type { WebsiteLoginMatchAvailabilityWire } from '../src/lib/auth-workflow-messages'
+import type { WebsiteLoginMatchAvailability } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 function cache(): LoginMatchAvailabilityCache {
   const options: LoginMatchAvailabilityCacheOptions = { ttlMs: 1_000 }
@@ -27,7 +27,7 @@ describe('login-match availability cache', () => {
   test('coalesces concurrent origin lookups and reuses the bounded result', async () => {
     const availabilityCache = cache()
     let loads = 0
-    const load = async (): Promise<WebsiteLoginMatchAvailabilityWire> => {
+    const load = async (): Promise<WebsiteLoginMatchAvailability> => {
       loads += 1
       return { kind: 'ready', count: 0 }
     }
@@ -65,7 +65,7 @@ describe('login-match availability cache', () => {
   test('reloads after explicit invalidation or expiry', async () => {
     const availabilityCache = cache()
     let loads = 0
-    const load = async (): Promise<WebsiteLoginMatchAvailabilityWire> => {
+    const load = async (): Promise<WebsiteLoginMatchAvailability> => {
       loads += 1
       return { kind: 'ready', count: loads }
     }
@@ -96,7 +96,7 @@ describe('login-match availability cache', () => {
   test('invalidates every origin when session or grant state changes', async () => {
     const availabilityCache = cache()
     let loads = 0
-    const load = async (): Promise<WebsiteLoginMatchAvailabilityWire> => {
+    const load = async (): Promise<WebsiteLoginMatchAvailability> => {
       loads += 1
       return { kind: 'ready', count: loads }
     }
@@ -118,9 +118,9 @@ describe('login-match availability cache', () => {
     expect(loads).toBe(4)
   })
 
-  test('does not let an invalidated lookup overwrite a newer result', async () => {
+  test('keeps an invalidated lookup in flight and refreshes after it settles', async () => {
     const availabilityCache = cache()
-    const stale = deferred<WebsiteLoginMatchAvailabilityWire>()
+    const stale = deferred<WebsiteLoginMatchAvailability>()
     const staleRequest: LoginMatchAvailabilityCacheRequest = {
       origin: 'https://example.test',
       load: () => stale.promise,
@@ -138,13 +138,14 @@ describe('login-match availability cache', () => {
       },
       readTime: timeReader(200),
     }
-    expect(await availabilityCache.resolve(freshRequest)).toEqual({
-      kind: 'ready',
-      count: 1,
-    })
+    const coalesced = availabilityCache.resolve(freshRequest)
+    expect(freshLoads).toBe(0)
 
     stale.resolve({ kind: 'ready', count: 0 })
-    await staleLookup
+    await expect(Promise.all([staleLookup, coalesced])).resolves.toEqual([
+      { kind: 'ready', count: 0 },
+      { kind: 'ready', count: 0 },
+    ])
     expect(await availabilityCache.resolve(freshRequest)).toEqual({
       kind: 'ready',
       count: 1,
@@ -152,9 +153,32 @@ describe('login-match availability cache', () => {
     expect(freshLoads).toBe(1)
   })
 
+  test('coalesces repeated invalidation while a lookup remains pending', async () => {
+    const availabilityCache = cache()
+    const delayed = deferred<WebsiteLoginMatchAvailability>()
+    let loads = 0
+    const request: LoginMatchAvailabilityCacheRequest = {
+      origin: 'https://example.test',
+      load: () => {
+        loads += 1
+        return delayed.promise
+      },
+    }
+    const first = availabilityCache.resolve(request)
+
+    for (let index = 0; index < 20; index += 1) {
+      availabilityCache.invalidate({ origin: 'https://example.test' })
+      expect(availabilityCache.resolve(request)).toBe(first)
+    }
+    expect(loads).toBe(1)
+
+    delayed.resolve({ kind: 'ready', count: 1 })
+    await first
+  })
+
   test('starts the cache lifetime when a delayed lookup settles', async () => {
     const availabilityCache = cache()
-    const delayed = deferred<WebsiteLoginMatchAvailabilityWire>()
+    const delayed = deferred<WebsiteLoginMatchAvailability>()
     let now = 100
     let loads = 0
     const request: LoginMatchAvailabilityCacheRequest = {

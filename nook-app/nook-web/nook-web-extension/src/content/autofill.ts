@@ -58,7 +58,7 @@ import {
   enrollmentCeremonyActive,
 } from './enrollment-flow'
 
-async function scanAndRender(): Promise<void> {
+async function scanAndRenderOnce(): Promise<void> {
   if (widgetState.dismissed) return
   if (saveOfferState.confirmationActive) return
   if (enrollmentCeremonyActive()) return
@@ -191,6 +191,15 @@ async function scanAndRender(): Promise<void> {
   renderWidget(nookTypedArgs0_1)
 }
 
+async function scanAndRender(): Promise<void> {
+  if (!scanState.beginScan()) return
+  try {
+    await scanAndRenderOnce()
+  } finally {
+    if (scanState.finishScan()) scheduleScan()
+  }
+}
+
 function scheduleScan(mutations?: AuthenticationScanMutationBatch) {
   if (
     Array.isArray(mutations) &&
@@ -199,14 +208,13 @@ function scheduleScan(mutations?: AuthenticationScanMutationBatch) {
   ) {
     return
   }
-  if (scanState.scheduleState.kind === ScanScheduleKind.Scheduled) {
-    window.clearTimeout(scanState.scheduleState.timer)
-  }
+  if (scanState.requestFollowUpIfRunning()) return
+  if (scanState.scheduleState.kind === ScanScheduleKind.Scheduled) return
   const delay = scanState.remainingScanDelay(
     AUTHENTICATION_FACT_SCAN_DEBOUNCE_MS,
   )
 
-  scanState.scheduleTimer(
+  scanState.scheduleTimer(() =>
     window.setTimeout(() => {
       scanState.clearPendingTimer()
       void scanAndRender()

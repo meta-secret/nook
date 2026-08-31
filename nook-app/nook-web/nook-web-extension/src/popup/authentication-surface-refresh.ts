@@ -6,9 +6,7 @@ export function refreshInvokingAuthenticationSurface(): void {
     currentWindow: true,
   }
   chrome.tabs.query(query, (tabs) => {
-    const activeTab = tabs.find(
-      (tab) => tab.active && typeof tab.id === 'number',
-    )
+    const activeTab = tabs.find((tab) => typeof tab.id === 'number')
     if (typeof activeTab?.id !== 'number') return
     const message: Parameters<typeof chrome.tabs.sendMessage>[1] = {
       type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces,

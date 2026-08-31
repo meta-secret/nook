@@ -53,9 +53,13 @@ import {
   clearPendingAccountPickers,
   completeAccountPickerAuthorizationCleanup,
   releaseAccountPickerAuthorizationCleanup,
+} from './service-worker/account-pickers'
+import {
+  invalidateAllLoginMatchAvailability,
+  invalidateLoginMatchAvailabilityForOrigin,
   websiteLoginMatchAvailability,
   websiteLoginOptions,
-} from './service-worker/account-pickers'
+} from './service-worker/login-match-availability'
 import {
   cancelAuthenticatorPicker,
   clearStagedAuthenticatorEnrollments,
@@ -140,7 +144,10 @@ const extensionLifecycleRoutingDependencies: Parameters<
 >[0]['dependencies'] = {
   accountPickerAuthorizationCleanupPending,
   beginAccountPickerAuthorizationCleanup,
-  clearPendingAccountPickers,
+  clearPendingAccountPickers: async () => {
+    invalidateAllLoginMatchAvailability()
+    await clearPendingAccountPickers()
+  },
   clearStagedAuthenticatorEnrollments,
   rebindStagedAuthenticatorEnrollmentsAuthorization,
   closeExtensionSessionDocument,
@@ -564,6 +571,17 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
       sender,
     }
     void websiteLoginSaveCommit(nookTypedArgs0_15)
+      .then((response) => {
+        if (response.kind === 'completed') {
+          const invalidation: Parameters<
+            typeof invalidateLoginMatchAvailabilityForOrigin
+          >[0] = {
+            origin: message.payload.origin,
+          }
+          invalidateLoginMatchAvailabilityForOrigin(invalidation)
+        }
+        return response
+      })
       .then(sendResponse)
       .catch(() => {
         const nookArrowArgs22: Parameters<typeof sendResponse>[0] = {

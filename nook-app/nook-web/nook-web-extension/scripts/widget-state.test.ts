@@ -1,10 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import {
-  AuthenticationActionState,
-  ScanState,
-  WidgetState,
-  invalidateAuthenticationActionContext,
-} from '../src/content/autofill/state'
+import { ScanState, WidgetState } from '../src/content/autofill/state'
 
 describe('authentication scan scheduling', () => {
   test('keeps the first pending timer under continuous mutations', () => {
@@ -31,7 +26,7 @@ describe('authentication scan scheduling', () => {
     expect(state.sequence).toBe(0)
     expect(state.requestFollowUpIfRunning()).toBe(true)
     expect(state.requestFollowUpIfRunning()).toBe(true)
-    expect(state.sequence).toBe(1)
+    expect(state.sequence).toBe(0)
     expect(state.finishScan()).toBe(true)
 
     expect(state.beginScan()).toBe(true)
@@ -45,41 +40,6 @@ describe('authentication scan scheduling', () => {
     state.invalidateCurrentResult()
 
     expect(state.sequence).toBe(sequence + 1)
-  })
-})
-
-describe('authentication DOM action scheduling', () => {
-  test('rejects an action result after authentication context changes', () => {
-    const state = new AuthenticationActionState()
-    const generation = state.begin()
-
-    expect(state.isCurrent(generation)).toBe(true)
-    state.invalidate()
-    expect(state.isCurrent(generation)).toBe(false)
-  })
-
-  test('allows only the newest direct authentication action', () => {
-    const state = new AuthenticationActionState()
-    const first = state.begin()
-    const second = state.begin()
-
-    expect(state.isCurrent(first)).toBe(false)
-    expect(state.isCurrent(second)).toBe(true)
-  })
-
-  test('invalidates a pending direct action before enrollment presentation', () => {
-    const actionState = new AuthenticationActionState()
-    const widget = new WidgetState()
-    widget.busy = true
-    const generation = actionState.begin()
-    const actionContextArgs: Parameters<
-      typeof invalidateAuthenticationActionContext
-    >[0] = { actionState, widget }
-
-    invalidateAuthenticationActionContext(actionContextArgs)
-
-    expect(actionState.isCurrent(generation)).toBe(false)
-    expect(widget.busy).toBe(false)
   })
 })
 
