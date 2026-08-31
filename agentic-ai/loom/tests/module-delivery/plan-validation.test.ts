@@ -341,8 +341,8 @@ describe('reviewed module delivery plan', () => {
     expect(accepted(sreWrite)).toBe(true);
     const forgedTeam = structuredClone(security);
     Object.assign(forgedTeam, { team: 'forged-team' });
-    const root =
-      'nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm';
+    const sharedRoot = 'nook-app/nook-web/nook-web-shared';
+    const root = `${sharedRoot}/src/vault-app/lib/nook-wasm`;
     const generated = structuredClone(sreWrite);
     Object.assign(generated, { team: TeamKey.WebDevelopment });
     Object.assign(generated, { moduleRoot: root });
