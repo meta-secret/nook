@@ -41,11 +41,11 @@ export type GeneratedPasswordFillRequest = PasswordFormScopeQuery & {
 type NativeInputValueMutation = { input: HTMLInputElement; value: string };
 
 const filledLoginCredentialFields = new WeakMap<
-  object,
+  ParentNode,
   Set<HTMLInputElement>
 >();
 
-function loginCredentialFieldKey(request: PasswordFormScopeQuery): object {
+function loginCredentialFieldKey(request: PasswordFormScopeQuery): ParentNode {
   if (
     request.kind === PasswordFormQueryKind.Scoped &&
     request.formScope.kind === PasswordFormScopeKind.Owned
@@ -55,13 +55,17 @@ function loginCredentialFieldKey(request: PasswordFormScopeQuery): object {
   return request.root;
 }
 
-export function trackLoginCredentialField(
-  request: PasswordFormScopeQuery,
-  field: HTMLInputElement,
-): void {
+type TrackedLoginCredentialField = NativeInputValueMutation & {
+  request: PasswordFormScopeQuery;
+};
+
+export function trackLoginCredentialField({
+  request,
+  input,
+}: TrackedLoginCredentialField): void {
   const key = loginCredentialFieldKey(request);
   const tracked = filledLoginCredentialFields.get(key) ?? new Set();
-  tracked.add(field);
+  tracked.add(input);
   filledLoginCredentialFields.set(key, tracked);
 }
 

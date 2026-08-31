@@ -203,7 +203,6 @@ function summarizeRoot(
     observedAt: Date.now(),
   };
 }
-
 export function summarizePasswordForms(): PasswordFormSummary {
   const nookTypedArgs0_9: PasswordFormSummaryRequest = {
     kind: PasswordFormQueryKind.Root,
@@ -211,7 +210,6 @@ export function summarizePasswordForms(): PasswordFormSummary {
   };
   return summarizeRoot(nookTypedArgs0_9);
 }
-
 const emptyPasswordFormSummary: PasswordFormSummary = {
   passwordFieldCount: 0,
   currentPasswordFieldCount: 0,
@@ -234,7 +232,6 @@ function passwordFormPriority(observation: PasswordFormObservation): number {
     authenticationPageObservationFacts(factsRequest),
   );
 }
-
 function scopedControlRoot({
   root,
   formScope,
@@ -766,11 +763,12 @@ export function fillLoginCredentials(
   }
   if (passwordFields.length === 0) {
     if (!usernameField) return false;
-    const nookTypedArgs0_20: Parameters<typeof setNativeInputValue>[0] = {
+    const nookTypedArgs0_20: Parameters<typeof trackLoginCredentialField>[0] = {
       input: usernameField,
+      request,
       value: request.credentials.username,
     };
-    trackLoginCredentialField(request, usernameField);
+    trackLoginCredentialField(nookTypedArgs0_20);
     setNativeInputValue(nookTypedArgs0_20);
     usernameField.focus();
     return true;
@@ -796,19 +794,21 @@ export function fillLoginCredentials(
   }
   if (passwordFieldBlocksFill()) return false;
   if (usernameField) {
-    const nookTypedArgs0_21: Parameters<typeof setNativeInputValue>[0] = {
+    const nookTypedArgs0_21: Parameters<typeof trackLoginCredentialField>[0] = {
       input: usernameField,
+      request,
       value: request.credentials.username,
     };
-    trackLoginCredentialField(request, usernameField);
+    trackLoginCredentialField(nookTypedArgs0_21);
     setNativeInputValue(nookTypedArgs0_21);
     if (passwordFieldBlocksFill()) return false;
   }
-  const nookTypedArgs0_22: Parameters<typeof setNativeInputValue>[0] = {
+  const nookTypedArgs0_22: Parameters<typeof trackLoginCredentialField>[0] = {
     input: passwordField,
+    request,
     value: request.credentials.password,
   };
-  trackLoginCredentialField(request, passwordField);
+  trackLoginCredentialField(nookTypedArgs0_22);
   setNativeInputValue(nookTypedArgs0_22);
   if (passwordFieldBlocksFill()) {
     nookTypedArgs0_22.value = "";
