@@ -36,7 +36,6 @@ describe('backup-code workflow action', () => {
       summary: {},
     }
     const host = connectedHost()
-
     await expect(
       startRevalidatedEnrollmentAction({
         workflow,
@@ -45,7 +44,6 @@ describe('backup-code workflow action', () => {
         start: mocks.startEnrollment,
       } as never),
     ).resolves.toBe(true)
-
     expect(mocks.revalidate).toHaveBeenCalledWith(
       expect.objectContaining({
         expectedAction: AuthenticationWorkflowAction.SaveBackupCodes,
@@ -53,10 +51,8 @@ describe('backup-code workflow action', () => {
     )
     expect(mocks.startEnrollment).toHaveBeenCalledOnce()
   })
-
   test('does not extract when Rust rejects the refreshed workflow', async () => {
     mocks.revalidate.mockResolvedValue(false)
-
     await expect(
       startRevalidatedEnrollmentAction({
         workflow: {} as never,
@@ -67,7 +63,6 @@ describe('backup-code workflow action', () => {
     ).resolves.toBe(false)
     expect(mocks.startEnrollment).not.toHaveBeenCalled()
   })
-
   test('rejects a second approval while revalidation is pending', async () => {
     let release: () => void = () => {
       throw new Error('revalidation release was not installed')
@@ -89,7 +84,6 @@ describe('backup-code workflow action', () => {
       action: AuthenticationWorkflowAction.SaveBackupCodes,
       start: mocks.startEnrollment,
     }
-
     const first = startRevalidatedEnrollmentAction(request as never)
     await expect(
       startRevalidatedEnrollmentAction(request as never),

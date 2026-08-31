@@ -7,6 +7,7 @@ import {
   recoveryCopyHasBackupCodeHint,
 } from '../lib/backup-code-candidates'
 import {
+  AuthenticationWorkflowAction,
   AuthenticatorEnrollmentConfirmResponseKind,
   AuthenticatorEnrollmentStageResponseKind,
   AuthenticatorPreviewResponseKind,

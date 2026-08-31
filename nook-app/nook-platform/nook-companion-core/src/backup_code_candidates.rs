@@ -93,7 +93,9 @@ fn candidate_shape_matches(value: &str) -> bool {
         .chars()
         .filter(|c| !c.is_ascii_whitespace() && *c != '_' && *c != '-')
         .count();
-    compact_len >= MIN_CODE_LEN && trimmed.chars().any(|c| c.is_ascii_digit())
+    compact_len >= MIN_CODE_LEN
+        && trimmed.chars().any(|c| c.is_ascii_digit())
+        && !trimmed.to_ascii_lowercase().ends_with("-digit")
 }
 
 fn collapse_whitespace(value: &str) -> String {
