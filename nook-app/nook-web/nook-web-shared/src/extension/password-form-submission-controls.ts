@@ -53,9 +53,15 @@ type AuthenticationRouteDestinationRequest = {
   control?: LoginAdvanceControl;
 };
 
+export type FormSubmissionApproval = {
+  isApproved: () => boolean;
+  reject: () => void;
+};
+
 type FormSubmissionObservation = {
   form: HTMLFormElement;
   action: () => void;
+  approval: FormSubmissionApproval | false;
 };
 
 type ObservedFormIdentityRequest = {
@@ -106,6 +112,7 @@ type ImplicitAuthenticationSubmitRequest = {
   form: HTMLFormElement;
   hasAuthenticationUsername: boolean;
   hasAuthenticationPassword: boolean;
+  approval: FormSubmissionApproval | false;
 };
 
 type AuthenticationFactTexts = string[];
@@ -598,6 +605,7 @@ export function requestImplicitAuthenticationSubmit({
   form,
   hasAuthenticationUsername,
   hasAuthenticationPassword,
+  approval,
 }: ImplicitAuthenticationSubmitRequest): boolean {
   const sourceOrigin = form.ownerDocument.defaultView?.location.origin;
   if (
@@ -625,6 +633,7 @@ export function requestImplicitAuthenticationSubmit({
   const submission: FormSubmissionObservation = {
     form,
     action: () => form.requestSubmit(),
+    approval,
   };
   return observeSubmit(submission);
 }
@@ -888,9 +897,16 @@ export function formHasSemanticSubmitter(form: HTMLFormElement): boolean {
 export function observeSubmit({
   form,
   action,
+  approval,
 }: FormSubmissionObservation): boolean {
   let submitted = false;
-  const markSubmitted = () => {
+  const markSubmitted = (event: SubmitEvent) => {
+    if (approval && !approval.isApproved()) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      approval.reject();
+      return;
+    }
     submitted = true;
   };
   const listenerOptions: AddEventListenerOptions = {

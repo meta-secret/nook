@@ -63,6 +63,7 @@ import {
   PasswordFormQueryKind,
   semanticSubmitControlSelector,
   type LoginAdvanceControl,
+  type FormSubmissionApproval,
   type PasswordFormScopeQuery,
 } from "./password-form-submission-controls";
 import {
@@ -864,8 +865,12 @@ type OwnedAdvanceControlActivation =
     };
 
 type OwnedAdvanceControlRequest = {
-  request: PasswordFormScopeQuery;
+  request: LoginFormSubmissionRequest;
   form: HTMLFormElement;
+};
+
+export type LoginFormSubmissionRequest = PasswordFormScopeQuery & {
+  submissionApproval?: FormSubmissionApproval;
 };
 
 function findApprovedOwnedAdvanceControl({
@@ -938,6 +943,7 @@ function activateApprovedOwnedAdvanceControl({
   const clickSubmission: Parameters<typeof observeSubmit>[0] = {
     form,
     action: () => approved.click(),
+    approval: request.submissionApproval ?? false,
   };
   const submitted = observeSubmit(clickSubmission);
   if (
@@ -957,7 +963,7 @@ function activateApprovedOwnedAdvanceControl({
   };
 }
 
-export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
+export function submitLoginForm(request: LoginFormSubmissionRequest): boolean {
   const nookTypedArgs0_26 = passwordFieldQuery(request);
   const passwordField = findPasswordFields(nookTypedArgs0_26)[0];
   const nookTypedArgs0_27 = passwordFieldQuery(request);
@@ -988,6 +994,7 @@ export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
     form,
     hasAuthenticationUsername,
     hasAuthenticationPassword: Boolean(passwordField),
+    approval: request.submissionApproval ?? false,
   };
   return requestImplicitAuthenticationSubmit(implicitRequest);
 }

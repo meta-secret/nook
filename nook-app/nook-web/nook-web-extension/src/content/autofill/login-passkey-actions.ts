@@ -263,10 +263,17 @@ export async function fillAndSubmitAccount({
     setStatus(nookTypedArgs0_6)
     return false
   }
+  const submissionApproval: NonNullable<
+    Parameters<typeof submitLoginForm>[0]['submissionApproval']
+  > = {
+    isApproved: () => approvedWorkflowIsStillCurrent(workflow),
+    reject: () => clearLoginCredentials(nookTypedArgs0_4),
+  }
   const nookTypedArgs0_7: Parameters<typeof submitLoginForm>[0] = {
     kind: PasswordFormQueryKind.Scoped,
     root: workflow.root,
     formScope: workflow.formScope,
+    submissionApproval,
   }
   if (!submitLoginForm(nookTypedArgs0_7)) {
     const nookTypedArgs0_8: Parameters<typeof setFlightProgress>[0] = {
