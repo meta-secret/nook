@@ -240,7 +240,7 @@ describe('Team Plan journal', () => {
       fixture,
       name: 'foreign-lock.json',
       contents: owner({
-        processIdentity: `${hostname()}-foreign:reused`,
+        processIdentity: `${hostname()}:foreign-boot:reused`,
         token: 'foreign',
       }),
     });
@@ -256,7 +256,7 @@ describe('Team Plan journal', () => {
       fixture,
       name: 'stale-lock.json',
       contents: owner({
-        processIdentity: `${hostname()}:reused`,
+        processIdentity: `${hostname()}:${boot}:reused`,
         token: 'stale',
       }),
     });
@@ -334,6 +334,7 @@ describe('Team Plan journal', () => {
     const { fixture, journalPath, started } = await startedFixture();
     await finalizeStartedFixture({ journalPath, started });
     let discarded = false;
+    let parentSyncs = 0;
     await expect(
       discardTeamPlanJournal({
         journalPath,
@@ -341,13 +342,14 @@ describe('Team Plan journal', () => {
           discarded = true;
         },
         beforeParentSync: () => {
-          throw new Error('parent sync failed');
+          if ((parentSyncs += 1) === 2) throw new Error('parent sync failed');
         },
       }),
     ).rejects.toThrow('parent sync failed');
-    expect(discarded).toBe(false);
+    expect(discarded).toBe(true);
     expect(existsSync(journalPath)).toBe(false);
     expect(existsSync(`${journalPath}.discarding`)).toBe(true);
+    discarded = false;
 
     const ref = lockRef({ fixture, journalPath });
     const foreign = ownerBlob({
