@@ -70,7 +70,7 @@ import type {
   FrozenModuleDeliveryResourcesRequest,
   ResourceConflictRequest,
 } from './authority.ts';
-import { runModuleDeliveryGit } from './git-command.ts';
+import { freezeModuleDeliveryAdmissionSource } from './admission-source.ts';
 const AUTHORITY = Symbol('module-delivery-generation-authority');
 const admissionStateStoreAuthorities = {
   assertCanonicalTransition: assertModuleDeliveryCanonicalEvidenceTransition,
@@ -249,18 +249,8 @@ const COMMIT = /^[0-9a-f]{40}$/u;
 export function createModuleDeliveryGenerationAuthority(
   request: CreateModuleDeliveryGenerationAuthorityRequest,
 ): ModuleDeliveryGenerationAuthority {
-  const acceptedPlan = trustedModuleDeliveryPlanSnapshot(request.acceptedPlan);
-  const authenticationRequest: AuthenticateModuleDeliverySourceCommitRequest = {
-    repositoryRoot: request.repositoryRoot,
-    sourceCommit: acceptedPlan.plan.sourceCommit,
-  };
-  const repositoryRoot = authenticateModuleDeliverySourceCommit(
-    authenticationRequest,
-  );
-  assertExactWriteClaimsAreNotSourceDirectories({
-    acceptedPlan,
-    repositoryRoot,
-  });
+  const { acceptedPlan, repositoryRoot } =
+    freezeModuleDeliveryAdmissionSource(request);
   const lineageRequest: ExpectedLineageMapRequest = {
     acceptedPlan,
     entries: request.expectedLineage,
@@ -281,32 +271,6 @@ export function createModuleDeliveryGenerationAuthority(
   };
   authorityStates.set(authority, authorityState);
   return authority;
-}
-
-function assertExactWriteClaimsAreNotSourceDirectories(request: {
-  readonly acceptedPlan: ValidatedModuleDeliveryPlan;
-  readonly repositoryRoot: string;
-}): void {
-  for (const node of request.acceptedPlan.plan.nodes) {
-    if (node.kind !== ModuleDeliveryTaskKind.Write) continue;
-    for (const write of node.resources.write) {
-      if (write.includes('*')) continue;
-      const result = runModuleDeliveryGit({
-        cwd: request.repositoryRoot,
-        args: [
-          'ls-tree',
-          '-z',
-          request.acceptedPlan.plan.sourceCommit,
-          '--',
-          write,
-        ],
-      });
-      if (result.stdout.subarray(0, 12).toString('utf8') === '040000 tree ')
-        throw new Error(
-          `Exact ordinary write claim names a source directory: ${write}`,
-        );
-    }
-  }
 }
 export function assertModuleDeliveryGenerationAuthority(
   inspection: GenerationAuthorityInspection,
