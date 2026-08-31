@@ -68,13 +68,19 @@ type TeamPlanCommand =
   | TeamPlanDiscardCommand
   | TeamPlanRecordCommand;
 
+export type TeamPlanCliArguments = Readonly<{
+  argv: readonly string[];
+}>;
+
 type CommandPathRequest = Readonly<{
   argv: readonly string[];
   index: number;
 }>;
 
-export async function runTeamPlanCli(argv: readonly string[]): Promise<number> {
-  const command = parseTeamPlanCommand(argv);
+export async function runTeamPlanCli(
+  cliArguments: TeamPlanCliArguments,
+): Promise<number> {
+  const command = parseTeamPlanCommand(cliArguments);
   if (!command) {
     console.error(HELP);
     return 2;
@@ -168,8 +174,9 @@ async function readTeamPlanRecordRequest(requestPath: string): Promise<string> {
 }
 
 function parseTeamPlanCommand(
-  argv: readonly string[],
+  cliArguments: TeamPlanCliArguments,
 ): TeamPlanCommand | false {
+  const { argv } = cliArguments;
   const kind = argv[0];
   if (
     (kind === TeamPlanCommandKind.Select ||
@@ -235,4 +242,5 @@ function commandPathAt(request: CommandPathRequest): string | false {
   return resolve(value);
 }
 
-if (import.meta.main) process.exit(await runTeamPlanCli(process.argv.slice(2)));
+if (import.meta.main)
+  process.exit(await runTeamPlanCli({ argv: process.argv.slice(2) }));

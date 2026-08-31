@@ -18,7 +18,7 @@ import {
   moduleDeliveryEvidenceArtifactDigest,
   moduleDeliveryEvidenceClaimIdentities,
 } from '../../src/module-delivery/index.ts';
-import { runTeamPlanCli } from '../../src/team-plan/cli.ts';
+import { runTeamPlanCli as runTeamPlanCliWithArguments } from '../../src/team-plan/cli.ts';
 import { TeamPlanRecordKind } from '../../src/team-plan/domain.ts';
 import {
   createGitFixture,
@@ -39,6 +39,10 @@ import type { GitFixture } from '../module-delivery/worktree-test-support.ts';
 
 const MODULE_ROOT = 'nook-app/nook-platform/nook-core';
 const fixtures: GitFixture[] = [];
+
+function runTeamPlanCli(argv: readonly string[]): Promise<number> {
+  return runTeamPlanCliWithArguments({ argv });
+}
 
 afterEach(() => {
   for (const fixture of fixtures.splice(0).reverse())
