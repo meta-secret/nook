@@ -101,6 +101,10 @@ type TeamPlanGenerationCapacityRequest = Readonly<{
   generationCount: number;
 }>;
 
+type ParentSyncHook =
+  | Readonly<{ presence: 'absent' }>
+  | Readonly<{ presence: 'present'; run: () => void }>;
+
 export async function createTeamPlanJournal(
   request: CreateTeamPlanJournalRequest,
 ): Promise<void> {
@@ -128,7 +132,7 @@ export async function appendTeamPlanEvent(
   await replaceFile({
     path,
     serialized: candidate,
-    beforeParentSync: request.beforeParentSync,
+    beforeParentSync: parentSyncHook(request.beforeParentSync),
   });
 }
 
@@ -201,7 +205,7 @@ export async function discardTeamPlanJournal(
         await publishDiscardTombstone({
           path,
           tombstone,
-          beforeParentSync: request.beforeParentSync,
+          beforeParentSync: parentSyncHook(request.beforeParentSync),
         });
       await request.discardArtifacts({
         journal,
@@ -826,13 +830,13 @@ async function publishNewFile(request: {
 async function replaceFile(request: {
   readonly path: string;
   readonly serialized: string;
-  readonly beforeParentSync: (() => void) | undefined;
+  readonly beforeParentSync: ParentSyncHook;
 }): Promise<void> {
   const { path } = request;
   const temporary = await writeTemporaryFile(request);
   try {
     await rename(temporary, path);
-    request.beforeParentSync?.();
+    runParentSyncHook(request.beforeParentSync);
     await syncParent(path);
   } catch (error) {
     await removeTemporary(temporary);
@@ -843,7 +847,7 @@ async function replaceFile(request: {
 async function publishDiscardTombstone(request: {
   readonly path: string;
   readonly tombstone: string;
-  readonly beforeParentSync: (() => void) | undefined;
+  readonly beforeParentSync: ParentSyncHook;
 }): Promise<void> {
   try {
     await link(request.path, request.tombstone);
@@ -857,8 +861,16 @@ async function publishDiscardTombstone(request: {
       });
   }
   await unlink(request.path);
-  request.beforeParentSync?.();
+  runParentSyncHook(request.beforeParentSync);
   await syncParent(request.path);
+}
+
+function parentSyncHook(hook?: () => void): ParentSyncHook {
+  return hook ? { presence: 'present', run: hook } : { presence: 'absent' };
+}
+
+function runParentSyncHook(hook: ParentSyncHook): void {
+  if (hook.presence === 'present') hook.run();
 }
 
 async function writeTemporaryFile(request: {
