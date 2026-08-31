@@ -1,0 +1,929 @@
+import { createHash, randomUUID } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
+import {
+  lstat,
+  link,
+  mkdir,
+  open,
+  readFile,
+  realpath,
+  rename,
+  unlink,
+} from 'node:fs/promises';
+import { basename, dirname, isAbsolute, resolve } from 'node:path';
+import { hostname } from 'node:os';
+
+import {
+  ModuleDeliveryValidationStatus,
+  decodeAndValidateModuleDeliveryPlan,
+} from '../module-delivery/index.ts';
+import {
+  TEAM_PLAN_JOURNAL_VERSION,
+  TeamPlanEventKind,
+  TeamPlanRecordKind,
+  assertTeamPlanJournalRecord,
+} from './domain.ts';
+
+import type { TeamPlanEvent, TeamPlanStartedEvent } from './domain.ts';
+import type { ModuleDeliveryPlanV2 } from '../module-delivery/index.ts';
+
+export const MAX_TEAM_PLAN_JOURNAL_BYTES = 5_242_880;
+const MAX_TEAM_PLAN_PLAN_TEXT_BYTES = 262_144;
+const MAX_TEAM_PLAN_PATH_BYTES = 4_096;
+const MAX_PLAN_TEXT_JSON_EXPANSION = 2;
+const MAX_PATH_JSON_EXPANSION = 6;
+const MAX_PLAN_EVENT_FIXED_BYTES = 4_096;
+const MAX_TEAM_PLAN_PLAN_EVENT_BYTES =
+  MAX_TEAM_PLAN_PLAN_TEXT_BYTES * MAX_PLAN_TEXT_JSON_EXPANSION +
+  MAX_TEAM_PLAN_PATH_BYTES * 3 * MAX_PATH_JSON_EXPANSION +
+  MAX_PLAN_EVENT_FIXED_BYTES;
+const MAX_TEAM_PLAN_RECORD_EVENT_BYTES = 768;
+const MAX_TEAM_PLAN_SELECTION_BASE_BYTES = 192;
+const MAX_TEAM_PLAN_ATTEMPT_IDENTITY_BYTES = 256;
+const MAX_TEAM_PLAN_FINAL_EVENT_BYTES = 256;
+const MAX_TEAM_PLAN_GENERATIONS = 5;
+const MAX_TEAM_PLAN_RECORDS_PER_GENERATION = 320;
+const ZERO_COMMIT = '0'.repeat(40);
+const SHA256 = /^[0-9a-f]{64}$/u;
+const COMMIT = /^[0-9a-f]{40}$/u;
+const TASK_ID = /^[a-z0-9][a-z0-9-]{0,79}$/u;
+
+const TEAM_PLAN_COMMON_FIELDS = 'version|kind|sequence';
+const TEAM_PLAN_STARTED_FIELDS = `${TEAM_PLAN_COMMON_FIELDS}|runId|planPath|planText|planSha256|modulePlanDigest|sourceCommit|repositoryRoot|workspaceRoot|generationRecordLimit`;
+const TEAM_PLAN_RESTARTED_FIELDS = `${TEAM_PLAN_COMMON_FIELDS}|planPath|planText|planSha256|modulePlanDigest|sourceCommit|generationRecordLimit`;
+const TEAM_PLAN_SELECTED_FIELDS = `${TEAM_PLAN_COMMON_FIELDS}|attempts`;
+const TEAM_PLAN_RECORDED_FIELDS = `${TEAM_PLAN_COMMON_FIELDS}|record`;
+const TEAM_PLAN_FINALIZED_FIELDS = `${TEAM_PLAN_COMMON_FIELDS}|headCommit`;
+
+export type TeamPlanJournal = Readonly<{
+  path: string;
+  started: TeamPlanStartedEvent;
+  events: readonly TeamPlanEvent[];
+  byteLength: number;
+  generationRecordLimit: number;
+  selectedLeaseCount: number;
+  recordedCount: number;
+  generationCount: number;
+  finalized: boolean;
+}>;
+
+export type CreateTeamPlanJournalRequest = Readonly<{
+  journalPath: string;
+  event: TeamPlanStartedEvent;
+}>;
+
+export type AppendTeamPlanEventRequest = Readonly<{
+  journalPath: string;
+  event: TeamPlanEvent;
+  beforeParentSync?: () => void;
+}>;
+
+export type TeamPlanJournalLockRequest<T> = Readonly<{
+  journalPath: string;
+  action: () => Promise<T>;
+}>;
+
+type ExactFieldRequest = Readonly<{
+  event: TeamPlanEvent;
+  fields: readonly string[];
+}>;
+
+type TeamPlanLockOwner = Readonly<{
+  pid: number;
+  processIdentity: string;
+  token: string;
+}>;
+
+type TeamPlanGenerationCapacityRequest = Readonly<{
+  journalBytes: number;
+  planEventBytes: number;
+  generationRecordLimit: number;
+  generationCount: number;
+}>;
+
+export async function createTeamPlanJournal(
+  request: CreateTeamPlanJournalRequest,
+): Promise<void> {
+  const path = await canonicalTeamPlanJournalPath(request.journalPath);
+  const serialized = serializeTeamPlanEvent(request.event);
+  decodeTeamPlanJournal({ serialized, path });
+  await publishNewFile({ path, serialized });
+}
+
+export async function loadTeamPlanJournal(
+  journalPath: string,
+): Promise<TeamPlanJournal> {
+  const path = await canonicalExistingJournalPath(journalPath);
+  const serialized = await readFile(path, 'utf8');
+  return decodeTeamPlanJournal({ serialized, path });
+}
+
+export async function appendTeamPlanEvent(
+  request: AppendTeamPlanEventRequest,
+): Promise<void> {
+  const path = await canonicalExistingJournalPath(request.journalPath);
+  const current = await readFile(path, 'utf8');
+  const candidate = `${current}${serializeTeamPlanEvent(request.event)}`;
+  decodeTeamPlanJournal({ serialized: candidate, path });
+  await replaceFile({
+    path,
+    serialized: candidate,
+    beforeParentSync: request.beforeParentSync,
+  });
+}
+
+export async function withTeamPlanJournalLock<T>(
+  request: TeamPlanJournalLockRequest<T>,
+): Promise<T> {
+  return withTeamPlanJournalLockIdentity(request);
+}
+
+async function withTeamPlanJournalLockIdentity<T>(
+  request: TeamPlanJournalLockRequest<T> &
+    Readonly<{ lockIdentityPath?: string }>,
+): Promise<T> {
+  const path = await canonicalExistingJournalPath(request.journalPath);
+  const journal = await loadTeamPlanJournal(path);
+  const identity = processStartIdentity(process.pid);
+  if (!identity)
+    throw new Error('Team Plan process lock identity is unavailable.');
+  const owner: TeamPlanLockOwner = {
+    pid: process.pid,
+    processIdentity: identity,
+    token: randomUUID(),
+  };
+  const serialized = `${JSON.stringify(owner)}\n`;
+  const ownerBlob = gitText({
+    cwd: journal.started.repositoryRoot,
+    args: ['hash-object', '-w', '--stdin'],
+    input: serialized,
+  });
+  const lockRef = teamPlanLockRef({
+    journal,
+    identityPath: request.lockIdentityPath ?? journal.path,
+  });
+  let acquired = false;
+  try {
+    acquireTeamPlanLock({ journal, lockRef, ownerBlob });
+    acquired = true;
+    return await request.action();
+  } catch (error) {
+    if (!acquired)
+      throw new Error('Team Plan journal is already in use.', { cause: error });
+    throw error;
+  } finally {
+    if (acquired) releaseTeamPlanLock({ journal, lockRef, ownerBlob });
+  }
+}
+
+export async function discardTeamPlanJournal(
+  request: Readonly<{
+    journalPath: string;
+    discardArtifacts: (state: {
+      readonly journal: TeamPlanJournal;
+      readonly artifactsMayAlreadyBeDiscarded: boolean;
+    }) => Promise<void>;
+    beforeParentSync?: () => void;
+  }>,
+): Promise<void> {
+  const path = await canonicalTeamPlanJournalPath(request.journalPath);
+  const tombstone = `${path}.discarding`;
+  const activePath = (await pathExists(path)) ? path : tombstone;
+  await withTeamPlanJournalLockIdentity({
+    journalPath: activePath,
+    lockIdentityPath: path,
+    action: async () => {
+      const loaded = await loadTeamPlanJournal(activePath);
+      const journal = { ...loaded, path };
+      if (!journal.finalized)
+        throw new Error('Only a finalized Team Plan run may be discarded.');
+      if (activePath === path)
+        await publishDiscardTombstone({
+          path,
+          tombstone,
+          beforeParentSync: request.beforeParentSync,
+        });
+      await request.discardArtifacts({
+        journal,
+        artifactsMayAlreadyBeDiscarded: activePath === tombstone,
+      });
+      await unlink(tombstone);
+      request.beforeParentSync?.();
+      await syncParent(tombstone);
+    },
+  });
+}
+
+export function assertTeamPlanGenerationCapacity(
+  request: TeamPlanGenerationCapacityRequest,
+): void {
+  if (
+    !Number.isSafeInteger(request.generationRecordLimit) ||
+    request.generationRecordLimit < 1
+  )
+    throw new Error('Team Plan generation record capacity is invalid.');
+  if (
+    !Number.isSafeInteger(request.generationCount) ||
+    request.generationCount < 1 ||
+    request.generationCount > MAX_TEAM_PLAN_GENERATIONS
+  )
+    throw new Error('Team Plan generation limit is exhausted.');
+  const remainingGenerationCount =
+    MAX_TEAM_PLAN_GENERATIONS - request.generationCount;
+  if (
+    request.journalBytes +
+      request.planEventBytes +
+      generationMutationBudget(request.generationRecordLimit) +
+      remainingGenerationCount * maximumGenerationBudget() +
+      MAX_TEAM_PLAN_FINAL_EVENT_BYTES >
+    MAX_TEAM_PLAN_JOURNAL_BYTES
+  )
+    throw new Error('Team Plan generation cannot fit its durable journal.');
+}
+
+export function teamPlanEventBytes(event: TeamPlanEvent): number {
+  return Buffer.byteLength(serializeTeamPlanEvent(event));
+}
+
+export function teamPlanSha256(value: string): string {
+  return createHash('sha256').update(value).digest('hex');
+}
+
+function decodeTeamPlanJournal(request: {
+  readonly serialized: string;
+  readonly path: string;
+}): TeamPlanJournal {
+  const { serialized, path } = request;
+  const bytes = Buffer.byteLength(serialized);
+  if (bytes > MAX_TEAM_PLAN_JOURNAL_BYTES || !serialized.endsWith('\n'))
+    throw new Error('Team Plan journal is oversized or noncanonical.');
+  const lines = serialized.slice(0, -1).split('\n');
+  if (lines.length === 0 || lines.some((line) => line.length === 0))
+    throw new Error('Team Plan journal is empty or noncanonical.');
+  const events: TeamPlanEvent[] = [];
+  for (const line of lines)
+    events.push(
+      decodeTeamPlanEvent({ line, expectedSequence: events.length + 1 }),
+    );
+  const started = events[0];
+  if (!started || started.kind !== TeamPlanEventKind.Started)
+    throw new Error('Team Plan journal must begin with one start event.');
+  const counters = journalGenerationCounters(events);
+  if (!counters.finalized)
+    assertRemainingJournalCapacity({ journalBytes: bytes, ...counters });
+  return {
+    path,
+    started,
+    events: Object.freeze(events),
+    byteLength: bytes,
+    ...counters,
+  };
+}
+
+type DecodeTeamPlanEventRequest = Readonly<{
+  line: string;
+  expectedSequence: number;
+}>;
+
+function decodeTeamPlanEvent(
+  request: DecodeTeamPlanEventRequest,
+): TeamPlanEvent {
+  const event = JSON.parse(request.line) as TeamPlanEvent;
+  if (
+    !event ||
+    event.version !== TEAM_PLAN_JOURNAL_VERSION ||
+    event.sequence !== request.expectedSequence ||
+    !Object.values(TeamPlanEventKind).includes(event.kind)
+  )
+    throw new Error('Team Plan journal event identity is invalid.');
+  const fields = fieldsFor(event.kind);
+  const exactFieldRequest: ExactFieldRequest = { event, fields };
+  assertExactFields(exactFieldRequest);
+  assertEventSize({ event, serialized: `${request.line}\n` });
+  if (event.kind === TeamPlanEventKind.Recorded)
+    assertTeamPlanJournalRecord(event.record);
+  if (
+    (event.kind === TeamPlanEventKind.Started ||
+      event.kind === TeamPlanEventKind.Restarted) &&
+    (!Number.isSafeInteger(event.generationRecordLimit) ||
+      event.generationRecordLimit < 1)
+  )
+    throw new Error('Team Plan generation record capacity is invalid.');
+  if (
+    event.kind === TeamPlanEventKind.Selected &&
+    (!Array.isArray(event.attempts) || event.attempts.length === 0)
+  )
+    throw new Error('Team Plan selected leases are invalid.');
+  assertStrictEventIdentity(event);
+  return event;
+}
+
+function assertStrictEventIdentity(event: TeamPlanEvent): void {
+  if (!Number.isSafeInteger(event.sequence) || event.sequence < 1)
+    throw new Error('Team Plan journal sequence is invalid.');
+  if (
+    event.kind === TeamPlanEventKind.Started ||
+    event.kind === TeamPlanEventKind.Restarted
+  ) {
+    if (
+      !isAbsolute(event.planPath) ||
+      (event.kind === TeamPlanEventKind.Started && !SHA256.test(event.runId)) ||
+      teamPlanSha256(event.planText) !== event.planSha256 ||
+      !SHA256.test(event.planSha256) ||
+      !SHA256.test(event.modulePlanDigest) ||
+      !COMMIT.test(event.sourceCommit) ||
+      (event.kind === TeamPlanEventKind.Started &&
+        (!isAbsolute(event.repositoryRoot) || !isAbsolute(event.workspaceRoot)))
+    )
+      throw new Error('Team Plan reviewed plan event identity is invalid.');
+    const validation = decodeAndValidateModuleDeliveryPlan(event.planText);
+    if (
+      validation.status !== ModuleDeliveryValidationStatus.Accepted ||
+      validation.planDigest !== event.modulePlanDigest ||
+      validation.plan.sourceCommit !== event.sourceCommit ||
+      validation.plan.nodes.length * validation.plan.maxAttempts !==
+        event.generationRecordLimit ||
+      event.generationRecordLimit > MAX_TEAM_PLAN_RECORDS_PER_GENERATION
+    )
+      throw new Error('Team Plan generation record capacity is unproven.');
+  } else if (event.kind === TeamPlanEventKind.Selected) {
+    const keys = new Set<string>();
+    for (const attempt of event.attempts) {
+      if (
+        JSON.stringify(Object.keys(attempt).sort()) !==
+        JSON.stringify(['attempt', 'generation', 'planDigest', 'taskId'])
+      )
+        throw new Error('Team Plan attempt identity fields are invalid.');
+      assertAttemptIdentity(attempt);
+      if (keys.has(attempt.taskId))
+        throw new Error('Team Plan selection repeats a logical task.');
+      keys.add(attempt.taskId);
+    }
+  } else if (event.kind === TeamPlanEventKind.Recorded) {
+    assertAttemptIdentity(event.record);
+    if (
+      event.record.kind === TeamPlanRecordKind.AcceptedWrite &&
+      (!COMMIT.test(event.record.baselineCommit) ||
+        !COMMIT.test(event.record.commit))
+    )
+      throw new Error('Team Plan accepted write identity is invalid.');
+    if (
+      event.record.kind === TeamPlanRecordKind.AcceptedEvidence &&
+      (!COMMIT.test(event.record.artifactObject) ||
+        !SHA256.test(event.record.artifactSha256))
+    )
+      throw new Error('Team Plan accepted evidence identity is invalid.');
+  } else if (!COMMIT.test(event.headCommit)) {
+    throw new Error('Team Plan final frontier is invalid.');
+  }
+}
+
+function assertAttemptIdentity(identity: {
+  readonly taskId: string;
+  readonly attempt: number;
+  readonly generation: number;
+  readonly planDigest: string;
+}): void {
+  if (
+    !identity ||
+    typeof identity !== 'object' ||
+    !TASK_ID.test(identity.taskId) ||
+    !Number.isSafeInteger(identity.attempt) ||
+    identity.attempt < 1 ||
+    !Number.isSafeInteger(identity.generation) ||
+    identity.generation < 1 ||
+    !SHA256.test(identity.planDigest)
+  )
+    throw new Error('Team Plan attempt identity is invalid.');
+}
+
+function attemptKey(identity: {
+  readonly taskId: string;
+  readonly attempt: number;
+}): string {
+  return `${identity.taskId}:${identity.attempt}`;
+}
+
+function fieldsFor(kind: TeamPlanEventKind): readonly string[] {
+  if (kind === TeamPlanEventKind.Started)
+    return TEAM_PLAN_STARTED_FIELDS.split('|');
+  if (kind === TeamPlanEventKind.Restarted)
+    return TEAM_PLAN_RESTARTED_FIELDS.split('|');
+  if (kind === TeamPlanEventKind.Selected)
+    return TEAM_PLAN_SELECTED_FIELDS.split('|');
+  if (kind === TeamPlanEventKind.Recorded)
+    return TEAM_PLAN_RECORDED_FIELDS.split('|');
+  if (kind === TeamPlanEventKind.Finalized)
+    return TEAM_PLAN_FINALIZED_FIELDS.split('|');
+  return TEAM_PLAN_COMMON_FIELDS.split('|');
+}
+
+function assertExactFields(request: ExactFieldRequest): void {
+  const actual = Object.keys(request.event).sort();
+  const expected = [...request.fields].sort();
+  if (JSON.stringify(actual) !== JSON.stringify(expected))
+    throw new Error('Team Plan journal event fields are invalid.');
+}
+
+export async function canonicalTeamPlanJournalPath(
+  journalPath: string,
+): Promise<string> {
+  const requested = resolve(journalPath);
+  await mkdir(dirname(requested), { recursive: true });
+  const parent = await realpath(dirname(requested));
+  return resolve(parent, basename(requested));
+}
+
+async function canonicalExistingJournalPath(
+  journalPath: string,
+): Promise<string> {
+  const requested = resolve(journalPath);
+  const status = await lstat(requested);
+  if (status.isSymbolicLink() || !status.isFile())
+    throw new Error('Team Plan journal path is unsafe.');
+  return realpath(requested);
+}
+
+function serializeTeamPlanEvent(event: TeamPlanEvent): string {
+  return `${JSON.stringify(event)}\n`;
+}
+
+function assertEventSize(request: {
+  readonly event: TeamPlanEvent;
+  readonly serialized: string;
+}): void {
+  const { event, serialized } = request;
+  if (
+    event.kind === TeamPlanEventKind.Started ||
+    event.kind === TeamPlanEventKind.Restarted
+  ) {
+    assertPlanEventSize({ event, serialized });
+    return;
+  }
+  const bytes = Buffer.byteLength(serialized);
+  if (
+    event.kind === TeamPlanEventKind.Selected &&
+    bytes >
+      MAX_TEAM_PLAN_SELECTION_BASE_BYTES +
+        event.attempts.length * MAX_TEAM_PLAN_ATTEMPT_IDENTITY_BYTES
+  )
+    throw new Error('Team Plan selection event is oversized.');
+  if (
+    event.kind === TeamPlanEventKind.Recorded &&
+    bytes > MAX_TEAM_PLAN_RECORD_EVENT_BYTES
+  )
+    throw new Error('Team Plan record event is oversized.');
+  if (
+    event.kind === TeamPlanEventKind.Finalized &&
+    bytes > MAX_TEAM_PLAN_FINAL_EVENT_BYTES
+  )
+    throw new Error('Team Plan final event is oversized.');
+}
+
+function assertPlanEventSize(request: {
+  readonly event: Extract<
+    TeamPlanEvent,
+    { kind: TeamPlanEventKind.Started | TeamPlanEventKind.Restarted }
+  >;
+  readonly serialized: string;
+}): void {
+  const paths =
+    request.event.kind === TeamPlanEventKind.Started
+      ? [
+          request.event.planPath,
+          request.event.repositoryRoot,
+          request.event.workspaceRoot,
+        ]
+      : [request.event.planPath];
+  if (
+    Buffer.byteLength(request.event.planText) > MAX_TEAM_PLAN_PLAN_TEXT_BYTES ||
+    paths.some((path) => Buffer.byteLength(path) > MAX_TEAM_PLAN_PATH_BYTES) ||
+    Buffer.byteLength(request.serialized) > MAX_TEAM_PLAN_PLAN_EVENT_BYTES
+  )
+    throw new Error('Team Plan reviewed plan event is oversized.');
+}
+
+type GenerationCounters = Readonly<{
+  generationRecordLimit: number;
+  selectedLeaseCount: number;
+  recordedCount: number;
+  generationCount: number;
+  finalized: boolean;
+}>;
+
+function journalGenerationCounters(
+  events: readonly TeamPlanEvent[],
+): GenerationCounters {
+  let generationRecordLimit = 0;
+  let selectedLeaseCount = 0;
+  let recordedCount = 0;
+  let generationCount = 0;
+  let finalized = false;
+  let currentGeneration = 0;
+  let currentPlanDigest = '';
+  let currentPlan: ModuleDeliveryPlanV2 | false = false;
+  const activeAttempts = new Map<string, string>();
+  const latestAttempts = new Map<string, number>();
+  const acceptedTasks = new Set<string>();
+  const failedAttempts = new Map<string, number>();
+  for (const event of events) {
+    if (finalized)
+      throw new Error('Finalized Team Plan journal has trailing events.');
+    if (
+      event.kind === TeamPlanEventKind.Started ||
+      event.kind === TeamPlanEventKind.Restarted
+    ) {
+      const validation = decodeAndValidateModuleDeliveryPlan(event.planText);
+      if (validation.status !== ModuleDeliveryValidationStatus.Accepted)
+        throw new Error('Team Plan reviewed plan event is invalid.');
+      if (
+        event.kind === TeamPlanEventKind.Started
+          ? generationCount !== 0
+          : generationCount === 0 ||
+            activeAttempts.size > 0 ||
+            validation.plan.generation <= currentGeneration
+      )
+        throw new Error('Team Plan journal lifecycle is invalid.');
+      generationRecordLimit = event.generationRecordLimit;
+      generationCount += 1;
+      currentGeneration = validation.plan.generation;
+      currentPlanDigest = event.modulePlanDigest;
+      currentPlan = validation.plan;
+      selectedLeaseCount = 0;
+      recordedCount = 0;
+      latestAttempts.clear();
+      acceptedTasks.clear();
+      failedAttempts.clear();
+    } else if (event.kind === TeamPlanEventKind.Selected) {
+      for (const attempt of event.attempts) {
+        if (!currentPlan)
+          throw new Error('Team Plan selection has no active plan.');
+        const previousAttempt = latestAttempts.get(attempt.taskId) ?? 0;
+        if (
+          attempt.generation !== currentGeneration ||
+          attempt.planDigest !== currentPlanDigest ||
+          !currentPlan.nodes.some(({ taskId }) => taskId === attempt.taskId) ||
+          attempt.attempt !== previousAttempt + 1 ||
+          attempt.attempt > currentPlan.maxAttempts ||
+          activeAttempts.has(attempt.taskId) ||
+          acceptedTasks.has(attempt.taskId) ||
+          (failedAttempts.get(attempt.taskId) ?? 0) >= currentPlan.maxAttempts
+        )
+          throw new Error('Team Plan selected attempt is stale or duplicated.');
+        activeAttempts.set(attempt.taskId, attemptKey(attempt));
+        latestAttempts.set(attempt.taskId, attempt.attempt);
+      }
+      selectedLeaseCount += event.attempts.length;
+    } else if (event.kind === TeamPlanEventKind.Recorded) {
+      const key = attemptKey(event.record);
+      if (
+        event.record.generation !== currentGeneration ||
+        event.record.planDigest !== currentPlanDigest ||
+        activeAttempts.get(event.record.taskId) !== key
+      )
+        throw new Error('Team Plan recorded attempt was not active.');
+      activeAttempts.delete(event.record.taskId);
+      if (
+        event.record.kind === TeamPlanRecordKind.AcceptedWrite ||
+        event.record.kind === TeamPlanRecordKind.AcceptedEvidence
+      )
+        acceptedTasks.add(event.record.taskId);
+      else failedAttempts.set(event.record.taskId, event.record.attempt);
+      recordedCount += 1;
+    } else {
+      if (activeAttempts.size > 0)
+        throw new Error('Team Plan finalization has outstanding attempts.');
+      if (!currentPlan)
+        throw new Error('Team Plan finalization has no active plan.');
+      assertTerminalPlan({ currentPlan, acceptedTasks, failedAttempts });
+      finalized = true;
+    }
+  }
+  if (
+    generationRecordLimit < 1 ||
+    selectedLeaseCount > generationRecordLimit ||
+    recordedCount > selectedLeaseCount
+  )
+    throw new Error('Team Plan journal exceeds its generation event budget.');
+  if (generationCount > MAX_TEAM_PLAN_GENERATIONS)
+    throw new Error('Team Plan generation limit is exhausted.');
+  return {
+    generationRecordLimit,
+    selectedLeaseCount,
+    recordedCount,
+    generationCount,
+    finalized,
+  };
+}
+
+function assertTerminalPlan(
+  request: Readonly<{
+    currentPlan: ModuleDeliveryPlanV2;
+    acceptedTasks: ReadonlySet<string>;
+    failedAttempts: ReadonlyMap<string, number>;
+  }>,
+): void {
+  const failures = new Set(
+    [...request.failedAttempts]
+      .filter(([, attempt]) => attempt >= request.currentPlan.maxAttempts)
+      .map(([taskId]) => taskId),
+  );
+  const terminal = new Set([...request.acceptedTasks, ...failures]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const node of request.currentPlan.nodes) {
+      if (
+        !terminal.has(node.taskId) &&
+        node.dependencies.some((taskId) => failures.has(taskId))
+      ) {
+        terminal.add(node.taskId);
+        failures.add(node.taskId);
+        changed = true;
+      }
+    }
+  }
+  if (request.currentPlan.nodes.some(({ taskId }) => !terminal.has(taskId)))
+    throw new Error('Team Plan finalization has nonterminal tasks.');
+}
+
+function assertRemainingJournalCapacity(
+  request: Readonly<{
+    journalBytes: number;
+    generationRecordLimit: number;
+    selectedLeaseCount: number;
+    recordedCount: number;
+    generationCount: number;
+  }>,
+): void {
+  const remainingSelections =
+    request.generationRecordLimit - request.selectedLeaseCount;
+  const remainingRecords =
+    request.generationRecordLimit - request.recordedCount;
+  const remainingGenerations =
+    MAX_TEAM_PLAN_GENERATIONS - request.generationCount;
+  const remainingBytes =
+    selectionBudget(remainingSelections) +
+    remainingRecords * MAX_TEAM_PLAN_RECORD_EVENT_BYTES +
+    remainingGenerations * maximumGenerationBudget() +
+    MAX_TEAM_PLAN_FINAL_EVENT_BYTES;
+  if (request.journalBytes + remainingBytes > MAX_TEAM_PLAN_JOURNAL_BYTES)
+    throw new Error('Team Plan journal lacks its proven completion capacity.');
+}
+
+function selectionBudget(attemptCount: number): number {
+  return (
+    attemptCount *
+    (MAX_TEAM_PLAN_SELECTION_BASE_BYTES + MAX_TEAM_PLAN_ATTEMPT_IDENTITY_BYTES)
+  );
+}
+
+function generationMutationBudget(recordLimit: number): number {
+  return (
+    selectionBudget(recordLimit) +
+    recordLimit * MAX_TEAM_PLAN_RECORD_EVENT_BYTES
+  );
+}
+
+function maximumGenerationBudget(): number {
+  return (
+    MAX_TEAM_PLAN_PLAN_EVENT_BYTES +
+    generationMutationBudget(MAX_TEAM_PLAN_RECORDS_PER_GENERATION)
+  );
+}
+
+function acquireTeamPlanLock(request: {
+  readonly journal: TeamPlanJournal;
+  readonly lockRef: string;
+  readonly ownerBlob: string;
+}): void {
+  const { journal, lockRef, ownerBlob } = request;
+  if (updateRef({ journal, args: [lockRef, ownerBlob, ZERO_COMMIT] })) return;
+  const previousBlob = gitText({
+    cwd: journal.started.repositoryRoot,
+    args: ['rev-parse', '--verify', `${lockRef}^{blob}`],
+  });
+  const serialized = gitText({
+    cwd: journal.started.repositoryRoot,
+    args: ['cat-file', 'blob', previousBlob],
+  });
+  const previousOwner = decodeLockOwner(serialized);
+  if (!staleTeamPlanLock(previousOwner))
+    throw new Error('Team Plan journal lock owner is still live.');
+  if (!updateRef({ journal, args: [lockRef, ownerBlob, previousBlob] }))
+    throw new Error('Team Plan journal lock changed during stale recovery.');
+}
+
+function releaseTeamPlanLock(request: {
+  readonly journal: TeamPlanJournal;
+  readonly lockRef: string;
+  readonly ownerBlob: string;
+}): void {
+  if (
+    !updateRef({
+      journal: request.journal,
+      args: ['-d', request.lockRef, request.ownerBlob],
+    })
+  )
+    throw new Error('Team Plan journal lock ownership changed.');
+}
+
+function updateRef(request: {
+  readonly journal: TeamPlanJournal;
+  readonly args: readonly string[];
+}): boolean {
+  const result = spawnSync('git', ['update-ref', ...request.args], {
+    cwd: request.journal.started.repositoryRoot,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  return result.status === 0;
+}
+
+function decodeLockOwner(serialized: string): TeamPlanLockOwner {
+  let owner: TeamPlanLockOwner;
+  try {
+    owner = JSON.parse(serialized) as TeamPlanLockOwner;
+  } catch (error) {
+    throw new Error('Team Plan journal lock owner is malformed.', {
+      cause: error,
+    });
+  }
+  if (
+    JSON.stringify(Object.keys(owner).sort()) !==
+      JSON.stringify(['pid', 'processIdentity', 'token']) ||
+    !Number.isSafeInteger(owner.pid) ||
+    owner.pid < 1 ||
+    typeof owner.processIdentity !== 'string' ||
+    owner.processIdentity.length < 1 ||
+    typeof owner.token !== 'string' ||
+    owner.token.length < 1
+  )
+    throw new Error('Team Plan journal lock owner is malformed.');
+  return owner;
+}
+
+function staleTeamPlanLock(owner: TeamPlanLockOwner): boolean {
+  if (!owner.processIdentity.startsWith(`${hostname()}:`)) return false;
+  const currentIdentity = processStartIdentity(owner.pid);
+  if (currentIdentity) return currentIdentity !== owner.processIdentity;
+  try {
+    process.kill(owner.pid, 0);
+    return false;
+  } catch (error) {
+    return nodeErrorCode(error as NodeJS.ErrnoException) === 'ESRCH';
+  }
+}
+
+function teamPlanLockRef(request: {
+  readonly journal: TeamPlanJournal;
+  readonly identityPath: string;
+}): string {
+  const run = teamPlanSha256(
+    `${request.journal.started.repositoryRoot}\n${request.identityPath}`,
+  );
+  return `refs/nook/team-plan-locks/${run}`;
+}
+
+type GitInvocation = Readonly<{
+  cwd: string;
+  args: readonly string[];
+  input?: string;
+}>;
+
+function gitText(invocation: GitInvocation): string {
+  const result = spawnSync('git', [...invocation.args], {
+    cwd: invocation.cwd,
+    encoding: 'utf8',
+    input: 'input' in invocation ? invocation.input : '',
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+  if (result.status !== 0)
+    throw new Error(result.stderr.trim() || 'Team Plan Git operation failed.');
+  return result.stdout.trim();
+}
+
+async function publishNewFile(request: {
+  readonly path: string;
+  readonly serialized: string;
+}): Promise<void> {
+  const { path } = request;
+  const temporary = await writeTemporaryFile(request);
+  try {
+    await link(temporary, path);
+    await unlink(temporary);
+    await syncParent(path);
+  } catch (error) {
+    await removeTemporary(temporary);
+    throw error;
+  }
+}
+
+async function replaceFile(request: {
+  readonly path: string;
+  readonly serialized: string;
+  readonly beforeParentSync: (() => void) | undefined;
+}): Promise<void> {
+  const { path } = request;
+  const temporary = await writeTemporaryFile(request);
+  try {
+    await rename(temporary, path);
+    request.beforeParentSync?.();
+    await syncParent(path);
+  } catch (error) {
+    await removeTemporary(temporary);
+    throw error;
+  }
+}
+
+async function publishDiscardTombstone(request: {
+  readonly path: string;
+  readonly tombstone: string;
+  readonly beforeParentSync: (() => void) | undefined;
+}): Promise<void> {
+  try {
+    await link(request.path, request.tombstone);
+  } catch (error) {
+    if (nodeErrorCode(error as NodeJS.ErrnoException) !== 'EEXIST') throw error;
+    const source = await lstat(request.path);
+    const existing = await lstat(request.tombstone);
+    if (source.dev !== existing.dev || source.ino !== existing.ino)
+      throw new Error('Team Plan discard tombstone is forged.', {
+        cause: error,
+      });
+  }
+  await unlink(request.path);
+  request.beforeParentSync?.();
+  await syncParent(request.path);
+}
+
+async function writeTemporaryFile(request: {
+  readonly path: string;
+  readonly serialized: string;
+}): Promise<string> {
+  const { path, serialized } = request;
+  const temporary = resolve(
+    dirname(path),
+    `.${basename(path)}.${randomUUID()}.tmp`,
+  );
+  const handle = await open(temporary, 'wx');
+  try {
+    await handle.writeFile(serialized, 'utf8');
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+  return temporary;
+}
+
+async function syncParent(path: string): Promise<void> {
+  const handle = await open(dirname(path), 'r');
+  try {
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+}
+
+async function removeTemporary(path: string): Promise<void> {
+  try {
+    await unlink(path);
+  } catch (error) {
+    if (nodeErrorCode(error as NodeJS.ErrnoException) !== 'ENOENT') throw error;
+  }
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await lstat(path);
+    return true;
+  } catch (error) {
+    if (nodeErrorCode(error as NodeJS.ErrnoException) === 'ENOENT')
+      return false;
+    throw error;
+  }
+}
+
+function nodeErrorCode(error: NodeJS.ErrnoException): string | false {
+  if (!error || typeof error !== 'object' || !('code' in error)) return false;
+  const code = error.code;
+  return typeof code === 'string' ? code : false;
+}
+
+function processStartIdentity(pid: number): string | false {
+  const result = spawnSync('ps', ['-o', 'lstart=', '-p', String(pid)], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  });
+  const started = result.status === 0 ? result.stdout.trim() : '';
+  if (started.length === 0) return false;
+  const bootCommand =
+    process.platform === 'darwin'
+      ? ['sysctl', '-n', 'kern.boottime']
+      : ['cat', '/proc/sys/kernel/random/boot_id'];
+  const boot = spawnSync(bootCommand[0] ?? '', bootCommand.slice(1), {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  }).stdout.trim();
+  return `${hostname()}:${boot || 'boot-unavailable'}:${started}`;
+}
