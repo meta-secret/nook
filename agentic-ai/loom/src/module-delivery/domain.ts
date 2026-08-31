@@ -93,6 +93,28 @@ export const ORDINARY_TASK_WRITE_ROOTS = {
   ],
 } as const;
 
+const ORDINARY_TASK_FILE_ROOTS = new Set<string>([
+  '.task/agentic-ai.yml',
+  'agentic-ai/minds/Cargo.lock',
+  'agentic-ai/minds/Cargo.toml',
+  'agentic-ai/minds/clippy.toml',
+  'agentic-ai/minds/hive/Cargo.toml',
+  'nook-app/nook-platform/Cargo.lock',
+  'nook-app/nook-platform/Cargo.toml',
+  'nook-app/nook-platform/nook-core/Dockerfile.dockerignore',
+  'nook-app/nook-platform/nook-core/coverage-floor.json',
+  'nook-app/nook-platform/nook-core/docker-bake.hcl',
+  'nook-app/nook-platform/nook-wasm/Dockerfile.dockerignore',
+  'nook-app/nook-platform/nook-wasm/Taskfile.yml',
+  'nook-app/nook-platform/nook-wasm/docker-bake.hcl',
+  'nook-app/nook-platform/Taskfile.yml',
+  'nook-app/nook-web/nook-web-app/Dockerfile',
+  'nook-app/nook-web/nook-web-app/docker-bake.hcl',
+  'nook-app/nook-web/nook-web-extension/scripts/verify-deployment.sh',
+  'nook-app/nook-web/nook-web-extension/Taskfile.yml',
+  'nook-app/nook-web/Taskfile.yml',
+]);
+
 export type ModuleDeliveryTaskTeamRequest = {
   readonly kind: ModuleDeliveryTaskKind;
   readonly moduleRoot: string;
@@ -122,7 +144,8 @@ function ordinaryTaskPathTeam(path: string): TeamKey | false {
     for (const root of roots)
       if (
         (path === root ||
-          (!ordinaryPathIsFileShaped(root) && path.startsWith(`${root}/`))) &&
+          (!ORDINARY_TASK_FILE_ROOTS.has(root) &&
+            path.startsWith(`${root}/`))) &&
         root.length > ownerRootLength
       ) {
         owner = team;
@@ -142,26 +165,26 @@ export function ordinaryTaskWriteAuthorized(
   request: OrdinaryTaskWriteAuthorizationRequest,
 ): boolean {
   return (
-    ordinaryWriteClaimIsFileOrPattern(request.write) &&
+    (request.write.includes('*') ||
+      request.write !== request.moduleRoot ||
+      !ordinaryTaskDirectoryRoot(request.write)) &&
     (request.write === request.moduleRoot ||
       request.write.startsWith(`${request.moduleRoot}/`)) &&
     ordinaryTaskWriteTeam(request.write) === request.team
   );
 }
 
-function ordinaryWriteClaimIsFileOrPattern(write: string): boolean {
-  return write.includes('*') || ordinaryPathIsFileShaped(write);
-}
-
-function ordinaryPathIsFileShaped(path: string): boolean {
-  const basename = path.slice(path.lastIndexOf('/') + 1);
-  return basename.indexOf('.') > 0 || /^[A-Z][A-Za-z0-9_-]*$/.test(basename);
+function ordinaryTaskDirectoryRoot(path: string): boolean {
+  for (const roots of Object.values(ORDINARY_TASK_WRITE_ROOTS))
+    if (roots.includes(path as never) && !ORDINARY_TASK_FILE_ROOTS.has(path))
+      return true;
+  return false;
 }
 
 function ordinaryTaskFileRootShadows(write: string): boolean {
   for (const roots of Object.values(ORDINARY_TASK_WRITE_ROOTS))
     for (const root of roots)
-      if (ordinaryPathIsFileShaped(root) && write.startsWith(`${root}/`))
+      if (ORDINARY_TASK_FILE_ROOTS.has(root) && write.startsWith(`${root}/`))
         return true;
   return false;
 }

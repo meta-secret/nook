@@ -476,6 +476,7 @@ function run(request:{indexFile?:string}) {
   spawnSync('git', ['status'], {env:{
     PATH:process.env.PATH,
     GIT_CONFIG_NOSYSTEM:'1',
+    GIT_CONFIG_GLOBAL:'/dev/null',
     GIT_INDEX_FILE:request.indexFile,
   }});
 }
@@ -517,6 +518,19 @@ spawnSync('git', ['status'], {env:{${environmentName}:requestValue}});`),
 import {spawnSync} from 'node:child_process';
 spawnSync('git', ['status'], {env:${environment}});`),
     ).toThrow('Unsafe TypeScript subprocess PATH value');
+  for (const environment of [
+    "{GIT_CONFIG_GLOBAL:'./evil.gitconfig'}",
+    "{GIT_CONFIG_NOSYSTEM:'0'}",
+    "{GIT_NO_REPLACE_OBJECTS:'0'}",
+    "{GIT_TERMINAL_PROMPT:'1'}",
+    "{LC_ALL:'en_US.UTF-8'}",
+    '{COMSPEC:request.shell}',
+  ])
+    expect(() =>
+      extract(`
+import {spawnSync} from 'node:child_process';
+spawnSync('git', ['status'], {env:${environment}});`),
+    ).toThrow('Unsafe TypeScript subprocess environment value');
 });
 
 test('rejects shell-enabled subprocess options', () => {

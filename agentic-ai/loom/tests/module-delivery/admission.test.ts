@@ -563,6 +563,64 @@ describe('module delivery admission authority', () => {
     ).toHaveLength(1);
   });
 
+  test('classifies exact extensionless writes against the frozen source tree', () => {
+    const ownedFixture = createGitFixture();
+    try {
+      const exactPath = 'infra/k0s/scripts/k0s-worker-mesh-reconcile';
+      writeFixtureFile({
+        fixture: ownedFixture,
+        relativePath: exactPath,
+        contents: '#!/bin/sh\n',
+      });
+      fixtureGit(ownedFixture)(['add', '--all']);
+      fixtureGit(ownedFixture)(['commit', '--quiet', '-m', 'owned paths']);
+      const sourceCommit = fixtureGit(ownedFixture)(['rev-parse', 'HEAD']);
+      const sourcePlan = structuredClone(planAt(sourceCommit));
+      const sourceNode = sourcePlan.nodes.find(
+        ({ taskId }) => taskId === 'alpha',
+      );
+      if (!sourceNode) throw new Error('Alpha node is missing.');
+      Object.assign(sourceNode, {
+        team: TeamKey.Sre,
+        expert: 'ordinary-team-task',
+        moduleRoot: 'infra/k0s/scripts',
+        resources: { read: [], write: [exactPath], evidenceSurface: [] },
+      });
+      const acceptedFile = validate(sourcePlan);
+      expect(() =>
+        createModuleDeliveryGenerationAuthority({
+          acceptedPlan: acceptedFile,
+          expectedLineage: lineage(acceptedFile),
+          repositoryRoot: ownedFixture.sourceRoot,
+        }),
+      ).not.toThrow();
+
+      const directoryPlan = structuredClone(sourcePlan);
+      const directoryNode = directoryPlan.nodes.find(
+        ({ taskId }) => taskId === 'alpha',
+      );
+      if (!directoryNode) throw new Error('Alpha node is missing.');
+      Object.assign(directoryNode, {
+        moduleRoot: 'infra/k0s',
+        resources: {
+          read: [],
+          write: ['infra/k0s/scripts'],
+          evidenceSurface: [],
+        },
+      });
+      const acceptedDirectory = validate(directoryPlan);
+      expect(() =>
+        createModuleDeliveryGenerationAuthority({
+          acceptedPlan: acceptedDirectory,
+          expectedLineage: lineage(acceptedDirectory),
+          repositoryRoot: ownedFixture.sourceRoot,
+        }),
+      ).toThrow('names a source directory');
+    } finally {
+      disposeGitFixture(ownedFixture);
+    }
+  });
+
   test('retains lease history through disposition and reports exhausted closure', () => {
     const exhaustionPlan: ModuleDeliveryPlanV2 = {
       ...PLAN,
