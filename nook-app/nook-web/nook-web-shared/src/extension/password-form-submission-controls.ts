@@ -3,7 +3,13 @@ import {
   can_activate_authentication_route_control,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import type { AuthenticationAdvanceControlObservation } from "./nook-companion-wasm/nook_companion_wasm.js";
-import { observeAuthenticationDirectSubmits } from "./authentication-direct-submit-bridge";
+import {
+  FormSubmissionResult,
+  observeAuthenticationSubmission,
+  type AuthenticationSubmissionObservation,
+  type FormSubmissionApproval,
+} from "./authentication-direct-submit-bridge";
+export { FormSubmissionResult, type FormSubmissionApproval };
 import {
   findOneTimeCodeFields,
   findPasswordFields,
@@ -54,26 +60,11 @@ type AuthenticationRouteDestinationRequest = {
   control?: LoginAdvanceControl;
 };
 
-export type FormSubmissionApproval = {
-  isApproved: () => boolean;
-  reject: () => void;
-};
-
 type FormSubmissionObservation = {
   form: HTMLFormElement;
   action: () => void;
   approval: FormSubmissionApproval | false;
   expectedSubmitter: LoginAdvanceControl | false;
-};
-
-export enum FormSubmissionResult {
-  NotObserved = "not-observed",
-  Submitted = "submitted",
-  Rejected = "rejected",
-}
-
-type FormSubmissionObservationState = {
-  result: FormSubmissionResult;
 };
 
 type ObservedFormIdentityRequest = {
@@ -913,24 +904,7 @@ export function observeSubmit({
   approval,
   expectedSubmitter,
 }: FormSubmissionObservation): FormSubmissionResult {
-  const state: FormSubmissionObservationState = {
-    result: FormSubmissionResult.NotObserved,
-  };
-  let replayingApprovedSubmission = false;
-  let dispatchingPageSubmission = false;
-  let pagePreventedSubmission = false;
-  let directSubmissionAllowed = false;
-  const rejectSubmission = (event?: SubmitEvent) => {
-    event?.preventDefault();
-    event?.stopImmediatePropagation();
-    state.result = FormSubmissionResult.Rejected;
-    if (approval) approval.reject();
-  };
-  const submitterMatches = (event: SubmitEvent) =>
-    event.submitter
-      ? event.submitter === expectedSubmitter
-      : expectedSubmitter === false;
-  const directSubmissionMatchesExpected = () => {
+  const directRouteMatches = () => {
     if (!expectedSubmitter) return true;
     const formScope: PasswordFormScope = {
       kind: PasswordFormScopeKind.Owned,
@@ -940,89 +914,20 @@ export function observeSubmit({
       control: expectedSubmitter,
       formScope,
     };
+    const expectedDestination = controlDestinationIdentity(destinationRequest);
     return (
       formSubmissionMethod(form) ===
         controlSubmissionMethod(expectedSubmitter) &&
       ownedFormDestinationIdentity(form) ===
-        boundedAuthenticationDestination(
-          controlDestinationIdentity(destinationRequest),
-        )
+        boundedAuthenticationDestination(expectedDestination)
     );
   };
-  const mediateSubmission = (event: SubmitEvent) => {
-    if (event.target !== form || dispatchingPageSubmission) return;
-    if (replayingApprovedSubmission) {
-      event.stopImmediatePropagation();
-      state.result = FormSubmissionResult.Submitted;
-      return;
-    }
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    if (!submitterMatches(event) || (approval && !approval.isApproved())) {
-      rejectSubmission();
-      return;
-    }
-    const pageEventInit: SubmitEventInit = {
-      bubbles: true,
-      cancelable: true,
-      submitter: event.submitter,
-    };
-    const pageEvent = new SubmitEvent("submit", pageEventInit);
-    dispatchingPageSubmission = true;
-    form.dispatchEvent(pageEvent);
-    dispatchingPageSubmission = false;
-    pagePreventedSubmission = pageEvent.defaultPrevented;
-    if (state.result === FormSubmissionResult.Rejected) return;
-    if (!approval) {
-      state.result = FormSubmissionResult.Submitted;
-      return;
-    }
-    if (!approval.isApproved()) {
-      rejectSubmission();
-      return;
-    }
-    state.result = FormSubmissionResult.Submitted;
+  const observation: AuthenticationSubmissionObservation = {
+    form,
+    action,
+    approval,
+    expectedSubmitter,
+    directRouteApproved: directRouteMatches,
   };
-  const stopDirectSubmitObservation = observeAuthenticationDirectSubmits(
-    (submittedForm) => {
-      if (submittedForm !== form) return true;
-      if (
-        !approval ||
-        !directSubmissionMatchesExpected() ||
-        !approval.isApproved()
-      ) {
-        rejectSubmission();
-        return false;
-      }
-      state.result = FormSubmissionResult.Submitted;
-      directSubmissionAllowed = true;
-      return true;
-    },
-  );
-  form.ownerDocument.addEventListener("submit", mediateSubmission, true);
-  try {
-    action();
-  } finally {
-    stopDirectSubmitObservation();
-  }
-  if (
-    approval &&
-    state.result === FormSubmissionResult.Submitted &&
-    approval.isApproved()
-  ) {
-    try {
-      if (!directSubmissionAllowed && !pagePreventedSubmission) {
-        replayingApprovedSubmission = true;
-        if (expectedSubmitter) form.requestSubmit(expectedSubmitter);
-        else form.requestSubmit();
-      }
-    } catch {
-      rejectSubmission();
-    }
-    replayingApprovedSubmission = false;
-  } else if (approval && state.result === FormSubmissionResult.Submitted) {
-    rejectSubmission();
-  }
-  form.ownerDocument.removeEventListener("submit", mediateSubmission, true);
-  return state.result;
+  return observeAuthenticationSubmission(observation);
 }

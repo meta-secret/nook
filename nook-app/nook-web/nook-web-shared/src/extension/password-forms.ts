@@ -860,7 +860,6 @@ enum OwnedAdvanceControlActivationKind {
   Absent = "absent",
   Activated = "activated",
 }
-
 type OwnedAdvanceControlActivation =
   | { kind: OwnedAdvanceControlActivationKind.Absent }
   | {
