@@ -24,8 +24,6 @@ import {
   controlAssociatesWithObservation,
   isLocallyAdjacentToOwnedForm,
   nearestUnownedAuthContainer,
-  pageHasManualCheckpoint,
-  pageHasPasskeyControl,
   PasskeyControlLookupKind,
   PasswordFormScopeKind,
   usernameEvidence,
@@ -80,6 +78,21 @@ import {
   LoginCredentialsLookupKind,
   type LoginCredentialsLookup,
 } from "./password-form-field-actions";
+import {
+  passwordFieldQuery,
+  summarizeRoot,
+  type PasswordFormObservation,
+  type PasswordFormSummary,
+} from './password-form-summaries'
+export {
+  documentAuthenticationWorkflowObservation,
+  summarizePasswordForms,
+  summarizeRoot,
+} from './password-form-summaries'
+export type {
+  PasswordFormObservation,
+  PasswordFormSummary,
+} from './password-form-summaries'
 export {
   findOneTimeCodeFields,
   findPasswordFields,
@@ -123,106 +136,12 @@ const credentialSubmissionAbsent =
   "absent" satisfies AuthenticationCredentialSubmissionObservation["kind"];
 const credentialSubmissionObserved =
   "observed" satisfies AuthenticationCredentialSubmissionObservation["kind"];
-export type PasswordFormSummary = {
-  passwordFieldCount: number;
-  currentPasswordFieldCount: number;
-  newPasswordFieldCount: number;
-  genericPasswordFieldCount: number;
-  usernameFieldCount: number;
-  oneTimeCodeFieldCount: number;
-  manualCheckpointPresent: boolean;
-  passkeyControlPresent: boolean;
-  formCount: number;
-  observedAt: number;
-};
-export type PasswordFormObservation = {
-  root: ParentNode;
-  formScope: PasswordFormScope;
-  summary: PasswordFormSummary;
-};
 type AuthenticationObservationFactsRequest = {
   observation: PasswordFormObservation;
   authenticatorSetupHint: boolean;
   backupCodesHint?: boolean;
   backupCodesCopy?: string;
 };
-type PasswordFormSummaryRequest = PasswordFormScopeQuery;
-function passwordFieldQuery(
-  request: PasswordFormScopeQuery,
-): PasswordFieldQuery {
-  if (request.kind === PasswordFormQueryKind.Root) {
-    return { root: request.root };
-  }
-  return { root: request.root, formScope: request.formScope };
-}
-export function summarizeRoot(
-  request: PasswordFormSummaryRequest,
-): PasswordFormSummary {
-  const { root } = request;
-  const nookTypedArgs0_6 = passwordFieldQuery(request);
-  const passwordFields = findPasswordFields(nookTypedArgs0_6);
-  const nookTypedArgs0_7 = passwordFieldQuery(request);
-  const usernameFields = findUsernameFields(nookTypedArgs0_7);
-  const nookTypedArgs0_8 = passwordFieldQuery(request);
-  const oneTimeCodeFields = findOneTimeCodeFields(nookTypedArgs0_8);
-  const currentPasswordFieldCount = passwordFields.filter((field) => {
-    const nookArrowArgs0: Parameters<typeof hasAutocompleteToken>[0] = {
-      field,
-      expected: "current-password",
-    };
-    return hasAutocompleteToken(nookArrowArgs0);
-  }).length;
-  const newPasswordFieldCount = passwordFields.filter((field) => {
-    const nookArrowArgs1: Parameters<typeof hasAutocompleteToken>[0] = {
-      field,
-      expected: "new-password",
-    };
-    return hasAutocompleteToken(nookArrowArgs1);
-  }).length;
-  const forms = new Set<HTMLFormElement>();
-  for (const field of [
-    ...passwordFields,
-    ...usernameFields,
-    ...oneTimeCodeFields,
-  ]) {
-    if (field.form) {
-      forms.add(field.form);
-    }
-  }
-  return {
-    passwordFieldCount: passwordFields.length,
-    currentPasswordFieldCount,
-    newPasswordFieldCount,
-    genericPasswordFieldCount:
-      passwordFields.length - currentPasswordFieldCount - newPasswordFieldCount,
-    usernameFieldCount: usernameFields.length,
-    oneTimeCodeFieldCount: oneTimeCodeFields.length,
-    manualCheckpointPresent: pageHasManualCheckpoint(root),
-    passkeyControlPresent: pageHasPasskeyControl(root),
-    formCount: forms.size,
-    observedAt: Date.now(),
-  };
-}
-export function summarizePasswordForms(): PasswordFormSummary {
-  const nookTypedArgs0_9: PasswordFormSummaryRequest = {
-    kind: PasswordFormQueryKind.Root,
-    root: document,
-  };
-  return summarizeRoot(nookTypedArgs0_9);
-}
-
-export function documentAuthenticationWorkflowObservation(): PasswordFormObservation {
-  const root = document;
-  const summaryRequest: PasswordFormSummaryRequest = {
-    kind: PasswordFormQueryKind.Root,
-    root,
-  };
-  return {
-    root,
-    formScope: { kind: PasswordFormScopeKind.Unowned },
-    summary: summarizeRoot(summaryRequest),
-  };
-}
 const emptyPasswordFormSummary: PasswordFormSummary = {
   passwordFieldCount: 0,
   currentPasswordFieldCount: 0,
