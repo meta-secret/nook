@@ -268,20 +268,16 @@
     </header>
 
     {#if showExistingConnection}
-      <button
-        type="button"
-        data-testid="open-simple-vault-btn"
-        onclick={openSimpleVault}
-      >
-        {translatePlain(I18N_KEYS.ExtensionSetupOpenSimpleVault)}
+      <button type="button" data-testid="stay-ready-btn" onclick={stayReady}>
+        {translatePlain(I18N_KEYS.ExtensionCompanionStayReady)}
       </button>
       <button
         type="button"
         class="menu-secondary-action"
-        data-testid="stay-ready-btn"
-        onclick={stayReady}
+        data-testid="open-simple-vault-btn"
+        onclick={openSimpleVault}
       >
-        {translatePlain(I18N_KEYS.ExtensionCompanionStayReady)}
+        {translatePlain(I18N_KEYS.ExtensionSetupOpenSimpleVault)}
       </button>
       {#if pairingCandidate.kind === PairingCandidateKind.Selected}
         <button
