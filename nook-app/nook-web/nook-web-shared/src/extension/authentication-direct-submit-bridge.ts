@@ -57,20 +57,21 @@ export function installPageAuthenticationDirectSubmitBridge(): () => void {
   const prototype = HTMLFormElement.prototype;
   const descriptor = Object.getOwnPropertyDescriptor(prototype, "submit");
   const nativeSubmit = prototype.submit;
-  const nativeDispatch = EventTarget.prototype.dispatchEvent;
   const bridgedSubmit = function (this: HTMLFormElement): void {
-    const event = new Event(AUTHENTICATION_DIRECT_SUBMIT_EVENT, {
+    const eventInit: EventInit = {
       bubbles: true,
       cancelable: true,
       composed: true,
-    });
-    if (nativeDispatch.call(this, event)) nativeSubmit.call(this);
+    };
+    const event = new Event(AUTHENTICATION_DIRECT_SUBMIT_EVENT, eventInit);
+    if (this.dispatchEvent(event)) nativeSubmit.call(this);
   };
-  Object.defineProperty(prototype, "submit", {
+  const submitDescriptor: PropertyDescriptor = {
     configurable: true,
     writable: true,
     value: bridgedSubmit,
-  });
+  };
+  Object.defineProperty(prototype, "submit", submitDescriptor);
   return () => {
     if (prototype.submit !== bridgedSubmit) return;
     if (descriptor) Object.defineProperty(prototype, "submit", descriptor);

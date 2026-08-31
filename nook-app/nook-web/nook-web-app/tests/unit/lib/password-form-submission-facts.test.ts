@@ -330,6 +330,7 @@ describe('credential submission observation facts', () => {
       <form method="post" id="login" action="/login">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
       </form>
     `
     fillTrackedCredentials()
