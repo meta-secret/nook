@@ -178,6 +178,7 @@ async function withTeamPlanJournalLockIdentity<T>(
 export async function discardTeamPlanJournal(
   request: Readonly<{
     journalPath: string;
+    expectedRunId: string;
     discardArtifacts: (state: {
       readonly journal: TeamPlanJournal;
       readonly artifactsMayAlreadyBeDiscarded: boolean;
@@ -228,8 +229,9 @@ export async function discardTeamPlanJournal(
         await resumeDiscardTombstone({ path, tombstone });
       const loaded = await loadTeamPlanJournal(activePath);
       const journal = { ...loaded, path };
-      if (!journal.finalized)
-        throw new Error('Only a finalized Team Plan run may be discarded.');
+      if (journal.started.runId !== request.expectedRunId)
+        throw new Error('Team Plan discard run identity is stale.');
+      if (!journal.finalized) throw new Error('Team Plan is not finalized.');
       if (activePath === path)
         await publishDiscardTombstone({
           path,
@@ -543,8 +545,7 @@ function journalGenerationCounters(
   const acceptedTasks = new Set<string>();
   const failedAttempts = new Map<string, number>();
   for (const event of events) {
-    if (finalized)
-      throw new Error('Finalized Team Plan journal has trailing events.');
+    if (finalized) throw new Error('Team Plan has trailing events.');
     if (
       event.kind === TeamPlanEventKind.Started ||
       event.kind === TeamPlanEventKind.Restarted
