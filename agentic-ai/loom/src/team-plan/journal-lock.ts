@@ -33,19 +33,19 @@ export function teamPlanLinuxNamespaceLockRecoverable(request: {
   readonly currentMachineIdentity: string;
   readonly liveNamespaces: ReadonlySet<string>;
 }): boolean {
-  const current = /^(.*):(pid:\[[0-9]+\])$/u.exec(
+  const current = /^([^:]+):([^:]+):(pid:\[[0-9]+\])$/u.exec(
     request.currentMachineIdentity,
   );
   if (!current) return false;
-  const hostBoot = current[1];
-  const currentNamespace = current[2];
-  if (!hostBoot || !currentNamespace) return false;
-  const owner = new RegExp(
-    `^${escapeRegularExpression(hostBoot)}:(pid:\\[[0-9]+\\]):start-ticks:[0-9]+$`,
-    'u',
-  ).exec(request.ownerIdentity);
-  const ownerNamespace = owner?.[1];
+  const owner = /^([^:]+):([^:]+):(pid:\[[0-9]+\]):start-ticks:[0-9]+$/u.exec(
+    request.ownerIdentity,
+  );
+  const currentBoot = current[2];
+  const currentNamespace = current[3];
+  const ownerBoot = owner?.[2];
+  const ownerNamespace = owner?.[3];
   return Boolean(
+    ownerBoot === currentBoot &&
     ownerNamespace &&
     ownerNamespace !== currentNamespace &&
     !request.liveNamespaces.has(ownerNamespace),
@@ -117,10 +117,12 @@ function releaseTeamPlanLock(request: {
   readonly lockRef: string;
   readonly ownerBlob: string;
 }): void {
-  if (!updateRef({
+  if (
+    !updateRef({
       journal: request.journal,
       args: ['-d', request.lockRef, request.ownerBlob],
-    })) {
+    })
+  ) {
     orphanedTeamPlanLocks.set(request.lockRef, request.ownerBlob);
     throw new Error('Team Plan journal lock ownership changed.');
   }
@@ -187,31 +189,51 @@ function staleTeamPlanLock(owner: TeamPlanLockOwner): boolean {
   if (!machineIdentity) return false;
   let ownerMachineIdentity = machineIdentity;
   if (!owner.processIdentity.startsWith(`${ownerMachineIdentity}:`)) {
-    const liveNamespaces = linuxLivePidNamespaces();
+    const currentLinux = /^([^:]+):([^:]+):(pid:\[[0-9]+\])$/u.exec(
+      machineIdentity,
+    );
+    const ownerLinux = /^([^:]+):([^:]+):(pid:\[[0-9]+\]):start-ticks:/u.exec(
+      owner.processIdentity,
+    );
     if (
-      liveNamespaces &&
-      teamPlanLinuxNamespaceLockRecoverable({
-        ownerIdentity: owner.processIdentity,
-        currentMachineIdentity: machineIdentity,
-        liveNamespaces,
-      })
-    )
-      return true;
-    const legacyIdentity = legacyMachineIdentity(machineIdentity);
-    if (
-      !legacyIdentity ||
-      !owner.processIdentity.startsWith(`${legacyIdentity}:`)
-    )
-      return false;
-    ownerMachineIdentity = legacyIdentity;
+      currentLinux &&
+      ownerLinux &&
+      currentLinux[2] === ownerLinux[2] &&
+      currentLinux[3] === ownerLinux[3]
+    ) {
+      ownerMachineIdentity = owner.processIdentity.slice(
+        0,
+        owner.processIdentity.lastIndexOf(':start-ticks:'),
+      );
+    } else {
+      const liveNamespaces = linuxLivePidNamespaces();
+      if (
+        liveNamespaces &&
+        teamPlanLinuxNamespaceLockRecoverable({
+          ownerIdentity: owner.processIdentity,
+          currentMachineIdentity: machineIdentity,
+          liveNamespaces,
+        })
+      )
+        return true;
+      const legacyIdentity = legacyMachineIdentity(machineIdentity);
+      if (
+        !legacyIdentity ||
+        !owner.processIdentity.startsWith(`${legacyIdentity}:`)
+      )
+        return false;
+      ownerMachineIdentity = legacyIdentity;
+    }
   }
   const currentIdentity = processStartIdentity(owner.pid);
-  const preciseOwner = owner.processIdentity.startsWith(
-    `${ownerMachineIdentity}:start-ticks:`,
+  const preciseOwner = ['start-ticks', 'process-start'].some((kind) =>
+    owner.processIdentity.startsWith(`${ownerMachineIdentity}:${kind}:`),
   );
   const preciseCurrent =
     currentIdentity &&
-    currentIdentity.startsWith(`${machineIdentity}:start-ticks:`);
+    ['start-ticks', 'process-start'].some((kind) =>
+      currentIdentity.startsWith(`${machineIdentity}:${kind}:`),
+    );
   if (
     'version' in owner &&
     owner.version === 3 &&
@@ -222,6 +244,17 @@ function staleTeamPlanLock(owner: TeamPlanLockOwner): boolean {
       `${ownerMachineIdentity}:${currentIdentity.slice(machineIdentity.length + 1)}` !==
       owner.processIdentity
     );
+  if (
+    'version' in owner &&
+    owner.version === 2 &&
+    process.platform === 'linux'
+  ) {
+    const legacyCurrent = legacyProcessStartIdentity({
+      pid: owner.pid,
+      machineIdentity: ownerMachineIdentity,
+    });
+    if (legacyCurrent) return legacyCurrent !== owner.processIdentity;
+  }
   try {
     process.kill(owner.pid, 0);
     return false;
@@ -275,12 +308,31 @@ function nodeErrorCode(error: NodeJS.ErrnoException): string | false {
 function processStartIdentity(pid: number): string | false {
   const machineIdentity = processMachineIdentity();
   if (!machineIdentity) return false;
-  if (process.platform !== 'linux')
-    return process.platform === 'darwin'
-      ? `${machineIdentity}:pid-liveness-only`
-      : false;
+  if (process.platform === 'darwin') {
+    const started = processStartTime(pid);
+    return started ? `${machineIdentity}:process-start:${started}` : false;
+  }
+  if (process.platform !== 'linux') return false;
   const started = linuxProcessStartTicks(pid);
   return started ? `${machineIdentity}:start-ticks:${started}` : false;
+}
+
+function legacyProcessStartIdentity(request: {
+  readonly pid: number;
+  readonly machineIdentity: string;
+}): string | false {
+  const started = processStartTime(request.pid);
+  return started ? `${request.machineIdentity}:${started}` : false;
+}
+
+function processStartTime(pid: number): string | false {
+  const result = spawnSync('ps', ['-o', 'lstart=', '-p', String(pid)], {
+    encoding: 'utf8',
+    env: { PATH: '/bin:/usr/bin:/usr/sbin' },
+    stdio: ['ignore', 'pipe', 'ignore'],
+  });
+  const started = result.status === 0 ? result.stdout.trim() : '';
+  return started.length > 0 ? started : false;
 }
 
 function linuxProcessStartTicks(pid: number): string | false {
@@ -320,10 +372,6 @@ function linuxLivePidNamespaces(): ReadonlySet<string> | false {
     }
   }
   return namespaces;
-}
-
-function escapeRegularExpression(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
 }
 
 function processMachineIdentity(): string | false {

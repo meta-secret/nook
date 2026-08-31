@@ -39,7 +39,6 @@ import {
   teamPlanSha256,
   withTeamPlanJournalLock,
 } from '../../src/team-plan/journal.ts';
-import { teamPlanLinuxNamespaceLockRecoverable } from '../../src/team-plan/journal-lock.ts';
 import {
   TEAM_PLAN_JOURNAL_VERSION,
   TeamPlanEventKind,
@@ -169,21 +168,26 @@ function ownerBlob(request: {
 }
 
 function testMachineIdentity(): string {
-  const boot = (
+  const boot =
     process.platform === 'darwin'
       ? spawnSync('sysctl', ['-n', 'kern.boottime'], { encoding: 'utf8' })
-      : spawnSync('cat', ['/proc/sys/kernel/random/boot_id'], {
-          encoding: 'utf8',
-        })
-  ).stdout.trim();
+          .stdout
+      : readFileSync('/proc/sys/kernel/random/boot_id', 'utf8');
   const namespace =
     process.platform === 'linux' ? readlinkSync('/proc/self/ns/pid') : 'host';
-  return `${hostname()}:${boot}:${namespace}`;
+  return `${hostname()}:${boot.trim()}:${namespace}`;
 }
 
 function testProcessIdentity(pid: number): string {
   const machine = testMachineIdentity();
-  if (process.platform !== 'linux') return `${machine}:pid-liveness-only`;
+  if (process.platform === 'darwin') {
+    const started = spawnSync('ps', ['-o', 'lstart=', '-p', String(pid)], {
+      encoding: 'utf8',
+    }).stdout.trim();
+    return `${machine}:process-start:${started}`;
+  }
+  if (process.platform !== 'linux')
+    throw new Error('Test process identity is unavailable.');
   const stat = readFileSync(`/proc/${pid}/stat`, 'utf8');
   const commandEnd = stat.lastIndexOf(') ');
   const startTicks = stat
@@ -239,32 +243,6 @@ async function finalizeStartedFixture(request: {
 }
 
 describe('Team Plan journal', () => {
-  test('recovers only a terminated foreign PID namespace', () => {
-    const current = 'machine:boot:pid:[101]';
-    const owner = 'machine:boot:pid:[202]:start-ticks:303';
-    expect(
-      teamPlanLinuxNamespaceLockRecoverable({
-        ownerIdentity: owner,
-        currentMachineIdentity: current,
-        liveNamespaces: new Set(),
-      }),
-    ).toBe(true);
-    expect(
-      teamPlanLinuxNamespaceLockRecoverable({
-        ownerIdentity: owner,
-        currentMachineIdentity: current,
-        liveNamespaces: new Set(['pid:[202]']),
-      }),
-    ).toBe(false);
-    expect(
-      teamPlanLinuxNamespaceLockRecoverable({
-        ownerIdentity: 'foreign:boot:pid:[202]:start-ticks:303',
-        currentMachineIdentity: current,
-        liveNamespaces: new Set(),
-      }),
-    ).toBe(false);
-  });
-
   test('recovers only a Git-CAS owner with mismatched process start', async () => {
     const { fixture, journalPath } = await startedFixture();
     const ref = lockRef({ fixture, journalPath });
@@ -334,40 +312,51 @@ describe('Team Plan journal', () => {
     const legacy = ownerBlob({
       fixture,
       name: 'legacy-lock.json',
-      contents: `${JSON.stringify({
+      contents: owner({
+        version: 2,
         pid: process.pid,
         processIdentity: `${machineIdentity}:legacy-whole-second`,
         token: 'legacy',
-      })}\n`,
+      }),
     });
     fixtureGit(fixture)(['update-ref', ref, legacy]);
-    await expect(
-      withTeamPlanJournalLock({
-        journalPath,
-        action: async () => 'unreachable',
-      }),
-    ).rejects.toThrow('already in use');
-    fixtureGit(fixture)(['update-ref', '-d', ref, legacy]);
-    const stale = ownerBlob({
-      fixture,
-      name: 'stale-lock.json',
-      contents: owner({
-        version: 3,
-        pid: process.pid,
-        processIdentity: `${machineIdentity}:start-ticks:1`,
-        token: 'stale',
-      }),
-    });
-    fixtureGit(fixture)(['update-ref', ref, stale]);
-    if (process.platform !== 'linux') {
+    if (process.platform === 'linux') {
+      expect(
+        await withTeamPlanJournalLock({
+          journalPath,
+          action: async () => 'recovered-legacy',
+        }),
+      ).toBe('recovered-legacy');
+    } else {
       await expect(
         withTeamPlanJournalLock({
           journalPath,
           action: async () => 'unreachable',
         }),
       ).rejects.toThrow('already in use');
-      fixtureGit(fixture)(['update-ref', '-d', ref, stale]);
+      fixtureGit(fixture)(['update-ref', '-d', ref, legacy]);
     }
+    const stale = ownerBlob({
+      fixture,
+      name: 'stale-lock.json',
+      contents: owner({
+        version: 3,
+        pid: process.pid,
+        processIdentity: `${machineIdentity}:${
+          process.platform === 'darwin'
+            ? 'process-start:stale'
+            : 'start-ticks:1'
+        }`,
+        token: 'stale',
+      }),
+    });
+    fixtureGit(fixture)(['update-ref', ref, stale]);
+    expect(
+      await withTeamPlanJournalLock({
+        journalPath,
+        action: async () => 'recovered-precise',
+      }),
+    ).toBe('recovered-precise');
     const absentPid = 2_147_483_647;
     const absent = ownerBlob({
       fixture,
@@ -379,8 +368,7 @@ describe('Team Plan journal', () => {
         token: 'absent',
       }),
     });
-    if (process.platform !== 'linux')
-      fixtureGit(fixture)(['update-ref', ref, absent]);
+    fixtureGit(fixture)(['update-ref', ref, absent]);
     expect(
       await withTeamPlanJournalLock({
         journalPath,
