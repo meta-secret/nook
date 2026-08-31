@@ -21,6 +21,7 @@ import {
   recordModuleDeliveryAttemptDisposition,
   recordModuleDeliveryAttemptLeases,
   selectModuleDeliveryAdmissions,
+  restoreModuleDeliveryAcceptedEvidence,
   verifyModuleDeliveryEvidenceSubmission,
 } from '../../src/module-delivery/index.ts';
 import {
@@ -108,8 +109,7 @@ function edge(request: EvidenceEdgeRequest): ModuleDeliveryEdgeContract {
   };
 }
 
-function runtime(): Runtime {
-  const fixture = createGitFixture();
+function runtime(fixture = createGitFixture()): Runtime {
   const provider: ModuleDeliveryReadOnlyNodeV2 = {
     kind: ModuleDeliveryTaskKind.ReadOnly,
     taskId: 'core-evidence',
@@ -386,6 +386,36 @@ test('rejects forged metadata, evidence capabilities, and authority-owned stale 
       };
       expect(() => verify(mutationVerificationRequest)).toThrow();
     }
+    const accepted = verify({ ...submissionRequest, candidate: exact });
+    const receipt = moduleDeliveryAcceptedEvidenceIdentity(accepted);
+    const replay = runtime(active.fixture);
+    const replayLease = admittedLease({
+      runtime: replay,
+      taskId: replay.provider.taskId,
+    });
+    const restoreRequest = {
+      authority: replay.authority,
+      acceptedPlan: replay.accepted,
+      repositoryRoot: replay.fixture.sourceRoot,
+      state: replay.state,
+      lease: replayLease,
+      acceptedEvidence: [],
+      receipt,
+    };
+    const extra = Object.assign(structuredClone(receipt), { extra: true });
+    for (const forged of [{ ...receipt, taskId: 'forged' }, extra])
+      expect(() =>
+        restoreModuleDeliveryAcceptedEvidence({
+          ...restoreRequest,
+          receipt: forged,
+        }),
+      ).toThrow();
+    const restored = restoreModuleDeliveryAcceptedEvidence(restoreRequest);
+    expect(restored.evidence.evidence).toEqual([]);
+    expect(restored.state.acceptedProviderEvidence).toEqual([receipt]);
+    expect(() => restoreModuleDeliveryAcceptedEvidence(restoreRequest)).toThrow(
+      'already consumed',
+    );
 
     const forgedEvidence: AcceptedModuleDeliveryEvidence = {
       ...exact,
