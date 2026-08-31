@@ -44,12 +44,15 @@ export const demoDomainEnumArgs = {
     loginKind: AuthenticationWorkflowKind.Login,
     signupKind: AuthenticationWorkflowKind.Signup,
     totpChallengeKind: AuthenticationWorkflowKind.TotpChallenge,
+    totpEnrollmentKind: AuthenticationWorkflowKind.TotpEnrollment,
     credentialsStage: AuthenticationWorkflowStage.Credentials,
     secondFactorStage: AuthenticationWorkflowStage.SecondFactor,
+    recoveryStage: AuthenticationWorkflowStage.Recovery,
     continueAction: AuthenticationWorkflowAction.ContinueWithNook,
     generatePasswordAction: AuthenticationWorkflowAction.GeneratePassword,
     fillTotpAction: AuthenticationWorkflowAction.FillTotp,
     createPasskeyAction: AuthenticationWorkflowAction.CreatePasskey,
+    saveBackupCodesAction: AuthenticationWorkflowAction.SaveBackupCodes,
     explicitUserApproval: demoExplicitUserApproval,
   },
   authenticatorProtocol: {
@@ -79,12 +82,15 @@ export type DemoChromeStubArgs = {
     loginKind: AuthenticationWorkflowKind.Login
     signupKind: AuthenticationWorkflowKind.Signup
     totpChallengeKind: AuthenticationWorkflowKind.TotpChallenge
+    totpEnrollmentKind: AuthenticationWorkflowKind.TotpEnrollment
     credentialsStage: AuthenticationWorkflowStage.Credentials
     secondFactorStage: AuthenticationWorkflowStage.SecondFactor
+    recoveryStage: AuthenticationWorkflowStage.Recovery
     continueAction: AuthenticationWorkflowAction.ContinueWithNook
     generatePasswordAction: AuthenticationWorkflowAction.GeneratePassword
     fillTotpAction: AuthenticationWorkflowAction.FillTotp
     createPasskeyAction: AuthenticationWorkflowAction.CreatePasskey
+    saveBackupCodesAction: AuthenticationWorkflowAction.SaveBackupCodes
   }
   authenticatorProtocol: {
     optionsMessageType: WebsiteAuthenticatorOptionsMessageType
