@@ -1,5 +1,6 @@
 import {
   CortexContractFindingCode,
+  CortexContextAuthorityDocument,
   CortexPolicyArea,
   CortexPolicyCapability,
   CortexPolicyContractKind,
@@ -67,8 +68,7 @@ export function compileCortexContracts(
     validatePolicySafeguards(safeguardArgs);
   }
 
-  for (const context of contexts.values()) {
-    const authorityPath = normalizePath(context.authorityDocument);
+  for (const [authorityPath, context] of contexts) {
     const authority = documents.get(authorityPath);
     if (!authority) {
       findings.push({
@@ -78,10 +78,10 @@ export function compileCortexContracts(
       });
       continue;
     }
-    const contextOwner = resolveContextOwner({
-      authorityPath,
-      findings,
-    });
+    const contextOwner: CortexDocumentOwnerResolution = {
+      kind: CortexDocumentOwnerResolutionKind.Known,
+      owner: CORTEX_CONTEXT_OWNERS[authorityPath],
+    };
     const contextArgs: ValidateContextArgs = {
       context,
       contextOwner,
@@ -103,11 +103,23 @@ type UniqueCortexContextsArgs = {
 
 function uniqueContexts(
   args: UniqueCortexContextsArgs,
-): ReadonlyMap<string, CortexContextContract> {
-  const entries = new Map<string, CortexContextContract>();
+): ReadonlyMap<CortexContextAuthorityDocument, CortexContextContract> {
+  const entries = new Map<
+    CortexContextAuthorityDocument,
+    CortexContextContract
+  >();
   for (const context of args.contexts) {
     const authorityPath = normalizePath(context.authorityDocument);
-    if (entries.has(authorityPath)) {
+    const authority = resolveContextAuthority(authorityPath);
+    if (authority.kind === CortexDocumentOwnerResolutionKind.Unrecognized) {
+      args.findings.push({
+        code: CortexContractFindingCode.InvalidContextOwner,
+        file: authorityPath,
+        message: `Cortex context authority is not a canonical AGENTS.md document: ${authorityPath}`,
+      });
+      continue;
+    }
+    if (entries.has(authority.authorityDocument)) {
       args.findings.push({
         code: CortexContractFindingCode.DuplicateContext,
         file: authorityPath,
@@ -115,7 +127,7 @@ function uniqueContexts(
       });
       continue;
     }
-    entries.set(authorityPath, context);
+    entries.set(authority.authorityDocument, context);
   }
   return entries;
 }
@@ -182,46 +194,38 @@ function cortexDocumentOwner(
   return { kind: CortexDocumentOwnerResolutionKind.Unrecognized };
 }
 
-type ResolveContextOwnerArgs = {
-  readonly authorityPath: string;
-  readonly findings: CortexContractFinding[];
+const CORTEX_CONTEXT_OWNERS: Readonly<
+  Record<CortexContextAuthorityDocument, CortexContractTeam>
+> = {
+  [CortexContextAuthorityDocument.Root]: CortexContractTeam.GizmoPrime,
+  [CortexContextAuthorityDocument.Gizmo]: CortexContractTeam.GizmoPrime,
+  [CortexContextAuthorityDocument.Shared]: CortexContractTeam.Shared,
+  [CortexContextAuthorityDocument.Ai]: CortexContractTeam.Ai,
+  [CortexContextAuthorityDocument.DevelopmentCore]:
+    CortexContractTeam.DevelopmentCore,
+  [CortexContextAuthorityDocument.Security]: CortexContractTeam.Security,
+  [CortexContextAuthorityDocument.Sre]: CortexContractTeam.Sre,
+  [CortexContextAuthorityDocument.WebDevelopment]:
+    CortexContractTeam.WebDevelopment,
 };
-
-function resolveContextOwner(
-  args: ResolveContextOwnerArgs,
-): CortexDocumentOwnerResolution {
-  const documentOwner = cortexContextOwner(args.authorityPath);
-  if (documentOwner.kind === CortexDocumentOwnerResolutionKind.Unrecognized) {
-    args.findings.push({
-      code: CortexContractFindingCode.InvalidContextOwner,
-      file: args.authorityPath,
-      message: `Cortex context authority is not a canonical AGENTS.md document: ${args.authorityPath}`,
-    });
-    return documentOwner;
-  }
-  return documentOwner;
-}
-
-function cortexContextOwner(
+type CortexContextAuthorityResolution =
+  | {
+      readonly kind: CortexDocumentOwnerResolutionKind.Known;
+      readonly authorityDocument: CortexContextAuthorityDocument;
+    }
+  | { readonly kind: CortexDocumentOwnerResolutionKind.Unrecognized };
+function resolveContextAuthority(
   authorityPath: string,
-): CortexDocumentOwnerResolution {
-  const authorities: readonly (readonly [string, CortexContractTeam])[] = [
-    ['.cortex/AGENTS.md', CortexContractTeam.GizmoPrime],
-    ['.cortex/gizmo/AGENTS.md', CortexContractTeam.GizmoPrime],
-    ['.cortex/shared/AGENTS.md', CortexContractTeam.Shared],
-    ['.cortex/teams/ai/AGENTS.md', CortexContractTeam.Ai],
-    ['.cortex/teams/dev-core/AGENTS.md', CortexContractTeam.DevelopmentCore],
-    ['.cortex/teams/security/AGENTS.md', CortexContractTeam.Security],
-    ['.cortex/teams/sre/AGENTS.md', CortexContractTeam.Sre],
-    ['.cortex/teams/web-dev/AGENTS.md', CortexContractTeam.WebDevelopment],
-  ];
-  const authority = authorities.find(([path]) => path === authorityPath);
-  return authority
-    ? {
+): CortexContextAuthorityResolution {
+  for (const authority of Object.values(CortexContextAuthorityDocument)) {
+    if (authority === authorityPath) {
+      return {
         kind: CortexDocumentOwnerResolutionKind.Known,
-        owner: authority[1],
-      }
-    : { kind: CortexDocumentOwnerResolutionKind.Unrecognized };
+        authorityDocument: authority,
+      };
+    }
+  }
+  return { kind: CortexDocumentOwnerResolutionKind.Unrecognized };
 }
 
 type ValidatePolicySafeguardsArgs = {

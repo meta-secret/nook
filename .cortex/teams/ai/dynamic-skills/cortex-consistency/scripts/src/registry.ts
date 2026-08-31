@@ -1,4 +1,5 @@
 import {
+  CortexContextAuthorityDocument,
   CortexPolicyContractKind,
   CortexPolicyArea,
   type CortexContractRegistry,
@@ -13,7 +14,7 @@ export enum RegisteredCortexPolicyPath {
 export const CORTEX_CONTRACT_REGISTRY = {
   contexts: [
     {
-      authorityDocument: '.cortex/AGENTS.md',
+      authorityDocument: CortexContextAuthorityDocument.Root,
       ownsAreas: [CortexPolicyArea.CortexAuthoring],
       imports: [
         RegisteredCortexPolicyPath.Writer,

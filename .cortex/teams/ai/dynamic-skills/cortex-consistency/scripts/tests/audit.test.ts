@@ -3,18 +3,22 @@ import { compileCortexContracts } from '../src/audit.ts';
 import {
   CortexCompatibilityEvidence,
   CortexContractFindingCode,
+  CortexContextAuthorityDocument,
   CortexPolicyArea,
   CortexPolicyCapability,
   CortexPolicyContractKind,
   type AuditCortexContractsArgs,
 } from '../src/domain.ts';
 
-const AUTHORITY = '.cortex/teams/sre/AGENTS.md';
+const AUTHORITY = CortexContextAuthorityDocument.Sre;
 const POLICY =
   '.cortex/teams/web-dev/dynamic-skills/typescript-enums-over-booleans.md';
 const RUST_POLICY = '.cortex/teams/dev-core/dynamic-skills/rust-coding.md';
 const SCHEMA_POLICY =
   '.cortex/teams/dev-core/design-docs/vault-schema-versioning.md';
+function adversarialAuthority(value: string): CortexContextAuthorityDocument {
+  return value as CortexContextAuthorityDocument;
+}
 
 function request(references: readonly string[]): AuditCortexContractsArgs {
   return {
@@ -64,7 +68,9 @@ test('rejects context ownership disguised by traversal', () => {
     registry: {
       contexts: [
         {
-          authorityDocument: '.cortex/teams/web-dev/../../rogue/AGENTS.md',
+          authorityDocument: adversarialAuthority(
+            '.cortex/teams/web-dev/../../rogue/AGENTS.md',
+          ),
           ownsAreas: [],
           imports: [],
         },
@@ -97,7 +103,7 @@ test('rejects a non-authority document under a recognized owner', () => {
       ...compileRequest.registry,
       contexts: [
         {
-          authorityDocument: nonAuthority,
+          authorityDocument: adversarialAuthority(nonAuthority),
           ownsAreas: [CortexPolicyArea.GithubTypescript],
           imports: [POLICY],
         },
@@ -122,7 +128,7 @@ test('preserves leading traversal so it cannot alias a canonical authority', () 
     registry: {
       contexts: [
         {
-          authorityDocument: escapedAuthority,
+          authorityDocument: adversarialAuthority(escapedAuthority),
           ownsAreas: [],
           imports: [],
         },

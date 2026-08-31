@@ -22,6 +22,16 @@ export enum CortexConsistencyContractKind {
   Result = 'cortex-consistency-findings-v1',
 }
 
+export enum CortexContextAuthorityDocument {
+  Root = '.cortex/AGENTS.md',
+  Gizmo = '.cortex/gizmo/AGENTS.md',
+  Shared = '.cortex/shared/AGENTS.md',
+  Ai = '.cortex/teams/ai/AGENTS.md',
+  DevelopmentCore = '.cortex/teams/dev-core/AGENTS.md',
+  Security = '.cortex/teams/security/AGENTS.md',
+  Sre = '.cortex/teams/sre/AGENTS.md',
+  WebDevelopment = '.cortex/teams/web-dev/AGENTS.md',
+}
 export const CORTEX_CONSISTENCY_DOCUMENT_LIMIT = 10_000;
 export const CORTEX_CONSISTENCY_REFERENCE_LIMIT = 10_000;
 export const CORTEX_CONSISTENCY_PATH_LIMIT = 4_096;
@@ -49,11 +59,10 @@ export type CortexPolicyContract =
   CortexGeneralPolicyContract | CortexPersistedRepresentationPolicyContract;
 
 export type CortexContextContract = {
-  readonly authorityDocument: string;
+  readonly authorityDocument: CortexContextAuthorityDocument;
   readonly ownsAreas: readonly CortexPolicyArea[];
   readonly imports: readonly string[];
 };
-
 export type CortexContractRegistry = {
   readonly contexts: readonly CortexContextContract[];
   readonly policies: readonly CortexPolicyContract[];

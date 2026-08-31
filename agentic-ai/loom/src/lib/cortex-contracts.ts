@@ -13,6 +13,7 @@ import type {
 export {
   CortexCompatibilityEvidence,
   CortexContractFindingCode,
+  CortexContextAuthorityDocument,
   CortexPolicyArea,
   CortexPolicyCapability,
   CortexPolicyContractKind,

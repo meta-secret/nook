@@ -5,6 +5,7 @@ import { compileCortexContracts } from '../../../.cortex/teams/ai/dynamic-skills
 import type { CortexContractRegistry } from '../../../.cortex/teams/ai/dynamic-skills/cortex-consistency/scripts/src/domain.ts';
 import { CORTEX_CONTRACT_REGISTRY } from '../../../.cortex/teams/ai/dynamic-skills/cortex-consistency/scripts/src/registry.ts';
 import {
+  CortexContextAuthorityDocument,
   adaptCortexContractDocuments,
   CortexContractFindingCode,
   CortexPolicyArea,
@@ -12,7 +13,7 @@ import {
   type CortexContractDocument,
 } from '../src/lib/cortex-contracts.ts';
 
-const AUTHORITY = '.cortex/teams/sre/AGENTS.md';
+const AUTHORITY = CortexContextAuthorityDocument.Sre;
 const POLICY =
   '.cortex/teams/web-dev/dynamic-skills/typescript-enums-over-booleans.md';
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, '..', '..', '..');
