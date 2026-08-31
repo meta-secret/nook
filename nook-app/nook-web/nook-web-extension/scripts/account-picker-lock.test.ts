@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { ExtensionRuntimeRequestType } from '../src/lib/extension-runtime-request-type'
 
 Object.assign(globalThis, {
   __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
@@ -54,6 +55,7 @@ describe('account picker authorization cleanup', () => {
     const { clearPendingAccountPickers } =
       await import('../src/background/service-worker/account-pickers')
     const removedTabs: number[] = []
+    const sentMessages: unknown[] = []
     let rejectStorage = false
     let rejectRemoval = false
     const runtime = {
@@ -88,13 +90,19 @@ describe('account picker authorization cleanup', () => {
           callback?.()
           Reflect.deleteProperty(runtime, 'lastError')
         },
-        sendMessage: () => Promise.resolve(),
+        sendMessage: (_tabId, message) => {
+          sentMessages.push(message)
+          return Promise.resolve()
+        },
       },
     } as typeof chrome
 
     await clearPendingAccountPickers()
 
     expect(removedTabs).toEqual([21])
+    expect(sentMessages).toContainEqual({
+      type: ExtensionRuntimeRequestType.ClearAuthenticationSurface,
+    })
     rejectStorage = true
     await expect(clearPendingAccountPickers()).rejects.toThrow(
       'account picker cleanup failed',

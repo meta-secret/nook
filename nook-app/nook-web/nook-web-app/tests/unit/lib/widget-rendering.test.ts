@@ -30,7 +30,7 @@ const renderState = vi.hoisted(() => ({
   widgetState: {
     dismissed: false,
     host: { kind: 'detached' },
-    workflowKey: { kind: 'unassigned' },
+    workflowKey: { kind: 'unassigned' } as TestPresentationScope,
     renderedWorkflowRoot: { kind: 'unassigned' },
     presentationScope: { kind: 'unassigned' } as TestPresentationScope,
     collapsed: false,
@@ -41,12 +41,23 @@ const renderState = vi.hoisted(() => ({
     assignPresentationScope(value: string) {
       this.presentationScope = { kind: 'assigned', key: value }
     },
+    beginEnrollmentWorkflow(value: string) {
+      if (
+        this.presentationScope.kind !== 'assigned' ||
+        this.presentationScope.key !== value
+      ) {
+        this.collapsed = false
+        this.userSelectedCollapse = false
+      }
+      this.assignPresentationScope(value)
+    },
     setRenderedWorkflowRoot: vi.fn(),
   },
 }))
 
 type MountTestWidgetShellArgs = {
   shell: { host: HTMLElement }
+  workflowKey: string
 }
 type RevalidatedEnrollmentRequest = { start: () => void }
 type AuthWidgetTestInput = { loginMatches: { kind: string } }
@@ -146,8 +157,14 @@ vi.mock(
         openVaultButton,
       }
     },
-    mountWidgetShell: ({ shell }: MountTestWidgetShellArgs) =>
-      document.body.append(shell.host),
+    mountWidgetShell: ({ shell, workflowKey }: MountTestWidgetShellArgs) => {
+      renderState.widgetState.host = { kind: 'attached' }
+      renderState.widgetState.workflowKey = {
+        kind: 'assigned',
+        key: workflowKey,
+      }
+      document.body.append(shell.host)
+    },
   }),
 )
 
@@ -164,7 +181,10 @@ vi.mock(
   }),
 )
 
-import { renderWidget } from '../../../../nook-web-extension/src/content/autofill/widget-rendering'
+import {
+  renderEnrollmentWidget,
+  renderWidget,
+} from '../../../../nook-web-extension/src/content/autofill/widget-rendering'
 
 const workflow = {
   root: document,
@@ -227,6 +247,36 @@ beforeEach(() => {
   renderState.widgetState.presentationScope = { kind: 'unassigned' }
   renderState.widgetState.collapsed = false
   renderState.widgetState.userSelectedCollapse = false
+})
+
+test('preserves enrollment collapse only within one presentation', () => {
+  const enrollmentSnapshot = {
+    ...snapshot,
+    action: AuthenticationWorkflowAction.EnrollAuthenticator,
+  }
+  const hints = { qr: true, backupCodes: false }
+  renderEnrollmentWidget({
+    hints,
+    snapshot: enrollmentSnapshot,
+    vaultConnection: { connected: false },
+  })
+  renderState.widgetState.collapsed = true
+  renderState.widgetState.userSelectedCollapse = true
+
+  renderEnrollmentWidget({
+    hints,
+    snapshot: enrollmentSnapshot,
+    vaultConnection: { connected: true, vaultName: 'Personal' },
+  })
+  expect(actions.remountWidget).toHaveBeenCalledOnce()
+  expect(renderState.widgetState.collapsed).toBe(true)
+
+  renderEnrollmentWidget({
+    hints,
+    snapshot: { ...enrollmentSnapshot, currentStep: 2 },
+    vaultConnection: { connected: true, vaultName: 'Personal' },
+  })
+  expect(renderState.widgetState.collapsed).toBe(false)
 })
 
 describe('passkey workflow saved-login fallback', () => {

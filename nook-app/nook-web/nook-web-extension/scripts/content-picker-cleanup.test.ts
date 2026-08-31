@@ -1,5 +1,6 @@
 import { expect, mock, test } from 'bun:test'
 import type { PasswordFormObservation } from '../../nook-web-shared/src/extension/password-forms'
+import { ExtensionRuntimeRequestType } from '../src/lib/extension-runtime-request-type'
 
 const addListener = mock(() => {})
 Object.assign(globalThis, {
@@ -13,7 +14,7 @@ Object.assign(globalThis, {
 })
 
 test('delivers cleanup cancellation through the content-script router', async () => {
-  const { LoginPickerKind, pickerState } =
+  const { LoginPickerKind, pickerState, widgetState } =
     await import('../src/content/autofill/state')
   const { routeAutofillMessage } =
     await import('../src/content/autofill/message-router')
@@ -50,4 +51,13 @@ test('delivers cleanup cancellation through the content-script router', async ()
   expect(description.textContent).toBe('Picker canceled')
   expect(continueButton.disabled).toBe(false)
   expect(sendResponse).toHaveBeenCalledWith({ ok: true })
+
+  const remove = mock(() => {})
+  widgetState.attachHost({ remove } as unknown as HTMLElement)
+  routeAutofillMessage(
+    { type: ExtensionRuntimeRequestType.ClearAuthenticationSurface },
+    { id: 'nook-extension' },
+    sendResponse,
+  )
+  expect(remove).toHaveBeenCalledTimes(1)
 })

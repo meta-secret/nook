@@ -75,13 +75,16 @@ export function renderEnrollmentWidget({
     removeWidget()
     return
   }
-  const workflowKey = [
+  const presentationScope = [
     'enrollment',
     snapshot.action,
     snapshot.currentStep,
     snapshot.totalSteps,
     hints.qr ? 'qr' : '',
     hints.backupCodes ? 'backup' : '',
+  ].join(':')
+  const workflowKey = [
+    presentationScope,
     vaultConnection.connected ? 'connected' : 'disconnected',
     vaultConnection.vaultName ?? '',
   ].join(':')
@@ -98,7 +101,8 @@ export function renderEnrollmentWidget({
   ) {
     return
   }
-  if (widgetState.host.kind === WidgetHostKind.Attached) removeWidget()
+  widgetState.beginEnrollmentWorkflow(presentationScope)
+  if (widgetState.host.kind === WidgetHostKind.Attached) remountWidget()
 
   const nookTypedArgs0_0: Parameters<typeof createWidgetShell>[0] = {
     copy: enrollmentCopy(hints),

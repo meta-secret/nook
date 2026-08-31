@@ -213,12 +213,14 @@ test.describe('PIN Pilot mock-auth coverage', () => {
         'extension-fill-password',
       )
 
-      await lockExtensionSession(paired.context)
-
       const loginPage = await paired.context.newPage()
       await loginPage.goto(`${mockAuth.origin}/plain/login`)
-      const widget = loginPage.locator('#nook-auth-widget')
+      let widget = loginPage.locator('#nook-auth-widget')
       await expect(widget.getByText('Ready to sign in')).toBeVisible()
+      await lockExtensionSession(paired.context)
+      await expect(widget).toHaveCount(0)
+      await loginPage.reload()
+      widget = loginPage.locator('#nook-auth-widget')
       await widget.getByRole('button', { name: 'Continue with Nook' }).click()
       await expect(
         widget.getByText(

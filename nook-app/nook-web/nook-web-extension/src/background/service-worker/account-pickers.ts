@@ -11,6 +11,7 @@ import {
   type WebsiteLoginCanceledMessage,
 } from '../../lib/login-picker-messages'
 import { OpenCompanionLauncherIntent } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
+import { ExtensionRuntimeRequestType } from '../../lib/extension-runtime-request-type'
 import {
   extensionSessionGrantIdentity,
   type StoredExtensionPairingGrant,
@@ -213,6 +214,16 @@ async function closeVisibleAccountPickerSurfaces(): Promise<void> {
   const pickerSurfaceTabs = await new Promise<chrome.tabs.Tab[]>((resolve) => {
     chrome.tabs.query(pickerSurfaceQuery, resolve)
   })
+  const clearMessage: Parameters<typeof chrome.tabs.sendMessage>[1] = {
+    type: ExtensionRuntimeRequestType.ClearAuthenticationSurface,
+  }
+  await Promise.allSettled(
+    pickerSurfaceTabs.flatMap((tab) =>
+      typeof tab.id === 'number'
+        ? [chrome.tabs.sendMessage(tab.id, clearMessage)]
+        : [],
+    ),
+  )
   const pickerSurfaceTabIds = pickerSurfaceTabs.flatMap((tab) => {
     if (
       !('id' in tab) ||

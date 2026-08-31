@@ -1,7 +1,6 @@
 import { expect, test, type Route } from '../fixtures'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { ExtensionReadySetup } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm'
 import { demoBeat } from './pilot-demo-helpers'
 
 const demoDir = path.dirname(fileURLToPath(import.meta.url))
@@ -14,7 +13,7 @@ function installPopupDemoRuntime(): void {
     devicePublicKey: 'popup-demo-public-key',
     deviceSigningPublicKey: 'popup-demo-signing-key',
   }
-  const setup: ExtensionReadySetup = {
+  const setup = {
     status: 'ready',
     deviceLabel: 'Nook Extension - UI demo',
     pairedVaults: ['Personal vault'],
@@ -52,17 +51,11 @@ function installPopupDemoRuntime(): void {
   const browserGlobal = globalThis as typeof globalThis & {
     chrome?: typeof chromeStub
   }
-  if (browserGlobal.chrome) {
-    Object.defineProperties(browserGlobal.chrome, {
-      i18n: { configurable: true, value: chromeStub.i18n },
-      runtime: { configurable: true, value: chromeStub.runtime },
-    })
-  } else {
-    Object.defineProperty(browserGlobal, 'chrome', {
-      configurable: true,
-      value: chromeStub,
-    })
-  }
+  browserGlobal.chrome ??= chromeStub
+  Object.defineProperties(browserGlobal.chrome, {
+    i18n: { configurable: true, value: chromeStub.i18n },
+    runtime: { configurable: true, value: chromeStub.runtime },
+  })
 }
 
 test('keeps the extension toolbar popup focused on one next action', async ({

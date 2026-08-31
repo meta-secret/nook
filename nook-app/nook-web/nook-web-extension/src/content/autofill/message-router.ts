@@ -49,6 +49,16 @@ export const routeAutofillMessage: AutofillMessageListener =
     if (
       sender.id === chrome.runtime.id &&
       'type' in message &&
+      message.type === ExtensionRuntimeRequestType.ClearAuthenticationSurface
+    ) {
+      removeScannedWidget()
+      const response: Parameters<typeof sendResponse>[0] = { ok: true }
+      sendResponse(response)
+      return false
+    }
+    if (
+      sender.id === chrome.runtime.id &&
+      'type' in message &&
       message.type === ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces
     ) {
       widgetState.dismissed = false

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, expect, test, vi } from 'vitest'
 import {
   attachPointerDrag,
   clampMountedWidgetPosition,
@@ -54,62 +54,53 @@ test('keeps one visible Nook mark across expanded and compact states', () => {
   expect(shell.nookMark.parentElement).toBe(shell.body)
 })
 
-describe('Pilot viewport placement', () => {
-  test('reclamps a mounted widget when the viewport shrinks', () => {
-    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(300)
-    const host = document.createElement('div')
-    vi.spyOn(host, 'offsetWidth', 'get').mockReturnValue(120)
-    widgetState.attachHost(host)
-    widgetState.setPosition({ left: 500, top: 400 })
+test('reclamps a mounted widget when the viewport shrinks', () => {
+  vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(300)
+  const host = document.createElement('div')
+  vi.spyOn(host, 'offsetWidth', 'get').mockReturnValue(120)
+  widgetState.attachHost(host)
+  widgetState.setPosition({ left: 500, top: 400 })
 
-    window.addEventListener('resize', clampMountedWidgetPosition)
-    window.dispatchEvent(new Event('resize'))
+  window.addEventListener('resize', clampMountedWidgetPosition)
+  window.dispatchEvent(new Event('resize'))
 
-    expect(host.style.left).toBe('172px')
-  })
+  expect(host.style.left).toBe('172px')
 })
 
-describe('compact Pilot activation', () => {
-  function tappableWidget() {
-    const host = document.createElement('div')
-    const handle = document.createElement('button')
-    handle.className = 'collapsed-launch'
-    host.append(handle)
-    const onTap = vi.fn()
-    attachPointerDrag({
-      host,
-      handle,
-      behavior: { kind: PointerDragBehaviorKind.Tappable, onTap },
-    })
-    return { handle, onTap }
-  }
-
-  test('uses the native click path for synthetic button activation', () => {
-    const { handle, onTap } = tappableWidget()
-    handle.click()
-
-    expect(onTap).toHaveBeenCalledOnce()
+function tappableWidget() {
+  const host = document.createElement('div')
+  const handle = document.createElement('button')
+  handle.className = 'collapsed-launch'
+  host.append(handle)
+  const onTap = vi.fn()
+  attachPointerDrag({
+    host,
+    handle,
+    behavior: { kind: PointerDragBehaviorKind.Tappable, onTap },
   })
+  return { handle, onTap }
+}
 
-  test('suppresses the click generated after a drag', () => {
-    const { handle, onTap } = tappableWidget()
-    handle.setPointerCapture = vi.fn()
-    handle.hasPointerCapture = vi.fn(() => false)
+test('uses native clicks while suppressing activation after drag', () => {
+  const { handle, onTap } = tappableWidget()
+  handle.click()
+  expect(onTap).toHaveBeenCalledOnce()
+  handle.setPointerCapture = vi.fn()
+  handle.hasPointerCapture = vi.fn(() => false)
 
-    const dispatchPointer = (type: string, clientX: number, clientY: number) =>
-      handle.dispatchEvent(
-        new PointerEvent(type, {
-          pointerId: 7,
-          button: 0,
-          clientX,
-          clientY,
-        }),
-      )
-    dispatchPointer('pointerdown', 10, 10)
-    dispatchPointer('pointermove', 40, 40)
-    handle.dispatchEvent(new PointerEvent('pointerup', { pointerId: 7 }))
-    handle.click()
+  const dispatchPointer = (type: string, clientX: number, clientY: number) =>
+    handle.dispatchEvent(
+      new PointerEvent(type, {
+        pointerId: 7,
+        button: 0,
+        clientX,
+        clientY,
+      }),
+    )
+  dispatchPointer('pointerdown', 10, 10)
+  dispatchPointer('pointermove', 40, 40)
+  handle.dispatchEvent(new PointerEvent('pointerup', { pointerId: 7 }))
+  handle.click()
 
-    expect(onTap).not.toHaveBeenCalled()
-  })
+  expect(onTap).toHaveBeenCalledOnce()
 })
