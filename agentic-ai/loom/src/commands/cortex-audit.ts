@@ -16,15 +16,13 @@ import type { LintProseDensityArgs } from '../lib/density.ts';
 import type { FindBrokenRelativeLinksArgs } from '../lib/links.ts';
 import type { LoomFailureDetailArgs } from '../loom-failure.ts';
 import {
-  auditCortexMarkdownSyntax,
-  auditCortexDocumentStructure,
   CortexStructureFindingCode,
   normalizedCortexMarkdown,
-  type AuditCortexMarkdownSyntaxArgs,
-  type AuditCortexDocumentStructureArgs,
   type CortexDocumentSource,
   type CortexStructureFinding,
 } from '../../../../.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/src/cortex-document-structure.ts';
+import { executeCortexDocumentMapApplication } from '../../../../.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/src/application.ts';
+import { CortexDocumentMapContractKind } from '../../../../.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/src/domain.ts';
 import {
   auditCortexArticleStructure,
   type AuditCortexArticleStructureArgs,
@@ -114,12 +112,26 @@ export async function runCortexAuditFromDirectory(
     };
     return documentSource;
   });
-  const syntaxAuditArgs: AuditCortexMarkdownSyntaxArgs = {
-    documents: syntaxDocuments,
-  };
-  const syntaxFindings = auditCortexMarkdownSyntax(syntaxAuditArgs);
+  const excludedDocumentPaths = syntaxDocuments
+    .filter((document) => {
+      const persistenceArgs: IsPersistentCortexMarkdownFileArgs = {
+        cortexRoot,
+        filePath: document.absolutePath,
+      };
+      return !isPersistentCortexMarkdownFile(persistenceArgs);
+    })
+    .map((document) => document.relativePath);
+  const documentMapResult = executeCortexDocumentMapApplication({
+    kind: CortexDocumentMapContractKind.Request,
+    documents: syntaxDocuments.map((document) => ({
+      relativePath: document.relativePath,
+      content: document.content,
+    })),
+    excludedDocumentPaths,
+  });
+  const structureFindings = [...documentMapResult.findings];
   const syntaxInvalidPaths = new Set(
-    syntaxFindings
+    structureFindings
       .filter(
         (finding) => finding.code === CortexStructureFindingCode.ProhibitedHtml,
       )
@@ -161,15 +173,6 @@ export async function runCortexAuditFromDirectory(
     }
   }
 
-  const structureAuditArgs: AuditCortexDocumentStructureArgs = {
-    documents,
-    excludedDocumentPaths: syntaxInvalidPaths,
-    repoRoot,
-  };
-  const downstreamStructureFindings = auditCortexDocumentStructure(
-    structureAuditArgs,
-  ).filter((finding) => !syntaxInvalidPaths.has(finding.file));
-  const structureFindings = [...syntaxFindings, ...downstreamStructureFindings];
   const articleStructureAuditArgs: AuditCortexArticleStructureArgs = {
     documents,
   };

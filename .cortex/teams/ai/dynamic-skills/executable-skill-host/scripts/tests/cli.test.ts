@@ -105,7 +105,7 @@ function providerFailurePath(
   throw new Error('Expected provider rejection.');
 }
 describe('provider-neutral executable skill YAML host', () => {
-  test('discovers the closed tools-list and article audit actions', async () => {
+  test('discovers the closed executable action catalog', async () => {
     const request: RunSkillCliRequest = { argv: [] };
     const outcome = await runSkillCli(request);
     const response = parseResponse(outcome.yaml);
@@ -114,7 +114,7 @@ describe('provider-neutral executable skill YAML host', () => {
     expect(response.ok).toBe(true);
     const actions = response.result?.actions;
     if (!actions) throw new Error('Missing discovered actions.');
-    expect(actions).toHaveLength(2);
+    expect(actions).toHaveLength(3);
     const action = actions[0];
     if (!action) throw new Error('Missing tools-list action.');
     expect(action.description).not.toBeEmpty();
@@ -152,6 +152,58 @@ describe('provider-neutral executable skill YAML host', () => {
     );
     expect(invalid.exitCode).toBe(2);
     expect(invalid.yaml).not.toContain('MARKER');
+  });
+  test('executes the document-map action through its static provider', () => {
+    const action = listDiscoverableSkillActions().actions.at(2);
+    if (!action) throw new Error('Missing document-map action.');
+    const outcome = dispatchSkillYamlText(action.exampleYaml);
+    const response = parseResponse(outcome.yaml);
+    expect(outcome.exitCode).toBe(0);
+    expect(response.family).toBe(SkillRequestFamily.CortexDocumentMap);
+    expect(response.operation).toBe('audit');
+    expect(response.result).toMatchObject({ findings: [] });
+
+    const invalid = dispatchSkillYamlText(
+      action.exampleYaml.replace(
+        'documents:',
+        'secret: MARKER\n    documents:',
+      ),
+    );
+    expect(invalid.exitCode).toBe(2);
+    expect(invalid.yaml).not.toContain('MARKER');
+
+    const transientLink = dispatchSkillYamlText(`cortexDocumentMap:
+  audit:
+    kind: cortex-document-map-audit-v1
+    documents:
+      - relativePath: .cortex/knowledge-graph.md
+        content: "# Router\\n\\n- [Transient](.session/note.md)\\n"
+      - relativePath: .cortex/.session/note.md
+        content: "# Temporary\\n"
+    excludedDocumentPaths:
+      - .cortex/.session/note.md
+`);
+    expect(parseResponse(transientLink.yaml).result?.findings).toEqual([
+      {
+        code: 'invalid-index-entry',
+        file: '.cortex/knowledge-graph.md',
+        line: 3,
+        message:
+          'Index link points to non-existent document: .cortex/.session/note.md',
+      },
+    ]);
+
+    const missingExcludedDocument = dispatchSkillYamlText(
+      action.exampleYaml.replace(
+        'excludedDocumentPaths: []',
+        'excludedDocumentPaths:\n      - .cortex/.session/MARKER.md',
+      ),
+    );
+    expect(missingExcludedDocument.exitCode).toBe(2);
+    expect(missingExcludedDocument.yaml).not.toContain('MARKER');
+    expect(
+      parseResponse(missingExcludedDocument.yaml).errors?.at(0)?.path,
+    ).toBe('cortexDocumentMap.audit.excludedDocumentPaths[0]');
   });
   test('aligns discovered and provider UTF-16 string limits', () => {
     const action = listDiscoverableSkillActions().actions.at(1);

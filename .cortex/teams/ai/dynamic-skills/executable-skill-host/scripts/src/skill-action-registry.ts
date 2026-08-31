@@ -9,8 +9,16 @@ import {
   decodeCortexArticleActionPayload,
   executeCortexArticleAction,
 } from '../../../cortex-article-structure/scripts/src/action.ts';
+import type { CortexDocumentMapResult } from '../../../cortex-document-map/scripts/src/domain.ts';
+import {
+  CORTEX_DOCUMENT_MAP_ACTION_DEFINITION,
+  CortexDocumentMapRequestDecodeError,
+  decodeCortexDocumentMapActionPayload,
+  executeCortexDocumentMapAction,
+} from '../../../cortex-document-map/scripts/src/action.ts';
 import {
   CortexArticleStructureOperation,
+  CortexDocumentMapOperation,
   SkillRequestFamily,
   SKILL_HOST_REQUEST_BYTE_LIMIT,
   SKILL_HOST_RESPONSE_BYTE_LIMIT,
@@ -62,6 +70,11 @@ const CORTEX_ARTICLE_DISCOVERY_SCHEMA: SkillObjectSchema = {
   maximumRequestBytes: SKILL_HOST_REQUEST_BYTE_LIMIT,
   maximumResponseBytes: SKILL_HOST_RESPONSE_BYTE_LIMIT,
 };
+const CORTEX_DOCUMENT_MAP_DISCOVERY_SCHEMA: SkillObjectSchema = {
+  ...CORTEX_DOCUMENT_MAP_ACTION_DEFINITION.inputSchema,
+  maximumRequestBytes: SKILL_HOST_REQUEST_BYTE_LIMIT,
+  maximumResponseBytes: SKILL_HOST_RESPONSE_BYTE_LIMIT,
+};
 const DISCOVERABLE_ACTIONS: readonly DiscoverableSkillAction[] = [
   {
     skillId: 'skills',
@@ -83,6 +96,17 @@ const DISCOVERABLE_ACTIONS: readonly DiscoverableSkillAction[] = [
     resolvedExampleYaml: CORTEX_ARTICLE_ACTION_DEFINITION.resolvedExampleYaml,
     inputSchema: CORTEX_ARTICLE_DISCOVERY_SCHEMA,
   },
+  {
+    skillId: CORTEX_DOCUMENT_MAP_ACTION_DEFINITION.skillId,
+    family: SkillRequestFamily.CortexDocumentMap,
+    operation: CortexDocumentMapOperation.Audit,
+    description: CORTEX_DOCUMENT_MAP_ACTION_DEFINITION.description,
+    exampleRequest: SKILL_RUN_INVOKE,
+    exampleYaml: CORTEX_DOCUMENT_MAP_ACTION_DEFINITION.exampleYaml,
+    resolvedExampleYaml:
+      CORTEX_DOCUMENT_MAP_ACTION_DEFINITION.resolvedExampleYaml,
+    inputSchema: CORTEX_DOCUMENT_MAP_DISCOVERY_SCHEMA,
+  },
 ];
 export function listDiscoverableSkillActions(): SkillToolsListResult {
   return { actions: DISCOVERABLE_ACTIONS };
@@ -96,9 +120,14 @@ export type SkillActionRequest =
       readonly family: SkillRequestFamily.CortexArticleStructure;
       readonly operation: CortexArticleStructureOperation.Audit;
       readonly request: ReturnType<typeof decodeCortexArticleActionPayload>;
+    }
+  | {
+      readonly family: SkillRequestFamily.CortexDocumentMap;
+      readonly operation: CortexDocumentMapOperation.Audit;
+      readonly request: ReturnType<typeof decodeCortexDocumentMapActionPayload>;
     };
 export type SkillActionResult =
-  SkillToolsListResult | CortexArticleStructureResult;
+  SkillToolsListResult | CortexArticleStructureResult | CortexDocumentMapResult;
 export type SkillActionDecodeOutcome =
   | { readonly ok: true; readonly request: SkillActionRequest }
   | { readonly ok: false; readonly path: string; readonly message: string };
@@ -118,6 +147,9 @@ export function decodeSkillActionRequest(
   if (Object.hasOwn(value, SkillRequestFamily.CortexArticleStructure)) {
     return decodeCortexArticleAction(value);
   }
+  if (Object.hasOwn(value, SkillRequestFamily.CortexDocumentMap)) {
+    return decodeCortexDocumentMapAction(value);
+  }
   const request: InvalidSkillRequest = {
     path: unknownSkillCommandPath(''),
     message: 'Unknown skill request family.',
@@ -130,7 +162,10 @@ export function executeSkillAction(
   if (request.family === SkillRequestFamily.ToolsList) {
     return listDiscoverableSkillActions();
   }
-  return executeCortexArticleAction(request.request);
+  if (request.family === SkillRequestFamily.CortexArticleStructure) {
+    return executeCortexArticleAction(request.request);
+  }
+  return executeCortexDocumentMapAction(request.request);
 }
 export function defaultSkillBlueprint(): string {
   return TOOLS_LIST_EXAMPLE;
@@ -255,6 +290,70 @@ function decodeCortexArticleAction(
       message: error instanceof Error ? error.message : String(error),
     };
     return invalidRequest(request);
+  }
+}
+function decodeCortexDocumentMapAction(
+  root: UntrustedSkillYamlMap,
+): SkillActionDecodeOutcome {
+  const family = skillYamlProperty({
+    map: root,
+    key: SkillRequestFamily.CortexDocumentMap,
+  });
+  if (!family.found || !isSkillYamlMap(family.value)) {
+    return invalidRequest({
+      path: 'cortexDocumentMap',
+      message: 'Expected an action object.',
+    });
+  }
+  const audit = skillYamlProperty({
+    map: family.value,
+    key: CortexDocumentMapOperation.Audit,
+  });
+  const operation = Object.keys(family.value).find(
+    (key) => key !== CortexDocumentMapOperation.Audit,
+  );
+  if (typeof operation === 'string') {
+    return invalidRequest({
+      path: unknownSkillCommandPath('cortexDocumentMap'),
+      message: 'Expected only the audit action.',
+    });
+  }
+  if (!audit.found) {
+    return invalidRequest({
+      path: 'cortexDocumentMap.audit',
+      message: 'Expected the audit action.',
+    });
+  }
+  const validation = validateSkillInput({
+    path: 'cortexDocumentMap.audit',
+    schema: CORTEX_DOCUMENT_MAP_ACTION_DEFINITION.inputSchema,
+    value: audit.value,
+  });
+  if (!validation.ok) {
+    return invalidRequest({
+      path: validation.path,
+      message: validation.message,
+    });
+  }
+  try {
+    return {
+      ok: true,
+      request: {
+        family: SkillRequestFamily.CortexDocumentMap,
+        operation: CortexDocumentMapOperation.Audit,
+        request: decodeCortexDocumentMapActionPayload(
+          JSON.stringify(audit.value),
+        ),
+      },
+    };
+  } catch (error) {
+    const suffix =
+      error instanceof CortexDocumentMapRequestDecodeError ? error.path : '';
+    const separator = suffix.startsWith('[') ? '' : '.';
+    return invalidRequest({
+      path: `cortexDocumentMap.audit${suffix ? `${separator}${suffix}` : ''}`,
+      message: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 type InvalidSkillRequest = {

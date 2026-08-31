@@ -1,6 +1,7 @@
 export enum SkillRequestFamily {
   ToolsList = 'skillToolsList',
   CortexArticleStructure = 'cortexArticleStructure',
+  CortexDocumentMap = 'cortexDocumentMap',
 }
 
 export enum SkillToolsOperation {
@@ -8,6 +9,10 @@ export enum SkillToolsOperation {
 }
 
 export enum CortexArticleStructureOperation {
+  Audit = 'audit',
+}
+
+export enum CortexDocumentMapOperation {
   Audit = 'audit',
 }
 
@@ -98,7 +103,10 @@ export type SkillInputSchema =
 export type DiscoverableSkillAction = {
   readonly skillId: string;
   readonly family: SkillRequestFamily;
-  readonly operation: CortexArticleStructureOperation | SkillToolsOperation;
+  readonly operation:
+    | CortexArticleStructureOperation
+    | CortexDocumentMapOperation
+    | SkillToolsOperation;
   readonly description: string;
   readonly exampleRequest: string;
   readonly exampleYaml: string;
