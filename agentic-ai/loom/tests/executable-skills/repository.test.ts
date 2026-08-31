@@ -21,6 +21,16 @@ import type { UntrustedYamlMap } from '../../src/lib/guards.ts';
 
 const ROOT = '.cortex/teams/ai/dynamic-skills/example';
 const SCRIPTS = `${ROOT}/scripts`;
+const WORKSPACE_PACKAGE = {
+  name: '@nook/executable-skills-workspace',
+  private: true,
+  packageManager: 'bun@1.3.14',
+  workspaces: [
+    'gizmo/dynamic-skills/*/scripts',
+    'shared/dynamic-skills/*/scripts',
+    'teams/*/dynamic-skills/*/scripts',
+  ],
+} as const;
 const REMOVE_OPTIONS = { recursive: true, force: true } as const;
 const DIRECTORY_OPTIONS = { recursive: true } as const;
 const CANONICAL_SCRIPTS = join(
@@ -60,10 +70,13 @@ const MANIFEST = {
 
 function trackedFiles(): TrackedRepositoryFile[] {
   return [
+    '.cortex/.gitignore',
+    '.cortex/bun.lock',
+    '.cortex/bunfig.toml',
+    '.cortex/package.json',
     `${ROOT}/SKILL.md`,
     `${SCRIPTS}/.gitignore`,
     `${SCRIPTS}/.prettierrc`,
-    `${SCRIPTS}/bun.lock`,
     `${SCRIPTS}/eslint.config.js`,
     `${SCRIPTS}/executable-skill.json`,
     `${SCRIPTS}/package.json`,
@@ -90,8 +103,10 @@ async function packageFixture(overrides?: FixtureOverrides): Promise<string> {
     lockfileVersion: 1,
     configVersion: 1,
     workspaces: {
-      '': {
+      '': { name: '@nook/executable-skills-workspace' },
+      'teams/ai/dynamic-skills/example/scripts': {
         name: '@nook/example-skill',
+        version: '0.1.0',
         devDependencies: packageDocument.devDependencies,
       },
     },
@@ -103,6 +118,16 @@ async function packageFixture(overrides?: FixtureOverrides): Promise<string> {
     ),
   );
   await Promise.all([
+    writeFile(join(repoRoot, '.cortex/.gitignore'), 'node_modules/\n'),
+    writeFile(
+      join(repoRoot, '.cortex/package.json'),
+      JSON.stringify(WORKSPACE_PACKAGE),
+    ),
+    writeFile(
+      join(repoRoot, '.cortex/bunfig.toml'),
+      '[install]\nlinker = "hoisted"\n',
+    ),
+    writeFile(join(repoRoot, '.cortex/bun.lock'), JSON.stringify(lock)),
     writeFile(
       join(repoRoot, ROOT, 'SKILL.md'),
       selected.skill ?? '---\nname: example\ndescription: Test skill.\n---\n',
@@ -115,7 +140,6 @@ async function packageFixture(overrides?: FixtureOverrides): Promise<string> {
       join(repoRoot, SCRIPTS, 'executable-skill.json'),
       JSON.stringify(selected.manifest ?? MANIFEST),
     ),
-    writeFile(join(repoRoot, SCRIPTS, 'bun.lock'), JSON.stringify(lock)),
     writeFile(join(repoRoot, SCRIPTS, '.prettierrc'), prettier ?? ''),
     writeFile(join(repoRoot, SCRIPTS, 'tsconfig.json'), tsconfig ?? ''),
     writeFile(join(repoRoot, SCRIPTS, 'eslint.config.js'), eslint ?? ''),
@@ -151,6 +175,43 @@ test('accepts a declared static YAML host execution kind', async () => {
   }
 });
 
+test('rejects executable-skill workspace policy drift', async () => {
+  for (const [relativePath, source, issue] of [
+    ['.cortex/package.json', '{}', 'workspace package'],
+    [
+      '.cortex/bunfig.toml',
+      '[install]\nlinker = "isolated"\n',
+      'hoisted linker',
+    ],
+  ] as const) {
+    const repoRoot = await packageFixture();
+    try {
+      await writeFile(join(repoRoot, relativePath), source);
+      expect(
+        audit(repoRoot)(trackedFiles()).some((finding) =>
+          finding.issue.includes(issue),
+        ),
+      ).toBe(true);
+    } finally {
+      await rm(repoRoot, REMOVE_OPTIONS);
+    }
+  }
+});
+
+test('rejects a missing executable-skill workspace lock', async () => {
+  const repoRoot = await packageFixture();
+  try {
+    await rm(join(repoRoot, '.cortex/bun.lock'));
+    expect(
+      audit(repoRoot)(trackedFiles()).some((finding) =>
+        finding.issue.includes('regular file'),
+      ),
+    ).toBe(true);
+  } finally {
+    await rm(repoRoot, REMOVE_OPTIONS);
+  }
+});
+
 test('rejects unsafe tracked modes and tracked node_modules', async () => {
   const repoRoot = await packageFixture();
   try {
@@ -160,12 +221,15 @@ test('rejects unsafe tracked modes and tracked node_modules', async () => {
       path: `${SCRIPTS}/node_modules/hidden.js`,
     };
     files.push(nodeModulesFile);
+    files.push({ mode: '100644', path: '.cortex/node_modules/hidden.js' });
+    files.push({ mode: '100644', path: `${SCRIPTS}/bun.lock` });
     const mirror: TrackedRepositoryFile = {
       mode: '100644',
       path: `${SCRIPTS}/SKILL.md`,
     };
     files.push(mirror);
-    for (const [index, mode] of ['100755', '120000', '160000'].entries()) {
+    for (const [offset, mode] of ['100755', '120000', '160000'].entries()) {
+      const index = offset + 4;
       const candidate = files.at(index);
       if (candidate) files[index] = { ...candidate, mode };
     }
@@ -175,6 +239,9 @@ test('rejects unsafe tracked modes and tracked node_modules', async () => {
     ).toHaveLength(3);
     expect(
       findings.some((finding) => finding.issue.includes('node_modules')),
+    ).toBe(true);
+    expect(
+      findings.some((finding) => finding.issue.includes('workspace lock')),
     ).toBe(true);
     expect(findings.some((finding) => finding.issue.includes('mirror'))).toBe(
       true,

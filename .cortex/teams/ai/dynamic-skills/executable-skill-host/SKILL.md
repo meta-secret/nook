@@ -22,8 +22,8 @@ does not read request files or stdin.
 The host has no model, scheduling, network, repository-write, process-spawn,
 dynamic import, manifest activation, or lifecycle authority. Static actions
 return validated data or plans. The active harness alone creates and
-coordinates agents and subagents. A Task install may fetch frozen dependencies;
-the invoked host and providers may not.
+coordinates agents and subagents. A Task install may fetch the frozen workspace
+dependencies. The invoked host and providers may not fetch dependencies.
 
 ## Example
 
@@ -41,5 +41,5 @@ recovery request. Request scalars and unknown keys are never echoed.
 Keep generic transport here and action schema, example, decode, execution, and
 verification in the owning skill. Provider integration must be static and
 one-way from host to provider. Discover the catalog with
-`task skills:tools-list`; validate both executable projects with
+`task skills:tools-list`; validate every workspace package with
 `task skills:verify` and the repository boundary with `task loom:verify`.

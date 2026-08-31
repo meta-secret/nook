@@ -173,13 +173,16 @@ test('all tracked executable application sources pass the AST capability gate', 
   ].sort();
   expect(implementationRoots).toEqual(packageRoots);
   expect([...SOURCE_PROFILES.keys()].sort()).toEqual(packageRoots);
+  expect(tracked).toContain('.cortex/bun.lock');
+  const workspaceLock = await Bun.file(
+    join(REPOSITORY_ROOT, '.cortex/bun.lock'),
+  ).text();
   for (const root of packageRoots) {
     const skillRoot = posix.dirname(root);
     const slug = posix.basename(skillRoot);
     expect(tracked).not.toContain(`${skillRoot}.md`);
     for (const required of [
       `${skillRoot}/SKILL.md`,
-      `${root}/bun.lock`,
       `${root}/executable-skill.json`,
     ]) {
       expect(tracked, required).toContain(required);
@@ -203,12 +206,9 @@ test('all tracked executable application sources pass the AST capability gate', 
     const packageDocument = await Bun.file(
       join(REPOSITORY_ROOT, root, 'package.json'),
     ).text();
-    const lockfile = await Bun.file(
-      join(REPOSITORY_ROOT, root, 'bun.lock'),
-    ).text();
     expect(skill.startsWith(`---\nname: ${slug}\ndescription:`)).toBe(true);
     expect(packageDocument).toContain(`"name": "@nook/${slug}-skill"`);
-    expect(lockfile).toContain(`"name": "@nook/${slug}-skill"`);
+    expect(workspaceLock).toContain(`"name": "@nook/${slug}-skill"`);
   }
   const sources = tracked.filter(isExecutableSkillApplicationSourcePath);
   expect(sources.length).toBeGreaterThan(0);

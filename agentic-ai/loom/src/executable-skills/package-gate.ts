@@ -1,6 +1,7 @@
 import path from 'node:path';
 import {
   auditExecutableSkillPackageFiles,
+  EXECUTABLE_SKILL_WORKSPACE_ROOT,
   executableSkillPackages,
   readTrackedRepositoryFiles,
 } from './repository.ts';
@@ -84,6 +85,19 @@ export function runExecutableSkillPackageGate(
   }
   const runner = request.runner ?? runCommand;
   const arguments_ = commandArguments(request.action);
+  if (request.action === 'install') {
+    const commandRequest: ExecutableSkillCommandRequest = {
+      arguments: arguments_,
+      cwd: path.join(request.repoRoot, EXECUTABLE_SKILL_WORKSPACE_ROOT),
+    };
+    const exitCode = runner(commandRequest);
+    if (exitCode !== 0) {
+      throw new Error(
+        `Executable skill workspace install failed with status ${exitCode}`,
+      );
+    }
+    return;
+  }
   for (const skillPackage of executableSkillPackages(tracked)) {
     const cwd = path.join(request.repoRoot, skillPackage.scriptsRoot);
     const commandRequest: ExecutableSkillCommandRequest = {

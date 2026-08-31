@@ -104,13 +104,30 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
     assert!(
         skills_install.contains("package-gate-cli.ts\" install")
             && skills_install.contains("{{.REPO_ROOT}}"),
-        "executable applications must install every pinned project"
+        "executable applications must install their pinned workspace"
+    );
+    let skills_workspace = read(&root, ".cortex/package.json");
+    for required in [
+        "@nook/executable-skills-workspace",
+        "gizmo/dynamic-skills/*/scripts",
+        "shared/dynamic-skills/*/scripts",
+        "teams/*/dynamic-skills/*/scripts",
+    ] {
+        assert!(
+            skills_workspace.contains(required),
+            "executable-skill workspace must retain `{required}`"
+        );
+    }
+    let skills_bunfig = read(&root, ".cortex/bunfig.toml");
+    assert!(
+        skills_bunfig.contains("linker = \"hoisted\""),
+        "executable-skill workspace must retain one hoisted dependency tree"
     );
     let skills_verify = task_body(&taskfile, "skills:verify", "loom:install");
     assert!(
         skills_verify.contains("deps: [skills:install]")
             && skills_verify.contains("package-gate-cli.ts\" verify"),
-        "skills:verify must run every complete application project gate"
+        "skills:verify must run every complete workspace package gate"
     );
 
     let loom_install = task_body(&taskfile, "loom:install", "loom:format");

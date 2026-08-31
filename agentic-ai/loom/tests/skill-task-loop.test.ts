@@ -39,6 +39,16 @@ const FIXTURE_PACKAGES: readonly FixturePackage[] = [
   { ownerRoot: '.cortex/teams/ai', slug: 'first-skill' },
   { ownerRoot: '.cortex/teams/security', slug: 'second-skill' },
 ];
+const WORKSPACE_PACKAGE = {
+  name: '@nook/executable-skills-workspace',
+  private: true,
+  packageManager: 'bun@1.3.14',
+  workspaces: [
+    'gizmo/dynamic-skills/*/scripts',
+    'shared/dynamic-skills/*/scripts',
+    'teams/*/dynamic-skills/*/scripts',
+  ],
+} as const;
 
 async function writePackage(request: WritePackageRequest): Promise<string> {
   const { repoRoot, ...fixture } = request;
@@ -74,17 +84,6 @@ async function writePackage(request: WritePackageRequest): Promise<string> {
     policyPaths: [`${packageRoot}/SKILL.md`],
     limits: { requestBytes: 1024, resultBytes: 1024 },
   } as const;
-  const lock = {
-    lockfileVersion: 1,
-    configVersion: 1,
-    workspaces: {
-      '': {
-        name: packageDocument.name,
-        devDependencies: packageDocument.devDependencies,
-      },
-    },
-    packages: {},
-  } as const;
   const sharedConfigs = await Promise.all(
     ['.prettierrc', 'tsconfig.json', 'eslint.config.js'].map(async (name) => ({
       name,
@@ -105,7 +104,6 @@ async function writePackage(request: WritePackageRequest): Promise<string> {
       join(repoRoot, scriptsRoot, 'executable-skill.json'),
       JSON.stringify(manifest),
     ),
-    writeFile(join(repoRoot, scriptsRoot, 'bun.lock'), JSON.stringify(lock)),
     writeFile(join(repoRoot, scriptsRoot, 'src/index.ts'), 'export {};\n'),
     writeFile(
       join(repoRoot, scriptsRoot, 'tests/index.test.ts'),
@@ -128,6 +126,38 @@ async function fixtureRepository(): Promise<{
     const request: WritePackageRequest = { ...fixture, repoRoot };
     packageRoots.push(await writePackage(request));
   }
+  const workspaces = Object.fromEntries([
+    ['', { name: WORKSPACE_PACKAGE.name }],
+    ...FIXTURE_PACKAGES.map((fixture) => {
+      const workspacePath = `${fixture.ownerRoot.slice('.cortex/'.length)}/dynamic-skills/${fixture.slug}/scripts`;
+      return [
+        workspacePath,
+        {
+          name: `@nook/${fixture.slug}-skill`,
+          version: '0.1.0',
+          devDependencies: { typescript: '6.0.3' },
+        },
+      ];
+    }),
+  ]);
+  const lock = {
+    lockfileVersion: 1,
+    configVersion: 1,
+    workspaces,
+    packages: {},
+  } as const;
+  await Promise.all([
+    writeFile(join(repoRoot, '.cortex/.gitignore'), 'node_modules/\n'),
+    writeFile(
+      join(repoRoot, '.cortex/package.json'),
+      JSON.stringify(WORKSPACE_PACKAGE),
+    ),
+    writeFile(
+      join(repoRoot, '.cortex/bunfig.toml'),
+      '[install]\nlinker = "hoisted"\n',
+    ),
+    writeFile(join(repoRoot, '.cortex/bun.lock'), JSON.stringify(lock)),
+  ]);
   const initOptions = { cmd: ['git', 'init', '-q'], cwd: repoRoot };
   const init = Bun.spawnSync(initOptions);
   if (init.exitCode !== 0) throw new Error('Fixture git init failed.');
@@ -197,7 +227,9 @@ test('install keeps the frozen lockfile contract', async () => {
     runExecutableSkillPackageGate(request);
     expect(requests.map((command) => command.arguments)).toEqual([
       ['install', '--frozen-lockfile'],
-      ['install', '--frozen-lockfile'],
+    ]);
+    expect(requests.map((command) => command.cwd)).toEqual([
+      join(fixture.repoRoot, '.cortex'),
     ]);
   } finally {
     await rm(fixture.repoRoot, REMOVE_OPTIONS);

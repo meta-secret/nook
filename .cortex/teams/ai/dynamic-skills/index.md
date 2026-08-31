@@ -108,8 +108,9 @@ Harness profile directories must not mirror or redefine these cards.
 2. Fill in the problem pattern, preferred pattern, scope, examples, and
    validation.
    Keep prose-only cards as `<slug>.md`. For an executable skill, convert the
-   card to `<slug>/SKILL.md` and co-locate its independent Bun and TypeScript
-   project under `<slug>/scripts/`.
+   card to `<slug>/SKILL.md` and co-locate its Bun and TypeScript package under
+   `<slug>/scripts/`. The shared `.cortex` workspace owns installation and the
+   frozen lockfile.
 3. Confirm the new card is in the catalog above and its owning Gizmo or team
    graph. Use the shared graph only for ownerless cross-team knowledge.
 4. Keep harness-specific profiles outside the tracked repository. Do not create

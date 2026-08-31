@@ -167,7 +167,6 @@ fn is_canonical_scripts_root(path: &Path) -> bool {
     [
         ".gitignore",
         ".prettierrc",
-        "bun.lock",
         "eslint.config.js",
         "executable-skill.json",
         "package.json",

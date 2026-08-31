@@ -50,7 +50,6 @@ fn is_valid_application_root(cortex_root: &std::path::Path, path: &std::path::Pa
         && [
             ".gitignore",
             ".prettierrc",
-            "bun.lock",
             "eslint.config.js",
             "executable-skill.json",
             "package.json",

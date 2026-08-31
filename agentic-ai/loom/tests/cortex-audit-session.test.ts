@@ -55,7 +55,7 @@ test('excludes temporary session memory from persistent Cortex documents', () =>
   }
 });
 
-test('excludes only canonical executable package scripts from Cortex Markdown', () => {
+test('excludes workspace dependencies and canonical executable package scripts', () => {
   const cortexRoot = mkdtempSync(path.join(tmpdir(), 'cortex-scripts-scope-'));
   try {
     const skillRoot = path.join(
@@ -82,6 +82,14 @@ test('excludes only canonical executable package scripts from Cortex Markdown', 
     );
     mkdirSync(unrelatedScripts, directoryOptions);
     mkdirSync(path.join(unknownSkillRoot, 'scripts'), directoryOptions);
+    mkdirSync(
+      path.join(cortexRoot, 'node_modules', 'workspace-tool'),
+      directoryOptions,
+    );
+    writeFileSync(
+      path.join(cortexRoot, 'node_modules', 'workspace-tool', 'README.md'),
+      '# Generated dependency\n',
+    );
     writeFileSync(
       path.join(skillRoot, 'SKILL.md'),
       '---\nname: article-audit\ndescription: Audit articles.\n---\n\n# Article Audit\n',
@@ -89,7 +97,6 @@ test('excludes only canonical executable package scripts from Cortex Markdown', 
     for (const name of [
       '.gitignore',
       '.prettierrc',
-      'bun.lock',
       'eslint.config.js',
       'executable-skill.json',
       'package.json',
@@ -118,6 +125,9 @@ test('excludes only canonical executable package scripts from Cortex Markdown', 
     );
     expect(relativeFiles).toContain(
       path.join('teams', 'ai', 'scripts', 'policy.md'),
+    );
+    expect(relativeFiles).not.toContain(
+      path.join('node_modules', 'workspace-tool', 'README.md'),
     );
     expect(relativeFiles).toContain(
       path.join('teams', 'ai', 'dynamic-skills', 'article-audit', 'SKILL.md'),
