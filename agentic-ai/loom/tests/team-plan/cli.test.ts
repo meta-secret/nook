@@ -1,4 +1,5 @@
 import { afterEach, expect, spyOn, test } from 'bun:test';
+import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -251,3 +252,31 @@ test('rejects non-files and oversized record requests before reading', async () 
     ).rejects.toThrow('invalid or oversized');
   rmSync(root, { recursive: true });
 });
+
+test.skipIf(process.platform === 'win32')(
+  'rejects a record request FIFO without waiting for a writer',
+  async () => {
+    const root = mkdtempSync(join(tmpdir(), 'team-plan-cli-fifo-'));
+    const request = join(root, 'request.fifo');
+    try {
+      const created = spawnSync('mkfifo', [request], {
+        env: { PATH: '/bin:/usr/bin:/usr/sbin' },
+        stdio: 'ignore',
+      });
+      if (created.status !== 0)
+        throw new Error('Unable to create Team Plan request FIFO fixture.');
+      await expect(
+        runTeamPlanCli([
+          'record',
+          '--journal',
+          join(root, 'journal'),
+          '--request',
+          request,
+        ]),
+      ).rejects.toThrow('invalid or oversized');
+    } finally {
+      rmSync(root, { recursive: true });
+    }
+  },
+  1_000,
+);

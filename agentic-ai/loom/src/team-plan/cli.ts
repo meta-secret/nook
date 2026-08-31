@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { open } from 'node:fs/promises';
+import { constants } from 'node:fs';
 import { resolve } from 'node:path';
 
 import {
@@ -125,7 +126,10 @@ export async function runTeamPlanCli(argv: readonly string[]): Promise<number> {
 }
 
 async function readTeamPlanRecordRequest(requestPath: string): Promise<string> {
-  const requestFile = await open(requestPath, 'r');
+  const requestFile = await open(
+    requestPath,
+    constants.O_RDONLY | constants.O_NONBLOCK,
+  );
   try {
     const requestStatus = await requestFile.stat();
     if (
