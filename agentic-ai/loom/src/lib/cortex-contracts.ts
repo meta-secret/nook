@@ -56,38 +56,53 @@ export function adaptCortexContractDocuments(
 function markdownReferences(content: string): readonly string[] {
   const root = unified().use(remarkParse).use(remarkGfm).parse(content);
   const definitions = new Map<string, string>();
-  visitMarkdownNode(root, (node) => {
-    if (node.type === 'definition') {
-      const identifier = node.identifier.toUpperCase();
-      if (!definitions.has(identifier)) definitions.set(identifier, node.url);
-    }
+  visitMarkdownNode({
+    node: root,
+    visitor: (node) => {
+      if (node.type === 'definition') {
+        const identifier = node.identifier.toUpperCase();
+        if (!definitions.has(identifier)) definitions.set(identifier, node.url);
+      }
+    },
   });
   const collection: MarkdownReferenceCollection = {
     definitions,
     references: [],
   };
-  visitMarkdownNode(root, (node) => collectMarkdownReference(node, collection));
+  visitMarkdownNode({
+    node: root,
+    visitor: (node) => collectMarkdownReference({ node, collection }),
+  });
   return collection.references;
 }
 
-function collectMarkdownReference(
-  node: Nodes,
-  collection: MarkdownReferenceCollection,
-): void {
-  if (node.type === 'link') {
-    collection.references.push(node.url);
-  } else if (node.type === 'linkReference') {
-    const destination = collection.definitions.get(
-      node.identifier.toUpperCase(),
+type CollectMarkdownReferenceArgs = {
+  readonly node: Nodes;
+  readonly collection: MarkdownReferenceCollection;
+};
+
+function collectMarkdownReference(args: CollectMarkdownReferenceArgs): void {
+  if (args.node.type === 'link') {
+    args.collection.references.push(args.node.url);
+  } else if (args.node.type === 'linkReference') {
+    const destination = args.collection.definitions.get(
+      args.node.identifier.toUpperCase(),
     );
-    if (destination) collection.references.push(destination);
-  } else if (node.type === 'inlineCode') {
-    collection.references.push(node.value);
+    if (destination) args.collection.references.push(destination);
+  } else if (args.node.type === 'inlineCode') {
+    args.collection.references.push(args.node.value);
   }
 }
 
-function visitMarkdownNode(node: Nodes, visitor: (node: Nodes) => void): void {
-  visitor(node);
-  if (!('children' in node)) return;
-  for (const child of node.children) visitMarkdownNode(child, visitor);
+type VisitMarkdownNodeArgs = {
+  readonly node: Nodes;
+  readonly visitor: (node: Nodes) => void;
+};
+
+function visitMarkdownNode(args: VisitMarkdownNodeArgs): void {
+  args.visitor(args.node);
+  if (!('children' in args.node)) return;
+  for (const child of args.node.children) {
+    visitMarkdownNode({ ...args, node: child });
+  }
 }
