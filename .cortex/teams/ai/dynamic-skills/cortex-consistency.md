@@ -172,12 +172,28 @@ For a full Cortex GC request, report:
 
 ### Deterministic contract compilation
 
-Loom compiles reviewed TypeScript contracts for selected cross-document rules.
+The ownership boundary is explicit:
+
+- This skill owns the semantic rules below.
+- Loom owns their deterministic TypeScript enforcement.
+- Markdown does not become executable state.
+- The rules remain beside the consistency procedure that authors must follow.
+
+Run the compiler through the normal Cortex consistency command:
+
+```bash
+task loom:cortex-audit
+```
+
+The command reports failures in `contractFindings`.
 
 - Context ownership and policy applicability determine required policy imports.
+- Authority paths determine context ownership before applicability is checked.
 - A foreign policy import requires a direct reference from the context authority.
+- Direct references use Markdown syntax-tree semantics.
 - Persisted-representation policy requires a schema-versioning authority.
 - It also requires a legacy-decode or migration-test obligation.
+- One policy discriminator selects the persisted contract and its obligations.
 - Missing imports, references, authorities, or evidence obligations fail the
   Cortex audit.
 

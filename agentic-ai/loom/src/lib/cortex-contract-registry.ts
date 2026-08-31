@@ -1,8 +1,8 @@
 import {
   CortexContractContextId,
   CortexContractTeam,
+  CortexPolicyContractKind,
   CortexPolicyArea,
-  CortexPolicyScopeKind,
   type CortexContractRegistry,
 } from './cortex-contracts.ts';
 
@@ -11,8 +11,6 @@ export enum RegisteredCortexPolicyPath {
   Consistency = '.cortex/teams/ai/dynamic-skills/cortex-consistency.md',
   Writer = '.cortex/teams/ai/dynamic-skills/cortex-writer.md',
 }
-
-const GENERAL_SCOPE = { kind: CortexPolicyScopeKind.General } as const;
 
 export const CORTEX_CONTRACT_REGISTRY = {
   contexts: [
@@ -32,23 +30,23 @@ export const CORTEX_CONTRACT_REGISTRY = {
     {
       owner: CortexContractTeam.Ai,
       document: RegisteredCortexPolicyPath.Writer,
+      kind: CortexPolicyContractKind.General,
       areas: [CortexPolicyArea.CortexAuthoring],
       capabilities: [],
-      scopes: [GENERAL_SCOPE],
     },
     {
       owner: CortexContractTeam.Ai,
       document: RegisteredCortexPolicyPath.ArticleStructure,
+      kind: CortexPolicyContractKind.General,
       areas: [CortexPolicyArea.CortexAuthoring],
       capabilities: [],
-      scopes: [GENERAL_SCOPE],
     },
     {
       owner: CortexContractTeam.Ai,
       document: RegisteredCortexPolicyPath.Consistency,
+      kind: CortexPolicyContractKind.General,
       areas: [CortexPolicyArea.CortexAuthoring],
       capabilities: [],
-      scopes: [GENERAL_SCOPE],
     },
   ],
 } as const satisfies CortexContractRegistry;

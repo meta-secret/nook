@@ -8,9 +8,9 @@ import {
   CortexContractContextId,
   CortexContractFindingCode,
   CortexContractTeam,
+  CortexPolicyContractKind,
   CortexPolicyArea,
   CortexPolicyCapability,
-  CortexPolicyScopeKind,
   type CortexContractDocument,
   type CortexContractRegistry,
 } from '../src/lib/cortex-contracts.ts';
@@ -60,9 +60,9 @@ test('rejects a foreign policy that covers an owned area without an import', () 
       {
         owner: CortexContractTeam.WebDevelopment,
         document: WEB_BOOLEAN_POLICY,
+        kind: CortexPolicyContractKind.General,
         areas: [CortexPolicyArea.GithubTypescript],
         capabilities: [],
-        scopes: [{ kind: CortexPolicyScopeKind.General }],
       },
     ],
   } as const satisfies CortexContractRegistry;
@@ -156,6 +156,35 @@ test('rejects a policy owner that disagrees with its Cortex path', () => {
   );
 });
 
+test('derives context ownership from the authority path before reachability', () => {
+  const registryArgs: ForeignTypescriptRegistryArgs = {
+    contextOwner: CortexContractTeam.WebDevelopment,
+    imports: [],
+  };
+  const registry = foreignTypescriptRegistry(registryArgs);
+  const compileArgs: CompileTestCortexRegistryArgs = {
+    registry,
+    documents: [
+      defaultDocument(SRE_AUTHORITY),
+      defaultDocument(WEB_BOOLEAN_POLICY),
+    ],
+  };
+  const findings = compile(compileArgs);
+
+  expect(findings).toContainEqual(
+    expect.objectContaining({
+      code: CortexContractFindingCode.InvalidContextOwner,
+      file: SRE_AUTHORITY,
+    }),
+  );
+  expect(findings).toContainEqual(
+    expect.objectContaining({
+      code: CortexContractFindingCode.MissingPolicyImport,
+      file: SRE_AUTHORITY,
+    }),
+  );
+});
+
 test('accepts a directly referenced foreign policy', () => {
   const registryArgs: ForeignTypescriptRegistryArgs = {
     imports: [WEB_BOOLEAN_POLICY],
@@ -172,6 +201,42 @@ test('accepts a directly referenced foreign policy', () => {
   const findings = compile(compileArgs);
 
   expect(findings).toEqual([]);
+});
+
+test('accepts a Markdown link with a title', () => {
+  const registryArgs: ForeignTypescriptRegistryArgs = {
+    imports: [WEB_BOOLEAN_POLICY],
+  };
+  const registry = foreignTypescriptRegistry(registryArgs);
+  const authorityArgs: TestCortexDocumentArgs = {
+    relativePath: SRE_AUTHORITY,
+    content:
+      '# SRE\n\n[Enum policy](../web-dev/dynamic-skills/typescript-enums-over-booleans.md "Policy")\n',
+  };
+  const compileArgs: CompileTestCortexRegistryArgs = {
+    registry,
+    documents: [document(authorityArgs), defaultDocument(WEB_BOOLEAN_POLICY)],
+  };
+
+  expect(compile(compileArgs)).toEqual([]);
+});
+
+test('accepts a reference-style Markdown link', () => {
+  const registryArgs: ForeignTypescriptRegistryArgs = {
+    imports: [WEB_BOOLEAN_POLICY],
+  };
+  const registry = foreignTypescriptRegistry(registryArgs);
+  const authorityArgs: TestCortexDocumentArgs = {
+    relativePath: SRE_AUTHORITY,
+    content:
+      '# SRE\n\nUse the [enum policy][boolean-policy].\n\n[boolean-policy]: ../web-dev/dynamic-skills/typescript-enums-over-booleans.md\n',
+  };
+  const compileArgs: CompileTestCortexRegistryArgs = {
+    registry,
+    documents: [document(authorityArgs), defaultDocument(WEB_BOOLEAN_POLICY)],
+  };
+
+  expect(compile(compileArgs)).toEqual([]);
 });
 
 test('rejects persisted representation policy without compatibility evidence', () => {
@@ -255,6 +320,7 @@ test('requires persisted policy to reference its schema authority', () => {
 });
 
 type ForeignTypescriptRegistryArgs = {
+  readonly contextOwner?: CortexContractTeam;
   readonly imports: readonly string[];
 };
 
@@ -265,7 +331,7 @@ function foreignTypescriptRegistry(
     contexts: [
       {
         id: CortexContractContextId.Sre,
-        owner: CortexContractTeam.Sre,
+        owner: args.contextOwner ?? CortexContractTeam.Sre,
         authorityDocument: SRE_AUTHORITY,
         ownsAreas: [CortexPolicyArea.GithubTypescript],
         imports: args.imports,
@@ -275,9 +341,9 @@ function foreignTypescriptRegistry(
       {
         owner: CortexContractTeam.WebDevelopment,
         document: WEB_BOOLEAN_POLICY,
+        kind: CortexPolicyContractKind.General,
         areas: [CortexPolicyArea.GithubTypescript],
         capabilities: [],
-        scopes: [{ kind: CortexPolicyScopeKind.General }],
       },
     ],
   };
@@ -297,22 +363,18 @@ function persistedRustRegistry(
       {
         owner: CortexContractTeam.DevelopmentCore,
         document: RUST_POLICY,
-        areas: [CortexPolicyArea.PersistedRustRepresentation],
+        kind: CortexPolicyContractKind.PersistedRepresentation,
+        schemaAuthority: args.schemaAuthority,
+        evidence: args.evidence,
+        areas: [],
         capabilities: [],
-        scopes: [
-          {
-            kind: CortexPolicyScopeKind.PersistedRepresentation,
-            schemaAuthority: args.schemaAuthority,
-            evidence: args.evidence,
-          },
-        ],
       },
       {
         owner: CortexContractTeam.DevelopmentCore,
         document: SCHEMA_POLICY,
-        areas: [CortexPolicyArea.PersistedRustRepresentation],
+        kind: CortexPolicyContractKind.General,
+        areas: [],
         capabilities: [CortexPolicyCapability.SchemaVersioning],
-        scopes: [{ kind: CortexPolicyScopeKind.General }],
       },
     ],
   };

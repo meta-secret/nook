@@ -1,4 +1,8 @@
+import type { Nodes } from 'mdast';
 import path from 'node:path';
+import remarkGfm from 'remark-gfm';
+import remarkParse from 'remark-parse';
+import { unified } from 'unified';
 
 export enum CortexContractContextId {
   Ai = 'ai',
@@ -24,7 +28,6 @@ export enum CortexContractTeam {
 export enum CortexPolicyArea {
   CortexAuthoring = 'cortex-authoring',
   GithubTypescript = 'github-typescript',
-  PersistedRustRepresentation = 'persisted-rust-representation',
 }
 
 export enum CortexPolicyCapability {
@@ -36,31 +39,31 @@ export enum CortexCompatibilityEvidence {
   MigrationTest = 'migration-test',
 }
 
-export enum CortexPolicyScopeKind {
+export enum CortexPolicyContractKind {
   General = 'general',
   PersistedRepresentation = 'persisted-representation',
 }
 
-export type CortexGeneralPolicyScope = {
-  readonly kind: CortexPolicyScopeKind.General;
-};
-
-export type CortexPersistedRepresentationScope = {
-  readonly kind: CortexPolicyScopeKind.PersistedRepresentation;
-  readonly schemaAuthority: string;
-  readonly evidence: readonly CortexCompatibilityEvidence[];
-};
-
-export type CortexPolicyScope =
-  CortexGeneralPolicyScope | CortexPersistedRepresentationScope;
-
-export type CortexPolicyContract = {
+type CortexPolicyContractBase = {
   readonly owner: CortexContractTeam;
   readonly document: string;
   readonly areas: readonly CortexPolicyArea[];
   readonly capabilities: readonly CortexPolicyCapability[];
-  readonly scopes: readonly CortexPolicyScope[];
 };
+
+export type CortexGeneralPolicyContract = CortexPolicyContractBase & {
+  readonly kind: CortexPolicyContractKind.General;
+};
+
+export type CortexPersistedRepresentationPolicyContract =
+  CortexPolicyContractBase & {
+    readonly kind: CortexPolicyContractKind.PersistedRepresentation;
+    readonly schemaAuthority: string;
+    readonly evidence: readonly CortexCompatibilityEvidence[];
+  };
+
+export type CortexPolicyContract =
+  CortexGeneralPolicyContract | CortexPersistedRepresentationPolicyContract;
 
 export type CortexContextContract = {
   readonly id: CortexContractContextId;
@@ -83,6 +86,7 @@ export type CortexContractDocument = {
 export enum CortexContractFindingCode {
   DuplicateContext = 'duplicate-context',
   DuplicatePolicy = 'duplicate-policy',
+  InvalidContextOwner = 'invalid-context-owner',
   InvalidPolicyOwner = 'invalid-policy-owner',
   InvalidSchemaAuthority = 'invalid-schema-authority',
   MissingAuthorityDocument = 'missing-authority-document',
@@ -166,8 +170,14 @@ export function compileCortexContracts(
       });
       continue;
     }
+    const contextOwner = validatedContextOwner({
+      context,
+      authorityPath,
+      findings,
+    });
     const contextArgs: ValidateContextArgs = {
       context,
+      contextOwner,
       authority,
       policies,
       findings,
@@ -241,6 +251,12 @@ type CortexDocumentOwnerResolution =
 function cortexDocumentOwner(
   documentPath: string,
 ): CortexDocumentOwnerResolution {
+  if (documentPath === '.cortex/AGENTS.md') {
+    return {
+      kind: CortexDocumentOwnerResolutionKind.Known,
+      owner: CortexContractTeam.GizmoPrime,
+    };
+  }
   const owners: readonly (readonly [string, CortexContractTeam])[] = [
     ['.cortex/gizmo/', CortexContractTeam.GizmoPrime],
     ['.cortex/shared/', CortexContractTeam.Shared],
@@ -258,6 +274,30 @@ function cortexDocumentOwner(
   return { kind: CortexDocumentOwnerResolutionKind.OutsideTeamPolicy };
 }
 
+type ValidatedContextOwnerArgs = {
+  readonly context: CortexContextContract;
+  readonly authorityPath: string;
+  readonly findings: CortexContractFinding[];
+};
+
+function validatedContextOwner(
+  args: ValidatedContextOwnerArgs,
+): CortexContractTeam {
+  const documentOwner = cortexDocumentOwner(args.authorityPath);
+  if (
+    documentOwner.kind === CortexDocumentOwnerResolutionKind.OutsideTeamPolicy
+  )
+    return args.context.owner;
+  if (documentOwner.owner !== args.context.owner) {
+    args.findings.push({
+      code: CortexContractFindingCode.InvalidContextOwner,
+      file: args.authorityPath,
+      message: `Cortex context ${args.context.id} declares owner ${args.context.owner}, but its authority document owner is ${documentOwner.owner}.`,
+    });
+  }
+  return documentOwner.owner;
+}
+
 type ValidatePolicySafeguardsArgs = {
   readonly policy: CortexPolicyContract;
   readonly policies: ReadonlyMap<string, CortexPolicyContract>;
@@ -266,48 +306,50 @@ type ValidatePolicySafeguardsArgs = {
 };
 
 function validatePolicySafeguards(args: ValidatePolicySafeguardsArgs): void {
-  for (const scope of args.policy.scopes) {
-    if (scope.kind !== CortexPolicyScopeKind.PersistedRepresentation) continue;
-    const authority = args.policies.get(normalizePath(scope.schemaAuthority));
-    if (
-      !authority ||
-      !authority.capabilities.includes(CortexPolicyCapability.SchemaVersioning)
-    ) {
-      args.findings.push({
-        code: CortexContractFindingCode.InvalidSchemaAuthority,
-        file: args.policy.document,
-        message: `Persisted policy ${args.policy.document} requires a schema-versioning authority; ${scope.schemaAuthority} does not provide it.`,
-      });
-    } else {
-      const policyDocument = args.documents.get(
-        normalizePath(args.policy.document),
-      );
-      if (policyDocument) {
-        const referenceArgs: CortexDocumentReferenceArgs = {
-          authority: policyDocument,
-          targetPath: authority.document,
-        };
-        if (!referencesDocument(referenceArgs)) {
-          args.findings.push({
-            code: CortexContractFindingCode.MissingSchemaAuthorityReference,
-            file: args.policy.document,
-            message: `Persisted policy ${args.policy.document} does not reference its schema authority document ${authority.document}.`,
-          });
-        }
+  if (args.policy.kind !== CortexPolicyContractKind.PersistedRepresentation)
+    return;
+  const authority = args.policies.get(
+    normalizePath(args.policy.schemaAuthority),
+  );
+  if (
+    !authority ||
+    !authority.capabilities.includes(CortexPolicyCapability.SchemaVersioning)
+  ) {
+    args.findings.push({
+      code: CortexContractFindingCode.InvalidSchemaAuthority,
+      file: args.policy.document,
+      message: `Persisted policy ${args.policy.document} requires a schema-versioning authority; ${args.policy.schemaAuthority} does not provide it.`,
+    });
+  } else {
+    const policyDocument = args.documents.get(
+      normalizePath(args.policy.document),
+    );
+    if (policyDocument) {
+      const referenceArgs: CortexDocumentReferenceArgs = {
+        authority: policyDocument,
+        targetPath: authority.document,
+      };
+      if (!referencesDocument(referenceArgs)) {
+        args.findings.push({
+          code: CortexContractFindingCode.MissingSchemaAuthorityReference,
+          file: args.policy.document,
+          message: `Persisted policy ${args.policy.document} does not reference its schema authority document ${authority.document}.`,
+        });
       }
     }
-    if (scope.evidence.length === 0) {
-      args.findings.push({
-        code: CortexContractFindingCode.MissingCompatibilityEvidence,
-        file: args.policy.document,
-        message: `Persisted policy ${args.policy.document} must require a legacy decode test or migration test.`,
-      });
-    }
+  }
+  if (args.policy.evidence.length === 0) {
+    args.findings.push({
+      code: CortexContractFindingCode.MissingCompatibilityEvidence,
+      file: args.policy.document,
+      message: `Persisted policy ${args.policy.document} must require a legacy decode test or migration test.`,
+    });
   }
 }
 
 type ValidateContextArgs = {
   readonly context: CortexContextContract;
+  readonly contextOwner: CortexContractTeam;
   readonly authority: CortexContractDocument;
   readonly policies: ReadonlyMap<string, CortexPolicyContract>;
   readonly findings: CortexContractFinding[];
@@ -341,7 +383,7 @@ function validateContextImports(args: ValidateContextArgs): void {
 
 function validatePolicyReachability(args: ValidateContextArgs): void {
   for (const policy of args.policies.values()) {
-    if (policy.owner === args.context.owner) continue;
+    if (policy.owner === args.contextOwner) continue;
     const coverageArgs: SharedPolicyAreaArgs = {
       contextAreas: args.context.ownsAreas,
       policyAreas: policy.areas,
@@ -404,13 +446,7 @@ type CortexDocumentReferenceArgs = {
 function referencesDocument(args: CortexDocumentReferenceArgs): boolean {
   const authorityPath = normalizePath(args.authority.relativePath);
   const target = normalizePath(args.targetPath);
-  const markdownReferences = [
-    ...args.authority.content.matchAll(/\[[^\]]+\]\(([^)#]+)(?:#[^)]+)?\)/gu),
-  ].flatMap(capturedReference);
-  const inlineCodeReferences = [
-    ...args.authority.content.matchAll(/`([^`\r\n]+)`/gu),
-  ].flatMap(capturedReference);
-  return [...markdownReferences, ...inlineCodeReferences].some((reference) => {
+  return markdownReferences(args.authority.content).some((reference) => {
     const resolved = reference.startsWith('.cortex/')
       ? normalizePath(reference)
       : path.posix.normalize(
@@ -420,9 +456,63 @@ function referencesDocument(args: CortexDocumentReferenceArgs): boolean {
   });
 }
 
-function capturedReference(match: RegExpMatchArray): readonly string[] {
-  const reference = match.at(1);
-  return typeof reference === 'string' ? [reference] : [];
+type MarkdownReferenceCollection = {
+  readonly definitions: ReadonlyMap<string, string>;
+  readonly references: string[];
+};
+
+function markdownReferences(content: string): readonly string[] {
+  const root = unified().use(remarkParse).use(remarkGfm).parse(content);
+  const definitions = new Map<string, string>();
+  const definitionVisitor = (node: Nodes): void => {
+    if (node.type !== 'definition') return;
+    definitions.set(node.identifier.toUpperCase(), node.url);
+  };
+  visitMarkdownNode({ node: root, visitor: definitionVisitor });
+  const collection: MarkdownReferenceCollection = {
+    definitions,
+    references: [],
+  };
+  const referenceVisitor = (node: Nodes): void => {
+    collectMarkdownReference({ node, collection });
+  };
+  visitMarkdownNode({ node: root, visitor: referenceVisitor });
+  return collection.references;
+}
+
+type CollectMarkdownReferenceArgs = {
+  readonly node: Nodes;
+  readonly collection: MarkdownReferenceCollection;
+};
+
+function collectMarkdownReference(args: CollectMarkdownReferenceArgs): void {
+  if (args.node.type === 'link') {
+    args.collection.references.push(args.node.url);
+    return;
+  }
+  if (args.node.type === 'linkReference') {
+    const destination = args.collection.definitions.get(
+      args.node.identifier.toUpperCase(),
+    );
+    if (destination) args.collection.references.push(destination);
+    return;
+  }
+  if (args.node.type === 'inlineCode') {
+    args.collection.references.push(args.node.value);
+  }
+}
+
+type VisitMarkdownArgs = {
+  readonly node: Nodes;
+  readonly visitor: (node: Nodes) => void;
+};
+
+function visitMarkdownNode(args: VisitMarkdownArgs): void {
+  args.visitor(args.node);
+  if (!('children' in args.node)) return;
+  for (const child of args.node.children) {
+    visitMarkdownNode({ node: child, visitor: args.visitor });
+  }
 }
 
 type SharedPolicyAreaArgs = {
