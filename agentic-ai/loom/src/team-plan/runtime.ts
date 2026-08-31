@@ -4,6 +4,7 @@ import { mkdir, readFile, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 
+import { LoomFailureCode, loomFailureFromCause } from '../loom-failure.ts';
 import {
   ModuleDeliveryAdmissionSelectionStatus,
   ModuleDeliveryAttemptDispositionKind,
@@ -47,6 +48,25 @@ import {
   teamPlanSha256,
   withTeamPlanJournalLock,
 } from './journal.ts';
+<<<<<<< HEAD
+=======
+import {
+  TeamPlanObjectType,
+  assertTeamPlanFinalizedHead,
+  assertTeamPlanLeaseFrontier,
+  assertTeamPlanRef,
+  deleteTeamPlanRunRefs,
+  pinTeamPlanFinalizedHead,
+  pinTeamPlanLeaseFrontier,
+  pinTeamPlanRef,
+  readBoundedTeamPlanFile,
+  teamPlanFinalizedHeadRef,
+  teamPlanGitText,
+  teamPlanLeaseFrontierRef,
+  teamPlanRunRefPrefix,
+  teamPlanRunRefsEmpty,
+} from './runtime-durability.ts';
+>>>>>>> 09de2fe1 (Harden Team Plan runtime boundaries)
 
 import type { SpawnSyncOptionsWithStringEncoding } from 'node:child_process';
 import type {
@@ -116,7 +136,10 @@ export async function startTeamPlan(
 ): Promise<TeamPlanSnapshot> {
   const repositoryRoot = await realpath(resolve(request.repositoryRoot));
   const journalPath = await canonicalTeamPlanJournalPath(request.journalPath);
+<<<<<<< HEAD
   const journalRelativePath = relative(repositoryRoot, journalPath);
+=======
+>>>>>>> 09de2fe1 (Harden Team Plan runtime boundaries)
   if (
     journalRelativePath === '' ||
     (!isAbsolute(journalRelativePath) &&
@@ -402,8 +425,11 @@ async function materializeTeamPlanSession(
     return session;
   } catch (error) {
     cleanupTeamPlanSession(session);
-    throw new Error('Team Plan journal replay failed closed.', {
-      cause: error,
+    throw loomFailureFromCause({
+      code: LoomFailureCode.TeamPlanRecoveryFailed,
+      cause:
+        error instanceof Error ? error : new Error('Journal replay failed.'),
+      message: 'Team Plan journal replay failed closed.',
     });
   }
 }
@@ -823,9 +849,11 @@ function teamPlanSnapshot(session: TeamPlanSession): TeamPlanSnapshot {
 function acceptedTeamPlan(planText: string): ValidatedModuleDeliveryPlan {
   const validation = decodeAndValidateModuleDeliveryPlan(planText);
   if (validation.status !== ModuleDeliveryValidationStatus.Accepted)
-    throw new Error(
-      `Team Plan is invalid: ${JSON.stringify(validation.issues)}`,
-    );
+    throw loomFailureFromCause({
+      code: LoomFailureCode.TeamPlanValidationFailed,
+      cause: new Error(JSON.stringify(validation.issues)),
+      message: 'Team Plan is invalid.',
+    });
   return validation;
 }
 

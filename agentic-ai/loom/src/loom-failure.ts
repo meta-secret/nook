@@ -11,6 +11,10 @@ export enum LoomFailureCode {
   StatsFilenameInvalid = 'statsFilenameInvalid',
   SkillScaffoldFailed = 'skillScaffoldFailed',
   CortexAuditFailed = 'cortexAuditFailed',
+  TeamPlanValidationFailed = 'teamPlanValidationFailed',
+  TeamPlanStorageFailed = 'teamPlanStorageFailed',
+  TeamPlanCommandFailed = 'teamPlanCommandFailed',
+  TeamPlanRecoveryFailed = 'teamPlanRecoveryFailed',
 }
 
 export enum LoomFailureDetailKind {
@@ -25,6 +29,7 @@ export type LoomFailureDetail =
 export type LoomFailureArgs = {
   readonly code: LoomFailureCode;
   readonly detail: LoomFailureDetail;
+  readonly cause?: Error;
 };
 
 export class LoomFailure extends Error {
@@ -32,11 +37,12 @@ export class LoomFailure extends Error {
   readonly detail: LoomFailureDetail;
 
   constructor(args: LoomFailureArgs) {
-    const { code, detail } = args;
+    const { code, detail, cause } = args;
     super(
       detail.kind === LoomFailureDetailKind.Text
         ? detail.text
         : defaultMessage(code),
+      { cause },
     );
     this.name = 'LoomFailure';
     this.code = code;
@@ -70,6 +76,49 @@ function defaultMessage(code: LoomFailureCode): string {
       return 'Skill scaffold failed';
     case LoomFailureCode.CortexAuditFailed:
       return 'Cortex audit failed';
+    case LoomFailureCode.TeamPlanValidationFailed:
+      return 'Team Plan validation failed';
+    case LoomFailureCode.TeamPlanStorageFailed:
+      return 'Team Plan storage operation failed';
+    case LoomFailureCode.TeamPlanCommandFailed:
+      return 'Team Plan command failed';
+    case LoomFailureCode.TeamPlanRecoveryFailed:
+      return 'Team Plan recovery failed';
+  }
+}
+
+export function loomFailureFromCause(args: {
+  readonly code: LoomFailureCode;
+  readonly cause: Error;
+  readonly message?: string;
+}): LoomFailure {
+  if (args.cause instanceof LoomFailure) return args.cause;
+  const message =
+    'message' in args
+      ? args.message
+      : args.cause instanceof Error
+        ? args.cause.message
+        : false;
+  return new LoomFailure({
+    code: args.code,
+    cause: args.cause,
+    detail: message
+      ? { kind: LoomFailureDetailKind.Text, text: message }
+      : { kind: LoomFailureDetailKind.None },
+  });
+}
+
+export async function withLoomFailureCode<T>(args: {
+  readonly code: LoomFailureCode;
+  readonly action: () => Promise<T>;
+}): Promise<T> {
+  try {
+    return await args.action();
+  } catch (cause) {
+    throw loomFailureFromCause({
+      code: args.code,
+      cause: cause instanceof Error ? cause : new Error('Non-Error failure.'),
+    });
   }
 }
 
