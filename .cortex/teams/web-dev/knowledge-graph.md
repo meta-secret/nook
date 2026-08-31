@@ -30,6 +30,7 @@ when the selected authority links them as read-only engineering policy.
 
 - [TypeScript domain structure](dynamic-skills/typescript-domain-structure.md)
 - [TypeScript explicit state](dynamic-skills/typescript-explicit-state.md)
+- [TypeScript enums instead of booleans](dynamic-skills/typescript-enums-over-booleans.md)
 - [TypeScript named call arguments](dynamic-skills/typescript-named-args.md)
 - [TypeScript concrete values](dynamic-skills/typescript-no-unknown.md)
 - [TypeScript single parameter](dynamic-skills/typescript-single-parameter.md)
