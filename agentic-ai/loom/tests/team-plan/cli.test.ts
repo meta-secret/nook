@@ -33,6 +33,7 @@ import type {
 import type {
   TeamPlanRecord,
   TeamPlanSelectionReceipt,
+  TeamPlanSnapshot,
 } from '../../src/team-plan/domain.ts';
 import type { GitFixture } from '../module-delivery/worktree-test-support.ts';
 
@@ -129,6 +130,7 @@ test('dispatches every successful Team Plan command', async () => {
         fixture.sourceRoot,
       ]),
     ).toBe(0);
+    const started = JSON.parse(output.at(-1) ?? '') as TeamPlanSnapshot;
     expect(await runTeamPlanCli(['select', '--journal', journalPath])).toBe(0);
     const firstSelection = JSON.parse(
       output.at(-1) ?? '',
@@ -229,7 +231,33 @@ test('dispatches every successful Team Plan command', async () => {
     expect(await runTeamPlanCli(['finalize', '--journal', journalPath])).toBe(
       0,
     );
-    expect(await runTeamPlanCli(['discard', '--journal', journalPath])).toBe(0);
+    const error = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      expect(await runTeamPlanCli(['discard', '--journal', journalPath])).toBe(
+        2,
+      );
+    } finally {
+      error.mockRestore();
+    }
+    await expect(
+      runTeamPlanCli([
+        'discard',
+        '--journal',
+        journalPath,
+        '--run-id',
+        '0'.repeat(64),
+      ]),
+    ).rejects.toThrow('run identity is stale');
+    expect(existsSync(journalPath)).toBe(true);
+    expect(
+      await runTeamPlanCli([
+        'discard',
+        '--journal',
+        journalPath,
+        '--run-id',
+        started.runId,
+      ]),
+    ).toBe(0);
     expect(existsSync(journalPath)).toBe(false);
   } finally {
     log.mockRestore();

@@ -252,14 +252,14 @@ tasks:
       - bun agentic-ai/loom/src/team-plan/cli.ts finalize --journal "{{.JOURNAL}}"
 
   loom:team-plan:discard:
-    desc: Discard one finalized Team Plan journal and its project-owned durable artifacts (JOURNAL=<events.jsonl>).
+    desc: Discard one expected finalized Team Plan and its project-owned durable artifacts (JOURNAL=<events.jsonl>, RUN_ID=<id>).
     dir: '{{.REPO_ROOT}}'
     deps: [loom:install]
-    requires: { vars: [JOURNAL] }
+    requires: { vars: [JOURNAL, RUN_ID] }
     cmds:
-      [
-        'bun agentic-ai/loom/src/team-plan/cli.ts discard --journal "{{.JOURNAL}}"',
-      ]
+      - >-
+        bun agentic-ai/loom/src/team-plan/cli.ts discard
+        --journal "{{.JOURNAL}}" --run-id "{{.RUN_ID}}"
 
   loom:agent-delegation:start:
     desc: Start one declared ordinary delegation run (PLAN=<plan.json>).
