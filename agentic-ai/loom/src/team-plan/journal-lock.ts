@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { readlinkSync } from 'node:fs';
+import { readFileSync, readlinkSync } from 'node:fs';
 import { hostname } from 'node:os';
 
 import type { TeamPlanJournal } from './journal.ts';
@@ -15,7 +15,7 @@ type TeamPlanLockOwnerFields = Readonly<{
 }>;
 type TeamPlanLockOwner =
   | TeamPlanLockOwnerFields
-  | (TeamPlanLockOwnerFields & Readonly<{ version: 2 }>);
+  | (TeamPlanLockOwnerFields & Readonly<{ version: 2 | 3 }>);
 type TeamPlanGitArguments = readonly [string, string, string];
 type TeamPlanLockRequest<T> = Readonly<{
   journal: TeamPlanJournal;
@@ -35,7 +35,7 @@ export async function runWithTeamPlanJournalLock<T>(
   if (!identity)
     throw new Error('Team Plan process lock identity is unavailable.');
   const owner: TeamPlanLockOwner = {
-    version: 2,
+    version: 3,
     pid: process.pid,
     processIdentity: identity,
     token: randomUUID(),
@@ -113,7 +113,12 @@ function updateRef(request: {
     {
       cwd: request.journal.started.repositoryRoot,
       encoding: 'utf8',
-      env: { PATH: '/bin:/usr/bin:/usr/sbin' },
+      env: {
+        PATH: '/bin:/usr/bin:/usr/sbin',
+        GIT_CONFIG_COUNT: '1',
+        GIT_CONFIG_KEY_0: 'safe.directory',
+        GIT_CONFIG_VALUE_0: request.journal.started.repositoryRoot,
+      },
       stdio: ['ignore', 'pipe', 'pipe'],
     },
   );
@@ -132,7 +137,8 @@ function decodeLockOwner(serialized: string): TeamPlanLockOwner {
   if (!owner || typeof owner !== 'object')
     throw new Error('Team Plan journal lock owner is malformed.');
   const ownerFields = Object.keys(owner).sort();
-  const currentVersion = 'version' in owner && owner.version === 2;
+  const currentVersion =
+    'version' in owner && (owner.version === 2 || owner.version === 3);
   if (
     JSON.stringify(ownerFields) !==
       JSON.stringify(
@@ -165,10 +171,22 @@ function staleTeamPlanLock(owner: TeamPlanLockOwner): boolean {
     ownerMachineIdentity = legacyIdentity;
   }
   const currentIdentity = processStartIdentity(owner.pid);
-  if (currentIdentity) {
-    const ownerComparableIdentity = `${ownerMachineIdentity}:${currentIdentity.slice(machineIdentity.length + 1)}`;
-    return ownerComparableIdentity !== owner.processIdentity;
-  }
+  const preciseOwner = owner.processIdentity.startsWith(
+    `${ownerMachineIdentity}:start-ticks:`,
+  );
+  const preciseCurrent =
+    currentIdentity &&
+    currentIdentity.startsWith(`${machineIdentity}:start-ticks:`);
+  if (
+    'version' in owner &&
+    owner.version === 3 &&
+    preciseOwner &&
+    preciseCurrent
+  )
+    return (
+      `${ownerMachineIdentity}:${currentIdentity.slice(machineIdentity.length + 1)}` !==
+      owner.processIdentity
+    );
   try {
     process.kill(owner.pid, 0);
     return false;
@@ -198,7 +216,12 @@ function gitText(invocation: GitInvocation): string {
   const result = spawnSync('git', [args[0], args[1], args[2]], {
     cwd: invocation.cwd,
     encoding: 'utf8',
-    env: { PATH: '/bin:/usr/bin:/usr/sbin' },
+    env: {
+      PATH: '/bin:/usr/bin:/usr/sbin',
+      GIT_CONFIG_COUNT: '1',
+      GIT_CONFIG_KEY_0: 'safe.directory',
+      GIT_CONFIG_VALUE_0: invocation.cwd,
+    },
     input: 'input' in invocation ? invocation.input : '',
     stdio: ['pipe', 'pipe', 'pipe'],
   });
@@ -216,13 +239,29 @@ function nodeErrorCode(error: NodeJS.ErrnoException): string | false {
 function processStartIdentity(pid: number): string | false {
   const machineIdentity = processMachineIdentity();
   if (!machineIdentity) return false;
-  const result = spawnSync('ps', ['-o', 'lstart=', '-p', String(pid)], {
-    encoding: 'utf8',
-    env: { PATH: '/bin:/usr/bin:/usr/sbin' },
-    stdio: ['ignore', 'pipe', 'ignore'],
-  });
-  const started = result.status === 0 ? result.stdout.trim() : '';
-  return started.length === 0 ? false : `${machineIdentity}:${started}`;
+  if (process.platform !== 'linux')
+    return process.platform === 'darwin'
+      ? `${machineIdentity}:pid-liveness-only`
+      : false;
+  const started = linuxProcessStartTicks(pid);
+  return started ? `${machineIdentity}:start-ticks:${started}` : false;
+}
+
+function linuxProcessStartTicks(pid: number): string | false {
+  let stat: string;
+  try {
+    stat = readFileSync(`/proc/${pid}/stat`, 'utf8');
+  } catch {
+    return false;
+  }
+  const commandEnd = stat.lastIndexOf(') ');
+  if (commandEnd < 1) return false;
+  const fieldsAfterCommand = stat
+    .slice(commandEnd + 2)
+    .trim()
+    .split(/\s+/u);
+  const startTicks = fieldsAfterCommand[19];
+  return startTicks && /^[0-9]+$/u.test(startTicks) ? startTicks : false;
 }
 
 function processMachineIdentity(): string | false {

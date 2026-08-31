@@ -1,15 +1,5 @@
-import { createHash, randomUUID } from 'node:crypto';
-import { constants } from 'node:fs';
-import {
-  lstat,
-  link,
-  mkdir,
-  open,
-  realpath,
-  rename,
-  unlink,
-} from 'node:fs/promises';
-import { basename, dirname, isAbsolute, resolve } from 'node:path';
+import { createHash } from 'node:crypto';
+import { isAbsolute } from 'node:path';
 
 import {
   ModuleDeliveryValidationStatus,
@@ -22,6 +12,21 @@ import {
   assertTeamPlanJournalRecord,
 } from './domain.ts';
 import { runWithTeamPlanJournalLock } from './journal-lock.ts';
+import {
+  assertMatchingDiscardTombstone,
+  canonicalExistingJournalPath,
+  canonicalTeamPlanJournalPath,
+  pathExists,
+  publishDiscardTombstone,
+  publishNewJournalFile,
+  readBoundedTeamPlanJournal,
+  removeDiscardTombstone,
+  replaceJournalFile,
+  resumeDiscardTombstone,
+  storageHook,
+} from './journal-storage.ts';
+
+export { canonicalTeamPlanJournalPath } from './journal-storage.ts';
 
 import type { TeamPlanEvent, TeamPlanStartedEvent } from './domain.ts';
 import type {
@@ -98,42 +103,53 @@ type TeamPlanGenerationCapacityRequest = Readonly<{
   generationCount: number;
 }>;
 
-type ParentSyncHook =
-  | Readonly<{ presence: 'absent' }>
-  | Readonly<{ presence: 'present'; run: () => void }>;
-
 export async function createTeamPlanJournal(
   request: CreateTeamPlanJournalRequest,
 ): Promise<void> {
   const path = await canonicalTeamPlanJournalPath(request.journalPath);
   const serialized = serializeTeamPlanEvent(request.event);
-  decodeTeamPlanJournal({ serialized, path });
-  await publishNewFile({ path, serialized });
+  const journal = decodeTeamPlanJournal({ serialized, path });
+  await runWithTeamPlanJournalLock({
+    journal,
+    identityPath: path,
+    action: async () => {
+      if (await pathExists(`${path}.discarding`))
+        throw new Error('Team Plan journal discard is still in progress.');
+      await publishNewJournalFile({ path, serialized });
+    },
+  });
 }
 
 export async function loadTeamPlanJournal(
   journalPath: string,
 ): Promise<TeamPlanJournal> {
-  const journalFile = await readTeamPlanJournalFile(journalPath);
-  return decodeTeamPlanJournal(journalFile);
+  const path = await canonicalExistingJournalPath(journalPath);
+  const journalFile = await readBoundedTeamPlanJournal({
+    path,
+    maximumBytes: MAX_TEAM_PLAN_JOURNAL_BYTES,
+    expectedLinkCount: 1,
+  });
+  return decodeTeamPlanJournal({ serialized: journalFile.serialized, path });
 }
 
 export async function appendTeamPlanEvent(
   request: AppendTeamPlanEventRequest,
 ): Promise<void> {
-  const current = await readTeamPlanJournalFile(request.journalPath);
+  const path = await canonicalExistingJournalPath(request.journalPath);
+  const current = await readBoundedTeamPlanJournal({
+    path,
+    maximumBytes: MAX_TEAM_PLAN_JOURNAL_BYTES,
+    expectedLinkCount: 1,
+  });
   const candidate = `${current.serialized}${serializeTeamPlanEvent(request.event)}`;
-  const path = current.path;
   decodeTeamPlanJournal({ serialized: candidate, path });
-  await replaceFile({
+  await replaceJournalFile({
     path,
     serialized: candidate,
     mode: current.mode,
-    beforeTemporarySync: parentSyncHook(request.beforeTemporarySync),
-    afterTemporaryCleanupSync: parentSyncHook(
-      request.afterTemporaryCleanupSync,
-    ),
-    beforeParentSync: parentSyncHook(request.beforeParentSync),
+    beforeTemporarySync: storageHook(request.beforeTemporarySync),
+    afterTemporaryCleanupSync: storageHook(request.afterTemporaryCleanupSync),
+    beforeParentSync: storageHook(request.beforeParentSync),
   });
 }
 
@@ -170,13 +186,29 @@ export async function discardTeamPlanJournal(
   const sourcePresent = await pathExists(path);
   const tombstonePresent = await pathExists(tombstone);
   const artifactsMayAlreadyBeDiscarded = !sourcePresent;
-  if (sourcePresent && tombstonePresent)
-    await resumeDiscardTombstone({ path, tombstone });
   const activePath = sourcePresent && !tombstonePresent ? path : tombstone;
-  await withTeamPlanJournalLockIdentity({
-    journalPath: activePath,
-    lockIdentityPath: path,
+  let lockJournal: TeamPlanJournal;
+  if (sourcePresent && tombstonePresent) {
+    await assertMatchingDiscardTombstone({ path, tombstone });
+    const journalFile = await readBoundedTeamPlanJournal({
+      path: tombstone,
+      maximumBytes: MAX_TEAM_PLAN_JOURNAL_BYTES,
+      expectedLinkCount: 2,
+    });
+    lockJournal = {
+      ...decodeTeamPlanJournal({ serialized: journalFile.serialized, path }),
+      path,
+    };
+  } else {
+    const loaded = await loadTeamPlanJournal(activePath);
+    lockJournal = { ...loaded, path };
+  }
+  await runWithTeamPlanJournalLock({
+    journal: lockJournal,
+    identityPath: path,
     action: async () => {
+      if ((await pathExists(path)) && (await pathExists(tombstone)))
+        await resumeDiscardTombstone({ path, tombstone });
       const loaded = await loadTeamPlanJournal(activePath);
       const journal = { ...loaded, path };
       if (!journal.finalized)
@@ -185,15 +217,16 @@ export async function discardTeamPlanJournal(
         await publishDiscardTombstone({
           path,
           tombstone,
-          beforeParentSync: parentSyncHook(request.beforeParentSync),
+          beforeParentSync: storageHook(request.beforeParentSync),
         });
       await request.discardArtifacts({
         journal,
         artifactsMayAlreadyBeDiscarded,
       });
-      request.beforeParentSync?.();
-      await syncParent(tombstone);
-      await unlink(tombstone);
+      await removeDiscardTombstone({
+        path: tombstone,
+        beforeParentSync: storageHook(request.beforeParentSync),
+      });
     },
   });
 }
@@ -407,49 +440,6 @@ function assertExactFields(request: ExactFieldRequest): void {
   const expected = [...request.fields].sort();
   if (JSON.stringify(actual) !== JSON.stringify(expected))
     throw new Error('Team Plan journal event fields are invalid.');
-}
-
-export async function canonicalTeamPlanJournalPath(
-  journalPath: string,
-): Promise<string> {
-  const requested = resolve(journalPath);
-  await mkdir(dirname(requested), { recursive: true });
-  const parent = await realpath(dirname(requested));
-  return resolve(parent, basename(requested));
-}
-
-async function readTeamPlanJournalFile(journalPath: string): Promise<{
-  readonly path: string;
-  readonly serialized: string;
-  readonly mode: number;
-}> {
-  const requested = resolve(journalPath);
-  const requestedStatus = await lstat(requested);
-  if (requestedStatus.isSymbolicLink() || !requestedStatus.isFile())
-    throw new Error('Team Plan journal path is unsafe.');
-  const parent = await realpath(dirname(requested));
-  const path = resolve(parent, basename(requested));
-  const handle = await open(
-    path,
-    constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
-  );
-  try {
-    const opened = await handle.stat();
-    if (!opened.isFile()) throw new Error('Team Plan journal path is unsafe.');
-    const serialized = await handle.readFile('utf8');
-    const named = await lstat(path);
-    if (
-      !named.isFile() ||
-      opened.nlink !== 1 ||
-      named.nlink !== 1 ||
-      opened.dev !== named.dev ||
-      opened.ino !== named.ino
-    )
-      throw new Error('Team Plan journal path is unsafe.');
-    return { path, serialized, mode: opened.mode & 0o777 };
-  } finally {
-    await handle.close();
-  }
 }
 
 function serializeTeamPlanEvent(event: TeamPlanEvent): string {
@@ -709,152 +699,4 @@ function maximumGenerationBudget(): number {
     MAX_TEAM_PLAN_PLAN_EVENT_BYTES +
     generationMutationBudget(MAX_TEAM_PLAN_RECORDS_PER_GENERATION)
   );
-}
-
-async function publishNewFile(request: {
-  readonly path: string;
-  readonly serialized: string;
-}): Promise<void> {
-  const { path } = request;
-  const temporary = await writeTemporaryFile({ ...request, mode: 0o600 });
-  try {
-    await link(temporary, path);
-    await unlink(temporary);
-    await syncParent(path);
-  } catch (error) {
-    await removeTemporary(temporary);
-    throw error;
-  }
-}
-
-async function replaceFile(request: {
-  readonly path: string;
-  readonly serialized: string;
-  readonly mode: number;
-  readonly beforeTemporarySync: ParentSyncHook;
-  readonly afterTemporaryCleanupSync: ParentSyncHook;
-  readonly beforeParentSync: ParentSyncHook;
-}): Promise<void> {
-  const { path } = request;
-  const temporary = await writeTemporaryFile(request);
-  try {
-    await rename(temporary, path);
-    runParentSyncHook(request.beforeParentSync);
-    await syncParent(path);
-  } catch (error) {
-    await removeTemporary(temporary);
-    throw error;
-  }
-}
-
-async function publishDiscardTombstone(request: {
-  readonly path: string;
-  readonly tombstone: string;
-  readonly beforeParentSync: ParentSyncHook;
-}): Promise<void> {
-  try {
-    await link(request.path, request.tombstone);
-  } catch (error) {
-    if (nodeErrorCode(error as NodeJS.ErrnoException) !== 'EEXIST') throw error;
-    const source = await lstat(request.path);
-    const existing = await lstat(request.tombstone);
-    if (source.dev !== existing.dev || source.ino !== existing.ino)
-      throw new Error('Team Plan discard tombstone is forged.', {
-        cause: error,
-      });
-  }
-  await unlink(request.path);
-  runParentSyncHook(request.beforeParentSync);
-  await syncParent(request.path);
-}
-
-async function resumeDiscardTombstone(request: {
-  readonly path: string;
-  readonly tombstone: string;
-}): Promise<void> {
-  const source = await lstat(request.path);
-  const existing = await lstat(request.tombstone);
-  if (
-    source.dev !== existing.dev ||
-    source.ino !== existing.ino ||
-    source.nlink !== 2 ||
-    existing.nlink !== 2
-  )
-    throw new Error('Team Plan discard tombstone is forged.');
-  await unlink(request.path);
-  await syncParent(request.path);
-}
-
-function parentSyncHook(hook?: () => void): ParentSyncHook {
-  return hook ? { presence: 'present', run: hook } : { presence: 'absent' };
-}
-
-function runParentSyncHook(hook: ParentSyncHook): void {
-  if (hook.presence === 'present') hook.run();
-}
-
-async function writeTemporaryFile(request: {
-  readonly path: string;
-  readonly serialized: string;
-  readonly mode: number;
-  readonly beforeTemporarySync?: ParentSyncHook;
-  readonly afterTemporaryCleanupSync?: ParentSyncHook;
-}): Promise<string> {
-  const { path, serialized } = request;
-  const temporary = resolve(
-    dirname(path),
-    `.${basename(path)}.${randomUUID()}.tmp`,
-  );
-  const handle = await open(temporary, 'wx', request.mode);
-  try {
-    await handle.chmod(request.mode);
-    await handle.writeFile(serialized, 'utf8');
-    if (request.beforeTemporarySync)
-      runParentSyncHook(request.beforeTemporarySync);
-    await handle.sync();
-    await handle.close();
-    return temporary;
-  } catch (error) {
-    await handle.close().catch(() => false);
-    await removeTemporary(temporary);
-    if (request.afterTemporaryCleanupSync)
-      runParentSyncHook(request.afterTemporaryCleanupSync);
-    throw error;
-  }
-}
-
-async function syncParent(path: string): Promise<void> {
-  const handle = await open(dirname(path), 'r');
-  try {
-    await handle.sync();
-  } finally {
-    await handle.close();
-  }
-}
-
-async function removeTemporary(path: string): Promise<void> {
-  try {
-    await unlink(path);
-  } catch (error) {
-    if (nodeErrorCode(error as NodeJS.ErrnoException) !== 'ENOENT') throw error;
-    return;
-  }
-  await syncParent(path);
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await lstat(path);
-    return true;
-  } catch (error) {
-    if (nodeErrorCode(error as NodeJS.ErrnoException) === 'ENOENT')
-      return false;
-    throw error;
-  }
-}
-
-function nodeErrorCode(error: NodeJS.ErrnoException): string | false {
-  if (!error || typeof error !== 'object' || !('code' in error)) return false;
-  const code = error.code;
-  return typeof code === 'string' ? code : false;
 }

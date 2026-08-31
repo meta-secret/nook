@@ -167,6 +167,32 @@ function ownerBlob(request: {
   return fixtureGit(request.fixture)(['hash-object', '-w', path]);
 }
 
+function testMachineIdentity(): string {
+  const boot = (
+    process.platform === 'darwin'
+      ? spawnSync('sysctl', ['-n', 'kern.boottime'], { encoding: 'utf8' })
+      : spawnSync('cat', ['/proc/sys/kernel/random/boot_id'], {
+          encoding: 'utf8',
+        })
+  ).stdout.trim();
+  const namespace =
+    process.platform === 'linux' ? readlinkSync('/proc/self/ns/pid') : 'host';
+  return `${hostname()}:${boot}:${namespace}`;
+}
+
+function testProcessIdentity(pid: number): string {
+  const machine = testMachineIdentity();
+  if (process.platform !== 'linux') return `${machine}:pid-liveness-only`;
+  const stat = readFileSync(`/proc/${pid}/stat`, 'utf8');
+  const commandEnd = stat.lastIndexOf(') ');
+  const startTicks = stat
+    .slice(commandEnd + 2)
+    .trim()
+    .split(/\s+/u)[19];
+  if (!startTicks) throw new Error('Test process start ticks are unavailable.');
+  return `${machine}:start-ticks:${startTicks}`;
+}
+
 async function finalizeStartedFixture(request: {
   readonly journalPath: string;
   readonly started: TeamPlanStartedEvent;
@@ -215,36 +241,22 @@ describe('Team Plan journal', () => {
   test('recovers only a Git-CAS owner with mismatched process start', async () => {
     const { fixture, journalPath } = await startedFixture();
     const ref = lockRef({ fixture, journalPath });
-    const started = spawnSync(
-      'ps',
-      ['-o', 'lstart=', '-p', String(process.pid)],
-      {
-        encoding: 'utf8',
-      },
-    ).stdout.trim();
-    const bootCommand =
-      process.platform === 'darwin'
-        ? ['sysctl', '-n', 'kern.boottime']
-        : ['cat', '/proc/sys/kernel/random/boot_id'];
-    const boot = spawnSync(bootCommand[0] ?? '', bootCommand.slice(1), {
-      encoding: 'utf8',
-    }).stdout.trim();
-    const namespace =
-      process.platform === 'linux' ? readlinkSync('/proc/self/ns/pid') : 'host';
-    const machineIdentity = `${hostname()}:${boot}:${namespace}`;
+    const machineIdentity = testMachineIdentity();
     const owner = (request: {
+      readonly version: 2 | 3;
+      readonly pid: number;
       readonly processIdentity: string;
       readonly token: string;
-    }): string => `${JSON.stringify({ pid: process.pid, ...request })}\n`;
+    }): string => `${JSON.stringify(request)}\n`;
     const live = ownerBlob({
       fixture,
       name: 'live-lock.json',
-      contents: `${JSON.stringify({
-        version: 2,
+      contents: owner({
+        version: 3,
         pid: process.pid,
-        processIdentity: `${machineIdentity}:${started}`,
+        processIdentity: testProcessIdentity(process.pid),
         token: 'live',
-      })}\n`,
+      }),
     });
     fixtureGit(fixture)(['update-ref', ref, live]);
     await expect(
@@ -258,10 +270,9 @@ describe('Team Plan journal', () => {
       fixture,
       name: 'foreign-lock.json',
       contents: owner({
-        processIdentity:
-          process.platform === 'linux'
-            ? `${hostname()}:${boot}:foreign-namespace:reused`
-            : `${hostname()}:foreign-boot:reused`,
+        version: 3,
+        pid: process.pid,
+        processIdentity: `${hostname()}:foreign-boot:foreign-namespace:reused`,
         token: 'foreign',
       }),
     });
@@ -276,37 +287,53 @@ describe('Team Plan journal', () => {
     const legacy = ownerBlob({
       fixture,
       name: 'legacy-lock.json',
-      contents: owner({
-        processIdentity: `${hostname()}:${boot}:reused`,
+      contents: `${JSON.stringify({
+        pid: process.pid,
+        processIdentity: `${machineIdentity}:legacy-whole-second`,
         token: 'legacy',
-      }),
+      })}\n`,
     });
     fixtureGit(fixture)(['update-ref', ref, legacy]);
-    if (process.platform === 'darwin') {
-      expect(
-        await withTeamPlanJournalLock({
-          journalPath,
-          action: async () => 'migrated',
-        }),
-      ).toBe('migrated');
-    } else {
+    await expect(
+      withTeamPlanJournalLock({
+        journalPath,
+        action: async () => 'unreachable',
+      }),
+    ).rejects.toThrow('already in use');
+    fixtureGit(fixture)(['update-ref', '-d', ref, legacy]);
+    const stale = ownerBlob({
+      fixture,
+      name: 'stale-lock.json',
+      contents: owner({
+        version: 3,
+        pid: process.pid,
+        processIdentity: `${machineIdentity}:start-ticks:1`,
+        token: 'stale',
+      }),
+    });
+    fixtureGit(fixture)(['update-ref', ref, stale]);
+    if (process.platform !== 'linux') {
       await expect(
         withTeamPlanJournalLock({
           journalPath,
           action: async () => 'unreachable',
         }),
       ).rejects.toThrow('already in use');
-      fixtureGit(fixture)(['update-ref', '-d', ref, legacy]);
+      fixtureGit(fixture)(['update-ref', '-d', ref, stale]);
     }
-    const stale = ownerBlob({
+    const absentPid = 2_147_483_647;
+    const absent = ownerBlob({
       fixture,
-      name: 'stale-lock.json',
+      name: 'absent-lock.json',
       contents: owner({
-        processIdentity: `${machineIdentity}:reused`,
-        token: 'stale',
+        version: 3,
+        pid: absentPid,
+        processIdentity: `${machineIdentity}:start-ticks:1`,
+        token: 'absent',
       }),
     });
-    fixtureGit(fixture)(['update-ref', ref, stale]);
+    if (process.platform !== 'linux')
+      fixtureGit(fixture)(['update-ref', ref, absent]);
     expect(
       await withTeamPlanJournalLock({
         journalPath,
@@ -317,7 +344,7 @@ describe('Team Plan journal', () => {
             `${ref}^{blob}`,
           ]);
           expect(fixtureGit(fixture)(['cat-file', 'blob', blob])).toContain(
-            '"version":2',
+            '"version":3',
           );
           return 'acquired';
         },
@@ -359,10 +386,19 @@ describe('Team Plan journal', () => {
     const originalGitCommonDirectory = process.env.GIT_COMMON_DIR ?? '';
     const hadGitNamespace = 'GIT_NAMESPACE' in process.env;
     const originalGitNamespace = process.env.GIT_NAMESPACE ?? '';
+    const hadGitConfigCount = 'GIT_CONFIG_COUNT' in process.env;
+    const originalGitConfigCount = process.env.GIT_CONFIG_COUNT ?? '';
+    const hadGitConfigKey = 'GIT_CONFIG_KEY_0' in process.env;
+    const originalGitConfigKey = process.env.GIT_CONFIG_KEY_0 ?? '';
+    const hadGitConfigValue = 'GIT_CONFIG_VALUE_0' in process.env;
+    const originalGitConfigValue = process.env.GIT_CONFIG_VALUE_0 ?? '';
     process.env.PATH = `.:${originalPath}`;
     process.env.GIT_DIR = join(fixture.root, 'hostile-git-dir');
     process.env.GIT_COMMON_DIR = join(fixture.root, 'hostile-common-dir');
     process.env.GIT_NAMESPACE = 'hostile';
+    process.env.GIT_CONFIG_COUNT = '1';
+    process.env.GIT_CONFIG_KEY_0 = 'safe.directory';
+    process.env.GIT_CONFIG_VALUE_0 = join(fixture.root, 'foreign-checkout');
     try {
       expect(
         await withTeamPlanJournalLock({
@@ -379,6 +415,14 @@ describe('Team Plan journal', () => {
       else delete process.env.GIT_COMMON_DIR;
       if (hadGitNamespace) process.env.GIT_NAMESPACE = originalGitNamespace;
       else delete process.env.GIT_NAMESPACE;
+      if (hadGitConfigCount)
+        process.env.GIT_CONFIG_COUNT = originalGitConfigCount;
+      else delete process.env.GIT_CONFIG_COUNT;
+      if (hadGitConfigKey) process.env.GIT_CONFIG_KEY_0 = originalGitConfigKey;
+      else delete process.env.GIT_CONFIG_KEY_0;
+      if (hadGitConfigValue)
+        process.env.GIT_CONFIG_VALUE_0 = originalGitConfigValue;
+      else delete process.env.GIT_CONFIG_VALUE_0;
     }
   });
 
@@ -432,6 +476,43 @@ describe('Team Plan journal', () => {
     await expect(loadTeamPlanJournal(journalPath)).rejects.toThrow(
       'attempt identity fields are invalid',
     );
+  });
+
+  test('bounds same-handle journal reads before decoding or append', async () => {
+    const { fixture, journalPath, started } = await startedFixture();
+    writeFileSync(
+      journalPath,
+      Buffer.alloc(MAX_TEAM_PLAN_JOURNAL_BYTES + 1, 120),
+    );
+    await expect(loadTeamPlanJournal(journalPath)).rejects.toThrow('oversized');
+    await expect(
+      appendTeamPlanEvent({
+        journalPath,
+        event: {
+          version: TEAM_PLAN_JOURNAL_VERSION,
+          kind: TeamPlanEventKind.Finalized,
+          sequence: 2,
+          headCommit: started.sourceCommit,
+        },
+      }),
+    ).rejects.toThrow('oversized');
+    expect(
+      readdirSync(fixture.root).filter((path) => path.endsWith('.tmp')),
+    ).toEqual([]);
+    writeFileSync(journalPath, '{not-json}\n');
+    await expect(loadTeamPlanJournal(journalPath)).rejects.toThrow();
+    await expect(
+      appendTeamPlanEvent({
+        journalPath,
+        event: {
+          version: TEAM_PLAN_JOURNAL_VERSION,
+          kind: TeamPlanEventKind.Finalized,
+          sequence: 2,
+          headCommit: started.sourceCommit,
+        },
+      }),
+    ).rejects.toThrow();
+    expect(readFileSync(journalPath, 'utf8')).toBe('{not-json}\n');
   });
 
   test('keeps a renamed append when parent synchronization fails', async () => {
@@ -589,10 +670,31 @@ describe('Team Plan journal', () => {
     expect(existsSync(journalPath)).toBe(true);
   });
 
-  test('accepts an existing discard tombstone only for the journal inode', async () => {
-    const { journalPath, started } = await startedFixture();
+  test('locks before resuming a matching discard tombstone', async () => {
+    const { fixture, journalPath, started } = await startedFixture();
     await finalizeStartedFixture({ journalPath, started });
     linkSync(journalPath, `${journalPath}.discarding`);
+    const ref = lockRef({ fixture, journalPath });
+    const foreign = ownerBlob({
+      fixture,
+      name: 'resume-lock.json',
+      contents: `${JSON.stringify({
+        version: 3,
+        pid: process.pid,
+        processIdentity: `${hostname()}:foreign:pid-liveness-only`,
+        token: 'foreign',
+      })}\n`,
+    });
+    fixtureGit(fixture)(['update-ref', ref, foreign]);
+    await expect(
+      discardTeamPlanJournal({
+        journalPath,
+        discardArtifacts: () => Promise.resolve(),
+      }),
+    ).rejects.toThrow('already in use');
+    expect(existsSync(journalPath)).toBe(true);
+    expect(existsSync(`${journalPath}.discarding`)).toBe(true);
+    fixtureGit(fixture)(['update-ref', '-d', ref, foreign]);
     await discardTeamPlanJournal({
       journalPath,
       discardArtifacts: async ({ artifactsMayAlreadyBeDiscarded }) => {
@@ -601,6 +703,19 @@ describe('Team Plan journal', () => {
     });
     expect(existsSync(journalPath)).toBe(false);
     expect(existsSync(`${journalPath}.discarding`)).toBe(false);
+  });
+
+  test('rejects journal creation while its discard tombstone survives', async () => {
+    const { journalPath, started } = await startedFixture();
+    await finalizeStartedFixture({ journalPath, started });
+    linkSync(journalPath, `${journalPath}.discarding`);
+    unlinkSync(journalPath);
+
+    await expect(
+      createTeamPlanJournal({ journalPath, event: started }),
+    ).rejects.toThrow('discard is still in progress');
+    expect(existsSync(journalPath)).toBe(false);
+    expect(existsSync(`${journalPath}.discarding`)).toBe(true);
   });
 
   test('proves bounded generation capacity before journal creation', async () => {
