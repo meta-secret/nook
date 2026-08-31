@@ -30,6 +30,7 @@ import {
 } from '../../src/module-delivery/index.ts';
 import {
   TeamPlanRecordKind,
+  TeamPlanRunPhase,
   discardFinalizedTeamPlan,
   finalizeTeamPlan,
   recordTeamPlan,
@@ -225,10 +226,18 @@ function startRequest(file: PlanFile): TeamPlanStartRequest {
 }
 
 function runRef(request: { readonly file: PlanFile }): string {
-  const first = readFileSync(request.file.journalPath, 'utf8').split('\n')[0];
+  return `refs/nook/team-plan/${runId(request.file)}`;
+}
+
+function runId(file: PlanFile): string {
+  const first = readFileSync(file.journalPath, 'utf8').split('\n')[0];
   if (!first) throw new Error('Team Plan start event is missing.');
   const started = JSON.parse(first) as { readonly runId: string };
-  return `refs/nook/team-plan/${started.runId}`;
+  return started.runId;
+}
+
+function discardRequest(file: PlanFile) {
+  return { journalPath: file.journalPath, runId: runId(file) };
 }
 
 function evidenceRecord(
@@ -292,6 +301,15 @@ describe('Team Plan runtime', () => {
       ...file,
       journalPath: join(aliasDirectory, 'events.jsonl'),
     };
+    const oversizedPlanPath = join(fixture.root, 'oversized-plan.json');
+    writeFileSync(oversizedPlanPath, 'x'.repeat(262_145));
+    await expect(
+      startTeamPlan({
+        ...startRequest(file),
+        planPath: oversizedPlanPath,
+        journalPath: join(fixture.root, 'oversized-events.jsonl'),
+      }),
+    ).rejects.toThrow('plan bytes are oversized');
     await expect(
       startTeamPlan({
         ...startRequest(file),
@@ -355,14 +373,19 @@ describe('Team Plan runtime', () => {
     expect(
       await finalizeTeamPlan({ journalPath: aliased.journalPath }),
     ).toEqual(finalized);
-    await discardFinalizedTeamPlan({ journalPath: aliased.journalPath });
+    await discardFinalizedTeamPlan(discardRequest(aliased));
   }, 10_000);
 
   test('reconstructs an exact integrated writer frontier', async () => {
     const fixture = createGitFixture();
     fixtures.push(fixture);
     const writer = writeNode(fixture.baselineCommit);
-    const file = fixturePlanFile([fixture, [writer]]);
+    const consumer = fixtureReadNode([fixture, 'consumer', ['writer']]);
+    const file = fixturePlanFile([
+      fixture,
+      [writer, consumer],
+      [edge('writer')],
+    ]);
     await startTeamPlan(startRequest(file));
     const selection = await selectTeamPlan({ journalPath: file.journalPath });
     const lease = selection.leases[0];
@@ -413,10 +436,74 @@ describe('Team Plan runtime', () => {
     expect(reconstructed.snapshot.integratedWriterFrontiers).toEqual(
       recorded.integratedWriterFrontiers,
     );
+    const consumerLease = reconstructed.leases[0];
+    if (!consumerLease) throw new Error('Consumer frontier lease is missing.');
+    expect(consumerLease.startingFrontier).toBe(recorded.headCommit);
+    await recordTeamPlan({
+      journalPath: file.journalPath,
+      record: evidenceRecord({ fixture, lease: consumerLease, node: consumer }),
+    });
     const finalized = await finalizeTeamPlan({
       journalPath: file.journalPath,
     });
     expect(finalized.headCommit).not.toBe(fixture.baselineCommit);
+    expect(
+      fixtureGit(fixture)([
+        'for-each-ref',
+        '--format=%(refname)',
+        `${runRef({ file })}/frontiers/`,
+      ]).split('\n'),
+    ).toHaveLength(2);
+    expect(
+      fixtureGit(fixture)(['rev-parse', `${runRef({ file })}/finalized`]),
+    ).toBe(finalized.headCommit);
+    fixtureGit(fixture)(['gc', '--prune=now']);
+    expect(
+      fixtureGit(fixture)(['cat-file', '-t', consumerLease.startingFrontier]),
+    ).toBe('commit');
+    const prefix = runRef({ file });
+    await discardFinalizedTeamPlan(discardRequest(file));
+    expect(fixtureGit(fixture)(['for-each-ref', prefix])).toBe('');
+  }, 15_000);
+
+  test('finalizes and discards a terminal failed run', async () => {
+    const fixture = createGitFixture();
+    fixtures.push(fixture);
+    const file = fixturePlanFile([
+      fixture,
+      [fixtureReadNode([fixture, 'failed-provider'])],
+    ]);
+    const started = await startTeamPlan(startRequest(file));
+    const selected = await selectTeamPlan({ journalPath: file.journalPath });
+    const lease = selected.leases[0];
+    if (!lease) throw new Error('Failed provider lease is missing.');
+    await recordTeamPlan({
+      journalPath: file.journalPath,
+      record: {
+        kind: TeamPlanRecordKind.FinalUnusable,
+        taskId: lease.taskId,
+        attempt: lease.attempt,
+        generation: lease.generation,
+        planDigest: lease.planDigest,
+        conclusion: ModuleDeliveryGenerationFenceKind.Failed,
+      },
+    });
+    const finalized = await finalizeTeamPlan({
+      journalPath: file.journalPath,
+    });
+    expect(finalized.phase).toBe(TeamPlanRunPhase.Finalized);
+    expect(finalized.headCommit).toBe(fixture.baselineCommit);
+    expect(
+      fixtureGit(fixture)(['rev-parse', `${runRef({ file })}/finalized`]),
+    ).toBe(finalized.headCommit);
+    expect(await finalizeTeamPlan({ journalPath: file.journalPath })).toEqual(
+      finalized,
+    );
+    await discardFinalizedTeamPlan({
+      journalPath: file.journalPath,
+      runId: started.runId,
+    });
+    expect(existsSync(file.journalPath)).toBe(false);
   });
 
   test('pins large evidence outside the bounded journal', async () => {
@@ -498,14 +585,22 @@ describe('Team Plan runtime', () => {
       record,
     });
     await expect(
-      discardFinalizedTeamPlan({ journalPath: file.journalPath }),
+      discardFinalizedTeamPlan(discardRequest(file)),
     ).rejects.toThrow('finalized');
     await finalizeTeamPlan({ journalPath: file.journalPath });
     const oldPrefix = runRef({ file });
+    const discard = discardRequest(file);
     const tombstone = `${file.journalPath}.discarding`;
     linkSync(file.journalPath, tombstone);
     unlinkSync(file.journalPath);
-    await discardFinalizedTeamPlan({ journalPath: file.journalPath });
+    await expect(startTeamPlan(startRequest(file))).rejects.toThrow(
+      'discard is still in progress',
+    );
+    await expect(
+      discardFinalizedTeamPlan({ ...discard, runId: '0'.repeat(64) }),
+    ).rejects.toThrow('run identity is stale');
+    expect(existsSync(tombstone)).toBe(true);
+    await discardFinalizedTeamPlan(discard);
     expect(fixtureGit(fixture)(['for-each-ref', oldPrefix])).toBe('');
     expect(existsSync(tombstone)).toBe(false);
     await startTeamPlan(startRequest(file));
@@ -524,7 +619,7 @@ describe('Team Plan runtime', () => {
           node: alpha,
         }),
       }),
-    ).rejects.toThrow('artifact ref already differs');
+    ).rejects.toThrow('run ref already differs');
   }, 10_000);
 
   test('blocks restart until leases are dispositioned and keeps attempts monotonic', async () => {
@@ -596,5 +691,5 @@ describe('Team Plan runtime', () => {
       (await selectTeamPlan({ journalPath: file.journalPath })).snapshot
         .generation,
     ).toBe(2);
-  });
+  }, 15_000);
 });

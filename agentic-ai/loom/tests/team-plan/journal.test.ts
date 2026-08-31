@@ -601,6 +601,7 @@ describe('Team Plan journal', () => {
     await expect(
       discardTeamPlanJournal({
         journalPath,
+        expectedRunId: started.runId,
         discardArtifacts: async () => {
           discarded = true;
         },
@@ -628,6 +629,7 @@ describe('Team Plan journal', () => {
     await expect(
       discardTeamPlanJournal({
         journalPath,
+        expectedRunId: started.runId,
         discardArtifacts: async () => {
           discarded = true;
         },
@@ -638,6 +640,7 @@ describe('Team Plan journal', () => {
 
     await discardTeamPlanJournal({
       journalPath,
+      expectedRunId: started.runId,
       discardArtifacts: async (state) => {
         expect(state.journal.path).toBe(journalPath);
         expect(state.artifactsMayAlreadyBeDiscarded).toBe(true);
@@ -674,6 +677,7 @@ describe('Team Plan journal', () => {
     await expect(
       discardTeamPlanJournal({
         journalPath,
+        expectedRunId: started.runId,
         discardArtifacts: async () => {
           discarded = true;
         },
@@ -710,6 +714,7 @@ describe('Team Plan journal', () => {
     fixtureGit(fixture)(['update-ref', '-d', ref, foreign]);
     await discardTeamPlanJournal({
       journalPath,
+      expectedRunId: started.runId,
       discardArtifacts: async ({ artifactsMayAlreadyBeDiscarded }) => {
         expect(artifactsMayAlreadyBeDiscarded).toBe(false);
       },

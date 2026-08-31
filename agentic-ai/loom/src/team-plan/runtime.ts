@@ -1,6 +1,5 @@
-import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, realpath } from 'node:fs/promises';
+import { mkdir, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve, sep } from 'node:path';
 
@@ -47,8 +46,24 @@ import {
   teamPlanSha256,
   withTeamPlanJournalLock,
 } from './journal.ts';
+import {
+  TeamPlanObjectType,
+  assertTeamPlanFinalizedHead,
+  assertTeamPlanLeaseFrontier,
+  assertTeamPlanRef,
+  deleteTeamPlanRunRefs,
+  pinTeamPlanFinalizedHead,
+  pinTeamPlanLeaseFrontier,
+  pinTeamPlanRef,
+  readBoundedTeamPlanFile,
+  teamPlanFinalizedHeadRef,
+  teamPlanGitText,
+  teamPlanLeaseFrontierRef,
+  teamPlanPathExists,
+  teamPlanRunRefPrefix,
+  teamPlanRunRefsEmpty,
+} from './runtime-durability.ts';
 
-import type { SpawnSyncOptionsWithStringEncoding } from 'node:child_process';
 import type {
   ModuleDeliveryAttemptLease,
   ModuleDeliveryAcceptedProviderEvidenceIdentity,
@@ -78,11 +93,6 @@ import type {
 import type { TeamPlanJournal } from './journal.ts';
 const MAX_TEAM_PLAN_BYTES = 262_144;
 
-enum TeamPlanArtifactObjectType {
-  Blob = 'blob',
-  Commit = 'commit',
-}
-
 type TeamPlanSession = {
   readonly journal: TeamPlanJournal;
   acceptedPlan: ValidatedModuleDeliveryPlan;
@@ -104,12 +114,6 @@ type ExecuteTeamPlanRecordRequest = Readonly<{
   replay: boolean;
 }>;
 
-type GitInvocation = Readonly<{
-  cwd: string;
-  args: readonly string[];
-  input?: string;
-}>;
-
 type LockedTeamPlanSessionRequest<T> = Readonly<{
   journalPath: string;
   action: (session: TeamPlanSession) => Promise<T>;
@@ -121,6 +125,8 @@ export async function startTeamPlan(
 ): Promise<TeamPlanSnapshot> {
   const repositoryRoot = await realpath(resolve(request.repositoryRoot));
   const journalPath = await canonicalTeamPlanJournalPath(request.journalPath);
+  if (await teamPlanPathExists(`${journalPath}.discarding`))
+    throw new Error('Team Plan journal discard is still in progress.');
   if (
     journalPath === repositoryRoot ||
     journalPath.startsWith(`${repositoryRoot}${sep}`)
@@ -202,8 +208,10 @@ export async function selectTeamPlan(
           admissions: selection.admissions,
         });
         leases = recording.leases;
-        for (const lease of leases)
+        for (const lease of leases) {
+          pinTeamPlanLeaseFrontier({ run: runIdentity(session), lease });
           session.activeLeases.set(attemptKey(lease), lease);
+        }
         const event: TeamPlanEvent = {
           version: TEAM_PLAN_JOURNAL_VERSION,
           kind: TeamPlanEventKind.Selected,
@@ -298,11 +306,7 @@ export async function finalizeTeamPlan(
       if (session.finalized) return teamPlanSnapshot(session);
       assertRunning(session);
       assertSessionRepositoryAtSource(session);
-      session.integrationState = finalizeModuleDeliveryIntegration({
-        authority: session.authority,
-        acceptedPlan: session.acceptedPlan,
-        state: session.integrationState,
-      });
+      session.integrationState = finalizedIntegrationState(session);
       session.finalized = true;
       const event: TeamPlanEvent = {
         version: TEAM_PLAN_JOURNAL_VERSION,
@@ -310,6 +314,10 @@ export async function finalizeTeamPlan(
         sequence: session.journal.events.length + 1,
         headCommit: session.integrationState.headCommit,
       };
+      pinTeamPlanFinalizedHead({
+        run: runIdentity(session),
+        headCommit: event.headCommit,
+      });
       await appendTeamPlanEvent({ journalPath: request.journalPath, event });
       return teamPlanSnapshot(session);
     },
@@ -321,6 +329,7 @@ export async function discardFinalizedTeamPlan(
 ): Promise<void> {
   await discardTeamPlanJournal({
     journalPath: request.journalPath,
+    expectedRunId: request.runId,
     discardArtifacts: async ({ journal, artifactsMayAlreadyBeDiscarded }) => {
       let session: TeamPlanSession;
       try {
@@ -436,6 +445,7 @@ async function replayTeamPlanEvent(
       const key = attemptKey(lease);
       if (session.activeLeases.has(key))
         throw new Error('Team Plan repeats an active attempt.');
+      assertTeamPlanLeaseFrontier({ run: runIdentity(session), lease });
       session.activeLeases.set(key, lease);
     }
     return;
@@ -450,13 +460,13 @@ async function replayTeamPlanEvent(
     return;
   }
   if (event.kind === TeamPlanEventKind.Finalized) {
-    session.integrationState = finalizeModuleDeliveryIntegration({
-      authority: session.authority,
-      acceptedPlan: session.acceptedPlan,
-      state: session.integrationState,
-    });
+    session.integrationState = finalizedIntegrationState(session);
     if (session.integrationState.headCommit !== event.headCommit)
       throw new Error('Team Plan final frontier has drifted.');
+    assertTeamPlanFinalizedHead({
+      run: runIdentity(session),
+      headCommit: event.headCommit,
+    });
     session.finalized = true;
     return;
   }
@@ -561,7 +571,7 @@ function acceptProviderRecord(request: {
   const serialized = JSON.stringify(
     moduleDeliveryAcceptedEvidenceIdentity(evidence),
   );
-  const artifactObject = gitText({
+  const artifactObject = teamPlanGitText({
     cwd: session.journal.started.repositoryRoot,
     args: ['hash-object', '-w', '--stdin'],
     input: serialized,
@@ -585,7 +595,7 @@ function replayAcceptedWrite(request: {
     session,
     record,
     artifactObject: record.commit,
-    objectType: TeamPlanArtifactObjectType.Commit,
+    objectType: TeamPlanObjectType.Commit,
   });
   const workspace = prepareModuleWorktree({
     repositoryRoot: session.journal.started.repositoryRoot,
@@ -596,7 +606,7 @@ function replayAcceptedWrite(request: {
     baselineCommit: record.baselineCommit,
   });
   try {
-    gitText({
+    teamPlanGitText({
       cwd: workspace.worktreePath,
       args: ['reset', '--hard', record.commit],
     });
@@ -635,9 +645,9 @@ function replayAcceptedEvidence(request: {
     session,
     record,
     artifactObject: record.artifactObject,
-    objectType: TeamPlanArtifactObjectType.Blob,
+    objectType: TeamPlanObjectType.Blob,
   });
-  const serialized = gitText({
+  const serialized = teamPlanGitText({
     cwd: session.journal.started.repositoryRoot,
     args: ['cat-file', 'blob', record.artifactObject],
   });
@@ -686,9 +696,10 @@ function restartTeamPlanSession(request: {
 }
 
 async function reviewedPlan(planPath: string) {
-  const path = await realpath(resolve(planPath));
-  const text = await readFile(path, 'utf8');
-  assertPlanByteBound(text);
+  const { path, text } = await readBoundedTeamPlanFile({
+    planPath,
+    maximumBytes: MAX_TEAM_PLAN_BYTES,
+  });
   return {
     path,
     text,
@@ -717,111 +728,84 @@ function pinPersistedRecord(request: {
   readonly artifactObject: string;
 }): TeamPlanJournalRecord {
   const { session, record, artifactObject } = request;
-  const artifactRef = artifactRefFor({ session, record });
-  const artifactCreated = updateRefCompare({
-    session,
-    artifactRef,
-    artifactObject,
-    expectedObject: '0'.repeat(40),
+  pinTeamPlanRef({
+    ...runIdentity(session),
+    ref: artifactRefFor({ session, record }),
+    object: artifactObject,
   });
-  if (!artifactCreated) {
-    const unchanged = updateRefCompare({
-      session,
-      artifactRef,
-      artifactObject,
-      expectedObject: artifactObject,
-    });
-    if (!unchanged)
-      throw new Error('Team Plan durable artifact ref already differs.');
-    const existing = gitText({
-      cwd: session.journal.started.repositoryRoot,
-      args: ['rev-parse', '--verify', artifactRef],
-    });
-    if (existing !== artifactObject)
-      throw new Error('Team Plan durable artifact ref already differs.');
-  }
   return record;
-}
-
-function updateRefCompare(request: {
-  readonly session: TeamPlanSession;
-  readonly artifactRef: string;
-  readonly artifactObject: string;
-  readonly expectedObject: string;
-}): boolean {
-  const { session, artifactRef, artifactObject, expectedObject } = request;
-  const result = spawnSync(
-    'git',
-    ['update-ref', artifactRef, artifactObject, expectedObject],
-    {
-      cwd: session.journal.started.repositoryRoot,
-      env: {},
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    },
-  );
-  return result.status === 0;
 }
 
 function assertPinnedArtifact(request: {
   readonly session: TeamPlanSession;
   readonly record: TeamPlanJournalRecord;
   readonly artifactObject: string;
-  readonly objectType: TeamPlanArtifactObjectType;
+  readonly objectType: TeamPlanObjectType;
 }): void {
   const { session, record, artifactObject, objectType } = request;
-  const resolved = gitText({
-    cwd: session.journal.started.repositoryRoot,
-    args: [
-      'rev-parse',
-      '--verify',
-      `${artifactRefFor({ session, record })}^{${objectType}}`,
-    ],
+  assertTeamPlanRef({
+    ...runIdentity(session),
+    ref: artifactRefFor({ session, record }),
+    object: artifactObject,
+    objectType,
   });
-  if (resolved !== artifactObject)
-    throw new Error('Team Plan durable artifact ref has drifted.');
 }
 
 function deleteRunArtifactRefs(session: TeamPlanArtifactRun): void {
   const expected = session.journal.events.flatMap((event) => {
-    if (event.kind !== TeamPlanEventKind.Recorded) return [];
-    const record = event.record;
-    if (record.kind === TeamPlanRecordKind.AcceptedWrite)
-      return [[artifactRefFor({ session, record }), record.commit] as const];
-    if (record.kind === TeamPlanRecordKind.AcceptedEvidence)
+    if (event.kind === TeamPlanEventKind.Selected)
+      return event.attempts.map((attempt) => ({
+        ...runIdentity(session),
+        ref: teamPlanLeaseFrontierRef({
+          run: runIdentity(session),
+          attempt,
+        }),
+        object: teamPlanGitText({
+          cwd: session.journal.started.repositoryRoot,
+          args: [
+            'rev-parse',
+            '--verify',
+            teamPlanLeaseFrontierRef({
+              run: runIdentity(session),
+              attempt,
+            }),
+          ],
+        }),
+      }));
+    if (event.kind === TeamPlanEventKind.Finalized)
       return [
-        [artifactRefFor({ session, record }), record.artifactObject] as const,
+        {
+          ...runIdentity(session),
+          ref: teamPlanFinalizedHeadRef(runIdentity(session)),
+          object: event.headCommit,
+        },
       ];
+    if (event.kind === TeamPlanEventKind.Recorded) {
+      const record = event.record;
+      if (record.kind === TeamPlanRecordKind.AcceptedWrite)
+        return [
+          {
+            ...runIdentity(session),
+            ref: artifactRefFor({ session, record }),
+            object: record.commit,
+          },
+        ];
+      if (record.kind === TeamPlanRecordKind.AcceptedEvidence)
+        return [
+          {
+            ...runIdentity(session),
+            ref: artifactRefFor({ session, record }),
+            object: record.artifactObject,
+          },
+        ];
+    }
     return [];
   });
-  const prefix = runArtifactPrefix(session);
-  const actual = gitText({
-    cwd: session.journal.started.repositoryRoot,
-    args: ['for-each-ref', '--format=%(refname)%09%(objectname)', `${prefix}/`],
-  });
-  const expectedText = expected
-    .map(([ref, object]) => `${ref}\t${object}`)
-    .sort()
-    .join('\n');
-  if (actual.split('\n').filter(Boolean).sort().join('\n') !== expectedText)
-    throw new Error('Team Plan durable run refs are incomplete or forged.');
-  if (expected.length === 0) return;
-  gitText({
-    cwd: session.journal.started.repositoryRoot,
-    args: ['update-ref', '--stdin'],
-    input: `start\n${expected
-      .map(([ref, object]) => `delete ${ref} ${object}`)
-      .join('\n')}\nprepare\ncommit\n`,
-  });
+  deleteTeamPlanRunRefs({ run: runIdentity(session), expected });
 }
 
 function runArtifactPrefixEmpty(session: TeamPlanArtifactRun): boolean {
-  return (
-    gitText({
-      cwd: session.journal.started.repositoryRoot,
-      args: ['for-each-ref', runArtifactPrefix(session)],
-    }) === ''
-  );
+  return teamPlanRunRefsEmpty(runIdentity(session));
 }
 
 function artifactRefFor(request: {
@@ -830,11 +814,14 @@ function artifactRefFor(request: {
 }): string {
   const { session, record } = request;
   const identity = recordIdentity(record);
-  return `${runArtifactPrefix(session)}/${identity.generation}/${identity.taskId}/${identity.attempt}/${record.kind}`;
+  return `${teamPlanRunRefPrefix(runIdentity(session))}/${identity.generation}/${identity.taskId}/${identity.attempt}/${record.kind}`;
 }
 
-function runArtifactPrefix(session: TeamPlanArtifactRun): string {
-  return `refs/nook/team-plan/${session.journal.started.runId}`;
+function runIdentity(session: TeamPlanArtifactRun) {
+  return {
+    repositoryRoot: session.journal.started.repositoryRoot,
+    runId: session.journal.started.runId,
+  };
 }
 
 function recordIdentity(
@@ -889,9 +876,30 @@ function assertFinalUnusableRecord(record: TeamPlanFinalUnusableRecord): void {
     throw new Error('Team Plan terminal failure conclusion is inconclusive.');
 }
 
+function finalizedIntegrationState(
+  session: TeamPlanSession,
+): ModuleIntegrationState {
+  const selection = selectModuleDeliveryAdmissions({
+    authority: session.authority,
+    acceptedPlan: session.acceptedPlan,
+    state: session.integrationState.admissionState,
+  });
+  if (
+    selection.status === ModuleDeliveryAdmissionSelectionStatus.Blocked &&
+    selection.blockedTaskIds.length > 0
+  )
+    return session.integrationState;
+  return finalizeModuleDeliveryIntegration({
+    authority: session.authority,
+    acceptedPlan: session.acceptedPlan,
+    state: session.integrationState,
+  });
+}
+
 function teamPlanSnapshot(session: TeamPlanSession): TeamPlanSnapshot {
   const state = session.integrationState.admissionState;
   return Object.freeze({
+    runId: session.journal.started.runId,
     phase: session.finalized
       ? TeamPlanRunPhase.Finalized
       : TeamPlanRunPhase.Running,
@@ -915,24 +923,19 @@ function acceptedTeamPlan(planText: string): ValidatedModuleDeliveryPlan {
   return validation;
 }
 
-function assertPlanByteBound(planText: string): void {
-  if (Buffer.byteLength(planText) > MAX_TEAM_PLAN_BYTES)
-    throw new Error('Team Plan reviewed plan bytes are oversized.');
-}
-
 function assertRepositoryAtSource(request: {
   readonly repositoryRoot: string;
   readonly sourceCommit: string;
 }): void {
-  const root = gitText({
+  const root = teamPlanGitText({
     cwd: request.repositoryRoot,
     args: ['rev-parse', '--show-toplevel'],
   });
-  const head = gitText({
+  const head = teamPlanGitText({
     cwd: request.repositoryRoot,
     args: ['rev-parse', 'HEAD'],
   });
-  const status = gitText({
+  const status = teamPlanGitText({
     cwd: request.repositoryRoot,
     args: ['status', '--porcelain=v1', '-z'],
   });
@@ -954,21 +957,6 @@ async function teamPlanWorkspaceRoot(request: {
   const requested = resolve(tmpdir(), 'nook-team-plan-workspaces', run);
   await mkdir(requested, { recursive: true });
   return realpath(requested);
-}
-
-function gitText(invocation: GitInvocation): string {
-  const options: SpawnSyncOptionsWithStringEncoding = {
-    cwd: invocation.cwd,
-    env: {},
-    encoding: 'utf8',
-    maxBuffer: Number.MAX_SAFE_INTEGER,
-    stdio: ['pipe', 'pipe', 'pipe'],
-  };
-  if ('input' in invocation) options.input = invocation.input;
-  const result = spawnSync('git', invocation.args, options);
-  if (result.status !== 0)
-    throw new Error(result.stderr.trim() || 'Team Plan Git operation failed.');
-  return result.stdout.replace(/\0+$/u, '').trim();
 }
 
 function attemptKey(identity: TeamPlanAttemptIdentity): string {

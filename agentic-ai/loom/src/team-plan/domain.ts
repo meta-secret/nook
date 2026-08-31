@@ -158,7 +158,8 @@ export type TeamPlanJournalRequest = Readonly<{
   journalPath: string;
 }>;
 
-export type TeamPlanDiscardRequest = TeamPlanJournalRequest;
+export type TeamPlanDiscardRequest = TeamPlanJournalRequest &
+  Readonly<{ runId: string }>;
 
 export type TeamPlanRestartRequest = TeamPlanJournalRequest &
   Readonly<{ planPath: string }>;
@@ -169,6 +170,7 @@ export type TeamPlanRecordRequest = TeamPlanJournalRequest &
   }>;
 
 export type TeamPlanSnapshot = Readonly<{
+  runId: string;
   phase: TeamPlanRunPhase;
   generation: number;
   planDigest: string;
