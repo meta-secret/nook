@@ -68,10 +68,11 @@ Does not apply to:
     `shared` for ownerless repository-wide policy;
   - use `security` for security policy, trust boundaries, and acceptance;
   - keep problem, preferred pattern, scope, examples, and validation concrete;
-  - when deterministic code is required, convert the scaffolded card to
-    `<slug>/SKILL.md`, add `name` and `description` frontmatter, and create an
-    executable `scripts/` package with `src/`, `tests/`, and the repository
-    TypeScript configuration;
+  - when deterministic code is required:
+    - convert the scaffolded card to `<slug>/SKILL.md`;
+    - add `name` and `description` frontmatter; and
+    - create an executable `scripts/` package with `src/`, `tests/`, and the
+      repository TypeScript configuration;
   - keep dependencies in the shared `.cortex` Bun workspace and its frozen
     lockfile;
   - update `.cortex/teams/ai/dynamic-skills/index.md` and the owning knowledge graph if
