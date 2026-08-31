@@ -25,13 +25,27 @@ function isVisibleRecoveryCopy(element: HTMLElement): boolean {
 }
 
 type RecoveryCopyTexts = string[]
-function boundedRecoveryCopy(texts: RecoveryCopyTexts): string {
-  const recoveryCopy = texts
-    .filter((text) => !contains_backup_code_candidate(text))
-    .filter(
-      (text) =>
-        classify_authentication_backup_codes_observation(text) === 'present',
+type RecoveryCopyEvidence = readonly [copy: string, hint: boolean]
+function boundedRecoveryCopy(texts: RecoveryCopyTexts): RecoveryCopyEvidence {
+  const candidatePresent = texts.some(contains_backup_code_candidate)
+  const safeTexts = texts.filter(
+    (text) => !contains_backup_code_candidate(text),
+  )
+  const recoveryCopy = safeTexts.filter(
+    (text) =>
+      classify_authentication_backup_codes_observation(text, false) ===
+      'present',
+  )
+  if (candidatePresent) {
+    recoveryCopy.push(
+      ...safeTexts.filter(
+        (text) =>
+          !recoveryCopy.includes(text) &&
+          classify_authentication_backup_codes_observation(text, true) ===
+            'present',
+      ),
     )
+  }
   let boundedCopy = ''
   for (const text of recoveryCopy) {
     const separator = boundedCopy.length > 0 ? ' ' : ''
@@ -40,11 +54,11 @@ function boundedRecoveryCopy(texts: RecoveryCopyTexts): string {
     if (remaining <= 0) break
     boundedCopy += separator + Array.from(text).slice(0, remaining).join('')
   }
-  return boundedCopy
+  return [boundedCopy, recoveryCopy.length > 0]
 }
 
 /** Collect bounded instructional copy without reading code-list or input values. */
-export function authenticationRecoveryCopy(): string {
+function authenticationRecoveryEvidence(): RecoveryCopyEvidence {
   if (typeof document.querySelectorAll !== 'function') {
     return boundedRecoveryCopy(
       (document.body?.innerText ?? '').split(/[\r\n]+/),
@@ -52,7 +66,7 @@ export function authenticationRecoveryCopy(): string {
   }
   const texts: RecoveryCopyTexts = []
   const elements = document.querySelectorAll<HTMLElement>(
-    'h1, h2, h3, h4, h5, h6, [role="heading"], p, label, legend',
+    'h1, h2, h3, h4, h5, h6, [role="heading"], p, label, legend, button, li, code, pre',
   )
   for (const element of elements) {
     if (texts.length >= MAX_RECOVERY_COPY_ELEMENTS) break
@@ -64,14 +78,19 @@ export function authenticationRecoveryCopy(): string {
   return boundedRecoveryCopy(texts)
 }
 
+export function authenticationRecoveryCopy(): string {
+  return authenticationRecoveryEvidence()[0]
+}
+
 export function recoveryCopyHasBackupCodeHint(recoveryCopy: string): boolean {
   return (
-    classify_authentication_backup_codes_observation(recoveryCopy) === 'present'
+    classify_authentication_backup_codes_observation(recoveryCopy, false) ===
+    'present'
   )
 }
 
 export function pageHasDocumentBackupCodeHint(): boolean {
-  return recoveryCopyHasBackupCodeHint(authenticationRecoveryCopy())
+  return authenticationRecoveryEvidence()[1]
 }
 
 export function extractDocumentBackupCodeCandidates(

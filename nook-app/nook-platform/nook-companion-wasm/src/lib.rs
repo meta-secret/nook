@@ -731,12 +731,13 @@ mod tests {
     #[test]
     fn backup_code_classifier_bridge_preserves_typed_variants() {
         assert_eq!(
-            classify_authentication_backup_codes_observation("Use a backup code instead"),
+            classify_authentication_backup_codes_observation("Use a backup code instead", false),
             nook_companion_core::AuthenticationBackupCodesObservation::Absent
         );
         assert_eq!(
             classify_authentication_backup_codes_observation(
-                "Save your recovery codes in a secure place"
+                "Save your recovery codes in a secure place",
+                false,
             ),
             nook_companion_core::AuthenticationBackupCodesObservation::Present
         );
@@ -972,7 +973,7 @@ mod wasm_tests {
                 AuthenticationBackupCodesObservation::Present,
             ),
         ] {
-            let classified = super::classify_authentication_backup_codes_observation(text);
+            let classified = super::classify_authentication_backup_codes_observation(text, false);
             let js_value = serde_wasm_bindgen::to_value(&classified)?;
             let decoded: AuthenticationBackupCodesObservation =
                 serde_wasm_bindgen::from_value(js_value)?;

@@ -54,8 +54,9 @@ pub fn authentication_workflow_pilot_presentation_capability(
 #[must_use]
 pub fn classify_authentication_backup_codes_observation(
     text: &str,
+    candidate_present: bool,
 ) -> nook_companion_core::AuthenticationBackupCodesObservation {
-    nook_companion_core::classify_authentication_backup_codes_observation(text)
+    nook_companion_core::classify_authentication_backup_codes_observation(text, candidate_present)
 }
 
 #[wasm_bindgen]

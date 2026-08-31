@@ -29,6 +29,7 @@ pub enum AuthenticationBackupCodesObservation {
 #[must_use]
 pub fn classify_authentication_backup_codes_observation(
     text: &str,
+    candidate_present: bool,
 ) -> AuthenticationBackupCodesObservation {
     let normalized = text.to_ascii_lowercase();
     let recovery_subject = ["backup codes", "recovery codes", "emergency codes"]
@@ -49,7 +50,7 @@ pub fn classify_authentication_backup_codes_observation(
             .split(|c: char| !c.is_ascii_alphanumeric())
             .any(|token| token == *word)
     });
-    if recovery_subject && preservation_instruction {
+    if recovery_subject && (preservation_instruction || candidate_present) {
         AuthenticationBackupCodesObservation::Present
     } else {
         AuthenticationBackupCodesObservation::Absent
@@ -81,7 +82,7 @@ impl AuthenticationAuthenticatorObservationFacts {
 
     pub(super) fn backup_codes_hint(&self) -> bool {
         matches!(
-            classify_authentication_backup_codes_observation(&self.backup_codes_copy),
+            classify_authentication_backup_codes_observation(&self.backup_codes_copy, false),
             AuthenticationBackupCodesObservation::Present
         )
     }
@@ -108,18 +109,23 @@ mod tests {
     #[test]
     fn backup_code_observation_requires_recovery_preservation_copy() {
         assert_eq!(
-            classify_authentication_backup_codes_observation("Use a backup code instead"),
+            classify_authentication_backup_codes_observation("Use a backup code instead", false),
             AuthenticationBackupCodesObservation::Absent
         );
         assert_eq!(
             classify_authentication_backup_codes_observation(
-                "Save your backup codes in a secure place"
+                "Save your backup codes in a secure place",
+                false,
             ),
+            AuthenticationBackupCodesObservation::Present
+        );
+        assert_eq!(
+            classify_authentication_backup_codes_observation("Backup codes", true),
             AuthenticationBackupCodesObservation::Present
         );
         for ordinary_otp in ["Authenticator code\n123456", "One-time code\n123456"] {
             assert_eq!(
-                classify_authentication_backup_codes_observation(ordinary_otp),
+                classify_authentication_backup_codes_observation(ordinary_otp, false),
                 AuthenticationBackupCodesObservation::Absent
             );
         }

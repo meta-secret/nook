@@ -243,13 +243,9 @@ impl AuthenticationWorkflowSnapshot {
     }
 
     const fn with_saved_login_capability(mut self) -> Self {
-        if matches!(
-            (self.kind, self.stage),
-            (
-                AuthenticationWorkflowKind::Login,
-                AuthenticationWorkflowStage::Credentials
-            )
-        ) {
+        if matches!(self.kind, AuthenticationWorkflowKind::Login)
+            && matches!(self.stage, AuthenticationWorkflowStage::Credentials)
+        {
             self.saved_login_capability = AuthenticationSavedLoginCapability::FillSavedLogin;
         }
         self

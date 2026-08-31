@@ -70,7 +70,7 @@ pub fn authentication_enrollment_workflow_match(
         return AuthenticationWorkflowMatch::Rejected;
     }
     let backup_codes_hint = matches!(
-        classify_authentication_backup_codes_observation(backup_codes_copy),
+        classify_authentication_backup_codes_observation(backup_codes_copy, false),
         super::AuthenticationBackupCodesObservation::Present
     );
     super::classify_authentication_workflow(AuthenticationPageObservation {

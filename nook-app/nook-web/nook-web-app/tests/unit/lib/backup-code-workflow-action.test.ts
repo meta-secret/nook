@@ -73,7 +73,7 @@ describe('backup-code workflow action', () => {
   })
 
   test('rejects a second approval while revalidation is pending', async () => {
-    let release = () => {
+    let release: () => void = () => {
       throw new Error('revalidation release was not installed')
     }
     mocks.revalidate.mockImplementation(
