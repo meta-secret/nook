@@ -170,4 +170,25 @@ describe('prepareModuleWorktree', () => {
       else delete process.env.EMAIL;
     }
   });
+
+  test('preserves trusted Git arguments within explicit input bounds', () => {
+    const fixture = createTrackedFixture();
+    const exact = runModuleDeliveryGit({
+      cwd: fixture.sourceRoot,
+      args: ['rev-parse', '--verify', 'HEAD'],
+    });
+    expect(gitText(exact)).toBe(fixture.baselineCommit);
+    expect(() =>
+      runModuleDeliveryGit({
+        cwd: fixture.sourceRoot,
+        args: Array.from({ length: 1025 }, () => 'status'),
+      }),
+    ).toThrow('arguments exceed bounded input');
+    expect(() =>
+      runModuleDeliveryGit({
+        cwd: fixture.sourceRoot,
+        args: ['x'.repeat(1024 * 1024 + 1)],
+      }),
+    ).toThrow('arguments exceed bounded input');
+  });
 });
