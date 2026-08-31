@@ -1,18 +1,15 @@
 import { ExtensionRuntimeRequestType } from '../lib/extension-runtime-request-type'
 
-export function refreshInvokingAuthenticationSurface(): void {
-  const query: Parameters<typeof chrome.tabs.query>[0] = {
-    active: true,
-    currentWindow: true,
+export function refreshInvokingAuthenticationSurface(
+  popupSearch = location.search,
+): void {
+  const encodedTabId = new URLSearchParams(popupSearch).get('invokingTabId')
+  const tabId = Number(encodedTabId)
+  if (!encodedTabId || !Number.isInteger(tabId)) return
+  const message: Parameters<typeof chrome.tabs.sendMessage>[1] = {
+    type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces,
   }
-  chrome.tabs.query(query, (tabs) => {
-    const activeTab = tabs.find((tab) => typeof tab.id === 'number')
-    if (typeof activeTab?.id !== 'number') return
-    const message: Parameters<typeof chrome.tabs.sendMessage>[1] = {
-      type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces,
-    }
-    void chrome.tabs.sendMessage(activeTab.id, message).catch(() => {
-      // Restricted pages may not host the Nook content script.
-    })
+  void chrome.tabs.sendMessage(tabId, message).catch(() => {
+    // Restricted pages may not host the Nook content script.
   })
 }

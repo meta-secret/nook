@@ -27,9 +27,7 @@ test('keeps one visible Nook mark across expanded and compact states', () => {
     i18n: { getMessage: (key: string) => key },
     runtime: { getURL: (path: string) => path },
   })
-  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
-    callback(0),
-  )
+  vi.stubGlobal('requestAnimationFrame', (run: FrameRequestCallback) => run(0))
   const shell = createWidgetShell({
     copy: {
       titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,

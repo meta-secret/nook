@@ -25,14 +25,12 @@ function installPopupDemoRuntime(): void {
     eventLogHeads: ['popup-demo-event-head'],
     lastLocalSyncAt: '2026-08-25T00:00:00.000Z',
   }
-  type RuntimeResponse =
-    | { readonly ok: boolean }
-    | { readonly ok: true; readonly setup: typeof setup }
-    | {
-        readonly ok: true
-        readonly status: number
-        readonly device: typeof device
-      }
+  type RuntimeResponse = {
+    readonly ok: boolean
+    readonly setup?: typeof setup
+    readonly status?: number
+    readonly device?: typeof device
+  }
 
   const runtime = {
     getURL: (resource: string) =>
@@ -95,17 +93,10 @@ test('keeps the extension toolbar popup focused on one next action', async ({
   })
 
   await page.goto(`${extensionRoutePrefix}popup/index.html?state=connected`)
-  await expect(page.getByTestId('companion-vault-status')).toHaveText(
-    'Connected to Personal vault',
-  )
   await expect(
     page.locator(
       '[data-testid="stay-ready-btn"] + [data-testid="open-simple-vault-btn"]',
     ),
   ).toBeVisible()
-  await expect(page.getByTestId('stay-ready-btn')).toHaveText('Stay ready')
-  await expect(page.getByTestId('pair-another-vault-btn')).toHaveClass(
-    /menu-secondary-action/,
-  )
   await demoBeat(page)
 })

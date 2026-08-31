@@ -220,13 +220,21 @@ export async function openCompanionLauncher(
   intent: OpenCompanionLauncherIntent,
 ): Promise<void> {
   const popupUrl = chrome.runtime.getURL('popup/index.html')
-  const launcherUrl =
-    intent === OpenCompanionLauncherIntent.Pair
-      ? `${popupUrl}?intent=${OpenCompanionLauncherIntent.Pair}`
-      : popupUrl
+  const launcherUrl = new URL(popupUrl)
+  if (intent === OpenCompanionLauncherIntent.Pair) {
+    launcherUrl.searchParams.set('intent', OpenCompanionLauncherIntent.Pair)
+  }
+  const invokingTab = await queryActiveTab()
+  if (
+    invokingTab.kind === ActiveTabQueryKind.Found &&
+    typeof invokingTab.tab.id === 'number' &&
+    Number.isInteger(invokingTab.tab.id)
+  ) {
+    launcherUrl.searchParams.set('invokingTabId', String(invokingTab.tab.id))
+  }
   if (chrome.windows?.create) {
     const nookTypedArgs0_7: Parameters<typeof chrome.windows.create>[0] = {
-      url: launcherUrl,
+      url: launcherUrl.href,
       type: 'popup',
       width: 440,
       height: 620,
@@ -236,7 +244,7 @@ export async function openCompanionLauncher(
     return
   }
   const nookTypedArgs0_8: Parameters<typeof chrome.tabs.create>[0] = {
-    url: launcherUrl,
+    url: launcherUrl.href,
   }
   await chrome.tabs.create(nookTypedArgs0_8)
 }

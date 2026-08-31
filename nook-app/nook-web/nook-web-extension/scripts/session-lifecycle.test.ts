@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, mock, test } from 'bun:test'
 import { OpenCompanionLauncherIntent } from '../../nook-web-shared/src/extension/companion-launcher-message'
 
 describe('ensureExtensionSessionDocument', () => {
@@ -28,12 +28,14 @@ describe('openCompanionLauncherBestEffort', () => {
     Object.assign(globalThis, {
       __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
     })
+    const create = mock(() => Promise.reject(new Error('launcher unavailable')))
     globalThis.chrome = {
       runtime: {
         getURL: () => 'chrome-extension://nook/popup/index.html',
       },
+      tabs: { query: (_query, callback) => callback([{ id: 42 }]) },
       windows: {
-        create: () => Promise.reject(new Error('launcher unavailable')),
+        create,
       },
     } as typeof chrome
     const { openCompanionLauncher } =
@@ -42,6 +44,9 @@ describe('openCompanionLauncherBestEffort', () => {
     await expect(
       openCompanionLauncher(OpenCompanionLauncherIntent.Default),
     ).rejects.toThrow('launcher unavailable')
+    expect(create.mock.calls[0]?.[0]).toMatchObject({
+      url: 'chrome-extension://nook/popup/index.html?invokingTabId=42',
+    })
   })
 
   test('contains launcher failures for callers returning locked responses', async () => {
@@ -52,6 +57,7 @@ describe('openCompanionLauncherBestEffort', () => {
       runtime: {
         getURL: () => 'chrome-extension://nook/popup/index.html',
       },
+      tabs: { query: (_query, callback) => callback([]) },
       windows: {
         create: () => Promise.reject(new Error('launcher unavailable')),
       },
