@@ -419,6 +419,7 @@ ${gizmoIndexRows}
           message: 'Cortex identifier registry is missing.',
         },
       ],
+      contractFindings: [],
       auditOk: false,
     };
     expect(report).toEqual(expectedReport);

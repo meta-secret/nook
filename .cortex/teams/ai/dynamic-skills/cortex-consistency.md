@@ -150,6 +150,7 @@ task loom:cortex-audit
 - Loom checks broken relative links, skill-index sync, and prohibited tracked
   harness skill mirrors.
 - Semantic conflicts still require agent judgment.
+
 - For implementation tasks:
   1. run required formatters and commit every allowed AI source or Cortex
      mutation in the coherent handoff;
@@ -168,3 +169,17 @@ For a full Cortex GC request, report:
 - cross-doc conflicts resolved;
 - code mismatches fixed;
 - remaining historical labels.
+
+### Deterministic contract compilation
+
+Loom compiles reviewed TypeScript contracts for selected cross-document rules.
+
+- Context ownership and policy applicability determine required policy imports.
+- A foreign policy import requires a direct reference from the context authority.
+- Persisted-representation policy requires a schema-versioning authority.
+- It also requires a legacy-decode or migration-test obligation.
+- Missing imports, references, authorities, or evidence obligations fail the
+  Cortex audit.
+
+The registry covers only relationships promoted into its closed TypeScript
+model. It does not infer meaning from Markdown or replace semantic review.

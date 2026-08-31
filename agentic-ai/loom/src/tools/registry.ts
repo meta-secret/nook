@@ -103,7 +103,7 @@ const DISCOVERABLE_DEFINITIONS: readonly DiscoverableRequestDefinition[] = [
   },
   {
     family: RequestFamily.CortexAudit,
-    description: 'Audit .cortex links and dynamic-skill index sync.',
+    description: 'Audit .cortex structure, links, and typed policy contracts.',
     exampleRequest: 'task loom:cortex-audit',
     inputSchema: CORTEX_AUDIT_INPUT_SCHEMA,
   },

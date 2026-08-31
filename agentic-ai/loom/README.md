@@ -344,7 +344,7 @@ There is no checked-in sample-file catalog.
 | `tools-list`            | Discovery                                         |
 | `tools-call`            | Nested call helper                                |
 | `pre-push`              | Host `task format` + UI demo contract             |
-| `cortex-audit`          | Broken `.cortex` links / skill index sync         |
+| `cortex-audit`          | Cortex structure, links, and policy contracts     |
 | `cortex-session-clean`  | Temporary Cortex session readiness assertion      |
 | `skill-scaffold`        | Create a dynamic-skill card                       |
 | `agent-stats`           | Assemble / validate / publish AI-agent stats YAML |
