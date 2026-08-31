@@ -9,6 +9,7 @@ import {
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 import { detectEnrollmentHints } from '../enrollment-flow'
 import {
+  clearLoginCredentials,
   fillGeneratedPassword,
   fillLoginCredentials,
   findWorkflowPasskeyControl,
@@ -240,7 +241,11 @@ export async function fillAndSubmitAccount({
   const filled = fillLoginCredentials(nookTypedArgs0_4)
   credentials.password = ''
   credentials.username = ''
-  if (!filled) {
+  const postFillApproved = filled && approvedWorkflowIsStillCurrent(workflow)
+  if (filled && !postFillApproved) {
+    clearLoginCredentials(nookTypedArgs0_4)
+  }
+  if (!postFillApproved) {
     const nookTypedArgs0_5: Parameters<typeof setFlightProgress>[0] = {
       step,
       title,

@@ -92,7 +92,9 @@ export async function fillAuthenticatorCode({
   const { response } = delivery
   if (
     response.kind !== AuthenticatorCodeResponseKind.Ready ||
-    !('code' in response)
+    !('code' in response) ||
+    !('expiresAt' in response) ||
+    response.expiresAt <= Date.now()
   ) {
     const nookTypedArgs0_2: Parameters<typeof setFlightProgress>[0] = {
       step,

@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import {
   authenticationPageObservationFacts,
+  fillLoginCredentials,
+  PasswordFormQueryKind,
   summarizeAuthenticationWorkflowForms,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 
@@ -79,9 +81,20 @@ describe('credential submission observation facts', () => {
       readonlyPasswordFieldCount: 1,
     })
 
+    const readonlyOnly =
+      document.querySelector<HTMLInputElement>('input[readonly]')
     document
       .querySelector<HTMLFieldSetElement>('#password-fields')
       ?.setAttribute('disabled', '')
+    expect(
+      fillLoginCredentials({
+        credentials: { username: 'vault-user', password: 'vault-password' },
+        kind: PasswordFormQueryKind.Root,
+        root: document,
+      }),
+    ).toBe(false)
+    expect(readonlyOnly?.value).toBe('')
+
     expect(authenticationFacts().fields).toMatchObject({
       currentPasswordFieldCount: 1,
       actionablePasswordFieldCount: 0,

@@ -65,10 +65,11 @@ describe('authenticator code expiry transport', () => {
   })
 
   test('keeps expiry on the staged-code service-worker response', async () => {
+    const expiresAt = Date.now() + 30_000
     mocks.sendSessionMessage.mockResolvedValue({
       ok: true,
       code: '123456',
-      expiresAt: 1_725_000_030_000,
+      expiresAt,
     })
 
     await expect(
@@ -78,7 +79,21 @@ describe('authenticator code expiry transport', () => {
     ).resolves.toEqual({
       ok: true,
       code: '123456',
-      expiresAt: 1_725_000_030_000,
+      expiresAt,
     })
+  })
+
+  test('rejects an expired staged code at the service-worker boundary', async () => {
+    mocks.sendSessionMessage.mockResolvedValue({
+      ok: true,
+      code: '123456',
+      expiresAt: Date.now() - 1,
+    })
+
+    await expect(
+      stagedAuthenticatorCodeFromSession(
+        'otpauth://totp/Nook:person@example.test?secret=JBSWY3DPEHPK3PXP',
+      ),
+    ).rejects.toThrow('Extension session returned an invalid staged code.')
   })
 })

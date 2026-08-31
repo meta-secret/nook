@@ -796,10 +796,16 @@ export function fillLoginCredentials(
   request: LoginCredentialsFillRequest,
 ): boolean {
   const nookTypedArgs0_18 = passwordFieldQuery(request);
-  const passwordFields = findPasswordFields(nookTypedArgs0_18);
+  const observedPasswordFields = findPasswordFields(nookTypedArgs0_18);
+  const passwordFields = observedPasswordFields.filter(
+    (field) => !field.readOnly,
+  );
   const nookTypedArgs0_19 = passwordFieldQuery(request);
   const usernameCandidates = findUsernameFields(nookTypedArgs0_19);
   const usernameField = usernameCandidates[0];
+  if (observedPasswordFields.length > 0 && passwordFields.length === 0) {
+    return false;
+  }
   if (passwordFields.length === 0) {
     if (!usernameField) return false;
     const nookTypedArgs0_20: Parameters<typeof setNativeInputValue>[0] = {
@@ -854,7 +860,9 @@ export function fillGeneratedPassword(
   request: GeneratedPasswordFillRequest,
 ): boolean {
   const nookTypedArgs0_23 = passwordFieldQuery(request);
-  const passwordFields = findPasswordFields(nookTypedArgs0_23);
+  const passwordFields = findPasswordFields(nookTypedArgs0_23).filter(
+    (field) => !field.readOnly,
+  );
   const newPasswordFields = passwordFields.filter((field) => {
     const nookArrowArgs3: Parameters<typeof hasAutocompleteToken>[0] = {
       field,
@@ -872,6 +880,20 @@ export function fillGeneratedPassword(
   }
   newPasswordFields[0]?.focus();
   return true;
+}
+
+export function clearLoginCredentials(
+  request: PasswordFormScopeQuery,
+): void {
+  const clearField = (input: HTMLInputElement): void => {
+    const mutation: Parameters<typeof setNativeInputValue>[0] = {
+      input,
+      value: "",
+    };
+    setNativeInputValue(mutation);
+  };
+  findUsernameFields(passwordFieldQuery(request)).forEach(clearField);
+  findPasswordFields(passwordFieldQuery(request)).forEach(clearField);
 }
 export function readLoginCredentials(
   request: PasswordFormScopeQuery,

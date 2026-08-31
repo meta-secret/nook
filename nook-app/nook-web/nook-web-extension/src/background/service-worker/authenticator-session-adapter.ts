@@ -62,7 +62,7 @@ export async function authenticatorCodeFromSession({
     typeof response.code !== 'string' ||
     typeof response.expiresAt !== 'number' ||
     !Number.isSafeInteger(response.expiresAt) ||
-    response.expiresAt <= 0
+    response.expiresAt <= Date.now()
   ) {
     throw new Error('Extension session returned an invalid authenticator code.')
   }
@@ -123,7 +123,7 @@ export async function stagedAuthenticatorCodeFromSession(
     typeof response.code !== 'string' ||
     typeof response.expiresAt !== 'number' ||
     !Number.isSafeInteger(response.expiresAt) ||
-    response.expiresAt <= 0
+    response.expiresAt <= Date.now()
   ) {
     throw new Error('Extension session returned an invalid staged code.')
   }
