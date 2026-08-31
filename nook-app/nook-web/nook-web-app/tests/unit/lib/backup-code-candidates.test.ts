@@ -20,6 +20,17 @@ describe('backup-code presentation evidence', () => {
     expect(pageHasDocumentBackupCodeHint()).toBe(true)
   })
 
+  test('drops mixed instructional copy that contains an inline secret', () => {
+    document.body.innerHTML = `
+      <p>Save your recovery codes: A1B2-C3D4-E5F6</p>
+      <h1>Backup codes</h1>
+    `
+
+    expect(authenticationRecoveryCopy()).toBe('Backup codes')
+    expect(authenticationRecoveryCopy()).not.toContain('A1B2-C3D4-E5F6')
+    expect(pageHasDocumentBackupCodeHint()).toBe(true)
+  })
+
   test('uses visible instructional paragraphs but excludes hidden and code-bearing copy', () => {
     document.body.innerHTML = `
       <h1>Backup codes</h1>

@@ -2,7 +2,10 @@ import {
   BROWSER_MESSAGE_KEYS,
   type BrowserMessageKey,
 } from '../lib/browser-message-keys'
-import { pageHasDocumentBackupCodeHint } from '../lib/backup-code-candidates'
+import {
+  authenticationRecoveryCopy,
+  recoveryCopyHasBackupCodeHint,
+} from '../lib/backup-code-candidates'
 import {
   AuthenticatorEnrollmentConfirmResponseKind,
   AuthenticatorEnrollmentStageResponseKind,
@@ -61,9 +64,15 @@ import { startRevalidatedBackupCodeEnrollment } from './autofill/backup-code-wor
 export type { EnrollmentPageHints } from './enrollment-flow-view'
 
 export function detectEnrollmentHints(): EnrollmentPageHints {
+  return detectEnrollmentHintsFromRecoveryCopy(authenticationRecoveryCopy())
+}
+
+export function detectEnrollmentHintsFromRecoveryCopy(
+  recoveryCopy: string,
+): EnrollmentPageHints {
   return {
     qr: pageHasQrEnrollmentHint(),
-    backupCodes: pageHasDocumentBackupCodeHint(),
+    backupCodes: recoveryCopyHasBackupCodeHint(recoveryCopy),
   }
 }
 

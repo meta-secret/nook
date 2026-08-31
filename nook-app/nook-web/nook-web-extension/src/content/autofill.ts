@@ -54,7 +54,7 @@ import {
 } from './autofill/widget-rendering'
 import { loadPilotVaultConnection } from './autofill/workflow-ui'
 import {
-  detectEnrollmentHints,
+  detectEnrollmentHintsFromRecoveryCopy,
   enrollmentCeremonyActive,
 } from './enrollment-flow'
 
@@ -83,8 +83,8 @@ async function scanAndRender(): Promise<void> {
     beginPendingSaveWatch(pendingOffer.offer)
     return
   }
-  const enrollmentHints = detectEnrollmentHints()
   const recoveryCopy = authenticationRecoveryCopy()
+  const enrollmentHints = detectEnrollmentHintsFromRecoveryCopy(recoveryCopy)
   const workflowForms = summarizeAuthenticationWorkflowForms().slice(
     0,
     MAX_AUTHENTICATION_WORKFLOW_TRANSPORT_OBSERVATIONS,
@@ -93,8 +93,8 @@ async function scanAndRender(): Promise<void> {
   // of an active OTP challenge so Rust can keep code fill as the primary action,
   // while a direct backup-code-only page still exposes the save ceremony.
   if (
-    enrollmentHints.qr ||
-    (enrollmentHints.backupCodes && workflowForms.length === 0)
+    (enrollmentHints.qr || enrollmentHints.backupCodes) &&
+    workflowForms.length === 0
   ) {
     const enrollmentMatch = authentication_enrollment_workflow_match(
       enrollmentHints.qr,

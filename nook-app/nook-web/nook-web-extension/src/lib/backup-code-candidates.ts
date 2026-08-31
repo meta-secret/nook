@@ -8,6 +8,10 @@ import {
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { isRenderedControl } from '../../../nook-web-shared/src/extension/password-form-submission-controls'
 
+const MAX_RECOVERY_COPY_CODE_POINTS = 128
+const MAX_RECOVERY_SOURCE_TEXT_UNITS = 256
+const MAX_RECOVERY_COPY_ELEMENTS = 128
+
 function isVisibleRecoveryCopy(element: HTMLElement): boolean {
   if (!isRenderedControl(element)) return false
   let current = element
@@ -41,7 +45,8 @@ function boundedRecoveryCopy(texts: RecoveryCopyTexts): string {
   let boundedCopy = ''
   for (const { text } of prioritizedCopy) {
     const separator = boundedCopy.length > 0 ? ' ' : ''
-    const remaining = 128 - Array.from(boundedCopy + separator).length
+    const remaining =
+      MAX_RECOVERY_COPY_CODE_POINTS - Array.from(boundedCopy + separator).length
     if (remaining <= 0) break
     boundedCopy += separator + Array.from(text).slice(0, remaining).join('')
   }
@@ -55,22 +60,28 @@ export function authenticationRecoveryCopy(): string {
       (document.body?.innerText ?? '').split(/[\r\n]+/),
     )
   }
-  const texts = Array.from(
-    document.querySelectorAll<HTMLElement>(
-      'h1, h2, h3, h4, h5, h6, [role="heading"], p, label, legend',
-    ),
+  const texts: RecoveryCopyTexts = []
+  const elements = document.querySelectorAll<HTMLElement>(
+    'h1, h2, h3, h4, h5, h6, [role="heading"], p, label, legend',
   )
-    .filter(isVisibleRecoveryCopy)
-    .map((element) => element.textContent ?? '')
+  for (const element of elements) {
+    if (texts.length >= MAX_RECOVERY_COPY_ELEMENTS) break
+    if (!isVisibleRecoveryCopy(element)) continue
+    const text = element.textContent ?? ''
+    if (text.length > MAX_RECOVERY_SOURCE_TEXT_UNITS) continue
+    texts.push(text)
+  }
   return boundedRecoveryCopy(texts)
 }
 
-export function pageHasDocumentBackupCodeHint(): boolean {
+export function recoveryCopyHasBackupCodeHint(recoveryCopy: string): boolean {
   return (
-    classify_authentication_backup_codes_observation(
-      authenticationRecoveryCopy(),
-    ) === 'present'
+    classify_authentication_backup_codes_observation(recoveryCopy) === 'present'
   )
+}
+
+export function pageHasDocumentBackupCodeHint(): boolean {
+  return recoveryCopyHasBackupCodeHint(authenticationRecoveryCopy())
 }
 
 export function extractDocumentBackupCodeCandidates(
