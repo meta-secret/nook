@@ -74,9 +74,9 @@ pub fn authentication_enrollment_workflow_match(
         super::AuthenticationBackupCodesObservation::Present
     );
     super::classify_authentication_workflow(AuthenticationPageObservation {
+        manual_checkpoint_present,
         authenticator_setup_hint,
         backup_codes_hint,
-        manual_checkpoint_present,
         ..AuthenticationPageObservation::default()
     })
 }

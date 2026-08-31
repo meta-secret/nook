@@ -375,7 +375,7 @@ describe('runtime message adapters', () => {
       },
       authenticator: {
         authenticatorSetup: 'absent',
-        backupCodes: 'absent',
+        backupCodesCopy: '',
         passkeyControl: 'present',
         matchingPasskeyAccountCount: 2,
         detailedPasskeyControl: { kind: 'absent' },

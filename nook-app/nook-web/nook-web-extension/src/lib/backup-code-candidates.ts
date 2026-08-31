@@ -10,9 +10,12 @@ import { isRenderedControl } from '../../../nook-web-shared/src/extension/passwo
 
 function isVisibleRecoveryCopy(element: HTMLElement): boolean {
   if (!isRenderedControl(element)) return false
-  for (let current: HTMLElement | null = element; current;) {
+  let current = element
+  while (true) {
     if (current.getAttribute('aria-hidden') === 'true') return false
-    current = current.parentElement
+    const parent = current.parentElement
+    if (!parent) break
+    current = parent
   }
   return true
 }
