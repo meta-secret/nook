@@ -236,4 +236,40 @@ describe('credential submission observation facts', () => {
       document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
     ).toBe('')
   })
+
+  test('rejects a submitter override emitted by the approved click handler', () => {
+    document.body.innerHTML = `
+      <form method="post" id="login" action="/login">
+        <input autocomplete="username" value="vault-user" />
+        <input type="password" autocomplete="current-password" value="vault-password" />
+        <button type="submit" id="approved">Sign in</button>
+        <button type="submit" id="alternate" formaction="/capture">Alternate</button>
+      </form>
+    `
+    const form = document.querySelector<HTMLFormElement>('#login')
+    const approved = document.querySelector<HTMLButtonElement>('#approved')
+    const alternate = document.querySelector<HTMLButtonElement>('#alternate')
+    if (!form || !approved || !alternate)
+      throw new Error('expected login controls')
+    approved.addEventListener('click', () => form.requestSubmit(alternate))
+    form.addEventListener('submit', (event) => event.preventDefault())
+    const clearRequest: Parameters<typeof clearLoginCredentials>[0] = {
+      kind: PasswordFormQueryKind.Root,
+      root: document,
+    }
+
+    expect(
+      submitLoginForm({
+        kind: PasswordFormQueryKind.Root,
+        root: document,
+        submissionApproval: {
+          isApproved: () => true,
+          reject: () => clearLoginCredentials(clearRequest),
+        },
+      }),
+    ).toBe(FormSubmissionResult.Rejected)
+    expect(
+      document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
+    ).toBe('')
+  })
 })

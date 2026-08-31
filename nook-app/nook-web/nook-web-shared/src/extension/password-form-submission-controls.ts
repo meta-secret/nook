@@ -62,6 +62,7 @@ type FormSubmissionObservation = {
   form: HTMLFormElement;
   action: () => void;
   approval: FormSubmissionApproval | false;
+  expectedSubmitter: LoginAdvanceControl | false;
 };
 
 export enum FormSubmissionResult {
@@ -644,6 +645,7 @@ export function requestImplicitAuthenticationSubmit({
     form,
     action: () => form.requestSubmit(),
     approval,
+    expectedSubmitter: false,
   };
   return observeSubmit(submission);
 }
@@ -908,12 +910,16 @@ export function observeSubmit({
   form,
   action,
   approval,
+  expectedSubmitter,
 }: FormSubmissionObservation): FormSubmissionResult {
   const state: FormSubmissionObservationState = {
     result: FormSubmissionResult.NotObserved,
   };
   const markSubmitted = (event: SubmitEvent) => {
-    if (approval && !approval.isApproved()) {
+    const submitterMatches = expectedSubmitter
+      ? event.submitter === expectedSubmitter
+      : event.submitter === null;
+    if (approval && (!submitterMatches || !approval.isApproved())) {
       event.preventDefault();
       event.stopImmediatePropagation();
       state.result = FormSubmissionResult.Rejected;

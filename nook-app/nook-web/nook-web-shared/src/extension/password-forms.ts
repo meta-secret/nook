@@ -147,7 +147,6 @@ type AuthenticationObservationFactsRequest = {
 };
 
 type PasswordFormSummaryRequest = PasswordFormScopeQuery;
-
 function passwordFieldQuery(
   request: PasswordFormScopeQuery,
 ): PasswordFieldQuery {
@@ -944,6 +943,7 @@ function activateApprovedOwnedAdvanceControl({
     form,
     action: () => approved.click(),
     approval: request.submissionApproval ?? false,
+    expectedSubmitter: approved,
   };
   const result = observeSubmit(clickSubmission);
   if (
