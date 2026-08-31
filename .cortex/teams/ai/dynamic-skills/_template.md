@@ -49,4 +49,4 @@ remote task when the pushed head is not validation-ready. Gizmo dispatches
 complete exact-head validation immediately when the head is ready.
 
 For a docs-only Cortex change, run the focused checks named by
-[Cortex document navigation](cortex-document-map.md#validation).
+[Cortex document navigation](cortex-document-map/SKILL.md#validation).

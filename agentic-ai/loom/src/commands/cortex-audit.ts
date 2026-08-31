@@ -24,7 +24,7 @@ import {
   type AuditCortexDocumentStructureArgs,
   type CortexDocumentSource,
   type CortexStructureFinding,
-} from '../lib/cortex-document-structure.ts';
+} from '../../../../.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/src/cortex-document-structure.ts';
 import {
   auditCortexArticleStructure,
   type AuditCortexArticleStructureArgs,

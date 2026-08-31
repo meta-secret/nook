@@ -65,12 +65,12 @@ const CORTEX_REFACTORING_FILES = [
   'agentic-ai/loom/src/codec/args/cortex-audit.ts',
   'agentic-ai/loom/src/commands/cortex-audit.ts',
   'agentic-ai/loom/src/lib/cortex-article-structure.ts',
-  'agentic-ai/loom/src/lib/cortex-document-structure.ts',
-  'agentic-ai/loom/src/lib/cortex-index.ts',
+  '.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/src/cortex-document-structure.ts',
+  '.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/src/cortex-index.ts',
   'agentic-ai/loom/tests/cortex-article-structure.test.ts',
   'agentic-ai/loom/tests/cortex-audit-session.test.ts',
-  'agentic-ai/loom/tests/cortex-document-structure.test.ts',
-  'agentic-ai/loom/tests/cortex-index.test.ts',
+  '.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/tests/cortex-document-structure.test.ts',
+  '.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/tests/cortex-index.test.ts',
 ] as const;
 
 const CORTEX_REFACTORING_DESCENDANT_ROOTS = [

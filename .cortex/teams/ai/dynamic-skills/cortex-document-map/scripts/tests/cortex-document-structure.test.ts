@@ -1,15 +1,17 @@
 import path from 'node:path';
 import { expect, test } from 'bun:test';
+import { executeCortexDocumentMapApplication } from '../src/application.ts';
 import {
   auditCortexMarkdownSyntax,
   auditCortexDocumentStructure,
   CortexStructureFindingCode,
-} from '../src/lib/cortex-document-structure.ts';
+} from '../src/cortex-document-structure.ts';
 import type {
   AuditCortexMarkdownSyntaxArgs,
   AuditCortexDocumentStructureArgs,
   CortexDocumentSource,
-} from '../src/lib/cortex-document-structure.ts';
+} from '../src/cortex-document-structure.ts';
+import { CortexDocumentMapContractKind } from '../src/domain.ts';
 
 const REPO_ROOT = '/repo';
 
@@ -32,7 +34,17 @@ function audit(documents: readonly CortexDocumentSource[]) {
     excludedDocumentPaths: new Set(),
     repoRoot: REPO_ROOT,
   };
-  return auditCortexDocumentStructure(args);
+  const expected = auditCortexDocumentStructure(args);
+  const result = executeCortexDocumentMapApplication({
+    kind: CortexDocumentMapContractKind.Request,
+    documents: documents.map((document) => ({
+      relativePath: document.relativePath,
+      content: document.content,
+    })),
+    excludedDocumentPaths: [],
+  });
+  expect(result.findings).toEqual(expected);
+  return expected;
 }
 
 function auditSyntax(documents: readonly CortexDocumentSource[]) {

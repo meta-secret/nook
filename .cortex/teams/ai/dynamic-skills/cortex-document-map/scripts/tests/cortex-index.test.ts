@@ -4,7 +4,7 @@ import {
   extractCortexIndex,
   renderCortexIndexMarkdown,
   stripDocumentNavigation,
-} from '../src/lib/cortex-index.ts';
+} from '../src/cortex-index.ts';
 
 test('extracts index metadata and renders markdown', () => {
   const documents = [
@@ -61,7 +61,7 @@ test('renders the complete canonical Cortex context router', () => {
   const renderArgs = { index: { documents: [] } };
   const markdown = renderCortexIndexMarkdown(renderArgs);
   const canonicalRouter = readFileSync(
-    new URL('../../../.cortex/knowledge-graph.md', import.meta.url),
+    new URL('../../../../../../knowledge-graph.md', import.meta.url),
     'utf8',
   );
 

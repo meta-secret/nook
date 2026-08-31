@@ -16,6 +16,8 @@ const AI_SKILLS = '.cortex/teams/ai/dynamic-skills/';
 const HOST_ROOT = `${AI_SKILLS}executable-skill-host/scripts/src/`;
 const ARTICLE_ROOT =
   '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/';
+const DOCUMENT_MAP_ROOT =
+  '.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/src/';
 const HOST_CLI = `${HOST_ROOT}cli.ts`;
 const HOST_REGISTRY = `${HOST_ROOT}skill-action-registry.ts`;
 const YAML_CODEC = `${HOST_ROOT}skill-yaml-codec.ts`;
@@ -82,9 +84,12 @@ export function analyzeSkillHostSource(
       );
       const crossSkill =
         relativePath === HOST_REGISTRY &&
-        [`${ARTICLE_ROOT}action.ts`, `${ARTICLE_ROOT}domain.ts`].includes(
-          dependency,
-        );
+        [
+          `${ARTICLE_ROOT}action.ts`,
+          `${ARTICLE_ROOT}domain.ts`,
+          `${DOCUMENT_MAP_ROOT}action.ts`,
+          `${DOCUMENT_MAP_ROOT}domain.ts`,
+        ].includes(dependency);
       if (crossSkill) {
         erase(node);
         return;
@@ -138,10 +143,94 @@ export function analyzeSkillHostSource(
   return analyzeExecutableSkillSource(analysisRequest);
 }
 
+export function analyzeDocumentMapSource(
+  request: AnalyzeExecutableSkillSourceRequest,
+) {
+  const { relativePath, source } = request;
+  const sourceFile = ts.createSourceFile(
+    relativePath,
+    source,
+    ts.ScriptTarget.ES2022,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const retained = source.split('');
+  const allowedExternalImport = (node: ts.ImportDeclaration): boolean => {
+    if (!ts.isStringLiteral(node.moduleSpecifier) || node.attributes)
+      return false;
+    const specifier = node.moduleSpecifier.text;
+    const clause = node.importClause;
+    if (!clause) return false;
+    if (specifier === 'node:path')
+      return (
+        clause.name?.text === 'path' &&
+        !clause.namedBindings &&
+        !clause.isTypeOnly
+      );
+    if (specifier === 'github-slugger')
+      return (
+        clause.name?.text === 'GithubSlugger' &&
+        !clause.namedBindings &&
+        !clause.isTypeOnly
+      );
+    if (specifier === 'mdast-util-from-markdown') {
+      const bindings = clause.namedBindings;
+      return Boolean(
+        !clause.name &&
+        !clause.isTypeOnly &&
+        bindings &&
+        ts.isNamedImports(bindings) &&
+        bindings.elements.length === 1 &&
+        bindings.elements[0]?.name.text === 'fromMarkdown' &&
+        !bindings.elements[0].propertyName,
+      );
+    }
+    if (specifier !== 'mdast' || !clause.isTypeOnly || clause.name)
+      return false;
+    const bindings = clause.namedBindings;
+    const allowedTypes = new Set(
+      'Heading Link List ListItem Parent Root RootContent'.split(' '),
+    );
+    return Boolean(
+      bindings &&
+      ts.isNamedImports(bindings) &&
+      bindings.elements.length > 0 &&
+      bindings.elements.every(
+        (element) =>
+          !element.propertyName && allowedTypes.has(element.name.text),
+      ),
+    );
+  };
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isImportDeclaration(node) &&
+      ts.isStringLiteral(node.moduleSpecifier) &&
+      !node.moduleSpecifier.text.startsWith('.')
+    ) {
+      if (!allowedExternalImport(node))
+        throw new Error(`Forbidden document-map import: ${relativePath}`);
+      retained.fill(' ', node.getFullStart(), node.getEnd());
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  try {
+    return analyzeExecutableSkillSource({
+      relativePath,
+      source: retained.join('').replace(/\bpath\b/gu, 'safePath'),
+    });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`${relativePath}: ${detail}`, { cause: error });
+  }
+}
+
 type ExecutableSkillSourceProfile = typeof analyzeExecutableSkillSource;
 const SOURCE_PROFILES: ReadonlyMap<string, ExecutableSkillSourceProfile> =
   new Map([
     [ARTICLE_ROOT.slice(0, -5), analyzeExecutableSkillSource],
+    [DOCUMENT_MAP_ROOT.slice(0, -5), analyzeDocumentMapSource],
     [HOST_ROOT.slice(0, -5), analyzeSkillHostSource],
   ]);
 

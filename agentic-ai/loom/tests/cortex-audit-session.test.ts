@@ -15,7 +15,7 @@ import {
   runCortexAuditFromDirectory,
 } from '../src/commands/cortex-audit.ts';
 import type { CortexAuditReport } from '../src/commands/cortex-audit.ts';
-import { CortexStructureFindingCode } from '../src/lib/cortex-document-structure.ts';
+import { CortexStructureFindingCode } from '../../../.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/src/cortex-document-structure.ts';
 
 test('uses the pre-push commit for push stability audits', () => {
   const before = '1'.repeat(40);

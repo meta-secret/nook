@@ -396,7 +396,7 @@ fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> 
 fn team_work_distinguishes_owner_vocabulary_from_implementation_expertise() -> anyhow::Result<()> {
     let agent_map = read(".cortex/AGENTS.md");
     let ownership = read(".cortex/gizmo/architecture/team-ownership.md");
-    let document_map = read(".cortex/teams/ai/dynamic-skills/cortex-document-map.md");
+    let document_map = read(".cortex/teams/ai/dynamic-skills/cortex-document-map/SKILL.md");
     let workflow = read(".cortex/gizmo/workflows/team-oriented-development.md");
     let web_contract = read(".cortex/teams/web-dev/AGENTS.md");
     let sre_contract = read(".cortex/teams/sre/AGENTS.md");
