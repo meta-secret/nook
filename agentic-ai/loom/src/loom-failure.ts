@@ -87,11 +87,15 @@ function defaultMessage(code: LoomFailureCode): string {
   }
 }
 
-export function loomFailureFromCause(args: {
+export type LoomFailureFromCauseRequest = Readonly<{
   readonly code: LoomFailureCode;
   readonly cause: Error;
   readonly message?: string;
-}): LoomFailure {
+}>;
+
+export function loomFailureFromCause(
+  args: LoomFailureFromCauseRequest,
+): LoomFailure {
   if (args.cause instanceof LoomFailure) return args.cause;
   const message =
     'message' in args

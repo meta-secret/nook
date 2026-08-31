@@ -35,12 +35,16 @@ import {
   TeamPlanRunPhase,
   discardFinalizedTeamPlan,
   finalizeTeamPlan,
+  leaseTeamPlan,
   recordTeamPlan,
   restartTeamPlan,
   selectTeamPlan,
   startTeamPlan,
 } from '../../src/team-plan/index.ts';
-import { readBoundedTeamPlanBytes } from '../../src/team-plan/runtime-durability.ts';
+import {
+  compareAndSwapTeamPlanRef,
+  readBoundedTeamPlanBytes,
+} from '../../src/team-plan/runtime-durability.ts';
 import {
   createGitFixture,
   disposeGitFixture,
@@ -84,6 +88,14 @@ afterEach(() => {
   for (const fixture of fixtures.splice(0).reverse())
     disposeGitFixture(fixture);
 });
+
+async function leaseNextTeamPlan(journalPath: string) {
+  const selection = await selectTeamPlan({ journalPath });
+  return leaseTeamPlan({
+    journalPath,
+    taskIds: selection.admissions.map(({ taskId }) => taskId),
+  });
+}
 
 function readNode([sourceCommit, taskId, dependencies = []]: readonly [
   string,
@@ -326,6 +338,82 @@ describe('Team Plan runtime', () => {
         planPath: join(fixture.root, 'missing-plan.json'),
       }),
     ).rejects.toMatchObject({ code: LoomFailureCode.TeamPlanStorageFailed });
+    const occupiedParent = join(fixture.root, 'occupied-journal-parent');
+    writeFileSync(occupiedParent, 'not-a-directory');
+    await expect(
+      startTeamPlan({
+        ...startRequest(file),
+        journalPath: join(occupiedParent, 'journal.jsonl'),
+      }),
+    ).rejects.toMatchObject({ code: LoomFailureCode.TeamPlanStorageFailed });
+  });
+
+  test('returns candidates before leasing only the authorized Gizmo subset', async () => {
+    const fixture = createGitFixture();
+    fixtures.push(fixture);
+    const file = fixturePlanFile([
+      fixture,
+      [fixtureReadNode([fixture, 'alpha']), fixtureReadNode([fixture, 'beta'])],
+    ]);
+    await startTeamPlan(startRequest(file));
+    const candidates = await selectTeamPlan({ journalPath: file.journalPath });
+    expect(candidates.admissions.map(({ taskId }) => taskId).sort()).toEqual([
+      'alpha',
+      'beta',
+    ]);
+    expect(candidates.snapshot.activeLeases).toHaveLength(0);
+    const leased = await leaseTeamPlan({
+      journalPath: file.journalPath,
+      taskIds: ['beta'],
+    });
+    expect(leased.leases.map(({ taskId }) => taskId)).toEqual(['beta']);
+    expect(leased.snapshot.activeLeases).toHaveLength(1);
+    const remaining = await selectTeamPlan({ journalPath: file.journalPath });
+    expect(remaining.admissions.map(({ taskId }) => taskId)).toEqual(['alpha']);
+  });
+
+  test('reconciles an unjournaled lease frontier before restart', async () => {
+    const fixture = createGitFixture();
+    fixtures.push(fixture);
+    const alpha = fixtureReadNode([fixture, 'alpha']);
+    const file = fixturePlanFile([fixture, [alpha]]);
+    await startTeamPlan(startRequest(file));
+    const orphan = `${runRef({ file })}/frontiers/1/alpha/1`;
+    fixtureGit(fixture)(['update-ref', orphan, fixture.baselineCommit]);
+    const next = writeNamedPlanFile({
+      fixture,
+      name: 'next-team-plan',
+      value: {
+        ...plan([fixture.baselineCommit, [alpha]]),
+        generation: 2,
+      },
+    });
+    await restartTeamPlan({
+      journalPath: file.journalPath,
+      planPath: next.path,
+    });
+    expect(fixtureGit(fixture)(['for-each-ref', orphan])).toBe('');
+  });
+
+  test('retains update-ref stderr for command failures', () => {
+    const fixture = createGitFixture();
+    fixtures.push(fixture);
+    try {
+      compareAndSwapTeamPlanRef({
+        repositoryRoot: fixture.sourceRoot,
+        runId: '0'.repeat(64),
+        ref: 'refs/nook/team-plan/invalid ref',
+        object: fixture.baselineCommit,
+        expectedObject: '0'.repeat(40),
+      });
+      throw new Error('Expected invalid update-ref to fail.');
+    } catch (error) {
+      expect(error).toBeInstanceOf(LoomFailure);
+      expect((error as LoomFailure).code).toBe(
+        LoomFailureCode.TeamPlanCommandFailed,
+      );
+      expect((error as Error).message.length).toBeGreaterThan(0);
+    }
   });
 
   test('normalizes replay failures and retains their cause', async () => {
@@ -383,9 +471,7 @@ describe('Team Plan runtime', () => {
     ).rejects.toThrow('outside the source repository');
     await startTeamPlan(startRequest(aliased));
 
-    const first = await selectTeamPlan({
-      journalPath: join(realDirectory, 'events.jsonl'),
-    });
+    const first = await leaseNextTeamPlan(join(realDirectory, 'events.jsonl'));
     expect(first.leases.map(({ taskId }) => taskId)).toEqual(['provider']);
     const firstLease = first.leases[0];
     if (!firstLease) throw new Error('First provider lease is missing.');
@@ -408,7 +494,7 @@ describe('Team Plan runtime', () => {
       }),
     ).rejects.toThrow('never selected');
 
-    const retry = await selectTeamPlan({ journalPath: aliased.journalPath });
+    const retry = await leaseNextTeamPlan(aliased.journalPath);
     const retryLease = retry.leases[0];
     if (!retryLease) throw new Error('Retry provider lease is missing.');
     expect(retryLease.attempt).toBe(2);
@@ -420,8 +506,12 @@ describe('Team Plan runtime', () => {
       finalizeTeamPlan({ journalPath: aliased.journalPath }),
     ).rejects.toThrow('every accepted task result');
 
-    const dependent = await selectTeamPlan({
+    const dependentSelection = await selectTeamPlan({
       journalPath: aliased.journalPath,
+    });
+    const dependent = await leaseTeamPlan({
+      journalPath: aliased.journalPath,
+      taskIds: dependentSelection.admissions.map(({ taskId }) => taskId),
     });
     expect(dependent.snapshot.acceptedProviderEvidence).toHaveLength(1);
     const consumerLease = dependent.leases[0];
@@ -452,7 +542,7 @@ describe('Team Plan runtime', () => {
       [edge('writer')],
     ]);
     await startTeamPlan(startRequest(file));
-    const selection = await selectTeamPlan({ journalPath: file.journalPath });
+    const selection = await leaseNextTeamPlan(file.journalPath);
     const lease = selection.leases[0];
     if (!lease) throw new Error('Writer lease is missing.');
     const workspace = prepareModuleWorktree({
@@ -495,9 +585,7 @@ describe('Team Plan runtime', () => {
     });
     cleanupModuleWorktree({ workspace });
     writerWorkspaces.pop();
-    const reconstructed = await selectTeamPlan({
-      journalPath: file.journalPath,
-    });
+    const reconstructed = await leaseNextTeamPlan(file.journalPath);
     expect(reconstructed.snapshot.integratedWriterFrontiers).toEqual(
       recorded.integratedWriterFrontiers,
     );
@@ -539,7 +627,7 @@ describe('Team Plan runtime', () => {
       [fixtureReadNode([fixture, 'failed-provider'])],
     ]);
     const started = await startTeamPlan(startRequest(file));
-    const selected = await selectTeamPlan({ journalPath: file.journalPath });
+    const selected = await leaseNextTeamPlan(file.journalPath);
     const lease = selected.leases[0];
     if (!lease) throw new Error('Failed provider lease is missing.');
     await recordTeamPlan({
@@ -579,7 +667,7 @@ describe('Team Plan runtime', () => {
       [fixtureReadNode([fixture, 'orphaned-provider'])],
     ]);
     const started = await startTeamPlan(startRequest(file));
-    const selected = await selectTeamPlan({ journalPath: file.journalPath });
+    const selected = await leaseNextTeamPlan(file.journalPath);
     const lease = selected.leases[0];
     if (!lease) throw new Error('Orphan recovery lease is missing.');
     const artifactPath = join(fixture.root, 'orphaned-artifact.json');
@@ -632,7 +720,7 @@ describe('Team Plan runtime', () => {
     });
     const file = fixturePlanFile([fixture, [node]]);
     await startTeamPlan(startRequest(file));
-    const selected = await selectTeamPlan({ journalPath: file.journalPath });
+    const selected = await leaseNextTeamPlan(file.journalPath);
     const lease = selected.leases[0];
     if (!lease) throw new Error('Large evidence lease is missing.');
     const record = evidenceRecord({ fixture, lease, node });
@@ -669,9 +757,7 @@ describe('Team Plan runtime', () => {
     const file = fixturePlanFile([fixture, [alpha]]);
     const probe = { ...file, journalPath: join(fixture.root, 'probe.jsonl') };
     await startTeamPlan(startRequest(probe));
-    const probeSelection = await selectTeamPlan({
-      journalPath: probe.journalPath,
-    });
+    const probeSelection = await leaseNextTeamPlan(probe.journalPath);
     const probeLease = probeSelection.leases[0];
     if (!probeLease) throw new Error('Probe lease is missing.');
     await recordTeamPlan({
@@ -683,7 +769,7 @@ describe('Team Plan runtime', () => {
       `${runRef({ file: probe })}/${probeLease.generation}/${probeLease.taskId}/${probeLease.attempt}/accepted-evidence`,
     ]);
     await startTeamPlan(startRequest(file));
-    const selected = await selectTeamPlan({ journalPath: file.journalPath });
+    const selected = await leaseNextTeamPlan(file.journalPath);
     const alphaLease = selected.leases[0];
     if (!alphaLease) throw new Error('CAS lease is missing.');
     const alphaRef = `${runRef({ file })}/${alphaLease.generation}/alpha/${alphaLease.attempt}/accepted-evidence`;
@@ -717,7 +803,7 @@ describe('Team Plan runtime', () => {
     expect(existsSync(tombstone)).toBe(false);
     await startTeamPlan(startRequest(file));
     expect(runRef({ file })).not.toBe(oldPrefix);
-    const replacement = await selectTeamPlan({ journalPath: file.journalPath });
+    const replacement = await leaseNextTeamPlan(file.journalPath);
     const replacementLease = replacement.leases[0];
     if (!replacementLease) throw new Error('Replacement lease is missing.');
     const forgedRef = `${runRef({ file })}/${replacementLease.generation}/alpha/${replacementLease.attempt}/accepted-evidence`;
@@ -740,7 +826,7 @@ describe('Team Plan runtime', () => {
     const firstNode = fixtureReadNode([fixture, 'provider']);
     const file = fixturePlanFile([fixture, [firstNode], [], 2]);
     await startTeamPlan(startRequest(file));
-    const selected = await selectTeamPlan({ journalPath: file.journalPath });
+    const selected = await leaseNextTeamPlan(file.journalPath);
     const oldLease = selected.leases[0];
     if (!oldLease) throw new Error('Old generation lease is missing.');
     const secondNode = fixtureReadNode([fixture, 'provider']);
@@ -789,7 +875,7 @@ describe('Team Plan runtime', () => {
     });
     expect(restarted.generation).toBe(2);
     expect(restarted.acceptedProviderEvidence).toEqual([]);
-    const next = await selectTeamPlan({ journalPath: file.journalPath });
+    const next = await leaseNextTeamPlan(file.journalPath);
     expect(next.leases[0]?.attempt).toBe(2);
     expect(next.leases[0]?.startingFrontier).toBe(sourceCommit);
     await expect(

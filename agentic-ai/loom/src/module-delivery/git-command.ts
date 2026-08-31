@@ -1,9 +1,6 @@
 import { spawnSync } from 'node:child_process';
 
-import type {
-  SpawnSyncOptionsWithBufferEncoding,
-  SpawnSyncReturns,
-} from 'node:child_process';
+import type { SpawnSyncOptions } from 'node:child_process';
 
 const MAX_GIT_OUTPUT_BYTES = 16 * 1024 * 1024;
 const MAX_GIT_ARGUMENTS = 1024;
@@ -15,7 +12,22 @@ export type GitCommandRequest = {
   readonly allowFailure?: boolean;
   readonly indexFile?: string;
   readonly commitTimestamp?: string;
+  readonly input?: string;
+  readonly environment?: GitCommandEnvironment;
 };
+
+type GitEnvironmentKey =
+  | 'COMSPEC'
+  | 'PATH'
+  | 'Path'
+  | 'PATHEXT'
+  | 'SYSTEMROOT'
+  | 'SystemRoot'
+  | 'WINDIR';
+
+export type GitCommandEnvironment = Readonly<
+  Partial<Record<GitEnvironmentKey, string>>
+>;
 
 export type GitCommandResult = {
   readonly exitCode: number;
@@ -31,7 +43,8 @@ export function runModuleDeliveryGit(
     !/^@[0-9]+ \+0000$/u.test(request.commitTimestamp)
   )
     throw new Error('Git commit timestamp must be canonical UTC epoch time.');
-  for (const searchPath of [process.env.PATH, process.env.Path])
+  const environment = request.environment ?? moduleDeliveryGitEnvironment();
+  for (const searchPath of [environment.PATH, environment.Path])
     if (typeof searchPath === 'string')
       assertAbsoluteExecutableSearchPath(searchPath);
   const args = [
@@ -52,10 +65,10 @@ export function runModuleDeliveryGit(
       throw new Error('Git command arguments exceed bounded input.');
     args.push(argument);
   }
-  const options: SpawnSyncOptionsWithBufferEncoding = {
+  const options: SpawnSyncOptions = {
     cwd: request.cwd,
     env: {
-      COMSPEC: process.env.COMSPEC,
+      COMSPEC: environment.COMSPEC,
       GIT_AUTHOR_DATE: request.commitTimestamp,
       GIT_COMMITTER_DATE: request.commitTimestamp,
       GIT_CONFIG_GLOBAL: '/dev/null',
@@ -64,20 +77,26 @@ export function runModuleDeliveryGit(
       GIT_NO_REPLACE_OBJECTS: '1',
       GIT_TERMINAL_PROMPT: '0',
       LC_ALL: 'C',
-      PATH: process.env.PATH,
-      Path: process.env.Path,
-      PATHEXT: process.env.PATHEXT,
-      SYSTEMROOT: process.env.SYSTEMROOT,
-      SystemRoot: process.env.SystemRoot,
-      WINDIR: process.env.WINDIR,
+      PATH: environment.PATH,
+      Path: environment.Path,
+      PATHEXT: environment.PATHEXT,
+      SYSTEMROOT: environment.SYSTEMROOT,
+      SystemRoot: environment.SystemRoot,
+      WINDIR: environment.WINDIR,
     },
-    encoding: 'buffer',
+    ...(typeof request.input === 'string'
+      ? { input: Buffer.from(request.input, 'utf8') }
+      : {}),
     maxBuffer: MAX_GIT_OUTPUT_BYTES,
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: ['pipe', 'pipe', 'pipe'],
   };
-  const execution: SpawnSyncReturns<Buffer> = spawnSync('git', args, options);
-  const stdout = execution.stdout ?? Buffer.alloc(0);
-  const stderr = (execution.stderr ?? Buffer.alloc(0)).toString('utf8').trim();
+  const execution = spawnSync('git', args, options);
+  const stdout = Buffer.isBuffer(execution.stdout)
+    ? execution.stdout
+    : Buffer.from(execution.stdout ?? '', 'utf8');
+  const stderr = Buffer.from(execution.stderr ?? '')
+    .toString('utf8')
+    .trim();
   const exitCode = execution.status ?? -1;
   if (execution.error) {
     throw new Error(`Git could not start: ${execution.error.message}`);
@@ -87,6 +106,24 @@ export function runModuleDeliveryGit(
     throw new Error(`Git command failed (${exitCode})${detail}`);
   }
   return { exitCode, stdout, stderr };
+}
+
+export function moduleDeliveryGitEnvironment(): GitCommandEnvironment {
+  const environment: Partial<Record<GitEnvironmentKey, string>> = {};
+  const keys: readonly GitEnvironmentKey[] = [
+    'COMSPEC',
+    'PATH',
+    'Path',
+    'PATHEXT',
+    'SYSTEMROOT',
+    'SystemRoot',
+    'WINDIR',
+  ];
+  for (const key of keys) {
+    const value = process.env[key];
+    if (typeof value === 'string') environment[key] = value;
+  }
+  return environment;
 }
 
 function assertAbsoluteExecutableSearchPath(value: string): void {

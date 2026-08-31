@@ -5,13 +5,18 @@ import {
   finalizeTeamPlan as finalizeTeamPlanRuntime,
   recordTeamPlan as recordTeamPlanRuntime,
   restartTeamPlan as restartTeamPlanRuntime,
-  selectTeamPlan as selectTeamPlanRuntime,
   startTeamPlan as startTeamPlanRuntime,
 } from './runtime.ts';
+import {
+  leaseTeamPlan as leaseTeamPlanRuntime,
+  selectTeamPlan as selectTeamPlanRuntime,
+} from './runtime-admission.ts';
 
 import type {
   TeamPlanDiscardRequest,
   TeamPlanJournalRequest,
+  TeamPlanLeaseReceipt,
+  TeamPlanLeaseRequest,
   TeamPlanRecordRequest,
   TeamPlanRestartRequest,
   TeamPlanSelectionReceipt,
@@ -34,6 +39,15 @@ export function selectTeamPlan(
   return withLoomFailureCode({
     code: LoomFailureCode.TeamPlanRecoveryFailed,
     action: () => selectTeamPlanRuntime(request),
+  });
+}
+
+export function leaseTeamPlan(
+  request: TeamPlanLeaseRequest,
+): Promise<TeamPlanLeaseReceipt> {
+  return withLoomFailureCode({
+    code: LoomFailureCode.TeamPlanRecoveryFailed,
+    action: () => leaseTeamPlanRuntime(request),
   });
 }
 

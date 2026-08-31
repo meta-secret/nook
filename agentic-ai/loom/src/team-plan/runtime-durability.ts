@@ -1,11 +1,14 @@
-import { spawnSync } from 'node:child_process';
 import { O_NONBLOCK, O_RDONLY } from 'node:constants';
 import { open, realpath } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 import { LoomFailureCode, loomFailureFromCause } from '../loom-failure.ts';
+import {
+  gitText,
+  moduleDeliveryGitEnvironment,
+  runModuleDeliveryGit,
+} from '../module-delivery/git-command.ts';
 
-import type { SpawnSyncOptionsWithStringEncoding } from 'node:child_process';
 import type { ModuleDeliveryAttemptLease } from '../module-delivery/index.ts';
 import type { TeamPlanAttemptIdentity } from './domain.ts';
 import { TeamPlanRecordKind } from './domain.ts';
@@ -35,6 +38,13 @@ export type TeamPlanByteReader = Readonly<{
   }) => Promise<Readonly<{ bytesRead: number }>>;
 }>;
 
+export type ReadBoundedTeamPlanFileRequest = Readonly<{
+  planPath: string;
+  maximumBytes: number;
+}>;
+
+const TEAM_PLAN_GIT_ENVIRONMENT = moduleDeliveryGitEnvironment();
+
 export async function readBoundedTeamPlanBytes(request: {
   readonly reader: TeamPlanByteReader;
   readonly maximumBytes: number;
@@ -61,10 +71,9 @@ export async function readBoundedTeamPlanBytes(request: {
   return bytes.subarray(0, total);
 }
 
-export async function readBoundedTeamPlanFile(request: {
-  readonly planPath: string;
-  readonly maximumBytes: number;
-}): Promise<Readonly<{ path: string; text: string }>> {
+export async function readBoundedTeamPlanFile(
+  request: ReadBoundedTeamPlanFileRequest,
+): Promise<Readonly<{ path: string; text: string }>> {
   let path: string;
   try {
     path = await realpath(resolve(request.planPath));
@@ -124,12 +133,12 @@ export async function readBoundedTeamPlanFile(request: {
 }
 
 export function pinTeamPlanRef(identity: TeamPlanRefIdentity): void {
-  const created = updateRefCompare({
+  const created = compareAndSwapTeamPlanRef({
     ...identity,
     expectedObject: '0'.repeat(40),
   });
   if (created) return;
-  const unchanged = updateRefCompare({
+  const unchanged = compareAndSwapTeamPlanRef({
     ...identity,
     expectedObject: identity.object,
   });
@@ -224,6 +233,44 @@ export function deleteTeamPlanAttemptArtifactOrphans(request: {
   });
 }
 
+export function deleteTeamPlanLeaseFrontierOrphans(request: {
+  readonly run: TeamPlanRunIdentity;
+  readonly expectedRefs: ReadonlySet<string>;
+}): void {
+  const prefix = `${teamPlanRunRefPrefix(request.run)}/frontiers/`;
+  const actual = teamPlanGitText({
+    cwd: request.run.repositoryRoot,
+    args: ['for-each-ref', '--format=%(refname)%09%(objectname)', prefix],
+  });
+  const orphans = actual
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      const fields = line.split('\t');
+      const ref = fields[0];
+      const object = fields[1];
+      if (
+        fields.length !== 2 ||
+        !ref ||
+        !object ||
+        !/^refs\/nook\/team-plan\/[0-9a-f]{64}\/frontiers\/[1-9][0-9]*\/[^/]+\/[1-9][0-9]*$/u.test(
+          ref,
+        )
+      )
+        throw new Error('Team Plan lease frontier ref is forged.');
+      return { ref, object };
+    })
+    .filter(({ ref }) => !request.expectedRefs.has(ref));
+  if (orphans.length === 0) return;
+  teamPlanGitText({
+    cwd: request.run.repositoryRoot,
+    args: ['update-ref', '--stdin'],
+    input: `start\n${orphans
+      .map(({ ref, object }) => `delete ${ref} ${object}`)
+      .join('\n')}\nprepare\ncommit\n`,
+  });
+}
+
 export function pinTeamPlanLeaseFrontier(request: {
   readonly run: TeamPlanRunIdentity;
   readonly lease: ModuleDeliveryAttemptLease;
@@ -292,45 +339,51 @@ export function teamPlanGitText(invocation: {
   readonly args: readonly string[];
   readonly input?: string;
 }): string {
-  const options: SpawnSyncOptionsWithStringEncoding = {
-    cwd: invocation.cwd,
-    env: {},
-    encoding: 'utf8',
-    maxBuffer: Number.MAX_SAFE_INTEGER,
-    stdio: ['pipe', 'pipe', 'pipe'],
-  };
-  if ('input' in invocation) options.input = invocation.input;
-  let result;
   try {
-    result = spawnSync('git', invocation.args, options);
+    return gitText(
+      runModuleDeliveryGit({
+        ...invocation,
+        environment: TEAM_PLAN_GIT_ENVIRONMENT,
+      }),
+    );
   } catch (cause) {
     throw loomFailureFromCause({
       code: LoomFailureCode.TeamPlanCommandFailed,
       cause: cause instanceof Error ? cause : new Error('Git failed.'),
     });
   }
-  if (result.status !== 0)
-    throw loomFailureFromCause({
-      code: LoomFailureCode.TeamPlanCommandFailed,
-      cause:
-        result.error ??
-        new Error(result.stderr.trim() || 'Team Plan Git operation failed.'),
-    });
-  return result.stdout.replace(/\0+$/u, '').trim();
 }
 
-function updateRefCompare(
+export function compareAndSwapTeamPlanRef(
   request: TeamPlanRefIdentity & Readonly<{ expectedObject: string }>,
 ): boolean {
-  const result = spawnSync(
-    'git',
-    ['update-ref', request.ref, request.object, request.expectedObject],
-    {
+  let result;
+  try {
+    result = runModuleDeliveryGit({
       cwd: request.repositoryRoot,
-      env: {},
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    },
-  );
-  return result.status === 0;
+      args: ['update-ref', request.ref, request.object, request.expectedObject],
+      allowFailure: true,
+      environment: TEAM_PLAN_GIT_ENVIRONMENT,
+    });
+  } catch (cause) {
+    throw loomFailureFromCause({
+      code: LoomFailureCode.TeamPlanCommandFailed,
+      cause: cause instanceof Error ? cause : new Error('Git failed.'),
+    });
+  }
+  if (result.exitCode === 0) return true;
+  const resolved = runModuleDeliveryGit({
+    cwd: request.repositoryRoot,
+    args: ['rev-parse', '--verify', request.ref],
+    allowFailure: true,
+    environment: TEAM_PLAN_GIT_ENVIRONMENT,
+  });
+  if (resolved.exitCode === 0 && gitText(resolved) !== request.expectedObject)
+    return false;
+  throw loomFailureFromCause({
+    code: LoomFailureCode.TeamPlanCommandFailed,
+    cause: new Error(
+      result.stderr || `Git update-ref failed (${result.exitCode}).`,
+    ),
+  });
 }

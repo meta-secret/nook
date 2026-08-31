@@ -2,10 +2,16 @@ import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { readFileSync, readdirSync, readlinkSync } from 'node:fs';
 import { hostname } from 'node:os';
+import {
+  gitText as moduleDeliveryGitText,
+  moduleDeliveryGitEnvironment,
+  runModuleDeliveryGit,
+} from '../module-delivery/git-command.ts';
 
 import type { TeamPlanJournal } from './journal.ts';
 
 const ZERO_COMMIT = '0'.repeat(40);
+const GIT_ENVIRONMENT = moduleDeliveryGitEnvironment();
 
 type TeamPlanLockOwnerFields = Readonly<{
   version: 3;
@@ -19,11 +25,6 @@ type TeamPlanLockRequest<T> = Readonly<{
   journal: TeamPlanJournal;
   identityPath: string;
   action: () => Promise<T>;
-}>;
-type GitInvocation = Readonly<{
-  cwd: string;
-  args: TeamPlanGitArguments;
-  input?: string;
 }>;
 
 export function teamPlanLinuxNamespaceLockRecoverable(request: {
@@ -127,23 +128,13 @@ function updateRef(request: {
 }): boolean {
   const args = request.args;
   const repositoryRoot = request.journal.started.repositoryRoot;
-  const result = spawnSync(
-    'git',
-    ['update-ref', '--no-deref', args[0], args[1], args[2]],
-    {
-      cwd: repositoryRoot,
-      encoding: 'utf8',
-      env: {
-        PATH: '/bin:/usr/bin:/usr/sbin',
-        GIT_NO_REPLACE_OBJECTS: '1',
-        GIT_CONFIG_COUNT: '1',
-        GIT_CONFIG_KEY_0: 'safe.directory',
-        GIT_CONFIG_VALUE_0: repositoryRoot,
-      },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    },
-  );
-  return result.status === 0;
+  const result = runModuleDeliveryGit({
+    cwd: repositoryRoot,
+    args: ['update-ref', '--no-deref', args[0], args[1], args[2]],
+    allowFailure: true,
+    environment: GIT_ENVIRONMENT,
+  });
+  return result.exitCode === 0;
 }
 
 function decodeLockOwner(serialized: string): TeamPlanLockOwner {
@@ -239,25 +230,19 @@ function teamPlanLockRef(request: {
   return `refs/nook/team-plan-locks/${run}`;
 }
 
-function gitText(invocation: GitInvocation): string {
-  const args = invocation.args;
-  const repositoryRoot = invocation.cwd;
-  const result = spawnSync('git', [args[0], args[1], args[2]], {
-    cwd: repositoryRoot,
-    encoding: 'utf8',
-    env: {
-      PATH: '/bin:/usr/bin:/usr/sbin',
-      GIT_NO_REPLACE_OBJECTS: '1',
-      GIT_CONFIG_COUNT: '1',
-      GIT_CONFIG_KEY_0: 'safe.directory',
-      GIT_CONFIG_VALUE_0: repositoryRoot,
-    },
-    input: 'input' in invocation ? invocation.input : '',
-    stdio: ['pipe', 'pipe', 'pipe'],
-  });
-  if (result.status !== 0)
-    throw new Error(result.stderr.trim() || 'Team Plan Git operation failed.');
-  return result.stdout.trim();
+function gitText(invocation: {
+  readonly cwd: string;
+  readonly args: TeamPlanGitArguments;
+  readonly input?: string;
+}): string {
+  return moduleDeliveryGitText(
+    runModuleDeliveryGit({
+      cwd: invocation.cwd,
+      args: invocation.args,
+      environment: GIT_ENVIRONMENT,
+      ...('input' in invocation ? { input: invocation.input } : {}),
+    }),
+  );
 }
 
 function nodeErrorCode(error: NodeJS.ErrnoException): string | false {

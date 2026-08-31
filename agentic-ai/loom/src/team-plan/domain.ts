@@ -3,6 +3,7 @@ import { assertEvidenceBound } from '../module-delivery/authority.ts';
 import { ModuleDeliveryOwner } from '../module-delivery/domain.ts';
 import { ModuleDeliveryProviderSubmissionKind } from '../module-delivery/integration-provenance.ts';
 import type {
+  ModuleDeliveryAdmission,
   ModuleDeliveryAttemptLease,
   ModuleDeliveryGenerationFenceKind,
 } from '../module-delivery/admission.ts';
@@ -160,6 +161,8 @@ export type TeamPlanJournalRequest = Readonly<{
 
 export type TeamPlanDiscardRequest = TeamPlanJournalRequest &
   Readonly<{ runId: string }>;
+export type TeamPlanLeaseRequest = TeamPlanJournalRequest &
+  Readonly<{ taskIds: readonly string[] }>;
 
 export type TeamPlanRestartRequest = TeamPlanJournalRequest &
   Readonly<{ planPath: string }>;
@@ -184,9 +187,14 @@ export type TeamPlanSnapshot = Readonly<{
 
 export type TeamPlanSelectionReceipt = Readonly<{
   snapshot: TeamPlanSnapshot;
-  leases: readonly ModuleDeliveryAttemptLease[];
+  admissions: readonly ModuleDeliveryAdmission[];
   pendingTaskIds: readonly string[];
   blockedTaskIds: readonly string[];
+}>;
+
+export type TeamPlanLeaseReceipt = Readonly<{
+  snapshot: TeamPlanSnapshot;
+  leases: readonly ModuleDeliveryAttemptLease[];
 }>;
 
 type TextFields = Readonly<{ values: readonly string[] }>;
