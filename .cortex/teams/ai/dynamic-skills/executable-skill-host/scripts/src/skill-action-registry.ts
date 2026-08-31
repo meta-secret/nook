@@ -17,7 +17,16 @@ import {
   executeCortexDocumentMapAction,
 } from '../../../cortex-document-map/scripts/src/action.ts';
 import {
+  CORTEX_CONSISTENCY_ACTION_DEFINITION,
+  CortexConsistencyRequestDecodeError,
+  decodeCortexConsistencyActionPayload,
+  executeCortexConsistencyAction,
+} from '../../../cortex-consistency/scripts/src/action.ts';
+import type { CortexConsistencyResult } from '../../../cortex-consistency/scripts/src/domain.ts';
+import { CortexContractFindingCode } from '../../../cortex-consistency/scripts/src/domain.ts';
+import {
   CortexArticleStructureOperation,
+  CortexConsistencyOperation,
   CortexDocumentMapOperation,
   SkillRequestFamily,
   SKILL_HOST_REQUEST_BYTE_LIMIT,
@@ -75,6 +84,11 @@ const CORTEX_DOCUMENT_MAP_DISCOVERY_SCHEMA: SkillObjectSchema = {
   maximumRequestBytes: SKILL_HOST_REQUEST_BYTE_LIMIT,
   maximumResponseBytes: SKILL_HOST_RESPONSE_BYTE_LIMIT,
 };
+const CORTEX_CONSISTENCY_DISCOVERY_SCHEMA: SkillObjectSchema = {
+  ...CORTEX_CONSISTENCY_ACTION_DEFINITION.inputSchema,
+  maximumRequestBytes: SKILL_HOST_REQUEST_BYTE_LIMIT,
+  maximumResponseBytes: SKILL_HOST_RESPONSE_BYTE_LIMIT,
+};
 const DISCOVERABLE_ACTIONS: readonly DiscoverableSkillAction[] = [
   {
     skillId: 'skills',
@@ -107,6 +121,17 @@ const DISCOVERABLE_ACTIONS: readonly DiscoverableSkillAction[] = [
       CORTEX_DOCUMENT_MAP_ACTION_DEFINITION.resolvedExampleYaml,
     inputSchema: CORTEX_DOCUMENT_MAP_DISCOVERY_SCHEMA,
   },
+  {
+    skillId: CORTEX_CONSISTENCY_ACTION_DEFINITION.skillId,
+    family: SkillRequestFamily.CortexConsistency,
+    operation: CortexConsistencyOperation.Compile,
+    description: CORTEX_CONSISTENCY_ACTION_DEFINITION.description,
+    exampleRequest: SKILL_RUN_INVOKE,
+    exampleYaml: CORTEX_CONSISTENCY_ACTION_DEFINITION.exampleYaml,
+    resolvedExampleYaml:
+      CORTEX_CONSISTENCY_ACTION_DEFINITION.resolvedExampleYaml,
+    inputSchema: CORTEX_CONSISTENCY_DISCOVERY_SCHEMA,
+  },
 ];
 export function listDiscoverableSkillActions(): SkillToolsListResult {
   return { actions: DISCOVERABLE_ACTIONS };
@@ -125,9 +150,17 @@ export type SkillActionRequest =
       readonly family: SkillRequestFamily.CortexDocumentMap;
       readonly operation: CortexDocumentMapOperation.Audit;
       readonly request: ReturnType<typeof decodeCortexDocumentMapActionPayload>;
+    }
+  | {
+      readonly family: SkillRequestFamily.CortexConsistency;
+      readonly operation: CortexConsistencyOperation.Compile;
+      readonly request: ReturnType<typeof decodeCortexConsistencyActionPayload>;
     };
 export type SkillActionResult =
-  SkillToolsListResult | CortexArticleStructureResult | CortexDocumentMapResult;
+  | SkillToolsListResult
+  | CortexArticleStructureResult
+  | CortexConsistencyResult
+  | CortexDocumentMapResult;
 export type SkillActionDecodeOutcome =
   | { readonly ok: true; readonly request: SkillActionRequest }
   | { readonly ok: false; readonly path: string; readonly message: string };
@@ -150,6 +183,9 @@ export function decodeSkillActionRequest(
   if (Object.hasOwn(value, SkillRequestFamily.CortexDocumentMap)) {
     return decodeCortexDocumentMapAction(value);
   }
+  if (Object.hasOwn(value, SkillRequestFamily.CortexConsistency)) {
+    return decodeCortexConsistencyAction(value);
+  }
   const request: InvalidSkillRequest = {
     path: unknownSkillCommandPath(''),
     message: 'Unknown skill request family.',
@@ -165,7 +201,9 @@ export function executeSkillAction(
   if (request.family === SkillRequestFamily.CortexArticleStructure) {
     return executeCortexArticleAction(request.request);
   }
-  return executeCortexDocumentMapAction(request.request);
+  return request.family === SkillRequestFamily.CortexDocumentMap
+    ? executeCortexDocumentMapAction(request.request)
+    : executeCortexConsistencyAction(request.request);
 }
 export function defaultSkillBlueprint(): string {
   return TOOLS_LIST_EXAMPLE;
@@ -356,6 +394,72 @@ function decodeCortexDocumentMapAction(
     });
   }
 }
+function decodeCortexConsistencyAction(
+  root: UntrustedSkillYamlMap,
+): SkillActionDecodeOutcome {
+  const familyRequest: SkillYamlPropertyRequest = {
+    map: root,
+    key: SkillRequestFamily.CortexConsistency,
+  };
+  const family = skillYamlProperty(familyRequest);
+  if (!family.found || !isSkillYamlMap(family.value)) {
+    return invalidRequest({
+      path: 'cortexConsistency',
+      message: 'Expected an action object.',
+    });
+  }
+  const compileRequest: SkillYamlPropertyRequest = {
+    map: family.value,
+    key: CortexConsistencyOperation.Compile,
+  };
+  const compile = skillYamlProperty(compileRequest);
+  const operation = Object.keys(family.value).find(
+    (key) => key !== CortexConsistencyOperation.Compile,
+  );
+  if (typeof operation === 'string') {
+    return invalidRequest({
+      path: unknownSkillCommandPath('cortexConsistency'),
+      message: 'Expected only the compile action.',
+    });
+  }
+  if (!compile.found) {
+    return invalidRequest({
+      path: 'cortexConsistency.compile',
+      message: 'Expected the compile action.',
+    });
+  }
+  const validation = validateSkillInput({
+    path: 'cortexConsistency.compile',
+    schema: CORTEX_CONSISTENCY_ACTION_DEFINITION.inputSchema,
+    value: compile.value,
+  });
+  if (!validation.ok) {
+    return invalidRequest({
+      path: validation.path,
+      message: validation.message,
+    });
+  }
+  try {
+    return {
+      ok: true,
+      request: {
+        family: SkillRequestFamily.CortexConsistency,
+        operation: CortexConsistencyOperation.Compile,
+        request: decodeCortexConsistencyActionPayload(
+          JSON.stringify(compile.value),
+        ),
+      },
+    };
+  } catch (error) {
+    const suffix =
+      error instanceof CortexConsistencyRequestDecodeError ? error.path : '';
+    const separator = suffix.startsWith('[') ? '' : '.';
+    return invalidRequest({
+      path: `cortexConsistency.compile${suffix ? `${separator}${suffix}` : ''}`,
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
 type InvalidSkillRequest = {
   readonly path: string;
   readonly message: string;
@@ -365,9 +469,11 @@ function invalidRequest(
 ): SkillActionDecodeOutcome {
   return { ok: false, path: request.path, message: request.message };
 }
-export const SKILL_FINDING_CODES = Object.freeze(
-  Object.values(CortexArticleFindingCode),
-);
+export const SKILL_FINDING_CODES = Object.freeze([
+  ...Object.values(CortexArticleFindingCode),
+  ...Object.values(CortexContractFindingCode),
+]);
 export { CortexArticleFindingCode } from '../../../cortex-article-structure/scripts/src/domain.ts';
+export { CortexContractFindingCode } from '../../../cortex-consistency/scripts/src/domain.ts';
 export const SKILL_PROVIDER_RESULT_BYTE_LIMIT =
   CORTEX_ARTICLE_RESULT_BYTE_LIMIT;

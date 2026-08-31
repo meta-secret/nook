@@ -22,6 +22,12 @@ export enum CortexConsistencyContractKind {
   Result = 'cortex-consistency-findings-v1',
 }
 
+export const CORTEX_CONSISTENCY_DOCUMENT_LIMIT = 10_000;
+export const CORTEX_CONSISTENCY_REFERENCE_LIMIT = 10_000;
+export const CORTEX_CONSISTENCY_PATH_LIMIT = 4_096;
+export const CORTEX_CONSISTENCY_REQUEST_BYTE_LIMIT = 4 * 1_024 * 1_024;
+export const CORTEX_CONSISTENCY_RESULT_BYTE_LIMIT = 1_024 * 1_024;
+
 type CortexPolicyContractBase = {
   readonly document: string;
   readonly areas: readonly CortexPolicyArea[];
@@ -81,6 +87,10 @@ export type CortexContractFinding = {
 
 export type CompileCortexContractsRequest = {
   readonly kind: CortexConsistencyContractKind.Request;
+  readonly documents: readonly CortexContractDocument[];
+};
+
+export type AuditCortexContractsArgs = {
   readonly registry: CortexContractRegistry;
   readonly documents: readonly CortexContractDocument[];
 };

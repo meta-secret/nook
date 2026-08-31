@@ -1,20 +1,18 @@
 import { expect, test } from 'bun:test';
 import { compileCortexContracts } from '../src/audit.ts';
 import {
-  CortexConsistencyContractKind,
   CortexContractFindingCode,
   CortexPolicyArea,
   CortexPolicyContractKind,
-  type CompileCortexContractsRequest,
+  type AuditCortexContractsArgs,
 } from '../src/domain.ts';
 
 const AUTHORITY = '.cortex/teams/sre/AGENTS.md';
 const POLICY =
   '.cortex/teams/web-dev/dynamic-skills/typescript-enums-over-booleans.md';
 
-function request(references: readonly string[]): CompileCortexContractsRequest {
+function request(references: readonly string[]): AuditCortexContractsArgs {
   return {
-    kind: CortexConsistencyContractKind.Request,
     registry: {
       contexts: [
         {
@@ -57,8 +55,7 @@ test('rejects an imported policy without an authority reference', () => {
 });
 
 test('rejects context ownership disguised by traversal', () => {
-  const compileRequest: CompileCortexContractsRequest = {
-    kind: CortexConsistencyContractKind.Request,
+  const compileRequest: AuditCortexContractsArgs = {
     registry: {
       contexts: [
         {
@@ -89,7 +86,7 @@ test('rejects a non-authority document under a recognized owner', () => {
   const compileRequest = request([
     '../web-dev/dynamic-skills/typescript-enums-over-booleans.md',
   ]);
-  const invalidRequest: CompileCortexContractsRequest = {
+  const invalidRequest: AuditCortexContractsArgs = {
     ...compileRequest,
     registry: {
       ...compileRequest.registry,
@@ -110,6 +107,29 @@ test('rejects a non-authority document under a recognized owner', () => {
     expect.objectContaining({
       code: CortexContractFindingCode.InvalidContextOwner,
       file: nonAuthority,
+    }),
+  );
+});
+
+test('preserves leading traversal so it cannot alias a canonical authority', () => {
+  const escapedAuthority = '../.cortex/AGENTS.md';
+  const compileRequest: AuditCortexContractsArgs = {
+    registry: {
+      contexts: [
+        {
+          authorityDocument: escapedAuthority,
+          ownsAreas: [],
+          imports: [],
+        },
+      ],
+      policies: [],
+    },
+    documents: [{ relativePath: escapedAuthority, references: [] }],
+  };
+  expect(compileCortexContracts(compileRequest)).toContainEqual(
+    expect.objectContaining({
+      code: CortexContractFindingCode.InvalidContextOwner,
+      file: escapedAuthority,
     }),
   );
 });

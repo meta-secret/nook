@@ -1,16 +1,17 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { expect, test } from 'bun:test';
+import { compileCortexContracts as auditCortexContracts } from '../../../.cortex/teams/ai/dynamic-skills/cortex-consistency/scripts/src/audit.ts';
+import type { CortexContractRegistry } from '../../../.cortex/teams/ai/dynamic-skills/cortex-consistency/scripts/src/domain.ts';
+import { CORTEX_CONTRACT_REGISTRY } from '../../../.cortex/teams/ai/dynamic-skills/cortex-consistency/scripts/src/registry.ts';
 import {
-  CORTEX_CONTRACT_REGISTRY,
-  compileCortexContracts,
+  adaptCortexContractDocuments,
   CortexCompatibilityEvidence,
   CortexContractFindingCode,
   CortexPolicyContractKind,
   CortexPolicyArea,
   CortexPolicyCapability,
   type CortexContractDocument,
-  type CortexContractRegistry,
 } from '../src/lib/cortex-contracts.ts';
 
 const SRE_AUTHORITY = '.cortex/teams/sre/AGENTS.md';
@@ -40,7 +41,10 @@ type CompileTestCortexRegistryArgs = {
 };
 
 function compile(args: CompileTestCortexRegistryArgs) {
-  return compileCortexContracts(args);
+  return auditCortexContracts({
+    registry: args.registry,
+    documents: adaptCortexContractDocuments(args.documents),
+  });
 }
 
 test('rejects a foreign policy that covers an owned area without an import', () => {
@@ -285,6 +289,41 @@ test('accepts a Markdown link to a policy heading', () => {
   };
 
   expect(compile(compileArgs)).toEqual([]);
+});
+
+test('accepts a Markdown link with a query and fragment', () => {
+  const registry = foreignTypescriptRegistry({ imports: [WEB_BOOLEAN_POLICY] });
+  const authorityArgs: TestCortexDocumentArgs = {
+    relativePath: SRE_AUTHORITY,
+    content:
+      '# SRE\n\n[Enum validation](../web-dev/dynamic-skills/typescript-enums-over-booleans.md?plain=1#validation)\n',
+  };
+  expect(
+    compile({
+      registry,
+      documents: [document(authorityArgs), defaultDocument(WEB_BOOLEAN_POLICY)],
+    }),
+  ).toEqual([]);
+});
+
+test('uses the first duplicate Markdown reference definition', () => {
+  const registry = foreignTypescriptRegistry({ imports: [WEB_BOOLEAN_POLICY] });
+  const authorityArgs: TestCortexDocumentArgs = {
+    relativePath: SRE_AUTHORITY,
+    content:
+      '# SRE\n\nUse [the policy][rule].\n\n[rule]: unrelated.md\n[rule]: ../web-dev/dynamic-skills/typescript-enums-over-booleans.md\n',
+  };
+  expect(
+    compile({
+      registry,
+      documents: [document(authorityArgs), defaultDocument(WEB_BOOLEAN_POLICY)],
+    }),
+  ).toContainEqual(
+    expect.objectContaining({
+      code: CortexContractFindingCode.MissingPolicyReference,
+      file: SRE_AUTHORITY,
+    }),
+  );
 });
 
 test('rejects persisted representation policy without compatibility evidence', () => {

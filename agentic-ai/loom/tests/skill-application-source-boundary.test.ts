@@ -18,6 +18,8 @@ const ARTICLE_ROOT =
   '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/';
 const DOCUMENT_MAP_ROOT =
   '.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/src/';
+const CONSISTENCY_ROOT =
+  '.cortex/teams/ai/dynamic-skills/cortex-consistency/scripts/src/';
 const HOST_CLI = `${HOST_ROOT}cli.ts`;
 const HOST_REGISTRY = `${HOST_ROOT}skill-action-registry.ts`;
 const YAML_CODEC = `${HOST_ROOT}skill-yaml-codec.ts`;
@@ -89,6 +91,8 @@ export function analyzeSkillHostSource(
           `${ARTICLE_ROOT}domain.ts`,
           `${DOCUMENT_MAP_ROOT}action.ts`,
           `${DOCUMENT_MAP_ROOT}domain.ts`,
+          `${CONSISTENCY_ROOT}action.ts`,
+          `${CONSISTENCY_ROOT}domain.ts`,
         ].includes(dependency);
       if (crossSkill) {
         erase(node);

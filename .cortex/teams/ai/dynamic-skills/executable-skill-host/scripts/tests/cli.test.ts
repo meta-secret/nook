@@ -114,7 +114,7 @@ describe('provider-neutral executable skill YAML host', () => {
     expect(response.ok).toBe(true);
     const actions = response.result?.actions;
     if (!actions) throw new Error('Missing discovered actions.');
-    expect(actions).toHaveLength(3);
+    expect(actions).toHaveLength(4);
     const action = actions[0];
     if (!action) throw new Error('Missing tools-list action.');
     expect(action.description).not.toBeEmpty();
@@ -204,6 +204,16 @@ describe('provider-neutral executable skill YAML host', () => {
     expect(
       parseResponse(missingExcludedDocument.yaml).errors?.at(0)?.path,
     ).toBe('cortexDocumentMap.audit.excludedDocumentPaths[0]');
+  });
+  test('executes consistency through its validated provider contract', () => {
+    const action = listDiscoverableSkillActions().actions.at(3);
+    if (!action) throw new Error('Missing consistency action.');
+    const outcome = dispatchSkillYamlText(action.exampleYaml);
+    const response = parseResponse(outcome.yaml);
+    expect(outcome.exitCode).toBe(0);
+    expect(response.family).toBe(SkillRequestFamily.CortexConsistency);
+    expect(response.operation).toBe('compile');
+    expect(response.result?.findings?.length).toBeGreaterThan(0);
   });
   test('aligns discovered and provider UTF-16 string limits', () => {
     const action = listDiscoverableSkillActions().actions.at(1);

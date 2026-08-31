@@ -4,12 +4,16 @@ import {
   type CompileCortexContractsRequest,
   type CortexConsistencyResult,
 } from './domain.ts';
+import { CORTEX_CONTRACT_REGISTRY } from './registry.ts';
 
 export function executeCortexConsistencyApplication(
   request: CompileCortexContractsRequest,
 ): CortexConsistencyResult {
   return {
     kind: CortexConsistencyContractKind.Result,
-    findings: compileCortexContracts(request),
+    findings: compileCortexContracts({
+      registry: CORTEX_CONTRACT_REGISTRY,
+      documents: request.documents,
+    }),
   };
 }

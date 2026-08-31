@@ -194,6 +194,16 @@ task loom:cortex-audit
 
 The command reports failures in `contractFindings`.
 
+The co-located application is also a discoverable executable skill:
+
+```bash
+task skills:tools-list
+task skills:run REQUEST_YAML='<cortexConsistency.compile request>'
+```
+
+The executable request contains parsed document paths and references. The
+registry and policy semantics remain internal to this skill.
+
 - Context ownership and policy applicability determine required policy imports.
 - Authority and policy document paths are their contract identities.
 - The registry does not repeat owner names beside those paths.

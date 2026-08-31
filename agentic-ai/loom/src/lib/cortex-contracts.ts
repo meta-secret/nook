@@ -8,7 +8,6 @@ import type {
   CompileCortexContractsRequest,
   CortexContractDocument as SemanticCortexContractDocument,
   CortexContractFinding,
-  CortexContractRegistry,
 } from '../../../../.cortex/teams/ai/dynamic-skills/cortex-consistency/scripts/src/domain.ts';
 
 export {
@@ -18,12 +17,9 @@ export {
   CortexPolicyCapability,
   CortexPolicyContractKind,
   type CortexContractFinding,
-  type CortexContractRegistry,
 } from '../../../../.cortex/teams/ai/dynamic-skills/cortex-consistency/scripts/src/domain.ts';
-export { CORTEX_CONTRACT_REGISTRY } from '../../../../.cortex/teams/ai/dynamic-skills/cortex-consistency/scripts/src/registry.ts';
 
 export type CompileCortexContractsArgs = {
-  readonly registry: CortexContractRegistry;
   readonly documents: readonly CortexContractDocument[];
 };
 
@@ -40,18 +36,21 @@ type MarkdownReferenceCollection = {
 export function compileCortexContracts(
   args: CompileCortexContractsArgs,
 ): CortexContractFinding[] {
-  const documents: SemanticCortexContractDocument[] = args.documents.map(
-    (document) => ({
-      relativePath: document.relativePath,
-      references: markdownReferences(document.content),
-    }),
-  );
+  const documents = adaptCortexContractDocuments(args.documents);
   const request: CompileCortexContractsRequest = {
     kind: CortexConsistencyContractKind.Request,
-    registry: args.registry,
     documents,
   };
   return [...executeCortexConsistencyApplication(request).findings];
+}
+
+export function adaptCortexContractDocuments(
+  documents: readonly CortexContractDocument[],
+): SemanticCortexContractDocument[] {
+  return documents.map((document) => ({
+    relativePath: document.relativePath,
+    references: markdownReferences(document.content),
+  }));
 }
 
 function markdownReferences(content: string): readonly string[] {
@@ -59,7 +58,8 @@ function markdownReferences(content: string): readonly string[] {
   const definitions = new Map<string, string>();
   visitMarkdownNode(root, (node) => {
     if (node.type === 'definition') {
-      definitions.set(node.identifier.toUpperCase(), node.url);
+      const identifier = node.identifier.toUpperCase();
+      if (!definitions.has(identifier)) definitions.set(identifier, node.url);
     }
   });
   const collection: MarkdownReferenceCollection = {

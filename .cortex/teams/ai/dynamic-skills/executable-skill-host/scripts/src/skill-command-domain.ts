@@ -1,6 +1,7 @@
 export enum SkillRequestFamily {
   ToolsList = 'skillToolsList',
   CortexArticleStructure = 'cortexArticleStructure',
+  CortexConsistency = 'cortexConsistency',
   CortexDocumentMap = 'cortexDocumentMap',
 }
 
@@ -14,6 +15,10 @@ export enum CortexArticleStructureOperation {
 
 export enum CortexDocumentMapOperation {
   Audit = 'audit',
+}
+
+export enum CortexConsistencyOperation {
+  Compile = 'compile',
 }
 
 export enum SkillCommandPhase {
@@ -105,6 +110,7 @@ export type DiscoverableSkillAction = {
   readonly family: SkillRequestFamily;
   readonly operation:
     | CortexArticleStructureOperation
+    | CortexConsistencyOperation
     | CortexDocumentMapOperation
     | SkillToolsOperation;
   readonly description: string;

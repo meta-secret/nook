@@ -41,7 +41,6 @@ import {
   type CortexIdentifierFinding,
 } from '../lib/cortex-identifiers.ts';
 import {
-  CORTEX_CONTRACT_REGISTRY,
   compileCortexContracts,
   type CortexContractFinding,
 } from '../lib/cortex-contracts.ts';
@@ -260,7 +259,6 @@ export async function runCortexAuditFromDirectory(
     ...stabilityFindings,
   ];
   const contractFindings = compileCortexContracts({
-    registry: CORTEX_CONTRACT_REGISTRY,
     documents: allDocuments,
   });
 

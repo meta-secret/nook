@@ -74,7 +74,6 @@ const CONSISTENCY_PROVIDER_PREFIX =
   '.cortex/teams/ai/dynamic-skills/cortex-consistency/scripts/';
 const CONSISTENCY_APPLICATION = `${CONSISTENCY_PROVIDER_PREFIX}src/application.ts`;
 const CONSISTENCY_DOMAIN = `${CONSISTENCY_PROVIDER_PREFIX}src/domain.ts`;
-const CONSISTENCY_REGISTRY = `${CONSISTENCY_PROVIDER_PREFIX}src/registry.ts`;
 const EXECUTABLE_SOURCE_EXTENSION = /\.(?:[cm]?[jt]sx?)$/u;
 const SUBPROCESS_SOURCE_EXTENSION = /\.(?:[cm]?[jt]sx?|sh)$/u;
 const RUNTIME_SOURCE_SUFFIXES = [
@@ -248,8 +247,7 @@ function isAuthorizedSkillApplicationEdge(
   if (edge.importer === LOOM_CONSISTENCY_ADAPTER) {
     return (
       edge.dependency === CONSISTENCY_APPLICATION ||
-      edge.dependency === CONSISTENCY_DOMAIN ||
-      edge.dependency === CONSISTENCY_REGISTRY
+      edge.dependency === CONSISTENCY_DOMAIN
     );
   }
   return (
@@ -462,7 +460,6 @@ test('production Loom reaches providers only through its semantic adapter', asyn
   expect(skillApplicationDependencies(consistencyDependenciesRequest)).toEqual([
     CONSISTENCY_APPLICATION,
     CONSISTENCY_DOMAIN,
-    CONSISTENCY_REGISTRY,
   ]);
   expect(runtimeDependencyViolations(inspection)).toEqual([]);
 });

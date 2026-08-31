@@ -3,7 +3,7 @@ import {
   CortexPolicyArea,
   CortexPolicyCapability,
   CortexPolicyContractKind,
-  type CompileCortexContractsRequest,
+  type AuditCortexContractsArgs,
   type CortexContextContract,
   type CortexContractDocument,
   type CortexContractFinding,
@@ -21,7 +21,7 @@ enum CortexContractTeam {
 }
 
 export function compileCortexContracts(
-  args: CompileCortexContractsRequest,
+  args: AuditCortexContractsArgs,
 ): CortexContractFinding[] {
   const findings: CortexContractFinding[] = [];
   const documents = new Map(
@@ -398,8 +398,11 @@ function referencesDocument(args: CortexDocumentReferenceArgs): boolean {
 }
 
 function stripDocumentFragment(reference: string): string {
-  const fragmentIndex = reference.indexOf('#');
-  return fragmentIndex === -1 ? reference : reference.slice(0, fragmentIndex);
+  const suffixIndexes = [reference.indexOf('?'), reference.indexOf('#')].filter(
+    (index) => index >= 0,
+  );
+  const suffixIndex = Math.min(...suffixIndexes, reference.length);
+  return reference.slice(0, suffixIndex);
 }
 
 type SharedPolicyAreaArgs = {
@@ -416,7 +419,9 @@ function normalizePath(filePath: string): string {
   for (const segment of filePath.replaceAll('\\', '/').split('/')) {
     if (segment === '' || segment === '.') continue;
     if (segment === '..') {
-      normalized.pop();
+      const previous = normalized.at(-1);
+      if (previous && previous !== '..') normalized.pop();
+      else normalized.push(segment);
       continue;
     }
     normalized.push(segment);
