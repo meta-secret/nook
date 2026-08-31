@@ -421,7 +421,11 @@ export async function handleSessionMessage({
         Math.floor(Date.now() / 1000),
       )
       try {
-        return { ok: true, code: code.code }
+        return {
+          ok: true,
+          code: code.code,
+          expiresAt: code.expiresAtUnixSeconds * 1_000,
+        }
       } finally {
         code.free()
       }

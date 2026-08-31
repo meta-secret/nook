@@ -73,7 +73,11 @@ export async function handleAuthenticatorEnrollmentMessage({
       await dependencies.ensureWasm()
       const code = current_code_from_otpauth_uri(payload.otpauthUri)
       try {
-        return { ok: true, code: code.code }
+        return {
+          ok: true,
+          code: code.code,
+          expiresAt: code.expiresAtUnixSeconds * 1_000,
+        }
       } finally {
         code.free()
       }

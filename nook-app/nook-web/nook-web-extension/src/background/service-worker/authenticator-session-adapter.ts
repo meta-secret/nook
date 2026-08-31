@@ -12,6 +12,7 @@ import { sendSessionMessage } from './pairing-identity'
 export type AuthenticatorCodeSessionResponse = {
   ok: true
   code: string
+  expiresAt: number
 }
 
 export type AuthenticatorPreviewSessionResponse = {
@@ -56,10 +57,16 @@ export async function authenticatorCodeFromSession({
     },
   }
   const response = responseRecord(await sendSessionMessage(message))
-  if (response.ok !== true || typeof response.code !== 'string') {
+  if (
+    response.ok !== true ||
+    typeof response.code !== 'string' ||
+    typeof response.expiresAt !== 'number' ||
+    !Number.isSafeInteger(response.expiresAt) ||
+    response.expiresAt <= 0
+  ) {
     throw new Error('Extension session returned an invalid authenticator code.')
   }
-  return { ok: true, code: response.code }
+  return { ok: true, code: response.code, expiresAt: response.expiresAt }
 }
 
 export async function authenticatorPreviewFromSession(
@@ -111,10 +118,16 @@ export async function stagedAuthenticatorCodeFromSession(
     payload: { otpauthUri, queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
   }
   const response = responseRecord(await sendSessionMessage(message))
-  if (response.ok !== true || typeof response.code !== 'string') {
+  if (
+    response.ok !== true ||
+    typeof response.code !== 'string' ||
+    typeof response.expiresAt !== 'number' ||
+    !Number.isSafeInteger(response.expiresAt) ||
+    response.expiresAt <= 0
+  ) {
     throw new Error('Extension session returned an invalid staged code.')
   }
-  return { ok: true, code: response.code }
+  return { ok: true, code: response.code, expiresAt: response.expiresAt }
 }
 
 type ConfirmAuthenticatorEnrollmentArgs = {

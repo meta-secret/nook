@@ -535,7 +535,11 @@ describe('runtime message adapters', () => {
   test('decodes only six-to-eight digit authenticator codes through Rust', async () => {
     installRuntimeMock({
       kind: RuntimeMockKind.Response,
-      response: { ok: true, code: '123456' },
+      response: {
+        ok: true,
+        code: '123456',
+        expiresAt: Date.now() + 30_000,
+      },
     })
     const ready = await sendAuthenticatorCodeRuntimeMessage(
       authenticatorCodeMessage,
@@ -546,9 +550,14 @@ describe('runtime message adapters', () => {
     }
 
     for (const response of [
-      { ok: true, code: 'not-a-totp' },
-      { ok: true, code: '12345' },
-      { ok: true, code: '123456', reason: 'contradiction' },
+      { ok: true, code: 'not-a-totp', expiresAt: Date.now() + 30_000 },
+      { ok: true, code: '12345', expiresAt: Date.now() + 30_000 },
+      {
+        ok: true,
+        code: '123456',
+        expiresAt: Date.now() + 30_000,
+        reason: 'contradiction',
+      },
     ]) {
       installRuntimeMock({ kind: RuntimeMockKind.Response, response })
       const delivery = await sendAuthenticatorCodeRuntimeMessage(
