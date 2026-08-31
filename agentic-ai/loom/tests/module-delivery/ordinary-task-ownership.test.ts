@@ -209,6 +209,37 @@ test('rejects globs that overlap a more-specific foreign root', () => {
   ).toBe(true);
 });
 
+test('rejects globs spanning multiple owners', () => {
+  for (const team of [TeamKey.Sre, TeamKey.WebDevelopment])
+    expect(
+      accepted(
+        ordinaryWrite({
+          team,
+          moduleRoot: 'nook-app/nook-web',
+          write: 'nook-app/nook-web/**',
+        }),
+      ),
+    ).toBe(false);
+  expect(
+    accepted(
+      ordinaryWrite({
+        team: TeamKey.WebDevelopment,
+        moduleRoot: 'nook-app/nook-web/nook-web-app',
+        write: 'nook-app/nook-web/nook-web-app/src/*.ts',
+      }),
+    ),
+  ).toBe(true);
+  expect(
+    accepted(
+      ordinaryWrite({
+        team: TeamKey.Sre,
+        moduleRoot: 'infra',
+        write: 'infra/*.tf',
+      }),
+    ),
+  ).toBe(true);
+});
+
 test('routes app Docker build definitions exclusively to SRE', () => {
   for (const write of [
     'nook-app/nook-web/nook-web-app/Dockerfile',

@@ -66,7 +66,10 @@ export const ORDINARY_TASK_WRITE_ROOTS = {
   [TeamKey.Sre]: [
     'infra',
     'nook-app/ci',
-    'nook-app/nook-platform',
+    'nook-app/nook-platform/.cargo',
+    'nook-app/nook-platform/.config',
+    'nook-app/nook-platform/Taskfile.yml',
+    'nook-app/nook-platform/docker',
     'nook-app/nook-platform/fuzz/.cargo',
     'nook-app/nook-platform/nook-core/Dockerfile.dockerignore',
     'nook-app/nook-platform/nook-core/coverage-floor.json',
@@ -100,28 +103,15 @@ export function ordinaryTaskWriteTeam(write: string): TeamKey | false {
   if (ordinaryTaskFileRootShadows(write)) return false;
   if (!write.includes('*')) return ordinaryTaskPathTeam(write);
   let owner: TeamKey | false = false;
-  let ownerRootLength = -1;
-  let ambiguous = false;
   for (const team of Object.values(TeamKey)) {
     const roots: readonly string[] = ORDINARY_TASK_WRITE_ROOTS[team];
-    for (const root of roots) {
-      if (
-        taskResourcePatternsOverlap({ first: write, second: root }) &&
-        root.length > ownerRootLength
-      ) {
+    for (const root of roots)
+      if (taskResourcePatternsOverlap({ first: write, second: root })) {
+        if (owner !== false && owner !== team) return false;
         owner = team;
-        ownerRootLength = root.length;
-        ambiguous = false;
-      } else if (
-        taskResourcePatternsOverlap({ first: write, second: root }) &&
-        root.length === ownerRootLength &&
-        owner !== team
-      ) {
-        ambiguous = true;
       }
-    }
   }
-  return ambiguous ? false : owner;
+  return owner;
 }
 
 function ordinaryTaskPathTeam(path: string): TeamKey | false {
