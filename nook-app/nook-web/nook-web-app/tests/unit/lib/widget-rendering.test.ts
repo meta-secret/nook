@@ -2,9 +2,11 @@ import '../../../../nook-web-extension/src/chrome.d.ts'
 
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { AuthenticationWorkflowAction } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import type { WidgetWorkflowKeyKind } from '../../../../nook-web-extension/src/content/autofill/state'
 
 type TestPresentationScope =
-  { kind: 'unassigned' } | { kind: 'assigned'; key: string }
+  | { kind: `${WidgetWorkflowKeyKind.Unassigned}` }
+  | { kind: `${WidgetWorkflowKeyKind.Assigned}`; key: string }
 
 const actions = vi.hoisted(() => ({
   cancelLoginPicker: vi.fn(),
