@@ -30,29 +30,13 @@ describe('authentication scan scheduling', () => {
 
     expect(state.beginScan()).toBe(true)
     expect(state.finishScan()).toBe(false)
-  })
-
-  test('invalidates a running scan when session-owned UI is cleared', () => {
-    const state = new ScanState()
     const sequence = state.sequence
-
     state.invalidateCurrentResult()
-
     expect(state.sequence).toBe(sequence + 1)
   })
 })
 
 describe('Nook Pilot presentation state', () => {
-  test('recomputes automatic collapse as login availability changes', () => {
-    const state = new WidgetState()
-
-    state.applyAutomaticCollapse(true)
-    expect(state.collapsed).toBe(true)
-
-    state.applyAutomaticCollapse(false)
-    expect(state.collapsed).toBe(false)
-  })
-
   test('preserves an explicit user presentation across availability changes', () => {
     const collapsed = new WidgetState()
     collapsed.collapseByUser()

@@ -25,19 +25,12 @@ function installPopupDemoRuntime(): void {
     eventLogHeads: ['popup-demo-event-head'],
     lastLocalSyncAt: '2026-08-25T00:00:00.000Z',
   }
-  type RuntimeResponse = {
-    readonly ok: boolean
-    readonly setup?: typeof setup
-    readonly status?: number
-    readonly device?: typeof device
-  }
-
   const runtime = {
     getURL: (resource: string) =>
       `${globalThis.location.origin}/__extension-popup/${resource}`,
     sendMessage: (
       message: { readonly type: string },
-      callback: (response: RuntimeResponse) => void,
+      callback: (response: unknown) => void,
     ) => {
       switch (message.type) {
         case 'nook:extension-pairing-state-query':

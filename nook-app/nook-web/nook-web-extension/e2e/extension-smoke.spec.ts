@@ -451,7 +451,7 @@ test('keeps the extension vault independent and switches after valid re-pairing'
       `chrome-extension://${extensionId}/popup/index.html?intent=pair`,
     )
     await expect(
-      replacementPopupPage.getByTestId('extension-companion-home'),
+      replacementPopupPage.getByTestId('extension-toolbar-menu'),
     ).toBeVisible()
     const replacementPage = await openSimpleVaultConnection(
       context,
@@ -505,7 +505,7 @@ test('keeps the extension vault independent and switches after valid re-pairing'
       `chrome-extension://${extensionId}/popup/index.html`,
     )
     await expect(
-      verifiedPopupPage.getByTestId('extension-companion-home'),
+      verifiedPopupPage.getByTestId('extension-toolbar-menu'),
     ).toBeVisible()
     await expect(
       verifiedPopupPage.getByTestId('companion-vault-status'),

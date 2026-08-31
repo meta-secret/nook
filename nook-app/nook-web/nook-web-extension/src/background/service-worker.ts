@@ -143,11 +143,11 @@ const extensionLifecycleRoutingDependencies: Parameters<
   typeof routeExtensionLifecycleMessage
 >[0]['dependencies'] = {
   accountPickerAuthorizationCleanupPending,
-  beginAccountPickerAuthorizationCleanup,
-  clearPendingAccountPickers: async () => {
+  beginAccountPickerAuthorizationCleanup: async () => {
     invalidateAllLoginMatchAvailability()
-    await clearPendingAccountPickers()
+    return beginAccountPickerAuthorizationCleanup()
   },
+  clearPendingAccountPickers,
   clearStagedAuthenticatorEnrollments,
   rebindStagedAuthenticatorEnrollmentsAuthorization,
   closeExtensionSessionDocument,

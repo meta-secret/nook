@@ -1,14 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import {
   LoginMatchAvailabilityCache,
-  type LoginMatchAvailabilityCacheOptions,
   type LoginMatchAvailabilityCacheRequest,
 } from '../src/lib/login-match-availability-cache'
 import type { WebsiteLoginMatchAvailability } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 function cache(): LoginMatchAvailabilityCache {
-  const options: LoginMatchAvailabilityCacheOptions = { ttlMs: 1_000 }
-  return new LoginMatchAvailabilityCache(options)
+  return new LoginMatchAvailabilityCache({ ttlMs: 1_000 })
 }
 
 function deferred<T>() {
@@ -19,8 +17,16 @@ function deferred<T>() {
   return { promise, resolve }
 }
 
-function timeReader(now: number): () => number {
-  return () => now
+const timeReader =
+  (now: number): (() => number) =>
+  () =>
+    now
+
+function request(
+  load: LoginMatchAvailabilityCacheRequest['load'],
+  readTime: LoginMatchAvailabilityCacheRequest['readTime'] = Date.now,
+): LoginMatchAvailabilityCacheRequest {
+  return { origin: 'https://example.test', load, readTime }
 }
 
 describe('login-match availability cache', () => {
@@ -31,16 +37,8 @@ describe('login-match availability cache', () => {
       loads += 1
       return { kind: 'ready', count: 0 }
     }
-    const first: LoginMatchAvailabilityCacheRequest = {
-      origin: 'https://example.test',
-      load,
-      readTime: timeReader(100),
-    }
-    const second: LoginMatchAvailabilityCacheRequest = {
-      origin: 'https://example.test',
-      load,
-      readTime: timeReader(101),
-    }
+    const first = request(load, timeReader(100))
+    const second = request(load, timeReader(101))
 
     expect(
       await Promise.all([
@@ -53,11 +51,7 @@ describe('login-match availability cache', () => {
     ])
     expect(loads).toBe(1)
 
-    const cached: LoginMatchAvailabilityCacheRequest = {
-      origin: 'https://example.test',
-      load,
-      readTime: timeReader(500),
-    }
+    const cached = request(load, timeReader(500))
     await availabilityCache.resolve(cached)
     expect(loads).toBe(1)
   })
@@ -69,26 +63,16 @@ describe('login-match availability cache', () => {
       loads += 1
       return { kind: 'ready', count: loads }
     }
-    const request: LoginMatchAvailabilityCacheRequest = {
-      origin: 'https://example.test',
-      load,
-      readTime: timeReader(100),
-    }
-    await availabilityCache.resolve(request)
+    const initial = request(load, timeReader(100))
+    await availabilityCache.resolve(initial)
 
     const invalidation: Parameters<typeof availabilityCache.invalidate>[0] = {
       origin: 'https://example.test',
     }
     availabilityCache.invalidate(invalidation)
-    const invalidatedRequest: LoginMatchAvailabilityCacheRequest = {
-      ...request,
-      readTime: timeReader(200),
-    }
+    const invalidatedRequest = request(load, timeReader(200))
     await availabilityCache.resolve(invalidatedRequest)
-    const expiredRequest: LoginMatchAvailabilityCacheRequest = {
-      ...request,
-      readTime: timeReader(1_500),
-    }
+    const expiredRequest = request(load, timeReader(1_500))
     await availabilityCache.resolve(expiredRequest)
     expect(loads).toBe(3)
   })
@@ -121,11 +105,7 @@ describe('login-match availability cache', () => {
   test('keeps an invalidated lookup in flight and refreshes after it settles', async () => {
     const availabilityCache = cache()
     const stale = deferred<WebsiteLoginMatchAvailability>()
-    const staleRequest: LoginMatchAvailabilityCacheRequest = {
-      origin: 'https://example.test',
-      load: () => stale.promise,
-      readTime: timeReader(100),
-    }
+    const staleRequest = request(() => stale.promise, timeReader(100))
     const staleLookup = availabilityCache.resolve(staleRequest)
 
     availabilityCache.invalidate({ origin: 'https://example.test' })
@@ -138,42 +118,37 @@ describe('login-match availability cache', () => {
       },
       readTime: timeReader(200),
     }
-    const coalesced = availabilityCache.resolve(freshRequest)
+    const refreshed = availabilityCache.resolve(freshRequest)
     expect(freshLoads).toBe(0)
 
     stale.resolve({ kind: 'ready', count: 0 })
-    await expect(Promise.all([staleLookup, coalesced])).resolves.toEqual([
-      { kind: 'ready', count: 0 },
-      { kind: 'ready', count: 0 },
-    ])
-    expect(await availabilityCache.resolve(freshRequest)).toEqual({
+    await expect(staleLookup).resolves.toEqual({ kind: 'unavailable' })
+    await expect(refreshed).resolves.toEqual({
       kind: 'ready',
       count: 1,
     })
-    expect(freshLoads).toBe(1)
   })
 
   test('coalesces repeated invalidation while a lookup remains pending', async () => {
     const availabilityCache = cache()
     const delayed = deferred<WebsiteLoginMatchAvailability>()
     let loads = 0
-    const request: LoginMatchAvailabilityCacheRequest = {
-      origin: 'https://example.test',
-      load: () => {
-        loads += 1
-        return delayed.promise
-      },
-    }
-    const first = availabilityCache.resolve(request)
+    const pendingRequest = request(() => {
+      loads += 1
+      return delayed.promise
+    })
+    const first = availabilityCache.resolve(pendingRequest)
 
     for (let index = 0; index < 20; index += 1) {
       availabilityCache.invalidate({ origin: 'https://example.test' })
-      expect(availabilityCache.resolve(request)).toBe(first)
+      void availabilityCache.resolve(pendingRequest)
     }
     expect(loads).toBe(1)
 
     delayed.resolve({ kind: 'ready', count: 1 })
     await first
+    await Promise.resolve()
+    expect(loads).toBe(2)
   })
 
   test('starts the cache lifetime when a delayed lookup settles', async () => {
@@ -181,27 +156,26 @@ describe('login-match availability cache', () => {
     const delayed = deferred<WebsiteLoginMatchAvailability>()
     let now = 100
     let loads = 0
-    const request: LoginMatchAvailabilityCacheRequest = {
-      origin: 'https://example.test',
-      load: () => {
+    const delayedRequest = request(
+      () => {
         loads += 1
         return loads === 1
           ? delayed.promise
           : Promise.resolve({ kind: 'ready', count: loads })
       },
-      readTime: () => now,
-    }
-    const lookup = availabilityCache.resolve(request)
+      () => now,
+    )
+    const lookup = availabilityCache.resolve(delayedRequest)
     now = 900
     delayed.resolve({ kind: 'ready', count: 1 })
     await lookup
 
     now = 1_500
-    await availabilityCache.resolve(request)
+    await availabilityCache.resolve(delayedRequest)
     expect(loads).toBe(1)
 
     now = 1_900
-    await availabilityCache.resolve(request)
+    await availabilityCache.resolve(delayedRequest)
     expect(loads).toBe(2)
   })
 })

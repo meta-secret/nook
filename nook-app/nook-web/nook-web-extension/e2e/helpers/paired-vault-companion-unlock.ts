@@ -39,7 +39,7 @@ async function completeCompanionPopupUnlock(
 ): Promise<void> {
   const { page } = request
   const deviceSetup = page.getByTestId('extension-device-setup')
-  const companionHome = page.getByTestId('extension-companion-home')
+  const companionHome = page.getByTestId('extension-toolbar-menu')
   await expect(deviceSetup.or(companionHome)).toBeVisible({
     timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
   })

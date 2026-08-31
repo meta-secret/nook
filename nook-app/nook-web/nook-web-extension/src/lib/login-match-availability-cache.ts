@@ -41,15 +41,20 @@ export class LoginMatchAvailabilityCache {
 
   constructor(private readonly options: LoginMatchAvailabilityCacheOptions) {}
 
-  resolve({
-    origin,
-    load,
-    readTime = Date.now,
-  }: LoginMatchAvailabilityCacheRequest): Promise<WebsiteLoginMatchAvailability> {
+  resolve(
+    request: LoginMatchAvailabilityCacheRequest,
+  ): Promise<WebsiteLoginMatchAvailability> {
+    const { origin, load, readTime = Date.now } = request
     const now = readTime()
     const existing = this.entries.get(origin)
     if (existing?.kind === LoginMatchAvailabilityCacheEntryKind.Pending) {
-      return existing.lookup
+      if (existing.freshness === PendingLoginMatchFreshness.Current) {
+        return existing.lookup
+      }
+      return existing.lookup.then(
+        () => this.resolve(request),
+        () => this.resolve(request),
+      )
     }
     if (
       existing?.kind === LoginMatchAvailabilityCacheEntryKind.Settled &&
@@ -77,6 +82,7 @@ export class LoginMatchAvailabilityCache {
           current.lookup === lookup
         ) {
           this.entries.delete(origin)
+          return { kind: 'unavailable' } as WebsiteLoginMatchAvailability
         }
         return value
       })

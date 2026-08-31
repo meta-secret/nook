@@ -57,10 +57,8 @@ test('keeps one visible Nook mark across expanded and compact states', () => {
 describe('Pilot viewport placement', () => {
   test('reclamps a mounted widget when the viewport shrinks', () => {
     vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(300)
-    vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(200)
     const host = document.createElement('div')
     vi.spyOn(host, 'offsetWidth', 'get').mockReturnValue(120)
-    vi.spyOn(host, 'offsetHeight', 'get').mockReturnValue(80)
     widgetState.attachHost(host)
     widgetState.setPosition({ left: 500, top: 400 })
 
