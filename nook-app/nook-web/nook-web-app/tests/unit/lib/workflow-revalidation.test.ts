@@ -28,6 +28,8 @@ import { RuntimeMessageDeliveryKind } from '../../../../nook-web-extension/src/c
 import {
   AuthenticationObservationBindingKind,
   performRevalidatedAuthenticationAction,
+  RevalidatedAuthenticationActionOutcomeKind,
+  RevalidatedAuthenticationActResultKind,
 } from '../../../../nook-web-extension/src/content/autofill/workflow-revalidation'
 
 const explicitUserApproval =
@@ -37,6 +39,30 @@ function firstWorkflow(): PasswordFormObservation {
   const workflow = summarizeAuthenticationWorkflowForms()[0]
   if (!workflow) throw new Error('expected an authentication workflow')
   return workflow
+}
+
+function matchedDelivery(
+  action: AuthenticationWorkflowAction,
+  observationIndex = 0,
+) {
+  return {
+    kind: RuntimeMessageDeliveryKind.Delivered,
+    response: {
+      verdict: {
+        kind: AuthenticationWorkflowSnapshotResponseKind.Matched,
+        snapshot: {
+          kind: AuthenticationWorkflowKind.Login,
+          stage: AuthenticationWorkflowStage.Credentials,
+          action,
+          currentStep: 1,
+          totalSteps: 3,
+          approvalRequirement: explicitUserApproval,
+          observationIndex,
+        },
+      },
+      loginMatches: [],
+    },
+  }
 }
 
 afterEach(() => {
@@ -59,20 +85,25 @@ describe('credential-bearing workflow revalidation', () => {
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
         response: {
-          kind: AuthenticationWorkflowSnapshotResponseKind.Matched,
-          snapshot: {
-            kind: AuthenticationWorkflowKind.TotpChallenge,
-            stage: AuthenticationWorkflowStage.SecondFactor,
-            action: AuthenticationWorkflowAction.FillTotp,
-            currentStep: 2,
-            totalSteps: 3,
-            approvalRequirement: explicitUserApproval,
-            observationIndex: 0,
+          verdict: {
+            kind: AuthenticationWorkflowSnapshotResponseKind.Matched,
+            snapshot: {
+              kind: AuthenticationWorkflowKind.TotpChallenge,
+              stage: AuthenticationWorkflowStage.SecondFactor,
+              action: AuthenticationWorkflowAction.FillTotp,
+              currentStep: 2,
+              totalSteps: 3,
+              approvalRequirement: explicitUserApproval,
+              observationIndex: 0,
+            },
           },
+          loginMatches: [],
         },
       }
     })
-    const act = vi.fn(() => true)
+    const act = vi.fn(() => ({
+      kind: RevalidatedAuthenticationActResultKind.Acted,
+    }))
 
     await expect(
       performRevalidatedAuthenticationAction({
@@ -81,9 +112,12 @@ describe('credential-bearing workflow revalidation', () => {
         observationBinding: {
           kind: AuthenticationObservationBindingKind.Unbound,
         },
+        approvalIsActive: () => true,
         act,
       }),
-    ).resolves.toBe(false)
+    ).resolves.toEqual({
+      kind: RevalidatedAuthenticationActionOutcomeKind.Rejected,
+    })
     expect(act).not.toHaveBeenCalled()
   })
 
@@ -94,27 +128,46 @@ describe('credential-bearing workflow revalidation', () => {
       <button type="button">Verify code</button>
     `
     document.body.append(root)
-    const workflow = summarizeAuthenticationWorkflowForms(root)[0]
-    if (!workflow) throw new Error('expected an authentication workflow')
+    const workflow: PasswordFormObservation = {
+      root,
+      formScope: { kind: 'unowned' },
+      summary: {
+        usernameFieldCount: 0,
+        passwordFieldCount: 0,
+        currentPasswordFieldCount: 0,
+        newPasswordFieldCount: 0,
+        genericPasswordFieldCount: 0,
+        oneTimeCodeFieldCount: 1,
+        manualCheckpointPresent: false,
+        passkeyControlPresent: false,
+        formCount: 0,
+        observedAt: Date.now(),
+      },
+    }
     runtime.sendSnapshot.mockImplementation(async () => {
       root.remove()
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
         response: {
-          kind: AuthenticationWorkflowSnapshotResponseKind.Matched,
-          snapshot: {
-            kind: AuthenticationWorkflowKind.TotpChallenge,
-            stage: AuthenticationWorkflowStage.SecondFactor,
-            action: AuthenticationWorkflowAction.FillTotp,
-            currentStep: 2,
-            totalSteps: 3,
-            approvalRequirement: explicitUserApproval,
-            observationIndex: 0,
+          verdict: {
+            kind: AuthenticationWorkflowSnapshotResponseKind.Matched,
+            snapshot: {
+              kind: AuthenticationWorkflowKind.TotpChallenge,
+              stage: AuthenticationWorkflowStage.SecondFactor,
+              action: AuthenticationWorkflowAction.FillTotp,
+              currentStep: 2,
+              totalSteps: 3,
+              approvalRequirement: explicitUserApproval,
+              observationIndex: 0,
+            },
           },
+          loginMatches: [],
         },
       }
     })
-    const act = vi.fn(() => true)
+    const act = vi.fn(() => ({
+      kind: RevalidatedAuthenticationActResultKind.Acted,
+    }))
 
     await expect(
       performRevalidatedAuthenticationAction({
@@ -123,9 +176,12 @@ describe('credential-bearing workflow revalidation', () => {
         observationBinding: {
           kind: AuthenticationObservationBindingKind.Unbound,
         },
+        approvalIsActive: () => true,
         act,
       }),
-    ).resolves.toBe(false)
+    ).resolves.toEqual({
+      kind: RevalidatedAuthenticationActionOutcomeKind.Rejected,
+    })
     expect(act).not.toHaveBeenCalled()
   })
 
@@ -137,19 +193,24 @@ describe('credential-bearing workflow revalidation', () => {
     runtime.sendSnapshot.mockResolvedValue({
       kind: RuntimeMessageDeliveryKind.Delivered,
       response: {
-        kind: AuthenticationWorkflowSnapshotResponseKind.Matched,
-        snapshot: {
-          kind: AuthenticationWorkflowKind.Login,
-          stage: AuthenticationWorkflowStage.Credentials,
-          action: AuthenticationWorkflowAction.UsePasskey,
-          currentStep: 1,
-          totalSteps: 3,
-          approvalRequirement: explicitUserApproval,
-          observationIndex: 0,
+        verdict: {
+          kind: AuthenticationWorkflowSnapshotResponseKind.Matched,
+          snapshot: {
+            kind: AuthenticationWorkflowKind.Login,
+            stage: AuthenticationWorkflowStage.Credentials,
+            action: AuthenticationWorkflowAction.UsePasskey,
+            currentStep: 1,
+            totalSteps: 3,
+            approvalRequirement: explicitUserApproval,
+            observationIndex: 0,
+          },
         },
+        loginMatches: [],
       },
     })
-    const act = vi.fn(() => true)
+    const act = vi.fn(() => ({
+      kind: RevalidatedAuthenticationActResultKind.Acted,
+    }))
 
     await expect(
       performRevalidatedAuthenticationAction({
@@ -158,9 +219,12 @@ describe('credential-bearing workflow revalidation', () => {
         observationBinding: {
           kind: AuthenticationObservationBindingKind.Unbound,
         },
+        approvalIsActive: () => true,
         act,
       }),
-    ).resolves.toBe(true)
+    ).resolves.toEqual({
+      kind: RevalidatedAuthenticationActionOutcomeKind.Acted,
+    })
     expect(act).toHaveBeenCalledOnce()
     expect(act).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -168,7 +232,8 @@ describe('credential-bearing workflow revalidation', () => {
           root: workflow.root,
           formScope: workflow.formScope,
         }),
-        observationDigest: expect.any(String),
+        observationBindingToken: expect.any(String),
+        revalidateCurrentWorkflow: expect.any(Function),
       }),
     )
   })
@@ -185,34 +250,40 @@ describe('credential-bearing workflow revalidation', () => {
     runtime.sendSnapshot.mockResolvedValue({
       kind: RuntimeMessageDeliveryKind.Delivered,
       response: {
-        kind: AuthenticationWorkflowSnapshotResponseKind.Matched,
-        snapshot: {
-          kind: AuthenticationWorkflowKind.Login,
-          stage: AuthenticationWorkflowStage.Credentials,
-          action: AuthenticationWorkflowAction.ContinueWithNook,
-          currentStep: 1,
-          totalSteps: 3,
-          approvalRequirement: explicitUserApproval,
-          observationIndex: 0,
+        verdict: {
+          kind: AuthenticationWorkflowSnapshotResponseKind.Matched,
+          snapshot: {
+            kind: AuthenticationWorkflowKind.Login,
+            stage: AuthenticationWorkflowStage.Credentials,
+            action: AuthenticationWorkflowAction.ContinueWithNook,
+            currentStep: 1,
+            totalSteps: 3,
+            approvalRequirement: explicitUserApproval,
+            observationIndex: 0,
+          },
         },
+        loginMatches: [],
       },
     })
-    let observationDigest = ''
+    let observationBindingToken = ''
     await performRevalidatedAuthenticationAction({
       workflow,
       expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
       observationBinding: {
         kind: AuthenticationObservationBindingKind.Unbound,
       },
-      act: ({ observationDigest: approvedDigest }) => {
-        observationDigest = approvedDigest
-        return true
+      approvalIsActive: () => true,
+      act: ({ observationBindingToken: approvedToken }) => {
+        observationBindingToken = approvedToken
+        return { kind: RevalidatedAuthenticationActResultKind.Acted }
       },
     })
     document
       .querySelector<HTMLFormElement>('#login')
       ?.setAttribute('action', '/different-safe-login')
-    const act = vi.fn(() => true)
+    const act = vi.fn(() => ({
+      kind: RevalidatedAuthenticationActResultKind.Acted,
+    }))
 
     await expect(
       performRevalidatedAuthenticationAction({
@@ -220,11 +291,14 @@ describe('credential-bearing workflow revalidation', () => {
         expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
         observationBinding: {
           kind: AuthenticationObservationBindingKind.Required,
-          observationDigest,
+          token: observationBindingToken,
         },
+        approvalIsActive: () => true,
         act,
       }),
-    ).resolves.toBe(false)
+    ).resolves.toEqual({
+      kind: RevalidatedAuthenticationActionOutcomeKind.Rejected,
+    })
     expect(act).not.toHaveBeenCalled()
   })
 
@@ -248,11 +322,16 @@ describe('credential-bearing workflow revalidation', () => {
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
         response: {
-          kind: AuthenticationWorkflowSnapshotResponseKind.NoMatch,
+          verdict: {
+            kind: AuthenticationWorkflowSnapshotResponseKind.NoMatch,
+          },
+          loginMatches: [],
         },
       }
     })
-    const act = vi.fn(() => true)
+    const act = vi.fn(() => ({
+      kind: RevalidatedAuthenticationActResultKind.Acted,
+    }))
 
     await expect(
       performRevalidatedAuthenticationAction({
@@ -261,9 +340,188 @@ describe('credential-bearing workflow revalidation', () => {
         observationBinding: {
           kind: AuthenticationObservationBindingKind.Unbound,
         },
+        approvalIsActive: () => true,
         act,
       }),
-    ).resolves.toBe(false)
+    ).resolves.toEqual({
+      kind: RevalidatedAuthenticationActionOutcomeKind.Rejected,
+    })
+    expect(act).not.toHaveBeenCalled()
+  })
+
+  test('refuses actuation when approval is withdrawn during the snapshot await', async () => {
+    document.body.innerHTML = `
+      <form action="/login" method="post">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+    const workflow = firstWorkflow()
+    let approvalIsActive = true
+    runtime.sendSnapshot.mockImplementation(async () => {
+      approvalIsActive = false
+      return matchedDelivery(AuthenticationWorkflowAction.ContinueWithNook)
+    })
+    const act = vi.fn(() => ({
+      kind: RevalidatedAuthenticationActResultKind.Acted,
+    }))
+
+    await expect(
+      performRevalidatedAuthenticationAction({
+        workflow,
+        expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
+        observationBinding: {
+          kind: AuthenticationObservationBindingKind.Unbound,
+        },
+        approvalIsActive: () => approvalIsActive,
+        act,
+      }),
+    ).resolves.toEqual({
+      kind: RevalidatedAuthenticationActionOutcomeKind.Rejected,
+    })
+    expect(act).not.toHaveBeenCalled()
+  })
+
+  test('refuses equivalent replacement controls after approval', async () => {
+    document.body.innerHTML = `
+      <form action="/login" method="post">
+        <input autocomplete="username" />
+        <input id="password" type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+    const workflow = firstWorkflow()
+    runtime.sendSnapshot.mockImplementation(async () => {
+      const password = document.querySelector<HTMLInputElement>('#password')
+      if (password) password.replaceWith(password.cloneNode())
+      return matchedDelivery(AuthenticationWorkflowAction.ContinueWithNook)
+    })
+    const act = vi.fn(() => ({
+      kind: RevalidatedAuthenticationActResultKind.Acted,
+    }))
+
+    await expect(
+      performRevalidatedAuthenticationAction({
+        workflow,
+        expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
+        observationBinding: {
+          kind: AuthenticationObservationBindingKind.Unbound,
+        },
+        approvalIsActive: () => true,
+        act,
+      }),
+    ).resolves.toEqual({
+      kind: RevalidatedAuthenticationActionOutcomeKind.Rejected,
+    })
+    expect(act).not.toHaveBeenCalled()
+  })
+
+  test('requires the bound workflow to remain selected from every current candidate', async () => {
+    document.body.innerHTML = `
+      <form action="/login" method="post">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+    const workflow = firstWorkflow()
+    document.body.insertAdjacentHTML(
+      'beforeend',
+      `<form action="/login/mfa" method="post">
+        <input autocomplete="one-time-code" />
+        <button type="submit">Verify code</button>
+      </form>`,
+    )
+    runtime.sendSnapshot.mockImplementation(async (message) => {
+      expect(message.payload.observations).toHaveLength(2)
+      const otpIndex = message.payload.observations.findIndex(
+        (facts) => facts.fields.oneTimeCodeFieldCount === 1,
+      )
+      expect(otpIndex).toBeGreaterThanOrEqual(0)
+      return matchedDelivery(AuthenticationWorkflowAction.FillTotp, otpIndex)
+    })
+    const act = vi.fn(() => ({
+      kind: RevalidatedAuthenticationActResultKind.Acted,
+    }))
+
+    await expect(
+      performRevalidatedAuthenticationAction({
+        workflow,
+        expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
+        observationBinding: {
+          kind: AuthenticationObservationBindingKind.Unbound,
+        },
+        approvalIsActive: () => true,
+        act,
+      }),
+    ).resolves.toEqual({
+      kind: RevalidatedAuthenticationActionOutcomeKind.Rejected,
+    })
+    expect(act).not.toHaveBeenCalled()
+  })
+
+  test('binds readonly state and the effective submission method', async () => {
+    document.body.innerHTML = `
+      <form id="login" action="/login" method="post">
+        <input autocomplete="username" />
+        <input id="password" type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+    const workflow = firstWorkflow()
+    runtime.sendSnapshot.mockResolvedValue(
+      matchedDelivery(AuthenticationWorkflowAction.ContinueWithNook),
+    )
+    let token = ''
+    await performRevalidatedAuthenticationAction({
+      workflow,
+      expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
+      observationBinding: {
+        kind: AuthenticationObservationBindingKind.Unbound,
+      },
+      approvalIsActive: () => true,
+      act: ({ observationBindingToken }) => {
+        token = observationBindingToken
+        return { kind: RevalidatedAuthenticationActResultKind.Acted }
+      },
+    })
+    const password = document.querySelector<HTMLInputElement>('#password')
+    const form = document.querySelector<HTMLFormElement>('#login')
+    if (!password || !form) throw new Error('expected login controls')
+    const act = vi.fn(() => ({
+      kind: RevalidatedAuthenticationActResultKind.Acted,
+    }))
+    const requiredBinding = {
+      kind: AuthenticationObservationBindingKind.Required,
+      token,
+    } as const
+
+    password.readOnly = true
+    await expect(
+      performRevalidatedAuthenticationAction({
+        workflow,
+        expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
+        observationBinding: requiredBinding,
+        approvalIsActive: () => true,
+        act,
+      }),
+    ).resolves.toEqual({
+      kind: RevalidatedAuthenticationActionOutcomeKind.Rejected,
+    })
+    password.readOnly = false
+    form.method = 'get'
+    await expect(
+      performRevalidatedAuthenticationAction({
+        workflow,
+        expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
+        observationBinding: requiredBinding,
+        approvalIsActive: () => true,
+        act,
+      }),
+    ).resolves.toEqual({
+      kind: RevalidatedAuthenticationActionOutcomeKind.Rejected,
+    })
     expect(act).not.toHaveBeenCalled()
   })
 })

@@ -247,6 +247,7 @@ export function renderWidget({
           title,
           description,
           continueButton,
+          approval: currentApproval,
         }
       void continueWithAuthenticator(nookTypedArgs0_4)
     } else if (
@@ -258,6 +259,7 @@ export function renderWidget({
         title,
         description,
         continueButton,
+        approval: currentApproval,
       }
       void generatePasswordWithNook(nookTypedArgs0_5)
     } else if (
@@ -270,6 +272,7 @@ export function renderWidget({
         continueButton,
         action: snapshot.action,
         workflow,
+        approval: currentApproval,
       }
       void proposePasskeyWithNook(nookTypedArgs0_6)
     } else {
@@ -279,6 +282,7 @@ export function renderWidget({
         description,
         continueButton,
         workflow,
+        approval: currentApproval,
       }
       void continueWithNook(nookTypedArgs0_7)
     }
@@ -321,6 +325,7 @@ export function renderWidget({
         description,
         continueButton: savedLoginButton,
         workflow,
+        approval: currentApproval,
       }
       void continueWithNook(nookTypedArgs0_10)
     })

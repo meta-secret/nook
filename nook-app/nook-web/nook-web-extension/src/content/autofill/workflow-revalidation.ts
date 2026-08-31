@@ -2,11 +2,19 @@ import {
   authenticationPageObservationFacts,
   PasswordFormScopeKind,
   refreshAuthenticationWorkflowObservation,
+  summarizeAuthenticationWorkflowForms,
   type PasswordFormObservation,
 } from '../../../../nook-web-shared/src/extension/password-forms'
+import { authenticationWorkflowScopesMatch } from '../../../../nook-web-shared/src/extension/password-form-classified-observations'
+import { detectEnrollmentHints } from '../enrollment-flow'
 import {
+  authentication_page_observation_facts_match_binding,
   AuthenticationWorkflowSnapshotResponseKind,
+  bind_authentication_page_observation_facts,
   type AuthenticationWorkflowAction,
+  type AuthenticationObservationBindingToken,
+  type AuthenticationPageObservationFacts,
+  type AuthenticationPageObservationFactsBatch,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { AuthenticationWorkflowSnapshotMessageType } from '../../lib/auth-workflow-messages'
 import {
@@ -18,12 +26,37 @@ type RevalidatedAuthenticationActionArgs = {
   workflow: PasswordFormObservation
   expectedAction: AuthenticationWorkflowAction
   observationBinding: AuthenticationObservationBinding
-  act: (request: RevalidatedAuthenticationActRequest) => boolean
+  approvalIsActive: () => boolean
+  act: (
+    request: RevalidatedAuthenticationActRequest,
+  ) => RevalidatedAuthenticationActResult
 }
 
 export type RevalidatedAuthenticationActRequest = {
   currentWorkflow: PasswordFormObservation
-  observationDigest: string
+  observationBindingToken: AuthenticationObservationBindingToken
+  revalidateCurrentWorkflow: () => PasswordFormObservation | false
+}
+
+export enum RevalidatedAuthenticationActResultKind {
+  Acted = 'acted',
+  Failed = 'failed',
+  ControlMissing = 'control-missing',
+}
+
+export type RevalidatedAuthenticationActResult = {
+  kind: RevalidatedAuthenticationActResultKind
+}
+
+export enum RevalidatedAuthenticationActionOutcomeKind {
+  Acted = 'acted',
+  Rejected = 'rejected',
+  ActionFailed = 'action-failed',
+  ControlMissing = 'control-missing',
+}
+
+export type RevalidatedAuthenticationActionOutcome = {
+  kind: RevalidatedAuthenticationActionOutcomeKind
 }
 
 export enum AuthenticationObservationBindingKind {
@@ -35,8 +68,58 @@ export type AuthenticationObservationBinding =
   | { kind: AuthenticationObservationBindingKind.Unbound }
   | {
       kind: AuthenticationObservationBindingKind.Required
-      observationDigest: string
+      token: AuthenticationObservationBindingToken
     }
+
+export function requiredAuthenticationObservationBinding(
+  facts: AuthenticationPageObservationFacts,
+): AuthenticationObservationBinding {
+  const batch: AuthenticationPageObservationFactsBatch = {
+    observations: [facts],
+  }
+  return {
+    kind: AuthenticationObservationBindingKind.Required,
+    token: bind_authentication_page_observation_facts(batch),
+  }
+}
+
+const boundAuthenticationControlSelector = [
+  'input',
+  'button',
+  'select',
+  'textarea',
+  'a[href]',
+].join(',')
+
+type AuthenticationControlIdentitySnapshot = {
+  controls: Element[]
+}
+
+function authenticationControlIdentitySnapshot(
+  workflow: PasswordFormObservation,
+): AuthenticationControlIdentitySnapshot {
+  const scope =
+    workflow.formScope.kind === PasswordFormScopeKind.Owned
+      ? workflow.formScope.owner
+      : workflow.root
+  return {
+    controls: Array.from(
+      scope.querySelectorAll<Element>(boundAuthenticationControlSelector),
+    ),
+  }
+}
+
+function authenticationControlIdentitiesMatch(
+  approved: AuthenticationControlIdentitySnapshot,
+  current: AuthenticationControlIdentitySnapshot,
+): boolean {
+  return (
+    approved.controls.length === current.controls.length &&
+    approved.controls.every(
+      (control, index) => current.controls[index] === control,
+    )
+  )
+}
 
 /**
  * Rebuild untrusted DOM facts and require a fresh Rust decision immediately
@@ -47,8 +130,12 @@ export async function performRevalidatedAuthenticationAction({
   workflow,
   expectedAction,
   observationBinding,
+  approvalIsActive,
   act,
-}: RevalidatedAuthenticationActionArgs): Promise<boolean> {
+}: RevalidatedAuthenticationActionArgs): Promise<RevalidatedAuthenticationActionOutcome> {
+  const rejected = (): RevalidatedAuthenticationActionOutcome => ({
+    kind: RevalidatedAuthenticationActionOutcomeKind.Rejected,
+  })
   const workflowIsAttachedToCurrentDocument = () => {
     const root = workflow.root
     const rootIsCurrent =
@@ -64,28 +151,64 @@ export async function performRevalidatedAuthenticationAction({
     )
   }
   const observeCurrentFacts = () => {
-    if (!workflowIsAttachedToCurrentDocument()) return undefined
-    const currentWorkflow = refreshAuthenticationWorkflowObservation(workflow)
-    const factsRequest: Parameters<
-      typeof authenticationPageObservationFacts
-    >[0] = {
-      observation: currentWorkflow,
-      authenticatorSetupHint: false,
-      backupCodesHint: false,
+    if (!workflowIsAttachedToCurrentDocument()) return false
+    let candidates = summarizeAuthenticationWorkflowForms()
+    let selectedIndex = candidates.findIndex((candidate) => {
+      const scopePair: Parameters<typeof authenticationWorkflowScopesMatch>[0] =
+        {
+          left: workflow,
+          right: candidate,
+        }
+      return authenticationWorkflowScopesMatch(scopePair)
+    })
+    if (selectedIndex < 0 && workflow.root !== document) {
+      candidates = [refreshAuthenticationWorkflowObservation(workflow)]
+      selectedIndex = 0
     }
+    if (selectedIndex < 0) return false
+    const hints = detectEnrollmentHints()
+    const observations = candidates.map((candidate) => {
+      const factsRequest: Parameters<
+        typeof authenticationPageObservationFacts
+      >[0] = {
+        observation: candidate,
+        authenticatorSetupHint: hints.qr,
+        backupCodesHint: hints.backupCodes,
+      }
+      return authenticationPageObservationFacts(factsRequest)
+    })
+    const currentWorkflow = candidates[selectedIndex]
+    const facts = observations[selectedIndex]
+    if (!currentWorkflow || !facts) return false
     return {
       currentWorkflow,
-      facts: authenticationPageObservationFacts(factsRequest),
+      facts,
+      observations,
+      selectedIndex,
+      controlIdentities: authenticationControlIdentitySnapshot(currentWorkflow),
     }
   }
+  if (!approvalIsActive()) return rejected()
   const approvedObservation = observeCurrentFacts()
-  if (!approvedObservation) return false
-  const approvedObservationDigest = JSON.stringify(approvedObservation.facts)
+  if (!approvedObservation) return rejected()
+  const approvedFactsBatch: AuthenticationPageObservationFactsBatch = {
+    observations: [approvedObservation.facts],
+  }
+  let approvedObservationBindingToken: AuthenticationObservationBindingToken
+  try {
+    approvedObservationBindingToken =
+      bind_authentication_page_observation_facts(approvedFactsBatch)
+  } catch {
+    return rejected()
+  }
   if (
     observationBinding.kind === AuthenticationObservationBindingKind.Required &&
-    observationBinding.observationDigest !== approvedObservationDigest
+    !authentication_page_observation_facts_match_binding(
+      observationBinding.token,
+      approvedFactsBatch,
+    )
   ) {
-    return false
+    return rejected()
   }
   const message: Parameters<
     typeof sendAuthenticationWorkflowSnapshotRuntimeMessage
@@ -93,33 +216,79 @@ export async function performRevalidatedAuthenticationAction({
     type: AuthenticationWorkflowSnapshotMessageType.NookAuthenticationWorkflowSnapshot,
     payload: {
       origin: location.origin,
-      observations: [approvedObservation.facts],
+      observations: approvedObservation.observations,
     },
   }
   const delivery =
     await sendAuthenticationWorkflowSnapshotRuntimeMessage(message)
-  if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) return false
-  const { response } = delivery
+  if (!approvalIsActive()) return rejected()
+  if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable)
+    return rejected()
+  const { verdict } = delivery.response
   if (
-    response.kind !== AuthenticationWorkflowSnapshotResponseKind.Matched ||
-    !('snapshot' in response) ||
-    response.snapshot.observationIndex !== 0 ||
-    response.snapshot.action !== expectedAction
+    verdict.kind !== AuthenticationWorkflowSnapshotResponseKind.Matched ||
+    !('snapshot' in verdict) ||
+    verdict.snapshot.observationIndex !== approvedObservation.selectedIndex ||
+    verdict.snapshot.action !== expectedAction
   ) {
-    return false
+    return rejected()
   }
 
   const currentObservation = observeCurrentFacts()
-  if (!currentObservation) return false
+  if (!currentObservation) return rejected()
+  const currentFactsBatch: AuthenticationPageObservationFactsBatch = {
+    observations: [currentObservation.facts],
+  }
   if (
-    JSON.stringify(currentObservation.facts) !==
-    JSON.stringify(approvedObservation.facts)
+    currentObservation.selectedIndex !== approvedObservation.selectedIndex ||
+    !authentication_page_observation_facts_match_binding(
+      approvedObservationBindingToken,
+      currentFactsBatch,
+    ) ||
+    !authenticationControlIdentitiesMatch(
+      approvedObservation.controlIdentities,
+      currentObservation.controlIdentities,
+    ) ||
+    !approvalIsActive()
   ) {
-    return false
+    return rejected()
+  }
+  const revalidateCurrentWorkflow = (): PasswordFormObservation | false => {
+    if (!approvalIsActive()) return false
+    const postActionObservation = observeCurrentFacts()
+    if (!postActionObservation) return false
+    const postActionFactsBatch: AuthenticationPageObservationFactsBatch = {
+      observations: [postActionObservation.facts],
+    }
+    if (
+      postActionObservation.selectedIndex !==
+        approvedObservation.selectedIndex ||
+      !authentication_page_observation_facts_match_binding(
+        approvedObservationBindingToken,
+        postActionFactsBatch,
+      ) ||
+      !authenticationControlIdentitiesMatch(
+        approvedObservation.controlIdentities,
+        postActionObservation.controlIdentities,
+      )
+    ) {
+      return false
+    }
+    return postActionObservation.currentWorkflow
   }
   const actRequest: RevalidatedAuthenticationActRequest = {
     currentWorkflow: currentObservation.currentWorkflow,
-    observationDigest: approvedObservationDigest,
+    observationBindingToken: approvedObservationBindingToken,
+    revalidateCurrentWorkflow,
   }
-  return act(actRequest)
+  const actResult = act(actRequest)
+  if (actResult.kind === RevalidatedAuthenticationActResultKind.Acted) {
+    return { kind: RevalidatedAuthenticationActionOutcomeKind.Acted }
+  }
+  if (
+    actResult.kind === RevalidatedAuthenticationActResultKind.ControlMissing
+  ) {
+    return { kind: RevalidatedAuthenticationActionOutcomeKind.ControlMissing }
+  }
+  return { kind: RevalidatedAuthenticationActionOutcomeKind.ActionFailed }
 }
