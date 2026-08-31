@@ -28,7 +28,4 @@ test('coalesces in-flight mutations into one follow-up scan', () => {
 
   expect(state.beginScan()).toBe(true)
   expect(state.finishScan()).toBe(false)
-  const sequence = state.sequence
-  state.invalidateCurrentResult()
-  expect(state.sequence).toBe(sequence + 1)
 })

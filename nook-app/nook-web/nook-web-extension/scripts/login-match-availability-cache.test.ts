@@ -38,7 +38,6 @@ test('coalesces, bounds, and invalidates cached origin results', async () => {
     availabilityCache.resolve(first),
     availabilityCache.resolve(second),
   ])
-  expect(loads).toBe(1)
   await availabilityCache.resolve(request(load, () => 500))
   expect(loads).toBe(1)
 
@@ -58,31 +57,29 @@ test('coalesces, bounds, and invalidates cached origin results', async () => {
 test('keeps invalidated work in flight but returns only a fresh result', async () => {
   const availabilityCache = cache()
   const stale = deferred<WebsiteLoginMatchAvailability>()
-  const staleRequest = request(
-    () => stale.promise,
-    () => 100,
+  const staleLookup = availabilityCache.resolve(
+    request(
+      () => stale.promise,
+      () => 100,
+    ),
   )
-  const staleLookup = availabilityCache.resolve(staleRequest)
 
   availabilityCache.invalidate({ origin: 'https://example.test' })
   let freshLoads = 0
-  const freshRequest: LoginMatchAvailabilityCacheRequest = {
-    origin: 'https://example.test',
-    load: async () => {
-      freshLoads += 1
-      return { kind: 'ready', count: 1 }
-    },
-    readTime: () => 200,
-  }
-  const refreshed = availabilityCache.resolve(freshRequest)
+  const refreshed = availabilityCache.resolve(
+    request(
+      async () => {
+        freshLoads += 1
+        return { kind: 'ready', count: 1 }
+      },
+      () => 200,
+    ),
+  )
   expect(freshLoads).toBe(0)
 
   stale.resolve({ kind: 'ready', count: 0 })
   await expect(staleLookup).resolves.toEqual({ kind: 'unavailable' })
-  await expect(refreshed).resolves.toEqual({
-    kind: 'ready',
-    count: 1,
-  })
+  expect(await refreshed).toEqual({ kind: 'ready', count: 1 })
 })
 
 test('coalesces repeated invalidation while a lookup remains pending', async () => {

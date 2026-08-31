@@ -14,7 +14,7 @@ Object.assign(globalThis, {
 })
 
 test('delivers cleanup cancellation through the content-script router', async () => {
-  const { LoginPickerKind, pickerState, widgetState } =
+  const { LoginPickerKind, pickerState, scanState, widgetState } =
     await import('../src/content/autofill/state')
   const { routeAutofillMessage } =
     await import('../src/content/autofill/message-router')
@@ -54,10 +54,15 @@ test('delivers cleanup cancellation through the content-script router', async ()
 
   const remove = mock(() => {})
   widgetState.attachHost({ remove } as unknown as HTMLElement)
+  const staleSequence = ++scanState.sequence
   routeAutofillMessage(
     { type: ExtensionRuntimeRequestType.ClearAuthenticationSurface },
     { id: 'nook-extension' },
     sendResponse,
   )
+  await Promise.resolve()
+  if (staleSequence === scanState.sequence)
+    widgetState.attachHost({ remove } as unknown as HTMLElement)
   expect(remove).toHaveBeenCalledTimes(1)
+  expect(widgetState.host).not.toHaveProperty('element')
 })

@@ -51,6 +51,7 @@ export const routeAutofillMessage: AutofillMessageListener =
       'type' in message &&
       message.type === ExtensionRuntimeRequestType.ClearAuthenticationSurface
     ) {
+      scanState.invalidateCurrentResult()
       removeScannedWidget()
       const response: Parameters<typeof sendResponse>[0] = { ok: true }
       sendResponse(response)
