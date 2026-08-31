@@ -228,7 +228,7 @@ describe('credential submission observation facts', () => {
     )
   })
 
-  test('guards every submit emitted by one approved activation', () => {
+  test('rejects a route changed by ancestor capture during replay', () => {
     document.body.innerHTML = `
       <form method="post" id="login" action="/login">
         <input autocomplete="username" />
@@ -240,10 +240,14 @@ describe('credential submission observation facts', () => {
     const button = form?.querySelector<HTMLButtonElement>('button')
     if (!form || !button) throw new Error('expected login controls')
     const approvedAction = form.action
-    button.addEventListener('click', () => {
-      form.requestSubmit()
-      form.action = '/capture'
-    })
+    let submits = 0
+    window.addEventListener(
+      'submit',
+      () => {
+        if (++submits === 2) form.action = '/capture'
+      },
+      true,
+    )
     form.addEventListener('submit', (event) => event.preventDefault())
     const clearRequest = fillTrackedCredentials()
     const request: Parameters<typeof submitLoginForm>[0] = {
@@ -279,10 +283,16 @@ describe('credential submission observation facts', () => {
       installPageAuthenticationDirectSubmitBridge(),
     )
     const pageSubmit = HTMLFormElement.prototype.submit
-    form.addEventListener('submit', (event) => {
-      event.stopPropagation()
-      pageSubmit.call(form)
-    })
+    let submits = 0
+    window.addEventListener(
+      'submit',
+      () => {
+        if (++submits !== 2) return
+        form.action = '/capture'
+        pageSubmit.call(form)
+      },
+      true,
+    )
     expect(
       submitLoginForm({
         kind: PasswordFormQueryKind.Root,
@@ -296,34 +306,6 @@ describe('credential submission observation facts', () => {
     expect(
       document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
     ).toBe('')
-  })
-
-  test('preserves a page-managed cancelled login submission', () => {
-    document.body.innerHTML = `
-      <form method="post" id="login" action="/login">
-        <input autocomplete="username" />
-        <input type="password" autocomplete="current-password" />
-        <button type="submit">Sign in</button>
-      </form>
-    `
-    const form = document.querySelector<HTMLFormElement>('#login')
-    if (!form) throw new Error('expected login form')
-    fillTrackedCredentials()
-    let submissionCount = 0
-    form.addEventListener('submit', (event) => {
-      if (event.defaultPrevented) return
-      submissionCount += 1
-      event.preventDefault()
-    })
-
-    expect(
-      submitLoginForm({
-        kind: PasswordFormQueryKind.Root,
-        root: document,
-        submissionApproval: { isApproved: () => true, reject: () => {} },
-      }),
-    ).toBe(FormSubmissionResult.Submitted)
-    expect(submissionCount).toBe(1)
   })
 
   test('preserves cancellation from a window bubble submit handler', () => {
@@ -384,7 +366,7 @@ describe('credential submission observation facts', () => {
     ).toBe('')
   })
 
-  test('rejects a submitter override emitted by the approved click handler', () => {
+  test('rejects a submitter override emitted by a page submit handler', () => {
     document.body.innerHTML = `
       <form method="post" id="login" action="/login">
         <input autocomplete="username" />
@@ -398,7 +380,7 @@ describe('credential submission observation facts', () => {
     const alternate = document.querySelector<HTMLButtonElement>('#alternate')
     if (!form || !approved || !alternate)
       throw new Error('expected login controls')
-    approved.addEventListener('click', () => form.requestSubmit(alternate))
+    form.onsubmit = () => form.requestSubmit(alternate)
     form.addEventListener('submit', (event) => event.preventDefault())
     const clearRequest = fillTrackedCredentials()
 

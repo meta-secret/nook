@@ -1,5 +1,4 @@
 const DIRECT_SUBMIT_EVENT = "nook-authentication-direct-submit-v1";
-
 type AuthenticationDirectSubmitHandler = (
   form: HTMLFormElement,
 ) => boolean;
@@ -91,7 +90,7 @@ export function observeAuthenticationSubmission({
 }: AuthenticationSubmissionObservation): FormSubmissionResult {
   let result = FormSubmissionResult.NotObserved;
   let replaying = false;
-  let dispatchingPageEvent = false;
+  let pageEvent: SubmitEvent | false = false;
   let pagePrevented = false;
   let directSubmitted = false;
   const reject = () => {
@@ -99,13 +98,18 @@ export function observeAuthenticationSubmission({
     if (approval) approval.reject();
   };
   const mediate = (event: SubmitEvent) => {
-    if (event.target !== form || dispatchingPageEvent) return;
+    if (event.target !== form || event === pageEvent) return;
     if (replaying) {
       event.stopImmediatePropagation();
+      if (!directRouteApproved() || !approval || !approval.isApproved()) {
+        event.preventDefault();
+        reject();
+        return;
+      }
       result = FormSubmissionResult.Submitted;
       return;
     }
-    const submitter = event.submitter === form ? null : event.submitter;
+    const submitter = event.submitter === form ? false : event.submitter;
     const submitterChanged = submitter
       ? submitter !== expectedSubmitter
       : expectedSubmitter !== false;
@@ -115,12 +119,13 @@ export function observeAuthenticationSubmission({
       reject();
       return;
     }
-    const pageEventInit: SubmitEventInit = { bubbles: true, cancelable: true, submitter };
-    const pageEvent = new SubmitEvent("submit", pageEventInit);
-    dispatchingPageEvent = true;
+    if (pageEvent) return;
+    const pageEventInit: SubmitEventInit = { bubbles: true, cancelable: true };
+    if (submitter !== false) pageEventInit.submitter = submitter;
+    pageEvent = new SubmitEvent("submit", pageEventInit);
     form.dispatchEvent(pageEvent);
-    dispatchingPageEvent = false;
     pagePrevented = pageEvent.defaultPrevented;
+    pageEvent = false;
     if (result === FormSubmissionResult.Rejected) return;
     if (approval && !approval.isApproved()) {
       reject();
@@ -143,22 +148,22 @@ export function observeAuthenticationSubmission({
   form.addEventListener("submit", mediate, true);
   try {
     action();
+    if (approval && Object.is(result, FormSubmissionResult.Submitted)) {
+      if (!approval.isApproved()) reject();
+      else if (!directSubmitted && !pagePrevented) {
+        try {
+          replaying = true;
+          if (expectedSubmitter) form.requestSubmit(expectedSubmitter);
+          else form.requestSubmit();
+        } catch {
+          reject();
+        }
+        replaying = false;
+      }
+    }
   } finally {
     stopDirectObservation();
+    form.removeEventListener("submit", mediate, true);
   }
-  if (approval && result === FormSubmissionResult.Submitted) {
-    if (!approval.isApproved()) reject();
-    else if (!directSubmitted && !pagePrevented) {
-      try {
-        replaying = true;
-        if (expectedSubmitter) form.requestSubmit(expectedSubmitter);
-        else form.requestSubmit();
-      } catch {
-        reject();
-      }
-      replaying = false;
-    }
-  }
-  form.removeEventListener("submit", mediate, true);
   return result;
 }
