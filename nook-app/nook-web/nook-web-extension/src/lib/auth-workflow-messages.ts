@@ -4,6 +4,11 @@ import type {
   AuthenticationDetailedPasskeyControlObservation,
   AuthenticationPageObservationFacts,
   AuthenticationWorkflowSnapshot,
+  AuthenticationPageObservationFactsBatch,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
+  authentication_page_observation_facts_match_binding,
+  bind_authentication_page_observation_facts,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 export type AuthenticationPageObservationView =
@@ -24,10 +29,22 @@ export function authenticationWorkflowApprovalsMatch({
   approved,
   current,
 }: AuthenticationWorkflowApprovalPair): boolean {
-  return (
-    approved.workflowKey === current.workflowKey &&
-    JSON.stringify(approved.facts) === JSON.stringify(current.facts)
-  )
+  if (approved.workflowKey !== current.workflowKey) return false
+  const approvedBatch: AuthenticationPageObservationFactsBatch = {
+    observations: [approved.facts],
+  }
+  const currentBatch: AuthenticationPageObservationFactsBatch = {
+    observations: [current.facts],
+  }
+  try {
+    const binding = bind_authentication_page_observation_facts(approvedBatch)
+    return authentication_page_observation_facts_match_binding(
+      binding,
+      currentBatch,
+    )
+  } catch {
+    return false
+  }
 }
 
 export enum AuthenticationWorkflowSnapshotMessageType {

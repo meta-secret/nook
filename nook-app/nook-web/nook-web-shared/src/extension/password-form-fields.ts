@@ -226,7 +226,9 @@ export function findPasswordFields({
   };
   return findFields(findArgs).filter(
     (field) =>
-      !field.disabled && field.type === "password" && isRenderedInput(field),
+      !field.matches(":disabled") &&
+      field.type === "password" &&
+      isRenderedInput(field),
   );
 }
 

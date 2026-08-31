@@ -1,9 +1,12 @@
 import {
+  authentication_page_observation_facts_match_binding,
+  bind_authentication_page_observation_facts,
   classify_companion_authentication_workflow_facts,
   companion_authentication_workflow_match_kind,
   CompanionAuthenticationWorkflowMatchKind,
   authentication_passkey_control_evidence_is_safe,
   type AuthenticationPageObservationFacts,
+  type AuthenticationPageObservationFactsBatch,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
   authenticationFactStringsAreTransportable,
@@ -122,6 +125,27 @@ function approvedFieldSemanticsMatch(
   return approvedAuthenticationContextMatches(request);
 }
 
+function rustBoundAuthenticationFactsMatch({
+  live,
+  approved,
+}: ApprovedAuthenticationFactsPair): boolean {
+  const approvedBatch: AuthenticationPageObservationFactsBatch = {
+    observations: [approved],
+  };
+  const liveBatch: AuthenticationPageObservationFactsBatch = {
+    observations: [live],
+  };
+  try {
+    const binding = bind_authentication_page_observation_facts(approvedBatch);
+    return authentication_page_observation_facts_match_binding(
+      binding,
+      liveBatch,
+    );
+  } catch {
+    return false;
+  }
+}
+
 function rustWorkflowSemantics(
   facts: AuthenticationPageObservationFacts,
 ): string {
@@ -216,6 +240,7 @@ export function liveApprovedAuthenticationWorkflow({
   };
   return (
     authenticationWorkflowScopesMatch(scopePair) &&
+    rustBoundAuthenticationFactsMatch(factsPair) &&
     approvedAuthenticationContextMatches(factsPair) &&
     approvedFieldSemanticsMatch(factsPair) &&
     rustWorkflowSemantics(selected.facts) ===

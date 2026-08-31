@@ -96,6 +96,14 @@ describe('website one-time-code fields', () => {
         }),
       ]),
     )
+    expect(facts.credentialSubmission).toMatchObject({
+      kind: 'observed',
+      facts: {
+        method: 'post',
+        formIdentity: 'login',
+        destinationIdentity: expect.stringContaining('/login'),
+      },
+    })
   })
 
   test('resolves aria-labelledby control names for Rust classification', () => {
@@ -134,6 +142,52 @@ describe('website one-time-code fields', () => {
     })
     expect(facts.detailedAdvanceControl).toEqual({ kind: 'absent' })
     expect(facts.ceremony.advanceControl).toBe('implicit-submission')
+    expect(facts.credentialSubmission).toMatchObject({
+      kind: 'observed',
+      facts: {
+        actionability: 'actionable',
+        method: 'post',
+        destinationIdentity: expect.stringContaining('/session'),
+      },
+    })
+  })
+
+  test('binds readonly and effectively disabled password-field transitions', () => {
+    document.body.innerHTML = `
+      <form method="post" id="login" action="/session">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" readonly />
+        <fieldset id="password-fields">
+          <input type="password" autocomplete="current-password" />
+        </fieldset>
+        <button type="submit">Sign in</button>
+      </form>
+    `
+
+    const before = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(before.fields).toMatchObject({
+      currentPasswordFieldCount: 2,
+      actionablePasswordFieldCount: 1,
+      readonlyPasswordFieldCount: 1,
+    })
+
+    document
+      .querySelector<HTMLFieldSetElement>('#password-fields')
+      ?.setAttribute('disabled', '')
+    const after = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(after.fields).toMatchObject({
+      currentPasswordFieldCount: 1,
+      actionablePasswordFieldCount: 0,
+      readonlyPasswordFieldCount: 1,
+    })
   })
 
   test('rejects implicit GET password submission before fill', () => {
