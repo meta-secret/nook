@@ -4,6 +4,8 @@ import russian from '../../locales/ru.json';
 export type TeamPlanMessages = Readonly<{
   help: string;
   invalidArguments: string;
+  invalidRecordFile: string;
+  oversizedRecord: string;
 }>;
 
 export function teamPlanMessages(locale: string): TeamPlanMessages {
@@ -13,5 +15,7 @@ export function teamPlanMessages(locale: string): TeamPlanMessages {
   return {
     help: catalog.team_plan_help,
     invalidArguments: catalog.team_plan_invalid_arguments,
+    invalidRecordFile: catalog.team_plan_invalid_record_file,
+    oversizedRecord: catalog.team_plan_oversized_record,
   };
 }

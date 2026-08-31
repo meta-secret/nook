@@ -5,10 +5,6 @@ import { resolve } from 'node:path';
 
 import { LoomFailureCode, loomFailureFromCause } from '../loom-failure.ts';
 import {
-  MAX_MODULE_DELIVERY_EVIDENCE_ENTRIES,
-  MAX_MODULE_DELIVERY_EVIDENCE_ENTRY_CODE_UNITS,
-} from '../module-delivery/evidence-limits.ts';
-import {
   discardFinalizedTeamPlan,
   finalizeTeamPlan,
   recordTeamPlan,
@@ -17,20 +13,17 @@ import {
   startTeamPlan,
 } from './index.ts';
 import { teamPlanMessages } from './messages.ts';
+import { MAX_TEAM_PLAN_RECORD_REQUEST_BYTES } from './record-limits.ts';
 
 import type {
   TeamPlanRecord,
   TeamPlanRecordRequest,
   TeamPlanStartRequest,
 } from './domain.ts';
+import type { TeamPlanMessages } from './messages.ts';
 
-const MAX_NON_EVIDENCE_RECORD_REQUEST_BYTES = 1_048_576;
-const MAX_SERIALIZED_JSON_BYTES_PER_CODE_UNIT = 6;
-export const MAX_TEAM_PLAN_RECORD_REQUEST_BYTES =
-  MAX_NON_EVIDENCE_RECORD_REQUEST_BYTES +
-  MAX_MODULE_DELIVERY_EVIDENCE_ENTRIES *
-    MAX_MODULE_DELIVERY_EVIDENCE_ENTRY_CODE_UNITS *
-    MAX_SERIALIZED_JSON_BYTES_PER_CODE_UNIT;
+export { MAX_TEAM_PLAN_RECORD_REQUEST_BYTES } from './record-limits.ts';
+const TEAM_PLAN_RECORD_READ_CHUNK_BYTES = 65_536;
 const TEAM_PLAN_RUN_ID = /^[0-9a-f]{64}$/u;
 
 enum TeamPlanCommandKind {
@@ -80,6 +73,11 @@ export type TeamPlanCliArguments = Readonly<{
 type CommandPathRequest = Readonly<{
   argv: readonly string[];
   index: number;
+}>;
+
+type ReadTeamPlanRecordRequest = Readonly<{
+  requestPath: string;
+  messages: TeamPlanMessages;
 }>;
 
 enum TeamPlanCommandParseKind {
@@ -165,7 +163,10 @@ export async function runTeamPlanCli(
       code: LoomFailureCode.TeamPlanCommandFailed,
       cause: new Error('Team Plan command dispatch is invalid.'),
     });
-  const serialized = await readTeamPlanRecordRequest(command.requestPath);
+  const serialized = await readTeamPlanRecordRequest({
+    requestPath: command.requestPath,
+    messages: teamPlanMessages(cliArguments.locale),
+  });
   let record: TeamPlanRecord;
   try {
     record = JSON.parse(serialized) as TeamPlanRecord;
@@ -186,10 +187,12 @@ export async function runTeamPlanCli(
   return 0;
 }
 
-async function readTeamPlanRecordRequest(requestPath: string): Promise<string> {
+async function readTeamPlanRecordRequest(
+  request: ReadTeamPlanRecordRequest,
+): Promise<string> {
   try {
     const requestFile = await open(
-      requestPath,
+      request.requestPath,
       constants.O_RDONLY | constants.O_NONBLOCK,
     );
     try {
@@ -200,30 +203,35 @@ async function readTeamPlanRecordRequest(requestPath: string): Promise<string> {
       )
         throw loomFailureFromCause({
           code: LoomFailureCode.TeamPlanValidationFailed,
-          cause: new Error(
-            'Team Plan record request file is invalid or oversized.',
-          ),
+          cause: new Error(request.messages.invalidRecordFile),
         });
-      const content = Buffer.alloc(MAX_TEAM_PLAN_RECORD_REQUEST_BYTES + 1);
+      const chunks: Buffer[] = [];
       let bytesRead = 0;
-      while (bytesRead < content.byteLength) {
+      while (bytesRead <= MAX_TEAM_PLAN_RECORD_REQUEST_BYTES) {
+        const chunk = Buffer.alloc(
+          Math.min(
+            TEAM_PLAN_RECORD_READ_CHUNK_BYTES,
+            MAX_TEAM_PLAN_RECORD_REQUEST_BYTES + 1 - bytesRead,
+          ),
+        );
         const read = await requestFile.read(
-          content,
-          bytesRead,
-          content.byteLength - bytesRead,
+          chunk,
+          0,
+          chunk.byteLength,
           bytesRead,
         );
         if (read.bytesRead === 0) break;
+        chunks.push(chunk.subarray(0, read.bytesRead));
         bytesRead += read.bytesRead;
       }
       if (bytesRead > MAX_TEAM_PLAN_RECORD_REQUEST_BYTES)
         throw loomFailureFromCause({
           code: LoomFailureCode.TeamPlanValidationFailed,
-          cause: new Error('Team Plan record request is oversized.'),
+          cause: new Error(request.messages.oversizedRecord),
         });
       try {
         return new TextDecoder('utf-8', { fatal: true }).decode(
-          content.subarray(0, bytesRead),
+          Buffer.concat(chunks, bytesRead),
         );
       } catch (cause) {
         throw loomFailureFromCause({

@@ -7,6 +7,10 @@ import {
   fieldNamesOf,
   type RequestFieldVocabulary,
 } from '../codec/field-vocabulary.ts';
+import {
+  MAX_MODULE_DELIVERY_STRING_CODE_UNITS,
+  MAX_MODULE_DELIVERY_STRING_LIST_ENTRIES,
+} from './evidence-limits.ts';
 import type {
   UntrustedYamlMap,
   UntrustedYamlNode,
@@ -45,7 +49,7 @@ export class ModulePlanFields {
     if (
       typeof value !== 'string' ||
       value.trim() === '' ||
-      value.length > 4096 ||
+      value.length > MAX_MODULE_DELIVERY_STRING_CODE_UNITS ||
       hasControlCharacter(value)
     )
       this.fail(`.${key}: expected a bounded non-empty string.`);
@@ -80,13 +84,16 @@ export class ModulePlanFields {
 
   stringList(key: string): readonly string[] {
     const value = this.value(key);
-    if (!Array.isArray(value) || value.length > 128)
+    if (
+      !Array.isArray(value) ||
+      value.length > MAX_MODULE_DELIVERY_STRING_LIST_ENTRIES
+    )
       this.fail(`.${key}: expected a bounded string array.`);
     for (const entry of value) {
       if (
         typeof entry !== 'string' ||
         entry.trim() === '' ||
-        entry.length > 4096 ||
+        entry.length > MAX_MODULE_DELIVERY_STRING_CODE_UNITS ||
         hasControlCharacter(entry)
       )
         this.fail(`.${key}: expected bounded non-empty entries.`);
