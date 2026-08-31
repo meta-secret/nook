@@ -532,12 +532,15 @@ function isPlatformPathEnvironmentValue(
 ): boolean {
   const { value, name } = request;
   return (
-    ts.isPropertyAccessExpression(value) &&
-    value.name.text === name &&
-    ts.isPropertyAccessExpression(value.expression) &&
-    value.expression.name.text === 'env' &&
-    ts.isIdentifier(value.expression.expression) &&
-    value.expression.expression.text === 'process'
+    (name === 'PATH' &&
+      ts.isStringLiteral(value) &&
+      value.text === '/bin:/usr/bin:/usr/sbin') ||
+    (ts.isPropertyAccessExpression(value) &&
+      value.name.text === name &&
+      ts.isPropertyAccessExpression(value.expression) &&
+      value.expression.name.text === 'env' &&
+      ts.isIdentifier(value.expression.expression) &&
+      value.expression.expression.text === 'process')
   );
 }
 
