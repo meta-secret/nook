@@ -558,6 +558,14 @@ Rust may use the configured ARC scale set. WASM and fork PR jobs remain hosted.
 - `PR`
 - `Web research` when `.github/workflows/web-research.yml` or `nook-app/nook-web/nook-web-research/**` changes
 
+- Keep monitoring inside the active delivery task with bounded direct waits.
+- Never create a Codex scheduled task, automation, heartbeat, reminder, or
+  recurring follow-up to continue PR monitoring later.
+- The agent may plan its polling cadence and next delivery action. Keep that
+  plan inside the active task; do not persist it as Codex scheduling state.
+- "Merge when ready" is a terminal delivery instruction. Test the PR, monitor
+  its exact-head checks and actionable review state, and merge it as soon as
+  readiness succeeds.
 - Never use an all-check watcher that can remain blocked on external services.
 - If neither repository workflow applies to the changed paths, there is no
   remote check to wait for.
@@ -695,6 +703,16 @@ gh pr merge <number> --squash
 ```
 
 The successful squash merge completes implementation delivery. Do not wait for, monitor, or live-verify the resulting Main run unless the user explicitly requested deployment/live verification or assigned a Main failure.
+
+Default-branch health outside the target PR is not part of PR delivery.
+
+- Consult `origin/main` only for branch creation, base comparison, and required
+  freshness updates.
+- Do not turn an unrelated Main failure into diagnosis or implementation work.
+- A Main failure does not authorize expanding the PR or creating a second task.
+- Report a proven inherited blocker without taking ownership of it. Continue
+  only when repository-owned state changes or the user explicitly changes the
+  task boundary.
 
 After merge, `main.yml` independently runs full local-provider and extension **e2e**.
 
