@@ -956,6 +956,81 @@ describe('Team Plan journal', () => {
     expect((await loadTeamPlanJournal(journalPath)).finalized).toBe(true);
   });
 
+  test('continues logical task attempts across generation restart', async () => {
+    const { journalPath, started, value } = await startedFixture(
+      (planValue) => ({ ...planValue, maxAttempts: 2 }),
+    );
+    const firstAttempt = {
+      taskId: 'provider',
+      attempt: 1,
+      generation: 1,
+      planDigest: started.modulePlanDigest,
+    };
+    await appendTeamPlanEvent({
+      journalPath,
+      event: {
+        version: TEAM_PLAN_JOURNAL_VERSION,
+        kind: TeamPlanEventKind.Selected,
+        sequence: 2,
+        attempts: [firstAttempt],
+      },
+    });
+    await appendTeamPlanEvent({
+      journalPath,
+      event: {
+        version: TEAM_PLAN_JOURNAL_VERSION,
+        kind: TeamPlanEventKind.Recorded,
+        sequence: 3,
+        record: {
+          kind: TeamPlanRecordKind.FinalUnusable,
+          ...firstAttempt,
+          conclusion: ModuleDeliveryGenerationFenceKind.Failed,
+        },
+      },
+    });
+
+    const replacementText = `${JSON.stringify({ ...value, generation: 2 })}\n`;
+    const replacement = decodeAndValidateModuleDeliveryPlan(replacementText);
+    if (replacement.status !== ModuleDeliveryValidationStatus.Accepted)
+      throw new Error('Restart journal test plan was rejected.');
+    await appendTeamPlanEvent({
+      journalPath,
+      event: {
+        version: TEAM_PLAN_JOURNAL_VERSION,
+        kind: TeamPlanEventKind.Restarted,
+        sequence: 4,
+        planPath: started.planPath,
+        planText: replacementText,
+        planSha256: teamPlanSha256(replacementText),
+        modulePlanDigest: replacement.planDigest,
+        sourceCommit: started.sourceCommit,
+        generationRecordLimit:
+          replacement.plan.nodes.length * replacement.plan.maxAttempts,
+      },
+    });
+    const secondAttempt = {
+      taskId: 'provider',
+      attempt: 2,
+      generation: 2,
+      planDigest: replacement.planDigest,
+    };
+    await appendTeamPlanEvent({
+      journalPath,
+      event: {
+        version: TEAM_PLAN_JOURNAL_VERSION,
+        kind: TeamPlanEventKind.Selected,
+        sequence: 5,
+        attempts: [secondAttempt],
+      },
+    });
+    expect((await loadTeamPlanJournal(journalPath)).events.at(-1)).toEqual({
+      version: TEAM_PLAN_JOURNAL_VERSION,
+      kind: TeamPlanEventKind.Selected,
+      sequence: 5,
+      attempts: [secondAttempt],
+    });
+  });
+
   test('persists a validator-accepted quote-heavy maximum-class plan', async () => {
     const { journalPath, started } = await startedFixture((value) => {
       const node = value.nodes[0];
