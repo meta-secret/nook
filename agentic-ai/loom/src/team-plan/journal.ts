@@ -51,7 +51,6 @@ const ZERO_COMMIT = '0'.repeat(40);
 const SHA256 = /^[0-9a-f]{64}$/u;
 const COMMIT = /^[0-9a-f]{40}$/u;
 const TASK_ID = /^[a-z][a-z0-9_-]{0,63}$/u;
-const TEAM_PLAN_SYSTEM_PATH = '/bin:/usr/bin:/usr/sbin';
 
 const TEAM_PLAN_COMMON_FIELDS = 'version|kind|sequence';
 const TEAM_PLAN_STARTED_FIELDS = `${TEAM_PLAN_COMMON_FIELDS}|runId|planPath|planText|planSha256|modulePlanDigest|sourceCommit|repositoryRoot|workspaceRoot|generationRecordLimit`;
@@ -788,7 +787,7 @@ function updateRef(request: {
     {
       cwd: request.journal.started.repositoryRoot,
       encoding: 'utf8',
-      env: { PATH: TEAM_PLAN_SYSTEM_PATH },
+      env: { PATH: '/bin:/usr/bin:/usr/sbin' },
       stdio: ['ignore', 'pipe', 'pipe'],
     },
   );
@@ -856,7 +855,7 @@ function gitText(invocation: GitInvocation): string {
   const result = spawnSync('git', [args[0], args[1], args[2]], {
     cwd: invocation.cwd,
     encoding: 'utf8',
-    env: { PATH: TEAM_PLAN_SYSTEM_PATH },
+    env: { PATH: '/bin:/usr/bin:/usr/sbin' },
     input: 'input' in invocation ? invocation.input : '',
     stdio: ['pipe', 'pipe', 'pipe'],
   });
