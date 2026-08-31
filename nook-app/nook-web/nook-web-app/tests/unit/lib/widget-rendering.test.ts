@@ -3,6 +3,9 @@ import '../../../../nook-web-extension/src/chrome.d.ts'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { AuthenticationWorkflowAction } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
+type TestPresentationScope =
+  { kind: 'unassigned' } | { kind: 'assigned'; key: string }
+
 const actions = vi.hoisted(() => ({
   cancelLoginPicker: vi.fn(),
   continueWithNook: vi.fn(),
@@ -27,7 +30,7 @@ const renderState = vi.hoisted(() => ({
     host: { kind: 'detached' },
     workflowKey: { kind: 'unassigned' },
     renderedWorkflowRoot: { kind: 'unassigned' },
-    presentationScope: { kind: 'unassigned' },
+    presentationScope: { kind: 'unassigned' } as TestPresentationScope,
     collapsed: false,
     userSelectedCollapse: false,
     applyAutomaticCollapse(value: boolean) {
@@ -219,8 +222,6 @@ beforeEach(() => {
   renderState.pickerState.login = { kind: 'closed' }
   renderState.pickerState.authenticator = { kind: 'closed' }
   renderState.widgetState.host = { kind: 'detached' }
-  renderState.widgetState.workflowKey = { kind: 'unassigned' }
-  renderState.widgetState.renderedWorkflowRoot = { kind: 'unassigned' }
   renderState.widgetState.presentationScope = { kind: 'unassigned' }
   renderState.widgetState.collapsed = false
   renderState.widgetState.userSelectedCollapse = false
@@ -245,11 +246,7 @@ describe('passkey workflow saved-login fallback', () => {
 
   test('preserves an explicit collapse choice across availability remounts', () => {
     renderPasskeyWidget({ loginMatches: { kind: 'locked' } })
-    renderState.widgetState.host = {
-      kind: 'attached',
-      element: document.createElement('aside'),
-    }
-    renderState.widgetState.workflowKey = { kind: 'assigned', key: 'locked' }
+    renderState.widgetState.host = { kind: 'attached' }
     renderState.widgetState.collapsed = true
     renderState.widgetState.userSelectedCollapse = true
 
