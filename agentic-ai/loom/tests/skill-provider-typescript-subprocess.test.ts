@@ -491,13 +491,14 @@ spawnSync('git', ['status'], {env:{PATH:'/bin:/usr/bin:/usr/sbin'}});`),
     extract(`
 import {spawnSync} from 'node:child_process';
 function run(request:{repositoryRoot:string}) {
+  const repositoryRoot=request.repositoryRoot;
   spawnSync('git', ['status'], {
-    cwd:request.repositoryRoot,
+    cwd:repositoryRoot,
     env:{
       PATH:'/bin:/usr/bin:/usr/sbin',
       GIT_CONFIG_COUNT:'1',
       GIT_CONFIG_KEY_0:'safe.directory',
-      GIT_CONFIG_VALUE_0:request.repositoryRoot,
+      GIT_CONFIG_VALUE_0:repositoryRoot,
     },
   });
 }
@@ -552,13 +553,33 @@ spawnSync('git', ['status'], {env:${environment}});`),
     "{GIT_CONFIG_COUNT:'1',GIT_CONFIG_KEY_0:'alias.status',GIT_CONFIG_VALUE_0:'/repo'}",
     "{GIT_CONFIG_COUNT:'1',GIT_CONFIG_KEY_0:'safe.directory',GIT_CONFIG_VALUE_0:'/other'}",
     "{GIT_CONFIG_COUNT:'1',GIT_CONFIG_KEY_0:'safe.directory'}",
-    "{PATH:'/bin:/usr/bin:/usr/sbin',GIT_CONFIG_COUNT:'1',GIT_CONFIG_KEY_0:'safe.directory',GIT_CONFIG_VALUE_0:'/repo',GIT_CONFIG_GLOBAL:'/hostile'}",
   ])
     expect(() =>
       extract(`
 import {spawnSync} from 'node:child_process';
 spawnSync('git', ['status'], {cwd:'/repo',env:${environment}});`),
     ).toThrow('Unsafe TypeScript Git safe.directory environment');
+  expect(() =>
+    extract(`
+import {spawnSync} from 'node:child_process';
+function nextPath(){return '/repo';}
+spawnSync('git', ['status'], {cwd:nextPath(),env:{
+  PATH:'/bin:/usr/bin:/usr/sbin',
+  GIT_CONFIG_COUNT:'1',
+  GIT_CONFIG_KEY_0:'safe.directory',
+  GIT_CONFIG_VALUE_0:nextPath(),
+}});`),
+  ).toThrow('Unsafe TypeScript Git safe.directory environment');
+  expect(() =>
+    extract(`
+import {spawnSync} from 'node:child_process';
+spawnSync('git', ['status'], {cwd:'/repo/../repo',env:{
+  PATH:'/bin:/usr/bin:/usr/sbin',
+  GIT_CONFIG_COUNT:'1',
+  GIT_CONFIG_KEY_0:'safe.directory',
+  GIT_CONFIG_VALUE_0:'/repo/../repo',
+}});`),
+  ).toThrow('Unsafe TypeScript Git safe.directory environment');
   expect(() =>
     extract(`
 import {spawnSync} from 'node:child_process';

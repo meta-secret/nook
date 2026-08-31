@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { readFileSync, readlinkSync } from 'node:fs';
+import { readFileSync, readdirSync, readlinkSync } from 'node:fs';
 import { hostname } from 'node:os';
 
 import type { TeamPlanJournal } from './journal.ts';
@@ -27,6 +27,30 @@ type GitInvocation = Readonly<{
   args: TeamPlanGitArguments;
   input?: string;
 }>;
+
+export function teamPlanLinuxNamespaceLockRecoverable(request: {
+  readonly ownerIdentity: string;
+  readonly currentMachineIdentity: string;
+  readonly liveNamespaces: ReadonlySet<string>;
+}): boolean {
+  const current = /^(.*):(pid:\[[0-9]+\])$/u.exec(
+    request.currentMachineIdentity,
+  );
+  if (!current) return false;
+  const hostBoot = current[1];
+  const currentNamespace = current[2];
+  if (!hostBoot || !currentNamespace) return false;
+  const owner = new RegExp(
+    `^${escapeRegularExpression(hostBoot)}:(pid:\\[[0-9]+\\]):start-ticks:[0-9]+$`,
+    'u',
+  ).exec(request.ownerIdentity);
+  const ownerNamespace = owner?.[1];
+  return Boolean(
+    ownerNamespace &&
+    ownerNamespace !== currentNamespace &&
+    !request.liveNamespaces.has(ownerNamespace),
+  );
+}
 
 export async function runWithTeamPlanJournalLock<T>(
   request: TeamPlanLockRequest<T>,
@@ -107,17 +131,18 @@ function updateRef(request: {
   readonly args: TeamPlanGitArguments;
 }): boolean {
   const args = request.args;
+  const repositoryRoot = request.journal.started.repositoryRoot;
   const result = spawnSync(
     'git',
     ['update-ref', '--no-deref', args[0], args[1], args[2]],
     {
-      cwd: request.journal.started.repositoryRoot,
+      cwd: repositoryRoot,
       encoding: 'utf8',
       env: {
         PATH: '/bin:/usr/bin:/usr/sbin',
         GIT_CONFIG_COUNT: '1',
         GIT_CONFIG_KEY_0: 'safe.directory',
-        GIT_CONFIG_VALUE_0: request.journal.started.repositoryRoot,
+        GIT_CONFIG_VALUE_0: repositoryRoot,
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     },
@@ -162,6 +187,16 @@ function staleTeamPlanLock(owner: TeamPlanLockOwner): boolean {
   if (!machineIdentity) return false;
   let ownerMachineIdentity = machineIdentity;
   if (!owner.processIdentity.startsWith(`${ownerMachineIdentity}:`)) {
+    const liveNamespaces = linuxLivePidNamespaces();
+    if (
+      liveNamespaces &&
+      teamPlanLinuxNamespaceLockRecoverable({
+        ownerIdentity: owner.processIdentity,
+        currentMachineIdentity: machineIdentity,
+        liveNamespaces,
+      })
+    )
+      return true;
     const legacyIdentity = legacyMachineIdentity(machineIdentity);
     if (
       !legacyIdentity ||
@@ -213,14 +248,15 @@ function teamPlanLockRef(request: {
 
 function gitText(invocation: GitInvocation): string {
   const args = invocation.args;
+  const repositoryRoot = invocation.cwd;
   const result = spawnSync('git', [args[0], args[1], args[2]], {
-    cwd: invocation.cwd,
+    cwd: repositoryRoot,
     encoding: 'utf8',
     env: {
       PATH: '/bin:/usr/bin:/usr/sbin',
       GIT_CONFIG_COUNT: '1',
       GIT_CONFIG_KEY_0: 'safe.directory',
-      GIT_CONFIG_VALUE_0: invocation.cwd,
+      GIT_CONFIG_VALUE_0: repositoryRoot,
     },
     input: 'input' in invocation ? invocation.input : '',
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -262,6 +298,32 @@ function linuxProcessStartTicks(pid: number): string | false {
     .split(/\s+/u);
   const startTicks = fieldsAfterCommand[19];
   return startTicks && /^[0-9]+$/u.test(startTicks) ? startTicks : false;
+}
+
+function linuxLivePidNamespaces(): ReadonlySet<string> | false {
+  if (process.platform !== 'linux') return false;
+  let processes: readonly string[];
+  try {
+    processes = readdirSync('/proc').filter((entry) => /^[0-9]+$/u.test(entry));
+  } catch {
+    return false;
+  }
+  const namespaces = new Set<string>();
+  for (const pid of processes) {
+    try {
+      const namespace = readlinkSync(`/proc/${pid}/ns/pid`);
+      if (!/^pid:\[[0-9]+\]$/u.test(namespace)) return false;
+      namespaces.add(namespace);
+    } catch (error) {
+      if (nodeErrorCode(error as NodeJS.ErrnoException) !== 'ENOENT')
+        return false;
+    }
+  }
+  return namespaces;
+}
+
+function escapeRegularExpression(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
 }
 
 function processMachineIdentity(): string | false {

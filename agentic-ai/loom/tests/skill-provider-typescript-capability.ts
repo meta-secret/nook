@@ -636,23 +636,37 @@ function assertGitSafeDirectoryEnvironment(request: {
     key.text !== 'safe.directory' ||
     value === false ||
     cwd === false ||
-    !stableEquivalentExpression({ first: value, second: cwd })
+    !isStableSafeDirectoryValue({ value, cwd })
   )
     throw new Error(
       `Unsafe TypeScript Git safe.directory environment in ${request.request.sourcePath}.`,
     );
 }
 
-function stableEquivalentExpression(request: {
-  readonly first: ts.Expression;
-  readonly second: ts.Expression;
+function isStableSafeDirectoryValue(request: {
+  readonly value: ts.Expression;
+  readonly cwd: ts.Expression;
 }): boolean {
-  const stable = (expression: ts.Expression): boolean =>
-    ts.isIdentifier(expression) || ts.isStringLiteral(expression);
+  const safeDirectory = unwrapTypescriptExpression(request.value);
+  const workingDirectory = unwrapTypescriptExpression(request.cwd);
+  if (ts.isIdentifier(safeDirectory) && ts.isIdentifier(workingDirectory))
+    return safeDirectory.text === workingDirectory.text;
+  const canonicalLiteral =
+    ts.isStringLiteral(safeDirectory) &&
+    (safeDirectory.text === '/' ||
+      (safeDirectory.text.startsWith('/') &&
+        !safeDirectory.text.endsWith('/') &&
+        safeDirectory.text
+          .split('/')
+          .slice(1)
+          .every(
+            (segment) =>
+              segment.length > 0 && segment !== '.' && segment !== '..',
+          )));
   return (
-    stable(request.first) &&
-    stable(request.second) &&
-    request.first.getText() === request.second.getText()
+    canonicalLiteral &&
+    ts.isStringLiteral(workingDirectory) &&
+    safeDirectory.text === workingDirectory.text
   );
 }
 

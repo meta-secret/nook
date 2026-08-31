@@ -132,6 +132,8 @@ export async function publishDiscardTombstone(request: {
         cause: error,
       });
   }
+  runStorageHook(request.beforeParentSync);
+  await syncParent(request.path);
   await unlink(request.path);
   runStorageHook(request.beforeParentSync);
   await syncParent(request.path);

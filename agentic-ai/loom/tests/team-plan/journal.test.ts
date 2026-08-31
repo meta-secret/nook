@@ -39,6 +39,7 @@ import {
   teamPlanSha256,
   withTeamPlanJournalLock,
 } from '../../src/team-plan/journal.ts';
+import { teamPlanLinuxNamespaceLockRecoverable } from '../../src/team-plan/journal-lock.ts';
 import {
   TEAM_PLAN_JOURNAL_VERSION,
   TeamPlanEventKind,
@@ -238,6 +239,32 @@ async function finalizeStartedFixture(request: {
 }
 
 describe('Team Plan journal', () => {
+  test('recovers only a terminated foreign PID namespace', () => {
+    const current = 'machine:boot:pid:[101]';
+    const owner = 'machine:boot:pid:[202]:start-ticks:303';
+    expect(
+      teamPlanLinuxNamespaceLockRecoverable({
+        ownerIdentity: owner,
+        currentMachineIdentity: current,
+        liveNamespaces: new Set(),
+      }),
+    ).toBe(true);
+    expect(
+      teamPlanLinuxNamespaceLockRecoverable({
+        ownerIdentity: owner,
+        currentMachineIdentity: current,
+        liveNamespaces: new Set(['pid:[202]']),
+      }),
+    ).toBe(false);
+    expect(
+      teamPlanLinuxNamespaceLockRecoverable({
+        ownerIdentity: 'foreign:boot:pid:[202]:start-ticks:303',
+        currentMachineIdentity: current,
+        liveNamespaces: new Set(),
+      }),
+    ).toBe(false);
+  });
+
   test('recovers only a Git-CAS owner with mismatched process start', async () => {
     const { fixture, journalPath } = await startedFixture();
     const ref = lockRef({ fixture, journalPath });
@@ -284,6 +311,26 @@ describe('Team Plan journal', () => {
       }),
     ).rejects.toThrow('already in use');
     fixtureGit(fixture)(['update-ref', '-d', ref, foreign]);
+    if (process.platform === 'linux') {
+      const namespace = readlinkSync('/proc/self/ns/pid');
+      const terminated = ownerBlob({
+        fixture,
+        name: 'terminated-namespace-lock.json',
+        contents: owner({
+          version: 3,
+          pid: process.pid,
+          processIdentity: `${machineIdentity.slice(0, -namespace.length)}pid:[2147483647]:start-ticks:1`,
+          token: 'terminated-namespace',
+        }),
+      });
+      fixtureGit(fixture)(['update-ref', ref, terminated]);
+      expect(
+        await withTeamPlanJournalLock({
+          journalPath,
+          action: async () => 'recovered-namespace',
+        }),
+      ).toBe('recovered-namespace');
+    }
     const legacy = ownerBlob({
       fixture,
       name: 'legacy-lock.json',
@@ -612,7 +659,7 @@ describe('Team Plan journal', () => {
         },
       }),
     ).rejects.toThrow('parent sync failed');
-    expect(discarded).toBe(true);
+    expect(discarded).toBe(false);
     expect(existsSync(journalPath)).toBe(false);
     expect(existsSync(`${journalPath}.discarding`)).toBe(true);
     discarded = false;
@@ -651,6 +698,22 @@ describe('Team Plan journal', () => {
     });
     expect(discarded).toBe(true);
     expect(existsSync(`${journalPath}.discarding`)).toBe(false);
+  });
+
+  test('syncs a new discard hardlink before unlinking its source', async () => {
+    const { journalPath, started } = await startedFixture();
+    await finalizeStartedFixture({ journalPath, started });
+    await expect(
+      discardTeamPlanJournal({
+        journalPath,
+        discardArtifacts: () => Promise.resolve(),
+        beforeParentSync: () => {
+          throw new Error('first parent sync failed');
+        },
+      }),
+    ).rejects.toThrow('first parent sync failed');
+    expect(existsSync(journalPath)).toBe(true);
+    expect(existsSync(`${journalPath}.discarding`)).toBe(true);
   });
 
   test('rejects a discard tombstone with a foreign inode', async () => {
