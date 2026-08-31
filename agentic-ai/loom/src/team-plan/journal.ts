@@ -917,17 +917,23 @@ function nodeErrorCode(error: NodeJS.ErrnoException): string | false {
 function processStartIdentity(pid: number): string | false {
   const result = spawnSync('ps', ['-o', 'lstart=', '-p', String(pid)], {
     encoding: 'utf8',
+    env: { PATH: '/bin:/usr/bin:/usr/sbin' },
     stdio: ['ignore', 'pipe', 'ignore'],
   });
   const started = result.status === 0 ? result.stdout.trim() : '';
   if (started.length === 0) return false;
-  const bootCommand =
+  const boot = (
     process.platform === 'darwin'
-      ? ['sysctl', '-n', 'kern.boottime']
-      : ['cat', '/proc/sys/kernel/random/boot_id'];
-  const boot = spawnSync(bootCommand[0] ?? '', bootCommand.slice(1), {
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'ignore'],
-  }).stdout.trim();
+      ? spawnSync('sysctl', ['-n', 'kern.boottime'], {
+          encoding: 'utf8',
+          env: { PATH: '/bin:/usr/bin:/usr/sbin' },
+          stdio: ['ignore', 'pipe', 'ignore'],
+        })
+      : spawnSync('cat', ['/proc/sys/kernel/random/boot_id'], {
+          encoding: 'utf8',
+          env: { PATH: '/bin:/usr/bin:/usr/sbin' },
+          stdio: ['ignore', 'pipe', 'ignore'],
+        })
+  ).stdout.trim();
   return `${hostname()}:${boot || 'boot-unavailable'}:${started}`;
 }
