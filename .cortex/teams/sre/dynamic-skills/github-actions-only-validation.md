@@ -23,7 +23,7 @@ wastes hosted concurrency before the branch is ready.
 Validation has three layers:
 
 - **Required handoff:** Team Agents format and commit without pushing. Gizmo
-  integrates, runs `task loom:pre-push`, and owns publication.
+  continues from that commit, runs `task loom:pre-push`, and owns publication.
 - **Focused evidence:** after Gizmo pushes a non-ready head, use
   `task remote TASK_NAME=<name>` for one relevant gate.
   - Do not batch broad gates sequentially before complete validation.
