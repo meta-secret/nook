@@ -32,24 +32,26 @@ export function freezeModuleDeliveryAdmissionSource(
 function assertExactWritesAreNotSourceDirectories(
   request: FrozenModuleDeliveryAdmissionSource,
 ): void {
+  const exactWrites = request.acceptedPlan.plan.nodes.flatMap((node) =>
+    node.kind === ModuleDeliveryTaskKind.Write
+      ? node.resources.write.filter((write) => !write.includes('*'))
+      : [],
+  );
+  if (exactWrites.length === 0) return;
   const sourceTree = sourceTreeKinds(request);
-  for (const node of request.acceptedPlan.plan.nodes) {
-    if (node.kind !== ModuleDeliveryTaskKind.Write) continue;
-    for (const write of node.resources.write) {
-      if (write.includes('*')) continue;
-      const segments = write.split('/');
-      for (let length = 1; length < segments.length; length += 1) {
-        const ancestor = segments.slice(0, length).join('/');
-        if (sourceTree.entries.has(ancestor) && !sourceTree.trees.has(ancestor))
-          throw new Error(
-            `Exact ordinary write claim has a non-directory source ancestor: ${ancestor}`,
-          );
-      }
-      if (sourceTree.trees.has(write))
+  for (const write of exactWrites) {
+    const segments = write.split('/');
+    for (let length = 1; length < segments.length; length += 1) {
+      const ancestor = segments.slice(0, length).join('/');
+      if (sourceTree.entries.has(ancestor) && !sourceTree.trees.has(ancestor))
         throw new Error(
-          `Exact ordinary write claim names a source directory: ${write}`,
+          `Exact ordinary write claim has a non-directory source ancestor: ${ancestor}`,
         );
     }
+    if (sourceTree.trees.has(write))
+      throw new Error(
+        `Exact ordinary write claim names a source directory: ${write}`,
+      );
   }
 }
 

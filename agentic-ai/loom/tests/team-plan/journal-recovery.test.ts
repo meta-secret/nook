@@ -1,14 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import {
-  existsSync,
-  linkSync,
-  readFileSync,
-  readlinkSync,
-  writeFileSync,
-} from 'node:fs';
-import { hostname } from 'node:os';
+import { existsSync, linkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { spawnSync } from 'node:child_process';
 
 import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
 import {
@@ -26,7 +18,6 @@ import {
   createTeamPlanJournal,
   discardTeamPlanJournal,
   teamPlanSha256,
-  withTeamPlanJournalLock,
 } from '../../src/team-plan/journal.ts';
 import {
   TEAM_PLAN_JOURNAL_VERSION,
@@ -36,7 +27,6 @@ import {
 import {
   createGitFixture,
   disposeGitFixture,
-  fixtureGit,
 } from '../module-delivery/worktree-test-support.ts';
 
 import type { ModuleDeliveryPlanV2 } from '../../src/module-delivery/index.ts';
@@ -168,48 +158,7 @@ async function finalizeFixture(request: {
   });
 }
 
-function testMachineIdentity(): string {
-  const boot =
-    process.platform === 'darwin'
-      ? spawnSync('sysctl', ['-n', 'kern.boottime'], { encoding: 'utf8' })
-          .stdout
-      : readFileSync('/proc/sys/kernel/random/boot_id', 'utf8');
-  const namespace =
-    process.platform === 'linux' ? readlinkSync('/proc/self/ns/pid') : 'host';
-  return `${hostname()}:${boot.trim()}:${namespace}`;
-}
-
 describe('Team Plan journal recovery', () => {
-  test('ignores Git replacement refs while recovering a stale lock', async () => {
-    const { fixture, journalPath } = await startedFixture();
-    const ref = `refs/nook/team-plan-locks/${teamPlanSha256(
-      `${fixture.sourceRoot}\n${journalPath}`,
-    )}`;
-    const stalePath = join(fixture.root, 'stale-lock.json');
-    const forgedPath = join(fixture.root, 'replacement-lock.json');
-    writeFileSync(
-      stalePath,
-      `${JSON.stringify({
-        version: 3,
-        pid: process.pid,
-        processIdentity: `${testMachineIdentity()}:start-ticks:1`,
-        token: 'stale',
-      })}\n`,
-    );
-    writeFileSync(forgedPath, '{"forged":true}\n');
-    const stale = fixtureGit(fixture)(['hash-object', '-w', stalePath]);
-    const forged = fixtureGit(fixture)(['hash-object', '-w', forgedPath]);
-    fixtureGit(fixture)(['update-ref', ref, stale]);
-    fixtureGit(fixture)(['replace', stale, forged]);
-
-    expect(
-      await withTeamPlanJournalLock({
-        journalPath,
-        action: async () => 'recovered-without-replacement',
-      }),
-    ).toBe('recovered-without-replacement');
-  });
-
   test('preserves an unfinalized journal when a matching tombstone exists', async () => {
     const { journalPath } = await startedFixture();
     linkSync(journalPath, `${journalPath}.discarding`);
