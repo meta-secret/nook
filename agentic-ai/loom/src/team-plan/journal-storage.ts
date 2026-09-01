@@ -21,6 +21,12 @@ export type JournalStorageHook =
   | Readonly<{ presence: 'absent' }>
   | Readonly<{ presence: 'present'; run: () => void }>;
 
+export type PublishNewJournalFileRequest = Readonly<{
+  path: string;
+  serialized: string;
+  beforePublicationCleanup: JournalStorageHook;
+}>;
+
 export async function canonicalTeamPlanJournalPath(
   journalPath: string,
 ): Promise<string> {
@@ -94,17 +100,16 @@ export async function readBoundedTeamPlanJournal(
   }
 }
 
-export async function publishNewJournalFile(request: {
-  readonly path: string;
-  readonly serialized: string;
-  readonly beforePublicationCleanup: JournalStorageHook;
-}): Promise<void> {
+export async function publishNewJournalFile(
+  request: PublishNewJournalFileRequest,
+): Promise<void> {
   const publication = `${request.path}.publishing`;
   if (
     await recoverJournalPublication({
       path: request.path,
       publication,
       serialized: request.serialized,
+      beforePublicationCleanup: request.beforePublicationCleanup,
     })
   )
     return;
@@ -142,6 +147,7 @@ async function recoverJournalPublication(request: {
   readonly path: string;
   readonly publication: string;
   readonly serialized: string;
+  readonly beforePublicationCleanup: JournalStorageHook;
 }): Promise<boolean> {
   if (!(await pathExists(request.publication))) return false;
   const published = await pathExists(request.path);
@@ -154,7 +160,10 @@ async function recoverJournalPublication(request: {
     });
     if (temporary.serialized !== request.serialized)
       throw new Error('Team Plan journal publication is stale or forged.');
+    await link(request.publication, request.path);
+    await syncParent(request.path);
   }
+  runStorageHook(request.beforePublicationCleanup);
   await unlink(request.publication);
   await syncParent(request.path);
   return published;

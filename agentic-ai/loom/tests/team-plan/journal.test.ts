@@ -725,6 +725,39 @@ describe('Team Plan journal', () => {
     );
   });
 
+  test('keeps marker-only publication durable while relinking', async () => {
+    const { journalPath, started } = await startedFixture();
+    unlinkSync(journalPath);
+    await expect(
+      createTeamPlanJournal({
+        journalPath,
+        event: started,
+        beforePublicationCleanup: () => {
+          throw new Error('publication cleanup interrupted');
+        },
+      }),
+    ).rejects.toThrow('publication cleanup interrupted');
+    unlinkSync(journalPath);
+
+    await expect(
+      createTeamPlanJournal({
+        journalPath,
+        event: started,
+        beforePublicationCleanup: () => {
+          throw new Error('relink cleanup interrupted');
+        },
+      }),
+    ).rejects.toThrow('relink cleanup interrupted');
+    expect(statSync(journalPath).nlink).toBe(2);
+    expect(statSync(`${journalPath}.publishing`).nlink).toBe(2);
+
+    await createTeamPlanJournal({ journalPath, event: started });
+    expect(existsSync(`${journalPath}.publishing`)).toBe(false);
+    expect((await loadTeamPlanJournal(journalPath)).started.runId).toBe(
+      started.runId,
+    );
+  });
+
   test('rejects an invalid discard completion before journal creation', async () => {
     const { journalPath, started } = await startedFixture();
     unlinkSync(journalPath);
