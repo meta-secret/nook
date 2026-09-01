@@ -110,12 +110,13 @@ as completed delivery.
    - Use immediate focused remote evidence or complete exact-head validation.
      Hosted Repository policy and PR verification enforce the UI-demo and
      other product or publication contracts.
-   - Run `task loom:pre-push` before each push.
+   - Run `task loom:pre-push PR=<number>` before each review-fix push.
    - Gizmo may commit deterministic integration-only state.
    - If pre-push hygiene mutates team-owned source or Cortex content, do not
      author or commit that diff as Gizmo.
    - Return the diff to the responsible team for a fresh formatted commit.
-   - Reintegrate that commit and rerun `task loom:pre-push` before pushing.
+   - Reintegrate that commit and rerun `task loom:pre-push PR=<number>` before
+     pushing a review fix.
    - Promptly commit any integration-only state and push the coherent head.
    - Do not add broad local builds, tests, e2e, container product gates, local
      review, or duplicate hosted-check mirrors before the push.

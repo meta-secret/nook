@@ -40,6 +40,13 @@ test('blocks at the 3,000-line review-growth stop', () => {
   )
 })
 
+test('classifies an oversized initial delivery before the review stop', () => {
+  assert.match(
+    evaluateBudget({ authoredLines: 3_000, prNumber: '', verifiedReviewContext: false }).message,
+    /without PR-verified review-fix context/,
+  )
+})
+
 test('counts authored rows and reports generated and lockfile rows separately', () => {
   const summary = summarizeNumstat(
     '12\t3\tsrc/domain.ts\0' +
@@ -73,40 +80,42 @@ test('counts an untracked symlink blob without following its target', () => {
 
 test('binds review growth to the current PR head, thread, and changed path', () => {
   const input = {
-    pr: { headRefOid: 'a'.repeat(40) },
     threads: [{ isResolved: false, isOutdated: false, path: 'src/fix.ts' }],
     reviews: [],
     comments: [],
     changedPaths: ['src/fix.ts', 'src/fix.test.ts'],
     publishedAt: '2026-01-01T00:00:00Z',
-    hasNextPage: false,
   }
   assert.equal(reviewBatchMatches(input), true)
   assert.equal(reviewBatchMatches({ ...input, changedPaths: ['src/other.ts'] }), false)
   assert.equal(reviewBatchMatches({ ...input, threads: [{ ...input.threads[0], isOutdated: true }] }), true)
   assert.equal(reviewBatchMatches({ ...input, threads: [{ ...input.threads[0], isResolved: true }] }), false)
-  assert.equal(reviewBatchMatches({ ...input, changedPaths: ['src/renamed.ts', 'src/fix.ts'] }), true)
   assert.equal(reviewBatchMatches({
     ...input,
     threads: [{ ...input.threads[0], path: 'src/fix.cjs' }],
     changedPaths: ['src/fix.ts'],
-  }), true)
+  }), false)
 })
 
 test('accepts reviewed-head bodies, committed fixes, and later PR comments', () => {
   const input = {
-    pr: { headRefOid: 'a'.repeat(40) },
     threads: [], reviews: [], comments: [], changedPaths: ['src/fix.ts'],
-    publishedAt: '2026-01-01T10:30:00-07:00', hasNextPage: false,
+    publishedAt: '2026-01-01T10:30:00-07:00',
   }
-  assert.equal(reviewBatchMatches({ ...input, reviews: [{ body: 'Please fix.', state: 'COMMENTED' }] }), true)
-  assert.equal(reviewBatchMatches({ ...input, reviews: [{ body: 'Please fix.', state: 'CHANGES_REQUESTED' }] }), true)
-  assert.equal(reviewBatchMatches({ ...input, reviews: [{ body: 'LGTM', state: 'APPROVED' }] }), false)
-  assert.equal(reviewBatchMatches({ ...input, reviews: [{ body: 'Old finding', state: 'DISMISSED' }] }), false)
+  const currentReview = { author: { login: 'reviewer' }, submittedAt: '2026-01-02T00:00:00Z' }
+  assert.equal(reviewBatchMatches({ ...input, reviews: [{ ...currentReview, body: 'Please fix.', state: 'COMMENTED' }] }), true)
+  assert.equal(reviewBatchMatches({ ...input, reviews: [{ ...currentReview, body: 'Please fix.', state: 'CHANGES_REQUESTED' }] }), true)
+  assert.equal(reviewBatchMatches({ ...input, reviews: [{ ...currentReview, body: 'LGTM', state: 'APPROVED' }] }), false)
+  assert.equal(reviewBatchMatches({ ...input, reviews: [{ ...currentReview, body: 'Old finding', state: 'DISMISSED' }] }), false)
+  assert.equal(reviewBatchMatches({ ...input, reviews: [
+    { ...currentReview, body: 'Please fix.', state: 'CHANGES_REQUESTED' },
+    { ...currentReview, body: '', state: 'APPROVED', submittedAt: '2026-01-03T00:00:00Z' },
+  ] }), false)
   assert.equal(reviewBatchMatches({
     ...input,
     reviews: [{
       author: { login: 'chatgpt-codex-connector[bot]' },
+      submittedAt: currentReview.submittedAt,
       body: '### 💡 Codex Review\n\nHere are some automated review suggestions for this pull request.\n\n**Reviewed commit:** `aaaaaaaaaa`',
       state: 'COMMENTED',
     }],
@@ -115,6 +124,7 @@ test('accepts reviewed-head bodies, committed fixes, and later PR comments', () 
     ...input,
     reviews: [{
       author: { login: 'chatgpt-codex-connector[bot]' },
+      submittedAt: currentReview.submittedAt,
       body: '### 💡 Codex Review\n\nHere are some automated review suggestions for this pull request.\n\n**Reviewed commit:** `aaaaaaaaaa`\n\nActionable finding',
       state: 'COMMENTED',
     }],
@@ -123,11 +133,12 @@ test('accepts reviewed-head bodies, committed fixes, and later PR comments', () 
     ...input,
     reviews: [{
       author: { login: 'cursor[bot]' },
+      submittedAt: currentReview.submittedAt,
       body: '<details><summary>Stale comment</summary></details>',
       state: 'COMMENTED',
     }],
   }), false)
-  assert.equal(reviewBatchMatches({ ...input, comments: [{ body: 'Please fix.', createdAt: '2026-01-02T00:00:00Z' }] }), true)
+  assert.equal(reviewBatchMatches({ ...input, comments: [{ body: 'Please fix.', createdAt: '2025-01-02T00:00:00Z', updatedAt: '2026-01-02T00:00:00Z' }] }), true)
   assert.equal(reviewBatchMatches({ ...input, comments: [{ body: 'Looks good to me.', createdAt: '2026-01-02T00:00:00Z' }] }), false)
   assert.equal(reviewBatchMatches({ ...input, comments: [{ body: 'Please fix.', createdAt: '2026-01-01T16:00:00Z' }] }), false)
   assert.equal(reviewBatchMatches({

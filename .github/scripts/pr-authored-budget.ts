@@ -145,6 +145,12 @@ export function countTextLines(text) {
 }
 
 export function evaluateBudget({ authoredLines, prNumber, verifiedReviewContext }) {
+  if (authoredLines > INITIAL_PR_LIMIT && !prNumber) {
+    return {
+      ok: false,
+      message: `authored diff exceeds 2,000 lines without PR-verified review-fix context: ${authoredLines}`,
+    }
+  }
   if (authoredLines >= REVIEW_GROWTH_STOP) {
     return {
       ok: false,
@@ -152,12 +158,6 @@ export function evaluateBudget({ authoredLines, prNumber, verifiedReviewContext 
     }
   }
   if (authoredLines <= INITIAL_PR_LIMIT) return { ok: true, mode: 'initial' }
-  if (!prNumber) {
-    return {
-      ok: false,
-      message: `authored diff exceeds 2,000 lines without PR-verified review-fix context: ${authoredLines}`,
-    }
-  }
   if (!verifiedReviewContext) {
     return {
       ok: false,
@@ -216,21 +216,28 @@ function isCodexStatusReviewBody(review) {
 }
 
 export function reviewBatchMatches({
-  pr, threads, reviews, comments, changedPaths, publishedAt,
-  hasNextPage,
+  threads, reviews, comments, changedPaths, publishedAt,
 }) {
-  if (hasNextPage || changedPaths.length === 0) return false
+  if (changedPaths.length === 0) return false
   const currentPaths = new Set(
     threads
       .filter((thread) => !thread.isResolved)
       .map((thread) => thread.path),
   )
-  const inlineMatch = changedPaths.some((path) =>
-    currentPaths.has(path) ||
-    (path.endsWith('.ts') && currentPaths.has(`${path.slice(0, -3)}.cjs`)),
-  )
-  const reviewBodyMatch = reviews.some(
+  const inlineMatch = changedPaths.some((path) => currentPaths.has(path))
+  const publishedTime = Date.parse(publishedAt)
+  const latestReviews = new Map()
+  for (const review of reviews) {
+    const login = review.author?.login
+    if (!login || !review.submittedAt) continue
+    const previous = latestReviews.get(login)
+    if (!previous || Date.parse(review.submittedAt) > Date.parse(previous.submittedAt)) {
+      latestReviews.set(login, review)
+    }
+  }
+  const reviewBodyMatch = [...latestReviews.values()].some(
     (review) => ['COMMENTED', 'CHANGES_REQUESTED'].includes(review.state) &&
+      Number.isFinite(publishedTime) && Date.parse(review.submittedAt) > publishedTime &&
       review.body.trim() &&
       !isNonActionableReviewBody(review.body) &&
       !isCodexStatusReviewBody(review) &&
@@ -239,9 +246,9 @@ export function reviewBatchMatches({
         review.body.includes('<summary>Stale comment</summary>')
       ),
   )
-  const publishedTime = Date.parse(publishedAt)
   const commentMatch = comments.some((comment) =>
-    Number.isFinite(publishedTime) && Date.parse(comment.createdAt) > publishedTime &&
+    Number.isFinite(publishedTime) &&
+    Date.parse(comment.updatedAt || comment.createdAt) > publishedTime &&
     comment.body.trim() &&
     !isNonActionableReviewBody(comment.body) &&
     !(
@@ -255,6 +262,15 @@ export function reviewBatchMatches({
     !/^@\S+ this workflow assigned you PR #\d+\. Continue only this PR's recorded scope through review, exact-head validation, and squash merge\.$/u.test(comment.body.trim()),
   )
   return Boolean(inlineMatch || reviewBodyMatch || commentMatch)
+}
+
+function pagedPrNodes(owner, name, number, field, selection) {
+  const query = `query($owner:String!,$name:String!,$number:Int!,$endCursor:String){repository(owner:$owner,name:$name){pullRequest(number:$number){${field}(first:100,after:$endCursor){nodes{${selection}}pageInfo{hasNextPage endCursor}}}}}`
+  const pages = JSON.parse(runGh([
+    'api', 'graphql', '--paginate', '--slurp', '-f', `query=${query}`,
+    '-f', `owner=${owner}`, '-f', `name=${name}`, '-F', `number=${number}`,
+  ]))
+  return pages.flatMap((page) => page.data.repository.pullRequest[field].nodes)
 }
 
 function verifyReviewContext(prNumber) {
@@ -274,26 +290,25 @@ function verifyReviewContext(prNumber) {
     return false
   }
   const [owner, name] = repository.split('/')
-  const review = JSON.parse(runGh([
+  const publication = JSON.parse(runGh([
     'api', 'graphql',
-    '-f', 'query=query($owner:String!,$name:String!,$number:Int!,$head:GitObjectID!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){pageInfo{hasNextPage}nodes{isResolved isOutdated path}}reviews(last:100){pageInfo{hasPreviousPage}nodes{author{login} body state}}comments(last:100){pageInfo{hasPreviousPage}nodes{author{login} body createdAt}}}object(oid:$head){... on Commit{committedDate pushedDate}}}}',
-    '-f', `owner=${owner}`, '-f', `name=${name}`, '-F', `number=${prNumber}`,
+    '-f', 'query=query($owner:String!,$name:String!,$head:GitObjectID!){repository(owner:$owner,name:$name){object(oid:$head){... on Commit{committedDate pushedDate}}}}',
+    '-f', `owner=${owner}`, '-f', `name=${name}`,
     '-f', `head=${pr.headRefOid}`,
-  ])).data.repository
+  ])).data.repository.object
+  const threads = pagedPrNodes(owner, name, prNumber, 'reviewThreads', 'isResolved isOutdated path')
+  const reviews = pagedPrNodes(owner, name, prNumber, 'reviews', 'author{login} body state submittedAt')
+  const comments = pagedPrNodes(owner, name, prNumber, 'comments', 'author{login} body createdAt updatedAt')
   const changedPaths = runGit(['diff', '--name-only', '--no-renames', '-z', pr.headRefOid])
     .split('\0')
     .concat(runGit(['ls-files', '--others', '--exclude-standard', '-z']).split('\0'))
     .filter(Boolean)
   return reviewBatchMatches({
-    pr,
-    threads: review.pullRequest.reviewThreads.nodes,
-    reviews: review.pullRequest.reviews.nodes,
-    comments: review.pullRequest.comments.nodes,
+    threads,
+    reviews,
+    comments,
     changedPaths,
-    publishedAt: review.object.pushedDate || review.object.committedDate,
-    hasNextPage: review.pullRequest.reviewThreads.pageInfo.hasNextPage ||
-      review.pullRequest.reviews.pageInfo.hasPreviousPage ||
-      review.pullRequest.comments.pageInfo.hasPreviousPage,
+    publishedAt: publication.pushedDate || publication.committedDate,
   })
 }
 
