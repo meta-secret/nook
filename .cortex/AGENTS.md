@@ -51,9 +51,10 @@ or second coordinator. See the [Gizmo contract](gizmo/AGENTS.md).
   active harness. This includes implementation and review fixes.
 - Gizmo Prime is prohibited from performing any worker-executable Team Agent
   work itself.
-- If a required real Team Agent cannot be created or an authorized attempt
-  cannot be dispatched, Gizmo Prime stops the task immediately and reports the
-  blocker.
+- Gizmo Prime stops the task immediately and reports the blocker when:
+  - a required real Team Agent cannot be created;
+  - an authorized attempt cannot be dispatched; or
+  - a dispatched attempt cannot be started.
 - After an attempt starts, Gizmo Prime follows the canonical bounded sequential
   retry and conclusive-disposition process.
 - Gizmo Prime stops with a blocker when that process is exhausted without an

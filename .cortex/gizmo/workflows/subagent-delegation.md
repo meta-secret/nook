@@ -130,6 +130,7 @@ Every subagent task must declare:
 
 - a stable task ID;
 - exactly one team identity;
+- the current pull-request identity for user-visible activity context;
 - an explicit functional owner;
 - any separate semantic role or expert required by the task;
 - its exact baseline;
@@ -160,6 +161,23 @@ names the expertise-provider team while the functional owner remains the
 acceptance owner whose approval is required before Gizmo integration. A
 semantic role or expert selects bounded knowledge. None of these fields can
 replace another.
+
+### Pull-request activity context
+
+The pull-request identity uses the root activity-context values: the exact
+`#<number>`, `pending`, or `none`. Gizmo supplies the current value with the
+delegated worker contract before the worker's first user-visible activity.
+
+When Gizmo creates the pull request, it refreshes that value through the active
+harness before the worker's next user-visible activity. Gizmo does the same
+after moving the work to another stacked pull request. The worker then re-emits
+its activity context with the new value. The worker must not infer pull-request
+identity from a branch or workspace.
+
+This field is live communication metadata, not plan-shaping task data. A
+refresh does not change the immutable generation, task identity, scope,
+claims, provider edges, acceptance evidence, or starting-frontier rule. It
+grants no GitHub or delivery authority.
 
 ### Attempts and results
 
@@ -714,6 +732,10 @@ Before integration, verify:
 
 - every worker used its declared exact baseline;
 - every team worker used its declared team identity;
+- every worker received the current pull-request identity before its first
+  user-visible activity;
+- every pull-request creation or stacked-pull-request transition was refreshed
+  through the active harness before that worker's next user-visible activity;
 - every worker-executable team or provider task recorded an explicit functional
   owner separately from team identity;
 - every expertise result received semantic acceptance from its recorded
