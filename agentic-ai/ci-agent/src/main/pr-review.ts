@@ -1,6 +1,7 @@
 import {
   DEFAULT_REVIEW_CLOCK,
   ExactHeadReviewFallback,
+  ExactHeadReviewRevisionState,
   requestExactHeadReview,
   type ExactHeadReviewRequestResult,
 } from "./github-review.js";
@@ -149,7 +150,9 @@ export async function runPrReviewRequest(): Promise<void> {
     pollIntervalMs: HEAD_TRANSITION_POLL_INTERVAL_MS,
     readRevision: () => readPullRequestRevision(octokit, repoRef, prNumber),
     requestReview: (revision) =>
-      requestExactHeadReview(octokit, repoRef, prNumber, undefined, revision),
+      requestExactHeadReview(octokit, repoRef, prNumber, {
+        revision: { revision, state: ExactHeadReviewRevisionState.Bound },
+      }),
     timeoutMs: HEAD_TRANSITION_WAIT_TIMEOUT_MS,
     waitMs: DEFAULT_REVIEW_CLOCK.waitMs,
   });
@@ -171,7 +174,14 @@ export async function requestExactHeadReviewWithCircuitBreaker(
     assertPullRequestRevision(revision, observation.revision);
   }
   if (observation.state === HeadTransitionObservationState.Missing) {
-    await input.ensureHeadTransition(revision);
+    const dispatch = await attemptBeforeDeadline({
+      deadline,
+      now: input.now,
+      operation: () => input.ensureHeadTransition(revision),
+    });
+    if (!dispatch.completed) {
+      throw headTransitionDispatchTimeoutError(input.timeoutMs);
+    }
     do {
       const remainingMs = deadline - input.now();
       if (remainingMs <= 0) {
@@ -203,6 +213,12 @@ export async function requestExactHeadReviewWithCircuitBreaker(
     };
   }
   return { ...result, requested: true, state: ReviewRequestState.Requested };
+}
+
+function headTransitionDispatchTimeoutError(timeoutMs: number): Error {
+  return new Error(
+    `Trusted exact-head transition backfill did not complete within ${timeoutMs}ms; no feedback was inspected and no review was requested`,
+  );
 }
 
 async function observeBeforeDeadline(

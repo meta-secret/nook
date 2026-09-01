@@ -6,6 +6,7 @@ import type { Octokit } from "@octokit/rest";
 import {
   ExactHeadReviewFallback,
   ExactHeadReviewProvider,
+  ExactHeadReviewRevisionState,
   codexReviewRequestMarker,
   cursorReviewRequestMarker,
   requestExactHeadReview,
@@ -133,7 +134,12 @@ test("requestExactHeadReview detects a revision change before Codex contact", as
   });
 
   await assert.rejects(
-    requestExactHeadReview(octokit, repoRef, 410, undefined, expected),
+    requestExactHeadReview(octokit, repoRef, 410, {
+      revision: {
+        revision: expected,
+        state: ExactHeadReviewRevisionState.Bound,
+      },
+    }),
     /Pull request revision changed.*no review was requested/,
   );
   assert.equal(createCalls.count, 0);
@@ -351,8 +357,10 @@ test("requestExactHeadReview keeps a Codex usage limit non-blocking", async () =
   };
 
   const result = await requestExactHeadReview(octokit, repoRef, 410, {
-    clock,
-    probe: { intervalMs: 1, timeoutMs: 20 },
+    availability: {
+      clock,
+      probe: { intervalMs: 1, timeoutMs: 20 },
+    },
   });
 
   assert.deepEqual(result, {

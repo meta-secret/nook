@@ -61,6 +61,23 @@ export type ExactHeadReviewAvailability = {
   probe: ReviewAvailabilityProbe;
 };
 
+export enum ExactHeadReviewRevisionState {
+  Bound = "bound",
+  Unbound = "unbound",
+}
+
+export type ExactHeadReviewRevision =
+  | {
+      revision: PullRequestRevision;
+      state: ExactHeadReviewRevisionState.Bound;
+    }
+  | { state: ExactHeadReviewRevisionState.Unbound };
+
+export type ExactHeadReviewOptions = {
+  availability?: ExactHeadReviewAvailability;
+  revision?: ExactHeadReviewRevision;
+};
+
 export type ExactHeadReviewRequestResult = {
   fallback: ExactHeadReviewFallback;
   headSha: string;
@@ -151,10 +168,13 @@ export async function requestExactHeadReview(
   octokit: Octokit,
   repoRef: RepoRef,
   prNumber: number,
-  availability?: ExactHeadReviewAvailability,
-  expectedRevision?: PullRequestRevision,
+  options: ExactHeadReviewOptions = {},
 ): Promise<ExactHeadReviewRequestResult> {
   const { owner, repo } = repoRef;
+  const availability = options.availability;
+  const expectedRevision = options.revision ?? {
+    state: ExactHeadReviewRevisionState.Unbound,
+  };
   const { data: pr } = await octokit.rest.pulls.get({
     owner,
     repo,
@@ -175,7 +195,7 @@ export async function requestExactHeadReview(
     prNumber,
     repo,
   });
-  if (expectedRevision) {
+  if (expectedRevision.state === ExactHeadReviewRevisionState.Bound) {
     const { data: currentPr } = await octokit.rest.pulls.get({
       owner,
       repo,
@@ -260,19 +280,19 @@ export async function requestExactHeadReview(
 }
 
 function assertExpectedRevision(
-  expected: PullRequestRevision | undefined,
+  expected: ExactHeadReviewRevision,
   actual: PullRequestRevision,
 ): void {
   if (
-    !expected ||
-    (expected.baseRef === actual.baseRef &&
-      expected.baseSha === actual.baseSha &&
-      expected.headSha === actual.headSha)
+    expected.state === ExactHeadReviewRevisionState.Unbound ||
+    (expected.revision.baseRef === actual.baseRef &&
+      expected.revision.baseSha === actual.baseSha &&
+      expected.revision.headSha === actual.headSha)
   ) {
     return;
   }
   throw new Error(
-    `Pull request revision changed from ${expected.headSha}/${expected.baseSha}/${expected.baseRef} to ${actual.headSha}/${actual.baseSha}/${actual.baseRef}; no review was requested`,
+    `Pull request revision changed from ${expected.revision.headSha}/${expected.revision.baseSha}/${expected.revision.baseRef} to ${actual.headSha}/${actual.baseSha}/${actual.baseRef}; no review was requested`,
   );
 }
 

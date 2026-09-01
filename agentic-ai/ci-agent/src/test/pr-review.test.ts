@@ -287,6 +287,40 @@ test("non-waiting review request bounds a stalled boundary observation", async (
   assert.equal(reviewRequests, 0);
 });
 
+test("non-waiting review request bounds a stalled boundary dispatch", async () => {
+  let feedbackInspections = 0;
+  let reviewRequests = 0;
+
+  await assert.rejects(
+    requestExactHeadReviewWithCircuitBreaker({
+      ensureHeadTransition: () => new Promise(() => {}),
+      inspectFeedback: async () => {
+        feedbackInspections += 1;
+        return cleanFeedback;
+      },
+      now: () => Date.now(),
+      observeHeadTransition: async () => missingBoundary,
+      pollIntervalMs: 5,
+      readRevision: async () => revision,
+      requestReview: async () => {
+        reviewRequests += 1;
+        return {
+          fallback: ExactHeadReviewFallback.None,
+          headSha: "head-sha",
+          provider: ExactHeadReviewProvider.Codex,
+          requested: true,
+          settled: false,
+        };
+      },
+      timeoutMs: 10,
+      waitMs: async () => {},
+    }),
+    /backfill did not complete.*no feedback was inspected and no review was requested/,
+  );
+  assert.equal(feedbackInspections, 0);
+  assert.equal(reviewRequests, 0);
+});
+
 test("non-waiting review request detects a revision change after feedback inspection", async () => {
   const changedRevision = { ...revision, headSha: "changed-head" };
   let reads = 0;
