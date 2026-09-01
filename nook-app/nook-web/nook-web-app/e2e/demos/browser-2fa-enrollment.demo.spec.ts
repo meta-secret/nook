@@ -189,7 +189,9 @@ test('uses the paired demo vault for authenticator enrollment', async ({
   })
 
   const widget = page.locator('#nook-auth-widget')
-  await widget.getByTestId('nook-auth-gate-expand').click()
+  const expand = widget.getByTestId('nook-auth-gate-expand')
+  await expand.waitFor({ state: 'attached', timeout: 15_000 })
+  if (await expand.isVisible()) await expand.click()
   await expect(widget.locator('img.collapsed-mark')).toBeVisible()
   await expect(
     widget.getByRole('button', { name: 'Add 2FA from this page' }),
