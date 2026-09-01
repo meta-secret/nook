@@ -287,6 +287,21 @@ type ReviewThreadPage = {
 type ReviewThreads =
   ReviewThreadPage["repository"]["pullRequest"]["reviewThreads"];
 
+type IssueCommentStatePage = {
+  repository: {
+    pullRequest: {
+      comments: {
+        nodes: Array<{
+          databaseId: unknown;
+          isMinimized: boolean;
+          minimizedReason: unknown;
+        }>;
+        pageInfo: { hasNextPage: boolean; endCursor?: string };
+      };
+    };
+  };
+};
+
 const REVIEW_THREADS_QUERY = `
   query($owner: String!, $repo: String!, $number: Int!, $cursor: String) {
     repository(owner: $owner, name: $repo) {
@@ -295,6 +310,19 @@ const REVIEW_THREADS_QUERY = `
           nodes {
             isResolved
           }
+          pageInfo { hasNextPage endCursor }
+        }
+      }
+    }
+  }
+`;
+
+const ISSUE_COMMENT_STATES_QUERY = `
+  query($owner: String!, $repo: String!, $number: Int!, $cursor: String) {
+    repository(owner: $owner, name: $repo) {
+      pullRequest(number: $number) {
+        comments(first: 100, after: $cursor) {
+          nodes { databaseId isMinimized minimizedReason }
           pageInfo { hasNextPage endCursor }
         }
       }
@@ -318,8 +346,14 @@ export type PrFeedbackSummary = {
   findingBatches: number;
   substantiveComments: number;
   substantiveReviews: number;
+  unhandledComments: number;
   unthreadedReviewFindings: number;
   unresolvedThreads: number;
+};
+
+export type InspectPrFeedbackOptions = {
+  expectedRevision?: PullRequestRevision;
+  signal?: AbortSignal;
 };
 
 type RepositoryStatusCommentInput = {
@@ -334,10 +368,10 @@ export async function inspectPrFeedback(
   octokit: Octokit,
   repoRef: RepoRef,
   prNumber: number,
-  expectedRevision?: PullRequestRevision,
-  signal?: AbortSignal,
+  options: InspectPrFeedbackOptions = {},
 ): Promise<PrFeedbackSummary> {
   const { owner, repo } = repoRef;
+  const { expectedRevision, signal } = options;
   const { data: pr } = await octokit.rest.pulls.get({
     owner,
     repo,
@@ -408,6 +442,38 @@ export async function inspectPrFeedback(
         : { kind: PaginationKind.Complete };
   }
 
+  const handledIssueCommentIds = new Set<number>();
+  pagination = { kind: PaginationKind.FirstPage };
+  while (pagination.kind !== PaginationKind.Complete) {
+    const page: IssueCommentStatePage =
+      await octokit.graphql<IssueCommentStatePage>(
+        ISSUE_COMMENT_STATES_QUERY,
+        {
+          owner,
+          repo,
+          number: prNumber,
+          ...(signal ? { request: { signal } } : {}),
+          ...(pagination.kind === PaginationKind.NextPage
+            ? { cursor: pagination.cursor }
+            : {}),
+        },
+      );
+    const comments = page.repository.pullRequest.comments;
+    for (const comment of comments.nodes) {
+      if (
+        comment.isMinimized &&
+        comment.minimizedReason === "resolved" &&
+        typeof comment.databaseId === "number"
+      ) {
+        handledIssueCommentIds.add(comment.databaseId);
+      }
+    }
+    pagination =
+      comments.pageInfo.hasNextPage && comments.pageInfo.endCursor
+        ? { kind: PaginationKind.NextPage, cursor: comments.pageInfo.endCursor }
+        : { kind: PaginationKind.Complete };
+  }
+
   const marker = codexReviewRequestMarker(pr.head.sha, pr.base.sha);
   const cursorMarker = cursorReviewRequestMarker(pr.head.sha);
   const reviewRequests = issueComments.filter((comment) =>
@@ -465,6 +531,9 @@ export async function inspectPrFeedback(
       }) &&
       !isCodexCleanReviewStatusComment(comment.body ?? "", comment.user) &&
       !isNonActionableReviewBody(comment.body ?? ""),
+  );
+  const unhandledComments = substantiveComments.filter(
+    (comment) => !handledIssueCommentIds.has(comment.id),
   );
   const substantiveReviews = reviews.filter((review) => {
     if (
@@ -537,6 +606,7 @@ export async function inspectPrFeedback(
     findingBatches: countAutomatedFindingBatches(findingBatchRequest),
     substantiveComments: substantiveComments.length,
     substantiveReviews: substantiveReviews.length,
+    unhandledComments: unhandledComments.length,
     unthreadedReviewFindings: unthreadedReviewFindings.length,
     unresolvedThreads,
   };

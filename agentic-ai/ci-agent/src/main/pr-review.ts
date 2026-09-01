@@ -21,7 +21,7 @@ const STABILIZATION_POLL_INTERVAL_MS = 15_000;
 const ZERO_WAIT_FEEDBACK_SNAPSHOT_TIMEOUT_MS = 15_000;
 const REVIEW_REQUEST_TIMEOUT_MS = 45_000;
 
-type ReviewStabilizationRequest = () => Promise<{
+type ReviewStabilizationRequest = (signal: AbortSignal) => Promise<{
   fallback?: ExactHeadReviewFallback;
   headSha: string;
   settled: boolean;
@@ -29,7 +29,7 @@ type ReviewStabilizationRequest = () => Promise<{
 
 type ReviewStabilizationInput = {
   circuitBreakerAcknowledged?: boolean;
-  inspectFeedback: () => Promise<PrFeedbackSummary>;
+  inspectFeedback: (signal: AbortSignal) => Promise<PrFeedbackSummary>;
   now: () => number;
   pollIntervalMs: number;
   requestReview: ReviewStabilizationRequest;
@@ -125,7 +125,10 @@ export async function runPrReviewRequest(): Promise<void> {
   const result = await requestExactHeadReviewWithCircuitBreaker({
     circuitBreakerAcknowledged: readCircuitBreakerAcknowledgement(),
     inspectFeedback: (revision, signal) =>
-      inspectPrFeedback(octokit, repoRef, prNumber, revision, signal),
+      inspectPrFeedback(octokit, repoRef, prNumber, {
+        expectedRevision: revision,
+        signal,
+      }),
     now: () => Date.now(),
     readRevision: (signal) =>
       readPullRequestRevision(octokit, repoRef, prNumber, signal),
@@ -220,10 +223,12 @@ export async function runPrReviewStabilization(): Promise<void> {
   const repoRef = parseRepository(repository);
   const result = await stabilizeExactHeadReview({
     circuitBreakerAcknowledged: readCircuitBreakerAcknowledgement(),
-    inspectFeedback: () => inspectPrFeedback(octokit, repoRef, prNumber),
+    inspectFeedback: (signal) =>
+      inspectPrFeedback(octokit, repoRef, prNumber, { signal }),
     now: () => Date.now(),
     pollIntervalMs: STABILIZATION_POLL_INTERVAL_MS,
-    requestReview: () => requestExactHeadReview(octokit, repoRef, prNumber),
+    requestReview: (signal) =>
+      requestExactHeadReview(octokit, repoRef, prNumber, { signal }),
     timeoutMs: waitSeconds * 1000,
     waitMs: DEFAULT_REVIEW_CLOCK.waitMs,
   });
@@ -426,7 +431,7 @@ function classifyFeedbackState(
     return FeedbackClassificationState.CircuitBreaker;
   }
   const hasFindings =
-    feedback.substantiveComments > 0 ||
+    feedback.unhandledComments > 0 ||
     feedback.unthreadedReviewFindings > 0 ||
     feedback.unresolvedThreads > 0;
   if (hasFindings) return FeedbackClassificationState.Findings;

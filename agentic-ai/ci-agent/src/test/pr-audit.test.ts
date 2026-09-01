@@ -78,8 +78,24 @@ test("buildPrAudit keeps old actionable comments in scope", async () => {
 
   assert.equal(audit.ready, false);
   assert.equal(audit.feedback.substantiveComments, 1);
+  assert.equal(audit.feedback.unhandledComments, 1);
 });
 
+test("buildPrAudit keeps resolved old comments visible without blocking", async () => {
+  const audit = await buildPrAudit(
+    mockOctokit({
+      codexReview: MockCodexReview.Missing,
+      handledHistoricalFinding: true,
+      historicalFinding: true,
+    }),
+    repoRef,
+    410,
+  );
+
+  assert.equal(audit.ready, true);
+  assert.equal(audit.feedback.substantiveComments, 1);
+  assert.equal(audit.feedback.unhandledComments, 0);
+});
 
 test("buildPrAudit does not wait for a current-head Codex review", async () => {
   const audit = await buildPrAudit(
@@ -376,6 +392,7 @@ type MockOptions = {
   currentHeadFinding?: boolean;
   cursorReview?: MockCursorReview;
   dismissedThreads?: number;
+  handledHistoricalFinding?: boolean;
   historicalFinding?: boolean;
   headRepository?: RepoRef;
   nativeConclusion?: MockJobConclusion;
@@ -570,8 +587,10 @@ function createMockOctokit(options: MockOptions): Octokit {
         ...(options.historicalFinding === true
           ? [
               {
+                author_association: "MEMBER",
                 body: "The older head drops the replacement-state guard.",
                 created_at: "2026-08-08T00:00:30Z",
+                id: 81,
                 user: { login: "reviewer" },
               },
             ]
@@ -698,6 +717,19 @@ function createMockOctokit(options: MockOptions): Octokit {
     graphql: async () => ({
       repository: {
         pullRequest: {
+          comments: {
+            nodes:
+              options.handledHistoricalFinding === true
+                ? [
+                    {
+                      databaseId: 81,
+                      isMinimized: true,
+                      minimizedReason: "resolved",
+                    },
+                  ]
+                : [],
+            pageInfo: { hasNextPage: false },
+          },
           reviewThreads: {
             nodes: Array.from(
               { length: options.unresolvedThreads ?? 0 },

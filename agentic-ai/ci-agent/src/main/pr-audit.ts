@@ -226,9 +226,9 @@ export async function buildPrAudit(
       `${feedback.unresolvedThreads} unresolved review thread(s) already present`,
     );
   }
-  if (feedback.substantiveComments > 0) {
+  if (feedback.unhandledComments > 0) {
     reasons.push(
-      `${feedback.substantiveComments} substantive PR comment(s) already present`,
+      `${feedback.unhandledComments} unhandled substantive PR comment(s) already present`,
     );
   }
   if (feedback.unthreadedReviewFindings > 0) {

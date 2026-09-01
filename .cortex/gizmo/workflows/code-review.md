@@ -89,6 +89,10 @@ actions:
 
 - address every actionable PR comment and submitted review finding, including
   feedback created before the current head;
+- retain every substantive top-level PR comment in inspection output;
+- minimize a handled top-level PR comment with GitHub's `RESOLVED` classifier;
+- block readiness on every substantive top-level comment that is not minimized
+  as `RESOLVED`;
 - retain every substantive submitted review body in inspection output;
 - block readiness on a substantive review body when it has no inline comments;
 - use unresolved-thread state as the deterministic readiness authority when a

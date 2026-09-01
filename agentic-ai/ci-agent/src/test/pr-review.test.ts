@@ -32,6 +32,7 @@ const cleanFeedback: PrFeedbackSummary = {
   findingBatches: 0,
   substantiveComments: 0,
   substantiveReviews: 0,
+  unhandledComments: 0,
   unthreadedReviewFindings: 0,
   unresolvedThreads: 0,
 };
@@ -345,6 +346,7 @@ test("stabilizeExactHeadReview keeps old top-level comments actionable", async (
     inspectFeedback: async () => ({
       ...cleanFeedback,
       substantiveComments: 4,
+      unhandledComments: 4,
     }),
     now: () => 0,
     pollIntervalMs: 15,
@@ -603,8 +605,12 @@ test("stabilizeExactHeadReview waits for feedback to observe settlement", async 
 
 test("stabilizeExactHeadReview bounds a stalled feedback request", async () => {
   let now = 0;
+  const signals: AbortSignal[] = [];
   const result = await stabilizeExactHeadReview({
-    inspectFeedback: () => new Promise(() => {}),
+    inspectFeedback: (signal) => {
+      signals.push(signal);
+      return new Promise(() => {});
+    },
     now: () => now,
     pollIntervalMs: 15,
     requestReview: async () => ({ headSha: "head-sha", settled: false }),
@@ -615,16 +621,23 @@ test("stabilizeExactHeadReview bounds a stalled feedback request", async () => {
   });
 
   assert.equal(now, 0);
+  assert.equal(signals[0]?.aborted, true);
   assert.equal(result.state, ReviewStabilizationState.TimedOut);
 });
 
 test("stabilizeExactHeadReview bounds a stalled review request", async () => {
   let now = 0;
+  let requests = 0;
+  const signals: AbortSignal[] = [];
   const result = await stabilizeExactHeadReview({
     inspectFeedback: async () => cleanFeedback,
     now: () => now,
     pollIntervalMs: 15,
-    requestReview: () => new Promise(() => {}),
+    requestReview: (signal) => {
+      requests += 1;
+      signals.push(signal);
+      return new Promise(() => {});
+    },
     timeoutMs: 30,
     waitMs: async (milliseconds) => {
       now += milliseconds;
@@ -632,5 +645,7 @@ test("stabilizeExactHeadReview bounds a stalled review request", async () => {
   });
 
   assert.equal(now, 0);
+  assert.equal(requests, 1);
+  assert.equal(signals[0]?.aborted, true);
   assert.equal(result.state, ReviewStabilizationState.TimedOut);
 });

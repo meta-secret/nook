@@ -24,8 +24,8 @@ review reasoning from the PR timeline and makes later agents rediscover it.
 ## Preferred Pattern
 
 Gizmo builds one checklist from inline review threads, submitted review bodies,
-and human PR comments. It filters findings against the exact current head and
-routes each active, non-outdated actionable item to its functional owner.
+and human PR comments from every head. It verifies each finding against the
+current code and routes every actionable item to its functional owner.
 
 For each routed item, the responsible team agent:
 
@@ -34,15 +34,18 @@ For each routed item, the responsible team agent:
 3. Implements the minimal correct fix when a change is required.
 4. Returns focused validation and a concise explanation to Gizmo.
 
-Gizmo then integrates the verified handoff, completes applicable validation,
-pushes the result, and replies on the original review target. When no change is
-required, Gizmo coordinates the team verification and records the rationale.
-Gizmo resolves a conversation only after its targeted reply is visible and the
-finding is fixed or explicitly invalidated.
+Gizmo integrates the verified handoff, completes applicable validation, and
+pushes the result. It then applies the handling rule for the feedback target:
 
-If an actionable item appears only in a submitted review body without a
-threaded reply target, Gizmo keeps it in the delivery checklist and final
-handoff. It does not post a broad or duplicative PR comment.
+- **Inline conversation:** Reply on the original target. Resolve it only after
+  the finding is fixed or explicitly invalidated.
+- **Top-level PR comment:** Minimize the original comment with GitHub's
+  `RESOLVED` classifier after addressing it. The comment remains visible in
+  inspection output. Readiness blocks until that explicit state exists.
+- **Review body without a thread:** Keep the actionable item in the delivery
+  checklist and final handoff. Do not post a broad or duplicative PR comment.
+
+When no change is required, Gizmo records the team's verified rationale.
 
 Inspect the currently available feedback before merge or handoff. Proceed when
 all actionable items are handled, Nook's applicable repository-owned checks are
@@ -89,7 +92,7 @@ Does not apply to:
 ## Application Checklist
 
 - [ ] Gizmo fetches submitted reviews, active review threads, and PR comments.
-- [ ] Gizmo filters review bodies by the exact current head.
+- [ ] Gizmo inspects review bodies and top-level PR comments from every head.
 - [ ] Gizmo builds a checklist for every active actionable finding.
 - [ ] Gizmo routes each finding to the responsible team agent.
 - [ ] The team agent verifies the finding before editing.
@@ -102,6 +105,7 @@ Does not apply to:
 - [ ] Gizmo pushes changed code or documentation.
 - [ ] Gizmo leaves a targeted reply with the fix, validation, or no-change
       rationale when GitHub supports one.
+- [ ] Gizmo minimizes each handled top-level PR comment as `RESOLVED`.
 - [ ] Gizmo resolves a conversation only after the targeted reply is visible.
 - [ ] Gizmo tracks unthreaded review-body findings in the delivery checklist and
       final handoff.

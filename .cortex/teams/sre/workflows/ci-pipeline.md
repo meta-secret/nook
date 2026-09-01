@@ -20,6 +20,10 @@ See [issues](../../../gizmo/workflows/issues.md),
   - Trigger: Explicit `ci:validate` / `ci:full-e2e` label
   - Purpose: Exact-head PR gate, including Rust ecosystem jobs
   - GitHub PAT: No
+- **[`pr-obsolete-validation.yml`](../../../../.github/workflows/pr-obsolete-validation.yml)**
+  - Trigger: `pull_request_target` on synchronize or base-ref edit
+  - Purpose: Cancel obsolete PR, Rust ecosystem, and Web research runs
+  - GitHub PAT: No
 - **[`repository-policy.yml`](../../../../.github/workflows/repository-policy.yml)**
   - Trigger: Every PR; path-filtered Main changes
   - Purpose: Source architecture plus conditional Loom verification
@@ -104,6 +108,18 @@ See [issues](../../../gizmo/workflows/issues.md),
 - `ci:full-e2e` additionally runs the Main-equivalent local-provider + extension browser suite.
 - Keep independent long-running gates on separate ARC Pods.
 - Combine jobs only when measured setup savings exceed lost parallelism.
+
+**`pr-obsolete-validation.yml`**
+
+- Runs trusted default-branch code without checking out pull-request code.
+- Handles head synchronization and base-ref edits.
+- Ignores edits that do not change the base ref.
+- Grants only `actions: write`, `contents: read`, and `pull-requests: read`.
+- Cancels active PR, Rust ecosystem, and Web research runs for obsolete heads.
+- Cancels stale-base PR and Rust ecosystem runs after a base retarget.
+- Creates no transition marker, comment, or backfill state.
+- Performs no review request or review wait.
+- Its bounded inspection window serves only the Actions registration race.
 
 **`repository-policy.yml`**
 
