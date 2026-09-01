@@ -80,6 +80,7 @@ export type TeamPlanJournal = Readonly<{
 export type CreateTeamPlanJournalRequest = Readonly<{
   journalPath: string;
   event: TeamPlanStartedEvent;
+  beforePublicationCleanup?: () => void;
 }>;
 
 export type AppendTeamPlanEventRequest = Readonly<{
@@ -119,9 +120,17 @@ export async function createTeamPlanJournal(
     action: async () => {
       if (await pathExists(`${path}.discarding`))
         throw new Error('Team Plan journal discard is still in progress.');
-      if (await pathExists(`${path}.discarded`))
+      if (await pathExists(`${path}.discarded`)) {
+        const completed = await loadTeamPlanJournal(`${path}.discarded`);
+        if (!completed.finalized)
+          throw new Error('Team Plan discard completion marker is stale.');
         await removeDiscardCompletion(`${path}.discarded`);
-      await publishNewJournalFile({ path, serialized });
+      }
+      await publishNewJournalFile({
+        path,
+        serialized,
+        beforePublicationCleanup: storageHook(request.beforePublicationCleanup),
+      });
     },
   });
 }

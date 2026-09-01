@@ -105,6 +105,11 @@ Recovery also fails closed:
 - An interrupted discard leaves a `<journal>.discarding` tombstone. A later
   discard must present the same `runId`. It resumes only when the tombstone is
   the original journal inode; a replacement or forged tombstone is rejected.
+- New-journal publication uses a durable `<journal>.publishing` link. Recovery
+  removes it only when it is the same inode and exact requested journal.
+- Successful discard retains the validated finalized journal as
+  `<journal>.discarded`. A retry resyncs that completion marker, and a later
+  journal creation validates it before durable removal.
 
 ## Delegated agent action references
 
