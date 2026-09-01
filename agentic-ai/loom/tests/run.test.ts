@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { runCommand } from '../src/lib/run.ts';
+import { CommandOutputPolicy, runCommand } from '../src/lib/run.ts';
 
 const LARGE_OUTPUT_BYTES = 2 * 1024 * 1024;
+const EXCESSIVE_OUTPUT_BYTES = 17 * 1024 * 1024;
 
 describe('run command', () => {
   test('captures output larger than the platform default within an explicit bound', () => {
@@ -9,7 +10,7 @@ describe('run command', () => {
       command: process.execPath,
       args: ['-e', `process.stdout.write('x'.repeat(${LARGE_OUTPUT_BYTES}))`],
       cwd: process.cwd(),
-      maxOutputBytes: LARGE_OUTPUT_BYTES + 1024,
+      outputPolicy: CommandOutputPolicy.GitHubApi,
     });
 
     expect(result.exitCode).toBe(0);
@@ -21,9 +22,12 @@ describe('run command', () => {
     expect(() =>
       runCommand({
         command: process.execPath,
-        args: ['-e', `process.stdout.write('x'.repeat(${LARGE_OUTPUT_BYTES}))`],
+        args: [
+          '-e',
+          `process.stdout.write('x'.repeat(${EXCESSIVE_OUTPUT_BYTES}))`,
+        ],
         cwd: process.cwd(),
-        maxOutputBytes: 1024,
+        outputPolicy: CommandOutputPolicy.GitHubApi,
       }),
     ).toThrow('failed to start');
   });

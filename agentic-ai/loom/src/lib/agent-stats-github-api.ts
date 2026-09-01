@@ -7,14 +7,12 @@ import {
   type UntrustedYamlMap,
   type UntrustedYamlNode,
 } from './guards.ts';
-import { runCommand } from './run.ts';
+import { CommandOutputPolicy, runCommand } from './run.ts';
 import { LoomFailureCode, loomFailureDetail } from '../loom-failure.ts';
 
 import type { UntrustedYamlPropertyArgs } from './guards.ts';
 import type { RunCommandArgs } from './run.ts';
 import type { LoomFailureDetailArgs } from '../loom-failure.ts';
-
-const GITHUB_API_MAX_OUTPUT_BYTES = 16 * 1024 * 1024;
 
 export type GitHubApiRequest = {
   readonly repoRoot: string;
@@ -389,7 +387,7 @@ export function runGitHubApi(request: GitHubApiRequest): UntrustedYamlNode {
     command: 'gh',
     args,
     cwd: request.repoRoot,
-    maxOutputBytes: GITHUB_API_MAX_OUTPUT_BYTES,
+    outputPolicy: CommandOutputPolicy.GitHubApi,
   };
   const output = runCommand(commandRequest);
   if (output.exitCode !== 0) {

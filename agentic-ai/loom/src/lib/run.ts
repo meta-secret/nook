@@ -14,22 +14,34 @@ export type CommandOutput = {
   readonly stderr: string;
 };
 
+export enum CommandOutputPolicy {
+  GitHubApi = 'githubApi',
+}
+
+const GITHUB_API_MAX_OUTPUT_BYTES = 16 * 1024 * 1024;
+
 export type RunCommandArgs = {
   readonly command: string;
   readonly args: readonly string[];
   readonly cwd: string;
-  readonly maxOutputBytes?: number;
+  readonly outputPolicy?: CommandOutputPolicy;
 };
 
 export function runCommand(input: RunCommandArgs): CommandOutput {
-  const { command, args, cwd, maxOutputBytes } = input;
-  const spawnOptions: SpawnSyncOptionsWithStringEncoding = {
+  const { command, args, cwd, outputPolicy } = input;
+  const defaultOptions: SpawnSyncOptionsWithStringEncoding = {
     cwd,
     encoding: 'utf8',
   };
-  if (typeof maxOutputBytes === 'number')
-    spawnOptions.maxBuffer = maxOutputBytes;
-  const result = spawnSync(command, [...args], spawnOptions);
+  const githubApiOptions: SpawnSyncOptionsWithStringEncoding = {
+    cwd,
+    encoding: 'utf8',
+    maxBuffer: GITHUB_API_MAX_OUTPUT_BYTES,
+  };
+  const result =
+    outputPolicy === CommandOutputPolicy.GitHubApi
+      ? spawnSync(command, [...args], githubApiOptions)
+      : spawnSync(command, [...args], defaultOptions);
   if (result.error) {
     const loomFailureArgs = {
       code: LoomFailureCode.CommandFailedToStart,
