@@ -92,6 +92,33 @@ export async function requestHeadTransitionBackfill(
   });
 }
 
+export async function observeCurrentHeadTransition(
+  octokit: Octokit,
+  repoRef: RepoRef,
+  prNumber: number,
+): Promise<boolean> {
+  const { owner, repo } = repoRef;
+  const [{ data: pr }, issueComments] = await Promise.all([
+    octokit.rest.pulls.get({ owner, repo, pull_number: prNumber }),
+    octokit.paginate(octokit.rest.issues.listComments, {
+      owner,
+      repo,
+      issue_number: prNumber,
+      per_page: 100,
+    }),
+  ]);
+  return (
+    findCurrentHeadTransition({
+      baseRef: pr.base.ref,
+      comments: issueComments.map((comment) => ({
+        body: comment.body ?? "",
+        user: comment.user,
+      })),
+      headSha: pr.head.sha,
+    }).state === HeadTransitionState.Observed
+  );
+}
+
 export async function findOpenPr(
   octokit: Octokit,
   { owner, repo }: RepoRef,

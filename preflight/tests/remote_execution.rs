@@ -279,6 +279,17 @@ fn remote_task_batches_are_validated_and_keep_requested_order() -> Result<()> {
         String::from_utf8(commands.stdout)?,
         "task preflight\ntask ci:pr:rust\n"
     );
+    let loom_batch = remote_batch_command(&["--validate", "loom:verify,preflight"])?;
+    assert!(
+        loom_batch.status.success(),
+        "Loom verification must remain batchable on the general ARC runner"
+    );
+    let loom_command = remote_batch_command(&["--commands", "loom:verify"])?;
+    assert!(loom_command.status.success());
+    assert_eq!(
+        String::from_utf8(loom_command.stdout)?,
+        "task loom:verify\n"
+    );
     let mixed_runtime = remote_batch_command(&["--validate", "arc:runtime,preflight"])?;
     assert!(
         !mixed_runtime.status.success(),
@@ -482,7 +493,7 @@ fn remote_task_batch_rechecks_buildkit_after_both_timeout_statuses_and_continues
 fn expensive_remote_validation_requires_the_current_base() -> Result<()> {
     let remote_tasks = read(".task/remote-execution.yml");
     assert!(remote_tasks.contains("remote-task-batch.sh --requires-current-base"));
-    for tasks in ["web:e2e", "extension:e2e", "ci:pr"] {
+    for tasks in ["loom:verify", "web:e2e", "extension:e2e", "ci:pr"] {
         assert!(
             remote_batch_command(&["--requires-current-base", tasks])?
                 .status
@@ -586,9 +597,17 @@ fn arc_workflow_matches_the_taskfile_catalog() -> Result<()> {
         workflow.contains("group: remote-${{ github.ref }}-${{ inputs.tasks || inputs.task }}")
     );
     assert!(workflow.contains("remote-task-batch.sh --run \"$REQUESTED_REMOTE_TASKS\""));
+    assert!(workflow.contains("name: Install Bun for Loom verification"));
+    assert!(workflow.contains("uses: oven-sh/setup-bun@v2"));
+    assert!(workflow.contains("bun-version: 1.3.14"));
+    assert!(workflow.contains("(inputs.tasks || inputs.task) != 'loom:verify'"));
     assert!(batch_script.contains(
         "rust:ci) run_with_timeout \"$timeout_minutes\" env CI_ARTIFACT_DIR=\"$artifact_root/rust-ci\" task ci:pr:rust"
     ));
+    assert!(
+        batch_script
+            .contains("loom:verify) run_with_timeout \"$timeout_minutes\" task loom:verify")
+    );
     assert!(batch_script.contains("docker buildx use \"$builder\""));
     assert!(batch_script.contains("if ! restore_hosted_builder; then"));
     let docker_setup = read(".github/actions/nook-docker-setup/action.yml");
@@ -908,6 +927,7 @@ fn complete_pr_validation_is_explicit_and_exact_head_bound() -> Result<()> {
         "--remove-label \"$validation_label\"",
         "--add-label \"$validation_label\"",
         "task remote TASK_NAME=rust:ci",
+        "task remote TASK_NAME=loom:verify",
         "task pr:validate PR=<number>",
         "becomes stale after any later push",
     ] {

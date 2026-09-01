@@ -5,11 +5,69 @@ import type { Octokit } from "@octokit/rest";
 
 import {
   createFixPr,
+  observeCurrentHeadTransition,
   requiredPrCheckNames,
   requiredPrWorkflows,
 } from "../main/github.js";
 
 const repoRef = { owner: "meta-secret", repo: "nook" };
+
+function headTransitionObserverOctokit(input: {
+  body: string;
+  login: string;
+}): Octokit {
+  return {
+    paginate: async () => [
+      { body: input.body, user: { login: input.login } },
+    ],
+    rest: {
+      issues: { listComments: async () => ({ data: [] }) },
+      pulls: {
+        get: async () => ({
+          data: { base: { ref: "main" }, head: { sha: "head-sha" } },
+        }),
+      },
+    },
+  } as unknown as Octokit;
+}
+
+test("observeCurrentHeadTransition accepts only the matching trusted marker", async () => {
+  const marker =
+    "<!-- nook-head-transition:head-sha:main:2026-09-01T00:00:00.000Z -->";
+  assert.equal(
+    await observeCurrentHeadTransition(
+      headTransitionObserverOctokit({
+        body: marker,
+        login: "github-actions[bot]",
+      }),
+      repoRef,
+      1263,
+    ),
+    true,
+  );
+  assert.equal(
+    await observeCurrentHeadTransition(
+      headTransitionObserverOctokit({
+        body: marker,
+        login: "untrusted-user",
+      }),
+      repoRef,
+      1263,
+    ),
+    false,
+  );
+  assert.equal(
+    await observeCurrentHeadTransition(
+      headTransitionObserverOctokit({
+        body: marker.replace("head-sha", "stale-head"),
+        login: "github-actions[bot]",
+      }),
+      repoRef,
+      1263,
+    ),
+    false,
+  );
+});
 
 test("requiredPrCheckNames maps changed paths to repository-owned gates", () => {
   assert.deepEqual(requiredPrCheckNames([".cortex/AGENTS.md"]), []);

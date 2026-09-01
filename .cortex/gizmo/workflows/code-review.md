@@ -53,8 +53,10 @@ task pr:validate PR=<number>
 The command:
 
 1. Dispatches repository-owned GitHub Actions immediately.
-2. Requests the trusted exact-head transition backfill, checks the review
-   circuit, and only then contacts Codex without waiting.
+2. Requests the trusted exact-head transition backfill.
+   - Waits boundedly only for its matching marker to become observable.
+   - Checks the review circuit, then contacts Codex without waiting for a
+     review result.
 3. Rechecks that the PR head and base did not change during dispatch.
 4. Lets hosted checks and exact-head review proceed concurrently.
 5. Batches current review findings and failed checks after both settle.
@@ -63,12 +65,16 @@ The command:
    delivery owner explicitly acknowledges that pass with
    `REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED=1` before the next review collection.
 
-The trusted head-transition request always precedes Codex contact. The
-non-waiting request then checks the circuit. An open circuit suppresses the
-request but does not stop already-dispatched validation. A transient request
-failure or provider `requested: false` result reports `not-requested` and also
-leaves validation running. Collect or retry review separately; do not restart
-hosted validation merely because the review request was unavailable.
+The trusted head-transition request and matching observable marker always
+precede feedback inspection and Codex contact. The marker wait is bounded and
+starts only after hosted validation dispatch. If it expires, the review request
+fails truthfully without inspecting feedback or contacting Codex, while
+already-dispatched validation continues. The non-waiting request then checks
+the circuit. An open circuit suppresses the request but does not stop validation.
+A transient request failure or provider `requested: false` result reports
+`not-requested` and also leaves validation running. Collect or retry review
+separately; do not restart hosted validation merely because the review request
+was unavailable.
 
 Never run `task pr:review:stabilize` before hosted validation dispatch. It may
 collect a pending review only after dispatch while checks are already running.

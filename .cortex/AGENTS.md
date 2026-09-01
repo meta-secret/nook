@@ -79,6 +79,16 @@ or second coordinator. See the [Gizmo contract](gizmo/AGENTS.md).
 - Team workers implement and test their assigned changes. Gizmo Prime controls
   shared integration and external delivery state and does not implement team
   work on their behalf.
+- Team workers run only fast focused local Loom tests, lint, or typechecks that
+  provide direct implementation feedback.
+- Team workers must not run the full `task loom:verify` suite locally during
+  agent delivery.
+- For Loom-affecting work, the Team Agent returns a coherent handoff to Gizmo
+  Prime after focused local evidence.
+- Gizmo Prime promptly integrates, runs pre-push hygiene, commits, and pushes
+  that handoff.
+- Gizmo Prime then dispatches `task remote TASK_NAME=loom:verify` for the exact
+  pushed head.
 - Security review does not transfer implementation ownership. Portable
   security behavior stays in Rust/WASM; web code receives public typed
   projections.

@@ -16,8 +16,8 @@ Agents waste delivery time when they:
 
 - repeatedly query PR or check state;
 - serialize or duplicate local and remote validation;
-- run full local gates before review feedback; or
-- spend the complete pipeline on a head that Codex immediately asks them to change.
+- delay hosted validation while waiting for review feedback; or
+- cancel in-flight validation solely because non-security review findings arrive.
 
 Moving `main`, unresolved-conversation policy, and exact-head deployment
 requirements are then discovered only at merge time.
@@ -91,9 +91,11 @@ Does not apply to:
 ## Examples
 
 - Before: format → push → `task check` ‖ PR CI → merge after both green.
-- After: `task loom:pre-push` → commit and push → required relevant focused
-  remote evidence when not ready, or immediate exact-head Cloud review
-  stabilization and complete validation when ready → squash merge.
+- After when not ready: `task loom:pre-push` → commit and push → required
+  relevant focused remote evidence.
+- After when ready: immediate complete validation with concurrent exact-head
+  Cloud review collection → one combined repair batch and readiness check →
+  squash merge.
 - Before: discover stale-base requirements after a failed merge command.
 - After: `task pr:preflight` / Loom ready reports the blocker before merge.
 

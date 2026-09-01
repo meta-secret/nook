@@ -7,6 +7,7 @@ import {
 import {
   createOctokit,
   inspectPrFeedback,
+  observeCurrentHeadTransition,
   parseRepository,
   requestHeadTransitionBackfill,
   type PrFeedbackSummary,
@@ -16,6 +17,8 @@ import { prettyJson } from "./json.js";
 const DEFAULT_STABILIZATION_WAIT_SECONDS = 600;
 const STABILIZATION_POLL_INTERVAL_MS = 15_000;
 const ZERO_WAIT_FEEDBACK_SNAPSHOT_TIMEOUT_MS = 15_000;
+const HEAD_TRANSITION_WAIT_TIMEOUT_MS = 45_000;
+const HEAD_TRANSITION_POLL_INTERVAL_MS = 2_500;
 
 type ReviewStabilizationRequest = () => Promise<{
   fallback?: ExactHeadReviewFallback;
@@ -38,7 +41,12 @@ type ReviewRequestInput = {
   circuitBreakerAcknowledged?: boolean;
   ensureHeadTransition: () => Promise<void>;
   inspectFeedback: () => Promise<PrFeedbackSummary>;
+  now: () => number;
+  observeHeadTransition: () => Promise<boolean>;
+  pollIntervalMs: number;
   requestReview: () => Promise<ExactHeadReviewRequestResult>;
+  timeoutMs: number;
+  waitMs: (milliseconds: number) => Promise<void>;
 };
 
 type BoundedAttempt<T> =
@@ -117,7 +125,13 @@ export async function runPrReviewRequest(): Promise<void> {
     ensureHeadTransition: () =>
       requestHeadTransitionBackfill({ octokit, prNumber, repoRef }),
     inspectFeedback: () => inspectPrFeedback(octokit, repoRef, prNumber),
+    now: () => Date.now(),
+    observeHeadTransition: () =>
+      observeCurrentHeadTransition(octokit, repoRef, prNumber),
+    pollIntervalMs: HEAD_TRANSITION_POLL_INTERVAL_MS,
     requestReview: () => requestExactHeadReview(octokit, repoRef, prNumber),
+    timeoutMs: HEAD_TRANSITION_WAIT_TIMEOUT_MS,
+    waitMs: DEFAULT_REVIEW_CLOCK.waitMs,
   });
   console.log(prettyJson({ number: prNumber, repository, ...result }));
   if (result.state === ReviewRequestState.CircuitBreaker) {
@@ -131,6 +145,23 @@ export async function requestExactHeadReviewWithCircuitBreaker(
   input: ReviewRequestInput,
 ): Promise<ReviewRequestResult> {
   await input.ensureHeadTransition();
+  const deadline = input.now() + input.timeoutMs;
+  while (true) {
+    const observation = await attemptBeforeDeadline({
+      deadline,
+      now: input.now,
+      operation: input.observeHeadTransition,
+    });
+    if (!observation.completed) {
+      throw missingHeadTransitionError(input.timeoutMs);
+    }
+    if (observation.value) break;
+    const remainingMs = deadline - input.now();
+    if (remainingMs <= 0) {
+      throw missingHeadTransitionError(input.timeoutMs);
+    }
+    await input.waitMs(Math.min(input.pollIntervalMs, remainingMs));
+  }
   const feedback = await input.inspectFeedback();
   if (
     classifyFeedbackState(
@@ -149,6 +180,12 @@ export async function requestExactHeadReviewWithCircuitBreaker(
     };
   }
   return { ...result, requested: true, state: ReviewRequestState.Requested };
+}
+
+function missingHeadTransitionError(timeoutMs: number): Error {
+  return new Error(
+    `Trusted exact-head transition boundary was not observable within ${timeoutMs}ms; no feedback was inspected and no review was requested`,
+  );
 }
 
 export async function runPrReviewStabilization(): Promise<void> {

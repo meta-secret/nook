@@ -108,7 +108,13 @@ jobs:
               ;;
           esac
           .github/scripts/remote-task-batch.sh --validate "$REQUESTED_REMOTE_TASKS"
+      - name: Install Bun for Loom verification
+        if: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',loom:verify,') }}
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
       - uses: ./.github/actions/nook-docker-setup
+        if: ${{ (inputs.tasks || inputs.task) != 'loom:verify' }}
         with:
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}

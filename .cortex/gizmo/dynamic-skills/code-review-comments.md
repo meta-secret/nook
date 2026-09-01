@@ -7,9 +7,11 @@ each active actionable finding and implements any required fix. Gizmo integrates
 the handoff, pushes the result, leaves the targeted GitHub reply, and resolves
 the conversation. Gizmo also coordinates findings that require no change.
 
-This skill does not initiate reviews. The PR delivery workflow stabilizes one
-exact-head Codex review before it dispatches complete validation. Codex is the
-sole automatic provider. Cursor Bugbot remains inactive.
+This skill does not initiate reviews. The PR delivery workflow dispatches
+complete validation first, then requests one exact-head Codex review without
+waiting. Review collection and hosted checks proceed concurrently, and their
+findings form one repair batch. Codex is the sole automatic provider. Cursor
+Bugbot remains inactive.
 
 ## Problem Pattern
 
