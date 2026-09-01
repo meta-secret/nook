@@ -59,17 +59,35 @@ jobs:
       - name: Classify policy paths
         id: policy-paths
         env:
+          AFTER_SHA: ${{ github.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
           if [ "$EVENT_NAME" = "push" ]; then
-            echo "loom=true" >> "$GITHUB_OUTPUT"
-            echo "runner_placement=true" >> "$GITHUB_OUTPUT"
-            exit 0
+            if [[ "$BEFORE_SHA" =~ ^0+$ ]]; then
+              changed_files="$(git diff-tree --no-commit-id --name-only -r "$AFTER_SHA")"
+            else
+              changed_files="$(git diff --no-renames --name-only "$BEFORE_SHA" "$AFTER_SHA")"
+            fi
+          else
+            changed_files="$(git diff --no-renames --name-only HEAD^1 HEAD^2)"
           fi
 
+          changed=false
+          cortex_markdown_only=true
           loom_changed=false
           runner_placement_changed=false
           while IFS= read -r changed_file; do
+            case "$changed_file" in
+              "")
+                continue
+                ;;
+            esac
+            changed=true
+            case "$changed_file" in
+              .cortex/*.md) ;;
+              *) cortex_markdown_only=false ;;
+            esac
             case "$changed_file" in
               .agents/skills/* | .claude/skills/* | .codex/hooks.json | .cortex/* | .cursor/rules.md | .cursor/skills/* | .github/formatting/* | .github/prompts/* | .github/scripts/format-host-apply.sh | .github/scripts/format-host-apply.test.sh | .github/workflows/repository-policy.yml | .task/agentic-ai.yml | AGENTS.md | CODEX.md | README.md | agentic-ai/loom/* | .cortex/*/dynamic-skills/*/scripts/* | preflight/*)
                 loom_changed=true
@@ -80,7 +98,11 @@ jobs:
                 runner_placement_changed=true
                 ;;
             esac
-          done < <(git diff --no-renames --name-only HEAD^1 HEAD^2)
+          done <<< "$changed_files"
+          if [ "$changed" != "true" ]; then
+            cortex_markdown_only=false
+          fi
+          echo "cortex_markdown_only=$cortex_markdown_only" >> "$GITHUB_OUTPUT"
           echo "loom=$loom_changed" >> "$GITHUB_OUTPUT"
           echo "runner_placement=$runner_placement_changed" >> "$GITHUB_OUTPUT"
 
@@ -90,12 +112,14 @@ jobs:
           version: 3.52.0
 
       - name: Install Rust for repository policy
+        if: steps.policy-paths.outputs.cortex_markdown_only != 'true'
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
 
       - name: Restore hosted preflight Rust dependencies
         if: >-
+          steps.policy-paths.outputs.cortex_markdown_only != 'true' &&
           github.event_name == 'pull_request' &&
           (github.event.pull_request.head.repo.full_name != github.repository ||
           github.event.pull_request.user.login == 'dependabot[bot]')
@@ -105,13 +129,16 @@ jobs:
           workspaces: preflight -> target
 
       - name: Enforce shared source formatter contract
+        if: steps.policy-paths.outputs.cortex_markdown_only != 'true'
         run: task preflight:format-contract
 
       - name: Connect private ARC BuildKit
         if: >-
-          github.event_name == 'push' ||
-          (github.event.pull_request.head.repo.full_name == github.repository &&
-          github.event.pull_request.user.login != 'dependabot[bot]')
+          steps.policy-paths.outputs.cortex_markdown_only != 'true' &&
+          (github.event_name == 'push' ||
+          (github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          github.event.pull_request.user.login != 'dependabot[bot]'))
         uses: ./.github/actions/nook-docker-setup
         with:
           registry-host: registry.dev.nokey.sh
@@ -123,6 +150,7 @@ jobs:
 
       - name: Enforce source architecture on hosted runners
         if: >-
+          steps.policy-paths.outputs.cortex_markdown_only != 'true' &&
           github.event_name == 'pull_request' &&
           (github.event.pull_request.head.repo.full_name != github.repository ||
           github.event.pull_request.user.login == 'dependabot[bot]')
@@ -130,9 +158,11 @@ jobs:
 
       - name: Enforce repository invariants through cached BuildKit
         if: >-
-          github.event_name == 'push' ||
-          (github.event.pull_request.head.repo.full_name == github.repository &&
-          github.event.pull_request.user.login != 'dependabot[bot]')
+          steps.policy-paths.outputs.cortex_markdown_only != 'true' &&
+          (github.event_name == 'push' ||
+          (github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          github.event.pull_request.user.login != 'dependabot[bot]'))
         run: task preflight:test
 
       - name: Install Bun
@@ -152,7 +182,9 @@ jobs:
         run: bun .github/scripts/arc-manifest-contract.ts
 
       - name: Verify Loom package quality
-        if: steps.policy-paths.outputs.loom == 'true'
+        if: >-
+          steps.policy-paths.outputs.loom == 'true' &&
+          steps.policy-paths.outputs.cortex_markdown_only != 'true'
         run: task loom:verify
 
       - name: Audit Cortex document structure
@@ -162,6 +194,7 @@ jobs:
       - name: Enforce authored TypeScript state invariants
         if: >-
           steps.policy-paths.outputs.loom == 'true' &&
+          steps.policy-paths.outputs.cortex_markdown_only != 'true' &&
           github.event_name == 'pull_request' &&
           (github.event.pull_request.head.repo.full_name != github.repository ||
           github.event.pull_request.user.login == 'dependabot[bot]')
@@ -170,6 +203,7 @@ jobs:
       - name: Enforce Loom single-parameter contract
         if: >-
           steps.policy-paths.outputs.loom == 'true' &&
+          steps.policy-paths.outputs.cortex_markdown_only != 'true' &&
           github.event_name == 'pull_request' &&
           (github.event.pull_request.head.repo.full_name != github.repository ||
           github.event.pull_request.user.login == 'dependabot[bot]')

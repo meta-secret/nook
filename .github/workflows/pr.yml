@@ -4,9 +4,9 @@
 # otherwise run only their dedicated headless demo specs and retain the resulting videos on the
 # PR workflow run. Main also runs the full local-provider and extension suites. Live-provider
 # sync checks remain available through the manually dispatched e2e-pr.yml workflow.
-# Research-only changes are handled by web-research.yml. Cortex, Cursor, and
-# agentic-AI-only changes do not need the product pipeline. Agent statistics
-# live in meta-secret/nook-workbench.
+# Research-only changes are handled by web-research.yml. Cortex, Cursor,
+# repository-policy-only, and agentic-AI-only changes do not need the product
+# pipeline. Agent statistics live in meta-secret/nook-workbench.
 # Validation is requested explicitly by adding a label. Ordinary pushes do not
 # spend hosted workers. A later push invalidates the prior head's checks, so the
 # label must be toggled again before merge. The trusted Linear close workflow
@@ -21,6 +21,7 @@ on:
     paths-ignore:
       - .cortex/**
       - .cursor/**
+      - .github/workflows/repository-policy.yml
       - .github/workflows/web-research.yml
       - agentic-ai/**
       - nook-app/nook-web/nook-web-research/**
