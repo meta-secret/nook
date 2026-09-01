@@ -236,31 +236,39 @@ tasks:
         --journal "$NOOK_TEAM_PLAN_JOURNAL"
 
   loom:team-plan:lease:
-    desc: Lease the explicitly authorized Team Plan candidates (JOURNAL=<events.jsonl>, TASK_IDS=<comma-separated-task-ids>).
+    desc: Lease explicitly authorized Team Plan candidates from one selection (JOURNAL=<events.jsonl>, RUN_ID=<id>, GENERATION=<number>, PLAN_DIGEST=<digest>, TASK_IDS=<comma-separated-task-ids>).
     dir: '{{.REPO_ROOT}}'
     deps: [loom:install]
-    requires: { vars: [JOURNAL, TASK_IDS] }
+    requires: { vars: [JOURNAL, RUN_ID, GENERATION, PLAN_DIGEST, TASK_IDS] }
     env:
       NOOK_TEAM_PLAN_JOURNAL: '{{.JOURNAL}}'
+      NOOK_TEAM_PLAN_RUN_ID: '{{.RUN_ID}}'
+      NOOK_TEAM_PLAN_GENERATION: '{{.GENERATION}}'
+      NOOK_TEAM_PLAN_PLAN_DIGEST: '{{.PLAN_DIGEST}}'
       NOOK_TEAM_PLAN_TASK_IDS: '{{.TASK_IDS}}'
     cmds:
       - >-
         bun agentic-ai/loom/src/team-plan/cli.ts lease
         --journal "$NOOK_TEAM_PLAN_JOURNAL"
+        --run-id "$NOOK_TEAM_PLAN_RUN_ID"
+        --generation "$NOOK_TEAM_PLAN_GENERATION"
+        --plan-digest "$NOOK_TEAM_PLAN_PLAN_DIGEST"
         --task-ids "$NOOK_TEAM_PLAN_TASK_IDS"
 
   loom:team-plan:record:
-    desc: Record one selected terminal Team Plan result (JOURNAL=<events.jsonl>, REQUEST=<result.json>).
+    desc: Record one selected terminal Team Plan result for an exact run (JOURNAL=<events.jsonl>, RUN_ID=<id>, REQUEST=<result.json>).
     dir: '{{.REPO_ROOT}}'
     deps: [loom:install]
-    requires: { vars: [JOURNAL, REQUEST] }
+    requires: { vars: [JOURNAL, RUN_ID, REQUEST] }
     env:
       NOOK_TEAM_PLAN_JOURNAL: '{{.JOURNAL}}'
+      NOOK_TEAM_PLAN_RUN_ID: '{{.RUN_ID}}'
       NOOK_TEAM_PLAN_REQUEST: '{{.REQUEST}}'
     cmds:
       - >-
         bun agentic-ai/loom/src/team-plan/cli.ts record
         --journal "$NOOK_TEAM_PLAN_JOURNAL"
+        --run-id "$NOOK_TEAM_PLAN_RUN_ID"
         --request "$NOOK_TEAM_PLAN_REQUEST"
 
   loom:team-plan:restart:

@@ -52,6 +52,9 @@ type TeamPlanJournalCommand = Readonly<{
 type TeamPlanLeaseCommand = Readonly<{
   kind: TeamPlanCommandKind.Lease;
   journalPath: string;
+  runId: string;
+  generation: number;
+  planDigest: string;
   taskIds: readonly string[];
 }>;
 
@@ -62,7 +65,14 @@ type TeamPlanDiscardCommand = Readonly<{
 }>;
 
 type TeamPlanRecordCommand = Readonly<{
-  kind: TeamPlanCommandKind.Record | TeamPlanCommandKind.Restart;
+  kind: TeamPlanCommandKind.Record;
+  journalPath: string;
+  runId: string;
+  requestPath: string;
+}>;
+
+type TeamPlanRestartCommand = Readonly<{
+  kind: TeamPlanCommandKind.Restart;
   journalPath: string;
   requestPath: string;
 }>;
@@ -72,7 +82,8 @@ type TeamPlanCommand =
   | TeamPlanJournalCommand
   | TeamPlanLeaseCommand
   | TeamPlanDiscardCommand
-  | TeamPlanRecordCommand;
+  | TeamPlanRecordCommand
+  | TeamPlanRestartCommand;
 
 export type TeamPlanCliArguments = Readonly<{
   argv: readonly string[];
@@ -145,6 +156,9 @@ export async function runTeamPlanCli(
       JSON.stringify(
         await leaseTeamPlan({
           journalPath: command.journalPath,
+          runId: command.runId,
+          generation: command.generation,
+          planDigest: command.planDigest,
           taskIds: command.taskIds,
         }),
       ),
@@ -199,6 +213,7 @@ export async function runTeamPlanCli(
   }
   const request: TeamPlanRecordRequest = {
     journalPath: command.journalPath,
+    runId: command.runId,
     record,
   };
   console.log(JSON.stringify(await recordTeamPlan(request)));
@@ -278,23 +293,42 @@ function parseTeamPlanCommand(
   const kind = argv[0];
   if (
     kind === TeamPlanCommandKind.Lease &&
-    argv.length === 5 &&
+    argv.length === 11 &&
     argv[1] === '--journal' &&
-    argv[3] === '--task-ids'
+    argv[3] === '--run-id' &&
+    argv[5] === '--generation' &&
+    argv[7] === '--plan-digest' &&
+    argv[9] === '--task-ids'
   ) {
     const journalPath = commandPathAt({ argv, index: 2 });
-    const taskIdsValue = argv[4];
+    const runId = argv[4];
+    const generation = Number(argv[6]);
+    const planDigest = argv[8];
+    const taskIdsValue = argv[10];
     const taskIds =
       typeof taskIdsValue === 'string' ? taskIdsValue.split(',') : [];
     if (
       journalPath.kind === CommandPathKind.Invalid ||
+      typeof runId !== 'string' ||
+      !TEAM_PLAN_RUN_ID.test(runId) ||
+      !Number.isSafeInteger(generation) ||
+      generation < 1 ||
+      typeof planDigest !== 'string' ||
+      !TEAM_PLAN_RUN_ID.test(planDigest) ||
       taskIds.length === 0 ||
       taskIds.some((taskId) => taskId.length === 0)
     )
       return { kind: TeamPlanCommandParseKind.Invalid };
     return {
       kind: TeamPlanCommandParseKind.Valid,
-      command: { kind, journalPath: journalPath.path, taskIds },
+      command: {
+        kind,
+        journalPath: journalPath.path,
+        runId,
+        generation,
+        planDigest,
+        taskIds,
+      },
     };
   }
   if (
@@ -331,11 +365,37 @@ function parseTeamPlanCommand(
     };
   }
   if (
-    (kind === TeamPlanCommandKind.Record ||
-      kind === TeamPlanCommandKind.Restart) &&
+    kind === TeamPlanCommandKind.Record &&
+    argv.length === 7 &&
+    argv[1] === '--journal' &&
+    argv[3] === '--run-id' &&
+    argv[5] === '--request'
+  ) {
+    const journalPath = commandPathAt({ argv, index: 2 });
+    const runId = argv[4];
+    const requestPath = commandPathAt({ argv, index: 6 });
+    if (
+      journalPath.kind === CommandPathKind.Invalid ||
+      typeof runId !== 'string' ||
+      !TEAM_PLAN_RUN_ID.test(runId) ||
+      requestPath.kind === CommandPathKind.Invalid
+    )
+      return { kind: TeamPlanCommandParseKind.Invalid };
+    return {
+      kind: TeamPlanCommandParseKind.Valid,
+      command: {
+        kind,
+        journalPath: journalPath.path,
+        runId,
+        requestPath: requestPath.path,
+      },
+    };
+  }
+  if (
+    kind === TeamPlanCommandKind.Restart &&
     argv.length === 5 &&
     argv[1] === '--journal' &&
-    argv[3] === (kind === TeamPlanCommandKind.Record ? '--request' : '--plan')
+    argv[3] === '--plan'
   ) {
     const journalPath = commandPathAt({ argv, index: 2 });
     const requestPath = commandPathAt({ argv, index: 4 });
