@@ -45,6 +45,7 @@ tasks:
   loom:install:
     desc: Install Loom Bun dependencies with a frozen lockfile.
     dir: agentic-ai/loom
+    silent: true
     cmds:
       - bun install --frozen-lockfile 1>&2
 
@@ -210,6 +211,7 @@ tasks:
   loom:team-plan:start:
     desc: Start one immutable reviewed Team Plan (PLAN=<plan.json>, JOURNAL=<events.jsonl>).
     dir: '{{.REPO_ROOT}}'
+    silent: true
     deps: [loom:install]
     requires: { vars: [PLAN, JOURNAL] }
     env:
@@ -226,6 +228,7 @@ tasks:
   loom:team-plan:select:
     desc: Return the next deterministic Team Plan candidates without leasing them (JOURNAL=<events.jsonl>).
     dir: '{{.REPO_ROOT}}'
+    silent: true
     deps: [loom:install]
     requires: { vars: [JOURNAL] }
     env:
@@ -236,16 +239,17 @@ tasks:
         --journal "$NOOK_TEAM_PLAN_JOURNAL"
 
   loom:team-plan:lease:
-    desc: Lease explicitly authorized Team Plan candidates from one selection (JOURNAL=<events.jsonl>, RUN_ID=<id>, GENERATION=<number>, PLAN_DIGEST=<digest>, TASK_IDS=<comma-separated-task-ids>).
+    desc: Lease explicitly authorized Team Plan attempts from one selection (JOURNAL=<events.jsonl>, RUN_ID=<id>, GENERATION=<number>, PLAN_DIGEST=<digest>, ATTEMPTS=<comma-separated-task-id:attempt pairs>).
     dir: '{{.REPO_ROOT}}'
+    silent: true
     deps: [loom:install]
-    requires: { vars: [JOURNAL, RUN_ID, GENERATION, PLAN_DIGEST, TASK_IDS] }
+    requires: { vars: [JOURNAL, RUN_ID, GENERATION, PLAN_DIGEST, ATTEMPTS] }
     env:
       NOOK_TEAM_PLAN_JOURNAL: '{{.JOURNAL}}'
       NOOK_TEAM_PLAN_RUN_ID: '{{.RUN_ID}}'
       NOOK_TEAM_PLAN_GENERATION: '{{.GENERATION}}'
       NOOK_TEAM_PLAN_PLAN_DIGEST: '{{.PLAN_DIGEST}}'
-      NOOK_TEAM_PLAN_TASK_IDS: '{{.TASK_IDS}}'
+      NOOK_TEAM_PLAN_ATTEMPTS: '{{.ATTEMPTS}}'
     cmds:
       - >-
         bun "{{.REPO_ROOT}}/agentic-ai/loom/src/team-plan/cli.ts" lease
@@ -253,11 +257,12 @@ tasks:
         --run-id "$NOOK_TEAM_PLAN_RUN_ID"
         --generation "$NOOK_TEAM_PLAN_GENERATION"
         --plan-digest "$NOOK_TEAM_PLAN_PLAN_DIGEST"
-        --task-ids "$NOOK_TEAM_PLAN_TASK_IDS"
+        --attempts "$NOOK_TEAM_PLAN_ATTEMPTS"
 
   loom:team-plan:record:
     desc: Record one selected terminal Team Plan result for an exact run (JOURNAL=<events.jsonl>, RUN_ID=<id>, REQUEST=<result.json>).
     dir: '{{.REPO_ROOT}}'
+    silent: true
     deps: [loom:install]
     requires: { vars: [JOURNAL, RUN_ID, REQUEST] }
     env:
@@ -274,6 +279,7 @@ tasks:
   loom:team-plan:restart:
     desc: Supersede an exact quiescent Team Plan run with a newer immutable generation (JOURNAL=<events.jsonl>, RUN_ID=<id>, PLAN=<plan.json>).
     dir: '{{.REPO_ROOT}}'
+    silent: true
     deps: [loom:install]
     requires: { vars: [JOURNAL, RUN_ID, PLAN] }
     env:
@@ -290,6 +296,7 @@ tasks:
   loom:team-plan:finalize:
     desc: Finalize an exact complete Team Plan run and return its joined frontier (JOURNAL=<events.jsonl>, RUN_ID=<id>).
     dir: '{{.REPO_ROOT}}'
+    silent: true
     deps: [loom:install]
     requires: { vars: [JOURNAL, RUN_ID] }
     env:
@@ -304,6 +311,7 @@ tasks:
   loom:team-plan:discard:
     desc: Discard one expected finalized Team Plan and its project-owned durable artifacts (JOURNAL=<events.jsonl>, RUN_ID=<id>).
     dir: '{{.REPO_ROOT}}'
+    silent: true
     deps: [loom:install]
     requires: { vars: [JOURNAL, RUN_ID] }
     env:

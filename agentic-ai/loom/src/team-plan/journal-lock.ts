@@ -118,7 +118,32 @@ function updateRef(request: {
       stdio: ['ignore', 'pipe', 'pipe'],
     },
   );
-  return result.status === 0;
+  if (result.status === 0) return true;
+  const expected = args[2];
+  const current = directLockRef({
+    repositoryRoot,
+    ref: args[0] === '-d' ? args[1] : args[0],
+  });
+  if (
+    (expected === ZERO_COMMIT && current !== false) ||
+    (expected !== ZERO_COMMIT && current !== expected)
+  )
+    return false;
+  throw new Error('Team Plan journal lock ref update failed.', {
+    cause: new Error(result.stderr.trim() || 'git update-ref failed.'),
+  });
+}
+
+function directLockRef(request: {
+  readonly repositoryRoot: string;
+  readonly ref: string;
+}): string | false {
+  const record = gitText({
+    cwd: request.repositoryRoot,
+    args: ['for-each-ref', '--format=%(objectname)', request.ref],
+  });
+  if (!record) return false;
+  return record;
 }
 
 function decodeLockOwner(serialized: string): TeamPlanLockOwner {
@@ -194,8 +219,11 @@ function gitText(invocation: GitInvocation): string {
     input: 'input' in invocation ? invocation.input : '',
     stdio: ['pipe', 'pipe', 'pipe'],
   });
-  if (result.status !== 0)
-    throw new Error(result.stderr.trim() || 'Team Plan Git operation failed.');
+  if (result.status !== 0) {
+    const stderr =
+      typeof result.stderr === 'string' ? result.stderr.trim() : '';
+    throw new Error(stderr || 'Team Plan Git operation failed.');
+  }
   return result.stdout.trim();
 }
 

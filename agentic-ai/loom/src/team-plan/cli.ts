@@ -23,6 +23,7 @@ import { teamPlanMessages } from './messages.ts';
 import { MAX_TEAM_PLAN_RECORD_REQUEST_BYTES } from './record-limits.ts';
 
 import type {
+  TeamPlanAttemptIdentity,
   TeamPlanRecord,
   TeamPlanRecordRequest,
   TeamPlanStartRequest,
@@ -68,7 +69,7 @@ type TeamPlanLeaseCommand = Readonly<{
   runId: string;
   generation: number;
   planDigest: string;
-  taskIds: readonly string[];
+  attempts: readonly TeamPlanAttemptIdentity[];
 }>;
 
 type TeamPlanRecordCommand = Readonly<{
@@ -193,7 +194,7 @@ export async function runTeamPlanCli(
               runId: command.runId,
               generation: command.generation,
               planDigest: command.planDigest,
-              taskIds: command.taskIds,
+              attempts: command.attempts,
             }),
         }),
       ),
@@ -411,17 +412,28 @@ function parseTeamPlanCommand(
     argv[3] === '--run-id' &&
     argv[5] === '--generation' &&
     argv[7] === '--plan-digest' &&
-    argv[9] === '--task-ids'
+    argv[9] === '--attempts'
   ) {
     const journalPath = commandPathAt({ argv, index: 2 });
     const runId = argv[4];
     const generation = Number(argv[6]);
     const planDigest = argv[8];
-    const taskIdsValue = argv[10];
-    const taskIds =
-      typeof taskIdsValue === 'string' &&
-      Buffer.byteLength(taskIdsValue) <= MAX_TEAM_PLAN_TASK_ID_LIST_BYTES
-        ? taskIdsValue.split(',', MAX_MODULE_DELIVERY_NODES + 1)
+    const attemptsValue = argv[10];
+    const attempts =
+      typeof attemptsValue === 'string' &&
+      Buffer.byteLength(attemptsValue) <= MAX_TEAM_PLAN_TASK_ID_LIST_BYTES
+        ? attemptsValue
+            .split(',', MAX_MODULE_DELIVERY_NODES + 1)
+            .map((entry) => {
+              const [taskId, attemptText, extension] = entry.split(':');
+              return {
+                taskId: taskId ?? '',
+                attempt: Number(attemptText),
+                generation,
+                planDigest: planDigest ?? '',
+                extension,
+              };
+            })
         : [];
     if (
       journalPath.kind === CommandPathKind.Invalid ||
@@ -431,9 +443,15 @@ function parseTeamPlanCommand(
       generation < 1 ||
       typeof planDigest !== 'string' ||
       !TEAM_PLAN_RUN_ID.test(planDigest) ||
-      taskIds.length === 0 ||
-      taskIds.length > MAX_MODULE_DELIVERY_NODES ||
-      taskIds.some((taskId) => taskId.length === 0)
+      attempts.length === 0 ||
+      attempts.length > MAX_MODULE_DELIVERY_NODES ||
+      attempts.some(
+        ({ taskId, attempt, extension }) =>
+          !/^[a-z][a-z0-9_-]{0,63}$/u.test(taskId) ||
+          !Number.isSafeInteger(attempt) ||
+          attempt < 1 ||
+          typeof extension === 'string',
+      )
     )
       return { kind: TeamPlanCommandParseKind.Invalid };
     return {
@@ -444,7 +462,9 @@ function parseTeamPlanCommand(
         runId,
         generation,
         planDigest,
-        taskIds,
+        attempts: attempts.map(
+          ({ extension: _extension, ...attempt }) => attempt,
+        ),
       },
     };
   }

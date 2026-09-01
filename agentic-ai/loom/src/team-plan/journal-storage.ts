@@ -11,14 +11,27 @@ import {
 } from 'node:fs/promises';
 import { basename, dirname, resolve } from 'node:path';
 
+const RESERVED_JOURNAL_SUFFIXES = [
+  '.discarded',
+  '.discarding',
+  '.publishing',
+] as const;
+
 export type JournalStorageHook =
   | Readonly<{ presence: 'absent' }>
   | Readonly<{ presence: 'present'; run: () => void }>;
+
+export type PublishNewJournalFileRequest = Readonly<{
+  path: string;
+  serialized: string;
+  beforePublicationCleanup: JournalStorageHook;
+}>;
 
 export async function canonicalTeamPlanJournalPath(
   journalPath: string,
 ): Promise<string> {
   const requested = resolve(journalPath);
+  assertJournalNameAvailable(requested);
   await mkdir(dirname(requested), { recursive: true });
   const parent = await realpath(dirname(requested));
   return resolve(parent, basename(requested));
@@ -33,6 +46,11 @@ export async function canonicalExistingJournalPath(
     throw new Error('Team Plan journal path is unsafe.');
   const parent = await realpath(dirname(requested));
   return resolve(parent, basename(requested));
+}
+
+function assertJournalNameAvailable(path: string): void {
+  if (RESERVED_JOURNAL_SUFFIXES.some((suffix) => path.endsWith(suffix)))
+    throw new Error('Team Plan journal path uses a reserved suffix.');
 }
 
 export async function readBoundedTeamPlanJournal(
@@ -82,19 +100,97 @@ export async function readBoundedTeamPlanJournal(
   }
 }
 
-export async function publishNewJournalFile(request: {
-  readonly path: string;
-  readonly serialized: string;
-}): Promise<void> {
-  const temporary = await writeTemporaryFile({ ...request, mode: 0o600 });
+export async function publishNewJournalFile(
+  request: PublishNewJournalFileRequest,
+): Promise<void> {
+  const publication = `${request.path}.publishing`;
+  if (
+    await recoverJournalPublication({
+      path: request.path,
+      publication,
+      serialized: request.serialized,
+      beforePublicationCleanup: request.beforePublicationCleanup,
+    })
+  )
+    return;
+  if (await pathExists(request.path)) {
+    const existing = await readBoundedTeamPlanJournal({
+      path: request.path,
+      maximumBytes: Buffer.byteLength(request.serialized),
+      expectedLinkCount: 1,
+    });
+    if (existing.serialized !== request.serialized)
+      throw new Error('Team Plan journal publication is stale or forged.');
+    await syncParent(request.path);
+    return;
+  }
+  const temporary = await writeTemporaryFile({
+    ...request,
+    mode: 0o600,
+    temporaryPath: publication,
+  });
+  let linked = false;
   try {
     await link(temporary, request.path);
+    linked = true;
+    await syncParent(request.path);
+    runStorageHook(request.beforePublicationCleanup);
     await unlink(temporary);
     await syncParent(request.path);
   } catch (error) {
-    await removeTemporary(temporary);
+    if (!linked) await removeTemporary(temporary);
     throw error;
   }
+}
+
+async function recoverJournalPublication(request: {
+  readonly path: string;
+  readonly publication: string;
+  readonly serialized: string;
+  readonly beforePublicationCleanup: JournalStorageHook;
+}): Promise<boolean> {
+  if (!(await pathExists(request.publication))) return false;
+  const published = await pathExists(request.path);
+  if (published) await assertMatchingJournalPublication(request);
+  else {
+    const temporary = await readBoundedTeamPlanJournal({
+      path: request.publication,
+      maximumBytes: Buffer.byteLength(request.serialized),
+      expectedLinkCount: 1,
+    });
+    if (temporary.serialized !== request.serialized)
+      throw new Error('Team Plan journal publication is stale or forged.');
+    await link(request.publication, request.path);
+    await syncParent(request.path);
+  }
+  runStorageHook(request.beforePublicationCleanup);
+  await unlink(request.publication);
+  await syncParent(request.path);
+  return published;
+}
+
+async function assertMatchingJournalPublication(request: {
+  readonly path: string;
+  readonly publication: string;
+  readonly serialized: string;
+}): Promise<void> {
+  const source = await lstat(request.path);
+  const publication = await lstat(request.publication);
+  if (
+    !source.isFile() ||
+    source.dev !== publication.dev ||
+    source.ino !== publication.ino ||
+    source.nlink !== 2 ||
+    publication.nlink !== 2
+  )
+    throw new Error('Team Plan journal publication is stale or forged.');
+  const journal = await readBoundedTeamPlanJournal({
+    path: request.path,
+    maximumBytes: Buffer.byteLength(request.serialized),
+    expectedLinkCount: 2,
+  });
+  if (journal.serialized !== request.serialized)
+    throw new Error('Team Plan journal publication is stale or forged.');
 }
 
 export async function replaceJournalFile(request: {
@@ -207,11 +303,15 @@ async function writeTemporaryFile(request: {
   readonly mode: number;
   readonly beforeTemporarySync?: JournalStorageHook;
   readonly afterTemporaryCleanupSync?: JournalStorageHook;
+  readonly temporaryPath?: string;
 }): Promise<string> {
-  const temporary = resolve(
-    dirname(request.path),
-    `.${basename(request.path)}.${randomUUID()}.tmp`,
-  );
+  const temporary =
+    'temporaryPath' in request
+      ? request.temporaryPath
+      : resolve(
+          dirname(request.path),
+          `.${basename(request.path)}.${randomUUID()}.tmp`,
+        );
   const handle = await open(temporary, 'wx', request.mode);
   try {
     await handle.chmod(request.mode);

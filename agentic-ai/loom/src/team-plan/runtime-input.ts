@@ -4,8 +4,6 @@ import { resolve } from 'node:path';
 
 import { LoomFailureCode, loomFailureFromCause } from '../loom-failure.ts';
 
-import type { FileHandle } from 'node:fs/promises';
-
 export type ReadBoundedTeamPlanFileRequest = Readonly<{
   planPath: string;
   maximumBytes: number;

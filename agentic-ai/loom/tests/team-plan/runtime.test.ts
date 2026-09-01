@@ -34,6 +34,7 @@ import {
   selectTeamPlan,
   startTeamPlan,
 } from '../../src/team-plan/index.ts';
+import { attemptIdentity } from '../../src/team-plan/runtime.ts';
 import {
   finalizeTeamPlan,
   finalizeTeamPlanRuntime,
@@ -76,7 +77,7 @@ async function leaseNextTeamPlan(journalPath: string) {
     runId: selection.snapshot.runId,
     generation: selection.snapshot.generation,
     planDigest: selection.snapshot.planDigest,
-    taskIds: selection.admissions.map(({ taskId }) => taskId),
+    attempts: selection.admissions.map(attemptIdentity),
   });
 }
 
@@ -302,19 +303,36 @@ describe('Team Plan runtime', () => {
       fixture,
       [fixtureReadNode([fixture, 'alpha']), fixtureReadNode([fixture, 'beta'])],
     ]);
-    await startTeamPlan(startRequest(file));
+    const started = await startTeamPlan(startRequest(file));
+    expect(await startTeamPlan(startRequest(file))).toEqual(started);
     const candidates = await selectTeamPlan({ journalPath: file.journalPath });
     expect(candidates.admissions.map(({ taskId }) => taskId).sort()).toEqual([
       'alpha',
       'beta',
     ]);
     expect(candidates.snapshot.activeLeases).toHaveLength(0);
+    await expect(
+      leaseTeamPlan({
+        journalPath: file.journalPath,
+        runId: candidates.snapshot.runId,
+        generation: candidates.snapshot.generation,
+        planDigest: candidates.snapshot.planDigest,
+        attempts: candidates.admissions
+          .filter(({ taskId }) => taskId === 'beta')
+          .map((admission) => ({
+            ...attemptIdentity(admission),
+            generation: 2,
+          })),
+      }),
+    ).rejects.toThrow('authorization is stale');
     const leased = await leaseTeamPlan({
       journalPath: file.journalPath,
       runId: candidates.snapshot.runId,
       generation: candidates.snapshot.generation,
       planDigest: candidates.snapshot.planDigest,
-      taskIds: ['beta'],
+      attempts: candidates.admissions
+        .filter(({ taskId }) => taskId === 'beta')
+        .map(attemptIdentity),
     });
     expect(leased.leases.map(({ taskId }) => taskId)).toEqual(['beta']);
   });
@@ -426,6 +444,7 @@ describe('Team Plan runtime', () => {
       journalPath: aliased.journalPath,
     });
     expect(finalized.headCommit).toBe(fixture.baselineCommit);
+    const planText = readFileSync(file.path, 'utf8');
     unlinkSync(file.path);
     expect(
       await finalizeTeamPlan({ journalPath: aliased.journalPath }),
@@ -434,7 +453,11 @@ describe('Team Plan runtime', () => {
       journalPath: aliased.journalPath,
       runId: started.runId,
     });
-  }, 10_000);
+    writeFileSync(file.path, planText);
+    expect((await startTeamPlan(startRequest(aliased))).runId).not.toBe(
+      started.runId,
+    );
+  }, 15_000);
 
   test('replays only attempts persisted in a selected event', async () => {
     const fixture = createGitFixture();
@@ -450,7 +473,7 @@ describe('Team Plan runtime', () => {
       runId: selected.snapshot.runId,
       generation: selected.snapshot.generation,
       planDigest: selected.snapshot.planDigest,
-      taskIds: selected.admissions.map(({ taskId }) => taskId),
+      attempts: selected.admissions.map(attemptIdentity),
     });
     expect(leased.leases).toHaveLength(2);
     const lines = readFileSync(file.journalPath, 'utf8').trim().split('\n');
@@ -524,7 +547,7 @@ describe('Team Plan runtime', () => {
       journalPath: file.journalPath,
     });
     expect(finalized.headCommit).not.toBe(fixture.baselineCommit);
-  });
+  }, 15_000);
 
   test('stores redacted large evidence outside the bounded journal', async () => {
     const fixture = createGitFixture();
@@ -610,20 +633,34 @@ describe('Team Plan runtime', () => {
     fixtureGit(fixture)(['add', '--all']);
     fixtureGit(fixture)(['commit', '--quiet', '-m', 'generation two']);
     const sourceCommit = fixtureGit(fixture)(['rev-parse', 'HEAD']);
+    const omittedNode = readNode([sourceCommit, 'other']);
+    const omitted = writeNamedPlanFile({
+      fixture,
+      value: {
+        ...plan([sourceCommit, [omittedNode], [], 2]),
+        generation: 2,
+      },
+      name: 'team-plan-omitted-generation-2',
+    });
+    const omittedGeneration = await restartTeamPlan({
+      journalPath: file.journalPath,
+      planPath: omitted.path,
+    });
+    expect(omittedGeneration.generation).toBe(2);
     const movedNode = readNode([sourceCommit, 'provider']);
     const moved = writeNamedPlanFile({
       fixture,
       value: {
         ...plan([sourceCommit, [movedNode], [], 2]),
-        generation: 2,
+        generation: 3,
       },
-      name: 'team-plan-moved-generation-2',
+      name: 'team-plan-moved-generation-3',
     });
     const restarted = await restartTeamPlan({
       journalPath: file.journalPath,
       planPath: moved.path,
     });
-    expect(restarted.generation).toBe(2);
+    expect(restarted.generation).toBe(3);
     expect(restarted.acceptedProviderEvidence).toEqual([]);
     const next = await leaseNextTeamPlan(file.journalPath);
     expect(next.leases[0]?.attempt).toBe(2);
@@ -638,6 +675,6 @@ describe('Team Plan runtime', () => {
     expect(
       (await selectTeamPlan({ journalPath: file.journalPath })).snapshot
         .generation,
-    ).toBe(2);
-  }, 10_000);
+    ).toBe(3);
+  }, 15_000);
 });

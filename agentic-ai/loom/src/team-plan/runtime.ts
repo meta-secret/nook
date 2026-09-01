@@ -27,6 +27,7 @@ import {
   restoreModuleDeliveryIntegrationEvidence,
   selectModuleDeliveryAdmissions,
 } from '../module-delivery/index.ts';
+import { LoomFailureCode, loomFailureFromCause } from '../loom-failure.ts';
 import {
   TEAM_PLAN_JOURNAL_VERSION,
   TeamPlanEventKind,
@@ -40,7 +41,7 @@ import {
   assertTeamPlanGenerationCapacity,
   createTeamPlanJournal,
   canonicalTeamPlanJournalPath,
-  loadTeamPlanJournal,
+  recoverTeamPlanStartRunId,
   discardTeamPlanJournal,
   teamPlanEventBytes,
   teamPlanSha256,
@@ -115,7 +116,17 @@ export async function startTeamPlan(
   request: TeamPlanStartRequest,
 ): Promise<TeamPlanSnapshot> {
   const repositoryRoot = await realpath(resolve(request.repositoryRoot));
-  const journalPath = await canonicalTeamPlanJournalPath(request.journalPath);
+  let journalPath: string;
+  let recoveredRunId: string | false;
+  try {
+    journalPath = await canonicalTeamPlanJournalPath(request.journalPath);
+    recoveredRunId = await recoverTeamPlanStartRunId(journalPath);
+  } catch (cause) {
+    throw loomFailureFromCause({
+      code: LoomFailureCode.TeamPlanStorageFailed,
+      cause: cause instanceof Error ? cause : new Error('Journal path failed.'),
+    });
+  }
   const journalRelativePath = relative(repositoryRoot, journalPath);
   if (
     journalRelativePath === '' ||
@@ -137,7 +148,7 @@ export async function startTeamPlan(
     version: TEAM_PLAN_JOURNAL_VERSION,
     kind: TeamPlanEventKind.Started,
     sequence: 1,
-    runId: teamPlanSha256(randomUUID()),
+    runId: recoveredRunId || teamPlanSha256(randomUUID()),
     planPath: plan.path,
     planText: plan.text,
     planSha256: plan.sha256,
@@ -172,10 +183,15 @@ export async function startTeamPlan(
     repositoryRoot,
     sourceCommit: plan.accepted.plan.sourceCommit,
   });
-  await createTeamPlanJournal({
-    journalPath,
-    event: started,
-  });
+  try {
+    await createTeamPlanJournal({ journalPath, event: started });
+  } catch (cause) {
+    throw loomFailureFromCause({
+      code: LoomFailureCode.TeamPlanStorageFailed,
+      cause:
+        cause instanceof Error ? cause : new Error('Journal creation failed.'),
+    });
+  }
   return snapshot;
 }
 
@@ -304,8 +320,7 @@ export async function withLockedTeamPlanSession<T>(
 ): Promise<T> {
   return withTeamPlanJournalLock({
     journalPath: request.journalPath,
-    action: async () => {
-      const journal = await loadTeamPlanJournal(request.journalPath);
+    action: async (journal) => {
       const session = await materializeTeamPlanSession(journal);
       try {
         return await request.action(session);

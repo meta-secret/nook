@@ -73,7 +73,7 @@ export async function leaseTeamPlan(
       });
       const admissions = authorizedAdmissions({
         admissions: selection.admissions,
-        taskIds: request.taskIds,
+        attempts: request.attempts,
       });
       const recording = recordModuleDeliveryAttemptLeases({
         authority: session.authority,
@@ -89,6 +89,7 @@ export async function leaseTeamPlan(
         sequence: session.journal.events.length + 1,
         attempts: recording.leases.map(attemptIdentity),
       };
+      assertTeamPlanSessionRepositoryAtSource(session);
       await appendTeamPlanEvent({ journalPath: request.journalPath, event });
       return { snapshot: teamPlanSnapshot(session), leases: recording.leases };
     },
@@ -97,15 +98,21 @@ export async function leaseTeamPlan(
 
 function authorizedAdmissions(request: {
   readonly admissions: readonly ModuleDeliveryAdmission[];
-  readonly taskIds: readonly string[];
+  readonly attempts: TeamPlanLeaseRequest['attempts'];
 }): readonly ModuleDeliveryAdmission[] {
   if (
-    request.taskIds.length === 0 ||
-    new Set(request.taskIds).size !== request.taskIds.length
+    request.attempts.length === 0 ||
+    new Set(request.attempts.map(attemptKey)).size !== request.attempts.length
   )
     throw new Error('Team Plan admission authorization is invalid.');
-  const authorized = request.taskIds.map((taskId) =>
-    request.admissions.find((admission) => admission.taskId === taskId),
+  const authorized = request.attempts.map((attempt) =>
+    request.admissions.find(
+      (admission) =>
+        admission.taskId === attempt.taskId &&
+        admission.attempt === attempt.attempt &&
+        admission.generation === attempt.generation &&
+        admission.planDigest === attempt.planDigest,
+    ),
   );
   if (authorized.some((admission) => !admission))
     throw new Error('Team Plan admission authorization is stale.');

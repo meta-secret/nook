@@ -80,6 +80,7 @@ export type TeamPlanJournal = Readonly<{
 export type CreateTeamPlanJournalRequest = Readonly<{
   journalPath: string;
   event: TeamPlanStartedEvent;
+  beforePublicationCleanup?: () => void;
 }>;
 
 export type AppendTeamPlanEventRequest = Readonly<{
@@ -92,7 +93,7 @@ export type AppendTeamPlanEventRequest = Readonly<{
 
 export type TeamPlanJournalLockRequest<T> = Readonly<{
   journalPath: string;
-  action: () => Promise<T>;
+  action: (journal: TeamPlanJournal) => Promise<T>;
 }>;
 
 type ExactFieldRequest = Readonly<{
@@ -119,11 +120,42 @@ export async function createTeamPlanJournal(
     action: async () => {
       if (await pathExists(`${path}.discarding`))
         throw new Error('Team Plan journal discard is still in progress.');
-      if (await pathExists(`${path}.discarded`))
+      if (await pathExists(`${path}.discarded`)) {
+        const completed = await loadTeamPlanJournal(`${path}.discarded`);
+        if (!completed.finalized)
+          throw new Error('Team Plan discard completion marker is stale.');
         await removeDiscardCompletion(`${path}.discarded`);
-      await publishNewJournalFile({ path, serialized });
+      }
+      await publishNewJournalFile({
+        path,
+        serialized,
+        beforePublicationCleanup: storageHook(request.beforePublicationCleanup),
+      });
     },
   });
+}
+
+export async function recoverTeamPlanStartRunId(
+  journalPath: string,
+): Promise<string | false> {
+  const path = await canonicalTeamPlanJournalPath(journalPath);
+  const publication = `${path}.publishing`;
+  const published = await pathExists(path);
+  const publishing = await pathExists(publication);
+  if (!published && !publishing) return false;
+  const activePath = published ? path : publication;
+  const journalFile = await readBoundedTeamPlanJournal({
+    path: activePath,
+    maximumBytes: MAX_TEAM_PLAN_JOURNAL_BYTES,
+    expectedLinkCount: published && publishing ? 2 : 1,
+  });
+  const journal = decodeTeamPlanJournal({
+    serialized: journalFile.serialized,
+    path,
+  });
+  if (journal.events.length !== 1)
+    throw new Error('Team Plan start retry is no longer available.');
+  return journal.started.runId;
 }
 
 export async function loadTeamPlanJournal(
@@ -190,7 +222,18 @@ async function withTeamPlanJournalLockIdentity<T>(
   return runWithTeamPlanJournalLock({
     journal,
     identityPath: request.lockIdentityPath ?? journal.path,
-    action: request.action,
+    action: async () => {
+      const lockedJournal = await loadTeamPlanJournal(request.journalPath);
+      if (
+        lockedJournal.path !== journal.path ||
+        lockedJournal.started.runId !== journal.started.runId ||
+        lockedJournal.started.repositoryRoot !== journal.started.repositoryRoot
+      )
+        throw new Error(
+          'Team Plan journal identity changed while acquiring its lock.',
+        );
+      return request.action(lockedJournal);
+    },
   });
 }
 
@@ -594,8 +637,15 @@ function journalGenerationCounters(
       selectedLeaseCount = 0;
       recordedCount = 0;
       const planIds = new Set(validation.plan.nodes.map((node) => node.taskId));
-      for (const taskId of latestAttempts.keys())
-        if (!planIds.has(taskId)) latestAttempts.delete(taskId);
+      if (
+        [...latestAttempts].some(
+          ([taskId, attempt]) =>
+            planIds.has(taskId) && attempt > validation.plan.maxAttempts,
+        )
+      )
+        throw new Error(
+          'Team Plan replacement attempt limit is below carried history.',
+        );
       acceptedTasks.clear();
       failedAttempts.clear();
     } else if (event.kind === TeamPlanEventKind.Selected) {
