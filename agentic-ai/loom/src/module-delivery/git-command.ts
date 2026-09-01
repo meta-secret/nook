@@ -13,22 +13,7 @@ export type GitCommandRequest = {
   readonly indexFile?: string;
   readonly commitTimestamp?: string;
   readonly input?: string;
-  readonly environment?: GitCommandEnvironment;
 };
-
-enum GitEnvironmentKey {
-  Comspec = 'COMSPEC',
-  PathUppercase = 'PATH',
-  PathTitlecase = 'Path',
-  PathExtensions = 'PATHEXT',
-  SystemRootUppercase = 'SYSTEMROOT',
-  SystemRootTitlecase = 'SystemRoot',
-  WindowsDirectory = 'WINDIR',
-}
-
-export type GitCommandEnvironment = Readonly<
-  Partial<Record<GitEnvironmentKey, string>>
->;
 
 export type GitCommandResult = {
   readonly exitCode: number;
@@ -44,8 +29,7 @@ export function runModuleDeliveryGit(
     !/^@[0-9]+ \+0000$/u.test(request.commitTimestamp)
   )
     throw new Error('Git commit timestamp must be canonical UTC epoch time.');
-  const environment = request.environment ?? moduleDeliveryGitEnvironment();
-  for (const searchPath of [environment.PATH, environment.Path])
+  for (const searchPath of [process.env.PATH, process.env.Path])
     if (typeof searchPath === 'string')
       assertAbsoluteExecutableSearchPath(searchPath);
   const args = [
@@ -69,7 +53,7 @@ export function runModuleDeliveryGit(
   const options: SpawnSyncOptions = {
     cwd: request.cwd,
     env: {
-      COMSPEC: environment.COMSPEC,
+      COMSPEC: process.env.COMSPEC,
       GIT_AUTHOR_DATE: request.commitTimestamp,
       GIT_COMMITTER_DATE: request.commitTimestamp,
       GIT_CONFIG_GLOBAL: '/dev/null',
@@ -78,16 +62,17 @@ export function runModuleDeliveryGit(
       GIT_NO_REPLACE_OBJECTS: '1',
       GIT_TERMINAL_PROMPT: '0',
       LC_ALL: 'C',
-      PATH: environment.PATH,
-      Path: environment.Path,
-      PATHEXT: environment.PATHEXT,
-      SYSTEMROOT: environment.SYSTEMROOT,
-      SystemRoot: environment.SystemRoot,
-      WINDIR: environment.WINDIR,
+      PATH: process.env.PATH,
+      Path: process.env.Path,
+      PATHEXT: process.env.PATHEXT,
+      SYSTEMROOT: process.env.SYSTEMROOT,
+      SystemRoot: process.env.SystemRoot,
+      WINDIR: process.env.WINDIR,
     },
-    ...(typeof request.input === 'string'
-      ? { input: Buffer.from(request.input, 'utf8') }
-      : {}),
+    input:
+      typeof request.input === 'string'
+        ? Buffer.from(request.input, 'utf8')
+        : undefined,
     maxBuffer: MAX_GIT_OUTPUT_BYTES,
     stdio: ['pipe', 'pipe', 'pipe'],
   };
@@ -107,24 +92,6 @@ export function runModuleDeliveryGit(
     throw new Error(`Git command failed (${exitCode})${detail}`);
   }
   return { exitCode, stdout, stderr };
-}
-
-export function moduleDeliveryGitEnvironment(): GitCommandEnvironment {
-  const environment: Partial<Record<GitEnvironmentKey, string>> = {};
-  const keys: readonly GitEnvironmentKey[] = [
-    GitEnvironmentKey.Comspec,
-    GitEnvironmentKey.PathUppercase,
-    GitEnvironmentKey.PathTitlecase,
-    GitEnvironmentKey.PathExtensions,
-    GitEnvironmentKey.SystemRootUppercase,
-    GitEnvironmentKey.SystemRootTitlecase,
-    GitEnvironmentKey.WindowsDirectory,
-  ];
-  for (const key of keys) {
-    const value = process.env[key];
-    if (typeof value === 'string') environment[key] = value;
-  }
-  return environment;
 }
 
 function assertAbsoluteExecutableSearchPath(value: string): void {
