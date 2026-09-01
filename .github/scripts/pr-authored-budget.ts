@@ -35,7 +35,8 @@ const authoredTextExtensions = new Set([
 
 export function emptySummary() {
   return {
-    authoredLines: 0,
+    authoredAdditions: 0,
+    authoredDeletions: 0,
     binaryFiles: 0,
     generatedLines: 0,
     lockfileLines: 0,
@@ -74,7 +75,8 @@ function classify(summary, path, added, deleted, renamed = false) {
   } else if (renamed && changedLines === 0) {
     summary.pureRenameFiles += 1
   } else {
-    summary.authoredLines += changedLines
+    summary.authoredAdditions += added
+    summary.authoredDeletions += deleted
   }
 }
 
@@ -144,20 +146,20 @@ export function countTextLines(text) {
   return terminators + (text.endsWith('\n') ? 0 : 1)
 }
 
-export function evaluateBudget({ authoredLines, prNumber, verifiedReviewContext }) {
-  if (authoredLines > INITIAL_PR_LIMIT && !prNumber) {
+export function evaluateBudget({ authoredAdditions, prNumber, verifiedReviewContext }) {
+  if (authoredAdditions > INITIAL_PR_LIMIT && !prNumber) {
     return {
       ok: false,
-      message: `authored diff exceeds 2,000 lines without PR-verified review-fix context: ${authoredLines}`,
+      message: `authored diff exceeds 2,000 additions without PR-verified review-fix context: ${authoredAdditions}`,
     }
   }
-  if (authoredLines >= REVIEW_GROWTH_STOP) {
+  if (authoredAdditions >= REVIEW_GROWTH_STOP) {
     return {
       ok: false,
-      message: `authored diff reached the 3,000-line review-growth stop: ${authoredLines}`,
+      message: `authored diff reached the 3,000-addition review-growth stop: ${authoredAdditions}`,
     }
   }
-  if (authoredLines <= INITIAL_PR_LIMIT) return { ok: true, mode: 'initial' }
+  if (authoredAdditions <= INITIAL_PR_LIMIT) return { ok: true, mode: 'initial' }
   if (!verifiedReviewContext) {
     return {
       ok: false,
@@ -338,24 +340,25 @@ function main() {
   if (summary.malformedRecords > 0 || summary.unmeasurableAuthoredFiles > 0) {
     throw new Error(`authored diff is not completely measurable: ${JSON.stringify(summary)}`)
   }
-  console.log(`Authored PR diff: ${summary.authoredLines} lines`)
+  console.log(`Authored PR additions: ${summary.authoredAdditions}`)
+  console.log(`Authored PR deletions: ${summary.authoredDeletions}`)
   console.log(`Reported-only diff: ${JSON.stringify(summary)}`)
   if (stopOnly) {
-    if (summary.authoredLines >= REVIEW_GROWTH_STOP) {
-      throw new Error(`authored diff reached the 3,000-line review-growth stop: ${summary.authoredLines}`)
+    if (summary.authoredAdditions >= REVIEW_GROWTH_STOP) {
+      throw new Error(`authored diff reached the 3,000-addition review-growth stop: ${summary.authoredAdditions}`)
     }
-    console.log('PR authored-line hard-stop precheck passed')
+    console.log('PR authored-addition hard-stop precheck passed')
     return
   }
-  const needsReviewContext = summary.authoredLines > INITIAL_PR_LIMIT &&
-    summary.authoredLines < REVIEW_GROWTH_STOP
+  const needsReviewContext = summary.authoredAdditions > INITIAL_PR_LIMIT &&
+    summary.authoredAdditions < REVIEW_GROWTH_STOP
   const result = evaluateBudget({
-    authoredLines: summary.authoredLines,
+    authoredAdditions: summary.authoredAdditions,
     prNumber: reviewFixPr,
     verifiedReviewContext: needsReviewContext && verifyReviewContext(reviewFixPr),
   })
   if (!result.ok) throw new Error(result.message)
-  console.log(`PR authored-line budget passed in ${result.mode} mode`)
+  console.log(`PR authored-addition budget passed in ${result.mode} mode`)
 }
 
 if (import.meta.main) {

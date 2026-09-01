@@ -122,7 +122,7 @@ Merge still requires the standard exact-head readiness audit.
   3. Run strict implementation editing with network denied, an isolated home,
      and no PAT or registry credentials in the editor process.
   4. After the editor exits, let trusted host tooling format the isolated
-     implementation worktree, enforce the authored-line budget, commit, push,
+     implementation worktree, enforce the authored-addition budget, commit, push,
      and use the GitHub API.
 - **Runner:** `agent-implement.yml` uses the general `nook-k0s` ARC scale set.
   - Concurrent work scales across the ARC worker pool.
@@ -225,7 +225,7 @@ issue without collapsing unrelated pending dispatches.
 - It cannot invoke Task or a container runtime.
 - Separate trusted host processes own:
   - formatting;
-  - the authored-line budget;
+  - the authored-addition budget;
   - commit and push; and
   - GitHub API operations.
 

@@ -905,7 +905,7 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
             && budget_guard.contains("INITIAL_PR_LIMIT = 2_000")
             && budget_guard.contains("REVIEW_GROWTH_STOP = 3_000")
             && budget_guard.contains("verifiedReviewContext"),
-        "pre-push must fail closed on the one-PR authored-line budget"
+        "pre-push must fail closed on the one-PR authored-addition budget"
     );
     Ok(())
 }

@@ -50,7 +50,7 @@ ownership until merge or a concrete blocked handoff:
    - Fetch `origin/main`.
    - Estimate the authored additions.
    - Define the module boundary.
-   - Confirm the complete PR can stay within the 2,000-line creation limit.
+   - Confirm the complete PR can stay within the 2,000-addition creation limit.
    - Create the first feature branch.
    - Define the first PR's title, body, and scope.
    - Create ignored `.cortex/.session/` memory only when temporary notes

@@ -12,50 +12,60 @@ import {
   summarizeNumstat,
 } from './pr-authored-budget.ts'
 
-test('keeps initial delivery at or below 2,000 authored lines', () => {
+test('keeps initial delivery at or below 2,000 authored additions', () => {
   assert.deepEqual(
-    evaluateBudget({ authoredLines: 2_000, prNumber: '', verifiedReviewContext: false }),
+    evaluateBudget({ authoredAdditions: 2_000, prNumber: '', verifiedReviewContext: false }),
     { ok: true, mode: 'initial' },
   )
 })
 
-test('blocks non-review growth above 2,000 authored lines', () => {
+test('blocks non-review growth above 2,000 authored additions', () => {
   assert.match(
-    evaluateBudget({ authoredLines: 2_001, prNumber: '', verifiedReviewContext: false }).message,
+    evaluateBudget({ authoredAdditions: 2_001, prNumber: '', verifiedReviewContext: false }).message,
     /without PR-verified review-fix context/,
   )
 })
 
-test('allows verified review fixes below the 3,000-line stop', () => {
+test('allows verified review fixes below the 3,000-addition stop', () => {
   assert.deepEqual(
-    evaluateBudget({ authoredLines: 2_999, prNumber: '42', verifiedReviewContext: true }),
+    evaluateBudget({ authoredAdditions: 2_999, prNumber: '42', verifiedReviewContext: true }),
     { ok: true, mode: 'review-fix' },
   )
 })
 
-test('blocks at the 3,000-line review-growth stop', () => {
+test('blocks at the 3,000-addition review-growth stop', () => {
   assert.match(
-    evaluateBudget({ authoredLines: 3_000, prNumber: '42', verifiedReviewContext: true }).message,
-    /3,000-line review-growth stop/,
+    evaluateBudget({ authoredAdditions: 3_000, prNumber: '42', verifiedReviewContext: true }).message,
+    /3,000-addition review-growth stop/,
   )
 })
 
 test('classifies an oversized initial delivery before the review stop', () => {
   assert.match(
-    evaluateBudget({ authoredLines: 3_000, prNumber: '', verifiedReviewContext: false }).message,
+    evaluateBudget({ authoredAdditions: 3_000, prNumber: '', verifiedReviewContext: false }).message,
     /without PR-verified review-fix context/,
   )
 })
 
-test('counts authored rows and reports generated and lockfile rows separately', () => {
+test('counts authored additions and deletions separately from reported-only rows', () => {
   const summary = summarizeNumstat(
     '12\t3\tsrc/domain.ts\0' +
     '4\t5\tgenerated/schema.ts\0' +
     '2\t1\tbun.lock\0',
   )
-  assert.equal(summary.authoredLines, 15)
+  assert.equal(summary.authoredAdditions, 12)
+  assert.equal(summary.authoredDeletions, 3)
   assert.equal(summary.generatedLines, 9)
   assert.equal(summary.lockfileLines, 3)
+})
+
+test('ignores 9,000 deletions when enforcing the 2,000-addition ceiling', () => {
+  const summary = summarizeNumstat('2000\t9000\tsrc/domain.ts\0')
+  assert.equal(summary.authoredDeletions, 9_000)
+  assert.deepEqual(
+    evaluateBudget({ authoredAdditions: summary.authoredAdditions, prNumber: '', verifiedReviewContext: false }),
+    { ok: true, mode: 'initial' },
+  )
 })
 
 test('counts newline-terminated untracked text like Git numstat', () => {
@@ -72,7 +82,7 @@ test('counts an untracked symlink blob without following its target', () => {
     symlinkSync('../missing-large-file', link)
     const summary = summarizeNumstat('')
     addUntracked(summary, [link])
-    assert.equal(summary.authoredLines, 1)
+    assert.equal(summary.authoredAdditions, 1)
   } finally {
     rmSync(root, { recursive: true, force: true })
   }

@@ -298,7 +298,7 @@ NOOK_WORKBENCH_ASSIGNED_GIZMO_ID=<focused-issue-gizmo-id> \
   2. validates and publishes the plan; and
   3. begins implementation only after publication.
 - A missing or rejected plan blocks implementation.
-- A plan above the 2,000-line creation limit blocks bounded implementation.
+- A plan above the 2,000-addition creation limit blocks bounded implementation.
 
 ## Worklog requirement
 

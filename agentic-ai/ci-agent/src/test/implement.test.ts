@@ -20,7 +20,7 @@ test("trusted budget rejection is exported for blocked worklog publication", () 
   const root = mkdtempSync(join(tmpdir(), "nook-budget-blocker-"));
   const output = join(root, "github-output");
   try {
-    const error = new AuthoredChangeBudgetExceededError(
+    const error = new AuthoredAdditionBudgetExceededError(
       "Implemented diff exceeds the 2000 authored-addition budget: 2001",
     );
     recordTrustedBudgetBlocker(error, output);

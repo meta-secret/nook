@@ -397,7 +397,7 @@ test('accepts multiple independently owned capability units', () => {
   assert.equal(validateAgentRecord(multiTeamPlan, 'plan'), '')
 })
 
-test('accepts a 200-line one-Gizmo plan with multiple ownership units', () => {
+test('accepts a 200-addition one-Gizmo plan with multiple ownership units', () => {
   const secondUnit =
     '2. Capability: Plan publication; Gizmo ID: gizmo-1; Functional owner: AI; Expertise provider: None; Expertise allowed code paths: None; Expertise allowed test paths: None; Expertise forbidden paths: None; Expertise consumer interfaces: None; Expertise acceptance evidence: None; Capability acceptance evidence: Publication checks pass'
   const plan = validPlan
@@ -447,7 +447,7 @@ for (const forbiddenPath of [
   })
 }
 
-test('rejects a nonnumeric authored-line estimate', () => {
+test('rejects a nonnumeric authored-addition estimate', () => {
   const invalid = validPlan.replace(
     'Estimated authored additions: 240',
     'Estimated authored additions: small',
@@ -603,7 +603,7 @@ test('rejects a bounded current slice for a multi-PR feature', () => {
   )
 })
 
-test('rejects a multi-PR slice without an authored-line estimate', () => {
+test('rejects a multi-PR slice without an authored-addition estimate', () => {
   const invalid = validPlan
     .replace(
       'Estimated authored additions: 240',
@@ -625,7 +625,7 @@ test('rejects a multi-PR slice without an authored-line estimate', () => {
   )
 })
 
-test('rejects undersized slice coverage for a 12,000-line feature', () => {
+test('rejects undersized slice coverage for a 12,000-addition feature', () => {
   const invalid = validPlan
     .replace(
       'Estimated authored additions: 240',
@@ -671,7 +671,7 @@ test('rejects an individual PR slice above 2,000 additions', () => {
   )
 })
 
-test('rejects a zero-line PR slice estimate', () => {
+test('rejects a zero-addition PR slice estimate', () => {
   const invalid = validPlan
     .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
     .replace('PR sequence mode: One PR', 'PR sequence mode: Independent PRs')
@@ -882,7 +882,7 @@ test('rejects a one-PR sequence that contradicts the current slice', () => {
   )
 })
 
-test('rejects zero authored-line estimates', () => {
+test('rejects zero authored-addition estimates', () => {
   const invalid = validPlan
     .replace('Estimated authored additions: 240', 'Estimated authored additions: 0')
     .replace(
