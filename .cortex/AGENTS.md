@@ -80,6 +80,20 @@ or second coordinator. See the [Gizmo contract](gizmo/AGENTS.md).
   does not use Python.
 - Keep `.cortex/.session/` temporary and physically clean before readiness.
 
+## No fallback behavior
+
+Agent-authored fallback behavior is prohibited. This is a universal P1 rule.
+
+- Do not add an alternate execution path when the intended path is unavailable
+  or fails.
+- Do not add compatibility branches, legacy branches, shims, or aliases.
+- Do not silently degrade behavior or substitute a default result.
+- Do not catch a failure and continue as if the operation succeeded.
+- Keep every unsupported or failed state observable.
+- Fail closed when the required path cannot complete.
+- Report a blocker when the required behavior cannot be implemented exactly.
+  Do not approximate it with fallback functionality.
+
 ## Agent communication
 
 Every user-visible agent message starts with the pull request it currently
