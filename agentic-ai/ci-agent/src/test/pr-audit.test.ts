@@ -66,7 +66,7 @@ test("buildPrAudit blocks an actionable Cursor review body", async () => {
   assert.equal(audit.feedback.substantiveReviews, 1);
 });
 
-test("buildPrAudit excludes historical comments before the first exact-head request", async () => {
+test("buildPrAudit keeps old actionable comments in scope", async () => {
   const audit = await buildPrAudit(
     mockOctokit({
       codexReview: MockCodexReview.Missing,
@@ -78,47 +78,8 @@ test("buildPrAudit excludes historical comments before the first exact-head requ
 
   assert.equal(audit.ready, false);
   assert.equal(audit.feedback.substantiveComments, 1);
-  assert.equal(audit.feedback.currentIterationComments, 0);
 });
 
-test("buildPrAudit leaves comments unclassified while the head transition is pending", async () => {
-  const audit = await buildPrAudit(
-    mockOctokit({
-      codexReview: MockCodexReview.Missing,
-      currentHeadFinding: true,
-      omitHeadTransition: true,
-    }),
-    repoRef,
-    410,
-  );
-
-  assert.equal(audit.ready, false);
-  assert.equal(audit.feedback.currentIterationComments, 0);
-  assert.equal(audit.feedback.headTransitionObserved, false);
-  assert.equal(audit.feedback.substantiveComments, 1);
-});
-
-test("buildPrAudit ignores an untrusted head transition marker", async () => {
-  const audit = await buildPrAudit(
-    mockOctokit({ untrustedHeadTransition: true }),
-    repoRef,
-    410,
-  );
-
-  assert.equal(audit.feedback.headTransitionObserved, false);
-});
-
-test("buildPrAudit reads fork head transitions from the trusted PR marker", async () => {
-  const audit = await buildPrAudit(
-    mockOctokit({
-      headRepository: { owner: "contributor", repo: "nook-fork" },
-    }),
-    repoRef,
-    410,
-  );
-
-  assert.equal(audit.feedback.headTransitionObserved, true);
-});
 
 test("buildPrAudit does not wait for a current-head Codex review", async () => {
   const audit = await buildPrAudit(
@@ -384,10 +345,8 @@ type MockOptions = {
   headRepository?: RepoRef;
   nativeConclusion?: MockJobConclusion;
   omitNativeJob?: boolean;
-  omitHeadTransition?: boolean;
   runStatus?: MockRunStatus;
   staleBaseRun?: boolean;
-  untrustedHeadTransition?: boolean;
   unresolvedThreads?: number;
 };
 
@@ -493,19 +452,6 @@ function createMockOctokit(options: MockOptions): Octokit {
   const issues = {
     listComments: async () => ({
       data: [
-        ...(options.omitHeadTransition === true
-          ? []
-          : [
-              {
-                body: `<!-- nook-head-transition:${headSha}:main:2026-08-08T00:01:00Z -->\nExact-head delivery boundary (automated).`,
-                user: {
-                  login:
-                    options.untrustedHeadTransition === true
-                      ? "reviewer"
-                      : "github-actions[bot]",
-                },
-              },
-            ]),
         {
           body: "### Preview deployed\n\nhttps://preview.test",
           user: { login: "github-actions[bot]" },

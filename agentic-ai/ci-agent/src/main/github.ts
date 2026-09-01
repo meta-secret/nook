@@ -37,31 +37,6 @@ export type PullRequestRevision = {
   headSha: string;
 };
 
-export enum HeadTransitionObservationState {
-  Changed = "changed",
-  Missing = "missing",
-  Observed = "observed",
-}
-
-export type HeadTransitionObservation =
-  | {
-      state: HeadTransitionObservationState.Changed;
-      revision: PullRequestRevision;
-    }
-  | { state: HeadTransitionObservationState.Missing }
-  | {
-      boundaryAt: string;
-      state: HeadTransitionObservationState.Observed;
-    };
-
-type HeadTransitionBackfillInput = {
-  octokit: Octokit;
-  prNumber: number;
-  repoRef: RepoRef;
-  revision?: PullRequestRevision;
-  signal?: AbortSignal;
-};
-
 export enum OpenPrLookupKind {
   Found = "found",
   NotFound = "not-found",
@@ -93,31 +68,6 @@ export function resolveGitHubToken(): string {
 
 export function createOctokit(): Octokit {
   return new Octokit({ auth: resolveGitHubToken() });
-}
-
-export async function requestHeadTransitionBackfill(
-  input: HeadTransitionBackfillInput,
-): Promise<void> {
-  const { owner, repo } = input.repoRef;
-  const revision =
-    input.revision ??
-    (await readPullRequestRevision(
-      input.octokit,
-      input.repoRef,
-      input.prNumber,
-    ));
-  await input.octokit.rest.actions.createWorkflowDispatch({
-    owner,
-    repo,
-    workflow_id: "pr-head-stabilization.yml",
-    ref: revision.baseRef,
-    inputs: {
-      base_sha: revision.baseSha,
-      head_sha: revision.headSha,
-      pr_number: String(input.prNumber),
-    },
-    ...(input.signal ? { request: { signal: input.signal } } : {}),
-  });
 }
 
 export async function readPullRequestRevision(
@@ -159,53 +109,6 @@ export function assertPullRequestRevision(
   throw new Error(
     `Pull request revision changed from ${expected.headSha}/${expected.baseSha}/${expected.baseRef} to ${actual.headSha}/${actual.baseSha}/${actual.baseRef}; no review was requested`,
   );
-}
-
-export async function observeCurrentHeadTransition(
-  octokit: Octokit,
-  repoRef: RepoRef,
-  prNumber: number,
-  expected: PullRequestRevision,
-  signal?: AbortSignal,
-): Promise<HeadTransitionObservation> {
-  const { owner, repo } = repoRef;
-  const [{ data: pr }, issueComments] = await Promise.all([
-    octokit.rest.pulls.get({
-      owner,
-      repo,
-      pull_number: prNumber,
-      ...(signal ? { request: { signal } } : {}),
-    }),
-    octokit.paginate(octokit.rest.issues.listComments, {
-      owner,
-      repo,
-      issue_number: prNumber,
-      per_page: 100,
-      ...(signal ? { request: { signal } } : {}),
-    }),
-  ]);
-  const revision: PullRequestRevision = {
-    baseRef: pr.base.ref,
-    baseSha: pr.base.sha,
-    headSha: pr.head.sha,
-  };
-  if (!samePullRequestRevision(revision, expected)) {
-    return { revision, state: HeadTransitionObservationState.Changed };
-  }
-  const transition = findCurrentHeadTransition({
-    baseRef: pr.base.ref,
-    comments: issueComments.map((comment) => ({
-      body: comment.body ?? "",
-      user: comment.user,
-    })),
-    headSha: pr.head.sha,
-  });
-  return transition.state === HeadTransitionState.Observed
-    ? {
-        boundaryAt: transition.at,
-        state: HeadTransitionObservationState.Observed,
-      }
-    : { state: HeadTransitionObservationState.Missing };
 }
 
 export async function findOpenPr(
@@ -412,9 +315,7 @@ export type PrFeedbackSummary = {
     requested: boolean;
     settled: boolean;
   };
-  currentIterationComments: number;
   findingBatches: number;
-  headTransitionObserved: boolean;
   substantiveComments: number;
   substantiveReviews: number;
   unresolvedThreads: number;
@@ -428,47 +329,11 @@ type RepositoryStatusCommentInput = {
   user: unknown;
 };
 
-enum HeadTransitionState {
-  Observed = "observed",
-  Pending = "pending",
-}
-
-type HeadTransitionBoundary =
-  | { at: string; state: HeadTransitionState.Observed }
-  | { state: HeadTransitionState.Pending };
-
-type HeadTransitionComment = {
-  readonly body: string;
-  readonly user: unknown;
-};
-
-type CurrentHeadTransitionInput = {
-  baseRef: string;
-  comments: readonly HeadTransitionComment[];
-  headSha: string;
-};
-
-function findCurrentHeadTransition(
-  input: CurrentHeadTransitionInput,
-): HeadTransitionBoundary {
-  const markerPrefix = headTransitionMarkerPrefix(input.headSha, input.baseRef);
-  const transitionTimes = input.comments
-    .filter((comment) => isGitHubActionsBot(comment.user))
-    .map((comment) => transitionTimeFromMarker(comment.body, markerPrefix))
-    .filter((transitionTime) => transitionTime.length > 0)
-    .sort();
-  const transitionTime = transitionTimes.at(-1);
-  return transitionTime
-    ? { at: transitionTime, state: HeadTransitionState.Observed }
-    : { state: HeadTransitionState.Pending };
-}
-
 export async function inspectPrFeedback(
   octokit: Octokit,
   repoRef: RepoRef,
   prNumber: number,
   expectedRevision?: PullRequestRevision,
-  expectedBoundaryAt?: string,
   signal?: AbortSignal,
 ): Promise<PrFeedbackSummary> {
   const { owner, repo } = repoRef;
@@ -508,25 +373,6 @@ export async function inspectPrFeedback(
       ...(signal ? { request: { signal } } : {}),
     }),
   ]);
-  const transitionInput: CurrentHeadTransitionInput = {
-    baseRef: pr.base.ref,
-    comments: issueComments.map((comment) => ({
-      body: comment.body ?? "",
-      user: comment.user,
-    })),
-    headSha: pr.head.sha,
-  };
-  const currentHeadTransition = findCurrentHeadTransition(transitionInput);
-  if (
-    expectedBoundaryAt &&
-    (currentHeadTransition.state !== HeadTransitionState.Observed ||
-      currentHeadTransition.at !== expectedBoundaryAt)
-  ) {
-    throw new Error(
-      `Trusted exact-head transition boundary changed from ${expectedBoundaryAt}; no review was requested`,
-    );
-  }
-
   let unresolvedThreads = 0;
   enum PaginationKind {
     FirstPage = "first-page",
@@ -561,11 +407,7 @@ export async function inspectPrFeedback(
         : { kind: PaginationKind.Complete };
   }
 
-  const marker = codexReviewRequestMarker(
-    pr.head.sha,
-    pr.base.sha,
-    expectedBoundaryAt ?? "",
-  );
+  const marker = codexReviewRequestMarker(pr.head.sha, pr.base.sha);
   const cursorMarker = cursorReviewRequestMarker(pr.head.sha);
   const reviewRequests = issueComments.filter((comment) =>
     isTrustedExactHeadReviewRequest({
@@ -582,10 +424,6 @@ export async function inspectPrFeedback(
     (review) =>
       review.commit_id === pr.head.sha &&
       isSubmittedReviewState(review.state) &&
-      evidenceFollowsTransition(
-        review.submitted_at ?? "",
-        currentHeadTransition,
-      ) &&
       isCodexReviewer(review.user),
   );
   const currentHeadCursorReview = reviews.some(
@@ -612,10 +450,6 @@ export async function inspectPrFeedback(
   );
   const cleanComment = issueComments.some(
     (comment) =>
-      evidenceFollowsTransition(
-        comment.created_at ?? "",
-        currentHeadTransition,
-      ) &&
       isCleanCodexReviewComment(comment.body ?? "", comment.user, pr.head.sha),
   );
 
@@ -627,19 +461,12 @@ export async function inspectPrFeedback(
         cursorMarker,
         marker,
         user: comment.user,
-      }) && !isCodexCleanReviewStatusComment(comment.body ?? "", comment.user),
+      }) &&
+      !isCodexCleanReviewStatusComment(comment.body ?? "", comment.user) &&
+      !isNonActionableReviewBody(comment.body ?? ""),
   );
-  const currentIterationComments =
-    currentHeadTransition.state === HeadTransitionState.Observed
-      ? substantiveComments.filter(
-          (comment) =>
-            comment.created_at >= currentHeadTransition.at &&
-            !isNonActionableReviewBody(comment.body ?? ""),
-        )
-      : [];
   const substantiveReviews = reviews.filter((review) => {
     if (
-      review.commit_id !== pr.head.sha ||
       !isSubmittedReviewState(review.state) ||
       review.state === "APPROVED"
     ) {
@@ -698,10 +525,7 @@ export async function inspectPrFeedback(
       requested: cursorReviewRequests.length > 0,
       settled: currentHeadCursorReview,
     },
-    currentIterationComments: currentIterationComments.length,
     findingBatches: countAutomatedFindingBatches(findingBatchRequest),
-    headTransitionObserved:
-      currentHeadTransition.state === HeadTransitionState.Observed,
     substantiveComments: substantiveComments.length,
     substantiveReviews: substantiveReviews.length,
     unresolvedThreads,
@@ -789,8 +613,7 @@ export function isRepositoryStatusComment(
       (trimmed.startsWith("### Preview deployed") ||
         trimmed.startsWith("### Web research preview") ||
         trimmed.startsWith("<!-- nook-ui-demo -->") ||
-        trimmed.startsWith("<!-- nook-core-coverage -->") ||
-        trimmed.startsWith("<!-- nook-head-transition:"))) ||
+        trimmed.startsWith("<!-- nook-core-coverage -->"))) ||
     isTrustedCodexReviewRequestComment({
       authorAssociation: input.authorAssociation,
       body: input.body,
@@ -810,27 +633,6 @@ export function isRepositoryStatusComment(
     (isCursorReviewer(input.user) &&
       trimmed.startsWith("<!-- BUGBOT_FREE_TIER_DISABLED_UPSELL -->"))
   );
-}
-
-function headTransitionMarkerPrefix(headSha: string, baseRef: string): string {
-  return `<!-- nook-head-transition:${headSha}:${baseRef}:`;
-}
-
-function transitionTimeFromMarker(body: string, markerPrefix: string): string {
-  const markerLine = body.trimStart().split("\n", 1)[0] ?? "";
-  if (!markerLine.startsWith(markerPrefix) || !markerLine.endsWith(" -->")) {
-    return "";
-  }
-  const transitionTime = markerLine.slice(markerPrefix.length, -4);
-  return Number.isNaN(Date.parse(transitionTime)) ? "" : transitionTime;
-}
-
-function evidenceFollowsTransition(
-  evidenceAt: string,
-  transition: HeadTransitionBoundary,
-): boolean {
-  if (transition.state === HeadTransitionState.Pending) return false;
-  return evidenceAt.length === 0 || evidenceAt >= transition.at;
 }
 
 function isGitHubActionsBot(

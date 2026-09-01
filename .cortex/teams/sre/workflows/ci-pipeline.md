@@ -20,13 +20,6 @@ See [issues](../../../gizmo/workflows/issues.md),
   - Trigger: Explicit `ci:validate` / `ci:full-e2e` label
   - Purpose: Exact-head PR gate, including Rust ecosystem jobs
   - GitHub PAT: No
-- **[`pr-head-stabilization.yml`](../../../../.github/workflows/pr-head-stabilization.yml)**
-  - Trigger: PR head replacement through `pull_request_target`
-  - Purpose: Cancel active obsolete-head validation associated with that PR
-  - Permissions: `actions: write`, PR write, contents read. PR write maintains
-    the trusted exact-head boundary comment. The workflow never checks out PR
-    code.
-  - GitHub PAT: No
 - **[`repository-policy.yml`](../../../../.github/workflows/repository-policy.yml)**
   - Trigger: Every PR; path-filtered Main changes
   - Purpose: Source architecture plus conditional Loom verification
@@ -111,18 +104,6 @@ See [issues](../../../gizmo/workflows/issues.md),
 - `ci:full-e2e` additionally runs the Main-equivalent local-provider + extension browser suite.
 - Keep independent long-running gates on separate ARC Pods.
 - Combine jobs only when measured setup savings exceed lost parallelism.
-
-**`pr-head-stabilization.yml`**
-
-- Runs from trusted default-branch workflow code when a PR head is replaced.
-- Accepts a numbered manual dispatch from validation to backfill the current
-  boundary for pull requests that were already open during rollout.
-- Serializes boundary writes per pull request and derives manual transition
-  time from the server-created workflow run.
-- Reads the live PR head before each cancellation.
-- Cancels only active obsolete PR, Rust ecosystem, and Web research runs that
-  GitHub associates with the same PR.
-- Preserves current-head runs and never checks out or executes PR code.
 
 **`repository-policy.yml`**
 

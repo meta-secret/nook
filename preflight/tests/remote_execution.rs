@@ -174,65 +174,46 @@ fn complete_validation_dispatches_before_review_collection() -> Result<()> {
         "label-race cleanup must preserve independently synchronized Web research runs"
     );
 
-    let replacement_head = read_fallible(".github/workflows/pr-head-stabilization.yml")?;
-    for required in [
-        "pull_request_target:",
-        "types: [edited, opened, reopened, synchronize]",
-        "workflow_dispatch:",
-        "pr_number:",
-        "head_sha:",
-        "base_sha:",
-        "actions: write",
-        "pull-requests: write",
-        "group: pr-head-boundary-${{ github.event.pull_request.number || inputs.pr_number }}",
-        "cancel-in-progress: false",
-        "runs-on: ubuntu-latest",
-        "<!-- nook-head-transition:",
-        "github.rest.actions.getWorkflowRun",
-        "Skipping obsolete head-boundary backfill.",
-        "Skipping obsolete head-boundary event.",
-        "github.rest.issues.updateComment",
-        "github.rest.issues.createComment",
-        "context.payload.changes?.base?.ref?.from",
-        "Ignoring PR edit without a base-ref change.",
-        "run.name !== \"Web research\"",
-        "associatedPullRequest?.base?.sha !== currentPr.base.sha",
-        ".filter((run) => activeStatuses.has(run.status))",
-        "latestPr.base.ref === eventBaseRef",
-        "associatedPullRequest?.base?.sha !== latestPr.base.sha",
-        "github.rest.actions.listWorkflowRuns",
-        "github.rest.pulls.get",
-        "inspectionDeadline = Date.now() + 45_000",
-        "setTimeout(resolve, 5_000)",
-        "run.head_sha !== currentPr.head.sha || predatesBaseRetarget",
-        "run.head_sha === latestPr.head.sha &&",
-        "Could not recheck PR state before cancelling",
-        "retrying within the registration window",
-        "run.pull_requests.find",
-        "github.rest.actions.cancelWorkflowRun",
-        "github.rest.actions.getWorkflowRun",
-        "latestRun.status === \"completed\"",
-        "\"PR\"",
-        "\"Rust ecosystem checks\"",
-        "\"Web research\"",
-    ] {
-        assert!(
-            replacement_head.contains(required),
-            "replacement-head cancellation contract missing: {required}"
-        );
+    Ok(())
+}
+
+#[test]
+fn head_transition_marker_and_stabilization_routes_are_absent() -> Result<()> {
+    let workflow_name = ["pr-head", "stabilization.yml"].join("-");
+    assert!(
+        !repository_root()
+            .join(".github/workflows")
+            .join(&workflow_name)
+            .exists(),
+        "the head-stabilization workflow must remain removed"
+    );
+
+    let forbidden = [
+        ["pr-head", "stabilization"].join("-"),
+        ["nook-head", "transition"].join("-"),
+    ];
+    for relative_root in [".github/workflows", ".github/scripts", ".task"] {
+        let mut pending = vec![repository_root().join(relative_root)];
+        while let Some(directory) = pending.pop() {
+            for entry in fs::read_dir(&directory)? {
+                let entry = entry?;
+                if entry.file_type()?.is_dir() {
+                    pending.push(entry.path());
+                    continue;
+                }
+                let Ok(source) = fs::read_to_string(entry.path()) else {
+                    continue;
+                };
+                for marker in &forbidden {
+                    assert!(
+                        !source.contains(marker),
+                        "{} must not support removed head-transition state: {marker}",
+                        entry.path().display()
+                    );
+                }
+            }
+        }
     }
-    let cancellation_job = replacement_head
-        .split_once("\n  obsolete-heads:\n")
-        .map(|(_, job)| job)
-        .context("replacement-head workflow must keep the cancellation job")?;
-    assert!(
-        !cancellation_job.contains("concurrency:"),
-        "obsolete-run cancellation must not share the serialized marker group"
-    );
-    assert!(
-        !replacement_head.contains("actions/checkout"),
-        "privileged replacement-head cancellation must never checkout PR code"
-    );
     Ok(())
 }
 

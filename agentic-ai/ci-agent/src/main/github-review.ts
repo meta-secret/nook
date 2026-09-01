@@ -68,7 +68,6 @@ export enum ExactHeadReviewRevisionState {
 
 export type ExactHeadReviewRevision =
   | {
-      boundaryAt: string;
       revision: PullRequestRevision;
       state: ExactHeadReviewRevisionState.Bound;
     }
@@ -121,10 +120,8 @@ type CommentReaction = {
 export function codexReviewRequestMarker(
   headSha: string,
   baseSha = "base-sha",
-  boundaryAt = "",
 ): string {
-  const boundaryIdentity = boundaryAt.length > 0 ? `:${boundaryAt}` : "";
-  return `<!-- nook-codex-review:${headSha}:${baseSha}${boundaryIdentity} -->`;
+  return `<!-- nook-codex-review:${headSha}:${baseSha} -->`;
 }
 
 export function cursorReviewRequestMarker(headSha: string): string {
@@ -195,10 +192,6 @@ export async function requestExactHeadReview(
   });
   const snapshot = await loadReviewSnapshot({
     baseSha,
-    boundaryAt:
-      expectedRevision.state === ExactHeadReviewRevisionState.Bound
-        ? expectedRevision.boundaryAt
-        : "",
     headSha,
     octokit,
     owner,
@@ -247,11 +240,7 @@ export async function requestExactHeadReview(
     };
   }
 
-  const boundaryAt =
-    expectedRevision.state === ExactHeadReviewRevisionState.Bound
-      ? expectedRevision.boundaryAt
-      : "";
-  const codexMarker = codexReviewRequestMarker(headSha, baseSha, boundaryAt);
+  const codexMarker = codexReviewRequestMarker(headSha, baseSha);
   await octokit.rest.issues.createComment({
     owner,
     repo,
@@ -272,7 +261,6 @@ export async function requestExactHeadReview(
   const probed = await probeCodexAvailability({
     availability,
     baseSha,
-    boundaryAt,
     headSha,
     octokit,
     owner,
@@ -460,7 +448,6 @@ type ReviewSnapshot = {
 
 async function loadReviewSnapshot(input: {
   baseSha: string;
-  boundaryAt: string;
   headSha: string;
   octokit: Octokit;
   owner: string;
@@ -472,14 +459,7 @@ async function loadReviewSnapshot(input: {
     listIssueComments(input),
     listPullReviews(input),
   ]);
-  return snapshotFrom(
-    comments,
-    reviews,
-    input.headSha,
-    input.baseSha,
-    input.boundaryAt,
-    input,
-  );
+  return snapshotFrom(comments, reviews, input.headSha, input.baseSha, input);
 }
 
 async function snapshotFrom(
@@ -487,7 +467,6 @@ async function snapshotFrom(
   reviews: PullReview[],
   headSha: string,
   baseSha: string,
-  boundaryAt: string,
   reactionSource: {
     octokit: Octokit;
     owner: string;
@@ -495,11 +474,7 @@ async function snapshotFrom(
     signal?: AbortSignal;
   },
 ): Promise<ReviewSnapshot> {
-  const codexMarker = codexReviewRequestMarker(
-    headSha,
-    baseSha,
-    boundaryAt,
-  );
+  const codexMarker = codexReviewRequestMarker(headSha, baseSha);
   const cursorMarker = cursorReviewRequestMarker(headSha);
   const codexRequests = comments.filter(
     (comment) =>
@@ -608,7 +583,6 @@ type CodexProbeResult =
 async function probeCodexAvailability(input: {
   availability: ExactHeadReviewAvailability;
   baseSha: string;
-  boundaryAt: string;
   headSha: string;
   octokit: Octokit;
   owner: string;

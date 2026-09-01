@@ -565,9 +565,6 @@ const hostedUntrustedBoundary = new Set([
   "hive.yml#console-untrusted",
   "web-research.yml#validate-untrusted",
 ]);
-const hostedControlPlaneBoundary = new Set([
-  "pr-head-stabilization.yml#head-boundary",
-]);
 const workflowsDir = resolve(root, ".github/workflows");
 const workflowFiles = (await readdir(workflowsDir))
   .filter((file) => file.endsWith(".yml") || file.endsWith(".yaml"))
@@ -586,23 +583,6 @@ for (const workflowFile of workflowFiles) {
     }
     const identity = `${workflowFile}#${jobName}`;
     if (placement === "ubuntu-latest") {
-      if (hostedControlPlaneBoundary.has(identity)) {
-        const steps = job.steps ?? [];
-        if (
-          steps.length === 0 ||
-          steps.some(
-            (step) =>
-              "run" in step ||
-              !step.uses?.startsWith("actions/github-script@"),
-          )
-        ) {
-          throw new Error(
-            `${identity} must remain checkout-free GitHub API control-plane work`,
-          );
-        }
-        observedHostedExceptions.add(identity);
-        continue;
-      }
       if (!hostedUntrustedBoundary.has(identity)) {
         throw new Error(`${identity} routes trusted work to GitHub cloud`);
       }
@@ -625,10 +605,7 @@ for (const workflowFile of workflowFiles) {
   }
 }
 
-for (const exception of [
-  ...hostedUntrustedBoundary,
-  ...hostedControlPlaneBoundary,
-]) {
+for (const exception of hostedUntrustedBoundary) {
   if (!observedHostedExceptions.has(exception)) {
     throw new Error(`stale hosted runner exception: ${exception}`);
   }

@@ -162,14 +162,16 @@ HH:mm | <action-type> | <description>
 - Use the exact pull-request number that the activity currently serves.
 - Use `pr: "pending"` before that pull request exists.
 - Use `pr: "none"` when the assigned work intentionally has no pull request.
-- Identify the actual Nook executor with the `team` and `agent` pair.
-  - Use `team: "GIZMO"` and `agent: "Prime"` for Gizmo Prime.
-  - Gizmo Prime is the existing root delivery agent. Do not report it as
-    `root`.
-  - Use a Team Agent's canonical team and visible task identity only when the
-    active harness really creates that worker.
-  - Do not use a capability, persona, or passive feature-slice Gizmo as the
-    agent identity.
+- Identify the actual Nook executor type with the `team` and `agent` pair.
+  - Use `team: "GIZMO"` and `agent: "Gizmo Prime"` for Gizmo Prime.
+  - Use the canonical team and `agent: "<team> Team Agent"` for a real Team
+    Agent created by the active harness, for example `team: "AI"` with
+    `agent: "AI Team Agent"` or `team: "SRE"` with
+    `agent: "SRE Team Agent"`.
+  - Use `agent: "Skill"` only while a skill is really executing, and name the
+    exact skill in the activity description.
+  - Do not report root, task names, personal names, capabilities, personas, or
+    passive feature-slice Gizmos as the agent identity.
   - Re-emit the context when execution passes to another real agent.
   - Change only the context values that actually differ.
   - Never imply a subagent execution, identity, or authority that did not
@@ -181,9 +183,7 @@ HH:mm | <action-type> | <description>
 - Do not repeat unchanged YAML context for consecutive activity updates.
 - A Team Agent or subagent emits its own context before its first relayed
   activity.
-- A skill does not replace the current agent identity.
-  - Name the exact skill in the activity description.
-  - Use `SKILL` when loading or applying the skill is the reported action.
+- Use `SKILL` when loading or applying a skill is the reported action.
 - Start every activity line with the current local time in 24-hour `HH:mm`
   form.
 - Use a short action type that makes the purpose immediately visible.

@@ -53,11 +53,10 @@ task pr:validate PR=<number>
 The command:
 
 1. Dispatches repository-owned GitHub Actions immediately.
-2. Freezes the current PR head and base, then observes their trusted transition
-   marker.
-   - Preserves an existing matching marker and dispatches backfill only when
-     that marker is absent.
-   - Waits boundedly for a dispatched marker to become observable.
+2. Freezes the current PR head and base only to bind the review request to the
+   intended revision.
+   - Inspects every PR comment, submitted review body, and review thread without
+     filtering by timestamp, marker, or head transition.
    - Detects revision changes through feedback inspection and immediately
      before Codex contact.
    - Checks the review circuit, then contacts Codex without waiting for a result.
@@ -69,12 +68,9 @@ The command:
    delivery owner explicitly acknowledges that pass with
    `REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED=1` before the next review collection.
 
-A matching observable marker always precedes feedback inspection and Codex
-contact. Reusing it avoids replacing the boundary that assigns settled review
-to the current iteration. A required marker wait is bounded and starts only
-after hosted validation dispatch. If it expires or the frozen revision changes,
-the review request fails truthfully without contacting Codex, while validation
-continues. The non-waiting request then checks the circuit. An open circuit
+If the frozen revision changes, the review request fails truthfully without
+contacting Codex, while validation continues. The non-waiting request then
+checks the circuit. An open circuit
 suppresses the request but does not stop validation. A transient request failure
 or provider `requested: false` result reports `not-requested` and also leaves
 validation running. Collect or retry review separately; do not restart hosted
@@ -91,7 +87,8 @@ without complete validation. It is idempotent and does not wait for a result.
 Before merge, inspect feedback currently present. Gizmo must coordinate these
 actions:
 
-- address every active actionable finding;
+- address every actionable PR comment and submitted review finding, including
+  feedback created before the current head;
 - reply on the targeted thread before resolving it;
 - re-query until unresolved review threads are zero;
 - keep polling feedback while repository checks run for the validation head;

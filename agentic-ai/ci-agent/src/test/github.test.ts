@@ -4,137 +4,12 @@ import test from "node:test";
 import type { Octokit } from "@octokit/rest";
 
 import {
-  HeadTransitionObservationState,
   createFixPr,
-  observeCurrentHeadTransition,
-  requestHeadTransitionBackfill,
   requiredPrCheckNames,
   requiredPrWorkflows,
 } from "../main/github.js";
 
 const repoRef = { owner: "meta-secret", repo: "nook" };
-
-test("requestHeadTransitionBackfill passes its abort signal to dispatch", async () => {
-  const controller = new AbortController();
-  const dispatchSignals: AbortSignal[] = [];
-  const octokit = {
-    rest: {
-      actions: {
-        createWorkflowDispatch: async (input: {
-          request?: { signal: AbortSignal };
-        }) => {
-          if (input.request) dispatchSignals.push(input.request.signal);
-        },
-      },
-    },
-  } as unknown as Octokit;
-
-  await requestHeadTransitionBackfill({
-    octokit,
-    prNumber: 1263,
-    repoRef,
-    revision: {
-      baseRef: "main",
-      baseSha: "base-sha",
-      headSha: "head-sha",
-    },
-    signal: controller.signal,
-  });
-
-  assert.equal(dispatchSignals[0], controller.signal);
-});
-
-function headTransitionObserverOctokit(input: {
-  body: string;
-  liveHeadSha?: string;
-  login: string;
-}): Octokit {
-  return {
-    paginate: async () => [
-      { body: input.body, user: { login: input.login } },
-    ],
-    rest: {
-      issues: { listComments: async () => ({ data: [] }) },
-      pulls: {
-        get: async () => ({
-          data: {
-            base: { ref: "main", sha: "base-sha" },
-            head: { sha: input.liveHeadSha ?? "head-sha" },
-          },
-        }),
-      },
-    },
-  } as unknown as Octokit;
-}
-
-test("observeCurrentHeadTransition accepts only the matching trusted marker", async () => {
-  const marker =
-    "<!-- nook-head-transition:head-sha:main:2026-09-01T00:00:00.000Z -->";
-  const expected = {
-    baseRef: "main",
-    baseSha: "base-sha",
-    headSha: "head-sha",
-  };
-  assert.deepEqual(
-    await observeCurrentHeadTransition(
-      headTransitionObserverOctokit({
-        body: marker,
-        login: "github-actions[bot]",
-      }),
-      repoRef,
-      1263,
-      expected,
-    ),
-    {
-      boundaryAt: "2026-09-01T00:00:00.000Z",
-      state: HeadTransitionObservationState.Observed,
-    },
-  );
-  assert.deepEqual(
-    await observeCurrentHeadTransition(
-      headTransitionObserverOctokit({
-        body: marker,
-        login: "untrusted-user",
-      }),
-      repoRef,
-      1263,
-      expected,
-    ),
-    { state: HeadTransitionObservationState.Missing },
-  );
-  assert.deepEqual(
-    await observeCurrentHeadTransition(
-      headTransitionObserverOctokit({
-        body: marker.replace("head-sha", "stale-head"),
-        login: "github-actions[bot]",
-      }),
-      repoRef,
-      1263,
-      expected,
-    ),
-    { state: HeadTransitionObservationState.Missing },
-  );
-  assert.deepEqual(
-    await observeCurrentHeadTransition(
-      headTransitionObserverOctokit({
-        body: marker,
-        liveHeadSha: "changed-head",
-        login: "github-actions[bot]",
-      }),
-      repoRef,
-      1263,
-      expected,
-    ),
-    {
-      revision: {
-        baseRef: "main",
-        baseSha: "base-sha",
-        headSha: "changed-head",
-      },
-      state: HeadTransitionObservationState.Changed,
-    },
-  );
-});
 
 test("requiredPrCheckNames maps changed paths to repository-owned gates", () => {
   assert.deepEqual(requiredPrCheckNames([".cortex/AGENTS.md"]), []);
@@ -188,7 +63,6 @@ test("requiredPrCheckNames maps changed paths to repository-owned gates", () => 
     },
   ]);
 });
-
 test("createFixPr leaves the PR body free of automatic merge control markers", async () => {
   let createdBody = "";
   let createdBase = "";
