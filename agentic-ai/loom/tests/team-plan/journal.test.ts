@@ -410,7 +410,6 @@ describe('Team Plan journal', () => {
       }),
     ).toBe('acquired-symbolic-name');
     expect(fixtureGit(fixture)(['rev-parse', targetRef])).toBe(stale);
-
     const shadowGit = join(fixture.sourceRoot, 'git');
     writeFileSync(shadowGit, '#!/bin/sh\nexit 93\n');
     chmodSync(shadowGit, 0o755);
@@ -459,24 +458,6 @@ describe('Team Plan journal', () => {
         process.env.GIT_CONFIG_VALUE_0 = originalGitConfigValue;
       else delete process.env.GIT_CONFIG_VALUE_0;
     }
-  });
-
-  test('rejects a hard-linked journal before lock acquisition', async () => {
-    const { fixture, journalPath } = await startedFixture();
-    linkSync(journalPath, `${journalPath}.alias`);
-    await expect(
-      withTeamPlanJournalLock({
-        journalPath,
-        action: async () => 'unreachable',
-      }),
-    ).rejects.toThrow('path is unsafe');
-    expect(
-      fixtureGit(fixture)([
-        'for-each-ref',
-        '--format=%(refname)',
-        lockRef({ fixture, journalPath }),
-      ]),
-    ).toBe('');
   });
 
   test('rejects torn snapshots and nested attempt extensions', async () => {

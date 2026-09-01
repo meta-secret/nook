@@ -1,6 +1,12 @@
 import { afterEach, expect, test } from 'bun:test';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import {
+  existsSync,
+  linkSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -24,4 +30,13 @@ test('rejects absent and non-regular journal paths without mutation', async () =
   const fifo = join(root, 'journal.fifo');
   expect(spawnSync('mkfifo', [fifo]).status).toBe(0);
   await expect(loadTeamPlanJournal(fifo)).rejects.toThrow('unsafe');
+});
+
+test('rejects a hard-linked journal path', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'nook-team-plan-journal-link-'));
+  roots.push(root);
+  const journalPath = join(root, 'journal.jsonl');
+  writeFileSync(journalPath, '{}\n');
+  linkSync(journalPath, `${journalPath}.alias`);
+  await expect(loadTeamPlanJournal(journalPath)).rejects.toThrow('unsafe');
 });
