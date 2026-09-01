@@ -27,6 +27,10 @@ Gizmo builds one checklist from inline review threads, submitted review bodies,
 and human PR comments from every head. It verifies each finding against the
 current code and routes every actionable item to its functional owner.
 
+Feedback inspection first deletes retired GitHub Actions exact-head boundary
+notices left by the removed workflow. Deletion failure stops inspection. These
+notices never become feedback state.
+
 For each routed item, the responsible team agent:
 
 1. Verifies the finding against current code.

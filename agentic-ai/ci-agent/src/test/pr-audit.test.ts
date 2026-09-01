@@ -81,6 +81,51 @@ test("buildPrAudit keeps old actionable comments in scope", async () => {
   assert.equal(audit.feedback.unhandledComments, 1);
 });
 
+test("buildPrAudit deletes retired automation comments", async () => {
+  const deletedCommentIds: number[] = [];
+  const audit = await buildPrAudit(
+    mockOctokit({ deletedCommentIds, legacyAutomationComment: true }),
+    repoRef,
+    410,
+  );
+
+  assert.equal(audit.ready, true);
+  assert.deepEqual(deletedCommentIds, [82]);
+  assert.equal(audit.feedback.substantiveComments, 0);
+});
+
+test("buildPrAudit deletes retired automation but blocks genuine comments", async () => {
+  const deletedCommentIds: number[] = [];
+  const audit = await buildPrAudit(
+    mockOctokit({
+      deletedCommentIds,
+      historicalFinding: true,
+      legacyAutomationComment: true,
+    }),
+    repoRef,
+    410,
+  );
+
+  assert.equal(audit.ready, false);
+  assert.deepEqual(deletedCommentIds, [82]);
+  assert.equal(audit.feedback.substantiveComments, 1);
+  assert.equal(audit.feedback.unhandledComments, 1);
+});
+
+test("buildPrAudit fails when retired automation cannot be deleted", async () => {
+  await assert.rejects(
+    buildPrAudit(
+      mockOctokit({
+        legacyAutomationComment: true,
+        legacyAutomationDeletionFails: true,
+      }),
+      repoRef,
+      410,
+    ),
+    /legacy automation deletion failed/,
+  );
+});
+
 test("buildPrAudit keeps resolved old comments visible without blocking", async () => {
   const audit = await buildPrAudit(
     mockOctokit({
@@ -391,9 +436,12 @@ type MockOptions = {
   codexReview?: MockCodexReview;
   currentHeadFinding?: boolean;
   cursorReview?: MockCursorReview;
+  deletedCommentIds?: number[];
   dismissedThreads?: number;
   handledHistoricalFinding?: boolean;
   historicalFinding?: boolean;
+  legacyAutomationComment?: boolean;
+  legacyAutomationDeletionFails?: boolean;
   headRepository?: RepoRef;
   nativeConclusion?: MockJobConclusion;
   omitNativeJob?: boolean;
@@ -517,6 +565,13 @@ function createMockOctokit(options: MockOptions): Octokit {
     },
   };
   const issues = {
+    deleteComment: async ({ comment_id }: { comment_id: number }) => {
+      if (options.legacyAutomationDeletionFails === true) {
+        throw new Error("legacy automation deletion failed");
+      }
+      options.deletedCommentIds?.push(comment_id);
+      return { data: {} };
+    },
     listComments: async () => ({
       data: [
         {
@@ -584,6 +639,15 @@ function createMockOctokit(options: MockOptions): Octokit {
           body: "<!-- nook-core-coverage -->\n### portable Rust crate coverage\n\nPASS",
           user: { login: "github-actions[bot]" },
         },
+        ...(options.legacyAutomationComment === true
+          ? [
+              {
+                body: `<!-- nook-head-transition:${headSha}:main:2026-09-01T08:24:05Z -->\nExact-head delivery boundary (automated).`,
+                id: 82,
+                user: { login: "github-actions[bot]" },
+              },
+            ]
+          : []),
         ...(options.historicalFinding === true
           ? [
               {

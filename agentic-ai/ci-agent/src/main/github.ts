@@ -408,6 +408,26 @@ export async function inspectPrFeedback(
       ...(signal ? { request: { signal } } : {}),
     }),
   ]);
+  const retiredAutomationComments = issueComments.filter((comment) =>
+    isRetiredHeadTransitionAutomationComment({
+      body: comment.body ?? "",
+      user: comment.user,
+    }),
+  );
+  await Promise.all(
+    retiredAutomationComments.map((comment) =>
+      octokit.rest.issues.deleteComment({
+        owner,
+        repo,
+        comment_id: comment.id,
+        ...(signal ? { request: { signal } } : {}),
+      }),
+    ),
+  );
+  const activeIssueComments = issueComments.filter(
+    (comment) =>
+      !retiredAutomationComments.some((retired) => retired.id === comment.id),
+  );
   let unresolvedThreads = 0;
   enum PaginationKind {
     FirstPage = "first-page",
@@ -476,7 +496,7 @@ export async function inspectPrFeedback(
 
   const marker = codexReviewRequestMarker(pr.head.sha, pr.base.sha);
   const cursorMarker = cursorReviewRequestMarker(pr.head.sha);
-  const reviewRequests = issueComments.filter((comment) =>
+  const reviewRequests = activeIssueComments.filter((comment) =>
     isTrustedExactHeadReviewRequest({
       authorAssociation: comment.author_association,
       body: comment.body ?? "",
@@ -484,7 +504,7 @@ export async function inspectPrFeedback(
       user: comment.user,
     }),
   );
-  const cursorReviewRequests = issueComments.filter((comment) =>
+  const cursorReviewRequests = activeIssueComments.filter((comment) =>
     comment.body?.includes(cursorMarker),
   );
   const currentHeadReview = reviews.some(
@@ -515,12 +535,12 @@ export async function inspectPrFeedback(
   const approvalReaction = requestReactions.some(
     (reaction) => reaction.content === "+1" && isCodexReviewer(reaction.user),
   );
-  const cleanComment = issueComments.some(
+  const cleanComment = activeIssueComments.some(
     (comment) =>
       isCleanCodexReviewComment(comment.body ?? "", comment.user, pr.head.sha),
   );
 
-  const substantiveComments = issueComments.filter(
+  const substantiveComments = activeIssueComments.filter(
     (comment) =>
       !isRepositoryStatusComment({
         authorAssociation: comment.author_association,
@@ -723,6 +743,18 @@ function isGitHubActionsBot(
     !!user &&
     "login" in user &&
     user.login === "github-actions[bot]"
+  );
+}
+
+function isRetiredHeadTransitionAutomationComment(input: {
+  readonly body: string;
+  readonly user: unknown;
+}): boolean {
+  return (
+    isGitHubActionsBot(input.user) &&
+    input.body
+      .trim()
+      .endsWith("\nExact-head delivery boundary (automated).")
   );
 }
 

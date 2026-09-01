@@ -57,6 +57,9 @@ The command:
    intended revision.
    - Inspects every PR comment, submitted review body, and review thread without
      filtering by timestamp, marker, or head transition.
+   - Deletes retired GitHub Actions exact-head boundary notices before feedback
+     classification.
+   - Fails feedback inspection when a retired notice cannot be deleted.
    - Detects revision changes through feedback inspection and immediately
      before Codex contact.
    - Checks the review circuit, then contacts Codex without waiting for a result.
