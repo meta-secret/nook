@@ -156,7 +156,7 @@ agent: "<agent>"
 Follow it with concise plain-text activity lines.
 
 ```text
-HH:mm | <action-type> | <actor> | <description>
+HH:mm:<ACTION>:<ACTOR> -> <description>
 ```
 
 - Use the exact pull-request number that the activity currently serves.
@@ -214,7 +214,8 @@ HH:mm | <action-type> | <actor> | <description>
   - On a non-Markdown surface, transport the opening marker as literal `---`.
 - Do not wrap live message metadata in a Markdown code fence.
 - The example above is fenced only to render the literal syntax in Cortex.
-- Separate the time, action type, actor, and description with ` | `.
+- Place no spaces around the colons between time, action type, and actor.
+- Place exactly one space before and after `->`.
 - State what changed, why it was done, or what current state was observed.
 - Show a command before waiting for it to finish.
   - Prefer the task entrypoint, such as `task loom:verify`.

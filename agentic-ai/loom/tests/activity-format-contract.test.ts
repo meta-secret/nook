@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { fromMarkdown } from 'mdast-util-from-markdown';
 
 const activityFixture =
-  '\\---  \npr: "#1263"  \nteam: "AI"  \nagent: "AI Team Agent"  \n...\n\n00:00 | STATE | AI | ready';
+  '\\---  \npr: "#1263"  \nteam: "AI"  \nagent: "AI Team Agent"  \n...\n\n00:00:STATE:AI -> ready';
 
 test('Markdown transport preserves every live YAML metadata line', () => {
   const document = fromMarkdown(activityFixture);
@@ -34,7 +34,7 @@ test('activity lines use a compact canonical actor token', () => {
   const activity = activityFixture.split('\n').at(-1);
 
   expect(activity).toMatch(
-    /^\d{2}:\d{2} \| [A-Z/]+ \| (GIZMO|AI|SRE|SKILL) \| .+$/,
+    /^\d{2}:\d{2}:[A-Z][A-Z0-9/-]*:(GIZMO|AI|SRE|SKILL) -> .+$/,
   );
   expect(activity).not.toContain('Team Agent');
 });
