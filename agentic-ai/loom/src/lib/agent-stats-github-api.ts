@@ -14,6 +14,8 @@ import type { UntrustedYamlPropertyArgs } from './guards.ts';
 import type { RunCommandArgs } from './run.ts';
 import type { LoomFailureDetailArgs } from '../loom-failure.ts';
 
+const GITHUB_API_MAX_OUTPUT_BYTES = 16 * 1024 * 1024;
+
 export type GitHubApiRequest = {
   readonly repoRoot: string;
   readonly endpoint: string;
@@ -387,6 +389,7 @@ export function runGitHubApi(request: GitHubApiRequest): UntrustedYamlNode {
     command: 'gh',
     args,
     cwd: request.repoRoot,
+    maxOutputBytes: GITHUB_API_MAX_OUTPUT_BYTES,
   };
   const output = runCommand(commandRequest);
   if (output.exitCode !== 0) {

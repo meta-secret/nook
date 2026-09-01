@@ -18,13 +18,15 @@ export type RunCommandArgs = {
   readonly command: string;
   readonly args: readonly string[];
   readonly cwd: string;
+  readonly maxOutputBytes?: number;
 };
 
 export function runCommand(input: RunCommandArgs): CommandOutput {
-  const { command, args, cwd } = input;
+  const { command, args, cwd, maxOutputBytes } = input;
   const spawnOptions: SpawnSyncOptionsWithStringEncoding = {
     cwd,
     encoding: 'utf8',
+    ...(maxOutputBytes ? { maxBuffer: maxOutputBytes } : {}),
   };
   const result = spawnSync(command, [...args], spawnOptions);
   if (result.error) {
