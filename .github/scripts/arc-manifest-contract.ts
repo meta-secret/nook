@@ -49,6 +49,16 @@ class TextContract {
       );
     }
   }
+
+  requireBefore(input: { first: string; second: string }): void {
+    const firstIndex = this.input.source.indexOf(input.first);
+    const secondIndex = this.input.source.indexOf(input.second);
+    if (firstIndex < 0 || secondIndex < 0 || firstIndex > secondIndex) {
+      throw new Error(
+        `${this.input.label} must place ${input.first} before ${input.second}`,
+      );
+    }
+  }
 }
 
 interface ResourceEnvelope {
@@ -56,9 +66,16 @@ interface ResourceEnvelope {
   limits?: { cpu?: string; memory?: string };
 }
 
+type ArcEnvironmentVariable =
+  | { name: string; value: string }
+  | {
+      name: string;
+      valueFrom: { fieldRef: { fieldPath: string } };
+    };
+
 interface ArcContainer {
   name: string;
-  env?: Array<{ name: string; value?: string }>;
+  env?: ArcEnvironmentVariable[];
   resources?: ResourceEnvelope;
 }
 
@@ -204,13 +221,27 @@ if (
 }
 const runner = pod.containers.find((container) => container.name === "runner");
 const runnerEnvironment = new Map(
-  runner?.env?.map((item) => [item.name, item.value]) ?? [],
+  runner?.env?.flatMap((item) =>
+    "value" in item ? [[item.name, item.value]] : [],
+  ) ?? [],
 );
 if (
   runnerEnvironment.get("NOOK_BUILDKIT_ADDR") !==
   "tcp://nook-buildkit.arc-runners.svc.cluster.local:1234"
 ) {
   throw new Error("ARC runner must use its node-local BuildKit service");
+}
+const kubernetesNodeEnvironment = runner?.env?.find(
+  (item) => item.name === "KUBERNETES_NODE_NAME",
+);
+if (
+  !kubernetesNodeEnvironment ||
+  !("valueFrom" in kubernetesNodeEnvironment) ||
+  kubernetesNodeEnvironment.valueFrom.fieldRef.fieldPath !== "spec.nodeName"
+) {
+  throw new Error(
+    "ARC runner must expose its Kubernetes worker through the Downward API",
+  );
 }
 if (
   runner?.resources?.limits?.cpu !== "4" ||
@@ -494,6 +525,9 @@ if (promotionSolve.includes("cache-from=type=registry,ref=${cache_ref}")) {
 }
 remoteWorkflow.forbidAll(["NOOK_CACHE_RUNS_ON", "nook-k0s-cache"]);
 remoteWorkflow.requireAll([
+  "name: Report Kubernetes worker node",
+  ': "${KUBERNETES_NODE_NAME:?KUBERNETES_NODE_NAME is required}"',
+  "printf '::notice title=Kubernetes worker::%s\\n' \"$KUBERNETES_NODE_NAME\"",
   "Remote / browser image",
   "runs-on: nook-k0s-container",
   "Run repository invariant preflight",
@@ -509,6 +543,10 @@ remoteWorkflow.requireAll([
   "inputs.tasks != '' && inputs.task != ''",
   "(inputs.tasks == '' || inputs.task == '')",
 ]);
+remoteWorkflow.requireBefore({
+  first: "name: Report Kubernetes worker node",
+  second: "uses: actions/checkout@v7",
+});
 remoteWorkflow.require(
   "inputs.dispatch_nonce || 'default'",
   "remote dispatches must permit explicitly distinct concurrent cache proofs",
