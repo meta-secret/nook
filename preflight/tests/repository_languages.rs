@@ -1,3 +1,4 @@
+use serde::Deserialize;
 use std::{
     ffi::OsStr,
     fs,
@@ -33,11 +34,14 @@ fn repository_paths(root: &Path) -> anyhow::Result<Vec<PathBuf>> {
                         | "vendor"
                 )
             );
-            if file_type.is_symlink() || ignored {
+            if file_type.is_symlink() {
+                files.push(path);
                 continue;
             }
             if file_type.is_dir() {
-                directories.push(path);
+                if !ignored {
+                    directories.push(path);
+                }
             } else if file_type.is_file() {
                 files.push(path);
             }
@@ -75,6 +79,7 @@ fn is_automation_source(path: &Path) -> bool {
                 | "rb"
                 | "rs"
                 | "sh"
+                | "svelte"
                 | "toml"
                 | "ts"
                 | "tsx"
@@ -94,6 +99,7 @@ fn automation_source_inventory_covers_repository_manifest_conventions() {
         "product.Dockerfile",
         "service.conf",
         "src/runner.rs",
+        "src/view.svelte",
     ] {
         assert!(is_automation_source(Path::new(path)), "missing {path}");
     }
@@ -186,28 +192,7 @@ fn contains_package_install(line: &str, installer: &str) -> bool {
     false
 }
 
-fn is_folded_yaml_header(line: &str) -> bool {
-    let trimmed = line.trim();
-    let value = if let Some((_, value)) = trimmed.split_once(':') {
-        value
-    } else if let Some(value) = trimmed.strip_prefix("- ") {
-        value
-    } else {
-        return false;
-    };
-    let marker = value.split('#').next().unwrap_or_default().trim();
-    marker.strip_prefix('>').is_some_and(|suffix| {
-        suffix
-            .chars()
-            .all(|character| matches!(character, '+' | '-' | '0'..='9'))
-    })
-}
-
-fn leading_whitespace(line: &str) -> usize {
-    line.len().saturating_sub(line.trim_start().len())
-}
-
-fn logical_source_lines(source: &str, fold_yaml: bool) -> Vec<(usize, String)> {
+fn logical_source_lines(source: &str) -> Vec<(usize, String)> {
     let physical_lines = source.lines().collect::<Vec<_>>();
     let mut logical_lines = Vec::new();
     let mut pending = String::new();
@@ -215,30 +200,6 @@ fn logical_source_lines(source: &str, fold_yaml: bool) -> Vec<(usize, String)> {
     let mut index = 0;
     while index < physical_lines.len() {
         let physical_line = physical_lines[index];
-        if fold_yaml && is_folded_yaml_header(physical_line) {
-            let header_indent = leading_whitespace(physical_line);
-            let block_start = index;
-            let mut folded = String::new();
-            index += 1;
-            while index < physical_lines.len() {
-                let block_line = physical_lines[index];
-                if !block_line.trim().is_empty() && leading_whitespace(block_line) <= header_indent
-                {
-                    break;
-                }
-                if !block_line.trim().is_empty() {
-                    if !folded.is_empty() {
-                        folded.push(' ');
-                    }
-                    folded.push_str(block_line.trim());
-                }
-                index += 1;
-            }
-            if !folded.is_empty() {
-                logical_lines.push((block_start, folded));
-            }
-            continue;
-        }
         if pending.is_empty() {
             pending_start = index;
         }
@@ -268,6 +229,89 @@ fn logical_source_lines(source: &str, fold_yaml: bool) -> Vec<(usize, String)> {
     logical_lines
 }
 
+fn join_argv_strings<'a>(values: impl Iterator<Item = &'a str>) -> Option<String> {
+    let values = values.collect::<Vec<_>>();
+    (values.len() > 1
+        && values
+            .iter()
+            .all(|value| !value.chars().any(char::is_whitespace)))
+    .then(|| values.join(" "))
+}
+
+fn collect_yaml_strings(value: &serde_yaml_ng::Value, strings: &mut Vec<String>) {
+    if let Some(value) = value.as_str() {
+        strings.push(value.to_owned());
+        return;
+    }
+    if let Some(sequence) = value.as_sequence() {
+        if let Some(argv) =
+            join_argv_strings(sequence.iter().filter_map(serde_yaml_ng::Value::as_str))
+        {
+            strings.push(argv);
+        }
+        for item in sequence {
+            collect_yaml_strings(item, strings);
+        }
+        return;
+    }
+    if let Some(mapping) = value.as_mapping() {
+        for (key, item) in mapping {
+            collect_yaml_strings(key, strings);
+            collect_yaml_strings(item, strings);
+        }
+    }
+}
+
+fn yaml_source_strings(source: &str) -> anyhow::Result<Vec<String>> {
+    let mut strings = Vec::new();
+    for document in serde_yaml_ng::Deserializer::from_str(source) {
+        let value = serde_yaml_ng::Value::deserialize(document)?;
+        collect_yaml_strings(&value, &mut strings);
+    }
+    Ok(strings)
+}
+
+fn collect_json_strings(value: &serde_json::Value, strings: &mut Vec<String>) {
+    if let Some(value) = value.as_str() {
+        strings.push(value.to_owned());
+        return;
+    }
+    if let Some(sequence) = value.as_array() {
+        if let Some(argv) = join_argv_strings(sequence.iter().filter_map(serde_json::Value::as_str))
+        {
+            strings.push(argv);
+        }
+        for item in sequence {
+            collect_json_strings(item, strings);
+        }
+        return;
+    }
+    if let Some(mapping) = value.as_object() {
+        for (key, item) in mapping {
+            strings.push(key.clone());
+            collect_json_strings(item, strings);
+        }
+    }
+}
+
+fn source_strings(path: &Path, source: &str) -> anyhow::Result<Vec<String>> {
+    match path.extension().and_then(OsStr::to_str) {
+        Some("yaml" | "yml") => yaml_source_strings(source),
+        Some("json")
+            if matches!(
+                path.file_name().and_then(OsStr::to_str),
+                Some("hooks.json" | "package.json")
+            ) =>
+        {
+            let value = serde_json::from_str(source)?;
+            let mut strings = Vec::new();
+            collect_json_strings(&value, &mut strings);
+            Ok(strings)
+        }
+        _ => Ok(vec![source.to_owned()]),
+    }
+}
+
 fn repository_language_violations(root: &Path) -> anyhow::Result<Vec<String>> {
     let language = ["py", "thon"].concat();
     let script_extension = [".", "py"].concat();
@@ -281,6 +325,12 @@ fn repository_language_violations(root: &Path) -> anyhow::Result<Vec<String>> {
         ["iron", language.as_str()].concat(),
         ["i", language.as_str()].concat(),
     ];
+    let ecosystem_identifiers = [
+        ["py", "o3"].concat(),
+        ["py", "odide"].concat(),
+        ["rust", language.as_str()].concat(),
+        ["c", language.as_str()].concat(),
+    ];
     let mut violations = Vec::new();
 
     for path in repository_paths(root)? {
@@ -292,6 +342,13 @@ fn repository_language_violations(root: &Path) -> anyhow::Result<Vec<String>> {
         if !is_automation_source(relative) {
             continue;
         }
+        if fs::symlink_metadata(&path)?.file_type().is_symlink() {
+            violations.push(format!(
+                "{}: automation symlinks are prohibited",
+                relative.display()
+            ));
+            continue;
+        }
         let bytes = fs::read(&path)?;
         if std::str::from_utf8(&bytes).is_err() {
             violations.push(format!(
@@ -300,31 +357,33 @@ fn repository_language_violations(root: &Path) -> anyhow::Result<Vec<String>> {
             ));
         }
         let source = String::from_utf8_lossy(&bytes);
-        let fold_yaml = matches!(
-            relative.extension().and_then(OsStr::to_str),
-            Some("yaml" | "yml")
-        );
-        for (index, line) in logical_source_lines(&source, fold_yaml) {
-            let trimmed = line.trim_start();
-            if trimmed.starts_with("//")
-                || (trimmed.starts_with('#') && !trimmed.starts_with("#!"))
-                || trimmed.starts_with('*')
-            {
-                continue;
-            }
-            let lowercase = line.to_ascii_lowercase();
-            if ascii_word_spans(&lowercase).iter().any(|(word, _, _)| {
-                is_versioned_command(word, &language)
-                    || interpreter_aliases
-                        .iter()
-                        .any(|alias| is_versioned_command(word, alias))
-            }) || contains_package_install(&lowercase, &package_installer)
-            {
-                violations.push(format!(
-                    "{}:{}: prohibited runtime, dependency, or script reference",
-                    relative.display(),
-                    index + 1
-                ));
+        for source_string in source_strings(relative, &source)? {
+            for (index, line) in logical_source_lines(&source_string) {
+                let trimmed = line.trim_start();
+                if trimmed.starts_with("//")
+                    || (trimmed.starts_with('#') && !trimmed.starts_with("#!"))
+                    || trimmed.starts_with('*')
+                {
+                    continue;
+                }
+                let lowercase = line.to_ascii_lowercase();
+                let words = ascii_word_spans(&lowercase);
+                if words.iter().any(|(word, _, _)| {
+                    is_versioned_command(word, &language)
+                        || interpreter_aliases
+                            .iter()
+                            .any(|alias| is_versioned_command(word, alias))
+                        || ecosystem_identifiers
+                            .iter()
+                            .any(|identifier| word == identifier)
+                }) || contains_package_install(&lowercase, &package_installer)
+                {
+                    violations.push(format!(
+                        "{}:{}: prohibited runtime, dependency, or script reference",
+                        relative.display(),
+                        index + 1
+                    ));
+                }
             }
         }
     }
@@ -384,6 +443,7 @@ fn canonical_repository_inventory_prunes_generated_and_dependency_trees() -> any
         fixture.join("nested/contract.ts"),
         "export const ok = true;\n",
     )?;
+    fs::write(fixture.join("build"), "#!/usr/bin/env bash\n")?;
     fs::write(fixture.join("rust-project/Cargo.toml"), "[package]\n")?;
     fs::write(fixture.join("rust-project/Taskfile.yml"), "version: '3'\n")?;
     fs::write(
@@ -402,6 +462,7 @@ fn canonical_repository_inventory_prunes_generated_and_dependency_trees() -> any
     assert_eq!(
         paths,
         vec![
+            fixture.join("build"),
             fixture.join("nested/contract.ts"),
             fixture.join("rust-project/Cargo.toml"),
             fixture.join("rust-project/Taskfile.yml"),
@@ -452,6 +513,10 @@ fn repository_language_scan_rejects_scripts_and_runtime_invocations() -> anyhow:
         format!("RUN {runtime} -m tool\n"),
     )?;
     fs::write(
+        fixture.join("scripts/App.svelte"),
+        format!("<script context=\"module\">exec(\"{runtime} tool\")</script>\n"),
+    )?;
+    fs::write(
         fixture.join(".env.test"),
         format!("SCRIPT_RUNTIME={alternate_runtime}\n"),
     )?;
@@ -461,7 +526,7 @@ fn repository_language_scan_rejects_scripts_and_runtime_invocations() -> anyhow:
     )?;
     fs::write(fixture.join("pyproject.toml"), "[project]\n")?;
     let violations = repository_language_violations(&fixture)?;
-    assert_eq!(violations.len(), 7);
+    assert_eq!(violations.len(), 8);
     assert!(
         violations
             .iter()
@@ -489,6 +554,8 @@ fn repository_language_scan_rejects_prohibited_dependency_surfaces() -> anyhow::
     fs::create_dir_all(fixture.join("scripts"))?;
     let installer = ["p", "ip"].concat();
     let language = ["py", "thon"].concat();
+    let rust_bridge = ["py", "o3"].concat();
+    let browser_runtime = ["py", "odide"].concat();
     fs::write(
         fixture.join("Taskfile.yml"),
         format!(
@@ -498,6 +565,10 @@ fn repository_language_scan_rejects_prohibited_dependency_surfaces() -> anyhow::
     fs::write(
         fixture.join("folded.yml"),
         format!("command: >-\n  {installer}\n  install package\n"),
+    )?;
+    fs::write(
+        fixture.join("argv.yaml"),
+        format!("command:\n  - {installer}\n  - install\n"),
     )?;
     fs::write(fixture.join("requirements-dev.txt"), "package==1\n")?;
     fs::write(fixture.join("requirements/base.txt"), "package==1\n")?;
@@ -511,11 +582,23 @@ fn repository_language_scan_rejects_prohibited_dependency_surfaces() -> anyhow::
         format!("export const {installer} = install; exec(\"{installer} install package\");\n"),
     )?;
     fs::write(
+        fixture.join("scripts/install.sh"),
+        format!("{installer} \\\ninstall package\n"),
+    )?;
+    fs::write(
         fixture.join("bun.lock"),
         format!("{{\"dependency\": \"{language}-shell\"}}\n"),
     )?;
+    fs::write(
+        fixture.join("Cargo.toml"),
+        format!("[dependencies]\n{rust_bridge} = \"1\"\n"),
+    )?;
+    fs::write(
+        fixture.join("package.json"),
+        format!("{{\"dependencies\": {{\"{browser_runtime}\": \"1\"}}}}\n"),
+    )?;
     let violations = repository_language_violations(&fixture)?;
-    assert_eq!(violations.len(), 10);
+    assert_eq!(violations.len(), 13);
     fs::remove_dir_all(fixture)?;
     Ok(())
 }
@@ -534,6 +617,26 @@ fn repository_language_scan_fails_closed_on_invalid_utf8() -> anyhow::Result<()>
     let violations = repository_language_violations(&fixture)?;
     assert_eq!(violations.len(), 1);
     assert!(violations[0].contains("not valid UTF-8"));
+    fs::remove_dir_all(fixture)?;
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn repository_language_scan_rejects_automation_symlinks() -> anyhow::Result<()> {
+    let fixture = std::env::temp_dir().join(format!(
+        "nook-language-symlink-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_nanos()
+    ));
+    fs::create_dir_all(&fixture)?;
+    fs::write(fixture.join("target-script"), "#!/usr/bin/env bash\n")?;
+    std::os::unix::fs::symlink("target-script", fixture.join("linked-script"))?;
+    let violations = repository_language_violations(&fixture)?;
+    assert_eq!(violations.len(), 1);
+    assert!(violations[0].contains("symlinks are prohibited"));
     fs::remove_dir_all(fixture)?;
     Ok(())
 }

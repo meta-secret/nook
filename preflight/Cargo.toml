@@ -15,6 +15,8 @@ tree-sitter-typescript = "0.23.2"
 
 [dev-dependencies]
 anyhow = "1.0.104"
+serde = "1.0.229"
+serde_yaml_ng = "0.10.0"
 
 [lints.clippy]
 all = { level = "warn", priority = -1 }
