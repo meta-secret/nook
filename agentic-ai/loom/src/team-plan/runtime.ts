@@ -5,7 +5,6 @@ import { tmpdir } from 'node:os';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 
 import {
-  ModuleDeliveryAdmissionSelectionStatus,
   ModuleDeliveryAttemptDispositionKind,
   ModuleDeliveryEvidenceVerdict,
   ModuleDeliveryGenerationFenceKind,
@@ -70,7 +69,6 @@ import type {
   TeamPlanRecordRequest,
   TeamPlanRestartedEvent,
   TeamPlanRestartRequest,
-  TeamPlanSelectionReceipt,
   TeamPlanSnapshot,
   TeamPlanStartRequest,
   TeamPlanStartedEvent,
@@ -78,7 +76,7 @@ import type {
 import type { TeamPlanJournal } from './journal.ts';
 const MAX_TEAM_PLAN_BYTES = 262_144;
 
-type TeamPlanSession = {
+export type TeamPlanSession = {
   readonly journal: TeamPlanJournal;
   acceptedPlan: ValidatedModuleDeliveryPlan;
   readonly authority: ModuleDeliveryGenerationAuthority;
@@ -179,52 +177,6 @@ export async function startTeamPlan(
   return snapshot;
 }
 
-export async function selectTeamPlan(
-  request: TeamPlanJournalRequest,
-): Promise<TeamPlanSelectionReceipt> {
-  return withLockedTeamPlanSession({
-    journalPath: request.journalPath,
-    action: async (session) => {
-      assertRunning(session);
-      assertSessionRepositoryAtSource(session);
-      const selection = selectModuleDeliveryAdmissions({
-        authority: session.authority,
-        acceptedPlan: session.acceptedPlan,
-        state: session.integrationState.admissionState,
-      });
-      let leases: readonly ModuleDeliveryAttemptLease[] = Object.freeze([]);
-      if (selection.admissions.length > 0) {
-        const recording = recordModuleDeliveryAttemptLeases({
-          authority: session.authority,
-          state: session.integrationState.admissionState,
-          admissions: selection.admissions,
-        });
-        leases = recording.leases;
-        for (const lease of leases)
-          session.activeLeases.set(attemptKey(lease), lease);
-        const event: TeamPlanEvent = {
-          version: TEAM_PLAN_JOURNAL_VERSION,
-          kind: TeamPlanEventKind.Selected,
-          sequence: session.journal.events.length + 1,
-          attempts: leases.map(attemptIdentity),
-        };
-        await appendTeamPlanEvent({ journalPath: request.journalPath, event });
-      }
-      if (
-        selection.status === ModuleDeliveryAdmissionSelectionStatus.Blocked &&
-        selection.blockedTaskIds.length === 0
-      )
-        throw new Error('Team Plan admission selection is inconclusive.');
-      return {
-        snapshot: teamPlanSnapshot(session),
-        leases,
-        pendingTaskIds: selection.pendingTaskIds,
-        blockedTaskIds: selection.blockedTaskIds,
-      };
-    },
-  });
-}
-
 export async function recordTeamPlan(
   request: TeamPlanRecordRequest,
 ): Promise<TeamPlanSnapshot> {
@@ -232,8 +184,8 @@ export async function recordTeamPlan(
   return withLockedTeamPlanSession({
     journalPath: request.journalPath,
     action: async (session) => {
-      assertRunning(session);
-      assertSessionRepositoryAtSource(session);
+      assertRunningTeamPlanSession(session);
+      assertTeamPlanSessionRepositoryAtSource(session);
       const persisted = executeTeamPlanRecord({
         session,
         record: request.record,
@@ -257,7 +209,7 @@ export async function restartTeamPlan(
   return withLockedTeamPlanSession({
     journalPath: request.journalPath,
     action: async (session) => {
-      assertRunning(session);
+      assertRunningTeamPlanSession(session);
       const plan = await reviewedPlan(request.planPath);
       assertRepositoryAtSource({
         repositoryRoot: session.journal.started.repositoryRoot,
@@ -294,8 +246,8 @@ export async function finalizeTeamPlan(
     journalPath: request.journalPath,
     action: async (session) => {
       if (session.finalized) return teamPlanSnapshot(session);
-      assertRunning(session);
-      assertSessionRepositoryAtSource(session);
+      assertRunningTeamPlanSession(session);
+      assertTeamPlanSessionRepositoryAtSource(session);
       session.integrationState = finalizeModuleDeliveryIntegration({
         authority: session.authority,
         acceptedPlan: session.acceptedPlan,
@@ -319,6 +271,7 @@ export async function discardFinalizedTeamPlan(
 ): Promise<void> {
   await discardTeamPlanJournal({
     journalPath: request.journalPath,
+    expectedRunId: request.runId,
     discardArtifacts: async ({ journal, artifactsMayAlreadyBeDiscarded }) => {
       let session: TeamPlanSession;
       try {
@@ -340,7 +293,7 @@ export async function discardFinalizedTeamPlan(
   });
 }
 
-async function withLockedTeamPlanSession<T>(
+export async function withLockedTeamPlanSession<T>(
   request: LockedTeamPlanSessionRequest<T>,
 ): Promise<T> {
   return withTeamPlanJournalLock({
@@ -759,7 +712,7 @@ function recordIdentity(
   return attemptIdentity(record.submission);
 }
 
-function attemptIdentity(
+export function attemptIdentity(
   value:
     | TeamPlanAttemptIdentity
     | ModuleDeliveryAttemptLease
@@ -803,9 +756,10 @@ function assertFinalUnusableRecord(record: TeamPlanFinalUnusableRecord): void {
     throw new Error('Team Plan terminal failure conclusion is inconclusive.');
 }
 
-function teamPlanSnapshot(session: TeamPlanSession): TeamPlanSnapshot {
+export function teamPlanSnapshot(session: TeamPlanSession): TeamPlanSnapshot {
   const state = session.integrationState.admissionState;
   return Object.freeze({
+    runId: session.journal.started.runId,
     phase: session.finalized
       ? TeamPlanRunPhase.Finalized
       : TeamPlanRunPhase.Running,
@@ -885,11 +839,11 @@ function gitText(invocation: GitInvocation): string {
   return result.stdout.replace(/\0+$/u, '').trim();
 }
 
-function attemptKey(identity: TeamPlanAttemptIdentity): string {
+export function attemptKey(identity: TeamPlanAttemptIdentity): string {
   return `${identity.taskId}:${identity.attempt}`;
 }
 
-function assertRunning(session: TeamPlanSession): void {
+export function assertRunningTeamPlanSession(session: TeamPlanSession): void {
   if (
     session.finalized ||
     session.integrationState.phase !== ModuleIntegrationPhase.AcceptingProviders
@@ -897,7 +851,9 @@ function assertRunning(session: TeamPlanSession): void {
     throw new Error('Team Plan is already finalized.');
 }
 
-function assertSessionRepositoryAtSource(session: TeamPlanSession): void {
+export function assertTeamPlanSessionRepositoryAtSource(
+  session: TeamPlanSession,
+): void {
   assertRepositoryAtSource({
     repositoryRoot: session.journal.started.repositoryRoot,
     sourceCommit: session.acceptedPlan.plan.sourceCommit,

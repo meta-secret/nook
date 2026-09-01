@@ -160,12 +160,13 @@ async function finalizeFixture(request: {
 
 describe('Team Plan journal recovery', () => {
   test('preserves an unfinalized journal when a matching tombstone exists', async () => {
-    const { journalPath } = await startedFixture();
+    const { journalPath, started } = await startedFixture();
     linkSync(journalPath, `${journalPath}.discarding`);
 
     await expect(
       discardTeamPlanJournal({
         journalPath,
+        expectedRunId: started.runId,
         discardArtifacts: () => Promise.resolve(),
       }),
     ).rejects.toThrow('Only a finalized Team Plan run may be discarded.');
@@ -180,6 +181,7 @@ describe('Team Plan journal recovery', () => {
     await expect(
       discardTeamPlanJournal({
         journalPath,
+        expectedRunId: started.runId,
         discardArtifacts: () => Promise.resolve(),
         beforeParentSync: () => {
           if ((parentSyncs += 1) === 3) throw new Error('final sync failed');
@@ -189,6 +191,7 @@ describe('Team Plan journal recovery', () => {
     expect(existsSync(`${journalPath}.discarded`)).toBe(true);
     await discardTeamPlanJournal({
       journalPath,
+      expectedRunId: started.runId,
       discardArtifacts: () => {
         throw new Error('completed artifacts must not run again');
       },

@@ -17,14 +17,16 @@ import type { ValidatedModuleDeliveryPlan } from './domain.ts';
 import type { ModuleDeliveryAcceptedProviderEvidenceIdentity } from './evidence.ts';
 import type { ModuleIntegrationState } from './integration-provenance.ts';
 
+export type RestoreModuleDeliveryIntegrationEvidenceRequest = Readonly<{
+  authority: ModuleDeliveryGenerationAuthority;
+  acceptedPlan: ValidatedModuleDeliveryPlan;
+  lease: ModuleDeliveryAttemptLease;
+  state: ModuleIntegrationState;
+  receipt: ModuleDeliveryAcceptedProviderEvidenceIdentity;
+}>;
+
 export function restoreModuleDeliveryIntegrationEvidence(
-  request: Readonly<{
-    authority: ModuleDeliveryGenerationAuthority;
-    acceptedPlan: ValidatedModuleDeliveryPlan;
-    lease: ModuleDeliveryAttemptLease;
-    state: ModuleIntegrationState;
-    receipt: ModuleDeliveryAcceptedProviderEvidenceIdentity;
-  }>,
+  request: RestoreModuleDeliveryIntegrationEvidenceRequest,
 ): ModuleIntegrationState {
   const provenance = integrationProvenance(request.state);
   assertFreshModuleIntegrationState({ state: request.state, provenance });

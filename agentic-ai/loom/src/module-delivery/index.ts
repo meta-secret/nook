@@ -57,6 +57,7 @@ export {
   prepareModuleIntegration,
 } from './integration.ts';
 export { restoreModuleDeliveryIntegrationEvidence } from './integration-evidence-replay.ts';
+export type { RestoreModuleDeliveryIntegrationEvidenceRequest } from './integration-evidence-replay.ts';
 export * from './domain.ts';
 export type {
   CleanupModuleWorktreeRequest,
