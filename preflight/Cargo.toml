@@ -15,6 +15,9 @@ tree-sitter-typescript = "0.23.2"
 
 [dev-dependencies]
 anyhow = "1.0.104"
+ignore = "0.4.33"
+regex = "1.13.1"
+tempfile = "3.27.0"
 
 [lints.clippy]
 all = { level = "warn", priority = -1 }

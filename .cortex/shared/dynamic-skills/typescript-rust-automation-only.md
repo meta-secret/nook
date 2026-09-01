@@ -50,5 +50,14 @@ Run:
 3. `task format`
 4. Exact-head pull-request validation
 
-The repository-language preflight scans the complete tracked and unignored tree.
-It rejects prohibited source extensions and executable runtime references.
+The repository-language preflight uses one ignore-aware filesystem inventory in
+every environment. When Git metadata is present, tracked index entries are
+unioned into that inventory. Force-added files therefore cannot hide behind
+ignore rules. Sealed source contexts scan every file admitted by the Docker
+context instead of reapplying Git-only ignore rules. The inventory never
+follows symlinks. Automation symlinks fail closed.
+
+The scan rejects prohibited source, package, notebook, and executable-artifact
+extensions. Content matching is limited to shell files, manifests, and
+TypeScript or JavaScript under automation-owned directories. It uses explicit
+regular expressions for direct runtime and package-tool invocations.

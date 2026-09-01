@@ -45,6 +45,7 @@ FROM build AS test
 
 COPY --from=repository-source / /meta-secret/nook
 ENV NOOK_REPO_ROOT=/meta-secret/nook
+ENV NOOK_REPOSITORY_SOURCE_CONTEXT=1
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo test --locked \
