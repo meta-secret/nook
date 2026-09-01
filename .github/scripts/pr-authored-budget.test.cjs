@@ -112,4 +112,17 @@ test('accepts reviewed-head bodies, committed fixes, and later PR comments', () 
     ...input,
     comments: [{ body: '### Web research preview\nDone.', createdAt: '2026-01-02T00:00:00Z' }],
   }), false)
+  for (const body of [
+    'You have reached your Codex usage limits for code reviews. Try later.',
+    "Codex Review: Didn't find any major issues. Reviewed commit abc123.",
+  ]) {
+    assert.equal(reviewBatchMatches({
+      ...input,
+      comments: [{
+        author: { login: 'chatgpt-codex-connector' },
+        body,
+        createdAt: '2026-01-02T00:00:00Z',
+      }],
+    }), false)
+  }
 })

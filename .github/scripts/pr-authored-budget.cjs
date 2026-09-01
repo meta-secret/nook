@@ -190,6 +190,13 @@ function reviewBatchMatches({
   const commentMatch = comments.some((comment) =>
     Number.isFinite(publishedTime) && Date.parse(comment.createdAt) > publishedTime &&
     comment.body.trim() &&
+    !(
+      comment.author?.login === 'chatgpt-codex-connector' &&
+      (
+        comment.body.includes('Codex usage limits for code reviews') ||
+        comment.body.trimStart().startsWith("Codex Review: Didn't find any major issues.")
+      )
+    ) &&
     !/^(?:<!--|@codex (?:review|security review)|### (?:Preview deployed|Web research preview))/u.test(comment.body.trim()) &&
     !/^@\S+ this workflow assigned you PR #\d+\. Continue only this PR's recorded scope through review, exact-head validation, and squash merge\.$/u.test(comment.body.trim()),
   )
@@ -210,7 +217,7 @@ function verifyReviewContext(prNumber) {
   const [owner, name] = repository.split('/')
   const review = JSON.parse(runGh([
     'api', 'graphql',
-    '-f', 'query=query($owner:String!,$name:String!,$number:Int!,$head:GitObjectID!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){pageInfo{hasNextPage}nodes{isResolved isOutdated path}}reviews(last:100){pageInfo{hasPreviousPage}nodes{body state}}comments(last:100){pageInfo{hasPreviousPage}nodes{body createdAt}}}object(oid:$head){... on Commit{checkSuites(first:100){pageInfo{hasNextPage}nodes{createdAt}}}}}}',
+    '-f', 'query=query($owner:String!,$name:String!,$number:Int!,$head:GitObjectID!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){pageInfo{hasNextPage}nodes{isResolved isOutdated path}}reviews(last:100){pageInfo{hasPreviousPage}nodes{body state}}comments(last:100){pageInfo{hasPreviousPage}nodes{author{login} body createdAt}}}object(oid:$head){... on Commit{checkSuites(first:100){pageInfo{hasNextPage}nodes{createdAt}}}}}}',
     '-f', `owner=${owner}`, '-f', `name=${name}`, '-F', `number=${prNumber}`,
     '-f', `head=${pr.headRefOid}`,
   ])).data.repository
