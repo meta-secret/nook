@@ -1,16 +1,16 @@
-const assert = require('node:assert/strict')
-const { mkdtempSync, rmSync, symlinkSync } = require('node:fs')
-const { tmpdir } = require('node:os')
-const { join } = require('node:path')
-const test = require('node:test')
+import assert from 'node:assert/strict'
+import { mkdtempSync, rmSync, symlinkSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import test from 'node:test'
 
-const {
+import {
   addUntracked,
   countTextLines,
   evaluateBudget,
   reviewBatchMatches,
   summarizeNumstat,
-} = require('./pr-authored-budget.cjs')
+} from './pr-authored-budget.ts'
 
 test('keeps initial delivery at or below 2,000 authored lines', () => {
   assert.deepEqual(

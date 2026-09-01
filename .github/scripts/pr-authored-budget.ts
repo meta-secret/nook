@@ -1,8 +1,8 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
-const { execFileSync } = require('node:child_process')
-const { lstatSync, readFileSync, readlinkSync } = require('node:fs')
-const { extname } = require('node:path')
+import { execFileSync } from 'node:child_process'
+import { lstatSync, readFileSync, readlinkSync } from 'node:fs'
+import { extname } from 'node:path'
 
 const INITIAL_PR_LIMIT = 2_000
 const REVIEW_GROWTH_STOP = 3_000
@@ -33,7 +33,7 @@ const authoredTextExtensions = new Set([
   '.toml', '.ts', '.tsx', '.yaml', '.yml', '.zsh',
 ])
 
-function emptySummary() {
+export function emptySummary() {
   return {
     authoredLines: 0,
     binaryFiles: 0,
@@ -78,7 +78,7 @@ function classify(summary, path, added, deleted, renamed = false) {
   }
 }
 
-function summarizeNumstat(numstat) {
+export function summarizeNumstat(numstat) {
   const summary = emptySummary()
   const records = numstat.split('\0')
   for (let index = 0; index < records.length;) {
@@ -117,7 +117,7 @@ function summarizeNumstat(numstat) {
   return summary
 }
 
-function addUntracked(summary, paths) {
+export function addUntracked(summary, paths) {
   for (const path of paths) {
     if (!path) continue
     const status = lstatSync(path)
@@ -138,13 +138,13 @@ function addUntracked(summary, paths) {
   }
 }
 
-function countTextLines(text) {
+export function countTextLines(text) {
   if (text.length === 0) return 0
   const terminators = text.match(/\n/gu)?.length ?? 0
   return terminators + (text.endsWith('\n') ? 0 : 1)
 }
 
-function evaluateBudget({ authoredLines, prNumber, verifiedReviewContext }) {
+export function evaluateBudget({ authoredLines, prNumber, verifiedReviewContext }) {
   if (authoredLines >= REVIEW_GROWTH_STOP) {
     return {
       ok: false,
@@ -215,7 +215,7 @@ function isCodexStatusReviewBody(review) {
     /^\*\*Reviewed commit:\*\*\s*`[0-9a-f]{10,40}`$/u.test(summary.slice(CODEX_REVIEW_PREFIX.length))
 }
 
-function reviewBatchMatches({
+export function reviewBatchMatches({
   pr, threads, reviews, comments, changedPaths, publishedAt,
   hasNextPage,
 }) {
@@ -273,7 +273,7 @@ function verifyReviewContext(prNumber) {
   const [owner, name] = repository.split('/')
   const review = JSON.parse(runGh([
     'api', 'graphql',
-    '-f', 'query=query($owner:String!,$name:String!,$number:Int!,$head:GitObjectID!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){pageInfo{hasNextPage}nodes{isResolved isOutdated path}}reviews(last:100){pageInfo{hasPreviousPage}nodes{author{login} body state}}comments(last:100){pageInfo{hasPreviousPage}nodes{author{login} body createdAt}}}object(oid:$head){... on Commit{checkSuites(first:100){pageInfo{hasNextPage}nodes{createdAt}}}}}}',
+    '-f', 'query=query($owner:String!,$name:String!,$number:Int!,$head:GitObjectID!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){pageInfo{hasNextPage}nodes{isResolved isOutdated path}}reviews(last:100){pageInfo{hasPreviousPage}nodes{author{login} body state}}comments(last:100){pageInfo{hasPreviousPage}nodes{author{login} body createdAt}}}object(oid:$head){... on Commit{committedDate pushedDate}}}}',
     '-f', `owner=${owner}`, '-f', `name=${name}`, '-F', `number=${prNumber}`,
     '-f', `head=${pr.headRefOid}`,
   ])).data.repository
@@ -287,11 +287,10 @@ function verifyReviewContext(prNumber) {
     reviews: review.pullRequest.reviews.nodes,
     comments: review.pullRequest.comments.nodes,
     changedPaths,
-    publishedAt: review.object.checkSuites.nodes.map(({ createdAt }) => createdAt).sort()[0] ?? '',
+    publishedAt: review.object.pushedDate || review.object.committedDate,
     hasNextPage: review.pullRequest.reviewThreads.pageInfo.hasNextPage ||
       review.pullRequest.reviews.pageInfo.hasPreviousPage ||
-      review.pullRequest.comments.pageInfo.hasPreviousPage ||
-      review.object.checkSuites.pageInfo.hasNextPage,
+      review.pullRequest.comments.pageInfo.hasPreviousPage,
   })
 }
 
@@ -324,15 +323,11 @@ function main() {
   console.log(`PR authored-line budget passed in ${result.mode} mode`)
 }
 
-if (require.main === module) {
+if (import.meta.main) {
   try {
     main()
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error))
     process.exit(1)
   }
-}
-
-module.exports = {
-  addUntracked, countTextLines, evaluateBudget, reviewBatchMatches, summarizeNumstat,
 }
