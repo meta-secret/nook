@@ -16,9 +16,22 @@ export type TeamPlanMessages = Readonly<{
 }>;
 
 export function teamPlanMessages(locale: string): TeamPlanMessages {
-  const catalog = locale.toLocaleLowerCase().startsWith('ru')
-    ? russian
-    : english;
+  const normalized = locale
+    .trim()
+    .toLocaleLowerCase()
+    .replaceAll('_', '-')
+    .split('.')[0];
+  let catalog: typeof english;
+  if (
+    normalized === 'c' ||
+    normalized === 'posix' ||
+    normalized === 'en' ||
+    normalized?.startsWith('en-')
+  )
+    catalog = english;
+  else if (normalized === 'ru' || normalized?.startsWith('ru-'))
+    catalog = russian;
+  else throw new Error(`Unsupported Team Plan locale: ${locale}`);
   return {
     help: catalog.team_plan_help,
     invalidArguments: catalog.team_plan_invalid_arguments,

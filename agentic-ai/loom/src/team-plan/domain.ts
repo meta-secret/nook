@@ -2,6 +2,7 @@ import { TeamKey } from '../team-agents/catalog.ts';
 import { assertEvidenceBound } from '../module-delivery/authority.ts';
 import { ModuleDeliveryOwner } from '../module-delivery/domain.ts';
 import { ModuleDeliveryProviderSubmissionKind } from '../module-delivery/integration-provenance.ts';
+import { MAX_SERIALIZED_TEAM_PLAN_RECORD_BYTES } from './record-limits.ts';
 import type {
   ModuleDeliveryAdmission,
   ModuleDeliveryAttemptLease,
@@ -225,7 +226,13 @@ export function assertTeamPlanRecord(record: TeamPlanRecord): void {
     Array.isArray(record.submission.acceptedProviderEvidence)
   )
     assertEvidenceBound(record.submission.acceptedProviderEvidence);
-  JSON.stringify(record);
+  const serialized = JSON.stringify(record);
+  if (
+    typeof serialized !== 'string' ||
+    Buffer.byteLength(serialized, 'utf8') >
+      MAX_SERIALIZED_TEAM_PLAN_RECORD_BYTES
+  )
+    invalidRecord();
   if (record.kind === TeamPlanRecordKind.Provider) {
     if (!record.submission) invalidRecord();
     assertKeys([record, 'kind|submission']);

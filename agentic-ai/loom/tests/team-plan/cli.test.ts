@@ -35,6 +35,7 @@ import {
 import { TeamPlanRecordKind } from '../../src/team-plan/domain.ts';
 import { assertTeamPlanAcceptedEvidenceReceipt } from '../../src/team-plan/domain.ts';
 import { MAX_TEAM_PLAN_JOURNAL_BYTES } from '../../src/team-plan/journal.ts';
+import { teamPlanMessages } from '../../src/team-plan/messages.ts';
 import {
   createGitFixture,
   disposeGitFixture,
@@ -446,6 +447,37 @@ test('localizes visible parse failures through the Loom catalog', async () => {
   }
 });
 
+test('rejects unsupported Team Plan locales instead of falling back', () => {
+  expect(() => teamPlanMessages('fr-FR')).toThrow(
+    'Unsupported Team Plan locale',
+  );
+  expect(teamPlanMessages('C.UTF-8').invalidArguments).toBe(
+    teamPlanMessages('en').invalidArguments,
+  );
+});
+
+test('keeps Task wrapper diagnostics out of machine-readable stdout', () => {
+  const root = mkdtempSync(join(tmpdir(), 'team-plan-task-stdout-'));
+  try {
+    const result = spawnSync(
+      'task',
+      [
+        'loom:team-plan:select',
+        `JOURNAL=${join(root, 'missing-journal.jsonl')}`,
+      ],
+      {
+        cwd: join(import.meta.dir, '../../../..'),
+        encoding: 'utf8',
+        env: { PATH: process.env.PATH ?? '' },
+      },
+    );
+    expect(result.status).not.toBe(0);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toContain('Team Plan');
+  } finally {
+    rmSync(root, { recursive: true });
+  }
+});
 test('localizes runtime validation failures through the Loom catalog', async () => {
   const root = mkdtempSync(join(tmpdir(), 'team-plan-cli-runtime-locale-'));
   const planPath = join(root, 'invalid-plan.json');
@@ -474,6 +506,7 @@ test('localizes runtime validation failures through the Loom catalog', async () 
     expect(((cause as LoomFailure).cause as Error).message).toBe(
       'Проверка команды Team Plan завершилась ошибкой.',
     );
+    expect(((cause as LoomFailure).cause as Error).cause).toBeUndefined();
   } finally {
     rmSync(root, { recursive: true });
   }

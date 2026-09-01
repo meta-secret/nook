@@ -298,9 +298,6 @@ async function localizedTeamPlanRuntime<T>(
           messages: request.messages,
           code: failure.code,
         }),
-        {
-          cause: failure,
-        },
       ),
     });
   }
