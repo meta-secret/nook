@@ -97,7 +97,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     for marker in [
         "product-paths:",
         "git diff --no-renames --name-only",
-        ".cortex/*.md)",
+        ".cortex/*.md | .github/workflows/repository-policy.yml)",
         "if: needs.product-paths.outputs.product-required == 'true'",
     ] {
         assert!(
@@ -497,7 +497,8 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
 }
 
 #[test]
-fn product_workflows_skip_only_cortex_markdown_changes() -> anyhow::Result<()> {
+fn product_workflows_skip_only_repository_policy_and_cortex_markdown_changes() -> anyhow::Result<()>
+{
     let pr = read(".github/workflows/pr.yml")?;
     let main = read(".github/workflows/main.yml")?;
     let research = read(".github/workflows/web-research.yml")?;
@@ -505,6 +506,7 @@ fn product_workflows_skip_only_cortex_markdown_changes() -> anyhow::Result<()> {
 
     assert!(!pr.contains("paths-ignore:"));
     assert!(pr.contains("path.startsWith('.cortex/') && path.endsWith('.md')"));
+    assert!(pr.contains("path === '.github/workflows/repository-policy.yml'"));
     assert!(pr.contains("files.length !== expectedChangedFiles"));
     assert!(pr.contains("files.length >= 3000"));
     assert!(pr.contains("!supportedStatuses.has(file.status)"));
@@ -521,11 +523,13 @@ fn product_workflows_skip_only_cortex_markdown_changes() -> anyhow::Result<()> {
     ] {
         assert!(
             pr.contains(&format!("{variant}: '{value}'"))
+                && research.contains(&format!("{variant}: '{value}'"))
                 && readiness.contains(&format!("{variant} = \"{value}\"")),
-            "inline and typed pull-request status enums must agree for {variant}"
+            "PR, research, and typed pull-request status enums must agree for {variant}"
         );
     }
     assert!(pr.contains("new Set(Object.values(PullRequestFileStatus))"));
+    assert!(research.contains("new Set(Object.values(PullRequestFileStatus))"));
     assert_eq!(
         pr.matches("product-validation-required == 'true'").count(),
         11,
@@ -538,17 +542,31 @@ fn product_workflows_skip_only_cortex_markdown_changes() -> anyhow::Result<()> {
     assert!(main.contains("permissions:\n      actions: read\n      contents: read"));
     assert!(main.contains("persist-credentials: false"));
     assert!(main.contains("git diff --no-renames --name-only"));
-    assert!(main.contains(".cortex/*.md)"));
+    assert!(main.contains(".cortex/*.md | .github/workflows/repository-policy.yml)"));
     assert!(!main.contains("agentic-ai/minds/*)"));
     assert!(main.contains("candidate.name !== 'Main'"));
     assert!(main.contains("job.name === 'Native Rust verification'"));
     assert!(main.contains("sentinel.conclusion === 'success'"));
+    for state in [
+        "Complete: 'complete'",
+        "MissingExpectedCount: 'missing-expected-count'",
+        "InvalidExpectedCount: 'invalid-expected-count'",
+        "CountMismatch: 'count-mismatch'",
+        "PageBound: 'page-bound'",
+    ] {
+        assert!(
+            main.contains(state),
+            "Main job inventory must model {state}"
+        );
+    }
+    assert!(!main.contains("return undefined"));
+    assert!(main.contains("Rejected Main job inventory: ${inventory.state}"));
 
     assert!(readiness.contains("path.startsWith(\".cortex/\") && path.endsWith(\".md\")"));
     assert!(readiness.contains("RENAMED_PATH_PRODUCT_SENTINEL"));
     assert!(readiness.contains("file.previousFilename"));
     assert!(!readiness.contains("workflowFile: \"rust-ecosystem.yml\""));
-    assert!(!readiness.contains("workflowFile: \"repository-policy.yml\""));
+    assert!(readiness.contains("workflowFile: \"repository-policy.yml\""));
     assert!(readiness.contains("workflowFile: \"web-research.yml\""));
     assert!(!research.contains("paths-ignore:"));
     assert!(research.contains("types: [opened, synchronize, reopened]"));

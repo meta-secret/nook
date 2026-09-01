@@ -78,9 +78,16 @@ jobs:
           result-encoding: string
           script: |
             const expectedRepository = `${context.repo.owner}/${context.repo.repo}`
+            const JobInventoryState = Object.freeze({
+              Complete: 'complete',
+              MissingExpectedCount: 'missing-expected-count',
+              InvalidExpectedCount: 'invalid-expected-count',
+              CountMismatch: 'count-mismatch',
+              PageBound: 'page-bound',
+            })
             const fetchJobs = async (runId) => {
               const jobs = []
-              let expectedCount
+              let expectedCount = 0
               for (let page = 1; page <= 10; page += 1) {
                 const response = await github.rest.actions.listJobsForWorkflowRun({
                   ...context.repo,
@@ -89,16 +96,24 @@ jobs:
                   per_page: 100,
                   page,
                 })
-                if (
-                  !Number.isSafeInteger(response.data.total_count) ||
-                  response.data.total_count <= 0
-                ) return undefined
-                expectedCount = response.data.total_count
+                const rawExpectedCount = response.data.total_count
+                if (typeof rawExpectedCount !== 'number') {
+                  return { state: JobInventoryState.MissingExpectedCount }
+                }
+                if (!Number.isSafeInteger(rawExpectedCount) || rawExpectedCount <= 0) {
+                  return { state: JobInventoryState.InvalidExpectedCount }
+                }
+                if (expectedCount !== 0 && rawExpectedCount !== expectedCount) {
+                  return { state: JobInventoryState.CountMismatch }
+                }
+                expectedCount = rawExpectedCount
                 jobs.push(...response.data.jobs)
                 if (response.data.jobs.length < 100) break
-                if (page === 10) return undefined
+                if (page === 10) return { state: JobInventoryState.PageBound }
               }
-              return jobs.length === expectedCount ? jobs : undefined
+              return jobs.length === expectedCount
+                ? { jobs, state: JobInventoryState.Complete }
+                : { state: JobInventoryState.CountMismatch }
             }
             try {
               const workflow = (
@@ -135,8 +150,12 @@ jobs:
                     candidate.head_repository?.full_name !== expectedRepository ||
                     !/^[0-9a-f]{40}$/.test(candidate.head_sha)
                   ) return ''
-                  const jobs = await fetchJobs(candidate.id)
-                  if (!jobs) return ''
+                  const inventory = await fetchJobs(candidate.id)
+                  if (inventory.state !== JobInventoryState.Complete) {
+                    core.warning(`Rejected Main job inventory: ${inventory.state}`)
+                    return ''
+                  }
+                  const jobs = inventory.jobs
                   const sentinels = jobs.filter(
                     (job) => job.name === 'Native Rust verification',
                   )
@@ -183,7 +202,7 @@ jobs:
           fi
           while IFS= read -r changed_file; do
             case "$changed_file" in
-              .cortex/*.md)
+              .cortex/*.md | .github/workflows/repository-policy.yml)
                 ;;
               *)
                 product_required=true

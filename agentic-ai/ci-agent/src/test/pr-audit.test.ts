@@ -406,6 +406,13 @@ test("buildPrAudit rejects a same-count synchronize during file inventory", asyn
   );
 });
 
+test("buildPrAudit rejects a synchronize after all audit evidence settles", async () => {
+  await assert.rejects(
+    buildPrAudit(mockOctokit({ lateSynchronize: true }), repoRef, 410),
+    /Pull request revision changed/u,
+  );
+});
+
 enum MockCodexReview {
   CleanComment = "clean-comment",
   Dismissed = "dismissed",
@@ -453,6 +460,7 @@ type MockOptions = {
   historicalFinding?: boolean;
   legacyAutomationComment?: boolean;
   legacyAutomationDeletionFails?: boolean;
+  lateSynchronize?: boolean;
   headRepository?: RepoRef;
   nativeConclusion?: MockJobConclusion;
   omitNativeJob?: boolean;
@@ -483,6 +491,7 @@ function mockOctokitWithAgentHandoff(
 
 function createMockOctokit(options: MockOptions): Octokit {
   const headSha = "0123456789abcdef0123456789abcdef01234567";
+  const nextHeadSha = "123456789abcdef0123456789abcdef012345678";
   const priorHeadSha = "89abcdef0123456789abcdef0123456789abcdef";
   const headRepository = options.headRepository ?? repoRef;
   let pullGetCalls = 0;
@@ -499,9 +508,10 @@ function createMockOctokit(options: MockOptions): Octokit {
               name: headRepository.repo,
               owner: { login: headRepository.owner },
             },
-            sha:
-              options.sameCountSynchronize === true && pullGetCalls === 1
-                ? priorHeadSha
+            sha: options.sameCountSynchronize === true && pullGetCalls === 1
+              ? priorHeadSha
+              : options.lateSynchronize === true && pullGetCalls >= 3
+                ? nextHeadSha
                 : headSha,
           },
           html_url: "https://github.com/meta-secret/nook/pull/410",

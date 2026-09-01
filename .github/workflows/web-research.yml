@@ -70,26 +70,28 @@ jobs:
               files.length !== expectedChangedFiles ||
               files.length >= 3000
             ) return 'true'
-            const supportedStatuses = new Set([
-              'added',
-              'removed',
-              'modified',
-              'renamed',
-              'copied',
-              'changed',
-              'unchanged',
-            ])
+            const PullRequestFileStatus = Object.freeze({
+              Added: 'added',
+              Removed: 'removed',
+              Modified: 'modified',
+              Renamed: 'renamed',
+              Copied: 'copied',
+              Changed: 'changed',
+              Unchanged: 'unchanged',
+            })
+            const supportedStatuses = new Set(Object.values(PullRequestFileStatus))
             if (
               files.some(
                 (file) =>
                   typeof file.filename !== 'string' ||
                   file.filename.length === 0 ||
                   !supportedStatuses.has(file.status) ||
-                  (file.status === 'renamed' && !file.previous_filename),
+                  (file.status === PullRequestFileStatus.Renamed &&
+                    !file.previous_filename),
               )
             ) return 'true'
             const changedPaths = files.flatMap((file) =>
-              file.status === 'renamed'
+              file.status === PullRequestFileStatus.Renamed
                 ? [file.previous_filename, file.filename]
                 : [file.filename],
             )

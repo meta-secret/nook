@@ -17,6 +17,13 @@ test("requiredPrCheckNames maps changed paths to repository-owned gates", () => 
     ".cortex/AGENTS.md",
     ".cortex/teams/sre/workflows/ci-pipeline.md",
   ]), []);
+  assert.deepEqual(
+    requiredPrCheckNames([
+      ".github/workflows/repository-policy.yml",
+      ".cortex/AGENTS.md",
+    ]),
+    ["Enforce repository policy"],
+  );
   for (const productPath of [
     ".cortex/teams/sre/workflow.yml",
     ".codex/config.toml",
@@ -26,6 +33,13 @@ test("requiredPrCheckNames maps changed paths to repository-owned gates", () => 
   ]) {
     assert.deepEqual(requiredPrCheckNames([productPath]), ["Verify and preview"]);
   }
+  assert.deepEqual(
+    requiredPrCheckNames([
+      ".github/workflows/repository-policy.yml",
+      "nook-app/nook-platform/nook-core/src/lib.rs",
+    ]),
+    ["Enforce repository policy", "Verify and preview"],
+  );
   assert.deepEqual(
     requiredPrCheckNames([
       "nook-app/nook-web/nook-web-research/src/main.ts",

@@ -455,6 +455,15 @@ mainWorkflow.requireAll([
   "task _web:test:ui-demo",
 ]);
 mainWorkflow.forbid("Build sealed web image for development deploy");
+mainWorkflow.requireAll([
+  "const JobInventoryState = Object.freeze({",
+  "MissingExpectedCount: 'missing-expected-count'",
+  "InvalidExpectedCount: 'invalid-expected-count'",
+  "CountMismatch: 'count-mismatch'",
+  "PageBound: 'page-bound'",
+  "Rejected Main job inventory: ${inventory.state}",
+]);
+mainWorkflow.forbid("return undefined");
 prWorkflow.requireAll([
   "name: Validate explicit CI request",
   "runs-on: ubuntu-latest",

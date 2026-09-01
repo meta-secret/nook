@@ -195,6 +195,7 @@ export async function createFixPr(
 }
 
 const MAIN_PR_CHECK = "Verify and preview";
+const REPOSITORY_POLICY_PR_CHECK = "Enforce repository policy";
 const WEB_RESEARCH_PR_CHECK = "Build and deploy research catalog";
 
 /** Jobs that must succeed on the latest exact-head PR run before merge. */
@@ -308,6 +309,12 @@ const MAIN_PR_WORKFLOW: RequiredPrWorkflow = {
   requiredJobs: REQUIRED_MAIN_PR_JOBS,
 };
 
+const REPOSITORY_POLICY_PR_WORKFLOW: RequiredPrWorkflow = {
+  checkName: REPOSITORY_POLICY_PR_CHECK,
+  workflowFile: "repository-policy.yml",
+  workflowName: "Repository policy",
+};
+
 const WEB_RESEARCH_PR_WORKFLOW: RequiredPrWorkflow = {
   checkName: WEB_RESEARCH_PR_CHECK,
   workflowFile: "web-research.yml",
@@ -327,6 +334,9 @@ function isWebResearchPath(path: string): boolean {
 export function requiredPrWorkflows(paths: string[]): RequiredPrWorkflow[] {
   const required: RequiredPrWorkflow[] = [];
 
+  if (paths.includes(".github/workflows/repository-policy.yml")) {
+    required.push(REPOSITORY_POLICY_PR_WORKFLOW);
+  }
   if (paths.some(isWebResearchPath)) {
     required.push(WEB_RESEARCH_PR_WORKFLOW);
   }
@@ -759,7 +769,10 @@ function isNotFound(err: unknown): boolean {
 }
 
 function isCanonicalAiOnlyPath(path: string): boolean {
-  return path.startsWith(".cortex/") && path.endsWith(".md");
+  return (
+    (path.startsWith(".cortex/") && path.endsWith(".md")) ||
+    path === ".github/workflows/repository-policy.yml"
+  );
 }
 
 export function isRepositoryStatusComment(

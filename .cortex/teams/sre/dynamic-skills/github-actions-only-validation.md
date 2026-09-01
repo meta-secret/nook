@@ -78,8 +78,8 @@ task loom:pr-land CONFIG=path/to/gizmo-owned/pr-land-validate.yaml
   3. Gizmo integrates, runs pre-push, and pushes; and
   4. Gizmo validates when ready or runs relevant focused proof.
 - Ordinary pushes do not refresh complete PR checks.
-- Product PR and Main workflows skip expensive jobs only for a change set made
-  entirely of `.cortex/**/*.md` files.
+- Product PR and Main workflows skip expensive jobs only when every changed path
+  is `.cortex/**/*.md` or `.github/workflows/repository-policy.yml`.
   - PR classification runs first on a read-only GitHub-hosted runner.
   - It checks the authoritative file count, API cap, and closed status set.
   - API errors, incomplete inventories, unsupported statuses, and every rename
@@ -93,8 +93,9 @@ task loom:pr-land CONFIG=path/to/gizmo-owned/pr-land-validate.yaml
     product frontier.
   - Trusted PR handoff, Linear demo, Main statistics, and Main failure consumers
     inspect the source run's Native Rust sentinel before reserving ARC.
-- Any non-Markdown Cortex file, workflow or agent implementation file, product
-  path, mixed change set, or rename retains complete product validation.
+- Any non-Markdown Cortex file, other workflow or agent implementation file,
+  product path, product-impacting mixed change set, or rename retains complete
+  product validation.
 - Web research uses a separate read-only source-aware classifier.
   - Research source and destination renames retain specialist evidence.
   - Readiness requires that evidence alongside product validation.

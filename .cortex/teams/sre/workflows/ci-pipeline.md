@@ -96,11 +96,14 @@ See [issues](../../../gizmo/workflows/issues.md),
 
 **`pr.yml`**
 
-- A read-only GitHub-hosted classifier runs before product workers and skips
-  them only when every changed file is `.cortex/**/*.md` and no file is renamed.
+- A read-only GitHub-hosted classifier runs before product workers.
+- It skips them only when every changed file is `.cortex/**/*.md` or
+  `.github/workflows/repository-policy.yml` and no file is renamed.
 - It checks the authoritative changed-file count, API cap, and a closed status
   set. API errors, incomplete or empty inventories, unsupported statuses, and
   renames fail closed to complete product validation.
+- Readiness requires repository-policy evidence when its workflow changes,
+  without requiring a skipped product run.
 - Every expensive product job depends directly on this classifier.
 - Rust domain unit tests + coverage, no-opt WASM, web/unit tests, all three web builds.
 - Shared Rust ecosystem gates via `rust-ecosystem-checks.yml`.

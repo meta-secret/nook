@@ -180,6 +180,12 @@ export async function buildPrAudit(
             pull_number: prNumber,
           })
         ).data.mergeable;
+  const settledRevision = await readPullRequestRevision(
+    octokit,
+    repoRef,
+    prNumber,
+  );
+  assertPullRequestRevision(expectedRevision, settledRevision);
 
   const reasons: string[] = [];
   if (pr.state !== "open") reasons.push(`state is ${pr.state}`);

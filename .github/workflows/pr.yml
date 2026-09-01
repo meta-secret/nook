@@ -65,7 +65,8 @@ jobs:
           result-encoding: string
           script: |
             const isCanonicalAiOnlyPath = (path) =>
-              path.startsWith('.cortex/') && path.endsWith('.md')
+              (path.startsWith('.cortex/') && path.endsWith('.md')) ||
+              path === '.github/workflows/repository-policy.yml'
 
             let files
             try {
