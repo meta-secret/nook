@@ -101,6 +101,7 @@ interface ArcValues {
 
 interface WorkflowJob {
   if?: string;
+  permissions?: Record<string, string>;
   "runs-on"?: string;
   steps?: Array<{ run?: string; uses?: string }>;
   uses?: string;
@@ -414,18 +415,26 @@ tasks.requireAll([
   "for scale_set in nook-k0s nook-k0s-hive nook-k0s-container",
 ]);
 mainWorkflow.forbid("NOOK_CACHE_RUNS_ON");
-mainWorkflow.forbid("    runs-on: ubuntu-latest");
+mainWorkflow.requireAll([
+  "name: Classify Main paths",
+  "runs-on: ubuntu-latest",
+  "product-required: ${{ steps.classify.outputs.product-required || steps.fail-closed.outputs.product-required }}",
+  "ecosystem-required: ${{ steps.classify.outputs.ecosystem-required || steps.fail-closed.outputs.ecosystem-required }}",
+  "git diff --no-renames --name-only",
+  "needs.product-paths.outputs.product-required == 'true'",
+]);
+mainWorkflow.count({ fragment: "    runs-on: ubuntu-latest", expected: 1 });
 mainWorkflow.requireAll([
   "wasm-cache-publish:",
   "name: WASM cache publication",
-  "needs: [wasm]",
+  "needs: [product-paths, wasm]",
   "cache_publication_outcome: ${{ steps.publish_wasm_cache.outcome }}",
   "continue-on-error: true",
   "CACHE_PUBLICATION_OUTCOME: ${{ needs.wasm.outputs.cache_publication_outcome }}",
   "WASM cache publication failed in the verified producer",
   "wasm-cache-proof:",
   "name: Portable WASM cache publication proof",
-  "needs: [wasm-cache-publish]",
+  "needs: [product-paths, wasm-cache-publish]",
   "Install Bun for registry cache audit",
   "NOOK_WASM_CACHE_PROMOTION_ENABLED: \"1\"",
   "NOOK_REGISTRY_USERNAME: ${{ secrets.NOOK_REGISTRY_USERNAME }}",
@@ -440,13 +449,19 @@ mainWorkflow.requireAll([
   "runs-on: nook-k0s-container",
   "Publish exact-source browser job image",
   "name: Verify web build",
-  "needs: [web, web-e2e, wasm-cache-proof]",
+  "needs: [product-paths, web, web-e2e, wasm-cache-proof]",
   "task _ci:main:web:e2e-only",
   "task _extension:test:e2e",
   "task _web:test:ui-demo",
 ]);
 mainWorkflow.forbid("Build sealed web image for development deploy");
 prWorkflow.requireAll([
+  "name: Validate explicit CI request",
+  "runs-on: ubuntu-latest",
+  "product-validation-required: ${{ steps.product-scope.outputs.result }}",
+  "files = await github.paginate(github.rest.pulls.listFiles",
+  "files.some((file) => file.status === 'renamed')",
+  "needs.validation-request.outputs.product-validation-required == 'true'",
   "full-e2e-shard:",
   "name: Full browser e2e shard (${{ matrix.shard }}/2)",
   "fail-fast: false",
@@ -454,7 +469,7 @@ prWorkflow.requireAll([
   "NOOK_E2E_SHARD: ${{ matrix.shard }}/2",
   "full-e2e:",
   "name: Full browser e2e (main fix)",
-  "needs: [full-e2e-shard, wasm]",
+  "needs: [validation-request, full-e2e-shard, wasm]",
   "SHARD_RESULT: ${{ needs.full-e2e-shard.result }}",
   "Publish exact-source PR browser job image",
   "nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}",
@@ -463,7 +478,7 @@ prWorkflow.requireAll([
   "task _extension:test:e2e",
   "task _web:test:ui-demo",
 ]);
-prWorkflow.forbid("    runs-on: ubuntu-latest");
+prWorkflow.count({ fragment: "    runs-on: ubuntu-latest", expected: 1 });
 nodeSetup.requireAll([
   "/home/runner/externals/node24/bin/node",
   'echo "$(dirname "$node_bin")" >> "$GITHUB_PATH"',
@@ -565,6 +580,17 @@ const hostedUntrustedBoundary = new Set([
   "hive.yml#console-untrusted",
   "web-research.yml#validate-untrusted",
 ]);
+const hostedCheapClassifiers = new Set([
+  "linear-ui-demo.yml#product-scope",
+  "main-build-stats.yml#product-scope",
+  "main-failure-handoff.yml#product-scope",
+  "main.yml#product-paths",
+  "pr-validation-handoff.yml#product-scope",
+  "pr.yml#validation-request",
+]);
+const hostedCheckoutClassifiers = new Set([
+  "main.yml#product-paths",
+]);
 const workflowsDir = resolve(root, ".github/workflows");
 const workflowFiles = (await readdir(workflowsDir))
   .filter((file) => file.endsWith(".yml") || file.endsWith(".yaml"))
@@ -583,6 +609,25 @@ for (const workflowFile of workflowFiles) {
     }
     const identity = `${workflowFile}#${jobName}`;
     if (placement === "ubuntu-latest") {
+      if (hostedCheapClassifiers.has(identity)) {
+        observedHostedExceptions.add(identity);
+        const serializedJob = JSON.stringify(job);
+        const permissions = job.permissions ?? {};
+        if (
+          Object.keys(permissions).length === 0 ||
+          Object.values(permissions).some((permission) => permission !== "read") ||
+          serializedJob.includes("secrets.") ||
+          (!hostedCheckoutClassifiers.has(identity) &&
+            serializedJob.includes("actions/checkout")) ||
+          (hostedCheckoutClassifiers.has(identity) &&
+            !serializedJob.includes('"persist-credentials":false'))
+        ) {
+          throw new Error(
+            `${identity} must remain an explicitly read-only, credential-free classifier`,
+          );
+        }
+        continue;
+      }
       if (!hostedUntrustedBoundary.has(identity)) {
         throw new Error(`${identity} routes trusted work to GitHub cloud`);
       }
@@ -605,7 +650,10 @@ for (const workflowFile of workflowFiles) {
   }
 }
 
-for (const exception of hostedUntrustedBoundary) {
+for (const exception of [
+  ...hostedUntrustedBoundary,
+  ...hostedCheapClassifiers,
+]) {
   if (!observedHostedExceptions.has(exception)) {
     throw new Error(`stale hosted runner exception: ${exception}`);
   }

@@ -4,6 +4,7 @@ import test from "node:test";
 import type { Octokit } from "@octokit/rest";
 
 import {
+  changedPathsForPullRequestFiles,
   createFixPr,
   requiredPrCheckNames,
   requiredPrWorkflows,
@@ -12,32 +13,19 @@ import {
 const repoRef = { owner: "meta-secret", repo: "nook" };
 
 test("requiredPrCheckNames maps changed paths to repository-owned gates", () => {
-  assert.deepEqual(requiredPrCheckNames([".cortex/AGENTS.md"]), []);
-  assert.deepEqual(
-    requiredPrCheckNames(["nook-app/nook-platform/nook-core/src/lib.rs"]),
-    ["Verify and preview"],
-  );
-  assert.deepEqual(
-    requiredPrCheckNames(["nook-app/nook-platform/.cargo/config.toml"]),
-    ["Verify and preview"],
-  );
-  assert.deepEqual(requiredPrCheckNames(["preflight/Cargo.lock"]), [
-    "Verify and preview",
-  ]);
-  assert.deepEqual(requiredPrCheckNames(["agentic-ai/minds/Cargo.lock"]), [
-    "Rust ecosystem checks",
-  ]);
-  assert.deepEqual(
-    requiredPrCheckNames(["nook-app/nook-web/nook-web-research/src/main.ts"]),
-    ["Build and deploy research catalog"],
-  );
-  assert.deepEqual(
-    requiredPrCheckNames([
-      "nook-app/nook-platform/nook-core/src/lib.rs",
-      "nook-app/nook-web/nook-web-research/src/main.ts",
-    ]),
-    ["Build and deploy research catalog", "Verify and preview"],
-  );
+  assert.deepEqual(requiredPrCheckNames([
+    ".cortex/AGENTS.md",
+    ".cortex/teams/sre/workflows/ci-pipeline.md",
+  ]), []);
+  for (const productPath of [
+    ".cortex/teams/sre/workflow.yml",
+    ".codex/config.toml",
+    ".github/workflows/pr.yml",
+    "agentic-ai/minds/Cargo.lock",
+    "nook-app/nook-platform/nook-core/src/lib.rs",
+  ]) {
+    assert.deepEqual(requiredPrCheckNames([productPath]), ["Verify and preview"]);
+  }
   assert.deepEqual(
     requiredPrWorkflows(["nook-app/nook-platform/nook-core/src/lib.rs"]),
     [
@@ -55,13 +43,70 @@ test("requiredPrCheckNames maps changed paths to repository-owned gates", () => 
       },
     ],
   );
-  assert.deepEqual(requiredPrWorkflows(["agentic-ai/minds/Cargo.lock"]), [
+});
+test("renamed PR files conservatively require product validation", () => {
+  const productToAiFiles = [
     {
-      checkName: "Rust ecosystem checks",
-      workflowFile: "rust-ecosystem.yml",
-      workflowName: "Rust ecosystem checks",
+      filename: "agentic-ai/loom/src/legacy.ts",
+      previous_filename: "preflight/src/legacy.rs",
+      status: "renamed",
     },
+  ];
+  const productToAiPaths = changedPathsForPullRequestFiles(
+    productToAiFiles,
+    productToAiFiles.length,
+  );
+  assert.deepEqual(requiredPrCheckNames(productToAiPaths), [
+    "Verify and preview",
   ]);
+
+  const aiToAiFiles = [
+    {
+      filename: ".cortex/teams/ai/renamed.md",
+      previous_filename: ".cortex/teams/ai/legacy-agent.md",
+      status: "renamed",
+    },
+  ];
+  const aiToAiPaths = changedPathsForPullRequestFiles(
+    aiToAiFiles,
+    aiToAiFiles.length,
+  );
+  assert.deepEqual(requiredPrCheckNames(aiToAiPaths), ["Verify and preview"]);
+  assert.throws(
+    () =>
+      changedPathsForPullRequestFiles(
+        [{ filename: "agentic-ai/loom/src/unknown.ts", status: "renamed" }],
+        1,
+      ),
+    /Renamed pull-request file lacks source path/u,
+  );
+});
+test("PR file inventory fails closed on truncation and unsupported status", () => {
+  const aiFile = { filename: ".cortex/AGENTS.md", status: "modified" };
+  assert.throws(
+    () => changedPathsForPullRequestFiles([aiFile], 2),
+    /inventory is incomplete: expected 2, received 1/u,
+  );
+  const cappedFiles = Array.from({ length: 3000 }, (_, index) => ({
+    filename: `.cortex/generated/${index}.md`,
+    status: "added",
+  }));
+  assert.throws(
+    () => changedPathsForPullRequestFiles(cappedFiles, cappedFiles.length),
+    /inventory is incomplete: expected 3000, received 3000/u,
+  );
+  assert.throws(
+    () =>
+      changedPathsForPullRequestFiles(
+        [{ filename: ".cortex/AGENTS.md", status: "invented" }],
+        1,
+      ),
+    /Unsupported pull-request file status/u,
+  );
+  assert.throws(
+    () => changedPathsForPullRequestFiles([], 0),
+    /inventory is incomplete/u,
+  );
 });
 test("createFixPr leaves the PR body free of automatic merge control markers", async () => {
   let createdBody = "";

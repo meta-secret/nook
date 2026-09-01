@@ -1,6 +1,7 @@
 import type { Octokit } from "@octokit/rest";
 
 import {
+  changedPathsForPullRequestFiles,
   createOctokit,
   inspectPrFeedback,
   parseRepository,
@@ -134,7 +135,7 @@ export async function buildPrAudit(
       per_page: 100,
     }),
   ]);
-  const changedFiles = files.map((file) => file.filename);
+  const changedFiles = changedPathsForPullRequestFiles(files, pr.changed_files);
   const requiredWorkflows = await auditWorkflows({
     baseSha: pr.base.sha,
     headSha: pr.head.sha,

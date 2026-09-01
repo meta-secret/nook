@@ -96,6 +96,12 @@ See [issues](../../../gizmo/workflows/issues.md),
 
 **`pr.yml`**
 
+- A read-only GitHub-hosted classifier runs before product workers and skips
+  them only when every changed file is `.cortex/**/*.md` and no file is renamed.
+- It checks the authoritative changed-file count, API cap, and a closed status
+  set. API errors, incomplete or empty inventories, unsupported statuses, and
+  renames fail closed to complete product validation.
+- Every expensive product job depends directly on this classifier.
 - Rust domain unit tests + coverage, no-opt WASM, web/unit tests, all three web builds.
 - Shared Rust ecosystem gates via `rust-ecosystem-checks.yml`.
 - Those ecosystem jobs run in parallel with native Rust, WASM, and verify.
@@ -162,6 +168,8 @@ See [issues](../../../gizmo/workflows/issues.md),
 
 - Runs from trusted default-branch code.
 - Receives only completed labeled validation runs because PR close is not a `PR` workflow trigger.
+- Inspects the source run's Native Rust sentinel on a read-only hosted runner and
+  reserves ARC only when product validation ran or source state is uncertain.
 - Verifies the successful source run and required jobs.
 - Validates native/WASM artifact shapes, attaches provenance.
 - Publishes exact-input handoffs that later PRs may trust.
@@ -169,6 +177,7 @@ See [issues](../../../gizmo/workflows/issues.md),
 **`linear-ui-demo.yml`**
 
 - Runs from the trusted default branch.
+- Uses the same source-sentinel admission before reserving its trusted publisher.
 - Claims the current `pr-<number>-<head-sha>` concurrency group on close to cancel in-flight validation.
 - Downloads the PR demo artifact.
 - Publishes its 10 largest WebMs to Linear.
@@ -177,8 +186,14 @@ See [issues](../../../gizmo/workflows/issues.md),
 **`main.yml`**
 
 - Calls the shared Rust ecosystem jobs in parallel with product verification.
-- Includes `agentic-ai/minds/**` so product-only, minds-only, and mixed pushes use one merged-head ecosystem orchestrator.
-- Classifies changed paths and skips the product job chain for minds-only pushes.
+- Runs for every Main push so native path filtering cannot hide rename sources.
+- A read-only GitHub-hosted classifier checks out complete history without
+  persisting credentials.
+- It diffs with `--no-renames` from the latest successful Main run whose Native
+  Rust sentinel succeeded.
+- Only an accumulated `.cortex/**/*.md`-only range skips product and ecosystem
+  jobs. Missing or uncertain history, job inventory, commits, ancestry, or diffs
+  fails closed; successful lightweight runs do not advance the product frontier.
 - Owns merged-head ecosystem cache seeding, statistics, and failure handoff.
 - Native Rust, WASM, and browser-free web verification use the configured ARC scale set.
 - Each lane serially exports its already-solved local BuildKit graph after validation.
@@ -191,11 +206,14 @@ See [issues](../../../gizmo/workflows/issues.md),
 
 **`main-build-stats.yml`**
 
+- Inspects the completed Main run's Native Rust sentinel before reserving ARC.
 - Collects run/job/step timing and conclusions.
 - Commits one `stats/main-build/**` record directly to Nook Workbench.
 
 **`main-failure-handoff.yml`**
 
+- Uses the same sentinel admission, while retaining successful reruns that must
+  retire incidents created by earlier failed attempts.
 - Creates or refreshes one ready automated Workbench incident per failed Main revision.
 - Uses run metadata and failed job names only.
 - Includes browser E2E and UI-demo failures.

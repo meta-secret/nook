@@ -78,6 +78,23 @@ task loom:pr-land CONFIG=path/to/gizmo-owned/pr-land-validate.yaml
   3. Gizmo integrates, runs pre-push, and pushes; and
   4. Gizmo validates when ready or runs relevant focused proof.
 - Ordinary pushes do not refresh complete PR checks.
+- Product PR and Main workflows skip expensive jobs only for a change set made
+  entirely of `.cortex/**/*.md` files.
+  - PR classification runs first on a read-only GitHub-hosted runner.
+  - It checks the authoritative file count, API cap, and closed status set.
+  - API errors, incomplete inventories, unsupported statuses, and every rename
+    fail closed to complete product validation.
+  - Every expensive PR job depends directly on the classifier output.
+  - Main runs a credential-free, read-only hosted classifier and diffs with
+    `--no-renames` from the latest successful Main run whose Native Rust sentinel
+    succeeded. Missing or uncertain workflow history, jobs, commits, ancestry,
+    or diffs require complete product and ecosystem validation.
+  - Successful Cortex-Markdown-only Main runs do not advance that validated
+    product frontier.
+  - Trusted PR handoff, Linear demo, Main statistics, and Main failure consumers
+    inspect the source run's Native Rust sentinel before reserving ARC.
+- Any non-Markdown Cortex file, workflow or agent implementation file, product
+  path, mixed change set, or rename retains complete product validation.
 - Markdown-only Cortex changes use the repository-policy workflow.
   - The workflow runs `task loom:cortex-audit`.
   - It skips Rust setup, BuildKit connection, preflight, and full Loom package

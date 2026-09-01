@@ -195,8 +195,6 @@ export async function createFixPr(
 }
 
 const MAIN_PR_CHECK = "Verify and preview";
-const WEB_RESEARCH_PR_CHECK = "Build and deploy research catalog";
-const RUST_ECOSYSTEM_PR_CHECK = "Rust ecosystem checks";
 
 /** Jobs that must succeed on the latest exact-head PR run before merge. */
 export const REQUIRED_MAIN_PR_JOBS = [
@@ -214,6 +212,90 @@ export type RequiredPrWorkflow = {
   requiredJobs?: readonly string[];
 };
 
+export enum PullRequestFileStatus {
+  Added = "added",
+  Removed = "removed",
+  Modified = "modified",
+  Renamed = "renamed",
+  Copied = "copied",
+  Changed = "changed",
+  Unchanged = "unchanged",
+}
+
+export type PullRequestChangedFile =
+  | {
+      filename: string;
+      previousFilename: string;
+      status: PullRequestFileStatus.Renamed;
+    }
+  | {
+      filename: string;
+      status: Exclude<PullRequestFileStatus, PullRequestFileStatus.Renamed>;
+    };
+
+const PULL_REQUEST_FILES_API_CAP = 3000;
+const RENAMED_PATH_PRODUCT_SENTINEL = "__renamed_path_requires_product_validation__";
+
+function decodePullRequestChangedFile(value: unknown): PullRequestChangedFile {
+  if (!value || typeof value !== "object") {
+    throw new Error("Pull-request file entry must be an object");
+  }
+  const file = value as Record<string, unknown>;
+  if (typeof file.filename !== "string" || file.filename.length === 0) {
+    throw new Error("Pull-request file entry lacks a filename");
+  }
+  switch (file.status) {
+    case PullRequestFileStatus.Renamed:
+      if (
+        typeof file.previous_filename !== "string" ||
+        file.previous_filename.length === 0
+      ) {
+        throw new Error(
+          `Renamed pull-request file lacks source path: ${file.filename}`,
+        );
+      }
+      return {
+        filename: file.filename,
+        previousFilename: file.previous_filename,
+        status: PullRequestFileStatus.Renamed,
+      };
+    case PullRequestFileStatus.Added:
+    case PullRequestFileStatus.Removed:
+    case PullRequestFileStatus.Modified:
+    case PullRequestFileStatus.Copied:
+    case PullRequestFileStatus.Changed:
+    case PullRequestFileStatus.Unchanged:
+      return { filename: file.filename, status: file.status };
+    default:
+      throw new Error(
+        `Unsupported pull-request file status for ${file.filename}: ${String(file.status)}`,
+      );
+  }
+}
+
+export function changedPathsForPullRequestFiles(
+  files: readonly unknown[],
+  authoritativeChangedFiles: number,
+): string[] {
+  if (
+    !Number.isSafeInteger(authoritativeChangedFiles) ||
+    authoritativeChangedFiles <= 0 ||
+    files.length !== authoritativeChangedFiles ||
+    files.length >= PULL_REQUEST_FILES_API_CAP
+  ) {
+    throw new Error(
+      `Pull-request file inventory is incomplete: expected ${authoritativeChangedFiles}, received ${files.length}`,
+    );
+  }
+  return files.flatMap((value) => {
+    const file = decodePullRequestChangedFile(value);
+    if (file.status !== PullRequestFileStatus.Renamed) {
+      return [file.filename];
+    }
+    return [file.filename, RENAMED_PATH_PRODUCT_SENTINEL];
+  });
+}
+
 const MAIN_PR_WORKFLOW: RequiredPrWorkflow = {
   checkName: MAIN_PR_CHECK,
   workflowFile: "pr.yml",
@@ -221,46 +303,10 @@ const MAIN_PR_WORKFLOW: RequiredPrWorkflow = {
   requiredJobs: REQUIRED_MAIN_PR_JOBS,
 };
 
-const WEB_RESEARCH_PR_WORKFLOW: RequiredPrWorkflow = {
-  checkName: WEB_RESEARCH_PR_CHECK,
-  workflowFile: "web-research.yml",
-  workflowName: "Web research",
-};
-
-const RUST_ECOSYSTEM_PR_WORKFLOW: RequiredPrWorkflow = {
-  checkName: RUST_ECOSYSTEM_PR_CHECK,
-  workflowFile: "rust-ecosystem.yml",
-  workflowName: "Rust ecosystem checks",
-};
-
-function isRustEcosystemPath(path: string): boolean {
-  return (
-    path === ".github/workflows/rust-ecosystem.yml" ||
-    path === ".github/workflows/rust-ecosystem-checks.yml" ||
-    path === "deny.toml" ||
-    path === "nook-app/nook-platform/Cargo.lock" ||
-    path === "nook-app/nook-platform/.insta.yaml" ||
-    path.startsWith("nook-app/nook-platform/.cargo/") ||
-    path.startsWith("nook-app/nook-platform/fuzz/") ||
-    path.startsWith("preflight/") ||
-    path.startsWith("agentic-ai/minds/") ||
-    (path.startsWith("nook-app/") &&
-      (path.endsWith(".rs") || path.endsWith("/Cargo.toml")))
-  );
-}
-
 export function requiredPrWorkflows(paths: string[]): RequiredPrWorkflow[] {
   const required: RequiredPrWorkflow[] = [];
 
-  if (paths.some(isWebResearchPath)) {
-    required.push(WEB_RESEARCH_PR_WORKFLOW);
-  }
-  // Product PRs run ecosystem jobs inside pr.yml. Only minds-only PRs still
-  // require the thin rust-ecosystem.yml entry point.
-  if (paths.some(isRustEcosystemPath) && paths.every(isMainPrIgnoredPath)) {
-    required.push(RUST_ECOSYSTEM_PR_WORKFLOW);
-  }
-  if (paths.some((path) => !isMainPrIgnoredPath(path))) {
+  if (paths.some((path) => !isCanonicalAiOnlyPath(path))) {
     required.push(MAIN_PR_WORKFLOW);
   }
 
@@ -688,20 +734,8 @@ function isNotFound(err: unknown): boolean {
   );
 }
 
-function isWebResearchPath(path: string): boolean {
-  return (
-    path === ".github/workflows/web-research.yml" ||
-    path.startsWith("nook-app/nook-web/nook-web-research/")
-  );
-}
-
-function isMainPrIgnoredPath(path: string): boolean {
-  return (
-    path.startsWith(".cortex/") ||
-    path.startsWith(".cursor/") ||
-    path.startsWith("agentic-ai/") ||
-    isWebResearchPath(path)
-  );
+function isCanonicalAiOnlyPath(path: string): boolean {
+  return path.startsWith(".cortex/") && path.endsWith(".md");
 }
 
 export function isRepositoryStatusComment(

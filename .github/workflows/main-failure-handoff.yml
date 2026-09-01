@@ -19,14 +19,76 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  product-scope:
+    name: Classify source product validation
+    if: >-
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      required: ${{ steps.classify.outputs.result || steps.fail-closed.outputs.result }}
+    steps:
+      - name: Default to product validation
+        id: fail-closed
+        run: echo "result=true" >> "$GITHUB_OUTPUT"
+
+      - name: Inspect source product sentinel
+        id: classify
+        continue-on-error: true
+        uses: actions/github-script@v9
+        with:
+          result-encoding: string
+          script: |
+            if (context.payload.workflow_run.conclusion !== 'success') {
+              return 'true'
+            }
+            if (context.payload.workflow_run.run_attempt > 1) {
+              return 'true'
+            }
+            try {
+              const jobs = await github.paginate(
+                github.rest.actions.listJobsForWorkflowRun,
+                {
+                  ...context.repo,
+                  run_id: context.payload.workflow_run.id,
+                  filter: 'all',
+                  per_page: 100,
+                },
+              )
+              const sentinels = jobs.filter(
+                (candidate) => candidate.name === 'Native Rust verification',
+              )
+              if (
+                sentinels.length === 0 ||
+                sentinels.some((sentinel) => sentinel.status !== 'completed')
+              ) {
+                core.warning('Source product sentinel is absent or incomplete')
+                return 'true'
+              }
+              return String(
+                sentinels.some((sentinel) => sentinel.conclusion !== 'skipped'),
+              )
+            } catch (error) {
+              core.warning(`Failed to inspect source product sentinel: ${error}`)
+              return 'true'
+            }
+
   record:
     name: Queue failed Main revision
     if: >-
+      always() &&
+      needs.product-scope.result == 'success' &&
+      needs.product-scope.outputs.required == 'true' &&
       contains(fromJSON('["action_required","failure","startup_failure","timed_out","success"]'),
         github.event.workflow_run.conclusion) &&
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'main' &&
       github.event.workflow_run.repository.full_name == github.repository
+    needs: product-scope
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     steps:
       - name: Checkout trusted handoff implementation

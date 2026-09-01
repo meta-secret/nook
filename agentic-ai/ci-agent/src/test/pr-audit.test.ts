@@ -486,6 +486,7 @@ function createMockOctokit(options: MockOptions): Octokit {
           sha: headSha,
         },
         html_url: "https://github.com/meta-secret/nook/pull/410",
+        changed_files: 1,
         created_at: "2026-08-08T00:00:00Z",
         mergeable: true,
         number: 410,
@@ -493,7 +494,12 @@ function createMockOctokit(options: MockOptions): Octokit {
       },
     }),
     listFiles: async () => ({
-      data: [{ filename: "nook-app/nook-platform/nook-core/src/lib.rs" }],
+      data: [
+        {
+          filename: "nook-app/nook-platform/nook-core/src/lib.rs",
+          status: "modified",
+        },
+      ],
     }),
     listReviewComments: async () => ({
       data:

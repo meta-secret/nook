@@ -108,11 +108,10 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "Thin rust-ecosystem.yml must not start a second Main-push run"
     );
     for marker in [
-        "- \"!agentic-ai/**\"",
-        "- \"agentic-ai/minds/**\"",
         "product-paths:",
-        "git diff --name-only \"$BEFORE_SHA\" \"$AFTER_SHA\"",
-        "if: needs.product-paths.outputs.changed == 'true'",
+        "git diff --no-renames --name-only",
+        ".cortex/*.md)",
+        "if: needs.product-paths.outputs.product-required == 'true'",
     ] {
         assert!(
             main.contains(marker),
@@ -505,8 +504,47 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
             "{relative} must deny unwrap in tests"
         );
     }
-    assert!(readiness.contains("workflowFile: \"rust-ecosystem.yml\""));
-    assert!(readiness.contains("paths.every(isMainPrIgnoredPath)"));
+    assert!(readiness.contains("workflowFile: \"pr.yml\""));
+    assert!(readiness.contains("!isCanonicalAiOnlyPath(path)"));
+    Ok(())
+}
+
+#[test]
+fn product_workflows_skip_only_cortex_markdown_changes() -> anyhow::Result<()> {
+    let pr = read(".github/workflows/pr.yml")?;
+    let main = read(".github/workflows/main.yml")?;
+    let readiness = read("agentic-ai/ci-agent/src/main/github.ts")?;
+
+    assert!(!pr.contains("paths-ignore:"));
+    assert!(pr.contains("path.startsWith('.cortex/') && path.endsWith('.md')"));
+    assert!(pr.contains("files.length !== expectedChangedFiles"));
+    assert!(pr.contains("files.length >= 3000"));
+    assert!(pr.contains("!supportedStatuses.has(file.status)"));
+    assert!(pr.contains("files.some((file) => file.status === 'renamed')"));
+    assert!(pr.contains("return 'true'"));
+    assert_eq!(
+        pr.matches("product-validation-required == 'true'").count(),
+        11,
+        "every expensive PR job must be gated by product classification"
+    );
+    assert!(pr.matches("needs: validation-request").count() >= 2);
+    assert!(pr.matches("needs: [validation-request,").count() >= 8);
+
+    assert!(!main.contains("paths-ignore:"));
+    assert!(main.contains("permissions:\n      actions: read\n      contents: read"));
+    assert!(main.contains("persist-credentials: false"));
+    assert!(main.contains("git diff --no-renames --name-only"));
+    assert!(main.contains(".cortex/*.md)"));
+    assert!(!main.contains("agentic-ai/minds/*)"));
+    assert!(main.contains("candidate.name !== 'Main'"));
+    assert!(main.contains("job.name === 'Native Rust verification'"));
+    assert!(main.contains("sentinel.conclusion === 'success'"));
+
+    assert!(readiness.contains("path.startsWith(\".cortex/\") && path.endsWith(\".md\")"));
+    assert!(readiness.contains("RENAMED_PATH_PRODUCT_SENTINEL"));
+    assert!(!readiness.contains("workflowFile: \"rust-ecosystem.yml\""));
+    assert!(!readiness.contains("workflowFile: \"repository-policy.yml\""));
+    assert!(!readiness.contains("workflowFile: \"web-research.yml\""));
     Ok(())
 }
 
