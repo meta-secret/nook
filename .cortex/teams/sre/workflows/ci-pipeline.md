@@ -96,15 +96,29 @@ See [issues](../../../gizmo/workflows/issues.md),
 
 **`pr.yml`**
 
-- A read-only GitHub-hosted classifier runs before product workers.
-- It skips them only when every changed file is `.cortex/**/*.md` or
-  `.github/workflows/repository-policy.yml` and no file is renamed.
-- It checks the authoritative changed-file count, API cap, and a closed status
-  set. API errors, incomplete or empty inventories, unsupported statuses, and
-  renames fail closed to complete product validation.
-- Readiness requires repository-policy evidence when its workflow changes,
-  without requiring a skipped product run.
-- Every expensive product job depends directly on this classifier.
+- Skips product validation only when every changed path is canonical AI-only.
+  - Agent configuration and instruction paths are `.agents/skills/**`,
+    `.claude/skills/**`, `.codex/**`, `.cortex/**`, and `.cursor/**`.
+  - AI prompts live under `.github/prompts/**`.
+  - AI-only workflow paths are `agent-implement.yml`, `ci-agent-smoke.yml`,
+    and `repository-policy.yml`.
+  - The remaining entries are `.task/agentic-ai.yml`, `AGENTS.md`, `CODEX.md`,
+    and `agentic-ai/**` except `agentic-ai/minds/**`.
+- Minds changes remain product-required so `pr.yml` retains their Rust
+  ecosystem validation until a specialist workflow replaces it atomically.
+- Any path outside that inventory restores complete product validation.
+- A GitHub-hosted classifier paginates the pull-request files API before any
+  product job is admitted.
+- Renames expose both real source and destination paths and always restore
+  product validation.
+- API errors, empty file lists, and 3,000-file cap results fail closed to
+  product validation.
+- Disagreement with the authoritative `changed_files` count also fails closed.
+- Unsupported statuses and renamed files without a source path fail closed.
+- The classifier job declares only `contents: read` and `pull-requests: read`,
+  overriding the workflow's deployment and issue permissions.
+- All-AI PRs retain only the cheap explicit-request classifier contract; every
+  product job depends directly on its output.
 - Rust domain unit tests + coverage, no-opt WASM, web/unit tests, all three web builds.
 - Shared Rust ecosystem gates via `rust-ecosystem-checks.yml`.
 - Those ecosystem jobs run in parallel with native Rust, WASM, and verify.
@@ -142,6 +156,9 @@ See [issues](../../../gizmo/workflows/issues.md),
 - Runs Loom checks when Loom, its Task wrapper, Cortex, or related preflight
   sources change.
 - Runs on Main for policy, Cortex, Loom, and workflow-relevant paths.
+- Covers every canonical AI-only inventory entry on Main.
+- Classifies agent configuration and instruction paths for Loom validation.
+- Other AI paths retain their relevant preflight or runner-placement checks.
 - Verifies Loom formatting, lint, types, tests, authored TypeScript state, and
   Loom API contracts when executable Loom or policy sources require them.
 - Remains separate from Main product orchestration.
@@ -152,18 +169,29 @@ See [issues](../../../gizmo/workflows/issues.md),
   - Adding any product-impacting path restores product PR and Main.
 - Enforces the authored source-file limit.
 - Enforces Rust unit-test colocation.
+- On Main, accumulates changes from the latest successful full-policy sentinel;
+  canceled, failed, and Cortex-only runs do not advance the frontier. Missing or
+  malformed workflow history, job inventory, ancestry, or diffs require full
+  validation.
+- Uses a read-only hosted classifier with rename-aware authoritative PR file
+  inventory and credential-free full-history push checkout. True Cortex
+  Markdown-only policy work keeps the audit on a hosted runner without ARC.
+- CI-agent changes run `npm test` plus a production build automatically.
+  Workflow CJS source and contract changes run all
+  `.github/scripts/*.test.cjs` tests, and readiness requires repository policy.
+- Other AI subdomains retain their focused gates. Loom verification owns
+  `agentic-ai/loom/**`; minds remains on the product validation path.
 
 **`web-research.yml`**
 
-- Every opened, synchronized, or reopened PR reaches a read-only hosted
-  classifier.
-- Research source or destination renames retain the specialist workflow.
-- Incomplete, capped, or unsupported inventories fail closed.
-- Readiness requires Web research evidence alongside product evidence when a
-  changed source or destination path belongs to research.
 - Checks and builds the isolated research package.
 - Deploys path-applicable PR previews and Main updates to Cloudflare Pages.
 - Records the deployment and comments the PR preview URL.
+- Every opened, synchronized, or reopened PR reaches a cheap API-only, read-only
+  path classifier because native path filters lose rename sources. Research
+  source or destination renames run the research jobs.
+- Incomplete, capped, unsupported, or unclassifiable PR file inventories fail
+  closed to research validation.
 
 **`rust-ecosystem.yml`**
 
@@ -178,8 +206,10 @@ See [issues](../../../gizmo/workflows/issues.md),
 
 - Runs from trusted default-branch code.
 - Receives only completed labeled validation runs because PR close is not a `PR` workflow trigger.
-- Inspects the source run's Native Rust sentinel on a read-only hosted runner and
-  reserves ARC only when product validation ran or source state is uncertain.
+- Classifies the source run on a GitHub-hosted runner and does not reserve ARC
+  when the product sentinel was skipped for an all-AI PR.
+- Missing, incomplete, or unclassifiable source-job state fails closed into the
+  normal promotion path.
 - Verifies the successful source run and required jobs.
 - Validates native/WASM artifact shapes, attaches provenance.
 - Publishes exact-input handoffs that later PRs may trust.
@@ -187,7 +217,9 @@ See [issues](../../../gizmo/workflows/issues.md),
 **`linear-ui-demo.yml`**
 
 - Runs from the trusted default branch.
-- Uses the same source-sentinel admission before reserving its trusted publisher.
+- Classifies completed PR runs on a GitHub-hosted runner and reserves the
+  trusted publisher only when product validation ran; uncertain state fails
+  closed into the publisher.
 - Claims the current `pr-<number>-<head-sha>` concurrency group on close to cancel in-flight validation.
 - Downloads the PR demo artifact.
 - Publishes its 10 largest WebMs to Linear.
@@ -201,9 +233,10 @@ See [issues](../../../gizmo/workflows/issues.md),
   persisting credentials.
 - It diffs with `--no-renames` from the latest successful Main run whose Native
   Rust sentinel succeeded.
-- Only an accumulated `.cortex/**/*.md`-only range skips product and ecosystem
-  jobs. Missing or uncertain history, job inventory, commits, ancestry, or diffs
-  fails closed; successful lightweight runs do not advance the product frontier.
+- Only an accumulated `.cortex/**/*.md` and repository-policy workflow range
+  skips product and ecosystem jobs. Missing or uncertain history, job inventory,
+  commits, ancestry, or diffs fail closed; successful lightweight runs do not
+  advance the product frontier.
 - Owns merged-head ecosystem cache seeding, statistics, and failure handoff.
 - Native Rust, WASM, and browser-free web verification use the configured ARC scale set.
 - Each lane serially exports its already-solved local BuildKit graph after validation.
@@ -216,14 +249,18 @@ See [issues](../../../gizmo/workflows/issues.md),
 
 **`main-build-stats.yml`**
 
-- Inspects the completed Main run's Native Rust sentinel before reserving ARC.
+- Classifies the completed Main source run on a read-only GitHub-hosted runner.
+- Skips the trusted Workbench publisher for successful all-AI runs; failed or
+  uncertain source state retains the normal publisher path.
 - Collects run/job/step timing and conclusions.
 - Commits one `stats/main-build/**` record directly to Nook Workbench.
 
 **`main-failure-handoff.yml`**
 
-- Uses the same sentinel admission, while retaining successful reruns that must
-  retire incidents created by earlier failed attempts.
+- Uses the same source-run classifier, suppressing a successful all-AI run but
+  retaining failed or uncertain Main state.
+- A successful rerun remains admitted so it can retire the incident created by
+  its earlier failed attempt, even when its product sentinel is skipped.
 - Creates or refreshes one ready automated Workbench incident per failed Main revision.
 - Uses run metadata and failed job names only.
 - Includes browser E2E and UI-demo failures.

@@ -292,15 +292,18 @@ async function auditWorkflows(
   const { owner, repo } = request.repoRef;
   return Promise.all(
     request.workflows.map(async (workflow) => {
-      const { data } = await request.octokit.rest.actions.listWorkflowRuns({
-        owner,
-        repo,
-        workflow_id: workflow.workflowFile,
-        event: "pull_request",
-        head_sha: request.headSha,
-        per_page: 20,
-      });
-      const runs = data.workflow_runs
+      const indexedRuns = await request.octokit.paginate(
+        request.octokit.rest.actions.listWorkflowRuns,
+        {
+          owner,
+          repo,
+          workflow_id: workflow.workflowFile,
+          event: "pull_request",
+          head_sha: request.headSha,
+          per_page: 100,
+        },
+      );
+      const runs = indexedRuns
         .filter(
           (candidate) =>
             candidate.head_sha === request.headSha &&
@@ -315,7 +318,24 @@ async function auditWorkflows(
           (left, right) =>
             Date.parse(right.created_at) - Date.parse(left.created_at),
         );
-      const run = runs[0];
+      let run;
+      let requiredJobAudits: RequiredJobAudit[] = [];
+      for (const candidate of runs) {
+        const audits = await auditRequiredJobs(
+          request.octokit,
+          { owner, repo },
+          candidate.id,
+          workflow.requiredJobs ?? [],
+        );
+        if (
+          workflow.workflowFile !== "repository-policy.yml" ||
+          audits.every((job) => job.conclusion !== "skipped")
+        ) {
+          run = candidate;
+          requiredJobAudits = audits;
+          break;
+        }
+      }
       if (!run) {
         return { ...workflow, state: WorkflowAuditState.NotIndexed };
       }
@@ -331,12 +351,6 @@ async function auditWorkflows(
           : typeof run.status === "string"
             ? { state: WorkflowRunStatusState.Other, value: run.status }
             : { state: WorkflowRunStatusState.Unavailable };
-      const requiredJobAudits = await auditRequiredJobs(
-        request.octokit,
-        { owner, repo },
-        run.id,
-        workflow.requiredJobs ?? [],
-      );
       return {
         ...workflow,
         state: WorkflowAuditState.Indexed,

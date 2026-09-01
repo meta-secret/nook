@@ -2,109 +2,275 @@ name: Repository policy
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, edited]
   push:
     branches: [main]
     paths:
       - .agents/skills/**
       - .cortex/**/dynamic-skills/*/scripts/**
       - .claude/skills/**
-      - .codex/hooks.json
+      - .codex/**
       - .cortex/**
-      - .cursor/rules.md
-      - .cursor/skills/**
+      - .cursor/**
       - .github/formatting/**
       - .github/prompts/**
       - .github/scripts/format-host-apply.sh
       - .github/scripts/format-host-apply.test.sh
       - .github/scripts/arc-manifest-contract.ts
+      - .github/scripts/*.cjs
       - .github/workflows/**
       - .task/agentic-ai.yml
       - AGENTS.md
       - CODEX.md
       - README.md
-      - agentic-ai/loom/**
+      - agentic-ai/**
       - preflight/**
 
 permissions:
   contents: read
 
 concurrency:
-  group: repository-policy-${{ github.event.pull_request.number || github.ref }}
+  group: repository-policy-${{ github.event.pull_request.number || github.ref }}-${{ github.event.action == 'edited' && github.run_id || 'validation' }}
   cancel-in-progress: true
 
 jobs:
+  policy-paths:
+    name: Classify repository policy paths
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    outputs:
+      policy_required: ${{ steps.pr-paths.outputs.policy_required || steps.fail-closed.outputs.policy_required }}
+      cortex_markdown_only: ${{ steps.pr-paths.outputs.cortex_markdown_only || steps.push-paths.outputs.cortex_markdown_only || steps.fail-closed.outputs.cortex_markdown_only }}
+      loom: ${{ steps.pr-paths.outputs.loom || steps.push-paths.outputs.loom || steps.fail-closed.outputs.loom }}
+      runner_placement: ${{ steps.pr-paths.outputs.runner_placement || steps.push-paths.outputs.runner_placement || steps.fail-closed.outputs.runner_placement }}
+      ci_agent: ${{ steps.pr-paths.outputs.ci_agent || steps.push-paths.outputs.ci_agent || steps.fail-closed.outputs.ci_agent }}
+      workflow_scripts: ${{ steps.pr-paths.outputs.workflow_scripts || steps.push-paths.outputs.workflow_scripts || steps.fail-closed.outputs.workflow_scripts }}
+    steps:
+      - name: Default to complete policy validation
+        id: fail-closed
+        run: |
+          echo "policy_required=true" >> "$GITHUB_OUTPUT"
+          echo "cortex_markdown_only=false" >> "$GITHUB_OUTPUT"
+          echo "loom=true" >> "$GITHUB_OUTPUT"
+          echo "runner_placement=true" >> "$GITHUB_OUTPUT"
+          echo "ci_agent=true" >> "$GITHUB_OUTPUT"
+          echo "workflow_scripts=true" >> "$GITHUB_OUTPUT"
+
+      - name: Classify pull-request policy paths
+        id: pr-paths
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const baseRetargeted =
+              context.payload.action !== 'edited' ||
+              typeof context.payload.changes?.base?.ref?.from === 'string'
+            core.setOutput('policy_required', String(baseRetargeted))
+            if (!baseRetargeted) return
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              ...context.repo,
+              pull_number: context.issue.number,
+              per_page: 100,
+            })
+            const expected = Number(context.payload.pull_request.changed_files)
+            const PullRequestFileStatus = Object.freeze({
+              Added: 'added', Removed: 'removed', Modified: 'modified',
+              Renamed: 'renamed', Copied: 'copied', Changed: 'changed',
+              Unchanged: 'unchanged',
+            })
+            const statuses = new Set(Object.values(PullRequestFileStatus))
+            if (
+              !Number.isSafeInteger(expected) || expected <= 0 ||
+              files.length !== expected || files.length >= 3000 ||
+              files.some((file) =>
+                typeof file.filename !== 'string' || !file.filename ||
+                !statuses.has(file.status) ||
+                (file.status === PullRequestFileStatus.Renamed &&
+                  !file.previous_filename),
+              )
+            ) throw new Error('Pull-request policy inventory is incomplete')
+            const paths = files.flatMap((file) =>
+              file.status === PullRequestFileStatus.Renamed
+                ? [file.previous_filename, file.filename]
+                : [file.filename],
+            )
+            const matches = (path, patterns) => patterns.some((pattern) =>
+              pattern.endsWith('/') ? path.startsWith(pattern) : path === pattern,
+            )
+            const loomPatterns = [
+              '.agents/skills/', '.claude/skills/', '.codex/', '.cortex/',
+              '.cursor/', '.github/formatting/', '.github/prompts/',
+              '.github/scripts/format-host-apply.sh',
+              '.github/scripts/format-host-apply.test.sh',
+              '.github/workflows/repository-policy.yml', '.task/agentic-ai.yml',
+              'AGENTS.md', 'CODEX.md', 'README.md', 'agentic-ai/loom/', 'preflight/',
+            ]
+            const setOutput = (name, value) => core.setOutput(name, String(value))
+            setOutput('cortex_markdown_only', paths.every((path) =>
+              path.startsWith('.cortex/') && path.endsWith('.md'),
+            ))
+            setOutput('loom', paths.some((path) =>
+              matches(path, loomPatterns) ||
+              (/^\.cortex\/.*\/dynamic-skills\/[^/]+\/scripts\//).test(path),
+            ))
+            setOutput('runner_placement', paths.some((path) =>
+              path === '.github/scripts/arc-manifest-contract.ts' ||
+              path.startsWith('.github/workflows/'),
+            ))
+            setOutput('ci_agent', paths.some((path) =>
+              path.startsWith('agentic-ai/ci-agent/'),
+            ))
+            setOutput('workflow_scripts', paths.some((path) =>
+              (path.startsWith('.github/scripts/') && path.endsWith('.cjs')) ||
+              [
+                '.github/workflows/main.yml',
+                '.github/workflows/pr-obsolete-validation.yml',
+                '.github/workflows/web-research.yml',
+                '.github/workflows/repository-policy.yml',
+              ].includes(path),
+            ))
+
+      - name: Resolve latest validated full-policy frontier
+        id: frontier
+        if: github.event_name == 'push'
+        continue-on-error: true
+        uses: actions/github-script@v9
+        with:
+          result-encoding: string
+          script: |
+            const repository = `${context.repo.owner}/${context.repo.repo}`
+            const JobInventoryState = Object.freeze({
+              Complete: 'complete', MissingExpectedCount: 'missing-expected-count',
+              InvalidExpectedCount: 'invalid-expected-count',
+              CountMismatch: 'count-mismatch', PageBound: 'page-bound',
+            })
+            const getJobs = async (runId) => {
+              const jobs = []
+              let expectedCount = 0
+              for (let page = 1; page <= 10; page += 1) {
+                const response = await github.rest.actions.listJobsForWorkflowRun({
+                  ...context.repo, run_id: runId, filter: 'latest', per_page: 100, page,
+                })
+                const rawExpectedCount = response.data.total_count
+                if (typeof rawExpectedCount !== 'number') {
+                  return { state: JobInventoryState.MissingExpectedCount }
+                }
+                if (!Number.isSafeInteger(rawExpectedCount) || rawExpectedCount <= 0) {
+                  return { state: JobInventoryState.InvalidExpectedCount }
+                }
+                if (expectedCount !== 0 && rawExpectedCount !== expectedCount) {
+                  return { state: JobInventoryState.CountMismatch }
+                }
+                expectedCount = rawExpectedCount
+                jobs.push(...response.data.jobs)
+                if (response.data.jobs.length < 100) break
+                if (page === 10) return { state: JobInventoryState.PageBound }
+              }
+              return jobs.length === expectedCount
+                ? { jobs, state: JobInventoryState.Complete }
+                : { state: JobInventoryState.CountMismatch }
+            }
+            const workflow = (await github.rest.actions.getWorkflow({
+              ...context.repo, workflow_id: 'repository-policy.yml',
+            })).data
+            if (
+              !Number.isSafeInteger(workflow.id) || workflow.name !== 'Repository policy' ||
+              workflow.path !== '.github/workflows/repository-policy.yml' ||
+              workflow.state !== 'active'
+            ) return ''
+            for (let page = 1; page <= 10; page += 1) {
+              const response = await github.rest.actions.listWorkflowRunsForWorkflow({
+                ...context.repo, workflow_id: workflow.id, branch: 'main',
+                event: 'push', status: 'success', per_page: 100, page,
+              })
+              for (const run of response.data.workflow_runs) {
+                if (
+                  run.workflow_id !== workflow.id || run.name !== 'Repository policy' ||
+                  run.path !== '.github/workflows/repository-policy.yml' ||
+                  run.event !== 'push' || run.status !== 'completed' ||
+                  run.conclusion !== 'success' || run.head_branch !== 'main' ||
+                  run.head_repository?.full_name !== repository ||
+                  !/^[0-9a-f]{40}$/.test(run.head_sha)
+                ) return ''
+                const inventory = await getJobs(run.id)
+                if (inventory.state !== JobInventoryState.Complete) {
+                  core.warning(`Rejected repository-policy job inventory: ${inventory.state}`)
+                  return ''
+                }
+                const jobs = inventory.jobs
+                const policyJobs = jobs.filter((job) => job.name === 'Enforce repository policy')
+                if (policyJobs.length !== 1 || !Array.isArray(policyJobs[0].steps)) return ''
+                const sentinels = policyJobs[0].steps.filter(
+                  (step) => step.name === 'Full repository policy validation sentinel',
+                )
+                if (sentinels.length !== 1 || sentinels[0].status !== 'completed') return ''
+                if (sentinels[0].conclusion === 'success') return run.head_sha
+                if (sentinels[0].conclusion !== 'skipped') return ''
+              }
+              if (response.data.workflow_runs.length < 100) return ''
+            }
+            return ''
+
+      - name: Checkout complete push history
+        id: checkout
+        if: github.event_name == 'push'
+        continue-on-error: true
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Classify accumulated push policy paths
+        id: push-paths
+        if: github.event_name == 'push' && steps.frontier.outcome == 'success' && steps.frontier.outputs.result != '' && steps.checkout.outcome == 'success'
+        continue-on-error: true
+        env:
+          FRONTIER_SHA: ${{ steps.frontier.outputs.result }}
+          AFTER_SHA: ${{ github.sha }}
+        run: |
+          [[ "$FRONTIER_SHA" =~ ^[0-9a-f]{40}$ ]]
+          git cat-file -e "$FRONTIER_SHA^{commit}"
+          git merge-base --is-ancestor "$FRONTIER_SHA" "$AFTER_SHA"
+          changed_files="$(git diff --no-renames --name-only "$FRONTIER_SHA" "$AFTER_SHA")"
+          [ -n "$changed_files" ]
+          cortex_markdown_only=true
+          loom=false
+          runner_placement=false
+          ci_agent=false
+          workflow_scripts=false
+          while IFS= read -r path; do
+            case "$path" in .cortex/*.md) ;; *) cortex_markdown_only=false ;; esac
+            case "$path" in
+              .agents/skills/* | .claude/skills/* | .codex/* | .cortex/* | .cursor/* | .github/formatting/* | .github/prompts/* | .github/scripts/format-host-apply.sh | .github/scripts/format-host-apply.test.sh | .github/workflows/repository-policy.yml | .task/agentic-ai.yml | AGENTS.md | CODEX.md | README.md | agentic-ai/loom/* | .cortex/*/dynamic-skills/*/scripts/* | preflight/*) loom=true ;;
+            esac
+            case "$path" in .github/scripts/arc-manifest-contract.ts | .github/workflows/*) runner_placement=true ;; esac
+            case "$path" in agentic-ai/ci-agent/*) ci_agent=true ;; esac
+            case "$path" in
+              .github/scripts/*.cjs | .github/workflows/main.yml | .github/workflows/pr-obsolete-validation.yml | .github/workflows/web-research.yml | .github/workflows/repository-policy.yml) workflow_scripts=true ;;
+            esac
+          done <<< "$changed_files"
+          echo "cortex_markdown_only=$cortex_markdown_only" >> "$GITHUB_OUTPUT"
+          echo "loom=$loom" >> "$GITHUB_OUTPUT"
+          echo "runner_placement=$runner_placement" >> "$GITHUB_OUTPUT"
+          echo "ci_agent=$ci_agent" >> "$GITHUB_OUTPUT"
+          echo "workflow_scripts=$workflow_scripts" >> "$GITHUB_OUTPUT"
+
   verify:
     name: Enforce repository policy
-    runs-on: ${{ (github.event_name == 'push' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
+    needs: policy-paths
+    if: needs.policy-paths.outputs.policy_required == 'true'
+    runs-on: ${{ needs.policy-paths.outputs.cortex_markdown_only != 'true' && (github.event_name == 'push' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
     timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
-
-      - name: Fetch pull-request registry baseline
-        if: github.event_name == 'pull_request'
-        env:
-          BASELINE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: git fetch --no-tags --depth=1 origin "$BASELINE_SHA"
-
-      - name: Fetch pre-push registry baseline
-        if: github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000'
-        env:
-          BASELINE_SHA: ${{ github.event.before }}
-        run: git fetch --no-tags --depth=1 origin "$BASELINE_SHA"
-
-      - name: Classify policy paths
-        id: policy-paths
-        env:
-          AFTER_SHA: ${{ github.sha }}
-          BEFORE_SHA: ${{ github.event.before }}
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          if [ "$EVENT_NAME" = "push" ]; then
-            if [[ "$BEFORE_SHA" =~ ^0+$ ]]; then
-              changed_files="$(git diff-tree --no-commit-id --name-only -r "$AFTER_SHA")"
-            else
-              changed_files="$(git diff --no-renames --name-only "$BEFORE_SHA" "$AFTER_SHA")"
-            fi
-          else
-            changed_files="$(git diff --no-renames --name-only HEAD^1 HEAD^2)"
-          fi
-
-          changed=false
-          cortex_markdown_only=true
-          loom_changed=false
-          runner_placement_changed=false
-          while IFS= read -r changed_file; do
-            case "$changed_file" in
-              "")
-                continue
-                ;;
-            esac
-            changed=true
-            case "$changed_file" in
-              .cortex/*.md) ;;
-              *) cortex_markdown_only=false ;;
-            esac
-            case "$changed_file" in
-              .agents/skills/* | .claude/skills/* | .codex/hooks.json | .cortex/* | .cursor/rules.md | .cursor/skills/* | .github/formatting/* | .github/prompts/* | .github/scripts/format-host-apply.sh | .github/scripts/format-host-apply.test.sh | .github/workflows/repository-policy.yml | .task/agentic-ai.yml | AGENTS.md | CODEX.md | README.md | agentic-ai/loom/* | .cortex/*/dynamic-skills/*/scripts/* | preflight/*)
-                loom_changed=true
-                ;;
-            esac
-            case "$changed_file" in
-              .github/scripts/arc-manifest-contract.ts | .github/workflows/*)
-                runner_placement_changed=true
-                ;;
-            esac
-          done <<< "$changed_files"
-          if [ "$changed" != "true" ]; then
-            cortex_markdown_only=false
-          fi
-          echo "cortex_markdown_only=$cortex_markdown_only" >> "$GITHUB_OUTPUT"
-          echo "loom=$loom_changed" >> "$GITHUB_OUTPUT"
-          echo "runner_placement=$runner_placement_changed" >> "$GITHUB_OUTPUT"
+          persist-credentials: false
 
       - name: Install Task
         uses: go-task/setup-task@v2
@@ -112,14 +278,14 @@ jobs:
           version: 3.52.0
 
       - name: Install Rust for repository policy
-        if: steps.policy-paths.outputs.cortex_markdown_only != 'true'
+        if: needs.policy-paths.outputs.cortex_markdown_only != 'true'
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
 
       - name: Restore hosted preflight Rust dependencies
         if: >-
-          steps.policy-paths.outputs.cortex_markdown_only != 'true' &&
+          needs.policy-paths.outputs.cortex_markdown_only != 'true' &&
           github.event_name == 'pull_request' &&
           (github.event.pull_request.head.repo.full_name != github.repository ||
           github.event.pull_request.user.login == 'dependabot[bot]')
@@ -129,12 +295,12 @@ jobs:
           workspaces: preflight -> target
 
       - name: Enforce shared source formatter contract
-        if: steps.policy-paths.outputs.cortex_markdown_only != 'true'
+        if: needs.policy-paths.outputs.cortex_markdown_only != 'true'
         run: task preflight:format-contract
 
       - name: Connect private ARC BuildKit
         if: >-
-          steps.policy-paths.outputs.cortex_markdown_only != 'true' &&
+          needs.policy-paths.outputs.cortex_markdown_only != 'true' &&
           (github.event_name == 'push' ||
           (github.event_name == 'pull_request' &&
           github.event.pull_request.head.repo.full_name == github.repository &&
@@ -150,7 +316,7 @@ jobs:
 
       - name: Enforce source architecture on hosted runners
         if: >-
-          steps.policy-paths.outputs.cortex_markdown_only != 'true' &&
+          needs.policy-paths.outputs.cortex_markdown_only != 'true' &&
           github.event_name == 'pull_request' &&
           (github.event.pull_request.head.repo.full_name != github.repository ||
           github.event.pull_request.user.login == 'dependabot[bot]')
@@ -158,7 +324,7 @@ jobs:
 
       - name: Enforce repository invariants through cached BuildKit
         if: >-
-          steps.policy-paths.outputs.cortex_markdown_only != 'true' &&
+          needs.policy-paths.outputs.cortex_markdown_only != 'true' &&
           (github.event_name == 'push' ||
           (github.event_name == 'pull_request' &&
           github.event.pull_request.head.repo.full_name == github.repository &&
@@ -166,35 +332,36 @@ jobs:
         run: task preflight:test
 
       - name: Install Bun
-        if: steps.policy-paths.outputs.loom == 'true' || steps.policy-paths.outputs.runner_placement == 'true'
+        if: needs.policy-paths.outputs.loom == 'true' || needs.policy-paths.outputs.runner_placement == 'true'
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
 
       - name: Install Ruby for the legacy Hive values renderer
-        if: steps.policy-paths.outputs.runner_placement == 'true'
+        if: needs.policy-paths.outputs.runner_placement == 'true'
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.4'
 
       - name: Enforce Actions runner placement inventory
-        if: steps.policy-paths.outputs.runner_placement == 'true'
+        if: needs.policy-paths.outputs.runner_placement == 'true'
         run: bun .github/scripts/arc-manifest-contract.ts
 
       - name: Verify Loom package quality
         if: >-
-          steps.policy-paths.outputs.loom == 'true' &&
-          steps.policy-paths.outputs.cortex_markdown_only != 'true'
+          needs.policy-paths.outputs.loom == 'true' &&
+          needs.policy-paths.outputs.cortex_markdown_only != 'true'
         run: task loom:verify
 
       - name: Audit Cortex document structure
-        if: steps.policy-paths.outputs.loom == 'true'
+        if: needs.policy-paths.outputs.loom == 'true'
         run: task loom:cortex-audit
 
       - name: Enforce authored TypeScript state invariants
         if: >-
-          steps.policy-paths.outputs.loom == 'true' &&
-          steps.policy-paths.outputs.cortex_markdown_only != 'true' &&
+          (needs.policy-paths.outputs.loom == 'true' ||
+          needs.policy-paths.outputs.ci_agent == 'true') &&
+          needs.policy-paths.outputs.cortex_markdown_only != 'true' &&
           github.event_name == 'pull_request' &&
           (github.event.pull_request.head.repo.full_name != github.repository ||
           github.event.pull_request.user.login == 'dependabot[bot]')
@@ -202,9 +369,30 @@ jobs:
 
       - name: Enforce Loom single-parameter contract
         if: >-
-          steps.policy-paths.outputs.loom == 'true' &&
-          steps.policy-paths.outputs.cortex_markdown_only != 'true' &&
+          needs.policy-paths.outputs.loom == 'true' &&
+          needs.policy-paths.outputs.cortex_markdown_only != 'true' &&
           github.event_name == 'pull_request' &&
           (github.event.pull_request.head.repo.full_name != github.repository ||
           github.event.pull_request.user.login == 'dependabot[bot]')
         run: task preflight:loom-contracts
+
+      - name: Install Node for targeted policy tests
+        if: needs.policy-paths.outputs.ci_agent == 'true' || needs.policy-paths.outputs.workflow_scripts == 'true'
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Test and build CI agent
+        if: needs.policy-paths.outputs.ci_agent == 'true'
+        run: |
+          npm ci --prefix agentic-ai/ci-agent
+          npm test --prefix agentic-ai/ci-agent
+          npm run build --prefix agentic-ai/ci-agent
+
+      - name: Test repository workflow scripts
+        if: needs.policy-paths.outputs.workflow_scripts == 'true'
+        run: node --test .github/scripts/*.test.cjs
+
+      - name: Full repository policy validation sentinel
+        if: needs.policy-paths.outputs.cortex_markdown_only != 'true'
+        run: true

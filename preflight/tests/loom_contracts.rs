@@ -229,15 +229,23 @@ fn loom_workflow_audits_every_cortex_change() {
     assert!(
         workflow.contains("      - .agents/skills/**")
             && workflow.contains(".agents/skills/* |")
+            && workflow.contains("      - .codex/**")
+            && workflow.contains(".codex/* |")
             && workflow.contains("      - .cortex/**/dynamic-skills/*/scripts/**")
-            && workflow.contains(".cortex/*/dynamic-skills/*/scripts/* |"),
-        "repository policy must trigger for prohibited mirrors and canonical applications"
+            && workflow.contains(".cortex/*/dynamic-skills/*/scripts/* |")
+            && workflow.contains("      - .cursor/**")
+            && workflow.contains(".cursor/* |")
+            && workflow.contains("      - agentic-ai/**")
+            && workflow.contains("agentic-ai/loom/* |"),
+        "repository policy must trigger for canonical AI paths and classify Loom-owned inputs"
     );
     assert!(
-        workflow.contains("echo \"loom=$loom_changed\" >> \"$GITHUB_OUTPUT\"")
-            && workflow.contains("git diff --no-renames --name-only HEAD^1 HEAD^2")
+        workflow.contains("setOutput('loom', paths.some")
             && workflow
-                .matches("steps.policy-paths.outputs.loom == 'true'")
+                .contains("git diff --no-renames --name-only \"$FRONTIER_SHA\" \"$AFTER_SHA\"",)
+            && workflow.contains("file.status === PullRequestFileStatus.Renamed")
+            && workflow
+                .matches("needs.policy-paths.outputs.loom == 'true'")
                 .count()
                 == 5,
         "repository policy must classify rename sources and condition every Loom-only step"
@@ -245,9 +253,8 @@ fn loom_workflow_audits_every_cortex_change() {
     assert!(
         workflow.contains(".cortex/*.md) ;;")
             && workflow.contains("*) cortex_markdown_only=false ;;")
-            && workflow.contains(
-                "if [ \"$changed\" != \"true\" ]; then\n            cortex_markdown_only=false"
-            )
+            && workflow.contains("expected <= 0")
+            && workflow.contains("[ -n \"$changed_files\" ]")
             && workflow.contains(
                 "echo \"cortex_markdown_only=$cortex_markdown_only\" >> \"$GITHUB_OUTPUT\"",
             ),
@@ -267,14 +274,14 @@ fn loom_workflow_audits_every_cortex_change() {
     assert!(
         format_step.contains("run: task preflight:format-contract")
             && format_step
-                .contains("if: steps.policy-paths.outputs.cortex_markdown_only != 'true'",)
+                .contains("if: needs.policy-paths.outputs.cortex_markdown_only != 'true'",)
             && !format_step.contains("install"),
         "repository policy must skip the detached formatter only for Cortex Markdown"
     );
 
     let cortex_audit_step = workflow_step(&workflow, "Audit Cortex document structure");
     assert!(
-        cortex_audit_step.contains("if: steps.policy-paths.outputs.loom == 'true'")
+        cortex_audit_step.contains("if: needs.policy-paths.outputs.loom == 'true'")
             && cortex_audit_step.contains("run: task loom:cortex-audit")
             && !cortex_audit_step.contains("cortex_markdown_only"),
         "Loom must audit Cortex Markdown even when detached formatter work is skipped"
@@ -293,10 +300,27 @@ fn loom_workflow_audits_every_cortex_change() {
         let hosted_preflight_step = workflow_step(&workflow, step_name);
         assert!(
             hosted_preflight_step
-                .contains("steps.policy-paths.outputs.cortex_markdown_only != 'true'")
+                .contains("needs.policy-paths.outputs.cortex_markdown_only != 'true'")
                 && hosted_preflight_step.contains("github.event_name == 'pull_request'")
                 && hosted_preflight_step.contains(task),
             "hosted `{step_name}` must skip Cargo-backed preflight for Cortex Markdown only"
+        );
+        if step_name == "Enforce authored TypeScript state invariants" {
+            assert!(
+                hosted_preflight_step.contains("needs.policy-paths.outputs.ci_agent == 'true'"),
+                "fork CI-agent changes must retain hosted authored-state enforcement"
+            );
+        }
+    }
+    for command in [
+        "npm ci --prefix agentic-ai/ci-agent",
+        "npm test --prefix agentic-ai/ci-agent",
+        "npm run build --prefix agentic-ai/ci-agent",
+        "node --test .github/scripts/*.test.cjs",
+    ] {
+        assert!(
+            workflow.contains(command),
+            "repository policy must automatically run targeted behavior command `{command}`"
         );
     }
 }

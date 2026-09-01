@@ -497,16 +497,27 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
 }
 
 #[test]
-fn product_workflows_skip_only_repository_policy_and_cortex_markdown_changes() -> anyhow::Result<()>
+fn product_pr_skips_only_policy_owned_ai_paths_while_main_stays_conservative() -> anyhow::Result<()>
 {
     let pr = read(".github/workflows/pr.yml")?;
     let main = read(".github/workflows/main.yml")?;
     let research = read(".github/workflows/web-research.yml")?;
+    let repository_policy = read(".github/workflows/repository-policy.yml")?;
     let readiness = read("agentic-ai/ci-agent/src/main/github.ts")?;
     let arc_contract = read(".github/scripts/arc-manifest-contract.ts")?;
 
     assert!(!pr.contains("paths-ignore:"));
-    assert!(pr.contains("path.startsWith('.cortex/') && path.endsWith('.md')"));
+    for marker in [
+        "path.startsWith('.agents/skills/')",
+        "path.startsWith('.codex/')",
+        "path.startsWith('.cortex/')",
+        "path.startsWith('.cursor/')",
+        "path.startsWith('.github/prompts/')",
+        "path.startsWith('agentic-ai/')",
+        "!path.startsWith('agentic-ai/minds/')",
+    ] {
+        assert!(pr.contains(marker), "PR AI inventory missing {marker}");
+    }
     assert!(pr.contains("path === '.github/workflows/repository-policy.yml'"));
     assert!(pr.contains("files.length !== expectedChangedFiles"));
     assert!(pr.contains("files.length >= 3000"));
@@ -524,12 +535,14 @@ fn product_workflows_skip_only_repository_policy_and_cortex_markdown_changes() -
     ] {
         assert!(
             pr.contains(&format!("{variant}: '{value}'"))
+                && repository_policy.contains(&format!("{variant}: '{value}'"))
                 && research.contains(&format!("{variant}: '{value}'"))
                 && readiness.contains(&format!("{variant} = \"{value}\"")),
             "PR, research, and typed pull-request status enums must agree for {variant}"
         );
     }
     assert!(pr.contains("new Set(Object.values(PullRequestFileStatus))"));
+    assert!(repository_policy.contains("new Set(Object.values(PullRequestFileStatus))"));
     assert!(research.contains("new Set(Object.values(PullRequestFileStatus))"));
     assert!(readiness.contains("PullRequestPathInventoryState"));
     assert!(readiness.contains("PullRequestPathInventoryIssue.ApiCap"));
@@ -591,7 +604,8 @@ fn product_workflows_skip_only_repository_policy_and_cortex_markdown_changes() -
         assert_eq!(product_required(&paths, renamed), expected);
     }
 
-    assert!(readiness.contains("path.startsWith(\".cortex/\") && path.endsWith(\".md\")"));
+    assert!(readiness.contains("path.startsWith(\".codex/\")"));
+    assert!(readiness.contains("!path.startsWith(\"agentic-ai/minds/\")"));
     assert!(readiness.contains("PullRequestPathInventoryState.Renamed"));
     assert!(readiness.contains("file.previousFilename"));
     assert!(!readiness.contains("workflowFile: \"rust-ecosystem.yml\""));

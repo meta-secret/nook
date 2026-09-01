@@ -78,30 +78,44 @@ task loom:pr-land CONFIG=path/to/gizmo-owned/pr-land-validate.yaml
   3. Gizmo integrates, runs pre-push, and pushes; and
   4. Gizmo validates when ready or runs relevant focused proof.
 - Ordinary pushes do not refresh complete PR checks.
-- Product PR and Main workflows skip expensive jobs only when every changed path
-  is `.cortex/**/*.md` or `.github/workflows/repository-policy.yml`.
-  - PR classification runs first on a read-only GitHub-hosted runner.
-  - It checks the authoritative file count, API cap, and closed status set.
-  - API errors, incomplete inventories, unsupported statuses, and every rename
-    fail closed to complete product validation.
-  - Every expensive PR job depends directly on the classifier output.
-  - Main runs a credential-free, read-only hosted classifier and diffs with
-    `--no-renames` from the latest successful Main run whose Native Rust sentinel
-    succeeded. Missing or uncertain workflow history, jobs, commits, ancestry,
-    or diffs require complete product and ecosystem validation.
-  - Successful Cortex-Markdown-only Main runs do not advance that validated
-    product frontier.
-  - Trusted PR handoff, Linear demo, Main statistics, and Main failure consumers
-    inspect the source run's Native Rust sentinel before reserving ARC.
-- Any non-Markdown Cortex file, other workflow or agent implementation file,
-  product path, product-impacting mixed change set, or rename retains complete
-  product validation.
-- Web research uses a separate read-only source-aware classifier.
-  - Research source and destination renames retain specialist evidence.
-  - Readiness requires that evidence alongside product validation.
-- Labeled minds changes run the ecosystem suite only through `pr.yml`.
+- Product PR validation skips only complete canonical AI-only change sets.
+  - The explicit inventory includes agent configuration, prompts, instructions,
+    AI workflows, and `agentic-ai/**` except `agentic-ai/minds/**`.
+  - Minds remains product-required until its specialist workflow owns an atomic
+    replacement; no intermediate merge can lose Rust ecosystem validation.
+  - PR and CI-agent readiness use the same policy-owned inventory.
+  - Repository policy covers every inventory entry on Main.
+  - Rename classification reports both real paths and always restores product
+    validation; it never injects a synthetic path into readiness evidence.
+  - One path outside the inventory restores product validation.
+  - The PR classifier paginates the complete file list.
+  - API failures, empty results, the API cap, and `changed_files` mismatches
+    restore product validation.
+  - Unsupported statuses and missing rename sources also restore product
+    validation.
+  - AI-only PRs retain the cheap explicit-request check on a GitHub-hosted
+    runner. Every product job depends directly on its classifier output.
+  - Trusted handoff and Linear demo consumers classify the completed source run
+    on GitHub-hosted runners and reserve ARC only when its product sentinel ran.
+  - Main retains the conservative Cortex-Markdown and repository-policy
+    exemption. Its hosted classifier uses the latest successful Native Rust
+    sentinel as the validated frontier and fails closed on uncertainty.
+  - The Main classifier checkout sets `persist-credentials: false`; hosted
+    classifier security contracts reject credential persistence.
+  - Main statistics and failure consumers reserve ARC only for product runs or
+    uncertain/failed source state.
+  - Every GitHub-hosted classifier declares explicit read-only job permissions
+    and remains credential-free.
+  - Web research has no native PR path filter. Its API-only hosted classifier
+    expands rename sources and destinations and gates every research worker;
+    incomplete or unsupported inventories fail closed to research validation.
 - Markdown-only Cortex changes use the repository-policy workflow.
   - The workflow runs `task loom:cortex-audit`.
+  - Main pushes classify from the latest successful run whose full-policy
+    sentinel succeeded. Canceled, failed, and lightweight Cortex-only runs do
+    not advance that frontier; missing history or inventory fails closed.
+  - The classifier is GitHub-hosted, read-only, source-aware for PR renames, and
+    checks out push history without persisting credentials.
   - It skips Rust setup, BuildKit connection, preflight, and full Loom package
     verification.
   - A change limited to `repository-policy.yml` and Cortex Markdown skips the
@@ -109,6 +123,9 @@ task loom:pr-land CONFIG=path/to/gizmo-owned/pr-land-validate.yaml
   - Any non-Markdown Cortex file keeps the complete repository-policy path.
   - Any mixed change keeps the complete repository-policy path.
   - Any product-impacting mixed change keeps the product PR and Main workflows.
+  - CI-agent changes automatically run its full npm tests and build. Workflow
+    CJS sources and contracts automatically run `.github/scripts/*.test.cjs`;
+    readiness requires this policy check instead of manual smoke evidence.
 
 ## Scope
 

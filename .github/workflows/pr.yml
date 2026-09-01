@@ -4,14 +4,14 @@
 # otherwise run only their dedicated headless demo specs and retain the resulting videos on the
 # PR workflow run. Main also runs the full local-provider and extension suites. Live-provider
 # sync checks remain available through the manually dispatched e2e-pr.yml workflow.
-# Cortex Markdown-only changes do not need the product pipeline. Any changed path
-# outside that narrow inventory, including every rename, restores complete product validation. Agent
+# Canonical AI-only changes do not need the product pipeline. Any changed path
+# outside the explicit AI inventory restores complete product validation. Agent
 # statistics live in meta-secret/nook-workbench.
 # Validation is requested explicitly by adding a label. Ordinary pushes do not
 # spend hosted workers. A later push invalidates the prior head's checks, so the
 # label must be toggled again before merge. The trusted Linear close workflow
 # claims the same exact-head concurrency group to cancel in-flight validation on PR close.
-# Schedule and manual ecosystem entry points stay in rust-ecosystem.yml.
+# Schedule, manual, and minds-only PR ecosystem entry points stay in rust-ecosystem.yml.
 
 name: PR
 
@@ -65,8 +65,20 @@ jobs:
           result-encoding: string
           script: |
             const isCanonicalAiOnlyPath = (path) =>
-              (path.startsWith('.cortex/') && path.endsWith('.md')) ||
-              path === '.github/workflows/repository-policy.yml'
+              path.startsWith('.agents/skills/') ||
+              path.startsWith('.claude/skills/') ||
+              path.startsWith('.codex/') ||
+              path.startsWith('.cortex/') ||
+              path.startsWith('.cursor/') ||
+              path.startsWith('.github/prompts/') ||
+              path === '.github/workflows/agent-implement.yml' ||
+              path === '.github/workflows/ci-agent-smoke.yml' ||
+              path === '.github/workflows/repository-policy.yml' ||
+              path === '.task/agentic-ai.yml' ||
+              path === 'AGENTS.md' ||
+              path === 'CODEX.md' ||
+              (path.startsWith('agentic-ai/') &&
+                !path.startsWith('agentic-ai/minds/'))
 
             let files
             try {
@@ -96,12 +108,8 @@ jobs:
             }
 
             const PullRequestFileStatus = Object.freeze({
-              Added: 'added',
-              Removed: 'removed',
-              Modified: 'modified',
-              Renamed: 'renamed',
-              Copied: 'copied',
-              Changed: 'changed',
+              Added: 'added', Removed: 'removed', Modified: 'modified',
+              Renamed: 'renamed', Copied: 'copied', Changed: 'changed',
               Unchanged: 'unchanged',
             })
             const supportedStatuses = new Set(Object.values(PullRequestFileStatus))
@@ -127,14 +135,13 @@ jobs:
               core.warning('Renamed pull-request file lacks previous_filename')
               return 'true'
             }
+            if (files.some((file) => file.status === PullRequestFileStatus.Renamed)) return 'true'
 
-            if (
-              files.some(
-                (file) => file.status === PullRequestFileStatus.Renamed,
-              )
-            ) return 'true'
-
-            const changedPaths = files.map((file) => file.filename)
+            const changedPaths = files.flatMap((file) =>
+              file.status === PullRequestFileStatus.Renamed
+                ? [file.previous_filename, file.filename]
+                : [file.filename],
+            )
             return String(
               changedPaths.length === 0 ||
                 changedPaths.some((path) => !isCanonicalAiOnlyPath(path)),
