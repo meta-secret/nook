@@ -169,6 +169,8 @@ declared or frozen subagent task contract.
 
 - The envelope carries the current pull-request identity as the exact
   `#<number>`, `pending`, or `none`.
+- The envelope carries the worker's canonical team separately from
+  `agent: "Team Agent/<visible-task-name>"`.
 - Gizmo supplies the envelope through the active harness before the worker's
   first user-visible activity.
 - When Gizmo creates the pull request, it refreshes the envelope before the
@@ -744,6 +746,9 @@ Before integration, verify:
 
 - every worker used its declared exact baseline;
 - every team worker used its declared team identity;
+- every real worker activity used the canonical
+  `Team Agent/<visible-task-name>` agent identity supplied by the active
+  harness;
 - every worker's activity-context envelope carried the current pull-request
   identity before its first user-visible activity;
 - every pull-request creation or stacked-pull-request transition refreshed the
