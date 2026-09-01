@@ -11,7 +11,7 @@ Every other gate runs on GitHub Actions.
 
 ## Problem Pattern
 
-Gizmo pushes a coherent integrated change, then burns a full remote cycle on:
+Gizmo pushes a coherent delivery-head change, then burns a full remote cycle on:
 
 - Prettier / rustfmt failures because format never wrote the host tree
 - Missing `nook-web-app/e2e/demos/*.demo.spec.ts` updates after UI path changes

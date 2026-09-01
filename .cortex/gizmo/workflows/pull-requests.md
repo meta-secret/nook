@@ -282,7 +282,7 @@ flowchart TD
   Z[0 Fetch origin/main] --> A[1 Branch + prepare PR]
   A --> I[2 Delegate team implementation]
   I --> CMT[3 Team returns committed handoff]
-  CMT --> E[4 Gizmo integrate + pre-push + push/update PR]
+  CMT --> E[4 Gizmo pre-push + push/update PR]
   E --> D{Validation-ready?}
   D -->|no| X[Required relevant focused remote evidence]
   D -->|yes| V[Explicit loom/pr validate]
