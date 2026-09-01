@@ -121,15 +121,17 @@ Plain-text description.
 - Use `pr: "none"` when the assigned work intentionally has no pull request.
 - Recheck the identifier after pull-request creation or a stacked-PR
   transition.
-- Identify the active team and agent in separate fields.
+- Identify functional ownership and actual execution in separate fields.
   - Use team labels such as `GIZMO`, `AI`, `DEV-CORE`, `SECURITY`, `SRE`, or
     `WEB-DEV`.
-  - Use a short stable agent label such as `Prime`, `Cortex`, `Rust`, `Review`,
-    `CI`, or `UI`.
-  - Use the team name for both fields when the task has no narrower agent
-    identity.
-  - Change the fields when work passes to another team or agent.
-  - Never imply an identity or authority that the acting agent does not hold.
+  - Use `agent: "root"` when the root agent performs the activity.
+  - Use a spawned subagent's visible task identity only when that real subagent
+    performs the activity.
+  - Do not use a team role, capability, or persona as the agent identity.
+  - Change the fields when work passes to another functional owner or actual
+    executor.
+  - Never imply a subagent execution, identity, or authority that did not
+    exist.
 - Use a short action type that makes the purpose immediately visible.
   - `FEATURE` covers new product functionality.
   - `BUILD` covers implementation of already selected functionality.
