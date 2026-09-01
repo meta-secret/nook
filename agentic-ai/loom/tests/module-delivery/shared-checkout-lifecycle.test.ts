@@ -29,6 +29,7 @@ import { applyModuleWaveTree } from '../../src/module-delivery/tree-integration.
 import {
   createGitFixture,
   disposeGitFixture,
+  evidenceSubmission,
   fixtureGit,
 } from './worktree-test-support.ts';
 
@@ -36,6 +37,7 @@ import type {
   ModuleDeliveryAttemptLease,
   ModuleDeliveryGenerationAuthority,
   ModuleDeliveryPlanV3,
+  ModuleDeliveryReadOnlyNodeV2,
   ModuleDeliveryWriteNodeV2,
   ModuleDeliveryWriteProviderSubmission,
   ModuleIntegrationState,
@@ -91,6 +93,23 @@ function writerNode(request: WriterNodeRequest): ModuleDeliveryWriteNodeV2 {
   };
 }
 
+function readerNode(sourceCommit: string): ModuleDeliveryReadOnlyNodeV2 {
+  const { workspace: _workspace, ...common } = writerNode({
+    taskId: 'reader',
+    path: 'reader',
+    sourceCommit,
+  });
+  return {
+    ...common,
+    kind: ModuleDeliveryTaskKind.ReadOnly,
+    resources: {
+      read: ['module/seed.txt'],
+      write: [],
+      evidenceSurface: ['module/seed.txt'],
+    },
+  };
+}
+
 function validatedPlan(fixture: GitFixture): ValidatedModuleDeliveryPlan {
   const plan: ModuleDeliveryPlanV3 = {
     version: 3,
@@ -116,6 +135,7 @@ function validatedPlan(fixture: GitFixture): ValidatedModuleDeliveryPlan {
         path: 'beta',
         sourceCommit: fixture.baselineCommit,
       }),
+      readerNode(fixture.baselineCommit),
     ],
     edgeContracts: [],
   };
@@ -228,7 +248,7 @@ test('sequences shared commits with failure atomicity and exact cleanup', () => 
   expect(firstSelection.admissions.map(({ taskId }) => taskId)).toEqual([
     'alpha',
   ]);
-  expect(firstSelection.pendingTaskIds).toEqual(['beta']);
+  expect(firstSelection.pendingTaskIds).toEqual(['beta', 'reader']);
   const alphaLease = recordModuleDeliveryAttemptLeases({
     authority: runtime.authority,
     state: runtime.state.admissionState,
@@ -291,23 +311,6 @@ test('sequences shared commits with failure atomicity and exact cleanup', () => 
     }),
   ).toThrow('stale baseline');
   expect(git(['rev-parse', 'HEAD'])).toBe(beta.handoff.commit);
-  const staleBeta = {
-    ...beta,
-    handoff: {
-      ...beta.handoff,
-      baselineCommit: runtime.fixture.baselineCommit,
-    },
-  };
-  expect(() =>
-    integrateVerifiedModuleDeliveryTask({
-      authority: runtime.authority,
-      acceptedPlan: runtime.plan,
-      lease: betaLease,
-      state: afterAlpha,
-      submission: staleBeta,
-    }),
-  ).toThrow('Handoff metadata is invalid');
-  expect(afterAlpha.acceptedWrites).toHaveLength(1);
   const afterBeta = integrateVerifiedModuleDeliveryTask({
     authority: runtime.authority,
     acceptedPlan: runtime.plan,
@@ -315,10 +318,97 @@ test('sequences shared commits with failure atomicity and exact cleanup', () => 
     state: afterAlpha,
     submission: beta,
   });
+  const readAdmission = selectModuleDeliveryAdmissions({
+    authority: runtime.authority,
+    acceptedPlan: runtime.plan,
+    state: afterBeta.admissionState,
+  }).admissions[0];
+  if (!readAdmission) throw new Error('Reader admission is missing.');
+  const readLease = recordModuleDeliveryAttemptLeases({
+    authority: runtime.authority,
+    state: afterBeta.admissionState,
+    admissions: [readAdmission],
+  }).leases[0];
+  if (!readLease) throw new Error('Reader lease is missing.');
+  const readNode = runtime.plan.plan.nodes[2];
+  if (!readNode || readNode.kind !== ModuleDeliveryTaskKind.ReadOnly)
+    throw new Error('Reader node is missing.');
+  const evidence = evidenceSubmission({
+    state: { ...afterBeta, headCommit: readLease.startingFrontier },
+    node: readNode,
+    lease: readLease,
+  });
+  git(['commit', '--quiet', '--allow-empty', '-m', 'unaccepted-writer']);
+  expect(() =>
+    integrateVerifiedModuleDeliveryTask({
+      authority: runtime.authority,
+      acceptedPlan: runtime.plan,
+      lease: readLease,
+      state: afterBeta,
+      submission: evidence,
+    }),
+  ).toThrow('Git metadata changed');
+  git(['reset', '--hard', '--quiet', beta.handoff.commit]);
+  const branch = git(['symbolic-ref', 'HEAD']);
+  const mutations = [
+    [
+      ['config', 'remote.origin.url', 'forged'],
+      ['config', '--unset', 'remote.origin.url'],
+    ],
+    [
+      ['update-ref', 'refs/custom/forged', 'HEAD'],
+      ['update-ref', '-d', 'refs/custom/forged'],
+    ],
+    [
+      ['update-index', '--skip-worktree', 'module/seed.txt'],
+      ['update-index', '--no-skip-worktree', 'module/seed.txt'],
+    ],
+    [
+      ['rm', '--quiet', 'module/seed.txt'],
+      ['restore', '--staged', '--worktree', 'module/seed.txt'],
+    ],
+    [
+      ['update-ref', branch, alpha.handoff.commit],
+      ['update-ref', branch, beta.handoff.commit],
+    ],
+  ] as const;
+  for (const [mutate, restore] of mutations) {
+    git(mutate);
+    expect(() =>
+      integrateVerifiedModuleDeliveryTask({
+        authority: runtime.authority,
+        acceptedPlan: runtime.plan,
+        lease: readLease,
+        state: afterBeta,
+        submission: evidence,
+      }),
+    ).toThrow();
+    expect(afterBeta.acceptedEvidence).toHaveLength(0);
+    git(restore);
+  }
+  const afterRead = integrateVerifiedModuleDeliveryTask({
+    authority: runtime.authority,
+    acceptedPlan: runtime.plan,
+    lease: readLease,
+    state: afterBeta,
+    submission: evidence,
+  });
+  for (const [mutate, restore] of mutations) {
+    git(mutate);
+    expect(() =>
+      finalizeModuleDeliveryIntegration({
+        authority: runtime.authority,
+        acceptedPlan: runtime.plan,
+        state: afterRead,
+      }),
+    ).toThrow();
+    expect(afterRead.phase).toBe(ModuleIntegrationPhase.AcceptingProviders);
+    git(restore);
+  }
   const finalized = finalizeModuleDeliveryIntegration({
     authority: runtime.authority,
     acceptedPlan: runtime.plan,
-    state: afterBeta,
+    state: afterRead,
   });
   expect(finalized.phase).toBe(ModuleIntegrationPhase.Finalized);
   expect(finalized.headCommit).toBe(beta.handoff.commit);

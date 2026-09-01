@@ -237,7 +237,6 @@ export type SourceRepositorySnapshot = {
 export type ModuleIntegrationSession = {
   readonly cleanupHandle: ModuleIntegrationCleanupHandle;
   readonly workspace: ModuleWorktreeHandle;
-  readonly integrationRef: string;
   currentHead: string;
   cleaned: boolean;
 };
@@ -262,7 +261,6 @@ export type SourceSnapshotExpectation = {
 export type IntegrationSessionRegistration = {
   readonly cleanupHandle: ModuleIntegrationCleanupHandle;
   readonly workspace: ModuleWorktreeHandle;
-  readonly integrationRef: string;
   readonly currentHead: string;
 };
 
@@ -315,11 +313,7 @@ type RelevantRefsDigestRequest = Readonly<{
   repositoryRoot: string;
   allowedBranchRef?: string;
 }>;
-export type ModuleIntegrationRefRequest = Readonly<{
-  workspace: ModuleWorktreeHandle;
-  planDigest: string;
-}>;
-export type UpdateModuleIntegrationRefRequest = Readonly<{
+export type UpdateModuleIntegrationHeadRequest = Readonly<{
   provenance: ModuleIntegrationProvenance;
   nextCommit: string;
   rollback: boolean;
@@ -684,6 +678,23 @@ export function assertSharedCheckoutAdvance(
     current.hooksDigest !== expectation.expected.hooksDigest
   )
     throw new Error('Shared checkout Git metadata changed during dispatch.');
+  const root = expectation.repositoryRoot;
+  const indexFlags = gitBytes({ cwd: root, args: ['ls-files', '-v', '-z'] });
+  if (
+    gitText(runModuleDeliveryGit({ cwd: root, args: ['write-tree'] })) !==
+      gitText(
+        runModuleDeliveryGit({
+          cwd: root,
+          args: ['rev-parse', `${expectation.expectedHead}^{tree}`],
+        }),
+      ) ||
+    gitBytes({
+      cwd: root,
+      args: ['status', '--porcelain=v2', '--untracked-files=all', '-z'],
+    }).length !== 0 ||
+    nullSeparatedPaths(indexFlags).some((entry) => !entry.startsWith('H '))
+  )
+    throw new Error('Shared checkout index is not canonical for HEAD.');
 }
 
 export function createIntegrationSession(
@@ -692,7 +703,6 @@ export function createIntegrationSession(
   const session: ModuleIntegrationSession = {
     cleanupHandle: registration.cleanupHandle,
     workspace: registration.workspace,
-    integrationRef: registration.integrationRef,
     currentHead: registration.currentHead,
     cleaned: false,
   };
@@ -773,14 +783,8 @@ export function immutableModuleIntegrationState(
   return Object.freeze(value);
 }
 
-export function moduleIntegrationRef(
-  request: ModuleIntegrationRefRequest,
-): string {
-  return `refs/nook/module-delivery/${request.planDigest}/${request.workspace.worktreeId}`;
-}
-
-export function updateModuleIntegrationRef(
-  request: UpdateModuleIntegrationRefRequest,
+export function updateModuleIntegrationHead(
+  request: UpdateModuleIntegrationHeadRequest,
 ): void {
   if (request.rollback)
     request.provenance.session.currentHead = request.provenance.headCommit;

@@ -27,7 +27,7 @@ import {
   recordIntegratedLeaseAcceptance,
   registerIntegrationState,
   retireIntegrationState,
-  updateModuleIntegrationRef,
+  updateModuleIntegrationHead,
 } from './integration-provenance.ts';
 import { applyModuleWaveTree } from './tree-integration.ts';
 import {
@@ -101,7 +101,6 @@ import type {
   ModuleDeliveryAuthorityPlanRequest,
   ModuleDeliveryAuthorityRepositoryInspection,
   CurrentModuleIntegrationAdmissionInspection,
-  ModuleIntegrationRefRequest,
   ModuleIntegrationHandoffRepositoryInspection,
   ModuleIntegrationLeaseFrontierInspection,
   ModuleIntegrationProviderPrecedenceInspection,
@@ -109,7 +108,7 @@ import type {
   AcceptedPlanStateInspection,
   ModuleIntegrationNodeLookup,
   RecordIntegratedLeaseAcceptanceRequest,
-  UpdateModuleIntegrationRefRequest,
+  UpdateModuleIntegrationHeadRequest,
 } from './integration-provenance.ts';
 import type {
   ApplyModuleWaveTreeRequest,
@@ -354,7 +353,7 @@ function applyAndValidateWave(application: ValidatedWaveApplication): string {
     handoffs,
   };
   const headCommit = applyModuleWaveTree(applyRequest);
-  updateModuleIntegrationRef({
+  updateModuleIntegrationHead({
     provenance: application.provenance,
     nextCommit: headCommit,
     rollback: false,
@@ -510,7 +509,6 @@ export function prepareModuleIntegration(
     const sessionRegistration: IntegrationSessionRegistration = {
       cleanupHandle,
       workspace: immutable.workspace,
-      integrationRef: '',
       currentHead: immutable.headCommit,
     };
     const session = createIntegrationSession(sessionRegistration);
@@ -709,6 +707,11 @@ export function integrateVerifiedModuleDeliveryTask(
       throw new Error('Shared-branch handoff acceptance failed.');
     }
   }
+  assertSharedCheckoutAdvance({
+    repositoryRoot: request.state.workspace.sourceRepositoryRoot,
+    expected: provenance.sourceSnapshot,
+    expectedHead: request.state.headCommit,
+  });
   const authorizedProviderEvidence = request.state.acceptedEvidence.filter(
     (evidence) =>
       lease.authorizedProviderEvidence.some(
@@ -814,6 +817,11 @@ export function finalizeModuleDeliveryIntegration(
   if (!allAccepted) {
     throw new Error('Final module join requires every accepted task result.');
   }
+  assertSharedCheckoutAdvance({
+    repositoryRoot: request.state.workspace.sourceRepositoryRoot,
+    expected: provenance.sourceSnapshot,
+    expectedHead: request.state.headCommit,
+  });
   const handoffs: TreeHandoff[] = request.acceptedPlan.topologicalOrder.flatMap(
     (taskId) =>
       request.state.acceptedWrites
@@ -881,12 +889,12 @@ export function finalizeModuleDeliveryIntegration(
     provenance,
     writerFrontiers: capabilities,
   };
-  const refUpdate: UpdateModuleIntegrationRefRequest = {
+  const refUpdate: UpdateModuleIntegrationHeadRequest = {
     provenance,
     nextCommit: canonicalHead,
     rollback: false,
   };
-  updateModuleIntegrationRef(refUpdate);
+  updateModuleIntegrationHead(refUpdate);
   try {
     const commitRequest: CommitFinalModuleDeliveryAdmissionStateRequest = {
       authority: request.authority,
@@ -903,12 +911,12 @@ export function finalizeModuleDeliveryIntegration(
         previousState: request.state.admissionState,
       };
     rollbackFinalModuleDeliveryAdmissionState(admissionRollback);
-    const refRollback: UpdateModuleIntegrationRefRequest = {
+    const refRollback: UpdateModuleIntegrationHeadRequest = {
       provenance,
       nextCommit: canonicalHead,
       rollback: true,
     };
-    updateModuleIntegrationRef(refRollback);
+    updateModuleIntegrationHead(refRollback);
     throw new Error('Final module join failed and was fully rolled back.');
   }
 }

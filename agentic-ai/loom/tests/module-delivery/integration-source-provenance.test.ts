@@ -251,7 +251,13 @@ describe('module delivery source provenance', () => {
     );
   });
 
-  test.each(['config', 'hook', 'ref'] as const)(
+  test.each([
+    'config',
+    'hook',
+    'ref',
+    'skip-worktree',
+    'assume-unchanged',
+  ] as const)(
     'rejects %s mutation through production handoff acceptance',
     (mutation) => {
       const prepared = preparedWrite();
@@ -263,7 +269,14 @@ describe('module delivery source provenance', () => {
           join(prepared.fixture.sourceRoot, '.git/hooks/pre-commit'),
           '#!/bin/sh\nexit 0\n',
         );
-      else git(['update-ref', 'refs/custom/forged', 'HEAD']);
+      else if (mutation === 'ref')
+        git(['update-ref', 'refs/custom/forged', 'HEAD']);
+      else
+        git([
+          'update-index',
+          `--${mutation}`,
+          'nook-app/nook-platform/nook-core/src/feature.rs',
+        ]);
 
       expect(() =>
         integrateVerifiedModuleDeliveryTask({
@@ -273,7 +286,11 @@ describe('module delivery source provenance', () => {
           state: prepared.state,
           submission: prepared.submission,
         }),
-      ).toThrow('Git metadata changed during dispatch');
+      ).toThrow(
+        mutation === 'skip-worktree' || mutation === 'assume-unchanged'
+          ? 'index is not canonical'
+          : 'Git metadata changed during dispatch',
+      );
     },
   );
 
