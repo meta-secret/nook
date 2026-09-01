@@ -1,4 +1,5 @@
 import { restoreModuleDeliveryCanonicalEvidenceReceipt } from './admission.ts';
+import { registerModuleDeliveryWriterFrontiers } from './integration-writer-frontiers.ts';
 import {
   assertFreshModuleIntegrationState,
   assertModuleIntegrationLeaseFrontier,
@@ -57,6 +58,10 @@ export function restoreModuleDeliveryIntegrationEvidence(
     sourceSnapshot: provenance.sourceSnapshot,
     workspaceSnapshot: provenance.workspaceSnapshot,
     session: provenance.session,
+  });
+  registerModuleDeliveryWriterFrontiers({
+    state: immutable,
+    writerFrontiers: immutable.admissionState.integratedWriterFrontiers,
   });
   retireIntegrationState(request.state);
   return immutable;

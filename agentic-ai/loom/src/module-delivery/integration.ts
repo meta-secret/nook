@@ -29,6 +29,10 @@ import {
   updateModuleIntegrationRef,
 } from './integration-provenance.ts';
 import { applyModuleWaveTree } from './tree-integration.ts';
+import {
+  moduleDeliveryWriterFrontiers,
+  registerModuleDeliveryWriterFrontiers,
+} from './integration-writer-frontiers.ts';
 import { validatedCanonicalWriterClosure } from './integration-finalization.ts';
 import type { CanonicalModuleFinalizationInspection } from './integration-finalization.ts';
 import {
@@ -199,10 +203,6 @@ const WRITER_FRONTIER_PROVENANCE = new WeakMap<
 const CANONICAL_EVIDENCE_TRANSITIONS = new WeakMap<
   ModuleDeliveryCanonicalEvidenceTransition,
   CanonicalEvidenceTransitionProvenance
->();
-const STATE_WRITER_FRONTIERS = new WeakMap<
-  ModuleIntegrationState,
-  readonly ModuleDeliveryIntegratedWriterFrontierCapability[]
 >();
 function mintIntegratedWriterFrontier(
   request: MintIntegratedWriterFrontierRequest,
@@ -401,7 +401,10 @@ function advancedIntegrationState(
     session: request.provenance.session,
   };
   registerIntegrationState(registration);
-  STATE_WRITER_FRONTIERS.set(immutable, request.writerFrontiers);
+  registerModuleDeliveryWriterFrontiers({
+    state: immutable,
+    writerFrontiers: request.writerFrontiers,
+  });
   retireIntegrationState(request.previousState);
   return immutable;
 }
@@ -457,15 +460,6 @@ function refreshedWriterFrontiers(
       return mintIntegratedWriterFrontier(request);
     }),
   );
-}
-
-function writerFrontiers(
-  state: ModuleIntegrationState,
-): readonly ModuleDeliveryIntegratedWriterFrontierCapability[] {
-  const capabilities =
-    STATE_WRITER_FRONTIERS.get(state) ??
-    state.admissionState.integratedWriterFrontiers;
-  return capabilities;
 }
 
 function updatedIntegrationState([
@@ -577,7 +571,10 @@ export function prepareModuleIntegration(
       session,
     };
     registerIntegrationState(registration);
-    STATE_WRITER_FRONTIERS.set(immutable, Object.freeze([]));
+    registerModuleDeliveryWriterFrontiers({
+      state: immutable,
+      writerFrontiers: Object.freeze([]),
+    });
     return immutable;
   } catch {
     let refDeleted = true;
@@ -811,7 +808,7 @@ export function integrateVerifiedModuleDeliveryTask(
       completedWaveCount: moduleIntegrationCompletedWaveCount(waveCountRequest),
     },
   ]);
-  const capabilities = writerFrontiers(request.state);
+  const capabilities = moduleDeliveryWriterFrontiers(request.state);
   const stateRequest: CreateModuleDeliveryAdmissionStateRequest = {
     authority: request.authority,
     acceptedPlan: request.acceptedPlan,
