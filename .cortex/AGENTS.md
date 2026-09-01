@@ -139,7 +139,7 @@ every user-visible skill-driven action.
 ---
 pr: "#<number>"
 team: "<team>"
-agent: "<executor-type>/<name>"
+agent: "<agent>"
 ...
 ```
 
@@ -153,13 +153,11 @@ HH:mm | <action-type> | <description>
 - Use `pr: "pending"` before that pull request exists.
 - Use `pr: "none"` when the assigned work intentionally has no pull request.
 - Identify the actual Nook executor with the `team` and `agent` pair.
-  - Every `agent` value uses the canonical `<executor-type>/<name>` form.
-  - Use `team: "GIZMO"` and `agent: "Gizmo Prime/Prime"` for Gizmo Prime.
+  - Use `team: "GIZMO"` and `agent: "Prime"` for Gizmo Prime.
   - Gizmo Prime is the existing root delivery agent. Do not report it as
     `root`.
-  - Use a Team Agent's canonical team and
-    `agent: "Team Agent/<visible-task-name>"` only when the active harness
-    really creates that worker. For example, Sagan is `Team Agent/Sagan`.
+  - Use a Team Agent's canonical team and visible task identity only when the
+    active harness really creates that worker.
   - Do not use a capability, persona, or passive feature-slice Gizmo as the
     agent identity.
   - Re-emit the context when execution passes to another real agent.
@@ -173,11 +171,8 @@ HH:mm | <action-type> | <description>
 - Do not repeat unchanged YAML context for consecutive activity updates.
 - A Team Agent or subagent emits its own context before its first relayed
   activity.
-- An actually loaded or applied skill uses the current executor's team and
-  `agent: "Skill/<canonical-skill-name>"` for its skill-driven activity.
-  - Re-emit the direct executor's context when skill execution ends.
-  - `Skill/<canonical-skill-name>` reports real skill execution only. It does
-    not create an agent, worker attempt, team identity, or delegated authority.
+- A skill does not replace the current agent identity.
+  - Name the exact skill in the activity description.
   - Use `SKILL` when loading or applying the skill is the reported action.
 - Start every activity line with the current local time in 24-hour `HH:mm`
   form.
