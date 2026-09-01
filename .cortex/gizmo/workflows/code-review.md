@@ -89,6 +89,10 @@ actions:
 
 - address every actionable PR comment and submitted review finding, including
   feedback created before the current head;
+- retain every substantive submitted review body in inspection output, but
+  block readiness on that persistent body only when it has no inline comments;
+  when inline comments exist, their unresolved-thread state is the
+  deterministic readiness authority;
 - reply on the targeted thread before resolving it;
 - re-query until unresolved review threads are zero;
 - keep polling feedback while repository checks run for the validation head;

@@ -318,6 +318,7 @@ export type PrFeedbackSummary = {
   findingBatches: number;
   substantiveComments: number;
   substantiveReviews: number;
+  unthreadedReviewFindings: number;
   unresolvedThreads: number;
 };
 
@@ -483,6 +484,14 @@ export async function inspectPrFeedback(
       !isNonActionableReviewBody(body)
     );
   });
+  const reviewIdsWithInlineComments = new Set(
+    reviewComments
+      .map((comment) => comment.pull_request_review_id)
+      .filter((reviewId): reviewId is number => typeof reviewId === "number"),
+  );
+  const unthreadedReviewFindings = substantiveReviews.filter(
+    (review) => !reviewIdsWithInlineComments.has(review.id),
+  );
 
   const normalizedReviewComments: ReviewFindingComment[] = reviewComments.map(
     (comment) => {
@@ -528,6 +537,7 @@ export async function inspectPrFeedback(
     findingBatches: countAutomatedFindingBatches(findingBatchRequest),
     substantiveComments: substantiveComments.length,
     substantiveReviews: substantiveReviews.length,
+    unthreadedReviewFindings: unthreadedReviewFindings.length,
     unresolvedThreads,
   };
 }

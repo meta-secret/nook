@@ -190,9 +190,10 @@ test("buildPrAudit blocks a lookalike Codex status review", async () => {
   assert.equal(audit.ready, false);
   assert.equal(audit.feedback.codexReview.currentHeadReview, false);
   assert.equal(audit.feedback.substantiveReviews, 1);
+  assert.equal(audit.feedback.unthreadedReviewFindings, 1);
   assert.ok(
     audit.reasons.some((reason) =>
-      reason.includes("substantive current-head review"),
+      reason.includes("unthreaded submitted review finding"),
     ),
   );
 });
@@ -206,9 +207,10 @@ test("buildPrAudit blocks actionable content in a Codex review body", async () =
 
   assert.equal(audit.ready, false);
   assert.equal(audit.feedback.substantiveReviews, 1);
+  assert.equal(audit.feedback.unthreadedReviewFindings, 1);
   assert.ok(
     audit.reasons.some((reason) =>
-      reason.includes("substantive current-head review"),
+      reason.includes("unthreaded submitted review finding"),
     ),
   );
 });
@@ -222,6 +224,39 @@ test("buildPrAudit blocks content injected into Codex about boilerplate", async 
 
   assert.equal(audit.ready, false);
   assert.equal(audit.feedback.substantiveReviews, 1);
+});
+
+test("buildPrAudit keeps handled submitted reviews visible without blocking", async () => {
+  const audit = await buildPrAudit(
+    mockOctokit({
+      codexReview: MockCodexReview.ReviewFinding,
+      resolvedInlineReviewFinding: true,
+    }),
+    repoRef,
+    410,
+  );
+
+  assert.equal(audit.ready, true);
+  assert.equal(audit.feedback.substantiveReviews, 1);
+  assert.equal(audit.feedback.unthreadedReviewFindings, 0);
+  assert.equal(audit.feedback.unresolvedThreads, 0);
+});
+
+test("buildPrAudit still blocks an unresolved thread from an old review", async () => {
+  const audit = await buildPrAudit(
+    mockOctokit({
+      codexReview: MockCodexReview.ReviewFinding,
+      resolvedInlineReviewFinding: true,
+      unresolvedThreads: 1,
+    }),
+    repoRef,
+    410,
+  );
+
+  assert.equal(audit.ready, false);
+  assert.equal(audit.feedback.substantiveReviews, 1);
+  assert.equal(audit.feedback.unthreadedReviewFindings, 0);
+  assert.equal(audit.feedback.unresolvedThreads, 1);
 });
 
 test("buildPrAudit reports current-head and existing-feedback blockers", async () => {
@@ -346,6 +381,7 @@ type MockOptions = {
   nativeConclusion?: MockJobConclusion;
   omitNativeJob?: boolean;
   runStatus?: MockRunStatus;
+  resolvedInlineReviewFinding?: boolean;
   staleBaseRun?: boolean;
   unresolvedThreads?: number;
 };
@@ -394,7 +430,18 @@ function createMockOctokit(options: MockOptions): Octokit {
     listFiles: async () => ({
       data: [{ filename: "nook-app/nook-platform/nook-core/src/lib.rs" }],
     }),
-    listReviewComments: async () => ({ data: [] }),
+    listReviewComments: async () => ({
+      data:
+        options.resolvedInlineReviewFinding === true
+          ? [
+              {
+                in_reply_to_id: null,
+                pull_request_review_id: 90,
+                user: { login: "chatgpt-codex-connector[bot]" },
+              },
+            ]
+          : [],
+    }),
     listReviews: async () => {
       const skipCodexReview =
         options.codexReview === MockCodexReview.Missing ||
@@ -406,6 +453,7 @@ function createMockOctokit(options: MockOptions): Octokit {
       const reviews: Array<{
         body: string;
         commit_id: string;
+        id: number;
         state: string;
         user: { login: string };
       }> = skipCodexReview
@@ -419,6 +467,7 @@ function createMockOctokit(options: MockOptions): Octokit {
                     ? `### 💡 Codex Review\n\nHere are some automated review suggestions for this pull request.\n\n**Reviewed commit:** \`${headSha.slice(0, 10)}\`\n\n<details> <summary>ℹ️ About Codex in GitHub</summary>\nInjected finding\n</details>`
                     : `### 💡 Codex Review\n\nHere are some automated review suggestions for this pull request.\n\n**Reviewed commit:** \`${headSha.slice(0, 10)}\``,
               commit_id: headSha,
+              id: 90,
               state:
                 options.codexReview === MockCodexReview.Dismissed
                   ? "DISMISSED"
@@ -435,6 +484,7 @@ function createMockOctokit(options: MockOptions): Octokit {
         reviews.push({
           body: "The fallback path drops the exact-head marker.",
           commit_id: headSha,
+          id: 91,
           state: "COMMENTED",
           user: { login: "cursor[bot]" },
         });
@@ -442,6 +492,7 @@ function createMockOctokit(options: MockOptions): Octokit {
         reviews.push({
           body: "<details>\n<summary>Stale comment</summary>\n\n<blockquote>\n\n\n\n</blockquote>\n\n</details>",
           commit_id: headSha,
+          id: 92,
           state: "COMMENTED",
           user: { login: "cursor[bot]" },
         });

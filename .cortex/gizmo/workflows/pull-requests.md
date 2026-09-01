@@ -636,10 +636,13 @@ gh api repos/meta-secret/nook/pulls/<pr-number>/reviews \
   --jq ".[] | {user: .user.login, state, body, html_url, commit_id, current_head: (.commit_id == \"$head_sha\")}"
 ```
 
-- Treat a submitted-review body as current only when `current_head` is `true`.
-- Keep older bodies as audit context.
-  - Use `isOutdated` and current code to decide whether an older inline finding
-    still needs a reply.
+- Inspect submitted-review bodies from every head and disposition every
+  actionable finding.
+  - A substantive body without inline comments blocks readiness.
+  - When a review has inline comments, retain its body as audit context and use
+    unresolved-thread state as the deterministic readiness authority.
+  - Use `isOutdated` and current code to decide the appropriate response to an
+    older inline finding; outdated does not make an unresolved thread optional.
 - Use the review-thread GraphQL query from the review-comments skill to inspect
   unresolved inline conversations.
 - Reply only where a real thread or comment supports a targeted reply.

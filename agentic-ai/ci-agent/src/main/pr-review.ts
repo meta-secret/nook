@@ -427,7 +427,7 @@ function classifyFeedbackState(
   }
   const hasFindings =
     feedback.substantiveComments > 0 ||
-    feedback.substantiveReviews > 0 ||
+    feedback.unthreadedReviewFindings > 0 ||
     feedback.unresolvedThreads > 0;
   if (hasFindings) return FeedbackClassificationState.Findings;
   return FeedbackClassificationState.Clean;

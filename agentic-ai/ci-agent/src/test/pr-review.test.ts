@@ -32,6 +32,7 @@ const cleanFeedback: PrFeedbackSummary = {
   findingBatches: 0,
   substantiveComments: 0,
   substantiveReviews: 0,
+  unthreadedReviewFindings: 0,
   unresolvedThreads: 0,
 };
 

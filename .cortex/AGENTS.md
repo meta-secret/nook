@@ -156,7 +156,7 @@ agent: "<agent>"
 Follow it with concise plain-text activity lines.
 
 ```text
-HH:mm | <action-type> | <description>
+HH:mm | <action-type> | <actor> | <description>
 ```
 
 - Use the exact pull-request number that the activity currently serves.
@@ -186,6 +186,10 @@ HH:mm | <action-type> | <description>
 - Use `SKILL` when loading or applying a skill is the reported action.
 - Start every activity line with the current local time in 24-hour `HH:mm`
   form.
+- Identify the executor on every activity line with one compact canonical actor
+  token: `GIZMO`, `AI`, `SRE`, or `SKILL`.
+  - Use the Team Agent's team token, not `Team Agent` or a personal name.
+  - Use `SKILL` only for an activity performed by a skill.
 - Use a short action type that makes the purpose immediately visible.
   - `FEATURE` covers new product functionality.
   - `BUILD` covers implementation of already selected functionality.
@@ -210,7 +214,7 @@ HH:mm | <action-type> | <description>
   - On a non-Markdown surface, transport the opening marker as literal `---`.
 - Do not wrap live message metadata in a Markdown code fence.
 - The example above is fenced only to render the literal syntax in Cortex.
-- Separate the time, action type, and description with ` | `.
+- Separate the time, action type, actor, and description with ` | `.
 - State what changed, why it was done, or what current state was observed.
 - Show a command before waiting for it to finish.
   - Prefer the task entrypoint, such as `task loom:verify`.

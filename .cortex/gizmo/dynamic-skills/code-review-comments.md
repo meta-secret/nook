@@ -156,16 +156,19 @@ gh api graphql --paginate \
   }'
 ```
 
-Build the actionable checklist from unresolved, non-outdated threads and from
-submitted review bodies whose `commit_id` matches `headRefOid`. An older thread
-that remains unresolved still needs a targeted reply explaining the addressing
-commit or why it no longer applies before resolution.
+Build the actionable checklist from every unresolved thread and every submitted
+review body, including feedback from older heads. An older thread that remains
+unresolved still needs a targeted reply explaining the addressing commit or why
+it no longer applies before resolution. A substantive review body without
+inline comments remains a readiness blocker. When a review has inline comments,
+retain its body in inspection output and use those threads' resolution state as
+the deterministic handled state.
 
 ## Validation
 
 Gizmo uses GraphQL or `gh pr view`/`gh api` to confirm zero unresolved actionable
-review threads. It also inspects submitted reviews and PR comments for remaining
-actionable items on the exact current head.
+review threads. It also inspects submitted reviews and PR comments from every
+head for remaining actionable items.
 
 Gizmo reports:
 
