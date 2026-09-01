@@ -7,7 +7,7 @@ import {
   type UntrustedYamlMap,
   type UntrustedYamlNode,
 } from './guards.ts';
-import { runCommand } from './run.ts';
+import { CommandOutputPolicy, runCommand } from './run.ts';
 import { LoomFailureCode, loomFailureDetail } from '../loom-failure.ts';
 
 import type { UntrustedYamlPropertyArgs } from './guards.ts';
@@ -387,6 +387,7 @@ export function runGitHubApi(request: GitHubApiRequest): UntrustedYamlNode {
     command: 'gh',
     args,
     cwd: request.repoRoot,
+    outputPolicy: CommandOutputPolicy.GitHubApi,
   };
   const output = runCommand(commandRequest);
   if (output.exitCode !== 0) {
