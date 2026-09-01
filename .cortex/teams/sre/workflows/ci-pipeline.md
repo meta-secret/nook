@@ -126,14 +126,21 @@ See [issues](../../../gizmo/workflows/issues.md),
 
 **`repository-policy.yml`**
 
-- Runs source architecture enforcement on every pull request.
-- Classifies PR paths and runs Loom checks only when Loom, its Task wrapper,
-  Cortex, or related preflight sources change.
-- Runs on Main only for those Loom-relevant paths.
+- Runs source architecture enforcement on every pull request except a
+  Markdown-only Cortex change.
+- Classifies PR and Main paths before provisioning language toolchains.
+- Markdown-only Cortex changes run the Cortex audit without Rust, BuildKit,
+  preflight, or the full Loom package suite.
+- Non-Markdown Cortex changes retain the full Loom and preflight path.
+- Mixed changes retain the full policy path.
+- Runs Loom checks when Loom, its Task wrapper, Cortex, or related preflight
+  sources change.
+- Runs on Main for policy, Cortex, Loom, and workflow-relevant paths.
 - Verifies Loom formatting, lint, types, tests, authored TypeScript state, and
-  Loom API contracts.
+  Loom API contracts when executable Loom or policy sources require them.
 - Remains separate from Main product orchestration.
-  - Cortex and agent-only merges require Loom but intentionally skip product Main.
+  - Cortex and agent-only merges require relevant Loom-backed policy checks.
+  - They intentionally skip product Main when product paths are unchanged.
 - Enforces the authored source-file limit.
 - Enforces Rust unit-test colocation.
 

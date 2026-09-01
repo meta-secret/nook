@@ -71,6 +71,12 @@ task loom:pr-land CONFIG=path/to/gizmo-owned/pr-land-validate.yaml
   3. Gizmo integrates, runs pre-push, and pushes; and
   4. Gizmo validates when ready or runs relevant focused proof.
 - Ordinary pushes do not refresh complete PR checks.
+- Markdown-only Cortex changes use the repository-policy workflow.
+  - The workflow runs `task loom:cortex-audit`.
+  - It skips Rust setup, BuildKit connection, preflight, and full Loom package
+    verification.
+  - Any non-Markdown Cortex file keeps the complete repository-policy path.
+  - Any mixed change keeps the complete repository-policy path.
 
 ## Scope
 
