@@ -15,6 +15,11 @@ export enum ModuleDeliveryOwner {
   GizmoPrime = 'gizmo-prime',
 }
 
+export enum ModuleDeliveryGitCommonSurface {
+  Hooks = 'hooks',
+  Info = 'info',
+}
+
 export type ModuleDeliveryOwnerIdentity = TeamKey | ModuleDeliveryOwner;
 
 export const REQUIRED_PARENT_OWNED_RESOURCES = [

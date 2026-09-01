@@ -7,6 +7,7 @@ import {
   realpathSync,
 } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
+import { ModuleDeliveryGitCommonSurface as GitSurface } from './domain.ts';
 import { gitText, runModuleDeliveryGit } from './git-command.ts';
 import { pathExists } from './workspace-paths.ts';
 import {
@@ -19,7 +20,6 @@ import {
   assertModuleDeliveryAdmissionStateAuthority,
   recordModuleDeliveryAttemptDisposition,
 } from './admission.ts';
-
 import type { GitCommandRequest } from './git-command.ts';
 import type {
   ModuleDeliveryAdmissionState,
@@ -542,7 +542,7 @@ function relevantRefsDigest(request: RelevantRefsDigestRequest): string {
 
 function commonEntryDigest([repositoryRoot, name]: readonly [
   string,
-  'hooks' | 'info',
+  GitSurface,
 ]): string {
   const commonDirectory = gitText(
     runModuleDeliveryGit({
@@ -626,10 +626,11 @@ function captureRepositorySnapshot(
       allowedBranchRef: symbolicHead,
     }),
     configDigest: digestBuffers([gitBytes(configInvocation)]),
-    hooksDigest: digestBuffers([
-      Buffer.from(commonEntryDigest([repositoryRoot, 'hooks']), 'ascii'),
-      Buffer.from(commonEntryDigest([repositoryRoot, 'info']), 'ascii'),
-    ]),
+    hooksDigest: digestBuffers(
+      [GitSurface.Hooks, GitSurface.Info].map((name) =>
+        Buffer.from(commonEntryDigest([repositoryRoot, name]), 'ascii'),
+      ),
+    ),
   };
 }
 
