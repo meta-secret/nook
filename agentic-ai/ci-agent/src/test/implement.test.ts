@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test, { describe, it } from "node:test";
 
 import { OpenPrLookupKind } from "../main/github.js";
@@ -8,9 +11,25 @@ import {
   CiImplementationMode,
   ImplementPrTargetKind,
   preserveImplementedBranchBeforePr as preserve,
+  recordTrustedBudgetBlocker,
   runCiImplementationPhases,
   resolveImplementPrTarget,
 } from "../main/implement.js";
+
+test("trusted budget rejection is exported for blocked worklog publication", () => {
+  const root = mkdtempSync(join(tmpdir(), "nook-budget-blocker-"));
+  const output = join(root, "github-output");
+  try {
+    const error = new AuthoredChangeBudgetExceededError(
+      "Implemented diff exceeds the 2000 authored changed-line budget: 2001",
+    );
+    recordTrustedBudgetBlocker(error, output);
+    const encoded = readFileSync(output, "utf8").trim().split("=")[1];
+    assert.equal(Buffer.from(encoded, "base64").toString("utf8"), error.message);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 async function step<T>(log: string[], name: string, value: T): Promise<T> {
   log.push(name);

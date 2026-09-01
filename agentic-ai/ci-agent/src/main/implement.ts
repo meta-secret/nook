@@ -1,3 +1,4 @@
+import { appendFileSync } from "node:fs";
 import { chdir } from "node:process";
 
 import { CiAgentConfigLoadKind, loadConfig } from "./config.js";
@@ -12,6 +13,7 @@ import {
 } from "./github.js";
 import {
   assertAuthoredChangeBudget,
+  AuthoredChangeBudgetExceededError,
   configureGitForCi,
   hasWorkingTreeChanges,
   pushFixBranch,
@@ -31,6 +33,17 @@ type PreserveImplementedBranchArgs = {
   verifyBranch: () => Promise<boolean>;
   verifyPublishedHead?: () => Promise<void>;
 };
+
+export function recordTrustedBudgetBlocker(
+  error: unknown,
+  outputPath: string | undefined,
+): void {
+  if (!(error instanceof AuthoredChangeBudgetExceededError) || !outputPath) {
+    return;
+  }
+  const encoded = Buffer.from(error.message, "utf8").toString("base64");
+  appendFileSync(outputPath, `budget_blocker_b64=${encoded}\n`, "utf8");
+}
 
 export async function preserveImplementedBranchBeforePr(
   args: PreserveImplementedBranchArgs,
@@ -234,36 +247,42 @@ export async function runCiDeliver(): Promise<void> {
   }
 
   const repoRef = parseRepository(repository);
-  const prNumber = await preserveImplementedBranchBeforePr({
-    agentBranch: target.branch,
-    assertBudget: () =>
-      assertAuthoredChangeBudget({
-        repoRoot,
-        baseRef: target.budgetBaseRef,
-        maximumLines: 2_000,
-      }),
-    createPr: () =>
-      createFixPr(
-        octokit,
-        repoRef,
-        target.branch,
-        runId,
-        "agent implementation",
-        target.baseBranch,
-      ),
-    findPr: async () => {
-      const found = await findOpenPr(octokit, repoRef, target.branch);
-      if (
-        found.kind === OpenPrLookupKind.Found &&
-        found.baseBranch !== target.baseBranch
-      ) {
-        throw new Error("Published implementation PR identity or base changed");
-      }
-      return found;
-    },
-    pushBranch: () => pushFixBranch(repoRoot, target.branch, runId),
-    verifyBranch: () => branchExistsOnOrigin(octokit, repoRef, target.branch),
-  });
+  let prNumber: number;
+  try {
+    prNumber = await preserveImplementedBranchBeforePr({
+      agentBranch: target.branch,
+      assertBudget: () =>
+        assertAuthoredChangeBudget({
+          repoRoot,
+          baseRef: target.budgetBaseRef,
+          maximumLines: 2_000,
+        }),
+      createPr: () =>
+        createFixPr(
+          octokit,
+          repoRef,
+          target.branch,
+          runId,
+          "agent implementation",
+          target.baseBranch,
+        ),
+      findPr: async () => {
+        const found = await findOpenPr(octokit, repoRef, target.branch);
+        if (
+          found.kind === OpenPrLookupKind.Found &&
+          found.baseBranch !== target.baseBranch
+        ) {
+          throw new Error("Published implementation PR identity or base changed");
+        }
+        return found;
+      },
+      pushBranch: () => pushFixBranch(repoRoot, target.branch, runId),
+      verifyBranch: () => branchExistsOnOrigin(octokit, repoRef, target.branch),
+    });
+  } catch (error) {
+    recordTrustedBudgetBlocker(error, process.env.GITHUB_OUTPUT);
+    throw error;
+  }
   log.info(
     `PR #${prNumber} opened; delivery verified and handed to the continuing owner`,
   );

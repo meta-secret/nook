@@ -98,7 +98,22 @@ test('accepts reviewed-head bodies, committed fixes, and later PR comments', () 
   assert.equal(reviewBatchMatches({ ...input, reviews: [{ body: 'Please fix.', state: 'CHANGES_REQUESTED' }] }), true)
   assert.equal(reviewBatchMatches({ ...input, reviews: [{ body: 'LGTM', state: 'APPROVED' }] }), false)
   assert.equal(reviewBatchMatches({ ...input, reviews: [{ body: 'Old finding', state: 'DISMISSED' }] }), false)
-  assert.equal(reviewBatchMatches({ ...input, reviews: [{ body: '### 💡 Codex Review\nBoilerplate', state: 'COMMENTED' }] }), false)
+  assert.equal(reviewBatchMatches({
+    ...input,
+    reviews: [{
+      author: { login: 'chatgpt-codex-connector[bot]' },
+      body: '### 💡 Codex Review\n\nHere are some automated review suggestions for this pull request.\n\n**Reviewed commit:** `aaaaaaaaaa`',
+      state: 'COMMENTED',
+    }],
+  }), false)
+  assert.equal(reviewBatchMatches({
+    ...input,
+    reviews: [{
+      author: { login: 'chatgpt-codex-connector[bot]' },
+      body: '### 💡 Codex Review\n\nHere are some automated review suggestions for this pull request.\n\n**Reviewed commit:** `aaaaaaaaaa`\n\nActionable finding',
+      state: 'COMMENTED',
+    }],
+  }), true)
   assert.equal(reviewBatchMatches({
     ...input,
     reviews: [{
@@ -108,6 +123,7 @@ test('accepts reviewed-head bodies, committed fixes, and later PR comments', () 
     }],
   }), false)
   assert.equal(reviewBatchMatches({ ...input, comments: [{ body: 'Please fix.', createdAt: '2026-01-02T00:00:00Z' }] }), true)
+  assert.equal(reviewBatchMatches({ ...input, comments: [{ body: 'Looks good to me.', createdAt: '2026-01-02T00:00:00Z' }] }), false)
   assert.equal(reviewBatchMatches({ ...input, comments: [{ body: 'Please fix.', createdAt: '2026-01-01T16:00:00Z' }] }), false)
   assert.equal(reviewBatchMatches({
     ...input,

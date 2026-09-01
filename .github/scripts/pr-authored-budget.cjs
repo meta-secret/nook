@@ -6,6 +6,16 @@ const { extname } = require('node:path')
 
 const INITIAL_PR_LIMIT = 2_000
 const REVIEW_GROWTH_STOP = 3_000
+const CODEX_REVIEW_PREFIX = '### 💡 Codex Review\n\nHere are some automated review suggestions for this pull request.\n\n'
+const CODEX_ABOUT_DETAILS = [
+  '<details> <summary>ℹ️ About Codex in GitHub</summary>', '<br/>',
+  '[Your team has set up Codex to review pull requests in this repo](https://chatgpt.com/codex/cloud/settings/general). Reviews are triggered when you',
+  '- Open a pull request for review', '- Mark a draft as ready',
+  '- Comment "@codex review".',
+  'If Codex has suggestions, it will comment; otherwise it will react with 👍.',
+  'Codex can also answer questions or update the PR. Try commenting "@codex address that feedback".',
+  '</details>',
+].join(' ')
 
 const reportedOnlyFilenames = new Set([
   'Cargo.lock',
@@ -186,6 +196,25 @@ function isGitAncestor(ancestor, descendant) {
   }
 }
 
+function isNonActionableReviewBody(body) {
+  const normalized = body.trim().toLowerCase().replace(/[.!\s]+$/gu, '')
+  return ['lgtm', 'looks good', 'looks good to me', 'nice work', 'no issues',
+    'no issues found', 'thank you', 'thanks'].includes(normalized)
+}
+
+function isCodexStatusReviewBody(review) {
+  if (!botLoginMatches(review.author, 'chatgpt-codex-connector')) return false
+  const body = review.body.trim()
+  const detailsIndex = body.indexOf('<details>')
+  const summary = (detailsIndex < 0 ? body : body.slice(0, detailsIndex)).trim()
+  if (detailsIndex >= 0) {
+    const details = body.slice(detailsIndex).trim().replace(/\s+/gu, ' ')
+    if (details !== CODEX_ABOUT_DETAILS) return false
+  }
+  return summary.startsWith(CODEX_REVIEW_PREFIX) &&
+    /^\*\*Reviewed commit:\*\*\s*`[0-9a-f]{10,40}`$/u.test(summary.slice(CODEX_REVIEW_PREFIX.length))
+}
+
 function reviewBatchMatches({
   pr, threads, reviews, comments, changedPaths, publishedAt,
   hasNextPage,
@@ -200,7 +229,8 @@ function reviewBatchMatches({
   const reviewBodyMatch = reviews.some(
     (review) => ['COMMENTED', 'CHANGES_REQUESTED'].includes(review.state) &&
       review.body.trim() &&
-      !/^### 💡 Codex Review/u.test(review.body.trim()) &&
+      !isNonActionableReviewBody(review.body) &&
+      !isCodexStatusReviewBody(review) &&
       !(
         botLoginMatches(review.author, 'cursor') &&
         review.body.includes('<summary>Stale comment</summary>')
@@ -210,6 +240,7 @@ function reviewBatchMatches({
   const commentMatch = comments.some((comment) =>
     Number.isFinite(publishedTime) && Date.parse(comment.createdAt) > publishedTime &&
     comment.body.trim() &&
+    !isNonActionableReviewBody(comment.body) &&
     !(
       botLoginMatches(comment.author, 'chatgpt-codex-connector') &&
       (
