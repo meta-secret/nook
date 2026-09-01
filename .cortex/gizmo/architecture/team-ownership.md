@@ -7,14 +7,14 @@ Nook divides responsibility across five engineering teams.
 The split controls code, Cortex, agent routing, contracts, tests, and review-fix
 responsibility.
 
-Gizmo retains shared integration and delivery actions as parent-owned control
+Gizmo retains shared-branch sequencing and delivery actions as parent-owned control
 operations outside the worker task-record graph.
 
 ## Ownership dimensions
 
 Every capability has one functional owner.
 
-- Gizmo may own delivery coordination, integration, or external delivery-state
+- Gizmo may own delivery coordination, shared-branch sequencing, or external delivery-state
   capabilities. The active harness owns worker-attempt lifecycle.
 - One engineering team owns every implementation capability.
 - Gizmo is never an implementation expertise provider.
@@ -39,7 +39,7 @@ A capability may require zero or more expertise providers.
 - It does not own consumer-team Cortex, capability semantics, shared files, or
   delivery state.
 - It returns its semantic handoff to the functional owner for acceptance before
-  Gizmo integrates it.
+  Gizmo continues from its accepted commit.
 
 Expertise delegation is task-scoped. It does not permanently transfer a file,
 module, or capability to the provider team.
@@ -60,7 +60,7 @@ Team identity is task-scoped.
   never has more than one concurrently active attempt.
 - Every attempt leases its claims until Gizmo conclusively dispositions its
   output.
-- Accepted write output is verified and integrated before release.
+- Accepted write output is verified as the shared-branch delivery head before release.
 - Accepted read-only evidence is verified and accepted into parent state before
   release.
 - Rejected or cancelled output is recorded as unusable before release.
@@ -71,12 +71,15 @@ Team identity is task-scoped.
 - Operational semantics follow
   [subagent delegation](../workflows/subagent-delegation.md).
 
-Gizmo tracks integration, review coordination and verdict, review replies and
-thread state, pull-request, readiness, merge, and Workbench actions separately
-as parent-owned control operations. Implementation corrections and review
-fixes remain team worker tasks. Parent-owned control operations have no worker
-team identity, never cause harness-created attempts, and Gizmo performs them at
-their required barriers.
+Gizmo tracks these parent-owned control operations separately:
+
+- delivery-head sequencing;
+- review coordination, verdicts, replies, and thread state; and
+- pull-request, readiness, merge, and Workbench actions.
+
+Implementation corrections and review fixes remain team worker tasks. Control
+operations have no worker team identity and cause no harness-created attempt.
+Gizmo performs them at their required barriers.
 
 Skill ownership is separate from implementation delegation.
 
@@ -95,13 +98,13 @@ Skill ownership is separate from implementation delegation.
 
 ### Gizmo delivery control
 
-Gizmo owns delivery coordination, integration, and external delivery-state
+Gizmo owns delivery coordination, shared-branch sequencing, and external delivery-state
 mutations. The active harness alone owns worker-attempt lifecycle.
 
 - **Primary Cortex:** `.cortex/gizmo/`.
-- **Primary state:** Workbench, integrated Git state, pull requests, review
-  coordination and verdict, review replies and thread state, validation
-  requests, readiness, and merge state.
+- **Primary state:** Workbench, delivery-head Git state, pull requests,
+  validation requests, readiness, and merge state.
+- **Review state:** coordination, verdicts, replies, and thread state.
 
 Gizmo must not implement a team capability or fix.
 
@@ -197,14 +200,14 @@ Shared Cortex contains knowledge that genuinely serves multiple teams.
 - TypeScript implementation practices belong to web development even when AI
   or SRE code consumes them.
 - Agent protocols, expert registries, and Cortex rules belong to AI.
-- Shared integration files remain serialized under Gizmo.
+- Shared files remain serialized under Gizmo.
 
-Shared integration includes root manifests, lockfiles, generated bindings,
-cross-team registries, the root graph, and integrated or external delivery
+Shared serialized ownership includes root manifests, lockfiles, generated bindings,
+cross-team registries, the root graph, and delivery-head or external delivery
 state.
 
 A team agent may propose a required shared-file change.
-Gizmo decides the integration order and assigns the final writer.
+Gizmo decides the shared-branch write order and assigns the final writer.
 
 ## Scope classification procedure
 
@@ -213,7 +216,7 @@ Gizmo assigns the human request before implementation starts.
 1. Describe the observable functionality without assigning files yet.
 2. Recursively discover concrete worker-executable team and provider task
    records and their provider dependencies.
-3. Track delivery coordination and integration separately as parent-owned
+3. Track delivery coordination and shared-branch sequencing as parent-owned
    Gizmo control operations. The active harness alone owns worker-attempt
    creation and lifecycle for authorized worker task records.
 4. Assign each implementation task to AI, development core, security, SRE, or
@@ -239,7 +242,7 @@ Gizmo assigns the human request before implementation starts.
     authorized `(task ID, attempt ID)` and owns attempt lifecycle. A logical
     task may retry sequentially but never has concurrent active attempts. The
     harness does not select or admit records or snapshot or change frontiers.
-13. Keep shared files and the final integration join with Gizmo.
+13. Keep shared files and the final delivery join with Gizmo.
 
 File location does not override semantic ownership.
 
@@ -286,7 +289,7 @@ another team has the implementation discipline needed to realize it safely.
    and acceptance owner, not as another task identity.
 5. Freeze the accepted input contract and observable output.
 6. Declare exact code and test paths the provider may change.
-7. Declare consumer Cortex, capability semantics, shared files, integrated
+7. Declare consumer Cortex, capability semantics, shared files, delivery-head
    delivery state, and worker-attempt lifecycle forbidden.
 8. Give the worker only the provider team's `AGENTS.md`, knowledge graph, and
    task-relevant authorities. Supply the frozen consumer contract as read-only
@@ -296,7 +299,7 @@ another team has the implementation discipline needed to realize it safely.
 10. Return a semantic handoff to the functional owner. The provider cannot
     redefine the functional contract.
 11. Let the functional owner accept or reject capability behavior before Gizmo
-    performs the parent-owned integration join.
+    performs the parent-owned delivery join.
 
 This contract makes the delegated files part of the provider's owned task
 scope. It does not grant general access to the consumer team's code.
@@ -318,12 +321,12 @@ That responsibility includes:
 Gizmo retains external delivery-state mutations.
 
 - Team agents may diagnose review comments and implement their scoped fixes.
-- Only Gizmo replies, resolves conversations, pushes the integrated branch,
+- Only Gizmo replies, resolves conversations, pushes the delivery branch,
   triggers shared checks, declares readiness, or merges.
 
 ## Validation
 
-The final integration must prove:
+The final delivery join must prove:
 
 - every changed path has one responsible team;
 - every capability has one functional owner;
@@ -366,4 +369,4 @@ The final integration must prove:
 - canonical delegation acceptance criteria passed;
 - ordinary multi-team dispatch remained blocked unless the installed typed
   validator enforced the complete canonical admission contract;
-- Gizmo validated the integrated exact head.
+- Gizmo validated the exact delivery head.

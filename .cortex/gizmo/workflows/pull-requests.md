@@ -56,7 +56,7 @@ ownership until merge or a concrete blocked handoff:
    - Create ignored `.cortex/.session/` memory only when temporary notes
      materially help the work.
 2. **Implement functionality** — dispatch the requested code, documentation,
-   and test changes to the responsible teams. Integrate only verified commit
+   and test changes to the responsible teams. Continue only from verified commit
    handoffs. Focused build and test feedback runs through the configured
    GitHub Actions runner.
 3. **Prepare a coherent commit:**
@@ -94,7 +94,7 @@ ownership until merge or a concrete blocked handoff:
    - Inspect the path-applicable `PR / Verify and preview` and `Web research / Build and deploy research catalog` workflows.
    - Do **not** run a required local `task check` / `task ci:pr`.
 6. **Fix Nook's failed PR workflow.** Inspect CI and app logs. Dispatch the
-   finding to its responsible team. Integrate the verified fix commit, run
+   finding to its responsible team. Continue from the verified fix commit, run
    pre-push hygiene, and push the complete fix. Validate the replacement head.
 7. **Promote durable discoveries when justified.** Apply the canonical
    [self-improvement review](../../teams/ai/dynamic-skills/self-improvement.md#self-improvement-review)
@@ -290,7 +290,7 @@ flowchart TD
   V --> F[6 Monitor applicable Nook PR checks on GHA]
   F --> G{Nook PR checks green?}
   G -->|no| H[7 Route finding to owner team]
-  H --> PUSH[8 Gizmo integrates fix + pre-push + push]
+  H --> PUSH[8 Gizmo continues from fix + pre-push + push]
   PUSH --> D
   G -->|yes| C[9 Address comments]
   C --> SI[10 Review durable discoveries when justified]
@@ -337,11 +337,15 @@ untracked.
 
 #### Trusted automated publisher exceptions
 
-Exactly two trusted GitHub Actions publishers bypass ordinary worker
-commit-handoff integration: `agent-implement.yml` and
-`rust-dependency-updates.yml` through `task ci-agent:fix` with
-`CI_AGENT_FIX_PROFILE=rust-dependency-update`. Their bounded editors have no
-independent Git or external delivery authority. See the root
+Two trusted GitHub Actions publishers bypass the ordinary direct-commit
+sequence:
+
+- `agent-implement.yml`; and
+- `rust-dependency-updates.yml` through `task ci-agent:fix` with
+  `CI_AGENT_FIX_PROFILE=rust-dependency-update`.
+
+Their bounded editors have no independent Git or external delivery authority.
+See the root
 [team worker contract](../../AGENTS.md#team-worker-contract) for the exact
 publication, isolation, and head-verification rules. Gizmo continues either
 returned head and owns review, validation, readiness, and merge.
@@ -349,7 +353,7 @@ returned head and owns review, validation, readiness, and merge.
 Prepare an exact remote commit:
 
 1. Make the implementation coherent.
-2. Integrate the teams' formatted commits.
+2. Continue from the teams' formatted commits.
 3. Run pre-push hygiene.
 4. Promptly push and open or update the PR.
 
@@ -617,7 +621,7 @@ gate. See [quality](../../teams/sre/workflows/quality.md#fix-check-findings--not
    Use the Playwright `nook-app-logs.json` attachment. Local sources include
    `fetchAppLogs(page)`, `/app-logs`, and `dumpNookLogs(page)`.
 3. Dispatch the root cause to its responsible team.
-4. Integrate the verified fix commit and run `task loom:pre-push`. Return any
+4. Continue from the verified fix commit and run `task loom:pre-push`. Return any
    team-owned formatter diff for a fresh team commit. Continue from it, rerun
    hygiene, and promptly push the completed fix.
 5. Run Loom/Task validation and return to monitoring Nook's complete exact-head
@@ -644,7 +648,7 @@ Merge only when all readiness conditions pass:
 - Nook's applicable repository-owned PR test checks are green.
 - The branch is current with `origin/main`.
 - All actionable comments are resolved.
-- Gizmo's final integrated verdict is ready for the exact head.
+- Gizmo's final delivery verdict is ready for the exact head.
 - Every required team verdict is satisfied.
 - Every required security verdict is satisfied.
 - Gizmo has not overridden a required blocking verdict.
@@ -761,7 +765,7 @@ See [mission delivery](mission-delivery.md) for the delivery procedure.
     self-improvement review finds an evidence-backed candidate. Repeat hosted
     validation if promotion changes the head.
 13. On failure, dispatch the issue to its responsible team.
-14. Integrate and promptly push the verified fix, then obtain fresh exact-head
+14. Promptly push the verified fix commit, then obtain fresh exact-head
     validation for the replacement head.
 15. Squash-merge after the exact-head readiness audit succeeds.
 16. Publish the Workbench completion records.

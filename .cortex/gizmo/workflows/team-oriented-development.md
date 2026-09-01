@@ -128,7 +128,7 @@ Each team agent owns its entire declared technical slice.
 8. Implement every valid team-scoped correction.
 9. Return typed artifacts and an agent-authored semantic view.
 
-The team agent must not mutate integrated delivery state or worker-attempt
+The team agent must not mutate external delivery state or worker-attempt
 lifecycle.
 
 ## Request another team's functionality
@@ -192,8 +192,8 @@ performs them at their named barriers.
    semantic view.
 2. Reconcile cross-team contract disagreements.
 3. Require each write provider to be terminal-successful and accepted.
-4. Verify each write provider's commit and scope, then integrate it into the
-   consumer's Git frontier.
+4. Verify each write provider's commit and scope. Continue from that commit for
+   the consumer.
 Canonical delegation supplies the intervening evidence and lease steps.
 5. Require each read-only provider to be terminal-successful and accepted.
 6. Verify each read-only provider according to its evidence kind, then accept

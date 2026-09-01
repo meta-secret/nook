@@ -5,7 +5,7 @@
 Prevent avoidable PR Verify failures from formatting lag and missing UI demo
 contract updates without turning local pre-push into a product build.
 
-This is the **only required local product work for Gizmo after integration**.
+This is the **only required local product work for Gizmo after a Team Agent commit**.
 
 Every other gate runs on GitHub Actions.
 
@@ -22,7 +22,7 @@ These show up in Workbench `stats/ai-agent` records as waste.
 
 ## Preferred Pattern
 
-Team Agents format and commit allowed changes without pushing. After integration,
+Team Agents format and commit allowed changes without pushing. From that commit,
 Gizmo calls Loom `pre-push` before every push.
 
 Request:
@@ -60,8 +60,8 @@ and [loom-tools.md](../../ai/references/loom-tools.md).
 ### Shared formatter rule
 
 - Loom invokes host-applied `task format` internally.
-- The integrated-delivery entrypoint is `task loom:pre-push`; ordinary Team
-  Agent handoffs do not run the parent-owned integration gate.
+- The delivery-head entrypoint is `task loom:pre-push`; ordinary Team
+  Agent commits do not run the parent-owned pre-push gate.
 - Ordinary Team Agents still format every changed file in their allowed scope
   before committing their handoff.
 - `task format` may build its content-addressed tool-only image once.
@@ -94,7 +94,7 @@ Does not apply to read-only sessions with no commits.
 - Before: format runs a product build → local CPU and cache bandwidth are wasted.
 - After: the shared tool-only formatter writes the same source changes in
   seconds without per-worktree dependency trees.
-- After: formatted Team Agent exact commit → Gizmo integration → clean
+- After: formatted Team Agent exact commit → Gizmo pre-push → clean
   `task loom:pre-push` → push → immediate remote evidence.
 - Before: change shared UI → push → demo contract fails.
 - After: Loom fails closed until a demo spec is updated.
@@ -102,7 +102,7 @@ Does not apply to read-only sessions with no commits.
 ## Application Checklist
 
 - [ ] Team Agents format and commit allowed changes without pushing.
-- [ ] Gizmo runs `task loom:pre-push` after integration and before every push.
+- [ ] Gizmo runs `task loom:pre-push` after each Team Agent commit and before every push.
 - [ ] Return team-owned formatter diffs for an owner commit, then continue.
 - [ ] Every pushed head immediately receives complete validation when ready or
       at least one relevant focused remote task when not ready.

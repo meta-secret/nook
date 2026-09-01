@@ -106,7 +106,7 @@ as completed delivery.
      Gizmo.
 6. **Prepare the delivery head.**
    - Continue from the exact accepted or published head.
-   - Do not create a duplicate integration commit.
+   - Do not create another commit for the same accepted change.
    - Immediately resume Gizmo ownership of PR, review, and validation work.
    - Do not add advisory local review after the publisher handoff.
    - Use immediate focused remote evidence or complete exact-head validation.
@@ -135,11 +135,11 @@ as completed delivery.
 7. **Validate and repair through teams.**
    - Trigger the repository-owned exact-head review and validation path.
    - Route each review or CI finding to its functional owner.
-   - Admission-authorize a bounded fix task from the current integrated head
+   - Admission-authorize a bounded fix task from the current delivery head
      and request its attempt through the active harness.
    - Require a verified coherent fix commit. Remote evidence follows after
-     Gizmo integrates and pushes it.
-   - Integrate the fix, promptly push, and obtain fresh exact-head remote
+     Gizmo continues from and pushes it.
+   - Promptly push the fix commit and obtain fresh exact-head remote
      validation for the replacement head.
    - Gizmo must not edit the implementation to resolve a finding.
 8. **Collect required verdicts.**
@@ -148,7 +148,7 @@ as completed delivery.
      policy, trust boundaries, or security acceptance.
    - Treat every verdict as exact-head evidence unless it is explicitly
      head-stable.
-9. **Issue the integrated verdict.**
+9. **Issue the delivery verdict.**
    - Mark the PR ready only when all required evidence is satisfied.
    - Keep the PR blocked while any required team verdict is blocking.
    - Keep the PR blocked while a required security verdict is blocking.
@@ -158,13 +158,13 @@ as completed delivery.
       [self-improvement review](../../teams/ai/dynamic-skills/self-improvement.md#self-improvement-review)
       only when the work revealed a durable lesson or Cortex defect.
     - No Cortex update is required when no candidate qualifies.
-    - When a promotion is justified, integrate its clean committed handoff into
-      the same PR.
+    - When a promotion is justified, continue from its clean commit in the same
+      PR.
     - If promotion changes the head, rerun pre-push hygiene through the owning
       teams, push, and obtain fresh exact-head hosted validation.
     - When promotion changes the head, recollect every required team and
       security verdict that is not explicitly head-stable.
-    - When promotion changes the head, issue the final integrated verdict for
+    - When promotion changes the head, issue the final delivery verdict for
       that promoted exact head before readiness. Never carry a stale
       pre-promotion verdict forward.
 11. **Finish delivery.**
@@ -184,20 +184,20 @@ Every finding returns to the team that owns the behavior.
 - SRE fixes CI/CD, runners, containers, deployments, and operations.
 - Security fixes security-owned policy and reviews security acceptance.
 - AI fixes Cortex, Loom, agent skills, expert registries, and AI automation.
-- Gizmo integrates accepted fixes and controls delivery state.
+- Gizmo continues from accepted fixes and controls delivery state.
 
 Gizmo reports a blocker when the required team cannot act. It does not take
 over the implementation.
 
 ## Review verdict
 
-Gizmo owns the final integrated PR verdict.
+Gizmo owns the final exact-head PR verdict.
 
-- A ready verdict names the exact integrated head.
+- A ready verdict names the exact delivery head.
 - A ready verdict cites the required team evidence.
 - A blocking team verdict can be cleared only by that team.
 - A blocking security verdict can be cleared only by security.
-- Gizmo may add an integration block.
+- Gizmo may add a delivery block.
 - Gizmo cannot remove an unresolved required block.
 
 ## Validation
@@ -205,7 +205,7 @@ Gizmo owns the final integrated PR verdict.
 Delivery is complete only when:
 
 - all requested behavior is implemented by its responsible teams;
-- every accepted handoff is verified and integrated;
+- every accepted direct commit is verified and becomes delivery state;
 - repository-owned checks pass on the exact head;
 - actionable review threads are resolved;
 - all required team and security verdicts are satisfied;

@@ -79,15 +79,15 @@ and `preflight` sources. Unused-code ownership is split as follows:
 - Live sync Playwright (`sync-live` project): `task web:test:e2e:sync-live` — real GitHub API; explicit manual runs only. Requires `NOOK_GITHUB_PAT` in `nook-app/nook-web/.env.test.local`.
 - Vite `import.meta.env` values used by e2e are build-time constants; Task targets that serve `dist` must rebuild the e2e dist with the e2e env before Playwright runs.
 - Do not run `bun run test:e2e*` or `playwright test` directly on the host; use Taskfile so wasm is built and tooling matches CI.
-- Before integration, the Web worker runs the applicable focused proof for the
-  behavior it changes, deterministically formats every allowed web or web-owned
-  Cortex file, and commits one coherent exact handoff. The worker promptly
-  returns that commit and focused evidence without pushing or taking PR
-  lifecycle ownership. Required agent browser E2E is not pre-integration
-  handoff evidence: it runs on the configured GitHub Actions worker against a
+- Before returning its commit, the Web worker runs the applicable focused proof.
+  It deterministically formats every allowed web or web-owned Cortex file. It
+  commits one coherent change and promptly returns that commit with focused
+  evidence. It does not push or take PR lifecycle ownership. Required agent
+  browser E2E is not worker-commit evidence. It runs on the configured GitHub
+  Actions worker against a
   published SHA. Humans may use local single-spec Docker e2e for interactive
   debugging.
-- Gizmo integrates accepted formatted handoffs and runs `task loom:pre-push`
+- Gizmo continues from accepted formatted commits and runs `task loom:pre-push`
   on the combined head. If that gate formats web-owned content, Gizmo returns
   the exact diff to web development for a fresh formatted commit instead of
   committing it. After the owner commit and a clean gate, Gizmo pushes.

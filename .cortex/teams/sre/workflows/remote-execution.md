@@ -165,7 +165,7 @@ agent-local Loom execution and handoff behavior.
 
 ## Explicit complete PR validation
 
-When the integrated pushed head is coherent, Gizmo runs:
+When the pushed delivery head is coherent, Gizmo runs:
 
 ```bash
 task pr:validate PR=<number>
@@ -189,7 +189,7 @@ When a remote task or complete check fails:
 
 1. Inspect the exact job log.
 2. Identify the first failing product or infrastructure boundary.
-3. Obtain and integrate the responsible Team Agent's formatted exact fix.
+3. Obtain and continue from the responsible Team Agent's formatted exact fix.
 4. Run pre-push, returning any team-owned formatter diff, until clean.
 5. Push, then immediately validate when ready or run relevant focused proof.
 

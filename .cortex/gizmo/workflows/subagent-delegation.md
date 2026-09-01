@@ -95,8 +95,8 @@ Gizmo Prime owns:
 
 - Workbench planning and lifecycle records;
 - architectural synthesis;
-- shared-file serialization, exact writer grants, and integration;
-- integration decisions;
+- shared-file serialization, exact writer grants, and write sequencing;
+- shared-branch sequencing decisions;
 - branch and pull-request state;
 - review replies and thread resolution;
 - validation requests;
@@ -154,11 +154,10 @@ Every subagent task must declare:
 - its parent-owned join.
 
 Team identity selects only the worker's team context. The explicit functional
-owner controls semantic acceptance. For an expertise task, the team identity
-names the expertise-provider team while the functional owner remains the
-acceptance owner whose approval is required before Gizmo integration. A
-semantic role or expert selects bounded knowledge. None of these fields can
-replace another.
+owner controls semantic acceptance. An expertise task uses the provider team
+as its team identity. Its functional owner remains the acceptance owner. Gizmo
+continues only after that owner approves. A semantic role or expert selects
+bounded knowledge. None of these fields can replace another.
 
 ### Active-harness activity-line context
 
@@ -281,7 +280,7 @@ A write provider satisfies its consumer edge only when it is:
 - terminal-successful;
 - semantically accepted by the task's recorded functional owner;
 - commit-verified against its declared frontier and resource scope; and
-- integrated into the consumer's Git frontier.
+- present in the consumer's exact starting Git frontier.
 
 A read-only provider satisfies its consumer edge only when it is:
 
@@ -413,7 +412,7 @@ Before dispatch, the deterministic validator derives a
 writer-before-evidence-provider constraint for every overlapping writer. This
 precedence is mandatory even when declared provider dependencies already order
 the tasks. The evidence provider starts only from a frontier containing every
-such integrated writer. Its consumers start only after the typed evidence
+such accepted writer commit. Its consumers start only after the typed evidence
 handoff is verified and accepted.
 
 For other otherwise-unordered overlapping claims, the validator derives a
@@ -471,7 +470,7 @@ For any late mutation:
 2. Gizmo requests cancellation through the active harness, rejects
    terminal-but-unaccepted output, and records each conclusive disposition
    before Loom/Nook releases its lease.
-3. Abandon accepted evidence and private integration state.
+3. Abandon accepted evidence and private admission state.
 4. Rebuild and cycle-check the graph as a new immutable generation.
 5. Let Loom/Nook compute replacement candidate and frontier data; Gizmo
    validates, admission-authorizes, and freezes each selected frontier; and the
@@ -601,9 +600,9 @@ The harness passes worker results to Gizmo with their frozen parent lineage.
 Loom/Nook computes barrier and candidate state. Lineage does not imply a live
 parent worker.
 
-Before integration, Gizmo verifies identity, lineage, baseline, scope,
-handoff, and the recorded functional owner's semantic acceptance. It
-dispositions each result provider-locally and integrates accepted writes or
+Before continuing from a worker result, Gizmo verifies identity, lineage,
+baseline, scope, commit, and the recorded functional owner's semantic
+acceptance. It dispositions each result provider-locally and accepts writes or
 evidence. Loom/Nook then releases the lease and recomputes readiness, conflicts,
 capacity, and exact frontier
 data. Gizmo validates that computation and freezes authorized successors'
@@ -668,9 +667,9 @@ The parent owns the cross-layer interface and migration order.
 
 Core, WASM, and web interface changes preserve provider order.
 
-1. Complete, accept, commit-verify, and integrate the core provider.
+1. Complete, accept, and commit-verify the core provider.
 2. Start WASM from the exact accepted commit containing core.
-3. Complete, accept, commit-verify, and integrate WASM.
+3. Complete, accept, and commit-verify WASM.
 4. Start web from the exact accepted commit containing core and WASM.
 
 Independent ready tasks continue while this chain advances. The chain does not
@@ -747,7 +746,7 @@ This delegation workflow still owns the worker boundary:
 
 ## Validation
 
-Before integration, verify:
+Before continuing from a worker commit, verify:
 
 - every worker used its declared exact baseline;
 - every team worker used its declared team identity;
@@ -763,7 +762,7 @@ Before integration, verify:
 - every worker-executable team or provider task recorded an explicit functional
   owner separately from team identity;
 - every expertise result received semantic acceptance from its recorded
-  functional owner before Gizmo integration;
+  functional owner before Gizmo continues from its commit;
 - the repository task contract did not prescribe a native label or model;
 - every reached worker-executable team or provider task has a task record and
   exactly one team identity;
@@ -848,7 +847,7 @@ Before integration, verify:
   replacement-generation records; surviving same logical tasks were retries
   and newly discovered providers received first attempts;
 - every cycle failed closed and reported its blocked dependency to Gizmo;
-- Loom/Nook recomputed readiness and frontier data after every Git integration
+- Loom/Nook recomputed readiness and frontier data after every accepted commit
   or evidence acceptance;
 - provider results were dispositioned locally without a whole-admission-batch
   barrier;
@@ -859,5 +858,5 @@ Before integration, verify:
 - no global barrier delayed dependency-ready work before the final join;
 - optional JSONL and Markdown evidence did not gate harness progress;
 - Gizmo reviewed all evidence;
-- only Gizmo mutated integrated and external delivery state, and only the
+- only Gizmo mutated delivery-head and external delivery state, and only the
   active harness owned worker-attempt lifecycle.

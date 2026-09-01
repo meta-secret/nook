@@ -708,7 +708,7 @@ UI demo rules:
   - They run serially with one worker.
   - PR CI avoids the cost of the full browser suite.
 
-**After integration, Gizmo runs the contract on the host before the first
+**After a Team Agent commit, Gizmo runs the contract on the host before the first
 push** (and after any later UI edit) so Verify does not discover a missing demo:
 
 ```bash
@@ -775,7 +775,7 @@ cross-package app tasks in `nook-app/ci/Taskfile.yml`, Docker tasks in
 `nook-web-extension/` / `nook-platform/`:
 
 ```bash
-# Gizmo-required local action after integration and before every push; route
+# Gizmo-required local action after a Team Agent commit and before every push; route
 # team-owned formatter diffs back to their owner and repeat until clean
 task loom:pre-push                  # host-applied format + UI demo contract
 
@@ -930,7 +930,7 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 - Ordinary Team Agents format every changed file in their allowed scope and
   return coherent exact committed handoffs. They do not push, dispatch remote
   work, or operate external PR/check state.
-- After integration, Gizmo runs `task loom:pre-push` and inspects every
+- After a Team Agent commit, Gizmo runs `task loom:pre-push` and inspects every
   host-applied change. If formatting changes team-owned source or Cortex, Gizmo
   routes that exact diff to the responsible Team Agent. The Team Agent returns
   a fresh formatted commit. Gizmo continues from it and repeats pre-push.

@@ -56,7 +56,7 @@ prLand:
 ```
 
 ```bash
-# Gizmo, after integrating accepted Team Agent handoffs
+# Gizmo, after accepting Team Agent commits
 task loom:pre-push
 git push -u origin HEAD
 task loom:pr-land CONFIG=path/to/gizmo-owned/pr-land-validate.yaml
@@ -75,7 +75,7 @@ task loom:pr-land CONFIG=path/to/gizmo-owned/pr-land-validate.yaml
 - On a red remote run:
   1. read `gh run view <id> --log-failed`;
   2. obtain the responsible Team Agent's formatted fix commit;
-  3. Gizmo integrates, runs pre-push, and pushes; and
+  3. Gizmo continues from the fix commit, runs pre-push, and pushes; and
   4. Gizmo validates when ready or runs relevant focused proof.
 - Ordinary pushes do not refresh complete PR checks.
 - Markdown-only Cortex changes use the repository-policy workflow.
@@ -113,7 +113,7 @@ Does not apply to:
 
 ## Application Checklist
 
-- [ ] Team Agents format and commit without pushing; Gizmo integrates them.
+- [ ] Team Agents format and commit without pushing; Gizmo continues from them.
 - [ ] Gizmo runs `task loom:pre-push` before every push.
 - [ ] Do not require `task check`, `task ci:pr`, full suites, builds, or e2e
       on the agent machine.

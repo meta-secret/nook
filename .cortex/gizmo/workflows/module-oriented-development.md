@@ -5,7 +5,7 @@
 Design feature behavior top-down and implement accepted module contracts
 bottom-up.
 
-One delivery owner freezes the plan and owns integrated PR and Workbench state.
+One delivery owner freezes the plan and owns delivery-head PR and Workbench state.
 Worker dispatch follows the root
 [team worker contract](../../AGENTS.md#team-worker-contract) and
 [subagent delegation](subagent-delegation.md).
@@ -146,7 +146,7 @@ evidence. They never gate harness continuation.
 Implementation follows dependency readiness.
 
 1. Complete and test the lowest provider against its frozen edge contract.
-2. Verify and integrate an accepted write provider immediately.
+2. Verify an accepted write provider and continue from its commit immediately.
 3. Verify and accept read-only evidence through its versioned typed handoff.
 4. Record unusable output, then let Loom/Nook release its lease and recompute
    candidates.
@@ -164,13 +164,13 @@ Shared files and unresolved contracts remain serialized.
 
 ### Provider barriers
 
-A write provider must be terminal-successful, accepted, commit-verified, and
-integrated into the consumer's Git frontier. A read-only provider must be
+A write provider must be terminal-successful, accepted, and commit-verified.
+Its commit becomes the consumer's shared-branch starting point. A read-only provider must be
 terminal-successful, accepted, exact-source verified, and accepted as evidence
 in parent task state. Read-only evidence is not required in Git ancestry.
 
-Provider edges are local barriers. A provider is dispositioned and integrated
-alone as soon as it is accepted; unrelated members of its admission batch do
+Provider edges are local barriers. Gizmo dispositions a provider and continues
+from its commit as soon as it is accepted. Unrelated members of its admission batch do
 not delay its consumers. Ready nodes excluded by conflict or capacity remain
 pending for the next readiness recomputation.
 
@@ -182,20 +182,19 @@ evidence-surface claim and binds the result to one immutable plan generation,
 team, task, attempt, exact source commit, and evidence artifact digest.
 
 Every overlapping writer is a mandatory derived predecessor of the evidence
-provider, even when the declared graph already puts that writer downstream of
-the provider or one of its consumers. Evidence therefore runs only after those
-writes are integrated, and its consumers run only after the handoff is verified
-and accepted. If an existing provider path requires evidence before the writer,
-the combined graph is cyclic and validation rejects the plan before dispatch.
+provider. This applies even when the declared graph puts that writer downstream
+of the provider or a consumer. Evidence runs only after those writes are
+accepted. Its consumers run only after the direct commit is verified. If a
+provider path requires evidence before the writer, the combined graph is
+cyclic. Validation rejects that plan before dispatch.
 The plan must remove the overlap or repair the dependencies; ordinary execution
 does not accept stale consumers and then selectively revalidate them. The
 active harness retains only authorized attempt creation, start, run,
 communication, retry, cancellation, and lifecycle authority.
 
-For example, `nook-core` must be accepted and integrated before `nook-wasm`
-starts. The web consumer then starts from the accepted shared-branch commit containing
-both `nook-core` and `nook-wasm`. Independent ready module tasks continue while
-that chain advances.
+For example, `nook-core` must commit before `nook-wasm` starts. The web consumer
+then starts from the shared-branch commit containing both modules. Independent
+ready module tasks continue while that chain advances.
 
 ## Late provider discovery and generation restart
 
@@ -204,14 +203,14 @@ does not dispatch it. Gizmo conclusively dispositions the old attempt; every
 late mutation then uses the complete
 [immutable generation restart](subagent-delegation.md#immutable-generation-restart).
 All old-generation attempts are cancelled or rejected, accepted evidence and
-private integration state are abandoned. Every authorized replacement-
+private admission state are abandoned. Every authorized replacement-
 generation record receives a fresh attempt from its declared source and exact
 frontier. A surviving same logical task receives a retry; the new provider is a
 separate task with its own team identity, functional owner, resources, and
 first attempt. After old-generation disposition, Loom/Nook computes candidacy
-and frontiers; Gizmo validates and admission-authorizes records and freezes
-their frontiers; only then does the harness create those attempts. No old
-output migrates.
+and frontiers. Gizmo validates and admission-authorizes the records. It freezes
+their frontiers before the harness creates those attempts. No old output
+migrates.
 
 ## Flat hierarchy
 

@@ -87,32 +87,31 @@ This skill does not replace module ownership, internal API review, or subagent e
 
 ## Validation
 
-Confirm that every worker-executable capability has one functional owner and
-every worker-executable team or provider task has one team identity. Confirm
-that parent-owned Gizmo control operations stayed outside the worker graph and
-received neither a team identity nor a harness-created attempt. Confirm that
-Loom/Nook computed candidate and exact frontier data, Gizmo validated and
-admission-authorized each selected record and froze its frontier, and the
-harness only operated authorized attempts. Confirm that every capability has
-zero or more separate expertise tasks, each with exactly one provider-team
-identity and the same functional owner as explicit acceptance metadata and
-acceptance owner. Confirm that every authorized `(task ID, attempt ID)` received
-exactly one harness-visible worker attempt after its exact frontier existed,
-logical tasks retried only sequentially, and no logical task had concurrent
-active attempts.
-Confirm that every expertise provider stayed inside its explicit code and test
-scope, preserved the frozen contract, and returned to the functional owner for
-acceptance before Gizmo integration. Confirm that Git frontiers contain write
-predecessors while accepted read-only evidence remains in parent task state.
-Confirm the harness did not select or admit records or snapshot or change
-frontiers. Confirm that normal retries preserved the exact frozen contract and
-acceptance evidence, while any contract or acceptance change created a new
-immutable generation with fresh attempts for every authorized record. Confirm
-that repository-reading read-only tasks used non-empty read-covered evidence
-surfaces, evidence-only synthesis tasks used empty repository claims and
-evidence surfaces plus generation-frozen provider edges, expected producer
-identities, input schema, and acceptance criteria, with exact accepted evidence
-identities bound by Gizmo only when authorizing ready attempts. Confirm that
-this binding was not treated as a plan mutation, that write-capable tasks used
-empty evidence surfaces, and that the remaining canonical delegation criteria
-passed.
+Confirm all of these ownership and admission properties:
+
+- Every worker capability has one functional owner.
+- Every worker task has one team identity.
+- Parent-owned controls stayed outside the worker graph.
+- Parent-owned controls received no team identity or harness attempt.
+- Loom/Nook computed candidates and exact frontiers.
+- Gizmo validated and admission-authorized each selected record.
+- Gizmo froze each selected frontier before the harness created the attempt.
+- Each authorized attempt had one harness-visible worker attempt.
+- Logical tasks retried sequentially and never had concurrent attempts.
+- Each expertise provider stayed inside its code and test scope.
+- The provider preserved its frozen contract and obtained owner acceptance.
+- Gizmo continued only from the accepted commit.
+- Git frontiers contained all write predecessors.
+- Accepted read-only evidence remained in parent task state.
+- The harness did not select records, admit records, or change frontiers.
+- Normal retries preserved the frozen contract and acceptance evidence.
+- A contract or acceptance change created a new immutable generation.
+- The replacement generation used fresh attempts for every authorized record.
+- Repository-reading tasks used non-empty read-covered evidence surfaces.
+- Evidence-only synthesis tasks used empty repository claims and evidence
+  surfaces.
+- Synthesis froze provider edges, producer identities, schema, and acceptance.
+- Gizmo bound exact accepted evidence only when authorizing a ready attempt.
+- That binding was not treated as a plan mutation.
+- Write-capable tasks used empty evidence surfaces.
+- The remaining canonical delegation criteria passed.

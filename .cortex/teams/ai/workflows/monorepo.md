@@ -25,7 +25,7 @@ Use this workflow for feature work that touches more than one package.
 7. Add new app routine commands to the nearest owning Taskfile: web-family tasks under `nook-app/nook-web/Taskfile.yml` , Docker tasks under `nook-app/nook-platform/docker/Taskfile.yml`, CI tasks under `nook-app/ci/Taskfile.yml`, and repo-level non-app commands under the root `Taskfile.yml` or root `.task/`.
 8. Update `.cortex` docs when architecture or workflow changes.
 9. Run required formatters and commit every resulting mutation in the allowed
-   AI paths. Gizmo integrates that coherent handoff and runs
+   AI paths. Gizmo continues from that coherent commit and runs
    `task loom:pre-push`.
    - If hygiene mutates AI-owned source or Cortex content, the AI team returns
      a fresh formatted commit. Gizmo continues from it and reruns hygiene before

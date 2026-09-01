@@ -477,7 +477,7 @@ Use this workflow for quality, CI, and deployment changes.
     - Hosted jobs restore the same verified Zot refs read-only.
 
 11. **GitHub Actions agent execution:**
-    - Team Agents return formatted commits without pushing. Gizmo integrates,
+    - Team Agents return formatted commits without pushing. Gizmo continues,
       runs pre-push, pushes, and owns remote validation.
     - Gizmo uses focused `task remote` when faster than complete validation.
     - Focused tasks are not a prerequisite for complete validation.
@@ -488,7 +488,7 @@ Use this workflow for quality, CI, and deployment changes.
       [mission delivery](../../../gizmo/workflows/mission-delivery.md), and
       [pull request validation](../../../gizmo/workflows/pull-requests.md#5-hosted-iteration-and-explicit-validation).
 12. Gizmo proves the final head with green hosted checks. After a complete-gate
-    failure, the Team Agent returns a formatted fix commit; Gizmo integrates,
+    failure, the Team Agent returns a formatted fix commit; Gizmo continues,
     pushes, and re-validates.
 13. **Docker:** Killing the Docker daemon is **strictly prohibited** — only stop individual containers (`docker stop <id>`). Never `killall docker`, `pkill docker`, etc. See [docker-container-harness.md](../dynamic-skills/docker-container-harness.md).
 14. **NEVER pipe a long-running command through `| grep`/`| tail`/`| head`/`| sed` (or any filter).** This is a hard rule, not a suggestion.

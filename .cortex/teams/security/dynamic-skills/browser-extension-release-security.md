@@ -66,7 +66,7 @@ Does not apply to:
 7. Security reviews the exact functional-owner handoff, formats and commits
    only its allowed security-owned Cortex changes, and returns a pending
    acceptance verdict to Gizmo.
-8. Gizmo integrates the accepted handoffs and runs `task loom:pre-push` on the
+8. Gizmo continues from the accepted commits and runs `task loom:pre-push` on the
    combined head. If formatting changes security-owned content, Gizmo returns
    that exact diff to Security for a fresh formatted commit instead of
    committing it.

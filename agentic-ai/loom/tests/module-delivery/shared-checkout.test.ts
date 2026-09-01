@@ -61,7 +61,7 @@ function prepared(request: PrepareModuleWorktreeRequest): ModuleWorktreeHandle {
   return workspace;
 }
 
-describe('prepareModuleWorktree', () => {
+describe('shared module checkout', () => {
   test('identifies the current shared checkout at the exact baseline', () => {
     const fixture = createTrackedFixture();
     const marker = installCheckoutHook(fixture);

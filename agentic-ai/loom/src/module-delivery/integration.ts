@@ -310,6 +310,7 @@ function verifyExpectedHandoff(
   const verificationRequest: VerifyModuleCommitHandoffRequest = {
     workspace: handoff.workspace,
     baselineCommit: verification.expected.baselineCommit,
+    commit: handoff.commit,
     allowedWriteClaims: verification.expected.node.resources.write,
   };
   const pathRequest: ModuleCommitPathRequest = {

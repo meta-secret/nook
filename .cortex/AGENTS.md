@@ -8,7 +8,7 @@ rules belong to Gizmo's linked authorities.
 
 1. Read the [root context router](knowledge-graph.md).
 2. Classify the work as Gizmo delivery control, AI, development core, security,
-   SRE, web development, or shared integration.
+   SRE, web development, or shared ownership.
 3. Load exactly one owning `AGENTS.md` and knowledge graph.
 4. Open only the documents and headings needed for the assigned work.
 5. Stop loading Cortex when the task can be executed safely.
@@ -21,8 +21,8 @@ requires an explicit expertise task from Gizmo Prime.
 ## Context routes
 
 - [Gizmo Prime](gizmo/AGENTS.md) owns mission planning, delegation,
-  integration, review coordination, GitHub and Workbench state, readiness, and
-  merge.
+  delivery-head sequencing, review coordination, GitHub and Workbench state,
+  readiness, and merge.
 - [AI contract](teams/ai/AGENTS.md) and
   [graph](teams/ai/knowledge-graph.md): Cortex, Loom, agent skills, routing, and
   agent automation.
@@ -100,7 +100,7 @@ or second coordinator. See the [Gizmo contract](gizmo/AGENTS.md).
   read-only until ownership is explicitly transferred. See
   [agent feature ownership](gizmo/dynamic-skills/agent-feature-ownership.md).
 - Exactly two trusted GitHub Actions publishers are narrow exceptions to the
-  committed worker-handoff path:
+  ordinary direct-commit path:
   - `agent-implement.yml` gives its bounded editor no Git or external delivery
     authority. Trusted host tooling formats, validates change budget and PR
     identity, publishes, and returns the exact head.

@@ -114,7 +114,7 @@ An exclusion must describe data provenance, not excuse authored source.
 - [ ] Preserve or add behavior-focused unit and integration tests at their
       correct boundaries.
 - [ ] Return a verified committed handoff with the focused worker proof.
-- [ ] Have Gizmo integrate the handoff and run `task loom:pre-push`.
+- [ ] Have Gizmo continue from the commit and run `task loom:pre-push`.
 - [ ] Have Gizmo push. If the head is not validation-ready, Gizmo may run the
       repository source-size scanner through a focused hosted preflight task.
 - [ ] Have Gizmo dispatch complete exact-head validation when the head is

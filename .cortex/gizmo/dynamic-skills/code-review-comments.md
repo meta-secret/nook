@@ -3,7 +3,7 @@
 ## Purpose
 
 Make PR review-comment handling auditable. The responsible team agent verifies
-each active actionable finding and implements any required fix. Gizmo integrates
+each active actionable finding and implements any required fix. Gizmo continues from
 the handoff, pushes the result, leaves the targeted GitHub reply, and resolves
 the conversation. Gizmo also coordinates findings that require no change.
 
@@ -38,7 +38,7 @@ For each routed item, the responsible team agent:
 3. Implements the minimal correct fix when a change is required.
 4. Returns focused validation and a concise explanation to Gizmo.
 
-Gizmo integrates the verified handoff, completes applicable validation, and
+Gizmo continues from the verified commit, completes applicable validation, and
 pushes the result. It then applies the handling rule for the feedback target:
 
 - **Inline conversation:** Reply on the original target. Resolve it only after
@@ -102,7 +102,7 @@ Does not apply to:
 - [ ] The team agent verifies the finding before editing.
 - [ ] The team agent implements the minimal correct fix when required.
 - [ ] The team agent returns focused proof and any no-change rationale.
-- [ ] Gizmo integrates verified handoffs and runs
+- [ ] Gizmo continues from verified commits and runs
       `task loom:pre-push PR=<number>` when files changed.
 - [ ] Gizmo uses focused `task remote` jobs when useful, then explicitly triggers
       complete PR validation.

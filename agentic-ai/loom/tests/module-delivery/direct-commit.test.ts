@@ -74,8 +74,8 @@ function commitPath(active: ModuleWorktreeHandle): void {
   git(['commit', '--quiet', '-m', 'feature']);
 }
 
-describe('verifyModuleCommitHandoff', () => {
-  test('accepts an underscore write-task through worktree handoff', () => {
+describe('direct module commit', () => {
+  test('accepts an underscore write task as a direct commit', () => {
     const active = createWorkspace('writer_with_underscore');
     commitPath(active);
     const request = verificationRequest(active);
@@ -140,7 +140,7 @@ describe('verifyModuleCommitHandoff', () => {
     );
   });
 
-  test('rejects empty and noncanonical commits but accepts a linear range', () => {
+  test('rejects empty, multi-commit, and noncanonical deliveries', () => {
     const active = createWorkspace();
     const git = worktreeGit(active);
     git(['commit', '--quiet', '--allow-empty', '-m', 'empty']);
@@ -150,8 +150,8 @@ describe('verifyModuleCommitHandoff', () => {
     git(['add', '--all']);
     git(['commit', '--quiet', '-m', 'second']);
     const multipleRequest = verificationRequest(active);
-    expect(verifyModuleCommitHandoff(multipleRequest).commit).toBe(
-      git(['rev-parse', 'HEAD']),
+    expect(() => verifyModuleCommitHandoff(multipleRequest)).toThrow(
+      'one direct non-merge child',
     );
     git(['reset', '--hard', active.baselineCommit]);
     worktreeFileWriter(active)(['module/bad name.ts', 'bad\n']);

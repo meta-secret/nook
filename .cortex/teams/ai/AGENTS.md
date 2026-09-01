@@ -5,7 +5,7 @@
 The AI team owns Nook's agent knowledge system and deterministic agent
 tooling.
 
-Gizmo owns integrated and external delivery state. Loom/Nook computes
+Gizmo owns delivery-head and external delivery state. Loom/Nook computes
 deterministic admission data. The active harness alone owns worker-attempt
 lifecycle.
 
@@ -39,14 +39,14 @@ will implement named files.
 
 ## Forbidden responsibilities
 
-- Gizmo delivery planning, Workbench state, integrated Git state, pull
+- Gizmo delivery planning, Workbench state, delivery-head Git state, pull
   requests, review threads, readiness, merge state, or final PR verdicts.
 - Portable product, cryptographic, authorization, or storage implementation.
 - Browser presentation and frontend interaction behavior.
 - CI/CD platforms, clusters, deployments, and provider operations.
 - Security architecture, cryptographic policy, or security acceptance.
 - Foreign-team Cortex edits without an explicit expertise contract.
-- Independent mutation of integrated delivery state or worker-attempt
+- Independent mutation of external delivery state or worker-attempt
   lifecycle by a child agent.
 
 ## Complete team scope
