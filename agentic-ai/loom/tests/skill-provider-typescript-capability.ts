@@ -441,16 +441,55 @@ function assertSubprocessEnvironment([request, object]: readonly [
   if (environment === false && environmentProperties.length > 0)
     throw new Error('Dynamic TypeScript subprocess environment is forbidden.');
   if (environment !== false) {
-    const environmentObject = request.resolveObject(environment);
-    if (environmentObject === false && request.allowDynamicEnvironment) return;
-    if (environmentObject === false)
+    if (!ts.isObjectLiteralExpression(environment)) {
+      if (request.allowDynamicEnvironment) return;
       throw new Error(
         `Dynamic TypeScript subprocess environment is forbidden in ${request.sourcePath}.`,
       );
-    if (environmentObject.properties.length > 0)
-      throw new Error(
-        `Nonempty TypeScript subprocess environment is forbidden in ${request.sourcePath}.`,
-      );
+    }
+    const names = new Set<string>();
+    for (const property of environment.properties) {
+      if (
+        !ts.isPropertyAssignment(property) ||
+        (!ts.isIdentifier(property.name) &&
+          !ts.isStringLiteral(property.name)) ||
+        names.has(property.name.text)
+      )
+        throw new Error(
+          `Dynamic TypeScript subprocess environment is forbidden in ${request.sourcePath}.`,
+        );
+      if (!isSafeSubprocessEnvironmentKey(property.name.text))
+        throw new Error(
+          `Unsafe TypeScript subprocess environment key ${property.name.text} in ${request.sourcePath}.`,
+        );
+      const pathEnvironmentKey =
+        property.name.text === PlatformPathEnvironmentKey.Posix
+          ? PlatformPathEnvironmentKey.Posix
+          : property.name.text === PlatformPathEnvironmentKey.Windows
+            ? PlatformPathEnvironmentKey.Windows
+            : false;
+      if (
+        pathEnvironmentKey !== false &&
+        !isPlatformPathEnvironmentValue({
+          value: property.initializer,
+          name: pathEnvironmentKey,
+        })
+      )
+        throw new Error(
+          `Unsafe TypeScript subprocess PATH value in ${request.sourcePath}.`,
+        );
+      if (
+        pathEnvironmentKey === false &&
+        !isSafeSubprocessEnvironmentValue({
+          name: property.name.text,
+          value: property.initializer,
+        })
+      )
+        throw new Error(
+          `Unsafe TypeScript subprocess environment value for ${property.name.text} in ${request.sourcePath}.`,
+        );
+      names.add(property.name.text);
+    }
   }
   const shell = exactObjectProperty([object, 'shell']);
   const shellProperties = object.properties.filter(
@@ -497,6 +536,107 @@ function assertSubprocessEnvironment([request, object]: readonly [
     throw new Error(
       `TypeScript Worker eval authority is forbidden in ${request.sourcePath}.`,
     );
+}
+
+type SafeSubprocessEnvironmentValueRequest = {
+  readonly name: string;
+  readonly value: ts.Expression;
+};
+
+function isSafeSubprocessEnvironmentValue(
+  request: SafeSubprocessEnvironmentValueRequest,
+): boolean {
+  const { name, value } = request;
+  const literals: Readonly<Record<string, string>> = {
+    GIT_CONFIG_GLOBAL: '/dev/null',
+    GIT_CONFIG_NOSYSTEM: '1',
+    GIT_NO_REPLACE_OBJECTS: '1',
+    GIT_TERMINAL_PROMPT: '0',
+    LC_ALL: 'C',
+  };
+  if (Object.hasOwn(literals, name))
+    return ts.isStringLiteral(value) && value.text === literals[name];
+  if (name === 'GIT_AUTHOR_DATE' || name === 'GIT_COMMITTER_DATE')
+    return (
+      (ts.isStringLiteral(value) && /^@[0-9]+ \+0000$/u.test(value.text)) ||
+      isNamedPropertyAccess({ value, name: 'commitTimestamp' })
+    );
+  if (name === 'GIT_INDEX_FILE')
+    return (
+      ts.isStringLiteral(value) ||
+      isNamedPropertyAccess({ value, name: 'indexFile' })
+    );
+  return isProcessEnvironmentAccess({ value, name });
+}
+
+function isNamedPropertyAccess(
+  request: SafeSubprocessEnvironmentValueRequest,
+): boolean {
+  return (
+    ts.isPropertyAccessExpression(request.value) &&
+    request.value.name.text === request.name
+  );
+}
+
+function isProcessEnvironmentAccess(
+  request: SafeSubprocessEnvironmentValueRequest,
+): boolean {
+  const { value, name } = request;
+  return (
+    ts.isPropertyAccessExpression(value) &&
+    value.name.text === name &&
+    ts.isPropertyAccessExpression(value.expression) &&
+    value.expression.name.text === 'env' &&
+    ts.isIdentifier(value.expression.expression) &&
+    value.expression.expression.text === 'process'
+  );
+}
+
+enum PlatformPathEnvironmentKey {
+  Posix = 'PATH',
+  Windows = 'Path',
+}
+
+type PlatformPathEnvironmentValueRequest = {
+  readonly value: ts.Expression;
+  readonly name: PlatformPathEnvironmentKey;
+};
+
+function isPlatformPathEnvironmentValue(
+  request: PlatformPathEnvironmentValueRequest,
+): boolean {
+  const { value, name } = request;
+  return (
+    (name === PlatformPathEnvironmentKey.Posix &&
+      ts.isStringLiteral(value) &&
+      value.text === '/bin:/usr/bin:/usr/sbin') ||
+    (ts.isPropertyAccessExpression(value) &&
+      value.name.text === name &&
+      ts.isPropertyAccessExpression(value.expression) &&
+      value.expression.name.text === 'env' &&
+      ts.isIdentifier(value.expression.expression) &&
+      value.expression.expression.text === 'process')
+  );
+}
+
+function isSafeSubprocessEnvironmentKey(name: string): boolean {
+  return (
+    name === 'COMSPEC' ||
+    name === 'GIT_AUTHOR_DATE' ||
+    name === 'GIT_COMMITTER_DATE' ||
+    name === 'GIT_CONFIG_GLOBAL' ||
+    name === 'GIT_CONFIG_NOSYSTEM' ||
+    name === 'GIT_INDEX_FILE' ||
+    name === 'GIT_NO_REPLACE_OBJECTS' ||
+    name === 'GIT_TERMINAL_PROMPT' ||
+    name === 'LC_ALL' ||
+    name === 'PATH' ||
+    name === 'Path' ||
+    name === 'PATHEXT' ||
+    name === 'SYSTEMROOT' ||
+    name === 'SystemRoot' ||
+    name === 'WINDIR'
+  );
 }
 
 export function subprocessArgumentList(

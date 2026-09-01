@@ -7,6 +7,7 @@ import {
   REQUIRED_PARENT_OWNED_RESOURCES,
   ModuleDeliveryBaselineKind,
   ModuleDeliveryJoinKind,
+  ModuleDeliveryOwner,
   ModuleDeliveryTaskKind,
   ModuleDeliveryValidationStatus,
   ModuleDeliveryWorkspaceKind,
@@ -36,8 +37,8 @@ import {
 import type { FixtureFileWrite, GitFixture } from './worktree-test-support.ts';
 
 const SRE_CONTEXT = [
-  '.cortex/teams/sre/AGENTS.md',
-  '.cortex/teams/sre/knowledge-graph.md',
+  '.cortex/teams/ai/AGENTS.md',
+  '.cortex/teams/ai/knowledge-graph.md',
 ] as const;
 const SRE_SKILL =
   '.cortex/teams/sre/dynamic-skills/github-actions-only-validation.md';
@@ -75,12 +76,12 @@ function plan(sourceCommit: string): ModuleDeliveryPlanV2 {
       {
         kind: ModuleDeliveryTaskKind.Write,
         taskId: 'sre-cortex-writer',
-        team: TeamKey.Sre,
-        functionalOwner: TeamKey.Sre,
-        acceptanceOwner: TeamKey.Sre,
+        team: TeamKey.Ai,
+        functionalOwner: ModuleDeliveryOwner.GizmoPrime,
+        acceptanceOwner: ModuleDeliveryOwner.GizmoPrime,
         parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
         expert: CORTEX_TEAM_WRITER_EXPERT,
-        moduleRoot: '.cortex/teams/sre',
+        moduleRoot: '.cortex/teams/ai',
         consumerOutcome: 'SRE guidance and its shared index are current.',
         baseline: {
           kind: ModuleDeliveryBaselineKind.SourceCommit,
@@ -90,15 +91,12 @@ function plan(sourceCommit: string): ModuleDeliveryPlanV2 {
         dependencies: [],
         resources: {
           read: [SRE_SKILL],
-          write: [
-            '.cortex/teams/sre/workflows/quality.md',
-            '.cortex/shared/product-specs/index.md',
-          ],
+          write: ['.cortex/gizmo/workflows/subagent-delegation.md'],
           evidenceSurface: [],
         },
         cortexAuthoring: {
           selectedSkillPaths: [SRE_SKILL],
-          sharedWriteClaims: ['.cortex/shared/product-specs/index.md'],
+          sharedWriteClaims: ['.cortex/gizmo/workflows/subagent-delegation.md'],
         },
         parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES.filter(
           (claim) => claim !== '.cortex/**',
@@ -193,6 +191,10 @@ describe('Cortex module-delivery admission', () => {
       expect(admission?.startingFrontier).toBe(sourceCommit);
       expect(admission?.context?.contextPaths).toEqual(expectedContext);
       expect(admission?.resources.read).toEqual(expectedContext);
+      expect(admission?.functionalOwner).toBe(ModuleDeliveryOwner.GizmoPrime);
+      expect(admission?.resources.write).toEqual([
+        '.cortex/gizmo/workflows/subagent-delegation.md',
+      ]);
       const leaseRequest: RecordModuleDeliveryAttemptLeasesRequest = {
         authority,
         state,

@@ -13,6 +13,10 @@ import {
   prepareModuleWorktree,
 } from '../../src/module-delivery/index.ts';
 import {
+  gitText,
+  runModuleDeliveryGit,
+} from '../../src/module-delivery/git-command.ts';
+import {
   createGitFixture,
   disposeGitFixture,
   fixtureGit,
@@ -148,5 +152,76 @@ describe('prepareModuleWorktree', () => {
       else delete process.env.GIT_CONFIG_GLOBAL;
     }
     expect(existsSync(marker)).toBe(false);
+  });
+
+  test('does not inherit ambient process environment in Git commands', () => {
+    const fixture = createTrackedFixture();
+    const hadEmail = 'EMAIL' in process.env;
+    const previousEmail = process.env.EMAIL ?? '';
+    process.env.EMAIL = 'ambient-authority@nook.invalid';
+    try {
+      const result = runModuleDeliveryGit({
+        cwd: fixture.sourceRoot,
+        args: ['var', 'GIT_AUTHOR_IDENT'],
+      });
+      expect(gitText(result)).not.toContain('ambient-authority@nook.invalid');
+    } finally {
+      if (hadEmail) process.env.EMAIL = previousEmail;
+      else delete process.env.EMAIL;
+    }
+  });
+
+  test('validates executable search paths for the host platform', () => {
+    const fixture = createTrackedFixture();
+    const hadPath = 'PATH' in process.env;
+    const previousPath = process.env.PATH ?? '';
+    try {
+      process.env.PATH = `relative-bin:${previousPath || '/usr/bin'}`;
+      expect(() =>
+        runModuleDeliveryGit({
+          cwd: fixture.sourceRoot,
+          args: ['status', '--short'],
+        }),
+      ).toThrow('search path must contain absolute paths');
+      process.env.PATH = '\\\\server\\git';
+      let message = '';
+      try {
+        runModuleDeliveryGit({
+          cwd: fixture.sourceRoot,
+          args: ['status', '--short'],
+        });
+      } catch (error) {
+        message = error instanceof Error ? error.message : String(error);
+      }
+      if (process.platform === 'win32')
+        expect(message).not.toContain(
+          'search path must contain absolute paths',
+        );
+      else expect(message).toContain('search path must contain absolute paths');
+    } finally {
+      if (hadPath) process.env.PATH = previousPath;
+      else delete process.env.PATH;
+    }
+  });
+
+  test('preserves trusted Git arguments within explicit input bounds', () => {
+    const fixture = createTrackedFixture();
+    const exact = runModuleDeliveryGit({
+      cwd: fixture.sourceRoot,
+      args: ['rev-parse', '--verify', 'HEAD'],
+    });
+    expect(gitText(exact)).toBe(fixture.baselineCommit);
+    expect(() =>
+      runModuleDeliveryGit({
+        cwd: fixture.sourceRoot,
+        args: Array.from({ length: 1025 }, () => 'status'),
+      }),
+    ).toThrow('arguments exceed bounded input');
+    expect(() =>
+      runModuleDeliveryGit({
+        cwd: fixture.sourceRoot,
+        args: ['x'.repeat(1024 * 1024 + 1)],
+      }),
+    ).toThrow('arguments exceed bounded input');
   });
 });

@@ -8,6 +8,7 @@ import {
   ModuleDeliveryEvidenceInputSchema,
   ModuleDeliveryExecutionPrecedenceReason,
   ModuleDeliveryTaskKind,
+  ModuleDeliveryTaskProfile,
   ModuleDeliveryValidationStatus,
   ModuleDeliveryWorkspaceKind,
   decodeAndValidateModuleDeliveryPlan,
@@ -32,7 +33,6 @@ const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
 const PARENT_OWNED_RESOURCES: readonly string[] = [
   ...REQUIRED_PARENT_OWNED_RESOURCES,
 ];
-
 type WriteNodeFixture = {
   readonly taskId: string;
   readonly expert: string;
@@ -53,7 +53,6 @@ type EdgeFixture = {
   readonly providerTaskId: string;
   readonly consumerTaskId: string;
 };
-
 type PlanFixture = {
   readonly nodes: readonly ModuleDeliveryNodeV2[];
   readonly edgeContracts: readonly ModuleDeliveryEdgeContract[];
@@ -311,6 +310,53 @@ const DEFAULT_EDGES: readonly ModuleDeliveryEdgeContract[] = [
 ];
 
 describe('reviewed module delivery plan', () => {
+  test('admits ordinary team tasks and rejects forged identity, profile, and scope', () => {
+    const accepted = (node: ModuleDeliveryNodeV2) =>
+      validate(plan({ nodes: [node], edgeContracts: [] })).status ===
+      ModuleDeliveryValidationStatus.Accepted;
+    const security: ModuleDeliveryReadOnlyNodeV2 = {
+      ...readOnlyNode({
+        taskId: 'security-review',
+        expert: ModuleDeliveryTaskProfile.Ordinary,
+        moduleRoot: '.cortex/teams/security',
+        dependencies: [],
+      }),
+      team: TeamKey.Security,
+      functionalOwner: TeamKey.Ai,
+      acceptanceOwner: TeamKey.Ai,
+    };
+    for (const team of [TeamKey.Security, TeamKey.Sre])
+      expect(accepted({ ...security, team })).toBe(true);
+    const sreWrite = {
+      ...writeNode({
+        ...CORE_FIXTURE,
+        expert: ModuleDeliveryTaskProfile.Ordinary,
+        moduleRoot: 'infra',
+        write: ['infra/**'],
+      }),
+      team: TeamKey.Sre,
+      functionalOwner: TeamKey.Ai,
+      acceptanceOwner: TeamKey.Ai,
+    };
+    expect(accepted(sreWrite)).toBe(true);
+    const forgedTeam = structuredClone(security);
+    Object.assign(forgedTeam, { team: 'forged-team' });
+    const sharedRoot = 'nook-app/nook-web/nook-web-shared';
+    const root = `${sharedRoot}/src/vault-app/lib/nook-wasm`;
+    const generated = structuredClone(sreWrite);
+    Object.assign(generated, { team: TeamKey.WebDevelopment });
+    Object.assign(generated, { moduleRoot: root });
+    Object.assign(generated.resources, { write: [`${root}/**`] });
+    for (const invalid of [
+      forgedTeam,
+      { ...security, expert: 'forged-profile' },
+      { ...security, moduleRoot: '../forged-scope' },
+      { ...sreWrite, team: TeamKey.Security },
+      generated,
+    ])
+      expect(accepted(invalid)).toBe(false);
+  });
+
   test('rejects v2-only task forms and authority fields in v1 input', () => {
     expect(LEGACY_INPUT_REJECTS_SYNTHESIS).toBe(true);
     const legacy = legacyPlan();

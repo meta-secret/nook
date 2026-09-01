@@ -463,22 +463,74 @@ runExternal({command:'tar',cwd:runtimeRoot});`),
   ).toEqual([]);
 });
 
-test('rejects subprocess environment authority and permits exact empty env', () => {
+test('permits static-key subprocess environments and rejects dynamic maps', () => {
   expect(
     extract(`
 import {spawnSync} from 'node:child_process';
 spawnSync('bun', ['scripts/facade.ts'], {cwd:'nested',env:{}});`),
   ).toEqual(["cd 'nested' && 'bun' 'scripts/facade.ts'"]);
+  expect(
+    extract(`
+import {spawnSync} from 'node:child_process';
+function run(request:{indexFile?:string}) {
+  spawnSync('git', ['status'], {env:{
+    PATH:process.env.PATH,
+    GIT_CONFIG_NOSYSTEM:'1',
+    GIT_CONFIG_GLOBAL:'/dev/null',
+    GIT_INDEX_FILE:request.indexFile,
+  }});
+}
+run({indexFile:'index'});`),
+  ).toEqual([]);
+  expect(
+    extract(`
+import {spawnSync} from 'node:child_process';
+spawnSync('git', ['status'], {env:{PATH:'/bin:/usr/bin:/usr/sbin'}});`),
+  ).toEqual([]);
   for (const source of [
-    "import {spawnSync} from 'node:child_process'; spawnSync('bun', ['scripts/facade.ts'], {env:{NODE_OPTIONS:'--require ./hook.cjs'}});",
-    "import {execSync} from 'node:child_process'; execSync('bun scripts/facade.ts', {env:{BASH_ENV:'./hook.sh'}});",
     "import {fork} from 'node:child_process'; fork('scripts/facade.ts', [], {env:process.env});",
     "Bun.spawn(['bun', 'scripts/facade.ts'], {env:{...process.env}});",
-    "import {spawnSync} from 'node:child_process'; spawnSync('git', ['status'], {env:{NODE_OPTIONS:'--require ./hook.cjs'}});",
+    "import {spawnSync} from 'node:child_process'; const environment={PATH:process.env.PATH}; spawnSync('git', ['status'], {env:environment});",
+    "import {spawnSync} from 'node:child_process'; spawnSync('git', ['status'], {env:{[environmentName]:environmentValue}});",
+    "import {spawnSync} from 'node:child_process'; spawnSync('git', ['status'], {env:{PATH:process.env.PATH,PATH:'/usr/bin'}});",
   ])
     expect(() => extract(source)).toThrow(
-      /(?:Dynamic|Nonempty) TypeScript subprocess environment is forbidden/,
+      'Dynamic TypeScript subprocess environment is forbidden',
     );
+  for (const environmentName of ['BASH_ENV', 'NODE_OPTIONS', 'CUSTOM_VALUE'])
+    expect(() =>
+      extract(`
+import {spawnSync} from 'node:child_process';
+spawnSync('git', ['status'], {env:{${environmentName}:requestValue}});`),
+    ).toThrow(
+      `Unsafe TypeScript subprocess environment key ${environmentName}`,
+    );
+  for (const environment of [
+    "{PATH:'./bin:/usr/bin'}",
+    "{PATH:'/tmp:/bin:/usr/bin:/usr/sbin'}",
+    "{PATH:'/bin:/usr/bin:/usr/sbin:'}",
+    '{PATH:request.path}',
+    "{Path:'relative-bin'}",
+    "{Path:'/bin:/usr/bin:/usr/sbin'}",
+  ])
+    expect(() =>
+      extract(`
+import {spawnSync} from 'node:child_process';
+spawnSync('git', ['status'], {env:${environment}});`),
+    ).toThrow('Unsafe TypeScript subprocess PATH value');
+  for (const environment of [
+    "{GIT_CONFIG_GLOBAL:'./evil.gitconfig'}",
+    "{GIT_CONFIG_NOSYSTEM:'0'}",
+    "{GIT_NO_REPLACE_OBJECTS:'0'}",
+    "{GIT_TERMINAL_PROMPT:'1'}",
+    "{LC_ALL:'en_US.UTF-8'}",
+    '{COMSPEC:request.shell}',
+  ])
+    expect(() =>
+      extract(`
+import {spawnSync} from 'node:child_process';
+spawnSync('git', ['status'], {env:${environment}});`),
+    ).toThrow('Unsafe TypeScript subprocess environment value');
 });
 
 test('rejects shell-enabled subprocess options', () => {
@@ -514,7 +566,6 @@ new Worker('./scripts/args.mjs', {execArgv:[],eval:false});`),
     "new Worker('./scripts/facade.mjs', {execArgv:[],execArgv:['--inspect']});",
     "new Worker('postMessage(1)', {eval:true});",
     "new Worker('./scripts/facade.mjs', {eval:false,eval:false});",
-    "new Worker('./scripts/facade.mjs', {env:{NODE_OPTIONS:'--require ./hook.cjs'}});",
   ])
     expect(() => extract(source)).toThrow();
   expect(

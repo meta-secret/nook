@@ -1,4 +1,5 @@
 import { TeamKey } from '../team-agents/catalog.ts';
+import { taskResourcePatternsOverlap } from '../agent-workflow/domain.ts';
 import type { AgentAttemptParent } from '../agent-workflow/domain.ts';
 
 export const MODULE_DELIVERY_PLAN_VERSION = 2;
@@ -9,6 +10,12 @@ export const MAX_MODULE_DELIVERY_CONCURRENCY = 16;
 export const MAX_MODULE_DELIVERY_AGENT_DEPTH = 3;
 export const MAX_MODULE_DELIVERY_ATTEMPTS = 5;
 export const CORTEX_TEAM_WRITER_EXPERT = 'cortex_team_writer';
+
+export enum ModuleDeliveryOwner {
+  GizmoPrime = 'gizmo-prime',
+}
+
+export type ModuleDeliveryOwnerIdentity = TeamKey | ModuleDeliveryOwner;
 
 export const REQUIRED_PARENT_OWNED_RESOURCES = [
   '.cortex/**',
@@ -28,21 +35,186 @@ export enum ModuleDeliveryTaskKind {
   Write = 'write',
 }
 
+export enum ModuleDeliveryTaskProfile {
+  Ordinary = 'ordinary-team-task',
+}
+
+const SRE_EXACT_OPERATIONAL_FILES = [
+  'agentic-ai/minds/Taskfile.yml',
+  'nook-app/Taskfile.yml',
+  'nook-app/docker-bake.hcl',
+  'nook-app/nook-web/nook-web-extension/scripts/hosted-extension.sh',
+  'nook-app/nook-web/nook-web-extension/scripts/hosted-extension.test.sh',
+  'nook-app/nook-web/nook-web-extension/scripts/run-with-xvfb.sh',
+  'nook-app/nook-web/nook-web-extension/scripts/setup-brave-vault.mjs',
+  'nook-app/nook-web/nook-web-extension/scripts/setup-brave-vault.sh',
+  'nook-app/nook-web/nook-web-extension/scripts/setup-brave-vault.test.sh',
+  'nook-app/nook-web/nook-web-extension/scripts/test-e2e.sh',
+  'nook-app/nook-web/nook-web-extension/scripts/test-hosted-smoke.sh',
+  'nook-app/nook-web/nook-web-extension/scripts/test-hosted-smoke.test.sh',
+  'nook-app/nook-web/nook-web-extension/scripts/verify-deployment.sh',
+] as const;
+
+export const ORDINARY_TASK_WRITE_ROOTS = {
+  [TeamKey.Ai]: [
+    'agentic-ai/loom',
+    '.task/agentic-ai.yml',
+    'preflight/tests/loom_contracts.rs',
+  ],
+  [TeamKey.DevelopmentCore]: [
+    'agentic-ai/minds/Cargo.lock',
+    'agentic-ai/minds/Cargo.toml',
+    'agentic-ai/minds/clippy.toml',
+    'agentic-ai/minds/hive/Cargo.toml',
+    'agentic-ai/minds/hive/src',
+    'agentic-ai/minds/hive/tests',
+    'agentic-ai/minds/lace',
+    'nook-app/nook-platform/Cargo.lock',
+    'nook-app/nook-platform/Cargo.toml',
+    'nook-app/nook-platform/fuzz',
+    'nook-app/nook-platform/nook-app-common',
+    'nook-app/nook-platform/nook-auth2',
+    'nook-app/nook-platform/nook-authenticator-domain',
+    'nook-app/nook-platform/nook-companion-core',
+    'nook-app/nook-platform/nook-companion-wasm',
+    'nook-app/nook-platform/nook-core',
+    'nook-app/nook-platform/nook-event-log',
+    'nook-app/nook-platform/nook-replication',
+    'nook-app/nook-platform/nook-wasm',
+  ],
+  [TeamKey.Security]: [],
+  [TeamKey.Sre]: [
+    ...SRE_EXACT_OPERATIONAL_FILES,
+    'infra',
+    'nook-app/ci',
+    'nook-app/nook-platform/.cargo',
+    'nook-app/nook-platform/.config',
+    'nook-app/nook-platform/Taskfile.yml',
+    'nook-app/nook-platform/docker',
+    'nook-app/nook-platform/fuzz/.cargo',
+    'nook-app/nook-platform/nook-core/Dockerfile.dockerignore',
+    'nook-app/nook-platform/nook-core/coverage-floor.json',
+    'nook-app/nook-platform/nook-core/docker-bake.hcl',
+    'nook-app/nook-platform/nook-wasm/Dockerfile.dockerignore',
+    'nook-app/nook-platform/nook-wasm/Taskfile.yml',
+    'nook-app/nook-platform/nook-wasm/docker-bake.hcl',
+    'nook-app/nook-web/Taskfile.yml',
+    'nook-app/nook-web/docker',
+    'nook-app/nook-web/nook-web-extension/Taskfile.yml',
+    'nook-app/nook-web/nook-web-app/Dockerfile',
+    'nook-app/nook-web/nook-web-app/docker-bake.hcl',
+    'preflight',
+    '.task',
+    'agentic-ai/ci-agent',
+  ],
+  [TeamKey.WebDevelopment]: [
+    'nook-app/nook-web',
+    'agentic-ai/minds/hive-console',
+  ],
+} as const;
+
+const ORDINARY_TASK_FILE_ROOTS = new Set<string>([
+  ...SRE_EXACT_OPERATIONAL_FILES,
+  '.task/agentic-ai.yml',
+  'agentic-ai/minds/Cargo.lock',
+  'agentic-ai/minds/Cargo.toml',
+  'agentic-ai/minds/clippy.toml',
+  'agentic-ai/minds/hive/Cargo.toml',
+  'nook-app/nook-platform/Cargo.lock',
+  'nook-app/nook-platform/Cargo.toml',
+  'nook-app/nook-platform/nook-core/Dockerfile.dockerignore',
+  'nook-app/nook-platform/nook-core/coverage-floor.json',
+  'nook-app/nook-platform/nook-core/docker-bake.hcl',
+  'nook-app/nook-platform/nook-wasm/Dockerfile.dockerignore',
+  'nook-app/nook-platform/nook-wasm/Taskfile.yml',
+  'nook-app/nook-platform/nook-wasm/docker-bake.hcl',
+  'nook-app/nook-platform/Taskfile.yml',
+  'nook-app/nook-web/nook-web-app/Dockerfile',
+  'nook-app/nook-web/nook-web-app/docker-bake.hcl',
+  'nook-app/nook-web/nook-web-extension/Taskfile.yml',
+  'nook-app/nook-web/Taskfile.yml',
+  'preflight/tests/loom_contracts.rs',
+]);
+
 export type ModuleDeliveryTaskTeamRequest = {
   readonly kind: ModuleDeliveryTaskKind;
   readonly moduleRoot: string;
   readonly expertContextPaths: readonly string[];
 };
 
+export function ordinaryTaskWriteTeam(write: string): TeamKey | false {
+  if (ordinaryTaskFileRootShadows(write)) return false;
+  if (!write.includes('*')) return ordinaryTaskPathTeam(write);
+  let owner: TeamKey | false = false;
+  for (const team of Object.values(TeamKey)) {
+    const roots: readonly string[] = ORDINARY_TASK_WRITE_ROOTS[team];
+    for (const root of roots)
+      if (taskResourcePatternsOverlap({ first: write, second: root })) {
+        if (owner !== false && owner !== team) return false;
+        owner = team;
+      }
+  }
+  return owner;
+}
+
+function ordinaryTaskPathTeam(path: string): TeamKey | false {
+  let owner: TeamKey | false = false;
+  let ownerRootLength = -1;
+  for (const team of Object.values(TeamKey)) {
+    const roots: readonly string[] = ORDINARY_TASK_WRITE_ROOTS[team];
+    for (const root of roots)
+      if (
+        (path === root ||
+          (!ORDINARY_TASK_FILE_ROOTS.has(root) &&
+            path.startsWith(`${root}/`))) &&
+        root.length > ownerRootLength
+      ) {
+        owner = team;
+        ownerRootLength = root.length;
+      }
+  }
+  return owner;
+}
+
+export type OrdinaryTaskWriteAuthorizationRequest = {
+  readonly team: TeamKey;
+  readonly moduleRoot: string;
+  readonly write: string;
+};
+
+export function ordinaryTaskWriteAuthorized(
+  request: OrdinaryTaskWriteAuthorizationRequest,
+): boolean {
+  return (
+    (request.write.includes('*') ||
+      request.write !== request.moduleRoot ||
+      !ordinaryTaskDirectoryRoot(request.write)) &&
+    (request.write === request.moduleRoot ||
+      request.write.startsWith(`${request.moduleRoot}/`)) &&
+    ordinaryTaskWriteTeam(request.write) === request.team
+  );
+}
+
+function ordinaryTaskDirectoryRoot(path: string): boolean {
+  for (const roots of Object.values(ORDINARY_TASK_WRITE_ROOTS))
+    if (roots.includes(path as never) && !ORDINARY_TASK_FILE_ROOTS.has(path))
+      return true;
+  return false;
+}
+
+function ordinaryTaskFileRootShadows(write: string): boolean {
+  for (const roots of Object.values(ORDINARY_TASK_WRITE_ROOTS))
+    for (const root of roots)
+      if (ORDINARY_TASK_FILE_ROOTS.has(root) && write.startsWith(`${root}/`))
+        return true;
+  return false;
+}
+
 export function moduleDeliveryTaskTeam(
   request: ModuleDeliveryTaskTeamRequest,
 ): TeamKey | false {
   if (request.kind === ModuleDeliveryTaskKind.Write) {
-    if (request.moduleRoot.startsWith('nook-app/nook-platform/'))
-      return TeamKey.DevelopmentCore;
-    if (request.moduleRoot.startsWith('nook-app/nook-web/'))
-      return TeamKey.WebDevelopment;
-    return false;
+    return ordinaryTaskWriteTeam(request.moduleRoot);
   }
   if (request.expertContextPaths.includes('.cortex/teams/ai/AGENTS.md'))
     return TeamKey.Ai;
@@ -102,8 +274,8 @@ export type ModuleDeliveryCortexAuthoring = {
 export type ModuleDeliveryExpectedProducerIdentity = {
   readonly taskId: string;
   readonly team: TeamKey;
-  readonly functionalOwner: TeamKey;
-  readonly acceptanceOwner: TeamKey;
+  readonly functionalOwner: ModuleDeliveryOwnerIdentity;
+  readonly acceptanceOwner: ModuleDeliveryOwnerIdentity;
 };
 
 export type ModuleDeliveryEvidenceInputContract = {
@@ -114,8 +286,8 @@ export type ModuleDeliveryEvidenceInputContract = {
 type ModuleDeliveryNodeFields = {
   readonly taskId: string;
   readonly team: TeamKey;
-  readonly functionalOwner: TeamKey;
-  readonly acceptanceOwner: TeamKey;
+  readonly functionalOwner: ModuleDeliveryOwnerIdentity;
+  readonly acceptanceOwner: ModuleDeliveryOwnerIdentity;
   readonly parentLineage: AgentAttemptParent;
   readonly expert: string;
   readonly moduleRoot: string;

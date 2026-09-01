@@ -1,6 +1,9 @@
 import { taskResourcePatternsOverlap } from '../agent-workflow/domain.ts';
-import { assertEvidenceBound } from './authority.ts';
-import { freezeProviderEvidenceIdentity } from './authority.ts';
+import {
+  assertEvidenceBound,
+  freezeProviderEvidenceIdentity,
+} from './authority.ts';
+import type { AcceptedModuleDeliveryEvidenceRegistry } from './authority.ts';
 import { ModuleDeliveryTaskKind } from './domain.ts';
 import { runModuleDeliveryGit } from './git-command.ts';
 import {
@@ -19,6 +22,7 @@ import type {
 } from './admission.ts';
 import type {
   ModuleDeliveryNodeV2,
+  ModuleDeliveryOwnerIdentity,
   ValidatedModuleDeliveryPlan,
 } from './domain.ts';
 import type { GitCommandRequest } from './git-command.ts';
@@ -52,8 +56,8 @@ export type ModuleDeliveryAcceptedProviderEvidenceIdentity = Readonly<{
   taskId: string;
   attempt: number;
   producerTeam: TeamKey;
-  functionalOwner: TeamKey;
-  acceptanceOwner: TeamKey;
+  functionalOwner: ModuleDeliveryOwnerIdentity;
+  acceptanceOwner: ModuleDeliveryOwnerIdentity;
   sourceCommit: string;
   verifiedHeadCommit: string;
   artifactIdentity: string;
@@ -81,6 +85,15 @@ export type ModuleDeliveryEvidenceSubmissionValidation = Readonly<{
   authorized: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
 }>;
 
+export type RestoreModuleDeliveryCanonicalEvidenceReceiptRequest = Readonly<{
+  authority: ModuleDeliveryGenerationAuthority;
+  acceptedPlan: ValidatedModuleDeliveryPlan;
+  state: ModuleDeliveryAdmissionState;
+  lease: ModuleDeliveryAttemptLease;
+  acceptedEvidence: readonly AcceptedModuleDeliveryEvidence[];
+  receipt: ModuleDeliveryAcceptedProviderEvidenceIdentity;
+}>;
+
 type GitTreeEntry = Readonly<{ metadata: string; path: string }>;
 type EvidenceArtifactDigestContent = Readonly<{
   artifactIdentity: string;
@@ -95,8 +108,10 @@ type EvidenceSourceProvenanceContent = Readonly<{
   taskId: string;
   attempt: number;
   producerTeam: TeamKey;
-  functionalOwner: TeamKey;
-  acceptanceOwner: TeamKey;
+  functionalOwner: ModuleDeliveryOwnerIdentity;
+  acceptanceOwner: ModuleDeliveryOwnerIdentity;
+  artifactIdentity: string;
+  artifactDigest: string;
   verdict: ModuleDeliveryEvidenceVerdict;
   claimIdentities: readonly ModuleDeliveryEvidenceClaimIdentity[];
   acceptanceRequirements: readonly string[];
@@ -133,7 +148,12 @@ type EvidenceNodeRequest = {
   readonly plan: ValidatedModuleDeliveryPlan;
   readonly taskId: string;
 };
-
+type RestoreCanonicalEvidenceReceiptRequest =
+  RestoreModuleDeliveryCanonicalEvidenceReceiptRequest &
+    Readonly<{
+      registry: AcceptedModuleDeliveryEvidenceRegistry;
+      node: ModuleDeliveryNodeV2;
+    }>;
 const COMMIT = /^[0-9a-f]{40}$/u;
 const DIGEST = /^[0-9a-f]{64}$/u;
 
@@ -319,6 +339,90 @@ function assertSynthesisInputs(request: SynthesisInputsRequest): void {
   }
 }
 
+export function restoreModuleDeliveryCanonicalEvidenceReceipt(
+  request: RestoreCanonicalEvidenceReceiptRequest,
+): AcceptedModuleDeliveryEvidence {
+  if (request.node.kind === ModuleDeliveryTaskKind.Write)
+    throw new Error('Canonical evidence receipts cannot restore write tasks.');
+  const existing = request.acceptedEvidence.map((evidence) => {
+    request.registry.assert({ authority: request.authority, evidence });
+    return request.registry.identity(evidence);
+  });
+  if (
+    JSON.stringify(existing) !==
+    JSON.stringify(request.state.acceptedProviderEvidence)
+  )
+    throw new Error('Canonical evidence receipt state is inconsistent.');
+
+  const receipt = freezeProviderEvidenceIdentity(request.receipt);
+  const canonicalReceipt: ModuleDeliveryAcceptedProviderEvidenceIdentity =
+    freezeProviderEvidenceIdentity({
+      schemaVersion: receipt.schemaVersion,
+      generation: receipt.generation,
+      planDigest: receipt.planDigest,
+      taskId: receipt.taskId,
+      attempt: receipt.attempt,
+      producerTeam: receipt.producerTeam,
+      functionalOwner: receipt.functionalOwner,
+      acceptanceOwner: receipt.acceptanceOwner,
+      sourceCommit: receipt.sourceCommit,
+      verifiedHeadCommit: receipt.verifiedHeadCommit,
+      artifactIdentity: receipt.artifactIdentity,
+      artifactDigest: receipt.artifactDigest,
+      sourceProvenanceDigest: receipt.sourceProvenanceDigest,
+      verdict: receipt.verdict,
+      claimIdentities: receipt.claimIdentities,
+      acceptanceRequirements: receipt.acceptanceRequirements,
+      acceptedProviderEvidence: receipt.acceptedProviderEvidence,
+    });
+  const expectedClaims =
+    request.node.kind === ModuleDeliveryTaskKind.EvidenceSynthesis
+      ? []
+      : request.node.resources.evidenceSurface;
+  if (
+    receipt.schemaVersion !== MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION ||
+    receipt.generation !== request.lease.generation ||
+    receipt.planDigest !== request.lease.planDigest ||
+    receipt.taskId !== request.lease.taskId ||
+    receipt.attempt !== request.lease.attempt ||
+    receipt.producerTeam !== request.lease.team ||
+    receipt.functionalOwner !== request.lease.functionalOwner ||
+    receipt.acceptanceOwner !== request.lease.acceptanceOwner ||
+    receipt.sourceCommit !== request.lease.startingFrontier ||
+    receipt.verifiedHeadCommit !== request.state.headCommit ||
+    !validIdentity(receipt.artifactIdentity) ||
+    !DIGEST.test(receipt.artifactDigest) ||
+    !DIGEST.test(receipt.sourceProvenanceDigest) ||
+    receipt.verdict !== ModuleDeliveryEvidenceVerdict.TerminalSuccess ||
+    JSON.stringify(receipt.claimIdentities.map(({ claim }) => claim)) !==
+      JSON.stringify(expectedClaims) ||
+    receipt.claimIdentities.some(
+      ({ contentDigest }) => !DIGEST.test(contentDigest),
+    ) ||
+    JSON.stringify(receipt.acceptanceRequirements) !==
+      JSON.stringify(request.lease.acceptanceRequirements) ||
+    JSON.stringify(receipt.acceptedProviderEvidence) !==
+      JSON.stringify(request.lease.authorizedProviderEvidence) ||
+    JSON.stringify(canonicalReceipt) !== JSON.stringify(request.receipt)
+  )
+    throw new Error(
+      'Canonical evidence receipt does not match its plan and lease state.',
+    );
+
+  const evidence: AcceptedModuleDeliveryEvidence = Object.freeze({
+    kind: ModuleDeliveryProviderSubmissionKind.ReadOnlyEvidence,
+    ...canonicalReceipt,
+    evidence: Object.freeze([]),
+  });
+  request.registry.register({
+    authority: request.authority,
+    evidence,
+    integratedTaskIds:
+      request.state.integratedWriterFrontiers[0]?.integratedTaskIds ?? [],
+  });
+  return evidence;
+}
+
 function sourceProvenanceDigest(
   submission: ModuleDeliveryReadOnlyEvidenceSubmission,
 ): string {
@@ -331,6 +435,8 @@ function sourceProvenanceDigest(
     producerTeam: submission.producerTeam,
     functionalOwner: submission.functionalOwner,
     acceptanceOwner: submission.acceptanceOwner,
+    artifactIdentity: submission.artifactIdentity,
+    artifactDigest: submission.artifactDigest,
     verdict: submission.verdict,
     claimIdentities: submission.claimIdentities,
     acceptanceRequirements: submission.acceptanceRequirements,

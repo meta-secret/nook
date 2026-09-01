@@ -1,8 +1,9 @@
 import { isValidTaskResourceClaim } from '../agent-workflow/domain.ts';
-import { teamCortexRoot } from '../team-agents/catalog.ts';
+import { TeamKey, teamCortexRoot } from '../team-agents/catalog.ts';
 import {
   CORTEX_TEAM_WRITER_EXPERT,
   ModuleDeliveryIssueCode,
+  ModuleDeliveryOwner,
   ModuleDeliveryTaskKind,
 } from './domain.ts';
 import type { ModuleDeliveryNodeV2, ModuleDeliveryPlanV2 } from './domain.ts';
@@ -38,6 +39,16 @@ export function validateCortexAuthoring(
   const findings: CortexAuthoringFinding[] = [];
   const { selectedSkillPaths, sharedWriteClaims } =
     request.node.cortexAuthoring;
+  const gizmoOwned =
+    request.node.functionalOwner === ModuleDeliveryOwner.GizmoPrime ||
+    request.node.acceptanceOwner === ModuleDeliveryOwner.GizmoPrime;
+  if (gizmoOwned && !isGizmoPrimeCortexTask(request.node)) {
+    findings.push({
+      code: ModuleDeliveryIssueCode.AcceptanceOwnershipMismatch,
+      path: `${request.path}.functionalOwner`,
+      message: 'Gizmo Prime may own only an exact Gizmo Cortex grant task.',
+    });
+  }
   if (!request.node.resources.write.some(isCortexClaim)) {
     const finding: CortexAuthoringFinding = {
       code: ModuleDeliveryIssueCode.InvalidField,
@@ -66,13 +77,13 @@ export function validateCortexAuthoring(
     if (
       !isValidTaskResourceClaim(sharedClaim) ||
       sharedClaim.includes('*') ||
-      !sharedClaim.startsWith('.cortex/shared/') ||
+      !explicitCortexGrant({ node: request.node, claim: sharedClaim }) ||
       !request.node.resources.write.includes(sharedClaim)
     ) {
       const finding: CortexAuthoringFinding = {
         code: ModuleDeliveryIssueCode.InvalidField,
         path: `${request.path}.cortexAuthoring.sharedWriteClaims`,
-        message: `Shared Cortex grant must be an exact assigned .cortex/shared file: ${sharedClaim}.`,
+        message: `Cortex grant must be an exact assigned shared or Gizmo-owned file: ${sharedClaim}.`,
       };
       findings.push(finding);
     }
@@ -120,6 +131,31 @@ export function isPureCortexTask(node: ModuleDeliveryNodeV2): boolean {
   );
 }
 
+export function isGizmoPrimeCortexTask(node: ModuleDeliveryNodeV2): boolean {
+  if (
+    !isPureCortexTask(node) ||
+    node.kind !== ModuleDeliveryTaskKind.Write ||
+    !node.cortexAuthoring
+  )
+    return false;
+  const { sharedWriteClaims } = node.cortexAuthoring;
+  return (
+    node.team === TeamKey.Ai &&
+    node.functionalOwner === ModuleDeliveryOwner.GizmoPrime &&
+    node.acceptanceOwner === ModuleDeliveryOwner.GizmoPrime &&
+    node.expert === CORTEX_TEAM_WRITER_EXPERT &&
+    node.moduleRoot === teamCortexRoot(TeamKey.Ai) &&
+    sharedWriteClaims.length === node.resources.write.length &&
+    node.resources.write.every(
+      (claim) =>
+        claim.startsWith('.cortex/gizmo/') &&
+        !claim.includes('*') &&
+        isMarkdownFileClaim(claim) &&
+        sharedWriteClaims.includes(claim),
+    )
+  );
+}
+
 export function cortexWriteAuthorized(
   request: CortexWriteAuthorizationRequest,
 ): boolean {
@@ -130,8 +166,25 @@ export function cortexWriteAuthorized(
   return (
     claim === teamRoot ||
     claim.startsWith(`${teamRoot}/`) ||
-    node.cortexAuthoring.sharedWriteClaims.includes(claim)
+    (node.cortexAuthoring.sharedWriteClaims.includes(claim) &&
+      explicitCortexGrant(request))
   );
+}
+
+function explicitCortexGrant(request: CortexWriteAuthorizationRequest) {
+  const { node, claim } = request;
+  return (
+    isMarkdownFileClaim(claim) &&
+    (claim.startsWith('.cortex/shared/') ||
+      (claim.startsWith('.cortex/gizmo/') &&
+        node.team === TeamKey.Ai &&
+        node.functionalOwner === ModuleDeliveryOwner.GizmoPrime &&
+        node.acceptanceOwner === ModuleDeliveryOwner.GizmoPrime))
+  );
+}
+
+function isMarkdownFileClaim(claim: string): boolean {
+  return claim.endsWith('.md');
 }
 
 export function expectedParentOwnedExclusions(

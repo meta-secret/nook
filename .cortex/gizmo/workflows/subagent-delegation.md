@@ -315,6 +315,40 @@ evidence artifact, and digest plus the applicable repository surface or typed
 provider-input identities. An unverified, wrong-generation, wrong-team, or
 wrong-attempt handoff cannot satisfy a provider edge.
 
+#### Canonical Team Plan receipt replay
+
+Project-owned Team Plan journal state is trusted project state. The same rule
+applies to redacted receipts stored in the project's private Git state.
+
+Replay validates the receipt against the canonical lifecycle state:
+
+- schema version;
+- plan generation and digest;
+- task and attempt;
+- team and owner identities;
+- active lease;
+- source and verified frontiers;
+- acceptance requirements;
+- evidence-surface claims; and
+- accepted provider-evidence inputs.
+
+Canonical replay follows these rules:
+
+- It restores only the redacted receipt.
+- It does not persist or replay raw worker evidence.
+- Project-owned Team Plan components must not add signatures or MACs between
+  each other.
+- They must not add signing keys, verification keys, or a cryptographic
+  provenance protocol between each other.
+- Those mechanisms would invent a trust root outside the canonical project
+  state.
+- This trust rule does not apply to external or unaccepted worker output.
+- That output must still pass the applicable handoff, scope, provenance,
+  semantic, and lifecycle checks before acceptance.
+- This rule does not weaken Nook product security boundaries.
+- Product cryptography, authentication, authorization, device identity, and
+  vault storage retain their owning security contracts.
+
 ### Ready admission
 
 Dispatch follows these rules:

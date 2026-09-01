@@ -4,16 +4,21 @@ import {
   CORTEX_TEAM_WRITER_EXPERT,
   REQUIRED_PARENT_OWNED_RESOURCES,
   ModuleDeliveryBaselineKind,
+  ModuleDeliveryEvidenceInputSchema,
   ModuleDeliveryExecutionPrecedenceReason,
   ModuleDeliveryIssueCode,
   ModuleDeliveryJoinKind,
+  ModuleDeliveryOwner,
   ModuleDeliveryTaskKind,
+  ModuleDeliveryTaskProfile,
   ModuleDeliveryValidationStatus,
   ModuleDeliveryWorkspaceKind,
   decodeAndValidateModuleDeliveryPlan,
 } from '../../src/module-delivery/index.ts';
 import type {
   ModuleDeliveryExecutionPrecedence,
+  ModuleDeliveryEvidenceSynthesisNodeV2,
+  ModuleDeliveryNodeV2,
   ModuleDeliveryPlanV2,
   ModuleDeliveryPlanValidation,
   ModuleDeliveryWriteNodeV2,
@@ -72,9 +77,7 @@ function cortexNode(request: CortexNodeRequest): ModuleDeliveryWriteNodeV2 {
   };
 }
 
-function plan(
-  nodes: readonly ModuleDeliveryWriteNodeV2[],
-): ModuleDeliveryPlanV2 {
+function plan(nodes: readonly ModuleDeliveryNodeV2[]): ModuleDeliveryPlanV2 {
   return {
     version: 2,
     generation: 1,
@@ -94,7 +97,7 @@ function plan(
 }
 
 function validate(
-  nodes: readonly ModuleDeliveryWriteNodeV2[],
+  nodes: readonly ModuleDeliveryNodeV2[],
 ): ModuleDeliveryPlanValidation {
   return decodeAndValidateModuleDeliveryPlan(JSON.stringify(plan(nodes)));
 }
@@ -120,7 +123,55 @@ function sreNode(): ModuleDeliveryWriteNodeV2 {
   return cortexNode(request);
 }
 
+function ordinaryDevCoreWrite(): ModuleDeliveryWriteNodeV2 {
+  const node = cortexNode({
+    taskId: 'dev-core-write',
+    team: TeamKey.DevelopmentCore,
+    write: ['nook-app/nook-platform/nook-core/src/**'],
+    selectedSkillPaths: [],
+    sharedWriteClaims: [],
+  });
+  Reflect.deleteProperty(node, 'cortexAuthoring');
+  return {
+    ...node,
+    functionalOwner: TeamKey.DevelopmentCore,
+    acceptanceOwner: TeamKey.DevelopmentCore,
+    expert: ModuleDeliveryTaskProfile.Ordinary,
+    moduleRoot: 'nook-app/nook-platform/nook-core',
+    parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
+  };
+}
+
 describe('Cortex module-delivery plan validation', () => {
+  test('keeps ordinary synthesis and Gizmo ownership fail-closed', () => {
+    const write = ordinaryDevCoreWrite();
+    expect(validate([write]).status).toBe(
+      ModuleDeliveryValidationStatus.Accepted,
+    );
+    expect(
+      validate([
+        {
+          ...write,
+          functionalOwner: ModuleDeliveryOwner.GizmoPrime,
+          acceptanceOwner: ModuleDeliveryOwner.GizmoPrime,
+        },
+      ]).status,
+    ).toBe(ModuleDeliveryValidationStatus.Rejected);
+    const synthesis: ModuleDeliveryEvidenceSynthesisNodeV2 = {
+      ...write,
+      kind: ModuleDeliveryTaskKind.EvidenceSynthesis,
+      resources: { read: [], write: [], evidenceSurface: [] },
+      evidenceInput: {
+        schema: ModuleDeliveryEvidenceInputSchema.AcceptedProviderEvidenceV1,
+        expectedProducers: [],
+      },
+    };
+    Reflect.deleteProperty(synthesis, 'workspace');
+    expect(validate([synthesis]).status).toBe(
+      ModuleDeliveryValidationStatus.Rejected,
+    );
+  });
+
   test('admits team scope and exact shared-subtree grants', () => {
     const result = validate([sreNode()]);
     expect(result.status).toBe(ModuleDeliveryValidationStatus.Accepted);
@@ -131,6 +182,55 @@ describe('Cortex module-delivery plan validation', () => {
       ...CORTEX_AUTHORING_SKILL_PATHS,
       SRE_SKILL,
     ]);
+  });
+
+  test('admits only an exact Gizmo grant owned by Gizmo Prime and written by AI', () => {
+    const claim = '.cortex/gizmo/workflows/subagent-delegation.md';
+    const gizmo: ModuleDeliveryWriteNodeV2 = {
+      ...cortexNode({
+        taskId: 'gizmo-workflow',
+        team: TeamKey.Ai,
+        write: [claim],
+        selectedSkillPaths: [],
+        sharedWriteClaims: [claim],
+      }),
+      functionalOwner: ModuleDeliveryOwner.GizmoPrime,
+      acceptanceOwner: ModuleDeliveryOwner.GizmoPrime,
+    };
+    expect(validate([gizmo]).status).toBe(
+      ModuleDeliveryValidationStatus.Accepted,
+    );
+    for (const invalid of [
+      { ...gizmo, team: TeamKey.Sre },
+      { ...gizmo, acceptanceOwner: TeamKey.Ai },
+      {
+        ...gizmo,
+        resources: { ...gizmo.resources, write: ['.cortex/gizmo/**'] },
+        cortexAuthoring: {
+          selectedSkillPaths: [],
+          sharedWriteClaims: ['.cortex/gizmo/**'],
+        },
+      },
+      {
+        ...gizmo,
+        resources: {
+          ...gizmo.resources,
+          write: ['.cortex/gizmo/workflows'],
+        },
+        cortexAuthoring: {
+          selectedSkillPaths: [],
+          sharedWriteClaims: ['.cortex/gizmo/workflows'],
+        },
+      },
+    ])
+      expect(validate([invalid]).status).toBe(
+        ModuleDeliveryValidationStatus.Rejected,
+      );
+    const forgedOwner = structuredClone(gizmo);
+    Object.assign(forgedOwner, { functionalOwner: 'forged-owner' });
+    expect(validate([forgedOwner]).status).toBe(
+      ModuleDeliveryValidationStatus.Rejected,
+    );
   });
 
   test('rejects foreign, broad, and authority-file grants', () => {

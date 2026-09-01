@@ -13,7 +13,10 @@ import {
   ModuleDeliveryBaselineKind,
   ModuleDeliveryTaskKind,
 } from './domain.ts';
-import { validateModuleDeliveryEvidenceSubmission } from './evidence.ts';
+import {
+  restoreModuleDeliveryCanonicalEvidenceReceipt as restoreCanonicalEvidenceReceipt,
+  validateModuleDeliveryEvidenceSubmission,
+} from './evidence.ts';
 import {
   assertModuleDeliveryCanonicalEvidenceTransition,
   assertModuleDeliveryIntegratedWriterFrontierCapability,
@@ -32,6 +35,7 @@ import type {
   ModuleDeliveryAcceptedProviderEvidenceIdentity,
   ModuleDeliveryEvidenceSubmissionValidation,
   ModuleDeliveryEvidenceSubmissionVerification,
+  RestoreModuleDeliveryCanonicalEvidenceReceiptRequest,
 } from './evidence.ts';
 import type { AgentAttemptParent } from '../agent-workflow/domain.ts';
 import type { TeamKey } from '../team-agents/catalog.ts';
@@ -40,6 +44,7 @@ import type { AdmitCortexAuthoringContextRequest } from './cortex-context.ts';
 import type { TeamTaskContext } from '../team-agents/context.ts';
 import type {
   ModuleDeliveryNodeV2,
+  ModuleDeliveryOwnerIdentity,
   ModuleDeliveryResourceClaims,
   ValidatedModuleDeliveryPlan,
 } from './domain.ts';
@@ -65,7 +70,7 @@ import type {
   FrozenModuleDeliveryResourcesRequest,
   ResourceConflictRequest,
 } from './authority.ts';
-
+import { freezeModuleDeliveryAdmissionSource } from './admission-source.ts';
 const AUTHORITY = Symbol('module-delivery-generation-authority');
 const admissionStateStoreAuthorities = {
   assertCanonicalTransition: assertModuleDeliveryCanonicalEvidenceTransition,
@@ -139,8 +144,8 @@ export type ModuleDeliveryAdmission = AttemptIdentity & {
   readonly resources: ModuleDeliveryResourceClaims;
   readonly context?: TeamTaskContext;
   readonly team: TeamKey;
-  readonly functionalOwner: TeamKey;
-  readonly acceptanceOwner: TeamKey;
+  readonly functionalOwner: ModuleDeliveryOwnerIdentity;
+  readonly acceptanceOwner: ModuleDeliveryOwnerIdentity;
   readonly parentLineage: AgentAttemptParent;
   readonly acceptanceRequirements: readonly string[];
   readonly authorizedProviderEvidence: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
@@ -241,18 +246,11 @@ const evidenceAuthorities = new WeakMap<
   ModuleDeliveryGenerationAuthority
 >();
 const COMMIT = /^[0-9a-f]{40}$/u;
-
 export function createModuleDeliveryGenerationAuthority(
   request: CreateModuleDeliveryGenerationAuthorityRequest,
 ): ModuleDeliveryGenerationAuthority {
-  const acceptedPlan = trustedModuleDeliveryPlanSnapshot(request.acceptedPlan);
-  const authenticationRequest: AuthenticateModuleDeliverySourceCommitRequest = {
-    repositoryRoot: request.repositoryRoot,
-    sourceCommit: acceptedPlan.plan.sourceCommit,
-  };
-  const repositoryRoot = authenticateModuleDeliverySourceCommit(
-    authenticationRequest,
-  );
+  const { acceptedPlan, repositoryRoot } =
+    freezeModuleDeliveryAdmissionSource(request);
   const lineageRequest: ExpectedLineageMapRequest = {
     acceptedPlan,
     entries: request.expectedLineage,
@@ -274,7 +272,6 @@ export function createModuleDeliveryGenerationAuthority(
   authorityStates.set(authority, authorityState);
   return authority;
 }
-
 export function assertModuleDeliveryGenerationAuthority(
   inspection: GenerationAuthorityInspection,
 ): void {
@@ -288,7 +285,6 @@ export function assertModuleDeliveryGenerationAuthority(
       'Module delivery generation authority is invalid or superseded.',
     );
 }
-
 export function moduleDeliveryAuthorityPlan(
   request: ModuleDeliveryAuthorityPlanRequest,
 ): ValidatedModuleDeliveryPlan {
@@ -296,7 +292,6 @@ export function moduleDeliveryAuthorityPlan(
     authorityStateForPlan(request).acceptedPlan,
   );
 }
-
 export function assertModuleDeliveryAuthorityRepository(
   inspection: ModuleDeliveryAuthorityRepositoryInspection,
 ): void {
@@ -311,20 +306,17 @@ export function assertModuleDeliveryAuthorityRepository(
   )
     throw new Error('Module delivery repository authority is invalid.');
 }
-
 export function assertAcceptedModuleDeliveryEvidence(
   inspection: AcceptedModuleDeliveryEvidenceInspection,
 ): void {
   requiredAuthority(inspection.authority).evidenceRegistry.assert(inspection);
 }
-
 export function moduleDeliveryAcceptedEvidenceIdentity(
   evidence: AcceptedModuleDeliveryEvidence,
 ): ModuleDeliveryAcceptedProviderEvidenceIdentity {
   const authority = authorityForAcceptedEvidence(evidence);
   return authority.evidenceRegistry.identity(evidence);
 }
-
 export function verifyModuleDeliveryEvidenceSubmission(
   verification: ModuleDeliveryEvidenceSubmissionVerification,
 ): AcceptedModuleDeliveryEvidence {
@@ -388,6 +380,42 @@ export function verifyModuleDeliveryEvidenceSubmission(
   return accepted;
 }
 
+export function restoreModuleDeliveryCanonicalEvidenceReceipt(
+  request: RestoreModuleDeliveryCanonicalEvidenceReceiptRequest,
+) {
+  const authority = authorityStateForPlan(request);
+  if (acceptedEvidenceLeases.has(request.lease))
+    throw new Error('Canonical evidence receipt lease is already consumed.');
+  assertModuleDeliveryAdmissionStateAuthority(request);
+  assertModuleDeliveryAttemptLeaseAuthority(request);
+  const evidence = restoreCanonicalEvidenceReceipt({
+    ...request,
+    registry: authority.evidenceRegistry,
+    node: nodeFor({
+      plan: authority.acceptedPlan,
+      taskId: request.lease.taskId,
+    }),
+  });
+  evidenceAuthorities.set(evidence, request.authority);
+  const state = createModuleDeliveryAdmissionState({
+    ...request,
+    headCommit: request.state.headCommit,
+    integratedWriterFrontiers: request.state.integratedWriterFrontiers,
+    acceptedEvidence: [...request.acceptedEvidence, evidence],
+  });
+  acceptedEvidenceLeases.add(request.lease);
+  recordModuleDeliveryAttemptDisposition({
+    authority: request.authority,
+    state,
+    lease: request.lease,
+    outcome: {
+      kind: ModuleDeliveryAttemptDispositionKind.Accepted,
+      conclusion: ModuleDeliveryGenerationFenceKind.Accepted,
+    },
+  });
+  return Object.freeze({ evidence, state });
+}
+
 export function createModuleDeliveryAdmissionState(
   request: CreateModuleDeliveryAdmissionStateRequest,
 ): ModuleDeliveryAdmissionState {
@@ -449,16 +477,14 @@ export function restartModuleDeliveryGeneration(
     throw new Error(
       'Generation restart requires authoritative terminal release evidence.',
     );
-  const acceptedPlan = trustedModuleDeliveryPlanSnapshot(request.acceptedPlan);
+  const { acceptedPlan } = freezeModuleDeliveryAdmissionSource({
+    acceptedPlan: request.acceptedPlan,
+    repositoryRoot: authority.repositoryRoot,
+  });
   if (acceptedPlan.plan.generation <= request.previousState.generation)
     throw new Error(
       'A superseding module plan requires a newer immutable generation.',
     );
-  const authenticationRequest: AuthenticateModuleDeliverySourceCommitRequest = {
-    repositoryRoot: authority.repositoryRoot,
-    sourceCommit: acceptedPlan.plan.sourceCommit,
-  };
-  authenticateModuleDeliverySourceCommit(authenticationRequest);
   const lineageRequest: ExpectedLineageMapRequest = {
     acceptedPlan,
     entries: request.expectedLineage,

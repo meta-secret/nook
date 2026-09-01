@@ -6,6 +6,8 @@ import type {
 } from 'node:child_process';
 
 const MAX_GIT_OUTPUT_BYTES = 16 * 1024 * 1024;
+const MAX_GIT_ARGUMENTS = 1024;
+const MAX_GIT_ARGUMENT_BYTES = 1024 * 1024;
 
 export type GitCommandRequest = {
   readonly cwd: string;
@@ -21,22 +23,17 @@ export type GitCommandResult = {
   readonly stderr: string;
 };
 
-function scrubbedGitEnvironment(): NodeJS.ProcessEnv {
-  const environment: NodeJS.ProcessEnv = {};
-  for (const [name, value] of Object.entries(process.env)) {
-    if (!name.startsWith('GIT_')) environment[name] = value;
-  }
-  environment.GIT_CONFIG_GLOBAL = '/dev/null';
-  environment.GIT_CONFIG_NOSYSTEM = '1';
-  environment.GIT_NO_REPLACE_OBJECTS = '1';
-  environment.GIT_TERMINAL_PROMPT = '0';
-  environment.LC_ALL = 'C';
-  return environment;
-}
-
 export function runModuleDeliveryGit(
   request: GitCommandRequest,
 ): GitCommandResult {
+  if (
+    request.commitTimestamp &&
+    !/^@[0-9]+ \+0000$/u.test(request.commitTimestamp)
+  )
+    throw new Error('Git commit timestamp must be canonical UTC epoch time.');
+  for (const searchPath of [process.env.PATH, process.env.Path])
+    if (typeof searchPath === 'string')
+      assertAbsoluteExecutableSearchPath(searchPath);
   const args = [
     '-c',
     'core.hooksPath=/dev/null',
@@ -45,20 +42,35 @@ export function runModuleDeliveryGit(
     '-c',
     'core.untrackedCache=false',
     '--literal-pathspecs',
-    ...request.args,
   ];
-  const environment = scrubbedGitEnvironment();
-  if (request.indexFile) environment.GIT_INDEX_FILE = request.indexFile;
-  if (request.commitTimestamp) {
-    if (!/^@[0-9]+ \+0000$/u.test(request.commitTimestamp)) {
-      throw new Error('Git commit timestamp must be canonical UTC epoch time.');
-    }
-    environment.GIT_AUTHOR_DATE = request.commitTimestamp;
-    environment.GIT_COMMITTER_DATE = request.commitTimestamp;
+  if (request.args.length > MAX_GIT_ARGUMENTS)
+    throw new Error('Git command arguments exceed bounded input.');
+  let argumentBytes = 0;
+  for (const argument of request.args) {
+    argumentBytes += Buffer.byteLength(argument);
+    if (argumentBytes > MAX_GIT_ARGUMENT_BYTES)
+      throw new Error('Git command arguments exceed bounded input.');
+    args.push(argument);
   }
   const options: SpawnSyncOptionsWithBufferEncoding = {
     cwd: request.cwd,
-    env: environment,
+    env: {
+      COMSPEC: process.env.COMSPEC,
+      GIT_AUTHOR_DATE: request.commitTimestamp,
+      GIT_COMMITTER_DATE: request.commitTimestamp,
+      GIT_CONFIG_GLOBAL: '/dev/null',
+      GIT_CONFIG_NOSYSTEM: '1',
+      GIT_INDEX_FILE: request.indexFile,
+      GIT_NO_REPLACE_OBJECTS: '1',
+      GIT_TERMINAL_PROMPT: '0',
+      LC_ALL: 'C',
+      PATH: process.env.PATH,
+      Path: process.env.Path,
+      PATHEXT: process.env.PATHEXT,
+      SYSTEMROOT: process.env.SYSTEMROOT,
+      SystemRoot: process.env.SystemRoot,
+      WINDIR: process.env.WINDIR,
+    },
     encoding: 'buffer',
     maxBuffer: MAX_GIT_OUTPUT_BYTES,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -75,6 +87,20 @@ export function runModuleDeliveryGit(
     throw new Error(`Git command failed (${exitCode})${detail}`);
   }
   return { exitCode, stdout, stderr };
+}
+
+function assertAbsoluteExecutableSearchPath(value: string): void {
+  const windows = process.platform === 'win32';
+  const separator = windows ? ';' : ':';
+  for (const entry of value.split(separator))
+    if (
+      windows
+        ? !entry.startsWith('\\\\') && !/^[A-Za-z]:[\\/]/.test(entry)
+        : !entry.startsWith('/')
+    )
+      throw new Error(
+        'Git executable search path must contain absolute paths.',
+      );
 }
 
 export function gitText(result: GitCommandResult): string {
