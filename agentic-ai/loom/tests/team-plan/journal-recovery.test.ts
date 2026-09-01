@@ -14,6 +14,7 @@ import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
 import {
   REQUIRED_PARENT_OWNED_RESOURCES,
   ModuleDeliveryBaselineKind,
+  ModuleDeliveryGenerationFenceKind,
   ModuleDeliveryJoinKind,
   ModuleDeliveryTaskKind,
   ModuleDeliveryValidationStatus,
@@ -21,6 +22,7 @@ import {
   decodeAndValidateModuleDeliveryPlan,
 } from '../../src/module-delivery/index.ts';
 import {
+  appendTeamPlanEvent,
   createTeamPlanJournal,
   discardTeamPlanJournal,
   teamPlanSha256,
@@ -29,6 +31,7 @@ import {
 import {
   TEAM_PLAN_JOURNAL_VERSION,
   TeamPlanEventKind,
+  TeamPlanRecordKind,
 } from '../../src/team-plan/domain.ts';
 import {
   createGitFixture,
@@ -119,7 +122,50 @@ async function startedFixture() {
     generationRecordLimit: 1,
   };
   await createTeamPlanJournal({ journalPath, event: started });
-  return { fixture, journalPath };
+  return { fixture, journalPath, started };
+}
+
+async function finalizeFixture(request: {
+  readonly journalPath: string;
+  readonly started: TeamPlanStartedEvent;
+}) {
+  const attempt = {
+    taskId: 'provider',
+    attempt: 1,
+    generation: 1,
+    planDigest: request.started.modulePlanDigest,
+  };
+  await appendTeamPlanEvent({
+    journalPath: request.journalPath,
+    event: {
+      version: TEAM_PLAN_JOURNAL_VERSION,
+      kind: TeamPlanEventKind.Selected,
+      sequence: 2,
+      attempts: [attempt],
+    },
+  });
+  await appendTeamPlanEvent({
+    journalPath: request.journalPath,
+    event: {
+      version: TEAM_PLAN_JOURNAL_VERSION,
+      kind: TeamPlanEventKind.Recorded,
+      sequence: 3,
+      record: {
+        kind: TeamPlanRecordKind.FinalUnusable,
+        ...attempt,
+        conclusion: ModuleDeliveryGenerationFenceKind.Failed,
+      },
+    },
+  });
+  await appendTeamPlanEvent({
+    journalPath: request.journalPath,
+    event: {
+      version: TEAM_PLAN_JOURNAL_VERSION,
+      kind: TeamPlanEventKind.Finalized,
+      sequence: 4,
+      headCommit: request.started.sourceCommit,
+    },
+  });
 }
 
 function testMachineIdentity(): string {
@@ -176,5 +222,27 @@ describe('Team Plan journal recovery', () => {
     ).rejects.toThrow('Only a finalized Team Plan run may be discarded.');
     expect(existsSync(journalPath)).toBe(true);
     expect(existsSync(`${journalPath}.discarding`)).toBe(true);
+  });
+
+  test('retains a completion marker when final discard sync fails', async () => {
+    const { journalPath, started } = await startedFixture();
+    await finalizeFixture({ journalPath, started });
+    let parentSyncs = 0;
+    await expect(
+      discardTeamPlanJournal({
+        journalPath,
+        discardArtifacts: () => Promise.resolve(),
+        beforeParentSync: () => {
+          if ((parentSyncs += 1) === 3) throw new Error('final sync failed');
+        },
+      }),
+    ).rejects.toThrow('final sync failed');
+    expect(existsSync(`${journalPath}.discarded`)).toBe(true);
+    await discardTeamPlanJournal({
+      journalPath,
+      discardArtifacts: () => {
+        throw new Error('completed artifacts must not run again');
+      },
+    });
   });
 });

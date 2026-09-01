@@ -320,22 +320,13 @@ describe('Team Plan journal', () => {
       }),
     });
     fixtureGit(fixture)(['update-ref', ref, legacy]);
-    if (process.platform === 'linux') {
-      expect(
-        await withTeamPlanJournalLock({
-          journalPath,
-          action: async () => 'recovered-legacy',
-        }),
-      ).toBe('recovered-legacy');
-    } else {
-      await expect(
-        withTeamPlanJournalLock({
-          journalPath,
-          action: async () => 'unreachable',
-        }),
-      ).rejects.toThrow('already in use');
-      fixtureGit(fixture)(['update-ref', '-d', ref, legacy]);
-    }
+    await expect(
+      withTeamPlanJournalLock({
+        journalPath,
+        action: async () => 'unreachable',
+      }),
+    ).rejects.toThrow('already in use');
+    fixtureGit(fixture)(['update-ref', '-d', ref, legacy]);
     const stale = ownerBlob({
       fixture,
       name: 'stale-lock.json',

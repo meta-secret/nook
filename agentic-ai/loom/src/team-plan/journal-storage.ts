@@ -141,11 +141,17 @@ export async function publishDiscardTombstone(request: {
 
 export async function removeDiscardTombstone(request: {
   readonly path: string;
+  readonly completion: string;
   readonly beforeParentSync: JournalStorageHook;
 }): Promise<void> {
+  await rename(request.path, request.completion);
   runStorageHook(request.beforeParentSync);
-  await unlink(request.path);
   await syncParent(request.path);
+}
+
+export async function removeDiscardCompletion(path: string): Promise<void> {
+  await unlink(path);
+  await syncParent(path);
 }
 
 export async function resumeDiscardTombstone(request: {

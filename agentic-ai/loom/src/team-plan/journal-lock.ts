@@ -9,13 +9,12 @@ const ZERO_COMMIT = '0'.repeat(40);
 const orphanedTeamPlanLocks = new Map<string, string>();
 
 type TeamPlanLockOwnerFields = Readonly<{
+  version: 3;
   pid: number;
   processIdentity: string;
   token: string;
 }>;
-type TeamPlanLockOwner =
-  | TeamPlanLockOwnerFields
-  | (TeamPlanLockOwnerFields & Readonly<{ version: 2 | 3 }>);
+type TeamPlanLockOwner = TeamPlanLockOwnerFields;
 type TeamPlanGitArguments = readonly [string, string, string];
 type TeamPlanLockRequest<T> = Readonly<{
   journal: TeamPlanJournal;
@@ -165,15 +164,10 @@ function decodeLockOwner(serialized: string): TeamPlanLockOwner {
   if (!owner || typeof owner !== 'object')
     throw new Error('Team Plan journal lock owner is malformed.');
   const ownerFields = Object.keys(owner).sort();
-  const currentVersion =
-    'version' in owner && (owner.version === 2 || owner.version === 3);
   if (
     JSON.stringify(ownerFields) !==
-      JSON.stringify(
-        currentVersion
-          ? ['pid', 'processIdentity', 'token', 'version']
-          : ['pid', 'processIdentity', 'token'],
-      ) ||
+      JSON.stringify(['pid', 'processIdentity', 'token', 'version']) ||
+    owner.version !== 3 ||
     !Number.isSafeInteger(owner.pid) ||
     owner.pid < 1 ||
     typeof owner.processIdentity !== 'string' ||
@@ -217,13 +211,7 @@ function staleTeamPlanLock(owner: TeamPlanLockOwner): boolean {
         })
       )
         return true;
-      const legacyIdentity = legacyMachineIdentity(machineIdentity);
-      if (
-        !legacyIdentity ||
-        !owner.processIdentity.startsWith(`${legacyIdentity}:`)
-      )
-        return false;
-      ownerMachineIdentity = legacyIdentity;
+      return false;
     }
   }
   const currentIdentity = processStartIdentity(owner.pid);
@@ -235,40 +223,17 @@ function staleTeamPlanLock(owner: TeamPlanLockOwner): boolean {
     ['start-ticks', 'process-start'].some((kind) =>
       currentIdentity.startsWith(`${machineIdentity}:${kind}:`),
     );
-  if (
-    'version' in owner &&
-    owner.version === 3 &&
-    preciseOwner &&
-    preciseCurrent
-  )
+  if (owner.version === 3 && preciseOwner && preciseCurrent)
     return (
       `${ownerMachineIdentity}:${currentIdentity.slice(machineIdentity.length + 1)}` !==
       owner.processIdentity
     );
-  if (
-    'version' in owner &&
-    owner.version === 2 &&
-    process.platform === 'linux'
-  ) {
-    const legacyCurrent = legacyProcessStartIdentity({
-      pid: owner.pid,
-      machineIdentity: ownerMachineIdentity,
-    });
-    if (legacyCurrent) return legacyCurrent !== owner.processIdentity;
-  }
   try {
     process.kill(owner.pid, 0);
     return false;
   } catch (error) {
     return nodeErrorCode(error as NodeJS.ErrnoException) === 'ESRCH';
   }
-}
-
-function legacyMachineIdentity(machineIdentity: string): string | false {
-  const hostSuffix = ':host';
-  return process.platform === 'darwin' && machineIdentity.endsWith(hostSuffix)
-    ? machineIdentity.slice(0, -hostSuffix.length)
-    : false;
 }
 
 function teamPlanLockRef(request: {
@@ -317,14 +282,6 @@ function processStartIdentity(pid: number): string | false {
   if (process.platform !== 'linux') return false;
   const started = linuxProcessStartTicks(pid);
   return started ? `${machineIdentity}:start-ticks:${started}` : false;
-}
-
-function legacyProcessStartIdentity(request: {
-  readonly pid: number;
-  readonly machineIdentity: string;
-}): string | false {
-  const started = processStartTime(request.pid);
-  return started ? `${request.machineIdentity}:${started}` : false;
 }
 
 function processStartTime(pid: number): string | false {

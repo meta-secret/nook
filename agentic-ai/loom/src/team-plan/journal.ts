@@ -20,6 +20,7 @@ import {
   publishDiscardTombstone,
   publishNewJournalFile,
   readBoundedTeamPlanJournal,
+  removeDiscardCompletion,
   removeDiscardTombstone,
   replaceJournalFile,
   resumeDiscardTombstone,
@@ -115,6 +116,8 @@ export async function createTeamPlanJournal(
     action: async () => {
       if (await pathExists(`${path}.discarding`))
         throw new Error('Team Plan journal discard is still in progress.');
+      if (await pathExists(`${path}.discarded`))
+        await removeDiscardCompletion(`${path}.discarded`);
       await publishNewJournalFile({ path, serialized });
     },
   });
@@ -183,8 +186,15 @@ export async function discardTeamPlanJournal(
 ): Promise<void> {
   const path = await canonicalTeamPlanJournalPath(request.journalPath);
   const tombstone = `${path}.discarding`;
+  const completion = `${path}.discarded`;
   const sourcePresent = await pathExists(path);
   const tombstonePresent = await pathExists(tombstone);
+  if (!sourcePresent && !tombstonePresent && (await pathExists(completion))) {
+    const completed = await loadTeamPlanJournal(completion);
+    if (!completed.finalized)
+      throw new Error('Team Plan discard completion marker is stale.');
+    return;
+  }
   const artifactsMayAlreadyBeDiscarded = !sourcePresent;
   const activePath = sourcePresent && !tombstonePresent ? path : tombstone;
   let lockJournal: TeamPlanJournal;
@@ -227,6 +237,7 @@ export async function discardTeamPlanJournal(
       });
       await removeDiscardTombstone({
         path: tombstone,
+        completion,
         beforeParentSync: storageHook(request.beforeParentSync),
       });
     },
