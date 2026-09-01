@@ -95,6 +95,10 @@ task loom:pr-land CONFIG=path/to/gizmo-owned/pr-land-validate.yaml
     inspect the source run's Native Rust sentinel before reserving ARC.
 - Any non-Markdown Cortex file, workflow or agent implementation file, product
   path, mixed change set, or rename retains complete product validation.
+- Web research uses a separate read-only source-aware classifier.
+  - Research source and destination renames retain specialist evidence.
+  - Readiness requires that evidence alongside product validation.
+- Labeled minds changes run the ecosystem suite only through `pr.yml`.
 - Markdown-only Cortex changes use the repository-policy workflow.
   - The workflow runs `task loom:cortex-audit`.
   - It skips Rust setup, BuildKit connection, preflight, and full Loom package

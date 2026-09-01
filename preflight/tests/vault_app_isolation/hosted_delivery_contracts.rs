@@ -51,10 +51,9 @@ fn assert_workflow_runtime_contract(root: &Path) {
                 .matches("github.event_name == 'workflow_dispatch'")
                 .count()
                 == 5
-            && ecosystem_entry.contains("github.event_name == 'schedule'")
-            && ecosystem_entry.contains("github.event_name == 'workflow_dispatch'")
-            && ecosystem_entry
-                .contains("github.event.pull_request.user.login != 'dependabot[bot]'"),
+            && ecosystem_entry.contains("schedule:")
+            && ecosystem_entry.contains("workflow_dispatch:")
+            && !ecosystem_entry.contains("pull_request:"),
         "trusted PR and release jobs must select ARC while forks retain hosted isolation"
     );
     assert!(

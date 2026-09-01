@@ -68,25 +68,12 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "Thin rust-ecosystem.yml must call the shared Rust ecosystem checks"
     );
     assert!(
-        entry.contains("agentic-ai/minds/**"),
-        "Thin rust-ecosystem.yml must keep labeled minds-only PR coverage"
+        !entry.contains("pull_request:")
+            && !entry.contains("agentic-ai/minds/**")
+            && entry.contains("fuzz_seconds: \"900\"")
+            && entry.contains("isolated_cache_write: \"false\""),
+        "labeled minds PRs must use only pr.yml while scheduled and manual specialist runs remain"
     );
-    for marker in [
-        "github.rest.pulls.listFiles",
-        "const isIgnoredByProductWorkflow",
-        "path.startsWith('.cortex/')",
-        "path.startsWith('.cursor/')",
-        "path === '.github/workflows/web-research.yml'",
-        "path.startsWith('agentic-ai/')",
-        "path.startsWith('nook-app/nook-web/nook-web-research/')",
-        "files.every((file) => isIgnoredByProductWorkflow(file.filename))",
-        "needs.validation-request.outputs.should-run == 'true'",
-    ] {
-        assert!(
-            entry.contains(marker),
-            "Thin rust-ecosystem.yml must defer only paths handled by pr.yml: missing {marker}"
-        );
-    }
     assert!(
         main.contains("uses: ./.github/workflows/rust-ecosystem-checks.yml")
             && main.contains("fuzz_seconds: \"20\"")
@@ -513,6 +500,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
 fn product_workflows_skip_only_cortex_markdown_changes() -> anyhow::Result<()> {
     let pr = read(".github/workflows/pr.yml")?;
     let main = read(".github/workflows/main.yml")?;
+    let research = read(".github/workflows/web-research.yml")?;
     let readiness = read("agentic-ai/ci-agent/src/main/github.ts")?;
 
     assert!(!pr.contains("paths-ignore:"));
@@ -520,8 +508,24 @@ fn product_workflows_skip_only_cortex_markdown_changes() -> anyhow::Result<()> {
     assert!(pr.contains("files.length !== expectedChangedFiles"));
     assert!(pr.contains("files.length >= 3000"));
     assert!(pr.contains("!supportedStatuses.has(file.status)"));
-    assert!(pr.contains("files.some((file) => file.status === 'renamed')"));
+    assert!(pr.contains("file.status === PullRequestFileStatus.Renamed"));
     assert!(pr.contains("return 'true'"));
+    for (variant, value) in [
+        ("Added", "added"),
+        ("Removed", "removed"),
+        ("Modified", "modified"),
+        ("Renamed", "renamed"),
+        ("Copied", "copied"),
+        ("Changed", "changed"),
+        ("Unchanged", "unchanged"),
+    ] {
+        assert!(
+            pr.contains(&format!("{variant}: '{value}'"))
+                && readiness.contains(&format!("{variant} = \"{value}\"")),
+            "inline and typed pull-request status enums must agree for {variant}"
+        );
+    }
+    assert!(pr.contains("new Set(Object.values(PullRequestFileStatus))"));
     assert_eq!(
         pr.matches("product-validation-required == 'true'").count(),
         11,
@@ -542,9 +546,16 @@ fn product_workflows_skip_only_cortex_markdown_changes() -> anyhow::Result<()> {
 
     assert!(readiness.contains("path.startsWith(\".cortex/\") && path.endsWith(\".md\")"));
     assert!(readiness.contains("RENAMED_PATH_PRODUCT_SENTINEL"));
+    assert!(readiness.contains("file.previousFilename"));
     assert!(!readiness.contains("workflowFile: \"rust-ecosystem.yml\""));
     assert!(!readiness.contains("workflowFile: \"repository-policy.yml\""));
-    assert!(!readiness.contains("workflowFile: \"web-research.yml\""));
+    assert!(readiness.contains("workflowFile: \"web-research.yml\""));
+    assert!(!research.contains("paths-ignore:"));
+    assert!(research.contains("types: [opened, synchronize, reopened]"));
+    assert!(research.contains("files.length !== expectedChangedFiles"));
+    assert!(research.contains("files.length >= 3000"));
+    assert!(research.contains("? [file.previous_filename, file.filename]"));
+    assert!(research.contains("needs.research-paths.outputs.research-required == 'true'"));
     Ok(())
 }
 

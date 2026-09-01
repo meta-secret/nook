@@ -195,6 +195,7 @@ export async function createFixPr(
 }
 
 const MAIN_PR_CHECK = "Verify and preview";
+const WEB_RESEARCH_PR_CHECK = "Build and deploy research catalog";
 
 /** Jobs that must succeed on the latest exact-head PR run before merge. */
 export const REQUIRED_MAIN_PR_JOBS = [
@@ -292,7 +293,11 @@ export function changedPathsForPullRequestFiles(
     if (file.status !== PullRequestFileStatus.Renamed) {
       return [file.filename];
     }
-    return [file.filename, RENAMED_PATH_PRODUCT_SENTINEL];
+    return [
+      file.previousFilename,
+      file.filename,
+      RENAMED_PATH_PRODUCT_SENTINEL,
+    ];
   });
 }
 
@@ -303,9 +308,28 @@ const MAIN_PR_WORKFLOW: RequiredPrWorkflow = {
   requiredJobs: REQUIRED_MAIN_PR_JOBS,
 };
 
+const WEB_RESEARCH_PR_WORKFLOW: RequiredPrWorkflow = {
+  checkName: WEB_RESEARCH_PR_CHECK,
+  workflowFile: "web-research.yml",
+  workflowName: "Web research",
+};
+
+function isWebResearchPath(path: string): boolean {
+  return (
+    path === ".github/workflows/web-research.yml" ||
+    path === ".github/scripts/web-research-deploy.sh" ||
+    path === ".github/scripts/web-research-verify-live.sh" ||
+    path === ".task/ci-workflows.yml" ||
+    path.startsWith("nook-app/nook-web/nook-web-research/")
+  );
+}
+
 export function requiredPrWorkflows(paths: string[]): RequiredPrWorkflow[] {
   const required: RequiredPrWorkflow[] = [];
 
+  if (paths.some(isWebResearchPath)) {
+    required.push(WEB_RESEARCH_PR_WORKFLOW);
+  }
   if (paths.some((path) => !isCanonicalAiOnlyPath(path))) {
     required.push(MAIN_PR_WORKFLOW);
   }

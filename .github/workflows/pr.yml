@@ -94,15 +94,16 @@ jobs:
               return 'true'
             }
 
-            const supportedStatuses = new Set([
-              'added',
-              'removed',
-              'modified',
-              'renamed',
-              'copied',
-              'changed',
-              'unchanged',
-            ])
+            const PullRequestFileStatus = Object.freeze({
+              Added: 'added',
+              Removed: 'removed',
+              Modified: 'modified',
+              Renamed: 'renamed',
+              Copied: 'copied',
+              Changed: 'changed',
+              Unchanged: 'unchanged',
+            })
+            const supportedStatuses = new Set(Object.values(PullRequestFileStatus))
             if (
               files.some(
                 (file) =>
@@ -117,14 +118,20 @@ jobs:
 
             if (
               files.some(
-                (file) => file.status === 'renamed' && !file.previous_filename,
+                (file) =>
+                  file.status === PullRequestFileStatus.Renamed &&
+                  !file.previous_filename,
               )
             ) {
               core.warning('Renamed pull-request file lacks previous_filename')
               return 'true'
             }
 
-            if (files.some((file) => file.status === 'renamed')) return 'true'
+            if (
+              files.some(
+                (file) => file.status === PullRequestFileStatus.Renamed,
+              )
+            ) return 'true'
 
             const changedPaths = files.map((file) => file.filename)
             return String(

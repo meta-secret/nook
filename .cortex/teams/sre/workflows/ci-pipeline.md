@@ -33,7 +33,7 @@ See [issues](../../../gizmo/workflows/issues.md),
   - Purpose: Research check, build, Cloudflare deploy, and PR preview
   - GitHub PAT: No
 - **[`rust-ecosystem.yml`](../../../../.github/workflows/rust-ecosystem.yml)**
-  - Trigger: Schedule, manual, minds-only PR
+  - Trigger: Schedule and manual
   - Purpose: Specialist Rust ecosystem entry points
   - GitHub PAT: No
 - **[`pr-validation-handoff.yml`](../../../../.github/workflows/pr-validation-handoff.yml)**
@@ -152,6 +152,12 @@ See [issues](../../../gizmo/workflows/issues.md),
 
 **`web-research.yml`**
 
+- Every opened, synchronized, or reopened PR reaches a read-only hosted
+  classifier.
+- Research source or destination renames retain the specialist workflow.
+- Incomplete, capped, or unsupported inventories fail closed.
+- Readiness requires Web research evidence alongside product evidence when a
+  changed source or destination path belongs to research.
 - Checks and builds the isolated research package.
 - Deploys path-applicable PR previews and Main updates to Cloudflare Pages.
 - Records the deployment and comments the PR preview URL.
@@ -160,7 +166,8 @@ See [issues](../../../gizmo/workflows/issues.md),
 
 - Thin entry points outside the product PR pipeline.
 - Weekly schedule and `workflow_dispatch`.
-- Labeled `agentic-ai/minds/**` PRs only, because `pr.yml` ignores `agentic-ai/**`.
+- Labeled minds PRs use the shared ecosystem suite inside `pr.yml`.
+- One explicit validation request cannot launch both expensive entry points.
 - Calls the same `rust-ecosystem-checks.yml` jobs as labeled product PRs and Main.
 - Ordinary PR pushes do not start it.
 

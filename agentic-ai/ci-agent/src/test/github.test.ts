@@ -27,6 +27,12 @@ test("requiredPrCheckNames maps changed paths to repository-owned gates", () => 
     assert.deepEqual(requiredPrCheckNames([productPath]), ["Verify and preview"]);
   }
   assert.deepEqual(
+    requiredPrCheckNames([
+      "nook-app/nook-web/nook-web-research/src/main.ts",
+    ]),
+    ["Build and deploy research catalog", "Verify and preview"],
+  );
+  assert.deepEqual(
     requiredPrWorkflows(["nook-app/nook-platform/nook-core/src/lib.rs"]),
     [
       {
@@ -72,6 +78,22 @@ test("renamed PR files conservatively require product validation", () => {
     aiToAiFiles.length,
   );
   assert.deepEqual(requiredPrCheckNames(aiToAiPaths), ["Verify and preview"]);
+
+  const researchToProductPaths = changedPathsForPullRequestFiles(
+    [
+      {
+        filename: "nook-app/nook-web/src/lib.ts",
+        previous_filename:
+          "nook-app/nook-web/nook-web-research/src/legacy.ts",
+        status: "renamed",
+      },
+    ],
+    1,
+  );
+  assert.deepEqual(requiredPrCheckNames(researchToProductPaths), [
+    "Build and deploy research catalog",
+    "Verify and preview",
+  ]);
   assert.throws(
     () =>
       changedPathsForPullRequestFiles(

@@ -460,7 +460,7 @@ prWorkflow.requireAll([
   "runs-on: ubuntu-latest",
   "product-validation-required: ${{ steps.product-scope.outputs.result }}",
   "files = await github.paginate(github.rest.pulls.listFiles",
-  "files.some((file) => file.status === 'renamed')",
+  "file.status === PullRequestFileStatus.Renamed",
   "needs.validation-request.outputs.product-validation-required == 'true'",
   "full-e2e-shard:",
   "name: Full browser e2e shard (${{ matrix.shard }}/2)",
@@ -587,6 +587,7 @@ const hostedCheapClassifiers = new Set([
   "main.yml#product-paths",
   "pr-validation-handoff.yml#product-scope",
   "pr.yml#validation-request",
+  "web-research.yml#research-paths",
 ]);
 const hostedCheckoutClassifiers = new Set([
   "main.yml#product-paths",
