@@ -10,6 +10,7 @@ import {
   cursorReviewRequestMarker,
   requestExactHeadReview,
 } from "../main/github-review.js";
+import type { PullRequestRevision } from "../main/github.js";
 
 const repoRef = { owner: "meta-secret", repo: "nook" };
 const headSha = "0123456789abcdef0123456789abcdef01234567";
@@ -33,6 +34,7 @@ function mockOctokit(input: {
   createCalls?: { count: number };
   createdBodies?: string[];
   reactions?: Array<{ content: string; user: { login: string } }>;
+  revisions?: PullRequestRevision[];
   reviews?: MockReview[];
   sha?: string;
 }): Octokit {
@@ -43,6 +45,7 @@ function mockOctokit(input: {
   const createdBodies = input.createdBodies ?? [];
   const reviews = input.reviews ?? [];
   const sha = input.sha ?? "head-sha";
+  let revisionReads = 0;
   return {
     rest: {
       issues: {
@@ -61,7 +64,21 @@ function mockOctokit(input: {
         listComments: async () => ({ data: comments }),
       },
       pulls: {
-        get: async () => ({ data: { base: { sha: "base-sha" }, head: { sha } } }),
+        get: async () => {
+          const revision = input.revisions?.[
+            Math.min(revisionReads, input.revisions.length - 1)
+          ];
+          revisionReads += 1;
+          return {
+            data: {
+              base: {
+                ref: revision?.baseRef ?? "main",
+                sha: revision?.baseSha ?? "base-sha",
+              },
+              head: { sha: revision?.headSha ?? sha },
+            },
+          };
+        },
         listReviews: async () => ({ data: reviews }),
       },
       reactions: {
@@ -101,6 +118,25 @@ test("requestExactHeadReview posts one exact-head Codex marker", async () => {
   assert.deepEqual(createdBodies, [
     "@codex review\n\n<!-- nook-codex-review:head-sha:base-sha -->",
   ]);
+});
+
+test("requestExactHeadReview detects a revision change before Codex contact", async () => {
+  const createCalls = { count: 0 };
+  const expected: PullRequestRevision = {
+    baseRef: "main",
+    baseSha: "base-sha",
+    headSha: "head-sha",
+  };
+  const octokit = mockOctokit({
+    createCalls,
+    revisions: [expected, { ...expected, headSha: "changed-head" }],
+  });
+
+  await assert.rejects(
+    requestExactHeadReview(octokit, repoRef, 410, undefined, expected),
+    /Pull request revision changed.*no review was requested/,
+  );
+  assert.equal(createCalls.count, 0);
 });
 
 test("review request identity changes with the base revision", () => {

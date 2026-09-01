@@ -100,7 +100,7 @@ jobs:
           esac
           case "$REQUESTED_RUNNER_LABEL:$REQUESTED_REMOTE_TASKS" in
             :*) ;;
-            nook-k0s:preflight|nook-k0s:rust:ci|nook-k0s:arc:runtime) ;;
+            nook-k0s:preflight|nook-k0s:rust:ci|nook-k0s:loom:verify|nook-k0s:arc:runtime) ;;
             nook-k0s-hive:hive:verify) ;;
             *)
               echo "Remote runner label is incompatible with the requested task" >&2

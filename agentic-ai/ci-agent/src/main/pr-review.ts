@@ -5,11 +5,16 @@ import {
   type ExactHeadReviewRequestResult,
 } from "./github-review.js";
 import {
+  HeadTransitionObservationState,
+  assertPullRequestRevision,
   createOctokit,
   inspectPrFeedback,
   observeCurrentHeadTransition,
   parseRepository,
+  readPullRequestRevision,
   requestHeadTransitionBackfill,
+  type HeadTransitionObservation,
+  type PullRequestRevision,
   type PrFeedbackSummary,
 } from "./github.js";
 import { prettyJson } from "./json.js";
@@ -39,12 +44,19 @@ type ReviewStabilizationInput = {
 
 type ReviewRequestInput = {
   circuitBreakerAcknowledged?: boolean;
-  ensureHeadTransition: () => Promise<void>;
-  inspectFeedback: () => Promise<PrFeedbackSummary>;
+  ensureHeadTransition: (revision: PullRequestRevision) => Promise<void>;
+  inspectFeedback: (
+    revision: PullRequestRevision,
+  ) => Promise<PrFeedbackSummary>;
   now: () => number;
-  observeHeadTransition: () => Promise<boolean>;
+  observeHeadTransition: (
+    revision: PullRequestRevision,
+  ) => Promise<HeadTransitionObservation>;
   pollIntervalMs: number;
-  requestReview: () => Promise<ExactHeadReviewRequestResult>;
+  readRevision: () => Promise<PullRequestRevision>;
+  requestReview: (
+    revision: PullRequestRevision,
+  ) => Promise<ExactHeadReviewRequestResult>;
   timeoutMs: number;
   waitMs: (milliseconds: number) => Promise<void>;
 };
@@ -122,14 +134,22 @@ export async function runPrReviewRequest(): Promise<void> {
   const repoRef = parseRepository(repository);
   const result = await requestExactHeadReviewWithCircuitBreaker({
     circuitBreakerAcknowledged: readCircuitBreakerAcknowledgement(),
-    ensureHeadTransition: () =>
-      requestHeadTransitionBackfill({ octokit, prNumber, repoRef }),
-    inspectFeedback: () => inspectPrFeedback(octokit, repoRef, prNumber),
+    ensureHeadTransition: (revision) =>
+      requestHeadTransitionBackfill({
+        octokit,
+        prNumber,
+        repoRef,
+        revision,
+      }),
+    inspectFeedback: (revision) =>
+      inspectPrFeedback(octokit, repoRef, prNumber, revision),
     now: () => Date.now(),
-    observeHeadTransition: () =>
-      observeCurrentHeadTransition(octokit, repoRef, prNumber),
+    observeHeadTransition: (revision) =>
+      observeCurrentHeadTransition(octokit, repoRef, prNumber, revision),
     pollIntervalMs: HEAD_TRANSITION_POLL_INTERVAL_MS,
-    requestReview: () => requestExactHeadReview(octokit, repoRef, prNumber),
+    readRevision: () => readPullRequestRevision(octokit, repoRef, prNumber),
+    requestReview: (revision) =>
+      requestExactHeadReview(octokit, repoRef, prNumber, undefined, revision),
     timeoutMs: HEAD_TRANSITION_WAIT_TIMEOUT_MS,
     waitMs: DEFAULT_REVIEW_CLOCK.waitMs,
   });
@@ -144,25 +164,27 @@ export async function runPrReviewRequest(): Promise<void> {
 export async function requestExactHeadReviewWithCircuitBreaker(
   input: ReviewRequestInput,
 ): Promise<ReviewRequestResult> {
-  await input.ensureHeadTransition();
   const deadline = input.now() + input.timeoutMs;
-  while (true) {
-    const observation = await attemptBeforeDeadline({
-      deadline,
-      now: input.now,
-      operation: input.observeHeadTransition,
-    });
-    if (!observation.completed) {
-      throw missingHeadTransitionError(input.timeoutMs);
-    }
-    if (observation.value) break;
-    const remainingMs = deadline - input.now();
-    if (remainingMs <= 0) {
-      throw missingHeadTransitionError(input.timeoutMs);
-    }
-    await input.waitMs(Math.min(input.pollIntervalMs, remainingMs));
+  const revision = await input.readRevision();
+  let observation = await observeBeforeDeadline(input, revision, deadline);
+  if (observation.state === HeadTransitionObservationState.Changed) {
+    assertPullRequestRevision(revision, observation.revision);
   }
-  const feedback = await input.inspectFeedback();
+  if (observation.state === HeadTransitionObservationState.Missing) {
+    await input.ensureHeadTransition(revision);
+    do {
+      const remainingMs = deadline - input.now();
+      if (remainingMs <= 0) {
+        throw missingHeadTransitionError(input.timeoutMs);
+      }
+      await input.waitMs(Math.min(input.pollIntervalMs, remainingMs));
+      observation = await observeBeforeDeadline(input, revision, deadline);
+      if (observation.state === HeadTransitionObservationState.Changed) {
+        assertPullRequestRevision(revision, observation.revision);
+      }
+    } while (observation.state === HeadTransitionObservationState.Missing);
+  }
+  const feedback = await input.inspectFeedback(revision);
   if (
     classifyFeedbackState(
       feedback,
@@ -171,7 +193,8 @@ export async function requestExactHeadReviewWithCircuitBreaker(
   ) {
     return { feedback, state: ReviewRequestState.CircuitBreaker };
   }
-  const result = await input.requestReview();
+  assertPullRequestRevision(revision, await input.readRevision());
+  const result = await input.requestReview(revision);
   if (!result.requested) {
     return {
       ...result,
@@ -180,6 +203,22 @@ export async function requestExactHeadReviewWithCircuitBreaker(
     };
   }
   return { ...result, requested: true, state: ReviewRequestState.Requested };
+}
+
+async function observeBeforeDeadline(
+  input: ReviewRequestInput,
+  revision: PullRequestRevision,
+  deadline: number,
+): Promise<HeadTransitionObservation> {
+  const observation = await attemptBeforeDeadline({
+    deadline,
+    now: input.now,
+    operation: () => input.observeHeadTransition(revision),
+  });
+  if (!observation.completed) {
+    throw missingHeadTransitionError(input.timeoutMs);
+  }
+  return observation.value;
 }
 
 function missingHeadTransitionError(timeoutMs: number): Error {

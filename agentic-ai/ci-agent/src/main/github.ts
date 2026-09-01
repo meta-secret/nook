@@ -31,10 +31,31 @@ const log = createLogger("github");
 
 export type RepoRef = { owner: string; repo: string };
 
+export type PullRequestRevision = {
+  baseRef: string;
+  baseSha: string;
+  headSha: string;
+};
+
+export enum HeadTransitionObservationState {
+  Changed = "changed",
+  Missing = "missing",
+  Observed = "observed",
+}
+
+export type HeadTransitionObservation =
+  | {
+      state: HeadTransitionObservationState.Changed;
+      revision: PullRequestRevision;
+    }
+  | { state: HeadTransitionObservationState.Missing }
+  | { state: HeadTransitionObservationState.Observed };
+
 type HeadTransitionBackfillInput = {
   octokit: Octokit;
   prNumber: number;
   repoRef: RepoRef;
+  revision?: PullRequestRevision;
 };
 
 export enum OpenPrLookupKind {
@@ -74,29 +95,71 @@ export async function requestHeadTransitionBackfill(
   input: HeadTransitionBackfillInput,
 ): Promise<void> {
   const { owner, repo } = input.repoRef;
-  const { data: pr } = await input.octokit.rest.pulls.get({
-    owner,
-    repo,
-    pull_number: input.prNumber,
-  });
+  const revision =
+    input.revision ??
+    (await readPullRequestRevision(
+      input.octokit,
+      input.repoRef,
+      input.prNumber,
+    ));
   await input.octokit.rest.actions.createWorkflowDispatch({
     owner,
     repo,
     workflow_id: "pr-head-stabilization.yml",
-    ref: pr.base.ref,
+    ref: revision.baseRef,
     inputs: {
-      base_sha: pr.base.sha,
-      head_sha: pr.head.sha,
+      base_sha: revision.baseSha,
+      head_sha: revision.headSha,
       pr_number: String(input.prNumber),
     },
   });
+}
+
+export async function readPullRequestRevision(
+  octokit: Octokit,
+  repoRef: RepoRef,
+  prNumber: number,
+): Promise<PullRequestRevision> {
+  const { owner, repo } = repoRef;
+  const { data: pr } = await octokit.rest.pulls.get({
+    owner,
+    repo,
+    pull_number: prNumber,
+  });
+  return {
+    baseRef: pr.base.ref,
+    baseSha: pr.base.sha,
+    headSha: pr.head.sha,
+  };
+}
+
+export function samePullRequestRevision(
+  left: PullRequestRevision,
+  right: PullRequestRevision,
+): boolean {
+  return (
+    left.baseRef === right.baseRef &&
+    left.baseSha === right.baseSha &&
+    left.headSha === right.headSha
+  );
+}
+
+export function assertPullRequestRevision(
+  expected: PullRequestRevision,
+  actual: PullRequestRevision,
+): void {
+  if (samePullRequestRevision(expected, actual)) return;
+  throw new Error(
+    `Pull request revision changed from ${expected.headSha}/${expected.baseSha}/${expected.baseRef} to ${actual.headSha}/${actual.baseSha}/${actual.baseRef}; no review was requested`,
+  );
 }
 
 export async function observeCurrentHeadTransition(
   octokit: Octokit,
   repoRef: RepoRef,
   prNumber: number,
-): Promise<boolean> {
+  expected: PullRequestRevision,
+): Promise<HeadTransitionObservation> {
   const { owner, repo } = repoRef;
   const [{ data: pr }, issueComments] = await Promise.all([
     octokit.rest.pulls.get({ owner, repo, pull_number: prNumber }),
@@ -107,16 +170,25 @@ export async function observeCurrentHeadTransition(
       per_page: 100,
     }),
   ]);
-  return (
-    findCurrentHeadTransition({
-      baseRef: pr.base.ref,
-      comments: issueComments.map((comment) => ({
-        body: comment.body ?? "",
-        user: comment.user,
-      })),
-      headSha: pr.head.sha,
-    }).state === HeadTransitionState.Observed
-  );
+  const revision: PullRequestRevision = {
+    baseRef: pr.base.ref,
+    baseSha: pr.base.sha,
+    headSha: pr.head.sha,
+  };
+  if (!samePullRequestRevision(revision, expected)) {
+    return { revision, state: HeadTransitionObservationState.Changed };
+  }
+  const transition = findCurrentHeadTransition({
+    baseRef: pr.base.ref,
+    comments: issueComments.map((comment) => ({
+      body: comment.body ?? "",
+      user: comment.user,
+    })),
+    headSha: pr.head.sha,
+  });
+  return transition.state === HeadTransitionState.Observed
+    ? { state: HeadTransitionObservationState.Observed }
+    : { state: HeadTransitionObservationState.Missing };
 }
 
 export async function findOpenPr(
@@ -378,6 +450,7 @@ export async function inspectPrFeedback(
   octokit: Octokit,
   repoRef: RepoRef,
   prNumber: number,
+  expectedRevision?: PullRequestRevision,
 ): Promise<PrFeedbackSummary> {
   const { owner, repo } = repoRef;
   const { data: pr } = await octokit.rest.pulls.get({
@@ -385,6 +458,13 @@ export async function inspectPrFeedback(
     repo,
     pull_number: prNumber,
   });
+  if (expectedRevision) {
+    assertPullRequestRevision(expectedRevision, {
+      baseRef: pr.base.ref,
+      baseSha: pr.base.sha,
+      headSha: pr.head.sha,
+    });
+  }
   const [issueComments, reviews, reviewComments] = await Promise.all([
     octokit.paginate(octokit.rest.issues.listComments, {
       owner,

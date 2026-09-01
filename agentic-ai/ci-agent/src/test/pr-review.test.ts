@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { PrFeedbackSummary } from "../main/github.js";
+import {
+  HeadTransitionObservationState,
+  type PrFeedbackSummary,
+  type PullRequestRevision,
+} from "../main/github.js";
 import {
   ExactHeadReviewFallback,
   ExactHeadReviewProvider,
@@ -34,6 +38,18 @@ const cleanFeedback: PrFeedbackSummary = {
   unresolvedThreads: 0,
 };
 
+const revision: PullRequestRevision = {
+  baseRef: "main",
+  baseSha: "base-sha",
+  headSha: "head-sha",
+};
+const observedBoundary = {
+  state: HeadTransitionObservationState.Observed,
+} as const;
+const missingBoundary = {
+  state: HeadTransitionObservationState.Missing,
+} as const;
+
 test("non-waiting review request honors the circuit breaker", async () => {
   const operations: string[] = [];
   let now = 0;
@@ -49,9 +65,10 @@ test("non-waiting review request honors the circuit breaker", async () => {
     now: () => now,
     observeHeadTransition: async () => {
       operations.push("boundary");
-      return true;
+      return observedBoundary;
     },
     pollIntervalMs: 5,
+    readRevision: async () => revision,
     requestReview: async () => {
       operations.push("review");
       requests += 1;
@@ -71,7 +88,7 @@ test("non-waiting review request honors the circuit breaker", async () => {
 
   assert.equal(result.state, ReviewRequestState.CircuitBreaker);
   assert.equal(requests, 0);
-  assert.deepEqual(operations, ["head-transition", "boundary", "feedback"]);
+  assert.deepEqual(operations, ["boundary", "feedback"]);
 });
 
 test("acknowledged stabilization permits a non-waiting review request", async () => {
@@ -85,8 +102,9 @@ test("acknowledged stabilization permits a non-waiting review request", async ()
       findingBatches: 3,
     }),
     now: () => now,
-    observeHeadTransition: async () => true,
+    observeHeadTransition: async () => observedBoundary,
     pollIntervalMs: 5,
+    readRevision: async () => revision,
     requestReview: async () => {
       requests += 1;
       return {
@@ -121,9 +139,10 @@ test("provider unavailability remains not-requested", async () => {
     now: () => now,
     observeHeadTransition: async () => {
       operations.push("boundary");
-      return true;
+      return observedBoundary;
     },
     pollIntervalMs: 5,
+    readRevision: async () => revision,
     requestReview: async () => {
       operations.push("review");
       return {
@@ -143,7 +162,6 @@ test("provider unavailability remains not-requested", async () => {
   assert.equal(result.state, ReviewRequestState.NotRequested);
   assert.equal(result.requested, false);
   assert.deepEqual(operations, [
-    "head-transition",
     "boundary",
     "feedback",
     "review",
@@ -166,9 +184,10 @@ test("non-waiting review request waits only for the trusted boundary", async () 
     observeHeadTransition: async () => {
       operations.push("boundary");
       observations += 1;
-      return observations === 2;
+      return observations === 2 ? observedBoundary : missingBoundary;
     },
     pollIntervalMs: 5,
+    readRevision: async () => revision,
     requestReview: async () => {
       operations.push("review");
       return {
@@ -188,8 +207,8 @@ test("non-waiting review request waits only for the trusted boundary", async () 
 
   assert.equal(result.state, ReviewRequestState.Requested);
   assert.deepEqual(operations, [
-    "head-transition",
     "boundary",
+    "head-transition",
     "wait",
     "boundary",
     "feedback",
@@ -210,8 +229,9 @@ test("non-waiting review request fails truthfully when the trusted boundary is a
         return cleanFeedback;
       },
       now: () => now,
-      observeHeadTransition: async () => false,
+      observeHeadTransition: async () => missingBoundary,
       pollIntervalMs: 5,
+      readRevision: async () => revision,
       requestReview: async () => {
         reviewRequests += 1;
         return {
@@ -247,6 +267,7 @@ test("non-waiting review request bounds a stalled boundary observation", async (
       now: () => Date.now(),
       observeHeadTransition: () => new Promise(() => {}),
       pollIntervalMs: 5,
+      readRevision: async () => revision,
       requestReview: async () => {
         reviewRequests += 1;
         return {
@@ -264,6 +285,65 @@ test("non-waiting review request bounds a stalled boundary observation", async (
   );
   assert.equal(feedbackInspections, 0);
   assert.equal(reviewRequests, 0);
+});
+
+test("non-waiting review request detects a revision change after feedback inspection", async () => {
+  const changedRevision = { ...revision, headSha: "changed-head" };
+  let reads = 0;
+  let reviewRequests = 0;
+
+  await assert.rejects(
+    requestExactHeadReviewWithCircuitBreaker({
+      ensureHeadTransition: async () => {},
+      inspectFeedback: async () => cleanFeedback,
+      now: () => 0,
+      observeHeadTransition: async () => observedBoundary,
+      pollIntervalMs: 5,
+      readRevision: async () => {
+        reads += 1;
+        return reads === 1 ? revision : changedRevision;
+      },
+      requestReview: async () => {
+        reviewRequests += 1;
+        return {
+          fallback: ExactHeadReviewFallback.None,
+          headSha: "head-sha",
+          provider: ExactHeadReviewProvider.Codex,
+          requested: true,
+          settled: false,
+        };
+      },
+      timeoutMs: 20,
+      waitMs: async () => {},
+    }),
+    /Pull request revision changed.*no review was requested/,
+  );
+  assert.equal(reviewRequests, 0);
+});
+
+test("non-waiting review request does not backfill an existing matching boundary", async () => {
+  let backfills = 0;
+  await requestExactHeadReviewWithCircuitBreaker({
+    ensureHeadTransition: async () => {
+      backfills += 1;
+    },
+    inspectFeedback: async () => cleanFeedback,
+    now: () => 0,
+    observeHeadTransition: async () => observedBoundary,
+    pollIntervalMs: 5,
+    readRevision: async () => revision,
+    requestReview: async () => ({
+      fallback: ExactHeadReviewFallback.None,
+      headSha: "head-sha",
+      provider: ExactHeadReviewProvider.Codex,
+      requested: false,
+      settled: true,
+    }),
+    timeoutMs: 20,
+    waitMs: async () => {},
+  });
+
+  assert.equal(backfills, 0);
 });
 
 test("stabilizeExactHeadReview waits once and accepts clean feedback", async () => {

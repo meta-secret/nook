@@ -550,6 +550,12 @@ fn arc_workflow_matches_the_taskfile_catalog() -> Result<()> {
         "remote tasks must select the general, Hive, or container ARC scale set"
     );
     assert!(
+        workflow.contains(
+            "nook-k0s:preflight|nook-k0s:rust:ci|nook-k0s:loom:verify|nook-k0s:arc:runtime"
+        ),
+        "explicit general ARC routing must accept every compatible direct-runner task"
+    );
+    assert!(
         !workflow.contains("Start hosted Hive Neo4j service")
             && !workflow.contains("docker run --detach"),
         "ARC remote tasks must use the Hive scale set sidecar instead of a nested daemon"

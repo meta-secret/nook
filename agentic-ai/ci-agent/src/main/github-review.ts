@@ -1,6 +1,6 @@
 import type { Octokit } from "@octokit/rest";
 
-import type { RepoRef } from "./github.js";
+import type { PullRequestRevision, RepoRef } from "./github.js";
 
 const CODEX_REVIEWER_LOGIN = "chatgpt-codex-connector[bot]";
 const CURSOR_REVIEWER_LOGIN = "cursor[bot]";
@@ -152,6 +152,7 @@ export async function requestExactHeadReview(
   repoRef: RepoRef,
   prNumber: number,
   availability?: ExactHeadReviewAvailability,
+  expectedRevision?: PullRequestRevision,
 ): Promise<ExactHeadReviewRequestResult> {
   const { owner, repo } = repoRef;
   const { data: pr } = await octokit.rest.pulls.get({
@@ -161,6 +162,11 @@ export async function requestExactHeadReview(
   });
   const headSha = pr.head.sha;
   const baseSha = pr.base.sha;
+  assertExpectedRevision(expectedRevision, {
+    baseRef: pr.base.ref,
+    baseSha,
+    headSha,
+  });
   const snapshot = await loadReviewSnapshot({
     baseSha,
     headSha,
@@ -169,6 +175,18 @@ export async function requestExactHeadReview(
     prNumber,
     repo,
   });
+  if (expectedRevision) {
+    const { data: currentPr } = await octokit.rest.pulls.get({
+      owner,
+      repo,
+      pull_number: prNumber,
+    });
+    assertExpectedRevision(expectedRevision, {
+      baseRef: currentPr.base.ref,
+      baseSha: currentPr.base.sha,
+      headSha: currentPr.head.sha,
+    });
+  }
   if (snapshot.codex.settled) {
     return {
       fallback: ExactHeadReviewFallback.None,
@@ -239,6 +257,23 @@ export async function requestExactHeadReview(
     requested: true,
     settled: probed.kind === CodexProbeKind.Settled,
   };
+}
+
+function assertExpectedRevision(
+  expected: PullRequestRevision | undefined,
+  actual: PullRequestRevision,
+): void {
+  if (
+    !expected ||
+    (expected.baseRef === actual.baseRef &&
+      expected.baseSha === actual.baseSha &&
+      expected.headSha === actual.headSha)
+  ) {
+    return;
+  }
+  throw new Error(
+    `Pull request revision changed from ${expected.headSha}/${expected.baseSha}/${expected.baseRef} to ${actual.headSha}/${actual.baseSha}/${actual.baseRef}; no review was requested`,
+  );
 }
 
 export function isCodexReviewer(actor: unknown): boolean {

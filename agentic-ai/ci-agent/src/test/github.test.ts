@@ -4,6 +4,7 @@ import test from "node:test";
 import type { Octokit } from "@octokit/rest";
 
 import {
+  HeadTransitionObservationState,
   createFixPr,
   observeCurrentHeadTransition,
   requiredPrCheckNames,
@@ -14,6 +15,7 @@ const repoRef = { owner: "meta-secret", repo: "nook" };
 
 function headTransitionObserverOctokit(input: {
   body: string;
+  liveHeadSha?: string;
   login: string;
 }): Octokit {
   return {
@@ -24,7 +26,10 @@ function headTransitionObserverOctokit(input: {
       issues: { listComments: async () => ({ data: [] }) },
       pulls: {
         get: async () => ({
-          data: { base: { ref: "main" }, head: { sha: "head-sha" } },
+          data: {
+            base: { ref: "main", sha: "base-sha" },
+            head: { sha: input.liveHeadSha ?? "head-sha" },
+          },
         }),
       },
     },
@@ -34,7 +39,12 @@ function headTransitionObserverOctokit(input: {
 test("observeCurrentHeadTransition accepts only the matching trusted marker", async () => {
   const marker =
     "<!-- nook-head-transition:head-sha:main:2026-09-01T00:00:00.000Z -->";
-  assert.equal(
+  const expected = {
+    baseRef: "main",
+    baseSha: "base-sha",
+    headSha: "head-sha",
+  };
+  assert.deepEqual(
     await observeCurrentHeadTransition(
       headTransitionObserverOctokit({
         body: marker,
@@ -42,10 +52,11 @@ test("observeCurrentHeadTransition accepts only the matching trusted marker", as
       }),
       repoRef,
       1263,
+      expected,
     ),
-    true,
+    { state: HeadTransitionObservationState.Observed },
   );
-  assert.equal(
+  assert.deepEqual(
     await observeCurrentHeadTransition(
       headTransitionObserverOctokit({
         body: marker,
@@ -53,10 +64,11 @@ test("observeCurrentHeadTransition accepts only the matching trusted marker", as
       }),
       repoRef,
       1263,
+      expected,
     ),
-    false,
+    { state: HeadTransitionObservationState.Missing },
   );
-  assert.equal(
+  assert.deepEqual(
     await observeCurrentHeadTransition(
       headTransitionObserverOctokit({
         body: marker.replace("head-sha", "stale-head"),
@@ -64,8 +76,29 @@ test("observeCurrentHeadTransition accepts only the matching trusted marker", as
       }),
       repoRef,
       1263,
+      expected,
     ),
-    false,
+    { state: HeadTransitionObservationState.Missing },
+  );
+  assert.deepEqual(
+    await observeCurrentHeadTransition(
+      headTransitionObserverOctokit({
+        body: marker,
+        liveHeadSha: "changed-head",
+        login: "github-actions[bot]",
+      }),
+      repoRef,
+      1263,
+      expected,
+    ),
+    {
+      revision: {
+        baseRef: "main",
+        baseSha: "base-sha",
+        headSha: "changed-head",
+      },
+      state: HeadTransitionObservationState.Changed,
+    },
   );
 });
 
