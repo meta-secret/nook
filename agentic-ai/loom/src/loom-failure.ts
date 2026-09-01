@@ -112,10 +112,14 @@ export function loomFailureFromCause(
   });
 }
 
-export async function withLoomFailureCode<T>(args: {
-  readonly code: LoomFailureCode;
-  readonly action: () => Promise<T>;
-}): Promise<T> {
+export type WithLoomFailureCodeRequest<T> = Readonly<{
+  code: LoomFailureCode;
+  action: () => Promise<T>;
+}>;
+
+export async function withLoomFailureCode<T>(
+  args: WithLoomFailureCodeRequest<T>,
+): Promise<T> {
   try {
     return await args.action();
   } catch (cause) {

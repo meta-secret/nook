@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { spawnSync } from 'node:child_process';
 import {
+  copyFileSync,
   existsSync,
   linkSync,
   mkdirSync,
   readFileSync,
+  rmSync,
   symlinkSync,
   unlinkSync,
   writeFileSync,
@@ -392,9 +394,15 @@ describe('Team Plan runtime', () => {
     const file = fixturePlanFile([fixture, [alpha]]);
     await startTeamPlan(startRequest(file));
     const selection = await selectTeamPlan({ journalPath: file.journalPath });
+    const started = JSON.parse(
+      readFileSync(file.journalPath, 'utf8').split('\n')[0] ?? '',
+    ) as {
+      readonly workspaceRoot: string;
+    };
     const finalizedRef = `${runRef({ file })}/finalized`;
     fixtureGit(fixture)(['update-ref', finalizedRef, fixture.baselineCommit]);
     const previousTemporaryDirectory = process.env.TMPDIR;
+    rmSync(started.workspaceRoot, { recursive: true });
     process.env.TMPDIR = join(fixture.root, 'different-tmp');
     try {
       expect(
@@ -406,6 +414,11 @@ describe('Team Plan runtime', () => {
       else process.env.TMPDIR = previousTemporaryDirectory;
     }
     expect(fixtureGit(fixture)(['for-each-ref', finalizedRef])).toBe('');
+    const relocatedJournal = join(fixture.root, 'relocated-events.jsonl');
+    copyFileSync(file.journalPath, relocatedJournal);
+    await expect(
+      selectTeamPlan({ journalPath: relocatedJournal }),
+    ).rejects.toThrow('workspace root has drifted');
     const next = writeNamedPlanFile({
       fixture,
       name: 'next-team-plan',

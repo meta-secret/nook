@@ -64,7 +64,10 @@ import {
   teamPlanRunRefPrefix,
   teamPlanRunRefsEmpty,
 } from './runtime-durability.ts';
-import { teamPlanWorkspaceRoot } from './runtime-workspace.ts';
+import {
+  recoverTeamPlanWorkspaceRoot,
+  teamPlanWorkspaceRoot,
+} from './runtime-workspace.ts';
 
 import type {
   ModuleDeliveryAttemptLease,
@@ -303,17 +306,9 @@ export async function discardFinalizedTeamPlan(
     journalPath: request.journalPath,
     expectedRunId: request.runId,
     discardArtifacts: async ({ journal, artifactsMayAlreadyBeDiscarded }) => {
-      let session: TeamPlanSession;
-      try {
-        session = await materializeTeamPlanSession(journal);
-      } catch (error) {
-        if (
-          artifactsMayAlreadyBeDiscarded &&
-          runArtifactPrefixEmpty({ journal })
-        )
-          return;
-        throw error;
-      }
+      if (artifactsMayAlreadyBeDiscarded && runArtifactPrefixEmpty({ journal }))
+        return;
+      const session = await materializeTeamPlanSession(journal);
       try {
         deleteRunArtifactRefs(session);
       } finally {
@@ -345,8 +340,11 @@ async function materializeTeamPlanSession(
 ): Promise<TeamPlanSession> {
   const started = journal.started;
   const plan = await assertReviewedPlanEvent(started);
-  if ((await realpath(started.workspaceRoot)) !== started.workspaceRoot)
-    throw new Error('Team Plan workspace root has drifted.');
+  await recoverTeamPlanWorkspaceRoot({
+    repositoryRoot: started.repositoryRoot,
+    journalPath: journal.path,
+    workspaceRoot: started.workspaceRoot,
+  });
   const authority = createModuleDeliveryGenerationAuthority({
     acceptedPlan: plan,
     expectedLineage: expectedLineage(plan),
