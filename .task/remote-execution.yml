@@ -121,7 +121,11 @@ tasks:
         dispatched_pr_state="$(gh pr view "$REQUESTED_PR" --json headRefOid,baseRefName --jq '.headRefOid + "|" + .baseRefName')"
         dispatched_pr_sha="${dispatched_pr_state%%|*}"
         dispatched_base_ref="${dispatched_pr_state#*|}"
-        if [ "$local_sha" != "$dispatched_pr_sha" ] || [ "$base_ref" != "$dispatched_base_ref" ]; then
+        dispatched_base_current="1"
+        if ! .github/scripts/require-current-base.sh origin "$dispatched_base_ref"; then
+          dispatched_base_current="0"
+        fi
+        if [ "$local_sha" != "$dispatched_pr_sha" ] || [ "$base_ref" != "$dispatched_base_ref" ] || [ "$dispatched_base_current" != "1" ]; then
           gh pr edit "$REQUESTED_PR" --remove-label "$validation_label"
           repository="$(gh repo view --json nameWithOwner --jq .nameWithOwner)"
           cancel_attempt=0

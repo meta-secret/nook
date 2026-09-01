@@ -94,11 +94,18 @@ fn complete_validation_dispatches_before_review_collection() -> Result<()> {
     let dispatched_head_position = direct_validation
         .find("dispatched_pr_state=\"$(gh pr view \"$REQUESTED_PR\" --json headRefOid,baseRefName")
         .context("direct validation must recheck the head and base after label dispatch")?;
+    let dispatched_base_position = direct_validation
+        .find(".github/scripts/require-current-base.sh origin \"$dispatched_base_ref\"")
+        .context("direct validation must recheck base freshness after label dispatch")?;
     assert!(
         current_base_position < validation_label_position
             && validation_label_position < review_request_position
             && review_request_position < dispatched_head_position,
         "complete validation must dispatch before requesting review and then reject a head change"
+    );
+    assert!(
+        dispatched_head_position < dispatched_base_position,
+        "complete validation must recheck target-branch freshness after dispatch"
     );
     for required in [
         "pr:review-local:",
