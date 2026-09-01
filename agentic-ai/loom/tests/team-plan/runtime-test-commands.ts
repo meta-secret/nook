@@ -7,6 +7,15 @@ import {
 
 export { finalizeTeamPlanRuntime, restartTeamPlanRuntime };
 
+export type FinalizeTeamPlanTestRequest = Readonly<{
+  journalPath: string;
+}>;
+
+export type RestartTeamPlanTestRequest = Readonly<{
+  journalPath: string;
+  planPath: string;
+}>;
+
 export function journalRunId(journalPath: string): string {
   const first = readFileSync(journalPath, 'utf8').split('\n')[0];
   if (!first) throw new Error('Team Plan start event is missing.');
@@ -14,17 +23,14 @@ export function journalRunId(journalPath: string): string {
   return started.runId;
 }
 
-export function finalizeTeamPlan(request: { readonly journalPath: string }) {
+export function finalizeTeamPlan(request: FinalizeTeamPlanTestRequest) {
   return finalizeTeamPlanRuntime({
     ...request,
     runId: journalRunId(request.journalPath),
   });
 }
 
-export function restartTeamPlan(request: {
-  readonly journalPath: string;
-  readonly planPath: string;
-}) {
+export function restartTeamPlan(request: RestartTeamPlanTestRequest) {
   return restartTeamPlanRuntime({
     ...request,
     runId: journalRunId(request.journalPath),

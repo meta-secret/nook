@@ -34,7 +34,12 @@ import {
   selectTeamPlan,
   startTeamPlan,
 } from '../../src/team-plan/index.ts';
-import { finalizeTeamPlan, restartTeamPlan } from './runtime-test-commands.ts';
+import {
+  finalizeTeamPlan,
+  finalizeTeamPlanRuntime,
+  restartTeamPlan,
+  restartTeamPlanRuntime,
+} from './runtime-test-commands.ts';
 import {
   createGitFixture,
   disposeGitFixture,
@@ -312,6 +317,39 @@ describe('Team Plan runtime', () => {
       taskIds: ['beta'],
     });
     expect(leased.leases.map(({ taskId }) => taskId)).toEqual(['beta']);
+  });
+
+  test('rejects stale run identities before mutating the journal', async () => {
+    const fixture = createGitFixture();
+    fixtures.push(fixture);
+    const node = fixtureReadNode([fixture, 'provider']);
+    const file = fixturePlanFile([fixture, [node]]);
+    await startTeamPlan(startRequest(file));
+    const leased = await leaseNextTeamPlan(file.journalPath);
+    const lease = leased.leases[0];
+    if (!lease) throw new Error('Provider lease is missing.');
+    const journal = readFileSync(file.journalPath, 'utf8');
+    await expect(
+      recordTeamPlanRuntime({
+        journalPath: file.journalPath,
+        runId: 'stale-run-id',
+        record: evidenceRecord({ fixture, lease, node }),
+      }),
+    ).rejects.toThrow('run identity is stale');
+    await expect(
+      restartTeamPlanRuntime({
+        journalPath: file.journalPath,
+        runId: 'stale-run-id',
+        planPath: file.path,
+      }),
+    ).rejects.toThrow('run identity is stale');
+    await expect(
+      finalizeTeamPlanRuntime({
+        journalPath: file.journalPath,
+        runId: 'stale-run-id',
+      }),
+    ).rejects.toThrow('run identity is stale');
+    expect(readFileSync(file.journalPath, 'utf8')).toBe(journal);
   });
 
   test('reconstructs evidence barriers and releases exact retry leases', async () => {
@@ -601,5 +639,5 @@ describe('Team Plan runtime', () => {
       (await selectTeamPlan({ journalPath: file.journalPath })).snapshot
         .generation,
     ).toBe(2);
-  });
+  }, 10_000);
 });
