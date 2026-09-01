@@ -21,7 +21,7 @@ Agents should use the Task wrappers from the repository root:
 ```bash
 task loom:team-plan:start PLAN=/absolute/path/to/plan.json JOURNAL=/absolute/path/to/events.jsonl
 task loom:team-plan:select JOURNAL=/absolute/path/to/events.jsonl
-task loom:team-plan:lease JOURNAL=/absolute/path/to/events.jsonl RUN_ID=<selection-run-id> GENERATION=<selection-generation> PLAN_DIGEST=<selection-plan-digest> TASK_IDS=task-a,task-b
+task loom:team-plan:lease JOURNAL=/absolute/path/to/events.jsonl RUN_ID=<selection-run-id> GENERATION=<selection-generation> PLAN_DIGEST=<selection-plan-digest> ATTEMPTS=task-a:1,task-b:1
 task loom:team-plan:record JOURNAL=/absolute/path/to/events.jsonl RUN_ID=<run-id> REQUEST=/absolute/path/to/result.json
 task loom:team-plan:restart JOURNAL=/absolute/path/to/events.jsonl RUN_ID=<run-id> PLAN=/absolute/path/to/new-plan.json
 task loom:team-plan:finalize JOURNAL=/absolute/path/to/events.jsonl RUN_ID=<run-id>
@@ -41,7 +41,8 @@ The lifecycle is explicit:
    batch without consuming attempts or concurrency. An empty candidate list is
    valid when work is blocked or already terminal.
 3. `lease` binds the selection snapshot's run, generation, and plan digest to
-   only the comma-separated candidate task IDs explicitly authorized by Gizmo.
+   only the comma-separated candidate task-and-attempt pairs explicitly
+   authorized by Gizmo.
 4. `record` binds one selected lease to the immutable run ID. Its request must be a regular file.
    Loom opens the file without waiting on special files and bounds the read on
    that same open handle.

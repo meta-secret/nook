@@ -34,6 +34,7 @@ import {
   selectTeamPlan,
   startTeamPlan,
 } from '../../src/team-plan/index.ts';
+import { attemptIdentity } from '../../src/team-plan/runtime.ts';
 import {
   finalizeTeamPlan,
   finalizeTeamPlanRuntime,
@@ -76,7 +77,7 @@ async function leaseNextTeamPlan(journalPath: string) {
     runId: selection.snapshot.runId,
     generation: selection.snapshot.generation,
     planDigest: selection.snapshot.planDigest,
-    taskIds: selection.admissions.map(({ taskId }) => taskId),
+    attempts: selection.admissions.map(attemptIdentity),
   });
 }
 
@@ -314,7 +315,9 @@ describe('Team Plan runtime', () => {
       runId: candidates.snapshot.runId,
       generation: candidates.snapshot.generation,
       planDigest: candidates.snapshot.planDigest,
-      taskIds: ['beta'],
+      attempts: candidates.admissions
+        .filter(({ taskId }) => taskId === 'beta')
+        .map(attemptIdentity),
     });
     expect(leased.leases.map(({ taskId }) => taskId)).toEqual(['beta']);
   });
