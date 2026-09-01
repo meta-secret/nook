@@ -154,15 +154,18 @@ function writeJson(request: WriteTeamPlanJsonRequest): void {
   writeFileSync(request.path, `${JSON.stringify(request.value)}\n`);
 }
 
-function recordArguments(journalPath: string, requestPath: string) {
+function recordArguments(request: {
+  readonly journalPath: string;
+  readonly requestPath: string;
+}) {
   return [
     'record',
     '--journal',
-    journalPath,
+    request.journalPath,
     '--run-id',
     '0'.repeat(64),
     '--request',
-    requestPath,
+    request.requestPath,
   ];
 }
 
@@ -518,7 +521,10 @@ test('admits the complete permitted nested provider evidence ancestry', async ()
       MAX_TEAM_PLAN_RECORD_REQUEST_BYTES,
     );
     await expectTeamPlanCliFailure({
-      argv: recordArguments(join(root, 'missing-journal'), requestPath),
+      argv: recordArguments({
+        journalPath: join(root, 'missing-journal'),
+        requestPath,
+      }),
       code: LoomFailureCode.TeamPlanValidationFailed,
     });
   } finally {
@@ -534,7 +540,10 @@ test('localizes non-file and oversized record failures', async () => {
   for (const requestPath of [root, oversized]) {
     try {
       await runTeamPlanCliWithArguments({
-        argv: recordArguments(join(root, 'journal'), requestPath),
+        argv: recordArguments({
+          journalPath: join(root, 'journal'),
+          requestPath,
+        }),
         locale: 'ru-RU',
       });
       throw new Error('Expected localized record-file failure.');
@@ -573,7 +582,10 @@ test('localizes malformed record contents', async () => {
     writeFileSync(requestPath, fixture.contents);
     try {
       await runTeamPlanCliWithArguments({
-        argv: recordArguments(join(root, 'journal'), requestPath),
+        argv: recordArguments({
+          journalPath: join(root, 'journal'),
+          requestPath,
+        }),
         locale: 'ru-RU',
       });
       throw new Error('Expected localized record-content failure.');
@@ -594,26 +606,41 @@ test('normalizes invalid record files and oversized journals', async () => {
   truncateSync(request, MAX_TEAM_PLAN_RECORD_REQUEST_BYTES + 1);
   for (const path of [root, request])
     await expectTeamPlanCliFailure({
-      argv: recordArguments(join(root, 'journal'), path),
+      argv: recordArguments({
+        journalPath: join(root, 'journal'),
+        requestPath: path,
+      }),
       code: LoomFailureCode.TeamPlanValidationFailed,
     });
   writeFileSync(request, '{');
   await expectTeamPlanCliFailure({
-    argv: recordArguments(join(root, 'journal'), request),
+    argv: recordArguments({
+      journalPath: join(root, 'journal'),
+      requestPath: request,
+    }),
     code: LoomFailureCode.TeamPlanValidationFailed,
   });
   writeFileSync(request, '{}\n');
   await expectTeamPlanCliFailure({
-    argv: recordArguments(join(root, 'journal'), request),
+    argv: recordArguments({
+      journalPath: join(root, 'journal'),
+      requestPath: request,
+    }),
     code: LoomFailureCode.TeamPlanValidationFailed,
   });
   writeFileSync(request, Buffer.from([0xc3, 0x28]));
   await expectTeamPlanCliFailure({
-    argv: recordArguments(join(root, 'journal'), request),
+    argv: recordArguments({
+      journalPath: join(root, 'journal'),
+      requestPath: request,
+    }),
     code: LoomFailureCode.TeamPlanValidationFailed,
   });
   await expectTeamPlanCliFailure({
-    argv: recordArguments(join(root, 'journal'), join(root, 'missing.json')),
+    argv: recordArguments({
+      journalPath: join(root, 'journal'),
+      requestPath: join(root, 'missing.json'),
+    }),
     code: LoomFailureCode.TeamPlanStorageFailed,
   });
   const journal = join(root, 'oversized-journal.jsonl');
@@ -638,7 +665,10 @@ test.skipIf(process.platform === 'win32')(
       if (created.status !== 0)
         throw new Error('Unable to create Team Plan request FIFO fixture.');
       await expectTeamPlanCliFailure({
-        argv: recordArguments(join(root, 'journal'), request),
+        argv: recordArguments({
+          journalPath: join(root, 'journal'),
+          requestPath: request,
+        }),
         code: LoomFailureCode.TeamPlanValidationFailed,
       });
       const planPath = join(root, 'plan.fifo');
