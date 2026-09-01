@@ -18,7 +18,7 @@ const secondGizmoOwnershipUnit =
   '2. Capability: Publisher adoption; Gizmo ID: gizmo-2; Functional owner: AI; Expertise provider: None; Expertise allowed code paths: None; Expertise allowed test paths: None; Expertise forbidden paths: None; Expertise consumer interfaces: None; Expertise acceptance evidence: None; Capability acceptance evidence: Integration checks pass'
 
 function sliceContract(number, id, name, predecessor, scope, estimate, evidence) {
-  return `${number}. Gizmo ID: ${id}; Gizmo name: ${name}; Predecessor Gizmo ID: ${predecessor}; ${scope}; Estimated authored changed lines: ${estimate}; Acceptance evidence: ${evidence}`
+  return `${number}. Gizmo ID: ${id}; Gizmo name: ${name}; Predecessor Gizmo ID: ${predecessor}; ${scope}; Estimated authored additions: ${estimate}; Acceptance evidence: ${evidence}`
 }
 
 function sequenceField(...slices) {
@@ -55,14 +55,14 @@ Deliver a durable two-phase agent context record.
 
 - Mission controller: Gizmo Prime
 - Current Gizmo ID: gizmo-1
-- Estimated authored changed lines: 240
+- Estimated authored additions: 240
 - Owning modules, packages, or layers: Workbench agent records
 - Ownership units:
 ${baseOwnershipUnit}
 - Public or cross-module interfaces: Plan validation contract
 - Delivery shape: One PR
 - PR sequence mode: One PR
-- Current PR estimated authored changed lines: 240
+- Current PR estimated authored additions: 240
 - Current PR slice and acceptance evidence: Validator change; Acceptance evidence: Contract tests pass
 ${validSequenceField}
 
@@ -110,8 +110,8 @@ function validTwoGizmoStackedPlan() {
   return validPlan
     .replace(baseOwnershipUnit, `${baseOwnershipUnit}\n${secondGizmoOwnershipUnit}`)
     .replace(
-      'Estimated authored changed lines: 240',
-      'Estimated authored changed lines: 2,240',
+      'Estimated authored additions: 240',
+      'Estimated authored additions: 2,240',
     )
     .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
     .replace('PR sequence mode: One PR', 'PR sequence mode: Stacked PRs')
@@ -253,13 +253,13 @@ test('rejects empty required sections', () => {
 for (const field of [
   'Mission controller',
   'Current Gizmo ID',
-  'Estimated authored changed lines',
+  'Estimated authored additions',
   'Owning modules, packages, or layers',
   'Ownership units',
   'Public or cross-module interfaces',
   'Delivery shape',
   'PR sequence mode',
-  'Current PR estimated authored changed lines',
+  'Current PR estimated authored additions',
   'Current PR slice and acceptance evidence',
   'PR slices, estimates, and acceptance evidence',
 ]) {
@@ -384,7 +384,7 @@ test('accepts a 200-line one-Gizmo plan with multiple ownership units', () => {
   const secondUnit =
     '2. Capability: Plan publication; Gizmo ID: gizmo-1; Functional owner: AI; Expertise provider: None; Expertise allowed code paths: None; Expertise allowed test paths: None; Expertise forbidden paths: None; Expertise consumer interfaces: None; Expertise acceptance evidence: None; Capability acceptance evidence: Publication checks pass'
   const plan = validPlan
-    .replaceAll('authored changed lines: 240', 'authored changed lines: 200')
+    .replaceAll('authored additions: 240', 'authored additions: 200')
     .replace(baseOwnershipUnit, `${baseOwnershipUnit}\n${secondUnit}`)
   assert.equal(validateAgentRecord(plan, 'plan'), '')
 })
@@ -432,24 +432,24 @@ for (const forbiddenPath of [
 
 test('rejects a nonnumeric authored-line estimate', () => {
   const invalid = validPlan.replace(
-    'Estimated authored changed lines: 240',
-    'Estimated authored changed lines: small',
+    'Estimated authored additions: 240',
+    'Estimated authored additions: small',
   )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /missing or empty plan field: Estimated authored changed lines/,
+    /missing or empty plan field: Estimated authored additions/,
   )
 })
 
 for (const malformedEstimate of ['5,00', '1,,,,']) {
   test(`rejects malformed estimate grouping: ${malformedEstimate}`, () => {
     const invalid = validPlan.replace(
-      'Estimated authored changed lines: 240',
-      `Estimated authored changed lines: ${malformedEstimate}`,
+      'Estimated authored additions: 240',
+      `Estimated authored additions: ${malformedEstimate}`,
     )
     assert.match(
       validateAgentRecord(invalid, 'plan'),
-      /missing or empty plan field: Estimated authored changed lines/,
+      /missing or empty plan field: Estimated authored additions/,
     )
   })
 }
@@ -457,43 +457,43 @@ for (const malformedEstimate of ['5,00', '1,,,,']) {
 test('rejects an over-budget one-PR plan', () => {
   const invalid = validPlan
     .replace(
-      'Estimated authored changed lines: 240',
-      'Estimated authored changed lines: 6,000',
+      'Estimated authored additions: 240',
+      'Estimated authored additions: 6,000',
     )
     .replace(
-      'Current PR estimated authored changed lines: 240',
-      'Current PR estimated authored changed lines: 6,000',
+      'Current PR estimated authored additions: 240',
+      'Current PR estimated authored additions: 6,000',
     )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /current PR estimate exceeds 2,000 authored changed lines/,
+    /current PR estimate exceeds 2,000 authored additions/,
   )
 })
 
 test('rejects a one-PR shape for an over-budget feature', () => {
   const invalid = validPlan.replace(
-    'Estimated authored changed lines: 240',
-    'Estimated authored changed lines: 6,000',
+    'Estimated authored additions: 240',
+    'Estimated authored additions: 6,000',
   )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /one-PR plan exceeds 2,000 authored changed lines/,
+    /one-PR plan exceeds 2,000 authored additions/,
   )
 })
 
 test('accepts a one-PR plan at the 2,000-line ceiling', () => {
   const atCeiling = validPlan
     .replace(
-      'Estimated authored changed lines: 240',
-      'Estimated authored changed lines: 2,000',
+      'Estimated authored additions: 240',
+      'Estimated authored additions: 2,000',
     )
     .replace(
-      'Current PR estimated authored changed lines: 240',
-      'Current PR estimated authored changed lines: 2,000',
+      'Current PR estimated authored additions: 240',
+      'Current PR estimated authored additions: 2,000',
     )
     .replace(
-      'Estimated authored changed lines: 240; Acceptance evidence: Contract tests pass',
-      'Estimated authored changed lines: 2,000; Acceptance evidence: Contract tests pass',
+      'Estimated authored additions: 240; Acceptance evidence: Contract tests pass',
+      'Estimated authored additions: 2,000; Acceptance evidence: Contract tests pass',
     )
   assert.equal(validateAgentRecord(atCeiling, 'plan'), '')
 })
@@ -501,8 +501,8 @@ test('accepts a one-PR plan at the 2,000-line ceiling', () => {
 test('rejects an over-budget multi-PR feature', () => {
   const independent = validPlan
     .replace(
-      'Estimated authored changed lines: 240',
-      'Estimated authored changed lines: 2,001',
+      'Estimated authored additions: 240',
+      'Estimated authored additions: 2,001',
     )
     .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
     .replace('PR sequence mode: One PR', 'PR sequence mode: Independent PRs')
@@ -533,12 +533,12 @@ test('rejects a sequence mode that contradicts one-PR delivery', () => {
 test('rejects a feature estimate below its current PR estimate', () => {
   const invalid = validPlan
     .replace(
-      'Estimated authored changed lines: 240',
-      'Estimated authored changed lines: 1',
+      'Estimated authored additions: 240',
+      'Estimated authored additions: 1',
     )
     .replace(
-      'Current PR estimated authored changed lines: 240',
-      'Current PR estimated authored changed lines: 1,999',
+      'Current PR estimated authored additions: 240',
+      'Current PR estimated authored additions: 1,999',
     )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
@@ -548,8 +548,8 @@ test('rejects a feature estimate below its current PR estimate', () => {
 
 test('rejects different feature and current PR estimates for one PR', () => {
   const invalid = validPlan.replace(
-    'Estimated authored changed lines: 240',
-    'Estimated authored changed lines: 300',
+    'Estimated authored additions: 240',
+    'Estimated authored additions: 300',
   )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
@@ -568,12 +568,12 @@ test('rejects a bounded current slice for a multi-PR feature', () => {
 test('rejects a multi-PR slice without an authored-line estimate', () => {
   const invalid = validPlan
     .replace(
-      'Estimated authored changed lines: 240',
-      'Estimated authored changed lines: 12,000',
+      'Estimated authored additions: 240',
+      'Estimated authored additions: 12,000',
     )
     .replace(
-      'Current PR estimated authored changed lines: 240',
-      'Current PR estimated authored changed lines: 1,000',
+      'Current PR estimated authored additions: 240',
+      'Current PR estimated authored additions: 1,000',
     )
     .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
     .replace('PR sequence mode: One PR', 'PR sequence mode: Stacked PRs')
@@ -590,12 +590,12 @@ test('rejects a multi-PR slice without an authored-line estimate', () => {
 test('rejects undersized slice coverage for a 12,000-line feature', () => {
   const invalid = validPlan
     .replace(
-      'Estimated authored changed lines: 240',
-      'Estimated authored changed lines: 12,000',
+      'Estimated authored additions: 240',
+      'Estimated authored additions: 12,000',
     )
     .replace(
-      'Current PR estimated authored changed lines: 240',
-      'Current PR estimated authored changed lines: 1,000',
+      'Current PR estimated authored additions: 240',
+      'Current PR estimated authored additions: 1,000',
     )
     .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
     .replace('PR sequence mode: One PR', 'PR sequence mode: Stacked PRs')
@@ -612,11 +612,11 @@ test('rejects undersized slice coverage for a 12,000-line feature', () => {
   )
 })
 
-test('rejects an individual PR slice above 2,000 lines', () => {
+test('rejects an individual PR slice above 2,000 additions', () => {
   const invalid = validPlan
     .replace(
-      'Estimated authored changed lines: 240',
-      'Estimated authored changed lines: 2,241',
+      'Estimated authored additions: 240',
+      'Estimated authored additions: 2,241',
     )
     .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
     .replace('PR sequence mode: One PR', 'PR sequence mode: Stacked PRs')
@@ -687,8 +687,8 @@ test('rejects a first slice estimate that differs from the current PR estimate',
 test('rejects a multi-PR plan without an ordered sequence', () => {
   const invalid = validPlan
     .replace(
-      'Estimated authored changed lines: 240',
-      'Estimated authored changed lines: 6,000',
+      'Estimated authored additions: 240',
+      'Estimated authored additions: 6,000',
     )
     .replace(
       'Delivery shape: One PR',
@@ -711,7 +711,7 @@ test('rejects multi-PR slices without acceptance evidence', () => {
     .replace('PR sequence mode: One PR', 'PR sequence mode: Independent PRs')
     .replace(
       validSequenceField,
-      '- PR slices, estimates, and acceptance evidence:\n1. Storage; Estimated authored changed lines: 120\n2. UI; Estimated authored changed lines: 120',
+      '- PR slices, estimates, and acceptance evidence:\n1. Storage; Estimated authored additions: 120\n2. UI; Estimated authored additions: 120',
     )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
@@ -846,14 +846,14 @@ test('rejects a one-PR sequence that contradicts the current slice', () => {
 
 test('rejects zero authored-line estimates', () => {
   const invalid = validPlan
-    .replace('Estimated authored changed lines: 240', 'Estimated authored changed lines: 0')
+    .replace('Estimated authored additions: 240', 'Estimated authored additions: 0')
     .replace(
-      'Current PR estimated authored changed lines: 240',
-      'Current PR estimated authored changed lines: 0',
+      'Current PR estimated authored additions: 240',
+      'Current PR estimated authored additions: 0',
     )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /authored changed-line estimates must be positive integers/,
+    /authored-addition estimates must be positive integers/,
   )
 })
 

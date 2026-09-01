@@ -51,11 +51,11 @@ The feature `README.md` must record:
 - feature-level acceptance criteria;
 - current completion status.
 
-- The planned PR must stay at or below 2,000 authored changed lines.
+- The planned PR must stay at or below 2,000 authored additions.
 - Do not create a size-driven issue sequence, successor PR, or PR stack.
 - If the planned work cannot fit, record the blocker instead of decomposing the
   delivery automatically.
-- If review fixes grow the PR to 3,000 lines, stop and publish the report
+- If review fixes grow the PR to 3,000 authored additions, stop and publish the report
   required by [pull requests](pull-requests.md#review-growth-stop).
 
 See
@@ -239,14 +239,14 @@ The plan must contain:
 - explicit constraints, assumptions, and exclusions;
 - a small ordered execution plan;
 - a `Change budget and PR sequence` section;
-- an `Estimated authored changed lines` value;
+- an `Estimated authored additions` value;
 - an `Owning modules, packages, or layers` value;
 - consecutively numbered `Ownership units`, one per capability, each referencing
   the one declared `Gizmo ID`;
 - a `Public or cross-module interfaces` value;
 - a `Delivery shape` value fixed to `One PR`;
 - a `PR sequence mode` value fixed to `One PR`;
-- a `Current PR estimated authored changed lines` value;
+- a `Current PR estimated authored additions` value;
 - a `Current PR slice and acceptance evidence` value;
 - a `PR slices, estimates, and acceptance evidence` value with exactly one row;
   - the row uses the current Gizmo ID;

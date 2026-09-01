@@ -32,17 +32,17 @@ Validate interactive plan publication.
 
 - Mission controller: Gizmo Prime
 - Current Gizmo ID: ${gizmoId}
-- Estimated authored changed lines: 20
+- Estimated authored additions: 20
 - Owning modules, packages, or layers: Workbench publisher
 - Ownership units:
 1. Capability: Plan publication; Gizmo ID: ${gizmoId}; Functional owner: AI; Expertise provider: None; Expertise allowed code paths: None; Expertise allowed test paths: None; Expertise forbidden paths: None; Expertise consumer interfaces: None; Expertise acceptance evidence: None; Capability acceptance evidence: Publisher tests pass
 - Public or cross-module interfaces: Interactive Workbench publication
 - Delivery shape: One PR
 - PR sequence mode: One PR
-- Current PR estimated authored changed lines: 20
+- Current PR estimated authored additions: 20
 - Current PR slice and acceptance evidence: Publisher validation; Acceptance evidence: Publisher tests pass
 - PR slices, estimates, and acceptance evidence:
-1. Gizmo ID: ${gizmoId}; Gizmo name: Publisher; Predecessor Gizmo ID: None; Publisher validation; Estimated authored changed lines: 20; Acceptance evidence: Publisher tests pass
+1. Gizmo ID: ${gizmoId}; Gizmo name: Publisher; Predecessor Gizmo ID: None; Publisher validation; Estimated authored additions: 20; Acceptance evidence: Publisher tests pass
 
 ## Initial plan
 

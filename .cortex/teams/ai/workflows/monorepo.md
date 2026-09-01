@@ -10,10 +10,10 @@ Use this workflow for feature work that touches more than one package.
    0b. **Merge with squash only.** When a PR is merged, use **Squash and
    merge** (`gh pr merge --squash`). Never merge commit or rebase merge. See
    [pull requests](../../../gizmo/workflows/pull-requests.md#squash-merge-only---no-exceptions).
-   0c. Estimate authored changed lines and map package ownership before editing.
-   Do not create a PR whose planned authored diff exceeds 2,000 lines. Do not
+   0c. Estimate authored additions and map package ownership before editing.
+   Do not create a PR whose planned authored diff exceeds 2,000 additions. Do not
    split, stack, or rebuild a PR to recover from size growth. If review fixes
-   grow the PR to 3,000 lines, stop and produce the required failure report.
+   grow the PR to 3,000 authored additions, stop and produce the required failure report.
    Follow
    [pull request size](../../../gizmo/workflows/pull-requests.md#pull-request-size-and-modularity).
 1. Identify the lowest package that should own the behavior.

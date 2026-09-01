@@ -8,7 +8,7 @@ function ownershipUnit(number, gizmoId, capability = 'Plan validation') {
 }
 
 function slice(number, gizmoId, predecessor = 'None', scope = 'Validator') {
-  return `${number}. Gizmo ID: ${gizmoId}; Gizmo name: Validator; Predecessor Gizmo ID: ${predecessor}; ${scope}; Estimated authored changed lines: 200; Acceptance evidence: Contract tests pass`
+  return `${number}. Gizmo ID: ${gizmoId}; Gizmo name: Validator; Predecessor Gizmo ID: ${predecessor}; ${scope}; Estimated authored additions: 200; Acceptance evidence: Contract tests pass`
 }
 
 function plan({
@@ -36,14 +36,14 @@ Deliver one mapped PR.
 
 - Mission controller: Gizmo Prime
 - Current Gizmo ID: ${currentGizmoId}
-- Estimated authored changed lines: 200
+- Estimated authored additions: 200
 - Owning modules, packages, or layers: Workbench records
 - Ownership units:
 ${ownershipUnits.join('\n')}
 - Public or cross-module interfaces: Plan contract
 - Delivery shape: ${shape}
 - PR sequence mode: ${mode}
-- Current PR estimated authored changed lines: 200
+- Current PR estimated authored additions: 200
 - Current PR slice and acceptance evidence: Validator; Acceptance evidence: Contract tests pass
 - PR slices, estimates, and acceptance evidence:
 ${slices.join('\n')}

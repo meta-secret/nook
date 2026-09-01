@@ -12,8 +12,8 @@ import {
   parseRepository,
 } from "./github.js";
 import {
-  assertAuthoredChangeBudget,
-  AuthoredChangeBudgetExceededError,
+  assertAuthoredAdditionBudget,
+  AuthoredAdditionBudgetExceededError,
   configureGitForCi,
   hasWorkingTreeChanges,
   pushFixBranch,
@@ -38,7 +38,7 @@ export function recordTrustedBudgetBlocker(
   error: unknown,
   outputPath: string,
 ): void {
-  if (!(error instanceof AuthoredChangeBudgetExceededError) || !outputPath) {
+  if (!(error instanceof AuthoredAdditionBudgetExceededError) || !outputPath) {
     return;
   }
   const encoded = Buffer.from(error.message, "utf8").toString("base64");
@@ -252,10 +252,10 @@ export async function runCiDeliver(): Promise<void> {
     prNumber = await preserveImplementedBranchBeforePr({
       agentBranch: target.branch,
       assertBudget: () =>
-        assertAuthoredChangeBudget({
+        assertAuthoredAdditionBudget({
           repoRoot,
           baseRef: target.budgetBaseRef,
-          maximumLines: 2_000,
+          maximumAdditions: 2_000,
         }),
       createPr: () =>
         createFixPr(

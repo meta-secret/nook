@@ -8,7 +8,7 @@ import { promisify } from "node:util";
 
 import {
   configureGitForCi,
-  countAuthoredNumstat,
+  countAuthoredAdditions,
   hasWorkingTreeChanges,
   pushFixBranch,
   summarizeAuthoredNumstat,
@@ -16,10 +16,24 @@ import {
 
 const execFileAsync = promisify(execFile);
 
-describe("countAuthoredNumstat", () => {
-  it("counts authored additions and deletions", () => {
+describe("countAuthoredAdditions", () => {
+  it("counts authored additions and reports deletions separately", () => {
     const numstat = "12\t3\tsrc/domain.ts\0" + "4\t5\ttests/domain.test.ts\0";
-    assert.equal(countAuthoredNumstat(numstat), 24);
+    assert.equal(countAuthoredAdditions(numstat), 16);
+    assert.equal(summarizeAuthoredNumstat(numstat).authoredDeletions, 8);
+  });
+
+  it("accepts 2,000 additions even with more than 2,000 deletions", () => {
+    const summary = summarizeAuthoredNumstat("2000\t9000\tsrc/domain.ts\0");
+    assert.equal(summary.authoredAdditions, 2_000);
+    assert.equal(summary.authoredDeletions, 9_000);
+    assert.ok(summary.authoredAdditions <= 2_000);
+  });
+
+  it("identifies additions above the ceiling", () => {
+    const summary = summarizeAuthoredNumstat("2001\t0\tsrc/domain.ts\0");
+    assert.equal(summary.authoredAdditions, 2_001);
+    assert.ok(summary.authoredAdditions > 2_000);
   });
 
   it("reports generated, lock, snapshot, vendor, binary, and pure rename rows separately", () => {
@@ -39,7 +53,7 @@ describe("countAuthoredNumstat", () => {
       "src/new.ts",
       "",
     ].join("\0");
-    assert.equal(countAuthoredNumstat(numstat), 9);
+    assert.equal(countAuthoredAdditions(numstat), 8);
     const expectedReportedOnly = {
       binaryFiles: 1,
       generatedLines: 26,
@@ -65,7 +79,7 @@ describe("countAuthoredNumstat", () => {
 
   it("skips malformed NUL-delimited records explicitly", () => {
     const numstat = "8\t1\tsrc/domain.ts\0malformed\0";
-    assert.equal(countAuthoredNumstat(numstat), 9);
+    assert.equal(countAuthoredAdditions(numstat), 8);
     assert.equal(
       summarizeAuthoredNumstat(numstat).reportedOnly.malformedRecords,
       1,

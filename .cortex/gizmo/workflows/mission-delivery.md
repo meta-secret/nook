@@ -57,12 +57,12 @@ as completed delivery.
    - Do not copy the raw prompt or chat transcript.
 2. **Plan delivery.**
    - Publish the Workbench task plan before implementation edits.
-   - Estimate authored changed lines.
-   - Limit the planned PR to 2,000 authored changed lines.
+   - Estimate authored additions.
+   - Limit the planned PR to 2,000 authored additions.
    - Keep one PR and one record. Team Agent count never triggers another PR.
    - Do not split or rebuild the PR when it grows.
-   - Review fixes may grow the existing PR beyond 2,000 lines.
-   - Stop immediately if the PR reaches 3,000 authored changed lines.
+   - Review fixes may grow the existing PR beyond 2,000 authored additions.
+   - Stop immediately if the PR reaches 3,000 authored additions.
    - Apply the reporting contract in
      [pull requests](pull-requests.md#review-growth-stop).
    - A trusted assigned Gizmo ID permits exactly one PR record and must appear

@@ -55,9 +55,9 @@ Gizmo does not:
 ## Feature-slice records
 
 One feature uses one PR and one feature-slice record, regardless of worker
-count. The PR may contain at most 2,000 authored additions plus deletions when
-it is created. Review fixes may grow the existing PR beyond that ceiling.
-Reaching 3,000 authored changed lines is a hard stop and reporting condition.
+count. The PR may contain at most 2,000 authored additions when it is created.
+Review fixes may grow the existing PR beyond that ceiling.
+Reaching 3,000 authored additions is a hard stop and reporting condition.
 It never authorizes a split, successor PR, or rebuilt stack. Published records
 are immutable; a change requires a superseding plan.
 

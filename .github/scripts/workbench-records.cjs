@@ -31,9 +31,9 @@ const planBudgetFields = [
     pattern: new RegExp(`^- Current Gizmo ID:\\s*${gizmoIdGrammar}\\s*$`, 'm'),
   },
   {
-    label: 'Estimated authored changed lines',
+    label: 'Estimated authored additions',
     pattern:
-      /^- Estimated authored changed lines:\s*(?:0|[1-9]\d*|[1-9]\d{0,2}(?:,\d{3})+)\s*$/m,
+      /^- Estimated authored additions:\s*(?:0|[1-9]\d*|[1-9]\d{0,2}(?:,\d{3})+)\s*$/m,
   },
   {
     label: 'Owning modules, packages, or layers',
@@ -57,9 +57,9 @@ const planBudgetFields = [
       /^- PR sequence mode:\s*(?:One PR|Independent PRs|Stacked PRs)\s*$/m,
   },
   {
-    label: 'Current PR estimated authored changed lines',
+    label: 'Current PR estimated authored additions',
     pattern:
-      /^- Current PR estimated authored changed lines:\s*(?:0|[1-9]\d*|[1-9]\d{0,2}(?:,\d{3})+)\s*$/m,
+      /^- Current PR estimated authored additions:\s*(?:0|[1-9]\d*|[1-9]\d{0,2}(?:,\d{3})+)\s*$/m,
   },
   {
     label: 'Current PR slice and acceptance evidence',
@@ -236,11 +236,11 @@ function parseBudgetFields(budgetSection) {
   )
   const estimate = parseBudgetFieldValue(
     budgetSection,
-    'Estimated authored changed lines',
+    'Estimated authored additions',
   )
   const currentPrEstimate = parseBudgetFieldValue(
     budgetSection,
-    'Current PR estimated authored changed lines',
+    'Current PR estimated authored additions',
   )
   const deliveryShape = parseBudgetFieldValue(budgetSection, 'Delivery shape')
   const sequenceMode = parseBudgetFieldValue(budgetSection, 'PR sequence mode')
@@ -318,7 +318,7 @@ function parseSliceContract(value, numbered) {
 
   const contractMatch = numbered
     ? contractText.match(
-        /^Gizmo ID:\s*([a-z0-9-]+)\s*;\s*Gizmo name:\s*(.+?)\s*;\s*Predecessor Gizmo ID:\s*(None|[a-z0-9-]+)\s*;\s*(.+?)\s*;\s*Estimated authored changed lines:\s*(0|[1-9]\d*|[1-9]\d{0,2}(?:,\d{3})+)\s*;\s*Acceptance evidence:\s*(.+?)\s*$/i,
+        /^Gizmo ID:\s*([a-z0-9-]+)\s*;\s*Gizmo name:\s*(.+?)\s*;\s*Predecessor Gizmo ID:\s*(None|[a-z0-9-]+)\s*;\s*(.+?)\s*;\s*Estimated authored additions:\s*(0|[1-9]\d*|[1-9]\d{0,2}(?:,\d{3})+)\s*;\s*Acceptance evidence:\s*(.+?)\s*$/i,
       )
     : contractText.match(
         /^(.+?)\s*;\s*Acceptance evidence:\s*(.+?)\s*$/i,
@@ -590,16 +590,16 @@ function validateAgentRecord(
     }
 
     if (estimate < 1 || currentPrEstimate < 1) {
-      return 'authored changed-line estimates must be positive integers'
+      return 'authored-addition estimates must be positive integers'
     }
     if (deliveryShape !== 'One PR' || sequenceMode !== 'One PR') {
       return 'only one-PR delivery is supported'
     }
     if (currentPrEstimate > 2_000) {
-      return 'current PR estimate exceeds 2,000 authored changed lines'
+      return 'current PR estimate exceeds 2,000 authored additions'
     }
     if (estimate > 2_000) {
-      return 'one-PR plan exceeds 2,000 authored changed lines'
+      return 'one-PR plan exceeds 2,000 authored additions'
     }
     if (estimate !== currentPrEstimate) {
       return 'one-PR feature and current PR estimates must match'
