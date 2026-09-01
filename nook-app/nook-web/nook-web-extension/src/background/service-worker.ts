@@ -205,7 +205,7 @@ async function importPairingAndRefreshSurfaces(
   chrome.tabs.query(query, (tabs) => {
     for (const { id } of tabs)
       if (typeof id === 'number')
-        void chrome.tabs.sendMessage(id, refresh).catch(() => undefined)
+        void chrome.tabs.sendMessage(id, refresh).catch(() => {})
   })
   return result
 }
