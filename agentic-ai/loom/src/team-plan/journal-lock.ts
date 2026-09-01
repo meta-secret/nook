@@ -219,8 +219,11 @@ function gitText(invocation: GitInvocation): string {
     input: 'input' in invocation ? invocation.input : '',
     stdio: ['pipe', 'pipe', 'pipe'],
   });
-  if (result.status !== 0)
-    throw new Error(result.stderr.trim() || 'Team Plan Git operation failed.');
+  if (result.status !== 0) {
+    const stderr =
+      typeof result.stderr === 'string' ? result.stderr.trim() : '';
+    throw new Error(stderr || 'Team Plan Git operation failed.');
+  }
   return result.stdout.trim();
 }
 

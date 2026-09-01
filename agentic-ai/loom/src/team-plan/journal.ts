@@ -222,7 +222,18 @@ async function withTeamPlanJournalLockIdentity<T>(
   return runWithTeamPlanJournalLock({
     journal,
     identityPath: request.lockIdentityPath ?? journal.path,
-    action: () => request.action(journal),
+    action: async () => {
+      const lockedJournal = await loadTeamPlanJournal(request.journalPath);
+      if (
+        lockedJournal.path !== journal.path ||
+        lockedJournal.started.runId !== journal.started.runId ||
+        lockedJournal.started.repositoryRoot !== journal.started.repositoryRoot
+      )
+        throw new Error(
+          'Team Plan journal identity changed while acquiring its lock.',
+        );
+      return request.action(lockedJournal);
+    },
   });
 }
 

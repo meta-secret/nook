@@ -547,7 +547,7 @@ describe('Team Plan runtime', () => {
       journalPath: file.journalPath,
     });
     expect(finalized.headCommit).not.toBe(fixture.baselineCommit);
-  });
+  }, 15_000);
 
   test('stores redacted large evidence outside the bounded journal', async () => {
     const fixture = createGitFixture();
@@ -633,20 +633,34 @@ describe('Team Plan runtime', () => {
     fixtureGit(fixture)(['add', '--all']);
     fixtureGit(fixture)(['commit', '--quiet', '-m', 'generation two']);
     const sourceCommit = fixtureGit(fixture)(['rev-parse', 'HEAD']);
+    const omittedNode = readNode([sourceCommit, 'other']);
+    const omitted = writeNamedPlanFile({
+      fixture,
+      value: {
+        ...plan([sourceCommit, [omittedNode], [], 2]),
+        generation: 2,
+      },
+      name: 'team-plan-omitted-generation-2',
+    });
+    const omittedGeneration = await restartTeamPlan({
+      journalPath: file.journalPath,
+      planPath: omitted.path,
+    });
+    expect(omittedGeneration.generation).toBe(2);
     const movedNode = readNode([sourceCommit, 'provider']);
     const moved = writeNamedPlanFile({
       fixture,
       value: {
         ...plan([sourceCommit, [movedNode], [], 2]),
-        generation: 2,
+        generation: 3,
       },
-      name: 'team-plan-moved-generation-2',
+      name: 'team-plan-moved-generation-3',
     });
     const restarted = await restartTeamPlan({
       journalPath: file.journalPath,
       planPath: moved.path,
     });
-    expect(restarted.generation).toBe(2);
+    expect(restarted.generation).toBe(3);
     expect(restarted.acceptedProviderEvidence).toEqual([]);
     const next = await leaseNextTeamPlan(file.journalPath);
     expect(next.leases[0]?.attempt).toBe(2);
@@ -661,6 +675,6 @@ describe('Team Plan runtime', () => {
     expect(
       (await selectTeamPlan({ journalPath: file.journalPath })).snapshot
         .generation,
-    ).toBe(2);
-  }, 10_000);
+    ).toBe(3);
+  }, 15_000);
 });

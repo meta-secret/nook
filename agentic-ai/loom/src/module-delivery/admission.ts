@@ -497,15 +497,7 @@ export function restartModuleDeliveryGeneration(
     entries: request.expectedLineage,
   };
   const expectedLineage = expectedModuleDeliveryLineageMap(lineageRequest);
-  const previousTaskIds = new Set(
-    authority.acceptedPlan.plan.nodes.map(({ taskId }) => taskId),
-  );
-  const attemptsByTask = new Map<string, number>();
-  for (const { taskId } of acceptedPlan.plan.nodes) {
-    const attempts = authority.attemptsByTask.get(taskId);
-    if (previousTaskIds.has(taskId) && attempts)
-      attemptsByTask.set(taskId, attempts);
-  }
+  const attemptsByTask = new Map(authority.attemptsByTask);
   const frontiers: readonly ModuleDeliveryIntegratedWriterFrontierCapability[] =
     Object.freeze([]);
   const identities: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[] =

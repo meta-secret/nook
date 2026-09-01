@@ -41,7 +41,6 @@ import {
   assertTeamPlanGenerationCapacity,
   createTeamPlanJournal,
   canonicalTeamPlanJournalPath,
-  loadTeamPlanJournal,
   recoverTeamPlanStartRunId,
   discardTeamPlanJournal,
   teamPlanEventBytes,
@@ -321,8 +320,7 @@ export async function withLockedTeamPlanSession<T>(
 ): Promise<T> {
   return withTeamPlanJournalLock({
     journalPath: request.journalPath,
-    action: async () => {
-      const journal = await loadTeamPlanJournal(request.journalPath);
+    action: async (journal) => {
       const session = await materializeTeamPlanSession(journal);
       try {
         return await request.action(session);
