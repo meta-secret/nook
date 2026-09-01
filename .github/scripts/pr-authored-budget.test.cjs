@@ -96,4 +96,11 @@ test('accepts current-head review bodies and later PR comments', () => {
   }
   assert.equal(reviewBatchMatches({ ...input, reviews: [{ body: 'Please fix.', commit: { oid: input.localHead } }] }), true)
   assert.equal(reviewBatchMatches({ ...input, comments: [{ body: 'Please fix.', createdAt: '2026-01-02T00:00:00Z' }] }), true)
+  assert.equal(reviewBatchMatches({
+    ...input,
+    comments: [{
+      body: "@gizmo this workflow assigned you PR #1281. Continue only this PR's recorded scope through review, exact-head validation, and squash merge.",
+      createdAt: '2026-01-02T00:00:00Z',
+    }],
+  }), false)
 })

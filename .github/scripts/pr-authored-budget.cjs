@@ -188,7 +188,8 @@ function reviewBatchMatches({
   const commentMatch = comments.some((comment) =>
     comment.createdAt > headCommittedAt &&
     comment.body.trim() &&
-    !/^(?:<!--|@codex (?:review|security review)|### Preview deployed)/u.test(comment.body.trim()),
+    !/^(?:<!--|@codex (?:review|security review)|### Preview deployed)/u.test(comment.body.trim()) &&
+    !/^@\S+ this workflow assigned you PR #\d+\. Continue only this PR's recorded scope through review, exact-head validation, and squash merge\.$/u.test(comment.body.trim()),
   )
   return Boolean(inlineMatch || reviewBodyMatch || commentMatch)
 }
