@@ -205,8 +205,10 @@ export function verifyModuleCommitHandoff(
     cwd: request.workspace.worktreePath,
     args: ['rev-parse', '--verify', 'HEAD^{commit}'],
   };
-  const commit =
-    request.commit ?? gitText(runModuleDeliveryGit(gitRequest(headInvocation)));
+  const head = gitText(runModuleDeliveryGit(gitRequest(headInvocation)));
+  const commit = request.commit ?? head;
+  if (commit !== head)
+    throw new Error('Submitted commit must equal shared checkout HEAD.');
   if (!EXACT_GIT_COMMIT.test(commit) || commit === request.baselineCommit) {
     throw new Error(
       'Commit handoff requires a non-baseline shared-branch commit.',

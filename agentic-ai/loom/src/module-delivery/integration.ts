@@ -7,7 +7,7 @@ import {
   verifyModuleCommitHandoff,
 } from './handoff.ts';
 import {
-  assertSourceSnapshot,
+  assertSharedCheckoutAdvance,
   assertModuleIntegrationAcceptedPlanState,
   assertFreshModuleIntegrationState,
   assertCurrentModuleIntegrationAdmission,
@@ -625,6 +625,11 @@ export function integrateVerifiedModuleDeliveryTask(
       handoff: request.submission.handoff,
     };
     assertModuleIntegrationHandoffRepository(repositoryInspection);
+    assertSharedCheckoutAdvance({
+      repositoryRoot: request.state.workspace.sourceRepositoryRoot,
+      expected: provenance.sourceSnapshot,
+      expectedHead: request.submission.handoff.commit,
+    });
     const expected: ExpectedHandoff = {
       node,
       baselineCommit: lease.startingFrontier,

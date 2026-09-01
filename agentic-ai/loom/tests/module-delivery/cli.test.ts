@@ -12,7 +12,7 @@ import {
 } from '../../src/module-delivery/index.ts';
 import type {
   LegacyModuleDeliveryPlan,
-  ModuleDeliveryPlanV2,
+  ModuleDeliveryPlanV3,
 } from '../../src/module-delivery/index.ts';
 import { TeamKey } from '../../src/team-agents/catalog.ts';
 
@@ -20,9 +20,9 @@ const REPOSITORY_ROOT = resolve(import.meta.dir, '../../../..');
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
 const CORE_ROOT = 'nook-app/nook-platform/nook-core';
 
-function cliPlan(): ModuleDeliveryPlanV2 {
+function cliPlan(): ModuleDeliveryPlanV3 {
   return {
-    version: 2,
+    version: 3,
     generation: 1,
     sourceCommit: SOURCE_COMMIT,
     maxConcurrency: 1,
@@ -139,7 +139,7 @@ test('module delivery CLI validates one plan file with deterministic JSON', asyn
     const secondResult = resultLine(second.stdout.toString());
     expect(firstResult).toBe(secondResult);
     expect(firstResult).toContain('"status":"accepted"');
-    expect(firstResult).toContain('"inputVersion":2');
+    expect(firstResult).toContain('"inputVersion":3');
     expect(firstResult).toMatch(/"planDigest":"[0-9a-f]{64}"/u);
 
     const legacyCommand = [
@@ -157,7 +157,7 @@ test('module delivery CLI validates one plan file with deterministic JSON', asyn
     const legacy = Bun.spawnSync(legacyOptions);
     expect(legacy.exitCode).not.toBe(0);
     expect(resultLine(legacy.stdout.toString())).toContain(
-      'Canonical CLI admission requires plan version 2.',
+      'only shared-checkout plan version 3 is accepted',
     );
 
     const rejectedCommand = [

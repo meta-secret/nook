@@ -48,7 +48,7 @@ import type {
   ModuleDeliveryEvidenceArtifactDigestRequest,
   ModuleDeliveryExpectedLineage,
   ModuleDeliveryGenerationAuthority,
-  ModuleDeliveryPlanV2,
+  ModuleDeliveryPlanV3,
   ModuleDeliveryReadOnlyEvidenceSubmission,
   ModuleDeliveryReadOnlyNodeV2,
   ModuleDeliveryWriteNodeV2,
@@ -112,11 +112,6 @@ type GenerationRestartRequest = {
   readonly runtime: Runtime;
   readonly acceptedPlan: ValidatedModuleDeliveryPlan;
 };
-type GenerationPlanUpdate = {
-  readonly generation: number;
-  readonly nodes: ModuleDeliveryPlanV2['nodes'];
-};
-type PlanConcurrencyUpdate = { readonly maxConcurrency: number };
 type EvidenceSubmissionRequest = {
   readonly runtime: Runtime;
   readonly lease: ModuleDeliveryAttemptLease;
@@ -203,8 +198,8 @@ const edge: ModuleDeliveryEdgeContract = {
   compatibilityExpectations: ['Compatible consumer.'],
   owningTests: ['alpha contract test'],
 };
-const PLAN: ModuleDeliveryPlanV2 = {
-  version: 2,
+const PLAN: ModuleDeliveryPlanV3 = {
+  version: 3,
   generation: 1,
   sourceCommit: SOURCE,
   maxConcurrency: 2,
@@ -220,7 +215,7 @@ const PLAN: ModuleDeliveryPlanV2 = {
   edgeContracts: [edge],
 };
 
-function planAt(sourceCommit: string): ModuleDeliveryPlanV2 {
+function planAt(sourceCommit: string): ModuleDeliveryPlanV3 {
   const plan = structuredClone(PLAN);
   const source = { sourceCommit };
   Object.assign(plan, source);
@@ -230,20 +225,19 @@ function planAt(sourceCommit: string): ModuleDeliveryPlanV2 {
   return plan;
 }
 
-function generationPlan(request: GenerationPlanRequest): ModuleDeliveryPlanV2 {
+function generationPlan(request: GenerationPlanRequest): ModuleDeliveryPlanV3 {
   const plan = structuredClone(planAt(request.sourceCommit));
   const nodes = request.includeGamma
     ? plan.nodes
     : plan.nodes.filter(({ taskId }) => taskId !== gamma.taskId);
-  const update: GenerationPlanUpdate = {
+  Object.assign(plan, {
     generation: request.generation,
     nodes,
-  };
-  Object.assign(plan, update);
+  });
   return plan;
 }
 
-function validate(plan: ModuleDeliveryPlanV2): ValidatedModuleDeliveryPlan {
+function validate(plan: ModuleDeliveryPlanV3): ValidatedModuleDeliveryPlan {
   const result = decodeAndValidateModuleDeliveryPlan(JSON.stringify(plan));
   if (result.status !== ModuleDeliveryValidationStatus.Accepted)
     throw new Error(JSON.stringify(result.issues));
@@ -420,12 +414,21 @@ function acceptEvidence(
 }
 
 describe('module delivery admission authority', () => {
-  test('selects the maximal safe set and rejects unproven writer frontiers', () => {
+  test('admits one shared-checkout writer and defers later writers', () => {
     const active = runtime(validate(PLAN));
     const first = select(active);
-    expect(first.admissions.map(({ taskId }) => taskId)).toEqual([
+    expect(first.admissions.map(({ taskId }) => taskId)).toEqual(['alpha']);
+    expect(first.pendingTaskIds).toEqual(['beta', 'gamma']);
+    const alphaLease = lease({ runtime: active, taskId: 'alpha' });
+    const whileActive = select(active);
+    expect(whileActive.admissions).toEqual([]);
+    expect(whileActive.pendingTaskIds).toEqual(['beta', 'gamma']);
+    const released = recordModuleDeliveryAttemptDisposition(
+      cancelledLease({ runtime: active, lease: alphaLease }),
+    );
+    const afterRelease = select({ ...active, state: released });
+    expect(afterRelease.admissions.map(({ taskId }) => taskId)).toEqual([
       'alpha',
-      'beta',
     ]);
     const forgedFrontier = {
       taskId: 'alpha',
@@ -564,7 +567,7 @@ describe('module delivery admission authority', () => {
   });
 
   test('retains lease history through disposition and reports exhausted closure', () => {
-    const exhaustionPlan: ModuleDeliveryPlanV2 = {
+    const exhaustionPlan: ModuleDeliveryPlanV3 = {
       ...PLAN,
       maxConcurrency: 1,
     };
@@ -630,7 +633,7 @@ describe('module delivery admission authority', () => {
     const assertPriorGenerationUsable = (): void => {
       const current = select(active);
       expect(current.admissions.map(({ generation }) => generation)).toEqual([
-        1, 1,
+        1,
       ]);
     };
     const replacementPlanRequest: GenerationPlanRequest = {
@@ -717,9 +720,7 @@ describe('module delivery admission authority', () => {
     expect(() =>
       restartModuleDeliveryGeneration(restartRequest(blockedRestartRequest)),
     ).toThrow('terminal release evidence');
-    expect(select(active).admissions.map(({ taskId }) => taskId)).toEqual([
-      beta.taskId,
-    ]);
+    expect(select(active).admissions).toEqual([]);
     const cancellationRequest: CancelledLeaseRequest = {
       runtime: active,
       lease: leasedAlpha,
@@ -793,16 +794,6 @@ describe('module delivery admission authority', () => {
         attempt: 2,
         startingFrontier: REPLACEMENT_SOURCE,
       },
-      {
-        taskId: beta.taskId,
-        attempt: 1,
-        startingFrontier: REPLACEMENT_SOURCE,
-      },
-      {
-        taskId: gamma.taskId,
-        attempt: 1,
-        startingFrontier: REPLACEMENT_SOURCE,
-      },
     ]);
     expect(() => select(active)).toThrow('invalid or superseded');
     const staleLeaseRequest: RecordModuleDeliveryAttemptLeasesRequest = {
@@ -840,7 +831,22 @@ describe('module delivery admission authority', () => {
       parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
       acceptance: alpha.acceptance,
     };
-    const firstPlan: ModuleDeliveryPlanV2 = {
+    const peer = {
+      ...provider,
+      taskId: 'peer-evidence',
+      consumerOutcome: 'AI receives independent peer evidence.',
+    };
+    const parallelPlan = {
+      ...PLAN,
+      nodes: [provider, peer],
+      edgeContracts: [],
+    };
+    expect(
+      select(runtime(validate(parallelPlan))).admissions.map(
+        ({ taskId }) => taskId,
+      ),
+    ).toEqual(['peer-evidence', 'provider-evidence']);
+    const firstPlan: ModuleDeliveryPlanV3 = {
       ...PLAN,
       nodes: [provider],
       edgeContracts: [],
@@ -939,8 +945,7 @@ describe('module delivery admission authority', () => {
       includeGamma: false,
     };
     const firstPlan = generationPlan(firstPlanRequest);
-    const concurrencyUpdate: PlanConcurrencyUpdate = { maxConcurrency: 1 };
-    Object.assign(firstPlan, concurrencyUpdate);
+    Object.assign(firstPlan, { maxConcurrency: 1 });
     const active = runtime(validate(firstPlan));
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       const alphaLeaseRequest: LeaseRequest = {
@@ -985,10 +990,7 @@ describe('module delivery admission authority', () => {
         taskId,
         attempt,
       })),
-    ).toEqual([
-      { taskId: beta.taskId, attempt: 1 },
-      { taskId: gamma.taskId, attempt: 1 },
-    ]);
+    ).toEqual([{ taskId: beta.taskId, attempt: 1 }]);
   });
 });
 

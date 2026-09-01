@@ -21,7 +21,7 @@ import type {
   CreateModuleDeliveryAdmissionStateRequest,
   CreateModuleDeliveryGenerationAuthorityRequest,
   ModuleDeliveryExpectedLineage,
-  ModuleDeliveryPlanV2,
+  ModuleDeliveryPlanV3,
   RecordModuleDeliveryAttemptLeasesRequest,
   SelectModuleDeliveryAdmissionsRequest,
   ValidatedModuleDeliveryPlan,
@@ -58,9 +58,9 @@ function write(request: CortexFixtureFileWriteRequest): void {
   writeFixtureFile(fileWrite);
 }
 
-function plan(sourceCommit: string): ModuleDeliveryPlanV2 {
+function plan(sourceCommit: string): ModuleDeliveryPlanV3 {
   return {
-    version: 2,
+    version: 3,
     generation: 7,
     sourceCommit,
     maxConcurrency: 1,
@@ -115,7 +115,7 @@ function plan(sourceCommit: string): ModuleDeliveryPlanV2 {
   };
 }
 
-function validate(value: ModuleDeliveryPlanV2): ValidatedModuleDeliveryPlan {
+function validate(value: ModuleDeliveryPlanV3): ValidatedModuleDeliveryPlan {
   const result = decodeAndValidateModuleDeliveryPlan(JSON.stringify(value));
   if (result.status !== ModuleDeliveryValidationStatus.Accepted)
     throw new Error(JSON.stringify(result.issues));

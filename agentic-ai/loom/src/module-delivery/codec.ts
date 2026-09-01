@@ -35,7 +35,7 @@ import type {
   ModuleDeliveryIssue,
   ModuleDeliveryNodeV2,
   ModuleDeliveryParentJoin,
-  ModuleDeliveryPlanV2,
+  ModuleDeliveryPlanV3,
   ModuleDeliveryExpectedProducerIdentity,
   ModuleDeliveryEvidenceInputContract,
   RejectedCompatibleModuleDeliveryPlan,
@@ -74,11 +74,11 @@ type LegacyTaskTeamRequest = {
   readonly moduleRoot: string;
 };
 type ModulePlanDigestNodeLookup = {
-  readonly plan: ModuleDeliveryPlanV2;
+  readonly plan: ModuleDeliveryPlanV3;
   readonly taskId: string;
 };
 type ModulePlanDigestContractLookup = {
-  readonly plan: ModuleDeliveryPlanV2;
+  readonly plan: ModuleDeliveryPlanV3;
   readonly key: string;
 };
 
@@ -317,11 +317,12 @@ function decodePlanRoot(
   };
   const fields = new ModulePlanFields(fieldRequest);
   const version = fields.positiveInteger('version');
-  if (version !== 1 && version !== MODULE_DELIVERY_PLAN_VERSION)
-    fail('$.version: plan version must be 1 or 2.');
-  const legacy = version === 1;
-  if (legacy) fields.requireExactKeys(LegacyModulePlanRootField);
-  else fields.requireExactKeys(ModulePlanRootField);
+  if (version !== MODULE_DELIVERY_PLAN_VERSION)
+    fail(
+      '$.version: only shared-checkout plan version 3 is accepted; versions 1 and 2 are retired.',
+    );
+  const legacy = false;
+  fields.requireExactKeys(ModulePlanRootField);
   const parentJoinRequest: ModulePlanObjectDecodeRequest = {
     record: fields.recordField('parentJoin'),
     path: '$.parentJoin',
@@ -330,9 +331,9 @@ function decodePlanRoot(
     values: fields.nodeList('nodes'),
     legacy,
   };
-  const plan: ModuleDeliveryPlanV2 = {
+  const plan: ModuleDeliveryPlanV3 = {
     version: MODULE_DELIVERY_PLAN_VERSION,
-    generation: legacy ? 1 : fields.positiveInteger('generation'),
+    generation: fields.positiveInteger('generation'),
     sourceCommit: fields.string('sourceCommit'),
     maxConcurrency: fields.positiveInteger('maxConcurrency'),
     maxAgentDepth: fields.positiveInteger('maxAgentDepth'),
@@ -807,7 +808,7 @@ function rejected(
   };
 }
 
-export function moduleDeliveryPlanDigest(plan: ModuleDeliveryPlanV2): string {
+export function moduleDeliveryPlanDigest(plan: ModuleDeliveryPlanV3): string {
   const nodes = plan.nodes
     .map(({ taskId }) => taskId)
     .sort()

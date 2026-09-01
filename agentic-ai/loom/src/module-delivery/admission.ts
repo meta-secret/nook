@@ -559,6 +559,11 @@ export function selectModuleDeliveryAdmissions(
     authority.acceptedPlan.plan.maxConcurrency - authority.activeLeases.size;
   const admissions: ModuleDeliveryAdmission[] = [];
   const pendingTaskIds: string[] = [];
+  let writerOccupied = [...authority.activeLeases.values()].some(
+    (lease) =>
+      nodeFor({ plan: authority.acceptedPlan, taskId: lease.taskId }).kind ===
+      ModuleDeliveryTaskKind.Write,
+  );
   for (const taskId of authority.acceptedPlan.topologicalOrder) {
     const nodeRequest: NodeLookupRequest = {
       plan: authority.acceptedPlan,
@@ -583,6 +588,7 @@ export function selectModuleDeliveryAdmissions(
     };
     const resources = frozenModuleDeliveryResources(resourcesRequest);
     if (
+      (node.kind === ModuleDeliveryTaskKind.Write && writerOccupied) ||
       admissions.length >= Math.max(available, 0) ||
       [...authority.activeLeases.values(), ...admissions].some((active) => {
         const conflictRequest: ResourceConflictRequest = {
@@ -651,6 +657,7 @@ export function selectModuleDeliveryAdmissions(
     };
     admissionProvenance.set(admission, provenance);
     admissions.push(admission);
+    if (node.kind === ModuleDeliveryTaskKind.Write) writerOccupied = true;
   }
   const selectionRequest = {
     status:
@@ -685,6 +692,11 @@ export function recordModuleDeliveryAttemptLeases(
     ...authority.activeLeases.values(),
   ];
   const seenAdmissions = new Set<ModuleDeliveryAdmission>();
+  let writerOccupied = [...authority.activeLeases.values()].some(
+    (lease) =>
+      nodeFor({ plan: authority.acceptedPlan, taskId: lease.taskId }).kind ===
+      ModuleDeliveryTaskKind.Write,
+  );
   for (const admission of request.admissions) {
     const provenance = admissionProvenance.get(admission);
     const key = attemptKey(admission);
@@ -699,6 +711,9 @@ export function recordModuleDeliveryAttemptLeases(
     )
       throw new Error('Module delivery admission capability is invalid.');
     if (
+      (nodeFor({ plan: authority.acceptedPlan, taskId: admission.taskId })
+        .kind === ModuleDeliveryTaskKind.Write &&
+        writerOccupied) ||
       compatible.some((active) => {
         const conflictRequest: ResourceConflictRequest = {
           first: admission.resources,
@@ -711,6 +726,11 @@ export function recordModuleDeliveryAttemptLeases(
     seenAdmissions.add(admission);
     seenTasks.add(admission.taskId);
     compatible.push(admission);
+    if (
+      nodeFor({ plan: authority.acceptedPlan, taskId: admission.taskId })
+        .kind === ModuleDeliveryTaskKind.Write
+    )
+      writerOccupied = true;
   }
   const leases = request.admissions.map((admission) => {
     consumedAdmissions.add(admission);

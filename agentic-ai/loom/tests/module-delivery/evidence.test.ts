@@ -42,7 +42,7 @@ import type {
   ModuleDeliveryEvidenceArtifactDigestRequest,
   ModuleDeliveryEvidenceSynthesisNodeV2,
   ModuleDeliveryGenerationAuthority,
-  ModuleDeliveryPlanV2,
+  ModuleDeliveryPlanV3,
   ModuleDeliveryReadOnlyEvidenceSubmission,
   ModuleDeliveryReadOnlyNodeV2,
   ModuleDeliveryWriteNodeV2,
@@ -206,8 +206,8 @@ function runtime(existingFixture?: GitFixture): Runtime {
     providerTaskId: providerB.taskId,
     consumerTaskId: synthesis.taskId,
   };
-  const plan: ModuleDeliveryPlanV2 = {
-    version: 2,
+  const plan: ModuleDeliveryPlanV3 = {
+    version: 3,
     generation: 1,
     sourceCommit: fixture.baselineCommit,
     maxConcurrency: 1,
@@ -285,8 +285,8 @@ function writeRuntime(fixture: GitFixture): WriteRuntime {
       expectedCommitHandoff: true,
     },
   };
-  const plan: ModuleDeliveryPlanV2 = {
-    version: 2,
+  const plan: ModuleDeliveryPlanV3 = {
+    version: 3,
     generation: 1,
     sourceCommit: fixture.baselineCommit,
     maxConcurrency: 1,

@@ -45,7 +45,7 @@ const GIZMO_AUTHORITY_MARKERS = [
   'single root delivery owner',
   'does not implement or repair team-owned work',
   'exactly one team identity',
-  'final verdict is bound to the exact integrated head',
+  'final verdict is bound to the exact delivery head',
 ] as const;
 const PARENT_OWNED_LIFECYCLE_BOUNDARY =
   'The active harness owns creation, communication, scheduling, retries, cancellation, barriers, synthesis, and delivery lifecycle state.';

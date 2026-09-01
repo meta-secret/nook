@@ -102,6 +102,22 @@ describe('direct module commit', () => {
     );
   });
 
+  test('rejects a submitted commit behind shared checkout HEAD', () => {
+    const active = createWorkspace();
+    commitPath(active);
+    const submitted = worktreeGit(active)(['rev-parse', 'HEAD']);
+    worktreeFileWriter(active)(['module/later.ts', 'later\n']);
+    const git = worktreeGit(active);
+    git(['add', '--all']);
+    git(['commit', '--quiet', '-m', 'later']);
+    expect(() =>
+      verifyModuleCommitHandoff({
+        ...verificationRequest(active),
+        commit: submitted,
+      }),
+    ).toThrow('must equal shared checkout HEAD');
+  });
+
   test('ignores replacement refs while validating the handed-off commit', () => {
     const active = createWorkspace();
     const git = worktreeGit(active);

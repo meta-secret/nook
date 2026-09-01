@@ -1,5 +1,11 @@
 import { createHash } from 'node:crypto';
-import { lstatSync, readFileSync, readlinkSync, realpathSync } from 'node:fs';
+import {
+  lstatSync,
+  readFileSync,
+  readdirSync,
+  readlinkSync,
+  realpathSync,
+} from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { gitText, runModuleDeliveryGit } from './git-command.ts';
 import { pathExists } from './workspace-paths.ts';
@@ -223,7 +229,9 @@ export type SourceRepositorySnapshot = {
   readonly metadataDigest: string;
   readonly indexDigest: string;
   readonly refsDigest: string;
+  readonly protectedRefsDigest: string;
   readonly configDigest: string;
+  readonly hooksDigest: string;
 };
 
 export type ModuleIntegrationSession = {
@@ -303,6 +311,10 @@ type RepositorySnapshotRequest = {
   readonly repositoryRoot: string;
   readonly includeContent: boolean;
 };
+type RelevantRefsDigestRequest = Readonly<{
+  repositoryRoot: string;
+  allowedBranchRef?: string;
+}>;
 export type ModuleIntegrationRefRequest = Readonly<{
   workspace: ModuleWorktreeHandle;
   planDigest: string;
@@ -518,9 +530,9 @@ function repositoryPaths(repositoryRoot: string): readonly string[] {
   ];
 }
 
-function relevantRefsDigest(repositoryRoot: string): string {
+function relevantRefsDigest(request: RelevantRefsDigestRequest): string {
   const invocation: ModuleGitInvocation = {
-    cwd: repositoryRoot,
+    cwd: request.repositoryRoot,
     args: [
       'for-each-ref',
       '--sort=refname',
@@ -532,7 +544,7 @@ function relevantRefsDigest(repositoryRoot: string): string {
   for (const record of gitBytes(invocation).toString('utf8').split('\n')) {
     if (record.length === 0) continue;
     const [ref = '', objectId = '', symref = ''] = record.split('\0');
-    if (/^refs\/nook\/module-delivery\//u.test(ref)) continue;
+    if (ref === (request.allowedBranchRef ?? '')) continue;
     if (ref.length === 0 || objectId.length === 0)
       throw new Error('Repository ref fingerprint record is malformed.');
     fields.push(
@@ -540,6 +552,40 @@ function relevantRefsDigest(repositoryRoot: string): string {
       Buffer.from(objectId, 'ascii'),
       Buffer.from(symref, 'utf8'),
     );
+  }
+  return digestBuffers(fields);
+}
+
+function hooksDigest(repositoryRoot: string): string {
+  const commonDirectory = gitText(
+    runModuleDeliveryGit({
+      cwd: repositoryRoot,
+      args: ['rev-parse', '--path-format=absolute', '--git-common-dir'],
+    }),
+  );
+  const hooksPath = resolve(commonDirectory, 'hooks');
+  if (!pathExists(hooksPath))
+    return digestBuffers([Buffer.from('hooks:missing', 'ascii')]);
+  const hooksMetadata = lstatSync(hooksPath);
+  if (hooksMetadata.isSymbolicLink())
+    return digestBuffers([
+      Buffer.from('hooks:symlink', 'ascii'),
+      Buffer.from(readlinkSync(hooksPath), 'utf8'),
+    ]);
+  if (!hooksMetadata.isDirectory())
+    return digestBuffers([Buffer.from('hooks:not-directory', 'ascii')]);
+  const fields: Buffer[] = [];
+  for (const entry of readdirSync(hooksPath, { withFileTypes: true })) {
+    const path = resolve(hooksPath, entry.name);
+    const metadata = lstatSync(path, BIGINT_STATS_OPTIONS);
+    fields.push(
+      Buffer.from(entry.name, 'utf8'),
+      Buffer.from(metadata.mode.toString(8), 'ascii'),
+    );
+    if (entry.isFile()) fields.push(readFileSync(path));
+    else if (entry.isSymbolicLink())
+      fields.push(Buffer.from(readlinkSync(path), 'utf8'));
+    else fields.push(Buffer.from('unsupported-hook-entry', 'ascii'));
   }
   return digestBuffers(fields);
 }
@@ -558,6 +604,7 @@ function captureRepositorySnapshot(
     allowFailure: true,
   };
   const branch = runModuleDeliveryGit(gitRequest(branchInvocation));
+  const symbolicHead = branch.exitCode === 0 ? gitText(branch) : '(detached)';
   const indexPathInvocation: ModuleGitInvocation = {
     cwd: repositoryRoot,
     args: ['rev-parse', '--path-format=absolute', '--git-path', 'index'],
@@ -577,12 +624,17 @@ function captureRepositorySnapshot(
   );
   return {
     headCommit: gitText(runModuleDeliveryGit(gitRequest(headInvocation))),
-    symbolicHead: branch.exitCode === 0 ? gitText(branch) : '(detached)',
+    symbolicHead,
     contentDigest: fingerprint.contentDigest,
     metadataDigest: fingerprint.metadataDigest,
     indexDigest: digestBuffers([readFileSync(indexPath)]),
-    refsDigest: relevantRefsDigest(repositoryRoot),
+    refsDigest: relevantRefsDigest({ repositoryRoot }),
+    protectedRefsDigest: relevantRefsDigest({
+      repositoryRoot,
+      allowedBranchRef: symbolicHead,
+    }),
     configDigest: digestBuffers([gitBytes(configInvocation)]),
+    hooksDigest: hooksDigest(repositoryRoot),
   };
 }
 
@@ -610,10 +662,28 @@ export function assertSourceSnapshot(
     current.metadataDigest !== expectation.expected.metadataDigest ||
     current.indexDigest !== expectation.expected.indexDigest ||
     current.refsDigest !== expectation.expected.refsDigest ||
-    current.configDigest !== expectation.expected.configDigest
+    current.configDigest !== expectation.expected.configDigest ||
+    current.hooksDigest !== expectation.expected.hooksDigest
   ) {
     throw new Error('Source repository changed after integration preparation.');
   }
+}
+
+export function assertSharedCheckoutAdvance(
+  expectation: SourceSnapshotExpectation & { readonly expectedHead: string },
+): void {
+  const current = captureRepositorySnapshot({
+    repositoryRoot: expectation.repositoryRoot,
+    includeContent: false,
+  });
+  if (
+    current.headCommit !== expectation.expectedHead ||
+    current.symbolicHead !== expectation.expected.symbolicHead ||
+    current.protectedRefsDigest !== expectation.expected.protectedRefsDigest ||
+    current.configDigest !== expectation.expected.configDigest ||
+    current.hooksDigest !== expectation.expected.hooksDigest
+  )
+    throw new Error('Shared checkout Git metadata changed during dispatch.');
 }
 
 export function createIntegrationSession(

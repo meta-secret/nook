@@ -19,7 +19,7 @@ import type {
   LegacyModuleDeliveryPlan,
   ModuleDeliveryEdgeContract,
   ModuleDeliveryNodeV2,
-  ModuleDeliveryPlanV2,
+  ModuleDeliveryPlanV3,
   ModuleDeliveryPlanValidation,
   ModuleDeliveryReadOnlyNodeV2,
   ModuleDeliveryWriteNodeV2,
@@ -136,9 +136,9 @@ function edge(fixture: EdgeFixture) {
   return value;
 }
 
-function plan(fixture: PlanFixture): ModuleDeliveryPlanV2 {
+function plan(fixture: PlanFixture): ModuleDeliveryPlanV3 {
   return {
-    version: 2,
+    version: 3,
     generation: 1,
     sourceCommit: fixture.sourceCommit,
     maxConcurrency: 3,
@@ -155,11 +155,11 @@ function plan(fixture: PlanFixture): ModuleDeliveryPlanV2 {
   };
 }
 
-function validate(value: ModuleDeliveryPlanV2): ModuleDeliveryPlanValidation {
+function validate(value: ModuleDeliveryPlanV3): ModuleDeliveryPlanValidation {
   return decodeAndValidateModuleDeliveryPlan(JSON.stringify(value));
 }
 
-function validated(value: ModuleDeliveryPlanV2): ValidatedModuleDeliveryPlan {
+function validated(value: ModuleDeliveryPlanV3): ValidatedModuleDeliveryPlan {
   const result = validate(value);
   if (result.status !== ModuleDeliveryValidationStatus.Accepted) {
     throw new Error(JSON.stringify(result.issues));
@@ -249,17 +249,42 @@ describe('validation-only runtime boundary', () => {
     expect(uncoveredEvidenceClaims(narrowerExactPath)).toEqual([]);
   });
 
-  test('keeps compatibility decode separate from canonical validation', () => {
+  test('rejects retired plan versions before canonical validation', () => {
     const serialized = JSON.stringify(legacyPlan());
     const compatibility = decodeCompatibleModuleDeliveryPlan(serialized);
     expect(compatibility.status).toBe(
-      ModuleDeliveryCompatibilityStatus.Decoded,
+      ModuleDeliveryCompatibilityStatus.Rejected,
     );
     const canonical = decodeAndValidateModuleDeliveryPlan(serialized);
     expect(canonical.status).toBe(ModuleDeliveryValidationStatus.Rejected);
     expect(issueCodes(canonical)).toContain(
       ModuleDeliveryIssueCode.InvalidField,
     );
+    for (const version of [1, 2]) {
+      const retired = {
+        ...plan({
+          sourceCommit: SOURCE_COMMIT,
+          nodes: [
+            readNode({
+              taskId: 'retired-audit',
+              dependencies: [],
+              evidenceSurface: [`${CORE_ROOT}/**`],
+            }),
+          ],
+          edgeContracts: [],
+        }),
+        version,
+      };
+      const decoded = decodeCompatibleModuleDeliveryPlan(
+        JSON.stringify(retired),
+      );
+      expect(decoded.status).toBe(ModuleDeliveryCompatibilityStatus.Rejected);
+      if (decoded.status !== ModuleDeliveryCompatibilityStatus.Rejected)
+        throw new Error('Retired plan version was accepted.');
+      expect(decoded.issues[0]?.message).toContain(
+        'versions 1 and 2 are retired',
+      );
+    }
   });
 
   test('derives evidence hazards without semantic edges or plan mutation', () => {

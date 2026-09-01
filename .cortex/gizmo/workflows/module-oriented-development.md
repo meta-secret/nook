@@ -138,6 +138,10 @@ Read-only experts do not edit files or mutate lifecycle state.
 An implementation worker receives a separate write contract and the current
 shared checkout.
 
+Module Plan version 3 is the only accepted runtime schema. It defines the
+shared-checkout, direct-commit model. Versions 1 and 2 are retired and rejected;
+Loom provides no compatibility acceptance or migration fallback.
+
 Optional Loom journals and Markdown views may preserve human-readable audit
 evidence. They never gate harness continuation.
 

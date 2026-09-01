@@ -2,9 +2,9 @@ import { TeamKey } from '../team-agents/catalog.ts';
 import { taskResourcePatternsOverlap } from '../agent-workflow/domain.ts';
 import type { AgentAttemptParent } from '../agent-workflow/domain.ts';
 
-export const MODULE_DELIVERY_PLAN_VERSION = 2;
+export const MODULE_DELIVERY_PLAN_VERSION = 3;
 export type ModuleDeliveryPlanInputVersion =
-  1 | typeof MODULE_DELIVERY_PLAN_VERSION;
+  typeof MODULE_DELIVERY_PLAN_VERSION;
 export const MAX_MODULE_DELIVERY_NODES = 64;
 export const MAX_MODULE_DELIVERY_CONCURRENCY = 16;
 export const MAX_MODULE_DELIVERY_AGENT_DEPTH = 3;
@@ -341,7 +341,7 @@ export type ModuleDeliveryParentJoin = {
   readonly validationCommands: readonly string[];
 };
 
-export type ModuleDeliveryPlanV2 = {
+export type ModuleDeliveryPlanV3 = {
   readonly version: typeof MODULE_DELIVERY_PLAN_VERSION;
   readonly generation: number;
   readonly sourceCommit: string;
@@ -412,8 +412,7 @@ export type WriteModuleDeliveryNode =
 export type ModuleDeliveryNode =
   LegacyModuleDeliveryNode | ModuleDeliveryNodeV2;
 
-export type ModuleDeliveryPlanInput =
-  LegacyModuleDeliveryPlan | ModuleDeliveryPlanV2;
+export type ModuleDeliveryPlanInput = ModuleDeliveryPlanV3;
 
 export type ModuleDeliveryPlan = ModuleDeliveryPlanInput;
 
@@ -460,7 +459,7 @@ export enum ModuleDeliveryCompatibilityStatus {
 export type DecodedCompatibleModuleDeliveryPlan = {
   readonly status: ModuleDeliveryCompatibilityStatus.Decoded;
   readonly inputVersion: ModuleDeliveryPlanInputVersion;
-  readonly plan: ModuleDeliveryPlanV2;
+  readonly plan: ModuleDeliveryPlanV3;
 };
 
 export type RejectedCompatibleModuleDeliveryPlan = {
@@ -474,7 +473,7 @@ export type CompatibleModuleDeliveryPlanDecode =
 export type ValidatedModuleDeliveryPlan = {
   readonly status: ModuleDeliveryValidationStatus.Accepted;
   readonly inputVersion: typeof MODULE_DELIVERY_PLAN_VERSION;
-  readonly plan: ModuleDeliveryPlanV2;
+  readonly plan: ModuleDeliveryPlanV3;
   readonly planDigest: string;
   readonly topologicalOrder: readonly string[];
   readonly waves: readonly (readonly string[])[];

@@ -6,7 +6,7 @@ import {
   ModuleDeliveryOwner,
   ModuleDeliveryTaskKind,
 } from './domain.ts';
-import type { ModuleDeliveryNodeV2, ModuleDeliveryPlanV2 } from './domain.ts';
+import type { ModuleDeliveryNodeV2, ModuleDeliveryPlanV3 } from './domain.ts';
 
 export type CortexAuthoringFinding = {
   readonly code: ModuleDeliveryIssueCode;
@@ -24,7 +24,7 @@ export type CortexWriteAuthorizationRequest = {
   readonly claim: string;
 };
 export type ParentOwnedExclusionsRequest = {
-  readonly plan: ModuleDeliveryPlanV2;
+  readonly plan: ModuleDeliveryPlanV3;
   readonly node: ModuleDeliveryNodeV2;
 };
 
