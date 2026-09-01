@@ -17,6 +17,7 @@ import {
   selectTeamPlan,
   startTeamPlan,
 } from './index.ts';
+import { MAX_MODULE_DELIVERY_NODES } from '../module-delivery/domain.ts';
 import { assertTeamPlanRecord } from './domain.ts';
 import { teamPlanMessages } from './messages.ts';
 import { MAX_TEAM_PLAN_RECORD_REQUEST_BYTES } from './record-limits.ts';
@@ -30,6 +31,7 @@ import type { TeamPlanMessages } from './messages.ts';
 
 export { MAX_TEAM_PLAN_RECORD_REQUEST_BYTES } from './record-limits.ts';
 const TEAM_PLAN_RECORD_READ_CHUNK_BYTES = 65_536;
+const MAX_TEAM_PLAN_TASK_ID_LIST_BYTES = 262_144;
 const TEAM_PLAN_RUN_ID = /^[0-9a-f]{64}$/u;
 
 enum TeamPlanCommandKind {
@@ -417,7 +419,10 @@ function parseTeamPlanCommand(
     const planDigest = argv[8];
     const taskIdsValue = argv[10];
     const taskIds =
-      typeof taskIdsValue === 'string' ? taskIdsValue.split(',') : [];
+      typeof taskIdsValue === 'string' &&
+      Buffer.byteLength(taskIdsValue) <= MAX_TEAM_PLAN_TASK_ID_LIST_BYTES
+        ? taskIdsValue.split(',', MAX_MODULE_DELIVERY_NODES + 1)
+        : [];
     if (
       journalPath.kind === CommandPathKind.Invalid ||
       typeof runId !== 'string' ||
@@ -427,6 +432,7 @@ function parseTeamPlanCommand(
       typeof planDigest !== 'string' ||
       !TEAM_PLAN_RUN_ID.test(planDigest) ||
       taskIds.length === 0 ||
+      taskIds.length > MAX_MODULE_DELIVERY_NODES ||
       taskIds.some((taskId) => taskId.length === 0)
     )
       return { kind: TeamPlanCommandParseKind.Invalid };

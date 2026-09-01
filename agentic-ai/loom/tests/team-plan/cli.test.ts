@@ -459,6 +459,34 @@ test('rejects unsupported Team Plan locales instead of falling back', async () =
   );
 });
 
+test('bounds lease task IDs before admission lookup', async () => {
+  const error = spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    for (const taskIds of [
+      [...Array(65).keys()].map((index) => `task-${index}`).join(','),
+      'x'.repeat(262_145),
+    ])
+      await expectTeamPlanCliFailure({
+        argv: [
+          'lease',
+          '--journal',
+          '/tmp/team-plan-journal',
+          '--run-id',
+          'a'.repeat(64),
+          '--generation',
+          '1',
+          '--plan-digest',
+          'a'.repeat(64),
+          '--task-ids',
+          taskIds,
+        ],
+        code: LoomFailureCode.TeamPlanValidationFailed,
+      });
+  } finally {
+    error.mockRestore();
+  }
+});
+
 test('keeps Task wrapper diagnostics out of machine-readable stdout', () => {
   const root = mkdtempSync(join(tmpdir(), 'team-plan-task-stdout-'));
   try {
@@ -519,8 +547,8 @@ test('admits the complete permitted nested provider evidence ancestry', async ()
   const root = mkdtempSync(join(tmpdir(), 'team-plan-cli-ancestry-'));
   try {
     const acceptedRoot = nestedProviderEvidence({
-      depth: 128,
-      entriesPerIdentity: 4,
+      depth: 120,
+      entriesPerIdentity: 8,
     });
     const acceptedProviderEvidence = [acceptedRoot];
     assertEvidenceBound(acceptedProviderEvidence);

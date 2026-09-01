@@ -32,10 +32,12 @@ quality, or billing measure.
 
 ## Run a Team Plan
 
-Team Plan gives agents one durable command lifecycle for a reviewed module
-delivery plan. The journal stays outside the source repository.
+Team Plan gives the active delegation harness one durable command lifecycle for
+a reviewed module delivery plan. Ordinary agents enter through the canonical
+delegation workflow and must not invoke these worker-lifecycle mutations
+directly. The journal stays outside the source repository.
 
-Invoke commands from the repository root:
+The active harness invokes commands from the repository root:
 
 ```bash
 task loom:team-plan:start PLAN=/absolute/path/to/plan.json JOURNAL=/absolute/path/to/events.jsonl
@@ -50,7 +52,7 @@ task loom:team-plan:discard JOURNAL=/absolute/path/to/events.jsonl RUN_ID=<runId
 The installed `loom-team-plan` executable exposes the same seven operations.
 Each successful operation prints one JSON value to stdout.
 
-Follow the lifecycle in order:
+The active harness owns this lifecycle in order:
 
 1. Start one reviewed generation at its declared source commit. Save the
    immutable `runId` from the returned JSON snapshot.
@@ -166,8 +168,8 @@ Use one domain root family and descriptive fields. Same-prefix operations nest:
 agentStats:
   assemble:
     prNumber: 123
-    scratchPath: "{agentTempDir}/pr-123-scratch.json"
-    outputPath: "{agentTempDir}/123.yaml"
+    scratchPath: '{agentTempDir}/pr-123-scratch.json'
+    outputPath: '{agentTempDir}/123.yaml'
     includeTestInventory: true
 ```
 
