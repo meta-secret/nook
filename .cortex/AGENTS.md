@@ -51,11 +51,16 @@ or second coordinator. See the [Gizmo contract](gizmo/AGENTS.md).
   active harness. This includes implementation and review fixes.
 - Gizmo Prime is prohibited from performing any worker-executable Team Agent
   work itself.
-- If a required real Team Agent cannot be created, dispatched, or completed,
-  Gizmo Prime stops the task immediately and reports the blocker.
-- Gizmo Prime must not continue the task, approximate the work, or take over
-  the worker scope. This is the [no-fallback rule](#no-fallback-behavior) for
-  worker execution.
+- If a required real Team Agent cannot be created or an authorized attempt
+  cannot be dispatched, Gizmo Prime stops the task immediately and reports the
+  blocker.
+- After an attempt starts, Gizmo Prime follows the canonical bounded sequential
+  retry and conclusive-disposition process.
+- Gizmo Prime stops with a blocker when that process is exhausted without an
+  accepted completion.
+- Gizmo Prime must never approximate the work, take over the worker scope, or
+  continue past that blocked scope. This is the
+  [no-fallback rule](#no-fallback-behavior) for worker execution.
 - Separate Codex tasks, threads, cloud tasks, and external agents must not
   serve as delegation, communication, or handoff transport.
 - Parent-owned Gizmo control operations remain with Gizmo Prime:
