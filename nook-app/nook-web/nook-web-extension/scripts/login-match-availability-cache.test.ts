@@ -55,23 +55,15 @@ test('coalesces, bounds, and invalidates cached origin results', async () => {
 test('keeps invalidated work in flight but returns only a fresh result', async () => {
   const availabilityCache = cache()
   const stale = deferred<WebsiteLoginMatchAvailability>()
-  const staleLookup = availabilityCache.resolve(
-    request(
-      () => stale.promise,
-      () => 100,
-    ),
-  )
+  const staleLookup = availabilityCache.resolve(request(() => stale.promise))
 
   availabilityCache.invalidate({ origin: 'https://example.test' })
   let freshLoads = 0
   const refreshed = availabilityCache.resolve(
-    request(
-      async () => {
-        freshLoads += 1
-        return { kind: 'ready', count: 1 }
-      },
-      () => 200,
-    ),
+    request(async () => {
+      freshLoads += 1
+      return { kind: 'ready', count: 1 }
+    }),
   )
   expect(freshLoads).toBe(0)
 

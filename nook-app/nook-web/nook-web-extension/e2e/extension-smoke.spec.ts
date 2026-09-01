@@ -149,7 +149,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     ).toEqual({ ok: true })
     const companionPage = await openedCompanionPage
     await expect(companionPage).toHaveURL(
-      `chrome-extension://${extensionId}/popup/index.html`,
+      /popup\/index\.html\?invokingTabId=[1-9]\d*$/,
     )
     await expect(
       companionPage.getByTestId('extension-device-setup'),

@@ -288,7 +288,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     ).toEqual({ ok: true })
     const pairingLauncher = await openedPairingLauncher
     await expect(pairingLauncher).toHaveURL(
-      `chrome-extension://${extensionId}/popup/index.html?intent=pair`,
+      /popup\/index\.html\?intent=pair&invokingTabId=[1-9]\d*$/,
     )
     await expect(
       pairingLauncher.getByTestId('extension-toolbar-menu'),
