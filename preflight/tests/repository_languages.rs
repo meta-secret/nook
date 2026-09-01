@@ -61,6 +61,8 @@ fn filesystem_paths(root: &Path) -> anyhow::Result<Vec<PathBuf>> {
 fn is_automation_source(path: &Path) -> bool {
     let file_name = path.file_name().and_then(OsStr::to_str).unwrap_or_default();
     if file_name.starts_with("Dockerfile")
+        || file_name.ends_with(".Dockerfile")
+        || file_name.starts_with(".env.")
         || matches!(file_name, "Taskfile.yml" | "Taskfile.yaml" | "package.json")
         || path.extension().is_none()
     {
@@ -71,7 +73,9 @@ fn is_automation_source(path: &Path) -> bool {
         Some(
             "bash"
                 | "cjs"
+                | "conf"
                 | "cts"
+                | "hcl"
                 | "js"
                 | "jsx"
                 | "json"
@@ -89,6 +93,23 @@ fn is_automation_source(path: &Path) -> bool {
                 | "zsh"
         )
     )
+}
+
+#[test]
+fn automation_source_inventory_covers_repository_manifest_conventions() {
+    for path in [
+        ".codex/hooks.json",
+        ".env.development",
+        "docker-bake.hcl",
+        "product.Dockerfile",
+        "service.conf",
+        "src/runner.rs",
+    ] {
+        assert!(is_automation_source(Path::new(path)), "missing {path}");
+    }
+    for path in ["README.md", "fixtures/image.png", "wordlist.txt"] {
+        assert!(!is_automation_source(Path::new(path)), "unexpected {path}");
+    }
 }
 
 fn is_prohibited_path(path: &Path, script_extension: &str, interface_extension: &str) -> bool {
@@ -261,12 +282,16 @@ fn repository_language_scan_rejects_scripts_and_runtime_invocations() -> anyhow:
         format!("{{\"command\": \"{runtime} tool\"}}\n"),
     )?;
     fs::write(
+        fixture.join("scripts/product.Dockerfile"),
+        format!("RUN {runtime} -m tool\n"),
+    )?;
+    fs::write(
         fixture.join("scripts/picture-in-picture.ts"),
         "export const pip = shape.pyramid;\n",
     )?;
     fs::write(fixture.join("pyproject.toml"), "[project]\n")?;
     let violations = repository_language_violations(&fixture)?;
-    assert_eq!(violations.len(), 5);
+    assert_eq!(violations.len(), 6);
     assert!(
         violations
             .iter()
