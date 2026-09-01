@@ -186,6 +186,8 @@ export async function recordTeamPlan(
     action: async (session) => {
       assertRunningTeamPlanSession(session);
       assertTeamPlanSessionRepositoryAtSource(session);
+      if (request.runId !== session.journal.started.runId)
+        throw new Error('Team Plan record run identity is stale.');
       const persisted = executeTeamPlanRecord({
         session,
         record: request.record,
