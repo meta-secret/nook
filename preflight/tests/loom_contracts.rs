@@ -231,8 +231,15 @@ fn loom_workflow_audits_every_cortex_change() {
         "repository policy must classify rename sources and condition every Loom-only step"
     );
     assert!(
-        workflow.contains("run: task loom:cortex-audit"),
-        "Loom must run the mechanical Cortex audit"
+        workflow.contains(".cortex/*.md) ;;")
+            && workflow.contains("*) cortex_markdown_only=false ;;")
+            && workflow.contains(
+                "if [ \"$changed\" != \"true\" ]; then\n            cortex_markdown_only=false"
+            )
+            && workflow.contains(
+                "echo \"cortex_markdown_only=$cortex_markdown_only\" >> \"$GITHUB_OUTPUT\"",
+            ),
+        "repository policy must classify only non-empty Cortex Markdown changes as lightweight"
     );
     for trigger_path in [
         ".github/formatting/**",
@@ -254,8 +261,24 @@ fn loom_workflow_audits_every_cortex_change() {
     let format_step = &format_step[..format_step_end];
     assert!(
         format_step.contains("run: task preflight:format-contract")
-            && !format_step.contains("if:")
+            && format_step
+                .contains("if: steps.policy-paths.outputs.cortex_markdown_only != 'true'",)
             && !format_step.contains("install"),
-        "repository policy must always run the detached formatter contract"
+        "repository policy must skip the detached formatter only for Cortex Markdown"
+    );
+
+    let cortex_audit_step_start = workflow
+        .find("      - name: Audit Cortex document structure\n")
+        .expect("repository policy must contain the named Cortex audit step");
+    let cortex_audit_step = &workflow[cortex_audit_step_start..];
+    let cortex_audit_step_end = cortex_audit_step[1..]
+        .find("\n      - name:")
+        .map_or(cortex_audit_step.len(), |offset| offset + 1);
+    let cortex_audit_step = &cortex_audit_step[..cortex_audit_step_end];
+    assert!(
+        cortex_audit_step.contains("if: steps.policy-paths.outputs.loom == 'true'")
+            && cortex_audit_step.contains("run: task loom:cortex-audit")
+            && !cortex_audit_step.contains("cortex_markdown_only"),
+        "Loom must audit Cortex Markdown even when detached formatter work is skipped"
     );
 }
