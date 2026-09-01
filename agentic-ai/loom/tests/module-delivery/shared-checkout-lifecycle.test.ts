@@ -37,6 +37,7 @@ import type {
   ModuleDeliveryAttemptLease,
   ModuleDeliveryGenerationAuthority,
   ModuleDeliveryPlanV3,
+  ModuleDeliveryProviderSubmission,
   ModuleDeliveryReadOnlyNodeV2,
   ModuleDeliveryWriteNodeV2,
   ModuleDeliveryWriteProviderSubmission,
@@ -110,12 +111,21 @@ function readerNode(sourceCommit: string): ModuleDeliveryReadOnlyNodeV2 {
   };
 }
 
-function validatedPlan(fixture: GitFixture): ValidatedModuleDeliveryPlan {
+function validatedPlan([fixture, concurrent = false]: readonly [
+  GitFixture,
+  boolean?,
+]): ValidatedModuleDeliveryPlan {
+  const alpha = writerNode({
+    taskId: 'alpha',
+    path: 'alpha',
+    sourceCommit: fixture.baselineCommit,
+  });
+  const reader = readerNode(fixture.baselineCommit);
   const plan: ModuleDeliveryPlanV3 = {
     version: 3,
     generation: 1,
     sourceCommit: fixture.baselineCommit,
-    maxConcurrency: 1,
+    maxConcurrency: concurrent ? 2 : 1,
     maxAgentDepth: 2,
     maxAttempts: 2,
     parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
@@ -124,19 +134,17 @@ function validatedPlan(fixture: GitFixture): ValidatedModuleDeliveryPlan {
       owner: 'delivery-owner',
       validationCommands: ['task loom:verify'],
     },
-    nodes: [
-      writerNode({
-        taskId: 'alpha',
-        path: 'alpha',
-        sourceCommit: fixture.baselineCommit,
-      }),
-      writerNode({
-        taskId: 'beta',
-        path: 'beta',
-        sourceCommit: fixture.baselineCommit,
-      }),
-      readerNode(fixture.baselineCommit),
-    ],
+    nodes: concurrent
+      ? [alpha, reader]
+      : [
+          alpha,
+          writerNode({
+            taskId: 'beta',
+            path: 'beta',
+            sourceCommit: fixture.baselineCommit,
+          }),
+          reader,
+        ],
     edgeContracts: [],
   };
   const decoded = decodeAndValidateModuleDeliveryPlan(JSON.stringify(plan));
@@ -152,10 +160,10 @@ type Runtime = Readonly<{
   state: ModuleIntegrationState;
 }>;
 
-function preparedRuntime(): Runtime {
+function preparedRuntime(concurrent = false): Runtime {
   const fixture = createGitFixture();
   fixtures.push(fixture);
-  const plan = validatedPlan(fixture);
+  const plan = validatedPlan([fixture, concurrent]);
   const authority = createModuleDeliveryGenerationAuthority({
     acceptedPlan: plan,
     expectedLineage: plan.plan.nodes.map((node) => ({
@@ -183,7 +191,6 @@ function preparedRuntime(): Runtime {
 
 type CommitWriterRequest = Readonly<{
   runtime: Runtime;
-  state: ModuleIntegrationState;
   lease: ModuleDeliveryAttemptLease;
   path: string;
 }>;
@@ -222,6 +229,21 @@ function commitWriter(
   };
 }
 
+function integrate([runtime, state, lease, submission]: readonly [
+  Runtime,
+  ModuleIntegrationState,
+  ModuleDeliveryAttemptLease,
+  ModuleDeliveryProviderSubmission,
+]): ModuleIntegrationState {
+  return integrateVerifiedModuleDeliveryTask({
+    authority: runtime.authority,
+    acceptedPlan: runtime.plan,
+    lease,
+    state,
+    submission,
+  });
+}
+
 function normalizedMetadata(git: GitRunner): readonly string[] {
   const branch = git(['symbolic-ref', 'HEAD']);
   const refs = git([
@@ -257,17 +279,10 @@ test('sequences shared commits with failure atomicity and exact cleanup', () => 
   if (!alphaLease) throw new Error('Alpha lease is missing.');
   const alpha = commitWriter({
     runtime,
-    state: runtime.state,
     lease: alphaLease,
     path: 'alpha',
   });
-  const afterAlpha = integrateVerifiedModuleDeliveryTask({
-    authority: runtime.authority,
-    acceptedPlan: runtime.plan,
-    lease: alphaLease,
-    state: runtime.state,
-    submission: alpha,
-  });
+  const afterAlpha = integrate([runtime, runtime.state, alphaLease, alpha]);
   expect(() =>
     finalizeModuleDeliveryIntegration({
       authority: runtime.authority,
@@ -293,7 +308,6 @@ test('sequences shared commits with failure atomicity and exact cleanup', () => 
   if (!betaLease) throw new Error('Beta lease is missing.');
   const beta = commitWriter({
     runtime,
-    state: afterAlpha,
     lease: betaLease,
     path: 'beta',
   });
@@ -311,13 +325,7 @@ test('sequences shared commits with failure atomicity and exact cleanup', () => 
     }),
   ).toThrow('stale baseline');
   expect(git(['rev-parse', 'HEAD'])).toBe(beta.handoff.commit);
-  const afterBeta = integrateVerifiedModuleDeliveryTask({
-    authority: runtime.authority,
-    acceptedPlan: runtime.plan,
-    lease: betaLease,
-    state: afterAlpha,
-    submission: beta,
-  });
+  const afterBeta = integrate([runtime, afterAlpha, betaLease, beta]);
   const readAdmission = selectModuleDeliveryAdmissions({
     authority: runtime.authority,
     acceptedPlan: runtime.plan,
@@ -339,15 +347,9 @@ test('sequences shared commits with failure atomicity and exact cleanup', () => 
     lease: readLease,
   });
   git(['commit', '--quiet', '--allow-empty', '-m', 'unaccepted-writer']);
-  expect(() =>
-    integrateVerifiedModuleDeliveryTask({
-      authority: runtime.authority,
-      acceptedPlan: runtime.plan,
-      lease: readLease,
-      state: afterBeta,
-      submission: evidence,
-    }),
-  ).toThrow('Git metadata changed');
+  expect(() => integrate([runtime, afterBeta, readLease, evidence])).toThrow(
+    'Git metadata changed',
+  );
   git(['reset', '--hard', '--quiet', beta.handoff.commit]);
   const branch = git(['symbolic-ref', 'HEAD']);
   const mutations = [
@@ -375,24 +377,12 @@ test('sequences shared commits with failure atomicity and exact cleanup', () => 
   for (const [mutate, restore] of mutations) {
     git(mutate);
     expect(() =>
-      integrateVerifiedModuleDeliveryTask({
-        authority: runtime.authority,
-        acceptedPlan: runtime.plan,
-        lease: readLease,
-        state: afterBeta,
-        submission: evidence,
-      }),
+      integrate([runtime, afterBeta, readLease, evidence]),
     ).toThrow();
     expect(afterBeta.acceptedEvidence).toHaveLength(0);
     git(restore);
   }
-  const afterRead = integrateVerifiedModuleDeliveryTask({
-    authority: runtime.authority,
-    acceptedPlan: runtime.plan,
-    lease: readLease,
-    state: afterBeta,
-    submission: evidence,
-  });
+  const afterRead = integrate([runtime, afterBeta, readLease, evidence]);
   for (const [mutate, restore] of mutations) {
     git(mutate);
     expect(() =>
@@ -421,3 +411,49 @@ test('sequences shared commits with failure atomicity and exact cleanup', () => 
   ).toEqual({ removed: false });
   expect(normalizedMetadata(git)).toEqual(metadata);
 });
+
+test.each(['read-first', 'writer-first'] as const)(
+  'accepts concurrent writer and reader in %s production order',
+  (order) => {
+    const runtime = preparedRuntime(true);
+    const selection = selectModuleDeliveryAdmissions({
+      authority: runtime.authority,
+      acceptedPlan: runtime.plan,
+      state: runtime.state.admissionState,
+    });
+    expect(selection.admissions.map(({ taskId }) => taskId)).toEqual([
+      'alpha',
+      'reader',
+    ]);
+    const leases = recordModuleDeliveryAttemptLeases({
+      authority: runtime.authority,
+      state: runtime.state.admissionState,
+      admissions: selection.admissions,
+    }).leases;
+    const writerLease = leases.find(({ taskId }) => taskId === 'alpha');
+    const readLease = leases.find(({ taskId }) => taskId === 'reader');
+    const reader = runtime.plan.plan.nodes[1];
+    if (
+      !writerLease ||
+      !readLease ||
+      reader?.kind !== ModuleDeliveryTaskKind.ReadOnly
+    )
+      throw new Error('Concurrent leases are missing.');
+    const evidence = evidenceSubmission({
+      state: runtime.state,
+      node: reader,
+      lease: readLease,
+    });
+    let state = runtime.state;
+    if (order === 'read-first')
+      state = integrate([runtime, state, readLease, evidence]);
+    const writer = commitWriter({ runtime, lease: writerLease, path: 'alpha' });
+    if (order === 'writer-first')
+      expect(() => integrate([runtime, state, readLease, evidence])).toThrow();
+    state = integrate([runtime, state, writerLease, writer]);
+    if (order === 'writer-first')
+      state = integrate([runtime, state, readLease, evidence]);
+    expect(state.acceptedEvidence).toHaveLength(1);
+    expect(state.acceptedWrites).toHaveLength(1);
+  },
+);
