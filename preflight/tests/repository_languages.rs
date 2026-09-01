@@ -22,6 +22,7 @@ fn repository_paths(root: &Path) -> anyhow::Result<Vec<PathBuf>> {
         .hidden(false)
         .parents(false)
         .require_git(false)
+        .filter_entry(|entry| entry.file_name() != OsStr::new(".git"))
         .sort_by_file_path(std::cmp::Ord::cmp);
     for entry in builder.build() {
         let entry = entry?;
@@ -56,6 +57,7 @@ fn is_automation_source(path: &Path) -> bool {
                 | "conf"
                 | "cts"
                 | "hcl"
+                | "html"
                 | "js"
                 | "jsx"
                 | "json"
@@ -83,6 +85,7 @@ fn automation_source_inventory_covers_repository_manifest_conventions() {
         ".codex/hooks.json",
         ".env.development",
         "docker-bake.hcl",
+        "index.html",
         "product.Dockerfile",
         "service.conf",
         "src/runner.rs",
@@ -179,7 +182,7 @@ fn contains_command_action(line: &str, command_name: &str, actions: &[&str]) -> 
     false
 }
 
-fn logical_source_lines(source: &str) -> Vec<(usize, String)> {
+fn logical_source_lines(source: &str, fold_shell_continuations: bool) -> Vec<(usize, String)> {
     let physical_lines = source.lines().collect::<Vec<_>>();
     let mut logical_lines = Vec::new();
     let mut pending = String::new();
@@ -196,7 +199,7 @@ fn logical_source_lines(source: &str) -> Vec<(usize, String)> {
             .rev()
             .take_while(|character| *character == '\\')
             .count();
-        let continued = trailing_backslashes % 2 == 1;
+        let continued = fold_shell_continuations && trailing_backslashes % 2 == 1;
         let content = if continued {
             &trimmed[..trimmed.len().saturating_sub(1)]
         } else {
@@ -214,6 +217,16 @@ fn logical_source_lines(source: &str) -> Vec<(usize, String)> {
         logical_lines.push((pending_start, pending));
     }
     logical_lines
+}
+
+fn supports_shell_continuations(path: &Path) -> bool {
+    let file_name = path.file_name().and_then(OsStr::to_str).unwrap_or_default();
+    file_name.starts_with("Dockerfile")
+        || file_name.ends_with(".Dockerfile")
+        || matches!(
+            path.extension().and_then(OsStr::to_str),
+            Some("bash" | "sh" | "zsh")
+        )
 }
 
 fn join_argv_strings<'a>(values: impl Iterator<Item = &'a str>) -> Option<String> {
@@ -344,21 +357,42 @@ fn source_strings(path: &Path, source: &str) -> anyhow::Result<Vec<String>> {
     }
 }
 
+fn project_manager_actions<'a>(language: &'a str, package_installer: &'a str) -> Vec<&'a str> {
+    vec![
+        "run",
+        language,
+        package_installer,
+        "tool",
+        "venv",
+        "add",
+        "build",
+        "export",
+        "init",
+        "lock",
+        "publish",
+        "remove",
+        "sync",
+        "tree",
+    ]
+}
+
 fn repository_language_violations(root: &Path) -> anyhow::Result<Vec<String>> {
     let language = ["py", "thon"].concat();
     let script_extension = [".", "py"].concat();
-    let source_suffixes =
-        ["", "i", "c", "o", "w"].map(|suffix| [script_extension.as_str(), suffix].concat());
+    let mut source_suffixes = ["", "i", "c", "o", "w"]
+        .map(|suffix| [script_extension.as_str(), suffix].concat())
+        .to_vec();
+    source_suffixes.extend([
+        [script_extension.as_str(), "z"].concat(),
+        [".", "pex"].concat(),
+        [".", "whl"].concat(),
+        [".", "egg"].concat(),
+    ]);
     let package_installer = ["p", "ip"].concat();
     let isolated_installer = [package_installer.as_str(), "x"].concat();
     let project_manager = ["u", "v"].concat();
-    let project_manager_actions = [
-        "run",
-        language.as_str(),
-        package_installer.as_str(),
-        "tool",
-        "venv",
-    ];
+    let project_manager_actions =
+        project_manager_actions(language.as_str(), package_installer.as_str());
     let interpreter_aliases = [
         ["py", "py"].concat(),
         ["micro", language.as_str()].concat(),
@@ -399,11 +433,12 @@ fn repository_language_violations(root: &Path) -> anyhow::Result<Vec<String>> {
         }
         let source = String::from_utf8_lossy(&bytes);
         for source_string in source_strings(relative, &source)? {
-            for (index, line) in logical_source_lines(&source_string) {
+            for (index, line) in
+                logical_source_lines(&source_string, supports_shell_continuations(relative))
+            {
                 let trimmed = line.trim_start();
                 if trimmed.starts_with("//")
                     || (trimmed.starts_with('#') && !trimmed.starts_with("#!"))
-                    || trimmed.starts_with('*')
                 {
                     continue;
                 }
@@ -483,6 +518,7 @@ fn canonical_repository_inventory_prunes_generated_and_dependency_trees() -> any
             .as_nanos()
     ));
     fs::create_dir_all(fixture.join("nested"))?;
+    fs::create_dir_all(fixture.join(".git/objects"))?;
     fs::create_dir_all(fixture.join("rust-project/src/deep"))?;
     fs::create_dir_all(fixture.join("rust-project/target/generated"))?;
     fs::create_dir_all(fixture.join("node_modules/package"))?;
@@ -495,6 +531,7 @@ fn canonical_repository_inventory_prunes_generated_and_dependency_trees() -> any
         fixture.join("nested/contract.ts"),
         "export const ok = true;\n",
     )?;
+    fs::write(fixture.join(".git/objects/generated"), [0xff])?;
     fs::write(fixture.join("build"), "#!/usr/bin/env bash\n")?;
     fs::write(fixture.join("rust-project/Cargo.toml"), "[package]\n")?;
     fs::write(fixture.join("rust-project/Taskfile.yml"), "version: '3'\n")?;
@@ -574,8 +611,20 @@ fn repository_language_scan_rejects_scripts_and_runtime_invocations() -> anyhow:
         format!("<script context=\"module\">exec(\"{runtime} tool\")</script>\n"),
     )?;
     fs::write(
+        fixture.join("scripts/index.html"),
+        format!("<script>exec(\"{runtime} tool\")</script>\n"),
+    )?;
+    fs::write(
+        fixture.join("rust-project/src/comment-continuation.rs"),
+        format!("// ordinary comment \\\nCommand::new(\"{runtime}\");\n"),
+    )?;
+    fs::write(
         fixture.join(".env.test"),
         format!("SCRIPT_RUNTIME={alternate_runtime}\n"),
+    )?;
+    fs::write(
+        fixture.join("rust-project/src/dereference.rs"),
+        format!("*command = Command::new(\"{runtime}\");\n"),
     )?;
     fs::write(
         fixture.join("scripts/picture-in-picture.ts"),
@@ -583,7 +632,7 @@ fn repository_language_scan_rejects_scripts_and_runtime_invocations() -> anyhow:
     )?;
     fs::write(fixture.join("pyproject.toml"), "[project]\n")?;
     let violations = repository_language_violations(&fixture)?;
-    assert_eq!(violations.len(), 8);
+    assert_eq!(violations.len(), 11);
     assert!(
         violations
             .iter()
@@ -612,6 +661,7 @@ fn repository_language_scan_rejects_prohibited_dependency_surfaces() -> anyhow::
     fs::create_dir_all(fixture.join(".cursor"))?;
     let installer = ["p", "ip"].concat();
     let language = ["py", "thon"].concat();
+    let script_extension = [".", "py"].concat();
     let rust_bridge = ["py", "o3"].concat();
     let browser_runtime = ["py", "odide"].concat();
     let project_manager = ["u", "v"].concat();
@@ -652,8 +702,22 @@ fn repository_language_scan_rejects_prohibited_dependency_surfaces() -> anyhow::
     fs::write(
         fixture.join("scripts/managers.sh"),
         format!(
-            "{project_manager} run tool\n{project_manager} {language} install 3\n{project_manager} {installer} install package\n{isolated_installer} install package\n"
+            "{project_manager} run tool\n{project_manager} {language} install 3\n{project_manager} {installer} install package\n{project_manager} add package\n{project_manager} sync\n{isolated_installer} install package\n"
         ),
+    )?;
+    for extension in ["whl", "pex", "egg"] {
+        fs::write(
+            fixture
+                .join("scripts")
+                .join(format!("vendored.{extension}")),
+            [0xff],
+        )?;
+    }
+    fs::write(
+        fixture
+            .join("scripts")
+            .join(format!("application{script_extension}z")),
+        [0xff],
     )?;
     fs::write(
         fixture.join("bun.lock"),
@@ -673,7 +737,7 @@ fn repository_language_scan_rejects_prohibited_dependency_surfaces() -> anyhow::
         format!("{{\"command\": \"{escaped_runtime} tool\"}}\n"),
     )?;
     let violations = repository_language_violations(&fixture)?;
-    assert_eq!(violations.len(), 20);
+    assert_eq!(violations.len(), 26);
     fs::remove_dir_all(fixture)?;
     Ok(())
 }
