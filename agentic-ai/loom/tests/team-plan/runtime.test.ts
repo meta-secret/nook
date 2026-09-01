@@ -34,10 +34,7 @@ import {
   selectTeamPlan,
   startTeamPlan,
 } from '../../src/team-plan/index.ts';
-import {
-  finalizeTeamPlan,
-  restartTeamPlan,
-} from './runtime-test-commands.ts';
+import { finalizeTeamPlan, restartTeamPlan } from './runtime-test-commands.ts';
 import {
   createGitFixture,
   disposeGitFixture,
@@ -412,6 +409,9 @@ describe('Team Plan runtime', () => {
     const selected = await selectTeamPlan({ journalPath: file.journalPath });
     const leased = await leaseTeamPlan({
       journalPath: file.journalPath,
+      runId: selected.snapshot.runId,
+      generation: selected.snapshot.generation,
+      planDigest: selected.snapshot.planDigest,
       taskIds: selected.admissions.map(({ taskId }) => taskId),
     });
     expect(leased.leases).toHaveLength(2);
