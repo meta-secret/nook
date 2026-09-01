@@ -13,6 +13,7 @@ import {
   selectTeamPlan,
   startTeamPlan,
 } from './index.ts';
+import { assertTeamPlanRecord } from './domain.ts';
 import { teamPlanMessages } from './messages.ts';
 import { MAX_TEAM_PLAN_RECORD_REQUEST_BYTES } from './record-limits.ts';
 
@@ -209,6 +210,14 @@ export async function runTeamPlanCli(
     throw loomFailureFromCause({
       code: LoomFailureCode.TeamPlanValidationFailed,
       cause: new Error(messages.invalidRecordJson, { cause }),
+    });
+  }
+  try {
+    assertTeamPlanRecord(record);
+  } catch (cause) {
+    throw loomFailureFromCause({
+      code: LoomFailureCode.TeamPlanValidationFailed,
+      cause: new Error(messages.invalidRecordContents, { cause }),
     });
   }
   const request: TeamPlanRecordRequest = {

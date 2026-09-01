@@ -3,6 +3,7 @@
   "team_plan_invalid_arguments": "Аргументы команды Team Plan недопустимы.",
   "team_plan_invalid_record_file": "Файл запроса записи Team Plan недопустим или слишком велик.",
   "team_plan_invalid_record_json": "JSON запроса записи Team Plan недопустим.",
+  "team_plan_invalid_record_contents": "Поля запроса записи Team Plan недопустимы.",
   "team_plan_invalid_record_encoding": "Запрос записи Team Plan должен быть в допустимой кодировке UTF-8.",
   "team_plan_oversized_record": "Запрос записи Team Plan слишком велик."
 }

@@ -521,6 +521,10 @@ test('localizes malformed record contents', async () => {
       expectedMessage:
         'Запрос записи Team Plan должен быть в допустимой кодировке UTF-8.',
     },
+    {
+      contents: '{}\n',
+      expectedMessage: 'Поля запроса записи Team Plan недопустимы.',
+    },
   ];
   for (const fixture of fixtures) {
     writeFileSync(requestPath, fixture.contents);
