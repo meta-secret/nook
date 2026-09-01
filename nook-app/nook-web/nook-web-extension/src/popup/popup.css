@@ -40,14 +40,76 @@ body {
   overflow-y: auto;
 }
 
+body:has(.toolbar-menu) {
+  width: 320px;
+}
+
 .device-setup,
-.companion-home,
+.toolbar-menu,
 .authenticator-picker {
   display: grid;
   gap: 14px;
   padding: 22px;
   border: 1px solid var(--border);
   background: var(--background);
+}
+
+.toolbar-menu {
+  gap: 10px;
+  padding: 14px;
+  border: 0;
+}
+
+.toolbar-menu-header {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.toolbar-menu-summary {
+  min-width: 0;
+}
+
+.toolbar-menu .step-label {
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 750;
+  letter-spacing: 0;
+  text-align: left;
+  text-transform: none;
+}
+
+.toolbar-menu h1 {
+  margin: 2px 0 0;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toolbar-menu .menu-logo {
+  width: 34px;
+  height: 34px;
+  margin: 0;
+  border-radius: 8px;
+}
+
+.menu-secondary-action {
+  justify-self: center;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  padding: 6px 10px;
+}
+
+.menu-secondary-action:hover:not(:disabled) {
+  background: var(--secondary);
+  color: var(--secondary-foreground);
 }
 
 .authenticator-picker {
@@ -175,36 +237,6 @@ h1 {
   text-align: center;
 }
 
-.vault-connection {
-  margin: -10px 8px 2px;
-  color: var(--muted-foreground);
-  font-size: 13px;
-  font-weight: 650;
-  line-height: 1.35;
-  text-align: center;
-}
-
-.vault-connection[data-connected='true'] {
-  color: color-mix(in oklab, oklch(0.78 0.08 155) 85%, var(--foreground));
-}
-
-.vault-connection[data-connected='false'] {
-  color: color-mix(in oklab, oklch(0.8 0.08 70) 80%, var(--foreground));
-}
-
-.login-detection {
-  margin: -4px 8px 4px;
-  color: var(--muted-foreground);
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.35;
-  text-align: center;
-}
-
-.login-detection[data-status='detected'] {
-  color: color-mix(in oklab, oklch(0.78 0.08 155) 85%, var(--foreground));
-}
-
 .field-group {
   display: grid;
   gap: 7px;
@@ -329,9 +361,4 @@ button:disabled {
   height: 38px;
   border-radius: 9px;
   margin: 0 auto;
-}
-
-.companion-logo {
-  width: 52px;
-  height: 52px;
 }

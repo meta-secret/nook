@@ -21,7 +21,7 @@ export async function ensurePinProtectedPopup(
   popupPage: Page,
   pin = MOCK_AUTH_DEFAULT_PIN,
 ): Promise<void> {
-  const companionHome = popupPage.getByTestId('extension-companion-home')
+  const companionHome = popupPage.getByTestId('extension-toolbar-menu')
   if (await companionHome.isVisible().catch(() => false)) {
     return
   }

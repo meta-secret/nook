@@ -310,7 +310,7 @@ export async function unlockExtensionPopupPin(
     await expect(
       popupPage
         .getByTestId('device-protection-pin-unlock-btn')
-        .or(popupPage.getByTestId('extension-companion-home')),
+        .or(popupPage.getByTestId('extension-toolbar-menu')),
     ).toBeVisible({ timeout: 45_000 })
     await ensurePinProtectedPopup(popupPage, pin)
   } finally {

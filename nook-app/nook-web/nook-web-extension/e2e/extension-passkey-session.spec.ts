@@ -137,7 +137,7 @@ test('creates a passkey from browser-native WASM options after extension messagi
   try {
     const popupPage = await setupPasskeyExtensionPopup(context)
     await expect(popupPage.getByTestId('open-simple-vault-btn')).toBeVisible()
-    await expect(popupPage.getByTestId('stay-as-companion-btn')).toBeVisible()
+    await expect(popupPage.getByTestId('stay-ready-btn')).toBeVisible()
     await openSimpleVaultConnection(context, popupPage)
   } finally {
     await context.close()
@@ -291,7 +291,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       `chrome-extension://${extensionId}/popup/index.html?intent=pair`,
     )
     await expect(
-      pairingLauncher.getByTestId('extension-companion-home'),
+      pairingLauncher.getByTestId('extension-toolbar-menu'),
     ).toBeVisible()
     await expect(
       pairingLauncher.getByTestId('companion-vault-status'),
@@ -346,11 +346,9 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       `chrome-extension://${extensionId}/popup/index.html`,
     )
     await expect(
-      connectedPopupPage.getByTestId('extension-companion-home'),
+      connectedPopupPage.getByTestId('extension-toolbar-menu'),
     ).toBeVisible()
-    await expect(
-      connectedPopupPage.getByTestId('stay-as-companion-btn'),
-    ).toBeVisible()
+    await expect(connectedPopupPage.getByTestId('stay-ready-btn')).toBeVisible()
     await expect(
       connectedPopupPage.getByTestId('open-simple-vault-btn'),
     ).toBeVisible()
@@ -903,9 +901,9 @@ test('reuses the offscreen session after the service worker restarts', async ({
         { timeout: 15_000 },
       )
       .toBe(true)
-    await expect(popupPage.getByTestId('extension-companion-home')).toBeVisible(
-      { timeout: 15_000 },
-    )
+    await expect(popupPage.getByTestId('extension-toolbar-menu')).toBeVisible({
+      timeout: 15_000,
+    })
   } finally {
     await context.close()
   }
