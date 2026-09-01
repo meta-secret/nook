@@ -151,7 +151,7 @@ HH:mm:(<PR>):<ACTOR>:<ACTION> -> <description>
 - Use `(pending)` before that pull request exists.
 - Use `(none)` when the assigned work intentionally has no pull request.
 - Emit the current PR token on every activity line. Refresh it immediately
-  after pull-request creation or a stacked pull-request transition.
+  after pull-request creation.
 - Use `SKILL` when loading or applying a skill is the reported action.
 - Start every activity line with the current local time in 24-hour `HH:mm`
   form.

@@ -498,7 +498,7 @@ test('accepts a one-PR plan at the 2,000-line ceiling', () => {
   assert.equal(validateAgentRecord(atCeiling, 'plan'), '')
 })
 
-test('requires stacked PRs for an over-budget multi-PR feature', () => {
+test('rejects an over-budget multi-PR feature', () => {
   const independent = validPlan
     .replace(
       'Estimated authored changed lines: 240',
@@ -515,7 +515,7 @@ test('requires stacked PRs for an over-budget multi-PR feature', () => {
     )
   assert.match(
     validateAgentRecord(independent, 'plan'),
-    /feature above 2,000 authored changed lines requires stacked PRs/,
+    /only one-PR delivery is supported/,
   )
 })
 
@@ -526,7 +526,7 @@ test('rejects a sequence mode that contradicts one-PR delivery', () => {
   )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /one-PR delivery requires one-PR sequence mode/,
+    /only one-PR delivery is supported/,
   )
 })
 
@@ -542,7 +542,7 @@ test('rejects a feature estimate below its current PR estimate', () => {
     )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /feature estimate must be at least the current PR estimate/,
+    /one-PR feature and current PR estimates must match/,
   )
 })
 
@@ -557,9 +557,12 @@ test('rejects different feature and current PR estimates for one PR', () => {
   )
 })
 
-test('accepts a bounded current slice for a multi-PR feature', () => {
+test('rejects a bounded current slice for a multi-PR feature', () => {
   const multiPr = validTwoGizmoStackedPlan()
-  assert.equal(validateAgentRecord(multiPr, 'plan'), '')
+  assert.match(
+    validateAgentRecord(multiPr, 'plan'),
+    /only one-PR delivery is supported/,
+  )
 })
 
 test('rejects a multi-PR slice without an authored-line estimate', () => {
@@ -580,7 +583,7 @@ test('rejects a multi-PR slice without an authored-line estimate', () => {
     )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /consecutively numbered slices with estimates and acceptance evidence/,
+    /only one-PR delivery is supported/,
   )
 })
 
@@ -605,7 +608,7 @@ test('rejects undersized slice coverage for a 12,000-line feature', () => {
     )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /PR slice estimates must sum to the complete feature estimate/,
+    /only one-PR delivery is supported/,
   )
 })
 
@@ -626,7 +629,7 @@ test('rejects an individual PR slice above 2,000 lines', () => {
     )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /every PR slice estimate must be between 1 and 2,000 authored changed lines/,
+    /only one-PR delivery is supported/,
   )
 })
 
@@ -643,7 +646,7 @@ test('rejects a zero-line PR slice estimate', () => {
     )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /every PR slice estimate must be between 1 and 2,000 authored changed lines/,
+    /only one-PR delivery is supported/,
   )
 })
 
@@ -660,7 +663,7 @@ test('rejects a multi-PR current slice omitted from its ordered sequence', () =>
     )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /first slice to match the current PR contract/,
+    /only one-PR delivery is supported/,
   )
 })
 
@@ -677,7 +680,7 @@ test('rejects a first slice estimate that differs from the current PR estimate',
     )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /first slice estimate to match the current PR estimate/,
+    /only one-PR delivery is supported/,
   )
 })
 
@@ -698,7 +701,7 @@ test('rejects a multi-PR plan without an ordered sequence', () => {
     )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /multi-PR plan requires at least two consecutively numbered slices with estimates and acceptance evidence/,
+    /only one-PR delivery is supported/,
   )
 })
 
@@ -712,7 +715,7 @@ test('rejects multi-PR slices without acceptance evidence', () => {
     )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /multi-PR plan requires at least two consecutively numbered slices with estimates and acceptance evidence/,
+    /only one-PR delivery is supported/,
   )
 })
 
@@ -730,7 +733,7 @@ for (const sequence of [
       )
     assert.match(
       validateAgentRecord(invalid, 'plan'),
-      /multi-PR plan requires at least two consecutively numbered slices with estimates and acceptance evidence/,
+      /only one-PR delivery is supported/,
     )
   })
 }
@@ -824,7 +827,7 @@ test('rejects a placeholder scope in a multi-PR slice', () => {
     )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /multi-PR plan requires at least two consecutively numbered slices with estimates and acceptance evidence/,
+    /only one-PR delivery is supported/,
   )
 })
 

@@ -82,9 +82,9 @@ a container runtime.
    or publication contracts.
 5. If part of the request is too large, risky, blocked, or out of scope, follow
    `.cortex/gizmo/workflows/issues.md` (update/create Workbench Markdown records)
-   rather than silently dropping work.
-   Before removing work, stop; Gizmo must preserve it in a
-   linked successor and record its inventory in Workbench.
+   rather than silently dropping work. Stop and record the blocker, its cause,
+   and all incomplete scope in the worklog. Do not create or propose a successor
+   issue, branch, pull request, stack, or rebuilt delivery.
 6. Before finishing, write a concise Markdown work summary to
    `.nook-workbench-worklog.md`. Include `# Work summary` and the sections
    `## Outcome`, `## Progress`, `## Implementation problems`, `## Decisions`,

@@ -202,39 +202,15 @@ requires a valid
 independent run. A blob-SHA conflict rejects a duplicate claim of the same
 issue without collapsing unrelated pending dispatches.
 
-**Stacked successor state**
-
-- Legacy focused issues and manual prompts start from `main`.
-- A stacked successor issue declares immutable stack metadata:
-  - `stack_branch`; and
-  - the historical `stack_predecessor_branch`.
-- Before claim, the workflow requires:
-  - the same-repository successor branch; and
-  - exactly one open successor PR.
-- The successor PR must be in one of two live states:
-  - **Pre-merge:** it targets the existing recorded predecessor. The
-    predecessor PR remains open and unmerged.
-  - **Post-merge:** the same successor PR targets `main`. This retargeting
-    follows the predecessor's authenticated squash merge.
-- The authored-line budget uses the frozen SHA of the live base.
-- Immediately before delivery, the trusted publisher repeats:
-  - native-stack adjacency checks;
-  - PR-state checks;
-  - the base-SHA check; and
-  - containment checks.
-- A successful stacked publication proves that the exact PR head advanced from
-  its frozen starting SHA.
-- Any other base fails closed. Incomplete stack metadata also fails closed.
-
 **Trusted checkout and worktree boundary**
 
 - The trusted workflow checkout remains pinned to `github.workflow_sha`.
 - Local actions, validators, prompts, and credentials use that trusted
   checkout.
-- Successor source is fetched into a separate detached implementation
+- Main-based implementation source is fetched into a separate detached
   worktree.
 - The CI agent receives that worktree only as its bounded `REPO_ROOT`.
-- Trusted tooling creates a disposable planning worktree from the successor
+- Trusted tooling creates a disposable planning worktree from the implementation
   source.
 - Only plan or worklog artifacts cross back to trusted validation and
   publication code.

@@ -164,7 +164,9 @@ tasks:
     deps: [loom:install]
     vars:
       CONFIG: '{{default "" .CONFIG}}'
+      PR: '{{default "" .PR}}'
     cmds:
+      - bun .github/scripts/pr-authored-budget.ts "{{.PR}}" --stop-only
       - |
         set -euo pipefail
         if [ -n "{{.CONFIG}}" ]; then
@@ -172,6 +174,7 @@ tasks:
         else
           task loom:default FAMILY=prePush
         fi
+      - bun .github/scripts/pr-authored-budget.ts "{{.PR}}"
 
   loom:cortex-audit:
     desc: Audit .cortex via Loom (optional CONFIG YAML, otherwise in-code default).

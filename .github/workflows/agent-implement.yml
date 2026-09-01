@@ -123,198 +123,13 @@ jobs:
               core.setFailed(`${path} has an invalid canonical gizmo_id`)
               return
             }
-            const stackBranchRows = [...frontmatter.matchAll(/^stack_branch:\s*(.+)$/gm)]
-            const stackPredecessorRows = [...frontmatter.matchAll(/^stack_predecessor_branch:\s*(.+)$/gm)]
-            if (stackBranchRows.length > 1 || stackPredecessorRows.length > 1) {
-              core.setFailed(`${path} has duplicate canonical stack branch fields`)
+            if (
+              /^stack_branch:/m.test(frontmatter) ||
+              /^stack_predecessor_branch:/m.test(frontmatter)
+            ) {
+              core.setFailed(`${path} uses unsupported stacked-PR metadata`)
               return
             }
-            const stackBranch = String(value(frontmatter, 'stack_branch')).trim()
-            const stackPredecessorBranch = String(value(frontmatter, 'stack_predecessor_branch')).trim()
-            if (Boolean(stackBranch) !== Boolean(stackPredecessorBranch)) {
-              core.setFailed(`${path} must provide both stack_branch and stack_predecessor_branch`)
-              return
-            }
-            const validBranch = (branch) => {
-              if (
-                !branch || branch.length > 255 || branch === '@' ||
-                branch.startsWith('-') || branch.startsWith('/') ||
-                branch.endsWith('/') || branch.endsWith('.') ||
-                branch.includes('..') || branch.includes('//') ||
-                branch.includes('@{') || /[\u0000-\u0020\u007f~^:?*\[\\]/u.test(branch)
-              ) return false
-              return branch.split('/').every(
-                (component) => !component.startsWith('.') && !component.endsWith('.lock'),
-              )
-            }
-            if (stackBranch) {
-              if (!assignedGizmoId) {
-                core.setFailed(`${path} stack metadata requires a canonical gizmo_id`)
-                return
-              }
-              if (!validBranch(stackBranch) || !validBranch(stackPredecessorBranch)) {
-                core.setFailed(`${path} has malformed stack branch metadata`)
-                return
-              }
-              if (stackBranch === stackPredecessorBranch) {
-                core.setFailed(`${path} stack branch must differ from its predecessor branch`)
-                return
-              }
-              try {
-                await github.rest.repos.getBranch({ ...context.repo, branch: stackBranch })
-              } catch {
-                core.setFailed(`${path} stack_branch must exist in the Nook repository`)
-                return
-              }
-              const { data: stackPulls } = await github.rest.pulls.list({
-                ...context.repo,
-                state: 'open',
-                head: `${context.repo.owner}:${stackBranch}`,
-                per_page: 2,
-              })
-              const stackPull = stackPulls[0]
-              if (stackPulls.length !== 1 || stackPull.head.repo?.full_name !== `${context.repo.owner}/${context.repo.repo}`) {
-                core.setFailed(`${path} stack_branch must have exactly one same-repository open PR`)
-                return
-              }
-              let nativeStacks
-              try {
-                nativeStacks = await github.paginate('GET /repos/{owner}/{repo}/stacks', {
-                  ...context.repo,
-                  per_page: 100,
-                  headers: { accept: 'application/vnd.github.nebula-preview+json' },
-                })
-              } catch {
-                core.setFailed(`${path} GitHub native stack membership is unavailable`)
-                return
-              }
-              const nativeStackMatches = nativeStacks.map((nativeStack) => {
-                const members = Array.isArray(nativeStack.pull_requests) ? nativeStack.pull_requests : []
-                return {
-                  members,
-                  nativeStack,
-                  successorIndex: members.findIndex((member) => member.number === stackPull.number),
-                }
-              }).filter(({ successorIndex }) => successorIndex >= 0)
-              if (
-                nativeStackMatches.length !== 1 ||
-                nativeStackMatches[0].nativeStack.open !== true ||
-                nativeStackMatches[0].nativeStack.base?.ref !== 'main'
-              ) {
-                core.setFailed(`${path} stack_branch must belong to exactly one open GitHub native stack based on main`)
-                return
-              }
-              const { members, successorIndex } = nativeStackMatches[0]
-              const nativeSuccessor = members[successorIndex]
-              const nativePredecessor = members[successorIndex - 1]
-              if (
-                successorIndex <= 0 ||
-                nativeSuccessor.head?.ref !== stackBranch ||
-                nativePredecessor?.head?.ref !== stackPredecessorBranch
-              ) {
-                core.setFailed(`${path} stack_branch must immediately follow stack_predecessor_branch in its GitHub native stack`)
-                return
-              }
-              let predecessorPull
-              try {
-                predecessorPull = (await github.rest.pulls.get({
-                  ...context.repo,
-                  pull_number: nativePredecessor.number,
-                })).data
-              } catch {
-                core.setFailed(`${path} predecessor PR verification is unavailable`)
-                return
-              }
-              if (stackPull.base.ref === stackPredecessorBranch) {
-                try {
-                  await github.rest.repos.getBranch({ ...context.repo, branch: stackPredecessorBranch })
-                } catch {
-                  core.setFailed(`${path} recorded predecessor must exist while it remains the live PR base`)
-                  return
-                }
-                if (
-                  nativePredecessor.state !== 'open' || nativePredecessor.merged_at ||
-                  predecessorPull.state !== 'open' || predecessorPull.merged || predecessorPull.merged_at ||
-                  predecessorPull.head.ref !== stackPredecessorBranch || predecessorPull.base.ref !== 'main'
-                ) {
-                  core.setFailed(`${path} recorded predecessor must remain open and unmerged while it is the live PR base`)
-                  return
-                }
-                core.setOutput('stack_live_base_branch', stackPredecessorBranch)
-              } else if (stackPull.base.ref === 'main') {
-                let mainBranch
-                try {
-                  const mainResponse = await github.rest.repos.getBranch({
-                    ...context.repo,
-                    branch: 'main',
-                  })
-                  mainBranch = mainResponse.data
-                } catch {
-                  core.setFailed(`${path} predecessor merge verification is unavailable`)
-                  return
-                }
-                if (
-                  nativePredecessor.state !== 'closed' || !nativePredecessor.merged_at ||
-                  predecessorPull.merged !== true || !predecessorPull.merged_at ||
-                  predecessorPull.base.ref !== 'main' || !predecessorPull.merge_commit_sha
-                ) {
-                  core.setFailed(`${path} cannot target main before its native-stack predecessor is merged`)
-                  return
-                }
-                let mergeCommit
-                let predecessorHeadCommit
-                let mergeToMain
-                let mainToSuccessor
-                try {
-                  const responses = await Promise.all([
-                    github.rest.repos.getCommit({ ...context.repo, ref: predecessorPull.merge_commit_sha }),
-                    github.rest.repos.getCommit({ ...context.repo, ref: predecessorPull.head.sha }),
-                    github.rest.repos.compareCommitsWithBasehead({
-                      ...context.repo,
-                      basehead: `${predecessorPull.merge_commit_sha}...${mainBranch.commit.sha}`,
-                    }),
-                    github.rest.repos.compareCommitsWithBasehead({
-                      ...context.repo,
-                      basehead: `${mainBranch.commit.sha}...${stackPull.head.sha}`,
-                    }),
-                  ])
-                  mergeCommit = responses[0].data
-                  predecessorHeadCommit = responses[1].data
-                  mergeToMain = responses[2].data
-                  mainToSuccessor = responses[3].data
-                } catch {
-                  core.setFailed(`${path} predecessor squash and main-frontier verification is unavailable`)
-                  return
-                }
-                const mergeIsOnMain = mergeToMain.behind_by === 0 && ['ahead', 'identical'].includes(mergeToMain.status)
-                const squashShape =
-                  predecessorPull.merge_commit_sha !== predecessorPull.head.sha &&
-                  mergeCommit.parents.length === 1 &&
-                  mergeCommit.parents[0]?.sha === predecessorPull.base.sha &&
-                  mergeCommit.commit.tree.sha === predecessorHeadCommit.commit.tree.sha
-                if (!squashShape || !mergeIsOnMain) {
-                  core.setFailed(`${path} native-stack predecessor must be squash-merged into main`)
-                  return
-                }
-                const containsMain = mainToSuccessor.behind_by === 0 && ['ahead', 'identical'].includes(mainToSuccessor.status)
-                if (!containsMain || stackPull.base.sha !== mainBranch.commit.sha) {
-                  core.setFailed(`${path} retargeted successor must contain the current main frontier`)
-                  return
-                }
-                core.setOutput('stack_live_base_branch', 'main')
-              } else {
-                core.setFailed(`${path} successor PR must target its recorded predecessor or main`)
-                return
-              }
-              if (!/^[0-9a-f]{40}$/.test(stackPull.head.sha) || !/^[0-9a-f]{40}$/.test(stackPull.base.sha)) {
-                core.setFailed(`${path} successor PR did not expose immutable head/base SHAs`)
-                return
-              }
-              core.setOutput('stack_pr_number', String(stackPull.number))
-              core.setOutput('stack_start_head_sha', stackPull.head.sha)
-              core.setOutput('stack_live_base_sha', stackPull.base.sha)
-            }
-
             const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
             const continuingOwner = String(value(body, 'owner')).trim()
             if (!/^[a-z0-9][a-z0-9._-]*$/.test(continuingOwner) || continuingOwner === 'unassigned') {
@@ -350,8 +165,6 @@ jobs:
             core.setOutput('slug', path.replace(/^issues\//, '').replace(/\.md$/, '').replaceAll('/', '-'))
             core.setOutput('continuing_owner', continuingOwner)
             core.setOutput('gizmo_id', assignedGizmoId)
-            core.setOutput('stack_branch', stackBranch)
-            core.setOutput('stack_predecessor_branch', stackPredecessorBranch)
 
       - name: Configure agent task
         id: task
@@ -366,12 +179,6 @@ jobs:
           MANUAL_CONTINUING_OWNER: ${{ inputs.continuing_owner }}
           MAJOR_CHANGE_AUTHORIZED: ${{ inputs.major_change_authorized }}
           RUN_ID: ${{ github.run_id }}
-          ISSUE_STACK_BRANCH: ${{ steps.workbench.outputs.stack_branch }}
-          ISSUE_STACK_LIVE_BASE_BRANCH: ${{ steps.workbench.outputs.stack_live_base_branch }}
-          ISSUE_STACK_LIVE_BASE_SHA: ${{ steps.workbench.outputs.stack_live_base_sha }}
-          ISSUE_STACK_PREDECESSOR_BRANCH: ${{ steps.workbench.outputs.stack_predecessor_branch }}
-          ISSUE_STACK_PR_NUMBER: ${{ steps.workbench.outputs.stack_pr_number }}
-          ISSUE_STACK_START_HEAD_SHA: ${{ steps.workbench.outputs.stack_start_head_sha }}
           WORKBENCH_SLUG: ${{ steps.workbench.outputs.slug }}
         run: |
           set -euo pipefail
@@ -383,14 +190,6 @@ jobs:
             title="Agent implement (run ${RUN_ID})"
             task="$DISPATCH_PROMPT"
             continuing_owner="$MANUAL_CONTINUING_OWNER"
-          elif [ -n "$ISSUE_STACK_BRANCH" ]; then
-            branch="$ISSUE_STACK_BRANCH"
-            base_branch="$ISSUE_STACK_LIVE_BASE_BRANCH"
-            checkout_ref="$ISSUE_STACK_BRANCH"
-            target_kind="stacked"
-            title="Implement ${ISSUE_TITLE}"
-            task="$(printf 'Nook Workbench issue `%s`: %s\nURL: %s\n\n%s' "$ISSUE_PATH" "$ISSUE_TITLE" "$ISSUE_URL" "$ISSUE_BODY")"
-            continuing_owner="$ISSUE_CONTINUING_OWNER"
           else
             branch="agent/workbench-${WORKBENCH_SLUG}-${RUN_ID}"
             base_branch="main"
@@ -440,10 +239,6 @@ jobs:
             echo "AGENT_BRANCH=$branch"
             echo "FIX_BRANCH=$branch"
             echo "AGENT_PR_BASE_BRANCH=$base_branch"
-            echo "AGENT_PR_BASE_SHA=$ISSUE_STACK_LIVE_BASE_SHA"
-            echo "AGENT_PR_NUMBER=$ISSUE_STACK_PR_NUMBER"
-            echo "AGENT_PR_PREDECESSOR_BRANCH=$ISSUE_STACK_PREDECESSOR_BRANCH"
-            echo "AGENT_PR_START_HEAD_SHA=$ISSUE_STACK_START_HEAD_SHA"
             echo "AGENT_PR_TARGET_KIND=$target_kind"
             emit_multiline_env "AGENT_PROMPT" "$task"
             emit_multiline_env "AGENT_PR_TITLE" "$title"
@@ -539,15 +334,6 @@ jobs:
           git -C "$GITHUB_WORKSPACE" fetch --no-tags origin \
             "refs/heads/${IMPLEMENTATION_REF}:refs/remotes/origin/${IMPLEMENTATION_REF}"
           implementation_sha="$(git -C "$GITHUB_WORKSPACE" rev-parse "refs/remotes/origin/${IMPLEMENTATION_REF}")"
-          test "$implementation_sha" = "${AGENT_PR_START_HEAD_SHA:-$implementation_sha}"
-          if [ "$AGENT_PR_TARGET_KIND" = stacked ]; then
-            GIT_CONFIG_COUNT=1 \
-            GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
-            GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
-            git -C "$GITHUB_WORKSPACE" fetch --no-tags origin \
-              "refs/heads/${AGENT_PR_BASE_BRANCH}:refs/nook/validated-base"
-            test "$(git -C "$GITHUB_WORKSPACE" rev-parse refs/nook/validated-base)" = "$AGENT_PR_BASE_SHA"
-          fi
           unset auth NOOK_TOKEN
           git -C "$GITHUB_WORKSPACE" worktree add --detach "$implementation_root" \
             "refs/remotes/origin/${IMPLEMENTATION_REF}"
@@ -648,16 +434,16 @@ jobs:
             const secrets = [process.env.CURSOR_SECRET]
             if (!fs.existsSync(localPath)) {
               if (!fs.existsSync(summaryPath)) {
-                core.setFailed('Planning produced neither a plan nor an authorization blocker.')
+                core.setFailed('Planning produced neither a plan nor a planning blocker.')
                 return
               }
               const blocker = fs.readFileSync(summaryPath, 'utf8').trim()
               const rejection = validateAgentRecord(blocker, 'worklog', secrets, process.env.AGENT_PROMPT)
               if (rejection) {
-                core.setFailed(`Rejected architectural authorization blocker: ${rejection}.`)
+                core.setFailed(`Rejected planning blocker: ${rejection}.`)
                 return
               }
-              core.setOutput('authorization_blocked', 'true')
+              core.setOutput('planning_blocked', 'true')
               return
             }
             const candidate = fs.readFileSync(localPath, 'utf8').trim()
@@ -701,14 +487,9 @@ jobs:
             })
             core.setOutput('path', planPath)
             core.setOutput('url', `https://github.com/${owner}/${repo}/blob/main/${planPath}`)
-            if (/^- Delivery shape:\s*Multiple PRs\s*$/m.test(candidate)) {
-              core.setOutput('multi_pr', 'true')
-              core.setFailed('Published multi-PR feature plan requires materialized Workbench feature and focused issue records before implementation.')
-              return
-            }
 
       - name: Materialize validated implementation plan
-        if: steps.plan.outcome == 'success' && steps.plan.outputs.authorization_blocked != 'true' && steps.rerun.outputs.terminal != 'true'
+        if: steps.plan.outcome == 'success' && steps.plan.outputs.planning_blocked != 'true' && steps.rerun.outputs.terminal != 'true'
         env:
           EXPECTED_PLAN_SHA256: ${{ steps.plan.outputs.sha256 }}
         run: |
@@ -725,7 +506,7 @@ jobs:
 
       - name: Run sandboxed implementation agent
         id: agent_edit
-        if: steps.rerun.outputs.terminal == 'true' || (steps.plan.outcome == 'success' && steps.plan.outputs.authorization_blocked != 'true')
+        if: steps.rerun.outputs.terminal == 'true' || (steps.plan.outcome == 'success' && steps.plan.outputs.planning_blocked != 'true')
         env:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
           IMPLEMENTATION_TERMINAL: ${{ steps.rerun.outputs.terminal }}
@@ -790,7 +571,7 @@ jobs:
           AGENT_BRANCH: ${{ env.AGENT_BRANCH }}
           AGENT_PROMPT: ${{ env.AGENT_PROMPT }}
           IMPLEMENT_OUTCOME: ${{ steps.implement.outcome }}
-          MULTI_PR_PLAN: ${{ steps.plan.outputs.multi_pr }}
+          BUDGET_BLOCKER_B64: ${{ steps.implement.outputs.budget_blocker_b64 }}
           ISSUE_PATH: ${{ steps.workbench.outputs.path }}
           ISSUE_TITLE: ${{ steps.workbench.outputs.title }}
           PLAN_PATH: ${{ steps.plan.outputs.path }}
@@ -823,7 +604,6 @@ jobs:
             })
             const pull = pulls.data[0]
             const success = process.env.IMPLEMENT_OUTCOME === 'success' && Boolean(pull)
-            const multiPrPlan = process.env.MULTI_PR_PLAN === 'true'
             if (success) {
               const continuingOwner = process.env.CONTINUING_AGENT_OWNER
               await github.rest.issues.addAssignees({
@@ -874,7 +654,7 @@ jobs:
                   '',
                   '## Implementation problems',
                   '',
-                  success ? '- No problem summary was emitted by the bounded worker.' : multiPrPlan ? '- The feature exceeds one bounded PR and requires focused Workbench issue records.' : '- The workflow or agent stopped before a pull request was opened.',
+                  success ? '- No problem summary was emitted by the bounded worker.' : '- The workflow or agent stopped before a pull request was opened.',
                   '',
                   '## Decisions',
                   '',
@@ -886,7 +666,7 @@ jobs:
                   '',
                   '## Remaining work',
                   '',
-                  success ? `- GitHub assigned and notified continuing owner \`${process.env.CONTINUING_AGENT_OWNER}\` for validation and merge of the Nook PR.` : multiPrPlan ? '- Materialize the feature and ordered focused issues from the published plan, then dispatch the first bounded issue.' : '- Inspect the workflow failure and return the issue to ready after correcting the blocker.',
+                  success ? `- GitHub assigned and notified continuing owner \`${process.env.CONTINUING_AGENT_OWNER}\` for validation and merge of the Nook PR.` : '- Inspect the workflow failure and return the issue to ready after correcting the blocker.',
                 ].join('\n')
             let summary = fallbackSummary
             if (fs.existsSync(summaryPath)) {
@@ -898,6 +678,39 @@ jobs:
               } else {
                 summary = candidate
               }
+            }
+            const budgetBlocker = process.env.BUDGET_BLOCKER_B64
+              ? Buffer.from(process.env.BUDGET_BLOCKER_B64, 'base64').toString('utf8')
+              : ''
+            const budgetMatch = budgetBlocker.match(/^Implemented diff exceeds the 2000 authored changed-line budget: (\d+)$/)
+            if (budgetMatch) {
+              summary = [
+                '# Automated agent work summary',
+                '',
+                '## Outcome',
+                '',
+                `Blocked before publication: the trusted formatter measured ${budgetMatch[1]} authored changed lines, above the 2,000-line PR creation limit.`,
+                '',
+                '## Progress',
+                '',
+                '- The bounded agent completed editing and trusted formatting, but no implementation branch or PR was published.',
+                '',
+                '## Implementation problems',
+                '',
+                `- ${budgetBlocker}. The accepted plan underestimated the final formatted diff.`,
+                '',
+                '## Decisions',
+                '',
+                '- Delivery stopped at the trusted authored-line budget; no split or successor PR was created.',
+                '',
+                '## Validation',
+                '',
+                `- [Agent implement run ${context.runId}](${runUrl})`,
+                '',
+                '## Remaining work',
+                '',
+                '- Re-scope or simplify the task before returning it to ready.',
+              ].join('\n')
             }
             const worklogPath = `worklogs/${feature}/${timestamp}-run-${context.runId}.md`
             const worklog = [
@@ -947,9 +760,7 @@ jobs:
             }
             const progressOutcome = success
               ? `opened [Nook PR #${pull.number}](${pull.html_url})`
-              : multiPrPlan
-                ? 'published a multi-PR plan that requires materialized focused issues before the first bounded issue is dispatched'
-                : 'stopped before opening a PR'
+              : 'stopped before opening a PR'
             const progress = `- ${now}: [Agent run ${context.runId}](${runUrl}) ${progressOutcome}; [worklog](/${owner}/${repo}/blob/main/${worklogPath}).`
             body = body.replace(/^## Progress\s*$/m, `## Progress\n\n${progress}`)
             await github.rest.repos.createOrUpdateFileContents({

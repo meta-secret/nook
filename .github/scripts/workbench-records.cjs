@@ -408,17 +408,8 @@ function validateGizmoMapping(budgetFields, slices) {
     return 'current Gizmo ID must match the first PR slice Gizmo ID'
   }
 
-  if (budgetFields.sequenceMode === 'Stacked PRs') {
-    if (slices[0].predecessorGizmoId !== 'None') {
-      return 'the first stacked PR slice must have no predecessor Gizmo'
-    }
-    for (let index = 1; index < slices.length; index += 1) {
-      if (slices[index].predecessorGizmoId !== slices[index - 1].gizmoId) {
-        return 'stacked PR slice predecessors must follow consecutive Gizmo order'
-      }
-    }
-  } else if (slices.some((slice) => slice.predecessorGizmoId !== 'None')) {
-    return 'one-PR and independent PR slices must not declare predecessor Gizmos'
+  if (slices.some((slice) => slice.predecessorGizmoId !== 'None')) {
+    return 'the one PR slice must not declare a predecessor Gizmo'
   }
 
   const mappedOwnershipGizmoIds = ownershipGizmoIds(budgetFields.ownershipBody)
@@ -601,112 +592,51 @@ function validateAgentRecord(
     if (estimate < 1 || currentPrEstimate < 1) {
       return 'authored changed-line estimates must be positive integers'
     }
+    if (deliveryShape !== 'One PR' || sequenceMode !== 'One PR') {
+      return 'only one-PR delivery is supported'
+    }
     if (currentPrEstimate > 2_000) {
       return 'current PR estimate exceeds 2,000 authored changed lines'
     }
-    if (estimate < currentPrEstimate) {
-      return 'feature estimate must be at least the current PR estimate'
-    }
-    if (deliveryShape === 'One PR' && estimate > 2_000) {
+    if (estimate > 2_000) {
       return 'one-PR plan exceeds 2,000 authored changed lines'
     }
-    if (deliveryShape === 'One PR' && estimate !== currentPrEstimate) {
+    if (estimate !== currentPrEstimate) {
       return 'one-PR feature and current PR estimates must match'
     }
-    if (deliveryShape === 'One PR' && sequenceMode !== 'One PR') {
-      return 'one-PR delivery requires one-PR sequence mode'
+    const sequenceBody = budgetFields.sequenceBody
+    const sliceLines = sequenceBody
+      .trim()
+      .split('\n')
+      .filter((line) => line.trim())
+    let sequenceSlice = {
+      valid: false,
+      number: 0,
+      scope: '',
+      estimate: 0,
+      evidence: '',
     }
-    if (deliveryShape === 'Multiple PRs' && sequenceMode === 'One PR') {
-      return 'multi-PR delivery requires independent or stacked sequence mode'
+    if (sliceLines.length === 1) {
+      sequenceSlice = parseSliceContract(sliceLines[0], true)
+    }
+    const listedSlices = [sequenceSlice]
+    if (
+      sliceLines.length !== 1 ||
+      !sequenceSlice.valid ||
+      sequenceSlice.number !== 1 ||
+      normalizedContractValue(sequenceSlice.scope) !==
+        normalizedContractValue(currentSlice.scope) ||
+      normalizedContractValue(sequenceSlice.evidence) !==
+        normalizedContractValue(currentSlice.evidence)
+    ) {
+      return 'one-PR plan requires one numbered slice matching the current PR contract'
     }
     if (
-      deliveryShape === 'Multiple PRs' &&
-      estimate <= 2_000 &&
-      sequenceMode !== 'Independent PRs'
+      sequenceSlice.estimate < 1 ||
+      sequenceSlice.estimate > 2_000 ||
+      sequenceSlice.estimate !== currentPrEstimate
     ) {
-      return 'multi-PR delivery at or below 2,000 authored changed lines requires independent PRs'
-    }
-    if (estimate > 2_000 && sequenceMode !== 'Stacked PRs') {
-      return 'feature above 2,000 authored changed lines requires stacked PRs'
-    }
-
-    const sequenceBody = budgetFields.sequenceBody
-    let listedSlices = []
-    if (deliveryShape === 'Multiple PRs') {
-      const sliceLines = sequenceBody
-        .trim()
-        .split('\n')
-        .filter((line) => line.trim())
-      const orderedSlices = sliceLines.map((line) =>
-        parseSliceContract(line, true),
-      )
-      listedSlices = orderedSlices
-      const hasExactSequence = orderedSlices.every(
-        (slice, index) => slice.valid && slice.number === index + 1,
-      )
-      if (sliceLines.length < 2 || !hasExactSequence) {
-        return 'multi-PR plan requires at least two consecutively numbered slices with estimates and acceptance evidence'
-      }
-      if (
-        orderedSlices.some(
-          (slice) => slice.estimate < 1 || slice.estimate > 2_000,
-        )
-      ) {
-        return 'every PR slice estimate must be between 1 and 2,000 authored changed lines'
-      }
-      const sliceEstimateTotal = orderedSlices.reduce(
-        (total, slice) => total + slice.estimate,
-        0,
-      )
-      if (sliceEstimateTotal !== estimate) {
-        return 'PR slice estimates must sum to the complete feature estimate'
-      }
-      const firstSlice = orderedSlices[0]
-      if (
-        normalizedContractValue(firstSlice.scope) !==
-          normalizedContractValue(currentSlice.scope) ||
-        normalizedContractValue(firstSlice.evidence) !==
-          normalizedContractValue(currentSlice.evidence)
-      ) {
-        return 'multi-PR plan requires its first slice to match the current PR contract'
-      }
-      if (firstSlice.estimate !== currentPrEstimate) {
-        return 'multi-PR plan requires its first slice estimate to match the current PR estimate'
-      }
-    } else {
-      const sliceLines = sequenceBody
-        .trim()
-        .split('\n')
-        .filter((line) => line.trim())
-      let sequenceSlice = {
-        valid: false,
-        number: 0,
-        scope: '',
-        estimate: 0,
-        evidence: '',
-      }
-      if (sliceLines.length === 1) {
-        sequenceSlice = parseSliceContract(sliceLines[0], true)
-      }
-      listedSlices = [sequenceSlice]
-      if (
-        sliceLines.length !== 1 ||
-        !sequenceSlice.valid ||
-        sequenceSlice.number !== 1 ||
-        normalizedContractValue(sequenceSlice.scope) !==
-          normalizedContractValue(currentSlice.scope) ||
-        normalizedContractValue(sequenceSlice.evidence) !==
-          normalizedContractValue(currentSlice.evidence)
-      ) {
-        return 'one-PR plan requires one numbered slice matching the current PR contract'
-      }
-      if (
-        sequenceSlice.estimate < 1 ||
-        sequenceSlice.estimate > 2_000 ||
-        sequenceSlice.estimate !== currentPrEstimate
-      ) {
-        return 'one-PR slice estimate must match the current PR estimate and be between 1 and 2,000'
-      }
+      return 'one-PR slice estimate must match the current PR estimate and be between 1 and 2,000'
     }
 
     const trustedGizmoRejection = validateTrustedGizmoAssignment(

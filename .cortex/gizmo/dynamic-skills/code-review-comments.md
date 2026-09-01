@@ -102,8 +102,8 @@ Does not apply to:
 - [ ] The team agent verifies the finding before editing.
 - [ ] The team agent implements the minimal correct fix when required.
 - [ ] The team agent returns focused proof and any no-change rationale.
-- [ ] Gizmo integrates verified handoffs and runs `task loom:pre-push` when files
-      changed.
+- [ ] Gizmo integrates verified handoffs and runs
+      `task loom:pre-push PR=<number>` when files changed.
 - [ ] Gizmo uses focused `task remote` jobs when useful, then explicitly triggers
       complete PR validation.
 - [ ] Gizmo pushes changed code or documentation.
