@@ -40,29 +40,32 @@ Invoke commands from the repository root:
 ```bash
 task loom:team-plan:start PLAN=/absolute/path/to/plan.json JOURNAL=/absolute/path/to/events.jsonl
 task loom:team-plan:select JOURNAL=/absolute/path/to/events.jsonl
+task loom:team-plan:lease JOURNAL=/absolute/path/to/events.jsonl TASK_IDS=task-a,task-b
 task loom:team-plan:record JOURNAL=/absolute/path/to/events.jsonl REQUEST=/absolute/path/to/result.json
 task loom:team-plan:restart JOURNAL=/absolute/path/to/events.jsonl PLAN=/absolute/path/to/new-plan.json
 task loom:team-plan:finalize JOURNAL=/absolute/path/to/events.jsonl
 task loom:team-plan:discard JOURNAL=/absolute/path/to/events.jsonl RUN_ID=<runId-from-start>
 ```
 
-The installed `loom-team-plan` executable exposes the same six operations.
+The installed `loom-team-plan` executable exposes the same seven operations.
 Each successful operation prints one JSON value to stdout.
 
 Follow the lifecycle in order:
 
 1. Start one reviewed generation at its declared source commit. Save the
    immutable `runId` from the returned JSON snapshot.
-2. Select the next lease batch. Selection is durable before the leases return.
-3. Record one terminal result for each selected lease.
+2. Select the next candidate batch without consuming attempts or concurrency.
+3. Lease only the comma-separated candidate task IDs explicitly authorized by
+   Gizmo.
+4. Record one terminal result for each selected lease.
    - The request path must identify a regular file.
    - Loom uses one nonblocking open handle for the bounded read.
-4. Continue selection and recording until the generation reaches terminal
+5. Continue selection, leasing, and recording until the generation reaches terminal
    closure.
-5. Restart only from a quiescent run when a newer reviewed generation is
+6. Restart only from a quiescent run when a newer reviewed generation is
    required.
-6. Finalize to persist the exact joined head commit.
-7. Discard only when the finalized journal and its run artifacts are no longer
+7. Finalize to persist the exact joined head commit.
+8. Discard only when the finalized journal and its run artifacts are no longer
    needed for inspection or recovery. Pass the exact `runId` returned by
    `start`.
 

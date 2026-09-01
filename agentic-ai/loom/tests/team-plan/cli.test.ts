@@ -47,6 +47,7 @@ import type {
   ModuleDeliveryReadOnlyNodeV2,
 } from '../../src/module-delivery/index.ts';
 import type {
+  TeamPlanLeaseReceipt,
   TeamPlanRecord,
   TeamPlanSelectionReceipt,
   TeamPlanSnapshot,
@@ -222,7 +223,21 @@ test('dispatches every successful Team Plan command', async () => {
     const firstSelection = JSON.parse(
       output.at(-1) ?? '',
     ) as TeamPlanSelectionReceipt;
-    const firstLease = firstSelection.leases[0];
+    const firstAdmission = firstSelection.admissions[0];
+    if (!firstAdmission) throw new Error('First CLI admission is missing.');
+    expect(
+      await runTeamPlanCli({
+        argv: [
+          'lease',
+          '--journal',
+          journalPath,
+          '--task-ids',
+          firstAdmission.taskId,
+        ],
+      }),
+    ).toBe(0);
+    const firstLease = (JSON.parse(output.at(-1) ?? '') as TeamPlanLeaseReceipt)
+      .leases[0];
     if (!firstLease) throw new Error('First CLI lease is missing.');
     const recordPath = join(fixture.root, 'record.json');
     writeJson({
@@ -262,7 +277,22 @@ test('dispatches every successful Team Plan command', async () => {
     const secondSelection = JSON.parse(
       output.at(-1) ?? '',
     ) as TeamPlanSelectionReceipt;
-    const secondLease = secondSelection.leases[0];
+    const secondAdmission = secondSelection.admissions[0];
+    if (!secondAdmission) throw new Error('Second CLI admission is missing.');
+    expect(
+      await runTeamPlanCli({
+        argv: [
+          'lease',
+          '--journal',
+          journalPath,
+          '--task-ids',
+          secondAdmission.taskId,
+        ],
+      }),
+    ).toBe(0);
+    const secondLease = (
+      JSON.parse(output.at(-1) ?? '') as TeamPlanLeaseReceipt
+    ).leases[0];
     if (!secondLease) throw new Error('Second CLI lease is missing.');
     const evidence = Array.from({ length: 128 }, () => '界'.repeat(4096));
     const artifactIdentity = 'provider/report.json';
