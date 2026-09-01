@@ -212,7 +212,7 @@ export async function restartTeamPlan(
   return withLockedTeamPlanSession({
     journalPath: request.journalPath,
     action: async (session) => {
-      assertTeamPlanRunIdentity(session, request.runId);
+      assertTeamPlanRunIdentity({ session, runId: request.runId });
       assertRunningTeamPlanSession(session);
       const plan = await reviewedPlan(request.planPath);
       assertRepositoryAtSource({
@@ -249,7 +249,7 @@ export async function finalizeTeamPlan(
   return withLockedTeamPlanSession({
     journalPath: request.journalPath,
     action: async (session) => {
-      assertTeamPlanRunIdentity(session, request.runId);
+      assertTeamPlanRunIdentity({ session, runId: request.runId });
       if (session.finalized) return teamPlanSnapshot(session);
       assertRunningTeamPlanSession(session);
       assertTeamPlanSessionRepositoryAtSource(session);
@@ -856,11 +856,11 @@ export function assertRunningTeamPlanSession(session: TeamPlanSession): void {
     throw new Error('Team Plan is already finalized.');
 }
 
-function assertTeamPlanRunIdentity(
-  session: TeamPlanSession,
-  runId: string,
-): void {
-  if (runId !== session.journal.started.runId)
+function assertTeamPlanRunIdentity(request: {
+  readonly session: TeamPlanSession;
+  readonly runId: string;
+}): void {
+  if (request.runId !== request.session.journal.started.runId)
     throw new Error('Team Plan run identity is stale.');
 }
 
