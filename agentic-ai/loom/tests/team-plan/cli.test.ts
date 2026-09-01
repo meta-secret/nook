@@ -447,10 +447,13 @@ test('localizes visible parse failures through the Loom catalog', async () => {
   }
 });
 
-test('rejects unsupported Team Plan locales instead of falling back', () => {
+test('rejects unsupported Team Plan locales instead of falling back', async () => {
   expect(() => teamPlanMessages('fr-FR')).toThrow(
     'Unsupported Team Plan locale',
   );
+  await expect(
+    runTeamPlanCliWithArguments({ argv: [], locale: 'fr-FR' }),
+  ).rejects.toMatchObject({ code: LoomFailureCode.TeamPlanValidationFailed });
   expect(teamPlanMessages('C.UTF-8').invalidArguments).toBe(
     teamPlanMessages('en').invalidArguments,
   );
@@ -645,6 +648,7 @@ test('localizes malformed record contents', async () => {
       expect(((cause as LoomFailure).cause as Error).message).toBe(
         fixture.expectedMessage,
       );
+      expect(((cause as LoomFailure).cause as Error).cause).toBeUndefined();
     }
   }
   rmSync(root, { recursive: true });

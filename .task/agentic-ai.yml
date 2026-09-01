@@ -46,7 +46,7 @@ tasks:
     desc: Install Loom Bun dependencies with a frozen lockfile.
     dir: agentic-ai/loom
     cmds:
-      - bun install --frozen-lockfile
+      - bun install --frozen-lockfile 1>&2
 
   loom:format:
     desc: Format Loom TypeScript sources with Prettier.
@@ -218,7 +218,7 @@ tasks:
       NOOK_TEAM_PLAN_REPOSITORY_ROOT: '{{.REPO_ROOT}}'
     cmds:
       - >-
-        bun agentic-ai/loom/src/team-plan/cli.ts start
+        bun "{{.REPO_ROOT}}/agentic-ai/loom/src/team-plan/cli.ts" start
         --plan "$NOOK_TEAM_PLAN_PLAN"
         --journal "$NOOK_TEAM_PLAN_JOURNAL"
         --repository-root "$NOOK_TEAM_PLAN_REPOSITORY_ROOT"
@@ -232,7 +232,7 @@ tasks:
       NOOK_TEAM_PLAN_JOURNAL: '{{.JOURNAL}}'
     cmds:
       - >-
-        bun agentic-ai/loom/src/team-plan/cli.ts select
+        bun "{{.REPO_ROOT}}/agentic-ai/loom/src/team-plan/cli.ts" select
         --journal "$NOOK_TEAM_PLAN_JOURNAL"
 
   loom:team-plan:lease:
@@ -248,7 +248,7 @@ tasks:
       NOOK_TEAM_PLAN_TASK_IDS: '{{.TASK_IDS}}'
     cmds:
       - >-
-        bun agentic-ai/loom/src/team-plan/cli.ts lease
+        bun "{{.REPO_ROOT}}/agentic-ai/loom/src/team-plan/cli.ts" lease
         --journal "$NOOK_TEAM_PLAN_JOURNAL"
         --run-id "$NOOK_TEAM_PLAN_RUN_ID"
         --generation "$NOOK_TEAM_PLAN_GENERATION"
@@ -266,7 +266,7 @@ tasks:
       NOOK_TEAM_PLAN_REQUEST: '{{.REQUEST}}'
     cmds:
       - >-
-        bun agentic-ai/loom/src/team-plan/cli.ts record
+        bun "{{.REPO_ROOT}}/agentic-ai/loom/src/team-plan/cli.ts" record
         --journal "$NOOK_TEAM_PLAN_JOURNAL"
         --run-id "$NOOK_TEAM_PLAN_RUN_ID"
         --request "$NOOK_TEAM_PLAN_REQUEST"
@@ -282,7 +282,7 @@ tasks:
       NOOK_TEAM_PLAN_PLAN: '{{.PLAN}}'
     cmds:
       - >-
-        bun agentic-ai/loom/src/team-plan/cli.ts restart
+        bun "{{.REPO_ROOT}}/agentic-ai/loom/src/team-plan/cli.ts" restart
         --journal "$NOOK_TEAM_PLAN_JOURNAL"
         --run-id "$NOOK_TEAM_PLAN_RUN_ID"
         --plan "$NOOK_TEAM_PLAN_PLAN"
@@ -297,7 +297,7 @@ tasks:
       NOOK_TEAM_PLAN_RUN_ID: '{{.RUN_ID}}'
     cmds:
       - >-
-        bun agentic-ai/loom/src/team-plan/cli.ts finalize
+        bun "{{.REPO_ROOT}}/agentic-ai/loom/src/team-plan/cli.ts" finalize
         --journal "$NOOK_TEAM_PLAN_JOURNAL"
         --run-id "$NOOK_TEAM_PLAN_RUN_ID"
 
@@ -311,7 +311,7 @@ tasks:
       NOOK_TEAM_PLAN_RUN_ID: '{{.RUN_ID}}'
     cmds:
       - >-
-        bun agentic-ai/loom/src/team-plan/cli.ts discard
+        bun "{{.REPO_ROOT}}/agentic-ai/loom/src/team-plan/cli.ts" discard
         --journal "$NOOK_TEAM_PLAN_JOURNAL"
         --run-id "$NOOK_TEAM_PLAN_RUN_ID"
 

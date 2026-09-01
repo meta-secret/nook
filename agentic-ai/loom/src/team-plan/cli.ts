@@ -135,7 +135,15 @@ type CommandPath =
 export async function runTeamPlanCli(
   cliArguments: TeamPlanCliArguments,
 ): Promise<number> {
-  const messages = teamPlanMessages(cliArguments.locale);
+  let messages: TeamPlanMessages;
+  try {
+    messages = teamPlanMessages(cliArguments.locale);
+  } catch (cause) {
+    throw loomFailureFromCause({
+      code: LoomFailureCode.TeamPlanValidationFailed,
+      cause: cause instanceof Error ? cause : new Error('Invalid locale.'),
+    });
+  }
   const parsed = parseTeamPlanCommand(cliArguments);
   if (parsed.kind === TeamPlanCommandParseKind.Invalid) {
     console.error(messages.help);
@@ -245,18 +253,18 @@ export async function runTeamPlanCli(
   let record: TeamPlanRecord;
   try {
     record = JSON.parse(serialized) as TeamPlanRecord;
-  } catch (cause) {
+  } catch {
     throw loomFailureFromCause({
       code: LoomFailureCode.TeamPlanValidationFailed,
-      cause: new Error(messages.invalidRecordJson, { cause }),
+      cause: new Error(messages.invalidRecordJson),
     });
   }
   try {
     assertTeamPlanRecord(record);
-  } catch (cause) {
+  } catch {
     throw loomFailureFromCause({
       code: LoomFailureCode.TeamPlanValidationFailed,
-      cause: new Error(messages.invalidRecordContents, { cause }),
+      cause: new Error(messages.invalidRecordContents),
     });
   }
   const request: TeamPlanRecordRequest = {
@@ -365,10 +373,10 @@ async function readTeamPlanRecordRequest(
         return new TextDecoder('utf-8', { fatal: true }).decode(
           Buffer.concat(chunks, bytesRead),
         );
-      } catch (cause) {
+      } catch {
         throw loomFailureFromCause({
           code: LoomFailureCode.TeamPlanValidationFailed,
-          cause: new Error(request.messages.invalidRecordEncoding, { cause }),
+          cause: new Error(request.messages.invalidRecordEncoding),
         });
       }
     } finally {
