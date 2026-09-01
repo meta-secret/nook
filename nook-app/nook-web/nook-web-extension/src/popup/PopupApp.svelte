@@ -37,7 +37,6 @@
     PairingCandidateKind,
     type PairingCandidate,
   } from './popup-app-state'
-  import { refreshInvokingAuthenticationSurfaceAfterUnlock } from './authentication-surface-refresh'
   import { DeviceProtectionSetupWorkflow } from '../../../nook-web-shared/src/vault-app/lib/components/device-protection-gate-state'
 
   let {
@@ -174,7 +173,6 @@
     error = ''
     try {
       const device = await action()
-      await refreshInvokingAuthenticationSurfaceAfterUnlock()
       enterToolbarMenu(device)
     } catch (caught) {
       busy = false

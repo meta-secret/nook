@@ -42,7 +42,6 @@ import {
   isWebsiteLoginSavePendingMessage,
 } from '../lib/login-save-messages'
 import { isAuthenticationOutcomeClassifyMessage } from '../lib/outcome-evidence-messages'
-import { ExtensionRuntimeRequestType } from '../lib/extension-runtime-request-type'
 import {
   isWebsitePasskeyCancelMessage,
   isWebsitePasskeyOptionsMessage,
@@ -158,7 +157,7 @@ const extensionLifecycleRoutingDependencies: Parameters<
   handlePairingStateQuery,
   hasPairingApprovedType,
   importLocalEventLogUpdate,
-  importPairingAfterCompanionReady: importPairingAndRefreshSurfaces,
+  importPairingAfterCompanionReady: importPairingAndInvalidateLoginMatches,
   isExtensionPairingStateQueryMessage,
   isExtensionSessionEnsureMessage,
   isExtensionSessionExpiryMessage,
@@ -182,7 +181,7 @@ const externalCompanionRoutingDependencies: Parameters<
   createIdentityHandoff,
   discoverPairedVaultIdentity,
   hasPairingApprovedType,
-  importPairingAfterCompanionReady: importPairingAndRefreshSurfaces,
+  importPairingAfterCompanionReady: importPairingAndInvalidateLoginMatches,
   isExtensionIdentityHandoffRequestMessage,
   isExtensionPairedVaultIdentityDiscoveryMessage,
   isExtensionPairedVaultIdentityHandoffRequestMessage,
@@ -192,36 +191,18 @@ const externalCompanionRoutingDependencies: Parameters<
   requestPairedVaultUnlock,
 }
 
-async function importPairingAndRefreshSurfaces(
+async function importPairingAndInvalidateLoginMatches(
   message: Parameters<typeof importPairingAfterCompanionReady>[0],
 ) {
   const result = await importPairingAfterCompanionReady(message)
   if (!result.ok) return result
   invalidateAllLoginMatchAvailability()
-  const query: Parameters<typeof chrome.tabs.query>[0] = {}
-  const refresh: Parameters<typeof chrome.tabs.sendMessage>[1] = {
-    type: ExtensionRuntimeRequestType.RescanSurfaces,
-  }
-  chrome.tabs.query(query, (tabs) => {
-    for (const { id } of tabs)
-      if (typeof id === 'number')
-        void chrome.tabs.sendMessage(id, refresh).catch(() => {})
-  })
   return result
 }
 // eslint-disable-next-line max-params -- Chrome owns the runtime listener callback signature.
 chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
   if (!runtimeMessage || typeof runtimeMessage !== 'object') return false
   const message = runtimeMessage
-  if (
-    sender.id === chrome.runtime.id &&
-    'type' in message &&
-    message.type === ExtensionRuntimeRequestType.RefreshSurfaces
-  ) {
-    invalidateAllLoginMatchAvailability()
-    sendResponse(true)
-    return false
-  }
   const lifecycleRoutingArgs: Parameters<
     typeof routeExtensionLifecycleMessage
   >[0] = {

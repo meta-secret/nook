@@ -45,7 +45,7 @@ describe('openCompanionLauncherBestEffort', () => {
       openCompanionLauncher(OpenCompanionLauncherIntent.Default),
     ).rejects.toThrow('launcher unavailable')
     expect(create.mock.calls[0]?.[0]).toMatchObject({
-      url: 'chrome-extension://nook/popup/index.html?invokingTabId=42',
+      url: 'chrome-extension://nook/popup/index.html',
     })
   })
 
