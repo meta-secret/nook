@@ -143,13 +143,13 @@ This format applies to Gizmo Prime, every real Team Agent or subagent, and
 every user-visible skill-driven action.
 
 ```text
-HH:mm:<PR>:<ACTOR>:<ACTION> -> <description>
+HH:mm:(<PR>):<ACTOR>:<ACTION> -> <description>
 ```
 
-- Use `PR<number>` with the exact positive pull-request number that the
-  activity currently serves, for example `PR1263`.
-- Use `PRpending` before that pull request exists.
-- Use `PRnone` when the assigned work intentionally has no pull request.
+- Use `(<number>)` with the exact positive pull-request number that the
+  activity currently serves, for example `(1263)`.
+- Use `(pending)` before that pull request exists.
+- Use `(none)` when the assigned work intentionally has no pull request.
 - Emit the current PR token on every activity line. Refresh it immediately
   after pull-request creation or a stacked pull-request transition.
 - Use `SKILL` when loading or applying a skill is the reported action.

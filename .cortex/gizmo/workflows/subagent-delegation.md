@@ -167,8 +167,8 @@ Gizmo owns the activity-line PR context for each live attempt. The active
 harness carries it for communication only. It is not part of the declared or
 frozen subagent task contract.
 
-- The context carries `PR<number>` with the exact positive pull-request number,
-  `PRpending`, or `PRnone` for inclusion on every user-visible activity line.
+- The context carries `(<number>)` with the exact positive pull-request number,
+  `(pending)`, or `(none)` for inclusion on every user-visible activity line.
 - Gizmo supplies the context through the active harness before the worker's
   first user-visible activity.
 - When Gizmo creates the pull request, it refreshes the context before the
