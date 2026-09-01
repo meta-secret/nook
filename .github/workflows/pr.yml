@@ -4,20 +4,27 @@
 # otherwise run only their dedicated headless demo specs and retain the resulting videos on the
 # PR workflow run. Main also runs the full local-provider and extension suites. Live-provider
 # sync checks remain available through the manually dispatched e2e-pr.yml workflow.
-# Cortex Markdown-only changes do not need the product pipeline. Any changed path
-# outside that narrow inventory, including every rename, restores complete product validation. Agent
-# statistics live in meta-secret/nook-workbench.
+# Research-only changes are handled by web-research.yml. Cortex, Cursor,
+# repository-policy-only, and agentic-AI-only changes do not need the product
+# pipeline. Agent statistics live in meta-secret/nook-workbench.
 # Validation is requested explicitly by adding a label. Ordinary pushes do not
 # spend hosted workers. A later push invalidates the prior head's checks, so the
 # label must be toggled again before merge. The trusted Linear close workflow
 # claims the same exact-head concurrency group to cancel in-flight validation on PR close.
-# Schedule and manual ecosystem entry points stay in rust-ecosystem.yml.
+# Schedule, manual, and minds-only PR ecosystem entry points stay in rust-ecosystem.yml.
 
 name: PR
 
 on:
   pull_request:
     types: [labeled]
+    paths-ignore:
+      - .cortex/**
+      - .cursor/**
+      - .github/workflows/repository-policy.yml
+      - .github/workflows/web-research.yml
+      - agentic-ai/**
+      - nook-app/nook-web/nook-web-research/**
 
 permissions:
   actions: read
@@ -38,13 +45,8 @@ env:
 jobs:
   validation-request:
     name: Validate explicit CI request
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
     timeout-minutes: 2
-    permissions:
-      contents: read
-      pull-requests: read
-    outputs:
-      product-validation-required: ${{ steps.product-scope.outputs.result }}
     steps:
       - name: Reject unsupported label events
         env:
@@ -58,92 +60,9 @@ jobs:
               ;;
           esac
 
-      - name: Classify product validation scope
-        id: product-scope
-        uses: actions/github-script@v9
-        with:
-          result-encoding: string
-          script: |
-            const isCanonicalAiOnlyPath = (path) =>
-              (path.startsWith('.cortex/') && path.endsWith('.md')) ||
-              path === '.github/workflows/repository-policy.yml'
-
-            let files
-            try {
-              files = await github.paginate(github.rest.pulls.listFiles, {
-                ...context.repo,
-                pull_number: context.issue.number,
-                per_page: 100,
-              })
-            } catch (error) {
-              core.warning(`Failed to classify pull-request paths: ${error}`)
-              return 'true'
-            }
-
-            const expectedChangedFiles = Number(
-              context.payload.pull_request.changed_files,
-            )
-            if (
-              !Number.isSafeInteger(expectedChangedFiles) ||
-              expectedChangedFiles <= 0 ||
-              files.length !== expectedChangedFiles ||
-              files.length >= 3000
-            ) {
-              core.warning(
-                `Pull-request file inventory is incomplete: expected ${expectedChangedFiles}, received ${files.length}`,
-              )
-              return 'true'
-            }
-
-            const PullRequestFileStatus = Object.freeze({
-              Added: 'added',
-              Removed: 'removed',
-              Modified: 'modified',
-              Renamed: 'renamed',
-              Copied: 'copied',
-              Changed: 'changed',
-              Unchanged: 'unchanged',
-            })
-            const supportedStatuses = new Set(Object.values(PullRequestFileStatus))
-            if (
-              files.some(
-                (file) =>
-                  typeof file.filename !== 'string' ||
-                  file.filename.length === 0 ||
-                  !supportedStatuses.has(file.status),
-              )
-            ) {
-              core.warning('Pull-request file inventory has an unsupported entry')
-              return 'true'
-            }
-
-            if (
-              files.some(
-                (file) =>
-                  file.status === PullRequestFileStatus.Renamed &&
-                  !file.previous_filename,
-              )
-            ) {
-              core.warning('Renamed pull-request file lacks previous_filename')
-              return 'true'
-            }
-
-            if (
-              files.some(
-                (file) => file.status === PullRequestFileStatus.Renamed,
-              )
-            ) return 'true'
-
-            const changedPaths = files.map((file) => file.filename)
-            return String(
-              changedPaths.length === 0 ||
-                changedPaths.some((path) => !isCanonicalAiOnlyPath(path)),
-            )
-
   rust-ecosystem:
     name: Rust ecosystem
     if: >-
-      needs.validation-request.outputs.product-validation-required == 'true' &&
       (github.event.label.name == 'ci:validate' ||
       github.event.label.name == 'ci:full-e2e')
     needs: validation-request
@@ -156,7 +75,6 @@ jobs:
   rust:
     name: Native Rust verification
     if: >-
-      needs.validation-request.outputs.product-validation-required == 'true' &&
       (github.event.label.name == 'ci:validate' ||
       github.event.label.name == 'ci:full-e2e')
     needs: validation-request
@@ -292,7 +210,6 @@ jobs:
   wasm:
     name: WASM build and artifact
     if: >-
-      needs.validation-request.outputs.product-validation-required == 'true' &&
       (github.event.label.name == 'ci:validate' ||
       github.event.label.name == 'ci:full-e2e')
     needs: validation-request
@@ -439,10 +356,9 @@ jobs:
   wasm-node-test:
     name: WASM Node tests
     if: >-
-      needs.validation-request.outputs.product-validation-required == 'true' &&
       (github.event.label.name == 'ci:validate' ||
       github.event.label.name == 'ci:full-e2e')
-    needs: [validation-request, wasm]
+    needs: wasm
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
     steps:
       - name: Checkout
@@ -487,7 +403,6 @@ jobs:
   verify:
     name: Web verification
     if: >-
-      needs.validation-request.outputs.product-validation-required == 'true' &&
       (github.event.label.name == 'ci:validate' ||
       github.event.label.name == 'ci:full-e2e')
     needs: [validation-request, wasm]
@@ -627,7 +542,6 @@ jobs:
   ui-demo:
     name: Headless UI demo
     if: >-
-      needs.validation-request.outputs.product-validation-required == 'true' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.user.login != 'dependabot[bot]' &&
       (github.event.label.name == 'ci:validate' ||
@@ -713,12 +627,11 @@ jobs:
     name: Verify and preview
     if: >-
       always() &&
-      needs.validation-request.outputs.product-validation-required == 'true' &&
       (github.event.label.name == 'ci:validate' ||
       github.event.label.name == 'ci:full-e2e')
     # Native must succeed before the merge gate check can go green. A green
     # preview with a failed Native job previously allowed false readiness.
-    needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo]
+    needs: [rust, wasm, verify, wasm-node-test, ui-demo]
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
     steps:
       - name: Enforce required verification results
@@ -919,21 +832,19 @@ jobs:
   coverage:
     name: Rust coverage report
     if: >-
-      needs.validation-request.outputs.product-validation-required == 'true' &&
       (github.event.label.name == 'ci:validate' ||
       github.event.label.name == 'ci:full-e2e')
-    needs: [validation-request, rust]
+    needs: rust
     uses: ./.github/workflows/pr-coverage.yml
     secrets: inherit
 
   full-e2e-shard:
     name: Full browser e2e shard (${{ matrix.shard }}/2)
     if: >-
-      needs.validation-request.outputs.product-validation-required == 'true' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.user.login != 'dependabot[bot]' &&
       contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')
-    needs: [validation-request, verify, wasm-node-test]
+    needs: [verify, wasm-node-test]
     runs-on: nook-k0s-container
     container:
       image: registry.dev.nokey.sh/nook/remote-buildcache/nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
@@ -959,11 +870,10 @@ jobs:
     name: Full browser e2e (main fix)
     if: >-
       always() &&
-      needs.validation-request.outputs.product-validation-required == 'true' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.user.login != 'dependabot[bot]' &&
       contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')
-    needs: [validation-request, full-e2e-shard, wasm]
+    needs: [full-e2e-shard, wasm]
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     steps:
       - name: Require both browser shards
@@ -974,11 +884,10 @@ jobs:
   full-extension-e2e:
     name: Full extension e2e (main fix)
     if: >-
-      needs.validation-request.outputs.product-validation-required == 'true' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.user.login != 'dependabot[bot]' &&
       contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')
-    needs: [validation-request, verify, wasm-node-test]
+    needs: [verify, wasm-node-test]
     runs-on: nook-k0s-container
     container:
       image: registry.dev.nokey.sh/nook/remote-buildcache/nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}

@@ -51,15 +51,14 @@ fn assert_workflow_runtime_contract(root: &Path) {
                 .matches("github.event_name == 'workflow_dispatch'")
                 .count()
                 == 5
-            && ecosystem_entry.contains("schedule:")
-            && ecosystem_entry.contains("workflow_dispatch:")
-            && !ecosystem_entry.contains("pull_request:"),
+            && ecosystem_entry.contains("github.event_name == 'schedule'")
+            && ecosystem_entry.contains("github.event_name == 'workflow_dispatch'")
+            && ecosystem_entry
+                .contains("github.event.pull_request.user.login != 'dependabot[bot]'"),
         "trusted PR and release jobs must select ARC while forks retain hosted isolation"
     );
     assert!(
-        main.matches("runs-on: ubuntu-latest").count() == 1
-            && main.contains("name: Classify Main paths")
-            && main.contains("permissions:\n      actions: read\n      contents: read")
+        !main.contains("runs-on: ubuntu-latest")
             && main
                 .matches("runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}")
                 .count()
@@ -238,7 +237,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "name: Headless UI demo",
         "name: Verify and preview",
         "always() &&",
-        "needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo]",
+        "needs: [rust, wasm, verify, wasm-node-test, ui-demo]",
         "name: Enforce required verification results",
         "NATIVE_RESULT: ${{ needs.rust.result }}",
         "WASM_RESULT: ${{ needs.wasm.result }}",
@@ -285,11 +284,11 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "chmod +x \"$dir/tools/nook-preflight\"",
         "test -x \"$dir/tools/nook-preflight\"",
         "needs: [validation-request, wasm]",
-        "needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo]",
+        "needs: [rust, wasm, verify, wasm-node-test, ui-demo]",
         "name: Download built WASM handoff",
         "name: Upload preview dist handoff",
         "NOOK_HOST_PAGES_DEPLOY",
-        "needs: [validation-request, rust]",
+        "needs: rust",
     ] {
         assert!(
             pr.contains(required),
@@ -342,7 +341,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "PR CI must restore or build WASM once and publish the exact attempt before Node tests"
     );
     assert!(
-        wasm_node_job.contains("needs: [validation-request, wasm]")
+        wasm_node_job.contains("needs: wasm")
             && wasm_node_job.contains("task ci:wasm:node-test")
             && wasm_node_job.contains("needs.wasm.outputs.run-node-tests == 'true'")
             && wasm_node_job.contains("GHA_CACHE_WRITE_ENABLED=\"\" task ci:wasm:node-test")
@@ -480,8 +479,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "PR web verification must wait on the WASM build through needs, download its artifact, and export host dist"
     );
     assert!(
-        preview_job
-            .contains("needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo]")
+        preview_job.contains("needs: [rust, wasm, verify, wasm-node-test, ui-demo]")
             && preview_job.contains("always() &&")
             && preview_job.contains("name: Enforce required verification results")
             && preview_job.contains("NOOK_HOST_PAGES_DEPLOY: \"1\"")
@@ -496,7 +494,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     let coverage_job = section(&pr, "  coverage:\n", "  full-e2e-shard:\n");
     let coverage_workflow = read(root, ".github/workflows/pr-coverage.yml");
     assert!(
-        coverage_job.contains("needs: [validation-request, rust]")
+        coverage_job.contains("needs: rust")
             && coverage_job.contains("uses: ./.github/workflows/pr-coverage.yml")
             && coverage_workflow.contains("actions/download-artifact@v8")
             && coverage_workflow.contains("name: pr-rust-${{ github.run_id }}")
@@ -511,7 +509,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     assert!(
         full_e2e_job.contains("github.event.pull_request.head.repo.full_name == github.repository")
             && full_e2e_job.contains("github.event.pull_request.user.login != 'dependabot[bot]'")
-            && full_e2e_job.contains("needs: [validation-request, verify, wasm-node-test]")
+            && full_e2e_job.contains("needs: [verify, wasm-node-test]")
             && full_e2e_job.contains("runs-on: nook-k0s-container")
             && full_e2e_job
                 .contains("nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")
@@ -530,7 +528,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
             .contains("github.event.pull_request.head.repo.full_name == github.repository")
             && extension_e2e_job
                 .contains("github.event.pull_request.user.login != 'dependabot[bot]'")
-            && extension_e2e_job.contains("needs: [validation-request, verify, wasm-node-test]")
+            && extension_e2e_job.contains("needs: [verify, wasm-node-test]")
             && extension_e2e_job.contains("runs-on: nook-k0s-container")
             && extension_e2e_job
                 .contains("nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")
@@ -679,7 +677,7 @@ fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {
         !verify_job.contains("Download Rust coverage handoff")
             && !verify_job.contains("Waiting for native coverage artifact")
             && !preview_job.contains("Download Rust coverage handoff")
-            && coverage_job.contains("needs: [validation-request, rust]")
+            && coverage_job.contains("needs: rust")
             && coverage_job.contains("uses: ./.github/workflows/pr-coverage.yml")
             && coverage_workflow.contains("actions/download-artifact@v8")
             && coverage_workflow.contains("name: pr-rust-${{ github.run_id }}"),
@@ -833,8 +831,8 @@ fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> 
         "\n  extension-e2e:\n",
         "\n  ui-demos:\n",
         "\n  deploy:\n",
-        "needs: [product-paths, wasm]",
-        "needs: [product-paths, web, web-e2e, wasm-cache-proof]",
+        "needs: [wasm]",
+        "needs: [web, web-e2e, wasm-cache-proof]",
         "task _ci:main:web:e2e-only",
         "task _extension:test:e2e",
         "task _web:test:ui-demo",

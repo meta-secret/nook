@@ -102,7 +102,7 @@ test('rejects stale rerun delivery before changing incident policy', () => {
   )
 })
 
-test('retires an incident after a failed Main run and successful all-AI rerun', () => {
+test('retires an existing incident after a successful rerun', () => {
   const initial = buildMainFailureIssue({
     run: run(),
     jobs: [{ name: 'Web e2e', conclusion: 'failure' }],
@@ -302,16 +302,16 @@ test('workflow preserves the Main cache order and coalesces only pending runs', 
     /concurrency:\n\s+group: main[\s\S]*cancel-in-progress: false/,
   )
   assert.doesNotMatch(main, /^\s+queue:/m)
-  assert.match(main, /wasm:\n\s+name: WASM verification and artifact[\s\S]*needs: \[product-paths, rust\]/)
+  assert.match(main, /wasm:\n\s+name: WASM verification and artifact[\s\S]*needs: \[rust\]/)
   assert.match(
     main,
     /Publish verified native BuildKit cache[\s\S]*task ci:main:publish-native-cache/,
   )
   assert.match(
     main,
-    /wasm-cache-publish:\n\s+name: WASM cache publication[\s\S]*?\n\s+needs: \[product-paths, wasm\][\s\S]*CACHE_PUBLICATION_OUTCOME: \$\{\{ needs\.wasm\.outputs\.cache_publication_outcome \}\}[\s\S]*WASM cache publication failed in the verified producer/,
+    /wasm-cache-publish:\n\s+name: WASM cache publication[\s\S]*?\n\s+needs: \[wasm\][\s\S]*CACHE_PUBLICATION_OUTCOME: \$\{\{ needs\.wasm\.outputs\.cache_publication_outcome \}\}[\s\S]*WASM cache publication failed in the verified producer/,
   )
-  assert.match(main, /web:\n\s+name: Verify web build\n\s+needs: \[product-paths, wasm\]/)
+  assert.match(main, /web:\n\s+name: Verify web build\n\s+needs: \[wasm\]/)
   assert.match(
     wasmJob,
     /outputs:\n\s+cache_publication_outcome: \$\{\{ steps\.publish_wasm_cache\.outcome \}\}[\s\S]*WASM Node tests[\s\S]*Publish verified WASM BuildKit cache[\s\S]*id: publish_wasm_cache\n\s+continue-on-error: true[\s\S]*task ci:main:publish-wasm-cache/,
@@ -324,11 +324,11 @@ test('workflow preserves the Main cache order and coalesces only pending runs', 
   )
   assert.match(
     main,
-    /wasm-cache-proof:\n\s+name: Portable WASM cache publication proof\n\s+needs: \[product-paths, wasm-cache-publish\][\s\S]*?\n\s+runs-on: \$\{\{ vars\.NOOK_RUNS_ON \|\| 'nook-k0s' \}\}[\s\S]*verify-wasm-gha-cache\.sh[\s\S]*NOOK_WASM_CACHE_PROMOTION_ENABLED: "1"/,
+    /wasm-cache-proof:\n\s+name: Portable WASM cache publication proof\n\s+needs: \[wasm-cache-publish\]\n\s+runs-on: \$\{\{ vars\.NOOK_RUNS_ON \|\| 'nook-k0s' \}\}[\s\S]*verify-wasm-gha-cache\.sh[\s\S]*NOOK_WASM_CACHE_PROMOTION_ENABLED: "1"/,
   )
   assert.match(
     main,
-    /deploy:\n\s+name: Deploy development\n\s+needs: \[product-paths, web, web-e2e, wasm-cache-proof\]/,
+    /deploy:\n\s+name: Deploy development\n\s+needs: \[web, web-e2e, wasm-cache-proof\]/,
   )
   assert.doesNotMatch(
     dockerTasks,
@@ -371,10 +371,6 @@ test('handoff workflow trusts default-branch code and writes only Workbench', ()
   )
   assert.doesNotMatch(workflow, /^\s+queue:/m)
   assert.match(workflow, /github\.event\.workflow_run\.event == 'push'/)
-  assert.match(
-    workflow,
-    /context\.payload\.workflow_run\.run_attempt > 1[\s\S]*return 'true'/,
-  )
   assert.match(workflow, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/)
   assert.match(workflow, /github-token: \$\{\{ secrets\.NOOK_GITHUB_PAT \}\}/)
   assert.match(workflow, /WORKBENCH_REPOSITORY: meta-secret\/nook-workbench/)

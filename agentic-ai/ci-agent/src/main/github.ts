@@ -195,8 +195,8 @@ export async function createFixPr(
 }
 
 const MAIN_PR_CHECK = "Verify and preview";
-const REPOSITORY_POLICY_PR_CHECK = "Enforce repository policy";
 const WEB_RESEARCH_PR_CHECK = "Build and deploy research catalog";
+const RUST_ECOSYSTEM_PR_CHECK = "Rust ecosystem checks";
 
 /** Jobs that must succeed on the latest exact-head PR run before merge. */
 export const REQUIRED_MAIN_PR_JOBS = [
@@ -214,166 +214,11 @@ export type RequiredPrWorkflow = {
   requiredJobs?: readonly string[];
 };
 
-export enum PullRequestFileStatus {
-  Added = "added",
-  Removed = "removed",
-  Modified = "modified",
-  Renamed = "renamed",
-  Copied = "copied",
-  Changed = "changed",
-  Unchanged = "unchanged",
-}
-
-export type PullRequestChangedFile =
-  | {
-      filename: string;
-      previousFilename: string;
-      status: PullRequestFileStatus.Renamed;
-    }
-  | {
-      filename: string;
-      status: Exclude<PullRequestFileStatus, PullRequestFileStatus.Renamed>;
-    };
-
-const PULL_REQUEST_FILES_API_CAP = 3000;
-
-export enum PullRequestPathInventoryState {
-  Inspectable = "inspectable",
-  Renamed = "renamed",
-  Uninspectable = "uninspectable",
-}
-
-export enum PullRequestPathInventoryIssue {
-  ApiCap = "api-cap",
-  CountMismatch = "count-mismatch",
-  InvalidChangedFileCount = "invalid-changed-file-count",
-  InvalidFile = "invalid-file",
-}
-
-export type PullRequestPathInventory =
-  | {
-      paths: string[];
-      state:
-        | PullRequestPathInventoryState.Inspectable
-        | PullRequestPathInventoryState.Renamed;
-    }
-  | {
-      issue: PullRequestPathInventoryIssue;
-      paths: string[];
-      reason: string;
-      state: PullRequestPathInventoryState.Uninspectable;
-    };
-
-function decodePullRequestChangedFile(value: unknown): PullRequestChangedFile {
-  if (!value || typeof value !== "object") {
-    throw new Error("Pull-request file entry must be an object");
-  }
-  const file = value as Record<string, unknown>;
-  if (typeof file.filename !== "string" || file.filename.length === 0) {
-    throw new Error("Pull-request file entry lacks a filename");
-  }
-  switch (file.status) {
-    case PullRequestFileStatus.Renamed:
-      if (
-        typeof file.previous_filename !== "string" ||
-        file.previous_filename.length === 0
-      ) {
-        throw new Error(
-          `Renamed pull-request file lacks source path: ${file.filename}`,
-        );
-      }
-      return {
-        filename: file.filename,
-        previousFilename: file.previous_filename,
-        status: PullRequestFileStatus.Renamed,
-      };
-    case PullRequestFileStatus.Added:
-    case PullRequestFileStatus.Removed:
-    case PullRequestFileStatus.Modified:
-    case PullRequestFileStatus.Copied:
-    case PullRequestFileStatus.Changed:
-    case PullRequestFileStatus.Unchanged:
-      return { filename: file.filename, status: file.status };
-    default:
-      throw new Error(
-        `Unsupported pull-request file status for ${file.filename}: ${String(file.status)}`,
-      );
-  }
-}
-
-export function classifyPullRequestChangedPaths(
-  files: readonly unknown[],
-  authoritativeChangedFiles: number,
-): PullRequestPathInventory {
-  if (
-    !Number.isSafeInteger(authoritativeChangedFiles) ||
-    authoritativeChangedFiles <= 0
-  ) {
-    return uninspectablePullRequestPaths(
-      PullRequestPathInventoryIssue.InvalidChangedFileCount,
-      `invalid authoritative changed-file count: ${authoritativeChangedFiles}`,
-    );
-  }
-  if (files.length !== authoritativeChangedFiles) {
-    return uninspectablePullRequestPaths(
-      PullRequestPathInventoryIssue.CountMismatch,
-      `expected ${authoritativeChangedFiles} files, received ${files.length}`,
-    );
-  }
-  if (files.length >= PULL_REQUEST_FILES_API_CAP) {
-    return uninspectablePullRequestPaths(
-      PullRequestPathInventoryIssue.ApiCap,
-      `GitHub file inventory reached the ${PULL_REQUEST_FILES_API_CAP}-file API cap`,
-    );
-  }
-  const paths: string[] = [];
-  let renamed = false;
-  try {
-    for (const value of files) {
-      const file = decodePullRequestChangedFile(value);
-      if (file.status === PullRequestFileStatus.Renamed) {
-        paths.push(file.previousFilename);
-        renamed = true;
-      }
-      paths.push(file.filename);
-    }
-  } catch (error) {
-    return uninspectablePullRequestPaths(
-      PullRequestPathInventoryIssue.InvalidFile,
-      error instanceof Error ? error.message : String(error),
-    );
-  }
-  return {
-    paths,
-    state: renamed
-      ? PullRequestPathInventoryState.Renamed
-      : PullRequestPathInventoryState.Inspectable,
-  };
-}
-
-function uninspectablePullRequestPaths(
-  issue: PullRequestPathInventoryIssue,
-  reason: string,
-): PullRequestPathInventory {
-  return {
-    issue,
-    paths: [],
-    reason,
-    state: PullRequestPathInventoryState.Uninspectable,
-  };
-}
-
 const MAIN_PR_WORKFLOW: RequiredPrWorkflow = {
   checkName: MAIN_PR_CHECK,
   workflowFile: "pr.yml",
   workflowName: "PR",
   requiredJobs: REQUIRED_MAIN_PR_JOBS,
-};
-
-const REPOSITORY_POLICY_PR_WORKFLOW: RequiredPrWorkflow = {
-  checkName: REPOSITORY_POLICY_PR_CHECK,
-  workflowFile: "repository-policy.yml",
-  workflowName: "Repository policy",
 };
 
 const WEB_RESEARCH_PR_WORKFLOW: RequiredPrWorkflow = {
@@ -382,52 +227,48 @@ const WEB_RESEARCH_PR_WORKFLOW: RequiredPrWorkflow = {
   workflowName: "Web research",
 };
 
-function isWebResearchPath(path: string): boolean {
+const RUST_ECOSYSTEM_PR_WORKFLOW: RequiredPrWorkflow = {
+  checkName: RUST_ECOSYSTEM_PR_CHECK,
+  workflowFile: "rust-ecosystem.yml",
+  workflowName: "Rust ecosystem checks",
+};
+
+function isRustEcosystemPath(path: string): boolean {
   return (
-    path === ".github/workflows/web-research.yml" ||
-    path === ".github/scripts/web-research-deploy.sh" ||
-    path === ".github/scripts/web-research-verify-live.sh" ||
-    path === ".task/ci-workflows.yml" ||
-    path.startsWith("nook-app/nook-web/nook-web-research/")
+    path === ".github/workflows/rust-ecosystem.yml" ||
+    path === ".github/workflows/rust-ecosystem-checks.yml" ||
+    path === "deny.toml" ||
+    path === "nook-app/nook-platform/Cargo.lock" ||
+    path === "nook-app/nook-platform/.insta.yaml" ||
+    path.startsWith("nook-app/nook-platform/.cargo/") ||
+    path.startsWith("nook-app/nook-platform/fuzz/") ||
+    path.startsWith("preflight/") ||
+    path.startsWith("agentic-ai/minds/") ||
+    (path.startsWith("nook-app/") &&
+      (path.endsWith(".rs") || path.endsWith("/Cargo.toml")))
   );
 }
 
-export function requiredPrWorkflows(
-  inventory: PullRequestPathInventory,
-): RequiredPrWorkflow[] {
-  if (inventory.state === PullRequestPathInventoryState.Uninspectable) {
-    return [
-      REPOSITORY_POLICY_PR_WORKFLOW,
-      WEB_RESEARCH_PR_WORKFLOW,
-      MAIN_PR_WORKFLOW,
-    ];
-  }
-  const paths = inventory.paths;
+export function requiredPrWorkflows(paths: string[]): RequiredPrWorkflow[] {
   const required: RequiredPrWorkflow[] = [];
 
-  if (
-    paths.includes(".github/workflows/repository-policy.yml") ||
-    paths.some(isCortexMarkdownPath)
-  ) {
-    required.push(REPOSITORY_POLICY_PR_WORKFLOW);
-  }
   if (paths.some(isWebResearchPath)) {
     required.push(WEB_RESEARCH_PR_WORKFLOW);
   }
-  if (
-    inventory.state === PullRequestPathInventoryState.Renamed ||
-    paths.some((path) => !isCanonicalAiOnlyPath(path))
-  ) {
+  // Product PRs run ecosystem jobs inside pr.yml. Only minds-only PRs still
+  // require the thin rust-ecosystem.yml entry point.
+  if (paths.some(isRustEcosystemPath) && paths.every(isMainPrIgnoredPath)) {
+    required.push(RUST_ECOSYSTEM_PR_WORKFLOW);
+  }
+  if (paths.some((path) => !isMainPrIgnoredPath(path))) {
     required.push(MAIN_PR_WORKFLOW);
   }
 
   return required;
 }
 
-export function requiredPrCheckNames(
-  inventory: PullRequestPathInventory,
-): string[] {
-  return requiredPrWorkflows(inventory).map((workflow) => workflow.checkName);
+export function requiredPrCheckNames(paths: string[]): string[] {
+  return requiredPrWorkflows(paths).map((workflow) => workflow.checkName);
 }
 
 type ReviewThreadPage = {
@@ -625,15 +466,18 @@ export async function inspectPrFeedback(
   pagination = { kind: PaginationKind.FirstPage };
   while (pagination.kind !== PaginationKind.Complete) {
     const page: IssueCommentStatePage =
-      await octokit.graphql<IssueCommentStatePage>(ISSUE_COMMENT_STATES_QUERY, {
-        owner,
-        repo,
-        number: prNumber,
-        ...(signal ? { request: { signal } } : {}),
-        ...(pagination.kind === PaginationKind.NextPage
-          ? { cursor: pagination.cursor }
-          : {}),
-      });
+      await octokit.graphql<IssueCommentStatePage>(
+        ISSUE_COMMENT_STATES_QUERY,
+        {
+          owner,
+          repo,
+          number: prNumber,
+          ...(signal ? { request: { signal } } : {}),
+          ...(pagination.kind === PaginationKind.NextPage
+            ? { cursor: pagination.cursor }
+            : {}),
+        },
+      );
     const comments = page.repository.pullRequest.comments;
     for (const comment of comments.nodes) {
       if (
@@ -691,8 +535,9 @@ export async function inspectPrFeedback(
   const approvalReaction = requestReactions.some(
     (reaction) => reaction.content === "+1" && isCodexReviewer(reaction.user),
   );
-  const cleanComment = activeIssueComments.some((comment) =>
-    isCleanCodexReviewComment(comment.body ?? "", comment.user, pr.head.sha),
+  const cleanComment = activeIssueComments.some(
+    (comment) =>
+      isCleanCodexReviewComment(comment.body ?? "", comment.user, pr.head.sha),
   );
 
   const substantiveComments = activeIssueComments.filter(
@@ -711,7 +556,10 @@ export async function inspectPrFeedback(
     (comment) => !handledIssueCommentIds.has(comment.id),
   );
   const substantiveReviews = reviews.filter((review) => {
-    if (!isSubmittedReviewState(review.state) || review.state === "APPROVED") {
+    if (
+      !isSubmittedReviewState(review.state) ||
+      review.state === "APPROVED"
+    ) {
       return false;
     }
     if (review.state === "CHANGES_REQUESTED") {
@@ -840,15 +688,20 @@ function isNotFound(err: unknown): boolean {
   );
 }
 
-function isCanonicalAiOnlyPath(path: string): boolean {
+function isWebResearchPath(path: string): boolean {
   return (
-    isCortexMarkdownPath(path) ||
-    path === ".github/workflows/repository-policy.yml"
+    path === ".github/workflows/web-research.yml" ||
+    path.startsWith("nook-app/nook-web/nook-web-research/")
   );
 }
 
-function isCortexMarkdownPath(path: string): boolean {
-  return path.startsWith(".cortex/") && path.endsWith(".md");
+function isMainPrIgnoredPath(path: string): boolean {
+  return (
+    path.startsWith(".cortex/") ||
+    path.startsWith(".cursor/") ||
+    path.startsWith("agentic-ai/") ||
+    isWebResearchPath(path)
+  );
 }
 
 export function isRepositoryStatusComment(
@@ -899,7 +752,9 @@ function isRetiredHeadTransitionAutomationComment(input: {
 }): boolean {
   return (
     isGitHubActionsBot(input.user) &&
-    input.body.trim().endsWith("\nExact-head delivery boundary (automated).")
+    input.body
+      .trim()
+      .endsWith("\nExact-head delivery boundary (automated).")
   );
 }
 
