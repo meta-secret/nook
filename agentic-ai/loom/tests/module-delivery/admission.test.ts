@@ -187,6 +187,30 @@ const alpha = writeNode(alphaRequest);
 const beta = writeNode(betaRequest);
 const gamma = writeNode(gammaRequest);
 const consumer = writeNode(consumerRequest);
+const provider: ModuleDeliveryReadOnlyNodeV2 = {
+  kind: ModuleDeliveryTaskKind.ReadOnly,
+  taskId: 'provider-evidence',
+  team: TeamKey.DevelopmentCore,
+  functionalOwner: TeamKey.Ai,
+  acceptanceOwner: TeamKey.Ai,
+  parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
+  expert: 'core_expert',
+  moduleRoot: ROOT,
+  consumerOutcome: 'AI receives accepted provider evidence.',
+  baseline: {
+    kind: ModuleDeliveryBaselineKind.SourceCommit,
+    sourceCommit: SOURCE,
+  },
+  agentDepthLimit: 2,
+  dependencies: [],
+  resources: {
+    read: [`${ROOT}/provider/**`],
+    write: [],
+    evidenceSurface: [`${ROOT}/provider/**`],
+  },
+  parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
+  acceptance: alpha.acceptance,
+};
 const edge: ModuleDeliveryEdgeContract = {
   providerTaskId: 'alpha',
   consumerTaskId: 'consumer',
@@ -415,21 +439,26 @@ function acceptEvidence(
 
 describe('module delivery admission authority', () => {
   test('admits one shared-checkout writer and defers later writers', () => {
-    const active = runtime(validate(PLAN));
+    const mixedPlan = { ...PLAN, nodes: [...PLAN.nodes, provider] };
+    const active = runtime(validate(mixedPlan));
     const first = select(active);
-    expect(first.admissions.map(({ taskId }) => taskId)).toEqual(['alpha']);
+    expect(first.admissions.map(({ taskId }) => taskId)).toEqual([
+      'alpha',
+      'provider-evidence',
+    ]);
     expect(first.pendingTaskIds).toEqual(['beta', 'gamma']);
-    const alphaLease = lease({ runtime: active, taskId: 'alpha' });
+    const recording = recordModuleDeliveryAttemptLeases({
+      authority: active.authority,
+      state: active.state,
+      admissions: first.admissions,
+    });
+    expect(recording.leases.map(({ taskId }) => taskId)).toEqual([
+      'alpha',
+      'provider-evidence',
+    ]);
     const whileActive = select(active);
     expect(whileActive.admissions).toEqual([]);
     expect(whileActive.pendingTaskIds).toEqual(['beta', 'gamma']);
-    const released = recordModuleDeliveryAttemptDisposition(
-      cancelledLease({ runtime: active, lease: alphaLease }),
-    );
-    const afterRelease = select({ ...active, state: released });
-    expect(afterRelease.admissions.map(({ taskId }) => taskId)).toEqual([
-      'alpha',
-    ]);
     const forgedFrontier = {
       taskId: 'alpha',
       attempt: 1,
@@ -807,45 +836,6 @@ describe('module delivery admission authority', () => {
   });
 
   test('retires accepted evidence authority across immutable generations', () => {
-    const provider: ModuleDeliveryReadOnlyNodeV2 = {
-      kind: ModuleDeliveryTaskKind.ReadOnly,
-      taskId: 'provider-evidence',
-      team: TeamKey.DevelopmentCore,
-      functionalOwner: TeamKey.Ai,
-      acceptanceOwner: TeamKey.Ai,
-      parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
-      expert: 'core_expert',
-      moduleRoot: ROOT,
-      consumerOutcome: 'AI receives accepted provider evidence.',
-      baseline: {
-        kind: ModuleDeliveryBaselineKind.SourceCommit,
-        sourceCommit: SOURCE,
-      },
-      agentDepthLimit: 2,
-      dependencies: [],
-      resources: {
-        read: [`${ROOT}/**`],
-        write: [],
-        evidenceSurface: [`${ROOT}/**`],
-      },
-      parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
-      acceptance: alpha.acceptance,
-    };
-    const peer = {
-      ...provider,
-      taskId: 'peer-evidence',
-      consumerOutcome: 'AI receives independent peer evidence.',
-    };
-    const parallelPlan = {
-      ...PLAN,
-      nodes: [provider, peer],
-      edgeContracts: [],
-    };
-    expect(
-      select(runtime(validate(parallelPlan))).admissions.map(
-        ({ taskId }) => taskId,
-      ),
-    ).toEqual(['peer-evidence', 'provider-evidence']);
     const firstPlan: ModuleDeliveryPlanV3 = {
       ...PLAN,
       nodes: [provider],

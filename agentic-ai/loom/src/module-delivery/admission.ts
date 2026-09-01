@@ -20,6 +20,7 @@ import {
 import {
   assertModuleDeliveryCanonicalEvidenceTransition,
   assertModuleDeliveryIntegratedWriterFrontierCapability,
+  type ModuleDeliveryIntegratedWriterFrontierCapability,
 } from './integration.ts';
 import {
   admissionStateAuthority,
@@ -55,11 +56,10 @@ import type {
   GenerationAuthorityInspection,
   ModuleDeliveryAuthorityPlanRequest,
   ModuleDeliveryAuthorityRepositoryInspection,
+  ModuleDeliveryCanonicalEvidenceTransition,
   ModuleDeliveryDispositionOutcome,
   RecordModuleDeliveryAttemptDispositionRequest,
 } from './integration-provenance.ts';
-import type { ModuleDeliveryIntegratedWriterFrontierCapability } from './integration.ts';
-import type { ModuleDeliveryCanonicalEvidenceTransition } from './integration-provenance.ts';
 import type {
   AcceptedModuleDeliveryEvidenceCollectionRequest,
   AcceptedModuleDeliveryEvidenceRegistry,
@@ -72,13 +72,10 @@ import type {
 } from './authority.ts';
 import { freezeModuleDeliveryAdmissionSource } from './admission-source.ts';
 const AUTHORITY = Symbol('module-delivery-generation-authority');
-const admissionStateStoreAuthorities = {
+const admissionStateStore = createModuleDeliveryAdmissionStateStore({
   assertCanonicalTransition: assertModuleDeliveryCanonicalEvidenceTransition,
   assertWriterFrontier: assertModuleDeliveryIntegratedWriterFrontierCapability,
-};
-const admissionStateStore = createModuleDeliveryAdmissionStateStore(
-  admissionStateStoreAuthorities,
-);
+});
 export enum ModuleDeliveryAdmissionSelectionStatus {
   Selected = 'selected',
   Blocked = 'blocked',
@@ -246,6 +243,12 @@ const evidenceAuthorities = new WeakMap<
   ModuleDeliveryGenerationAuthority
 >();
 const COMMIT = /^[0-9a-f]{40}$/u;
+function isWriter(request: AuthorityTaskRequest): boolean {
+  return (
+    nodeFor({ plan: request.authority.acceptedPlan, taskId: request.taskId })
+      .kind === ModuleDeliveryTaskKind.Write
+  );
+}
 export function createModuleDeliveryGenerationAuthority(
   request: CreateModuleDeliveryGenerationAuthorityRequest,
 ): ModuleDeliveryGenerationAuthority {
@@ -559,17 +562,14 @@ export function selectModuleDeliveryAdmissions(
     authority.acceptedPlan.plan.maxConcurrency - authority.activeLeases.size;
   const admissions: ModuleDeliveryAdmission[] = [];
   const pendingTaskIds: string[] = [];
-  let writerOccupied = [...authority.activeLeases.values()].some(
-    (lease) =>
-      nodeFor({ plan: authority.acceptedPlan, taskId: lease.taskId }).kind ===
-      ModuleDeliveryTaskKind.Write,
+  let writerOccupied = [...authority.activeLeases.values()].some((lease) =>
+    isWriter({ authority, taskId: lease.taskId }),
   );
   for (const taskId of authority.acceptedPlan.topologicalOrder) {
-    const nodeRequest: NodeLookupRequest = {
+    const node = nodeFor({
       plan: authority.acceptedPlan,
       taskId,
-    };
-    const node = nodeFor(nodeRequest);
+    });
     const taskRequest: AuthorityTaskRequest = { authority, taskId };
     const readyRequest: TaskReadyRequest = {
       authority,
@@ -601,7 +601,6 @@ export function selectModuleDeliveryAdmissions(
       pendingTaskIds.push(taskId);
       continue;
     }
-    const attemptRequest: AuthorityTaskRequest = { authority, taskId };
     const frontierRequest: StartingFrontierRequest = {
       authority,
       state: request.state,
@@ -637,7 +636,7 @@ export function selectModuleDeliveryAdmissions(
     }
     const admissionValue: ModuleDeliveryAdmission = {
       taskId,
-      attempt: nextAttempt(attemptRequest),
+      attempt: nextAttempt(taskRequest),
       generation: request.state.generation,
       planDigest: request.state.planDigest,
       startingFrontier: startingFrontier(frontierRequest),
@@ -688,32 +687,25 @@ export function recordModuleDeliveryAttemptLeases(
   const seenTasks = new Set(
     [...authority.activeLeases.values()].map(({ taskId }) => taskId),
   );
-  const compatible: ModuleDeliveryAdmission[] = [
-    ...authority.activeLeases.values(),
-  ];
-  const seenAdmissions = new Set<ModuleDeliveryAdmission>();
-  let writerOccupied = [...authority.activeLeases.values()].some(
-    (lease) =>
-      nodeFor({ plan: authority.acceptedPlan, taskId: lease.taskId }).kind ===
-      ModuleDeliveryTaskKind.Write,
+  const compatible = [...authority.activeLeases.values()];
+  let writerOccupied = [...authority.activeLeases.values()].some((lease) =>
+    isWriter({ authority, taskId: lease.taskId }),
   );
   for (const admission of request.admissions) {
     const provenance = admissionProvenance.get(admission);
     const key = attemptKey(admission);
+    const writer = isWriter({ authority, taskId: admission.taskId });
     if (
       !provenance ||
       provenance.authority !== request.authority ||
       provenance.state !== request.state ||
       consumedAdmissions.has(admission) ||
-      seenAdmissions.has(admission) ||
       seenTasks.has(admission.taskId) ||
       authority.leaseHistory.has(key)
     )
       throw new Error('Module delivery admission capability is invalid.');
     if (
-      (nodeFor({ plan: authority.acceptedPlan, taskId: admission.taskId })
-        .kind === ModuleDeliveryTaskKind.Write &&
-        writerOccupied) ||
+      (writer && writerOccupied) ||
       compatible.some((active) => {
         const conflictRequest: ResourceConflictRequest = {
           first: admission.resources,
@@ -723,14 +715,9 @@ export function recordModuleDeliveryAttemptLeases(
       })
     )
       throw new Error('Module delivery admission capability is invalid.');
-    seenAdmissions.add(admission);
     seenTasks.add(admission.taskId);
     compatible.push(admission);
-    if (
-      nodeFor({ plan: authority.acceptedPlan, taskId: admission.taskId })
-        .kind === ModuleDeliveryTaskKind.Write
-    )
-      writerOccupied = true;
+    if (writer) writerOccupied = true;
   }
   const leases = request.admissions.map((admission) => {
     consumedAdmissions.add(admission);
