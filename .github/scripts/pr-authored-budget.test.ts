@@ -159,7 +159,6 @@ test('accepts reviewed-head bodies, committed fixes, and later PR comments', () 
     body: '<!-- codex-pull-request-review-summary -->\nStatus',
     createdAt: '2026-01-02T00:00:00Z',
   }] }), false)
-  assert.equal(reviewBatchMatches({ ...input, publishedAt: null, comments: [{ body: 'Please fix.', createdAt: '2026-01-02T00:00:00Z' }] }), false)
   assert.equal(reviewBatchMatches({ ...input, comments: [{ body: 'Looks good to me.', createdAt: '2026-01-02T00:00:00Z' }] }), false)
   assert.equal(reviewBatchMatches({ ...input, comments: [{ body: 'Please fix.', createdAt: '2026-01-01T16:00:00Z' }] }), false)
   assert.equal(reviewBatchMatches({

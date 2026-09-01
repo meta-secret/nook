@@ -316,7 +316,7 @@ function verifyReviewContext(prNumber) {
     reviews,
     comments,
     changedPaths,
-    publishedAt: publication.pushedDate,
+    publishedAt: publication.pushedDate ?? '',
   })
 }
 
