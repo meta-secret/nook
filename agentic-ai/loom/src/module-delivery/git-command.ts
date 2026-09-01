@@ -16,14 +16,15 @@ export type GitCommandRequest = {
   readonly environment?: GitCommandEnvironment;
 };
 
-type GitEnvironmentKey =
-  | 'COMSPEC'
-  | 'PATH'
-  | 'Path'
-  | 'PATHEXT'
-  | 'SYSTEMROOT'
-  | 'SystemRoot'
-  | 'WINDIR';
+enum GitEnvironmentKey {
+  Comspec = 'COMSPEC',
+  PathUppercase = 'PATH',
+  PathTitlecase = 'Path',
+  PathExtensions = 'PATHEXT',
+  SystemRootUppercase = 'SYSTEMROOT',
+  SystemRootTitlecase = 'SystemRoot',
+  WindowsDirectory = 'WINDIR',
+}
 
 export type GitCommandEnvironment = Readonly<
   Partial<Record<GitEnvironmentKey, string>>
@@ -111,13 +112,13 @@ export function runModuleDeliveryGit(
 export function moduleDeliveryGitEnvironment(): GitCommandEnvironment {
   const environment: Partial<Record<GitEnvironmentKey, string>> = {};
   const keys: readonly GitEnvironmentKey[] = [
-    'COMSPEC',
-    'PATH',
-    'Path',
-    'PATHEXT',
-    'SYSTEMROOT',
-    'SystemRoot',
-    'WINDIR',
+    GitEnvironmentKey.Comspec,
+    GitEnvironmentKey.PathUppercase,
+    GitEnvironmentKey.PathTitlecase,
+    GitEnvironmentKey.PathExtensions,
+    GitEnvironmentKey.SystemRootUppercase,
+    GitEnvironmentKey.SystemRootTitlecase,
+    GitEnvironmentKey.WindowsDirectory,
   ];
   for (const key of keys) {
     const value = process.env[key];
