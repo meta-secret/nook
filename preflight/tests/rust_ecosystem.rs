@@ -503,6 +503,7 @@ fn product_workflows_skip_only_repository_policy_and_cortex_markdown_changes() -
     let main = read(".github/workflows/main.yml")?;
     let research = read(".github/workflows/web-research.yml")?;
     let readiness = read("agentic-ai/ci-agent/src/main/github.ts")?;
+    let arc_contract = read(".github/scripts/arc-manifest-contract.ts")?;
 
     assert!(!pr.contains("paths-ignore:"));
     assert!(pr.contains("path.startsWith('.cortex/') && path.endsWith('.md')"));
@@ -530,6 +531,12 @@ fn product_workflows_skip_only_repository_policy_and_cortex_markdown_changes() -
     }
     assert!(pr.contains("new Set(Object.values(PullRequestFileStatus))"));
     assert!(research.contains("new Set(Object.values(PullRequestFileStatus))"));
+    assert!(readiness.contains("PullRequestPathInventoryState"));
+    assert!(readiness.contains("PullRequestPathInventoryIssue.ApiCap"));
+    assert!(!readiness.contains("__renamed_path_requires_product_validation__"));
+    assert!(arc_contract.contains("enum WorkflowPermissionsState"));
+    assert!(arc_contract.contains("normalizeWorkflowPermissions(job)"));
+    assert!(!arc_contract.contains("job.permissions ?? {}"));
     assert_eq!(
         pr.matches("product-validation-required == 'true'").count(),
         11,
@@ -585,7 +592,7 @@ fn product_workflows_skip_only_repository_policy_and_cortex_markdown_changes() -
     }
 
     assert!(readiness.contains("path.startsWith(\".cortex/\") && path.endsWith(\".md\")"));
-    assert!(readiness.contains("RENAMED_PATH_PRODUCT_SENTINEL"));
+    assert!(readiness.contains("PullRequestPathInventoryState.Renamed"));
     assert!(readiness.contains("file.previousFilename"));
     assert!(!readiness.contains("workflowFile: \"rust-ecosystem.yml\""));
     assert!(readiness.contains("workflowFile: \"repository-policy.yml\""));

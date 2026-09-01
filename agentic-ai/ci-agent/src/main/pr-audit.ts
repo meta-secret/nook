@@ -2,13 +2,14 @@ import type { Octokit } from "@octokit/rest";
 
 import {
   assertPullRequestRevision,
-  changedPathsForPullRequestFiles,
+  classifyPullRequestChangedPaths,
   createOctokit,
   inspectPrFeedback,
   parseRepository,
   readPullRequestRevision,
   requiredPrWorkflows,
   type RepoRef,
+  type PullRequestPathInventory,
   type RequiredPrWorkflow,
 } from "./github.js";
 import { prettyJson } from "./json.js";
@@ -87,6 +88,7 @@ export type PrAudit = {
   base: { branch: string; sha: string };
   branchProtection: BranchProtectionAudit;
   changedFiles: string[];
+  changedFileInventory: PullRequestPathInventory;
   exactHeadDeployment?: { environment: string; state: string; url?: string };
   externalReviewPolicy: "inspect-existing-feedback-without-waiting";
   feedback: Awaited<ReturnType<typeof inspectPrFeedback>>;
@@ -150,14 +152,18 @@ export async function buildPrAudit(
     prNumber,
   );
   assertPullRequestRevision(expectedRevision, inventoryRevision);
-  const changedFiles = changedPathsForPullRequestFiles(files, pr.changed_files);
+  const changedFileInventory = classifyPullRequestChangedPaths(
+    files,
+    pr.changed_files,
+  );
+  const changedFiles = changedFileInventory.paths;
   const requiredWorkflows = await auditWorkflows({
     baseSha: pr.base.sha,
     headSha: pr.head.sha,
     octokit,
     prNumber,
     repoRef,
-    workflows: requiredPrWorkflows(changedFiles),
+    workflows: requiredPrWorkflows(changedFileInventory),
   });
   const [comparison, feedback, branchProtection, exactHeadDeployment] =
     await Promise.all([
@@ -216,9 +222,7 @@ export async function buildPrAudit(
       reasons.push(`${workflow.workflowName} run is ${workflow.status.value}`);
     } else if (workflow.conclusion.state === WorkflowConclusionState.Pending) {
       reasons.push(`${workflow.workflowName} run has no conclusion`);
-    } else if (
-      workflow.conclusion.value !== GithubWorkflowConclusion.Success
-    ) {
+    } else if (workflow.conclusion.value !== GithubWorkflowConclusion.Success) {
       reasons.push(
         `${workflow.workflowName} run concluded ${workflow.conclusion.value}`,
       );
@@ -261,6 +265,7 @@ export async function buildPrAudit(
   return {
     base: { branch: pr.base.ref, sha: pr.base.sha },
     branchProtection,
+    changedFileInventory,
     changedFiles,
     exactHeadDeployment,
     externalReviewPolicy: "inspect-existing-feedback-without-waiting",

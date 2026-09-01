@@ -111,6 +111,29 @@ interface WorkflowManifest {
   jobs?: Record<string, WorkflowJob>;
 }
 
+enum WorkflowPermissionsState {
+  Missing = "missing",
+  Present = "present",
+}
+
+type WorkflowPermissions =
+  | { state: WorkflowPermissionsState.Missing }
+  | {
+      state: WorkflowPermissionsState.Present;
+      value: Record<string, string>;
+    };
+
+function normalizeWorkflowPermissions(job: WorkflowJob): WorkflowPermissions {
+  const value: unknown = job.permissions;
+  if (!(value instanceof Object) || Array.isArray(value)) {
+    return { state: WorkflowPermissionsState.Missing };
+  }
+  return {
+    state: WorkflowPermissionsState.Present,
+    value: value as Record<string, string>,
+  };
+}
+
 const runnersSource = await read(
   "infra/k0s/manifests/arc/runner-scale-set-values.yaml",
 );
@@ -297,7 +320,7 @@ containerHook.requireAll([
   "name: nook-arc-container-hook",
   "automountServiceAccountToken: false",
   'name: "$job"',
-  "nook.nokey.sh/arc-build: \"true\"",
+  'nook.nokey.sh/arc-build: "true"',
   "values: [primary]",
   "values: [secondary]",
   "values: [overflow]",
@@ -328,7 +351,7 @@ buildkit.requireAll([
   "kind: StatefulSet",
   "replicas: 4",
   "requiredDuringSchedulingIgnoredDuringExecution:",
-  "nook.nokey.sh/arc-build: \"true\"",
+  'nook.nokey.sh/arc-build: "true"',
   "v0.32.2-rootless@sha256:60d1f642e29dc938bd6c109ba5500849fccf41921927c5339788b8227f57feb9",
   "--oci-worker-gc-keepstorage",
   "--oci-worker-no-process-sandbox",
@@ -376,7 +399,7 @@ dockerSetup.requireAll([
 ]);
 runtimeSmoke.requireAll([
   "NOOK_ARC_RUNNER",
-  'type=local,dest=$shared_dir',
+  "type=local,dest=$shared_dir",
   "ARC node-local rootless BuildKit smoke passed",
 ]);
 runtimeSmoke.forbidAll(["--load", "docker run", "docker info", "podman"]);
@@ -400,14 +423,14 @@ tasks.requireAll([
   "disable --now nook-arc-buildkit-cloner.service",
   '"$legacy_image_next"',
   "/etc/sysctl.d/91-nook-buildkit-keyring.conf",
-  'keyring_maxkeys=20000',
-  'keyring_maxbytes=2000000',
+  "keyring_maxkeys=20000",
+  "keyring_maxbytes=2000000",
   'sysctl -p "$keyring_config"',
-  'cat /proc/sys/kernel/keys/maxkeys',
-  'cat /proc/sys/kernel/keys/maxbytes',
-  'nook.nokey.sh/arc-build=preparing:NoSchedule --overwrite',
+  "cat /proc/sys/kernel/keys/maxkeys",
+  "cat /proc/sys/kernel/keys/maxbytes",
+  "nook.nokey.sh/arc-build=preparing:NoSchedule --overwrite",
   "ARC build node $node is quarantined for convergence",
-  'quarantine_failed=0',
+  "quarantine_failed=0",
   'test "$quarantine_failed" = 0',
   "- task: arc:build-hosts:quarantine\n      - task: arc:buildkit:storage:prepare",
   "container-runner-scale-set-values.yaml",
@@ -436,7 +459,7 @@ mainWorkflow.requireAll([
   "name: Portable WASM cache publication proof",
   "needs: [product-paths, wasm-cache-publish]",
   "Install Bun for registry cache audit",
-  "NOOK_WASM_CACHE_PROMOTION_ENABLED: \"1\"",
+  'NOOK_WASM_CACHE_PROMOTION_ENABLED: "1"',
   "NOOK_REGISTRY_USERNAME: ${{ secrets.NOOK_REGISTRY_USERNAME }}",
   "bash .github/scripts/verify-wasm-gha-cache.sh",
   "web-e2e:",
@@ -533,10 +556,10 @@ webDockerTasks.requireAll([
 wasmCacheProof.requireAll([
   "Publish from the already-selected node-local rootless BuildKit shard",
   "repair solve never imports the ref it is replacing",
-  'nook-rust-wasm-deps-input-v3:fingerprint-${deps_fingerprint}',
+  "nook-rust-wasm-deps-input-v3:fingerprint-${deps_fingerprint}",
   "nook-rust-wasm-source-v3:buildcache,ignore-error=true",
   "compression=zstd,force-compression=true",
-  'builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref}',
+  "builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref}",
   "verify-registry-cache-blobs.ts",
 ]);
 wasmCacheProof.forbidAll([
@@ -545,11 +568,17 @@ wasmCacheProof.forbidAll([
   "docker buildx rm",
 ]);
 const promotionSolve = wasmCacheProofSource.slice(
-  wasmCacheProofSource.indexOf('if [ "${NOOK_WASM_CACHE_PROMOTION_ENABLED:-}" = "1" ]'),
-  wasmCacheProofSource.indexOf('bun "$repo_root/.github/scripts/verify-registry-cache-blobs.ts"'),
+  wasmCacheProofSource.indexOf(
+    'if [ "${NOOK_WASM_CACHE_PROMOTION_ENABLED:-}" = "1" ]',
+  ),
+  wasmCacheProofSource.indexOf(
+    'bun "$repo_root/.github/scripts/verify-registry-cache-blobs.ts"',
+  ),
 );
 if (promotionSolve.includes("cache-from=type=registry,ref=${cache_ref}")) {
-  throw new Error("portable WASM cache promotion must not import its destination");
+  throw new Error(
+    "portable WASM cache promotion must not import its destination",
+  );
 }
 remoteWorkflow.forbidAll(["NOOK_CACHE_RUNS_ON", "nook-k0s-cache"]);
 remoteWorkflow.requireAll([
@@ -602,9 +631,7 @@ const hostedCheapClassifiers = new Set([
   "pr.yml#validation-request",
   "web-research.yml#research-paths",
 ]);
-const hostedCheckoutClassifiers = new Set([
-  "main.yml#product-paths",
-]);
+const hostedCheckoutClassifiers = new Set(["main.yml#product-paths"]);
 const workflowsDir = resolve(root, ".github/workflows");
 const workflowFiles = (await readdir(workflowsDir))
   .filter((file) => file.endsWith(".yml") || file.endsWith(".yaml"))
@@ -626,10 +653,13 @@ for (const workflowFile of workflowFiles) {
       if (hostedCheapClassifiers.has(identity)) {
         observedHostedExceptions.add(identity);
         const serializedJob = JSON.stringify(job);
-        const permissions = job.permissions ?? {};
+        const permissions = normalizeWorkflowPermissions(job);
         if (
-          Object.keys(permissions).length === 0 ||
-          Object.values(permissions).some((permission) => permission !== "read") ||
+          permissions.state === WorkflowPermissionsState.Missing ||
+          Object.keys(permissions.value).length === 0 ||
+          Object.values(permissions.value).some(
+            (permission) => permission !== "read",
+          ) ||
           serializedJob.includes("secrets.") ||
           (!hostedCheckoutClassifiers.has(identity) &&
             serializedJob.includes("actions/checkout")) ||
@@ -647,8 +677,13 @@ for (const workflowFile of workflowFiles) {
       }
       observedHostedExceptions.add(identity);
       const condition = job.if ?? "";
-      if (!condition.includes("head.repo.full_name") || !condition.includes("dependabot[bot]")) {
-        throw new Error(`${identity} must be restricted to forks and Dependabot`);
+      if (
+        !condition.includes("head.repo.full_name") ||
+        !condition.includes("dependabot[bot]")
+      ) {
+        throw new Error(
+          `${identity} must be restricted to forks and Dependabot`,
+        );
       }
       continue;
     }
@@ -658,7 +693,10 @@ for (const workflowFile of workflowFiles) {
       }
       continue;
     }
-    if (!placement.includes("nook-k0s") && !placement.includes("NOOK_RUNS_ON")) {
+    if (
+      !placement.includes("nook-k0s") &&
+      !placement.includes("NOOK_RUNS_ON")
+    ) {
       throw new Error(`${identity} is not routed through an ARC scale set`);
     }
   }

@@ -3,7 +3,7 @@ import test from "node:test";
 
 import type { Octokit } from "@octokit/rest";
 
-import type { RepoRef } from "../main/github.js";
+import { PullRequestPathInventoryState, type RepoRef } from "../main/github.js";
 import { buildPrAudit } from "../main/pr-audit.js";
 
 const repoRef = { owner: "meta-secret", repo: "nook" };
@@ -231,11 +231,7 @@ test("buildPrAudit reports a dismissed exact-head Codex review without waiting",
 });
 
 test("buildPrAudit ignores the automated continuing-owner handoff", async () => {
-  const audit = await buildPrAudit(
-    mockOctokitWithAgentHandoff(),
-    repoRef,
-    410,
-  );
+  const audit = await buildPrAudit(mockOctokitWithAgentHandoff(), repoRef, 410);
 
   assert.equal(audit.ready, true);
   assert.equal(audit.feedback.substantiveComments, 0);
@@ -397,11 +393,7 @@ test("buildPrAudit rejects validation from a previous base revision", async () =
 
 test("buildPrAudit rejects a same-count synchronize during file inventory", async () => {
   await assert.rejects(
-    buildPrAudit(
-      mockOctokit({ sameCountSynchronize: true }),
-      repoRef,
-      410,
-    ),
+    buildPrAudit(mockOctokit({ sameCountSynchronize: true }), repoRef, 410),
     /Pull request revision changed/u,
   );
 });
@@ -410,6 +402,37 @@ test("buildPrAudit rejects a synchronize after all audit evidence settles", asyn
   await assert.rejects(
     buildPrAudit(mockOctokit({ lateSynchronize: true }), repoRef, 410),
     /Pull request revision changed/u,
+  );
+});
+
+test("buildPrAudit conservatively audits every workflow for a capped inventory", async () => {
+  const audit = await buildPrAudit(
+    mockOctokit({
+      cappedFileInventory: true,
+      omitSecondaryWorkflowRuns: true,
+    }),
+    repoRef,
+    410,
+  );
+
+  assert.equal(
+    audit.changedFileInventory.state,
+    PullRequestPathInventoryState.Uninspectable,
+  );
+  assert.deepEqual(
+    audit.requiredWorkflows.map((workflow) => workflow.workflowName),
+    ["Repository policy", "Web research", "PR"],
+  );
+  assert.equal(audit.ready, false);
+  assert.ok(
+    audit.reasons.includes(
+      "Repository policy run is not indexed for the current head",
+    ),
+  );
+  assert.ok(
+    audit.reasons.includes(
+      "Web research run is not indexed for the current head",
+    ),
   );
 });
 
@@ -451,6 +474,7 @@ enum MockAgentHandoff {
 type MockOptions = {
   agentHandoff: MockAgentHandoff;
   behindBy?: number;
+  cappedFileInventory?: boolean;
   codexReview?: MockCodexReview;
   currentHeadFinding?: boolean;
   cursorReview?: MockCursorReview;
@@ -464,6 +488,7 @@ type MockOptions = {
   headRepository?: RepoRef;
   nativeConclusion?: MockJobConclusion;
   omitNativeJob?: boolean;
+  omitSecondaryWorkflowRuns?: boolean;
   runStatus?: MockRunStatus;
   resolvedInlineReviewFinding?: boolean;
   sameCountSynchronize?: boolean;
@@ -480,9 +505,7 @@ function mockOctokit(overrides: MockOverrides = {}): Octokit {
   });
 }
 
-function mockOctokitWithAgentHandoff(
-  overrides: MockOverrides = {},
-): Octokit {
+function mockOctokitWithAgentHandoff(overrides: MockOverrides = {}): Octokit {
   return createMockOctokit({
     ...overrides,
     agentHandoff: MockAgentHandoff.Included,
@@ -508,14 +531,15 @@ function createMockOctokit(options: MockOptions): Octokit {
               name: headRepository.repo,
               owner: { login: headRepository.owner },
             },
-            sha: options.sameCountSynchronize === true && pullGetCalls === 1
-              ? priorHeadSha
-              : options.lateSynchronize === true && pullGetCalls >= 3
-                ? nextHeadSha
-                : headSha,
+            sha:
+              options.sameCountSynchronize === true && pullGetCalls === 1
+                ? priorHeadSha
+                : options.lateSynchronize === true && pullGetCalls >= 3
+                  ? nextHeadSha
+                  : headSha,
           },
           html_url: "https://github.com/meta-secret/nook/pull/410",
-          changed_files: 1,
+          changed_files: options.cappedFileInventory === true ? 3000 : 1,
           created_at: "2026-08-08T00:00:00Z",
           mergeable: true,
           number: 410,
@@ -524,15 +548,21 @@ function createMockOctokit(options: MockOptions): Octokit {
       };
     },
     listFiles: async () => ({
-      data: [
-        {
-          filename:
-            options.sameCountSynchronize === true
-              ? ".cortex/AGENTS.md"
-              : "nook-app/nook-platform/nook-core/src/lib.rs",
-          status: "modified",
-        },
-      ],
+      data:
+        options.cappedFileInventory === true
+          ? Array.from({ length: 3000 }, (_, index) => ({
+              filename: `.cortex/generated/${index}.md`,
+              status: "modified",
+            }))
+          : [
+              {
+                filename:
+                  options.sameCountSynchronize === true
+                    ? ".cortex/AGENTS.md"
+                    : "nook-app/nook-platform/nook-core/src/lib.rs",
+                status: "modified",
+              },
+            ],
     }),
     listReviewComments: async () => ({
       data:
@@ -762,31 +792,36 @@ function createMockOctokit(options: MockOptions): Octokit {
               status: MockRunStatus.Completed,
             })),
         }),
-        listWorkflowRuns: async () => ({
+        listWorkflowRuns: async ({ workflow_id }: { workflow_id: string }) => ({
           data: {
-            workflow_runs: [
-              {
-                ...(options.runStatus === MockRunStatus.InProgress
-                  ? {}
-                  : { conclusion: MockJobConclusion.Success }),
-                created_at: "2026-08-08T00:00:00Z",
-                head_sha: headSha,
-                html_url: "https://github.com/meta-secret/nook/actions/runs/42",
-                id: 42,
-                pull_requests: [
-                  {
-                    base: {
-                      sha:
-                        options.staleBaseRun === true
-                          ? "previous-base-sha"
-                          : "base-sha",
+            workflow_runs:
+              options.omitSecondaryWorkflowRuns === true &&
+              workflow_id !== "pr.yml"
+                ? []
+                : [
+                    {
+                      ...(options.runStatus === MockRunStatus.InProgress
+                        ? {}
+                        : { conclusion: MockJobConclusion.Success }),
+                      created_at: "2026-08-08T00:00:00Z",
+                      head_sha: headSha,
+                      html_url:
+                        "https://github.com/meta-secret/nook/actions/runs/42",
+                      id: 42,
+                      pull_requests: [
+                        {
+                          base: {
+                            sha:
+                              options.staleBaseRun === true
+                                ? "previous-base-sha"
+                                : "base-sha",
+                          },
+                          number: 410,
+                        },
+                      ],
+                      status: options.runStatus ?? MockRunStatus.Completed,
                     },
-                    number: 410,
-                  },
-                ],
-                status: options.runStatus ?? MockRunStatus.Completed,
-              },
-            ],
+                  ],
           },
         }),
       },

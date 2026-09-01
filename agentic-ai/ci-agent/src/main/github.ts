@@ -236,7 +236,33 @@ export type PullRequestChangedFile =
     };
 
 const PULL_REQUEST_FILES_API_CAP = 3000;
-const RENAMED_PATH_PRODUCT_SENTINEL = "__renamed_path_requires_product_validation__";
+
+export enum PullRequestPathInventoryState {
+  Inspectable = "inspectable",
+  Renamed = "renamed",
+  Uninspectable = "uninspectable",
+}
+
+export enum PullRequestPathInventoryIssue {
+  ApiCap = "api-cap",
+  CountMismatch = "count-mismatch",
+  InvalidChangedFileCount = "invalid-changed-file-count",
+  InvalidFile = "invalid-file",
+}
+
+export type PullRequestPathInventory =
+  | {
+      paths: string[];
+      state:
+        | PullRequestPathInventoryState.Inspectable
+        | PullRequestPathInventoryState.Renamed;
+    }
+  | {
+      issue: PullRequestPathInventoryIssue;
+      paths: string[];
+      reason: string;
+      state: PullRequestPathInventoryState.Uninspectable;
+    };
 
 function decodePullRequestChangedFile(value: unknown): PullRequestChangedFile {
   if (!value || typeof value !== "object") {
@@ -275,31 +301,66 @@ function decodePullRequestChangedFile(value: unknown): PullRequestChangedFile {
   }
 }
 
-export function changedPathsForPullRequestFiles(
+export function classifyPullRequestChangedPaths(
   files: readonly unknown[],
   authoritativeChangedFiles: number,
-): string[] {
+): PullRequestPathInventory {
   if (
     !Number.isSafeInteger(authoritativeChangedFiles) ||
-    authoritativeChangedFiles <= 0 ||
-    files.length !== authoritativeChangedFiles ||
-    files.length >= PULL_REQUEST_FILES_API_CAP
+    authoritativeChangedFiles <= 0
   ) {
-    throw new Error(
-      `Pull-request file inventory is incomplete: expected ${authoritativeChangedFiles}, received ${files.length}`,
+    return uninspectablePullRequestPaths(
+      PullRequestPathInventoryIssue.InvalidChangedFileCount,
+      `invalid authoritative changed-file count: ${authoritativeChangedFiles}`,
     );
   }
-  return files.flatMap((value) => {
-    const file = decodePullRequestChangedFile(value);
-    if (file.status !== PullRequestFileStatus.Renamed) {
-      return [file.filename];
+  if (files.length !== authoritativeChangedFiles) {
+    return uninspectablePullRequestPaths(
+      PullRequestPathInventoryIssue.CountMismatch,
+      `expected ${authoritativeChangedFiles} files, received ${files.length}`,
+    );
+  }
+  if (files.length >= PULL_REQUEST_FILES_API_CAP) {
+    return uninspectablePullRequestPaths(
+      PullRequestPathInventoryIssue.ApiCap,
+      `GitHub file inventory reached the ${PULL_REQUEST_FILES_API_CAP}-file API cap`,
+    );
+  }
+  const paths: string[] = [];
+  let renamed = false;
+  try {
+    for (const value of files) {
+      const file = decodePullRequestChangedFile(value);
+      if (file.status === PullRequestFileStatus.Renamed) {
+        paths.push(file.previousFilename);
+        renamed = true;
+      }
+      paths.push(file.filename);
     }
-    return [
-      file.previousFilename,
-      file.filename,
-      RENAMED_PATH_PRODUCT_SENTINEL,
-    ];
-  });
+  } catch (error) {
+    return uninspectablePullRequestPaths(
+      PullRequestPathInventoryIssue.InvalidFile,
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+  return {
+    paths,
+    state: renamed
+      ? PullRequestPathInventoryState.Renamed
+      : PullRequestPathInventoryState.Inspectable,
+  };
+}
+
+function uninspectablePullRequestPaths(
+  issue: PullRequestPathInventoryIssue,
+  reason: string,
+): PullRequestPathInventory {
+  return {
+    issue,
+    paths: [],
+    reason,
+    state: PullRequestPathInventoryState.Uninspectable,
+  };
 }
 
 const MAIN_PR_WORKFLOW: RequiredPrWorkflow = {
@@ -331,7 +392,17 @@ function isWebResearchPath(path: string): boolean {
   );
 }
 
-export function requiredPrWorkflows(paths: string[]): RequiredPrWorkflow[] {
+export function requiredPrWorkflows(
+  inventory: PullRequestPathInventory,
+): RequiredPrWorkflow[] {
+  if (inventory.state === PullRequestPathInventoryState.Uninspectable) {
+    return [
+      REPOSITORY_POLICY_PR_WORKFLOW,
+      WEB_RESEARCH_PR_WORKFLOW,
+      MAIN_PR_WORKFLOW,
+    ];
+  }
+  const paths = inventory.paths;
   const required: RequiredPrWorkflow[] = [];
 
   if (paths.includes(".github/workflows/repository-policy.yml")) {
@@ -340,15 +411,20 @@ export function requiredPrWorkflows(paths: string[]): RequiredPrWorkflow[] {
   if (paths.some(isWebResearchPath)) {
     required.push(WEB_RESEARCH_PR_WORKFLOW);
   }
-  if (paths.some((path) => !isCanonicalAiOnlyPath(path))) {
+  if (
+    inventory.state === PullRequestPathInventoryState.Renamed ||
+    paths.some((path) => !isCanonicalAiOnlyPath(path))
+  ) {
     required.push(MAIN_PR_WORKFLOW);
   }
 
   return required;
 }
 
-export function requiredPrCheckNames(paths: string[]): string[] {
-  return requiredPrWorkflows(paths).map((workflow) => workflow.checkName);
+export function requiredPrCheckNames(
+  inventory: PullRequestPathInventory,
+): string[] {
+  return requiredPrWorkflows(inventory).map((workflow) => workflow.checkName);
 }
 
 type ReviewThreadPage = {
@@ -546,18 +622,15 @@ export async function inspectPrFeedback(
   pagination = { kind: PaginationKind.FirstPage };
   while (pagination.kind !== PaginationKind.Complete) {
     const page: IssueCommentStatePage =
-      await octokit.graphql<IssueCommentStatePage>(
-        ISSUE_COMMENT_STATES_QUERY,
-        {
-          owner,
-          repo,
-          number: prNumber,
-          ...(signal ? { request: { signal } } : {}),
-          ...(pagination.kind === PaginationKind.NextPage
-            ? { cursor: pagination.cursor }
-            : {}),
-        },
-      );
+      await octokit.graphql<IssueCommentStatePage>(ISSUE_COMMENT_STATES_QUERY, {
+        owner,
+        repo,
+        number: prNumber,
+        ...(signal ? { request: { signal } } : {}),
+        ...(pagination.kind === PaginationKind.NextPage
+          ? { cursor: pagination.cursor }
+          : {}),
+      });
     const comments = page.repository.pullRequest.comments;
     for (const comment of comments.nodes) {
       if (
@@ -615,9 +688,8 @@ export async function inspectPrFeedback(
   const approvalReaction = requestReactions.some(
     (reaction) => reaction.content === "+1" && isCodexReviewer(reaction.user),
   );
-  const cleanComment = activeIssueComments.some(
-    (comment) =>
-      isCleanCodexReviewComment(comment.body ?? "", comment.user, pr.head.sha),
+  const cleanComment = activeIssueComments.some((comment) =>
+    isCleanCodexReviewComment(comment.body ?? "", comment.user, pr.head.sha),
   );
 
   const substantiveComments = activeIssueComments.filter(
@@ -636,10 +708,7 @@ export async function inspectPrFeedback(
     (comment) => !handledIssueCommentIds.has(comment.id),
   );
   const substantiveReviews = reviews.filter((review) => {
-    if (
-      !isSubmittedReviewState(review.state) ||
-      review.state === "APPROVED"
-    ) {
+    if (!isSubmittedReviewState(review.state) || review.state === "APPROVED") {
       return false;
     }
     if (review.state === "CHANGES_REQUESTED") {
@@ -823,9 +892,7 @@ function isRetiredHeadTransitionAutomationComment(input: {
 }): boolean {
   return (
     isGitHubActionsBot(input.user) &&
-    input.body
-      .trim()
-      .endsWith("\nExact-head delivery boundary (automated).")
+    input.body.trim().endsWith("\nExact-head delivery boundary (automated).")
   );
 }
 
