@@ -383,7 +383,7 @@ describe('Team Plan journal', () => {
         journalPath,
         action: async () => writeFileSync(lockPath, 'block release\n'),
       }),
-    ).rejects.toThrow('ownership changed');
+    ).rejects.toThrow('lock ref update failed');
     unlinkSync(lockPath);
     await expect(
       withTeamPlanJournalLock({
@@ -688,6 +688,40 @@ describe('Team Plan journal', () => {
     ).rejects.toThrow('discard is still in progress');
     expect(existsSync(journalPath)).toBe(false);
     expect(existsSync(`${journalPath}.discarding`)).toBe(true);
+  });
+
+  test('recovers an owned new-journal publication after linking', async () => {
+    const { journalPath, started } = await startedFixture();
+    unlinkSync(journalPath);
+    await expect(
+      createTeamPlanJournal({
+        journalPath,
+        event: started,
+        beforePublicationCleanup: () => {
+          throw new Error('publication cleanup interrupted');
+        },
+      }),
+    ).rejects.toThrow('publication cleanup interrupted');
+    expect(statSync(journalPath).nlink).toBe(2);
+    expect(statSync(`${journalPath}.publishing`).nlink).toBe(2);
+
+    await createTeamPlanJournal({ journalPath, event: started });
+    expect(existsSync(`${journalPath}.publishing`)).toBe(false);
+    expect((await loadTeamPlanJournal(journalPath)).started.runId).toBe(
+      started.runId,
+    );
+  });
+
+  test('rejects an invalid discard completion before journal creation', async () => {
+    const { journalPath, started } = await startedFixture();
+    unlinkSync(journalPath);
+    writeFileSync(`${journalPath}.discarded`, '{}\n');
+
+    await expect(
+      createTeamPlanJournal({ journalPath, event: started }),
+    ).rejects.toThrow();
+    expect(existsSync(`${journalPath}.discarded`)).toBe(true);
+    expect(existsSync(journalPath)).toBe(false);
   });
 
   test('rejects stale discard identity before resuming its tombstone', async () => {

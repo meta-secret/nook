@@ -72,6 +72,11 @@ Follow the lifecycle in order:
 
 ## Team Plan journal compatibility
 
+Creation recovers `.publishing` only when it is the same inode and exact
+requested journal. Completed discard retains `.discarded` as a validated
+finalized journal; retries resync it and later creation validates it before
+durable removal.
+
 The package README owns the versioned journal and recovery contract. See
 [`Team Plan commands`](../../../../agentic-ai/loom/README.md#team-plan-commands).
 

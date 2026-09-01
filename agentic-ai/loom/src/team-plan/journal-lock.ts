@@ -126,12 +126,38 @@ function updateRef(request: {
 }): boolean {
   const args = request.args;
   const repositoryRoot = request.journal.started.repositoryRoot;
+  const deleting = args[0] === '-d';
+  const ref = deleting ? args[1] : args[0];
+  const expected = args[2];
   const result = runModuleDeliveryGit({
     cwd: repositoryRoot,
     args: ['update-ref', '--no-deref', args[0], args[1], args[2]],
     allowFailure: true,
   });
-  return result.exitCode === 0;
+  if (result.exitCode === 0) return true;
+  const current = directLockRef({ repositoryRoot, ref });
+  if (
+    (expected === ZERO_COMMIT && current !== false) ||
+    (expected !== ZERO_COMMIT && current !== expected)
+  )
+    return false;
+  throw new Error('Team Plan journal lock ref update failed.', {
+    cause: new Error(result.stderr.trim() || 'git update-ref failed.'),
+  });
+}
+
+function directLockRef(request: {
+  readonly repositoryRoot: string;
+  readonly ref: string;
+}): string | false {
+  const record = gitText({
+    cwd: request.repositoryRoot,
+    args: ['for-each-ref', '--format=%(objectname)', request.ref],
+  });
+  if (!record) return false;
+  if (!/^[0-9a-f]{40}$/u.test(record))
+    throw new Error('Team Plan journal lock ref is forged.');
+  return record;
 }
 
 function decodeLockOwner(serialized: string): TeamPlanLockOwner {
