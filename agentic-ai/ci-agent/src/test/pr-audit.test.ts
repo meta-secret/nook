@@ -395,6 +395,17 @@ test("buildPrAudit rejects validation from a previous base revision", async () =
   assert.match(audit.reasons.join("\n"), /not indexed for the current head/);
 });
 
+test("buildPrAudit rejects a same-count synchronize during file inventory", async () => {
+  await assert.rejects(
+    buildPrAudit(
+      mockOctokit({ sameCountSynchronize: true }),
+      repoRef,
+      410,
+    ),
+    /Pull request revision changed/u,
+  );
+});
+
 enum MockCodexReview {
   CleanComment = "clean-comment",
   Dismissed = "dismissed",
@@ -447,6 +458,7 @@ type MockOptions = {
   omitNativeJob?: boolean;
   runStatus?: MockRunStatus;
   resolvedInlineReviewFinding?: boolean;
+  sameCountSynchronize?: boolean;
   staleBaseRun?: boolean;
   unresolvedThreads?: number;
 };
@@ -471,32 +483,43 @@ function mockOctokitWithAgentHandoff(
 
 function createMockOctokit(options: MockOptions): Octokit {
   const headSha = "0123456789abcdef0123456789abcdef01234567";
+  const priorHeadSha = "89abcdef0123456789abcdef0123456789abcdef";
   const headRepository = options.headRepository ?? repoRef;
+  let pullGetCalls = 0;
   const pulls = {
-    get: async () => ({
-      data: {
-        base: { ref: "main", sha: "base-sha" },
-        draft: false,
-        head: {
-          ref: "feature",
-          repo: {
-            name: headRepository.repo,
-            owner: { login: headRepository.owner },
+    get: async () => {
+      pullGetCalls += 1;
+      return {
+        data: {
+          base: { ref: "main", sha: "base-sha" },
+          draft: false,
+          head: {
+            ref: "feature",
+            repo: {
+              name: headRepository.repo,
+              owner: { login: headRepository.owner },
+            },
+            sha:
+              options.sameCountSynchronize === true && pullGetCalls === 1
+                ? priorHeadSha
+                : headSha,
           },
-          sha: headSha,
+          html_url: "https://github.com/meta-secret/nook/pull/410",
+          changed_files: 1,
+          created_at: "2026-08-08T00:00:00Z",
+          mergeable: true,
+          number: 410,
+          state: "open",
         },
-        html_url: "https://github.com/meta-secret/nook/pull/410",
-        changed_files: 1,
-        created_at: "2026-08-08T00:00:00Z",
-        mergeable: true,
-        number: 410,
-        state: "open",
-      },
-    }),
+      };
+    },
     listFiles: async () => ({
       data: [
         {
-          filename: "nook-app/nook-platform/nook-core/src/lib.rs",
+          filename:
+            options.sameCountSynchronize === true
+              ? ".cortex/AGENTS.md"
+              : "nook-app/nook-platform/nook-core/src/lib.rs",
           status: "modified",
         },
       ],

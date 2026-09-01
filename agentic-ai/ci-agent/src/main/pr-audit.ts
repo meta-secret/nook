@@ -1,10 +1,12 @@
 import type { Octokit } from "@octokit/rest";
 
 import {
+  assertPullRequestRevision,
   changedPathsForPullRequestFiles,
   createOctokit,
   inspectPrFeedback,
   parseRepository,
+  readPullRequestRevision,
   requiredPrWorkflows,
   type RepoRef,
   type RequiredPrWorkflow,
@@ -126,15 +128,28 @@ export async function buildPrAudit(
   prNumber: number,
 ): Promise<PrAudit> {
   const { owner, repo } = repoRef;
-  const [{ data: pr }, files] = await Promise.all([
-    octokit.rest.pulls.get({ owner, repo, pull_number: prNumber }),
-    octokit.paginate(octokit.rest.pulls.listFiles, {
-      owner,
-      repo,
-      pull_number: prNumber,
-      per_page: 100,
-    }),
-  ]);
+  const { data: pr } = await octokit.rest.pulls.get({
+    owner,
+    repo,
+    pull_number: prNumber,
+  });
+  const expectedRevision = {
+    baseRef: pr.base.ref,
+    baseSha: pr.base.sha,
+    headSha: pr.head.sha,
+  };
+  const files = await octokit.paginate(octokit.rest.pulls.listFiles, {
+    owner,
+    repo,
+    pull_number: prNumber,
+    per_page: 100,
+  });
+  const inventoryRevision = await readPullRequestRevision(
+    octokit,
+    repoRef,
+    prNumber,
+  );
+  assertPullRequestRevision(expectedRevision, inventoryRevision);
   const changedFiles = changedPathsForPullRequestFiles(files, pr.changed_files);
   const requiredWorkflows = await auditWorkflows({
     baseSha: pr.base.sha,
