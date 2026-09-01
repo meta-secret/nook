@@ -596,10 +596,35 @@ fn arc_workflow_matches_the_taskfile_catalog() -> Result<()> {
     assert!(
         workflow.contains("group: remote-${{ github.ref }}-${{ inputs.tasks || inputs.task }}")
     );
-    assert!(workflow.contains("remote-task-batch.sh --run \"$REQUESTED_REMOTE_TASKS\""));
-    assert!(workflow.contains("name: Install Bun for Loom verification"));
-    assert!(workflow.contains("uses: oven-sh/setup-bun@v2"));
-    assert!(workflow.contains("bun-version: 1.3.14"));
+    let task_setup_position = workflow
+        .find("name: Install Task for Loom-only verification")
+        .context("Loom-only remote execution must install Task")?;
+    let bun_setup_position = workflow
+        .find("name: Install Bun for Loom verification")
+        .context("Loom remote execution must install Bun")?;
+    let tool_proof_position = workflow
+        .find("name: Verify Loom command tools")
+        .context("Loom remote execution must prove both command tools")?;
+    let batch_position = workflow
+        .find("remote-task-batch.sh --run \"$REQUESTED_REMOTE_TASKS\"")
+        .context("remote execution must run the allowlisted batch")?;
+    assert!(task_setup_position < bun_setup_position);
+    assert!(bun_setup_position < tool_proof_position);
+    assert!(tool_proof_position < batch_position);
+    for required in [
+        "(inputs.tasks || inputs.task) == 'loom:verify'",
+        "uses: go-task/setup-task@v2",
+        "version: 3.52.0",
+        "uses: oven-sh/setup-bun@v2",
+        "bun-version: 1.3.14",
+        "task --version",
+        "bun --version",
+    ] {
+        assert!(
+            workflow.contains(required),
+            "Loom remote tool bootstrap missing: {required}"
+        );
+    }
     assert!(workflow.contains("(inputs.tasks || inputs.task) != 'loom:verify'"));
     assert!(batch_script.contains(
         "rust:ci) run_with_timeout \"$timeout_minutes\" env CI_ARTIFACT_DIR=\"$artifact_root/rust-ci\" task ci:pr:rust"

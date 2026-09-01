@@ -108,6 +108,11 @@ jobs:
               ;;
           esac
           .github/scripts/remote-task-batch.sh --validate "$REQUESTED_REMOTE_TASKS"
+      - name: Install Task for Loom-only verification
+        if: ${{ (inputs.tasks || inputs.task) == 'loom:verify' }}
+        uses: go-task/setup-task@v2
+        with:
+          version: 3.52.0
       - name: Install Bun for Loom verification
         if: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',loom:verify,') }}
         uses: oven-sh/setup-bun@v2
@@ -126,6 +131,11 @@ jobs:
           cache-write: "false"
           main-cache-only: "true"
           isolated-cache-write: ${{ (inputs.tasks || inputs.task) == 'hive:verify' && 'false' || 'true' }}
+      - name: Verify Loom command tools
+        if: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',loom:verify,') }}
+        run: |
+          task --version
+          bun --version
       - name: Wait for private Neo4j sidecar
         if: ${{ env.REQUEST_INCLUDES_HIVE == 'true' }}
         run: .github/scripts/wait-hive-neo4j.sh
