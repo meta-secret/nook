@@ -10,7 +10,10 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { loadTeamPlanJournal } from '../../src/team-plan/journal.ts';
+import {
+  canonicalTeamPlanJournalPath,
+  loadTeamPlanJournal,
+} from '../../src/team-plan/journal.ts';
 
 const roots: string[] = [];
 
@@ -39,4 +42,13 @@ test('rejects a hard-linked journal path', async () => {
   writeFileSync(journalPath, '{}\n');
   linkSync(journalPath, `${journalPath}.alias`);
   await expect(loadTeamPlanJournal(journalPath)).rejects.toThrow('unsafe');
+});
+
+test('reserves journal companion-file suffixes', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'nook-team-plan-journal-suffix-'));
+  roots.push(root);
+  for (const suffix of ['.publishing', '.discarding', '.discarded'])
+    await expect(
+      canonicalTeamPlanJournalPath(join(root, `journal${suffix}`)),
+    ).rejects.toThrow('reserved suffix');
 });

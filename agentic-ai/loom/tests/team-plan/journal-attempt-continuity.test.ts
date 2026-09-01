@@ -151,9 +151,15 @@ test('Team Plan journal continues attempts across generations', async () => {
       },
     },
   });
-  const replacementText = `${JSON.stringify({ ...value, generation: 2 })}\n`;
-  const replacement = decodeAndValidateModuleDeliveryPlan(replacementText);
-  if (replacement.status !== ModuleDeliveryValidationStatus.Accepted)
+  const provider = value.nodes[0];
+  if (!provider) throw new Error('Continuity provider is missing.');
+  const omittedText = `${JSON.stringify({
+    ...value,
+    generation: 2,
+    nodes: [{ ...provider, taskId: 'other' }],
+  })}\n`;
+  const omitted = decodeAndValidateModuleDeliveryPlan(omittedText);
+  if (omitted.status !== ModuleDeliveryValidationStatus.Accepted)
     throw new Error('Restart continuity plan was rejected.');
   await appendTeamPlanEvent({
     journalPath,
@@ -161,6 +167,24 @@ test('Team Plan journal continues attempts across generations', async () => {
       version: TEAM_PLAN_JOURNAL_VERSION,
       kind: TeamPlanEventKind.Restarted,
       sequence: 4,
+      planPath: started.planPath,
+      planText: omittedText,
+      planSha256: teamPlanSha256(omittedText),
+      modulePlanDigest: omitted.planDigest,
+      sourceCommit: started.sourceCommit,
+      generationRecordLimit: 2,
+    },
+  });
+  const replacementText = `${JSON.stringify({ ...value, generation: 3 })}\n`;
+  const replacement = decodeAndValidateModuleDeliveryPlan(replacementText);
+  if (replacement.status !== ModuleDeliveryValidationStatus.Accepted)
+    throw new Error('Reintroduced continuity plan was rejected.');
+  await appendTeamPlanEvent({
+    journalPath,
+    event: {
+      version: TEAM_PLAN_JOURNAL_VERSION,
+      kind: TeamPlanEventKind.Restarted,
+      sequence: 5,
       planPath: started.planPath,
       planText: replacementText,
       planSha256: teamPlanSha256(replacementText),
@@ -172,7 +196,7 @@ test('Team Plan journal continues attempts across generations', async () => {
   const secondAttempt = {
     taskId: 'provider',
     attempt: 2,
-    generation: 2,
+    generation: 3,
     planDigest: replacement.planDigest,
   };
   await appendTeamPlanEvent({
@@ -180,14 +204,14 @@ test('Team Plan journal continues attempts across generations', async () => {
     event: {
       version: TEAM_PLAN_JOURNAL_VERSION,
       kind: TeamPlanEventKind.Selected,
-      sequence: 5,
+      sequence: 6,
       attempts: [secondAttempt],
     },
   });
   expect((await loadTeamPlanJournal(journalPath)).events.at(-1)).toEqual({
     version: TEAM_PLAN_JOURNAL_VERSION,
     kind: TeamPlanEventKind.Selected,
-    sequence: 5,
+    sequence: 6,
     attempts: [secondAttempt],
   });
 });
@@ -222,9 +246,50 @@ test('rejects replacement limits below carried attempts', async () => {
       },
     },
   });
+  const secondAttempt = { ...attempt, attempt: 2 };
+  await appendTeamPlanEvent({
+    journalPath,
+    event: {
+      version: TEAM_PLAN_JOURNAL_VERSION,
+      kind: TeamPlanEventKind.Selected,
+      sequence: 4,
+      attempts: [secondAttempt],
+    },
+  });
+  await appendTeamPlanEvent({
+    journalPath,
+    event: {
+      version: TEAM_PLAN_JOURNAL_VERSION,
+      kind: TeamPlanEventKind.Recorded,
+      sequence: 5,
+      record: {
+        kind: TeamPlanRecordKind.FinalUnusable,
+        ...secondAttempt,
+        conclusion: ModuleDeliveryGenerationFenceKind.Failed,
+      },
+    },
+  });
+  const exhaustedText = `${JSON.stringify({ ...value, generation: 2 })}\n`;
+  const exhausted = decodeAndValidateModuleDeliveryPlan(exhaustedText);
+  if (exhausted.status !== ModuleDeliveryValidationStatus.Accepted)
+    throw new Error('Exhausted replacement plan was rejected.');
+  await appendTeamPlanEvent({
+    journalPath,
+    event: {
+      version: TEAM_PLAN_JOURNAL_VERSION,
+      kind: TeamPlanEventKind.Restarted,
+      sequence: 6,
+      planPath: started.planPath,
+      planText: exhaustedText,
+      planSha256: teamPlanSha256(exhaustedText),
+      modulePlanDigest: exhausted.planDigest,
+      sourceCommit: started.sourceCommit,
+      generationRecordLimit: 2,
+    },
+  });
   const replacementText = `${JSON.stringify({
     ...value,
-    generation: 2,
+    generation: 3,
     maxAttempts: 1,
   })}\n`;
   const replacement = decodeAndValidateModuleDeliveryPlan(replacementText);
@@ -236,7 +301,7 @@ test('rejects replacement limits below carried attempts', async () => {
       event: {
         version: TEAM_PLAN_JOURNAL_VERSION,
         kind: TeamPlanEventKind.Restarted,
-        sequence: 4,
+        sequence: 7,
         planPath: started.planPath,
         planText: replacementText,
         planSha256: teamPlanSha256(replacementText),

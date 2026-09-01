@@ -135,6 +135,29 @@ export async function createTeamPlanJournal(
   });
 }
 
+export async function recoverTeamPlanStartRunId(
+  journalPath: string,
+): Promise<string | false> {
+  const path = await canonicalTeamPlanJournalPath(journalPath);
+  const publication = `${path}.publishing`;
+  const published = await pathExists(path);
+  const publishing = await pathExists(publication);
+  if (!published && !publishing) return false;
+  const activePath = published ? path : publication;
+  const journalFile = await readBoundedTeamPlanJournal({
+    path: activePath,
+    maximumBytes: MAX_TEAM_PLAN_JOURNAL_BYTES,
+    expectedLinkCount: published && publishing ? 2 : 1,
+  });
+  const journal = decodeTeamPlanJournal({
+    serialized: journalFile.serialized,
+    path,
+  });
+  if (journal.events.length !== 1)
+    throw new Error('Team Plan start retry is no longer available.');
+  return journal.started.runId;
+}
+
 export async function loadTeamPlanJournal(
   journalPath: string,
 ): Promise<TeamPlanJournal> {
@@ -603,12 +626,10 @@ function journalGenerationCounters(
       selectedLeaseCount = 0;
       recordedCount = 0;
       const planIds = new Set(validation.plan.nodes.map((node) => node.taskId));
-      for (const taskId of latestAttempts.keys())
-        if (!planIds.has(taskId)) latestAttempts.delete(taskId);
       if (
         [...latestAttempts].some(
           ([taskId, attempt]) =>
-            planIds.has(taskId) && attempt >= validation.plan.maxAttempts,
+            planIds.has(taskId) && attempt > validation.plan.maxAttempts,
         )
       )
         throw new Error(

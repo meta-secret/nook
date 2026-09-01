@@ -89,6 +89,7 @@ export async function leaseTeamPlan(
         sequence: session.journal.events.length + 1,
         attempts: recording.leases.map(attemptIdentity),
       };
+      assertTeamPlanSessionRepositoryAtSource(session);
       await appendTeamPlanEvent({ journalPath: request.journalPath, event });
       return { snapshot: teamPlanSnapshot(session), leases: recording.leases };
     },
@@ -106,7 +107,11 @@ function authorizedAdmissions(request: {
     throw new Error('Team Plan admission authorization is invalid.');
   const authorized = request.attempts.map((attempt) =>
     request.admissions.find(
-      (admission) => attemptKey(admission) === attemptKey(attempt),
+      (admission) =>
+        admission.taskId === attempt.taskId &&
+        admission.attempt === attempt.attempt &&
+        admission.generation === attempt.generation &&
+        admission.planDigest === attempt.planDigest,
     ),
   );
   if (authorized.some((admission) => !admission))

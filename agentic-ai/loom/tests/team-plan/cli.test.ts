@@ -503,6 +503,30 @@ test('rejects a delayed lease after its selected attempt advances', async () => 
   }
 });
 
+test('classifies journal-path I/O as a storage failure', async () => {
+  const fixture = createGitFixture();
+  fixtures.push(fixture);
+  const planPath = join(fixture.root, 'storage-failure-plan.json');
+  const occupiedParent = join(fixture.root, 'occupied-parent');
+  writeJson({
+    path: planPath,
+    value: plan({ sourceCommit: fixture.baselineCommit, generation: 1 }),
+  });
+  writeFileSync(occupiedParent, 'occupied\n');
+  await expectTeamPlanCliFailure({
+    argv: [
+      'start',
+      '--plan',
+      planPath,
+      '--journal',
+      join(occupiedParent, 'events.jsonl'),
+      '--repository-root',
+      fixture.sourceRoot,
+    ],
+    code: LoomFailureCode.TeamPlanStorageFailed,
+  });
+});
+
 test('localizes visible parse failures through the Loom catalog', async () => {
   const error = spyOn(console, 'error').mockImplementation(() => {});
   try {
@@ -657,7 +681,7 @@ test('admits the complete permitted nested provider evidence ancestry', async ()
       },
     });
     const requestBytes = statSync(requestPath).size;
-    expect(MAX_TEAM_PLAN_RECORD_REQUEST_BYTES).toBe(16 * 1024 * 1024);
+    expect(MAX_TEAM_PLAN_RECORD_REQUEST_BYTES).toBe(18 * 1024 * 1024);
     expect(requestBytes).toBeGreaterThan(4_194_304);
     expect(requestBytes).toBeLessThanOrEqual(
       MAX_TEAM_PLAN_RECORD_REQUEST_BYTES,

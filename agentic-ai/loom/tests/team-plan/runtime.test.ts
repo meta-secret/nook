@@ -303,13 +303,28 @@ describe('Team Plan runtime', () => {
       fixture,
       [fixtureReadNode([fixture, 'alpha']), fixtureReadNode([fixture, 'beta'])],
     ]);
-    await startTeamPlan(startRequest(file));
+    const started = await startTeamPlan(startRequest(file));
+    expect(await startTeamPlan(startRequest(file))).toEqual(started);
     const candidates = await selectTeamPlan({ journalPath: file.journalPath });
     expect(candidates.admissions.map(({ taskId }) => taskId).sort()).toEqual([
       'alpha',
       'beta',
     ]);
     expect(candidates.snapshot.activeLeases).toHaveLength(0);
+    await expect(
+      leaseTeamPlan({
+        journalPath: file.journalPath,
+        runId: candidates.snapshot.runId,
+        generation: candidates.snapshot.generation,
+        planDigest: candidates.snapshot.planDigest,
+        attempts: candidates.admissions
+          .filter(({ taskId }) => taskId === 'beta')
+          .map((admission) => ({
+            ...attemptIdentity(admission),
+            generation: 2,
+          })),
+      }),
+    ).rejects.toThrow('authorization is stale');
     const leased = await leaseTeamPlan({
       journalPath: file.journalPath,
       runId: candidates.snapshot.runId,
@@ -429,6 +444,7 @@ describe('Team Plan runtime', () => {
       journalPath: aliased.journalPath,
     });
     expect(finalized.headCommit).toBe(fixture.baselineCommit);
+    const planText = readFileSync(file.path, 'utf8');
     unlinkSync(file.path);
     expect(
       await finalizeTeamPlan({ journalPath: aliased.journalPath }),
@@ -437,6 +453,10 @@ describe('Team Plan runtime', () => {
       journalPath: aliased.journalPath,
       runId: started.runId,
     });
+    writeFileSync(file.path, planText);
+    expect((await startTeamPlan(startRequest(aliased))).runId).not.toBe(
+      started.runId,
+    );
   }, 15_000);
 
   test('replays only attempts persisted in a selected event', async () => {
@@ -453,7 +473,7 @@ describe('Team Plan runtime', () => {
       runId: selected.snapshot.runId,
       generation: selected.snapshot.generation,
       planDigest: selected.snapshot.planDigest,
-      taskIds: selected.admissions.map(({ taskId }) => taskId),
+      attempts: selected.admissions.map(attemptIdentity),
     });
     expect(leased.leases).toHaveLength(2);
     const lines = readFileSync(file.journalPath, 'utf8').trim().split('\n');

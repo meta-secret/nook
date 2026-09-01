@@ -11,6 +11,12 @@ import {
 } from 'node:fs/promises';
 import { basename, dirname, resolve } from 'node:path';
 
+const RESERVED_JOURNAL_SUFFIXES = [
+  '.discarded',
+  '.discarding',
+  '.publishing',
+] as const;
+
 export type JournalStorageHook =
   | Readonly<{ presence: 'absent' }>
   | Readonly<{ presence: 'present'; run: () => void }>;
@@ -19,6 +25,7 @@ export async function canonicalTeamPlanJournalPath(
   journalPath: string,
 ): Promise<string> {
   const requested = resolve(journalPath);
+  assertJournalNameAvailable(requested);
   await mkdir(dirname(requested), { recursive: true });
   const parent = await realpath(dirname(requested));
   return resolve(parent, basename(requested));
@@ -33,6 +40,11 @@ export async function canonicalExistingJournalPath(
     throw new Error('Team Plan journal path is unsafe.');
   const parent = await realpath(dirname(requested));
   return resolve(parent, basename(requested));
+}
+
+function assertJournalNameAvailable(path: string): void {
+  if (RESERVED_JOURNAL_SUFFIXES.some((suffix) => path.endsWith(suffix)))
+    throw new Error('Team Plan journal path uses a reserved suffix.');
 }
 
 export async function readBoundedTeamPlanJournal(

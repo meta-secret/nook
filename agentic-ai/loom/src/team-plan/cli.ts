@@ -425,15 +425,15 @@ function parseTeamPlanCommand(
         ? attemptsValue
             .split(',', MAX_MODULE_DELIVERY_NODES + 1)
             .map((entry) => {
-             const [taskId, attemptText, extension] = entry.split(':');
-             return {
-               taskId: taskId ?? '',
-              attempt: Number(attemptText),
-              generation,
-              planDigest: planDigest ?? '',
-               extension,
-             };
-           })
+              const [taskId, attemptText, extension] = entry.split(':');
+              return {
+                taskId: taskId ?? '',
+                attempt: Number(attemptText),
+                generation,
+                planDigest: planDigest ?? '',
+                extension,
+              };
+            })
         : [];
     if (
       journalPath.kind === CommandPathKind.Invalid ||
@@ -450,8 +450,8 @@ function parseTeamPlanCommand(
           !/^[a-z][a-z0-9_-]{0,63}$/u.test(taskId) ||
           !Number.isSafeInteger(attempt) ||
           attempt < 1 ||
-           typeof extension === 'string',
-       )
+          typeof extension === 'string',
+      )
     )
       return { kind: TeamPlanCommandParseKind.Invalid };
     return {
