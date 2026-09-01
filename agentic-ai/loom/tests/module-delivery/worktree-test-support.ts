@@ -173,7 +173,10 @@ export function createGitFixture(): GitFixture {
     baselineCommit: '',
   };
   const git = fixtureGit(provisional);
-  git(['init', '--quiet']);
+  git(['-c', 'init.templateDir=', 'init', '--quiet']);
+  for (const name of ['hooks', 'info'])
+    mkdirSync(join(sourceRoot, '.git', name));
+  writeFileSync(join(sourceRoot, '.git/info/exclude'), '');
   git(['config', 'user.name', 'Nook Test']);
   git(['config', 'user.email', 'nook-test@example.invalid']);
   const initialWrite: FixtureFileWrite = {
