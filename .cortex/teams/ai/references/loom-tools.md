@@ -94,18 +94,6 @@ fields, other versions, partial lines, invalid ordering, and trailing events
 fail closed. Incompatible future changes require an explicit versioned
 migration or deliberate cleanup.
 
-Recovery uses the complete journal:
-
-- Every mutation of an existing run takes the run's Git reference lock. It
-  replays the stream before appending.
-- Replay revalidates the reviewed plans, source state, lifecycle, leases,
-  terminal records, workspace, and run artifact references.
-- Replay rejects a damaged stream instead of truncating it.
-- Durable artifact references reconstruct accepted results after restart.
-- Interrupted discard uses a `.discarding` tombstone and the same expected run
-  ID.
-- Resume accepts only a tombstone backed by the original journal inode.
-
 The package README owns the detailed command and recovery behavior. See
 [`Team Plan commands`](../../../../agentic-ai/loom/README.md#team-plan-commands).
 
