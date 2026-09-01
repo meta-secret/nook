@@ -42,6 +42,7 @@ import {
   isWebsiteLoginSavePendingMessage,
 } from '../lib/login-save-messages'
 import { isAuthenticationOutcomeClassifyMessage } from '../lib/outcome-evidence-messages'
+import { ExtensionRuntimeRequestType } from '../lib/extension-runtime-request-type'
 import {
   isWebsitePasskeyCancelMessage,
   isWebsitePasskeyOptionsMessage,
@@ -195,6 +196,15 @@ const externalCompanionRoutingDependencies: Parameters<
 chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
   if (!runtimeMessage || typeof runtimeMessage !== 'object') return false
   const message = runtimeMessage
+  if (
+    sender.id === chrome.runtime.id &&
+    'type' in message &&
+    message.type === ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces
+  ) {
+    invalidateAllLoginMatchAvailability()
+    sendResponse(true)
+    return false
+  }
   const lifecycleRoutingArgs: Parameters<
     typeof routeExtensionLifecycleMessage
   >[0] = {

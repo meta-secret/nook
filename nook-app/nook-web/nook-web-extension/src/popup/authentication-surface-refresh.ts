@@ -1,5 +1,15 @@
 import { ExtensionRuntimeRequestType } from '../lib/extension-runtime-request-type'
 
+export async function refreshInvokingAuthenticationSurfaceAfterUnlock(
+  popupSearch = location.search,
+): Promise<void> {
+  const message: Parameters<typeof chrome.runtime.sendMessage>[0] = {
+    type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces,
+  }
+  await chrome.runtime.sendMessage(message)
+  refreshInvokingAuthenticationSurface(popupSearch)
+}
+
 export function refreshInvokingAuthenticationSurface(
   popupSearch = location.search,
 ): void {
