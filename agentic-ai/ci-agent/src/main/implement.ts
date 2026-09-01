@@ -36,7 +36,7 @@ type PreserveImplementedBranchArgs = {
 
 export function recordTrustedBudgetBlocker(
   error: unknown,
-  outputPath: string | undefined,
+  outputPath: string,
 ): void {
   if (!(error instanceof AuthoredChangeBudgetExceededError) || !outputPath) {
     return;
@@ -280,7 +280,7 @@ export async function runCiDeliver(): Promise<void> {
       verifyBranch: () => branchExistsOnOrigin(octokit, repoRef, target.branch),
     });
   } catch (error) {
-    recordTrustedBudgetBlocker(error, process.env.GITHUB_OUTPUT);
+    recordTrustedBudgetBlocker(error, process.env.GITHUB_OUTPUT || "");
     throw error;
   }
   log.info(
