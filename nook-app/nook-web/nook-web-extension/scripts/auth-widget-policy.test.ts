@@ -4,7 +4,6 @@ import {
   compactProgressState,
   isTrustedAuthAction,
   safeSavedOptionNumber,
-  shouldOfferOpenVault,
   type AuthWidgetPresentationInput,
 } from '../src/lib/auth-widget-policy'
 describe('Nook Pilot in-page authorization policy', () => {
@@ -34,7 +33,6 @@ describe('Nook Pilot in-page authorization policy', () => {
       },
     }
     expect(authWidgetStartsCollapsed(emptyMatches)).toBe(false)
-    expect(shouldOfferOpenVault(emptyMatches.loginMatches)).toBe(true)
     const savedMatch: AuthWidgetPresentationInput = {
       savedLoginCapability: 'fill-saved-login',
       loginMatches: {
@@ -43,7 +41,6 @@ describe('Nook Pilot in-page authorization policy', () => {
       },
     }
     expect(authWidgetStartsCollapsed(savedMatch)).toBe(false)
-    expect(shouldOfferOpenVault(savedMatch.loginMatches)).toBe(false)
     const unresolvedStates: AuthWidgetPresentationInput[] = [
       {
         savedLoginCapability: 'fill-saved-login',

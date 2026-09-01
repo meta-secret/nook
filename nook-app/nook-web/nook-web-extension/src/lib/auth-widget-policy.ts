@@ -41,12 +41,6 @@ export function authWidgetStartsCollapsed({
   return loginMatches.kind !== 'ready'
 }
 
-export function shouldOfferOpenVault(
-  loginMatches: WebsiteLoginMatchAvailability,
-): boolean {
-  return loginMatches.kind === 'ready' && loginMatches.count === 0
-}
-
 export function safeSavedOptionNumber(index: number): string {
   return String(index + 1)
 }
