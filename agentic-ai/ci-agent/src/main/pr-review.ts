@@ -33,6 +33,12 @@ type ReviewStabilizationInput = {
   waitMs: (milliseconds: number) => Promise<void>;
 };
 
+type ReviewRequestInput = {
+  circuitBreakerAcknowledged?: boolean;
+  inspectFeedback: () => Promise<PrFeedbackSummary>;
+  requestReview: ReviewStabilizationRequest;
+};
+
 type BoundedAttempt<T> =
   | { completed: true; value: T }
   | { completed: false };
@@ -48,6 +54,11 @@ export enum ReviewStabilizationState {
   Clean = "clean",
   Findings = "findings",
   TimedOut = "timed-out",
+}
+
+export enum ReviewRequestState {
+  CircuitBreaker = "circuit-breaker",
+  Requested = "requested",
 }
 
 enum FeedbackClassificationState {
@@ -72,15 +83,49 @@ export type ReviewStabilizationResult = {
   state: ReviewStabilizationState;
 };
 
+export type ReviewRequestResult =
+  | {
+      feedback: PrFeedbackSummary;
+      state: ReviewRequestState.CircuitBreaker;
+    }
+  | {
+      fallback?: ExactHeadReviewFallback;
+      headSha: string;
+      settled: boolean;
+      state: ReviewRequestState.Requested;
+    };
+
 export async function runPrReviewRequest(): Promise<void> {
   const { prNumber, repository } = readReviewContext();
-
-  const result = await requestExactHeadReview(
-    createOctokit(),
-    parseRepository(repository),
-    prNumber,
-  );
+  const octokit = createOctokit();
+  const repoRef = parseRepository(repository);
+  const result = await requestExactHeadReviewWithCircuitBreaker({
+    circuitBreakerAcknowledged: readCircuitBreakerAcknowledgement(),
+    inspectFeedback: () => inspectPrFeedback(octokit, repoRef, prNumber),
+    requestReview: () => requestExactHeadReview(octokit, repoRef, prNumber),
+  });
   console.log(prettyJson({ number: prNumber, repository, ...result }));
+  if (result.state === ReviewRequestState.CircuitBreaker) {
+    throw new Error(
+      `PR #${prNumber} has reached three Cloud-review finding batches; no new review was requested before comprehensive stabilization`,
+    );
+  }
+}
+
+export async function requestExactHeadReviewWithCircuitBreaker(
+  input: ReviewRequestInput,
+): Promise<ReviewRequestResult> {
+  const feedback = await input.inspectFeedback();
+  if (
+    classifyFeedbackState(
+      feedback,
+      input.circuitBreakerAcknowledged ?? false,
+    ) === FeedbackClassificationState.CircuitBreaker
+  ) {
+    return { feedback, state: ReviewRequestState.CircuitBreaker };
+  }
+  const result = await input.requestReview();
+  return { ...result, state: ReviewRequestState.Requested };
 }
 
 export async function runPrReviewStabilization(): Promise<void> {

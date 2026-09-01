@@ -82,6 +82,7 @@ fn remote_task_catalog_is_allowlisted_and_exact_head_only() {
 fn complete_validation_dispatches_before_review_collection() -> Result<()> {
     let agentic_tasks = read_fallible(".task/agentic-ai.yml")?;
     let direct_validation = read_fallible(".task/remote-execution.yml")?;
+    let readme = read_fallible("README.md")?;
     let current_base_position = direct_validation
         .find(".github/scripts/require-current-base.sh origin \"$base_ref\"")
         .context("direct validation must require a current base")?;
@@ -89,7 +90,7 @@ fn complete_validation_dispatches_before_review_collection() -> Result<()> {
         .find("gh pr edit \"$REQUESTED_PR\" --add-label \"$validation_label\"")
         .context("direct validation must apply its label")?;
     let review_request_position = direct_validation
-        .find("task pr:review PR=\"$REQUESTED_PR\"")
+        .find("if ! task pr:review \\")
         .context("direct validation must request concurrent exact-head review")?;
     let dispatched_head_position = direct_validation
         .find("dispatched_pr_state=\"$(gh pr view \"$REQUESTED_PR\" --json headRefOid,baseRefName")
@@ -127,6 +128,23 @@ fn complete_validation_dispatches_before_review_collection() -> Result<()> {
         !direct_validation.contains("pr:review:stabilize")
             && !direct_validation.contains("REQUEST_REVIEW_WAIT_SECONDS"),
         "complete validation must not wait for review before dispatch"
+    );
+    for required in [
+        "review_request_state=\"not-requested\"",
+        "Keep this validation running; collect or retry review separately without restarting validation.",
+        "Exact-head review request state: $review_request_state.",
+        "REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED=\"$REQUEST_REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED\"",
+    ] {
+        assert!(
+            direct_validation.contains(required),
+            "post-dispatch review partial-state contract missing: {required}"
+        );
+    }
+    assert!(
+        readme.contains(
+            "task pr:review:stabilize PR=410 # bounded Codex collection after hosted validation dispatch"
+        ),
+        "public command catalog must place review stabilization after hosted dispatch"
     );
     assert!(
         direct_validation.contains(

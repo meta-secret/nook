@@ -6,7 +6,9 @@ import {
   ExactHeadReviewFallback,
 } from "../main/github-review.js";
 import {
+  ReviewRequestState,
   ReviewStabilizationState,
+  requestExactHeadReviewWithCircuitBreaker,
   stabilizeExactHeadReview,
 } from "../main/pr-review.js";
 
@@ -30,6 +32,41 @@ const cleanFeedback: PrFeedbackSummary = {
   substantiveReviews: 0,
   unresolvedThreads: 0,
 };
+
+test("non-waiting review request honors the circuit breaker", async () => {
+  let requests = 0;
+  const result = await requestExactHeadReviewWithCircuitBreaker({
+    inspectFeedback: async () => ({
+      ...cleanFeedback,
+      findingBatches: 3,
+    }),
+    requestReview: async () => {
+      requests += 1;
+      return { headSha: "head-sha", settled: false };
+    },
+  });
+
+  assert.equal(result.state, ReviewRequestState.CircuitBreaker);
+  assert.equal(requests, 0);
+});
+
+test("acknowledged stabilization permits a non-waiting review request", async () => {
+  let requests = 0;
+  const result = await requestExactHeadReviewWithCircuitBreaker({
+    circuitBreakerAcknowledged: true,
+    inspectFeedback: async () => ({
+      ...cleanFeedback,
+      findingBatches: 3,
+    }),
+    requestReview: async () => {
+      requests += 1;
+      return { headSha: "head-sha", settled: false };
+    },
+  });
+
+  assert.equal(result.state, ReviewRequestState.Requested);
+  assert.equal(requests, 1);
+});
 
 test("stabilizeExactHeadReview waits once and accepts clean feedback", async () => {
   let now = 0;

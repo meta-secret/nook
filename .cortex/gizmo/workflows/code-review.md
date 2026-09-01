@@ -62,6 +62,12 @@ The command:
    delivery owner explicitly acknowledges that pass with
    `REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED=1` before the next review collection.
 
+The non-waiting request checks that circuit before contacting Codex. An open
+circuit suppresses the request but does not stop already-dispatched validation.
+A transient request failure reports a partial `not-requested` state and also
+leaves validation running. Collect or retry review separately; do not restart
+hosted validation merely because the review request was unavailable.
+
 Never run `task pr:review:stabilize` before hosted validation dispatch. It may
 collect a pending review only after dispatch while checks are already running.
 
@@ -86,19 +92,22 @@ requires immediate fail-closed action.
 
 When a new finding arrives:
 
-1. Stop watching or cancel validation for the obsolete head when safe.
-2. Dispatch the fix to the responsible team.
-3. Integrate the verified fix commit.
-4. Reply to and resolve the thread.
-5. Run pre-push hygiene through the responsible formatter owner and push the
+1. For a security finding, fail closed and stop or cancel unsafe validation.
+2. For every other finding, keep the in-flight validation head running until
+   hosted checks and exact-head review settle.
+3. Combine review findings and failed checks into one coherent repair batch.
+4. Dispatch that batch to the responsible team.
+5. Integrate the verified fix commit, then reply to and resolve the thread.
+6. Run pre-push hygiene through the responsible formatter owner and push the
    replacement head.
-6. Restart complete validation for that head. If it is not yet
+7. Restart complete validation for that head. If it is not yet
    validation-ready, dispatch at least one relevant focused remote job first.
 
 Use a focused task instead only when it isolates a known failure faster.
 
-Only let exact-head validation finish while the actionable feedback queue is
-empty. Feedback that arrives while checks run takes priority.
+Non-security feedback that arrives while checks run joins the pending repair
+batch. It does not cancel validation or replace the head before both result
+sets settle.
 
 `task pr:ready` enforces unresolved-thread count alongside the exact-head
 deployment, branch state, and applicable repository-owned PR checks. It reports
@@ -121,9 +130,10 @@ Cursor, CodeRabbit, or another service:
    and push when files changed.
 5. If the head is not validation-ready, dispatch at least one relevant focused
    hosted task.
-6. If complete validation was already requested, restart it for the replacement
-   head. This first stabilizes one exact-head Codex review. Otherwise start it
-   when that head is ready for the final gate.
+6. If complete validation was already requested, dispatch it for the
+   replacement head first and collect exact-head Codex review concurrently.
+   Otherwise start it when that head is ready for the final gate. In both cases,
+   wait for both result sets before forming another repair batch.
 7. Reply on the original thread or comment with the fix and validation when a
    targeted reply is possible.
 8. Resolve only after the targeted reply is visible and the finding is fixed or

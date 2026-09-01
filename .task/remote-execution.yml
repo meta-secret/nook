@@ -59,12 +59,13 @@ tasks:
       - .github/scripts/remote-task-batch.sh --list
 
   pr:validate:
-    desc: Trigger required PR validation immediately and request concurrent exact-head Codex review (PR=<number>, FULL_E2E=1 for a Main-fix browser gate).
+    desc: Trigger required PR validation immediately and request concurrent exact-head Codex review (PR=<number>, FULL_E2E=1 for a Main-fix browser gate, REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED=1 after comprehensive stabilization).
     requires:
       vars: [PR]
     env:
       REQUESTED_PR: '{{.PR}}'
       REQUEST_FULL_E2E: '{{default "0" .FULL_E2E}}'
+      REQUEST_REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED: '{{default "0" .REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED}}'
     preconditions:
       - sh: command -v gh >/dev/null 2>&1
         msg: GitHub CLI is required.
@@ -82,6 +83,10 @@ tasks:
         esac
         if [ "$REQUEST_FULL_E2E" != "0" ] && [ "$REQUEST_FULL_E2E" != "1" ]; then
           echo "FULL_E2E must be 0 or 1." >&2
+          exit 2
+        fi
+        if [ "$REQUEST_REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED" != "0" ] && [ "$REQUEST_REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED" != "1" ]; then
+          echo "REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED must be 0 or 1." >&2
           exit 2
         fi
 
@@ -117,7 +122,13 @@ tasks:
           gh pr edit "$REQUESTED_PR" --remove-label "$validation_label"
         fi
         gh pr edit "$REQUESTED_PR" --add-label "$validation_label"
-        task pr:review PR="$REQUESTED_PR"
+        review_request_state="requested"
+        if ! task pr:review \
+          PR="$REQUESTED_PR" \
+          REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED="$REQUEST_REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED"; then
+          review_request_state="not-requested"
+          echo "::warning::Hosted validation is active, but the exact-head review request did not complete. Keep this validation running; collect or retry review separately without restarting validation." >&2
+        fi
         dispatched_pr_state="$(gh pr view "$REQUESTED_PR" --json headRefOid,baseRefName --jq '.headRefOid + "|" + .baseRefName')"
         dispatched_pr_sha="${dispatched_pr_state%%|*}"
         dispatched_base_ref="${dispatched_pr_state#*|}"
@@ -166,4 +177,4 @@ tasks:
           echo "PR #$REQUESTED_PR changed head or base while validation was dispatched; removed $validation_label from the replacement state." >&2
           exit 2
         fi
-        echo "Triggered PR validation and requested concurrent exact-head review for $pr_sha with label $validation_label."
+        echo "Triggered PR validation for $pr_sha with label $validation_label. Exact-head review request state: $review_request_state."

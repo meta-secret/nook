@@ -591,7 +591,7 @@ tasks:
           CI_AGENT_CMD: pr-ready
 
   pr:review:
-    desc: Request one idempotent exact-head Codex review (PR=<number>); never waits and is not required for readiness.
+    desc: Request one circuit-breaker-guarded, idempotent exact-head Codex review (PR=<number>, REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED=1 after comprehensive stabilization); never waits and is not required for readiness.
     requires:
       vars: [PR]
     cmds:
@@ -599,6 +599,7 @@ tasks:
         vars:
           PR: '{{.PR}}'
           CI_AGENT_CMD: pr-review
+          REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED: '{{default "0" .REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED}}'
 
   pr:review:stabilize:
     desc: Collect exact-head Cloud review after hosted validation dispatch, allowing a bounded timeout (PR=<number>, REVIEW_WAIT_SECONDS defaults to 600, REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED=1 after comprehensive stabilization).
