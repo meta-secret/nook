@@ -294,7 +294,10 @@ async function localizedTeamPlanRuntime<T>(
     throw loomFailureFromCause({
       code: failure.code,
       cause: new Error(
-        localizedRuntimeFailure(request.messages, failure.code),
+        localizedRuntimeFailure({
+          messages: request.messages,
+          code: failure.code,
+        }),
         {
           cause: failure,
         },
@@ -303,19 +306,19 @@ async function localizedTeamPlanRuntime<T>(
   }
 }
 
-function localizedRuntimeFailure(
-  messages: TeamPlanMessages,
-  code: LoomFailureCode,
-): string {
-  switch (code) {
+function localizedRuntimeFailure(request: {
+  readonly messages: TeamPlanMessages;
+  readonly code: LoomFailureCode;
+}): string {
+  switch (request.code) {
     case LoomFailureCode.TeamPlanValidationFailed:
-      return messages.runtimeValidationFailure;
+      return request.messages.runtimeValidationFailure;
     case LoomFailureCode.TeamPlanStorageFailed:
-      return messages.runtimeStorageFailure;
+      return request.messages.runtimeStorageFailure;
     case LoomFailureCode.TeamPlanRecoveryFailed:
-      return messages.runtimeRecoveryFailure;
+      return request.messages.runtimeRecoveryFailure;
     default:
-      return messages.runtimeCommandFailure;
+      return request.messages.runtimeCommandFailure;
   }
 }
 
