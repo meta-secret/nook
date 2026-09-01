@@ -55,6 +55,7 @@ test('counts newline-terminated untracked text like Git numstat', () => {
   assert.equal(countTextLines('x\n'), 1)
   assert.equal(countTextLines('x'), 1)
   assert.equal(countTextLines('x\r\ny\r\n'), 2)
+  assert.equal(countTextLines('x\ry\r'), 1)
 })
 
 test('counts an untracked symlink blob without following its target', () => {
@@ -82,7 +83,9 @@ test('binds review growth to the current PR head, thread, and changed path', () 
   }
   assert.equal(reviewBatchMatches(input), true)
   assert.equal(reviewBatchMatches({ ...input, changedPaths: ['src/other.ts'] }), false)
+  assert.equal(reviewBatchMatches({ ...input, threads: [{ ...input.threads[0], isOutdated: true }] }), true)
   assert.equal(reviewBatchMatches({ ...input, threads: [{ ...input.threads[0], isResolved: true }] }), false)
+  assert.equal(reviewBatchMatches({ ...input, changedPaths: ['src/renamed.ts', 'src/fix.ts'] }), true)
 })
 
 test('accepts reviewed-head bodies, committed fixes, and later PR comments', () => {

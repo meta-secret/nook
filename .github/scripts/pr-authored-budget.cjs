@@ -130,8 +130,8 @@ function addUntracked(summary, paths) {
 
 function countTextLines(text) {
   if (text.length === 0) return 0
-  const terminators = text.match(/\r\n|\n|\r/gu)?.length ?? 0
-  return terminators + (/(?:\r\n|\n|\r)$/u.test(text) ? 0 : 1)
+  const terminators = text.match(/\n/gu)?.length ?? 0
+  return terminators + (text.endsWith('\n') ? 0 : 1)
 }
 
 function evaluateBudget({ authoredLines, prNumber, verifiedReviewContext }) {
@@ -178,7 +178,7 @@ function reviewBatchMatches({
   if (hasNextPage || changedPaths.length === 0) return false
   const currentPaths = new Set(
     threads
-      .filter((thread) => !thread.isResolved && !thread.isOutdated)
+      .filter((thread) => !thread.isResolved)
       .map((thread) => thread.path),
   )
   const inlineMatch = changedPaths.some((path) => currentPaths.has(path))
@@ -213,7 +213,7 @@ function verifyReviewContext(prNumber) {
     '-f', `owner=${owner}`, '-f', `name=${name}`, '-F', `number=${prNumber}`,
     '-f', `head=${pr.headRefOid}`,
   ])).data.repository
-  const changedPaths = runGit(['diff', '--name-only', '-z', pr.headRefOid])
+  const changedPaths = runGit(['diff', '--name-only', '--no-renames', '-z', pr.headRefOid])
     .split('\0')
     .concat(runGit(['ls-files', '--others', '--exclude-standard', '-z']).split('\0'))
     .filter(Boolean)
