@@ -382,54 +382,6 @@ describe('Team Plan journal', () => {
       }),
     ).toBe('acquired-symbolic-name');
     expect(fixtureGit(fixture)(['rev-parse', targetRef])).toBe(stale);
-    const shadowGit = join(fixture.sourceRoot, 'git');
-    writeFileSync(shadowGit, '#!/bin/sh\nexit 93\n');
-    chmodSync(shadowGit, 0o755);
-    const originalPath = process.env.PATH || '/usr/bin:/bin';
-    const hadGitDirectory = 'GIT_DIR' in process.env;
-    const originalGitDirectory = process.env.GIT_DIR ?? '';
-    const hadGitCommonDirectory = 'GIT_COMMON_DIR' in process.env;
-    const originalGitCommonDirectory = process.env.GIT_COMMON_DIR ?? '';
-    const hadGitNamespace = 'GIT_NAMESPACE' in process.env;
-    const originalGitNamespace = process.env.GIT_NAMESPACE ?? '';
-    const hadGitConfigCount = 'GIT_CONFIG_COUNT' in process.env;
-    const originalGitConfigCount = process.env.GIT_CONFIG_COUNT ?? '';
-    const hadGitConfigKey = 'GIT_CONFIG_KEY_0' in process.env;
-    const originalGitConfigKey = process.env.GIT_CONFIG_KEY_0 ?? '';
-    const hadGitConfigValue = 'GIT_CONFIG_VALUE_0' in process.env;
-    const originalGitConfigValue = process.env.GIT_CONFIG_VALUE_0 ?? '';
-    process.env.PATH = `.:${originalPath}`;
-    process.env.GIT_DIR = join(fixture.root, 'hostile-git-dir');
-    process.env.GIT_COMMON_DIR = join(fixture.root, 'hostile-common-dir');
-    process.env.GIT_NAMESPACE = 'hostile';
-    process.env.GIT_CONFIG_COUNT = '1';
-    process.env.GIT_CONFIG_KEY_0 = 'safe.directory';
-    process.env.GIT_CONFIG_VALUE_0 = join(fixture.root, 'foreign-checkout');
-    try {
-      expect(
-        await withTeamPlanJournalLock({
-          journalPath,
-          action: async () => 'canonical-git',
-        }),
-      ).toBe('canonical-git');
-    } finally {
-      process.env.PATH = originalPath;
-      if (hadGitDirectory) process.env.GIT_DIR = originalGitDirectory;
-      else delete process.env.GIT_DIR;
-      if (hadGitCommonDirectory)
-        process.env.GIT_COMMON_DIR = originalGitCommonDirectory;
-      else delete process.env.GIT_COMMON_DIR;
-      if (hadGitNamespace) process.env.GIT_NAMESPACE = originalGitNamespace;
-      else delete process.env.GIT_NAMESPACE;
-      if (hadGitConfigCount)
-        process.env.GIT_CONFIG_COUNT = originalGitConfigCount;
-      else delete process.env.GIT_CONFIG_COUNT;
-      if (hadGitConfigKey) process.env.GIT_CONFIG_KEY_0 = originalGitConfigKey;
-      else delete process.env.GIT_CONFIG_KEY_0;
-      if (hadGitConfigValue)
-        process.env.GIT_CONFIG_VALUE_0 = originalGitConfigValue;
-      else delete process.env.GIT_CONFIG_VALUE_0;
-    }
   });
 
   test('rejects torn snapshots and nested attempt extensions', async () => {

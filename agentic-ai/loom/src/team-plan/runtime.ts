@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, realpath } from 'node:fs/promises';
+import { mkdir, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 
@@ -46,6 +46,7 @@ import {
   teamPlanSha256,
   withTeamPlanJournalLock,
 } from './journal.ts';
+import { readBoundedTeamPlanFile } from './runtime-input.ts';
 
 import type { SpawnSyncOptionsWithStringEncoding } from 'node:child_process';
 import type {
@@ -627,9 +628,10 @@ function restartTeamPlanSession(request: {
 }
 
 async function reviewedPlan(planPath: string) {
-  const path = await realpath(resolve(planPath));
-  const text = await readFile(path, 'utf8');
-  assertPlanByteBound(text);
+  const { path, text } = await readBoundedTeamPlanFile({
+    planPath,
+    maximumBytes: MAX_TEAM_PLAN_BYTES,
+  });
   return {
     path,
     text,
@@ -786,11 +788,6 @@ function acceptedTeamPlan(planText: string): ValidatedModuleDeliveryPlan {
       `Team Plan is invalid: ${JSON.stringify(validation.issues)}`,
     );
   return validation;
-}
-
-function assertPlanByteBound(planText: string): void {
-  if (Buffer.byteLength(planText) > MAX_TEAM_PLAN_BYTES)
-    throw new Error('Team Plan reviewed plan bytes are oversized.');
 }
 
 function assertRepositoryAtSource(request: {

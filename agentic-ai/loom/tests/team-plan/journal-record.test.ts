@@ -9,6 +9,7 @@ import {
   TeamPlanRecordKind,
   assertTeamPlanRecord,
 } from '../../src/team-plan/domain.ts';
+import { MAX_SERIALIZED_TEAM_PLAN_RECORD_BYTES } from '../../src/team-plan/record-limits.ts';
 
 import type { TeamPlanRecord } from '../../src/team-plan/domain.ts';
 
@@ -129,4 +130,28 @@ test('validates both provider variants and every nested identity', () => {
       submission: overboundEvidence,
     }),
   ).toThrow('ancestry is too large');
+});
+
+test('rejects records outside the bounded command envelope', () => {
+  const [writeRecord] = providerRecords();
+  if (
+    !writeRecord ||
+    writeRecord.kind !== TeamPlanRecordKind.Provider ||
+    writeRecord.submission.kind !== ModuleDeliveryProviderSubmissionKind.Write
+  )
+    throw new Error('Provider record fixture is malformed.');
+  const submission = structuredClone(writeRecord.submission);
+  const oversizedSubmission = {
+    ...submission,
+    handoff: {
+      ...submission.handoff,
+      workspace: {
+        ...submission.handoff.workspace,
+        worktreePath: 'x'.repeat(MAX_SERIALIZED_TEAM_PLAN_RECORD_BYTES),
+      },
+    },
+  };
+  expect(() =>
+    assertTeamPlanRecord({ ...writeRecord, submission: oversizedSubmission }),
+  ).toThrow('fields are invalid');
 });
