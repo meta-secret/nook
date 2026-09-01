@@ -59,13 +59,17 @@ import type {
   ModuleDeliveryCanonicalEvidenceTransition,
   ModuleDeliveryDispositionOutcome,
   RecordModuleDeliveryAttemptDispositionRequest,
+  SourceRepositorySnapshot,
+} from './integration-provenance.ts';
+import {
+  assertSharedCheckoutAdvance,
+  captureSourceSnapshot,
 } from './integration-provenance.ts';
 import type {
   AcceptedModuleDeliveryEvidenceCollectionRequest,
   AcceptedModuleDeliveryEvidenceRegistry,
   AcceptedModuleDeliveryEvidenceInspection,
   AcceptedModuleDeliveryEvidenceRegistration,
-  AuthenticateModuleDeliverySourceCommitRequest,
   ExpectedLineageMapRequest,
   FrozenModuleDeliveryResourcesRequest,
   ResourceConflictRequest,
@@ -181,6 +185,7 @@ export type ModuleDeliveryLeaseRecording = {
 };
 type AuthorityState = {
   repositoryRoot: string;
+  sourceSnapshot: SourceRepositorySnapshot;
   inputPlan: ValidatedModuleDeliveryPlan;
   acceptedPlan: ValidatedModuleDeliveryPlan;
   expectedLineage: ReadonlyMap<string, AgentAttemptParent>;
@@ -194,14 +199,7 @@ type CapabilityProvenance = {
   readonly authority: ModuleDeliveryGenerationAuthority;
   readonly state: ModuleDeliveryAdmissionState;
 };
-type NodeLookupRequest = {
-  readonly plan: ValidatedModuleDeliveryPlan;
-  readonly taskId: string;
-};
-type AuthorityTaskRequest = {
-  readonly authority: AuthorityState;
-  readonly taskId: string;
-};
+type AuthorityTaskRequest = { authority: AuthorityState; taskId: string };
 type TaskReadyRequest = {
   readonly authority: AuthorityState;
   readonly state: ModuleDeliveryAdmissionState;
@@ -227,6 +225,7 @@ const authorityStates = new WeakMap<
   ModuleDeliveryGenerationAuthority,
   AuthorityState
 >();
+const sharedCheckoutAuthorities = new WeakSet<AuthorityState>();
 const admissionProvenance = new WeakMap<
   ModuleDeliveryAdmission,
   CapabilityProvenance
@@ -236,7 +235,6 @@ const leaseProvenance = new WeakMap<
   CapabilityProvenance
 >();
 const consumedAdmissions = new WeakSet<ModuleDeliveryAdmission>();
-const disposedLeases = new WeakSet<ModuleDeliveryAttemptLease>();
 const acceptedEvidenceLeases = new WeakSet<ModuleDeliveryAttemptLease>();
 const evidenceAuthorities = new WeakMap<
   AcceptedModuleDeliveryEvidence,
@@ -244,10 +242,9 @@ const evidenceAuthorities = new WeakMap<
 >();
 const COMMIT = /^[0-9a-f]{40}$/u;
 function isWriter(request: AuthorityTaskRequest): boolean {
-  return (
-    nodeFor({ plan: request.authority.acceptedPlan, taskId: request.taskId })
-      .kind === ModuleDeliveryTaskKind.Write
-  );
+  const plan = request.authority.acceptedPlan;
+  const write = ModuleDeliveryTaskKind.Write;
+  return nodeFor({ plan, taskId: request.taskId }).kind === write;
 }
 export function createModuleDeliveryGenerationAuthority(
   request: CreateModuleDeliveryGenerationAuthorityRequest,
@@ -263,6 +260,7 @@ export function createModuleDeliveryGenerationAuthority(
   const authority = Object.freeze(value);
   const authorityState: AuthorityState = {
     repositoryRoot,
+    sourceSnapshot: captureSourceSnapshot(repositoryRoot),
     inputPlan: request.acceptedPlan,
     acceptedPlan,
     expectedLineage,
@@ -299,15 +297,14 @@ export function assertModuleDeliveryAuthorityRepository(
   inspection: ModuleDeliveryAuthorityRepositoryInspection,
 ): void {
   const authority = requiredAuthority(inspection.authority);
-  const authentication: AuthenticateModuleDeliverySourceCommitRequest = {
-    repositoryRoot: inspection.repositoryRoot,
-    sourceCommit: authority.acceptedPlan.plan.sourceCommit,
-  };
   if (
-    authenticateModuleDeliverySourceCommit(authentication) !==
-    authority.repositoryRoot
+    authenticateModuleDeliverySourceCommit({
+      repositoryRoot: inspection.repositoryRoot,
+      sourceCommit: authority.acceptedPlan.plan.sourceCommit,
+    }) !== authority.repositoryRoot
   )
     throw new Error('Module delivery repository authority is invalid.');
+  sharedCheckoutAuthorities.add(authority);
 }
 export function assertAcceptedModuleDeliveryEvidence(
   inspection: AcceptedModuleDeliveryEvidenceInspection,
@@ -719,6 +716,8 @@ export function recordModuleDeliveryAttemptLeases(
     compatible.push(admission);
     if (writer) writerOccupied = true;
   }
+  if (request.admissions.some(({ taskId }) => isWriter({ authority, taskId })))
+    authority.sourceSnapshot = captureSourceSnapshot(authority.repositoryRoot);
   const leases = request.admissions.map((admission) => {
     consumedAdmissions.add(admission);
     const lease = Object.freeze(copyModuleDeliveryAdmission(admission));
@@ -768,13 +767,8 @@ export function recordModuleDeliveryAttemptDisposition(
     lease: request.lease,
     outcome: request.outcome,
   };
-  if (
-    disposedLeases.has(request.lease) ||
-    authority.activeLeases.get(key) !== request.lease ||
-    !validDisposition(dispositionRequest)
-  )
+  if (!validDisposition(dispositionRequest))
     throw new Error('Module delivery lease capability is invalid.');
-  disposedLeases.add(request.lease);
   authority.activeLeases.delete(key);
   const dispositionValue: ModuleDeliveryAttemptDisposition = {
     taskId: request.lease.taskId,
@@ -863,11 +857,10 @@ function taskReady(request: TaskReadyRequest): boolean {
     request.authority.acceptedPlan.executionPrecedence
       .filter((edge) => edge.successorTaskId === request.node.taskId)
       .every((edge) => {
-        const nodeRequest: NodeLookupRequest = {
+        const predecessor = nodeFor({
           plan: request.authority.acceptedPlan,
           taskId: edge.predecessorTaskId,
-        };
-        const predecessor = nodeFor(nodeRequest);
+        });
         if (
           edge.requiresIntegratedWriterFrontier ||
           predecessor.kind === ModuleDeliveryTaskKind.Write
@@ -943,11 +936,10 @@ function terminallyBlockedTaskIds(
 }
 
 function validDisposition(request: DispositionValidationRequest): boolean {
-  const nodeRequest: NodeLookupRequest = {
+  const node = nodeFor({
     plan: request.authority.acceptedPlan,
     taskId: request.lease.taskId,
-  };
-  const node = nodeFor(nodeRequest);
+  });
   const proofPresent =
     node.kind === ModuleDeliveryTaskKind.Write
       ? request.state.integratedWriterFrontiers
@@ -961,6 +953,15 @@ function validDisposition(request: DispositionValidationRequest): boolean {
       request.outcome.conclusion ===
         ModuleDeliveryGenerationFenceKind.Accepted && exactProofPresent
     );
+  if (
+    node.kind === ModuleDeliveryTaskKind.Write &&
+    sharedCheckoutAuthorities.has(request.authority)
+  )
+    assertSharedCheckoutAdvance({
+      repositoryRoot: request.authority.repositoryRoot,
+      expected: request.authority.sourceSnapshot,
+      expectedHead: request.state.headCommit,
+    });
   return (
     request.outcome.kind ===
       ModuleDeliveryAttemptDispositionKind.FinalUnusable &&

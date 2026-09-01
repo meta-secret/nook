@@ -225,9 +225,7 @@ export function moduleDeliveryEvidenceSha256(value: string): string {
 export type SourceRepositorySnapshot = {
   readonly headCommit: string;
   readonly symbolicHead: string;
-  readonly contentDigest: string;
   readonly metadataDigest: string;
-  readonly indexDigest: string;
   readonly refsDigest: string;
   readonly protectedRefsDigest: string;
   readonly configDigest: string;
@@ -284,10 +282,7 @@ type RepositoryPathSet = {
   readonly includeContent: boolean;
 };
 
-type RepositoryFingerprint = {
-  readonly contentDigest: string;
-  readonly metadataDigest: string;
-};
+type RepositoryFingerprint = Readonly<{ metadataDigest: string }>;
 
 type EntryFingerprint = {
   readonly content: readonly Buffer[];
@@ -489,7 +484,6 @@ function entryFingerprint(request: EntryFingerprintRequest): EntryFingerprint {
 function repositoryFingerprint(
   paths: RepositoryPathSet,
 ): RepositoryFingerprint {
-  const content: Buffer[] = [];
   const metadata: Buffer[] = [];
   for (const path of [...paths.paths].sort()) {
     const request: EntryFingerprintRequest = {
@@ -498,13 +492,9 @@ function repositoryFingerprint(
       includeContent: paths.includeContent,
     };
     const fingerprint = entryFingerprint(request);
-    content.push(...fingerprint.content);
-    metadata.push(...fingerprint.metadata);
+    metadata.push(...fingerprint.metadata, ...fingerprint.content);
   }
-  return {
-    contentDigest: digestBuffers(content),
-    metadataDigest: digestBuffers(metadata),
-  };
+  return { metadataDigest: digestBuffers(metadata) };
 }
 
 function repositoryPaths(repositoryRoot: string): readonly string[] {
@@ -550,36 +540,50 @@ function relevantRefsDigest(request: RelevantRefsDigestRequest): string {
   return digestBuffers(fields);
 }
 
-function hooksDigest(repositoryRoot: string): string {
+function commonEntryDigest([repositoryRoot, name]: readonly [
+  string,
+  'hooks' | 'info',
+]): string {
   const commonDirectory = gitText(
     runModuleDeliveryGit({
       cwd: repositoryRoot,
       args: ['rev-parse', '--path-format=absolute', '--git-common-dir'],
     }),
   );
-  const hooksPath = resolve(commonDirectory, 'hooks');
-  if (!pathExists(hooksPath))
-    return digestBuffers([Buffer.from('hooks:missing', 'ascii')]);
-  const hooksMetadata = lstatSync(hooksPath);
-  if (hooksMetadata.isSymbolicLink())
+  const root = resolve(commonDirectory, name);
+  if (!pathExists(root))
+    return digestBuffers([Buffer.from(`${name}:missing`, 'ascii')]);
+  const rootMetadata = lstatSync(root);
+  if (rootMetadata.isSymbolicLink())
     return digestBuffers([
-      Buffer.from('hooks:symlink', 'ascii'),
-      Buffer.from(readlinkSync(hooksPath), 'utf8'),
+      Buffer.from(`${name}:symlink`, 'ascii'),
+      Buffer.from(readlinkSync(root), 'utf8'),
     ]);
-  if (!hooksMetadata.isDirectory())
-    return digestBuffers([Buffer.from('hooks:not-directory', 'ascii')]);
+  if (!rootMetadata.isDirectory())
+    throw new Error(`Git common ${name} surface is unsupported.`);
   const fields: Buffer[] = [];
-  for (const entry of readdirSync(hooksPath, { withFileTypes: true })) {
-    const path = resolve(hooksPath, entry.name);
-    const metadata = lstatSync(path, BIGINT_STATS_OPTIONS);
+  const entries = readdirSync(root).sort();
+  if (entries.length > 256)
+    throw new Error(`Git common ${name} surface exceeds its entry bound.`);
+  let totalBytes = 0;
+  for (const entry of entries) {
+    const path = resolve(root, entry);
+    const metadata = lstatSync(path);
     fields.push(
-      Buffer.from(entry.name, 'utf8'),
+      Buffer.from(entry, 'utf8'),
       Buffer.from(metadata.mode.toString(8), 'ascii'),
     );
-    if (entry.isFile()) fields.push(readFileSync(path));
-    else if (entry.isSymbolicLink())
-      fields.push(Buffer.from(readlinkSync(path), 'utf8'));
-    else fields.push(Buffer.from('unsupported-hook-entry', 'ascii'));
+    if (metadata.isFile()) {
+      totalBytes += metadata.size;
+      if (totalBytes > 1_048_576)
+        throw new Error(`Git common ${name} surface exceeds its byte bound.`);
+      fields.push(Buffer.from('file', 'ascii'), readFileSync(path));
+    } else if (metadata.isSymbolicLink())
+      fields.push(
+        Buffer.from('symlink', 'ascii'),
+        Buffer.from(readlinkSync(path), 'utf8'),
+      );
+    else throw new Error(`Git common ${name} entry is unsupported.`);
   }
   return digestBuffers(fields);
 }
@@ -599,10 +603,6 @@ function captureRepositorySnapshot(
   };
   const branch = runModuleDeliveryGit(gitRequest(branchInvocation));
   const symbolicHead = branch.exitCode === 0 ? gitText(branch) : '(detached)';
-  const indexPathInvocation: ModuleGitInvocation = {
-    cwd: repositoryRoot,
-    args: ['rev-parse', '--path-format=absolute', '--git-path', 'index'],
-  };
   const configInvocation: ModuleGitInvocation = {
     cwd: repositoryRoot,
     args: ['config', '--local', '--null', '--list'],
@@ -610,25 +610,23 @@ function captureRepositorySnapshot(
   const pathSet: RepositoryPathSet = {
     repositoryRoot,
     paths: repositoryPaths(repositoryRoot),
-    includeContent: request.includeContent,
+    includeContent: true,
   };
   const fingerprint = repositoryFingerprint(pathSet);
-  const indexPath = gitText(
-    runModuleDeliveryGit(gitRequest(indexPathInvocation)),
-  );
   return {
     headCommit: gitText(runModuleDeliveryGit(gitRequest(headInvocation))),
     symbolicHead,
-    contentDigest: fingerprint.contentDigest,
     metadataDigest: fingerprint.metadataDigest,
-    indexDigest: digestBuffers([readFileSync(indexPath)]),
     refsDigest: relevantRefsDigest({ repositoryRoot }),
     protectedRefsDigest: relevantRefsDigest({
       repositoryRoot,
       allowedBranchRef: symbolicHead,
     }),
     configDigest: digestBuffers([gitBytes(configInvocation)]),
-    hooksDigest: hooksDigest(repositoryRoot),
+    hooksDigest: digestBuffers([
+      Buffer.from(commonEntryDigest([repositoryRoot, 'hooks']), 'ascii'),
+      Buffer.from(commonEntryDigest([repositoryRoot, 'info']), 'ascii'),
+    ]),
   };
 }
 
@@ -654,7 +652,6 @@ export function assertSourceSnapshot(
     current.headCommit !== expectation.expected.headCommit ||
     current.symbolicHead !== expectation.expected.symbolicHead ||
     current.metadataDigest !== expectation.expected.metadataDigest ||
-    current.indexDigest !== expectation.expected.indexDigest ||
     current.refsDigest !== expectation.expected.refsDigest ||
     current.configDigest !== expectation.expected.configDigest ||
     current.hooksDigest !== expectation.expected.hooksDigest
