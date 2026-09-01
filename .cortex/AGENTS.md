@@ -131,7 +131,8 @@ HH:mm | <action-type> | <description>
     active harness really creates that worker.
   - Do not use a capability, persona, or passive feature-slice Gizmo as the
     agent identity.
-  - Change both fields when execution passes to another real agent.
+  - Re-emit the context when execution passes to another real agent.
+  - Change only the context values that actually differ.
   - Never imply a subagent execution, identity, or authority that did not
     exist.
 - Emit the YAML context once while the pull request, team, and agent remain
@@ -171,12 +172,19 @@ HH:mm | <action-type> | <description>
     time.
 - During a long command or external wait, emit a `WAIT` update at least once
   per minute.
+- Identify the exact operation in every `WAIT` line.
+  - For local Task execution, name the exact `task <task-name>` command.
+  - For hosted execution, name the GitHub run or job ID and include its
+    clickable URL.
+  - A preceding `CMD` line does not replace this requirement.
 - Give every bounded wait a start update and a completion or timeout update.
 - Apply the format to progress updates, questions, handoffs, and final
   responses.
 - Give each separate activity its own timestamped plain-text line.
-- Do not add the prefix to code, logs, repository content, commit messages, or
-  machine-readable protocols.
+- Do not add the activity format to code, logs, repository content, or commit
+  messages.
+- A strict machine-readable protocol response is exempt from the entire
+  activity format. Emit only the required protocol content.
 
 ## Cortex authoring
 
