@@ -435,7 +435,6 @@ function createMockOctokit(options: MockOptions): Octokit {
         options.resolvedInlineReviewFinding === true
           ? [
               {
-                in_reply_to_id: null,
                 pull_request_review_id: 90,
                 user: { login: "chatgpt-codex-connector[bot]" },
               },
