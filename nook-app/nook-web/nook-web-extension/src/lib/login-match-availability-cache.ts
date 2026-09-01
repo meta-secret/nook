@@ -1,15 +1,12 @@
 import type { WebsiteLoginMatchAvailability } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-
 enum LoginMatchAvailabilityCacheEntryKind {
   Pending = 'pending',
   Settled = 'settled',
 }
-
 enum PendingLoginMatchFreshness {
   Current = 'current',
   RefreshRequired = 'refresh-required',
 }
-
 type LoginMatchAvailabilityCacheEntry =
   | {
       kind: LoginMatchAvailabilityCacheEntryKind.Pending
@@ -21,26 +18,20 @@ type LoginMatchAvailabilityCacheEntry =
       value: WebsiteLoginMatchAvailability
       expiresAt: number
     }
-
 export type LoginMatchAvailabilityCacheOptions = {
   ttlMs: number
 }
-
 export type LoginMatchAvailabilityCacheRequest = {
   origin: string
   load: () => Promise<WebsiteLoginMatchAvailability>
   readTime?: () => number
 }
-
 export type LoginMatchAvailabilityCacheInvalidation = {
   origin: string
 }
-
 export class LoginMatchAvailabilityCache {
   private readonly entries = new Map<string, LoginMatchAvailabilityCacheEntry>()
-
   constructor(private readonly options: LoginMatchAvailabilityCacheOptions) {}
-
   resolve(
     request: LoginMatchAvailabilityCacheRequest,
   ): Promise<WebsiteLoginMatchAvailability> {
@@ -62,7 +53,6 @@ export class LoginMatchAvailabilityCache {
     ) {
       return Promise.resolve(existing.value)
     }
-
     const lookup = load()
       .then((value) => {
         const current = this.entries.get(origin)
@@ -104,7 +94,6 @@ export class LoginMatchAvailabilityCache {
     this.entries.set(origin, entry)
     return lookup
   }
-
   invalidate({ origin }: LoginMatchAvailabilityCacheInvalidation): void {
     const current = this.entries.get(origin)
     if (current?.kind === LoginMatchAvailabilityCacheEntryKind.Pending) {

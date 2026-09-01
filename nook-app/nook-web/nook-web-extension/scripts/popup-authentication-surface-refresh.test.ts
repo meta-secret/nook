@@ -3,7 +3,6 @@ import {
   refreshInvokingAuthenticationSurface,
   refreshInvokingAuthenticationSurfaceAfterUnlock,
 } from '../src/popup/authentication-surface-refresh'
-
 test('invalidates unlock state before targeting companion and toolbar tabs', async () => {
   const events: string[] = []
   const sendMessage = mock((tabId) => {
@@ -15,13 +14,10 @@ test('invalidates unlock state before targeting companion and toolbar tabs', asy
     runtime: { sendMessage: mock(async () => events.push('invalidate')) },
     tabs: { query, sendMessage },
   } as unknown as typeof chrome
-
   await refreshInvokingAuthenticationSurfaceAfterUnlock('?invokingTabId=42')
-
   expect(query).not.toHaveBeenCalled()
   expect(events).toEqual(['invalidate', 'refresh-42'])
   refreshInvokingAuthenticationSurface('')
-
   expect(query).toHaveBeenCalledTimes(1)
   refreshInvokingAuthenticationSurface('?invokingTabId=invalid')
   expect(query).toHaveBeenCalledTimes(1)

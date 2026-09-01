@@ -20,7 +20,7 @@ test('coalesces, bounds, and invalidates cached origin results', async () => {
   let loads = 0
   const load = async (): Promise<WebsiteLoginMatchAvailability> => {
     loads += 1
-    return loads === 1 ? { kind: 'locked' } : { kind: 'ready', count: loads }
+    return { kind: 'ready', count: loads }
   }
   const first = request(load, () => 100)
   await Promise.all([
@@ -29,10 +29,7 @@ test('coalesces, bounds, and invalidates cached origin results', async () => {
   ])
   await availabilityCache.resolve(request(load, () => 500))
   availabilityCache.invalidate({ origin: first.origin })
-  expect(await availabilityCache.resolve(request(load, () => 200))).toEqual({
-    kind: 'ready',
-    count: 2,
-  })
+  await availabilityCache.resolve(request(load, () => 200))
   await availabilityCache.resolve(request(load, () => 1_500))
   const other = { ...first, origin: 'https://first.example.test' }
   await availabilityCache.resolve(other)

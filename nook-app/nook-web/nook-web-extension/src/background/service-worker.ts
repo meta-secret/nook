@@ -158,7 +158,7 @@ const extensionLifecycleRoutingDependencies: Parameters<
   handlePairingStateQuery,
   hasPairingApprovedType,
   importLocalEventLogUpdate,
-  importPairingAfterCompanionReady,
+  importPairingAfterCompanionReady: importPairingAndRefreshSurfaces,
   isExtensionPairingStateQueryMessage,
   isExtensionSessionEnsureMessage,
   isExtensionSessionExpiryMessage,
@@ -182,7 +182,7 @@ const externalCompanionRoutingDependencies: Parameters<
   createIdentityHandoff,
   discoverPairedVaultIdentity,
   hasPairingApprovedType,
-  importPairingAfterCompanionReady,
+  importPairingAfterCompanionReady: importPairingAndRefreshSurfaces,
   isExtensionIdentityHandoffRequestMessage,
   isExtensionPairedVaultIdentityDiscoveryMessage,
   isExtensionPairedVaultIdentityHandoffRequestMessage,
@@ -190,6 +190,24 @@ const externalCompanionRoutingDependencies: Parameters<
   normalizeOpenCompanionLauncherMessage,
   openCompanionLauncher,
   requestPairedVaultUnlock,
+}
+
+async function importPairingAndRefreshSurfaces(
+  message: Parameters<typeof importPairingAfterCompanionReady>[0],
+) {
+  const result = await importPairingAfterCompanionReady(message)
+  if (!result.ok) return result
+  invalidateAllLoginMatchAvailability()
+  const query: Parameters<typeof chrome.tabs.query>[0] = {}
+  const refresh: Parameters<typeof chrome.tabs.sendMessage>[1] = {
+    type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces,
+  }
+  chrome.tabs.query(query, (tabs) => {
+    for (const { id } of tabs)
+      if (typeof id === 'number')
+        void chrome.tabs.sendMessage(id, refresh).catch(() => undefined)
+  })
+  return result
 }
 
 // eslint-disable-next-line max-params -- Chrome owns the runtime listener callback signature.

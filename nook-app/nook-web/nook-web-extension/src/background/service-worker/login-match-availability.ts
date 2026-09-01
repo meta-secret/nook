@@ -30,21 +30,17 @@ import {
   SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS,
   openCompanionLauncherBestEffort,
 } from './session-lifecycle'
-
 type WebsiteLoginOptionsArgs = {
   message: { payload: { origin: string } }
   sender: chrome.runtime.MessageSender
   dependencies?: WebsiteLoginOptionsDependencies
 }
-
 type WebsiteLoginOptionsResponseArgs = WebsiteLoginOptionsArgs & {
   openUnavailableCompanion: boolean
 }
-
 type WebsiteLoginOptionsResponse =
   | WebsiteLoginOptionsWireValue
   | (WebsiteLoginOptionsWireValue & { authorizationGeneration: string })
-
 type WebsiteLoginOptionsDependencies = {
   accountPickerAuthorizationCleanupPending: typeof accountPickerAuthorizationCleanupPending
   accountPickerAuthorizationGeneration: typeof accountPickerAuthorizationGeneration
@@ -55,7 +51,6 @@ type WebsiteLoginOptionsDependencies = {
   loginAccountAvailabilityForOrigin: typeof loginAccountAvailabilityForOrigin
   openCompanionLauncherBestEffort: typeof openCompanionLauncherBestEffort
 }
-
 const dependencies: WebsiteLoginOptionsDependencies = {
   accountPickerAuthorizationCleanupPending,
   accountPickerAuthorizationGeneration,
@@ -66,7 +61,6 @@ const dependencies: WebsiteLoginOptionsDependencies = {
   loginAccountAvailabilityForOrigin,
   openCompanionLauncherBestEffort,
 }
-
 async function websiteLoginOptionsResponse({
   message,
   sender,
@@ -133,7 +127,6 @@ async function websiteLoginOptionsResponse({
   }
   return { ok: true, status: 'ready', authorizationGeneration, accounts }
 }
-
 export async function websiteLoginOptions(
   args: WebsiteLoginOptionsArgs,
 ): Promise<WebsiteLoginOptionsResponse> {
@@ -143,26 +136,21 @@ export async function websiteLoginOptions(
   }
   return websiteLoginOptionsResponse(request)
 }
-
 const cacheOptions: LoginMatchAvailabilityCacheOptions = { ttlMs: 2_000 }
 const cache = new LoginMatchAvailabilityCache(cacheOptions)
-
 export function invalidateLoginMatchAvailabilityForOrigin(
   invalidation: LoginMatchAvailabilityCacheInvalidation,
 ): void {
   cache.invalidate(invalidation)
 }
-
 export function invalidateAllLoginMatchAvailability(): void {
   cache.invalidateAll()
 }
-
 type WebsiteLoginMatchAvailabilityArgs = {
   origin: string
   sender: chrome.runtime.MessageSender
   dependencies?: WebsiteLoginOptionsDependencies
 }
-
 export function websiteLoginMatchAvailability({
   origin,
   sender,

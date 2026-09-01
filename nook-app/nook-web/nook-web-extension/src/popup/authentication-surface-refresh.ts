@@ -1,5 +1,4 @@
 import { ExtensionRuntimeRequestType } from '../lib/extension-runtime-request-type'
-
 export async function refreshInvokingAuthenticationSurfaceAfterUnlock(
   popupSearch = location.search,
 ): Promise<void> {
@@ -9,7 +8,6 @@ export async function refreshInvokingAuthenticationSurfaceAfterUnlock(
   await chrome.runtime.sendMessage(message)
   refreshInvokingAuthenticationSurface(popupSearch)
 }
-
 export function refreshInvokingAuthenticationSurface(
   popupSearch = location.search,
 ): void {
