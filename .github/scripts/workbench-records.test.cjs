@@ -47,7 +47,10 @@ const validSequenceField = sequenceField(
   ),
 )
 
-const validPlan = `# Task plan
+const validPlan = `---
+schema_version: 2
+---
+# Task plan
 
 ## Interpreted request
 

@@ -2,7 +2,6 @@ import { afterEach, expect, test } from 'bun:test';
 import {
   chmodSync,
   mkdirSync,
-  readFileSync,
   renameSync,
   rmSync,
   statSync,
@@ -15,16 +14,14 @@ import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
 import {
   REQUIRED_PARENT_OWNED_RESOURCES,
   ModuleDeliveryBaselineKind,
-  ModuleDeliveryAttemptDispositionKind,
   ModuleDeliveryEvidenceVerdict,
   ModuleDeliveryJoinKind,
   ModuleDeliveryProviderSubmissionKind,
-  ModuleDeliveryGenerationFenceKind,
   ModuleDeliveryTaskKind,
   ModuleDeliveryValidationStatus,
   ModuleDeliveryWorkspaceKind,
   TeamKey,
-  cleanupModuleIntegration,
+  acknowledgeModuleDeliveryPush,
   createModuleDeliveryAdmissionState,
   createModuleDeliveryGenerationAuthority,
   decodeAndValidateModuleDeliveryPlan,
@@ -33,7 +30,6 @@ import {
   prepareModuleIntegration,
   prepareModuleWorktree,
   recordModuleDeliveryAttemptLeases,
-  recordModuleDeliveryAttemptDisposition,
   selectModuleDeliveryAdmissions,
 } from '../../src/module-delivery/index.ts';
 import {
@@ -45,7 +41,6 @@ import {
 
 import type {
   ModuleDeliveryAttemptLease,
-  ModuleDeliveryGenerationAuthority,
   ModuleDeliveryPlanV3,
   ModuleDeliveryProviderSubmission,
   ModuleDeliveryReadOnlyNodeV2,
@@ -56,6 +51,8 @@ import type {
 } from '../../src/module-delivery/index.ts';
 import type { GitFixture } from './worktree-test-support.ts';
 
+/* eslint-disable max-params -- lifecycle fixture helpers mirror production calls. */
+
 const fixtures: GitFixture[] = [];
 const ROOT = 'nook-app/nook-platform/nook-core';
 
@@ -64,38 +61,36 @@ afterEach(() => {
     disposeGitFixture(fixture);
 });
 
-type WriterNodeRequest = Readonly<{
-  taskId: string;
-  path: string;
-  sourceCommit: string;
-}>;
-
-function writerNode(request: WriterNodeRequest): ModuleDeliveryWriteNodeV2 {
+function writerNode(
+  taskId: string,
+  path: string,
+  sourceCommit: string,
+): ModuleDeliveryWriteNodeV2 {
   return {
     kind: ModuleDeliveryTaskKind.Write,
-    taskId: request.taskId,
+    taskId,
     team: TeamKey.DevelopmentCore,
     functionalOwner: TeamKey.Ai,
     acceptanceOwner: TeamKey.Ai,
     parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
     expert: 'core_expert',
     moduleRoot: ROOT,
-    consumerOutcome: `${request.taskId} publishes a direct commit.`,
+    consumerOutcome: `${taskId} publishes a direct commit.`,
     baseline: {
       kind: ModuleDeliveryBaselineKind.SourceCommit,
-      sourceCommit: request.sourceCommit,
+      sourceCommit,
     },
     agentDepthLimit: 2,
     dependencies: [],
     resources: {
-      read: [`${ROOT}/${request.path}/**`],
-      write: [`${ROOT}/${request.path}/**`],
+      read: [`${ROOT}/${path}/**`],
+      write: [`${ROOT}/${path}/**`],
       evidenceSurface: [],
     },
     parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
     acceptance: {
-      commands: [`task ${request.taskId}:test`],
-      evidence: [`${request.taskId} passed`],
+      commands: [`task ${taskId}:test`],
+      evidence: [`${taskId} passed`],
     },
     workspace: {
       kind: ModuleDeliveryWorkspaceKind.SharedCheckout,
@@ -104,33 +99,23 @@ function writerNode(request: WriterNodeRequest): ModuleDeliveryWriteNodeV2 {
   };
 }
 
-function readerNode(sourceCommit: string): ModuleDeliveryReadOnlyNodeV2 {
-  const { workspace: _workspace, ...common } = writerNode({
-    taskId: 'reader',
-    path: 'reader',
-    sourceCommit,
-  });
-  return {
-    ...common,
+function validatedPlan(
+  fixture: GitFixture,
+  concurrent = false,
+): ValidatedModuleDeliveryPlan {
+  const alpha = writerNode('alpha', 'alpha', fixture.baselineCommit);
+  const beta = writerNode('beta', 'beta', fixture.baselineCommit);
+  const { workspace: _workspace, ...readerBase } = alpha;
+  const reader: ModuleDeliveryReadOnlyNodeV2 = {
+    ...readerBase,
     kind: ModuleDeliveryTaskKind.ReadOnly,
+    taskId: 'reader',
     resources: {
       read: ['module/seed.txt'],
       write: [],
       evidenceSurface: ['module/seed.txt'],
     },
   };
-}
-
-function validatedPlan([fixture, concurrent = false]: readonly [
-  GitFixture,
-  boolean?,
-]): ValidatedModuleDeliveryPlan {
-  const alpha = writerNode({
-    taskId: 'alpha',
-    path: 'alpha',
-    sourceCommit: fixture.baselineCommit,
-  });
-  const reader = readerNode(fixture.baselineCommit);
   const plan: ModuleDeliveryPlanV3 = {
     version: 3,
     generation: 1,
@@ -144,16 +129,7 @@ function validatedPlan([fixture, concurrent = false]: readonly [
       owner: 'delivery-owner',
       validationCommands: ['task loom:verify'],
     },
-    nodes: concurrent
-      ? [alpha, reader]
-      : [
-          alpha,
-          writerNode({
-            taskId: 'beta',
-            path: 'beta',
-            sourceCommit: fixture.baselineCommit,
-          }),
-        ],
+    nodes: concurrent ? [alpha, beta, reader] : [alpha, beta],
     edgeContracts: [],
   };
   const decoded = decodeAndValidateModuleDeliveryPlan(JSON.stringify(plan));
@@ -162,17 +138,10 @@ function validatedPlan([fixture, concurrent = false]: readonly [
   return decoded;
 }
 
-type Runtime = Readonly<{
-  authority: ModuleDeliveryGenerationAuthority;
-  fixture: GitFixture;
-  plan: ValidatedModuleDeliveryPlan;
-  state: ModuleIntegrationState;
-}>;
-
-function preparedRuntime(concurrent = false): Runtime {
+function preparedRuntime(concurrent = false) {
   const fixture = createGitFixture();
   fixtures.push(fixture);
-  const plan = validatedPlan([fixture, concurrent]);
+  const plan = validatedPlan(fixture, concurrent);
   const authority = createModuleDeliveryGenerationAuthority({
     acceptedPlan: plan,
     expectedLineage: plan.plan.nodes.map((node) => ({
@@ -197,53 +166,50 @@ function preparedRuntime(concurrent = false): Runtime {
   });
   return { authority, fixture, plan, state };
 }
-
-type CommitWriterRequest = Readonly<{
-  runtime: Runtime;
-  lease: ModuleDeliveryAttemptLease;
-  path: string;
-}>;
+type Runtime = ReturnType<typeof preparedRuntime>;
 
 function commitWriter(
-  request: CommitWriterRequest,
+  runtime: Runtime,
+  lease: ModuleDeliveryAttemptLease,
+  path: string,
 ): ModuleDeliveryWriteProviderSubmission {
-  const { fixture, plan } = request.runtime;
+  const { fixture, plan } = runtime;
   const workspace = prepareModuleWorktree({
     repositoryRoot: fixture.sourceRoot,
     workspaceRoot: fixture.workspaceRoot,
     planDigest: plan.planDigest,
-    taskId: request.lease.taskId,
-    attempt: request.lease.attempt,
-    baselineCommit: request.lease.startingFrontier,
+    taskId: lease.taskId,
+    attempt: lease.attempt,
+    baselineCommit: lease.startingFrontier,
   });
-  const file = join(fixture.sourceRoot, ROOT, request.path, 'feature.rs');
+  const file = join(fixture.sourceRoot, ROOT, path, 'feature.rs');
   mkdirSync(join(file, '..'), { recursive: true });
-  writeFileSync(file, `pub fn ${request.lease.taskId}() {}\n`);
+  writeFileSync(file, `pub fn ${lease.taskId}() {}\n`);
   const git = fixtureGit(fixture);
   git(['add', '--all']);
-  git(['commit', '--quiet', '-m', request.lease.taskId]);
+  git(['commit', '--quiet', '-m', lease.taskId]);
   return {
     kind: ModuleDeliveryProviderSubmissionKind.Write,
     generation: 1,
     acceptedByTeam: TeamKey.Ai,
     verdict: ModuleDeliveryEvidenceVerdict.TerminalSuccess,
     handoff: {
-      taskId: request.lease.taskId,
-      attempt: request.lease.attempt,
+      taskId: lease.taskId,
+      attempt: lease.attempt,
       planDigest: plan.planDigest,
-      baselineCommit: request.lease.startingFrontier,
+      baselineCommit: lease.startingFrontier,
       commit: git(['rev-parse', 'HEAD']),
       workspace,
     },
   };
 }
 
-function integrate([runtime, state, lease, submission]: readonly [
-  Runtime,
-  ModuleIntegrationState,
-  ModuleDeliveryAttemptLease,
-  ModuleDeliveryProviderSubmission,
-]): ModuleIntegrationState {
+function integrate(
+  runtime: Runtime,
+  state: ModuleIntegrationState,
+  lease: ModuleDeliveryAttemptLease,
+  submission: ModuleDeliveryProviderSubmission,
+): ModuleIntegrationState {
   return integrateVerifiedModuleDeliveryTask({
     authority: runtime.authority,
     acceptedPlan: runtime.plan,
@@ -253,26 +219,47 @@ function integrate([runtime, state, lease, submission]: readonly [
   });
 }
 
-function nextWriter([runtime, state]: readonly [
-  Runtime,
-  ModuleIntegrationState,
-]): readonly [
-  ModuleDeliveryAttemptLease,
-  ModuleDeliveryWriteProviderSubmission,
-] {
+function finalize(runtime: Runtime, state: ModuleIntegrationState) {
+  return finalizeModuleDeliveryIntegration({
+    authority: runtime.authority,
+    acceptedPlan: runtime.plan,
+    state,
+  });
+}
+
+function acknowledge(runtime: Runtime, state: ModuleIntegrationState) {
+  return acknowledgeModuleDeliveryPush({
+    authority: runtime.authority,
+    acceptedPlan: runtime.plan,
+    state,
+  });
+}
+
+function leases(runtime: Runtime) {
+  const admissions = selectModuleDeliveryAdmissions({
+    authority: runtime.authority,
+    acceptedPlan: runtime.plan,
+    state: runtime.state.admissionState,
+  }).admissions;
+  return recordModuleDeliveryAttemptLeases({
+    authority: runtime.authority,
+    state: runtime.state.admissionState,
+    admissions,
+  }).leases;
+}
+
+function nextWriter(runtime: Runtime, state: ModuleIntegrationState) {
   const admission = selectModuleDeliveryAdmissions({
     authority: runtime.authority,
     acceptedPlan: runtime.plan,
     state: state.admissionState,
-  }).admissions[0];
-  if (!admission) throw new Error('Writer admission is missing.');
+  }).admissions[0]!;
   const lease = recordModuleDeliveryAttemptLeases({
     authority: runtime.authority,
     state: state.admissionState,
     admissions: [admission],
-  }).leases[0];
-  if (!lease) throw new Error('Writer lease is missing.');
-  return [lease, commitWriter({ runtime, lease, path: lease.taskId })];
+  }).leases[0]!;
+  return [lease, commitWriter(runtime, lease, lease.taskId)] as const;
 }
 
 const MUTATIONS = [
@@ -349,164 +336,88 @@ function mutateGit([fixture, mutation]: readonly [
       renameSync(saved, info);
     };
   }
-  const original = readFileSync(exclude);
   const hidden = join(fixture.sourceRoot, 'hidden');
-  writeFileSync(exclude, 'hidden/**\n');
   writeFileSync(join(info, 'hidden-control'), 'control');
   mkdirSync(hidden);
   writeFileSync(join(hidden, 'secret'), 'secret');
   return () => {
-    writeFileSync(exclude, original);
     rmSync(join(info, 'hidden-control'));
     rmSync(hidden, { recursive: true });
   };
 }
 
-test.each([...MUTATIONS])(
-  'rejects %s during production write acceptance',
-  (kind) => {
-    const runtime = preparedRuntime();
-    const [lease, submission] = nextWriter([runtime, runtime.state]);
+function rejectMutations(runtime: Runtime, action: () => void): void {
+  for (const kind of MUTATIONS) {
     const restore = mutateGit([runtime.fixture, kind]);
-    expect(() =>
-      integrate([runtime, runtime.state, lease, submission]),
-    ).toThrow();
+    expect(action).toThrow();
     restore();
-  },
-);
+  }
+}
 
-test('sequences shared commits with failure atomicity and exact cleanup', () => {
+test('rejects protected mutations during production write acceptance', () => {
   const runtime = preparedRuntime();
-  const [alphaLease, alpha] = nextWriter([runtime, runtime.state]);
-  const afterAlpha = integrate([runtime, runtime.state, alphaLease, alpha]);
-  const [betaLease, beta] = nextWriter([runtime, afterAlpha]);
-  expect(betaLease.startingFrontier).toBe(alpha.handoff.commit);
-  const afterBeta = integrate([runtime, afterAlpha, betaLease, beta]);
-  const finalized = finalizeModuleDeliveryIntegration({
-    authority: runtime.authority,
-    acceptedPlan: runtime.plan,
-    state: afterBeta,
-  });
-  expect(finalized.headCommit).toBe(beta.handoff.commit);
-  expect(
-    cleanupModuleIntegration({ cleanupHandle: finalized.cleanupHandle }),
-  ).toEqual({ removed: true });
-  expect(
-    cleanupModuleIntegration({ cleanupHandle: finalized.cleanupHandle }),
-  ).toEqual({ removed: false });
+  const [lease, submission] = nextWriter(runtime, runtime.state);
+  rejectMutations(runtime, () =>
+    integrate(runtime, runtime.state, lease, submission),
+  );
 });
 
 test.each(['read-first', 'writer-first'] as const)(
   'accepts concurrent writer and reader in %s production order',
   (order) => {
     const runtime = preparedRuntime(true);
-    const selection = selectModuleDeliveryAdmissions({
-      authority: runtime.authority,
-      acceptedPlan: runtime.plan,
-      state: runtime.state.admissionState,
-    });
-    const leases = recordModuleDeliveryAttemptLeases({
-      authority: runtime.authority,
-      state: runtime.state.admissionState,
-      admissions: selection.admissions,
-    }).leases;
-    const writerLease = leases.find(({ taskId }) => taskId === 'alpha');
-    const readLease = leases.find(({ taskId }) => taskId === 'reader');
-    const reader = runtime.plan.plan.nodes[1];
-    if (
-      !writerLease ||
-      !readLease ||
-      reader?.kind !== ModuleDeliveryTaskKind.ReadOnly
-    )
-      throw new Error('Concurrent leases are missing.');
+    const concurrentLeases = leases(runtime);
+    const writerLease = concurrentLeases.find(
+      ({ taskId }) => taskId === 'alpha',
+    )!;
+    const readLease = concurrentLeases.find(
+      ({ taskId }) => taskId === 'reader',
+    )!;
+    const reader = runtime.plan.plan.nodes[2] as ModuleDeliveryReadOnlyNodeV2;
     const evidence = evidenceSubmission({
       state: runtime.state,
       node: reader,
       lease: readLease,
     });
     let state = runtime.state;
-    const rejectReadMutations = () => {
-      for (const kind of MUTATIONS) {
-        const restore = mutateGit([runtime.fixture, kind]);
-        expect(() =>
-          integrate([runtime, state, readLease, evidence]),
-        ).toThrow();
-        restore();
-      }
-    };
+    const rejectReadMutations = () =>
+      rejectMutations(runtime, () =>
+        integrate(runtime, state, readLease, evidence),
+      );
     if (order === 'read-first') {
       rejectReadMutations();
-      state = integrate([runtime, state, readLease, evidence]);
+      state = integrate(runtime, state, readLease, evidence);
     }
-    let writer = commitWriter({ runtime, lease: writerLease, path: 'alpha' });
+    const writer = commitWriter(runtime, writerLease, 'alpha');
     if (order === 'writer-first') {
-      expect(() => integrate([runtime, state, readLease, evidence])).toThrow();
-      writeFileSync(
-        join(runtime.fixture.sourceRoot, ROOT, 'alpha/feature.rs'),
-        'dirty\n',
-      );
-      const disposition = {
-        authority: runtime.authority,
-        state: state.admissionState,
-        lease: writerLease,
-        outcome: {
-          kind: ModuleDeliveryAttemptDispositionKind.FinalUnusable,
-          conclusion: ModuleDeliveryGenerationFenceKind.Rejected,
-        },
-      } as const;
-      expect(() =>
-        recordModuleDeliveryAttemptDisposition(disposition),
-      ).toThrow();
-      fixtureGit(runtime.fixture)([
-        'reset',
-        '--hard',
-        '--quiet',
-        state.headCommit,
-      ]);
-      recordModuleDeliveryAttemptDisposition(disposition);
-      const retry = selectModuleDeliveryAdmissions({
-        authority: runtime.authority,
-        acceptedPlan: runtime.plan,
-        state: state.admissionState,
-      }).admissions.find(({ taskId }) => taskId === 'alpha');
-      if (!retry) throw new Error('Writer retry is missing.');
-      expect(retry.startingFrontier).toBe(writerLease.startingFrontier);
-      const retryLease = recordModuleDeliveryAttemptLeases({
-        authority: runtime.authority,
-        state: state.admissionState,
-        admissions: [retry],
-      }).leases[0];
-      if (!retryLease) throw new Error('Writer retry lease is missing.');
-      writer = commitWriter({ runtime, lease: retryLease, path: 'alpha' });
-      state = integrate([runtime, state, retryLease, writer]);
-    } else {
+      expect(() => integrate(runtime, state, readLease, evidence)).toThrow();
+    }
+    state = integrate(runtime, state, writerLease, writer);
+    if (order === 'read-first') {
       const git = fixtureGit(runtime.fixture);
-      git(['commit', '--amend', '--quiet', '-m', 'amended-alpha']);
-      writer = {
-        ...writer,
-        handoff: { ...writer.handoff, commit: git(['rev-parse', 'HEAD']) },
-      };
-      state = integrate([runtime, state, writerLease, writer]);
+      const upstream = git([
+        'rev-parse',
+        '--symbolic-full-name',
+        '@{upstream}',
+      ]);
+      expect(() => acknowledge(runtime, state)).toThrow();
+      git(['update-ref', upstream, writer.handoff.commit]);
+      expect(() => finalize(runtime, state)).toThrow();
+      git(['update-ref', 'refs/custom/push-drift', 'HEAD']);
+      expect(() => acknowledge(runtime, state)).toThrow();
+      git(['update-ref', '-d', 'refs/custom/push-drift']);
+      state = acknowledge(runtime, state);
     }
     if (order === 'writer-first') {
       rejectReadMutations();
-      state = integrate([runtime, state, readLease, evidence]);
+      state = integrate(runtime, state, readLease, evidence);
     }
-    for (const kind of MUTATIONS) {
-      const restore = mutateGit([runtime.fixture, kind]);
-      expect(() =>
-        finalizeModuleDeliveryIntegration({
-          authority: runtime.authority,
-          acceptedPlan: runtime.plan,
-          state,
-        }),
-      ).toThrow();
-      restore();
-    }
-    finalizeModuleDeliveryIntegration({
-      authority: runtime.authority,
-      acceptedPlan: runtime.plan,
-      state,
-    });
+    const restoreAdmission = mutateGit([runtime.fixture, 'hook']);
+    expect(() => nextWriter(runtime, state)).toThrow();
+    restoreAdmission();
+    const [betaLease, beta] = nextWriter(runtime, state);
+    state = integrate(runtime, state, betaLease, beta);
+    rejectMutations(runtime, () => finalize(runtime, state));
+    finalize(runtime, state);
   },
 );

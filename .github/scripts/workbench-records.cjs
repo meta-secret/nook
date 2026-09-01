@@ -545,6 +545,13 @@ function validateAgentRecord(
 
   const required = recordSections[kind]
   if (!required) return `unknown record kind: ${kind}`
+  if (kind === 'plan') {
+    const yaml = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(candidate)?.[1] ?? ''
+    const versions = [...yaml.matchAll(/^schema_version:\s*(.*?)\s*$/gm)]
+    if (versions.length !== 1) return 'plan requires one schema_version'
+    if (versions[0][1] === '1') return 'plan schema_version 1 is retired'
+    if (versions[0][1] !== '2') return 'plan schema_version is unsupported'
+  }
 
   const headings = [...candidate.matchAll(/^## (.+)$/gm)].map(
     (match) => `## ${match[1]}`,

@@ -124,6 +124,13 @@ if (remotePath.startsWith('plans/')) {
     process.exit(8)
   }
   const sourceTask = readFileSync(sourceTaskPath, 'utf8')
+  const rejection = validateAgentRecord(localContent, 'plan', [], sourceTask, {
+    assignedGizmoId,
+  })
+  if (rejection) {
+    console.error(`Refusing invalid Workbench plan: ${rejection}`)
+    process.exit(7)
+  }
   const planFrontmatter = parsePlanFrontmatter(localContent)
   if (planFrontmatter.kind === 'invalid') {
     console.error(`Refusing invalid Workbench plan: ${planFrontmatter.message}`)
@@ -149,13 +156,6 @@ if (remotePath.startsWith('plans/')) {
     (assignment.kind === 'legacy' && assignedGizmoId)
   ) {
     console.error('Refusing invalid Workbench plan: trusted remote issue could not be validated')
-    process.exit(7)
-  }
-  const rejection = validateAgentRecord(localContent, 'plan', [], sourceTask, {
-    assignedGizmoId,
-  })
-  if (rejection) {
-    console.error(`Refusing invalid Workbench plan: ${rejection}`)
     process.exit(7)
   }
   const currentGizmoId =

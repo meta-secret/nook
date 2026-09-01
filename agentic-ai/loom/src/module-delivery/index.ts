@@ -51,6 +51,7 @@ export type {
 export { cleanupModuleWorktree, prepareModuleWorktree } from './workspace.ts';
 export { verifyModuleCommitHandoff } from './handoff.ts';
 export {
+  acknowledgeModuleDeliveryPush,
   cleanupModuleIntegration,
   finalizeModuleDeliveryIntegration,
   integrateVerifiedModuleDeliveryTask,

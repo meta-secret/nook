@@ -18,7 +18,10 @@ function plan({
   shape = 'One PR',
   mode = 'One PR',
 } = {}) {
-  return `# Task plan
+  return `---
+schema_version: 2
+---
+# Task plan
 
 ## Interpreted request
 

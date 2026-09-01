@@ -185,7 +185,7 @@ export type ModuleDeliveryLeaseRecording = {
 };
 type AuthorityState = {
   repositoryRoot: string;
-  sourceSnapshot: SourceRepositorySnapshot;
+  sourceSnapshot?: SourceRepositorySnapshot;
   inputPlan: ValidatedModuleDeliveryPlan;
   acceptedPlan: ValidatedModuleDeliveryPlan;
   expectedLineage: ReadonlyMap<string, AgentAttemptParent>;
@@ -225,7 +225,6 @@ const authorityStates = new WeakMap<
   ModuleDeliveryGenerationAuthority,
   AuthorityState
 >();
-const sharedCheckoutAuthorities = new WeakSet<AuthorityState>();
 const admissionProvenance = new WeakMap<
   ModuleDeliveryAdmission,
   CapabilityProvenance
@@ -260,7 +259,6 @@ export function createModuleDeliveryGenerationAuthority(
   const authority = Object.freeze(value);
   const authorityState: AuthorityState = {
     repositoryRoot,
-    sourceSnapshot: captureSourceSnapshot(repositoryRoot),
     inputPlan: request.acceptedPlan,
     acceptedPlan,
     expectedLineage,
@@ -304,7 +302,7 @@ export function assertModuleDeliveryAuthorityRepository(
     }) !== authority.repositoryRoot
   )
     throw new Error('Module delivery repository authority is invalid.');
-  sharedCheckoutAuthorities.add(authority);
+  authority.sourceSnapshot = captureSourceSnapshot(authority.repositoryRoot);
 }
 export function assertAcceptedModuleDeliveryEvidence(
   inspection: AcceptedModuleDeliveryEvidenceInspection,
@@ -321,27 +319,23 @@ export function verifyModuleDeliveryEvidenceSubmission(
   verification: ModuleDeliveryEvidenceSubmissionVerification,
 ): AcceptedModuleDeliveryEvidence {
   const authority = requiredAuthority(verification.authority);
-  const planRequest: ModuleDeliveryAuthorityPlanRequest = {
+  const acceptedPlan = moduleDeliveryAuthorityPlan({
     authority: verification.authority,
     acceptedPlan: verification.acceptedPlan,
-  };
-  const acceptedPlan = moduleDeliveryAuthorityPlan(planRequest);
-  const generationInspection: GenerationAuthorityInspection = {
+  });
+  assertModuleDeliveryGenerationAuthority({
     authority: verification.authority,
     generation: acceptedPlan.plan.generation,
     planDigest: acceptedPlan.planDigest,
-  };
-  assertModuleDeliveryGenerationAuthority(generationInspection);
-  const leaseInspection: AttemptLeaseAuthorityInspection = {
+  });
+  assertModuleDeliveryAttemptLeaseAuthority({
     authority: verification.authority,
     lease: verification.lease,
-  };
-  assertModuleDeliveryAttemptLeaseAuthority(leaseInspection);
-  const stateInspection: AdmissionStateAuthorityInspection = {
+  });
+  assertModuleDeliveryAdmissionStateAuthority({
     authority: verification.authority,
     state: verification.state,
-  };
-  assertModuleDeliveryAdmissionStateAuthority(stateInspection);
+  });
   if (acceptedEvidenceLeases.has(verification.lease))
     throw new Error(
       `Evidence metadata is invalid for ${verification.lease.taskId}.`,
@@ -349,11 +343,10 @@ export function verifyModuleDeliveryEvidenceSubmission(
   const seen = new Set<string>();
   const authorized = Object.freeze(
     verification.authorizedProviderEvidence.map((evidence) => {
-      const inspection: AcceptedModuleDeliveryEvidenceInspection = {
+      authority.evidenceRegistry.assert({
         authority: verification.authority,
         evidence,
-      };
-      authority.evidenceRegistry.assert(inspection);
+      });
       const identity = authority.evidenceRegistry.identity(evidence);
       if (seen.has(identity.taskId))
         throw new Error(`Duplicate accepted evidence for ${identity.taskId}.`);
@@ -447,25 +440,22 @@ export function prepareFinalModuleDeliveryAdmissionState(
 export function commitFinalModuleDeliveryAdmissionState(
   request: CommitFinalModuleDeliveryAdmissionStateRequest,
 ): void {
-  const commitRequest = { ...request, store: admissionStateStore };
-  commitFinalAdmissionState(commitRequest);
+  commitFinalAdmissionState({ ...request, store: admissionStateStore });
 }
 
 export function rollbackFinalModuleDeliveryAdmissionState(
   request: RollbackFinalModuleDeliveryAdmissionStateRequest,
 ): void {
-  const rollbackRequest = { ...request, store: admissionStateStore };
-  rollbackFinalAdmissionState(rollbackRequest);
+  rollbackFinalAdmissionState({ ...request, store: admissionStateStore });
 }
 
 export function restartModuleDeliveryGeneration(
   request: RestartModuleDeliveryGenerationRequest,
 ): ModuleDeliveryAdmissionState {
-  const stateInspection: AdmissionStateAuthorityInspection = {
+  assertModuleDeliveryAdmissionStateAuthority({
     authority: request.authority,
     state: request.previousState,
-  };
-  assertModuleDeliveryAdmissionStateAuthority(stateInspection);
+  });
   const authority = requiredAuthority(request.authority);
   const dispositionKeys = new Set(authority.dispositions.map(attemptKey));
   if (
@@ -538,14 +528,13 @@ export function assertModuleDeliveryAdmissionStateAuthority(
     throw new Error(
       'Module delivery admission state authority is invalid or stale.',
     );
-  const currentInspection = {
+  assertAdmissionStateCurrent({
     store: admissionStateStore,
     authority: inspection.authority,
     state: inspection.state,
     generation: authority.acceptedPlan.plan.generation,
     planDigest: authority.acceptedPlan.planDigest,
-  };
-  assertAdmissionStateCurrent(currentInspection);
+  });
 }
 
 export function selectModuleDeliveryAdmissions(
@@ -716,8 +705,17 @@ export function recordModuleDeliveryAttemptLeases(
     compatible.push(admission);
     if (writer) writerOccupied = true;
   }
-  if (request.admissions.some(({ taskId }) => isWriter({ authority, taskId })))
+  if (
+    authority.sourceSnapshot &&
+    request.admissions.some(({ taskId }) => isWriter({ authority, taskId }))
+  ) {
+    assertSharedCheckoutAdvance({
+      repositoryRoot: authority.repositoryRoot,
+      expected: authority.sourceSnapshot,
+      expectedHead: request.state.headCommit,
+    });
     authority.sourceSnapshot = captureSourceSnapshot(authority.repositoryRoot);
+  }
   const leases = request.admissions.map((admission) => {
     consumedAdmissions.add(admission);
     const lease = Object.freeze(copyModuleDeliveryAdmission(admission));
@@ -955,7 +953,7 @@ function validDisposition(request: DispositionValidationRequest): boolean {
     );
   if (
     node.kind === ModuleDeliveryTaskKind.Write &&
-    sharedCheckoutAuthorities.has(request.authority)
+    request.authority.sourceSnapshot
   )
     assertSharedCheckoutAdvance({
       repositoryRoot: request.authority.repositoryRoot,

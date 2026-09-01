@@ -230,6 +230,10 @@ export type SourceRepositorySnapshot = {
   readonly protectedRefsDigest: string;
   readonly configDigest: string;
   readonly hooksDigest: string;
+  readonly ignoredDigest: string;
+  readonly upstreamRef: string;
+  readonly upstreamCommit: string;
+  readonly pushProtectedRefsDigest: string;
 };
 
 export type ModuleIntegrationSession = {
@@ -276,38 +280,6 @@ type ModuleGitInvocation = {
   readonly allowFailure?: boolean;
 };
 
-type RepositoryPathSet = {
-  readonly repositoryRoot: string;
-  readonly paths: readonly string[];
-  readonly includeContent: boolean;
-};
-
-type RepositoryFingerprint = Readonly<{ metadataDigest: string }>;
-
-type EntryFingerprint = {
-  readonly content: readonly Buffer[];
-  readonly metadata: readonly Buffer[];
-};
-
-type SymlinkAncestorInspection = {
-  readonly root: string;
-  readonly absolutePath: string;
-};
-
-type EntryFingerprintRequest = {
-  readonly repositoryRoot: string;
-  readonly path: string;
-  readonly includeContent: boolean;
-};
-
-type RepositorySnapshotRequest = {
-  readonly repositoryRoot: string;
-  readonly includeContent: boolean;
-};
-type RelevantRefsDigestRequest = Readonly<{
-  repositoryRoot: string;
-  allowedBranchRef?: string;
-}>;
 export type UpdateModuleIntegrationHeadRequest = Readonly<{
   provenance: ModuleIntegrationProvenance;
   nextCommit: string;
@@ -344,7 +316,6 @@ export type ModuleIntegrationCompletedWaveCountRequest = Readonly<{
   acceptedPlan: ValidatedModuleDeliveryPlan;
   state: ModuleIntegrationState;
 }>;
-
 const BIGINT_STATS_OPTIONS = { bigint: true } as const;
 
 const PROVENANCE = new WeakMap<
@@ -403,9 +374,12 @@ function nullSeparatedPaths(bytes: Buffer): readonly string[] {
   return paths;
 }
 
-function assertNoSymlinkAncestor(inspection: SymlinkAncestorInspection): void {
-  let parent = dirname(inspection.absolutePath);
-  while (parent !== inspection.root) {
+function assertNoSymlinkAncestor([root, absolutePath]: readonly [
+  string,
+  string,
+]): void {
+  let parent = dirname(absolutePath);
+  while (parent !== root) {
     if (lstatSync(parent).isSymbolicLink()) {
       throw new Error('Repository entry has a symlink ancestor.');
     }
@@ -413,18 +387,14 @@ function assertNoSymlinkAncestor(inspection: SymlinkAncestorInspection): void {
   }
 }
 
-function entryFingerprint(request: EntryFingerprintRequest): EntryFingerprint {
-  const absolutePath = resolve(request.repositoryRoot, request.path);
-  const fromRoot = relative(request.repositoryRoot, absolutePath);
+function entryFingerprint([repositoryRoot, path]: readonly [string, string]) {
+  const absolutePath = resolve(repositoryRoot, path);
+  const fromRoot = relative(repositoryRoot, absolutePath);
   if (fromRoot === '' || fromRoot.startsWith('..') || isAbsolute(fromRoot)) {
     throw new Error('Repository entry escapes its root.');
   }
-  const ancestorInspection: SymlinkAncestorInspection = {
-    root: request.repositoryRoot,
-    absolutePath,
-  };
-  assertNoSymlinkAncestor(ancestorInspection);
-  const pathTag = Buffer.from(`path:${request.path}`, 'utf8');
+  assertNoSymlinkAncestor([repositoryRoot, absolutePath]);
+  const pathTag = Buffer.from(`path:${path}`, 'utf8');
   if (!pathExists(absolutePath)) {
     return {
       content: [pathTag, Buffer.from('content:missing', 'utf8')],
@@ -440,38 +410,26 @@ function entryFingerprint(request: EntryFingerprintRequest): EntryFingerprint {
         ? 'directory'
         : 'other';
   const metadataTag = Buffer.from(
-    [
-      `kind:${kind}`,
-      `mode:${metadata.mode.toString(8)}`,
-      `dev:${metadata.dev.toString()}`,
-      `ino:${metadata.ino.toString()}`,
-      `size:${metadata.size.toString()}`,
-      `mtime:${metadata.mtimeNs.toString()}`,
-      `ctime:${metadata.ctimeNs.toString()}`,
-    ].join('|'),
+    [`kind:${kind}`, `mode:${metadata.mode.toString(8)}`].join('|'),
     'utf8',
   );
   if (kind === 'symlink') {
     return {
-      content: request.includeContent
-        ? [
-            pathTag,
-            Buffer.from('content:symlink-target', 'utf8'),
-            Buffer.from(readlinkSync(absolutePath), 'utf8'),
-          ]
-        : [],
+      content: [
+        pathTag,
+        Buffer.from('content:symlink-target', 'utf8'),
+        Buffer.from(readlinkSync(absolutePath), 'utf8'),
+      ],
       metadata: [pathTag, metadataTag],
     };
   }
   if (kind === 'file') {
     return {
-      content: request.includeContent
-        ? [
-            pathTag,
-            Buffer.from('content:file-bytes', 'utf8'),
-            readFileSync(absolutePath),
-          ]
-        : [],
+      content: [
+        pathTag,
+        Buffer.from('content:file-bytes', 'utf8'),
+        readFileSync(absolutePath),
+      ],
       metadata: [pathTag, metadataTag],
     };
   }
@@ -481,20 +439,16 @@ function entryFingerprint(request: EntryFingerprintRequest): EntryFingerprint {
   };
 }
 
-function repositoryFingerprint(
-  paths: RepositoryPathSet,
-): RepositoryFingerprint {
+function repositoryFingerprint([repositoryRoot, paths]: readonly [
+  string,
+  readonly string[],
+]): string {
   const metadata: Buffer[] = [];
-  for (const path of [...paths.paths].sort()) {
-    const request: EntryFingerprintRequest = {
-      repositoryRoot: paths.repositoryRoot,
-      path,
-      includeContent: paths.includeContent,
-    };
-    const fingerprint = entryFingerprint(request);
+  for (const path of [...paths].sort()) {
+    const fingerprint = entryFingerprint([repositoryRoot, path]);
     metadata.push(...fingerprint.metadata, ...fingerprint.content);
   }
-  return { metadataDigest: digestBuffers(metadata) };
+  return digestBuffers(metadata);
 }
 
 function repositoryPaths(repositoryRoot: string): readonly string[] {
@@ -514,9 +468,30 @@ function repositoryPaths(repositoryRoot: string): readonly string[] {
   ];
 }
 
-function relevantRefsDigest(request: RelevantRefsDigestRequest): string {
+function ignoredDigest(repositoryRoot: string): string {
+  const paths = nullSeparatedPaths(
+    gitBytes({
+      cwd: repositoryRoot,
+      args: ['ls-files', '--others', '--ignored', '--exclude-standard', '-z'],
+    }),
+  );
+  let bytes = 0n;
+  for (const path of paths)
+    bytes += lstatSync(
+      resolve(repositoryRoot, path),
+      BIGINT_STATS_OPTIONS,
+    ).size;
+  if (paths.length > 256 || bytes > 1_048_576n)
+    throw new Error('Ignored repository surface exceeds its bound.');
+  return repositoryFingerprint([repositoryRoot, paths]);
+}
+
+function relevantRefsDigest([repositoryRoot, allowedRefs = []]: readonly [
+  string,
+  (readonly string[])?,
+]): string {
   const invocation: ModuleGitInvocation = {
-    cwd: request.repositoryRoot,
+    cwd: repositoryRoot,
     args: [
       'for-each-ref',
       '--sort=refname',
@@ -528,7 +503,7 @@ function relevantRefsDigest(request: RelevantRefsDigestRequest): string {
   for (const record of gitBytes(invocation).toString('utf8').split('\n')) {
     if (record.length === 0) continue;
     const [ref = '', objectId = '', symref = ''] = record.split('\0');
-    if (ref === (request.allowedBranchRef ?? '')) continue;
+    if (allowedRefs.includes(ref)) continue;
     if (ref.length === 0 || objectId.length === 0)
       throw new Error('Repository ref fingerprint record is malformed.');
     fields.push(
@@ -552,49 +527,29 @@ function commonEntryDigest([repositoryRoot, name]: readonly [
   );
   const root = resolve(commonDirectory, name);
   if (!pathExists(root))
-    return digestBuffers([Buffer.from(`${name}:missing`, 'ascii')]);
+    return repositoryFingerprint([commonDirectory, [name]]);
   const rootMetadata = lstatSync(root);
-  if (rootMetadata.isSymbolicLink())
-    return digestBuffers([
-      Buffer.from(`${name}:symlink`, 'ascii'),
-      Buffer.from(rootMetadata.mode.toString(8), 'ascii'),
-      Buffer.from(readlinkSync(root), 'utf8'),
-    ]);
-  if (!rootMetadata.isDirectory())
+  if (!rootMetadata.isDirectory() && !rootMetadata.isSymbolicLink())
     throw new Error(`Git common ${name} surface is unsupported.`);
-  const fields = [
-    Buffer.from(`directory:${rootMetadata.mode.toString(8)}`, 'ascii'),
-  ];
-  const entries = readdirSync(root).sort();
-  if (entries.length > 256)
-    throw new Error(`Git common ${name} surface exceeds its entry bound.`);
-  let totalBytes = 0;
-  for (const entry of entries) {
-    const path = resolve(root, entry);
-    const metadata = lstatSync(path);
-    fields.push(
-      Buffer.from(entry, 'utf8'),
-      Buffer.from(metadata.mode.toString(8), 'ascii'),
-    );
-    if (metadata.isFile()) {
-      totalBytes += metadata.size;
-      if (totalBytes > 1_048_576)
-        throw new Error(`Git common ${name} surface exceeds its byte bound.`);
-      fields.push(Buffer.from('file', 'ascii'), readFileSync(path));
-    } else if (metadata.isSymbolicLink())
-      fields.push(
-        Buffer.from('symlink', 'ascii'),
-        Buffer.from(readlinkSync(path), 'utf8'),
-      );
-    else throw new Error(`Git common ${name} entry is unsupported.`);
-  }
-  return digestBuffers(fields);
+  const entries = rootMetadata.isDirectory() ? readdirSync(root).sort() : [];
+  const metadata = entries.map((entry) => lstatSync(resolve(root, entry)));
+  let bytes = 0;
+  for (const value of metadata) bytes += value.size;
+  if (
+    entries.length > 256 ||
+    bytes > 1_048_576 ||
+    metadata.some((value) => !value.isFile() && !value.isSymbolicLink())
+  )
+    throw new Error(`Git common ${name} surface is unsupported or unbounded.`);
+  return repositoryFingerprint([
+    commonDirectory,
+    [name, ...entries.map((entry) => `${name}/${entry}`)],
+  ]);
 }
 
 function captureRepositorySnapshot(
-  request: RepositorySnapshotRequest,
+  repositoryRoot: string,
 ): SourceRepositorySnapshot {
-  const repositoryRoot = request.repositoryRoot;
   const headInvocation: ModuleGitInvocation = {
     cwd: repositoryRoot,
     args: ['rev-parse', '--verify', 'HEAD^{commit}'],
@@ -606,87 +561,85 @@ function captureRepositorySnapshot(
   };
   const branch = runModuleDeliveryGit(gitRequest(branchInvocation));
   const symbolicHead = branch.exitCode === 0 ? gitText(branch) : '(detached)';
+  const upstream = runModuleDeliveryGit({
+    cwd: repositoryRoot,
+    args: ['rev-parse', '--symbolic-full-name', '@{upstream}'],
+    allowFailure: true,
+  });
+  const upstreamRef = upstream.exitCode === 0 ? gitText(upstream) : '';
+  const upstreamCommit = upstreamRef
+    ? gitText(
+        runModuleDeliveryGit({
+          cwd: repositoryRoot,
+          args: ['rev-parse', '--verify', `${upstreamRef}^{commit}`],
+          allowFailure: true,
+        }),
+      )
+    : '';
   const configInvocation: ModuleGitInvocation = {
     cwd: repositoryRoot,
     args: ['config', '--local', '--null', '--list'],
   };
-  const pathSet: RepositoryPathSet = {
+  const metadataDigest = repositoryFingerprint([
     repositoryRoot,
-    paths: repositoryPaths(repositoryRoot),
-    includeContent: true,
-  };
-  const fingerprint = repositoryFingerprint(pathSet);
+    repositoryPaths(repositoryRoot),
+  ]);
   return {
     headCommit: gitText(runModuleDeliveryGit(gitRequest(headInvocation))),
     symbolicHead,
-    metadataDigest: fingerprint.metadataDigest,
-    refsDigest: relevantRefsDigest({ repositoryRoot }),
-    protectedRefsDigest: relevantRefsDigest({
-      repositoryRoot,
-      allowedBranchRef: symbolicHead,
-    }),
+    metadataDigest,
+    refsDigest: relevantRefsDigest([repositoryRoot]),
+    protectedRefsDigest: relevantRefsDigest([repositoryRoot, [symbolicHead]]),
     configDigest: digestBuffers([gitBytes(configInvocation)]),
     hooksDigest: digestBuffers(
       [GitSurface.Hooks, GitSurface.Info].map((name) =>
         Buffer.from(commonEntryDigest([repositoryRoot, name]), 'ascii'),
       ),
     ),
+    ignoredDigest: ignoredDigest(repositoryRoot),
+    upstreamRef,
+    upstreamCommit,
+    pushProtectedRefsDigest: relevantRefsDigest([
+      repositoryRoot,
+      [symbolicHead, upstreamRef],
+    ]),
   };
 }
 
 export function captureSourceSnapshot(
   repositoryRoot: string,
 ): SourceRepositorySnapshot {
-  const request: RepositorySnapshotRequest = {
-    repositoryRoot,
-    includeContent: true,
-  };
-  return captureRepositorySnapshot(request);
+  return captureRepositorySnapshot(repositoryRoot);
 }
 
 export function assertSourceSnapshot(
   expectation: SourceSnapshotExpectation,
 ): void {
-  const request: RepositorySnapshotRequest = {
-    repositoryRoot: expectation.repositoryRoot,
-    includeContent: false,
-  };
-  const current = captureRepositorySnapshot(request);
+  const current = captureRepositorySnapshot(expectation.repositoryRoot);
   if (
     current.headCommit !== expectation.expected.headCommit ||
     current.symbolicHead !== expectation.expected.symbolicHead ||
     current.metadataDigest !== expectation.expected.metadataDigest ||
     current.refsDigest !== expectation.expected.refsDigest ||
     current.configDigest !== expectation.expected.configDigest ||
-    current.hooksDigest !== expectation.expected.hooksDigest
+    current.hooksDigest !== expectation.expected.hooksDigest ||
+    current.ignoredDigest !== expectation.expected.ignoredDigest
   ) {
     throw new Error('Source repository changed after integration preparation.');
   }
 }
 
-export function assertSharedCheckoutAdvance(
-  expectation: SourceSnapshotExpectation & { readonly expectedHead: string },
-): void {
-  const current = captureRepositorySnapshot({
-    repositoryRoot: expectation.repositoryRoot,
-    includeContent: false,
-  });
-  if (
-    current.headCommit !== expectation.expectedHead ||
-    current.symbolicHead !== expectation.expected.symbolicHead ||
-    current.protectedRefsDigest !== expectation.expected.protectedRefsDigest ||
-    current.configDigest !== expectation.expected.configDigest ||
-    current.hooksDigest !== expectation.expected.hooksDigest
-  )
-    throw new Error('Shared checkout Git metadata changed during dispatch.');
-  const root = expectation.repositoryRoot;
+function assertCanonicalCheckout([root, head]: readonly [
+  string,
+  string,
+]): void {
   const indexFlags = gitBytes({ cwd: root, args: ['ls-files', '-v', '-z'] });
   if (
     gitText(runModuleDeliveryGit({ cwd: root, args: ['write-tree'] })) !==
       gitText(
         runModuleDeliveryGit({
           cwd: root,
-          args: ['rev-parse', `${expectation.expectedHead}^{tree}`],
+          args: ['rev-parse', `${head}^{tree}`],
         }),
       ) ||
     gitBytes({
@@ -696,6 +649,51 @@ export function assertSharedCheckoutAdvance(
     nullSeparatedPaths(indexFlags).some((entry) => !entry.startsWith('H '))
   )
     throw new Error('Shared checkout index is not canonical for HEAD.');
+}
+
+export function assertSharedCheckoutAdvance(
+  expectation: SourceSnapshotExpectation & { readonly expectedHead: string },
+): void {
+  const current = captureRepositorySnapshot(expectation.repositoryRoot);
+  if (
+    current.headCommit !== expectation.expectedHead ||
+    current.symbolicHead !== expectation.expected.symbolicHead ||
+    current.protectedRefsDigest !== expectation.expected.protectedRefsDigest ||
+    current.configDigest !== expectation.expected.configDigest ||
+    current.hooksDigest !== expectation.expected.hooksDigest ||
+    current.ignoredDigest !== expectation.expected.ignoredDigest
+  )
+    throw new Error('Shared checkout Git metadata changed during dispatch.');
+  assertCanonicalCheckout([
+    expectation.repositoryRoot,
+    expectation.expectedHead,
+  ]);
+}
+
+export function acknowledgeSharedCheckoutPush(
+  request: Readonly<{
+    repositoryRoot: string;
+    expected: SourceRepositorySnapshot;
+    expectedHead: string;
+  }>,
+): SourceRepositorySnapshot {
+  const current = captureRepositorySnapshot(request.repositoryRoot);
+  if (
+    !request.expected.upstreamRef ||
+    request.expected.upstreamCommit === request.expectedHead ||
+    current.headCommit !== request.expectedHead ||
+    current.symbolicHead !== request.expected.symbolicHead ||
+    current.upstreamRef !== request.expected.upstreamRef ||
+    current.upstreamCommit !== request.expectedHead ||
+    current.pushProtectedRefsDigest !==
+      request.expected.pushProtectedRefsDigest ||
+    current.configDigest !== request.expected.configDigest ||
+    current.hooksDigest !== request.expected.hooksDigest ||
+    current.ignoredDigest !== request.expected.ignoredDigest
+  )
+    throw new Error('Shared checkout push acknowledgement is invalid.');
+  assertCanonicalCheckout([request.repositoryRoot, request.expectedHead]);
+  return current;
 }
 
 export function createIntegrationSession(

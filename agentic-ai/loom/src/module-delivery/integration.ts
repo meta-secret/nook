@@ -7,6 +7,7 @@ import {
   verifyModuleCommitHandoff,
 } from './handoff.ts';
 import {
+  acknowledgeSharedCheckoutPush,
   assertSharedCheckoutAdvance,
   assertModuleIntegrationAcceptedPlanState,
   assertFreshModuleIntegrationState,
@@ -145,6 +146,7 @@ type AdvancedIntegrationStateRequest = {
   readonly nextState: ModuleIntegrationState;
   readonly provenance: ModuleIntegrationProvenance;
   readonly writerFrontiers: readonly ModuleDeliveryIntegratedWriterFrontierCapability[];
+  readonly sourceSnapshot?: ModuleIntegrationProvenance['sourceSnapshot'];
 };
 type ProviderLeaseInspection = {
   readonly authority: ModuleDeliveryGenerationAuthority;
@@ -369,7 +371,7 @@ function advancedIntegrationState(
   const registration: IntegrationStateRegistration = {
     authority: request.provenance.authority,
     state: immutable,
-    sourceSnapshot: request.provenance.sourceSnapshot,
+    sourceSnapshot: request.sourceSnapshot ?? request.provenance.sourceSnapshot,
     workspaceSnapshot: request.provenance.workspaceSnapshot,
     session: request.provenance.session,
   };
@@ -771,6 +773,46 @@ export function integrateVerifiedModuleDeliveryTask(
   };
   recordIntegratedLeaseAcceptance(disposition);
   return integrated;
+}
+
+export function acknowledgeModuleDeliveryPush(
+  request: Readonly<{
+    authority: ModuleDeliveryGenerationAuthority;
+    acceptedPlan: ValidatedModuleDeliveryPlan;
+    state: ModuleIntegrationState;
+  }>,
+): ModuleIntegrationState {
+  moduleDeliveryAuthorityPlan(request);
+  assertModuleIntegrationAcceptedPlanState(request);
+  const provenance = integrationProvenance(request.state);
+  if (provenance.authority !== request.authority)
+    throw new Error('Module integration authority does not own this state.');
+  assertFreshModuleIntegrationState({ state: request.state, provenance });
+  assertCurrentModuleIntegrationAdmission(request);
+  const sourceSnapshot = acknowledgeSharedCheckoutPush({
+    repositoryRoot: request.state.workspace.sourceRepositoryRoot,
+    expected: provenance.sourceSnapshot,
+    expectedHead: request.state.headCommit,
+  });
+  assertModuleDeliveryAuthorityRepository({
+    authority: request.authority,
+    repositoryRoot: request.state.workspace.sourceRepositoryRoot,
+  });
+  const writerFrontiers = moduleDeliveryWriterFrontiers(request.state);
+  const admissionState = createModuleDeliveryAdmissionState({
+    authority: request.authority,
+    acceptedPlan: request.acceptedPlan,
+    headCommit: request.state.headCommit,
+    integratedWriterFrontiers: writerFrontiers,
+    acceptedEvidence: request.state.acceptedEvidence,
+  });
+  return advancedIntegrationState({
+    previousState: request.state,
+    nextState: { ...request.state, admissionState },
+    provenance,
+    writerFrontiers,
+    sourceSnapshot,
+  });
 }
 
 export function finalizeModuleDeliveryIntegration(

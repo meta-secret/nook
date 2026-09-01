@@ -809,6 +809,7 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
 
     for required in [
         ".nook-workbench-plan.md",
+        "schema_version: 2",
         "## Interpreted request",
         "## Requirements",
         "## Constraints and exclusions",

@@ -56,6 +56,9 @@ repository root before any implementation agent runs. Write only this Markdown
 body, with each heading exactly once and in this order:
 
 ```text
+---
+schema_version: 2
+---
 # Task plan
 
 ## Interpreted request

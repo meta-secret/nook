@@ -237,7 +237,7 @@ The plan must contain:
 - the agent's own complete interpretation of the desired outcome;
 - material functional, workflow, security, and delivery requirements;
 - explicit constraints, assumptions, and exclusions;
-- a small ordered execution plan;
+- a small ordered execution plan with closed `schema_version: 2` metadata. Other versions fail;
 - a `Change budget and PR sequence` section;
 - an `Estimated authored additions` value;
 - an `Estimated authored deletions (reported only)` value;
