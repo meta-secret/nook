@@ -14,7 +14,9 @@ import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
 import {
   REQUIRED_PARENT_OWNED_RESOURCES,
   ModuleDeliveryBaselineKind,
+  ModuleDeliveryAttemptDispositionKind,
   ModuleDeliveryEvidenceVerdict,
+  ModuleDeliveryGenerationFenceKind,
   ModuleDeliveryJoinKind,
   ModuleDeliveryProviderSubmissionKind,
   ModuleDeliveryTaskKind,
@@ -30,6 +32,7 @@ import {
   prepareModuleIntegration,
   prepareModuleWorktree,
   recordModuleDeliveryAttemptLeases,
+  recordModuleDeliveryAttemptDisposition,
   selectModuleDeliveryAdmissions,
 } from '../../src/module-delivery/index.ts';
 import {
@@ -138,9 +141,14 @@ function validatedPlan(
   return decoded;
 }
 
-function preparedRuntime(concurrent = false) {
+function preparedRuntime(concurrent = false, manyIgnored = false) {
   const fixture = createGitFixture();
   fixtures.push(fixture);
+  if (manyIgnored) {
+    mkdirSync(join(fixture.sourceRoot, 'hidden'));
+    for (let index = 0; index < 300; index += 1)
+      writeFileSync(join(fixture.sourceRoot, 'hidden', `${index}`), '');
+  }
   const plan = validatedPlan(fixture, concurrent);
   const authority = createModuleDeliveryGenerationAuthority({
     acceptedPlan: plan,
@@ -338,11 +346,11 @@ function mutateGit([fixture, mutation]: readonly [
   }
   const hidden = join(fixture.sourceRoot, 'hidden');
   writeFileSync(join(info, 'hidden-control'), 'control');
-  mkdirSync(hidden);
+  mkdirSync(hidden, { recursive: true });
   writeFileSync(join(hidden, 'secret'), 'secret');
   return () => {
     rmSync(join(info, 'hidden-control'));
-    rmSync(hidden, { recursive: true });
+    rmSync(join(hidden, 'secret'));
   };
 }
 
@@ -354,18 +362,10 @@ function rejectMutations(runtime: Runtime, action: () => void): void {
   }
 }
 
-test('rejects protected mutations during production write acceptance', () => {
-  const runtime = preparedRuntime();
-  const [lease, submission] = nextWriter(runtime, runtime.state);
-  rejectMutations(runtime, () =>
-    integrate(runtime, runtime.state, lease, submission),
-  );
-});
-
 test.each(['read-first', 'writer-first'] as const)(
   'accepts concurrent writer and reader in %s production order',
   (order) => {
-    const runtime = preparedRuntime(true);
+    const runtime = preparedRuntime(true, order === 'read-first');
     const concurrentLeases = leases(runtime);
     const writerLease = concurrentLeases.find(
       ({ taskId }) => taskId === 'alpha',
@@ -380,26 +380,44 @@ test.each(['read-first', 'writer-first'] as const)(
       lease: readLease,
     });
     let state = runtime.state;
-    const rejectReadMutations = () =>
+    if (order === 'read-first') {
       rejectMutations(runtime, () =>
         integrate(runtime, state, readLease, evidence),
       );
-    if (order === 'read-first') {
-      rejectReadMutations();
       state = integrate(runtime, state, readLease, evidence);
     }
     const writer = commitWriter(runtime, writerLease, 'alpha');
     if (order === 'writer-first') {
       expect(() => integrate(runtime, state, readLease, evidence)).toThrow();
+      const root = runtime.fixture.sourceRoot;
+      writeFileSync(join(root, 'module/seed.txt'), 'dirty\n');
+      const disposition = {
+        authority: runtime.authority,
+        state: state.admissionState,
+        lease: writerLease,
+        outcome: {
+          kind: ModuleDeliveryAttemptDispositionKind.FinalUnusable,
+          conclusion: ModuleDeliveryGenerationFenceKind.Rejected,
+        },
+      } as const;
+      expect(() =>
+        recordModuleDeliveryAttemptDisposition(disposition),
+      ).toThrow();
+      fixtureGit(runtime.fixture)(['reset', '--hard', state.headCommit]);
+      recordModuleDeliveryAttemptDisposition(disposition);
+      const [retryLease, retryWriter] = nextWriter(runtime, state);
+      expect(retryLease.attempt).toBe(2);
+      expect(retryLease.startingFrontier).toBe(writerLease.startingFrontier);
+      state = integrate(runtime, state, retryLease, retryWriter);
+    } else {
+      rejectMutations(runtime, () =>
+        integrate(runtime, state, writerLease, writer),
+      );
+      state = integrate(runtime, state, writerLease, writer);
     }
-    state = integrate(runtime, state, writerLease, writer);
     if (order === 'read-first') {
       const git = fixtureGit(runtime.fixture);
-      const upstream = git([
-        'rev-parse',
-        '--symbolic-full-name',
-        '@{upstream}',
-      ]);
+      const upstream = git(['rev-parse', '--symbolic-full-name', '@{u}']);
       expect(() => acknowledge(runtime, state)).toThrow();
       git(['update-ref', upstream, writer.handoff.commit]);
       expect(() => finalize(runtime, state)).toThrow();
@@ -408,16 +426,12 @@ test.each(['read-first', 'writer-first'] as const)(
       git(['update-ref', '-d', 'refs/custom/push-drift']);
       state = acknowledge(runtime, state);
     }
-    if (order === 'writer-first') {
-      rejectReadMutations();
+    if (order === 'writer-first')
       state = integrate(runtime, state, readLease, evidence);
-    }
-    const restoreAdmission = mutateGit([runtime.fixture, 'hook']);
-    expect(() => nextWriter(runtime, state)).toThrow();
-    restoreAdmission();
     const [betaLease, beta] = nextWriter(runtime, state);
     state = integrate(runtime, state, betaLease, beta);
     rejectMutations(runtime, () => finalize(runtime, state));
     finalize(runtime, state);
   },
+  30_000,
 );

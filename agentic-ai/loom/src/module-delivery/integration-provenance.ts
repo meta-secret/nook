@@ -469,21 +469,16 @@ function repositoryPaths(repositoryRoot: string): readonly string[] {
 }
 
 function ignoredDigest(repositoryRoot: string): string {
-  const paths = nullSeparatedPaths(
-    gitBytes({
-      cwd: repositoryRoot,
-      args: ['ls-files', '--others', '--ignored', '--exclude-standard', '-z'],
-    }),
-  );
-  let bytes = 0n;
-  for (const path of paths)
-    bytes += lstatSync(
-      resolve(repositoryRoot, path),
-      BIGINT_STATS_OPTIONS,
-    ).size;
-  if (paths.length > 256 || bytes > 1_048_576n)
+  const inventory = gitBytes({
+    cwd: repositoryRoot,
+    args: ['ls-files', '--others', '--ignored', '--exclude-standard', '-z'],
+  });
+  if (
+    inventory.length > 8_388_608 ||
+    nullSeparatedPaths(inventory).length > 100_000
+  )
     throw new Error('Ignored repository surface exceeds its bound.');
-  return repositoryFingerprint([repositoryRoot, paths]);
+  return digestBuffers([inventory]);
 }
 
 function relevantRefsDigest([repositoryRoot, allowedRefs = []]: readonly [
