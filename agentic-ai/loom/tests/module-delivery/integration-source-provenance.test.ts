@@ -50,22 +50,6 @@ describe('module delivery source provenance', () => {
     );
   });
 
-  test('ignores concurrent Team Plan lifecycle refs', () => {
-    const fixture = trackedFixture();
-    const expectation = sourceExpectation(fixture);
-    const sourceGit = fixtureGit(fixture);
-    for (const ref of [
-      'refs/nook/team-plan/locks/concurrent',
-      'refs/nook/team-plan/artifacts/concurrent',
-      'refs/nook/team-plan/frontiers/concurrent',
-      'refs/nook/team-plan/final-heads/concurrent',
-      'refs/nook/team-plan-locks/legacy-concurrent',
-    ])
-      sourceGit(['update-ref', ref, 'HEAD']);
-
-    expect(() => assertSourceSnapshot(expectation)).not.toThrow();
-  });
-
   test('rejects a custom symbolic ref retargeted between equal commits', () => {
     const fixture = trackedFixture();
     const sourceGit = fixtureGit(fixture);
