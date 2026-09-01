@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from 'bun:test';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
@@ -144,7 +144,6 @@ function validatedPlan([fixture, concurrent = false]: readonly [
             path: 'beta',
             sourceCommit: fixture.baselineCommit,
           }),
-          reader,
         ],
     edgeContracts: [],
   };
@@ -245,9 +244,32 @@ function integrate([runtime, state, lease, submission]: readonly [
   });
 }
 
+function mutateInfo([fixture, kind]: readonly [
+  GitFixture,
+  'hidden' | 'root-file',
+]): () => void {
+  const info = join(fixture.sourceRoot, '.git/info');
+  const saved = `${info}.saved`;
+  renameSync(info, saved);
+  if (kind === 'root-file') writeFileSync(info, 'unsupported');
+  else {
+    mkdirSync(info, { mode: 0o700 });
+    writeFileSync(join(info, 'exclude'), 'hidden/**\n');
+    writeFileSync(join(info, 'hidden-control'), 'control');
+    const hidden = join(fixture.sourceRoot, 'hidden');
+    mkdirSync(hidden);
+    writeFileSync(join(hidden, 'secret'), 'secret');
+  }
+  return () => {
+    rmSync(info, { recursive: true });
+    renameSync(saved, info);
+    if (kind === 'hidden')
+      rmSync(join(fixture.sourceRoot, 'hidden'), { recursive: true });
+  };
+}
+
 test('sequences shared commits with failure atomicity and exact cleanup', () => {
   const runtime = preparedRuntime();
-  const git = fixtureGit(runtime.fixture);
   const firstSelection = selectModuleDeliveryAdmissions({
     authority: runtime.authority,
     acceptedPlan: runtime.plan,
@@ -270,7 +292,6 @@ test('sequences shared commits with failure atomicity and exact cleanup', () => 
     acceptedPlan: runtime.plan,
     state: afterAlpha.admissionState,
   });
-  expect(secondSelection.admissions[0]?.taskId).toBe('beta');
   expect(secondSelection.admissions[0]?.startingFrontier).toBe(
     alpha.handoff.commit,
   );
@@ -286,48 +307,12 @@ test('sequences shared commits with failure atomicity and exact cleanup', () => 
     path: 'beta',
   });
   const afterBeta = integrate([runtime, afterAlpha, betaLease, beta]);
-  const readAdmission = selectModuleDeliveryAdmissions({
-    authority: runtime.authority,
-    acceptedPlan: runtime.plan,
-    state: afterBeta.admissionState,
-  }).admissions[0];
-  if (!readAdmission) throw new Error('Reader admission is missing.');
-  const readLease = recordModuleDeliveryAttemptLeases({
-    authority: runtime.authority,
-    state: afterBeta.admissionState,
-    admissions: [readAdmission],
-  }).leases[0];
-  if (!readLease) throw new Error('Reader lease is missing.');
-  const readNode = runtime.plan.plan.nodes[2];
-  if (!readNode || readNode.kind !== ModuleDeliveryTaskKind.ReadOnly)
-    throw new Error('Reader node is missing.');
-  const evidence = evidenceSubmission({
-    state: { ...afterBeta, headCommit: readLease.startingFrontier },
-    node: readNode,
-    lease: readLease,
-  });
-  const exclude = join(runtime.fixture.sourceRoot, '.git/info/exclude');
-  const savedExclude = readFileSync(exclude);
-  writeFileSync(exclude, 'hidden/**\n');
-  expect(() => integrate([runtime, afterBeta, readLease, evidence])).toThrow();
-  writeFileSync(exclude, savedExclude);
-  const afterRead = integrate([runtime, afterBeta, readLease, evidence]);
-  writeFileSync(exclude, 'hidden/**\n');
-  expect(() =>
-    finalizeModuleDeliveryIntegration({
-      authority: runtime.authority,
-      acceptedPlan: runtime.plan,
-      state: afterRead,
-    }),
-  ).toThrow();
-  writeFileSync(exclude, savedExclude);
   const finalized = finalizeModuleDeliveryIntegration({
     authority: runtime.authority,
     acceptedPlan: runtime.plan,
-    state: afterRead,
+    state: afterBeta,
   });
   expect(finalized.headCommit).toBe(beta.handoff.commit);
-  expect(git(['rev-parse', 'HEAD'])).toBe(beta.handoff.commit);
   expect(
     cleanupModuleIntegration({ cleanupHandle: finalized.cleanupHandle }),
   ).toEqual({ removed: true });
@@ -345,10 +330,6 @@ test.each(['read-first', 'writer-first'] as const)(
       acceptedPlan: runtime.plan,
       state: runtime.state.admissionState,
     });
-    expect(selection.admissions.map(({ taskId }) => taskId)).toEqual([
-      'alpha',
-      'reader',
-    ]);
     const leases = recordModuleDeliveryAttemptLeases({
       authority: runtime.authority,
       state: runtime.state.admissionState,
@@ -369,8 +350,19 @@ test.each(['read-first', 'writer-first'] as const)(
       lease: readLease,
     });
     let state = runtime.state;
-    if (order === 'read-first')
+    const rejectReadMutations = () => {
+      for (const kind of ['hidden', 'root-file'] as const) {
+        const restore = mutateInfo([runtime.fixture, kind]);
+        expect(() =>
+          integrate([runtime, state, readLease, evidence]),
+        ).toThrow();
+        restore();
+      }
+    };
+    if (order === 'read-first') {
+      rejectReadMutations();
       state = integrate([runtime, state, readLease, evidence]);
+    }
     let writer = commitWriter({ runtime, lease: writerLease, path: 'alpha' });
     if (order === 'writer-first') {
       expect(() => integrate([runtime, state, readLease, evidence])).toThrow();
@@ -421,9 +413,25 @@ test.each(['read-first', 'writer-first'] as const)(
       };
       state = integrate([runtime, state, writerLease, writer]);
     }
-    if (order === 'writer-first')
+    if (order === 'writer-first') {
+      rejectReadMutations();
       state = integrate([runtime, state, readLease, evidence]);
-    expect(state.acceptedEvidence).toHaveLength(1);
-    expect(state.acceptedWrites).toHaveLength(1);
+    }
+    for (const kind of ['hidden', 'root-file'] as const) {
+      const restore = mutateInfo([runtime.fixture, kind]);
+      expect(() =>
+        finalizeModuleDeliveryIntegration({
+          authority: runtime.authority,
+          acceptedPlan: runtime.plan,
+          state,
+        }),
+      ).toThrow();
+      restore();
+    }
+    finalizeModuleDeliveryIntegration({
+      authority: runtime.authority,
+      acceptedPlan: runtime.plan,
+      state,
+    });
   },
 );

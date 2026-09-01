@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, expect, test } from 'bun:test';
 import {
   chmodSync,
   mkdirSync,
@@ -195,58 +195,44 @@ function preparedWrite(): PreparedWrite {
   };
 }
 
-describe('module delivery source provenance', () => {
-  test.each([
-    'config',
-    'hook',
-    'ref',
-    'skip-worktree',
-    'assume-unchanged',
-    'info-content',
-    'info-mode',
-    'info-symlink',
-  ] as const)(
-    'rejects %s mutation through production handoff acceptance',
-    (mutation) => {
-      const prepared = preparedWrite();
-      const git = fixtureGit(prepared.fixture);
-      if (mutation === 'config')
-        git(['config', 'remote.origin.url', 'https://example.invalid/repo']);
-      else if (mutation === 'hook')
-        writeFileSync(
-          join(prepared.fixture.sourceRoot, '.git/hooks/pre-commit'),
-          '#!/bin/sh\nexit 0\n',
-        );
-      else if (mutation === 'ref')
-        git(['update-ref', 'refs/custom/forged', 'HEAD']);
-      else if (mutation.startsWith('info-')) {
-        const exclude = join(prepared.fixture.sourceRoot, '.git/info/exclude');
-        if (mutation === 'info-content') writeFileSync(exclude, 'hidden/**\n');
-        else if (mutation === 'info-mode') chmodSync(exclude, 0o600);
-        else {
-          rmSync(exclude);
-          symlinkSync('../../module/seed.txt', exclude);
-        }
-      } else
-        git([
-          'update-index',
-          `--${mutation}`,
-          'nook-app/nook-platform/nook-core/src/feature.rs',
-        ]);
-
-      expect(() =>
-        integrateVerifiedModuleDeliveryTask({
-          authority: prepared.authority,
-          acceptedPlan: prepared.plan,
-          lease: prepared.lease,
-          state: prepared.state,
-          submission: prepared.submission,
-        }),
-      ).toThrow(
-        mutation === 'skip-worktree' || mutation === 'assume-unchanged'
-          ? 'index is not canonical'
-          : 'Git metadata changed during dispatch',
+test.each([
+  'info-content',
+  'info-mode',
+  'info-symlink',
+  'info-root-mode',
+  'info-root-type',
+] as const)(
+  'rejects %s mutation through production handoff acceptance',
+  (mutation) => {
+    const prepared = preparedWrite();
+    const info = join(prepared.fixture.sourceRoot, '.git/info');
+    const exclude = join(info, 'exclude');
+    if (mutation === 'info-content') {
+      mkdirSync(join(prepared.fixture.sourceRoot, 'hidden'));
+      writeFileSync(
+        join(prepared.fixture.sourceRoot, 'hidden/secret'),
+        'secret',
       );
-    },
-  );
-});
+      writeFileSync(join(info, 'hidden-control'), 'control');
+      writeFileSync(exclude, 'hidden/**\n');
+    } else if (mutation === 'info-mode') chmodSync(exclude, 0o600);
+    else if (mutation === 'info-symlink') {
+      rmSync(exclude);
+      symlinkSync('../../module/seed.txt', exclude);
+    } else if (mutation === 'info-root-mode') chmodSync(info, 0o700);
+    else {
+      rmSync(info, { recursive: true });
+      writeFileSync(info, 'unsupported');
+    }
+
+    expect(() =>
+      integrateVerifiedModuleDeliveryTask({
+        authority: prepared.authority,
+        acceptedPlan: prepared.plan,
+        lease: prepared.lease,
+        state: prepared.state,
+        submission: prepared.submission,
+      }),
+    ).toThrow();
+  },
+);

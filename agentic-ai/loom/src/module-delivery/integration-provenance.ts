@@ -557,11 +557,14 @@ function commonEntryDigest([repositoryRoot, name]: readonly [
   if (rootMetadata.isSymbolicLink())
     return digestBuffers([
       Buffer.from(`${name}:symlink`, 'ascii'),
+      Buffer.from(rootMetadata.mode.toString(8), 'ascii'),
       Buffer.from(readlinkSync(root), 'utf8'),
     ]);
   if (!rootMetadata.isDirectory())
     throw new Error(`Git common ${name} surface is unsupported.`);
-  const fields: Buffer[] = [];
+  const fields = [
+    Buffer.from(`directory:${rootMetadata.mode.toString(8)}`, 'ascii'),
+  ];
   const entries = readdirSync(root).sort();
   if (entries.length > 256)
     throw new Error(`Git common ${name} surface exceeds its entry bound.`);
