@@ -215,6 +215,10 @@ by Git commit and worktree. See
 task loom:pr-land CONFIG=path/to/validate-request.yaml
 ```
 
+`prLand.validate` dispatches hosted validation first. Its `nextStep` requires
+repository-owned checks and concurrent exact-head review collection or
+stabilization to settle before `prLand.ready`.
+
 ### toolsCall
 
 Wraps another domain request.

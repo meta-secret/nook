@@ -90,7 +90,7 @@ fn complete_validation_dispatches_before_review_collection() -> Result<()> {
         .find("gh pr edit \"$REQUESTED_PR\" --add-label \"$validation_label\"")
         .context("direct validation must apply its label")?;
     let review_request_position = direct_validation
-        .find("if ! task pr:review \\")
+        .find("if review_request_output=\"$(task pr:review \\")
         .context("direct validation must request concurrent exact-head review")?;
     let dispatched_head_position = direct_validation
         .find("dispatched_pr_state=\"$(gh pr view \"$REQUESTED_PR\" --json headRefOid,baseRefName")
@@ -131,6 +131,7 @@ fn complete_validation_dispatches_before_review_collection() -> Result<()> {
     );
     for required in [
         "review_request_state=\"not-requested\"",
+        "grep -Fq '\"state\": \"requested\"'",
         "Keep this validation running; collect or retry review separately without restarting validation.",
         "Exact-head review request state: $review_request_state.",
         "REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED=\"$REQUEST_REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED\"",

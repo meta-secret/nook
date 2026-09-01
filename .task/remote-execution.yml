@@ -122,11 +122,17 @@ tasks:
           gh pr edit "$REQUESTED_PR" --remove-label "$validation_label"
         fi
         gh pr edit "$REQUESTED_PR" --add-label "$validation_label"
-        review_request_state="requested"
-        if ! task pr:review \
+        review_request_state="not-requested"
+        review_request_output=""
+        if review_request_output="$(task pr:review \
           PR="$REQUESTED_PR" \
-          REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED="$REQUEST_REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED"; then
-          review_request_state="not-requested"
+          REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED="$REQUEST_REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED")"; then
+          printf '%s\n' "$review_request_output"
+          if printf '%s\n' "$review_request_output" | grep -Fq '"state": "requested"'; then
+            review_request_state="requested"
+          fi
+        else
+          printf '%s\n' "$review_request_output"
           echo "::warning::Hosted validation is active, but the exact-head review request did not complete. Keep this validation running; collect or retry review separately without restarting validation." >&2
         fi
         dispatched_pr_state="$(gh pr view "$REQUESTED_PR" --json headRefOid,baseRefName --jq '.headRefOid + "|" + .baseRefName')"

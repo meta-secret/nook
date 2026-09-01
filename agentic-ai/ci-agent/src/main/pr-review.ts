@@ -2,6 +2,7 @@ import {
   DEFAULT_REVIEW_CLOCK,
   ExactHeadReviewFallback,
   requestExactHeadReview,
+  type ExactHeadReviewRequestResult,
 } from "./github-review.js";
 import {
   createOctokit,
@@ -35,8 +36,9 @@ type ReviewStabilizationInput = {
 
 type ReviewRequestInput = {
   circuitBreakerAcknowledged?: boolean;
+  ensureHeadTransition: () => Promise<void>;
   inspectFeedback: () => Promise<PrFeedbackSummary>;
-  requestReview: ReviewStabilizationRequest;
+  requestReview: () => Promise<ExactHeadReviewRequestResult>;
 };
 
 type BoundedAttempt<T> =
@@ -58,6 +60,7 @@ export enum ReviewStabilizationState {
 
 export enum ReviewRequestState {
   CircuitBreaker = "circuit-breaker",
+  NotRequested = "not-requested",
   Requested = "requested",
 }
 
@@ -89,8 +92,18 @@ export type ReviewRequestResult =
       state: ReviewRequestState.CircuitBreaker;
     }
   | {
-      fallback?: ExactHeadReviewFallback;
+      fallback: ExactHeadReviewFallback;
       headSha: string;
+      provider: ExactHeadReviewRequestResult["provider"];
+      requested: false;
+      settled: boolean;
+      state: ReviewRequestState.NotRequested;
+    }
+  | {
+      fallback: ExactHeadReviewFallback;
+      headSha: string;
+      provider: ExactHeadReviewRequestResult["provider"];
+      requested: true;
       settled: boolean;
       state: ReviewRequestState.Requested;
     };
@@ -101,6 +114,8 @@ export async function runPrReviewRequest(): Promise<void> {
   const repoRef = parseRepository(repository);
   const result = await requestExactHeadReviewWithCircuitBreaker({
     circuitBreakerAcknowledged: readCircuitBreakerAcknowledgement(),
+    ensureHeadTransition: () =>
+      requestHeadTransitionBackfill({ octokit, prNumber, repoRef }),
     inspectFeedback: () => inspectPrFeedback(octokit, repoRef, prNumber),
     requestReview: () => requestExactHeadReview(octokit, repoRef, prNumber),
   });
@@ -115,6 +130,7 @@ export async function runPrReviewRequest(): Promise<void> {
 export async function requestExactHeadReviewWithCircuitBreaker(
   input: ReviewRequestInput,
 ): Promise<ReviewRequestResult> {
+  await input.ensureHeadTransition();
   const feedback = await input.inspectFeedback();
   if (
     classifyFeedbackState(
@@ -125,7 +141,14 @@ export async function requestExactHeadReviewWithCircuitBreaker(
     return { feedback, state: ReviewRequestState.CircuitBreaker };
   }
   const result = await input.requestReview();
-  return { ...result, state: ReviewRequestState.Requested };
+  if (!result.requested) {
+    return {
+      ...result,
+      requested: false,
+      state: ReviewRequestState.NotRequested,
+    };
+  }
+  return { ...result, requested: true, state: ReviewRequestState.Requested };
 }
 
 export async function runPrReviewStabilization(): Promise<void> {

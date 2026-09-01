@@ -32,8 +32,8 @@ Validation has three layers:
 - **Required remotely:** Gizmo triggers complete exact-head PR validation.
   - Dispatch every required hosted check immediately.
   - Never wait for GitHub review before dispatch.
-  - Request one idempotent exact-head Codex review after dispatch without
-    waiting for its result.
+  - Request the trusted head-transition backfill after dispatch, then request
+    one circuit-guarded exact-head Codex review without waiting for its result.
   - Collect review while hosted validation runs.
   - After both settle, batch current review findings and failed checks into one
     repair iteration.

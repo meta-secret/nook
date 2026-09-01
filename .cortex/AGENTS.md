@@ -193,6 +193,10 @@ HH:mm | <action-type> | <description>
   - On a Markdown-rendered surface, transport the opening marker as `\---`.
   - Markdown removes that presentation escape and displays the literal marker
     instead of a thematic break.
+  - End the opening marker and every metadata field line with two ASCII spaces
+    before its newline. Markdown renders each pair as a hard line break, so the
+    YAML fields remain on separate displayed lines.
+  - Follow the closing `...` with a blank line before the first activity line.
   - On a non-Markdown surface, transport the opening marker as literal `---`.
 - Do not wrap live message metadata in a Markdown code fence.
 - The example above is fenced only to render the literal syntax in Cortex.

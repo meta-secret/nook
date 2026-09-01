@@ -4,6 +4,7 @@ import test from "node:test";
 import type { PrFeedbackSummary } from "../main/github.js";
 import {
   ExactHeadReviewFallback,
+  ExactHeadReviewProvider,
 } from "../main/github-review.js";
 import {
   ReviewRequestState,
@@ -34,38 +35,84 @@ const cleanFeedback: PrFeedbackSummary = {
 };
 
 test("non-waiting review request honors the circuit breaker", async () => {
+  const operations: string[] = [];
   let requests = 0;
   const result = await requestExactHeadReviewWithCircuitBreaker({
-    inspectFeedback: async () => ({
-      ...cleanFeedback,
-      findingBatches: 3,
-    }),
+    ensureHeadTransition: async () => {
+      operations.push("head-transition");
+    },
+    inspectFeedback: async () => {
+      operations.push("feedback");
+      return { ...cleanFeedback, findingBatches: 3 };
+    },
     requestReview: async () => {
+      operations.push("review");
       requests += 1;
-      return { headSha: "head-sha", settled: false };
+      return {
+        fallback: ExactHeadReviewFallback.None,
+        headSha: "head-sha",
+        provider: ExactHeadReviewProvider.Codex,
+        requested: true,
+        settled: false,
+      };
     },
   });
 
   assert.equal(result.state, ReviewRequestState.CircuitBreaker);
   assert.equal(requests, 0);
+  assert.deepEqual(operations, ["head-transition", "feedback"]);
 });
 
 test("acknowledged stabilization permits a non-waiting review request", async () => {
   let requests = 0;
   const result = await requestExactHeadReviewWithCircuitBreaker({
     circuitBreakerAcknowledged: true,
+    ensureHeadTransition: async () => {},
     inspectFeedback: async () => ({
       ...cleanFeedback,
       findingBatches: 3,
     }),
     requestReview: async () => {
       requests += 1;
-      return { headSha: "head-sha", settled: false };
+      return {
+        fallback: ExactHeadReviewFallback.None,
+        headSha: "head-sha",
+        provider: ExactHeadReviewProvider.Codex,
+        requested: true,
+        settled: false,
+      };
     },
   });
 
   assert.equal(result.state, ReviewRequestState.Requested);
   assert.equal(requests, 1);
+});
+
+test("provider unavailability remains not-requested", async () => {
+  const operations: string[] = [];
+  const result = await requestExactHeadReviewWithCircuitBreaker({
+    ensureHeadTransition: async () => {
+      operations.push("head-transition");
+    },
+    inspectFeedback: async () => {
+      operations.push("feedback");
+      return cleanFeedback;
+    },
+    requestReview: async () => {
+      operations.push("review");
+      return {
+        fallback: ExactHeadReviewFallback.CodexUsageLimit,
+        headSha: "head-sha",
+        provider: ExactHeadReviewProvider.Codex,
+        requested: false,
+        settled: false,
+      };
+    },
+  });
+
+  assert.equal(result.state, ReviewRequestState.NotRequested);
+  assert.equal(result.requested, false);
+  assert.deepEqual(operations, ["head-transition", "feedback", "review"]);
 });
 
 test("stabilizeExactHeadReview waits once and accepts clean feedback", async () => {
