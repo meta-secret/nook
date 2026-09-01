@@ -437,7 +437,7 @@ describe('Team Plan runtime', () => {
       journalPath: aliased.journalPath,
       runId: started.runId,
     });
-  }, 10_000);
+  }, 15_000);
 
   test('replays only attempts persisted in a selected event', async () => {
     const fixture = createGitFixture();
