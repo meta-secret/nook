@@ -112,37 +112,113 @@ fn automation_source_inventory_covers_repository_manifest_conventions() {
     }
 }
 
-fn is_prohibited_path(path: &Path, script_extension: &str, interface_extension: &str) -> bool {
+fn is_prohibited_path(path: &Path, source_suffixes: &[String]) -> bool {
     let path_text = path.to_string_lossy();
-    if path_text.ends_with(script_extension) || path_text.ends_with(interface_extension) {
+    if source_suffixes
+        .iter()
+        .any(|suffix| path_text.ends_with(suffix))
+    {
         return true;
     }
-    matches!(
-        path.file_name().and_then(OsStr::to_str),
-        Some("Pipfile" | "Pipfile.lock" | "poetry.lock" | "pyproject.toml" | "requirements.txt")
-    )
+    let file_name = path.file_name().and_then(OsStr::to_str).unwrap_or_default();
+    let lowercase_name = file_name.to_ascii_lowercase();
+    let version_file = [".", "py", "thon-version"].concat();
+    if lowercase_name == version_file
+        || matches!(
+            lowercase_name.as_str(),
+            "pipfile"
+                | "pipfile.lock"
+                | "pdm.lock"
+                | "pdm.toml"
+                | "poetry.lock"
+                | "pyproject.toml"
+                | "pytest.ini"
+                | "setup.cfg"
+                | "tox.ini"
+                | "uv.lock"
+        )
+    {
+        return true;
+    }
+    matches!(path.extension().and_then(OsStr::to_str), Some("in" | "txt"))
+        && (lowercase_name.starts_with("constraints")
+            || lowercase_name.starts_with("requirements")
+            || path
+                .components()
+                .any(|component| component.as_os_str() == "requirements"))
+}
+
+fn ascii_word_spans(value: &str) -> Vec<(&str, usize, usize)> {
+    let mut spans = Vec::new();
+    let mut start = None;
+    for (index, character) in value.char_indices() {
+        if character.is_ascii_alphanumeric() {
+            start.get_or_insert(index);
+        } else if let Some(word_start) = start.take() {
+            spans.push((&value[word_start..index], word_start, index));
+        }
+    }
+    if let Some(word_start) = start {
+        spans.push((&value[word_start..], word_start, value.len()));
+    }
+    spans
+}
+
+fn is_versioned_command(word: &str, command: &str) -> bool {
+    word.strip_prefix(command)
+        .is_some_and(|version| version.chars().all(|character| character.is_ascii_digit()))
+}
+
+fn contains_package_install(line: &str, installer: &str) -> bool {
+    let spans = ascii_word_spans(line);
+    for (index, (command, _, command_end)) in spans.iter().copied().enumerate() {
+        if !is_versioned_command(command, installer) {
+            continue;
+        }
+        for (action, action_start, _) in spans[index + 1..].iter().copied() {
+            if action != "install" {
+                continue;
+            }
+            let separator = &line[command_end..action_start];
+            let direct = separator.chars().all(|character| {
+                character.is_ascii_whitespace()
+                    || matches!(character, '\'' | '"' | ',' | '[' | ']' | '(' | ')')
+            });
+            let options = separator.contains("--")
+                && !separator
+                    .chars()
+                    .any(|character| matches!(character, ';' | '&' | '|'));
+            return direct || options;
+        }
+    }
+    false
 }
 
 fn repository_language_violations(root: &Path) -> anyhow::Result<Vec<String>> {
     let language = ["py", "thon"].concat();
     let script_extension = [".", "py"].concat();
-    let interface_extension = [script_extension.as_str(), "i"].concat();
-    let versioned_runtime = [language.as_str(), "3"].concat();
-    let runtime_tokens = [language.as_str(), versioned_runtime.as_str()];
+    let source_suffixes =
+        ["", "i", "c", "o", "w"].map(|suffix| [script_extension.as_str(), suffix].concat());
+    let package_installer = ["p", "ip"].concat();
     let mut violations = Vec::new();
 
     for path in tracked_paths(root)? {
         let relative = path.strip_prefix(root).unwrap_or(&path);
-        if is_prohibited_path(relative, &script_extension, &interface_extension) {
+        if is_prohibited_path(relative, &source_suffixes) {
             violations.push(format!("{}: prohibited authored file", relative.display()));
             continue;
         }
         if !is_automation_source(relative) {
             continue;
         }
-        let Ok(source) = fs::read_to_string(&path) else {
-            continue;
-        };
+        let bytes = fs::read(&path)?;
+        if std::str::from_utf8(&bytes).is_err() {
+            violations.push(format!(
+                "{}: automation source is not valid UTF-8",
+                relative.display()
+            ));
+        }
+        let source = String::from_utf8_lossy(&bytes);
         for (index, line) in source.lines().enumerate() {
             let trimmed = line.trim_start();
             if trimmed.starts_with("//")
@@ -152,8 +228,11 @@ fn repository_language_violations(root: &Path) -> anyhow::Result<Vec<String>> {
                 continue;
             }
             let lowercase = line.to_ascii_lowercase();
-            let words = lowercase.split(|character: char| !character.is_ascii_alphanumeric());
-            if words.into_iter().any(|word| runtime_tokens.contains(&word)) {
+            if ascii_word_spans(&lowercase)
+                .iter()
+                .any(|(word, _, _)| is_versioned_command(word, &language))
+                || contains_package_install(&lowercase, &package_installer)
+            {
                 violations.push(format!(
                     "{}:{}: prohibited runtime, dependency, or script reference",
                     relative.display(),
@@ -302,6 +381,55 @@ fn repository_language_scan_rejects_scripts_and_runtime_invocations() -> anyhow:
             .iter()
             .any(|violation| violation.contains("prohibited runtime"))
     );
+    fs::remove_dir_all(fixture)?;
+    Ok(())
+}
+
+#[test]
+fn repository_language_scan_rejects_prohibited_dependency_surfaces() -> anyhow::Result<()> {
+    let fixture = std::env::temp_dir().join(format!(
+        "nook-language-dependencies-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_nanos()
+    ));
+    fs::create_dir_all(fixture.join("requirements"))?;
+    fs::create_dir_all(fixture.join("scripts"))?;
+    let installer = ["p", "ip"].concat();
+    fs::write(
+        fixture.join("Taskfile.yml"),
+        format!(
+            "version: '3'\ntasks:\n  install:\n    cmds:\n      - {installer} install package\n      - {installer}3 --no-cache-dir install package\n"
+        ),
+    )?;
+    fs::write(fixture.join("requirements-dev.txt"), "package==1\n")?;
+    fs::write(fixture.join("requirements/base.txt"), "package==1\n")?;
+    fs::write(fixture.join("constraints-dev.in"), "package==1\n")?;
+    fs::write(
+        fixture.join("scripts/picture-in-picture.ts"),
+        "export const pip = install; export const pyramid = shape.pyramid;\n",
+    )?;
+    let violations = repository_language_violations(&fixture)?;
+    assert_eq!(violations.len(), 5);
+    fs::remove_dir_all(fixture)?;
+    Ok(())
+}
+
+#[test]
+fn repository_language_scan_fails_closed_on_invalid_utf8() -> anyhow::Result<()> {
+    let fixture = std::env::temp_dir().join(format!(
+        "nook-language-encoding-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_nanos()
+    ));
+    fs::create_dir_all(&fixture)?;
+    fs::write(fixture.join("automation.ts"), [0xff, b'\n'])?;
+    let violations = repository_language_violations(&fixture)?;
+    assert_eq!(violations.len(), 1);
+    assert!(violations[0].contains("not valid UTF-8"));
     fs::remove_dir_all(fixture)?;
     Ok(())
 }
