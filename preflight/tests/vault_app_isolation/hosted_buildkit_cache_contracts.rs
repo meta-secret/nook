@@ -495,7 +495,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         rust_verify < rust_publish
             && rust[rust_verify..rust_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
             && rust[rust_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
-            && wasm.contains("needs: [product-paths, rust]")
+            && wasm.contains("needs: [rust]")
             && wasm_verify < wasm_node
             && wasm_node < wasm_publish_id
             && wasm_publish_id < wasm_publish
@@ -503,7 +503,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && wasm.contains("cache_publication_outcome: ${{ steps.publish_wasm_cache.outcome }}")
             && wasm[wasm_publish_id..wasm_publish].contains("continue-on-error: true")
             && wasm[wasm_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
-            && wasm_cache_publish.contains("needs: [product-paths, wasm]")
+            && wasm_cache_publish.contains("needs: [wasm]")
             && wasm_cache_publish.contains(
                 "CACHE_PUBLICATION_OUTCOME: ${{ needs.wasm.outputs.cache_publication_outcome }}"
             )
@@ -514,8 +514,8 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && !wasm_cache_publish.contains("actions/download-artifact")
             && !wasm_cache_publish.contains("actions/upload-artifact")
             && main.matches("task ci:main:publish-wasm-cache").count() == 1
-            && wasm_cache_proof.contains("needs: [product-paths, wasm-cache-publish]")
-            && web.contains("needs: [product-paths, wasm]")
+            && wasm_cache_proof.contains("needs: [wasm-cache-publish]")
+            && web.contains("needs: [wasm]")
             && !web.contains("wasm-cache-publish")
             && web.contains("uses: actions/download-artifact@v8")
             && web.contains("name: main-wasm-${{ github.run_id }}")
@@ -523,7 +523,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && web_verify < web_browser_image
             && web[web_verify..web_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
             && web[web_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
-            && ui_demo.contains("needs: [product-paths, web]")
+            && ui_demo.contains("needs: [web]")
             && ui_demo.contains("runs-on: nook-k0s-container")
             && ui_demo.contains("nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")
             && ui_demo[ui_demo_step..].contains("task _web:test:ui-demo")
@@ -715,16 +715,16 @@ fn assert_main_split_pipeline(root: &Path) -> anyhow::Result<()> {
             && main.contains("\n  wasm-cache-publish:\n")
             && main.contains("\n  wasm-cache-proof:\n")
             && main.contains("NOOK_WASM_CACHE_PROMOTION_ENABLED: \"1\"")
-            && web.contains("needs: [product-paths, wasm]")
+            && web.contains("needs: [wasm]")
             && wasm.contains("task ci:main:publish-wasm-cache")
             && wasm.contains("continue-on-error: true")
-            && wasm_publish.contains("needs: [product-paths, wasm]")
+            && wasm_publish.contains("needs: [wasm]")
             && wasm_publish.contains(
                 "CACHE_PUBLICATION_OUTCOME: ${{ needs.wasm.outputs.cache_publication_outcome }}"
             )
             && !wasm_publish.contains("task ci:main:publish-wasm-cache")
-            && wasm_proof.contains("needs: [product-paths, wasm-cache-publish]")
-            && main.contains("needs: [product-paths, web, web-e2e, wasm-cache-proof]"),
+            && wasm_proof.contains("needs: [wasm-cache-publish]")
+            && main.contains("needs: [web, web-e2e, wasm-cache-proof]"),
         "Main must let verified WASM feed product jobs independently while cache publication and deployment remain fail-closed"
     );
     assert!(
@@ -734,7 +734,7 @@ fn assert_main_split_pipeline(root: &Path) -> anyhow::Result<()> {
     );
     assert!(
         deploy.starts_with(
-            "    name: Deploy development\n    needs: [product-paths, web, web-e2e, wasm-cache-proof]"
+            "    name: Deploy development\n    needs: [web, web-e2e, wasm-cache-proof]"
         ) && deploy.contains("\n    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}\n"),
         "the development deployment lane must use the general ARC scale set"
     );

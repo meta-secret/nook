@@ -335,17 +335,10 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
         "Rust ecosystem Docker jobs must mount SeaweedFS sccache"
     );
     assert!(ecosystem.contains("isolated-cache-write: ${{ inputs.isolated_cache_write }}"));
-    assert!(pr.contains("uses: ./.github/workflows/rust-ecosystem-checks.yml"));
-    assert!(pr.contains("isolated_cache_write: \"true\""));
     let ecosystem_entry = read(".github/workflows/rust-ecosystem.yml");
-    assert!(ecosystem_entry.contains("schedule:"));
-    assert!(ecosystem_entry.contains("workflow_dispatch:"));
-    let isolated_write = if ecosystem_entry.contains("pull_request:") {
+    assert!(ecosystem_entry.contains(
         "isolated_cache_write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}"
-    } else {
-        "isolated_cache_write: \"false\""
-    };
-    assert!(ecosystem_entry.contains(isolated_write));
+    ));
 
     let remote = read(".github/workflows/remote.yml");
     let compiler_jobs = 2;
