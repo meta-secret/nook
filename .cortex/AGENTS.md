@@ -87,6 +87,10 @@ Agent-authored fallback behavior is prohibited. This is a universal P1 rule.
 - Do not add an alternate execution path when the intended path is unavailable
   or fails.
 - Do not add compatibility branches, legacy branches, shims, or aliases.
+- Existing fallback behavior does not create an exception. Do not extend or
+  duplicate it.
+- Lower-level Cortex guidance cannot authorize fallback behavior. Report the
+  policy conflict and stop.
 - Do not silently degrade behavior or substitute a default result.
 - Do not catch a failure and continue as if the operation succeeded.
 - Keep every unsupported or failed state observable.
