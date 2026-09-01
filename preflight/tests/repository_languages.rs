@@ -14,14 +14,16 @@ fn repository_root() -> PathBuf {
     )
 }
 
-fn repository_paths(root: &Path) -> anyhow::Result<Vec<PathBuf>> {
+fn repository_paths(root: &Path, source_context: bool) -> anyhow::Result<Vec<PathBuf>> {
     let mut files = BTreeSet::new();
     let mut builder = ignore::WalkBuilder::new(root);
     builder
         .follow_links(false)
         .git_exclude(false)
         .git_global(false)
+        .git_ignore(!source_context)
         .hidden(false)
+        .ignore(!source_context)
         .parents(false)
         .require_git(false)
         .filter_entry(|entry| entry.file_name() != OsStr::new(".git"))
@@ -39,7 +41,7 @@ fn repository_paths(root: &Path) -> anyhow::Result<Vec<PathBuf>> {
         }
     }
     let git_metadata = root.join(".git");
-    if git_metadata.is_dir() || git_metadata.is_file() {
+    if !source_context && (git_metadata.is_dir() || git_metadata.is_file()) {
         let output = Command::new("git")
             .arg("-C")
             .arg(root)
@@ -124,7 +126,7 @@ fn automation_source_inventory_covers_repository_manifest_conventions() {
 }
 
 fn is_prohibited_path(path: &Path, source_suffixes: &[String]) -> bool {
-    let path_text = path.to_string_lossy();
+    let path_text = path.to_string_lossy().to_ascii_lowercase();
     if source_suffixes
         .iter()
         .any(|suffix| path_text.ends_with(suffix))
@@ -252,6 +254,37 @@ fn supports_shell_continuations(path: &Path) -> bool {
             path.extension().and_then(OsStr::to_str),
             Some("bash" | "sh" | "zsh")
         )
+}
+
+fn is_source_comment(path: &Path, trimmed: &str) -> bool {
+    let extension = path.extension().and_then(OsStr::to_str);
+    let shell_comment = supports_shell_continuations(path)
+        || extension.is_none()
+        || matches!(extension, Some("conf"));
+    let slash_comment = matches!(
+        extension,
+        Some("cjs" | "cts" | "hcl" | "js" | "jsx" | "mjs" | "mts" | "rs" | "svelte" | "ts" | "tsx")
+    );
+    (shell_comment && trimmed.starts_with('#') && !trimmed.starts_with("#!"))
+        || (slash_comment && trimmed.starts_with("//"))
+}
+
+fn supports_inline_commands(path: &Path) -> bool {
+    supports_shell_continuations(path)
+        || path.extension().is_none()
+        || matches!(
+            path.extension().and_then(OsStr::to_str),
+            Some("json" | "jsonc" | "toml" | "yaml" | "yml")
+        )
+}
+
+fn contains_prohibited_inline_syntax(line: &str) -> bool {
+    let declaration = ["d", "ef"].concat();
+    let trimmed = line.trim_start();
+    let trimmed = trimmed.strip_prefix("async ").unwrap_or(trimmed);
+    trimmed
+        .strip_prefix(&format!("{declaration} "))
+        .is_some_and(|rest| rest.contains('(') && rest.contains("):"))
 }
 
 fn join_argv_strings<'a>(values: impl Iterator<Item = &'a str>) -> Option<String> {
@@ -466,7 +499,10 @@ fn project_manager_actions<'a>(language: &'a str, package_installer: &'a str) ->
     ]
 }
 
-fn repository_language_violations(root: &Path) -> anyhow::Result<Vec<String>> {
+fn repository_language_violations(
+    root: &Path,
+    source_context: bool,
+) -> anyhow::Result<Vec<String>> {
     let language = ["py", "thon"].concat();
     let script_extension = [".", "py"].concat();
     let mut source_suffixes = ["", "i", "c", "o", "w"]
@@ -474,6 +510,7 @@ fn repository_language_violations(root: &Path) -> anyhow::Result<Vec<String>> {
         .to_vec();
     source_suffixes.extend([
         [script_extension.as_str(), "z"].concat(),
+        [".", "i", script_extension.trim_start_matches('.'), "nb"].concat(),
         [".", "pex"].concat(),
         [".", "whl"].concat(),
         [".", "egg"].concat(),
@@ -498,7 +535,7 @@ fn repository_language_violations(root: &Path) -> anyhow::Result<Vec<String>> {
     ];
     let mut violations = Vec::new();
 
-    for path in repository_paths(root)? {
+    for path in repository_paths(root, source_context)? {
         let relative = path.strip_prefix(root).unwrap_or(&path);
         if is_prohibited_path(relative, &source_suffixes) {
             violations.push(format!("{}: prohibited authored file", relative.display()));
@@ -527,9 +564,7 @@ fn repository_language_violations(root: &Path) -> anyhow::Result<Vec<String>> {
                 logical_source_lines(&source_string, supports_shell_continuations(relative))
             {
                 let trimmed = line.trim_start();
-                if trimmed.starts_with("//")
-                    || (trimmed.starts_with('#') && !trimmed.starts_with("#!"))
-                {
+                if is_source_comment(relative, trimmed) {
                     continue;
                 }
                 let lowercase = line.to_ascii_lowercase();
@@ -549,7 +584,9 @@ fn repository_language_violations(root: &Path) -> anyhow::Result<Vec<String>> {
                         &project_manager,
                         &project_manager_actions,
                     )
-                    || contains_prohibited_output_path(&lowercase, &source_suffixes)
+                    || (supports_inline_commands(relative)
+                        && (contains_prohibited_output_path(&lowercase, &source_suffixes)
+                            || contains_prohibited_inline_syntax(&lowercase)))
                 {
                     violations.push(format!(
                         "{}:{}: prohibited runtime, dependency, or script reference",
@@ -566,7 +603,10 @@ fn repository_language_violations(root: &Path) -> anyhow::Result<Vec<String>> {
 #[test]
 fn repository_automation_uses_only_typescript_rust_and_taskfiles() -> anyhow::Result<()> {
     let root = repository_root();
-    let violations = repository_language_violations(&root)?;
+    let violations = repository_language_violations(
+        &root,
+        std::env::var_os("NOOK_REPOSITORY_SOURCE_CONTEXT").is_some(),
+    )?;
 
     assert!(
         violations.is_empty(),
@@ -659,19 +699,20 @@ fn canonical_repository_inventory_prunes_generated_and_dependency_trees() -> any
         .arg(tracked_ignored.strip_prefix(&fixture)?)
         .status()?;
     anyhow::ensure!(add.success(), "failed to stage ignored inventory fixture");
-    let paths = repository_paths(&fixture)?;
+    let paths = repository_paths(&fixture, false)?;
     assert_eq!(
         paths,
         vec![
             fixture.join(".gitignore"),
             fixture.join("build"),
-            tracked_ignored,
+            tracked_ignored.clone(),
             fixture.join("nested/contract.ts"),
             fixture.join("rust-project/Cargo.toml"),
             fixture.join("rust-project/Taskfile.yml"),
             fixture.join("rust-project/src/deep/implementation.rs"),
         ]
     );
+    assert!(repository_paths(&fixture, true)?.contains(&tracked_ignored));
     fs::remove_dir_all(fixture)?;
     Ok(())
 }
@@ -696,6 +737,19 @@ fn repository_language_scan_rejects_scripts_and_runtime_invocations() -> anyhow:
             .join("scripts")
             .join(format!("fetch-comments{script_extension}")),
         "print('comments')\n",
+    )?;
+    fs::write(
+        fixture.join("scripts").join(format!(
+            "uppercase{}",
+            script_extension.to_ascii_uppercase()
+        )),
+        "print('comments')\n",
+    )?;
+    fs::write(
+        fixture
+            .join("scripts")
+            .join(["analysis.i", script_extension.trim_start_matches('.'), "nb"].concat()),
+        "{}\n",
     )?;
     fs::write(
         fixture.join("Taskfile.yml"),
@@ -736,12 +790,23 @@ fn repository_language_scan_rejects_scripts_and_runtime_invocations() -> anyhow:
         format!("*command = Command::new(\"{runtime}\");\n"),
     )?;
     fs::write(
+        fixture.join("scripts/double-slash.sh"),
+        format!("//usr/bin/{runtime} tool\n"),
+    )?;
+    let declaration = ["d", "ef"].concat();
+    fs::write(
+        fixture.join("scripts/inline-program"),
+        format!("{declaration} main():\n    print(\"hello\")\n"),
+    )?;
+    fs::write(
         fixture.join("scripts/picture-in-picture.ts"),
-        "export const pip = shape.pyramid;\n",
+        format!(
+            "export const pip = shape.pyramid;\nconst larger = score > metrics{script_extension};\n"
+        ),
     )?;
     fs::write(fixture.join("pyproject.toml"), "[project]\n")?;
-    let violations = repository_language_violations(&fixture)?;
-    assert_eq!(violations.len(), 12);
+    let violations = repository_language_violations(&fixture, false)?;
+    assert_eq!(violations.len(), 16);
     assert!(
         violations
             .iter()
@@ -845,7 +910,7 @@ fn repository_language_scan_rejects_prohibited_dependency_surfaces() -> anyhow::
         fixture.join(".cursor/mcp.json"),
         format!("{{\"command\": \"{escaped_runtime} tool\"}}\n"),
     )?;
-    let violations = repository_language_violations(&fixture)?;
+    let violations = repository_language_violations(&fixture, false)?;
     assert_eq!(violations.len(), 26);
     fs::remove_dir_all(fixture)?;
     Ok(())
@@ -862,7 +927,7 @@ fn repository_language_scan_fails_closed_on_invalid_utf8() -> anyhow::Result<()>
     ));
     fs::create_dir_all(&fixture)?;
     fs::write(fixture.join("automation.ts"), [0xff, b'\n'])?;
-    let violations = repository_language_violations(&fixture)?;
+    let violations = repository_language_violations(&fixture, false)?;
     assert_eq!(violations.len(), 1);
     assert!(violations[0].contains("not valid UTF-8"));
     fs::remove_dir_all(fixture)?;
@@ -882,7 +947,7 @@ fn repository_language_scan_rejects_automation_symlinks() -> anyhow::Result<()> 
     fs::create_dir_all(&fixture)?;
     fs::write(fixture.join("target-script"), "#!/usr/bin/env bash\n")?;
     std::os::unix::fs::symlink("target-script", fixture.join("linked-script"))?;
-    let violations = repository_language_violations(&fixture)?;
+    let violations = repository_language_violations(&fixture, false)?;
     assert_eq!(violations.len(), 1);
     assert!(violations[0].contains("symlinks are prohibited"));
     fs::remove_dir_all(fixture)?;

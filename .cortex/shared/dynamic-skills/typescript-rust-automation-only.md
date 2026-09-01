@@ -53,8 +53,9 @@ Run:
 The repository-language preflight uses one ignore-aware filesystem inventory in
 every environment. When Git metadata is present, tracked index entries are
 unioned into that inventory. Force-added files therefore cannot hide behind
-ignore rules. Git metadata is not required in sealed source contexts. The
-inventory never follows symlinks. Automation symlinks fail closed.
+ignore rules. Sealed source contexts scan every file admitted by the Docker
+context instead of reapplying Git-only ignore rules. The inventory never
+follows symlinks. Automation symlinks fail closed.
 
 The scan rejects prohibited source, package, and executable-artifact
 extensions. It reads only automation-capable text formats, including HTML
