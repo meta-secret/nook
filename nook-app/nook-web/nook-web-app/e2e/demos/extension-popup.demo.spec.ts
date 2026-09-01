@@ -6,6 +6,7 @@ const demoDir = path.dirname(fileURLToPath(import.meta.url))
 const extensionDist = path.resolve(demoDir, '../../../nook-web-extension/dist')
 const extensionRoutePrefix = '/__extension-popup/'
 function installPopupDemoRuntime(): void {
+  let statusReads = 0
   const device = {
     deviceId: 'popup-demo-device',
     devicePublicKey: 'popup-demo-public-key',
@@ -34,7 +35,7 @@ function installPopupDemoRuntime(): void {
           callback({ ok: true, setup })
           return
         case 'nook:extension-session-status':
-          callback({ ok: true, status: 6, device })
+          callback({ ok: true, status: statusReads++ === 0 ? 6 : 3, device })
           return
         default:
           callback({ ok: true })
@@ -48,9 +49,7 @@ function installPopupDemoRuntime(): void {
   const descriptor: PropertyDescriptor = { value: chromeStub }
   Object.defineProperty(globalThis, 'chrome', descriptor)
 }
-test('keeps the extension toolbar popup focused on one next action', async ({
-  page,
-}) => {
+test('keeps mixed session status safe and actionable', async ({ page }) => {
   await page.addInitScript(installPopupDemoRuntime)
   await page.route(`**${extensionRoutePrefix}**`, async (route: Route) => {
     const requestPath = new URL(route.request().url()).pathname
@@ -59,11 +58,12 @@ test('keeps the extension toolbar popup focused on one next action', async ({
       path: path.join(extensionDist, relativePath),
     })
   })
-  await page.goto(`${extensionRoutePrefix}popup/index.html?state=connected`)
+  await page.goto(`${extensionRoutePrefix}popup/index.html?state=mixed`)
   await expect(
     page.locator(
       '[data-testid="stay-ready-btn"] + [data-testid="open-simple-vault-btn"]',
     ),
   ).toBeVisible()
+  await expect(page.getByTestId('connect-simple-vault-btn')).toBeHidden()
   await demoBeat(page)
 })

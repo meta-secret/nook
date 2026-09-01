@@ -3,7 +3,6 @@ import '../../../../nook-web-extension/src/chrome.d.ts'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { AuthenticationWorkflowAction } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type { WidgetWorkflowKeyKind } from '../../../../nook-web-extension/src/content/autofill/state'
-
 type TestPresentationScope =
   | { kind: `${WidgetWorkflowKeyKind.Unassigned}` }
   | { kind: `${WidgetWorkflowKeyKind.Assigned}`; key: string }
@@ -300,7 +299,6 @@ describe('passkey workflow saved-login fallback', () => {
     renderPasskeyWidget({ loginMatches: { kind: 'unavailable' } })
     expect(savedLoginButton()).toBe(false)
   })
-
   test('preserves an explicit collapse choice across availability remounts', () => {
     renderPasskeyWidget({ loginMatches: { kind: 'locked' } })
     renderState.widgetState.host = { kind: 'attached' }
@@ -312,7 +310,6 @@ describe('passkey workflow saved-login fallback', () => {
     expect(actions.remountWidget).toHaveBeenCalledOnce()
     expect(renderState.widgetState.collapsed).toBe(true)
   })
-
   test('cancels a pending login picker before primary passkey activation', () => {
     renderState.pickerState.login = {
       kind: 'open',
@@ -330,7 +327,6 @@ describe('passkey workflow saved-login fallback', () => {
     expect(actions.proposePasskeyWithNook).toHaveBeenCalledOnce()
   })
 })
-
 describe('authenticator enrollment workflow', () => {
   test('renders and dispatches the Rust-selected enrollment action', () => {
     const enrollmentSnapshot = {

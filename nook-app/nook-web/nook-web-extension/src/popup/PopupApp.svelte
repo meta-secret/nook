@@ -295,9 +295,10 @@
           {translatePlain(I18N_KEYS.ExtensionCompanionPairAnotherVault)}
         </button>
       {/if}
-    {:else if pairingCandidate.kind === PairingCandidateKind.Selected}
+    {:else}
       <button
         type="button"
+        hidden={pairingCandidate.kind !== PairingCandidateKind.Selected}
         disabled={busy}
         data-testid="connect-simple-vault-btn"
         onclick={() => {
