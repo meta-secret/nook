@@ -172,10 +172,10 @@ function runGh(args) {
 }
 
 function reviewBatchMatches({
-  localHead, pr, threads, reviews, comments, changedPaths, headCommittedAt,
+  pr, threads, reviews, comments, changedPaths, publishedAt,
   hasNextPage,
 }) {
-  if (hasNextPage || pr.headRefOid !== localHead || changedPaths.length === 0) return false
+  if (hasNextPage || changedPaths.length === 0) return false
   const currentPaths = new Set(
     threads
       .filter((thread) => !thread.isResolved && !thread.isOutdated)
@@ -183,12 +183,13 @@ function reviewBatchMatches({
   )
   const inlineMatch = changedPaths.some((path) => currentPaths.has(path))
   const reviewBodyMatch = reviews.some(
-    (review) => review.commit?.oid === localHead && review.body.trim(),
+    (review) => review.commit?.oid === pr.headRefOid && review.body.trim(),
   )
+  const publishedTime = Date.parse(publishedAt)
   const commentMatch = comments.some((comment) =>
-    comment.createdAt > headCommittedAt &&
+    Number.isFinite(publishedTime) && Date.parse(comment.createdAt) > publishedTime &&
     comment.body.trim() &&
-    !/^(?:<!--|@codex (?:review|security review)|### Preview deployed)/u.test(comment.body.trim()) &&
+    !/^(?:<!--|@codex (?:review|security review)|### (?:Preview deployed|Web research preview))/u.test(comment.body.trim()) &&
     !/^@\S+ this workflow assigned you PR #\d+\. Continue only this PR's recorded scope through review, exact-head validation, and squash merge\.$/u.test(comment.body.trim()),
   )
   return Boolean(inlineMatch || reviewBodyMatch || commentMatch)
@@ -204,29 +205,29 @@ function verifyReviewContext(prNumber) {
   if (pr.state !== 'OPEN' || pr.baseRefName !== 'main' || pr.headRefName !== branch) {
     return false
   }
-  const localHead = runGit(['rev-parse', 'HEAD'])
-  const headCommittedAt = runGit(['show', '-s', '--format=%cI', 'HEAD'])
   const repository = runGh(['repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner'])
   const [owner, name] = repository.split('/')
   const review = JSON.parse(runGh([
     'api', 'graphql',
-    '-f', 'query=query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){pageInfo{hasNextPage}nodes{isResolved isOutdated path}}reviews(last:100){pageInfo{hasPreviousPage}nodes{body commit{oid}}}comments(last:100){pageInfo{hasPreviousPage}nodes{body createdAt}}}}}',
+    '-f', 'query=query($owner:String!,$name:String!,$number:Int!,$head:GitObjectID!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){pageInfo{hasNextPage}nodes{isResolved isOutdated path}}reviews(last:100){pageInfo{hasPreviousPage}nodes{body commit{oid}}}comments(last:100){pageInfo{hasPreviousPage}nodes{body createdAt}}}object(oid:$head){... on Commit{checkSuites(first:100){pageInfo{hasNextPage}nodes{createdAt}}}}}}',
     '-f', `owner=${owner}`, '-f', `name=${name}`, '-F', `number=${prNumber}`,
-  ])).data.repository.pullRequest
-  const changedPaths = runGit(['diff', '--name-only', '-z', 'HEAD'])
+    '-f', `head=${pr.headRefOid}`,
+  ])).data.repository
+  const changedPaths = runGit(['diff', '--name-only', '-z', pr.headRefOid])
     .split('\0')
     .concat(runGit(['ls-files', '--others', '--exclude-standard', '-z']).split('\0'))
     .filter(Boolean)
   return reviewBatchMatches({
-    localHead,
     pr,
-    threads: review.reviewThreads.nodes,
-    reviews: review.reviews.nodes,
-    comments: review.comments.nodes,
+    threads: review.pullRequest.reviewThreads.nodes,
+    reviews: review.pullRequest.reviews.nodes,
+    comments: review.pullRequest.comments.nodes,
     changedPaths,
-    headCommittedAt,
-    hasNextPage: review.reviewThreads.pageInfo.hasNextPage ||
-      review.reviews.pageInfo.hasPreviousPage || review.comments.pageInfo.hasPreviousPage,
+    publishedAt: review.object.checkSuites.nodes.map(({ createdAt }) => createdAt).sort()[0] ?? '',
+    hasNextPage: review.pullRequest.reviewThreads.pageInfo.hasNextPage ||
+      review.pullRequest.reviews.pageInfo.hasPreviousPage ||
+      review.pullRequest.comments.pageInfo.hasPreviousPage ||
+      review.object.checkSuites.pageInfo.hasNextPage,
   })
 }
 

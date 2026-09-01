@@ -403,7 +403,7 @@ applies a validation label through `task pr:validate`. Its trusted daemon-free
 Rust jobs may use ARC; its remaining jobs stay hosted.
 
 ```text
-implement/fix → task loom:pre-push → commit → push/update PR
+implement/fix → task loom:pre-push PR=<number> → commit → push/update PR
 → focused remote evidence when not ready or immediate complete validation
 → concurrent exact-head Codex review → combined repair batch
 ```
@@ -411,10 +411,10 @@ implement/fix → task loom:pre-push → commit → push/update PR
 **Required local action** (before every push):
 
 ```bash
-task loom:pre-push
+task loom:pre-push PR=<number>
 ```
 
-Always run `task loom:pre-push` again before every fix re-push.
+Always run `task loom:pre-push PR=<number>` again before every fix re-push.
 Do not add broad local builds, tests, e2e, container product gates, advisory
 review, or duplicate hosted-check mirrors.
 

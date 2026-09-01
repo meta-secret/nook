@@ -72,35 +72,37 @@ test('counts an untracked symlink blob without following its target', () => {
 
 test('binds review growth to the current PR head, thread, and changed path', () => {
   const input = {
-    localHead: 'a'.repeat(40),
     pr: { headRefOid: 'a'.repeat(40) },
     threads: [{ isResolved: false, isOutdated: false, path: 'src/fix.ts' }],
     reviews: [],
     comments: [],
     changedPaths: ['src/fix.ts', 'src/fix.test.ts'],
-    headCommittedAt: '2026-01-01T00:00:00Z',
+    publishedAt: '2026-01-01T00:00:00Z',
     hasNextPage: false,
   }
   assert.equal(reviewBatchMatches(input), true)
   assert.equal(reviewBatchMatches({ ...input, changedPaths: ['src/other.ts'] }), false)
   assert.equal(reviewBatchMatches({ ...input, threads: [{ ...input.threads[0], isResolved: true }] }), false)
-  assert.equal(reviewBatchMatches({ ...input, localHead: 'b'.repeat(40) }), false)
 })
 
-test('accepts current-head review bodies and later PR comments', () => {
+test('accepts reviewed-head bodies, committed fixes, and later PR comments', () => {
   const input = {
-    localHead: 'a'.repeat(40),
     pr: { headRefOid: 'a'.repeat(40) },
     threads: [], reviews: [], comments: [], changedPaths: ['src/fix.ts'],
-    headCommittedAt: '2026-01-01T00:00:00Z', hasNextPage: false,
+    publishedAt: '2026-01-01T10:30:00-07:00', hasNextPage: false,
   }
-  assert.equal(reviewBatchMatches({ ...input, reviews: [{ body: 'Please fix.', commit: { oid: input.localHead } }] }), true)
+  assert.equal(reviewBatchMatches({ ...input, reviews: [{ body: 'Please fix.', commit: { oid: input.pr.headRefOid } }] }), true)
   assert.equal(reviewBatchMatches({ ...input, comments: [{ body: 'Please fix.', createdAt: '2026-01-02T00:00:00Z' }] }), true)
+  assert.equal(reviewBatchMatches({ ...input, comments: [{ body: 'Please fix.', createdAt: '2026-01-01T16:00:00Z' }] }), false)
   assert.equal(reviewBatchMatches({
     ...input,
     comments: [{
       body: "@gizmo this workflow assigned you PR #1281. Continue only this PR's recorded scope through review, exact-head validation, and squash merge.",
       createdAt: '2026-01-02T00:00:00Z',
     }],
+  }), false)
+  assert.equal(reviewBatchMatches({
+    ...input,
+    comments: [{ body: '### Web research preview\nDone.', createdAt: '2026-01-02T00:00:00Z' }],
   }), false)
 })

@@ -146,7 +146,7 @@ Cursor, CodeRabbit, or another service:
 2. Dispatch the minimal correct fix to the responsible team, or document why
    no change is needed.
 3. Integrate the verified fix commit.
-4. Run `task loom:pre-push` through the responsible formatter owner, commit,
+4. Run `task loom:pre-push PR=<number>` through the responsible formatter owner, commit,
    and push when files changed.
 5. If the head is not validation-ready, dispatch at least one relevant focused
    hosted task.
