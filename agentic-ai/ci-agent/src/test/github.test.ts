@@ -26,7 +26,7 @@ test("requiredPrCheckNames maps changed paths to repository-owned gates", () => 
         ".cortex/teams/sre/workflows/ci-pipeline.md",
       ]),
     ),
-    [],
+    ["Enforce repository policy"],
   );
   assert.deepEqual(
     requiredPrCheckNames(
@@ -115,7 +115,10 @@ test("renamed PR files conservatively require product validation", () => {
     aiToAiFiles,
     aiToAiFiles.length,
   );
-  assert.deepEqual(requiredPrCheckNames(aiToAiPaths), ["Verify and preview"]);
+  assert.deepEqual(requiredPrCheckNames(aiToAiPaths), [
+    "Enforce repository policy",
+    "Verify and preview",
+  ]);
 
   const researchToProductPaths = classifyPullRequestChangedPaths(
     [

@@ -27,6 +27,28 @@ test("buildPrAudit reports an exact-head repository-green PR as ready", async ()
   assert.equal(audit.feedback.substantiveComments, 0);
 });
 
+test("buildPrAudit requires successful policy evidence for Cortex-only PRs", async () => {
+  const successful = await buildPrAudit(
+    mockOctokit({ cortexOnly: true }),
+    repoRef,
+    410,
+  );
+  assert.equal(successful.ready, true);
+  assert.deepEqual(
+    successful.requiredWorkflows.map((workflow) => workflow.workflowName),
+    ["Repository policy"],
+  );
+
+  for (const options of [
+    { cortexOnly: true, runStatus: MockRunStatus.InProgress },
+    { cortexOnly: true, workflowConclusion: MockJobConclusion.Failure },
+  ]) {
+    const audit = await buildPrAudit(mockOctokit(options), repoRef, 410);
+    assert.equal(audit.ready, false);
+    assert.match(audit.reasons.join("\n"), /Repository policy run/u);
+  }
+});
+
 test("buildPrAudit ignores a Cursor Bugbot disabled-account upsell comment", async () => {
   const audit = await buildPrAudit(mockOctokit(), repoRef, 410);
 
@@ -476,6 +498,7 @@ type MockOptions = {
   behindBy?: number;
   cappedFileInventory?: boolean;
   codexReview?: MockCodexReview;
+  cortexOnly?: boolean;
   currentHeadFinding?: boolean;
   cursorReview?: MockCursorReview;
   deletedCommentIds?: number[];
@@ -494,6 +517,7 @@ type MockOptions = {
   sameCountSynchronize?: boolean;
   staleBaseRun?: boolean;
   unresolvedThreads?: number;
+  workflowConclusion?: MockJobConclusion;
 };
 
 type MockOverrides = Omit<MockOptions, "agentHandoff">;
@@ -557,6 +581,7 @@ function createMockOctokit(options: MockOptions): Octokit {
           : [
               {
                 filename:
+                  options.cortexOnly === true ||
                   options.sameCountSynchronize === true
                     ? ".cortex/AGENTS.md"
                     : "nook-app/nook-platform/nook-core/src/lib.rs",
@@ -802,7 +827,11 @@ function createMockOctokit(options: MockOptions): Octokit {
                     {
                       ...(options.runStatus === MockRunStatus.InProgress
                         ? {}
-                        : { conclusion: MockJobConclusion.Success }),
+                        : {
+                            conclusion:
+                              options.workflowConclusion ??
+                              MockJobConclusion.Success,
+                          }),
                       created_at: "2026-08-08T00:00:00Z",
                       head_sha: headSha,
                       html_url:

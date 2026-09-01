@@ -405,7 +405,10 @@ export function requiredPrWorkflows(
   const paths = inventory.paths;
   const required: RequiredPrWorkflow[] = [];
 
-  if (paths.includes(".github/workflows/repository-policy.yml")) {
+  if (
+    paths.includes(".github/workflows/repository-policy.yml") ||
+    paths.some(isCortexMarkdownPath)
+  ) {
     required.push(REPOSITORY_POLICY_PR_WORKFLOW);
   }
   if (paths.some(isWebResearchPath)) {
@@ -839,9 +842,13 @@ function isNotFound(err: unknown): boolean {
 
 function isCanonicalAiOnlyPath(path: string): boolean {
   return (
-    (path.startsWith(".cortex/") && path.endsWith(".md")) ||
+    isCortexMarkdownPath(path) ||
     path === ".github/workflows/repository-policy.yml"
   );
+}
+
+function isCortexMarkdownPath(path: string): boolean {
+  return path.startsWith(".cortex/") && path.endsWith(".md");
 }
 
 export function isRepositoryStatusComment(
