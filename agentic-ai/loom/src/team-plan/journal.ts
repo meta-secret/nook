@@ -555,7 +555,6 @@ function journalGenerationCounters(
       currentPlan = validation.plan;
       selectedLeaseCount = 0;
       recordedCount = 0;
-      latestAttempts.clear();
       acceptedTasks.clear();
       failedAttempts.clear();
     } else if (event.kind === TeamPlanEventKind.Selected) {
@@ -771,12 +770,8 @@ function decodeLockOwner(serialized: string): TeamPlanLockOwner {
 }
 
 function staleTeamPlanLock(owner: TeamPlanLockOwner): boolean {
-  const machineIdentity = processMachineIdentity();
-  if (
-    !machineIdentity ||
-    !owner.processIdentity.startsWith(`${machineIdentity}:`)
-  )
-    return false;
+  const machineIdentity = hostname();
+  if (!owner.processIdentity.startsWith(`${machineIdentity}:`)) return false;
   const currentIdentity = processStartIdentity(owner.pid);
   if (currentIdentity) return currentIdentity !== owner.processIdentity;
   try {
@@ -932,8 +927,7 @@ function nodeErrorCode(error: NodeJS.ErrnoException): string | false {
 }
 
 function processStartIdentity(pid: number): string | false {
-  const machineIdentity = processMachineIdentity();
-  if (!machineIdentity) return false;
+  const machineIdentity = hostname();
   const result = spawnSync('ps', ['-o', 'lstart=', '-p', String(pid)], {
     encoding: 'utf8',
     env: { PATH: '/bin:/usr/bin:/usr/sbin' },
@@ -942,21 +936,4 @@ function processStartIdentity(pid: number): string | false {
   const started = result.status === 0 ? result.stdout.trim() : '';
   if (started.length === 0) return false;
   return `${machineIdentity}:${started}`;
-}
-
-function processMachineIdentity(): string | false {
-  const boot = (
-    process.platform === 'darwin'
-      ? spawnSync('sysctl', ['-n', 'kern.boottime'], {
-          encoding: 'utf8',
-          env: { PATH: '/bin:/usr/bin:/usr/sbin' },
-          stdio: ['ignore', 'pipe', 'ignore'],
-        })
-      : spawnSync('cat', ['/proc/sys/kernel/random/boot_id'], {
-          encoding: 'utf8',
-          env: { PATH: '/bin:/usr/bin:/usr/sbin' },
-          stdio: ['ignore', 'pipe', 'ignore'],
-        })
-  ).stdout.trim();
-  return boot ? `${hostname()}:${boot}` : false;
 }

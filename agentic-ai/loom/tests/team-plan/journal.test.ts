@@ -199,7 +199,7 @@ async function finalizeStartedFixture(request: {
 }
 
 describe('Team Plan journal', () => {
-  test('recovers only a Git-CAS owner with mismatched process start', async () => {
+  test('recovers only a same-host Git-CAS owner with mismatched process start', async () => {
     const { fixture, journalPath } = await startedFixture();
     const ref = lockRef({ fixture, journalPath });
     const started = spawnSync(
@@ -209,13 +209,6 @@ describe('Team Plan journal', () => {
         encoding: 'utf8',
       },
     ).stdout.trim();
-    const bootCommand =
-      process.platform === 'darwin'
-        ? ['sysctl', '-n', 'kern.boottime']
-        : ['cat', '/proc/sys/kernel/random/boot_id'];
-    const boot = spawnSync(bootCommand[0] ?? '', bootCommand.slice(1), {
-      encoding: 'utf8',
-    }).stdout.trim();
     const owner = (request: {
       readonly processIdentity: string;
       readonly token: string;
@@ -224,7 +217,7 @@ describe('Team Plan journal', () => {
       fixture,
       name: 'live-lock.json',
       contents: owner({
-        processIdentity: `${hostname()}:${boot || 'boot-unavailable'}:${started}`,
+        processIdentity: `${hostname()}:${started}`,
         token: 'live',
       }),
     });
@@ -240,7 +233,7 @@ describe('Team Plan journal', () => {
       fixture,
       name: 'foreign-lock.json',
       contents: owner({
-        processIdentity: `${hostname()}:foreign-boot:reused`,
+        processIdentity: `${hostname()}-foreign:reused`,
         token: 'foreign',
       }),
     });
@@ -256,7 +249,7 @@ describe('Team Plan journal', () => {
       fixture,
       name: 'stale-lock.json',
       contents: owner({
-        processIdentity: `${hostname()}:${boot}:reused`,
+        processIdentity: `${hostname()}:reused`,
         token: 'stale',
       }),
     });
@@ -447,68 +440,74 @@ describe('Team Plan journal', () => {
   });
 
   test('keeps retries sequential and finalizes only terminal task closure', async () => {
-    const { fixture, journalPath, started } = await startedFixture((value) => {
-      const provider = value.nodes[0];
-      if (!provider) throw new Error('Lifecycle provider is missing.');
-      return {
-        ...value,
-        maxAttempts: 2,
-        nodes: [
-          {
-            ...provider,
-            taskId: 'downstream',
-            dependencies: ['consumer'],
-            consumerOutcome: 'Downstream uses consumer evidence.',
-            baseline: {
-              kind: ModuleDeliveryBaselineKind.IntegratedDependencies,
-              providerTaskIds: ['consumer'],
+    const { fixture, journalPath, started, value } = await startedFixture(
+      (value) => {
+        const provider = value.nodes[0];
+        if (!provider) throw new Error('Lifecycle provider is missing.');
+        return {
+          ...value,
+          maxAttempts: 2,
+          nodes: [
+            {
+              ...provider,
+              taskId: 'downstream',
+              dependencies: ['consumer'],
+              consumerOutcome: 'Downstream uses consumer evidence.',
+              baseline: {
+                kind: ModuleDeliveryBaselineKind.IntegratedDependencies,
+                providerTaskIds: ['consumer'],
+              },
             },
-          },
-          {
-            ...provider,
-            taskId: 'consumer',
-            dependencies: ['provider'],
-            consumerOutcome: 'Consumer uses provider evidence.',
-            baseline: {
-              kind: ModuleDeliveryBaselineKind.IntegratedDependencies,
-              providerTaskIds: ['provider'],
+            {
+              ...provider,
+              taskId: 'consumer',
+              dependencies: ['provider'],
+              consumerOutcome: 'Consumer uses provider evidence.',
+              baseline: {
+                kind: ModuleDeliveryBaselineKind.IntegratedDependencies,
+                providerTaskIds: ['provider'],
+              },
             },
-          },
-          provider,
-        ],
-        edgeContracts: [
-          {
-            providerTaskId: 'provider',
-            consumerTaskId: 'consumer',
-            capability: 'provider capability',
-            publicTypes: ['ProviderResult'],
-            errors: ['ProviderError'],
-            behaviorInvariants: ['Provider evidence is deterministic.'],
-            securityInvariants: ['Provider state stays protected.'],
-            compatibilityExpectations: ['Consumer accepts provider evidence.'],
-            owningTests: ['provider contract test'],
-          },
-          {
-            providerTaskId: 'consumer',
-            consumerTaskId: 'downstream',
-            capability: 'consumer capability',
-            publicTypes: ['ConsumerResult'],
-            errors: ['ConsumerError'],
-            behaviorInvariants: ['Consumer evidence is deterministic.'],
-            securityInvariants: ['Consumer state stays protected.'],
-            compatibilityExpectations: [
-              'Downstream accepts consumer evidence.',
-            ],
-            owningTests: ['consumer contract test'],
-          },
-        ],
-      };
-    });
+            provider,
+          ],
+          edgeContracts: [
+            {
+              providerTaskId: 'provider',
+              consumerTaskId: 'consumer',
+              capability: 'provider capability',
+              publicTypes: ['ProviderResult'],
+              errors: ['ProviderError'],
+              behaviorInvariants: ['Provider evidence is deterministic.'],
+              securityInvariants: ['Provider state stays protected.'],
+              compatibilityExpectations: [
+                'Consumer accepts provider evidence.',
+              ],
+              owningTests: ['provider contract test'],
+            },
+            {
+              providerTaskId: 'consumer',
+              consumerTaskId: 'downstream',
+              capability: 'consumer capability',
+              publicTypes: ['ConsumerResult'],
+              errors: ['ConsumerError'],
+              behaviorInvariants: ['Consumer evidence is deterministic.'],
+              securityInvariants: ['Consumer state stays protected.'],
+              compatibilityExpectations: [
+                'Downstream accepts consumer evidence.',
+              ],
+              owningTests: ['consumer contract test'],
+            },
+          ],
+        };
+      },
+    );
+    let generation = 1;
+    let planDigest = started.modulePlanDigest;
     const attempt = (number: number) => ({
       taskId: 'provider',
       attempt: number,
-      generation: 1,
-      planDigest: started.modulePlanDigest,
+      generation,
+      planDigest,
     });
     const selected = (request: {
       readonly sequence: number;
@@ -554,18 +553,38 @@ describe('Team Plan journal', () => {
       journalPath,
       event: unusable({ sequence: 3, attempt: 1 }),
     });
+    const planText = `${JSON.stringify({ ...value, generation: 2 })}\n`;
+    const replacement = decodeAndValidateModuleDeliveryPlan(planText);
+    if (replacement.status !== ModuleDeliveryValidationStatus.Accepted)
+      throw new Error('Replacement journal test plan was rejected.');
+    await appendTeamPlanEvent({
+      journalPath,
+      event: {
+        version: TEAM_PLAN_JOURNAL_VERSION,
+        kind: TeamPlanEventKind.Restarted,
+        sequence: 4,
+        planPath: started.planPath,
+        planText,
+        planSha256: teamPlanSha256(planText),
+        modulePlanDigest: replacement.planDigest,
+        sourceCommit: started.sourceCommit,
+        generationRecordLimit: started.generationRecordLimit,
+      },
+    });
+    generation = 2;
+    planDigest = replacement.planDigest;
     await expect(
-      appendTeamPlanEvent({ journalPath, event: finalized(4) }),
+      appendTeamPlanEvent({ journalPath, event: finalized(5) }),
     ).rejects.toThrow('nonterminal tasks');
     await appendTeamPlanEvent({
       journalPath,
-      event: selected({ sequence: 4, attempts: [attempt(2)] }),
+      event: selected({ sequence: 5, attempts: [attempt(2)] }),
     });
     await appendTeamPlanEvent({
       journalPath,
-      event: unusable({ sequence: 5, attempt: 2 }),
+      event: unusable({ sequence: 6, attempt: 2 }),
     });
-    await appendTeamPlanEvent({ journalPath, event: finalized(6) });
+    await appendTeamPlanEvent({ journalPath, event: finalized(7) });
     expect((await loadTeamPlanJournal(journalPath)).finalized).toBe(true);
   });
 

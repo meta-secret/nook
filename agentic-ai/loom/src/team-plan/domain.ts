@@ -280,6 +280,7 @@ function assertProviderSubmission(
     assertTextFields({
       values: [submission.acceptedByTeam, submission.verdict],
     });
+    if (submission.verdict !== 'terminal-success') invalidRecord();
     assertOwner(submission.acceptedByTeam);
     assertWriteHandoff(submission.handoff);
     return;
