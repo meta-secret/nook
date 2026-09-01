@@ -174,8 +174,8 @@ export function createGitFixture(): GitFixture {
   };
   const git = fixtureGit(provisional);
   git(['-c', 'init.templateDir=', 'init', '--quiet']);
-  for (const name of ['hooks', 'info'])
-    mkdirSync(join(sourceRoot, '.git', name));
+  // prettier-ignore
+  for (const name of ['hooks', 'info']) chmodSync((mkdirSync(join(sourceRoot, '.git', name)), join(sourceRoot, '.git', name)), 0o755);
   writeFileSync(join(sourceRoot, '.git/info/exclude'), '');
   git(['config', 'user.name', 'Nook Test']);
   git(['config', 'user.email', 'nook-test@example.invalid']);
