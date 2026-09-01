@@ -348,12 +348,13 @@ function mutateGit([fixture, mutation]: readonly [
 }
 
 function rejectMutations(runtime: Runtime, action: () => void): void {
-  const snapshot = captureSourceSnapshot(runtime.fixture.sourceRoot);
+  const root = runtime.fixture.sourceRoot;
+  const snapshot = captureSourceSnapshot(root);
   for (const kind of MUTATIONS) {
     const restore = mutateGit([runtime.fixture, kind]);
     expect(action).toThrow();
     restore();
-    expect(captureSourceSnapshot(runtime.fixture.sourceRoot)).toEqual(snapshot);
+    expect(captureSourceSnapshot(root), kind).toEqual(snapshot);
   }
 }
 
