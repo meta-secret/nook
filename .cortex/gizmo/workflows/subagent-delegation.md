@@ -171,6 +171,12 @@ frozen subagent task contract.
   `(pending)`, or `(none)` for inclusion on every user-visible activity line.
 - The harness derives the worker actor token from its immutable team identity:
   `AI`, `DEV-CORE`, `SECURITY`, `SRE`, or `WEB-DEV`.
+- The active harness supplies the authoritative host-local clock source for
+  worker communication.
+- The worker reads a fresh `HH:mm` from that source immediately before each
+  activity-line emission.
+- An unavailable authoritative clock blocks worker communication through the
+  harness. The harness must not supply a fallback source.
 - `GIZMO` identifies only Gizmo Prime, and `SKILL` identifies only an actively
   executing skill. Neither token is a worker team identity.
 - Gizmo supplies the context through the active harness before the worker's
@@ -788,6 +794,9 @@ Before integration, verify:
 - every team worker used its declared team identity;
 - every worker's activity-line context carried the current pull-request
   identity before its first user-visible activity;
+- the active harness supplied the authoritative host-local clock source for
+  worker communication, and every activity line used a fresh read immediately
+  before emission;
 - every worker activity used the compact actor token mapped from its declared
   team identity, without a personal name;
 - every pull-request creation or stacked-pull-request transition refreshed the
