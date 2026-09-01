@@ -168,7 +168,7 @@ export type TeamPlanLeaseRequest = TeamPlanJournalRequest &
     runId: string;
     generation: number;
     planDigest: string;
-    taskIds: readonly string[];
+    attempts: readonly TeamPlanAttemptIdentity[];
   }>;
 
 export type TeamPlanRestartRequest = TeamPlanRunRequest &

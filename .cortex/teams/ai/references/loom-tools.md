@@ -40,7 +40,7 @@ Invoke commands from the repository root:
 ```bash
 task loom:team-plan:start PLAN=/absolute/path/to/plan.json JOURNAL=/absolute/path/to/events.jsonl
 task loom:team-plan:select JOURNAL=/absolute/path/to/events.jsonl
-task loom:team-plan:lease JOURNAL=/absolute/path/to/events.jsonl RUN_ID=<selection-run-id> GENERATION=<selection-generation> PLAN_DIGEST=<selection-plan-digest> TASK_IDS=task-a,task-b
+task loom:team-plan:lease JOURNAL=/absolute/path/to/events.jsonl RUN_ID=<selection-run-id> GENERATION=<selection-generation> PLAN_DIGEST=<selection-plan-digest> ATTEMPTS=task-a:1,task-b:1
 task loom:team-plan:record JOURNAL=/absolute/path/to/events.jsonl RUN_ID=<run-id> REQUEST=/absolute/path/to/result.json
 task loom:team-plan:restart JOURNAL=/absolute/path/to/events.jsonl RUN_ID=<run-id> PLAN=/absolute/path/to/new-plan.json
 task loom:team-plan:finalize JOURNAL=/absolute/path/to/events.jsonl RUN_ID=<run-id>
@@ -55,8 +55,9 @@ Follow the lifecycle in order:
 1. Start one reviewed generation at its declared source commit. Save the
    immutable `runId` from the returned JSON snapshot.
 2. Select the next candidate batch without consuming attempts or concurrency.
-3. Lease only the comma-separated candidate task IDs explicitly authorized by
-   Gizmo, using the exact run, generation, and plan digest from that selection.
+3. Lease only the comma-separated candidate task-and-attempt pairs explicitly
+   authorized by Gizmo, using the exact run, generation, and plan digest from
+   that selection.
 4. Record one terminal result for each selected lease using the immutable run ID.
    - The request path must identify a regular file.
    - Loom uses one nonblocking open handle for the bounded read.

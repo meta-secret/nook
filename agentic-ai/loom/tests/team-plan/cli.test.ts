@@ -256,8 +256,8 @@ test('dispatches every successful Team Plan command', async () => {
           String(firstSelection.snapshot.generation),
           '--plan-digest',
           firstSelection.snapshot.planDigest,
-          '--task-ids',
-          firstAdmission.taskId,
+          '--attempts',
+          `${firstAdmission.taskId}:${firstAdmission.attempt}`,
         ],
       }),
     ).toBe(0);
@@ -332,8 +332,8 @@ test('dispatches every successful Team Plan command', async () => {
           String(secondSelection.snapshot.generation),
           '--plan-digest',
           secondSelection.snapshot.planDigest,
-          '--task-ids',
-          secondAdmission.taskId,
+          '--attempts',
+          `${secondAdmission.taskId}:${secondAdmission.attempt}`,
         ],
       }),
     ).toBe(0);
@@ -425,6 +425,83 @@ test('dispatches every successful Team Plan command', async () => {
   }
 }, 30_000);
 
+test('rejects a delayed lease after its selected attempt advances', async () => {
+  const fixture = createGitFixture();
+  fixtures.push(fixture);
+  const journalPath = join(fixture.root, 'delayed-lease-events.jsonl');
+  const planPath = join(fixture.root, 'delayed-lease-plan.json');
+  const recordPath = join(fixture.root, 'delayed-lease-result.json');
+  writeJson({
+    path: planPath,
+    value: plan({ sourceCommit: fixture.baselineCommit, generation: 1 }),
+  });
+  const output: string[] = [];
+  const log = spyOn(console, 'log').mockImplementation((message) => {
+    output.push(String(message));
+  });
+  try {
+    await runTeamPlanCli({
+      argv: [
+        'start',
+        '--plan',
+        planPath,
+        '--journal',
+        journalPath,
+        '--repository-root',
+        fixture.sourceRoot,
+      ],
+    });
+    await runTeamPlanCli({ argv: ['select', '--journal', journalPath] });
+    const selection = JSON.parse(
+      output.at(-1) ?? '',
+    ) as TeamPlanSelectionReceipt;
+    const admission = selection.admissions[0];
+    if (!admission) throw new Error('Delayed admission fixture is missing.');
+    const delayedLeaseArguments = [
+      'lease',
+      '--journal',
+      journalPath,
+      '--run-id',
+      selection.snapshot.runId,
+      '--generation',
+      String(selection.snapshot.generation),
+      '--plan-digest',
+      selection.snapshot.planDigest,
+      '--attempts',
+      `${admission.taskId}:${admission.attempt}`,
+    ];
+    await runTeamPlanCli({ argv: delayedLeaseArguments });
+    writeJson({
+      path: recordPath,
+      value: {
+        kind: TeamPlanRecordKind.FinalUnusable,
+        taskId: admission.taskId,
+        attempt: admission.attempt,
+        generation: admission.generation,
+        planDigest: admission.planDigest,
+        conclusion: ModuleDeliveryGenerationFenceKind.Failed,
+      },
+    });
+    await runTeamPlanCli({
+      argv: [
+        'record',
+        '--journal',
+        journalPath,
+        '--run-id',
+        selection.snapshot.runId,
+        '--request',
+        recordPath,
+      ],
+    });
+    await expectTeamPlanCliFailure({
+      argv: delayedLeaseArguments,
+      code: LoomFailureCode.TeamPlanRecoveryFailed,
+    });
+  } finally {
+    log.mockRestore();
+  }
+});
+
 test('localizes visible parse failures through the Loom catalog', async () => {
   const error = spyOn(console, 'error').mockImplementation(() => {});
   try {
@@ -443,6 +520,29 @@ test('localizes visible parse failures through the Loom catalog', async () => {
     );
   } finally {
     error.mockRestore();
+  }
+});
+
+test('keeps Task wrapper diagnostics out of machine-readable stdout', () => {
+  const root = mkdtempSync(join(tmpdir(), 'team-plan-task-stdout-'));
+  try {
+    const result = spawnSync(
+      'task',
+      [
+        'loom:team-plan:select',
+        `JOURNAL=${join(root, 'missing-journal.jsonl')}`,
+      ],
+      {
+        cwd: join(import.meta.dir, '../../../..'),
+        encoding: 'utf8',
+        env: { ...process.env, NO_COLOR: '1' },
+      },
+    );
+    expect(result.status).not.toBe(0);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toContain('Team Plan');
+  } finally {
+    rmSync(root, { recursive: true });
   }
 });
 
@@ -516,6 +616,7 @@ test('admits the complete permitted nested provider evidence ancestry', async ()
       },
     });
     const requestBytes = statSync(requestPath).size;
+    expect(MAX_TEAM_PLAN_RECORD_REQUEST_BYTES).toBe(16 * 1024 * 1024);
     expect(requestBytes).toBeGreaterThan(4_194_304);
     expect(requestBytes).toBeLessThanOrEqual(
       MAX_TEAM_PLAN_RECORD_REQUEST_BYTES,

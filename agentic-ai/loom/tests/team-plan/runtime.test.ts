@@ -45,6 +45,7 @@ import {
   compareAndSwapTeamPlanRef,
   readBoundedTeamPlanBytes,
 } from '../../src/team-plan/runtime-durability.ts';
+import { attemptIdentity } from '../../src/team-plan/runtime.ts';
 import {
   createGitFixture,
   disposeGitFixture,
@@ -103,7 +104,7 @@ async function leaseNextTeamPlan(journalPath: string) {
     runId: selection.snapshot.runId,
     generation: selection.snapshot.generation,
     planDigest: selection.snapshot.planDigest,
-    taskIds: selection.admissions.map(({ taskId }) => taskId),
+    attempts: selection.admissions.map(attemptIdentity),
   });
 }
 
@@ -381,7 +382,9 @@ describe('Team Plan runtime', () => {
       runId: candidates.snapshot.runId,
       generation: candidates.snapshot.generation,
       planDigest: candidates.snapshot.planDigest,
-      taskIds: ['beta'],
+      attempts: candidates.admissions
+        .filter(({ taskId }) => taskId === 'beta')
+        .map(attemptIdentity),
     });
     expect(leased.leases.map(({ taskId }) => taskId)).toEqual(['beta']);
     expect(leased.snapshot.activeLeases).toHaveLength(1);
@@ -438,7 +441,7 @@ describe('Team Plan runtime', () => {
         runId: selection.snapshot.runId,
         generation: selection.snapshot.generation,
         planDigest: selection.snapshot.planDigest,
-        taskIds: ['alpha'],
+        attempts: selection.admissions.map(attemptIdentity),
       }),
     ).rejects.toThrow('admission selection is stale');
   });
@@ -585,7 +588,7 @@ describe('Team Plan runtime', () => {
       runId: dependentSelection.snapshot.runId,
       generation: dependentSelection.snapshot.generation,
       planDigest: dependentSelection.snapshot.planDigest,
-      taskIds: dependentSelection.admissions.map(({ taskId }) => taskId),
+      attempts: dependentSelection.admissions.map(attemptIdentity),
     });
     expect(dependent.snapshot.acceptedProviderEvidence).toHaveLength(1);
     const consumerLease = dependent.leases[0];
