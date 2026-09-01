@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, realpath } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { realpath } from 'node:fs/promises';
 import { resolve, sep } from 'node:path';
 
 import { LoomFailureCode, loomFailureFromCause } from '../loom-failure.ts';
@@ -53,6 +52,7 @@ import {
   assertTeamPlanLeaseFrontier,
   assertTeamPlanRef,
   deleteTeamPlanAttemptArtifactOrphans,
+  deleteTeamPlanFinalizedHeadOrphan,
   deleteTeamPlanLeaseFrontierOrphans,
   deleteTeamPlanRunRefs,
   pinTeamPlanFinalizedHead,
@@ -64,6 +64,7 @@ import {
   teamPlanRunRefPrefix,
   teamPlanRunRefsEmpty,
 } from './runtime-durability.ts';
+import { teamPlanWorkspaceRoot } from './runtime-workspace.ts';
 
 import type {
   ModuleDeliveryAttemptLease,
@@ -213,6 +214,8 @@ export async function recordTeamPlan(
     action: async (session) => {
       assertRunningTeamPlanSession(session);
       assertTeamPlanSessionRepositoryAtSource(session);
+      if (request.runId !== session.journal.started.runId)
+        throw new Error('Team Plan record run identity is stale.');
       const persisted = executeTeamPlanRecord({
         session,
         record: request.record,
@@ -342,11 +345,7 @@ async function materializeTeamPlanSession(
 ): Promise<TeamPlanSession> {
   const started = journal.started;
   const plan = await assertReviewedPlanEvent(started);
-  const expectedWorkspace = await teamPlanWorkspaceRoot({
-    repositoryRoot: started.repositoryRoot,
-    journalPath: journal.path,
-  });
-  if ((await realpath(started.workspaceRoot)) !== expectedWorkspace)
+  if ((await realpath(started.workspaceRoot)) !== started.workspaceRoot)
     throw new Error('Team Plan workspace root has drifted.');
   const authority = createModuleDeliveryGenerationAuthority({
     acceptedPlan: plan,
@@ -394,6 +393,11 @@ async function materializeTeamPlanSession(
     });
     for (const event of journal.events.slice(1))
       await replayTeamPlanEvent({ session, event });
+    if (!session.finalized)
+      deleteTeamPlanFinalizedHeadOrphan({
+        run: runIdentity(session),
+        expectedHeadCommit: session.integrationState.headCommit,
+      });
     return session;
   } catch (error) {
     cleanupTeamPlanSession(session);
@@ -951,18 +955,6 @@ function assertRepositoryAtSource(request: {
     status.length > 0
   )
     throw new Error('Team Plan source repository has drifted.');
-}
-
-async function teamPlanWorkspaceRoot(request: {
-  readonly repositoryRoot: string;
-  readonly journalPath: string;
-}): Promise<string> {
-  const run = teamPlanSha256(
-    `${request.repositoryRoot}\n${resolve(request.journalPath)}`,
-  );
-  const requested = resolve(tmpdir(), 'nook-team-plan-workspaces', run);
-  await mkdir(requested, { recursive: true });
-  return realpath(requested);
 }
 
 export function attemptKey(identity: TeamPlanAttemptIdentity): string {

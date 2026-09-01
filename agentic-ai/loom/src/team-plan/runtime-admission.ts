@@ -60,6 +60,13 @@ export async function leaseTeamPlan(
     action: async (session) => {
       assertRunningTeamPlanSession(session);
       assertTeamPlanSessionRepositoryAtSource(session);
+      const snapshot = teamPlanSnapshot(session);
+      if (
+        request.runId !== snapshot.runId ||
+        request.generation !== snapshot.generation ||
+        request.planDigest !== snapshot.planDigest
+      )
+        throw new Error('Team Plan admission selection is stale.');
       const selection = selectModuleDeliveryAdmissions({
         authority: session.authority,
         acceptedPlan: session.acceptedPlan,

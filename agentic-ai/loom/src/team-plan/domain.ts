@@ -162,13 +162,19 @@ export type TeamPlanJournalRequest = Readonly<{
 export type TeamPlanDiscardRequest = TeamPlanJournalRequest &
   Readonly<{ runId: string }>;
 export type TeamPlanLeaseRequest = TeamPlanJournalRequest &
-  Readonly<{ taskIds: readonly string[] }>;
+  Readonly<{
+    runId: string;
+    generation: number;
+    planDigest: string;
+    taskIds: readonly string[];
+  }>;
 
 export type TeamPlanRestartRequest = TeamPlanJournalRequest &
   Readonly<{ planPath: string }>;
 
 export type TeamPlanRecordRequest = TeamPlanJournalRequest &
   Readonly<{
+    runId: string;
     record: TeamPlanRecord;
   }>;
 

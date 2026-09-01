@@ -322,6 +322,24 @@ export function pinTeamPlanFinalizedHead(request: {
   });
 }
 
+export function deleteTeamPlanFinalizedHeadOrphan(request: {
+  readonly run: TeamPlanRunIdentity;
+  readonly expectedHeadCommit: string;
+}): void {
+  const ref = teamPlanFinalizedHeadRef(request.run);
+  const actual = teamPlanGitText({
+    cwd: request.run.repositoryRoot,
+    args: ['for-each-ref', '--format=%(objectname)', ref],
+  });
+  if (!actual) return;
+  if (actual !== request.expectedHeadCommit)
+    throw new Error('Team Plan finalized head ref is forged.');
+  teamPlanGitText({
+    cwd: request.run.repositoryRoot,
+    args: ['update-ref', '-d', ref, actual],
+  });
+}
+
 export function assertTeamPlanFinalizedHead(request: {
   readonly run: TeamPlanRunIdentity;
   readonly headCommit: string;

@@ -36,7 +36,7 @@ import {
   discardFinalizedTeamPlan,
   finalizeTeamPlan,
   leaseTeamPlan,
-  recordTeamPlan,
+  recordTeamPlan as recordTeamPlanRuntime,
   restartTeamPlan,
   selectTeamPlan,
   startTeamPlan,
@@ -93,8 +93,18 @@ async function leaseNextTeamPlan(journalPath: string) {
   const selection = await selectTeamPlan({ journalPath });
   return leaseTeamPlan({
     journalPath,
+    runId: selection.snapshot.runId,
+    generation: selection.snapshot.generation,
+    planDigest: selection.snapshot.planDigest,
     taskIds: selection.admissions.map(({ taskId }) => taskId),
   });
+}
+
+async function recordTeamPlan(
+  request: Omit<Parameters<typeof recordTeamPlanRuntime>[0], 'runId'>,
+) {
+  const current = await selectTeamPlan({ journalPath: request.journalPath });
+  return recordTeamPlanRuntime({ ...request, runId: current.snapshot.runId });
 }
 
 function readNode([sourceCommit, taskId, dependencies = []]: readonly [
@@ -364,12 +374,56 @@ describe('Team Plan runtime', () => {
     expect(candidates.snapshot.activeLeases).toHaveLength(0);
     const leased = await leaseTeamPlan({
       journalPath: file.journalPath,
+      runId: candidates.snapshot.runId,
+      generation: candidates.snapshot.generation,
+      planDigest: candidates.snapshot.planDigest,
       taskIds: ['beta'],
     });
     expect(leased.leases.map(({ taskId }) => taskId)).toEqual(['beta']);
     expect(leased.snapshot.activeLeases).toHaveLength(1);
     const remaining = await selectTeamPlan({ journalPath: file.journalPath });
     expect(remaining.admissions.map(({ taskId }) => taskId)).toEqual(['alpha']);
+  });
+
+  test('binds persisted workspace, selection, and finalized-ref recovery', async () => {
+    const fixture = createGitFixture();
+    fixtures.push(fixture);
+    const alpha = fixtureReadNode([fixture, 'alpha']);
+    const file = fixturePlanFile([fixture, [alpha]]);
+    await startTeamPlan(startRequest(file));
+    const selection = await selectTeamPlan({ journalPath: file.journalPath });
+    const finalizedRef = `${runRef({ file })}/finalized`;
+    fixtureGit(fixture)(['update-ref', finalizedRef, fixture.baselineCommit]);
+    const previousTemporaryDirectory = process.env.TMPDIR;
+    process.env.TMPDIR = join(fixture.root, 'different-tmp');
+    try {
+      expect(
+        (await selectTeamPlan({ journalPath: file.journalPath })).snapshot
+          .runId,
+      ).toBe(selection.snapshot.runId);
+    } finally {
+      if (previousTemporaryDirectory === undefined) delete process.env.TMPDIR;
+      else process.env.TMPDIR = previousTemporaryDirectory;
+    }
+    expect(fixtureGit(fixture)(['for-each-ref', finalizedRef])).toBe('');
+    const next = writeNamedPlanFile({
+      fixture,
+      name: 'next-team-plan',
+      value: { ...plan([fixture.baselineCommit, [alpha]]), generation: 2 },
+    });
+    await restartTeamPlan({
+      journalPath: file.journalPath,
+      planPath: next.path,
+    });
+    await expect(
+      leaseTeamPlan({
+        journalPath: file.journalPath,
+        runId: selection.snapshot.runId,
+        generation: selection.snapshot.generation,
+        planDigest: selection.snapshot.planDigest,
+        taskIds: ['alpha'],
+      }),
+    ).rejects.toThrow('admission selection is stale');
   });
 
   test('reconciles an unjournaled lease frontier before restart', async () => {
@@ -511,6 +565,9 @@ describe('Team Plan runtime', () => {
     });
     const dependent = await leaseTeamPlan({
       journalPath: aliased.journalPath,
+      runId: dependentSelection.snapshot.runId,
+      generation: dependentSelection.snapshot.generation,
+      planDigest: dependentSelection.snapshot.planDigest,
       taskIds: dependentSelection.admissions.map(({ taskId }) => taskId),
     });
     expect(dependent.snapshot.acceptedProviderEvidence).toHaveLength(1);
@@ -806,6 +863,17 @@ describe('Team Plan runtime', () => {
     const replacement = await leaseNextTeamPlan(file.journalPath);
     const replacementLease = replacement.leases[0];
     if (!replacementLease) throw new Error('Replacement lease is missing.');
+    await expect(
+      recordTeamPlanRuntime({
+        journalPath: file.journalPath,
+        runId: discard.runId,
+        record: evidenceRecord({
+          fixture,
+          lease: replacementLease,
+          node: alpha,
+        }),
+      }),
+    ).rejects.toThrow('record run identity is stale');
     const forgedRef = `${runRef({ file })}/${replacementLease.generation}/alpha/${replacementLease.attempt}/accepted-evidence`;
     fixtureGit(fixture)(['update-ref', forgedRef, fixture.baselineCommit]);
     await expect(

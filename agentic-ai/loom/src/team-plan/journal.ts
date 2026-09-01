@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
 import { isAbsolute } from 'node:path';
 
+import { LoomFailureCode, loomFailureFromCause } from '../loom-failure.ts';
+
 import {
   ModuleDeliveryValidationStatus,
   decodeAndValidateModuleDeliveryPlan,
@@ -138,22 +140,39 @@ export async function loadTeamPlanJournal(
 export async function appendTeamPlanEvent(
   request: AppendTeamPlanEventRequest,
 ): Promise<void> {
-  const path = await canonicalExistingJournalPath(request.journalPath);
-  const current = await readBoundedTeamPlanJournal({
-    path,
-    maximumBytes: MAX_TEAM_PLAN_JOURNAL_BYTES,
-    expectedLinkCount: 1,
-  });
+  let path: string;
+  let current: Awaited<ReturnType<typeof readBoundedTeamPlanJournal>>;
+  try {
+    path = await canonicalExistingJournalPath(request.journalPath);
+    current = await readBoundedTeamPlanJournal({
+      path,
+      maximumBytes: MAX_TEAM_PLAN_JOURNAL_BYTES,
+      expectedLinkCount: 1,
+    });
+  } catch (cause) {
+    throw loomFailureFromCause({
+      code: LoomFailureCode.TeamPlanStorageFailed,
+      cause: cause instanceof Error ? cause : new Error('Journal read failed.'),
+    });
+  }
   const candidate = `${current.serialized}${serializeTeamPlanEvent(request.event)}`;
   decodeTeamPlanJournal({ serialized: candidate, path });
-  await replaceJournalFile({
-    path,
-    serialized: candidate,
-    mode: current.mode,
-    beforeTemporarySync: storageHook(request.beforeTemporarySync),
-    afterTemporaryCleanupSync: storageHook(request.afterTemporaryCleanupSync),
-    beforeParentSync: storageHook(request.beforeParentSync),
-  });
+  try {
+    await replaceJournalFile({
+      path,
+      serialized: candidate,
+      mode: current.mode,
+      beforeTemporarySync: storageHook(request.beforeTemporarySync),
+      afterTemporaryCleanupSync: storageHook(request.afterTemporaryCleanupSync),
+      beforeParentSync: storageHook(request.beforeParentSync),
+    });
+  } catch (cause) {
+    throw loomFailureFromCause({
+      code: LoomFailureCode.TeamPlanStorageFailed,
+      cause:
+        cause instanceof Error ? cause : new Error('Journal append failed.'),
+    });
+  }
 }
 
 export async function withTeamPlanJournalLock<T>(
@@ -192,7 +211,10 @@ export async function discardTeamPlanJournal(
   const tombstonePresent = await pathExists(tombstone);
   if (!sourcePresent && !tombstonePresent && (await pathExists(completion))) {
     const completed = await loadTeamPlanJournal(completion);
-    if (!completed.finalized)
+    if (
+      !completed.finalized ||
+      completed.started.runId !== request.expectedRunId
+    )
       throw new Error('Team Plan discard completion marker is stale.');
     return;
   }

@@ -11,6 +11,7 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
+import { LoomFailureCode } from '../../src/loom-failure.ts';
 import {
   REQUIRED_PARENT_OWNED_RESOURCES,
   ModuleDeliveryBaselineKind,
@@ -247,5 +248,21 @@ describe('Team Plan journal recovery', () => {
         throw new Error('completed artifacts must not run again');
       },
     });
+  });
+
+  test('classifies journal filesystem failures as storage failures', async () => {
+    const fixture = createGitFixture();
+    fixtures.push(fixture);
+    await expect(
+      appendTeamPlanEvent({
+        journalPath: join(fixture.root, 'missing', 'journal.jsonl'),
+        event: {
+          version: TEAM_PLAN_JOURNAL_VERSION,
+          kind: TeamPlanEventKind.Finalized,
+          sequence: 2,
+          headCommit: fixture.baselineCommit,
+        },
+      }),
+    ).rejects.toMatchObject({ code: LoomFailureCode.TeamPlanStorageFailed });
   });
 });
