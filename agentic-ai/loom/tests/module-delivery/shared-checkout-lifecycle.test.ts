@@ -257,11 +257,7 @@ function leases(runtime: Runtime) {
 }
 
 function nextWriter(runtime: Runtime, state: ModuleIntegrationState) {
-  const admission = selectModuleDeliveryAdmissions({
-    authority: runtime.authority,
-    acceptedPlan: runtime.plan,
-    state: state.admissionState,
-  }).admissions[0]!;
+  const admission = nextAdmission(runtime, state);
   const lease = recordModuleDeliveryAttemptLeases({
     authority: runtime.authority,
     state: state.admissionState,
@@ -270,19 +266,17 @@ function nextWriter(runtime: Runtime, state: ModuleIntegrationState) {
   return [lease, commitWriter(runtime, lease, lease.taskId)] as const;
 }
 
+function nextAdmission(runtime: Runtime, state: ModuleIntegrationState) {
+  return selectModuleDeliveryAdmissions({
+    authority: runtime.authority,
+    acceptedPlan: runtime.plan,
+    state: state.admissionState,
+  }).admissions[0]!;
+}
+
+// prettier-ignore
 const MUTATIONS = [
-  'remote-config',
-  'hook',
-  'foreign-ref',
-  'staged-index',
-  'skip-worktree',
-  'assume-unchanged',
-  'info-content',
-  'info-mode',
-  'info-symlink',
-  'info-root-mode',
-  'info-root-type',
-  'info-hidden-file',
+  'remote-config', 'hook', 'foreign-ref', 'staged-index', 'skip-worktree', 'assume-unchanged', 'info-hidden-file', 'info-mode', 'info-symlink', 'info-root-mode', 'info-root-type', 'ignored-path',
 ] as const;
 
 function mutateGit([fixture, mutation]: readonly [
@@ -315,7 +309,7 @@ function mutateGit([fixture, mutation]: readonly [
     return () =>
       void git(['update-index', `--no-${mutation}`, 'module/seed.txt']);
   }
-  if (mutation === 'info-content') {
+  if (mutation === 'info-hidden-file') {
     const control = join(info, 'control');
     writeFileSync(control, 'drift');
     return () => rmSync(control);
@@ -344,14 +338,10 @@ function mutateGit([fixture, mutation]: readonly [
       renameSync(saved, info);
     };
   }
-  const hidden = join(fixture.sourceRoot, 'hidden');
-  writeFileSync(join(info, 'hidden-control'), 'control');
-  mkdirSync(hidden, { recursive: true });
-  writeFileSync(join(hidden, 'secret'), 'secret');
-  return () => {
-    rmSync(join(info, 'hidden-control'));
-    rmSync(join(hidden, 'secret'));
-  };
+  const secret = join(fixture.sourceRoot, 'hidden/secret');
+  mkdirSync(join(fixture.sourceRoot, 'hidden'), { recursive: true });
+  writeFileSync(secret, 'secret');
+  return () => rmSync(secret);
 }
 
 function rejectMutations(runtime: Runtime, action: () => void): void {
@@ -405,9 +395,20 @@ test.each(['read-first', 'writer-first'] as const)(
       ).toThrow();
       fixtureGit(runtime.fixture)(['reset', '--hard', state.headCommit]);
       recordModuleDeliveryAttemptDisposition(disposition);
-      const [retryLease, retryWriter] = nextWriter(runtime, state);
+      const retryAdmission = nextAdmission(runtime, state);
+      writeFileSync(join(root, 'module/seed.txt'), 'dirty retry\n');
+      const recordRetry = () =>
+        recordModuleDeliveryAttemptLeases({
+          authority: runtime.authority,
+          state: state.admissionState,
+          admissions: [retryAdmission],
+        }).leases[0]!;
+      expect(recordRetry).toThrow();
+      fixtureGit(runtime.fixture)(['reset', '--hard', state.headCommit]);
+      const retryLease = recordRetry();
       expect(retryLease.attempt).toBe(2);
       expect(retryLease.startingFrontier).toBe(writerLease.startingFrontier);
+      const retryWriter = commitWriter(runtime, retryLease, retryLease.taskId);
       state = integrate(runtime, state, retryLease, retryWriter);
     } else {
       rejectMutations(runtime, () =>
