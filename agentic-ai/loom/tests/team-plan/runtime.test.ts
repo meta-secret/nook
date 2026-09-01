@@ -29,13 +29,15 @@ import {
 import {
   TeamPlanRecordKind,
   discardFinalizedTeamPlan,
-  finalizeTeamPlan,
   leaseTeamPlan,
   recordTeamPlan as recordTeamPlanRuntime,
-  restartTeamPlan,
   selectTeamPlan,
   startTeamPlan,
 } from '../../src/team-plan/index.ts';
+import {
+  finalizeTeamPlan,
+  restartTeamPlan,
+} from './runtime-test-commands.ts';
 import {
   createGitFixture,
   disposeGitFixture,

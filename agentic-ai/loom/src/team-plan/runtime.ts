@@ -62,6 +62,7 @@ import type {
   TeamPlanAttemptIdentity,
   TeamPlanEvent,
   TeamPlanDiscardRequest,
+  TeamPlanFinalizeRequest,
   TeamPlanFinalUnusableRecord,
   TeamPlanJournalRecord,
   TeamPlanJournalRequest,
@@ -211,6 +212,7 @@ export async function restartTeamPlan(
   return withLockedTeamPlanSession({
     journalPath: request.journalPath,
     action: async (session) => {
+      assertTeamPlanRunIdentity(session, request.runId);
       assertRunningTeamPlanSession(session);
       const plan = await reviewedPlan(request.planPath);
       assertRepositoryAtSource({
@@ -242,11 +244,12 @@ export async function restartTeamPlan(
 }
 
 export async function finalizeTeamPlan(
-  request: TeamPlanJournalRequest,
+  request: TeamPlanFinalizeRequest,
 ): Promise<TeamPlanSnapshot> {
   return withLockedTeamPlanSession({
     journalPath: request.journalPath,
     action: async (session) => {
+      assertTeamPlanRunIdentity(session, request.runId);
       if (session.finalized) return teamPlanSnapshot(session);
       assertRunningTeamPlanSession(session);
       assertTeamPlanSessionRepositoryAtSource(session);
@@ -851,6 +854,14 @@ export function assertRunningTeamPlanSession(session: TeamPlanSession): void {
     session.integrationState.phase !== ModuleIntegrationPhase.AcceptingProviders
   )
     throw new Error('Team Plan is already finalized.');
+}
+
+function assertTeamPlanRunIdentity(
+  session: TeamPlanSession,
+  runId: string,
+): void {
+  if (runId !== session.journal.started.runId)
+    throw new Error('Team Plan run identity is stale.');
 }
 
 export function assertTeamPlanSessionRepositoryAtSource(
