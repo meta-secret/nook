@@ -72,18 +72,16 @@ PR delivery helpers live in `agentic-ai/ci-agent`.
 
 - The local review command runs advisory Codex review against `origin/main`.
 - The review command posts an idempotent SHA-bound Codex request.
-- Codex's eye reaction is liveness evidence only. It never settles review or
-  blocks validation beyond the bounded stabilization timeout.
-- A Codex usage limit does not activate another review provider. The bounded
-  stabilization timeout keeps review unavailability from deadlocking delivery.
-- Complete validation first requests an idempotent exact-head review and waits
-  for a clean result or the bounded stabilization timeout.
-- Current-head findings stop the dispatch so the agent can address one coherent
-  review batch before spending the complete validation budget.
+- Complete validation applies its hosted validation label before requesting
+  exact-head review.
+- The review request never waits before hosted dispatch.
+- Hosted checks and exact-head review proceed concurrently.
+- Codex's eye reaction is liveness evidence only. It never settles review.
+- A Codex usage limit does not activate another review provider.
+- After checks and review settle, the agent batches current review findings and
+  failed checks into one repair iteration.
 - Three Cloud-review finding batches open a circuit breaker. The agent performs
-  comprehensive stabilization before attempting another complete validation.
-- Review unavailability does not deadlock delivery. Validation proceeds after
-  the bounded timeout.
+  comprehensive stabilization before requesting another review.
 - Review results are not required for readiness.
 - Audit commands emit machine-readable exact-head state.
 - Audit commands do not wait for an external reviewer.

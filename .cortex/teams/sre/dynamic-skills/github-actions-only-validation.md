@@ -30,6 +30,13 @@ Validation has three layers:
   - Use only selectors listed by `task remote:list`. A local Docker-backed task
     remains unavailable until it has a Kubernetes-native Pod implementation.
 - **Required remotely:** Gizmo triggers complete exact-head PR validation.
+  - Dispatch every required hosted check immediately.
+  - Never wait for GitHub review before dispatch.
+  - After dispatch, request one circuit-guarded Codex review bound to the
+    current head and base without waiting for its result.
+  - Collect review while hosted validation runs.
+  - After both settle, batch current review findings and failed checks into one
+    repair iteration.
   - Trusted same-repository native Rust and Rust ecosystem PR jobs and Main
     build producers select ARC.
   - General ARC provides persistent BuildKit for image producers.
@@ -110,9 +117,11 @@ Does not apply to:
 - [ ] A non-ready head requires a relevant focused `task remote`. Usefulness
       decides focused tasks only after the head is validation-ready.
 - [ ] Gizmo triggers complete validation with Loom or `task pr:validate`.
+- [ ] Complete validation dispatches hosted checks before requesting review.
+- [ ] Exact-head review runs concurrently with hosted validation.
 - [ ] Gizmo re-validates after every push that replaces the validated head.
 
 ## Validation
 
-Proof is a PR whose first Verify attempt is not wasted on format/demo misses,
-and whose complete validation was requested only for a ready head.
+Proof is a ready PR whose hosted validation dispatched without a review wait.
+Its exact-head review ran during the hosted validation window.

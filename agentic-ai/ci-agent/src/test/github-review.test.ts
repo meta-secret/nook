@@ -6,10 +6,12 @@ import type { Octokit } from "@octokit/rest";
 import {
   ExactHeadReviewFallback,
   ExactHeadReviewProvider,
+  ExactHeadReviewRevisionState,
   codexReviewRequestMarker,
   cursorReviewRequestMarker,
   requestExactHeadReview,
 } from "../main/github-review.js";
+import type { PullRequestRevision } from "../main/github.js";
 
 const repoRef = { owner: "meta-secret", repo: "nook" };
 const headSha = "0123456789abcdef0123456789abcdef01234567";
@@ -17,6 +19,7 @@ const headSha = "0123456789abcdef0123456789abcdef01234567";
 type MockComment = {
   author_association?: string;
   body: string;
+  created_at?: string;
   id: number;
   user?: { login: string };
 };
@@ -25,6 +28,7 @@ type MockReview = {
   body?: string;
   commit_id: string;
   state: string;
+  submitted_at?: string;
   user: { login: string };
 };
 
@@ -33,6 +37,7 @@ function mockOctokit(input: {
   createCalls?: { count: number };
   createdBodies?: string[];
   reactions?: Array<{ content: string; user: { login: string } }>;
+  revisions?: PullRequestRevision[];
   reviews?: MockReview[];
   sha?: string;
 }): Octokit {
@@ -43,6 +48,7 @@ function mockOctokit(input: {
   const createdBodies = input.createdBodies ?? [];
   const reviews = input.reviews ?? [];
   const sha = input.sha ?? "head-sha";
+  let revisionReads = 0;
   return {
     rest: {
       issues: {
@@ -54,6 +60,7 @@ function mockOctokit(input: {
           comments.push({
             author_association: "OWNER",
             body,
+            created_at: "2026-09-01T02:00:00.000Z",
             id: comments.length + 1,
           });
           return { data: { id: comments.length } };
@@ -61,7 +68,21 @@ function mockOctokit(input: {
         listComments: async () => ({ data: comments }),
       },
       pulls: {
-        get: async () => ({ data: { base: { sha: "base-sha" }, head: { sha } } }),
+        get: async () => {
+          const revision = input.revisions?.[
+            Math.min(revisionReads, input.revisions.length - 1)
+          ];
+          revisionReads += 1;
+          return {
+            data: {
+              base: {
+                ref: revision?.baseRef ?? "main",
+                sha: revision?.baseSha ?? "base-sha",
+              },
+              head: { sha: revision?.headSha ?? sha },
+            },
+          };
+        },
         listReviews: async () => ({ data: reviews }),
       },
       reactions: {
@@ -103,6 +124,30 @@ test("requestExactHeadReview posts one exact-head Codex marker", async () => {
   ]);
 });
 
+test("requestExactHeadReview detects a revision change before Codex contact", async () => {
+  const createCalls = { count: 0 };
+  const expected: PullRequestRevision = {
+    baseRef: "main",
+    baseSha: "base-sha",
+    headSha: "head-sha",
+  };
+  const octokit = mockOctokit({
+    createCalls,
+    revisions: [expected, { ...expected, headSha: "changed-head" }],
+  });
+
+  await assert.rejects(
+    requestExactHeadReview(octokit, repoRef, 410, {
+      revision: {
+        revision: expected,
+        state: ExactHeadReviewRevisionState.Bound,
+      },
+    }),
+    /Pull request revision changed.*no review was requested/,
+  );
+  assert.equal(createCalls.count, 0);
+});
+
 test("review request identity changes with the base revision", () => {
   assert.notEqual(
     codexReviewRequestMarker(headSha, "base-one"),
@@ -137,6 +182,7 @@ test("an old same-head review cannot settle a new base-bound request", async () 
     `@codex review\n\n${codexReviewRequestMarker(headSha, "base-sha")}`,
   ]);
 });
+
 
 test("requestExactHeadReview ignores an untrusted exact-head marker", async () => {
   const createdBodies: string[] = [];
@@ -315,8 +361,10 @@ test("requestExactHeadReview keeps a Codex usage limit non-blocking", async () =
   };
 
   const result = await requestExactHeadReview(octokit, repoRef, 410, {
-    clock,
-    probe: { intervalMs: 1, timeoutMs: 20 },
+    availability: {
+      clock,
+      probe: { intervalMs: 1, timeoutMs: 20 },
+    },
   });
 
   assert.deepEqual(result, {

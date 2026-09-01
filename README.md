@@ -459,7 +459,9 @@ selectors execute separately in exact-image Kubernetes Pods; compatible
 build-only selectors may share one ARC batch. When the head is ready, Gizmo
 explicitly starts complete PR validation with
 **`task pr:validate PR=<number>`**. Ordinary PR pushes do not start the complete
-pipeline. Local Task mirrors below remain available for humans. Main-fix PRs
+pipeline. Validation dispatches hosted checks before requesting concurrent
+exact-head review. Use review stabilization only after dispatch while those
+checks run. Local Task mirrors below remain available for humans. Main-fix PRs
 use `FULL_E2E=1` to request the Main-equivalent browser suites.
 
 Project-scoped module experts use stable semantic role names defined by the
@@ -545,8 +547,8 @@ task extension:run:brave CHANNEL=prod # launch a hosted build in an isolated Bra
 task ci:pr                 # optional local mirror of the non-browser PR gate (daemon BuildKit; never shared nook-pr)
 task ci:pr:e2e             # explicit full web + extension e2e validation (optional)
 task pr:preflight PR=410   # JSON audit: base, policy, exact-head runs/deployments, feedback
-task pr:review PR=410      # optional idempotent exact-head Codex review request
-task pr:review:stabilize PR=410 # bounded Codex review-first wait before hosted validation
+task pr:review PR=410      # optional circuit-guarded exact-head Codex review request
+task pr:review:stabilize PR=410 # bounded Codex collection after hosted validation dispatch
 task pr:ready PR=410       # read-only exact-head readiness assertion; never merges
 task docker:coverage:export  # coverage-only CI fallback (no app image export)
 task sccache:stats          # shared SeaweedFS S3 compiler-cache object presence

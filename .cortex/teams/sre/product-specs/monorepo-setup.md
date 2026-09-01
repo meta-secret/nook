@@ -126,14 +126,18 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Agents explicitly cancel an obsolete run.
 - **Remote task and PR CI.**
   - `remote.yml` executes up to eight allowlisted Task commands per manual dispatch.
-  - `preflight`, `rust:ci`, and `arc:runtime` may run on a fresh general ARC Pod.
+  - `preflight`, `rust:ci`, `loom:verify`, and `arc:runtime` may run on a fresh
+    general ARC Pod.
   - `hive:verify` may run on a fresh dedicated Hive ARC Pod.
   - Other non-browser selections run on general ARC.
   - Browser selections build their immutable image on general ARC and execute
     it in an ordinary `nook-k0s-container` job Pod.
-  - A batch shares one checkout, Docker setup, and cache connection.
+  - A batch shares one checkout.
+  - A batch that needs Docker shares one setup and cache connection.
   - Selected tasks run sequentially.
   - Each task retains its bounded timeout.
+  - The focused `loom:verify` selector runs the complete Loom suite after
+    exact-head remote dispatch.
   - The batch reports every task result before returning its final status.
   - Its frequent Rust test and web/extension check routes use narrow source-sealed images.
   - Those images stop before unrelated coverage, WASM-test, browser, full-verification, and production-build stages.

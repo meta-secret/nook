@@ -61,6 +61,12 @@ Dispatch one ARC-native Rust task:
 task remote TASK_NAME=rust:ci
 ```
 
+Dispatch the complete Loom suite on the exact pushed head:
+
+```bash
+task remote TASK_NAME=loom:verify
+```
+
 Reuse one ARC job for a Kubernetes-native batch:
 
 ```bash
@@ -71,6 +77,7 @@ Routing rules:
 
 - Single `preflight`, `rust:ci`, and `arc:runtime` selections may use
   `NOOK_RUNS_ON=nook-k0s`.
+- `loom:verify` uses the general `nook-k0s` scale set.
 - Trusted `hive:verify` uses `NOOK_HIVE_RUNS_ON=nook-k0s-hive`.
 - Batches containing `hive:verify` use `nook-k0s-hive`.
 - Other mixed batches use the general `nook-k0s` scale set.
@@ -126,6 +133,13 @@ Security rules:
 The allowlisted ARC tasks avoid a general container-runtime requirement:
 
 - `rust:ci` executes formatting, Clippy, tests, and coverage in BuildKit stages.
+- `loom:verify` executes the full Loom format, lint, typecheck, unit-test,
+  skill, and expert-catalog verification directly on the ARC runner.
+  - A Loom-only dispatch installs the repository-pinned Task version.
+  - Every Loom dispatch installs the pinned Bun version and stable Rust
+    toolchain used by repository policy.
+  - It proves Task, Bun, and Cargo before starting the allowlisted task.
+  - It does not initialize Docker or cache credentials.
 - `arc:runtime` exports and verifies a BuildKit result without `docker run`.
 - `hive:verify` executes exported tests through its pinned native runtime
   sidecar.
@@ -138,6 +152,16 @@ Every dispatch requires:
 - a clean worktree;
 - a branch present on `origin`; and
 - a remote branch SHA equal to local `HEAD`.
+
+## Loom validation boundary
+
+The root [team worker contract](../../../AGENTS.md#team-worker-contract) owns
+agent-local Loom execution and handoff behavior.
+
+- This remote surface implements its hosted full-suite boundary.
+- `task remote TASK_NAME=loom:verify` binds the full suite to the exact pushed
+  head.
+- The hosted result does not replace complete PR validation or readiness.
 
 ## Explicit complete PR validation
 

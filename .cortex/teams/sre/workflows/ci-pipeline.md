@@ -20,12 +20,9 @@ See [issues](../../../gizmo/workflows/issues.md),
   - Trigger: Explicit `ci:validate` / `ci:full-e2e` label
   - Purpose: Exact-head PR gate, including Rust ecosystem jobs
   - GitHub PAT: No
-- **[`pr-head-stabilization.yml`](../../../../.github/workflows/pr-head-stabilization.yml)**
-  - Trigger: PR head replacement through `pull_request_target`
-  - Purpose: Cancel active obsolete-head validation associated with that PR
-  - Permissions: `actions: write`, PR write, contents read. PR write maintains
-    the trusted exact-head boundary comment. The workflow never checks out PR
-    code.
+- **[`pr-obsolete-validation.yml`](../../../../.github/workflows/pr-obsolete-validation.yml)**
+  - Trigger: `pull_request_target` on synchronize or base-ref edit
+  - Purpose: Cancel obsolete PR, Rust ecosystem, and Web research runs
   - GitHub PAT: No
 - **[`repository-policy.yml`](../../../../.github/workflows/repository-policy.yml)**
   - Trigger: Every PR; path-filtered Main changes
@@ -112,17 +109,17 @@ See [issues](../../../gizmo/workflows/issues.md),
 - Keep independent long-running gates on separate ARC Pods.
 - Combine jobs only when measured setup savings exceed lost parallelism.
 
-**`pr-head-stabilization.yml`**
+**`pr-obsolete-validation.yml`**
 
-- Runs from trusted default-branch workflow code when a PR head is replaced.
-- Accepts a numbered manual dispatch from validation to backfill the current
-  boundary for pull requests that were already open during rollout.
-- Serializes boundary writes per pull request and derives manual transition
-  time from the server-created workflow run.
-- Reads the live PR head before each cancellation.
-- Cancels only active obsolete PR, Rust ecosystem, and Web research runs that
-  GitHub associates with the same PR.
-- Preserves current-head runs and never checks out or executes PR code.
+- Runs trusted default-branch code without checking out pull-request code.
+- Handles head synchronization and base-ref edits.
+- Ignores edits that do not change the base ref.
+- Grants only `actions: write`, `contents: read`, and `pull-requests: read`.
+- Cancels active PR, Rust ecosystem, and Web research runs for obsolete heads.
+- Cancels stale-base PR and Rust ecosystem runs after a base retarget.
+- Creates no transition marker, comment, or backfill state.
+- Performs no review request or review wait.
+- Its bounded inspection window serves only the Actions registration race.
 
 **`repository-policy.yml`**
 
@@ -946,19 +943,20 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 - When the pushed branch is validation-ready, Gizmo immediately runs
   `task pr:validate PR=<number>` or adds `FULL_E2E=1`. Focused tasks are optional
   for that head and never replace complete validation.
-- Validation first requests one idempotent exact-head Codex review.
-- Current findings stop dispatch so they can be repaired as one coherent batch.
-- Review unavailability is bounded to 600 seconds when no current findings are
-  visible, after which repository-owned checks proceed.
+- Validation dispatches repository-owned checks before any GitHub review wait.
+- It then requests one idempotent exact-head Codex review without waiting.
+- Review runs concurrently with hosted checks.
+- Current findings and failed checks form one coherent repair batch after both
+  settle.
 - Three finding batches open a circuit breaker and require comprehensive
-  stabilization before another complete validation attempt.
+  stabilization before another review request.
 - Codex is the sole automatic provider. Cursor Bugbot remains inactive.
 - They wait only for applicable repository-owned exact-head PR checks.
 - Ordinary pushes do not start `pr.yml`.
 - Every later push requires another explicit validation before readiness.
 - Every actionable comment already present must be addressed and resolved.
-- Review belongs before GitHub Actions; do not request another review after
-  checks finish.
+- Request review immediately after dispatch. Do not defer it until checks
+  finish.
 - Claude, CodeRabbit, and other optional services are not requested or
   awaited. Cursor Bugbot is not activated.
 - The local ci-agent image tag is derived from the worktree path, preventing parallel worktrees from replacing each other's review/readiness binaries.

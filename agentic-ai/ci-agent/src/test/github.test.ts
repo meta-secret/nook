@@ -63,7 +63,6 @@ test("requiredPrCheckNames maps changed paths to repository-owned gates", () => 
     },
   ]);
 });
-
 test("createFixPr leaves the PR body free of automatic merge control markers", async () => {
   let createdBody = "";
   let createdBase = "";

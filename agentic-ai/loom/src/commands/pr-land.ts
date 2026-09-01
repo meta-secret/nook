@@ -23,6 +23,9 @@ export type PrLandReport = {
   readonly ready: boolean;
 };
 
+export const PR_LAND_VALIDATE_NEXT_STEP =
+  'watch repository-owned checks and collect or stabilize exact-head review concurrently; after both settle, run a prLand.ready request';
+
 export async function runPrLandStatus(
   request: PrLandPrRequest,
 ): Promise<PrLandReport> {
@@ -161,7 +164,7 @@ async function validate(args: PrLandValidateArgs): Promise<PrLandReport> {
     family: RequestFamily.PrLand,
     operation: PrLandOperation.Validate,
     prNumber: request.prNumber,
-    nextStep: 'watch repository-owned checks, then run a prLand.ready request',
+    nextStep: PR_LAND_VALIDATE_NEXT_STEP,
     ready: false,
     messages: [
       'prePush passed',

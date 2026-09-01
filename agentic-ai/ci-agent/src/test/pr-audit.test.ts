@@ -66,7 +66,7 @@ test("buildPrAudit blocks an actionable Cursor review body", async () => {
   assert.equal(audit.feedback.substantiveReviews, 1);
 });
 
-test("buildPrAudit excludes historical comments before the first exact-head request", async () => {
+test("buildPrAudit keeps old actionable comments in scope", async () => {
   const audit = await buildPrAudit(
     mockOctokit({
       codexReview: MockCodexReview.Missing,
@@ -78,46 +78,68 @@ test("buildPrAudit excludes historical comments before the first exact-head requ
 
   assert.equal(audit.ready, false);
   assert.equal(audit.feedback.substantiveComments, 1);
-  assert.equal(audit.feedback.currentIterationComments, 0);
+  assert.equal(audit.feedback.unhandledComments, 1);
 });
 
-test("buildPrAudit leaves comments unclassified while the head transition is pending", async () => {
+test("buildPrAudit deletes retired automation comments", async () => {
+  const deletedCommentIds: number[] = [];
+  const audit = await buildPrAudit(
+    mockOctokit({ deletedCommentIds, legacyAutomationComment: true }),
+    repoRef,
+    410,
+  );
+
+  assert.equal(audit.ready, true);
+  assert.deepEqual(deletedCommentIds, [82]);
+  assert.equal(audit.feedback.substantiveComments, 0);
+});
+
+test("buildPrAudit deletes retired automation but blocks genuine comments", async () => {
+  const deletedCommentIds: number[] = [];
   const audit = await buildPrAudit(
     mockOctokit({
-      codexReview: MockCodexReview.Missing,
-      currentHeadFinding: true,
-      omitHeadTransition: true,
+      deletedCommentIds,
+      historicalFinding: true,
+      legacyAutomationComment: true,
     }),
     repoRef,
     410,
   );
 
   assert.equal(audit.ready, false);
-  assert.equal(audit.feedback.currentIterationComments, 0);
-  assert.equal(audit.feedback.headTransitionObserved, false);
+  assert.deepEqual(deletedCommentIds, [82]);
   assert.equal(audit.feedback.substantiveComments, 1);
+  assert.equal(audit.feedback.unhandledComments, 1);
 });
 
-test("buildPrAudit ignores an untrusted head transition marker", async () => {
-  const audit = await buildPrAudit(
-    mockOctokit({ untrustedHeadTransition: true }),
-    repoRef,
-    410,
+test("buildPrAudit fails when retired automation cannot be deleted", async () => {
+  await assert.rejects(
+    buildPrAudit(
+      mockOctokit({
+        legacyAutomationComment: true,
+        legacyAutomationDeletionFails: true,
+      }),
+      repoRef,
+      410,
+    ),
+    /legacy automation deletion failed/,
   );
-
-  assert.equal(audit.feedback.headTransitionObserved, false);
 });
 
-test("buildPrAudit reads fork head transitions from the trusted PR marker", async () => {
+test("buildPrAudit keeps resolved old comments visible without blocking", async () => {
   const audit = await buildPrAudit(
     mockOctokit({
-      headRepository: { owner: "contributor", repo: "nook-fork" },
+      codexReview: MockCodexReview.Missing,
+      handledHistoricalFinding: true,
+      historicalFinding: true,
     }),
     repoRef,
     410,
   );
 
-  assert.equal(audit.feedback.headTransitionObserved, true);
+  assert.equal(audit.ready, true);
+  assert.equal(audit.feedback.substantiveComments, 1);
+  assert.equal(audit.feedback.unhandledComments, 0);
 });
 
 test("buildPrAudit does not wait for a current-head Codex review", async () => {
@@ -229,9 +251,10 @@ test("buildPrAudit blocks a lookalike Codex status review", async () => {
   assert.equal(audit.ready, false);
   assert.equal(audit.feedback.codexReview.currentHeadReview, false);
   assert.equal(audit.feedback.substantiveReviews, 1);
+  assert.equal(audit.feedback.unthreadedReviewFindings, 1);
   assert.ok(
     audit.reasons.some((reason) =>
-      reason.includes("substantive current-head review"),
+      reason.includes("unthreaded submitted review finding"),
     ),
   );
 });
@@ -245,9 +268,10 @@ test("buildPrAudit blocks actionable content in a Codex review body", async () =
 
   assert.equal(audit.ready, false);
   assert.equal(audit.feedback.substantiveReviews, 1);
+  assert.equal(audit.feedback.unthreadedReviewFindings, 1);
   assert.ok(
     audit.reasons.some((reason) =>
-      reason.includes("substantive current-head review"),
+      reason.includes("unthreaded submitted review finding"),
     ),
   );
 });
@@ -261,6 +285,39 @@ test("buildPrAudit blocks content injected into Codex about boilerplate", async 
 
   assert.equal(audit.ready, false);
   assert.equal(audit.feedback.substantiveReviews, 1);
+});
+
+test("buildPrAudit keeps handled submitted reviews visible without blocking", async () => {
+  const audit = await buildPrAudit(
+    mockOctokit({
+      codexReview: MockCodexReview.ReviewFinding,
+      resolvedInlineReviewFinding: true,
+    }),
+    repoRef,
+    410,
+  );
+
+  assert.equal(audit.ready, true);
+  assert.equal(audit.feedback.substantiveReviews, 1);
+  assert.equal(audit.feedback.unthreadedReviewFindings, 0);
+  assert.equal(audit.feedback.unresolvedThreads, 0);
+});
+
+test("buildPrAudit still blocks an unresolved thread from an old review", async () => {
+  const audit = await buildPrAudit(
+    mockOctokit({
+      codexReview: MockCodexReview.ReviewFinding,
+      resolvedInlineReviewFinding: true,
+      unresolvedThreads: 1,
+    }),
+    repoRef,
+    410,
+  );
+
+  assert.equal(audit.ready, false);
+  assert.equal(audit.feedback.substantiveReviews, 1);
+  assert.equal(audit.feedback.unthreadedReviewFindings, 0);
+  assert.equal(audit.feedback.unresolvedThreads, 1);
 });
 
 test("buildPrAudit reports current-head and existing-feedback blockers", async () => {
@@ -379,15 +436,18 @@ type MockOptions = {
   codexReview?: MockCodexReview;
   currentHeadFinding?: boolean;
   cursorReview?: MockCursorReview;
+  deletedCommentIds?: number[];
   dismissedThreads?: number;
+  handledHistoricalFinding?: boolean;
   historicalFinding?: boolean;
+  legacyAutomationComment?: boolean;
+  legacyAutomationDeletionFails?: boolean;
   headRepository?: RepoRef;
   nativeConclusion?: MockJobConclusion;
   omitNativeJob?: boolean;
-  omitHeadTransition?: boolean;
   runStatus?: MockRunStatus;
+  resolvedInlineReviewFinding?: boolean;
   staleBaseRun?: boolean;
-  untrustedHeadTransition?: boolean;
   unresolvedThreads?: number;
 };
 
@@ -435,7 +495,17 @@ function createMockOctokit(options: MockOptions): Octokit {
     listFiles: async () => ({
       data: [{ filename: "nook-app/nook-platform/nook-core/src/lib.rs" }],
     }),
-    listReviewComments: async () => ({ data: [] }),
+    listReviewComments: async () => ({
+      data:
+        options.resolvedInlineReviewFinding === true
+          ? [
+              {
+                pull_request_review_id: 90,
+                user: { login: "chatgpt-codex-connector[bot]" },
+              },
+            ]
+          : [],
+    }),
     listReviews: async () => {
       const skipCodexReview =
         options.codexReview === MockCodexReview.Missing ||
@@ -447,6 +517,7 @@ function createMockOctokit(options: MockOptions): Octokit {
       const reviews: Array<{
         body: string;
         commit_id: string;
+        id: number;
         state: string;
         user: { login: string };
       }> = skipCodexReview
@@ -460,6 +531,7 @@ function createMockOctokit(options: MockOptions): Octokit {
                     ? `### 💡 Codex Review\n\nHere are some automated review suggestions for this pull request.\n\n**Reviewed commit:** \`${headSha.slice(0, 10)}\`\n\n<details> <summary>ℹ️ About Codex in GitHub</summary>\nInjected finding\n</details>`
                     : `### 💡 Codex Review\n\nHere are some automated review suggestions for this pull request.\n\n**Reviewed commit:** \`${headSha.slice(0, 10)}\``,
               commit_id: headSha,
+              id: 90,
               state:
                 options.codexReview === MockCodexReview.Dismissed
                   ? "DISMISSED"
@@ -476,6 +548,7 @@ function createMockOctokit(options: MockOptions): Octokit {
         reviews.push({
           body: "The fallback path drops the exact-head marker.",
           commit_id: headSha,
+          id: 91,
           state: "COMMENTED",
           user: { login: "cursor[bot]" },
         });
@@ -483,6 +556,7 @@ function createMockOctokit(options: MockOptions): Octokit {
         reviews.push({
           body: "<details>\n<summary>Stale comment</summary>\n\n<blockquote>\n\n\n\n</blockquote>\n\n</details>",
           commit_id: headSha,
+          id: 92,
           state: "COMMENTED",
           user: { login: "cursor[bot]" },
         });
@@ -491,21 +565,15 @@ function createMockOctokit(options: MockOptions): Octokit {
     },
   };
   const issues = {
+    deleteComment: async ({ comment_id }: { comment_id: number }) => {
+      if (options.legacyAutomationDeletionFails === true) {
+        throw new Error("legacy automation deletion failed");
+      }
+      options.deletedCommentIds?.push(comment_id);
+      return { data: {} };
+    },
     listComments: async () => ({
       data: [
-        ...(options.omitHeadTransition === true
-          ? []
-          : [
-              {
-                body: `<!-- nook-head-transition:${headSha}:main:2026-08-08T00:01:00Z -->\nExact-head delivery boundary (automated).`,
-                user: {
-                  login:
-                    options.untrustedHeadTransition === true
-                      ? "reviewer"
-                      : "github-actions[bot]",
-                },
-              },
-            ]),
         {
           body: "### Preview deployed\n\nhttps://preview.test",
           user: { login: "github-actions[bot]" },
@@ -571,11 +639,22 @@ function createMockOctokit(options: MockOptions): Octokit {
           body: "<!-- nook-core-coverage -->\n### portable Rust crate coverage\n\nPASS",
           user: { login: "github-actions[bot]" },
         },
+        ...(options.legacyAutomationComment === true
+          ? [
+              {
+                body: `<!-- nook-head-transition:${headSha}:main:2026-09-01T08:24:05Z -->\nExact-head delivery boundary (automated).`,
+                id: 82,
+                user: { login: "github-actions[bot]" },
+              },
+            ]
+          : []),
         ...(options.historicalFinding === true
           ? [
               {
+                author_association: "MEMBER",
                 body: "The older head drops the replacement-state guard.",
                 created_at: "2026-08-08T00:00:30Z",
+                id: 81,
                 user: { login: "reviewer" },
               },
             ]
@@ -702,6 +781,19 @@ function createMockOctokit(options: MockOptions): Octokit {
     graphql: async () => ({
       repository: {
         pullRequest: {
+          comments: {
+            nodes:
+              options.handledHistoricalFinding === true
+                ? [
+                    {
+                      databaseId: 81,
+                      isMinimized: true,
+                      minimizedReason: "resolved",
+                    },
+                  ]
+                : [],
+            pageInfo: { hasNextPage: false },
+          },
           reviewThreads: {
             nodes: Array.from(
               { length: options.unresolvedThreads ?? 0 },

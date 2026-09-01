@@ -8,6 +8,7 @@ catalog() {
 preflight
 arc:runtime
 rust:ci
+loom:verify
 web:build
 web:e2e
 extension:e2e
@@ -82,6 +83,7 @@ task_command() {
     preflight) echo "task preflight" ;;
     arc:runtime) echo "bash .github/scripts/arc-runtime-smoke.sh" ;;
     rust:ci) echo "task ci:pr:rust" ;;
+    loom:verify) echo "task loom:verify" ;;
     web:build) echo "task web:build" ;;
     web:e2e) echo "task web:test:e2e" ;;
     extension:e2e) echo "task extension:test:e2e" ;;
@@ -97,6 +99,7 @@ task_timeout_minutes() {
   case "$1" in
     arc:runtime) echo 15 ;;
     preflight) echo 15 ;;
+    loom:verify) echo 15 ;;
     rust:ci|hive:verify) echo 20 ;;
     web:build) echo 25 ;;
     web:e2e|extension:e2e) echo 30 ;;
@@ -144,6 +147,7 @@ run_task() {
     preflight) run_with_timeout "$timeout_minutes" task preflight ;;
     arc:runtime) run_with_timeout "$timeout_minutes" bash .github/scripts/arc-runtime-smoke.sh ;;
     rust:ci) run_with_timeout "$timeout_minutes" env CI_ARTIFACT_DIR="$artifact_root/rust-ci" task ci:pr:rust ;;
+    loom:verify) run_with_timeout "$timeout_minutes" task loom:verify ;;
     web:build) run_with_timeout "$timeout_minutes" task web:build ;;
     web:e2e) run_with_timeout "$timeout_minutes" env E2E_ARTIFACT_DIR="$artifact_root/web-e2e" task web:test:e2e ;;
     extension:e2e) run_with_timeout "$timeout_minutes" env E2E_ARTIFACT_DIR="$artifact_root/extension-e2e" task extension:test:e2e ;;
@@ -163,7 +167,7 @@ requires_current_base() {
   IFS=',' read -r -a tasks <<< "$normalized_tasks"
   for task in "${tasks[@]}"; do
     case "$task" in
-      web:e2e|extension:e2e|check|ci:pr|ci:pr:e2e) return 0 ;;
+      loom:verify|web:e2e|extension:e2e|check|ci:pr|ci:pr:e2e) return 0 ;;
     esac
   done
   return 1

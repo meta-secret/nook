@@ -1,13 +1,17 @@
 import {
   DEFAULT_REVIEW_CLOCK,
   ExactHeadReviewFallback,
+  ExactHeadReviewRevisionState,
   requestExactHeadReview,
+  type ExactHeadReviewRequestResult,
 } from "./github-review.js";
 import {
+  assertPullRequestRevision,
   createOctokit,
   inspectPrFeedback,
   parseRepository,
-  requestHeadTransitionBackfill,
+  readPullRequestRevision,
+  type PullRequestRevision,
   type PrFeedbackSummary,
 } from "./github.js";
 import { prettyJson } from "./json.js";
@@ -15,8 +19,9 @@ import { prettyJson } from "./json.js";
 const DEFAULT_STABILIZATION_WAIT_SECONDS = 600;
 const STABILIZATION_POLL_INTERVAL_MS = 15_000;
 const ZERO_WAIT_FEEDBACK_SNAPSHOT_TIMEOUT_MS = 15_000;
+const REVIEW_REQUEST_TIMEOUT_MS = 45_000;
 
-type ReviewStabilizationRequest = () => Promise<{
+type ReviewStabilizationRequest = (signal: AbortSignal) => Promise<{
   fallback?: ExactHeadReviewFallback;
   headSha: string;
   settled: boolean;
@@ -24,13 +29,27 @@ type ReviewStabilizationRequest = () => Promise<{
 
 type ReviewStabilizationInput = {
   circuitBreakerAcknowledged?: boolean;
-  ensureHeadTransition?: () => Promise<void>;
-  inspectFeedback: () => Promise<PrFeedbackSummary>;
+  inspectFeedback: (signal: AbortSignal) => Promise<PrFeedbackSummary>;
   now: () => number;
   pollIntervalMs: number;
   requestReview: ReviewStabilizationRequest;
   timeoutMs: number;
   waitMs: (milliseconds: number) => Promise<void>;
+};
+
+type ReviewRequestInput = {
+  circuitBreakerAcknowledged?: boolean;
+  inspectFeedback: (
+    revision: PullRequestRevision,
+    signal: AbortSignal,
+  ) => Promise<PrFeedbackSummary>;
+  now: () => number;
+  readRevision: (signal: AbortSignal) => Promise<PullRequestRevision>;
+  requestReview: (
+    revision: PullRequestRevision,
+    signal: AbortSignal,
+  ) => Promise<ExactHeadReviewRequestResult>;
+  timeoutMs: number;
 };
 
 type BoundedAttempt<T> =
@@ -40,7 +59,7 @@ type BoundedAttempt<T> =
 type BoundedAttemptInput<T> = {
   deadline: number;
   now: () => number;
-  operation: () => Promise<T>;
+  operation: (signal: AbortSignal) => Promise<T>;
 };
 
 export enum ReviewStabilizationState {
@@ -50,11 +69,16 @@ export enum ReviewStabilizationState {
   TimedOut = "timed-out",
 }
 
+export enum ReviewRequestState {
+  CircuitBreaker = "circuit-breaker",
+  NotRequested = "not-requested",
+  Requested = "requested",
+}
+
 enum FeedbackClassificationState {
   CircuitBreaker = "circuit-breaker",
   Clean = "clean",
   Findings = "findings",
-  PendingHeadTransition = "pending-head-transition",
 }
 
 enum LatestFeedbackState {
@@ -72,15 +96,124 @@ export type ReviewStabilizationResult = {
   state: ReviewStabilizationState;
 };
 
+export type ReviewRequestResult =
+  | {
+      feedback: PrFeedbackSummary;
+      state: ReviewRequestState.CircuitBreaker;
+    }
+  | {
+      fallback: ExactHeadReviewFallback;
+      headSha: string;
+      provider: ExactHeadReviewRequestResult["provider"];
+      requested: false;
+      settled: boolean;
+      state: ReviewRequestState.NotRequested;
+    }
+  | {
+      fallback: ExactHeadReviewFallback;
+      headSha: string;
+      provider: ExactHeadReviewRequestResult["provider"];
+      requested: true;
+      settled: boolean;
+      state: ReviewRequestState.Requested;
+    };
+
 export async function runPrReviewRequest(): Promise<void> {
   const { prNumber, repository } = readReviewContext();
-
-  const result = await requestExactHeadReview(
-    createOctokit(),
-    parseRepository(repository),
-    prNumber,
-  );
+  const octokit = createOctokit();
+  const repoRef = parseRepository(repository);
+  const result = await requestExactHeadReviewWithCircuitBreaker({
+    circuitBreakerAcknowledged: readCircuitBreakerAcknowledgement(),
+    inspectFeedback: (revision, signal) =>
+      inspectPrFeedback(octokit, repoRef, prNumber, {
+        expectedRevision: revision,
+        signal,
+      }),
+    now: () => Date.now(),
+    readRevision: (signal) =>
+      readPullRequestRevision(octokit, repoRef, prNumber, signal),
+    requestReview: (revision, signal) =>
+      requestExactHeadReview(octokit, repoRef, prNumber, {
+        revision: {
+          revision,
+          state: ExactHeadReviewRevisionState.Bound,
+        },
+        signal,
+      }),
+    timeoutMs: REVIEW_REQUEST_TIMEOUT_MS,
+  });
   console.log(prettyJson({ number: prNumber, repository, ...result }));
+  if (result.state === ReviewRequestState.CircuitBreaker) {
+    throw new Error(
+      `PR #${prNumber} has reached three Cloud-review finding batches; no new review was requested before comprehensive stabilization`,
+    );
+  }
+}
+
+export async function requestExactHeadReviewWithCircuitBreaker(
+  input: ReviewRequestInput,
+): Promise<ReviewRequestResult> {
+  const deadline = input.now() + input.timeoutMs;
+  const revision = await requireBeforeDeadline({
+    deadline,
+    input,
+    operation: input.readRevision,
+    phase: "initial revision inspection",
+  });
+  const feedback = await requireBeforeDeadline({
+    deadline,
+    input,
+    operation: (signal) => input.inspectFeedback(revision, signal),
+    phase: "feedback inspection",
+  });
+  if (
+    classifyFeedbackState(
+      feedback,
+      input.circuitBreakerAcknowledged ?? false,
+    ) === FeedbackClassificationState.CircuitBreaker
+  ) {
+    return { feedback, state: ReviewRequestState.CircuitBreaker };
+  }
+  const currentRevision = await requireBeforeDeadline({
+    deadline,
+    input,
+    operation: input.readRevision,
+    phase: "revision verification",
+  });
+  assertPullRequestRevision(revision, currentRevision);
+  const result = await requireBeforeDeadline({
+    deadline,
+    input,
+    operation: (signal) => input.requestReview(revision, signal),
+    phase: "review request",
+  });
+  if (!result.requested) {
+    return {
+      ...result,
+      requested: false,
+      state: ReviewRequestState.NotRequested,
+    };
+  }
+  return { ...result, requested: true, state: ReviewRequestState.Requested };
+}
+
+async function requireBeforeDeadline<T>(input: {
+  deadline: number;
+  input: ReviewRequestInput;
+  operation: (signal: AbortSignal) => Promise<T>;
+  phase: string;
+}): Promise<T> {
+  const attempt = await attemptBeforeDeadline({
+    deadline: input.deadline,
+    now: input.input.now,
+    operation: input.operation,
+  });
+  if (!attempt.completed) {
+    throw new Error(
+      `Exact-head ${input.phase} did not complete within the ${input.input.timeoutMs}ms transaction; validation continues without a confirmed review outcome`,
+    );
+  }
+  return attempt.value;
 }
 
 export async function runPrReviewStabilization(): Promise<void> {
@@ -90,12 +223,12 @@ export async function runPrReviewStabilization(): Promise<void> {
   const repoRef = parseRepository(repository);
   const result = await stabilizeExactHeadReview({
     circuitBreakerAcknowledged: readCircuitBreakerAcknowledgement(),
-    ensureHeadTransition: () =>
-      requestHeadTransitionBackfill({ octokit, prNumber, repoRef }),
-    inspectFeedback: () => inspectPrFeedback(octokit, repoRef, prNumber),
+    inspectFeedback: (signal) =>
+      inspectPrFeedback(octokit, repoRef, prNumber, { signal }),
     now: () => Date.now(),
     pollIntervalMs: STABILIZATION_POLL_INTERVAL_MS,
-    requestReview: () => requestExactHeadReview(octokit, repoRef, prNumber),
+    requestReview: (signal) =>
+      requestExactHeadReview(octokit, repoRef, prNumber, { signal }),
     timeoutMs: waitSeconds * 1000,
     waitMs: DEFAULT_REVIEW_CLOCK.waitMs,
   });
@@ -104,17 +237,17 @@ export async function runPrReviewStabilization(): Promise<void> {
   );
   if (result.state === ReviewStabilizationState.Findings) {
     throw new Error(
-      `PR #${prNumber} has current-head review findings; address them as one coherent batch before validation`,
+      `PR #${prNumber} has current-head review findings; batch them with hosted validation failures`,
     );
   }
   if (result.state === ReviewStabilizationState.CircuitBreaker) {
     throw new Error(
-      `PR #${prNumber} has reached three Cloud-review finding batches; stop the rerun loop and perform comprehensive stabilization before another complete validation`,
+      `PR #${prNumber} has reached three Cloud-review finding batches; stop the review rerun loop and perform comprehensive stabilization before another review request`,
     );
   }
   if (result.state === ReviewStabilizationState.TimedOut) {
     console.log(
-      `::warning::Exact-head review did not settle within ${waitSeconds}s; continuing with validation so review availability cannot deadlock delivery.`,
+      `::warning::Exact-head review did not settle within ${waitSeconds}s; hosted validation remains independent of review availability.`,
     );
   }
 }
@@ -129,7 +262,6 @@ export async function stabilizeExactHeadReview(
       : deadline;
   let headSha = "";
   let latestFeedback: LatestFeedback = { state: LatestFeedbackState.Missing };
-  let headTransitionBackfillRequested = false;
   let settled = false;
   while (true) {
     try {
@@ -156,23 +288,6 @@ export async function stabilizeExactHeadReview(
       }
       if (findingState === FeedbackClassificationState.Findings) {
         return { feedback, headSha, state: ReviewStabilizationState.Findings };
-      }
-      if (
-        findingState === FeedbackClassificationState.PendingHeadTransition &&
-        !headTransitionBackfillRequested &&
-        input.ensureHeadTransition
-      ) {
-        headTransitionBackfillRequested = true;
-        try {
-          await attemptBeforeDeadline({
-            deadline: initialFeedbackDeadline,
-            now: input.now,
-            operation: input.ensureHeadTransition,
-          });
-        } catch {
-          // The workflow may not exist on the base branch during its own
-          // rollout. The same bounded timeout remains the safe fallback.
-        }
       }
       if (
         findingState === FeedbackClassificationState.Clean &&
@@ -286,13 +401,17 @@ async function attemptBeforeDeadline<T>(
   input: BoundedAttemptInput<T>,
 ): Promise<BoundedAttempt<T>> {
   const remainingMs = Math.max(0, input.deadline - input.now());
+  const controller = new AbortController();
   return new Promise((resolve, reject) => {
     const timer = setTimeout(
-      () => resolve({ completed: false }),
+      () => {
+        controller.abort();
+        resolve({ completed: false });
+      },
       remainingMs,
     );
     Promise.resolve()
-      .then(input.operation)
+      .then(() => input.operation(controller.signal))
       .then((value) => {
         clearTimeout(timer);
         resolve({ completed: true, value });
@@ -312,14 +431,10 @@ function classifyFeedbackState(
     return FeedbackClassificationState.CircuitBreaker;
   }
   const hasFindings =
-    feedback.currentIterationComments > 0 ||
-    feedback.substantiveReviews > 0 ||
-    feedback.unresolvedThreads > 0 ||
-    (!feedback.headTransitionObserved && feedback.substantiveComments > 0);
+    feedback.unhandledComments > 0 ||
+    feedback.unthreadedReviewFindings > 0 ||
+    feedback.unresolvedThreads > 0;
   if (hasFindings) return FeedbackClassificationState.Findings;
-  if (!feedback.headTransitionObserved) {
-    return FeedbackClassificationState.PendingHeadTransition;
-  }
   return FeedbackClassificationState.Clean;
 }
 
@@ -331,17 +446,6 @@ type DeadlineFinalizationInput = {
 function finalizeAtDeadline(
   input: DeadlineFinalizationInput,
 ): ReviewStabilizationResult {
-  if (
-    input.feedback.state === LatestFeedbackState.Present &&
-    !input.feedback.value.headTransitionObserved &&
-    input.feedback.value.substantiveComments > 0
-  ) {
-    return {
-      feedback: input.feedback.value,
-      headSha: input.headSha,
-      state: ReviewStabilizationState.Findings,
-    };
-  }
   if (input.feedback.state === LatestFeedbackState.Present) {
     return {
       feedback: input.feedback.value,
