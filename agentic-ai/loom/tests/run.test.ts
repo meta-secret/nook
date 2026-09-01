@@ -16,4 +16,15 @@ describe('run command', () => {
     expect(result.stderr).toBe('');
     expect(result.stdout.length).toBe(LARGE_OUTPUT_BYTES);
   });
+
+  test('fails closed when output exceeds the explicit bound', () => {
+    expect(() =>
+      runCommand({
+        command: process.execPath,
+        args: ['-e', `process.stdout.write('x'.repeat(${LARGE_OUTPUT_BYTES}))`],
+        cwd: process.cwd(),
+        maxOutputBytes: 1024,
+      }),
+    ).toThrow('failed to start');
+  });
 });

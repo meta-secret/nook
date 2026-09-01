@@ -26,8 +26,9 @@ export function runCommand(input: RunCommandArgs): CommandOutput {
   const spawnOptions: SpawnSyncOptionsWithStringEncoding = {
     cwd,
     encoding: 'utf8',
-    ...(maxOutputBytes ? { maxBuffer: maxOutputBytes } : {}),
   };
+  if (typeof maxOutputBytes === 'number')
+    spawnOptions.maxBuffer = maxOutputBytes;
   const result = spawnSync(command, [...args], spawnOptions);
   if (result.error) {
     const loomFailureArgs = {
