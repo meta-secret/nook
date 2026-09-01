@@ -55,5 +55,6 @@ It rejects prohibited source extensions from the complete tracked and unignored
 path inventory. It reads only automation-capable text formats when checking
 runtime, dependency, and script references.
 
-The sealed Docker fallback prunes dependency and build directories. It checks
-the root files of each Rust project and does not descend into its source tree.
+The sealed Docker fallback prunes dependency and build directories. It keeps
+authored Rust sources and automation manifests in scope without reading
+documentation, data files, or generated trees.

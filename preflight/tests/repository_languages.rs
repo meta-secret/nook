@@ -40,17 +40,14 @@ fn filesystem_paths(root: &Path) -> anyhow::Result<Vec<PathBuf>> {
     let mut files = Vec::new();
     let mut directories = vec![root.to_path_buf()];
     while let Some(directory) = directories.pop() {
-        let rust_project = directory != root && directory.join("Cargo.toml").is_file();
         for entry in fs::read_dir(&directory)? {
             let entry = entry?;
             let path = entry.path();
             if path.is_dir() {
-                if !rust_project
-                    && !matches!(
-                        path.file_name().and_then(OsStr::to_str),
-                        Some(".git" | "node_modules" | "target" | "vendor")
-                    )
-                {
+                if !matches!(
+                    path.file_name().and_then(OsStr::to_str),
+                    Some(".git" | "node_modules" | "target" | "vendor")
+                ) {
                     directories.push(path);
                 }
             } else if path.is_file() {
@@ -77,8 +74,12 @@ fn is_automation_source(path: &Path) -> bool {
                 | "cts"
                 | "js"
                 | "jsx"
+                | "json"
+                | "jsonc"
                 | "mjs"
                 | "mts"
+                | "rb"
+                | "rs"
                 | "sh"
                 | "toml"
                 | "ts"
@@ -90,29 +91,28 @@ fn is_automation_source(path: &Path) -> bool {
     )
 }
 
+fn is_prohibited_path(path: &Path, script_extension: &str, interface_extension: &str) -> bool {
+    let path_text = path.to_string_lossy();
+    if path_text.ends_with(script_extension) || path_text.ends_with(interface_extension) {
+        return true;
+    }
+    matches!(
+        path.file_name().and_then(OsStr::to_str),
+        Some("Pipfile" | "Pipfile.lock" | "poetry.lock" | "pyproject.toml" | "requirements.txt")
+    )
+}
+
 fn repository_language_violations(root: &Path) -> anyhow::Result<Vec<String>> {
     let language = ["py", "thon"].concat();
     let script_extension = [".", "py"].concat();
     let interface_extension = [script_extension.as_str(), "i"].concat();
     let versioned_runtime = [language.as_str(), "3"].concat();
-    let package_installer = ["p", "ip"].concat();
-    let versioned_installer = [package_installer.as_str(), "3"].concat();
-    let test_runner = ["py", "test"].concat();
-    let runtime_tokens = [
-        language.as_str(),
-        versioned_runtime.as_str(),
-        package_installer.as_str(),
-        versioned_installer.as_str(),
-        test_runner.as_str(),
-    ];
+    let runtime_tokens = [language.as_str(), versioned_runtime.as_str()];
     let mut violations = Vec::new();
 
     for path in tracked_paths(root)? {
         let relative = path.strip_prefix(root).unwrap_or(&path);
-        let relative_text = relative.to_string_lossy();
-        if relative_text.ends_with(&script_extension)
-            || relative_text.ends_with(&interface_extension)
-        {
+        if is_prohibited_path(relative, &script_extension, &interface_extension) {
             violations.push(format!("{}: prohibited authored file", relative.display()));
             continue;
         }
@@ -132,9 +132,7 @@ fn repository_language_violations(root: &Path) -> anyhow::Result<Vec<String>> {
             }
             let lowercase = line.to_ascii_lowercase();
             let words = lowercase.split(|character: char| !character.is_ascii_alphanumeric());
-            if words.into_iter().any(|word| runtime_tokens.contains(&word))
-                || lowercase.contains(&script_extension)
-            {
+            if words.into_iter().any(|word| runtime_tokens.contains(&word)) {
                 violations.push(format!(
                     "{}:{}: prohibited runtime, dependency, or script reference",
                     relative.display(),
@@ -183,7 +181,7 @@ fn repository_language_rule_stays_wired_to_agent_guidance() -> anyhow::Result<()
 }
 
 #[test]
-fn sealed_repository_scan_does_not_require_git_metadata() -> anyhow::Result<()> {
+fn sealed_repository_scan_prunes_only_generated_and_dependency_trees() -> anyhow::Result<()> {
     let fixture = std::env::temp_dir().join(format!(
         "nook-language-scan-{}-{}",
         std::process::id(),
@@ -193,6 +191,8 @@ fn sealed_repository_scan_does_not_require_git_metadata() -> anyhow::Result<()> 
     ));
     fs::create_dir_all(fixture.join("nested"))?;
     fs::create_dir_all(fixture.join("rust-project/src/deep"))?;
+    fs::create_dir_all(fixture.join("rust-project/target/generated"))?;
+    fs::create_dir_all(fixture.join("node_modules/package"))?;
     fs::write(
         fixture.join("nested/contract.ts"),
         "export const ok = true;\n",
@@ -203,6 +203,14 @@ fn sealed_repository_scan_does_not_require_git_metadata() -> anyhow::Result<()> 
         fixture.join("rust-project/src/deep/implementation.rs"),
         "pub fn value() -> bool { true }\n",
     )?;
+    fs::write(
+        fixture.join("rust-project/target/generated/ignored.rs"),
+        "pub fn generated() -> bool { true }\n",
+    )?;
+    fs::write(
+        fixture.join("node_modules/package/ignored.js"),
+        "export const generated = true;\n",
+    )?;
     let mut paths = tracked_paths(&fixture)?;
     paths.sort();
     assert_eq!(
@@ -211,6 +219,7 @@ fn sealed_repository_scan_does_not_require_git_metadata() -> anyhow::Result<()> 
             fixture.join("nested/contract.ts"),
             fixture.join("rust-project/Cargo.toml"),
             fixture.join("rust-project/Taskfile.yml"),
+            fixture.join("rust-project/src/deep/implementation.rs"),
         ]
     );
     fs::remove_dir_all(fixture)?;
@@ -227,6 +236,8 @@ fn repository_language_scan_rejects_scripts_and_runtime_invocations() -> anyhow:
             .as_nanos()
     ));
     fs::create_dir_all(fixture.join("scripts"))?;
+    fs::create_dir_all(fixture.join("rust-project/src"))?;
+    fs::create_dir_all(fixture.join(".codex"))?;
     let script_extension = [".", "py"].concat();
     let runtime = ["py", "thon3"].concat();
     fs::write(
@@ -241,8 +252,21 @@ fn repository_language_scan_rejects_scripts_and_runtime_invocations() -> anyhow:
             "version: '3'\ntasks:\n  comments:\n    cmds: [{runtime} fetch-comments{script_extension}]\n"
         ),
     )?;
+    fs::write(
+        fixture.join("rust-project/src/runner.rs"),
+        format!("fn command() {{ Command::new(\"{runtime}\"); }}\n"),
+    )?;
+    fs::write(
+        fixture.join(".codex/hooks.json"),
+        format!("{{\"command\": \"{runtime} tool\"}}\n"),
+    )?;
+    fs::write(
+        fixture.join("scripts/picture-in-picture.ts"),
+        "export const pip = shape.pyramid;\n",
+    )?;
+    fs::write(fixture.join("pyproject.toml"), "[project]\n")?;
     let violations = repository_language_violations(&fixture)?;
-    assert_eq!(violations.len(), 2);
+    assert_eq!(violations.len(), 5);
     assert!(
         violations
             .iter()
