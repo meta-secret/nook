@@ -47,9 +47,15 @@ or second coordinator. See the [Gizmo contract](gizmo/AGENTS.md).
 
 - Each worker task has exactly one team identity, a bounded file scope, and
   named acceptance evidence. Workers write only inside that scope.
-- Gizmo Prime delegates every worker-executable implementation task and review
-  fix to a real Team Agent through the active harness.
-- Gizmo Prime must not perform that team-owned work itself.
+- Gizmo Prime delegates every worker-executable Team Agent task through the
+  active harness. This includes implementation and review fixes.
+- Gizmo Prime is prohibited from performing any worker-executable Team Agent
+  work itself.
+- If a required real Team Agent cannot be created, dispatched, or completed,
+  Gizmo Prime stops the task immediately and reports the blocker.
+- Gizmo Prime must not continue the task, approximate the work, or take over
+  the worker scope. This is the [no-fallback rule](#no-fallback-behavior) for
+  worker execution.
 - Separate Codex tasks, threads, cloud tasks, and external agents must not
   serve as delegation, communication, or handoff transport.
 - Parent-owned Gizmo control operations remain with Gizmo Prime:
