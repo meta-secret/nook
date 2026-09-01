@@ -19,6 +19,7 @@ const headSha = "0123456789abcdef0123456789abcdef01234567";
 type MockComment = {
   author_association?: string;
   body: string;
+  created_at?: string;
   id: number;
   user?: { login: string };
 };
@@ -27,6 +28,7 @@ type MockReview = {
   body?: string;
   commit_id: string;
   state: string;
+  submitted_at?: string;
   user: { login: string };
 };
 
@@ -58,6 +60,7 @@ function mockOctokit(input: {
           comments.push({
             author_association: "OWNER",
             body,
+            created_at: "2026-09-01T02:00:00.000Z",
             id: comments.length + 1,
           });
           return { data: { id: comments.length } };
@@ -136,6 +139,7 @@ test("requestExactHeadReview detects a revision change before Codex contact", as
   await assert.rejects(
     requestExactHeadReview(octokit, repoRef, 410, {
       revision: {
+        boundaryAt: "2026-09-01T01:00:00.000Z",
         revision: expected,
         state: ExactHeadReviewRevisionState.Bound,
       },
@@ -177,6 +181,57 @@ test("an old same-head review cannot settle a new base-bound request", async () 
   assert.equal(result.requested, true);
   assert.deepEqual(createdBodies, [
     `@codex review\n\n${codexReviewRequestMarker(headSha, "base-sha")}`,
+  ]);
+});
+
+test("a pre-boundary exact-head request cannot block its replacement", async () => {
+  const boundaryAt = "2026-09-01T01:00:00.000Z";
+  const createdBodies: string[] = [];
+  const expected: PullRequestRevision = {
+    baseRef: "main",
+    baseSha: "base-sha",
+    headSha,
+  };
+  const octokit = mockOctokit({
+    comments: [
+      {
+        body: `@codex review\n\n${codexReviewRequestMarker(headSha, "base-sha")}`,
+        created_at: "2026-09-01T00:00:00.000Z",
+        id: 1,
+      },
+    ],
+    createdBodies,
+    reviews: [
+      {
+        commit_id: headSha,
+        state: "COMMENTED",
+        submitted_at: "2026-09-01T00:01:00.000Z",
+        user: { login: "chatgpt-codex-connector[bot]" },
+      },
+    ],
+    sha: headSha,
+  });
+
+  const options = {
+    revision: {
+      boundaryAt,
+      revision: expected,
+      state: ExactHeadReviewRevisionState.Bound,
+    },
+  } as const;
+  const result = await requestExactHeadReview(octokit, repoRef, 410, options);
+  const idempotent = await requestExactHeadReview(
+    octokit,
+    repoRef,
+    410,
+    options,
+  );
+
+  assert.equal(result.requested, true);
+  assert.equal(idempotent.requested, false);
+  assert.equal(idempotent.settled, false);
+  assert.deepEqual(createdBodies, [
+    `@codex review\n\n${codexReviewRequestMarker(headSha, "base-sha", boundaryAt)}`,
   ]);
 });
 

@@ -49,13 +49,17 @@ export type HeadTransitionObservation =
       revision: PullRequestRevision;
     }
   | { state: HeadTransitionObservationState.Missing }
-  | { state: HeadTransitionObservationState.Observed };
+  | {
+      boundaryAt: string;
+      state: HeadTransitionObservationState.Observed;
+    };
 
 type HeadTransitionBackfillInput = {
   octokit: Octokit;
   prNumber: number;
   repoRef: RepoRef;
   revision?: PullRequestRevision;
+  signal?: AbortSignal;
 };
 
 export enum OpenPrLookupKind {
@@ -112,6 +116,7 @@ export async function requestHeadTransitionBackfill(
       head_sha: revision.headSha,
       pr_number: String(input.prNumber),
     },
+    ...(input.signal ? { request: { signal: input.signal } } : {}),
   });
 }
 
@@ -119,12 +124,14 @@ export async function readPullRequestRevision(
   octokit: Octokit,
   repoRef: RepoRef,
   prNumber: number,
+  signal?: AbortSignal,
 ): Promise<PullRequestRevision> {
   const { owner, repo } = repoRef;
   const { data: pr } = await octokit.rest.pulls.get({
     owner,
     repo,
     pull_number: prNumber,
+    ...(signal ? { request: { signal } } : {}),
   });
   return {
     baseRef: pr.base.ref,
@@ -159,15 +166,22 @@ export async function observeCurrentHeadTransition(
   repoRef: RepoRef,
   prNumber: number,
   expected: PullRequestRevision,
+  signal?: AbortSignal,
 ): Promise<HeadTransitionObservation> {
   const { owner, repo } = repoRef;
   const [{ data: pr }, issueComments] = await Promise.all([
-    octokit.rest.pulls.get({ owner, repo, pull_number: prNumber }),
+    octokit.rest.pulls.get({
+      owner,
+      repo,
+      pull_number: prNumber,
+      ...(signal ? { request: { signal } } : {}),
+    }),
     octokit.paginate(octokit.rest.issues.listComments, {
       owner,
       repo,
       issue_number: prNumber,
       per_page: 100,
+      ...(signal ? { request: { signal } } : {}),
     }),
   ]);
   const revision: PullRequestRevision = {
@@ -187,7 +201,10 @@ export async function observeCurrentHeadTransition(
     headSha: pr.head.sha,
   });
   return transition.state === HeadTransitionState.Observed
-    ? { state: HeadTransitionObservationState.Observed }
+    ? {
+        boundaryAt: transition.at,
+        state: HeadTransitionObservationState.Observed,
+      }
     : { state: HeadTransitionObservationState.Missing };
 }
 
@@ -451,12 +468,15 @@ export async function inspectPrFeedback(
   repoRef: RepoRef,
   prNumber: number,
   expectedRevision?: PullRequestRevision,
+  expectedBoundaryAt?: string,
+  signal?: AbortSignal,
 ): Promise<PrFeedbackSummary> {
   const { owner, repo } = repoRef;
   const { data: pr } = await octokit.rest.pulls.get({
     owner,
     repo,
     pull_number: prNumber,
+    ...(signal ? { request: { signal } } : {}),
   });
   if (expectedRevision) {
     assertPullRequestRevision(expectedRevision, {
@@ -471,18 +491,21 @@ export async function inspectPrFeedback(
       repo,
       issue_number: prNumber,
       per_page: 100,
+      ...(signal ? { request: { signal } } : {}),
     }),
     octokit.paginate(octokit.rest.pulls.listReviews, {
       owner,
       repo,
       pull_number: prNumber,
       per_page: 100,
+      ...(signal ? { request: { signal } } : {}),
     }),
     octokit.paginate(octokit.rest.pulls.listReviewComments, {
       owner,
       repo,
       pull_number: prNumber,
       per_page: 100,
+      ...(signal ? { request: { signal } } : {}),
     }),
   ]);
   const transitionInput: CurrentHeadTransitionInput = {
@@ -494,6 +517,15 @@ export async function inspectPrFeedback(
     headSha: pr.head.sha,
   };
   const currentHeadTransition = findCurrentHeadTransition(transitionInput);
+  if (
+    expectedBoundaryAt &&
+    (currentHeadTransition.state !== HeadTransitionState.Observed ||
+      currentHeadTransition.at !== expectedBoundaryAt)
+  ) {
+    throw new Error(
+      `Trusted exact-head transition boundary changed from ${expectedBoundaryAt}; no review was requested`,
+    );
+  }
 
   let unresolvedThreads = 0;
   enum PaginationKind {
@@ -513,6 +545,7 @@ export async function inspectPrFeedback(
         owner,
         repo,
         number: prNumber,
+        ...(signal ? { request: { signal } } : {}),
         ...(pagination.kind === PaginationKind.NextPage
           ? { cursor: pagination.cursor }
           : {}),
@@ -528,7 +561,11 @@ export async function inspectPrFeedback(
         : { kind: PaginationKind.Complete };
   }
 
-  const marker = codexReviewRequestMarker(pr.head.sha, pr.base.sha);
+  const marker = codexReviewRequestMarker(
+    pr.head.sha,
+    pr.base.sha,
+    expectedBoundaryAt ?? "",
+  );
   const cursorMarker = cursorReviewRequestMarker(pr.head.sha);
   const reviewRequests = issueComments.filter((comment) =>
     isTrustedExactHeadReviewRequest({
@@ -565,6 +602,7 @@ export async function inspectPrFeedback(
           repo,
           comment_id: request.id,
           per_page: 100,
+          ...(signal ? { request: { signal } } : {}),
         }),
       ),
     )

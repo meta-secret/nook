@@ -44,6 +44,7 @@ const revision: PullRequestRevision = {
   headSha: "head-sha",
 };
 const observedBoundary = {
+  boundaryAt: "2026-09-01T01:00:00.000Z",
   state: HeadTransitionObservationState.Observed,
 } as const;
 const missingBoundary = {
@@ -288,12 +289,16 @@ test("non-waiting review request bounds a stalled boundary observation", async (
 });
 
 test("non-waiting review request bounds a stalled boundary dispatch", async () => {
+  const dispatchSignals: AbortSignal[] = [];
   let feedbackInspections = 0;
   let reviewRequests = 0;
 
   await assert.rejects(
     requestExactHeadReviewWithCircuitBreaker({
-      ensureHeadTransition: () => new Promise(() => {}),
+      ensureHeadTransition: (_revision, signal) => {
+        dispatchSignals.push(signal);
+        return new Promise(() => {});
+      },
       inspectFeedback: async () => {
         feedbackInspections += 1;
         return cleanFeedback;
@@ -319,6 +324,98 @@ test("non-waiting review request bounds a stalled boundary dispatch", async () =
   );
   assert.equal(feedbackInspections, 0);
   assert.equal(reviewRequests, 0);
+  assert.equal(dispatchSignals[0]?.aborted, true);
+});
+
+test("non-waiting review request bounds stalled post-boundary feedback", async () => {
+  const feedbackSignals: AbortSignal[] = [];
+  let reviewRequests = 0;
+  await assert.rejects(
+    requestExactHeadReviewWithCircuitBreaker({
+      ensureHeadTransition: async () => {},
+      inspectFeedback: (_revision, _boundaryAt, signal) => {
+        feedbackSignals.push(signal);
+        return new Promise(() => {});
+      },
+      now: () => Date.now(),
+      observeHeadTransition: async () => observedBoundary,
+      pollIntervalMs: 5,
+      readRevision: async () => revision,
+      requestReview: async () => {
+        reviewRequests += 1;
+        return {
+          fallback: ExactHeadReviewFallback.None,
+          headSha: "head-sha",
+          provider: ExactHeadReviewProvider.Codex,
+          requested: true,
+          settled: false,
+        };
+      },
+      timeoutMs: 10,
+      waitMs: async () => {},
+    }),
+    /feedback inspection did not complete.*without a confirmed review outcome/,
+  );
+  assert.equal(feedbackSignals[0]?.aborted, true);
+  assert.equal(reviewRequests, 0);
+});
+
+test("non-waiting review request bounds stalled post-boundary revision verification", async () => {
+  const revisionSignals: AbortSignal[] = [];
+  let reads = 0;
+  let reviewRequests = 0;
+  await assert.rejects(
+    requestExactHeadReviewWithCircuitBreaker({
+      ensureHeadTransition: async () => {},
+      inspectFeedback: async () => cleanFeedback,
+      now: () => Date.now(),
+      observeHeadTransition: async () => observedBoundary,
+      pollIntervalMs: 5,
+      readRevision: (signal) => {
+        reads += 1;
+        if (reads === 1) return Promise.resolve(revision);
+        revisionSignals.push(signal);
+        return new Promise(() => {});
+      },
+      requestReview: async () => {
+        reviewRequests += 1;
+        return {
+          fallback: ExactHeadReviewFallback.None,
+          headSha: "head-sha",
+          provider: ExactHeadReviewProvider.Codex,
+          requested: true,
+          settled: false,
+        };
+      },
+      timeoutMs: 10,
+      waitMs: async () => {},
+    }),
+    /revision verification did not complete.*without a confirmed review outcome/,
+  );
+  assert.equal(revisionSignals[0]?.aborted, true);
+  assert.equal(reviewRequests, 0);
+});
+
+test("non-waiting review request bounds a stalled post-boundary review request", async () => {
+  const requestSignals: AbortSignal[] = [];
+  await assert.rejects(
+    requestExactHeadReviewWithCircuitBreaker({
+      ensureHeadTransition: async () => {},
+      inspectFeedback: async () => cleanFeedback,
+      now: () => Date.now(),
+      observeHeadTransition: async () => observedBoundary,
+      pollIntervalMs: 5,
+      readRevision: async () => revision,
+      requestReview: (_revision, _boundaryAt, signal) => {
+        requestSignals.push(signal);
+        return new Promise(() => {});
+      },
+      timeoutMs: 10,
+      waitMs: async () => {},
+    }),
+    /review request did not complete.*without a confirmed review outcome/,
+  );
+  assert.equal(requestSignals[0]?.aborted, true);
 });
 
 test("non-waiting review request detects a revision change after feedback inspection", async () => {

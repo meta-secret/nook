@@ -7,11 +7,42 @@ import {
   HeadTransitionObservationState,
   createFixPr,
   observeCurrentHeadTransition,
+  requestHeadTransitionBackfill,
   requiredPrCheckNames,
   requiredPrWorkflows,
 } from "../main/github.js";
 
 const repoRef = { owner: "meta-secret", repo: "nook" };
+
+test("requestHeadTransitionBackfill passes its abort signal to dispatch", async () => {
+  const controller = new AbortController();
+  const dispatchSignals: AbortSignal[] = [];
+  const octokit = {
+    rest: {
+      actions: {
+        createWorkflowDispatch: async (input: {
+          request?: { signal: AbortSignal };
+        }) => {
+          if (input.request) dispatchSignals.push(input.request.signal);
+        },
+      },
+    },
+  } as unknown as Octokit;
+
+  await requestHeadTransitionBackfill({
+    octokit,
+    prNumber: 1263,
+    repoRef,
+    revision: {
+      baseRef: "main",
+      baseSha: "base-sha",
+      headSha: "head-sha",
+    },
+    signal: controller.signal,
+  });
+
+  assert.equal(dispatchSignals[0], controller.signal);
+});
 
 function headTransitionObserverOctokit(input: {
   body: string;
@@ -54,7 +85,10 @@ test("observeCurrentHeadTransition accepts only the matching trusted marker", as
       1263,
       expected,
     ),
-    { state: HeadTransitionObservationState.Observed },
+    {
+      boundaryAt: "2026-09-01T00:00:00.000Z",
+      state: HeadTransitionObservationState.Observed,
+    },
   );
   assert.deepEqual(
     await observeCurrentHeadTransition(

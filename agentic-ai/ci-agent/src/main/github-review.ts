@@ -68,6 +68,7 @@ export enum ExactHeadReviewRevisionState {
 
 export type ExactHeadReviewRevision =
   | {
+      boundaryAt: string;
       revision: PullRequestRevision;
       state: ExactHeadReviewRevisionState.Bound;
     }
@@ -76,6 +77,7 @@ export type ExactHeadReviewRevision =
 export type ExactHeadReviewOptions = {
   availability?: ExactHeadReviewAvailability;
   revision?: ExactHeadReviewRevision;
+  signal?: AbortSignal;
 };
 
 export type ExactHeadReviewRequestResult = {
@@ -119,8 +121,10 @@ type CommentReaction = {
 export function codexReviewRequestMarker(
   headSha: string,
   baseSha = "base-sha",
+  boundaryAt = "",
 ): string {
-  return `<!-- nook-codex-review:${headSha}:${baseSha} -->`;
+  const boundaryIdentity = boundaryAt.length > 0 ? `:${boundaryAt}` : "";
+  return `<!-- nook-codex-review:${headSha}:${baseSha}${boundaryIdentity} -->`;
 }
 
 export function cursorReviewRequestMarker(headSha: string): string {
@@ -172,6 +176,7 @@ export async function requestExactHeadReview(
 ): Promise<ExactHeadReviewRequestResult> {
   const { owner, repo } = repoRef;
   const availability = options.availability;
+  const signal = options.signal;
   const expectedRevision = options.revision ?? {
     state: ExactHeadReviewRevisionState.Unbound,
   };
@@ -179,6 +184,7 @@ export async function requestExactHeadReview(
     owner,
     repo,
     pull_number: prNumber,
+    ...(signal ? { request: { signal } } : {}),
   });
   const headSha = pr.head.sha;
   const baseSha = pr.base.sha;
@@ -189,17 +195,23 @@ export async function requestExactHeadReview(
   });
   const snapshot = await loadReviewSnapshot({
     baseSha,
+    boundaryAt:
+      expectedRevision.state === ExactHeadReviewRevisionState.Bound
+        ? expectedRevision.boundaryAt
+        : "",
     headSha,
     octokit,
     owner,
     prNumber,
     repo,
+    signal,
   });
   if (expectedRevision.state === ExactHeadReviewRevisionState.Bound) {
     const { data: currentPr } = await octokit.rest.pulls.get({
       owner,
       repo,
       pull_number: prNumber,
+      ...(signal ? { request: { signal } } : {}),
     });
     assertExpectedRevision(expectedRevision, {
       baseRef: currentPr.base.ref,
@@ -235,12 +247,17 @@ export async function requestExactHeadReview(
     };
   }
 
-  const codexMarker = codexReviewRequestMarker(headSha, baseSha);
+  const boundaryAt =
+    expectedRevision.state === ExactHeadReviewRevisionState.Bound
+      ? expectedRevision.boundaryAt
+      : "";
+  const codexMarker = codexReviewRequestMarker(headSha, baseSha, boundaryAt);
   await octokit.rest.issues.createComment({
     owner,
     repo,
     issue_number: prNumber,
     body: `@codex review\n\n${codexMarker}`,
+    ...(signal ? { request: { signal } } : {}),
   });
   if (!availability || availability.probe.timeoutMs <= 0) {
     return {
@@ -255,11 +272,13 @@ export async function requestExactHeadReview(
   const probed = await probeCodexAvailability({
     availability,
     baseSha,
+    boundaryAt,
     headSha,
     octokit,
     owner,
     prNumber,
     repo,
+    signal,
   });
   if (probed.kind === CodexProbeKind.UsageLimited) {
     return {
@@ -441,17 +460,26 @@ type ReviewSnapshot = {
 
 async function loadReviewSnapshot(input: {
   baseSha: string;
+  boundaryAt: string;
   headSha: string;
   octokit: Octokit;
   owner: string;
   prNumber: number;
   repo: string;
+  signal?: AbortSignal;
 }): Promise<ReviewSnapshot> {
   const [comments, reviews] = await Promise.all([
     listIssueComments(input),
     listPullReviews(input),
   ]);
-  return snapshotFrom(comments, reviews, input.headSha, input.baseSha, input);
+  return snapshotFrom(
+    comments,
+    reviews,
+    input.headSha,
+    input.baseSha,
+    input.boundaryAt,
+    input,
+  );
 }
 
 async function snapshotFrom(
@@ -459,13 +487,19 @@ async function snapshotFrom(
   reviews: PullReview[],
   headSha: string,
   baseSha: string,
+  boundaryAt: string,
   reactionSource: {
     octokit: Octokit;
     owner: string;
     repo: string;
+    signal?: AbortSignal;
   },
 ): Promise<ReviewSnapshot> {
-  const codexMarker = codexReviewRequestMarker(headSha, baseSha);
+  const codexMarker = codexReviewRequestMarker(
+    headSha,
+    baseSha,
+    boundaryAt,
+  );
   const cursorMarker = cursorReviewRequestMarker(headSha);
   const codexRequests = comments.filter(
     (comment) =>
@@ -535,6 +569,9 @@ async function snapshotFrom(
                   repo: reactionSource.repo,
                   comment_id: request.id,
                   per_page: 100,
+                  ...(reactionSource.signal
+                    ? { request: { signal: reactionSource.signal } }
+                    : {}),
                 },
               ),
             ),
@@ -571,11 +608,13 @@ type CodexProbeResult =
 async function probeCodexAvailability(input: {
   availability: ExactHeadReviewAvailability;
   baseSha: string;
+  boundaryAt: string;
   headSha: string;
   octokit: Octokit;
   owner: string;
   prNumber: number;
   repo: string;
+  signal?: AbortSignal;
 }): Promise<CodexProbeResult> {
   const deadline = Date.now() + input.availability.probe.timeoutMs;
   while (Date.now() < deadline) {
@@ -649,6 +688,7 @@ async function listIssueComments(input: {
   owner: string;
   prNumber: number;
   repo: string;
+  signal?: AbortSignal;
 }): Promise<IssueComment[]> {
   const comments = await input.octokit.paginate(
     input.octokit.rest.issues.listComments,
@@ -657,6 +697,7 @@ async function listIssueComments(input: {
       repo: input.repo,
       issue_number: input.prNumber,
       per_page: 100,
+      ...(input.signal ? { request: { signal: input.signal } } : {}),
     },
   );
   return comments.map((comment) => ({
@@ -673,6 +714,7 @@ async function listPullReviews(input: {
   owner: string;
   prNumber: number;
   repo: string;
+  signal?: AbortSignal;
 }): Promise<PullReview[]> {
   const reviews = await input.octokit.paginate(
     input.octokit.rest.pulls.listReviews,
@@ -681,6 +723,7 @@ async function listPullReviews(input: {
       repo: input.repo,
       pull_number: input.prNumber,
       per_page: 100,
+      ...(input.signal ? { request: { signal: input.signal } } : {}),
     },
   );
   return reviews.map((review) => ({
