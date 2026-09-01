@@ -106,7 +106,6 @@ export class LoginMatchAvailabilityCache {
     }
     this.entries.delete(origin)
   }
-
   invalidateAll(): void {
     for (const [origin, current] of this.entries) {
       if (current.kind === LoginMatchAvailabilityCacheEntryKind.Pending) {

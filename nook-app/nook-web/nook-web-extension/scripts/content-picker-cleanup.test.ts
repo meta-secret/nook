@@ -65,4 +65,22 @@ test('delivers cleanup cancellation through the content-script router', async ()
     widgetState.attachHost({ remove } as unknown as HTMLElement)
   expect(remove).toHaveBeenCalledTimes(1)
   expect(widgetState.host).not.toHaveProperty('element')
+
+  const schedule = mock(() => {})
+  widgetState.dismissed = true
+  scanState.schedule = schedule
+  routeAutofillMessage(
+    { type: ExtensionRuntimeRequestType.RescanSurfaces },
+    { id: 'nook-extension' },
+    sendResponse,
+  )
+  expect(widgetState.dismissed).toBe(true)
+  expect(schedule).toHaveBeenCalledTimes(1)
+  routeAutofillMessage(
+    { type: ExtensionRuntimeRequestType.RefreshSurfaces },
+    { id: 'nook-extension' },
+    sendResponse,
+  )
+  expect(widgetState.dismissed).toBe(false)
+  expect(schedule).toHaveBeenCalledTimes(2)
 })

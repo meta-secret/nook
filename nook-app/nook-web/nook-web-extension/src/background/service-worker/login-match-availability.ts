@@ -96,7 +96,6 @@ async function websiteLoginOptionsResponse({
     }
     return access.response as WebsiteLoginOptionsWireValue
   }
-
   let accounts
   if (openUnavailableCompanion) {
     const accountRequest: Parameters<typeof loginAccountsForOrigin>[0] = {

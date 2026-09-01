@@ -200,7 +200,7 @@ async function importPairingAndRefreshSurfaces(
   invalidateAllLoginMatchAvailability()
   const query: Parameters<typeof chrome.tabs.query>[0] = {}
   const refresh: Parameters<typeof chrome.tabs.sendMessage>[1] = {
-    type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces,
+    type: ExtensionRuntimeRequestType.RescanSurfaces,
   }
   chrome.tabs.query(query, (tabs) => {
     for (const { id } of tabs)
@@ -217,7 +217,7 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
   if (
     sender.id === chrome.runtime.id &&
     'type' in message &&
-    message.type === ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces
+    message.type === ExtensionRuntimeRequestType.RefreshSurfaces
   ) {
     invalidateAllLoginMatchAvailability()
     sendResponse(true)

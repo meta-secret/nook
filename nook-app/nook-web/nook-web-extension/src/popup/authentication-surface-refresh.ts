@@ -3,7 +3,7 @@ export async function refreshInvokingAuthenticationSurfaceAfterUnlock(
   popupSearch = location.search,
 ): Promise<void> {
   const message: Parameters<typeof chrome.runtime.sendMessage>[0] = {
-    type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces,
+    type: ExtensionRuntimeRequestType.RefreshSurfaces,
   }
   await chrome.runtime.sendMessage(message)
   refreshInvokingAuthenticationSurface(popupSearch)
@@ -12,7 +12,7 @@ export function refreshInvokingAuthenticationSurface(
   popupSearch = location.search,
 ): void {
   const message: Parameters<typeof chrome.tabs.sendMessage>[1] = {
-    type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces,
+    type: ExtensionRuntimeRequestType.RefreshSurfaces,
   }
   const refreshTab = (tabId: number): void => {
     void chrome.tabs.sendMessage(tabId, message).catch(() => {

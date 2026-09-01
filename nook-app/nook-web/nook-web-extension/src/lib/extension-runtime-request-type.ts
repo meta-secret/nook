@@ -1,5 +1,6 @@
 export enum ExtensionRuntimeRequestType {
   ClearAuthenticationSurface = 'nook:clear-authentication-surface',
   EnsureRuntime = 'nook:ensure-extension-session-runtime',
-  RefreshAuthenticationSurfaces = 'nook:refresh-authentication-surfaces',
+  RescanSurfaces = 'nook:rescan-authentication-surfaces',
+  RefreshSurfaces = 'nook:refresh-authentication-surfaces',
 }

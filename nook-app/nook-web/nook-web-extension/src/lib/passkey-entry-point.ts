@@ -2,11 +2,9 @@ export enum PasskeyEntryPointKind {
   SiteControl = 'site-control',
   Unavailable = 'unavailable',
 }
-
 type PasskeyEntryPointKindArgs = {
   siteControlPresent: boolean
 }
-
 export function passkeyEntryPointKind({
   siteControlPresent,
 }: PasskeyEntryPointKindArgs): PasskeyEntryPointKind {

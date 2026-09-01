@@ -209,6 +209,13 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         website.page.getByTestId('nook-auth-gate-expand'),
       ).toBeVisible()
     }
+    if (websiteAfterUnlock.kind === WebsitePageStateKind.Opened) {
+      const dismissedWidget =
+        websiteAfterUnlock.page.locator('#nook-auth-widget')
+      await dismissedWidget.getByTestId('nook-auth-gate-expand').click()
+      await dismissedWidget.locator('.dismiss-button').click()
+      await expect(dismissedWidget).toHaveCount(0)
+    }
     expect(
       await simplePage.evaluate(
         ({
@@ -272,6 +279,11 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       await expect(
         website.page.locator('#nook-auth-widget').getByText('Ready to sign in'),
       ).toBeVisible()
+    }
+    if (websiteAfterUnlock.kind === WebsitePageStateKind.Opened) {
+      await expect(
+        websiteAfterUnlock.page.locator('#nook-auth-widget'),
+      ).toHaveCount(0)
     }
     const pairedStorage = await readExtensionStorage(context)
     const pairedGrant = Object.entries(pairedStorage).find(([key]) =>

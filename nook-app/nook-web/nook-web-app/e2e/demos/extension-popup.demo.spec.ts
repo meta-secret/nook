@@ -2,11 +2,9 @@ import { expect, test, type Route } from '../fixtures'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { demoBeat } from './pilot-demo-helpers'
-
 const demoDir = path.dirname(fileURLToPath(import.meta.url))
 const extensionDist = path.resolve(demoDir, '../../../nook-web-extension/dist')
 const extensionRoutePrefix = '/__extension-popup/'
-
 function installPopupDemoRuntime(): void {
   const device = {
     deviceId: 'popup-demo-device',
@@ -43,21 +41,13 @@ function installPopupDemoRuntime(): void {
       }
     },
   }
-
   const chromeStub = {
     i18n: { getUILanguage: () => 'en' },
     runtime,
   }
-  const browserGlobal = globalThis as typeof globalThis & {
-    chrome?: typeof chromeStub
-  }
-  browserGlobal.chrome ??= chromeStub
-  Object.defineProperties(browserGlobal.chrome, {
-    i18n: { configurable: true, value: chromeStub.i18n },
-    runtime: { configurable: true, value: chromeStub.runtime },
-  })
+  const descriptor: PropertyDescriptor = { value: chromeStub }
+  Object.defineProperty(globalThis, 'chrome', descriptor)
 }
-
 test('keeps the extension toolbar popup focused on one next action', async ({
   page,
 }) => {
@@ -69,7 +59,6 @@ test('keeps the extension toolbar popup focused on one next action', async ({
       path: path.join(extensionDist, relativePath),
     })
   })
-
   await page.goto(`${extensionRoutePrefix}popup/index.html?state=connected`)
   await expect(
     page.locator(
