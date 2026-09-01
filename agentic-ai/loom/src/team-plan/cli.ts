@@ -7,6 +7,7 @@ import { LoomFailureCode, loomFailureFromCause } from '../loom-failure.ts';
 import {
   discardFinalizedTeamPlan,
   finalizeTeamPlan,
+  leaseTeamPlan,
   recordTeamPlan,
   restartTeamPlan,
   selectTeamPlan,
@@ -29,6 +30,7 @@ const TEAM_PLAN_RUN_ID = /^[0-9a-f]{64}$/u;
 enum TeamPlanCommandKind {
   Start = 'start',
   Select = 'select',
+  Lease = 'lease',
   Record = 'record',
   Restart = 'restart',
   Finalize = 'finalize',
@@ -47,6 +49,12 @@ type TeamPlanJournalCommand = Readonly<{
   journalPath: string;
 }>;
 
+type TeamPlanLeaseCommand = Readonly<{
+  kind: TeamPlanCommandKind.Lease;
+  journalPath: string;
+  taskIds: readonly string[];
+}>;
+
 type TeamPlanDiscardCommand = Readonly<{
   kind: TeamPlanCommandKind.Discard;
   journalPath: string;
@@ -62,6 +70,7 @@ type TeamPlanRecordCommand = Readonly<{
 type TeamPlanCommand =
   | TeamPlanStartCommand
   | TeamPlanJournalCommand
+  | TeamPlanLeaseCommand
   | TeamPlanDiscardCommand
   | TeamPlanRecordCommand;
 
@@ -127,6 +136,17 @@ export async function runTeamPlanCli(
     console.log(
       JSON.stringify(
         await selectTeamPlan({ journalPath: command.journalPath }),
+      ),
+    );
+    return 0;
+  }
+  if (command.kind === TeamPlanCommandKind.Lease) {
+    console.log(
+      JSON.stringify(
+        await leaseTeamPlan({
+          journalPath: command.journalPath,
+          taskIds: command.taskIds,
+        }),
       ),
     );
     return 0;
@@ -261,6 +281,27 @@ function parseTeamPlanCommand(
 ): TeamPlanCommandParse {
   const { argv } = cliArguments;
   const kind = argv[0];
+  if (
+    kind === TeamPlanCommandKind.Lease &&
+    argv.length === 5 &&
+    argv[1] === '--journal' &&
+    argv[3] === '--task-ids'
+  ) {
+    const journalPath = commandPathAt({ argv, index: 2 });
+    const taskIdsValue = argv[4];
+    const taskIds =
+      typeof taskIdsValue === 'string' ? taskIdsValue.split(',') : [];
+    if (
+      journalPath.kind === CommandPathKind.Invalid ||
+      taskIds.length === 0 ||
+      taskIds.some((taskId) => taskId.length === 0)
+    )
+      return { kind: TeamPlanCommandParseKind.Invalid };
+    return {
+      kind: TeamPlanCommandParseKind.Valid,
+      command: { kind, journalPath: journalPath.path, taskIds },
+    };
+  }
   if (
     (kind === TeamPlanCommandKind.Select ||
       kind === TeamPlanCommandKind.Finalize) &&

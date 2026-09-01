@@ -224,7 +224,7 @@ tasks:
         --repository-root "$NOOK_TEAM_PLAN_REPOSITORY_ROOT"
 
   loom:team-plan:select:
-    desc: Select and lease the next deterministic safe Team Plan batch (JOURNAL=<events.jsonl>).
+    desc: Return the next deterministic Team Plan candidates without leasing them (JOURNAL=<events.jsonl>).
     dir: '{{.REPO_ROOT}}'
     deps: [loom:install]
     requires: { vars: [JOURNAL] }
@@ -234,6 +234,20 @@ tasks:
       - >-
         bun agentic-ai/loom/src/team-plan/cli.ts select
         --journal "$NOOK_TEAM_PLAN_JOURNAL"
+
+  loom:team-plan:lease:
+    desc: Lease the explicitly authorized Team Plan candidates (JOURNAL=<events.jsonl>, TASK_IDS=<comma-separated-task-ids>).
+    dir: '{{.REPO_ROOT}}'
+    deps: [loom:install]
+    requires: { vars: [JOURNAL, TASK_IDS] }
+    env:
+      NOOK_TEAM_PLAN_JOURNAL: '{{.JOURNAL}}'
+      NOOK_TEAM_PLAN_TASK_IDS: '{{.TASK_IDS}}'
+    cmds:
+      - >-
+        bun agentic-ai/loom/src/team-plan/cli.ts lease
+        --journal "$NOOK_TEAM_PLAN_JOURNAL"
+        --task-ids "$NOOK_TEAM_PLAN_TASK_IDS"
 
   loom:team-plan:record:
     desc: Record one selected terminal Team Plan result (JOURNAL=<events.jsonl>, REQUEST=<result.json>).

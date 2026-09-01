@@ -21,6 +21,7 @@ Agents should use the Task wrappers from the repository root:
 ```bash
 task loom:team-plan:start PLAN=/absolute/path/to/plan.json JOURNAL=/absolute/path/to/events.jsonl
 task loom:team-plan:select JOURNAL=/absolute/path/to/events.jsonl
+task loom:team-plan:lease JOURNAL=/absolute/path/to/events.jsonl TASK_IDS=task-a,task-b
 task loom:team-plan:record JOURNAL=/absolute/path/to/events.jsonl REQUEST=/absolute/path/to/result.json
 task loom:team-plan:restart JOURNAL=/absolute/path/to/events.jsonl PLAN=/absolute/path/to/new-plan.json
 task loom:team-plan:finalize JOURNAL=/absolute/path/to/events.jsonl
@@ -28,28 +29,30 @@ task loom:team-plan:discard JOURNAL=/absolute/path/to/events.jsonl RUN_ID=<runId
 ```
 
 The installed executable is `loom-team-plan`. It accepts the same `start`,
-`select`, `record`, `restart`, `finalize`, and `discard` arguments as the Task
-wrappers.
+`select`, `lease`, `record`, `restart`, `finalize`, and `discard` arguments as
+the Task wrappers.
 
 The lifecycle is explicit:
 
 1. `start` validates the reviewed generation, source commit, repository root,
    and journal capacity. It creates one new journal and returns a snapshot with
    the immutable `runId`.
-2. `select` replays the journal and persists the next deterministic lease
-   batch before returning it. An empty lease list is valid when work is blocked
-   or already terminal.
-3. `record` consumes one selected lease. Its request must be a regular file.
+2. `select` replays the journal and returns the next deterministic candidate
+   batch without consuming attempts or concurrency. An empty candidate list is
+   valid when work is blocked or already terminal.
+3. `lease` persists only the comma-separated candidate task IDs explicitly
+   authorized by Gizmo and returns their leases.
+4. `record` consumes one selected lease. Its request must be a regular file.
    Loom opens the file without waiting on special files and bounds the read on
    that same open handle.
-4. Repeat `select` and `record` until every task is accepted, exhausts its
+5. Repeat `select`, `lease`, and `record` until every task is accepted, exhausts its
    attempts, or becomes terminal through dependency failure.
-5. `restart` appends a newer reviewed generation. The current generation must
+6. `restart` appends a newer reviewed generation. The current generation must
    have no active leases. Logical task attempts remain monotonic across the
    restart.
-6. `finalize` appends the exact joined head commit after terminal closure. A
+7. `finalize` appends the exact joined head commit after terminal closure. A
    repeated finalize of the same finalized run returns its existing snapshot.
-7. `discard` requires the immutable `runId` returned by `start`. It removes only
+8. `discard` requires the immutable `runId` returned by `start`. It removes only
    that expected finalized journal and its run-owned durable artifacts. A
    missing, malformed, or stale run ID cannot delete the journal.
 
