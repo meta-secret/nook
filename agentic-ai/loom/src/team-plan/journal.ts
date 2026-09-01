@@ -404,8 +404,7 @@ function assertStrictEventIdentity(event: TeamPlanEvent): void {
       throw new Error('Team Plan accepted write identity is invalid.');
     if (
       event.record.kind === TeamPlanRecordKind.AcceptedEvidence &&
-      (!COMMIT.test(event.record.artifactObject) ||
-        !SHA256.test(event.record.artifactSha256))
+      !COMMIT.test(event.record.artifactObject)
     )
       throw new Error('Team Plan accepted evidence identity is invalid.');
   } else if (!COMMIT.test(event.headCommit)) {

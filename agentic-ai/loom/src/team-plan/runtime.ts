@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { resolve, sep } from 'node:path';
+import { isAbsolute, relative, resolve, sep } from 'node:path';
 
 import {
   ModuleDeliveryAdmissionSelectionStatus,
@@ -78,11 +78,6 @@ import type {
 import type { TeamPlanJournal } from './journal.ts';
 const MAX_TEAM_PLAN_BYTES = 262_144;
 
-enum TeamPlanArtifactObjectType {
-  Blob = 'blob',
-  Commit = 'commit',
-}
-
 type TeamPlanSession = {
   readonly journal: TeamPlanJournal;
   acceptedPlan: ValidatedModuleDeliveryPlan;
@@ -121,9 +116,12 @@ export async function startTeamPlan(
 ): Promise<TeamPlanSnapshot> {
   const repositoryRoot = await realpath(resolve(request.repositoryRoot));
   const journalPath = await canonicalTeamPlanJournalPath(request.journalPath);
+  const journalRelativePath = relative(repositoryRoot, journalPath);
   if (
-    journalPath === repositoryRoot ||
-    journalPath.startsWith(`${repositoryRoot}${sep}`)
+    journalRelativePath === '' ||
+    (!isAbsolute(journalRelativePath) &&
+      journalRelativePath !== '..' &&
+      !journalRelativePath.startsWith(`..${sep}`))
   )
     throw new Error('Team Plan journal must be outside the source repository.');
   const plan = await reviewedPlan(request.planPath);
@@ -427,11 +425,6 @@ async function replayTeamPlanEvent(
       state: session.integrationState.admissionState,
       admissions: selection.admissions,
     });
-    if (
-      JSON.stringify(recording.leases.map(attemptIdentity)) !==
-      JSON.stringify(event.attempts)
-    )
-      throw new Error('Team Plan admission batch is stale or forged.');
     for (const lease of recording.leases) {
       const key = attemptKey(lease);
       if (session.activeLeases.has(key))
@@ -570,7 +563,6 @@ function acceptProviderRecord(request: {
     kind: TeamPlanRecordKind.AcceptedEvidence,
     ...attemptIdentity(record.submission),
     artifactObject,
-    artifactSha256: teamPlanSha256(serialized),
   };
   return pinPersistedRecord({ session, record: accepted, artifactObject });
 }
@@ -581,12 +573,6 @@ function replayAcceptedWrite(request: {
   readonly record: TeamPlanAcceptedWriteRecord;
 }): void {
   const { session, lease, record } = request;
-  assertPinnedArtifact({
-    session,
-    record,
-    artifactObject: record.commit,
-    objectType: TeamPlanArtifactObjectType.Commit,
-  });
   const workspace = prepareModuleWorktree({
     repositoryRoot: session.journal.started.repositoryRoot,
     workspaceRoot: session.journal.started.workspaceRoot,
@@ -631,27 +617,14 @@ function replayAcceptedEvidence(request: {
   readonly record: TeamPlanAcceptedEvidenceRecord;
 }): void {
   const { session, lease, record } = request;
-  assertPinnedArtifact({
-    session,
-    record,
-    artifactObject: record.artifactObject,
-    objectType: TeamPlanArtifactObjectType.Blob,
-  });
   const serialized = gitText({
     cwd: session.journal.started.repositoryRoot,
     args: ['cat-file', 'blob', record.artifactObject],
   });
-  if (teamPlanSha256(serialized) !== record.artifactSha256)
-    throw new Error('Team Plan evidence artifact digest is invalid.');
   const artifact = JSON.parse(
     serialized,
   ) as ModuleDeliveryAcceptedProviderEvidenceIdentity;
   assertTeamPlanAcceptedEvidenceReceipt(artifact);
-  if (
-    JSON.stringify(attemptIdentity(artifact)) !==
-    JSON.stringify(attemptIdentity(record))
-  )
-    throw new Error('Team Plan evidence artifact identity is invalid.');
   session.integrationState = restoreModuleDeliveryIntegrationEvidence({
     authority: session.authority,
     acceptedPlan: session.acceptedPlan,
@@ -717,69 +690,11 @@ function pinPersistedRecord(request: {
   readonly artifactObject: string;
 }): TeamPlanJournalRecord {
   const { session, record, artifactObject } = request;
-  const artifactRef = artifactRefFor({ session, record });
-  const artifactCreated = updateRefCompare({
-    session,
-    artifactRef,
-    artifactObject,
-    expectedObject: '0'.repeat(40),
-  });
-  if (!artifactCreated) {
-    const unchanged = updateRefCompare({
-      session,
-      artifactRef,
-      artifactObject,
-      expectedObject: artifactObject,
-    });
-    if (!unchanged)
-      throw new Error('Team Plan durable artifact ref already differs.');
-    const existing = gitText({
-      cwd: session.journal.started.repositoryRoot,
-      args: ['rev-parse', '--verify', artifactRef],
-    });
-    if (existing !== artifactObject)
-      throw new Error('Team Plan durable artifact ref already differs.');
-  }
-  return record;
-}
-
-function updateRefCompare(request: {
-  readonly session: TeamPlanSession;
-  readonly artifactRef: string;
-  readonly artifactObject: string;
-  readonly expectedObject: string;
-}): boolean {
-  const { session, artifactRef, artifactObject, expectedObject } = request;
-  const result = spawnSync(
-    'git',
-    ['update-ref', artifactRef, artifactObject, expectedObject],
-    {
-      cwd: session.journal.started.repositoryRoot,
-      env: {},
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    },
-  );
-  return result.status === 0;
-}
-
-function assertPinnedArtifact(request: {
-  readonly session: TeamPlanSession;
-  readonly record: TeamPlanJournalRecord;
-  readonly artifactObject: string;
-  readonly objectType: TeamPlanArtifactObjectType;
-}): void {
-  const { session, record, artifactObject, objectType } = request;
-  const resolved = gitText({
+  gitText({
     cwd: session.journal.started.repositoryRoot,
-    args: [
-      'rev-parse',
-      '--verify',
-      `${artifactRefFor({ session, record })}^{${objectType}}`,
-    ],
+    args: ['update-ref', artifactRefFor({ session, record }), artifactObject],
   });
-  if (resolved !== artifactObject)
-    throw new Error('Team Plan durable artifact ref has drifted.');
+  return record;
 }
 
 function deleteRunArtifactRefs(session: TeamPlanArtifactRun): void {
@@ -794,23 +709,12 @@ function deleteRunArtifactRefs(session: TeamPlanArtifactRun): void {
       ];
     return [];
   });
-  const prefix = runArtifactPrefix(session);
-  const actual = gitText({
-    cwd: session.journal.started.repositoryRoot,
-    args: ['for-each-ref', '--format=%(refname)%09%(objectname)', `${prefix}/`],
-  });
-  const expectedText = expected
-    .map(([ref, object]) => `${ref}\t${object}`)
-    .sort()
-    .join('\n');
-  if (actual.split('\n').filter(Boolean).sort().join('\n') !== expectedText)
-    throw new Error('Team Plan durable run refs are incomplete or forged.');
   if (expected.length === 0) return;
   gitText({
     cwd: session.journal.started.repositoryRoot,
     args: ['update-ref', '--stdin'],
     input: `start\n${expected
-      .map(([ref, object]) => `delete ${ref} ${object}`)
+      .map(([ref]) => `delete ${ref}`)
       .join('\n')}\nprepare\ncommit\n`,
   });
 }

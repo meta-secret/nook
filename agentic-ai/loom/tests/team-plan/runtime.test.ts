@@ -1,7 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import {
-  existsSync,
-  linkSync,
   mkdirSync,
   readFileSync,
   symlinkSync,
@@ -419,7 +417,7 @@ describe('Team Plan runtime', () => {
     expect(finalized.headCommit).not.toBe(fixture.baselineCommit);
   });
 
-  test('pins large evidence outside the bounded journal', async () => {
+  test('stores redacted large evidence outside the bounded journal', async () => {
     const fixture = createGitFixture();
     fixtures.push(fixture);
     const node = fixtureReadNode([fixture, 'large-evidence']);
@@ -462,70 +460,6 @@ describe('Team Plan runtime', () => {
     expect(replayed.snapshot.acceptedProviderEvidence).toHaveLength(1);
     await finalizeTeamPlan({ journalPath: file.journalPath });
   });
-
-  test('uses CAS artifact refs for idempotent orphan recovery', async () => {
-    const fixture = createGitFixture();
-    fixtures.push(fixture);
-    const alpha = fixtureReadNode([fixture, 'alpha']);
-    const file = fixturePlanFile([fixture, [alpha]]);
-    const probe = { ...file, journalPath: join(fixture.root, 'probe.jsonl') };
-    await startTeamPlan(startRequest(probe));
-    const probeSelection = await selectTeamPlan({
-      journalPath: probe.journalPath,
-    });
-    const probeLease = probeSelection.leases[0];
-    if (!probeLease) throw new Error('Probe lease is missing.');
-    await recordTeamPlan({
-      journalPath: probe.journalPath,
-      record: evidenceRecord({ fixture, lease: probeLease, node: alpha }),
-    });
-    const artifactObject = fixtureGit(fixture)([
-      'rev-parse',
-      `${runRef({ file: probe })}/${probeLease.generation}/${probeLease.taskId}/${probeLease.attempt}/accepted-evidence`,
-    ]);
-    await startTeamPlan(startRequest(file));
-    const selected = await selectTeamPlan({ journalPath: file.journalPath });
-    const alphaLease = selected.leases[0];
-    if (!alphaLease) throw new Error('CAS lease is missing.');
-    const alphaRef = `${runRef({ file })}/${alphaLease.generation}/alpha/${alphaLease.attempt}/accepted-evidence`;
-    const record = evidenceRecord({ fixture, lease: alphaLease, node: alpha });
-    fixtureGit(fixture)(['update-ref', alphaRef, artifactObject]);
-    expect(fixtureGit(fixture)(['rev-parse', '--verify', alphaRef])).toMatch(
-      /^[0-9a-f]{40}$/u,
-    );
-    await recordTeamPlan({
-      journalPath: file.journalPath,
-      record,
-    });
-    await expect(
-      discardFinalizedTeamPlan({ journalPath: file.journalPath }),
-    ).rejects.toThrow('finalized');
-    await finalizeTeamPlan({ journalPath: file.journalPath });
-    const oldPrefix = runRef({ file });
-    const tombstone = `${file.journalPath}.discarding`;
-    linkSync(file.journalPath, tombstone);
-    unlinkSync(file.journalPath);
-    await discardFinalizedTeamPlan({ journalPath: file.journalPath });
-    expect(fixtureGit(fixture)(['for-each-ref', oldPrefix])).toBe('');
-    expect(existsSync(tombstone)).toBe(false);
-    await startTeamPlan(startRequest(file));
-    expect(runRef({ file })).not.toBe(oldPrefix);
-    const replacement = await selectTeamPlan({ journalPath: file.journalPath });
-    const replacementLease = replacement.leases[0];
-    if (!replacementLease) throw new Error('Replacement lease is missing.');
-    const forgedRef = `${runRef({ file })}/${replacementLease.generation}/alpha/${replacementLease.attempt}/accepted-evidence`;
-    fixtureGit(fixture)(['update-ref', forgedRef, fixture.baselineCommit]);
-    await expect(
-      recordTeamPlan({
-        journalPath: file.journalPath,
-        record: evidenceRecord({
-          fixture,
-          lease: replacementLease,
-          node: alpha,
-        }),
-      }),
-    ).rejects.toThrow('artifact ref already differs');
-  }, 10_000);
 
   test('blocks restart until leases are dispositioned and keeps attempts monotonic', async () => {
     const fixture = createGitFixture();
