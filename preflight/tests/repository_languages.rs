@@ -80,6 +80,7 @@ fn is_automation_source(path: &Path) -> bool {
                 | "jsx"
                 | "json"
                 | "jsonc"
+                | "lock"
                 | "mjs"
                 | "mts"
                 | "rb"
@@ -184,14 +185,49 @@ fn contains_package_install(line: &str, installer: &str) -> bool {
                 character.is_ascii_whitespace()
                     || matches!(character, '\'' | '"' | ',' | '[' | ']' | '(' | ')')
             });
-            let options = separator.contains("--")
+            let options = separator.contains('-')
                 && !separator
                     .chars()
                     .any(|character| matches!(character, ';' | '&' | '|'));
-            return direct || options;
+            if direct || options {
+                return true;
+            }
         }
     }
     false
+}
+
+fn logical_source_lines(source: &str) -> Vec<(usize, String)> {
+    let mut logical_lines = Vec::new();
+    let mut pending = String::new();
+    let mut pending_start = 0;
+    for (index, physical_line) in source.lines().enumerate() {
+        if pending.is_empty() {
+            pending_start = index;
+        }
+        let trimmed = physical_line.trim_end();
+        let trailing_backslashes = trimmed
+            .chars()
+            .rev()
+            .take_while(|character| *character == '\\')
+            .count();
+        let continued = trailing_backslashes % 2 == 1;
+        let content = if continued {
+            &trimmed[..trimmed.len().saturating_sub(1)]
+        } else {
+            physical_line
+        };
+        pending.push_str(content);
+        if continued {
+            pending.push(' ');
+        } else {
+            logical_lines.push((pending_start, std::mem::take(&mut pending)));
+        }
+    }
+    if !pending.is_empty() {
+        logical_lines.push((pending_start, pending));
+    }
+    logical_lines
 }
 
 fn repository_language_violations(root: &Path) -> anyhow::Result<Vec<String>> {
@@ -219,7 +255,7 @@ fn repository_language_violations(root: &Path) -> anyhow::Result<Vec<String>> {
             ));
         }
         let source = String::from_utf8_lossy(&bytes);
-        for (index, line) in source.lines().enumerate() {
+        for (index, line) in logical_source_lines(&source) {
             let trimmed = line.trim_start();
             if trimmed.starts_with("//")
                 || (trimmed.starts_with('#') && !trimmed.starts_with("#!"))
@@ -397,10 +433,11 @@ fn repository_language_scan_rejects_prohibited_dependency_surfaces() -> anyhow::
     fs::create_dir_all(fixture.join("requirements"))?;
     fs::create_dir_all(fixture.join("scripts"))?;
     let installer = ["p", "ip"].concat();
+    let language = ["py", "thon"].concat();
     fs::write(
         fixture.join("Taskfile.yml"),
         format!(
-            "version: '3'\ntasks:\n  install:\n    cmds:\n      - {installer} install package\n      - {installer}3 --no-cache-dir install package\n"
+            "version: '3'\ntasks:\n  install:\n    cmds:\n      - {installer} install package\n      - {installer}3 --no-cache-dir install package\n      - {installer} -q install package\n      - {installer} \\\n        install package\n"
         ),
     )?;
     fs::write(fixture.join("requirements-dev.txt"), "package==1\n")?;
@@ -408,10 +445,18 @@ fn repository_language_scan_rejects_prohibited_dependency_surfaces() -> anyhow::
     fs::write(fixture.join("constraints-dev.in"), "package==1\n")?;
     fs::write(
         fixture.join("scripts/picture-in-picture.ts"),
-        "export const pip = install; export const pyramid = shape.pyramid;\n",
+        format!("export const {installer} = install; export const pyramid = shape.pyramid;\n"),
+    )?;
+    fs::write(
+        fixture.join("scripts/mixed-command.ts"),
+        format!("export const {installer} = install; exec(\"{installer} install package\");\n"),
+    )?;
+    fs::write(
+        fixture.join("bun.lock"),
+        format!("{{\"dependency\": \"{language}-shell\"}}\n"),
     )?;
     let violations = repository_language_violations(&fixture)?;
-    assert_eq!(violations.len(), 5);
+    assert_eq!(violations.len(), 9);
     fs::remove_dir_all(fixture)?;
     Ok(())
 }
