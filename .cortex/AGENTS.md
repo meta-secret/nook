@@ -156,7 +156,14 @@ HH:mm:(<PR>):<ACTOR>:<ACTION> -> <description>
 - Start every activity line with the current local time in 24-hour `HH:mm`
   form.
 - Identify the executor on every activity line with one compact canonical actor
-  token: `GIZMO`, `AI`, `SRE`, or `SKILL`.
+  token from this closed mapping:
+  - `GIZMO` for Gizmo Prime;
+  - `AI` for the AI team;
+  - `DEV-CORE` for Development core;
+  - `SECURITY` for Security;
+  - `SRE` for SRE;
+  - `WEB-DEV` for Web development; and
+  - `SKILL` for an actively executing skill.
   - Use the Team Agent's team token, not `Team Agent` or a personal name.
   - Use `SKILL` only for an activity performed by a skill.
   - Never imply an executor, subagent, or skill execution that did not exist.
