@@ -32,6 +32,7 @@ export function freezeModuleDeliveryAdmissionSource(
 function assertExactWritesAreNotSourceDirectories(
   request: FrozenModuleDeliveryAdmissionSource,
 ): void {
+  const sourceTree = sourceTreeKinds(request);
   for (const node of request.acceptedPlan.plan.nodes) {
     if (node.kind !== ModuleDeliveryTaskKind.Write) continue;
     for (const write of node.resources.write) {
@@ -39,17 +40,12 @@ function assertExactWritesAreNotSourceDirectories(
       const segments = write.split('/');
       for (let length = 1; length < segments.length; length += 1) {
         const ancestor = segments.slice(0, length).join('/');
-        const result = sourceTreeEntry({ ...request, path: ancestor });
-        if (
-          result.stdout.length > 0 &&
-          result.stdout.subarray(0, 12).toString('utf8') !== '040000 tree '
-        )
+        if (sourceTree.entries.has(ancestor) && !sourceTree.trees.has(ancestor))
           throw new Error(
             `Exact ordinary write claim has a non-directory source ancestor: ${ancestor}`,
           );
       }
-      const result = sourceTreeEntry({ ...request, path: write });
-      if (result.stdout.subarray(0, 12).toString('utf8') === '040000 tree ')
+      if (sourceTree.trees.has(write))
         throw new Error(
           `Exact ordinary write claim names a source directory: ${write}`,
         );
@@ -57,17 +53,20 @@ function assertExactWritesAreNotSourceDirectories(
   }
 }
 
-function sourceTreeEntry(
-  request: FrozenModuleDeliveryAdmissionSource & Readonly<{ path: string }>,
-) {
-  return runModuleDeliveryGit({
+function sourceTreeKinds(request: FrozenModuleDeliveryAdmissionSource) {
+  const result = runModuleDeliveryGit({
     cwd: request.repositoryRoot,
-    args: [
-      'ls-tree',
-      '-z',
-      request.acceptedPlan.plan.sourceCommit,
-      '--',
-      request.path,
-    ],
+    args: ['ls-tree', '-r', '-t', '-z', request.acceptedPlan.plan.sourceCommit],
   });
+  const entries = new Set<string>();
+  const trees = new Set<string>();
+  for (const entry of result.stdout.toString('utf8').split('\0')) {
+    if (!entry) continue;
+    const separator = entry.indexOf('\t');
+    if (separator < 0) throw new Error('Source tree entry is malformed.');
+    const path = entry.slice(separator + 1);
+    entries.add(path);
+    if (entry.startsWith('040000 tree ')) trees.add(path);
+  }
+  return { entries, trees } as const;
 }
