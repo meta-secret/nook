@@ -42,8 +42,8 @@ task loom:team-plan:start PLAN=/absolute/path/to/plan.json JOURNAL=/absolute/pat
 task loom:team-plan:select JOURNAL=/absolute/path/to/events.jsonl
 task loom:team-plan:lease JOURNAL=/absolute/path/to/events.jsonl RUN_ID=<selection-run-id> GENERATION=<selection-generation> PLAN_DIGEST=<selection-plan-digest> TASK_IDS=task-a,task-b
 task loom:team-plan:record JOURNAL=/absolute/path/to/events.jsonl RUN_ID=<run-id> REQUEST=/absolute/path/to/result.json
-task loom:team-plan:restart JOURNAL=/absolute/path/to/events.jsonl PLAN=/absolute/path/to/new-plan.json
-task loom:team-plan:finalize JOURNAL=/absolute/path/to/events.jsonl
+task loom:team-plan:restart JOURNAL=/absolute/path/to/events.jsonl RUN_ID=<run-id> PLAN=/absolute/path/to/new-plan.json
+task loom:team-plan:finalize JOURNAL=/absolute/path/to/events.jsonl RUN_ID=<run-id>
 task loom:team-plan:discard JOURNAL=/absolute/path/to/events.jsonl RUN_ID=<runId-from-start>
 ```
 
@@ -62,9 +62,9 @@ Follow the lifecycle in order:
    - Loom uses one nonblocking open handle for the bounded read.
 5. Continue selection, leasing, and recording until the generation reaches terminal
    closure.
-6. Restart only from a quiescent run when a newer reviewed generation is
+6. Restart only with the immutable run ID from a quiescent run when a newer reviewed generation is
    required.
-7. Finalize to persist the exact joined head commit.
+7. Finalize with the immutable run ID to persist the exact joined head commit.
 8. Discard only when the finalized journal and its run artifacts are no longer
    needed for inspection or recovery. Pass the exact `runId` returned by
    `start`.

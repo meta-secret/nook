@@ -298,7 +298,15 @@ test('dispatches every successful Team Plan command', async () => {
     });
     expect(
       await runTeamPlanCli({
-        argv: ['restart', '--journal', journalPath, '--plan', secondPlanPath],
+        argv: [
+          'restart',
+          '--journal',
+          journalPath,
+          '--run-id',
+          started.runId,
+          '--plan',
+          secondPlanPath,
+        ],
       }),
     ).toBe(0);
     expect(
@@ -385,7 +393,9 @@ test('dispatches every successful Team Plan command', async () => {
       }),
     ).toBe(0);
     expect(
-      await runTeamPlanCli({ argv: ['finalize', '--journal', journalPath] }),
+      await runTeamPlanCli({
+        argv: ['finalize', '--journal', journalPath, '--run-id', started.runId],
+      }),
     ).toBe(0);
     const error = spyOn(console, 'error').mockImplementation(() => {});
     try {
@@ -430,6 +440,39 @@ test('localizes visible parse failures through the Loom catalog', async () => {
     );
   } finally {
     error.mockRestore();
+  }
+});
+
+test('localizes runtime validation failures through the Loom catalog', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'team-plan-cli-runtime-locale-'));
+  const planPath = join(root, 'invalid-plan.json');
+  const repositoryRoot = join(root, 'repository');
+  mkdirSync(repositoryRoot);
+  writeFileSync(planPath, '{}\n');
+  try {
+    await runTeamPlanCliWithArguments({
+      argv: [
+        'start',
+        '--plan',
+        planPath,
+        '--journal',
+        join(root, 'journal.jsonl'),
+        '--repository-root',
+        repositoryRoot,
+      ],
+      locale: 'ru-RU',
+    });
+    throw new Error('Expected localized runtime validation failure.');
+  } catch (cause) {
+    expect(cause).toBeInstanceOf(LoomFailure);
+    expect((cause as LoomFailure).code).toBe(
+      LoomFailureCode.TeamPlanValidationFailed,
+    );
+    expect(((cause as LoomFailure).cause as Error).message).toBe(
+      'Проверка команды Team Plan завершилась ошибкой.',
+    );
+  } finally {
+    rmSync(root, { recursive: true });
   }
 });
 

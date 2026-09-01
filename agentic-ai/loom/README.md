@@ -23,8 +23,8 @@ task loom:team-plan:start PLAN=/absolute/path/to/plan.json JOURNAL=/absolute/pat
 task loom:team-plan:select JOURNAL=/absolute/path/to/events.jsonl
 task loom:team-plan:lease JOURNAL=/absolute/path/to/events.jsonl RUN_ID=<selection-run-id> GENERATION=<selection-generation> PLAN_DIGEST=<selection-plan-digest> TASK_IDS=task-a,task-b
 task loom:team-plan:record JOURNAL=/absolute/path/to/events.jsonl RUN_ID=<run-id> REQUEST=/absolute/path/to/result.json
-task loom:team-plan:restart JOURNAL=/absolute/path/to/events.jsonl PLAN=/absolute/path/to/new-plan.json
-task loom:team-plan:finalize JOURNAL=/absolute/path/to/events.jsonl
+task loom:team-plan:restart JOURNAL=/absolute/path/to/events.jsonl RUN_ID=<run-id> PLAN=/absolute/path/to/new-plan.json
+task loom:team-plan:finalize JOURNAL=/absolute/path/to/events.jsonl RUN_ID=<run-id>
 task loom:team-plan:discard JOURNAL=/absolute/path/to/events.jsonl RUN_ID=<runId-from-start>
 ```
 
@@ -47,10 +47,10 @@ The lifecycle is explicit:
    that same open handle.
 5. Repeat `select`, `lease`, and `record` until every task is accepted, exhausts its
    attempts, or becomes terminal through dependency failure.
-6. `restart` appends a newer reviewed generation. The current generation must
+6. `restart` binds the immutable run ID and appends a newer reviewed generation. The current generation must
    have no active leases. Logical task attempts remain monotonic across the
    restart.
-7. `finalize` appends the exact joined head commit after terminal closure. A
+7. `finalize` binds the immutable run ID and appends the exact joined head commit after terminal closure. A
    repeated finalize of the same finalized run returns its existing snapshot.
 8. `discard` requires the immutable `runId` returned by `start`. It removes only
    that expected finalized journal and its run-owned durable artifacts. A

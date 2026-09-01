@@ -1,9 +1,13 @@
 {
-  "team_plan_help": "Использование:\n  loom-team-plan start --plan <plan.json> --journal <events.jsonl> --repository-root <repo>\n  loom-team-plan select --journal <events.jsonl>\n  loom-team-plan lease --journal <events.jsonl> --run-id <id> --generation <number> --plan-digest <digest> --task-ids <id[,id...]>\n  loom-team-plan record --journal <events.jsonl> --run-id <id> --request <result.json>\n  loom-team-plan restart --journal <events.jsonl> --plan <plan.json>\n  loom-team-plan finalize --journal <events.jsonl>\n  loom-team-plan discard --journal <events.jsonl> --run-id <id>",
+  "team_plan_help": "Использование:\n  loom-team-plan start --plan <plan.json> --journal <events.jsonl> --repository-root <repo>\n  loom-team-plan select --journal <events.jsonl>\n  loom-team-plan lease --journal <events.jsonl> --run-id <id> --generation <number> --plan-digest <digest> --task-ids <id[,id...]>\n  loom-team-plan record --journal <events.jsonl> --run-id <id> --request <result.json>\n  loom-team-plan restart --journal <events.jsonl> --run-id <id> --plan <plan.json>\n  loom-team-plan finalize --journal <events.jsonl> --run-id <id>\n  loom-team-plan discard --journal <events.jsonl> --run-id <id>",
   "team_plan_invalid_arguments": "Аргументы команды Team Plan недопустимы.",
   "team_plan_invalid_record_file": "Файл запроса записи Team Plan недопустим или слишком велик.",
   "team_plan_invalid_record_json": "JSON запроса записи Team Plan недопустим.",
   "team_plan_invalid_record_contents": "Поля запроса записи Team Plan недопустимы.",
   "team_plan_invalid_record_encoding": "Запрос записи Team Plan должен быть в допустимой кодировке UTF-8.",
-  "team_plan_oversized_record": "Запрос записи Team Plan слишком велик."
+  "team_plan_oversized_record": "Запрос записи Team Plan слишком велик.",
+  "team_plan_runtime_validation_failure": "Проверка команды Team Plan завершилась ошибкой.",
+  "team_plan_runtime_storage_failure": "Операция хранения команды Team Plan завершилась ошибкой.",
+  "team_plan_runtime_recovery_failure": "Восстановление команды Team Plan завершилось ошибкой.",
+  "team_plan_runtime_command_failure": "Команда Team Plan завершилась ошибкой."
 }
