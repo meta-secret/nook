@@ -30,58 +30,6 @@ These records expose auditable actions and cited authority, not private
 reasoning. Event counts are diagnostic activity signals and are not an effort,
 quality, or billing measure.
 
-## Run a Team Plan
-
-Team Plan gives the active delegation harness one durable command lifecycle for
-a reviewed module delivery plan. Ordinary agents enter through the canonical
-delegation workflow and must not invoke these worker-lifecycle mutations
-directly. The journal stays outside the source repository.
-
-The active harness invokes commands from the repository root:
-
-```bash
-task loom:team-plan:start PLAN=/absolute/path/to/plan.json JOURNAL=/absolute/path/to/events.jsonl
-task loom:team-plan:select JOURNAL=/absolute/path/to/events.jsonl
-task loom:team-plan:lease JOURNAL=/absolute/path/to/events.jsonl RUN_ID=<selection-run-id> GENERATION=<selection-generation> PLAN_DIGEST=<selection-plan-digest> ATTEMPTS=task-a:1,task-b:1
-task loom:team-plan:record JOURNAL=/absolute/path/to/events.jsonl RUN_ID=<run-id> REQUEST=/absolute/path/to/result.json
-task loom:team-plan:restart JOURNAL=/absolute/path/to/events.jsonl RUN_ID=<run-id> PLAN=/absolute/path/to/new-plan.json
-task loom:team-plan:finalize JOURNAL=/absolute/path/to/events.jsonl RUN_ID=<run-id>
-task loom:team-plan:discard JOURNAL=/absolute/path/to/events.jsonl RUN_ID=<runId-from-start>
-```
-
-The installed `loom-team-plan` executable exposes the same seven operations.
-Each successful operation prints one JSON value to stdout.
-
-The active harness owns this lifecycle in order:
-
-1. Start one reviewed generation at its declared source commit. Save the
-   immutable `runId` from the returned JSON snapshot.
-2. Select the next candidate batch without consuming attempts or concurrency.
-3. Lease only the comma-separated candidate task-and-attempt pairs explicitly
-   authorized by Gizmo, using the exact run, generation, and plan digest from
-   that selection.
-4. Record one terminal result for each selected lease using the immutable run ID.
-   - The request path must identify a regular file.
-   - Loom uses one nonblocking open handle for the bounded read.
-5. Continue selection, leasing, and recording until the generation reaches terminal
-   closure.
-6. Restart only with the immutable run ID from a quiescent run when a newer reviewed generation is
-   required.
-7. Finalize with the immutable run ID to persist the exact joined head commit.
-8. Discard only when the finalized journal and its run artifacts are no longer
-   needed for inspection or recovery. Pass the exact `runId` returned by
-   `start`.
-
-## Team Plan journal compatibility
-
-Creation recovers `.publishing` only when it is the same inode and exact
-requested journal. Completed discard retains `.discarded` as a validated
-finalized journal; retries resync it and later creation validates it before
-durable removal.
-
-The package README owns the versioned journal and recovery contract. See
-[`Team Plan commands`](../../../../agentic-ai/loom/README.md#team-plan-commands).
-
 ## Invoke a leaf tool
 
 Defaultable tools use a Task alias and an in-code example:

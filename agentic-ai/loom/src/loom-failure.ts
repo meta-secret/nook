@@ -11,10 +11,6 @@ export enum LoomFailureCode {
   StatsFilenameInvalid = 'statsFilenameInvalid',
   SkillScaffoldFailed = 'skillScaffoldFailed',
   CortexAuditFailed = 'cortexAuditFailed',
-  TeamPlanValidationFailed = 'teamPlanValidationFailed',
-  TeamPlanStorageFailed = 'teamPlanStorageFailed',
-  TeamPlanCommandFailed = 'teamPlanCommandFailed',
-  TeamPlanRecoveryFailed = 'teamPlanRecoveryFailed',
 }
 
 export enum LoomFailureDetailKind {
@@ -76,14 +72,6 @@ function defaultMessage(code: LoomFailureCode): string {
       return 'Skill scaffold failed';
     case LoomFailureCode.CortexAuditFailed:
       return 'Cortex audit failed';
-    case LoomFailureCode.TeamPlanValidationFailed:
-      return 'Team Plan validation failed';
-    case LoomFailureCode.TeamPlanStorageFailed:
-      return 'Team Plan storage operation failed';
-    case LoomFailureCode.TeamPlanCommandFailed:
-      return 'Team Plan command failed';
-    case LoomFailureCode.TeamPlanRecoveryFailed:
-      return 'Team Plan recovery failed';
   }
 }
 
