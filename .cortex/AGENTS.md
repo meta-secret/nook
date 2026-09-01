@@ -100,16 +100,64 @@ Agent-authored fallback behavior is prohibited. This is a universal P1 rule.
 
 ## Agent communication
 
-Every user-visible agent message starts with the pull request it currently
-serves.
+Every user-visible agent message starts with an unformatted YAML metadata
+document.
 
-- Use `PR #<number> —` when the current work has a pull request.
-- Use `PR pending —` before that pull request exists.
-- Use `PR none —` when the assigned work intentionally has no pull request.
+```yaml
+---
+time: "HH:mm"
+pr: "#<number>"
+team: "<team>"
+agent: "<agent>"
+action: "<action-type>"
+...
+```
+
+Plain-text description.
+
+- Use the current local time in 24-hour `HH:mm` form.
+- Use the exact pull-request number that the activity currently serves.
+- Use `pr: "pending"` before that pull request exists.
+- Use `pr: "none"` when the assigned work intentionally has no pull request.
 - Recheck the identifier after pull-request creation or a stacked-PR
   transition.
-- Apply the prefix to progress updates, questions, handoffs, and final
+- Identify the active team and agent in separate fields.
+  - Use team labels such as `GIZMO`, `AI`, `DEV-CORE`, `SECURITY`, `SRE`, or
+    `WEB-DEV`.
+  - Use a short stable agent label such as `Prime`, `Cortex`, `Rust`, `Review`,
+    `CI`, or `UI`.
+  - Use the team name for both fields when the task has no narrower agent
+    identity.
+  - Change the fields when work passes to another team or agent.
+  - Never imply an identity or authority that the acting agent does not hold.
+- Use a short action type that makes the purpose immediately visible.
+  - `FEATURE` covers new product functionality.
+  - `BUILD` covers implementation of already selected functionality.
+  - `REVIEW` covers review analysis and comment fixes.
+  - `REFACTOR` covers structure changes without intended behavior changes.
+  - `TEST` covers validation and test results.
+  - `AI` covers agent coordination and AI-owned implementation.
+  - `DOCS/CORTEX` covers documentation and Cortex work.
+  - `CMD` identifies a command that is starting or still running.
+  - `WAIT` identifies a bounded wait and its elapsed time.
+  - `STATE` summarizes the current result, blocker, or next action.
+- Start the metadata with `---` and end it with `...`.
+- Do not wrap live message metadata in a Markdown code fence.
+- The example above is fenced only to render the literal syntax in Cortex.
+- Put the short plain-text description after the metadata.
+- State what changed, why it was done, or what current state was observed.
+- Show a command before waiting for it to finish.
+  - Prefer the task entrypoint, such as `task loom:verify`.
+  - Truncate a command longer than roughly 20 to 30 characters when its full
+    spelling would obscure the status.
+  - Report the command's completion, failure, or interruption with elapsed
+    time.
+- During a long command or external wait, emit a `WAIT` update at least once
+  per minute.
+- Give every bounded wait a start update and a completion or timeout update.
+- Apply the format to progress updates, questions, handoffs, and final
   responses.
+- Give each separate activity its own YAML metadata and plain-text description.
 - Do not add the prefix to code, logs, repository content, commit messages, or
   machine-readable protocols.
 
