@@ -599,6 +599,9 @@ fn arc_workflow_matches_the_taskfile_catalog() -> Result<()> {
     let task_setup_position = workflow
         .find("name: Install Task for Loom-only verification")
         .context("Loom-only remote execution must install Task")?;
+    let rust_setup_position = workflow
+        .find("name: Install Rust for Loom verification")
+        .context("Loom remote execution must install Rust")?;
     let bun_setup_position = workflow
         .find("name: Install Bun for Loom verification")
         .context("Loom remote execution must install Bun")?;
@@ -608,17 +611,21 @@ fn arc_workflow_matches_the_taskfile_catalog() -> Result<()> {
     let batch_position = workflow
         .find("remote-task-batch.sh --run \"$REQUESTED_REMOTE_TASKS\"")
         .context("remote execution must run the allowlisted batch")?;
-    assert!(task_setup_position < bun_setup_position);
+    assert!(task_setup_position < rust_setup_position);
+    assert!(rust_setup_position < bun_setup_position);
     assert!(bun_setup_position < tool_proof_position);
     assert!(tool_proof_position < batch_position);
     for required in [
         "(inputs.tasks || inputs.task) == 'loom:verify'",
         "uses: go-task/setup-task@v2",
         "version: 3.52.0",
+        "uses: dtolnay/rust-toolchain@stable",
+        "components: rustfmt",
         "uses: oven-sh/setup-bun@v2",
         "bun-version: 1.3.14",
-        "task --version",
-        "bun --version",
+        "command -v task",
+        "command -v bun",
+        "command -v cargo",
     ] {
         assert!(
             workflow.contains(required),

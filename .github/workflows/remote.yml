@@ -113,6 +113,11 @@ jobs:
         uses: go-task/setup-task@v2
         with:
           version: 3.52.0
+      - name: Install Rust for Loom verification
+        if: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',loom:verify,') }}
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
       - name: Install Bun for Loom verification
         if: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',loom:verify,') }}
         uses: oven-sh/setup-bun@v2
@@ -134,8 +139,9 @@ jobs:
       - name: Verify Loom command tools
         if: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',loom:verify,') }}
         run: |
-          task --version
-          bun --version
+          command -v task
+          command -v bun
+          command -v cargo
       - name: Wait for private Neo4j sidecar
         if: ${{ env.REQUEST_INCLUDES_HIVE == 'true' }}
         run: .github/scripts/wait-hive-neo4j.sh

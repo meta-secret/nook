@@ -54,7 +54,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     '.github/scripts/remote-task-batch.sh',
-    '5e080e77ac462a6de1339b55ab26ad0b8a240128975621acf8163ae3d4e90c49',
+    '02f60c3d13be6b159eebd6698a9730114ed325d167c2df6ed0f041271bbb4ced',
   ],
   [
     'infra/operator-ssh.ts',

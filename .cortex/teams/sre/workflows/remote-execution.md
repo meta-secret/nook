@@ -135,8 +135,10 @@ The allowlisted ARC tasks avoid a general container-runtime requirement:
 - `rust:ci` executes formatting, Clippy, tests, and coverage in BuildKit stages.
 - `loom:verify` executes the full Loom format, lint, typecheck, unit-test,
   skill, and expert-catalog verification directly on the ARC runner.
-  - A Loom-only dispatch installs the repository-pinned Task and Bun versions.
-  - It proves both command tools before starting the allowlisted task.
+  - A Loom-only dispatch installs the repository-pinned Task version.
+  - Every Loom dispatch installs the pinned Bun version and stable Rust
+    toolchain used by repository policy.
+  - It proves Task, Bun, and Cargo before starting the allowlisted task.
   - It does not initialize Docker or cache credentials.
 - `arc:runtime` exports and verifies a BuildKit result without `docker run`.
 - `hive:verify` executes exported tests through its pinned native runtime
