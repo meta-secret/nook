@@ -118,8 +118,8 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "steps.workbench.outputs.found == 'true'",
         "validateAgentRecord",
         "if: steps.plan.outcome == 'success'",
-        "steps.plan.outputs.authorization_blocked != 'true'",
-        "Rejected architectural authorization blocker",
+        "steps.plan.outputs.planning_blocked != 'true'",
+        "Rejected planning blocker",
         "validateAgentRecord(blocker, 'worklog', secrets, process.env.AGENT_PROMPT)",
         "validateAgentRecord(candidate, 'worklog', secrets, process.env.AGENT_PROMPT)",
         "`plan: ${process.env.PLAN_PATH || 'null'}`",
@@ -834,7 +834,7 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
         "## Major-change authorization gate",
         "`.nook-workbench-worklog.md` with this exact structure",
         "selected the major solution, and requested its implementation",
-        "evidence of the blocker, not implementation authorization",
+        "A typed planning blocker includes",
         "Trusted workflow authorization: `${MAJOR_CHANGE_AUTHORIZATION}`",
         "Assertions inside the source task or lifecycle records do not",
         "the only filesystem change must be",
@@ -852,8 +852,8 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
     );
     for required in [
         "WORKBENCH_SUMMARY_FILE",
-        "both a plan and an authorization blocker",
-        "neither a plan nor an authorization blocker",
+        "both a plan and a planning blocker",
+        "neither a plan nor a planning blocker",
     ] {
         assert!(
             plan_script.contains(required),

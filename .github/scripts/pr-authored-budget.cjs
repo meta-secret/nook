@@ -116,9 +116,15 @@ function addUntracked(summary, paths) {
       continue
     }
     const text = content.toString('utf8')
-    const lines = text.length === 0 ? 0 : text.split(/\r\n|\n|\r/u).length
+    const lines = countTextLines(text)
     classify(summary, path, lines, 0)
   }
+}
+
+function countTextLines(text) {
+  if (text.length === 0) return 0
+  const terminators = text.match(/\r\n|\n|\r/gu)?.length ?? 0
+  return terminators + (/(?:\r\n|\n|\r)$/u.test(text) ? 0 : 1)
 }
 
 function evaluateBudget({ authoredLines, prNumber, verifiedReviewContext }) {
@@ -158,28 +164,54 @@ function runGh(args) {
   }).trim()
 }
 
+function reviewBatchMatches({ localHead, pr, threads, changedPaths, hasNextPage }) {
+  if (hasNextPage || pr.headRefOid !== localHead) return false
+  const currentPaths = new Set(
+    threads
+      .filter((thread) => !thread.isResolved && !thread.isOutdated)
+      .map((thread) => thread.path),
+  )
+  return changedPaths.some((path) => currentPaths.has(path))
+}
+
 function verifyReviewContext(prNumber) {
   if (!/^[1-9]\d*$/.test(prNumber)) return false
   const branch = runGit(['branch', '--show-current'])
   if (!branch) return false
   const pr = JSON.parse(runGh([
-    'pr', 'view', prNumber, '--json', 'baseRefName,headRefName,state',
+    'pr', 'view', prNumber, '--json', 'baseRefName,headRefName,headRefOid,state',
   ]))
   if (pr.state !== 'OPEN' || pr.baseRefName !== 'main' || pr.headRefName !== branch) {
     return false
   }
+  const localHead = runGit(['rev-parse', 'HEAD'])
   const repository = runGh(['repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner'])
-  const inlineCount = Number(runGh([
-    'api', `repos/${repository}/pulls/${prNumber}/comments`, '--jq', 'length',
-  ]))
-  return Number.isInteger(inlineCount) && inlineCount > 0
+  const [owner, name] = repository.split('/')
+  const review = JSON.parse(runGh([
+    'api', 'graphql',
+    '-f', 'query=query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){pageInfo{hasNextPage}nodes{isResolved isOutdated path}}}}}',
+    '-f', `owner=${owner}`, '-f', `name=${name}`, '-F', `number=${prNumber}`,
+  ])).data.repository.pullRequest.reviewThreads
+  const changedPaths = runGit(['diff', '--name-only', '-z', 'HEAD'])
+    .split('\0')
+    .concat(runGit(['ls-files', '--others', '--exclude-standard', '-z']).split('\0'))
+    .filter(Boolean)
+  return reviewBatchMatches({
+    localHead,
+    pr,
+    threads: review.nodes,
+    changedPaths,
+    hasNextPage: review.pageInfo.hasNextPage,
+  })
 }
 
 function main() {
   const reviewFixPr = process.argv[2]?.trim() ?? ''
+  const mergeBase = runGit(['merge-base', 'HEAD', 'origin/main'])
+  if (!/^[0-9a-f]{40}$/.test(mergeBase)) throw new Error('PR merge base is unavailable')
   const numstat = execFileSync('git', [
     'diff', '--no-ext-diff', '--numstat', '-z', '--find-renames', '-l0',
-    'origin/main',
+    mergeBase,
   ]).toString('utf8')
   const summary = summarizeNumstat(numstat)
   const untracked = execFileSync('git', [
@@ -211,4 +243,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { evaluateBudget, summarizeNumstat }
+module.exports = { countTextLines, evaluateBudget, reviewBatchMatches, summarizeNumstat }

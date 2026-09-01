@@ -40,7 +40,7 @@ artifact_ready() {
   [ -f "$1" ] && [ ! -L "$1" ] && [ -s "$1" ] && [ "$(wc -c < "$1")" -le 65536 ]
 }
 if artifact_ready "$plan_path" && artifact_ready "$blocker_path"; then
-  echo "Planning agent produced both a plan and an authorization blocker." >&2
+  echo "Planning agent produced both a plan and a planning blocker." >&2
   exit 1
 fi
 if artifact_ready "$plan_path"; then
@@ -53,5 +53,5 @@ if artifact_ready "$blocker_path"; then
   test -s "$WORKBENCH_SUMMARY_FILE"
   exit 0
 fi
-echo "Planning agent produced neither a plan nor an authorization blocker." >&2
+echo "Planning agent produced neither a plan nor a planning blocker." >&2
 exit 1

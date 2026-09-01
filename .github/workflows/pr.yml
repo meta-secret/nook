@@ -436,7 +436,7 @@ jobs:
         run: node --test .github/scripts/main-failure-handoff.test.cjs
 
       - name: Test Workbench agent records
-        run: node --test .github/scripts/workbench-records.test.cjs
+        run: node --test .github/scripts/workbench-records.test.cjs .github/scripts/pr-authored-budget.test.cjs
 
       - name: Test cache telemetry collector
         run: node --test .github/scripts/cache-telemetry.test.cjs

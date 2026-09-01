@@ -434,16 +434,16 @@ jobs:
             const secrets = [process.env.CURSOR_SECRET]
             if (!fs.existsSync(localPath)) {
               if (!fs.existsSync(summaryPath)) {
-                core.setFailed('Planning produced neither a plan nor an authorization blocker.')
+                core.setFailed('Planning produced neither a plan nor a planning blocker.')
                 return
               }
               const blocker = fs.readFileSync(summaryPath, 'utf8').trim()
               const rejection = validateAgentRecord(blocker, 'worklog', secrets, process.env.AGENT_PROMPT)
               if (rejection) {
-                core.setFailed(`Rejected architectural authorization blocker: ${rejection}.`)
+                core.setFailed(`Rejected planning blocker: ${rejection}.`)
                 return
               }
-              core.setOutput('authorization_blocked', 'true')
+              core.setOutput('planning_blocked', 'true')
               return
             }
             const candidate = fs.readFileSync(localPath, 'utf8').trim()
@@ -489,7 +489,7 @@ jobs:
             core.setOutput('url', `https://github.com/${owner}/${repo}/blob/main/${planPath}`)
 
       - name: Materialize validated implementation plan
-        if: steps.plan.outcome == 'success' && steps.plan.outputs.authorization_blocked != 'true' && steps.rerun.outputs.terminal != 'true'
+        if: steps.plan.outcome == 'success' && steps.plan.outputs.planning_blocked != 'true' && steps.rerun.outputs.terminal != 'true'
         env:
           EXPECTED_PLAN_SHA256: ${{ steps.plan.outputs.sha256 }}
         run: |
@@ -506,7 +506,7 @@ jobs:
 
       - name: Run sandboxed implementation agent
         id: agent_edit
-        if: steps.rerun.outputs.terminal == 'true' || (steps.plan.outcome == 'success' && steps.plan.outputs.authorization_blocked != 'true')
+        if: steps.rerun.outputs.terminal == 'true' || (steps.plan.outcome == 'success' && steps.plan.outputs.planning_blocked != 'true')
         env:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
           IMPLEMENTATION_TERMINAL: ${{ steps.rerun.outputs.terminal }}
