@@ -154,6 +154,18 @@ function writeJson(request: WriteTeamPlanJsonRequest): void {
   writeFileSync(request.path, `${JSON.stringify(request.value)}\n`);
 }
 
+function recordArguments(journalPath: string, requestPath: string) {
+  return [
+    'record',
+    '--journal',
+    journalPath,
+    '--run-id',
+    '0'.repeat(64),
+    '--request',
+    requestPath,
+  ];
+}
+
 function nestedProviderEvidence(
   request: NestedProviderEvidenceRequest,
 ): ModuleDeliveryAcceptedProviderEvidenceIdentity {
@@ -235,6 +247,12 @@ test('dispatches every successful Team Plan command', async () => {
           'lease',
           '--journal',
           journalPath,
+          '--run-id',
+          firstSelection.snapshot.runId,
+          '--generation',
+          String(firstSelection.snapshot.generation),
+          '--plan-digest',
+          firstSelection.snapshot.planDigest,
           '--task-ids',
           firstAdmission.taskId,
         ],
@@ -257,7 +275,15 @@ test('dispatches every successful Team Plan command', async () => {
     });
     expect(
       await runTeamPlanCli({
-        argv: ['record', '--journal', journalPath, '--request', recordPath],
+        argv: [
+          'record',
+          '--journal',
+          journalPath,
+          '--run-id',
+          started.runId,
+          '--request',
+          recordPath,
+        ],
       }),
     ).toBe(0);
 
@@ -289,6 +315,12 @@ test('dispatches every successful Team Plan command', async () => {
           'lease',
           '--journal',
           journalPath,
+          '--run-id',
+          secondSelection.snapshot.runId,
+          '--generation',
+          String(secondSelection.snapshot.generation),
+          '--plan-digest',
+          secondSelection.snapshot.planDigest,
           '--task-ids',
           secondAdmission.taskId,
         ],
@@ -341,7 +373,15 @@ test('dispatches every successful Team Plan command', async () => {
     );
     expect(
       await runTeamPlanCli({
-        argv: ['record', '--journal', journalPath, '--request', recordPath],
+        argv: [
+          'record',
+          '--journal',
+          journalPath,
+          '--run-id',
+          started.runId,
+          '--request',
+          recordPath,
+        ],
       }),
     ).toBe(0);
     expect(
@@ -435,13 +475,7 @@ test('admits the complete permitted nested provider evidence ancestry', async ()
       MAX_TEAM_PLAN_RECORD_REQUEST_BYTES,
     );
     await expectTeamPlanCliFailure({
-      argv: [
-        'record',
-        '--journal',
-        join(root, 'missing-journal'),
-        '--request',
-        requestPath,
-      ],
+      argv: recordArguments(join(root, 'missing-journal'), requestPath),
       code: LoomFailureCode.TeamPlanValidationFailed,
     });
   } finally {
@@ -457,13 +491,7 @@ test('localizes non-file and oversized record failures', async () => {
   for (const requestPath of [root, oversized]) {
     try {
       await runTeamPlanCliWithArguments({
-        argv: [
-          'record',
-          '--journal',
-          join(root, 'journal'),
-          '--request',
-          requestPath,
-        ],
+        argv: recordArguments(join(root, 'journal'), requestPath),
         locale: 'ru-RU',
       });
       throw new Error('Expected localized record-file failure.');
@@ -498,13 +526,7 @@ test('localizes malformed record contents', async () => {
     writeFileSync(requestPath, fixture.contents);
     try {
       await runTeamPlanCliWithArguments({
-        argv: [
-          'record',
-          '--journal',
-          join(root, 'journal'),
-          '--request',
-          requestPath,
-        ],
+        argv: recordArguments(join(root, 'journal'), requestPath),
         locale: 'ru-RU',
       });
       throw new Error('Expected localized record-content failure.');
@@ -525,32 +547,26 @@ test('normalizes invalid record files and oversized journals', async () => {
   truncateSync(request, MAX_TEAM_PLAN_RECORD_REQUEST_BYTES + 1);
   for (const path of [root, request])
     await expectTeamPlanCliFailure({
-      argv: ['record', '--journal', join(root, 'journal'), '--request', path],
+      argv: recordArguments(join(root, 'journal'), path),
       code: LoomFailureCode.TeamPlanValidationFailed,
     });
   writeFileSync(request, '{');
   await expectTeamPlanCliFailure({
-    argv: ['record', '--journal', join(root, 'journal'), '--request', request],
+    argv: recordArguments(join(root, 'journal'), request),
     code: LoomFailureCode.TeamPlanValidationFailed,
   });
   writeFileSync(request, '{}\n');
   await expectTeamPlanCliFailure({
-    argv: ['record', '--journal', join(root, 'journal'), '--request', request],
+    argv: recordArguments(join(root, 'journal'), request),
     code: LoomFailureCode.TeamPlanValidationFailed,
   });
   writeFileSync(request, Buffer.from([0xc3, 0x28]));
   await expectTeamPlanCliFailure({
-    argv: ['record', '--journal', join(root, 'journal'), '--request', request],
+    argv: recordArguments(join(root, 'journal'), request),
     code: LoomFailureCode.TeamPlanValidationFailed,
   });
   await expectTeamPlanCliFailure({
-    argv: [
-      'record',
-      '--journal',
-      join(root, 'journal'),
-      '--request',
-      join(root, 'missing.json'),
-    ],
+    argv: recordArguments(join(root, 'journal'), join(root, 'missing.json')),
     code: LoomFailureCode.TeamPlanStorageFailed,
   });
   const journal = join(root, 'oversized-journal.jsonl');
@@ -575,13 +591,7 @@ test.skipIf(process.platform === 'win32')(
       if (created.status !== 0)
         throw new Error('Unable to create Team Plan request FIFO fixture.');
       await expectTeamPlanCliFailure({
-        argv: [
-          'record',
-          '--journal',
-          join(root, 'journal'),
-          '--request',
-          request,
-        ],
+        argv: recordArguments(join(root, 'journal'), request),
         code: LoomFailureCode.TeamPlanValidationFailed,
       });
       const planPath = join(root, 'plan.fifo');
