@@ -2,7 +2,6 @@ use std::{
     ffi::OsStr,
     fs,
     path::{Path, PathBuf},
-    process::Command,
 };
 
 fn repository_root() -> PathBuf {
@@ -12,49 +11,39 @@ fn repository_root() -> PathBuf {
     )
 }
 
-fn tracked_paths(root: &Path) -> anyhow::Result<Vec<PathBuf>> {
-    if !root.join(".git").exists() {
-        return filesystem_paths(root);
-    }
-    let output = Command::new("git")
-        .args([
-            "ls-files",
-            "--cached",
-            "--others",
-            "--exclude-standard",
-            "-z",
-        ])
-        .current_dir(root)
-        .output()?;
-    anyhow::ensure!(output.status.success(), "git ls-files failed");
-    Ok(output
-        .stdout
-        .split(|byte| *byte == 0)
-        .filter(|path| !path.is_empty())
-        .map(|path| root.join(String::from_utf8_lossy(path).as_ref()))
-        .filter(|path| path.is_file())
-        .collect())
-}
-
-fn filesystem_paths(root: &Path) -> anyhow::Result<Vec<PathBuf>> {
+fn repository_paths(root: &Path) -> anyhow::Result<Vec<PathBuf>> {
     let mut files = Vec::new();
     let mut directories = vec![root.to_path_buf()];
     while let Some(directory) = directories.pop() {
         for entry in fs::read_dir(&directory)? {
             let entry = entry?;
             let path = entry.path();
-            if path.is_dir() {
-                if !matches!(
-                    path.file_name().and_then(OsStr::to_str),
-                    Some(".git" | "node_modules" | "target" | "vendor")
-                ) {
-                    directories.push(path);
-                }
-            } else if path.is_file() {
+            let file_type = entry.file_type()?;
+            let ignored = matches!(
+                path.file_name().and_then(OsStr::to_str),
+                Some(
+                    ".cache"
+                        | ".git"
+                        | ".svelte-kit"
+                        | "build"
+                        | "coverage"
+                        | "dist"
+                        | "node_modules"
+                        | "target"
+                        | "vendor"
+                )
+            );
+            if file_type.is_symlink() || ignored {
+                continue;
+            }
+            if file_type.is_dir() {
+                directories.push(path);
+            } else if file_type.is_file() {
                 files.push(path);
             }
         }
     }
+    files.sort();
     Ok(files)
 }
 
@@ -197,11 +186,59 @@ fn contains_package_install(line: &str, installer: &str) -> bool {
     false
 }
 
-fn logical_source_lines(source: &str) -> Vec<(usize, String)> {
+fn is_folded_yaml_header(line: &str) -> bool {
+    let trimmed = line.trim();
+    let value = if let Some((_, value)) = trimmed.split_once(':') {
+        value
+    } else if let Some(value) = trimmed.strip_prefix("- ") {
+        value
+    } else {
+        return false;
+    };
+    let marker = value.split('#').next().unwrap_or_default().trim();
+    marker.strip_prefix('>').is_some_and(|suffix| {
+        suffix
+            .chars()
+            .all(|character| matches!(character, '+' | '-' | '0'..='9'))
+    })
+}
+
+fn leading_whitespace(line: &str) -> usize {
+    line.len().saturating_sub(line.trim_start().len())
+}
+
+fn logical_source_lines(source: &str, fold_yaml: bool) -> Vec<(usize, String)> {
+    let physical_lines = source.lines().collect::<Vec<_>>();
     let mut logical_lines = Vec::new();
     let mut pending = String::new();
     let mut pending_start = 0;
-    for (index, physical_line) in source.lines().enumerate() {
+    let mut index = 0;
+    while index < physical_lines.len() {
+        let physical_line = physical_lines[index];
+        if fold_yaml && is_folded_yaml_header(physical_line) {
+            let header_indent = leading_whitespace(physical_line);
+            let block_start = index;
+            let mut folded = String::new();
+            index += 1;
+            while index < physical_lines.len() {
+                let block_line = physical_lines[index];
+                if !block_line.trim().is_empty() && leading_whitespace(block_line) <= header_indent
+                {
+                    break;
+                }
+                if !block_line.trim().is_empty() {
+                    if !folded.is_empty() {
+                        folded.push(' ');
+                    }
+                    folded.push_str(block_line.trim());
+                }
+                index += 1;
+            }
+            if !folded.is_empty() {
+                logical_lines.push((block_start, folded));
+            }
+            continue;
+        }
         if pending.is_empty() {
             pending_start = index;
         }
@@ -223,6 +260,7 @@ fn logical_source_lines(source: &str) -> Vec<(usize, String)> {
         } else {
             logical_lines.push((pending_start, std::mem::take(&mut pending)));
         }
+        index += 1;
     }
     if !pending.is_empty() {
         logical_lines.push((pending_start, pending));
@@ -236,9 +274,16 @@ fn repository_language_violations(root: &Path) -> anyhow::Result<Vec<String>> {
     let source_suffixes =
         ["", "i", "c", "o", "w"].map(|suffix| [script_extension.as_str(), suffix].concat());
     let package_installer = ["p", "ip"].concat();
+    let interpreter_aliases = [
+        ["py", "py"].concat(),
+        ["micro", language.as_str()].concat(),
+        ["jy", "thon"].concat(),
+        ["iron", language.as_str()].concat(),
+        ["i", language.as_str()].concat(),
+    ];
     let mut violations = Vec::new();
 
-    for path in tracked_paths(root)? {
+    for path in repository_paths(root)? {
         let relative = path.strip_prefix(root).unwrap_or(&path);
         if is_prohibited_path(relative, &source_suffixes) {
             violations.push(format!("{}: prohibited authored file", relative.display()));
@@ -255,7 +300,11 @@ fn repository_language_violations(root: &Path) -> anyhow::Result<Vec<String>> {
             ));
         }
         let source = String::from_utf8_lossy(&bytes);
-        for (index, line) in logical_source_lines(&source) {
+        let fold_yaml = matches!(
+            relative.extension().and_then(OsStr::to_str),
+            Some("yaml" | "yml")
+        );
+        for (index, line) in logical_source_lines(&source, fold_yaml) {
             let trimmed = line.trim_start();
             if trimmed.starts_with("//")
                 || (trimmed.starts_with('#') && !trimmed.starts_with("#!"))
@@ -264,10 +313,12 @@ fn repository_language_violations(root: &Path) -> anyhow::Result<Vec<String>> {
                 continue;
             }
             let lowercase = line.to_ascii_lowercase();
-            if ascii_word_spans(&lowercase)
-                .iter()
-                .any(|(word, _, _)| is_versioned_command(word, &language))
-                || contains_package_install(&lowercase, &package_installer)
+            if ascii_word_spans(&lowercase).iter().any(|(word, _, _)| {
+                is_versioned_command(word, &language)
+                    || interpreter_aliases
+                        .iter()
+                        .any(|alias| is_versioned_command(word, alias))
+            }) || contains_package_install(&lowercase, &package_installer)
             {
                 violations.push(format!(
                     "{}:{}: prohibited runtime, dependency, or script reference",
@@ -317,7 +368,7 @@ fn repository_language_rule_stays_wired_to_agent_guidance() -> anyhow::Result<()
 }
 
 #[test]
-fn sealed_repository_scan_prunes_only_generated_and_dependency_trees() -> anyhow::Result<()> {
+fn canonical_repository_inventory_prunes_generated_and_dependency_trees() -> anyhow::Result<()> {
     let fixture = std::env::temp_dir().join(format!(
         "nook-language-scan-{}-{}",
         std::process::id(),
@@ -347,8 +398,7 @@ fn sealed_repository_scan_prunes_only_generated_and_dependency_trees() -> anyhow
         fixture.join("node_modules/package/ignored.js"),
         "export const generated = true;\n",
     )?;
-    let mut paths = tracked_paths(&fixture)?;
-    paths.sort();
+    let paths = repository_paths(&fixture)?;
     assert_eq!(
         paths,
         vec![
@@ -376,6 +426,7 @@ fn repository_language_scan_rejects_scripts_and_runtime_invocations() -> anyhow:
     fs::create_dir_all(fixture.join(".codex"))?;
     let script_extension = [".", "py"].concat();
     let runtime = ["py", "thon3"].concat();
+    let alternate_runtime = ["py", "py3"].concat();
     fs::write(
         fixture
             .join("scripts")
@@ -401,12 +452,16 @@ fn repository_language_scan_rejects_scripts_and_runtime_invocations() -> anyhow:
         format!("RUN {runtime} -m tool\n"),
     )?;
     fs::write(
+        fixture.join(".env.test"),
+        format!("SCRIPT_RUNTIME={alternate_runtime}\n"),
+    )?;
+    fs::write(
         fixture.join("scripts/picture-in-picture.ts"),
         "export const pip = shape.pyramid;\n",
     )?;
     fs::write(fixture.join("pyproject.toml"), "[project]\n")?;
     let violations = repository_language_violations(&fixture)?;
-    assert_eq!(violations.len(), 6);
+    assert_eq!(violations.len(), 7);
     assert!(
         violations
             .iter()
@@ -440,6 +495,10 @@ fn repository_language_scan_rejects_prohibited_dependency_surfaces() -> anyhow::
             "version: '3'\ntasks:\n  install:\n    cmds:\n      - {installer} install package\n      - {installer}3 --no-cache-dir install package\n      - {installer} -q install package\n      - {installer} \\\n        install package\n"
         ),
     )?;
+    fs::write(
+        fixture.join("folded.yml"),
+        format!("command: >-\n  {installer}\n  install package\n"),
+    )?;
     fs::write(fixture.join("requirements-dev.txt"), "package==1\n")?;
     fs::write(fixture.join("requirements/base.txt"), "package==1\n")?;
     fs::write(fixture.join("constraints-dev.in"), "package==1\n")?;
@@ -456,7 +515,7 @@ fn repository_language_scan_rejects_prohibited_dependency_surfaces() -> anyhow::
         format!("{{\"dependency\": \"{language}-shell\"}}\n"),
     )?;
     let violations = repository_language_violations(&fixture)?;
-    assert_eq!(violations.len(), 9);
+    assert_eq!(violations.len(), 10);
     fs::remove_dir_all(fixture)?;
     Ok(())
 }

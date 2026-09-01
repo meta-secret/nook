@@ -321,7 +321,7 @@ domain Taskfiles are prohibited.
 Repository automation has one hard language boundary: do not add Python source,
 runtime invocations, packages, or inline programs. Use Bun/TypeScript for
 scripts and controllers, Rust for compiled behavior, and Taskfiles for
-orchestration. `task preflight:source-architecture` checks the complete Git path
+orchestration. `task preflight:source-architecture` uses one filesystem
 inventory and reads only automation-capable files for runtime references.
 
 Project skill semantics live only in team-owned Markdown under `.cortex` and

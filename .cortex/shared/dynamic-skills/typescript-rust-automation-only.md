@@ -50,11 +50,7 @@ Run:
 3. `task format`
 4. Exact-head pull-request validation
 
-The repository-language preflight uses the Git index for the normal host gate.
-It rejects prohibited source extensions from the complete tracked and unignored
-path inventory. It reads only automation-capable text formats when checking
-runtime, dependency, and script references.
-
-The sealed Docker fallback prunes dependency and build directories. It keeps
-authored Rust sources and automation manifests in scope without reading
-documentation, data files, or generated trees.
+The repository-language preflight uses one filesystem inventory in every
+environment. It prunes dependency and build directories and skips symlinks. It
+rejects prohibited source extensions and reads only automation-capable text
+formats when checking runtime, dependency, and script references.
