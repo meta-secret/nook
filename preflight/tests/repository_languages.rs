@@ -14,40 +14,27 @@ fn repository_root() -> PathBuf {
 
 fn repository_paths(root: &Path) -> anyhow::Result<Vec<PathBuf>> {
     let mut files = Vec::new();
-    let mut directories = vec![root.to_path_buf()];
-    while let Some(directory) = directories.pop() {
-        for entry in fs::read_dir(&directory)? {
-            let entry = entry?;
-            let path = entry.path();
-            let file_type = entry.file_type()?;
-            let ignored = matches!(
-                path.file_name().and_then(OsStr::to_str),
-                Some(
-                    ".cache"
-                        | ".git"
-                        | ".svelte-kit"
-                        | "build"
-                        | "coverage"
-                        | "dist"
-                        | "node_modules"
-                        | "target"
-                        | "vendor"
-                )
-            );
-            if file_type.is_symlink() {
-                files.push(path);
-                continue;
-            }
-            if file_type.is_dir() {
-                if !ignored {
-                    directories.push(path);
-                }
-            } else if file_type.is_file() {
-                files.push(path);
-            }
+    let mut builder = ignore::WalkBuilder::new(root);
+    builder
+        .follow_links(false)
+        .git_exclude(false)
+        .git_global(false)
+        .hidden(false)
+        .parents(false)
+        .require_git(false)
+        .sort_by_file_path(std::cmp::Ord::cmp);
+    for entry in builder.build() {
+        let entry = entry?;
+        if entry.depth() == 0 {
+            continue;
+        }
+        if entry
+            .file_type()
+            .is_some_and(|file_type| file_type.is_file() || file_type.is_symlink())
+        {
+            files.push(entry.into_path());
         }
     }
-    files.sort();
     Ok(files)
 }
 
@@ -165,14 +152,14 @@ fn is_versioned_command(word: &str, command: &str) -> bool {
         .is_some_and(|version| version.chars().all(|character| character.is_ascii_digit()))
 }
 
-fn contains_package_install(line: &str, installer: &str) -> bool {
+fn contains_command_action(line: &str, command_name: &str, actions: &[&str]) -> bool {
     let spans = ascii_word_spans(line);
     for (index, (command, _, command_end)) in spans.iter().copied().enumerate() {
-        if !is_versioned_command(command, installer) {
+        if !is_versioned_command(command, command_name) {
             continue;
         }
         for (action, action_start, _) in spans[index + 1..].iter().copied() {
-            if action != "install" {
+            if !actions.contains(&action) {
                 continue;
             }
             let separator = &line[command_end..action_start];
@@ -238,6 +225,21 @@ fn join_argv_strings<'a>(values: impl Iterator<Item = &'a str>) -> Option<String
     .then(|| values.join(" "))
 }
 
+fn yaml_argv(value: &serde_yaml_ng::Value) -> Vec<&str> {
+    if let Some(value) = value.as_str() {
+        return vec![value];
+    }
+    value
+        .as_sequence()
+        .map(|sequence| {
+            sequence
+                .iter()
+                .filter_map(serde_yaml_ng::Value::as_str)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 fn collect_yaml_strings(value: &serde_yaml_ng::Value, strings: &mut Vec<String>) {
     if let Some(value) = value.as_str() {
         strings.push(value.to_owned());
@@ -255,11 +257,40 @@ fn collect_yaml_strings(value: &serde_yaml_ng::Value, strings: &mut Vec<String>)
         return;
     }
     if let Some(mapping) = value.as_mapping() {
+        let command = mapping
+            .iter()
+            .find(|(key, _)| key.as_str() == Some("command"))
+            .map(|(_, value)| yaml_argv(value))
+            .unwrap_or_default();
+        let arguments = mapping
+            .iter()
+            .find(|(key, _)| key.as_str() == Some("args"))
+            .map(|(_, value)| yaml_argv(value))
+            .unwrap_or_default();
+        let combined = command.into_iter().chain(arguments).collect::<Vec<_>>();
+        if combined.len() > 1 {
+            strings.push(combined.join(" "));
+        }
         for (key, item) in mapping {
             collect_yaml_strings(key, strings);
             collect_yaml_strings(item, strings);
         }
     }
+}
+
+fn json_argv(value: &serde_json::Value) -> Vec<&str> {
+    if let Some(value) = value.as_str() {
+        return vec![value];
+    }
+    value
+        .as_array()
+        .map(|sequence| {
+            sequence
+                .iter()
+                .filter_map(serde_json::Value::as_str)
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 fn yaml_source_strings(source: &str) -> anyhow::Result<Vec<String>> {
@@ -287,6 +318,12 @@ fn collect_json_strings(value: &serde_json::Value, strings: &mut Vec<String>) {
         return;
     }
     if let Some(mapping) = value.as_object() {
+        let command = mapping.get("command").map(json_argv).unwrap_or_default();
+        let arguments = mapping.get("args").map(json_argv).unwrap_or_default();
+        let combined = command.into_iter().chain(arguments).collect::<Vec<_>>();
+        if combined.len() > 1 {
+            strings.push(combined.join(" "));
+        }
         for (key, item) in mapping {
             strings.push(key.clone());
             collect_json_strings(item, strings);
@@ -297,13 +334,8 @@ fn collect_json_strings(value: &serde_json::Value, strings: &mut Vec<String>) {
 fn source_strings(path: &Path, source: &str) -> anyhow::Result<Vec<String>> {
     match path.extension().and_then(OsStr::to_str) {
         Some("yaml" | "yml") => yaml_source_strings(source),
-        Some("json")
-            if matches!(
-                path.file_name().and_then(OsStr::to_str),
-                Some("hooks.json" | "package.json")
-            ) =>
-        {
-            let value = serde_json::from_str(source)?;
+        Some("json" | "jsonc") => {
+            let value = json5::from_str(source)?;
             let mut strings = Vec::new();
             collect_json_strings(&value, &mut strings);
             Ok(strings)
@@ -318,6 +350,15 @@ fn repository_language_violations(root: &Path) -> anyhow::Result<Vec<String>> {
     let source_suffixes =
         ["", "i", "c", "o", "w"].map(|suffix| [script_extension.as_str(), suffix].concat());
     let package_installer = ["p", "ip"].concat();
+    let isolated_installer = [package_installer.as_str(), "x"].concat();
+    let project_manager = ["u", "v"].concat();
+    let project_manager_actions = [
+        "run",
+        language.as_str(),
+        package_installer.as_str(),
+        "tool",
+        "venv",
+    ];
     let interpreter_aliases = [
         ["py", "py"].concat(),
         ["micro", language.as_str()].concat(),
@@ -376,7 +417,13 @@ fn repository_language_violations(root: &Path) -> anyhow::Result<Vec<String>> {
                         || ecosystem_identifiers
                             .iter()
                             .any(|identifier| word == identifier)
-                }) || contains_package_install(&lowercase, &package_installer)
+                }) || contains_command_action(&lowercase, &package_installer, &["install"])
+                    || contains_command_action(&lowercase, &isolated_installer, &["install", "run"])
+                    || contains_command_action(
+                        &lowercase,
+                        &project_manager,
+                        &project_manager_actions,
+                    )
                 {
                     violations.push(format!(
                         "{}:{}: prohibited runtime, dependency, or script reference",
@@ -439,6 +486,11 @@ fn canonical_repository_inventory_prunes_generated_and_dependency_trees() -> any
     fs::create_dir_all(fixture.join("rust-project/src/deep"))?;
     fs::create_dir_all(fixture.join("rust-project/target/generated"))?;
     fs::create_dir_all(fixture.join("node_modules/package"))?;
+    fs::create_dir_all(fixture.join("infra/secrets"))?;
+    fs::write(
+        fixture.join(".gitignore"),
+        "/infra/secrets/\n/node_modules/\n**/target/\n",
+    )?;
     fs::write(
         fixture.join("nested/contract.ts"),
         "export const ok = true;\n",
@@ -458,10 +510,15 @@ fn canonical_repository_inventory_prunes_generated_and_dependency_trees() -> any
         fixture.join("node_modules/package/ignored.js"),
         "export const generated = true;\n",
     )?;
+    fs::write(
+        fixture.join("infra/secrets/ignored.ts"),
+        "export const ignored = true;\n",
+    )?;
     let paths = repository_paths(&fixture)?;
     assert_eq!(
         paths,
         vec![
+            fixture.join(".gitignore"),
             fixture.join("build"),
             fixture.join("nested/contract.ts"),
             fixture.join("rust-project/Cargo.toml"),
@@ -552,10 +609,13 @@ fn repository_language_scan_rejects_prohibited_dependency_surfaces() -> anyhow::
     ));
     fs::create_dir_all(fixture.join("requirements"))?;
     fs::create_dir_all(fixture.join("scripts"))?;
+    fs::create_dir_all(fixture.join(".cursor"))?;
     let installer = ["p", "ip"].concat();
     let language = ["py", "thon"].concat();
     let rust_bridge = ["py", "o3"].concat();
     let browser_runtime = ["py", "odide"].concat();
+    let project_manager = ["u", "v"].concat();
+    let isolated_installer = [installer.as_str(), "x"].concat();
     fs::write(
         fixture.join("Taskfile.yml"),
         format!(
@@ -569,6 +629,10 @@ fn repository_language_scan_rejects_prohibited_dependency_surfaces() -> anyhow::
     fs::write(
         fixture.join("argv.yaml"),
         format!("command:\n  - {installer}\n  - install\n"),
+    )?;
+    fs::write(
+        fixture.join("split-argv.yaml"),
+        format!("command: [\"{installer}\"]\nargs: [\"install\", \"package\"]\n"),
     )?;
     fs::write(fixture.join("requirements-dev.txt"), "package==1\n")?;
     fs::write(fixture.join("requirements/base.txt"), "package==1\n")?;
@@ -586,6 +650,12 @@ fn repository_language_scan_rejects_prohibited_dependency_surfaces() -> anyhow::
         format!("{installer} \\\ninstall package\n"),
     )?;
     fs::write(
+        fixture.join("scripts/managers.sh"),
+        format!(
+            "{project_manager} run tool\n{project_manager} {language} install 3\n{project_manager} {installer} install package\n{isolated_installer} install package\n"
+        ),
+    )?;
+    fs::write(
         fixture.join("bun.lock"),
         format!("{{\"dependency\": \"{language}-shell\"}}\n"),
     )?;
@@ -597,8 +667,13 @@ fn repository_language_scan_rejects_prohibited_dependency_surfaces() -> anyhow::
         fixture.join("package.json"),
         format!("{{\"dependencies\": {{\"{browser_runtime}\": \"1\"}}}}\n"),
     )?;
+    let escaped_runtime = format!("\\u0070{}3", &language[1..]);
+    fs::write(
+        fixture.join(".cursor/mcp.json"),
+        format!("{{\"command\": \"{escaped_runtime} tool\"}}\n"),
+    )?;
     let violations = repository_language_violations(&fixture)?;
-    assert_eq!(violations.len(), 13);
+    assert_eq!(violations.len(), 20);
     fs::remove_dir_all(fixture)?;
     Ok(())
 }

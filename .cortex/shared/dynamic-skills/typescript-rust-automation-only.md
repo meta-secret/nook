@@ -51,6 +51,9 @@ Run:
 4. Exact-head pull-request validation
 
 The repository-language preflight uses one filesystem inventory in every
-environment. It prunes dependency and build directories and skips symlinks. It
-rejects prohibited source extensions and reads only automation-capable text
-formats when checking runtime, dependency, and script references.
+environment. The inventory applies committed ignore files without requiring Git
+metadata. It never follows symlinks. Automation symlinks fail closed.
+
+The scan rejects prohibited source extensions. It reads only
+automation-capable text formats. Structured YAML and JSON manifests are decoded
+before runtime, dependency, and script references are checked.
