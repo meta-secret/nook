@@ -25,6 +25,7 @@ import {
   replaceJournalFile,
   resumeDiscardTombstone,
   storageHook,
+  syncTeamPlanJournalParent,
 } from './journal-storage.ts';
 
 export { canonicalTeamPlanJournalPath } from './journal-storage.ts';
@@ -193,6 +194,10 @@ export async function discardTeamPlanJournal(
     const completed = await loadTeamPlanJournal(completion);
     if (!completed.finalized)
       throw new Error('Team Plan discard completion marker is stale.');
+    await syncTeamPlanJournalParent({
+      path: completion,
+      beforeParentSync: storageHook(request.beforeParentSync),
+    });
     return;
   }
   const artifactsMayAlreadyBeDiscarded = !sourcePresent;

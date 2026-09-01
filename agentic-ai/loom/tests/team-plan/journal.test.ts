@@ -330,7 +330,11 @@ describe('Team Plan journal', () => {
       contents: owner({
         version: 3,
         pid: absentPid,
-        processIdentity: `${machineIdentity}:start-ticks:1`,
+        processIdentity: `${machineIdentity}:${
+          process.platform === 'darwin'
+            ? 'process-start:stale'
+            : 'start-ticks:1'
+        }`,
         token: 'absent',
       }),
     });
@@ -639,6 +643,35 @@ describe('Team Plan journal', () => {
     ).rejects.toThrow('first parent sync failed');
     expect(existsSync(journalPath)).toBe(true);
     expect(existsSync(`${journalPath}.discarding`)).toBe(true);
+  });
+
+  test('syncs a recovered discard completion before succeeding', async () => {
+    const { journalPath, started } = await startedFixture();
+    await finalizeStartedFixture({ journalPath, started });
+    let parentSyncs = 0;
+    await expect(
+      discardTeamPlanJournal({
+        journalPath,
+        discardArtifacts: () => Promise.resolve(),
+        beforeParentSync: () => {
+          if ((parentSyncs += 1) === 3) throw new Error('final sync failed');
+        },
+      }),
+    ).rejects.toThrow('final sync failed');
+    expect(existsSync(`${journalPath}.discarded`)).toBe(true);
+    await expect(
+      discardTeamPlanJournal({
+        journalPath,
+        discardArtifacts: () => Promise.resolve(),
+        beforeParentSync: () => {
+          throw new Error('retry sync observed');
+        },
+      }),
+    ).rejects.toThrow('retry sync observed');
+    await discardTeamPlanJournal({
+      journalPath,
+      discardArtifacts: () => Promise.resolve(),
+    });
   });
 
   test('rejects a discard tombstone with a foreign inode', async () => {

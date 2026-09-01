@@ -140,12 +140,20 @@ function decodeLockOwner(serialized: string): TeamPlanLockOwner {
     !Number.isSafeInteger(owner.pid) ||
     owner.pid < 1 ||
     typeof owner.processIdentity !== 'string' ||
-    owner.processIdentity.length < 1 ||
+    !validProcessIdentity(owner.processIdentity) ||
     typeof owner.token !== 'string' ||
     owner.token.length < 1
   )
     throw new Error('Team Plan journal lock owner is malformed.');
   return owner;
+}
+
+function validProcessIdentity(identity: string): boolean {
+  if (process.platform === 'darwin')
+    return /:host:process-start:.+$/u.test(identity);
+  if (process.platform === 'linux')
+    return /:pid:\[[0-9]+\]:start-ticks:[0-9]+$/u.test(identity);
+  return false;
 }
 
 function staleTeamPlanLock(owner: TeamPlanLockOwner): boolean {

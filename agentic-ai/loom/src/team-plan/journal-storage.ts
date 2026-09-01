@@ -154,6 +154,14 @@ export async function removeDiscardCompletion(path: string): Promise<void> {
   await syncParent(path);
 }
 
+export async function syncTeamPlanJournalParent(request: {
+  readonly path: string;
+  readonly beforeParentSync: JournalStorageHook;
+}): Promise<void> {
+  runStorageHook(request.beforeParentSync);
+  await syncParent(request.path);
+}
+
 export async function resumeDiscardTombstone(request: {
   readonly path: string;
   readonly tombstone: string;
