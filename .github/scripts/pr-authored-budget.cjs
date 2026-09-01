@@ -171,6 +171,21 @@ function runGh(args) {
   }).trim()
 }
 
+function botLoginMatches(actor, login) {
+  return actor?.login === login || actor?.login === `${login}[bot]`
+}
+
+function isGitAncestor(ancestor, descendant) {
+  try {
+    execFileSync('git', ['merge-base', '--is-ancestor', ancestor, descendant], {
+      stdio: 'ignore',
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
 function reviewBatchMatches({
   pr, threads, reviews, comments, changedPaths, publishedAt,
   hasNextPage,
@@ -184,14 +199,19 @@ function reviewBatchMatches({
   const inlineMatch = changedPaths.some((path) => currentPaths.has(path))
   const reviewBodyMatch = reviews.some(
     (review) => ['COMMENTED', 'CHANGES_REQUESTED'].includes(review.state) &&
-      review.body.trim() && !/^### 💡 Codex Review/u.test(review.body.trim()),
+      review.body.trim() &&
+      !/^### 💡 Codex Review/u.test(review.body.trim()) &&
+      !(
+        botLoginMatches(review.author, 'cursor') &&
+        review.body.includes('<summary>Stale comment</summary>')
+      ),
   )
   const publishedTime = Date.parse(publishedAt)
   const commentMatch = comments.some((comment) =>
     Number.isFinite(publishedTime) && Date.parse(comment.createdAt) > publishedTime &&
     comment.body.trim() &&
     !(
-      comment.author?.login === 'chatgpt-codex-connector' &&
+      botLoginMatches(comment.author, 'chatgpt-codex-connector') &&
       (
         comment.body.includes('Codex usage limits for code reviews') ||
         comment.body.trimStart().startsWith("Codex Review: Didn't find any major issues.")
@@ -207,17 +227,22 @@ function verifyReviewContext(prNumber) {
   if (!/^[1-9]\d*$/.test(prNumber)) return false
   const branch = runGit(['branch', '--show-current'])
   if (!branch) return false
+  const repository = runGh(['repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner'])
   const pr = JSON.parse(runGh([
-    'pr', 'view', prNumber, '--json', 'baseRefName,headRefName,headRefOid,state',
+    'pr', 'view', prNumber, '--json',
+    'baseRefName,headRefName,headRefOid,headRepository,isCrossRepository,state',
   ]))
-  if (pr.state !== 'OPEN' || pr.baseRefName !== 'main' || pr.headRefName !== branch) {
+  if (
+    pr.state !== 'OPEN' || pr.baseRefName !== 'main' || pr.headRefName !== branch ||
+    pr.isCrossRepository || pr.headRepository?.nameWithOwner !== repository ||
+    !isGitAncestor(pr.headRefOid, 'HEAD')
+  ) {
     return false
   }
-  const repository = runGh(['repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner'])
   const [owner, name] = repository.split('/')
   const review = JSON.parse(runGh([
     'api', 'graphql',
-    '-f', 'query=query($owner:String!,$name:String!,$number:Int!,$head:GitObjectID!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){pageInfo{hasNextPage}nodes{isResolved isOutdated path}}reviews(last:100){pageInfo{hasPreviousPage}nodes{body state}}comments(last:100){pageInfo{hasPreviousPage}nodes{author{login} body createdAt}}}object(oid:$head){... on Commit{checkSuites(first:100){pageInfo{hasNextPage}nodes{createdAt}}}}}}',
+    '-f', 'query=query($owner:String!,$name:String!,$number:Int!,$head:GitObjectID!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){pageInfo{hasNextPage}nodes{isResolved isOutdated path}}reviews(last:100){pageInfo{hasPreviousPage}nodes{author{login} body state}}comments(last:100){pageInfo{hasPreviousPage}nodes{author{login} body createdAt}}}object(oid:$head){... on Commit{checkSuites(first:100){pageInfo{hasNextPage}nodes{createdAt}}}}}}',
     '-f', `owner=${owner}`, '-f', `name=${name}`, '-F', `number=${prNumber}`,
     '-f', `head=${pr.headRefOid}`,
   ])).data.repository
