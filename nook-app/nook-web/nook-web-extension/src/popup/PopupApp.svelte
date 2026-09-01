@@ -311,6 +311,7 @@
           : translatePlain(I18N_KEYS.ExtensionSetupConnectSimpleVault)}
       </button>
       <button
+        type="button"
         class="menu-secondary-action"
         data-testid="stay-ready-btn"
         onclick={stayReady}
@@ -318,6 +319,7 @@
         {translatePlain(I18N_KEYS.ExtensionCompanionStayReady)}
       </button>
       <button
+        type="button"
         class="menu-secondary-action"
         data-testid="open-simple-vault-btn"
         onclick={openSimpleVault}
