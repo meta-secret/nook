@@ -420,10 +420,20 @@ async function replayTeamPlanEvent(
       acceptedPlan: session.acceptedPlan,
       state: session.integrationState.admissionState,
     });
+    const admissions = event.attempts.map((attempt) => {
+      const admission = selection.admissions.find(
+        (candidate) =>
+          JSON.stringify(attemptIdentity(candidate)) ===
+          JSON.stringify(attempt),
+      );
+      if (!admission)
+        throw new Error('Team Plan selected attempt cannot be replayed.');
+      return admission;
+    });
     const recording = recordModuleDeliveryAttemptLeases({
       authority: session.authority,
       state: session.integrationState.admissionState,
-      admissions: selection.admissions,
+      admissions,
     });
     for (const lease of recording.leases) {
       const key = attemptKey(lease);

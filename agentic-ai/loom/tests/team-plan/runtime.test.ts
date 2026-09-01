@@ -53,6 +53,7 @@ import type {
   ModuleWorktreeHandle,
 } from '../../src/module-delivery/index.ts';
 import type {
+  TeamPlanAttemptIdentity,
   TeamPlanProviderRecord,
   TeamPlanStartRequest,
 } from '../../src/team-plan/index.ts';
@@ -355,6 +356,28 @@ describe('Team Plan runtime', () => {
     ).toEqual(finalized);
     await discardFinalizedTeamPlan({ journalPath: aliased.journalPath });
   }, 10_000);
+
+  test('replays only attempts persisted in a selected event', async () => {
+    const fixture = createGitFixture();
+    fixtures.push(fixture);
+    const file = fixturePlanFile([
+      fixture,
+      [fixtureReadNode([fixture, 'alpha']), fixtureReadNode([fixture, 'beta'])],
+    ]);
+    await startTeamPlan(startRequest(file));
+    const selected = await selectTeamPlan({ journalPath: file.journalPath });
+    expect(selected.leases).toHaveLength(2);
+    const lines = readFileSync(file.journalPath, 'utf8').trim().split('\n');
+    const selection = JSON.parse(lines[1] ?? '') as {
+      attempts: TeamPlanAttemptIdentity[];
+    };
+    selection.attempts = selection.attempts.slice(1);
+    lines[1] = JSON.stringify(selection);
+    writeFileSync(file.journalPath, `${lines.join('\n')}\n`);
+
+    const replayed = await selectTeamPlan({ journalPath: file.journalPath });
+    expect(replayed.leases.map(({ taskId }) => taskId)).toEqual(['alpha']);
+  });
 
   test('reconstructs an exact integrated writer frontier', async () => {
     const fixture = createGitFixture();
