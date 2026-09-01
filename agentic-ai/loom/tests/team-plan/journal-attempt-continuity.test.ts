@@ -192,6 +192,62 @@ test('Team Plan journal continues attempts across generations', async () => {
   });
 });
 
+test('rejects replacement limits below carried attempts', async () => {
+  const { journalPath, started, value } = await continuityFixture();
+  const attempt = {
+    taskId: 'provider',
+    attempt: 1,
+    generation: 1,
+    planDigest: started.modulePlanDigest,
+  };
+  await appendTeamPlanEvent({
+    journalPath,
+    event: {
+      version: TEAM_PLAN_JOURNAL_VERSION,
+      kind: TeamPlanEventKind.Selected,
+      sequence: 2,
+      attempts: [attempt],
+    },
+  });
+  await appendTeamPlanEvent({
+    journalPath,
+    event: {
+      version: TEAM_PLAN_JOURNAL_VERSION,
+      kind: TeamPlanEventKind.Recorded,
+      sequence: 3,
+      record: {
+        kind: TeamPlanRecordKind.FinalUnusable,
+        ...attempt,
+        conclusion: ModuleDeliveryGenerationFenceKind.Failed,
+      },
+    },
+  });
+  const replacementText = `${JSON.stringify({
+    ...value,
+    generation: 2,
+    maxAttempts: 1,
+  })}\n`;
+  const replacement = decodeAndValidateModuleDeliveryPlan(replacementText);
+  if (replacement.status !== ModuleDeliveryValidationStatus.Accepted)
+    throw new Error('Replacement limit test plan was rejected.');
+  await expect(
+    appendTeamPlanEvent({
+      journalPath,
+      event: {
+        version: TEAM_PLAN_JOURNAL_VERSION,
+        kind: TeamPlanEventKind.Restarted,
+        sequence: 4,
+        planPath: started.planPath,
+        planText: replacementText,
+        planSha256: teamPlanSha256(replacementText),
+        modulePlanDigest: replacement.planDigest,
+        sourceCommit: started.sourceCommit,
+        generationRecordLimit: 1,
+      },
+    }),
+  ).rejects.toThrow('attempt limit is below carried history');
+});
+
 test('Team Plan journal keeps retries sequential until terminal closure', async () => {
   const { fixture, journalPath, started } = await continuityFixture((value) => {
     const provider = value.nodes[0];

@@ -93,7 +93,7 @@ export type AppendTeamPlanEventRequest = Readonly<{
 
 export type TeamPlanJournalLockRequest<T> = Readonly<{
   journalPath: string;
-  action: () => Promise<T>;
+  action: (journal: TeamPlanJournal) => Promise<T>;
 }>;
 
 type ExactFieldRequest = Readonly<{
@@ -199,7 +199,7 @@ async function withTeamPlanJournalLockIdentity<T>(
   return runWithTeamPlanJournalLock({
     journal,
     identityPath: request.lockIdentityPath ?? journal.path,
-    action: request.action,
+    action: () => request.action(journal),
   });
 }
 
@@ -605,6 +605,15 @@ function journalGenerationCounters(
       const planIds = new Set(validation.plan.nodes.map((node) => node.taskId));
       for (const taskId of latestAttempts.keys())
         if (!planIds.has(taskId)) latestAttempts.delete(taskId);
+      if (
+        [...latestAttempts].some(
+          ([taskId, attempt]) =>
+            planIds.has(taskId) && attempt >= validation.plan.maxAttempts,
+        )
+      )
+        throw new Error(
+          'Team Plan replacement attempt limit is below carried history.',
+        );
       acceptedTasks.clear();
       failedAttempts.clear();
     } else if (event.kind === TeamPlanEventKind.Selected) {
