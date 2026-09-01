@@ -3,6 +3,7 @@
   "team_plan_invalid_arguments": "Team Plan command arguments are invalid.",
   "team_plan_invalid_record_file": "Team Plan record request file is invalid or oversized.",
   "team_plan_invalid_record_json": "Team Plan record request JSON is invalid.",
+  "team_plan_invalid_record_contents": "Team Plan record request fields are invalid.",
   "team_plan_invalid_record_encoding": "Team Plan record request must be valid UTF-8.",
   "team_plan_oversized_record": "Team Plan record request is oversized."
 }
