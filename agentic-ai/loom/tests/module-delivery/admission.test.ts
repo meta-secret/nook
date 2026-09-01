@@ -740,31 +740,29 @@ describe('module delivery admission authority', () => {
       ({ taskId }) => taskId === alpha.taskId,
     );
     if (!alphaAdmission) throw new Error('Alpha admission is missing.');
-    const alphaLeaseRequest: LeaseRequest = {
-      runtime: active,
-      taskId: alpha.taskId,
-    };
-    const alphaLease = lease(alphaLeaseRequest);
-    const cancellationRequest: CancelledLeaseRequest = {
-      runtime: active,
-      lease: alphaLease,
-    };
-    recordModuleDeliveryAttemptDisposition(cancelledLease(cancellationRequest));
+    const alphaLease = lease({ runtime: active, taskId: alpha.taskId });
+    recordModuleDeliveryAttemptDisposition(
+      cancelledLease({
+        runtime: active,
+        lease: alphaLease,
+      }),
+    );
     const replacementPlanRequest: GenerationPlanRequest = {
       sourceCommit: REPLACEMENT_SOURCE,
       generation: 2,
       includeGamma: true,
     };
     const replacementPlan = generationPlan(replacementPlanRequest);
-    const concurrencyUpdate: PlanConcurrencyUpdate = { maxConcurrency: 3 };
-    Object.assign(replacementPlan, concurrencyUpdate);
+    Object.assign(replacementPlan, { maxConcurrency: 3 });
+    const raisedAttemptLimit = validate({ ...replacementPlan, maxAttempts: 3 });
+    expect(() =>
+      restartModuleDeliveryGeneration(
+        restartRequest({ runtime: active, acceptedPlan: raisedAttemptLimit }),
+      ),
+    ).toThrow('cannot change maxAttempts');
     const replacement = validate(replacementPlan);
-    const generationRestartRequest: GenerationRestartRequest = {
-      runtime: active,
-      acceptedPlan: replacement,
-    };
     const restarted = restartModuleDeliveryGeneration(
-      restartRequest(generationRestartRequest),
+      restartRequest({ runtime: active, acceptedPlan: replacement }),
     );
     const expectedState: ModuleDeliveryAdmissionState = {
       generation: 2,

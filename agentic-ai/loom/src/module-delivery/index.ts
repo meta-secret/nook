@@ -10,7 +10,6 @@ export {
   recordModuleDeliveryAttemptLeases,
   moduleDeliveryAcceptedEvidenceIdentity,
   restartModuleDeliveryGeneration,
-  restoreModuleDeliveryCanonicalEvidenceReceipt,
   selectModuleDeliveryAdmissions,
   verifyModuleDeliveryEvidenceSubmission,
 } from './admission.ts';
@@ -35,7 +34,6 @@ export type {
   ModuleDeliveryAcceptedProviderEvidenceIdentity,
   ModuleDeliveryEvidenceArtifactDigestRequest,
   ModuleDeliveryEvidenceDigestRequest,
-  RestoreModuleDeliveryCanonicalEvidenceReceiptRequest,
 } from './evidence.ts';
 export {
   MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
@@ -58,6 +56,7 @@ export {
   integrateVerifiedModuleDeliveryTask,
   prepareModuleIntegration,
 } from './integration.ts';
+export { restoreModuleDeliveryIntegrationEvidence } from './integration-evidence-replay.ts';
 export * from './domain.ts';
 export type {
   CleanupModuleWorktreeRequest,

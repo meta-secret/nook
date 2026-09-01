@@ -116,7 +116,6 @@ export type TeamPlanAcceptedEvidenceRecord = Readonly<{
   generation: number;
   planDigest: string;
   artifactObject: string;
-  artifactSha256: string;
 }>;
 
 export type TeamPlanRecord =
@@ -245,15 +244,10 @@ export function assertTeamPlanJournalRecord(
   if (record.kind === TeamPlanRecordKind.AcceptedEvidence) {
     assertKeys([
       record,
-      'kind|taskId|attempt|generation|planDigest|artifactObject|artifactSha256',
+      'kind|taskId|attempt|generation|planDigest|artifactObject',
     ]);
     assertTextFields({
-      values: [
-        record.taskId,
-        record.planDigest,
-        record.artifactObject,
-        record.artifactSha256,
-      ],
+      values: [record.taskId, record.planDigest, record.artifactObject],
     });
     assertNumberFields({ values: [record.attempt, record.generation] });
     return;

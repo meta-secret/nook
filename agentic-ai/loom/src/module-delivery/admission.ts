@@ -485,6 +485,13 @@ export function restartModuleDeliveryGeneration(
     throw new Error(
       'A superseding module plan requires a newer immutable generation.',
     );
+  if (
+    authority.leaseHistory.size > 0 &&
+    acceptedPlan.plan.maxAttempts !== authority.acceptedPlan.plan.maxAttempts
+  )
+    throw new Error(
+      'A superseding module plan cannot change maxAttempts after execution begins.',
+    );
   const lineageRequest: ExpectedLineageMapRequest = {
     acceptedPlan,
     entries: request.expectedLineage,
