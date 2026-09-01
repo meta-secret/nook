@@ -214,15 +214,6 @@ export async function performRevalidatedAuthenticationAction({
   } catch {
     return rejected()
   }
-  if (
-    observationBinding.kind === AuthenticationObservationBindingKind.Required &&
-    !authentication_page_observation_facts_match_binding(
-      observationBinding.token,
-      approvedFactsBatch,
-    )
-  ) {
-    return rejected()
-  }
   const message: Parameters<
     typeof sendAuthenticationWorkflowSnapshotRuntimeMessage
   >[0] = {
@@ -241,8 +232,21 @@ export async function performRevalidatedAuthenticationAction({
   if (
     verdict.kind !== AuthenticationWorkflowSnapshotResponseKind.Matched ||
     !('snapshot' in verdict) ||
+    !delivery.response.selectedFacts ||
     verdict.snapshot.observationIndex !== approvedObservation.selectedIndex ||
     verdict.snapshot.action !== expectedAction
+  ) {
+    return rejected()
+  }
+  const selectedFactsBatch: AuthenticationPageObservationFactsBatch = {
+    observations: [delivery.response.selectedFacts],
+  }
+  if (
+    observationBinding.kind === AuthenticationObservationBindingKind.Required &&
+    !authentication_page_observation_facts_match_binding(
+      observationBinding.token,
+      selectedFactsBatch,
+    )
   ) {
     return rejected()
   }

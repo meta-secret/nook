@@ -203,12 +203,15 @@ export function liveApprovedAuthenticationWorkflow({
       authentication_passkey_control_evidence_is_safe(passkeyEvidence)
         ? approved.facts.authenticator.matchingPasskeyAccountCount
         : 0;
+    const passkeyAccountAvailability =
+      approved.facts.authenticator.passkeyAccountAvailability;
     return {
       ...candidate,
       facts: {
         ...candidate.facts,
         authenticator: {
           ...candidate.facts.authenticator,
+          passkeyAccountAvailability,
           matchingPasskeyAccountCount,
         },
       },

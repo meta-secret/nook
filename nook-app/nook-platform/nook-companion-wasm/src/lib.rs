@@ -53,6 +53,17 @@ pub fn decode_website_login_options(
 }
 
 #[wasm_bindgen]
+#[must_use]
+pub fn decode_website_passkey_account_list(
+    response: wasm_bindgen::JsValue,
+) -> nook_companion_core::WebsitePasskeyAccountList {
+    serde_wasm_bindgen::from_value(response).map_or_else(
+        |_| nook_companion_core::WebsitePasskeyAccountList::invalid(),
+        nook_companion_core::decode_website_passkey_account_list,
+    )
+}
+
+#[wasm_bindgen]
 pub fn decode_website_login_save_offer_response(
     response: nook_companion_core::WebsiteLoginSaveOfferResponse,
 ) -> Result<nook_companion_core::WebsiteLoginSaveOfferResponse, wasm_bindgen::JsError> {

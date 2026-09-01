@@ -32,6 +32,7 @@ mod page_field_classification;
 mod vault_host_policy;
 mod website_login_options_response;
 mod website_login_save_offer_response;
+mod website_passkey_account_list;
 mod website_passkey_proposal;
 
 pub use account_picker_authorization::AccountPickerAuthorizationLifecycle;
@@ -53,13 +54,14 @@ pub use authentication_workflow::{
     AuthenticationObservationBindingToken, AuthenticationOneTimeCodeProgressionEvidence,
     AuthenticationPageObservation, AuthenticationPageObservationFacts,
     AuthenticationPageObservationFactsBatch, AuthenticationPageObservations,
-    AuthenticationPasskeyControlObservation, AuthenticationPasskeyEvidence,
-    AuthenticationPilotPresentationCapability, AuthenticationSavedLoginCapability,
-    AuthenticationWorkflowAction, AuthenticationWorkflowKind, AuthenticationWorkflowMatch,
-    AuthenticationWorkflowSnapshot, AuthenticationWorkflowSnapshotError,
-    AuthenticationWorkflowStage, MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
-    MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS, authentication_enrollment_workflow_match,
-    authentication_form_observation_priority, authentication_page_observation_facts_match_binding,
+    AuthenticationPasskeyAccountAvailability, AuthenticationPasskeyControlObservation,
+    AuthenticationPasskeyEvidence, AuthenticationPilotPresentationCapability,
+    AuthenticationSavedLoginCapability, AuthenticationWorkflowAction, AuthenticationWorkflowKind,
+    AuthenticationWorkflowMatch, AuthenticationWorkflowSnapshot,
+    AuthenticationWorkflowSnapshotError, AuthenticationWorkflowStage,
+    MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
+    authentication_enrollment_workflow_match, authentication_form_observation_priority,
+    authentication_page_observation_facts_match_binding,
     authentication_page_observation_facts_priority, authentication_page_observations_are_valid,
     authentication_passkey_control_candidate_is_safe,
     authentication_passkey_control_evidence_is_safe, bind_authentication_page_observation_facts,
@@ -184,5 +186,10 @@ pub use website_login_save_offer_response::{
     WebsiteLoginSaveOfferResponseDecodeError, WebsiteLoginSavePendingResponse,
     decode_website_login_save_action_response, decode_website_login_save_offer_response,
     decode_website_login_save_pending_response,
+};
+pub use website_passkey_account_list::{
+    WebsitePasskeyAccount, WebsitePasskeyAccountList, WebsitePasskeyAccountListKind,
+    WebsitePasskeyAccountListWire, decode_website_passkey_account_list,
+    decode_website_passkey_account_list_json,
 };
 pub use website_passkey_proposal::{WebsitePasskeyProposal, propose_website_passkey};

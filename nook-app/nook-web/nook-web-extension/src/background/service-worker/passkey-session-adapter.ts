@@ -1,35 +1,11 @@
 import type {
-  WebsitePasskeyAccount,
   WebsitePasskeyAssertionResponse,
   WebsitePasskeyRegistrationResponse,
 } from '../../lib/webauthn-messages'
-
-export function passkeyAccountsFromSession(
-  response: unknown,
-): WebsitePasskeyAccount[] {
-  if (
-    !response ||
-    typeof response !== 'object' ||
-    !('ok' in response) ||
-    response.ok !== true ||
-    !('accounts' in response) ||
-    !Array.isArray(response.accounts)
-  ) {
-    return []
-  }
-  return response.accounts.filter(
-    (account): account is WebsitePasskeyAccount =>
-      !!account &&
-      typeof account === 'object' &&
-      'credentialId' in account &&
-      typeof account.credentialId === 'string' &&
-      account.credentialId.length > 0 &&
-      'userName' in account &&
-      typeof account.userName === 'string' &&
-      'userDisplayName' in account &&
-      typeof account.userDisplayName === 'string',
-  )
-}
+export {
+  decode_website_passkey_account_list,
+  WebsitePasskeyAccountListKind,
+} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 export function passkeyCeremonyResponseFromSession(
   response: unknown,

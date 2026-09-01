@@ -57,12 +57,14 @@ test('propose Create passkey through Nook Pilot without silent ceremony', async 
       </head>
       <body>
         <main>
-          <h1>Sign in with a passkey</h1>
-          <p>Nook can propose creating a passkey after you approve.</p>
-          <button type="button" data-nook-passkey-control data-testid="demo-passkey-control">
-            Create a passkey
-          </button>
-          <p id="started" data-testid="demo-passkey-started">Site passkey ceremony started</p>
+          <form id="passkey-signin" method="post">
+            <h1>Sign in with a passkey</h1>
+            <p>Nook can propose creating a passkey after you approve.</p>
+            <button type="button" data-nook-passkey-control data-testid="demo-passkey-control">
+              Sign in with a passkey
+            </button>
+            <p id="started" data-testid="demo-passkey-started">Site passkey ceremony started</p>
+          </form>
         </main>
       </body>
     </html>`)
@@ -83,10 +85,17 @@ test('propose Create passkey through Nook Pilot without silent ceremony', async 
   await expect(widget.getByTestId('nook-auth-gate-vault-status')).toHaveText(
     'Connected to Demo vault',
   )
+  const ceremonyStarted = page.getByTestId('demo-passkey-started')
+  await expect(ceremonyStarted).toBeHidden()
   await demoBeat(page)
 
   await widget.getByRole('button', { name: 'Create passkey' }).click()
-  await expect(page.getByTestId('demo-passkey-started')).toBeVisible()
+  await expect(ceremonyStarted).toBeHidden()
+  await expect(
+    widget.getByRole('button', { name: 'Create passkey' }),
+  ).toBeEnabled()
+  await widget.getByRole('button', { name: 'Create passkey' }).click()
+  await expect(ceremonyStarted).toBeVisible()
   await expect(
     widget.getByText(/Continue in the Nook passkey prompt|окне ключа доступа/i),
   ).toBeVisible()

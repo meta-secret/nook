@@ -55,6 +55,7 @@ export type WebsitePasskeyVaultOption = {
 export enum WebsitePasskeyOptionsStatus {
   Unavailable = 'unavailable',
   Locked = 'locked',
+  Invalid = 'invalid',
   Ready = 'ready',
 }
 

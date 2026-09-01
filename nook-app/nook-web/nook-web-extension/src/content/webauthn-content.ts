@@ -17,6 +17,11 @@ import {
   type WebsitePasskeyOptionsMessage,
   type WebsitePasskeyPerformMessage,
 } from '../lib/webauthn-messages'
+import {
+  PageResponseAction,
+  websitePasskeyOptionsDisposition,
+  WebsitePasskeyOptionsDispositionKind,
+} from './webauthn-options-response'
 
 const REQUEST_SOURCE = 'nook-passkey-page-v1'
 const RESPONSE_SOURCE = 'nook-passkey-extension-v1'
@@ -24,12 +29,6 @@ const prompts = new Map<string, HTMLElement>()
 
 enum PageRequestType {
   Request = 'request',
-}
-
-enum PageResponseAction {
-  Fallback = 'fallback',
-  Result = 'result',
-  Error = 'error',
 }
 
 type PageRequest = {
@@ -227,14 +226,19 @@ async function handleRequest(request: PageRequest): Promise<void> {
     options?: unknown
   }>(nookTypedArgs0_4)
   const options = validOptions(optionsResponse?.options)
-  if (
-    optionsResponse?.ok !== true ||
-    optionsResponse.status !== WebsitePasskeyOptionsStatus.Ready ||
-    options.length === 0
-  ) {
+  const dispositionArgs: Parameters<
+    typeof websitePasskeyOptionsDisposition
+  >[0] = {
+    ok: optionsResponse?.ok === true,
+    status: optionsResponse?.status,
+    hasOptions: options.length > 0,
+  }
+  const disposition = websitePasskeyOptionsDisposition(dispositionArgs)
+  if (disposition.kind === WebsitePasskeyOptionsDispositionKind.Respond) {
     const nookTypedArgs0_2: Parameters<typeof respond>[0] = {
       requestId: request.requestId,
-      action: PageResponseAction.Fallback,
+      action: disposition.action,
+      ...('reason' in disposition ? { value: disposition.reason } : {}),
     }
     respond(nookTypedArgs0_2)
     return

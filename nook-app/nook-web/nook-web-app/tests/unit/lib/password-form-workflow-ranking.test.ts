@@ -524,10 +524,50 @@ describe('authentication workflow ranking', () => {
         ...classified.facts,
         authenticator: {
           ...classified.facts.authenticator,
+          passkeyAccountAvailability: 'ready',
           matchingPasskeyAccountCount: 1,
         },
       },
+    } satisfies typeof classified
+    const liveRequest: Parameters<
+      typeof liveApprovedAuthenticationWorkflow
+    >[0] = {
+      approved,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
     }
+    expect(liveApprovedAuthenticationWorkflow(liveRequest)).toBe(true)
+  })
+
+  test('preserves ready availability during a password workflow live check', () => {
+    document.body.innerHTML = `
+      <form method="post" id="login" aria-label="Login" action="/auth/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+    const workflow = observedAuthenticationWorkflow()
+    const approvedRequest: Parameters<
+      typeof classifiedAuthenticationWorkflowObservations
+    >[0] = {
+      workflowForms: [workflow],
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    }
+    const classified =
+      classifiedAuthenticationWorkflowObservations(approvedRequest)[0]
+    if (!classified) throw new Error('expected an approved password workflow')
+    const approved = {
+      ...classified,
+      facts: {
+        ...classified.facts,
+        authenticator: {
+          ...classified.facts.authenticator,
+          passkeyAccountAvailability: 'ready',
+        },
+      },
+    } satisfies typeof classified
     const liveRequest: Parameters<
       typeof liveApprovedAuthenticationWorkflow
     >[0] = {
