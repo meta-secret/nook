@@ -320,6 +320,10 @@ wrong-attempt handoff cannot satisfy a provider edge.
 Project-owned Team Plan journal state is trusted project state. The same rule
 applies to redacted receipts stored in the project's private Git state.
 
+Team Plan journal lock-owner Git blobs use schema version 3 exclusively.
+Unknown, unversioned, or older lock-owner layouts block recovery for explicit
+operator handling; the runtime does not execute a compatibility branch.
+
 Replay validates the receipt against the canonical lifecycle state:
 
 - schema version;

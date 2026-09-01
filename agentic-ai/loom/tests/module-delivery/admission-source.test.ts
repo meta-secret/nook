@@ -120,6 +120,19 @@ test('classifies exact writes against the frozen source tree', () => {
       }),
     ).toThrow('names a source directory');
 
+    const acceptedBelowFile = acceptedPlan({
+      sourceCommit,
+      generation: 3,
+      moduleRoot: 'infra/k0s/scripts',
+      write: `${exactPath}/child.md`,
+    });
+    expect(() =>
+      freezeModuleDeliveryAdmissionSource({
+        acceptedPlan: acceptedBelowFile,
+        repositoryRoot: fixture.sourceRoot,
+      }),
+    ).toThrow('non-directory source ancestor');
+
     const expectedLineage = acceptedFile.plan.nodes.map((node) => ({
       taskId: node.taskId,
       parentLineage: node.parentLineage,
