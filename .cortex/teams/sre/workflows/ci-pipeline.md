@@ -33,7 +33,7 @@ See [issues](../../../gizmo/workflows/issues.md),
   - Purpose: Research check, build, Cloudflare deploy, and PR preview
   - GitHub PAT: No
 - **[`rust-ecosystem.yml`](../../../../.github/workflows/rust-ecosystem.yml)**
-  - Trigger: Schedule and manual
+  - Trigger: Schedule, manual, minds-only PR
   - Purpose: Specialist Rust ecosystem entry points
   - GitHub PAT: No
 - **[`pr-validation-handoff.yml`](../../../../.github/workflows/pr-validation-handoff.yml)**
@@ -103,9 +103,7 @@ See [issues](../../../gizmo/workflows/issues.md),
   - AI-only workflow paths are `agent-implement.yml`, `ci-agent-smoke.yml`,
     and `repository-policy.yml`.
   - The remaining entries are `.task/agentic-ai.yml`, `AGENTS.md`, `CODEX.md`,
-    and `agentic-ai/**` except `agentic-ai/minds/**`.
-- Minds changes remain product-required so `pr.yml` retains their Rust
-  ecosystem validation until a specialist workflow replaces it atomically.
+    and `agentic-ai/**`.
 - Any path outside that inventory restores complete product validation.
 - A GitHub-hosted classifier paginates the pull-request files API before any
   product job is admitted.
@@ -179,8 +177,8 @@ See [issues](../../../gizmo/workflows/issues.md),
 - CI-agent changes run `npm test` plus a production build automatically.
   Workflow CJS source and contract changes run all
   `.github/scripts/*.test.cjs` tests, and readiness requires repository policy.
-- Other AI subdomains retain their focused gates. Loom verification owns
-  `agentic-ai/loom/**`; minds remains on the product validation path.
+- Other AI subdomains retain their focused gates: Loom verification for
+  `agentic-ai/loom/**` and Rust ecosystem validation for `agentic-ai/minds/**`.
 
 **`web-research.yml`**
 
@@ -197,8 +195,16 @@ See [issues](../../../gizmo/workflows/issues.md),
 
 - Thin entry points outside the product PR pipeline.
 - Weekly schedule and `workflow_dispatch`.
-- Labeled minds PRs use the shared ecosystem suite inside `pr.yml`.
-- One explicit validation request cannot launch both expensive entry points.
+- Every labeled PR reaches a cheap read-only classifier because native path
+  filters lose rename sources.
+- The specialist jobs run only when a complete, non-renamed canonical AI-only
+  change has a minds path. Known renames use the product workflow's ecosystem
+  suite; ordinary AI-only and mixed product changes do not reserve specialist
+  ARC.
+- Incomplete, capped, unsupported, or unclassifiable file inventories fail
+  closed to specialist validation.
+- Uses the same canonical AI-only inventory as `pr.yml`.
+- A minds PR with any non-AI path stays in the product workflow.
 - Calls the same `rust-ecosystem-checks.yml` jobs as labeled product PRs and Main.
 - Ordinary PR pushes do not start it.
 
@@ -228,15 +234,22 @@ See [issues](../../../gizmo/workflows/issues.md),
 **`main.yml`**
 
 - Calls the shared Rust ecosystem jobs in parallel with product verification.
-- Runs for every Main push so native path filtering cannot hide rename sources.
-- A read-only GitHub-hosted classifier checks out complete history without
-  persisting credentials.
-- It diffs with `--no-renames` from the latest successful Main run whose Native
-  Rust sentinel succeeded.
-- Only an accumulated `.cortex/**/*.md` and repository-policy workflow range
-  skips product and ecosystem jobs. Missing or uncertain history, job inventory,
-  commits, ancestry, or diffs fail closed; successful lightweight runs do not
-  advance the product frontier.
+- Includes `agentic-ai/minds/**` so product-only, minds-only, and mixed pushes use one merged-head ecosystem orchestrator.
+- Uses the same canonical AI-only inventory as `pr.yml`.
+- Runs for every Main push so native trigger filtering cannot hide a
+  product-to-AI rename.
+- Classifies paths through a GitHub-hosted, read-only checkout with
+  `--no-renames` from the latest completed successful Main run whose Native Rust
+  sentinel succeeded.
+- API history, job inventory, checkout, ancestry, diff, or empty-result
+  uncertainty defaults to full product and ecosystem validation.
+- Successful AI-only runs never advance this product frontier.
+- The classifier checkout sets `persist-credentials: false`.
+- Resolves a separate successful ecosystem-sentinel frontier. Minds-only
+  success advances that frontier without advancing the Native Rust product
+  frontier; other all-AI changes reserve no product ARC workers.
+- Skips the product job chain when every changed path is AI-only.
+- Any non-AI path restores the product job chain.
 - Owns merged-head ecosystem cache seeding, statistics, and failure handoff.
 - Native Rust, WASM, and browser-free web verification use the configured ARC scale set.
 - Each lane serially exports its already-solved local BuildKit graph after validation.

@@ -196,6 +196,7 @@ export async function createFixPr(
 
 const MAIN_PR_CHECK = "Verify and preview";
 const WEB_RESEARCH_PR_CHECK = "Build and deploy research catalog";
+const RUST_ECOSYSTEM_PR_CHECK = "Rust ecosystem checks";
 const REPOSITORY_POLICY_PR_CHECK = "Enforce repository policy";
 
 /** Jobs that must succeed on the latest exact-head PR run before merge. */
@@ -376,6 +377,12 @@ const WEB_RESEARCH_PR_WORKFLOW: RequiredPrWorkflow = {
   workflowName: "Web research",
 };
 
+const RUST_ECOSYSTEM_PR_WORKFLOW: RequiredPrWorkflow = {
+  checkName: RUST_ECOSYSTEM_PR_CHECK,
+  workflowFile: "rust-ecosystem.yml",
+  workflowName: "Rust ecosystem checks",
+};
+
 const REPOSITORY_POLICY_PR_WORKFLOW: RequiredPrWorkflow = {
   checkName: REPOSITORY_POLICY_PR_CHECK,
   requiredJobs: [REPOSITORY_POLICY_PR_CHECK],
@@ -394,6 +401,22 @@ function isRepositoryBehaviorTestPath(path: string): boolean {
   );
 }
 
+function isRustEcosystemPath(path: string): boolean {
+  return (
+    path === ".github/workflows/rust-ecosystem.yml" ||
+    path === ".github/workflows/rust-ecosystem-checks.yml" ||
+    path === "deny.toml" ||
+    path === "nook-app/nook-platform/Cargo.lock" ||
+    path === "nook-app/nook-platform/.insta.yaml" ||
+    path.startsWith("nook-app/nook-platform/.cargo/") ||
+    path.startsWith("nook-app/nook-platform/fuzz/") ||
+    path.startsWith("preflight/") ||
+    path.startsWith("agentic-ai/minds/") ||
+    (path.startsWith("nook-app/") &&
+      (path.endsWith(".rs") || path.endsWith("/Cargo.toml")))
+  );
+}
+
 export function requiredPrWorkflows(
   inventory: PullRequestPathInventory,
 ): RequiredPrWorkflow[] {
@@ -401,6 +424,7 @@ export function requiredPrWorkflows(
     return [
       REPOSITORY_POLICY_PR_WORKFLOW,
       WEB_RESEARCH_PR_WORKFLOW,
+      RUST_ECOSYSTEM_PR_WORKFLOW,
       MAIN_PR_WORKFLOW,
     ];
   }
@@ -415,6 +439,15 @@ export function requiredPrWorkflows(
   }
   if (paths.some(isWebResearchPath)) {
     required.push(WEB_RESEARCH_PR_WORKFLOW);
+  }
+  // Product PRs run ecosystem jobs inside pr.yml. Only minds-only PRs still
+  // require the thin rust-ecosystem.yml entry point.
+  if (
+    inventory.state === PullRequestPathInventoryState.Inspectable &&
+    paths.some(isRustEcosystemPath) &&
+    paths.every(isCanonicalAiOnlyPath)
+  ) {
+    required.push(RUST_ECOSYSTEM_PR_WORKFLOW);
   }
   if (
     inventory.state === PullRequestPathInventoryState.Renamed ||
@@ -866,8 +899,7 @@ function isCanonicalAiOnlyPath(path: string): boolean {
     path === ".task/agentic-ai.yml" ||
     path === "AGENTS.md" ||
     path === "CODEX.md" ||
-    (path.startsWith("agentic-ai/") &&
-      !path.startsWith("agentic-ai/minds/"))
+    path.startsWith("agentic-ai/")
   );
 }
 

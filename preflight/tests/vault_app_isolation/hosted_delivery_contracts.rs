@@ -51,13 +51,15 @@ fn assert_workflow_runtime_contract(root: &Path) {
                 .matches("github.event_name == 'workflow_dispatch'")
                 .count()
                 == 5
-            && ecosystem_entry.contains("schedule:")
-            && ecosystem_entry.contains("workflow_dispatch:")
-            && !ecosystem_entry.contains("pull_request:"),
+            && ecosystem_entry.contains("github.event_name == 'schedule'")
+            && ecosystem_entry.contains("github.event_name == 'workflow_dispatch'")
+            && ecosystem_entry.contains("runs-on: ubuntu-latest")
+            && ecosystem_entry
+                .contains("permissions:\n      contents: read\n      pull-requests: read"),
         "trusted PR and release jobs must select ARC while forks retain hosted isolation"
     );
     assert!(
-        main.matches("runs-on: ubuntu-latest").count() == 1
+        main.matches("runs-on: ubuntu-latest").count() == 2
             && main.contains("name: Classify Main paths")
             && main.contains("permissions:\n      actions: read\n      contents: read")
             && main

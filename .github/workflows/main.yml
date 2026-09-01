@@ -9,8 +9,9 @@
 # Extension e2e and UI demos remain required for the workflow but do not gate the development
 # deploy. Immutable releases remain
 # responsible for production wasm optimization.
-# Cortex Markdown-only changes do not need product validation. Any changed path
-# outside that narrow inventory restores the product and ecosystem pipelines. A trusted
+# Canonical AI-only changes do not need product validation. Any changed path
+# outside the explicit AI inventory restores the product pipeline. Minds-only
+# changes run the ecosystem gates here but skip product jobs. A trusted
 # workflow_run collector records each attempt in meta-secret/nook-workbench.
 #
 # E2e on main uses the unified stub `e2e` project (no GitHub API). Live sync
@@ -70,12 +71,11 @@ jobs:
           echo "product-required=true" >> "$GITHUB_OUTPUT"
           echo "ecosystem-required=true" >> "$GITHUB_OUTPUT"
 
-      - name: Resolve latest validated product frontier
+      - name: Resolve validated product and ecosystem frontiers
         id: frontier
         continue-on-error: true
         uses: actions/github-script@v9
         with:
-          result-encoding: string
           script: |
             const expectedRepository = `${context.repo.owner}/${context.repo.repo}`
             const JobInventoryState = Object.freeze({
@@ -85,6 +85,8 @@ jobs:
               CountMismatch: 'count-mismatch',
               PageBound: 'page-bound',
             })
+            let productSha = ''
+            let ecosystemSha = ''
             const fetchJobs = async (runId) => {
               const jobs = []
               let expectedCount = 0
@@ -156,21 +158,36 @@ jobs:
                     return ''
                   }
                   const jobs = inventory.jobs
-                  const sentinels = jobs.filter(
-                    (job) => job.name === 'Native Rust verification',
-                  )
-                  if (sentinels.length !== 1) return ''
-                  const sentinel = sentinels[0]
-                  if (sentinel.status !== 'completed') return ''
-                  if (sentinel.conclusion === 'success') return candidate.head_sha
-                  if (sentinel.conclusion !== 'skipped') return ''
+                  const resolveSentinel = (name) => {
+                    const sentinels = jobs.filter((job) => job.name === name)
+                    if (sentinels.length !== 1) return 'invalid'
+                    const sentinel = sentinels[0]
+                    if (sentinel.status !== 'completed') return 'invalid'
+                    if (sentinel.conclusion === 'success') return 'success'
+                    if (sentinel.conclusion === 'skipped') return 'skipped'
+                    return 'invalid'
+                  }
+                  const productState = resolveSentinel('Native Rust verification')
+                  const ecosystemState = resolveSentinel('Rust ecosystem validation sentinel')
+                  if (productState === 'invalid' || ecosystemState === 'invalid') return
+                  if (productSha === '' && productState === 'success') productSha = candidate.head_sha
+                  if (ecosystemSha === '' && ecosystemState === 'success') ecosystemSha = candidate.head_sha
+                  if (productSha !== '' && ecosystemSha !== '') {
+                    core.setOutput('product-sha', productSha)
+                    core.setOutput('ecosystem-sha', ecosystemSha)
+                    return
+                  }
                 }
-                if (response.data.workflow_runs.length < 100) return ''
+                if (response.data.workflow_runs.length < 100) break
               }
             } catch (error) {
-              core.warning(`Failed to resolve validated product frontier: ${error}`)
+              core.warning(`Failed to resolve validated Main frontiers: ${error}`)
+              return
             }
-            return ''
+            if (productSha !== '' && ecosystemSha !== '') {
+              core.setOutput('product-sha', productSha)
+              core.setOutput('ecosystem-sha', ecosystemSha)
+            }
 
       - name: Checkout complete push history
         id: checkout
@@ -182,21 +199,26 @@ jobs:
 
       - name: Detect product changes
         id: classify
-        if: steps.checkout.outcome == 'success' && steps.frontier.outcome == 'success' && steps.frontier.outputs.result != ''
+        if: steps.checkout.outcome == 'success' && steps.frontier.outcome == 'success' && steps.frontier.outputs.product-sha != '' && steps.frontier.outputs.ecosystem-sha != ''
         continue-on-error: true
         env:
-          FRONTIER_SHA: ${{ steps.frontier.outputs.result }}
+          PRODUCT_FRONTIER_SHA: ${{ steps.frontier.outputs.product-sha }}
+          ECOSYSTEM_FRONTIER_SHA: ${{ steps.frontier.outputs.ecosystem-sha }}
           AFTER_SHA: ${{ github.sha }}
         run: |
-          [[ "$FRONTIER_SHA" =~ ^[0-9a-f]{40}$ ]]
-          git cat-file -e "$FRONTIER_SHA^{commit}"
-          git merge-base --is-ancestor "$FRONTIER_SHA" "$AFTER_SHA"
-          rename_status="$(git diff --find-renames=1% --name-status "$FRONTIER_SHA" "$AFTER_SHA")"
-          changed_files="$(git diff --no-renames --name-only "$FRONTIER_SHA" "$AFTER_SHA")"
+          for frontier_sha in "$PRODUCT_FRONTIER_SHA" "$ECOSYSTEM_FRONTIER_SHA"; do
+            [[ "$frontier_sha" =~ ^[0-9a-f]{40}$ ]]
+            git cat-file -e "$frontier_sha^{commit}"
+            git merge-base --is-ancestor "$frontier_sha" "$AFTER_SHA"
+          done
+          product_rename_status="$(git diff --find-renames=1% --name-status "$PRODUCT_FRONTIER_SHA" "$AFTER_SHA")"
+          product_changed_files="$(git diff --no-renames --name-only "$PRODUCT_FRONTIER_SHA" "$AFTER_SHA")"
+          ecosystem_rename_status="$(git diff --find-renames=1% --name-status "$ECOSYSTEM_FRONTIER_SHA" "$AFTER_SHA")"
+          ecosystem_changed_files="$(git diff --no-renames --name-only "$ECOSYSTEM_FRONTIER_SHA" "$AFTER_SHA")"
 
           product_required=false
           ecosystem_required=false
-          if [ -z "$changed_files" ]; then
+          if [ -z "$product_changed_files" ] || [ -z "$ecosystem_changed_files" ]; then
             echo "product-required=true" >> "$GITHUB_OUTPUT"
             echo "ecosystem-required=true" >> "$GITHUB_OUTPUT"
             exit 0
@@ -205,20 +227,30 @@ jobs:
             case "$status" in
               R*)
                 product_required=true
-                ecosystem_required=true
                 ;;
             esac
-          done <<< "$rename_status"
+          done <<< "$product_rename_status"
           while IFS= read -r changed_file; do
             case "$changed_file" in
-              .cortex/*.md | .github/workflows/repository-policy.yml)
+              .agents/skills/* | .claude/skills/* | .codex/* | .cortex/* | .cursor/* | .github/prompts/* | .github/workflows/agent-implement.yml | .github/workflows/ci-agent-smoke.yml | .github/workflows/repository-policy.yml | .task/agentic-ai.yml | AGENTS.md | CODEX.md | agentic-ai/*)
                 ;;
               *)
                 product_required=true
-                ecosystem_required=true
                 ;;
             esac
-          done <<< "$changed_files"
+          done <<< "$product_changed_files"
+          while IFS=$'\t' read -r status _; do
+            case "$status" in
+              R*) ecosystem_required=true ;;
+            esac
+          done <<< "$ecosystem_rename_status"
+          while IFS= read -r changed_file; do
+            case "$changed_file" in
+              agentic-ai/minds/*) ecosystem_required=true ;;
+              .agents/skills/* | .claude/skills/* | .codex/* | .cortex/* | .cursor/* | .github/prompts/* | .github/workflows/agent-implement.yml | .github/workflows/ci-agent-smoke.yml | .github/workflows/repository-policy.yml | .task/agentic-ai.yml | AGENTS.md | CODEX.md | agentic-ai/*) ;;
+              *) ecosystem_required=true ;;
+            esac
+          done <<< "$ecosystem_changed_files"
           echo "product-required=$product_required" >> "$GITHUB_OUTPUT"
           echo "ecosystem-required=$ecosystem_required" >> "$GITHUB_OUTPUT"
 
@@ -231,6 +263,17 @@ jobs:
     with:
       fuzz_seconds: "20"
       isolated_cache_write: "false"
+
+  ecosystem-sentinel:
+    name: Rust ecosystem validation sentinel
+    needs: [product-paths, rust-ecosystem]
+    if: always() && needs.product-paths.outputs.ecosystem-required == 'true' && needs.rust-ecosystem.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Record validated ecosystem frontier
+        run: "true"
 
   rust:
     name: Native Rust verification

@@ -77,8 +77,7 @@ jobs:
               path === '.task/agentic-ai.yml' ||
               path === 'AGENTS.md' ||
               path === 'CODEX.md' ||
-              (path.startsWith('agentic-ai/') &&
-                !path.startsWith('agentic-ai/minds/'))
+              path.startsWith('agentic-ai/')
 
             let files
             try {

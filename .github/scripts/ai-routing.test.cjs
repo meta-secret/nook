@@ -7,6 +7,8 @@ const root = resolve(__dirname, '../..')
 const research = readFileSync(resolve(root, '.github/workflows/web-research.yml'), 'utf8')
 const policy = readFileSync(resolve(root, '.github/workflows/repository-policy.yml'), 'utf8')
 const obsolete = readFileSync(resolve(root, '.github/workflows/pr-obsolete-validation.yml'), 'utf8')
+const main = readFileSync(resolve(root, '.github/workflows/main.yml'), 'utf8')
+const ecosystem = readFileSync(resolve(root, '.github/workflows/rust-ecosystem.yml'), 'utf8')
 
 const FrontierKind = Object.freeze({ found: 'found', unavailable: 'unavailable' })
 const unavailableFrontier = () => ({ kind: FrontierKind.unavailable })
@@ -41,6 +43,18 @@ const policyJobInventory = (pages) => {
     receivedCount += page.jobs
   }
   return receivedCount === expectedCount ? 'complete' : 'count-mismatch'
+}
+
+const mainFrontiers = (runs) => {
+  let product = ''
+  let ecosystem = ''
+  for (const run of runs) {
+    if (!run.valid || !['success', 'skipped'].includes(run.product) || !['success', 'skipped'].includes(run.ecosystem)) return unavailableFrontier()
+    if (!product && run.product === 'success') product = run.sha
+    if (!ecosystem && run.ecosystem === 'success') ecosystem = run.sha
+    if (product && ecosystem) return { kind: FrontierKind.found, product, ecosystem }
+  }
+  return unavailableFrontier()
 }
 
 test('repository policy frontier preserves canceled and failed full validation', () => {
@@ -151,4 +165,42 @@ test('workflow sources enforce frontier and hosted classifier contracts', () => 
   assert.match(policy, /node --test \.github\/scripts\/\*\.test\.cjs/)
   assert.equal(policy.split('.github/workflows/pr-obsolete-validation.yml').length - 1, 2)
   assert.match(policy, /needs\.policy-paths\.outputs\.ci_agent == 'true'/)
+})
+
+test('Main keeps independent validated product and ecosystem frontiers', () => {
+  assert.deepEqual(mainFrontiers([
+    { sha: 'AI', valid: true, product: 'skipped', ecosystem: 'skipped' },
+    { sha: 'MINDS', valid: true, product: 'skipped', ecosystem: 'success' },
+    { sha: 'PRODUCT', valid: true, product: 'success', ecosystem: 'success' },
+  ]), { kind: FrontierKind.found, product: 'PRODUCT', ecosystem: 'MINDS' })
+  assert.deepEqual(mainFrontiers([
+    { sha: 'FAILED', valid: true, product: 'failure', ecosystem: 'failure' },
+  ]), unavailableFrontier())
+  for (const marker of [
+    "core.setOutput('product-sha', productSha)",
+    "core.setOutput('ecosystem-sha', ecosystemSha)",
+    "resolveSentinel('Native Rust verification')",
+    "resolveSentinel('Rust ecosystem validation sentinel')",
+    'PRODUCT_FRONTIER_SHA',
+    'ECOSYSTEM_FRONTIER_SHA',
+    'git diff --find-renames=1% --name-status',
+    'git diff --no-renames --name-only',
+  ]) assert.match(main, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+  assert.match(main, /agentic-ai\/minds\/\*\) ecosystem_required=true/)
+  assert.match(main, /ecosystem-sentinel:[\s\S]*runs-on: ubuntu-latest[\s\S]*run: "true"/)
+  assert.match(main, /R\*\)\s+product_required=true/)
+})
+
+test('Rust specialist replaces only canonical minds validation', () => {
+  for (const marker of [
+    'types: [labeled, edited]',
+    'PullRequestFileInventoryState',
+    'Object.values(PullRequestFileStatus)',
+    'context.payload.changes?.base?.ref?.from',
+    "path.startsWith('agentic-ai/minds/')",
+    'changedPaths.every(isCanonicalAiOnlyPath)',
+  ]) assert.equal(ecosystem.includes(marker), true)
+  assert.match(ecosystem, /github\.event\.action == 'labeled'[\s\S]*'validation' \|\| github\.run_id/)
+  assert.match(ecosystem, /file\.status === PullRequestFileStatus\.Renamed[\s\S]*return 'false'/)
+  assert.doesNotMatch(ecosystem.split('  validation-request:')[1].split('\n  ecosystem:')[0], /actions\/checkout|secrets\./)
 })

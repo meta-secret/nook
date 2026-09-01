@@ -66,7 +66,7 @@ test("requiredPrCheckNames maps changed paths to repository-owned gates", () => 
   );
   assert.deepEqual(
     requiredPrCheckNames(inspectable(["agentic-ai/minds/Cargo.lock"])),
-    ["Verify and preview"],
+    ["Enforce repository policy", "Rust ecosystem checks"],
   );
   assert.deepEqual(
     requiredPrCheckNames(
@@ -119,6 +119,22 @@ test("requiredPrCheckNames maps changed paths to repository-owned gates", () => 
         ],
         workflowFile: "pr.yml",
         workflowName: "PR",
+      },
+    ],
+  );
+  assert.deepEqual(
+    requiredPrWorkflows(inspectable(["agentic-ai/minds/Cargo.lock"])),
+    [
+      {
+        checkName: "Enforce repository policy",
+        requiredJobs: ["Enforce repository policy"],
+        workflowFile: "repository-policy.yml",
+        workflowName: "Repository policy",
+      },
+      {
+        checkName: "Rust ecosystem checks",
+        workflowFile: "rust-ecosystem.yml",
+        workflowName: "Rust ecosystem checks",
       },
     ],
   );
@@ -250,6 +266,7 @@ test("PR file inventory fails closed on truncation and unsupported status", () =
   assert.deepEqual(requiredPrCheckNames(capped), [
     "Enforce repository policy",
     "Build and deploy research catalog",
+    "Rust ecosystem checks",
     "Verify and preview",
   ]);
   const unsupported = classifyPullRequestChangedPaths(

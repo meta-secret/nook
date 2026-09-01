@@ -68,11 +68,12 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "Thin rust-ecosystem.yml must call the shared Rust ecosystem checks"
     );
     assert!(
-        !entry.contains("pull_request:")
-            && !entry.contains("agentic-ai/minds/**")
-            && entry.contains("fuzz_seconds: \"900\"")
-            && entry.contains("isolated_cache_write: \"false\""),
-        "labeled minds PRs must use only pr.yml while scheduled and manual specialist runs remain"
+        entry.contains("pull_request:")
+            && entry.contains("types: [labeled, edited]")
+            && entry.contains("agentic-ai/minds/")
+            && entry.contains("'900' || '20'")
+            && entry.contains("github.event_name == 'pull_request' && 'true' || 'false'"),
+        "minds-only PRs and scheduled/manual runs must retain the specialist suite"
     );
     assert!(
         main.contains("uses: ./.github/workflows/rust-ecosystem-checks.yml")
@@ -97,7 +98,8 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     for marker in [
         "product-paths:",
         "git diff --no-renames --name-only",
-        ".cortex/*.md | .github/workflows/repository-policy.yml)",
+        "agentic-ai/minds/*) ecosystem_required=true",
+        "ECOSYSTEM_FRONTIER_SHA",
         "if: needs.product-paths.outputs.product-required == 'true'",
     ] {
         assert!(
@@ -497,10 +499,10 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
 }
 
 #[test]
-fn product_pr_skips_only_policy_owned_ai_paths_while_main_stays_conservative() -> anyhow::Result<()>
-{
+fn minds_routing_is_atomic_across_pr_main_and_readiness() -> anyhow::Result<()> {
     let pr = read(".github/workflows/pr.yml")?;
     let main = read(".github/workflows/main.yml")?;
+    let entry = read(".github/workflows/rust-ecosystem.yml")?;
     let research = read(".github/workflows/web-research.yml")?;
     let repository_policy = read(".github/workflows/repository-policy.yml")?;
     let readiness = read("agentic-ai/ci-agent/src/main/github.ts")?;
@@ -514,7 +516,7 @@ fn product_pr_skips_only_policy_owned_ai_paths_while_main_stays_conservative() -
         "path.startsWith('.cursor/')",
         "path.startsWith('.github/prompts/')",
         "path.startsWith('agentic-ai/')",
-        "!path.startsWith('agentic-ai/minds/')",
+        "path.startsWith('agentic-ai/')",
     ] {
         assert!(pr.contains(marker), "PR AI inventory missing {marker}");
     }
@@ -565,10 +567,11 @@ fn product_pr_skips_only_policy_owned_ai_paths_while_main_stays_conservative() -
     assert!(main.contains("while IFS=$'\\t' read -r status _"));
     assert!(main.contains("R*)"));
     assert!(main.contains("git diff --no-renames --name-only"));
-    assert!(main.contains(".cortex/*.md | .github/workflows/repository-policy.yml)"));
-    assert!(!main.contains("agentic-ai/minds/*)"));
+    assert!(main.contains("agentic-ai/minds/*) ecosystem_required=true"));
+    assert!(main.contains("ECOSYSTEM_FRONTIER_SHA"));
+    assert!(main.contains("Rust ecosystem validation sentinel"));
     assert!(main.contains("candidate.name !== 'Main'"));
-    assert!(main.contains("job.name === 'Native Rust verification'"));
+    assert!(main.contains("resolveSentinel('Native Rust verification')"));
     assert!(main.contains("sentinel.conclusion === 'success'"));
     for state in [
         "Complete: 'complete'",
@@ -605,10 +608,10 @@ fn product_pr_skips_only_policy_owned_ai_paths_while_main_stays_conservative() -
     }
 
     assert!(readiness.contains("path.startsWith(\".codex/\")"));
-    assert!(readiness.contains("!path.startsWith(\"agentic-ai/minds/\")"));
+    assert!(readiness.contains("path.startsWith(\"agentic-ai/minds/\")"));
     assert!(readiness.contains("PullRequestPathInventoryState.Renamed"));
     assert!(readiness.contains("file.previousFilename"));
-    assert!(!readiness.contains("workflowFile: \"rust-ecosystem.yml\""));
+    assert!(readiness.contains("workflowFile: \"rust-ecosystem.yml\""));
     assert!(readiness.contains("workflowFile: \"repository-policy.yml\""));
     assert!(readiness.contains("workflowFile: \"web-research.yml\""));
     assert!(!research.contains("paths-ignore:"));
@@ -617,6 +620,22 @@ fn product_pr_skips_only_policy_owned_ai_paths_while_main_stays_conservative() -
     assert!(research.contains("files.length >= 3000"));
     assert!(research.contains("? [file.previous_filename, file.filename]"));
     assert!(research.contains("needs.research-paths.outputs.research-required == 'true'"));
+
+    for marker in [
+        "types: [labeled, edited]",
+        "context.payload.changes?.base?.ref?.from",
+        "PullRequestFileInventoryState",
+        "new Set(Object.values(PullRequestFileStatus))",
+        "github.event.action == 'labeled'",
+        "github.run_id",
+    ] {
+        assert!(
+            entry.contains(marker),
+            "specialist routing missing {marker}"
+        );
+    }
+    assert!(entry.contains("changedPaths.some((path) => path.startsWith('agentic-ai/minds/'))"));
+    assert!(entry.contains("changedPaths.every(isCanonicalAiOnlyPath)"));
     Ok(())
 }
 

@@ -78,12 +78,11 @@ task loom:pr-land CONFIG=path/to/gizmo-owned/pr-land-validate.yaml
   3. Gizmo integrates, runs pre-push, and pushes; and
   4. Gizmo validates when ready or runs relevant focused proof.
 - Ordinary pushes do not refresh complete PR checks.
-- Product PR validation skips only complete canonical AI-only change sets.
-  - The explicit inventory includes agent configuration, prompts, instructions,
-    AI workflows, and `agentic-ai/**` except `agentic-ai/minds/**`.
-  - Minds remains product-required until its specialist workflow owns an atomic
-    replacement; no intermediate merge can lose Rust ecosystem validation.
-  - PR and CI-agent readiness use the same policy-owned inventory.
+- Product PR and Main validation skip only all-AI change sets.
+  - The explicit canonical AI-only inventory lives in the product workflow
+    classifiers. Neither PR nor Main uses native exclusions because trigger
+    filters discard rename source paths before a workflow can fail closed.
+  - PR, Main, minds-specialist, and CI-agent readiness use the same inventory.
   - Repository policy covers every inventory entry on Main.
   - Rename classification reports both real paths and always restores product
     validation; it never injects a synthetic path into readiness evidence.
@@ -97,15 +96,25 @@ task loom:pr-land CONFIG=path/to/gizmo-owned/pr-land-validate.yaml
     runner. Every product job depends directly on its classifier output.
   - Trusted handoff and Linear demo consumers classify the completed source run
     on GitHub-hosted runners and reserve ARC only when its product sentinel ran.
-  - Main retains the conservative Cortex-Markdown and repository-policy
-    exemption. Its hosted classifier uses the latest successful Native Rust
-    sentinel as the validated frontier and fails closed on uncertainty.
+  - Main uses a GitHub-hosted, read-only checkout classifier with `--no-renames`.
+    It resolves the latest successful Main run whose Native Rust sentinel
+    succeeded and classifies the complete range from that validated product
+    frontier. Missing or uncertain run, job, commit, or history state requires
+    complete validation. It resolves a separate successful ecosystem sentinel
+    frontier so minds-only success advances ecosystem evidence without
+    advancing product evidence. Accumulated minds changes therefore keep
+    ecosystem validation without admitting the product graph.
   - The Main classifier checkout sets `persist-credentials: false`; hosted
     classifier security contracts reject credential persistence.
   - Main statistics and failure consumers reserve ARC only for product runs or
     uncertain/failed source state.
   - Every GitHub-hosted classifier declares explicit read-only job permissions
     and remains credential-free.
+  - The minds specialist workflow has no native PR path filter. Its hosted
+    classifier uses the authoritative file count and supported status set. It
+    admits specialist ARC only for a complete, non-renamed canonical AI-only
+    minds change. Known renames use the product ecosystem suite; uncertain
+    inventories fail closed to specialist validation.
   - Web research has no native PR path filter. Its API-only hosted classifier
     expands rename sources and destinations and gates every research worker;
     incomplete or unsupported inventories fail closed to research validation.

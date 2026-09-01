@@ -475,7 +475,7 @@ test("buildPrAudit conservatively audits every workflow for a capped inventory",
   );
   assert.deepEqual(
     audit.requiredWorkflows.map((workflow) => workflow.workflowName),
-    ["Repository policy", "Web research", "PR"],
+    ["Repository policy", "Web research", "Rust ecosystem checks", "PR"],
   );
   assert.equal(audit.ready, false);
   assert.ok(
@@ -486,6 +486,11 @@ test("buildPrAudit conservatively audits every workflow for a capped inventory",
   assert.ok(
     audit.reasons.includes(
       "Web research run is not indexed for the current head",
+    ),
+  );
+  assert.ok(
+    audit.reasons.includes(
+      "Rust ecosystem checks run is not indexed for the current head",
     ),
   );
 });

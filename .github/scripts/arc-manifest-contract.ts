@@ -446,7 +446,7 @@ mainWorkflow.requireAll([
   "git diff --no-renames --name-only",
   "needs.product-paths.outputs.product-required == 'true'",
 ]);
-mainWorkflow.count({ fragment: "    runs-on: ubuntu-latest", expected: 1 });
+mainWorkflow.count({ fragment: "    runs-on: ubuntu-latest", expected: 2 });
 mainWorkflow.requireAll([
   "wasm-cache-publish:",
   "name: WASM cache publication",
@@ -641,10 +641,12 @@ const hostedCheapClassifiers = new Set([
   "main-build-stats.yml#product-scope",
   "main-failure-handoff.yml#product-scope",
   "main.yml#product-paths",
+  "main.yml#ecosystem-sentinel",
   "pr-validation-handoff.yml#product-scope",
   "pr-obsolete-validation.yml#obsolete-heads",
   "pr.yml#validation-request",
   "repository-policy.yml#policy-paths",
+  "rust-ecosystem.yml#validation-request",
   "web-research.yml#research-paths",
 ]);
 const hostedCheckoutClassifiers = new Set([
