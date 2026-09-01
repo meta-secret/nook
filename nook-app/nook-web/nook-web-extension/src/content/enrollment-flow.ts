@@ -88,6 +88,7 @@ type TranslatedMessageWithSubstitutionArgs = {
 export type EnrollmentFlowHost = EnrollmentFlowViewHost & {
   step: HTMLParagraphElement
   continueButton: HTMLButtonElement
+  openVaultButton: HTMLButtonElement
   setBusy: (busy: boolean) => void
   isBusy: () => boolean
   sendDecodedRuntimeMessage: <Response>(
@@ -729,10 +730,6 @@ export function enrollmentCeremonyActive(): boolean {
   return enrollmentEvidenceWatchActive() || holdEnrollmentWidgetAfterSave
 }
 
-export function resetEnrollmentCeremony(): void {
-  stopPendingEnrollmentWatch()
-  holdEnrollmentWidgetAfterSave = false
-}
 export function releaseEnrollmentWidgetHold(): void {
   holdEnrollmentWidgetAfterSave = false
 }

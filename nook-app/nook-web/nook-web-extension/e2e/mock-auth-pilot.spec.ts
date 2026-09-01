@@ -28,7 +28,9 @@ test.describe('PIN Pilot against mock auth', () => {
       await loginPage.goto(`${mockAuth.origin}/plain/login`)
       const widget = loginPage.locator('#nook-auth-widget')
       await expect(widget.getByText('Ready to sign in')).toBeVisible()
-      await expect(widget.locator('img.collapsed-mark')).toBeVisible()
+      await expect(
+        widget.getByTestId('nook-auth-gate-vault-status'),
+      ).toHaveText(/Connected to Mock auth vault/)
       // Single matching login fills and submits without an account chooser.
       await widget.getByRole('button', { name: 'Continue with Nook' }).click()
       await expect(loginPage.getByTestId('mock-auth-success')).toHaveText(

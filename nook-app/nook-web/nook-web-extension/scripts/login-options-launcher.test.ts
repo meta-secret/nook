@@ -3,8 +3,6 @@ import { WebsiteAuthenticatorResponseStatus } from '../src/lib/login-fill-messag
 import { OpenCompanionLauncherIntent } from '../../nook-web-shared/src/extension/companion-launcher-message'
 import type { StoredExtensionPairingGrant } from '../src/background/pairing-grants'
 import { extensionSessionProbeDeadline } from '../src/offscreen/session-request-adapter'
-import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
-await companionWasmReady
 
 type GrantAccessResponse =
   | {
@@ -38,13 +36,8 @@ describe('websiteLoginOptions', () => {
     Object.assign(globalThis, {
       __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
     })
-    const {
-      invalidateLoginMatchAvailabilityForOrigin,
-      websiteLoginMatchAvailability,
-      websiteLoginOptions,
-    } =
-      await import('../src/background/service-worker/login-match-availability')
-    const invalidation = { origin: 'https://example.test' }
+    const { websiteLoginMatchAvailability, websiteLoginOptions } =
+      await import('../src/background/service-worker/account-pickers')
     let grantAccessResponse: GrantAccessResponse = {
       response: {
         ok: true,
@@ -143,7 +136,6 @@ describe('websiteLoginOptions', () => {
     expect(openCompanionLauncherBestEffort).toHaveBeenCalledTimes(1)
 
     grantAccessResponse = { grants: [] }
-    invalidateLoginMatchAvailabilityForOrigin(invalidation)
     const unlockedPassiveResponse = await websiteLoginMatchAvailability({
       origin: 'https://example.test',
       sender: {
@@ -162,7 +154,6 @@ describe('websiteLoginOptions', () => {
     expect(availabilityRequests[0]?.queue.expiresAt).toBeGreaterThan(Date.now())
 
     loginAccountAvailability = { ok: false }
-    invalidateLoginMatchAvailabilityForOrigin(invalidation)
     const failedPassiveResponse = await websiteLoginMatchAvailability({
       origin: 'https://example.test',
       sender: {
@@ -241,7 +232,7 @@ describe('websiteLoginOptions', () => {
 
   test('withholds direct account results invalidated during lookup', async () => {
     const { websiteLoginOptions } =
-      await import('../src/background/service-worker/login-match-availability')
+      await import('../src/background/service-worker/account-pickers')
     const { websiteAuthenticatorOptions } =
       await import('../src/background/service-worker/authenticator-operations')
     let currentChecks = 0

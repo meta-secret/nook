@@ -27,13 +27,14 @@ import {
   PointerDragBehaviorKind,
   clampWidgetPosition,
 } from './widget-position'
-import type { WorkflowCopy } from './workflow-ui'
+import type { PilotVaultConnection, WorkflowCopy } from './workflow-ui'
 import {
   WIDGET_HOST_ID,
   progressLabel,
   removeWidget,
   translatedMessage,
   translatedMessageWithSubstitution,
+  vaultConnectionLabel,
 } from './workflow-ui'
 
 const WIDGET_PANEL_STYLES = `
@@ -54,10 +55,10 @@ const WIDGET_PANEL_STYLES = `
     }
     .panel {
       position: relative;
-      width: min(288px, calc(100vw - 36px));
+      width: min(320px, calc(100vw - 36px));
       display: grid;
-      gap: 10px;
-      padding: 12px;
+      gap: 12px;
+      padding: 14px 14px 16px;
       border: 1px solid rgb(255 255 255 / 10%);
       border-radius: 12px;
       background: oklch(0.141 0.005 285.823);
@@ -111,12 +112,12 @@ const WIDGET_PANEL_STYLES = `
     }
     .body {
       display: grid;
-      gap: 9px;
+      gap: 12px;
     }
     .site-context {
       width: fit-content;
       max-width: 100%;
-      margin: 0;
+      margin: -4px auto 0;
       overflow: hidden;
       color: oklch(0.82 0.01 286);
       font-size: 11px;
@@ -124,6 +125,33 @@ const WIDGET_PANEL_STYLES = `
       letter-spacing: 0.02em;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+    .vault-status {
+      width: fit-content;
+      max-width: 100%;
+      margin: -8px auto 0;
+      overflow: hidden;
+      color: oklch(0.705 0.015 286.067);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      text-align: center;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .vault-status[data-connected='true'] {
+      color: oklch(0.82 0.04 155);
+    }
+    .vault-status[data-connected='false'] {
+      color: oklch(0.78 0.05 70);
+    }
+    .mark {
+      display: block;
+      width: 52px;
+      height: 52px;
+      margin: 0 auto;
+      border-radius: 12px;
+      object-fit: contain;
     }
     .collapsed-launch {
       appearance: none;
@@ -151,11 +179,6 @@ const WIDGET_PANEL_STYLES = `
       object-fit: contain;
       pointer-events: none;
     }
-    .body .collapsed-mark {
-      width: 20px;
-      height: 20px;
-      border-radius: 5px;
-    }
     .collapsed-progress {
       position: absolute;
       right: -4px;
@@ -171,16 +194,16 @@ const WIDGET_PANEL_STYLES = `
     }
     h1 {
       margin: 0;
-      font-size: 16px;
+      font-size: 18px;
       line-height: 1.25;
-      text-align: left;
+      text-align: center;
     }
     .description {
       margin: 0;
       color: oklch(0.705 0.015 286.067);
-      font-size: 12px;
+      font-size: 13px;
       line-height: 1.4;
-      text-align: left;
+      text-align: center;
     }
     .account-list {
       display: grid;
@@ -189,7 +212,7 @@ const WIDGET_PANEL_STYLES = `
     button.primary-button,
     button.secondary-button {
       appearance: none;
-      min-height: 38px;
+      min-height: 40px;
       border-radius: 9px;
       cursor: pointer;
       font: inherit;
@@ -241,6 +264,7 @@ type BuildEnrollmentFlowHostArgs = {
   title: HTMLHeadingElement
   description: HTMLParagraphElement
   continueButton: HTMLButtonElement
+  openVaultButton: HTMLButtonElement
 }
 
 export function buildEnrollmentFlowHost({
@@ -249,6 +273,7 @@ export function buildEnrollmentFlowHost({
   title,
   description,
   continueButton,
+  openVaultButton,
 }: BuildEnrollmentFlowHostArgs): EnrollmentFlowHost {
   return {
     panel,
@@ -256,6 +281,7 @@ export function buildEnrollmentFlowHost({
     title,
     description,
     continueButton,
+    openVaultButton,
     setBusy: (value: boolean) => {
       widgetState.busy = value
     },
@@ -296,9 +322,9 @@ interface WidgetShell {
   title: HTMLHeadingElement
   description: HTMLParagraphElement
   continueButton: HTMLButtonElement
+  openVaultButton: HTMLButtonElement
   collapseButton: HTMLButtonElement
   collapsedLaunch: HTMLButtonElement
-  nookMark: HTMLImageElement
 }
 
 type CreateWidgetMarkArgs = {
@@ -322,12 +348,14 @@ export function createWidgetMark({
 
 type CreateWidgetShellArgs = {
   copy: WorkflowCopy
+  vaultConnection: PilotVaultConnection
   currentStep: number
   totalSteps: number
 }
 
 export function createWidgetShell({
   copy,
+  vaultConnection,
   currentStep,
   totalSteps,
 }: CreateWidgetShellArgs): WidgetShell {
@@ -382,12 +410,24 @@ export function createWidgetShell({
   const body = document.createElement('div')
   body.className = 'body'
 
+  const nookTypedArgs0_1: Parameters<typeof createWidgetMark>[0] = {
+    className: 'mark',
+    size: 52,
+  }
+  const mark = createWidgetMark(nookTypedArgs0_1)
+
   const title = document.createElement('h1')
   title.textContent = translatedMessage(copy.titleKey)
 
   const site = document.createElement('p')
   site.className = 'site-context'
   site.textContent = location.hostname
+
+  const vaultStatus = document.createElement('p')
+  vaultStatus.className = 'vault-status'
+  vaultStatus.setAttribute('data-testid', 'nook-auth-gate-vault-status')
+  vaultStatus.dataset.connected = vaultConnection.connected ? 'true' : 'false'
+  vaultStatus.textContent = vaultConnectionLabel(vaultConnection)
 
   const description = document.createElement('p')
   description.className = 'description'
@@ -397,7 +437,32 @@ export function createWidgetShell({
   continueButton.type = 'button'
   continueButton.className = 'primary-button'
 
-  body.append(title, description, continueButton, site)
+  const openVaultButton = document.createElement('button')
+  openVaultButton.type = 'button'
+  openVaultButton.className = 'secondary-button'
+  openVaultButton.setAttribute(
+    'aria-label',
+    translatedMessage(BROWSER_MESSAGE_KEYS.WidgetOpenVault),
+  )
+  openVaultButton.textContent = translatedMessage(
+    BROWSER_MESSAGE_KEYS.WidgetOpenVault,
+  )
+  openVaultButton.addEventListener('click', () => {
+    const nookTypedArgs0_0: Parameters<typeof chrome.runtime.sendMessage>[0] = {
+      type: 'nook:open-simple-vault',
+    }
+    void chrome.runtime.sendMessage(nookTypedArgs0_0)
+  })
+
+  body.append(
+    mark,
+    site,
+    vaultStatus,
+    title,
+    description,
+    continueButton,
+    openVaultButton,
+  )
 
   const collapsedLaunch = document.createElement('button')
   collapsedLaunch.type = 'button'
@@ -416,11 +481,11 @@ export function createWidgetShell({
     className: 'collapsed-mark',
     size: 40,
   }
-  const nookMark = createWidgetMark(nookTypedArgs0_3)
+  const collapsedMark = createWidgetMark(nookTypedArgs0_3)
   const collapsedProgress = document.createElement('span')
   collapsedProgress.className = 'collapsed-progress'
   collapsedProgress.textContent = `${currentStep}/${totalSteps}`
-  collapsedLaunch.append(nookMark, collapsedProgress)
+  collapsedLaunch.append(collapsedMark, collapsedProgress)
 
   return {
     host,
@@ -431,9 +496,9 @@ export function createWidgetShell({
     title,
     description,
     continueButton,
+    openVaultButton,
     collapseButton,
     collapsedLaunch,
-    nookMark,
   }
 }
 
@@ -450,8 +515,6 @@ export function mountWidgetShell({
 }: MountWidgetShellArgs): void {
   const { host, panel, toolbar, body, collapseButton, collapsedLaunch } = shell
   const applyCollapsedState = (): void => {
-    const markParent = widgetState.collapsed ? collapsedLaunch : body
-    markParent.prepend(shell.nookMark)
     panel.classList.toggle('is-collapsed', widgetState.collapsed)
     collapseButton.hidden = widgetState.collapsed
     toolbar.hidden = widgetState.collapsed
@@ -478,7 +541,7 @@ export function mountWidgetShell({
   }
 
   collapseButton.addEventListener('click', () => {
-    widgetState.collapseByUser()
+    widgetState.collapsed = true
     applyCollapsedState()
   })
 
@@ -504,7 +567,7 @@ export function mountWidgetShell({
     {
       kind: PointerDragBehaviorKind.Tappable,
       onTap: () => {
-        widgetState.expandByUser()
+        widgetState.collapsed = false
         applyCollapsedState()
       },
     }

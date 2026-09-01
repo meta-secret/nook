@@ -51,6 +51,8 @@ test('propose Create passkey through Nook Pilot without silent ceremony', async 
             color: #171921;
             font: 750 14px/1 Inter, ui-sans-serif, system-ui, sans-serif;
           }
+          #started { display: none; margin-top: 16px; color: #94d4ae; font-weight: 650; }
+          body.started #started { display: block; }
         </style>
       </head>
       <body>
@@ -60,18 +62,15 @@ test('propose Create passkey through Nook Pilot without silent ceremony', async 
           <button type="button" data-nook-passkey-control data-testid="demo-passkey-control">
             Create a passkey
           </button>
+          <p id="started" data-testid="demo-passkey-started">Site passkey ceremony started</p>
         </main>
       </body>
     </html>`)
   await page.evaluate(() => {
-    const demoWindow = window as typeof window & {
-      __nookDemoPasskeyStarted: boolean
-    }
-    demoWindow.__nookDemoPasskeyStarted = false
     document
       .querySelector('[data-testid="demo-passkey-control"]')
       ?.addEventListener('click', () => {
-        demoWindow.__nookDemoPasskeyStarted = true
+        document.body.classList.add('started')
       })
   })
   await page.evaluate(installDemoChromeStub, stubArgs)
@@ -81,21 +80,13 @@ test('propose Create passkey through Nook Pilot without silent ceremony', async 
   await expect(
     widget.getByRole('button', { name: 'Create passkey' }),
   ).toBeVisible()
+  await expect(widget.getByTestId('nook-auth-gate-vault-status')).toHaveText(
+    'Connected to Demo vault',
+  )
   await demoBeat(page)
 
   await widget.getByRole('button', { name: 'Create passkey' }).click()
-  await expect
-    .poll(() =>
-      page.evaluate(
-        () =>
-          (
-            window as typeof window & {
-              __nookDemoPasskeyStarted: boolean
-            }
-          ).__nookDemoPasskeyStarted,
-      ),
-    )
-    .toBe(true)
+  await expect(page.getByTestId('demo-passkey-started')).toBeVisible()
   await expect(
     widget.getByText(/Continue in the Nook passkey prompt|окне ключа доступа/i),
   ).toBeVisible()

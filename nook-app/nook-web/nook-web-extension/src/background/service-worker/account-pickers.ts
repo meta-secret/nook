@@ -1,7 +1,13 @@
 import {
+  WebsiteAuthenticatorResponseStatus,
   type WebsiteAuthenticatorOption,
   type WebsiteLoginAccountOption,
 } from '../../lib/login-fill-messages'
+import {
+  decode_website_login_match_availability,
+  type WebsiteLoginMatchAvailability,
+  type WebsiteLoginOptionsWireValue,
+} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   WebsiteAuthenticatorCanceledMessageType,
   type WebsiteAuthenticatorCanceledMessage,
@@ -17,14 +23,17 @@ import {
 } from '../pairing-grants'
 import {
   extensionSessionInteractiveDeadline,
+  extensionSessionProbeDeadline,
   MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
   type ExtensionSessionQueue,
 } from '../../offscreen/session-request-adapter'
 import {
+  availableWebsiteGrants,
   getAllSessionStorage,
   getSessionStorage,
   isAuthorizedWebsiteSender,
   passwordPairingGrants,
+  passiveAvailableWebsiteGrants,
   removeSessionStorage,
   sendSessionMessage,
   setSessionStorage,
@@ -518,13 +527,12 @@ type LoginAccountsForOriginArgs = {
   sendMessage?: typeof sendSessionMessage
 }
 
-export type LoginAccountAvailabilityForOriginArgs =
-  LoginAccountsForOriginArgs & {
-    queue: ExtensionSessionQueue
-    sendMessage?: typeof sendSessionMessage
-  }
+type LoginAccountAvailabilityForOriginArgs = LoginAccountsForOriginArgs & {
+  queue: ExtensionSessionQueue
+  sendMessage?: typeof sendSessionMessage
+}
 
-export type LoginAccountAvailability =
+type LoginAccountAvailability =
   { ok: true; accounts: WebsiteLoginAccountOption[] } | { ok: false }
 
 type LoginAccountListForOriginArgs = LoginAccountAvailabilityForOriginArgs & {
@@ -637,6 +645,152 @@ export async function loginAccountsForOrigin({
   }
   const result = await loginAccountListForOrigin(request)
   return result.ok ? result.accounts : []
+}
+
+type WebsiteLoginOptionsArgs = {
+  message: {
+    payload: {
+      origin: string
+    }
+  }
+  sender: chrome.runtime.MessageSender
+  dependencies?: WebsiteLoginOptionsDependencies
+}
+
+type WebsiteLoginOptionsDependencies = {
+  accountPickerAuthorizationCleanupPending: typeof accountPickerAuthorizationCleanupPending
+  accountPickerAuthorizationGeneration: typeof accountPickerAuthorizationGeneration
+  accountPickerAuthorizationIsCurrent: typeof accountPickerAuthorizationIsCurrent
+  availableWebsiteGrants: typeof availableWebsiteGrants
+  passiveAvailableWebsiteGrants: typeof passiveAvailableWebsiteGrants
+  loginAccountsForOrigin: typeof loginAccountsForOrigin
+  loginAccountAvailabilityForOrigin: typeof loginAccountAvailabilityForOrigin
+  openCompanionLauncherBestEffort: typeof openCompanionLauncherBestEffort
+}
+
+const websiteLoginOptionsDependencies: WebsiteLoginOptionsDependencies = {
+  accountPickerAuthorizationCleanupPending,
+  accountPickerAuthorizationGeneration,
+  accountPickerAuthorizationIsCurrent,
+  availableWebsiteGrants,
+  passiveAvailableWebsiteGrants,
+  loginAccountsForOrigin,
+  loginAccountAvailabilityForOrigin,
+  openCompanionLauncherBestEffort,
+}
+
+type WebsiteLoginOptionsResponseArgs = WebsiteLoginOptionsArgs & {
+  openUnavailableCompanion: boolean
+}
+
+async function websiteLoginOptionsResponse({
+  message,
+  sender,
+  dependencies,
+  openUnavailableCompanion,
+}: WebsiteLoginOptionsResponseArgs): Promise<unknown> {
+  const resolvedDependencies = dependencies ?? websiteLoginOptionsDependencies
+  const authorizationGeneration =
+    await resolvedDependencies.accountPickerAuthorizationGeneration()
+  if (
+    !resolvedDependencies.accountPickerAuthorizationIsCurrent(
+      authorizationGeneration,
+    ) ||
+    (await resolvedDependencies.accountPickerAuthorizationCleanupPending())
+  ) {
+    return { ok: false, reason: 'login-options-unavailable' }
+  }
+  const nookTypedArgs0_6: Parameters<typeof availableWebsiteGrants>[0] = {
+    origin: message.payload.origin,
+    sender,
+    forbiddenReason: 'login-forbidden-origin',
+  }
+  const grantsProbe = openUnavailableCompanion
+    ? resolvedDependencies.availableWebsiteGrants
+    : resolvedDependencies.passiveAvailableWebsiteGrants
+  const access = await grantsProbe(nookTypedArgs0_6)
+  if ('response' in access) {
+    if (
+      access.response.ok &&
+      access.response.status ===
+        WebsiteAuthenticatorResponseStatus.Unavailable &&
+      openUnavailableCompanion
+    ) {
+      resolvedDependencies.openCompanionLauncherBestEffort(
+        OpenCompanionLauncherIntent.Pair,
+      )
+    }
+    return access.response
+  }
+
+  let accounts: WebsiteLoginAccountOption[]
+  if (openUnavailableCompanion) {
+    const accountRequest: Parameters<typeof loginAccountsForOrigin>[0] = {
+      grants: access.grants,
+      origin: message.payload.origin,
+    }
+    accounts = await resolvedDependencies.loginAccountsForOrigin(accountRequest)
+  } else {
+    const queueExpiresAt = Date.now() + SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS
+    const accountRequest: LoginAccountAvailabilityForOriginArgs = {
+      grants: access.grants,
+      origin: message.payload.origin,
+      queue: extensionSessionProbeDeadline(queueExpiresAt),
+    }
+    const availability =
+      await resolvedDependencies.loginAccountAvailabilityForOrigin(
+        accountRequest,
+      )
+    if (!availability.ok) {
+      return { ok: false, reason: 'login-options-unavailable' }
+    }
+    accounts = availability.accounts
+  }
+  if (
+    !resolvedDependencies.accountPickerAuthorizationIsCurrent(
+      authorizationGeneration,
+    ) ||
+    (await resolvedDependencies.accountPickerAuthorizationCleanupPending())
+  ) {
+    return { ok: false, reason: 'login-options-unavailable' }
+  }
+  return { ok: true, status: 'ready', authorizationGeneration, accounts }
+}
+
+export async function websiteLoginOptions(
+  args: WebsiteLoginOptionsArgs,
+): Promise<unknown> {
+  const responseRequest: WebsiteLoginOptionsResponseArgs = {
+    ...args,
+    openUnavailableCompanion: true,
+  }
+  return websiteLoginOptionsResponse(responseRequest)
+}
+
+type WebsiteLoginMatchAvailabilityArgs = {
+  origin: string
+  sender: chrome.runtime.MessageSender
+  dependencies?: WebsiteLoginOptionsDependencies
+}
+
+export async function websiteLoginMatchAvailability({
+  origin,
+  sender,
+  dependencies,
+}: WebsiteLoginMatchAvailabilityArgs): Promise<WebsiteLoginMatchAvailability> {
+  const message: WebsiteLoginOptionsArgs['message'] = {
+    payload: { origin },
+  }
+  const responseRequest: WebsiteLoginOptionsResponseArgs = {
+    message,
+    sender,
+    dependencies,
+    openUnavailableCompanion: false,
+  }
+  const response = await websiteLoginOptionsResponse(responseRequest)
+  return decode_website_login_match_availability(
+    response as WebsiteLoginOptionsWireValue,
+  )
 }
 
 function loginPickerStorageKey(requestId: string): string {

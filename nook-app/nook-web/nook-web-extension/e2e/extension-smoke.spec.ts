@@ -163,13 +163,15 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     await expect(widget.getByText('Nook Pilot · 1/3')).toBeVisible()
     await expect(widget.getByText('Ready to sign in')).toBeVisible()
     await expect(widget.getByText('localhost')).toBeVisible()
-    await expect(widget.locator('img.collapsed-mark')).toBeVisible()
+    await expect(widget.getByTestId('nook-auth-gate-vault-status')).toHaveText(
+      'Vault not connected',
+    )
     await expect(
       widget.getByRole('button', { name: 'Continue with Nook' }),
     ).toBeVisible()
     await expect(
       widget.getByRole('button', { name: 'Open vault' }),
-    ).toHaveCount(0)
+    ).toBeVisible()
 
     const hiddenHeaderLoginPage = await context.newPage()
     await hiddenHeaderLoginPage.goto(
@@ -208,6 +210,10 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     await expect(
       widget.getByRole('button', { name: 'Continue with Nook' }),
     ).toBeVisible()
+
+    const openedVault = context.waitForEvent('page')
+    await widget.getByRole('button', { name: 'Open vault' }).click()
+    await expect(await openedVault).toHaveURL(simpleVaultBaseUrl)
 
     const signupPage = await context.newPage()
     await signupPage.goto(`${loginServer.origin}/signup`)

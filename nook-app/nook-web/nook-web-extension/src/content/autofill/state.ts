@@ -21,10 +21,6 @@ export enum ScanScheduleKind {
   Idle = 'idle',
   Scheduled = 'scheduled',
 }
-enum ScanActivityKind {
-  Idle = 'idle',
-  Running = 'running',
-}
 
 export type ScanSchedule =
   | { kind: ScanScheduleKind.Idle }
@@ -107,11 +103,9 @@ export type PendingSaveWatch = {
   observer?: MutationObserver
 }
 
-export class ScanState {
+class ScanState {
   private currentSchedule: ScanSchedule = { kind: ScanScheduleKind.Idle }
   private scheduleStartedAt = 0
-  private activity = ScanActivityKind.Idle
-  private followUpRequested = false
   sequence = 0
   schedule: (mutations?: AuthenticationScanMutationBatch) => void = () => {}
   get scheduleState(): ScanSchedule {
@@ -124,43 +118,16 @@ export class ScanState {
     }
     return Math.max(0, debounceMs - (Date.now() - this.scheduleStartedAt))
   }
-  scheduleTimer(createTimer: () => number): boolean {
-    if (this.currentSchedule.kind === ScanScheduleKind.Scheduled) return false
-    this.currentSchedule = {
-      kind: ScanScheduleKind.Scheduled,
-      timer: createTimer(),
-    }
-    return true
+  scheduleTimer(timer: number): void {
+    this.currentSchedule = { kind: ScanScheduleKind.Scheduled, timer }
   }
   clearPendingTimer(): void {
     this.currentSchedule = { kind: ScanScheduleKind.Idle }
     this.scheduleStartedAt = 0
   }
-  beginScan(): boolean {
-    if (this.activity === ScanActivityKind.Running) {
-      this.followUpRequested = true
-      return false
-    }
-    this.activity = ScanActivityKind.Running
-    return true
-  }
-  requestFollowUpIfRunning(): boolean {
-    if (this.activity === ScanActivityKind.Idle) return false
-    this.followUpRequested = true
-    return true
-  }
-  invalidateCurrentResult(): void {
-    this.sequence += 1
-  }
-  finishScan(): boolean {
-    this.activity = ScanActivityKind.Idle
-    const followUpRequested = this.followUpRequested
-    this.followUpRequested = false
-    return followUpRequested
-  }
 }
 
-export class WidgetState {
+class WidgetState {
   private hostState: WidgetHost = { kind: WidgetHostKind.Detached }
   private workflowKeyState: WidgetWorkflowKey = {
     kind: WidgetWorkflowKeyKind.Unassigned,
@@ -168,40 +135,12 @@ export class WidgetState {
   private workflowRootState: WidgetWorkflowRoot = {
     kind: WidgetWorkflowRootKind.Unassigned,
   }
-  private presentationScopeState: WidgetWorkflowKey = {
-    kind: WidgetWorkflowKeyKind.Unassigned,
-  }
   private placementState: WidgetPlacement = {
     kind: WidgetPlacementKind.Unpositioned,
   }
   dismissed = false
   busy = false
-  private collapsedState = false
-  private userSelectedCollapse = false
-  get collapsed(): boolean {
-    return this.collapsedState
-  }
-  applyAutomaticCollapse(value: boolean): void {
-    if (!this.userSelectedCollapse) this.collapsedState = value
-  }
-  collapseByUser(): void {
-    this.userSelectedCollapse = true
-    this.collapsedState = true
-  }
-  expandByUser(): void {
-    this.userSelectedCollapse = true
-    this.collapsedState = false
-  }
-  beginEnrollmentWorkflow(presentationScope: string): void {
-    const sameScope =
-      this.presentationScopeState.kind === WidgetWorkflowKeyKind.Assigned &&
-      this.presentationScopeState.key === presentationScope
-    if (!sameScope) {
-      this.collapsedState = false
-      this.userSelectedCollapse = false
-    }
-    this.assignPresentationScope(presentationScope)
-  }
+  collapsed = false
   get host(): WidgetHost {
     return this.hostState
   }
@@ -213,15 +152,6 @@ export class WidgetState {
   }
   assignWorkflowKey(value: string): void {
     this.workflowKeyState = {
-      kind: WidgetWorkflowKeyKind.Assigned,
-      key: value,
-    }
-  }
-  get presentationScope(): WidgetWorkflowKey {
-    return this.presentationScopeState
-  }
-  assignPresentationScope(value: string): void {
-    this.presentationScopeState = {
       kind: WidgetWorkflowKeyKind.Assigned,
       key: value,
     }
@@ -241,16 +171,10 @@ export class WidgetState {
       position: value,
     }
   }
-  detachRenderedWidget(): void {
+  clearRenderedWidget(): void {
     this.hostState = { kind: WidgetHostKind.Detached }
     this.workflowKeyState = { kind: WidgetWorkflowKeyKind.Unassigned }
     this.workflowRootState = { kind: WidgetWorkflowRootKind.Unassigned }
-  }
-  clearRenderedWidget(): void {
-    this.detachRenderedWidget()
-    this.presentationScopeState = { kind: WidgetWorkflowKeyKind.Unassigned }
-    this.collapsedState = false
-    this.userSelectedCollapse = false
   }
 }
 

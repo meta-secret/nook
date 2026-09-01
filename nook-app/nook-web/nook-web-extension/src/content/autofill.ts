@@ -52,14 +52,13 @@ import {
   renderEnrollmentWidget,
   renderWidget,
 } from './autofill/widget-rendering'
-import { clampMountedWidgetPosition } from './autofill/widget-position'
 import { loadPilotVaultConnection } from './autofill/workflow-ui'
 import {
   detectEnrollmentHintsFromRecoveryCopy,
   enrollmentCeremonyActive,
 } from './enrollment-flow'
 
-async function scanAndRenderOnce(): Promise<void> {
+async function scanAndRender(): Promise<void> {
   if (widgetState.dismissed) return
   if (saveOfferState.confirmationActive) return
   if (enrollmentCeremonyActive()) return
@@ -191,14 +190,6 @@ async function scanAndRenderOnce(): Promise<void> {
   }
   renderWidget(nookTypedArgs0_1)
 }
-async function scanAndRender(): Promise<void> {
-  if (!scanState.beginScan()) return
-  try {
-    await scanAndRenderOnce()
-  } finally {
-    if (scanState.finishScan()) scheduleScan()
-  }
-}
 
 function scheduleScan(mutations?: AuthenticationScanMutationBatch) {
   if (
@@ -208,13 +199,14 @@ function scheduleScan(mutations?: AuthenticationScanMutationBatch) {
   ) {
     return
   }
-  if (scanState.requestFollowUpIfRunning()) return
-  if (scanState.scheduleState.kind === ScanScheduleKind.Scheduled) return
+  if (scanState.scheduleState.kind === ScanScheduleKind.Scheduled) {
+    window.clearTimeout(scanState.scheduleState.timer)
+  }
   const delay = scanState.remainingScanDelay(
     AUTHENTICATION_FACT_SCAN_DEBOUNCE_MS,
   )
 
-  scanState.scheduleTimer(() =>
+  scanState.scheduleTimer(
     window.setTimeout(() => {
       scanState.clearPendingTimer()
       void scanAndRender()
@@ -229,7 +221,6 @@ void companionWasmReady.then(() => {
     return
   }
   document.addEventListener('submit', captureSubmittedLogin, true)
-  window.addEventListener('resize', clampMountedWidgetPosition)
   void scanAndRender()
 
   const observer = new MutationObserver(scheduleScan)

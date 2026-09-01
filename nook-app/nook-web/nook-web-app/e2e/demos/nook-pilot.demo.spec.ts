@@ -169,10 +169,10 @@ test('open trusted pairing from disconnected Nook Pilot', async ({ page }) => {
   await injectPilotAutofill(page)
 
   const widget = page.locator('#nook-auth-widget')
-  await widget.getByTestId('nook-auth-gate-expand').click({ timeout: 15_000 })
   await expect(widget.getByText('Ready to sign in')).toBeVisible()
-  await expect(widget.getByRole('button', { name: 'Take over' })).toBeVisible()
-  await expect(widget.locator('img.collapsed-mark')).toBeVisible()
+  await expect(widget.getByTestId('nook-auth-gate-vault-status')).toHaveText(
+    'Vault not connected',
+  )
   await widget.getByRole('button', { name: 'Continue with Nook' }).click()
   await expect(
     widget.getByText(
@@ -277,10 +277,11 @@ test('guide a login through the Nook Pilot control plane', async ({ page }) => {
   await injectPilotAutofill(page)
 
   const widget = page.locator('#nook-auth-widget')
-  await widget.getByTestId('nook-auth-gate-expand').click({ timeout: 15_000 })
   await expect(widget.getByText('Nook Pilot · 1/3')).toBeVisible()
   await expect(widget.getByText('Ready to sign in')).toBeVisible()
-  await expect(widget.locator('img.collapsed-mark')).toBeVisible()
+  await expect(widget.getByTestId('nook-auth-gate-vault-status')).toHaveText(
+    'Connected to Demo vault',
+  )
   await expect
     .poll(() =>
       page.evaluate(
@@ -508,7 +509,6 @@ test('revalidate contextual email-first facts through Nook Pilot', async ({
   await injectPilotAutofill(page)
 
   const widget = page.locator('#nook-auth-widget')
-  await widget.getByTestId('nook-auth-gate-expand').click({ timeout: 15_000 })
   await expect(widget.getByText('Nook Pilot · 1/3')).toBeVisible()
   await expect(widget.getByText('Ready to sign in')).toBeVisible()
   await expect(
@@ -628,7 +628,6 @@ test('detect a Facebook-like login under an aria-hidden consent layer', async ({
   await injectPilotAutofill(page)
 
   const widget = page.locator('#nook-auth-widget')
-  await widget.getByTestId('nook-auth-gate-expand').click({ timeout: 15_000 })
   await expect(widget.getByText('Nook Pilot · 1/3')).toBeVisible()
   await expect(widget.getByText('Ready to sign in')).toBeVisible()
   await expect(

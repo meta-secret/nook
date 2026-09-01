@@ -53,13 +53,9 @@ import {
   clearPendingAccountPickers,
   completeAccountPickerAuthorizationCleanup,
   releaseAccountPickerAuthorizationCleanup,
-} from './service-worker/account-pickers'
-import {
-  invalidateAllLoginMatchAvailability,
-  invalidateLoginMatchAvailabilityForOrigin,
   websiteLoginMatchAvailability,
   websiteLoginOptions,
-} from './service-worker/login-match-availability'
+} from './service-worker/account-pickers'
 import {
   cancelAuthenticatorPicker,
   clearStagedAuthenticatorEnrollments,
@@ -143,10 +139,7 @@ const extensionLifecycleRoutingDependencies: Parameters<
   typeof routeExtensionLifecycleMessage
 >[0]['dependencies'] = {
   accountPickerAuthorizationCleanupPending,
-  beginAccountPickerAuthorizationCleanup: async () => {
-    invalidateAllLoginMatchAvailability()
-    return beginAccountPickerAuthorizationCleanup()
-  },
+  beginAccountPickerAuthorizationCleanup,
   clearPendingAccountPickers,
   clearStagedAuthenticatorEnrollments,
   rebindStagedAuthenticatorEnrollmentsAuthorization,
@@ -157,7 +150,7 @@ const extensionLifecycleRoutingDependencies: Parameters<
   handlePairingStateQuery,
   hasPairingApprovedType,
   importLocalEventLogUpdate,
-  importPairingAfterCompanionReady: importPairingAndInvalidateLoginMatches,
+  importPairingAfterCompanionReady,
   isExtensionPairingStateQueryMessage,
   isExtensionSessionEnsureMessage,
   isExtensionSessionExpiryMessage,
@@ -181,7 +174,7 @@ const externalCompanionRoutingDependencies: Parameters<
   createIdentityHandoff,
   discoverPairedVaultIdentity,
   hasPairingApprovedType,
-  importPairingAfterCompanionReady: importPairingAndInvalidateLoginMatches,
+  importPairingAfterCompanionReady,
   isExtensionIdentityHandoffRequestMessage,
   isExtensionPairedVaultIdentityDiscoveryMessage,
   isExtensionPairedVaultIdentityHandoffRequestMessage,
@@ -191,14 +184,6 @@ const externalCompanionRoutingDependencies: Parameters<
   requestPairedVaultUnlock,
 }
 
-async function importPairingAndInvalidateLoginMatches(
-  message: Parameters<typeof importPairingAfterCompanionReady>[0],
-) {
-  const result = await importPairingAfterCompanionReady(message)
-  if (!result.ok) return result
-  invalidateAllLoginMatchAvailability()
-  return result
-}
 // eslint-disable-next-line max-params -- Chrome owns the runtime listener callback signature.
 chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
   if (!runtimeMessage || typeof runtimeMessage !== 'object') return false
@@ -579,17 +564,6 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
       sender,
     }
     void websiteLoginSaveCommit(nookTypedArgs0_15)
-      .then((response) => {
-        if (response.kind === 'completed') {
-          const invalidation: Parameters<
-            typeof invalidateLoginMatchAvailabilityForOrigin
-          >[0] = {
-            origin: message.payload.origin,
-          }
-          invalidateLoginMatchAvailabilityForOrigin(invalidation)
-        }
-        return response
-      })
       .then(sendResponse)
       .catch(() => {
         const nookArrowArgs22: Parameters<typeof sendResponse>[0] = {

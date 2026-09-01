@@ -18,6 +18,8 @@ export type PilotVaultConnection = {
 
 export const WIDGET_HOST_ID = 'nook-auth-widget'
 
+export const DRAG_THRESHOLD_PX = 4
+
 export const OUTCOME_EVIDENCE_TIMEOUT_MS = 8_000
 
 export const OUTCOME_EVIDENCE_POLL_MS = 250
@@ -157,14 +159,6 @@ export function removeWidget(): void {
     widgetState.host.element.remove()
   }
   widgetState.clearRenderedWidget()
-  saveOfferState.clearActiveOffer()
-  saveOfferState.confirmationActive = false
-}
-export function remountWidget(): void {
-  if (widgetState.host.kind === WidgetHostKind.Attached) {
-    widgetState.host.element.remove()
-  }
-  widgetState.detachRenderedWidget()
   saveOfferState.clearActiveOffer()
   saveOfferState.confirmationActive = false
 }
