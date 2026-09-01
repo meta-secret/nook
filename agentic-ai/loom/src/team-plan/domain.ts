@@ -350,6 +350,7 @@ function assertReadOnlySubmission(
   });
   assertTextFields({ values: submission.acceptanceRequirements });
   assertTextFields({ values: submission.evidence });
+  if (submission.verdict !== 'terminal-success') invalidRecord();
   assertTeam(submission.producerTeam);
   assertOwner(submission.functionalOwner);
   assertOwner(submission.acceptanceOwner);

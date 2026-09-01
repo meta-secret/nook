@@ -212,8 +212,8 @@ export async function discardTeamPlanJournal(
         artifactsMayAlreadyBeDiscarded: activePath === tombstone,
       });
       request.beforeParentSync?.();
-      await syncParent(tombstone);
       await unlink(tombstone);
+      await syncParent(tombstone);
     },
   });
 }
