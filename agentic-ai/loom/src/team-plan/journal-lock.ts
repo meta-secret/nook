@@ -4,14 +4,12 @@ import { readFileSync, readdirSync, readlinkSync } from 'node:fs';
 import { hostname } from 'node:os';
 import {
   gitText as moduleDeliveryGitText,
-  moduleDeliveryGitEnvironment,
   runModuleDeliveryGit,
 } from '../module-delivery/git-command.ts';
 
 import type { TeamPlanJournal } from './journal.ts';
 
 const ZERO_COMMIT = '0'.repeat(40);
-const GIT_ENVIRONMENT = moduleDeliveryGitEnvironment();
 
 type TeamPlanLockOwnerFields = Readonly<{
   version: 3;
@@ -132,7 +130,6 @@ function updateRef(request: {
     cwd: repositoryRoot,
     args: ['update-ref', '--no-deref', args[0], args[1], args[2]],
     allowFailure: true,
-    environment: GIT_ENVIRONMENT,
   });
   return result.exitCode === 0;
 }
@@ -239,7 +236,6 @@ function gitText(invocation: {
     runModuleDeliveryGit({
       cwd: invocation.cwd,
       args: invocation.args,
-      environment: GIT_ENVIRONMENT,
       ...('input' in invocation ? { input: invocation.input } : {}),
     }),
   );

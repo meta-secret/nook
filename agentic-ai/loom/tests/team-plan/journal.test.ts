@@ -427,12 +427,12 @@ describe('Team Plan journal', () => {
     process.env.GIT_CONFIG_KEY_0 = 'safe.directory';
     process.env.GIT_CONFIG_VALUE_0 = join(fixture.root, 'foreign-checkout');
     try {
-      expect(
-        await withTeamPlanJournalLock({
+      await expect(
+        withTeamPlanJournalLock({
           journalPath,
           action: async () => 'canonical-git',
         }),
-      ).toBe('canonical-git');
+      ).rejects.toThrow('search path must contain absolute paths');
     } finally {
       process.env.PATH = originalPath;
       if (hadGitDirectory) process.env.GIT_DIR = originalGitDirectory;

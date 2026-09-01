@@ -5,7 +5,6 @@ import { resolve } from 'node:path';
 import { LoomFailureCode, loomFailureFromCause } from '../loom-failure.ts';
 import {
   gitText,
-  moduleDeliveryGitEnvironment,
   runModuleDeliveryGit,
 } from '../module-delivery/git-command.ts';
 
@@ -42,8 +41,6 @@ export type ReadBoundedTeamPlanFileRequest = Readonly<{
   planPath: string;
   maximumBytes: number;
 }>;
-
-const TEAM_PLAN_GIT_ENVIRONMENT = moduleDeliveryGitEnvironment();
 
 export async function readBoundedTeamPlanBytes(request: {
   readonly reader: TeamPlanByteReader;
@@ -361,7 +358,6 @@ export function teamPlanGitText(invocation: {
     return gitText(
       runModuleDeliveryGit({
         ...invocation,
-        environment: TEAM_PLAN_GIT_ENVIRONMENT,
       }),
     );
   } catch (cause) {
@@ -381,7 +377,6 @@ export function compareAndSwapTeamPlanRef(
       cwd: request.repositoryRoot,
       args: ['update-ref', request.ref, request.object, request.expectedObject],
       allowFailure: true,
-      environment: TEAM_PLAN_GIT_ENVIRONMENT,
     });
   } catch (cause) {
     throw loomFailureFromCause({
@@ -394,7 +389,6 @@ export function compareAndSwapTeamPlanRef(
     cwd: request.repositoryRoot,
     args: ['rev-parse', '--verify', request.ref],
     allowFailure: true,
-    environment: TEAM_PLAN_GIT_ENVIRONMENT,
   });
   if (resolved.exitCode === 0 && gitText(resolved) !== request.expectedObject)
     return false;
