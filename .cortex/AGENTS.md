@@ -103,6 +103,9 @@ Agent-authored fallback behavior is prohibited. This is a universal P1 rule.
 Every user-visible activity stream starts with an unformatted YAML context
 document.
 
+This format applies to Gizmo Prime, every real Team Agent or subagent, and
+every user-visible skill-driven action.
+
 ```yaml
 ---
 pr: "#<number>"
@@ -136,6 +139,11 @@ HH:mm | <action-type> | <description>
 - Re-emit it before the first activity after pull-request creation, a stacked-
   PR transition, or an actual agent handoff.
 - Do not repeat unchanged YAML context for consecutive activity updates.
+- A Team Agent or subagent emits its own context before its first relayed
+  activity.
+- A skill does not replace the current agent identity.
+  - Name the exact skill in the activity description.
+  - Use `SKILL` when loading or applying the skill is the reported action.
 - Start every activity line with the current local time in 24-hour `HH:mm`
   form.
 - Use a short action type that makes the purpose immediately visible.
@@ -145,6 +153,7 @@ HH:mm | <action-type> | <description>
   - `REFACTOR` covers structure changes without intended behavior changes.
   - `TEST` covers validation and test results.
   - `AI` covers agent coordination and AI-owned implementation.
+  - `SKILL` covers a skill load, application, required action, or pause.
   - `DOCS/CORTEX` covers documentation and Cortex work.
   - `CMD` identifies a command that is starting or still running.
   - `WAIT` identifies a bounded wait and its elapsed time.
