@@ -121,15 +121,15 @@ Plain-text description.
 - Use `pr: "none"` when the assigned work intentionally has no pull request.
 - Recheck the identifier after pull-request creation or a stacked-PR
   transition.
-- Identify functional ownership and actual execution in separate fields.
-  - Use team labels such as `GIZMO`, `AI`, `DEV-CORE`, `SECURITY`, `SRE`, or
-    `WEB-DEV`.
-  - Use `agent: "root"` when the root agent performs the activity.
-  - Use a spawned subagent's visible task identity only when that real subagent
-    performs the activity.
-  - Do not use a team role, capability, or persona as the agent identity.
-  - Change the fields when work passes to another functional owner or actual
-    executor.
+- Identify the actual Nook executor with the `team` and `agent` pair.
+  - Use `team: "GIZMO"` and `agent: "Prime"` for Gizmo Prime.
+  - Gizmo Prime is the existing root delivery agent. Do not report it as
+    `root`.
+  - Use a Team Agent's canonical team and visible task identity only when the
+    active harness really creates that worker.
+  - Do not use a capability, persona, or passive feature-slice Gizmo as the
+    agent identity.
+  - Change both fields when execution passes to another real agent.
   - Never imply a subagent execution, identity, or authority that did not
     exist.
 - Use a short action type that makes the purpose immediately visible.
