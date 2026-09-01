@@ -50,9 +50,11 @@ Run:
 3. `task format`
 4. Exact-head pull-request validation
 
-The repository-language preflight uses one filesystem inventory in every
-environment. The inventory applies committed ignore files without requiring Git
-metadata. It never follows symlinks. Automation symlinks fail closed.
+The repository-language preflight uses one ignore-aware filesystem inventory in
+every environment. When Git metadata is present, tracked index entries are
+unioned into that inventory. Force-added files therefore cannot hide behind
+ignore rules. Git metadata is not required in sealed source contexts. The
+inventory never follows symlinks. Automation symlinks fail closed.
 
 The scan rejects prohibited source, package, and executable-artifact
 extensions. It reads only automation-capable text formats, including HTML

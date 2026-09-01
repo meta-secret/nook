@@ -1,8 +1,10 @@
 use serde::Deserialize;
 use std::{
+    collections::BTreeSet,
     ffi::OsStr,
     fs,
     path::{Path, PathBuf},
+    process::Command,
 };
 
 fn repository_root() -> PathBuf {
@@ -13,7 +15,7 @@ fn repository_root() -> PathBuf {
 }
 
 fn repository_paths(root: &Path) -> anyhow::Result<Vec<PathBuf>> {
-    let mut files = Vec::new();
+    let mut files = BTreeSet::new();
     let mut builder = ignore::WalkBuilder::new(root);
     builder
         .follow_links(false)
@@ -33,10 +35,33 @@ fn repository_paths(root: &Path) -> anyhow::Result<Vec<PathBuf>> {
             .file_type()
             .is_some_and(|file_type| file_type.is_file() || file_type.is_symlink())
         {
-            files.push(entry.into_path());
+            files.insert(entry.into_path());
         }
     }
-    Ok(files)
+    let git_metadata = root.join(".git");
+    if git_metadata.is_dir() || git_metadata.is_file() {
+        let output = Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(["ls-files", "--cached", "-z"])
+            .output()?;
+        anyhow::ensure!(
+            output.status.success(),
+            "failed to enumerate tracked repository paths"
+        );
+        for relative_bytes in output.stdout.split(|byte| *byte == 0) {
+            if relative_bytes.is_empty() {
+                continue;
+            }
+            let relative = std::str::from_utf8(relative_bytes)?;
+            let path = root.join(relative);
+            let file_type = fs::symlink_metadata(&path)?.file_type();
+            if file_type.is_file() || file_type.is_symlink() {
+                files.insert(path);
+            }
+        }
+    }
+    Ok(files.into_iter().collect())
 }
 
 fn is_automation_source(path: &Path) -> bool {
@@ -344,6 +369,28 @@ fn collect_json_strings(value: &serde_json::Value, strings: &mut Vec<String>) {
     }
 }
 
+fn collect_toml_strings(value: &toml::Value, strings: &mut Vec<String>) {
+    if let Some(value) = value.as_str() {
+        strings.push(value.to_owned());
+        return;
+    }
+    if let Some(sequence) = value.as_array() {
+        if let Some(argv) = join_argv_strings(sequence.iter().filter_map(toml::Value::as_str)) {
+            strings.push(argv);
+        }
+        for item in sequence {
+            collect_toml_strings(item, strings);
+        }
+        return;
+    }
+    if let Some(mapping) = value.as_table() {
+        for (key, item) in mapping {
+            strings.push(key.clone());
+            collect_toml_strings(item, strings);
+        }
+    }
+}
+
 fn source_strings(path: &Path, source: &str) -> anyhow::Result<Vec<String>> {
     match path.extension().and_then(OsStr::to_str) {
         Some("yaml" | "yml") => yaml_source_strings(source),
@@ -353,8 +400,51 @@ fn source_strings(path: &Path, source: &str) -> anyhow::Result<Vec<String>> {
             collect_json_strings(&value, &mut strings);
             Ok(strings)
         }
+        Some("toml") => {
+            let value = toml::from_str(source)?;
+            let mut strings = Vec::new();
+            collect_toml_strings(&value, &mut strings);
+            Ok(strings)
+        }
         _ => Ok(vec![source.to_owned()]),
     }
+}
+
+fn contains_prohibited_output_path(line: &str, suffixes: &[String]) -> bool {
+    let bytes = line.as_bytes();
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] != b'>' || bytes.get(index + 1) == Some(&b'=') {
+            index += 1;
+            continue;
+        }
+        index += usize::from(bytes.get(index + 1) == Some(&b'>')) + 1;
+        while bytes.get(index).is_some_and(u8::is_ascii_whitespace) {
+            index += 1;
+        }
+        let quote = bytes
+            .get(index)
+            .copied()
+            .filter(|byte| matches!(byte, b'\'' | b'"'));
+        if quote.is_some() {
+            index += 1;
+        }
+        let start = index;
+        while let Some(byte) = bytes.get(index) {
+            if quote.map_or_else(
+                || byte.is_ascii_whitespace() || matches!(byte, b'<' | b'>' | b'&' | b';' | b'|'),
+                |quote| *byte == quote,
+            ) {
+                break;
+            }
+            index += 1;
+        }
+        let candidate = line[start..index].to_ascii_lowercase();
+        if suffixes.iter().any(|suffix| candidate.ends_with(suffix)) {
+            return true;
+        }
+    }
+    false
 }
 
 fn project_manager_actions<'a>(language: &'a str, package_installer: &'a str) -> Vec<&'a str> {
@@ -459,6 +549,7 @@ fn repository_language_violations(root: &Path) -> anyhow::Result<Vec<String>> {
                         &project_manager,
                         &project_manager_actions,
                     )
+                    || contains_prohibited_output_path(&lowercase, &source_suffixes)
                 {
                     violations.push(format!(
                         "{}:{}: prohibited runtime, dependency, or script reference",
@@ -518,20 +609,24 @@ fn canonical_repository_inventory_prunes_generated_and_dependency_trees() -> any
             .as_nanos()
     ));
     fs::create_dir_all(fixture.join("nested"))?;
-    fs::create_dir_all(fixture.join(".git/objects"))?;
+    fs::create_dir_all(fixture.join("dist"))?;
     fs::create_dir_all(fixture.join("rust-project/src/deep"))?;
     fs::create_dir_all(fixture.join("rust-project/target/generated"))?;
     fs::create_dir_all(fixture.join("node_modules/package"))?;
     fs::create_dir_all(fixture.join("infra/secrets"))?;
     fs::write(
         fixture.join(".gitignore"),
-        "/infra/secrets/\n/node_modules/\n**/target/\n",
+        "/dist/\n/infra/secrets/\n/node_modules/\n**/target/\n",
     )?;
     fs::write(
         fixture.join("nested/contract.ts"),
         "export const ok = true;\n",
     )?;
-    fs::write(fixture.join(".git/objects/generated"), [0xff])?;
+    let script_extension = [".", "py"].concat();
+    let tracked_ignored = fixture
+        .join("dist")
+        .join(format!("runtime{script_extension}"));
+    fs::write(&tracked_ignored, "print('tracked')\n")?;
     fs::write(fixture.join("build"), "#!/usr/bin/env bash\n")?;
     fs::write(fixture.join("rust-project/Cargo.toml"), "[package]\n")?;
     fs::write(fixture.join("rust-project/Taskfile.yml"), "version: '3'\n")?;
@@ -551,12 +646,26 @@ fn canonical_repository_inventory_prunes_generated_and_dependency_trees() -> any
         fixture.join("infra/secrets/ignored.ts"),
         "export const ignored = true;\n",
     )?;
+    let init = Command::new("git")
+        .arg("init")
+        .arg("--quiet")
+        .arg(&fixture)
+        .status()?;
+    anyhow::ensure!(init.success(), "failed to initialize inventory fixture");
+    let add = Command::new("git")
+        .arg("-C")
+        .arg(&fixture)
+        .args(["add", "--force", "--"])
+        .arg(tracked_ignored.strip_prefix(&fixture)?)
+        .status()?;
+    anyhow::ensure!(add.success(), "failed to stage ignored inventory fixture");
     let paths = repository_paths(&fixture)?;
     assert_eq!(
         paths,
         vec![
             fixture.join(".gitignore"),
             fixture.join("build"),
+            tracked_ignored,
             fixture.join("nested/contract.ts"),
             fixture.join("rust-project/Cargo.toml"),
             fixture.join("rust-project/Taskfile.yml"),
@@ -591,7 +700,7 @@ fn repository_language_scan_rejects_scripts_and_runtime_invocations() -> anyhow:
     fs::write(
         fixture.join("Taskfile.yml"),
         format!(
-            "version: '3'\ntasks:\n  comments:\n    cmds: [{runtime} fetch-comments{script_extension}]\n"
+            "version: '3'\ntasks:\n  comments:\n    cmds:\n      - {runtime} fetch-comments{script_extension}\n      - cat > generated{script_extension} <<'EOF'\n"
         ),
     )?;
     fs::write(
@@ -632,7 +741,7 @@ fn repository_language_scan_rejects_scripts_and_runtime_invocations() -> anyhow:
     )?;
     fs::write(fixture.join("pyproject.toml"), "[project]\n")?;
     let violations = repository_language_violations(&fixture)?;
-    assert_eq!(violations.len(), 11);
+    assert_eq!(violations.len(), 12);
     assert!(
         violations
             .iter()
@@ -725,7 +834,7 @@ fn repository_language_scan_rejects_prohibited_dependency_surfaces() -> anyhow::
     )?;
     fs::write(
         fixture.join("Cargo.toml"),
-        format!("[dependencies]\n{rust_bridge} = \"1\"\n"),
+        format!("[dependencies]\n\"\\u0070{}\" = \"1\"\n", &rust_bridge[1..]),
     )?;
     fs::write(
         fixture.join("package.json"),
