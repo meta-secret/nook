@@ -2,8 +2,6 @@
 
 #[path = "workbench/harness_neutral.rs"]
 mod harness_neutral;
-#[path = "workbench/stacked_runtime.rs"]
-mod stacked_runtime;
 
 use anyhow::Context as _;
 use std::{
@@ -52,33 +50,8 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "gizmo_id",
         "const rawGizmoId = gizmoIdRows[0]?.[1].trim() || ''",
         "const assignedGizmoId = rawGizmoId === 'null' ? '' : rawGizmoId",
-        "stack_branch",
-        "stack_predecessor_branch",
-        "must provide both stack_branch and stack_predecessor_branch",
-        "stack_branch must exist in the Nook repository",
-        "stack_branch must have exactly one same-repository open PR",
-        "GET /repos/{owner}/{repo}/stacks",
-        "application/vnd.github.nebula-preview+json",
-        "GitHub native stack membership is unavailable",
-        "must belong to exactly one open GitHub native stack based on main",
-        "successorIndex <= 0",
-        "must immediately follow stack_predecessor_branch in its GitHub native stack",
-        "recorded predecessor must exist while it remains the live PR base",
-        "recorded predecessor must remain open and unmerged while it is the live PR base",
-        "cannot target main before its native-stack predecessor is merged",
-        "mergeCommit.parents[0]?.sha === predecessorPull.base.sha",
-        "mergeCommit.commit.tree.sha === predecessorHeadCommit.commit.tree.sha",
-        "native-stack predecessor must be squash-merged into main",
-        "retargeted successor must contain the current main frontier",
-        "successor PR must target its recorded predecessor or main",
-        "ISSUE_STACK_BRANCH: ${{ steps.workbench.outputs.stack_branch }}",
-        "ISSUE_STACK_LIVE_BASE_BRANCH: ${{ steps.workbench.outputs.stack_live_base_branch }}",
-        "ISSUE_STACK_LIVE_BASE_SHA: ${{ steps.workbench.outputs.stack_live_base_sha }}",
-        "ISSUE_STACK_PREDECESSOR_BRANCH: ${{ steps.workbench.outputs.stack_predecessor_branch }}",
-        "ISSUE_STACK_PR_NUMBER: ${{ steps.workbench.outputs.stack_pr_number }}",
-        "ISSUE_STACK_START_HEAD_SHA: ${{ steps.workbench.outputs.stack_start_head_sha }}",
+        "uses unsupported stacked-PR metadata",
         "AGENT_PR_BASE_BRANCH=$base_branch",
-        "AGENT_PR_BASE_SHA=$ISSUE_STACK_LIVE_BASE_SHA",
         "AGENT_PR_TARGET_KIND=$target_kind",
         "Checkout trusted workflow tooling",
         "ref: ${{ github.workflow_sha }}",
@@ -142,8 +115,6 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "sha256sum \"$implementation_plan\"",
         "sha256sum \"$plan\"",
         "Publish Workbench result",
-        "MULTI_PR_PLAN: ${{ steps.plan.outputs.multi_pr }}",
-        "Materialize the feature and ordered focused issues",
         "steps.workbench.outputs.found == 'true'",
         "validateAgentRecord",
         "if: steps.plan.outcome == 'success'",
@@ -161,46 +132,6 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
             "Workbench agent workflow is missing: {required}"
         );
     }
-    let accepts_stack_claim = |native: bool,
-                               adjacent: bool,
-                               retargeted: bool,
-                               predecessor_open: bool,
-                               merged: bool,
-                               squash: bool,
-                               current_main: bool| {
-        native
-            && adjacent
-            && ((retargeted && merged && squash && current_main)
-                || (!retargeted && predecessor_open))
-    };
-    assert!(
-        !accepts_stack_claim(false, true, false, true, false, false, false),
-        "an informal PR chain must not pass as a native stack"
-    );
-    assert!(
-        !accepts_stack_claim(true, false, false, true, false, false, false),
-        "a non-adjacent native-stack predecessor must be rejected"
-    );
-    assert!(
-        !accepts_stack_claim(true, true, false, false, false, false, false),
-        "a closed unmerged predecessor must be rejected"
-    );
-    assert!(
-        accepts_stack_claim(true, true, false, true, false, false, false),
-        "an adjacent successor with an open predecessor must remain claimable"
-    );
-    assert!(
-        !accepts_stack_claim(true, true, true, false, false, false, false),
-        "retargeting to main before predecessor merge must be rejected"
-    );
-    assert!(
-        !accepts_stack_claim(true, true, true, false, true, true, false),
-        "a successor behind the current main frontier must be rejected"
-    );
-    assert!(
-        accepts_stack_claim(true, true, true, false, true, true, true),
-        "a current successor after predecessor squash merge must remain claimable"
-    );
     assert!(
         workflow
             .matches("ASSIGNED_GIZMO_ID: ${{ steps.workbench.outputs.gizmo_id }}")
@@ -241,9 +172,9 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "published plan frontmatter must persist the validated Current Gizmo ID"
     );
     assert!(
-        !workflow.contains("presentStackMetadata")
-            && !workflow.contains("Stacked successor dispatch requires the later runtime support"),
-        "successor runtime support must replace the bottom-only stack rejection"
+        workflow.contains("uses unsupported stacked-PR metadata")
+            && !workflow.contains("GET /repos/{owner}/{repo}/stacks"),
+        "bounded automation must reject legacy stacked-PR metadata"
     );
     assert!(
         workflow.matches("uses: actions/checkout@v7").count() == 1
@@ -299,15 +230,15 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
     let claim_position = workflow
         .find("Claim ready Workbench issue")
         .context("the workflow must claim the requested Workbench issue")?;
-    let stack_parser_position = workflow
-        .find("const stackBranchRows")
-        .context("the successor workflow must parse trusted stack metadata")?;
+    let stack_rejection_position = workflow
+        .find("uses unsupported stacked-PR metadata")
+        .context("the workflow must reject legacy stack metadata")?;
     let claim_mutation_position = workflow
         .find("github.rest.repos.createOrUpdateFileContents")
         .context("the workflow must claim the requested Workbench issue atomically")?;
     assert!(
-        stack_parser_position < claim_mutation_position,
-        "trusted stack metadata must be validated before the Workbench claim is mutated"
+        stack_rejection_position < claim_mutation_position,
+        "legacy stack metadata must be rejected before the Workbench claim is mutated"
     );
     let tooling_position = workflow
         .find("Prepare direct host tooling")
@@ -706,14 +637,14 @@ fn pr_workbench_suite_loads_split_contract_tests() {
         "the PR-invoked Workbench suite must load publisher tests"
     );
     assert!(
-        mapping_suite.contains("rejects one-PR delivery with multiple Gizmos")
-            && mapping_suite.contains("rejects an over-2,000 feature represented by one Gizmo"),
+        mapping_suite.contains("rejects multiple PR rows")
+            && mapping_suite.contains("['Multiple PRs', 'Stacked PRs']"),
         "the transitively loaded suite must retain bounded Gizmo mapping regressions"
     );
 }
 
 #[test]
-fn workbench_plans_bind_trusted_slices_and_bounded_independence() {
+fn workbench_plans_bind_trusted_slices_to_one_pr() {
     let validator = read(".github/scripts/workbench-records.cjs");
     let prompt = read(".github/prompts/agent-plan.md");
     let pull_requests = read(".cortex/gizmo/workflows/pull-requests.md");
@@ -727,7 +658,7 @@ fn workbench_plans_bind_trusted_slices_and_bounded_independence() {
         "trusted focused-issue Gizmo ID requires one-PR delivery",
         "the sole PR slice must use the trusted focused-issue Gizmo ID",
         "every ownership unit must use the trusted focused-issue Gizmo ID",
-        "multi-PR delivery at or below 2,000 authored changed lines requires independent PRs",
+        "only one-PR delivery is supported",
     ] {
         assert!(
             validator.contains(required),
@@ -735,11 +666,12 @@ fn workbench_plans_bind_trusted_slices_and_bounded_independence() {
         );
     }
     assert!(
-        prompt.contains("At or below 2,000, stacked delivery is invalid")
-            && prompt.contains("exactly one slice, and no other Gizmo ID")
-            && normalized_pull_requests.contains("must not be registered as a stack")
+        prompt.contains("Set `Delivery shape` and `PR sequence mode` to exactly `One PR`")
+            && prompt.contains("a blocker. Report that the complete requested outcome")
+            && prompt.contains("Do not create slices, successor PRs, or a stack")
+            && normalized_pull_requests.contains("Do not split, stack, or rebuild pull requests")
             && normalized_pull_requests.contains("one PR, one slice"),
-        "planning policy must require one trusted slice and predecessor-free bounded independence"
+        "planning policy must require one bounded PR and prohibit stack recovery"
     );
 }
 
@@ -891,8 +823,8 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
         "Current PR slice and acceptance evidence",
         "PR slices, estimates, and acceptance evidence",
         "Predecessor Gizmo ID",
-        "Every slice estimate must be at or below 2,000",
-        "Team Agent count never determines PR or Gizmo count",
+        "The sole slice estimate must equal",
+        "Team Agent count never determines",
         "Functional owner` to exactly `Gizmo Prime`",
         "canonical `gizmo_id`",
         "## Initial plan",
@@ -955,23 +887,22 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
             "interactive Workbench publisher is missing plan validation: {required}"
         );
     }
-    let publish_position = workflow
-        .find("path: planPath")
-        .context("bounded automation must publish the validated plan")?;
-    let block_position = workflow
-        .find("Published multi-PR feature plan requires materialized Workbench feature")
-        .context("bounded automation must block an unmaterialized multi-PR plan")?;
-    let materialization_position = workflow
-        .find("core.setOutput('multi_pr', 'true')")
-        .context("bounded automation must identify a multi-PR materialization action")?;
+    let pre_push_task = read(".task/agentic-ai.yml");
+    let budget_guard = read(".github/scripts/pr-authored-budget.cjs");
     assert!(
-        publish_position < block_position,
-        "bounded automation must publish a multi-PR plan before blocking implementation"
+        workflow.contains("uses unsupported stacked-PR metadata")
+            && !workflow.contains("core.setOutput('multi_pr', 'true')")
+            && !workflow.contains(
+                "Published multi-PR feature plan requires materialized Workbench feature"
+            ),
+        "implementation automation must reject legacy stack metadata and omit multi-PR materialization"
     );
     assert!(
-        materialization_position < block_position,
-        "bounded automation must identify the materialization action before blocking"
+        pre_push_task.contains("node .github/scripts/pr-authored-budget.cjs \"{{.PR}}\"")
+            && budget_guard.contains("INITIAL_PR_LIMIT = 2_000")
+            && budget_guard.contains("REVIEW_GROWTH_STOP = 3_000")
+            && budget_guard.contains("verifiedReviewContext"),
+        "pre-push must fail closed on the one-PR authored-line budget"
     );
-    stacked_runtime::assert_contract(&workflow)?;
     Ok(())
 }

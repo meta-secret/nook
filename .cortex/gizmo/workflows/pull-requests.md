@@ -150,9 +150,20 @@ Report these separately because they do not represent authored functionality:
 ### Review-growth stop
 
 Review fixes may grow an existing PR beyond 2,000 authored changed lines.
-This exception exists only to address review comments on the same PR.
+This exception exists only to address GitHub review comments on the same PR.
+Every other change blocks immediately when the PR exceeds 2,000 lines.
 
-- Measure the authored diff before and after every review-fix batch.
+- Continued implementation, CI repair, conflict resolution, and security repair
+  do not receive the review-growth exception by themselves.
+- A required non-review change that would cross 2,000 lines is a blocked
+  terminal path for the current mission.
+- Report the required change and current size without implementing or pushing
+  that growth.
+
+- Run `task loom:pre-push PR=<number>` before committing or pushing every
+  review-fix batch.
+- The pre-push gate verifies the current PR and measures the authored diff.
+- A value above 2,000 without verified review-fix context fails closed.
 - Continue to preserve tests, documentation, security boundaries, and complete
   behavior while addressing review comments.
 - Do not remove required work or compress code merely to reduce the count.
@@ -216,10 +227,10 @@ An estimate is a design tool.
 
 It is not a promise of exact line count.
 
-### Module-focused slices
+### Module-focused PR
 
-Prefer one cohesive module, package, layer, or architectural responsibility per
-pull request.
+Keep one cohesive module, package, layer, or architectural responsibility in
+the pull request.
 
 Apply SOLID principles as concrete review questions:
 
@@ -242,7 +253,7 @@ Each slice must be:
 - compatible with the previous merged slice;
 - small enough for focused review and repair.
 
-- A slice may prepare an interface or migrate one module before the complete
+- The PR may prepare an interface or migrate one module before the complete
   user flow exists.
   - Its acceptance criteria must still be independently observable.
 
@@ -289,7 +300,7 @@ flowchart TD
   R -->|ready| M[Squash merge PR]
   M --> S[Publish Workbench issue + worklog + stats]
   S --> J{Feature acceptance complete?}
-  J -->|no, next issue ready| Z
+  J -->|no| B[Stop and report incomplete mission]
   J -->|yes| K[Done]
 ```
 
@@ -307,8 +318,8 @@ Never commit directly on `main`.
 ### 1. Prepare the PR path
 
 1. Complete the size and modularity plan above.
-2. Decide the branch name and the first PR's scope, title, and body.
-3. Organize work around getting that slice green and merged.
+2. Decide the branch name and the PR's scope, title, and body.
+3. Organize work around getting that PR green and merged.
 4. Open the PR after the first coherent commit when useful.
 
 ### 2. Implement

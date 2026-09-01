@@ -1,0 +1,214 @@
+#!/usr/bin/env node
+
+const { execFileSync } = require('node:child_process')
+const { readFileSync } = require('node:fs')
+const { extname } = require('node:path')
+
+const INITIAL_PR_LIMIT = 2_000
+const REVIEW_GROWTH_STOP = 3_000
+
+const reportedOnlyFilenames = new Set([
+  'Cargo.lock',
+  'bun.lock',
+  'package-lock.json',
+  'pnpm-lock.yaml',
+  'yarn.lock',
+])
+const generatedPaths = new Set([
+  '/nook-app/nook-web/nook-web-app/src/landing/generated-message-keys.ts',
+])
+const authoredTextExtensions = new Set([
+  '.bash', '.cjs', '.css', '.graphql', '.html', '.js', '.json', '.jsx',
+  '.md', '.mjs', '.proto', '.rb', '.rs', '.scss', '.sh', '.sql', '.svelte',
+  '.toml', '.ts', '.tsx', '.yaml', '.yml', '.zsh',
+])
+
+function emptySummary() {
+  return {
+    authoredLines: 0,
+    binaryFiles: 0,
+    generatedLines: 0,
+    lockfileLines: 0,
+    malformedRecords: 0,
+    pureRenameFiles: 0,
+    snapshotLines: 0,
+    unmeasurableAuthoredFiles: 0,
+    vendoredLines: 0,
+  }
+}
+
+function classify(summary, path, added, deleted, renamed = false) {
+  const normalizedPath = `/${path.replaceAll('\\', '/')}`
+  const filename = normalizedPath.slice(normalizedPath.lastIndexOf('/') + 1)
+  if (!Number.isInteger(added) || !Number.isInteger(deleted)) {
+    if (authoredTextExtensions.has(extname(filename))) {
+      summary.unmeasurableAuthoredFiles += 1
+    } else {
+      summary.binaryFiles += 1
+    }
+    return
+  }
+  const changedLines = added + deleted
+  if (reportedOnlyFilenames.has(filename)) {
+    summary.lockfileLines += changedLines
+  } else if (normalizedPath.endsWith('.snap')) {
+    summary.snapshotLines += changedLines
+  } else if (
+    normalizedPath.includes('/generated/') ||
+    normalizedPath.includes('/dist/') ||
+    generatedPaths.has(normalizedPath)
+  ) {
+    summary.generatedLines += changedLines
+  } else if (normalizedPath.includes('/vendor/')) {
+    summary.vendoredLines += changedLines
+  } else if (renamed && changedLines === 0) {
+    summary.pureRenameFiles += 1
+  } else {
+    summary.authoredLines += changedLines
+  }
+}
+
+function summarizeNumstat(numstat) {
+  const summary = emptySummary()
+  const records = numstat.split('\0')
+  for (let index = 0; index < records.length;) {
+    const record = records[index]
+    if (!record) break
+    const firstTab = record.indexOf('\t')
+    const secondTab = record.indexOf('\t', firstTab + 1)
+    if (firstTab < 0 || secondTab < 0) {
+      summary.malformedRecords += 1
+      index += 1
+      continue
+    }
+    const addedRaw = record.slice(0, firstTab)
+    const deletedRaw = record.slice(firstTab + 1, secondTab)
+    const inlinePath = record.slice(secondTab + 1)
+    let path = inlinePath
+    let renamed = false
+    index += 1
+    if (!inlinePath) {
+      if (!records[index] || !records[index + 1]) {
+        summary.malformedRecords += 1
+        break
+      }
+      path = records[index + 1]
+      renamed = true
+      index += 2
+    }
+    classify(
+      summary,
+      path,
+      /^\d+$/.test(addedRaw) ? Number(addedRaw) : Number.NaN,
+      /^\d+$/.test(deletedRaw) ? Number(deletedRaw) : Number.NaN,
+      renamed,
+    )
+  }
+  return summary
+}
+
+function addUntracked(summary, paths) {
+  for (const path of paths) {
+    if (!path) continue
+    const content = readFileSync(path)
+    if (content.includes(0)) {
+      classify(summary, path, Number.NaN, Number.NaN)
+      continue
+    }
+    const text = content.toString('utf8')
+    const lines = text.length === 0 ? 0 : text.split(/\r\n|\n|\r/u).length
+    classify(summary, path, lines, 0)
+  }
+}
+
+function evaluateBudget({ authoredLines, prNumber, verifiedReviewContext }) {
+  if (authoredLines >= REVIEW_GROWTH_STOP) {
+    return {
+      ok: false,
+      message: `authored diff reached the 3,000-line review-growth stop: ${authoredLines}`,
+    }
+  }
+  if (authoredLines <= INITIAL_PR_LIMIT) return { ok: true, mode: 'initial' }
+  if (!prNumber) {
+    return {
+      ok: false,
+      message: `authored diff exceeds 2,000 lines without PR-verified review-fix context: ${authoredLines}`,
+    }
+  }
+  if (!verifiedReviewContext) {
+    return {
+      ok: false,
+      message: `PR #${prNumber} does not verify review-fix growth for this branch`,
+    }
+  }
+  return { ok: true, mode: 'review-fix' }
+}
+
+function runGit(args) {
+  return execFileSync('git', args, {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  }).trim()
+}
+
+function runGh(args) {
+  return execFileSync('gh', args, {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  }).trim()
+}
+
+function verifyReviewContext(prNumber) {
+  if (!/^[1-9]\d*$/.test(prNumber)) return false
+  const branch = runGit(['branch', '--show-current'])
+  if (!branch) return false
+  const pr = JSON.parse(runGh([
+    'pr', 'view', prNumber, '--json', 'baseRefName,headRefName,state',
+  ]))
+  if (pr.state !== 'OPEN' || pr.baseRefName !== 'main' || pr.headRefName !== branch) {
+    return false
+  }
+  const repository = runGh(['repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner'])
+  const inlineCount = Number(runGh([
+    'api', `repos/${repository}/pulls/${prNumber}/comments`, '--jq', 'length',
+  ]))
+  return Number.isInteger(inlineCount) && inlineCount > 0
+}
+
+function main() {
+  const reviewFixPr = process.argv[2]?.trim() ?? ''
+  const numstat = execFileSync('git', [
+    'diff', '--no-ext-diff', '--numstat', '-z', '--find-renames', '-l0',
+    'origin/main',
+  ]).toString('utf8')
+  const summary = summarizeNumstat(numstat)
+  const untracked = execFileSync('git', [
+    'ls-files', '--others', '--exclude-standard', '-z',
+  ]).toString('utf8').split('\0')
+  addUntracked(summary, untracked)
+  if (summary.malformedRecords > 0 || summary.unmeasurableAuthoredFiles > 0) {
+    throw new Error(`authored diff is not completely measurable: ${JSON.stringify(summary)}`)
+  }
+  const needsReviewContext = summary.authoredLines > INITIAL_PR_LIMIT &&
+    summary.authoredLines < REVIEW_GROWTH_STOP
+  const result = evaluateBudget({
+    authoredLines: summary.authoredLines,
+    prNumber: reviewFixPr,
+    verifiedReviewContext: needsReviewContext && verifyReviewContext(reviewFixPr),
+  })
+  console.log(`Authored PR diff: ${summary.authoredLines} lines`)
+  console.log(`Reported-only diff: ${JSON.stringify(summary)}`)
+  if (!result.ok) throw new Error(result.message)
+  console.log(`PR authored-line budget passed in ${result.mode} mode`)
+}
+
+if (require.main === module) {
+  try {
+    main()
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error))
+    process.exit(1)
+  }
+}
+
+module.exports = { evaluateBudget, summarizeNumstat }
