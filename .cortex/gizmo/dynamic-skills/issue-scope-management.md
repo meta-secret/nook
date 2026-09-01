@@ -17,19 +17,9 @@ Use this ownership hierarchy:
   - publish a task worklog.
 - Otherwise create `issues/<feature>/README.md` and the smallest independently
   deliverable issue files.
-- When a complete feature needs multiple bounded pull requests:
-  - keep one feature summary;
-  - create one ordered focused issue for each slice;
-  - prefer module-, package-, or layer-owned slices with stable interfaces; and
-  - complete the full sequence instead of treating later slices as optional.
-
-When implemented work moves between pull requests, preserve it first.
-
-- Create the successor branch from the full-work commit.
-- Open the linked draft successor PR.
-- Record both PRs and their order in Workbench.
-- Map every removed file and behavior to the successor.
-- Reduce the predecessor only after that evidence is durable.
+- Keep the feature inside one focused issue and one PR.
+- Prefer a cohesive module, package, layer, or stable-interface boundary.
+- Do not move implemented work into a successor PR as size recovery.
 
 ## Scope
 
@@ -58,31 +48,16 @@ to generate bookkeeping.
 3. Treat every other active task as read-only.
 4. Update the existing record or create a focused non-duplicate.
 5. Bound the work:
-   - Record an ordered native GitHub Stacked Pull Request sequence for a feature
-     above 2,000 authored changed lines or an in-progress PR that may exceed the
-     ceiling. Exactly 2,000 may remain one PR.
-   - Use same-repository predecessor branches as temporary GitHub bases,
-     cross-link adjacent PRs, register them as one GitHub-recognized stack, and
-     record bottom-up merge order. Prefer `gh stack`; the GitHub website is also
-     valid. At or below the ceiling, multiple PRs must remain genuinely
-     independent and predecessor-free; do not register them as a stack.
-   - If native stack operations are unavailable, stop and record the delivery
-     blocker. Do not use an informal PR chain or add a third-party dependency.
-   - Open and link the successor draft PR before reducing an implemented PR.
-   - Record a preservation inventory for every removed file and behavior.
-   - Keep each issue inside one cohesive module, package, layer, or
-     responsibility.
-   - Keep acceptance criteria independently deliverable and testable.
    - Record one positive authored additions-plus-deletions estimate at or below
-     2,000 for every consecutively numbered slice; require their sum to equal
-     the complete feature estimate.
-   - Copy each multi-PR plan slice's stable Gizmo ID into the canonical
-     `gizmo_id` frontmatter of its focused issue. Later plans must retain that
-     identity rather than inventing a new one.
-   - After each predecessor merges, retarget the immediate successor to `main`,
-     update it from current `origin/main`, re-measure authored additions plus
-     deletions, and validate the new exact head before its bottom-up squash
-     merge.
+     2,000 for the PR.
+   - Keep the issue inside one cohesive module, package, layer, or
+     responsibility.
+   - Keep acceptance criteria deliverable and testable in that PR.
+   - Copy the plan's stable Gizmo ID into the canonical `gizmo_id` frontmatter.
+   - Do not split, stack, rebuild, or replace an oversized PR.
+   - If planned work cannot fit below 2,000 lines, stop and record the blocker.
+   - If review work reaches 3,000 lines, stop and produce the report required by
+     [pull requests](../workflows/pull-requests.md#review-growth-stop).
 6. Link the parent feature, dependencies, historical issue context, and Nook
    PR.
 7. Publish a worklog before completion or blocked handoff.

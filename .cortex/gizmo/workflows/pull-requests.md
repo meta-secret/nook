@@ -50,7 +50,7 @@ ownership until merge or a concrete blocked handoff:
    - Fetch `origin/main`.
    - Estimate the authored changed lines.
    - Define the module boundary.
-   - Split larger features into an ordered PR sequence.
+   - Confirm the complete PR can stay within the 2,000-line creation limit.
    - Create the first feature branch.
    - Define the first PR's title, body, and scope.
    - Create ignored `.cortex/.session/` memory only when temporary notes
@@ -110,10 +110,9 @@ ownership until merge or a concrete blocked handoff:
 
 ### Size boundary
 
-- An implementation pull request targets no more than **2,000 authored changed
-  lines**.
-- Treat this as a planning ceiling because review, validation, conflict
-  resolution, and repair costs rise sharply above it.
+- An implementation pull request may be created with no more than **2,000
+  authored changed lines**.
+- This is the maximum planned and initial-delivery size.
 - Estimate before implementation.
 - Re-estimate when design changes or the diff grows unexpectedly.
 - Recalculate the actual authored diff after each logical domain change and
@@ -143,86 +142,55 @@ Report these separately because they do not represent authored functionality:
 
 - Do not exclude tests or delete-heavy refactors from the authored estimate.
 - Do not pad, compress, or mechanically reorganize code to fit the number.
-- Treat 1,500 authored changed lines as a mandatory split-planning warning.
-- Stop implementation and re-estimate the complete requested outcome.
-- Inventory every logical domain, capability, package, layer, migration, and
-  public-interface change already present in the PR.
-- If the complete feature is expected to exceed the ceiling, or the remaining
-  work may bring the current PR beyond it, define at least two semantic
-  PR slices as an ordered GitHub Stacked Pull Request sequence in Workbench
-  before continuing.
-- Each slice owns complete capabilities or module responsibilities together
-  with their tests and documentation.
-- If implementation crosses the ceiling, stop expanding that PR.
-- Do not optimize the current diff to make the number pass.
-- Compression, test removal, documentation removal, completed-behavior deletion,
-  and cosmetic churn are not scope management.
+- If the planned implementation would exceed 2,000 lines, stop before creating
+  the PR and report that the scope or design does not fit the PR contract.
+- Do not split, stack, or rebuild pull requests to evade the ceiling.
+- Do not open a successor PR as an automatic size-recovery action.
 
-Before changing the first PR after the re-estimate requires a split, or after
-implementation crosses the ceiling:
+### Review-growth stop
 
-1. Identify the last full-work commit and publish a superseding Workbench plan.
-2. Divide the complete outcome along domain, capability, package, layer, or
-   stable-interface boundaries.
-3. Materialize every slice as an ordered focused issue whose `gizmo_id`
-   frontmatter exactly matches the canonical Gizmo ID in that plan slice.
-4. Record which complete implementation, tests, migrations, and documentation
-   belong to each slice.
-5. Branch the successor from the full-work commit, register the predecessor and
-   successor as a native GitHub stack, and open the successor as a linked draft
-   PR before changing the first PR.
-6. Cross-link all PR descriptions and Workbench records.
-7. Prove every file and behavior exists in the ordered PR sequence, using the
-   Workbench checklist plus `numstat`, `name-status`, or `range-diff` evidence.
-8. Rebuild the first PR as the smallest independently useful semantic slice.
+Review fixes may grow an existing PR beyond 2,000 authored changed lines.
+This exception exists only to address review comments on the same PR.
 
-Sequence rules:
+- Measure the authored diff before and after every review-fix batch.
+- Continue to preserve tests, documentation, security boundaries, and complete
+  behavior while addressing review comments.
+- Do not remove required work or compress code merely to reduce the count.
+- Do not split, stack, rebuild, or replace the PR because review fixes grew it.
+- Stop all implementation and review-fix work immediately when the authored
+  diff reaches or exceeds **3,000 changed lines**.
+- Do not push another code change after the stop condition is observed.
+- Preserve the current branch, PR, review threads, checks, and Workbench state
+  for inspection.
 
-- Local Git history is not preservation; a linked draft successor is.
-- Stacking is mandatory for a feature expected to exceed the ceiling and for an
-  in-progress PR that may exceed or has exceeded it. Exactly 2,000 authored
-  changed lines may remain one PR. At or below the ceiling, multiple PRs are
-  valid only for genuinely independent, predecessor-free units and must not be
-  registered as a stack.
-- Use GitHub's native Stacked Pull Requests through `gh stack` when available,
-  or through the GitHub website. The branches must stay in the same repository,
-  and GitHub must recognize the PRs as one stack; an informal chain of PR links
-  or base branches is not a substitute.
-- Prefer `gh stack init <bottom> <successor> ...` for bottom-to-top local stack
-  adoption and `gh stack submit` to push and create or update the GitHub stack.
-  `gh stack link <bottom-pr> <successor-pr> ...` may register existing PRs.
-- If neither native `gh stack` operations nor the GitHub website stack controls
-  are available, stop and report the delivery blocker. Do not silently fall
-  back to an unrecognized branch chain or add a third-party stacking tool.
-- Preserve a coherent bounded capability, not a line-count-selected portion.
-- Complete the stack bottom-up, one PR at a time. Every PR must independently
-  satisfy its full checks, actionable review resolution, and exact-head
-  readiness before it is squash-merged; upper layers do not bypass those gates.
-- Model the stack with GitHub base branches: each successor temporarily targets
-  its predecessor branch and links the preceding and following PRs.
-- After each predecessor merges, change the immediate successor's temporary
-  stacked base to `main`, update it from current `origin/main`, re-measure its
-  authored additions plus deletions, and validate the new exact head.
-- Continue until the complete Workbench outcome is merged.
-- Gizmo Prime owns the complete declared sequence and records exactly one named
-  immutable feature-slice Gizmo Workbench record for each semantic PR slice.
-  Gizmo Prime coordinates Team Agent work, receives existing handoffs directly,
-  and aggregates verified results under the matching record. A slice record is
-  not a process or controller and owns no lifecycle state.
-- Scope reduction without a linked preservation PR is a P1 delivery failure.
+The stopped mission ends with a report to the user. The report must include:
+
+- the PR number, exact head, base, and current authored changed-line count;
+- the requested outcome and the implementation approach taken;
+- a chronological summary of the work completed and still incomplete;
+- why the PR grew uncontrollably, with measured growth by review-fix batch when
+  that evidence is available;
+- the total number of Codex review comments created on GitHub for the PR;
+- the comments grouped by finding type;
+- the count and disposition of comments in each group;
+- an explicit conclusion about whether every comment belonged to one group;
+- which comments or groups the agent failed to address;
+- the observed or plausible reasons each failed fix did not settle the review;
+- checks, review state, and other evidence relevant to the failure; and
+- a clear statement that the agent did not complete the mission.
+
+Do not include hidden reasoning, prompts, secrets, credentials, private data,
+or raw logs in the report. Distinguish observed causes from possible causes.
 
 ### Adaptive Gizmo cardinality
 
-- One feature at or below 2,000 authored additions plus deletions defaults to
-  one PR and one feature-slice Gizmo.
-- Gizmo Prime records additional feature-slice Gizmos only for a required
-  semantic size split above 2,000 or for genuinely independent delivery units.
-- Multiple records at or below 2,000 must use independent predecessor-free PRs;
-  stacked delivery at or below the ceiling is invalid.
+- One feature uses one PR and one feature-slice Gizmo.
+- Gizmo Prime does not add records because the PR approaches or exceeds a line
+  limit.
 - Team Agent count never determines PR or Gizmo count. Do not fragment a small
   feature merely because multiple teams or agents contribute to it.
-- Gizmo Prime alone owns the feature DAG, native GitHub stack, retargeting,
-  exact-head readiness, squash merge, and Workbench lifecycle.
+- Gizmo Prime alone owns exact-head readiness, squash merge, and Workbench
+  lifecycle.
 
 ### Required plan
 
@@ -233,15 +201,12 @@ The Workbench task plan must state:
 - the estimated authored changed lines;
 - the files, packages, modules, or layers expected to change;
 - the public or cross-module interfaces involved;
-- whether one PR can deliver the complete feature;
-- the PR sequence mode: `One PR`, `Independent PRs`, or `Stacked PRs`;
-- the current PR slice and its authored changed-line estimate;
-- every consecutively numbered PR slice with its positive authored changed-line
-  estimate at or below 2,000, unique Gizmo ID and name, and predecessor Gizmo;
-- the acceptance evidence for each slice;
-- slice estimates whose sum equals the complete feature estimate;
-- one declared slice Gizmo ID on every ownership unit, with multiple Team Agent
-  units allowed to map to the same slice Gizmo;
+- confirmation that the one PR estimate is at most 2,000 lines;
+- the current PR scope and acceptance evidence;
+- the required PR sequence mode fixed to `One PR`;
+- exactly one PR-slice row with predecessor `None` for Workbench compatibility;
+- one declared Gizmo ID on every ownership unit;
+- permission for multiple Team Agent units to map to that same Gizmo ID;
 - a superseding immutable plan when scope or the estimate materially changes.
 
 A plan bound to a trusted focused-issue `gizmo_id` must declare one PR, one
@@ -280,37 +245,6 @@ Each slice must be:
 - A slice may prepare an interface or migrate one module before the complete
   user flow exists.
   - Its acceptance criteria must still be independently observable.
-
-### Multi-PR feature delivery
-
-- A feature may require many issues and pull requests.
-- Use one Workbench feature summary for the full outcome.
-- Create one focused issue for each independently mergeable slice.
-- Record dependencies and order in the feature index.
-- When the complete feature is expected to exceed 2,000 authored changed lines,
-  the ordered issues must be delivered as the native GitHub Stacked Pull
-  Request sequence defined above. A smaller set of independent PRs may instead
-  branch from `main` when it does not depend on unmerged predecessor work.
-
-Then repeat this loop:
-
-1. Implement the first ready issue.
-2. Validate and squash-merge its pull request.
-3. Update the feature and issue records.
-4. Fetch current `origin/main`.
-5. For an oversized stacked sequence, retarget the immediate successor to
-   `main`, update it from `origin/main`, re-measure, and validate its new exact
-   head. For a small independent sequence, start the next ready issue on a new
-   branch from `origin/main`.
-6. Continue until the feature acceptance criteria are complete.
-
-- Remaining slices are required delivery work.
-  - Do not label them optional because the first pull request merged.
-- Do not use one long-lived PR for the full sequence. Each stacked slice keeps
-  its own branch and PR until its predecessor merges and it becomes the next
-  `main`-based PR.
-
-See [issues.md](issues.md#multi-pr-feature-sequences) for Workbench ownership.
 
 ## ⛔ SQUASH MERGE ONLY
 
@@ -624,6 +558,9 @@ task pr:ready PR=<number>
 
 - Handle all actionable feedback already present, regardless of author.
   - Follow [Code review comments](../dynamic-skills/code-review-comments.md).
+- Measure the authored diff before and after each review-fix batch.
+- Apply the [review-growth stop](#review-growth-stop) immediately at 3,000
+  authored changed lines.
 - Before resolving a conversation, leave an agent-authored reply with the fix,
   validation, or no-change rationale.
   - Do not resolve silently.

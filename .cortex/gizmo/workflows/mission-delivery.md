@@ -9,13 +9,10 @@ and external delivery state. The active harness alone owns worker-attempt
 lifecycle. Gizmo Prime never implements the feature or a resulting fix.
 
 For one feature or PR, Gizmo Prime creates one named immutable feature-slice
-Gizmo record in the Workbench plan by default. The record groups one semantic
-PR slice by stable ID and name, scope, predecessor, estimate, acceptance
-evidence, and ownership-unit mappings. It is not a process, agent, worker
-attempt, or controller. Additional records exist only for a semantic split when
-the feature is expected to exceed or actually grows beyond 2,000 authored
-additions plus deletions, or for genuinely independent delivery units. Team
-Agent count never determines PR count.
+Gizmo record in the Workbench plan. The record groups the PR by stable ID and
+name, scope, estimate, acceptance evidence, and ownership-unit mappings. It is
+not a process, agent, worker attempt, or controller. Team Agent count never
+determines PR count.
 
 ## Required authorities
 
@@ -27,8 +24,7 @@ Agent count never determines PR count.
   change crosses registered module boundaries.
 - Use [pull request delivery](pull-requests.md) for exact-head validation,
   readiness, and merge policy.
-- Use [Workbench issue management](issues.md) for plans, scope, worklogs, and
-  multi-PR sequences.
+- Use [Workbench issue management](issues.md) for plans, scope, and worklogs.
 - Ask the AI team to apply the
   [major architectural initiative rule](../../teams/ai/dynamic-skills/self-improvement.md#user-authority-for-major-architectural-initiatives)
   when a proposed direction is broad, novel, or cross-cutting.
@@ -62,18 +58,15 @@ as completed delivery.
 2. **Plan delivery.**
    - Publish the Workbench task plan before implementation edits.
    - Estimate authored changed lines.
-   - At or below 2,000 authored changed lines, default to one PR and one record.
-     Add records only for a required semantic size split above 2,000 or for
-     genuinely independent delivery units. Team Agent count never triggers a
-     split.
-   - Additional records at or below 2,000 use predecessor-free independent PRs,
-     never a stack.
-   - Map one feature-slice Gizmo to each semantic PR slice. Do not increase PR
-     or Gizmo count merely because multiple Team Agents are required.
-   - For multi-PR delivery, persist each slice's canonical Gizmo ID as the
-     matching focused issue's `gizmo_id`; later one-PR plans must retain it.
-     A trusted assigned ID permits exactly one slice and must appear on every
-     ownership unit.
+   - Limit the planned PR to 2,000 authored changed lines.
+   - Keep one PR and one record. Team Agent count never triggers another PR.
+   - Do not split or rebuild the PR when it grows.
+   - Review fixes may grow the existing PR beyond 2,000 lines.
+   - Stop immediately if the PR reaches 3,000 authored changed lines.
+   - Apply the reporting contract in
+     [pull requests](pull-requests.md#review-growth-stop).
+   - A trusted assigned Gizmo ID permits exactly one PR record and must appear
+     on every ownership unit.
    - Record the module DAG and provider-consumer contracts when applicable.
 3. **Assign team tasks.**
    - Name one functional owner for each capability.

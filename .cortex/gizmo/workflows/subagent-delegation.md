@@ -110,9 +110,8 @@ The active harness may coordinate subagents on Gizmo Prime's behalf.
 
 - Gizmo Prime creates one named immutable feature-slice Gizmo Workbench record
   by default for one semantic PR slice.
-- It records additional feature-slice Gizmos only when the feature is expected
-  to exceed or actually grows beyond 2,000 authored additions plus deletions
-  and needs semantic PR slices, or for genuinely independent delivery units.
+- It does not add feature-slice Gizmos because a PR approaches or exceeds its
+  line budget.
 - Team Agent count never determines this cardinality.
 - A feature-slice Gizmo record groups Team Agent contracts and accepted results
   for exactly one PR slice. It is not a process, agent, worker attempt,
@@ -183,8 +182,6 @@ frozen subagent task contract.
   first user-visible activity.
 - When Gizmo creates the pull request, it refreshes the context before the
   worker's next user-visible activity.
-- Gizmo performs the same refresh after moving the work to another stacked
-  pull request.
 - The worker uses the refreshed PR token on its next activity line.
 - The worker must not infer pull-request identity from a branch or workspace.
 - The context does not alter the generation, task identity, scope, retry
@@ -761,9 +758,8 @@ Before integration, verify:
   before emission;
 - every worker activity used the compact actor token mapped from its declared
   team identity, without a personal name;
-- every pull-request creation or stacked-pull-request transition refreshed the
-  context through the active harness before that worker's next user-visible
-  activity;
+- every pull-request creation refreshed the context through the active harness
+  before that worker's next user-visible activity;
 - every worker-executable team or provider task recorded an explicit functional
   owner separately from team identity;
 - every expertise result received semantic acceptance from its recorded
