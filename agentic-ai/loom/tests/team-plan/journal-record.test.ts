@@ -110,16 +110,19 @@ test('validates both provider variants and every nested identity', () => {
   expect(() => assertTeamPlanRecord(acceptedWrite)).toThrow(
     'fields are invalid',
   );
-  const overboundEvidence = structuredClone(evidenceRecord.submission);
+  const evidenceSubmission = structuredClone(evidenceRecord.submission);
   const acceptedIdentity = {
-    ...overboundEvidence,
-    verifiedHeadCommit: overboundEvidence.sourceCommit,
+    ...evidenceSubmission,
+    verifiedHeadCommit: evidenceSubmission.sourceCommit,
     sourceProvenanceDigest: 'e'.repeat(64),
     acceptedProviderEvidence: [],
   };
-  overboundEvidence.acceptedProviderEvidence = Array.from({ length: 129 }, () =>
-    structuredClone(acceptedIdentity),
-  );
+  const overboundEvidence = {
+    ...evidenceSubmission,
+    acceptedProviderEvidence: Array.from({ length: 129 }, () =>
+      structuredClone(acceptedIdentity),
+    ),
+  };
   expect(() =>
     assertTeamPlanRecord({
       kind: TeamPlanRecordKind.Provider,
