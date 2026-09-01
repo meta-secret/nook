@@ -303,9 +303,9 @@ function parseBudgetFields(budgetSection) {
       ownershipEnd,
     ),
     estimate: Number(estimate.value.replaceAll(',', '')),
-    deletionEstimate: Number(deletionEstimate.value.replaceAll(',', '')),
+    deletionEstimate: BigInt(deletionEstimate.value.replaceAll(',', '')),
     currentPrEstimate: Number(currentPrEstimate.value.replaceAll(',', '')),
-    currentPrDeletionEstimate: Number(
+    currentPrDeletionEstimate: BigInt(
       currentPrDeletionEstimate.value.replaceAll(',', ''),
     ),
     deliveryShape: deliveryShape.value,
@@ -325,7 +325,7 @@ function parseSliceContract(value, numbered) {
     gizmoName: '',
     predecessorGizmoId: '',
     estimate: 0,
-    deletionEstimate: 0,
+    deletionEstimate: 0n,
     evidence: '',
   }
   let contractText = value.trim()
@@ -358,8 +358,8 @@ function parseSliceContract(value, numbered) {
     ? Number(contractMatch[5].replaceAll(',', ''))
     : 0
   const deletionEstimate = numbered
-    ? Number(contractMatch[6].replaceAll(',', ''))
-    : 0
+    ? BigInt(contractMatch[6].replaceAll(',', ''))
+    : 0n
   const evidence = contractMatch[numbered ? 7 : 2].trim()
   const validGizmoIds =
     !numbered ||
@@ -648,7 +648,7 @@ function validateAgentRecord(
       number: 0,
       scope: '',
       estimate: 0,
-      deletionEstimate: 0,
+      deletionEstimate: 0n,
       evidence: '',
     }
     if (sliceLines.length === 1) {

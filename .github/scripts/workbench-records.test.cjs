@@ -25,6 +25,16 @@ function sequenceField(...slices) {
   return `- PR slices, estimates, and acceptance evidence:\n${slices.join('\n')}`
 }
 
+function withDeletionReports(plan, ...reports) {
+  let index = 0
+  const updated = plan.replace(
+    /((?:Estimated|Current PR estimated) authored deletions \(reported only\)): 0/g,
+    (_match, label) => `${label}: ${reports[index++]}`,
+  )
+  assert.equal(index, reports.length)
+  return updated
+}
+
 const validSequenceField = sequenceField(
   sliceContract(
     1,
@@ -512,6 +522,19 @@ test('accepts a one-PR plan at the 2,000-addition ceiling with 9,000 deletions',
     )
   assert.equal(validateAgentRecord(atCeiling, 'plan'), '')
 })
+
+const unsafeInteger = '9,007,199,254,740,992'
+const nextInteger = '9,007,199,254,740,993'
+
+for (const [name, reports, rejection] of [
+  ['feature and current PR mismatch', [unsafeInteger, nextInteger, nextInteger], /one-PR feature and current PR deletion reports must match/],
+  ['current PR and slice mismatch', [unsafeInteger, unsafeInteger, nextInteger], /one-PR slice deletion report must match the current PR deletion report/],
+]) {
+  test(`rejects unsafe-integer ${name} exactly`, () => {
+    const invalid = withDeletionReports(validPlan, ...reports)
+    assert.match(validateAgentRecord(invalid, 'plan'), rejection)
+  })
+}
 
 test('rejects an over-budget multi-PR feature', () => {
   const independent = validPlan
