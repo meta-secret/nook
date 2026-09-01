@@ -65,7 +65,6 @@ const lifecycleDependencies: ExtensionLifecycleRoutingDependencies = {
   openCompanionLauncher,
   openExtensionPairing: unusedAsyncDependency,
   openSimpleVault: mock(() => {}),
-  queryActiveTabLoginDetection: unusedAsyncDependency,
   releaseAccountPickerAuthorizationCleanup,
   rebindStagedAuthenticatorEnrollmentsAuthorization,
 }

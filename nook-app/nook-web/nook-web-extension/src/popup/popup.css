@@ -99,7 +99,6 @@ body:has(.toolbar-menu) {
 }
 
 .menu-secondary-action {
-  min-height: 34px;
   justify-self: center;
   border-color: transparent;
   background: transparent;
@@ -235,15 +234,6 @@ h1 {
   color: var(--muted-foreground);
   font-size: 15px;
   line-height: 1.45;
-  text-align: center;
-}
-
-.vault-connection {
-  margin: -10px 8px 2px;
-  color: var(--muted-foreground);
-  font-size: 13px;
-  font-weight: 650;
-  line-height: 1.35;
   text-align: center;
 }
 

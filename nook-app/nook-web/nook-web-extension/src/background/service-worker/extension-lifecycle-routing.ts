@@ -17,11 +17,6 @@ import type * as SessionRuntimeMessages from './session-runtime-messages'
 import type * as AccountPickers from './account-pickers'
 import { AccountPickerCleanupMarkerStatus } from './account-pickers'
 import type * as AuthenticatorOperations from './authenticator-operations'
-import {
-  LoginDetectionStatus,
-  isQueryActiveTabLoginDetectionMessage,
-  type LoginDetectionResponse,
-} from '../../lib/login-detection-messages'
 
 type ChromeMessageListener = Parameters<
   typeof chrome.runtime.onMessage.addListener
@@ -55,7 +50,6 @@ export type ExtensionLifecycleRoutingDependencies = {
   openCompanionLauncher: typeof SessionLifecycle.openCompanionLauncher
   openExtensionPairing: typeof PairingIdentity.openExtensionPairing
   openSimpleVault: typeof SessionLifecycle.openSimpleVault
-  queryActiveTabLoginDetection: typeof SessionLifecycle.queryActiveTabLoginDetection
   releaseAccountPickerAuthorizationCleanup: typeof AccountPickers.releaseAccountPickerAuthorizationCleanup
 }
 
@@ -216,7 +210,6 @@ export function routeExtensionLifecycleMessage({
     openCompanionLauncher,
     openExtensionPairing,
     openSimpleVault,
-    queryActiveTabLoginDetection,
     releaseAccountPickerAuthorizationCleanup,
     rebindStagedAuthenticatorEnrollmentsAuthorization,
   } = dependencies
@@ -347,23 +340,6 @@ export function routeExtensionLifecycleMessage({
         }
       })
       .then(sendResponse)
-    return true
-  }
-
-  if (isQueryActiveTabLoginDetectionMessage(message)) {
-    if (!isExtensionRuntimeSender(sender)) {
-      sendResponse(forbiddenSenderResponse)
-      return false
-    }
-    void queryActiveTabLoginDetection()
-      .then(sendResponse)
-      .catch(() => {
-        const response: LoginDetectionResponse = {
-          ok: true,
-          status: LoginDetectionStatus.Unavailable,
-        }
-        return sendResponse(response)
-      })
     return true
   }
 

@@ -1,13 +1,8 @@
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
-import { summarizeAuthenticationWorkflowForms } from '../../../../nook-web-shared/src/extension/password-forms'
 import {
   isWebsiteAuthenticatorCanceledMessage,
   isWebsiteAuthenticatorSelectedMessage,
 } from '../../lib/authenticator-picker-messages'
-import {
-  isQueryLoginDetectionMessage,
-  LoginDetectionStatus,
-} from '../../lib/login-detection-messages'
 import {
   isWebsiteLoginCanceledMessage,
   isWebsiteLoginSelectedMessage,
@@ -46,20 +41,6 @@ export const routeAutofillMessage: AutofillMessageListener =
     const message = runtimeMessage
     if (
       sender.id === chrome.runtime.id &&
-      isQueryLoginDetectionMessage(message)
-    ) {
-      const detected = summarizeAuthenticationWorkflowForms().length > 0
-      const nookTypedArgs0_0: Parameters<typeof sendResponse>[0] = {
-        ok: true,
-        status: detected
-          ? LoginDetectionStatus.Detected
-          : LoginDetectionStatus.NotDetected,
-      }
-      sendResponse(nookTypedArgs0_0)
-      return false
-    }
-    if (
-      sender.id === chrome.runtime.id &&
       isWebsiteLoginCanceledMessage(message) &&
       message.payload.origin === location.origin &&
       pickerState.login.kind === LoginPickerKind.Open &&
@@ -81,8 +62,8 @@ export const routeAutofillMessage: AutofillMessageListener =
       ) {
         pending.continueButton.disabled = false
       }
-      const nookTypedArgs0_1: Parameters<typeof sendResponse>[0] = { ok: true }
-      sendResponse(nookTypedArgs0_1)
+      const nookTypedArgs0_0: Parameters<typeof sendResponse>[0] = { ok: true }
+      sendResponse(nookTypedArgs0_0)
       return false
     }
     if (
@@ -95,8 +76,8 @@ export const routeAutofillMessage: AutofillMessageListener =
       const pending = pickerState.login.request
       pickerState.clearPendingLogin()
       window.clearTimeout(pending.timeoutId)
-      const nookTypedArgs0_2: Parameters<typeof sendResponse>[0] = { ok: true }
-      sendResponse(nookTypedArgs0_2)
+      const nookTypedArgs0_1: Parameters<typeof sendResponse>[0] = { ok: true }
+      sendResponse(nookTypedArgs0_1)
       widgetState.busy = true
       pending.continueButton.disabled = true
       const nookTypedArgs0_1: Parameters<typeof fillAndSubmitAccount>[0] = {

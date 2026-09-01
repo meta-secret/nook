@@ -872,17 +872,8 @@ pub const EXTENSION_AUTHENTICATOR_PICKER_SEARCH_PLACEHOLDER: &str =
 pub const EXTENSION_AUTHENTICATOR_PICKER_STEP_LABEL: &str =
     "extension.authenticator_picker.step_label";
 pub const EXTENSION_AUTHENTICATOR_PICKER_TITLE: &str = "extension.authenticator_picker.title";
-pub const EXTENSION_COMPANION_CONNECT_DESCRIPTION: &str = "extension.companion.connect_description";
-pub const EXTENSION_COMPANION_CONNECT_TITLE: &str = "extension.companion.connect_title";
-pub const EXTENSION_COMPANION_LOGIN_CHECKING: &str = "extension.companion.login_checking";
-pub const EXTENSION_COMPANION_LOGIN_DETECTED: &str = "extension.companion.login_detected";
-pub const EXTENSION_COMPANION_LOGIN_NOT_DETECTED: &str = "extension.companion.login_not_detected";
-pub const EXTENSION_COMPANION_LOGIN_UNAVAILABLE: &str = "extension.companion.login_unavailable";
 pub const EXTENSION_COMPANION_NOT_CONNECTED: &str = "extension.companion.not_connected";
-pub const EXTENSION_COMPANION_NOT_NOW: &str = "extension.companion.not_now";
 pub const EXTENSION_COMPANION_PAIR_ANOTHER_VAULT: &str = "extension.companion.pair_another_vault";
-pub const EXTENSION_COMPANION_READY_DESCRIPTION: &str = "extension.companion.ready_description";
-pub const EXTENSION_COMPANION_READY_TITLE: &str = "extension.companion.ready_title";
 pub const EXTENSION_COMPANION_READY_VAULT: &str = "extension.companion.ready_vault";
 pub const EXTENSION_COMPANION_STAY_READY: &str = "extension.companion.stay_ready";
 pub const EXTENSION_COMPANION_STEP_LABEL: &str = "extension.companion.step_label";
