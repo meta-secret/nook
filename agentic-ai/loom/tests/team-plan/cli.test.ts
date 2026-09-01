@@ -535,7 +535,7 @@ test('keeps Task wrapper diagnostics out of machine-readable stdout', () => {
       {
         cwd: join(import.meta.dir, '../../../..'),
         encoding: 'utf8',
-        env: { ...process.env, NO_COLOR: '1' },
+        env: { PATH: process.env.PATH ?? '' },
       },
     );
     expect(result.status).not.toBe(0);
