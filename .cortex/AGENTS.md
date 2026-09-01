@@ -139,50 +139,19 @@ Agent-authored fallback behavior is prohibited. This is a universal P1 rule.
 
 ## Agent communication
 
-Every user-visible activity stream starts with an unformatted YAML context
-document.
-
 This format applies to Gizmo Prime, every real Team Agent or subagent, and
 every user-visible skill-driven action.
 
-```yaml
----
-pr: "#<number>"
-team: "<team>"
-agent: "<agent>"
-...
-```
-
-Follow it with concise plain-text activity lines.
-
 ```text
-HH:mm:<ACTOR>:<ACTION> -> <description>
+HH:mm:<PR>:<ACTOR>:<ACTION> -> <description>
 ```
 
-- Use the exact pull-request number that the activity currently serves.
-- Use `pr: "pending"` before that pull request exists.
-- Use `pr: "none"` when the assigned work intentionally has no pull request.
-- Identify the actual Nook executor type with the `team` and `agent` pair.
-  - Use `team: "GIZMO"` and `agent: "Gizmo Prime"` for Gizmo Prime.
-  - Use the canonical team and `agent: "<team> Team Agent"` for a real Team
-    Agent created by the active harness, for example `team: "AI"` with
-    `agent: "AI Team Agent"` or `team: "SRE"` with
-    `agent: "SRE Team Agent"`.
-  - Use `agent: "Skill"` only while a skill is really executing, and name the
-    exact skill in the activity description.
-  - Do not report root, task names, personal names, capabilities, personas, or
-    passive feature-slice Gizmos as the agent identity.
-  - Re-emit the context when execution passes to another real agent.
-  - Change only the context values that actually differ.
-  - Never imply a subagent execution, identity, or authority that did not
-    exist.
-- Emit the YAML context once while the pull request, team, and agent remain
-  unchanged.
-- Re-emit it before the first activity after pull-request creation, a stacked-
-  PR transition, or an actual agent handoff.
-- Do not repeat unchanged YAML context for consecutive activity updates.
-- A Team Agent or subagent emits its own context before its first relayed
-  activity.
+- Use `PR<number>` with the exact positive pull-request number that the
+  activity currently serves, for example `PR1263`.
+- Use `PRpending` before that pull request exists.
+- Use `PRnone` when the assigned work intentionally has no pull request.
+- Emit the current PR token on every activity line. Refresh it immediately
+  after pull-request creation or a stacked pull-request transition.
 - Use `SKILL` when loading or applying a skill is the reported action.
 - Start every activity line with the current local time in 24-hour `HH:mm`
   form.
@@ -190,6 +159,7 @@ HH:mm:<ACTOR>:<ACTION> -> <description>
   token: `GIZMO`, `AI`, `SRE`, or `SKILL`.
   - Use the Team Agent's team token, not `Team Agent` or a personal name.
   - Use `SKILL` only for an activity performed by a skill.
+  - Never imply an executor, subagent, or skill execution that did not exist.
 - Use a short action type that makes the purpose immediately visible.
   - `FEATURE` covers new product functionality.
   - `BUILD` covers implementation of already selected functionality.
@@ -202,19 +172,7 @@ HH:mm:<ACTOR>:<ACTION> -> <description>
   - `CMD` identifies a command that is starting or still running.
   - `WAIT` identifies a bounded wait and its elapsed time.
   - `STATE` summarizes the current result, blocker, or next action.
-- Ensure the displayed metadata starts with a visible `---` and ends with
-  `...`.
-  - On a Markdown-rendered surface, transport the opening marker as `\---`.
-  - Markdown removes that presentation escape and displays the literal marker
-    instead of a thematic break.
-  - End the opening marker and every metadata field line with two ASCII spaces
-    before its newline. Markdown renders each pair as a hard line break, so the
-    YAML fields remain on separate displayed lines.
-  - Follow the closing `...` with a blank line before the first activity line.
-  - On a non-Markdown surface, transport the opening marker as literal `---`.
-- Do not wrap live message metadata in a Markdown code fence.
-- The example above is fenced only to render the literal syntax in Cortex.
-- Place no spaces around the colons between time, actor, and action type.
+- Place no spaces around the colons between time, PR, actor, and action type.
 - Place exactly one space before and after `->`.
 - State what changed, why it was done, or what current state was observed.
 - Show a command before waiting for it to finish.

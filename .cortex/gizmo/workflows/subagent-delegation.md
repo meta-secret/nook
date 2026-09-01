@@ -161,25 +161,25 @@ acceptance owner whose approval is required before Gizmo integration. A
 semantic role or expert selects bounded knowledge. None of these fields can
 replace another.
 
-### Active-harness activity-context envelope
+### Active-harness activity-line context
 
-Gizmo owns a separate activity-context envelope for each live attempt. The
-active harness carries it for communication only. It is not part of the
-declared or frozen subagent task contract.
+Gizmo owns the activity-line PR context for each live attempt. The active
+harness carries it for communication only. It is not part of the declared or
+frozen subagent task contract.
 
-- The envelope carries the current pull-request identity as the exact
-  `#<number>`, `pending`, or `none`.
-- Gizmo supplies the envelope through the active harness before the worker's
+- The context carries `PR<number>` with the exact positive pull-request number,
+  `PRpending`, or `PRnone` for inclusion on every user-visible activity line.
+- Gizmo supplies the context through the active harness before the worker's
   first user-visible activity.
-- When Gizmo creates the pull request, it refreshes the envelope before the
+- When Gizmo creates the pull request, it refreshes the context before the
   worker's next user-visible activity.
 - Gizmo performs the same refresh after moving the work to another stacked
   pull request.
-- The worker re-emits its activity context after a refresh.
+- The worker uses the refreshed PR token on its next activity line.
 - The worker must not infer pull-request identity from a branch or workspace.
-- The envelope does not alter the generation, task identity, scope, retry
+- The context does not alter the generation, task identity, scope, retry
   contract, claims, provider edges, evidence, or frontier.
-- The envelope grants no GitHub or delivery authority.
+- The context grants no GitHub or delivery authority.
 
 ### Attempts and results
 
@@ -744,10 +744,10 @@ Before integration, verify:
 
 - every worker used its declared exact baseline;
 - every team worker used its declared team identity;
-- every worker's activity-context envelope carried the current pull-request
+- every worker's activity-line context carried the current pull-request
   identity before its first user-visible activity;
 - every pull-request creation or stacked-pull-request transition refreshed the
-  envelope through the active harness before that worker's next user-visible
+  context through the active harness before that worker's next user-visible
   activity;
 - every worker-executable team or provider task recorded an explicit functional
   owner separately from team identity;
