@@ -444,18 +444,22 @@ async function readTeamPlanJournalFile(journalPath: string): Promise<{
   readonly serialized: string;
   readonly mode: number;
 }> {
-  const path = await canonicalTeamPlanJournalPath(journalPath);
-  const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  const requested = resolve(journalPath);
+  const requestedStatus = await lstat(requested);
+  if (requestedStatus.isSymbolicLink() || !requestedStatus.isFile())
+    throw new Error('Team Plan journal path is unsafe.');
+  const parent = await realpath(dirname(requested));
+  const path = resolve(parent, basename(requested));
+  const handle = await open(
+    path,
+    constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+  );
   try {
     const opened = await handle.stat();
+    if (!opened.isFile()) throw new Error('Team Plan journal path is unsafe.');
     const serialized = await handle.readFile('utf8');
     const named = await lstat(path);
-    if (
-      !opened.isFile() ||
-      !named.isFile() ||
-      opened.dev !== named.dev ||
-      opened.ino !== named.ino
-    )
+    if (!named.isFile() || opened.dev !== named.dev || opened.ino !== named.ino)
       throw new Error('Team Plan journal path is unsafe.');
     return { path, serialized, mode: opened.mode & 0o777 };
   } finally {

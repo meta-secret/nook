@@ -360,6 +360,18 @@ describe('Team Plan journal', () => {
     await expect(loadTeamPlanJournal(alias)).rejects.toThrow();
   });
 
+  test('rejects absent and non-regular journal paths without mutation', async () => {
+    const { fixture } = await startedFixture();
+    const missingParent = join(fixture.root, 'missing-parent');
+    await expect(
+      loadTeamPlanJournal(join(missingParent, 'journal.jsonl')),
+    ).rejects.toThrow();
+    expect(existsSync(missingParent)).toBe(false);
+    const fifo = join(fixture.root, 'journal.fifo');
+    expect(spawnSync('mkfifo', [fifo]).status).toBe(0);
+    await expect(loadTeamPlanJournal(fifo)).rejects.toThrow('unsafe');
+  });
+
   test('durably tombstones discard and resumes under the original lock', async () => {
     const { fixture, journalPath, started } = await startedFixture();
     await finalizeStartedFixture({ journalPath, started });
