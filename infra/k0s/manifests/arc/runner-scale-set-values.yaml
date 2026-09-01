@@ -119,6 +119,10 @@ template:
             value: "1"
           - name: NOOK_BUILDKIT_ADDR
             value: tcp://nook-buildkit.arc-runners.svc.cluster.local:1234
+          - name: KUBERNETES_NODE_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:

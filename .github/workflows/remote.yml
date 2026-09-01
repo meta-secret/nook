@@ -79,6 +79,12 @@ jobs:
       HIVE_NEO4J_TEST_USERNAME: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && 'neo4j' || '' }}
       HIVE_NEO4J_TEST_PASSWORD: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && 'hive-integration-password' || '' }}
     steps:
+      - name: Report Kubernetes worker node
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${KUBERNETES_NODE_NAME:?KUBERNETES_NODE_NAME is required}"
+          printf '::notice title=Kubernetes worker::%s\n' "$KUBERNETES_NODE_NAME"
       - uses: actions/checkout@v7
       - name: Validate batch request
         shell: bash
