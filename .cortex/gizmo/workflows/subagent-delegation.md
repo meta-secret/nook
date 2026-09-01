@@ -149,6 +149,8 @@ Every subagent task must declare:
   artifact, digest, and provenance identities are not knowable yet;
 - its dependencies;
 - its hierarchy depth bound;
+- its positive finite maximum attempt count;
+- its terminal exhaustion policy, which must be `block`;
 - its expected result shape;
 - its acceptance evidence;
 - forbidden mutations;
@@ -195,16 +197,26 @@ attempt. Worker claims are not subleased.
 
 #### Retry sequencing
 
-A normal retry is a new attempt of the same logical task under the exact same
-frozen task contract, acceptance evidence, generation, and starting-frontier
-rule. It receives fresh isolated attempt state. Changing the task contract,
-resource claims, provider edges, or acceptance evidence is not a retry; it is a
-plan mutation that requires a new immutable generation.
+Retry sequencing follows these rules:
 
-A retry may be admitted only after the preceding attempt is terminal,
-conclusively dispositioned, and no longer active. The logical task may therefore
-have sequential attempts, each with a unique attempt ID, but never concurrent
-attempts.
+- Before execution, the frozen task contract declares:
+  - `maxAttempts` as a positive finite integer; and
+  - `onExhaustion` as `block`.
+- Neither value may change after execution begins.
+- A worker attempt consumes one attempt from the bound when it starts.
+- A normal retry keeps the exact frozen task contract, acceptance evidence,
+  generation, and starting-frontier rule.
+- A normal retry receives fresh isolated attempt state.
+- A task-contract, resource-claim, provider-edge, or acceptance-evidence change
+  requires a new immutable generation. It is not a retry.
+- A retry may be admitted only after the preceding attempt is terminal,
+  conclusively dispositioned, and no longer active.
+- Sequential attempts use unique attempt IDs. They must never be concurrent.
+- A retry may proceed only when the logical task has an unused attempt.
+- Exhaustion without accepted completion blocks the task and its dependent
+  scope.
+- Failure to create, dispatch, or start an authorized attempt follows the root
+  immediate-blocker rule. It does not enter retry sequencing.
 
 - The worker returns a bounded result to Gizmo under its frozen parent-lineage
   metadata.
@@ -751,6 +763,11 @@ Before integration, verify:
 - every authorized `(task ID, attempt ID)` had exactly one harness-visible
   worker attempt, every logical task had at most one concurrently active
   attempt, and sequential retries used distinct attempt IDs;
+- every task contract froze a positive finite `maxAttempts` and
+  `onExhaustion: block` before execution;
+- every started attempt consumed exactly one slot and no task exceeded its
+  frozen attempt bound;
+- every exhausted task without accepted completion became blocked;
 - every worker task record declares read and write resource claims;
 - every repository-reading read-only task declares a non-empty repository
   evidence surface covered by its read claims;

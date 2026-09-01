@@ -55,9 +55,11 @@ or second coordinator. See the [Gizmo contract](gizmo/AGENTS.md).
   - a required real Team Agent cannot be created;
   - an authorized attempt cannot be dispatched; or
   - a dispatched attempt cannot be started.
-- After an attempt starts, Gizmo Prime follows the canonical bounded sequential
-  retry and conclusive-disposition process.
-- Gizmo Prime stops with a blocker when that process is exhausted without an
+- Before execution, the task contract freezes the canonical finite attempt
+  bound and terminal exhaustion policy.
+- After an attempt starts, Gizmo Prime follows sequential retry and conclusive
+  disposition within that bound.
+- Gizmo Prime stops with a blocker when the bound is exhausted without an
   accepted completion.
 - Gizmo Prime must never approximate the work, take over the worker scope, or
   continue past that blocked scope. This is the
@@ -184,7 +186,12 @@ HH:mm | <action-type> | <description>
   - `CMD` identifies a command that is starting or still running.
   - `WAIT` identifies a bounded wait and its elapsed time.
   - `STATE` summarizes the current result, blocker, or next action.
-- Start the metadata with `---` and end it with `...`.
+- Ensure the displayed metadata starts with a visible `---` and ends with
+  `...`.
+  - On a Markdown-rendered surface, transport the opening marker as `\---`.
+  - Markdown removes that presentation escape and displays the literal marker
+    instead of a thematic break.
+  - On a non-Markdown surface, transport the opening marker as literal `---`.
 - Do not wrap live message metadata in a Markdown code fence.
 - The example above is fenced only to render the literal syntax in Cortex.
 - Separate the time, action type, and description with ` | `.
