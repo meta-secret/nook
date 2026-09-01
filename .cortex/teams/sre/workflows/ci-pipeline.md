@@ -939,19 +939,20 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 - When the pushed branch is validation-ready, Gizmo immediately runs
   `task pr:validate PR=<number>` or adds `FULL_E2E=1`. Focused tasks are optional
   for that head and never replace complete validation.
-- Validation first requests one idempotent exact-head Codex review.
-- Current findings stop dispatch so they can be repaired as one coherent batch.
-- Review unavailability is bounded to 600 seconds when no current findings are
-  visible, after which repository-owned checks proceed.
+- Validation dispatches repository-owned checks before any GitHub review wait.
+- It then requests one idempotent exact-head Codex review without waiting.
+- Review runs concurrently with hosted checks.
+- Current findings and failed checks form one coherent repair batch after both
+  settle.
 - Three finding batches open a circuit breaker and require comprehensive
-  stabilization before another complete validation attempt.
+  stabilization before another review request.
 - Codex is the sole automatic provider. Cursor Bugbot remains inactive.
 - They wait only for applicable repository-owned exact-head PR checks.
 - Ordinary pushes do not start `pr.yml`.
 - Every later push requires another explicit validation before readiness.
 - Every actionable comment already present must be addressed and resolved.
-- Review belongs before GitHub Actions; do not request another review after
-  checks finish.
+- Request review immediately after dispatch. Do not defer it until checks
+  finish.
 - Claude, CodeRabbit, and other optional services are not requested or
   awaited. Cursor Bugbot is not activated.
 - The local ci-agent image tag is derived from the worktree path, preventing parallel worktrees from replacing each other's review/readiness binaries.

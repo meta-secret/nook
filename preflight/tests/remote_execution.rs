@@ -79,39 +79,31 @@ fn remote_task_catalog_is_allowlisted_and_exact_head_only() {
 }
 
 #[test]
-fn complete_validation_waits_for_bounded_review_stabilization() -> Result<()> {
+fn complete_validation_dispatches_before_review_collection() -> Result<()> {
     let agentic_tasks = read_fallible(".task/agentic-ai.yml")?;
     let direct_validation = read_fallible(".task/remote-execution.yml")?;
-    let stabilization_position = direct_validation
-        .find("task pr:review:stabilize")
-        .context("direct validation must stabilize exact-head review first")?;
-    let stabilized_head_position = direct_validation
-        .find("stabilized_pr_state=\"$(gh pr view \"$REQUESTED_PR\" --json headRefOid,baseRefName")
-        .context("direct validation must recheck the stabilized PR head and base")?;
+    let current_base_position = direct_validation
+        .find(".github/scripts/require-current-base.sh origin \"$base_ref\"")
+        .context("direct validation must require a current base")?;
     let validation_label_position = direct_validation
         .find("gh pr edit \"$REQUESTED_PR\" --add-label \"$validation_label\"")
         .context("direct validation must apply its label")?;
-    let refreshed_base_position = direct_validation[stabilization_position..]
-        .find(".github/scripts/require-current-base.sh origin \"$stabilized_base_ref\"")
-        .map(|position| position + stabilization_position)
-        .context("direct validation must recheck the base after review stabilization")?;
+    let review_request_position = direct_validation
+        .find("task pr:review PR=\"$REQUESTED_PR\"")
+        .context("direct validation must request concurrent exact-head review")?;
     let dispatched_head_position = direct_validation
         .find("dispatched_pr_state=\"$(gh pr view \"$REQUESTED_PR\" --json headRefOid,baseRefName")
         .context("direct validation must recheck the head and base after label dispatch")?;
     assert!(
-        stabilization_position < stabilized_head_position
-            && stabilized_head_position < refreshed_base_position
-            && refreshed_base_position < validation_label_position,
-        "complete validation must start only after bounded exact-head review stabilization"
-    );
-    assert!(
-        validation_label_position < dispatched_head_position,
-        "complete validation must reject a head change during label dispatch"
+        current_base_position < validation_label_position
+            && validation_label_position < review_request_position
+            && review_request_position < dispatched_head_position,
+        "complete validation must dispatch before requesting review and then reject a head change"
     );
     for required in [
         "pr:review-local:",
         "codex review --base origin/main",
-        "Cloud review remains Codex-only and its bounded wait cannot block delivery indefinitely.",
+        "Cloud review remains Codex-only; hosted validation dispatch never waits for it.",
         "pr:review:",
         "CI_AGENT_CMD: pr-review",
         "pr:review:stabilize:",
@@ -125,14 +117,9 @@ fn complete_validation_waits_for_bounded_review_stabilization() -> Result<()> {
         );
     }
     assert!(
-        direct_validation.contains("REQUEST_REVIEW_WAIT_SECONDS"),
-        "review stabilization must expose a bounded wait"
-    );
-    assert!(
-        direct_validation.contains(
-            "changed head or base during review stabilization; validate the replacement state explicitly.\" >&2\n          exit 2"
-        ),
-        "a head or base change during stabilization must fail so the replacement state is validated"
+        !direct_validation.contains("pr:review:stabilize")
+            && !direct_validation.contains("REQUEST_REVIEW_WAIT_SECONDS"),
+        "complete validation must not wait for review before dispatch"
     );
     assert!(
         direct_validation.contains(

@@ -55,10 +55,11 @@ publisher verifies the exact published head and returns the PR to Gizmo with a
 direct mention. Gizmo does not run advisory local review after handoff. If the
 head is not validation-ready, Gizmo immediately dispatches at least one
 relevant focused `task remote` job. If it is validation-ready, Gizmo immediately
-runs `task pr:validate`, which stabilizes exact-head Codex review before
-dispatching GitHub Actions. Hosted Repository policy and PR verification
-enforce the UI-demo and other product or publication contracts. A bounded
-timeout keeps review unavailability from blocking those checks. Gizmo never
+runs `task pr:validate`, which dispatches GitHub Actions before requesting one
+non-waiting exact-head Codex review. Gizmo collects that review during the
+hosted validation window and batches review findings with failed checks. Hosted
+Repository policy and PR verification enforce the UI-demo and other product or
+publication contracts. Gizmo never
 activates another review provider. This bounded worker must not invoke Task or
 a container runtime.
 

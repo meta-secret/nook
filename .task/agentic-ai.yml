@@ -601,7 +601,7 @@ tasks:
           CI_AGENT_CMD: pr-review
 
   pr:review:stabilize:
-    desc: Wait for an exact-head Cloud review before expensive validation, allowing a bounded timeout (PR=<number>, REVIEW_WAIT_SECONDS defaults to 600, REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED=1 after comprehensive stabilization).
+    desc: Collect exact-head Cloud review after hosted validation dispatch, allowing a bounded timeout (PR=<number>, REVIEW_WAIT_SECONDS defaults to 600, REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED=1 after comprehensive stabilization).
     requires:
       vars: [PR]
     cmds:
@@ -619,16 +619,16 @@ tasks:
         bash -c 'set -euo pipefail;
         if ! command -v codex >/dev/null 2>&1; then
           echo "Codex CLI is unavailable; skipping advisory local review.";
-          echo "Cloud review remains Codex-only and its bounded wait cannot block delivery indefinitely.";
+          echo "Cloud review remains Codex-only; hosted validation dispatch never waits for it.";
           exit 0;
         fi;
         if ! codex login status >/dev/null 2>&1; then
           echo "Codex CLI is not authenticated; skipping advisory local review.";
-          echo "Cloud review remains Codex-only and its bounded wait cannot block delivery indefinitely.";
+          echo "Cloud review remains Codex-only; hosted validation dispatch never waits for it.";
           exit 0;
         fi;
         git fetch origin main;
         if ! codex review --base origin/main; then
           echo "Codex local review was unavailable; continuing without blocking delivery.";
-          echo "Cloud review remains Codex-only and its bounded wait cannot block delivery indefinitely.";
+          echo "Cloud review remains Codex-only; hosted validation dispatch never waits for it.";
         fi'

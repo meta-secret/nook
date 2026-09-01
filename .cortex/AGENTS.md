@@ -55,17 +55,19 @@ or second coordinator. See the [Gizmo contract](gizmo/AGENTS.md).
   - a required real Team Agent cannot be created;
   - an authorized attempt cannot be dispatched; or
   - a dispatched attempt cannot be started.
-- Before execution, the task contract freezes the canonical finite attempt
-  bound and terminal exhaustion policy.
+- Before execution, the immutable generation plan freezes the canonical finite
+  attempt bound.
 - After an attempt starts, Gizmo Prime follows sequential retry and conclusive
   disposition within that bound.
-- Gizmo Prime stops with a blocker when the bound is exhausted without an
-  accepted completion.
+- Canonical exhaustion is hard-coded to block the task when the bound is
+  exhausted without an accepted completion.
 - Gizmo Prime must never approximate the work, take over the worker scope, or
   continue past that blocked scope. This is the
   [no-fallback rule](#no-fallback-behavior) for worker execution.
-- Separate Codex tasks, threads, cloud tasks, and external agents must not
-  serve as delegation, communication, or handoff transport.
+- Separate Codex tasks, threads, cloud tasks, and ordinary external agents must
+  not serve as delegation, communication, or handoff transport.
+- This ordinary-transport prohibition preserves the two trusted publisher
+  handoffs below. Those publishers are not ordinary delegation transport.
 - Parent-owned Gizmo control operations remain with Gizmo Prime:
   - planning and integration;
   - Git, pull-request, Workbench, and review coordination;

@@ -104,17 +104,17 @@ export async function runPrReviewStabilization(): Promise<void> {
   );
   if (result.state === ReviewStabilizationState.Findings) {
     throw new Error(
-      `PR #${prNumber} has current-head review findings; address them as one coherent batch before validation`,
+      `PR #${prNumber} has current-head review findings; batch them with hosted validation failures`,
     );
   }
   if (result.state === ReviewStabilizationState.CircuitBreaker) {
     throw new Error(
-      `PR #${prNumber} has reached three Cloud-review finding batches; stop the rerun loop and perform comprehensive stabilization before another complete validation`,
+      `PR #${prNumber} has reached three Cloud-review finding batches; stop the review rerun loop and perform comprehensive stabilization before another review request`,
     );
   }
   if (result.state === ReviewStabilizationState.TimedOut) {
     console.log(
-      `::warning::Exact-head review did not settle within ${waitSeconds}s; continuing with validation so review availability cannot deadlock delivery.`,
+      `::warning::Exact-head review did not settle within ${waitSeconds}s; hosted validation remains independent of review availability.`,
     );
   }
 }

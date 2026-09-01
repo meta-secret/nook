@@ -54,10 +54,10 @@ Delivery rules:
   readiness.
 - Loom never squash-merges.
   - Gizmo merges after readiness succeeds.
-- Loom stabilizes one exact-head Codex review before complete validation.
-  - Current findings stop dispatch so they can be repaired as one batch.
-  - A failed request or missing result is bounded and non-blocking when no
-    current findings are visible.
+- Loom dispatches complete validation before any GitHub review wait.
+  - It requests one exact-head Codex review without waiting.
+  - Review and hosted checks proceed concurrently.
+  - Current findings and failed checks become one repair batch.
   - Codex is the sole automatic provider. Cursor Bugbot remains inactive.
 - Inspect feedback again at the readiness boundary.
 - A later push invalidates the audit.
@@ -109,9 +109,9 @@ Does not apply to:
       relevant focused hosted task immediately.
 - [ ] When the head is validation-ready, dispatch complete validation
       immediately without requiring a focused task first.
-- [ ] Stabilize one exact-head Codex review before complete validation.
-- [ ] Address current findings as one coherent batch before dispatching complete
-      validation.
+- [ ] Dispatch complete validation before any GitHub review wait.
+- [ ] Collect exact-head review during hosted validation.
+- [ ] Address current findings and failed checks as one coherent batch.
 - [ ] Inspect and address all feedback already present.
 - [ ] After every replacement push, obtain fresh exact-head remote evidence.
 - [ ] Promote an evidence-backed durable discovery when justified; no promotion

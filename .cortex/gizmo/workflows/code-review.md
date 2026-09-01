@@ -4,13 +4,12 @@
 
 Review policy is explicit:
 
-- Exact-head Cloud review settles before expensive repository-owned GitHub
-  Actions begin, subject to a bounded timeout.
+- Repository-owned GitHub Actions dispatch before any Cloud-review wait.
+- Exact-head Cloud review proceeds during the hosted validation window.
 - Codex is the only automatic review provider. Do not activate Cursor Bugbot.
 - A Codex eye reaction is liveness evidence only. It does not settle review and
   is never required for validation or readiness.
-- Review is not a merge gate. A missing or unavailable review result does not
-  delay delivery after those checks finish.
+- Review findings remain actionable before merge.
 - Other external review services remain optional. Do not request or wait for
   Claude, CodeRabbit, or similar services unless the user explicitly asks.
 
@@ -53,22 +52,18 @@ task pr:validate PR=<number>
 
 The command:
 
-1. Requests one idempotent exact-head Codex review.
-2. Backfills the trusted head boundary through default-branch workflow code
-   when the pull request predates this protocol.
-3. Waits for a clean result, current-head findings, or the bounded 600-second
-   stabilization timeout.
-4. Stops before validation when findings exist so the agent can address one
-   coherent batch.
-5. Opens a circuit breaker after three finding batches and requires a
+1. Dispatches repository-owned GitHub Actions immediately.
+2. Requests one idempotent exact-head Codex review without waiting.
+3. Rechecks that the PR head and base did not change during dispatch.
+4. Lets hosted checks and exact-head review proceed concurrently.
+5. Batches current review findings and failed checks after both settle.
+6. Opens a circuit breaker after three finding batches and requires a
    comprehensive stabilization pass. After resolving its coherent batch, the
    delivery owner explicitly acknowledges that pass with
-   `REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED=1` on the next validation.
-6. Rechecks that the PR head did not change, then dispatches repository-owned
-   GitHub Actions.
+   `REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED=1` before the next review collection.
 
-Review unavailability does not deadlock validation: the bounded timeout allows
-the checks to proceed. A liveness reaction does not end that wait.
+Never run `task pr:review:stabilize` before hosted validation dispatch. It may
+collect a pending review only after dispatch while checks are already running.
 
 Use `task pr:review PR=<number>` only when an exact-head review request is needed
 without complete validation. It is idempotent and does not wait for a result.
@@ -81,11 +76,13 @@ actions:
 - address every active actionable finding;
 - reply on the targeted thread before resolving it;
 - re-query until unresolved review threads are zero;
-- keep polling feedback while repository checks run for the validation head; and
-- interrupt obsolete check waiting when actionable feedback requires another
-  push.
+- keep polling feedback while repository checks run for the validation head;
+  and
+- batch feedback with check failures after both result sets settle.
 
-The actionable feedback queue has priority over waiting for checks.
+Do not replace an in-flight validation head merely because review arrives
+first. Collect the complete coherent repair batch unless a security finding
+requires immediate fail-closed action.
 
 When a new finding arrives:
 

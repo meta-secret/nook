@@ -44,8 +44,8 @@ handoff. It does not post a broad or duplicative PR comment.
 
 Inspect the currently available feedback before merge or handoff. Proceed when
 all actionable items are handled, Nook's applicable repository-owned checks are
-green, and the unresolved-thread query is clear. Do not wait for review after
-repository-owned checks finish.
+green, and the unresolved-thread query is clear. Request exact-head review
+during hosted validation rather than after repository-owned checks finish.
 
 ## Scope
 
