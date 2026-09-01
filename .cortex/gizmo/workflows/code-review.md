@@ -4,13 +4,12 @@
 
 Review policy is explicit:
 
-- Exact-head Cloud review settles before expensive repository-owned GitHub
-  Actions begin, subject to a bounded timeout.
+- Repository-owned GitHub Actions dispatch before any Cloud-review wait.
+- Exact-head Cloud review proceeds during the hosted validation window.
 - Codex is the only automatic review provider. Do not activate Cursor Bugbot.
 - A Codex eye reaction is liveness evidence only. It does not settle review and
   is never required for validation or readiness.
-- Review is not a merge gate. A missing or unavailable review result does not
-  delay delivery after those checks finish.
+- Review findings remain actionable before merge.
 - Other external review services remain optional. Do not request or wait for
   Claude, CodeRabbit, or similar services unless the user explicitly asks.
 
@@ -53,22 +52,35 @@ task pr:validate PR=<number>
 
 The command:
 
-1. Requests one idempotent exact-head Codex review.
-2. Backfills the trusted head boundary through default-branch workflow code
-   when the pull request predates this protocol.
-3. Waits for a clean result, current-head findings, or the bounded 600-second
-   stabilization timeout.
-4. Stops before validation when findings exist so the agent can address one
-   coherent batch.
-5. Opens a circuit breaker after three finding batches and requires a
+1. Dispatches repository-owned GitHub Actions immediately.
+2. Freezes the current PR head and base only to bind the review request to the
+   intended revision.
+   - Inspects every PR comment, submitted review body, and review thread without
+     filtering by timestamp, marker, or head transition.
+   - Deletes retired GitHub Actions exact-head boundary notices before feedback
+     classification.
+   - Fails feedback inspection when a retired notice cannot be deleted.
+   - Detects revision changes through feedback inspection and immediately
+     before Codex contact.
+   - Checks the review circuit, then contacts Codex without waiting for a result.
+3. Rechecks that the PR head and base did not change during dispatch.
+4. Lets hosted checks and exact-head review proceed concurrently.
+5. Batches current review findings and failed checks after both settle.
+6. Opens a circuit breaker after three finding batches and requires a
    comprehensive stabilization pass. After resolving its coherent batch, the
    delivery owner explicitly acknowledges that pass with
-   `REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED=1` on the next validation.
-6. Rechecks that the PR head did not change, then dispatches repository-owned
-   GitHub Actions.
+   `REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED=1` before the next review collection.
 
-Review unavailability does not deadlock validation: the bounded timeout allows
-the checks to proceed. A liveness reaction does not end that wait.
+If the frozen revision changes, the review request fails truthfully without
+contacting Codex, while validation continues. The non-waiting request then
+checks the circuit. An open circuit
+suppresses the request but does not stop validation. A transient request failure
+or provider `requested: false` result reports `not-requested` and also leaves
+validation running. Collect or retry review separately; do not restart hosted
+validation merely because the review request was unavailable.
+
+Never run `task pr:review:stabilize` before hosted validation dispatch. It may
+collect a pending review only after dispatch while checks are already running.
 
 Use `task pr:review PR=<number>` only when an exact-head review request is needed
 without complete validation. It is idempotent and does not wait for a result.
@@ -78,30 +90,44 @@ without complete validation. It is idempotent and does not wait for a result.
 Before merge, inspect feedback currently present. Gizmo must coordinate these
 actions:
 
-- address every active actionable finding;
+- address every actionable PR comment and submitted review finding, including
+  feedback created before the current head;
+- retain every substantive top-level PR comment in inspection output;
+- minimize a handled top-level PR comment with GitHub's `RESOLVED` classifier;
+- block readiness on every substantive top-level comment that is not minimized
+  as `RESOLVED`;
+- retain every substantive submitted review body in inspection output;
+- block readiness on a substantive review body when it has no inline comments;
+- use unresolved-thread state as the deterministic readiness authority when a
+  review has inline comments;
 - reply on the targeted thread before resolving it;
 - re-query until unresolved review threads are zero;
-- keep polling feedback while repository checks run for the validation head; and
-- interrupt obsolete check waiting when actionable feedback requires another
-  push.
+- keep polling feedback while repository checks run for the validation head;
+  and
+- batch feedback with check failures after both result sets settle.
 
-The actionable feedback queue has priority over waiting for checks.
+Do not replace an in-flight validation head merely because review arrives
+first. Collect the complete coherent repair batch unless a security finding
+requires immediate fail-closed action.
 
 When a new finding arrives:
 
-1. Stop watching or cancel validation for the obsolete head when safe.
-2. Dispatch the fix to the responsible team.
-3. Integrate the verified fix commit.
-4. Reply to and resolve the thread.
-5. Run pre-push hygiene through the responsible formatter owner and push the
+1. For a security finding, fail closed and stop or cancel unsafe validation.
+2. For every other finding, keep the in-flight validation head running until
+   hosted checks and exact-head review settle.
+3. Combine review findings and failed checks into one coherent repair batch.
+4. Dispatch that batch to the responsible team.
+5. Integrate the verified fix commit, then reply to and resolve the thread.
+6. Run pre-push hygiene through the responsible formatter owner and push the
    replacement head.
-6. Restart complete validation for that head. If it is not yet
+7. Restart complete validation for that head. If it is not yet
    validation-ready, dispatch at least one relevant focused remote job first.
 
 Use a focused task instead only when it isolates a known failure faster.
 
-Only let exact-head validation finish while the actionable feedback queue is
-empty. Feedback that arrives while checks run takes priority.
+Non-security feedback that arrives while checks run joins the pending repair
+batch. It does not cancel validation or replace the head before both result
+sets settle.
 
 `task pr:ready` enforces unresolved-thread count alongside the exact-head
 deployment, branch state, and applicable repository-owned PR checks. It reports
@@ -124,9 +150,10 @@ Cursor, CodeRabbit, or another service:
    and push when files changed.
 5. If the head is not validation-ready, dispatch at least one relevant focused
    hosted task.
-6. If complete validation was already requested, restart it for the replacement
-   head. This first stabilizes one exact-head Codex review. Otherwise start it
-   when that head is ready for the final gate.
+6. If complete validation was already requested, dispatch it for the
+   replacement head first and collect exact-head Codex review concurrently.
+   Otherwise start it when that head is ready for the final gate. In both cases,
+   wait for both result sets before forming another repair batch.
 7. Reply on the original thread or comment with the fix and validation when a
    targeted reply is possible.
 8. Resolve only after the targeted reply is visible and the finding is fixed or

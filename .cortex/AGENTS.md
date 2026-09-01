@@ -47,9 +47,48 @@ or second coordinator. See the [Gizmo contract](gizmo/AGENTS.md).
 
 - Each worker task has exactly one team identity, a bounded file scope, and
   named acceptance evidence. Workers write only inside that scope.
+- Gizmo Prime delegates every worker-executable Team Agent task through the
+  active harness. This includes implementation and review fixes.
+- Gizmo Prime is prohibited from performing any worker-executable Team Agent
+  work itself.
+- Gizmo Prime stops the task immediately and reports the blocker when:
+  - a required real Team Agent cannot be created;
+  - an authorized attempt cannot be dispatched; or
+  - a dispatched attempt cannot be started.
+- Before execution, the immutable generation plan freezes the canonical finite
+  attempt bound.
+- After an attempt starts, Gizmo Prime follows sequential retry and conclusive
+  disposition within that bound.
+- Canonical exhaustion is hard-coded to block the task when the bound is
+  exhausted without an accepted completion.
+- Gizmo Prime must never approximate the work, take over the worker scope, or
+  continue past that blocked scope. This is the
+  [no-fallback rule](#no-fallback-behavior) for worker execution.
+- Separate Codex tasks, threads, cloud tasks, and ordinary external agents must
+  not serve as delegation, communication, or handoff transport.
+- This ordinary-transport prohibition preserves the two trusted publisher
+  handoffs below. Those publishers are not ordinary delegation transport.
+- Parent-owned Gizmo control operations remain with Gizmo Prime:
+  - planning and integration;
+  - Git, pull-request, Workbench, and review coordination;
+  - validation, readiness, and merge.
+- Parent-owned control operations stay outside the worker graph and do not
+  create worker attempts.
+- The canonical delegation workflow remains the sole worker-lifecycle
+  authority. Do not invent another lifecycle system.
 - Team workers implement and test their assigned changes. Gizmo Prime controls
   shared integration and external delivery state and does not implement team
   work on their behalf.
+- Team workers run only fast focused local Loom tests, lint, or typechecks that
+  provide direct implementation feedback.
+- Team workers must not run the full `task loom:verify` suite locally during
+  agent delivery.
+- For Loom-affecting work, the Team Agent returns a coherent handoff to Gizmo
+  Prime after focused local evidence.
+- Gizmo Prime promptly integrates, runs pre-push hygiene, commits, and pushes
+  that handoff.
+- Gizmo Prime then dispatches `task remote TASK_NAME=loom:verify` for the exact
+  pushed head.
 - Security review does not transfer implementation ownership. Portable
   security behavior stays in Rust/WASM; web code receives public typed
   projections.
@@ -100,18 +139,70 @@ Agent-authored fallback behavior is prohibited. This is a universal P1 rule.
 
 ## Agent communication
 
-Every user-visible agent message starts with the pull request it currently
-serves.
+This format applies to Gizmo Prime, every real Team Agent or subagent, and
+every user-visible skill-driven action.
 
-- Use `PR #<number> —` when the current work has a pull request.
-- Use `PR pending —` before that pull request exists.
-- Use `PR none —` when the assigned work intentionally has no pull request.
-- Recheck the identifier after pull-request creation or a stacked-PR
-  transition.
-- Apply the prefix to progress updates, questions, handoffs, and final
+```text
+HH:mm:(<PR>):<ACTOR>:<ACTION> -> <description>
+```
+
+- Use `(<number>)` with the exact positive pull-request number that the
+  activity currently serves, for example `(1263)`.
+- Use `(pending)` before that pull request exists.
+- Use `(none)` when the assigned work intentionally has no pull request.
+- Emit the current PR token on every activity line. Refresh it immediately
+  after pull-request creation or a stacked pull-request transition.
+- Use `SKILL` when loading or applying a skill is the reported action.
+- Start every activity line with the current local time in 24-hour `HH:mm`
+  form.
+- Identify the executor on every activity line with one compact canonical actor
+  token from this closed mapping:
+  - `GIZMO` for Gizmo Prime;
+  - `AI` for the AI team;
+  - `DEV-CORE` for Development core;
+  - `SECURITY` for Security;
+  - `SRE` for SRE;
+  - `WEB-DEV` for Web development; and
+  - `SKILL` for an actively executing skill.
+  - Use the Team Agent's team token, not `Team Agent` or a personal name.
+  - Use `SKILL` only for an activity performed by a skill.
+  - Never imply an executor, subagent, or skill execution that did not exist.
+- Use a short action type that makes the purpose immediately visible.
+  - `FEATURE` covers new product functionality.
+  - `BUILD` covers implementation of already selected functionality.
+  - `REVIEW` covers review analysis and comment fixes.
+  - `REFACTOR` covers structure changes without intended behavior changes.
+  - `TEST` covers validation and test results.
+  - `AI` covers agent coordination and AI-owned implementation.
+  - `SKILL` covers a skill load, application, required action, or pause.
+  - `DOCS/CORTEX` covers documentation and Cortex work.
+  - `CMD` identifies a command that is starting or still running.
+  - `WAIT` identifies a bounded wait and its elapsed time.
+  - `STATE` summarizes the current result, blocker, or next action.
+- Place no spaces around the colons between time, PR, actor, and action type.
+- Place exactly one space before and after `->`.
+- State what changed, why it was done, or what current state was observed.
+- Show a command before waiting for it to finish.
+  - Prefer the task entrypoint, such as `task loom:verify`.
+  - Truncate a command longer than roughly 20 to 30 characters when its full
+    spelling would obscure the status.
+  - Report the command's completion, failure, or interruption with elapsed
+    time.
+- During a long command or external wait, emit a `WAIT` update at least once
+  per minute.
+- Identify the exact operation in every `WAIT` line.
+  - For local Task execution, name the exact `task <task-name>` command.
+  - For hosted execution, name the GitHub run or job ID and include its
+    clickable URL.
+  - A preceding `CMD` line does not replace this requirement.
+- Give every bounded wait a start update and a completion or timeout update.
+- Apply the format to progress updates, questions, handoffs, and final
   responses.
-- Do not add the prefix to code, logs, repository content, commit messages, or
-  machine-readable protocols.
+- Give each separate activity its own timestamped plain-text line.
+- Do not add the activity format to code, logs, repository content, or commit
+  messages.
+- A strict machine-readable protocol response is exempt from the entire
+  activity format. Emit only the required protocol content.
 
 ## Cortex authoring
 

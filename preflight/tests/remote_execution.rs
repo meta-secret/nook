@@ -79,39 +79,39 @@ fn remote_task_catalog_is_allowlisted_and_exact_head_only() {
 }
 
 #[test]
-fn complete_validation_waits_for_bounded_review_stabilization() -> Result<()> {
+fn complete_validation_dispatches_before_review_collection() -> Result<()> {
     let agentic_tasks = read_fallible(".task/agentic-ai.yml")?;
     let direct_validation = read_fallible(".task/remote-execution.yml")?;
-    let stabilization_position = direct_validation
-        .find("task pr:review:stabilize")
-        .context("direct validation must stabilize exact-head review first")?;
-    let stabilized_head_position = direct_validation
-        .find("stabilized_pr_state=\"$(gh pr view \"$REQUESTED_PR\" --json headRefOid,baseRefName")
-        .context("direct validation must recheck the stabilized PR head and base")?;
+    let readme = read_fallible("README.md")?;
+    let current_base_position = direct_validation
+        .find(".github/scripts/require-current-base.sh origin \"$base_ref\"")
+        .context("direct validation must require a current base")?;
     let validation_label_position = direct_validation
         .find("gh pr edit \"$REQUESTED_PR\" --add-label \"$validation_label\"")
         .context("direct validation must apply its label")?;
-    let refreshed_base_position = direct_validation[stabilization_position..]
-        .find(".github/scripts/require-current-base.sh origin \"$stabilized_base_ref\"")
-        .map(|position| position + stabilization_position)
-        .context("direct validation must recheck the base after review stabilization")?;
+    let review_request_position = direct_validation
+        .find("if review_request_output=\"$(task pr:review \\")
+        .context("direct validation must request concurrent exact-head review")?;
     let dispatched_head_position = direct_validation
         .find("dispatched_pr_state=\"$(gh pr view \"$REQUESTED_PR\" --json headRefOid,baseRefName")
         .context("direct validation must recheck the head and base after label dispatch")?;
+    let dispatched_base_position = direct_validation
+        .find(".github/scripts/require-current-base.sh origin \"$dispatched_base_ref\"")
+        .context("direct validation must recheck base freshness after label dispatch")?;
     assert!(
-        stabilization_position < stabilized_head_position
-            && stabilized_head_position < refreshed_base_position
-            && refreshed_base_position < validation_label_position,
-        "complete validation must start only after bounded exact-head review stabilization"
+        current_base_position < validation_label_position
+            && validation_label_position < review_request_position
+            && review_request_position < dispatched_head_position,
+        "complete validation must dispatch before requesting review and then reject a head change"
     );
     assert!(
-        validation_label_position < dispatched_head_position,
-        "complete validation must reject a head change during label dispatch"
+        dispatched_head_position < dispatched_base_position,
+        "complete validation must recheck target-branch freshness after dispatch"
     );
     for required in [
         "pr:review-local:",
         "codex review --base origin/main",
-        "Cloud review remains Codex-only and its bounded wait cannot block delivery indefinitely.",
+        "Cloud review remains Codex-only; hosted validation dispatch never waits for it.",
         "pr:review:",
         "CI_AGENT_CMD: pr-review",
         "pr:review:stabilize:",
@@ -125,14 +125,27 @@ fn complete_validation_waits_for_bounded_review_stabilization() -> Result<()> {
         );
     }
     assert!(
-        direct_validation.contains("REQUEST_REVIEW_WAIT_SECONDS"),
-        "review stabilization must expose a bounded wait"
+        !direct_validation.contains("pr:review:stabilize")
+            && !direct_validation.contains("REQUEST_REVIEW_WAIT_SECONDS"),
+        "complete validation must not wait for review before dispatch"
     );
+    for required in [
+        "review_request_state=\"not-requested\"",
+        "grep -Fq '\"state\": \"requested\"'",
+        "Keep this validation running; collect or retry review separately without restarting validation.",
+        "Exact-head review request state: $review_request_state.",
+        "REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED=\"$REQUEST_REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED\"",
+    ] {
+        assert!(
+            direct_validation.contains(required),
+            "post-dispatch review partial-state contract missing: {required}"
+        );
+    }
     assert!(
-        direct_validation.contains(
-            "changed head or base during review stabilization; validate the replacement state explicitly.\" >&2\n          exit 2"
+        readme.contains(
+            "task pr:review:stabilize PR=410 # bounded Codex collection after hosted validation dispatch"
         ),
-        "a head or base change during stabilization must fail so the replacement state is validated"
+        "public command catalog must place review stabilization after hosted dispatch"
     );
     assert!(
         direct_validation.contains(
@@ -161,65 +174,6 @@ fn complete_validation_waits_for_bounded_review_stabilization() -> Result<()> {
         "label-race cleanup must preserve independently synchronized Web research runs"
     );
 
-    let replacement_head = read_fallible(".github/workflows/pr-head-stabilization.yml")?;
-    for required in [
-        "pull_request_target:",
-        "types: [edited, opened, reopened, synchronize]",
-        "workflow_dispatch:",
-        "pr_number:",
-        "head_sha:",
-        "base_sha:",
-        "actions: write",
-        "pull-requests: write",
-        "group: pr-head-boundary-${{ github.event.pull_request.number || inputs.pr_number }}",
-        "cancel-in-progress: false",
-        "runs-on: ubuntu-latest",
-        "<!-- nook-head-transition:",
-        "github.rest.actions.getWorkflowRun",
-        "Skipping obsolete head-boundary backfill.",
-        "Skipping obsolete head-boundary event.",
-        "github.rest.issues.updateComment",
-        "github.rest.issues.createComment",
-        "context.payload.changes?.base?.ref?.from",
-        "Ignoring PR edit without a base-ref change.",
-        "run.name !== \"Web research\"",
-        "associatedPullRequest?.base?.sha !== currentPr.base.sha",
-        ".filter((run) => activeStatuses.has(run.status))",
-        "latestPr.base.ref === eventBaseRef",
-        "associatedPullRequest?.base?.sha !== latestPr.base.sha",
-        "github.rest.actions.listWorkflowRuns",
-        "github.rest.pulls.get",
-        "inspectionDeadline = Date.now() + 45_000",
-        "setTimeout(resolve, 5_000)",
-        "run.head_sha !== currentPr.head.sha || predatesBaseRetarget",
-        "run.head_sha === latestPr.head.sha &&",
-        "Could not recheck PR state before cancelling",
-        "retrying within the registration window",
-        "run.pull_requests.find",
-        "github.rest.actions.cancelWorkflowRun",
-        "github.rest.actions.getWorkflowRun",
-        "latestRun.status === \"completed\"",
-        "\"PR\"",
-        "\"Rust ecosystem checks\"",
-        "\"Web research\"",
-    ] {
-        assert!(
-            replacement_head.contains(required),
-            "replacement-head cancellation contract missing: {required}"
-        );
-    }
-    let cancellation_job = replacement_head
-        .split_once("\n  obsolete-heads:\n")
-        .map(|(_, job)| job)
-        .context("replacement-head workflow must keep the cancellation job")?;
-    assert!(
-        !cancellation_job.contains("concurrency:"),
-        "obsolete-run cancellation must not share the serialized marker group"
-    );
-    assert!(
-        !replacement_head.contains("actions/checkout"),
-        "privileged replacement-head cancellation must never checkout PR code"
-    );
     Ok(())
 }
 
@@ -265,6 +219,17 @@ fn remote_task_batches_are_validated_and_keep_requested_order() -> Result<()> {
     assert_eq!(
         String::from_utf8(commands.stdout)?,
         "task preflight\ntask ci:pr:rust\n"
+    );
+    let loom_batch = remote_batch_command(&["--validate", "loom:verify,preflight"])?;
+    assert!(
+        loom_batch.status.success(),
+        "Loom verification must remain batchable on the general ARC runner"
+    );
+    let loom_command = remote_batch_command(&["--commands", "loom:verify"])?;
+    assert!(loom_command.status.success());
+    assert_eq!(
+        String::from_utf8(loom_command.stdout)?,
+        "task loom:verify\n"
     );
     let mixed_runtime = remote_batch_command(&["--validate", "arc:runtime,preflight"])?;
     assert!(
@@ -469,7 +434,7 @@ fn remote_task_batch_rechecks_buildkit_after_both_timeout_statuses_and_continues
 fn expensive_remote_validation_requires_the_current_base() -> Result<()> {
     let remote_tasks = read(".task/remote-execution.yml");
     assert!(remote_tasks.contains("remote-task-batch.sh --requires-current-base"));
-    for tasks in ["web:e2e", "extension:e2e", "ci:pr"] {
+    for tasks in ["loom:verify", "web:e2e", "extension:e2e", "ci:pr"] {
         assert!(
             remote_batch_command(&["--requires-current-base", tasks])?
                 .status
@@ -526,6 +491,12 @@ fn arc_workflow_matches_the_taskfile_catalog() -> Result<()> {
         "remote tasks must select the general, Hive, or container ARC scale set"
     );
     assert!(
+        workflow.contains(
+            "nook-k0s:preflight|nook-k0s:rust:ci|nook-k0s:loom:verify|nook-k0s:arc:runtime"
+        ),
+        "explicit general ARC routing must accept every compatible direct-runner task"
+    );
+    assert!(
         !workflow.contains("Start hosted Hive Neo4j service")
             && !workflow.contains("docker run --detach"),
         "ARC remote tasks must use the Hive scale set sidecar instead of a nested daemon"
@@ -572,10 +543,50 @@ fn arc_workflow_matches_the_taskfile_catalog() -> Result<()> {
     assert!(
         workflow.contains("group: remote-${{ github.ref }}-${{ inputs.tasks || inputs.task }}")
     );
-    assert!(workflow.contains("remote-task-batch.sh --run \"$REQUESTED_REMOTE_TASKS\""));
+    let task_setup_position = workflow
+        .find("name: Install Task for Loom-only verification")
+        .context("Loom-only remote execution must install Task")?;
+    let rust_setup_position = workflow
+        .find("name: Install Rust for Loom verification")
+        .context("Loom remote execution must install Rust")?;
+    let bun_setup_position = workflow
+        .find("name: Install Bun for Loom verification")
+        .context("Loom remote execution must install Bun")?;
+    let tool_proof_position = workflow
+        .find("name: Verify Loom command tools")
+        .context("Loom remote execution must prove both command tools")?;
+    let batch_position = workflow
+        .find("remote-task-batch.sh --run \"$REQUESTED_REMOTE_TASKS\"")
+        .context("remote execution must run the allowlisted batch")?;
+    assert!(task_setup_position < rust_setup_position);
+    assert!(rust_setup_position < bun_setup_position);
+    assert!(bun_setup_position < tool_proof_position);
+    assert!(tool_proof_position < batch_position);
+    for required in [
+        "(inputs.tasks || inputs.task) == 'loom:verify'",
+        "uses: go-task/setup-task@v2",
+        "version: 3.52.0",
+        "uses: dtolnay/rust-toolchain@stable",
+        "components: rustfmt",
+        "uses: oven-sh/setup-bun@v2",
+        "bun-version: 1.3.14",
+        "command -v task",
+        "command -v bun",
+        "command -v cargo",
+    ] {
+        assert!(
+            workflow.contains(required),
+            "Loom remote tool bootstrap missing: {required}"
+        );
+    }
+    assert!(workflow.contains("(inputs.tasks || inputs.task) != 'loom:verify'"));
     assert!(batch_script.contains(
         "rust:ci) run_with_timeout \"$timeout_minutes\" env CI_ARTIFACT_DIR=\"$artifact_root/rust-ci\" task ci:pr:rust"
     ));
+    assert!(
+        batch_script
+            .contains("loom:verify) run_with_timeout \"$timeout_minutes\" task loom:verify")
+    );
     assert!(batch_script.contains("docker buildx use \"$builder\""));
     assert!(batch_script.contains("if ! restore_hosted_builder; then"));
     let docker_setup = read(".github/actions/nook-docker-setup/action.yml");
@@ -895,6 +906,7 @@ fn complete_pr_validation_is_explicit_and_exact_head_bound() -> Result<()> {
         "--remove-label \"$validation_label\"",
         "--add-label \"$validation_label\"",
         "task remote TASK_NAME=rust:ci",
+        "task remote TASK_NAME=loom:verify",
         "task pr:validate PR=<number>",
         "becomes stale after any later push",
     ] {

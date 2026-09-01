@@ -1,6 +1,6 @@
 import type { Octokit } from "@octokit/rest";
 
-import type { RepoRef } from "./github.js";
+import type { PullRequestRevision, RepoRef } from "./github.js";
 
 const CODEX_REVIEWER_LOGIN = "chatgpt-codex-connector[bot]";
 const CURSOR_REVIEWER_LOGIN = "cursor[bot]";
@@ -59,6 +59,24 @@ export type ReviewAvailabilityProbe = {
 export type ExactHeadReviewAvailability = {
   clock: ReviewClock;
   probe: ReviewAvailabilityProbe;
+};
+
+export enum ExactHeadReviewRevisionState {
+  Bound = "bound",
+  Unbound = "unbound",
+}
+
+export type ExactHeadReviewRevision =
+  | {
+      revision: PullRequestRevision;
+      state: ExactHeadReviewRevisionState.Bound;
+    }
+  | { state: ExactHeadReviewRevisionState.Unbound };
+
+export type ExactHeadReviewOptions = {
+  availability?: ExactHeadReviewAvailability;
+  revision?: ExactHeadReviewRevision;
+  signal?: AbortSignal;
 };
 
 export type ExactHeadReviewRequestResult = {
@@ -151,16 +169,27 @@ export async function requestExactHeadReview(
   octokit: Octokit,
   repoRef: RepoRef,
   prNumber: number,
-  availability?: ExactHeadReviewAvailability,
+  options: ExactHeadReviewOptions = {},
 ): Promise<ExactHeadReviewRequestResult> {
   const { owner, repo } = repoRef;
+  const availability = options.availability;
+  const signal = options.signal;
+  const expectedRevision = options.revision ?? {
+    state: ExactHeadReviewRevisionState.Unbound,
+  };
   const { data: pr } = await octokit.rest.pulls.get({
     owner,
     repo,
     pull_number: prNumber,
+    ...(signal ? { request: { signal } } : {}),
   });
   const headSha = pr.head.sha;
   const baseSha = pr.base.sha;
+  assertExpectedRevision(expectedRevision, {
+    baseRef: pr.base.ref,
+    baseSha,
+    headSha,
+  });
   const snapshot = await loadReviewSnapshot({
     baseSha,
     headSha,
@@ -168,7 +197,21 @@ export async function requestExactHeadReview(
     owner,
     prNumber,
     repo,
+    signal,
   });
+  if (expectedRevision.state === ExactHeadReviewRevisionState.Bound) {
+    const { data: currentPr } = await octokit.rest.pulls.get({
+      owner,
+      repo,
+      pull_number: prNumber,
+      ...(signal ? { request: { signal } } : {}),
+    });
+    assertExpectedRevision(expectedRevision, {
+      baseRef: currentPr.base.ref,
+      baseSha: currentPr.base.sha,
+      headSha: currentPr.head.sha,
+    });
+  }
   if (snapshot.codex.settled) {
     return {
       fallback: ExactHeadReviewFallback.None,
@@ -203,6 +246,7 @@ export async function requestExactHeadReview(
     repo,
     issue_number: prNumber,
     body: `@codex review\n\n${codexMarker}`,
+    ...(signal ? { request: { signal } } : {}),
   });
   if (!availability || availability.probe.timeoutMs <= 0) {
     return {
@@ -222,6 +266,7 @@ export async function requestExactHeadReview(
     owner,
     prNumber,
     repo,
+    signal,
   });
   if (probed.kind === CodexProbeKind.UsageLimited) {
     return {
@@ -239,6 +284,23 @@ export async function requestExactHeadReview(
     requested: true,
     settled: probed.kind === CodexProbeKind.Settled,
   };
+}
+
+function assertExpectedRevision(
+  expected: ExactHeadReviewRevision,
+  actual: PullRequestRevision,
+): void {
+  if (
+    expected.state === ExactHeadReviewRevisionState.Unbound ||
+    (expected.revision.baseRef === actual.baseRef &&
+      expected.revision.baseSha === actual.baseSha &&
+      expected.revision.headSha === actual.headSha)
+  ) {
+    return;
+  }
+  throw new Error(
+    `Pull request revision changed from ${expected.revision.headSha}/${expected.revision.baseSha}/${expected.revision.baseRef} to ${actual.headSha}/${actual.baseSha}/${actual.baseRef}; no review was requested`,
+  );
 }
 
 export function isCodexReviewer(actor: unknown): boolean {
@@ -391,6 +453,7 @@ async function loadReviewSnapshot(input: {
   owner: string;
   prNumber: number;
   repo: string;
+  signal?: AbortSignal;
 }): Promise<ReviewSnapshot> {
   const [comments, reviews] = await Promise.all([
     listIssueComments(input),
@@ -408,6 +471,7 @@ async function snapshotFrom(
     octokit: Octokit;
     owner: string;
     repo: string;
+    signal?: AbortSignal;
   },
 ): Promise<ReviewSnapshot> {
   const codexMarker = codexReviewRequestMarker(headSha, baseSha);
@@ -480,6 +544,9 @@ async function snapshotFrom(
                   repo: reactionSource.repo,
                   comment_id: request.id,
                   per_page: 100,
+                  ...(reactionSource.signal
+                    ? { request: { signal: reactionSource.signal } }
+                    : {}),
                 },
               ),
             ),
@@ -521,6 +588,7 @@ async function probeCodexAvailability(input: {
   owner: string;
   prNumber: number;
   repo: string;
+  signal?: AbortSignal;
 }): Promise<CodexProbeResult> {
   const deadline = Date.now() + input.availability.probe.timeoutMs;
   while (Date.now() < deadline) {
@@ -594,6 +662,7 @@ async function listIssueComments(input: {
   owner: string;
   prNumber: number;
   repo: string;
+  signal?: AbortSignal;
 }): Promise<IssueComment[]> {
   const comments = await input.octokit.paginate(
     input.octokit.rest.issues.listComments,
@@ -602,6 +671,7 @@ async function listIssueComments(input: {
       repo: input.repo,
       issue_number: input.prNumber,
       per_page: 100,
+      ...(input.signal ? { request: { signal: input.signal } } : {}),
     },
   );
   return comments.map((comment) => ({
@@ -618,6 +688,7 @@ async function listPullReviews(input: {
   owner: string;
   prNumber: number;
   repo: string;
+  signal?: AbortSignal;
 }): Promise<PullReview[]> {
   const reviews = await input.octokit.paginate(
     input.octokit.rest.pulls.listReviews,
@@ -626,6 +697,7 @@ async function listPullReviews(input: {
       repo: input.repo,
       pull_number: input.prNumber,
       per_page: 100,
+      ...(input.signal ? { request: { signal: input.signal } } : {}),
     },
   );
   return reviews.map((review) => ({

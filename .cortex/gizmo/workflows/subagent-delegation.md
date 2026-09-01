@@ -161,6 +161,30 @@ acceptance owner whose approval is required before Gizmo integration. A
 semantic role or expert selects bounded knowledge. None of these fields can
 replace another.
 
+### Active-harness activity-line context
+
+Gizmo owns the activity-line PR context for each live attempt. The active
+harness carries it for communication only. It is not part of the declared or
+frozen subagent task contract.
+
+- The context carries `(<number>)` with the exact positive pull-request number,
+  `(pending)`, or `(none)` for inclusion on every user-visible activity line.
+- The harness derives the worker actor token from its immutable team identity:
+  `AI`, `DEV-CORE`, `SECURITY`, `SRE`, or `WEB-DEV`.
+- `GIZMO` identifies only Gizmo Prime, and `SKILL` identifies only an actively
+  executing skill. Neither token is a worker team identity.
+- Gizmo supplies the context through the active harness before the worker's
+  first user-visible activity.
+- When Gizmo creates the pull request, it refreshes the context before the
+  worker's next user-visible activity.
+- Gizmo performs the same refresh after moving the work to another stacked
+  pull request.
+- The worker uses the refreshed PR token on its next activity line.
+- The worker must not infer pull-request identity from a branch or workspace.
+- The context does not alter the generation, task identity, scope, retry
+  contract, claims, provider edges, evidence, or frontier.
+- The context grants no GitHub or delivery authority.
+
 ### Attempts and results
 
 Create one disposable worker attempt only when that exact task attempt is
@@ -175,16 +199,26 @@ attempt. Worker claims are not subleased.
 
 #### Retry sequencing
 
-A normal retry is a new attempt of the same logical task under the exact same
-frozen task contract, acceptance evidence, generation, and starting-frontier
-rule. It receives fresh isolated attempt state. Changing the task contract,
-resource claims, provider edges, or acceptance evidence is not a retry; it is a
-plan mutation that requires a new immutable generation.
+Retry sequencing follows these rules:
 
-A retry may be admitted only after the preceding attempt is terminal,
-conclusively dispositioned, and no longer active. The logical task may therefore
-have sequential attempts, each with a unique attempt ID, but never concurrent
-attempts.
+- Before execution, the typed immutable generation plan declares `maxAttempts`
+  as a positive finite integer.
+- `maxAttempts` may not change after execution begins.
+- Exhaustion behavior is canonical and hard-coded. It blocks the task and its
+  dependent scope.
+- A worker attempt consumes one attempt from the bound when it starts.
+- A normal retry keeps the exact frozen task contract, acceptance evidence,
+  generation, and starting-frontier rule.
+- A normal retry receives fresh isolated attempt state.
+- A task-contract, resource-claim, provider-edge, or acceptance-evidence change
+  requires a new immutable generation. It is not a retry.
+- A retry may be admitted only after the preceding attempt is terminal,
+  conclusively dispositioned, and no longer active.
+- Sequential attempts use unique attempt IDs. They must never be concurrent.
+- A retry may proceed only when the logical task has an unused attempt.
+- Exhaustion without accepted completion applies the hard-coded blocked state.
+- Failure to create, dispatch, or start an authorized attempt follows the root
+  immediate-blocker rule. It does not enter retry sequencing.
 
 - The worker returns a bounded result to Gizmo under its frozen parent-lineage
   metadata.
@@ -714,6 +748,13 @@ Before integration, verify:
 
 - every worker used its declared exact baseline;
 - every team worker used its declared team identity;
+- every worker's activity-line context carried the current pull-request
+  identity before its first user-visible activity;
+- every worker activity used the compact actor token mapped from its declared
+  team identity, without a personal name;
+- every pull-request creation or stacked-pull-request transition refreshed the
+  context through the active harness before that worker's next user-visible
+  activity;
 - every worker-executable team or provider task recorded an explicit functional
   owner separately from team identity;
 - every expertise result received semantic acceptance from its recorded
@@ -726,6 +767,12 @@ Before integration, verify:
 - every authorized `(task ID, attempt ID)` had exactly one harness-visible
   worker attempt, every logical task had at most one concurrently active
   attempt, and sequential retries used distinct attempt IDs;
+- every typed immutable generation plan froze a positive finite `maxAttempts`
+  before execution;
+- every started attempt consumed exactly one slot and no task exceeded its
+  frozen attempt bound;
+- every exhausted task without accepted completion entered the hard-coded
+  blocked state;
 - every worker task record declares read and write resource claims;
 - every repository-reading read-only task declares a non-empty repository
   evidence surface covered by its read claims;

@@ -59,13 +59,12 @@ tasks:
       - .github/scripts/remote-task-batch.sh --list
 
   pr:validate:
-    desc: Stabilize exact-head Cloud review before triggering required PR validation (PR=<number>, FULL_E2E=1 for a Main-fix browser gate, REVIEW_WAIT_SECONDS defaults to 600, REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED=1 after comprehensive stabilization).
+    desc: Trigger required PR validation immediately and request concurrent exact-head Codex review (PR=<number>, FULL_E2E=1 for a Main-fix browser gate, REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED=1 after comprehensive stabilization).
     requires:
       vars: [PR]
     env:
       REQUESTED_PR: '{{.PR}}'
       REQUEST_FULL_E2E: '{{default "0" .FULL_E2E}}'
-      REQUEST_REVIEW_WAIT_SECONDS: '{{default "600" .REVIEW_WAIT_SECONDS}}'
       REQUEST_REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED: '{{default "0" .REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED}}'
     preconditions:
       - sh: command -v gh >/dev/null 2>&1
@@ -86,6 +85,10 @@ tasks:
           echo "FULL_E2E must be 0 or 1." >&2
           exit 2
         fi
+        if [ "$REQUEST_REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED" != "0" ] && [ "$REQUEST_REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED" != "1" ]; then
+          echo "REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED must be 0 or 1." >&2
+          exit 2
+        fi
 
         local_sha="$(git rev-parse HEAD)"
         pr_state="$(gh pr view "$REQUESTED_PR" --json headRefOid,baseRefName --jq '.headRefOid + "|" + .baseRefName')"
@@ -104,20 +107,6 @@ tasks:
 
         .github/scripts/require-current-base.sh origin "$base_ref"
 
-        task pr:review:stabilize \
-          PR="$REQUESTED_PR" \
-          REVIEW_WAIT_SECONDS="$REQUEST_REVIEW_WAIT_SECONDS" \
-          REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED="$REQUEST_REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED"
-
-        stabilized_pr_state="$(gh pr view "$REQUESTED_PR" --json headRefOid,baseRefName --jq '.headRefOid + "|" + .baseRefName')"
-        stabilized_pr_sha="${stabilized_pr_state%%|*}"
-        stabilized_base_ref="${stabilized_pr_state#*|}"
-        if [ "$local_sha" != "$stabilized_pr_sha" ] || [ "$base_ref" != "$stabilized_base_ref" ]; then
-          echo "PR #$REQUESTED_PR changed head or base during review stabilization; validate the replacement state explicitly." >&2
-          exit 2
-        fi
-        .github/scripts/require-current-base.sh origin "$stabilized_base_ref"
-
         validation_label="ci:validate"
         stale_validation_label="ci:full-e2e"
         if [ "$REQUEST_FULL_E2E" = "1" ]; then
@@ -133,10 +122,27 @@ tasks:
           gh pr edit "$REQUESTED_PR" --remove-label "$validation_label"
         fi
         gh pr edit "$REQUESTED_PR" --add-label "$validation_label"
+        review_request_state="not-requested"
+        review_request_output=""
+        if review_request_output="$(task pr:review \
+          PR="$REQUESTED_PR" \
+          REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED="$REQUEST_REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED")"; then
+          printf '%s\n' "$review_request_output"
+          if printf '%s\n' "$review_request_output" | grep -Fq '"state": "requested"'; then
+            review_request_state="requested"
+          fi
+        else
+          printf '%s\n' "$review_request_output"
+          echo "::warning::Hosted validation is active, but the exact-head review request did not complete. Keep this validation running; collect or retry review separately without restarting validation." >&2
+        fi
         dispatched_pr_state="$(gh pr view "$REQUESTED_PR" --json headRefOid,baseRefName --jq '.headRefOid + "|" + .baseRefName')"
         dispatched_pr_sha="${dispatched_pr_state%%|*}"
         dispatched_base_ref="${dispatched_pr_state#*|}"
-        if [ "$local_sha" != "$dispatched_pr_sha" ] || [ "$base_ref" != "$dispatched_base_ref" ]; then
+        dispatched_base_current="1"
+        if ! .github/scripts/require-current-base.sh origin "$dispatched_base_ref"; then
+          dispatched_base_current="0"
+        fi
+        if [ "$local_sha" != "$dispatched_pr_sha" ] || [ "$base_ref" != "$dispatched_base_ref" ] || [ "$dispatched_base_current" != "1" ]; then
           gh pr edit "$REQUESTED_PR" --remove-label "$validation_label"
           repository="$(gh repo view --json nameWithOwner --jq .nameWithOwner)"
           cancel_attempt=0
@@ -177,4 +183,4 @@ tasks:
           echo "PR #$REQUESTED_PR changed head or base while validation was dispatched; removed $validation_label from the replacement state." >&2
           exit 2
         fi
-        echo "Triggered PR validation for $pr_sha with label $validation_label."
+        echo "Triggered PR validation for $pr_sha with label $validation_label. Exact-head review request state: $review_request_state."

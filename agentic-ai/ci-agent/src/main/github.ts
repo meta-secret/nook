@@ -31,10 +31,10 @@ const log = createLogger("github");
 
 export type RepoRef = { owner: string; repo: string };
 
-type HeadTransitionBackfillInput = {
-  octokit: Octokit;
-  prNumber: number;
-  repoRef: RepoRef;
+export type PullRequestRevision = {
+  baseRef: string;
+  baseSha: string;
+  headSha: string;
 };
 
 export enum OpenPrLookupKind {
@@ -70,26 +70,45 @@ export function createOctokit(): Octokit {
   return new Octokit({ auth: resolveGitHubToken() });
 }
 
-export async function requestHeadTransitionBackfill(
-  input: HeadTransitionBackfillInput,
-): Promise<void> {
-  const { owner, repo } = input.repoRef;
-  const { data: pr } = await input.octokit.rest.pulls.get({
+export async function readPullRequestRevision(
+  octokit: Octokit,
+  repoRef: RepoRef,
+  prNumber: number,
+  signal?: AbortSignal,
+): Promise<PullRequestRevision> {
+  const { owner, repo } = repoRef;
+  const { data: pr } = await octokit.rest.pulls.get({
     owner,
     repo,
-    pull_number: input.prNumber,
+    pull_number: prNumber,
+    ...(signal ? { request: { signal } } : {}),
   });
-  await input.octokit.rest.actions.createWorkflowDispatch({
-    owner,
-    repo,
-    workflow_id: "pr-head-stabilization.yml",
-    ref: pr.base.ref,
-    inputs: {
-      base_sha: pr.base.sha,
-      head_sha: pr.head.sha,
-      pr_number: String(input.prNumber),
-    },
-  });
+  return {
+    baseRef: pr.base.ref,
+    baseSha: pr.base.sha,
+    headSha: pr.head.sha,
+  };
+}
+
+export function samePullRequestRevision(
+  left: PullRequestRevision,
+  right: PullRequestRevision,
+): boolean {
+  return (
+    left.baseRef === right.baseRef &&
+    left.baseSha === right.baseSha &&
+    left.headSha === right.headSha
+  );
+}
+
+export function assertPullRequestRevision(
+  expected: PullRequestRevision,
+  actual: PullRequestRevision,
+): void {
+  if (samePullRequestRevision(expected, actual)) return;
+  throw new Error(
+    `Pull request revision changed from ${expected.headSha}/${expected.baseSha}/${expected.baseRef} to ${actual.headSha}/${actual.baseSha}/${actual.baseRef}; no review was requested`,
+  );
 }
 
 export async function findOpenPr(
@@ -268,6 +287,21 @@ type ReviewThreadPage = {
 type ReviewThreads =
   ReviewThreadPage["repository"]["pullRequest"]["reviewThreads"];
 
+type IssueCommentStatePage = {
+  repository: {
+    pullRequest: {
+      comments: {
+        nodes: Array<{
+          databaseId: unknown;
+          isMinimized: boolean;
+          minimizedReason: unknown;
+        }>;
+        pageInfo: { hasNextPage: boolean; endCursor?: string };
+      };
+    };
+  };
+};
+
 const REVIEW_THREADS_QUERY = `
   query($owner: String!, $repo: String!, $number: Int!, $cursor: String) {
     repository(owner: $owner, name: $repo) {
@@ -276,6 +310,19 @@ const REVIEW_THREADS_QUERY = `
           nodes {
             isResolved
           }
+          pageInfo { hasNextPage endCursor }
+        }
+      }
+    }
+  }
+`;
+
+const ISSUE_COMMENT_STATES_QUERY = `
+  query($owner: String!, $repo: String!, $number: Int!, $cursor: String) {
+    repository(owner: $owner, name: $repo) {
+      pullRequest(number: $number) {
+        comments(first: 100, after: $cursor) {
+          nodes { databaseId isMinimized minimizedReason }
           pageInfo { hasNextPage endCursor }
         }
       }
@@ -296,12 +343,17 @@ export type PrFeedbackSummary = {
     requested: boolean;
     settled: boolean;
   };
-  currentIterationComments: number;
   findingBatches: number;
-  headTransitionObserved: boolean;
   substantiveComments: number;
   substantiveReviews: number;
+  unhandledComments: number;
+  unthreadedReviewFindings: number;
   unresolvedThreads: number;
+};
+
+export type InspectPrFeedbackOptions = {
+  expectedRevision?: PullRequestRevision;
+  signal?: AbortSignal;
 };
 
 type RepositoryStatusCommentInput = {
@@ -312,82 +364,70 @@ type RepositoryStatusCommentInput = {
   user: unknown;
 };
 
-enum HeadTransitionState {
-  Observed = "observed",
-  Pending = "pending",
-}
-
-type HeadTransitionBoundary =
-  | { at: string; state: HeadTransitionState.Observed }
-  | { state: HeadTransitionState.Pending };
-
-type HeadTransitionComment = {
-  readonly body: string;
-  readonly user: unknown;
-};
-
-type CurrentHeadTransitionInput = {
-  baseRef: string;
-  comments: readonly HeadTransitionComment[];
-  headSha: string;
-};
-
-function findCurrentHeadTransition(
-  input: CurrentHeadTransitionInput,
-): HeadTransitionBoundary {
-  const markerPrefix = headTransitionMarkerPrefix(input.headSha, input.baseRef);
-  const transitionTimes = input.comments
-    .filter((comment) => isGitHubActionsBot(comment.user))
-    .map((comment) => transitionTimeFromMarker(comment.body, markerPrefix))
-    .filter((transitionTime) => transitionTime.length > 0)
-    .sort();
-  const transitionTime = transitionTimes.at(-1);
-  return transitionTime
-    ? { at: transitionTime, state: HeadTransitionState.Observed }
-    : { state: HeadTransitionState.Pending };
-}
-
 export async function inspectPrFeedback(
   octokit: Octokit,
   repoRef: RepoRef,
   prNumber: number,
+  options: InspectPrFeedbackOptions = {},
 ): Promise<PrFeedbackSummary> {
   const { owner, repo } = repoRef;
+  const { expectedRevision, signal } = options;
   const { data: pr } = await octokit.rest.pulls.get({
     owner,
     repo,
     pull_number: prNumber,
+    ...(signal ? { request: { signal } } : {}),
   });
+  if (expectedRevision) {
+    assertPullRequestRevision(expectedRevision, {
+      baseRef: pr.base.ref,
+      baseSha: pr.base.sha,
+      headSha: pr.head.sha,
+    });
+  }
   const [issueComments, reviews, reviewComments] = await Promise.all([
     octokit.paginate(octokit.rest.issues.listComments, {
       owner,
       repo,
       issue_number: prNumber,
       per_page: 100,
+      ...(signal ? { request: { signal } } : {}),
     }),
     octokit.paginate(octokit.rest.pulls.listReviews, {
       owner,
       repo,
       pull_number: prNumber,
       per_page: 100,
+      ...(signal ? { request: { signal } } : {}),
     }),
     octokit.paginate(octokit.rest.pulls.listReviewComments, {
       owner,
       repo,
       pull_number: prNumber,
       per_page: 100,
+      ...(signal ? { request: { signal } } : {}),
     }),
   ]);
-  const transitionInput: CurrentHeadTransitionInput = {
-    baseRef: pr.base.ref,
-    comments: issueComments.map((comment) => ({
+  const retiredAutomationComments = issueComments.filter((comment) =>
+    isRetiredHeadTransitionAutomationComment({
       body: comment.body ?? "",
       user: comment.user,
-    })),
-    headSha: pr.head.sha,
-  };
-  const currentHeadTransition = findCurrentHeadTransition(transitionInput);
-
+    }),
+  );
+  await Promise.all(
+    retiredAutomationComments.map((comment) =>
+      octokit.rest.issues.deleteComment({
+        owner,
+        repo,
+        comment_id: comment.id,
+        ...(signal ? { request: { signal } } : {}),
+      }),
+    ),
+  );
+  const activeIssueComments = issueComments.filter(
+    (comment) =>
+      !retiredAutomationComments.some((retired) => retired.id === comment.id),
+  );
   let unresolvedThreads = 0;
   enum PaginationKind {
     FirstPage = "first-page",
@@ -406,6 +446,7 @@ export async function inspectPrFeedback(
         owner,
         repo,
         number: prNumber,
+        ...(signal ? { request: { signal } } : {}),
         ...(pagination.kind === PaginationKind.NextPage
           ? { cursor: pagination.cursor }
           : {}),
@@ -421,9 +462,41 @@ export async function inspectPrFeedback(
         : { kind: PaginationKind.Complete };
   }
 
+  const handledIssueCommentIds = new Set<number>();
+  pagination = { kind: PaginationKind.FirstPage };
+  while (pagination.kind !== PaginationKind.Complete) {
+    const page: IssueCommentStatePage =
+      await octokit.graphql<IssueCommentStatePage>(
+        ISSUE_COMMENT_STATES_QUERY,
+        {
+          owner,
+          repo,
+          number: prNumber,
+          ...(signal ? { request: { signal } } : {}),
+          ...(pagination.kind === PaginationKind.NextPage
+            ? { cursor: pagination.cursor }
+            : {}),
+        },
+      );
+    const comments = page.repository.pullRequest.comments;
+    for (const comment of comments.nodes) {
+      if (
+        comment.isMinimized &&
+        comment.minimizedReason === "resolved" &&
+        typeof comment.databaseId === "number"
+      ) {
+        handledIssueCommentIds.add(comment.databaseId);
+      }
+    }
+    pagination =
+      comments.pageInfo.hasNextPage && comments.pageInfo.endCursor
+        ? { kind: PaginationKind.NextPage, cursor: comments.pageInfo.endCursor }
+        : { kind: PaginationKind.Complete };
+  }
+
   const marker = codexReviewRequestMarker(pr.head.sha, pr.base.sha);
   const cursorMarker = cursorReviewRequestMarker(pr.head.sha);
-  const reviewRequests = issueComments.filter((comment) =>
+  const reviewRequests = activeIssueComments.filter((comment) =>
     isTrustedExactHeadReviewRequest({
       authorAssociation: comment.author_association,
       body: comment.body ?? "",
@@ -431,17 +504,13 @@ export async function inspectPrFeedback(
       user: comment.user,
     }),
   );
-  const cursorReviewRequests = issueComments.filter((comment) =>
+  const cursorReviewRequests = activeIssueComments.filter((comment) =>
     comment.body?.includes(cursorMarker),
   );
   const currentHeadReview = reviews.some(
     (review) =>
       review.commit_id === pr.head.sha &&
       isSubmittedReviewState(review.state) &&
-      evidenceFollowsTransition(
-        review.submitted_at ?? "",
-        currentHeadTransition,
-      ) &&
       isCodexReviewer(review.user),
   );
   const currentHeadCursorReview = reviews.some(
@@ -458,6 +527,7 @@ export async function inspectPrFeedback(
           repo,
           comment_id: request.id,
           per_page: 100,
+          ...(signal ? { request: { signal } } : {}),
         }),
       ),
     )
@@ -465,16 +535,12 @@ export async function inspectPrFeedback(
   const approvalReaction = requestReactions.some(
     (reaction) => reaction.content === "+1" && isCodexReviewer(reaction.user),
   );
-  const cleanComment = issueComments.some(
+  const cleanComment = activeIssueComments.some(
     (comment) =>
-      evidenceFollowsTransition(
-        comment.created_at ?? "",
-        currentHeadTransition,
-      ) &&
       isCleanCodexReviewComment(comment.body ?? "", comment.user, pr.head.sha),
   );
 
-  const substantiveComments = issueComments.filter(
+  const substantiveComments = activeIssueComments.filter(
     (comment) =>
       !isRepositoryStatusComment({
         authorAssociation: comment.author_association,
@@ -482,19 +548,15 @@ export async function inspectPrFeedback(
         cursorMarker,
         marker,
         user: comment.user,
-      }) && !isCodexCleanReviewStatusComment(comment.body ?? "", comment.user),
+      }) &&
+      !isCodexCleanReviewStatusComment(comment.body ?? "", comment.user) &&
+      !isNonActionableReviewBody(comment.body ?? ""),
   );
-  const currentIterationComments =
-    currentHeadTransition.state === HeadTransitionState.Observed
-      ? substantiveComments.filter(
-          (comment) =>
-            comment.created_at >= currentHeadTransition.at &&
-            !isNonActionableReviewBody(comment.body ?? ""),
-        )
-      : [];
+  const unhandledComments = substantiveComments.filter(
+    (comment) => !handledIssueCommentIds.has(comment.id),
+  );
   const substantiveReviews = reviews.filter((review) => {
     if (
-      review.commit_id !== pr.head.sha ||
       !isSubmittedReviewState(review.state) ||
       review.state === "APPROVED"
     ) {
@@ -511,6 +573,14 @@ export async function inspectPrFeedback(
       !isNonActionableReviewBody(body)
     );
   });
+  const reviewIdsWithInlineComments = new Set(
+    reviewComments
+      .map((comment) => comment.pull_request_review_id)
+      .filter((reviewId): reviewId is number => typeof reviewId === "number"),
+  );
+  const unthreadedReviewFindings = substantiveReviews.filter(
+    (review) => !reviewIdsWithInlineComments.has(review.id),
+  );
 
   const normalizedReviewComments: ReviewFindingComment[] = reviewComments.map(
     (comment) => {
@@ -553,12 +623,11 @@ export async function inspectPrFeedback(
       requested: cursorReviewRequests.length > 0,
       settled: currentHeadCursorReview,
     },
-    currentIterationComments: currentIterationComments.length,
     findingBatches: countAutomatedFindingBatches(findingBatchRequest),
-    headTransitionObserved:
-      currentHeadTransition.state === HeadTransitionState.Observed,
     substantiveComments: substantiveComments.length,
     substantiveReviews: substantiveReviews.length,
+    unhandledComments: unhandledComments.length,
+    unthreadedReviewFindings: unthreadedReviewFindings.length,
     unresolvedThreads,
   };
 }
@@ -644,8 +713,7 @@ export function isRepositoryStatusComment(
       (trimmed.startsWith("### Preview deployed") ||
         trimmed.startsWith("### Web research preview") ||
         trimmed.startsWith("<!-- nook-ui-demo -->") ||
-        trimmed.startsWith("<!-- nook-core-coverage -->") ||
-        trimmed.startsWith("<!-- nook-head-transition:"))) ||
+        trimmed.startsWith("<!-- nook-core-coverage -->"))) ||
     isTrustedCodexReviewRequestComment({
       authorAssociation: input.authorAssociation,
       body: input.body,
@@ -667,27 +735,6 @@ export function isRepositoryStatusComment(
   );
 }
 
-function headTransitionMarkerPrefix(headSha: string, baseRef: string): string {
-  return `<!-- nook-head-transition:${headSha}:${baseRef}:`;
-}
-
-function transitionTimeFromMarker(body: string, markerPrefix: string): string {
-  const markerLine = body.trimStart().split("\n", 1)[0] ?? "";
-  if (!markerLine.startsWith(markerPrefix) || !markerLine.endsWith(" -->")) {
-    return "";
-  }
-  const transitionTime = markerLine.slice(markerPrefix.length, -4);
-  return Number.isNaN(Date.parse(transitionTime)) ? "" : transitionTime;
-}
-
-function evidenceFollowsTransition(
-  evidenceAt: string,
-  transition: HeadTransitionBoundary,
-): boolean {
-  if (transition.state === HeadTransitionState.Pending) return false;
-  return evidenceAt.length === 0 || evidenceAt >= transition.at;
-}
-
 function isGitHubActionsBot(
   user: RepositoryStatusCommentInput["user"],
 ): boolean {
@@ -696,6 +743,18 @@ function isGitHubActionsBot(
     !!user &&
     "login" in user &&
     user.login === "github-actions[bot]"
+  );
+}
+
+function isRetiredHeadTransitionAutomationComment(input: {
+  readonly body: string;
+  readonly user: unknown;
+}): boolean {
+  return (
+    isGitHubActionsBot(input.user) &&
+    input.body
+      .trim()
+      .endsWith("\nExact-head delivery boundary (automated).")
   );
 }
 

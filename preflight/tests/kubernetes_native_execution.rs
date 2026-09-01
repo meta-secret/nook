@@ -17,6 +17,7 @@ const EXPECTED_REMOTE_CATALOG: &[&str] = &[
     "preflight",
     "arc:runtime",
     "rust:ci",
+    "loom:verify",
     "web:build",
     "web:e2e",
     "extension:e2e",
