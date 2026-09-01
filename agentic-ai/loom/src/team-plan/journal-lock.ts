@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { readFileSync, readdirSync, readlinkSync } from 'node:fs';
+import { readFileSync, readlinkSync } from 'node:fs';
 import { hostname } from 'node:os';
 
 import type { TeamPlanJournal } from './journal.ts';
@@ -25,32 +25,6 @@ type GitInvocation = Readonly<{
   args: TeamPlanGitArguments;
   input?: string;
 }>;
-
-export function teamPlanLinuxNamespaceLockRecoverable(request: {
-  readonly ownerIdentity: string;
-  readonly currentMachineIdentity: string;
-  readonly liveNamespaces: ReadonlySet<string>;
-}): boolean {
-  const current = /^([^:]+):([^:]+):(pid:\[[0-9]+\])$/u.exec(
-    request.currentMachineIdentity,
-  );
-  if (!current) return false;
-  const owner = /^([^:]+):([^:]+):(pid:\[[0-9]+\]):start-ticks:[0-9]+$/u.exec(
-    request.ownerIdentity,
-  );
-  const currentBoot = current[2];
-  const currentNamespace = current[3];
-  const sameHost = owner?.[1] === current[1];
-  const ownerBoot = owner?.[2];
-  const ownerNamespace = owner?.[3];
-  return Boolean(
-    (sameHost && ownerBoot !== currentBoot) ||
-    (ownerBoot === currentBoot &&
-      ownerNamespace &&
-      ownerNamespace !== currentNamespace &&
-      !request.liveNamespaces.has(ownerNamespace)),
-  );
-}
 
 export async function runWithTeamPlanJournalLock<T>(
   request: TeamPlanLockRequest<T>,
@@ -137,7 +111,6 @@ function updateRef(request: {
       encoding: 'utf8',
       env: {
         PATH: '/bin:/usr/bin:/usr/sbin',
-        GIT_NO_REPLACE_OBJECTS: '1',
         GIT_CONFIG_COUNT: '1',
         GIT_CONFIG_KEY_0: 'safe.directory',
         GIT_CONFIG_VALUE_0: repositoryRoot,
@@ -178,52 +151,9 @@ function decodeLockOwner(serialized: string): TeamPlanLockOwner {
 function staleTeamPlanLock(owner: TeamPlanLockOwner): boolean {
   const machineIdentity = processMachineIdentity();
   if (!machineIdentity) return false;
-  let ownerMachineIdentity = machineIdentity;
-  if (!owner.processIdentity.startsWith(`${ownerMachineIdentity}:`)) {
-    const currentLinux = /^([^:]+):([^:]+):(pid:\[[0-9]+\])$/u.exec(
-      machineIdentity,
-    );
-    const ownerLinux = /^([^:]+):([^:]+):(pid:\[[0-9]+\]):start-ticks:/u.exec(
-      owner.processIdentity,
-    );
-    if (
-      currentLinux &&
-      ownerLinux &&
-      currentLinux[2] === ownerLinux[2] &&
-      currentLinux[3] === ownerLinux[3]
-    ) {
-      ownerMachineIdentity = owner.processIdentity.slice(
-        0,
-        owner.processIdentity.lastIndexOf(':start-ticks:'),
-      );
-    } else {
-      const liveNamespaces = linuxLivePidNamespaces();
-      if (
-        liveNamespaces &&
-        teamPlanLinuxNamespaceLockRecoverable({
-          ownerIdentity: owner.processIdentity,
-          currentMachineIdentity: machineIdentity,
-          liveNamespaces,
-        })
-      )
-        return true;
-      return false;
-    }
-  }
+  if (!owner.processIdentity.startsWith(`${machineIdentity}:`)) return false;
   const currentIdentity = processStartIdentity(owner.pid);
-  const preciseOwner = ['start-ticks', 'process-start'].some((kind) =>
-    owner.processIdentity.startsWith(`${ownerMachineIdentity}:${kind}:`),
-  );
-  const preciseCurrent =
-    currentIdentity &&
-    ['start-ticks', 'process-start'].some((kind) =>
-      currentIdentity.startsWith(`${machineIdentity}:${kind}:`),
-    );
-  if (owner.version === 3 && preciseOwner && preciseCurrent)
-    return (
-      `${ownerMachineIdentity}:${currentIdentity.slice(machineIdentity.length + 1)}` !==
-      owner.processIdentity
-    );
+  if (currentIdentity) return currentIdentity !== owner.processIdentity;
   try {
     process.kill(owner.pid, 0);
     return false;
@@ -249,7 +179,6 @@ function gitText(invocation: GitInvocation): string {
     encoding: 'utf8',
     env: {
       PATH: '/bin:/usr/bin:/usr/sbin',
-      GIT_NO_REPLACE_OBJECTS: '1',
       GIT_CONFIG_COUNT: '1',
       GIT_CONFIG_KEY_0: 'safe.directory',
       GIT_CONFIG_VALUE_0: repositoryRoot,
@@ -307,28 +236,6 @@ function linuxProcessStartTicks(pid: number): string | false {
   return startTicks && /^[0-9]+$/u.test(startTicks) ? startTicks : false;
 }
 
-function linuxLivePidNamespaces(): ReadonlySet<string> | false {
-  if (process.platform !== 'linux') return false;
-  let processes: readonly string[];
-  try {
-    processes = readdirSync('/proc').filter((entry) => /^[0-9]+$/u.test(entry));
-  } catch {
-    return false;
-  }
-  const namespaces = new Set<string>();
-  for (const pid of processes) {
-    try {
-      const namespace = readlinkSync(`/proc/${pid}/ns/pid`);
-      if (!/^pid:\[[0-9]+\]$/u.test(namespace)) return false;
-      namespaces.add(namespace);
-    } catch (error) {
-      if (nodeErrorCode(error as NodeJS.ErrnoException) !== 'ENOENT')
-        return false;
-    }
-  }
-  return namespaces;
-}
-
 function processMachineIdentity(): string | false {
   let namespace = 'host';
   if (process.platform === 'linux') {
@@ -339,18 +246,5 @@ function processMachineIdentity(): string | false {
     }
     if (!/^pid:\[[0-9]+\]$/u.test(namespace)) return false;
   }
-  const boot = (
-    process.platform === 'darwin'
-      ? spawnSync('sysctl', ['-n', 'kern.boottime'], {
-          encoding: 'utf8',
-          env: { PATH: '/bin:/usr/bin:/usr/sbin' },
-          stdio: ['ignore', 'pipe', 'ignore'],
-        })
-      : spawnSync('cat', ['/proc/sys/kernel/random/boot_id'], {
-          encoding: 'utf8',
-          env: { PATH: '/bin:/usr/bin:/usr/sbin' },
-          stdio: ['ignore', 'pipe', 'ignore'],
-        })
-  ).stdout.trim();
-  return boot ? `${hostname()}:${boot}:${namespace}` : false;
+  return `${hostname()}:${namespace}`;
 }

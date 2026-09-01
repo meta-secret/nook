@@ -168,14 +168,9 @@ function ownerBlob(request: {
 }
 
 function testMachineIdentity(): string {
-  const boot =
-    process.platform === 'darwin'
-      ? spawnSync('sysctl', ['-n', 'kern.boottime'], { encoding: 'utf8' })
-          .stdout
-      : readFileSync('/proc/sys/kernel/random/boot_id', 'utf8');
   const namespace =
     process.platform === 'linux' ? readlinkSync('/proc/self/ns/pid') : 'host';
-  return `${hostname()}:${boot.trim()}:${namespace}`;
+  return `${hostname()}:${namespace}`;
 }
 
 function testProcessIdentity(pid: number): string {
@@ -289,26 +284,6 @@ describe('Team Plan journal', () => {
       }),
     ).rejects.toThrow('already in use');
     fixtureGit(fixture)(['update-ref', '-d', ref, foreign]);
-    if (process.platform === 'linux') {
-      const namespace = readlinkSync('/proc/self/ns/pid');
-      const terminated = ownerBlob({
-        fixture,
-        name: 'terminated-namespace-lock.json',
-        contents: owner({
-          version: 3,
-          pid: process.pid,
-          processIdentity: `${machineIdentity.slice(0, -namespace.length)}pid:[2147483647]:start-ticks:1`,
-          token: 'terminated-namespace',
-        }),
-      });
-      fixtureGit(fixture)(['update-ref', ref, terminated]);
-      expect(
-        await withTeamPlanJournalLock({
-          journalPath,
-          action: async () => 'recovered-namespace',
-        }),
-      ).toBe('recovered-namespace');
-    }
     const legacy = ownerBlob({
       fixture,
       name: 'legacy-lock.json',
