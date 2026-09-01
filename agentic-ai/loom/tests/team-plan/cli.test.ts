@@ -547,7 +547,7 @@ test('admits the complete permitted nested provider evidence ancestry', async ()
   const root = mkdtempSync(join(tmpdir(), 'team-plan-cli-ancestry-'));
   try {
     const acceptedRoot = nestedProviderEvidence({
-      depth: 120,
+      depth: 128,
       entriesPerIdentity: 8,
     });
     const acceptedProviderEvidence = [acceptedRoot];
