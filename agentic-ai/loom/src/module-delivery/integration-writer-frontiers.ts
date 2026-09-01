@@ -1,4 +1,4 @@
-import type { ModuleDeliveryIntegratedWriterFrontierCapability } from './admission.ts';
+import type { ModuleDeliveryIntegratedWriterFrontierCapability } from './integration.ts';
 import type { ModuleIntegrationState } from './integration-provenance.ts';
 
 const STATE_WRITER_FRONTIERS = new WeakMap<

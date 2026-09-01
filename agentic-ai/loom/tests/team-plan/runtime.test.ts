@@ -36,10 +36,8 @@ import {
   TeamPlanRecordKind,
   TeamPlanRunPhase,
   discardFinalizedTeamPlan,
-  finalizeTeamPlan,
   leaseTeamPlan,
   recordTeamPlan as recordTeamPlanRuntime,
-  restartTeamPlan,
   selectTeamPlan,
   startTeamPlan,
 } from '../../src/team-plan/index.ts';
@@ -54,6 +52,13 @@ import {
   worktreeFileWriter,
   worktreeGit,
 } from '../module-delivery/worktree-test-support.ts';
+import {
+  finalizeTeamPlan,
+  finalizeTeamPlanRuntime,
+  journalRunId,
+  restartTeamPlan,
+  restartTeamPlanRuntime,
+} from './runtime-test-commands.ts';
 
 import type {
   ModuleDeliveryAttemptLease,
@@ -257,10 +262,7 @@ function runRef(request: { readonly file: PlanFile }): string {
 }
 
 function runId(file: PlanFile): string {
-  const first = readFileSync(file.journalPath, 'utf8').split('\n')[0];
-  if (!first) throw new Error('Team Plan start event is missing.');
-  const started = JSON.parse(first) as { readonly runId: string };
-  return started.runId;
+  return journalRunId(file.journalPath);
 }
 
 function discardRequest(file: PlanFile) {
@@ -401,7 +403,8 @@ describe('Team Plan runtime', () => {
     };
     const finalizedRef = `${runRef({ file })}/finalized`;
     fixtureGit(fixture)(['update-ref', finalizedRef, fixture.baselineCommit]);
-    const previousTemporaryDirectory = process.env.TMPDIR;
+    const hadTemporaryDirectory = 'TMPDIR' in process.env;
+    const previousTemporaryDirectory = process.env.TMPDIR || '';
     rmSync(started.workspaceRoot, { recursive: true });
     process.env.TMPDIR = join(fixture.root, 'different-tmp');
     try {
@@ -410,8 +413,9 @@ describe('Team Plan runtime', () => {
           .runId,
       ).toBe(selection.snapshot.runId);
     } finally {
-      if (previousTemporaryDirectory === undefined) delete process.env.TMPDIR;
-      else process.env.TMPDIR = previousTemporaryDirectory;
+      if (hadTemporaryDirectory)
+        process.env.TMPDIR = previousTemporaryDirectory;
+      else delete process.env.TMPDIR;
     }
     expect(fixtureGit(fixture)(['for-each-ref', finalizedRef])).toBe('');
     const relocatedJournal = join(fixture.root, 'relocated-events.jsonl');
@@ -873,6 +877,19 @@ describe('Team Plan runtime', () => {
     expect(existsSync(tombstone)).toBe(false);
     await startTeamPlan(startRequest(file));
     expect(runRef({ file })).not.toBe(oldPrefix);
+    await expect(
+      finalizeTeamPlanRuntime({
+        journalPath: file.journalPath,
+        runId: discard.runId,
+      }),
+    ).rejects.toThrow('run identity is stale');
+    await expect(
+      restartTeamPlanRuntime({
+        journalPath: file.journalPath,
+        runId: discard.runId,
+        planPath: file.path,
+      }),
+    ).rejects.toThrow('run identity is stale');
     const replacement = await leaseNextTeamPlan(file.journalPath);
     const replacementLease = replacement.leases[0];
     if (!replacementLease) throw new Error('Replacement lease is missing.');

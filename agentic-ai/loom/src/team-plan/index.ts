@@ -14,6 +14,7 @@ import {
 
 import type {
   TeamPlanDiscardRequest,
+  TeamPlanFinalizeRequest,
   TeamPlanJournalRequest,
   TeamPlanLeaseReceipt,
   TeamPlanLeaseRequest,
@@ -70,7 +71,7 @@ export function restartTeamPlan(
 }
 
 export function finalizeTeamPlan(
-  request: TeamPlanJournalRequest,
+  request: TeamPlanFinalizeRequest,
 ): Promise<TeamPlanSnapshot> {
   return withLoomFailureCode({
     code: LoomFailureCode.TeamPlanRecoveryFailed,
