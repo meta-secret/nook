@@ -1,17 +1,5 @@
-import { createHash, randomUUID } from 'node:crypto';
-import { spawnSync } from 'node:child_process';
-import {
-  lstat,
-  link,
-  mkdir,
-  open,
-  readFile,
-  realpath,
-  rename,
-  unlink,
-} from 'node:fs/promises';
-import { basename, dirname, isAbsolute, resolve } from 'node:path';
-import { hostname } from 'node:os';
+import { createHash } from 'node:crypto';
+import { isAbsolute } from 'node:path';
 
 import {
   ModuleDeliveryValidationStatus,
@@ -23,9 +11,30 @@ import {
   TeamPlanRecordKind,
   assertTeamPlanJournalRecord,
 } from './domain.ts';
+import { runWithTeamPlanJournalLock } from './journal-lock.ts';
+import {
+  assertMatchingDiscardTombstone,
+  canonicalExistingJournalPath,
+  canonicalTeamPlanJournalPath,
+  pathExists,
+  publishDiscardTombstone,
+  publishNewJournalFile,
+  readBoundedTeamPlanJournal,
+  removeDiscardCompletion,
+  removeDiscardTombstone,
+  replaceJournalFile,
+  resumeDiscardTombstone,
+  storageHook,
+  syncTeamPlanJournalParent,
+} from './journal-storage.ts';
+
+export { canonicalTeamPlanJournalPath } from './journal-storage.ts';
 
 import type { TeamPlanEvent, TeamPlanStartedEvent } from './domain.ts';
-import type { ModuleDeliveryPlanV2 } from '../module-delivery/index.ts';
+import type {
+  ModuleDeliveryExecutionPrecedence,
+  ModuleDeliveryPlanV2,
+} from '../module-delivery/index.ts';
 
 export const MAX_TEAM_PLAN_JOURNAL_BYTES = 5_242_880;
 const MAX_TEAM_PLAN_PLAN_TEXT_BYTES = 262_144;
@@ -43,10 +52,9 @@ const MAX_TEAM_PLAN_ATTEMPT_IDENTITY_BYTES = 256;
 const MAX_TEAM_PLAN_FINAL_EVENT_BYTES = 256;
 const MAX_TEAM_PLAN_GENERATIONS = 5;
 const MAX_TEAM_PLAN_RECORDS_PER_GENERATION = 320;
-const ZERO_COMMIT = '0'.repeat(40);
 const SHA256 = /^[0-9a-f]{64}$/u;
 const COMMIT = /^[0-9a-f]{40}$/u;
-const TASK_ID = /^[a-z0-9][a-z0-9-]{0,79}$/u;
+const TASK_ID = /^[a-z][a-z0-9_-]{0,63}$/u;
 
 const TEAM_PLAN_COMMON_FIELDS = 'version|kind|sequence';
 const TEAM_PLAN_STARTED_FIELDS = `${TEAM_PLAN_COMMON_FIELDS}|runId|planPath|planText|planSha256|modulePlanDigest|sourceCommit|repositoryRoot|workspaceRoot|generationRecordLimit`;
@@ -75,6 +83,8 @@ export type CreateTeamPlanJournalRequest = Readonly<{
 export type AppendTeamPlanEventRequest = Readonly<{
   journalPath: string;
   event: TeamPlanEvent;
+  beforeTemporarySync?: () => void;
+  afterTemporaryCleanupSync?: () => void;
   beforeParentSync?: () => void;
 }>;
 
@@ -88,12 +98,6 @@ type ExactFieldRequest = Readonly<{
   fields: readonly string[];
 }>;
 
-type TeamPlanLockOwner = Readonly<{
-  pid: number;
-  processIdentity: string;
-  token: string;
-}>;
-
 type TeamPlanGenerationCapacityRequest = Readonly<{
   journalBytes: number;
   planEventBytes: number;
@@ -101,38 +105,55 @@ type TeamPlanGenerationCapacityRequest = Readonly<{
   generationCount: number;
 }>;
 
-type ParentSyncHook =
-  | Readonly<{ presence: 'absent' }>
-  | Readonly<{ presence: 'present'; run: () => void }>;
-
 export async function createTeamPlanJournal(
   request: CreateTeamPlanJournalRequest,
 ): Promise<void> {
   const path = await canonicalTeamPlanJournalPath(request.journalPath);
   const serialized = serializeTeamPlanEvent(request.event);
-  decodeTeamPlanJournal({ serialized, path });
-  await publishNewFile({ path, serialized });
+  const journal = decodeTeamPlanJournal({ serialized, path });
+  await runWithTeamPlanJournalLock({
+    journal,
+    identityPath: path,
+    action: async () => {
+      if (await pathExists(`${path}.discarding`))
+        throw new Error('Team Plan journal discard is still in progress.');
+      if (await pathExists(`${path}.discarded`))
+        await removeDiscardCompletion(`${path}.discarded`);
+      await publishNewJournalFile({ path, serialized });
+    },
+  });
 }
 
 export async function loadTeamPlanJournal(
   journalPath: string,
 ): Promise<TeamPlanJournal> {
   const path = await canonicalExistingJournalPath(journalPath);
-  const serialized = await readFile(path, 'utf8');
-  return decodeTeamPlanJournal({ serialized, path });
+  const journalFile = await readBoundedTeamPlanJournal({
+    path,
+    maximumBytes: MAX_TEAM_PLAN_JOURNAL_BYTES,
+    expectedLinkCount: 1,
+  });
+  return decodeTeamPlanJournal({ serialized: journalFile.serialized, path });
 }
 
 export async function appendTeamPlanEvent(
   request: AppendTeamPlanEventRequest,
 ): Promise<void> {
   const path = await canonicalExistingJournalPath(request.journalPath);
-  const current = await readFile(path, 'utf8');
-  const candidate = `${current}${serializeTeamPlanEvent(request.event)}`;
+  const current = await readBoundedTeamPlanJournal({
+    path,
+    maximumBytes: MAX_TEAM_PLAN_JOURNAL_BYTES,
+    expectedLinkCount: 1,
+  });
+  const candidate = `${current.serialized}${serializeTeamPlanEvent(request.event)}`;
   decodeTeamPlanJournal({ serialized: candidate, path });
-  await replaceFile({
+  await replaceJournalFile({
     path,
     serialized: candidate,
-    beforeParentSync: parentSyncHook(request.beforeParentSync),
+    mode: current.mode,
+    beforeTemporarySync: storageHook(request.beforeTemporarySync),
+    afterTemporaryCleanupSync: storageHook(request.afterTemporaryCleanupSync),
+    beforeParentSync: storageHook(request.beforeParentSync),
   });
 }
 
@@ -146,38 +167,12 @@ async function withTeamPlanJournalLockIdentity<T>(
   request: TeamPlanJournalLockRequest<T> &
     Readonly<{ lockIdentityPath?: string }>,
 ): Promise<T> {
-  const path = await canonicalExistingJournalPath(request.journalPath);
-  const journal = await loadTeamPlanJournal(path);
-  const identity = processStartIdentity(process.pid);
-  if (!identity)
-    throw new Error('Team Plan process lock identity is unavailable.');
-  const owner: TeamPlanLockOwner = {
-    pid: process.pid,
-    processIdentity: identity,
-    token: randomUUID(),
-  };
-  const serialized = `${JSON.stringify(owner)}\n`;
-  const ownerBlob = gitText({
-    cwd: journal.started.repositoryRoot,
-    args: ['hash-object', '-w', '--stdin'],
-    input: serialized,
-  });
-  const lockRef = teamPlanLockRef({
+  const journal = await loadTeamPlanJournal(request.journalPath);
+  return runWithTeamPlanJournalLock({
     journal,
     identityPath: request.lockIdentityPath ?? journal.path,
+    action: request.action,
   });
-  let acquired = false;
-  try {
-    acquireTeamPlanLock({ journal, lockRef, ownerBlob });
-    acquired = true;
-    return await request.action();
-  } catch (error) {
-    if (!acquired)
-      throw new Error('Team Plan journal is already in use.', { cause: error });
-    throw error;
-  } finally {
-    if (acquired) releaseTeamPlanLock({ journal, lockRef, ownerBlob });
-  }
 }
 
 export async function discardTeamPlanJournal(
@@ -192,11 +187,45 @@ export async function discardTeamPlanJournal(
 ): Promise<void> {
   const path = await canonicalTeamPlanJournalPath(request.journalPath);
   const tombstone = `${path}.discarding`;
-  const activePath = (await pathExists(path)) ? path : tombstone;
-  await withTeamPlanJournalLockIdentity({
-    journalPath: activePath,
-    lockIdentityPath: path,
+  const completion = `${path}.discarded`;
+  const sourcePresent = await pathExists(path);
+  const tombstonePresent = await pathExists(tombstone);
+  if (!sourcePresent && !tombstonePresent && (await pathExists(completion))) {
+    const completed = await loadTeamPlanJournal(completion);
+    if (!completed.finalized)
+      throw new Error('Team Plan discard completion marker is stale.');
+    await syncTeamPlanJournalParent({
+      path: completion,
+      beforeParentSync: storageHook(request.beforeParentSync),
+    });
+    return;
+  }
+  const artifactsMayAlreadyBeDiscarded = !sourcePresent;
+  const activePath = sourcePresent && !tombstonePresent ? path : tombstone;
+  let lockJournal: TeamPlanJournal;
+  if (sourcePresent && tombstonePresent) {
+    await assertMatchingDiscardTombstone({ path, tombstone });
+    const journalFile = await readBoundedTeamPlanJournal({
+      path: tombstone,
+      maximumBytes: MAX_TEAM_PLAN_JOURNAL_BYTES,
+      expectedLinkCount: 2,
+    });
+    lockJournal = {
+      ...decodeTeamPlanJournal({ serialized: journalFile.serialized, path }),
+      path,
+    };
+  } else {
+    const loaded = await loadTeamPlanJournal(activePath);
+    lockJournal = { ...loaded, path };
+  }
+  await runWithTeamPlanJournalLock({
+    journal: lockJournal,
+    identityPath: path,
     action: async () => {
+      if (!lockJournal.finalized)
+        throw new Error('Only a finalized Team Plan run may be discarded.');
+      if ((await pathExists(path)) && (await pathExists(tombstone)))
+        await resumeDiscardTombstone({ path, tombstone });
       const loaded = await loadTeamPlanJournal(activePath);
       const journal = { ...loaded, path };
       if (!journal.finalized)
@@ -205,15 +234,17 @@ export async function discardTeamPlanJournal(
         await publishDiscardTombstone({
           path,
           tombstone,
-          beforeParentSync: parentSyncHook(request.beforeParentSync),
+          beforeParentSync: storageHook(request.beforeParentSync),
         });
       await request.discardArtifacts({
         journal,
-        artifactsMayAlreadyBeDiscarded: activePath === tombstone,
+        artifactsMayAlreadyBeDiscarded,
       });
-      request.beforeParentSync?.();
-      await unlink(tombstone);
-      await syncParent(tombstone);
+      await removeDiscardTombstone({
+        path: tombstone,
+        completion,
+        beforeParentSync: storageHook(request.beforeParentSync),
+      });
     },
   });
 }
@@ -429,25 +460,6 @@ function assertExactFields(request: ExactFieldRequest): void {
     throw new Error('Team Plan journal event fields are invalid.');
 }
 
-export async function canonicalTeamPlanJournalPath(
-  journalPath: string,
-): Promise<string> {
-  const requested = resolve(journalPath);
-  await mkdir(dirname(requested), { recursive: true });
-  const parent = await realpath(dirname(requested));
-  return resolve(parent, basename(requested));
-}
-
-async function canonicalExistingJournalPath(
-  journalPath: string,
-): Promise<string> {
-  const requested = resolve(journalPath);
-  const status = await lstat(requested);
-  if (status.isSymbolicLink() || !status.isFile())
-    throw new Error('Team Plan journal path is unsafe.');
-  return realpath(requested);
-}
-
 function serializeTeamPlanEvent(event: TeamPlanEvent): string {
   return `${JSON.stringify(event)}\n`;
 }
@@ -526,6 +538,7 @@ function journalGenerationCounters(
   let currentGeneration = 0;
   let currentPlanDigest = '';
   let currentPlan: ModuleDeliveryPlanV2 | false = false;
+  let executionPrecedence: readonly ModuleDeliveryExecutionPrecedence[] = [];
   const activeAttempts = new Map<string, string>();
   const latestAttempts = new Map<string, number>();
   const acceptedTasks = new Set<string>();
@@ -553,6 +566,7 @@ function journalGenerationCounters(
       currentGeneration = validation.plan.generation;
       currentPlanDigest = event.modulePlanDigest;
       currentPlan = validation.plan;
+      executionPrecedence = validation.executionPrecedence;
       selectedLeaseCount = 0;
       recordedCount = 0;
       acceptedTasks.clear();
@@ -598,7 +612,12 @@ function journalGenerationCounters(
         throw new Error('Team Plan finalization has outstanding attempts.');
       if (!currentPlan)
         throw new Error('Team Plan finalization has no active plan.');
-      assertTerminalPlan({ currentPlan, acceptedTasks, failedAttempts });
+      assertTerminalPlan({
+        currentPlan,
+        executionPrecedence,
+        acceptedTasks,
+        failedAttempts,
+      });
       finalized = true;
     }
   }
@@ -622,6 +641,7 @@ function journalGenerationCounters(
 function assertTerminalPlan(
   request: Readonly<{
     currentPlan: ModuleDeliveryPlanV2;
+    executionPrecedence: readonly ModuleDeliveryExecutionPrecedence[];
     acceptedTasks: ReadonlySet<string>;
     failedAttempts: ReadonlyMap<string, number>;
   }>,
@@ -638,7 +658,10 @@ function assertTerminalPlan(
     for (const node of request.currentPlan.nodes) {
       if (
         !terminal.has(node.taskId) &&
-        node.dependencies.some((taskId) => failures.has(taskId))
+        request.executionPrecedence.some(
+          ({ predecessorTaskId, successorTaskId }) =>
+            successorTaskId === node.taskId && failures.has(predecessorTaskId),
+        )
       ) {
         terminal.add(node.taskId);
         failures.add(node.taskId);
@@ -693,249 +716,4 @@ function maximumGenerationBudget(): number {
     MAX_TEAM_PLAN_PLAN_EVENT_BYTES +
     generationMutationBudget(MAX_TEAM_PLAN_RECORDS_PER_GENERATION)
   );
-}
-
-function acquireTeamPlanLock(request: {
-  readonly journal: TeamPlanJournal;
-  readonly lockRef: string;
-  readonly ownerBlob: string;
-}): void {
-  const { journal, lockRef, ownerBlob } = request;
-  if (updateRef({ journal, args: [lockRef, ownerBlob, ZERO_COMMIT] })) return;
-  const previousBlob = gitText({
-    cwd: journal.started.repositoryRoot,
-    args: ['rev-parse', '--verify', `${lockRef}^{blob}`],
-  });
-  const serialized = gitText({
-    cwd: journal.started.repositoryRoot,
-    args: ['cat-file', 'blob', previousBlob],
-  });
-  const previousOwner = decodeLockOwner(serialized);
-  if (!staleTeamPlanLock(previousOwner))
-    throw new Error('Team Plan journal lock owner is still live.');
-  if (!updateRef({ journal, args: [lockRef, ownerBlob, previousBlob] }))
-    throw new Error('Team Plan journal lock changed during stale recovery.');
-}
-
-function releaseTeamPlanLock(request: {
-  readonly journal: TeamPlanJournal;
-  readonly lockRef: string;
-  readonly ownerBlob: string;
-}): void {
-  if (
-    !updateRef({
-      journal: request.journal,
-      args: ['-d', request.lockRef, request.ownerBlob],
-    })
-  )
-    throw new Error('Team Plan journal lock ownership changed.');
-}
-
-type TeamPlanGitArguments = readonly [string, string, string];
-
-function updateRef(request: {
-  readonly journal: TeamPlanJournal;
-  readonly args: TeamPlanGitArguments;
-}): boolean {
-  const args = request.args;
-  const result = spawnSync('git', ['update-ref', args[0], args[1], args[2]], {
-    cwd: request.journal.started.repositoryRoot,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  return result.status === 0;
-}
-
-function decodeLockOwner(serialized: string): TeamPlanLockOwner {
-  let owner: TeamPlanLockOwner;
-  try {
-    owner = JSON.parse(serialized) as TeamPlanLockOwner;
-  } catch (error) {
-    throw new Error('Team Plan journal lock owner is malformed.', {
-      cause: error,
-    });
-  }
-  if (
-    JSON.stringify(Object.keys(owner).sort()) !==
-      JSON.stringify(['pid', 'processIdentity', 'token']) ||
-    !Number.isSafeInteger(owner.pid) ||
-    owner.pid < 1 ||
-    typeof owner.processIdentity !== 'string' ||
-    owner.processIdentity.length < 1 ||
-    typeof owner.token !== 'string' ||
-    owner.token.length < 1
-  )
-    throw new Error('Team Plan journal lock owner is malformed.');
-  return owner;
-}
-
-function staleTeamPlanLock(owner: TeamPlanLockOwner): boolean {
-  const machineIdentity = hostname();
-  if (!owner.processIdentity.startsWith(`${machineIdentity}:`)) return false;
-  const currentIdentity = processStartIdentity(owner.pid);
-  if (currentIdentity) return currentIdentity !== owner.processIdentity;
-  try {
-    process.kill(owner.pid, 0);
-    return false;
-  } catch (error) {
-    return nodeErrorCode(error as NodeJS.ErrnoException) === 'ESRCH';
-  }
-}
-
-function teamPlanLockRef(request: {
-  readonly journal: TeamPlanJournal;
-  readonly identityPath: string;
-}): string {
-  const run = teamPlanSha256(
-    `${request.journal.started.repositoryRoot}\n${request.identityPath}`,
-  );
-  return `refs/nook/team-plan-locks/${run}`;
-}
-
-type GitInvocation = Readonly<{
-  cwd: string;
-  args: TeamPlanGitArguments;
-  input?: string;
-}>;
-
-function gitText(invocation: GitInvocation): string {
-  const args = invocation.args;
-  const result = spawnSync('git', [args[0], args[1], args[2]], {
-    cwd: invocation.cwd,
-    encoding: 'utf8',
-    input: 'input' in invocation ? invocation.input : '',
-    stdio: ['pipe', 'pipe', 'pipe'],
-  });
-  if (result.status !== 0)
-    throw new Error(result.stderr.trim() || 'Team Plan Git operation failed.');
-  return result.stdout.trim();
-}
-
-async function publishNewFile(request: {
-  readonly path: string;
-  readonly serialized: string;
-}): Promise<void> {
-  const { path } = request;
-  const temporary = await writeTemporaryFile(request);
-  try {
-    await link(temporary, path);
-    await unlink(temporary);
-    await syncParent(path);
-  } catch (error) {
-    await removeTemporary(temporary);
-    throw error;
-  }
-}
-
-async function replaceFile(request: {
-  readonly path: string;
-  readonly serialized: string;
-  readonly beforeParentSync: ParentSyncHook;
-}): Promise<void> {
-  const { path } = request;
-  const temporary = await writeTemporaryFile(request);
-  try {
-    await rename(temporary, path);
-    runParentSyncHook(request.beforeParentSync);
-    await syncParent(path);
-  } catch (error) {
-    await removeTemporary(temporary);
-    throw error;
-  }
-}
-
-async function publishDiscardTombstone(request: {
-  readonly path: string;
-  readonly tombstone: string;
-  readonly beforeParentSync: ParentSyncHook;
-}): Promise<void> {
-  try {
-    await link(request.path, request.tombstone);
-  } catch (error) {
-    if (nodeErrorCode(error as NodeJS.ErrnoException) !== 'EEXIST') throw error;
-    const source = await lstat(request.path);
-    const existing = await lstat(request.tombstone);
-    if (source.dev !== existing.dev || source.ino !== existing.ino)
-      throw new Error('Team Plan discard tombstone is forged.', {
-        cause: error,
-      });
-  }
-  await unlink(request.path);
-  runParentSyncHook(request.beforeParentSync);
-  await syncParent(request.path);
-}
-
-function parentSyncHook(hook?: () => void): ParentSyncHook {
-  return hook ? { presence: 'present', run: hook } : { presence: 'absent' };
-}
-
-function runParentSyncHook(hook: ParentSyncHook): void {
-  if (hook.presence === 'present') hook.run();
-}
-
-async function writeTemporaryFile(request: {
-  readonly path: string;
-  readonly serialized: string;
-}): Promise<string> {
-  const { path, serialized } = request;
-  const temporary = resolve(
-    dirname(path),
-    `.${basename(path)}.${randomUUID()}.tmp`,
-  );
-  const handle = await open(temporary, 'wx');
-  try {
-    await handle.writeFile(serialized, 'utf8');
-    await handle.sync();
-  } finally {
-    await handle.close();
-  }
-  return temporary;
-}
-
-async function syncParent(path: string): Promise<void> {
-  const handle = await open(dirname(path), 'r');
-  try {
-    await handle.sync();
-  } finally {
-    await handle.close();
-  }
-}
-
-async function removeTemporary(path: string): Promise<void> {
-  try {
-    await unlink(path);
-  } catch (error) {
-    if (nodeErrorCode(error as NodeJS.ErrnoException) !== 'ENOENT') throw error;
-  }
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await lstat(path);
-    return true;
-  } catch (error) {
-    if (nodeErrorCode(error as NodeJS.ErrnoException) === 'ENOENT')
-      return false;
-    throw error;
-  }
-}
-
-function nodeErrorCode(error: NodeJS.ErrnoException): string | false {
-  if (!error || typeof error !== 'object' || !('code' in error)) return false;
-  const code = error.code;
-  return typeof code === 'string' ? code : false;
-}
-
-function processStartIdentity(pid: number): string | false {
-  if (process.platform === 'win32')
-    throw new Error('Team Plan journal locks do not support Windows.');
-  const machineIdentity = hostname();
-  const result = spawnSync('ps', ['-o', 'lstart=', '-p', String(pid)], {
-    encoding: 'utf8',
-    env: { PATH: '/bin:/usr/bin:/usr/sbin' },
-    stdio: ['ignore', 'pipe', 'ignore'],
-  });
-  const started = result.status === 0 ? result.stdout.trim() : '';
-  if (started.length === 0) return false;
-  return `${machineIdentity}:${started}`;
 }
