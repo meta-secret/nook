@@ -5,6 +5,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
     process::Command,
+    sync::OnceLock,
 };
 
 fn repository_root() -> PathBuf {
@@ -279,168 +280,94 @@ fn supports_inline_commands(path: &Path) -> bool {
 }
 
 fn contains_prohibited_inline_syntax(line: &str) -> bool {
-    let declaration = ["d", "ef"].concat();
-    let trimmed = line.trim_start();
-    let trimmed = trimmed.strip_prefix("async ").unwrap_or(trimmed);
-    trimmed
-        .strip_prefix(&format!("{declaration} "))
-        .is_some_and(|rest| rest.contains('(') && rest.contains("):"))
-}
-
-fn join_argv_strings<'a>(values: impl Iterator<Item = &'a str>) -> Option<String> {
-    let values = values.collect::<Vec<_>>();
-    (values.len() > 1
-        && values
-            .iter()
-            .all(|value| !value.chars().any(char::is_whitespace)))
-    .then(|| values.join(" "))
-}
-
-fn yaml_argv(value: &serde_yaml_ng::Value) -> Vec<&str> {
-    if let Some(value) = value.as_str() {
-        return vec![value];
-    }
-    value
-        .as_sequence()
-        .map(|sequence| {
-            sequence
-                .iter()
-                .filter_map(serde_yaml_ng::Value::as_str)
-                .collect()
+    static DECLARATION: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
+    DECLARATION
+        .get_or_init(|| {
+            let keyword = ["d", "ef"].concat();
+            regex::Regex::new(&format!(
+                r"^\s*(?:async\s+)?{}\s+[A-Za-z_]\w*\s*\([^)]*\)\s*:",
+                regex::escape(&keyword)
+            ))
         })
-        .unwrap_or_default()
+        .as_ref()
+        .is_ok_and(|pattern| pattern.is_match(line))
 }
 
-fn collect_yaml_strings(value: &serde_yaml_ng::Value, strings: &mut Vec<String>) {
-    if let Some(value) = value.as_str() {
-        strings.push(value.to_owned());
-        return;
-    }
-    if let Some(sequence) = value.as_sequence() {
-        if let Some(argv) =
-            join_argv_strings(sequence.iter().filter_map(serde_yaml_ng::Value::as_str))
-        {
-            strings.push(argv);
-        }
-        for item in sequence {
-            collect_yaml_strings(item, strings);
-        }
-        return;
-    }
-    if let Some(mapping) = value.as_mapping() {
-        let command = mapping
+fn semantic_argv(value: &serde_value::Value) -> Vec<&str> {
+    match value {
+        serde_value::Value::String(value) => vec![value],
+        serde_value::Value::Seq(values) => values
             .iter()
-            .find(|(key, _)| key.as_str() == Some("command"))
-            .map(|(_, value)| yaml_argv(value))
-            .unwrap_or_default();
-        let arguments = mapping
-            .iter()
-            .find(|(key, _)| key.as_str() == Some("args"))
-            .map(|(_, value)| yaml_argv(value))
-            .unwrap_or_default();
-        let combined = command.into_iter().chain(arguments).collect::<Vec<_>>();
-        if combined.len() > 1 {
-            strings.push(combined.join(" "));
-        }
-        for (key, item) in mapping {
-            collect_yaml_strings(key, strings);
-            collect_yaml_strings(item, strings);
-        }
+            .filter_map(|value| match value {
+                serde_value::Value::String(value) => Some(value.as_str()),
+                _ => None,
+            })
+            .collect(),
+        _ => Vec::new(),
     }
 }
 
-fn json_argv(value: &serde_json::Value) -> Vec<&str> {
-    if let Some(value) = value.as_str() {
-        return vec![value];
-    }
-    value
-        .as_array()
-        .map(|sequence| {
-            sequence
-                .iter()
-                .filter_map(serde_json::Value::as_str)
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
-fn yaml_source_strings(source: &str) -> anyhow::Result<Vec<String>> {
-    let mut strings = Vec::new();
-    for document in serde_yaml_ng::Deserializer::from_str(source) {
-        let value = serde_yaml_ng::Value::deserialize(document)?;
-        collect_yaml_strings(&value, &mut strings);
-    }
-    Ok(strings)
-}
-
-fn collect_json_strings(value: &serde_json::Value, strings: &mut Vec<String>) {
-    if let Some(value) = value.as_str() {
-        strings.push(value.to_owned());
-        return;
-    }
-    if let Some(sequence) = value.as_array() {
-        if let Some(argv) = join_argv_strings(sequence.iter().filter_map(serde_json::Value::as_str))
-        {
-            strings.push(argv);
+fn visit_semantic_strings(value: &serde_value::Value, visit: &mut impl FnMut(&str)) {
+    match value {
+        serde_value::Value::String(value) => visit(value),
+        serde_value::Value::Seq(values) => {
+            let argv = semantic_argv(value);
+            if argv.len() > 1
+                && argv
+                    .iter()
+                    .all(|value| !value.contains(char::is_whitespace))
+            {
+                visit(&argv.join(" "));
+            }
+            for value in values {
+                visit_semantic_strings(value, visit);
+            }
         }
-        for item in sequence {
-            collect_json_strings(item, strings);
+        serde_value::Value::Map(values) => {
+            let key = |name: &str| serde_value::Value::String(name.to_owned());
+            let command = values
+                .get(&key("command"))
+                .map(semantic_argv)
+                .unwrap_or_default();
+            let args = values
+                .get(&key("args"))
+                .map(semantic_argv)
+                .unwrap_or_default();
+            let combined = command.into_iter().chain(args).collect::<Vec<_>>();
+            if combined.len() > 1 {
+                visit(&combined.join(" "));
+            }
+            for (key, value) in values {
+                visit_semantic_strings(key, visit);
+                visit_semantic_strings(value, visit);
+            }
         }
-        return;
-    }
-    if let Some(mapping) = value.as_object() {
-        let command = mapping.get("command").map(json_argv).unwrap_or_default();
-        let arguments = mapping.get("args").map(json_argv).unwrap_or_default();
-        let combined = command.into_iter().chain(arguments).collect::<Vec<_>>();
-        if combined.len() > 1 {
-            strings.push(combined.join(" "));
+        serde_value::Value::Option(Some(value)) | serde_value::Value::Newtype(value) => {
+            visit_semantic_strings(value, visit);
         }
-        for (key, item) in mapping {
-            strings.push(key.clone());
-            collect_json_strings(item, strings);
-        }
+        _ => {}
     }
 }
 
-fn collect_toml_strings(value: &toml::Value, strings: &mut Vec<String>) {
-    if let Some(value) = value.as_str() {
-        strings.push(value.to_owned());
-        return;
-    }
-    if let Some(sequence) = value.as_array() {
-        if let Some(argv) = join_argv_strings(sequence.iter().filter_map(toml::Value::as_str)) {
-            strings.push(argv);
-        }
-        for item in sequence {
-            collect_toml_strings(item, strings);
-        }
-        return;
-    }
-    if let Some(mapping) = value.as_table() {
-        for (key, item) in mapping {
-            strings.push(key.clone());
-            collect_toml_strings(item, strings);
-        }
-    }
-}
-
-fn source_strings(path: &Path, source: &str) -> anyhow::Result<Vec<String>> {
+fn visit_source_strings(
+    path: &Path,
+    source: &str,
+    mut visit: impl FnMut(&str),
+) -> anyhow::Result<()> {
     match path.extension().and_then(OsStr::to_str) {
-        Some("yaml" | "yml") => yaml_source_strings(source),
+        Some("yaml" | "yml") => {
+            for document in serde_yaml_ng::Deserializer::from_str(source) {
+                let value = serde_value::Value::deserialize(document)?;
+                visit_semantic_strings(&value, &mut visit);
+            }
+        }
         Some("json" | "jsonc") => {
-            let value = json5::from_str(source)?;
-            let mut strings = Vec::new();
-            collect_json_strings(&value, &mut strings);
-            Ok(strings)
+            visit_semantic_strings(&json5::from_str(source)?, &mut visit);
         }
-        Some("toml") => {
-            let value = toml::from_str(source)?;
-            let mut strings = Vec::new();
-            collect_toml_strings(&value, &mut strings);
-            Ok(strings)
-        }
-        _ => Ok(vec![source.to_owned()]),
+        Some("toml") => visit_semantic_strings(&toml::from_str(source)?, &mut visit),
+        _ => visit(source),
     }
+    Ok(())
 }
 
 fn contains_prohibited_output_path(line: &str, suffixes: &[String]) -> bool {
@@ -559,9 +486,9 @@ fn repository_language_violations(
             ));
         }
         let source = String::from_utf8_lossy(&bytes);
-        for source_string in source_strings(relative, &source)? {
+        visit_source_strings(relative, &source, |source_string| {
             for (index, line) in
-                logical_source_lines(&source_string, supports_shell_continuations(relative))
+                logical_source_lines(source_string, supports_shell_continuations(relative))
             {
                 let trimmed = line.trim_start();
                 if is_source_comment(relative, trimmed) {
@@ -595,7 +522,7 @@ fn repository_language_violations(
                     ));
                 }
             }
-        }
+        })?;
     }
     Ok(violations)
 }
