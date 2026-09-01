@@ -4,7 +4,6 @@ import { OpenCompanionLauncherIntent } from '../../nook-web-shared/src/extension
 import type { StoredExtensionPairingGrant } from '../src/background/pairing-grants'
 import { extensionSessionProbeDeadline } from '../src/offscreen/session-request-adapter'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
-
 await companionWasmReady
 
 type GrantAccessResponse =

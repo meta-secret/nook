@@ -27,7 +27,6 @@ export function compactProgressState(
 export function isTrustedAuthAction(isTrusted: boolean): boolean {
   return isTrusted
 }
-
 export type AuthWidgetPresentationInput = {
   savedLoginCapability: AuthenticationSavedLoginCapability
   loginMatches: WebsiteLoginMatchAvailability
@@ -40,7 +39,6 @@ export function authWidgetStartsCollapsed({
   if (savedLoginCapability !== 'fill-saved-login') return false
   return loginMatches.kind !== 'ready'
 }
-
 export function safeSavedOptionNumber(index: number): string {
   return String(index + 1)
 }

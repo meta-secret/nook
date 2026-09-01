@@ -191,7 +191,6 @@ async function scanAndRenderOnce(): Promise<void> {
   }
   renderWidget(nookTypedArgs0_1)
 }
-
 async function scanAndRender(): Promise<void> {
   if (!scanState.beginScan()) return
   try {

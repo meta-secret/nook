@@ -734,7 +734,6 @@ export function resetEnrollmentCeremony(): void {
   stopPendingEnrollmentWatch()
   holdEnrollmentWidgetAfterSave = false
 }
-
 export function releaseEnrollmentWidgetHold(): void {
   holdEnrollmentWidgetAfterSave = false
 }

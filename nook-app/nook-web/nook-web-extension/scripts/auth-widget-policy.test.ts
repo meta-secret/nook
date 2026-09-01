@@ -23,7 +23,6 @@ describe('Nook Pilot in-page authorization policy', () => {
       accessibleLabel: 'Nook Pilot · 3/3',
     })
   })
-
   test('expands confirmed availability and compacts unresolved lookups', () => {
     const emptyMatches: AuthWidgetPresentationInput = {
       savedLoginCapability: 'fill-saved-login',

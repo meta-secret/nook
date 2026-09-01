@@ -127,7 +127,6 @@
       window.close()
     })
   }
-
   function stayReady(): void {
     window.close()
   }
@@ -309,6 +308,20 @@
         {busy
           ? translatePlain(I18N_KEYS.DeviceProtectionAuthorizing)
           : translatePlain(I18N_KEYS.ExtensionSetupConnectSimpleVault)}
+      </button>
+      <button
+        class="menu-secondary-action"
+        data-testid="stay-ready-btn"
+        onclick={stayReady}
+      >
+        {translatePlain(I18N_KEYS.ExtensionCompanionStayReady)}
+      </button>
+      <button
+        class="menu-secondary-action"
+        data-testid="open-simple-vault-btn"
+        onclick={openSimpleVault}
+      >
+        {translatePlain(I18N_KEYS.ExtensionSetupOpenSimpleVault)}
       </button>
     {/if}
 

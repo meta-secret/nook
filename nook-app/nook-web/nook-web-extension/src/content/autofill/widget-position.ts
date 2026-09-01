@@ -1,6 +1,5 @@
 import type { WidgetPosition } from './state'
 import { WidgetHostKind, WidgetPlacementKind, widgetState } from './state'
-
 const DRAG_THRESHOLD_PX = 4
 
 type ClampWidgetPositionArgs = {
@@ -38,7 +37,6 @@ export function applyWidgetPosition({
   host.style.left = `${position.left}px`
   host.style.right = 'auto'
 }
-
 export function clampMountedWidgetPosition(): void {
   if (
     widgetState.host.kind !== WidgetHostKind.Attached ||

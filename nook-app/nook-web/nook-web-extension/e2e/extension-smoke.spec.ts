@@ -171,7 +171,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     ).toBeVisible()
     await expect(
       widget.getByRole('button', { name: 'Open vault' }),
-    ).toBeVisible()
+    ).toHaveCount(0)
 
     const hiddenHeaderLoginPage = await context.newPage()
     await hiddenHeaderLoginPage.goto(
@@ -210,10 +210,6 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     await expect(
       widget.getByRole('button', { name: 'Continue with Nook' }),
     ).toBeVisible()
-
-    const openedVault = context.waitForEvent('page')
-    await widget.getByRole('button', { name: 'Open vault' }).click()
-    await expect(await openedVault).toHaveURL(simpleVaultBaseUrl)
 
     const signupPage = await context.newPage()
     await signupPage.goto(`${loginServer.origin}/signup`)

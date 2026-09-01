@@ -223,7 +223,6 @@ export function renderWidget({
     if (preservesPresentation) remountWidget()
     else removeWidget()
   }
-
   const presentationInput: Parameters<typeof authWidgetStartsCollapsed>[0] = {
     savedLoginCapability: snapshot.savedLoginCapability,
     loginMatches,

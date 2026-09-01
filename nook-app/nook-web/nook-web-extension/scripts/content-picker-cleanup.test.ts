@@ -69,7 +69,6 @@ test('delivers cleanup cancellation through the content-script router', async ()
   expect(description.textContent).toBe('Picker canceled')
   expect(continueButton.disabled).toBe(false)
   expect(sendResponse).toHaveBeenCalledWith({ ok: true })
-
   const remove = mock(() => {})
   widgetState.attachHost({ remove } as unknown as HTMLElement)
   const watchArgs: Parameters<typeof beginEnrollmentEvidenceWatch>[0] = {
@@ -97,7 +96,6 @@ test('delivers cleanup cancellation through the content-script router', async ()
   expect(enrollmentCeremonyActive()).toBe(false)
   expect(clearInterval).toHaveBeenCalledWith(9)
   expect(disconnect).toHaveBeenCalledTimes(1)
-
   const schedule = mock(() => {})
   scanState.schedule = schedule
   routeAutofillMessage(
