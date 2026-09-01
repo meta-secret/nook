@@ -134,14 +134,14 @@ export async function openCompanionLauncher(
       ? `${popupUrl}?intent=${OpenCompanionLauncherIntent.Pair}`
       : popupUrl
   if (chrome.windows?.create) {
-    const nookTypedArgs0_2: Parameters<typeof chrome.windows.create>[0] = {
+    const nookTypedArgs0_7: Parameters<typeof chrome.windows.create>[0] = {
       url: launcherUrl,
       type: 'popup',
       width: 440,
       height: 620,
       focused: true,
     }
-    await chrome.windows.create(nookTypedArgs0_2)
+    await chrome.windows.create(nookTypedArgs0_7)
     return
   }
   const nookTypedArgs0_8: Parameters<typeof chrome.tabs.create>[0] = {

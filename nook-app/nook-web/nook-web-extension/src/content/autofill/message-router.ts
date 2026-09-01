@@ -62,8 +62,8 @@ export const routeAutofillMessage: AutofillMessageListener =
       ) {
         pending.continueButton.disabled = false
       }
-      const nookTypedArgs0_0: Parameters<typeof sendResponse>[0] = { ok: true }
-      sendResponse(nookTypedArgs0_0)
+      const nookTypedArgs0_1: Parameters<typeof sendResponse>[0] = { ok: true }
+      sendResponse(nookTypedArgs0_1)
       return false
     }
     if (
@@ -76,8 +76,8 @@ export const routeAutofillMessage: AutofillMessageListener =
       const pending = pickerState.login.request
       pickerState.clearPendingLogin()
       window.clearTimeout(pending.timeoutId)
-      const nookTypedArgs0_1: Parameters<typeof sendResponse>[0] = { ok: true }
-      sendResponse(nookTypedArgs0_1)
+      const nookTypedArgs0_2: Parameters<typeof sendResponse>[0] = { ok: true }
+      sendResponse(nookTypedArgs0_2)
       widgetState.busy = true
       pending.continueButton.disabled = true
       const nookTypedArgs0_1: Parameters<typeof fillAndSubmitAccount>[0] = {
