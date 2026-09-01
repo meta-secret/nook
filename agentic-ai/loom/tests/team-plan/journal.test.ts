@@ -1,0 +1,616 @@
+import { afterEach, describe, expect, test } from 'bun:test';
+import { spawnSync } from 'node:child_process';
+import { existsSync, linkSync, readFileSync, writeFileSync } from 'node:fs';
+import { hostname } from 'node:os';
+import { join } from 'node:path';
+
+import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
+import {
+  REQUIRED_PARENT_OWNED_RESOURCES,
+  ModuleDeliveryBaselineKind,
+  ModuleDeliveryGenerationFenceKind,
+  ModuleDeliveryJoinKind,
+  ModuleDeliveryTaskKind,
+  ModuleDeliveryValidationStatus,
+  TeamKey,
+  decodeAndValidateModuleDeliveryPlan,
+} from '../../src/module-delivery/index.ts';
+import {
+  MAX_TEAM_PLAN_JOURNAL_BYTES,
+  appendTeamPlanEvent,
+  assertTeamPlanGenerationCapacity,
+  createTeamPlanJournal,
+  discardTeamPlanJournal,
+  loadTeamPlanJournal,
+  teamPlanEventBytes,
+  teamPlanSha256,
+  withTeamPlanJournalLock,
+} from '../../src/team-plan/journal.ts';
+import {
+  TEAM_PLAN_JOURNAL_VERSION,
+  TeamPlanEventKind,
+  TeamPlanRecordKind,
+} from '../../src/team-plan/domain.ts';
+import {
+  createGitFixture,
+  disposeGitFixture,
+  fixtureGit,
+} from '../module-delivery/worktree-test-support.ts';
+
+import type { ModuleDeliveryPlanV2 } from '../../src/module-delivery/index.ts';
+import type {
+  TeamPlanEvent,
+  TeamPlanSelectedEvent,
+  TeamPlanStartedEvent,
+} from '../../src/team-plan/domain.ts';
+import type { GitFixture } from '../module-delivery/worktree-test-support.ts';
+
+const fixtures: GitFixture[] = [];
+
+afterEach(() => {
+  for (const fixture of fixtures.splice(0).reverse())
+    disposeGitFixture(fixture);
+});
+
+function plan(sourceCommit: string): ModuleDeliveryPlanV2 {
+  return {
+    version: 2,
+    generation: 1,
+    sourceCommit,
+    maxConcurrency: 1,
+    maxAgentDepth: 1,
+    maxAttempts: 1,
+    parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
+    parentJoin: {
+      kind: ModuleDeliveryJoinKind.OrderedCommitHandoffs,
+      owner: 'delivery-owner',
+      validationCommands: ['task loom:verify'],
+    },
+    nodes: [
+      {
+        kind: ModuleDeliveryTaskKind.ReadOnly,
+        taskId: 'provider',
+        team: TeamKey.DevelopmentCore,
+        functionalOwner: TeamKey.Ai,
+        acceptanceOwner: TeamKey.Ai,
+        parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
+        expert: 'core_expert',
+        moduleRoot: 'nook-app/nook-platform/nook-core',
+        consumerOutcome: 'Provider publishes evidence.',
+        baseline: {
+          kind: ModuleDeliveryBaselineKind.SourceCommit,
+          sourceCommit,
+        },
+        agentDepthLimit: 1,
+        dependencies: [],
+        resources: {
+          read: ['nook-app/nook-platform/nook-core/**'],
+          write: [],
+          evidenceSurface: ['nook-app/nook-platform/nook-core/**'],
+        },
+        parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
+        acceptance: {
+          commands: ['task provider:test'],
+          evidence: ['provider completed'],
+        },
+      },
+    ],
+    edgeContracts: [],
+  };
+}
+
+async function startedFixture(
+  transform: (value: ModuleDeliveryPlanV2) => ModuleDeliveryPlanV2 = (value) =>
+    value,
+) {
+  const fixture = createGitFixture();
+  fixtures.push(fixture);
+  const planPath = join(fixture.root, 'plan.json');
+  const journalPath = join(fixture.root, 'journal.jsonl');
+  const value = transform(plan(fixture.baselineCommit));
+  const planText = `${JSON.stringify(value)}\n`;
+  const validation = decodeAndValidateModuleDeliveryPlan(planText);
+  if (validation.status !== ModuleDeliveryValidationStatus.Accepted)
+    throw new Error(
+      `Journal test plan was rejected: ${JSON.stringify(validation.issues)}`,
+    );
+  writeFileSync(planPath, planText);
+  const started: TeamPlanStartedEvent = {
+    version: TEAM_PLAN_JOURNAL_VERSION,
+    kind: TeamPlanEventKind.Started,
+    sequence: 1,
+    runId: teamPlanSha256('journal-test-run'),
+    planPath,
+    planText,
+    planSha256: teamPlanSha256(planText),
+    modulePlanDigest: validation.planDigest,
+    sourceCommit: fixture.baselineCommit,
+    repositoryRoot: fixture.sourceRoot,
+    workspaceRoot: fixture.workspaceRoot,
+    generationRecordLimit:
+      validation.plan.nodes.length * validation.plan.maxAttempts,
+  };
+  await createTeamPlanJournal({ journalPath, event: started });
+  return { fixture, journalPath, started, value };
+}
+
+function lockRef(request: {
+  readonly fixture: GitFixture;
+  readonly journalPath: string;
+}): string {
+  const run = teamPlanSha256(
+    `${request.fixture.sourceRoot}\n${request.journalPath}`,
+  );
+  return `refs/nook/team-plan-locks/${run}`;
+}
+
+function ownerBlob(request: {
+  readonly fixture: GitFixture;
+  readonly name: string;
+  readonly contents: string;
+}): string {
+  const path = join(request.fixture.root, request.name);
+  writeFileSync(path, request.contents);
+  return fixtureGit(request.fixture)(['hash-object', '-w', path]);
+}
+
+async function finalizeStartedFixture(request: {
+  readonly journalPath: string;
+  readonly started: TeamPlanStartedEvent;
+}): Promise<void> {
+  const { journalPath, started } = request;
+  const attempt = {
+    taskId: 'provider',
+    attempt: 1,
+    generation: 1,
+    planDigest: started.modulePlanDigest,
+  };
+  await appendTeamPlanEvent({
+    journalPath,
+    event: {
+      version: TEAM_PLAN_JOURNAL_VERSION,
+      kind: TeamPlanEventKind.Selected,
+      sequence: 2,
+      attempts: [attempt],
+    },
+  });
+  await appendTeamPlanEvent({
+    journalPath,
+    event: {
+      version: TEAM_PLAN_JOURNAL_VERSION,
+      kind: TeamPlanEventKind.Recorded,
+      sequence: 3,
+      record: {
+        kind: TeamPlanRecordKind.FinalUnusable,
+        ...attempt,
+        conclusion: ModuleDeliveryGenerationFenceKind.Failed,
+      },
+    },
+  });
+  await appendTeamPlanEvent({
+    journalPath,
+    event: {
+      version: TEAM_PLAN_JOURNAL_VERSION,
+      kind: TeamPlanEventKind.Finalized,
+      sequence: 4,
+      headCommit: started.sourceCommit,
+    },
+  });
+}
+
+describe('Team Plan journal', () => {
+  test('recovers only a same-host Git-CAS owner with mismatched process start', async () => {
+    const { fixture, journalPath } = await startedFixture();
+    const ref = lockRef({ fixture, journalPath });
+    const started = spawnSync(
+      'ps',
+      ['-o', 'lstart=', '-p', String(process.pid)],
+      {
+        encoding: 'utf8',
+      },
+    ).stdout.trim();
+    const owner = (request: {
+      readonly processIdentity: string;
+      readonly token: string;
+    }): string => `${JSON.stringify({ pid: process.pid, ...request })}\n`;
+    const live = ownerBlob({
+      fixture,
+      name: 'live-lock.json',
+      contents: owner({
+        processIdentity: `${hostname()}:${started}`,
+        token: 'live',
+      }),
+    });
+    fixtureGit(fixture)(['update-ref', ref, live]);
+    await expect(
+      withTeamPlanJournalLock({
+        journalPath,
+        action: async () => 'unreachable',
+      }),
+    ).rejects.toThrow('already in use');
+    fixtureGit(fixture)(['update-ref', '-d', ref, live]);
+    const foreign = ownerBlob({
+      fixture,
+      name: 'foreign-lock.json',
+      contents: owner({
+        processIdentity: `${hostname()}-foreign:reused`,
+        token: 'foreign',
+      }),
+    });
+    fixtureGit(fixture)(['update-ref', ref, foreign]);
+    await expect(
+      withTeamPlanJournalLock({
+        journalPath,
+        action: async () => 'unreachable',
+      }),
+    ).rejects.toThrow('already in use');
+    fixtureGit(fixture)(['update-ref', '-d', ref, foreign]);
+    const stale = ownerBlob({
+      fixture,
+      name: 'stale-lock.json',
+      contents: owner({
+        processIdentity: `${hostname()}:reused`,
+        token: 'stale',
+      }),
+    });
+    fixtureGit(fixture)(['update-ref', ref, stale]);
+    expect(
+      await withTeamPlanJournalLock({
+        journalPath,
+        action: async () => 'acquired',
+      }),
+    ).toBe('acquired');
+  });
+
+  test('rejects torn snapshots and nested attempt extensions', async () => {
+    const { journalPath, started } = await startedFixture();
+    const snapshot = readFileSync(journalPath, 'utf8');
+    writeFileSync(journalPath, `${snapshot}{`);
+    await expect(loadTeamPlanJournal(journalPath)).rejects.toThrow(
+      'noncanonical',
+    );
+    writeFileSync(journalPath, snapshot);
+    const selected: TeamPlanSelectedEvent = {
+      version: TEAM_PLAN_JOURNAL_VERSION,
+      kind: TeamPlanEventKind.Selected,
+      sequence: 2,
+      attempts: [
+        {
+          taskId: 'provider',
+          attempt: 1,
+          generation: 1,
+          planDigest: started.modulePlanDigest,
+        },
+      ],
+    };
+    await appendTeamPlanEvent({ journalPath, event: selected });
+    const lines = readFileSync(journalPath, 'utf8').trim().split('\n');
+    const forged = JSON.parse(lines[1] ?? '') as {
+      attempts: Array<Record<string, string | number>>;
+    };
+    Object.assign(forged.attempts[0] ?? {}, { extension: 'forged' });
+    lines[1] = JSON.stringify(forged);
+    writeFileSync(journalPath, `${lines.join('\n')}\n`);
+    await expect(loadTeamPlanJournal(journalPath)).rejects.toThrow(
+      'attempt identity fields are invalid',
+    );
+  });
+
+  test('keeps a renamed append when parent synchronization fails', async () => {
+    const { journalPath, started } = await startedFixture();
+    const selected: TeamPlanSelectedEvent = {
+      version: TEAM_PLAN_JOURNAL_VERSION,
+      kind: TeamPlanEventKind.Selected,
+      sequence: 2,
+      attempts: [
+        {
+          taskId: 'provider',
+          attempt: 1,
+          generation: 1,
+          planDigest: started.modulePlanDigest,
+        },
+      ],
+    };
+    await expect(
+      appendTeamPlanEvent({
+        journalPath,
+        event: selected,
+        beforeParentSync: () => {
+          throw new Error('parent sync failed');
+        },
+      }),
+    ).rejects.toThrow('parent sync failed');
+    expect((await loadTeamPlanJournal(journalPath)).events).toHaveLength(2);
+  });
+
+  test('durably tombstones discard and resumes under the original lock', async () => {
+    const { fixture, journalPath, started } = await startedFixture();
+    await finalizeStartedFixture({ journalPath, started });
+    let discarded = false;
+    let parentSyncs = 0;
+    await expect(
+      discardTeamPlanJournal({
+        journalPath,
+        discardArtifacts: async () => {
+          discarded = true;
+        },
+        beforeParentSync: () => {
+          if ((parentSyncs += 1) === 2) throw new Error('parent sync failed');
+        },
+      }),
+    ).rejects.toThrow('parent sync failed');
+    expect(discarded).toBe(true);
+    expect(existsSync(journalPath)).toBe(false);
+    expect(existsSync(`${journalPath}.discarding`)).toBe(true);
+    discarded = false;
+
+    const ref = lockRef({ fixture, journalPath });
+    const foreign = ownerBlob({
+      fixture,
+      name: 'discard-lock.json',
+      contents: `${JSON.stringify({
+        pid: process.pid,
+        processIdentity: `${hostname()}-foreign:discard`,
+        token: 'discard',
+      })}\n`,
+    });
+    fixtureGit(fixture)(['update-ref', ref, foreign]);
+    await expect(
+      discardTeamPlanJournal({
+        journalPath,
+        discardArtifacts: async () => {
+          discarded = true;
+        },
+      }),
+    ).rejects.toThrow('already in use');
+    expect(discarded).toBe(false);
+    fixtureGit(fixture)(['update-ref', '-d', ref, foreign]);
+
+    await discardTeamPlanJournal({
+      journalPath,
+      discardArtifacts: async (state) => {
+        expect(state.journal.path).toBe(journalPath);
+        expect(state.artifactsMayAlreadyBeDiscarded).toBe(true);
+        expect(existsSync(journalPath)).toBe(false);
+        expect(existsSync(`${journalPath}.discarding`)).toBe(true);
+        discarded = true;
+      },
+    });
+    expect(discarded).toBe(true);
+    expect(existsSync(`${journalPath}.discarding`)).toBe(false);
+  });
+
+  test('rejects a discard tombstone with a foreign inode', async () => {
+    const { journalPath, started } = await startedFixture();
+    await finalizeStartedFixture({ journalPath, started });
+    writeFileSync(`${journalPath}.discarding`, 'forged\n');
+    let discarded = false;
+    await expect(
+      discardTeamPlanJournal({
+        journalPath,
+        discardArtifacts: async () => {
+          discarded = true;
+        },
+      }),
+    ).rejects.toThrow('tombstone is forged');
+    expect(discarded).toBe(false);
+    expect(existsSync(journalPath)).toBe(true);
+  });
+
+  test('accepts an existing discard tombstone only for the journal inode', async () => {
+    const { journalPath, started } = await startedFixture();
+    await finalizeStartedFixture({ journalPath, started });
+    linkSync(journalPath, `${journalPath}.discarding`);
+    await discardTeamPlanJournal({
+      journalPath,
+      discardArtifacts: async ({ artifactsMayAlreadyBeDiscarded }) => {
+        expect(artifactsMayAlreadyBeDiscarded).toBe(false);
+      },
+    });
+    expect(existsSync(journalPath)).toBe(false);
+    expect(existsSync(`${journalPath}.discarding`)).toBe(false);
+  });
+
+  test('proves bounded generation capacity before journal creation', async () => {
+    const { started } = await startedFixture();
+    expect(() =>
+      assertTeamPlanGenerationCapacity({
+        journalBytes: 0,
+        planEventBytes: teamPlanEventBytes(started),
+        generationRecordLimit: started.generationRecordLimit,
+        generationCount: 1,
+      }),
+    ).not.toThrow();
+    expect(() =>
+      assertTeamPlanGenerationCapacity({
+        journalBytes: MAX_TEAM_PLAN_JOURNAL_BYTES,
+        planEventBytes: teamPlanEventBytes(started),
+        generationRecordLimit: started.generationRecordLimit,
+        generationCount: 1,
+      }),
+    ).toThrow('cannot fit');
+    expect(() =>
+      assertTeamPlanGenerationCapacity({
+        journalBytes: 0,
+        planEventBytes: teamPlanEventBytes(started),
+        generationRecordLimit: started.generationRecordLimit,
+        generationCount: 6,
+      }),
+    ).toThrow('generation limit is exhausted');
+  });
+
+  test('keeps retries sequential and finalizes only terminal task closure', async () => {
+    const { fixture, journalPath, started, value } = await startedFixture(
+      (value) => {
+        const provider = value.nodes[0];
+        if (!provider) throw new Error('Lifecycle provider is missing.');
+        return {
+          ...value,
+          maxAttempts: 2,
+          nodes: [
+            {
+              ...provider,
+              taskId: 'downstream',
+              dependencies: ['consumer'],
+              consumerOutcome: 'Downstream uses consumer evidence.',
+              baseline: {
+                kind: ModuleDeliveryBaselineKind.IntegratedDependencies,
+                providerTaskIds: ['consumer'],
+              },
+            },
+            {
+              ...provider,
+              taskId: 'consumer',
+              dependencies: ['provider'],
+              consumerOutcome: 'Consumer uses provider evidence.',
+              baseline: {
+                kind: ModuleDeliveryBaselineKind.IntegratedDependencies,
+                providerTaskIds: ['provider'],
+              },
+            },
+            provider,
+          ],
+          edgeContracts: [
+            {
+              providerTaskId: 'provider',
+              consumerTaskId: 'consumer',
+              capability: 'provider capability',
+              publicTypes: ['ProviderResult'],
+              errors: ['ProviderError'],
+              behaviorInvariants: ['Provider evidence is deterministic.'],
+              securityInvariants: ['Provider state stays protected.'],
+              compatibilityExpectations: [
+                'Consumer accepts provider evidence.',
+              ],
+              owningTests: ['provider contract test'],
+            },
+            {
+              providerTaskId: 'consumer',
+              consumerTaskId: 'downstream',
+              capability: 'consumer capability',
+              publicTypes: ['ConsumerResult'],
+              errors: ['ConsumerError'],
+              behaviorInvariants: ['Consumer evidence is deterministic.'],
+              securityInvariants: ['Consumer state stays protected.'],
+              compatibilityExpectations: [
+                'Downstream accepts consumer evidence.',
+              ],
+              owningTests: ['consumer contract test'],
+            },
+          ],
+        };
+      },
+    );
+    let generation = 1;
+    let planDigest = started.modulePlanDigest;
+    const attempt = (number: number) => ({
+      taskId: 'provider',
+      attempt: number,
+      generation,
+      planDigest,
+    });
+    const selected = (request: {
+      readonly sequence: number;
+      readonly attempts: readonly ReturnType<typeof attempt>[];
+    }): TeamPlanSelectedEvent => ({
+      version: TEAM_PLAN_JOURNAL_VERSION,
+      kind: TeamPlanEventKind.Selected,
+      ...request,
+    });
+    const finalized = (sequence: number): TeamPlanEvent => ({
+      version: TEAM_PLAN_JOURNAL_VERSION,
+      kind: TeamPlanEventKind.Finalized,
+      sequence,
+      headCommit: fixture.baselineCommit,
+    });
+    await expect(
+      appendTeamPlanEvent({
+        journalPath,
+        event: selected({ sequence: 2, attempts: [attempt(1), attempt(2)] }),
+      }),
+    ).rejects.toThrow('repeats a logical task');
+    await expect(
+      appendTeamPlanEvent({ journalPath, event: finalized(2) }),
+    ).rejects.toThrow('nonterminal tasks');
+    await appendTeamPlanEvent({
+      journalPath,
+      event: selected({ sequence: 2, attempts: [attempt(1)] }),
+    });
+    const unusable = (request: {
+      readonly sequence: number;
+      readonly attempt: number;
+    }): TeamPlanEvent => ({
+      version: TEAM_PLAN_JOURNAL_VERSION,
+      kind: TeamPlanEventKind.Recorded,
+      sequence: request.sequence,
+      record: {
+        kind: TeamPlanRecordKind.FinalUnusable,
+        ...attempt(request.attempt),
+        conclusion: ModuleDeliveryGenerationFenceKind.Failed,
+      },
+    });
+    await appendTeamPlanEvent({
+      journalPath,
+      event: unusable({ sequence: 3, attempt: 1 }),
+    });
+    const planText = `${JSON.stringify({ ...value, generation: 2 })}\n`;
+    const replacement = decodeAndValidateModuleDeliveryPlan(planText);
+    if (replacement.status !== ModuleDeliveryValidationStatus.Accepted)
+      throw new Error('Replacement journal test plan was rejected.');
+    await appendTeamPlanEvent({
+      journalPath,
+      event: {
+        version: TEAM_PLAN_JOURNAL_VERSION,
+        kind: TeamPlanEventKind.Restarted,
+        sequence: 4,
+        planPath: started.planPath,
+        planText,
+        planSha256: teamPlanSha256(planText),
+        modulePlanDigest: replacement.planDigest,
+        sourceCommit: started.sourceCommit,
+        generationRecordLimit: started.generationRecordLimit,
+      },
+    });
+    generation = 2;
+    planDigest = replacement.planDigest;
+    await expect(
+      appendTeamPlanEvent({ journalPath, event: finalized(5) }),
+    ).rejects.toThrow('nonterminal tasks');
+    await appendTeamPlanEvent({
+      journalPath,
+      event: selected({ sequence: 5, attempts: [attempt(2)] }),
+    });
+    await appendTeamPlanEvent({
+      journalPath,
+      event: unusable({ sequence: 6, attempt: 2 }),
+    });
+    await appendTeamPlanEvent({ journalPath, event: finalized(7) });
+    expect((await loadTeamPlanJournal(journalPath)).finalized).toBe(true);
+  });
+
+  test('persists a validator-accepted quote-heavy maximum-class plan', async () => {
+    const { journalPath, started } = await startedFixture((value) => {
+      const node = value.nodes[0];
+      if (!node) throw new Error('Quote-heavy plan node is missing.');
+      const quoted = '"'.repeat(1_150);
+      const taskIds = ['provider-0'];
+      while (taskIds.length < 32) taskIds.push(`provider-${taskIds.length}`);
+      return {
+        ...value,
+        nodes: taskIds.map((taskId) => ({
+          ...node,
+          taskId,
+          consumerOutcome: quoted,
+          acceptance: {
+            commands: [quoted],
+            evidence: [quoted],
+          },
+        })),
+      };
+    });
+    expect(Buffer.byteLength(started.planText)).toBeGreaterThan(220_000);
+    expect(Buffer.byteLength(started.planText)).toBeLessThanOrEqual(262_144);
+    expect(teamPlanEventBytes(started)).toBeGreaterThan(400_000);
+    expect((await loadTeamPlanJournal(journalPath)).started).toEqual(started);
+  });
+});
