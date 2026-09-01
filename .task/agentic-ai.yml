@@ -173,7 +173,7 @@ tasks:
         else
           task loom:default FAMILY=prePush
         fi
-      - node .github/scripts/pr-authored-budget.cjs "{{.PR}}"
+      - bun .github/scripts/pr-authored-budget.ts "{{.PR}}"
 
   loom:cortex-audit:
     desc: Audit .cortex via Loom (optional CONFIG YAML, otherwise in-code default).
