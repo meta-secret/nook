@@ -57,7 +57,7 @@ ignore rules. Sealed source contexts scan every file admitted by the Docker
 context instead of reapplying Git-only ignore rules. The inventory never
 follows symlinks. Automation symlinks fail closed.
 
-The scan rejects prohibited source, package, and executable-artifact
-extensions. It reads only automation-capable text formats, including HTML
-entrypoints. Structured YAML and JSON manifests are decoded before runtime,
-dependency, and script references are checked.
+The scan rejects prohibited source, package, notebook, and executable-artifact
+extensions. Content matching is limited to shell files, manifests, and
+TypeScript or JavaScript under automation-owned directories. It uses explicit
+regular expressions for direct runtime and package-tool invocations.
