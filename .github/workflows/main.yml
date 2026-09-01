@@ -191,6 +191,7 @@ jobs:
           [[ "$FRONTIER_SHA" =~ ^[0-9a-f]{40}$ ]]
           git cat-file -e "$FRONTIER_SHA^{commit}"
           git merge-base --is-ancestor "$FRONTIER_SHA" "$AFTER_SHA"
+          rename_status="$(git diff --find-renames=1% --name-status "$FRONTIER_SHA" "$AFTER_SHA")"
           changed_files="$(git diff --no-renames --name-only "$FRONTIER_SHA" "$AFTER_SHA")"
 
           product_required=false
@@ -200,6 +201,14 @@ jobs:
             echo "ecosystem-required=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          while IFS=$'\t' read -r status _; do
+            case "$status" in
+              R*)
+                product_required=true
+                ecosystem_required=true
+                ;;
+            esac
+          done <<< "$rename_status"
           while IFS= read -r changed_file; do
             case "$changed_file" in
               .cortex/*.md | .github/workflows/repository-policy.yml)

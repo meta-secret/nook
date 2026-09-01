@@ -462,6 +462,10 @@ mainWorkflow.requireAll([
   "CountMismatch: 'count-mismatch'",
   "PageBound: 'page-bound'",
   "Rejected Main job inventory: ${inventory.state}",
+  "git diff --find-renames=1% --name-status",
+  "while IFS=$'\\t' read -r status _",
+  "R*)",
+  "git diff --no-renames --name-only",
 ]);
 mainWorkflow.forbid("return undefined");
 prWorkflow.requireAll([

@@ -541,6 +541,9 @@ fn product_workflows_skip_only_repository_policy_and_cortex_markdown_changes() -
     assert!(!main.contains("paths-ignore:"));
     assert!(main.contains("permissions:\n      actions: read\n      contents: read"));
     assert!(main.contains("persist-credentials: false"));
+    assert!(main.contains("git diff --find-renames=1% --name-status"));
+    assert!(main.contains("while IFS=$'\\t' read -r status _"));
+    assert!(main.contains("R*)"));
     assert!(main.contains("git diff --no-renames --name-only"));
     assert!(main.contains(".cortex/*.md | .github/workflows/repository-policy.yml)"));
     assert!(!main.contains("agentic-ai/minds/*)"));
@@ -561,6 +564,25 @@ fn product_workflows_skip_only_repository_policy_and_cortex_markdown_changes() -
     }
     assert!(!main.contains("return undefined"));
     assert!(main.contains("Rejected Main job inventory: ${inventory.state}"));
+    let product_required = |paths: &[&str], renamed: bool| {
+        renamed
+            || paths.iter().any(|path| {
+                !(path.starts_with(".cortex/") && path.ends_with(".md")
+                    || *path == ".github/workflows/repository-policy.yml")
+            })
+    };
+    for (paths, renamed, expected) in [
+        (vec![".cortex/old.md", ".cortex/new.md"], true, true),
+        (
+            vec![".github/workflows/repository-policy.yml", ".cortex/new.md"],
+            true,
+            true,
+        ),
+        (vec!["preflight/old.rs", "preflight/new.rs"], true, true),
+        (vec![".cortex/AGENTS.md"], false, false),
+    ] {
+        assert_eq!(product_required(&paths, renamed), expected);
+    }
 
     assert!(readiness.contains("path.startsWith(\".cortex/\") && path.endsWith(\".md\")"));
     assert!(readiness.contains("RENAMED_PATH_PRODUCT_SENTINEL"));
