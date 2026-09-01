@@ -259,7 +259,10 @@
         <p class="step-label">
           {translatePlain(I18N_KEYS.ExtensionCompanionStepLabel)}
         </p>
-        <h1 data-testid="companion-vault-status">
+        <h1
+          data-testid="companion-vault-status"
+          data-connected={showExistingConnection}
+        >
           {showExistingConnection && vaultName
             ? connectedVaultLabel(vaultName)
             : translatePlain(I18N_KEYS.ExtensionCompanionNotConnected)}
