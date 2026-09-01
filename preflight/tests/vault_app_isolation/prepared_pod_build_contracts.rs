@@ -158,6 +158,7 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
         "  deploy:\n",
         "\n      - name: Install dependencies",
     );
+    let research_image = section(&research_workflow, "  image:\n", "\n  deploy:\n");
     assert!(
         !research_global.contains("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH")
             && research_deploy.contains("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium"),
@@ -170,7 +171,7 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
         "ARC container actions must receive PR identity explicitly instead of reading a missing event file"
     );
     assert!(
-        !read(&root, ".github/workflows/web-research.yml").contains("context.payload"),
+        !research_image.contains("context.payload") && !research_deploy.contains("context.payload"),
         "ARC research actions must receive event identity explicitly"
     );
 

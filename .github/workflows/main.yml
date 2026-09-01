@@ -9,11 +9,9 @@
 # Extension e2e and UI demos remain required for the workflow but do not gate the development
 # deploy. Immutable releases remain
 # responsible for production wasm optimization.
-# Research-only changes are handled by web-research.yml. Cortex, Cursor,
-# repository-policy-only, and non-minds agentic-AI-only changes do not need
-# this workflow. Minds-only changes run the ecosystem gates here but skip the
-# product pipeline. A trusted workflow_run collector records each attempt in
-# meta-secret/nook-workbench.
+# Cortex Markdown-only changes do not need product validation. Any changed path
+# outside that narrow inventory restores the product and ecosystem pipelines. A trusted
+# workflow_run collector records each attempt in meta-secret/nook-workbench.
 #
 # E2e on main uses the unified stub `e2e` project (no GitHub API). Live sync
 # provider tests remain available through the manually dispatched e2e-pr.yml.
@@ -28,15 +26,6 @@ name: Main
 on:
   push:
     branches: [main]
-    paths:
-      - "**"
-      - "!.cortex/**"
-      - "!.cursor/**"
-      - "!.github/workflows/repository-policy.yml"
-      - "!.github/workflows/web-research.yml"
-      - "!agentic-ai/**"
-      - "agentic-ai/minds/**"
-      - "!nook-app/nook-web/nook-web-research/**"
 
 permissions:
   contents: read
@@ -67,44 +56,176 @@ env:
 jobs:
   product-paths:
     name: Classify Main paths
-    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
     outputs:
-      changed: ${{ steps.classify.outputs.changed }}
+      product-required: ${{ steps.classify.outputs.product-required || steps.fail-closed.outputs.product-required }}
+      ecosystem-required: ${{ steps.classify.outputs.ecosystem-required || steps.fail-closed.outputs.ecosystem-required }}
     steps:
+      - name: Default to complete validation
+        id: fail-closed
+        run: |
+          echo "product-required=true" >> "$GITHUB_OUTPUT"
+          echo "ecosystem-required=true" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve latest validated product frontier
+        id: frontier
+        continue-on-error: true
+        uses: actions/github-script@v9
+        with:
+          result-encoding: string
+          script: |
+            const expectedRepository = `${context.repo.owner}/${context.repo.repo}`
+            const JobInventoryState = Object.freeze({
+              Complete: 'complete',
+              MissingExpectedCount: 'missing-expected-count',
+              InvalidExpectedCount: 'invalid-expected-count',
+              CountMismatch: 'count-mismatch',
+              PageBound: 'page-bound',
+            })
+            const fetchJobs = async (runId) => {
+              const jobs = []
+              let expectedCount = 0
+              for (let page = 1; page <= 10; page += 1) {
+                const response = await github.rest.actions.listJobsForWorkflowRun({
+                  ...context.repo,
+                  run_id: runId,
+                  filter: 'latest',
+                  per_page: 100,
+                  page,
+                })
+                const rawExpectedCount = response.data.total_count
+                if (typeof rawExpectedCount !== 'number') {
+                  return { state: JobInventoryState.MissingExpectedCount }
+                }
+                if (!Number.isSafeInteger(rawExpectedCount) || rawExpectedCount <= 0) {
+                  return { state: JobInventoryState.InvalidExpectedCount }
+                }
+                if (expectedCount !== 0 && rawExpectedCount !== expectedCount) {
+                  return { state: JobInventoryState.CountMismatch }
+                }
+                expectedCount = rawExpectedCount
+                jobs.push(...response.data.jobs)
+                if (response.data.jobs.length < 100) break
+                if (page === 10) return { state: JobInventoryState.PageBound }
+              }
+              return jobs.length === expectedCount
+                ? { jobs, state: JobInventoryState.Complete }
+                : { state: JobInventoryState.CountMismatch }
+            }
+            try {
+              const workflow = (
+                await github.rest.actions.getWorkflow({
+                  ...context.repo,
+                  workflow_id: 'main.yml',
+                })
+              ).data
+              if (
+                !Number.isSafeInteger(workflow.id) ||
+                workflow.name !== 'Main' ||
+                workflow.path !== '.github/workflows/main.yml' ||
+                workflow.state !== 'active'
+              ) return ''
+              for (let page = 1; page <= 10; page += 1) {
+                const response = await github.rest.actions.listWorkflowRunsForWorkflow({
+                  ...context.repo,
+                  workflow_id: workflow.id,
+                  branch: 'main',
+                  event: 'push',
+                  status: 'success',
+                  per_page: 100,
+                  page,
+                })
+                for (const candidate of response.data.workflow_runs) {
+                  if (
+                    candidate.workflow_id !== workflow.id ||
+                    candidate.name !== 'Main' ||
+                    candidate.path !== '.github/workflows/main.yml' ||
+                    candidate.event !== 'push' ||
+                    candidate.status !== 'completed' ||
+                    candidate.conclusion !== 'success' ||
+                    candidate.head_branch !== 'main' ||
+                    candidate.head_repository?.full_name !== expectedRepository ||
+                    !/^[0-9a-f]{40}$/.test(candidate.head_sha)
+                  ) return ''
+                  const inventory = await fetchJobs(candidate.id)
+                  if (inventory.state !== JobInventoryState.Complete) {
+                    core.warning(`Rejected Main job inventory: ${inventory.state}`)
+                    return ''
+                  }
+                  const jobs = inventory.jobs
+                  const sentinels = jobs.filter(
+                    (job) => job.name === 'Native Rust verification',
+                  )
+                  if (sentinels.length !== 1) return ''
+                  const sentinel = sentinels[0]
+                  if (sentinel.status !== 'completed') return ''
+                  if (sentinel.conclusion === 'success') return candidate.head_sha
+                  if (sentinel.conclusion !== 'skipped') return ''
+                }
+                if (response.data.workflow_runs.length < 100) return ''
+              }
+            } catch (error) {
+              core.warning(`Failed to resolve validated product frontier: ${error}`)
+            }
+            return ''
+
       - name: Checkout complete push history
+        id: checkout
+        continue-on-error: true
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Detect product changes
         id: classify
+        if: steps.checkout.outcome == 'success' && steps.frontier.outcome == 'success' && steps.frontier.outputs.result != ''
+        continue-on-error: true
         env:
-          BEFORE_SHA: ${{ github.event.before }}
+          FRONTIER_SHA: ${{ steps.frontier.outputs.result }}
           AFTER_SHA: ${{ github.sha }}
         run: |
-          if [[ "$BEFORE_SHA" =~ ^0+$ ]]; then
-            changed_files="$(git diff-tree --no-commit-id --name-only -r "$AFTER_SHA")"
-          else
-            changed_files="$(git diff --name-only "$BEFORE_SHA" "$AFTER_SHA")"
-          fi
+          [[ "$FRONTIER_SHA" =~ ^[0-9a-f]{40}$ ]]
+          git cat-file -e "$FRONTIER_SHA^{commit}"
+          git merge-base --is-ancestor "$FRONTIER_SHA" "$AFTER_SHA"
+          rename_status="$(git diff --find-renames=1% --name-status "$FRONTIER_SHA" "$AFTER_SHA")"
+          changed_files="$(git diff --no-renames --name-only "$FRONTIER_SHA" "$AFTER_SHA")"
 
-          product_changed=false
+          product_required=false
+          ecosystem_required=false
+          if [ -z "$changed_files" ]; then
+            echo "product-required=true" >> "$GITHUB_OUTPUT"
+            echo "ecosystem-required=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          while IFS=$'\t' read -r status _; do
+            case "$status" in
+              R*)
+                product_required=true
+                ecosystem_required=true
+                ;;
+            esac
+          done <<< "$rename_status"
           while IFS= read -r changed_file; do
             case "$changed_file" in
-              .cortex/* | .cursor/* | .github/workflows/web-research.yml | agentic-ai/* | nook-app/nook-web/nook-web-research/*)
-                ;;
-              "")
+              .cortex/*.md | .github/workflows/repository-policy.yml)
                 ;;
               *)
-                product_changed=true
-                break
+                product_required=true
+                ecosystem_required=true
                 ;;
             esac
           done <<< "$changed_files"
-          echo "changed=$product_changed" >> "$GITHUB_OUTPUT"
+          echo "product-required=$product_required" >> "$GITHUB_OUTPUT"
+          echo "ecosystem-required=$ecosystem_required" >> "$GITHUB_OUTPUT"
 
   rust-ecosystem:
     name: Rust ecosystem
+    needs: product-paths
+    if: needs.product-paths.outputs.ecosystem-required == 'true'
     uses: ./.github/workflows/rust-ecosystem-checks.yml
     secrets: inherit
     with:
@@ -114,7 +235,7 @@ jobs:
   rust:
     name: Native Rust verification
     needs: [product-paths]
-    if: needs.product-paths.outputs.changed == 'true'
+    if: needs.product-paths.outputs.product-required == 'true'
     # Main refreshes the default-branch GHA native cache that new PRs are allowed to restore.
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     permissions:
@@ -175,7 +296,8 @@ jobs:
 
   wasm:
     name: WASM verification and artifact
-    needs: [rust]
+    needs: [product-paths, rust]
+    if: needs.product-paths.outputs.product-required == 'true'
     outputs:
       cache_publication_outcome: ${{ steps.publish_wasm_cache.outcome }}
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
@@ -249,7 +371,8 @@ jobs:
 
   wasm-cache-publish:
     name: WASM cache publication
-    needs: [wasm]
+    needs: [product-paths, wasm]
+    if: needs.product-paths.outputs.product-required == 'true'
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     steps:
       - name: Require successful WASM cache publication
@@ -263,7 +386,8 @@ jobs:
 
   wasm-cache-proof:
     name: Portable WASM cache publication proof
-    needs: [wasm-cache-publish]
+    needs: [product-paths, wasm-cache-publish]
+    if: needs.product-paths.outputs.product-required == 'true'
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     permissions:
       contents: read
@@ -297,7 +421,8 @@ jobs:
 
   web:
     name: Verify web build
-    needs: [wasm]
+    needs: [product-paths, wasm]
+    if: needs.product-paths.outputs.product-required == 'true'
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     permissions:
       contents: read
@@ -381,7 +506,8 @@ jobs:
 
   web-e2e:
     name: Web e2e
-    needs: [web]
+    needs: [product-paths, web]
+    if: needs.product-paths.outputs.product-required == 'true'
     runs-on: nook-k0s-container
     container:
       image: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
@@ -403,7 +529,8 @@ jobs:
 
   extension-e2e:
     name: Extension e2e
-    needs: [web]
+    needs: [product-paths, web]
+    if: needs.product-paths.outputs.product-required == 'true'
     runs-on: nook-k0s-container
     container:
       image: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
@@ -424,7 +551,8 @@ jobs:
     name: UI demos
     # This is the final local cache producer. Serialize it behind web so it
     # clones the promoted web generation instead of racing a sibling lineage.
-    needs: [web]
+    needs: [product-paths, web]
+    if: needs.product-paths.outputs.product-required == 'true'
     runs-on: nook-k0s-container
     container:
       image: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
@@ -514,7 +642,8 @@ jobs:
 
   deploy:
     name: Deploy development
-    needs: [web, web-e2e, wasm-cache-proof]
+    needs: [product-paths, web, web-e2e, wasm-cache-proof]
+    if: needs.product-paths.outputs.product-required == 'true'
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     environment:
       name: development

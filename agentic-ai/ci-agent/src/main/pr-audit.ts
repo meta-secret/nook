@@ -1,11 +1,15 @@
 import type { Octokit } from "@octokit/rest";
 
 import {
+  assertPullRequestRevision,
+  classifyPullRequestChangedPaths,
   createOctokit,
   inspectPrFeedback,
   parseRepository,
+  readPullRequestRevision,
   requiredPrWorkflows,
   type RepoRef,
+  type PullRequestPathInventory,
   type RequiredPrWorkflow,
 } from "./github.js";
 import { prettyJson } from "./json.js";
@@ -84,6 +88,7 @@ export type PrAudit = {
   base: { branch: string; sha: string };
   branchProtection: BranchProtectionAudit;
   changedFiles: string[];
+  changedFileInventory: PullRequestPathInventory;
   exactHeadDeployment?: { environment: string; state: string; url?: string };
   externalReviewPolicy: "inspect-existing-feedback-without-waiting";
   feedback: Awaited<ReturnType<typeof inspectPrFeedback>>;
@@ -125,23 +130,40 @@ export async function buildPrAudit(
   prNumber: number,
 ): Promise<PrAudit> {
   const { owner, repo } = repoRef;
-  const [{ data: pr }, files] = await Promise.all([
-    octokit.rest.pulls.get({ owner, repo, pull_number: prNumber }),
-    octokit.paginate(octokit.rest.pulls.listFiles, {
-      owner,
-      repo,
-      pull_number: prNumber,
-      per_page: 100,
-    }),
-  ]);
-  const changedFiles = files.map((file) => file.filename);
+  const { data: pr } = await octokit.rest.pulls.get({
+    owner,
+    repo,
+    pull_number: prNumber,
+  });
+  const expectedRevision = {
+    baseRef: pr.base.ref,
+    baseSha: pr.base.sha,
+    headSha: pr.head.sha,
+  };
+  const files = await octokit.paginate(octokit.rest.pulls.listFiles, {
+    owner,
+    repo,
+    pull_number: prNumber,
+    per_page: 100,
+  });
+  const inventoryRevision = await readPullRequestRevision(
+    octokit,
+    repoRef,
+    prNumber,
+  );
+  assertPullRequestRevision(expectedRevision, inventoryRevision);
+  const changedFileInventory = classifyPullRequestChangedPaths(
+    files,
+    pr.changed_files,
+  );
+  const changedFiles = changedFileInventory.paths;
   const requiredWorkflows = await auditWorkflows({
     baseSha: pr.base.sha,
     headSha: pr.head.sha,
     octokit,
     prNumber,
     repoRef,
-    workflows: requiredPrWorkflows(changedFiles),
+    workflows: requiredPrWorkflows(changedFileInventory),
   });
   const [comparison, feedback, branchProtection, exactHeadDeployment] =
     await Promise.all([
@@ -164,6 +186,12 @@ export async function buildPrAudit(
             pull_number: prNumber,
           })
         ).data.mergeable;
+  const settledRevision = await readPullRequestRevision(
+    octokit,
+    repoRef,
+    prNumber,
+  );
+  assertPullRequestRevision(expectedRevision, settledRevision);
 
   const reasons: string[] = [];
   if (pr.state !== "open") reasons.push(`state is ${pr.state}`);
@@ -194,9 +222,7 @@ export async function buildPrAudit(
       reasons.push(`${workflow.workflowName} run is ${workflow.status.value}`);
     } else if (workflow.conclusion.state === WorkflowConclusionState.Pending) {
       reasons.push(`${workflow.workflowName} run has no conclusion`);
-    } else if (
-      workflow.conclusion.value !== GithubWorkflowConclusion.Success
-    ) {
+    } else if (workflow.conclusion.value !== GithubWorkflowConclusion.Success) {
       reasons.push(
         `${workflow.workflowName} run concluded ${workflow.conclusion.value}`,
       );
@@ -239,6 +265,7 @@ export async function buildPrAudit(
   return {
     base: { branch: pr.base.ref, sha: pr.base.sha },
     branchProtection,
+    changedFileInventory,
     changedFiles,
     exactHeadDeployment,
     externalReviewPolicy: "inspect-existing-feedback-without-waiting",

@@ -1,89 +1,28 @@
-# Specialist entry points for Rust ecosystem gates.
-# Labeled product PRs run the same jobs inside pr.yml so every exact-head gate
-# appears on one Actions run page. Ordinary PR pushes never start these checks.
-# Main runs the same jobs inside main.yml for every merged-head verification.
-# agentic-ai/minds-only PRs still use this workflow because the product PR
-# workflow ignores agentic-ai/**.
+# Scheduled and manual specialist entry points for Rust ecosystem gates.
+# Every labeled PR, including minds changes, runs these jobs inside pr.yml so
+# one exact-head request cannot reserve two copies of the expensive suite.
 
 name: Rust ecosystem checks
 
 on:
-  pull_request:
-    types: [labeled]
-    paths:
-      - agentic-ai/minds/**
   schedule:
     - cron: "17 5 * * 1"
   workflow_dispatch:
 
 permissions:
   contents: read
-  pull-requests: read
 
 concurrency:
   group: >-
     rust-ecosystem-specialist-${{ github.event_name }}-
-    ${{ github.event.pull_request.number || github.ref }}-
-    ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.run_id || 'shared' }}
+    ${{ github.ref }}-${{ github.run_id }}
   cancel-in-progress: true
 
 jobs:
-  validation-request:
-    name: Validate explicit ecosystem request
-    runs-on: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
-    timeout-minutes: 2
-    outputs:
-      should-run: ${{ steps.pr-scope.outputs.result }}
-    steps:
-      - name: Reject unsupported label events
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          REQUESTED_LABEL: ${{ github.event.label.name }}
-        run: |
-          if [ "$EVENT_NAME" != "pull_request" ]; then
-            exit 0
-          fi
-          case "$REQUESTED_LABEL" in
-            ci:validate|ci:full-e2e) ;;
-            *)
-              echo "Unsupported Rust ecosystem validation label: $REQUESTED_LABEL" >&2
-              exit 1
-              ;;
-          esac
-
-      - name: Keep mixed PRs in the product workflow
-        id: pr-scope
-        uses: actions/github-script@v9
-        with:
-          result-encoding: string
-          script: |
-            if (context.eventName !== 'pull_request') return 'true'
-            const files = await github.paginate(github.rest.pulls.listFiles, {
-              ...context.repo,
-              pull_number: context.issue.number,
-              per_page: 100,
-            })
-            const isIgnoredByProductWorkflow = (path) =>
-              path.startsWith('.cortex/') ||
-              path.startsWith('.cursor/') ||
-              path === '.github/workflows/web-research.yml' ||
-              path.startsWith('agentic-ai/') ||
-              path.startsWith('nook-app/nook-web/nook-web-research/')
-            return String(
-              files.length > 0 &&
-              files.every((file) => isIgnoredByProductWorkflow(file.filename)),
-            )
-
   ecosystem:
     name: Rust ecosystem
-    needs: validation-request
-    if: >-
-      github.event_name != 'pull_request' ||
-      ((github.event.label.name == 'ci:validate' ||
-      github.event.label.name == 'ci:full-e2e') &&
-      needs.validation-request.outputs.should-run == 'true')
     uses: ./.github/workflows/rust-ecosystem-checks.yml
     secrets: inherit
     with:
-      fuzz_seconds: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && '900' || '20' }}
-      isolated_cache_write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
+      fuzz_seconds: "900"
+      isolated_cache_write: "false"

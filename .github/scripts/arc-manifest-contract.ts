@@ -101,6 +101,7 @@ interface ArcValues {
 
 interface WorkflowJob {
   if?: string;
+  permissions?: Record<string, string>;
   "runs-on"?: string;
   steps?: Array<{ run?: string; uses?: string }>;
   uses?: string;
@@ -108,6 +109,29 @@ interface WorkflowJob {
 
 interface WorkflowManifest {
   jobs?: Record<string, WorkflowJob>;
+}
+
+enum WorkflowPermissionsState {
+  Missing = "missing",
+  Present = "present",
+}
+
+type WorkflowPermissions =
+  | { state: WorkflowPermissionsState.Missing }
+  | {
+      state: WorkflowPermissionsState.Present;
+      value: Record<string, string>;
+    };
+
+function normalizeWorkflowPermissions(job: WorkflowJob): WorkflowPermissions {
+  const value: unknown = job.permissions;
+  if (!(value instanceof Object) || Array.isArray(value)) {
+    return { state: WorkflowPermissionsState.Missing };
+  }
+  return {
+    state: WorkflowPermissionsState.Present,
+    value: value as Record<string, string>,
+  };
 }
 
 const runnersSource = await read(
@@ -296,7 +320,7 @@ containerHook.requireAll([
   "name: nook-arc-container-hook",
   "automountServiceAccountToken: false",
   'name: "$job"',
-  "nook.nokey.sh/arc-build: \"true\"",
+  'nook.nokey.sh/arc-build: "true"',
   "values: [primary]",
   "values: [secondary]",
   "values: [overflow]",
@@ -327,7 +351,7 @@ buildkit.requireAll([
   "kind: StatefulSet",
   "replicas: 4",
   "requiredDuringSchedulingIgnoredDuringExecution:",
-  "nook.nokey.sh/arc-build: \"true\"",
+  'nook.nokey.sh/arc-build: "true"',
   "v0.32.2-rootless@sha256:60d1f642e29dc938bd6c109ba5500849fccf41921927c5339788b8227f57feb9",
   "--oci-worker-gc-keepstorage",
   "--oci-worker-no-process-sandbox",
@@ -375,7 +399,7 @@ dockerSetup.requireAll([
 ]);
 runtimeSmoke.requireAll([
   "NOOK_ARC_RUNNER",
-  'type=local,dest=$shared_dir',
+  "type=local,dest=$shared_dir",
   "ARC node-local rootless BuildKit smoke passed",
 ]);
 runtimeSmoke.forbidAll(["--load", "docker run", "docker info", "podman"]);
@@ -399,14 +423,14 @@ tasks.requireAll([
   "disable --now nook-arc-buildkit-cloner.service",
   '"$legacy_image_next"',
   "/etc/sysctl.d/91-nook-buildkit-keyring.conf",
-  'keyring_maxkeys=20000',
-  'keyring_maxbytes=2000000',
+  "keyring_maxkeys=20000",
+  "keyring_maxbytes=2000000",
   'sysctl -p "$keyring_config"',
-  'cat /proc/sys/kernel/keys/maxkeys',
-  'cat /proc/sys/kernel/keys/maxbytes',
-  'nook.nokey.sh/arc-build=preparing:NoSchedule --overwrite',
+  "cat /proc/sys/kernel/keys/maxkeys",
+  "cat /proc/sys/kernel/keys/maxbytes",
+  "nook.nokey.sh/arc-build=preparing:NoSchedule --overwrite",
   "ARC build node $node is quarantined for convergence",
-  'quarantine_failed=0',
+  "quarantine_failed=0",
   'test "$quarantine_failed" = 0',
   "- task: arc:build-hosts:quarantine\n      - task: arc:buildkit:storage:prepare",
   "container-runner-scale-set-values.yaml",
@@ -414,20 +438,28 @@ tasks.requireAll([
   "for scale_set in nook-k0s nook-k0s-hive nook-k0s-container",
 ]);
 mainWorkflow.forbid("NOOK_CACHE_RUNS_ON");
-mainWorkflow.forbid("    runs-on: ubuntu-latest");
+mainWorkflow.requireAll([
+  "name: Classify Main paths",
+  "runs-on: ubuntu-latest",
+  "product-required: ${{ steps.classify.outputs.product-required || steps.fail-closed.outputs.product-required }}",
+  "ecosystem-required: ${{ steps.classify.outputs.ecosystem-required || steps.fail-closed.outputs.ecosystem-required }}",
+  "git diff --no-renames --name-only",
+  "needs.product-paths.outputs.product-required == 'true'",
+]);
+mainWorkflow.count({ fragment: "    runs-on: ubuntu-latest", expected: 1 });
 mainWorkflow.requireAll([
   "wasm-cache-publish:",
   "name: WASM cache publication",
-  "needs: [wasm]",
+  "needs: [product-paths, wasm]",
   "cache_publication_outcome: ${{ steps.publish_wasm_cache.outcome }}",
   "continue-on-error: true",
   "CACHE_PUBLICATION_OUTCOME: ${{ needs.wasm.outputs.cache_publication_outcome }}",
   "WASM cache publication failed in the verified producer",
   "wasm-cache-proof:",
   "name: Portable WASM cache publication proof",
-  "needs: [wasm-cache-publish]",
+  "needs: [product-paths, wasm-cache-publish]",
   "Install Bun for registry cache audit",
-  "NOOK_WASM_CACHE_PROMOTION_ENABLED: \"1\"",
+  'NOOK_WASM_CACHE_PROMOTION_ENABLED: "1"',
   "NOOK_REGISTRY_USERNAME: ${{ secrets.NOOK_REGISTRY_USERNAME }}",
   "bash .github/scripts/verify-wasm-gha-cache.sh",
   "web-e2e:",
@@ -440,13 +472,32 @@ mainWorkflow.requireAll([
   "runs-on: nook-k0s-container",
   "Publish exact-source browser job image",
   "name: Verify web build",
-  "needs: [web, web-e2e, wasm-cache-proof]",
+  "needs: [product-paths, web, web-e2e, wasm-cache-proof]",
   "task _ci:main:web:e2e-only",
   "task _extension:test:e2e",
   "task _web:test:ui-demo",
 ]);
 mainWorkflow.forbid("Build sealed web image for development deploy");
+mainWorkflow.requireAll([
+  "const JobInventoryState = Object.freeze({",
+  "MissingExpectedCount: 'missing-expected-count'",
+  "InvalidExpectedCount: 'invalid-expected-count'",
+  "CountMismatch: 'count-mismatch'",
+  "PageBound: 'page-bound'",
+  "Rejected Main job inventory: ${inventory.state}",
+  "git diff --find-renames=1% --name-status",
+  "while IFS=$'\\t' read -r status _",
+  "R*)",
+  "git diff --no-renames --name-only",
+]);
+mainWorkflow.forbid("return undefined");
 prWorkflow.requireAll([
+  "name: Validate explicit CI request",
+  "runs-on: ubuntu-latest",
+  "product-validation-required: ${{ steps.product-scope.outputs.result }}",
+  "files = await github.paginate(github.rest.pulls.listFiles",
+  "file.status === PullRequestFileStatus.Renamed",
+  "needs.validation-request.outputs.product-validation-required == 'true'",
   "full-e2e-shard:",
   "name: Full browser e2e shard (${{ matrix.shard }}/2)",
   "fail-fast: false",
@@ -454,7 +505,7 @@ prWorkflow.requireAll([
   "NOOK_E2E_SHARD: ${{ matrix.shard }}/2",
   "full-e2e:",
   "name: Full browser e2e (main fix)",
-  "needs: [full-e2e-shard, wasm]",
+  "needs: [validation-request, full-e2e-shard, wasm]",
   "SHARD_RESULT: ${{ needs.full-e2e-shard.result }}",
   "Publish exact-source PR browser job image",
   "nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}",
@@ -463,7 +514,7 @@ prWorkflow.requireAll([
   "task _extension:test:e2e",
   "task _web:test:ui-demo",
 ]);
-prWorkflow.forbid("    runs-on: ubuntu-latest");
+prWorkflow.count({ fragment: "    runs-on: ubuntu-latest", expected: 1 });
 nodeSetup.requireAll([
   "/home/runner/externals/node24/bin/node",
   'echo "$(dirname "$node_bin")" >> "$GITHUB_PATH"',
@@ -505,10 +556,10 @@ webDockerTasks.requireAll([
 wasmCacheProof.requireAll([
   "Publish from the already-selected node-local rootless BuildKit shard",
   "repair solve never imports the ref it is replacing",
-  'nook-rust-wasm-deps-input-v3:fingerprint-${deps_fingerprint}',
+  "nook-rust-wasm-deps-input-v3:fingerprint-${deps_fingerprint}",
   "nook-rust-wasm-source-v3:buildcache,ignore-error=true",
   "compression=zstd,force-compression=true",
-  'builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref}',
+  "builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref}",
   "verify-registry-cache-blobs.ts",
 ]);
 wasmCacheProof.forbidAll([
@@ -517,11 +568,17 @@ wasmCacheProof.forbidAll([
   "docker buildx rm",
 ]);
 const promotionSolve = wasmCacheProofSource.slice(
-  wasmCacheProofSource.indexOf('if [ "${NOOK_WASM_CACHE_PROMOTION_ENABLED:-}" = "1" ]'),
-  wasmCacheProofSource.indexOf('bun "$repo_root/.github/scripts/verify-registry-cache-blobs.ts"'),
+  wasmCacheProofSource.indexOf(
+    'if [ "${NOOK_WASM_CACHE_PROMOTION_ENABLED:-}" = "1" ]',
+  ),
+  wasmCacheProofSource.indexOf(
+    'bun "$repo_root/.github/scripts/verify-registry-cache-blobs.ts"',
+  ),
 );
 if (promotionSolve.includes("cache-from=type=registry,ref=${cache_ref}")) {
-  throw new Error("portable WASM cache promotion must not import its destination");
+  throw new Error(
+    "portable WASM cache promotion must not import its destination",
+  );
 }
 remoteWorkflow.forbidAll(["NOOK_CACHE_RUNS_ON", "nook-k0s-cache"]);
 remoteWorkflow.requireAll([
@@ -565,6 +622,16 @@ const hostedUntrustedBoundary = new Set([
   "hive.yml#console-untrusted",
   "web-research.yml#validate-untrusted",
 ]);
+const hostedCheapClassifiers = new Set([
+  "linear-ui-demo.yml#product-scope",
+  "main-build-stats.yml#product-scope",
+  "main-failure-handoff.yml#product-scope",
+  "main.yml#product-paths",
+  "pr-validation-handoff.yml#product-scope",
+  "pr.yml#validation-request",
+  "web-research.yml#research-paths",
+]);
+const hostedCheckoutClassifiers = new Set(["main.yml#product-paths"]);
 const workflowsDir = resolve(root, ".github/workflows");
 const workflowFiles = (await readdir(workflowsDir))
   .filter((file) => file.endsWith(".yml") || file.endsWith(".yaml"))
@@ -583,13 +650,40 @@ for (const workflowFile of workflowFiles) {
     }
     const identity = `${workflowFile}#${jobName}`;
     if (placement === "ubuntu-latest") {
+      if (hostedCheapClassifiers.has(identity)) {
+        observedHostedExceptions.add(identity);
+        const serializedJob = JSON.stringify(job);
+        const permissions = normalizeWorkflowPermissions(job);
+        if (
+          permissions.state === WorkflowPermissionsState.Missing ||
+          Object.keys(permissions.value).length === 0 ||
+          Object.values(permissions.value).some(
+            (permission) => permission !== "read",
+          ) ||
+          serializedJob.includes("secrets.") ||
+          (!hostedCheckoutClassifiers.has(identity) &&
+            serializedJob.includes("actions/checkout")) ||
+          (hostedCheckoutClassifiers.has(identity) &&
+            !serializedJob.includes('"persist-credentials":false'))
+        ) {
+          throw new Error(
+            `${identity} must remain an explicitly read-only, credential-free classifier`,
+          );
+        }
+        continue;
+      }
       if (!hostedUntrustedBoundary.has(identity)) {
         throw new Error(`${identity} routes trusted work to GitHub cloud`);
       }
       observedHostedExceptions.add(identity);
       const condition = job.if ?? "";
-      if (!condition.includes("head.repo.full_name") || !condition.includes("dependabot[bot]")) {
-        throw new Error(`${identity} must be restricted to forks and Dependabot`);
+      if (
+        !condition.includes("head.repo.full_name") ||
+        !condition.includes("dependabot[bot]")
+      ) {
+        throw new Error(
+          `${identity} must be restricted to forks and Dependabot`,
+        );
       }
       continue;
     }
@@ -599,13 +693,19 @@ for (const workflowFile of workflowFiles) {
       }
       continue;
     }
-    if (!placement.includes("nook-k0s") && !placement.includes("NOOK_RUNS_ON")) {
+    if (
+      !placement.includes("nook-k0s") &&
+      !placement.includes("NOOK_RUNS_ON")
+    ) {
       throw new Error(`${identity} is not routed through an ARC scale set`);
     }
   }
 }
 
-for (const exception of hostedUntrustedBoundary) {
+for (const exception of [
+  ...hostedUntrustedBoundary,
+  ...hostedCheapClassifiers,
+]) {
   if (!observedHostedExceptions.has(exception)) {
     throw new Error(`stale hosted runner exception: ${exception}`);
   }
