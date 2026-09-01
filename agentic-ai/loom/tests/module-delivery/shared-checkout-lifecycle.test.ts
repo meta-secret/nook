@@ -319,7 +319,7 @@ function mutateGit([fixture, mutation]: readonly [
   }
   if (mutation === 'info-mode' || mutation === 'info-root-mode') {
     const path = mutation === 'info-mode' ? exclude : info;
-    const mode = statSync(path).mode;
+    const mode = statSync(path).mode & 0o7777;
     chmodSync(path, 0o700);
     return () => chmodSync(path, mode);
   }
@@ -348,13 +348,12 @@ function mutateGit([fixture, mutation]: readonly [
 }
 
 function rejectMutations(runtime: Runtime, action: () => void): void {
-  const root = runtime.fixture.sourceRoot;
-  const snapshot = captureSourceSnapshot(root);
+  const snapshot = captureSourceSnapshot(runtime.fixture.sourceRoot);
   for (const kind of MUTATIONS) {
     const restore = mutateGit([runtime.fixture, kind]);
     expect(action).toThrow();
     restore();
-    expect(captureSourceSnapshot(root), kind).toEqual(snapshot);
+    expect(captureSourceSnapshot(runtime.fixture.sourceRoot)).toEqual(snapshot);
   }
 }
 
