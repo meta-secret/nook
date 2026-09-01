@@ -557,6 +557,24 @@ test('localizes non-file and oversized record failures', async () => {
       );
     }
   }
+  try {
+    await runTeamPlanCliWithArguments({
+      argv: recordArguments({
+        journalPath: join(root, 'journal'),
+        requestPath: join(root, 'missing.json'),
+      }),
+      locale: 'ru-RU',
+    });
+    throw new Error('Expected localized record storage failure.');
+  } catch (cause) {
+    expect(cause).toBeInstanceOf(LoomFailure);
+    expect((cause as LoomFailure).code).toBe(
+      LoomFailureCode.TeamPlanStorageFailed,
+    );
+    expect(((cause as LoomFailure).cause as Error).message).toBe(
+      'Операция хранения команды Team Plan завершилась ошибкой.',
+    );
+  }
   rmSync(root, { recursive: true });
 });
 

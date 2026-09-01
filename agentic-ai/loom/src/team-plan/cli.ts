@@ -378,12 +378,16 @@ async function readTeamPlanRecordRequest(
       await requestFile.close();
     }
   } catch (cause) {
+    if (cause instanceof LoomFailure) throw cause;
+    const storageCause =
+      cause instanceof Error
+        ? cause
+        : new Error('Team Plan record request read failed.');
     throw loomFailureFromCause({
       code: LoomFailureCode.TeamPlanStorageFailed,
-      cause:
-        cause instanceof Error
-          ? cause
-          : new Error('Team Plan record request read failed.'),
+      cause: new Error(request.messages.runtimeStorageFailure, {
+        cause: storageCause,
+      }),
     });
   }
 }
