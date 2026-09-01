@@ -183,9 +183,10 @@ export async function runTeamPlanCli(
       code: LoomFailureCode.TeamPlanCommandFailed,
       cause: new Error('Team Plan command dispatch is invalid.'),
     });
+  const messages = teamPlanMessages(cliArguments.locale);
   const serialized = await readTeamPlanRecordRequest({
     requestPath: command.requestPath,
-    messages: teamPlanMessages(cliArguments.locale),
+    messages,
   });
   let record: TeamPlanRecord;
   try {
@@ -193,10 +194,7 @@ export async function runTeamPlanCli(
   } catch (cause) {
     throw loomFailureFromCause({
       code: LoomFailureCode.TeamPlanValidationFailed,
-      cause:
-        cause instanceof Error
-          ? cause
-          : new Error('Team Plan record JSON is invalid.'),
+      cause: new Error(messages.invalidRecordJson, { cause }),
     });
   }
   const request: TeamPlanRecordRequest = {
@@ -256,10 +254,7 @@ async function readTeamPlanRecordRequest(
       } catch (cause) {
         throw loomFailureFromCause({
           code: LoomFailureCode.TeamPlanValidationFailed,
-          cause:
-            cause instanceof Error
-              ? cause
-              : new Error('Team Plan record request UTF-8 is invalid.'),
+          cause: new Error(request.messages.invalidRecordEncoding, { cause }),
         });
       }
     } finally {

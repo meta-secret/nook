@@ -74,6 +74,10 @@ type NestedProviderEvidenceRequest = Readonly<{
   depth: number;
   entriesPerIdentity: number;
 }>;
+type LocalizedRecordContentFixture = Readonly<{
+  contents: string | Buffer;
+  expectedMessage: string;
+}>;
 
 function runTeamPlanCli(request: TestTeamPlanCliArguments): Promise<number> {
   return runTeamPlanCliWithArguments({ argv: request.argv, locale: 'en' });
@@ -470,6 +474,44 @@ test('localizes non-file and oversized record failures', async () => {
       );
       expect(((cause as LoomFailure).cause as Error).message).toBe(
         'Файл запроса записи Team Plan недопустим или слишком велик.',
+      );
+    }
+  }
+  rmSync(root, { recursive: true });
+});
+
+test('localizes malformed record contents', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'team-plan-cli-localized-content-'));
+  const requestPath = join(root, 'record.json');
+  const fixtures: readonly LocalizedRecordContentFixture[] = [
+    {
+      contents: '{',
+      expectedMessage: 'JSON запроса записи Team Plan недопустим.',
+    },
+    {
+      contents: Buffer.from([0xc3, 0x28]),
+      expectedMessage:
+        'Запрос записи Team Plan должен быть в допустимой кодировке UTF-8.',
+    },
+  ];
+  for (const fixture of fixtures) {
+    writeFileSync(requestPath, fixture.contents);
+    try {
+      await runTeamPlanCliWithArguments({
+        argv: [
+          'record',
+          '--journal',
+          join(root, 'journal'),
+          '--request',
+          requestPath,
+        ],
+        locale: 'ru-RU',
+      });
+      throw new Error('Expected localized record-content failure.');
+    } catch (cause) {
+      expect(cause).toBeInstanceOf(LoomFailure);
+      expect(((cause as LoomFailure).cause as Error).message).toBe(
+        fixture.expectedMessage,
       );
     }
   }
