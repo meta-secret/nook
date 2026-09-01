@@ -1,5 +1,14 @@
 import { afterEach, expect, test } from 'bun:test';
-import { mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 
 import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
@@ -244,68 +253,134 @@ function integrate([runtime, state, lease, submission]: readonly [
   });
 }
 
-function mutateInfo([fixture, kind]: readonly [
+function nextWriter([runtime, state]: readonly [
+  Runtime,
+  ModuleIntegrationState,
+]): readonly [
+  ModuleDeliveryAttemptLease,
+  ModuleDeliveryWriteProviderSubmission,
+] {
+  const admission = selectModuleDeliveryAdmissions({
+    authority: runtime.authority,
+    acceptedPlan: runtime.plan,
+    state: state.admissionState,
+  }).admissions[0];
+  if (!admission) throw new Error('Writer admission is missing.');
+  const lease = recordModuleDeliveryAttemptLeases({
+    authority: runtime.authority,
+    state: state.admissionState,
+    admissions: [admission],
+  }).leases[0];
+  if (!lease) throw new Error('Writer lease is missing.');
+  return [lease, commitWriter({ runtime, lease, path: lease.taskId })];
+}
+
+const MUTATIONS = [
+  'remote-config',
+  'hook',
+  'foreign-ref',
+  'staged-index',
+  'skip-worktree',
+  'assume-unchanged',
+  'info-content',
+  'info-mode',
+  'info-symlink',
+  'info-root-mode',
+  'info-root-type',
+  'info-hidden-file',
+] as const;
+
+function mutateGit([fixture, mutation]: readonly [
   GitFixture,
-  'hidden' | 'root-file',
+  (typeof MUTATIONS)[number],
 ]): () => void {
+  const git = fixtureGit(fixture);
   const info = join(fixture.sourceRoot, '.git/info');
-  const saved = `${info}.saved`;
-  renameSync(info, saved);
-  if (kind === 'root-file') writeFileSync(info, 'unsupported');
-  else {
-    mkdirSync(info, { mode: 0o700 });
-    writeFileSync(join(info, 'exclude'), 'hidden/**\n');
-    writeFileSync(join(info, 'hidden-control'), 'control');
-    const hidden = join(fixture.sourceRoot, 'hidden');
-    mkdirSync(hidden);
-    writeFileSync(join(hidden, 'secret'), 'secret');
+  const exclude = join(info, 'exclude');
+  if (mutation === 'remote-config') {
+    git(['config', 'remote.origin.url', 'https://example.invalid/repo']);
+    return () => void git(['config', '--unset-all', 'remote.origin.url']);
   }
+  if (mutation === 'hook') {
+    const hook = join(fixture.sourceRoot, '.git/hooks/pre-commit');
+    writeFileSync(hook, '#!/bin/sh\nexit 0\n');
+    return () => rmSync(hook);
+  }
+  if (mutation === 'foreign-ref') {
+    git(['update-ref', 'refs/custom/drift', 'HEAD']);
+    return () => void git(['update-ref', '-d', 'refs/custom/drift']);
+  }
+  if (mutation === 'staged-index') {
+    writeFileSync(join(fixture.sourceRoot, 'module/seed.txt'), 'drift\n');
+    git(['add', 'module/seed.txt']);
+    return () => void git(['reset', '--hard', '--quiet', 'HEAD']);
+  }
+  if (mutation === 'skip-worktree' || mutation === 'assume-unchanged') {
+    git(['update-index', `--${mutation}`, 'module/seed.txt']);
+    return () =>
+      void git(['update-index', `--no-${mutation}`, 'module/seed.txt']);
+  }
+  if (mutation === 'info-content') {
+    const control = join(info, 'control');
+    writeFileSync(control, 'drift');
+    return () => rmSync(control);
+  }
+  if (mutation === 'info-mode' || mutation === 'info-root-mode') {
+    const path = mutation === 'info-mode' ? exclude : info;
+    const mode = statSync(path).mode;
+    chmodSync(path, 0o700);
+    return () => chmodSync(path, mode);
+  }
+  if (mutation === 'info-symlink') {
+    const saved = `${exclude}.saved`;
+    renameSync(exclude, saved);
+    symlinkSync('../../module/seed.txt', exclude);
+    return () => {
+      rmSync(exclude);
+      renameSync(saved, exclude);
+    };
+  }
+  if (mutation === 'info-root-type') {
+    const saved = `${info}.saved`;
+    renameSync(info, saved);
+    writeFileSync(info, 'unsupported');
+    return () => {
+      rmSync(info);
+      renameSync(saved, info);
+    };
+  }
+  const original = readFileSync(exclude);
+  const hidden = join(fixture.sourceRoot, 'hidden');
+  writeFileSync(exclude, 'hidden/**\n');
+  writeFileSync(join(info, 'hidden-control'), 'control');
+  mkdirSync(hidden);
+  writeFileSync(join(hidden, 'secret'), 'secret');
   return () => {
-    rmSync(info, { recursive: true });
-    renameSync(saved, info);
-    if (kind === 'hidden')
-      rmSync(join(fixture.sourceRoot, 'hidden'), { recursive: true });
+    writeFileSync(exclude, original);
+    rmSync(join(info, 'hidden-control'));
+    rmSync(hidden, { recursive: true });
   };
 }
 
+test.each([...MUTATIONS])(
+  'rejects %s during production write acceptance',
+  (kind) => {
+    const runtime = preparedRuntime();
+    const [lease, submission] = nextWriter([runtime, runtime.state]);
+    const restore = mutateGit([runtime.fixture, kind]);
+    expect(() =>
+      integrate([runtime, runtime.state, lease, submission]),
+    ).toThrow();
+    restore();
+  },
+);
+
 test('sequences shared commits with failure atomicity and exact cleanup', () => {
   const runtime = preparedRuntime();
-  const firstSelection = selectModuleDeliveryAdmissions({
-    authority: runtime.authority,
-    acceptedPlan: runtime.plan,
-    state: runtime.state.admissionState,
-  });
-  const alphaLease = recordModuleDeliveryAttemptLeases({
-    authority: runtime.authority,
-    state: runtime.state.admissionState,
-    admissions: firstSelection.admissions,
-  }).leases[0];
-  if (!alphaLease) throw new Error('Alpha lease is missing.');
-  const alpha = commitWriter({
-    runtime,
-    lease: alphaLease,
-    path: 'alpha',
-  });
+  const [alphaLease, alpha] = nextWriter([runtime, runtime.state]);
   const afterAlpha = integrate([runtime, runtime.state, alphaLease, alpha]);
-  const secondSelection = selectModuleDeliveryAdmissions({
-    authority: runtime.authority,
-    acceptedPlan: runtime.plan,
-    state: afterAlpha.admissionState,
-  });
-  expect(secondSelection.admissions[0]?.startingFrontier).toBe(
-    alpha.handoff.commit,
-  );
-  const betaLease = recordModuleDeliveryAttemptLeases({
-    authority: runtime.authority,
-    state: afterAlpha.admissionState,
-    admissions: secondSelection.admissions,
-  }).leases[0];
-  if (!betaLease) throw new Error('Beta lease is missing.');
-  const beta = commitWriter({
-    runtime,
-    lease: betaLease,
-    path: 'beta',
-  });
+  const [betaLease, beta] = nextWriter([runtime, afterAlpha]);
+  expect(betaLease.startingFrontier).toBe(alpha.handoff.commit);
   const afterBeta = integrate([runtime, afterAlpha, betaLease, beta]);
   const finalized = finalizeModuleDeliveryIntegration({
     authority: runtime.authority,
@@ -351,8 +426,8 @@ test.each(['read-first', 'writer-first'] as const)(
     });
     let state = runtime.state;
     const rejectReadMutations = () => {
-      for (const kind of ['hidden', 'root-file'] as const) {
-        const restore = mutateInfo([runtime.fixture, kind]);
+      for (const kind of MUTATIONS) {
+        const restore = mutateGit([runtime.fixture, kind]);
         expect(() =>
           integrate([runtime, state, readLease, evidence]),
         ).toThrow();
@@ -417,8 +492,8 @@ test.each(['read-first', 'writer-first'] as const)(
       rejectReadMutations();
       state = integrate([runtime, state, readLease, evidence]);
     }
-    for (const kind of ['hidden', 'root-file'] as const) {
-      const restore = mutateInfo([runtime.fixture, kind]);
+    for (const kind of MUTATIONS) {
+      const restore = mutateGit([runtime.fixture, kind]);
       expect(() =>
         finalizeModuleDeliveryIntegration({
           authority: runtime.authority,
