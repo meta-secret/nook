@@ -90,11 +90,11 @@ and `preflight` sources. Unused-code ownership is split as follows:
 - Gizmo integrates accepted formatted handoffs and runs `task loom:pre-push`
   on the combined head. If that gate formats web-owned content, Gizmo returns
   the exact diff to web development for a fresh formatted commit instead of
-  committing it. After the owner commit and a clean gate, Gizmo pushes and
-  immediately obtains exact-published-head remote evidence: at least one
-  relevant focused remote task, including any required Web-owned browser E2E
-  through `task remote`, while the head is not validation-ready; or complete
-  exact-head validation immediately when it is ready. Gizmo must collect every
+  committing it. After the owner commit and a clean gate, Gizmo pushes.
+  Gizmo immediately obtains exact-published-head remote evidence. Use at least
+  one relevant focused remote task while the head is not validation-ready.
+  This includes required Web-owned browser E2E through `task remote`.
+  Otherwise, start complete exact-head validation immediately. Gizmo must collect every
   required browser E2E result against that published head before readiness.
   Web development owns the browser acceptance requirement; Gizmo owns
   publication, remote dispatch and collection, readiness, and merge.

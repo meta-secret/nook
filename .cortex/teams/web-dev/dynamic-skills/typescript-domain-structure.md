@@ -108,10 +108,11 @@ Does not apply to:
 - Gizmo integrates the formatted handoff and runs `task loom:pre-push` on the
   combined head. If that gate formats team-owned content, Gizmo returns the
   exact diff to its owning worker for a fresh formatted commit instead of
-  committing it. After the owner commit and a clean gate, Gizmo pushes and
-  immediately obtains remote evidence for that head: at least one relevant
-  focused remote task when it is not validation-ready, or complete exact-head
-  validation immediately when it is ready. Gizmo then owns readiness and merge.
+  committing it. After the owner commit and a clean gate, Gizmo pushes.
+  Gizmo immediately obtains remote evidence for that head. Use at least one
+  relevant focused remote task when the head is not validation-ready.
+  Otherwise, start complete exact-head validation immediately. Gizmo owns
+  readiness and merge.
 
 For Loom's one-parameter function rule, see
 [typescript-single-parameter.md](typescript-single-parameter.md).
