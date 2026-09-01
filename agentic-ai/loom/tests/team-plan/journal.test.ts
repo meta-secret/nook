@@ -292,6 +292,16 @@ describe('Team Plan journal', () => {
         action: async () => 'recovered',
       }),
     ).toBe('recovered');
+    const targetRef = `${ref}-target`;
+    fixtureGit(fixture)(['update-ref', targetRef, stale]);
+    fixtureGit(fixture)(['symbolic-ref', ref, targetRef]);
+    expect(
+      await withTeamPlanJournalLock({
+        journalPath,
+        action: async () => 'acquired-symbolic-name',
+      }),
+    ).toBe('acquired-symbolic-name');
+    expect(fixtureGit(fixture)(['rev-parse', targetRef])).toBe(stale);
   });
 
   test('rejects torn snapshots and nested attempt extensions', async () => {

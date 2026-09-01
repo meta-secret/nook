@@ -764,11 +764,15 @@ function updateRef(request: {
   readonly args: TeamPlanGitArguments;
 }): boolean {
   const args = request.args;
-  const result = spawnSync('git', ['update-ref', args[0], args[1], args[2]], {
-    cwd: request.journal.started.repositoryRoot,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  const result = spawnSync(
+    'git',
+    ['update-ref', '--no-deref', args[0], args[1], args[2]],
+    {
+      cwd: request.journal.started.repositoryRoot,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
+  );
   return result.status === 0;
 }
 
