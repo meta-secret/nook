@@ -6,7 +6,6 @@ import { hostname } from 'node:os';
 import type { TeamPlanJournal } from './journal.ts';
 
 const ZERO_COMMIT = '0'.repeat(40);
-const orphanedTeamPlanLocks = new Map<string, string>();
 
 type TeamPlanLockOwnerFields = Readonly<{
   version: 3;
@@ -101,14 +100,10 @@ function acquireTeamPlanLock(request: {
       args: ['cat-file', 'blob', previousBlob],
     }),
   );
-  if (
-    orphanedTeamPlanLocks.get(lockRef) !== previousBlob &&
-    !staleTeamPlanLock(previousOwner)
-  )
+  if (!staleTeamPlanLock(previousOwner))
     throw new Error('Team Plan journal lock owner is still live.');
   if (!updateRef({ journal, args: [lockRef, ownerBlob, previousBlob] }))
     throw new Error('Team Plan journal lock changed during stale recovery.');
-  orphanedTeamPlanLocks.delete(lockRef);
 }
 
 function releaseTeamPlanLock(request: {
@@ -122,7 +117,6 @@ function releaseTeamPlanLock(request: {
       args: ['-d', request.lockRef, request.ownerBlob],
     })
   ) {
-    orphanedTeamPlanLocks.set(request.lockRef, request.ownerBlob);
     throw new Error('Team Plan journal lock ownership changed.');
   }
 }

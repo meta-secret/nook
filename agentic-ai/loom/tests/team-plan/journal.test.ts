@@ -385,12 +385,14 @@ describe('Team Plan journal', () => {
       }),
     ).rejects.toThrow('ownership changed');
     unlinkSync(lockPath);
-    expect(
-      await withTeamPlanJournalLock({
+    await expect(
+      withTeamPlanJournalLock({
         journalPath,
-        action: async () => 'recovered',
+        action: async () => 'unreachable',
       }),
-    ).toBe('recovered');
+    ).rejects.toThrow('already in use');
+    const blockedOwner = fixtureGit(fixture)(['rev-parse', '--verify', ref]);
+    fixtureGit(fixture)(['update-ref', '-d', ref, blockedOwner]);
     const targetRef = `${ref}-target`;
     fixtureGit(fixture)(['update-ref', targetRef, stale]);
     fixtureGit(fixture)(['symbolic-ref', ref, targetRef]);
