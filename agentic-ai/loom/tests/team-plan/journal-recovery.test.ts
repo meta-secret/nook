@@ -1,0 +1,180 @@
+import { afterEach, describe, expect, test } from 'bun:test';
+import {
+  existsSync,
+  linkSync,
+  readFileSync,
+  readlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { hostname } from 'node:os';
+import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
+
+import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
+import {
+  REQUIRED_PARENT_OWNED_RESOURCES,
+  ModuleDeliveryBaselineKind,
+  ModuleDeliveryJoinKind,
+  ModuleDeliveryTaskKind,
+  ModuleDeliveryValidationStatus,
+  TeamKey,
+  decodeAndValidateModuleDeliveryPlan,
+} from '../../src/module-delivery/index.ts';
+import {
+  createTeamPlanJournal,
+  discardTeamPlanJournal,
+  teamPlanSha256,
+  withTeamPlanJournalLock,
+} from '../../src/team-plan/journal.ts';
+import {
+  TEAM_PLAN_JOURNAL_VERSION,
+  TeamPlanEventKind,
+} from '../../src/team-plan/domain.ts';
+import {
+  createGitFixture,
+  disposeGitFixture,
+  fixtureGit,
+} from '../module-delivery/worktree-test-support.ts';
+
+import type { ModuleDeliveryPlanV2 } from '../../src/module-delivery/index.ts';
+import type { TeamPlanStartedEvent } from '../../src/team-plan/domain.ts';
+import type { GitFixture } from '../module-delivery/worktree-test-support.ts';
+
+const fixtures: GitFixture[] = [];
+
+afterEach(() => {
+  for (const fixture of fixtures.splice(0).reverse())
+    disposeGitFixture(fixture);
+});
+
+function plan(sourceCommit: string): ModuleDeliveryPlanV2 {
+  return {
+    version: 2,
+    generation: 1,
+    sourceCommit,
+    maxConcurrency: 1,
+    maxAgentDepth: 1,
+    maxAttempts: 1,
+    parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
+    parentJoin: {
+      kind: ModuleDeliveryJoinKind.OrderedCommitHandoffs,
+      owner: 'delivery-owner',
+      validationCommands: ['task loom:verify'],
+    },
+    nodes: [
+      {
+        kind: ModuleDeliveryTaskKind.ReadOnly,
+        taskId: 'provider',
+        team: TeamKey.DevelopmentCore,
+        functionalOwner: TeamKey.Ai,
+        acceptanceOwner: TeamKey.Ai,
+        parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
+        expert: 'core_expert',
+        moduleRoot: 'nook-app/nook-platform/nook-core',
+        consumerOutcome: 'Provider publishes evidence.',
+        baseline: {
+          kind: ModuleDeliveryBaselineKind.SourceCommit,
+          sourceCommit,
+        },
+        agentDepthLimit: 1,
+        dependencies: [],
+        resources: {
+          read: ['nook-app/nook-platform/nook-core/**'],
+          write: [],
+          evidenceSurface: ['nook-app/nook-platform/nook-core/**'],
+        },
+        parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
+        acceptance: {
+          commands: ['task provider:test'],
+          evidence: ['provider completed'],
+        },
+      },
+    ],
+    edgeContracts: [],
+  };
+}
+
+async function startedFixture() {
+  const fixture = createGitFixture();
+  fixtures.push(fixture);
+  const planPath = join(fixture.root, 'plan.json');
+  const journalPath = join(fixture.root, 'journal.jsonl');
+  const planText = `${JSON.stringify(plan(fixture.baselineCommit))}\n`;
+  const validation = decodeAndValidateModuleDeliveryPlan(planText);
+  if (validation.status !== ModuleDeliveryValidationStatus.Accepted)
+    throw new Error('Journal recovery test plan was rejected.');
+  writeFileSync(planPath, planText);
+  const started: TeamPlanStartedEvent = {
+    version: TEAM_PLAN_JOURNAL_VERSION,
+    kind: TeamPlanEventKind.Started,
+    sequence: 1,
+    runId: teamPlanSha256('journal-recovery-test-run'),
+    planPath,
+    planText,
+    planSha256: teamPlanSha256(planText),
+    modulePlanDigest: validation.planDigest,
+    sourceCommit: fixture.baselineCommit,
+    repositoryRoot: fixture.sourceRoot,
+    workspaceRoot: fixture.workspaceRoot,
+    generationRecordLimit: 1,
+  };
+  await createTeamPlanJournal({ journalPath, event: started });
+  return { fixture, journalPath };
+}
+
+function testMachineIdentity(): string {
+  const boot =
+    process.platform === 'darwin'
+      ? spawnSync('sysctl', ['-n', 'kern.boottime'], { encoding: 'utf8' })
+          .stdout
+      : readFileSync('/proc/sys/kernel/random/boot_id', 'utf8');
+  const namespace =
+    process.platform === 'linux' ? readlinkSync('/proc/self/ns/pid') : 'host';
+  return `${hostname()}:${boot.trim()}:${namespace}`;
+}
+
+describe('Team Plan journal recovery', () => {
+  test('ignores Git replacement refs while recovering a stale lock', async () => {
+    const { fixture, journalPath } = await startedFixture();
+    const ref = `refs/nook/team-plan-locks/${teamPlanSha256(
+      `${fixture.sourceRoot}\n${journalPath}`,
+    )}`;
+    const stalePath = join(fixture.root, 'stale-lock.json');
+    const forgedPath = join(fixture.root, 'replacement-lock.json');
+    writeFileSync(
+      stalePath,
+      `${JSON.stringify({
+        version: 3,
+        pid: process.pid,
+        processIdentity: `${testMachineIdentity()}:start-ticks:1`,
+        token: 'stale',
+      })}\n`,
+    );
+    writeFileSync(forgedPath, '{"forged":true}\n');
+    const stale = fixtureGit(fixture)(['hash-object', '-w', stalePath]);
+    const forged = fixtureGit(fixture)(['hash-object', '-w', forgedPath]);
+    fixtureGit(fixture)(['update-ref', ref, stale]);
+    fixtureGit(fixture)(['replace', stale, forged]);
+
+    expect(
+      await withTeamPlanJournalLock({
+        journalPath,
+        action: async () => 'recovered-without-replacement',
+      }),
+    ).toBe('recovered-without-replacement');
+  });
+
+  test('preserves an unfinalized journal when a matching tombstone exists', async () => {
+    const { journalPath } = await startedFixture();
+    linkSync(journalPath, `${journalPath}.discarding`);
+
+    await expect(
+      discardTeamPlanJournal({
+        journalPath,
+        discardArtifacts: () => Promise.resolve(),
+      }),
+    ).rejects.toThrow('Only a finalized Team Plan run may be discarded.');
+    expect(existsSync(journalPath)).toBe(true);
+    expect(existsSync(`${journalPath}.discarding`)).toBe(true);
+  });
+});

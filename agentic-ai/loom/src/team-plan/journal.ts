@@ -207,6 +207,8 @@ export async function discardTeamPlanJournal(
     journal: lockJournal,
     identityPath: path,
     action: async () => {
+      if (!lockJournal.finalized)
+        throw new Error('Only a finalized Team Plan run may be discarded.');
       if ((await pathExists(path)) && (await pathExists(tombstone)))
         await resumeDiscardTombstone({ path, tombstone });
       const loaded = await loadTeamPlanJournal(activePath);

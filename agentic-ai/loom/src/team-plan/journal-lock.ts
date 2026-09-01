@@ -142,6 +142,7 @@ function updateRef(request: {
       encoding: 'utf8',
       env: {
         PATH: '/bin:/usr/bin:/usr/sbin',
+        GIT_NO_REPLACE_OBJECTS: '1',
         GIT_CONFIG_COUNT: '1',
         GIT_CONFIG_KEY_0: 'safe.directory',
         GIT_CONFIG_VALUE_0: repositoryRoot,
@@ -287,6 +288,7 @@ function gitText(invocation: GitInvocation): string {
     encoding: 'utf8',
     env: {
       PATH: '/bin:/usr/bin:/usr/sbin',
+      GIT_NO_REPLACE_OBJECTS: '1',
       GIT_CONFIG_COUNT: '1',
       GIT_CONFIG_KEY_0: 'safe.directory',
       GIT_CONFIG_VALUE_0: repositoryRoot,
