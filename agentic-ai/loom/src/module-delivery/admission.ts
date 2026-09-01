@@ -982,7 +982,8 @@ function startingFrontier(request: StartingFrontierRequest): string {
       edge.successorTaskId === request.node.taskId &&
       edge.requiresIntegratedWriterFrontier,
   );
-  return !requiresIntegrated &&
+  return request.node.kind !== ModuleDeliveryTaskKind.Write &&
+    !requiresIntegrated &&
     request.node.baseline.kind === ModuleDeliveryBaselineKind.SourceCommit &&
     request.node.dependencies.length === 0
     ? request.node.baseline.sourceCommit
