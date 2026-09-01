@@ -927,6 +927,8 @@ function nodeErrorCode(error: NodeJS.ErrnoException): string | false {
 }
 
 function processStartIdentity(pid: number): string | false {
+  if (process.platform === 'win32')
+    throw new Error('Team Plan journal locks do not support Windows.');
   const machineIdentity = hostname();
   const result = spawnSync('ps', ['-o', 'lstart=', '-p', String(pid)], {
     encoding: 'utf8',

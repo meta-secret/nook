@@ -392,6 +392,7 @@ function assertEvidenceIdentity(
   } = identity;
   assertTextFields({ values: Object.values(text) });
   assertTextFields({ values: acceptanceRequirements });
+  if (identity.verdict !== 'terminal-success') invalidRecord();
   assertTeam(identity.producerTeam);
   assertOwner(identity.functionalOwner);
   assertOwner(identity.acceptanceOwner);
