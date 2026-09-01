@@ -239,6 +239,7 @@ function savedLoginButton(): HTMLButtonElement | false {
 
 beforeEach(() => {
   document.body.replaceChildren()
+  snapshot.savedLoginCapability = 'fill-saved-login'
   vi.clearAllMocks()
   actions.events.length = 0
   renderState.pickerState.login = { kind: 'closed' }
@@ -280,7 +281,7 @@ test('preserves enrollment collapse only within one presentation', () => {
 })
 
 describe('passkey workflow saved-login fallback', () => {
-  test('keeps saved-login markup indistinguishable across availability', () => {
+  test('gates secret-independent fallback markup on Rust capability', () => {
     const availabilityStates: Array<
       Parameters<typeof renderWidget>[0]['loginMatches']
     > = [
@@ -294,6 +295,10 @@ describe('passkey workflow saved-login fallback', () => {
       renderPasskeyWidget({ loginMatches })
       expect(savedLoginButton()).not.toBe(false)
     }
+    document.body.replaceChildren()
+    snapshot.savedLoginCapability = 'unavailable'
+    renderPasskeyWidget({ loginMatches: { kind: 'unavailable' } })
+    expect(savedLoginButton()).toBe(false)
   })
 
   test('preserves an explicit collapse choice across availability remounts', () => {

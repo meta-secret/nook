@@ -43,7 +43,6 @@ import {
   WidgetWorkflowKeyKind,
   WidgetWorkflowRootKind,
   pickerState,
-  scanState,
   widgetState,
 } from './state'
 import {
@@ -128,7 +127,6 @@ export function renderEnrollmentWidget({
     title,
     description,
     continueButton,
-    requestWorkflowReclassification: scanState.schedule,
   }
   const nookTypedArgs1_0: Parameters<typeof renderEnrollmentActions>[0] = {
     host: buildEnrollmentFlowHost(nookTypedArgs0_2),
@@ -303,7 +301,6 @@ export function renderWidget({
         title,
         description,
         continueButton,
-        requestWorkflowReclassification: scanState.schedule,
       }
       const host = buildEnrollmentFlowHost(hostRequest)
       const enrollmentRequest: Parameters<
@@ -389,7 +386,7 @@ export function renderWidget({
   const passkeyAction =
     snapshot.action === AuthenticationWorkflowAction.UsePasskey ||
     snapshot.action === AuthenticationWorkflowAction.CreatePasskey
-  if (passkeyAction) {
+  if (passkeyAction && snapshot.savedLoginCapability === 'fill-saved-login') {
     const savedLoginButton = document.createElement('button')
     savedLoginButton.type = 'button'
     savedLoginButton.className = 'text-button'
@@ -439,7 +436,6 @@ export function renderWidget({
       title,
       description,
       continueButton,
-      requestWorkflowReclassification: scanState.schedule,
     }
     const nookTypedArgs1_1: Parameters<typeof renderEnrollmentActions>[0] = {
       host: buildEnrollmentFlowHost(nookTypedArgs0_9),

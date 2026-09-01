@@ -137,7 +137,6 @@ export type EnrollmentFlowHost = EnrollmentFlowViewHost & {
   translatedMessageWithSubstitution: (
     args: TranslatedMessageWithSubstitutionArgs,
   ) => string
-  requestWorkflowReclassification: () => void
 }
 
 /** Keep the post-save enrollment widget from being rebuilt by scanAndRender. */

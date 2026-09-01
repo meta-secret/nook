@@ -241,7 +241,6 @@ type BuildEnrollmentFlowHostArgs = {
   title: HTMLHeadingElement
   description: HTMLParagraphElement
   continueButton: HTMLButtonElement
-  requestWorkflowReclassification: () => void
 }
 
 export function buildEnrollmentFlowHost({
@@ -250,7 +249,6 @@ export function buildEnrollmentFlowHost({
   title,
   description,
   continueButton,
-  requestWorkflowReclassification,
 }: BuildEnrollmentFlowHostArgs): EnrollmentFlowHost {
   return {
     panel,
@@ -271,7 +269,6 @@ export function buildEnrollmentFlowHost({
     sendAuthenticatorOptionsRuntimeMessage,
     sendAuthenticatorPreviewRuntimeMessage,
     sendRuntimeMessageWithoutResponse,
-    requestWorkflowReclassification,
     translatedMessage,
     translatedMessageWithSubstitution,
   }
