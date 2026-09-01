@@ -35,6 +35,7 @@ import {
   recordModuleDeliveryAttemptDisposition,
   selectModuleDeliveryAdmissions,
 } from '../../src/module-delivery/index.ts';
+import { captureSourceSnapshot } from '../../src/module-delivery/integration-provenance.ts';
 import {
   createGitFixture,
   disposeGitFixture,
@@ -287,8 +288,10 @@ function mutateGit([fixture, mutation]: readonly [
   const info = join(fixture.sourceRoot, '.git/info');
   const exclude = join(info, 'exclude');
   if (mutation === 'remote-config') {
-    git(['config', 'remote.origin.url', 'https://example.invalid/repo']);
-    return () => void git(['config', '--unset-all', 'remote.origin.url']);
+    const key = 'remote.origin.fetch';
+    const original = git(['config', '--get', key]);
+    git(['config', key, '+refs/drift/*:refs/drift/*']);
+    return () => void git(['config', key, original]);
   }
   if (mutation === 'hook') {
     const hook = join(fixture.sourceRoot, '.git/hooks/pre-commit');
@@ -345,10 +348,12 @@ function mutateGit([fixture, mutation]: readonly [
 }
 
 function rejectMutations(runtime: Runtime, action: () => void): void {
+  const snapshot = captureSourceSnapshot(runtime.fixture.sourceRoot);
   for (const kind of MUTATIONS) {
     const restore = mutateGit([runtime.fixture, kind]);
     expect(action).toThrow();
     restore();
+    expect(captureSourceSnapshot(runtime.fixture.sourceRoot)).toEqual(snapshot);
   }
 }
 
