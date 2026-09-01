@@ -262,7 +262,8 @@ export function reviewBatchMatches({
     !(botLoginMatches(comment.author, 'chatgpt-codex-connector') &&
       comment.body.startsWith('<!-- codex-pull-request-review-summary -->')) &&
     !(botLoginMatches(comment.author, 'github-actions') &&
-      comment.body.startsWith('<!-- nook-core-coverage -->')) &&
+      ['<!-- nook-core-coverage -->', '<!-- nook-ui-demo -->']
+        .some((marker) => comment.body.startsWith(marker))) &&
     !/^(?:@codex (?:review|security review)|### (?:Preview deployed|Web research preview))/u.test(comment.body.trim()) &&
     !/^@\S+ this workflow assigned you PR #\d+\. Continue only this PR's recorded scope through review, exact-head validation, and squash merge\.$/u.test(comment.body.trim()),
   )
@@ -322,6 +323,7 @@ function verifyReviewContext(prNumber) {
 
 function main() {
   const reviewFixPr = process.argv[2]?.trim() ?? ''
+  const stopOnly = process.argv[3] === '--stop-only'
   const mergeBase = runGit(['merge-base', 'HEAD', 'origin/main'])
   if (!/^[0-9a-f]{40}$/.test(mergeBase)) throw new Error('PR merge base is unavailable')
   const numstat = execFileSync('git', [
@@ -336,6 +338,15 @@ function main() {
   if (summary.malformedRecords > 0 || summary.unmeasurableAuthoredFiles > 0) {
     throw new Error(`authored diff is not completely measurable: ${JSON.stringify(summary)}`)
   }
+  console.log(`Authored PR diff: ${summary.authoredLines} lines`)
+  console.log(`Reported-only diff: ${JSON.stringify(summary)}`)
+  if (stopOnly) {
+    if (summary.authoredLines >= REVIEW_GROWTH_STOP) {
+      throw new Error(`authored diff reached the 3,000-line review-growth stop: ${summary.authoredLines}`)
+    }
+    console.log('PR authored-line hard-stop precheck passed')
+    return
+  }
   const needsReviewContext = summary.authoredLines > INITIAL_PR_LIMIT &&
     summary.authoredLines < REVIEW_GROWTH_STOP
   const result = evaluateBudget({
@@ -343,8 +354,6 @@ function main() {
     prNumber: reviewFixPr,
     verifiedReviewContext: needsReviewContext && verifyReviewContext(reviewFixPr),
   })
-  console.log(`Authored PR diff: ${summary.authoredLines} lines`)
-  console.log(`Reported-only diff: ${JSON.stringify(summary)}`)
   if (!result.ok) throw new Error(result.message)
   console.log(`PR authored-line budget passed in ${result.mode} mode`)
 }

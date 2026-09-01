@@ -166,6 +166,7 @@ tasks:
       CONFIG: '{{default "" .CONFIG}}'
       PR: '{{default "" .PR}}'
     cmds:
+      - bun .github/scripts/pr-authored-budget.ts "{{.PR}}" --stop-only
       - |
         set -euo pipefail
         if [ -n "{{.CONFIG}}" ]; then
