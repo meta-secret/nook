@@ -225,7 +225,10 @@ export function reviewBatchMatches({
       .filter((thread) => !thread.isResolved)
       .map((thread) => thread.path),
   )
-  const inlineMatch = changedPaths.some((path) => currentPaths.has(path))
+  const inlineMatch = changedPaths.some((path) =>
+    currentPaths.has(path) ||
+    (path.endsWith('.ts') && currentPaths.has(`${path.slice(0, -3)}.cjs`)),
+  )
   const reviewBodyMatch = reviews.some(
     (review) => ['COMMENTED', 'CHANGES_REQUESTED'].includes(review.state) &&
       review.body.trim() &&

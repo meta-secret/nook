@@ -436,7 +436,7 @@ jobs:
         run: node --test .github/scripts/main-failure-handoff.test.cjs
 
       - name: Test Workbench agent records
-        run: node --test .github/scripts/workbench-records.test.cjs && bun test ./.github/scripts/pr-authored-budget.test.ts
+        run: node --test .github/scripts/workbench-records.test.cjs
 
       - name: Test cache telemetry collector
         run: node --test .github/scripts/cache-telemetry.test.cjs
@@ -445,6 +445,9 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
+
+      - name: Test PR authored-line budget
+        run: bun test ./.github/scripts/pr-authored-budget.test.ts
 
       - name: Test registry cache descriptor integrity
         run: bun test ./.github/scripts/registry-cache-descriptor.test.ts
