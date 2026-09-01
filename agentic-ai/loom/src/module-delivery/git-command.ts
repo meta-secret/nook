@@ -69,13 +69,11 @@ export function runModuleDeliveryGit(
       SystemRoot: process.env.SystemRoot,
       WINDIR: process.env.WINDIR,
     },
-    input:
-      typeof request.input === 'string'
-        ? Buffer.from(request.input, 'utf8')
-        : undefined,
     maxBuffer: MAX_GIT_OUTPUT_BYTES,
     stdio: ['pipe', 'pipe', 'pipe'],
   };
+  if (typeof request.input === 'string')
+    options.input = Buffer.from(request.input, 'utf8');
   const execution = spawnSync('git', args, options);
   const stdout = Buffer.isBuffer(execution.stdout)
     ? execution.stdout
