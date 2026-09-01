@@ -3,7 +3,11 @@ import { open } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { LoomFailureCode, loomFailureFromCause } from '../loom-failure.ts';
+import {
+  LoomFailure,
+  LoomFailureCode,
+  loomFailureFromCause,
+} from '../loom-failure.ts';
 import {
   discardFinalizedTeamPlan,
   finalizeTeamPlan,
@@ -46,8 +50,14 @@ type TeamPlanStartCommand = Readonly<{
 }>;
 
 type TeamPlanJournalCommand = Readonly<{
-  kind: TeamPlanCommandKind.Select | TeamPlanCommandKind.Finalize;
+  kind: TeamPlanCommandKind.Select;
   journalPath: string;
+}>;
+
+type TeamPlanRunCommand = Readonly<{
+  kind: TeamPlanCommandKind.Finalize | TeamPlanCommandKind.Discard;
+  journalPath: string;
+  runId: string;
 }>;
 
 type TeamPlanLeaseCommand = Readonly<{
@@ -57,12 +67,6 @@ type TeamPlanLeaseCommand = Readonly<{
   generation: number;
   planDigest: string;
   taskIds: readonly string[];
-}>;
-
-type TeamPlanDiscardCommand = Readonly<{
-  kind: TeamPlanCommandKind.Discard;
-  journalPath: string;
-  runId: string;
 }>;
 
 type TeamPlanRecordCommand = Readonly<{
@@ -75,6 +79,7 @@ type TeamPlanRecordCommand = Readonly<{
 type TeamPlanRestartCommand = Readonly<{
   kind: TeamPlanCommandKind.Restart;
   journalPath: string;
+  runId: string;
   requestPath: string;
 }>;
 
@@ -82,7 +87,7 @@ type TeamPlanCommand =
   | TeamPlanStartCommand
   | TeamPlanJournalCommand
   | TeamPlanLeaseCommand
-  | TeamPlanDiscardCommand
+  | TeamPlanRunCommand
   | TeamPlanRecordCommand
   | TeamPlanRestartCommand;
 
@@ -99,6 +104,11 @@ type CommandPathRequest = Readonly<{
 type ReadTeamPlanRecordRequest = Readonly<{
   requestPath: string;
   messages: TeamPlanMessages;
+}>;
+
+type LocalizedTeamPlanRuntimeRequest<T> = Readonly<{
+  messages: TeamPlanMessages;
+  action: () => Promise<T>;
 }>;
 
 enum TeamPlanCommandParseKind {
@@ -125,9 +135,9 @@ type CommandPath =
 export async function runTeamPlanCli(
   cliArguments: TeamPlanCliArguments,
 ): Promise<number> {
+  const messages = teamPlanMessages(cliArguments.locale);
   const parsed = parseTeamPlanCommand(cliArguments);
   if (parsed.kind === TeamPlanCommandParseKind.Invalid) {
-    const messages = teamPlanMessages(cliArguments.locale);
     console.error(messages.help);
     throw loomFailureFromCause({
       code: LoomFailureCode.TeamPlanValidationFailed,
@@ -141,13 +151,23 @@ export async function runTeamPlanCli(
       journalPath: command.journalPath,
       repositoryRoot: command.repositoryRoot,
     };
-    console.log(JSON.stringify(await startTeamPlan(request)));
+    console.log(
+      JSON.stringify(
+        await localizedTeamPlanRuntime({
+          messages,
+          action: () => startTeamPlan(request),
+        }),
+      ),
+    );
     return 0;
   }
   if (command.kind === TeamPlanCommandKind.Select) {
     console.log(
       JSON.stringify(
-        await selectTeamPlan({ journalPath: command.journalPath }),
+        await localizedTeamPlanRuntime({
+          messages,
+          action: () => selectTeamPlan({ journalPath: command.journalPath }),
+        }),
       ),
     );
     return 0;
@@ -155,12 +175,16 @@ export async function runTeamPlanCli(
   if (command.kind === TeamPlanCommandKind.Lease) {
     console.log(
       JSON.stringify(
-        await leaseTeamPlan({
-          journalPath: command.journalPath,
-          runId: command.runId,
-          generation: command.generation,
-          planDigest: command.planDigest,
-          taskIds: command.taskIds,
+        await localizedTeamPlanRuntime({
+          messages,
+          action: () =>
+            leaseTeamPlan({
+              journalPath: command.journalPath,
+              runId: command.runId,
+              generation: command.generation,
+              planDigest: command.planDigest,
+              taskIds: command.taskIds,
+            }),
         }),
       ),
     );
@@ -169,15 +193,26 @@ export async function runTeamPlanCli(
   if (command.kind === TeamPlanCommandKind.Finalize) {
     console.log(
       JSON.stringify(
-        await finalizeTeamPlan({ journalPath: command.journalPath }),
+        await localizedTeamPlanRuntime({
+          messages,
+          action: () =>
+            finalizeTeamPlan({
+              journalPath: command.journalPath,
+              runId: command.runId,
+            }),
+        }),
       ),
     );
     return 0;
   }
   if (command.kind === TeamPlanCommandKind.Discard) {
-    await discardFinalizedTeamPlan({
-      journalPath: command.journalPath,
-      runId: command.runId,
+    await localizedTeamPlanRuntime({
+      messages,
+      action: () =>
+        discardFinalizedTeamPlan({
+          journalPath: command.journalPath,
+          runId: command.runId,
+        }),
     });
     console.log(JSON.stringify({ discarded: true }));
     return 0;
@@ -185,9 +220,14 @@ export async function runTeamPlanCli(
   if (command.kind === TeamPlanCommandKind.Restart) {
     console.log(
       JSON.stringify(
-        await restartTeamPlan({
-          journalPath: command.journalPath,
-          planPath: command.requestPath,
+        await localizedTeamPlanRuntime({
+          messages,
+          action: () =>
+            restartTeamPlan({
+              journalPath: command.journalPath,
+              runId: command.runId,
+              planPath: command.requestPath,
+            }),
         }),
       ),
     );
@@ -198,7 +238,6 @@ export async function runTeamPlanCli(
       code: LoomFailureCode.TeamPlanCommandFailed,
       cause: new Error('Team Plan command dispatch is invalid.'),
     });
-  const messages = teamPlanMessages(cliArguments.locale);
   const serialized = await readTeamPlanRecordRequest({
     requestPath: command.requestPath,
     messages,
@@ -225,8 +264,59 @@ export async function runTeamPlanCli(
     runId: command.runId,
     record,
   };
-  console.log(JSON.stringify(await recordTeamPlan(request)));
+  console.log(
+    JSON.stringify(
+      await localizedTeamPlanRuntime({
+        messages,
+        action: () => recordTeamPlan(request),
+      }),
+    ),
+  );
   return 0;
+}
+
+async function localizedTeamPlanRuntime<T>(
+  request: LocalizedTeamPlanRuntimeRequest<T>,
+): Promise<T> {
+  try {
+    return await request.action();
+  } catch (cause) {
+    const failure =
+      cause instanceof LoomFailure
+        ? cause
+        : loomFailureFromCause({
+            code: LoomFailureCode.TeamPlanCommandFailed,
+            cause:
+              cause instanceof Error
+                ? cause
+                : new Error('Team Plan runtime command failed.'),
+          });
+    throw loomFailureFromCause({
+      code: failure.code,
+      cause: new Error(
+        localizedRuntimeFailure(request.messages, failure.code),
+        {
+          cause: failure,
+        },
+      ),
+    });
+  }
+}
+
+function localizedRuntimeFailure(
+  messages: TeamPlanMessages,
+  code: LoomFailureCode,
+): string {
+  switch (code) {
+    case LoomFailureCode.TeamPlanValidationFailed:
+      return messages.runtimeValidationFailure;
+    case LoomFailureCode.TeamPlanStorageFailed:
+      return messages.runtimeStorageFailure;
+    case LoomFailureCode.TeamPlanRecoveryFailed:
+      return messages.runtimeRecoveryFailure;
+    default:
+      return messages.runtimeCommandFailure;
+  }
 }
 
 async function readTeamPlanRecordRequest(
@@ -341,8 +431,7 @@ function parseTeamPlanCommand(
     };
   }
   if (
-    (kind === TeamPlanCommandKind.Select ||
-      kind === TeamPlanCommandKind.Finalize) &&
+    kind === TeamPlanCommandKind.Select &&
     argv.length === 3 &&
     argv[1] === '--journal'
   ) {
@@ -355,7 +444,8 @@ function parseTeamPlanCommand(
     };
   }
   if (
-    kind === TeamPlanCommandKind.Discard &&
+    (kind === TeamPlanCommandKind.Discard ||
+      kind === TeamPlanCommandKind.Finalize) &&
     argv.length === 5 &&
     argv[1] === '--journal' &&
     argv[3] === '--run-id'
@@ -402,14 +492,18 @@ function parseTeamPlanCommand(
   }
   if (
     kind === TeamPlanCommandKind.Restart &&
-    argv.length === 5 &&
+    argv.length === 7 &&
     argv[1] === '--journal' &&
-    argv[3] === '--plan'
+    argv[3] === '--run-id' &&
+    argv[5] === '--plan'
   ) {
     const journalPath = commandPathAt({ argv, index: 2 });
-    const requestPath = commandPathAt({ argv, index: 4 });
+    const runId = argv[4];
+    const requestPath = commandPathAt({ argv, index: 6 });
     if (
       journalPath.kind === CommandPathKind.Invalid ||
+      typeof runId !== 'string' ||
+      !TEAM_PLAN_RUN_ID.test(runId) ||
       requestPath.kind === CommandPathKind.Invalid
     )
       return { kind: TeamPlanCommandParseKind.Invalid };
@@ -418,6 +512,7 @@ function parseTeamPlanCommand(
       command: {
         kind,
         journalPath: journalPath.path,
+        runId,
         requestPath: requestPath.path,
       },
     };

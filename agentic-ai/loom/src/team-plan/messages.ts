@@ -9,6 +9,10 @@ export type TeamPlanMessages = Readonly<{
   invalidRecordContents: string;
   invalidRecordEncoding: string;
   oversizedRecord: string;
+  runtimeValidationFailure: string;
+  runtimeStorageFailure: string;
+  runtimeRecoveryFailure: string;
+  runtimeCommandFailure: string;
 }>;
 
 export function teamPlanMessages(locale: string): TeamPlanMessages {
@@ -23,5 +27,9 @@ export function teamPlanMessages(locale: string): TeamPlanMessages {
     invalidRecordContents: catalog.team_plan_invalid_record_contents,
     invalidRecordEncoding: catalog.team_plan_invalid_record_encoding,
     oversizedRecord: catalog.team_plan_oversized_record,
+    runtimeValidationFailure: catalog.team_plan_runtime_validation_failure,
+    runtimeStorageFailure: catalog.team_plan_runtime_storage_failure,
+    runtimeRecoveryFailure: catalog.team_plan_runtime_recovery_failure,
+    runtimeCommandFailure: catalog.team_plan_runtime_command_failure,
   };
 }
