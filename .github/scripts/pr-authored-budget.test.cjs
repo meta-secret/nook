@@ -94,7 +94,11 @@ test('accepts reviewed-head bodies, committed fixes, and later PR comments', () 
     threads: [], reviews: [], comments: [], changedPaths: ['src/fix.ts'],
     publishedAt: '2026-01-01T10:30:00-07:00', hasNextPage: false,
   }
-  assert.equal(reviewBatchMatches({ ...input, reviews: [{ body: 'Please fix.', commit: { oid: input.pr.headRefOid } }] }), true)
+  assert.equal(reviewBatchMatches({ ...input, reviews: [{ body: 'Please fix.', state: 'COMMENTED' }] }), true)
+  assert.equal(reviewBatchMatches({ ...input, reviews: [{ body: 'Please fix.', state: 'CHANGES_REQUESTED' }] }), true)
+  assert.equal(reviewBatchMatches({ ...input, reviews: [{ body: 'LGTM', state: 'APPROVED' }] }), false)
+  assert.equal(reviewBatchMatches({ ...input, reviews: [{ body: 'Old finding', state: 'DISMISSED' }] }), false)
+  assert.equal(reviewBatchMatches({ ...input, reviews: [{ body: '### 💡 Codex Review\nBoilerplate', state: 'COMMENTED' }] }), false)
   assert.equal(reviewBatchMatches({ ...input, comments: [{ body: 'Please fix.', createdAt: '2026-01-02T00:00:00Z' }] }), true)
   assert.equal(reviewBatchMatches({ ...input, comments: [{ body: 'Please fix.', createdAt: '2026-01-01T16:00:00Z' }] }), false)
   assert.equal(reviewBatchMatches({

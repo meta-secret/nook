@@ -183,7 +183,8 @@ function reviewBatchMatches({
   )
   const inlineMatch = changedPaths.some((path) => currentPaths.has(path))
   const reviewBodyMatch = reviews.some(
-    (review) => review.commit?.oid === pr.headRefOid && review.body.trim(),
+    (review) => ['COMMENTED', 'CHANGES_REQUESTED'].includes(review.state) &&
+      review.body.trim() && !/^### 💡 Codex Review/u.test(review.body.trim()),
   )
   const publishedTime = Date.parse(publishedAt)
   const commentMatch = comments.some((comment) =>
@@ -209,7 +210,7 @@ function verifyReviewContext(prNumber) {
   const [owner, name] = repository.split('/')
   const review = JSON.parse(runGh([
     'api', 'graphql',
-    '-f', 'query=query($owner:String!,$name:String!,$number:Int!,$head:GitObjectID!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){pageInfo{hasNextPage}nodes{isResolved isOutdated path}}reviews(last:100){pageInfo{hasPreviousPage}nodes{body commit{oid}}}comments(last:100){pageInfo{hasPreviousPage}nodes{body createdAt}}}object(oid:$head){... on Commit{checkSuites(first:100){pageInfo{hasNextPage}nodes{createdAt}}}}}}',
+    '-f', 'query=query($owner:String!,$name:String!,$number:Int!,$head:GitObjectID!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){pageInfo{hasNextPage}nodes{isResolved isOutdated path}}reviews(last:100){pageInfo{hasPreviousPage}nodes{body state}}comments(last:100){pageInfo{hasPreviousPage}nodes{body createdAt}}}object(oid:$head){... on Commit{checkSuites(first:100){pageInfo{hasNextPage}nodes{createdAt}}}}}}',
     '-f', `owner=${owner}`, '-f', `name=${name}`, '-F', `number=${prNumber}`,
     '-f', `head=${pr.headRefOid}`,
   ])).data.repository
