@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 const { execFileSync } = require('node:child_process')
-const { readFileSync } = require('node:fs')
+const { lstatSync, readFileSync, readlinkSync } = require('node:fs')
 const { extname } = require('node:path')
 
 const INITIAL_PR_LIMIT = 2_000
@@ -110,7 +110,14 @@ function summarizeNumstat(numstat) {
 function addUntracked(summary, paths) {
   for (const path of paths) {
     if (!path) continue
-    const content = readFileSync(path)
+    const status = lstatSync(path)
+    if (!status.isFile() && !status.isSymbolicLink()) {
+      summary.unmeasurableAuthoredFiles += 1
+      continue
+    }
+    const content = status.isSymbolicLink()
+      ? Buffer.from(readlinkSync(path, 'utf8'))
+      : readFileSync(path)
     if (content.includes(0)) {
       classify(summary, path, Number.NaN, Number.NaN)
       continue
@@ -164,14 +171,26 @@ function runGh(args) {
   }).trim()
 }
 
-function reviewBatchMatches({ localHead, pr, threads, changedPaths, hasNextPage }) {
-  if (hasNextPage || pr.headRefOid !== localHead) return false
+function reviewBatchMatches({
+  localHead, pr, threads, reviews, comments, changedPaths, headCommittedAt,
+  hasNextPage,
+}) {
+  if (hasNextPage || pr.headRefOid !== localHead || changedPaths.length === 0) return false
   const currentPaths = new Set(
     threads
       .filter((thread) => !thread.isResolved && !thread.isOutdated)
       .map((thread) => thread.path),
   )
-  return changedPaths.some((path) => currentPaths.has(path))
+  const inlineMatch = changedPaths.some((path) => currentPaths.has(path))
+  const reviewBodyMatch = reviews.some(
+    (review) => review.commit?.oid === localHead && review.body.trim(),
+  )
+  const commentMatch = comments.some((comment) =>
+    comment.createdAt > headCommittedAt &&
+    comment.body.trim() &&
+    !/^(?:<!--|@codex (?:review|security review)|### Preview deployed)/u.test(comment.body.trim()),
+  )
+  return Boolean(inlineMatch || reviewBodyMatch || commentMatch)
 }
 
 function verifyReviewContext(prNumber) {
@@ -185,13 +204,14 @@ function verifyReviewContext(prNumber) {
     return false
   }
   const localHead = runGit(['rev-parse', 'HEAD'])
+  const headCommittedAt = runGit(['show', '-s', '--format=%cI', 'HEAD'])
   const repository = runGh(['repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner'])
   const [owner, name] = repository.split('/')
   const review = JSON.parse(runGh([
     'api', 'graphql',
-    '-f', 'query=query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){pageInfo{hasNextPage}nodes{isResolved isOutdated path}}}}}',
+    '-f', 'query=query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){pageInfo{hasNextPage}nodes{isResolved isOutdated path}}reviews(last:100){pageInfo{hasPreviousPage}nodes{body commit{oid}}}comments(last:100){pageInfo{hasPreviousPage}nodes{body createdAt}}}}}',
     '-f', `owner=${owner}`, '-f', `name=${name}`, '-F', `number=${prNumber}`,
-  ])).data.repository.pullRequest.reviewThreads
+  ])).data.repository.pullRequest
   const changedPaths = runGit(['diff', '--name-only', '-z', 'HEAD'])
     .split('\0')
     .concat(runGit(['ls-files', '--others', '--exclude-standard', '-z']).split('\0'))
@@ -199,9 +219,13 @@ function verifyReviewContext(prNumber) {
   return reviewBatchMatches({
     localHead,
     pr,
-    threads: review.nodes,
+    threads: review.reviewThreads.nodes,
+    reviews: review.reviews.nodes,
+    comments: review.comments.nodes,
     changedPaths,
-    hasNextPage: review.pageInfo.hasNextPage,
+    headCommittedAt,
+    hasNextPage: review.reviewThreads.pageInfo.hasNextPage ||
+      review.reviews.pageInfo.hasPreviousPage || review.comments.pageInfo.hasPreviousPage,
   })
 }
 
@@ -243,4 +267,6 @@ if (require.main === module) {
   }
 }
 
-module.exports = { countTextLines, evaluateBudget, reviewBatchMatches, summarizeNumstat }
+module.exports = {
+  addUntracked, countTextLines, evaluateBudget, reviewBatchMatches, summarizeNumstat,
+}

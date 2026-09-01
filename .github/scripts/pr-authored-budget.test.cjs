@@ -1,7 +1,11 @@
 const assert = require('node:assert/strict')
+const { mkdtempSync, rmSync, symlinkSync } = require('node:fs')
+const { tmpdir } = require('node:os')
+const { join } = require('node:path')
 const test = require('node:test')
 
 const {
+  addUntracked,
   countTextLines,
   evaluateBudget,
   reviewBatchMatches,
@@ -53,16 +57,43 @@ test('counts newline-terminated untracked text like Git numstat', () => {
   assert.equal(countTextLines('x\r\ny\r\n'), 2)
 })
 
+test('counts an untracked symlink blob without following its target', () => {
+  const root = mkdtempSync(join(tmpdir(), 'nook-budget-'))
+  const link = join(root, 'fixture.ts')
+  try {
+    symlinkSync('../missing-large-file', link)
+    const summary = summarizeNumstat('')
+    addUntracked(summary, [link])
+    assert.equal(summary.authoredLines, 1)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
 test('binds review growth to the current PR head, thread, and changed path', () => {
   const input = {
     localHead: 'a'.repeat(40),
     pr: { headRefOid: 'a'.repeat(40) },
     threads: [{ isResolved: false, isOutdated: false, path: 'src/fix.ts' }],
+    reviews: [],
+    comments: [],
     changedPaths: ['src/fix.ts', 'src/fix.test.ts'],
+    headCommittedAt: '2026-01-01T00:00:00Z',
     hasNextPage: false,
   }
   assert.equal(reviewBatchMatches(input), true)
   assert.equal(reviewBatchMatches({ ...input, changedPaths: ['src/other.ts'] }), false)
   assert.equal(reviewBatchMatches({ ...input, threads: [{ ...input.threads[0], isResolved: true }] }), false)
   assert.equal(reviewBatchMatches({ ...input, localHead: 'b'.repeat(40) }), false)
+})
+
+test('accepts current-head review bodies and later PR comments', () => {
+  const input = {
+    localHead: 'a'.repeat(40),
+    pr: { headRefOid: 'a'.repeat(40) },
+    threads: [], reviews: [], comments: [], changedPaths: ['src/fix.ts'],
+    headCommittedAt: '2026-01-01T00:00:00Z', hasNextPage: false,
+  }
+  assert.equal(reviewBatchMatches({ ...input, reviews: [{ body: 'Please fix.', commit: { oid: input.localHead } }] }), true)
+  assert.equal(reviewBatchMatches({ ...input, comments: [{ body: 'Please fix.', createdAt: '2026-01-02T00:00:00Z' }] }), true)
 })
