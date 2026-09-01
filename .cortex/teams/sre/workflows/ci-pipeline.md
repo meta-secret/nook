@@ -138,6 +138,9 @@ See [issues](../../../gizmo/workflows/issues.md),
 - Remains separate from Main product orchestration.
   - Cortex and agent-only merges require relevant Loom-backed policy checks.
   - They intentionally skip product Main when product paths are unchanged.
+  - Repository-policy-only changes also skip product PR and Main.
+  - Combining repository policy with Cortex Markdown keeps that skip.
+  - Adding any product-impacting path restores product PR and Main.
 - Enforces the authored source-file limit.
 - Enforces Rust unit-test colocation.
 

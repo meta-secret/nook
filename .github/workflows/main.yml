@@ -9,10 +9,11 @@
 # Extension e2e and UI demos remain required for the workflow but do not gate the development
 # deploy. Immutable releases remain
 # responsible for production wasm optimization.
-# Research-only changes are handled by web-research.yml. Cortex, Cursor, and
-# non-minds agentic-AI-only changes do not need this workflow. Minds-only
-# changes run the ecosystem gates here but skip the product pipeline. A trusted
-# workflow_run collector records each attempt in meta-secret/nook-workbench.
+# Research-only changes are handled by web-research.yml. Cortex, Cursor,
+# repository-policy-only, and non-minds agentic-AI-only changes do not need
+# this workflow. Minds-only changes run the ecosystem gates here but skip the
+# product pipeline. A trusted workflow_run collector records each attempt in
+# meta-secret/nook-workbench.
 #
 # E2e on main uses the unified stub `e2e` project (no GitHub API). Live sync
 # provider tests remain available through the manually dispatched e2e-pr.yml.
@@ -31,6 +32,7 @@ on:
       - "**"
       - "!.cortex/**"
       - "!.cursor/**"
+      - "!.github/workflows/repository-policy.yml"
       - "!.github/workflows/web-research.yml"
       - "!agentic-ai/**"
       - "agentic-ai/minds/**"

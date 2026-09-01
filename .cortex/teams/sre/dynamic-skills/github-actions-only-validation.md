@@ -82,8 +82,11 @@ task loom:pr-land CONFIG=path/to/gizmo-owned/pr-land-validate.yaml
   - The workflow runs `task loom:cortex-audit`.
   - It skips Rust setup, BuildKit connection, preflight, and full Loom package
     verification.
+  - A change limited to `repository-policy.yml` and Cortex Markdown skips the
+    product PR and Main workflows.
   - Any non-Markdown Cortex file keeps the complete repository-policy path.
   - Any mixed change keeps the complete repository-policy path.
+  - Any product-impacting mixed change keeps the product PR and Main workflows.
 
 ## Scope
 
