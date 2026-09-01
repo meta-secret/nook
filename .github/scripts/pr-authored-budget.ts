@@ -226,25 +226,26 @@ export function reviewBatchMatches({
   )
   const inlineMatch = changedPaths.some((path) => currentPaths.has(path))
   const publishedTime = Date.parse(publishedAt)
-  const latestReviews = new Map()
-  for (const review of reviews) {
+  const activeReviews = new Map()
+  for (const review of reviews.toSorted(
+    (left, right) => Date.parse(left.submittedAt) - Date.parse(right.submittedAt),
+  )) {
     const login = review.author?.login
     if (!login || !review.submittedAt) continue
-    const previous = latestReviews.get(login)
-    if (!previous || Date.parse(review.submittedAt) > Date.parse(previous.submittedAt)) {
-      latestReviews.set(login, review)
+    if (['APPROVED', 'DISMISSED'].includes(review.state)) {
+      activeReviews.delete(login)
+    } else if (
+      ['COMMENTED', 'CHANGES_REQUESTED'].includes(review.state) &&
+      review.comments.totalCount === 0 && review.body.trim() &&
+      !isNonActionableReviewBody(review.body) && !isCodexStatusReviewBody(review) &&
+      !(botLoginMatches(review.author, 'cursor') && review.body.includes('<summary>Stale comment</summary>'))
+    ) {
+      activeReviews.set(login, review)
     }
   }
-  const reviewBodyMatch = [...latestReviews.values()].some(
-    (review) => ['COMMENTED', 'CHANGES_REQUESTED'].includes(review.state) &&
-      Number.isFinite(publishedTime) && Date.parse(review.submittedAt) > publishedTime &&
-      review.body.trim() &&
-      !isNonActionableReviewBody(review.body) &&
-      !isCodexStatusReviewBody(review) &&
-      !(
-        botLoginMatches(review.author, 'cursor') &&
-        review.body.includes('<summary>Stale comment</summary>')
-      ),
+  const reviewBodyMatch = [...activeReviews.values()].some(
+    (review) => Number.isFinite(publishedTime) &&
+      Date.parse(review.submittedAt) > publishedTime,
   )
   const commentMatch = comments.some((comment) =>
     Number.isFinite(publishedTime) &&
@@ -258,7 +259,11 @@ export function reviewBatchMatches({
         comment.body.trimStart().startsWith("Codex Review: Didn't find any major issues.")
       )
     ) &&
-    !/^(?:<!--|@codex (?:review|security review)|### (?:Preview deployed|Web research preview))/u.test(comment.body.trim()) &&
+    !(botLoginMatches(comment.author, 'chatgpt-codex-connector') &&
+      comment.body.startsWith('<!-- codex-pull-request-review-summary -->')) &&
+    !(botLoginMatches(comment.author, 'github-actions') &&
+      comment.body.startsWith('<!-- nook-core-coverage -->')) &&
+    !/^(?:@codex (?:review|security review)|### (?:Preview deployed|Web research preview))/u.test(comment.body.trim()) &&
     !/^@\S+ this workflow assigned you PR #\d+\. Continue only this PR's recorded scope through review, exact-head validation, and squash merge\.$/u.test(comment.body.trim()),
   )
   return Boolean(inlineMatch || reviewBodyMatch || commentMatch)
@@ -292,15 +297,18 @@ function verifyReviewContext(prNumber) {
   const [owner, name] = repository.split('/')
   const publication = JSON.parse(runGh([
     'api', 'graphql',
-    '-f', 'query=query($owner:String!,$name:String!,$head:GitObjectID!){repository(owner:$owner,name:$name){object(oid:$head){... on Commit{committedDate pushedDate}}}}',
+    '-f', 'query=query($owner:String!,$name:String!,$head:GitObjectID!){repository(owner:$owner,name:$name){object(oid:$head){... on Commit{pushedDate}}}}',
     '-f', `owner=${owner}`, '-f', `name=${name}`,
     '-f', `head=${pr.headRefOid}`,
   ])).data.repository.object
   const threads = pagedPrNodes(owner, name, prNumber, 'reviewThreads', 'isResolved isOutdated path')
-  const reviews = pagedPrNodes(owner, name, prNumber, 'reviews', 'author{login} body state submittedAt')
+  const reviews = pagedPrNodes(owner, name, prNumber, 'reviews', 'author{login} body state submittedAt comments{totalCount}')
   const comments = pagedPrNodes(owner, name, prNumber, 'comments', 'author{login} body createdAt updatedAt')
-  const changedPaths = runGit(['diff', '--name-only', '--no-renames', '-z', pr.headRefOid])
-    .split('\0')
+  const changedPaths = runGit([
+    'log', '--format=', '--name-only', '-z', '--no-renames', '--first-parent', '--no-merges',
+    `${pr.headRefOid}..HEAD`,
+  ]).split('\0')
+    .concat(runGit(['diff', '--name-only', '--no-renames', '-z', 'HEAD']).split('\0'))
     .concat(runGit(['ls-files', '--others', '--exclude-standard', '-z']).split('\0'))
     .filter(Boolean)
   return reviewBatchMatches({
@@ -308,7 +316,7 @@ function verifyReviewContext(prNumber) {
     reviews,
     comments,
     changedPaths,
-    publishedAt: publication.pushedDate || publication.committedDate,
+    publishedAt: publication.pushedDate,
   })
 }
 

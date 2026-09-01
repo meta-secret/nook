@@ -102,7 +102,10 @@ test('accepts reviewed-head bodies, committed fixes, and later PR comments', () 
     threads: [], reviews: [], comments: [], changedPaths: ['src/fix.ts'],
     publishedAt: '2026-01-01T10:30:00-07:00',
   }
-  const currentReview = { author: { login: 'reviewer' }, submittedAt: '2026-01-02T00:00:00Z' }
+  const currentReview = {
+    author: { login: 'reviewer' }, comments: { totalCount: 0 },
+    submittedAt: '2026-01-02T00:00:00Z',
+  }
   assert.equal(reviewBatchMatches({ ...input, reviews: [{ ...currentReview, body: 'Please fix.', state: 'COMMENTED' }] }), true)
   assert.equal(reviewBatchMatches({ ...input, reviews: [{ ...currentReview, body: 'Please fix.', state: 'CHANGES_REQUESTED' }] }), true)
   assert.equal(reviewBatchMatches({ ...input, reviews: [{ ...currentReview, body: 'LGTM', state: 'APPROVED' }] }), false)
@@ -111,10 +114,19 @@ test('accepts reviewed-head bodies, committed fixes, and later PR comments', () 
     { ...currentReview, body: 'Please fix.', state: 'CHANGES_REQUESTED' },
     { ...currentReview, body: '', state: 'APPROVED', submittedAt: '2026-01-03T00:00:00Z' },
   ] }), false)
+  assert.equal(reviewBatchMatches({ ...input, reviews: [
+    { ...currentReview, body: 'Please fix.', state: 'COMMENTED' },
+    { ...currentReview, body: 'Thanks', state: 'COMMENTED', submittedAt: '2026-01-03T00:00:00Z' },
+  ] }), true)
+  assert.equal(reviewBatchMatches({ ...input, reviews: [{
+    ...currentReview, body: 'See inline comments.', state: 'COMMENTED',
+    comments: { totalCount: 1 },
+  }] }), false)
   assert.equal(reviewBatchMatches({
     ...input,
     reviews: [{
       author: { login: 'chatgpt-codex-connector[bot]' },
+      comments: { totalCount: 0 },
       submittedAt: currentReview.submittedAt,
       body: '### 💡 Codex Review\n\nHere are some automated review suggestions for this pull request.\n\n**Reviewed commit:** `aaaaaaaaaa`',
       state: 'COMMENTED',
@@ -124,6 +136,7 @@ test('accepts reviewed-head bodies, committed fixes, and later PR comments', () 
     ...input,
     reviews: [{
       author: { login: 'chatgpt-codex-connector[bot]' },
+      comments: { totalCount: 0 },
       submittedAt: currentReview.submittedAt,
       body: '### 💡 Codex Review\n\nHere are some automated review suggestions for this pull request.\n\n**Reviewed commit:** `aaaaaaaaaa`\n\nActionable finding',
       state: 'COMMENTED',
@@ -133,12 +146,20 @@ test('accepts reviewed-head bodies, committed fixes, and later PR comments', () 
     ...input,
     reviews: [{
       author: { login: 'cursor[bot]' },
+      comments: { totalCount: 0 },
       submittedAt: currentReview.submittedAt,
       body: '<details><summary>Stale comment</summary></details>',
       state: 'COMMENTED',
     }],
   }), false)
   assert.equal(reviewBatchMatches({ ...input, comments: [{ body: 'Please fix.', createdAt: '2025-01-02T00:00:00Z', updatedAt: '2026-01-02T00:00:00Z' }] }), true)
+  assert.equal(reviewBatchMatches({ ...input, comments: [{ body: '<!-- review-id:42 -->\nPlease fix.', createdAt: '2026-01-02T00:00:00Z' }] }), true)
+  assert.equal(reviewBatchMatches({ ...input, comments: [{
+    author: { login: 'chatgpt-codex-connector' },
+    body: '<!-- codex-pull-request-review-summary -->\nStatus',
+    createdAt: '2026-01-02T00:00:00Z',
+  }] }), false)
+  assert.equal(reviewBatchMatches({ ...input, publishedAt: null, comments: [{ body: 'Please fix.', createdAt: '2026-01-02T00:00:00Z' }] }), false)
   assert.equal(reviewBatchMatches({ ...input, comments: [{ body: 'Looks good to me.', createdAt: '2026-01-02T00:00:00Z' }] }), false)
   assert.equal(reviewBatchMatches({ ...input, comments: [{ body: 'Please fix.', createdAt: '2026-01-01T16:00:00Z' }] }), false)
   assert.equal(reviewBatchMatches({
