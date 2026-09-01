@@ -4,7 +4,11 @@ import test from "node:test";
 import type { Octokit } from "@octokit/rest";
 
 import { PullRequestPathInventoryState, type RepoRef } from "../main/github.js";
-import { buildPrAudit } from "../main/pr-audit.js";
+import {
+  buildPrAudit,
+  GithubWorkflowConclusion,
+  WorkflowAuditState,
+} from "../main/pr-audit.js";
 
 const repoRef = { owner: "meta-secret", repo: "nook" };
 
@@ -47,6 +51,39 @@ test("buildPrAudit requires successful policy evidence for Cortex-only PRs", asy
     assert.equal(audit.ready, false);
     assert.match(audit.reasons.join("\n"), /Repository policy run/u);
   }
+});
+
+test("buildPrAudit replaces old-base policy evidence and ignores metadata edits", async () => {
+  const stale = await buildPrAudit(
+    mockOctokit({ cortexOnly: true, staleBaseRun: true }),
+    repoRef,
+    410,
+  );
+  assert.equal(stale.ready, false);
+  const replacement = await buildPrAudit(
+    mockOctokit({ cortexOnly: true, metadataPolicyRun: true }),
+    repoRef,
+    410,
+  );
+  assert.equal(replacement.ready, true);
+  const policy = replacement.requiredWorkflows[0];
+  assert.equal(policy?.state, WorkflowAuditState.Indexed);
+  if (policy?.state === WorkflowAuditState.Indexed)
+    assert.equal(policy.runId, 42);
+});
+
+test("buildPrAudit paginates past metadata-only policy runs", async () => {
+  assert.equal(GithubWorkflowConclusion.Skipped, MockJobConclusion.Skipped);
+  const audit = await buildPrAudit(
+    mockOctokit({ cortexOnly: true, metadataPolicyRunCount: 21 }),
+    repoRef,
+    410,
+  );
+  assert.equal(audit.ready, true);
+  const policy = audit.requiredWorkflows[0];
+  assert.equal(policy?.state, WorkflowAuditState.Indexed);
+  if (policy?.state === WorkflowAuditState.Indexed)
+    assert.equal(policy.runId, 42);
 });
 
 test("buildPrAudit ignores a Cursor Bugbot disabled-account upsell comment", async () => {
@@ -485,6 +522,7 @@ enum MockRunStatus {
 
 enum MockJobConclusion {
   Failure = "failure",
+  Skipped = "skipped",
   Success = "success",
 }
 
@@ -507,6 +545,8 @@ type MockOptions = {
   historicalFinding?: boolean;
   legacyAutomationComment?: boolean;
   legacyAutomationDeletionFails?: boolean;
+  metadataPolicyRun?: boolean;
+  metadataPolicyRunCount?: number;
   lateSynchronize?: boolean;
   headRepository?: RepoRef;
   nativeConclusion?: MockJobConclusion;
@@ -793,8 +833,9 @@ function createMockOctokit(options: MockOptions): Octokit {
   const octokit = {
     rest: {
       actions: {
-        listJobsForWorkflowRun: async () => ({
+        listJobsForWorkflowRun: async ({ run_id }: { run_id: number }) => ({
           data: [
+            "Enforce repository policy",
             "Native Rust verification",
             "WASM build and artifact",
             "WASM Node tests",
@@ -810,9 +851,11 @@ function createMockOctokit(options: MockOptions): Octokit {
             )
             .map((name) => ({
               conclusion:
-                name === "Native Rust verification"
-                  ? (options.nativeConclusion ?? MockJobConclusion.Success)
-                  : MockJobConclusion.Success,
+                run_id >= 43 && name === "Enforce repository policy"
+                  ? MockJobConclusion.Skipped
+                  : name === "Native Rust verification"
+                    ? (options.nativeConclusion ?? MockJobConclusion.Success)
+                    : MockJobConclusion.Success,
               name,
               status: MockRunStatus.Completed,
             })),
@@ -824,6 +867,26 @@ function createMockOctokit(options: MockOptions): Octokit {
               workflow_id !== "pr.yml"
                 ? []
                 : [
+                    ...(workflow_id === "repository-policy.yml"
+                      ? Array.from(
+                          {
+                            length:
+                              options.metadataPolicyRunCount ??
+                              (options.metadataPolicyRun === true ? 1 : 0),
+                          },
+                          (_, index) => ({
+                            conclusion: MockJobConclusion.Success,
+                            created_at: `2026-08-09T00:${String(index).padStart(2, "0")}:00Z`,
+                            head_sha: headSha,
+                            html_url: `https://github.com/meta-secret/nook/actions/runs/${43 + index}`,
+                            id: 43 + index,
+                            pull_requests: [
+                              { base: { sha: "base-sha" }, number: 410 },
+                            ],
+                            status: MockRunStatus.Completed,
+                          }),
+                        )
+                      : []),
                     {
                       ...(options.runStatus === MockRunStatus.InProgress
                         ? {}
@@ -880,7 +943,12 @@ function createMockOctokit(options: MockOptions): Octokit {
     paginate: async (
       route: (args: unknown) => Promise<{ data: unknown[] }>,
       args: unknown,
-    ) => (await route(args)).data,
+    ) => {
+      const response = (await route(args)).data;
+      return Array.isArray(response)
+        ? response
+        : (response as { workflow_runs: unknown[] }).workflow_runs;
+    },
     graphql: async () => ({
       repository: {
         pullRequest: {

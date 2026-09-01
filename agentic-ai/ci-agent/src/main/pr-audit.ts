@@ -31,7 +31,13 @@ export enum WorkflowRunStatusState {
 }
 
 export enum GithubWorkflowConclusion {
+  Skipped = "skipped",
   Success = "success",
+}
+
+enum WorkflowSelectionState {
+  NotSelected = "not-selected",
+  Selected = "selected",
 }
 
 type WorkflowConclusion =
@@ -292,15 +298,18 @@ async function auditWorkflows(
   const { owner, repo } = request.repoRef;
   return Promise.all(
     request.workflows.map(async (workflow) => {
-      const { data } = await request.octokit.rest.actions.listWorkflowRuns({
-        owner,
-        repo,
-        workflow_id: workflow.workflowFile,
-        event: "pull_request",
-        head_sha: request.headSha,
-        per_page: 20,
-      });
-      const runs = data.workflow_runs
+      const indexedRuns = await request.octokit.paginate(
+        request.octokit.rest.actions.listWorkflowRuns,
+        {
+          owner,
+          repo,
+          workflow_id: workflow.workflowFile,
+          event: "pull_request",
+          head_sha: request.headSha,
+          per_page: 100,
+        },
+      );
+      const runs = indexedRuns
         .filter(
           (candidate) =>
             candidate.head_sha === request.headSha &&
@@ -315,10 +324,41 @@ async function auditWorkflows(
           (left, right) =>
             Date.parse(right.created_at) - Date.parse(left.created_at),
         );
-      const run = runs[0];
-      if (!run) {
+      type WorkflowSelection =
+        | { state: WorkflowSelectionState.NotSelected }
+        | {
+            audits: RequiredJobAudit[];
+            run: (typeof runs)[number];
+            state: WorkflowSelectionState.Selected;
+          };
+      let selection: WorkflowSelection = {
+        state: WorkflowSelectionState.NotSelected,
+      };
+      for (const candidate of runs) {
+        const audits = await auditRequiredJobs(
+          request.octokit,
+          { owner, repo },
+          candidate.id,
+          workflow.requiredJobs ?? [],
+        );
+        if (
+          workflow.workflowFile !== "repository-policy.yml" ||
+          audits.every(
+            (job) => job.conclusion !== GithubWorkflowConclusion.Skipped,
+          )
+        ) {
+          selection = {
+            audits,
+            run: candidate,
+            state: WorkflowSelectionState.Selected,
+          };
+          break;
+        }
+      }
+      if (selection.state === WorkflowSelectionState.NotSelected) {
         return { ...workflow, state: WorkflowAuditState.NotIndexed };
       }
+      const { audits: requiredJobAudits, run } = selection;
       const conclusion: WorkflowConclusion = run.conclusion
         ? {
             state: WorkflowConclusionState.Reported,
@@ -331,12 +371,6 @@ async function auditWorkflows(
           : typeof run.status === "string"
             ? { state: WorkflowRunStatusState.Other, value: run.status }
             : { state: WorkflowRunStatusState.Unavailable };
-      const requiredJobAudits = await auditRequiredJobs(
-        request.octokit,
-        { owner, repo },
-        run.id,
-        workflow.requiredJobs ?? [],
-      );
       return {
         ...workflow,
         state: WorkflowAuditState.Indexed,

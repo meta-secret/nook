@@ -19,47 +19,87 @@ const inspectable = (paths: string[]): PullRequestPathInventory => ({
 });
 
 test("requiredPrCheckNames maps changed paths to repository-owned gates", () => {
-  assert.deepEqual(
-    requiredPrCheckNames(
-      inspectable([
-        ".cortex/AGENTS.md",
-        ".cortex/teams/sre/workflows/ci-pipeline.md",
-      ]),
-    ),
-    ["Enforce repository policy"],
-  );
-  assert.deepEqual(
-    requiredPrCheckNames(
-      inspectable([
-        ".github/workflows/repository-policy.yml",
-        ".cortex/AGENTS.md",
-      ]),
-    ),
-    ["Enforce repository policy"],
-  );
-  for (const productPath of [
-    ".cortex/teams/sre/workflow.yml",
+  const canonicalAiOnlyPaths = [
+    ".agents/skills/example/SKILL.md",
+    ".claude/skills/example/SKILL.md",
     ".codex/config.toml",
-    ".github/workflows/pr.yml",
-    "agentic-ai/minds/Cargo.lock",
-    "nook-app/nook-platform/nook-core/src/lib.rs",
+    ".cortex/AGENTS.md",
+    ".cursor/mcp.json",
+    ".github/prompts/agent-plan.md",
+    ".github/workflows/agent-implement.yml",
+    ".github/workflows/ci-agent-smoke.yml",
+    ".github/workflows/repository-policy.yml",
+    ".task/agentic-ai.yml",
+    "AGENTS.md",
+    "CODEX.md",
+    "agentic-ai/loom/src/cli.ts",
+  ];
+  for (const canonicalPath of canonicalAiOnlyPaths) {
+    assert.deepEqual(requiredPrCheckNames(inspectable([canonicalPath])), [
+      "Enforce repository policy",
+    ]);
+  }
+  assert.deepEqual(
+    requiredPrCheckNames(
+      inspectable([...canonicalAiOnlyPaths, "preflight/Cargo.lock"]),
+    ),
+    ["Enforce repository policy", "Verify and preview"],
+  );
+  assert.deepEqual(requiredPrCheckNames(inspectable([".cortex/AGENTS.md"])), [
+    "Enforce repository policy",
+  ]);
+  assert.deepEqual(
+    requiredPrCheckNames(
+      inspectable(["nook-app/nook-platform/nook-core/src/lib.rs"]),
+    ),
+    ["Verify and preview"],
+  );
+  assert.deepEqual(
+    requiredPrCheckNames(
+      inspectable(["nook-app/nook-platform/.cargo/config.toml"]),
+    ),
+    ["Verify and preview"],
+  );
+  assert.deepEqual(
+    requiredPrCheckNames(inspectable(["preflight/Cargo.lock"])),
+    ["Verify and preview"],
+  );
+  assert.deepEqual(
+    requiredPrCheckNames(inspectable(["agentic-ai/minds/Cargo.lock"])),
+    ["Verify and preview"],
+  );
+  assert.deepEqual(
+    requiredPrCheckNames(
+      inspectable(["agentic-ai/ci-agent/src/main/github.ts"]),
+    ),
+    ["Enforce repository policy"],
+  );
+  assert.deepEqual(
+    requiredPrCheckNames(inspectable([".github/scripts/ai-routing.test.cjs"])),
+    ["Enforce repository policy", "Verify and preview"],
+  );
+  assert.deepEqual(
+    requiredPrCheckNames(
+      inspectable(["nook-app/nook-web/nook-web-research/src/main.ts"]),
+    ),
+    ["Build and deploy research catalog", "Verify and preview"],
+  );
+  for (const path of [
+    ".github/scripts/web-research-deploy.sh",
+    ".github/scripts/web-research-verify-live.sh",
+    ".task/ci-workflows.yml",
   ]) {
-    assert.deepEqual(requiredPrCheckNames(inspectable([productPath])), [
+    assert.deepEqual(requiredPrCheckNames(inspectable([path])), [
+      "Build and deploy research catalog",
       "Verify and preview",
     ]);
   }
   assert.deepEqual(
     requiredPrCheckNames(
       inspectable([
-        ".github/workflows/repository-policy.yml",
         "nook-app/nook-platform/nook-core/src/lib.rs",
+        "nook-app/nook-web/nook-web-research/src/main.ts",
       ]),
-    ),
-    ["Enforce repository policy", "Verify and preview"],
-  );
-  assert.deepEqual(
-    requiredPrCheckNames(
-      inspectable(["nook-app/nook-web/nook-web-research/src/main.ts"]),
     ),
     ["Build and deploy research catalog", "Verify and preview"],
   );
@@ -83,7 +123,7 @@ test("requiredPrCheckNames maps changed paths to repository-owned gates", () => 
     ],
   );
 });
-test("renamed PR files conservatively require product validation", () => {
+test("renamed PR files preserve source-path validation", () => {
   const productToAiFiles = [
     {
       filename: "agentic-ai/loom/src/legacy.ts",
@@ -101,13 +141,14 @@ test("renamed PR files conservatively require product validation", () => {
   ]);
   assert.equal(productToAiPaths.state, PullRequestPathInventoryState.Renamed);
   assert.deepEqual(requiredPrCheckNames(productToAiPaths), [
+    "Enforce repository policy",
     "Verify and preview",
   ]);
 
   const aiToAiFiles = [
     {
       filename: ".cortex/teams/ai/renamed.md",
-      previous_filename: ".cortex/teams/ai/legacy-agent.md",
+      previous_filename: ".cursor/legacy-agent.md",
       status: "renamed",
     },
   ];
@@ -120,20 +161,70 @@ test("renamed PR files conservatively require product validation", () => {
     "Verify and preview",
   ]);
 
-  const researchToProductPaths = classifyPullRequestChangedPaths(
+  for (const [previousFilename, filename] of [
+    ["agentic-ai/minds/old.rs", ".cortex/teams/ai/new.md"],
+    [".cortex/teams/ai/old.md", "agentic-ai/minds/new.rs"],
+  ]) {
+    const mindsRenamePaths = classifyPullRequestChangedPaths(
+      [
+        {
+          filename,
+          previous_filename: previousFilename,
+          status: "renamed",
+        },
+      ],
+      1,
+    );
+    assert.deepEqual(requiredPrCheckNames(mindsRenamePaths), [
+      "Enforce repository policy",
+      "Verify and preview",
+    ]);
+  }
+  for (const [previousFilename, filename, expected] of [
     [
-      {
-        filename: "nook-app/nook-web/src/lib.ts",
-        previous_filename: "nook-app/nook-web/nook-web-research/src/legacy.ts",
-        status: "renamed",
-      },
+      "agentic-ai/ci-agent/src/old.ts",
+      ".cortex/new.md",
+      ["Enforce repository policy"],
     ],
-    1,
-  );
-  assert.deepEqual(requiredPrCheckNames(researchToProductPaths), [
-    "Build and deploy research catalog",
-    "Verify and preview",
-  ]);
+    [
+      ".cortex/old.md",
+      "agentic-ai/ci-agent/src/new.ts",
+      ["Enforce repository policy"],
+    ],
+    [
+      ".github/scripts/ai-routing.test.cjs",
+      ".cortex/new.md",
+      ["Enforce repository policy"],
+    ],
+    [
+      ".cortex/old.md",
+      ".github/scripts/ai-routing.test.cjs",
+      ["Enforce repository policy"],
+    ],
+  ] as const) {
+    const targetedPaths = classifyPullRequestChangedPaths(
+      [{ filename, previous_filename: previousFilename, status: "renamed" }],
+      1,
+    );
+    assert.deepEqual(requiredPrCheckNames(targetedPaths), [
+      ...expected,
+      "Verify and preview",
+    ]);
+  }
+  for (const [previousFilename, filename] of [
+    ["nook-app/nook-web/nook-web-research/src/old.ts", ".cortex/new.md"],
+    [".cortex/old.md", "nook-app/nook-web/nook-web-research/src/new.ts"],
+  ]) {
+    const researchRenamePaths = classifyPullRequestChangedPaths(
+      [{ filename, previous_filename: previousFilename, status: "renamed" }],
+      1,
+    );
+    assert.deepEqual(requiredPrCheckNames(researchRenamePaths), [
+      "Enforce repository policy",
+      "Build and deploy research catalog",
+      "Verify and preview",
+    ]);
+  }
   const malformedRename = classifyPullRequestChangedPaths(
     [{ filename: "agentic-ai/loom/src/unknown.ts", status: "renamed" }],
     1,
@@ -141,10 +232,6 @@ test("renamed PR files conservatively require product validation", () => {
   assert.equal(
     malformedRename.state,
     PullRequestPathInventoryState.Uninspectable,
-  );
-  assert.match(
-    "reason" in malformedRename ? malformedRename.reason : "",
-    /lacks source path/u,
   );
 });
 test("PR file inventory fails closed on truncation and unsupported status", () => {

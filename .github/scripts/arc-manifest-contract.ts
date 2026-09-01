@@ -496,7 +496,9 @@ prWorkflow.requireAll([
   "runs-on: ubuntu-latest",
   "product-validation-required: ${{ steps.product-scope.outputs.result }}",
   "files = await github.paginate(github.rest.pulls.listFiles",
+  "const PullRequestFileStatus = Object.freeze({",
   "file.status === PullRequestFileStatus.Renamed",
+  "? [file.previous_filename, file.filename]",
   "needs.validation-request.outputs.product-validation-required == 'true'",
   "full-e2e-shard:",
   "name: Full browser e2e shard (${{ matrix.shard }}/2)",
@@ -513,6 +515,18 @@ prWorkflow.requireAll([
   "task _ci:main:web:e2e-only",
   "task _extension:test:e2e",
   "task _web:test:ui-demo",
+]);
+webResearchWorkflow.requireAll([
+  "const PullRequestFileStatus = Object.freeze({",
+  "Added: 'added'",
+  "Removed: 'removed'",
+  "Modified: 'modified'",
+  "Renamed: 'renamed'",
+  "Copied: 'copied'",
+  "Changed: 'changed'",
+  "Unchanged: 'unchanged'",
+  "new Set(Object.values(PullRequestFileStatus))",
+  "file.status === PullRequestFileStatus.Renamed",
 ]);
 prWorkflow.count({ fragment: "    runs-on: ubuntu-latest", expected: 1 });
 nodeSetup.requireAll([
@@ -628,10 +642,15 @@ const hostedCheapClassifiers = new Set([
   "main-failure-handoff.yml#product-scope",
   "main.yml#product-paths",
   "pr-validation-handoff.yml#product-scope",
+  "pr-obsolete-validation.yml#obsolete-heads",
   "pr.yml#validation-request",
+  "repository-policy.yml#policy-paths",
   "web-research.yml#research-paths",
 ]);
-const hostedCheckoutClassifiers = new Set(["main.yml#product-paths"]);
+const hostedCheckoutClassifiers = new Set([
+  "main.yml#product-paths",
+  "repository-policy.yml#policy-paths",
+]);
 const workflowsDir = resolve(root, ".github/workflows");
 const workflowFiles = (await readdir(workflowsDir))
   .filter((file) => file.endsWith(".yml") || file.endsWith(".yaml"))
@@ -657,8 +676,11 @@ for (const workflowFile of workflowFiles) {
         if (
           permissions.state === WorkflowPermissionsState.Missing ||
           Object.keys(permissions.value).length === 0 ||
-          Object.values(permissions.value).some(
-            (permission) => permission !== "read",
+          Object.entries(permissions.value).some(
+            ([scope, permission]) =>
+              permission !== "read" &&
+              !(identity === "pr-obsolete-validation.yml#obsolete-heads" &&
+                scope === "actions" && permission === "write"),
           ) ||
           serializedJob.includes("secrets.") ||
           (!hostedCheckoutClassifiers.has(identity) &&
@@ -667,7 +689,7 @@ for (const workflowFile of workflowFiles) {
             !serializedJob.includes('"persist-credentials":false'))
         ) {
           throw new Error(
-            `${identity} must remain an explicitly read-only, credential-free classifier`,
+            `${identity} must remain an explicitly scoped, credential-free hosted job`,
           );
         }
         continue;

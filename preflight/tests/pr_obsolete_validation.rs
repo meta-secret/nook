@@ -63,6 +63,7 @@ fn obsolete_validation_cancellation_is_marker_free_and_head_bound() -> Result<()
         "actions: write",
         "pull-requests: read",
         "name: Cancel obsolete validation heads",
+        "runs-on: ubuntu-latest",
         "context.payload.action === \"edited\"",
         "context.payload.changes?.base?.ref?.from",
         "Ignoring PR edit without a base-ref change.",
@@ -96,6 +97,9 @@ fn obsolete_validation_cancellation_is_marker_free_and_head_bound() -> Result<()
         "nook-head-transition",
         "backfill",
         "actions/checkout",
+        "NOOK_RUNS_ON",
+        "nook-k0s",
+        "secrets.",
     ] {
         assert!(
             !cancellation.contains(forbidden),

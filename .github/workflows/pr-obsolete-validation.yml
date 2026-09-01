@@ -5,15 +5,14 @@ on:
   pull_request_target:
     types: [edited, synchronize]
 
-permissions:
-  actions: write
-  contents: read
-  pull-requests: read
-
 jobs:
   obsolete-heads:
     name: Cancel obsolete validation heads
-    runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
+    permissions:
+      actions: write
+      contents: read
+      pull-requests: read
+    runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
       - name: Cancel active validation for replaced heads
@@ -33,6 +32,7 @@ jobs:
             }
             const validationWorkflows = [
               { file: "pr.yml", name: "PR" },
+              { file: "repository-policy.yml", name: "Repository policy" },
               { file: "rust-ecosystem.yml", name: "Rust ecosystem checks" },
               { file: "web-research.yml", name: "Web research" },
             ];

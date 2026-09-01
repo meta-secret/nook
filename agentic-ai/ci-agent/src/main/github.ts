@@ -195,8 +195,8 @@ export async function createFixPr(
 }
 
 const MAIN_PR_CHECK = "Verify and preview";
-const REPOSITORY_POLICY_PR_CHECK = "Enforce repository policy";
 const WEB_RESEARCH_PR_CHECK = "Build and deploy research catalog";
+const REPOSITORY_POLICY_PR_CHECK = "Enforce repository policy";
 
 /** Jobs that must succeed on the latest exact-head PR run before merge. */
 export const REQUIRED_MAIN_PR_JOBS = [
@@ -370,25 +370,27 @@ const MAIN_PR_WORKFLOW: RequiredPrWorkflow = {
   requiredJobs: REQUIRED_MAIN_PR_JOBS,
 };
 
-const REPOSITORY_POLICY_PR_WORKFLOW: RequiredPrWorkflow = {
-  checkName: REPOSITORY_POLICY_PR_CHECK,
-  workflowFile: "repository-policy.yml",
-  workflowName: "Repository policy",
-};
-
 const WEB_RESEARCH_PR_WORKFLOW: RequiredPrWorkflow = {
   checkName: WEB_RESEARCH_PR_CHECK,
   workflowFile: "web-research.yml",
   workflowName: "Web research",
 };
 
-function isWebResearchPath(path: string): boolean {
+const REPOSITORY_POLICY_PR_WORKFLOW: RequiredPrWorkflow = {
+  checkName: REPOSITORY_POLICY_PR_CHECK,
+  requiredJobs: [REPOSITORY_POLICY_PR_CHECK],
+  workflowFile: "repository-policy.yml",
+  workflowName: "Repository policy",
+};
+
+function isRepositoryBehaviorTestPath(path: string): boolean {
   return (
+    path.startsWith("agentic-ai/ci-agent/") ||
+    (path.startsWith(".github/scripts/") && path.endsWith(".cjs")) ||
+    path === ".github/workflows/main.yml" ||
+    path === ".github/workflows/pr-obsolete-validation.yml" ||
     path === ".github/workflows/web-research.yml" ||
-    path === ".github/scripts/web-research-deploy.sh" ||
-    path === ".github/scripts/web-research-verify-live.sh" ||
-    path === ".task/ci-workflows.yml" ||
-    path.startsWith("nook-app/nook-web/nook-web-research/")
+    path === ".github/workflows/repository-policy.yml"
   );
 }
 
@@ -406,8 +408,8 @@ export function requiredPrWorkflows(
   const required: RequiredPrWorkflow[] = [];
 
   if (
-    paths.includes(".github/workflows/repository-policy.yml") ||
-    paths.some(isCortexMarkdownPath)
+    paths.some(isCanonicalAiOnlyPath) ||
+    paths.some(isRepositoryBehaviorTestPath)
   ) {
     required.push(REPOSITORY_POLICY_PR_WORKFLOW);
   }
@@ -840,15 +842,33 @@ function isNotFound(err: unknown): boolean {
   );
 }
 
-function isCanonicalAiOnlyPath(path: string): boolean {
+function isWebResearchPath(path: string): boolean {
   return (
-    isCortexMarkdownPath(path) ||
-    path === ".github/workflows/repository-policy.yml"
+    path === ".github/workflows/web-research.yml" ||
+    path === ".github/scripts/web-research-deploy.sh" ||
+    path === ".github/scripts/web-research-verify-live.sh" ||
+    path === ".task/ci-workflows.yml" ||
+    path.startsWith("nook-app/nook-web/nook-web-research/")
   );
 }
 
-function isCortexMarkdownPath(path: string): boolean {
-  return path.startsWith(".cortex/") && path.endsWith(".md");
+function isCanonicalAiOnlyPath(path: string): boolean {
+  return (
+    path.startsWith(".agents/skills/") ||
+    path.startsWith(".claude/skills/") ||
+    path.startsWith(".codex/") ||
+    path.startsWith(".cortex/") ||
+    path.startsWith(".cursor/") ||
+    path.startsWith(".github/prompts/") ||
+    path === ".github/workflows/agent-implement.yml" ||
+    path === ".github/workflows/ci-agent-smoke.yml" ||
+    path === ".github/workflows/repository-policy.yml" ||
+    path === ".task/agentic-ai.yml" ||
+    path === "AGENTS.md" ||
+    path === "CODEX.md" ||
+    (path.startsWith("agentic-ai/") &&
+      !path.startsWith("agentic-ai/minds/"))
+  );
 }
 
 export function isRepositoryStatusComment(
