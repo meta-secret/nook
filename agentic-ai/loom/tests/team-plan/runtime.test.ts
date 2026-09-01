@@ -308,9 +308,7 @@ describe('Team Plan runtime', () => {
     ).rejects.toThrow('outside the source repository');
     const started = await startTeamPlan(startRequest(aliased));
 
-    const first = await leaseNextTeamPlan(
-      join(realDirectory, 'events.jsonl'),
-    );
+    const first = await leaseNextTeamPlan(join(realDirectory, 'events.jsonl'));
     expect(first.leases.map(({ taskId }) => taskId)).toEqual(['provider']);
     const firstLease = first.leases[0];
     if (!firstLease) throw new Error('First provider lease is missing.');
@@ -376,7 +374,11 @@ describe('Team Plan runtime', () => {
     ]);
     await startTeamPlan(startRequest(file));
     const selected = await selectTeamPlan({ journalPath: file.journalPath });
-    expect(selected.leases).toHaveLength(2);
+    const leased = await leaseTeamPlan({
+      journalPath: file.journalPath,
+      taskIds: selected.admissions.map(({ taskId }) => taskId),
+    });
+    expect(leased.leases).toHaveLength(2);
     const lines = readFileSync(file.journalPath, 'utf8').trim().split('\n');
     const selection = JSON.parse(lines[1] ?? '') as {
       attempts: TeamPlanAttemptIdentity[];
@@ -386,7 +388,7 @@ describe('Team Plan runtime', () => {
     writeFileSync(file.journalPath, `${lines.join('\n')}\n`);
 
     const replayed = await selectTeamPlan({ journalPath: file.journalPath });
-    expect(replayed.leases.map(({ taskId }) => taskId)).toEqual(['alpha']);
+    expect(replayed.admissions.map(({ taskId }) => taskId)).toEqual(['alpha']);
   });
 
   test('reconstructs an exact integrated writer frontier', async () => {
