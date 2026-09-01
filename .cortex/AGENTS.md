@@ -100,27 +100,26 @@ Agent-authored fallback behavior is prohibited. This is a universal P1 rule.
 
 ## Agent communication
 
-Every user-visible agent message starts with an unformatted YAML metadata
+Every user-visible activity stream starts with an unformatted YAML context
 document.
 
 ```yaml
 ---
-time: "HH:mm"
 pr: "#<number>"
 team: "<team>"
 agent: "<agent>"
-action: "<action-type>"
 ...
 ```
 
-Plain-text description.
+Follow it with concise plain-text activity lines.
 
-- Use the current local time in 24-hour `HH:mm` form.
+```text
+HH:mm | <action-type> | <description>
+```
+
 - Use the exact pull-request number that the activity currently serves.
 - Use `pr: "pending"` before that pull request exists.
 - Use `pr: "none"` when the assigned work intentionally has no pull request.
-- Recheck the identifier after pull-request creation or a stacked-PR
-  transition.
 - Identify the actual Nook executor with the `team` and `agent` pair.
   - Use `team: "GIZMO"` and `agent: "Prime"` for Gizmo Prime.
   - Gizmo Prime is the existing root delivery agent. Do not report it as
@@ -132,6 +131,13 @@ Plain-text description.
   - Change both fields when execution passes to another real agent.
   - Never imply a subagent execution, identity, or authority that did not
     exist.
+- Emit the YAML context once while the pull request, team, and agent remain
+  unchanged.
+- Re-emit it before the first activity after pull-request creation, a stacked-
+  PR transition, or an actual agent handoff.
+- Do not repeat unchanged YAML context for consecutive activity updates.
+- Start every activity line with the current local time in 24-hour `HH:mm`
+  form.
 - Use a short action type that makes the purpose immediately visible.
   - `FEATURE` covers new product functionality.
   - `BUILD` covers implementation of already selected functionality.
@@ -146,7 +152,7 @@ Plain-text description.
 - Start the metadata with `---` and end it with `...`.
 - Do not wrap live message metadata in a Markdown code fence.
 - The example above is fenced only to render the literal syntax in Cortex.
-- Put the short plain-text description after the metadata.
+- Separate the time, action type, and description with ` | `.
 - State what changed, why it was done, or what current state was observed.
 - Show a command before waiting for it to finish.
   - Prefer the task entrypoint, such as `task loom:verify`.
@@ -159,7 +165,7 @@ Plain-text description.
 - Give every bounded wait a start update and a completion or timeout update.
 - Apply the format to progress updates, questions, handoffs, and final
   responses.
-- Give each separate activity its own YAML metadata and plain-text description.
+- Give each separate activity its own timestamped plain-text line.
 - Do not add the prefix to code, logs, repository content, commit messages, or
   machine-readable protocols.
 
