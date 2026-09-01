@@ -50,5 +50,10 @@ Run:
 3. `task format`
 4. Exact-head pull-request validation
 
-The repository-language preflight scans the complete tracked and unignored tree.
-It rejects prohibited source extensions and executable runtime references.
+The repository-language preflight uses the Git index for the normal host gate.
+It rejects prohibited source extensions from the complete tracked and unignored
+path inventory. It reads only automation-capable text formats when checking
+runtime, dependency, and script references.
+
+The sealed Docker fallback prunes dependency and build directories. It checks
+the root files of each Rust project and does not descend into its source tree.

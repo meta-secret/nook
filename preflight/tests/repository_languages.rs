@@ -40,14 +40,17 @@ fn filesystem_paths(root: &Path) -> anyhow::Result<Vec<PathBuf>> {
     let mut files = Vec::new();
     let mut directories = vec![root.to_path_buf()];
     while let Some(directory) = directories.pop() {
+        let rust_project = directory != root && directory.join("Cargo.toml").is_file();
         for entry in fs::read_dir(&directory)? {
             let entry = entry?;
             let path = entry.path();
             if path.is_dir() {
-                if !matches!(
-                    path.file_name().and_then(OsStr::to_str),
-                    Some(".git" | "node_modules" | "target")
-                ) {
+                if !rust_project
+                    && !matches!(
+                        path.file_name().and_then(OsStr::to_str),
+                        Some(".git" | "node_modules" | "target" | "vendor")
+                    )
+                {
                     directories.push(path);
                 }
             } else if path.is_file() {
@@ -58,22 +61,54 @@ fn filesystem_paths(root: &Path) -> anyhow::Result<Vec<PathBuf>> {
     Ok(files)
 }
 
-fn is_documentation(path: &Path) -> bool {
-    matches!(path.extension().and_then(OsStr::to_str), Some("md" | "txt"))
+fn is_automation_source(path: &Path) -> bool {
+    let file_name = path.file_name().and_then(OsStr::to_str).unwrap_or_default();
+    if file_name.starts_with("Dockerfile")
+        || matches!(file_name, "Taskfile.yml" | "Taskfile.yaml" | "package.json")
+        || path.extension().is_none()
+    {
+        return true;
+    }
+    matches!(
+        path.extension().and_then(OsStr::to_str),
+        Some(
+            "bash"
+                | "cjs"
+                | "cts"
+                | "js"
+                | "jsx"
+                | "mjs"
+                | "mts"
+                | "sh"
+                | "toml"
+                | "ts"
+                | "tsx"
+                | "yaml"
+                | "yml"
+                | "zsh"
+        )
+    )
 }
 
-#[test]
-fn repository_automation_uses_only_typescript_rust_and_taskfiles() -> anyhow::Result<()> {
-    let root = repository_root();
+fn repository_language_violations(root: &Path) -> anyhow::Result<Vec<String>> {
     let language = ["py", "thon"].concat();
     let script_extension = [".", "py"].concat();
     let interface_extension = [script_extension.as_str(), "i"].concat();
     let versioned_runtime = [language.as_str(), "3"].concat();
-    let runtime_tokens = [language.as_str(), versioned_runtime.as_str()];
+    let package_installer = ["p", "ip"].concat();
+    let versioned_installer = [package_installer.as_str(), "3"].concat();
+    let test_runner = ["py", "test"].concat();
+    let runtime_tokens = [
+        language.as_str(),
+        versioned_runtime.as_str(),
+        package_installer.as_str(),
+        versioned_installer.as_str(),
+        test_runner.as_str(),
+    ];
     let mut violations = Vec::new();
 
-    for path in tracked_paths(&root)? {
-        let relative = path.strip_prefix(&root).unwrap_or(&path);
+    for path in tracked_paths(root)? {
+        let relative = path.strip_prefix(root).unwrap_or(&path);
         let relative_text = relative.to_string_lossy();
         if relative_text.ends_with(&script_extension)
             || relative_text.ends_with(&interface_extension)
@@ -81,7 +116,7 @@ fn repository_automation_uses_only_typescript_rust_and_taskfiles() -> anyhow::Re
             violations.push(format!("{}: prohibited authored file", relative.display()));
             continue;
         }
-        if is_documentation(&path) {
+        if !is_automation_source(relative) {
             continue;
         }
         let Ok(source) = fs::read_to_string(&path) else {
@@ -96,19 +131,25 @@ fn repository_automation_uses_only_typescript_rust_and_taskfiles() -> anyhow::Re
                 continue;
             }
             let lowercase = line.to_ascii_lowercase();
-            if runtime_tokens.iter().any(|token| {
-                lowercase
-                    .split(|character: char| !character.is_ascii_alphanumeric())
-                    .any(|word| word == *token)
-            }) {
+            let words = lowercase.split(|character: char| !character.is_ascii_alphanumeric());
+            if words.into_iter().any(|word| runtime_tokens.contains(&word))
+                || lowercase.contains(&script_extension)
+            {
                 violations.push(format!(
-                    "{}:{}: prohibited runtime or dependency reference",
+                    "{}:{}: prohibited runtime, dependency, or script reference",
                     relative.display(),
                     index + 1
                 ));
             }
         }
     }
+    Ok(violations)
+}
+
+#[test]
+fn repository_automation_uses_only_typescript_rust_and_taskfiles() -> anyhow::Result<()> {
+    let root = repository_root();
+    let violations = repository_language_violations(&root)?;
 
     assert!(
         violations.is_empty(),
@@ -151,12 +192,67 @@ fn sealed_repository_scan_does_not_require_git_metadata() -> anyhow::Result<()> 
             .as_nanos()
     ));
     fs::create_dir_all(fixture.join("nested"))?;
+    fs::create_dir_all(fixture.join("rust-project/src/deep"))?;
     fs::write(
         fixture.join("nested/contract.ts"),
         "export const ok = true;\n",
     )?;
-    let paths = tracked_paths(&fixture)?;
-    assert_eq!(paths, vec![fixture.join("nested/contract.ts")]);
+    fs::write(fixture.join("rust-project/Cargo.toml"), "[package]\n")?;
+    fs::write(fixture.join("rust-project/Taskfile.yml"), "version: '3'\n")?;
+    fs::write(
+        fixture.join("rust-project/src/deep/implementation.rs"),
+        "pub fn value() -> bool { true }\n",
+    )?;
+    let mut paths = tracked_paths(&fixture)?;
+    paths.sort();
+    assert_eq!(
+        paths,
+        vec![
+            fixture.join("nested/contract.ts"),
+            fixture.join("rust-project/Cargo.toml"),
+            fixture.join("rust-project/Taskfile.yml"),
+        ]
+    );
+    fs::remove_dir_all(fixture)?;
+    Ok(())
+}
+
+#[test]
+fn repository_language_scan_rejects_scripts_and_runtime_invocations() -> anyhow::Result<()> {
+    let fixture = std::env::temp_dir().join(format!(
+        "nook-language-violations-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_nanos()
+    ));
+    fs::create_dir_all(fixture.join("scripts"))?;
+    let script_extension = [".", "py"].concat();
+    let runtime = ["py", "thon3"].concat();
+    fs::write(
+        fixture
+            .join("scripts")
+            .join(format!("fetch-comments{script_extension}")),
+        "print('comments')\n",
+    )?;
+    fs::write(
+        fixture.join("Taskfile.yml"),
+        format!(
+            "version: '3'\ntasks:\n  comments:\n    cmds: [{runtime} fetch-comments{script_extension}]\n"
+        ),
+    )?;
+    let violations = repository_language_violations(&fixture)?;
+    assert_eq!(violations.len(), 2);
+    assert!(
+        violations
+            .iter()
+            .any(|violation| violation.contains("prohibited authored file"))
+    );
+    assert!(
+        violations
+            .iter()
+            .any(|violation| violation.contains("prohibited runtime"))
+    );
     fs::remove_dir_all(fixture)?;
     Ok(())
 }
