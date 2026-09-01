@@ -58,6 +58,8 @@ as completed delivery.
 2. **Plan delivery.**
    - Publish the Workbench task plan before implementation edits.
    - Estimate authored additions.
+   - Report authored deletions for the feature, current PR, and sole slice.
+     Zero is allowed and no deletion ceiling applies.
    - Limit the planned PR to 2,000 authored additions.
    - Keep one PR and one record. Team Agent count never triggers another PR.
    - Do not split or rebuild the PR when it grows.

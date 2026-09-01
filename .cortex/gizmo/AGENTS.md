@@ -57,13 +57,15 @@ Gizmo does not:
 One feature uses one PR and one feature-slice record, regardless of worker
 count. The PR may contain at most 2,000 authored additions when it is created.
 Review fixes may grow the existing PR beyond that ceiling.
+Every record reports authored deletions separately. Those reports are
+mandatory, may be zero, and have no ceiling.
 Reaching 3,000 authored additions is a hard stop and reporting condition.
 It never authorizes a split, successor PR, or rebuilt stack. Published records
 are immutable; a change requires a superseding plan.
 
-Every team task records its feature-slice ID. The record groups scope, estimate,
-acceptance evidence, and ownership mappings. It performs no work and owns no
-lifecycle state.
+Every team task records its feature-slice ID. The record groups scope, addition
+estimate, deletion report, acceptance evidence, and ownership mappings. It
+performs no work and owns no lifecycle state.
 
 ## Team routing
 

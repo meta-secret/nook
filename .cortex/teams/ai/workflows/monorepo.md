@@ -10,7 +10,9 @@ Use this workflow for feature work that touches more than one package.
    0b. **Merge with squash only.** When a PR is merged, use **Squash and
    merge** (`gh pr merge --squash`). Never merge commit or rebase merge. See
    [pull requests](../../../gizmo/workflows/pull-requests.md#squash-merge-only---no-exceptions).
-   0c. Estimate authored additions and map package ownership before editing.
+   0c. Estimate authored additions and report authored deletions before editing.
+   Deletions are unbounded and do not affect size decisions. Map package
+   ownership before editing.
    Do not create a PR whose planned authored diff exceeds 2,000 additions. Do not
    split, stack, or rebuild a PR to recover from size growth. If review fixes
    grow the PR to 3,000 authored additions, stop and produce the required failure report.

@@ -69,6 +69,7 @@ body, with each heading exactly once and in this order:
 - Mission controller: Gizmo Prime
 - Current Gizmo ID:
 - Estimated authored additions:
+- Estimated authored deletions (reported only):
 - Owning modules, packages, or layers:
 - Ownership units:
 1. Capability: ; Gizmo ID: ; Functional owner: ; Expertise provider: ; Expertise allowed code paths: ; Expertise allowed test paths: ; Expertise forbidden paths: ; Expertise consumer interfaces: ; Expertise acceptance evidence: ; Capability acceptance evidence:
@@ -76,9 +77,10 @@ body, with each heading exactly once and in this order:
 - Delivery shape:
 - PR sequence mode:
 - Current PR estimated authored additions:
+- Current PR estimated authored deletions (reported only):
 - Current PR slice and acceptance evidence:
 - PR slices, estimates, and acceptance evidence:
-1. Gizmo ID: ; Gizmo name: ; Predecessor Gizmo ID: ; ; Estimated authored additions: ; Acceptance evidence:
+1. Gizmo ID: ; Gizmo name: ; Predecessor Gizmo ID: ; ; Estimated authored additions: ; Estimated authored deletions (reported only): ; Acceptance evidence:
 
 ## Initial plan
 
@@ -93,8 +95,9 @@ plus explicit assumptions or exclusions. Keep the execution plan small and
 ordered.
 
 Estimate authored additions for source, tests, documentation, configuration,
-scripts, and workflow code. Report deletions separately, but never count them
-toward the PR size limit. Exclude generated files, lockfiles,
+scripts, and workflow code. Report authored deletions for the complete feature,
+the current PR, and the sole PR slice. Zero is allowed and deletion totals are
+unbounded. Never count deletions toward the PR size limit. Exclude generated files, lockfiles,
 snapshots, vendored sources, binary artifacts, and pure renames from the
 estimate. Set `Delivery shape` and `PR sequence mode` to exactly `One PR`.
 The estimate must not exceed 2,000 authored additions. A larger estimate is
@@ -106,10 +109,11 @@ Set `Mission controller` to exactly `Gizmo Prime`. Give every feature-slice
 Gizmo record a stable lowercase-hyphenated ID and a unique human-readable name. Set
 `Current Gizmo ID` to the first/current PR slice's Gizmo ID. List every PR slice
 on its own consecutively numbered line as
-`<number>. Gizmo ID: <id>; Gizmo name: <name>; Predecessor Gizmo ID: <id-or-None>; <scope>; Estimated authored additions: <positive integer>; Acceptance evidence: <observable proof>`.
+`<number>. Gizmo ID: <id>; Gizmo name: <name>; Predecessor Gizmo ID: <id-or-None>; <scope>; Estimated authored additions: <positive integer>; Estimated authored deletions (reported only): <non-negative integer>; Acceptance evidence: <observable proof>`.
 The sole slice estimate must equal `Current PR estimated authored additions`
-and `Estimated authored additions`. Missing, zero, oversized, or
-incomplete estimates are invalid.
+and `Estimated authored additions`. Its deletion report must equal both deletion
+report fields. Missing, zero, oversized, or incomplete addition estimates are
+invalid.
 
 When the task source is a focused Workbench issue with canonical `gizmo_id`
 frontmatter, copy that exact trusted value into `Current Gizmo ID`, every

@@ -50,6 +50,8 @@ to generate bookkeeping.
 5. Bound the work:
    - Record one positive authored additions estimate at or below
      2,000 for the PR.
+   - Record one non-negative authored deletion report for the feature, current
+     PR, and sole slice. Do not apply the additions ceiling to deletions.
    - Keep the issue inside one cohesive module, package, layer, or
      responsibility.
    - Keep acceptance criteria deliverable and testable in that PR.

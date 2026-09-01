@@ -110,6 +110,8 @@ The active harness may coordinate subagents on Gizmo Prime's behalf.
 
 - Gizmo Prime creates one named immutable feature-slice Gizmo Workbench record
   by default for one semantic PR slice.
+- Every record reports authored deletions separately. Deletion totals never
+  determine record count.
 - It does not add feature-slice Gizmos because a PR approaches or exceeds its
   line budget.
 - Team Agent count never determines this cardinality.

@@ -240,6 +240,7 @@ The plan must contain:
 - a small ordered execution plan;
 - a `Change budget and PR sequence` section;
 - an `Estimated authored additions` value;
+- an `Estimated authored deletions (reported only)` value;
 - an `Owning modules, packages, or layers` value;
 - consecutively numbered `Ownership units`, one per capability, each referencing
   the one declared `Gizmo ID`;
@@ -247,11 +248,13 @@ The plan must contain:
 - a `Delivery shape` value fixed to `One PR`;
 - a `PR sequence mode` value fixed to `One PR`;
 - a `Current PR estimated authored additions` value;
+- a `Current PR estimated authored deletions (reported only)` value;
 - a `Current PR slice and acceptance evidence` value;
 - a `PR slices, estimates, and acceptance evidence` value with exactly one row;
   - the row uses the current Gizmo ID;
   - its predecessor is `None`;
   - its positive estimate is at most 2,000; and
+  - it has a non-negative deletion report; and
   - it states the PR acceptance evidence;
 - expected completion evidence; and
 - a safety review confirming that no raw prompt, transcript, secret, private

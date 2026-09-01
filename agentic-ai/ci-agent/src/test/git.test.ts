@@ -7,6 +7,8 @@ import { describe, it } from "node:test";
 import { promisify } from "node:util";
 
 import {
+  assertAuthoredAdditionBudget,
+  AuthoredAdditionBudgetExceededError,
   configureGitForCi,
   countAuthoredAdditions,
   hasWorkingTreeChanges,
@@ -88,6 +90,60 @@ describe("countAuthoredAdditions", () => {
 });
 
 describe("implementation working tree", () => {
+  it("enforces only the authored-addition ceiling on a real staged diff", async () => {
+    const repoRoot = await mkdtemp(join(tmpdir(), "nook-ci-agent-budget-"));
+    const git = (...args: string[]) =>
+      execFileAsync("git", ["-C", repoRoot, ...args]);
+    const authoredPath = join(repoRoot, "domain.ts");
+    try {
+      await git("init");
+      await writeFile(
+        authoredPath,
+        Array.from({ length: 9_000 }, (_, index) => `old-${index}`).join("\n") +
+          "\n",
+      );
+      await git("add", "domain.ts");
+      await git(
+        "-c",
+        "user.name=test",
+        "-c",
+        "user.email=test@example.com",
+        "commit",
+        "-m",
+        "base",
+      );
+      const { stdout } = await git("rev-parse", "HEAD");
+      const baseRef = stdout.trim();
+
+      await writeFile(
+        authoredPath,
+        Array.from({ length: 2_000 }, (_, index) => `new-${index}`).join("\n") +
+          "\n",
+      );
+      await assertAuthoredAdditionBudget({
+        repoRoot,
+        baseRef,
+        maximumAdditions: 2_000,
+      });
+
+      await writeFile(
+        authoredPath,
+        Array.from({ length: 2_001 }, (_, index) => `new-${index}`).join("\n") +
+          "\n",
+      );
+      await assert.rejects(
+        assertAuthoredAdditionBudget({
+          repoRoot,
+          baseRef,
+          maximumAdditions: 2_000,
+        }),
+        AuthoredAdditionBudgetExceededError,
+      );
+    } finally {
+      await rm(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it("marks the worktree safe before inspecting its state", async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), "nook-ci-agent-safe-"));
     const repoRoot = join(tempRoot, "repo");

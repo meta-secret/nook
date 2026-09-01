@@ -17,8 +17,8 @@ const gizmoOwnershipUnit =
 const secondGizmoOwnershipUnit =
   '2. Capability: Publisher adoption; Gizmo ID: gizmo-2; Functional owner: AI; Expertise provider: None; Expertise allowed code paths: None; Expertise allowed test paths: None; Expertise forbidden paths: None; Expertise consumer interfaces: None; Expertise acceptance evidence: None; Capability acceptance evidence: Integration checks pass'
 
-function sliceContract(number, id, name, predecessor, scope, estimate, evidence) {
-  return `${number}. Gizmo ID: ${id}; Gizmo name: ${name}; Predecessor Gizmo ID: ${predecessor}; ${scope}; Estimated authored additions: ${estimate}; Acceptance evidence: ${evidence}`
+function sliceContract(number, id, name, predecessor, scope, estimate, evidence, deletions = '0') {
+  return `${number}. Gizmo ID: ${id}; Gizmo name: ${name}; Predecessor Gizmo ID: ${predecessor}; ${scope}; Estimated authored additions: ${estimate}; Estimated authored deletions (reported only): ${deletions}; Acceptance evidence: ${evidence}`
 }
 
 function sequenceField(...slices) {
@@ -56,6 +56,7 @@ Deliver a durable two-phase agent context record.
 - Mission controller: Gizmo Prime
 - Current Gizmo ID: gizmo-1
 - Estimated authored additions: 240
+- Estimated authored deletions (reported only): 0
 - Owning modules, packages, or layers: Workbench agent records
 - Ownership units:
 ${baseOwnershipUnit}
@@ -63,6 +64,7 @@ ${baseOwnershipUnit}
 - Delivery shape: One PR
 - PR sequence mode: One PR
 - Current PR estimated authored additions: 240
+- Current PR estimated authored deletions (reported only): 0
 - Current PR slice and acceptance evidence: Validator change; Acceptance evidence: Contract tests pass
 ${validSequenceField}
 
@@ -254,23 +256,28 @@ for (const field of [
   'Mission controller',
   'Current Gizmo ID',
   'Estimated authored additions',
+  'Estimated authored deletions (reported only)',
   'Owning modules, packages, or layers',
   'Ownership units',
   'Public or cross-module interfaces',
   'Delivery shape',
   'PR sequence mode',
   'Current PR estimated authored additions',
+  'Current PR estimated authored deletions (reported only)',
   'Current PR slice and acceptance evidence',
   'PR slices, estimates, and acceptance evidence',
 ]) {
   test(`rejects a plan without ${field}`, () => {
     const missing = validPlan.replace(
-      new RegExp(`^- ${field}:.*\\n`, 'm'),
+      new RegExp(
+        `^- ${field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:.*\\n`,
+        'm',
+      ),
       '',
     )
-    assert.match(
+    assert.equal(
       validateAgentRecord(missing, 'plan'),
-      new RegExp(`missing or empty plan field: ${field}`),
+      `missing or empty plan field: ${field}`,
     )
   })
 }
@@ -481,7 +488,7 @@ test('rejects a one-PR shape for an over-budget feature', () => {
   )
 })
 
-test('accepts a one-PR plan at the 2,000-line ceiling', () => {
+test('accepts a one-PR plan at the 2,000-addition ceiling with 9,000 deletions', () => {
   const atCeiling = validPlan
     .replace(
       'Estimated authored additions: 240',
@@ -492,8 +499,16 @@ test('accepts a one-PR plan at the 2,000-line ceiling', () => {
       'Current PR estimated authored additions: 2,000',
     )
     .replace(
-      'Estimated authored additions: 240; Acceptance evidence: Contract tests pass',
-      'Estimated authored additions: 2,000; Acceptance evidence: Contract tests pass',
+      'Estimated authored deletions (reported only): 0',
+      'Estimated authored deletions (reported only): 9,000',
+    )
+    .replace(
+      'Current PR estimated authored deletions (reported only): 0',
+      'Current PR estimated authored deletions (reported only): 9,000',
+    )
+    .replace(
+      'Estimated authored additions: 240; Estimated authored deletions (reported only): 0; Acceptance evidence: Contract tests pass',
+      'Estimated authored additions: 2,000; Estimated authored deletions (reported only): 9,000; Acceptance evidence: Contract tests pass',
     )
   assert.equal(validateAgentRecord(atCeiling, 'plan'), '')
 })

@@ -141,7 +141,9 @@ Report these separately because they do not represent authored functionality:
 - pure renames with no content change.
 
 - Do not exclude authored test additions.
-- Report deletion totals separately. Deletions never consume the size budget.
+- Report authored deletion totals for the feature, current PR, and sole PR
+  slice. These reports are mandatory and may be zero.
+- Authored deletion totals are unbounded. They never consume the size budget.
 - Do not pad, compress, or mechanically reorganize code to fit the number.
 - If the planned implementation would exceed 2,000 authored additions, stop before creating
   the PR and report that the scope or design does not fit the PR contract.
@@ -211,12 +213,15 @@ The Workbench task plan must state:
 - Gizmo Prime as the mission controller;
 - the current feature-slice Gizmo ID;
 - the estimated authored additions;
+- the mandatory authored deletion report for the feature;
 - the files, packages, modules, or layers expected to change;
 - the public or cross-module interfaces involved;
 - confirmation that the one PR estimate is at most 2,000 authored additions;
 - the current PR scope and acceptance evidence;
+- the current PR's mandatory authored deletion report;
 - the required PR sequence mode fixed to `One PR`;
 - exactly one PR-slice row with predecessor `None` for Workbench compatibility;
+- the sole slice's mandatory non-negative authored deletion report;
 - one declared Gizmo ID on every ownership unit;
 - permission for multiple Team Agent units to map to that same Gizmo ID;
 - a superseding immutable plan when scope or the estimate materially changes.
