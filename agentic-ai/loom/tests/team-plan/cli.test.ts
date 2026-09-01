@@ -509,7 +509,7 @@ test('localizes runtime validation failures through the Loom catalog', async () 
     expect(((cause as LoomFailure).cause as Error).message).toBe(
       'Проверка команды Team Plan завершилась ошибкой.',
     );
-    expect(((cause as LoomFailure).cause as Error).cause).toBeUndefined();
+    expect('cause' in ((cause as LoomFailure).cause as Error)).toBeFalse();
   } finally {
     rmSync(root, { recursive: true });
   }
@@ -648,7 +648,7 @@ test('localizes malformed record contents', async () => {
       expect(((cause as LoomFailure).cause as Error).message).toBe(
         fixture.expectedMessage,
       );
-      expect(((cause as LoomFailure).cause as Error).cause).toBeUndefined();
+      expect('cause' in ((cause as LoomFailure).cause as Error)).toBeFalse();
     }
   }
   rmSync(root, { recursive: true });
