@@ -730,6 +730,11 @@ export function enrollmentCeremonyActive(): boolean {
   return enrollmentEvidenceWatchActive() || holdEnrollmentWidgetAfterSave
 }
 
+export function resetEnrollmentCeremony(): void {
+  stopPendingEnrollmentWatch()
+  holdEnrollmentWidgetAfterSave = false
+}
+
 export function releaseEnrollmentWidgetHold(): void {
   holdEnrollmentWidgetAfterSave = false
 }

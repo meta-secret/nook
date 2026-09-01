@@ -3,14 +3,28 @@ import type { PasswordFormObservation } from '../../nook-web-shared/src/extensio
 import { ExtensionRuntimeRequestType } from '../src/lib/extension-runtime-request-type'
 
 const addListener = mock(() => {})
+const clearInterval = mock(() => {})
+const disconnect = mock(() => {})
+const unexpectedRuntimeMessage = async () => {
+  throw new Error('unexpected enrollment request')
+}
 Object.assign(globalThis, {
   __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
   chrome: {
     i18n: { getMessage: () => 'Picker canceled' },
     runtime: { id: 'nook-extension', onMessage: { addListener } },
   },
-  location: { origin: 'https://login.example.test' },
-  window: { clearTimeout: mock(() => {}) },
+  document: { documentElement: {} },
+  location: { origin: 'https://login.example.test', pathname: '/enroll' },
+  MutationObserver: class {
+    observe() {}
+    disconnect = disconnect
+  },
+  window: {
+    clearInterval,
+    clearTimeout: mock(() => {}),
+    setInterval: () => 9,
+  },
 })
 
 test('delivers cleanup cancellation through the content-script router', async () => {
@@ -18,6 +32,10 @@ test('delivers cleanup cancellation through the content-script router', async ()
     await import('../src/content/autofill/state')
   const { routeAutofillMessage } =
     await import('../src/content/autofill/message-router')
+  const { enrollmentCeremonyActive } =
+    await import('../src/content/enrollment-flow')
+  const { beginEnrollmentEvidenceWatch } =
+    await import('../src/content/enrollment-outcome')
   const description = { textContent: '' } as HTMLParagraphElement
   const continueButton = {
     disabled: true,
@@ -54,6 +72,17 @@ test('delivers cleanup cancellation through the content-script router', async ()
 
   const remove = mock(() => {})
   widgetState.attachHost({ remove } as unknown as HTMLElement)
+  const watchArgs: Parameters<typeof beginEnrollmentEvidenceWatch>[0] = {
+    host: {
+      sendAuthenticatorCodeRuntimeMessage: unexpectedRuntimeMessage,
+      sendAuthenticationOutcomeRuntimeMessage: unexpectedRuntimeMessage,
+    },
+    stageId: 'pending',
+    callbacks: { commit: async () => {}, reject: () => {}, timeout: () => {} },
+  }
+  beginEnrollmentEvidenceWatch(watchArgs)
+  expect(enrollmentCeremonyActive()).toBe(true)
+  widgetState.dismissed = true
   const staleSequence = ++scanState.sequence
   routeAutofillMessage(
     { type: ExtensionRuntimeRequestType.ClearAuthenticationSurface },
@@ -65,9 +94,11 @@ test('delivers cleanup cancellation through the content-script router', async ()
     widgetState.attachHost({ remove } as unknown as HTMLElement)
   expect(remove).toHaveBeenCalledTimes(1)
   expect(widgetState.host).not.toHaveProperty('element')
+  expect(enrollmentCeremonyActive()).toBe(false)
+  expect(clearInterval).toHaveBeenCalledWith(9)
+  expect(disconnect).toHaveBeenCalledTimes(1)
 
   const schedule = mock(() => {})
-  widgetState.dismissed = true
   scanState.schedule = schedule
   routeAutofillMessage(
     { type: ExtensionRuntimeRequestType.RescanSurfaces },

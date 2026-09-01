@@ -1,5 +1,6 @@
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 import { ExtensionRuntimeRequestType } from '../../lib/extension-runtime-request-type'
+import { resetEnrollmentCeremony } from '../enrollment-flow'
 import { summarizeAuthenticationWorkflowForms } from '../../../../nook-web-shared/src/extension/password-forms'
 import {
   isWebsiteAuthenticatorCanceledMessage,
@@ -52,6 +53,7 @@ export const routeAutofillMessage: AutofillMessageListener =
       message.type === ExtensionRuntimeRequestType.ClearAuthenticationSurface
     ) {
       scanState.invalidateCurrentResult()
+      resetEnrollmentCeremony()
       removeScannedWidget()
       const response: Parameters<typeof sendResponse>[0] = { ok: true }
       sendResponse(response)
