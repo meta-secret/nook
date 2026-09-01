@@ -15,6 +15,18 @@ fn read(root: &Path, path: &str) -> String {
         .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
 }
 
+fn workflow_step<'a>(workflow: &'a str, name: &str) -> &'a str {
+    let marker = format!("      - name: {name}\n");
+    let start = workflow
+        .find(&marker)
+        .unwrap_or_else(|| panic!("repository policy must contain the named `{name}` step"));
+    let step = &workflow[start..];
+    let end = step[1..]
+        .find("\n      - name:")
+        .map_or(step.len(), |offset| offset + 1);
+    &step[..end]
+}
+
 fn task_body<'a>(taskfile: &'a str, task: &str, next_task: &str) -> &'a str {
     let start_marker = format!("  {task}:\n");
     let end_marker = format!("  {next_task}:\n");
@@ -251,14 +263,7 @@ fn loom_workflow_audits_every_cortex_change() {
             "repository policy must trigger for formatter authority `{trigger_path}`"
         );
     }
-    let format_step_start = workflow
-        .find("      - name: Enforce shared source formatter contract\n")
-        .expect("repository policy must contain the named formatter contract step");
-    let format_step = &workflow[format_step_start..];
-    let format_step_end = format_step[1..]
-        .find("\n      - name:")
-        .map_or(format_step.len(), |offset| offset + 1);
-    let format_step = &format_step[..format_step_end];
+    let format_step = workflow_step(&workflow, "Enforce shared source formatter contract");
     assert!(
         format_step.contains("run: task preflight:format-contract")
             && format_step
@@ -267,18 +272,31 @@ fn loom_workflow_audits_every_cortex_change() {
         "repository policy must skip the detached formatter only for Cortex Markdown"
     );
 
-    let cortex_audit_step_start = workflow
-        .find("      - name: Audit Cortex document structure\n")
-        .expect("repository policy must contain the named Cortex audit step");
-    let cortex_audit_step = &workflow[cortex_audit_step_start..];
-    let cortex_audit_step_end = cortex_audit_step[1..]
-        .find("\n      - name:")
-        .map_or(cortex_audit_step.len(), |offset| offset + 1);
-    let cortex_audit_step = &cortex_audit_step[..cortex_audit_step_end];
+    let cortex_audit_step = workflow_step(&workflow, "Audit Cortex document structure");
     assert!(
         cortex_audit_step.contains("if: steps.policy-paths.outputs.loom == 'true'")
             && cortex_audit_step.contains("run: task loom:cortex-audit")
             && !cortex_audit_step.contains("cortex_markdown_only"),
         "Loom must audit Cortex Markdown even when detached formatter work is skipped"
     );
+
+    for (step_name, task) in [
+        (
+            "Enforce authored TypeScript state invariants",
+            "task preflight:typescript-state",
+        ),
+        (
+            "Enforce Loom single-parameter contract",
+            "task preflight:loom-contracts",
+        ),
+    ] {
+        let hosted_preflight_step = workflow_step(&workflow, step_name);
+        assert!(
+            hosted_preflight_step
+                .contains("steps.policy-paths.outputs.cortex_markdown_only != 'true'")
+                && hosted_preflight_step.contains("github.event_name == 'pull_request'")
+                && hosted_preflight_step.contains(task),
+            "hosted `{step_name}` must skip Cargo-backed preflight for Cortex Markdown only"
+        );
+    }
 }

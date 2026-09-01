@@ -194,6 +194,7 @@ jobs:
       - name: Enforce authored TypeScript state invariants
         if: >-
           steps.policy-paths.outputs.loom == 'true' &&
+          steps.policy-paths.outputs.cortex_markdown_only != 'true' &&
           github.event_name == 'pull_request' &&
           (github.event.pull_request.head.repo.full_name != github.repository ||
           github.event.pull_request.user.login == 'dependabot[bot]')
@@ -202,6 +203,7 @@ jobs:
       - name: Enforce Loom single-parameter contract
         if: >-
           steps.policy-paths.outputs.loom == 'true' &&
+          steps.policy-paths.outputs.cortex_markdown_only != 'true' &&
           github.event_name == 'pull_request' &&
           (github.event.pull_request.head.repo.full_name != github.repository ||
           github.event.pull_request.user.login == 'dependabot[bot]')
