@@ -90,7 +90,7 @@ and `preflight` sources. Unused-code ownership is split as follows:
 - Gizmo integrates accepted formatted handoffs and runs `task loom:pre-push`
   on the combined head. If that gate formats web-owned content, Gizmo returns
   the exact diff to web development for a fresh formatted commit instead of
-  committing it. After reintegration and a clean gate, Gizmo pushes and
+  committing it. After the owner commit and a clean gate, Gizmo pushes and
   immediately obtains exact-published-head remote evidence: at least one
   relevant focused remote task, including any required Web-owned browser E2E
   through `task remote`, while the head is not validation-ready; or complete

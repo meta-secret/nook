@@ -19,7 +19,7 @@ determines PR count.
 - Use [team-oriented development](team-oriented-development.md) to assign each
   capability to one functional owner.
 - Use [subagent delegation](subagent-delegation.md) for task contracts,
-  isolated writers, barriers, and commit handoffs.
+  serialized writers, barriers, and direct commits.
 - Use [module-oriented development](module-oriented-development.md) when a
   change crosses registered module boundaries.
 - Use [pull request delivery](pull-requests.md) for exact-head validation,
@@ -81,43 +81,45 @@ as completed delivery.
      records, freeze their exact starting frontiers, and supply their contracts
      to the active harness with the trusted focused-issue Gizmo ID in plan/task
      context when one is assigned.
-4. **Accept implementation handoffs.**
+4. **Accept implementation results.**
    - Wait for each required dependency or terminal barrier.
    - Verify each commit against its baseline and write scope.
    - Verify the team's focused tests and Cortex evidence.
    - Verify that the team ran required formatters and committed all mutations
      in its allowed source or Cortex paths.
    - Reject incomplete or out-of-scope handoffs.
-   - Receive each Team Agent's existing typed handoff directly. Do not add a
-     slice-process transport or intermediate agent.
-   - Aggregate each verified handoff under its assigned passive Gizmo record.
+   - Receive each Team Agent's result directly. Do not add a slice-process
+     transport or intermediate agent.
+   - Aggregate each verified result under its assigned passive Gizmo record.
    - Treat exactly two trusted GitHub Actions publishers as narrow exceptions
      to the ordinary committed-handoff sequence:
      `agent-implement.yml` and `rust-dependency-updates.yml` through
      `task ci-agent:fix` with `CI_AGENT_FIX_PROFILE=rust-dependency-update`.
      Follow the root [team worker contract](../../AGENTS.md#team-worker-contract)
      for their isolation, publication, and exact-head verification rules.
-5. **Integrate accepted commits.**
-   - Integrate in deterministic dependency order.
-   - Bind each downstream task to the exact integrated commit.
-   - Keep shared files and integrated or external delivery-state mutations
-     serialized under Gizmo.
-6. **Prepare the integrated head.**
-   - For either accepted trusted publication, continue from its exact published
-     head. Do not require a duplicate integration commit.
+5. **Continue from accepted commits.**
+   - Run write-capable Team Agents sequentially in deterministic dependency
+     order on the current shared branch.
+   - Continue directly from each accepted Team Agent commit.
+   - Bind each downstream task to that exact commit.
+   - Keep shared files and external delivery-state mutations serialized under
+     Gizmo.
+6. **Prepare the delivery head.**
+   - Continue from the exact accepted or published head.
+   - Do not create a duplicate integration commit.
    - Immediately resume Gizmo ownership of PR, review, and validation work.
    - Do not add advisory local review after the publisher handoff.
    - Use immediate focused remote evidence or complete exact-head validation.
      Hosted Repository policy and PR verification enforce the UI-demo and
      other product or publication contracts.
    - Run `task loom:pre-push PR=<number>` before each review-fix push.
-   - Gizmo may commit deterministic integration-only state.
+   - Gizmo may commit only parent-owned delivery state.
    - If pre-push hygiene mutates team-owned source or Cortex content, do not
      author or commit that diff as Gizmo.
    - Return the diff to the responsible team for a fresh formatted commit.
-   - Reintegrate that commit and rerun `task loom:pre-push PR=<number>` before
+   - Continue from that commit and rerun `task loom:pre-push PR=<number>` before
      pushing a review fix.
-   - Promptly commit any integration-only state and push the coherent head.
+   - Promptly commit any parent-owned delivery state and push the coherent head.
    - Do not add broad local builds, tests, e2e, container product gates, local
      review, or duplicate hosted-check mirrors before the push.
    - Immediately choose remote evidence for every pushed coherent head.

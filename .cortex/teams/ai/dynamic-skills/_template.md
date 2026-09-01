@@ -44,7 +44,7 @@ For implementation tasks, run focused proof and required formatters. Commit
 every resulting mutation in the allowed source or Cortex paths. Gizmo
 integrates the handoff and runs `task loom:pre-push`. If hygiene mutates those
 team-owned paths, the team returns a fresh formatted commit before Gizmo
-reintegrates, reruns hygiene, and pushes. Gizmo dispatches a relevant focused
+continues from it, reruns hygiene, and pushes. Gizmo dispatches a relevant focused
 remote task when the pushed head is not validation-ready. Gizmo dispatches
 complete exact-head validation immediately when the head is ready.
 

@@ -30,9 +30,9 @@ Analyze in this order:
 
 Keep knowledge routing separate from write authorization. Invoke the registered
 semantic role through the active harness as read-only. A separate
-implementation worker may consume that evidence in a fresh isolated workspace
-at the exact accepted baseline. The parent verifies its commit handoff before
-integration.
+implementation worker may consume that evidence in the shared checkout at the
+exact accepted baseline. The parent verifies its direct commit before
+continuation.
 
 ## Scope
 

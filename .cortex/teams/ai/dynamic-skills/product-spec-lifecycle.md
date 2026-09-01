@@ -140,6 +140,6 @@ After:
   coherent formatted handoff. Include every formatter mutation in allowed
   source or Cortex paths. Return the exact commit and evidence to Gizmo. If
   integrated pre-push hygiene mutates team-owned content, that team returns a
-  fresh formatted commit before Gizmo reintegrates and pushes. Gizmo
+  fresh formatted commit before Gizmo continues and pushes. Gizmo
   immediately dispatches a relevant focused remote task when the pushed head is
   not validation-ready, or complete exact-head validation when it is ready.

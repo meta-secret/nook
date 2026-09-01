@@ -12,7 +12,7 @@ A capable agent environment MUST delegate when all of these conditions hold:
 
 1. The request contains at least two separate team tasks.
 2. Each selected ready task can receive an exact starting frontier.
-3. Concurrent write tasks have isolated workspaces and disjoint resource claims.
+3. Write-capable tasks run sequentially in the current shared checkout.
 4. Each subagent has explicit inputs and expected outputs.
 5. Each subagent has its own acceptance evidence.
 6. Gizmo can state how the returned results will be integrated before work
@@ -231,7 +231,7 @@ Retry sequencing follows these rules:
 - summary;
 - evidence;
 - affected paths;
-- proposed changes or a verified commit handoff;
+- proposed changes or a verified direct commit;
 - risks;
 - notes for Gizmo.
 
@@ -356,11 +356,13 @@ Dispatch follows these rules:
   candidates, select or admit task records, or snapshot or change frontiers.
 - Ready tasks excluded by conflicts remain pending for the next recomputation.
 - Read-only audits may overlap, including audits of the same evidence.
-- Concurrent writers require isolated workspaces and disjoint resource claims.
+- At most one write-capable attempt may hold a lease.
+- Read-only attempts may remain concurrent when their evidence scopes are safe.
 - After each Git integration or read-only evidence acceptance, Loom/Nook
   recomputes readiness and exact frontier data on affected outgoing edges.
 - Gizmo validates that data and freezes each authorized successor's exact
-  integrated frontier containing its complete write-predecessor closure.
+  accepted shared-branch commit containing its complete write-predecessor
+  closure.
 - Unrelated work continues. Admission batches are not completion or integration
   barriers.
 - The all-task terminal barrier exists only for the final parent-owned join.
@@ -369,8 +371,8 @@ Dispatch follows these rules:
 
 Gizmo records exactly one conclusive disposition for each terminal output.
 
-- **Accepted write:** verify the commit and scope, then integrate that provider
-  immediately without waiting for other tasks from its admission batch.
+- **Accepted write:** verify the direct commit and scope, then continue from
+  that commit without waiting for read-only tasks from its admission batch.
 - **Accepted read-only:** verify the typed evidence handoff and its exact
   repository-source provenance or typed accepted provider-evidence inputs, then
   accept the evidence into parent task state without waiting for other tasks
@@ -493,10 +495,11 @@ Module-oriented work follows
   boundary.
 - Freeze provider-consumer edges before implementation.
 - Continue from accepted providers to immediate consumers.
-- Give every write-capable worker an isolated workspace.
+- Give every write-capable worker the current shared checkout.
+- Lease only one write-capable worker at a time.
 - Verify every returned commit against its exact baseline and allowed paths.
-- Bind every downstream task to the exact integrated provider commit.
-- Keep shared-file serialization, writer grants, integration, and external
+- Bind every downstream task to the exact provider commit.
+- Keep shared-file serialization, writer grants, sequencing, and external
   delivery state with Gizmo. An assigned worker may edit only an exact shared
   file named by its frozen grant.
 
@@ -522,10 +525,8 @@ Implementation delegation also follows
   security, SRE, or web development before starting workers.
 - Give every team worker one exact team identity and explicit code and Cortex
   paths.
-- Keep concurrently selected or active write-capable team agents in isolated
-  workspaces with disjoint scopes. Deterministically serialized writers may
-  overlap only in their declared precedence order and without concurrent
-  leases.
+- Keep write-capable Team Agents sequential in the current shared checkout.
+- Concurrent read-only agents must not mutate the checkout.
 - Require each team agent to own its implementation, tests, Cortex updates,
   review fixes, and validation fixes.
 - Let a team agent report a dependency on another team to Gizmo.
@@ -668,9 +669,9 @@ The parent owns the cross-layer interface and migration order.
 Core, WASM, and web interface changes preserve provider order.
 
 1. Complete, accept, commit-verify, and integrate the core provider.
-2. Start WASM from the exact integrated frontier containing core.
+2. Start WASM from the exact accepted commit containing core.
 3. Complete, accept, commit-verify, and integrate WASM.
-4. Start web from the exact integrated frontier containing core and WASM.
+4. Start web from the exact accepted commit containing core and WASM.
 
 Independent ready tasks continue while this chain advances. The chain does not
 create a mission-wide wait.
@@ -722,14 +723,13 @@ Keep one owner when work is:
 - changing shared GitHub or Workbench state;
 - reading secrets that are not required by the child task.
 
-- Concurrent writers must not share one worktree.
-- Write-capable workers need isolated worktrees or disposable workspaces.
-- Concurrently selected or active writers' file scopes must be disjoint.
+- Concurrent write-capable workers are prohibited.
+- Write-capable workers use the current shared checkout and branch.
 - Deterministically serialized scope overlaps must follow their declared
   precedence and must not hold concurrent leases.
-- Every retry needs fresh isolated attempt state from the declared baseline.
-- A successful writer returns a commit with verifiable baseline ancestry.
-- The parent still owns integration.
+- Every retry starts from the current accepted shared-branch commit.
+- A successful writer returns a commit when Gizmo requests one.
+- The parent owns write sequencing and external delivery state.
 
 ## Machine-managed workflows
 
@@ -742,7 +742,7 @@ This delegation workflow still owns the worker boundary:
 - semantic work uses bounded child workers;
 - deterministic work uses tools;
 - the active harness owns native worker coordination;
-- Gizmo defines and reviews the integration; and
+- Gizmo defines and reviews the write sequence; and
 - child workers do not acquire delivery authority.
 
 ## Validation
@@ -793,18 +793,17 @@ Before integration, verify:
   as a separate normally admitted task after old-attempt disposition;
 - Gizmo's aggregate covers every terminal barrier declared by the frozen task
   lineage;
-- concurrently selected or active write scopes did not overlap;
+- no two write-capable attempts were active concurrently;
 - every deterministically serialized write-scope overlap followed its declared
   precedence without concurrent leases;
-- every write-capable attempt used an isolated workspace;
+- every write-capable attempt used the current shared checkout;
 - every normal retry kept the exact frozen task contract, acceptance evidence,
-  generation, and starting-frontier rule while starting from fresh isolated
-  attempt state;
+  generation, and starting-frontier rule;
 - every task-contract, claim, edge, or acceptance-evidence change created a new
   immutable generation instead of mutating a retry;
 - every accepted commit descends from its exact baseline;
 - every accepted commit changes only allowed paths;
-- every downstream task binds to the exact integrated provider commit;
+- every downstream task binds to the exact provider commit;
 - every downstream task's frontier contains its complete write-predecessor
   closure;
 - read-only evidence was accepted in parent task state without a Git-ancestry

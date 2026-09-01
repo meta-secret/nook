@@ -71,7 +71,7 @@ function cortexNode(request: CortexNodeRequest): ModuleDeliveryWriteNodeV2 {
       evidence: [`${request.taskId} guidance is audited.`],
     },
     workspace: {
-      kind: ModuleDeliveryWorkspaceKind.IsolatedWorktree,
+      kind: ModuleDeliveryWorkspaceKind.SharedCheckout,
       expectedCommitHandoff: true,
     },
   };
@@ -87,7 +87,7 @@ function plan(nodes: readonly ModuleDeliveryNodeV2[]): ModuleDeliveryPlanV2 {
     maxAttempts: 2,
     parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
     parentJoin: {
-      kind: ModuleDeliveryJoinKind.OrderedCommitHandoffs,
+      kind: ModuleDeliveryJoinKind.DirectCommits,
       owner: 'gizmo-prime',
       validationCommands: ['task loom:verify'],
     },

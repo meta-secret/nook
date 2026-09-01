@@ -29,9 +29,9 @@ validation, readiness, and merge.
 ### Ordinary worker handoff
 
 For an ordinary worker handoff, once Gizmo integrates a coherent commit it runs
-`task loom:pre-push`. Gizmo may commit deterministic integration-only state.
+`task loom:pre-push`. Gizmo may commit parent-owned delivery state.
 If hygiene mutates team-owned source or Cortex content, Gizmo returns that diff
-to the responsible team for a fresh formatted commit, reintegrates it, and
+to the responsible team for a fresh formatted commit, continues from it, and
 reruns hygiene. Gizmo then promptly pushes the coherent head.
 
 Every pushed head immediately selects remote evidence. Dispatch at least one

@@ -131,7 +131,7 @@ function writeNode(fixture: WriteNodeFixture): ModuleDeliveryWriteNodeV2 {
       evidence: [`${fixture.taskId} behavior passes`],
     },
     workspace: {
-      kind: ModuleDeliveryWorkspaceKind.IsolatedWorktree,
+      kind: ModuleDeliveryWorkspaceKind.SharedCheckout,
       expectedCommitHandoff: true,
     },
   };
@@ -200,7 +200,7 @@ function plan(fixture: PlanFixture): ModuleDeliveryPlanV2 {
     maxAttempts: 2,
     parentOwnedResources: PARENT_OWNED_RESOURCES,
     parentJoin: {
-      kind: ModuleDeliveryJoinKind.OrderedCommitHandoffs,
+      kind: ModuleDeliveryJoinKind.DirectCommits,
       owner: 'delivery-owner',
       validationCommands: ['task loom:verify'],
     },
@@ -222,7 +222,7 @@ function legacyPlan(): LegacyModuleDeliveryPlan {
     maxAttempts: 2,
     parentOwnedResources: PARENT_OWNED_RESOURCES,
     parentJoin: {
-      kind: ModuleDeliveryJoinKind.OrderedCommitHandoffs,
+      kind: ModuleDeliveryJoinKind.DirectCommits,
       owner: 'delivery-owner',
       validationCommands: ['task loom:verify'],
     },

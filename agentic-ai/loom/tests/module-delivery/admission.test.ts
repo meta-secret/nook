@@ -162,7 +162,7 @@ function writeNode(request: WriteNodeRequest): ModuleDeliveryWriteNodeV2 {
       evidence: [`${taskId} passed`],
     },
     workspace: {
-      kind: ModuleDeliveryWorkspaceKind.IsolatedWorktree,
+      kind: ModuleDeliveryWorkspaceKind.SharedCheckout,
       expectedCommitHandoff: true,
     },
   };
@@ -212,7 +212,7 @@ const PLAN: ModuleDeliveryPlanV2 = {
   maxAttempts: 2,
   parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
   parentJoin: {
-    kind: ModuleDeliveryJoinKind.OrderedCommitHandoffs,
+    kind: ModuleDeliveryJoinKind.DirectCommits,
     owner: 'delivery-owner',
     validationCommands: ['task loom:verify'],
   },

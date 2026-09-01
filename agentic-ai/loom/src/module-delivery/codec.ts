@@ -354,11 +354,11 @@ function decodeParentJoin(
 ): ModuleDeliveryParentJoin {
   const fields = new ModulePlanFields(request);
   fields.requireExactKeys(ModulePlanParentJoinField);
-  if (fields.string('kind') !== ModuleDeliveryJoinKind.OrderedCommitHandoffs) {
+  if (fields.string('kind') !== ModuleDeliveryJoinKind.DirectCommits) {
     fail(`${request.path}.kind: unsupported parent join.`);
   }
   return {
-    kind: ModuleDeliveryJoinKind.OrderedCommitHandoffs,
+    kind: ModuleDeliveryJoinKind.DirectCommits,
     owner: fields.identifier('owner'),
     validationCommands: fields.nonEmptyStringList('validationCommands'),
   };
@@ -518,12 +518,12 @@ function decodeNode(
   workspaceFields.requireExactKeys(ModulePlanWorkspaceField);
   if (
     workspaceFields.string('kind') !==
-    ModuleDeliveryWorkspaceKind.IsolatedWorktree
+    ModuleDeliveryWorkspaceKind.SharedCheckout
   ) {
     fail(`${path}.workspace.kind: unsupported workspace kind.`);
   }
   const workspace = {
-    kind: ModuleDeliveryWorkspaceKind.IsolatedWorktree,
+    kind: ModuleDeliveryWorkspaceKind.SharedCheckout,
     expectedCommitHandoff: workspaceFields.trueValue('expectedCommitHandoff'),
   } as const;
   if (!Object.hasOwn(request.value, 'cortexAuthoring')) {

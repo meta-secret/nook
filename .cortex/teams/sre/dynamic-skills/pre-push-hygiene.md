@@ -51,7 +51,7 @@ Loom always:
 4. Stages host format updates when `stageHostUpdates: true`
 
 Gizmo returns any team-owned formatter diff for a fresh owner commit and repeats
-after reintegration until clean. It then pushes and immediately validates a ready
+after the owner commit until clean. It then pushes and immediately validates a ready
 head or starts relevant focused remote proof for any other head.
 
 See [remote-execution.md](../workflows/remote-execution.md)
@@ -103,7 +103,7 @@ Does not apply to read-only sessions with no commits.
 
 - [ ] Team Agents format and commit allowed changes without pushing.
 - [ ] Gizmo runs `task loom:pre-push` after integration and before every push.
-- [ ] Return team-owned formatter diffs for owner commit, then reintegrate.
+- [ ] Return team-owned formatter diffs for an owner commit, then continue.
 - [ ] Every pushed head immediately receives complete validation when ready or
       at least one relevant focused remote task when not ready.
 - [ ] Do not use `task extension:format` as the sole format step.

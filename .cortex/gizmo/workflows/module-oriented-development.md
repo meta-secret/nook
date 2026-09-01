@@ -35,8 +35,8 @@ Each node declares:
     its read claims used to produce evidence; and
   - a write-capable node declares an empty evidence surface;
 - the starting-frontier rule;
-- the isolated workspace policy for write-capable work;
-- the expected commit handoff;
+- the shared-checkout policy for write-capable work;
+- whether Gizmo requests a commit;
 - acceptance evidence;
 - the parent-owned join.
 
@@ -135,8 +135,8 @@ contract:
 
 Experts return evidence and recommendations.
 Read-only experts do not edit files or mutate lifecycle state.
-An implementation worker receives a separate write contract and isolated
-workspace.
+An implementation worker receives a separate write contract and the current
+shared checkout.
 
 Optional Loom journals and Markdown views may preserve human-readable audit
 evidence. They never gate harness continuation.
@@ -157,8 +157,9 @@ Implementation follows dependency readiness.
    repository delivery gates.
 
 Independent ready providers may be analyzed in parallel.
-Independent write-capable providers may run in parallel only when their
-isolated workspace and resource claims are disjoint.
+Write-capable providers run sequentially in the shared checkout.
+Independent read-only providers may run in parallel when their evidence scopes
+are safe.
 Shared files and unresolved contracts remain serialized.
 
 ### Provider barriers
@@ -192,7 +193,7 @@ active harness retains only authorized attempt creation, start, run,
 communication, retry, cancellation, and lifecycle authority.
 
 For example, `nook-core` must be accepted and integrated before `nook-wasm`
-starts. The web consumer then starts from the integrated frontier containing
+starts. The web consumer then starts from the accepted shared-branch commit containing
 both `nook-core` and `nook-wasm`. Independent ready module tasks continue while
 that chain advances.
 
@@ -233,14 +234,14 @@ Exactly one delivery owner controls:
 
 - Workbench planning;
 - graph and contract synthesis;
-- shared-file serialization, exact writer grants, and commit integration;
+- shared-file serialization, exact writer grants, and write sequencing;
 - branch and PR state;
 - validation and review;
 - readiness, merge, and completion records.
 
 Experts do not become delivery owners.
 The registry's paths route knowledge and never grant write ownership.
-Write-capable workers own only the paths and workspace named by their task.
+Write-capable workers own only the paths named by their task.
 
 ## Validation
 
@@ -254,7 +255,8 @@ these module-specific requirements:
 - every expertise result is accepted by its functional owner before Gizmo
   integration;
 - every changed boundary has a reviewed external API and provider-owned tests;
-- every task has exact frontier, scope, isolation, and frozen lineage rules;
+- every task has exact frontier, scope, shared-checkout, and frozen lineage
+  rules;
 - every repository-reading read-only task has a non-empty read-covered evidence
   surface and typed handoff;
 - every write-capable task has an empty evidence surface;
@@ -281,7 +283,7 @@ path.
 
 This foundation does not:
 
-- allow concurrent writes in one worktree;
+- allow concurrent write-capable Team Agents;
 - define a prompt-generated graph language;
 - make Markdown scheduler state;
 - require JSONL or Markdown evidence for harness progress;

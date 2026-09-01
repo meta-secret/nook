@@ -48,9 +48,9 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 - Gizmo uses `task loom:pre-push` as the only required local pre-push hygiene,
   then promptly pushes a coherent integrated head. Team workers run required
   formatters and commit every mutation in their allowed source or Cortex paths.
-- Gizmo may commit deterministic integration-only state. It routes formatter
+- Gizmo may commit parent-owned delivery state. It routes formatter
   mutations in team-owned content back to that team for a fresh formatted
-  commit, then reintegrates and reruns pre-push hygiene.
+  commit, then continues from it and reruns pre-push hygiene.
 - Every pushed head immediately selects remote evidence. A head that is not
   validation-ready requires at least one relevant focused `task remote` job.
 - Gizmo dispatches `task pr:validate` immediately when the pushed head is ready

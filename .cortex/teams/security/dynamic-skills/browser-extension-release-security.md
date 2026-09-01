@@ -70,7 +70,7 @@ Does not apply to:
    combined head. If formatting changes security-owned content, Gizmo returns
    that exact diff to Security for a fresh formatted commit instead of
    committing it.
-9. After reintegration and a clean `task loom:pre-push`, Gizmo pushes promptly
+9. After the owner commit and a clean `task loom:pre-push`, Gizmo pushes promptly
    and immediately obtains remote evidence. For a non-validation-ready
    extension head, Gizmo dispatches hosted extension proof. For a
    validation-ready head, Gizmo dispatches complete exact-head validation.

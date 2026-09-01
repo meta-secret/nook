@@ -69,24 +69,28 @@ or second coordinator. See the [Gizmo contract](gizmo/AGENTS.md).
 - This ordinary-transport prohibition preserves the two trusted publisher
   handoffs below. Those publishers are not ordinary delegation transport.
 - Parent-owned Gizmo control operations remain with Gizmo Prime:
-  - planning and integration;
+  - planning and shared-branch sequencing;
   - Git, pull-request, Workbench, and review coordination;
   - validation, readiness, and merge.
 - Parent-owned control operations stay outside the worker graph and do not
   create worker attempts.
 - The canonical delegation workflow remains the sole worker-lifecycle
   authority. Do not invent another lifecycle system.
-- Team workers implement and test their assigned changes. Gizmo Prime controls
-  shared integration and external delivery state and does not implement team
-  work on their behalf.
+- Team workers implement and test their assigned changes in the current shared
+  checkout. Gizmo Prime controls write sequencing and external delivery state.
+- Only one write-capable Team Agent runs at a time.
+- Read-only Team Agents may run concurrently when their evidence scopes are
+  safe to inspect while the writer runs.
+- A write-capable Team Agent may commit its complete scoped change when Gizmo
+  requests a commit. Gizmo continues directly from that commit.
 - Team workers run only fast focused local Loom tests, lint, or typechecks that
   provide direct implementation feedback.
 - Team workers must not run the full `task loom:verify` suite locally during
   agent delivery.
-- For Loom-affecting work, the Team Agent returns a coherent handoff to Gizmo
+- For Loom-affecting work, the Team Agent returns a coherent result to Gizmo
   Prime after focused local evidence.
-- Gizmo Prime promptly integrates, runs pre-push hygiene, commits, and pushes
-  that handoff.
+- Gizmo Prime runs pre-push hygiene on the Team Agent's direct commit and
+  promptly pushes the shared branch.
 - Gizmo Prime then dispatches `task remote TASK_NAME=loom:verify` for the exact
   pushed head.
 - Security review does not transfer implementation ownership. Portable

@@ -206,31 +206,15 @@ export function verifyModuleCommitHandoff(
   };
   const commit = gitText(runModuleDeliveryGit(gitRequest(headInvocation)));
   if (!EXACT_GIT_COMMIT.test(commit) || commit === request.baselineCommit) {
-    throw new Error('Commit handoff requires one non-baseline commit.');
-  }
-  const parentsInvocation: ModuleGitInvocation = {
-    cwd: request.workspace.worktreePath,
-    args: ['rev-list', '--parents', '-n', '1', commit],
-  };
-  const commitAndParents = gitText(
-    runModuleDeliveryGit(gitRequest(parentsInvocation)),
-  ).split(' ');
-  if (
-    commitAndParents.length !== 2 ||
-    commitAndParents[0] !== commit ||
-    commitAndParents[1] !== request.baselineCommit
-  ) {
     throw new Error(
-      'Commit handoff must be one direct-child non-merge commit.',
+      'Commit handoff requires a non-baseline shared-branch commit.',
     );
   }
-  const countInvocation: ModuleGitInvocation = {
+  const ancestryInvocation: ModuleGitInvocation = {
     cwd: request.workspace.worktreePath,
-    args: ['rev-list', '--count', `${request.baselineCommit}..${commit}`],
+    args: ['merge-base', '--is-ancestor', request.baselineCommit, commit],
   };
-  if (gitText(runModuleDeliveryGit(gitRequest(countInvocation))) !== '1') {
-    throw new Error('Commit handoff must contain exactly one commit.');
-  }
+  runModuleDeliveryGit(gitRequest(ancestryInvocation));
   const pathRequest: ModuleCommitPathRequest = {
     workspace: request.workspace,
     baselineCommit: request.baselineCommit,
@@ -238,7 +222,7 @@ export function verifyModuleCommitHandoff(
   };
   const changedPaths = moduleCommitChangedPaths(pathRequest);
   if (changedPaths.length === 0) {
-    throw new Error('Commit handoff commit must be nonempty.');
+    throw new Error('Commit handoff range must be nonempty.');
   }
   for (const path of changedPaths) {
     if (!CANONICAL_GIT_PATH.test(path)) {

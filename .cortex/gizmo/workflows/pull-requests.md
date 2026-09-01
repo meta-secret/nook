@@ -63,7 +63,7 @@ ownership until merge or a concrete blocked handoff:
    - Run `task loom:pre-push`.
    - Team workers own formatter mutations in their allowed source or Cortex
      files and return fresh formatted commits.
-   - Gizmo may commit deterministic integration-only state.
+   - Gizmo may commit parent-owned delivery state.
    - Exactly two trusted GitHub Actions publishers are narrow exceptions:
      `agent-implement.yml` and `rust-dependency-updates.yml` through
      `task ci-agent:fix` with
@@ -361,8 +361,8 @@ validation.
   gate.
 - Always run `task loom:pre-push` before push.
 - If hygiene mutates team-owned source or Cortex content, return the diff to
-  that team for a fresh formatted commit. Reintegrate it and rerun hygiene.
-- Gizmo may commit deterministic integration-only state.
+  that team for a fresh formatted commit. Continue from it and rerun hygiene.
+- Gizmo may commit parent-owned delivery state.
 - Push only when the branch is coherent enough to validate.
 
 ```bash
@@ -618,7 +618,7 @@ gate. See [quality](../../teams/sre/workflows/quality.md#fix-check-findings--not
    `fetchAppLogs(page)`, `/app-logs`, and `dumpNookLogs(page)`.
 3. Dispatch the root cause to its responsible team.
 4. Integrate the verified fix commit and run `task loom:pre-push`. Return any
-   team-owned formatter diff for a fresh team commit. Reintegrate it, rerun
+   team-owned formatter diff for a fresh team commit. Continue from it, rerun
    hygiene, and promptly push the completed fix.
 5. Run Loom/Task validation and return to monitoring Nook's complete exact-head
    PR checks. If the pushed fix is not validation-ready, dispatch at least one

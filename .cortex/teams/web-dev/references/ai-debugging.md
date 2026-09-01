@@ -39,7 +39,7 @@ For every submitted annotation, the agent must:
 6. leave push, PR, and external lifecycle state to Gizmo. Gizmo runs
    `task loom:pre-push` on the combined head. If that gate formats web-owned
    content, Gizmo returns the exact diff for a fresh web-development commit
-   instead of committing it. After reintegration and a clean gate, Gizmo pushes
+   instead of committing it. After the owner commit and a clean gate, Gizmo pushes
    and immediately obtains remote evidence: at least one relevant focused
    remote task while the head is not validation-ready, or complete exact-head
    validation immediately when it is ready. Gizmo then owns readiness and
