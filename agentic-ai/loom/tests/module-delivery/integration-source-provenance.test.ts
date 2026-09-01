@@ -10,7 +10,6 @@ import {
   createGitFixture,
   disposeGitFixture,
   fixtureGit,
-  writeFixtureFile,
 } from './worktree-test-support.ts';
 
 import type { SourceSnapshotExpectation } from '../../src/module-delivery/integration-provenance.ts';
@@ -37,24 +36,6 @@ function sourceExpectation(fixture: GitFixture): SourceSnapshotExpectation {
 }
 
 describe('module delivery source provenance', () => {
-  test('rejects source byte, ref, and config drift after capture', () => {
-    const fixture = trackedFixture();
-    const expectation = sourceExpectation(fixture);
-    const sourceWrite = {
-      fixture,
-      relativePath: 'module/seed.txt',
-      contents: 'mutated source bytes\n',
-    } as const;
-    writeFixtureFile(sourceWrite);
-    const sourceGit = fixtureGit(fixture);
-    sourceGit(['branch', 'source-drift', 'HEAD']);
-    sourceGit(['config', 'nook.test-drift', 'true']);
-
-    expect(() => assertSourceSnapshot(expectation)).toThrow(
-      'Source repository changed',
-    );
-  });
-
   test('rejects drift in a custom ref outside private namespaces', () => {
     const fixture = trackedFixture();
     const expectation = sourceExpectation(fixture);

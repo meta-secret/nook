@@ -34,6 +34,7 @@ import {
   evidenceSubmission,
   fixtureGit,
   invalidEvidenceCases,
+  writeFixtureFile,
   worktreeFileWriter,
   worktreeGit,
 } from './worktree-test-support.ts';
@@ -830,6 +831,25 @@ describe('module delivery wave integration', () => {
       false,
     );
     expect(existsSync(marker)).toBe(false);
+  });
+
+  test('rejects source drift through the integration path', () => {
+    const fixture = createTrackedFixture();
+    const { accepted } = readOnlyPlan(fixture);
+    const state = preparedIntegration(accepted);
+    writeFixtureFile({
+      fixture,
+      relativePath: 'module/seed.txt',
+      contents: 'mutated source bytes\n',
+    });
+    const integration: WaveIntegration = {
+      acceptedPlan: accepted,
+      state,
+      handoffs: [],
+    };
+    expect(() => integrateWave(integration)).toThrow(
+      'Source repository changed',
+    );
   });
 
   test('rejects an intermediate symlink before preparing integration', () => {

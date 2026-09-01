@@ -40,13 +40,15 @@ export function teamPlanLinuxNamespaceLockRecoverable(request: {
   );
   const currentBoot = current[2];
   const currentNamespace = current[3];
+  const sameHost = owner?.[1] === current[1];
   const ownerBoot = owner?.[2];
   const ownerNamespace = owner?.[3];
   return Boolean(
-    ownerBoot === currentBoot &&
-    ownerNamespace &&
-    ownerNamespace !== currentNamespace &&
-    !request.liveNamespaces.has(ownerNamespace),
+    (sameHost && ownerBoot !== currentBoot) ||
+    (ownerBoot === currentBoot &&
+      ownerNamespace &&
+      ownerNamespace !== currentNamespace &&
+      !request.liveNamespaces.has(ownerNamespace)),
   );
 }
 

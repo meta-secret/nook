@@ -33,5 +33,10 @@ test('recovers terminated namespaces without stealing live siblings', () => {
     recoverable({
       ownerIdentity: 'current-host:foreign-boot:pid:[202]:start-ticks:303',
     }),
+  ).toBe(true);
+  expect(
+    recoverable({
+      ownerIdentity: 'foreign-host:foreign-boot:pid:[202]:start-ticks:303',
+    }),
   ).toBe(false);
 });

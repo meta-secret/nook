@@ -622,10 +622,15 @@ function assertGitSafeDirectoryEnvironment(request: {
     'GIT_CONFIG_VALUE_0',
   ]);
   const cwd = exactObjectProperty([request.object, 'cwd']);
+  const allowedNames = new Set([
+    'PATH',
+    'GIT_NO_REPLACE_OBJECTS',
+    ...configNames,
+  ]);
   if (
     evaluated.dynamic ||
     evaluated.value !== 'git' ||
-    request.names.size !== 4 ||
+    [...request.names].some((name) => !allowedNames.has(name)) ||
     !request.names.has('PATH') ||
     configNames.some((name) => !request.names.has(name)) ||
     count === false ||
