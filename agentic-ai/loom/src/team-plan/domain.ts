@@ -1,5 +1,7 @@
 import { TeamKey } from '../team-agents/catalog.ts';
+import { assertEvidenceBound } from '../module-delivery/authority.ts';
 import { ModuleDeliveryOwner } from '../module-delivery/domain.ts';
+import { ModuleDeliveryProviderSubmissionKind } from '../module-delivery/integration-provenance.ts';
 import type {
   ModuleDeliveryAttemptLease,
   ModuleDeliveryGenerationFenceKind,
@@ -199,6 +201,13 @@ type KeyAssertion = readonly [StrictRecordValue, string];
 
 export function assertTeamPlanRecord(record: TeamPlanRecord): void {
   if (!record || typeof record !== 'object') invalidRecord();
+  if (
+    record.kind === TeamPlanRecordKind.Provider &&
+    record.submission?.kind ===
+      ModuleDeliveryProviderSubmissionKind.ReadOnlyEvidence &&
+    Array.isArray(record.submission.acceptedProviderEvidence)
+  )
+    assertEvidenceBound(record.submission.acceptedProviderEvidence);
   JSON.stringify(record);
   if (record.kind === TeamPlanRecordKind.Provider) {
     if (!record.submission) invalidRecord();
@@ -206,6 +215,7 @@ export function assertTeamPlanRecord(record: TeamPlanRecord): void {
     assertProviderSubmission(record.submission);
     return;
   }
+  if (record.kind !== TeamPlanRecordKind.FinalUnusable) invalidRecord();
   assertTeamPlanJournalRecord(record);
 }
 

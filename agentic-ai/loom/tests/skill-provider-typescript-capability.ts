@@ -490,6 +490,7 @@ function assertSubprocessEnvironment([request, object]: readonly [
         );
       names.add(property.name.text);
     }
+    assertGitSafeDirectoryEnvironment({ request, object, environment, names });
   }
   const shell = exactObjectProperty([object, 'shell']);
   const shellProperties = object.properties.filter(
@@ -556,6 +557,12 @@ function isSafeSubprocessEnvironmentValue(
   };
   if (Object.hasOwn(literals, name))
     return ts.isStringLiteral(value) && value.text === literals[name];
+  if (
+    name === 'GIT_CONFIG_COUNT' ||
+    name === 'GIT_CONFIG_KEY_0' ||
+    name === 'GIT_CONFIG_VALUE_0'
+  )
+    return true;
   if (name === 'GIT_AUTHOR_DATE' || name === 'GIT_COMMITTER_DATE')
     return (
       (ts.isStringLiteral(value) && /^@[0-9]+ \+0000$/u.test(value.text)) ||
@@ -592,6 +599,77 @@ function isProcessEnvironmentAccess(
   );
 }
 
+function assertGitSafeDirectoryEnvironment(request: {
+  readonly request: SubprocessCwdRequest;
+  readonly object: ts.ObjectLiteralExpression;
+  readonly environment: ts.ObjectLiteralExpression;
+  readonly names: ReadonlySet<string>;
+}): void {
+  const configNames = [
+    'GIT_CONFIG_COUNT',
+    'GIT_CONFIG_KEY_0',
+    'GIT_CONFIG_VALUE_0',
+  ] as const;
+  if (!configNames.some((name) => request.names.has(name))) return;
+  const executable = request.request.call.arguments?.[0];
+  const evaluated = executable
+    ? request.request.evaluate(executable)
+    : { dynamic: true, value: '' };
+  const count = exactObjectProperty([request.environment, 'GIT_CONFIG_COUNT']);
+  const key = exactObjectProperty([request.environment, 'GIT_CONFIG_KEY_0']);
+  const value = exactObjectProperty([
+    request.environment,
+    'GIT_CONFIG_VALUE_0',
+  ]);
+  const cwd = exactObjectProperty([request.object, 'cwd']);
+  if (
+    evaluated.dynamic ||
+    evaluated.value !== 'git' ||
+    request.names.size !== 4 ||
+    !request.names.has('PATH') ||
+    configNames.some((name) => !request.names.has(name)) ||
+    count === false ||
+    !ts.isStringLiteral(count) ||
+    count.text !== '1' ||
+    key === false ||
+    !ts.isStringLiteral(key) ||
+    key.text !== 'safe.directory' ||
+    value === false ||
+    cwd === false ||
+    !isStableSafeDirectoryValue({ value, cwd })
+  )
+    throw new Error(
+      `Unsafe TypeScript Git safe.directory environment in ${request.request.sourcePath}.`,
+    );
+}
+
+function isStableSafeDirectoryValue(request: {
+  readonly value: ts.Expression;
+  readonly cwd: ts.Expression;
+}): boolean {
+  const safeDirectory = unwrapTypescriptExpression(request.value);
+  const workingDirectory = unwrapTypescriptExpression(request.cwd);
+  if (ts.isIdentifier(safeDirectory) && ts.isIdentifier(workingDirectory))
+    return safeDirectory.text === workingDirectory.text;
+  const canonicalLiteral =
+    ts.isStringLiteral(safeDirectory) &&
+    (safeDirectory.text === '/' ||
+      (safeDirectory.text.startsWith('/') &&
+        !safeDirectory.text.endsWith('/') &&
+        safeDirectory.text
+          .split('/')
+          .slice(1)
+          .every(
+            (segment) =>
+              segment.length > 0 && segment !== '.' && segment !== '..',
+          )));
+  return (
+    canonicalLiteral &&
+    ts.isStringLiteral(workingDirectory) &&
+    safeDirectory.text === workingDirectory.text
+  );
+}
+
 enum PlatformPathEnvironmentKey {
   Posix = 'PATH',
   Windows = 'Path',
@@ -624,8 +702,11 @@ function isSafeSubprocessEnvironmentKey(name: string): boolean {
     name === 'COMSPEC' ||
     name === 'GIT_AUTHOR_DATE' ||
     name === 'GIT_COMMITTER_DATE' ||
+    name === 'GIT_CONFIG_COUNT' ||
     name === 'GIT_CONFIG_GLOBAL' ||
+    name === 'GIT_CONFIG_KEY_0' ||
     name === 'GIT_CONFIG_NOSYSTEM' ||
+    name === 'GIT_CONFIG_VALUE_0' ||
     name === 'GIT_INDEX_FILE' ||
     name === 'GIT_NO_REPLACE_OBJECTS' ||
     name === 'GIT_TERMINAL_PROMPT' ||

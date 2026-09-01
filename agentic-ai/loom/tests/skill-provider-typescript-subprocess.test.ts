@@ -487,6 +487,23 @@ run({indexFile:'index'});`),
 import {spawnSync} from 'node:child_process';
 spawnSync('git', ['status'], {env:{PATH:'/bin:/usr/bin:/usr/sbin'}});`),
   ).toEqual([]);
+  expect(
+    extract(`
+import {spawnSync} from 'node:child_process';
+function run(request:{repositoryRoot:string}) {
+  const repositoryRoot=request.repositoryRoot;
+  spawnSync('git', ['status'], {
+    cwd:repositoryRoot,
+    env:{
+      PATH:'/bin:/usr/bin:/usr/sbin',
+      GIT_CONFIG_COUNT:'1',
+      GIT_CONFIG_KEY_0:'safe.directory',
+      GIT_CONFIG_VALUE_0:repositoryRoot,
+    },
+  });
+}
+run({repositoryRoot:'/repo'});`),
+  ).toEqual([]);
   for (const source of [
     "import {fork} from 'node:child_process'; fork('scripts/facade.ts', [], {env:process.env});",
     "Bun.spawn(['bun', 'scripts/facade.ts'], {env:{...process.env}});",
@@ -531,6 +548,43 @@ spawnSync('git', ['status'], {env:${environment}});`),
 import {spawnSync} from 'node:child_process';
 spawnSync('git', ['status'], {env:${environment}});`),
     ).toThrow('Unsafe TypeScript subprocess environment value');
+  for (const environment of [
+    "{GIT_CONFIG_COUNT:'2',GIT_CONFIG_KEY_0:'safe.directory',GIT_CONFIG_VALUE_0:'/repo'}",
+    "{GIT_CONFIG_COUNT:'1',GIT_CONFIG_KEY_0:'alias.status',GIT_CONFIG_VALUE_0:'/repo'}",
+    "{GIT_CONFIG_COUNT:'1',GIT_CONFIG_KEY_0:'safe.directory',GIT_CONFIG_VALUE_0:'/other'}",
+    "{GIT_CONFIG_COUNT:'1',GIT_CONFIG_KEY_0:'safe.directory'}",
+  ])
+    expect(() =>
+      extract(`
+import {spawnSync} from 'node:child_process';
+spawnSync('git', ['status'], {cwd:'/repo',env:${environment}});`),
+    ).toThrow('Unsafe TypeScript Git safe.directory environment');
+  expect(() =>
+    extract(`
+import {spawnSync} from 'node:child_process';
+function nextPath(){return '/repo';}
+spawnSync('git', ['status'], {cwd:nextPath(),env:{
+  PATH:'/bin:/usr/bin:/usr/sbin',
+  GIT_CONFIG_COUNT:'1',
+  GIT_CONFIG_KEY_0:'safe.directory',
+  GIT_CONFIG_VALUE_0:nextPath(),
+}});`),
+  ).toThrow('Unsafe TypeScript Git safe.directory environment');
+  expect(() =>
+    extract(`
+import {spawnSync} from 'node:child_process';
+spawnSync('git', ['status'], {cwd:'/repo/../repo',env:{
+  PATH:'/bin:/usr/bin:/usr/sbin',
+  GIT_CONFIG_COUNT:'1',
+  GIT_CONFIG_KEY_0:'safe.directory',
+  GIT_CONFIG_VALUE_0:'/repo/../repo',
+}});`),
+  ).toThrow('Unsafe TypeScript Git safe.directory environment');
+  expect(() =>
+    extract(`
+import {spawnSync} from 'node:child_process';
+spawnSync('git', ['status'], {cwd:'/repo',env:{GIT_CONFIG_KEY_1:'safe.directory'}});`),
+  ).toThrow('Unsafe TypeScript subprocess environment key GIT_CONFIG_KEY_1');
 });
 
 test('rejects shell-enabled subprocess options', () => {
