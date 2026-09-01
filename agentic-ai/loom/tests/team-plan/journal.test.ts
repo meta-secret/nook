@@ -715,6 +715,8 @@ describe('Team Plan journal', () => {
     ).rejects.toThrow('publication cleanup interrupted');
     expect(statSync(journalPath).nlink).toBe(2);
     expect(statSync(`${journalPath}.publishing`).nlink).toBe(2);
+    unlinkSync(`${journalPath}.publishing`);
+    expect(statSync(journalPath).nlink).toBe(1);
 
     await createTeamPlanJournal({ journalPath, event: started });
     expect(existsSync(`${journalPath}.publishing`)).toBe(false);

@@ -96,6 +96,17 @@ export async function publishNewJournalFile(request: {
     })
   )
     return;
+  if (await pathExists(request.path)) {
+    const existing = await readBoundedTeamPlanJournal({
+      path: request.path,
+      maximumBytes: Buffer.byteLength(request.serialized),
+      expectedLinkCount: 1,
+    });
+    if (existing.serialized !== request.serialized)
+      throw new Error('Team Plan journal publication is stale or forged.');
+    await syncParent(request.path);
+    return;
+  }
   const temporary = await writeTemporaryFile({
     ...request,
     mode: 0o600,
