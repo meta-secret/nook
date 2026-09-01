@@ -29,13 +29,17 @@ import {
 import {
   TeamPlanRecordKind,
   discardFinalizedTeamPlan,
-  finalizeTeamPlan,
   leaseTeamPlan,
-  recordTeamPlan,
-  restartTeamPlan,
+  recordTeamPlan as recordTeamPlanRuntime,
   selectTeamPlan,
   startTeamPlan,
 } from '../../src/team-plan/index.ts';
+import {
+  finalizeTeamPlan,
+  finalizeTeamPlanRuntime,
+  restartTeamPlan,
+  restartTeamPlanRuntime,
+} from './runtime-test-commands.ts';
 import {
   createGitFixture,
   disposeGitFixture,
@@ -69,8 +73,18 @@ async function leaseNextTeamPlan(journalPath: string) {
   const selection = await selectTeamPlan({ journalPath });
   return leaseTeamPlan({
     journalPath,
+    runId: selection.snapshot.runId,
+    generation: selection.snapshot.generation,
+    planDigest: selection.snapshot.planDigest,
     taskIds: selection.admissions.map(({ taskId }) => taskId),
   });
+}
+
+async function recordTeamPlan(
+  request: Omit<Parameters<typeof recordTeamPlanRuntime>[0], 'runId'>,
+) {
+  const current = await selectTeamPlan({ journalPath: request.journalPath });
+  return recordTeamPlanRuntime({ ...request, runId: current.snapshot.runId });
 }
 
 type PlanFile = Readonly<{
@@ -281,6 +295,63 @@ function evidenceRecord(
 }
 
 describe('Team Plan runtime', () => {
+  test('selects candidates before leasing the chosen task subset', async () => {
+    const fixture = createGitFixture();
+    fixtures.push(fixture);
+    const file = fixturePlanFile([
+      fixture,
+      [fixtureReadNode([fixture, 'alpha']), fixtureReadNode([fixture, 'beta'])],
+    ]);
+    await startTeamPlan(startRequest(file));
+    const candidates = await selectTeamPlan({ journalPath: file.journalPath });
+    expect(candidates.admissions.map(({ taskId }) => taskId).sort()).toEqual([
+      'alpha',
+      'beta',
+    ]);
+    expect(candidates.snapshot.activeLeases).toHaveLength(0);
+    const leased = await leaseTeamPlan({
+      journalPath: file.journalPath,
+      runId: candidates.snapshot.runId,
+      generation: candidates.snapshot.generation,
+      planDigest: candidates.snapshot.planDigest,
+      taskIds: ['beta'],
+    });
+    expect(leased.leases.map(({ taskId }) => taskId)).toEqual(['beta']);
+  });
+
+  test('rejects stale run identities before mutating the journal', async () => {
+    const fixture = createGitFixture();
+    fixtures.push(fixture);
+    const node = fixtureReadNode([fixture, 'provider']);
+    const file = fixturePlanFile([fixture, [node]]);
+    await startTeamPlan(startRequest(file));
+    const leased = await leaseNextTeamPlan(file.journalPath);
+    const lease = leased.leases[0];
+    if (!lease) throw new Error('Provider lease is missing.');
+    const journal = readFileSync(file.journalPath, 'utf8');
+    await expect(
+      recordTeamPlanRuntime({
+        journalPath: file.journalPath,
+        runId: 'stale-run-id',
+        record: evidenceRecord({ fixture, lease, node }),
+      }),
+    ).rejects.toThrow('run identity is stale');
+    await expect(
+      restartTeamPlanRuntime({
+        journalPath: file.journalPath,
+        runId: 'stale-run-id',
+        planPath: file.path,
+      }),
+    ).rejects.toThrow('run identity is stale');
+    await expect(
+      finalizeTeamPlanRuntime({
+        journalPath: file.journalPath,
+        runId: 'stale-run-id',
+      }),
+    ).rejects.toThrow('run identity is stale');
+    expect(readFileSync(file.journalPath, 'utf8')).toBe(journal);
+  });
+
   test('reconstructs evidence barriers and releases exact retry leases', async () => {
     const fixture = createGitFixture();
     fixtures.push(fixture);
@@ -376,6 +447,9 @@ describe('Team Plan runtime', () => {
     const selected = await selectTeamPlan({ journalPath: file.journalPath });
     const leased = await leaseTeamPlan({
       journalPath: file.journalPath,
+      runId: selected.snapshot.runId,
+      generation: selected.snapshot.generation,
+      planDigest: selected.snapshot.planDigest,
       taskIds: selected.admissions.map(({ taskId }) => taskId),
     });
     expect(leased.leases).toHaveLength(2);
@@ -565,5 +639,5 @@ describe('Team Plan runtime', () => {
       (await selectTeamPlan({ journalPath: file.journalPath })).snapshot
         .generation,
     ).toBe(2);
-  });
+  }, 10_000);
 });

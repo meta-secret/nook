@@ -62,6 +62,7 @@ import type {
   TeamPlanAttemptIdentity,
   TeamPlanEvent,
   TeamPlanDiscardRequest,
+  TeamPlanFinalizeRequest,
   TeamPlanFinalUnusableRecord,
   TeamPlanJournalRecord,
   TeamPlanJournalRequest,
@@ -186,6 +187,8 @@ export async function recordTeamPlan(
     action: async (session) => {
       assertRunningTeamPlanSession(session);
       assertTeamPlanSessionRepositoryAtSource(session);
+      if (request.runId !== session.journal.started.runId)
+        throw new Error('Team Plan record run identity is stale.');
       const persisted = executeTeamPlanRecord({
         session,
         record: request.record,
@@ -209,6 +212,7 @@ export async function restartTeamPlan(
   return withLockedTeamPlanSession({
     journalPath: request.journalPath,
     action: async (session) => {
+      assertTeamPlanRunIdentity({ session, runId: request.runId });
       assertRunningTeamPlanSession(session);
       const plan = await reviewedPlan(request.planPath);
       assertRepositoryAtSource({
@@ -240,11 +244,12 @@ export async function restartTeamPlan(
 }
 
 export async function finalizeTeamPlan(
-  request: TeamPlanJournalRequest,
+  request: TeamPlanFinalizeRequest,
 ): Promise<TeamPlanSnapshot> {
   return withLockedTeamPlanSession({
     journalPath: request.journalPath,
     action: async (session) => {
+      assertTeamPlanRunIdentity({ session, runId: request.runId });
       if (session.finalized) return teamPlanSnapshot(session);
       assertRunningTeamPlanSession(session);
       assertTeamPlanSessionRepositoryAtSource(session);
@@ -849,6 +854,14 @@ export function assertRunningTeamPlanSession(session: TeamPlanSession): void {
     session.integrationState.phase !== ModuleIntegrationPhase.AcceptingProviders
   )
     throw new Error('Team Plan is already finalized.');
+}
+
+function assertTeamPlanRunIdentity(request: {
+  readonly session: TeamPlanSession;
+  readonly runId: string;
+}): void {
+  if (request.runId !== request.session.journal.started.runId)
+    throw new Error('Team Plan run identity is stale.');
 }
 
 export function assertTeamPlanSessionRepositoryAtSource(
