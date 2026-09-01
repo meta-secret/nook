@@ -69,32 +69,9 @@ Follow the lifecycle in order:
    needed for inspection or recovery. Pass the exact `runId` returned by
    `start`.
 
-`restart` preserves the run identity. It also preserves monotonic attempt
-history for logical tasks. It does not merge a new plan into active leases.
-Missing, malformed, or stale discard identity cannot delete the journal.
-
 ## Team Plan journal compatibility
 
-The canonical schema version is `2`. The source contract lives in
-[`team-plan/domain.ts`](../../../../agentic-ai/loom/src/team-plan/domain.ts).
-
-The journal is strict newline-delimited JSON:
-
-- Every event carries `version: 2`.
-- Every event carries its exact kind and contiguous one-based sequence.
-- `started` is first and freezes the run, plan, source, repository, workspace,
-  and generation-capacity identities.
-- `restarted` freezes one newer reviewed generation.
-- `selected` persists exact lease identities.
-- `recorded` persists one accepted or terminal-unusable lease result.
-- `finalized` persists the terminal head commit and ends the stream.
-
-Version 2 has no permissive compatibility decoder. Missing fields, extra
-fields, other versions, partial lines, invalid ordering, and trailing events
-fail closed. Incompatible future changes require an explicit versioned
-migration or deliberate cleanup.
-
-The package README owns the detailed command and recovery behavior. See
+The package README owns the versioned journal and recovery contract. See
 [`Team Plan commands`](../../../../agentic-ai/loom/README.md#team-plan-commands).
 
 ## Invoke a leaf tool
