@@ -141,17 +141,23 @@ fn content_scan_candidate(path: &Path) -> bool {
         return true;
     }
 
-    let automation_tree = path.components().next().is_some_and(|component| {
+    let automation_tree = path.components().any(|component| {
         matches!(
             component.as_os_str().to_str(),
             Some(".cortex" | ".github" | "agentic-ai" | "infra" | "preflight" | "scripts")
         )
     });
+    let test_source = path.components().any(|component| {
+        matches!(
+            component.as_os_str().to_str(),
+            Some("test" | "tests" | "fixture" | "fixtures")
+        )
+    });
     automation_tree
-        && matches!(
+        && (matches!(
             extension.as_str(),
             "cjs" | "cts" | "js" | "jsx" | "mjs" | "mts" | "ts" | "tsx"
-        )
+        ) || (extension == "rs" && !test_source))
 }
 
 fn prohibited_content() -> &'static Result<RegexSet, regex::Error> {
@@ -160,7 +166,7 @@ fn prohibited_content() -> &'static Result<RegexSet, regex::Error> {
         RegexSet::new([
             r"(?i)(?:^|[^a-z0-9_])(?:python|pypy|micropython|jython|ironpython|ipython)[0-9.]*\b",
             r"(?i)\b(?:pyo3|pyodide|rustpython|cpython)\b",
-            r#"(?i)(?:^|[\s;&|(\[])(?:pip[0-9]*|pipx)["',\s]+(?:-[^\s]+[\s]+)*(?:install|run)\b"#,
+            r#"(?i)(?:^|[\s;&|(\[])(?:pip[0-9]*|pipx)(?:["',\s]+|-\s+)+(?:-[^\s]+[\s]+)*(?:install|run)\b"#,
             r#"(?i)(?:^|[\s;&|(\[])uv["',\s]+(?:-[^\s]+[\s]+)*(?:add|build|export|init|lock|pip|publish|python|remove|run|sync|tool|tree|venv)\b"#,
             r#"(?i)(?:>|>>)\s*["']?[^"';&|<>\s]+(?:\.py|\.pyi|\.pyw|\.pyz|\.pex)\b"#,
             r"(?im)^\s*(?:async\s+)?def\s+[a-z_]\w*\s*\([^)]*\)\s*:",
@@ -322,6 +328,30 @@ fn content_scan_avoids_product_code_false_positives() -> anyhow::Result<()> {
         "const pip = pictureInPicture; const value = score > metrics.py;\n",
     )?;
     assert!(repository_language_violations(fixture.path(), false)?.is_empty());
+    Ok(())
+}
+
+#[test]
+fn content_scan_covers_nested_scripts_rust_and_yaml_vectors() -> anyhow::Result<()> {
+    let fixture = tempfile::tempdir()?;
+    fs::create_dir_all(fixture.path().join("product/scripts"))?;
+    fs::create_dir_all(fixture.path().join("preflight/src"))?;
+    fs::write(
+        fixture.path().join("product/scripts/build.ts"),
+        "Bun.spawn(['python3', 'tool.py']);\n",
+    )?;
+    fs::write(
+        fixture.path().join("preflight/src/runner.rs"),
+        "std::process::Command::new(\"python3\").status()?;\n",
+    )?;
+    fs::write(
+        fixture.path().join("Taskfile.yml"),
+        "tasks:\n  install:\n    cmd:\n      - pip\n      - install\n      - package\n",
+    )?;
+    assert_eq!(
+        repository_language_violations(fixture.path(), false)?.len(),
+        3
+    );
     Ok(())
 }
 
