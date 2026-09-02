@@ -78,7 +78,7 @@ export function stopPendingSaveWatch(): void {
   saveOfferState.clearPendingWatch()
 }
 
-export function dismissPendingSaveOffer(): void {
+export async function dismissPendingSaveOffer(): Promise<void> {
   let offer: WebsiteLoginSaveOfferView | false = false
   if (saveOfferState.watch.kind === SavePageWatchKind.Watching) {
     offer = saveOfferState.watch.watch.offer
@@ -89,11 +89,17 @@ export function dismissPendingSaveOffer(): void {
   saveOfferState.clearActiveOffer()
   if (!offer) return
   saveOfferState.dismissedOfferIds.add(offer.offerId)
-  const message: Parameters<typeof sendRuntimeMessageWithoutResponse>[0] = {
+  const message: Parameters<typeof sendLoginSaveActionRuntimeMessage>[0] = {
     type: WebsiteLoginSaveDismissMessageType.NookWebsiteLoginSaveDismiss,
     payload: { origin: location.origin, offerId: offer.offerId },
   }
-  sendRuntimeMessageWithoutResponse(message)
+  const delivery = await sendLoginSaveActionRuntimeMessage(message)
+  if (
+    delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
+    delivery.response.kind !== 'completed'
+  ) {
+    throw new Error('login save dismissal failed')
+  }
 }
 
 function pageLooksLikeAuthPath(pathname: string): boolean {

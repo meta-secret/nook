@@ -1,12 +1,16 @@
 import { expect, mock, test } from 'bun:test'
 import type { PasswordFormObservation } from '../../nook-web-shared/src/extension/password-forms'
 import { ExtensionRuntimeRequestType } from '../src/lib/extension-runtime-request-type'
-import type { WebsiteLoginSaveOfferView } from '../src/lib/login-save-messages'
+import type {
+  WebsiteLoginSaveActionResponse,
+  WebsiteLoginSaveOfferView,
+} from '../src/lib/login-save-messages'
 
 const addListener = mock(() => {})
+let saveDismissResponse: WebsiteLoginSaveActionResponse = { kind: 'completed' }
 const sendMessage = mock(
   (_message: unknown, callback: (response: unknown) => void) =>
-    callback({ ok: true }),
+    callback(saveDismissResponse),
 )
 Object.assign(globalThis, {
   __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
@@ -22,6 +26,15 @@ Object.assign(globalThis, {
   location: { origin: 'https://login.example.test' },
   window: { clearTimeout: mock(() => {}) },
 })
+
+async function flushResponses(): Promise<void> {
+  await Promise.resolve()
+  await Promise.resolve()
+  await Promise.resolve()
+  await Promise.resolve()
+  await Promise.resolve()
+  await Promise.resolve()
+}
 
 test('delivers cleanup cancellation through the content-script router', async () => {
   const { LoginPickerKind, pickerState } =
@@ -88,17 +101,21 @@ test('refresh preserves dismissal while clearing stale surface state', async () 
   scanState.schedule = schedule
   const sendResponse = mock(() => {})
 
-  routeAutofillMessage(
-    { type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces },
-    { id: 'nook-extension' },
-    sendResponse,
-  )
+  expect(
+    routeAutofillMessage(
+      { type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces },
+      { id: 'nook-extension' },
+      sendResponse,
+    ),
+  ).toBe(true)
 
   expect(widgetState.dismissed).toBe(true)
   expect(widgetState.busy).toBe(false)
   expect(widgetState.host.kind).toBe(WidgetHostKind.Detached)
   expect(saveOfferState.watch.kind).toBe(SavePageWatchKind.Idle)
   expect(saveOfferState.dismissedOfferIds.has(staleOfferId)).toBe(true)
+  expect(schedule).not.toHaveBeenCalled()
+  expect(sendResponse).not.toHaveBeenCalled()
   expect(sendMessage).toHaveBeenCalledWith(
     {
       type: 'nook:website-login-save-dismiss',
@@ -109,7 +126,43 @@ test('refresh preserves dismissal while clearing stale surface state', async () 
     },
     expect.any(Function),
   )
+  await flushResponses()
   expect(remove).toHaveBeenCalledOnce()
   expect(schedule).toHaveBeenCalledOnce()
   expect(sendResponse).toHaveBeenCalledWith({ ok: true })
+})
+
+test('refresh does not rescan when staged offer dismissal is rejected', async () => {
+  const { saveOfferState, scanState, widgetState } =
+    await import('../src/content/autofill/state')
+  const { routeAutofillMessage } =
+    await import('../src/content/autofill/message-router')
+  const remove = mock(() => {})
+  widgetState.attachHost({ remove } as unknown as HTMLElement)
+  saveOfferState.watchPage({
+    offer: { offerId: 'rejected-save-offer' } as WebsiteLoginSaveOfferView,
+    startedAt: 1,
+    authPath: '/login',
+    sawMutation: false,
+  })
+  saveDismissResponse = {
+    kind: 'rejected',
+    reason: 'login-save-dismiss-failed',
+  }
+  const schedule = mock(() => {})
+  scanState.schedule = schedule
+  const sendResponse = mock(() => {})
+
+  expect(
+    routeAutofillMessage(
+      { type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces },
+      { id: 'nook-extension' },
+      sendResponse,
+    ),
+  ).toBe(true)
+  await flushResponses()
+
+  expect(remove).toHaveBeenCalledOnce()
+  expect(schedule).not.toHaveBeenCalled()
+  expect(sendResponse).toHaveBeenCalledWith({ ok: false })
 })

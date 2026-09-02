@@ -74,7 +74,7 @@ describe('authentication surface notifications', () => {
         query: (_query, callback) => callback([{ id: 7 }, {}, { id: 11 }]),
         sendMessage: (tabId, message) => {
           messages.push({ tabId, type: message.type })
-          return Promise.resolve()
+          return Promise.resolve({ ok: true })
         },
       },
     } as unknown as typeof chrome
@@ -94,6 +94,21 @@ describe('authentication surface notifications', () => {
       tabs: {
         query: (_query, callback) => callback([{ id: 7 }, {}, { id: 11 }]),
         sendMessage: () => Promise.reject(new Error('tab unavailable')),
+      },
+    } as unknown as typeof chrome
+    const { refreshAuthenticationSurfaces } =
+      await import('../src/background/service-worker/session-lifecycle')
+
+    await expect(refreshAuthenticationSurfaces()).rejects.toThrow(
+      'authentication surface refresh delivery failed',
+    )
+  })
+
+  test('reports refresh failure when every eligible tab replies with failure', async () => {
+    globalThis.chrome = {
+      tabs: {
+        query: (_query, callback) => callback([{ id: 7 }, { id: 11 }]),
+        sendMessage: () => Promise.resolve({ ok: false }),
       },
     } as unknown as typeof chrome
     const { refreshAuthenticationSurfaces } =

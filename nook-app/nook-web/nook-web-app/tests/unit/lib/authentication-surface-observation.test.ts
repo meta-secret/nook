@@ -117,8 +117,10 @@ describe('authentication surface mutation filtering', () => {
   })
 
   test('ignores unrelated prose and a detached Nook host', () => {
+    const paragraph = document.createElement('p')
     const prose = document.createTextNode('12:01')
-    document.body.append(prose)
+    paragraph.append(prose)
+    document.body.append(paragraph)
     const textMutation = {
       type: 'characterData',
       target: prose,
@@ -126,7 +128,8 @@ describe('authentication surface mutation filtering', () => {
     const detachedHost = document.createElement('section')
     detachedHost.id = 'nook-auth-widget'
     const hostRemoval = childListMutation(document.body, [], [detachedHost])
-    for (const record of [textMutation, hostRemoval]) {
+    const paragraphInsertion = childListMutation(document.body, [paragraph])
+    for (const record of [textMutation, paragraphInsertion, hostRemoval]) {
       const request: Parameters<typeof authenticationMutationImpact>[0] = {
         records: [record],
         mountedHost: false,
@@ -207,6 +210,7 @@ describe('authentication surface mutation filtering', () => {
     const paragraph = document.createElement('p')
     const paragraphText = document.createTextNode('Backup codes')
     paragraph.append(paragraphText)
+    document.body.append(heading, listItem, code, paragraph)
 
     for (const record of [
       childListMutation(document.body, [heading, listItem, code]),

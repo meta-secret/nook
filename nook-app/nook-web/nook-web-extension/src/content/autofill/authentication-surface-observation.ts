@@ -1,4 +1,5 @@
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
+import { pageHasDocumentBackupCodeHint } from '../../lib/backup-code-candidates'
 
 export const AUTHENTICATION_MUTATION_ATTRIBUTE_FILTER = [
   'aria-disabled',
@@ -74,30 +75,51 @@ const AUTHENTICATION_WORKFLOW_MUTATION_SELECTOR = [
   'a[href]',
   'canvas',
   'form',
-  'h1',
-  'h2',
-  'h3',
-  'h4',
-  'h5',
-  'h6',
   'img',
   'input',
   'button',
-  'code',
   'label',
   'legend',
-  'li',
-  'p',
-  'pre',
   'select',
   'textarea',
   'svg',
   '[role="button"]',
-  '[role="heading"]',
   '[data-nook-manual-checkpoint]',
   '[data-nook-otpauth-uri]',
   '[data-nook-passkey-control]',
 ].join(',')
+
+const AUTHENTICATION_RECOVERY_MUTATION_SELECTOR =
+  'h1, h2, h3, h4, h5, h6, [role="heading"], p, li, code, pre'
+
+function mutationTouchesAuthenticationRecoveryCopy(
+  record: MutationRecord,
+): boolean {
+  const containsRecoveryCopyElement = (node: Node): boolean =>
+    node instanceof Element &&
+    (node.matches(AUTHENTICATION_RECOVERY_MUTATION_SELECTOR) ||
+      Boolean(node.querySelector(AUTHENTICATION_RECOVERY_MUTATION_SELECTOR)))
+  if (record.type === 'childList') {
+    return [...record.addedNodes].some(containsRecoveryCopyElement)
+  }
+  if (record.type === 'attributes') {
+    return containsRecoveryCopyElement(record.target)
+  }
+  return Boolean(
+    record.target.parentElement?.closest(
+      AUTHENTICATION_RECOVERY_MUTATION_SELECTOR,
+    ),
+  )
+}
+
+function mutationCanIntroduceAuthenticationRecoveryEvidence(
+  record: MutationRecord,
+): boolean {
+  return (
+    mutationTouchesAuthenticationRecoveryCopy(record) &&
+    pageHasDocumentBackupCodeHint()
+  )
+}
 
 export function mutationBelongsOnlyToMountedWidget(
   request: MountedWidgetMutationRequest,
@@ -211,6 +233,7 @@ export function mutationTouchesAuthenticationWorkflow(
 export function mutationCanChangeAuthenticationWorkflows(
   record: MutationRecord,
 ): boolean {
+  if (mutationCanIntroduceAuthenticationRecoveryEvidence(record)) return true
   const containsAuthenticationControl = (node: Node): boolean =>
     node instanceof Element &&
     (node.matches(AUTHENTICATION_WORKFLOW_MUTATION_SELECTOR) ||

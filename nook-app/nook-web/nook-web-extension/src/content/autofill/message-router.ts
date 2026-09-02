@@ -33,9 +33,10 @@ export function removeScannedWidget(): void {
   removeWidget()
 }
 
-function clearAuthenticationSurface(): void {
-  dismissPendingSaveOffer()
+async function clearAuthenticationSurface(): Promise<void> {
+  const dismissal = dismissPendingSaveOffer()
   removeScannedWidget()
+  await dismissal
 }
 
 type AutofillMessageListener = Parameters<
@@ -54,11 +55,17 @@ export const routeAutofillMessage: AutofillMessageListener =
     ) {
       scanState.sequence += 1
       widgetState.busy = false
-      clearAuthenticationSurface()
-      scanState.schedule()
-      const response: Parameters<typeof sendResponse>[0] = { ok: true }
-      sendResponse(response)
-      return false
+      void clearAuthenticationSurface()
+        .then(() => {
+          scanState.schedule()
+          const response: Parameters<typeof sendResponse>[0] = { ok: true }
+          sendResponse(response)
+        })
+        .catch(() => {
+          const response: Parameters<typeof sendResponse>[0] = { ok: false }
+          sendResponse(response)
+        })
+      return true
     }
     if (
       sender.id === chrome.runtime.id &&

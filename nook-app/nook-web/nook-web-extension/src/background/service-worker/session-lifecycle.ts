@@ -130,6 +130,34 @@ type AuthenticationSurfaceNotification = {
   type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces
 }
 
+type AuthenticationSurfaceRefreshSuccess = { ok: true }
+
+function authenticationSurfaceRefreshSucceeded(
+  response: unknown,
+): response is AuthenticationSurfaceRefreshSuccess {
+  return (
+    !!response &&
+    typeof response === 'object' &&
+    'ok' in response &&
+    response.ok === true
+  )
+}
+
+type AuthenticationSurfaceDeliveryRequest = {
+  tabId: number
+  message: AuthenticationSurfaceNotification
+}
+
+async function deliverAuthenticationSurfaceNotification({
+  tabId,
+  message,
+}: AuthenticationSurfaceDeliveryRequest): Promise<void> {
+  const response = await chrome.tabs.sendMessage(tabId, message)
+  if (!authenticationSurfaceRefreshSucceeded(response)) {
+    throw new Error('authentication surface refresh rejected')
+  }
+}
+
 async function notifyAuthenticationSurfaces(
   message: AuthenticationSurfaceNotification,
 ): Promise<void> {
@@ -144,7 +172,13 @@ async function notifyAuthenticationSurfaces(
     }
   }
   const deliveries = await Promise.allSettled(
-    eligibleTabIds.map((tabId) => chrome.tabs.sendMessage(tabId, message)),
+    eligibleTabIds.map((tabId) => {
+      const deliveryRequest: AuthenticationSurfaceDeliveryRequest = {
+        tabId,
+        message,
+      }
+      return deliverAuthenticationSurfaceNotification(deliveryRequest)
+    }),
   )
   if (
     eligibleTabIds.length > 0 &&
