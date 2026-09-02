@@ -80,7 +80,7 @@ For every promotion:
 3. Create a document only when no current authority owns the knowledge.
 4. Update the owning graph only when document ownership, path, or
    discoverability changes.
-5. Apply [Cortex consistency](cortex-consistency.md), the canonical writer, and
+5. Apply [Cortex consistency](cortex-consistency/SKILL.md), the canonical writer, and
    article-structure rules.
 6. Validate the resulting Cortex tree.
 

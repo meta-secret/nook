@@ -40,6 +40,10 @@ import {
   type CortexIdentifierRegistry,
   type CortexIdentifierFinding,
 } from '../lib/cortex-identifiers.ts';
+import {
+  compileCortexContracts,
+  type CortexContractFinding,
+} from '../lib/cortex-contracts.ts';
 export type CortexAuditReport = {
   readonly brokenLinks: BrokenLink[];
   readonly invalidExecutableSkillPackages: readonly ExecutableSkillPackageFinding[];
@@ -50,6 +54,7 @@ export type CortexAuditReport = {
   readonly structureFindings: CortexStructureFinding[];
   readonly articleStructureFindings: CortexArticleFinding[];
   readonly identifierFindings: readonly CortexIdentifierFinding[];
+  readonly contractFindings: readonly CortexContractFinding[];
   readonly auditOk: boolean;
 };
 
@@ -253,6 +258,9 @@ export async function runCortexAuditFromDirectory(
     ...publishedResolution.findings,
     ...stabilityFindings,
   ];
+  const contractFindings = compileCortexContracts({
+    documents: allDocuments,
+  });
 
   return {
     brokenLinks,
@@ -264,6 +272,7 @@ export async function runCortexAuditFromDirectory(
     structureFindings,
     articleStructureFindings,
     identifierFindings,
+    contractFindings,
     auditOk:
       brokenLinks.length === 0 &&
       executableSkillPackageFindings.length === 0 &&
@@ -273,7 +282,8 @@ export async function runCortexAuditFromDirectory(
       densityFindings.length === 0 &&
       structureFindings.length === 0 &&
       articleStructureFindings.length === 0 &&
-      identifierFindings.length === 0,
+      identifierFindings.length === 0 &&
+      contractFindings.length === 0,
   };
 }
 

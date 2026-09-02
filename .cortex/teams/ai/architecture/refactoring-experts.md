@@ -257,7 +257,7 @@ It diagnoses:
 
 The expert applies these canonical lenses:
 
-- [Cortex consistency](../dynamic-skills/cortex-consistency.md);
+- [Cortex consistency](../dynamic-skills/cortex-consistency/SKILL.md);
 - [Cortex writer](../dynamic-skills/cortex-writer.md);
 - [Cortex article structure](../dynamic-skills/cortex-article-structure/SKILL.md);
 - [Cortex document navigation](../dynamic-skills/cortex-document-map/SKILL.md);

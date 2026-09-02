@@ -64,11 +64,16 @@ const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
 const LOOM_PRODUCTION_PREFIX = 'agentic-ai/loom/src/';
 const CORTEX_AUDIT = `${LOOM_PRODUCTION_PREFIX}commands/cortex-audit.ts`;
 const LOOM_ARTICLE_ADAPTER = `${LOOM_PRODUCTION_PREFIX}lib/cortex-article-structure.ts`;
+const LOOM_CONSISTENCY_ADAPTER = `${LOOM_PRODUCTION_PREFIX}lib/cortex-contracts.ts`;
 const EXECUTABLE_SKILL_PACKAGE_GATE = `${LOOM_PRODUCTION_PREFIX}executable-skills/package-gate.ts`;
 const ARTICLE_PROVIDER_PREFIX =
   '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/';
 const ARTICLE_APPLICATION = `${ARTICLE_PROVIDER_PREFIX}src/application.ts`;
 const ARTICLE_DOMAIN = `${ARTICLE_PROVIDER_PREFIX}src/domain.ts`;
+const CONSISTENCY_PROVIDER_PREFIX =
+  '.cortex/teams/ai/dynamic-skills/cortex-consistency/scripts/';
+const CONSISTENCY_APPLICATION = `${CONSISTENCY_PROVIDER_PREFIX}src/application.ts`;
+const CONSISTENCY_DOMAIN = `${CONSISTENCY_PROVIDER_PREFIX}src/domain.ts`;
 const EXECUTABLE_SOURCE_EXTENSION = /\.(?:[cm]?[jt]sx?)$/u;
 const SUBPROCESS_SOURCE_EXTENSION = /\.(?:[cm]?[jt]sx?|sh)$/u;
 const RUNTIME_SOURCE_SUFFIXES = [
@@ -144,7 +149,7 @@ function runtimeDependencyViolations(
     };
     const adapterInspection = { path, source: sourceBody };
     if (
-      (path === LOOM_ARTICLE_ADAPTER
+      (path === LOOM_ARTICLE_ADAPTER || path === LOOM_CONSISTENCY_ADAPTER
         ? cortexArticleAdapterViolatesBoundary(adapterInspection)
         : path !== EXECUTABLE_SKILL_PACKAGE_GATE &&
           executableScriptViolatesBoundary(boundaryInspection)) ||
@@ -217,7 +222,10 @@ function runtimeDependencyViolations(
 
 function isSkillApplicationDependency(path: string): boolean {
   return (
-    path === LOOM_ARTICLE_ADAPTER || path.startsWith(ARTICLE_PROVIDER_PREFIX)
+    path === LOOM_ARTICLE_ADAPTER ||
+    path === LOOM_CONSISTENCY_ADAPTER ||
+    path.startsWith(ARTICLE_PROVIDER_PREFIX) ||
+    path.startsWith(CONSISTENCY_PROVIDER_PREFIX)
   );
 }
 
@@ -227,15 +235,26 @@ function isAuthorizedSkillApplicationEdge(
   if (edge.dependency === LOOM_ARTICLE_ADAPTER) {
     return edge.importer === CORTEX_AUDIT;
   }
+  if (edge.dependency === LOOM_CONSISTENCY_ADAPTER) {
+    return edge.importer === CORTEX_AUDIT;
+  }
   if (edge.importer === LOOM_ARTICLE_ADAPTER) {
     return (
       edge.dependency === ARTICLE_APPLICATION ||
       edge.dependency === ARTICLE_DOMAIN
     );
   }
+  if (edge.importer === LOOM_CONSISTENCY_ADAPTER) {
+    return (
+      edge.dependency === CONSISTENCY_APPLICATION ||
+      edge.dependency === CONSISTENCY_DOMAIN
+    );
+  }
   return (
-    edge.importer.startsWith(ARTICLE_PROVIDER_PREFIX) &&
-    edge.dependency.startsWith(ARTICLE_PROVIDER_PREFIX)
+    (edge.importer.startsWith(ARTICLE_PROVIDER_PREFIX) &&
+      edge.dependency.startsWith(ARTICLE_PROVIDER_PREFIX)) ||
+    (edge.importer.startsWith(CONSISTENCY_PROVIDER_PREFIX) &&
+      edge.dependency.startsWith(CONSISTENCY_PROVIDER_PREFIX))
   );
 }
 
@@ -315,11 +334,10 @@ function referencesSkillProvider(
   return (
     path === '.agents/skills' ||
     path.startsWith('.agents/skills/') ||
-    path ===
-      '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts' ||
-    path.startsWith(
-      '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/',
-    )
+    path === ARTICLE_PROVIDER_PREFIX.slice(0, -1) ||
+    path.startsWith(ARTICLE_PROVIDER_PREFIX) ||
+    path === CONSISTENCY_PROVIDER_PREFIX.slice(0, -1) ||
+    path.startsWith(CONSISTENCY_PROVIDER_PREFIX)
   );
 }
 
@@ -426,6 +444,7 @@ test('production Loom reaches providers only through its semantic adapter', asyn
   };
   expect(skillApplicationDependencies(auditDependenciesRequest)).toEqual([
     LOOM_ARTICLE_ADAPTER,
+    LOOM_CONSISTENCY_ADAPTER,
   ]);
   const adapterDependenciesRequest: RuntimeDependencyListRequest = {
     importer: LOOM_ARTICLE_ADAPTER,
@@ -434,6 +453,14 @@ test('production Loom reaches providers only through its semantic adapter', asyn
   expect(skillApplicationDependencies(adapterDependenciesRequest)).toEqual([
     ARTICLE_APPLICATION,
     ARTICLE_DOMAIN,
+  ]);
+  const consistencyDependenciesRequest: RuntimeDependencyListRequest = {
+    importer: LOOM_CONSISTENCY_ADAPTER,
+    sources,
+  };
+  expect(skillApplicationDependencies(consistencyDependenciesRequest)).toEqual([
+    CONSISTENCY_APPLICATION,
+    CONSISTENCY_DOMAIN,
   ]);
   expect(runtimeDependencyViolations(inspection)).toEqual([]);
 });

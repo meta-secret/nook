@@ -6,7 +6,7 @@ Reference documents provide durable technology cheat sheets, runtime configurati
 
 - **Consult during tasks:** Retrieve exact reference anchors from [`.cortex/knowledge-graph.md`](../../knowledge-graph.md) when debugging, interacting with WASM bindings, checking log formats, or using Loom tools.
 - **Maintain dynamically:** When tooling commands, logging schemas, WASM binding signatures, or platform operational capabilities change, agents must update the corresponding reference document in the same PR.
-- **Consistency:** Treat stale commands or obsolete tool flags in `references/` as P1 documentation defects under [`../dynamic-skills/cortex-consistency.md`](../../teams/ai/dynamic-skills/cortex-consistency.md).
+- **Consistency:** Treat stale commands or obsolete tool flags in `references/` as P1 documentation defects under [`cortex-consistency/SKILL.md`](../../teams/ai/dynamic-skills/cortex-consistency/SKILL.md).
 
 ## Reference catalog
 

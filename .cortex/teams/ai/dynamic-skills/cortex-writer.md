@@ -197,7 +197,7 @@ Full rewritten example:
   - run link checks; and
   - self-review against the checklist above.
 - Run the consistency GC in
-  [Cortex consistency](cortex-consistency.md) for the touched topic.
+  [Cortex consistency](cortex-consistency/SKILL.md) for the touched topic.
 - For implementation tasks that include `.cortex` edits:
   1. run required formatters and commit every allowed AI source or Cortex
      mutation in the coherent handoff;

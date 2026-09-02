@@ -110,7 +110,7 @@ from the user's example and surrounding code.
 - Keep cards concise and actionable. They are working instructions, not essays.
 - Follow [cortex-writer.md](../dynamic-skills/cortex-writer.md).
 - Use short sentences, bullets, and lists.
-- Follow [cortex-consistency.md](../dynamic-skills/cortex-consistency.md).
+- Follow [cortex-consistency](../dynamic-skills/cortex-consistency/SKILL.md).
 - Check new or updated cards against sibling docs and current code.
 - Prefer concrete code references over copied code blocks.
 - Capture durable engineering knowledge only. Do not record task status, secrets,

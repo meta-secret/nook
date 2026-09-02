@@ -16,6 +16,7 @@ import {
 } from '../src/commands/cortex-audit.ts';
 import type { CortexAuditReport } from '../src/commands/cortex-audit.ts';
 import { CortexStructureFindingCode } from '../../../.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/src/cortex-document-structure.ts';
+import { CortexContractFindingCode } from '../src/lib/cortex-contracts.ts';
 
 test('uses the pre-push commit for push stability audits', () => {
   const before = '1'.repeat(40);
@@ -417,6 +418,44 @@ ${gizmoIndexRows}
         {
           file: '.cortex/identifiers.json',
           message: 'Cortex identifier registry is missing.',
+        },
+      ],
+      contractFindings: [
+        {
+          code: CortexContractFindingCode.MissingPolicyDocument,
+          file: '.cortex/teams/ai/dynamic-skills/cortex-writer.md',
+          message:
+            'Cortex policy references a missing document: .cortex/teams/ai/dynamic-skills/cortex-writer.md',
+        },
+        {
+          code: CortexContractFindingCode.MissingPolicyDocument,
+          file: '.cortex/teams/ai/dynamic-skills/cortex-article-structure/SKILL.md',
+          message:
+            'Cortex policy references a missing document: .cortex/teams/ai/dynamic-skills/cortex-article-structure/SKILL.md',
+        },
+        {
+          code: CortexContractFindingCode.MissingPolicyDocument,
+          file: '.cortex/teams/ai/dynamic-skills/cortex-consistency/SKILL.md',
+          message:
+            'Cortex policy references a missing document: .cortex/teams/ai/dynamic-skills/cortex-consistency/SKILL.md',
+        },
+        {
+          code: CortexContractFindingCode.MissingPolicyReference,
+          file: '.cortex/AGENTS.md',
+          message:
+            'Cortex context .cortex/AGENTS.md imports policy .cortex/teams/ai/dynamic-skills/cortex-writer.md but its authority document does not reference it.',
+        },
+        {
+          code: CortexContractFindingCode.MissingPolicyReference,
+          file: '.cortex/AGENTS.md',
+          message:
+            'Cortex context .cortex/AGENTS.md imports policy .cortex/teams/ai/dynamic-skills/cortex-article-structure/SKILL.md but its authority document does not reference it.',
+        },
+        {
+          code: CortexContractFindingCode.MissingPolicyReference,
+          file: '.cortex/AGENTS.md',
+          message:
+            'Cortex context .cortex/AGENTS.md imports policy .cortex/teams/ai/dynamic-skills/cortex-consistency/SKILL.md but its authority document does not reference it.',
         },
       ],
       auditOk: false,

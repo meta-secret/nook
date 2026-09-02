@@ -134,7 +134,7 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 - Apply [agent self-improvement](../../../teams/ai/dynamic-skills/self-improvement.md) when
   substantial work produces reusable evidence.
 - Apply [Cortex Writer](../../../teams/ai/dynamic-skills/cortex-writer.md) to persistent prose.
-- Apply [Cortex consistency](../../../teams/ai/dynamic-skills/cortex-consistency.md) to every
+- Apply [Cortex consistency](../../../teams/ai/dynamic-skills/cortex-consistency/SKILL.md) to every
   promoted claim.
 - For user-facing requirements, item schemas, or UX flows, read and update the owning specification in `product-specs/` (see [`../dynamic-skills/product-spec-lifecycle.md`](../../../teams/ai/dynamic-skills/product-spec-lifecycle.md)).
 - For recurring refactor or code-organization lessons, add or update the canonical project skill registry under [`../dynamic-skills/`](../dynamic-skills) and follow [dynamic-skills.md](../workflows/dynamic-skills.md).

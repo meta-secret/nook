@@ -1,3 +1,8 @@
+---
+name: cortex-consistency
+description: Compile typed Cortex policy contracts and audit documentation consistency.
+---
+
 # Cortex Consistency — Garbage Collector
 
 ## Priority
@@ -53,7 +58,7 @@ Verification checklist:
 - [ ] Named commands, packages, and paths still exist.
 - [ ] Superseded designs are labeled historical.
 - [ ] Dead links and orphan index rows are gone.
-- [ ] New prose follows [cortex-writer.md](cortex-writer.md).
+- [ ] New prose follows [cortex-writer.md](../cortex-writer.md).
 
 Conflict resolution order:
 
@@ -81,7 +86,7 @@ Default task scope:
 A full-tree GC follows this ownership model:
 
 1. Follow
-   [subagent delegation](../../../gizmo/workflows/subagent-delegation.md).
+   [subagent delegation](../../../../gizmo/workflows/subagent-delegation.md).
 2. When multiple document families are in scope, delegate read-only evidence
    collection by family.
 3. Keep one task owner responsible for conflict resolution and the final edit.
@@ -123,7 +128,7 @@ After:
 - [ ] Open the owning `.cortex` docs and nearby index links.
 - [ ] Diff claims against code, Taskfiles, and CI workflows.
 - [ ] Resolve conflicts with the resolution order above.
-- [ ] Apply [cortex-writer.md](cortex-writer.md) to every edit.
+- [ ] Apply [cortex-writer.md](../cortex-writer.md) to every edit.
 - [ ] Update indexes when files move, split, or become historical.
 
 ## Validation
@@ -146,10 +151,11 @@ task loom:cortex-audit
 
 - For density findings, set `includeDensityLint: true` in the cortexAudit
   request.
-- See [Loom tools](../references/loom-tools.md).
+- See [Loom tools](../../references/loom-tools.md).
 - Loom checks broken relative links, skill-index sync, and prohibited tracked
   harness skill mirrors.
 - Semantic conflicts still require agent judgment.
+
 - For implementation tasks:
   1. run required formatters and commit every allowed AI source or Cortex
      mutation in the coherent handoff;
@@ -168,3 +174,48 @@ For a full Cortex GC request, report:
 - cross-doc conflicts resolved;
 - code mismatches fixed;
 - remaining historical labels.
+
+### Deterministic contract compilation
+
+The ownership boundary is explicit:
+
+- This skill's co-located TypeScript application owns the contract types,
+  registry, ownership mapping, policy checks, and deterministic verification.
+- Loom only discovers repository Markdown and adapts parsed references into the
+  skill request.
+- Markdown does not become executable state.
+- The rules and their executable policy remain beside this procedure.
+
+Run the compiler through the normal Cortex consistency command:
+
+```bash
+task loom:cortex-audit
+```
+
+The command reports failures in `contractFindings`.
+
+The co-located application is also a discoverable executable skill:
+
+```bash
+task skills:tools-list
+task skills:run REQUEST_YAML='<cortexConsistency.compile request>'
+```
+
+The executable request contains parsed document paths and references. The
+registry and policy semantics remain internal to this skill.
+
+- Context ownership and policy applicability determine required policy imports.
+- Authority and policy document paths are their contract identities.
+- The registry does not repeat owner names beside those paths.
+- Recognized authority paths determine context and policy ownership.
+- A registered contract path without a recognized owner fails the audit.
+- A foreign policy import requires a direct reference from the context authority.
+- Direct references use Markdown syntax-tree semantics.
+- Persisted-representation policy requires a schema-versioning authority.
+- It also requires a legacy-decode or migration-test obligation.
+- One policy discriminator selects the persisted contract and its obligations.
+- Missing imports, references, authorities, or evidence obligations fail the
+  Cortex audit.
+
+The registry covers only relationships promoted into its closed TypeScript
+model. It does not infer meaning from Markdown or replace semantic review.
