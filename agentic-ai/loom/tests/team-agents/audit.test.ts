@@ -212,7 +212,7 @@ describe('canonical Cortex team authority', () => {
       const gizmoPath = join(fixtureRoot, '.cortex/gizmo/AGENTS.md');
       await writeFile(
         authorityPath,
-        `${await readFile(authorityPath, 'utf8')}\nSubagents may:\n\n- task check\n\n| Actor | Authority |\n| --- | --- |\n| AI | may run product tests locally. |\n\n> Security may run product builds locally.\n\n## Gizmo Prime may:\n\n- cargo test\n\n<div data-hidden="Workers may run lint locally.">Gizmo Prime may run bun test.</div>\n<script>Workers may run cargo test.</script>\n`,
+        `${await readFile(authorityPath, 'utf8')}\nSubagents should:\n\n- task check\n\n| Actor | Authority |\n| --- | --- |\n| AI | may run product tests locally. |\n\n> Security may run product builds locally.\n\n## Gizmo Prime may:\n\n- cargo test\n\n<div data-hidden="Workers may run lint locally.">Gizmo Prime may run bun test.</div>\n<script>Workers may run cargo test.</script>\n`,
         'utf8',
       );
       await writeFile(
@@ -227,7 +227,7 @@ describe('canonical Cortex team authority', () => {
       expect(messages).toHaveLength(6);
       expect(messages).toEqual(
         expect.arrayContaining([
-          expect.stringContaining('Subagents may task check'),
+          expect.stringContaining('Subagents should task check'),
           expect.stringContaining('AI may run product tests locally.'),
           expect.stringContaining('Security may run product builds locally.'),
           expect.stringContaining('Gizmo may ask workers to execute'),
@@ -319,7 +319,7 @@ describe('canonical Cortex team authority', () => {
       const authorityPath = join(fixtureRoot, '.cortex/AGENTS.md');
       await writeFile(
         authorityPath,
-        `${await readFile(authorityPath, 'utf8')}\nAI may run product compilation locally.\nDevelopment core may run checks locally.\nWeb development may run product tests locally.\nGizmo Prime may perform linting locally.\nAgents may run typechecks locally.\nAgents may run product builds locally.\nAgents may perform bundling locally.\nAgents may perform dependency installation locally.\nAgents may run browser suites locally.\nAgents may execute repository validation locally.\nWorkers may run compilers locally.\nWorkers may run bundlers locally.\nWorkers may invoke test runners locally.\nWorkers may execute linters locally.\nWorkers may run typecheckers locally.\nWorkers may run package installers locally.\n`,
+        `${await readFile(authorityPath, 'utf8')}\nAI may run product compilation locally.\nDevelopment core may run checks locally.\nWeb development may run product tests locally.\nGizmo Prime should perform linting locally.\nAgents may run typechecks locally.\nAgents may run product builds locally.\nAgents may perform bundling locally.\nAgents may perform dependency installation locally.\nAgents may run browser suites locally.\nAgents may execute repository validation locally.\nWorkers may run compilers locally.\nWorkers may run bundlers locally.\nWorkers may invoke test runners locally.\nWorkers may execute linters locally.\nWorkers may run typecheckers locally.\nWorkers may run package installers locally.\n`,
         'utf8',
       );
 
@@ -358,7 +358,7 @@ describe('canonical Cortex team authority', () => {
       const authorityPath = join(fixtureRoot, '.cortex/AGENTS.md');
       await writeFile(
         authorityPath,
-        `${await readFile(authorityPath, 'utf8')}\nDevelopment core may run product tests locally, but must not run linting locally.\nWeb development must not run tests locally, but may run lint locally.\nGizmo Prime may run checks locally and must not run builds locally.\n`,
+        `${await readFile(authorityPath, 'utf8')}\nDevelopment core may run product tests locally, but must not run linting locally.\nWeb development must not run tests locally, but should run lint locally.\nGizmo Prime may run checks locally and must not run builds locally.\n`,
         'utf8',
       );
 
@@ -368,7 +368,7 @@ describe('canonical Cortex team authority', () => {
         'Development core may run product tests locally',
       );
       expect(report.findings[1]?.message).toContain(
-        'Web development may run lint locally',
+        'Web development should run lint locally',
       );
       expect(report.findings[2]?.message).toContain(
         'Gizmo Prime may run checks locally',
@@ -384,7 +384,7 @@ describe('canonical Cortex team authority', () => {
       const authorityPath = join(fixtureRoot, '.cortex/AGENTS.md');
       await writeFile(
         authorityPath,
-        `${await readFile(authorityPath, 'utf8')}\nSRE is permitted to run cargo test.\nAgents must invoke task web:check locally.\nGizmo Prime may, when debugging, run product tests locally.\nAgents can, for focused diagnosis, run cargo test locally.\nWorkers must run cargo nextest.\n\n- Run bun test locally.\n\nSecurity shall:\n\n- execute wasm-pack locally.\n`,
+        `${await readFile(authorityPath, 'utf8')}\nSRE should run cargo test.\nAgents must invoke task web:check locally.\nGizmo Prime should, when debugging, run product tests locally.\nAgents can, for focused diagnosis, run cargo test locally.\nWorkers must run cargo nextest.\n\n- Run bun test locally.\n\nSecurity shall:\n\n- execute wasm-pack locally.\n`,
         'utf8',
       );
 
@@ -392,10 +392,10 @@ describe('canonical Cortex team authority', () => {
       expect(report.findings).toHaveLength(7);
       expect(report.findings.map((finding) => finding.message)).toEqual(
         expect.arrayContaining([
-          expect.stringContaining('SRE is permitted to run cargo test.'),
+          expect.stringContaining('SRE should run cargo test.'),
           expect.stringContaining('Agents must invoke task web:check locally.'),
           expect.stringContaining(
-            'Gizmo Prime may, when debugging, run product tests locally.',
+            'Gizmo Prime should, when debugging, run product tests locally.',
           ),
           expect.stringContaining(
             'Agents can, for focused diagnosis, run cargo test locally.',
