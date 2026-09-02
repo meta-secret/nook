@@ -214,18 +214,22 @@ async function establishManualIssue({
       if (Array.isArray(data) || data.type !== 'file') {
         throw new Error(`Workbench record is not a file: ${path}`)
       }
-      return Buffer.from(data.content, 'base64').toString('utf8')
+      return {
+        exists: true,
+        content: Buffer.from(data.content, 'base64').toString('utf8'),
+      }
     } catch (error) {
-      if (error.status === 404) return null
+      if (error.status === 404) return { exists: false, content: '' }
       throw error
     }
   }
-  const index = await readFile(indexPath)
-  if (!index || !/^## Issues\s*$/m.test(index)) {
+  const indexFile = await readFile(indexPath)
+  if (!indexFile.exists || !/^## Issues\s*$/m.test(indexFile.content)) {
     throw new Error(
       `Manual focused issue index is missing or malformed: ${indexPath}`,
     )
   }
+  const index = indexFile.content
   const indexedIssues = index
     .slice(index.search(/^## Issues\s*$/m))
     .split(/\n## /)[0]
@@ -239,10 +243,11 @@ async function establishManualIssue({
   const exactIndexLines = indexedIssues
     .split('\n')
     .filter((line) => line === indexLine)
-  const existing = await readFile(issuePath)
+  const existingFile = await readFile(issuePath)
+  const existing = existingFile.content
   let changes
   let message
-  if (existing === null) {
+  if (!existingFile.exists) {
     if (relatedIndexLines.length > 0) {
       throw new Error(
         `Manual focused issue index has a conflicting path or title: ${indexPath}`,
@@ -600,10 +605,12 @@ async function publishTrustedResult({ core, context, github }) {
       ...context.repo,
       issue_number: pull.number,
     })
-    const assigned =
-      assignedPull.assignees?.some(
-        ({ login }) => login.toLowerCase() === continuingOwner.toLowerCase(),
-      ) ?? false
+    const assignees = Array.isArray(assignedPull.assignees)
+      ? assignedPull.assignees
+      : []
+    const assigned = assignees.some(
+      ({ login }) => login.toLowerCase() === continuingOwner.toLowerCase(),
+    )
     if (!assigned) throw new Error(`Failed to assign PR #${pull.number}`)
     await github.rest.issues.createComment({
       ...context.repo,
