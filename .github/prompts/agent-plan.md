@@ -108,7 +108,7 @@ on its own consecutively numbered line as
 `<number>. Gizmo ID: <id>; Gizmo name: <name>; Predecessor Gizmo ID: <id-or-None>; <scope>; Estimated authored changed lines: <non-negative integer>; Acceptance evidence: <observable proof>`.
 The sole slice estimate must equal `Current PR estimated authored changed
 lines` and `Estimated authored changed lines`. These existing labels mean
-authored additions; no deletion-report field is required. Missing, zero, oversized, or
+authored additions; no deletion-report field is required. Missing, oversized, or
 incomplete estimates are invalid.
 
 When the task source is a focused Workbench issue with canonical `gizmo_id`

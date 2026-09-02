@@ -347,8 +347,8 @@ review fix → task loom:pre-push PR=<number> → commit → push/update PR
 task loom:pre-push
 ```
 
-Before every review-fix re-push, run `task loom:pre-push PR=<number>` so the
-exception above 2,000 lines remains bound to verified GitHub feedback.
+Before every review-fix re-push, run `task loom:pre-push PR=<number>`. The PR
+argument does not allow the change to exceed 2,000 authored additions.
 Do not add broad local builds, tests, e2e, container product gates, advisory
 review, or duplicate hosted-check mirrors.
 
