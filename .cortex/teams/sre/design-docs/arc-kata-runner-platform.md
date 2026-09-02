@@ -74,11 +74,12 @@ target aggregate envelope remains:
 - KS-6: about 5-7 runners.
 
 The scale-set limits are queue ceilings. Disposable runner and job containers
-do not declare CPU requests or limits. Kubernetes may admit Pods up to the
+do not declare resource requests or limits. Kubernetes may admit Pods up to the
 scale-set ceilings. Each container may share all CPU available on its node.
 Topology spreading and tier preferences distribute that burst work across
-qualified nodes. Memory, ephemeral-storage, and persistent-volume envelopes
-remain the resource admission and isolation boundaries.
+qualified nodes. Support-container memory envelopes remain admission
+boundaries. Empty-directory and persistent-volume sizes retain storage
+boundaries.
 
 ## Persistent local BuildKit shards
 
@@ -177,19 +178,16 @@ Distribution follows these rules:
 
 The resource envelopes are:
 
-- Every container in a disposable general or Hive runner Pod declares no CPU
-  requests or limits.
-- Container-scale-set runner and container-job Pod containers also declare no
-  CPU requests or limits.
+- General runner, container-scale-set coordinator, Hive runner, and
+  container-job containers declare no resource requests or limits.
 - Concurrent Pods share all CPU available on their node.
 - Scale-set ceilings bound aggregate runner count.
-- General and container-job workloads retain their memory and ephemeral-storage
-  requests and limits. Their ephemeral work volume is limited to 32 GiB.
+- Support init containers retain their role-specific memory envelopes.
+- Empty-directory size limits continue to bound disposable storage.
 - The persistent BuildKit shard performs compilation, layer extraction,
   import, and export. It must not inherit fractional control-plane CPU limits.
-- Hive's Rust test-runtime sidecar retains its 4 GiB memory limit. Its runner,
-  init containers, Neo4j sidecar, and Rust test-runtime sidecar remain free of
-  CPU requests and limits.
+- Hive's Rust test-runtime sidecar retains its 4 GiB memory limit. Hive init
+  containers and sidecars remain free of CPU requests and limits.
 - Zot may use up to 8 CPU and 12 GiB because it serves all nodes.
 
 These are operational starting points. Live CPU, memory, disk, and network

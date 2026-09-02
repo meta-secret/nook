@@ -77,11 +77,6 @@ template:
           - name: nook-arc-hook
             mountPath: /etc/nook-arc-hook
             readOnly: true
-        resources:
-          requests:
-            memory: 256Mi
-          limits:
-            memory: 1Gi
     volumes:
       - name: nook-arc-hook
         configMap:

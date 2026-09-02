@@ -68,8 +68,7 @@ pod.fetch("initContainers").concat(
 
 runner = named(pod.fetch("containers"), "runner")
 runner.fetch("env") << { "name" => "NOOK_ARC_HIVE", "value" => "1" }
-runner.fetch("resources").fetch("requests")["memory"] = "1Gi"
-runner.fetch("resources").fetch("limits")["memory"] = "1Gi"
+runner.delete("resources")
 runner.fetch("volumeMounts") << {
   "name" => "hive-test-exchange",
   "mountPath" => "/var/run/nook-hive-tests"
@@ -152,6 +151,8 @@ pod.fetch("initContainers").concat(
 )
 
 (pod.fetch("initContainers") + pod.fetch("containers")).each do |container|
+  next unless container.key?("resources")
+
   resources = container.fetch("resources")
   resources.fetch("requests").delete("cpu")
   resources.fetch("limits").delete("cpu")
