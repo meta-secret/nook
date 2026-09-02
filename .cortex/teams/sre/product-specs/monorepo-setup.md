@@ -157,7 +157,7 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Each Main-fix browser consumer builds only the browser image.
   - A stable `Full browser e2e (main fix)` join requires both web shards and remains free of a low-reuse post-test cache rebuild.
   - Main-fix consumers do not repeat Rust/WASM or web verification.
-  - **`main.yml`** serializes the cache-writing native → WASM → web → UI-demo lanes.
+  - **`main.yml`** serializes the cache-writing native → WASM → web lanes.
   - Main build producers select the general scale set through `NOOK_RUNS_ON`.
   - The portable WASM cache writer/proof selects the general ARC scale set.
   - `ubuntu-latest` remains the configuration fallback.
@@ -167,9 +167,11 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
     It may use independent input-fingerprint and Main source refs as optional
     seeds, so a corrupted portable ref heals without manual deletion, and it
     keeps forced-zstd behavior.
-  - Later browser/UI consumers remain read-only.
+  - Later browser E2E consumers remain read-only.
+  - Headless UI-demo execution and its browser-cache publication remain
+    implemented but temporarily disabled.
   - Development deploy waits on web verify, web e2e, and the portable WASM
     cache publication proof.
   - Every actionable unsuccessful Main run creates or refreshes a Hive repair incident.
-  - That includes browser E2E and UI-demo failures.
+  - That includes browser E2E failures.
   - Real-provider sync-live checks run only through explicit manual validation.

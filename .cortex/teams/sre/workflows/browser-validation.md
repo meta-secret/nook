@@ -24,7 +24,8 @@ The projects are defined in
   - CI: Manual `e2e-pr.yml` runs.
 - **`ui-demo`**
   - Specs: `e2e/demos/**/*.demo.spec.ts` with one worker.
-  - CI: UI-changing pull requests.
+  - CI: Implemented but temporarily disabled in PR and Main workflows.
+  - Contract: UI-changing pull requests still require focused demo specs.
 
 The `test:e2e` script runs `stable` and then `unstable`.
 `test:e2e:local` runs `stable`.

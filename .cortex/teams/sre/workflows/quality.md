@@ -401,9 +401,10 @@ Use this workflow for quality, CI, and deployment changes.
       corrupted portable ref can heal on the next Main run. It may import only
       independent input-fingerprint and Main source refs as optional seeds, and
       it forces zstd compression.
-    - Browser/UI validation remains read-only and receives no compiler-cache identity.
-    - After UI-demo assertions pass, the producer publishes the verified browser
-      graph.
+    - Browser E2E validation remains read-only and receives no compiler-cache identity.
+    - Headless UI-demo execution is temporarily disabled.
+    - Its retained implementation does not publish the browser graph while
+      disabled.
     - Main runs full local-provider and extension e2e.
     - Main deploys `dev.nokey.sh`, `simple.dev.nokey.sh`, and `sentinel.dev.nokey.sh`.
 
@@ -462,7 +463,7 @@ Use this workflow for quality, CI, and deployment changes.
 
     #### Main failure incidents (Hive)
     - Every actionable unsuccessful Main run creates one `automation: hive` Workbench incident per failed SHA.
-    - This includes `Web e2e`, `UI demos`, and `Extension e2e` failures.
+    - This includes `Web e2e` and `Extension e2e` failures.
     - Each rerun creates a fresh delivery generation with generation-specific publication records and no completed publication reuse.
     - A later failed rerun cancels and supersedes an active delivery before its new generation is enqueued.
     - The old generation remains `CANCELLING` until its worker durably acknowledges that Codex execution stopped or Kubernetes confirms deletion of the exact recorded worker Pod.

@@ -155,13 +155,13 @@ legacy registered `nook` runner is not used.
 - `Web verification` depends on the WASM build producer through `needs`.
 - It downloads the clippy-clean WASM package with `actions/download-artifact`.
 - `WASM Node tests` can finish in parallel with web verification.
-- The conditional `Headless UI demo` job also starts from the WASM handoff.
-- It overlaps web verification on UI-changing pull requests.
-- It solves the browser image without writing cache state.
-- Playwright must succeed before cache publication starts.
-- A dedicated cache-only target publishes the isolated exact-head browser graph.
+- The `Headless UI demo` job retains its WASM-handoff implementation.
+- Its PR execution and exact-head browser-cache publication are temporarily
+  disabled.
+- When re-enabled, Playwright must succeed before its retained cache-only target
+  publishes the isolated browser graph.
 - `Verify and preview` waits for Native Rust, web verification, and WASM Node tests.
-- It also waits for the UI demo job.
+- It does not wait for the disabled UI-demo job.
 - It deploys from the exported host dist handoff.
 - Rust coverage reporting is a separate native-dependent job.
 - That job downloads the completed handoff directly.
