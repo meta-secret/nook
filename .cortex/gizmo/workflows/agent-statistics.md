@@ -20,11 +20,9 @@ It is not a free-form task diary.
 1. Gizmo starts an out-of-tree scratch event log when PR-bound work begins.
 2. Gizmo appends every local lightweight execution, focused remote run, complete
    validation run, retrigger, and merge attempt as it happens.
-3. Before readiness or merge, Gizmo dispatches inventory for the exact final PR
-   head and retains the downloaded JSON out of tree.
-4. Only after that exact-head artifact is retained, Gizmo squash-merges the PR.
-5. After merge, Gizmo assembles and compares `stats/ai-agent/<pr-number>.yaml`
-   using the retained inventory.
+3. Before readiness or merge, Gizmo dispatches inventory for the exact final PR head and retains its JSON out of tree.
+4. Only after retention, Gizmo squash-merges the PR and assembles its YAML using that inventory.
+5. Gizmo compares the record with one or two recent comparable records.
 6. Gizmo publishes the YAML to Workbench `main` with Loom.
 7. Gizmo opens a separate build-performance PR when waste or regression is
    actionable.
@@ -39,22 +37,10 @@ It is not a free-form task diary.
   - `pr_retriggers`;
   - `merge_attempts`;
   - `comparison`; and
-  - `waste_assessment`;
-  - `test_inventory` from hosted exact-head validation.
+  - `waste_assessment`.
 
-Assemble request:
-
-```bash
-task loom:agent-stats-control <<'JSON'
-{"operation":"assemble","request":{"prNumber":123,"scratchPath":"{agentTempDir}/pr-123-scratch.json","outputPath":"{agentTempDir}/123.yaml","includeTestInventory":false}}
-JSON
-```
-
-Before readiness or merge, Gizmo runs `task remote TASK_NAME=agent-stats:inventory`
-for the exact final PR head and waits for success. It downloads with `gh run
-download <run-id> -n test-inventory-<head-sha> -D <agent-temp-dir>`, retains the
-JSON through publication, and copies it to `test_inventory`. Missing or
-mismatched evidence blocks merge without fallback; assembly never redispatches it.
+Before merge, Gizmo runs `task remote TASK_NAME=agent-stats:inventory` for the exact final PR head.
+It retains `test-inventory-<head-sha>` as `test_inventory`; missing or mismatched evidence blocks merge without fallback, and assembly never redispatches or runs it locally.
 
 ### Agent-local path token
 
@@ -102,13 +88,10 @@ Measure wall-clock time, including owned wait time.
 - **PR retriggers:** count complete validation cycles after the first.
 - **Merge attempts:** count executed merge commands, including failures.
 - **PR elapsed time:** first agent action through `mergedAt`.
-- **Repository test inventory:** retained case counts from the final PR head.
 
 Never record secrets, credentials, vault data, raw logs, or prompt contents.
 
 ## Test inventory counting
-
-Measure the final PR `head_sha` before merge and retain it for assembly.
 
 Count individual test cases, not files or suites.
 
@@ -123,9 +106,6 @@ Count individual test cases, not files or suites.
     - **What to count:** Playwright cases under `nook-app/nook-web`
 
 `total` equals the sum of those four counts.
-
-Hosted exact-head validation owns these inventory list commands. The local
-statistics control entrypoint never invokes them.
 
 ## YAML contract
 
@@ -193,7 +173,5 @@ Before publishing:
 - do not create a Nook branch or PR;
 - do not wait for Main or deployment;
 - validate with Loom;
-- publish with Loom through `task loom:agent-stats-control` and the `publish`
-  request shown above.
 
 Invalid records must be corrected before publication.

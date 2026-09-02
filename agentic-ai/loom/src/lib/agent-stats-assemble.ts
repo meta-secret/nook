@@ -16,14 +16,10 @@ import {
   type AgentStatsGitHubEvidenceRequest,
 } from './agent-stats-github.ts';
 import { validationRetriggerCount } from './agent-stats-validation-cycles.ts';
-import {
-  LoomFailureCode,
-  loomFailure,
-  loomFailureDetail,
-} from '../loom-failure.ts';
+import { LoomFailureCode, loomFailureDetail } from '../loom-failure.ts';
 
 import type { UntrustedYamlPropertyArgs } from './guards.ts';
-import type { RunCommandArgs } from './run.ts';
+import type { CommandOutput, RunCommandArgs } from './run.ts';
 import type { LoomFailureDetailArgs } from '../loom-failure.ts';
 export type ScratchEventLog = {
   readonly started_at: string;
@@ -452,7 +448,7 @@ function countTestInventory(args: CountTestInventoryArgs): UntrustedYamlMap {
       'package(nook-app-common) + package(nook-core) + package(nook-auth2) + package(nook-replication) + package(nook-event-log)',
   };
   const rust = countNextest(rustArgs);
-  const preflightArgs = { repoRoot, filter: 'package(preflight)' };
+  const preflightArgs = { repoRoot, filter: 'package(nook-preflight)' };
   const preflight = countNextest(preflightArgs);
   const webUnit = countVitest(repoRoot);
   const e2e = countPlaywright(repoRoot);
@@ -484,15 +480,22 @@ type CountNextestArgs = {
 
 function countNextest(args: CountNextestArgs): number {
   const { repoRoot, filter } = args;
+  const workspace = filter.includes('nook-preflight')
+    ? 'preflight'
+    : 'nook-app/nook-platform';
 
   const listedArgs3: RunCommandArgs = {
     command: 'cargo',
     args: ['nextest', 'list', '-E', filter, '--lib', '--tests'],
-    cwd: path.join(repoRoot, 'nook-app'),
+    cwd: path.join(repoRoot, workspace),
   };
   const listed = runCommand(listedArgs3);
   if (listed.exitCode !== 0) {
-    loomFailure(LoomFailureCode.CommandFailed);
+    inventoryCommandFailure({
+      name: 'cargo nextest list',
+      root: repoRoot,
+      result: listed,
+    });
   }
   const matches = listed.stdout.match(/^[^\s].*:/gm);
   if (!matches) {
@@ -510,7 +513,11 @@ function countVitest(repoRoot: string): number {
   };
   const listed = runCommand(listedArgs2);
   if (listed.exitCode !== 0) {
-    loomFailure(LoomFailureCode.CommandFailed);
+    inventoryCommandFailure({
+      name: 'vitest list',
+      root: repoRoot,
+      result: listed,
+    });
   }
   const lines = listed.stdout
     .split(/\r?\n/)
@@ -528,13 +535,33 @@ function countPlaywright(repoRoot: string): number {
   };
   const listed = runCommand(listedArgs);
   if (listed.exitCode !== 0) {
-    loomFailure(LoomFailureCode.CommandFailed);
+    inventoryCommandFailure({
+      name: 'playwright list',
+      root: repoRoot,
+      result: listed,
+    });
   }
   const matches = listed.stdout.match(/^\s+\d+/gm);
   if (!matches) {
     return 0;
   }
   return matches.length;
+}
+
+type InventoryFailure = { name: string; root: string; result: CommandOutput };
+const INVENTORY_SECRET =
+  /https?:\/\/[^@\s]+@|\b(?:gh[pousr]_|github_pat_)[A-Za-z0-9_]+\b|\b(?:authorization|password|token)\s*[:=]\s*\S+/gi;
+
+function inventoryCommandFailure(args: InventoryFailure): never {
+  const detail = (args.result.stderr || args.result.stdout)
+    .replaceAll(args.root, '<repo>')
+    .replace(INVENTORY_SECRET, '<redacted>')
+    .trim()
+    .slice(0, 2000);
+  loomFailureDetail({
+    code: LoomFailureCode.CommandFailed,
+    text: `${args.name} failed with exit ${args.result.exitCode}: ${detail}`,
+  });
 }
 
 type AgentStatisticsDurationEntries = UntrustedYamlMap[];
