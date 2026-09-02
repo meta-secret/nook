@@ -11,6 +11,13 @@ import { validateAgentStatsYaml } from '../lib/agent-stats-schema.ts';
 import { findRepoRoot } from '../lib/repo.ts';
 import { runCommand } from '../lib/run.ts';
 import {
+  UntrustedYamlPropertyPresence,
+  asUntrustedYamlNode,
+  isRecord,
+  untrustedYamlProperty,
+  type UntrustedYamlNode,
+} from '../lib/guards.ts';
+import {
   LoomFailureCode,
   loomFailure,
   loomFailureDetail,
@@ -25,6 +32,20 @@ export type AgentStatsReport = {
   readonly operation: AgentStatsOperation;
   readonly messages: string[];
   readonly outputPath: string;
+};
+
+export enum AgentStatsSourcePrField {
+  State = 'state',
+  MergedAt = 'mergedAt',
+}
+
+export enum GitHubPullRequestState {
+  Merged = 'MERGED',
+}
+
+export type VerifyMergedAgentStatsSourcePrRequest = {
+  readonly repoRoot: string;
+  readonly prNumber: number;
 };
 
 export async function runAgentStatsAssemble(
@@ -122,6 +143,8 @@ export async function runAgentStatsPublish(
     loomFailureDetail(loomFailureDetailArgs3);
   }
 
+  verifyMergedAgentStatsSourcePr({ repoRoot, prNumber });
+
   const remotePath = `stats/ai-agent/${prNumber}.yaml`;
   const publishedArgs: RunCommandArgs = {
     command: 'node',
@@ -148,6 +171,82 @@ export async function runAgentStatsPublish(
     outputPath: absolute,
     messages: [`published ${remotePath}`, (published.stdout || 'ok').trim()],
   };
+}
+
+export function verifyMergedAgentStatsSourcePr(
+  request: VerifyMergedAgentStatsSourcePrRequest,
+): void {
+  const viewArgs: RunCommandArgs = {
+    command: 'gh',
+    args: [
+      'pr',
+      'view',
+      String(request.prNumber),
+      '--json',
+      `${AgentStatsSourcePrField.State},${AgentStatsSourcePrField.MergedAt}`,
+    ],
+    cwd: request.repoRoot,
+  };
+  const view = runCommand(viewArgs);
+  if (view.exitCode !== 0) {
+    const failure: LoomFailureDetailArgs = {
+      code: LoomFailureCode.CommandFailed,
+      text: `gh pr view failed before stats publication: ${view.stderr || view.stdout}`,
+    };
+    loomFailureDetail(failure);
+  }
+  assertMergedAgentStatsSourcePr(view.stdout);
+}
+
+export function assertMergedAgentStatsSourcePr(serialized: string): void {
+  let parsed: UntrustedYamlNode;
+  try {
+    parsed = asUntrustedYamlNode(JSON.parse(serialized) as UntrustedYamlNode);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const failure: LoomFailureDetailArgs = {
+      code: LoomFailureCode.PrMetadataInvalid,
+      text: `Failed to parse source PR merge state: ${message}`,
+    };
+    loomFailureDetail(failure);
+  }
+  if (
+    !isRecord(parsed) ||
+    Object.keys(parsed).length !== 2 ||
+    Object.keys(parsed).some(
+      (key) =>
+        key !== AgentStatsSourcePrField.State &&
+        key !== AgentStatsSourcePrField.MergedAt,
+    )
+  ) {
+    const failure: LoomFailureDetailArgs = {
+      code: LoomFailureCode.PrMetadataInvalid,
+      text: 'Source PR merge state must contain exactly state and mergedAt',
+    };
+    loomFailureDetail(failure);
+  }
+  const state = untrustedYamlProperty({
+    record: parsed,
+    key: AgentStatsSourcePrField.State,
+  });
+  const mergedAt = untrustedYamlProperty({
+    record: parsed,
+    key: AgentStatsSourcePrField.MergedAt,
+  });
+  if (
+    state.presence === UntrustedYamlPropertyPresence.Absent ||
+    state.value !== GitHubPullRequestState.Merged ||
+    mergedAt.presence === UntrustedYamlPropertyPresence.Absent ||
+    typeof mergedAt.value !== 'string' ||
+    mergedAt.value === '' ||
+    Number.isNaN(Date.parse(mergedAt.value))
+  ) {
+    const failure: LoomFailureDetailArgs = {
+      code: LoomFailureCode.PrMetadataInvalid,
+      text: 'AI-agent stats publication requires a currently merged source PR',
+    };
+    loomFailureDetail(failure);
+  }
 }
 
 type ValidateFileArgs = {

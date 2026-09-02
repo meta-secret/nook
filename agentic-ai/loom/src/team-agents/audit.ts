@@ -91,6 +91,8 @@ const AGENT_COMMAND_DIRECTION =
 const IMPERATIVE_COMMAND_DIRECTION = /^(?:run|invoke|perform|execute)\s+/iu;
 const EXECUTION_LIST_DIRECTION =
   /^(?:agents?|team agents?|workers?|gizmo)\s+(?:may|can|must|shall|need to|are allowed to|is allowed to|are required to|is required to)(?:\s+not)?(?:\s+ask\s+(?:an?\s+)?(?:team\s+)?(?:agent|worker)s?\s+to)?\s*:$/iu;
+const QUALIFIED_AUTHORITY_DIRECTION =
+  /(\b(?:agents?|team agents?|workers?|gizmo)\s+(?:may|can|must|shall|need to|are allowed to|is allowed to|are required to|is required to))\s*,\s*(?:(?:only\s+)?when|while|during|for|if|unless|after|before)\b[^,.;!?]*,\s*/iu;
 const AUTHORITY_ACTOR = /^(?:agents?|team agents?|workers?|gizmo)\b/iu;
 const ELLIPTICAL_AUTHORITY_DIRECTION =
   /^(?:may|can|must|shall|need to|are allowed to|is allowed to|are required to|is required to)\b/iu;
@@ -321,19 +323,23 @@ function appendLocalExecutionGrantFindings(
   request: LocalExecutionGrantAudit,
 ): void {
   for (const statement of markdownStatements(request.source)) {
+    const normalizedStatement = statement.replace(
+      QUALIFIED_AUTHORITY_DIRECTION,
+      '$1 ',
+    );
     const commandDirection = [
-      AGENT_COMMAND_DIRECTION.exec(statement),
-      IMPERATIVE_COMMAND_DIRECTION.exec(statement),
+      AGENT_COMMAND_DIRECTION.exec(normalizedStatement),
+      IMPERATIVE_COMMAND_DIRECTION.exec(normalizedStatement),
     ].some((match) =>
       match
         ? PROHIBITED_COMMAND.test(
-            statement.slice(match.index + match[0].length),
+            normalizedStatement.slice(match.index + match[0].length),
           )
         : false,
     );
     if (
-      (AGENT_EXECUTION_DIRECTION.test(statement) ||
-        IMPERATIVE_EXECUTION_DIRECTION.test(statement) ||
+      (AGENT_EXECUTION_DIRECTION.test(normalizedStatement) ||
+        IMPERATIVE_EXECUTION_DIRECTION.test(normalizedStatement) ||
         commandDirection) &&
       LOCAL_EXECUTION.test(statement) &&
       !NEGATED_LOCAL_EXECUTION.test(statement)

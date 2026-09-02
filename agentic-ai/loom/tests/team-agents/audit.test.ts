@@ -395,6 +395,33 @@ describe('canonical Cortex team authority', () => {
     }
   });
 
+  test('rejects qualified local execution grants', async () => {
+    const fixtureRoot = await writableCortexAuthorityFixture();
+    try {
+      const authorityPath = join(fixtureRoot, '.cortex/AGENTS.md');
+      await writeFile(
+        authorityPath,
+        `${await readFile(authorityPath, 'utf8')}\nWorkers may, when debugging, run product tests locally.\nAgents can, for focused diagnosis, run cargo test locally.\nWorkers may, when editing Rust, run required non-compiling formatters locally.\n`,
+        'utf8',
+      );
+
+      const report = auditTeamAgents({ repoRoot: fixtureRoot });
+      expect(report.findings).toHaveLength(2);
+      expect(report.findings.map((finding) => finding.message)).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining(
+            'Workers may, when debugging, run product tests locally.',
+          ),
+          expect.stringContaining(
+            'Agents can, for focused diagnosis, run cargo test locally.',
+          ),
+        ]),
+      );
+    } finally {
+      await rm(fixtureRoot, REMOVE_RECURSIVELY);
+    }
+  });
+
   test('rejects every prohibited natural-language execution category', async () => {
     const fixtureRoot = await writableCortexAuthorityFixture();
     try {
