@@ -27,6 +27,7 @@ export type ModuleWorktreeHandle = {
   readonly worktreeAdminDirectory: string;
   readonly gitCommonDirectory: string;
   readonly worktreeId: string;
+  readonly branchName: string;
   readonly planDigest: string;
   readonly taskId: string;
   readonly attempt: number;
@@ -101,7 +102,9 @@ function validateHandle(workspace: ModuleWorktreeHandle): void {
   if (
     top !== root ||
     workspace.gitCommonDirectory !== common ||
-    workspace.worktreeAdminDirectory !== admin
+    workspace.worktreeAdminDirectory !== admin ||
+    git({ cwd: root, args: ['symbolic-ref', '--quiet', 'HEAD'] }) !==
+      workspace.branchName
   )
     throw new Error(
       'Module workspace identity does not match the shared checkout.',
@@ -163,6 +166,10 @@ export function prepareModuleWorktree(
       }),
     ),
   );
+  const branchName = git({
+    cwd: sourceRepositoryRoot,
+    args: ['symbolic-ref', '--quiet', 'HEAD'],
+  });
   const handle: ModuleWorktreeHandle = Object.freeze({
     sourceRepositoryRoot,
     ownedWorkspaceRoot: sourceRepositoryRoot,
@@ -170,6 +177,7 @@ export function prepareModuleWorktree(
     worktreeAdminDirectory,
     gitCommonDirectory,
     worktreeId: 'shared-checkout',
+    branchName,
     planDigest: request.planDigest,
     taskId: request.taskId,
     attempt: request.attempt,

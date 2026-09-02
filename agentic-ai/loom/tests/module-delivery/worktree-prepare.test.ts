@@ -73,6 +73,7 @@ describe('prepareModuleWorktree', () => {
     expect(workspace.worktreePath).toBe(fixture.sourceRoot);
     expect(workspace.ownedWorkspaceRoot).toBe(fixture.sourceRoot);
     expect(workspace.worktreeId).toBe('shared-checkout');
+    expect(workspace.branchName).toMatch(/^refs\/heads\/.+$/);
     expect(git(['rev-parse', 'HEAD'])).toBe(fixture.baselineCommit);
     expect(git(['status', '--porcelain=v1'])).toBe('');
     expect(git(['rev-parse', '--abbrev-ref', 'HEAD'])).not.toBe('HEAD');
@@ -107,6 +108,12 @@ describe('prepareModuleWorktree', () => {
     expect(() => prepareModuleWorktree(request)).toThrow(
       'HEAD must match its baseline',
     );
+  });
+
+  test('rejects a detached shared checkout before dispatch', () => {
+    const fixture = createTrackedFixture();
+    fixtureGit(fixture)(['checkout', '--quiet', '--detach']);
+    expect(() => prepareModuleWorktree(prepareRequest(fixture))).toThrow();
   });
 
   test('rejects nonexact commits and ignores obsolete workspace roots', () => {

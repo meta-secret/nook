@@ -972,10 +972,6 @@ function validDisposition(request: DispositionValidationRequest): boolean {
 }
 
 function startingFrontier(request: StartingFrontierRequest): string {
-  const previous = [...request.authority.leaseHistory.values()].find(
-    ({ taskId }) => taskId === request.node.taskId,
-  );
-  if (previous) return previous.startingFrontier;
   return request.state.headCommit;
 }
 
