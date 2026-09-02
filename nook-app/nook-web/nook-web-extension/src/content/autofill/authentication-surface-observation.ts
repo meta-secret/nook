@@ -126,7 +126,9 @@ function mutationTouchesAuthenticationRecoveryCopy(
     (node.matches(AUTHENTICATION_RECOVERY_MUTATION_SELECTOR) ||
       Boolean(node.querySelector(AUTHENTICATION_RECOVERY_MUTATION_SELECTOR)))
   if (record.type === 'childList') {
-    return [...record.addedNodes].some(containsRecoveryCopyElement)
+    return [...record.addedNodes, ...record.removedNodes].some(
+      containsRecoveryCopyElement,
+    )
   }
   if (record.type === 'attributes') {
     return containsRecoveryCopyElement(record.target)
