@@ -61,8 +61,8 @@ Workbench record, not another coordinator or worker. See the
     - planning and shared-branch sequencing;
     - Git, pull-request, Workbench, and review coordination;
     - validation, readiness, and merge.
-  - Team workers implement and test their assigned changes in the current
-    shared checkout.
+  - Team workers implement their assigned changes in the current shared
+    checkout without running local compilation or validation.
   - Gizmo Prime controls write sequencing and external delivery state.
   - Only one write-capable Team Agent runs at a time.
   - Read-only Team Agents may run concurrently when their evidence scopes are
@@ -71,14 +71,10 @@ Workbench record, not another coordinator or worker. See the
     requests a commit.
   - Gizmo continues directly from that commit.
 - **Validation and delivery**
-  - Team workers run only fast focused local Loom tests, lint, or typechecks
-    that provide direct implementation feedback.
-  - For Loom-affecting work, the Team Agent returns a coherent result to Gizmo
-    Prime after focused local evidence.
-  - Gizmo Prime runs pre-push hygiene on the Team Agent's direct commit.
-  - Gizmo Prime promptly pushes the shared branch.
-  - Gizmo Prime then dispatches `task remote TASK_NAME=loom:verify` for the
-    exact pushed head.
+  - Team workers return coherent changes without running local compilation,
+    builds, tests, lint, typechecks, package installation, or browser suites.
+  - Gizmo Prime promptly pushes the shared branch and obtains any required
+    evidence through existing hosted validation.
 - **Feature ownership**
   - Portable security behavior stays in Rust/WASM.
   - Web code receives public typed projections.
@@ -128,8 +124,12 @@ Workbench record, not another coordinator or worker. See the
 - **Parent and worker ownership**
   - Parent-owned control operations do not create Team Agent work.
 - **Validation and delivery**
-  - Team workers must not run the full `task loom:verify` suite locally during
-    agent delivery.
+  - Gizmo Prime, Team Agents, and subagents must not run project compilation or
+    repository validation locally, whether directly or through a Task target
+    or script.
+  - Focused or fast commands are not exceptions.
+  - Missing hosted validation is a blocker, not permission to run locally.
+  - Only the user may authorize an exact local command for the current task.
 - **Feature ownership**
   - Security review does not transfer implementation ownership.
   - Another active agent's work is read-only until ownership is explicitly
@@ -308,6 +308,6 @@ Use the detailed authority only when its stage is reached:
 - [Pull requests](gizmo/workflows/pull-requests.md) owns exact-head review,
   validation, readiness, and merge.
 
-Run `task loom:cortex-audit` after Cortex changes. Knowledge graphs index
-documents, not their headings; update a graph only when document ownership,
-path, or discoverability changes.
+Cortex instruction-only changes do not require local preflight or Loom checks.
+Knowledge graphs index documents, not their headings; update a graph only when
+document ownership, path, or discoverability changes.
