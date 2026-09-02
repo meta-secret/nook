@@ -42,11 +42,11 @@ impl NookAuthenticatorBackupAttachResult {
 }
 
 impl NookVaultManager {
-    async fn add_authenticator_from_otpauth(
+    async fn prepare_authenticator_enrollment(
         &mut self,
         uri: &str,
         page_origin: &str,
-    ) -> Result<String, JsError> {
+    ) -> Result<(String, Zeroizing<String>), JsError> {
         self.ensure_passkey_extension_capability()?;
         self.ensure_vault_crypto_from_cache().await?;
         let mut authenticator =
@@ -66,8 +66,7 @@ impl NookVaultManager {
         let id = nook_core::generate_secret_id()
             .map_err(NookError::from)?
             .to_string();
-        self.persist_authenticator_yaml(id, yaml.as_str().to_owned())
-            .await
+        Ok((id, yaml))
     }
 
     async fn persist_authenticator_yaml(
@@ -265,6 +264,18 @@ mod wasm_tests {
             manager.revoke_authenticator_enrollment("valid", 20.0)?,
             R::Committed
         );
+        manager.authorize_authenticator_enrollment("ambiguous", 30.0, 20.0)?;
+        manager.event_log.key_epoch = "invalid".to_owned();
+        let secret_count = manager.vault.meta.secrets.len();
+        let ambiguous = manager
+            .commit_authenticator_enrollment_js("ambiguous", uri, "https://example.test", 21.0)
+            .await;
+        assert!(ambiguous.is_err());
+        assert_eq!(manager.vault.meta.secrets.len(), secret_count + 1);
+        assert_eq!(
+            manager.revoke_authenticator_enrollment("ambiguous", 22.0)?,
+            R::Committing
+        );
         Ok(())
     }
 }
@@ -314,21 +325,33 @@ impl NookVaultManager {
         page_origin: &str,
         now_millis: f64,
     ) -> Result<String, JsError> {
+        let now_millis = enrollment_millis(now_millis)?;
+        let (secret_id, yaml) = match self
+            .prepare_authenticator_enrollment(uri, page_origin)
+            .await
+        {
+            Ok(prepared) => prepared,
+            Err(error) => {
+                self.authenticator_enrollment
+                    .revoke(authorization_id, now_millis);
+                return Err(error);
+            }
+        };
         if !self
             .authenticator_enrollment
-            .claim(authorization_id, enrollment_millis(now_millis)?)
+            .claim(authorization_id, now_millis)
         {
             return Err(JsError::new("Authenticator enrollment is not authorized."));
         }
-        match self.add_authenticator_from_otpauth(uri, page_origin).await {
-            Ok(secret_id) => {
+        match self
+            .persist_authenticator_yaml(secret_id, yaml.as_str().to_owned())
+            .await
+        {
+            Ok(persisted_id) => {
                 self.authenticator_enrollment.commit(authorization_id);
-                Ok(secret_id)
+                Ok(persisted_id)
             }
-            Err(error) => {
-                self.authenticator_enrollment.fail(authorization_id);
-                Err(error)
-            }
+            Err(error) => Err(error),
         }
     }
 

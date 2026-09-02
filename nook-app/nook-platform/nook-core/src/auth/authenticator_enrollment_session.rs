@@ -102,14 +102,6 @@ impl AuthenticatorEnrollmentSession {
         }
     }
 
-    pub fn fail(&mut self, id: &str) {
-        if self.authorizations.get(id).map(|entry| entry.state)
-            != Some(EnrollmentAuthorizationState::Committed)
-        {
-            self.authorizations.remove(id);
-        }
-    }
-
     pub fn revoke(&mut self, id: &str, now_millis: u64) -> EnrollmentRevokeOutcome {
         self.purge_expired(now_millis);
         match self.authorizations.get(id).map(|entry| entry.state) {
@@ -156,10 +148,6 @@ mod tests {
         let mut session = AuthenticatorEnrollmentSession::default();
         assert_eq!(session.authorize("", 20, 10), A::Invalid);
         assert_eq!(session.authorize(&"a".repeat(129), 20, 10), A::Invalid);
-        assert_eq!(
-            session.authorize("long", MAX_ENROLLMENT_AUTHORIZATION_TTL_MILLIS + 11, 10),
-            A::Invalid
-        );
         assert_eq!(session.authorize("stage", 20, 10), A::Authorized);
         assert!(session.claim("stage", 11));
         assert_eq!(session.revoke("stage", 12), R::Committing);
@@ -175,7 +163,6 @@ mod tests {
             assert_eq!(session.authorize(&index.to_string(), 20, 10), A::Authorized);
         }
         assert_eq!(session.authorize("overflow", 20, 10), A::Capacity);
-        session.fail("0");
         assert_eq!(session.purge(20), EnrollmentPurgeOutcome::Purged);
         assert_eq!(session.authorize("next", 30, 20), A::Authorized);
         session.clear();

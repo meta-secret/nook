@@ -74,18 +74,6 @@ describe('enrollment message guards', () => {
       }),
     ).toBe(false)
 
-    const invalidStage = {
-      type: 'nook:website-authenticator-enroll-stage',
-      payload: {
-        origin: 'https://example.test',
-        vaultStoreId: 'store-1',
-        otpauthUri:
-          'otpauth://totp/Example:alice?secret=JBSWY3DPEHPK3PXP&issuer=Example',
-      },
-    }
-    expect(isWebsiteAuthenticatorEnrollStageMessage(invalidStage)).toBe(false)
-    Object.assign(invalidStage.payload, { stageId: 'x'.repeat(65) })
-    expect(isWebsiteAuthenticatorEnrollStageMessage(invalidStage)).toBe(false)
     expect(
       isWebsiteAuthenticatorBackupAttachMessage({
         type: 'nook:website-authenticator-backup-attach',

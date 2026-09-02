@@ -14,13 +14,11 @@ import {
   LoginPickerOpenResponseKind,
   WebsiteLoginOptionsKind,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-import { EnrollmentRevokeOutcome } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import {
   RuntimeMessageDeliveryKind,
   sendAuthenticatorBackupAttachRuntimeMessage,
   sendAuthenticatorCodeRuntimeMessage,
   sendAuthenticatorEnrollmentConfirmRuntimeMessage,
-  sendAuthenticatorEnrollmentDismissRuntimeMessage,
   sendAuthenticatorEnrollmentStageRuntimeMessage,
   sendAuthenticatorOptionsRuntimeMessage,
   sendAuthenticatorPickerOpenRuntimeMessage,
@@ -41,7 +39,6 @@ import {
   WebsiteAuthenticatorBackupAttachMessageType,
   WebsiteAuthenticatorEnrollCodeMessageType,
   WebsiteAuthenticatorEnrollConfirmMessageType,
-  WebsiteAuthenticatorEnrollDismissMessageType,
   WebsiteAuthenticatorEnrollPreviewMessageType,
   WebsiteAuthenticatorEnrollStageMessageType,
 } from '../src/lib/enrollment-messages'
@@ -174,12 +171,6 @@ const authenticatorConfirmMessage: Parameters<
     vaultStoreId: 'vault',
     stageId: 'stage',
   },
-}
-const authenticatorDismissMessage: Parameters<
-  typeof sendAuthenticatorEnrollmentDismissRuntimeMessage
->[0] = {
-  type: WebsiteAuthenticatorEnrollDismissMessageType.NookWebsiteAuthenticatorEnrollDismiss,
-  payload: { origin: 'https://example.test', stageId: 'stage' },
 }
 const generatedPasswordMessage: Parameters<
   typeof sendGeneratePasswordRuntimeMessage
@@ -607,21 +598,6 @@ describe('runtime message adapters', () => {
         AuthenticatorEnrollmentConfirmResponseKind.Completed,
       )
     }
-  })
-
-  test('preserves the typed enrollment dismissal outcome', async () => {
-    installRuntimeMock({
-      kind: RuntimeMockKind.Response,
-      response: {
-        ok: true,
-        outcome: EnrollmentRevokeOutcome.Missing,
-      },
-    })
-    await expect(
-      sendAuthenticatorEnrollmentDismissRuntimeMessage(
-        authenticatorDismissMessage,
-      ),
-    ).resolves.toBe(EnrollmentRevokeOutcome.Missing)
   })
 
   test('rejects blank and contradictory authenticator enrollment identities through Rust', async () => {

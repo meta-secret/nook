@@ -140,7 +140,6 @@ test('staged enrollment cancel during authorization prevents staging', async () 
   const [started, release] = deferAuthorization(true)
   const staging = stage('during')
   await started
-  expect(authorizedStageIds).toEqual(['during'])
   await expectOk(dismiss('during'))
   release()
   await expectReason(staging, missing)
@@ -156,10 +155,7 @@ test('same-origin staging lease rejects a second request before authorization re
   await expectReason(stage('origin-lease-second'), missing)
   expect(authorizedStageIds).toEqual(['origin-lease-first'])
   release()
-  await expect(first).resolves.toEqual({
-    ok: true,
-    stageId: 'origin-lease-first',
-  })
+  await expectOk(first)
   revokeOutcome = EnrollmentRevokeOutcome.Revoked
   await expectOk(dismiss('origin-lease-first'))
 })

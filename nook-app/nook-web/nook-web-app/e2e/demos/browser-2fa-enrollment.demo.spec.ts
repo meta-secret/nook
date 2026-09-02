@@ -39,7 +39,6 @@ test('uses the paired demo vault for authenticator enrollment', async ({
     localizedMessages: messages,
     ...demoDomainEnumArgs,
     enrollPilotFlow: true,
-    enrollmentConfirmDelayMs: 1_200,
   }
 
   await page.addInitScript(installDemoChromeStub, stubArgs)
@@ -228,18 +227,6 @@ test('uses the paired demo vault for authenticator enrollment', async ({
       'Verification code filled. Submit on the site — Nook saves only after verified success.',
     ),
   ).toBeVisible()
-  await demoBeat(page)
-
-  await widget.getByRole('button', { name: 'Cancel' }).click()
-  await expect(
-    widget.getByRole('button', { name: 'Add 2FA from this page' }),
-  ).toBeVisible()
-  await widget.getByRole('button', { name: 'Add 2FA from this page' }).click()
-  await expect(
-    widget.getByRole('button', { name: 'Continue enrollment' }),
-  ).toBeVisible()
-  await widget.getByRole('button', { name: 'Continue enrollment' }).click()
-  await expect(page.locator('input[name="Code"]')).toHaveValue('482913')
   await demoBeat(page)
 
   await page.getByRole('button', { name: 'Verify' }).click()

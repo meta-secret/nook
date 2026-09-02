@@ -237,7 +237,9 @@ export function assignStagedEnrollmentCeremony({
   return true
 }
 
-function completeEnrollmentCeremony(authorizationGeneration: number): void {
+export function completeEnrollmentCeremony(
+  authorizationGeneration: number,
+): void {
   if (!enrollmentCeremonyIsCurrent(authorizationGeneration)) return
   activeEnrollmentCeremony = { kind: ActiveEnrollmentCeremonyKind.Idle }
 }
@@ -401,7 +403,9 @@ type EnrollmentEvidenceCallbacksArgs = {
   authorizationGeneration: number
 }
 
-function enrollmentEvidenceCallbacks(args: EnrollmentEvidenceCallbacksArgs) {
+export function enrollmentEvidenceCallbacks(
+  args: EnrollmentEvidenceCallbacksArgs,
+) {
   const { host, section, stageId, vaultStoreId, authorizationGeneration } = args
   return {
     commit: () => {
