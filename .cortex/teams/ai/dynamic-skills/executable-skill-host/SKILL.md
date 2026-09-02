@@ -14,10 +14,10 @@ shape and weaken validation.
 ## Pattern and scope
 
 The scripts project owns strict YAML transport and a closed, code-reviewed
-catalog. `task skills:tools-list` discovers actions. `task skills:run`
-invokes one action from `REQUEST_YAML`. The CLI receives the complete
-multiline document in exactly one `--request-yaml=<strict-yaml>` argument. It
-does not read request files or stdin.
+catalog. An AI worker authors or inspects strict requests without invoking the
+local `skills:*` Task targets. The CLI receives one complete multiline
+document in one `--request-yaml=<strict-yaml>` argument. It does not read
+request files or stdin.
 
 The host has no model, scheduling, network, repository-write, process-spawn,
 dynamic import, manifest activation, or lifecycle authority. Static actions
@@ -40,7 +40,7 @@ recovery request. Request scalars and unknown keys are never echoed.
 
 Keep generic transport here and action schema, example, decode, execution, and
 verification in the owning skill. Provider integration must be static and
-one-way from host to provider. Discover the catalog with
-`task skills:tools-list`; return the coherent commit to Gizmo. Gizmo pushes the
-exact head and validates every workspace package and the repository boundary
-through `task remote TASK_NAME=loom:verify`.
+one-way from host to provider. Return the coherent commit to Gizmo. Gizmo
+pushes the exact head and dispatches
+`task remote TASK_NAME=loom:verify`. That hosted path exercises catalog
+discovery and validates every workspace package and repository boundary.

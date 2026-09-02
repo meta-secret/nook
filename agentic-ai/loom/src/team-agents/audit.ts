@@ -85,6 +85,8 @@ const AFFIRMATIVE_AGENT_GRANT =
 const AFFIRMATIVE_LIST_GRANT =
   /^(?:agents?|team agents?|workers?|gizmo)\s+(?:may|can|are allowed to|is allowed to)(?:\s+ask\s+(?:an?\s+)?(?:team\s+)?(?:agent|worker)s?\s+to)?\s*:$/iu;
 const LOCAL_EXECUTION = /\b(?:local(?:ly)?|on (?:a|the) local host)\b/iu;
+const NEGATED_LOCAL_EXECUTION =
+  /\b(?:never|not)\s+(?:(?:run|invoke|perform|execute|compile|test|lint|validate|build)\b[^;.!?]*\s+)?(?:locally|on (?:a|the) local host)(?:\s+(?:at all|under any circumstances))?(?=\s*[,.;!?]|$)/iu;
 const PARENT_OWNED_LIFECYCLE_BOUNDARY =
   'The active harness owns creation, communication, scheduling, retries, cancellation, barriers, synthesis, and delivery lifecycle state.';
 const EXPECTED_TEAM_AUTHORITIES = new Map<TeamKey, ExpectedTeamAuthority>([
@@ -294,7 +296,8 @@ function appendLocalExecutionGrantFindings(
   for (const statement of markdownStatements(request.source)) {
     if (
       AFFIRMATIVE_AGENT_GRANT.test(statement) &&
-      LOCAL_EXECUTION.test(statement)
+      LOCAL_EXECUTION.test(statement) &&
+      !NEGATED_LOCAL_EXECUTION.test(statement)
     ) {
       request.findings.push({
         code: `invalid-cortex-${request.authorityName.toLowerCase()}-authority`,
@@ -353,7 +356,7 @@ function appendAuthoritySentences(
 ): void {
   request.statements.push(
     ...request.text
-      .split(/(?<=[.!?])\s+/u)
+      .split(/(?<=[.!?])\s+|\s*;\s*/u)
       .map((statement) => statement.trim())
       .filter((statement) => statement !== ''),
   );

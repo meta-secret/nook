@@ -249,6 +249,26 @@ describe('canonical Cortex team authority', () => {
     }
   });
 
+  test('does not mistake an explicitly hosted grant for a local grant', async () => {
+    const fixtureRoot = await writableCortexAuthorityFixture();
+    try {
+      const authorityPath = join(fixtureRoot, '.cortex/AGENTS.md');
+      await writeFile(
+        authorityPath,
+        `${await readFile(authorityPath, 'utf8')}\nAgents may run product tests on hosted runners, never locally.\nWorkers may execute repository validation on hosted runners, but not on the local host.\nAgents may run product tests locally, but results are not locally cached.\n`,
+        'utf8',
+      );
+
+      const report = auditTeamAgents({ repoRoot: fixtureRoot });
+      expect(report.findings).toHaveLength(1);
+      expect(report.findings[0]?.message).toContain(
+        'Agents may run product tests locally, but results are not locally cached.',
+      );
+    } finally {
+      await rm(fixtureRoot, REMOVE_RECURSIVELY);
+    }
+  });
+
   test('binds hosted Loom verification to the Cortex audit', async () => {
     const taskSource = await readFile(
       join(REPO_ROOT, '.task/agentic-ai.yml'),
