@@ -111,18 +111,19 @@ absent or is the legacy Nook-generated admin configuration, and refuses to
 replace an unrelated operator config.
 
 No Kubernetes API, kubelet, Neo4j, or Hive port is exposed publicly. The host
-firewall must retain default-drop input and forward policies. The installer adds
-only two persisted `10.244.0.0/16` source exceptions arriving on kube-router's
-`kube-bridge`: Pod traffic to local
-control-plane ports `6443` and `8132` and the kubelet API on `10250`, plus Pod
-egress through the forward chain. Kube-router masquerades Pod traffic destined
-outside the cluster so replies return through the node. The API server binds the
-stable host loopback address `10.201.0.1`; worker policy allows only its `/32`
-post-DNAT endpoint on `6443`, so endpoint refresh cannot deadlock behind its own
-stale policy. A Taskfile-owned systemd oneshot unit assigns that address before
-k0s and validates that the unit is enabled, active, and present on `lo`, so the
-binding survives host reboots and fresh installations. No public control-plane
-port is opened. The installer applies its
+firewall must retain default-drop input and forward policies. The installer
+allows Pod traffic arriving on kube-router's `kube-bridge` to reach local
+control-plane ports `6443` and `8132` and the kubelet API on `10250`. It also
+allows Pod egress through the forward chain. Worker firewalls allow Pod traffic
+arriving through `wg-nook` to reach only the kubelet API on `10250`, so Metrics
+Server can scrape mesh-connected nodes. Kube-router masquerades Pod traffic
+destined outside the cluster so replies return through the node. The API server
+binds the stable host loopback address `10.201.0.1`. Worker policy allows only
+its `/32` post-DNAT endpoint on `6443`, so endpoint refresh cannot deadlock
+behind its own stale policy. A Taskfile-owned systemd oneshot unit assigns that
+address before k0s. It validates that the unit is enabled, active, and present
+on `lo`. This keeps the binding available after host reboots and fresh
+installations. No public control-plane port is opened. The installer applies its
 fragment without reloading the global nftables ruleset, preserving Docker's
 dynamic networking rules, and atomically restores every previous input and
 forward rule in its original order plus the persisted firewall state if
@@ -142,10 +143,12 @@ defense in depth for unqualified test fixtures. ARC uses only the read-only
 registry identity when it publishes Nook cache data; it does not receive Zot
 administration. Public upstream mirror content is anonymously readable and has
 no client-side write path. Private Nook repositories remain behind explicit
-authenticated policies. Zot preserves upstream digests and stores a missing
-image once for reuse by every runner and node. The initial SeaweedFS bucket
-bootstrap pulls its pinned AWS CLI image directly because Zot does not exist
-yet on a clean controller.
+authenticated policies. Kubernetes `imagePullSecrets` provide private-image
+credentials. Containerd uses only its `config_path` hosts directory and carries
+no deprecated global `registry.configs` authentication. Zot preserves upstream
+digests and stores a missing image once for reuse by every runner and node. The
+initial SeaweedFS bucket bootstrap pulls its pinned AWS CLI image directly
+because Zot does not exist yet on a clean controller.
 ARC uses one retained 64 GiB local persistent volume per qualified build
 node. The `nook-buildkit` StatefulSet has four rootless replicas with required
 hostname anti-affinity. Each replica binds to its node's

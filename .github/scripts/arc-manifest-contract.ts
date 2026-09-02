@@ -652,6 +652,11 @@ workerTasks.requireAll([
   "INFRA_WORKER_MESH_ADDRESS",
   "nook.nokey.sh/arc-build=preparing:NoSchedule",
 ]);
+workerTasks.count({
+  fragment:
+    'iifname "wg-nook" ip saddr 10.244.0.0/16 tcp dport 10250 accept comment "nook k0s worker kubelet mesh pods"',
+  expected: 2,
+});
 
 await assertHiveRenderContract({ root });
 

@@ -27,10 +27,13 @@ function forbidFragment(input: {
 }
 
 const registryTask = await read("infra/tasks/registry.yml");
+const k0sTask = await read("infra/tasks/k0s.yml");
+const workerTask = await read("infra/tasks/k0s-workers.yml");
 const zot = await read("infra/k0s/manifests/registry/zot.yaml");
 const traefik = await read("infra/traefik-dynamic.yaml");
 const compose = await read("infra/compose.yaml");
 const hosts = await read("infra/k0s/config/registry-hosts.toml");
+const criRegistry = await read("infra/k0s/config/cri-registry.toml");
 const hive = await read("infra/tasks/hive.yml");
 const sccache = await read("infra/tasks/sccache.yml");
 const sccacheBucketEnsure = sccache.slice(
@@ -138,6 +141,25 @@ const hostsAssertion = {
   message: "containerd must use the authenticated public registry endpoint",
 };
 requireFragment(hostsAssertion);
+requireFragment({
+  source: criRegistry,
+  fragment: 'config_path = "/etc/k0s/containerd.d/certs.d"',
+  message: "containerd must load registry hosts through config_path",
+});
+for (const source of [registryTask, k0sTask, workerTask]) {
+  forbidFragment({
+    source,
+    fragment: "registry.configs",
+    message:
+      "deprecated containerd registry.configs authentication is prohibited",
+  });
+  requireFragment({
+    source,
+    fragment: "sudo -n rm -f /etc/k0s/containerd.d/registry-auth.toml",
+    message:
+      "every k0s convergence path must remove deprecated containerd authentication",
+  });
+}
 for (const source of [hosts, hive]) {
   const assertion = {
     source,

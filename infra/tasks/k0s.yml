@@ -240,6 +240,8 @@ tasks:
         sudo -n install -m 0644 \
           "$remote_dir/infra/k0s/config/registry-hosts.toml" \
           /etc/k0s/containerd.d/certs.d/registry.dev.nokey.sh/hosts.toml
+        rm -f "$remote_dir/infra/k0s/config/registry-auth.toml"
+        sudo -n rm -f /etc/k0s/containerd.d/registry-auth.toml
         sudo -n rm -rf /etc/k0s/containerd.d/certs.d/127.0.0.1:5000
 
         api_address_unit="$(mktemp)"

@@ -83,15 +83,8 @@ tasks:
         install -d -m 0700 "$HOME/.docker"
         install -m 0600 "$docker_config" "$HOME/.docker/config.json"
 
-        cri_auth="$remote_dir/infra/k0s/config/registry-auth.toml"
-        umask 077
-        printf '%s\n' \
-          "[plugins.\"io.containerd.cri.v1.images\".registry.configs.\"{{.NOOK_REGISTRY_HOST}}\".auth]" \
-          "  username = \"$username\"" \
-          "  password = \"$password\"" \
-          > "$cri_auth"
-        chmod 0600 "$cri_auth"
-        sudo -n install -m 0600 "$cri_auth" /etc/k0s/containerd.d/registry-auth.toml
+        rm -f "$remote_dir/infra/k0s/config/registry-auth.toml"
+        sudo -n rm -f /etc/k0s/containerd.d/registry-auth.toml
         REMOTE
 
   registry:credential:sync:
@@ -191,9 +184,7 @@ tasks:
         sudo -n install -m 0644 \
           "$remote_dir/infra/k0s/config/registry-hosts.toml" \
           /etc/k0s/containerd.d/certs.d/{{.NOOK_REGISTRY_HOST}}/hosts.toml
-        if test -s /etc/k0s/containerd.d/registry-auth.toml; then
-          sudo -n k0s ctr --address /run/k0s/containerd.sock plugins ls >/dev/null 2>&1 || true
-        fi
+        test ! -e /etc/k0s/containerd.d/registry-auth.toml
 
         kubectl apply -f "$remote_dir/infra/k0s/manifests/namespaces.yaml"
         kubectl delete networkpolicy nook-zot-default-deny \
