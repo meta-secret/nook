@@ -258,24 +258,31 @@ describe('authentication surface mutation filtering', () => {
 
   test('rescans when the last backup-code evidence disappears', () => {
     const heading = document.createElement('h2')
-    heading.textContent = 'Recovery codes'
+    heading.textContent = 'Backup codes'
+    const instructions = document.createElement('p')
+    instructions.textContent = 'Save these recovery codes somewhere secure.'
     const code = document.createElement('code')
     code.textContent = 'A1B2-C3D4-E5F6'
-    document.body.append(heading, code)
+    document.body.append(heading, instructions, code)
     recordAuthenticationRecoveryEvidenceState()
     heading.remove()
+    instructions.remove()
     code.remove()
     const request: Parameters<typeof authenticationMutationImpact>[0] = {
-      records: [childListMutation(document.body, [], [heading, code])],
+      records: [
+        childListMutation(document.body, [], [heading, instructions, code]),
+      ],
       mountedHost: false,
       renderedWorkflow: false,
     }
 
     expect(authenticationMutationImpact(request).shouldScheduleScan).toBe(true)
 
-    document.body.append(heading, code)
+    document.body.append(heading, instructions, code)
     recordAuthenticationRecoveryEvidenceState()
     heading.hidden = true
+    instructions.hidden = true
+    code.hidden = true
     const hiddenRequest: Parameters<typeof authenticationMutationImpact>[0] = {
       records: [attributeMutation(heading)],
       mountedHost: false,
@@ -286,12 +293,15 @@ describe('authentication surface mutation filtering', () => {
     )
 
     heading.hidden = false
+    instructions.hidden = false
+    code.hidden = false
     recordAuthenticationRecoveryEvidenceState()
     const headingText = heading.firstChild
     if (!(headingText instanceof Text)) {
       throw new Error('expected recovery heading text')
     }
     headingText.data = 'Account details'
+    instructions.textContent = 'Your account is ready.'
     code.textContent = '12:01'
     const textRequest: Parameters<typeof authenticationMutationImpact>[0] = {
       records: [

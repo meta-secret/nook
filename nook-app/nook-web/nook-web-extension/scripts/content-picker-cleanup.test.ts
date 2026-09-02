@@ -189,10 +189,11 @@ test('refresh preserves dismissal while clearing stale surface state', async () 
   expect(widgetState.dismissed).toBe(true)
   expect(widgetState.busy).toBe(false)
   expect(widgetState.host.kind).toBe(WidgetHostKind.Detached)
-  expect(saveOfferState.watch.kind).toBe(SavePageWatchKind.Idle)
-  expect(saveOfferState.dismissedOfferIds.has(staleOfferId)).toBe(true)
   expect(schedule).not.toHaveBeenCalled()
   expect(sendResponse).not.toHaveBeenCalled()
+  await expect(responseCapture.response).resolves.toEqual({ ok: true })
+  expect(saveOfferState.watch.kind).toBe(SavePageWatchKind.Idle)
+  expect(saveOfferState.dismissedOfferIds.has(staleOfferId)).toBe(true)
   expect(sendMessage).toHaveBeenCalledWith(
     {
       type: 'nook:website-login-save-dismiss',
@@ -203,7 +204,6 @@ test('refresh preserves dismissal while clearing stale surface state', async () 
     },
     expect.any(Function),
   )
-  await expect(responseCapture.response).resolves.toEqual({ ok: true })
   expect(remove).toHaveBeenCalledOnce()
   expect(schedule).toHaveBeenCalledOnce()
   expect(sendResponse).toHaveBeenCalledWith({ ok: true })
