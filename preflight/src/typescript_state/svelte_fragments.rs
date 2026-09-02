@@ -152,10 +152,11 @@ fn collect_svelte_script_fragments(
     source: &str,
     lines: &mut Vec<usize>,
 ) -> Result<(), tree_sitter::LanguageError> {
-    if node.kind() == "raw_text"
+    if (node.kind() == "raw_text"
         && node
             .parent()
-            .is_some_and(|parent| parent.kind() == "script_element")
+            .is_some_and(|parent| parent.kind() == "script_element"))
+        || node.kind() == "svelte_raw_text"
     {
         if let Ok(fragment) = node.utf8_text(source.as_bytes()) {
             lines.extend(typescript_code_undefined_token_lines(
@@ -178,4 +179,25 @@ fn collect_svelte_script_fragments(
         collect_svelte_script_fragments(child, source, lines)?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::svelte_undefined_token_lines;
+
+    #[test]
+    fn reports_script_and_template_nullish_operators() -> Result<(), tree_sitter::LanguageError> {
+        let source = r#"
+<script lang="ts">
+  const selected = value ?? fallback
+  state.value ??= fallback
+</script>
+<p>{value ?? fallback}</p>
+<button onclick={() => (state.value ??= fallback)}>Update</button>
+<p>Documentation about ?? and ??= stays prose.</p>
+"#;
+
+        assert_eq!(svelte_undefined_token_lines(source)?, vec![3, 4, 6, 7]);
+        Ok(())
+    }
 }
