@@ -206,6 +206,7 @@ function emptyReportedOnlyNumstat(): ReportedOnlyNumstat {
 
 export function summarizeAuthoredNumstat(
   numstat: string,
+  deletedPaths: ReadonlySet<string> = new Set(),
 ): AuthoredNumstatSummary {
   let authoredLines = 0;
   const reportedOnly = emptyReportedOnlyNumstat();
@@ -223,6 +224,10 @@ export function summarizeAuthoredNumstat(
     const normalizedPath = `/${parsed.destinationPath.replaceAll("\\", "/")}`;
     const filename = normalizedPath.slice(normalizedPath.lastIndexOf("/") + 1);
     if (!/^\d+$/.test(parsed.added) || !/^\d+$/.test(parsed.deleted)) {
+      if (deletedPaths.has(parsed.destinationPath)) {
+        reportedOnly.binaryFiles += 1;
+        continue;
+      }
       const extensionStart = filename.lastIndexOf(".");
       const extension =
         extensionStart >= 0 ? filename.slice(extensionStart) : "";
@@ -282,7 +287,17 @@ export async function assertAuthoredChangeBudget(
     "-l0",
     args.baseRef,
   ]);
-  const summary = summarizeAuthoredNumstat(stdout);
+  const deletedDiff = await trustedGit(args.repoRoot, [
+    "diff",
+    "--cached",
+    "--no-ext-diff",
+    "--diff-filter=D",
+    "--name-only",
+    "-z",
+    args.baseRef,
+  ]);
+  const deletedPaths = new Set(deletedDiff.stdout.split("\0").filter(Boolean));
+  const summary = summarizeAuthoredNumstat(stdout, deletedPaths);
   log.info(
     `Implemented diff contains ${summary.authoredLines} authored additions against ${args.baseRef}`,
   );

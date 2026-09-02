@@ -43,7 +43,7 @@ const TEAM_AUTHORITY_MARKERS = [
 ] as const;
 const GIZMO_AUTHORITY_MARKERS = [
   'single root delivery owner',
-  'implement or repair team-owned work',
+  'Gizmo does not:\n\n- implement or repair team-owned work;',
   'exactly one team identity',
   'final verdict is bound to the exact pull-request head',
 ] as const;

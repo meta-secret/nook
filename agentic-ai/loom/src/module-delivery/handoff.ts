@@ -210,11 +210,22 @@ export function verifyModuleCommitHandoff(
       'Commit handoff requires a non-baseline shared-branch commit.',
     );
   }
-  const ancestryInvocation: ModuleGitInvocation = {
+  const parentInvocation: ModuleGitInvocation = {
     cwd: request.workspace.worktreePath,
-    args: ['merge-base', '--is-ancestor', request.baselineCommit, commit],
+    args: ['rev-list', '--parents', '-n', '1', commit],
   };
-  runModuleDeliveryGit(gitRequest(ancestryInvocation));
+  const commitAndParents = gitText(
+    runModuleDeliveryGit(gitRequest(parentInvocation)),
+  ).split(' ');
+  if (
+    commitAndParents.length !== 2 ||
+    commitAndParents[0] !== commit ||
+    commitAndParents[1] !== request.baselineCommit
+  ) {
+    throw new Error(
+      'Commit handoff requires one non-merge commit directly after its baseline.',
+    );
+  }
   const pathRequest: ModuleCommitPathRequest = {
     workspace: request.workspace,
     baselineCommit: request.baselineCommit,

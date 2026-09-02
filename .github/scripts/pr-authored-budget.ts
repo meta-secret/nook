@@ -36,11 +36,20 @@ export function emptySummary() {
   }
 }
 
-function classify(summary, path, added, deleted, renamed = false) {
+function classify(
+  summary,
+  path,
+  added,
+  deleted,
+  renamed = false,
+  deletedOnly = false,
+) {
   const normalizedPath = `/${path.replaceAll('\\', '/')}`
   const filename = normalizedPath.slice(normalizedPath.lastIndexOf('/') + 1)
   if (!Number.isInteger(added) || !Number.isInteger(deleted)) {
-    if (authoredTextExtensions.has(extname(filename))) {
+    if (deletedOnly) {
+      summary.binaryFiles += 1
+    } else if (authoredTextExtensions.has(extname(filename))) {
       summary.unmeasurableAuthoredFiles += 1
     } else {
       summary.binaryFiles += 1
@@ -67,7 +76,7 @@ function classify(summary, path, added, deleted, renamed = false) {
   }
 }
 
-export function summarizeNumstat(numstat) {
+export function summarizeNumstat(numstat, deletedPaths = new Set()) {
   const summary = emptySummary()
   const records = numstat.split('\0')
   for (let index = 0; index < records.length;) {
@@ -101,6 +110,7 @@ export function summarizeNumstat(numstat) {
       /^\d+$/.test(addedRaw) ? Number(addedRaw) : Number.NaN,
       /^\d+$/.test(deletedRaw) ? Number(deletedRaw) : Number.NaN,
       renamed,
+      deletedPaths.has(path),
     )
   }
   return summary
@@ -158,7 +168,12 @@ function main() {
     'diff', '--no-ext-diff', '--numstat', '-z', '--find-renames', '-l0',
     mergeBase,
   ]).toString('utf8')
-  const summary = summarizeNumstat(numstat)
+  const deletedPaths = new Set(
+    execFileSync('git', [
+      'diff', '--no-ext-diff', '--diff-filter=D', '--name-only', '-z', mergeBase,
+    ]).toString('utf8').split('\0').filter(Boolean),
+  )
+  const summary = summarizeNumstat(numstat, deletedPaths)
   const untracked = execFileSync('git', [
     'ls-files', '--others', '--exclude-standard', '-z',
   ]).toString('utf8').split('\0')

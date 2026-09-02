@@ -589,8 +589,8 @@ function validateAgentRecord(
       return 'missing or empty plan field: Current PR slice and acceptance evidence'
     }
 
-    if (estimate < 1 || currentPrEstimate < 1) {
-      return 'authored changed-line estimates must be positive integers'
+    if (estimate < 0 || currentPrEstimate < 0) {
+      return 'authored changed-line estimates must be non-negative integers'
     }
     if (deliveryShape !== 'One PR' || sequenceMode !== 'One PR') {
       return 'only one-PR delivery is supported'
@@ -632,11 +632,11 @@ function validateAgentRecord(
       return 'one-PR plan requires one numbered slice matching the current PR contract'
     }
     if (
-      sequenceSlice.estimate < 1 ||
+      sequenceSlice.estimate < 0 ||
       sequenceSlice.estimate > 2_000 ||
       sequenceSlice.estimate !== currentPrEstimate
     ) {
-      return 'one-PR slice estimate must match the current PR estimate and be between 1 and 2,000'
+      return 'one-PR slice estimate must match the current PR estimate and be between 0 and 2,000'
     }
 
     const trustedGizmoRejection = validateTrustedGizmoAssignment(

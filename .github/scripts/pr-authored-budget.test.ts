@@ -41,6 +41,16 @@ test('does not count deletion-only authored rows', () => {
   assert.equal(summary.authoredLines, 0)
 })
 
+test('does not require line counts for a deleted binary source file', () => {
+  const summary = summarizeNumstat(
+    '-\t-\tsrc/obsolete.ts\0',
+    new Set(['src/obsolete.ts']),
+  )
+  assert.equal(summary.authoredLines, 0)
+  assert.equal(summary.unmeasurableAuthoredFiles, 0)
+  assert.equal(summary.binaryFiles, 1)
+})
+
 test('counts newline-terminated untracked text like Git numstat', () => {
   assert.equal(countTextLines('x\n'), 1)
   assert.equal(countTextLines('x'), 1)

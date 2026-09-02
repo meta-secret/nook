@@ -105,7 +105,7 @@ Set `Mission controller` to exactly `Gizmo Prime`. Give every feature-slice
 Gizmo record a stable lowercase-hyphenated ID and a unique human-readable name. Set
 `Current Gizmo ID` to the first/current PR slice's Gizmo ID. List every PR slice
 on its own consecutively numbered line as
-`<number>. Gizmo ID: <id>; Gizmo name: <name>; Predecessor Gizmo ID: <id-or-None>; <scope>; Estimated authored changed lines: <positive integer>; Acceptance evidence: <observable proof>`.
+`<number>. Gizmo ID: <id>; Gizmo name: <name>; Predecessor Gizmo ID: <id-or-None>; <scope>; Estimated authored changed lines: <non-negative integer>; Acceptance evidence: <observable proof>`.
 The sole slice estimate must equal `Current PR estimated authored changed
 lines` and `Estimated authored changed lines`. These existing labels mean
 authored additions; no deletion-report field is required. Missing, zero, oversized, or

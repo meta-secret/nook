@@ -140,7 +140,7 @@ describe('verifyModuleCommitHandoff', () => {
     );
   });
 
-  test('rejects empty and noncanonical commits but accepts a linear range', () => {
+  test('rejects empty, multi-commit, and noncanonical handoffs', () => {
     const active = createWorkspace();
     const git = worktreeGit(active);
     git(['commit', '--quiet', '--allow-empty', '-m', 'empty']);
@@ -150,8 +150,8 @@ describe('verifyModuleCommitHandoff', () => {
     git(['add', '--all']);
     git(['commit', '--quiet', '-m', 'second']);
     const multipleRequest = verificationRequest(active);
-    expect(verifyModuleCommitHandoff(multipleRequest).commit).toBe(
-      git(['rev-parse', 'HEAD']),
+    expect(() => verifyModuleCommitHandoff(multipleRequest)).toThrow(
+      'directly after its baseline',
     );
     git(['reset', '--hard', active.baselineCommit]);
     worktreeFileWriter(active)(['module/bad name.ts', 'bad\n']);

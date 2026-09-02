@@ -63,6 +63,17 @@ describe("countAuthoredNumstat", () => {
     assert.equal(summary.reportedOnly.unmeasurableAuthoredFiles, 1);
   });
 
+  it("reports a deleted binary source file without requiring an addition count", () => {
+    const numstat = "-\t-\tsrc/obsolete.ts\0";
+    const summary = summarizeAuthoredNumstat(
+      numstat,
+      new Set(["src/obsolete.ts"]),
+    );
+    assert.equal(summary.authoredLines, 0);
+    assert.equal(summary.reportedOnly.binaryFiles, 1);
+    assert.equal(summary.reportedOnly.unmeasurableAuthoredFiles, 0);
+  });
+
   it("skips malformed NUL-delimited records explicitly", () => {
     const numstat = "8\t1\tsrc/domain.ts\0malformed\0";
     assert.equal(countAuthoredNumstat(numstat), 8);

@@ -844,16 +844,20 @@ test('rejects a one-PR sequence that contradicts the current slice', () => {
   )
 })
 
-test('rejects zero authored-line estimates', () => {
-  const invalid = validPlan
+test('accepts a zero-addition one-PR plan', () => {
+  const deletionOnly = validPlan
     .replace('Estimated authored changed lines: 240', 'Estimated authored changed lines: 0')
     .replace(
       'Current PR estimated authored changed lines: 240',
       'Current PR estimated authored changed lines: 0',
     )
-  assert.match(
-    validateAgentRecord(invalid, 'plan'),
-    /authored changed-line estimates must be positive integers/,
+    .replace(
+      'Estimated authored changed lines: 240; Acceptance evidence:',
+      'Estimated authored changed lines: 0; Acceptance evidence:',
+    )
+  assert.equal(
+    validateAgentRecord(deletionOnly, 'plan'),
+    '',
   )
 })
 
