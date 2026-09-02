@@ -11,6 +11,8 @@ use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 use zeroize::Zeroize;
 
+const MAX_ENROLLMENT_AUTHORIZATION_ID_BYTES: usize = 128;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Tsify)]
 #[tsify(type = "0 | 1")]
 pub struct PasskeyDeviceModeWire(nook_authenticator_domain::PasskeyDeviceProtectionMode);
@@ -244,7 +246,27 @@ pub struct OtpauthGrantPayload {
     device_signing_public_key: String,
     otpauth_uri: SessionSecretText,
     origin: String,
+    enrollment_authorization_id: EnrollmentAuthorizationId,
     queue: QueueDisposition,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Tsify)]
+#[tsify(type = "string")]
+pub struct EnrollmentAuthorizationId(String);
+
+impl<'de> Deserialize<'de> for EnrollmentAuthorizationId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        if value.trim().is_empty() || value.len() > MAX_ENROLLMENT_AUTHORIZATION_ID_BYTES {
+            return Err(D::Error::custom(
+                "enrollment authorization id must be nonempty and at most 128 bytes",
+            ));
+        }
+        Ok(Self(value))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
@@ -635,7 +657,7 @@ mod tests {
             ),
             (
                 "OTP confirm",
-                r#"{"type":"nook:extension-session-authenticator-enroll-confirm","payload":{"vaultStoreId":"vault","deviceId":"device","devicePublicKey":"public","deviceSigningPublicKey":"signing","otpauthUri":"otpauth://totp/example","origin":"https://example.com","queue":{"kind":"message-default"}}}"#,
+                r#"{"type":"nook:extension-session-authenticator-enroll-confirm","payload":{"vaultStoreId":"vault","deviceId":"device","devicePublicKey":"public","deviceSigningPublicKey":"signing","otpauthUri":"otpauth://totp/example","origin":"https://example.com","enrollmentAuthorizationId":"authorization","queue":{"kind":"message-default"}}}"#,
                 r#""otpauthUri":"otpauth://totp/example","#,
             ),
             (
@@ -700,6 +722,33 @@ mod tests {
             ),
             ExtensionSessionRequestValidation::Rejected
         );
+    }
+
+    #[test]
+    fn validates_bounded_enrollment_authorization_identifiers() {
+        let valid = r#"{"type":"nook:extension-session-authenticator-enroll-confirm","payload":{"vaultStoreId":"vault","deviceId":"device","devicePublicKey":"public","deviceSigningPublicKey":"signing","otpauthUri":"otpauth://totp/example","origin":"https://example.com","enrollmentAuthorizationId":"authorization","queue":{"kind":"message-default"}}}"#;
+        assert_eq!(
+            validate_extension_session_request_json(valid),
+            ExtensionSessionRequestValidation::Accepted
+        );
+        for invalid in [
+            valid.replace(r#""enrollmentAuthorizationId":"authorization","#, ""),
+            valid.replace("authorization", ""),
+            valid.replace("authorization", "   "),
+            valid.replace(
+                "authorization",
+                &"a".repeat(MAX_ENROLLMENT_AUTHORIZATION_ID_BYTES + 1),
+            ),
+            valid.replace(
+                r#""enrollmentAuthorizationId":"authorization""#,
+                r#""enrollmentAuthorizationId":"authorization","foreign":true"#,
+            ),
+        ] {
+            assert_eq!(
+                validate_extension_session_request_json(&invalid),
+                ExtensionSessionRequestValidation::Rejected
+            );
+        }
     }
 
     #[test]
