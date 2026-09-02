@@ -180,7 +180,6 @@ const INTERNAL_API_EXPERT_AUTHORED_CONSUMER_SCOPE_PATHS = [
   'nook-app/nook-web/nook-web-extension/src/content/enrollment-backup-flow.ts',
   'nook-app/nook-web/nook-web-extension/src/content/enrollment-flow-view.ts',
   'nook-app/nook-web/nook-web-extension/src/content/enrollment-flow.ts',
-  'nook-app/nook-web/nook-web-extension/src/content/enrollment-outcome.ts',
   'nook-app/nook-web/nook-web-extension/src/lib/auth-workflow-messages.ts',
   'nook-app/nook-web/nook-web-extension/src/lib/backup-code-candidates.ts',
   'nook-app/nook-web/nook-web-extension/src/lib/extension-session-message-type.ts',
