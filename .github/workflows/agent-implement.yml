@@ -66,7 +66,7 @@ jobs:
             echo "::error::A prompt-backed run requires continuing_owner."
             exit 1
           fi
-          if [ -n "$PR_TITLE" ] && printf '%s' "$PR_TITLE" | LC_ALL=C grep -q '[[:cntrl:]]'; then
+          if [ -n "$PR_TITLE" ] && { printf '%s' "$PR_TITLE" | LC_ALL=C.UTF-8 grep -q '[[:cntrl:]]' || [[ "$PR_TITLE" == *$'\u2028'* || "$PR_TITLE" == *$'\u2029'* ]]; }; then
             echo "::error::pr_title must be 3-120 characters on one line without control characters."
             exit 1
           fi
@@ -151,7 +151,7 @@ jobs:
               return
             }
             const issueTitle = decodedTitle.trim()
-            if (issueTitle.length < 3 || issueTitle.length > 120 || /[\u0000-\u001f\u007f]/.test(issueTitle)) {
+            if (issueTitle.length < 3 || issueTitle.length > 120 || /[\p{Cc}\p{Zl}\p{Zp}]/u.test(issueTitle)) {
               core.setFailed(`${path} title must be 3-120 characters on one line without control characters`)
               return
             }

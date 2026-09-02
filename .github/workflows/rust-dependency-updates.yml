@@ -73,7 +73,7 @@ jobs:
       AGENT_PR_BODY: |
         ## Summary
 
-        - Update every outdated direct Rust dependency found by the repository audit.
+        - Update the audited direct Rust dependencies included in this PR.
 
         ## Agent task provenance
 
@@ -89,7 +89,7 @@ jobs:
 
         ## Validation
 
-        - Repository dependency-update validation: required before publication
+        - Repository dependency-update validation: passed before publication
     steps:
       - name: Checkout
         uses: actions/checkout@v7
