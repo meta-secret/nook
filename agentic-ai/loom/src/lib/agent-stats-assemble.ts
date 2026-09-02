@@ -270,11 +270,10 @@ export async function assembleAgentStats(
     const inventoryArgs = { repoRoot: options.repoRoot, headSha };
     inventory = countTestInventory(inventoryArgs);
   } else {
-    const inventoryFailure: LoomFailureDetailArgs = {
+    loomFailureDetail({
       code: LoomFailureCode.ScratchLogInvalid,
       text: 'AI-agent stats require test_inventory from hosted exact-head validation',
-    };
-    loomFailureDetail(inventoryFailure);
+    });
   }
 
   const cacheTelemetry =
@@ -440,26 +439,18 @@ type CountTestInventoryArgs = {
 
 function countTestInventory(args: CountTestInventoryArgs): UntrustedYamlMap {
   const { repoRoot, headSha } = args;
-
-  const measuredAt = new Date().toISOString();
-  const rustArgs = {
-    repoRoot,
-    filter:
-      'package(nook-app-common) + package(nook-core) + package(nook-auth2) + package(nook-replication) + package(nook-event-log)',
-  };
-  const rust = countNextest(rustArgs);
-  const preflightArgs = { repoRoot, filter: 'package(nook-preflight)' };
-  const preflight = countNextest(preflightArgs);
-  const webUnit = countVitest(repoRoot);
-  const e2e = countPlaywright(repoRoot);
   const byType = {
-    rust,
-    preflight,
-    web_unit: webUnit,
-    e2e,
+    rust: countNextest({
+      repoRoot,
+      filter:
+        'package(nook-app-common) + package(nook-core) + package(nook-auth2) + package(nook-replication) + package(nook-event-log)',
+    }),
+    preflight: countNextest({ repoRoot, filter: 'package(nook-preflight)' }),
+    web_unit: countVitest(repoRoot),
+    e2e: countPlaywright(repoRoot),
   };
   return {
-    measured_at: measuredAt,
+    measured_at: new Date().toISOString(),
     head_sha: headSha,
     by_type: byType,
     total: byType.rust + byType.preflight + byType.web_unit + byType.e2e,
@@ -473,9 +464,8 @@ type CountNextestArgs = {
 
 function countNextest(args: CountNextestArgs): number {
   const { repoRoot, filter } = args;
-  const workspace = filter.includes('nook-preflight')
-    ? 'preflight'
-    : 'nook-app/nook-platform';
+  // prettier-ignore
+  const workspace = filter.includes('nook-preflight') ? 'preflight' : 'nook-app/nook-platform';
 
   const listedArgs3: RunCommandArgs = {
     command: 'cargo',
@@ -484,17 +474,10 @@ function countNextest(args: CountNextestArgs): number {
   };
   const listed = runCommand(listedArgs3);
   if (listed.exitCode !== 0) {
-    failInventory({
-      name: 'cargo nextest list',
-      root: repoRoot,
-      result: listed,
-    });
+    failInventory({ name: 'nextest list', root: repoRoot, result: listed });
   }
   const matches = listed.stdout.match(/^[^\s].*:/gm);
-  if (!matches) {
-    return 0;
-  }
-  return matches.length;
+  return matches ? matches.length : 0;
 }
 
 function countVitest(repoRoot: string): number {
@@ -505,27 +488,19 @@ function countVitest(repoRoot: string): number {
     cwd: appRoot,
   };
   const listed = runCommand(listedArgs2);
-  if (listed.exitCode !== 0) {
-    failInventory({ name: 'vitest list', root: repoRoot, result: listed });
-  }
-  const lines = listed.stdout
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-  return lines.length;
+  // prettier-ignore
+  if (listed.exitCode !== 0) failInventory({ name: 'vitest list', root: repoRoot, result: listed });
+  return listed.stdout.split(/\r?\n/).filter((line) => line.trim().length > 0)
+    .length;
 }
 
 function countPlaywright(repoRoot: string): number {
   const appRoot = path.join(repoRoot, 'nook-app', 'nook-web', 'nook-web-app');
   const listedArgs: RunCommandArgs = {
-    command: 'bunx',
-    args: [
-      'playwright',
-      'test',
-      '--list',
-      '--config',
-      '../../../agentic-ai/loom/playwright.inventory.config.mjs',
-    ],
+    command: 'env',
+    // Keep the Playwright-supported transform and its scope adjacent and exact.
+    // prettier-ignore
+    args: [`PW_TEST_SOURCE_TRANSFORM=${path.join(repoRoot, 'agentic-ai/loom/playwright-inventory-transform.cjs')}`, `PW_TEST_SOURCE_TRANSFORM_SCOPE=${appRoot}${path.sep}`, 'bunx', 'playwright', 'test', '--list'],
     cwd: appRoot,
   };
   const listed = runCommand(listedArgs);
@@ -533,10 +508,7 @@ function countPlaywright(repoRoot: string): number {
     failInventory({ name: 'playwright list', root: repoRoot, result: listed });
   }
   const matches = listed.stdout.match(/^\s+\d+/gm);
-  if (!matches) {
-    return 0;
-  }
-  return matches.length;
+  return matches ? matches.length : 0;
 }
 
 type InventoryFailure = { name: string; root: string; result: CommandOutput };
@@ -555,12 +527,8 @@ function failInventory(args: InventoryFailure): never {
   });
 }
 
-if (import.meta.main) {
-  const headSha = process.env.GITHUB_SHA || '';
-  process.stdout.write(
-    JSON.stringify(countTestInventory({ repoRoot: process.cwd(), headSha })),
-  );
-}
+// prettier-ignore
+if (import.meta.main) process.stdout.write(JSON.stringify(countTestInventory({ repoRoot: process.cwd(), headSha: process.env.GITHUB_SHA || '' })));
 
 type AgentStatisticsDurationEntries = UntrustedYamlMap[];
 
