@@ -484,7 +484,7 @@ function countNextest(args: CountNextestArgs): number {
   };
   const listed = runCommand(listedArgs3);
   if (listed.exitCode !== 0) {
-    inventoryCommandFailure({
+    failInventory({
       name: 'cargo nextest list',
       root: repoRoot,
       result: listed,
@@ -506,11 +506,7 @@ function countVitest(repoRoot: string): number {
   };
   const listed = runCommand(listedArgs2);
   if (listed.exitCode !== 0) {
-    inventoryCommandFailure({
-      name: 'vitest list',
-      root: repoRoot,
-      result: listed,
-    });
+    failInventory({ name: 'vitest list', root: repoRoot, result: listed });
   }
   const lines = listed.stdout
     .split(/\r?\n/)
@@ -523,16 +519,18 @@ function countPlaywright(repoRoot: string): number {
   const appRoot = path.join(repoRoot, 'nook-app', 'nook-web', 'nook-web-app');
   const listedArgs: RunCommandArgs = {
     command: 'bunx',
-    args: ['playwright', 'test', '--list'],
+    args: [
+      'playwright',
+      'test',
+      '--list',
+      '--config',
+      '../../../agentic-ai/loom/playwright.inventory.config.mjs',
+    ],
     cwd: appRoot,
   };
   const listed = runCommand(listedArgs);
   if (listed.exitCode !== 0) {
-    inventoryCommandFailure({
-      name: 'playwright list',
-      root: repoRoot,
-      result: listed,
-    });
+    failInventory({ name: 'playwright list', root: repoRoot, result: listed });
   }
   const matches = listed.stdout.match(/^\s+\d+/gm);
   if (!matches) {
@@ -545,7 +543,7 @@ type InventoryFailure = { name: string; root: string; result: CommandOutput };
 const INVENTORY_SECRET =
   /https?:\/\/[^@\s]+@|\b(?:gh[pousr]_|github_pat_)[A-Za-z0-9_]+\b|\b(?:authorization|password|token)\s*[:=]\s*\S+/gi;
 
-function inventoryCommandFailure(args: InventoryFailure): never {
+function failInventory(args: InventoryFailure): never {
   const detail = (args.result.stderr || args.result.stdout)
     .replaceAll(args.root, '<repo>')
     .replace(INVENTORY_SECRET, '<redacted>')
