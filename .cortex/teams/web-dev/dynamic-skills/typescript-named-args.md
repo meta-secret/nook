@@ -119,9 +119,12 @@ named contract.
 
 The rule is configured in `nook-app/nook-web/eslint.config.js`.
 
-```bash
-task web:lint
-```
+Format the changed files and return one coherent commit to Gizmo. Gizmo
+continues from that commit, runs pre-push hygiene, and pushes the exact head.
+Gizmo then dispatches the applicable hosted pull-request validation.
+
+Do not run `task web:lint` locally. There is no focused remote selector for
+this rule. Do not invent a selector or substitute local validation.
 
 ## Application Checklist
 
@@ -129,4 +132,4 @@ task web:lint
 - [ ] Search function and method declarations for inline object parameter types.
 - [ ] Prefer exported arg types from the callee module.
 - [ ] Prefer Rust-generated types for domain-owned boundary contracts.
-- [ ] Keep the Web lint task green.
+- [ ] Keep the applicable hosted Web validation green.
