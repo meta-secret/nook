@@ -153,11 +153,7 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         })
     };
     fn assigned_gizmo_id(raw: &str) -> &str {
-        if raw == "null" {
-            ""
-        } else {
-            raw
-        }
+        if raw == "null" { "" } else { raw }
     }
     for accepted in ["2fa-slice", "123", "true", "false"] {
         assert!(
