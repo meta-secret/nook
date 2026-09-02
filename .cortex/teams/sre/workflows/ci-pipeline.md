@@ -546,10 +546,10 @@ lockfile and immutable Docker layer are the cache and reproducibility boundary.
 
 PR web solves normally use browser-free `web-base`. Explicitly requested
 browser e2e builds `web-e2e-base` with Debian's
-`chromium` and `ffmpeg` packages. Playwright is pointed at `/usr/bin/chromium`,
-and its revisioned recording path links to `/usr/bin/ffmpeg`; do not install
-its bundled Chromium + headless-shell payload, which creates a roughly 1.3 GB
-image layer (about 432 MB compressed) on cold runners.
+`chromium` and `ffmpeg` packages. Playwright uses `/usr/bin/chromium`.
+Its revisioned recording path links to `/usr/bin/ffmpeg`. Do not install its
+bundled Chromium and headless-shell payload. That payload creates a roughly
+1.3 GB image layer on cold runners, or about 432 MB compressed.
 The preparation solve runs once. The small final web-image solve retries once
 after the known immediate BuildKit frontend/Dockerfile-load flake, without
 repeating the multi-minute Rust/WASM and dependency graph.
