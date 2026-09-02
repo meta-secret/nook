@@ -7,8 +7,7 @@ import {
   verifyModuleCommitHandoff,
 } from './handoff.ts';
 import {
-  acknowledgeSharedCheckoutPush,
-  assertSharedCheckoutAdvance,
+  assertSourceSnapshot,
   assertModuleIntegrationAcceptedPlanState,
   assertFreshModuleIntegrationState,
   assertCurrentModuleIntegrationAdmission,
@@ -28,7 +27,7 @@ import {
   recordIntegratedLeaseAcceptance,
   registerIntegrationState,
   retireIntegrationState,
-  updateModuleIntegrationHead,
+  updateModuleIntegrationRef,
 } from './integration-provenance.ts';
 import { applyModuleWaveTree } from './tree-integration.ts';
 import {
@@ -102,6 +101,7 @@ import type {
   ModuleDeliveryAuthorityPlanRequest,
   ModuleDeliveryAuthorityRepositoryInspection,
   CurrentModuleIntegrationAdmissionInspection,
+  ModuleIntegrationRefRequest,
   ModuleIntegrationHandoffRepositoryInspection,
   ModuleIntegrationLeaseFrontierInspection,
   ModuleIntegrationProviderPrecedenceInspection,
@@ -109,7 +109,7 @@ import type {
   AcceptedPlanStateInspection,
   ModuleIntegrationNodeLookup,
   RecordIntegratedLeaseAcceptanceRequest,
-  UpdateModuleIntegrationHeadRequest,
+  UpdateModuleIntegrationRefRequest,
 } from './integration-provenance.ts';
 import type {
   ApplyModuleWaveTreeRequest,
@@ -146,7 +146,6 @@ type AdvancedIntegrationStateRequest = {
   readonly nextState: ModuleIntegrationState;
   readonly provenance: ModuleIntegrationProvenance;
   readonly writerFrontiers: readonly ModuleDeliveryIntegratedWriterFrontierCapability[];
-  readonly sourceSnapshot?: ModuleIntegrationProvenance['sourceSnapshot'];
 };
 type ProviderLeaseInspection = {
   readonly authority: ModuleDeliveryGenerationAuthority;
@@ -311,7 +310,6 @@ function verifyExpectedHandoff(
   const verificationRequest: VerifyModuleCommitHandoffRequest = {
     workspace: handoff.workspace,
     baselineCommit: verification.expected.baselineCommit,
-    commit: handoff.commit,
     allowedWriteClaims: verification.expected.node.resources.write,
   };
   const pathRequest: ModuleCommitPathRequest = {
@@ -355,7 +353,7 @@ function applyAndValidateWave(application: ValidatedWaveApplication): string {
     handoffs,
   };
   const headCommit = applyModuleWaveTree(applyRequest);
-  updateModuleIntegrationHead({
+  updateModuleIntegrationRef({
     provenance: application.provenance,
     nextCommit: headCommit,
     rollback: false,
@@ -371,7 +369,7 @@ function advancedIntegrationState(
   const registration: IntegrationStateRegistration = {
     authority: request.provenance.authority,
     state: immutable,
-    sourceSnapshot: request.sourceSnapshot ?? request.provenance.sourceSnapshot,
+    sourceSnapshot: request.provenance.sourceSnapshot,
     workspaceSnapshot: request.provenance.workspaceSnapshot,
     session: request.provenance.session,
   };
@@ -511,6 +509,7 @@ export function prepareModuleIntegration(
     const sessionRegistration: IntegrationSessionRegistration = {
       cleanupHandle,
       workspace: immutable.workspace,
+      integrationRef: '',
       currentHead: immutable.headCommit,
     };
     const session = createIntegrationSession(sessionRegistration);
@@ -625,11 +624,6 @@ export function integrateVerifiedModuleDeliveryTask(
       handoff: request.submission.handoff,
     };
     assertModuleIntegrationHandoffRepository(repositoryInspection);
-    assertSharedCheckoutAdvance({
-      repositoryRoot: request.state.workspace.sourceRepositoryRoot,
-      expected: provenance.sourceSnapshot,
-      expectedHead: request.submission.handoff.commit,
-    });
     const expected: ExpectedHandoff = {
       node,
       baselineCommit: lease.startingFrontier,
@@ -709,11 +703,6 @@ export function integrateVerifiedModuleDeliveryTask(
       throw new Error('Shared-branch handoff acceptance failed.');
     }
   }
-  assertSharedCheckoutAdvance({
-    repositoryRoot: request.state.workspace.sourceRepositoryRoot,
-    expected: provenance.sourceSnapshot,
-    expectedHead: request.state.headCommit,
-  });
   const authorizedProviderEvidence = request.state.acceptedEvidence.filter(
     (evidence) =>
       lease.authorizedProviderEvidence.some(
@@ -775,46 +764,6 @@ export function integrateVerifiedModuleDeliveryTask(
   return integrated;
 }
 
-export function acknowledgeModuleDeliveryPush(
-  request: Readonly<{
-    authority: ModuleDeliveryGenerationAuthority;
-    acceptedPlan: ValidatedModuleDeliveryPlan;
-    state: ModuleIntegrationState;
-  }>,
-): ModuleIntegrationState {
-  moduleDeliveryAuthorityPlan(request);
-  assertModuleIntegrationAcceptedPlanState(request);
-  const provenance = integrationProvenance(request.state);
-  if (provenance.authority !== request.authority)
-    throw new Error('Module integration authority does not own this state.');
-  assertFreshModuleIntegrationState({ state: request.state, provenance });
-  assertCurrentModuleIntegrationAdmission(request);
-  const sourceSnapshot = acknowledgeSharedCheckoutPush({
-    repositoryRoot: request.state.workspace.sourceRepositoryRoot,
-    expected: provenance.sourceSnapshot,
-    expectedHead: request.state.headCommit,
-  });
-  assertModuleDeliveryAuthorityRepository({
-    authority: request.authority,
-    repositoryRoot: request.state.workspace.sourceRepositoryRoot,
-  });
-  const writerFrontiers = moduleDeliveryWriterFrontiers(request.state);
-  const admissionState = createModuleDeliveryAdmissionState({
-    authority: request.authority,
-    acceptedPlan: request.acceptedPlan,
-    headCommit: request.state.headCommit,
-    integratedWriterFrontiers: writerFrontiers,
-    acceptedEvidence: request.state.acceptedEvidence,
-  });
-  return advancedIntegrationState({
-    previousState: request.state,
-    nextState: { ...request.state, admissionState },
-    provenance,
-    writerFrontiers,
-    sourceSnapshot,
-  });
-}
-
 export function finalizeModuleDeliveryIntegration(
   request: FinalizeModuleDeliveryIntegrationRequest,
 ): ModuleIntegrationState {
@@ -859,11 +808,6 @@ export function finalizeModuleDeliveryIntegration(
   if (!allAccepted) {
     throw new Error('Final module join requires every accepted task result.');
   }
-  assertSharedCheckoutAdvance({
-    repositoryRoot: request.state.workspace.sourceRepositoryRoot,
-    expected: provenance.sourceSnapshot,
-    expectedHead: request.state.headCommit,
-  });
   const handoffs: TreeHandoff[] = request.acceptedPlan.topologicalOrder.flatMap(
     (taskId) =>
       request.state.acceptedWrites
@@ -931,12 +875,12 @@ export function finalizeModuleDeliveryIntegration(
     provenance,
     writerFrontiers: capabilities,
   };
-  const refUpdate: UpdateModuleIntegrationHeadRequest = {
+  const refUpdate: UpdateModuleIntegrationRefRequest = {
     provenance,
     nextCommit: canonicalHead,
     rollback: false,
   };
-  updateModuleIntegrationHead(refUpdate);
+  updateModuleIntegrationRef(refUpdate);
   try {
     const commitRequest: CommitFinalModuleDeliveryAdmissionStateRequest = {
       authority: request.authority,
@@ -953,12 +897,12 @@ export function finalizeModuleDeliveryIntegration(
         previousState: request.state.admissionState,
       };
     rollbackFinalModuleDeliveryAdmissionState(admissionRollback);
-    const refRollback: UpdateModuleIntegrationHeadRequest = {
+    const refRollback: UpdateModuleIntegrationRefRequest = {
       provenance,
       nextCommit: canonicalHead,
       rollback: true,
     };
-    updateModuleIntegrationHead(refRollback);
+    updateModuleIntegrationRef(refRollback);
     throw new Error('Final module join failed and was fully rolled back.');
   }
 }

@@ -74,8 +74,8 @@ function commitPath(active: ModuleWorktreeHandle): void {
   git(['commit', '--quiet', '-m', 'feature']);
 }
 
-describe('direct module commit', () => {
-  test('accepts an underscore write task as a direct commit', () => {
+describe('verifyModuleCommitHandoff', () => {
+  test('accepts an underscore write-task through worktree handoff', () => {
     const active = createWorkspace('writer_with_underscore');
     commitPath(active);
     const request = verificationRequest(active);
@@ -100,22 +100,6 @@ describe('direct module commit', () => {
     expect(() => verifyModuleCommitHandoff(outsideRequest)).toThrow(
       'outside allowed write claims',
     );
-  });
-
-  test('rejects a submitted commit behind shared checkout HEAD', () => {
-    const active = createWorkspace();
-    commitPath(active);
-    const submitted = worktreeGit(active)(['rev-parse', 'HEAD']);
-    worktreeFileWriter(active)(['module/later.ts', 'later\n']);
-    const git = worktreeGit(active);
-    git(['add', '--all']);
-    git(['commit', '--quiet', '-m', 'later']);
-    expect(() =>
-      verifyModuleCommitHandoff({
-        ...verificationRequest(active),
-        commit: submitted,
-      }),
-    ).toThrow('must equal shared checkout HEAD');
   });
 
   test('ignores replacement refs while validating the handed-off commit', () => {
@@ -156,7 +140,7 @@ describe('direct module commit', () => {
     );
   });
 
-  test('rejects empty, multi-commit, and noncanonical deliveries', () => {
+  test('rejects empty and noncanonical commits but accepts a linear range', () => {
     const active = createWorkspace();
     const git = worktreeGit(active);
     git(['commit', '--quiet', '--allow-empty', '-m', 'empty']);
@@ -166,8 +150,8 @@ describe('direct module commit', () => {
     git(['add', '--all']);
     git(['commit', '--quiet', '-m', 'second']);
     const multipleRequest = verificationRequest(active);
-    expect(() => verifyModuleCommitHandoff(multipleRequest)).toThrow(
-      'one direct non-merge child',
+    expect(verifyModuleCommitHandoff(multipleRequest).commit).toBe(
+      git(['rev-parse', 'HEAD']),
     );
     git(['reset', '--hard', active.baselineCommit]);
     worktreeFileWriter(active)(['module/bad name.ts', 'bad\n']);

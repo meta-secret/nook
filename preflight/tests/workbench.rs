@@ -291,8 +291,8 @@ fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> 
 
     for required in [
         "Treat every other active task as read-only",
-        "current task's owned feature and focused issue set",
-        "Require an explicit handoff first",
+        "current checkout and current branch",
+        "only one write-capable Team Agent at a time",
     ] {
         assert!(
             coding_workflow.contains(required),
@@ -344,6 +344,7 @@ fn team_work_distinguishes_owner_vocabulary_from_implementation_expertise() -> a
     let workbench_validator = read(".github/scripts/workbench-records.cjs");
     let normalized_agent_map = agent_map.split_whitespace().collect::<Vec<_>>().join(" ");
     let normalized_agent_plan = agent_plan.split_whitespace().collect::<Vec<_>>().join(" ");
+    let normalized_workflow = workflow.split_whitespace().collect::<Vec<_>>().join(" ");
     let normalized_web_contract = web_contract
         .split_whitespace()
         .collect::<Vec<_>>()
@@ -366,13 +367,12 @@ fn team_work_distinguishes_owner_vocabulary_from_implementation_expertise() -> a
     );
 
     for required in [
-        "## Ownership dimensions",
-        "## Cross-team expertise protocol",
-        "does not permanently transfer a file",
-        "consumer-team Cortex",
-        "capability semantics",
-        "Skill ownership is separate from implementation delegation",
-        "implementing its own capability",
+        "## Universal rules",
+        "one functional engineering team",
+        "File location is evidence of ownership",
+        "A team stops at another team's boundary",
+        "Security review does not transfer implementation ownership",
+        "Team Agents edit the current shared checkout sequentially",
     ] {
         assert!(
             ownership.contains(required),
@@ -381,13 +381,13 @@ fn team_work_distinguishes_owner_vocabulary_from_implementation_expertise() -> a
     }
 
     for required in [
-        "## Request another team's expertise",
-        "exact code and test paths",
-        "Return the result to the functional owner",
-        "Skill consumption alone does not create an expertise provider",
+        "## Cross-team dependencies",
+        "reports foreign-team work to Gizmo",
+        "does not implement the foreign capability",
+        "assigns the dependency to its functional owner",
     ] {
         assert!(
-            workflow.contains(required),
+            normalized_workflow.contains(required),
             "team workflow is missing expertise delegation step: {required}"
         );
     }
@@ -475,11 +475,11 @@ fn team_work_distinguishes_owner_vocabulary_from_implementation_expertise() -> a
         normalized_agent_plan.contains(
             "`Functional owner` to exactly `Gizmo Prime`, `AI`, `Development core`, `Security`, `SRE`, or `Web development`"
         ) && normalized_agent_plan.contains(
-            "Use `Gizmo Prime` only for coordination, integration, or lifecycle capabilities"
+            "Use `Gizmo Prime` only for coordination, shared-branch sequencing, or delivery capabilities"
         ) && normalized_agent_plan.contains(
                 "An `Expertise provider` must be exactly `AI`, `Development core`, `Security`, `SRE`, or `Web development`"
             ) && normalized_agent_plan.contains("Gizmo Prime is never an expertise provider"),
-        "planning review policy must reserve Gizmo Prime for coordination, integration, or lifecycle and exclude it from expertise provision"
+        "planning policy must reserve Gizmo Prime for delivery coordination and exclude it from expertise provision"
     );
     // The JavaScript validator enforces only role vocabularies, not capability semantics.
     assert!(
@@ -589,9 +589,8 @@ fn feature_slice_gizmos_are_passive_workbench_records() {
     for required in [
         "immutable typed Workbench slice record, not a process, agent, worker attempt, or controller",
         "routes tasks by assigned Gizmo ID",
-        "receives existing typed handoffs directly",
-        "existing typed handoff directly to Gizmo Prime",
-        "introduces no new handoff transport",
+        "receives results directly",
+        "Do not introduce a slice-process transport or intermediate agent",
         "changes require a superseding new immutable Workbench plan",
     ] {
         assert!(
@@ -652,6 +651,7 @@ fn workbench_plans_bind_trusted_slices_to_one_pr() {
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ");
+    let normalized_prompt = prompt.split_whitespace().collect::<Vec<_>>().join(" ");
 
     for required in [
         "validateTrustedGizmoAssignment",
@@ -666,11 +666,13 @@ fn workbench_plans_bind_trusted_slices_to_one_pr() {
         );
     }
     assert!(
-        prompt.contains("Set `Delivery shape` and `PR sequence mode` to exactly `One PR`")
-            && prompt.contains("a blocker. Report that the complete requested outcome")
-            && prompt.contains("Do not create slices, successor PRs, or a stack")
-            && normalized_pull_requests.contains("Do not split, stack, or rebuild pull requests")
-            && normalized_pull_requests.contains("one PR, one slice"),
+        normalized_prompt
+            .contains("Set `Delivery shape` and `PR sequence mode` to exactly `One PR`")
+            && normalized_prompt.contains("a blocker. Report that the complete requested outcome")
+            && normalized_prompt.contains("Do not create slices, successor PRs, or a stack")
+            && normalized_pull_requests
+                .contains("Do not split, stack, rebuild, or replace pull requests")
+            && normalized_pull_requests.contains("One feature uses one PR"),
         "planning policy must require one bounded PR and prohibit stack recovery"
     );
 }
@@ -809,25 +811,21 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
 
     for required in [
         ".nook-workbench-plan.md",
-        "schema_version: 2",
         "## Interpreted request",
         "## Requirements",
         "## Constraints and exclusions",
         "## Change budget and PR sequence",
-        "Estimated authored additions",
-        "Estimated authored deletions (reported only)",
+        "Estimated authored changed lines",
         "Mission controller",
         "Current Gizmo ID",
         "Owning modules, packages, or layers",
         "Public or cross-module interfaces",
         "Delivery shape",
-        "Current PR estimated authored additions",
-        "Current PR estimated authored deletions (reported only)",
+        "Current PR estimated authored changed lines",
         "Current PR slice and acceptance evidence",
         "PR slices, estimates, and acceptance evidence",
         "Predecessor Gizmo ID",
         "The sole slice estimate must equal",
-        "Report authored deletions for the complete feature",
         "Team Agent count never determines",
         "Functional owner` to exactly `Gizmo Prime`",
         "canonical `gizmo_id`",
@@ -903,9 +901,9 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
     );
     assert!(
         pre_push_task.contains("bun .github/scripts/pr-authored-budget.ts \"{{.PR}}\"")
-            && budget_guard.contains("INITIAL_PR_LIMIT = 2_000")
-            && budget_guard.contains("REVIEW_GROWTH_STOP = 3_000")
-            && budget_guard.contains("verifiedReviewContext"),
+            && budget_guard.contains("PR_ADDITION_LIMIT = 2_000")
+            && budget_guard.contains("summary.authoredLines += added")
+            && !budget_guard.contains("REVIEW_GROWTH_STOP"),
         "pre-push must fail closed on the one-PR authored-addition budget"
     );
     Ok(())

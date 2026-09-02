@@ -64,7 +64,7 @@ function moduleDeliveryCliValidation(
     const issue: ModuleDeliveryIssue = {
       code: ModuleDeliveryIssueCode.InvalidField,
       path: '$.version',
-      message: 'Canonical CLI admission requires plan version 3.',
+      message: 'Canonical CLI admission requires plan version 2.',
     };
     const rejection: RejectedModuleDeliveryPlan = {
       status: ModuleDeliveryValidationStatus.Rejected,

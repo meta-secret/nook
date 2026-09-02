@@ -19,7 +19,7 @@ import type {
   ModuleDeliveryExecutionPrecedence,
   ModuleDeliveryEvidenceSynthesisNodeV2,
   ModuleDeliveryNodeV2,
-  ModuleDeliveryPlanV3,
+  ModuleDeliveryPlanV2,
   ModuleDeliveryPlanValidation,
   ModuleDeliveryWriteNodeV2,
 } from '../../src/module-delivery/index.ts';
@@ -77,9 +77,9 @@ function cortexNode(request: CortexNodeRequest): ModuleDeliveryWriteNodeV2 {
   };
 }
 
-function plan(nodes: readonly ModuleDeliveryNodeV2[]): ModuleDeliveryPlanV3 {
+function plan(nodes: readonly ModuleDeliveryNodeV2[]): ModuleDeliveryPlanV2 {
   return {
-    version: 3,
+    version: 2,
     generation: 1,
     sourceCommit: SOURCE_COMMIT,
     maxConcurrency: 2,

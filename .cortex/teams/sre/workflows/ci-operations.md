@@ -122,7 +122,7 @@ Merge still requires the standard exact-head readiness audit.
   3. Run strict implementation editing with network denied, an isolated home,
      and no PAT or registry credentials in the editor process.
   4. After the editor exits, let trusted host tooling format the isolated
-     implementation worktree, enforce the authored-addition budget, commit, push,
+     implementation worktree, enforce the authored-line budget, commit, push,
      and use the GitHub API.
 - **Runner:** `agent-implement.yml` uses the general `nook-k0s` ARC scale set.
   - Concurrent work scales across the ARC worker pool.
@@ -225,7 +225,7 @@ issue without collapsing unrelated pending dispatches.
 - It cannot invoke Task or a container runtime.
 - Separate trusted host processes own:
   - formatting;
-  - the authored-addition budget;
+  - the authored-line budget;
   - commit and push; and
   - GitHub API operations.
 
@@ -276,7 +276,7 @@ publication steps. Registry credentials are not used. Prompt:
 
 1. **Do not** move real GitHub API tests back into `main.yml` — extend stub coverage instead.
 2. **Do** add new sync-provider integration tests to the `e2e` spec list first; add a small live smoke under `e2e/live/` if the provider has a real backend.
-3. **Do** return a formatted Team Agent commit for Gizmo to verify, push,
+3. **Do** return a formatted Team Agent commit for Gizmo to integrate, push,
    and validate; never run heavy product work locally.
 4. **Do** update this doc and
    [pull requests](../../../gizmo/workflows/pull-requests.md) when workflow

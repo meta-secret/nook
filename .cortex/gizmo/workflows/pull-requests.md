@@ -26,16 +26,15 @@ Full ownership policy:
 
 ## PR-first agent contract
 
-For implementation tasks, Gizmo's default job is to land an integrated PR with
+For implementation tasks, Gizmo's default job is to land a coherent PR with
 Nook's applicable GitHub Actions PR test checks green. Team subagents make the
 implementation edits.
 
 ### Dispatch meaning
 
-When this document says Gizmo **dispatches work to a team**, `dispatch` means
-Gizmo admission-authorizes the bounded task record and submits its contract to
-the active harness. The harness creates and runs the worker attempt. This
-definition does not change GitHub Actions or Hive workflow-dispatch terminology.
+When this document says Gizmo **dispatches work to a team**, Gizmo gives a
+bounded task to that Team Agent through the active harness. This definition
+does not change GitHub Actions or Hive workflow-dispatch terminology.
 
 Before establishing a PR path, apply the
 [major architectural initiative rule](../../teams/ai/dynamic-skills/self-improvement.md#user-authority-for-major-architectural-initiatives).
@@ -48,9 +47,9 @@ ownership until merge or a concrete blocked handoff:
 
 1. **Prepare the PR path first:**
    - Fetch `origin/main`.
-   - Estimate the authored additions.
+   - Estimate authored additions.
    - Define the module boundary.
-   - Confirm the complete PR can stay within the 2,000-addition creation limit.
+   - Confirm the complete PR can stay within the 2,000-addition limit.
    - Create the first feature branch.
    - Define the first PR's title, body, and scope.
    - Create ignored `.cortex/.session/` memory only when temporary notes
@@ -110,91 +109,22 @@ ownership until merge or a concrete blocked handoff:
 
 ### Size boundary
 
-- An implementation pull request may be created with no more than **2,000
-  authored additions**.
-- This is the maximum planned and initial-delivery size.
-- Estimate before implementation.
-- Re-estimate when design changes or the diff grows unexpectedly.
-- Recalculate the actual authored diff after each logical domain change and
-  before every commit or push.
-
-Count authored additions against the intended base for:
-
-- authored source;
-- tests;
-- documentation;
-- configuration;
-- scripts and workflow code.
-
-- During implementation, use the additions column from
-  `git diff --numstat <base>` for tracked working-tree changes.
-- Count untracked authored files separately.
-- After commit, use `git diff --numstat <base>...HEAD`.
-
-Report these separately because they do not represent authored functionality:
-
-- generated files;
-- lockfiles;
-- snapshots;
-- vendored sources;
-- binary artifacts;
-- pure renames with no content change.
-
-- Do not exclude authored test additions.
-- Report authored deletion totals for the feature, current PR, and sole PR
-  slice. These reports are mandatory and may be zero.
-- Authored deletion totals are unbounded. They never consume the size budget.
-- Do not pad, compress, or mechanically reorganize code to fit the number.
-- If the planned implementation would exceed 2,000 authored additions, stop before creating
-  the PR and report that the scope or design does not fit the PR contract.
-- Do not split, stack, or rebuild pull requests to evade the ceiling.
-- Do not open a successor PR as an automatic size-recovery action.
-
-### Review-growth stop
-
-Review fixes may grow an existing PR beyond 2,000 authored additions.
-This exception exists only to address GitHub review comments on the same PR.
-Every other change blocks immediately when the PR exceeds 2,000 authored additions.
-
-- Continued implementation, CI repair, conflict resolution, and security repair
-  do not receive the review-growth exception by themselves.
-- A required non-review change that would cross 2,000 authored additions is a blocked
-  terminal path for the current mission.
-- Report the required change and current size without implementing or pushing
-  that growth.
-
-- Run `task loom:pre-push PR=<number>` before committing or pushing every
-  review-fix batch.
-- The pre-push gate verifies the current PR and measures the authored diff.
-- A value above 2,000 without verified review-fix context fails closed.
-- Continue to preserve tests, documentation, security boundaries, and complete
-  behavior while addressing review comments.
-- Do not remove required work or compress code merely to reduce the count.
-- Do not split, stack, rebuild, or replace the PR because review fixes grew it.
-- Stop all implementation and review-fix work immediately when the authored
-  diff reaches or exceeds **3,000 authored additions**.
-- Do not push another code change after the stop condition is observed.
-- Preserve the current branch, PR, review threads, checks, and Workbench state
-  for inspection.
-
-The stopped mission ends with a report to the user. The report must include:
-
-- the PR number, exact head, base, and current authored-addition count;
-- the requested outcome and the implementation approach taken;
-- a chronological summary of the work completed and still incomplete;
-- why the PR grew uncontrollably, with measured growth by review-fix batch when
-  that evidence is available;
-- the total number of Codex review comments created on GitHub for the PR;
-- the comments grouped by finding type;
-- the count and disposition of comments in each group;
-- an explicit conclusion about whether every comment belonged to one group;
-- which comments or groups the agent failed to address;
-- the observed or plausible reasons each failed fix did not settle the review;
-- checks, review state, and other evidence relevant to the failure; and
-- a clear statement that the agent did not complete the mission.
-
-Do not include hidden reasoning, prompts, secrets, credentials, private data,
-or raw logs in the report. Distinguish observed causes from possible causes.
+- A pull request may contain at most **2,000 authored additions**.
+- Deletions do not count toward the limit and have no limit.
+- The same limit applies before and after review.
+- Estimate additions before implementation.
+- Recalculate additions when the design or diff changes materially.
+- Use `git diff --numstat <base>` and count only the added column.
+- Count untracked authored files as additions.
+- Report generated files, lockfiles, snapshots, vendored sources, binaries, and
+  pure renames separately.
+- Warn at 1,500 authored additions.
+- Stop before exceeding 2,000 authored additions.
+- Treat unexpected growth as a reason to simplify scope and architecture.
+- Do not compress code or remove required behavior merely to fit the limit.
+- Do not split, stack, rebuild, or replace pull requests to evade the limit.
+- Do not create a deletion-report field or change a Workbench schema for this
+  rule. Existing plan estimate labels record the additions estimate.
 
 ### Adaptive Gizmo cardinality
 
@@ -212,16 +142,13 @@ The Workbench task plan must state:
 
 - Gizmo Prime as the mission controller;
 - the current feature-slice Gizmo ID;
-- the estimated authored additions;
-- the mandatory authored deletion report for the feature;
+- the estimated authored changed lines;
 - the files, packages, modules, or layers expected to change;
 - the public or cross-module interfaces involved;
-- confirmation that the one PR estimate is at most 2,000 authored additions;
+- confirmation that the one PR estimate is at most 2,000 lines;
 - the current PR scope and acceptance evidence;
-- the current PR's mandatory authored deletion report;
 - the required PR sequence mode fixed to `One PR`;
 - exactly one PR-slice row with predecessor `None` for Workbench compatibility;
-- the sole slice's mandatory non-negative authored deletion report;
 - one declared Gizmo ID on every ownership unit;
 - permission for multiple Team Agent units to map to that same Gizmo ID;
 - a superseding immutable plan when scope or the estimate materially changes.
@@ -330,10 +257,9 @@ Never commit directly on `main`.
 
 ### 2. Implement
 
-Gizmo dispatches the bounded slice described by the task plan: it
-admission-authorizes that task record and submits the bounded contract to the
-active harness, which creates and runs the attempt. The responsible team
-implements it and preserves its owning interfaces and acceptance evidence.
+Gizmo dispatches the bounded slice described by the task plan through the
+active harness. The responsible team implements it and preserves its owning
+interfaces and acceptance evidence.
 
 When temporary notes materially help, capture meaningful discoveries and
 evidence in `.cortex/.session/`. Any session file remains provisional and
@@ -343,15 +269,11 @@ untracked.
 
 #### Trusted automated publisher exceptions
 
-Two trusted GitHub Actions publishers bypass the ordinary direct-commit
-sequence:
-
-- `agent-implement.yml`; and
-- `rust-dependency-updates.yml` through `task ci-agent:fix` with
-  `CI_AGENT_FIX_PROFILE=rust-dependency-update`.
-
-Their bounded editors have no independent Git or external delivery authority.
-See the root
+Exactly two trusted GitHub Actions publishers may publish Team Agent work.
+They are `agent-implement.yml` and `rust-dependency-updates.yml` through
+`task ci-agent:fix` with
+`CI_AGENT_FIX_PROFILE=rust-dependency-update`. Their bounded editors have no
+independent Git or external delivery authority. See the root
 [team worker contract](../../AGENTS.md#team-worker-contract) for the exact
 publication, isolation, and head-verification rules. Gizmo continues either
 returned head and owns review, validation, readiness, and merge.
@@ -426,7 +348,7 @@ task loom:pre-push
 ```
 
 Before every review-fix re-push, run `task loom:pre-push PR=<number>` so the
-exception above 2,000 authored additions remains bound to verified GitHub feedback.
+exception above 2,000 lines remains bound to verified GitHub feedback.
 Do not add broad local builds, tests, e2e, container product gates, advisory
 review, or duplicate hosted-check mirrors.
 
@@ -582,8 +504,7 @@ task pr:ready PR=<number>
 - Handle all actionable feedback already present, regardless of author.
   - Follow [Code review comments](../dynamic-skills/code-review-comments.md).
 - Measure the authored diff before and after each review-fix batch.
-- Apply the [review-growth stop](#review-growth-stop) immediately at 3,000
-  authored additions.
+- Apply the 2,000-authored-addition limit to every review fix.
 - Before resolving a conversation, leave an agent-authored reply with the fix,
   validation, or no-change rationale.
   - Do not resolve silently.
@@ -645,7 +566,7 @@ remote `pr.yml` evidence.
 
 When the work revealed a durable lesson or Cortex defect, apply
 [Agent self-improvement](../../teams/ai/dynamic-skills/self-improvement.md#self-improvement-review).
-No promotion is required when no candidate qualifies. Integrate any justified
+No promotion is required when no candidate qualifies. Continue from any justified
 clean committed promotion before final readiness. If promotion changes the
 head, repeat complete hosted validation.
 
@@ -654,7 +575,7 @@ Merge only when all readiness conditions pass:
 - Nook's applicable repository-owned PR test checks are green.
 - The branch is current with `origin/main`.
 - All actionable comments are resolved.
-- Gizmo's final delivery verdict is ready for the exact head.
+- Gizmo's final verdict is ready for the exact head.
 - Every required team verdict is satisfied.
 - Every required security verdict is satisfied.
 - Gizmo has not overridden a required blocking verdict.
@@ -771,7 +692,7 @@ See [mission delivery](mission-delivery.md) for the delivery procedure.
     self-improvement review finds an evidence-backed candidate. Repeat hosted
     validation if promotion changes the head.
 13. On failure, dispatch the issue to its responsible team.
-14. Promptly push the verified fix commit, then obtain fresh exact-head
+14. Continue from and promptly push the verified fix, then obtain fresh exact-head
     validation for the replacement head.
 15. Squash-merge after the exact-head readiness audit succeeds.
 16. Publish the Workbench completion records.

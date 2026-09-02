@@ -455,6 +455,9 @@ jobs:
               core.setFailed(`Rejected agent-authored Workbench task plan: ${rejection}.`)
               return
             }
+            const validatedPlan = `${candidate}\n`
+            fs.writeFileSync(localPath, validatedPlan, { encoding: 'utf8', mode: 0o600 })
+            core.setOutput('sha256', crypto.createHash('sha256').update(validatedPlan).digest('hex'))
             const currentGizmoIdMatch = /^- Current Gizmo ID:\s*([a-z0-9]+(?:-[a-z0-9]+)*)\s*$/m.exec(candidate)
             const currentGizmoId = currentGizmoIdMatch?.[1]
             if (!currentGizmoId) {
@@ -463,7 +466,6 @@ jobs:
             }
             const plan = [
               '---',
-              'schema_version: 2',
               `title: ${JSON.stringify(process.env.TASK_TITLE)}`,
               `feature: ${process.env.TASK_FEATURE}`,
               `issue: ${process.env.ISSUE_PATH || 'null'}`,
@@ -472,11 +474,9 @@ jobs:
               'agent: cursor',
               '---',
               '',
-              candidate.replace(/^---\r?\nschema_version:\s*2\s*\r?\n---\r?\n/, '').trim(),
+              candidate,
               '',
             ].join('\n')
-            fs.writeFileSync(localPath, plan, { encoding: 'utf8', mode: 0o600 })
-            core.setOutput('sha256', crypto.createHash('sha256').update(plan).digest('hex'))
             await github.rest.repos.createOrUpdateFileContents({
               owner,
               repo,
@@ -682,14 +682,14 @@ jobs:
             const budgetBlocker = process.env.BUDGET_BLOCKER_B64
               ? Buffer.from(process.env.BUDGET_BLOCKER_B64, 'base64').toString('utf8')
               : ''
-            const budgetMatch = budgetBlocker.match(/^Implemented diff exceeds the 2000 authored-addition budget: (\d+)$/)
+            const budgetMatch = budgetBlocker.match(/^Implemented diff exceeds the 2000 authored changed-line budget: (\d+)$/)
             if (budgetMatch) {
               summary = [
                 '# Automated agent work summary',
                 '',
                 '## Outcome',
                 '',
-                `Blocked before publication: the trusted formatter measured ${budgetMatch[1]} authored additions, above the 2,000-addition PR creation limit.`,
+                `Blocked before publication: the trusted formatter measured ${budgetMatch[1]} authored changed lines, above the 2,000-line PR creation limit.`,
                 '',
                 '## Progress',
                 '',
@@ -701,7 +701,7 @@ jobs:
                 '',
                 '## Decisions',
                 '',
-                '- Delivery stopped at the trusted authored-addition budget; no split or successor PR was created.',
+                '- Delivery stopped at the trusted authored-line budget; no split or successor PR was created.',
                 '',
                 '## Validation',
                 '',

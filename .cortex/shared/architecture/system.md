@@ -358,12 +358,10 @@ See [architecture/engineering-harness.md](../../teams/sre/architecture/engineeri
 
 ## 8. Hive isolated agent platform
 
-- **Ownership boundaries:** Agent workflow policy, scheduling, deterministic
-  tools, and durable execution remain separate.
-  - Cortex Markdown owns semantic delegation contracts.
-  - Loom owns deterministic tools and typed admission calculations.
-  - Hive owns durable task state and isolated execution.
-  - One delivery owner sequences accepted results and mutates shared lifecycle state.
+- **Ownership boundaries:** Normal Team Agents use the active harness and the
+  current shared branch. Loom provides deterministic tools and audits. Hive is
+  a separate durable Main-repair platform and does not govern normal Team Agent
+  delivery.
 Hive lives in `agentic-ai/minds/hive` and is deployed only through the
 domain-owned Hive commands flattened into the `infra/Taskfile.yml` command
 surface for the dedicated k0s host. It is a

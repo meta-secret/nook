@@ -173,10 +173,7 @@ export function createGitFixture(): GitFixture {
     baselineCommit: '',
   };
   const git = fixtureGit(provisional);
-  git(['-c', 'init.templateDir=', 'init', '--quiet']);
-  // prettier-ignore
-  for (const name of ['hooks', 'info']) chmodSync((mkdirSync(join(sourceRoot, '.git', name)), join(sourceRoot, '.git', name)), 0o755);
-  writeFileSync(join(sourceRoot, '.git/info/exclude'), '');
+  git(['init', '--quiet']);
   git(['config', 'user.name', 'Nook Test']);
   git(['config', 'user.email', 'nook-test@example.invalid']);
   const initialWrite: FixtureFileWrite = {
@@ -185,15 +182,9 @@ export function createGitFixture(): GitFixture {
     contents: 'seed\n',
   };
   writeFixtureFile(initialWrite);
-  writeFileSync(join(sourceRoot, '.gitignore'), 'hidden/**\n');
   git(['add', '--all']);
   git(['commit', '--quiet', '-m', 'baseline']);
   const baselineCommit = git(['rev-parse', 'HEAD']);
-  const branch = git(['symbolic-ref', '--short', 'HEAD']);
-  git(['update-ref', `refs/remotes/origin/${branch}`, baselineCommit]);
-  git(['config', 'remote.origin.fetch', '+refs/heads/*:refs/remotes/origin/*']);
-  git(['config', `branch.${branch}.remote`, 'origin']);
-  git(['config', `branch.${branch}.merge`, `refs/heads/${branch}`]);
   return { root, sourceRoot, workspaceRoot, baselineCommit };
 }
 

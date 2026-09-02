@@ -7,10 +7,8 @@ import { describe, it } from "node:test";
 import { promisify } from "node:util";
 
 import {
-  assertAuthoredAdditionBudget,
-  AuthoredAdditionBudgetExceededError,
   configureGitForCi,
-  countAuthoredAdditions,
+  countAuthoredNumstat,
   hasWorkingTreeChanges,
   pushFixBranch,
   summarizeAuthoredNumstat,
@@ -18,24 +16,10 @@ import {
 
 const execFileAsync = promisify(execFile);
 
-describe("countAuthoredAdditions", () => {
-  it("counts authored additions and reports deletions separately", () => {
+describe("countAuthoredNumstat", () => {
+  it("counts only authored additions", () => {
     const numstat = "12\t3\tsrc/domain.ts\0" + "4\t5\ttests/domain.test.ts\0";
-    assert.equal(countAuthoredAdditions(numstat), 16);
-    assert.equal(summarizeAuthoredNumstat(numstat).authoredDeletions, 8);
-  });
-
-  it("accepts 2,000 additions even with more than 2,000 deletions", () => {
-    const summary = summarizeAuthoredNumstat("2000\t9000\tsrc/domain.ts\0");
-    assert.equal(summary.authoredAdditions, 2_000);
-    assert.equal(summary.authoredDeletions, 9_000);
-    assert.ok(summary.authoredAdditions <= 2_000);
-  });
-
-  it("identifies additions above the ceiling", () => {
-    const summary = summarizeAuthoredNumstat("2001\t0\tsrc/domain.ts\0");
-    assert.equal(summary.authoredAdditions, 2_001);
-    assert.ok(summary.authoredAdditions > 2_000);
+    assert.equal(countAuthoredNumstat(numstat), 16);
   });
 
   it("reports generated, lock, snapshot, vendor, binary, and pure rename rows separately", () => {
@@ -55,7 +39,7 @@ describe("countAuthoredAdditions", () => {
       "src/new.ts",
       "",
     ].join("\0");
-    assert.equal(countAuthoredAdditions(numstat), 8);
+    assert.equal(countAuthoredNumstat(numstat), 8);
     const expectedReportedOnly = {
       binaryFiles: 1,
       generatedLines: 26,
@@ -81,7 +65,7 @@ describe("countAuthoredAdditions", () => {
 
   it("skips malformed NUL-delimited records explicitly", () => {
     const numstat = "8\t1\tsrc/domain.ts\0malformed\0";
-    assert.equal(countAuthoredAdditions(numstat), 8);
+    assert.equal(countAuthoredNumstat(numstat), 8);
     assert.equal(
       summarizeAuthoredNumstat(numstat).reportedOnly.malformedRecords,
       1,
@@ -90,60 +74,6 @@ describe("countAuthoredAdditions", () => {
 });
 
 describe("implementation working tree", () => {
-  it("enforces only the authored-addition ceiling on a real staged diff", async () => {
-    const repoRoot = await mkdtemp(join(tmpdir(), "nook-ci-agent-budget-"));
-    const git = (...args: string[]) =>
-      execFileAsync("git", ["-C", repoRoot, ...args]);
-    const authoredPath = join(repoRoot, "domain.ts");
-    try {
-      await git("init");
-      await writeFile(
-        authoredPath,
-        Array.from({ length: 9_000 }, (_, index) => `old-${index}`).join("\n") +
-          "\n",
-      );
-      await git("add", "domain.ts");
-      await git(
-        "-c",
-        "user.name=test",
-        "-c",
-        "user.email=test@example.com",
-        "commit",
-        "-m",
-        "base",
-      );
-      const { stdout } = await git("rev-parse", "HEAD");
-      const baseRef = stdout.trim();
-
-      await writeFile(
-        authoredPath,
-        Array.from({ length: 2_000 }, (_, index) => `new-${index}`).join("\n") +
-          "\n",
-      );
-      await assertAuthoredAdditionBudget({
-        repoRoot,
-        baseRef,
-        maximumAdditions: 2_000,
-      });
-
-      await writeFile(
-        authoredPath,
-        Array.from({ length: 2_001 }, (_, index) => `new-${index}`).join("\n") +
-          "\n",
-      );
-      await assert.rejects(
-        assertAuthoredAdditionBudget({
-          repoRoot,
-          baseRef,
-          maximumAdditions: 2_000,
-        }),
-        AuthoredAdditionBudgetExceededError,
-      );
-    } finally {
-      await rm(repoRoot, { recursive: true, force: true });
-    }
-  });
-
   it("marks the worktree safe before inspecting its state", async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), "nook-ci-agent-safe-"));
     const repoRoot = join(tempRoot, "repo");

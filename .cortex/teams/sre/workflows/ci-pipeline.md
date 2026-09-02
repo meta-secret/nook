@@ -708,7 +708,7 @@ UI demo rules:
   - They run serially with one worker.
   - PR CI avoids the cost of the full browser suite.
 
-**After a Team Agent commit, Gizmo runs the contract on the host before the first
+**After integration, Gizmo runs the contract on the host before the first
 push** (and after any later UI edit) so Verify does not discover a missing demo:
 
 ```bash
@@ -775,7 +775,7 @@ cross-package app tasks in `nook-app/ci/Taskfile.yml`, Docker tasks in
 `nook-web-extension/` / `nook-platform/`:
 
 ```bash
-# Gizmo-required local action after a Team Agent commit and before every push; route
+# Gizmo-required local action after integration and before every push; route
 # team-owned formatter diffs back to their owner and repeat until clean
 task loom:pre-push                  # host-applied format + UI demo contract
 
@@ -930,12 +930,11 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 - Ordinary Team Agents format every changed file in their allowed scope and
   return coherent exact committed handoffs. They do not push, dispatch remote
   work, or operate external PR/check state.
-- After a Team Agent commit, Gizmo runs `task loom:pre-push` and inspects every
-  host-applied change. If formatting changes team-owned source or Cortex, Gizmo
-  routes that exact diff to the responsible Team Agent. The Team Agent returns
-  a fresh formatted commit. Gizmo continues from it and repeats pre-push.
-  Gizmo does not author or commit the diff itself. Gizmo pushes only after
-  pre-push is clean.
+- Gizmo continues from the Team Agent commit and runs `task loom:pre-push`.
+- Gizmo inspects every host-applied change.
+- If formatting changes team-owned content, Gizmo returns that diff to its
+  owner for a fresh commit.
+- Gizmo repeats pre-push and pushes only after it is clean.
 - Every pushed head receives remote evidence immediately. For a
   non-validation-ready head, Gizmo uses `task remote TASK_NAME=<name>` for at
   least one relevant focused command; `TASK_NAMES=<a>,<b>` may reuse one job for

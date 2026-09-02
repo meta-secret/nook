@@ -48,7 +48,7 @@ import type {
   ModuleDeliveryEvidenceArtifactDigestRequest,
   ModuleDeliveryExpectedLineage,
   ModuleDeliveryGenerationAuthority,
-  ModuleDeliveryPlanV3,
+  ModuleDeliveryPlanV2,
   ModuleDeliveryReadOnlyEvidenceSubmission,
   ModuleDeliveryReadOnlyNodeV2,
   ModuleDeliveryWriteNodeV2,
@@ -112,6 +112,11 @@ type GenerationRestartRequest = {
   readonly runtime: Runtime;
   readonly acceptedPlan: ValidatedModuleDeliveryPlan;
 };
+type GenerationPlanUpdate = {
+  readonly generation: number;
+  readonly nodes: ModuleDeliveryPlanV2['nodes'];
+};
+type PlanConcurrencyUpdate = { readonly maxConcurrency: number };
 type EvidenceSubmissionRequest = {
   readonly runtime: Runtime;
   readonly lease: ModuleDeliveryAttemptLease;
@@ -187,30 +192,6 @@ const alpha = writeNode(alphaRequest);
 const beta = writeNode(betaRequest);
 const gamma = writeNode(gammaRequest);
 const consumer = writeNode(consumerRequest);
-const provider: ModuleDeliveryReadOnlyNodeV2 = {
-  kind: ModuleDeliveryTaskKind.ReadOnly,
-  taskId: 'provider-evidence',
-  team: TeamKey.DevelopmentCore,
-  functionalOwner: TeamKey.Ai,
-  acceptanceOwner: TeamKey.Ai,
-  parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
-  expert: 'core_expert',
-  moduleRoot: ROOT,
-  consumerOutcome: 'AI receives accepted provider evidence.',
-  baseline: {
-    kind: ModuleDeliveryBaselineKind.SourceCommit,
-    sourceCommit: SOURCE,
-  },
-  agentDepthLimit: 2,
-  dependencies: [],
-  resources: {
-    read: [`${ROOT}/provider/**`],
-    write: [],
-    evidenceSurface: [`${ROOT}/provider/**`],
-  },
-  parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
-  acceptance: alpha.acceptance,
-};
 const edge: ModuleDeliveryEdgeContract = {
   providerTaskId: 'alpha',
   consumerTaskId: 'consumer',
@@ -222,8 +203,8 @@ const edge: ModuleDeliveryEdgeContract = {
   compatibilityExpectations: ['Compatible consumer.'],
   owningTests: ['alpha contract test'],
 };
-const PLAN: ModuleDeliveryPlanV3 = {
-  version: 3,
+const PLAN: ModuleDeliveryPlanV2 = {
+  version: 2,
   generation: 1,
   sourceCommit: SOURCE,
   maxConcurrency: 2,
@@ -239,7 +220,7 @@ const PLAN: ModuleDeliveryPlanV3 = {
   edgeContracts: [edge],
 };
 
-function planAt(sourceCommit: string): ModuleDeliveryPlanV3 {
+function planAt(sourceCommit: string): ModuleDeliveryPlanV2 {
   const plan = structuredClone(PLAN);
   const source = { sourceCommit };
   Object.assign(plan, source);
@@ -249,19 +230,20 @@ function planAt(sourceCommit: string): ModuleDeliveryPlanV3 {
   return plan;
 }
 
-function generationPlan(request: GenerationPlanRequest): ModuleDeliveryPlanV3 {
+function generationPlan(request: GenerationPlanRequest): ModuleDeliveryPlanV2 {
   const plan = structuredClone(planAt(request.sourceCommit));
   const nodes = request.includeGamma
     ? plan.nodes
     : plan.nodes.filter(({ taskId }) => taskId !== gamma.taskId);
-  Object.assign(plan, {
+  const update: GenerationPlanUpdate = {
     generation: request.generation,
     nodes,
-  });
+  };
+  Object.assign(plan, update);
   return plan;
 }
 
-function validate(plan: ModuleDeliveryPlanV3): ValidatedModuleDeliveryPlan {
+function validate(plan: ModuleDeliveryPlanV2): ValidatedModuleDeliveryPlan {
   const result = decodeAndValidateModuleDeliveryPlan(JSON.stringify(plan));
   if (result.status !== ModuleDeliveryValidationStatus.Accepted)
     throw new Error(JSON.stringify(result.issues));
@@ -438,27 +420,13 @@ function acceptEvidence(
 }
 
 describe('module delivery admission authority', () => {
-  test('admits one shared-checkout writer and defers later writers', () => {
-    const mixedPlan = { ...PLAN, nodes: [...PLAN.nodes, provider] };
-    const active = runtime(validate(mixedPlan));
+  test('selects the maximal safe set and rejects unproven writer frontiers', () => {
+    const active = runtime(validate(PLAN));
     const first = select(active);
     expect(first.admissions.map(({ taskId }) => taskId)).toEqual([
       'alpha',
-      'provider-evidence',
+      'beta',
     ]);
-    expect(first.pendingTaskIds).toEqual(['beta', 'gamma']);
-    const recording = recordModuleDeliveryAttemptLeases({
-      authority: active.authority,
-      state: active.state,
-      admissions: first.admissions,
-    });
-    expect(recording.leases.map(({ taskId }) => taskId)).toEqual([
-      'alpha',
-      'provider-evidence',
-    ]);
-    const whileActive = select(active);
-    expect(whileActive.admissions).toEqual([]);
-    expect(whileActive.pendingTaskIds).toEqual(['beta', 'gamma']);
     const forgedFrontier = {
       taskId: 'alpha',
       attempt: 1,
@@ -596,7 +564,7 @@ describe('module delivery admission authority', () => {
   });
 
   test('retains lease history through disposition and reports exhausted closure', () => {
-    const exhaustionPlan: ModuleDeliveryPlanV3 = {
+    const exhaustionPlan: ModuleDeliveryPlanV2 = {
       ...PLAN,
       maxConcurrency: 1,
     };
@@ -662,7 +630,7 @@ describe('module delivery admission authority', () => {
     const assertPriorGenerationUsable = (): void => {
       const current = select(active);
       expect(current.admissions.map(({ generation }) => generation)).toEqual([
-        1,
+        1, 1,
       ]);
     };
     const replacementPlanRequest: GenerationPlanRequest = {
@@ -749,7 +717,9 @@ describe('module delivery admission authority', () => {
     expect(() =>
       restartModuleDeliveryGeneration(restartRequest(blockedRestartRequest)),
     ).toThrow('terminal release evidence');
-    expect(select(active).admissions).toEqual([]);
+    expect(select(active).admissions.map(({ taskId }) => taskId)).toEqual([
+      beta.taskId,
+    ]);
     const cancellationRequest: CancelledLeaseRequest = {
       runtime: active,
       lease: leasedAlpha,
@@ -823,6 +793,16 @@ describe('module delivery admission authority', () => {
         attempt: 2,
         startingFrontier: REPLACEMENT_SOURCE,
       },
+      {
+        taskId: beta.taskId,
+        attempt: 1,
+        startingFrontier: REPLACEMENT_SOURCE,
+      },
+      {
+        taskId: gamma.taskId,
+        attempt: 1,
+        startingFrontier: REPLACEMENT_SOURCE,
+      },
     ]);
     expect(() => select(active)).toThrow('invalid or superseded');
     const staleLeaseRequest: RecordModuleDeliveryAttemptLeasesRequest = {
@@ -836,7 +816,31 @@ describe('module delivery admission authority', () => {
   });
 
   test('retires accepted evidence authority across immutable generations', () => {
-    const firstPlan: ModuleDeliveryPlanV3 = {
+    const provider: ModuleDeliveryReadOnlyNodeV2 = {
+      kind: ModuleDeliveryTaskKind.ReadOnly,
+      taskId: 'provider-evidence',
+      team: TeamKey.DevelopmentCore,
+      functionalOwner: TeamKey.Ai,
+      acceptanceOwner: TeamKey.Ai,
+      parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
+      expert: 'core_expert',
+      moduleRoot: ROOT,
+      consumerOutcome: 'AI receives accepted provider evidence.',
+      baseline: {
+        kind: ModuleDeliveryBaselineKind.SourceCommit,
+        sourceCommit: SOURCE,
+      },
+      agentDepthLimit: 2,
+      dependencies: [],
+      resources: {
+        read: [`${ROOT}/**`],
+        write: [],
+        evidenceSurface: [`${ROOT}/**`],
+      },
+      parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
+      acceptance: alpha.acceptance,
+    };
+    const firstPlan: ModuleDeliveryPlanV2 = {
       ...PLAN,
       nodes: [provider],
       edgeContracts: [],
@@ -935,7 +939,8 @@ describe('module delivery admission authority', () => {
       includeGamma: false,
     };
     const firstPlan = generationPlan(firstPlanRequest);
-    Object.assign(firstPlan, { maxConcurrency: 1 });
+    const concurrencyUpdate: PlanConcurrencyUpdate = { maxConcurrency: 1 };
+    Object.assign(firstPlan, concurrencyUpdate);
     const active = runtime(validate(firstPlan));
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       const alphaLeaseRequest: LeaseRequest = {
@@ -980,7 +985,10 @@ describe('module delivery admission authority', () => {
         taskId,
         attempt,
       })),
-    ).toEqual([{ taskId: beta.taskId, attempt: 1 }]);
+    ).toEqual([
+      { taskId: beta.taskId, attempt: 1 },
+      { taskId: gamma.taskId, attempt: 1 },
+    ]);
   });
 });
 

@@ -28,7 +28,7 @@ validation, readiness, and merge.
 
 ### Ordinary worker handoff
 
-For an ordinary worker commit, Gizmo continues from that commit and runs
+For an ordinary worker handoff, once Gizmo continues from a coherent commit it runs
 `task loom:pre-push`. Gizmo may commit parent-owned delivery state.
 If hygiene mutates team-owned source or Cortex content, Gizmo returns that diff
 to the responsible team for a fresh formatted commit, continues from it, and
@@ -187,14 +187,14 @@ Report:
 Confirm that unresolved review-thread count was zero at the final readiness
 audit.
 
-## Integrated verdict
+## Exact-head verdict
 
-Gizmo issues the final PR verdict for the exact delivery head.
+Gizmo issues the final PR verdict for the exact head.
 
 - Required team verdicts remain independent acceptance evidence.
 - A required blocking team verdict remains binding until that team clears it.
 - A required blocking security verdict remains binding until security clears
   it.
 - Gizmo cannot waive, downgrade, or override either block.
-- Gizmo may block the PR when delivery evidence is incomplete.
+- Gizmo may block the PR when exact-head evidence is incomplete.
 - A replacement head invalidates verdicts whose evidence is not head-stable.

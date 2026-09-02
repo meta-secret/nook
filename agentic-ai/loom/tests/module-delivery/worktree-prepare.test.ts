@@ -61,7 +61,7 @@ function prepared(request: PrepareModuleWorktreeRequest): ModuleWorktreeHandle {
   return workspace;
 }
 
-describe('shared module checkout', () => {
+describe('prepareModuleWorktree', () => {
   test('identifies the current shared checkout at the exact baseline', () => {
     const fixture = createTrackedFixture();
     const marker = installCheckoutHook(fixture);
@@ -91,35 +91,6 @@ describe('shared module checkout', () => {
     expect(second.worktreePath).toBe(first.worktreePath);
     expect(second.worktreeId).toBe(first.worktreeId);
     expect(second.attempt).toBe(2);
-  });
-
-  test('rejects dispatch from a dirty checkout or a stale baseline', () => {
-    const dirty = createTrackedFixture();
-    writeFileSync(join(dirty.sourceRoot, 'module/dirty.txt'), 'dirty\n');
-    expect(() => prepareModuleWorktree(prepareRequest(dirty))).toThrow(
-      'must be clean before dispatch',
-    );
-
-    const stale = createTrackedFixture();
-    const staleBaseline = stale.baselineCommit;
-    writeFileSync(join(stale.sourceRoot, 'module/later.txt'), 'later\n');
-    const git = fixtureGit(stale);
-    git(['add', '--all']);
-    git(['commit', '--quiet', '-m', 'later baseline']);
-    expect(() =>
-      prepareModuleWorktree({
-        ...prepareRequest(stale),
-        baselineCommit: staleBaseline,
-      }),
-    ).toThrow('HEAD must equal its baseline');
-  });
-
-  test('rejects detached checkout dispatch', () => {
-    const fixture = createTrackedFixture();
-    fixtureGit(fixture)(['checkout', '--quiet', '--detach']);
-    expect(() => prepareModuleWorktree(prepareRequest(fixture))).toThrow(
-      'must be on a branch',
-    );
   });
 
   test('rejects nonexact commits and ignores obsolete workspace roots', () => {

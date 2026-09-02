@@ -20,7 +20,6 @@ import {
 import {
   assertModuleDeliveryCanonicalEvidenceTransition,
   assertModuleDeliveryIntegratedWriterFrontierCapability,
-  type ModuleDeliveryIntegratedWriterFrontierCapability,
 } from './integration.ts';
 import {
   admissionStateAuthority,
@@ -56,30 +55,30 @@ import type {
   GenerationAuthorityInspection,
   ModuleDeliveryAuthorityPlanRequest,
   ModuleDeliveryAuthorityRepositoryInspection,
-  ModuleDeliveryCanonicalEvidenceTransition,
   ModuleDeliveryDispositionOutcome,
   RecordModuleDeliveryAttemptDispositionRequest,
-  SourceRepositorySnapshot,
 } from './integration-provenance.ts';
-import {
-  assertSharedCheckoutAdvance,
-  captureSourceSnapshot,
-} from './integration-provenance.ts';
+import type { ModuleDeliveryIntegratedWriterFrontierCapability } from './integration.ts';
+import type { ModuleDeliveryCanonicalEvidenceTransition } from './integration-provenance.ts';
 import type {
   AcceptedModuleDeliveryEvidenceCollectionRequest,
   AcceptedModuleDeliveryEvidenceRegistry,
   AcceptedModuleDeliveryEvidenceInspection,
   AcceptedModuleDeliveryEvidenceRegistration,
+  AuthenticateModuleDeliverySourceCommitRequest,
   ExpectedLineageMapRequest,
   FrozenModuleDeliveryResourcesRequest,
   ResourceConflictRequest,
 } from './authority.ts';
 import { freezeModuleDeliveryAdmissionSource } from './admission-source.ts';
 const AUTHORITY = Symbol('module-delivery-generation-authority');
-const admissionStateStore = createModuleDeliveryAdmissionStateStore({
+const admissionStateStoreAuthorities = {
   assertCanonicalTransition: assertModuleDeliveryCanonicalEvidenceTransition,
   assertWriterFrontier: assertModuleDeliveryIntegratedWriterFrontierCapability,
-});
+};
+const admissionStateStore = createModuleDeliveryAdmissionStateStore(
+  admissionStateStoreAuthorities,
+);
 export enum ModuleDeliveryAdmissionSelectionStatus {
   Selected = 'selected',
   Blocked = 'blocked',
@@ -185,7 +184,6 @@ export type ModuleDeliveryLeaseRecording = {
 };
 type AuthorityState = {
   repositoryRoot: string;
-  sourceSnapshot?: SourceRepositorySnapshot;
   inputPlan: ValidatedModuleDeliveryPlan;
   acceptedPlan: ValidatedModuleDeliveryPlan;
   expectedLineage: ReadonlyMap<string, AgentAttemptParent>;
@@ -199,7 +197,14 @@ type CapabilityProvenance = {
   readonly authority: ModuleDeliveryGenerationAuthority;
   readonly state: ModuleDeliveryAdmissionState;
 };
-type AuthorityTaskRequest = { authority: AuthorityState; taskId: string };
+type NodeLookupRequest = {
+  readonly plan: ValidatedModuleDeliveryPlan;
+  readonly taskId: string;
+};
+type AuthorityTaskRequest = {
+  readonly authority: AuthorityState;
+  readonly taskId: string;
+};
 type TaskReadyRequest = {
   readonly authority: AuthorityState;
   readonly state: ModuleDeliveryAdmissionState;
@@ -234,17 +239,13 @@ const leaseProvenance = new WeakMap<
   CapabilityProvenance
 >();
 const consumedAdmissions = new WeakSet<ModuleDeliveryAdmission>();
+const disposedLeases = new WeakSet<ModuleDeliveryAttemptLease>();
 const acceptedEvidenceLeases = new WeakSet<ModuleDeliveryAttemptLease>();
 const evidenceAuthorities = new WeakMap<
   AcceptedModuleDeliveryEvidence,
   ModuleDeliveryGenerationAuthority
 >();
 const COMMIT = /^[0-9a-f]{40}$/u;
-function isWriter(request: AuthorityTaskRequest): boolean {
-  const plan = request.authority.acceptedPlan;
-  const write = ModuleDeliveryTaskKind.Write;
-  return nodeFor({ plan, taskId: request.taskId }).kind === write;
-}
 export function createModuleDeliveryGenerationAuthority(
   request: CreateModuleDeliveryGenerationAuthorityRequest,
 ): ModuleDeliveryGenerationAuthority {
@@ -295,14 +296,15 @@ export function assertModuleDeliveryAuthorityRepository(
   inspection: ModuleDeliveryAuthorityRepositoryInspection,
 ): void {
   const authority = requiredAuthority(inspection.authority);
+  const authentication: AuthenticateModuleDeliverySourceCommitRequest = {
+    repositoryRoot: inspection.repositoryRoot,
+    sourceCommit: authority.acceptedPlan.plan.sourceCommit,
+  };
   if (
-    authenticateModuleDeliverySourceCommit({
-      repositoryRoot: inspection.repositoryRoot,
-      sourceCommit: authority.acceptedPlan.plan.sourceCommit,
-    }) !== authority.repositoryRoot
+    authenticateModuleDeliverySourceCommit(authentication) !==
+    authority.repositoryRoot
   )
     throw new Error('Module delivery repository authority is invalid.');
-  authority.sourceSnapshot = captureSourceSnapshot(authority.repositoryRoot);
 }
 export function assertAcceptedModuleDeliveryEvidence(
   inspection: AcceptedModuleDeliveryEvidenceInspection,
@@ -319,23 +321,27 @@ export function verifyModuleDeliveryEvidenceSubmission(
   verification: ModuleDeliveryEvidenceSubmissionVerification,
 ): AcceptedModuleDeliveryEvidence {
   const authority = requiredAuthority(verification.authority);
-  const acceptedPlan = moduleDeliveryAuthorityPlan({
+  const planRequest: ModuleDeliveryAuthorityPlanRequest = {
     authority: verification.authority,
     acceptedPlan: verification.acceptedPlan,
-  });
-  assertModuleDeliveryGenerationAuthority({
+  };
+  const acceptedPlan = moduleDeliveryAuthorityPlan(planRequest);
+  const generationInspection: GenerationAuthorityInspection = {
     authority: verification.authority,
     generation: acceptedPlan.plan.generation,
     planDigest: acceptedPlan.planDigest,
-  });
-  assertModuleDeliveryAttemptLeaseAuthority({
+  };
+  assertModuleDeliveryGenerationAuthority(generationInspection);
+  const leaseInspection: AttemptLeaseAuthorityInspection = {
     authority: verification.authority,
     lease: verification.lease,
-  });
-  assertModuleDeliveryAdmissionStateAuthority({
+  };
+  assertModuleDeliveryAttemptLeaseAuthority(leaseInspection);
+  const stateInspection: AdmissionStateAuthorityInspection = {
     authority: verification.authority,
     state: verification.state,
-  });
+  };
+  assertModuleDeliveryAdmissionStateAuthority(stateInspection);
   if (acceptedEvidenceLeases.has(verification.lease))
     throw new Error(
       `Evidence metadata is invalid for ${verification.lease.taskId}.`,
@@ -343,10 +349,11 @@ export function verifyModuleDeliveryEvidenceSubmission(
   const seen = new Set<string>();
   const authorized = Object.freeze(
     verification.authorizedProviderEvidence.map((evidence) => {
-      authority.evidenceRegistry.assert({
+      const inspection: AcceptedModuleDeliveryEvidenceInspection = {
         authority: verification.authority,
         evidence,
-      });
+      };
+      authority.evidenceRegistry.assert(inspection);
       const identity = authority.evidenceRegistry.identity(evidence);
       if (seen.has(identity.taskId))
         throw new Error(`Duplicate accepted evidence for ${identity.taskId}.`);
@@ -440,22 +447,25 @@ export function prepareFinalModuleDeliveryAdmissionState(
 export function commitFinalModuleDeliveryAdmissionState(
   request: CommitFinalModuleDeliveryAdmissionStateRequest,
 ): void {
-  commitFinalAdmissionState({ ...request, store: admissionStateStore });
+  const commitRequest = { ...request, store: admissionStateStore };
+  commitFinalAdmissionState(commitRequest);
 }
 
 export function rollbackFinalModuleDeliveryAdmissionState(
   request: RollbackFinalModuleDeliveryAdmissionStateRequest,
 ): void {
-  rollbackFinalAdmissionState({ ...request, store: admissionStateStore });
+  const rollbackRequest = { ...request, store: admissionStateStore };
+  rollbackFinalAdmissionState(rollbackRequest);
 }
 
 export function restartModuleDeliveryGeneration(
   request: RestartModuleDeliveryGenerationRequest,
 ): ModuleDeliveryAdmissionState {
-  assertModuleDeliveryAdmissionStateAuthority({
+  const stateInspection: AdmissionStateAuthorityInspection = {
     authority: request.authority,
     state: request.previousState,
-  });
+  };
+  assertModuleDeliveryAdmissionStateAuthority(stateInspection);
   const authority = requiredAuthority(request.authority);
   const dispositionKeys = new Set(authority.dispositions.map(attemptKey));
   if (
@@ -528,13 +538,14 @@ export function assertModuleDeliveryAdmissionStateAuthority(
     throw new Error(
       'Module delivery admission state authority is invalid or stale.',
     );
-  assertAdmissionStateCurrent({
+  const currentInspection = {
     store: admissionStateStore,
     authority: inspection.authority,
     state: inspection.state,
     generation: authority.acceptedPlan.plan.generation,
     planDigest: authority.acceptedPlan.planDigest,
-  });
+  };
+  assertAdmissionStateCurrent(currentInspection);
 }
 
 export function selectModuleDeliveryAdmissions(
@@ -548,14 +559,12 @@ export function selectModuleDeliveryAdmissions(
     authority.acceptedPlan.plan.maxConcurrency - authority.activeLeases.size;
   const admissions: ModuleDeliveryAdmission[] = [];
   const pendingTaskIds: string[] = [];
-  let writerOccupied = [...authority.activeLeases.values()].some((lease) =>
-    isWriter({ authority, taskId: lease.taskId }),
-  );
   for (const taskId of authority.acceptedPlan.topologicalOrder) {
-    const node = nodeFor({
+    const nodeRequest: NodeLookupRequest = {
       plan: authority.acceptedPlan,
       taskId,
-    });
+    };
+    const node = nodeFor(nodeRequest);
     const taskRequest: AuthorityTaskRequest = { authority, taskId };
     const readyRequest: TaskReadyRequest = {
       authority,
@@ -574,7 +583,6 @@ export function selectModuleDeliveryAdmissions(
     };
     const resources = frozenModuleDeliveryResources(resourcesRequest);
     if (
-      (node.kind === ModuleDeliveryTaskKind.Write && writerOccupied) ||
       admissions.length >= Math.max(available, 0) ||
       [...authority.activeLeases.values(), ...admissions].some((active) => {
         const conflictRequest: ResourceConflictRequest = {
@@ -587,6 +595,7 @@ export function selectModuleDeliveryAdmissions(
       pendingTaskIds.push(taskId);
       continue;
     }
+    const attemptRequest: AuthorityTaskRequest = { authority, taskId };
     const frontierRequest: StartingFrontierRequest = {
       authority,
       state: request.state,
@@ -622,7 +631,7 @@ export function selectModuleDeliveryAdmissions(
     }
     const admissionValue: ModuleDeliveryAdmission = {
       taskId,
-      attempt: nextAttempt(taskRequest),
+      attempt: nextAttempt(attemptRequest),
       generation: request.state.generation,
       planDigest: request.state.planDigest,
       startingFrontier: startingFrontier(frontierRequest),
@@ -642,7 +651,6 @@ export function selectModuleDeliveryAdmissions(
     };
     admissionProvenance.set(admission, provenance);
     admissions.push(admission);
-    if (node.kind === ModuleDeliveryTaskKind.Write) writerOccupied = true;
   }
   const selectionRequest = {
     status:
@@ -673,25 +681,24 @@ export function recordModuleDeliveryAttemptLeases(
   const seenTasks = new Set(
     [...authority.activeLeases.values()].map(({ taskId }) => taskId),
   );
-  const compatible = [...authority.activeLeases.values()];
-  let writerOccupied = [...authority.activeLeases.values()].some((lease) =>
-    isWriter({ authority, taskId: lease.taskId }),
-  );
+  const compatible: ModuleDeliveryAdmission[] = [
+    ...authority.activeLeases.values(),
+  ];
+  const seenAdmissions = new Set<ModuleDeliveryAdmission>();
   for (const admission of request.admissions) {
     const provenance = admissionProvenance.get(admission);
     const key = attemptKey(admission);
-    const writer = isWriter({ authority, taskId: admission.taskId });
     if (
       !provenance ||
       provenance.authority !== request.authority ||
       provenance.state !== request.state ||
       consumedAdmissions.has(admission) ||
+      seenAdmissions.has(admission) ||
       seenTasks.has(admission.taskId) ||
       authority.leaseHistory.has(key)
     )
       throw new Error('Module delivery admission capability is invalid.');
     if (
-      (writer && writerOccupied) ||
       compatible.some((active) => {
         const conflictRequest: ResourceConflictRequest = {
           first: admission.resources,
@@ -701,20 +708,9 @@ export function recordModuleDeliveryAttemptLeases(
       })
     )
       throw new Error('Module delivery admission capability is invalid.');
+    seenAdmissions.add(admission);
     seenTasks.add(admission.taskId);
     compatible.push(admission);
-    if (writer) writerOccupied = true;
-  }
-  if (
-    authority.sourceSnapshot &&
-    request.admissions.some(({ taskId }) => isWriter({ authority, taskId }))
-  ) {
-    assertSharedCheckoutAdvance({
-      repositoryRoot: authority.repositoryRoot,
-      expected: authority.sourceSnapshot,
-      expectedHead: request.state.headCommit,
-    });
-    authority.sourceSnapshot = captureSourceSnapshot(authority.repositoryRoot);
   }
   const leases = request.admissions.map((admission) => {
     consumedAdmissions.add(admission);
@@ -765,8 +761,13 @@ export function recordModuleDeliveryAttemptDisposition(
     lease: request.lease,
     outcome: request.outcome,
   };
-  if (!validDisposition(dispositionRequest))
+  if (
+    disposedLeases.has(request.lease) ||
+    authority.activeLeases.get(key) !== request.lease ||
+    !validDisposition(dispositionRequest)
+  )
     throw new Error('Module delivery lease capability is invalid.');
+  disposedLeases.add(request.lease);
   authority.activeLeases.delete(key);
   const dispositionValue: ModuleDeliveryAttemptDisposition = {
     taskId: request.lease.taskId,
@@ -855,10 +856,11 @@ function taskReady(request: TaskReadyRequest): boolean {
     request.authority.acceptedPlan.executionPrecedence
       .filter((edge) => edge.successorTaskId === request.node.taskId)
       .every((edge) => {
-        const predecessor = nodeFor({
+        const nodeRequest: NodeLookupRequest = {
           plan: request.authority.acceptedPlan,
           taskId: edge.predecessorTaskId,
-        });
+        };
+        const predecessor = nodeFor(nodeRequest);
         if (
           edge.requiresIntegratedWriterFrontier ||
           predecessor.kind === ModuleDeliveryTaskKind.Write
@@ -934,10 +936,11 @@ function terminallyBlockedTaskIds(
 }
 
 function validDisposition(request: DispositionValidationRequest): boolean {
-  const node = nodeFor({
+  const nodeRequest: NodeLookupRequest = {
     plan: request.authority.acceptedPlan,
     taskId: request.lease.taskId,
-  });
+  };
+  const node = nodeFor(nodeRequest);
   const proofPresent =
     node.kind === ModuleDeliveryTaskKind.Write
       ? request.state.integratedWriterFrontiers
@@ -951,15 +954,6 @@ function validDisposition(request: DispositionValidationRequest): boolean {
       request.outcome.conclusion ===
         ModuleDeliveryGenerationFenceKind.Accepted && exactProofPresent
     );
-  if (
-    node.kind === ModuleDeliveryTaskKind.Write &&
-    request.authority.sourceSnapshot
-  )
-    assertSharedCheckoutAdvance({
-      repositoryRoot: request.authority.repositoryRoot,
-      expected: request.authority.sourceSnapshot,
-      expectedHead: request.state.headCommit,
-    });
   return (
     request.outcome.kind ===
       ModuleDeliveryAttemptDispositionKind.FinalUnusable &&
@@ -981,8 +975,7 @@ function startingFrontier(request: StartingFrontierRequest): string {
       edge.successorTaskId === request.node.taskId &&
       edge.requiresIntegratedWriterFrontier,
   );
-  return request.node.kind !== ModuleDeliveryTaskKind.Write &&
-    !requiresIntegrated &&
+  return !requiresIntegrated &&
     request.node.baseline.kind === ModuleDeliveryBaselineKind.SourceCommit &&
     request.node.dependencies.length === 0
     ? request.node.baseline.sourceCommit

@@ -25,7 +25,7 @@ import {
 } from './worktree-test-support.ts';
 
 import type {
-  ModuleDeliveryPlanV3,
+  ModuleDeliveryPlanV2,
   ModuleDeliveryWriteNodeV2,
   ValidatedModuleDeliveryPlan,
 } from '../../src/module-delivery/index.ts';
@@ -60,7 +60,7 @@ function acceptedPlan(request: {
       expectedCommitHandoff: true,
     },
   };
-  const plan: ModuleDeliveryPlanV3 = {
+  const plan: ModuleDeliveryPlanV2 = {
     version: MODULE_DELIVERY_PLAN_VERSION,
     generation: request.generation,
     sourceCommit: request.sourceCommit,

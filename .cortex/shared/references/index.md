@@ -17,7 +17,7 @@ Reference documents provide durable technology cheat sheets, runtime configurati
   - Description: Rust + WASM bridge reference, wasm-bindgen rules, and typed boundary contracts
   - Topics: `wasm-bindgen`, build modes, WASM exports
 - **[loom-tools.md](../../teams/ai/references/loom-tools.md)**
-  - Description: Loom CLI tool runner, YAML protocol blueprints, typed admission, and deterministic audits
+  - Description: Loom CLI tool runner, YAML requests, and deterministic audits
   - Topics: Loom tools, typed requests, domain YAML
 - **[ai-debugging.md](../../teams/web-dev/references/ai-debugging.md)**
   - Description: Comprehensive AI-agent debugging cheat sheet, browser profiles, and failure triage

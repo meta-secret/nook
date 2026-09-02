@@ -23,7 +23,7 @@ wastes hosted concurrency before the branch is ready.
 Validation has three layers:
 
 - **Required handoff:** Team Agents format and commit without pushing. Gizmo
-  continues from that commit, runs `task loom:pre-push`, and owns publication.
+  integrates, runs `task loom:pre-push`, and owns publication.
 - **Focused evidence:** after Gizmo pushes a non-ready head, use
   `task remote TASK_NAME=<name>` for one relevant gate.
   - Do not batch broad gates sequentially before complete validation.
@@ -56,7 +56,7 @@ prLand:
 ```
 
 ```bash
-# Gizmo, after accepting Team Agent commits
+# Gizmo, after integrating accepted Team Agent handoffs
 task loom:pre-push
 git push -u origin HEAD
 task loom:pr-land CONFIG=path/to/gizmo-owned/pr-land-validate.yaml
@@ -75,7 +75,7 @@ task loom:pr-land CONFIG=path/to/gizmo-owned/pr-land-validate.yaml
 - On a red remote run:
   1. read `gh run view <id> --log-failed`;
   2. obtain the responsible Team Agent's formatted fix commit;
-  3. Gizmo continues from the fix commit, runs pre-push, and pushes; and
+  3. Gizmo continues from the commit, runs pre-push, and pushes; and
   4. Gizmo validates when ready or runs relevant focused proof.
 - Ordinary pushes do not refresh complete PR checks.
 - Markdown-only Cortex changes use the repository-policy workflow.

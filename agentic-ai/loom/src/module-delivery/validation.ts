@@ -44,7 +44,7 @@ import type {
   ModuleDeliveryEdgeContract,
   ModuleDeliveryIssue,
   ModuleDeliveryNodeV2,
-  ModuleDeliveryPlanV3,
+  ModuleDeliveryPlanV2,
   ModuleDeliveryPlanValidation,
   ModuleDeliveryExecutionPrecedence,
   RejectedModuleDeliveryPlan,
@@ -52,7 +52,7 @@ import type {
 import * as claimContainment from './resource-claim-containment.ts';
 
 type ValidationState = {
-  readonly plan: ModuleDeliveryPlanV3;
+  readonly plan: ModuleDeliveryPlanV2;
   readonly issues: ModuleDeliveryIssue[];
   readonly nodesById: Map<string, ModuleDeliveryNodeV2>;
 };
@@ -127,7 +127,7 @@ export function decodeAndValidateModuleDeliveryPlan(
     const issue: ModuleDeliveryIssue = {
       code: ModuleDeliveryIssueCode.InvalidField,
       path: '$.version',
-      message: 'Canonical validation requires shared-checkout plan version 3.',
+      message: 'Canonical validation requires authored plan version 2.',
     };
     const rejection: RejectedModuleDeliveryPlan = {
       status: ModuleDeliveryValidationStatus.Rejected,
@@ -139,7 +139,7 @@ export function decodeAndValidateModuleDeliveryPlan(
 }
 
 function validateDecodedModuleDeliveryPlan(
-  plan: ModuleDeliveryPlanV3,
+  plan: ModuleDeliveryPlanV2,
 ): ModuleDeliveryPlanValidation {
   const issues: ModuleDeliveryIssue[] = [];
   const nodesById = new Map<string, ModuleDeliveryNodeV2>();

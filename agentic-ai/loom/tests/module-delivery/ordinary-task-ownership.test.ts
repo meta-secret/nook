@@ -15,7 +15,7 @@ import {
 } from '../../src/module-delivery/index.ts';
 
 import type {
-  ModuleDeliveryPlanV3,
+  ModuleDeliveryPlanV2,
   ModuleDeliveryWriteNodeV2,
 } from '../../src/module-delivery/index.ts';
 
@@ -53,7 +53,7 @@ function ordinaryWrite(request: {
 }
 
 function accepted(node: ModuleDeliveryWriteNodeV2): boolean {
-  const plan: ModuleDeliveryPlanV3 = {
+  const plan: ModuleDeliveryPlanV2 = {
     version: MODULE_DELIVERY_PLAN_VERSION,
     generation: 1,
     sourceCommit: SOURCE_COMMIT,

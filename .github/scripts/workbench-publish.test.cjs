@@ -10,7 +10,6 @@ const publisherPath = join(__dirname, 'workbench-publish.cjs')
 
 function plan(gizmoId, frontmatterGizmoId = gizmoId, issuePath = 'null') {
   return `---
-schema_version: 2
 issue: ${issuePath}
 gizmo_id: ${frontmatterGizmoId}
 ---
@@ -33,19 +32,17 @@ Validate interactive plan publication.
 
 - Mission controller: Gizmo Prime
 - Current Gizmo ID: ${gizmoId}
-- Estimated authored additions: 20
-- Estimated authored deletions (reported only): 0
+- Estimated authored changed lines: 20
 - Owning modules, packages, or layers: Workbench publisher
 - Ownership units:
 1. Capability: Plan publication; Gizmo ID: ${gizmoId}; Functional owner: AI; Expertise provider: None; Expertise allowed code paths: None; Expertise allowed test paths: None; Expertise forbidden paths: None; Expertise consumer interfaces: None; Expertise acceptance evidence: None; Capability acceptance evidence: Publisher tests pass
 - Public or cross-module interfaces: Interactive Workbench publication
 - Delivery shape: One PR
 - PR sequence mode: One PR
-- Current PR estimated authored additions: 20
-- Current PR estimated authored deletions (reported only): 0
+- Current PR estimated authored changed lines: 20
 - Current PR slice and acceptance evidence: Publisher validation; Acceptance evidence: Publisher tests pass
 - PR slices, estimates, and acceptance evidence:
-1. Gizmo ID: ${gizmoId}; Gizmo name: Publisher; Predecessor Gizmo ID: None; Publisher validation; Estimated authored additions: 20; Estimated authored deletions (reported only): 0; Acceptance evidence: Publisher tests pass
+1. Gizmo ID: ${gizmoId}; Gizmo name: Publisher; Predecessor Gizmo ID: None; Publisher validation; Estimated authored changed lines: 20; Acceptance evidence: Publisher tests pass
 
 ## Initial plan
 
@@ -127,17 +124,13 @@ for (const [name, candidate, options, status, rejection] of [
   ['accepts a legacy issue with null ID', plan('legacy-slice', 'legacy-slice', focusedIssue), { assignedIssuePath: focusedIssue, remoteIssue: issue('null') }, 0],
   ['rejects body and frontmatter mismatch', plan('body-slice', 'other-slice'), {}, 7, /gizmo_id must match/],
   ['rejects null plan Gizmo ID', plan('body-slice', 'null'), {}, 7, /gizmo_id is invalid/],
-  ['rejects absent plan schema before remote I/O', plan('body-slice').replace('schema_version: 2\n', ''), {}, 7, /requires/],
-  ['rejects retired plan schema before remote I/O', plan('body-slice').replace('schema_version: 2', 'schema_version: 1'), {}, 7, /retired/],
-  ['rejects unknown plan schema before remote I/O', plan('body-slice').replace('schema_version: 2', 'schema_version: 3'), {}, 7, /unsupported/],
 ]) {
   test(name, () => {
     const { result, calls } = publish(candidate, options)
     assert.equal(result.status, status, result.stderr)
     if (rejection) assert.match(result.stderr, rejection)
-    if (options.remoteIssue && status === 0) assert.match(calls, /contents\/issues\/focused\.md\?ref=main/)
+    if (options.remoteIssue) assert.match(calls, /contents\/issues\/focused\.md\?ref=main/)
     if (status === 0) assert.match(calls, /"PUT"/)
     else assert.doesNotMatch(calls, /"PUT"/)
-    if (name.endsWith('before remote I/O')) assert.equal(calls, '')
   })
 }

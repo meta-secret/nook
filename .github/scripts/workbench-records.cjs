@@ -31,14 +31,9 @@ const planBudgetFields = [
     pattern: new RegExp(`^- Current Gizmo ID:\\s*${gizmoIdGrammar}\\s*$`, 'm'),
   },
   {
-    label: 'Estimated authored additions',
+    label: 'Estimated authored changed lines',
     pattern:
-      /^- Estimated authored additions:\s*(?:0|[1-9]\d*|[1-9]\d{0,2}(?:,\d{3})+)\s*$/m,
-  },
-  {
-    label: 'Estimated authored deletions (reported only)',
-    pattern:
-      /^- Estimated authored deletions \(reported only\):\s*(?:0|[1-9]\d*|[1-9]\d{0,2}(?:,\d{3})+)\s*$/m,
+      /^- Estimated authored changed lines:\s*(?:0|[1-9]\d*|[1-9]\d{0,2}(?:,\d{3})+)\s*$/m,
   },
   {
     label: 'Owning modules, packages, or layers',
@@ -62,14 +57,9 @@ const planBudgetFields = [
       /^- PR sequence mode:\s*(?:One PR|Independent PRs|Stacked PRs)\s*$/m,
   },
   {
-    label: 'Current PR estimated authored additions',
+    label: 'Current PR estimated authored changed lines',
     pattern:
-      /^- Current PR estimated authored additions:\s*(?:0|[1-9]\d*|[1-9]\d{0,2}(?:,\d{3})+)\s*$/m,
-  },
-  {
-    label: 'Current PR estimated authored deletions (reported only)',
-    pattern:
-      /^- Current PR estimated authored deletions \(reported only\):\s*(?:0|[1-9]\d*|[1-9]\d{0,2}(?:,\d{3})+)\s*$/m,
+      /^- Current PR estimated authored changed lines:\s*(?:0|[1-9]\d*|[1-9]\d{0,2}(?:,\d{3})+)\s*$/m,
   },
   {
     label: 'Current PR slice and acceptance evidence',
@@ -246,19 +236,11 @@ function parseBudgetFields(budgetSection) {
   )
   const estimate = parseBudgetFieldValue(
     budgetSection,
-    'Estimated authored additions',
-  )
-  const deletionEstimate = parseBudgetFieldValue(
-    budgetSection,
-    'Estimated authored deletions (reported only)',
+    'Estimated authored changed lines',
   )
   const currentPrEstimate = parseBudgetFieldValue(
     budgetSection,
-    'Current PR estimated authored additions',
-  )
-  const currentPrDeletionEstimate = parseBudgetFieldValue(
-    budgetSection,
-    'Current PR estimated authored deletions (reported only)',
+    'Current PR estimated authored changed lines',
   )
   const deliveryShape = parseBudgetFieldValue(budgetSection, 'Delivery shape')
   const sequenceMode = parseBudgetFieldValue(budgetSection, 'PR sequence mode')
@@ -280,9 +262,7 @@ function parseBudgetFields(budgetSection) {
     currentGizmoId.kind === 'invalid' ||
     owningBoundary.kind === 'invalid' ||
     estimate.kind === 'invalid' ||
-    deletionEstimate.kind === 'invalid' ||
     currentPrEstimate.kind === 'invalid' ||
-    currentPrDeletionEstimate.kind === 'invalid' ||
     deliveryShape.kind === 'invalid' ||
     sequenceMode.kind === 'invalid' ||
     publicInterfaces.kind === 'invalid' ||
@@ -303,11 +283,7 @@ function parseBudgetFields(budgetSection) {
       ownershipEnd,
     ),
     estimate: Number(estimate.value.replaceAll(',', '')),
-    deletionEstimate: BigInt(deletionEstimate.value.replaceAll(',', '')),
     currentPrEstimate: Number(currentPrEstimate.value.replaceAll(',', '')),
-    currentPrDeletionEstimate: BigInt(
-      currentPrDeletionEstimate.value.replaceAll(',', ''),
-    ),
     deliveryShape: deliveryShape.value,
     sequenceMode: sequenceMode.value,
     publicInterfaces: publicInterfaces.value,
@@ -325,7 +301,6 @@ function parseSliceContract(value, numbered) {
     gizmoName: '',
     predecessorGizmoId: '',
     estimate: 0,
-    deletionEstimate: 0n,
     evidence: '',
   }
   let contractText = value.trim()
@@ -343,7 +318,7 @@ function parseSliceContract(value, numbered) {
 
   const contractMatch = numbered
     ? contractText.match(
-        /^Gizmo ID:\s*([a-z0-9-]+)\s*;\s*Gizmo name:\s*(.+?)\s*;\s*Predecessor Gizmo ID:\s*(None|[a-z0-9-]+)\s*;\s*(.+?)\s*;\s*Estimated authored additions:\s*(0|[1-9]\d*|[1-9]\d{0,2}(?:,\d{3})+)\s*;\s*Estimated authored deletions \(reported only\):\s*(0|[1-9]\d*|[1-9]\d{0,2}(?:,\d{3})+)\s*;\s*Acceptance evidence:\s*(.+?)\s*$/i,
+        /^Gizmo ID:\s*([a-z0-9-]+)\s*;\s*Gizmo name:\s*(.+?)\s*;\s*Predecessor Gizmo ID:\s*(None|[a-z0-9-]+)\s*;\s*(.+?)\s*;\s*Estimated authored changed lines:\s*(0|[1-9]\d*|[1-9]\d{0,2}(?:,\d{3})+)\s*;\s*Acceptance evidence:\s*(.+?)\s*$/i,
       )
     : contractText.match(
         /^(.+?)\s*;\s*Acceptance evidence:\s*(.+?)\s*$/i,
@@ -357,10 +332,7 @@ function parseSliceContract(value, numbered) {
   const estimate = numbered
     ? Number(contractMatch[5].replaceAll(',', ''))
     : 0
-  const deletionEstimate = numbered
-    ? BigInt(contractMatch[6].replaceAll(',', ''))
-    : 0n
-  const evidence = contractMatch[numbered ? 7 : 2].trim()
+  const evidence = contractMatch[numbered ? 6 : 2].trim()
   const validGizmoIds =
     !numbered ||
     (gizmoIdPattern.test(gizmoId) &&
@@ -379,7 +351,6 @@ function parseSliceContract(value, numbered) {
     gizmoName,
     predecessorGizmoId,
     estimate,
-    deletionEstimate,
     evidence,
   }
 }
@@ -545,13 +516,6 @@ function validateAgentRecord(
 
   const required = recordSections[kind]
   if (!required) return `unknown record kind: ${kind}`
-  if (kind === 'plan') {
-    const yaml = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(candidate)?.[1] ?? ''
-    const versions = [...yaml.matchAll(/^schema_version:\s*(.*?)\s*$/gm)]
-    if (versions.length !== 1) return 'plan requires one schema_version'
-    if (versions[0][1] === '1') return 'plan schema_version 1 is retired'
-    if (versions[0][1] !== '2') return 'plan schema_version is unsupported'
-  }
 
   const headings = [...candidate.matchAll(/^## (.+)$/gm)].map(
     (match) => `## ${match[1]}`,
@@ -617,9 +581,7 @@ function validateAgentRecord(
     if (ownershipRejection) return ownershipRejection
 
     const estimate = budgetFields.estimate
-    const deletionEstimate = budgetFields.deletionEstimate
     const currentPrEstimate = budgetFields.currentPrEstimate
-    const currentPrDeletionEstimate = budgetFields.currentPrDeletionEstimate
     const deliveryShape = budgetFields.deliveryShape
     const sequenceMode = budgetFields.sequenceMode
     const currentSlice = parseSliceContract(budgetFields.currentSlice, false)
@@ -628,22 +590,19 @@ function validateAgentRecord(
     }
 
     if (estimate < 1 || currentPrEstimate < 1) {
-      return 'authored-addition estimates must be positive integers'
+      return 'authored changed-line estimates must be positive integers'
     }
     if (deliveryShape !== 'One PR' || sequenceMode !== 'One PR') {
       return 'only one-PR delivery is supported'
     }
     if (currentPrEstimate > 2_000) {
-      return 'current PR estimate exceeds 2,000 authored additions'
+      return 'current PR estimate exceeds 2,000 authored changed lines'
     }
     if (estimate > 2_000) {
-      return 'one-PR plan exceeds 2,000 authored additions'
+      return 'one-PR plan exceeds 2,000 authored changed lines'
     }
     if (estimate !== currentPrEstimate) {
       return 'one-PR feature and current PR estimates must match'
-    }
-    if (deletionEstimate !== currentPrDeletionEstimate) {
-      return 'one-PR feature and current PR deletion reports must match'
     }
     const sequenceBody = budgetFields.sequenceBody
     const sliceLines = sequenceBody
@@ -655,7 +614,6 @@ function validateAgentRecord(
       number: 0,
       scope: '',
       estimate: 0,
-      deletionEstimate: 0n,
       evidence: '',
     }
     if (sliceLines.length === 1) {
@@ -679,9 +637,6 @@ function validateAgentRecord(
       sequenceSlice.estimate !== currentPrEstimate
     ) {
       return 'one-PR slice estimate must match the current PR estimate and be between 1 and 2,000'
-    }
-    if (sequenceSlice.deletionEstimate !== currentPrDeletionEstimate) {
-      return 'one-PR slice deletion report must match the current PR deletion report'
     }
 
     const trustedGizmoRejection = validateTrustedGizmoAssignment(

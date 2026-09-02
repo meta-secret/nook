@@ -93,13 +93,13 @@ const AUTHORED_TEXT_EXTENSIONS = new Set([
   ".zsh",
 ]);
 
-export type AuthoredAdditionBudgetArgs = {
+export type AuthoredBudgetArgs = {
   repoRoot: string;
   baseRef: string;
-  maximumAdditions: number;
+  maximumLines: number;
 };
 
-export class AuthoredAdditionBudgetExceededError extends Error {}
+export class AuthoredChangeBudgetExceededError extends Error {}
 
 enum NumstatRecordParseKind {
   End = "end",
@@ -187,8 +187,7 @@ export type ReportedOnlyNumstat = {
 };
 
 export type AuthoredNumstatSummary = {
-  authoredAdditions: number;
-  authoredDeletions: number;
+  authoredLines: number;
   reportedOnly: ReportedOnlyNumstat;
 };
 
@@ -208,8 +207,7 @@ function emptyReportedOnlyNumstat(): ReportedOnlyNumstat {
 export function summarizeAuthoredNumstat(
   numstat: string,
 ): AuthoredNumstatSummary {
-  let authoredAdditions = 0;
-  let authoredDeletions = 0;
+  let authoredLines = 0;
   const reportedOnly = emptyReportedOnlyNumstat();
   const records = numstat.split("\0");
   let index = 0;
@@ -235,7 +233,8 @@ export function summarizeAuthoredNumstat(
       }
       continue;
     }
-    const changedLines = Number(parsed.added) + Number(parsed.deleted);
+    const addedLines = Number(parsed.added);
+    const changedLines = addedLines + Number(parsed.deleted);
     if (REPORTED_ONLY_FILENAMES.has(filename)) {
       reportedOnly.lockfileLines += changedLines;
     } else if (normalizedPath.endsWith(".snap")) {
@@ -252,19 +251,18 @@ export function summarizeAuthoredNumstat(
     } else if (parsed.renamed && changedLines === 0) {
       reportedOnly.pureRenameFiles += 1;
     } else {
-      authoredAdditions += Number(parsed.added);
-      authoredDeletions += Number(parsed.deleted);
+      authoredLines += addedLines;
     }
   }
-  return { authoredAdditions, authoredDeletions, reportedOnly };
+  return { authoredLines, reportedOnly };
 }
 
-export function countAuthoredAdditions(numstat: string): number {
-  return summarizeAuthoredNumstat(numstat).authoredAdditions;
+export function countAuthoredNumstat(numstat: string): number {
+  return summarizeAuthoredNumstat(numstat).authoredLines;
 }
 
-export async function assertAuthoredAdditionBudget(
-  args: AuthoredAdditionBudgetArgs,
+export async function assertAuthoredChangeBudget(
+  args: AuthoredBudgetArgs,
 ): Promise<void> {
   await excludeAgentRuntimeArtifacts(args.repoRoot);
   await trustedGit(args.repoRoot, [
@@ -286,18 +284,17 @@ export async function assertAuthoredAdditionBudget(
   ]);
   const summary = summarizeAuthoredNumstat(stdout);
   log.info(
-    `Implemented diff contains ${summary.authoredAdditions} authored additions against ${args.baseRef}`,
+    `Implemented diff contains ${summary.authoredLines} authored additions against ${args.baseRef}`,
   );
-  log.info(`Implemented diff contains ${summary.authoredDeletions} authored deletions`);
   log.info(`Reported-only diff rows: ${JSON.stringify(summary.reportedOnly)}`);
   if (summary.reportedOnly.unmeasurableAuthoredFiles > 0) {
     throw new Error(
       `Implemented diff contains ${summary.reportedOnly.unmeasurableAuthoredFiles} authored source file(s) whose line counts are hidden by binary attributes`,
     );
   }
-  if (summary.authoredAdditions > args.maximumAdditions) {
-    throw new AuthoredAdditionBudgetExceededError(
-      `Implemented diff exceeds the ${args.maximumAdditions} authored-addition budget: ${summary.authoredAdditions}`,
+  if (summary.authoredLines > args.maximumLines) {
+    throw new AuthoredChangeBudgetExceededError(
+      `Implemented diff exceeds the ${args.maximumLines} authored-addition budget: ${summary.authoredLines}`,
     );
   }
 }

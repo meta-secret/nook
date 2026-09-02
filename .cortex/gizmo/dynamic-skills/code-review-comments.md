@@ -80,7 +80,7 @@ Does not apply to:
 
 - Before: Gizmo implements a fix and resolves the thread without a reply.
 - After: the responsible team implements and validates the fix. Gizmo
-  integrates it, pushes, posts the targeted reply, and then resolves.
+  continues from it, pushes, posts the targeted reply, and then resolves.
 - Before: Gizmo resolves an outdated formatting comment because it looks
   obsolete.
 - After: the responsible team verifies the current file. Gizmo replies with the

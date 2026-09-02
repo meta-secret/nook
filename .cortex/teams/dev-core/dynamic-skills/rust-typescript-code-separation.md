@@ -459,28 +459,26 @@ When `Option<T>` is still acceptable (do not force an enum):
 ## Validation
 
 Development-core workers run the smallest focused Rust domain tests that prove
-the changed behavior and typed bridge tests when the WASM contract changes.
-Browser E2E does not replace this domain proof. For implementation tasks, run
-`task format` to deterministically format every allowed Rust or development-
-core Cortex file changed by the worker. Inspect the resulting diff. Return the
-coherent formatted commit without pushing or mutating external delivery state.
-Gizmo runs `task loom:pre-push` on that head. If its
+the changed behavior. They also run typed bridge tests when the WASM contract
+changes. Browser E2E does not replace this domain proof.
+
+For implementation tasks, run `task format`. Format every allowed Rust or
+development-core Cortex file the worker changed. Inspect that diff and return
+one coherent commit. Do not push or mutate external delivery state.
+
+Gizmo continues from the commit and runs `task loom:pre-push`. If its
 formatter changes development-core-owned content, Gizmo returns that diff to
 development core for a fresh formatted commit instead of committing the
-formatter output. Once that head passes cleanly,
-Gizmo pushes it and immediately obtains remote evidence for that exact head.
-Use at least one relevant focused remote Rust or web task while the head is not
-ready for complete validation. Otherwise, start complete exact-head validation
-immediately. Gizmo uses `task pr:validate` for complete validation. Gizmo also
-owns readiness and merge.
+formatter output.
 
-`task preflight` rejects:
+- Once the gate passes, Gizmo pushes the head.
+- Run a focused Rust or web task while the head is not validation-ready.
+- Run complete exact-head validation when the head is ready.
+- Gizmo uses `task pr:validate` for complete validation.
+- Gizmo owns readiness and merge.
 
-- known TypeScript domain mirrors;
-- local aliases of generated `Nook*` types;
-- same-argument forwarding functions around generated WASM imports;
-- unchecked WASM type hints; and
-- raw provider/auth `JsValue` DTO signatures.
-
-Extension ownership checks must reject known portable decision patterns after
-their Rust replacement lands.
+`task preflight` rejects known TypeScript domain mirrors. It also rejects local
+aliases of generated `Nook*` types and same-argument WASM forwarding functions.
+Unchecked WASM type hints and raw provider/auth `JsValue` DTO signatures also
+fail. Extension ownership checks must reject known portable
+decision patterns after their Rust replacement lands.

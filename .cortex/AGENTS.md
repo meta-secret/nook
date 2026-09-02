@@ -21,7 +21,7 @@ requires an explicit expertise task from Gizmo Prime.
 ## Context routes
 
 - [Gizmo Prime](gizmo/AGENTS.md) owns mission planning, delegation,
-  delivery-head sequencing, review coordination, GitHub and Workbench state,
+  shared-branch sequencing, review coordination, GitHub and Workbench state,
   readiness, and merge.
 - [AI contract](teams/ai/AGENTS.md) and
   [graph](teams/ai/knowledge-graph.md): Cortex, Loom, agent skills, routing, and
@@ -39,9 +39,9 @@ requires an explicit expertise task from Gizmo Prime.
   [graph](teams/web-dev/knowledge-graph.md): TypeScript, Svelte, browser
   behavior, and extension interaction.
 
-Gizmo Prime is the existing root delivery owner. A feature-slice Gizmo is an
-immutable typed Workbench slice record, not a process, agent, worker attempt,
-or second coordinator. See the [Gizmo contract](gizmo/AGENTS.md).
+Gizmo Prime is the existing root delivery owner. A feature-slice Gizmo is a
+Workbench record, not another coordinator or worker. See the
+[Gizmo contract](gizmo/AGENTS.md).
 
 ## Team worker contract
 
@@ -51,16 +51,8 @@ or second coordinator. See the [Gizmo contract](gizmo/AGENTS.md).
   active harness. This includes implementation and review fixes.
 - Gizmo Prime is prohibited from performing any worker-executable Team Agent
   work itself.
-- Gizmo Prime stops the task immediately and reports the blocker when:
-  - a required real Team Agent cannot be created;
-  - an authorized attempt cannot be dispatched; or
-  - a dispatched attempt cannot be started.
-- Before execution, the immutable generation plan freezes the canonical finite
-  attempt bound.
-- After an attempt starts, Gizmo Prime follows sequential retry and conclusive
-  disposition within that bound.
-- Canonical exhaustion is hard-coded to block the task when the bound is
-  exhausted without an accepted completion.
+- Gizmo Prime stops the task and reports the blocker when a required Team Agent
+  cannot be created or started.
 - Gizmo Prime must never approximate the work, take over the worker scope, or
   continue past that blocked scope. This is the
   [no-fallback rule](#no-fallback-behavior) for worker execution.
@@ -72,10 +64,7 @@ or second coordinator. See the [Gizmo contract](gizmo/AGENTS.md).
   - planning and shared-branch sequencing;
   - Git, pull-request, Workbench, and review coordination;
   - validation, readiness, and merge.
-- Parent-owned control operations stay outside the worker graph and do not
-  create worker attempts.
-- The canonical delegation workflow remains the sole worker-lifecycle
-  authority. Do not invent another lifecycle system.
+- Parent-owned control operations do not create Team Agent work.
 - Team workers implement and test their assigned changes in the current shared
   checkout. Gizmo Prime controls write sequencing and external delivery state.
 - Only one write-capable Team Agent runs at a time.
@@ -100,7 +89,7 @@ or second coordinator. See the [Gizmo contract](gizmo/AGENTS.md).
   read-only until ownership is explicitly transferred. See
   [agent feature ownership](gizmo/dynamic-skills/agent-feature-ownership.md).
 - Exactly two trusted GitHub Actions publishers are narrow exceptions to the
-  ordinary direct-commit path:
+  committed worker-handoff path:
   - `agent-implement.yml` gives its bounded editor no Git or external delivery
     authority. Trusted host tooling formats, validates change budget and PR
     identity, publishes, and returns the exact head.
@@ -217,11 +206,9 @@ Cortex authoring composition:
 - `teams/ai/dynamic-skills/cortex-article-structure/SKILL.md`; and
 - `teams/ai/dynamic-skills/cortex-consistency.md`.
 
-Before dispatch, Gizmo includes the typed `cortexAuthoring` grant in the
-immutable Loom generation. Admission validates the candidate batch, lease,
-exact frontier, team-owned writes, and any serialized shared-file grants before
-the harness receives context paths. Team-specific authoring skills may add
-domain policy but must not copy or rename the canonical skills.
+Gizmo gives the writer these three authorities with its bounded file scope.
+Team-specific authoring skills may add domain policy but must not copy or
+rename the canonical skills.
 
 Promote durable lessons only when evidence justifies them. The
 [self-improvement skill](teams/ai/dynamic-skills/self-improvement.md) keeps
@@ -255,8 +242,8 @@ completion.
 
 Use the detailed authority only when its stage is reached:
 
-- [Canonical delegation](gizmo/workflows/subagent-delegation.md) owns task,
-  attempt, admission, lease, evidence, retry, and join semantics.
+- [Team Agent delegation](gizmo/workflows/subagent-delegation.md) owns worker
+  scope and shared-branch sequencing.
 - [Mission delivery](gizmo/workflows/mission-delivery.md) owns the end-to-end
   delivery sequence.
 - [Pull requests](gizmo/workflows/pull-requests.md) owns exact-head review,

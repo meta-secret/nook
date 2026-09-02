@@ -3,7 +3,7 @@ import type { TeamTaskContextPathRequest } from '../team-agents/context.ts';
 import { ModuleDeliveryTaskKind } from './domain.ts';
 import { resourceClaimListsOverlap } from './resource-claim-containment.ts';
 import type { ResourceClaimListPair } from './resource-claim-containment.ts';
-import type { ModuleDeliveryPlanV3 } from './domain.ts';
+import type { ModuleDeliveryPlanV2 } from './domain.ts';
 
 export type CortexContextPrecedence = {
   readonly writerTaskId: string;
@@ -11,7 +11,7 @@ export type CortexContextPrecedence = {
 };
 
 export function cortexContextPrecedence(
-  plan: ModuleDeliveryPlanV3,
+  plan: ModuleDeliveryPlanV2,
 ): readonly CortexContextPrecedence[] {
   const precedence: CortexContextPrecedence[] = [];
   const writers = plan.nodes.filter(

@@ -20,7 +20,6 @@ import type { ModuleWorktreeHandle } from './workspace.ts';
 export type VerifyModuleCommitHandoffRequest = {
   readonly workspace: ModuleWorktreeHandle;
   readonly baselineCommit: string;
-  readonly commit?: string;
   readonly allowedWriteClaims: readonly string[];
 };
 
@@ -205,27 +204,17 @@ export function verifyModuleCommitHandoff(
     cwd: request.workspace.worktreePath,
     args: ['rev-parse', '--verify', 'HEAD^{commit}'],
   };
-  const head = gitText(runModuleDeliveryGit(gitRequest(headInvocation)));
-  const commit = request.commit ?? head;
-  if (commit !== head)
-    throw new Error('Submitted commit must equal shared checkout HEAD.');
+  const commit = gitText(runModuleDeliveryGit(gitRequest(headInvocation)));
   if (!EXACT_GIT_COMMIT.test(commit) || commit === request.baselineCommit) {
     throw new Error(
       'Commit handoff requires a non-baseline shared-branch commit.',
     );
   }
-  const parentInvocation: ModuleGitInvocation = {
+  const ancestryInvocation: ModuleGitInvocation = {
     cwd: request.workspace.worktreePath,
-    args: ['rev-list', '--parents', '-n', '1', commit],
+    args: ['merge-base', '--is-ancestor', request.baselineCommit, commit],
   };
-  const ancestry = gitText(
-    runModuleDeliveryGit(gitRequest(parentInvocation)),
-  ).split(' ');
-  if (ancestry.length !== 2 || ancestry[1] !== request.baselineCommit) {
-    throw new Error(
-      'Commit handoff must be one direct non-merge child of its baseline.',
-    );
-  }
+  runModuleDeliveryGit(gitRequest(ancestryInvocation));
   const pathRequest: ModuleCommitPathRequest = {
     workspace: request.workspace,
     baselineCommit: request.baselineCommit,

@@ -8,64 +8,37 @@ import {
   addUntracked,
   countTextLines,
   evaluateBudget,
-  reviewBatchMatches,
   summarizeNumstat,
 } from './pr-authored-budget.ts'
 
-test('keeps initial delivery at or below 2,000 authored additions', () => {
+test('keeps delivery at or below 2,000 authored additions', () => {
   assert.deepEqual(
-    evaluateBudget({ authoredAdditions: 2_000, prNumber: '', verifiedReviewContext: false }),
-    { ok: true, mode: 'initial' },
+    evaluateBudget({ authoredLines: 2_000 }),
+    { ok: true, mode: 'additions-only' },
   )
 })
 
-test('blocks non-review growth above 2,000 authored additions', () => {
+test('blocks above 2,000 authored additions', () => {
   assert.match(
-    evaluateBudget({ authoredAdditions: 2_001, prNumber: '', verifiedReviewContext: false }).message,
-    /without PR-verified review-fix context/,
+    evaluateBudget({ authoredLines: 2_001 }).message,
+    /authored additions exceed the 2,000-line limit/,
   )
 })
 
-test('allows verified review fixes below the 3,000-addition stop', () => {
-  assert.deepEqual(
-    evaluateBudget({ authoredAdditions: 2_999, prNumber: '42', verifiedReviewContext: true }),
-    { ok: true, mode: 'review-fix' },
-  )
-})
-
-test('blocks at the 3,000-addition review-growth stop', () => {
-  assert.match(
-    evaluateBudget({ authoredAdditions: 3_000, prNumber: '42', verifiedReviewContext: true }).message,
-    /3,000-addition review-growth stop/,
-  )
-})
-
-test('classifies an oversized initial delivery before the review stop', () => {
-  assert.match(
-    evaluateBudget({ authoredAdditions: 3_000, prNumber: '', verifiedReviewContext: false }).message,
-    /without PR-verified review-fix context/,
-  )
-})
-
-test('counts authored additions and deletions separately from reported-only rows', () => {
+test('counts only authored additions and reports excluded rows separately', () => {
   const summary = summarizeNumstat(
-    '12\t3\tsrc/domain.ts\0' +
+    '12\t300\tsrc/domain.ts\0' +
     '4\t5\tgenerated/schema.ts\0' +
     '2\t1\tbun.lock\0',
   )
-  assert.equal(summary.authoredAdditions, 12)
-  assert.equal(summary.authoredDeletions, 3)
+  assert.equal(summary.authoredLines, 12)
   assert.equal(summary.generatedLines, 9)
   assert.equal(summary.lockfileLines, 3)
 })
 
-test('ignores 9,000 deletions when enforcing the 2,000-addition ceiling', () => {
-  const summary = summarizeNumstat('2000\t9000\tsrc/domain.ts\0')
-  assert.equal(summary.authoredDeletions, 9_000)
-  assert.deepEqual(
-    evaluateBudget({ authoredAdditions: summary.authoredAdditions, prNumber: '', verifiedReviewContext: false }),
-    { ok: true, mode: 'initial' },
-  )
+test('does not count deletion-only authored rows', () => {
+  const summary = summarizeNumstat('0\t5000\tsrc/obsolete.ts\0')
+  assert.equal(summary.authoredLines, 0)
 })
 
 test('counts newline-terminated untracked text like Git numstat', () => {
@@ -82,121 +55,8 @@ test('counts an untracked symlink blob without following its target', () => {
     symlinkSync('../missing-large-file', link)
     const summary = summarizeNumstat('')
     addUntracked(summary, [link])
-    assert.equal(summary.authoredAdditions, 1)
+    assert.equal(summary.authoredLines, 1)
   } finally {
     rmSync(root, { recursive: true, force: true })
-  }
-})
-
-test('binds review growth to the current PR head, thread, and changed path', () => {
-  const input = {
-    threads: [{ isResolved: false, isOutdated: false, path: 'src/fix.ts' }],
-    reviews: [],
-    comments: [],
-    changedPaths: ['src/fix.ts', 'src/fix.test.ts'],
-    publishedAt: '2026-01-01T00:00:00Z',
-  }
-  assert.equal(reviewBatchMatches(input), true)
-  assert.equal(reviewBatchMatches({ ...input, changedPaths: ['src/other.ts'] }), false)
-  assert.equal(reviewBatchMatches({ ...input, threads: [{ ...input.threads[0], isOutdated: true }] }), true)
-  assert.equal(reviewBatchMatches({ ...input, threads: [{ ...input.threads[0], isResolved: true }] }), false)
-  assert.equal(reviewBatchMatches({
-    ...input,
-    threads: [{ ...input.threads[0], path: 'src/fix.cjs' }],
-    changedPaths: ['src/fix.ts'],
-  }), false)
-})
-
-test('accepts reviewed-head bodies, committed fixes, and later PR comments', () => {
-  const input = {
-    threads: [], reviews: [], comments: [], changedPaths: ['src/fix.ts'],
-    publishedAt: '2026-01-01T10:30:00-07:00',
-  }
-  const currentReview = {
-    author: { login: 'reviewer' }, comments: { totalCount: 0 },
-    submittedAt: '2026-01-02T00:00:00Z',
-  }
-  assert.equal(reviewBatchMatches({ ...input, reviews: [{ ...currentReview, body: 'Please fix.', state: 'COMMENTED' }] }), true)
-  assert.equal(reviewBatchMatches({ ...input, reviews: [{ ...currentReview, body: 'Please fix.', state: 'CHANGES_REQUESTED' }] }), true)
-  assert.equal(reviewBatchMatches({ ...input, reviews: [{ ...currentReview, body: 'LGTM', state: 'APPROVED' }] }), false)
-  assert.equal(reviewBatchMatches({ ...input, reviews: [{ ...currentReview, body: 'Old finding', state: 'DISMISSED' }] }), false)
-  assert.equal(reviewBatchMatches({ ...input, reviews: [
-    { ...currentReview, body: 'Please fix.', state: 'CHANGES_REQUESTED' },
-    { ...currentReview, body: '', state: 'APPROVED', submittedAt: '2026-01-03T00:00:00Z' },
-  ] }), false)
-  assert.equal(reviewBatchMatches({ ...input, reviews: [
-    { ...currentReview, body: 'Please fix.', state: 'COMMENTED' },
-    { ...currentReview, body: 'Thanks', state: 'COMMENTED', submittedAt: '2026-01-03T00:00:00Z' },
-  ] }), true)
-  assert.equal(reviewBatchMatches({ ...input, reviews: [{
-    ...currentReview, body: 'See inline comments.', state: 'COMMENTED',
-    comments: { totalCount: 1 },
-  }] }), false)
-  assert.equal(reviewBatchMatches({
-    ...input,
-    reviews: [{
-      author: { login: 'chatgpt-codex-connector[bot]' },
-      comments: { totalCount: 0 },
-      submittedAt: currentReview.submittedAt,
-      body: '### 💡 Codex Review\n\nHere are some automated review suggestions for this pull request.\n\n**Reviewed commit:** `aaaaaaaaaa`',
-      state: 'COMMENTED',
-    }],
-  }), false)
-  assert.equal(reviewBatchMatches({
-    ...input,
-    reviews: [{
-      author: { login: 'chatgpt-codex-connector[bot]' },
-      comments: { totalCount: 0 },
-      submittedAt: currentReview.submittedAt,
-      body: '### 💡 Codex Review\n\nHere are some automated review suggestions for this pull request.\n\n**Reviewed commit:** `aaaaaaaaaa`\n\nActionable finding',
-      state: 'COMMENTED',
-    }],
-  }), true)
-  assert.equal(reviewBatchMatches({
-    ...input,
-    reviews: [{
-      author: { login: 'cursor[bot]' },
-      comments: { totalCount: 0 },
-      submittedAt: currentReview.submittedAt,
-      body: '<details><summary>Stale comment</summary></details>',
-      state: 'COMMENTED',
-    }],
-  }), false)
-  assert.equal(reviewBatchMatches({ ...input, comments: [{ body: 'Please fix.', createdAt: '2025-01-02T00:00:00Z', updatedAt: '2026-01-02T00:00:00Z' }] }), true)
-  assert.equal(reviewBatchMatches({ ...input, comments: [{ body: '<!-- review-id:42 -->\nPlease fix.', createdAt: '2026-01-02T00:00:00Z' }] }), true)
-  assert.equal(reviewBatchMatches({ ...input, comments: [{
-    author: { login: 'chatgpt-codex-connector' },
-    body: '<!-- codex-pull-request-review-summary -->\nStatus',
-    createdAt: '2026-01-02T00:00:00Z',
-  }] }), false)
-  assert.equal(reviewBatchMatches({ ...input, comments: [{
-    author: { login: 'github-actions' }, body: '<!-- nook-ui-demo -->\nStatus',
-    createdAt: '2026-01-02T00:00:00Z',
-  }] }), false)
-  assert.equal(reviewBatchMatches({ ...input, comments: [{ body: 'Looks good to me.', createdAt: '2026-01-02T00:00:00Z' }] }), false)
-  assert.equal(reviewBatchMatches({ ...input, comments: [{ body: 'Please fix.', createdAt: '2026-01-01T16:00:00Z' }] }), false)
-  assert.equal(reviewBatchMatches({
-    ...input,
-    comments: [{
-      body: "@gizmo this workflow assigned you PR #1281. Continue only this PR's recorded scope through review, exact-head validation, and squash merge.",
-      createdAt: '2026-01-02T00:00:00Z',
-    }],
-  }), false)
-  assert.equal(reviewBatchMatches({
-    ...input,
-    comments: [{ body: '### Web research preview\nDone.', createdAt: '2026-01-02T00:00:00Z' }],
-  }), false)
-  for (const body of [
-    'You have reached your Codex usage limits for code reviews. Try later.',
-    "Codex Review: Didn't find any major issues. Reviewed commit abc123.",
-  ]) {
-    assert.equal(reviewBatchMatches({
-      ...input,
-      comments: [{
-        author: { login: 'chatgpt-codex-connector[bot]' },
-        body,
-        createdAt: '2026-01-02T00:00:00Z',
-      }],
-    }), false)
   }
 })

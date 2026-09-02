@@ -22,7 +22,7 @@ import type {
   ModuleDeliveryBaseline,
   ModuleDeliveryNodeV2,
   ModuleDeliveryPlan,
-  ModuleDeliveryPlanV3,
+  ModuleDeliveryPlanV2,
   ModuleDeliveryPlanValidation,
   ModuleDeliveryReadOnlyNodeV2,
   ModuleDeliveryWriteNodeV2,
@@ -190,9 +190,9 @@ function edgeContract(fixture: EdgeFixture): ModuleDeliveryEdgeContract {
   };
 }
 
-function plan(fixture: PlanFixture): ModuleDeliveryPlanV3 {
+function plan(fixture: PlanFixture): ModuleDeliveryPlanV2 {
   return {
-    version: 3,
+    version: 2,
     generation: 1,
     sourceCommit: SOURCE_COMMIT,
     maxConcurrency: 3,
@@ -209,7 +209,7 @@ function plan(fixture: PlanFixture): ModuleDeliveryPlanV3 {
   };
 }
 
-function validate(value: ModuleDeliveryPlanV3): ModuleDeliveryPlanValidation {
+function validate(value: ModuleDeliveryPlanV2): ModuleDeliveryPlanValidation {
   return decodeAndValidateModuleDeliveryPlan(JSON.stringify(value));
 }
 
@@ -519,7 +519,7 @@ describe('reviewed module delivery plan', () => {
         commands: ['task core:second', 'task core:first'],
       },
     };
-    const reversedNodePlan: ModuleDeliveryPlanV3 = {
+    const reversedNodePlan: ModuleDeliveryPlanV2 = {
       ...orderedPlan,
       nodes: [reversedNode],
     };
@@ -582,7 +582,7 @@ describe('reviewed module delivery plan', () => {
       edgeContracts: DEFAULT_EDGES,
     };
     const validPlan = plan(fixture);
-    const invalidPlan: ModuleDeliveryPlanV3 = {
+    const invalidPlan: ModuleDeliveryPlanV2 = {
       ...validPlan,
       sourceCommit: 'main',
       maxConcurrency: 17,
