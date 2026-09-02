@@ -111,7 +111,8 @@ function normalizeStep(step) {
 }
 
 function normalizeJob(job) {
-  const steps = (job.steps ?? [])
+  const { steps: rawSteps = [] } = job
+  const steps = rawSteps
     .map(normalizeStep)
     .sort((left, right) => left.number - right.number)
   const duration = durationSeconds(
@@ -704,6 +705,7 @@ function serializeMainBuildStats(record) {
 
 function normalizeLegacyMainBuildStats(record) {
   const normalized = structuredClone(record)
+  const { jobs = [] } = normalized
 
   if (normalized.schema_version < 3) {
     for (const field of [
@@ -724,15 +726,17 @@ function normalizeLegacyMainBuildStats(record) {
         delete normalized.comparison?.[field]
       }
     }
-    for (const job of normalized.jobs ?? []) {
+    for (const job of jobs) {
       if (!Number.isFinite(job.duration_seconds)) delete job.duration_seconds
-      for (const step of job.steps ?? []) {
+      const { steps = [] } = job
+      for (const step of steps) {
         if (!Number.isFinite(step.duration_seconds))
           delete step.duration_seconds
       }
     }
     if (normalized.cache_telemetry) {
       const telemetryTotals = normalized.cache_telemetry.totals
+      const { jobs: telemetryJobs = [] } = normalized.cache_telemetry
       for (const field of [
         'sccache_hit_rate_percent',
         'buildkit_cache_hit_rate_percent',
@@ -741,7 +745,7 @@ function normalizeLegacyMainBuildStats(record) {
           delete telemetryTotals?.[field]
         }
       }
-      for (const job of normalized.cache_telemetry.jobs ?? []) {
+      for (const job of telemetryJobs) {
         if (!Number.isFinite(job.sccache?.hit_rate_percent)) {
           delete job.sccache?.hit_rate_percent
         }
@@ -756,6 +760,7 @@ function normalizeLegacyMainBuildStats(record) {
     return normalized
 
   const totals = normalized.cache_telemetry.totals
+  const { jobs: telemetryJobs = [] } = normalized.cache_telemetry
   if (
     totals &&
     !('direct_compile_job_count' in totals) &&
@@ -764,7 +769,7 @@ function normalizeLegacyMainBuildStats(record) {
     totals.direct_compile_job_count = totals.local_fallback_job_count
     delete totals.local_fallback_job_count
   }
-  for (const job of normalized.cache_telemetry.jobs ?? []) {
+  for (const job of telemetryJobs) {
     if (job.cache_backend?.kind === 'local_fallback') {
       job.cache_backend.kind = 'direct_compile'
     }

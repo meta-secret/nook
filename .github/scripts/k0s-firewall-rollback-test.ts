@@ -9,6 +9,8 @@ import {
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
+const { PATH: executablePath = "" } = process.env;
+
 const root = resolve(import.meta.dir, "../..");
 const taskfile = resolve(root, "infra/tasks/k0s.yml");
 const rollbackStart = "        rollback_k0s_firewall() {\n";
@@ -159,7 +161,7 @@ ${trigger}
       cmd: [harness.path],
       env: {
         ...process.env,
-        PATH: `${mockBin}:${process.env.PATH ?? ""}`,
+        PATH: `${mockBin}:${executablePath}`,
         MOCK_INPUT_STATE: inputState,
         MOCK_FORWARD_STATE: forwardState,
         MOCK_CONFIG: config,
@@ -259,7 +261,7 @@ replace_k0s_firewall_rules committed
       cmd: [harness.path],
       env: {
         ...process.env,
-        PATH: `${mockBin}:${process.env.PATH ?? ""}`,
+        PATH: `${mockBin}:${executablePath}`,
         MOCK_INPUT_STATE: inputState,
         MOCK_FORWARD_STATE: forwardState,
       },

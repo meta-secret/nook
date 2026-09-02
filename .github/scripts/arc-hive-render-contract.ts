@@ -44,9 +44,10 @@ function assertCpuUnconstrained(
       `Hive ARC ${container.name} must retain its non-CPU resource envelope`,
     );
   }
+  const { limits = {}, requests = {} } = resources;
   if (
-    Object.keys(resources.requests ?? {}).includes("cpu") ||
-    Object.keys(resources.limits ?? {}).includes("cpu")
+    Object.keys(requests).includes("cpu") ||
+    Object.keys(limits).includes("cpu")
   ) {
     throw new Error(
       `Hive ARC ${container.name} must not declare CPU requests or limits`,

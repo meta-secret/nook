@@ -80,7 +80,7 @@ if (fileExists(cursorMcpPath)) {
   if (playwright.command !== 'bash') {
     fail('.cursor/mcp.json playwright.command must be bash.')
   }
-  const args = playwright.args ?? []
+  const { args = [] } = playwright
   if (args[0] !== '.github/scripts/ai-debug/run-playwright-mcp.sh') {
     fail('.cursor/mcp.json must launch .github/scripts/ai-debug/run-playwright-mcp.sh.')
   }

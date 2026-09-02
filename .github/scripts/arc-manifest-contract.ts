@@ -120,9 +120,10 @@ function assertCpuUnconstrained(container: ArcContainer, label: string): void {
   if (!resources) {
     return;
   }
+  const { limits = {}, requests = {} } = resources;
   if (
-    Object.keys(resources.requests ?? {}).includes("cpu") ||
-    Object.keys(resources.limits ?? {}).includes("cpu")
+    Object.keys(requests).includes("cpu") ||
+    Object.keys(limits).includes("cpu")
   ) {
     throw new Error(`${label} must not declare CPU requests or limits`);
   }
@@ -302,10 +303,11 @@ const runner = pod.containers.find((container) => container.name === "runner");
 if (!runner) {
   throw new Error("general ARC must retain its runner container");
 }
+const { env: runnerVariables = [] } = runner;
 const runnerEnvironment = new Map(
-  runner.env?.flatMap((item) =>
+  runnerVariables.flatMap((item) =>
     "value" in item ? [[item.name, item.value]] : [],
-  ) ?? [],
+  ),
 );
 if (
   runnerEnvironment.get("NOOK_BUILDKIT_ADDR") !==
@@ -754,7 +756,8 @@ for (const workflowFile of workflowFiles) {
   const workflow = Bun.YAML.parse(
     await Bun.file(resolve(workflowsDir, workflowFile)).text(),
   ) as WorkflowManifest;
-  for (const [jobName, job] of Object.entries(workflow.jobs ?? {})) {
+  const { jobs = {} } = workflow;
+  for (const [jobName, job] of Object.entries(jobs)) {
     if (job.uses) continue;
     const placement = job["runs-on"];
     if (!placement) {
@@ -766,7 +769,7 @@ for (const workflowFile of workflowFiles) {
         throw new Error(`${identity} routes trusted work to GitHub cloud`);
       }
       observedHostedExceptions.add(identity);
-      const condition = job.if ?? "";
+      const { if: condition = "" } = job;
       if (!condition.includes("head.repo.full_name") || !condition.includes("dependabot[bot]")) {
         throw new Error(`${identity} must be restricted to forks and Dependabot`);
       }
