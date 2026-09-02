@@ -32,11 +32,16 @@ type ExpectedTeamAuthority = {
   readonly capabilityBoundary: string;
 };
 
+enum CortexAuthorityName {
+  Team = 'team',
+  Gizmo = 'Gizmo',
+}
+
 type LocalExecutionGrantAudit = {
   readonly findings: TeamAuthorityAuditFinding[];
   readonly source: string;
   readonly path: string;
-  readonly authorityName: 'team' | 'Gizmo';
+  readonly authorityName: CortexAuthorityName;
 };
 
 const TEAM_CATALOG_PATH = 'agentic-ai/loom/src/team-agents/catalog.ts';
@@ -178,13 +183,13 @@ export function auditTeamAuthorities(
     findings,
     source: authoritySource,
     path: TEAM_AUTHORITY_PATH,
-    authorityName: 'team',
+    authorityName: CortexAuthorityName.Team,
   });
   appendLocalExecutionGrantFindings({
     findings,
     source: gizmoSource,
     path: GIZMO_AUTHORITY_PATH,
-    authorityName: 'Gizmo',
+    authorityName: CortexAuthorityName.Gizmo,
   });
   for (const skillPath of CORTEX_AUTHORING_SKILL_PATHS) {
     if (!existsSync(join(request.repoRoot, skillPath))) {
