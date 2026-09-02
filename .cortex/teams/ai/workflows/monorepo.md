@@ -67,7 +67,8 @@ nook-core → nook-wasm → nook-web
   - `wasm-bindgen` annotations on simple core DTOs and enums are allowed when
     they preserve one typed domain model across Rust and web.
 - Use Bun for Nook web and Loom JavaScript tooling.
-- Run project commands through Taskfile and Docker.
+- Gizmo dispatches project validation through repository Taskfile entrypoints
+  on the applicable hosted runner. Container-backed gates remain hosted.
 - Do not introduce npm flows or lockfiles into Bun-owned packages.
   - `agentic-ai/ci-agent` is the maintained Node/npm exception and owns its
     `package-lock.json`.

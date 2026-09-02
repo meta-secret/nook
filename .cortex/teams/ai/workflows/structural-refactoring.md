@@ -143,7 +143,8 @@ Gizmo reviews every finding before assigning edits.
 7. Update canonical Cortex cards when durable guidance changes.
 8. Update the owning knowledge graph when document ownership, path, or
    discoverability changes.
-9. Run the validation owned by each edit group.
+9. Have Gizmo dispatch the hosted validation owned by each edit group after
+   the coherent head is pushed.
 
 Shared registries, lockfiles, generated bindings, and lifecycle state remain
 serialized.
@@ -157,7 +158,7 @@ A proposal moves into Loom or Task only through a reviewed implementation.
 3. Define typed input, output, and failure behavior.
 4. Add behavior-focused tests for the deterministic contract.
 5. Add or update the canonical Task entrypoint.
-6. Validate the implementation on the updated exact head.
+6. Have Gizmo dispatch applicable hosted validation on the updated exact head.
 7. Replace duplicated prose with a short semantic rule and executable link.
 
 Do not generate topology from Markdown, prompts, or model output.

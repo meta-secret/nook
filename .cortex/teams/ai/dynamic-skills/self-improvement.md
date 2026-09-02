@@ -82,7 +82,7 @@ For every promotion:
    discoverability changes.
 5. Apply [Cortex consistency](cortex-consistency/SKILL.md), the canonical writer, and
    article-structure rules.
-6. Validate the resulting Cortex tree.
+6. Review the resulting Cortex tree against the selected authoring authorities.
 
 ## Protocol evolution safety
 
@@ -156,7 +156,7 @@ Do not run a broad workflow audit merely because a task was substantial.
 2. Classify duplicated instructions by the categories above.
 3. Move only fully deterministic behavior into a typed leaf.
 4. Replace duplicated procedure with a link to the canonical authority.
-5. Validate behavior and Cortex coherence.
+5. Review behavior and Cortex coherence without executing the proposed leaf.
 
 Never derive executable topology from Markdown, YAML, prompts, temporary notes,
 or model output. Processing artifacts are evidence, not durable authority.
@@ -165,7 +165,7 @@ or model output. Processing artifacts are evidence, not durable authority.
 
 Before returning an AI-owned Cortex handoff to Gizmo:
 
-- implementation and focused worker proof are complete;
+- implementation and focused behavior proof are authored;
 - any promoted knowledge is evidence-backed;
 - any promoted knowledge is owned by one authority;
 - no speculative or duplicate guidance was promoted;

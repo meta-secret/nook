@@ -81,11 +81,11 @@ const GIZMO_AUTHORITY_MARKERS = [
   'final verdict is bound to the exact pull-request head',
 ] as const;
 const AGENT_EXECUTION_DIRECTION =
-  /\b(?:agents?|team agents?|workers?|gizmo)\s+(?:may|can|must|shall|need to|are allowed to|is allowed to|are required to|is required to)\s+(?:ask\s+(?:an?\s+)?(?:team\s+)?(?:agent|worker)s?\s+to\s+)?(?:locally\s+)?(?:(?:run|invoke|perform|execute)\s+(?:(?:focused|required|shared|product|project|repository|source|package|local)\s+){0,4}(?:compilation|tests?|testing|linting|builds?|validation)|(?:compile|test|lint|validate)(?:\s+(?:the\s+)?(?:product|project|repository|source|package))?|build(?:ing)?\s+(?:the\s+)?(?:product|project|repository|source|package))\b/iu;
+  /\b(?:agents?|team agents?|workers?|gizmo)\s+(?:may|can|must|shall|need to|are allowed to|is allowed to|are required to|is required to)\s+(?:ask\s+(?:an?\s+)?(?:team\s+)?(?:agent|worker)s?\s+to\s+)?(?:locally\s+)?(?:(?:run|invoke|perform|execute)\s+(?:(?:focused|required|shared|product|project|repository|source|package|local)\s+){0,4}(?:compilation|compilers?|checks?|checking|tests?|testing|test runners?|linting|linters?|typechecks?|typechecking|typecheckers?|builds?|bundles?|bundling|bundlers?|validation|installs?|installing|dependency installation|package installers?|browser suites?)|(?:compile|compiling|check(?:ing)?|test(?:ing)?|lint(?:ing)?|typecheck(?:ing)?|validate|validating|bundle|bundling|install(?:ing)?)(?:\s+(?:the\s+)?(?:product|project|repository|source|package|dependencies|browser suites?))?|build(?:ing)?\s+(?:the\s+)?(?:product|project|repository|source|package))\b/iu;
 const IMPERATIVE_EXECUTION_DIRECTION =
-  /^(?:locally\s+)?(?:(?:run|invoke|perform|execute)\s+(?:(?:focused|required|shared|product|project|repository|source|package|local)\s+){0,4}(?:compilation|tests?|testing|linting|builds?|validation)|(?:compile|test|lint|validate)(?:\s+(?:the\s+)?(?:product|project|repository|source|package))?|build(?:ing)?\s+(?:the\s+)?(?:product|project|repository|source|package))\b/iu;
+  /^(?:locally\s+)?(?:(?:run|invoke|perform|execute)\s+(?:(?:focused|required|shared|product|project|repository|source|package|local)\s+){0,4}(?:compilation|compilers?|checks?|checking|tests?|testing|test runners?|linting|linters?|typechecks?|typechecking|typecheckers?|builds?|bundles?|bundling|bundlers?|validation|installs?|installing|dependency installation|package installers?|browser suites?)|(?:compile|compiling|check(?:ing)?|test(?:ing)?|lint(?:ing)?|typecheck(?:ing)?|validate|validating|bundle|bundling|install(?:ing)?)(?:\s+(?:the\s+)?(?:product|project|repository|source|package|dependencies|browser suites?))?|build(?:ing)?\s+(?:the\s+)?(?:product|project|repository|source|package))\b/iu;
 const PROHIBITED_COMMAND =
-  /^(?:cargo\s+(?:test|build|check|run|clippy|install|add|update)\b|rustc\b|wasm-pack\b|bun\s+(?:test|install|add|run\s+(?:test|lint|check|build))\b|(?:npm|pnpm|yarn)\s+(?:test|install|add|run\s+(?:test|lint|check|build))\b|tsc\b|eslint\b|task\s+(?!(?:loom:pre-push|loom:cortex-session-clean|remote|loom:pr-land|pr:validate|pr:review|pr:ready)\b)\S+)/iu;
+  /^(?:cargo\s+(?:test|build|check|run|clippy|install|add|update)\b|rustc\b|wasm-pack\b|bun\s+(?:test|install|add|build|x\s+(?:tsc|eslint)|run\s+(?:test|lint|check|typecheck|build|bundle))\b|(?:npm|pnpm|yarn)\s+(?:test|install|add|exec\s+(?:tsc|eslint)|run\s+(?:test|lint|check|typecheck|build|bundle))\b|tsc\b|eslint\b|task\s+(?!(?:loom:pre-push|loom:cortex-session-clean|remote|loom:pr-land|pr:validate|pr:review|pr:ready)\b)\S+)/iu;
 const AGENT_COMMAND_DIRECTION =
   /\b(?:agents?|team agents?|workers?|gizmo)\s+(?:may|can|must|shall|need to|are allowed to|is allowed to|are required to|is required to)\s+(?:ask\s+(?:an?\s+)?(?:team\s+)?(?:agent|worker)s?\s+to\s+)?(?:locally\s+)?(?:run|invoke|perform|execute)\s+/iu;
 const IMPERATIVE_COMMAND_DIRECTION = /^(?:run|invoke|perform|execute)\s+/iu;
@@ -375,7 +375,7 @@ function appendAuthoritySentences(
 ): void {
   request.statements.push(
     ...request.text
-      .split(/(?<=[.!?])\s+|\s*;\s*/u)
+      .split(/(?<=[.!?])\s+|\s*;\s*|\s*,?\s+(?:but|yet)\s+/iu)
       .map((statement) => statement.trim())
       .filter((statement) => statement !== ''),
   );

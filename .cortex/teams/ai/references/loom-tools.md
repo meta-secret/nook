@@ -40,7 +40,6 @@ human-operated use:
 ```bash
 task loom:pre-push
 task loom:cortex-session-clean
-task loom:dependency-popularity
 ```
 
 Gizmo uses `task loom:pre-push` as the only local validation alias. AI workers
@@ -150,11 +149,10 @@ On decode errors:
 
 ### dependencyPopularity
 
-Reject low-adoption npm packages and crates.io crates:
-
-```bash
-task loom:dependency-popularity
-```
+The typed request describes adoption evidence for npm packages and crates.io
+crates. No allowlisted hosted selector executes it. AI workers record cited
+read-only evidence and report a required executable verdict as blocked; they do
+not invoke the local alias or substitute an unevaluated verdict.
 
 Prefer libraries over boilerplate:
 [prefer-popular-libraries.md](../../../shared/dynamic-skills/prefer-popular-libraries.md).
@@ -201,16 +199,16 @@ checks the scaffold contract and exact catalog state.
 
 ### agentStats (assemble / validate / publish)
 
-```bash
-task loom:agent-stats CONFIG=path/to/assemble-request.yaml
-```
-
 Validate and publish use `agentStats.validate` / `agentStats.publish` with
 `statsFile`. Agent-statistics paths accept `{agentTempDir}` for stable isolation
 by Git commit and worktree. See
 [Agent PR Statistics](../../../gizmo/workflows/agent-statistics.md#mechanical-entrypoint--loom).
+AI workers do not invoke its local alias; Gizmo follows that delivery-control
+workflow.
 
 ### prLand (status / validate / ready / mergeCheck)
+
+Gizmo uses this allowlisted local delivery-control entrypoint:
 
 ```bash
 task loom:pr-land CONFIG=path/to/validate-request.yaml

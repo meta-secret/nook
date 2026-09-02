@@ -151,7 +151,7 @@ Checklist for every new or edited `.cortex` sentence:
 
 ## Mechanical lint
 
-The normal pre-push path checks changed Cortex Markdown automatically.
+Gizmo's normal pre-push path checks changed Cortex Markdown automatically.
 
 ```bash
 task loom:pre-push
@@ -241,9 +241,9 @@ Full rewritten example:
   - A reviewer should be able to extract each rule without re-parsing a
     compound sentence.
 - For docs-only captures:
-  - run link checks; and
+  - inspect changed links read-only; and
   - self-review against the checklist above.
-- Run the consistency GC in
+- Apply the read-only semantic consistency review in
   [Cortex consistency](cortex-consistency/SKILL.md) for the touched topic.
 - For implementation tasks that include `.cortex` edits:
   1. run required formatters and commit every allowed AI source or Cortex
@@ -256,3 +256,4 @@ Full rewritten example:
      head is not validation-ready, or complete exact-head validation immediately
      when it is ready.
 - Gizmo obtains fresh exact-head remote evidence after every replacement push.
+- Gizmo's hosted `loom:verify` evidence owns executable link and Cortex audits.

@@ -77,7 +77,7 @@ sections. Their natural heading hierarchy is the local map.
 3. Add one document-level link to that context's graph.
 4. Remove obsolete links from the previous graph.
 5. Update direct callers and the canonical skill catalog.
-6. Run the Cortex audit.
+6. Return the coherent commit so Gizmo can dispatch the hosted Cortex audit.
 
 ## Validation
 

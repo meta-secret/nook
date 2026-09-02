@@ -138,10 +138,10 @@ After:
 - Return the coherent commit to Gizmo. Gizmo pushes the exact head and runs
   `task remote TASK_NAME=loom:verify` to verify links, index entries, and
   structure.
-- For implementation tasks, run the focused worker proof and commit the
+- For implementation tasks, author the focused behavior proof and commit the
   coherent formatted handoff. Include every formatter mutation in allowed
-  source or Cortex paths. Return the exact commit and evidence to Gizmo. If
-  integrated pre-push hygiene mutates team-owned content, that team returns a
-  fresh formatted commit before Gizmo continues and pushes. Gizmo
-  immediately dispatches a relevant focused remote task when the pushed head is
-  not validation-ready, or complete exact-head validation when it is ready.
+  source or Cortex paths. Return the exact commit to Gizmo. If integrated
+  pre-push hygiene mutates team-owned content, that team returns a fresh
+  formatted commit before Gizmo continues and pushes. Gizmo immediately
+  dispatches the relevant focused hosted proof when the pushed head is not
+  validation-ready, or complete exact-head validation when it is ready.
