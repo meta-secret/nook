@@ -512,10 +512,8 @@ const stagedAuthenticatorEnrollments = new Map<
   string,
   StagedAuthenticatorEnrollment
 >()
-const pendingAuthenticatorEnrollments = new Map<
-  string,
-  { origin: string; uri: { value: string } }
->()
+type PendingEnrollment = { origin: string; uri: { value: string } }
+const pendingAuthenticatorEnrollments = new Map<string, PendingEnrollment>()
 const revokedAuthenticatorEnrollments = new Map<string, Map<string, number>>()
 
 function purgeExpiredEnrollmentRevocations(now = Date.now()): void {
@@ -527,26 +525,31 @@ function purgeExpiredEnrollmentRevocations(now = Date.now()): void {
   }
 }
 
-function enrollmentStageIsRevoked(origin: string, stageId: string): boolean {
+interface EnrollmentStageKey {
+  origin: string
+  stageId: string
+}
+
+function enrollmentStageIsRevoked(stage: EnrollmentStageKey): boolean {
+  const { origin, stageId } = stage
   const now = Date.now()
   purgeExpiredEnrollmentRevocations(now)
   return revokedAuthenticatorEnrollments.get(origin)?.has(stageId) === true
 }
 
-function revokeEnrollmentStage(origin: string, stageId: string): boolean {
+function revokeEnrollmentStage(stage: EnrollmentStageKey): boolean {
+  const { origin, stageId } = stage
   const now = Date.now()
   purgeExpiredEnrollmentRevocations(now)
   let stages = revokedAuthenticatorEnrollments.get(origin)
   if (!stages) {
-    if (revokedAuthenticatorEnrollments.size >= MAX_STAGED_ENROLLMENT_ORIGINS) {
+    if (revokedAuthenticatorEnrollments.size >= MAX_STAGED_ENROLLMENT_ORIGINS)
       return false
-    }
     stages = new Map()
     revokedAuthenticatorEnrollments.set(origin, stages)
   }
-  if (!stages.has(stageId) && stages.size >= MAX_STAGED_ENROLLMENT_ENTRIES) {
+  if (!stages.has(stageId) && stages.size >= MAX_STAGED_ENROLLMENT_ENTRIES)
     return false
-  }
   stages.set(stageId, now + STAGED_ENROLLMENT_TTL_MS)
   return true
 }
@@ -614,21 +617,20 @@ export async function websiteAuthenticatorEnrollStage({
   try {
     if (
       !isBoundedEnrollmentStageId(stageId) ||
-      enrollmentStageIsRevoked(origin, stageId) ||
+      enrollmentStageIsRevoked(message.payload) ||
       pendingAuthenticatorEnrollments.size >= MAX_STAGED_ENROLLMENT_ENTRIES ||
       pendingAuthenticatorEnrollments.has(stageId) ||
       stagedAuthenticatorEnrollments.has(stageId)
     ) {
       return { ok: false, reason: 'authenticator-stage-missing' }
     }
-    pendingAuthenticatorEnrollments.set(stageId, { origin, uri: otpauthUri })
+    const pendingEnrollment: PendingEnrollment = { origin, uri: otpauthUri }
+    pendingAuthenticatorEnrollments.set(stageId, pendingEnrollment)
     const authorizationGeneration = await accountPickerAuthorizationGeneration()
-    if (enrollmentStageIsRevoked(origin, stageId)) {
+    if (enrollmentStageIsRevoked(message.payload))
       return { ok: false, reason: 'authenticator-stage-missing' }
-    }
-    if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
+    if (!accountPickerAuthorizationIsCurrent(authorizationGeneration))
       return { ok: false, reason: 'authenticator-locked' }
-    }
     const nookTypedArgs0_10: Parameters<
       typeof authorizedWebsiteGrant
     >[0]['reasons'] = {
@@ -643,9 +645,8 @@ export async function websiteAuthenticatorEnrollStage({
       reasons: nookTypedArgs0_10,
     }
     const access = await authorizedWebsiteGrant(accessArgs)
-    if (enrollmentStageIsRevoked(origin, stageId)) {
+    if (enrollmentStageIsRevoked(message.payload))
       return { ok: false, reason: 'authenticator-stage-missing' }
-    }
     if ('response' in access) return access.response
     if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
       return { ok: false, reason: 'authenticator-locked' }
@@ -655,19 +656,16 @@ export async function websiteAuthenticatorEnrollStage({
       if (staged.origin === message.payload.origin) {
         const revoked =
           await revokeAuthenticatorEnrollmentFromSession(existingStageId)
-        if (!revoked) {
+        if (!revoked)
           return { ok: false, reason: 'authenticator-enroll-failed' }
-        }
         clearStagedEnrollment(existingStageId)
-        if (enrollmentStageIsRevoked(origin, stageId)) {
+        if (enrollmentStageIsRevoked(message.payload))
           return { ok: false, reason: 'authenticator-stage-missing' }
-        }
       }
     }
     const expiresAt = Date.now() + STAGED_ENROLLMENT_TTL_MS
-    if (enrollmentStageIsRevoked(origin, stageId)) {
+    if (enrollmentStageIsRevoked(message.payload))
       return { ok: false, reason: 'authenticator-stage-missing' }
-    }
     if (
       stagedAuthenticatorEnrollments.size >= MAX_STAGED_ENROLLMENT_ENTRIES ||
       !accountPickerAuthorizationIsCurrent(authorizationGeneration)
@@ -675,9 +673,8 @@ export async function websiteAuthenticatorEnrollStage({
       return { ok: false, reason: 'authenticator-locked' }
     }
     await ensureExtensionSessionDocument()
-    if (enrollmentStageIsRevoked(origin, stageId)) {
+    if (enrollmentStageIsRevoked(message.payload))
       return { ok: false, reason: 'authenticator-stage-missing' }
-    }
     const authorizeArgs: Parameters<
       typeof authorizeAuthenticatorEnrollmentFromSession
     >[0] = {
@@ -693,7 +690,7 @@ export async function websiteAuthenticatorEnrollStage({
       await revokeAuthenticatorEnrollmentFromSession(stageId)
       return { ok: false, reason: 'authenticator-locked' }
     }
-    if (enrollmentStageIsRevoked(origin, stageId)) {
+    if (enrollmentStageIsRevoked(message.payload)) {
       await revokeAuthenticatorEnrollmentFromSession(stageId)
       return { ok: false, reason: 'authenticator-stage-missing' }
     }
@@ -885,7 +882,7 @@ export async function websiteAuthenticatorEnrollDismiss({
   ) {
     return { ok: false, reason: 'authenticator-stage-missing' }
   }
-  if (!revokeEnrollmentStage(message.payload.origin, message.payload.stageId)) {
+  if (!revokeEnrollmentStage(message.payload)) {
     return { ok: false, reason: 'authenticator-enroll-failed' }
   }
   if (pending) pending.uri.value = ''

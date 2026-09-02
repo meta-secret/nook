@@ -380,7 +380,8 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
   }
 
   registerRuntimeListener(): void {
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    chrome.runtime.onMessage.addListener((...listenerArgs) => {
+      const [message, sender, sendResponse] = listenerArgs
       if (sender.id !== chrome.runtime.id) return false
       if (
         !message ||

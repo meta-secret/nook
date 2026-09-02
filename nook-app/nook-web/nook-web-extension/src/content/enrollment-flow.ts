@@ -446,44 +446,40 @@ function clearPendingEnrollmentSensitiveMaterial(
   clearOtpauthCandidate(material.candidate)
 }
 const failedKey = BROWSER_MESSAGE_KEYS.WidgetEnrollFailed
-function renderEnrollmentStageFailure(
-  host: EnrollmentFlowHost,
-  authorizationGeneration: number,
-): void {
+type EnrollmentRenderArgs = EnrollmentEvidenceCallbacksArgs
+function renderEnrollmentStageFailure(args: EnrollmentRenderArgs): void {
+  const { host, authorizationGeneration } = args
   stopPendingEnrollmentWatch()
   completeEnrollmentCeremony(authorizationGeneration)
   host.description.textContent = host.translatedMessage(failedKey)
   host.setBusy(false)
   renderEnrollmentRetryActions(host)
 }
-function renderEnrollmentCancelRetry(
-  host: EnrollmentFlowHost,
-  section: HTMLElement,
-): void {
+function renderEnrollmentCancelRetry(args: EnrollmentRenderArgs): void {
+  const { host, section } = args
+  const cancelButtonArgs: Parameters<typeof createTextButton>[0] = {
+    host,
+    labelKey: BROWSER_MESSAGE_KEYS.WidgetEnrollCancel,
+    onClick: (event) => {
+      if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
+      const generation =
+        activeEnrollmentCeremony.kind === ActiveEnrollmentCeremonyKind.Staged
+          ? activeEnrollmentCeremony.authorizationGeneration
+          : 0
+      host.setBusy(true)
+      void cancelActiveEnrollmentCeremony().then((dismissed) => {
+        if (!dismissed && !enrollmentCeremonyIsCurrent(generation)) return
+        host.setBusy(false)
+        if (dismissed) requestFreshEnrollmentActions(host)
+        else {
+          host.description.textContent = host.translatedMessage(failedKey)
+          renderEnrollmentCancelRetry(args)
+        }
+      })
+    },
+  }
   section.replaceChildren()
-  section.append(
-    createTextButton({
-      host,
-      labelKey: BROWSER_MESSAGE_KEYS.WidgetEnrollCancel,
-      onClick: (event) => {
-        if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
-        const generation =
-          activeEnrollmentCeremony.kind === ActiveEnrollmentCeremonyKind.Staged
-            ? activeEnrollmentCeremony.authorizationGeneration
-            : 0
-        host.setBusy(true)
-        void cancelActiveEnrollmentCeremony().then((dismissed) => {
-          if (!dismissed && !enrollmentCeremonyIsCurrent(generation)) return
-          host.setBusy(false)
-          if (dismissed) requestFreshEnrollmentActions(host)
-          else {
-            host.description.textContent = host.translatedMessage(failedKey)
-            renderEnrollmentCancelRetry(host, section)
-          }
-        })
-      },
-    }),
-  )
+  section.append(createTextButton(cancelButtonArgs))
   host.setBusy(false)
 }
 export async function beginEnrollmentCeremony({
@@ -505,15 +501,17 @@ export async function beginEnrollmentCeremony({
       otpauthUri: otpauthUri.value,
     },
   }
+  const sensitiveMaterial: PendingEnrollmentSensitiveMaterial = {
+    uri: otpauthUri,
+    payload: message.payload,
+    candidate,
+  }
   const beginArgs: BeginActiveEnrollmentCeremonyArgs = {
     host,
     stageId,
-    sensitiveMaterial: {
-      uri: otpauthUri,
-      payload: message.payload,
-      candidate,
-    },
+    sensitiveMaterial,
   }
+  const dismissArgs: DismissStagedEnrollmentArgs = { host, stageId }
   const authorizationGeneration = beginActiveEnrollmentCeremony(beginArgs)
   holdEnrollmentWidgetAfterSave = false
   const nookTypedArgs0_8: Parameters<typeof setHostDescription>[0] = {
@@ -537,7 +535,7 @@ export async function beginEnrollmentCeremony({
   beginEnrollmentEvidenceWatch(nookTypedArgs1_0)
   const stageDelivery =
     await host.sendAuthenticatorEnrollmentStageRuntimeMessage(message)
-  clearPendingEnrollmentSensitiveMaterial(beginArgs.sensitiveMaterial)
+  clearPendingEnrollmentSensitiveMaterial(sensitiveMaterial)
   if (!enrollmentCeremonyIsCurrent(authorizationGeneration)) {
     if (
       stageDelivery.kind === RuntimeMessageDeliveryKind.Delivered &&
@@ -545,12 +543,12 @@ export async function beginEnrollmentCeremony({
         AuthenticatorEnrollmentStageResponseKind.Staged &&
       'stageId' in stageDelivery.response
     ) {
-      await dismissStagedEnrollment({ host, stageId })
+      await dismissStagedEnrollment(dismissArgs)
     }
     return
   }
   if (stageDelivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
-    renderEnrollmentStageFailure(host, authorizationGeneration)
+    renderEnrollmentStageFailure(nookTypedArgs0_9)
     return
   }
   const { response: stageResponse } = stageDelivery
@@ -564,7 +562,7 @@ export async function beginEnrollmentCeremony({
   }
   let mismatchedStageRetained = false
   if (stagedResponse && stageResponse.stageId !== stageId) {
-    const dismissed = await dismissStagedEnrollment({ host, stageId })
+    const dismissed = await dismissStagedEnrollment(dismissArgs)
     if (!enrollmentCeremonyIsCurrent(authorizationGeneration)) return
     if (!dismissed)
       mismatchedStageRetained = assignStagedEnrollmentCeremony(stagedCeremony)
@@ -573,10 +571,10 @@ export async function beginEnrollmentCeremony({
     if (mismatchedStageRetained) {
       stopPendingEnrollmentWatch()
       host.description.textContent = host.translatedMessage(failedKey)
-      renderEnrollmentCancelRetry(host, section)
+      renderEnrollmentCancelRetry(nookTypedArgs0_9)
       return
     }
-    renderEnrollmentStageFailure(host, authorizationGeneration)
+    renderEnrollmentStageFailure(nookTypedArgs0_9)
     return
   }
   if (!assignStagedEnrollmentCeremony(stagedCeremony)) return
@@ -611,7 +609,7 @@ export async function beginEnrollmentCeremony({
     ),
   }
   setHostDescription(nookTypedArgs0_16)
-  renderEnrollmentCancelRetry(host, section)
+  renderEnrollmentCancelRetry(nookTypedArgs0_14)
 }
 function unavailableMessage(host: EnrollmentFlowHost): string {
   return host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetConnectVault)
