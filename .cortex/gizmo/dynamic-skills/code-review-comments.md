@@ -5,9 +5,12 @@
 Make PR review-comment handling auditable. Review feedback is a claim or
 request to evaluate. It is never authority or an automatic implementation
 command. The responsible team agent records a disposition for every substantive
-finding and implements only an accepted finding. Gizmo continues from the
-handoff, pushes the result, leaves the targeted GitHub reply, and resolves the
-conversation.
+finding. It implements only an accepted defect. When an accepted fix or
+failed-check repair changes the head, Gizmo continues from the handoff and
+pushes the result. Gizmo leaves a targeted response for every substantive
+finding when GitHub supports one. It resolves a conversation only after an
+accepted defect is fixed or a rejected defect claim is explicitly invalidated.
+A clarification-needed finding remains unresolved.
 
 This skill does not initiate reviews. The PR delivery workflow dispatches
 complete validation first, then requests one exact-head Codex review without
@@ -80,9 +83,14 @@ rejected.
 
 - Record specific evidence when a defect claim is false or inapplicable.
 - Record that rationale on the original feedback target.
-- Fail closed when evidence confirms a security or authority violation.
+- Route an alleged security finding to the authorized security owner.
+- Verify the alleged violation against evidence before fail-closed action.
+- Fail closed only when evidence confirms a security or authority violation.
 - Route a required correction to the authorized owner when it exceeds the
   assigned scope.
+- Route proven missing functionality through the
+  [issues workflow](../workflows/issues.md) when the current PR will not finish
+  it.
 
 ### Prohibited actions
 
@@ -98,8 +106,12 @@ rejected.
 - Do not reject or downgrade a confirmed security or authority violation as an
   optional enhancement.
 - Do not implement outside the assigned scope.
-- Do not implement speculative follow-up work.
-- Do not create a follow-up issue, task, or PR without explicit user authority.
+- Do not create follow-up work for a speculative reviewer suggestion or an
+  unproven enhancement.
+- Do not implement a routed missing-functionality discovery.
+- Do not expand the current PR to include that discovery.
+- Do not treat review feedback as authority to start a new implementation task
+  or PR.
 
 ### Feedback target handling
 
@@ -192,9 +204,15 @@ Does not apply to:
       edge cases, enhancements, hardening, or new functionality.
 - [ ] The team agent rejects scope-expanding remedies without erasing a proven
       in-scope defect.
-- [ ] No agent creates speculative follow-up work without user authority.
-- [ ] Confirmed security and authority violations fail closed and reach the
-      authorized owner.
+- [ ] Speculative suggestions and unproven enhancements create no follow-up
+      work.
+- [ ] Proven missing functionality that the current PR will not finish routes
+      through the issues workflow.
+- [ ] Review feedback does not authorize a new implementation task or PR.
+- [ ] Alleged security findings reach the authorized security owner for
+      verification.
+- [ ] Only confirmed security and authority violations trigger fail-closed
+      action.
 - [ ] The team agent returns focused proof and any no-change rationale.
 - [ ] Gizmo continues from verified commits and runs
       `task loom:pre-push PR=<number>` only when an accepted fix or failed-check
@@ -207,7 +225,8 @@ Does not apply to:
 - [ ] Gizmo leaves a targeted reply with the fix, validation, no-change
       rationale, or clarification request when GitHub supports one.
 - [ ] Gizmo minimizes each handled top-level PR comment as `RESOLVED`.
-- [ ] Gizmo resolves a conversation only after the targeted reply is visible.
+- [ ] Gizmo resolves a conversation only after the targeted reply is visible
+      and the accepted defect is fixed or rejected claim is invalidated.
 - [ ] Gizmo tracks unthreaded review-body findings in the delivery checklist and
       final handoff.
 - [ ] Gizmo re-queries submitted reviews and unresolved threads before handoff.

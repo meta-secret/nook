@@ -120,30 +120,36 @@ must coordinate these actions:
 - batch feedback with check failures after both result sets settle.
 
 Do not replace an in-flight validation head merely because review arrives
-first. Collect the complete coherent repair batch unless a security finding
-requires immediate fail-closed action.
+first. Collect the complete coherent repair batch unless a confirmed security
+or authority violation requires immediate fail-closed action.
 
 When a new finding arrives:
 
-1. For a security finding, fail closed and stop or cancel unsafe validation.
-2. For every other finding, keep the in-flight validation head running until
+1. Route an alleged security finding to the authorized security owner.
+2. Verify the alleged violation against current code, repository authority,
+   and reproducible evidence.
+   - A security label or severity alone is not proof.
+3. Only when the violation is confirmed, fail closed and stop or cancel unsafe
+   validation.
+4. For every finding that is not a confirmed security or authority violation,
+   keep the in-flight validation head running until
    hosted checks and exact-head review settle.
-3. Dispatch each finding to the responsible team for separate defect and
+5. Dispatch each finding to the responsible team for separate defect and
    remedy dispositions.
-4. Combine accepted defects and failed checks into one coherent repair batch.
-5. Record evidence-backed no-change dispositions for rejected defect claims.
-6. Keep clarification-needed findings unresolved until the team obtains the
+6. Combine accepted defects and failed checks into one coherent repair batch.
+7. Record evidence-backed no-change dispositions for rejected defect claims.
+8. Keep clarification-needed findings unresolved until the team obtains the
    missing evidence and reclassifies them as accepted or rejected.
-7. Determine whether an accepted fix or failed-check repair changed the head.
-8. When the head changed, continue from the verified fix commit. Run pre-push
+9. Determine whether an accepted fix or failed-check repair changed the head.
+10. When the head changed, continue from the verified fix commit. Run pre-push
    hygiene through the responsible formatter owner and push the replacement
    head.
-9. When the head changed, restart complete validation for that head. If it is
+11. When the head changed, restart complete validation for that head. If it is
    not yet validation-ready, dispatch at least one relevant focused remote job
    first.
-10. When the batch is rejected-only, reply with the no-change rationale and
+12. When the batch is rejected-only, reply with the no-change rationale and
     resolve the explicitly invalidated threads without replacement-head work.
-11. Reply to clarification-needed findings with the missing evidence and keep
+13. Reply to clarification-needed findings with the missing evidence and keep
     them unresolved without replacement-head work.
 
 A confirmed security or authority violation is binding and fails closed. Route
@@ -211,10 +217,23 @@ remains readiness-blocking until reclassification.
 Inspect every external-service review comment already present. An optional
 review service never makes its delivered feedback optional; classify
 non-actionable status or praise as no action. Record a disposition for every
-substantive finding. Do not treat a technically plausible edge case,
-enhancement, hardening idea, or new functionality outside the PR acceptance
-boundary as a command to expand the change. Do not create speculative
-follow-up work or an issue without explicit user authority.
+substantive finding.
+
+### Out-of-scope discovery handling
+
+**Required actions:**
+
+- Route evidence-proven missing functionality through the
+  [issues workflow](issues.md) when the current PR will not finish it.
+
+**Prohibited actions:**
+
+- Do not create follow-up work for a speculative reviewer suggestion or an
+  unproven enhancement.
+- Do not implement the routed missing functionality.
+- Do not expand the current PR to include it.
+- Do not treat review feedback as authority to start a new implementation task
+  or PR.
 
 ### Completion and ownership
 
