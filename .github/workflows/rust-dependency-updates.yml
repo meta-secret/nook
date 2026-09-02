@@ -6,7 +6,7 @@ name: Rust dependency updates
 on:
   schedule:
     # GitHub cron is UTC.
-    - cron: "0 9 * * 1"
+    - cron: '0 9 * * 1'
   workflow_dispatch:
 
 permissions:
@@ -68,7 +68,7 @@ jobs:
       CI_AGENT_FIX_PROFILE: rust-dependency-update
       CI_AGENT_PROMPT_FILE: .github/prompts/rust-dependency-update-agent.md
       CI_FIX_LABEL: Rust dependency update
-      CI_AGENT_TIMEOUT_MS: "10800000"
+      CI_AGENT_TIMEOUT_MS: '10800000'
       AGENT_PR_TITLE: "chore(rust): update direct dependencies"
       AGENT_PR_BODY: |
         ## Summary
@@ -127,5 +127,5 @@ jobs:
           RUST_DEPS_OUTDATED_REPORT: ${{ runner.temp }}/rust-deps-outdated.txt
           VITE_BASE: /
           WASM_BUILD_MODE: prod
-          VITE_VAULT_SYNC_INTERVAL_MS: "1000"
+          VITE_VAULT_SYNC_INTERVAL_MS: '1000'
         run: task ci-agent:fix
