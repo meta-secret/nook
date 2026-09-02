@@ -111,14 +111,13 @@ lines` and `Estimated authored changed lines`. These existing labels mean
 authored additions; no deletion-report field is required. Missing, oversized, or
 incomplete estimates are invalid.
 
-When the task source is a focused Workbench issue with canonical `gizmo_id`
-frontmatter, copy that exact trusted value into `Current Gizmo ID`, every
-ownership-unit `Gizmo ID`, and the sole numbered PR-slice `Gizmo ID`. Never
-invent or rename the Gizmo ID in a later per-issue plan. Legacy standalone
-issues without `gizmo_id` retain self-contained one-PR planning compatibility.
-The trusted assignment requires `Delivery shape` and `PR sequence mode` to be
-`One PR`, exactly one slice, and no other Gizmo ID anywhere in the ownership or
-slice mappings.
+When the task source is a focused Workbench issue, require canonical `gizmo_id`
+frontmatter. Copy that exact trusted value into `Current Gizmo ID`, every
+ownership-unit `Gizmo ID`, and the sole numbered PR-slice `Gizmo ID`. A missing
+or invalid `gizmo_id` blocks planning before implementation. Never invent or
+rename the Gizmo ID in a later per-issue plan. The trusted assignment requires
+`Delivery shape` and `PR sequence mode` to be `One PR`, exactly one slice, and
+no other Gizmo ID anywhere in the ownership or slice mappings.
 
 Set the sole predecessor to `None`. Add `Gizmo ID` to every ownership-unit row.
 Multiple Team Agent ownership units may reference the same declared Gizmo.
