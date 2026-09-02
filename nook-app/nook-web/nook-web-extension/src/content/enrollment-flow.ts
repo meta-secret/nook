@@ -431,7 +431,6 @@ function enrollmentEvidenceCallbacks({
     },
   }
 }
-
 type BeginEnrollmentCeremonyArgs = {
   host: EnrollmentFlowHost
   section: HTMLElement
@@ -451,18 +450,41 @@ function clearPendingEnrollmentSensitiveMaterial(
   material.payload.otpauthUri = ''
   clearOtpauthCandidate(material.candidate)
 }
+const failedKey = BROWSER_MESSAGE_KEYS.WidgetEnrollFailed
 function renderEnrollmentStageFailure(
   host: EnrollmentFlowHost,
   authorizationGeneration: number,
-  completeCeremony = true,
 ): void {
   stopPendingEnrollmentWatch()
-  if (completeCeremony) completeEnrollmentCeremony(authorizationGeneration)
-  host.description.textContent = host.translatedMessage(
-    BROWSER_MESSAGE_KEYS.WidgetEnrollFailed,
-  )
+  completeEnrollmentCeremony(authorizationGeneration)
+  host.description.textContent = host.translatedMessage(failedKey)
   host.setBusy(false)
   renderEnrollmentRetryActions(host)
+}
+function renderEnrollmentCancelRetry(
+  host: EnrollmentFlowHost,
+  section: HTMLElement,
+): void {
+  section.replaceChildren()
+  section.append(
+    createTextButton({
+      host,
+      labelKey: BROWSER_MESSAGE_KEYS.WidgetEnrollCancel,
+      onClick: (event) => {
+        if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
+        host.setBusy(true)
+        void cancelActiveEnrollmentCeremony().then((dismissed) => {
+          host.setBusy(false)
+          if (dismissed) requestFreshEnrollmentActions(host)
+          else {
+            host.description.textContent = host.translatedMessage(failedKey)
+            renderEnrollmentCancelRetry(host, section)
+          }
+        })
+      },
+    }),
+  )
+  host.setBusy(false)
 }
 export async function beginEnrollmentCeremony({
   host,
@@ -543,16 +565,18 @@ export async function beginEnrollmentCeremony({
   let mismatchedStageRetained = false
   if (stagedResponse && stageResponse.stageId !== stageId) {
     const dismissed = await dismissStagedEnrollment({ host, stageId })
-    if (!dismissed) {
+    if (!enrollmentCeremonyIsCurrent(authorizationGeneration)) return
+    if (!dismissed)
       mismatchedStageRetained = assignStagedEnrollmentCeremony(stagedCeremony)
-    }
   }
   if (!stagedResponse || stageResponse.stageId !== stageId) {
-    renderEnrollmentStageFailure(
-      host,
-      authorizationGeneration,
-      !mismatchedStageRetained,
-    )
+    if (mismatchedStageRetained) {
+      stopPendingEnrollmentWatch()
+      host.description.textContent = host.translatedMessage(failedKey)
+      renderEnrollmentCancelRetry(host, section)
+      return
+    }
+    renderEnrollmentStageFailure(host, authorizationGeneration)
     return
   }
   if (!assignStagedEnrollmentCeremony(stagedCeremony)) return
@@ -587,32 +611,8 @@ export async function beginEnrollmentCeremony({
     ),
   }
   setHostDescription(nookTypedArgs0_16)
-  section.replaceChildren()
-  const nookTypedArgs1_2: Parameters<typeof createTextButton>[0] = {
-    host,
-    labelKey: BROWSER_MESSAGE_KEYS.WidgetEnrollCancel,
-    onClick: (event) => {
-      if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
-      host.setBusy(true)
-      void cancelActiveEnrollmentCeremony().then((dismissed) => {
-        host.setBusy(false)
-        if (dismissed) {
-          requestFreshEnrollmentActions(host)
-          return
-        }
-        const failure: Parameters<typeof setHostDescription>[0] = {
-          host,
-          text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollFailed),
-        }
-        setHostDescription(failure)
-      })
-    },
-  }
-  const cancelButton = createTextButton(nookTypedArgs1_2)
-  section.append(cancelButton)
-  host.setBusy(false)
+  renderEnrollmentCancelRetry(host, section)
 }
-
 function unavailableMessage(host: EnrollmentFlowHost): string {
   return host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetConnectVault)
 }
