@@ -136,9 +136,10 @@ export const STRUCTURAL_EXPERT_CATALOG: readonly StructuralExpertProfile[] = [
 export function structuralExpertProfile(
   expertName: string,
 ): StructuralExpertProfile | false {
-  return (
+  const [defaulted1 = false] = [
     STRUCTURAL_EXPERT_CATALOG.find(
       (candidate) => candidate.name === expertName,
-    ) ?? false
-  );
+    ),
+  ];
+  return defaulted1;
 }

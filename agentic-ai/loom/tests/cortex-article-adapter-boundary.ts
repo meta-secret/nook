@@ -100,11 +100,10 @@ function isAllowedImport(node: ts.ImportDeclaration): boolean {
         clause.namedBindings &&
         ts.isNamedImports(clause.namedBindings) &&
         clause.namedBindings.elements.length > 0 &&
-        clause.namedBindings.elements.every(
-          (element) =>
-            !element.isTypeOnly &&
-            (element.propertyName ?? element.name).text === 'readFileSync',
-        ),
+        clause.namedBindings.elements.every((element) => {
+          const [imported = element.name] = [element.propertyName];
+          return !element.isTypeOnly && imported.text === 'readFileSync';
+        }),
       )
     );
   }
@@ -119,10 +118,11 @@ function isAllowedImport(node: ts.ImportDeclaration): boolean {
       clause.namedBindings &&
       ts.isNamedImports(clause.namedBindings) &&
       clause.namedBindings.elements.length === 1 &&
-      (
-        clause.namedBindings.elements[0]?.propertyName ??
-        clause.namedBindings.elements[0]?.name
-      )?.text === 'unified',
+      clause.namedBindings.elements.every(
+        (element) =>
+          (element.propertyName ? element.propertyName : element.name).text ===
+          'unified',
+      ),
     );
   }
   if (specifier === DOCUMENT_SOURCE_IMPORT) return clause.isTypeOnly;

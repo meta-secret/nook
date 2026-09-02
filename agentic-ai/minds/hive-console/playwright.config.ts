@@ -1,7 +1,8 @@
 import { defineConfig } from '@playwright/test';
 
-const chromiumExecutablePath =
-  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim() ?? '';
+const [chromiumExecutablePath = ''] = [
+  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim(),
+];
 
 export default defineConfig({
   testDir: './e2e',

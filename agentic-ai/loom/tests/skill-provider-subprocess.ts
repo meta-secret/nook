@@ -197,7 +197,10 @@ function subprocessApi(
 ): SubprocessApi | false {
   const expression = unwrapExpression(inspection.expression);
   if (ts.isIdentifier(expression)) {
-    return inspection.bindings.apiIdentifiers.get(expression.text) ?? false;
+    const [defaulted1 = false] = [
+      inspection.bindings.apiIdentifiers.get(expression.text),
+    ];
+    return defaulted1;
   }
   if (!ts.isPropertyAccessExpression(expression)) return false;
   const member = asSubprocessApi(expression.name.text);
@@ -245,7 +248,7 @@ function collectImportedBindings(collection: BindingCollection): void {
         collection.bindings.namespaceIdentifiers.add(bindings.name.text);
       } else if (bindings && ts.isNamedImports(bindings)) {
         for (const element of bindings.elements) {
-          const imported = element.propertyName?.text ?? element.name.text;
+          const [imported = element.name.text] = [element.propertyName?.text];
           const api = asSubprocessApi(imported);
           if (api !== false) {
             collection.bindings.apiIdentifiers.set(element.name.text, api);
@@ -599,12 +602,12 @@ function candidateScriptLiterals(
   inspection: CandidateScriptInspection,
 ): CandidateScriptDiscovery {
   if (inspection.api === SubprocessApi.Fork) {
-    const literal = inspection.literals[0] ?? false;
+    const [literal = false] = [inspection.literals[0]];
     return literal === false || literal === UNRESOLVED_LITERAL
       ? { literals: [], unresolved: true }
       : { literals: [literal], unresolved: false };
   }
-  const first = inspection.literals[0] ?? false;
+  const [first = false] = [inspection.literals[0]];
   if (first === MUTABLE_LITERAL) {
     return { literals: [], unresolved: true };
   }
@@ -637,7 +640,7 @@ function candidateScriptLiterals(
       return { literals: [], unresolved: true };
     }
     const tokens = first.split(/\s+/u).filter(Boolean);
-    const command = tokens[0] ?? false;
+    const [command = false] = [tokens[0]];
     if (command === false) return { literals: [], unresolved: true };
     if (SCRIPT_RUNTIMES.has(posix.basename(command))) {
       const runtimeInspection: RuntimeScriptInspection = {
@@ -669,12 +672,13 @@ function candidateScriptLiterals(
 function candidateUsesScriptRuntime(
   inspection: CandidateScriptInspection,
 ): boolean {
-  const first = inspection.literals[0] ?? false;
+  const [first = false] = [inspection.literals[0]];
   if (first === false || first === UNRESOLVED_LITERAL) return false;
+  const [defaulted2 = ''] = [first.split(/\s+/u)[0]];
   const command =
     inspection.api === SubprocessApi.Exec ||
     inspection.api === SubprocessApi.ExecSync
-      ? (first.split(/\s+/u)[0] ?? '')
+      ? defaulted2
       : first;
   return SCRIPT_RUNTIMES.has(posix.basename(command));
 }
@@ -701,7 +705,7 @@ function runtimeScriptLiterals(
       continue;
     }
     if (RUNTIME_OPTIONS_WITH_VALUES.has(argument)) {
-      const directory = inspection.arguments[index + 1] ?? false;
+      const [directory = false] = [inspection.arguments[index + 1]];
       if (
         directory === false ||
         directory === UNRESOLVED_LITERAL ||
@@ -755,7 +759,9 @@ function resolveBunPackageScript(
   const packagePath = posix.normalize(
     posix.join(inspection.workingDirectory, 'package.json'),
   );
-  const packageSource = inspection.repository.sources.get(packagePath) ?? false;
+  const [packageSource = false] = [
+    inspection.repository.sources.get(packagePath),
+  ];
   if (packageSource === false) return { literals: [], unresolved: true };
   let document: BunPackageDocument;
   try {
@@ -763,7 +769,7 @@ function resolveBunPackageScript(
   } catch {
     return { literals: [], unresolved: true };
   }
-  const command = document.scripts?.[inspection.name] ?? false;
+  const [command = false] = [document.scripts?.[inspection.name]];
   if (command === false || /[;&|`$<>\n"']/u.test(command)) {
     return { literals: [], unresolved: true };
   }

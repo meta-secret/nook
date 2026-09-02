@@ -379,7 +379,10 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
       [ObservedExecutionStatus.Ready]: copy.ready,
       [ObservedExecutionStatus.Running]: copy.running,
     };
-    return labels[status] ?? status;
+    for (const [candidate, label] of Object.entries(labels)) {
+      if (candidate === status) return label;
+    }
+    return status;
   }
 
   function isAttentionStatus(status: string): boolean {

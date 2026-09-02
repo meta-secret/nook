@@ -311,8 +311,8 @@ test('uses immediate task navigation with reduced motion', async ({ page }) => {
       options?: boolean | ScrollIntoViewOptions,
     ) {
       if (typeof options !== 'boolean') {
-        document.documentElement.dataset.scrollBehavior =
-          options?.behavior ?? 'auto';
+        const [behavior = 'auto'] = [options?.behavior];
+        document.documentElement.dataset.scrollBehavior = behavior;
       }
     };
   });

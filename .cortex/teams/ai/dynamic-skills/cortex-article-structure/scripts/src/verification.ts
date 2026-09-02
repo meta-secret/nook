@@ -51,8 +51,8 @@ export function verifyCortexArticleStructureResult(
     throw new Error(VERIFICATION_FAILURE);
   }
   for (let index = 0; index < expected.length; index += 1) {
-    const actual = request.result.findings.at(index) ?? false;
-    const wanted = expected.at(index) ?? false;
+    const [actual = false] = [request.result.findings.at(index)];
+    const [wanted = false] = [expected.at(index)];
     if (
       actual === false ||
       wanted === false ||
@@ -89,7 +89,7 @@ function verifyDocument(request: VerifyDocumentRequest): void {
     request.expected.push(finding);
   }
   for (let index = 0; index < request.document.blocks.length; index += 1) {
-    const block = request.document.blocks.at(index) ?? false;
+    const [block = false] = [request.document.blocks.at(index)];
     if (
       block === false ||
       block.kind !== CortexArticleSemanticKind.Heading ||
@@ -113,7 +113,7 @@ function verifyDocument(request: VerifyDocumentRequest): void {
 function ownedSection(
   request: OwnedSectionRequest,
 ): readonly CortexArticleSemanticBlock[] {
-  const heading = request.blocks.at(request.headingIndex) ?? false;
+  const [heading = false] = [request.blocks.at(request.headingIndex)];
   if (heading === false || heading.kind !== CortexArticleSemanticKind.Heading) {
     return [];
   }
@@ -123,7 +123,7 @@ function ownedSection(
     index < request.blocks.length;
     index += 1
   ) {
-    const candidate = request.blocks.at(index) ?? false;
+    const [candidate = false] = [request.blocks.at(index)];
     if (
       candidate !== false &&
       candidate.kind === CortexArticleSemanticKind.Heading &&

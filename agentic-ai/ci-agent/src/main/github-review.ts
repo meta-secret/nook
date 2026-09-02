@@ -174,9 +174,9 @@ export async function requestExactHeadReview(
   const { owner, repo } = repoRef;
   const availability = options.availability;
   const signal = options.signal;
-  const expectedRevision = options.revision ?? {
+  const [expectedRevision = ({
     state: ExactHeadReviewRevisionState.Unbound,
-  };
+  })] = [options.revision];
   const { data: pr } = await octokit.rest.pulls.get({
     owner,
     repo,
@@ -644,7 +644,8 @@ function isExactHeadSubmittedReview(
 }
 
 function latestRequestTime(requests: IssueComment[]): GitHubText {
-  return requests.at(-1)?.createdAt ?? { kind: GitHubTextKind.Missing };
+  const [defaulted1 = ({ kind: GitHubTextKind.Missing })] = [requests.at(-1)?.createdAt];
+  return defaulted1;
 }
 
 function isAtOrAfter(value: GitHubText, boundary: GitHubText): boolean {

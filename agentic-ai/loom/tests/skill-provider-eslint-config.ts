@@ -118,7 +118,8 @@ function commandReferences([
     if (mightSelectTaskfile([words, start])) {
       if (runtime.dynamic) {
         const wrapped = words[start + 1];
-        const wrappedName = posix.basename(wrapped?.value ?? '');
+        const [defaulted1 = ''] = [wrapped?.value];
+        const wrappedName = posix.basename(defaulted1);
         if (wrappedName !== 'task' && wrappedName !== 'go-task') continue;
         throw new Error('Dynamic Task dispatch wrapper is forbidden.');
       }
@@ -245,17 +246,22 @@ function selectedTaskfileReference(
     if (attachedDirectory) {
       if (word.dynamic)
         throw new Error('Task working directory is missing or dynamic.');
+      const [defaulted2 = ''] = [attachedDirectory[1]];
       directory =
         directory === false
           ? false
-          : repositoryCommandDirectory([directory, attachedDirectory[1] ?? '']);
+          : repositoryCommandDirectory([directory, defaulted2]);
       continue;
     }
     const attached = /^(?:--taskfile=|-t=)(.+)$/u.exec(word.value);
     if (attached) {
       if (selection !== false)
         throw new Error('Duplicate Taskfile selection is forbidden.');
-      selection = { ...word, value: attached[1] ?? '' };
+      const [defaulted3 = ''] = [attached[1]];
+      selection = {
+        ...word,
+        value: defaulted3,
+      };
       continue;
     }
     if (word.dynamic && !taskNameSeen)
@@ -313,8 +319,14 @@ function commandSegments(
 
 function firstCommandWord(words: readonly ShellWord[]): number {
   let index = 0;
-  while (/^[A-Za-z_]\w*=/u.test(words[index]?.value ?? '')) index += 1;
-  if (posix.basename(words[index]?.value ?? '') === 'env') {
+  while (true) {
+    const [word = false] = [words[index]];
+    if (word === false) break;
+    if (!/^[A-Za-z_]\w*=/u.test(word.value)) break;
+    index += 1;
+  }
+  const [defaulted5 = ''] = [words[index]?.value];
+  if (posix.basename(defaulted5) === 'env') {
     const envRequest = {
       environment: new Map(),
       start: index + 1,
@@ -329,7 +341,8 @@ function toolInvocation([words, start]: readonly [
   readonly ShellWord[],
   number,
 ]): ToolInvocation | false {
-  const runtime = posix.basename(words[start]?.value ?? '');
+  const [defaulted6 = ''] = [words[start]?.value];
+  const runtime = posix.basename(defaulted6);
   const direct = configurationTool(runtime);
   if (direct !== false) return { argumentStart: start + 1, tool: direct };
   const wrapperStart = wrapperToolStart([runtime, words, start + 1]);
@@ -340,7 +353,7 @@ function toolInvocation([words, start]: readonly [
     if (wrapped !== false)
       return { argumentStart: wrapperStart + 1, tool: wrapped };
   }
-  const execTool = words[start + 2] ?? false;
+  const [execTool = false] = [words[start + 2]];
   if (
     (runtime === 'bun' || runtime === 'npm') &&
     (words[start + 1]?.value === 'x' || words[start + 1]?.value === 'exec') &&
@@ -369,7 +382,7 @@ function wrapperToolStart([runtime, words, start]: readonly [
     }
     if (word.value === '--') return index + 1;
     if (!word.value.startsWith('-') || word.value === '-') return index;
-    const option = word.value.split('=')[0] ?? '';
+    const [option = ''] = [word.value.split('=')[0]];
     if (WRAPPER_BOOLEAN_OPTIONS.has(word.value)) {
       index += 1;
       continue;

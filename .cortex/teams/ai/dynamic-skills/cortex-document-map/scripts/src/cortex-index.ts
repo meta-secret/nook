@@ -208,10 +208,9 @@ export function parseDocumentIndex(
       if (heading.depth === 1) {
         continue;
       }
-      while (
-        depthStack.length > 0 &&
-        (depthStack.at(-1) ?? 0) >= heading.depth
-      ) {
+      while (depthStack.length > 0) {
+        const [parentDepth = 0] = [depthStack.at(-1)];
+        if (parentDepth < heading.depth) break;
         depthStack.pop();
       }
       depthStack.push(heading.depth);

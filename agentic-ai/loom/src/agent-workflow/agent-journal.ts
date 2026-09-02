@@ -228,9 +228,11 @@ export class AgentAttemptJournal<TTask extends string> {
     this.liveSequence = 0;
     this.pendingAppend = Promise.resolve();
     this.finalized = false;
-    this.moduleExpertJournalBinding = pendingBinding ?? false;
+    const [defaulted1 = false] = [pendingBinding];
+    this.moduleExpertJournalBinding = defaulted1;
     this.trustedModuleExpertFinalization = false;
-    this.structuralExpertJournalBinding = pendingStructuralBinding ?? false;
+    const [defaulted2 = false] = [pendingStructuralBinding];
+    this.structuralExpertJournalBinding = defaulted2;
     this.trustedStructuralExpertFinalization = false;
   }
 
@@ -287,11 +289,11 @@ export class AgentAttemptJournal<TTask extends string> {
     });
     this.pendingAppend = appendOperation;
     await appendOperation;
-    const compactOutput =
-      this.configuration.compactOutput ??
-      ((line: string): void => {
+    const [
+      compactOutput = (line: string): void => {
         process.stderr.write(line);
-      });
+      },
+    ] = [this.configuration.compactOutput];
     try {
       await compactOutput(renderAgentAttemptEvent(completeEvent));
     } catch {
@@ -323,23 +325,24 @@ export class AgentAttemptJournal<TTask extends string> {
     ) {
       throw new Error('Agent runtime activity is invalid.');
     }
-    const references = observation.cortexReferences ?? [];
+    const [references = []] = [observation.cortexReferences];
     if (references.length > 0 && !this.configuration.knownCortexIdentifiers) {
       throw new Error(
         'Agent runtime activity Cortex references require a source-bound registry.',
       );
     }
+    const [defaulted3 = false] = [this.configuration.knownCortexIdentifiers];
     const referenceArgs: AssertCortexReferencesArgs = {
       references,
-      knownIdentifiers: this.configuration.knownCortexIdentifiers ?? false,
+      knownIdentifiers: defaulted3,
     };
     assertCortexReferences(referenceArgs);
     this.liveSequence += 1;
-    const compactOutput =
-      this.configuration.compactOutput ??
-      ((line: string): void => {
+    const [
+      compactOutput = (line: string): void => {
         process.stderr.write(line);
-      });
+      },
+    ] = [this.configuration.compactOutput];
     try {
       await compactOutput(
         renderRuntimeActivityObservation({

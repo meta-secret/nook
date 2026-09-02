@@ -77,7 +77,7 @@ export function mergeReviewedDeliveryHeads(
       action_seconds: 0,
       obsolete_action_seconds: 0,
     };
-    const existingIndex = indexByHead.get(headSha) ?? -1;
+    const [existingIndex = -1] = [indexByHead.get(headSha)];
     if (existingIndex < 0) {
       indexByHead.set(headSha, heads.length);
       heads.push(sealUntrustedYamlMap(headRecord));
@@ -143,8 +143,8 @@ export function deliveryHeadStarts(
   for (const candidate of unsorted) {
     let inserted = false;
     for (const [index, existing] of sorted.entries()) {
-      const candidateOrder = orderByHead.get(candidate.headSha) ?? -1;
-      const existingOrder = orderByHead.get(existing.headSha) ?? -1;
+      const [candidateOrder = -1] = [orderByHead.get(candidate.headSha)];
+      const [existingOrder = -1] = [orderByHead.get(existing.headSha)];
       const bothKnown = candidateOrder >= 0 && existingOrder >= 0;
       if (
         (bothKnown && candidateOrder < existingOrder) ||
@@ -165,7 +165,7 @@ export function deliveryHeadStarts(
 }
 
 function retainEarlierStart(request: RetainEarlierStartRequest): void {
-  const existing = request.starts.get(request.headSha) ?? '';
+  const [existing = ''] = [request.starts.get(request.headSha)];
   if (existing.length === 0 || request.observedAt < existing) {
     request.starts.set(request.headSha, request.observedAt);
   }
@@ -174,7 +174,7 @@ function retainEarlierStart(request: RetainEarlierStartRequest): void {
 export function minimumTimestamp(request: TimestampExtremaRequest): string {
   const populated = request.values.filter((value) => value.length > 0);
   if (populated.length === 0) return '';
-  let minimum = populated[0] ?? '';
+  let [minimum = ''] = [populated[0]];
   for (const value of populated) if (value < minimum) minimum = value;
   return minimum;
 }
@@ -182,7 +182,7 @@ export function minimumTimestamp(request: TimestampExtremaRequest): string {
 export function maximumTimestamp(request: TimestampExtremaRequest): string {
   const populated = request.values.filter((value) => value.length > 0);
   if (populated.length === 0) return '';
-  let maximum = populated[0] ?? '';
+  let [maximum = ''] = [populated[0]];
   for (const value of populated) if (value > maximum) maximum = value;
   return maximum;
 }

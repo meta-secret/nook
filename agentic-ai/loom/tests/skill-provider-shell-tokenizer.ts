@@ -17,7 +17,7 @@ export function isShellCommentStart([source, index, wordActive]: readonly [
 export function hasUnquotedExpansion(source: string): boolean {
   let quote = '';
   for (let index = 0; index < source.length; index += 1) {
-    const character = source[index] ?? '';
+    const [character = ''] = [source[index]];
     if (quote) {
       if (character === '\\' && quote === '"') index += 1;
       else if (character === quote) quote = '';
@@ -46,7 +46,7 @@ export function tokenizeShell(source: string): readonly ShellToken[] {
     dynamic = false;
   };
   for (let index = 0; index < source.length; index += 1) {
-    const character = source[index] ?? '';
+    const [character = ''] = [source[index]];
     const compoundClosing =
       quote.length === 0 && source.slice(index, index + 2) === '(('
         ? '))'
@@ -71,7 +71,7 @@ export function tokenizeShell(source: string): readonly ShellToken[] {
       dynamic = true;
       index += 2;
       for (; index < source.length && depth > 0; index += 1) {
-        const nested = source[index] ?? '';
+        const [nested = ''] = [source[index]];
         raw += nested;
         value += nested;
         if (nestedQuote.length > 0) {
@@ -81,8 +81,10 @@ export function tokenizeShell(source: string): readonly ShellToken[] {
             index + 1 < source.length
           ) {
             index += 1;
-            raw += source[index] ?? '';
-            value += source[index] ?? '';
+            const [defaulted1 = ''] = [source[index]];
+            raw += defaulted1;
+            const [defaulted2 = ''] = [source[index]];
+            value += defaulted2;
           } else if (nested === nestedQuote) nestedQuote = '';
         } else if (nested === '"' || nested === "'") nestedQuote = nested;
         else if (nested === '(') depth += 1;
@@ -104,7 +106,7 @@ export function tokenizeShell(source: string): readonly ShellToken[] {
     if (quote.length > 0) {
       raw += character;
       if (quote === '"' && character === '\\' && index + 1 < source.length) {
-        const escaped = source[index + 1] ?? '';
+        const [escaped = ''] = [source[index + 1]];
         raw += escaped;
         value += escaped;
         index += 1;
@@ -134,8 +136,10 @@ export function tokenizeShell(source: string): readonly ShellToken[] {
       continue;
     }
     if (character === '\\' && index + 1 < source.length) {
-      raw += character + (source[index + 1] ?? '');
-      value += source[index + 1] ?? '';
+      const [defaulted3 = ''] = [source[index + 1]];
+      raw += character + defaulted3;
+      const [defaulted4 = ''] = [source[index + 1]];
+      value += defaulted4;
       index += 1;
       continue;
     }

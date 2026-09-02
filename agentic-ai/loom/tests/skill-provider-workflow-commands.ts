@@ -29,17 +29,19 @@ export function workflowCommandSources(
   const root = mapping(request.document);
   const commands: string[] = [];
   if (request.action) {
-    const runs = mapping(root.runs ?? false);
+    const [runsNode = false] = [root.runs];
+    const runs = mapping(runsNode);
     if (runs.using === 'composite') {
       const environmentRequest: StaticEnvironmentRequest = {
         inherited: false,
         node: root,
       };
+      const [steps = false] = [runs.steps];
       const stepRequest: StepRunRequest = {
         defaultDirectory: '',
         defaultShell: workflowDefaultShell(root),
         environment: staticEnvironment(environmentRequest),
-        steps: runs.steps ?? false,
+        steps,
         target: commands,
       };
       collectStepRuns(stepRequest);
@@ -53,13 +55,15 @@ export function workflowCommandSources(
     node: root,
   };
   const workflowEnvironment = staticEnvironment(workflowEnvironmentRequest);
-  for (const job of Object.values(mapping(root.jobs ?? false))) {
+  const [jobs = false] = [root.jobs];
+  for (const job of Object.values(mapping(jobs))) {
     const jobNode = mapping(job);
     const jobDirectory = defaultWorkingDirectory(jobNode);
     const environmentRequest: StaticEnvironmentRequest = {
       inherited: workflowEnvironment,
       node: jobNode,
     };
+    const [steps = false] = [jobNode.steps];
     const stepRequest: StepRunRequest = {
       defaultDirectory: jobDirectory || workflowDirectory,
       defaultShell:
@@ -67,7 +71,7 @@ export function workflowCommandSources(
         workflowShell ||
         workflowRunnerDefaultShell(jobNode),
       environment: staticEnvironment(environmentRequest),
-      steps: jobNode.steps ?? false,
+      steps,
       target: commands,
     };
     collectStepRuns(stepRequest);
@@ -80,12 +84,16 @@ export function workflowGithubScriptSources(
 ): readonly string[] {
   const root = mapping(request.document);
   if (request.action) {
-    const runs = mapping(root.runs ?? false);
-    return githubScriptSources(runs.steps ?? false);
+    const [runsNode = false] = [root.runs];
+    const runs = mapping(runsNode);
+    const [steps = false] = [runs.steps];
+    return githubScriptSources(steps);
   }
-  return Object.values(mapping(root.jobs ?? false)).flatMap((job) =>
-    githubScriptSources(mapping(job).steps ?? false),
-  );
+  const [jobs = false] = [root.jobs];
+  return Object.values(mapping(jobs)).flatMap((job) => {
+    const [steps = false] = [mapping(job).steps];
+    return githubScriptSources(steps);
+  });
 }
 
 function githubScriptSources(steps: ConfigurationNode): readonly string[] {
@@ -97,7 +105,8 @@ function githubScriptSources(steps: ConfigurationNode): readonly string[] {
       !node.uses.startsWith('actions/github-script@')
     )
       return [];
-    const source = mapping(node.with ?? false).script;
+    const [withNode = false] = [node.with];
+    const source = mapping(withNode).script;
     if (typeof source !== 'string')
       throw new Error('github-script step has no static script body.');
     if (source.includes('${{'))
@@ -113,7 +122,8 @@ function collectStepRuns(request: StepRunRequest): void {
   for (const step of request.steps) {
     const node = mapping(step);
     if (typeof node.run !== 'string') continue;
-    assertSafeWorkflowShell(node.shell ?? request.defaultShell);
+    const [defaulted10 = request.defaultShell] = [node.shell];
+    assertSafeWorkflowShell(defaulted10);
     assertNoProtectedCommandFileMutation(node.run);
     const directory =
       typeof node['working-directory'] === 'string'
@@ -184,9 +194,8 @@ function staticEnvironment(
   request: StaticEnvironmentRequest,
 ): ReadonlyMap<string, string> {
   const values = new Map(request.inherited || []);
-  for (const [name, value] of Object.entries(
-    mapping(request.node.env ?? false),
-  ))
+  const [environment = false] = [request.node.env];
+  for (const [name, value] of Object.entries(mapping(environment)))
     if (
       /^[A-Za-z_]\w*$/u.test(name) &&
       typeof value === 'string' &&
@@ -197,14 +206,18 @@ function staticEnvironment(
 }
 
 function defaultWorkingDirectory(node: ConfigurationMapping): string {
-  const run = mapping(mapping(node.defaults ?? false).run ?? false);
+  const [defaults = false] = [node.defaults];
+  const [runNode = false] = [mapping(defaults).run];
+  const run = mapping(runNode);
   return typeof run['working-directory'] === 'string'
     ? run['working-directory']
     : '';
 }
 
 function workflowDefaultShell(node: ConfigurationMapping): string | false {
-  const runDefaults = mapping(mapping(node.defaults ?? false).run ?? false);
+  const [defaults = false] = [node.defaults];
+  const [runNode = false] = [mapping(defaults).run];
+  const runDefaults = mapping(runNode);
   if (!('shell' in runDefaults)) return false;
   const shell = runDefaults.shell;
   assertSafeWorkflowShell(shell);

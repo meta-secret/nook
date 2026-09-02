@@ -458,7 +458,7 @@ describe('executable skill source policy', () => {
       'const Realm = ShadowRealm; new Realm();',
       "Bun.stdout = '/tmp/out';",
       "Bun.stderr += '/tmp/out';",
-      'Bun.stdout ??= value;',
+      'Bun.stdout **= value;',
       'Bun.stderr &&= value;',
       'Bun.stdin ||= value;',
       '++Bun.stdin;',

@@ -619,6 +619,7 @@ describe('module expert audit', () => {
         ),
       }),
     );
+    const [defaulted1 = ''] = [internalApiProfile.generatedScopePaths[0]?.path];
     const driftedProfiles: readonly ModuleExpertProfile[] = [
       ...missingScopeProfiles,
       {
@@ -627,10 +628,7 @@ describe('module expert audit', () => {
       },
       {
         ...internalApiProfile,
-        scopePaths: [
-          ...internalApiProfile.scopePaths,
-          internalApiProfile.generatedScopePaths[0]?.path ?? '',
-        ],
+        scopePaths: [...internalApiProfile.scopePaths, defaulted1],
       },
       {
         ...internalApiProfile,

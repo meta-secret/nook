@@ -28,7 +28,9 @@ spyOn(codexRuntime, 'runIsolatedReadOnlyExpertCodex').mockImplementation(
 export function registerStructuralRuntimeMock(
   request: RegisterStructuralRuntimeMockRequest,
 ): StructuralRuntimeMockRegistration {
-  const runtimes = RUNTIMES.get(request.runId) ?? [];
+  const [runtimes = new Array<AgentTaskRuntime<string, string>>()] = [
+    RUNTIMES.get(request.runId),
+  ];
   runtimes.push(request.runtime);
   RUNTIMES.set(request.runId, runtimes);
   return {

@@ -9,10 +9,8 @@ export function validationRetriggerCount(
   for (const cycle of cycles) {
     const workflowRequest = { record: cycle, key: 'workflow' };
     const workflow = stringProperty(workflowRequest);
-    attemptsByWorkflow.set(
-      workflow,
-      (attemptsByWorkflow.get(workflow) ?? 0) + 1,
-    );
+    const [defaulted1 = 0] = [attemptsByWorkflow.get(workflow)];
+    attemptsByWorkflow.set(workflow, defaulted1 + 1);
   }
   let retriggers = 0;
   for (const attempts of attemptsByWorkflow.values()) {

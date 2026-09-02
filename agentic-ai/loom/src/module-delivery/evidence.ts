@@ -419,11 +419,13 @@ export function restoreModuleDeliveryCanonicalEvidenceReceipt(
     ...canonicalReceipt,
     evidence: Object.freeze([]),
   });
+  const [defaulted1 = []] = [
+    request.state.integratedWriterFrontiers[0]?.integratedTaskIds,
+  ];
   request.registry.register({
     authority: request.authority,
     evidence,
-    integratedTaskIds:
-      request.state.integratedWriterFrontiers[0]?.integratedTaskIds ?? [],
+    integratedTaskIds: defaulted1,
   });
   return evidence;
 }

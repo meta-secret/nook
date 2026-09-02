@@ -204,12 +204,14 @@ export async function buildPrAudit(
     if (workflow.state === WorkflowAuditState.Indexed) {
       for (const job of workflow.requiredJobAudits) {
         if (job.status !== WorkflowRunStatusState.Completed) {
+          const [defaulted1 = ("missing")] = [job.status];
           reasons.push(
-            `${job.name} is ${job.status ?? "missing"} on the latest ${workflow.workflowName} run`,
+            `${job.name} is ${defaulted1} on the latest ${workflow.workflowName} run`,
           );
         } else if (job.conclusion !== GithubWorkflowConclusion.Success) {
+          const [defaulted2 = ("unknown")] = [job.conclusion];
           reasons.push(
-            `${job.name} concluded ${job.conclusion ?? "unknown"} on the latest ${workflow.workflowName} run`,
+            `${job.name} concluded ${defaulted2} on the latest ${workflow.workflowName} run`,
           );
         }
       }
@@ -236,6 +238,7 @@ export async function buildPrAudit(
       `${feedback.unthreadedReviewFindings} unthreaded submitted review finding(s) already present`,
     );
   }
+  const [defaulted3 = (false)] = [pr.draft];
   return {
     base: { branch: pr.base.ref, sha: pr.base.sha },
     branchProtection,
@@ -246,7 +249,7 @@ export async function buildPrAudit(
     head: { branch: pr.head.ref, sha: pr.head.sha },
     mergeState: {
       behindBy: comparison.data.behind_by,
-      draft: pr.draft ?? false,
+      draft: defaulted3,
       mergeability,
       state: pr.state,
     },
@@ -274,16 +277,20 @@ async function auditWorkflows(
         per_page: 20,
       });
       const runs = data.workflow_runs
-        .filter(
-          (candidate) =>
+        .filter((candidate) => {
+          const pullRequests = Array.isArray(candidate.pull_requests)
+            ? candidate.pull_requests
+            : [];
+          return (
             candidate.head_sha === request.headSha &&
-            (candidate.pull_requests ?? []).some(
+            pullRequests.some(
               (pullRequest) =>
                 pullRequest.number === request.prNumber &&
                 (workflow.workflowFile === "web-research.yml" ||
                   pullRequest.base.sha === request.baseSha),
-            ),
-        )
+            )
+          );
+        })
         .sort(
           (left, right) =>
             Date.parse(right.created_at) - Date.parse(left.created_at),
@@ -304,11 +311,12 @@ async function auditWorkflows(
           : typeof run.status === "string"
             ? { state: WorkflowRunStatusState.Other, value: run.status }
             : { state: WorkflowRunStatusState.Unavailable };
+      const [defaulted5 = ([])] = [workflow.requiredJobs];
       const requiredJobAudits = await auditRequiredJobs(
         request.octokit,
         { owner, repo },
         run.id,
-        workflow.requiredJobs ?? [],
+        defaulted5,
       );
       return {
         ...workflow,
@@ -368,16 +376,17 @@ async function inspectBranchProtection(
       repo,
       branch,
     });
+    const [defaulted6 = (0)] = [data.required_pull_request_reviews?.required_approving_review_count];
+    const [defaulted7 = (false)] = [data.required_conversation_resolution?.enabled];
+    const [defaulted8 = new Array<string>()] = [data.required_status_checks?.checks?.map((check) => check.context)];
     return {
       available: true,
       requiresApprovingReviews:
-        (data.required_pull_request_reviews?.required_approving_review_count ??
-          0) > 0,
+        (defaulted6) > 0,
       requiresConversationResolution:
-        data.required_conversation_resolution?.enabled ?? false,
+        defaulted7,
       requiredStatusChecks:
-        data.required_status_checks?.checks?.map((check) => check.context) ??
-        [],
+        defaulted8,
     };
   } catch (error: unknown) {
     if (isHttpStatus(error, 403) || isHttpStatus(error, 404)) {
@@ -419,7 +428,7 @@ async function inspectExactHeadDeployment(
 }
 
 function readPrNumber(): number {
-  const raw = process.env.PR_NUMBER?.trim() ?? "";
+  const [raw = ("")] = [process.env.PR_NUMBER?.trim()];
   const value = Number(raw);
   if (!Number.isInteger(value) || value <= 0) {
     throw new Error(

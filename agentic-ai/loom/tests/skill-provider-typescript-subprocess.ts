@@ -214,7 +214,7 @@ function assertUnsupportedArguments([call, model]: readonly [
     model,
     visited: new Set(),
   });
-  for (const argument of call.arguments ?? []) {
+  for (const argument of call.arguments ? call.arguments : []) {
     const callArgumentRequest: UnsupportedCallArgumentRequest = {
       call: call.getText(),
       capability: (expression) => resolveCapability(requestFor(expression)),
@@ -572,7 +572,7 @@ function commandFromRunCommand(request: CallCommandRequest): StaticCommand {
   return result;
 }
 function isExactRunCommandDispatch(request: CallCommandRequest): boolean {
-  const [command, args] = request.call.arguments ?? [];
+  const [command, args] = request.call.arguments ? request.call.arguments : [];
   if (!command || !args || !ts.isIdentifier(command)) return false;
   const binding = lookupBinding([request.model, command, command.text]);
   const initializer = binding === false ? false : binding.initializer;
@@ -989,8 +989,9 @@ function evaluatePathCall([request, call]: readonly [
   });
   if (values.some((value) => value.dynamic)) return false;
   const text = values.map((value) => value.value);
+  const [first = ''] = text;
   if (name === 'dirname')
-    return { dynamic: false, value: posix.dirname(text[0] ?? '') };
+    return { dynamic: false, value: posix.dirname(first) };
   return {
     dynamic: false,
     value: name === 'join' ? posix.join(...text) : posix.resolve(...text),

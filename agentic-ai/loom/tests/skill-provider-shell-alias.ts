@@ -38,13 +38,15 @@ export function applyAliasMutation(request: AliasRequest): boolean {
       if (alias.value === '-p' || /^[A-Za-z_]\w*$/u.test(alias.value)) continue;
       const match = /^([A-Za-z_]\w*)=([\s\S]*)$/u.exec(alias.value);
       if (!match) throw new Error('Invalid shell alias definition.');
-      request.state.aliases.set(match[1] ?? '', match[2] ?? '');
+      const [defaulted1 = ''] = [match[1]];
+      const [defaulted2 = ''] = [match[2]];
+      request.state.aliases.set(defaulted1, defaulted2);
     }
   return true;
 }
 
 export function aliasInvocationSource(request: AliasRequest): string | false {
-  const body = request.state.aliases.get(request.command.value) ?? false;
+  const [body = false] = [request.state.aliases.get(request.command.value)];
   return body === false
     ? false
     : [

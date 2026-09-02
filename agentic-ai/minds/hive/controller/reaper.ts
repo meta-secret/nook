@@ -126,10 +126,12 @@ function normalizeIpv4(value: string): string {
 }
 
 function isNeo4jIpRule(rule: EgressRule): boolean {
+  const [ports = []] = [rule.ports];
+  const [targets = []] = [rule.to];
   return (
-    (rule.ports ?? []).some(
+    ports.some(
       (port) => port.protocol === "TCP" && port.port === 7687,
-    ) && (rule.to ?? []).some((target) => "ipBlock" in target)
+    ) && targets.some((target) => "ipBlock" in target)
   );
 }
 
@@ -169,8 +171,12 @@ export class ReaperController {
     const service = await this.api.json<Service>(serviceRequest);
     const endpoints = await this.api.json<Endpoints>(endpointsRequest);
     const serviceIp = normalizeIpv4(service.spec.clusterIP);
-    const endpointIps = (endpoints.subsets ?? [])
-      .flatMap((subset) => subset.addresses ?? [])
+    const [subsets = []] = [endpoints.subsets];
+    const endpointIps = subsets
+      .flatMap((subset) => {
+        const [addresses = []] = [subset.addresses];
+        return addresses;
+      })
       .map((address) => normalizeIpv4(address.ip))
       .sort();
     const destinations: NetworkTarget[] = [
@@ -207,8 +213,9 @@ export class ReaperController {
         throw new Error("Neo4j endpoint egress rule is missing");
       }
       const rule = rules[0]!;
+      const [left = []] = [rule.to];
       const comparison = {
-        left: rule.to ?? [],
+        left,
         right: input.destinations,
       };
       if (destinationsEqual(comparison)) {
@@ -307,8 +314,7 @@ export function createReaperRequestHandler(
     if (request.method !== "POST") {
       return responseWithStatus(404);
     }
-    const supplied =
-      request.headers.get("Authorization")?.replace(/^Bearer /, "") ?? "";
+    const [supplied = ("")] = [request.headers.get("Authorization")?.replace(/^Bearer /, "")];
     const expected = (await input.readExpectedToken()).trim();
     const match = new URL(request.url).pathname.match(
       /^\/reap\/(hive-[a-z0-9-]+)$/,
@@ -317,7 +323,8 @@ export function createReaperRequestHandler(
     if (!match || !secureEqual(credentials)) {
       return responseWithStatus(403);
     }
-    return input.controller.reap(match.at(1) ?? "");
+    const [, task = ""] = match;
+    return input.controller.reap(task);
   };
 }
 

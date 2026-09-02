@@ -58,7 +58,7 @@ export function verifyCortexDocumentMapResult(
     throw new Error(FAILURE);
   }
   for (const [index, wanted] of expected.entries()) {
-    const actual = request.result.findings.at(index) ?? false;
+    const [actual = false] = [request.result.findings.at(index)];
     if (
       actual === false ||
       actual.code !== wanted.code ||
@@ -115,11 +115,11 @@ function deriveTopology(args: {
       document,
     ]),
   );
-  const root =
-    catalog.get('.cortex/knowledge-graph.md') ??
-    catalog.get('.cortex/k-graph.md') ??
-    catalog.get('.cortex/INDEX.md') ??
-    false;
+  const [root = false] = [
+    ['.cortex/knowledge-graph.md', '.cortex/k-graph.md', '.cortex/INDEX.md']
+      .map((path) => catalog.get(path))
+      .find(Boolean),
+  ];
   if (root === false) {
     add(args.findings)({
       code: CortexStructureFindingCode.MissingIndex,
@@ -153,7 +153,7 @@ function deriveGraphFindings(args: {
   graphDocuments.set(rootPath, args.root);
   if (distributed) {
     for (const graphPath of OWNER_GRAPHS) {
-      const graph = args.catalog.get(graphPath) ?? false;
+      const [graph = false] = [args.catalog.get(graphPath)];
       if (graph === false) {
         add(args.findings)({
           code: CortexStructureFindingCode.MissingIndex,
@@ -191,7 +191,7 @@ function deriveGraphFindings(args: {
     });
   }
   if (!distributed) return;
-  const rootIndexed = indexedByGraph.get(rootPath) ?? new Set<string>();
+  const [rootIndexed = new Set<string>()] = [indexedByGraph.get(rootPath)];
   for (const graphPath of OWNER_GRAPHS) {
     if (rootIndexed.has(graphPath)) continue;
     add(args.findings)({
@@ -202,7 +202,8 @@ function deriveGraphFindings(args: {
     });
   }
   for (const graphPath of OWNER_GRAPHS) {
-    for (const indexedPath of indexedByGraph.get(graphPath) ?? []) {
+    const [indexedPaths = []] = [indexedByGraph.get(graphPath)];
+    for (const indexedPath of indexedPaths) {
       const indexedOwner = owner(indexedPath);
       if (indexedOwner === false || indexedOwner === owner(graphPath)) continue;
       add(args.findings)({
@@ -238,11 +239,12 @@ function deriveIndexFindings(args: {
 }): void {
   const headings = args.graph.root.children.filter(isHeading);
   const h1s = headings.filter((heading) => heading.depth === 1);
+  const [firstH1 = false] = h1s;
   if (h1s.length !== 1 || args.graph.root.children[0] !== h1s[0]) {
     add(args.findings)({
       code: CortexStructureFindingCode.InvalidTitle,
       file: args.graph.relativePath,
-      line: line(h1s[0] ?? false),
+      line: line(firstH1),
       message: 'Knowledge graph must begin with exactly one H1 title.',
     });
   }
@@ -257,7 +259,7 @@ function deriveIndexFindings(args: {
       args.indexed.add(resolved.target);
       continue;
     }
-    const target = args.catalog.get(resolved.target) ?? false;
+    const [target = false] = [args.catalog.get(resolved.target)];
     if (target === false) {
       add(args.findings)({
         code: CortexStructureFindingCode.InvalidIndexEntry,
@@ -268,7 +270,8 @@ function deriveIndexFindings(args: {
       continue;
     }
     args.indexed.add(resolved.target);
-    counts.set(resolved.target, (counts.get(resolved.target) ?? 0) + 1);
+    const [count = 0] = [counts.get(resolved.target)];
+    counts.set(resolved.target, count + 1);
     if (resolved.fragment === false) continue;
     if (!target.fragments.has(resolved.fragment)) {
       add(args.findings)({
@@ -302,11 +305,12 @@ function deriveDocumentFindings(args: {
 }): void {
   const headings = args.document.root.children.filter(isHeading);
   const h1s = headings.filter((heading) => heading.depth === 1);
+  const [firstH1 = false] = h1s;
   if (h1s.length !== 1 || args.document.root.children[0] !== h1s[0]) {
     add(args.findings)({
       code: CortexStructureFindingCode.InvalidTitle,
       file: args.document.relativePath,
-      line: line(h1s[0] ?? false),
+      line: line(firstH1),
       message: 'Document must begin with exactly one H1 title.',
     });
   }
@@ -387,7 +391,9 @@ function owner(value: string): string | false {
     /^\.cortex\/(gizmo|shared|teams\/(?:ai|dev-core|security|sre|web-dev))\//u.exec(
       value,
     );
-  return match?.[1] ?? false;
+  if (!match) return false;
+  const [, context = false] = match;
+  return context;
 }
 
 function links(root: Root): Link[] {

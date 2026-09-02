@@ -64,7 +64,8 @@ function normalizedMarkdownSection(
 
 function markdownHeadingLevel(heading: string): number | false {
   const match = /^(#{1,6})\s+\S/u.exec(heading);
-  return match?.[1]?.length ?? false;
+  const [defaulted1 = false] = [match?.[1]?.length];
+  return defaulted1;
 }
 
 function normalizedMarkdown(value: string): string {

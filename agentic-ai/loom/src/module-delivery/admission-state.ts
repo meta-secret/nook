@@ -142,8 +142,9 @@ export function prepareFinalAdmissionState(
     transitionInspection,
   );
   const state = materializedAdmissionState(materialization);
-  const integratedTaskIds =
-    state.integratedWriterFrontiers[0]?.integratedTaskIds ?? [];
+  const [integratedTaskIds = []] = [
+    state.integratedWriterFrontiers[0]?.integratedTaskIds,
+  ];
   const integratedTaskSet = new Set(integratedTaskIds);
   const canonicalTaskIds = request.canonicalTransition.integratedTaskIds;
   if (
@@ -233,7 +234,8 @@ function materializedAdmissionState(
     acceptedPlan,
   };
   const frontiers = authenticatedFrontiers(frontierRequest);
-  const integratedTaskIds = new Set(frontiers[0]?.integratedTaskIds ?? []);
+  const [defaulted1 = []] = [frontiers[0]?.integratedTaskIds];
+  const integratedTaskIds = new Set(defaulted1);
   const integratedWrites = acceptedPlan.plan.nodes
     .filter(({ taskId }) => integratedTaskIds.has(taskId))
     .map(({ taskId, resources }) => ({ taskId, claims: resources.write }));
@@ -249,8 +251,9 @@ function materializedAdmissionState(
   const previousProvenance = previousState
     ? stateProvenance.get(previousState)
     : false;
-  const previousTaskIds =
-    previousState?.integratedWriterFrontiers[0]?.integratedTaskIds ?? [];
+  const [previousTaskIds = []] = [
+    previousState?.integratedWriterFrontiers[0]?.integratedTaskIds,
+  ];
   if (
     previousState &&
     (!previousProvenance ||
@@ -282,8 +285,9 @@ function authenticatedFrontiers(
   const { request, acceptedPlan } = input;
   if (!/^[0-9a-f]{40}$/u.test(request.headCommit))
     throw new Error('Module delivery admission head must be an exact commit.');
-  const integratedTaskIds =
-    request.integratedWriterFrontiers[0]?.integratedTaskIds ?? [];
+  const [integratedTaskIds = []] = [
+    request.integratedWriterFrontiers[0]?.integratedTaskIds,
+  ];
   const seen = new Set<string>();
   const frontiers = request.integratedWriterFrontiers.map((entry) => {
     const node = acceptedPlan.plan.nodes.find(

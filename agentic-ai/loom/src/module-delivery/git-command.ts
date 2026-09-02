@@ -77,11 +77,18 @@ export function runModuleDeliveryGit(
   const execution = spawnSync('git', args, options);
   const stdout = Buffer.isBuffer(execution.stdout)
     ? execution.stdout
-    : Buffer.from(execution.stdout ?? '', 'utf8');
-  const stderr = Buffer.from(execution.stderr ?? '')
+    : Buffer.from(
+        typeof execution.stdout === 'string' ? execution.stdout : '',
+        'utf8',
+      );
+  const stderr = Buffer.from(
+    typeof execution.stderr === 'string' || Buffer.isBuffer(execution.stderr)
+      ? execution.stderr
+      : '',
+  )
     .toString('utf8')
     .trim();
-  const exitCode = execution.status ?? -1;
+  const exitCode = typeof execution.status === 'number' ? execution.status : -1;
   if (execution.error) {
     throw new Error(`Git could not start: ${execution.error.message}`);
   }

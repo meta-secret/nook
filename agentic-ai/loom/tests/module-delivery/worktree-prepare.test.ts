@@ -128,7 +128,7 @@ describe('prepareModuleWorktree', () => {
     );
 
     const hadGitDirectory = 'GIT_DIR' in process.env;
-    const previousGitDirectory = process.env.GIT_DIR ?? '';
+    const [previousGitDirectory = ''] = [process.env.GIT_DIR];
     process.env.GIT_DIR = join(fixture.root, 'does-not-exist');
     const scrubbed = prepared(base);
     expect(scrubbed.baselineCommit).toBe(fixture.baselineCommit);
@@ -171,7 +171,7 @@ describe('prepareModuleWorktree', () => {
     chmodSync(monitor, 0o755);
     writeFileSync(globalConfig, `[core]\n\tfsmonitor = ${monitor}\n`);
     const hadGlobalConfig = 'GIT_CONFIG_GLOBAL' in process.env;
-    const previousConfig = process.env.GIT_CONFIG_GLOBAL ?? '';
+    const [previousConfig = ''] = [process.env.GIT_CONFIG_GLOBAL];
     process.env.GIT_CONFIG_GLOBAL = globalConfig;
     try {
       prepared(prepareRequest(fixture));
@@ -185,7 +185,7 @@ describe('prepareModuleWorktree', () => {
   test('does not inherit ambient process environment in Git commands', () => {
     const fixture = createTrackedFixture();
     const hadEmail = 'EMAIL' in process.env;
-    const previousEmail = process.env.EMAIL ?? '';
+    const [previousEmail = ''] = [process.env.EMAIL];
     process.env.EMAIL = 'ambient-authority@nook.invalid';
     try {
       const result = runModuleDeliveryGit({
@@ -202,7 +202,7 @@ describe('prepareModuleWorktree', () => {
   test('validates executable search paths for the host platform', () => {
     const fixture = createTrackedFixture();
     const hadPath = 'PATH' in process.env;
-    const previousPath = process.env.PATH ?? '';
+    const [previousPath = ''] = [process.env.PATH];
     try {
       process.env.PATH = `relative-bin:${previousPath || '/usr/bin'}`;
       expect(() =>

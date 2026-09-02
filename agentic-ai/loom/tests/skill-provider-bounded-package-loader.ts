@@ -80,7 +80,7 @@ export function specializeBoundedPackageLoaders(
   while (pending.length > 0) {
     let latestIndex = 0;
     for (let index = 1; index < pending.length; index += 1) {
-      if ((pending[index]?.start ?? -1) > (pending[latestIndex]?.start ?? -1)) {
+      if (pending[index]!.start > pending[latestIndex]!.start) {
         latestIndex = index;
       }
     }
@@ -121,10 +121,10 @@ export function specializeProvenGeneratedArtifactLoader(
   if (!dynamicImport || !urlArgument || !ts.isIdentifier(urlArgument)) {
     return inspection.source;
   }
-  const urlDeclaration = declarations.get(urlArgument.text) ?? false;
+  const [urlDeclaration = false] = [declarations.get(urlArgument.text)];
   const target = generatedArtifactTarget(urlDeclaration);
   if (target === false) return inspection.source;
-  const siteDeclaration = declarations.get(target.root.text) ?? false;
+  const [siteDeclaration = false] = [declarations.get(target.root.text)];
   const output = fixedOutputDirectory(siteDeclaration);
   const useInspection: IdentifierUseInspection = {
     name: urlArgument.text,
@@ -256,7 +256,7 @@ function generatedArtifactProducer(
   request: GeneratedArtifactProducerInspection,
 ): GeneratedArtifactProducer | false {
   for (const root of request.inspection.roots) {
-    const source = request.inspection.sources.get(root) ?? '';
+    const [source = ''] = [request.inspection.sources.get(root)];
     if (
       !source.includes('copyFileSync') ||
       !source.includes(`'${request.artifact}'`)
@@ -267,10 +267,11 @@ function generatedArtifactProducer(
         source,
       );
     if (!sourceMatch || sourceMatch[2] !== request.artifact) continue;
-    const sourcePath = posix.join(posix.dirname(root), sourceMatch[1] ?? '');
+    const [, sourcePathSuffix = ''] = sourceMatch;
+    const sourcePath = posix.join(posix.dirname(root), sourcePathSuffix);
     if (!request.inspection.sources.has(sourcePath)) continue;
     const envProvesOutput = [...request.inspection.roots].some((path) => {
-      const config = request.inspection.sources.get(path) ?? '';
+      const [config = ''] = [request.inspection.sources.get(path)];
       return (
         config.includes('VITE_NOOK_APP_KIND=site') &&
         config.includes(`VITE_NOOK_OUT_DIR=${request.output}`)
@@ -321,10 +322,10 @@ export function specializeBoundedLocalDataLoaders(
     if (!moduleDeclaration) continue;
     const sourceBinding = dataUrlSourceBinding(moduleDeclaration);
     if (sourceBinding === false) continue;
-    const sourceDeclaration = declarations.get(sourceBinding.text) ?? false;
+    const [sourceDeclaration = false] = [declarations.get(sourceBinding.text)];
     const pathBinding = readFilePathBinding(sourceDeclaration);
     if (pathBinding === false) continue;
-    const pathDeclaration = declarations.get(pathBinding.text) ?? false;
+    const [pathDeclaration = false] = [declarations.get(pathBinding.text)];
     const pathInspection: TrackedResolvedPathInspection = {
       declaration: pathDeclaration,
       sources: inspection.sources,
@@ -440,7 +441,7 @@ function trackedResolvedPath(
   }
   const literals = initializer.arguments.filter(ts.isStringLiteralLike);
   if (literals.length !== 1) return false;
-  const path = posix.normalize(literals[0]?.text ?? '');
+  const path = posix.normalize(literals[0]!.text);
   return inspection.sources.has(path) ? path : false;
 }
 
@@ -527,7 +528,7 @@ function boundedLoaderCandidates(
       node.importClause.namedBindings.elements.length === 1
     ) {
       for (const element of node.importClause.namedBindings.elements) {
-        const imported = element.propertyName?.text ?? element.name.text;
+        const [imported = element.name.text] = [element.propertyName?.text];
         if (imported === 'createRequire') {
           createRequireImports.set(element.name.text, node);
         }
@@ -541,7 +542,7 @@ function boundedLoaderCandidates(
       ts.isNamedImports(node.importClause.namedBindings)
     ) {
       for (const element of node.importClause.namedBindings.elements) {
-        const imported = element.propertyName?.text ?? element.name.text;
+        const [imported = element.name.text] = [element.propertyName?.text];
         if (imported === 'pathToFileURL') {
           pathToFileUrlImports.add(element.name.text);
         }
@@ -653,7 +654,7 @@ function findBoundedDynamicImport(
       node.arguments.length === 1 &&
       (() => {
         const inspection: ResolvedFileUrlImportInspection = {
-          argument: node.arguments[0] ?? false,
+          argument: node.arguments[0]!,
           resolvedBinding: search.resolvedBinding,
         };
         return isResolvedFileUrlImport(inspection);
@@ -664,7 +665,7 @@ function findBoundedDynamicImport(
     ts.forEachChild(node, visit);
   };
   visit(search.body);
-  return imports.length === 1 ? (imports[0] ?? false) : false;
+  return imports.length === 1 ? imports[0]! : false;
 }
 
 type ResolvedFileUrlImportInspection = {
@@ -709,7 +710,9 @@ function isClosedBoundedLoader(validation: CandidateValidation): boolean {
     return false;
   }
   const allowedRequireReference = resolvedInitializer.expression.expression;
-  const allowedParameterReference = resolvedInitializer.arguments[0] ?? false;
+  const [allowedParameterReference = false] = [
+    resolvedInitializer.arguments[0],
+  ];
   const dynamicArgument = candidate.dynamicImport.arguments[0];
   if (
     !dynamicArgument ||
@@ -718,8 +721,9 @@ function isClosedBoundedLoader(validation: CandidateValidation): boolean {
   ) {
     return false;
   }
-  const allowedResolvedReference =
-    dynamicArgument.expression.arguments[0] ?? false;
+  const [allowedResolvedReference = false] = [
+    dynamicArgument.expression.arguments[0],
+  ];
   const allowedPathToFileUrlReference = dynamicArgument.expression.expression;
   let safe = true;
   let callCount = 0;
@@ -823,7 +827,7 @@ function isRepositoryBackedPackage(
       document.devDependencies,
       document.optionalDependencies,
     ]) {
-      const dependency = dependencies?.[inspection.specifier] ?? false;
+      const [dependency = false] = [dependencies?.[inspection.specifier]];
       if (
         dependency !== false &&
         (dependency.startsWith('file:') || dependency.startsWith('workspace:'))
