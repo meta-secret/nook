@@ -2,6 +2,7 @@ import { expect, mock, test } from 'bun:test'
 import type { PasswordFormObservation } from '../../nook-web-shared/src/extension/password-forms'
 import type { LoginCredentials } from '../../nook-web-shared/src/extension/password-form-field-actions'
 import { ExtensionRuntimeRequestType } from '../src/lib/extension-runtime-request-type'
+import { BROWSER_MESSAGE_KEYS } from '../src/lib/browser-message-keys'
 import type {
   WebsiteLoginSaveActionResponse,
   WebsiteLoginSaveOfferView,
@@ -430,24 +431,16 @@ test('pending cancellation revokes the serialized stage and scrubs local URI', a
   )
 })
 
-test('mismatched stage response dismisses only the requested stage', async () => {
+async function runMismatchedStageResponse(dismissalResults: boolean[]) {
   const { beginEnrollmentCeremony } =
     await import('../src/content/enrollment-flow')
   let requestedStageId = ''
-  let dismissedStageId = ''
-  let markDismissStarted = () => {}
-  let finishDismiss: (accepted: boolean) => void = () => {}
-  const dismissStarted = new Promise<void>((resolve) => {
-    markDismissStarted = resolve
-  })
-  const dismissGate = new Promise<boolean>((resolve) => {
-    finishDismiss = resolve
-  })
+  const dismissedStageIds: string[] = []
   const host = {
     description: { textContent: '' },
     panel: { querySelector: () => undefined },
     setBusy: () => {},
-    translatedMessage: () => 'Staging enrollment',
+    translatedMessage: (key: string) => key,
     sendAuthenticatorEnrollmentStageRuntimeMessage: async (
       message: Parameters<
         EnrollmentFlowHost['sendAuthenticatorEnrollmentStageRuntimeMessage']
@@ -464,12 +457,11 @@ test('mismatched stage response dismisses only the requested stage', async () =>
         EnrollmentFlowHost['sendAuthenticatorEnrollmentDismissRuntimeMessage']
       >[0],
     ) => {
-      dismissedStageId = message.payload.stageId
-      markDismissStarted()
-      return dismissGate
+      dismissedStageIds.push(message.payload.stageId)
+      return dismissalResults.shift() ?? true
     },
   } as unknown as EnrollmentFlowHost
-  const enrollment = beginEnrollmentCeremony({
+  await beginEnrollmentCeremony({
     host,
     section: {} as HTMLElement,
     vaultStoreId: 'vault-mismatch',
@@ -479,10 +471,27 @@ test('mismatched stage response dismisses only the requested stage', async () =>
       otpauthUri: 'otpauth://mismatch-secret',
     },
   })
-  await dismissStarted
-  expect(dismissedStageId).toBe(requestedStageId)
-  expect(dismissedStageId).not.toBe('response-supplied-mismatch')
-  expect(host.description.textContent).toBe('Staging enrollment')
-  finishDismiss(true)
-  await enrollment
+  return { dismissedStageIds, host, requestedStageId }
+}
+
+test('mismatched stage response dismisses only the requested stage', async () => {
+  const result = await runMismatchedStageResponse([true])
+  expect(result.dismissedStageIds).toEqual([result.requestedStageId])
+  expect(result.dismissedStageIds).not.toContain('response-supplied-mismatch')
+})
+
+test('failed mismatched cleanup retains the known stage for cancel retry', async () => {
+  const { cancelActiveEnrollmentCeremony, enrollmentCeremonyActive } =
+    await import('../src/content/enrollment-flow')
+  const result = await runMismatchedStageResponse([false, true])
+  expect(enrollmentCeremonyActive()).toBe(true)
+  expect(result.host.description.textContent).toBe(
+    BROWSER_MESSAGE_KEYS.WidgetEnrollFailed,
+  )
+  expect(await cancelActiveEnrollmentCeremony()).toBe(true)
+  expect(result.dismissedStageIds).toEqual([
+    result.requestedStageId,
+    result.requestedStageId,
+  ])
+  expect(result.dismissedStageIds).not.toContain('response-supplied-mismatch')
 })

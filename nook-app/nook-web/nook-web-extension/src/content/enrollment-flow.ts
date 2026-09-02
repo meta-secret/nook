@@ -451,6 +451,19 @@ function clearPendingEnrollmentSensitiveMaterial(
   material.payload.otpauthUri = ''
   clearOtpauthCandidate(material.candidate)
 }
+function renderEnrollmentStageFailure(
+  host: EnrollmentFlowHost,
+  authorizationGeneration: number,
+  completeCeremony = true,
+): void {
+  stopPendingEnrollmentWatch()
+  if (completeCeremony) completeEnrollmentCeremony(authorizationGeneration)
+  host.description.textContent = host.translatedMessage(
+    BROWSER_MESSAGE_KEYS.WidgetEnrollFailed,
+  )
+  host.setBusy(false)
+  renderEnrollmentRetryActions(host)
+}
 export async function beginEnrollmentCeremony({
   host,
   section,
@@ -515,44 +528,32 @@ export async function beginEnrollmentCeremony({
     return
   }
   if (stageDelivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
-    stopPendingEnrollmentWatch()
-    completeEnrollmentCeremony(authorizationGeneration)
-    const nookTypedArgs0_10: Parameters<typeof setHostDescription>[0] = {
-      host,
-      text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollFailed),
-    }
-    setHostDescription(nookTypedArgs0_10)
-    host.setBusy(false)
-    renderEnrollmentRetryActions(host)
+    renderEnrollmentStageFailure(host, authorizationGeneration)
     return
   }
   const { response: stageResponse } = stageDelivery
-  if (
+  const stagedResponse =
     stageResponse.kind === AuthenticatorEnrollmentStageResponseKind.Staged &&
-    'stageId' in stageResponse &&
-    stageResponse.stageId !== stageId
-  )
-    await dismissStagedEnrollment({ host, stageId })
-  if (
-    stageResponse.kind !== AuthenticatorEnrollmentStageResponseKind.Staged ||
-    !('stageId' in stageResponse) ||
-    stageResponse.stageId !== stageId
-  ) {
-    stopPendingEnrollmentWatch()
-    completeEnrollmentCeremony(authorizationGeneration)
-    const nookTypedArgs0_12: Parameters<typeof setHostDescription>[0] = {
-      host,
-      text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollFailed),
-    }
-    setHostDescription(nookTypedArgs0_12)
-    host.setBusy(false)
-    renderEnrollmentRetryActions(host)
-    return
-  }
+    'stageId' in stageResponse
   const stagedCeremony: Parameters<typeof assignStagedEnrollmentCeremony>[0] = {
     authorizationGeneration,
     host,
     stageId,
+  }
+  let mismatchedStageRetained = false
+  if (stagedResponse && stageResponse.stageId !== stageId) {
+    const dismissed = await dismissStagedEnrollment({ host, stageId })
+    if (!dismissed) {
+      mismatchedStageRetained = assignStagedEnrollmentCeremony(stagedCeremony)
+    }
+  }
+  if (!stagedResponse || stageResponse.stageId !== stageId) {
+    renderEnrollmentStageFailure(
+      host,
+      authorizationGeneration,
+      !mismatchedStageRetained,
+    )
+    return
   }
   if (!assignStagedEnrollmentCeremony(stagedCeremony)) return
   // Replace the temporary pending watch with the real stage id.
@@ -569,7 +570,6 @@ export async function beginEnrollmentCeremony({
     callbacks: enrollmentEvidenceCallbacks(nookTypedArgs0_14),
   }
   beginEnrollmentEvidenceWatch(nookTypedArgs1_1)
-
   const nookTypedArgs0_15: Parameters<typeof fillStagedEnrollmentCode>[0] = {
     host,
     stageId,
