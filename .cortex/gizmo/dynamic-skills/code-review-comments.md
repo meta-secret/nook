@@ -33,10 +33,18 @@ notices never become feedback state.
 
 For each routed item, the responsible team agent:
 
-1. Verifies the finding against current code.
-2. Uses reviewer-provided agent prompts as context, not as blind patches.
-3. Implements the minimal correct fix when a change is required.
-4. Returns focused validation and a concise explanation to Gizmo.
+1. Verifies the reviewer's claim against current code, repository authority,
+   and reproducible evidence.
+2. Classifies the finding as accepted, rejected, or clarification-needed.
+3. Records the evidence and rationale for that disposition.
+4. Uses reviewer-provided agent prompts as context, not as blind patches.
+5. Implements the minimal correct fix only when the finding is accepted.
+6. Returns focused validation and a concise explanation to Gizmo.
+
+A review label, severity, or confident explanation is not proof. Do not change
+the implementation merely to agree with a reviewer. Reject a false or
+inapplicable claim with specific evidence, then record that rationale on the
+original feedback target.
 
 Gizmo continues from the verified commit, completes applicable validation, and
 pushes the result. It then applies the handling rule for the feedback target:
@@ -99,7 +107,7 @@ Does not apply to:
 - [ ] Gizmo inspects review bodies and top-level PR comments from every head.
 - [ ] Gizmo builds a checklist for every active actionable finding.
 - [ ] Gizmo routes each finding to the responsible team agent.
-- [ ] The team agent verifies the finding before editing.
+- [ ] The team agent verifies and dispositions the finding before editing.
 - [ ] The team agent implements the minimal correct fix when required.
 - [ ] The team agent returns focused proof and any no-change rationale.
 - [ ] Gizmo continues from verified commits and runs
