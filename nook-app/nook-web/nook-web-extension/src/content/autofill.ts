@@ -25,6 +25,12 @@ import {
 } from '../lib/auth-workflow-messages'
 import { cancelPendingAuthenticatorPickerRequest } from './autofill/authenticator-actions'
 import {
+  AUTHENTICATION_MUTATION_ATTRIBUTE_FILTER,
+  AUTHENTICATION_VIEWPORT_EVENTS,
+  authenticationMutationImpact,
+  recordAuthenticationRecoveryEvidenceState,
+} from './autofill/authentication-surface-observation'
+import {
   cancelPendingLoginPickerRequest,
   RuntimeMessageDeliveryKind,
   sendAuthenticationWorkflowSnapshotRuntimeMessage,
@@ -42,7 +48,9 @@ import {
   SaveOfferDisplayKind,
   SavePageWatchKind,
   ScanScheduleKind,
+  WidgetHostKind,
   WidgetWorkflowKeyKind,
+  WidgetWorkflowRootKind,
   type AuthenticationScanMutationBatch,
   saveOfferState,
   scanState,
@@ -52,13 +60,17 @@ import {
   renderEnrollmentWidget,
   renderWidget,
 } from './autofill/widget-rendering'
+import {
+  applyWidgetPosition,
+  clampWidgetPosition,
+} from './autofill/widget-position'
 import { loadPilotVaultConnection } from './autofill/workflow-ui'
 import {
   detectEnrollmentHintsFromRecoveryCopy,
   enrollmentCeremonyActive,
 } from './enrollment-flow'
 
-async function scanAndRender(): Promise<void> {
+async function performScanAndRender(): Promise<void> {
   if (widgetState.dismissed) return
   if (saveOfferState.confirmationActive) return
   if (enrollmentCeremonyActive()) return
@@ -191,6 +203,14 @@ async function scanAndRender(): Promise<void> {
   renderWidget(nookTypedArgs0_1)
 }
 
+async function scanAndRender(): Promise<void> {
+  try {
+    await performScanAndRender()
+  } finally {
+    recordAuthenticationRecoveryEvidenceState()
+  }
+}
+
 function scheduleScan(mutations?: AuthenticationScanMutationBatch) {
   if (
     Array.isArray(mutations) &&
@@ -214,6 +234,83 @@ function scheduleScan(mutations?: AuthenticationScanMutationBatch) {
   )
 }
 
+function invalidateRenderedAuthenticationAction(): void {
+  widgetState.busy = false
+  cancelPendingAuthenticatorPickerRequest()
+  cancelPendingLoginPickerRequest()
+}
+
+type AuthenticationMutationRecords = MutationRecord[]
+
+function handleAuthenticationMutations(
+  records: AuthenticationMutationRecords,
+): void {
+  if (widgetState.host.kind === WidgetHostKind.Attached) {
+    const mountedHost = widgetState.host.element
+    const mountedHostWasRemoved = records.some(
+      (record) =>
+        record.type === 'childList' &&
+        !mountedHost.isConnected &&
+        [...record.removedNodes].some((node) => node === mountedHost),
+    )
+    if (mountedHostWasRemoved) {
+      invalidateRenderedAuthenticationAction()
+      widgetState.clearRenderedWidget()
+      scheduleScan()
+      return
+    }
+  }
+  const mountedHost =
+    widgetState.host.kind === WidgetHostKind.Attached
+      ? widgetState.host.element
+      : false
+  const renderedWorkflow =
+    widgetState.renderedWorkflowRoot.kind === WidgetWorkflowRootKind.Assigned
+      ? widgetState.renderedWorkflowRoot.observation
+      : false
+  const impactRequest: Parameters<typeof authenticationMutationImpact>[0] = {
+    records,
+    mountedHost,
+    renderedWorkflow,
+  }
+  const impact = authenticationMutationImpact(impactRequest)
+  if (!impact.shouldScheduleScan) return
+  if (pageHasManualCheckpoint(document)) {
+    invalidateRenderedAuthenticationAction()
+    removeScannedWidget()
+    scheduleScan()
+    return
+  }
+  if (
+    widgetState.host.kind === WidgetHostKind.Attached &&
+    renderedWorkflow &&
+    impact.shouldRemountRenderedWorkflow
+  ) {
+    invalidateRenderedAuthenticationAction()
+    removeScannedWidget()
+  }
+  scheduleScan()
+}
+
+function handleViewportChange(): void {
+  if (widgetState.host.kind !== WidgetHostKind.Attached) return
+  const host = widgetState.host.element
+  const rect = host.getBoundingClientRect()
+  const clampRequest: Parameters<typeof clampWidgetPosition>[0] = {
+    left: rect.left,
+    top: rect.top,
+    width: rect.width,
+    height: rect.height,
+  }
+  const position = clampWidgetPosition(clampRequest)
+  widgetState.setPosition(position)
+  const applyRequest: Parameters<typeof applyWidgetPosition>[0] = {
+    host,
+    position,
+  }
+  applyWidgetPosition(applyRequest)
+}
+
 scanState.schedule = scheduleScan
 
 void companionWasmReady.then(() => {
@@ -223,8 +320,12 @@ void companionWasmReady.then(() => {
   document.addEventListener('submit', captureSubmittedLogin, true)
   void scanAndRender()
 
-  const observer = new MutationObserver(scheduleScan)
-  observer.observe(document.documentElement, authenticationFactObserverOptions)
+  const observer = new MutationObserver(handleAuthenticationMutations)
+  const observerOptions: MutationObserverInit = {
+    ...authenticationFactObserverOptions,
+    attributeFilter: [...AUTHENTICATION_MUTATION_ATTRIBUTE_FILTER],
+  }
+  observer.observe(document.documentElement, observerOptions)
   observeAuthenticationSubmitValueAssignments(scheduleScan)
   window.addEventListener('message', (event) => {
     if (
@@ -235,4 +336,11 @@ void companionWasmReady.then(() => {
     }
     scheduleScan()
   })
+  for (const eventName of AUTHENTICATION_VIEWPORT_EVENTS) {
+    const options: AddEventListenerOptions = {
+      capture: eventName === 'scroll',
+      passive: true,
+    }
+    window.addEventListener(eventName, handleViewportChange, options)
+  }
 })

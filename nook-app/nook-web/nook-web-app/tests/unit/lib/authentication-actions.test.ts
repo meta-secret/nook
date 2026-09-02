@@ -145,6 +145,36 @@ function controls() {
   return result
 }
 
+enum DeferredResolverKind {
+  Waiting = 'waiting',
+  Available = 'available',
+}
+
+type DeferredResolver<Value> =
+  | { kind: DeferredResolverKind.Waiting }
+  | {
+      kind: DeferredResolverKind.Available
+      resolve: (value: Value) => void
+    }
+
+function deferred<Value>() {
+  let resolver: DeferredResolver<Value> = {
+    kind: DeferredResolverKind.Waiting,
+  }
+  const promise = new Promise<Value>((resolve) => {
+    resolver = { kind: DeferredResolverKind.Available, resolve }
+  })
+  return {
+    promise,
+    resolve: (value: Value) => {
+      if (resolver.kind !== DeferredResolverKind.Available) {
+        throw new Error('deferred resolver was not initialized')
+      }
+      resolver.resolve(value)
+    },
+  }
+}
+
 beforeEach(() => {
   document.body.replaceChildren()
   vi.clearAllMocks()
@@ -219,6 +249,80 @@ describe('revalidated authentication actions', () => {
     expect(actionMocks.performRevalidation).toHaveBeenCalledTimes(2)
     expect(actionMocks.sendAuthenticatorCode).toHaveBeenCalledOnce()
     expect(actionMocks.fillOneTimeCode).toHaveBeenCalledOnce()
+  })
+
+  test('scrubs delayed login credentials after the approved surface is replaced', async () => {
+    const response = { ok: true, username: 'person', password: 'secret' }
+    const delivery = deferred<{ kind: string; response: typeof response }>()
+    actionMocks.sendLoginFill.mockReturnValue(delivery.promise)
+    const ui = controls()
+    const pending = fillAndSubmitAccount({
+      account: {
+        vaultStoreId: 'vault',
+        secretId: 'login',
+        authorizationGeneration: 'epoch-1',
+      },
+      workflow,
+      approval,
+      ...ui,
+    })
+    await vi.waitFor(() => expect(actionMocks.sendLoginFill).toHaveBeenCalled())
+    ui.continueButton.remove()
+    delivery.resolve({ kind: 'delivered', response })
+
+    await expect(pending).resolves.toBe(false)
+    expect(response.password).toBe('')
+    expect(actionMocks.fillLoginCredentials).not.toHaveBeenCalled()
+  })
+
+  test('scrubs a delayed authenticator code after the approved surface is replaced', async () => {
+    const response = {
+      kind: AuthenticatorCodeResponseKind.Ready,
+      code: '123456',
+      expiresAt: Date.now() + 30_000,
+    }
+    const delivery = deferred<{ kind: string; response: typeof response }>()
+    actionMocks.sendAuthenticatorCode.mockReturnValue(delivery.promise)
+    const ui = controls()
+    const pending = fillAuthenticatorCode({
+      account: { vaultStoreId: 'vault', secretId: 'otp' },
+      workflow,
+      approval,
+      ...ui,
+    })
+    await vi.waitFor(() =>
+      expect(actionMocks.sendAuthenticatorCode).toHaveBeenCalled(),
+    )
+    ui.continueButton.remove()
+    delivery.resolve({ kind: 'delivered', response })
+
+    await expect(pending).resolves.toBe(false)
+    expect(response.code).toBe('')
+    expect(actionMocks.fillOneTimeCode).not.toHaveBeenCalled()
+  })
+
+  test('scrubs a delayed generated password after the approved surface is replaced', async () => {
+    const response = {
+      kind: GeneratedPasswordResponseKind.Generated,
+      password: 'generated-secret',
+    }
+    const delivery = deferred<{ kind: string; response: typeof response }>()
+    actionMocks.sendGeneratePassword.mockReturnValue(delivery.promise)
+    const ui = controls()
+    const pending = generatePasswordWithNook({
+      workflow,
+      approval,
+      ...ui,
+    })
+    await vi.waitFor(() =>
+      expect(actionMocks.sendGeneratePassword).toHaveBeenCalled(),
+    )
+    ui.continueButton.remove()
+    delivery.resolve({ kind: 'delivered', response })
+
+    await pending
+    expect(response.password).toBe('')
+    expect(actionMocks.fillGeneratedPassword).not.toHaveBeenCalled()
   })
 
   test('actuates only the passkey control returned by approved lookup', async () => {

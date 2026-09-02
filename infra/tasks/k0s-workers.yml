@@ -469,6 +469,7 @@ tasks:
             udp dport 51820 accept comment "nook k0s worker wireguard"
             iifname "wg-nook" ip saddr 10.202.0.0/24 accept comment "nook k0s worker mesh input"
             iifname "wg-nook" ip saddr 10.201.0.1 tcp dport 10250 accept comment "nook k0s worker kubelet controller"
+            iifname "wg-nook" ip saddr 10.244.0.0/16 tcp dport 10250 accept comment "nook k0s worker kubelet mesh pods"
             iifname "kube-bridge" ip saddr 10.244.0.0/16 tcp dport 10250 accept comment "nook k0s worker kubelet pods"
           }
           chain forward {
@@ -512,6 +513,7 @@ tasks:
         add rule inet bynull_filter input udp dport 51820 accept comment "nook k0s worker wireguard"
         add rule inet bynull_filter input iifname "wg-nook" ip saddr 10.202.0.0/24 accept comment "nook k0s worker mesh input"
         add rule inet bynull_filter input iifname "wg-nook" ip saddr 10.201.0.1 tcp dport 10250 accept comment "nook k0s worker kubelet controller"
+        add rule inet bynull_filter input iifname "wg-nook" ip saddr 10.244.0.0/16 tcp dport 10250 accept comment "nook k0s worker kubelet mesh pods"
         add rule inet bynull_filter input iifname "kube-bridge" ip saddr 10.244.0.0/16 tcp dport 10250 accept comment "nook k0s worker kubelet pods"
         add rule inet bynull_filter forward ct state invalid drop comment "nook k0s worker invalid forward"
         add rule inet bynull_filter forward ct state established,related accept comment "nook k0s worker established forward"
@@ -644,6 +646,37 @@ tasks:
           echo "k0s worker: refusing invalid ARC tier" >&2
           exit 2
         fi
+        ssh -o BatchMode=yes "$controller_target" bash -s -- \
+          "$worker_mesh_address" <<'REMOTE'
+        set -euo pipefail
+        worker_mesh_address="$1"
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        node="$(kubectl get nodes -o json | jq -r \
+          --arg address "$worker_mesh_address" \
+          '.items[] | select(any(.status.addresses[]; .type == "InternalIP" and .address == $address)) | .metadata.name')"
+        test "$(printf '%s\n' "$node" | sed '/^$/d' | wc -l | tr -d ' ')" -le 1
+        node="$(printf '%s\n' "$node" | sed '/^$/d')"
+        if test -n "$node"; then
+          kubectl taint node "$node" \
+            nook.nokey.sh/arc-build=preparing:NoSchedule --overwrite >/dev/null
+          deadline="$(( $(date +%s) + 7200 ))"
+          while :; do
+            active_runners="$(kubectl get pods --namespace arc-runners \
+              --field-selector "spec.nodeName=$node" \
+              -l actions.github.com/scale-set-name -o json | jq \
+              '[.items[] | select(.status.phase == "Pending" or .status.phase == "Running")] | length')"
+            if test "$active_runners" = 0; then
+              break
+            fi
+            if test "$(date +%s)" -ge "$deadline"; then
+              echo "Timed out waiting for $active_runners ARC runner(s) on $node" >&2
+              exit 1
+            fi
+            echo "Waiting for $active_runners ARC runner(s) to finish on $node" >&2
+            sleep 30
+          done
+        fi
+        REMOTE
         ssh -o BatchMode=yes "$worker_target" bash -s -- \
           "$remote_dir" "{{.K0S_VERSION}}" "{{.K0S_AMD64_SHA256}}" <<'REMOTE'
         set -euo pipefail
@@ -676,6 +709,8 @@ tasks:
         sudo -n install -m 0644 \
           "$remote_dir/infra/k0s/config/registry-hosts.toml" \
           /etc/k0s/containerd.d/certs.d/registry.dev.nokey.sh/hosts.toml
+        rm -f "$remote_dir/infra/k0s/config/registry-auth.toml"
+        sudo -n rm -f /etc/k0s/containerd.d/registry-auth.toml
         sudo -n install -d -m 0755 /etc/systemd/system/k0sworker.service.d
         drop_in="$(mktemp)"
         cat > "$drop_in" <<'EOF'
@@ -693,6 +728,10 @@ tasks:
         remote_program='set -euo pipefail
         worker_mesh_address="$1"
         worker_arc_tier="$2"
+        worker_was_active=false
+        if sudo -n systemctl is-active --quiet k0sworker.service; then
+          worker_was_active=true
+        fi
         token_file=/etc/k0s/worker-token
         token_temp="$(mktemp)"
         cleanup() { rm -f "$token_temp"; }
@@ -705,7 +744,13 @@ tasks:
           --kubelet-extra-args="--node-ip=$worker_mesh_address --register-with-taints=nook.nokey.sh/arc-build=preparing:NoSchedule" \
           --labels="nook.nokey.sh/arc-build=true,nook.nokey.sh/node-role=compute,nook.nokey.sh/arc-tier=$worker_arc_tier"
         sudo -n systemctl daemon-reload
-        sudo -n systemctl enable --now k0sworker'
+        sudo -n systemctl enable k0sworker
+        if test "$worker_was_active" = true; then
+          sudo -n systemctl restart k0sworker.service
+        else
+          sudo -n systemctl start k0sworker.service
+        fi
+        sudo -n systemctl is-active --quiet k0sworker.service'
         encoded_program="$(printf '%s' "$remote_program" | base64 | tr -d '\n')"
         printf '%s' "$token" |
           ssh -o BatchMode=yes "$worker_target" \
@@ -776,8 +821,19 @@ tasks:
         sudo -n k0s kubectl label "node/$node" \
           "nook.nokey.sh/arc-tier=$worker_arc_tier" --overwrite
         REMOTE
-        ssh -n -o BatchMode=yes "$worker_target" \
-          'sudo -n rm -f /etc/k0s/worker-token'
+        ssh -n -o BatchMode=yes "$worker_target" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        sudo -n rm -f /etc/k0s/worker-token
+        sudo -n test ! -e /etc/k0s/containerd.d/registry-auth.toml
+        invocation="$(sudo -n systemctl show k0sworker.service \
+          --property=InvocationID --value)"
+        [[ "$invocation" =~ ^[0-9a-f]{32}$ ]]
+        marker_next="$(mktemp)"
+        trap 'rm -f "$marker_next"' EXIT
+        printf '%s\n' "$invocation" > "$marker_next"
+        sudo -n install -m 0600 "$marker_next" \
+          /var/lib/k0s/nook-containerd-auth-clean-invocation
+        REMOTE
         BASH
 
   k0s:worker:kata:verify:

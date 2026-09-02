@@ -91,8 +91,9 @@ Each replica uses:
 - a retained 64 GiB local persistent volume;
 - the host path `/var/lib/nook-arc-buildkit/state` behind that volume;
 - garbage collection with a 56 GB keep target;
-- a 4 CPU request without a CPU limit; and
-- an 8 GiB memory request with a 48 GiB limit.
+- a 4 CPU request;
+- an 8 GiB memory request; and
+- no CPU or memory limits.
 
 Build-host key quotas follow these rules:
 

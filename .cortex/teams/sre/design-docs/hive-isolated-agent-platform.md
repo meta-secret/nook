@@ -718,7 +718,8 @@ The Dockerfile follows Nook's cargo-chef boundary:
 
 Each parallel Cargo branch uses two build jobs. Together, the test and Clippy
 branches cap compiler-process fan-out without constraining the Hive runner
-Pod's CPU usage. BuildKit requests 4 GiB and may burst to 6 GiB for rustc and
+Pod's CPU usage. BuildKit requests 4 CPU and 8 GiB of memory. It has no CPU or
+memory limits and may share all resources available on its node for rustc and
 linker peaks.
 
 Pull requests restore the `nook-hive-linux-amd64-v2` GitHub Actions BuildKit

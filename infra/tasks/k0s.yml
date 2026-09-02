@@ -240,6 +240,8 @@ tasks:
         sudo -n install -m 0644 \
           "$remote_dir/infra/k0s/config/registry-hosts.toml" \
           /etc/k0s/containerd.d/certs.d/registry.dev.nokey.sh/hosts.toml
+        rm -f "$remote_dir/infra/k0s/config/registry-auth.toml"
+        sudo -n rm -f /etc/k0s/containerd.d/registry-auth.toml
         sudo -n rm -rf /etc/k0s/containerd.d/certs.d/127.0.0.1:5000
 
         api_address_unit="$(mktemp)"
@@ -412,6 +414,15 @@ tasks:
         sudo -n k0s kubectl get nodes -o name |
           grep -q '^node/'
         sudo -n k0s kubectl wait node --all --for=condition=Ready --timeout=5m
+        containerd_auth_invocation="$(sudo -n systemctl show k0scontroller.service \
+          --property=InvocationID --value)"
+        [[ "$containerd_auth_invocation" =~ ^[0-9a-f]{32}$ ]]
+        containerd_auth_marker="$(mktemp)"
+        printf '%s\n' "$containerd_auth_invocation" > "$containerd_auth_marker"
+        sudo -n install -m 0600 "$containerd_auth_marker" \
+          /var/lib/k0s/nook-containerd-auth-clean-invocation
+        rm -f "$containerd_auth_marker"
+        sudo -n test ! -e /etc/k0s/containerd.d/registry-auth.toml
         for _ in $(seq 1 60); do
           if sudo -n test -s "$cni_config"; then
             break

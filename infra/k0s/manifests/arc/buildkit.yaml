@@ -218,8 +218,6 @@ spec:
             requests:
               cpu: "4"
               memory: 8Gi
-            limits:
-              memory: 48Gi
           volumeMounts:
             - name: buildkit-state
               mountPath: /home/user/.local/share/buildkit

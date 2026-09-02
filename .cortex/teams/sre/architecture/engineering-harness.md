@@ -312,8 +312,9 @@ legacy registered `nook` runner is not used.
 - Local Task Bake restores and publishes shared layers when remote registry credentials exist under `~/.nook/`.
 - Every qualified node owns one retained 64 GiB rootless BuildKit shard.
 - The node-local Service routes each runner only to the shard on its own node.
-- BuildKit requests 4 CPU and 8 GiB. It has no CPU limit and may use up to
-  48 GiB during large parallel web and Rust builds.
+- BuildKit requests 4 CPU and 8 GiB. It has no CPU or memory limits. During
+  large parallel web and Rust builds, it may share all resources available on
+  its node.
 - Concurrent jobs share BuildKit's content-addressed store on that node.
 - Main and pull requests retain separate registry publication refs.
 - Zot remains the cross-node bootstrap and recovery source.

@@ -122,8 +122,10 @@ import {
   extensionSessionDocument,
   openCompanionLauncher,
   openSimpleVault,
+  refreshAuthenticationSurfaces,
 } from './service-worker/session-lifecycle'
 import {
+  isExtensionAuthenticationSurfacesRefreshMessage,
   isExtensionSessionEnsureMessage,
   isExtensionSessionExpiryMessage,
   isExtensionSessionLockMessage,
@@ -150,6 +152,7 @@ const extensionLifecycleRoutingDependencies: Parameters<
   hasPairingApprovedType,
   importLocalEventLogUpdate,
   importPairingAfterCompanionReady,
+  isExtensionAuthenticationSurfacesRefreshMessage,
   isExtensionPairingStateQueryMessage,
   isExtensionSessionEnsureMessage,
   isExtensionSessionExpiryMessage,
@@ -158,6 +161,7 @@ const extensionLifecycleRoutingDependencies: Parameters<
   openExtensionPairing,
   openSimpleVault,
   releaseAccountPickerAuthorizationCleanup,
+  refreshAuthenticationSurfaces,
 }
 
 void recoverInterruptedAuthorizationCleanup(
@@ -179,6 +183,7 @@ const externalCompanionRoutingDependencies: Parameters<
   isExtensionPairedVaultUnlockRequestMessage,
   normalizeOpenCompanionLauncherMessage,
   openCompanionLauncher,
+  refreshAuthenticationSurfaces,
   requestPairedVaultUnlock,
 }
 
