@@ -85,7 +85,9 @@ function verifyPrerequisites(): void {
     label: "k3d version",
   });
   if (clusterExists()) {
-    throw new Error("refusing to replace existing k3d cluster named nook-cache-proof");
+    throw new Error(
+      "refusing to replace existing k3d cluster named nook-cache-proof",
+    );
   }
 }
 
@@ -241,18 +243,22 @@ function runProof(): void {
     podNode({ kubeconfigPath, podName: `nook-buildkit-${index}` }),
   );
   if (new Set(buildkitNodes).size !== 3) {
-    throw new Error(`BuildKit anti-affinity: expected 3 nodes, got ${buildkitNodes}`);
+    throw new Error(
+      `BuildKit anti-affinity: expected 3 nodes, got ${buildkitNodes}`,
+    );
   }
-  const [firstNode = ""] = buildkitNodes;
+  if (typeof buildkitNodes[0] !== "string") {
+    throw new Error("BuildKit node inventory has no first node");
+  }
   proveBuildkitShardAccess({
     kubeconfigPath,
     name: "cache-shard-allowed",
-    nodeName: firstNode,
+    nodeName: buildkitNodes[0],
   });
   proveNetworkPolicy({
     kubeconfigPath,
     name: "cache-network-denied",
-    nodeName: firstNode,
+    nodeName: buildkitNodes[0],
   });
   proveStableCache({ kubeconfigPath, buildkitNodes });
   proveIsolatedCache({ kubeconfigPath, buildkitNodes });
@@ -277,7 +283,8 @@ try {
     activeClusterCreated = false;
     activeTemporaryDirectory = "";
   } catch (error) {
-    const cleanupError = error instanceof Error ? error : new Error(String(error));
+    const cleanupError =
+      error instanceof Error ? error : new Error(String(error));
     proofErrors.push(cleanupError);
   }
 }
