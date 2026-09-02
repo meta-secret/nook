@@ -486,6 +486,9 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
             && verify_job.contains("name: Download built WASM handoff")
             && verify_job.contains("name: Confirm WASM handoff shape")
             && verify_job.contains("name: Upload preview dist handoff")
+            && verify_job.contains(
+                "name: Publish exact-source PR browser job image\n        if: contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')"
+            )
             && verify_job.contains("actions/download-artifact@v8")
             && verify_job.contains("name: pr-wasm-${{ github.run_id }}")
             && !verify_job.contains("Wait for built WASM handoff")
