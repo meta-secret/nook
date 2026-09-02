@@ -35,6 +35,11 @@ type MarkdownContentInspection = {
   readonly excludeProcedureExamples: boolean;
 };
 
+type CollectTableBlocksRequest = {
+  readonly node: Nodes;
+  readonly blocks: CortexArticleSemanticBlock[];
+};
+
 const INVISIBLE_TEXT = /[\s\p{Default_Ignorable_Code_Point}]/gu;
 
 export function auditCortexArticleStructure(
@@ -66,7 +71,11 @@ function semanticDocument(
     const containerBlock = semanticBlock(blockRequest);
     if (node.type === 'table') return [containerBlock];
     const tableBlocks: CortexArticleSemanticBlock[] = [];
-    collectTableBlocks(node, tableBlocks);
+    const tableRequest: CollectTableBlocksRequest = {
+      node,
+      blocks: tableBlocks,
+    };
+    collectTableBlocks(tableRequest);
     return [
       containerBlock,
       ...tableBlocks.map((tableBlock) =>
@@ -124,20 +133,21 @@ function semanticBlock(
   };
 }
 
-function collectTableBlocks(
-  node: Nodes,
-  blocks: CortexArticleSemanticBlock[],
-): void {
-  if (node.type === 'table') {
-    blocks.push({
+function collectTableBlocks(request: CollectTableBlocksRequest): void {
+  if (request.node.type === 'table') {
+    request.blocks.push({
       kind: CortexArticleSemanticKind.Table,
-      line: nodeLine(node),
+      line: nodeLine(request.node),
     });
     return;
   }
-  if (!('children' in node)) return;
-  for (const child of node.children) {
-    collectTableBlocks(child, blocks);
+  if (!('children' in request.node)) return;
+  for (const child of request.node.children) {
+    const childRequest: CollectTableBlocksRequest = {
+      node: child,
+      blocks: request.blocks,
+    };
+    collectTableBlocks(childRequest);
   }
 }
 
