@@ -35,6 +35,7 @@ function registry(imports: readonly string[]): CortexContractRegistry {
         capabilities: [],
       },
     ],
+    runtimes: [],
   };
 }
 
@@ -100,4 +101,28 @@ test('uses the first duplicate Markdown reference definition', () => {
       file: AUTHORITY,
     }),
   );
+});
+
+test('adapts inline and fenced runtime commands without prose inference', () => {
+  const documents = adaptCortexContractDocuments([
+    {
+      relativePath: '.cortex/gizmo/workflows/subagent-delegation.md',
+      content: `# Delegation
+
+Prose mentions loom-agent-delegation but does not invoke it.
+
+Use \`task skills:run REQUEST_YAML=request\`.
+
+\`\`\`bash
+task skills:tools-list
+task skills:run REQUEST_YAML=request
+\`\`\`
+`,
+    },
+  ]);
+  expect(documents[0]?.commands).toEqual([
+    'task skills:run REQUEST_YAML=request',
+    'task skills:tools-list',
+    'task skills:run REQUEST_YAML=request',
+  ]);
 });

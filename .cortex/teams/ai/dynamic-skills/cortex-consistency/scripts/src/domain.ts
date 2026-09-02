@@ -63,14 +63,24 @@ export type CortexContextContract = {
   readonly ownsAreas: readonly CortexPolicyArea[];
   readonly imports: readonly string[];
 };
+
+export type CortexRuntimeContract = {
+  readonly document: string;
+  readonly allowedCommandPrefixes: readonly string[];
+  readonly requiredCommandPrefixes: readonly string[];
+  readonly retiredCommandPrefixes: readonly string[];
+};
+
 export type CortexContractRegistry = {
   readonly contexts: readonly CortexContextContract[];
   readonly policies: readonly CortexPolicyContract[];
+  readonly runtimes: readonly CortexRuntimeContract[];
 };
 
 export type CortexContractDocument = {
   readonly relativePath: string;
   readonly references: readonly string[];
+  readonly commands: readonly string[];
 };
 
 export enum CortexContractFindingCode {
@@ -85,6 +95,8 @@ export enum CortexContractFindingCode {
   MissingPolicyImport = 'missing-policy-import',
   MissingPolicyReference = 'missing-policy-reference',
   MissingSchemaAuthorityReference = 'missing-schema-authority-reference',
+  MissingRuntimeEntrypoint = 'missing-runtime-entrypoint',
+  RetiredRuntimeEntrypoint = 'retired-runtime-entrypoint',
   UnknownPolicyImport = 'unknown-policy-import',
 }
 

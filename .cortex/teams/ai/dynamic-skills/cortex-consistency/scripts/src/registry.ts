@@ -11,6 +11,16 @@ export enum RegisteredCortexPolicyPath {
   Writer = '.cortex/teams/ai/dynamic-skills/cortex-writer.md',
 }
 
+export enum RegisteredCortexRuntimeDocument {
+  NativeSubagentDelegation = '.cortex/gizmo/workflows/subagent-delegation.md',
+}
+
+export enum RegisteredCortexRuntimeCommand {
+  StaticSkillHost = 'task skills:run',
+  DelegationJournalBinary = 'loom-agent-delegation',
+  DelegationJournalTask = 'task loom:agent-delegation',
+}
+
 export const CORTEX_CONTRACT_REGISTRY = {
   contexts: [
     {
@@ -41,6 +51,17 @@ export const CORTEX_CONTRACT_REGISTRY = {
       kind: CortexPolicyContractKind.General,
       areas: [CortexPolicyArea.CortexAuthoring],
       capabilities: [],
+    },
+  ],
+  runtimes: [
+    {
+      document: RegisteredCortexRuntimeDocument.NativeSubagentDelegation,
+      allowedCommandPrefixes: [RegisteredCortexRuntimeCommand.StaticSkillHost],
+      requiredCommandPrefixes: [RegisteredCortexRuntimeCommand.StaticSkillHost],
+      retiredCommandPrefixes: [
+        RegisteredCortexRuntimeCommand.DelegationJournalBinary,
+        RegisteredCortexRuntimeCommand.DelegationJournalTask,
+      ],
     },
   ],
 } as const satisfies CortexContractRegistry;

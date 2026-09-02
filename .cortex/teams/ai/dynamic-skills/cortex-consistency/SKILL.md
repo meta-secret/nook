@@ -32,6 +32,8 @@ Common failures:
 - a product spec omits features or rules introduced in chat, code, or PR reviews;
 - a design doc describes an old architecture after the code moved;
 - an index still links a deleted or renamed file;
+- a native harness workflow names a repository journal or retired CLI;
+- a workflow omits the active runtime entrypoint required by its contract;
 - a skill card teaches a pattern the repo already rejected;
 - historical context is written as if it were current policy.
 
@@ -183,6 +185,7 @@ The ownership boundary is explicit:
   registry, ownership mapping, policy checks, and deterministic verification.
 - Loom only discovers repository Markdown and adapts parsed references into the
   skill request.
+- Loom also adapts commands from inline and fenced code as inert facts.
 - Markdown does not become executable state.
 - The rules and their executable policy remain beside this procedure.
 
@@ -216,6 +219,11 @@ registry and policy semantics remain internal to this skill.
 - One policy discriminator selects the persisted contract and its obligations.
 - Missing imports, references, authorities, or evidence obligations fail the
   Cortex audit.
+- Registered workflow runtime bindings are closed policy.
+- A missing required entrypoint fails the audit.
+- An unregistered Task or Loom command fails the owning workflow audit.
+- A retired entrypoint fails even when legacy implementation remains present.
+- Native Team Agent workflows cannot bind repository journals as dispatch.
 
 The registry covers only relationships promoted into its closed TypeScript
 model. It does not infer meaning from Markdown or replace semantic review.

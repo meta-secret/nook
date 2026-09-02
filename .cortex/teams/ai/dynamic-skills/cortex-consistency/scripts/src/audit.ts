@@ -9,6 +9,7 @@ import {
   type CortexContractDocument,
   type CortexContractFinding,
   type CortexPolicyContract,
+  type CortexRuntimeContract,
 } from './domain.ts';
 
 enum CortexContractTeam {
@@ -90,7 +91,63 @@ export function compileCortexContracts(
     validatePolicyReachability(contextArgs);
   }
 
+  for (const runtime of args.registry.runtimes) {
+    validateRuntimeContract({ runtime, documents, findings });
+  }
+
   return findings;
+}
+
+type ValidateRuntimeContractRequest = {
+  readonly runtime: CortexRuntimeContract;
+  readonly documents: ReadonlyMap<string, CortexContractDocument>;
+  readonly findings: CortexContractFinding[];
+};
+
+function validateRuntimeContract(
+  request: ValidateRuntimeContractRequest,
+): void {
+  const documentPath = normalizePath(request.runtime.document);
+  const document = request.documents.get(documentPath);
+  if (!document) return;
+  const commands = document.commands.map(normalizeCommand);
+  for (const command of commands) {
+    if (!runtimeCommand(command)) continue;
+    const recognized = [
+      ...request.runtime.allowedCommandPrefixes,
+      ...request.runtime.retiredCommandPrefixes,
+    ].some((prefix) => command.startsWith(prefix));
+    if (recognized) continue;
+    request.findings.push({
+      code: CortexContractFindingCode.MissingRuntimeEntrypoint,
+      file: documentPath,
+      message: `Cortex workflow names an unregistered runtime entrypoint: ${command}`,
+    });
+  }
+  for (const required of request.runtime.requiredCommandPrefixes) {
+    if (commands.some((command) => command.startsWith(required))) continue;
+    request.findings.push({
+      code: CortexContractFindingCode.MissingRuntimeEntrypoint,
+      file: documentPath,
+      message: `Cortex workflow is missing its required runtime entrypoint: ${required}`,
+    });
+  }
+  for (const retired of request.runtime.retiredCommandPrefixes) {
+    if (!commands.some((command) => command.startsWith(retired))) continue;
+    request.findings.push({
+      code: CortexContractFindingCode.RetiredRuntimeEntrypoint,
+      file: documentPath,
+      message: `Cortex workflow names a retired runtime entrypoint: ${retired}`,
+    });
+  }
+}
+
+function normalizeCommand(command: string): string {
+  return command.replaceAll(/\s+/gu, ' ').trim();
+}
+
+function runtimeCommand(command: string): boolean {
+  return command.startsWith('task ') || /^loom-[A-Za-z0-9:_-]+/u.test(command);
 }
 
 type UniqueCortexContextsArgs = {
