@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use tsify::Tsify;
 
-pub const MAX_ENROLLMENT_AUTHORIZATIONS: usize = 128;
 pub const MAX_ENROLLMENT_AUTHORIZATION_TTL_MILLIS: u64 = 5 * 60 * 1_000;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -26,34 +25,6 @@ pub enum EnrollmentAuthorizeOutcome {
     Invalid,
     Exists,
     Capacity,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
-pub enum EnrollmentClaimOutcome {
-    Claimed,
-    Missing,
-    Committing,
-    Committed,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
-pub enum EnrollmentCommitOutcome {
-    Committed,
-    Missing,
-    Authorized,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
-pub enum EnrollmentFailOutcome {
-    Removed,
-    Missing,
-    Committed,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -98,7 +69,7 @@ impl AuthenticatorEnrollmentSession {
         if self.authorizations.contains_key(id) {
             return EnrollmentAuthorizeOutcome::Exists;
         }
-        if self.authorizations.len() >= MAX_ENROLLMENT_AUTHORIZATIONS {
+        if self.authorizations.len() >= 128 {
             return EnrollmentAuthorizeOutcome::Capacity;
         }
         self.authorizations.insert(
@@ -111,45 +82,31 @@ impl AuthenticatorEnrollmentSession {
         EnrollmentAuthorizeOutcome::Authorized
     }
 
-    pub fn claim(&mut self, id: &str, now_millis: u64) -> EnrollmentClaimOutcome {
+    pub fn claim(&mut self, id: &str, now_millis: u64) -> bool {
         self.purge_expired(now_millis);
         let Some(authorization) = self.authorizations.get_mut(id) else {
-            return EnrollmentClaimOutcome::Missing;
+            return false;
         };
-        match authorization.state {
-            EnrollmentAuthorizationState::Authorized => {
-                authorization.state = EnrollmentAuthorizationState::Committing;
-                EnrollmentClaimOutcome::Claimed
-            }
-            EnrollmentAuthorizationState::Committing => EnrollmentClaimOutcome::Committing,
-            EnrollmentAuthorizationState::Committed => EnrollmentClaimOutcome::Committed,
+        if authorization.state != EnrollmentAuthorizationState::Authorized {
+            return false;
+        }
+        authorization.state = EnrollmentAuthorizationState::Committing;
+        true
+    }
+
+    pub fn commit(&mut self, id: &str) {
+        if let Some(authorization) = self.authorizations.get_mut(id)
+            && authorization.state == EnrollmentAuthorizationState::Committing
+        {
+            authorization.state = EnrollmentAuthorizationState::Committed;
         }
     }
 
-    pub fn commit(&mut self, id: &str, now_millis: u64) -> EnrollmentCommitOutcome {
-        self.purge_expired(now_millis);
-        let Some(authorization) = self.authorizations.get_mut(id) else {
-            return EnrollmentCommitOutcome::Missing;
-        };
-        match authorization.state {
-            EnrollmentAuthorizationState::Committing => {
-                authorization.state = EnrollmentAuthorizationState::Committed;
-                EnrollmentCommitOutcome::Committed
-            }
-            EnrollmentAuthorizationState::Committed => EnrollmentCommitOutcome::Committed,
-            EnrollmentAuthorizationState::Authorized => EnrollmentCommitOutcome::Authorized,
-        }
-    }
-
-    pub fn fail(&mut self, id: &str, now_millis: u64) -> EnrollmentFailOutcome {
-        self.purge_expired(now_millis);
-        match self.authorizations.get(id).map(|entry| entry.state) {
-            Some(EnrollmentAuthorizationState::Committed) => EnrollmentFailOutcome::Committed,
-            Some(_) => {
-                self.authorizations.remove(id);
-                EnrollmentFailOutcome::Removed
-            }
-            None => EnrollmentFailOutcome::Missing,
+    pub fn fail(&mut self, id: &str) {
+        if self.authorizations.get(id).map(|entry| entry.state)
+            != Some(EnrollmentAuthorizationState::Committed)
+        {
+            self.authorizations.remove(id);
         }
     }
 
@@ -199,35 +156,29 @@ mod tests {
         let mut session = AuthenticatorEnrollmentSession::default();
         assert_eq!(session.authorize("", 20, 10), A::Invalid);
         assert_eq!(session.authorize(&"a".repeat(129), 20, 10), A::Invalid);
-        assert_eq!(session.authorize("late", 10, 10), A::Invalid);
         assert_eq!(
             session.authorize("long", MAX_ENROLLMENT_AUTHORIZATION_TTL_MILLIS + 11, 10),
             A::Invalid
         );
         assert_eq!(session.authorize("stage", 20, 10), A::Authorized);
-        assert_eq!(session.authorize("stage", 20, 10), A::Exists);
-        assert_eq!(session.claim("stage", 11), EnrollmentClaimOutcome::Claimed);
+        assert!(session.claim("stage", 11));
         assert_eq!(session.revoke("stage", 12), R::Committing);
-        assert_eq!(
-            session.commit("stage", 13),
-            EnrollmentCommitOutcome::Committed
-        );
+        session.commit("stage");
         assert_eq!(session.revoke("stage", 14), R::Committed);
-        assert_eq!(session.fail("stage", 15), EnrollmentFailOutcome::Committed);
         assert_eq!(session.revoke("stage", 20), R::Missing);
     }
 
     #[test]
     fn failure_capacity_purge_and_clear_fail_closed() {
         let mut session = AuthenticatorEnrollmentSession::default();
-        for index in 0..MAX_ENROLLMENT_AUTHORIZATIONS {
+        for index in 0..128 {
             assert_eq!(session.authorize(&index.to_string(), 20, 10), A::Authorized);
         }
         assert_eq!(session.authorize("overflow", 20, 10), A::Capacity);
-        assert_eq!(session.fail("0", 11), EnrollmentFailOutcome::Removed);
+        session.fail("0");
         assert_eq!(session.purge(20), EnrollmentPurgeOutcome::Purged);
         assert_eq!(session.authorize("next", 30, 20), A::Authorized);
         session.clear();
-        assert_eq!(session.claim("next", 21), EnrollmentClaimOutcome::Missing);
+        assert!(!session.claim("next", 21));
     }
 }

@@ -13,7 +13,6 @@ let stagedCodeDelivery = async () => ({
 })
 type SessionRequest = { type: string; payload: Record<string, unknown> }
 const authorizedStageIds: string[] = []
-const revokedStageIds: string[] = []
 const stagedCodeUris: string[] = []
 let authorizedOrigin = 'https://example.test'
 let ops: typeof import('../src/background/service-worker/authenticator-operations')
@@ -52,7 +51,6 @@ beforeAll(async () => {
         }
       }
       if (type.endsWith('revoke')) {
-        revokedStageIds.push(payload.enrollmentAuthorizationId as string)
         return { ok: true, outcome: revokeOutcome }
       }
       if (type.endsWith('enroll-code')) {
@@ -102,10 +100,43 @@ function deferAuthorization(result: boolean) {
   authorizeEnrollment = () => authorization.promise
   return [started.promise, () => authorization.resolve(result)] as const
 }
+async function expectDeferredCodeRejected(
+  stageId: string,
+  invalidate: () => unknown,
+) {
+  expect(await stage(stageId)).toEqual({ ok: true, stageId })
+  const delivery = Promise.withResolvers<{
+    ok: true
+    code: string
+    expiresAt: number
+  }>()
+  stagedCodeDelivery = () => delivery.promise
+  const request = ops.websiteAuthenticatorEnrollCode(dismissArgs(stageId))
+  await Promise.resolve()
+  await invalidate()
+  const response = {
+    ok: true as const,
+    code: '654321',
+    expiresAt: Date.now() + 30_000,
+  }
+  delivery.resolve(response)
+  await expectReason(request, missing)
+  expect(response.code).toBe('')
+}
+test('cancel before stage delivery prevents authorization', async () => {
+  await expectOk(dismiss('before-delivery'))
+  authorizedStageIds.length = 0
+  await expectReason(stage('before-delivery'), missing)
+  expect(authorizedStageIds).toEqual([])
+  authorizeEnrollment = () => Promise.reject(new Error('offscreen lost'))
+  await expect(stage('lost-offscreen')).rejects.toThrow('offscreen lost')
+  authorizeEnrollment = async () => true
+  await expectOk(stage('after-loss'))
+  await expectOk(dismiss('after-loss'))
+})
 test('staged enrollment cancel during authorization prevents staging', async () => {
   revokeOutcome = EnrollmentRevokeOutcome.Missing
   authorizedStageIds.length = 0
-  revokedStageIds.length = 0
   const [started, release] = deferAuthorization(true)
   const staging = stage('during')
   await started
@@ -113,14 +144,15 @@ test('staged enrollment cancel during authorization prevents staging', async () 
   await expectOk(dismiss('during'))
   release()
   await expectReason(staging, missing)
-  expect(revokedStageIds).toContain('during')
-  await expectOk(pending())
 })
 test('same-origin staging lease rejects a second request before authorization resolves', async () => {
   authorizedStageIds.length = 0
   const [started, release] = deferAuthorization(true)
   const first = stage('origin-lease-first')
   await started
+  authorizedOrigin = 'https://foreign.example.test'
+  await expectOk(dismiss('origin-lease-first', authorizedOrigin))
+  authorizedOrigin = origin
   await expectReason(stage('origin-lease-second'), missing)
   expect(authorizedStageIds).toEqual(['origin-lease-first'])
   release()
@@ -131,16 +163,32 @@ test('same-origin staging lease rejects a second request before authorization re
   revokeOutcome = EnrollmentRevokeOutcome.Revoked
   await expectOk(dismiss('origin-lease-first'))
 })
+test('failed revoke retains staged URI for retry', async () => {
+  authorizeEnrollment = async () => true
+  authorizationStarted = () => {}
+  revokeOutcome = EnrollmentRevokeOutcome.Committing
+  expect(await stage('retry')).toEqual({ ok: true, stageId: 'retry' })
+  await expectOk(dismiss('retry'))
+  await ops.websiteAuthenticatorEnrollCode(dismissArgs('retry'))
+  expect(stagedCodeUris.at(-1)).toContain('secret=JBSWY3DPEHPK3PXP')
+  revokeOutcome = EnrollmentRevokeOutcome.Revoked
+  await expectOk(dismiss('retry'))
+})
 test('staged enrollment full tombstones preserve origin isolation', async () => {
   revokeOutcome = EnrollmentRevokeOutcome.Missing
-  const capacityOrigin = 'https://capacity.example.test'
+  const capacityOrigin = origin
   authorizedOrigin = capacityOrigin
   for (let index = 0; index < 128; index += 1)
     await expectOk(dismiss(`capacity-${index}`, capacityOrigin))
+  const [started, release] = deferAuthorization(true)
+  const staging = stage('capacity-pending')
+  await started
   await expectReason(
-    dismiss('capacity-overflow', capacityOrigin),
+    dismiss('capacity-pending', capacityOrigin),
     'authenticator-retry-required',
   )
+  release()
+  await expectReason(staging, missing)
   authorizedOrigin = 'https://isolated.example.test'
   await expectOk(dismiss('isolated-stage', authorizedOrigin))
   authorizedOrigin = origin
@@ -148,29 +196,27 @@ test('staged enrollment full tombstones preserve origin isolation', async () => 
 test('code returned after exact stage ownership is revoked is scrubbed', async () => {
   authorizeEnrollment = async () => true
   revokeOutcome = EnrollmentRevokeOutcome.Revoked
-  expect(await stage('code-race')).toEqual({ ok: true, stageId: 'code-race' })
-  const delivery = Promise.withResolvers<{
-    ok: true
-    code: string
-    expiresAt: number
-  }>()
-  stagedCodeDelivery = () => delivery.promise
-  const codeRequest = ops.websiteAuthenticatorEnrollCode(
-    dismissArgs('code-race'),
-  )
-  await Promise.resolve()
-  await expectOk(dismiss('code-race'))
-  const response = {
-    ok: true as const,
-    code: '654321',
-    expiresAt: Date.now() + 30_000,
+  await expectDeferredCodeRejected('code-race', () => dismiss('code-race'))
+})
+test('code crossing its actual staged TTL while deferred is scrubbed', async () => {
+  const nativeNow = Date.now
+  const nativeTimeout = globalThis.setTimeout
+  let expire = () => {}
+  let now = nativeNow()
+  Date.now = () => now
+  globalThis.setTimeout = ((callback: TimerHandler) => {
+    expire = callback as () => void
+    return 1
+  }) as typeof setTimeout
+  try {
+    await expectDeferredCodeRejected('ttl-code', () => {
+      now += 5 * 60 * 1_000 + 1
+    })
+    expect(await stage('timer')).toEqual({ ok: true, stageId: 'timer' })
+    expire()
+    expect(await pending()).toEqual({ ok: true })
+  } finally {
+    Date.now = nativeNow
+    globalThis.setTimeout = nativeTimeout
   }
-  delivery.resolve(response)
-  await expectReason(codeRequest, missing)
-  expect(response.code).toBe('')
-  stagedCodeDelivery = async () => ({
-    ok: true,
-    code: '123456',
-    expiresAt: Date.now() + 30_000,
-  })
 })

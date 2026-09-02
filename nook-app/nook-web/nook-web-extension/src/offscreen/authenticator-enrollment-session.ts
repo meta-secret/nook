@@ -1,7 +1,5 @@
 import {
   current_code_from_otpauth_uri,
-  EnrollmentClaimOutcome,
-  EnrollmentCommitOutcome,
   preview_otpauth_uri,
   type NookVaultManager,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
@@ -118,45 +116,23 @@ export async function handleAuthenticatorEnrollmentMessage({
       }
       const enrollmentAuthorizationId = payload.enrollmentAuthorizationId
       const activeManager = await dependencies.getManager()
-      try {
-        const openArgs: Parameters<typeof openPasskeyVault>[0] = {
-          activeManager,
-          grant,
-        }
-        await openPasskeyVault(openArgs)
-        if (
-          activeManager.claim_authenticator_enrollment(
-            enrollmentAuthorizationId,
-            Date.now(),
-          ) !== EnrollmentClaimOutcome.Claimed
-        ) {
-          throw new Error('Extension session enrollment authorization expired.')
-        }
-        const secretId = await activeManager.add_authenticator_from_otpauth_js(
-          payload.otpauthUri,
-          payload.origin,
-        )
-        const flushArgs: Parameters<typeof flushPasskeyEventToProviders>[0] = {
-          activeManager,
-          vaultStoreId: grant.vaultStoreId,
-        }
-        await flushPasskeyEventToProviders(flushArgs)
-        if (
-          activeManager.commit_authenticator_enrollment(
-            enrollmentAuthorizationId,
-            Date.now(),
-          ) !== EnrollmentCommitOutcome.Committed
-        ) {
-          throw new Error('Extension session enrollment authorization expired.')
-        }
-        return { ok: true, secretId }
-      } catch (error) {
-        activeManager.fail_authenticator_enrollment(
-          enrollmentAuthorizationId,
-          Date.now(),
-        )
-        throw error
+      const openArgs: Parameters<typeof openPasskeyVault>[0] = {
+        activeManager,
+        grant,
       }
+      await openPasskeyVault(openArgs)
+      const secretId = await activeManager.commit_authenticator_enrollment_js(
+        enrollmentAuthorizationId,
+        payload.otpauthUri,
+        payload.origin,
+        Date.now(),
+      )
+      const flushArgs: Parameters<typeof flushPasskeyEventToProviders>[0] = {
+        activeManager,
+        vaultStoreId: grant.vaultStoreId,
+      }
+      await flushPasskeyEventToProviders(flushArgs)
+      return { ok: true, secretId }
     }
     case ExtensionSessionMessageType.AuthenticatorBackupAttach: {
       const payload = message.payload

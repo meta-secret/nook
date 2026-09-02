@@ -51,6 +51,7 @@ import {
   createPrimaryButton,
   createSecondaryButton,
   createTextButton,
+  renderEnrollmentCancelRetry,
   renderPreviewDetails,
   setHostDescription,
   type EnrollmentFlowViewHost,
@@ -161,6 +162,7 @@ type ActiveEnrollmentCeremony =
       kind: ActiveEnrollmentCeremonyKind.Pending
       authorizationGeneration: number
       host: EnrollmentFlowHost
+      section: HTMLElement
       stageId: string
       sensitiveMaterial: PendingEnrollmentSensitiveMaterial
     }
@@ -170,6 +172,7 @@ type ActiveEnrollmentCeremony =
         | ActiveEnrollmentCeremonyKind.CancellationPending
       authorizationGeneration: number
       host: EnrollmentFlowHost
+      section: HTMLElement
       stageId: string
     }
 
@@ -180,12 +183,14 @@ let activeEnrollmentCeremony: ActiveEnrollmentCeremony = {
 
 type BeginActiveEnrollmentCeremonyArgs = {
   host: EnrollmentFlowHost
+  section: HTMLElement
   stageId: string
   sensitiveMaterial: PendingEnrollmentSensitiveMaterial
 }
 
 export function beginActiveEnrollmentCeremony({
   host,
+  section,
   stageId,
   sensitiveMaterial,
 }: BeginActiveEnrollmentCeremonyArgs): number {
@@ -194,6 +199,7 @@ export function beginActiveEnrollmentCeremony({
     kind: ActiveEnrollmentCeremonyKind.Pending,
     authorizationGeneration: enrollmentAuthorizationGeneration,
     host,
+    section,
     stageId,
     sensitiveMaterial,
   }
@@ -210,12 +216,14 @@ function enrollmentCeremonyIsCurrent(authorizationGeneration: number): boolean {
 type AssignStagedEnrollmentCeremonyArgs = {
   authorizationGeneration: number
   host: EnrollmentFlowHost
+  section: HTMLElement
   stageId: string
 }
 
 export function assignStagedEnrollmentCeremony({
   authorizationGeneration,
   host,
+  section,
   stageId,
 }: AssignStagedEnrollmentCeremonyArgs): boolean {
   if (!enrollmentCeremonyIsCurrent(authorizationGeneration)) return false
@@ -223,6 +231,7 @@ export function assignStagedEnrollmentCeremony({
     kind: ActiveEnrollmentCeremonyKind.Staged,
     authorizationGeneration,
     host,
+    section,
     stageId,
   }
   return true
@@ -274,6 +283,7 @@ export async function cancelActiveEnrollmentCeremony(): Promise<boolean> {
     kind: ActiveEnrollmentCeremonyKind.CancellationPending,
     authorizationGeneration: cancellationGeneration,
     host: ceremony.host,
+    section: ceremony.section,
     stageId: ceremony.stageId,
   }
   const dismissArgs: Parameters<typeof dismissStagedEnrollment>[0] = {
@@ -289,8 +299,19 @@ export async function cancelActiveEnrollmentCeremony(): Promise<boolean> {
         kind: ActiveEnrollmentCeremonyKind.Staged,
         authorizationGeneration: cancellationGeneration,
         host: ceremony.host,
+        section: ceremony.section,
         stageId: ceremony.stageId,
       }
+  if (!dismissed) {
+    ceremony.host.description.textContent = ceremony.host.translatedMessage(
+      BROWSER_MESSAGE_KEYS.WidgetEnrollFailed,
+    )
+    renderEnrollmentCancelRetry({
+      host: ceremony.host,
+      section: ceremony.section,
+      cancel: cancelActiveEnrollmentCeremony,
+    })
+  }
   return dismissed
 }
 
@@ -453,39 +474,6 @@ function renderEnrollmentStageFailure(
   host.setBusy(false)
   renderEnrollmentRetryActions(host)
 }
-function renderEnrollmentCancelRetry(
-  args: EnrollmentEvidenceCallbacksArgs,
-): void {
-  const { host, section } = args
-  const cancelButtonArgs: Parameters<typeof createTextButton>[0] = {
-    host,
-    labelKey: BROWSER_MESSAGE_KEYS.WidgetEnrollCancel,
-    onClick: (event) => {
-      if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
-      const generation =
-        activeEnrollmentCeremony.kind === ActiveEnrollmentCeremonyKind.Staged
-          ? activeEnrollmentCeremony.authorizationGeneration
-          : 0
-      host.setBusy(true)
-      void cancelActiveEnrollmentCeremony().then((dismissed) => {
-        if (!dismissed && !enrollmentCeremonyIsCurrent(generation)) return
-        host.setBusy(false)
-        if (dismissed) {
-          clearEnrollmentSection(host.panel)
-          host.requestWorkflowReclassification()
-        } else {
-          host.description.textContent = host.translatedMessage(
-            BROWSER_MESSAGE_KEYS.WidgetEnrollFailed,
-          )
-          renderEnrollmentCancelRetry(args)
-        }
-      })
-    },
-  }
-  section.replaceChildren()
-  section.append(createTextButton(cancelButtonArgs))
-  host.setBusy(false)
-}
 export async function beginEnrollmentCeremony({
   host,
   section,
@@ -512,6 +500,7 @@ export async function beginEnrollmentCeremony({
   }
   const beginArgs: BeginActiveEnrollmentCeremonyArgs = {
     host,
+    section,
     stageId,
     sensitiveMaterial,
   }
@@ -564,6 +553,7 @@ export async function beginEnrollmentCeremony({
   const stagedCeremony: Parameters<typeof assignStagedEnrollmentCeremony>[0] = {
     authorizationGeneration,
     host,
+    section,
     stageId,
   }
   let mismatchedStageRetained = false
@@ -579,16 +569,22 @@ export async function beginEnrollmentCeremony({
       host.description.textContent = host.translatedMessage(
         BROWSER_MESSAGE_KEYS.WidgetEnrollFailed,
       )
-      renderEnrollmentCancelRetry(nookTypedArgs0_9)
+      renderEnrollmentCancelRetry({
+        host,
+        section,
+        cancel: cancelActiveEnrollmentCeremony,
+      })
       return
     }
     renderEnrollmentStageFailure(nookTypedArgs0_9)
     return
   }
   if (!assignStagedEnrollmentCeremony(stagedCeremony)) return
-  const nookTypedArgs0_14: Parameters<typeof enrollmentEvidenceCallbacks>[0] = {
+  const nookTypedArgs0_14: Parameters<typeof enrollmentEvidenceCallbacks>[0] &
+    Parameters<typeof renderEnrollmentCancelRetry>[0] = {
     host,
     section,
+    cancel: cancelActiveEnrollmentCeremony,
     stageId,
     vaultStoreId,
     authorizationGeneration,

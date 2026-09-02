@@ -42,6 +42,34 @@ impl NookAuthenticatorBackupAttachResult {
 }
 
 impl NookVaultManager {
+    async fn add_authenticator_from_otpauth(
+        &mut self,
+        uri: &str,
+        page_origin: &str,
+    ) -> Result<String, JsError> {
+        self.ensure_passkey_extension_capability()?;
+        self.ensure_vault_crypto_from_cache().await?;
+        let mut authenticator =
+            nook_core::AuthenticatorSecret::from_otpauth_uri(uri).map_err(NookError::from)?;
+        let origin = page_origin.trim();
+        if !origin.is_empty() {
+            authenticator.website_url = origin.to_owned();
+        }
+        authenticator.normalize().map_err(NookError::from)?;
+        let yaml = Zeroizing::new(
+            nook_core::SecretValue::Authenticator(authenticator)
+                .to_yaml()
+                .map_err(NookError::from)?
+                .as_str()
+                .to_owned(),
+        );
+        let id = nook_core::generate_secret_id()
+            .map_err(NookError::from)?
+            .to_string();
+        self.persist_authenticator_yaml(id, yaml.as_str().to_owned())
+            .await
+    }
+
     async fn persist_authenticator_yaml(
         &mut self,
         id: String,
@@ -213,6 +241,30 @@ mod wasm_tests {
         };
         projected.zeroize_plaintext();
         assert_eq!(persisted_codes, ["alpha-code", "beta-code"]);
+
+        use nook_core::EnrollmentRevokeOutcome as R;
+        let uri = "otpauth://totp/Nook:test?secret=JBSWY3DPEHPK3PXP&issuer=Nook";
+        let unauthorized = manager
+            .commit_authenticator_enrollment_js("missing", uri, "https://example.test", 10.0)
+            .await;
+        assert!(unauthorized.is_err());
+        manager.authorize_authenticator_enrollment("invalid", 20.0, 10.0)?;
+        let invalid = manager
+            .commit_authenticator_enrollment_js("invalid", "not-otpauth", "", 11.0)
+            .await;
+        assert!(invalid.is_err());
+        assert_eq!(
+            manager.revoke_authenticator_enrollment("invalid", 12.0)?,
+            R::Missing
+        );
+        manager.authorize_authenticator_enrollment("valid", 20.0, 10.0)?;
+        manager
+            .commit_authenticator_enrollment_js("valid", uri, "https://example.test", 11.0)
+            .await?;
+        assert_eq!(
+            manager.revoke_authenticator_enrollment("valid", 20.0)?,
+            R::Committed
+        );
         Ok(())
     }
 }
@@ -231,39 +283,6 @@ impl NookVaultManager {
             enrollment_millis(expires_at_millis)?,
             enrollment_millis(now_millis)?,
         ))
-    }
-
-    #[wasm_bindgen]
-    pub fn claim_authenticator_enrollment(
-        &mut self,
-        authorization_id: &str,
-        now_millis: f64,
-    ) -> Result<nook_core::EnrollmentClaimOutcome, JsError> {
-        Ok(self
-            .authenticator_enrollment
-            .claim(authorization_id, enrollment_millis(now_millis)?))
-    }
-
-    #[wasm_bindgen]
-    pub fn commit_authenticator_enrollment(
-        &mut self,
-        authorization_id: &str,
-        now_millis: f64,
-    ) -> Result<nook_core::EnrollmentCommitOutcome, JsError> {
-        Ok(self
-            .authenticator_enrollment
-            .commit(authorization_id, enrollment_millis(now_millis)?))
-    }
-
-    #[wasm_bindgen]
-    pub fn fail_authenticator_enrollment(
-        &mut self,
-        authorization_id: &str,
-        now_millis: f64,
-    ) -> Result<nook_core::EnrollmentFailOutcome, JsError> {
-        Ok(self
-            .authenticator_enrollment
-            .fail(authorization_id, enrollment_millis(now_millis)?))
     }
 
     #[wasm_bindgen]
@@ -287,34 +306,30 @@ impl NookVaultManager {
             .purge(enrollment_millis(now_millis)?))
     }
 
-    /// Create an authenticator from a consented `otpauth://totp/...` URI.
     #[wasm_bindgen]
-    pub async fn add_authenticator_from_otpauth_js(
+    pub async fn commit_authenticator_enrollment_js(
         &mut self,
+        authorization_id: &str,
         uri: &str,
         page_origin: &str,
+        now_millis: f64,
     ) -> Result<String, JsError> {
-        self.ensure_passkey_extension_capability()?;
-        self.ensure_vault_crypto_from_cache().await?;
-        let mut authenticator =
-            nook_core::AuthenticatorSecret::from_otpauth_uri(uri).map_err(NookError::from)?;
-        let origin = page_origin.trim();
-        if !origin.is_empty() {
-            authenticator.website_url = origin.to_owned();
+        if !self
+            .authenticator_enrollment
+            .claim(authorization_id, enrollment_millis(now_millis)?)
+        {
+            return Err(JsError::new("Authenticator enrollment is not authorized."));
         }
-        authenticator.normalize().map_err(NookError::from)?;
-        let yaml = Zeroizing::new(
-            nook_core::SecretValue::Authenticator(authenticator)
-                .to_yaml()
-                .map_err(NookError::from)?
-                .as_str()
-                .to_owned(),
-        );
-        let id = nook_core::generate_secret_id()
-            .map_err(NookError::from)?
-            .to_string();
-        self.persist_authenticator_yaml(id, yaml.as_str().to_owned())
-            .await
+        match self.add_authenticator_from_otpauth(uri, page_origin).await {
+            Ok(secret_id) => {
+                self.authenticator_enrollment.commit(authorization_id);
+                Ok(secret_id)
+            }
+            Err(error) => {
+                self.authenticator_enrollment.fail(authorization_id);
+                Err(error)
+            }
+        }
     }
 
     /// Attach reviewed recovery codes to an authenticator via replace/merge.

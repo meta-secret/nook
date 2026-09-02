@@ -58,8 +58,7 @@ pub use authenticator::{
     authenticator_setup_key_changed, normalize_backup_codes, verify_persisted_backup_codes,
 };
 pub use authenticator_enrollment_session::{
-    AuthenticatorEnrollmentSession, EnrollmentAuthorizeOutcome, EnrollmentClaimOutcome,
-    EnrollmentCommitOutcome, EnrollmentFailOutcome, EnrollmentPurgeOutcome,
+    AuthenticatorEnrollmentSession, EnrollmentAuthorizeOutcome, EnrollmentPurgeOutcome,
     EnrollmentRevokeOutcome,
 };
 pub use authenticator_issuer_hosts::{

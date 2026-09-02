@@ -1,39 +1,48 @@
 import { expect, test, vi } from 'vitest'
-import { renderEnrollmentRetryActions } from '../../../../nook-web-extension/src/content/enrollment-flow'
+import {
+  beginActiveEnrollmentCeremony,
+  cancelActiveEnrollmentCeremony,
+} from '../../../../nook-web-extension/src/content/enrollment-flow'
 import { BROWSER_MESSAGE_KEYS } from '../../../../nook-web-extension/src/lib/browser-message-keys'
 
-test('keeps a translated failure visible while rendering retry actions', () => {
-  try {
-    const panel = document.createElement('section')
-    const title = document.createElement('h2')
-    const description = document.createElement('p')
-    description.textContent = 'Authenticator setup failed.'
-    document.body.innerHTML = `
-      <img alt="Authenticator QR code"
-        data-nook-otpauth-uri="otpauth://totp/Example?secret=example" />
-    `
-    const qr = document.querySelector('img')
-    if (!qr) throw new Error('Expected the QR fixture.')
-    vi.spyOn(qr, 'getBoundingClientRect').mockReturnValue(
-      DOMRect.fromRect({ width: 200, height: 200 }),
-    )
-    renderEnrollmentRetryActions({
-      panel,
-      title,
-      description,
-      isBusy: () => false,
-      setBusy: vi.fn(),
-      translatedMessage: (key: string) =>
-        key === BROWSER_MESSAGE_KEYS.WidgetAddFromPage
-          ? 'Add 2FA from this page'
-          : key,
-    } as unknown as Parameters<typeof renderEnrollmentRetryActions>[0])
-
-    expect(description.textContent).toBe('Authenticator setup failed.')
-    expect(panel.querySelector('button')?.getAttribute('aria-label')).toBe(
-      'Add 2FA from this page',
-    )
-  } finally {
-    document.body.replaceChildren()
-  }
+test('failed pending cancellation keeps identity and renders Cancel-only retry', async () => {
+  const section = document.createElement('section')
+  const description = document.createElement('p')
+  const stageIds: string[] = []
+  let attempt = 0
+  const host = {
+    description,
+    isBusy: () => false,
+    panel: document.createElement('section'),
+    requestWorkflowReclassification: vi.fn(),
+    sendAuthenticatorEnrollmentDismissRuntimeMessage: async (message: {
+      payload: { stageId: string }
+    }) => {
+      stageIds.push(message.payload.stageId)
+      attempt += 1
+      return attempt === 1 ? 'committing' : 'revoked'
+    },
+    setBusy: vi.fn(),
+    translatedMessage: (key: string) =>
+      key === BROWSER_MESSAGE_KEYS.WidgetEnrollFailed
+        ? 'Authenticator setup failed.'
+        : 'Cancel',
+  } as unknown as Parameters<typeof beginActiveEnrollmentCeremony>[0]['host']
+  const uri = { value: 'otpauth://pending-secret' }
+  beginActiveEnrollmentCeremony({
+    host,
+    section,
+    stageId: 'retained-stage',
+    sensitiveMaterial: {
+      uri,
+      payload: { otpauthUri: uri.value },
+      candidate: { sourceLabel: 'QR', otpauthUri: uri.value },
+    },
+  })
+  expect(await cancelActiveEnrollmentCeremony()).toBe(false)
+  expect(description.textContent).toBe('Authenticator setup failed.')
+  expect(section.querySelectorAll('button')).toHaveLength(1)
+  expect(section.querySelector('button')?.textContent).toBe('Cancel')
+  expect(await cancelActiveEnrollmentCeremony()).toBe(true)
+  expect(stageIds).toEqual(['retained-stage', 'retained-stage'])
 })

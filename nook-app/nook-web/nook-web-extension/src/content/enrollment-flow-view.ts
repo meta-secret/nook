@@ -3,6 +3,7 @@ import {
   BROWSER_MESSAGE_KEYS,
   type BrowserMessageKey,
 } from '../lib/browser-message-keys'
+import { isTrustedAuthAction } from '../lib/auth-widget-policy'
 
 export type EnrollmentFlowViewHost = {
   panel: HTMLElement
@@ -157,6 +158,39 @@ export function createTextButton({
     onClick,
   }
   return createButton(nookTypedArgs0_2)
+}
+
+type RenderEnrollmentCancelRetryArgs = {
+  host: EnrollmentFlowViewHost & {
+    isBusy: () => boolean
+    requestWorkflowReclassification: () => void
+    setBusy: (busy: boolean) => void
+  }
+  section: HTMLElement
+  cancel: () => Promise<boolean>
+}
+
+export function renderEnrollmentCancelRetry({
+  host,
+  section,
+  cancel,
+}: RenderEnrollmentCancelRetryArgs): void {
+  const button = createTextButton({
+    host,
+    labelKey: BROWSER_MESSAGE_KEYS.WidgetEnrollCancel,
+    onClick: (event) => {
+      if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
+      host.setBusy(true)
+      void cancel().then((dismissed) => {
+        host.setBusy(false)
+        if (!dismissed) return
+        clearEnrollmentSection(host.panel)
+        host.requestWorkflowReclassification()
+      })
+    },
+  })
+  section.replaceChildren(button)
+  host.setBusy(false)
 }
 
 type RenderPreviewDetailsArgs = {
