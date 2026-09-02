@@ -100,6 +100,10 @@ must coordinate these actions:
   head;
 - record the defect-claim disposition separately from the disposition of any
   reviewer-proposed remedy;
+- treat every regression caused by the current PR as current-task relevant,
+  regardless of the product area or consumer that exposes it;
+- reject or route outside the current change only unrelated pre-existing
+  defects and enhancements;
 - implement the smallest correct fix for every accepted defect, including when
   its proposed remedy is rejected;
 - record why each rejected defect claim requires no current change;
@@ -179,6 +183,8 @@ Cursor, CodeRabbit, or another service:
 
 1. Verify the finding against the current branch and `.cortex` rules.
 2. Apply validity and current-task relevance gates to the defect claim.
+   - A regression caused by the current PR always passes the relevance gate.
+   - Its exposing product area or consumer does not change that result.
 3. Select a candidate for the smallest correct in-scope fix for an accepted
    defect.
 4. Apply the proportionality and scope gate separately to any proposed remedy
@@ -223,13 +229,15 @@ substantive finding.
 
 **Required actions:**
 
-- Route evidence-proven missing functionality through the
-  [issues workflow](issues.md) when the current PR will not finish it.
+- Route evidence-proven unrelated pre-existing missing functionality through
+  the [issues workflow](issues.md) when the current PR will not finish it.
 
 **Prohibited actions:**
 
 - Do not create follow-up work for a speculative reviewer suggestion or an
   unproven enhancement.
+- Do not reject or route a regression caused by the current PR as out of scope.
+- Do not use the exposing product area or consumer to exclude that regression.
 - Do not implement the routed missing functionality.
 - Do not expand the current PR to include it.
 - Do not treat review feedback as authority to start a new implementation task

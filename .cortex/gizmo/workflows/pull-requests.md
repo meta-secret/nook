@@ -580,6 +580,11 @@ task pr:ready PR=<number>
   - Follow [Code review comments](../dynamic-skills/code-review-comments.md).
 - Preserve the broader repository meaning of `actionable`.
 - Require implementation only for an accepted defect claim.
+- Treat every regression caused by the current PR as current-task relevant.
+- Do not exclude that regression because another product area or consumer
+  exposes it.
+- Reject or route outside the current change only unrelated pre-existing
+  defects and enhancements.
 - Evaluate any reviewer-proposed remedy separately from its defect claim.
 - Select a candidate correction before applying the proportionality and scope
   gate.

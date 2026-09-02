@@ -48,9 +48,11 @@ For each routed item, the responsible team agent:
 4. Applies the current-task relevance gate to the defect claim.
    - Accept the defect only when correcting it is necessary to satisfy the
      current PR's acceptance boundary.
-   - Reject a claim for this change when it concerns a new capability, product
-     area, architecture, or separately valuable follow-up instead of a defect
-     inside that boundary.
+   - Treat every regression caused by the current PR as inside that boundary.
+   - The product area or consumer that exposes the regression does not change
+     its relevance.
+   - Only an unrelated pre-existing defect or enhancement may be rejected or
+     routed outside the current change.
 5. Classifies the defect claim as accepted, rejected, or
    clarification-needed.
    - A clarification-needed claim remains unresolved and blocks readiness.
@@ -83,12 +85,14 @@ rejected.
 
 - Record specific evidence when a defect claim is false or inapplicable.
 - Record that rationale on the original feedback target.
+- Correct every regression caused by the current PR through the authorized
+  functional owner.
 - Route an alleged security finding to the authorized security owner.
 - Verify the alleged violation against evidence before fail-closed action.
 - Fail closed only when evidence confirms a security or authority violation.
 - Route a required correction to the authorized owner when it exceeds the
   assigned scope.
-- Route proven missing functionality through the
+- Route proven unrelated pre-existing missing functionality through the
   [issues workflow](../workflows/issues.md) when the current PR will not finish
   it.
 
@@ -99,8 +103,8 @@ rejected.
 - Do not treat a plausible edge case, enhancement, hardening idea, or request
   for new functionality as a defect merely because it could improve the
   system.
-- Do not accept a defect claim for the current change when it exceeds the PR's
-  acceptance boundary.
+- Do not reject or route a regression caused by the current PR as out of scope.
+- Do not use the exposing product area or consumer to exclude that regression.
 - Do not reject a proven in-scope defect merely because the proposed remedy is
   overbroad.
 - Do not reject or downgrade a confirmed security or authority violation as an
@@ -190,6 +194,10 @@ Does not apply to:
 - [ ] Gizmo routes each finding to the responsible team agent.
 - [ ] The team agent applies validity and current-task relevance gates to the
       defect claim before editing.
+- [ ] Every regression caused by the current PR passes current-task relevance.
+- [ ] The exposing product area or consumer does not change that result.
+- [ ] Only unrelated pre-existing defects and enhancements may be rejected or
+      routed outside the current change.
 - [ ] The team agent selects a candidate correction for every accepted defect.
 - [ ] The team agent applies the proportionality and scope gate separately to
       the reviewer-proposed remedy and candidate correction.
@@ -206,8 +214,8 @@ Does not apply to:
       in-scope defect.
 - [ ] Speculative suggestions and unproven enhancements create no follow-up
       work.
-- [ ] Proven missing functionality that the current PR will not finish routes
-      through the issues workflow.
+- [ ] Proven unrelated pre-existing missing functionality that the current PR
+      will not finish routes through the issues workflow.
 - [ ] Review feedback does not authorize a new implementation task or PR.
 - [ ] Alleged security findings reach the authorized security owner for
       verification.
