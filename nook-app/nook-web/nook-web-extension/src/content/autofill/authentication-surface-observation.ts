@@ -1,4 +1,8 @@
-import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
+import { authenticationFactMutationTouchesLabelDependency } from '../../../../nook-web-shared/src/extension/authentication-fact-attributes'
+import {
+  pageHasManualCheckpoint,
+  type PasswordFormObservation,
+} from '../../../../nook-web-shared/src/extension/password-forms'
 import { pageHasDocumentBackupCodeHint } from '../../lib/backup-code-candidates'
 
 export const AUTHENTICATION_MUTATION_ATTRIBUTE_FILTER = [
@@ -145,6 +149,19 @@ function mutationCanIntroduceAuthenticationRecoveryEvidence(
   )
 }
 
+function mutationCanIntroduceManualCheckpoint(record: MutationRecord): boolean {
+  const nodeHasManualCheckpoint = (node: Node): boolean => {
+    const root = node instanceof Element ? node : node.parentElement
+    return Boolean(root && pageHasManualCheckpoint(root))
+  }
+  if (record.type === 'childList') {
+    return [...record.addedNodes, ...record.removedNodes].some(
+      nodeHasManualCheckpoint,
+    )
+  }
+  return nodeHasManualCheckpoint(record.target)
+}
+
 export function mutationBelongsOnlyToMountedWidget(
   request: MountedWidgetMutationRequest,
 ): boolean {
@@ -257,6 +274,8 @@ export function mutationTouchesAuthenticationWorkflow(
 export function mutationCanChangeAuthenticationWorkflows(
   record: MutationRecord,
 ): boolean {
+  if (authenticationFactMutationTouchesLabelDependency(record)) return true
+  if (mutationCanIntroduceManualCheckpoint(record)) return true
   if (mutationCanIntroduceAuthenticationRecoveryEvidence(record)) return true
   const containsAuthenticationControl = (node: Node): boolean =>
     node instanceof Element &&

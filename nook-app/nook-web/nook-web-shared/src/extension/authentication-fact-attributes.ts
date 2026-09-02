@@ -98,6 +98,35 @@ function elementLabelsAuthenticationControl({
   );
 }
 
+export function authenticationFactMutationTouchesLabelDependency(
+  mutation: MutationRecord,
+): boolean {
+  const elements = new Set<Element>();
+  const includeNode = (node: Node): void => {
+    if (node instanceof Element) elements.add(node);
+    if (node.parentElement) elements.add(node.parentElement);
+  };
+  includeNode(mutation.target);
+  if (mutation.type === "childList") {
+    for (const node of [...mutation.addedNodes, ...mutation.removedNodes]) {
+      includeNode(node);
+    }
+  }
+  const previousId =
+    mutation.type === "attributes" &&
+    mutation.attributeName === "id" &&
+    mutation.oldValue
+      ? mutation.oldValue
+      : false;
+  return [...elements].some((element) => {
+    const dependency: LabelledAuthenticationControlDependency = {
+      element,
+      previousId,
+    };
+    return elementLabelsAuthenticationControl(dependency);
+  });
+}
+
 function attributeTargetCanAffectAuthenticationFacts(
   mutation: AuthenticationFactMutation,
 ): boolean {

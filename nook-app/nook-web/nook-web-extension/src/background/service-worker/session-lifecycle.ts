@@ -200,10 +200,7 @@ async function notifyAuthenticationSurfaces(
       return deliverAuthenticationSurfaceNotification(deliveryRequest)
     }),
   )
-  if (
-    eligibleTabIds.length > 0 &&
-    !deliveries.some((delivery) => 'value' in delivery)
-  ) {
+  if (deliveries.some((delivery) => delivery.status === 'rejected')) {
     throw new Error('authentication surface refresh delivery failed')
   }
 }

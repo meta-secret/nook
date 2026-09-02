@@ -184,7 +184,7 @@ describe('authentication surface mutation filtering', () => {
 
   test('rescans dynamically inserted and updated CAPTCHA frames', () => {
     const insertedFrame = document.createElement('iframe')
-    insertedFrame.src = 'https://captcha.example.test/recaptcha'
+    insertedFrame.src = 'about:blank#recaptcha'
     const updatedFrame = document.createElement('iframe')
     document.body.append(insertedFrame, updatedFrame)
     updatedFrame.title = 'Complete CAPTCHA'
@@ -224,6 +224,42 @@ describe('authentication surface mutation filtering', () => {
         true,
       )
     }
+  })
+
+  test('rescans text changes in externally referenced labels', () => {
+    document.body.innerHTML = `
+      <span id="action-label">Continue</span>
+      <button aria-labelledby="action-label"></button>
+    `
+    const label = document.querySelector('#action-label')
+    const labelText = label?.firstChild
+    if (!(labelText instanceof Text)) throw new Error('expected label text')
+    labelText.data = 'Use passkey'
+    const request: Parameters<typeof authenticationMutationImpact>[0] = {
+      records: [
+        {
+          type: 'characterData',
+          target: labelText,
+        } as unknown as MutationRecord,
+      ],
+      mountedHost: false,
+      renderedWorkflow: false,
+    }
+
+    expect(authenticationMutationImpact(request).shouldScheduleScan).toBe(true)
+  })
+
+  test('rescans dynamically inserted email-verification checkpoints', () => {
+    const checkpoint = document.createElement('div')
+    checkpoint.textContent = 'Please verify your email before continuing.'
+    document.body.append(checkpoint)
+    const request: Parameters<typeof authenticationMutationImpact>[0] = {
+      records: [childListMutation(document.body, [checkpoint])],
+      mountedHost: false,
+      renderedWorkflow: false,
+    }
+
+    expect(authenticationMutationImpact(request).shouldScheduleScan).toBe(true)
   })
 
   test('rescans dynamically inserted backup-code evidence', () => {

@@ -133,6 +133,26 @@ describe('authentication surface notifications', () => {
     )
   })
 
+  test('reports refresh failure when any eligible tab rejects delivery', async () => {
+    globalThis.chrome = {
+      tabs: {
+        query: (_query, callback) =>
+          callback([
+            { id: 7, url: 'https://login.example.test/' },
+            { id: 11, url: 'https://account.example.test/' },
+          ]),
+        sendMessage: (tabId) =>
+          Promise.resolve(tabId === 7 ? { ok: true } : { ok: false }),
+      },
+    } as unknown as typeof chrome
+    const { refreshAuthenticationSurfaces } =
+      await import('../src/background/service-worker/session-lifecycle')
+
+    await expect(refreshAuthenticationSurfaces()).rejects.toThrow(
+      'authentication surface refresh delivery failed',
+    )
+  })
+
   test('ignores restricted and Nook vault tabs without autofill listeners', async () => {
     const messages: number[] = []
     globalThis.chrome = {
