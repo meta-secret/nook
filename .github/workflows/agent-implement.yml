@@ -122,21 +122,8 @@ jobs:
               return
             }
             const body = decode(data)
-            const slug = path.replace(/^issues\//, '').replace(/\.md$/, '').replaceAll('/', '-')
-            const expectedBranch = `agent/workbench-${slug}-${context.runId}`
-            const status = value(body, 'status')
-            let recoveringOpenPull = false
-            if (status === 'in_progress' && value(body, 'automation') === 'agent') {
-              const pulls = await github.rest.pulls.list({
-                ...context.repo,
-                state: 'open',
-                head: `${context.repo.owner}:${expectedBranch}`,
-                per_page: 2,
-              })
-              recoveringOpenPull = pulls.data.length === 1
-            }
-            if ((status !== 'ready' && !recoveringOpenPull) || value(body, 'automation') !== 'agent') {
-              core.setFailed(`${path} must have status: ready or this run's open implementation PR, with automation: agent`)
+            if (value(body, 'status') !== 'ready' || value(body, 'automation') !== 'agent') {
+              core.setFailed(`${path} must have status: ready and automation: agent`)
               return
             }
             const frontmatter = body.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/)?.[1] || ''
@@ -182,27 +169,25 @@ jobs:
               core.setFailed(`${path} owner ${continuingOwner} must have write access to Nook`)
               return
             }
-            if (!recoveringOpenPull) {
-              const claimed = body
-                .replace(/^status:\s*ready$/m, 'status: in_progress')
-                .replace(/^updated_at:\s*.+$/m, `updated_at: ${now}`)
-              await github.rest.repos.createOrUpdateFileContents({
-                owner,
-                repo,
-                path,
-                branch: 'main',
-                sha: data.sha,
-                message: `claim: ${path}`,
-                content: Buffer.from(claimed).toString('base64'),
-              })
-            }
+            const claimed = body
+              .replace(/^status:\s*ready$/m, 'status: in_progress')
+              .replace(/^updated_at:\s*.+$/m, `updated_at: ${now}`)
+            await github.rest.repos.createOrUpdateFileContents({
+              owner,
+              repo,
+              path,
+              branch: 'main',
+              sha: data.sha,
+              message: `claim: ${path}`,
+              content: Buffer.from(claimed).toString('base64'),
+            })
 
             core.setOutput('found', 'true')
             core.setOutput('path', path)
             core.setOutput('title', issueTitle)
             core.setOutput('body', body)
             core.setOutput('url', `https://github.com/${owner}/${repo}/blob/main/${path}`)
-            core.setOutput('slug', slug)
+            core.setOutput('slug', path.replace(/^issues\//, '').replace(/\.md$/, '').replaceAll('/', '-'))
             core.setOutput('continuing_owner', continuingOwner)
             core.setOutput('gizmo_id', assignedGizmoId)
 
@@ -294,9 +279,9 @@ jobs:
           echo "ready=true" >> "$GITHUB_OUTPUT"
           echo "checkout_ref=$checkout_ref" >> "$GITHUB_OUTPUT"
 
-      - name: Resolve existing implementation PR
+      - name: Resolve standalone prompt rerun
         id: rerun
-        if: steps.task.outputs.ready == 'true'
+        if: steps.task.outputs.ready == 'true' && inputs.prompt != ''
         uses: actions/github-script@v9
         env:
           AGENT_BRANCH: ${{ env.AGENT_BRANCH }}
@@ -670,7 +655,7 @@ jobs:
               `- Task ID: [run ${context.runId}](${process.env.GITHUB_SERVER_URL}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`, '',
               '## Nook Workbench', '', `- Focused issue: ${issue}`,
               `- Immutable plan: ${process.env.PLAN_URL}`, '- Worklog: pending', '',
-              '## Validation', '', '- Hosted PR checks: pending',
+              '## Validation', '', '- Trusted formatting and PR metadata validation: passed before publication',
             ].join('\n'))
 
       - name: Validate, commit, and publish implementation
@@ -692,7 +677,7 @@ jobs:
       - name: Publish Workbench result
         if: >-
           always() &&
-          steps.rerun.outputs.terminal_reason != 'merged' &&
+          steps.rerun.outputs.terminal != 'true' &&
           (steps.task.outputs.ready == 'true' ||
            steps.workbench.outputs.found == 'true')
         uses: actions/github-script@v9
