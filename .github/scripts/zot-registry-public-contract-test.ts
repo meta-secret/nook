@@ -26,11 +26,45 @@ function forbidFragment(input: {
   }
 }
 
+function countFragment(input: {
+  source: string;
+  fragment: string;
+  expected: number;
+  message: string;
+}): void {
+  const actual = input.source.split(input.fragment).length - 1;
+  if (actual !== input.expected) {
+    throw new Error(
+      `${input.message}: expected ${input.expected}, found ${actual}`,
+    );
+  }
+}
+
+function requireBefore(input: {
+  source: string;
+  first: string;
+  second: string;
+  message: string;
+}): void {
+  const first = input.source.indexOf(input.first);
+  const second = input.source.indexOf(input.second);
+  if (first < 0 || second < 0 || first >= second) {
+    throw new Error(input.message);
+  }
+}
+
 const registryTask = await read("infra/tasks/registry.yml");
 const k0sTask = await read("infra/tasks/k0s.yml");
 const workerTask = await read("infra/tasks/k0s-workers.yml");
 const workerMesh = await read("infra/k0s/scripts/k0s-worker-mesh-reconcile");
 const completeDeploy = await read("infra/tasks/host-services.yml");
+const controllerAuthReconcile = registryTask.slice(
+  registryTask.indexOf("  registry:containerd-auth:reconcile:"),
+  registryTask.indexOf("  registry:credential:sync:"),
+);
+if (!controllerAuthReconcile) {
+  throw new Error("controller registry-auth reconciliation task is missing");
+}
 const zot = await read("infra/k0s/manifests/registry/zot.yaml");
 const traefik = await read("infra/traefik-dynamic.yaml");
 const compose = await read("infra/compose.yaml");
@@ -60,6 +94,172 @@ for (const fragment of [
     message: `missing registry contract: ${fragment}`,
   };
   requireFragment(assertion);
+}
+forbidFragment({
+  source: controllerAuthReconcile,
+  fragment: "metadata.labels.nook\\.nokey\\.sh/arc-build}')\" != true",
+  message: "controller auth cleanup must support an ARC-qualified controller",
+});
+forbidFragment({
+  source: controllerAuthReconcile,
+  fragment: "--overwrite",
+  message: "controller quarantine must not overwrite concurrent ownership",
+});
+for (const fragment of [
+  "quarantine_owned=false",
+  "nook.nokey.sh/containerd-auth-quarantine=registry-controller-v1",
+  "Controller has a foreign containerd auth quarantine owner",
+  "nook.nokey.sh/arc-build=preparing:NoSchedule",
+  "Controller has ambiguous ARC quarantine state",
+  'if test "$quarantine_owned" = true; then',
+  "nook.nokey.sh/arc-build:NoSchedule-",
+  "nook.nokey.sh/containerd-auth-quarantine-",
+]) {
+  requireFragment({
+    source: controllerAuthReconcile,
+    fragment,
+    message: `controller quarantine ownership is missing: ${fragment}`,
+  });
+}
+requireBefore({
+  source: controllerAuthReconcile,
+  first: "nook.nokey.sh/arc-build=preparing:NoSchedule",
+  second: "actions.github.com/scale-set-name",
+  message: "controller quarantine must block scheduling before the ARC drain",
+});
+requireBefore({
+  source: controllerAuthReconcile,
+  first: "actions.github.com/scale-set-name",
+  second: "sudo -n systemctl restart k0scontroller.service",
+  message: "controller ARC drain must finish before restart",
+});
+requireBefore({
+  source: controllerAuthReconcile,
+  first: 'sudo -n install -m 0600 "$marker_next" "$marker"',
+  second: 'if test "$quarantine_owned" = true; then',
+  message: "owned controller quarantine must remain until cleanup is proven",
+});
+countFragment({
+  source: controllerAuthReconcile,
+  fragment: "sudo -n systemctl restart k0scontroller.service",
+  expected: 1,
+  message: "controller auth cleanup must restart exactly once",
+});
+countFragment({
+  source: workerMesh,
+  fragment: "sudo -n systemctl restart k0sworker.service",
+  expected: 1,
+  message: "worker auth cleanup must restart exactly once",
+});
+
+type ArcTaint = { key: string; value: string; effect: string };
+function quarantineDisposition(
+  taints: ArcTaint[],
+  owner: string,
+): "owned" | "preserved" | "reject" {
+  if (owner !== "" && owner !== "registry-controller-v1") return "reject";
+  const matching = taints.filter(
+    (taint) => taint.key === "nook.nokey.sh/arc-build",
+  );
+  if (matching.length === 0) return "owned";
+  if (
+    matching.length === 1 &&
+    matching[0]?.value === "preparing" &&
+    matching[0]?.effect === "NoSchedule"
+  ) {
+    return owner === "registry-controller-v1" ? "owned" : "preserved";
+  }
+  return "reject";
+}
+const controllerQuarantineFixtures = [
+  {
+    name: "ARC-qualified controller without a taint",
+    arcBuildQualified: true,
+    taints: [] as ArcTaint[],
+    owner: "",
+    expected: "owned",
+  },
+  {
+    name: "interrupted owned quarantine before taint",
+    arcBuildQualified: true,
+    taints: [] as ArcTaint[],
+    owner: "registry-controller-v1",
+    expected: "owned",
+  },
+  {
+    name: "pre-existing exact quarantine",
+    arcBuildQualified: true,
+    taints: [
+      {
+        key: "nook.nokey.sh/arc-build",
+        value: "preparing",
+        effect: "NoSchedule",
+      },
+    ],
+    owner: "",
+    expected: "preserved",
+  },
+  {
+    name: "interrupted owned exact quarantine",
+    arcBuildQualified: true,
+    taints: [
+      {
+        key: "nook.nokey.sh/arc-build",
+        value: "preparing",
+        effect: "NoSchedule",
+      },
+    ],
+    owner: "registry-controller-v1",
+    expected: "owned",
+  },
+  {
+    name: "conflicting quarantine",
+    arcBuildQualified: true,
+    taints: [
+      {
+        key: "nook.nokey.sh/arc-build",
+        value: "other",
+        effect: "NoSchedule",
+      },
+    ],
+    owner: "",
+    expected: "reject",
+  },
+  {
+    name: "foreign quarantine owner",
+    arcBuildQualified: true,
+    taints: [] as ArcTaint[],
+    owner: "foreign",
+    expected: "reject",
+  },
+] as const;
+for (const fixture of controllerQuarantineFixtures) {
+  if (!fixture.arcBuildQualified) {
+    throw new Error(
+      `${fixture.name} must exercise an ARC-qualified controller`,
+    );
+  }
+  if (
+    quarantineDisposition([...fixture.taints], fixture.owner) !==
+    fixture.expected
+  ) {
+    throw new Error(`controller quarantine fixture failed: ${fixture.name}`);
+  }
+}
+const previousWorkerInvocation = "0123456789abcdef0123456789abcdef";
+function didInvocationChange(previous: string, current: string): boolean {
+  return previous !== current;
+}
+if (
+  !didInvocationChange(
+    previousWorkerInvocation,
+    "11111111111111111111111111111111",
+  )
+) {
+  throw new Error("changed worker InvocationID fixture was rejected");
+}
+if (didInvocationChange(previousWorkerInvocation, previousWorkerInvocation)) {
+  throw new Error("unchanged worker InvocationID fixture was accepted");
 }
 for (const fragment of ["kubectl port-forward --", "port-forward --address"]) {
   const assertion = {
@@ -167,7 +367,7 @@ for (const fragment of [
   "/var/lib/k0s/nook-containerd-auth-clean-invocation",
   "--property=InvocationID --value",
   "actions.github.com/scale-set-name",
-  "nook\\.nokey\\.sh/arc-build",
+  "nook.nokey.sh/arc-build",
   "restart_required=true",
   "sudo -n systemctl restart k0scontroller.service",
   "k0s controller did not start a clean containerd invocation",

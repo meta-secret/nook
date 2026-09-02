@@ -743,7 +743,20 @@ workerMeshTasks.requireAll([
   'wait_for_node_ready "$node_name"',
   "Worker containerd auth state changed during reconciliation",
   "/var/lib/k0s/nook-containerd-auth-clean-invocation",
+  'previous_invocation="$invocation"',
 ]);
+workerMeshTasks.count({
+  fragment: "sudo -n systemctl restart k0sworker.service",
+  expected: 1,
+});
+workerMeshTasks.requireBefore({
+  first: 'previous_invocation="$invocation"',
+  second: "sudo -n systemctl restart k0sworker.service",
+});
+workerMeshTasks.requireBefore({
+  first: "sudo -n systemctl restart k0sworker.service",
+  second: "k0s worker did not start a clean containerd invocation",
+});
 
 await assertHiveRenderContract({ root });
 

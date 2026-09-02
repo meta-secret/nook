@@ -179,7 +179,6 @@ sudo -n systemctl is-active --quiet k0sworker.service
 invocation="$(sudo -n systemctl show k0sworker.service \
   --property=InvocationID --value)"
 [[ "$invocation" =~ ^[0-9a-f]{32}$ ]]
-previous_invocation="$invocation"
 marked_invocation="$(sudo -n cat "$marker" 2>/dev/null || true)"
 if sudo -n test -e "$auth_file" || test "$marked_invocation" != "$invocation"; then
   printf 'restart\n'
@@ -346,6 +345,7 @@ observed_containerd_auth_state=current
 invocation="$(sudo -n systemctl show k0sworker.service \
   --property=InvocationID --value)"
 [[ "$invocation" =~ ^[0-9a-f]{32}$ ]]
+previous_invocation="$invocation"
 marked_invocation="$(sudo -n cat "$marker" 2>/dev/null || true)"
 if sudo -n test -e "$auth_file" || test "$marked_invocation" != "$invocation"; then
   observed_containerd_auth_state=restart
