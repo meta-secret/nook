@@ -17,6 +17,7 @@ export enum RegisteredCortexRuntimeDocument {
 
 export enum RegisteredCortexRuntimeCommand {
   StaticSkillHost = 'task skills:run',
+  DelegationVisualization = 'task loom:delegation-visualization',
   DelegationJournalBinary = 'loom-agent-delegation',
   DelegationJournalTask = 'task loom:agent-delegation',
 }
@@ -56,9 +57,14 @@ export const CORTEX_CONTRACT_REGISTRY = {
   runtimes: [
     {
       document: RegisteredCortexRuntimeDocument.NativeSubagentDelegation,
-      allowedCommandPrefixes: [RegisteredCortexRuntimeCommand.StaticSkillHost],
-      requiredCommandPrefixes: [RegisteredCortexRuntimeCommand.StaticSkillHost],
+      allowedCommandPrefixes: [
+        RegisteredCortexRuntimeCommand.DelegationVisualization,
+      ],
+      requiredCommandPrefixes: [
+        RegisteredCortexRuntimeCommand.DelegationVisualization,
+      ],
       retiredCommandPrefixes: [
+        RegisteredCortexRuntimeCommand.StaticSkillHost,
         RegisteredCortexRuntimeCommand.DelegationJournalBinary,
         RegisteredCortexRuntimeCommand.DelegationJournalTask,
       ],

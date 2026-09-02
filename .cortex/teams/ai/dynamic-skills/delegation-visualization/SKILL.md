@@ -28,20 +28,31 @@ creates and coordinates Team Agents.
 
 ## Invocation
 
-Discover the strict request through the executable skill host:
+Gizmo builds the bounded request as strict JSON:
 
-```bash
-task skills:tools-list
+```json
+{
+  "kind": "gizmo-delegation-visualization-v1",
+  "tasks": [
+    {
+      "id": "update-cortex",
+      "team": "ai",
+      "description": "update Cortex",
+      "dependencies": []
+    }
+  ]
+}
 ```
 
-Invoke the returned `delegationVisualization.render` request:
+Invoke the dependency-free presentation-control entrypoint:
 
 ```bash
-task skills:run REQUEST_YAML='<strict-yaml>'
+task loom:delegation-visualization REQUEST_JSON='<strict-json>'
 ```
 
 Publish only the returned `tree` as the plan hierarchy. Do not infer or edit
-the rendered output.
+the rendered output. This entrypoint imports only the co-located codec,
+application, and renderer. It does not install the executable-skill workspace.
 
 ## Later discovery
 
@@ -53,4 +64,5 @@ Never rewrite an earlier visualization as though the dependency was known.
 - Reject duplicate, missing, self, forward, or cyclic dependencies.
 - Reject unknown teams and unsupported fields.
 - Verify exact tree order and connectors with focused package tests.
-- Run `task skills:verify` and `task loom:cortex-audit` before delivery.
+- Return the coherent change to Gizmo. Gizmo's hosted `loom:verify` evidence
+  executes the package and Cortex contract coverage before delivery.

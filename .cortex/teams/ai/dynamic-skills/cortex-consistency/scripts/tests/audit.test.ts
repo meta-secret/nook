@@ -64,9 +64,9 @@ test('rejects missing and retired native delegation runtime bindings', () => {
       runtimes: [
         {
           document: workflow,
-          allowedCommandPrefixes: ['task skills:run'],
-          requiredCommandPrefixes: ['task skills:run'],
-          retiredCommandPrefixes: ['loom-agent-delegation'],
+          allowedCommandPrefixes: ['task loom:delegation-visualization'],
+          requiredCommandPrefixes: ['task loom:delegation-visualization'],
+          retiredCommandPrefixes: ['task skills:run', 'loom-agent-delegation'],
         },
       ],
     },
@@ -100,7 +100,7 @@ test('rejects missing and retired native delegation runtime bindings', () => {
   ]);
 });
 
-test('accepts the static skill host for native delegation rendering', () => {
+test('accepts the dependency-free native delegation renderer', () => {
   const workflow = '.cortex/gizmo/workflows/subagent-delegation.md';
   const compileRequest: AuditCortexContractsArgs = {
     registry: {
@@ -109,9 +109,9 @@ test('accepts the static skill host for native delegation rendering', () => {
       runtimes: [
         {
           document: workflow,
-          allowedCommandPrefixes: ['task skills:run'],
-          requiredCommandPrefixes: ['task skills:run'],
-          retiredCommandPrefixes: ['loom-agent-delegation'],
+          allowedCommandPrefixes: ['task loom:delegation-visualization'],
+          requiredCommandPrefixes: ['task loom:delegation-visualization'],
+          retiredCommandPrefixes: ['task skills:run'],
         },
       ],
     },
@@ -119,7 +119,9 @@ test('accepts the static skill host for native delegation rendering', () => {
       {
         relativePath: workflow,
         references: [],
-        commands: ['task skills:run REQUEST_YAML=strict-yaml'],
+        commands: [
+          'task loom:delegation-visualization REQUEST_JSON=strict-json',
+        ],
       },
     ],
   };
@@ -135,8 +137,8 @@ test('rejects a missing registered runtime document', () => {
       runtimes: [
         {
           document: workflow,
-          allowedCommandPrefixes: ['task skills:run'],
-          requiredCommandPrefixes: ['task skills:run'],
+          allowedCommandPrefixes: ['task loom:delegation-visualization'],
+          requiredCommandPrefixes: ['task loom:delegation-visualization'],
           retiredCommandPrefixes: [],
         },
       ],
@@ -160,8 +162,8 @@ test('requires an exact runtime command prefix boundary', () => {
       runtimes: [
         {
           document: workflow,
-          allowedCommandPrefixes: ['task skills:run'],
-          requiredCommandPrefixes: ['task skills:run'],
+          allowedCommandPrefixes: ['task loom:delegation-visualization'],
+          requiredCommandPrefixes: ['task loom:delegation-visualization'],
           retiredCommandPrefixes: [],
         },
       ],
@@ -170,7 +172,9 @@ test('requires an exact runtime command prefix boundary', () => {
       {
         relativePath: workflow,
         references: [],
-        commands: ['task skills:runaway REQUEST_YAML=strict-yaml'],
+        commands: [
+          'task loom:delegation-visualization:unsafe REQUEST_JSON=strict-json',
+        ],
       },
     ],
   };
@@ -178,11 +182,11 @@ test('requires an exact runtime command prefix boundary', () => {
   expect(compileCortexContracts(compileRequest)).toEqual([
     expect.objectContaining({
       message:
-        'Cortex workflow names an unregistered runtime entrypoint: task skills:runaway REQUEST_YAML=strict-yaml',
+        'Cortex workflow names an unregistered runtime entrypoint: task loom:delegation-visualization:unsafe REQUEST_JSON=strict-json',
     }),
     expect.objectContaining({
       message:
-        'Cortex workflow is missing its required runtime entrypoint: task skills:run',
+        'Cortex workflow is missing its required runtime entrypoint: task loom:delegation-visualization',
     }),
   ]);
 });

@@ -178,6 +178,10 @@ Agents never run product compilation or repository validation locally.
   `task pr:ready` are local delivery-control entrypoints.
 - Delivery-control entrypoints may prepare their bounded control-plane helper.
 - They may only dispatch or inspect hosted product and repository evidence.
+- `task loom:delegation-visualization` is a local presentation-control
+  entrypoint. It may run only the dependency-free static renderer over one
+  transient request. It must not install dependencies, validate the repository,
+  or acquire admission, scheduling, persistence, or agent-lifecycle authority.
 - Only the user may authorize another exact local command for the current
   task.
 

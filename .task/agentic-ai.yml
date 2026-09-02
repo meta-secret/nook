@@ -42,6 +42,17 @@ tasks:
     cmds:
       - bun "{{.REPO_ROOT}}/.cortex/teams/ai/dynamic-skills/executable-skill-host/scripts/src/cli.ts" --tools-list
 
+  loom:delegation-visualization:
+    desc: >-
+      Render one transient native Team Agent plan without installing project
+      dependencies.
+    requires:
+      vars: [REQUEST_JSON]
+    env:
+      NOOK_DELEGATION_VISUALIZATION_REQUEST_JSON: '{{.REQUEST_JSON}}'
+    cmds:
+      - bun "{{.REPO_ROOT}}/.cortex/teams/ai/dynamic-skills/delegation-visualization/scripts/src/cli.ts"
+
   loom:install:
     desc: Install Loom Bun dependencies with a frozen lockfile.
     dir: agentic-ai/loom

@@ -423,15 +423,18 @@ describe('canonical Cortex team authority', () => {
       const gizmoPath = join(fixtureRoot, '.cortex/gizmo/AGENTS.md');
       await writeFile(
         gizmoPath,
-        `${await readFile(gizmoPath, 'utf8')}\nGizmo may run task loom:pre-push:full locally.\nGizmo may run task remote:unsafe locally.\nGizmo may run task pr:validate-extra locally.\nGizmo may run task loom:pre-push locally.\nGizmo may run task remote locally.\nGizmo may run task pr:validate locally.\n`,
+        `${await readFile(gizmoPath, 'utf8')}\nGizmo may run task loom:pre-push:full locally.\nGizmo may run task loom:delegation-visualization:unsafe locally.\nGizmo may run task remote:unsafe locally.\nGizmo may run task pr:validate-extra locally.\nGizmo may run task loom:pre-push locally.\nGizmo may run task loom:delegation-visualization locally.\nGizmo may run task remote locally.\nGizmo may run task pr:validate locally.\n`,
         'utf8',
       );
 
       const report = auditTeamAgents({ repoRoot: fixtureRoot });
-      expect(report.findings).toHaveLength(3);
+      expect(report.findings).toHaveLength(4);
       expect(report.findings.map((finding) => finding.message)).toEqual(
         expect.arrayContaining([
           expect.stringContaining('task loom:pre-push:full locally'),
+          expect.stringContaining(
+            'task loom:delegation-visualization:unsafe locally',
+          ),
           expect.stringContaining('task remote:unsafe locally'),
           expect.stringContaining('task pr:validate-extra locally'),
         ]),
@@ -439,6 +442,27 @@ describe('canonical Cortex team authority', () => {
     } finally {
       await rm(fixtureRoot, REMOVE_RECURSIVELY);
     }
+  });
+
+  test('binds delegation visualization to a dependency-free control-plane task', async () => {
+    const taskSource = await readFile(
+      join(REPO_ROOT, '.task/agentic-ai.yml'),
+      'utf8',
+    );
+    const renderStart = taskSource.indexOf(
+      '\n  loom:delegation-visualization:\n',
+    );
+    const renderEnd = taskSource.indexOf('\n  loom:install:\n', renderStart);
+    const renderSource = taskSource.slice(renderStart, renderEnd);
+
+    expect(renderStart).toBeGreaterThan(-1);
+    expect(renderEnd).toBeGreaterThan(renderStart);
+    expect(renderSource).toContain(
+      'delegation-visualization/scripts/src/cli.ts',
+    );
+    expect(renderSource).not.toContain('deps:');
+    expect(renderSource).not.toContain('skills:install');
+    expect(renderSource).not.toContain('bun install');
   });
 
   test('binds hosted Loom verification to the Cortex audit', async () => {

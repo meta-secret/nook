@@ -46,7 +46,8 @@ the active harness.
    - Give every task one identifier, team, description, and dependency list.
    - Keep tasks in native harness dispatch order.
    - Name only earlier tasks as dependencies.
-6. Invoke the static renderer through `task skills:run`.
+6. Invoke the dependency-free static renderer through
+   `task loom:delegation-visualization REQUEST_JSON='<strict-json>'`.
 7. Emit one normal `GIZMO:STATE` activity line for the plan visualization.
 8. Publish the returned `tree` verbatim as one compact user-visible block
    immediately below that activity line.
