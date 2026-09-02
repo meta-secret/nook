@@ -552,6 +552,7 @@ jobs:
     name: Headless UI demo
     if: >-
       needs.validation-request.outputs.ui-demos-enabled == 'true' &&
+      needs.verify.outputs.ui-demo-required == 'true' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.user.login != 'dependabot[bot]' &&
       (github.event.label.name == 'ci:validate' ||
@@ -641,7 +642,7 @@ jobs:
       github.event.label.name == 'ci:full-e2e')
     # Native must succeed before the merge gate check can go green. A green
     # preview with a failed Native job previously allowed false readiness.
-    needs: [rust, wasm, verify, wasm-node-test]
+    needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo]
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
     steps:
       - name: Enforce required verification results
@@ -650,6 +651,9 @@ jobs:
           WASM_RESULT: ${{ needs.wasm.result }}
           WEB_RESULT: ${{ needs.verify.result }}
           WASM_NODE_RESULT: ${{ needs.wasm-node-test.result }}
+          UI_DEMOS_ENABLED: ${{ needs.validation-request.outputs.ui-demos-enabled }}
+          UI_DEMO_REQUIRED: ${{ needs.verify.outputs.ui-demo-required }}
+          UI_DEMO_RESULT: ${{ needs.ui-demo.result }}
         run: |
           set -euo pipefail
           failed=0
@@ -666,6 +670,13 @@ jobs:
               failed=1
             fi
           done
+          echo "Headless UI demo=$UI_DEMO_RESULT (enabled=$UI_DEMOS_ENABLED, required=$UI_DEMO_REQUIRED)"
+          if [ "$UI_DEMOS_ENABLED" = "true" ] \
+            && [ "$UI_DEMO_REQUIRED" = "true" ] \
+            && [ "$UI_DEMO_RESULT" != "success" ]; then
+            echo "::error::Headless UI demo finished with $UI_DEMO_RESULT"
+            failed=1
+          fi
           test "$failed" -eq 0
 
       - name: Checkout
