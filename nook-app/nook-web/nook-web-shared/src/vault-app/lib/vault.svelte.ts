@@ -24,6 +24,7 @@ import {
   type StoreId,
 } from "$app-wasm";
 import { type ProviderSetupRequest } from "$lib/auth/providers";
+import type { ProviderVaultIdentitySelection } from "$lib/vault/provider-vault-decision";
 import type { VaultArchitecture } from "$lib/vault/architecture-model";
 import type {
   SettingsNavigationRequest,
@@ -603,8 +604,14 @@ export class VaultState extends VaultRuntimeState {
     );
   }
 
-  async resolveSyncConflictImportRemote(): Promise<void> {
-    return syncActions.resolveSyncConflictImportRemote(this);
+  async resolveSyncConflictImportRemote(
+    identitySelection: ProviderVaultIdentitySelection,
+  ): Promise<void> {
+    const request: syncActions.ProviderVaultImportRequest = {
+      state: this,
+      identitySelection,
+    };
+    return syncActions.resolveSyncConflictImportRemote(request);
   }
 
   async resolveSyncConflictKeepLocal(): Promise<void> {

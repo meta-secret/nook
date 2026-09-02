@@ -40,6 +40,7 @@ const clearStagedAuthenticatorEnrollments = mock(() => {})
 const rebindStagedAuthenticatorEnrollmentsAuthorization = mock(() => {})
 const completeAccountPickerAuthorizationCleanup = mock(() => Promise.resolve())
 const releaseAccountPickerAuthorizationCleanup = mock(() => {})
+const refreshAuthenticationSurfaces = mock(() => Promise.resolve())
 
 const lifecycleDependencies: ExtensionLifecycleRoutingDependencies = {
   accountPickerAuthorizationCleanupPending,
@@ -54,6 +55,11 @@ const lifecycleDependencies: ExtensionLifecycleRoutingDependencies = {
   hasPairingApprovedType: mock(() => false),
   importLocalEventLogUpdate: unusedAsyncDependency,
   importPairingAfterCompanionReady: unusedAsyncDependency,
+  isExtensionAuthenticationSurfacesRefreshMessage: (message) =>
+    !!message &&
+    typeof message === 'object' &&
+    'type' in message &&
+    message.type === ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces,
   isExtensionPairingStateQueryMessage: mock(() => false),
   isExtensionSessionEnsureMessage: (message) =>
     !!message &&
@@ -67,6 +73,7 @@ const lifecycleDependencies: ExtensionLifecycleRoutingDependencies = {
   openSimpleVault: mock(() => {}),
   releaseAccountPickerAuthorizationCleanup,
   rebindStagedAuthenticatorEnrollmentsAuthorization,
+  refreshAuthenticationSurfaces,
 }
 
 const externalDependencies: ExternalCompanionRoutingDependencies = {
@@ -80,6 +87,7 @@ const externalDependencies: ExternalCompanionRoutingDependencies = {
   isExtensionPairedVaultUnlockRequestMessage: mock(() => false),
   normalizeOpenCompanionLauncherMessage,
   openCompanionLauncher,
+  refreshAuthenticationSurfaces,
   requestPairedVaultUnlock: unusedAsyncDependency,
 }
 
@@ -122,6 +130,27 @@ describe('service worker routing', () => {
     expect(routeExtensionLifecycleMessage(routingArgs)).toBe(true)
     await flushResponses()
     expect(ensureExtensionSessionDocument).toHaveBeenCalledTimes(1)
+  })
+
+  test('refreshes mounted authentication surfaces from an authorized sender', async () => {
+    const { routeExtensionLifecycleMessage } =
+      await import('../src/background/service-worker/extension-lifecycle-routing')
+    const sendResponse = mock(() => {})
+
+    expect(
+      routeExtensionLifecycleMessage({
+        dependencies: lifecycleDependencies,
+        message: {
+          type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces,
+        },
+        sender: { id: 'nook-extension' },
+        sendResponse,
+      }),
+    ).toBe(true)
+    await flushResponses()
+
+    expect(refreshAuthenticationSurfaces).toHaveBeenCalled()
+    expect(sendResponse).toHaveBeenCalledWith({ ok: true })
   })
 
   test('keeps picker authorization invalid until lock cleanup finishes', async () => {
@@ -170,6 +199,7 @@ describe('service worker routing', () => {
         sendResponse,
       }),
     ).toBe(true)
+    await flushResponses()
     await flushResponses()
     await flushResponses()
 
@@ -322,6 +352,10 @@ describe('service worker routing', () => {
         events.push(`authorization-restored-${generation}`)
         return Promise.resolve()
       },
+      refreshAuthenticationSurfaces: () => {
+        events.push('authentication-surfaces-refreshed')
+        return Promise.resolve()
+      },
     }
     const { routeExtensionLifecycleMessage } =
       await import('../src/background/service-worker/extension-lifecycle-routing')
@@ -350,6 +384,7 @@ describe('service worker routing', () => {
     expect(events).toEqual([
       'enrollments-rebound-epoch-15',
       'authorization-restored-epoch-15',
+      'authentication-surfaces-refreshed',
     ])
   })
 
@@ -402,6 +437,72 @@ describe('service worker routing', () => {
       OpenCompanionLauncherIntent.Default,
     )
     expect(sendResponse).toHaveBeenCalledWith({ ok: true })
+  })
+
+  test('refreshes cached surfaces after an external pairing import', async () => {
+    const importPairingAfterCompanionReady = mock(() =>
+      Promise.resolve({ ok: true as const, eventCount: 1 }),
+    )
+    const refresh = mock(() => Promise.resolve())
+    const dependencies: ExternalCompanionRoutingDependencies = {
+      ...externalDependencies,
+      hasPairingApprovedType: () => true,
+      importPairingAfterCompanionReady,
+      refreshAuthenticationSurfaces: refresh,
+    }
+    const { routeExternalCompanionMessage } =
+      await import('../src/background/service-worker/external-companion-routing')
+    const sendResponse = mock(() => {})
+
+    expect(
+      routeExternalCompanionMessage({
+        dependencies,
+        message: { type: 'nook:extension-pairing-approved' },
+        sender: {
+          id: 'simple-vault',
+          url: 'https://simple.example.test/',
+        },
+        sendResponse,
+      }),
+    ).toBe(true)
+    await flushResponses()
+    await flushResponses()
+
+    expect(refresh).toHaveBeenCalledOnce()
+    expect(sendResponse).toHaveBeenCalledWith({ ok: true, eventCount: 1 })
+  })
+
+  test('reports an external pairing refresh failure', async () => {
+    const dependencies: ExternalCompanionRoutingDependencies = {
+      ...externalDependencies,
+      hasPairingApprovedType: () => true,
+      importPairingAfterCompanionReady: () =>
+        Promise.resolve({ ok: true as const, eventCount: 1 }),
+      refreshAuthenticationSurfaces: () =>
+        Promise.reject(new Error('refresh unavailable')),
+    }
+    const { routeExternalCompanionMessage } =
+      await import('../src/background/service-worker/external-companion-routing')
+    const sendResponse = mock(() => {})
+
+    expect(
+      routeExternalCompanionMessage({
+        dependencies,
+        message: { type: 'nook:extension-pairing-approved' },
+        sender: {
+          id: 'simple-vault',
+          url: 'https://simple.example.test/',
+        },
+        sendResponse,
+      }),
+    ).toBe(true)
+    await flushResponses()
+    await flushResponses()
+
+    expect(sendResponse).toHaveBeenCalledWith({
+      ok: false,
+      reason: 'authentication-surface-refresh-failed',
+    })
   })
 
   test('normalizes pair intent before internal launcher routing', async () => {

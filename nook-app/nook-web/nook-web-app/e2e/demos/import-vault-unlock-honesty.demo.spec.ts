@@ -89,6 +89,13 @@ test('import-as-new-vault conflict and unlock honesty surface', async ({
   await expect(
     page.getByTestId('sync-conflict-import-new-vault-btn'),
   ).toBeVisible()
+  await expect(page.getByTestId('provider-vault-preserve-both')).toContainText(
+    'Nook does not merge them automatically',
+  )
+  await expect(
+    page.getByText(/A passkey unlocks one protected Nook identity/),
+  ).toBeVisible()
+  await expect(page.getByText(/A backup password is separate/)).toBeVisible()
   await demoBeat(page)
 
   await page.getByTestId('sync-conflict-cancel-btn').click()

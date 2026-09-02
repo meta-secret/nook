@@ -9,6 +9,10 @@ type ExtensionSessionRuntimeMessage = {
     | ExtensionSessionMessageType.Lock
 }
 
+type AuthenticationSurfacesRefreshMessage = {
+  type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces
+}
+
 type ChromeMessageListener = Parameters<
   typeof chrome.runtime.onMessage.addListener
 >[0]
@@ -22,6 +26,17 @@ export function isExtensionSessionEnsureMessage(
     typeof message === 'object' &&
     'type' in message &&
     message.type === ExtensionRuntimeRequestType.EnsureRuntime
+  )
+}
+
+export function isExtensionAuthenticationSurfacesRefreshMessage(
+  message: ChromeRuntimeMessage,
+): message is AuthenticationSurfacesRefreshMessage {
+  return (
+    !!message &&
+    typeof message === 'object' &&
+    'type' in message &&
+    message.type === ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces
   )
 }
 

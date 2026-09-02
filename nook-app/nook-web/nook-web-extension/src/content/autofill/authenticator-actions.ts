@@ -139,6 +139,15 @@ export async function fillAuthenticatorCode({
     return reportAuthenticatorFillFailure(failureUi)
   }
   const { response } = delivery
+  if (!approvalIsActive()) {
+    if (
+      response.kind === AuthenticatorCodeResponseKind.Ready &&
+      'code' in response
+    ) {
+      response.code = ''
+    }
+    return false
+  }
   if (
     response.kind !== AuthenticatorCodeResponseKind.Ready ||
     !('code' in response) ||

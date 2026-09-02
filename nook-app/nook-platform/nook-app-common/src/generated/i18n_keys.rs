@@ -257,6 +257,45 @@ pub const AUTH_STORAGE_NO_PROVIDERS_SAVED: &str = "auth_storage.no_providers_sav
 pub const AUTH_STORAGE_NO_SYNC_PROVIDERS: &str = "auth_storage.no_sync_providers";
 pub const AUTH_STORAGE_NO_TOKEN_SAVED: &str = "auth_storage.no_token_saved";
 pub const AUTH_STORAGE_NOT_SYNCED_YET: &str = "auth_storage.not_synced_yet";
+pub const AUTH_STORAGE_PROVIDER_VAULT_BACKUP_PASSWORD: &str =
+    "auth_storage.provider_vault_backup_password";
+pub const AUTH_STORAGE_PROVIDER_VAULT_CHECKING: &str = "auth_storage.provider_vault_checking";
+pub const AUTH_STORAGE_PROVIDER_VAULT_CHOOSE_IDENTITY: &str =
+    "auth_storage.provider_vault_choose_identity";
+pub const AUTH_STORAGE_PROVIDER_VAULT_CURRENT_IDENTITY: &str =
+    "auth_storage.provider_vault_current_identity";
+pub const AUTH_STORAGE_PROVIDER_VAULT_IDENTITIES_TITLE: &str =
+    "auth_storage.provider_vault_identities_title";
+pub const AUTH_STORAGE_PROVIDER_VAULT_IDENTITY_NOT_LINKED: &str =
+    "auth_storage.provider_vault_identity_not_linked";
+pub const AUTH_STORAGE_PROVIDER_VAULT_IDENTITY_READY: &str =
+    "auth_storage.provider_vault_identity_ready";
+pub const AUTH_STORAGE_PROVIDER_VAULT_IDENTITY_SELECTION_FAILED: &str =
+    "auth_storage.provider_vault_identity_selection_failed";
+pub const AUTH_STORAGE_PROVIDER_VAULT_IDENTITY_UNAVAILABLE: &str =
+    "auth_storage.provider_vault_identity_unavailable";
+pub const AUTH_STORAGE_PROVIDER_VAULT_INTRO: &str = "auth_storage.provider_vault_intro";
+pub const AUTH_STORAGE_PROVIDER_VAULT_KEEP_BOTH_RECOMMENDED: &str =
+    "auth_storage.provider_vault_keep_both_recommended";
+pub const AUTH_STORAGE_PROVIDER_VAULT_NO_MERGE: &str = "auth_storage.provider_vault_no_merge";
+pub const AUTH_STORAGE_PROVIDER_VAULT_PASSKEY_EXPLANATION: &str =
+    "auth_storage.provider_vault_passkey_explanation";
+pub const AUTH_STORAGE_PROVIDER_VAULT_REASON_IDENTITY_UNAVAILABLE: &str =
+    "auth_storage.provider_vault_reason_identity_unavailable";
+pub const AUTH_STORAGE_PROVIDER_VAULT_REASON_LOCAL_DATA: &str =
+    "auth_storage.provider_vault_reason_local_data";
+pub const AUTH_STORAGE_PROVIDER_VAULT_REASON_NO_IDENTITY: &str =
+    "auth_storage.provider_vault_reason_no_identity";
+pub const AUTH_STORAGE_PROVIDER_VAULT_REASON_READY: &str =
+    "auth_storage.provider_vault_reason_ready";
+pub const AUTH_STORAGE_PROVIDER_VAULT_REASON_UNKNOWN: &str =
+    "auth_storage.provider_vault_reason_unknown";
+pub const AUTH_STORAGE_PROVIDER_VAULT_TECHNICAL_DETAILS: &str =
+    "auth_storage.provider_vault_technical_details";
+pub const AUTH_STORAGE_PROVIDER_VAULT_USE_PROVIDER: &str =
+    "auth_storage.provider_vault_use_provider";
+pub const AUTH_STORAGE_PROVIDER_VAULT_USE_RECOMMENDED: &str =
+    "auth_storage.provider_vault_use_recommended";
 pub const AUTH_STORAGE_RECONNECT: &str = "auth_storage.reconnect";
 pub const AUTH_STORAGE_SAVED_PROVIDERS: &str = "auth_storage.saved_providers";
 pub const AUTH_STORAGE_SECURITY_CONFLICT_EDITS: &str = "auth_storage.security_conflict_edits";
