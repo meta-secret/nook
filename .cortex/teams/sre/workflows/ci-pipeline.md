@@ -530,7 +530,9 @@ Main's portable WASM cache writer/proof uses the general ARC scale set.
 - The disabled `Headless UI demo` job retains its WASM producer dependency.
 - Its implementation remains available for later re-enable.
 - `Verify and preview` waits for Native Rust, web verification, and WASM Node tests.
-- It structurally excludes the disabled UI-demo job from readiness.
+- It retains the UI-demo job in `needs` so the skipped result remains visible.
+- A disabled or non-required skip is permitted.
+- An enabled, required UI-demo failure blocks preview and readiness.
 - That keeps the merge-gate check red when Native fails.
 - Preview deploys from a host dist handoff with pinned wrangler.
 - No consumer polls GitHub for a sibling producer.
@@ -711,7 +713,9 @@ UI demo rules:
 - New Actions and Linear demo artifacts are not published.
 - Demo implementations remain retained for later re-enable.
 - The UI-demo contract and focused demo-spec requirements remain active.
-- PR readiness structurally excludes the disabled UI-demo job.
+- PR readiness observes the UI-demo result through the preview dependency.
+- It permits a disabled or non-required skip.
+- It rejects an enabled, required demo failure.
 - Browser E2E remains a separate validation authority.
 
 - UI-facing changes under web apps, shared vault UI, or extension browser
@@ -855,7 +859,9 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 - The disabled `Headless UI demo` job retains its WASM build dependency and
   changed-spec implementation.
 - `Verify and preview` waits for Native Rust, web verification, and WASM Node tests.
-- It does not wait for the disabled UI-demo job.
+- It also retains the UI-demo job in `needs` for observable skip handling.
+- A disabled or non-required skip is permitted.
+- An enabled, required demo failure blocks preview.
 - Optional web and extension e2e consumers need both WASM jobs and receive only a fully verified handoff.
 - A separate `Rust coverage report` job declares `needs: rust`, downloads the native handoff directly, and performs reporting without occupying or delaying the preview runner.
 

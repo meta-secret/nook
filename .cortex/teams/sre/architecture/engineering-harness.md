@@ -161,7 +161,9 @@ legacy registered `nook` runner is not used.
 - When re-enabled, Playwright must succeed before its retained cache-only target
   publishes the isolated browser graph.
 - `Verify and preview` waits for Native Rust, web verification, and WASM Node tests.
-- It does not wait for the disabled UI-demo job.
+- It retains the UI-demo job in `needs` so a skipped result remains observable.
+- It permits that skip while demos are disabled or not required.
+- An enabled, required UI-demo failure blocks preview.
 - It deploys from the exported host dist handoff.
 - Rust coverage reporting is a separate native-dependent job.
 - That job downloads the completed handoff directly.

@@ -416,7 +416,9 @@ Rust may use the configured ARC scale set. WASM and fork PR jobs remain hosted.
 - Preview deployment remains blocked until the producer succeeds.
 - Headless UI-demo execution is temporarily disabled.
 - The UI-demo implementation and focused spec contract remain retained.
-- Exact-head readiness structurally excludes the disabled UI-demo job.
+- Preview retains the UI-demo job in `needs` so its skipped result is visible.
+- A disabled or non-required skip is permitted.
+- An enabled, required UI-demo failure blocks preview and readiness.
 - Optional browser-e2e consumers wait for that fully verified producer.
 - No consumer recompiles Rust.
 
