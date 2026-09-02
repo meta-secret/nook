@@ -347,7 +347,7 @@ async function loadHostIdentity(input: HostIdentityInput): Promise<HostIdentity>
     "-E",
     "sha256",
   ]);
-  const fingerprint = fingerprintOutput.split(/\s+/)[1] ?? "";
+  const [, fingerprint = ""] = fingerprintOutput.split(/\s+/);
   if (!fingerprint.startsWith("SHA256:")) {
     throw new Error("generated SSH host identity has no SHA256 fingerprint");
   }
@@ -416,15 +416,16 @@ function parseArguments(argv: string[]): CliArguments {
   }
   const values = new Map<string, string>();
   for (let index = 0; index < rest.length; index += 2) {
-    const flag = rest[index] ?? "";
-    const value = rest[index + 1] ?? "";
+    const [flag = "", value = ""] = rest.slice(index, index + 2);
     if (!flag.startsWith("--") || value.length === 0) {
       throw new Error(`invalid argument near ${flag}`);
     }
     values.set(flag.slice(2), value);
   }
-  const node = requireString({ label: "node", value: values.get("node") ?? "" });
-  const fieldRaw = values.get("field") ?? DedicatedServerField.Hostname;
+  const [nodeValue = ""] = [values.get("node")];
+  const [fieldRaw = DedicatedServerField.Hostname] = [values.get("field")];
+  const [inventoryFile = defaultInventory] = [values.get("inventory")];
+  const node = requireString({ label: "node", value: nodeValue });
   const field = Object.values(DedicatedServerField).find(
     (value) => value === fieldRaw,
   );
@@ -433,7 +434,7 @@ function parseArguments(argv: string[]): CliArguments {
     action,
     allowReinstall: values.get("allow-reinstall") === "true",
     field,
-    inventoryFile: expandHome(values.get("inventory") ?? defaultInventory),
+    inventoryFile: expandHome(inventoryFile),
     node,
   };
 }
@@ -463,8 +464,10 @@ async function parseCredentials(path: string): Promise<OvhCredentials> {
 async function loadCredentials(input: {
   definition: DedicatedServerDefinition;
 }): Promise<OvhCredentials> {
+  const { OVH_CREDENTIAL_FILE: credentialFile = defaultCredentialFile } =
+    process.env;
   const source = expandHome(
-    process.env.OVH_CREDENTIAL_FILE ?? defaultCredentialFile,
+    credentialFile,
   );
   const target = defaultCredentialFile;
   await mkdir(dirname(target), { mode: 0o700, recursive: true });
@@ -504,7 +507,7 @@ async function ovhApi<T>(input: {
   request: ApiRequest;
 }): Promise<T> {
   const root = apiRoot(input.credentials);
-  const body = input.request.body ?? "";
+  const { body = "" } = input.request;
   const url = `${root}${input.request.path}`;
   const timeResponse = await fetch(`${root}/auth/time`);
   if (!timeResponse.ok) throw new Error("OVH time endpoint failed");

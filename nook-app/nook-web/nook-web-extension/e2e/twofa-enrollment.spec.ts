@@ -79,9 +79,10 @@ function parsedExtensionPairingSessionGrants(
 async function listExtensionAuthenticators(
   context: Awaited<ReturnType<typeof launchPairedPinExtension>>['context'],
 ): Promise<Array<{ issuer: string; account: string }>> {
-  const worker =
-    context.serviceWorkers()[0] ??
-    (await context.waitForEvent('serviceworker', { timeout: 45_000 }))
+  const [availableWorker] = context.serviceWorkers()
+  const worker = availableWorker
+    ? availableWorker
+    : await context.waitForEvent('serviceworker', { timeout: 45_000 })
   const pairingState = await readExtensionPairingStorage(worker)
   const grants = parsedExtensionPairingSessionGrants(
     Object.entries(pairingState),
@@ -149,9 +150,10 @@ type EventLogSnapshot = {
 async function attemptMalformedBackupCodeReplace(
   args: MalformedBackupCodeReplaceAttemptArgs,
 ): Promise<MalformedBackupCodeReplaceResult> {
-  const worker =
-    args.context.serviceWorkers()[0] ??
-    (await args.context.waitForEvent('serviceworker', { timeout: 45_000 }))
+  const [availableWorker] = args.context.serviceWorkers()
+  const worker = availableWorker
+    ? availableWorker
+    : await args.context.waitForEvent('serviceworker', { timeout: 45_000 })
   const pairingState = await readExtensionPairingStorage(worker)
   const grants = parsedExtensionPairingSessionGrants(
     Object.entries(pairingState),
@@ -206,9 +208,8 @@ async function attemptMalformedBackupCodeReplace(
           databaseRequest.onerror = () => {
             resolve({
               kind: DatabaseOpenResultKind.Failed,
-              message:
-                databaseRequest.error?.message ??
-                'Failed to open extension event storage.',
+              message: ((...[v = 'Failed to open extension event storage.']) =>
+                v)(databaseRequest.error?.message),
             })
           }
         },
@@ -250,9 +251,8 @@ async function attemptMalformedBackupCodeReplace(
         cursorRequest.onerror = () => {
           resolve({
             kind: EventLogReadResultKind.Failed,
-            message:
-              cursorRequest.error?.message ??
-              'Failed to read extension event storage.',
+            message: ((...[v = 'Failed to read extension event storage.']) =>
+              v)(cursorRequest.error?.message),
           })
         }
       })

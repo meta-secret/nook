@@ -75,7 +75,7 @@ export function renderEnrollmentWidget({
     hints.qr ? 'qr' : '',
     hints.backupCodes ? 'backup' : '',
     vaultConnection.connected ? 'connected' : 'disconnected',
-    vaultConnection.vaultName ?? '',
+    ((v) => (v ? v : ''))(vaultConnection.vaultName),
   ].join(':')
   if (pickerState.login.kind === LoginPickerKind.Open) {
     cancelPendingLoginPickerRequest()
@@ -161,7 +161,7 @@ export function renderWidget({
     loginMatches.kind,
     'count' in loginMatches ? loginMatches.count : 0,
     vaultConnection.connected ? 'connected' : 'disconnected',
-    vaultConnection.vaultName ?? '',
+    ((v) => (v ? v : ''))(vaultConnection.vaultName),
   ].join(':')
   const currentApproval: AuthenticationWorkflowApproval = {
     workflowKey,

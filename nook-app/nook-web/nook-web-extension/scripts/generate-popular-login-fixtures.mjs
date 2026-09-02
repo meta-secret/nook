@@ -260,14 +260,16 @@ const SPECIAL_TEMPLATE_IDS = {
 
 function shapeKey(shell) {
   return JSON.stringify({
-    quirks: shell.quirks ?? [],
+    quirks: ((v) => (v ? v : []))(shell.quirks),
     steps: shell.steps,
   })
 }
 
 function genericTemplateName(shell) {
-  const steps = shell.steps ?? []
-  const names = (steps[0]?.fields ?? []).map((field) => field.name)
+  const steps = ((v) => (v ? v : []))(shell.steps)
+  const names = ((v) => (v ? v : []))(steps[0]?.fields).map(
+    (field) => field.name,
+  )
   if (steps.length === 1 && names[0] === 'email' && names[1] === 'password') {
     return { matched: true, templateName: 'email-password' }
   }
@@ -305,7 +307,7 @@ const shellsById = new Map()
 for (const site of catalog) {
   const shell = shellFor(site.id, site.family)
   shellsById.set(site.id, {
-    quirks: shell.quirks ?? [],
+    quirks: ((v) => (v ? v : []))(shell.quirks),
     steps: shell.steps,
   })
 }
@@ -320,9 +322,11 @@ for (const site of catalog) {
   const key = shapeKey(shell)
   if (templateIdByShape.has(key)) continue
   const genericTemplate = genericTemplateName(shell)
-  let templateId =
-    SPECIAL_TEMPLATE_IDS[site.id] ??
-    (genericTemplate.matched ? genericTemplate.templateName : site.id)
+  let [
+    templateId = genericTemplate.matched
+      ? genericTemplate.templateName
+      : site.id,
+  ] = [SPECIAL_TEMPLATE_IDS[site.id]]
   const existing = templates.get(templateId)
   if (existing && shapeKey(existing) !== key) {
     templateId = `${templateId}-${createHash('sha1').update(key).digest('hex').slice(0, 6)}`

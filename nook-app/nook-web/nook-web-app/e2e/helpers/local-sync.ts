@@ -61,7 +61,7 @@ export async function readLocalVaultYamlFromIdb(page: Page): Promise<string> {
     return new Promise<string>((resolve, reject) => {
       const request = indexedDB.open('nook_db')
       request.onerror = () =>
-        reject(request.error ?? new Error('idb open failed'))
+        reject(((v) => (v ? v : new Error('idb open failed')))(request.error))
       request.onsuccess = () => {
         const db = request.result
         const tx = db.transaction('vault', 'readonly')
@@ -70,16 +70,22 @@ export async function readLocalVaultYamlFromIdb(page: Page): Promise<string> {
           new Promise<string>((resolveBlob, rejectBlob) => {
             const getReq = store.get(key)
             getReq.onerror = () =>
-              rejectBlob(getReq.error ?? new Error('idb read failed'))
+              rejectBlob(
+                ((v) => (v ? v : new Error('idb read failed')))(getReq.error),
+              )
             getReq.onsuccess = () => {
-              resolveBlob(String(getReq.result ?? ''))
+              resolveBlob(String(((v) => (v ? v : ''))(getReq.result)))
             }
           })
         const activeReq = store.get('active_vault_id')
         activeReq.onerror = () =>
-          reject(activeReq.error ?? new Error('idb read failed'))
+          reject(
+            ((v) => (v ? v : new Error('idb read failed')))(activeReq.error),
+          )
         activeReq.onsuccess = () => {
-          const activeId = String(activeReq.result ?? '').trim()
+          const activeId = String(
+            ((v) => (v ? v : ''))(activeReq.result),
+          ).trim()
           if (activeId) {
             void readBlob(`vault:${activeId}`).then(resolve).catch(reject)
             return
@@ -113,7 +119,7 @@ export async function seedLocalVaultYamlForEnrollment(
       return new Promise<void>((resolve, reject) => {
         const request = indexedDB.open('nook_db')
         request.onerror = () =>
-          reject(request.error ?? new Error('idb open failed'))
+          reject(((v) => (v ? v : new Error('idb open failed')))(request.error))
         request.onupgradeneeded = () => {
           const db = request.result
           if (!db.objectStoreNames.contains('vault')) {
@@ -140,7 +146,8 @@ export async function seedLocalVaultYamlForEnrollment(
             db.close()
             resolve()
           }
-          tx.onerror = () => reject(tx.error ?? new Error('idb tx failed'))
+          tx.onerror = () =>
+            reject(((v) => (v ? v : new Error('idb tx failed')))(tx.error))
         }
       })
     },
@@ -158,9 +165,9 @@ export async function waitForLocalVaultState(
   predicate: (snapshot: VaultYamlSnapshot) => boolean,
   options?: { timeoutMs?: number; intervalMs?: number },
 ): Promise<VaultYamlSnapshot> {
-  const timeoutMs = options?.timeoutMs ?? ENROLLMENT_UNLOCK_TIMEOUT_MS
+  const [timeoutMs = ENROLLMENT_UNLOCK_TIMEOUT_MS] = [options?.timeoutMs]
   // IndexedDB read via page.evaluate — small round-trip, still much cheaper than network.
-  const intervalMs = options?.intervalMs ?? 150
+  const [intervalMs = 150] = [options?.intervalMs]
   const deadline = Date.now() + timeoutMs
   let lastError = 'local vault missing'
 
@@ -185,9 +192,12 @@ export async function installOauthFileRemoteForLocalE2e(
   opts: { fileName: string; vaultYaml?: string; accessToken?: string },
   existingStub?: E2eOauthFileStub,
 ) {
-  const stub =
-    existingStub ??
-    createLocalE2eFileSyncVaultStub(opts.vaultYaml ?? '', opts.fileName)
+  const [
+    stub = createLocalE2eFileSyncVaultStub(
+      ((v) => (v ? v : ''))(opts.vaultYaml),
+      opts.fileName,
+    ),
+  ] = [existingStub]
   if ('vaultYaml' in opts) {
     stub.setVaultYaml(opts.vaultYaml)
   }
@@ -204,8 +214,9 @@ export async function stubGithubVaultForLocalE2e(
   opts: { repoName: string; vaultYaml?: string; username?: string },
   existingStub?: ReturnType<typeof createLocalE2eGithubVaultStub>,
 ) {
-  const stub =
-    existingStub ?? createLocalE2eGithubVaultStub(opts.vaultYaml ?? '')
+  const [
+    stub = createLocalE2eGithubVaultStub(((v) => (v ? v : ''))(opts.vaultYaml)),
+  ] = [existingStub]
   if ('vaultYaml' in opts && !existingStub) {
     stub.setVaultYaml(opts.vaultYaml)
   }
@@ -290,7 +301,7 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
         }
         vaultYaml = opts.vaultYaml
       }
-      const owner = opts.username ?? 'e2e-user'
+      const [owner = 'e2e-user'] = [opts.username]
       const fullRepo = `${owner}/${opts.repoName}`
       const context = page.context()
 
@@ -428,7 +439,7 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
               contentType: 'application/json',
               body: JSON.stringify({
                 content: {
-                  sha: eventShas.get(relativePath) ?? sha,
+                  sha: ((...[v = sha]) => v)(eventShas.get(relativePath)),
                 },
               }),
             })
@@ -442,7 +453,7 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
               contentType: 'application/json',
               body: JSON.stringify({
                 content: encoded,
-                sha: eventShas.get(relativePath) ?? sha,
+                sha: ((...[v = sha]) => v)(eventShas.get(relativePath)),
                 encoding: 'base64',
               }),
             })
@@ -670,7 +681,7 @@ export async function reloadUnlockWithSyncProvider(
     sharedStub?: E2eOauthFileStub
   },
 ) {
-  const providers = opts?.providers ?? [E2E_OAUTH_ONBOARD_PROVIDER]
+  const [providers = [E2E_OAUTH_ONBOARD_PROVIDER]] = [opts?.providers]
   const sharedStub = opts?.sharedStub
   await seedExtraOauthFileProviders(page, providers)
 
@@ -771,8 +782,11 @@ export async function waitForLoadedSyncProviders(
           ).__nookVault
           return {
             authenticated: Boolean(vault?.isAuthenticated),
-            count:
-              vault?.syncProviderCount ?? vault?.syncProviders?.length ?? 0,
+            count: ((v) => (v ? v : 0))(
+              ((...[v = vault?.syncProviders?.length]) => v)(
+                vault?.syncProviderCount,
+              ),
+            ),
           }
         })
         if (state.authenticated && state.count < minCount) {

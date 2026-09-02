@@ -153,8 +153,12 @@ test.describe('local vault', () => {
           }
           request.onerror = () =>
             reject(
-              request.error ??
-                new Error(`${target.databaseName} cleanup probe open failed`),
+              ((v) =>
+                v
+                  ? v
+                  : new Error(
+                      `${target.databaseName} cleanup probe open failed`,
+                    ))(request.error),
             )
           request.onsuccess = () => {
             const db = request.result
@@ -171,8 +175,12 @@ test.describe('local vault', () => {
             }
             transaction.onerror = () =>
               reject(
-                transaction.error ??
-                  new Error(`${target.databaseName} cleanup probe seed failed`),
+                ((v) =>
+                  v
+                    ? v
+                    : new Error(
+                        `${target.databaseName} cleanup probe seed failed`,
+                      ))(transaction.error),
               )
           }
         })
@@ -295,8 +303,10 @@ test.describe('local vault', () => {
           }
           request.onerror = () =>
             reject(
-              request.error ??
-                new Error(`${target.databaseName} probe open failed`),
+              ((v) =>
+                v ? v : new Error(`${target.databaseName} probe open failed`))(
+                request.error,
+              ),
             )
           request.onsuccess = () => {
             const db = request.result
@@ -316,10 +326,12 @@ test.describe('local vault', () => {
               }
               read.onerror = () =>
                 reject(
-                  read.error ??
-                    new Error(
-                      `${target.databaseName} cleanup probe read failed`,
-                    ),
+                  ((v) =>
+                    v
+                      ? v
+                      : new Error(
+                          `${target.databaseName} cleanup probe read failed`,
+                        ))(read.error),
                 )
             } catch {
               db.close()

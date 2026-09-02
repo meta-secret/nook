@@ -65,7 +65,10 @@ export async function startMockAuthServer(): Promise<MockAuthServer> {
 
   const server = createServer((request, response) => {
     void (async () => {
-      const url = new URL(request.url ?? '/', 'http://127.0.0.1')
+      const url = new URL(
+        ((...[v = '/']) => v)(request.url),
+        'http://127.0.0.1',
+      )
       const asset = await resolveAsset(url.pathname)
       if (asset.kind === StaticAssetResolutionKind.Rejected) {
         response.writeHead(404)

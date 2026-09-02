@@ -480,7 +480,7 @@ async function runMismatchedStageResponse(
     sendAuthenticatorEnrollmentDismissRuntimeMessage: async (message) => {
       dismissedStageIds.push(message.payload.stageId)
       if (scenario === StageScenario.Confirm) return dismiss.promise
-      const dismissed = dismissalResults.shift() ?? true
+      const dismissed = dismissalResults.shift() !== false
       if (dismissedStageIds.length === 1) await onFirstDismiss?.()
       return dismissed
     },

@@ -43,7 +43,9 @@
         }
       : { kind: DetectionFixtureRenderKind.Missing }
   })
-  const label = $derived(templateId ?? siteId ?? 'unknown')
+  const label = $derived(
+    ((...[v = 'unknown']) => v)(((...[v = siteId]) => v)(templateId)),
+  )
   const wrapAriaHidden = $derived(
     renderState.kind === DetectionFixtureRenderKind.Ready &&
       renderState.fixture.quirks.includes('aria-hidden-ancestor'),
@@ -65,8 +67,8 @@
       (field) => field.type !== 'password',
     )
     if (!identity) return ''
-    return (
-      form.querySelector<HTMLInputElement>(fieldSelector(identity))?.value ?? ''
+    return ((v) => (v ? v : ''))(
+      form.querySelector<HTMLInputElement>(fieldSelector(identity))?.value,
     )
   }
 
@@ -76,8 +78,8 @@
       (field) => field.type === 'password',
     )
     if (!password) return ''
-    return (
-      form.querySelector<HTMLInputElement>(fieldSelector(password))?.value ?? ''
+    return ((v) => (v ? v : ''))(
+      form.querySelector<HTMLInputElement>(fieldSelector(password))?.value,
     )
   }
 
@@ -130,9 +132,9 @@
         <p class="error" role="alert">{error}</p>
       {/if}
       <form id="login_form" {onsubmit}>
-        {#each step.fields as field (field.id ?? field.name ?? field.placeholder)}
+        {#each step.fields as field (((...[v = field.placeholder]) => v)(((...[v = field.name]) => v)(field.id)))}
           <input
-            type={field.type ?? 'text'}
+            type={((...[v = 'text']) => v)(field.type)}
             name={field.name}
             id={field.id}
             autocomplete={field.autocomplete}
@@ -174,9 +176,9 @@
       <p class="error" role="alert">{error}</p>
     {/if}
     <form id="login_form" {onsubmit}>
-      {#each step.fields as field (field.id ?? field.name ?? field.placeholder)}
+      {#each step.fields as field (((...[v = field.placeholder]) => v)(((...[v = field.name]) => v)(field.id)))}
         <input
-          type={field.type ?? 'text'}
+          type={((...[v = 'text']) => v)(field.type)}
           name={field.name}
           id={field.id}
           autocomplete={field.autocomplete}

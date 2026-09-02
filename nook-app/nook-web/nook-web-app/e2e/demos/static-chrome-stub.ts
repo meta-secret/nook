@@ -490,7 +490,9 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
           const demoWindow = window as typeof window & {
             __nookDemoCompanionLauncherUrls?: string[]
           }
-          demoWindow.__nookDemoCompanionLauncherUrls ??= []
+          demoWindow.__nookDemoCompanionLauncherUrls = ((v) => (v ? v : []))(
+            demoWindow.__nookDemoCompanionLauncherUrls,
+          )
           demoWindow.__nookDemoCompanionLauncherUrls.push(
             'chrome-extension://demo-extension/popup/index.html?intent=pair',
           )
@@ -597,9 +599,10 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     ) {
       return response
     }
-    const { observationIndex } = (response as AuthenticationSnapshotResponse)
-      .snapshot ?? { observationIndex: -1 }
-    const observations = message.payload?.observations ?? []
+    const { observationIndex } = ((...[v = { observationIndex: -1 }]) => v)(
+      (response as AuthenticationSnapshotResponse).snapshot,
+    )
+    const observations = ((v) => (v ? v : []))(message.payload?.observations)
     if (
       typeof observationIndex !== 'number' ||
       !Number.isInteger(observationIndex) ||
@@ -651,7 +654,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
   const chromeStub = {
     i18n: {
       getMessage(key: string, substitution?: string) {
-        const message = localizedMessages[key]?.message ?? ''
+        const message = ((v) => (v ? v : ''))(localizedMessages[key]?.message)
         return substitution ? message.replaceAll('$1', substitution) : message
       },
     },
@@ -672,7 +675,9 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
           const demoWindow = globalThis as unknown as {
             __nookDemoRuntimeMessageTypes?: string[]
           }
-          demoWindow.__nookDemoRuntimeMessageTypes ??= []
+          demoWindow.__nookDemoRuntimeMessageTypes = ((v) => (v ? v : []))(
+            demoWindow.__nookDemoRuntimeMessageTypes,
+          )
           demoWindow.__nookDemoRuntimeMessageTypes.push(message.type)
         }
         const responseRequest: AuthenticationSnapshotResponseAdapterRequest = {

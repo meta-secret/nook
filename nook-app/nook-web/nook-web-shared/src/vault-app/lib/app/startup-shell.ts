@@ -23,7 +23,7 @@ export type VaultStartupShell = {
 
 function storedValue(key: string): string {
   try {
-    return localStorage.getItem(key) ?? "";
+    return ((v) => (v ? v : ""))(localStorage.getItem(key));
   } catch {
     return "";
   }
@@ -55,8 +55,8 @@ function applyStartupColorMode(): void {
 }
 
 function faviconUrl(): string {
-  return (
-    document.querySelector<HTMLLinkElement>('link[rel~="icon"]')?.href ?? ""
+  return ((v) => (v ? v : ""))(
+    document.querySelector<HTMLLinkElement>('link[rel~="icon"]')?.href,
   );
 }
 

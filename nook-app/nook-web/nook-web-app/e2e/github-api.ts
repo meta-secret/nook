@@ -54,7 +54,9 @@ export function githubFetch(
 ): Promise<Response> {
   return fetch(url, {
     ...init,
-    signal: init?.signal ?? AbortSignal.timeout(GITHUB_FETCH_TIMEOUT_MS),
+    signal: ((...[v = AbortSignal.timeout(GITHUB_FETCH_TIMEOUT_MS)]) => v)(
+      init?.signal,
+    ),
     cache: 'no-store',
   })
 }

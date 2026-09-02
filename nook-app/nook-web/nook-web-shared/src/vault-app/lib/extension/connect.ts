@@ -95,7 +95,7 @@ export function isExtensionConnectPath(pathname: string): boolean {
 
 function parseScopes(params: URLSearchParams): ExtensionConnectScope[] {
   const raw = params.get("scopes");
-  const scopes = (raw ?? "")
+  const scopes = ((v) => (v ? v : ""))(raw)
     .split(",")
     .map((scope) => scope.trim())
     .filter(Boolean);
@@ -111,15 +111,20 @@ export function extensionConnectRequestFromLocation(
   }
 
   const params = new URLSearchParams(location.search);
-  const deviceId = params.get("device_id")?.trim() ?? "";
-  const devicePublicKey = params.get("device_public_key")?.trim() ?? "";
-  const deviceSigningPublicKey =
-    params.get("device_signing_public_key")?.trim() ?? "";
-  const extensionRuntimeId = params.get("extension_id")?.trim() ?? "";
-  const deviceLabel =
-    params.get("device_label")?.trim() ??
-    "Nook Extension - this browser profile";
-  const nonce = params.get("nonce")?.trim() ?? "";
+  const deviceId = ((v) => (v ? v : ""))(params.get("device_id")?.trim());
+  const devicePublicKey = ((v) => (v ? v : ""))(
+    params.get("device_public_key")?.trim(),
+  );
+  const deviceSigningPublicKey = ((v) => (v ? v : ""))(
+    params.get("device_signing_public_key")?.trim(),
+  );
+  const extensionRuntimeId = ((v) => (v ? v : ""))(
+    params.get("extension_id")?.trim(),
+  );
+  const [deviceLabel = "Nook Extension - this browser profile"] = [
+    params.get("device_label")?.trim(),
+  ];
+  const nonce = ((v) => (v ? v : ""))(params.get("nonce")?.trim());
   const scopes = parseScopes(params);
 
   if (

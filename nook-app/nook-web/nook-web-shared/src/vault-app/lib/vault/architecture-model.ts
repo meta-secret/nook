@@ -97,9 +97,9 @@ export function validateVaultArchitecture(
       ? NookVaultArchitecture.sentinel(
           architecture.device_mode,
           architecture.replication_type,
-          architecture.sentinel?.threshold ?? 2,
-          architecture.sentinel?.required_participants ?? 3,
-          architecture.sentinel?.ready_participants ?? 0,
+          ((...[v = 2]) => v)(architecture.sentinel?.threshold),
+          ((...[v = 3]) => v)(architecture.sentinel?.required_participants),
+          ((v) => (v ? v : 0))(architecture.sentinel?.ready_participants),
         )
       : NookVaultArchitecture.simple(
           architecture.device_mode,

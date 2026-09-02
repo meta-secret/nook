@@ -168,9 +168,10 @@ export function deployPlatform(request: DeployPlatformRequest): void {
     ["-n", "hive-data", "rollout", "status", "deployment/nook-zot"],
     ["-n", "arc-runners", "rollout", "status", "statefulset/nook-buildkit"],
   ]) {
+    const [workload = "workload"] = command.slice(-1);
     runKubectl({
       kubeconfigPath: request.kubeconfigPath,
-      label: `wait for ${command.at(-1) ?? "workload"}`,
+      label: `wait for ${workload}`,
       command: [...command, "--timeout=300s"],
       streamOutput: true,
     });

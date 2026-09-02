@@ -64,11 +64,11 @@ function escapeAttr(value: string): string {
 }
 
 function renderStepHtml(fixture: ShellTemplate, stepIndex: number): string {
-  const step = fixture.steps[stepIndex] ?? fixture.steps[0]
+  const [step = fixture.steps[0]] = [fixture.steps[stepIndex]]
   const fields = step.fields
     .map((field) => {
       const attrs = [
-        `type="${escapeAttr(field.type ?? 'text')}"`,
+        `type="${escapeAttr(((...[v = 'text']) => v)(field.type))}"`,
         field.name ? `name="${escapeAttr(field.name)}"` : '',
         field.id ? `id="${escapeAttr(field.id)}"` : '',
         field.autocomplete
@@ -133,9 +133,9 @@ describe('popular login shell templates', () => {
       const summary = observations[0]?.summary
       expect(summary).toBeTruthy()
       const authSignal =
-        (summary?.usernameFieldCount ?? 0) +
-        (summary?.passwordFieldCount ?? 0) +
-        (summary?.oneTimeCodeFieldCount ?? 0)
+        ((v) => (v ? v : 0))(summary?.usernameFieldCount) +
+        ((v) => (v ? v : 0))(summary?.passwordFieldCount) +
+        ((v) => (v ? v : 0))(summary?.oneTimeCodeFieldCount)
       expect(authSignal).toBeGreaterThan(0)
 
       if (!firstHasPassword && fixture.steps.length > 1) {
@@ -146,7 +146,9 @@ describe('popular login shell templates', () => {
         const passwordObservations = summarizeAuthenticationWorkflowForms()
         expect(passwordObservations.length).toBeGreaterThan(0)
         expect(
-          passwordObservations[0]?.summary.passwordFieldCount ?? 0,
+          ((v) => (v ? v : 0))(
+            passwordObservations[0]?.summary.passwordFieldCount,
+          ),
         ).toBeGreaterThan(0)
       }
     },

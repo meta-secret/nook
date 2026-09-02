@@ -121,7 +121,7 @@ export async function connectGoogleDriveVault(
   await createLocalVaultOnLogin(page)
   await connectGoogleDriveSyncProviderFromSettings(page, fileName, accessToken)
   await waitForSyncRemoteVaultState(
-    stub ?? createLocalE2eGoogleDriveVaultStub('', fileName),
+    ((...[v = createLocalE2eGoogleDriveVaultStub('', fileName)]) => v)(stub),
     (yaml) => yaml.authPkIds.length >= 1 && yaml.memberPkIds.length >= 1,
     { page, timeoutMs: GITHUB_CONNECT_TIMEOUT_MS },
   )
@@ -274,7 +274,7 @@ export async function waitForPendingJoinBanner(page: Page, deviceId?: string) {
               __nookVault?: { pendingJoins?: unknown[] }
             }
           ).__nookVault
-          return vault?.pendingJoins?.length ?? 0
+          return ((v) => (v ? v : 0))(vault?.pendingJoins?.length)
         })
         return pending > 0
       },

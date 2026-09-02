@@ -1,7 +1,14 @@
 <script lang="ts">
-  type EnrollmentCodeIssue = { readonly entryId: PasswordEntryId; readonly password: string; readonly providerId: string }
+  type EnrollmentCodeIssue = {
+    readonly entryId: PasswordEntryId
+    readonly password: string
+    readonly providerId: string
+  }
 
-  type VaultPasswordCreation = { readonly label: string; readonly password: string }
+  type VaultPasswordCreation = {
+    readonly label: string
+    readonly password: string
+  }
 
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import {
@@ -22,7 +29,10 @@
   import OnboardDevicePasswordStep from '$lib/components/onboard-device/OnboardDevicePasswordStep.svelte'
   import SentinelOnboardingGuidance from '$lib/components/onboard-device/SentinelOnboardingGuidance.svelte'
   import { Button } from '$lib/components/ui/button'
-  import { buildEnrollmentLink, getEnrollmentLinkBase } from '$lib/enrollment/code'
+  import {
+    buildEnrollmentLink,
+    getEnrollmentLinkBase,
+  } from '$lib/enrollment/code'
   import {
     GITHUB_PROVIDER_TYPE,
     GOOGLE_DRIVE_OAUTH_FILE_PRESET,
@@ -99,9 +109,7 @@
     loginSetup: LoginSetup
     githubPat: string
     githubRepo: string
-    onIssueCode: (
-      args: EnrollmentCodeIssue,
-    ) => Promise<string>
+    onIssueCode: (args: EnrollmentCodeIssue) => Promise<string>
     onClearCode: () => void
     onAddPassword: (args: VaultPasswordCreation) => void | Promise<void>
     onBeginAddProvider?: () => void
@@ -143,10 +151,12 @@
     vault.vaultArchitecture.vault_type === VaultType.Sentinel,
   )
   const sentinelReadyParticipants = $derived(
-    vault.vaultArchitecture.sentinel_ready_participants ?? 0,
+    ((v) => (v ? v : 0))(vault.vaultArchitecture.sentinel_ready_participants),
   )
   const sentinelRequiredParticipants = $derived(
-    vault.vaultArchitecture.sentinel_required_participants ?? 0,
+    ((v) => (v ? v : 0))(
+      vault.vaultArchitecture.sentinel_required_participants,
+    ),
   )
 
   let selectedProviderIdState = $state<ProviderSelection>({
@@ -172,10 +182,14 @@
   }
 
   const effectiveProviderId = $derived.by(() => {
-    const firstCompatibleProviderArgs: Parameters<typeof firstCompatibleProvider>[0] = { providers: syncProviders, replicationType: vault.vaultArchitecture.replication_type, preference: selectedProviderIdState };
-    const selection = firstCompatibleProvider(
-      firstCompatibleProviderArgs,
-    )
+    const firstCompatibleProviderArgs: Parameters<
+      typeof firstCompatibleProvider
+    >[0] = {
+      providers: syncProviders,
+      replicationType: vault.vaultArchitecture.replication_type,
+      preference: selectedProviderIdState,
+    }
+    const selection = firstCompatibleProvider(firstCompatibleProviderArgs)
     return selection.kind === CompatibleProviderSelectionKind.Selected
       ? selection.provider.id
       : ''
@@ -255,33 +269,61 @@
 
   const passwordStepSubtitle = $derived(
     selectedPassword.kind === ResolvedOnboardingPasswordKind.Available
-      ? (() => { const tArgs2: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.OnboardDeviceWizardPasswordSelected, replacements: {
-          label: selectedPassword.entry.label,
-        } }; return vault.t(tArgs2); })()
+      ? (() => {
+          const tArgs2: Parameters<typeof vault.t>[0] = {
+            key: I18N_KEYS.OnboardDeviceWizardPasswordSelected,
+            replacements: {
+              label: selectedPassword.entry.label,
+            },
+          }
+          return vault.t(tArgs2)
+        })()
       : hasPasswords
         ? passwordEntries.length === 1
           ? vault.t(I18N_KEYS.OnboardDeviceWizardPasswordChooseSingular)
-          : (() => { const tArgs: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.OnboardDeviceWizardPasswordChoosePlural, replacements: {
-              count: String(passwordEntries.length),
-            } }; return vault.t(tArgs); })()
+          : (() => {
+              const tArgs: Parameters<typeof vault.t>[0] = {
+                key: I18N_KEYS.OnboardDeviceWizardPasswordChoosePlural,
+                replacements: {
+                  count: String(passwordEntries.length),
+                },
+              }
+              return vault.t(tArgs)
+            })()
         : vault.t(I18N_KEYS.OnboardDeviceWizardPasswordSubtitle),
   )
 
   const syncStepSubtitle = $derived(
     hasCompatibleSyncProviders
       ? compatibleSyncProviders.length === 1
-        ? (() => { const translationRequest: Parameters<typeof vault.t>[0] = {
-            key: I18N_KEYS.OnboardDeviceWizardSyncReadySingular,
-            replacements: {
-              label: (() => { const localizeProviderLabelArgs: Parameters<typeof localizeProviderLabel>[0] = {
-                label: compatibleSyncProviders[0]?.label ?? '',
-                t: vault.t,
-              }; return localizeProviderLabel(localizeProviderLabelArgs); })(),
-            },
-          }; return vault.t(translationRequest); })()
-        : (() => { const tArgs3: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.OnboardDeviceWizardSyncReadyPlural, replacements: {
-            count: String(compatibleSyncProviders.length),
-          } }; return vault.t(tArgs3); })()
+        ? (() => {
+            const translationRequest: Parameters<typeof vault.t>[0] = {
+              key: I18N_KEYS.OnboardDeviceWizardSyncReadySingular,
+              replacements: {
+                label: (() => {
+                  const localizeProviderLabelArgs: Parameters<
+                    typeof localizeProviderLabel
+                  >[0] = {
+                    label: ((v) => (v ? v : ''))(
+                      compatibleSyncProviders[0]?.label,
+                    ),
+                    t: vault.t,
+                  }
+                  return localizeProviderLabel(localizeProviderLabelArgs)
+                })(),
+              },
+            }
+            return vault.t(translationRequest)
+          })()
+        : (() => {
+            const tArgs3: Parameters<typeof vault.t>[0] = {
+              key: I18N_KEYS.OnboardDeviceWizardSyncReadyPlural,
+              replacements: {
+                count: String(compatibleSyncProviders.length),
+              },
+            }
+            return vault.t(tArgs3)
+          })()
       : hasSyncProviders
         ? vault.t(I18N_KEYS.OnboardDeviceNoCompatibleSyncProviders)
         : hasPasswords
@@ -355,7 +397,9 @@
       passwordInput = ''
     } catch (e) {
       localError =
-        e instanceof Error ? e.message : vault.t(I18N_KEYS.OnboardDeviceFailedQrErr)
+        e instanceof Error
+          ? e.message
+          : vault.t(I18N_KEYS.OnboardDeviceFailedQrErr)
     } finally {
       isGenerating = false
     }
@@ -524,7 +568,12 @@
                 <div class="min-w-0 flex-1">
                   <div class="flex items-center gap-2">
                     <span class="truncate font-medium"
-                      >{(() => { const localizeProviderLabelArgs2: Parameters<typeof localizeProviderLabel>[0] = { label: provider.label, t: vault.t }; return localizeProviderLabel(localizeProviderLabelArgs2); })()}</span
+                      >{(() => {
+                        const localizeProviderLabelArgs2: Parameters<
+                          typeof localizeProviderLabel
+                        >[0] = { label: provider.label, t: vault.t }
+                        return localizeProviderLabel(localizeProviderLabelArgs2)
+                      })()}</span
                     >
                   </div>
                   <div
@@ -533,7 +582,14 @@
                       : 'text-muted-foreground/80'}"
                     data-testid="onboard-provider-detail-{provider.id}"
                   >
-                    {(() => { const localizedProviderStorageDetailRequest: Parameters<typeof localizedProviderStorageDetail>[0] = { provider, t: vault.t }; return localizedProviderStorageDetail(localizedProviderStorageDetailRequest); })()}
+                    {(() => {
+                      const localizedProviderStorageDetailRequest: Parameters<
+                        typeof localizedProviderStorageDetail
+                      >[0] = { provider, t: vault.t }
+                      return localizedProviderStorageDetail(
+                        localizedProviderStorageDetailRequest,
+                      )
+                    })()}
                   </div>
                   <div
                     class="text-[11px] {compatible
@@ -543,7 +599,9 @@
                   >
                     {vault.t(providerCapabilityLabelKey(provider))}
                     {#if !compatible}
-                      · {vault.t(I18N_KEYS.ProviderPickerUnsupportedCurrentVault)}
+                      · {vault.t(
+                        I18N_KEYS.ProviderPickerUnsupportedCurrentVault,
+                      )}
                     {/if}
                   </div>
                 </div>
@@ -611,9 +669,15 @@
             >
               {selectedPassword.kind ===
               ResolvedOnboardingPasswordKind.Available
-                ? (() => { const tArgs8: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.VaultPasswordsPasswordFor, replacements: {
-                    label: selectedPassword.entry.label,
-                  } }; return vault.t(tArgs8); })()
+                ? (() => {
+                    const tArgs8: Parameters<typeof vault.t>[0] = {
+                      key: I18N_KEYS.VaultPasswordsPasswordFor,
+                      replacements: {
+                        label: selectedPassword.entry.label,
+                      },
+                    }
+                    return vault.t(tArgs8)
+                  })()
                 : vault.t(I18N_KEYS.VaultPasswordsConfirmPassword)}
             </label>
             <input
@@ -716,9 +780,15 @@
         {enrollmentLink}
         instruction={vault.t(I18N_KEYS.OnboardDeviceReadyDesc)}
         issuedSuffix={issuedAt
-          ? (() => { const tArgs9: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.OnboardDeviceIssuedTime, replacements: {
-              time: issuedAt.slice(0, 19).replace('T', ' ') + ' UTC',
-            } }; return vault.t(tArgs9); })()
+          ? (() => {
+              const tArgs9: Parameters<typeof vault.t>[0] = {
+                key: I18N_KEYS.OnboardDeviceIssuedTime,
+                replacements: {
+                  time: issuedAt.slice(0, 19).replace('T', ' ') + ' UTC',
+                },
+              }
+              return vault.t(tArgs9)
+            })()
           : ''}
         linkTitle={vault.t(I18N_KEYS.OnboardDeviceLinkTitle)}
         linkDescription={vault.t(I18N_KEYS.OnboardDeviceLinkDesc)}

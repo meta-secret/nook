@@ -79,9 +79,9 @@ export async function readNookLogSnapshot(
 ): Promise<AppLogsResponse> {
   const query = {
     schema: APP_LOGS_SCHEMA,
-    minLevel: options?.minLevel ?? 'trace',
-    limit: options?.limit ?? APP_LOGS_ATTACHMENT_LIMIT,
-    offset: options?.offset ?? 0,
+    minLevel: ((...[v = 'trace']) => v)(options?.minLevel),
+    limit: ((...[v = APP_LOGS_ATTACHMENT_LIMIT]) => v)(options?.limit),
+    offset: ((v) => (v ? v : 0))(options?.offset),
   }
   return page.evaluate(async (opts) => {
     const log = (
@@ -211,7 +211,10 @@ export async function waitForPersistedAppLog(
     .poll(
       async () => {
         await flushNookLogPersistQueue(page)
-        const entries = await readNookLogEntries(page, options?.limit ?? 500)
+        const entries = await readNookLogEntries(
+          page,
+          ((...[v = 500]) => v)(options?.limit),
+        )
         const found = findAppLogEntry(entries, filter)
         searchState =
           found.kind === AppLogEntryLookupKind.Missing
@@ -219,7 +222,7 @@ export async function waitForPersistedAppLog(
             : { kind: LogSearchStateKind.Matched, entry: found.entry }
         return searchState.kind === LogSearchStateKind.Matched
       },
-      { timeout: options?.timeoutMs ?? UI_TIMEOUT_MS * 2 },
+      { timeout: ((...[v = UI_TIMEOUT_MS * 2]) => v)(options?.timeoutMs) },
     )
     .toBe(true)
   if (searchState.kind === LogSearchStateKind.Searching) {
@@ -243,10 +246,13 @@ export async function expectAppLogMilestones(
     .poll(
       async () => {
         await flushNookLogPersistQueue(page)
-        lastEntries = await readNookLogEntries(page, options?.limit ?? 500)
+        lastEntries = await readNookLogEntries(
+          page,
+          ((...[v = 500]) => v)(options?.limit),
+        )
         return appLogMilestonesAreInOrder(lastEntries, milestones)
       },
-      { timeout: options?.timeoutMs ?? UI_TIMEOUT_MS * 2 },
+      { timeout: ((...[v = UI_TIMEOUT_MS * 2]) => v)(options?.timeoutMs) },
     )
     .toBe(true)
 
@@ -368,7 +374,7 @@ export async function waitForLogsPageStoredCount(
         )
         return predicate(count)
       },
-      { timeout: options?.timeoutMs ?? UI_TIMEOUT_MS * 2 },
+      { timeout: ((...[v = UI_TIMEOUT_MS * 2]) => v)(options?.timeoutMs) },
     )
     .toBe(true)
   return count
@@ -395,7 +401,10 @@ export async function dumpNookLogs(
   options?: { limit?: number },
 ) {
   try {
-    const entries = await readNookLogEntries(page, options?.limit ?? 200)
+    const entries = await readNookLogEntries(
+      page,
+      ((...[v = 200]) => v)(options?.limit),
+    )
     printNookLogEntries(label, entries)
   } catch (error) {
     console.warn(

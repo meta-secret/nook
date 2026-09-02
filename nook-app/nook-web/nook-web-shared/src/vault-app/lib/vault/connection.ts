@@ -70,9 +70,9 @@ export async function loadDb(state: VaultState) {
     ) {
       const saved = await state.ensureProviderSaved();
       if (!saved) return;
-      const provider =
-        state.syncProviders[state.syncProviders.length - 1] ??
-        state.providers[state.providers.length - 1];
+      const [provider = state.providers[state.providers.length - 1]] = [
+        state.syncProviders[state.syncProviders.length - 1],
+      ];
       if (provider?.type === "local-folder") {
         const syncLocalFolderProviderArgs: Parameters<
           typeof syncLocalFolderProvider

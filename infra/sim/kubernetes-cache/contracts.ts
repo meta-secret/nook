@@ -52,16 +52,19 @@ interface AssertionRequest {
 export function runCommand(request: CommandRequest): CommandOutcome {
   const executable = request.command[0];
   if (!executable) throw new Error(`${request.label} has no executable`);
+  const { environment = process.env } = request;
   const result = spawnSync(executable, request.command.slice(1), {
     cwd: request.cwd,
-    env: request.environment ?? process.env,
+    env: environment,
     input: request.input,
     encoding: "utf8",
   });
+  const { status: exitCode = 1, stdout = "", stderr: rawStderr = result.error?.message } = result;
+  const [stderr = ""] = [rawStderr];
   const outcome: CommandOutcome = {
-    exitCode: result.status ?? 1,
-    stdout: result.stdout ?? "",
-    stderr: result.stderr ?? result.error?.message ?? "",
+    exitCode,
+    stdout,
+    stderr,
   };
   if (request.streamOutput) {
     if (outcome.stdout.length > 0) process.stdout.write(outcome.stdout);

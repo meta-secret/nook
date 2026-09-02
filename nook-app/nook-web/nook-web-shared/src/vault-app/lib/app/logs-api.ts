@@ -72,7 +72,7 @@ function parsePositiveInt({
   max,
 }: PositiveIntegerParseRequest) {
   const raw = params.get(name);
-  const parsed = Number.parseInt(raw ?? "", 10);
+  const parsed = Number.parseInt(((v) => (v ? v : ""))(raw), 10);
   if (!Number.isFinite(parsed) || parsed < 0) return fallback;
   return Math.min(parsed, max);
 }

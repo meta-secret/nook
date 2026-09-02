@@ -98,7 +98,9 @@
     actionBusy = true
     vault.errorMsg = ''
     try {
-      const responseRequest: Parameters<typeof createSentinelUnlockResponse>[0] = {
+      const responseRequest: Parameters<
+        typeof createSentinelUnlockResponse
+      >[0] = {
         state: vault,
         storeId,
         request: payload,
@@ -200,10 +202,13 @@
                 class="h-10 w-full bg-background px-3"
                 data-testid="sentinel-unlock-delivery-select"
               >
-                {selectedSummary?.storeId ??
-                  vault.t(
-                    I18N_KEYS.ArchitectureModesSentinelUnlockDeliveryPlaceholder,
-                  )}
+                {((
+                  ...[
+                    v = vault.t(
+                      I18N_KEYS.ArchitectureModesSentinelUnlockDeliveryPlaceholder,
+                    ),
+                  ]
+                ) => v)(selectedSummary?.storeId)}
               </Select.Trigger>
               <Select.Content portalProps={{ disabled: true }}>
                 {#each vault.sentinelStoredDeliveries as delivery (delivery.storeId)}

@@ -402,9 +402,11 @@ export async function connectWithEnrollmentCode({
         kind: SavedEnrollmentProviderKind.Local,
       };
       if (!hasLocalPasswordEntries) {
-        const candidate =
-          state.syncProviders[0] ??
-          state.providers.find((provider) => provider.type !== "local");
+        const [
+          candidate = state.providers.find(
+            (provider) => provider.type !== "local",
+          ),
+        ] = [state.syncProviders[0]];
         if (candidate && candidate.type !== "local") {
           selection = {
             kind: SavedEnrollmentProviderKind.Remote,

@@ -178,7 +178,9 @@ export function createLocalE2eFileSyncVaultStub(
 
       await page.route('https://www.googleapis.com/**', async (route) => {
         if (accessToken) {
-          const authorization = route.request().headers().authorization ?? ''
+          const authorization = ((v) => (v ? v : ''))(
+            route.request().headers().authorization,
+          )
           if (authorization !== `Bearer ${accessToken}`) {
             await route.fallback()
             return
@@ -309,7 +311,9 @@ export function createLocalE2eFileSyncVaultStub(
           url === 'https://www.googleapis.com/upload/drive/v3/files' &&
           method === 'POST'
         ) {
-          const event = parseEventMultipart(request.postData() ?? '')
+          const event = parseEventMultipart(
+            ((v) => (v ? v : ''))(request.postData()),
+          )
           if (event.kind === EventMultipartParseKind.Valid) {
             if (!writeEvent(event.digest, event.content)) {
               await route.fulfill({ status: 409, body: '{}' })
@@ -337,7 +341,7 @@ export function createLocalE2eFileSyncVaultStub(
           url.startsWith('https://www.googleapis.com/upload/drive/v3/files/') &&
           method === 'PATCH'
         ) {
-          const body = request.postData() ?? ''
+          const body = ((v) => (v ? v : ''))(request.postData())
           const patchId = url.slice(
             'https://www.googleapis.com/upload/drive/v3/files/'.length,
           )

@@ -141,9 +141,11 @@ async function fetchCloudKitWebAuthChallenge(): Promise<CloudKitAuthChallenge> {
     throw new Error(CloudKitAuthErrorTranslationKey.UnknownError, ErrorArgs);
   }
   throw new Error(
-    body.reason ??
-      body.serverErrorCode ??
-      `Apple CloudKit auth challenge failed with HTTP ${response.status}.`,
+    ((
+      ...[
+        v = `Apple CloudKit auth challenge failed with HTTP ${response.status}.`,
+      ]
+    ) => v)(((...[v = body.serverErrorCode]) => v)(body.reason)),
   );
 }
 

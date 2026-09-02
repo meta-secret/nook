@@ -1,6 +1,8 @@
 import { expect, test } from '../fixtures'
 
-const PUBLIC_SITE_PATH = process.env.NOOK_E2E_PUBLIC_SITE_PATH ?? ''
+const PUBLIC_SITE_PATH = ((v) => (v ? v : ''))(
+  process.env.NOOK_E2E_PUBLIC_SITE_PATH,
+)
 const DEMO_BEAT_MS = 650
 
 test('public landing modules preserve locale, theme, and install behavior', async ({

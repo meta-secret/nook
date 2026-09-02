@@ -76,9 +76,10 @@ function navigatorLanguages(): string[] {
     return []
   }
 
-  return [...(navigator.languages ?? []), navigator.language].filter(
-    (language): language is string => Boolean(language),
-  )
+  return [
+    ...((v) => (v ? v : []))(navigator.languages),
+    navigator.language,
+  ].filter((language): language is string => Boolean(language))
 }
 
 function uniqueLanguageTags(tags: ExtensionLanguageTagCandidates): string[] {

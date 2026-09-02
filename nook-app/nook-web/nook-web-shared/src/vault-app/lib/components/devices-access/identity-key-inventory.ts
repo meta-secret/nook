@@ -102,8 +102,9 @@ export function buildIdentityKeyInventory({
       vault,
       protection: localProtection,
     };
-    const protectorTitle =
-      currentProtector?.title ?? protectionLabel(protectionLabelArgs);
+    const [protectorTitle = protectionLabel(protectionLabelArgs)] = [
+      currentProtector?.title,
+    ];
     const protectedRelationshipArgs: Parameters<typeof vault.t>[0] = {
       key: I18N_KEYS.DevicesAccessAppProtectedBy,
       replacements: { protection: protectorTitle },
@@ -112,22 +113,25 @@ export function buildIdentityKeyInventory({
       key: `protector:${member.appId}`,
       kind: IdentityKeyInventoryRowKind.Protector,
       title: protectorTitle,
-      typeLabel:
-        currentProtector?.typeLabel ??
-        vault.t(
-          isPasskeyProtection(localProtection)
-            ? I18N_KEYS.DevicesAccessKeyTypePasskey
-            : localProtection === DeviceAccessProtectionKind.CompanionSession
-              ? I18N_KEYS.DevicesAccessKeyTypeCompanion
-              : I18N_KEYS.DevicesAccessKeyTypePin,
-        ),
-      lastUsed:
-        currentProtector?.lastUsedLabel ??
-        vault.t(I18N_KEYS.DevicesAccessUnknown),
+      typeLabel: ((
+        ...[
+          v = vault.t(
+            isPasskeyProtection(localProtection)
+              ? I18N_KEYS.DevicesAccessKeyTypePasskey
+              : localProtection === DeviceAccessProtectionKind.CompanionSession
+                ? I18N_KEYS.DevicesAccessKeyTypeCompanion
+                : I18N_KEYS.DevicesAccessKeyTypePin,
+          ),
+        ]
+      ) => v)(currentProtector?.typeLabel),
+      lastUsed: ((...[v = vault.t(I18N_KEYS.DevicesAccessUnknown)]) => v)(
+        currentProtector?.lastUsedLabel,
+      ),
       renamable:
         Boolean(currentProtector) && isPasskeyProtection(localProtection),
-      passkeySummary:
-        currentProtector?.passkeySummary ?? PASSKEY_CARD_SUMMARY_ABSENT,
+      passkeySummary: ((...[v = PASSKEY_CARD_SUMMARY_ABSENT]) => v)(
+        currentProtector?.passkeySummary,
+      ),
       apps: [
         {
           ...appBase,

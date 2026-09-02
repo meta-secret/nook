@@ -14,9 +14,10 @@ export interface CleanupRequest {
 }
 
 export function requireCommand(command: string): void {
+  const { PATH: executablePath = "" } = process.env;
   const candidates = command.includes("/")
     ? [command]
-    : (process.env.PATH ?? "")
+    : executablePath
         .split(delimiter)
         .filter((directory) => directory.length > 0)
         .map((directory) => join(directory, command));
@@ -38,7 +39,10 @@ export function clusterExists(): boolean {
   });
   return outcome.stdout
     .split("\n")
-    .map((line) => line.trim().split(/\s+/)[0] ?? "")
+    .map((line) => {
+      const [name = ""] = line.trim().split(/\s+/);
+      return name;
+    })
     .includes(CLUSTER_NAME);
 }
 

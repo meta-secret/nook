@@ -43,7 +43,11 @@ function loadExistingTemplates() {
   )) {
     const id = name.replace(/\.json$/u, '')
     const data = JSON.parse(readFileSync(path.join(templatesDir, name), 'utf8'))
-    map.set(id, { id, quirks: data.quirks ?? [], steps: data.steps })
+    map.set(id, {
+      id,
+      quirks: ((v) => (v ? v : []))(data.quirks),
+      steps: data.steps,
+    })
   }
   return map
 }
@@ -61,8 +65,10 @@ function main() {
   for (const site of seeded) {
     byId.set(site.id, {
       ...site,
-      template: existingShells[site.id]?.template ?? 'email-password',
-      source: existingShells[site.id]?.source ?? 'research',
+      template: ((...[v = 'email-password']) => v)(
+        existingShells[site.id]?.template,
+      ),
+      source: ((...[v = 'research']) => v)(existingShells[site.id]?.source),
     })
   }
 
@@ -172,7 +178,7 @@ function main() {
     }
     writeFileSync(
       path.join(templatesDir, `${id}.json`),
-      `${prettyJson({ id, quirks: template.quirks ?? [], steps: template.steps })}\n`,
+      `${prettyJson({ id, quirks: ((v) => (v ? v : []))(template.quirks), steps: template.steps })}\n`,
     )
   }
   // Always write required templates
@@ -180,7 +186,7 @@ function main() {
     const template = existingTemplates.get(templateId)
     writeFileSync(
       path.join(templatesDir, `${templateId}.json`),
-      `${prettyJson({ id: templateId, quirks: template.quirks ?? [], steps: template.steps })}\n`,
+      `${prettyJson({ id: templateId, quirks: ((v) => (v ? v : []))(template.quirks), steps: template.steps })}\n`,
     )
   }
 
@@ -236,7 +242,7 @@ function main() {
 
   const counts = {}
   for (const site of sites) {
-    counts[site.template] = (counts[site.template] ?? 0) + 1
+    counts[site.template] = ((v) => (v ? v : 0))(counts[site.template]) + 1
   }
   console.log(`catalog=${catalog.length}`)
   console.log(`templates_used=${Object.keys(counts).length}`)

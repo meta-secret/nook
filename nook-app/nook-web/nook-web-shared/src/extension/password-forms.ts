@@ -616,7 +616,7 @@ export function authenticationPageObservationFacts({
     authenticator: {
       authenticatorSetup: authenticatorSetupHint ? "present" : "absent",
       backupCodesCopy:
-        backupCodesCopy ?? (backupCodesHint ? "Save backup codes" : ""),
+        ((...[v = backupCodesHint ? "Save backup codes" : ""]) => v)(backupCodesCopy),
       passkeyControl:
         passkeyControls.length > 0
           ? passkeyControlPresent
@@ -826,19 +826,16 @@ export function readLoginCredentials(
     };
     return hasAutocompleteToken(nookArrowArgs4);
   });
-  const passwordField =
-    newPasswordFields[0] ??
-    passwordFields.find((field) => {
+  const [passwordField = passwordFields[0]] = [((...[v = passwordFields.find((field) => {
       const nookArrowArgs5: Parameters<typeof hasAutocompleteToken>[0] = {
         field,
         expected: "current-password",
       };
       return hasAutocompleteToken(nookArrowArgs5);
-    }) ??
-    passwordFields[0];
+    })]) => v)(newPasswordFields[0])];
   const password = passwordField.value.trim();
   const nookNamedArgs0_3 = passwordFieldQuery(request);
-  const username = findUsernameFields(nookNamedArgs0_3)[0]?.value.trim() ?? "";
+  const username = ((v) => (v ? v : ""))(findUsernameFields(nookNamedArgs0_3)[0]?.value.trim());
   if (!username || !password) {
     return { kind: LoginCredentialsLookupKind.Absent };
   }
@@ -882,15 +879,15 @@ function findApprovedOwnedAdvanceControl({
           formScope: request.formScope,
           summary: summarizeRoot(request),
         }
-      : (summarizeAuthenticationWorkflowForms().find(
+      : (((v) => (v ? v : false))(summarizeAuthenticationWorkflowForms().find(
           (candidate) =>
             formWithinRequestRoot &&
             candidate.formScope.kind === PasswordFormScopeKind.Owned &&
             candidate.formScope.owner === form,
-        ) ?? false);
+        )));
   return (
     observation &&
-    (Array.from(
+    (((v) => (v ? v : false))(Array.from(
       form.ownerDocument.querySelectorAll<LoginAdvanceControl>(
         authenticationAdvanceControlSelector,
       ),
@@ -912,8 +909,7 @@ function findApprovedOwnedAdvanceControl({
           Boolean(transported) &&
           authentication_advance_control_is_safe(transported)
         );
-      }) ??
-      false)
+      })))
   );
 }
 
@@ -934,7 +930,7 @@ function activateApprovedOwnedAdvanceControl({
   const clickSubmission: Parameters<typeof observeSubmit>[0] = {
     form,
     action: () => approved.click(),
-    approval: request.submissionApproval ?? false,
+    approval: ((v) => (v ? v : false))(request.submissionApproval),
     expectedSubmitter: approved,
   };
   const result = observeSubmit(clickSubmission);
@@ -964,7 +960,7 @@ export function submitLoginForm(
   const usernameFields = findUsernameFields(nookTypedArgs0_27);
   const usernameField = usernameFields[0];
   const hasAuthenticationUsername = usernameFields.some(isAuthUsernameField);
-  const anchor = passwordField ?? usernameField;
+  const [anchor = usernameField] = [passwordField];
   if (!anchor) return FormSubmissionResult.NotObserved;
   const form = anchor.form;
   if (form) {
@@ -989,7 +985,7 @@ export function submitLoginForm(
     form,
     hasAuthenticationUsername,
     hasAuthenticationPassword: Boolean(passwordField),
-    approval: request.submissionApproval ?? false,
+    approval: ((v) => (v ? v : false))(request.submissionApproval),
   };
   return requestImplicitAuthenticationSubmit(implicitRequest);
 }

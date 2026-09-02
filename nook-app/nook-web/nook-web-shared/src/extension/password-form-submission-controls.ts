@@ -147,9 +147,9 @@ export function boundedAuthenticationDestination(identity: string): string {
 export function rawOwnedFormIdentity(form: HTMLFormElement): string {
   return [
     form.id,
-    form.getAttribute("name") ?? "",
-    form.getAttribute("class") ?? "",
-    form.getAttribute("aria-label") ?? "",
+    ((v) => (v ? v : ""))(form.getAttribute("name")),
+    ((v) => (v ? v : ""))(form.getAttribute("class")),
+    ((v) => (v ? v : ""))(form.getAttribute("aria-label")),
   ]
     .filter(Boolean)
     .join(" ");
@@ -169,9 +169,9 @@ export function observedFormIdentity({
   return [
     owner.id,
     owner.className,
-    owner.getAttribute("name") ?? "",
-    owner.getAttribute("role") ?? "",
-    owner.getAttribute("aria-label") ?? "",
+    ((v) => (v ? v : ""))(owner.getAttribute("name")),
+    ((v) => (v ? v : ""))(owner.getAttribute("role")),
+    ((v) => (v ? v : ""))(owner.getAttribute("aria-label")),
   ]
     .filter(Boolean)
     .join(" ");
@@ -186,7 +186,7 @@ export function observedFormDestination(formScope: PasswordFormScope): string {
 function rawFormDestinationIdentity(form: HTMLFormElement): string {
   return form.hasAttribute("action")
     ? form.action
-    : (form.ownerDocument.defaultView?.location.href ?? "");
+    : (((v) => (v ? v : ""))(form.ownerDocument.defaultView?.location.href));
 }
 
 export function ownedFormDestinationIdentity(form: HTMLFormElement): string {
@@ -422,23 +422,23 @@ export function controlMachineIdentity(control: HTMLElement): string {
     control instanceof HTMLButtonElement || control instanceof HTMLInputElement
       ? `${control.name}=${control.value}`
       : "";
-  return `${control.id} ${namedValue} ${control.getAttribute("class") ?? ""}`;
+  return `${control.id} ${namedValue} ${((v) => (v ? v : ""))(control.getAttribute("class"))}`;
 }
 
 export function controlLabel(control: HTMLElement): string {
-  const labelledBy = (control.getAttribute("aria-labelledby") ?? "")
+  const labelledBy = (((v) => (v ? v : ""))(control.getAttribute("aria-labelledby")))
     .split(/\s+/u)
     .filter(Boolean)
     .flatMap((id) => {
       const label = control.ownerDocument.getElementById(id);
-      return label ? [label.textContent ?? ""] : [];
+      return label ? [((v) => (v ? v : ""))(label.textContent)] : [];
     })
     .join(" ");
   return [
-    control.textContent ?? "",
-    control.getAttribute("aria-label") ?? "",
-    control.getAttribute("title") ?? "",
-    control.getAttribute("alt") ?? "",
+    ((v) => (v ? v : ""))(control.textContent),
+    ((v) => (v ? v : ""))(control.getAttribute("aria-label")),
+    ((v) => (v ? v : ""))(control.getAttribute("title")),
+    ((v) => (v ? v : ""))(control.getAttribute("alt")),
     control instanceof HTMLInputElement
       ? control.value || control.getAttribute("alt") || "submit"
       : "",
@@ -661,7 +661,7 @@ function authenticationControlDestination(
 ): string {
   if (!control.form) {
     return boundedAuthenticationDestination(
-      control.ownerDocument.defaultView?.location.href ?? "",
+      ((v) => (v ? v : ""))(control.ownerDocument.defaultView?.location.href),
     );
   }
   const request: AuthenticationRouteDestinationRequest = {
@@ -687,10 +687,10 @@ function canActivateAuthenticationRouteControl(
       ? query.root
       : form;
   const formIdentity = [
-    identityContainer?.id ?? "",
-    identityContainer?.getAttribute("name") ?? "",
-    identityContainer?.getAttribute("class") ?? "",
-    identityContainer?.getAttribute("aria-label") ?? "",
+    ((v) => (v ? v : ""))(identityContainer?.id),
+    ((v) => (v ? v : ""))(identityContainer?.getAttribute("name")),
+    ((v) => (v ? v : ""))(identityContainer?.getAttribute("class")),
+    ((v) => (v ? v : ""))(identityContainer?.getAttribute("aria-label")),
   ].join(" ");
   const destinationIdentity = authenticationControlDestination(control);
   const machineIdentity = controlMachineIdentity(control);
@@ -840,7 +840,7 @@ export function formHasRustClassifiableAdvanceControl(
       newPasswordFieldCount,
       oneTimeCodeFieldCount,
       semanticSubmitControlCount,
-      sourceOrigin: form.ownerDocument.defaultView?.location.origin ?? "",
+      sourceOrigin: ((v) => (v ? v : ""))(form.ownerDocument.defaultView?.location.origin),
       formIdentity: ownedFormIdentity(form),
       destinationIdentity: controlDestinationIdentity(destinationRequest),
       label: controlLabel(control),
@@ -853,7 +853,7 @@ export function formHasRustClassifiableAdvanceControl(
         observation.formIdentity,
         observation.destinationIdentity,
         observation.label,
-        observation.machineIdentity ?? "",
+        ((v) => (v ? v : ""))(observation.machineIdentity),
       ]) && authentication_advance_control_is_safe(observation)
     );
   });

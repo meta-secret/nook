@@ -43,16 +43,23 @@ function percentageField(field, numerator, denominator) {
 }
 
 function normalizeBuildRecord(record) {
-  const completedSteps = nonNegativeInteger(
-    record.completed_steps ?? record.NumCompletedSteps,
-  )
-  const cachedSteps = nonNegativeInteger(
-    record.cached_steps ?? record.NumCachedSteps,
-  )
+  const {
+    completed_steps: completedStepsRaw = record.NumCompletedSteps,
+    cached_steps: cachedStepsRaw = record.NumCachedSteps,
+    total_steps: totalStepsRaw = record.NumTotalSteps,
+    ref: refRaw = record.Ref,
+    name: nameRaw = record.Name,
+    status: statusRaw = record.Status,
+  } = record
+  const [ref = ''] = [refRaw]
+  const [name = ''] = [nameRaw]
+  const [status = ''] = [statusRaw]
+  const completedSteps = nonNegativeInteger(completedStepsRaw)
+  const cachedSteps = nonNegativeInteger(cachedStepsRaw)
   return {
-    ref: String(record.ref ?? record.Ref ?? ''),
-    name: String(record.name ?? record.Name ?? ''),
-    status: String(record.status ?? record.Status ?? '').toLowerCase(),
+    ref: String(ref),
+    name: String(name),
+    status: String(status).toLowerCase(),
     ...(record.created_at || record.StartedAt
       ? { started_at: record.created_at || record.StartedAt }
       : {}),
@@ -60,19 +67,21 @@ function normalizeBuildRecord(record) {
       ? { completed_at: record.completed_at || record.CompletedAt }
       : {}),
     completed_steps: completedSteps,
-    total_steps: nonNegativeInteger(record.total_steps ?? record.NumTotalSteps),
+    total_steps: nonNegativeInteger(totalStepsRaw),
     cached_steps: cachedSteps,
     ...percentageField('cache_hit_rate_percent', cachedSteps, completedSteps),
   }
 }
 
 function historyLogRef(ref) {
-  return String(ref).split('/').filter(Boolean).pop() ?? ''
+  const [historyRef = ''] = [String(ref).split('/').filter(Boolean).pop()]
+  return historyRef
 }
 
 function normalizeSccacheReport(report) {
+  const { stage = '' } = report
   const normalized = {
-    stage: String(report.stage ?? ''),
+    stage: String(stage),
     compile_requests: nonNegativeInteger(report.compile_requests),
     requests_executed: nonNegativeInteger(report.requests_executed),
     cache_hits: nonNegativeInteger(report.cache_hits),
@@ -142,18 +151,23 @@ function extractSccacheReports(events, seen = new Set()) {
     const markerAt = line.indexOf(SCCACHE_MARKER)
     if (markerAt === -1) return
     const payload = line.slice(markerAt + SCCACHE_MARKER.length).trim()
-    const identity = `${log.vertex ?? ''}:${log.timestamp ?? ''}:${payload}`
+    const { vertex = '', timestamp = '' } = log
+    const identity = `${vertex}:${timestamp}:${payload}`
     if (seen.has(identity)) return
     seen.add(identity)
     reports.push(normalizeSccacheReport(JSON.parse(payload)))
   }
 
   for (const event of events) {
-    for (const log of event.logs ?? []) {
-      const key = `${log.vertex ?? ''}`
-      const decoded = Buffer.from(log.data ?? '', 'base64').toString('utf8')
-      const lines = `${buffers.get(key) ?? ''}${decoded}`.split(/\r?\n/)
-      buffers.set(key, lines.pop() ?? '')
+    const { logs = [] } = event
+    for (const log of logs) {
+      const { vertex = '', data = '' } = log
+      const key = `${vertex}`
+      const decoded = Buffer.from(data, 'base64').toString('utf8')
+      const [buffer = ''] = [buffers.get(key)]
+      const lines = `${buffer}${decoded}`.split(/\r?\n/)
+      const [remainder = ''] = [lines.pop()]
+      buffers.set(key, remainder)
       for (const line of lines) inspectLine(line, log)
     }
   }
@@ -337,8 +351,8 @@ function validateTelemetryRecord(record, expected = {}) {
 async function collectTelemetry({
   baselineRefs,
   baselineWarnings = [],
-  job,
-  runId,
+  job = '',
+  runId = '',
   runAttempt,
   environment = process.env,
 }) {
@@ -371,9 +385,9 @@ async function collectTelemetry({
   return {
     schema_version: 1,
     github: {
-      run_id: String(runId ?? ''),
+      run_id: String(runId),
       run_attempt: nonNegativeInteger(runAttempt, 1),
-      job: String(job ?? ''),
+      job: String(job),
     },
     cache_backend: cacheBackendFromEnvironment(environment),
     sccache: summarizeSccache(reports),
@@ -443,9 +457,10 @@ async function main(arguments_ = process.argv.slice(2)) {
   const baseline = JSON.parse(
     fs.readFileSync(argumentValue(arguments_, '--baseline'), 'utf8'),
   )
+  const { refs: baselineRefs = [], warnings: baselineWarnings = [] } = baseline
   const record = await collectTelemetry({
-    baselineRefs: baseline.refs ?? [],
-    baselineWarnings: baseline.warnings ?? [],
+    baselineRefs,
+    baselineWarnings,
     job: process.env.GITHUB_JOB,
     runId: process.env.GITHUB_RUN_ID,
     runAttempt: process.env.GITHUB_RUN_ATTEMPT,

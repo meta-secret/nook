@@ -138,7 +138,7 @@ export async function addVaultPassword(
   password: string,
   options?: { expectedCount?: number },
 ) {
-  const expectedCount = options?.expectedCount ?? 1
+  const [expectedCount = 1] = [options?.expectedCount]
   await expandSettingsSection(page, 'unlock')
   await page.getByTestId('set-vault-password-btn').click()
   await page.getByTestId('vault-password-label').fill(label)
@@ -190,10 +190,10 @@ export async function waitForStableLocalVaultState(
     stableReads?: number
   },
 ): Promise<VaultYamlSnapshot> {
-  const timeoutMs = options?.timeoutMs ?? ENROLLMENT_UNLOCK_TIMEOUT_MS
+  const [timeoutMs = ENROLLMENT_UNLOCK_TIMEOUT_MS] = [options?.timeoutMs]
   // IndexedDB read via page.evaluate — small round-trip, still much cheaper than network.
-  const intervalMs = options?.intervalMs ?? 150
-  const stableReads = options?.stableReads ?? 3
+  const [intervalMs = 150] = [options?.intervalMs]
+  const [stableReads = 3] = [options?.stableReads]
   const deadline = Date.now() + timeoutMs
   let consecutive = 0
   let lastError = 'local vault missing'
@@ -239,7 +239,7 @@ export async function expectVaultPasswordStatus(
   const status = page
     .getByTestId('vault-unlock-section')
     .getByTestId('vault-password-status')
-  const timeout = options?.timeout ?? UI_TIMEOUT_MS
+  const [timeout = UI_TIMEOUT_MS] = [options?.timeout]
   if (count === 1) {
     await expect(status).toContainText(/1 (password|item)/, { timeout })
     return
@@ -258,7 +258,7 @@ export async function expectNoVaultPasswords(
     .getByTestId('vault-unlock-section')
     .getByTestId('vault-password-status')
   await expect(status).toContainText('None', {
-    timeout: options?.timeout ?? UI_TIMEOUT_MS,
+    timeout: ((...[v = UI_TIMEOUT_MS]) => v)(options?.timeout),
   })
 }
 
@@ -292,7 +292,7 @@ export async function submitOnboardEnrollmentCode(
   })
   if (await error.isVisible()) {
     throw new Error(
-      `Onboard enrollment failed: ${(await error.textContent())?.trim() ?? 'unknown error'}`,
+      `Onboard enrollment failed: ${((...[v = 'unknown error']) => v)((await error.textContent())?.trim())}`,
     )
   }
   await expect(linkInput).toBeVisible({
@@ -642,7 +642,7 @@ export async function unlockVaultOnLogin(
       await selectLoginUnlockMethod(page, UnlockMethod.Password)
       await expect(
         page.getByTestId('login-password-entry-list').getByRole('button', {
-          name: opts.entryLabel ?? /.+/,
+          name: ((...[v = /.+/]) => v)(opts.entryLabel),
         }),
       ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
       if (opts.entryLabel) {

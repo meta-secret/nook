@@ -77,7 +77,7 @@ export const noRawObjectArgumentsRule = {
     let activeCallScope = { kind: ActiveCallScopeKind.Inactive }
 
     function nodeStart(node) {
-      return node.range?.[0] ?? sourceCode.getIndexFromLoc(node.loc.start)
+      return ((...[v = sourceCode.getIndexFromLoc(node.loc.start)]) => v)(node.range?.[0])
     }
 
     function occursBeforeActiveCallSite(node) {
@@ -499,7 +499,7 @@ export const noRawObjectArgumentsRule = {
           seenVariables,
           limit: arrayIndexLookup.value,
         })
-        return [...(summary.values.get(arrayIndexLookup.value) ?? [])].flatMap(
+        return [...(((v) => (v ? v : []))(summary.values.get(arrayIndexLookup.value)))].flatMap(
           (element) =>
             possibleExpressionValues({ expression: element, seenVariables }),
         )

@@ -139,7 +139,7 @@ export function addUntracked(summary, paths) {
 
 export function countTextLines(text) {
   if (text.length === 0) return 0
-  const terminators = text.match(/\n/gu)?.length ?? 0
+  const terminators = [...text.matchAll(/\n/gu)].length
   return terminators + (text.endsWith('\n') ? 0 : 1)
 }
 

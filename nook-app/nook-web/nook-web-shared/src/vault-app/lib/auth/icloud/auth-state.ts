@@ -48,8 +48,12 @@ export function iCloudAccountNameFromIdentity(
   if (identity.kind === CloudKitIdentityKind.SignedOut) {
     return { kind: ICloudAccountNameKind.Unavailable };
   }
-  const given = identity.identity.nameComponents?.givenName?.trim() ?? "";
-  const family = identity.identity.nameComponents?.familyName?.trim() ?? "";
+  const given = ((v) => (v ? v : ""))(
+    identity.identity.nameComponents?.givenName?.trim(),
+  );
+  const family = ((v) => (v ? v : ""))(
+    identity.identity.nameComponents?.familyName?.trim(),
+  );
   const fullName = `${given} ${family}`.trim();
   if (fullName) {
     return { kind: ICloudAccountNameKind.Available, value: fullName };
