@@ -466,13 +466,6 @@ function countTestInventory(args: CountTestInventoryArgs): UntrustedYamlMap {
   };
 }
 
-if (import.meta.main) {
-  const headSha = process.env.GITHUB_SHA ?? '';
-  process.stdout.write(
-    JSON.stringify(countTestInventory({ repoRoot: process.cwd(), headSha })),
-  );
-}
-
 type CountNextestArgs = {
   readonly repoRoot: string;
   readonly filter: string;
@@ -562,6 +555,13 @@ function inventoryCommandFailure(args: InventoryFailure): never {
     code: LoomFailureCode.CommandFailed,
     text: `${args.name} failed with exit ${args.result.exitCode}: ${detail}`,
   });
+}
+
+if (import.meta.main) {
+  const headSha = process.env.GITHUB_SHA || '';
+  process.stdout.write(
+    JSON.stringify(countTestInventory({ repoRoot: process.cwd(), headSha })),
+  );
 }
 
 type AgentStatisticsDurationEntries = UntrustedYamlMap[];

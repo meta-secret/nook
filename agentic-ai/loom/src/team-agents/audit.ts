@@ -439,11 +439,11 @@ function appendAuthoritySentences(
       )
       .map((clause) => clause.trim())
       .filter((clause) => clause !== '');
-    const actor = AUTHORITY_ACTOR.exec(clauses[0] ?? '')?.[0] ?? false;
+    const actorMatch = AUTHORITY_ACTOR.exec(clauses.join(' '));
     request.statements.push(
       ...clauses.map((clause, index) =>
-        index > 0 && actor && ELLIPTICAL_AUTHORITY_DIRECTION.test(clause)
-          ? `${actor} ${clause}`
+        index > 0 && actorMatch && ELLIPTICAL_AUTHORITY_DIRECTION.test(clause)
+          ? `${actorMatch[0]} ${clause}`
           : clause,
       ),
     );
