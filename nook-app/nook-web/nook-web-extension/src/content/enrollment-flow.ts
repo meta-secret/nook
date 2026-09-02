@@ -161,6 +161,7 @@ type ActiveEnrollmentCeremony =
       kind: ActiveEnrollmentCeremonyKind.Pending
       authorizationGeneration: number
       host: EnrollmentFlowHost
+      sensitiveMaterial: PendingEnrollmentSensitiveMaterial
     }
   | {
       kind:
@@ -176,12 +177,21 @@ let activeEnrollmentCeremony: ActiveEnrollmentCeremony = {
   kind: ActiveEnrollmentCeremonyKind.Idle,
 }
 
-function beginActiveEnrollmentCeremony(host: EnrollmentFlowHost): number {
+type BeginActiveEnrollmentCeremonyArgs = {
+  host: EnrollmentFlowHost
+  sensitiveMaterial: PendingEnrollmentSensitiveMaterial
+}
+
+export function beginActiveEnrollmentCeremony({
+  host,
+  sensitiveMaterial,
+}: BeginActiveEnrollmentCeremonyArgs): number {
   enrollmentAuthorizationGeneration += 1
   activeEnrollmentCeremony = {
     kind: ActiveEnrollmentCeremonyKind.Pending,
     authorizationGeneration: enrollmentAuthorizationGeneration,
     host,
+    sensitiveMaterial,
   }
   return enrollmentAuthorizationGeneration
 }
@@ -199,7 +209,7 @@ type AssignStagedEnrollmentCeremonyArgs = {
   stageId: string
 }
 
-function assignStagedEnrollmentCeremony({
+export function assignStagedEnrollmentCeremony({
   authorizationGeneration,
   host,
   stageId,
@@ -247,6 +257,7 @@ export async function cancelActiveEnrollmentCeremony(): Promise<boolean> {
   }
   if (ceremony.kind === ActiveEnrollmentCeremonyKind.Pending) {
     enrollmentAuthorizationGeneration += 1
+    clearPendingEnrollmentSensitiveMaterial(ceremony.sensitiveMaterial)
     activeEnrollmentCeremony = { kind: ActiveEnrollmentCeremonyKind.Idle }
     return true
   }
@@ -428,14 +439,46 @@ type BeginEnrollmentCeremonyArgs = {
   candidate: DecodedOtpauthCandidate
 }
 
-async function beginEnrollmentCeremony({
+type PendingEnrollmentSensitiveMaterial = {
+  uri: { value: string }
+  payload: { otpauthUri: string }
+  candidate: DecodedOtpauthCandidate
+}
+
+function clearPendingEnrollmentSensitiveMaterial(
+  material: PendingEnrollmentSensitiveMaterial,
+): void {
+  material.uri.value = ''
+  material.payload.otpauthUri = ''
+  clearOtpauthCandidate(material.candidate)
+}
+
+export async function beginEnrollmentCeremony({
   host,
   section,
   vaultStoreId,
   otpauthUri,
   candidate,
 }: BeginEnrollmentCeremonyArgs): Promise<void> {
-  const authorizationGeneration = beginActiveEnrollmentCeremony(host)
+  const message: Parameters<
+    typeof host.sendAuthenticatorEnrollmentStageRuntimeMessage
+  >[0] = {
+    type: WebsiteAuthenticatorEnrollStageMessageType.NookWebsiteAuthenticatorEnrollStage,
+    payload: {
+      origin: location.origin,
+      vaultStoreId,
+      otpauthUri: otpauthUri.value,
+    },
+  }
+  const beginArgs: BeginActiveEnrollmentCeremonyArgs = {
+    host,
+    sensitiveMaterial: {
+      uri: otpauthUri,
+      payload: message.payload,
+      candidate,
+    },
+  }
+  const authorizationGeneration = beginActiveEnrollmentCeremony(beginArgs)
   holdEnrollmentWidgetAfterSave = false
   const nookTypedArgs0_8: Parameters<typeof setHostDescription>[0] = {
     host,
@@ -456,20 +499,9 @@ async function beginEnrollmentCeremony({
     callbacks: enrollmentEvidenceCallbacks(nookTypedArgs0_9),
   }
   beginEnrollmentEvidenceWatch(nookTypedArgs1_0)
-  const message: Parameters<
-    typeof host.sendAuthenticatorEnrollmentStageRuntimeMessage
-  >[0] = {
-    type: WebsiteAuthenticatorEnrollStageMessageType.NookWebsiteAuthenticatorEnrollStage,
-    payload: {
-      origin: location.origin,
-      vaultStoreId,
-      otpauthUri: otpauthUri.value,
-    },
-  }
   const stageDelivery =
     await host.sendAuthenticatorEnrollmentStageRuntimeMessage(message)
-  clearOtpauthUri(otpauthUri)
-  clearCandidate(candidate)
+  clearPendingEnrollmentSensitiveMaterial(beginArgs.sensitiveMaterial)
   if (!enrollmentCeremonyIsCurrent(authorizationGeneration)) {
     if (
       stageDelivery.kind === RuntimeMessageDeliveryKind.Delivered &&
@@ -578,16 +610,6 @@ async function beginEnrollmentCeremony({
   host.setBusy(false)
 }
 
-type ClearOtpauthUriArgs = { value: string }
-
-function clearOtpauthUri(uri: ClearOtpauthUriArgs): void {
-  uri.value = ''
-}
-
-function clearCandidate(candidate: DecodedOtpauthCandidate): void {
-  clearOtpauthCandidate(candidate)
-}
-
 function unavailableMessage(host: EnrollmentFlowHost): string {
   return host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetConnectVault)
 }
@@ -642,8 +664,8 @@ async function showQrPreview({
       }
       setHostDescription(nookTypedArgs0_20)
       renderEnrollmentRetryActions(host)
-      clearOtpauthUri(otpauthUri)
-      clearCandidate(candidate)
+      otpauthUri.value = ''
+      clearOtpauthCandidate(candidate)
       return
     }
     const { response } = delivery
@@ -655,8 +677,8 @@ async function showQrPreview({
       }
       setHostDescription(nookTypedArgs0_22)
       renderEnrollmentRetryActions(host)
-      clearOtpauthUri(otpauthUri)
-      clearCandidate(candidate)
+      otpauthUri.value = ''
+      clearOtpauthCandidate(candidate)
       return
     }
 
@@ -708,8 +730,8 @@ async function showQrPreview({
       labelKey: BROWSER_MESSAGE_KEYS.WidgetEnrollCancel,
       onClick: (event) => {
         if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
-        clearOtpauthUri(otpauthUri)
-        clearCandidate(candidate)
+        otpauthUri.value = ''
+        clearOtpauthCandidate(candidate)
         requestFreshEnrollmentActions(host)
       },
     }
@@ -769,7 +791,7 @@ function showQrCandidatePicker({
     labelKey: BROWSER_MESSAGE_KEYS.WidgetEnrollCancel,
     onClick: (event) => {
       if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
-      candidates.forEach((candidate) => clearCandidate(candidate))
+      candidates.forEach((candidate) => clearOtpauthCandidate(candidate))
       requestFreshEnrollmentActions(host)
     },
   }

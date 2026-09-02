@@ -36,7 +36,8 @@ export function removeScannedWidget(): void {
 
 async function clearAuthenticationSurface(): Promise<void> {
   const dismissal = dismissPendingSaveOffer()
-  removeScannedWidget()
+  cancelPendingAuthenticatorPickerRequest()
+  cancelPendingLoginPickerRequest()
   await dismissal
 }
 
@@ -56,10 +57,13 @@ export const routeAutofillMessage: AutofillMessageListener =
     ) {
       scanState.sequence += 1
       widgetState.busy = false
-      void Promise.all([
-        clearAuthenticationSurface(),
-        cancelActiveEnrollmentCeremony(),
-      ])
+      const enrollmentCleanup = cancelActiveEnrollmentCeremony().then(
+        (enrollmentCanceled) => {
+          if (enrollmentCanceled) removeWidget()
+          return enrollmentCanceled
+        },
+      )
+      void Promise.all([clearAuthenticationSurface(), enrollmentCleanup])
         .then(([, enrollmentCanceled]) => {
           if (!enrollmentCanceled) {
             const response: Parameters<typeof sendResponse>[0] = { ok: false }

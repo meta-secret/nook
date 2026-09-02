@@ -7,6 +7,8 @@ import type {
   WebsiteLoginSaveOfferView,
 } from '../src/lib/login-save-messages'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
+import type { DecodedOtpauthCandidate } from '../src/lib/page-qr-capture'
+import type { EnrollmentFlowHost } from '../src/content/enrollment-flow'
 
 await companionWasmReady
 
@@ -84,8 +86,20 @@ Object.assign(globalThis, {
       sendMessage,
     },
   },
-  location: { origin: 'https://login.example.test' },
-  window: { clearTimeout: mock(() => {}) },
+  document: { documentElement: {} },
+  location: {
+    origin: 'https://login.example.test',
+    pathname: '/enroll',
+  },
+  MutationObserver: class {
+    observe(): void {}
+    disconnect(): void {}
+  },
+  window: {
+    clearInterval: mock(() => {}),
+    clearTimeout: mock(() => {}),
+    setInterval: mock(() => 1),
+  },
 })
 
 type RefreshResponse = { ok: true } | { ok: false }
@@ -188,10 +202,11 @@ test('refresh preserves dismissal while clearing stale surface state', async () 
 
   expect(widgetState.dismissed).toBe(true)
   expect(widgetState.busy).toBe(false)
-  expect(widgetState.host.kind).toBe(WidgetHostKind.Detached)
+  expect(widgetState.host.kind).toBe(WidgetHostKind.Attached)
   expect(schedule).not.toHaveBeenCalled()
   expect(sendResponse).not.toHaveBeenCalled()
   await expect(responseCapture.response).resolves.toEqual({ ok: true })
+  expect(widgetState.host.kind).toBe(WidgetHostKind.Detached)
   expect(saveOfferState.watch.kind).toBe(SavePageWatchKind.Idle)
   expect(saveOfferState.dismissedOfferIds.has(staleOfferId)).toBe(true)
   expect(sendMessage).toHaveBeenCalledWith(
@@ -304,4 +319,97 @@ test('refresh dismisses an in-flight save offer before rescanning', async () => 
     expect.any(Function),
   )
   expect(schedule).toHaveBeenCalledOnce()
+})
+
+test('refresh retains staged enrollment UI when dismissal fails', async () => {
+  const {
+    assignStagedEnrollmentCeremony,
+    beginActiveEnrollmentCeremony,
+    cancelActiveEnrollmentCeremony,
+  } = await import('../src/content/enrollment-flow')
+  const { routeAutofillMessage, removeScannedWidget } =
+    await import('../src/content/autofill/message-router')
+  const { scanState, widgetState } =
+    await import('../src/content/autofill/state')
+  let dismissalAccepted = false
+  const description = { textContent: 'Enrollment retry available' }
+  const host = {
+    description,
+    sendAuthenticatorEnrollmentDismissRuntimeMessage: async () =>
+      dismissalAccepted,
+  } as EnrollmentFlowHost
+  const sensitiveMaterial = {
+    uri: { value: '' },
+    payload: { otpauthUri: '' },
+    candidate: { sourceLabel: '', otpauthUri: '' },
+  }
+  const generation = beginActiveEnrollmentCeremony({
+    host,
+    sensitiveMaterial,
+  })
+  expect(
+    assignStagedEnrollmentCeremony({
+      authorizationGeneration: generation,
+      host,
+      stageId: 'stage-refresh-dismissal',
+    }),
+  ).toBe(true)
+  const remove = mock(() => {})
+  widgetState.attachHost({ remove } as unknown as HTMLElement)
+  const schedule = mock(() => {})
+  scanState.schedule = schedule
+  const responseCapture = captureRefreshResponse()
+
+  routeAutofillMessage(
+    { type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces },
+    { id: 'nook-extension' },
+    responseCapture.sendResponse,
+  )
+
+  await expect(responseCapture.response).resolves.toEqual({ ok: false })
+  expect(remove).not.toHaveBeenCalled()
+  expect(description.textContent).toBe('Enrollment retry available')
+  expect(schedule).not.toHaveBeenCalled()
+  dismissalAccepted = true
+  expect(await cancelActiveEnrollmentCeremony()).toBe(true)
+  removeScannedWidget()
+})
+
+test('pending enrollment cancellation scrubs every URI copy immediately', async () => {
+  const { beginEnrollmentCeremony, cancelActiveEnrollmentCeremony } =
+    await import('../src/content/enrollment-flow')
+  const uri = { value: 'otpauth://pending-secret' }
+  const candidate: DecodedOtpauthCandidate = {
+    sourceLabel: 'QR',
+    otpauthUri: uri.value,
+  }
+  const neverSettles = new Promise<void>(() => {})
+  const outboundMessages: Parameters<
+    EnrollmentFlowHost['sendAuthenticatorEnrollmentStageRuntimeMessage']
+  >[0][] = []
+  const host = {
+    description: { textContent: '' },
+    translatedMessage: () => 'Staging enrollment',
+    sendAuthenticatorEnrollmentStageRuntimeMessage: (
+      message: (typeof outboundMessages)[number],
+    ) => {
+      outboundMessages.push(message)
+      return neverSettles
+    },
+  } as unknown as EnrollmentFlowHost
+  void beginEnrollmentCeremony({
+    host,
+    section: {} as HTMLElement,
+    vaultStoreId: 'vault-pending',
+    otpauthUri: uri,
+    candidate,
+  })
+  expect(outboundMessages).toHaveLength(1)
+  expect(outboundMessages[0]?.payload.otpauthUri).toBe(
+    'otpauth://pending-secret',
+  )
+  expect(await cancelActiveEnrollmentCeremony()).toBe(true)
+  expect(uri.value).toBe('')
+  expect(outboundMessages[0]?.payload.otpauthUri).toBe('')
+  expect(candidate.otpauthUri).toBe('')
 })
