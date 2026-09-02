@@ -83,10 +83,8 @@ data:
               type: RuntimeDefault
           resources:
             requests:
-              cpu: 500m
               memory: 1Gi
               ephemeral-storage: 4Gi
             limits:
-              cpu: "4"
               memory: 6Gi
               ephemeral-storage: 32Gi

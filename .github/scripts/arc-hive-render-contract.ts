@@ -35,6 +35,25 @@ interface HiveValues {
   };
 }
 
+function assertCpuUnconstrained(
+  container: HiveInitContainer | HiveContainer,
+): void {
+  const resources = container.resources;
+  if (!resources) {
+    throw new Error(
+      `Hive ARC ${container.name} must retain its non-CPU resource envelope`,
+    );
+  }
+  if (
+    Object.keys(resources.requests ?? {}).includes("cpu") ||
+    Object.keys(resources.limits ?? {}).includes("cpu")
+  ) {
+    throw new Error(
+      `Hive ARC ${container.name} must not declare CPU requests or limits`,
+    );
+  }
+}
+
 interface HiveRenderContractInput {
   root: string;
 }
@@ -84,9 +103,23 @@ export async function assertHiveRenderContract(
     if (sidecars.has("container-runtime") || sidecars.has("buildkit")) {
       throw new Error("Hive ARC must use the persistent BuildKit service only");
     }
-    const hiveRunner = hivePod.containers.find((item) => item.name === "runner");
-    if (hiveRunner?.resources?.limits?.cpu !== "1") {
-      throw new Error("Hive ARC runner coordinator must retain one CPU");
+    const hiveRunner = hivePod.containers.find(
+      (item) => item.name === "runner",
+    );
+    if (!hiveRunner) {
+      throw new Error("Hive ARC must retain its runner container");
+    }
+    for (const container of [
+      ...hivePod.initContainers,
+      ...hivePod.containers,
+    ]) {
+      assertCpuUnconstrained(container);
+    }
+    if (
+      hiveRunner.resources?.requests?.memory !== "1Gi" ||
+      hiveRunner.resources.limits?.memory !== "1Gi"
+    ) {
+      throw new Error("Hive ARC runner must retain its memory envelope");
     }
     if (
       hiveRunner?.env?.some((item) =>
@@ -102,15 +135,17 @@ export async function assertHiveRenderContract(
     }
     const hiveTestRuntime = sidecars.get("hive-test-runtime");
     if (
-      hiveTestRuntime?.resources?.limits?.cpu !== "4" ||
+      hiveTestRuntime?.resources?.requests?.memory !== "512Mi" ||
       hiveTestRuntime.resources.limits?.memory !== "4Gi"
     ) {
-      throw new Error(
-        "Hive ARC test runtime must retain its 4 CPU and 4 GiB budget",
-      );
+      throw new Error("Hive ARC test runtime must retain its memory envelope");
     }
-    if (sidecars.get("neo4j")?.resources?.limits?.cpu !== "1") {
-      throw new Error("Hive ARC Neo4j must retain one CPU for integration tests");
+    const neo4j = sidecars.get("neo4j");
+    if (
+      neo4j?.resources?.requests?.memory !== "1Gi" ||
+      neo4j.resources.limits?.memory !== "2Gi"
+    ) {
+      throw new Error("Hive ARC Neo4j must retain its memory envelope");
     }
     if (
       !sidecars

@@ -62,8 +62,16 @@ class TextContract {
 }
 
 interface ResourceEnvelope {
-  requests?: { cpu?: string; memory?: string };
-  limits?: { cpu?: string; memory?: string };
+  requests?: {
+    cpu?: string;
+    memory?: string;
+    "ephemeral-storage"?: string;
+  };
+  limits?: {
+    cpu?: string;
+    memory?: string;
+    "ephemeral-storage"?: string;
+  };
 }
 
 type ArcEnvironmentVariable =
@@ -99,6 +107,27 @@ interface ArcValues {
   };
 }
 
+interface ArcContainerHook {
+  data: { "content.yaml": string };
+}
+
+interface ArcContainerPodTemplate {
+  spec: { initContainers: ArcContainer[]; containers: ArcContainer[] };
+}
+
+function assertCpuUnconstrained(container: ArcContainer, label: string): void {
+  const resources = container.resources;
+  if (!resources) {
+    return;
+  }
+  if (
+    Object.keys(resources.requests ?? {}).includes("cpu") ||
+    Object.keys(resources.limits ?? {}).includes("cpu")
+  ) {
+    throw new Error(`${label} must not declare CPU requests or limits`);
+  }
+}
+
 interface WorkflowJob {
   if?: string;
   "runs-on"?: string;
@@ -117,15 +146,19 @@ const runners = new TextContract({
   label: "ARC runner scale set",
   source: runnersSource,
 });
+const containerRunnersSource = await read(
+  "infra/k0s/manifests/arc/container-runner-scale-set-values.yaml",
+);
 const containerRunners = new TextContract({
   label: "ARC Kubernetes container scale set",
-  source: await read(
-    "infra/k0s/manifests/arc/container-runner-scale-set-values.yaml",
-  ),
+  source: containerRunnersSource,
 });
+const containerHookSource = await read(
+  "infra/k0s/manifests/arc/container-hook.yaml",
+);
 const containerHook = new TextContract({
   label: "ARC Kubernetes container hook",
-  source: await read("infra/k0s/manifests/arc/container-hook.yaml"),
+  source: containerHookSource,
 });
 const buildkit = new TextContract({
   label: "ARC persistent BuildKit",
@@ -219,9 +252,22 @@ if (
 ) {
   throw new Error("ARC must carry only the daemon-free Docker client init");
 }
+for (const container of [...pod.initContainers, ...pod.containers]) {
+  assertCpuUnconstrained(container, `general ARC ${container.name}`);
+}
+const dockerClientInit = pod.initContainers[0];
+if (
+  dockerClientInit?.resources?.requests?.memory !== "32Mi" ||
+  dockerClientInit.resources.limits?.memory !== "256Mi"
+) {
+  throw new Error("general ARC Docker client init must retain its memory envelope");
+}
 const runner = pod.containers.find((container) => container.name === "runner");
+if (!runner) {
+  throw new Error("general ARC must retain its runner container");
+}
 const runnerEnvironment = new Map(
-  runner?.env?.flatMap((item) =>
+  runner.env?.flatMap((item) =>
     "value" in item ? [[item.name, item.value]] : [],
   ) ?? [],
 );
@@ -231,7 +277,7 @@ if (
 ) {
   throw new Error("ARC runner must use its node-local BuildKit service");
 }
-const kubernetesNodeEnvironment = runner?.env?.find(
+const kubernetesNodeEnvironment = runner.env?.find(
   (item) => item.name === "KUBERNETES_NODE_NAME",
 );
 if (
@@ -244,11 +290,60 @@ if (
   );
 }
 if (
-  runner?.resources?.requests?.cpu !== "2" ||
-  runner.resources.limits?.cpu !== "4" ||
-  runner.resources.limits.memory !== "6Gi"
+  runner.resources?.requests?.memory !== "1Gi" ||
+  runner.resources.requests["ephemeral-storage"] !== "4Gi" ||
+  runner.resources.limits?.memory !== "6Gi" ||
+  runner.resources.limits["ephemeral-storage"] !== "32Gi"
 ) {
-  throw new Error("ARC runner must retain its 2-to-4 CPU and 6 GiB envelope");
+  throw new Error(
+    "general ARC runner must retain its memory and ephemeral-storage envelope",
+  );
+}
+
+const containerValues = Bun.YAML.parse(containerRunnersSource) as ArcValues;
+const containerRunner = containerValues.template.spec.containers.find(
+  (container) => container.name === "runner",
+);
+if (!containerRunner) {
+  throw new Error("container ARC must retain its runner coordinator");
+}
+assertCpuUnconstrained(containerRunner, "container ARC runner coordinator");
+if (
+  containerRunner.resources?.requests?.memory !== "256Mi" ||
+  containerRunner.resources.limits?.memory !== "1Gi"
+) {
+  throw new Error(
+    "container ARC runner coordinator must retain its memory envelope",
+  );
+}
+
+const containerHookManifest = Bun.YAML.parse(
+  containerHookSource,
+) as ArcContainerHook;
+const containerPodTemplate = Bun.YAML.parse(
+  containerHookManifest.data["content.yaml"],
+) as ArcContainerPodTemplate;
+for (const container of [
+  ...containerPodTemplate.spec.initContainers,
+  ...containerPodTemplate.spec.containers,
+]) {
+  assertCpuUnconstrained(container, `ARC job Pod ${container.name}`);
+}
+const jobContainer = containerPodTemplate.spec.containers.find(
+  (container) => container.name === "$job",
+);
+if (!jobContainer) {
+  throw new Error("ARC container hook must retain its job container");
+}
+if (
+  jobContainer.resources?.requests?.memory !== "1Gi" ||
+  jobContainer.resources.requests["ephemeral-storage"] !== "4Gi" ||
+  jobContainer.resources.limits?.memory !== "6Gi" ||
+  jobContainer.resources.limits["ephemeral-storage"] !== "32Gi"
+) {
+  throw new Error(
+    "ARC job container must retain its memory and ephemeral-storage envelope",
+  );
 }
 
 runners.requireAll([
@@ -301,7 +396,6 @@ containerHook.requireAll([
   "values: [primary]",
   "values: [secondary]",
   "values: [overflow]",
-  'cpu: "4"',
   "memory: 6Gi",
   "ephemeral-storage: 32Gi",
   'drop: ["ALL"]',
