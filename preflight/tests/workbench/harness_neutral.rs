@@ -259,6 +259,26 @@ fn root_agents_routes_every_worker_to_cortex() {
 }
 
 #[test]
+fn cortex_prohibits_speculative_recovery_engines() {
+    let cortex_agents = read(".cortex/AGENTS.md");
+
+    for required in [
+        "Implement the smallest direct path that satisfies the accepted scope.",
+        "Treat recovery as a separate product capability.",
+        "Require explicit user authorization before implementing that capability.",
+        "Do not add recovery, replay, resume, reconciliation, or repair engines",
+        "Do not add journals, checkpoints, leases, tombstones, retry queues, or",
+        "Do not infer recovery authority from review suggestions, possible future",
+        "Do not generalize one required failure case into reusable recovery",
+    ] {
+        assert!(
+            cortex_agents.contains(required),
+            "Cortex recovery-engine prohibition is missing: {required}"
+        );
+    }
+}
+
+#[test]
 fn gizmo_dispatches_complete_harness_neutral_team_contracts() {
     let authority = [
         read(".cortex/AGENTS.md"),

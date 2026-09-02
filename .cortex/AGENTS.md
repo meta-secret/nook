@@ -119,7 +119,8 @@ Workbench record, not another coordinator or worker. See the
     work itself.
   - Gizmo Prime must never approximate the work, take over the worker scope, or
     continue past that blocked scope.
-  - This is the [no-fallback rule](#no-fallback-behavior) for worker execution.
+  - This is the [no-fallback rule](#no-fallback-or-speculative-recovery) for
+    worker execution.
   - Separate Codex tasks, threads, cloud tasks, and ordinary external agents
     must not serve as delegation, communication, or handoff transport.
   - This ordinary-transport prohibition preserves the two trusted publisher
@@ -192,23 +193,41 @@ When a task requires a current base, it also verifies that the branch contains
 the current `origin/main`. A later push invalidates the earlier run as delivery
 evidence; dispatch the task again for the new head.
 
-## No fallback behavior
+## No fallback or speculative recovery
 
-Agent-authored fallback behavior is prohibited. This is a universal P1 rule.
+Agent-authored fallback behavior and speculative recovery machinery are
+prohibited. This is a universal P1 rule.
+
+### Required actions
+
+- Implement the smallest direct path that satisfies the accepted scope.
+- Keep every unsupported or failed state observable.
+- Fail closed when the required path cannot complete.
+- Treat recovery as a separate product capability.
+- Require explicit user authorization before implementing that capability.
+- Report a blocker when the required behavior cannot be implemented exactly.
+
+### Prohibited actions
 
 - Do not add an alternate execution path when the intended path is unavailable
   or fails.
 - Do not add compatibility branches, legacy branches, shims, or aliases.
+- Do not add recovery, replay, resume, reconciliation, or repair engines for
+  failures that are not part of the accepted scope.
+- Do not add journals, checkpoints, leases, tombstones, retry queues, or
+  lifecycle state machines to support speculative recovery.
+- Do not infer recovery authority from review suggestions, possible future
+  failures, autonomy, or general reliability goals.
+- Do not generalize one required failure case into reusable recovery
+  infrastructure.
 - Existing fallback behavior does not create an exception. Do not extend or
   duplicate it.
 - Lower-level Cortex guidance cannot authorize fallback behavior. Report the
   policy conflict and stop.
 - Do not silently degrade behavior or substitute a default result.
 - Do not catch a failure and continue as if the operation succeeded.
-- Keep every unsupported or failed state observable.
-- Fail closed when the required path cannot complete.
-- Report a blocker when the required behavior cannot be implemented exactly.
-  Do not approximate it with fallback functionality.
+- Do not approximate required behavior with fallback or recovery
+  functionality.
 
 ## Agent communication
 
