@@ -421,6 +421,10 @@ jobs:
             const localPath = `${process.env.GITHUB_WORKSPACE}/${process.env.WORKBENCH_PLAN_FILE}`
             const summaryPath = `${process.env.GITHUB_WORKSPACE}/${process.env.WORKBENCH_SUMMARY_FILE}`
             const secrets = [process.env.CURSOR_SECRET]
+            const claimedIssuePath = process.env.ISSUE_PATH.trim()
+            const claimedIssueTitle = process.env.ISSUE_TITLE.trim()
+            core.setOutput('issue_path', claimedIssuePath)
+            core.setOutput('issue_title', claimedIssueTitle)
             if (!fs.existsSync(localPath)) {
               if (!fs.existsSync(summaryPath)) {
                 core.setFailed('Planning produced neither a plan nor a planning blocker.')
@@ -455,17 +459,16 @@ jobs:
             }
             const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
             const gizmoNamePattern = new RegExp(
-              `^1\\. Gizmo ID: ${escapeRegExp(currentGizmoId)}; Gizmo name: ([^;\\r\\n]+);`,
-              'm',
+              `^1\\.\\s+Gizmo ID:\\s*${escapeRegExp(currentGizmoId)}\\s*;\\s*Gizmo name:\\s*(.+?)\\s*;\\s*Predecessor Gizmo ID:`,
+              'im',
             )
             const gizmoName = gizmoNamePattern.exec(candidate)?.[1].trim() || ''
-            const trustedTitle = process.env.ISSUE_PATH.trim()
-              ? process.env.ISSUE_TITLE.trim()
-              : gizmoName
-            if (!/^[\p{L}\p{N}][\p{L}\p{N} .,:()'’\/&+_-]{2,119}$/u.test(trustedTitle)) {
+            const trustedTitle = claimedIssuePath ? claimedIssueTitle : gizmoName
+            if (trustedTitle.length < 3 || trustedTitle.length > 120 || /[\u0000-\u001f\u007f]/u.test(trustedTitle)) {
               core.setFailed('Validated task context is missing a safe capability-oriented PR title.')
               return
             }
+            const markdownTitle = trustedTitle.replace(/([\\`*_[\]<>])/g, '\\$1')
             const bindingRejection = validateAgentRecord(candidate, 'plan', secrets, sourceTask, {
               assignedGizmoId: currentGizmoId,
             })
@@ -474,7 +477,7 @@ jobs:
               return
             }
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
-            let issuePath = process.env.ISSUE_PATH.trim()
+            let issuePath = claimedIssuePath
             if (!issuePath) {
               issuePath = `issues/unplanned/run-${context.runId}.md`
               const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
@@ -493,7 +496,7 @@ jobs:
                 `gizmo_id: ${currentGizmoId}`,
                 '---',
                 '',
-                `# ${trustedTitle}`,
+                `# ${markdownTitle}`,
                 '',
                 '## Context',
                 '',
@@ -501,7 +504,7 @@ jobs:
                 '',
                 '## Outcome',
                 '',
-                `Deliver ${trustedTitle} through one bounded Nook pull request.`,
+                `Deliver ${markdownTitle} through one bounded Nook pull request.`,
                 '',
                 '## Scope',
                 '',
@@ -594,12 +597,12 @@ jobs:
             const prBody = [
               '## Summary',
               '',
-              `Automated implementation of ${trustedTitle}.`,
+              `Automated implementation of ${markdownTitle}.`,
               '',
               '## Agent-task provenance',
               '',
               '- Harness: GitHub Actions `Agent implement`',
-              `- Task: ${trustedTitle}`,
+              `- Task: ${markdownTitle}`,
               `- Opaque task ID: [workflow run ${context.runId}](${runUrl})`,
               `- Gizmo ID: \`${currentGizmoId}\``,
               '',
@@ -892,6 +895,37 @@ jobs:
               message: `worklog: agent run ${context.runId}`,
               content: Buffer.from(worklog).toString('base64'),
             })
+            const worklogUrl = `https://github.com/${owner}/${repo}/blob/main/${worklogPath}`
+            if (pull) {
+              const { data: currentPull } = await github.rest.pulls.get({
+                ...context.repo,
+                pull_number: pull.number,
+              })
+              const currentPrBody = currentPull.body || ''
+              const issueUrl = `https://github.com/${owner}/${repo}/blob/main/${issuePath}`
+              const planUrl = `https://github.com/${owner}/${repo}/blob/main/${process.env.PLAN_PATH}`
+              if (
+                !currentPrBody.includes('## Agent-task provenance') ||
+                !currentPrBody.includes('## Workbench authority') ||
+                !currentPrBody.includes(issueUrl) ||
+                !currentPrBody.includes(planUrl)
+              ) {
+                core.setFailed(`PR #${pull.number} is missing required trusted publication metadata`)
+                return
+              }
+              if (!currentPrBody.includes(worklogUrl)) {
+                const worklogLine = `- Immutable worklog: [\`${worklogPath}\`](${worklogUrl})`
+                const updatedPrBody = currentPrBody.replace(
+                  /^## Workbench authority\s*$/m,
+                  (heading) => `${heading}\n\n${worklogLine}`,
+                )
+                await github.rest.pulls.update({
+                  ...context.repo,
+                  pull_number: pull.number,
+                  body: updatedPrBody,
+                })
+              }
+            }
 
             if (!issuePath) return
             const { data } = await github.rest.repos.getContent({ owner, repo, path: issuePath, ref: 'main' })

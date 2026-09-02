@@ -277,6 +277,8 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
 #[test]
 fn agent_implementation_publishes_prs_with_trusted_workbench_metadata() -> anyhow::Result<()> {
     let workflow = read(".github/workflows/agent-implement.yml");
+    let plan_prompt = read(".github/prompts/agent-plan.md");
+    let normalized_plan_prompt = plan_prompt.split_whitespace().collect::<Vec<_>>().join(" ");
 
     for required in [
         "must have a valid canonical gizmo_id before PR publication",
@@ -293,6 +295,10 @@ fn agent_implementation_publishes_prs_with_trusted_workbench_metadata() -> anyho
         "AGENT_PR_TITLE<<${delimiter}",
         "AGENT_PR_BODY<<${delimiter}",
         "ISSUE_PATH: ${{ steps.plan.outputs.issue_path }}",
+        "core.setOutput('issue_path', claimedIssuePath)",
+        "core.setOutput('issue_title', claimedIssueTitle)",
+        "Gizmo name:\\\\s*(.+?)\\\\s*;\\\\s*Predecessor Gizmo ID:",
+        "const worklogUrl = `https://github.com/${owner}/${repo}/blob/main/${worklogPath}`",
     ] {
         assert!(
             workflow.contains(required),
@@ -303,6 +309,25 @@ fn agent_implementation_publishes_prs_with_trusted_workbench_metadata() -> anyho
         !workflow.contains("title=\"Agent implement (run ${RUN_ID})\"")
             && !workflow.contains("Owned scope: manual prompt run"),
         "PR metadata must not publish generic or private manual-prompt context"
+    );
+    assert!(
+        workflow.contains("if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(assignedGizmoId))")
+            && normalized_plan_prompt.contains(
+                "When the task source is a focused Workbench issue, require canonical `gizmo_id` frontmatter."
+            )
+            && !normalized_plan_prompt.contains("Legacy standalone issues without `gizmo_id`"),
+        "missing, null, and invalid focused-issue Gizmo IDs must fail before claim"
+    );
+
+    let claimed_issue_output_position = workflow
+        .find("core.setOutput('issue_path', claimedIssuePath)")
+        .context("the plan step must retain the claimed issue path")?;
+    let planning_blocked_position = workflow
+        .find("core.setOutput('planning_blocked', 'true')")
+        .context("the plan step must report a validated planning blocker")?;
+    assert!(
+        claimed_issue_output_position < planning_blocked_position,
+        "claimed issue metadata must survive the planning-blocked return"
     );
 
     let manual_issue_position = workflow
@@ -317,11 +342,22 @@ fn agent_implementation_publishes_prs_with_trusted_workbench_metadata() -> anyho
     let delivery_position = workflow
         .find("Validate, commit, and publish implementation")
         .context("the workflow must retain its delivery step")?;
+    let worklog_publication_position = workflow
+        .find("path: worklogPath")
+        .context("the workflow must publish its immutable worklog")?;
+    let pr_worklog_update_position = workflow
+        .find("github.rest.pulls.update")
+        .context("the workflow must add the worklog URL to the PR body")?;
     assert!(
         manual_issue_position < plan_publication_position
             && plan_publication_position < pr_body_position
             && pr_body_position < delivery_position,
         "focused issue and immutable plan publication must precede PR metadata construction and delivery"
+    );
+    assert!(
+        worklog_publication_position < pr_worklog_update_position
+            && workflow.contains("const updatedPrBody = currentPrBody.replace("),
+        "the published worklog URL must extend the existing PR metadata without replacing it"
     );
     Ok(())
 }
