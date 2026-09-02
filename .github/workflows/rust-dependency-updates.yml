@@ -70,6 +70,10 @@ jobs:
       CI_FIX_LABEL: Rust dependency update
       CI_AGENT_TIMEOUT_MS: '10800000'
       RUST_DEPS_OUTDATED_REPORT: ${{ runner.temp }}/rust-deps-outdated.txt
+      WORKBENCH_REPOSITORY: meta-secret/nook-workbench
+      WORKBENCH_PLAN_FILE: .nook-workbench-plan.md
+      WORKBENCH_SUMMARY_FILE: .nook-workbench-worklog.md
+      CONTINUING_AGENT_OWNER: ${{ vars.NOOK_RUST_DEPENDENCY_CONTINUING_OWNER }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -90,21 +94,122 @@ jobs:
       - name: Expose Actions Node.js runtime
         uses: ./.github/actions/nook-node-setup
 
+      - name: Configure trusted dependency task
+        run: |
+          set -euo pipefail
+          started_at="$(date -u -Iseconds | sed 's/+00:00$/Z/')"
+          plan_path_name=TASK_PLAN_PATH
+          {
+            echo "AGENT_BRANCH=$FIX_BRANCH"
+            echo "AGENT_PROMPT=Refresh every outdated direct Rust dependency under the repository-owned dependency update contract."
+            echo "MAJOR_CHANGE_AUTHORIZED=false"
+            echo "TASK_FEATURE=rust-dependency-updates"
+            echo "TASK_PLAN_STARTED_AT=$started_at"
+            echo "$plan_path_name=plans/rust-dependency-updates/run-$GITHUB_RUN_ID-attempt-$GITHUB_RUN_ATTEMPT.md"
+          } >> "$GITHUB_ENV"
+
+      - name: Prepare isolated dependency worktree
+        run: |
+          set -euo pipefail
+          implementation_root="$RUNNER_TEMP/nook-rust-dependencies-${GITHUB_RUN_ID}"
+          test ! -e "$implementation_root"
+          git worktree add --detach "$implementation_root" HEAD
+          echo "IMPLEMENTATION_REPO_ROOT=$implementation_root" >> "$GITHUB_ENV"
+
+      - name: Prepare direct agent tooling
+        run: task ci-agent:prepare
+
+      - name: Run dependency task-planning agent
+        id: planning
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          CI_AGENT_PROMPT_FILE: .github/prompts/agent-plan.md
+          CI_AGENT_TIMEOUT_MS: '600000'
+          ASSIGNED_GIZMO_ID: ''
+          IMPLEMENTATION_REPO_ROOT: ${{ env.IMPLEMENTATION_REPO_ROOT }}
+        run: bash "$GITHUB_WORKSPACE/.github/scripts/ci-agent-plan.sh"
+
+      - name: Publish trusted dependency plans and PR metadata
+        id: plan
+        if: steps.planning.outcome == 'success'
+        uses: actions/github-script@v9
+        env:
+          ISSUE_PATH: ''
+          ISSUE_TITLE: ''
+          TASK_PLAN_PATH: ${{ env.TASK_PLAN_PATH }}
+          TASK_PLAN_STARTED_AT: ${{ env.TASK_PLAN_STARTED_AT }}
+          WORKBENCH_PLAN_FILE: ${{ env.WORKBENCH_PLAN_FILE }}
+          WORKBENCH_SUMMARY_FILE: ${{ env.WORKBENCH_SUMMARY_FILE }}
+          WORKBENCH_REPOSITORY: ${{ env.WORKBENCH_REPOSITORY }}
+          CURSOR_SECRET: ${{ secrets.CURSOR_API_KEY }}
+          ASSIGNED_GIZMO_ID: ''
+          CONTINUING_AGENT_OWNER: ${{ env.CONTINUING_AGENT_OWNER }}
+        with:
+          github-token: ${{ secrets.NOOK_GITHUB_PAT }}
+          retries: 3
+          script: |
+            const { publishTrustedPlan } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/trusted-pr-publisher.cjs`)
+            await publishTrustedPlan({ core, context, github })
+
+      - name: Materialize validated dependency plan
+        if: steps.plan.outcome == 'success' && steps.plan.outputs.planning_blocked != 'true'
+        env:
+          EXPECTED_PLAN_SHA256: ${{ steps.plan.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+          source_plan="$GITHUB_WORKSPACE/$WORKBENCH_PLAN_FILE"
+          implementation_plan="$IMPLEMENTATION_REPO_ROOT/$WORKBENCH_PLAN_FILE"
+          test -f "$source_plan" && test ! -L "$source_plan"
+          test "$(wc -c < "$source_plan")" -le 65536
+          test ! -e "$implementation_plan"
+          test "$(sha256sum "$source_plan" | cut -d' ' -f1)" = "$EXPECTED_PLAN_SHA256"
+          install -m 0444 "$source_plan" "$implementation_plan"
+          test "$(sha256sum "$implementation_plan" | cut -d' ' -f1)" = "$EXPECTED_PLAN_SHA256"
+          echo "VALIDATED_PLAN_SHA256=$EXPECTED_PLAN_SHA256" >> "$GITHUB_ENV"
+
       - name: Docker setup
+        if: steps.plan.outcome == 'success' && steps.plan.outputs.planning_blocked != 'true'
         uses: ./.github/actions/nook-docker-setup
         with:
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
       - name: Build split Rust/WASM and web images
+        if: steps.plan.outcome == 'success' && steps.plan.outputs.planning_blocked != 'true'
         run: task setup WASM_BUILD_MODE=prod
 
       - name: Run dependency-update agent directly on ARC
+        id: implement
+        if: steps.plan.outcome == 'success' && steps.plan.outputs.planning_blocked != 'true'
         env:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
           NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
-          REPO_ROOT: ${{ github.workspace }}
+          REPO_ROOT: ${{ env.IMPLEMENTATION_REPO_ROOT }}
           VITE_BASE: /
           WASM_BUILD_MODE: prod
           VITE_VAULT_SYNC_INTERVAL_MS: '1000'
         run: task ci-agent:fix
+
+      - name: Publish dependency Workbench result
+        if: always() && steps.plan.outcome == 'success'
+        uses: actions/github-script@v9
+        env:
+          AGENT_BRANCH: ${{ env.AGENT_BRANCH }}
+          AGENT_PROMPT: ${{ env.AGENT_PROMPT }}
+          IMPLEMENT_OUTCOME: ${{ steps.implement.outcome }}
+          BUDGET_BLOCKER_B64: ''
+          ISSUE_PATH: ${{ steps.plan.outputs.issue_path }}
+          ISSUE_TITLE: ${{ steps.plan.outputs.issue_title }}
+          PLAN_PATH: ${{ steps.plan.outputs.path }}
+          WORKBENCH_REPOSITORY: ${{ env.WORKBENCH_REPOSITORY }}
+          WORKBENCH_SUMMARY_FILE: ${{ env.WORKBENCH_SUMMARY_FILE }}
+          CURSOR_SECRET: ${{ secrets.CURSOR_API_KEY }}
+          NOOK_SECRET: ${{ secrets.NOOK_GITHUB_PAT }}
+          CONTINUING_AGENT_OWNER: ${{ env.CONTINUING_AGENT_OWNER }}
+          IMPLEMENTATION_REPO_ROOT: ${{ env.IMPLEMENTATION_REPO_ROOT }}
+        with:
+          github-token: ${{ secrets.NOOK_GITHUB_PAT }}
+          retries: 3
+          script: |
+            const { publishTrustedResult } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/trusted-pr-publisher.cjs`)
+            await publishTrustedResult({ core, context, github })
