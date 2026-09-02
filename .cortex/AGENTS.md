@@ -244,6 +244,10 @@ HH:mm:(<PR>):<ACTOR>:<ACTION> -> <description>
   - `FEATURE` covers new product functionality.
   - `BUILD` covers implementation of already selected functionality.
   - `REVIEW` covers review analysis and comment fixes.
+    - When addressing comments, briefly name what each actionable finding is
+      about.
+    - A count plus reply, resolution, or re-query mechanics is insufficient.
+    - Summarize the concern safely. Do not paste the full comment body.
   - `REFACTOR` covers structure changes without intended behavior changes.
   - `TEST` covers validation and test results.
   - `AI` covers agent coordination and AI-owned implementation.
