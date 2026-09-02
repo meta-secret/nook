@@ -261,6 +261,28 @@ describe('canonical Cortex team authority', () => {
     }
   });
 
+  test('audits affirmative grants inside Markdown blockquotes', async () => {
+    const fixtureRoot = await writableCortexAuthorityFixture();
+    try {
+      const authorityPath = join(fixtureRoot, '.cortex/AGENTS.md');
+      await writeFile(
+        authorityPath,
+        `${await readFile(authorityPath, 'utf8')}\n> Workers may run product tests locally.\n`,
+        'utf8',
+      );
+
+      const report = auditTeamAgents({ repoRoot: fixtureRoot });
+      expect(report.findings).toContainEqual({
+        code: 'invalid-cortex-team-authority',
+        path: '.cortex/AGENTS.md',
+        message:
+          'Canonical Cortex team authority grants prohibited local agent product execution: Workers may run product tests locally.',
+      });
+    } finally {
+      await rm(fixtureRoot, REMOVE_RECURSIVELY);
+    }
+  });
+
   test('does not mistake explicit local execution prohibitions for grants', async () => {
     const fixtureRoot = await writableCortexAuthorityFixture();
     try {
@@ -376,14 +398,17 @@ describe('canonical Cortex team authority', () => {
       const authorityPath = join(fixtureRoot, '.cortex/AGENTS.md');
       await writeFile(
         authorityPath,
-        `${await readFile(authorityPath, 'utf8')}\nAgents may run product tests locally, but must not run linting locally.\n`,
+        `${await readFile(authorityPath, 'utf8')}\nAgents may run product tests locally, but must not run linting locally.\nWorkers must not run tests locally, but may run lint locally.\n`,
         'utf8',
       );
 
       const report = auditTeamAgents({ repoRoot: fixtureRoot });
-      expect(report.findings).toHaveLength(1);
+      expect(report.findings).toHaveLength(2);
       expect(report.findings[0]?.message).toContain(
         'Agents may run product tests locally',
+      );
+      expect(report.findings[1]?.message).toContain(
+        'Workers may run lint locally',
       );
     } finally {
       await rm(fixtureRoot, REMOVE_RECURSIVELY);
@@ -461,6 +486,9 @@ describe('canonical Cortex team authority', () => {
       'delegation-visualization/scripts/src/cli.ts',
     );
     expect(renderSource).not.toContain('deps:');
+    expect(renderSource).not.toContain('requires:');
+    expect(renderSource).not.toContain('REQUEST_JSON');
+    expect(renderSource).not.toContain('env:');
     expect(renderSource).not.toContain('skills:install');
     expect(renderSource).not.toContain('bun install');
   });

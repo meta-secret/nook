@@ -123,4 +123,22 @@ describe('delegation visualization renderer', () => {
       ),
     ).toBe('gizmo\n└─ ai\n  └─ first task\n');
   });
+
+  test('preserves codec-admitted apostrophes through JSON transport', () => {
+    expect(
+      renderDelegationVisualizationJson(
+        JSON.stringify({
+          kind: DelegationVisualizationContractKind.Request,
+          tasks: [
+            {
+              id: 'first',
+              team: DelegationVisualizationTeam.Ai,
+              description: "author's task",
+              dependencies: [],
+            },
+          ],
+        }),
+      ),
+    ).toBe("gizmo\n└─ ai\n  └─ author's task\n");
+  });
 });

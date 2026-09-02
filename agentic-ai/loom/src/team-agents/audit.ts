@@ -91,6 +91,9 @@ const AGENT_COMMAND_DIRECTION =
 const IMPERATIVE_COMMAND_DIRECTION = /^(?:run|invoke|perform|execute)\s+/iu;
 const EXECUTION_LIST_DIRECTION =
   /^(?:agents?|team agents?|workers?|gizmo)\s+(?:may|can|must|shall|need to|are allowed to|is allowed to|are required to|is required to)(?:\s+ask\s+(?:an?\s+)?(?:team\s+)?(?:agent|worker)s?\s+to)?\s*:$/iu;
+const AUTHORITY_ACTOR = /^(?:agents?|team agents?|workers?|gizmo)\b/iu;
+const ELLIPTICAL_AUTHORITY_DIRECTION =
+  /^(?:may|can|must|shall|need to|are allowed to|is allowed to|are required to|is required to)\b/iu;
 const LOCAL_EXECUTION = /\b(?:local(?:ly)?|on (?:a|the) local host)\b/iu;
 const NEGATED_LOCAL_EXECUTION =
   /\b(?:never|not)\s+(?:(?:run|invoke|perform|execute|compile|test|lint|validate|build)\b[^;.!?]*\s+)?(?:locally|on (?:a|the) local host)(?:\s+(?:at all|under any circumstances))?(?=\s*[,.;!?]|$)/iu;
@@ -374,6 +377,13 @@ function inspectAuthorityStatements(
         });
       }
     }
+    if (node.type === 'blockquote') {
+      inspectAuthorityStatements({
+        nodes: node.children,
+        inheritedGrant: listGrant,
+        statements: request.statements,
+      });
+    }
     listGrant = false;
   }
 }
@@ -385,12 +395,20 @@ function executionListDirection(text: string): string | false {
 function appendAuthoritySentences(
   request: AppendAuthoritySentencesRequest,
 ): void {
-  request.statements.push(
-    ...request.text
-      .split(/(?<=[.!?])\s+|\s*;\s*|\s*,?\s+(?:but|yet)\s+/iu)
-      .map((statement) => statement.trim())
-      .filter((statement) => statement !== ''),
-  );
+  for (const sentence of request.text.split(/(?<=[.!?])\s+/u)) {
+    const clauses = sentence
+      .split(/\s*;\s*|\s*,?\s+(?:but|yet)\s+/iu)
+      .map((clause) => clause.trim())
+      .filter((clause) => clause !== '');
+    const actor = AUTHORITY_ACTOR.exec(clauses[0] ?? '')?.[0] ?? false;
+    request.statements.push(
+      ...clauses.map((clause, index) =>
+        index > 0 && actor && ELLIPTICAL_AUTHORITY_DIRECTION.test(clause)
+          ? `${actor} ${clause}`
+          : clause,
+      ),
+    );
+  }
 }
 
 function markdownText(node: Nodes): string {

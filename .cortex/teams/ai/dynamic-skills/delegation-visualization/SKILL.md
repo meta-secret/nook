@@ -44,15 +44,31 @@ Gizmo builds the bounded request as strict JSON:
 }
 ```
 
-Invoke the dependency-free presentation-control entrypoint:
+Send that JSON to the dependency-free presentation-control entrypoint on
+standard input. A quoted heredoc preserves every codec-admitted string,
+including apostrophes:
 
 ```bash
-task loom:delegation-visualization REQUEST_JSON='<strict-json>'
+task loom:delegation-visualization <<'JSON'
+{
+  "kind": "gizmo-delegation-visualization-v1",
+  "tasks": [
+    {
+      "id": "update-cortex",
+      "team": "ai",
+      "description": "author's Cortex update",
+      "dependencies": []
+    }
+  ]
+}
+JSON
 ```
 
 Publish only the returned `tree` as the plan hierarchy. Do not infer or edit
 the rendered output. This entrypoint imports only the co-located codec,
 application, and renderer. It does not install the executable-skill workspace.
+It does not accept the request through a shell argument or environment
+variable.
 
 ## Later discovery
 

@@ -119,9 +119,7 @@ test('accepts the dependency-free native delegation renderer', () => {
       {
         relativePath: workflow,
         references: [],
-        commands: [
-          'task loom:delegation-visualization REQUEST_JSON=strict-json',
-        ],
+        commands: ['task loom:delegation-visualization'],
       },
     ],
   };
@@ -172,9 +170,7 @@ test('requires an exact runtime command prefix boundary', () => {
       {
         relativePath: workflow,
         references: [],
-        commands: [
-          'task loom:delegation-visualization:unsafe REQUEST_JSON=strict-json',
-        ],
+        commands: ['task loom:delegation-visualization:unsafe'],
       },
     ],
   };
@@ -182,7 +178,7 @@ test('requires an exact runtime command prefix boundary', () => {
   expect(compileCortexContracts(compileRequest)).toEqual([
     expect.objectContaining({
       message:
-        'Cortex workflow names an unregistered runtime entrypoint: task loom:delegation-visualization:unsafe REQUEST_JSON=strict-json',
+        'Cortex workflow names an unregistered runtime entrypoint: task loom:delegation-visualization:unsafe',
     }),
     expect.objectContaining({
       message:

@@ -46,10 +46,6 @@ tasks:
     desc: >-
       Render one transient native Team Agent plan without installing project
       dependencies.
-    requires:
-      vars: [REQUEST_JSON]
-    env:
-      NOOK_DELEGATION_VISUALIZATION_REQUEST_JSON: '{{.REQUEST_JSON}}'
     cmds:
       - bun "{{.REPO_ROOT}}/.cortex/teams/ai/dynamic-skills/delegation-visualization/scripts/src/cli.ts"
 
