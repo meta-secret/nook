@@ -168,7 +168,8 @@ Agents never run product compilation or repository validation locally.
 - Gizmo uses `task pr:validate PR=<number>` for complete exact-head evidence.
 - A missing remote task is a blocker. Never substitute local execution.
 - Local activity is limited to read-only inspection, owner-authorized Git
-  operations, `git diff --check`, and required formatters.
+  operations, `git diff --check`, the read-only
+  `task loom:cortex-session-clean` check, and required formatters.
 - `task loom:pre-push` is the only local repository-validation exception.
 - The pre-push exception may prepare only its bounded Loom dependencies.
 - `task pr:validate`, `task pr:review`, and `task pr:ready` are local

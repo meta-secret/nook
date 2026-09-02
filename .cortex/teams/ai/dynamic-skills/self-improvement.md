@@ -180,10 +180,12 @@ head requires fresh exact-head hosted validation.
 
 1. Run required formatters and include their mutations in the owned scope.
 2. Remove optional `.cortex/.session/` notes.
-3. Return the coherent formatted handoff to Gizmo.
-4. Let Gizmo run `task loom:pre-push` and push the exact head.
-5. Run `task remote TASK_NAME=loom:verify`.
-6. Return any hosted finding to its owning team.
+3. Run the read-only `task loom:cortex-session-clean` check and confirm no
+   session file is tracked.
+4. Return the coherent formatted handoff to Gizmo.
+5. Let Gizmo run `task loom:pre-push` and push the exact head.
+6. Run `task remote TASK_NAME=loom:verify`.
+7. Return any hosted finding to its owning team.
 
 Do not run local product or repository gates or duplicate hosted validation in
 this focused sequence.
