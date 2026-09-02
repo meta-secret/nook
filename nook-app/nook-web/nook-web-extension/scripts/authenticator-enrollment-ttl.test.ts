@@ -5,6 +5,7 @@ let authorizeEnrollment: () => Promise<boolean> = async () => true
 let authorizationStarted = () => {}
 const authorizedStageIds: string[] = []
 const revokedStageIds: string[] = []
+const stagedCodeUris: string[] = []
 let authorizedOrigin = 'https://example.test'
 
 mock.module('../src/background/service-worker/account-pickers', () => ({
@@ -57,7 +58,10 @@ mock.module(
       return revokeAccepted
     },
     selectedAuthenticatorPageAcknowledged: async () => true,
-    stagedAuthenticatorCodeFromSession: async () => ({ ok: true }),
+    stagedAuthenticatorCodeFromSession: async (otpauthUri: string) => {
+      stagedCodeUris.push(otpauthUri)
+      return { ok: true }
+    },
   }),
 )
 
@@ -223,5 +227,77 @@ describe('staged authenticator enrollment expiry', () => {
     authorizedOrigin = origin
     releaseAuthorization()
     await staging
+  })
+
+  test('failed staged revoke retains the URI for retry', async () => {
+    authorizeEnrollment = async () => true
+    authorizationStarted = () => {}
+    revokeAccepted = false
+    stagedCodeUris.length = 0
+    const {
+      websiteAuthenticatorEnrollCode,
+      websiteAuthenticatorEnrollDismiss,
+      websiteAuthenticatorEnrollStage,
+    } =
+      await import('../src/background/service-worker/authenticator-operations')
+    const stageId = 'stage-revoke-retry'
+    await expect(
+      websiteAuthenticatorEnrollStage(stageArgs(stageId)),
+    ).resolves.toEqual({ ok: true, stageId })
+    await expect(
+      websiteAuthenticatorEnrollDismiss(dismissArgs(stageId)),
+    ).resolves.toEqual({
+      ok: false,
+      reason: 'authenticator-enroll-failed',
+    })
+    await websiteAuthenticatorEnrollCode({
+      message: { payload: { origin, stageId } },
+      sender,
+    })
+    expect(stagedCodeUris.at(-1)).toContain('secret=JBSWY3DPEHPK3PXP')
+    revokeAccepted = true
+    await expect(
+      websiteAuthenticatorEnrollDismiss(dismissArgs(stageId)),
+    ).resolves.toEqual({ ok: true })
+  })
+
+  test('full origin tombstones fail truthfully without blocking another origin', async () => {
+    revokeAccepted = false
+    const { websiteAuthenticatorEnrollDismiss } =
+      await import('../src/background/service-worker/authenticator-operations')
+    const capacityOrigin = 'https://capacity.example.test'
+    authorizedOrigin = capacityOrigin
+    for (let index = 0; index < 128; index += 1) {
+      await expect(
+        websiteAuthenticatorEnrollDismiss({
+          message: {
+            payload: { origin: capacityOrigin, stageId: `capacity-${index}` },
+          },
+          sender,
+        }),
+      ).resolves.toEqual({ ok: true })
+    }
+    await expect(
+      websiteAuthenticatorEnrollDismiss({
+        message: {
+          payload: { origin: capacityOrigin, stageId: 'capacity-overflow' },
+        },
+        sender,
+      }),
+    ).resolves.toEqual({
+      ok: false,
+      reason: 'authenticator-enroll-failed',
+    })
+    const isolatedOrigin = 'https://isolated.example.test'
+    authorizedOrigin = isolatedOrigin
+    await expect(
+      websiteAuthenticatorEnrollDismiss({
+        message: {
+          payload: { origin: isolatedOrigin, stageId: 'isolated-stage' },
+        },
+        sender,
+      }),
+    ).resolves.toEqual({ ok: true })
+    authorizedOrigin = origin
   })
 })

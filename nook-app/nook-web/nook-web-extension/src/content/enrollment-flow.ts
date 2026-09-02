@@ -439,19 +439,18 @@ type BeginEnrollmentCeremonyArgs = {
   otpauthUri: { value: string }
   candidate: DecodedOtpauthCandidate
 }
-
 type PendingEnrollmentSensitiveMaterial = {
   uri: { value: string }
+  payload: { otpauthUri: string }
   candidate: DecodedOtpauthCandidate
 }
-
 function clearPendingEnrollmentSensitiveMaterial(
   material: PendingEnrollmentSensitiveMaterial,
 ): void {
   material.uri.value = ''
+  material.payload.otpauthUri = ''
   clearOtpauthCandidate(material.candidate)
 }
-
 export async function beginEnrollmentCeremony({
   host,
   section,
@@ -476,6 +475,7 @@ export async function beginEnrollmentCeremony({
     stageId,
     sensitiveMaterial: {
       uri: otpauthUri,
+      payload: message.payload,
       candidate,
     },
   }
@@ -510,11 +510,7 @@ export async function beginEnrollmentCeremony({
         AuthenticatorEnrollmentStageResponseKind.Staged &&
       'stageId' in stageDelivery.response
     ) {
-      const dismissArgs: Parameters<typeof dismissStagedEnrollment>[0] = {
-        host,
-        stageId,
-      }
-      await dismissStagedEnrollment(dismissArgs)
+      await dismissStagedEnrollment({ host, stageId })
     }
     return
   }
@@ -531,6 +527,12 @@ export async function beginEnrollmentCeremony({
     return
   }
   const { response: stageResponse } = stageDelivery
+  if (
+    stageResponse.kind === AuthenticatorEnrollmentStageResponseKind.Staged &&
+    'stageId' in stageResponse &&
+    stageResponse.stageId !== stageId
+  )
+    await dismissStagedEnrollment({ host, stageId })
   if (
     stageResponse.kind !== AuthenticatorEnrollmentStageResponseKind.Staged ||
     !('stageId' in stageResponse) ||

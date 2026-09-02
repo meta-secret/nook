@@ -86,7 +86,7 @@ Object.assign(globalThis, {
       sendMessage,
     },
   },
-  document: { documentElement: {} },
+  document: { documentElement: {}, querySelectorAll: () => [] },
   location: {
     origin: 'https://login.example.test',
     pathname: '/enroll',
@@ -340,6 +340,7 @@ test('refresh retains staged enrollment UI when dismissal fails', async () => {
   } as EnrollmentFlowHost
   const sensitiveMaterial = {
     uri: { value: '' },
+    payload: { otpauthUri: '' },
     candidate: { sourceLabel: '', otpauthUri: '' },
   }
   const generation = beginActiveEnrollmentCeremony({
@@ -387,6 +388,7 @@ test('pending cancellation revokes the serialized stage and scrubs local URI', a
   const serializedMessages: Parameters<
     EnrollmentFlowHost['sendAuthenticatorEnrollmentStageRuntimeMessage']
   >[0][] = []
+  let contentPayload: { otpauthUri: string } | false = false
   const dismissalStageIds: string[] = []
   const host = {
     description: { textContent: '' },
@@ -394,6 +396,7 @@ test('pending cancellation revokes the serialized stage and scrubs local URI', a
     sendAuthenticatorEnrollmentStageRuntimeMessage: (
       message: (typeof serializedMessages)[number],
     ) => {
+      contentPayload = message.payload
       serializedMessages.push(structuredClone(message))
       return neverSettles
     },
@@ -420,8 +423,66 @@ test('pending cancellation revokes the serialized stage and scrubs local URI', a
   expect(await cancelActiveEnrollmentCeremony()).toBe(true)
   expect(uri.value).toBe('')
   expect(candidate.otpauthUri).toBe('')
+  expect(contentPayload && contentPayload.otpauthUri).toBe('')
   expect(dismissalStageIds).toEqual([serializedMessages[0]?.payload.stageId])
   expect(serializedMessages[0]?.payload.otpauthUri).toBe(
     'otpauth://pending-secret',
   )
+})
+
+test('mismatched stage response dismisses only the requested stage', async () => {
+  const { beginEnrollmentCeremony } =
+    await import('../src/content/enrollment-flow')
+  let requestedStageId = ''
+  let dismissedStageId = ''
+  let markDismissStarted = () => {}
+  let finishDismiss: (accepted: boolean) => void = () => {}
+  const dismissStarted = new Promise<void>((resolve) => {
+    markDismissStarted = resolve
+  })
+  const dismissGate = new Promise<boolean>((resolve) => {
+    finishDismiss = resolve
+  })
+  const host = {
+    description: { textContent: '' },
+    panel: { querySelector: () => undefined },
+    setBusy: () => {},
+    translatedMessage: () => 'Staging enrollment',
+    sendAuthenticatorEnrollmentStageRuntimeMessage: async (
+      message: Parameters<
+        EnrollmentFlowHost['sendAuthenticatorEnrollmentStageRuntimeMessage']
+      >[0],
+    ) => {
+      requestedStageId = message.payload.stageId
+      return {
+        kind: 'delivered',
+        response: { kind: 0, stageId: 'response-supplied-mismatch' },
+      }
+    },
+    sendAuthenticatorEnrollmentDismissRuntimeMessage: async (
+      message: Parameters<
+        EnrollmentFlowHost['sendAuthenticatorEnrollmentDismissRuntimeMessage']
+      >[0],
+    ) => {
+      dismissedStageId = message.payload.stageId
+      markDismissStarted()
+      return dismissGate
+    },
+  } as unknown as EnrollmentFlowHost
+  const enrollment = beginEnrollmentCeremony({
+    host,
+    section: {} as HTMLElement,
+    vaultStoreId: 'vault-mismatch',
+    otpauthUri: { value: 'otpauth://mismatch-secret' },
+    candidate: {
+      sourceLabel: 'QR',
+      otpauthUri: 'otpauth://mismatch-secret',
+    },
+  })
+  await dismissStarted
+  expect(dismissedStageId).toBe(requestedStageId)
+  expect(dismissedStageId).not.toBe('response-supplied-mismatch')
+  expect(host.description.textContent).toBe('Staging enrollment')
+  finishDismiss(true)
+  await enrollment
 })

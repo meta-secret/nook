@@ -507,6 +507,7 @@ type StagedAuthenticatorEnrollment = {
 }
 const STAGED_ENROLLMENT_TTL_MS = 5 * 60 * 1000
 const MAX_STAGED_ENROLLMENT_ENTRIES = 128
+const MAX_STAGED_ENROLLMENT_ORIGINS = 32
 const stagedAuthenticatorEnrollments = new Map<
   string,
   StagedAuthenticatorEnrollment
@@ -515,42 +516,39 @@ const pendingAuthenticatorEnrollments = new Map<
   string,
   { origin: string; uri: { value: string } }
 >()
-const revokedAuthenticatorEnrollments = new Map<string, number>()
-let enrollmentRevocationsSaturatedUntil = 0
-const enrollmentRevocationKey = (origin: string, stageId: string) =>
-  `${origin}\n${stageId}`
+const revokedAuthenticatorEnrollments = new Map<string, Map<string, number>>()
 
 function purgeExpiredEnrollmentRevocations(now = Date.now()): void {
-  for (const [key, expiresAt] of revokedAuthenticatorEnrollments) {
-    if (expiresAt <= now) revokedAuthenticatorEnrollments.delete(key)
+  for (const [origin, stages] of revokedAuthenticatorEnrollments) {
+    for (const [stageId, expiresAt] of stages) {
+      if (expiresAt <= now) stages.delete(stageId)
+    }
+    if (stages.size === 0) revokedAuthenticatorEnrollments.delete(origin)
   }
-  if (enrollmentRevocationsSaturatedUntil <= now)
-    enrollmentRevocationsSaturatedUntil = 0
 }
 
 function enrollmentStageIsRevoked(origin: string, stageId: string): boolean {
   const now = Date.now()
   purgeExpiredEnrollmentRevocations(now)
-  return (
-    enrollmentRevocationsSaturatedUntil > now ||
-    revokedAuthenticatorEnrollments.has(
-      enrollmentRevocationKey(origin, stageId),
-    )
-  )
+  return revokedAuthenticatorEnrollments.get(origin)?.has(stageId) === true
 }
 
-function revokeEnrollmentStage(origin: string, stageId: string): void {
+function revokeEnrollmentStage(origin: string, stageId: string): boolean {
   const now = Date.now()
   purgeExpiredEnrollmentRevocations(now)
-  const key = enrollmentRevocationKey(origin, stageId)
-  if (
-    revokedAuthenticatorEnrollments.has(key) ||
-    revokedAuthenticatorEnrollments.size < MAX_STAGED_ENROLLMENT_ENTRIES
-  ) {
-    revokedAuthenticatorEnrollments.set(key, now + STAGED_ENROLLMENT_TTL_MS)
-    return
+  let stages = revokedAuthenticatorEnrollments.get(origin)
+  if (!stages) {
+    if (revokedAuthenticatorEnrollments.size >= MAX_STAGED_ENROLLMENT_ORIGINS) {
+      return false
+    }
+    stages = new Map()
+    revokedAuthenticatorEnrollments.set(origin, stages)
   }
-  enrollmentRevocationsSaturatedUntil = now + STAGED_ENROLLMENT_TTL_MS
+  if (!stages.has(stageId) && stages.size >= MAX_STAGED_ENROLLMENT_ENTRIES) {
+    return false
+  }
+  stages.set(stageId, now + STAGED_ENROLLMENT_TTL_MS)
+  return true
 }
 
 export function authenticatorEnrollmentAuthorizationIsCurrent(
@@ -887,8 +885,9 @@ export async function websiteAuthenticatorEnrollDismiss({
   ) {
     return { ok: false, reason: 'authenticator-stage-missing' }
   }
-  revokeEnrollmentStage(message.payload.origin, message.payload.stageId)
-  if (staged) staged.otpauthUri = ''
+  if (!revokeEnrollmentStage(message.payload.origin, message.payload.stageId)) {
+    return { ok: false, reason: 'authenticator-enroll-failed' }
+  }
   if (pending) pending.uri.value = ''
   await ensureExtensionSessionDocument()
   const revoked = await revokeAuthenticatorEnrollmentFromSession(
