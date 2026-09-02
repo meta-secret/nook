@@ -25,11 +25,11 @@ pub enum PasskeyCeremonyPriority {
 )]
 pub enum QueueDisposition {
     MessageDefault {
-        #[serde(flatten, skip)]
+        #[serde(flatten, skip_serializing)]
         _strict_unknown_fields: (),
     },
     Deadline {
-        #[serde(flatten, skip)]
+        #[serde(flatten, skip_serializing)]
         _strict_unknown_fields: (),
         #[serde(deserialize_with = "deserialize_finite_f64")]
         expires_at: f64,
@@ -41,7 +41,7 @@ pub enum QueueDisposition {
 #[serde(deny_unknown_fields, tag = "kind", rename_all = "kebab-case")]
 pub enum MessageDefaultQueueDisposition {
     MessageDefault {
-        #[serde(flatten, skip)]
+        #[serde(flatten, skip_serializing)]
         _strict_unknown_fields: (),
     },
 }
@@ -55,7 +55,7 @@ pub enum MessageDefaultQueueDisposition {
 )]
 pub enum PasskeyCeremonyQueueDisposition {
     Deadline {
-        #[serde(flatten, skip)]
+        #[serde(flatten, skip_serializing)]
         _strict_unknown_fields: (),
         #[serde(deserialize_with = "deserialize_finite_f64")]
         expires_at: f64,

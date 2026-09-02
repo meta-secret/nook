@@ -23,7 +23,7 @@ macro_rules! strict_camel_payload {
         #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
         #[serde(deny_unknown_fields, rename_all = "camelCase")]
         pub struct $name {
-            #[serde(flatten, skip)]
+            #[serde(flatten, skip_serializing)]
             _strict_unknown_fields: (),
             $($fields)*
         }
@@ -93,7 +93,7 @@ impl Drop for SessionSecretBytes {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields)]
 pub struct SerializedStorageProvider {
-    #[serde(flatten, skip)]
+    #[serde(flatten, skip_serializing)]
     _strict_unknown_fields: (),
     id: String,
     #[serde(rename = "type")]
@@ -113,7 +113,7 @@ pub enum SerializedStorageProviderType {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct ExtensionEventLogRecord {
-    #[serde(flatten, skip)]
+    #[serde(flatten, skip_serializing)]
     _strict_unknown_fields: (),
     event_id: String,
     path: String,
@@ -123,7 +123,7 @@ pub struct ExtensionEventLogRecord {
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields)]
 pub struct EmptyPayload {
-    #[serde(flatten, skip)]
+    #[serde(flatten, skip_serializing)]
     _strict_unknown_fields: (),
     queue: QueueDisposition,
 }
@@ -152,7 +152,7 @@ strict_camel_payload!(UnlockPasskeyPayload {
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields)]
 pub struct PinPayload {
-    #[serde(flatten, skip)]
+    #[serde(flatten, skip_serializing)]
     _strict_unknown_fields: (),
     pin: SessionSecretText,
     queue: QueueDisposition,
@@ -278,7 +278,7 @@ strict_camel_payload!(EnrollmentAuthorizationPayload {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct EnrollmentAuthorizationRevokePayload {
-    #[serde(flatten, skip)]
+    #[serde(flatten, skip_serializing)]
     _strict_unknown_fields: (),
     enrollment_authorization_id: EnrollmentAuthorizationId,
     queue: MessageDefaultQueueDisposition,
@@ -310,7 +310,7 @@ strict_camel_payload!(LoginSavePlanPayload {
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields)]
 pub struct OriginPayload {
-    #[serde(flatten, skip)]
+    #[serde(flatten, skip_serializing)]
     _strict_unknown_fields: (),
     origin: String,
     queue: QueueDisposition,
@@ -340,7 +340,7 @@ strict_camel_payload!(RequestPayload {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct DirectLoginSaveActionPayload {
-    #[serde(flatten, skip)]
+    #[serde(flatten, skip_serializing)]
     _strict_unknown_fields: (),
     origin: String,
     offer_id: String,
@@ -350,7 +350,7 @@ pub struct DirectLoginSaveActionPayload {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct DirectRequestPayload {
-    #[serde(flatten, skip)]
+    #[serde(flatten, skip_serializing)]
     _strict_unknown_fields: (),
     request_id: String,
     queue: MessageDefaultQueueDisposition,
