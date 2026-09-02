@@ -33,6 +33,7 @@ import {
   sendRuntimeMessageWithoutResponse,
 } from './login-passkey-actions'
 import {
+  SaveOfferDisplayKind,
   SavePageWatchKind,
   WidgetPlacementKind,
   saveOfferState,
@@ -75,6 +76,24 @@ export function stopPendingSaveWatch(): void {
   }
   watch.observer?.disconnect()
   saveOfferState.clearPendingWatch()
+}
+
+export function dismissPendingSaveOffer(): void {
+  let offer: WebsiteLoginSaveOfferView | false = false
+  if (saveOfferState.watch.kind === SavePageWatchKind.Watching) {
+    offer = saveOfferState.watch.watch.offer
+  } else if (saveOfferState.display.kind === SaveOfferDisplayKind.Visible) {
+    offer = saveOfferState.display.offer
+  }
+  stopPendingSaveWatch()
+  saveOfferState.clearActiveOffer()
+  if (!offer) return
+  saveOfferState.dismissedOfferIds.add(offer.offerId)
+  const message: Parameters<typeof sendRuntimeMessageWithoutResponse>[0] = {
+    type: WebsiteLoginSaveDismissMessageType.NookWebsiteLoginSaveDismiss,
+    payload: { origin: location.origin, offerId: offer.offerId },
+  }
+  sendRuntimeMessageWithoutResponse(message)
 }
 
 function pageLooksLikeAuthPath(pathname: string): boolean {

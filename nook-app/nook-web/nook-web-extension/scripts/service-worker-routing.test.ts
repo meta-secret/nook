@@ -352,6 +352,10 @@ describe('service worker routing', () => {
         events.push(`authorization-restored-${generation}`)
         return Promise.resolve()
       },
+      refreshAuthenticationSurfaces: () => {
+        events.push('authentication-surfaces-refreshed')
+        return Promise.resolve()
+      },
     }
     const { routeExtensionLifecycleMessage } =
       await import('../src/background/service-worker/extension-lifecycle-routing')
@@ -380,6 +384,7 @@ describe('service worker routing', () => {
     expect(events).toEqual([
       'enrollments-rebound-epoch-15',
       'authorization-restored-epoch-15',
+      'authentication-surfaces-refreshed',
     ])
   })
 

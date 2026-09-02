@@ -345,11 +345,11 @@ export function routeExtensionLifecycleMessage({
             rebindStagedAuthenticatorEnrollmentsAuthorization(
               cleanupStart.authorizationGeneration,
             )
-            await refreshAuthenticationSurfaces()
             await completeAccountPickerAuthorizationCleanup(
               cleanupStart.authorizationGeneration,
               false,
             )
+            await refreshAuthenticationSurfaces()
           }
           return response
         } catch (error) {

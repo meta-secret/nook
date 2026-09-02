@@ -133,19 +133,24 @@ type AuthenticationSurfaceNotification = {
 async function notifyAuthenticationSurfaces(
   message: AuthenticationSurfaceNotification,
 ): Promise<void> {
-  try {
-    const queryArgs: Parameters<typeof chrome.tabs.query>[0] = {}
-    const tabs = await new Promise<chrome.tabs.Tab[]>((resolve) => {
-      chrome.tabs.query(queryArgs, resolve)
-    })
-    await Promise.allSettled(
-      tabs.map(async (tab) => {
-        if (typeof tab.id !== 'number' || !Number.isInteger(tab.id)) return
-        await chrome.tabs.sendMessage(tab.id, message)
-      }),
-    )
-  } catch {
-    // Authorization cleanup must complete even when tab enumeration is absent.
+  const queryArgs: Parameters<typeof chrome.tabs.query>[0] = {}
+  const tabs = await new Promise<chrome.tabs.Tab[]>((resolve) => {
+    chrome.tabs.query(queryArgs, resolve)
+  })
+  const eligibleTabIds: number[] = []
+  for (const tab of tabs) {
+    if (typeof tab.id === 'number' && Number.isInteger(tab.id)) {
+      eligibleTabIds.push(tab.id)
+    }
+  }
+  const deliveries = await Promise.allSettled(
+    eligibleTabIds.map((tabId) => chrome.tabs.sendMessage(tabId, message)),
+  )
+  if (
+    eligibleTabIds.length > 0 &&
+    !deliveries.some((delivery) => 'value' in delivery)
+  ) {
+    throw new Error('authentication surface refresh delivery failed')
   }
 }
 

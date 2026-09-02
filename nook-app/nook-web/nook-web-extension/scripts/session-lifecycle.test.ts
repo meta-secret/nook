@@ -88,4 +88,19 @@ describe('authentication surface notifications', () => {
       { tabId: 11, type: 'nook:refresh-authentication-surfaces' },
     ])
   })
+
+  test('reports refresh failure when every eligible tab rejects delivery', async () => {
+    globalThis.chrome = {
+      tabs: {
+        query: (_query, callback) => callback([{ id: 7 }, {}, { id: 11 }]),
+        sendMessage: () => Promise.reject(new Error('tab unavailable')),
+      },
+    } as unknown as typeof chrome
+    const { refreshAuthenticationSurfaces } =
+      await import('../src/background/service-worker/session-lifecycle')
+
+    await expect(refreshAuthenticationSurfaces()).rejects.toThrow(
+      'authentication surface refresh delivery failed',
+    )
+  })
 })

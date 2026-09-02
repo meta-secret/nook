@@ -147,7 +147,7 @@ describe('authentication surface mutation filtering', () => {
       ),
     ).toBe(true)
 
-    const prose = document.createElement('p')
+    const prose = document.createElement('div')
     prose.textContent = 'Marketing copy changed'
     expect(
       mutationCanChangeAuthenticationWorkflows(
@@ -166,6 +166,54 @@ describe('authentication surface mutation filtering', () => {
     for (const evidence of [passkeyLink, qrImage]) {
       const request: Parameters<typeof authenticationMutationImpact>[0] = {
         records: [childListMutation(document.body, [evidence])],
+        mountedHost: false,
+        renderedWorkflow: false,
+      }
+      expect(authenticationMutationImpact(request).shouldScheduleScan).toBe(
+        true,
+      )
+    }
+  })
+
+  test('rescans dynamically associated labels', () => {
+    const input = document.createElement('input')
+    input.id = 'login-email'
+    document.body.append(input)
+    const label = document.createElement('label')
+    label.htmlFor = 'login-email'
+
+    for (const record of [
+      childListMutation(document.body, [label]),
+      attributeMutation(label),
+    ]) {
+      const request: Parameters<typeof authenticationMutationImpact>[0] = {
+        records: [record],
+        mountedHost: false,
+        renderedWorkflow: false,
+      }
+      expect(authenticationMutationImpact(request).shouldScheduleScan).toBe(
+        true,
+      )
+    }
+  })
+
+  test('rescans dynamically inserted backup-code evidence', () => {
+    const heading = document.createElement('h2')
+    heading.textContent = 'Recovery codes'
+    const listItem = document.createElement('li')
+    listItem.textContent = 'ABCD-EFGH'
+    const code = document.createElement('code')
+    code.textContent = 'IJKL-MNOP'
+    const paragraph = document.createElement('p')
+    const paragraphText = document.createTextNode('Backup codes')
+    paragraph.append(paragraphText)
+
+    for (const record of [
+      childListMutation(document.body, [heading, listItem, code]),
+      { type: 'characterData', target: paragraphText } as MutationRecord,
+    ]) {
+      const request: Parameters<typeof authenticationMutationImpact>[0] = {
+        records: [record],
         mountedHost: false,
         renderedWorkflow: false,
       }

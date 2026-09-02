@@ -4,11 +4,20 @@ import { ExtensionRuntimeRequestType } from '../src/lib/extension-runtime-reques
 import type { WebsiteLoginSaveOfferView } from '../src/lib/login-save-messages'
 
 const addListener = mock(() => {})
+const sendMessage = mock(
+  (_message: unknown, callback: (response: unknown) => void) =>
+    callback({ ok: true }),
+)
 Object.assign(globalThis, {
   __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
   chrome: {
     i18n: { getMessage: () => 'Picker canceled' },
-    runtime: { id: 'nook-extension', onMessage: { addListener } },
+    runtime: {
+      id: 'nook-extension',
+      lastError: false,
+      onMessage: { addListener },
+      sendMessage,
+    },
   },
   location: { origin: 'https://login.example.test' },
   window: { clearTimeout: mock(() => {}) },
@@ -68,8 +77,9 @@ test('refresh preserves dismissal while clearing stale surface state', async () 
   widgetState.attachHost({ remove } as unknown as HTMLElement)
   widgetState.dismissed = true
   widgetState.busy = true
+  const staleOfferId = 'stale-save-offer'
   saveOfferState.watchPage({
-    offer: {} as WebsiteLoginSaveOfferView,
+    offer: { offerId: staleOfferId } as WebsiteLoginSaveOfferView,
     startedAt: 1,
     authPath: '/login',
     sawMutation: false,
@@ -88,6 +98,17 @@ test('refresh preserves dismissal while clearing stale surface state', async () 
   expect(widgetState.busy).toBe(false)
   expect(widgetState.host.kind).toBe(WidgetHostKind.Detached)
   expect(saveOfferState.watch.kind).toBe(SavePageWatchKind.Idle)
+  expect(saveOfferState.dismissedOfferIds.has(staleOfferId)).toBe(true)
+  expect(sendMessage).toHaveBeenCalledWith(
+    {
+      type: 'nook:website-login-save-dismiss',
+      payload: {
+        origin: 'https://login.example.test',
+        offerId: staleOfferId,
+      },
+    },
+    expect.any(Function),
+  )
   expect(remove).toHaveBeenCalledOnce()
   expect(schedule).toHaveBeenCalledOnce()
   expect(sendResponse).toHaveBeenCalledWith({ ok: true })

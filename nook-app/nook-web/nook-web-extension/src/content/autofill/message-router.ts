@@ -17,7 +17,7 @@ import {
   fillAndSubmitAccount,
   setStatus,
 } from './login-passkey-actions'
-import { stopPendingSaveWatch } from './login-save'
+import { dismissPendingSaveOffer } from './login-save'
 import {
   AuthenticatorPickerKind,
   LoginPickerKind,
@@ -34,7 +34,7 @@ export function removeScannedWidget(): void {
 }
 
 function clearAuthenticationSurface(): void {
-  stopPendingSaveWatch()
+  dismissPendingSaveOffer()
   removeScannedWidget()
 }
 
