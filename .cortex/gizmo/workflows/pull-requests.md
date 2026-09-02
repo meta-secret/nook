@@ -30,6 +30,60 @@ For implementation tasks, Gizmo's default job is to land a coherent PR with
 Nook's applicable GitHub Actions PR test checks green. Team subagents make the
 implementation edits.
 
+### PR metadata and provenance
+
+PR metadata stays truthful throughout delivery. Provenance records context for
+readers; it does not control or resume agent execution.
+
+**Required actions**
+
+- **Capability-oriented identity**
+  - At PR creation, choose a truthful capability-oriented title.
+  - Make it broad enough to survive normal in-scope iteration.
+  - Describe the complete current capability in the PR body.
+- **Lifecycle refresh**
+  - Re-read the whole PR when its scope, design, or material diff changes.
+  - Update both the title and description so they describe the current PR.
+  - Repeat that review before readiness or handoff.
+- **Agent-task provenance**
+  - Include a compact agent-task provenance section in the PR description.
+  - Record the harness or execution surface.
+  - Record the human-readable task name.
+  - Record the harness-provided opaque task or thread ID when available.
+  - When the harness exposes no stable name or ID, say so explicitly in that
+    field.
+- **Workbench authority**
+  - Use public [Nook Workbench](https://github.com/meta-secret/nook-workbench)
+    URLs as durable plan and handoff authority.
+  - Link the exact focused issue when one exists.
+  - Link the immutable task-start plan and each superseding plan.
+  - Add the published worklog when it becomes available.
+  - Update the PR description as those lifecycle links appear.
+
+**Prohibited actions**
+
+- **Fragile titles**
+  - Do not tie the title to one file, the first implementation detail, or a
+    temporary symptom.
+- **Invented provenance**
+  - Never invent a task name, task ID, thread ID, issue, plan, or worklog.
+  - Do not substitute a machine-local identifier when the harness exposes no
+    stable value.
+- **Private and machine-local context**
+  - Do not publish absolute machine paths, usernames, environment values,
+    private task content, or local plan paths.
+  - This includes `~/.codex/plans/**` and paths under `$CODEX_HOME`.
+  - These values are neither portable provenance nor valid handoff links.
+- **Transcript publication**
+  - Do not automatically create or publish an immutable Codex transcript share
+    link.
+  - A transcript share URL requires separate explicit user authorization
+    because it exposes task content.
+- **Execution authority**
+  - Passive PR provenance is not delegation, communication, or handoff
+    transport.
+  - It grants no authority to mutate or resume a separate Codex task.
+
 ### Dispatch meaning
 
 When this document says Gizmo **dispatches work to a team**, Gizmo gives a
@@ -51,7 +105,8 @@ ownership until merge or a concrete blocked handoff:
    - Define the module boundary.
    - Confirm the complete PR can stay within the 2,000-addition limit.
    - Create the first feature branch.
-   - Define the first PR's title, body, and scope.
+   - Define the first PR's title, body, scope, and agent-task provenance under
+     [PR metadata and provenance](#pr-metadata-and-provenance).
    - Create ignored `.cortex/.session/` memory only when temporary notes
      materially help the work.
 2. **Implement functionality** — dispatch the requested code, documentation,
@@ -68,7 +123,8 @@ ownership until merge or a concrete blocked handoff:
      `task ci-agent:fix` with
      `CI_AGENT_FIX_PROFILE=rust-dependency-update`.
 4. **Promptly push and create or update the PR.** Do not add another local
-   product or review gate.
+   product or review gate. Refresh its title, description, provenance, and
+   available Workbench links.
 5. **Request review and validate on GitHub Actions:**
    - If the pushed head is not validation-ready, immediately dispatch at least
      one relevant focused `task remote TASK_NAME=<name>` job.
@@ -103,7 +159,8 @@ ownership until merge or a concrete blocked handoff:
 8. **Merge automatically when ready.** Require a current branch, green
    repository-owned checks, resolved actionable comments, every required team
    and security verdict, and the exact-head readiness audit. Then squash-merge
-   without separate permission.
+   without separate permission. Re-read the whole PR and refresh its title and
+   description before this readiness handoff.
 
 ## Pull request size and modularity
 

@@ -40,6 +40,24 @@ gh pr merge <number> --squash
 
 See [Loom tools](../../teams/ai/references/loom-tools.md).
 
+PR metadata follows the canonical
+[PR metadata contract](../workflows/pull-requests.md#pr-metadata-and-provenance).
+
+**Required actions**
+
+- Keep the PR title, description, provenance, and durable Workbench links
+  current.
+- Re-read the whole PR after a scope, design, or material-diff change.
+- Refresh both its title and description.
+- Repeat the review before readiness or handoff.
+
+**Prohibited actions**
+
+- Do not invent provenance or publish private and machine-local context.
+- Do not create a Codex transcript share URL without separate explicit user
+  authorization.
+- Do not treat passive PR provenance as task transport or execution authority.
+
 Delivery rules:
 
 - Do not run `task check` or `task ci:pr` as a local product gate.
@@ -102,6 +120,11 @@ Does not apply to:
 ## Application Checklist
 
 - [ ] Establish the branch and PR path from current `origin/main`.
+- [ ] Choose a truthful capability-oriented title and current description.
+- [ ] Add compact agent-task provenance without inventing unavailable fields or
+      publishing private task content.
+- [ ] Link available public Workbench issue, immutable plan, and worklog
+      records; update the body as later lifecycle links appear.
 - [ ] Run `task loom:pre-push` before every push.
 - [ ] Route formatter mutations in team-owned source or Cortex files back to
       that team for a fresh formatted commit.
@@ -115,6 +138,8 @@ Does not apply to:
 - [ ] Collect exact-head review during hosted validation.
 - [ ] Address current findings and failed checks as one coherent batch.
 - [ ] Inspect and address all feedback already present.
+- [ ] Re-read the whole PR and refresh title and description before readiness
+      or handoff.
 - [ ] After every replacement push, obtain fresh exact-head remote evidence.
 - [ ] Promote an evidence-backed durable discovery when justified; no promotion
       is required when no candidate qualifies.
