@@ -227,6 +227,40 @@ describe('canonical Cortex team authority', () => {
     }
   });
 
+  test('audits affirmative grants split across GFM table cells', async () => {
+    const fixtureRoot = await writableCortexAuthorityFixture();
+    try {
+      const authorityPath = join(fixtureRoot, '.cortex/AGENTS.md');
+      const gizmoPath = join(fixtureRoot, '.cortex/gizmo/AGENTS.md');
+      await writeFile(
+        authorityPath,
+        `${await readFile(authorityPath, 'utf8')}\n| Actor | Authority |\n| --- | --- |\n| Workers | may run product tests locally. |\n`,
+        'utf8',
+      );
+      await writeFile(
+        gizmoPath,
+        `${await readFile(gizmoPath, 'utf8')}\n| Actor | Authority |\n| --- | --- |\n| Gizmo | can ask a worker to execute repository validation on the local host. |\n`,
+        'utf8',
+      );
+
+      const report = auditTeamAgents({ repoRoot: fixtureRoot });
+      expect(report.findings).toContainEqual({
+        code: 'invalid-cortex-team-authority',
+        path: '.cortex/AGENTS.md',
+        message:
+          'Canonical Cortex team authority grants prohibited local agent product execution: Workers may run product tests locally.',
+      });
+      expect(report.findings).toContainEqual({
+        code: 'invalid-cortex-gizmo-authority',
+        path: '.cortex/gizmo/AGENTS.md',
+        message:
+          'Canonical Cortex Gizmo authority grants prohibited local agent product execution: Gizmo can ask a worker to execute repository validation on the local host.',
+      });
+    } finally {
+      await rm(fixtureRoot, REMOVE_RECURSIVELY);
+    }
+  });
+
   test('does not mistake explicit local execution prohibitions for grants', async () => {
     const fixtureRoot = await writableCortexAuthorityFixture();
     try {
@@ -376,6 +410,30 @@ describe('canonical Cortex team authority', () => {
           ),
           expect.stringContaining('Run bun test locally.'),
           expect.stringContaining('Workers shall execute wasm-pack locally.'),
+        ]),
+      );
+    } finally {
+      await rm(fixtureRoot, REMOVE_RECURSIVELY);
+    }
+  });
+
+  test('requires exact Task entrypoint names for local exceptions', async () => {
+    const fixtureRoot = await writableCortexAuthorityFixture();
+    try {
+      const gizmoPath = join(fixtureRoot, '.cortex/gizmo/AGENTS.md');
+      await writeFile(
+        gizmoPath,
+        `${await readFile(gizmoPath, 'utf8')}\nGizmo may run task loom:pre-push:full locally.\nGizmo may run task remote:unsafe locally.\nGizmo may run task pr:validate-extra locally.\nGizmo may run task loom:pre-push locally.\nGizmo may run task remote locally.\nGizmo may run task pr:validate locally.\n`,
+        'utf8',
+      );
+
+      const report = auditTeamAgents({ repoRoot: fixtureRoot });
+      expect(report.findings).toHaveLength(3);
+      expect(report.findings.map((finding) => finding.message)).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining('task loom:pre-push:full locally'),
+          expect.stringContaining('task remote:unsafe locally'),
+          expect.stringContaining('task pr:validate-extra locally'),
         ]),
       );
     } finally {
