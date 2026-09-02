@@ -5,6 +5,7 @@ import { lstatSync, readFileSync, readlinkSync } from 'node:fs'
 import { extname } from 'node:path'
 
 const PR_ADDITION_LIMIT = 2_000
+const PR_ADDITION_WARNING = 1_500
 
 const reportedOnlyFilenames = new Set([
   'Cargo.lock',
@@ -149,6 +150,13 @@ export function evaluateBudget({ authoredLines }) {
       message: `authored additions exceed the 2,000-line limit: ${authoredLines}`,
     }
   }
+  if (authoredLines >= PR_ADDITION_WARNING) {
+    return {
+      ok: true,
+      mode: 'near-limit',
+      message: `warning: authored additions are near the 2,000-line limit: ${authoredLines}`,
+    }
+  }
   return { ok: true, mode: 'additions-only' }
 }
 
@@ -185,6 +193,7 @@ function main() {
   console.log(`Reported-only diff: ${JSON.stringify(summary)}`)
   const result = evaluateBudget({ authoredLines: summary.authoredLines })
   if (!result.ok) throw new Error(result.message)
+  if (result.mode === 'near-limit') console.warn(result.message)
   console.log('PR authored-addition budget passed')
 }
 

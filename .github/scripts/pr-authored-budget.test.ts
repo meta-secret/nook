@@ -12,10 +12,15 @@ import {
 } from './pr-authored-budget.ts'
 
 test('keeps delivery at or below 2,000 authored additions', () => {
-  assert.deepEqual(
-    evaluateBudget({ authoredLines: 2_000 }),
-    { ok: true, mode: 'additions-only' },
+  assert.match(
+    evaluateBudget({ authoredLines: 2_000 }).message,
+    /warning: authored additions are near the 2,000-line limit/,
   )
+})
+
+test('warns when authored additions reach 1,500', () => {
+  assert.equal(evaluateBudget({ authoredLines: 1_500 }).mode, 'near-limit')
+  assert.equal(evaluateBudget({ authoredLines: 1_499 }).mode, 'additions-only')
 })
 
 test('blocks above 2,000 authored additions', () => {
