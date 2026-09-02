@@ -99,6 +99,44 @@ describe('canonical Cortex team authority', () => {
     }
   });
 
+  test('rejects removal of autonomous mission execution', async () => {
+    const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-autonomy-drift-'));
+    const cortexRoot = join(fixtureRoot, '.cortex');
+    try {
+      await mkdir(cortexRoot, CREATE_RECURSIVELY);
+      await symlink(
+        join(REPO_ROOT, '.cortex/teams'),
+        join(cortexRoot, 'teams'),
+      );
+      await symlink(
+        join(REPO_ROOT, '.cortex/gizmo'),
+        join(cortexRoot, 'gizmo'),
+      );
+      const authority = await readFile(
+        join(REPO_ROOT, '.cortex/AGENTS.md'),
+        'utf8',
+      );
+      await writeFile(
+        join(cortexRoot, 'AGENTS.md'),
+        authority.replace(
+          'Routine uncertainty, implementation breadth, validation failures, and\n  delivery sequencing are not blockers or reasons to ask the user.',
+          'Routine uncertainty may require user confirmation.',
+        ),
+        'utf8',
+      );
+
+      const report = auditTeamAgents({ repoRoot: fixtureRoot });
+      expect(report.findings).toContainEqual({
+        code: 'invalid-cortex-team-authority',
+        path: '.cortex/AGENTS.md',
+        message:
+          'Canonical Cortex team authority is missing marker: Routine uncertainty, implementation breadth, validation failures, and\n  delivery sequencing are not blockers or reasons to ask the user.',
+      });
+    } finally {
+      await rm(fixtureRoot, REMOVE_RECURSIVELY);
+    }
+  });
+
   test('rejects an affirmative Gizmo implementation grant', async () => {
     const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-gizmo-grant-'));
     const cortexRoot = join(fixtureRoot, '.cortex');

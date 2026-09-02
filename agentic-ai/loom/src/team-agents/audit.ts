@@ -40,6 +40,7 @@ const TEAM_AUTHORITY_MARKERS = [
   '## Team worker contract',
   'exactly one team identity',
   'canonical typed\nCortex authoring composition',
+  'Routine uncertainty, implementation breadth, validation failures, and\n  delivery sequencing are not blockers or reasons to ask the user.',
 ] as const;
 const GIZMO_AUTHORITY_MARKERS = [
   'single root delivery owner',
