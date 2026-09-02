@@ -64,7 +64,7 @@ Use these description headings exactly once and in this order:
 - <command or hosted check and its result>
 ```
 
-Apply the following rules:
+Required actions:
 
 - State only capabilities present in the current diff.
 - Use the exact Workbench issue URL when a focused issue owns the task.
@@ -73,6 +73,9 @@ Apply the following rules:
 - Replace `pending` with the worklog URL when the worklog is published.
 - Use `unavailable — <reason>` only when the harness or workflow genuinely has
   no corresponding public record. Never invent an identifier or URL.
+
+Prohibited actions:
+
 - Do not publish prompts, transcripts, local paths, usernames, environment
   values, secrets, or other machine-local context.
 - A transcript share URL requires separate explicit user authorization.

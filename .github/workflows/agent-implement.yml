@@ -512,18 +512,6 @@ jobs:
               content: Buffer.from(plan).toString('base64'),
             })
             const planUrl = `https://github.com/${owner}/${repo}/blob/${published.data.commit.sha}/${planPath}`
-            const issue = process.env.ISSUE_URL
-              || 'unavailable — manual workflow dispatch has no focused Workbench issue'
-            core.exportVariable('AGENT_PR_BODY', [
-              '## Summary', '', `- ${process.env.TASK_TITLE}`, '',
-              '## Agent task provenance', '',
-              '- Harness: GitHub Actions workflow `agent-implement.yml`',
-              `- Task name: ${process.env.TASK_TITLE}`,
-              `- Task ID: [run ${context.runId}](${process.env.GITHUB_SERVER_URL}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`, '',
-              '## Nook Workbench', '', `- Focused issue: ${issue}`,
-              `- Immutable plan: ${planUrl}`, '- Worklog: pending', '',
-              '## Validation', '', '- Hosted PR checks: pending',
-            ].join('\n'))
             core.setOutput('path', planPath)
             core.setOutput('url', planUrl)
 
@@ -582,6 +570,76 @@ jobs:
           NOOK_FORMATTER_ROOT="$GITHUB_WORKSPACE/.github/formatting" \
           FORMAT_CHANGED_FILES="$changed_files" \
             bash "$GITHUB_WORKSPACE/.github/formatting/format.sh"
+
+      - name: Prepare delivered PR metadata
+        if: steps.agent_edit.outputs.changed == 'true' && steps.format.outcome == 'success' && steps.rerun.outputs.terminal != 'true'
+        uses: actions/github-script@v9
+        env:
+          AGENT_PROMPT: ${{ env.AGENT_PROMPT }}
+          IMPLEMENTATION_REPO_ROOT: ${{ env.IMPLEMENTATION_REPO_ROOT }}
+          ISSUE_URL: ${{ steps.workbench.outputs.url }}
+          PLAN_URL: ${{ steps.plan.outputs.url }}
+          TASK_TITLE: ${{ env.TASK_TITLE }}
+          WORKBENCH_SUMMARY_FILE: ${{ env.WORKBENCH_SUMMARY_FILE }}
+          CURSOR_SECRET: ${{ secrets.CURSOR_API_KEY }}
+        with:
+          script: |
+            const fs = require('node:fs')
+            const { validateAgentRecord } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/workbench-records.cjs`)
+            const summaryPath = `${process.env.IMPLEMENTATION_REPO_ROOT}/${process.env.WORKBENCH_SUMMARY_FILE}`
+            if (!fs.existsSync(summaryPath)) {
+              core.setFailed('Implementation did not produce its required work summary.')
+              return
+            }
+            const summaryArtifact = fs.lstatSync(summaryPath)
+            if (!summaryArtifact.isFile() || summaryArtifact.isSymbolicLink() || summaryArtifact.size > 65536) {
+              core.setFailed('Rejected unsafe implementation work summary artifact.')
+              return
+            }
+            const summary = fs.readFileSync(summaryPath, 'utf8').trim()
+            const rejection = validateAgentRecord(
+              summary,
+              'worklog',
+              [process.env.CURSOR_SECRET],
+              process.env.AGENT_PROMPT,
+            )
+            if (rejection) {
+              core.setFailed(`Rejected implementation work summary: ${rejection}.`)
+              return
+            }
+            const outcomeStart = summary.indexOf('## Outcome\n')
+            const outcomeEnd = outcomeStart < 0 ? -1 : summary.indexOf('\n## ', outcomeStart + 11)
+            const outcomeSection = outcomeStart < 0
+              ? ''
+              : summary.slice(outcomeStart + 11, outcomeEnd < 0 ? undefined : outcomeEnd).trim()
+            const outcomeLines = outcomeSection?.split('\n').filter((line) => line.trim()) ?? []
+            if (outcomeLines.length !== 1 || !outcomeLines[0].startsWith('- ')) {
+              core.setFailed('Work summary Outcome must contain exactly one bullet.')
+              return
+            }
+            const deliveredCapability = outcomeLines[0].slice(2).trim()
+            const title = deliveredCapability.replace(/[.!?]$/, '')
+            if (
+              title.length < 3 ||
+              title.length > 120 ||
+              /[\p{Cc}\p{Zl}\p{Zp}]/u.test(title)
+            ) {
+              core.setFailed('Delivered PR title must be 3–120 characters on one line with no control characters.')
+              return
+            }
+            const issue = process.env.ISSUE_URL
+              || 'unavailable — manual workflow dispatch has no focused Workbench issue'
+            core.exportVariable('AGENT_PR_TITLE', title)
+            core.exportVariable('AGENT_PR_BODY', [
+              '## Summary', '', `- ${deliveredCapability}`, '',
+              '## Agent task provenance', '',
+              '- Harness: GitHub Actions workflow `agent-implement.yml`',
+              `- Task name: ${process.env.TASK_TITLE}`,
+              `- Task ID: [run ${context.runId}](${process.env.GITHUB_SERVER_URL}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`, '',
+              '## Nook Workbench', '', `- Focused issue: ${issue}`,
+              `- Immutable plan: ${process.env.PLAN_URL}`, '- Worklog: pending', '',
+              '## Validation', '', '- Hosted PR checks: pending',
+            ].join('\n'))
 
       - name: Validate, commit, and publish implementation
         id: implement
@@ -768,7 +826,7 @@ jobs:
               summary,
               '',
             ].join('\n')
-            await github.rest.repos.createOrUpdateFileContents({
+            const publishedWorklog = await github.rest.repos.createOrUpdateFileContents({
               owner,
               repo,
               path: worklogPath,
@@ -776,6 +834,20 @@ jobs:
               message: `worklog: agent run ${context.runId}`,
               content: Buffer.from(worklog).toString('base64'),
             })
+            const worklogUrl = `https://github.com/${owner}/${repo}/blob/${publishedWorklog.data.commit.sha}/${worklogPath}`
+            if (success) {
+              const currentPullBody = pull.body || ''
+              const nextPullBody = currentPullBody.replace('- Worklog: pending', `- Worklog: ${worklogUrl}`)
+              if (nextPullBody === currentPullBody) {
+                core.setFailed(`PR #${pull.number} is missing its pending Worklog field.`)
+                return
+              }
+              await github.rest.pulls.update({
+                ...context.repo,
+                pull_number: pull.number,
+                body: nextPullBody,
+              })
+            }
 
             if (!issuePath) return
             const { data } = await github.rest.repos.getContent({ owner, repo, path: issuePath, ref: 'main' })
@@ -800,7 +872,7 @@ jobs:
             const progressOutcome = success
               ? `opened [Nook PR #${pull.number}](${pull.html_url})`
               : 'stopped before opening a PR'
-            const progress = `- ${now}: [Agent run ${context.runId}](${runUrl}) ${progressOutcome}; [worklog](/${owner}/${repo}/blob/main/${worklogPath}).`
+            const progress = `- ${now}: [Agent run ${context.runId}](${runUrl}) ${progressOutcome}; [worklog](${worklogUrl}).`
             body = body.replace(/^## Progress\s*$/m, `## Progress\n\n${progress}`)
             await github.rest.repos.createOrUpdateFileContents({
               owner,

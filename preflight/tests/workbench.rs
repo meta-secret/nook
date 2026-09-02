@@ -94,6 +94,9 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "npm ci --ignore-scripts --include=dev --prefix",
         "bun install --cwd",
         "Format implementation on trusted host",
+        "Prepare delivered PR metadata",
+        "Work summary Outcome must contain exactly one bullet.",
+        "const nextPullBody = currentPullBody.replace('- Worklog: pending'",
         "Validate and publish Workbench task plan",
         "Resolve standalone prompt rerun",
         "if: steps.task.outputs.ready == 'true' && inputs.prompt != ''",
@@ -794,6 +797,7 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
         "## Decisions",
         "## Validation",
         "## Remaining work",
+        "exactly one bullet of 3–120 characters",
         "${VALIDATED_PLAN}",
         "authoritative even if a workspace file is later changed",
     ] {
