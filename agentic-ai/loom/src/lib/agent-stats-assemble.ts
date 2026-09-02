@@ -507,8 +507,11 @@ function countPlaywright(repoRoot: string): number {
   if (listed.exitCode !== 0) {
     failInventory({ name: 'playwright list', root: repoRoot, result: listed });
   }
-  const matches = listed.stdout.match(/^\s+\d+/gm);
-  return matches ? matches.length : 0;
+  // prettier-ignore
+  const [line, ...extra] = listed.stdout.match(/^Total:.*$/gm) || [], summary = line ? line.match(/^Total:\s+(\d+)\s+tests?\s+in\s+\d+\s+files?$/) : false, count = summary ? Number.parseInt(summary[1], 10) : -1;
+  // prettier-ignore
+  if (extra.length || !Number.isSafeInteger(count) || count < 0) failInventory({ name: 'playwright summary', root: repoRoot, result: listed });
+  return count;
 }
 
 type InventoryFailure = { name: string; root: string; result: CommandOutput };
