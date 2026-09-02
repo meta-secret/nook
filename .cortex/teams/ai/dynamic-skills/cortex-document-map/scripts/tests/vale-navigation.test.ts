@@ -41,6 +41,18 @@ function runInvalidFixture() {
   });
 }
 
+function runOrdinaryGraphFixture() {
+  return Bun.spawnSync({
+    cmd: [
+      'task',
+      'vale:cortex',
+      'CORTEX_ROOT=.vale/fixtures/cortex-navigation/ordinary-graph/.cortex',
+    ],
+    stderr: 'pipe',
+    stdout: 'pipe',
+  });
+}
+
 function report(stdout: Uint8Array): ValeReport {
   return JSON.parse(new TextDecoder().decode(stdout)) as ValeReport;
 }
@@ -79,4 +91,9 @@ test('reports each exact prohibited H2 through the Vale rule', () => {
       Severity: 'error',
     },
   ]);
+});
+
+test('does not exempt an ordinary nested knowledge-graph document', () => {
+  const result = runOrdinaryGraphFixture();
+  expect(result.exitCode).not.toBe(0);
 });

@@ -1,4 +1,6 @@
 import {
+  copyFileSync,
+  cpSync,
   mkdirSync,
   mkdtempSync,
   rmSync,
@@ -9,15 +11,31 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { expect, test } from 'bun:test';
 import {
-  listCortexMarkdownFiles,
-  listPersistentCortexMarkdownFiles,
   publishedBaseCandidatesForEvent,
   runCortexAuditFromDirectory,
 } from '../src/commands/cortex-audit.ts';
+import {
+  listCortexMarkdownFiles,
+  listPersistentCortexMarkdownFiles,
+} from '../src/lib/cortex-markdown-files.ts';
 import type { CortexAuditReport } from '../src/commands/cortex-audit.ts';
 import { CortexStructureFindingCode } from '../../../.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/src/cortex-document-structure.ts';
 import { CortexContractFindingCode } from '../src/lib/cortex-contracts.ts';
 import { CortexArticleFindingCode } from '../src/lib/cortex-article-structure.ts';
+
+const REPOSITORY_ROOT = path.resolve(import.meta.dir, '../../..');
+
+function installValeConfiguration(repoRoot: string): void {
+  copyFileSync(
+    path.join(REPOSITORY_ROOT, '.vale.ini'),
+    path.join(repoRoot, '.vale.ini'),
+  );
+  cpSync(
+    path.join(REPOSITORY_ROOT, '.vale', 'styles'),
+    path.join(repoRoot, '.vale', 'styles'),
+    { recursive: true },
+  );
+}
 
 test('uses the pre-push commit for push stability audits', () => {
   const before = '1'.repeat(40);
@@ -160,9 +178,30 @@ test('excludes workspace dependencies and canonical executable package scripts',
   }
 });
 
+test('enforces Vale through the common Cortex audit execution path', async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), 'cortex-vale-audit-'));
+  try {
+    installValeConfiguration(repoRoot);
+    const cortexRoot = path.join(repoRoot, '.cortex');
+    mkdirSync(cortexRoot, { recursive: true });
+    writeFileSync(
+      path.join(cortexRoot, 'AGENTS.md'),
+      '# Agent Map\n\n## Relationships\n\nObsolete navigation.\n',
+    );
+    const audit = runCortexAuditFromDirectory({
+      request: { includeDensityLint: false },
+      startDirectory: repoRoot,
+    });
+    await expect(audit).rejects.toThrow('Vale Cortex lint failed');
+  } finally {
+    rmSync(repoRoot, { recursive: true, force: true });
+  }
+});
+
 test('fails the integrated Cortex audit for rendered Markdown tables', async () => {
   const repoRoot = mkdtempSync(path.join(tmpdir(), 'cortex-table-audit-'));
   try {
+    installValeConfiguration(repoRoot);
     const cortexRoot = path.join(repoRoot, '.cortex');
     const skillsRoot = path.join(cortexRoot, 'dynamic-skills');
     const directoryOptions = { recursive: true } as const;
@@ -171,11 +210,11 @@ test('fails the integrated Cortex audit for rendered Markdown tables', async () 
       path.join(cortexRoot, 'AGENTS.md'),
       `# Agent Map
 
-## Relationships
+## Context
 
 - None.
 
-## Document map
+## Navigation
 
 - [Policy](#policy)
   - Defines the policy.
@@ -213,6 +252,7 @@ test('fails the integrated Cortex audit for rendered Markdown tables', async () 
 test('fails the integrated Cortex audit for authored HTML', async () => {
   const repoRoot = mkdtempSync(path.join(tmpdir(), 'cortex-html-audit-'));
   try {
+    installValeConfiguration(repoRoot);
     const cortexRoot = path.join(repoRoot, '.cortex');
     const skillsRoot = path.join(cortexRoot, 'dynamic-skills');
     const directoryOptions = { recursive: true } as const;
@@ -231,7 +271,7 @@ test('fails the integrated Cortex audit for authored HTML', async () => {
 
 # Agent Map
 
-## Document map
+## Navigation
 
 - [Policy](#policy)
   - Defines the policy.
@@ -302,6 +342,7 @@ Fourth paragraph.
 test('admits session Markdown only through the global HTML syntax gate', async () => {
   const repoRoot = mkdtempSync(path.join(tmpdir(), 'cortex-session-html-'));
   try {
+    installValeConfiguration(repoRoot);
     const cortexRoot = path.join(repoRoot, '.cortex');
     const sessionRoot = path.join(cortexRoot, '.session', 'nested');
     const skillsRoot = path.join(cortexRoot, 'dynamic-skills');
@@ -361,6 +402,7 @@ test('admits session Markdown only through the global HTML syntax gate', async (
 test('admits Gizmo skill rows without cascading from rejected syntax', async () => {
   const repoRoot = mkdtempSync(path.join(tmpdir(), 'cortex-html-cascade-'));
   try {
+    installValeConfiguration(repoRoot);
     const cortexRoot = path.join(repoRoot, '.cortex');
     const teamsRoot = path.join(cortexRoot, 'teams');
     const aiRoot = path.join(teamsRoot, 'ai');

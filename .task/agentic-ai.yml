@@ -50,31 +50,10 @@ tasks:
     cmds:
       - |
         set -euo pipefail
-        if ! command -v vale >/dev/null 2>&1; then
-          echo "Vale 3.19.0 is required for Cortex Markdown linting." >&2
-          exit 1
-        fi
-        if [ "$(vale --version)" != "vale version 3.19.0" ]; then
-          echo "Vale 3.19.0 is required for Cortex Markdown linting." >&2
-          exit 1
-        fi
         cortex_root="{{.CORTEX_ROOT}}"
-        if [ ! -d "$cortex_root" ]; then
-          echo "Cortex Markdown root does not exist: $cortex_root" >&2
-          exit 1
-        fi
-        find "$cortex_root" \
-          \( -path "$cortex_root/node_modules" -o -path "$cortex_root/.session" \) \
-          -prune -o \
-          -type f -name '*.md' \
-          ! -name 'knowledge-graph.md' \
-          ! -path "$cortex_root/k-graph.md" \
-          ! -path "$cortex_root/INDEX.md" \
-          -print0 \
-          | xargs -0 vale \
-              --no-global \
-              --config="{{.REPO_ROOT}}/.vale.ini" \
-              --output=JSON
+        bun "{{.REPO_ROOT}}/agentic-ai/loom/src/commands/cortex-vale-cli.ts" \
+          "{{.REPO_ROOT}}" \
+          "$cortex_root"
 
   vale:cortex:test:
     desc: Verify the Cortex Vale rules against focused engine fixtures.
@@ -223,8 +202,6 @@ tasks:
     vars:
       CONFIG: '{{default "" .CONFIG}}'
     cmds:
-      - task: vale:cortex:test
-      - task: vale:cortex
       - |
         set -euo pipefail
         if [ -n "{{.CONFIG}}" ]; then
