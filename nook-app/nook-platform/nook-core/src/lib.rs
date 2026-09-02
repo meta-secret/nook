@@ -12,8 +12,8 @@ mod sync;
 mod vault;
 
 pub(crate) use auth::{
-    device_key_protection, enrollment, extension_identity_handoff, multi_device, password_envelope,
-    website_login_save,
+    authenticator_enrollment_session, device_key_protection, enrollment,
+    extension_identity_handoff, multi_device, password_envelope, website_login_save,
 };
 pub(crate) use crypto::{vault_crypto, vault_epoch_crypto};
 pub use device_access::{
@@ -56,6 +56,11 @@ pub use authenticator::{
     MAX_AUTHENTICATOR_BACKUP_CODE_LEN, MAX_AUTHENTICATOR_BACKUP_CODES, OtpauthPreview,
     TotpAlgorithm, TotpCode, TotpDigits, TotpPeriod, TotpSecret, apply_backup_codes,
     authenticator_setup_key_changed, normalize_backup_codes, verify_persisted_backup_codes,
+};
+pub use authenticator_enrollment_session::{
+    AuthenticatorEnrollmentSession, EnrollmentAuthorizeOutcome, EnrollmentClaimOutcome,
+    EnrollmentCommitOutcome, EnrollmentFailOutcome, EnrollmentPurgeOutcome,
+    EnrollmentRevokeOutcome,
 };
 pub use authenticator_issuer_hosts::{
     mapped_host_for_issuer, normalize_issuer_lookup_key, resolve_authenticator_website_host,

@@ -3,6 +3,10 @@ import type {
   WebsiteAuthenticatorBackupAttachMessageMode,
 } from '../../lib/enrollment-messages'
 import {
+  EnrollmentAuthorizeOutcome,
+  EnrollmentRevokeOutcome,
+} from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import {
   extensionSessionGrantIdentity,
   type StoredExtensionPairingGrant,
 } from '../pairing-grants'
@@ -178,12 +182,15 @@ export async function authorizeAuthenticatorEnrollmentFromSession({
     },
   }
   const response = responseRecord(await sendSessionMessage(message))
-  return response.ok === true && response.accepted === true
+  return (
+    response.ok === true &&
+    response.outcome === EnrollmentAuthorizeOutcome.Authorized
+  )
 }
 
 export async function revokeAuthenticatorEnrollmentFromSession(
   enrollmentAuthorizationId: string,
-): Promise<boolean> {
+): Promise<EnrollmentRevokeOutcome> {
   const message: Parameters<typeof sendSessionMessage>[0] = {
     type: 'nook:extension-session-authenticator-enroll-revoke',
     payload: {
@@ -192,7 +199,16 @@ export async function revokeAuthenticatorEnrollmentFromSession(
     },
   }
   const response = responseRecord(await sendSessionMessage(message))
-  return response.ok === true && response.accepted === true
+  if (response.ok === true) {
+    switch (response.outcome) {
+      case EnrollmentRevokeOutcome.Revoked:
+      case EnrollmentRevokeOutcome.Missing:
+      case EnrollmentRevokeOutcome.Committing:
+      case EnrollmentRevokeOutcome.Committed:
+        return response.outcome
+    }
+  }
+  throw new Error('Extension session returned an invalid revoke outcome.')
 }
 
 type AuthenticatorBackupCodesSessionAttachmentRequest = {

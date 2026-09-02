@@ -12,6 +12,7 @@ import {
   AuthenticatorEnrollmentStageResponseKind,
   AuthenticatorPreviewResponseKind,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { EnrollmentRevokeOutcome } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import {
   clearOtpauthCandidate,
   decodeVisibleOtpauthCandidates,
@@ -118,7 +119,7 @@ export type EnrollmentFlowHost = EnrollmentFlowViewHost & {
     message: Parameters<
       typeof import('./autofill/login-passkey-actions').sendAuthenticatorEnrollmentDismissRuntimeMessage
     >[0],
-  ) => Promise<boolean>
+  ) => Promise<EnrollmentRevokeOutcome>
   sendAuthenticatorEnrollmentStageRuntimeMessage: (
     message: Parameters<
       typeof import('./autofill/login-passkey-actions').sendAuthenticatorEnrollmentStageRuntimeMessage
@@ -145,7 +146,6 @@ export type EnrollmentFlowHost = EnrollmentFlowViewHost & {
   ) => string
 }
 
-/** Keep the post-save enrollment widget from being rebuilt by scanAndRender. */
 let holdEnrollmentWidgetAfterSave = false
 
 enum ActiveEnrollmentCeremonyKind {
@@ -248,7 +248,16 @@ async function dismissStagedEnrollment({
     type: WebsiteAuthenticatorEnrollDismissMessageType.NookWebsiteAuthenticatorEnrollDismiss,
     payload: { origin: location.origin, stageId },
   }
-  return host.sendAuthenticatorEnrollmentDismissRuntimeMessage(message)
+  try {
+    const outcome =
+      await host.sendAuthenticatorEnrollmentDismissRuntimeMessage(message)
+    return (
+      outcome === EnrollmentRevokeOutcome.Revoked ||
+      outcome === EnrollmentRevokeOutcome.Missing
+    )
+  } catch {
+    return false
+  }
 }
 
 export async function cancelActiveEnrollmentCeremony(): Promise<boolean> {
@@ -260,10 +269,7 @@ export async function cancelActiveEnrollmentCeremony(): Promise<boolean> {
     return false
   if (ceremony.kind === ActiveEnrollmentCeremonyKind.Pending)
     clearPendingEnrollmentSensitiveMaterial(ceremony.sensitiveMaterial)
-  const cancellationGeneration =
-    ceremony.kind === ActiveEnrollmentCeremonyKind.Pending
-      ? ++enrollmentAuthorizationGeneration
-      : ceremony.authorizationGeneration
+  const cancellationGeneration = ceremony.authorizationGeneration
   activeEnrollmentCeremony = {
     kind: ActiveEnrollmentCeremonyKind.CancellationPending,
     authorizationGeneration: cancellationGeneration,
@@ -288,10 +294,6 @@ export async function cancelActiveEnrollmentCeremony(): Promise<boolean> {
   return dismissed
 }
 
-export function requestFreshEnrollmentActions(host: EnrollmentFlowHost): void {
-  clearEnrollmentSection(host.panel)
-  host.requestWorkflowReclassification()
-}
 type CommitStagedEnrollmentArgs = {
   host: EnrollmentFlowHost
   section: HTMLElement
@@ -344,9 +346,6 @@ async function commitStagedEnrollment({
       }
       renderEnrollmentActions(nookTypedArgs0_2)
     }
-    // Success pages often mention backup codes; without this hold, the next
-    // MutationObserver scan rebuilds the enrollment CTA and wipes the saved
-    // confirmation before the user (or e2e) can observe it.
     holdEnrollmentWidgetAfterSave = true
   } else if (
     confirmDelivery.kind === RuntimeMessageDeliveryKind.Delivered &&
@@ -358,7 +357,7 @@ async function commitStagedEnrollment({
     completeEnrollmentCeremony(authorizationGeneration)
     const nookTypedArgs0_3: Parameters<typeof setHostDescription>[0] = {
       host,
-      text: lockedEnrollMessage(host),
+      text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollUnlock),
     }
     setHostDescription(nookTypedArgs0_3)
   } else {
@@ -381,13 +380,8 @@ type EnrollmentEvidenceCallbacksArgs = {
   authorizationGeneration: number
 }
 
-function enrollmentEvidenceCallbacks({
-  host,
-  section,
-  stageId,
-  vaultStoreId,
-  authorizationGeneration,
-}: EnrollmentEvidenceCallbacksArgs) {
+function enrollmentEvidenceCallbacks(args: EnrollmentEvidenceCallbacksArgs) {
+  const { host, section, stageId, vaultStoreId, authorizationGeneration } = args
   return {
     commit: () => {
       const nookArrowArgs0: Parameters<typeof commitStagedEnrollment>[0] = {
@@ -400,7 +394,9 @@ function enrollmentEvidenceCallbacks({
       return commitStagedEnrollment(nookArrowArgs0)
     },
     reject: () => {
-      host.description.textContent = host.translatedMessage(failedKey)
+      host.description.textContent = host.translatedMessage(
+        BROWSER_MESSAGE_KEYS.WidgetEnrollFailed,
+      )
       host.setBusy(true)
       void cancelActiveEnrollmentCeremony().then((dismissed) => {
         if (!dismissed && !enrollmentCeremonyIsCurrent(authorizationGeneration))
@@ -410,14 +406,14 @@ function enrollmentEvidenceCallbacks({
           renderEnrollmentRetryActions(host)
           return
         }
-        host.description.textContent = host.translatedMessage(failedKey)
+        host.description.textContent = host.translatedMessage(
+          BROWSER_MESSAGE_KEYS.WidgetEnrollFailed,
+        )
       })
     },
     expired: () => {
-      if (!enrollmentCeremonyIsCurrent(authorizationGeneration)) return
-      completeEnrollmentCeremony(authorizationGeneration)
-      host.description.textContent = host.translatedMessage(failedKey)
-      requestFreshEnrollmentActions(host)
+      if (enrollmentCeremonyIsCurrent(authorizationGeneration))
+        renderEnrollmentStageFailure(args)
     },
     timeout: () => {
       host.description.textContent = host.translatedMessage(
@@ -445,17 +441,21 @@ function clearPendingEnrollmentSensitiveMaterial(
   material.payload.otpauthUri = ''
   clearOtpauthCandidate(material.candidate)
 }
-const failedKey = BROWSER_MESSAGE_KEYS.WidgetEnrollFailed
-type EnrollmentRenderArgs = EnrollmentEvidenceCallbacksArgs
-function renderEnrollmentStageFailure(args: EnrollmentRenderArgs): void {
+function renderEnrollmentStageFailure(
+  args: EnrollmentEvidenceCallbacksArgs,
+): void {
   const { host, authorizationGeneration } = args
   stopPendingEnrollmentWatch()
   completeEnrollmentCeremony(authorizationGeneration)
-  host.description.textContent = host.translatedMessage(failedKey)
+  host.description.textContent = host.translatedMessage(
+    BROWSER_MESSAGE_KEYS.WidgetEnrollFailed,
+  )
   host.setBusy(false)
   renderEnrollmentRetryActions(host)
 }
-function renderEnrollmentCancelRetry(args: EnrollmentRenderArgs): void {
+function renderEnrollmentCancelRetry(
+  args: EnrollmentEvidenceCallbacksArgs,
+): void {
   const { host, section } = args
   const cancelButtonArgs: Parameters<typeof createTextButton>[0] = {
     host,
@@ -470,9 +470,13 @@ function renderEnrollmentCancelRetry(args: EnrollmentRenderArgs): void {
       void cancelActiveEnrollmentCeremony().then((dismissed) => {
         if (!dismissed && !enrollmentCeremonyIsCurrent(generation)) return
         host.setBusy(false)
-        if (dismissed) requestFreshEnrollmentActions(host)
-        else {
-          host.description.textContent = host.translatedMessage(failedKey)
+        if (dismissed) {
+          clearEnrollmentSection(host.panel)
+          host.requestWorkflowReclassification()
+        } else {
+          host.description.textContent = host.translatedMessage(
+            BROWSER_MESSAGE_KEYS.WidgetEnrollFailed,
+          )
           renderEnrollmentCancelRetry(args)
         }
       })
@@ -519,7 +523,6 @@ export async function beginEnrollmentCeremony({
     text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollStaging),
   }
   setHostDescription(nookTypedArgs0_8)
-  // Arm the watch early so fill-driven mutations cannot re-scan and wipe the UI.
   const nookTypedArgs0_9: Parameters<typeof enrollmentEvidenceCallbacks>[0] = {
     host,
     section,
@@ -536,7 +539,10 @@ export async function beginEnrollmentCeremony({
   const stageDelivery =
     await host.sendAuthenticatorEnrollmentStageRuntimeMessage(message)
   clearPendingEnrollmentSensitiveMaterial(sensitiveMaterial)
-  if (!enrollmentCeremonyIsCurrent(authorizationGeneration)) {
+  if (
+    activeEnrollmentCeremony.kind !== ActiveEnrollmentCeremonyKind.Pending ||
+    activeEnrollmentCeremony.authorizationGeneration !== authorizationGeneration
+  ) {
     if (
       stageDelivery.kind === RuntimeMessageDeliveryKind.Delivered &&
       stageDelivery.response.kind ===
@@ -570,7 +576,9 @@ export async function beginEnrollmentCeremony({
   if (!stagedResponse || stageResponse.stageId !== stageId) {
     if (mismatchedStageRetained) {
       stopPendingEnrollmentWatch()
-      host.description.textContent = host.translatedMessage(failedKey)
+      host.description.textContent = host.translatedMessage(
+        BROWSER_MESSAGE_KEYS.WidgetEnrollFailed,
+      )
       renderEnrollmentCancelRetry(nookTypedArgs0_9)
       return
     }
@@ -578,7 +586,6 @@ export async function beginEnrollmentCeremony({
     return
   }
   if (!assignStagedEnrollmentCeremony(stagedCeremony)) return
-  // Replace the temporary pending watch with the real stage id.
   const nookTypedArgs0_14: Parameters<typeof enrollmentEvidenceCallbacks>[0] = {
     host,
     section,
@@ -611,14 +618,6 @@ export async function beginEnrollmentCeremony({
   setHostDescription(nookTypedArgs0_16)
   renderEnrollmentCancelRetry(nookTypedArgs0_14)
 }
-function unavailableMessage(host: EnrollmentFlowHost): string {
-  return host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetConnectVault)
-}
-
-function lockedEnrollMessage(host: EnrollmentFlowHost): string {
-  return host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollUnlock)
-}
-
 type ShowQrPreviewArgs = {
   host: EnrollmentFlowHost
   section: HTMLElement
@@ -674,7 +673,7 @@ async function showQrPreview({
     if (response.kind === AuthenticatorPreviewResponseKind.Unavailable) {
       const nookTypedArgs0_22: Parameters<typeof setHostDescription>[0] = {
         host,
-        text: unavailableMessage(host),
+        text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetConnectVault),
       }
       setHostDescription(nookTypedArgs0_22)
       renderEnrollmentRetryActions(host)
@@ -733,7 +732,8 @@ async function showQrPreview({
         if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
         otpauthUri.value = ''
         clearOtpauthCandidate(candidate)
-        requestFreshEnrollmentActions(host)
+        clearEnrollmentSection(host.panel)
+        host.requestWorkflowReclassification()
       },
     }
     const cancelButton = createTextButton(nookTypedArgs1_4)
@@ -793,7 +793,8 @@ function showQrCandidatePicker({
     onClick: (event) => {
       if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
       candidates.forEach((candidate) => clearOtpauthCandidate(candidate))
-      requestFreshEnrollmentActions(host)
+      clearEnrollmentSection(host.panel)
+      host.requestWorkflowReclassification()
     },
   }
   const cancelButton = createTextButton(nookTypedArgs1_5)

@@ -1,5 +1,6 @@
 //! Device, member, enrollment, and unlock-domain primitives.
 
+pub(crate) mod authenticator_enrollment_session;
 pub(crate) mod device_key_protection;
 pub(crate) mod enrollment;
 pub(crate) mod extension_identity_handoff;

@@ -9,13 +9,22 @@ import {
 } from '../src/lib/provider-credential-staging'
 import type { StorageProvider } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
-async function stageFixture(providers: SerializedStorageProvider[]) {
+async function stageAcceptedFixture(providers: SerializedStorageProvider[]) {
   const args: Parameters<typeof stageProviderCredentials>[0] = {
     providers,
     decode: async (candidate) =>
       structuredClone(candidate) as StorageProvider[],
   }
   return stageProviderCredentials(args)
+}
+
+async function stageRejectedFixture(providers: SerializedStorageProvider[]) {
+  return stageProviderCredentials({
+    providers,
+    decode: async () => {
+      throw new Error('Rust rejected provider payload')
+    },
+  })
 }
 
 describe('provider credential staging', () => {
@@ -35,7 +44,7 @@ describe('provider credential staging', () => {
       },
     ]
 
-    const staging = await stageFixture(source)
+    const staging = await stageAcceptedFixture(source)
 
     expect(staging.kind).toBe(ProviderCredentialStagingKind.Staged)
     if (staging.kind !== ProviderCredentialStagingKind.Staged) return
@@ -59,7 +68,7 @@ describe('provider credential staging', () => {
   })
 
   test('scrubs decoded providers when queued import work expires', async () => {
-    const staging = await stageFixture([
+    const staging = await stageAcceptedFixture([
       {
         id: 'drive',
         oauthFile: {
@@ -129,7 +138,7 @@ describe('provider credential staging', () => {
     expect(providers[2]).not.toHaveProperty('githubPat')
   })
 
-  test('rejects values outside the serialized external model', async () => {
+  test('scrubs values rejected by the Rust decoder', async () => {
     const source = [
       {
         id: 'github',
@@ -137,18 +146,18 @@ describe('provider credential staging', () => {
         metadata: new Date(),
       },
     ]
-    const staging = await stageFixture(source)
+    const staging = await stageRejectedFixture(source)
 
     expect(staging.kind).toBe(ProviderCredentialStagingKind.InvalidInput)
     scrubProviderCredentials(source)
     expect(source[0]).not.toHaveProperty('githubPat')
   })
 
-  test('rejects __proto__ outside the provider contract', async () => {
+  test('propagates Rust rejection of foreign provider structure', async () => {
     const source = JSON.parse(
       '[{"id":"github","__proto__":{"githubPat":"inherited-secret"}}]',
     )
-    const staging = await stageFixture(source)
+    const staging = await stageRejectedFixture(source)
 
     expect(staging.kind).toBe(ProviderCredentialStagingKind.InvalidInput)
   })

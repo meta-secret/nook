@@ -6,7 +6,7 @@ import {
 import {
   ExtensionSessionRequestParseKind,
   MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
-  parseExtensionSessionRequest,
+  parseExtensionSessionRequest as parseRequestWithProviders,
 } from '../src/offscreen/session-request-adapter'
 import type { StorageProvider } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
@@ -21,8 +21,15 @@ function messagePayload(message: unknown): Record<string, unknown> {
 }
 
 async function decodeProviders(providers: StorageProvider[]) {
+  for (const provider of providers) {
+    if ('foreign' in provider || 'metadata' in provider)
+      throw new Error('Rust rejected provider payload')
+  }
   return structuredClone(providers)
 }
+
+const parseExtensionSessionRequest = (value: unknown) =>
+  parseRequestWithProviders(value, decodeProviders)
 
 const deferred = () => Promise.withResolvers<void>()
 

@@ -14,6 +14,7 @@ import {
   LoginPickerOpenResponseKind,
   WebsiteLoginOptionsKind,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { EnrollmentRevokeOutcome } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import {
   RuntimeMessageDeliveryKind,
   sendAuthenticatorBackupAttachRuntimeMessage,
@@ -608,33 +609,19 @@ describe('runtime message adapters', () => {
     }
   })
 
-  test('reports whether enrollment dismissal reached the service worker', async () => {
+  test('preserves the typed enrollment dismissal outcome', async () => {
     installRuntimeMock({
       kind: RuntimeMockKind.Response,
-      response: { ok: true },
+      response: {
+        ok: true,
+        outcome: EnrollmentRevokeOutcome.Missing,
+      },
     })
     await expect(
       sendAuthenticatorEnrollmentDismissRuntimeMessage(
         authenticatorDismissMessage,
       ),
-    ).resolves.toBe(true)
-
-    installRuntimeMock({
-      kind: RuntimeMockKind.Response,
-      response: { ok: false, reason: 'authenticator-forbidden-origin' },
-    })
-    await expect(
-      sendAuthenticatorEnrollmentDismissRuntimeMessage(
-        authenticatorDismissMessage,
-      ),
-    ).resolves.toBe(false)
-
-    installRuntimeMock({ kind: RuntimeMockKind.LastError })
-    await expect(
-      sendAuthenticatorEnrollmentDismissRuntimeMessage(
-        authenticatorDismissMessage,
-      ),
-    ).resolves.toBe(false)
+    ).resolves.toBe(EnrollmentRevokeOutcome.Missing)
   })
 
   test('rejects blank and contradictory authenticator enrollment identities through Rust', async () => {

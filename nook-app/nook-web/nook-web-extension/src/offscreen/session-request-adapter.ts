@@ -1,8 +1,11 @@
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
-import type { SerializedStorageProvider } from '../lib/provider-credential-staging'
+import type {
+  DecodedExtensionStorageProviders,
+  SerializedExtensionStorageProviders,
+  SerializedStorageProvider,
+} from '../lib/provider-credential-staging'
 import {
-  assertProviderKeys,
   extensionSessionProviderIdentities,
   scrubProviderCredentials,
 } from '../lib/provider-credential-staging'
@@ -371,7 +374,6 @@ function stageExtensionSessionIngressRequest(
       return { kind: ExtensionSessionIngressStageKind.Invalid }
     }
     try {
-      assertProviderKeys(providers)
       const stagedProviders = structuredClone(providers)
       scrubProviderCredentials(providers)
       request.payload.providers = []
@@ -415,6 +417,9 @@ function clearExtensionSessionIngressRequest(
 
 export async function parseExtensionSessionRequest(
   value: unknown,
+  decodeProviders: (
+    providers: SerializedExtensionStorageProviders,
+  ) => Promise<DecodedExtensionStorageProviders>,
 ): Promise<ExtensionSessionRequestParse> {
   const ingressStage = stageExtensionSessionIngressRequest(value)
   if (ingressStage.kind === ExtensionSessionIngressStageKind.Invalid) {
@@ -455,18 +460,20 @@ export async function parseExtensionSessionRequest(
     if (readiness === CompanionWasmReadinessKind.Expired) {
       return { kind: ExtensionSessionRequestParseKind.Invalid }
     }
-    const validationRequest =
-      request.type === ExtensionSessionMessageType.ImportVault
-        ? {
-            ...request,
-            payload: {
-              ...request.payload,
-              providers: extensionSessionProviderIdentities(
-                request.payload.providers,
-              ),
-            },
-          }
-        : request
+    let validationRequest: ParsedExtensionSessionTransportRequest = request
+    if (request.type === ExtensionSessionMessageType.ImportVault) {
+      const stagedProviders = request.payload.providers
+      const decodedProviders = await decodeProviders(stagedProviders)
+      scrubProviderCredentials(stagedProviders)
+      request.payload.providers = decodedProviders
+      validationRequest = {
+        ...request,
+        payload: {
+          ...request.payload,
+          providers: extensionSessionProviderIdentities(decodedProviders),
+        },
+      }
+    }
     const requestWire: ExtensionSessionRequestWire =
       validationRequest as ExtensionSessionRequestWire
     if (

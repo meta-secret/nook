@@ -216,6 +216,7 @@ impl NookVaultManager {
         self.pending_sentinel_genesis_request = CeremonyState::Inactive;
         self.sentinel_unlock = CeremonyState::Inactive;
         self.sync_outbox.reset();
+        self.authenticator_enrollment.clear();
     }
 
     /// Clear the failed vault session while retaining the staged signer that a

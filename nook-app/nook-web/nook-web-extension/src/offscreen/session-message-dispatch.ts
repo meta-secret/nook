@@ -393,7 +393,10 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
       ) {
         return false
       }
-      void parseExtensionSessionRequest(message).then((parsed) => {
+      void parseExtensionSessionRequest(
+        message,
+        this.context.decodeProviders,
+      ).then((parsed) => {
         if (parsed.kind === ExtensionSessionRequestParseKind.Invalid) {
           const invalidResponse: Parameters<typeof sendResponse>[0] = {
             ok: false,

@@ -7,19 +7,9 @@ export type SerializedExtensionStorageProviders = SerializedStorageProvider[]
 export type DecodedExtensionStorageProviders = StorageProvider[]
 export type ExtensionStorageProviderIdentities =
   ExtensionStorageProviderPayload[]
-const providerKey =
-  /^(?:id|type|label|githubPat|githubRepo|oauthFile|localFolder|storeId|syncCheckpoint|createdAt)$/
-function hasProviderKeys(value: unknown): boolean {
-  if (!value || Object.getPrototypeOf(value) !== Object.prototype) return false
-  return Object.keys(value).every((key) => providerKey.test(key))
-}
-export function assertProviderKeys(providers: readonly unknown[]): void {
-  if (!providers.every(hasProviderKeys)) throw Error('Invalid provider keys.')
-}
 export function extensionSessionProviderIdentities(
-  providers: SerializedExtensionStorageProviders,
+  providers: DecodedExtensionStorageProviders,
 ): ExtensionStorageProviderIdentities {
-  assertProviderKeys(providers)
   return providers.map((provider) => ({
     id: provider.id,
     type: provider.type,
@@ -48,14 +38,6 @@ type ProviderCredentialCandidate = {
     accessToken?: string
     refreshToken?: string
   }
-}
-
-function isSerializedProviderField(value: unknown): boolean {
-  if (typeof value === 'string' || typeof value === 'boolean') return true
-  if (typeof value === 'number') return Number.isFinite(value)
-  if (Array.isArray(value)) return value.every(isSerializedProviderField)
-  if (!value || Object.getPrototypeOf(value) !== Object.prototype) return false
-  return Object.values(value).every(isSerializedProviderField)
 }
 
 export function scrubProviderCredentials(
@@ -112,9 +94,6 @@ export async function stageProviderCredentials(
 ): Promise<ProviderCredentialStaging> {
   let staged: SerializedExtensionStorageProviders
   try {
-    assertProviderKeys(args.providers)
-    if (!args.providers.every(isSerializedProviderField))
-      throw new Error('Invalid storage provider payload.')
     staged = structuredClone(args.providers)
   } catch {
     scrubProviderCredentials(args.providers)

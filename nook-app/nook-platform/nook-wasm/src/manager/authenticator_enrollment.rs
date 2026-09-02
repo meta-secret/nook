@@ -6,6 +6,15 @@ use crate::NookError;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::{Zeroize, Zeroizing};
 
+fn enrollment_millis(value: f64) -> Result<u64, JsError> {
+    if !value.is_finite() || value < 0.0 || value.fract() != 0.0 || value > u64::MAX as f64 {
+        return Err(JsError::new(
+            "Enrollment time must be a finite nonnegative integer.",
+        ));
+    }
+    Ok(value as u64)
+}
+
 /// Proof that reviewed authenticator recovery codes were persisted exactly.
 #[wasm_bindgen]
 pub struct NookAuthenticatorBackupAttachResult {
@@ -210,6 +219,74 @@ mod wasm_tests {
 
 #[wasm_bindgen]
 impl NookVaultManager {
+    #[wasm_bindgen]
+    pub fn authorize_authenticator_enrollment(
+        &mut self,
+        authorization_id: &str,
+        expires_at_millis: f64,
+        now_millis: f64,
+    ) -> Result<nook_core::EnrollmentAuthorizeOutcome, JsError> {
+        Ok(self.authenticator_enrollment.authorize(
+            authorization_id,
+            enrollment_millis(expires_at_millis)?,
+            enrollment_millis(now_millis)?,
+        ))
+    }
+
+    #[wasm_bindgen]
+    pub fn claim_authenticator_enrollment(
+        &mut self,
+        authorization_id: &str,
+        now_millis: f64,
+    ) -> Result<nook_core::EnrollmentClaimOutcome, JsError> {
+        Ok(self
+            .authenticator_enrollment
+            .claim(authorization_id, enrollment_millis(now_millis)?))
+    }
+
+    #[wasm_bindgen]
+    pub fn commit_authenticator_enrollment(
+        &mut self,
+        authorization_id: &str,
+        now_millis: f64,
+    ) -> Result<nook_core::EnrollmentCommitOutcome, JsError> {
+        Ok(self
+            .authenticator_enrollment
+            .commit(authorization_id, enrollment_millis(now_millis)?))
+    }
+
+    #[wasm_bindgen]
+    pub fn fail_authenticator_enrollment(
+        &mut self,
+        authorization_id: &str,
+        now_millis: f64,
+    ) -> Result<nook_core::EnrollmentFailOutcome, JsError> {
+        Ok(self
+            .authenticator_enrollment
+            .fail(authorization_id, enrollment_millis(now_millis)?))
+    }
+
+    #[wasm_bindgen]
+    pub fn revoke_authenticator_enrollment(
+        &mut self,
+        authorization_id: &str,
+        now_millis: f64,
+    ) -> Result<nook_core::EnrollmentRevokeOutcome, JsError> {
+        Ok(self
+            .authenticator_enrollment
+            .revoke(authorization_id, enrollment_millis(now_millis)?))
+    }
+
+    #[wasm_bindgen]
+    pub fn purge_authenticator_enrollments(
+        &mut self,
+        now_millis: f64,
+    ) -> Result<nook_core::EnrollmentPurgeOutcome, JsError> {
+        Ok(self
+            .authenticator_enrollment
+            .purge(enrollment_millis(now_millis)?))
+    }
+
     /// Create an authenticator from a consented `otpauth://totp/...` URI.
     #[wasm_bindgen]
     pub async fn add_authenticator_from_otpauth_js(

@@ -78,6 +78,7 @@ import {
   type AuthenticationOutcomeResponse,
   type AuthenticationOutcomeResponseWire,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { EnrollmentRevokeOutcome } from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
 export enum RuntimeMessageDeliveryKind {
   Delivered = 'delivered',
@@ -468,15 +469,25 @@ export async function sendAuthenticatorEnrollmentConfirmRuntimeMessage(
 
 export async function sendAuthenticatorEnrollmentDismissRuntimeMessage(
   message: WebsiteAuthenticatorEnrollDismissMessage,
-): Promise<boolean> {
+): Promise<EnrollmentRevokeOutcome> {
   const delivery = await sendRuntimeMessage(message)
-  return (
+  if (
     delivery.kind === RuntimeMessageDeliveryKind.Delivered &&
-    !!delivery.response &&
+    delivery.response &&
     typeof delivery.response === 'object' &&
     'ok' in delivery.response &&
-    delivery.response.ok === true
-  )
+    delivery.response.ok === true &&
+    'outcome' in delivery.response
+  ) {
+    switch (delivery.response.outcome) {
+      case EnrollmentRevokeOutcome.Revoked:
+      case EnrollmentRevokeOutcome.Missing:
+      case EnrollmentRevokeOutcome.Committing:
+      case EnrollmentRevokeOutcome.Committed:
+        return delivery.response.outcome
+    }
+  }
+  throw new Error('Authenticator enrollment dismissal was not delivered.')
 }
 
 export async function sendAuthenticationOutcomeRuntimeMessage(

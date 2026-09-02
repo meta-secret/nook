@@ -314,6 +314,7 @@ pub struct NookVaultManager {
     pub(in crate::manager) sentinel_unlock: CeremonyState<nook_core::SentinelUnlockSession>,
     pub(in crate::manager) sync_outbox: SyncOutboxState,
     pub(in crate::manager) event_log_sync_issue: EventLogSyncIssueState,
+    pub(in crate::manager) authenticator_enrollment: nook_core::AuthenticatorEnrollmentSession,
 }
 
 impl Drop for NookVaultManager {
@@ -329,6 +330,7 @@ impl Drop for NookVaultManager {
         self.sentinel_unlock = CeremonyState::Inactive;
         self.sync_outbox.reset();
         self.event_log_sync_issue = EventLogSyncIssueState::Clear;
+        self.authenticator_enrollment.clear();
     }
 }
 
@@ -349,6 +351,7 @@ impl NookVaultManager {
             sentinel_unlock: CeremonyState::Inactive,
             sync_outbox: SyncOutboxState::default(),
             event_log_sync_issue: EventLogSyncIssueState::Clear,
+            authenticator_enrollment: nook_core::AuthenticatorEnrollmentSession::default(),
         }
     }
 }

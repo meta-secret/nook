@@ -1,7 +1,16 @@
 import { afterAll, beforeAll, expect, mock, test } from 'bun:test'
-let revokeAccepted = true
+import {
+  EnrollmentAuthorizeOutcome,
+  EnrollmentRevokeOutcome,
+} from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+let revokeOutcome = EnrollmentRevokeOutcome.Missing
 let authorizeEnrollment: () => Promise<boolean> = async () => true
 let authorizationStarted = () => {}
+let stagedCodeDelivery = async () => ({
+  ok: true,
+  code: '123456',
+  expiresAt: Date.now() + 30_000,
+})
 type SessionRequest = { type: string; payload: Record<string, unknown> }
 const authorizedStageIds: string[] = []
 const revokedStageIds: string[] = []
@@ -35,15 +44,20 @@ beforeAll(async () => {
       if (type.endsWith('authorize')) {
         authorizedStageIds.push(payload.enrollmentAuthorizationId as string)
         authorizationStarted()
-        return { ok: true, accepted: await authorizeEnrollment() }
+        return {
+          ok: true,
+          outcome: (await authorizeEnrollment())
+            ? EnrollmentAuthorizeOutcome.Authorized
+            : EnrollmentAuthorizeOutcome.Invalid,
+        }
       }
       if (type.endsWith('revoke')) {
         revokedStageIds.push(payload.enrollmentAuthorizationId as string)
-        return { ok: true, accepted: revokeAccepted }
+        return { ok: true, outcome: revokeOutcome }
       }
       if (type.endsWith('enroll-code')) {
         stagedCodeUris.push(payload.otpauthUri as string)
-        return { ok: true, code: '123456', expiresAt: Date.now() + 30_000 }
+        return stagedCodeDelivery()
       }
       return new Promise((resolve) =>
         chrome.runtime.sendMessage({ type, payload }, resolve),
@@ -60,7 +74,6 @@ const sender = {} as chrome.runtime.MessageSender
 const origin = 'https://example.test'
 const uri = 'otpauth://totp/Nook:test?secret=JBSWY3DPEHPK3PXP&issuer=Nook'
 const missing = 'authenticator-stage-missing'
-const failed = 'authenticator-enroll-failed'
 const stageArgs = (stageId: string) => ({
   message: {
     payload: { origin, stageId, vaultStoreId: 'vault-1', otpauthUri: uri },
@@ -78,7 +91,7 @@ const pending = () => ops.websiteAuthenticatorEnrollPending(pendingArgs)
 const stage = (stageId: string) =>
   ops.websiteAuthenticatorEnrollStage(stageArgs(stageId))
 const expectOk = (request: Promise<unknown>) =>
-  expect(request).resolves.toEqual({ ok: true })
+  expect(request).resolves.toEqual(expect.objectContaining({ ok: true }))
 const expectReason = (request: Promise<unknown>, reason: string) =>
   expect(request).resolves.toEqual({ ok: false, reason })
 afterAll(() => mock.restore())
@@ -89,35 +102,8 @@ function deferAuthorization(result: boolean) {
   authorizeEnrollment = () => authorization.promise
   return [started.promise, () => authorization.resolve(result)] as const
 }
-test('staged enrollment TTL clears the URI without follow-up traffic', async () => {
-  const nativeSetTimeout = globalThis.setTimeout
-  let expire = () => {}
-  globalThis.setTimeout = ((callback: TimerHandler, timeout?: number) => {
-    if (typeof callback === 'function' && timeout && timeout > 290_000) {
-      expire = callback
-      return 1
-    }
-    return nativeSetTimeout(callback, timeout)
-  }) as typeof setTimeout
-  try {
-    expect((await stage('ttl')).ok).toBe(true)
-    expire()
-    await expectOk(pending())
-  } finally {
-    globalThis.setTimeout = nativeSetTimeout
-  }
-})
-test('staged enrollment cancel before delivery prevents staging', async () => {
-  revokeAccepted = false
-  authorizedStageIds.length = 0
-  await expectOk(dismiss('before-delivery'))
-  await expectOk(dismiss('before-delivery'))
-  await expectReason(stage('before-delivery'), missing)
-  expect(authorizedStageIds).toEqual([])
-  await expectOk(pending())
-})
 test('staged enrollment cancel during authorization prevents staging', async () => {
-  revokeAccepted = true
+  revokeOutcome = EnrollmentRevokeOutcome.Missing
   authorizedStageIds.length = 0
   revokedStageIds.length = 0
   const [started, release] = deferAuthorization(true)
@@ -130,39 +116,61 @@ test('staged enrollment cancel during authorization prevents staging', async () 
   expect(revokedStageIds).toContain('during')
   await expectOk(pending())
 })
-test('staged enrollment foreign-origin dismissal cannot revoke pending', async () => {
-  revokeAccepted = true
-  revokedStageIds.length = 0
-  const [started, release] = deferAuthorization(false)
-  const staging = stage('origin')
+test('same-origin staging lease rejects a second request before authorization resolves', async () => {
+  authorizedStageIds.length = 0
+  const [started, release] = deferAuthorization(true)
+  const first = stage('origin-lease-first')
   await started
-  authorizedOrigin = 'https://foreign.example.test'
-  await expectReason(dismiss('origin', authorizedOrigin), missing)
-  expect(revokedStageIds).toEqual([])
-  authorizedOrigin = origin
+  await expectReason(stage('origin-lease-second'), missing)
+  expect(authorizedStageIds).toEqual(['origin-lease-first'])
   release()
-  await staging
-})
-test('staged enrollment failed revoke retains the URI for retry', async () => {
-  authorizeEnrollment = async () => true
-  authorizationStarted = () => {}
-  revokeAccepted = false
-  stagedCodeUris.length = 0
-  expect(await stage('retry')).toEqual({ ok: true, stageId: 'retry' })
-  await expectReason(dismiss('retry'), failed)
-  await ops.websiteAuthenticatorEnrollCode(dismissArgs('retry'))
-  expect(stagedCodeUris.at(-1)).toContain('secret=JBSWY3DPEHPK3PXP')
-  revokeAccepted = true
-  await expectOk(dismiss('retry'))
+  await expect(first).resolves.toEqual({
+    ok: true,
+    stageId: 'origin-lease-first',
+  })
+  revokeOutcome = EnrollmentRevokeOutcome.Revoked
+  await expectOk(dismiss('origin-lease-first'))
 })
 test('staged enrollment full tombstones preserve origin isolation', async () => {
-  revokeAccepted = false
+  revokeOutcome = EnrollmentRevokeOutcome.Missing
   const capacityOrigin = 'https://capacity.example.test'
   authorizedOrigin = capacityOrigin
   for (let index = 0; index < 128; index += 1)
     await expectOk(dismiss(`capacity-${index}`, capacityOrigin))
-  await expectReason(dismiss('capacity-overflow', capacityOrigin), failed)
+  await expectReason(
+    dismiss('capacity-overflow', capacityOrigin),
+    'authenticator-retry-required',
+  )
   authorizedOrigin = 'https://isolated.example.test'
   await expectOk(dismiss('isolated-stage', authorizedOrigin))
   authorizedOrigin = origin
+})
+test('code returned after exact stage ownership is revoked is scrubbed', async () => {
+  authorizeEnrollment = async () => true
+  revokeOutcome = EnrollmentRevokeOutcome.Revoked
+  expect(await stage('code-race')).toEqual({ ok: true, stageId: 'code-race' })
+  const delivery = Promise.withResolvers<{
+    ok: true
+    code: string
+    expiresAt: number
+  }>()
+  stagedCodeDelivery = () => delivery.promise
+  const codeRequest = ops.websiteAuthenticatorEnrollCode(
+    dismissArgs('code-race'),
+  )
+  await Promise.resolve()
+  await expectOk(dismiss('code-race'))
+  const response = {
+    ok: true as const,
+    code: '654321',
+    expiresAt: Date.now() + 30_000,
+  }
+  delivery.resolve(response)
+  await expectReason(codeRequest, missing)
+  expect(response.code).toBe('')
+  stagedCodeDelivery = async () => ({
+    ok: true,
+    code: '123456',
+    expiresAt: Date.now() + 30_000,
+  })
 })

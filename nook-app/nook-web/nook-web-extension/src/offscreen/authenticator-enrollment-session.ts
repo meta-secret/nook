@@ -1,5 +1,7 @@
 import {
   current_code_from_otpauth_uri,
+  EnrollmentClaimOutcome,
+  EnrollmentCommitOutcome,
   preview_otpauth_uri,
   type NookVaultManager,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
@@ -39,118 +41,32 @@ type AuthenticatorEnrollmentMessageHandlingRequest = {
   dependencies: AuthenticatorEnrollmentSessionDependencies
 }
 
-enum EnrollmentAuthorizationState {
-  Authorized = 'authorized',
-  Committing = 'committing',
-  Committed = 'committed',
-}
-
-type EnrollmentAuthorization = {
-  state: EnrollmentAuthorizationState
-  expiresAt: number
-  expiryTimer: ReturnType<typeof setTimeout>
-}
-
-const enrollmentAuthorizations = new Map<string, EnrollmentAuthorization>()
-const MAX_ENROLLMENT_AUTHORIZATION_TTL_MS = 5 * 60 * 1000
-
-type AuthorizeAuthenticatorEnrollmentArgs = {
-  enrollmentAuthorizationId: string
-  expiresAt: number
-}
-
-function authorizeAuthenticatorEnrollment({
-  enrollmentAuthorizationId,
-  expiresAt,
-}: AuthorizeAuthenticatorEnrollmentArgs): boolean {
-  const now = Date.now()
-  if (
-    expiresAt <= now ||
-    expiresAt > now + MAX_ENROLLMENT_AUTHORIZATION_TTL_MS ||
-    enrollmentAuthorizations.has(enrollmentAuthorizationId)
-  ) {
-    return false
-  }
-  const expiryTimer = setTimeout(() => {
-    enrollmentAuthorizations.delete(enrollmentAuthorizationId)
-  }, expiresAt - now)
-  const authorization: EnrollmentAuthorization = {
-    state: EnrollmentAuthorizationState.Authorized,
-    expiresAt,
-    expiryTimer,
-  }
-  enrollmentAuthorizations.set(enrollmentAuthorizationId, authorization)
-  return true
-}
-
-function revokeAuthenticatorEnrollment(
-  enrollmentAuthorizationId: string,
-): boolean {
-  const authorization = enrollmentAuthorizations.get(enrollmentAuthorizationId)
-  if (
-    !authorization ||
-    authorization.state !== EnrollmentAuthorizationState.Authorized
-  ) {
-    return false
-  }
-  clearTimeout(authorization.expiryTimer)
-  enrollmentAuthorizations.delete(enrollmentAuthorizationId)
-  return true
-}
-
-function claimAuthenticatorEnrollment(
-  enrollmentAuthorizationId: string,
-): boolean {
-  const authorization = enrollmentAuthorizations.get(enrollmentAuthorizationId)
-  if (
-    !authorization ||
-    authorization.state !== EnrollmentAuthorizationState.Authorized ||
-    authorization.expiresAt <= Date.now()
-  ) {
-    failAuthenticatorEnrollment(enrollmentAuthorizationId)
-    return false
-  }
-  authorization.state = EnrollmentAuthorizationState.Committing
-  return true
-}
-
-function failAuthenticatorEnrollment(enrollmentAuthorizationId: string): void {
-  const authorization = enrollmentAuthorizations.get(enrollmentAuthorizationId)
-  if (authorization) clearTimeout(authorization.expiryTimer)
-  enrollmentAuthorizations.delete(enrollmentAuthorizationId)
-}
-
-function commitAuthenticatorEnrollment(
-  enrollmentAuthorizationId: string,
-): void {
-  const authorization = enrollmentAuthorizations.get(enrollmentAuthorizationId)
-  if (authorization?.state === EnrollmentAuthorizationState.Committing) {
-    authorization.state = EnrollmentAuthorizationState.Committed
-  }
-}
-
 export async function handleAuthenticatorEnrollmentMessage({
   message,
   dependencies,
 }: AuthenticatorEnrollmentMessageHandlingRequest) {
   switch (message.type) {
     case ExtensionSessionMessageType.AuthenticatorEnrollAuthorize: {
-      const authorizeArgs: AuthorizeAuthenticatorEnrollmentArgs = {
-        enrollmentAuthorizationId: message.payload.enrollmentAuthorizationId,
-        expiresAt: message.payload.expiresAt,
-      }
+      const activeManager = await dependencies.getManager()
       return {
         ok: true,
-        accepted: authorizeAuthenticatorEnrollment(authorizeArgs),
-      }
-    }
-    case ExtensionSessionMessageType.AuthenticatorEnrollRevoke:
-      return {
-        ok: true,
-        accepted: revokeAuthenticatorEnrollment(
+        outcome: activeManager.authorize_authenticator_enrollment(
           message.payload.enrollmentAuthorizationId,
+          message.payload.expiresAt,
+          Date.now(),
         ),
       }
+    }
+    case ExtensionSessionMessageType.AuthenticatorEnrollRevoke: {
+      const activeManager = await dependencies.getManager()
+      return {
+        ok: true,
+        outcome: activeManager.revoke_authenticator_enrollment(
+          message.payload.enrollmentAuthorizationId,
+          Date.now(),
+        ),
+      }
+    }
     case ExtensionSessionMessageType.AuthenticatorEnrollPreview: {
       const payload = message.payload
       if (typeof payload.otpauthUri !== 'string') {
@@ -201,14 +117,19 @@ export async function handleAuthenticatorEnrollmentMessage({
         throw new Error('Extension session received an invalid enrollment.')
       }
       const enrollmentAuthorizationId = payload.enrollmentAuthorizationId
+      const activeManager = await dependencies.getManager()
       try {
-        const activeManager = await dependencies.getManager()
         const openArgs: Parameters<typeof openPasskeyVault>[0] = {
           activeManager,
           grant,
         }
         await openPasskeyVault(openArgs)
-        if (!claimAuthenticatorEnrollment(enrollmentAuthorizationId)) {
+        if (
+          activeManager.claim_authenticator_enrollment(
+            enrollmentAuthorizationId,
+            Date.now(),
+          ) !== EnrollmentClaimOutcome.Claimed
+        ) {
           throw new Error('Extension session enrollment authorization expired.')
         }
         const secretId = await activeManager.add_authenticator_from_otpauth_js(
@@ -220,10 +141,20 @@ export async function handleAuthenticatorEnrollmentMessage({
           vaultStoreId: grant.vaultStoreId,
         }
         await flushPasskeyEventToProviders(flushArgs)
-        commitAuthenticatorEnrollment(enrollmentAuthorizationId)
+        if (
+          activeManager.commit_authenticator_enrollment(
+            enrollmentAuthorizationId,
+            Date.now(),
+          ) !== EnrollmentCommitOutcome.Committed
+        ) {
+          throw new Error('Extension session enrollment authorization expired.')
+        }
         return { ok: true, secretId }
       } catch (error) {
-        failAuthenticatorEnrollment(enrollmentAuthorizationId)
+        activeManager.fail_authenticator_enrollment(
+          enrollmentAuthorizationId,
+          Date.now(),
+        )
         throw error
       }
     }

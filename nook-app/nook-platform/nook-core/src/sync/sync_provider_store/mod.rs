@@ -214,9 +214,11 @@ pub enum ManagerStoreScopeRef<'a> {
 
 /// One persisted sync provider row.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct StorageProvider {
+    #[serde(flatten, skip_serializing)]
+    _strict_unknown_fields: (),
     pub id: String,
     #[serde(rename = "type")]
     pub provider_type: StorageProviderType,
@@ -235,6 +237,7 @@ impl StorageProvider {
     #[must_use]
     pub fn github(id: &str, label: &str, pat: &str, repo: &str, created_at: &str) -> Self {
         Self {
+            _strict_unknown_fields: (),
             id: id.to_owned(),
             provider_type: StorageProviderType::Github,
             label: label.to_owned(),

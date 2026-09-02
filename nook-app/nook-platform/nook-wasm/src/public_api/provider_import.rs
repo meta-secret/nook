@@ -2,15 +2,12 @@ use super::wasm_bindgen;
 
 /// Decode external provider snapshots through the Rust-owned serde contract.
 ///
-/// `Tsify` performs the JavaScript-to-Rust conversion before this function
-/// runs. Invalid nested variants fail at that boundary. Valid legacy rows are
-/// normalized by serde defaults before returning to TypeScript.
 #[wasm_bindgen]
-#[must_use]
 pub fn decode_storage_providers(
-    snapshot: nook_core::AuthProvidersSnapshotData,
-) -> nook_core::AuthProvidersSnapshotData {
-    snapshot
+    #[wasm_bindgen(unchecked_param_type = "AuthProvidersSnapshot")] snapshot: wasm_bindgen::JsValue,
+) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
+    serde_wasm_bindgen::from_value(snapshot)
+        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
 #[cfg(all(test, target_arch = "wasm32"))]
@@ -53,17 +50,13 @@ mod wasm_tests {
     ) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
         let value = js_sys::JSON::parse(input)
             .map_err(|_| wasm_bindgen::JsError::new("provider fixture must parse"))?;
-        // Tsify's generated `from_wasm_abi` implementation delegates to this
-        // exact serde-wasm conversion for `AuthProvidersSnapshotData`.
-        serde_wasm_bindgen::from_value(value)
-            .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+        decode_storage_providers(value)
     }
 
     #[wasm_bindgen_test]
     fn provider_decoder_normalizes_legacy_javascript_snapshot() -> Result<(), wasm_bindgen::JsError>
     {
-        let snapshot = decode_snapshot_json(LEGACY_PROVIDER_SNAPSHOT)?;
-        let decoded = decode_storage_providers(snapshot);
+        let decoded = decode_snapshot_json(LEGACY_PROVIDER_SNAPSHOT)?;
 
         assert_eq!(
             decoded.providers[0].sync_checkpoint,
@@ -77,5 +70,12 @@ mod wasm_tests {
     -> Result<(), wasm_bindgen::JsError> {
         assert!(decode_snapshot_json(MALFORMED_PROVIDER_SNAPSHOT).is_err());
         Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn provider_decoder_rejects_foreign_provider_field() {
+        let foreign =
+            LEGACY_PROVIDER_SNAPSHOT.replace("\"createdAt\"", "\"foreign\": true, \"createdAt\"");
+        assert!(decode_snapshot_json(&foreign).is_err());
     }
 }
