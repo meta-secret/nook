@@ -4,9 +4,41 @@ use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 use super::NookVaultManager;
 use crate::identity_record::NookIdentityDirectorySnapshotRequest;
+use crate::types::NookProviderVaultDecisionProjection;
 
 #[wasm_bindgen]
 impl NookVaultManager {
+    pub async fn provider_vault_decision_request(
+        &self,
+        provider_store_id: String,
+    ) -> Result<NookProviderVaultDecisionProjection, JsError> {
+        let provider_store_id = nook_core::StoreId::parse(&provider_store_id)
+            .map_err(|error| JsError::new(&error.to_string()))?;
+        let current_store_id = self.vault.store_id.trim();
+        let current_vault = if current_store_id.is_empty() {
+            nook_core::CurrentVaultReplaceability::Unknown
+        } else {
+            let store = crate::storage::event_db::load_local_event_store(current_store_id)
+                .await
+                .map_err(|error| JsError::new(&error.to_string()))?;
+            match store.load_graph(current_store_id) {
+                Ok(graph) => {
+                    nook_core::classify_current_vault_replaceability(&graph, current_store_id)
+                }
+                Err(_) => nook_core::CurrentVaultReplaceability::Unknown,
+            }
+        };
+        let identities = crate::identity_record::provider_vault_identity_observations(
+            &self.device.public_app_id(),
+            &provider_store_id,
+        )
+        .await
+        .map_err(|error| JsError::new(&error.to_string()))?;
+        Ok(NookProviderVaultDecisionProjection::from_core(
+            nook_core::project_provider_vault_decision(current_vault, identities),
+        ))
+    }
+
     pub fn identity_directory_snapshot_request(
         &self,
     ) -> Result<NookIdentityDirectorySnapshotRequest, JsError> {

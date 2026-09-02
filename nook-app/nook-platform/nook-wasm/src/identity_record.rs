@@ -53,6 +53,79 @@ fn local_app_protections(keyring: &nook_core::LocalIdentityKeyring) -> Vec<Local
         .collect()
 }
 
+pub(crate) async fn provider_vault_identity_observations(
+    session_app_id: &str,
+    store_id: &nook_core::StoreId,
+) -> Result<Vec<nook_core::ProviderVaultIdentityObservation>, crate::NookError> {
+    let projection = load_local_identity_projection(session_app_id).await?;
+    let local_protections = local_app_protections(&projection.keyring);
+    let current_app_id = nook_core::AppId::parse(session_app_id).ok();
+
+    Ok(projection
+        .directory
+        .identities()
+        .iter()
+        .map(|identity| {
+            let protected_members = identity
+                .members
+                .iter()
+                .filter(|member| {
+                    local_protections.iter().any(|entry| {
+                        entry.app_id == member.app_id
+                            && entry.protection != nook_core::DeviceAccessProtectionKind::Missing
+                    })
+                })
+                .collect::<Vec<_>>();
+            let candidate = protected_members
+                .iter()
+                .copied()
+                .find(|member| {
+                    current_app_id.as_ref() == Some(&member.app_id)
+                        && nook_core::classify_identity_vault_app_grant(
+                            identity,
+                            store_id,
+                            &member.app_id,
+                        ) == nook_core::IdentityVaultAppGrantKind::Granted
+                })
+                .or_else(|| {
+                    protected_members.iter().copied().find(|member| {
+                        nook_core::classify_identity_vault_app_grant(
+                            identity,
+                            store_id,
+                            &member.app_id,
+                        ) == nook_core::IdentityVaultAppGrantKind::Granted
+                    })
+                })
+                .or_else(|| {
+                    protected_members
+                        .iter()
+                        .copied()
+                        .find(|member| current_app_id.as_ref() == Some(&member.app_id))
+                })
+                .or_else(|| protected_members.first().copied());
+
+            nook_core::ProviderVaultIdentityObservation {
+                identity_id: identity.identity_id.as_str().to_owned(),
+                identity_label: identity.label.clone(),
+                linked_to_provider_vault: identity.owns_vault(store_id),
+                protected_local_app_available: candidate.is_some(),
+                is_current_app: candidate
+                    .is_some_and(|member| current_app_id.as_ref() == Some(&member.app_id)),
+                app_grant: candidate.map_or(
+                    nook_core::IdentityVaultAppGrantKind::NotGranted,
+                    |member| {
+                        nook_core::classify_identity_vault_app_grant(
+                            identity,
+                            store_id,
+                            &member.app_id,
+                        )
+                    },
+                ),
+            }
+        })
+        .collect())
+}
+
 #[wasm_bindgen]
 #[derive(Clone)]
 pub struct NookIdentityMemberSnapshot {

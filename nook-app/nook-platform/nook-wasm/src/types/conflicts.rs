@@ -22,6 +22,65 @@ const PENDING_SYNC_PROVIDER_ID: &str = "__pending_provider__";
 const TEST_SYNC_PROVIDER_ID: &str = "__test_provider__";
 
 #[wasm_bindgen]
+#[derive(Clone)]
+pub struct NookProviderVaultIdentityProjection(nook_core::ProviderVaultIdentityProjection);
+
+#[wasm_bindgen]
+impl NookProviderVaultIdentityProjection {
+    #[wasm_bindgen(getter, js_name = identityId)]
+    pub fn identity_id(&self) -> String {
+        self.0.identity_id.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = identityLabel)]
+    pub fn identity_label(&self) -> String {
+        self.0.identity_label.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = isCurrentApp)]
+    pub fn is_current_app(&self) -> bool {
+        self.0.is_current_app
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn eligibility(&self) -> nook_core::ProviderVaultIdentityEligibility {
+        self.0.eligibility
+    }
+}
+
+#[wasm_bindgen]
+pub struct NookProviderVaultDecisionProjection(nook_core::ProviderVaultDecisionProjection);
+
+impl NookProviderVaultDecisionProjection {
+    pub(crate) const fn from_core(projection: nook_core::ProviderVaultDecisionProjection) -> Self {
+        Self(projection)
+    }
+}
+
+#[wasm_bindgen]
+impl NookProviderVaultDecisionProjection {
+    #[wasm_bindgen(getter)]
+    pub fn decision(&self) -> nook_core::ProviderVaultDecision {
+        self.0.decision
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn reason(&self) -> nook_core::ProviderVaultDecisionReason {
+        self.0.reason
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn identities(&self) -> Vec<NookProviderVaultIdentityProjection> {
+        self.0
+            .identities
+            .iter()
+            .cloned()
+            .map(NookProviderVaultIdentityProjection)
+            .collect()
+    }
+}
+
+#[wasm_bindgen]
 impl NookPendingSyncConflict {
     /// E2E/dev seam for rendering a Rust-owned content conflict without storage I/O.
     #[wasm_bindgen]
@@ -325,6 +384,54 @@ mod pending_sync_conflict_tests {
         assert_eq!(store_id.local_store_id()?, "store_localDemo01");
         assert_eq!(store_id.remote_store_id()?, "store_remoteDemo1");
         Ok(())
+    }
+
+    #[test]
+    fn provider_vault_projection_exposes_only_public_decision_facts() {
+        let projection = NookProviderVaultDecisionProjection::from_core(
+            nook_core::project_provider_vault_decision(
+                nook_core::CurrentVaultReplaceability::Replaceable,
+                vec![
+                    nook_core::ProviderVaultIdentityObservation {
+                        identity_id: "identity-personal".to_owned(),
+                        identity_label: "Personal".to_owned(),
+                        linked_to_provider_vault: false,
+                        protected_local_app_available: true,
+                        is_current_app: true,
+                        app_grant: nook_core::IdentityVaultAppGrantKind::NotLinked,
+                    },
+                    nook_core::ProviderVaultIdentityObservation {
+                        identity_id: "identity-work".to_owned(),
+                        identity_label: "Work".to_owned(),
+                        linked_to_provider_vault: true,
+                        protected_local_app_available: true,
+                        is_current_app: false,
+                        app_grant: nook_core::IdentityVaultAppGrantKind::Granted,
+                    },
+                ],
+            ),
+        );
+
+        assert_eq!(
+            projection.decision(),
+            nook_core::ProviderVaultDecision::AdoptProviderVault
+        );
+        assert_eq!(
+            projection.reason(),
+            nook_core::ProviderVaultDecisionReason::ReadyToAdopt
+        );
+        let identities = projection.identities();
+        assert_eq!(identities[0].identity_id(), "identity-personal");
+        assert_eq!(
+            identities[0].eligibility(),
+            nook_core::ProviderVaultIdentityEligibility::NotLinked
+        );
+        assert_eq!(identities[1].identity_label(), "Work");
+        assert!(!identities[1].is_current_app());
+        assert_eq!(
+            identities[1].eligibility(),
+            nook_core::ProviderVaultIdentityEligibility::LinkedAndPrepared
+        );
     }
 }
 
