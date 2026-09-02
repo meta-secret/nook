@@ -45,6 +45,8 @@ Workbench record, not another coordinator or worker. See the
 
 ## Team worker contract
 
+### Delegation boundary
+
 - Each worker task has exactly one team identity, a bounded file scope, and
   named acceptance evidence. Workers write only inside that scope.
 - Gizmo Prime delegates every worker-executable Team Agent task through the
@@ -60,6 +62,9 @@ Workbench record, not another coordinator or worker. See the
   not serve as delegation, communication, or handoff transport.
 - This ordinary-transport prohibition preserves the two trusted publisher
   handoffs below. Those publishers are not ordinary delegation transport.
+
+### Parent and worker ownership
+
 - Parent-owned Gizmo control operations remain with Gizmo Prime:
   - planning and shared-branch sequencing;
   - Git, pull-request, Workbench, and review coordination;
@@ -72,6 +77,9 @@ Workbench record, not another coordinator or worker. See the
   safe to inspect while the writer runs.
 - A write-capable Team Agent may commit its complete scoped change when Gizmo
   requests a commit. Gizmo continues directly from that commit.
+
+### Validation and delivery
+
 - Team workers run only fast focused local Loom tests, lint, or typechecks that
   provide direct implementation feedback.
 - Team workers must not run the full `task loom:verify` suite locally during
@@ -82,12 +90,18 @@ Workbench record, not another coordinator or worker. See the
   promptly pushes the shared branch.
 - Gizmo Prime then dispatches `task remote TASK_NAME=loom:verify` for the exact
   pushed head.
+
+### Feature ownership
+
 - Security review does not transfer implementation ownership. Portable
   security behavior stays in Rust/WASM; web code receives public typed
   projections.
 - Agents mutate only their owned feature. Another active agent's work is
   read-only until ownership is explicitly transferred. See
   [agent feature ownership](gizmo/dynamic-skills/agent-feature-ownership.md).
+
+### Trusted publishers
+
 - Exactly two trusted GitHub Actions publishers are narrow exceptions to the
   committed worker-handoff path:
   - `agent-implement.yml` gives its bounded editor no Git or external delivery
@@ -101,6 +115,9 @@ Workbench record, not another coordinator or worker. See the
     publication.
   - Neither exception grants publication authority to an ordinary worker.
     Gizmo owns review, validation, readiness, and merge for the returned head.
+
+### Repository constraints
+
 - The source-size limit is a non-bypassable hard rule: every authored source
   file stays at or below the **1,000-line delivery limit**. A violation blocks
   delivery and requires a
