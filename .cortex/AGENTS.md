@@ -77,8 +77,8 @@ Workbench record, not another coordinator or worker. See the
     validation evidence.
   - Gizmo Prime runs pre-push hygiene on the Team Agent's direct commit.
   - Gizmo Prime promptly pushes the shared branch.
-  - Gizmo Prime then dispatches `task remote TASK_NAME=loom:verify` for the
-    exact pushed head.
+  - Gizmo Prime executes the authored tests through the applicable allowlisted
+    hosted validation for the exact pushed head.
 - **Feature ownership**
   - Portable security behavior stays in Rust/WASM.
   - Web code receives public typed projections.

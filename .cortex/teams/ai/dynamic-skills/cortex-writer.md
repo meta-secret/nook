@@ -172,18 +172,9 @@ This changed-file gate has bounded scope.
 - It also excludes fenced code and structural Markdown blocks.
 - It does not audit unchanged legacy prose.
 
-Use Loom configuration for an explicit full-corpus density pass:
-
-```yaml
-cortexAudit:
-  includeDensityLint: true
-```
-
-```bash
-task loom:run CONFIG=path/to/cortex-audit-density.yaml
-```
-
-Loom flags long sentences and heavy semicolon or "and" joins.
+The changed-file gate flags long sentences and heavy semicolon or "and" joins.
+No allowlisted hosted selector exists for an explicit full-corpus density pass.
+Report that missing selector as a blocker instead of invoking Loom locally.
 
 It does not rewrite meaning. The agent still owns the edit.
 

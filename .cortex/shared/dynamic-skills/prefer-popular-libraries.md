@@ -24,7 +24,8 @@ downloads. That creates maintenance and supply-chain risk.
 4. Domain rules, cryptography, vault policy, and product invariants stay in
    Nook-owned code (`nook-core` / Loom codecs). Libraries help with commodity
    mechanics, not product policy.
-5. Validate candidate dependencies with Loom:
+5. Record candidate adoption evidence from read-only package-registry and
+   repository inspection:
 
 ```yaml
 dependencyPopularity:
@@ -35,9 +36,9 @@ dependencyPopularity:
   minCratesIoRecentDownloads: 1000
 ```
 
-```bash
-task loom:dependency-popularity
-```
+No allowlisted hosted selector executes `dependencyPopularity`. Report that
+missing selector to Gizmo when an executable popularity verdict is required.
+Do not invoke Loom locally or substitute an unevaluated verdict.
 
 ## Scope
 
@@ -60,10 +61,12 @@ Does not apply to:
 
 - [ ] Ask whether a popular library already solves the commodity problem.
 - [ ] Check stars/downloads before adding a dependency.
-- [ ] Run Loom `dependencyPopularity` when adding or reviewing dependencies.
+- [ ] Record cited stars and download evidence for candidate dependencies.
 - [ ] Keep domain validation and product policy in Nook-owned code.
 
 ## Validation
 
-- `task loom:dependency-popularity`
-- Review findings for any `verdict: fail` entries before merge
+- Return the cited adoption evidence with the coherent commit.
+- Gizmo runs applicable hosted exact-head validation after push.
+- A required executable popularity verdict remains blocked until an
+  allowlisted hosted selector exists.

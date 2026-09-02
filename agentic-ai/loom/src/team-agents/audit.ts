@@ -84,6 +84,11 @@ const AGENT_EXECUTION_DIRECTION =
   /\b(?:agents?|team agents?|workers?|gizmo)\s+(?:may|can|must|shall|need to|are allowed to|is allowed to|are required to|is required to)\s+(?:ask\s+(?:an?\s+)?(?:team\s+)?(?:agent|worker)s?\s+to\s+)?(?:locally\s+)?(?:(?:run|invoke|perform|execute)\s+(?:(?:focused|required|shared|product|project|repository|source|package|local)\s+){0,4}(?:compilation|tests?|testing|linting|builds?|validation)|(?:compile|test|lint|validate)(?:\s+(?:the\s+)?(?:product|project|repository|source|package))?|build(?:ing)?\s+(?:the\s+)?(?:product|project|repository|source|package))\b/iu;
 const IMPERATIVE_EXECUTION_DIRECTION =
   /^(?:locally\s+)?(?:(?:run|invoke|perform|execute)\s+(?:(?:focused|required|shared|product|project|repository|source|package|local)\s+){0,4}(?:compilation|tests?|testing|linting|builds?|validation)|(?:compile|test|lint|validate)(?:\s+(?:the\s+)?(?:product|project|repository|source|package))?|build(?:ing)?\s+(?:the\s+)?(?:product|project|repository|source|package))\b/iu;
+const PROHIBITED_COMMAND =
+  /^(?:cargo\s+(?:test|build|check|run|clippy|install|add|update)\b|rustc\b|wasm-pack\b|bun\s+(?:test|install|add|run\s+(?:test|lint|check|build))\b|(?:npm|pnpm|yarn)\s+(?:test|install|add|run\s+(?:test|lint|check|build))\b|tsc\b|eslint\b|task\s+(?!(?:loom:pre-push|loom:cortex-session-clean|remote|loom:pr-land|pr:validate|pr:review|pr:ready)\b)\S+)/iu;
+const AGENT_COMMAND_DIRECTION =
+  /\b(?:agents?|team agents?|workers?|gizmo)\s+(?:may|can|must|shall|need to|are allowed to|is allowed to|are required to|is required to)\s+(?:ask\s+(?:an?\s+)?(?:team\s+)?(?:agent|worker)s?\s+to\s+)?(?:locally\s+)?(?:run|invoke|perform|execute)\s+/iu;
+const IMPERATIVE_COMMAND_DIRECTION = /^(?:run|invoke|perform|execute)\s+/iu;
 const EXECUTION_LIST_DIRECTION =
   /^(?:agents?|team agents?|workers?|gizmo)\s+(?:may|can|must|shall|need to|are allowed to|is allowed to|are required to|is required to)(?:\s+ask\s+(?:an?\s+)?(?:team\s+)?(?:agent|worker)s?\s+to)?\s*:$/iu;
 const LOCAL_EXECUTION = /\b(?:local(?:ly)?|on (?:a|the) local host)\b/iu;
@@ -296,9 +301,20 @@ function appendLocalExecutionGrantFindings(
   request: LocalExecutionGrantAudit,
 ): void {
   for (const statement of markdownStatements(request.source)) {
+    const commandDirection = [
+      AGENT_COMMAND_DIRECTION.exec(statement),
+      IMPERATIVE_COMMAND_DIRECTION.exec(statement),
+    ].some((match) =>
+      match
+        ? PROHIBITED_COMMAND.test(
+            statement.slice(match.index + match[0].length),
+          )
+        : false,
+    );
     if (
       (AGENT_EXECUTION_DIRECTION.test(statement) ||
-        IMPERATIVE_EXECUTION_DIRECTION.test(statement)) &&
+        IMPERATIVE_EXECUTION_DIRECTION.test(statement) ||
+        commandDirection) &&
       LOCAL_EXECUTION.test(statement) &&
       !NEGATED_LOCAL_EXECUTION.test(statement)
     ) {

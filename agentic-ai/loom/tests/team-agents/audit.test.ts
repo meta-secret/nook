@@ -234,7 +234,7 @@ describe('canonical Cortex team authority', () => {
       const gizmoPath = join(fixtureRoot, '.cortex/gizmo/AGENTS.md');
       await writeFile(
         authorityPath,
-        `${await readFile(authorityPath, 'utf8')}\nAgents may not run product tests locally.\nWorkers must not run product tests locally.\nDo not run repository validation on the local host.\nWorkers cannot perform repository validation on the local host.\nAgents may locally run required non-compiling formatters.\n\nWorkers may not:\n\n- run product tests locally.\n\nWorkers may:\n\n- run required non-compiling formatters locally.\n`,
+        `${await readFile(authorityPath, 'utf8')}\nAgents may not run product tests locally.\nWorkers must not run product tests locally.\nWorkers must not run cargo test locally.\nDo not run repository validation on the local host.\nDo not run bun test locally.\nWorkers cannot perform repository validation on the local host.\nAgents may locally run required non-compiling formatters.\nWorkers may run cargo fmt locally.\nWorkers may run a formatter over Cargo files locally.\n\nWorkers may not:\n\n- run product tests locally.\n\nWorkers may:\n\n- run required non-compiling formatters locally.\n`,
         'utf8',
       );
       await writeFile(
@@ -255,7 +255,7 @@ describe('canonical Cortex team authority', () => {
       const authorityPath = join(fixtureRoot, '.cortex/AGENTS.md');
       await writeFile(
         authorityPath,
-        `${await readFile(authorityPath, 'utf8')}\nAgents may run product tests on hosted runners, never locally.\nWorkers must run product tests on hosted runners, never locally.\nWorkers may execute repository validation on hosted runners, but not on the local host.\nAgents may run product tests locally, but results are not locally cached.\n`,
+        `${await readFile(authorityPath, 'utf8')}\nAgents may run product tests on hosted runners, never locally.\nWorkers must run product tests on hosted runners, never locally.\nWorkers must run cargo test on hosted runners, never locally.\nWorkers may execute repository validation on hosted runners, but not on the local host.\nAgents may run product tests locally, but results are not locally cached.\n`,
         'utf8',
       );
 
@@ -290,6 +290,33 @@ describe('canonical Cortex team authority', () => {
           expect.stringContaining(
             'Workers are required to run product builds locally.',
           ),
+        ]),
+      );
+    } finally {
+      await rm(fixtureRoot, REMOVE_RECURSIVELY);
+    }
+  });
+
+  test('rejects direct prohibited commands in local execution directions', async () => {
+    const fixtureRoot = await writableCortexAuthorityFixture();
+    try {
+      const authorityPath = join(fixtureRoot, '.cortex/AGENTS.md');
+      await writeFile(
+        authorityPath,
+        `${await readFile(authorityPath, 'utf8')}\nWorkers must run cargo test locally.\nAgents are required to invoke task web:check locally.\n\n- Run bun test locally.\n\nWorkers shall:\n\n- execute wasm-pack locally.\n`,
+        'utf8',
+      );
+
+      const report = auditTeamAgents({ repoRoot: fixtureRoot });
+      expect(report.findings).toHaveLength(4);
+      expect(report.findings.map((finding) => finding.message)).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining('Workers must run cargo test locally.'),
+          expect.stringContaining(
+            'Agents are required to invoke task web:check locally.',
+          ),
+          expect.stringContaining('Run bun test locally.'),
+          expect.stringContaining('Workers shall execute wasm-pack locally.'),
         ]),
       );
     } finally {
