@@ -23,10 +23,11 @@ function parseGizmoName(candidate, currentGizmoId) {
 }
 
 function safeCapabilityTitle(value) {
+  const title = value.trim()
   return (
-    value.length >= 3 &&
-    value.length <= 120 &&
-    !/[\u0000-\u001f\u007f]/u.test(value)
+    title.length >= 3 &&
+    title.length <= 120 &&
+    !/[\u0000-\u001f\u007f]/u.test(title)
   )
 }
 
@@ -188,17 +189,90 @@ async function establishManualIssue({
     supersedingUrl,
     title,
   })
-  try {
-    const { data } = await github.rest.repos.getContent({
-      owner,
-      repo,
-      path: issuePath,
-      ref: 'main',
-    })
-    if (Array.isArray(data) || data.type !== 'file') {
-      throw new Error(`Manual focused issue is not a file: ${issuePath}`)
+  const indexPath = issuePath.replace(/\/[^/]+$/, '/README.md')
+  const issueName = issuePath.split('/').at(-1)
+  const indexLine = `- [ ] [${markdownTitle}](${issueName})`
+  const { data: reference } = await github.rest.git.getRef({
+    owner,
+    repo,
+    ref: 'heads/main',
+  })
+  const head = reference.object.sha
+  const { data: commit } = await github.rest.git.getCommit({
+    owner,
+    repo,
+    commit_sha: head,
+  })
+  const readFile = async (path) => {
+    try {
+      const { data } = await github.rest.repos.getContent({
+        owner,
+        repo,
+        path,
+        ref: head,
+      })
+      if (Array.isArray(data) || data.type !== 'file') {
+        throw new Error(`Workbench record is not a file: ${path}`)
+      }
+      return Buffer.from(data.content, 'base64').toString('utf8')
+    } catch (error) {
+      if (error.status === 404) return null
+      throw error
     }
-    const existing = Buffer.from(data.content, 'base64').toString('utf8')
+  }
+  const index = await readFile(indexPath)
+  if (!index || !/^## Issues\s*$/m.test(index)) {
+    throw new Error(
+      `Manual focused issue index is missing or malformed: ${indexPath}`,
+    )
+  }
+  const indexedIssues = index
+    .slice(index.search(/^## Issues\s*$/m))
+    .split(/\n## /)[0]
+  const relatedIndexLines = index
+    .split('\n')
+    .filter(
+      (line) =>
+        line.endsWith(`](${issueName})`) ||
+        line.includes(`[${markdownTitle}](`),
+    )
+  const exactIndexLines = indexedIssues
+    .split('\n')
+    .filter((line) => line === indexLine)
+  const existing = await readFile(issuePath)
+  let changes
+  let message
+  if (existing === null) {
+    if (relatedIndexLines.length > 0) {
+      throw new Error(
+        `Manual focused issue index has a conflicting path or title: ${indexPath}`,
+      )
+    }
+    if (!/^updated_at:\s*.+$/m.test(index)) {
+      throw new Error(
+        `Manual focused issue index has no mutable updated_at: ${indexPath}`,
+      )
+    }
+    const timestampedIndex = index.replace(
+      /^updated_at:\s*.+$/m,
+      `updated_at: ${now}`,
+    )
+    const updatedIndex = timestampedIndex.replace(
+      /^## Issues\s*$/m,
+      (heading) => `${heading}\n\n${indexLine}`,
+    )
+    changes = { [indexPath]: updatedIndex, [issuePath]: issue }
+    message = `issues: establish agent run ${runId}`
+  } else {
+    if (
+      relatedIndexLines.length !== 1 ||
+      exactIndexLines.length !== 1 ||
+      relatedIndexLines[0] !== indexLine
+    ) {
+      throw new Error(
+        `Manual focused issue index does not match this trusted run: ${indexPath}`,
+      )
+    }
     const frontmatter =
       existing.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/)?.[1] || ''
     const exact =
@@ -230,26 +304,40 @@ async function establishManualIssue({
       .replace(/^status:\s*blocked$/m, 'status: in_progress')
       .replace(/^updated_at:\s*.+$/m, `updated_at: ${now}`)
       .replace(/^## Progress\s*$/m, `## Progress\n\n${progress}`)
-    await github.rest.repos.createOrUpdateFileContents({
-      owner,
-      repo,
-      path: issuePath,
-      branch: 'main',
-      sha: data.sha,
-      message: `retry: ${issuePath}`,
-      content: Buffer.from(reactivated).toString('base64'),
-    })
-  } catch (error) {
-    if (error.status !== 404) throw error
-    await github.rest.repos.createOrUpdateFileContents({
-      owner,
-      repo,
-      path: issuePath,
-      branch: 'main',
-      message: `issues: establish agent run ${runId}`,
-      content: Buffer.from(issue).toString('base64'),
-    })
+    changes = { [issuePath]: reactivated }
+    message = `retry: ${issuePath}`
   }
+  const tree = await Promise.all(
+    Object.entries(changes).map(async ([path, content]) => {
+      const { data } = await github.rest.git.createBlob({
+        owner,
+        repo,
+        content,
+        encoding: 'utf-8',
+      })
+      return { path, mode: '100644', type: 'blob', sha: data.sha }
+    }),
+  )
+  const { data: updatedTree } = await github.rest.git.createTree({
+    owner,
+    repo,
+    base_tree: commit.tree.sha,
+    tree,
+  })
+  const { data: updatedCommit } = await github.rest.git.createCommit({
+    owner,
+    repo,
+    message,
+    tree: updatedTree.sha,
+    parents: [head],
+  })
+  await github.rest.git.updateRef({
+    owner,
+    repo,
+    ref: 'heads/main',
+    sha: updatedCommit.sha,
+    force: false,
+  })
 }
 
 function appendPrEnvironment({ body, title }) {
@@ -415,6 +503,8 @@ async function publishTrustedPlan({ core, context, github }) {
       supersedingUrl,
       title: trustedTitle,
     })
+    core.setOutput('issue_path', issuePath)
+    core.setOutput('issue_title', trustedTitle)
     supersedingUrl = await publishImmutablePlan({
       candidate,
       currentGizmoId,

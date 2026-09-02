@@ -288,7 +288,12 @@ fn agent_implementation_publishes_prs_with_trusted_workbench_metadata() -> anyho
         "Task-start plan: [\\`${taskStartPath}\\`](${taskStartUrl})",
         "AGENT_PR_TITLE<<${delimiter}",
         "AGENT_PR_BODY<<${delimiter}",
-        "ISSUE_PATH: ${{ steps.plan.outputs.issue_path }}",
+        "ISSUE_PATH: ${{ steps.plan.outputs.issue_path || steps.workbench.outputs.path }}",
+        "ISSUE_TITLE: ${{ steps.plan.outputs.issue_title || steps.workbench.outputs.title }}",
+        "safeCapabilityTitle(issueTitle)",
+        "github.rest.git.updateRef",
+        "force: false",
+        "`- [ ] [${markdownTitle}](${issueName})`",
         "core.setOutput('issue_path', claimedIssuePath)",
         "core.setOutput('issue_title', claimedIssueTitle)",
         "Gizmo name:\\\\s*(.+?)\\\\s*;\\\\s*Predecessor Gizmo ID:",
@@ -301,7 +306,8 @@ fn agent_implementation_publishes_prs_with_trusted_workbench_metadata() -> anyho
     }
     assert!(
         !workflow.contains("title=\"Agent implement (run ${RUN_ID})\"")
-            && !workflow.contains("Owned scope: manual prompt run"),
+            && !workflow.contains("Owned scope: manual prompt run")
+            && !workflow.contains("[\\p{L}\\p{N} .,:()'’\\/&+_-]"),
         "PR metadata must not publish generic or private manual-prompt context"
     );
     assert!(

@@ -85,6 +85,9 @@ jobs:
           github-token: ${{ secrets.NOOK_GITHUB_PAT }}
           retries: 3
           script: |
+            const { safeCapabilityTitle } = require(
+              `${process.env.GITHUB_WORKSPACE}/.github/scripts/trusted-pr-publisher.cjs`,
+            )
             const [owner, repo] = process.env.WORKBENCH_REPOSITORY.split('/')
             const requestedPath = process.env.REQUESTED_PATH.trim()
             const decode = (data) => Buffer.from(data.content, 'base64').toString('utf8')
@@ -124,7 +127,7 @@ jobs:
               return
             }
             const issueTitle = String(value(body, 'title')).trim()
-            if (!/^[\p{L}\p{N}][\p{L}\p{N} .,:()'’\/&+_-]{2,119}$/u.test(issueTitle)) {
+            if (!safeCapabilityTitle(issueTitle)) {
               core.setFailed(`${path} must have a trusted capability-oriented title before PR publication`)
               return
             }
@@ -502,8 +505,8 @@ jobs:
           AGENT_PROMPT: ${{ env.AGENT_PROMPT }}
           IMPLEMENT_OUTCOME: ${{ steps.implement.outcome }}
           BUDGET_BLOCKER_B64: ${{ steps.implement.outputs.budget_blocker_b64 }}
-          ISSUE_PATH: ${{ steps.plan.outputs.issue_path }}
-          ISSUE_TITLE: ${{ steps.plan.outputs.issue_title }}
+          ISSUE_PATH: ${{ steps.plan.outputs.issue_path || steps.workbench.outputs.path }}
+          ISSUE_TITLE: ${{ steps.plan.outputs.issue_title || steps.workbench.outputs.title }}
           PLAN_PATH: ${{ steps.plan.outputs.path }}
           WORKBENCH_REPOSITORY: ${{ env.WORKBENCH_REPOSITORY }}
           WORKBENCH_SUMMARY_FILE: ${{ env.WORKBENCH_SUMMARY_FILE }}
