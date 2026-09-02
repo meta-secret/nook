@@ -62,11 +62,21 @@ function semanticDocument(
     : request.document.content;
   const root = unified().use(remarkParse).use(remarkGfm).parse(content);
   const blocks = root.children.flatMap((node) => {
+    const blockRequest: SemanticBlockRequest = { node };
+    const containerBlock = semanticBlock(blockRequest);
+    if (node.type === 'table') return [containerBlock];
     const tableBlocks: CortexArticleSemanticBlock[] = [];
     collectTableBlocks(node, tableBlocks);
-    if (tableBlocks.length > 0) return tableBlocks;
-    const blockRequest: SemanticBlockRequest = { node };
-    return [semanticBlock(blockRequest)];
+    return [
+      containerBlock,
+      ...tableBlocks.map((tableBlock) =>
+        // A nested table can share its container's opening line. Its delimiter
+        // is the next source line and keeps the semantic transport ordered.
+        tableBlock.line === containerBlock.line
+          ? { ...tableBlock, line: tableBlock.line + 1 }
+          : tableBlock,
+      ),
+    ];
   });
   return { relativePath: request.document.relativePath, blocks };
 }

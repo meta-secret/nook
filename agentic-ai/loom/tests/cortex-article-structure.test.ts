@@ -342,34 +342,46 @@ Fourth paragraph.
 `,
   };
   const document = makeDocument(documentArgs);
-  expect(audit([document])).toContainEqual({
+  const findings = audit([document]);
+  expect(findings).toContainEqual({
     code: CortexArticleFindingCode.MarkdownTable,
     file: '.cortex/table-structure.md',
     line: 17,
     message:
       'Rendered Markdown table in .cortex/table-structure.md is prohibited; use an enclosed structured list.',
   });
+  expect(
+    findings.filter(
+      (finding) => finding.code === CortexArticleFindingCode.MarkdownTable,
+    ),
+  ).toHaveLength(1);
 });
 
-test('rejects a GFM table nested in a Markdown container', () => {
+test('preserves visible container prose while rejecting its nested GFM table', () => {
   const documentArgs: MakeDocumentArgs = {
     path: '.cortex/nested-table.md',
     content: `# Nested table
 
 ## Reference
 
+> Visible explanatory prose.
+>
 > | Shape | Use |
 > | --- | --- |
 > | Rule | Parallel constraints |
 `,
   };
-  expect(audit([makeDocument(documentArgs)])).toContainEqual({
+  const findings = audit([makeDocument(documentArgs)]);
+  expect(findings).toContainEqual({
     code: CortexArticleFindingCode.MarkdownTable,
     file: '.cortex/nested-table.md',
-    line: 5,
+    line: 7,
     message:
       'Rendered Markdown table in .cortex/nested-table.md is prohibited; use an enclosed structured list.',
   });
+  expect(findings.map((finding) => finding.code)).not.toContain(
+    CortexArticleFindingCode.EmptyArticle,
+  );
 });
 
 test('does not count a link definition as article content', () => {
