@@ -481,8 +481,6 @@ impl Drop for ExtensionSessionRequestWire {
             | ExtensionSessionRequest::AuthenticatorEnrollCode(payload) => {
                 payload.otpauth_uri.zeroize();
             }
-            ExtensionSessionRequest::AuthenticatorEnrollAuthorize(_)
-            | ExtensionSessionRequest::AuthenticatorEnrollRevoke(_) => {}
             ExtensionSessionRequest::AuthenticatorEnrollConfirm(payload) => {
                 payload.otpauth_uri.zeroize();
             }
@@ -509,6 +507,8 @@ impl Drop for ExtensionSessionRequestWire {
             | ExtensionSessionRequest::RevealLogin(_)
             | ExtensionSessionRequest::ListAuthenticators(_)
             | ExtensionSessionRequest::AuthenticatorCode(_)
+            | ExtensionSessionRequest::AuthenticatorEnrollAuthorize(_)
+            | ExtensionSessionRequest::AuthenticatorEnrollRevoke(_)
             | ExtensionSessionRequest::PendingLoginSave(_)
             | ExtensionSessionRequest::CommitLoginSave(_)
             | ExtensionSessionRequest::DismissLoginSave(_)
