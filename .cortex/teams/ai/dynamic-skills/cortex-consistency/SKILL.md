@@ -138,8 +138,7 @@ After:
 - The proof is a docs diff that restores agreement.
 - Name the checked docs and the code or Task paths used as evidence.
 
-Return the coherent commit to Gizmo. Gizmo pushes the exact head and runs the
-mechanical link and index audit:
+Run the mechanical link and index audit:
 
 Request:
 
@@ -149,7 +148,7 @@ cortexAudit:
 ```
 
 ```bash
-task remote TASK_NAME=loom:verify
+task loom:cortex-audit
 ```
 
 - For density findings, set `includeDensityLint: true` in the cortexAudit
@@ -190,20 +189,23 @@ The ownership boundary is explicit:
 - Markdown does not become executable state.
 - The rules and their executable policy remain beside this procedure.
 
-Gizmo runs the compiler through the normal hosted Cortex consistency command:
+Run the compiler through the normal Cortex consistency command:
 
 ```bash
-task remote TASK_NAME=loom:verify
+task loom:cortex-audit
 ```
 
 The command reports failures in `contractFindings`.
 
-The co-located application remains in the closed executable-skill registry.
-AI workers inspect its typed request and provider read-only. They do not invoke
-local `skills:*` targets. Hosted `loom:verify` exercises the compile request,
-provider, and package contract. The executable request contains parsed document
-paths and references. The registry and policy semantics remain internal to
-this skill.
+The co-located application is also a discoverable executable skill:
+
+```bash
+task skills:tools-list
+task skills:run REQUEST_YAML='<cortexConsistency.compile request>'
+```
+
+The executable request contains parsed document paths and references. The
+registry and policy semantics remain internal to this skill.
 
 Request contract v2 adds the required `commands` collection to each document.
 The former `cortex-consistency-compile-v1` transport is not accepted; callers

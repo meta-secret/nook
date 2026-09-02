@@ -69,15 +69,12 @@ For an assigned security unit, own:
 - the security invariant;
 - evidence collection;
 - security-owned Cortex and skills;
-- focused documentation evidence requirements;
+- focused documentation validation;
 - review and validation fixes in the same scope; and
 - a bounded handoff to implementation teams when code changes are required.
 
 ## Validation
 
 Verify concrete claims against current code, manifests, tests, configuration,
-or a narrower existing authority through static inspection. After
-security-document changes, the Security Team Agent returns its coherent commit
-to Gizmo without running local validation. Gizmo owns pre-push hygiene and the
-exact-head hosted Cortex audit and validation. Do not describe planned behavior
-as implemented behavior.
+or a narrower existing authority. Run the Cortex audit after security-document
+changes. Do not describe planned behavior as implemented behavior.

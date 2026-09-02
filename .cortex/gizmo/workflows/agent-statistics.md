@@ -20,8 +20,8 @@ It is not a free-form task diary.
 1. Gizmo starts an out-of-tree scratch event log when PR-bound work begins.
 2. Gizmo appends every local lightweight execution, focused remote run, complete
    validation run, retrigger, and merge attempt as it happens.
-3. Before readiness or merge, Gizmo dispatches inventory for the exact final PR head and retains its JSON out of tree.
-4. Only after retention, Gizmo squash-merges the PR and assembles its YAML using that inventory.
+3. Gizmo squash-merges the implementation PR through the readiness workflow.
+4. Gizmo assembles `stats/ai-agent/<pr-number>.yaml` with Loom after merge.
 5. Gizmo compares the record with one or two recent comparable records.
 6. Gizmo publishes the YAML to Workbench `main` with Loom.
 7. Gizmo opens a separate build-performance PR when waste or regression is
@@ -30,6 +30,7 @@ It is not a free-form task diary.
 ## Mechanical entrypoint — Loom
 
 - Keep judgment in this document.
+- Run assemble, validate, and publish through Loom YAML requests.
 - Scratch JSON must include:
   - `started_at`;
   - `change_surface`;
@@ -39,22 +40,43 @@ It is not a free-form task diary.
   - `comparison`; and
   - `waste_assessment`.
 
-Before merge, Gizmo runs `task remote TASK_NAME=agent-stats:inventory` for the exact final PR head.
-It retains `test-inventory-<head-sha>` as `test_inventory`; missing or mismatched evidence blocks merge without fallback, and assembly never redispatches or runs it locally.
+Assemble request:
 
-After merge, pipe exactly one complete envelope to
-`task loom:agent-stats-control`:
+```yaml
+agentStats:
+  assemble:
+    prNumber: 123
+    scratchPath: "{agentTempDir}/pr-123-scratch.json"
+    outputPath: "{agentTempDir}/123.yaml"
+    includeTestInventory: true
+```
 
-```jsonl
-{"operation":"assemble","request":{"prNumber":123,"scratchPath":"{agentTempDir}/pr-123-scratch.json","outputPath":"{agentTempDir}/123.yaml","includeTestInventory":false}}
-{"operation":"validate","request":{"statsFile":"{agentTempDir}/123.yaml"}}
-{"operation":"publish","request":{"statsFile":"{agentTempDir}/123.yaml"}}
+```bash
+task loom:agent-stats CONFIG=path/to/agent-owned/assemble-request.yaml
 ```
 
 ### Agent-local path token
 
 - `scratchPath`, `outputPath`, and `statsFile` accept `{agentTempDir}`.
+- Loom resolves the token under the operating system's temporary directory.
+- The resolved directory contains the exact 40-character task-anchor commit.
+- That anchor is the branch-entry commit, or the worktree's initial commit for
+  a branch created with the worktree. Implementation commits do not move it.
+- The first task-branch entry remains authoritative after branch re-entry.
+- It also contains an opaque identifier derived from the canonical worktree.
+- Separate worktrees cannot collide when they use the same commit.
+- One worktree and commit resolve consistently across `assemble`, `validate`,
+  and `publish`.
+- `task loom:tools-list` returns the filled path in `resolvedExampleYaml`.
+- Loom provisions the resolved agent directory during token resolution.
+- Use that resolved path when creating the scratch JSON before `assemble`.
 - Ordinary absolute and relative paths remain supported.
+- The request file passed through `CONFIG` must also live in agent-owned
+  storage. Do not reuse a shared fixed `/tmp` request filename.
+
+- **Validate and publish:** use `agentStats.validate` or `agentStats.publish`
+  with `statsFile: "{agentTempDir}/123.yaml"`.
+- **Examples:** copy `exampleYaml` from `task loom:tools-list`.
 - **Protocol:** [Loom tools](../../teams/ai/references/loom-tools.md).
 - **AI-owned Loom tooling provides:** PR metadata, paginated Actions and Codex
   review history, per-head delivery evidence, optional test inventory, and
@@ -97,10 +119,13 @@ Measure wall-clock time, including owned wait time.
 - **PR retriggers:** count complete validation cycles after the first.
 - **Merge attempts:** count executed merge commands, including failures.
 - **PR elapsed time:** first agent action through `mergedAt`.
+- **Repository test inventory:** absolute case counts on the merged head.
 
 Never record secrets, credentials, vault data, raw logs, or prompt contents.
 
 ## Test inventory counting
+
+Measure on the merged implementation `head_sha`.
 
 Count individual test cases, not files or suites.
 
@@ -115,6 +140,8 @@ Count individual test cases, not files or suites.
     - **What to count:** Playwright cases under `nook-app/nook-web`
 
 `total` equals the sum of those four counts.
+
+Loom `--inventory` runs the list commands when the toolchains are available.
 
 ## YAML contract
 
@@ -182,5 +209,6 @@ Before publishing:
 - do not create a Nook branch or PR;
 - do not wait for Main or deployment;
 - validate with Loom;
+- publish with Loom (`task loom:agent-stats CONFIG=<publish-request.yaml>`).
 
 Invalid records must be corrected before publication.

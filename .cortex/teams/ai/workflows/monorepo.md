@@ -30,10 +30,8 @@ Use this workflow for feature work that touches more than one package.
    - If hygiene mutates AI-owned source or Cortex content, the AI team returns
      a fresh formatted commit. Gizmo continues from it and reruns hygiene before
      pushing.
-   - Do not run local builds, tests, checks, lint, typechecks, or e2e.
-   - Do not run local package installation or compiler commands.
-   - Do not run local container product gates.
-   - Do not duplicate hosted-check mirrors before push.
+   - Do not add broad local builds, tests, e2e, container product gates, or
+     duplicate hosted-check mirrors before push.
    - If the pushed head is not validation-ready, Gizmo dispatches at least one
      relevant focused hosted task immediately.
    - When the head is validation-ready, Gizmo dispatches complete exact-head
@@ -67,8 +65,7 @@ nook-core → nook-wasm → nook-web
   - `wasm-bindgen` annotations on simple core DTOs and enums are allowed when
     they preserve one typed domain model across Rust and web.
 - Use Bun for Nook web and Loom JavaScript tooling.
-- Gizmo dispatches project validation through repository Taskfile entrypoints
-  on the applicable hosted runner. Container-backed gates remain hosted.
+- Run project commands through Taskfile and Docker.
 - Do not introduce npm flows or lockfiles into Bun-owned packages.
   - `agentic-ai/ci-agent` is the maintained Node/npm exception and owns its
     `package-lock.json`.

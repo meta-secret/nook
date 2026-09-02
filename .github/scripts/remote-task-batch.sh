@@ -9,10 +9,8 @@ preflight
 arc:runtime
 rust:ci
 loom:verify
-agent-stats:inventory
 web:build
 web:e2e
-extension:check:fast
 extension:e2e
 hive:verify
 check
@@ -67,15 +65,13 @@ normalize_tasks() {
     return 2
   fi
   if (( count > 1 )) \
-    && { [[ "$seen" == *",agent-stats:inventory,"* ]] \
-      || [[ "$seen" == *",web:build,"* ]] \
+    && { [[ "$seen" == *",web:build,"* ]] \
       || [[ "$seen" == *",web:e2e,"* ]] \
-      || [[ "$seen" == *",extension:check:fast,"* ]] \
       || [[ "$seen" == *",extension:e2e,"* ]] \
       || [[ "$seen" == *",check,"* ]] \
       || [[ "$seen" == *",ci:pr,"* ]] \
       || [[ "$seen" == *",ci:pr:e2e,"* ]]; }; then
-    echo "Isolated remote tasks must be dispatched alone on their configured runner." >&2
+    echo "Runtime-backed tasks must be dispatched alone on the Kubernetes container runner." >&2
     return 2
   fi
 
@@ -88,10 +84,8 @@ task_command() {
     arc:runtime) echo "bash .github/scripts/arc-runtime-smoke.sh" ;;
     rust:ci) echo "task ci:pr:rust" ;;
     loom:verify) echo "task loom:verify" ;;
-    agent-stats:inventory) echo "bun agentic-ai/loom/src/lib/agent-stats-assemble.ts" ;;
     web:build) echo "task web:build" ;;
     web:e2e) echo "task web:test:e2e" ;;
-    extension:check:fast) echo "task extension:check:fast" ;;
     extension:e2e) echo "task extension:test:e2e" ;;
     hive:verify) echo "task hive:verify" ;;
     check) echo "task check" ;;
@@ -108,9 +102,9 @@ task_timeout_minutes() {
     loom:verify) echo 15 ;;
     rust:ci|hive:verify) echo 20 ;;
     web:build) echo 25 ;;
-    web:e2e|extension:check:fast|extension:e2e) echo 30 ;;
+    web:e2e|extension:e2e) echo 30 ;;
     check|ci:pr) echo 35 ;;
-    agent-stats:inventory|ci:pr:e2e) echo 45 ;;
+    ci:pr:e2e) echo 45 ;;
     *) return 2 ;;
   esac
 }
@@ -154,10 +148,8 @@ run_task() {
     arc:runtime) run_with_timeout "$timeout_minutes" bash .github/scripts/arc-runtime-smoke.sh ;;
     rust:ci) run_with_timeout "$timeout_minutes" env CI_ARTIFACT_DIR="$artifact_root/rust-ci" task ci:pr:rust ;;
     loom:verify) run_with_timeout "$timeout_minutes" task loom:verify ;;
-    agent-stats:inventory) run_with_timeout "$timeout_minutes" bun agentic-ai/loom/src/lib/agent-stats-assemble.ts > test-inventory.json ;;
     web:build) run_with_timeout "$timeout_minutes" task web:build ;;
     web:e2e) run_with_timeout "$timeout_minutes" env E2E_ARTIFACT_DIR="$artifact_root/web-e2e" task web:test:e2e ;;
-    extension:check:fast) run_with_timeout "$timeout_minutes" task extension:check:fast ;;
     extension:e2e) run_with_timeout "$timeout_minutes" env E2E_ARTIFACT_DIR="$artifact_root/extension-e2e" task extension:test:e2e ;;
     hive:verify) run_with_timeout "$timeout_minutes" env HIVE_CACHE_TO= task hive:verify ;;
     check) run_with_timeout "$timeout_minutes" task check ;;
@@ -175,7 +167,7 @@ requires_current_base() {
   IFS=',' read -r -a tasks <<< "$normalized_tasks"
   for task in "${tasks[@]}"; do
     case "$task" in
-      loom:verify|agent-stats:inventory|web:e2e|extension:check:fast|extension:e2e|check|ci:pr|ci:pr:e2e) return 0 ;;
+      loom:verify|web:e2e|extension:e2e|check|ci:pr|ci:pr:e2e) return 0 ;;
     esac
   done
   return 1

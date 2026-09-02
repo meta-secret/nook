@@ -349,10 +349,8 @@ task loom:pre-push
 
 Before every review-fix re-push, run `task loom:pre-push PR=<number>`. The PR
 argument does not allow the change to exceed 2,000 authored additions.
-Do not run local builds, tests, checks, lint, typechecks, or e2e.
-Do not run local package installation or compiler commands.
-Do not run local container product gates.
-Do not run advisory review or duplicate hosted-check mirrors.
+Do not add broad local builds, tests, e2e, container product gates, advisory
+review, or duplicate hosted-check mirrors.
 
 Focused hosted commands (never merge gates):
 
@@ -404,8 +402,7 @@ Normal PR CI omits browser e2e. A PR fixing a failure observed on `main` must tr
 task pr:validate PR=<number> FULL_E2E=1
 ```
 
-Agents do not run e2e locally. Use the remote catalog for focused browser
-feedback and the explicit Main-fix gate for merge validation.
+Agents do not run full e2e locally. Use the remote catalog for focused browser feedback and the explicit Main-fix gate for merge validation.
 
 ### 6. Monitor only Nook's applicable PR test checks until green
 
@@ -634,8 +631,7 @@ merge. Follow [issues](issues.md) and
 - Update the associated issue.
 - Add the agent worklog.
 - Create `stats/ai-agent/<source-pr-number>.yaml`.
-- Include the local pre-push hygiene, repository workflow
-  executions/retriggers, merge attempts, and elapsed time.
+- Include all local validation and repository workflow executions/retriggers plus merge attempts and elapsed time.
 - Record the repository test inventory on the merged head.
 - Compare with recent comparable records and assess waste.
 

@@ -16,8 +16,8 @@ found only by asynchronous PR review.
 
 ## Preferred Pattern
 
-For a hosted extension change, require hosted `task extension:check:fast` as
-focused security proof and verify all of these invariants in code and tests:
+For a hosted extension change, run `task extension:check:fast` as focused
+security proof and verify all of these invariants in code and tests:
 
 - selected Simple plus selected and production Sentinel injection exclusions;
 - exact selected-channel externally-connectable and content-script targets;
@@ -88,7 +88,7 @@ Deployment verification must prove:
 - the checksum; and
 - the packaged manifest.
 
-The security worker returns its exact committed handoff and pending acceptance
-verdict without running local validation. Gizmo obtains hosted extension proof
-and deployment evidence and returns both to Security. Security accepts or
-rejects that exact-head evidence before readiness.
+The security worker returns focused evidence for its exact committed handoff.
+Gizmo obtains hosted extension proof and deployment evidence and returns both
+to Security. Security accepts or rejects that exact-head evidence before
+readiness.

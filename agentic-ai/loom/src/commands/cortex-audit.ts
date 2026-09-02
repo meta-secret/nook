@@ -44,10 +44,6 @@ import {
   compileCortexContracts,
   type CortexContractFinding,
 } from '../lib/cortex-contracts.ts';
-import {
-  auditTeamAgents,
-  type TeamAuthorityAuditFinding,
-} from '../team-agents/audit.ts';
 export type CortexAuditReport = {
   readonly brokenLinks: BrokenLink[];
   readonly invalidExecutableSkillPackages: readonly ExecutableSkillPackageFinding[];
@@ -59,7 +55,6 @@ export type CortexAuditReport = {
   readonly articleStructureFindings: CortexArticleFinding[];
   readonly identifierFindings: readonly CortexIdentifierFinding[];
   readonly contractFindings: readonly CortexContractFinding[];
-  readonly teamAuthorityFindings: readonly TeamAuthorityAuditFinding[];
   readonly auditOk: boolean;
 };
 
@@ -269,7 +264,6 @@ export async function runCortexAuditFromDirectory(
   const contractFindings = compileCortexContracts({
     documents: allDocuments,
   });
-  const teamAuthorityFindings = auditTeamAgents({ repoRoot }).findings;
 
   return {
     brokenLinks,
@@ -282,7 +276,6 @@ export async function runCortexAuditFromDirectory(
     articleStructureFindings,
     identifierFindings,
     contractFindings,
-    teamAuthorityFindings,
     auditOk:
       brokenLinks.length === 0 &&
       executableSkillPackageFindings.length === 0 &&
@@ -293,8 +286,7 @@ export async function runCortexAuditFromDirectory(
       structureFindings.length === 0 &&
       articleStructureFindings.length === 0 &&
       identifierFindings.length === 0 &&
-      contractFindings.length === 0 &&
-      teamAuthorityFindings.length === 0,
+      contractFindings.length === 0,
   };
 }
 

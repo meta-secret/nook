@@ -43,17 +43,12 @@ rules. Keep operational behavior covered by regression tests after migration.
 
 ## Validation
 
-Team Agents author the required regression coverage, run only required
-non-compiling formatters, and return a coherent commit to Gizmo. Gizmo runs
-`task loom:pre-push`, pushes the exact head, and dispatches
-`task remote TASK_NAME=preflight`; hosted preflight owns the source-architecture
-evidence.
+Run:
 
-Complete exact-head pull-request validation owns the manifest-contract
-evidence. No focused hosted selector is allowlisted for the manifest check. If
-the complete validation job cannot provide that evidence, report the missing
-route as a blocker. Never substitute local source-architecture or manifest
-validation.
+1. `task preflight:source-architecture`
+2. `task infra:k0s:manifests:check`
+3. `task format`
+4. Exact-head pull-request validation
 
 The repository-language preflight uses one ignore-aware filesystem inventory in
 every environment. When Git metadata is present, tracked index entries are

@@ -34,18 +34,22 @@ an effort, quality, or billing measure.
 
 ## Invoke a leaf tool
 
-Defaultable tools retain Task aliases and in-code examples for hosted or
-human-operated use:
+Defaultable tools use a Task alias and an in-code example:
 
 ```bash
 task loom:pre-push
+task loom:tools-list
+task loom:cortex-audit
 task loom:cortex-session-clean
+task loom:dependency-popularity
 ```
 
-Gizmo uses `task loom:pre-push` as the only local validation alias. AI workers
-do not invoke the other aliases. They author the intended request or mutation
-in their assigned scope and return the coherent commit to Gizmo. Gizmo pushes
-that head and dispatches `task remote TASK_NAME=loom:verify`.
+Parameterized tools still take an agent-owned YAML file:
+
+```bash
+loom <request.yaml>
+task loom:run CONFIG=<request.yaml>
+```
 
 ## Executable skill applications
 
@@ -55,15 +59,14 @@ implementation is an ordinary Bun and TypeScript project in its owning
 the Cortex article application through a narrow in-process adapter. The
 application validates its request, audits it, independently verifies its
 result, and enforces contract bounds without command, network, write, agent, or
-lifecycle authority. Return the coherent commit to Gizmo. Gizmo pushes the
-exact head and runs `task remote TASK_NAME=loom:verify` for the recursive AST
-capability audit and exact Loom-consumer boundary.
+lifecycle authority. Run the shared workspace gate with `task skills:verify`.
+Run `task loom:verify` for the recursive AST capability audit and exact
+Loom-consumer boundary.
 
-AI workers inspect the closed registry and in-code examples read-only. They do
-not invoke local `skills:*` targets. A requested provider change includes its
-strict request and focused behavior coverage in the coherent commit. Gizmo's
-hosted `loom:verify` dispatch exercises catalog discovery, provider invocation,
-and every executable-skill package. The active harness owns agent lifecycle.
+Use `task skills:tools-list` for the closed action catalog and schemas. Use
+`task skills:run REQUEST_YAML='<strict-yaml>'` to pass one complete YAML
+document as one CLI argument. The host does not read request files or stdin.
+It returns validated data only; the active harness owns agent lifecycle.
 
 ## TypeScript domain structure
 
@@ -97,9 +100,8 @@ and [typescript-named-args.md](../../web-dev/dynamic-skills/typescript-named-arg
 - review enforces semantic reusable and public contracts plus generic-value
   containment while the existing debt is migrated
 
-Enforced by hosted `task preflight:typescript-state` across the repository,
-plus `task remote TASK_NAME=loom:verify` (includes ESLint) for Loom-local
-rules.
+Enforced by `task preflight:typescript-state` across the repository, plus
+`task loom:verify` (includes ESLint) for Loom-local rules.
 
 ## Domain request rule
 
@@ -115,18 +117,27 @@ arguments:
   pr: 123
 ```
 
-Use one registered domain root family and descriptive fields. Exactly one root
-family key is allowed. Agent statistics is not a generic Loom family; use its
-control adapter below.
+Use one domain root family and descriptive fields. Same-prefix operations nest:
+
+```yaml
+# right
+agentStats:
+  assemble:
+    prNumber: 123
+    scratchPath: '{agentTempDir}/pr-123-scratch.json'
+    outputPath: '{agentTempDir}/123.yaml'
+    includeTestInventory: true
+```
+
+Exactly one root family key is allowed.
 
 Unknown fields fail closed.
 
 ## Discover request kinds
 
-Inspect `agentic-ai/loom/src/tools/registry.ts` and the typed request codecs.
-The in-code examples remain the source for complete request shapes. Gizmo's
-hosted `loom:verify` dispatch checks that every example decodes and every
-registered provider remains reachable.
+```bash
+task loom:tools-list
+```
 
 On decode errors:
 
@@ -135,22 +146,24 @@ On decode errors:
    blueprint template versus the received YAML.
 3. For syntax failures, also read `explanation.parseMessage`.
 4. Fix the request to match `explanation.blueprintYaml`, then retry.
-5. Inspect the typed registry when the root family is unclear.
+5. Run `toolsList` when the root family is unclear.
 
 ### dependencyPopularity
 
-The typed request describes adoption evidence for npm packages and crates.io
-crates. No allowlisted hosted selector executes it. AI workers record cited
-read-only evidence and report a required executable verdict as blocked; they do
-not invoke the local alias or substitute an unevaluated verdict.
+Reject low-adoption npm packages and crates.io crates:
+
+```bash
+task loom:dependency-popularity
+```
 
 Prefer libraries over boilerplate:
 [prefer-popular-libraries.md](../../../shared/dynamic-skills/prefer-popular-libraries.md).
 
 ## Common requests
 
-The typed registry owns the canonical invoke command, exact `exampleYaml`, and
-typed `inputSchema` for every direct request below.
+`task loom:tools-list` returns the canonical invoke command in
+`exampleRequest`, exact `exampleYaml`, and typed `inputSchema` for every
+direct request below.
 `resolvedExampleYaml` equals the generated example for static requests and
 fills dynamic tokens for the current worktree and commit. Consume that output
 instead of maintaining request bodies in Cortex.
@@ -164,7 +177,7 @@ task loom:pre-push
 ### cortexAudit
 
 ```bash
-task remote TASK_NAME=loom:verify
+task loom:cortex-audit
 ```
 
 ### cortexSessionClean
@@ -178,39 +191,27 @@ ignored `.cortex/.session/` memory.
 
 ### skillScaffold
 
+```bash
+task loom:skill-scaffold CONFIG=path/to/request.yaml
+```
+
 The request requires `skillOwner` with one of `gizmo`, `ai`, `shared`,
 `dev-core`, `security`, `sre`, or `web-dev`. Loom creates the canonical card in
 that owner's dynamic-skill directory. It registers the card in the AI skill
 catalog. Security remains the owner for security policy and acceptance.
 
-An AI worker materializes the card and registry mutation directly in its
-assigned scope. It returns the coherent commit to Gizmo. Hosted `loom:verify`
-checks the scaffold contract and exact catalog state.
-
 ### agentStats (assemble / validate / publish)
+
+```bash
+task loom:agent-stats CONFIG=path/to/assemble-request.yaml
+```
 
 Validate and publish use `agentStats.validate` / `agentStats.publish` with
 `statsFile`. Agent-statistics paths accept `{agentTempDir}` for stable isolation
 by Git commit and worktree. See
 [Agent PR Statistics](../../../gizmo/workflows/agent-statistics.md#mechanical-entrypoint--loom).
-Generic Loom discovery and dispatch reject this family. After the source PR is
-merged, Gizmo uses the dependency-free
-`task loom:agent-stats-control` stdin JSON adapter for assemble, validate, and
-publish. The adapter rejects local test-inventory collection; hosted exact-head
-evidence supplies that inventory. It does not install Loom or expose generic
-tool discovery or invocation.
-
-The complete stdin envelope is exactly one of these JSON objects:
-
-```jsonl
-{"operation":"assemble","request":{"prNumber":123,"scratchPath":"{agentTempDir}/pr-123-scratch.json","outputPath":"{agentTempDir}/123.yaml","includeTestInventory":false}}
-{"operation":"validate","request":{"statsFile":"{agentTempDir}/123.yaml"}}
-{"operation":"publish","request":{"statsFile":"{agentTempDir}/123.yaml"}}
-```
 
 ### prLand (status / validate / ready / mergeCheck)
-
-Gizmo uses this allowlisted local delivery-control entrypoint:
 
 ```bash
 task loom:pr-land CONFIG=path/to/validate-request.yaml
@@ -224,8 +225,8 @@ stabilization to settle before `prLand.ready`.
 
 Wraps another domain request.
 
-Copy `exampleYaml` from the typed registry when you need a nested call. Prefer
-a top-level domain key for normal calls.
+Copy the generated `exampleYaml` from `task loom:tools-list` when you need a
+nested call. Prefer a top-level domain key for normal calls.
 
 ## Response
 

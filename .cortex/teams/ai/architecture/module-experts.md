@@ -288,11 +288,10 @@ resource claims make independent ownership useful.
 
 ## Validation
 
-Return registry changes to Gizmo. Gizmo pushes the exact head and runs the
-deterministic registry audit through the hosted selector:
+Run the deterministic registry audit:
 
 ```bash
-task remote TASK_NAME=loom:verify
+task loom:module-experts:validate
 ```
 
 The audit rejects:

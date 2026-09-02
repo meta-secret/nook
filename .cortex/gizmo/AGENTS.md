@@ -80,15 +80,10 @@ worker boundary.
 1. Define the requested outcome and terminal evidence.
 2. Assign bounded tasks to their functional owners.
 3. Sequence write-capable Team Agents on the shared branch.
-4. Verify returned changes without requesting local validation.
+4. Verify returned changes and focused evidence.
 5. Route corrections to the responsible team.
-6. Run `task loom:pre-push`, push the coherent branch, and dispatch remote
-   exact-head validation.
+6. Push the coherent branch and obtain exact-head validation.
 7. Complete the user-selected terminal state.
-
-Gizmo never asks a worker to run local compilation or validation. It enforces
-the root [remote-only execution](../AGENTS.md#remote-only-agent-execution)
-contract when defining acceptance evidence.
 
 For a normal implementation mission, completion includes pull-request
 creation, exact-head validation, readiness, squash merge, remote verification,

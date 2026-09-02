@@ -82,7 +82,7 @@ For every promotion:
    discoverability changes.
 5. Apply [Cortex consistency](cortex-consistency/SKILL.md), the canonical writer, and
    article-structure rules.
-6. Review the resulting Cortex tree against the selected authoring authorities.
+6. Validate the resulting Cortex tree.
 
 ## Protocol evolution safety
 
@@ -156,7 +156,7 @@ Do not run a broad workflow audit merely because a task was substantial.
 2. Classify duplicated instructions by the categories above.
 3. Move only fully deterministic behavior into a typed leaf.
 4. Replace duplicated procedure with a link to the canonical authority.
-5. Review behavior and Cortex coherence without executing the proposed leaf.
+5. Validate behavior and Cortex coherence.
 
 Never derive executable topology from Markdown, YAML, prompts, temporary notes,
 or model output. Processing artifacts are evidence, not durable authority.
@@ -165,7 +165,7 @@ or model output. Processing artifacts are evidence, not durable authority.
 
 Before returning an AI-owned Cortex handoff to Gizmo:
 
-- implementation and focused behavior proof are authored;
+- implementation and focused worker proof are complete;
 - any promoted knowledge is evidence-backed;
 - any promoted knowledge is owned by one authority;
 - no speculative or duplicate guidance was promoted;
@@ -178,14 +178,14 @@ head requires fresh exact-head hosted validation.
 
 ## Validation
 
-1. Run required formatters and include their mutations in the owned scope.
-2. Remove optional `.cortex/.session/` notes.
-3. Run the read-only `task loom:cortex-session-clean` check and confirm no
-   session file is tracked.
-4. Return the coherent formatted handoff to Gizmo.
-5. Let Gizmo run `task loom:pre-push` and push the exact head.
-6. Let Gizmo run `task remote TASK_NAME=loom:verify`.
-7. Return any hosted finding to its owning team.
+1. Run focused checks for changed authorities.
+2. Run required formatters and include their mutations in the owned scope.
+3. Run `task loom:cortex-audit`.
+4. Remove optional `.cortex/.session/` notes.
+5. Run `task loom:cortex-session-clean` and confirm no session file is tracked.
+6. If formatting changed the tree after the audit, repeat the audit and cleanup
+   check.
+7. Return the coherent audited handoff to Gizmo.
 
-Do not run local product or repository gates or duplicate hosted validation in
-this focused sequence.
+Do not add broad local product gates or duplicate hosted validation to this
+focused sequence.

@@ -51,11 +51,11 @@ Report the blocker instead of reporting an intermediate state as complete.
 4. **Sequence writers.**
    - Run only one write-capable Team Agent at a time.
    - Use the current checkout and current branch.
-   - Let the Team Agent run required non-compiling formatters.
+   - Let the Team Agent run focused checks.
    - Ask for a complete scoped commit when useful.
    - Continue directly from that shared-branch state.
 5. **Prepare the delivery head.**
-   - Verify changed paths and formatter evidence.
+   - Verify changed paths and focused evidence.
    - Route formatter or implementation corrections to the owning team.
    - Run `task loom:pre-push PR=<number>` before a push.
    - Push the coherent shared branch.

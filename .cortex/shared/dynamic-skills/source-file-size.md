@@ -113,8 +113,7 @@ An exclusion must describe data provenance, not excuse authored source.
       never in separate files under `src`.
 - [ ] Preserve or add behavior-focused unit and integration tests at their
       correct boundaries.
-- [ ] Return a coherent committed handoff with the focused behavior proof
-      authored at its owning boundary.
+- [ ] Return a verified committed handoff with the focused worker proof.
 - [ ] Have Gizmo continue from the commit and run `task loom:pre-push`.
 - [ ] Have Gizmo push. If the head is not validation-ready, Gizmo may run the
       repository source-size scanner through a focused hosted preflight task.
@@ -135,7 +134,7 @@ scanner diagnostics; code review verifies the actual decomposition seam.
 
 ## Validation
 
-Ordinary workers return a coherent committed handoff. Gizmo runs
+Ordinary workers return a verified committed handoff. Gizmo runs
 `task loom:pre-push` before every push. Gizmo uses a focused hosted preflight
 task only while the head is not validation-ready. A ready head enters the
 complete PR gate, which includes the scanner.

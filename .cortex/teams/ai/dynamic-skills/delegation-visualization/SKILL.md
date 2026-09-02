@@ -28,47 +28,20 @@ creates and coordinates Team Agents.
 
 ## Invocation
 
-Gizmo builds the bounded request as strict JSON:
-
-```json
-{
-  "kind": "gizmo-delegation-visualization-v1",
-  "tasks": [
-    {
-      "id": "update-cortex",
-      "team": "ai",
-      "description": "update Cortex",
-      "dependencies": []
-    }
-  ]
-}
-```
-
-Send that JSON to the dependency-free presentation-control entrypoint on
-standard input. A quoted heredoc preserves every codec-admitted string,
-including apostrophes:
+Discover the strict request through the executable skill host:
 
 ```bash
-task loom:delegation-visualization <<'JSON'
-{
-  "kind": "gizmo-delegation-visualization-v1",
-  "tasks": [
-    {
-      "id": "update-cortex",
-      "team": "ai",
-      "description": "author's Cortex update",
-      "dependencies": []
-    }
-  ]
-}
-JSON
+task skills:tools-list
+```
+
+Invoke the returned `delegationVisualization.render` request:
+
+```bash
+task skills:run REQUEST_YAML='<strict-yaml>'
 ```
 
 Publish only the returned `tree` as the plan hierarchy. Do not infer or edit
-the rendered output. This entrypoint imports only the co-located codec,
-application, and renderer. It does not install the executable-skill workspace.
-It does not accept the request through a shell argument or environment
-variable.
+the rendered output.
 
 ## Later discovery
 
@@ -80,5 +53,4 @@ Never rewrite an earlier visualization as though the dependency was known.
 - Reject duplicate, missing, self, forward, or cyclic dependencies.
 - Reject unknown teams and unsupported fields.
 - Verify exact tree order and connectors with focused package tests.
-- Return the coherent change to Gizmo. Gizmo's hosted `loom:verify` evidence
-  executes the package and Cortex contract coverage before delivery.
+- Run `task skills:verify` and `task loom:cortex-audit` before delivery.

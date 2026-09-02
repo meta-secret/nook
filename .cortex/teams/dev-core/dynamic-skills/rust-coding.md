@@ -444,8 +444,6 @@ whether a value exists.
 - Review every `clippy::fn_params_excessive_bools` and
   `clippy::struct_excessive_bools` allowance in the changed scope. An allowance
   is not justification and should normally disappear with the refactor.
-- Return the formatted implementation to Gizmo. Gizmo dispatches hosted
-  targeted portable Rust tests and strict Clippy evidence for the affected
-  crates.
-- When exposed to web, Gizmo dispatches hosted WASM binding regeneration and
-  web typecheck evidence.
+- Run targeted portable Rust tests plus `cd nook-app/nook-platform && cargo clippy -p
+nook-app-common -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --all-targets -- -D warnings`.
+- When exposed to web, regenerate wasm bindings and run the web type check.

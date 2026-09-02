@@ -640,7 +640,7 @@ remoteWorkflow.requireAll([
   "name: Report Kubernetes worker node",
   ': "${KUBERNETES_NODE_NAME:?KUBERNETES_NODE_NAME is required}"',
   "printf '::notice title=Kubernetes worker::%s\\n' \"$KUBERNETES_NODE_NAME\"",
-  "timeout-minutes: ${{ (inputs.tasks || inputs.task) == 'agent-stats:inventory' && 45 || 30 }}",
+  "Remote / browser image",
   "runs-on: nook-k0s-container",
   "Run repository invariant preflight",
   "run: task preflight",
@@ -648,23 +648,16 @@ remoteWorkflow.requireAll([
   "Run selected task without a nested container runtime",
   "web:build) task _web:build",
   "task _web:test:e2e",
-  "extension:check:fast) task extension:check:fast",
   "extension:e2e) task _extension:test:e2e",
   "check) task _check",
   "ci:pr) task _ci:pr",
   "ci:pr:e2e) task _ci:main",
   "inputs.tasks != '' && inputs.task != ''",
   "(inputs.tasks == '' || inputs.task == '')",
-  "DOCKER_RUST_BROWSER_IMAGE=$DOCKER_E2E_IMAGE task setup:rust:browser SETUP_OUTPUT=type=registry",
-  "test-inventory-${{ github.sha }}",
 ]);
 remoteWorkflow.requireBefore({
   first: "name: Report Kubernetes worker node",
   second: "uses: actions/checkout@v7",
-});
-remoteWorkflow.requireBefore({
-  first: "timeout-minutes: ${{ (inputs.tasks || inputs.task) == 'agent-stats:inventory' && 45 || 30 }}",
-  second: "container:\n      image: registry.dev.nokey.sh/nook/remote-buildcache/nook-web-e2e:run-",
 });
 remoteWorkflow.require(
   "inputs.dispatch_nonce || 'default'",

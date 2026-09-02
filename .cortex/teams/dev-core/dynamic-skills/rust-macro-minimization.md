@@ -63,9 +63,8 @@ Does not apply to:
 
 ## Validation
 
-Development-core workers return the formatted implementation to Gizmo. Gizmo
-dispatches hosted syntax-aware preflight and the smallest allowlisted Rust task
-that proves the changed behavior.
+Development-core workers run the syntax-aware preflight tests and the smallest
+focused Rust tests that prove the changed behavior.
 
 For implementation work, run `task format`. Format every allowed Rust or
 development-core Cortex file the worker changed. Inspect that diff and return

@@ -103,8 +103,8 @@ Does not apply to:
 
 1. [ ] Domain logic changes have colocated Rust unit or property tests.
 2. [ ] Bug fixes include a test that reproduces the defect.
-3. [ ] Hosted Rust domain tests pass with all tests green.
-4. [ ] Hosted Rust line coverage remains at or above 90%.
+3. [ ] `task rust:test` passes with all tests green.
+4. [ ] Rust line coverage remains at or above 90% (`task rust:coverage:check`).
 5. [ ] App logs (`nook-app-logs.json`, `/logs`) are consulted when debugging test failures.
 6. [ ] Durable Cortex scenarios have evidence at the authoritative boundary.
 7. [ ] Durable behavior discovered in tests is reflected in the owning Cortex
@@ -113,7 +113,6 @@ Does not apply to:
 
 ## Validation
 
-- Gizmo dispatches the relevant allowlisted hosted Rust task for unit, domain,
-  and coverage evidence.
-- Gizmo dispatches the relevant allowlisted hosted browser task for web e2e
-  evidence.
+- Run unit & domain tests: `task rust:test`
+- Verify coverage floor: `task rust:coverage:check`
+- Run web e2e smoke tests: `task web:test:e2e`

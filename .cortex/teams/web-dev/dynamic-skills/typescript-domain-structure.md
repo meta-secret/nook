@@ -95,11 +95,12 @@ Does not apply to:
 - `rg "new Set\\(\\['" agentic-ai nook-app` should find no authored field
   allow-lists
 - `rg "type Result<|type Maybe<" agentic-ai` should find none
-- Gizmo dispatches the relevant allowlisted hosted TypeScript and Loom tasks.
-- The worker that owns the changed scope formats every allowed source or
-  Cortex file and returns one coherent commit without pushing.
-- Gizmo dispatches the affected package typecheck and behavior tests.
-- Gizmo retains required browser evidence.
+- `task preflight:typescript-state`
+- Loom: `bun run verify` in `agentic-ai/loom`
+- The worker that owns the changed scope runs the applicable checks above plus
+  the affected package's focused typecheck and behavior tests, retains required
+  browser evidence, formats every allowed source or Cortex file, commits one
+  coherent exact handoff, and returns the commit and evidence without pushing.
   Changes under `agentic-ai/` and Loom remain AI-worker work. A Web worker
   applies this skill only to web-owned implementation or through an explicit
   Web expertise task; the skill does not grant generic ownership of

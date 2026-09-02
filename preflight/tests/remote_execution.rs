@@ -191,7 +191,6 @@ fn remote_task_batches_are_validated_and_keep_requested_order() -> Result<()> {
         "preflight,arbitrary:command",
         "preflight, rust:ci",
         "preflight,web:e2e",
-        "preflight,extension:check:fast",
         "preflight,extension:e2e",
         "preflight,web:build",
         "preflight,check",
@@ -253,8 +252,6 @@ fn remote_task_batches_are_validated_and_keep_requested_order() -> Result<()> {
     for task in [
         "web:build",
         "web:e2e",
-        "agent-stats:inventory",
-        "extension:check:fast",
         "extension:e2e",
         "check",
         "ci:pr",
@@ -269,8 +266,6 @@ fn remote_task_batches_are_validated_and_keep_requested_order() -> Result<()> {
     for direct_task in [
         "web:build) task _web:build",
         "web:e2e) task _web:test:e2e",
-        "agent-stats:inventory) bun agentic-ai/loom/src/lib/agent-stats-assemble.ts",
-        "extension:check:fast) task extension:check:fast",
         "extension:e2e) task _extension:test:e2e",
         "check) task _check",
         "ci:pr) task _ci:pr",
@@ -439,14 +434,7 @@ fn remote_task_batch_rechecks_buildkit_after_both_timeout_statuses_and_continues
 fn expensive_remote_validation_requires_the_current_base() -> Result<()> {
     let remote_tasks = read(".task/remote-execution.yml");
     assert!(remote_tasks.contains("remote-task-batch.sh --requires-current-base"));
-    for tasks in [
-        "loom:verify",
-        "agent-stats:inventory",
-        "web:e2e",
-        "extension:check:fast",
-        "extension:e2e",
-        "ci:pr",
-    ] {
+    for tasks in ["loom:verify", "web:e2e", "extension:e2e", "ci:pr"] {
         assert!(
             remote_batch_command(&["--requires-current-base", tasks])?
                 .status

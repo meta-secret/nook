@@ -10,12 +10,11 @@ simple shared-branch delivery sequence.
 1. Identify the functional owner.
 2. Define the allowed files and acceptance evidence.
 3. Start one write-capable Team Agent in the current checkout.
-4. Let the Team Agent implement and run required non-compiling formatters.
+4. Let the Team Agent implement and run focused checks.
 5. Ask the Team Agent to commit when a commit helps the sequence.
 6. Continue directly from that shared-branch state.
-7. Let Gizmo push and dispatch the acceptance evidence remotely.
-8. Route review or validation fixes to the responsible team.
-9. Let Gizmo complete external delivery.
+7. Route review or validation fixes to the responsible team.
+8. Let Gizmo complete external delivery.
 
 ## Rules
 
@@ -33,6 +32,6 @@ simple shared-branch delivery sequence.
 
 - The owning team implemented the change.
 - The accepted result is already on the shared branch.
-- Hosted focused tests cover the changed behavior.
+- Focused tests cover the changed behavior.
 - No concurrent writer touched the checkout.
 - Gizmo retains external delivery ownership.

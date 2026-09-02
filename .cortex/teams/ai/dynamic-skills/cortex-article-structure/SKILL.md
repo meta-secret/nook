@@ -201,12 +201,13 @@ also exposes its validated audit action through strict YAML.
 
 ## Validation
 
-Return the coherent commit to Gizmo. The provider contract and independent
-verifier live in Loom with the production audit implementation; Gizmo pushes
-the exact head and runs:
+Run the focused checks. The provider contract and independent verifier live in
+Loom with the production audit implementation:
 
 ```bash
-task remote TASK_NAME=loom:verify
+task loom:cortex-audit
+task loom:verify
+task preflight:loom-contracts
 ```
 
 Review the diff semantically after the mechanical checks pass.

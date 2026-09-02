@@ -8,10 +8,7 @@
 - `agentic-ai/ci-agent` is the maintained Node/npm exception.
 - It owns its checked-in `package-lock.json` and runs through Task wrappers.
 
-## 2. Human Dev Server and Build
-
-These local commands are for human interactive development. Agents use the
-hosted remote catalog and do not run local product builds or dev servers.
+## 2. Dev Server and Build
 
 - Start Vite dev server: `task web:dev` (Docker; port 5173). It uses the default dev/no-opt WASM mode; `task web:dev:fast` is an explicit alias for the same local-iteration behavior and expects the `nook-web:local` image to already exist, so run `task setup` once first on a fresh machine.
 - Build the production assets: `task web:build` (outputs to `nook-app/nook-web/dist/`).
@@ -41,10 +38,7 @@ After `task wasm:build`, `task wasm:build:fast`, or any `nook-wasm` /
 `nook-core` change, restart `task web:dev` / `task web:dev:fast` if the UI does
 not recover on its own.
 
-## 3. Human E2E Reference and Hosted Agent Evidence
-
-The local commands in this section are for human interactive debugging. Agents
-use the hosted remote catalog for browser evidence.
+## 3. E2e tests
 
 Unused TypeScript and Svelte code is enforced by `bun run unused` (Knip) in both
 `nook-web-app` and `nook-web-research`. Copy/paste clones are enforced by
@@ -84,13 +78,12 @@ and `preflight` sources. Unused-code ownership is split as follows:
   to reclaim `5173`.
 - Live sync Playwright (`sync-live` project): `task web:test:e2e:sync-live` — real GitHub API; explicit manual runs only. Requires `NOOK_GITHUB_PAT` in `nook-app/nook-web/.env.test.local`.
 - Vite `import.meta.env` values used by e2e are build-time constants; Task targets that serve `dist` must rebuild the e2e dist with the e2e env before Playwright runs.
-- Humans do not run `bun run test:e2e*` or `playwright test` directly on the
-  host. They use the Taskfile so WASM is built and tooling matches CI.
-- Before integration, the Web worker deterministically formats every allowed
-  web or web-owned Cortex file and commits one coherent exact handoff. The
-  worker promptly returns that commit without pushing or taking PR lifecycle
-  ownership. Gizmo dispatches the applicable hosted focused proof. Required
-  agent browser E2E is not pre-integration
+- Do not run `bun run test:e2e*` or `playwright test` directly on the host; use Taskfile so wasm is built and tooling matches CI.
+- Before integration, the Web worker runs the applicable focused proof for the
+  behavior it changes, deterministically formats every allowed web or web-owned
+  Cortex file, and commits one coherent exact handoff. The worker promptly
+  returns that commit and focused evidence without pushing or taking PR
+  lifecycle ownership. Required agent browser E2E is not pre-integration
   handoff evidence: it runs on the configured GitHub Actions worker against a
   published SHA. Humans may use local single-spec Docker e2e for interactive
   debugging.
@@ -99,10 +92,9 @@ and `preflight` sources. Unused-code ownership is split as follows:
   the exact diff to web development for a fresh formatted commit instead of
   committing it.
 - After the owner commit and a clean gate, Gizmo pushes.
-- Gizmo runs a relevant focused remote task while the head is not
-  validation-ready.
-- Gizmo includes required Web-owned browser E2E through `task remote`.
-- Gizmo runs complete exact-head validation when the head is ready.
+- Run a relevant focused remote task while the head is not validation-ready.
+- Include required Web-owned browser E2E through `task remote`.
+- Run complete exact-head validation when the head is ready.
 - Gizmo collects every required browser E2E result against that published head.
   Web development owns the browser acceptance requirement; Gizmo owns
   publication, remote dispatch and collection, readiness, and merge.

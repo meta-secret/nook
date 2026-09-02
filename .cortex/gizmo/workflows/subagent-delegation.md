@@ -46,21 +46,16 @@ the active harness.
    - Give every task one identifier, team, description, and dependency list.
    - Keep tasks in native harness dispatch order.
    - Name only earlier tasks as dependencies.
-6. Send the strict JSON request to the dependency-free static renderer on
-   standard input through `task loom:delegation-visualization`. Never put the
-   request in a shell argument or environment variable.
+6. Invoke the static renderer through `task skills:run`.
 7. Emit one normal `GIZMO:STATE` activity line for the plan visualization.
 8. Publish the returned `tree` verbatim as one compact user-visible block
    immediately below that activity line.
 9. Start the Team Agent through the active harness in the current checkout.
-10. Let the Team Agent implement and run required non-compiling formatters.
+10. Let the Team Agent implement and run focused checks.
 11. Ask for a commit when a commit is useful for the delivery sequence.
 12. Verify that the result stays inside the declared scope.
 13. Continue from the resulting shared-branch state.
-14. Gizmo runs `task loom:pre-push` as the sole local validation exception.
-15. Gizmo pushes the coherent head and dispatches its acceptance evidence
-    remotely.
-16. Route any correction to the team that owns the affected change.
+14. Route any correction to the team that owns the affected change.
 
 ## Dependencies
 
@@ -100,5 +95,5 @@ Before accepting Team Agent work, verify:
 - only the declared files changed;
 - no other writer ran concurrently;
 - the shared branch contains the accepted result;
-- required acceptance evidence ran remotely; and
+- focused acceptance checks passed; and
 - Gizmo still owns every external delivery action.

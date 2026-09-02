@@ -151,7 +151,7 @@ Checklist for every new or edited `.cortex` sentence:
 
 ## Mechanical lint
 
-Gizmo's normal pre-push path checks changed Cortex Markdown automatically.
+The normal pre-push path checks changed Cortex Markdown automatically.
 
 ```bash
 task loom:pre-push
@@ -172,9 +172,18 @@ This changed-file gate has bounded scope.
 - It also excludes fenced code and structural Markdown blocks.
 - It does not audit unchanged legacy prose.
 
-The changed-file gate flags long sentences and heavy semicolon or "and" joins.
-No allowlisted hosted selector exists for an explicit full-corpus density pass.
-Report that missing selector as a blocker instead of invoking Loom locally.
+Use Loom configuration for an explicit full-corpus density pass:
+
+```yaml
+cortexAudit:
+  includeDensityLint: true
+```
+
+```bash
+task loom:run CONFIG=path/to/cortex-audit-density.yaml
+```
+
+Loom flags long sentences and heavy semicolon or "and" joins.
 
 It does not rewrite meaning. The agent still owns the edit.
 
@@ -241,9 +250,9 @@ Full rewritten example:
   - A reviewer should be able to extract each rule without re-parsing a
     compound sentence.
 - For docs-only captures:
-  - inspect changed links read-only; and
+  - run link checks; and
   - self-review against the checklist above.
-- Apply the read-only semantic consistency review in
+- Run the consistency GC in
   [Cortex consistency](cortex-consistency/SKILL.md) for the touched topic.
 - For implementation tasks that include `.cortex` edits:
   1. run required formatters and commit every allowed AI source or Cortex
@@ -256,4 +265,3 @@ Full rewritten example:
      head is not validation-ready, or complete exact-head validation immediately
      when it is ready.
 - Gizmo obtains fresh exact-head remote evidence after every replacement push.
-- Gizmo's hosted `loom:verify` evidence owns executable link and Cortex audits.

@@ -77,14 +77,16 @@ sections. Their natural heading hierarchy is the local map.
 3. Add one document-level link to that context's graph.
 4. Remove obsolete links from the previous graph.
 5. Update direct callers and the canonical skill catalog.
-6. Return the coherent commit so Gizmo can dispatch the hosted Cortex audit.
+6. Run the Cortex audit.
 
 ## Validation
 
-Return the coherent commit to Gizmo. Gizmo pushes the exact head and runs:
+Run:
 
 ```bash
-task remote TASK_NAME=loom:verify
+task loom:cortex-audit
+task loom:verify
+task preflight:loom-contracts
 ```
 
 Loom enforces:
@@ -98,7 +100,7 @@ Loom enforces:
 
 The co-located read-only TypeScript application owns the deterministic
 Markdown parser, graph-topology diagnostics, and legacy index migration
-rendering. The project is installed and verified through Gizmo's hosted
-`task remote TASK_NAME=loom:verify` dispatch. AI workers inspect its typed
-request and provider read-only. The action does not read or write repository
-files, spawn processes, or coordinate agents.
+rendering. The project is automatically installed and verified with every
+executable skill. Discover its bounded audit action with
+`task skills:tools-list`. The action does not read or write repository files,
+spawn processes, or coordinate agents.

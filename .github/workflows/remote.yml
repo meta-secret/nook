@@ -60,8 +60,6 @@ jobs:
       ((inputs.task != 'rust-cache:promote' || inputs.tasks != '') &&
       (inputs.tasks || inputs.task) != 'web:build' &&
       (inputs.tasks || inputs.task) != 'web:e2e' &&
-      (inputs.tasks || inputs.task) != 'agent-stats:inventory' &&
-      (inputs.tasks || inputs.task) != 'extension:check:fast' &&
       (inputs.tasks || inputs.task) != 'extension:e2e' &&
       (inputs.tasks || inputs.task) != 'check' &&
       (inputs.tasks || inputs.task) != 'ci:pr' &&
@@ -88,8 +86,6 @@ jobs:
           : "${KUBERNETES_NODE_NAME:?KUBERNETES_NODE_NAME is required}"
           printf '::notice title=Kubernetes worker::%s\n' "$KUBERNETES_NODE_NAME"
       - uses: actions/checkout@v7
-        with:
-          fetch-depth: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',loom:verify,') && '0' || '1' }}
       - name: Validate batch request
         shell: bash
         run: |
@@ -167,15 +163,13 @@ jobs:
       (inputs.tasks == '' || inputs.task == '') &&
       ((inputs.tasks || inputs.task) == 'web:build' ||
       (inputs.tasks || inputs.task) == 'web:e2e' ||
-      (inputs.tasks || inputs.task) == 'agent-stats:inventory' ||
-      (inputs.tasks || inputs.task) == 'extension:check:fast' ||
       (inputs.tasks || inputs.task) == 'extension:e2e' ||
       (inputs.tasks || inputs.task) == 'check' ||
       (inputs.tasks || inputs.task) == 'ci:pr' ||
       (inputs.tasks || inputs.task) == 'ci:pr:e2e')
     name: Remote / browser image
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
-    timeout-minutes: 45
+    timeout-minutes: 30
     env:
       DOCKER_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-web-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
       DOCKER_E2E_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-web-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
@@ -200,15 +194,13 @@ jobs:
           (inputs.tasks || inputs.task) == 'ci:pr:e2e'
         run: task preflight
       - name: Build exact-source Kubernetes job image
-        run: ${{ (inputs.tasks || inputs.task) == 'agent-stats:inventory' && 'DOCKER_RUST_BROWSER_IMAGE=$DOCKER_E2E_IMAGE task setup:rust:browser SETUP_OUTPUT=type=registry' || 'task web:e2e:kubernetes-image' }}
+        run: task web:e2e:kubernetes-image
 
   web-e2e:
     if: >-
       (inputs.tasks == '' || inputs.task == '') &&
       ((inputs.tasks || inputs.task) == 'web:build' ||
       (inputs.tasks || inputs.task) == 'web:e2e' ||
-      (inputs.tasks || inputs.task) == 'agent-stats:inventory' ||
-      (inputs.tasks || inputs.task) == 'extension:check:fast' ||
       (inputs.tasks || inputs.task) == 'extension:e2e' ||
       (inputs.tasks || inputs.task) == 'check' ||
       (inputs.tasks || inputs.task) == 'ci:pr' ||
@@ -216,7 +208,7 @@ jobs:
     needs: web-e2e-image
     name: Remote / web:e2e
     runs-on: nook-k0s-container
-    timeout-minutes: ${{ (inputs.tasks || inputs.task) == 'agent-stats:inventory' && 45 || 30 }}
+    timeout-minutes: 30
     container:
       image: registry.dev.nokey.sh/nook/remote-buildcache/nook-web-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
       credentials:
@@ -234,17 +226,12 @@ jobs:
           case "$REMOTE_CONTAINER_TASK" in
             web:build) task _web:build ;;
             web:e2e) task _web:test:e2e ;;
-            agent-stats:inventory) bun agentic-ai/loom/src/lib/agent-stats-assemble.ts > "$GITHUB_WORKSPACE/test-inventory.json" ;;
-            extension:check:fast) task extension:check:fast ;;
             extension:e2e) task _extension:test:e2e ;;
             check) task _check ;;
             ci:pr) task _ci:pr ;;
             ci:pr:e2e) task _ci:main ;;
             *) echo "Unsupported Kubernetes container task: $REMOTE_CONTAINER_TASK" >&2; exit 2 ;;
           esac
-      - uses: actions/upload-artifact@v7
-        if: ${{ (inputs.tasks || inputs.task) == 'agent-stats:inventory' }}
-        with: { name: "test-inventory-${{ github.sha }}", path: test-inventory.json }
 
       - name: Collect Playwright diagnostics
         if: always()

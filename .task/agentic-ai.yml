@@ -42,20 +42,6 @@ tasks:
     cmds:
       - bun "{{.REPO_ROOT}}/.cortex/teams/ai/dynamic-skills/executable-skill-host/scripts/src/cli.ts" --tools-list
 
-  loom:delegation-visualization:
-    desc: >-
-      Render one transient native Team Agent plan without installing project
-      dependencies.
-    cmds:
-      - bun "{{.REPO_ROOT}}/.cortex/teams/ai/dynamic-skills/delegation-visualization/scripts/src/cli.ts"
-
-  loom:agent-stats-control:
-    desc: >-
-      Assemble, validate, or publish post-merge agent statistics without
-      installing project dependencies.
-    cmds:
-      - bun "{{.REPO_ROOT}}/agentic-ai/loom/src/agent-stats-control-cli.ts"
-
   loom:install:
     desc: Install Loom Bun dependencies with a frozen lockfile.
     dir: agentic-ai/loom
@@ -99,10 +85,9 @@ tasks:
       - bun run lint
 
   loom:verify:
-    desc: Audit Cortex, then format-check, lint, typecheck, and unit-test Loom.
+    desc: Format-check, lint, typecheck, and unit-test Loom.
     deps: [loom:install]
     cmds:
-      - task: loom:cortex-audit
       - task: skills:verify
       - task: loom:format:check
       - task: loom:lint
@@ -292,6 +277,16 @@ tasks:
 
   loom:skill-scaffold:
     desc: Scaffold a dynamic-skill card via Loom (CONFIG=<request.yaml>).
+    deps: [loom:install]
+    requires:
+      vars: [CONFIG]
+    cmds:
+      - task: loom:run
+        vars:
+          CONFIG: '{{.CONFIG}}'
+
+  loom:agent-stats:
+    desc: Assemble, validate, or publish AI-agent stats via Loom (CONFIG=<request.yaml>).
     deps: [loom:install]
     requires:
       vars: [CONFIG]

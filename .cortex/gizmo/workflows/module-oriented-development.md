@@ -18,23 +18,16 @@ creating a separate Git integration system.
 - Read-only experts return evidence only. They do not mutate Git or delivery
   state.
 - Shared files receive one explicitly assigned writer.
-- Every currently known module task belongs to one immutable Loom delegation
-  plan before its Team Agent starts.
 
 ## Procedure
 
 1. Identify the modules and their provider-consumer order.
 2. Assign each implementation task to its functional owner.
-3. Build and visualize the complete immutable delegation plan for the known
-   module sequence.
-4. Start the first write-capable Team Agent in the current checkout.
-5. Let the Team Agent implement and run required non-compiling formatters.
-6. Verify its scoped changes and request its complete commit.
-7. Start the next dependent writer from that provider commit.
-8. Repeat the formatter, scope, and commit handoff for each remaining writer.
-9. After the coherent module sequence, Gizmo runs `task loom:pre-push`.
-10. Gizmo pushes the coherent head.
-11. Gizmo dispatches every applicable hosted evidence task for that exact head.
+3. Start the first write-capable Team Agent in the current checkout.
+4. Verify its focused tests and scoped changes.
+5. If another writer follows, require the current writer's scoped commit.
+6. Start the next dependent writer from that provider commit.
+7. Run shared validation after the coherent module sequence is complete.
 
 ## Review and corrections
 
@@ -49,11 +42,8 @@ module delivery.
 Verify:
 
 - provider changes precede dependent consumer changes;
-- the immutable Loom plan contains every module task known before dispatch;
 - every writer stayed inside its assigned module scope;
 - only one writer ran at a time;
-- workers ran no local product compilation or validation;
+- focused module tests passed;
 - the shared branch contains the complete result; and
-- Gizmo completed pre-push hygiene and pushed the coherent head;
-- applicable hosted evidence passed for the exact pushed head; and
-- Gizmo owns pull-request, readiness, and merge actions.
+- Gizmo owns push, pull-request, readiness, and merge actions.

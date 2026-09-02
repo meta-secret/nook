@@ -383,19 +383,15 @@ Provider readiness still controls implementation order.
 
 ## Validation
 
-Return structural-expert documentation changes to Gizmo. Gizmo pushes the
-exact head and preserves both Loom and repository-preflight contract evidence
-with:
+Validate structural-expert documentation with:
 
 ```bash
-task remote TASK_NAME=loom:verify
-task remote TASK_NAME=preflight
+task loom:cortex-audit
+task loom:verify
+task preflight:loom-contracts
 ```
 
-Complete `task pr:validate PR=<number>` exact-head evidence may satisfy both
-contracts instead.
-
-Hosted evidence confirms:
+Validate direct skill routing by checking:
 
 - every canonical skill card is indexed;
 - no tracked `.agents`, `.cursor`, or `.claude` skill mirror exists;

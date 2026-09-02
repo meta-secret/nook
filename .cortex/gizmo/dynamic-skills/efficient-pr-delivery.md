@@ -43,10 +43,8 @@ See [Loom tools](../../teams/ai/references/loom-tools.md).
 Delivery rules:
 
 - Do not run `task check` or `task ci:pr` as a local product gate.
-- Do not run local builds, tests, checks, lint, typechecks, or e2e.
-- Do not run local package installation or compiler commands.
-- Do not run local container product gates.
-- Do not run advisory review or duplicate hosted-check mirrors before push.
+- Do not run broad local builds, tests, e2e, container product gates, advisory
+  review, or duplicate hosted-check mirrors before push.
 - Exactly two trusted GitHub Actions publishers bypass ordinary worker commit
   handoffs. See the root
   [team worker contract](../../AGENTS.md#team-worker-contract). Neither bounded
@@ -129,8 +127,7 @@ Does not apply to:
 
 ## Validation
 
-- Run `task remote TASK_NAME=loom:verify` after the exact head is pushed.
-- Run `task pr:validate PR=<number>` for complete hosted evidence.
+- Run `task loom:test` and `cd agentic-ai/ci-agent && npm test`.
 - The readiness audit must reject:
   - stale heads;
   - missing or failed Nook runs;

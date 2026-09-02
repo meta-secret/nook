@@ -812,11 +812,8 @@ RUN apt-get update \
     && echo "${PLAYWRIGHT_CHROMEDRIVER_SHA256}  /tmp/chromedriver.zip" | sha256sum -c - \
     && unzip -q /tmp/chromedriver.zip -d /tmp/chromedriver \
     && install -m 0755 /tmp/chromedriver/chromedriver-linux64/chromedriver "$CHROMEDRIVER" \
-    && rm -rf /tmp/chromedriver /tmp/chromedriver.zip /var/lib/apt/lists/* \
-    && bun install --cwd agentic-ai/loom --frozen-lockfile \
-    && bun install --cwd nook-app/nook-web/nook-web-app --frozen-lockfile \
-    && bun install --cwd nook-app/nook-web/nook-web-research --frozen-lockfile \
-    && ln -s ../nook-web-app/node_modules nook-app/nook-web/nook-web-extension/node_modules
+    && rm -rf /tmp/chromedriver /tmp/chromedriver.zip \
+    && rm -rf /var/lib/apt/lists/*
 
 # -----------------------------------------------------------------------------
 

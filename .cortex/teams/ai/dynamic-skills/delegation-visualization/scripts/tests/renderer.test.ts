@@ -10,7 +10,6 @@ import {
   decodeDelegationVisualizationResult,
   verifyDelegationVisualizationResult,
 } from '../src/result-codec.ts';
-import { renderDelegationVisualizationJson } from '../src/cli.ts';
 
 describe('delegation visualization renderer', () => {
   test('renders independent Team Agents as ordered Gizmo siblings', () => {
@@ -104,41 +103,5 @@ describe('delegation visualization renderer', () => {
         JSON.stringify({ ...result, unverified: true }),
       ),
     ).toThrow();
-  });
-
-  test('renders a strict JSON request without the executable-skill host', () => {
-    expect(
-      renderDelegationVisualizationJson(
-        JSON.stringify({
-          kind: DelegationVisualizationContractKind.Request,
-          tasks: [
-            {
-              id: 'first',
-              team: DelegationVisualizationTeam.Ai,
-              description: 'first task',
-              dependencies: [],
-            },
-          ],
-        }),
-      ),
-    ).toBe('gizmo\n└─ ai\n  └─ first task\n');
-  });
-
-  test('preserves codec-admitted apostrophes through JSON transport', () => {
-    expect(
-      renderDelegationVisualizationJson(
-        JSON.stringify({
-          kind: DelegationVisualizationContractKind.Request,
-          tasks: [
-            {
-              id: 'first',
-              team: DelegationVisualizationTeam.Ai,
-              description: "author's task",
-              dependencies: [],
-            },
-          ],
-        }),
-      ),
-    ).toBe("gizmo\n└─ ai\n  └─ author's task\n");
   });
 });

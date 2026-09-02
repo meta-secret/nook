@@ -188,8 +188,8 @@ Preferred order:
 1. **Playwright attachments** — read `nook-app-logs.json` from the test result
    first. The fixture attaches it for both passing and failing e2e tests.
 2. **`fetchAppLogs(page, { minLevel: 'trace' })`** — navigate to `/app-logs` and
-   parse the JSON body (`data-testid="app-logs-json"`). Use it in specs executed
-   by hosted browser validation.
+   parse the JSON body (`data-testid="app-logs-json"`). Use in specs and local
+   debug scripts.
 3. **`dumpNookLogs(page, label)`** — print the last N entries to test output
    mid-flow without leaving the current page.
 4. **`/logs` UI** — human inspection only; agents should prefer `/app-logs` or
@@ -199,8 +199,8 @@ When CI e2e fails, read app logs **before** changing production code. Lower the
 capture level (`VITE_LOG_LEVEL=debug`, `localStorage.nook_log_level=trace`) when
 the default trail is too thin.
 
-- The **dev** web server sets `VITE_LOG_LEVEL=debug`; when a hosted browser job
-  uses that server, its focused spec captures a useful trail automatically.
+- The **dev** web server sets `VITE_LOG_LEVEL=debug`, so local runs
+  (`E2E_SPEC=… task web:test:e2e:file`) capture a useful trail automatically.
 - The **CI preview** server serves a prebuilt `dist/` (level `info`). To capture
   more on CI, rebuild with `VITE_LOG_LEVEL=debug`, or in a spec:
   `await page.addInitScript(() => localStorage.setItem('nook_log_level', 'trace'))`.

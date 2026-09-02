@@ -48,6 +48,5 @@ The two project graphs expose different evidence:
 
 ## Validation
 
-Return the coherent formatted commit to Gizmo. Gizmo pushes the exact head and
-dispatches the relevant allowlisted hosted web validation. Unused-code checks
-for `nook-web-app` and `nook-web-research` must finish with zero findings.
+Run `bun run unused` from both `nook-web-app` and `nook-web-research`; both must
+finish with zero findings.
