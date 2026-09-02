@@ -32,6 +32,13 @@ type ExpectedTeamAuthority = {
   readonly capabilityBoundary: string;
 };
 
+type LocalExecutionGrantAudit = {
+  readonly findings: TeamAuthorityAuditFinding[];
+  readonly source: string;
+  readonly path: string;
+  readonly authorityName: 'team' | 'Gizmo';
+};
+
 const TEAM_CATALOG_PATH = 'agentic-ai/loom/src/team-agents/catalog.ts';
 const TEAM_AUTHORITY_PATH = '.cortex/AGENTS.md';
 const GIZMO_AUTHORITY_PATH = '.cortex/gizmo/AGENTS.md';
@@ -53,6 +60,10 @@ const GIZMO_AUTHORITY_MARKERS = [
   'exactly one team identity',
   'final verdict is bound to the exact pull-request head',
 ] as const;
+const AFFIRMATIVE_AGENT_GRANT =
+  /\b(?:agents?|team agents?|workers?|gizmo)\s+(?:may|can|are allowed to|is allowed to)\s+(?:ask\s+(?:an?\s+)?(?:team\s+)?(?:agent|worker)s?\s+to\s+)?(?:locally\s+)?(?:(?:run|invoke|perform|execute)\s+(?:(?:focused|required|product|project|repository|source|package|local)\s+){0,4}(?:compilation|tests?|testing|linting|builds?|validation)|(?:compile|test|lint|validate)(?:\s+(?:the\s+)?(?:product|project|repository|source|package))?|build(?:ing)?\s+(?:the\s+)?(?:product|project|repository|source|package))\b/iu;
+const LOCAL_EXECUTION =
+  /\b(?:local(?:ly)?|on (?:a|the) local host)\b/iu;
 const PARENT_OWNED_LIFECYCLE_BOUNDARY =
   'The active harness owns creation, communication, scheduling, retries, cancellation, barriers, synthesis, and delivery lifecycle state.';
 const EXPECTED_TEAM_AUTHORITIES = new Map<TeamKey, ExpectedTeamAuthority>([
@@ -164,6 +175,18 @@ export function auditTeamAuthorities(
       });
     }
   }
+  appendLocalExecutionGrantFindings({
+    findings,
+    source: authoritySource,
+    path: TEAM_AUTHORITY_PATH,
+    authorityName: 'team',
+  });
+  appendLocalExecutionGrantFindings({
+    findings,
+    source: gizmoSource,
+    path: GIZMO_AUTHORITY_PATH,
+    authorityName: 'Gizmo',
+  });
   for (const skillPath of CORTEX_AUTHORING_SKILL_PATHS) {
     if (!existsSync(join(request.repoRoot, skillPath))) {
       const finding: TeamAuthorityAuditFinding = {
@@ -242,6 +265,30 @@ export function auditTeamAuthorities(
     authorityCount: request.authorities.length,
     auditOk: findings.length === 0,
   };
+}
+
+function appendLocalExecutionGrantFindings(
+  request: LocalExecutionGrantAudit,
+): void {
+  for (const statement of markdownStatements(request.source)) {
+    if (
+      AFFIRMATIVE_AGENT_GRANT.test(statement) &&
+      LOCAL_EXECUTION.test(statement)
+    ) {
+      request.findings.push({
+        code: `invalid-cortex-${request.authorityName.toLowerCase()}-authority`,
+        path: request.path,
+        message: `Canonical Cortex ${request.authorityName} authority grants prohibited local agent product execution: ${statement}`,
+      });
+    }
+  }
+}
+
+function markdownStatements(source: string): readonly string[] {
+  return source
+    .split(/\n{2,}|\n(?=\s*(?:[-*+]|\d+\.)\s+)|(?<=[.!?])\s+/u)
+    .map((statement) => statement.replace(/\s+/gu, ' ').trim())
+    .filter((statement) => statement !== '');
 }
 
 function safeRepositoryPath(path: string): boolean {

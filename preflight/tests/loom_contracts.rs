@@ -272,12 +272,21 @@ fn loom_workflow_audits_every_cortex_change() {
         "repository policy must skip the detached formatter only for Cortex Markdown"
     );
 
+    let loom_verify_step = workflow_step(&workflow, "Verify Loom package quality");
+    assert!(
+        loom_verify_step.contains("steps.policy-paths.outputs.loom == 'true'")
+            && loom_verify_step
+                .contains("steps.policy-paths.outputs.cortex_markdown_only != 'true'")
+            && loom_verify_step.contains("run: task loom:verify"),
+        "non-Markdown Loom changes must run the complete verification path"
+    );
     let cortex_audit_step = workflow_step(&workflow, "Audit Cortex document structure");
     assert!(
-        cortex_audit_step.contains("if: steps.policy-paths.outputs.loom == 'true'")
-            && cortex_audit_step.contains("run: task loom:cortex-audit")
-            && !cortex_audit_step.contains("cortex_markdown_only"),
-        "Loom must audit Cortex Markdown even when detached formatter work is skipped"
+        cortex_audit_step.contains("steps.policy-paths.outputs.loom == 'true'")
+            && cortex_audit_step
+                .contains("steps.policy-paths.outputs.cortex_markdown_only == 'true'")
+            && cortex_audit_step.contains("run: task loom:cortex-audit"),
+        "Cortex Markdown-only changes must run the lightweight Cortex audit"
     );
 
     for (step_name, task) in [
