@@ -56,11 +56,14 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 - Gizmo dispatches `task pr:validate` immediately when the pushed head is ready
   for complete validation. Focused jobs are optional on that path.
 - Every replacement push requires fresh exact-head remote evidence.
-- They do not add broad local builds, tests, e2e, container product gates, or
-  duplicate local mirrors before push.
-- They use local `task web:dev` only for interactive development state.
-- **Containerized Toolchain:** All compiles, tests, and package installs run inside Docker.
-- This ensures environment parity between the host machine and GitHub Actions CI.
+- They do not run local builds, tests, checks, lint, typechecks, e2e, package
+  installation, or compiler commands before push.
+- They use local `task web:dev` only when the user authorizes that exact
+  command for the current task.
+- **Hosted Toolchain:** All compiles, tests, checks, lint, typechecks, and
+  package installs run on configured GitHub Actions workers.
+- Local Docker does not provide an agent exception.
+- This preserves host performance and provides exact-head environment parity.
 
 ## 5. Pay Down Tech Debt Continuously
 

@@ -38,6 +38,9 @@ const GIZMO_AUTHORITY_PATH = '.cortex/gizmo/AGENTS.md';
 const TEAM_AUTHORITY_MARKERS = [
   '## Mandatory context selection',
   '## Team worker contract',
+  '## Remote-only agent execution',
+  'Agents never run project compilation or validation locally.',
+  'A missing remote task is a blocker. Never substitute local execution.',
   'exactly one team identity',
   'canonical typed\nCortex authoring composition',
   'Routine uncertainty, implementation breadth, validation failures, and\n  delivery sequencing are not blockers or reasons to ask the user.',
@@ -46,6 +49,7 @@ const TEAM_AUTHORITY_MARKERS = [
 const GIZMO_AUTHORITY_MARKERS = [
   'single root delivery owner',
   'Gizmo does not:\n\n- implement or repair team-owned work;',
+  'Gizmo never asks a worker to run local compilation or validation.',
   'exactly one team identity',
   'final verdict is bound to the exact pull-request head',
 ] as const;

@@ -119,6 +119,46 @@ describe('canonical Cortex team authority', () => {
     }
   });
 
+  test('rejects removal of the remote-only execution contract', async () => {
+    const fixtureRoot = await mkdtemp(
+      join(tmpdir(), 'loom-local-build-grant-'),
+    );
+    const cortexRoot = join(fixtureRoot, '.cortex');
+    try {
+      await mkdir(join(cortexRoot, 'gizmo'), CREATE_RECURSIVELY);
+      await symlink(
+        join(REPO_ROOT, '.cortex/teams'),
+        join(cortexRoot, 'teams'),
+      );
+      const authority = await readFile(
+        join(REPO_ROOT, '.cortex/AGENTS.md'),
+        'utf8',
+      );
+      await writeFile(
+        join(cortexRoot, 'AGENTS.md'),
+        authority.replace(
+          'Agents never run project compilation or validation locally.',
+          'Agents may run focused project validation locally.',
+        ),
+        'utf8',
+      );
+      await symlink(
+        join(REPO_ROOT, '.cortex/gizmo/AGENTS.md'),
+        join(cortexRoot, 'gizmo/AGENTS.md'),
+      );
+
+      const report = auditTeamAgents({ repoRoot: fixtureRoot });
+      expect(report.findings).toContainEqual({
+        code: 'invalid-cortex-team-authority',
+        path: '.cortex/AGENTS.md',
+        message:
+          'Canonical Cortex team authority is missing marker: Agents never run project compilation or validation locally.',
+      });
+    } finally {
+      await rm(fixtureRoot, REMOVE_RECURSIVELY);
+    }
+  });
+
   test('rejects an affirmative Gizmo implementation grant', async () => {
     const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-gizmo-grant-'));
     const cortexRoot = join(fixtureRoot, '.cortex');

@@ -51,11 +51,14 @@ the active harness.
 8. Publish the returned `tree` verbatim as one compact user-visible block
    immediately below that activity line.
 9. Start the Team Agent through the active harness in the current checkout.
-10. Let the Team Agent implement and run focused checks.
+10. Let the Team Agent implement and run required non-compiling formatters.
 11. Ask for a commit when a commit is useful for the delivery sequence.
 12. Verify that the result stays inside the declared scope.
 13. Continue from the resulting shared-branch state.
-14. Route any correction to the team that owns the affected change.
+14. Gizmo runs `task loom:pre-push` as the sole local validation exception.
+15. Gizmo pushes the coherent head and dispatches its acceptance evidence
+    remotely.
+16. Route any correction to the team that owns the affected change.
 
 ## Dependencies
 
@@ -95,5 +98,5 @@ Before accepting Team Agent work, verify:
 - only the declared files changed;
 - no other writer ran concurrently;
 - the shared branch contains the accepted result;
-- focused acceptance checks passed; and
+- required acceptance evidence ran remotely; and
 - Gizmo still owns every external delivery action.

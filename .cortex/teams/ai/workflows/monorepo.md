@@ -30,8 +30,10 @@ Use this workflow for feature work that touches more than one package.
    - If hygiene mutates AI-owned source or Cortex content, the AI team returns
      a fresh formatted commit. Gizmo continues from it and reruns hygiene before
      pushing.
-   - Do not add broad local builds, tests, e2e, container product gates, or
-     duplicate hosted-check mirrors before push.
+   - Do not run local builds, tests, checks, lint, typechecks, or e2e.
+   - Do not run local package installation or compiler commands.
+   - Do not run local container product gates.
+   - Do not duplicate hosted-check mirrors before push.
    - If the pushed head is not validation-ready, Gizmo dispatches at least one
      relevant focused hosted task immediately.
    - When the head is validation-ready, Gizmo dispatches complete exact-head

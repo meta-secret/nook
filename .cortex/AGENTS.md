@@ -61,8 +61,8 @@ Workbench record, not another coordinator or worker. See the
     - planning and shared-branch sequencing;
     - Git, pull-request, Workbench, and review coordination;
     - validation, readiness, and merge.
-  - Team workers implement and test their assigned changes in the current
-    shared checkout.
+  - Team workers implement their assigned changes and author required behavior
+    tests in the current shared checkout.
   - Gizmo Prime controls write sequencing and external delivery state.
   - Only one write-capable Team Agent runs at a time.
   - Read-only Team Agents may run concurrently when their evidence scopes are
@@ -71,10 +71,10 @@ Workbench record, not another coordinator or worker. See the
     requests a commit.
   - Gizmo continues directly from that commit.
 - **Validation and delivery**
-  - Team workers run only fast focused local Loom tests, lint, or typechecks
-    that provide direct implementation feedback.
-  - For Loom-affecting work, the Team Agent returns a coherent result to Gizmo
-    Prime after focused local evidence.
+  - Team workers may run required formatters that do not compile, build, test,
+    lint, typecheck, bundle, or install project dependencies.
+  - Team workers return a coherent result to Gizmo Prime without local
+    validation evidence.
   - Gizmo Prime runs pre-push hygiene on the Team Agent's direct commit.
   - Gizmo Prime promptly pushes the shared branch.
   - Gizmo Prime then dispatches `task remote TASK_NAME=loom:verify` for the
@@ -128,8 +128,9 @@ Workbench record, not another coordinator or worker. See the
 - **Parent and worker ownership**
   - Parent-owned control operations do not create Team Agent work.
 - **Validation and delivery**
-  - Team workers must not run the full `task loom:verify` suite locally during
-    agent delivery.
+  - Team workers must not run project compilation or validation locally.
+  - This includes focused or fast tests, lint, typechecks, builds, package
+    installation, browser suites, and the full `task loom:verify` suite.
 - **Feature ownership**
   - Security review does not transfer implementation ownership.
   - Another active agent's work is read-only until ownership is explicitly
@@ -147,6 +148,30 @@ Workbench record, not another coordinator or worker. See the
   - Moving unit tests or making arbitrary fragments is not source-size
     compliance.
   - Repository-authored automation does not use Python.
+
+## Remote-only agent execution
+
+Agents never run project compilation or validation locally.
+
+- This prohibition applies to Gizmo Prime and every Team Agent or subagent.
+- It applies even when a command is focused, fast, or needed for direct
+  implementation feedback.
+- Do not invoke compilers, bundlers, test runners, linters, typecheckers,
+  package installers, product builds, or browser suites on the local host.
+- Do not invoke a Task target or script that performs any prohibited action.
+- Prohibited direct commands include `cargo`, `rustc`, `wasm-pack`, `bun test`,
+  `tsc`, `eslint`, and product package-manager commands.
+- Prohibited indirect commands include `task preflight:typescript-state` and
+  local selectors such as `rust:test`, `web:check`, or `web:build`.
+- Gizmo promptly pushes a coherent head and uses
+  `task remote TASK_NAME=<allowlisted-task>` for focused evidence.
+- Gizmo uses `task pr:validate PR=<number>` for complete exact-head evidence.
+- A missing remote task is a blocker. Never substitute local execution.
+- Local activity is limited to read-only inspection, owner-authorized Git
+  operations, `git diff --check`, and required formatters.
+- `task loom:pre-push` is the only local validation exception.
+- Only the user may authorize another exact local command for the current
+  task.
 
 ## No fallback behavior
 
