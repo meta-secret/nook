@@ -204,9 +204,9 @@ describe('authentication surface mutation filtering', () => {
     const heading = document.createElement('h2')
     heading.textContent = 'Recovery codes'
     const listItem = document.createElement('li')
-    listItem.textContent = 'ABCD-EFGH'
+    listItem.textContent = 'A1B2-C3D4-E5F6'
     const code = document.createElement('code')
-    code.textContent = 'IJKL-MNOP'
+    code.textContent = 'ABCD-EFGH-IJK1'
     const paragraph = document.createElement('p')
     const paragraphText = document.createTextNode('Backup codes')
     paragraph.append(paragraphText)
@@ -214,7 +214,10 @@ describe('authentication surface mutation filtering', () => {
 
     for (const record of [
       childListMutation(document.body, [heading, listItem, code]),
-      { type: 'characterData', target: paragraphText } as MutationRecord,
+      {
+        type: 'characterData',
+        target: paragraphText,
+      } as unknown as MutationRecord,
     ]) {
       const request: Parameters<typeof authenticationMutationImpact>[0] = {
         records: [record],

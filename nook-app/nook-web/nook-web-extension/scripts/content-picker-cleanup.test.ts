@@ -5,6 +5,9 @@ import type {
   WebsiteLoginSaveActionResponse,
   WebsiteLoginSaveOfferView,
 } from '../src/lib/login-save-messages'
+import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
+
+await companionWasmReady
 
 const addListener = mock(() => {})
 let saveDismissResponse: WebsiteLoginSaveActionResponse = { kind: 'completed' }
@@ -27,13 +30,24 @@ Object.assign(globalThis, {
   window: { clearTimeout: mock(() => {}) },
 })
 
-async function flushResponses(): Promise<void> {
-  await Promise.resolve()
-  await Promise.resolve()
-  await Promise.resolve()
-  await Promise.resolve()
-  await Promise.resolve()
-  await Promise.resolve()
+type RefreshResponse = { ok: true } | { ok: false }
+
+function captureRefreshResponse(): {
+  sendResponse: (response: RefreshResponse) => void
+  response: Promise<RefreshResponse>
+} {
+  let resolveResponse: ((response: RefreshResponse) => void) | false = false
+  const response = new Promise<RefreshResponse>((resolve) => {
+    resolveResponse = resolve
+  })
+  return {
+    sendResponse: (value) => {
+      if (!resolveResponse)
+        throw new Error('refresh response capture unavailable')
+      resolveResponse(value)
+    },
+    response,
+  }
 }
 
 test('delivers cleanup cancellation through the content-script router', async () => {
@@ -99,7 +113,8 @@ test('refresh preserves dismissal while clearing stale surface state', async () 
   })
   const schedule = mock(() => {})
   scanState.schedule = schedule
-  const sendResponse = mock(() => {})
+  const responseCapture = captureRefreshResponse()
+  const sendResponse = mock(responseCapture.sendResponse)
 
   expect(
     routeAutofillMessage(
@@ -126,7 +141,7 @@ test('refresh preserves dismissal while clearing stale surface state', async () 
     },
     expect.any(Function),
   )
-  await flushResponses()
+  await expect(responseCapture.response).resolves.toEqual({ ok: true })
   expect(remove).toHaveBeenCalledOnce()
   expect(schedule).toHaveBeenCalledOnce()
   expect(sendResponse).toHaveBeenCalledWith({ ok: true })
@@ -151,7 +166,8 @@ test('refresh does not rescan when staged offer dismissal is rejected', async ()
   }
   const schedule = mock(() => {})
   scanState.schedule = schedule
-  const sendResponse = mock(() => {})
+  const responseCapture = captureRefreshResponse()
+  const sendResponse = mock(responseCapture.sendResponse)
 
   expect(
     routeAutofillMessage(
@@ -160,7 +176,7 @@ test('refresh does not rescan when staged offer dismissal is rejected', async ()
       sendResponse,
     ),
   ).toBe(true)
-  await flushResponses()
+  await expect(responseCapture.response).resolves.toEqual({ ok: false })
 
   expect(remove).toHaveBeenCalledOnce()
   expect(schedule).not.toHaveBeenCalled()
