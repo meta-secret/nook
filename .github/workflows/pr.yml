@@ -544,7 +544,12 @@ jobs:
 
   ui-demo:
     name: Headless UI demo
-    if: ${{ false }}
+    if: >-
+      false &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login != 'dependabot[bot]' &&
+      (github.event.label.name == 'ci:validate' ||
+      github.event.label.name == 'ci:full-e2e')
     needs: [validation-request, verify]
     runs-on: nook-k0s-container
     container:
@@ -641,8 +646,15 @@ jobs:
           WASM_NODE_RESULT: ${{ needs.wasm-node-test.result }}
           UI_DEMO_RESULT: ${{ needs.ui-demo.result }}
           UI_DEMO_REQUIRED: ${{ needs.verify.outputs.ui-demo-required }}
+          TRUSTED_SOURCE: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && 'true' || 'false' }}
         run: |
           set -euo pipefail
+          if [ "$TRUSTED_SOURCE" != "true" ] \
+            && [ "$UI_DEMO_REQUIRED" != "true" ] \
+            && [ "$UI_DEMO_RESULT" = "skipped" ]; then
+            echo "Headless UI demo is not required for this untrusted source"
+            UI_DEMO_RESULT=success
+          fi
           if [ "$UI_DEMO_RESULT" = "skipped" ]; then
             echo "Headless UI demo is disabled (contract required: $UI_DEMO_REQUIRED)"
             UI_DEMO_RESULT=success
