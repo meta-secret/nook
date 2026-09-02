@@ -152,6 +152,7 @@ enum ActiveEnrollmentCeremonyKind {
   Idle = 'idle',
   Pending = 'pending',
   Staged = 'staged',
+  CancellationPending = 'cancellation-pending',
 }
 
 type ActiveEnrollmentCeremony =
@@ -162,7 +163,9 @@ type ActiveEnrollmentCeremony =
       host: EnrollmentFlowHost
     }
   | {
-      kind: ActiveEnrollmentCeremonyKind.Staged
+      kind:
+        | ActiveEnrollmentCeremonyKind.Staged
+        | ActiveEnrollmentCeremonyKind.CancellationPending
       authorizationGeneration: number
       host: EnrollmentFlowHost
       stageId: string
@@ -235,17 +238,41 @@ async function dismissStagedEnrollment({
 }
 
 export async function cancelActiveEnrollmentCeremony(): Promise<boolean> {
-  enrollmentAuthorizationGeneration += 1
   holdEnrollmentWidgetAfterSave = false
   stopPendingEnrollmentWatch()
   const ceremony = activeEnrollmentCeremony
-  activeEnrollmentCeremony = { kind: ActiveEnrollmentCeremonyKind.Idle }
-  if (ceremony.kind !== ActiveEnrollmentCeremonyKind.Staged) return true
+  if (ceremony.kind === ActiveEnrollmentCeremonyKind.Idle) return true
+  if (ceremony.kind === ActiveEnrollmentCeremonyKind.CancellationPending) {
+    return false
+  }
+  if (ceremony.kind === ActiveEnrollmentCeremonyKind.Pending) {
+    enrollmentAuthorizationGeneration += 1
+    activeEnrollmentCeremony = { kind: ActiveEnrollmentCeremonyKind.Idle }
+    return true
+  }
+  enrollmentAuthorizationGeneration += 1
+  const cancellationGeneration = enrollmentAuthorizationGeneration
+  activeEnrollmentCeremony = {
+    kind: ActiveEnrollmentCeremonyKind.CancellationPending,
+    authorizationGeneration: cancellationGeneration,
+    host: ceremony.host,
+    stageId: ceremony.stageId,
+  }
   const dismissArgs: Parameters<typeof dismissStagedEnrollment>[0] = {
     host: ceremony.host,
     stageId: ceremony.stageId,
   }
-  return dismissStagedEnrollment(dismissArgs)
+  const dismissed = await dismissStagedEnrollment(dismissArgs)
+  if (!enrollmentCeremonyIsCurrent(cancellationGeneration)) return false
+  activeEnrollmentCeremony = dismissed
+    ? { kind: ActiveEnrollmentCeremonyKind.Idle }
+    : {
+        kind: ActiveEnrollmentCeremonyKind.Staged,
+        authorizationGeneration: cancellationGeneration,
+        host: ceremony.host,
+        stageId: ceremony.stageId,
+      }
+  return dismissed
 }
 
 export function requestFreshEnrollmentActions(host: EnrollmentFlowHost): void {
@@ -367,9 +394,17 @@ function enrollmentEvidenceCallbacks({
       }
       setHostDescription(nookTypedArgs0_5)
       host.setBusy(true)
-      void cancelActiveEnrollmentCeremony().finally(() => {
+      void cancelActiveEnrollmentCeremony().then((dismissed) => {
         host.setBusy(false)
-        requestFreshEnrollmentActions(host)
+        if (dismissed) {
+          renderEnrollmentRetryActions(host)
+          return
+        }
+        const failure: Parameters<typeof setHostDescription>[0] = {
+          host,
+          text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollFailed),
+        }
+        setHostDescription(failure)
       })
     },
     timeout: () => {
@@ -459,7 +494,7 @@ async function beginEnrollmentCeremony({
     }
     setHostDescription(nookTypedArgs0_10)
     host.setBusy(false)
-    requestFreshEnrollmentActions(host)
+    renderEnrollmentRetryActions(host)
     return
   }
   const { response: stageResponse } = stageDelivery
@@ -475,7 +510,7 @@ async function beginEnrollmentCeremony({
     }
     setHostDescription(nookTypedArgs0_12)
     host.setBusy(false)
-    requestFreshEnrollmentActions(host)
+    renderEnrollmentRetryActions(host)
     return
   }
   const stageId = stageResponse.stageId
@@ -524,9 +559,17 @@ async function beginEnrollmentCeremony({
     onClick: (event) => {
       if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
       host.setBusy(true)
-      void cancelActiveEnrollmentCeremony().finally(() => {
+      void cancelActiveEnrollmentCeremony().then((dismissed) => {
         host.setBusy(false)
-        requestFreshEnrollmentActions(host)
+        if (dismissed) {
+          requestFreshEnrollmentActions(host)
+          return
+        }
+        const failure: Parameters<typeof setHostDescription>[0] = {
+          host,
+          text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollFailed),
+        }
+        setHostDescription(failure)
       })
     },
   }
@@ -598,7 +641,7 @@ async function showQrPreview({
         text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollFailed),
       }
       setHostDescription(nookTypedArgs0_20)
-      requestFreshEnrollmentActions(host)
+      renderEnrollmentRetryActions(host)
       clearOtpauthUri(otpauthUri)
       clearCandidate(candidate)
       return
@@ -611,7 +654,7 @@ async function showQrPreview({
         text: unavailableMessage(host),
       }
       setHostDescription(nookTypedArgs0_22)
-      requestFreshEnrollmentActions(host)
+      renderEnrollmentRetryActions(host)
       clearOtpauthUri(otpauthUri)
       clearCandidate(candidate)
       return
@@ -765,7 +808,7 @@ export async function startQrEnrollment({
         ),
       }
       setHostDescription(nookTypedArgs0_37)
-      requestFreshEnrollmentActions(host)
+      renderEnrollmentRetryActions(host)
       return
     }
     if (result.status === 'empty') {
@@ -774,7 +817,7 @@ export async function startQrEnrollment({
         text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollNoQr),
       }
       setHostDescription(nookTypedArgs0_39)
-      requestFreshEnrollmentActions(host)
+      renderEnrollmentRetryActions(host)
       return
     }
     if (result.status === 'ambiguous') {
@@ -793,7 +836,7 @@ export async function startQrEnrollment({
         text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollNoQr),
       }
       setHostDescription(nookTypedArgs0_42)
-      requestFreshEnrollmentActions(host)
+      renderEnrollmentRetryActions(host)
       return
     }
     const uri = { value: candidate.otpauthUri }
@@ -810,7 +853,11 @@ export async function startQrEnrollment({
 }
 
 export function enrollmentCeremonyActive(): boolean {
-  return enrollmentEvidenceWatchActive() || holdEnrollmentWidgetAfterSave
+  return (
+    activeEnrollmentCeremony.kind !== ActiveEnrollmentCeremonyKind.Idle ||
+    enrollmentEvidenceWatchActive() ||
+    holdEnrollmentWidgetAfterSave
+  )
 }
 
 export function releaseEnrollmentWidgetHold(): void {
@@ -820,6 +867,14 @@ export function releaseEnrollmentWidgetHold(): void {
 type RenderEnrollmentActionsArgs = {
   host: EnrollmentFlowHost
   hints: EnrollmentPageHints
+}
+
+export function renderEnrollmentRetryActions(host: EnrollmentFlowHost): void {
+  const retry: Parameters<typeof renderEnrollmentActions>[0] = {
+    host,
+    hints: detectEnrollmentHints(),
+  }
+  renderEnrollmentActions(retry)
 }
 
 type StartBackupCodeEnrollmentArgs = {

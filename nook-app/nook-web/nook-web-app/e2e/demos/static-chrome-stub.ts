@@ -112,6 +112,8 @@ export type DemoChromeStubArgs = {
   passkeyPilotFlow?: boolean
   /** 2FA enrollment ceremony replies with evidence-gated confirm. */
   enrollPilotFlow?: boolean
+  /** Delay enrollment confirmation so mutation rescans race the staged ceremony. */
+  enrollmentConfirmDelayMs?: number
   /** Extension-owned 2FA picker selection returned to the page HUD. */
   authenticatorPickerFlow?: boolean
   /** Record runtime message types so demos can assert cross-domain sequencing. */
@@ -156,6 +158,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     generatePilotFlow = false,
     passkeyPilotFlow = false,
     enrollPilotFlow = false,
+    enrollmentConfirmDelayMs = 0,
     authenticatorPickerFlow = false,
     recordRuntimeMessageTypes = false,
     barcodeRawValue,
@@ -677,7 +680,15 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
           response: responseFor(message),
         }
         const response = adaptAuthenticationSnapshotResponse(responseRequest)
-        if (callback) queueMicrotask(() => callback(response))
+        if (!callback) return
+        if (
+          message.type === 'nook:website-authenticator-enroll-confirm' &&
+          enrollmentConfirmDelayMs > 0
+        ) {
+          setTimeout(() => callback(response), enrollmentConfirmDelayMs)
+          return
+        }
+        queueMicrotask(() => callback(response))
       },
     },
     storage: {

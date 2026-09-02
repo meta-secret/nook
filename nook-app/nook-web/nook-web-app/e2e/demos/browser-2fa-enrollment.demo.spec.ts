@@ -39,6 +39,7 @@ test('uses the paired demo vault for authenticator enrollment', async ({
     localizedMessages: messages,
     ...demoDomainEnumArgs,
     enrollPilotFlow: true,
+    enrollmentConfirmDelayMs: 1_200,
   }
 
   await page.addInitScript(installDemoChromeStub, stubArgs)
@@ -191,7 +192,7 @@ test('uses the paired demo vault for authenticator enrollment', async ({
   const widget = page.locator('#nook-auth-widget')
   await expect(
     widget.getByRole('button', { name: 'Add 2FA from this page' }),
-  ).toBeVisible()
+  ).toBeVisible({ timeout: 15_000 })
   await expect(widget.getByTestId('nook-auth-gate-vault-status')).toHaveText(
     'Connected to Demo vault',
   )
