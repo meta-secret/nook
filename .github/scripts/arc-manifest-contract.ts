@@ -722,8 +722,8 @@ workerMeshTasks.count({
   expected: 2,
 });
 workerMeshTasks.requireAll([
-  'controller_kubelet_rule=\'            iifname "wg-nook" ip saddr 10.201.0.1 tcp dport 10250 accept comment "nook k0s worker kubelet controller"\'',
-  'legacy_controller_kubelet_rule=\'            iifname "wg-nook" ip saddr 10.201.0.1 tcp dport 10250 accept\'',
+  'controller_kubelet_rule=\'    iifname "wg-nook" ip saddr 10.201.0.1 tcp dport 10250 accept comment "nook k0s worker kubelet controller"\'',
+  'legacy_controller_kubelet_rule=\'    iifname "wg-nook" ip saddr 10.201.0.1 tcp dport 10250 accept\'',
   'if test "$controller_kubelet_count" != 1; then',
   "Worker firewall must contain exactly one controller kubelet rule",
   "$0 == canonical || $0 == legacy { print canonical; print rule; next }",

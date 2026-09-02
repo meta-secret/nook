@@ -236,9 +236,9 @@ if sudo -n nft list table inet bynull_filter >/dev/null 2>&1; then
     -e 's/ip saddr ([0-9]{1,3}\.){3}[0-9]{1,3} udp dport 51820 accept comment "nook k0s worker wireguard"/udp dport 51820 accept comment "nook k0s worker wireguard"/' \
     -e '/comment "nook k0s worker kubelet mesh pods"/d' \
     "$firewall" > "$firewall_next"
-  kubelet_rule='            iifname "wg-nook" ip saddr 10.244.0.0/16 tcp dport 10250 accept comment "nook k0s worker kubelet mesh pods"'
-  controller_kubelet_rule='            iifname "wg-nook" ip saddr 10.201.0.1 tcp dport 10250 accept comment "nook k0s worker kubelet controller"'
-  legacy_controller_kubelet_rule='            iifname "wg-nook" ip saddr 10.201.0.1 tcp dport 10250 accept'
+  kubelet_rule='    iifname "wg-nook" ip saddr 10.244.0.0/16 tcp dport 10250 accept comment "nook k0s worker kubelet mesh pods"'
+  controller_kubelet_rule='    iifname "wg-nook" ip saddr 10.201.0.1 tcp dport 10250 accept comment "nook k0s worker kubelet controller"'
+  legacy_controller_kubelet_rule='    iifname "wg-nook" ip saddr 10.201.0.1 tcp dport 10250 accept'
   controller_kubelet_count="$(awk \
     -v canonical="$controller_kubelet_rule" \
     -v legacy="$legacy_controller_kubelet_rule" \
