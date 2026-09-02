@@ -207,9 +207,9 @@ export async function performRevalidatedAuthenticationAction({
   const approvedFactsBatch: AuthenticationPageObservationFactsBatch = {
     observations: [approvedObservation.facts],
   }
-  let approvedObservationBindingToken: AuthenticationObservationBindingToken
+  let approvedDomObservationBindingToken: AuthenticationObservationBindingToken
   try {
-    approvedObservationBindingToken =
+    approvedDomObservationBindingToken =
       bind_authentication_page_observation_facts(approvedFactsBatch)
   } catch {
     return rejected()
@@ -241,6 +241,13 @@ export async function performRevalidatedAuthenticationAction({
   const selectedFactsBatch: AuthenticationPageObservationFactsBatch = {
     observations: [delivery.response.selectedFacts],
   }
+  let selectedObservationBindingToken: AuthenticationObservationBindingToken
+  try {
+    selectedObservationBindingToken =
+      bind_authentication_page_observation_facts(selectedFactsBatch)
+  } catch {
+    return rejected()
+  }
   if (
     observationBinding.kind === AuthenticationObservationBindingKind.Required &&
     !authentication_page_observation_facts_match_binding(
@@ -264,7 +271,7 @@ export async function performRevalidatedAuthenticationAction({
   if (
     currentObservation.selectedIndex !== approvedObservation.selectedIndex ||
     !authentication_page_observation_facts_match_binding(
-      approvedObservationBindingToken,
+      approvedDomObservationBindingToken,
       currentFactsBatch,
     ) ||
     !authenticationControlIdentitiesMatch(currentIdentitiesMatchRequest) ||
@@ -288,7 +295,7 @@ export async function performRevalidatedAuthenticationAction({
       postActionObservation.selectedIndex !==
         approvedObservation.selectedIndex ||
       !authentication_page_observation_facts_match_binding(
-        approvedObservationBindingToken,
+        approvedDomObservationBindingToken,
         postActionFactsBatch,
       ) ||
       !authenticationControlIdentitiesMatch(postActionIdentitiesMatchRequest)
@@ -299,7 +306,7 @@ export async function performRevalidatedAuthenticationAction({
   }
   const actRequest: RevalidatedAuthenticationActRequest = {
     currentWorkflow: currentObservation.currentWorkflow,
-    observationBindingToken: approvedObservationBindingToken,
+    observationBindingToken: selectedObservationBindingToken,
     revalidateCurrentWorkflow,
   }
   const actResult = act(actRequest)

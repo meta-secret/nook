@@ -5,6 +5,7 @@ import {
   AuthenticationWorkflowSnapshotResponseKind,
   AuthenticationWorkflowStage,
   type AuthenticationApprovalRequirement,
+  type AuthenticationObservationBindingToken,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   PasswordFormScopeKind,
@@ -67,12 +68,95 @@ function matchedDelivery(
   }
 }
 
+function enrichedMatchedDelivery(
+  message: AuthenticationWorkflowSnapshotMessage,
+  action: AuthenticationWorkflowAction,
+) {
+  const selectedFacts = message.payload.observations[0]
+  if (!selectedFacts) throw new Error('expected selected workflow facts')
+  const delivery = matchedDelivery(action)
+  return {
+    ...delivery,
+    response: {
+      ...delivery.response,
+      selectedFacts: {
+        ...selectedFacts,
+        authenticator: {
+          ...selectedFacts.authenticator,
+          passkeyAccountAvailability: 'ready' as const,
+        },
+      },
+    },
+  }
+}
+
 afterEach(() => {
   document.body.replaceChildren()
   runtime.sendSnapshot.mockReset()
 })
 
 describe('credential-bearing workflow revalidation', () => {
+  test.each([
+    {
+      flow: 'saved-login',
+      action: AuthenticationWorkflowAction.ContinueWithNook,
+      markup: `<form action="/login"><input autocomplete="username" /><input type="password" autocomplete="current-password" /><button type="submit">Sign in</button></form>`,
+    },
+    {
+      flow: 'authenticator',
+      action: AuthenticationWorkflowAction.FillTotp,
+      markup: `<form action="/login/mfa"><input autocomplete="one-time-code" /><button type="submit">Verify code</button></form>`,
+    },
+  ])(
+    'preserves an enriched binding across two-stage $flow authorization',
+    async ({ action, markup }) => {
+      document.body.innerHTML = markup
+      const workflow = firstWorkflow()
+      runtime.sendSnapshot.mockImplementation(
+        async (message: AuthenticationWorkflowSnapshotMessage) =>
+          enrichedMatchedDelivery(message, action),
+      )
+      let releasedToken: AuthenticationObservationBindingToken | undefined
+
+      await expect(
+        performRevalidatedAuthenticationAction({
+          workflow,
+          expectedAction: action,
+          observationBinding: {
+            kind: AuthenticationObservationBindingKind.Unbound,
+          },
+          approvalIsActive: () => true,
+          act: ({ observationBindingToken }) => {
+            releasedToken = observationBindingToken
+            return { kind: RevalidatedAuthenticationActResultKind.Acted }
+          },
+        }),
+      ).resolves.toEqual({
+        kind: RevalidatedAuthenticationActionOutcomeKind.Acted,
+      })
+      if (!releasedToken) throw new Error('expected an enriched binding token')
+      const stagedAct = vi.fn(() => ({
+        kind: RevalidatedAuthenticationActResultKind.Acted,
+      }))
+
+      await expect(
+        performRevalidatedAuthenticationAction({
+          workflow,
+          expectedAction: action,
+          observationBinding: {
+            kind: AuthenticationObservationBindingKind.Required,
+            token: releasedToken,
+          },
+          approvalIsActive: () => true,
+          act: stagedAct,
+        }),
+      ).resolves.toEqual({
+        kind: RevalidatedAuthenticationActionOutcomeKind.Acted,
+      })
+      expect(stagedAct).toHaveBeenCalledOnce()
+    },
+  )
+
   test('refuses actuation when DOM facts change while Rust is deciding', async () => {
     document.body.innerHTML = `
       <form id="otp" action="/login/mfa">
