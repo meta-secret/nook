@@ -6,6 +6,7 @@ import {
   mutationBelongsOnlyToMountedWidget,
   mutationCanChangeAuthenticationWorkflows,
   mutationTouchesAuthenticationWorkflow,
+  recordAuthenticationRecoveryEvidenceState,
 } from '../../../../nook-web-extension/src/content/autofill/authentication-surface-observation'
 
 function childListMutation(
@@ -44,7 +45,10 @@ function observation(form: HTMLFormElement): PasswordFormObservation {
   } as unknown as PasswordFormObservation
 }
 
-afterEach(() => document.body.replaceChildren())
+afterEach(() => {
+  document.body.replaceChildren()
+  recordAuthenticationRecoveryEvidenceState()
+})
 
 describe('authentication surface mutation filtering', () => {
   test('ignores mutations owned entirely by the mounted extension widget', () => {
@@ -178,6 +182,28 @@ describe('authentication surface mutation filtering', () => {
     }
   })
 
+  test('rescans dynamically inserted and updated CAPTCHA frames', () => {
+    const insertedFrame = document.createElement('iframe')
+    insertedFrame.src = 'https://captcha.example.test/recaptcha'
+    const updatedFrame = document.createElement('iframe')
+    document.body.append(insertedFrame, updatedFrame)
+    updatedFrame.title = 'Complete CAPTCHA'
+
+    for (const record of [
+      childListMutation(document.body, [insertedFrame]),
+      attributeMutation(updatedFrame),
+    ]) {
+      const request: Parameters<typeof authenticationMutationImpact>[0] = {
+        records: [record],
+        mountedHost: false,
+        renderedWorkflow: false,
+      }
+      expect(authenticationMutationImpact(request).shouldScheduleScan).toBe(
+        true,
+      )
+    }
+  })
+
   test('rescans dynamically associated labels', () => {
     const input = document.createElement('input')
     input.id = 'login-email'
@@ -228,5 +254,57 @@ describe('authentication surface mutation filtering', () => {
         true,
       )
     }
+  })
+
+  test('rescans when the last backup-code evidence disappears', () => {
+    const heading = document.createElement('h2')
+    heading.textContent = 'Recovery codes'
+    const code = document.createElement('code')
+    code.textContent = 'A1B2-C3D4-E5F6'
+    document.body.append(heading, code)
+    recordAuthenticationRecoveryEvidenceState()
+    heading.remove()
+    code.remove()
+    const request: Parameters<typeof authenticationMutationImpact>[0] = {
+      records: [childListMutation(document.body, [], [heading, code])],
+      mountedHost: false,
+      renderedWorkflow: false,
+    }
+
+    expect(authenticationMutationImpact(request).shouldScheduleScan).toBe(true)
+
+    document.body.append(heading, code)
+    recordAuthenticationRecoveryEvidenceState()
+    heading.hidden = true
+    const hiddenRequest: Parameters<typeof authenticationMutationImpact>[0] = {
+      records: [attributeMutation(heading)],
+      mountedHost: false,
+      renderedWorkflow: false,
+    }
+    expect(authenticationMutationImpact(hiddenRequest).shouldScheduleScan).toBe(
+      true,
+    )
+
+    heading.hidden = false
+    recordAuthenticationRecoveryEvidenceState()
+    const headingText = heading.firstChild
+    if (!(headingText instanceof Text)) {
+      throw new Error('expected recovery heading text')
+    }
+    headingText.data = 'Account details'
+    code.textContent = '12:01'
+    const textRequest: Parameters<typeof authenticationMutationImpact>[0] = {
+      records: [
+        {
+          type: 'characterData',
+          target: headingText,
+        } as unknown as MutationRecord,
+      ],
+      mountedHost: false,
+      renderedWorkflow: false,
+    }
+    expect(authenticationMutationImpact(textRequest).shouldScheduleScan).toBe(
+      true,
+    )
   })
 })

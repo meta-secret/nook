@@ -76,6 +76,7 @@ const AUTHENTICATION_WORKFLOW_MUTATION_SELECTOR = [
   'canvas',
   'form',
   'img',
+  'iframe',
   'input',
   'button',
   'label',
@@ -91,6 +92,27 @@ const AUTHENTICATION_WORKFLOW_MUTATION_SELECTOR = [
 
 const AUTHENTICATION_RECOVERY_MUTATION_SELECTOR =
   'h1, h2, h3, h4, h5, h6, [role="heading"], p, li, code, pre'
+
+enum AuthenticationRecoveryEvidenceKind {
+  Absent = 'absent',
+  Present = 'present',
+}
+
+type AuthenticationRecoveryEvidenceState = {
+  kind: AuthenticationRecoveryEvidenceKind
+}
+
+let authenticationRecoveryEvidenceState: AuthenticationRecoveryEvidenceState = {
+  kind: AuthenticationRecoveryEvidenceKind.Absent,
+}
+
+export function recordAuthenticationRecoveryEvidenceState(): void {
+  authenticationRecoveryEvidenceState = {
+    kind: pageHasDocumentBackupCodeHint()
+      ? AuthenticationRecoveryEvidenceKind.Present
+      : AuthenticationRecoveryEvidenceKind.Absent,
+  }
+}
 
 function mutationTouchesAuthenticationRecoveryCopy(
   record: MutationRecord,
@@ -115,9 +137,11 @@ function mutationTouchesAuthenticationRecoveryCopy(
 function mutationCanIntroduceAuthenticationRecoveryEvidence(
   record: MutationRecord,
 ): boolean {
+  if (!mutationTouchesAuthenticationRecoveryCopy(record)) return false
   return (
-    mutationTouchesAuthenticationRecoveryCopy(record) &&
-    pageHasDocumentBackupCodeHint()
+    pageHasDocumentBackupCodeHint() ||
+    authenticationRecoveryEvidenceState.kind ===
+      AuthenticationRecoveryEvidenceKind.Present
   )
 }
 

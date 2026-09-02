@@ -28,6 +28,7 @@ import {
   AUTHENTICATION_MUTATION_ATTRIBUTE_FILTER,
   AUTHENTICATION_VIEWPORT_EVENTS,
   authenticationMutationImpact,
+  recordAuthenticationRecoveryEvidenceState,
 } from './autofill/authentication-surface-observation'
 import {
   cancelPendingLoginPickerRequest,
@@ -203,7 +204,11 @@ async function performScanAndRender(): Promise<void> {
 }
 
 async function scanAndRender(): Promise<void> {
-  await performScanAndRender()
+  try {
+    await performScanAndRender()
+  } finally {
+    recordAuthenticationRecoveryEvidenceState()
+  }
 }
 
 function scheduleScan(mutations?: AuthenticationScanMutationBatch) {

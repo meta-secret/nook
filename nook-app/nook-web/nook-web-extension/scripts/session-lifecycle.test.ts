@@ -71,7 +71,12 @@ describe('authentication surface notifications', () => {
     const messages: Array<{ tabId: number; type: string }> = []
     globalThis.chrome = {
       tabs: {
-        query: (_query, callback) => callback([{ id: 7 }, {}, { id: 11 }]),
+        query: (_query, callback) =>
+          callback([
+            { id: 7, url: 'https://login.example.test/' },
+            {},
+            { id: 11, url: 'https://account.example.test/' },
+          ]),
         sendMessage: (tabId, message) => {
           messages.push({ tabId, type: message.type })
           return Promise.resolve({ ok: true })
@@ -92,7 +97,12 @@ describe('authentication surface notifications', () => {
   test('reports refresh failure when every eligible tab rejects delivery', async () => {
     globalThis.chrome = {
       tabs: {
-        query: (_query, callback) => callback([{ id: 7 }, {}, { id: 11 }]),
+        query: (_query, callback) =>
+          callback([
+            { id: 7, url: 'https://login.example.test/' },
+            {},
+            { id: 11, url: 'https://account.example.test/' },
+          ]),
         sendMessage: () => Promise.reject(new Error('tab unavailable')),
       },
     } as unknown as typeof chrome
@@ -107,7 +117,11 @@ describe('authentication surface notifications', () => {
   test('reports refresh failure when every eligible tab replies with failure', async () => {
     globalThis.chrome = {
       tabs: {
-        query: (_query, callback) => callback([{ id: 7 }, { id: 11 }]),
+        query: (_query, callback) =>
+          callback([
+            { id: 7, url: 'https://login.example.test/' },
+            { id: 11, url: 'https://account.example.test/' },
+          ]),
         sendMessage: () => Promise.resolve({ ok: false }),
       },
     } as unknown as typeof chrome
@@ -117,5 +131,29 @@ describe('authentication surface notifications', () => {
     await expect(refreshAuthenticationSurfaces()).rejects.toThrow(
       'authentication surface refresh delivery failed',
     )
+  })
+
+  test('ignores restricted and Nook vault tabs without autofill listeners', async () => {
+    const messages: number[] = []
+    globalThis.chrome = {
+      tabs: {
+        query: (_query, callback) =>
+          callback([
+            { id: 3, url: 'chrome://newtab/' },
+            { id: 5, url: 'https://simple.example.test/' },
+            { id: 7, url: 'https://sentinel.example.test/' },
+          ]),
+        sendMessage: (tabId) => {
+          messages.push(tabId)
+          return Promise.reject(new Error('content script unavailable'))
+        },
+      },
+    } as unknown as typeof chrome
+    const { refreshAuthenticationSurfaces } =
+      await import('../src/background/service-worker/session-lifecycle')
+
+    await refreshAuthenticationSurfaces()
+
+    expect(messages).toEqual([])
   })
 })

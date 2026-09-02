@@ -472,6 +472,39 @@ describe('service worker routing', () => {
     expect(sendResponse).toHaveBeenCalledWith({ ok: true, eventCount: 1 })
   })
 
+  test('reports an external pairing refresh failure', async () => {
+    const dependencies: ExternalCompanionRoutingDependencies = {
+      ...externalDependencies,
+      hasPairingApprovedType: () => true,
+      importPairingAfterCompanionReady: () =>
+        Promise.resolve({ ok: true as const, eventCount: 1 }),
+      refreshAuthenticationSurfaces: () =>
+        Promise.reject(new Error('refresh unavailable')),
+    }
+    const { routeExternalCompanionMessage } =
+      await import('../src/background/service-worker/external-companion-routing')
+    const sendResponse = mock(() => {})
+
+    expect(
+      routeExternalCompanionMessage({
+        dependencies,
+        message: { type: 'nook:extension-pairing-approved' },
+        sender: {
+          id: 'simple-vault',
+          url: 'https://simple.example.test/',
+        },
+        sendResponse,
+      }),
+    ).toBe(true)
+    await flushResponses()
+    await flushResponses()
+
+    expect(sendResponse).toHaveBeenCalledWith({
+      ok: false,
+      reason: 'authentication-surface-refresh-failed',
+    })
+  })
+
   test('normalizes pair intent before internal launcher routing', async () => {
     openCompanionLauncher.mockClear()
     const { routeExtensionLifecycleMessage } =

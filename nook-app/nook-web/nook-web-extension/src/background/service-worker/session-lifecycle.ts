@@ -1,4 +1,7 @@
-import { runtimeSimpleVaultUrl } from '../../lib/simple-vault-runtime'
+import {
+  isRuntimeNookVaultAppUrl,
+  runtimeSimpleVaultUrl,
+} from '../../lib/simple-vault-runtime'
 import { DeviceProtectionStatus } from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { OpenCompanionLauncherIntent } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
 import { ExtensionRuntimeRequestType } from '../../lib/extension-runtime-request-type'
@@ -148,6 +151,24 @@ type AuthenticationSurfaceDeliveryRequest = {
   message: AuthenticationSurfaceNotification
 }
 
+function authenticationSurfaceTabId(tab: chrome.tabs.Tab): number | false {
+  if (
+    typeof tab.id !== 'number' ||
+    !Number.isInteger(tab.id) ||
+    typeof tab.url !== 'string' ||
+    isRuntimeNookVaultAppUrl(tab.url)
+  ) {
+    return false
+  }
+  try {
+    const protocol = new URL(tab.url).protocol
+    if (!['http:', 'https:'].includes(protocol)) return false
+  } catch {
+    return false
+  }
+  return tab.id
+}
+
 async function deliverAuthenticationSurfaceNotification({
   tabId,
   message,
@@ -167,9 +188,8 @@ async function notifyAuthenticationSurfaces(
   })
   const eligibleTabIds: number[] = []
   for (const tab of tabs) {
-    if (typeof tab.id === 'number' && Number.isInteger(tab.id)) {
-      eligibleTabIds.push(tab.id)
-    }
+    const tabId = authenticationSurfaceTabId(tab)
+    if (tabId !== false) eligibleTabIds.push(tabId)
   }
   const deliveries = await Promise.allSettled(
     eligibleTabIds.map((tabId) => {

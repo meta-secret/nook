@@ -68,6 +68,8 @@ type AuthenticationOutcomeRead =
     }
   | { kind: AuthenticationOutcomeReadKind.Unavailable }
 
+const pendingSaveOfferRequests = new Set<Promise<void>>()
+
 export function stopPendingSaveWatch(): void {
   if (saveOfferState.watch.kind === SavePageWatchKind.Idle) return
   const { watch } = saveOfferState.watch
@@ -78,16 +80,9 @@ export function stopPendingSaveWatch(): void {
   saveOfferState.clearPendingWatch()
 }
 
-export async function dismissPendingSaveOffer(): Promise<void> {
-  let offer: WebsiteLoginSaveOfferView | false = false
-  if (saveOfferState.watch.kind === SavePageWatchKind.Watching) {
-    offer = saveOfferState.watch.watch.offer
-  } else if (saveOfferState.display.kind === SaveOfferDisplayKind.Visible) {
-    offer = saveOfferState.display.offer
-  }
-  stopPendingSaveWatch()
-  saveOfferState.clearActiveOffer()
-  if (!offer) return
+async function dismissSaveOffer(
+  offer: WebsiteLoginSaveOfferView,
+): Promise<void> {
   saveOfferState.dismissedOfferIds.add(offer.offerId)
   const message: Parameters<typeof sendLoginSaveActionRuntimeMessage>[0] = {
     type: WebsiteLoginSaveDismissMessageType.NookWebsiteLoginSaveDismiss,
@@ -100,6 +95,20 @@ export async function dismissPendingSaveOffer(): Promise<void> {
   ) {
     throw new Error('login save dismissal failed')
   }
+}
+
+export async function dismissPendingSaveOffer(): Promise<void> {
+  await Promise.all([...pendingSaveOfferRequests])
+  let offer: WebsiteLoginSaveOfferView | false = false
+  if (saveOfferState.watch.kind === SavePageWatchKind.Watching) {
+    offer = saveOfferState.watch.watch.offer
+  } else if (saveOfferState.display.kind === SaveOfferDisplayKind.Visible) {
+    offer = saveOfferState.display.offer
+  }
+  stopPendingSaveWatch()
+  saveOfferState.clearActiveOffer()
+  if (!offer) return
+  await dismissSaveOffer(offer)
 }
 
 function pageLooksLikeAuthPath(pathname: string): boolean {
@@ -246,9 +255,31 @@ export function beginPendingSaveWatch(offer: WebsiteLoginSaveOfferView): void {
   void evaluatePendingSaveEvidence()
 }
 
-async function stageSaveForCredentials(
+export function stageSaveForCredentials(
   credentials: LoginCredentials,
 ): Promise<void> {
+  const trustedSurfaceGeneration = scanState.sequence
+  const stageRequest: StageSaveOfferRequest = {
+    credentials,
+    trustedSurfaceGeneration,
+  }
+  const operation = stageSaveOfferForCredentials(stageRequest)
+  const trackedOperation = operation.finally(() => {
+    pendingSaveOfferRequests.delete(trackedOperation)
+  })
+  pendingSaveOfferRequests.add(trackedOperation)
+  return trackedOperation
+}
+
+type StageSaveOfferRequest = {
+  credentials: LoginCredentials
+  trustedSurfaceGeneration: number
+}
+
+async function stageSaveOfferForCredentials({
+  credentials,
+  trustedSurfaceGeneration,
+}: StageSaveOfferRequest): Promise<void> {
   const message: Parameters<typeof sendLoginSaveOfferRuntimeMessage>[0] = {
     type: WebsiteLoginSaveOfferMessageType.NookWebsiteLoginSaveOffer,
     payload: {
@@ -266,6 +297,10 @@ async function stageSaveForCredentials(
   const { response } = delivery
   if (response.kind !== 'offer-available') return
   const { offer } = response
+  if (trustedSurfaceGeneration !== scanState.sequence) {
+    await dismissSaveOffer(offer)
+    return
+  }
   if (saveOfferState.dismissedOfferIds.has(offer.offerId)) return
   beginPendingSaveWatch(offer)
 }

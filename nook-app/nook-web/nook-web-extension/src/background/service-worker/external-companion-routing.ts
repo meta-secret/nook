@@ -51,6 +51,10 @@ const invalidPairingGrantResponse: MessageResponse = {
   ok: false,
   reason: 'invalid-pairing-grant',
 }
+const authenticationSurfaceRefreshFailureResponse: MessageResponse = {
+  ok: false,
+  reason: 'authentication-surface-refresh-failed',
+}
 
 export function routeExternalCompanionMessage({
   dependencies,
@@ -133,9 +137,11 @@ export function routeExternalCompanionMessage({
   void importPairingAfterCompanionReady(message)
     .then(async (response) => {
       if (response.ok) {
-        await refreshAuthenticationSurfaces().catch(() => {
-          // Restricted pages do not invalidate the successful grant import.
-        })
+        try {
+          await refreshAuthenticationSurfaces()
+        } catch {
+          return authenticationSurfaceRefreshFailureResponse
+        }
       }
       return response
     })
