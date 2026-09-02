@@ -640,10 +640,11 @@ jobs:
           WEB_RESULT: ${{ needs.verify.result }}
           WASM_NODE_RESULT: ${{ needs.wasm-node-test.result }}
           UI_DEMO_RESULT: ${{ needs.ui-demo.result }}
+          UI_DEMO_REQUIRED: ${{ needs.verify.outputs.ui-demo-required }}
         run: |
           set -euo pipefail
           if [ "$UI_DEMO_RESULT" = "skipped" ]; then
-            echo "Headless UI demo is disabled"
+            echo "Headless UI demo is disabled (contract required: $UI_DEMO_REQUIRED)"
             UI_DEMO_RESULT=success
           fi
           failed=0
