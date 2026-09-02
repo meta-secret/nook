@@ -85,6 +85,7 @@ export type EnrollmentFlowHost = EnrollmentFlowViewHost & {
   sendDecodedRuntimeMessage: <Response>(
     args: DecodedRuntimeMessageArgs<Response>,
   ) => Promise<RuntimeMessageDelivery<Response>>
+  sendAuthenticationOutcomeRuntimeMessage: typeof import('./autofill/login-passkey-actions').sendAuthenticationOutcomeRuntimeMessage
   sendAuthenticatorBackupAttachRuntimeMessage: (
     message: Parameters<
       typeof import('./autofill/login-passkey-actions').sendAuthenticatorBackupAttachRuntimeMessage
@@ -100,6 +101,7 @@ export type EnrollmentFlowHost = EnrollmentFlowViewHost & {
       typeof import('./autofill/login-passkey-actions').sendAuthenticatorEnrollmentStageRuntimeMessage
     >[0],
   ) => Promise<RuntimeMessageDelivery<AuthenticatorEnrollmentStageResponse>>
+  sendAuthenticatorCodeRuntimeMessage: typeof import('./autofill/login-passkey-actions').sendAuthenticatorCodeRuntimeMessage
   sendAuthenticatorOptionsRuntimeMessage: (
     message: Parameters<
       typeof import('./autofill/login-passkey-actions').sendAuthenticatorOptionsRuntimeMessage
@@ -110,6 +112,7 @@ export type EnrollmentFlowHost = EnrollmentFlowViewHost & {
       typeof import('./autofill/login-passkey-actions').sendAuthenticatorPreviewRuntimeMessage
     >[0],
   ) => Promise<RuntimeMessageDelivery<AuthenticatorPreviewResponse>>
+  sendRuntimeMessageWithoutResponse: typeof import('./autofill/login-passkey-actions').sendRuntimeMessageWithoutResponse
   translatedMessage: (key: BrowserMessageKey) => string
   translatedMessageWithSubstitution: (
     args: TranslatedMessageWithSubstitutionArgs,
