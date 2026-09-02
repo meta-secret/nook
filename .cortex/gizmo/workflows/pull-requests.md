@@ -55,10 +55,25 @@ readers; it does not control or resume agent execution.
 - **Workbench authority**
   - Use public [Nook Workbench](https://github.com/meta-secret/nook-workbench)
     URLs as durable plan and handoff authority.
-  - Link the exact focused issue when one exists.
+  - Link the exact focused issue that owns the PR.
+  - A direct or manual task that reaches PR delivery must create that focused
+    issue before PR publication.
+  - It must then publish a superseding plan bound to the issue's canonical
+    `gizmo_id`.
   - Link the immutable task-start plan and each superseding plan.
   - Add the published worklog when it becomes available.
   - Update the PR description as those lifecycle links appear.
+- **Trusted-publisher production**
+  - A trusted publisher must satisfy this metadata contract before it creates
+    a PR.
+  - It must produce the capability-oriented title from trusted task context.
+  - It must include agent-task provenance in the body.
+  - It must include the exact focused-issue and immutable-plan URLs in the
+    body.
+  - Missing trusted context blocks publication.
+  - A publisher-created PR that lacks any required metadata is not eligible
+    for readiness.
+  - Gizmo reports the producer defect to its owning team.
 
 **Prohibited actions**
 
@@ -83,6 +98,11 @@ readers; it does not control or resume agent execution.
   - Passive PR provenance is not delegation, communication, or handoff
     transport.
   - It grants no authority to mutate or resume a separate Codex task.
+- **Publisher exceptions**
+  - Trusted publication authority does not exempt a producer from this
+    contract.
+  - Do not invent missing metadata after publication to make a noncompliant
+    producer output appear ready.
 
 ### Dispatch meaning
 
@@ -636,6 +656,11 @@ Merge only when all readiness conditions pass:
 
 - Nook's applicable repository-owned PR test checks are green.
 - The branch is current with `origin/main`.
+- The PR links its exact focused Workbench issue.
+- The focused issue and current plan share the canonical `gizmo_id`.
+- The PR links the immutable task-start plan and every superseding plan.
+- The PR title, description, and agent-task provenance satisfy the canonical
+  [metadata contract](#pr-metadata-and-provenance).
 - All actionable comments are resolved.
 - Gizmo's final verdict is ready for the exact head.
 - Every required team verdict is satisfied.
