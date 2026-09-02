@@ -56,6 +56,7 @@ test('accepts the reviewed repository contract registry', () => {
       (context) => context.authorityDocument,
     ),
     ...CORTEX_CONTRACT_REGISTRY.policies.map((policy) => policy.document),
+    ...CORTEX_CONTRACT_REGISTRY.runtimes.map((runtime) => runtime.document),
   ];
   const documents = [...new Set(paths)].map((relativePath) => ({
     relativePath,
