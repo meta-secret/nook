@@ -123,12 +123,12 @@ automation: agent
 owner: <nook-github-collaborator>
 ```
 
-Legacy standalone focused issues may omit `gizmo_id`. When the field is
-present, dispatch treats it as canonical trusted routing metadata: its syntax
-must be valid, it must never be changed to create a fresh identity, and the
+Dispatch treats `gizmo_id` as canonical trusted routing metadata. Its syntax
+must be valid. It must never be changed to create a fresh identity. The
 published per-issue plan must use it as `Current Gizmo ID` and its sole slice
 Gizmo ID. That plan must declare one PR and use the same ID on every ownership
-unit.
+unit. A missing or invalid `gizmo_id` blocks dispatch before the issue is
+claimed.
 
 - The owner must be an assignable Nook GitHub collaborator with write access.
 - The dispatch must provide exactly one of `issue_path` or `prompt`.
@@ -232,8 +232,8 @@ The plan must contain:
 
 - a `Mission controller` value fixed to `Gizmo Prime`;
 - a `Current Gizmo ID` matching the current and first PR slice;
-- for a focused issue with canonical `gizmo_id`, a `Current Gizmo ID` matching
-  that trusted issue value exactly;
+- for a focused issue, a `Current Gizmo ID` matching its canonical trusted
+  `gizmo_id` exactly;
 - the agent's own complete interpretation of the desired outcome;
 - material functional, workflow, security, and delivery requirements;
 - explicit constraints, assumptions, and exclusions;
@@ -288,8 +288,8 @@ NOOK_WORKBENCH_ASSIGNED_GIZMO_ID=<focused-issue-gizmo-id> \
   - It lets the publisher reject copied prompt text.
   - Do not publish it.
 - Set the assigned issue path and `NOOK_WORKBENCH_ASSIGNED_GIZMO_ID` from the
-  trusted focused-issue dispatch when publishing its plan. For legacy issues,
-  set only the issue path; omit both fields for direct standalone plans.
+  trusted focused-issue dispatch when publishing its plan. Omit both fields
+  only for a direct standalone plan that has not reached PR delivery.
 - The bounded worker:
   1. uses a dedicated planning LLM turn;
   2. validates and publishes the plan; and
