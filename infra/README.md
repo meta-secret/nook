@@ -150,12 +150,11 @@ by the compiler cache.
 
 Each node's shared BuildKit Pod requests 4 CPU and 8 GiB and has no CPU or
 memory limit. Large parallel solves may use available node memory. Disposable
-runner and job Pod containers declare no CPU request or limit. General runner
-and container-job workloads retain 1 GiB memory and 4 GiB ephemeral-storage
-requests, with 6 GiB memory and 32 GiB ephemeral-storage limits. The container
-coordinator and Hive helpers retain smaller role-specific memory envelopes.
-These are ordinary Pods, not per-job microVMs. Scale-set ceilings bound the
-runner count, not the CPU shared by those Pods.
+general runners, container coordinators, Hive runners, and job containers
+declare no resource requests or limits. Support init containers and Hive
+helpers retain role-specific memory envelopes. These are ordinary Pods, not
+per-job microVMs. Scale-set ceilings bound the runner count, not the resources
+shared by those Pods.
 
 Install the pinned browserless LAN alias before operating the home worker from
 the local operator network:
