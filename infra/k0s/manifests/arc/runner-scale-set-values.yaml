@@ -103,10 +103,8 @@ template:
             mountPath: /tmp
         resources:
           requests:
-            cpu: 10m
             memory: 32Mi
           limits:
-            cpu: 500m
             memory: 256Mi
     containers:
       - name: runner
@@ -151,11 +149,9 @@ template:
             mountPath: /opt/hostedtoolcache
         resources:
           requests:
-            cpu: "2"
             memory: 1Gi
             ephemeral-storage: 4Gi
           limits:
-            cpu: "4"
             memory: 6Gi
             ephemeral-storage: 32Gi
     volumes:

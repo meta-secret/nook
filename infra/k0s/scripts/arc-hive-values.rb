@@ -37,8 +37,8 @@ pod.fetch("initContainers").concat(
       },
       "volumeMounts" => [{ "name" => "neo4j-data", "mountPath" => "/data" }],
       "resources" => {
-        "requests" => { "cpu" => "10m", "memory" => "32Mi" },
-        "limits" => { "cpu" => "100m", "memory" => "128Mi" }
+        "requests" => { "memory" => "32Mi" },
+        "limits" => { "memory" => "128Mi" }
       }
     },
     {
@@ -59,8 +59,8 @@ pod.fetch("initContainers").concat(
         { "name" => "hive-test-exchange", "mountPath" => "/var/run/nook-hive-tests" }
       ],
       "resources" => {
-        "requests" => { "cpu" => "10m", "memory" => "32Mi" },
-        "limits" => { "cpu" => "100m", "memory" => "128Mi" }
+        "requests" => { "memory" => "32Mi" },
+        "limits" => { "memory" => "128Mi" }
       }
     }
   ]
@@ -68,9 +68,7 @@ pod.fetch("initContainers").concat(
 
 runner = named(pod.fetch("containers"), "runner")
 runner.fetch("env") << { "name" => "NOOK_ARC_HIVE", "value" => "1" }
-runner.fetch("resources").fetch("requests")["cpu"] = "500m"
 runner.fetch("resources").fetch("requests")["memory"] = "1Gi"
-runner.fetch("resources").fetch("limits")["cpu"] = "1"
 runner.fetch("resources").fetch("limits")["memory"] = "1Gi"
 runner.fetch("volumeMounts") << {
   "name" => "hive-test-exchange",
@@ -113,8 +111,8 @@ pod.fetch("initContainers").concat(
       },
       "volumeMounts" => [{ "name" => "neo4j-data", "mountPath" => "/data" }],
       "resources" => {
-        "requests" => { "cpu" => "250m", "memory" => "1Gi" },
-        "limits" => { "cpu" => "1", "memory" => "2Gi" }
+        "requests" => { "memory" => "1Gi" },
+        "limits" => { "memory" => "2Gi" }
       }
     },
     {
@@ -146,12 +144,18 @@ pod.fetch("initContainers").concat(
         }
       ],
       "resources" => {
-        "requests" => { "cpu" => "500m", "memory" => "512Mi" },
-        "limits" => { "cpu" => "4", "memory" => "4Gi" }
+        "requests" => { "memory" => "512Mi" },
+        "limits" => { "memory" => "4Gi" }
       }
     }
   ]
 )
+
+(pod.fetch("initContainers") + pod.fetch("containers")).each do |container|
+  resources = container.fetch("resources")
+  resources.fetch("requests").delete("cpu")
+  resources.fetch("limits").delete("cpu")
+end
 
 pod.fetch("volumes") << { "name" => "neo4j-data", "emptyDir" => { "sizeLimit" => "4Gi" } }
 pod.fetch("volumes").concat(

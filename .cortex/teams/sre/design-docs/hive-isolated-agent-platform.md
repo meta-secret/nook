@@ -101,9 +101,10 @@ and ARC listeners remain there. KS-6 and dedicated compute nodes may also be
 qualified with `nook.nokey.sh/arc-build=true`; general and Hive ARC scale sets
 select those nodes. They enforce a maximum hostname skew of five, then use the
 primary, secondary, and overflow tiers to assign the extra slots. Container
-CPU requests provide the aggregate capacity boundary across scale sets. Each
-ARC build node owns one persistent BuildKit shard. Node and Pod traffic crosses
-an authenticated WireGuard mesh on `10.202.0.0/24`. Each worker address has one
+CPU requests and limits are absent from every container in disposable runner
+and job Pods. Scale-set ceilings bound aggregate runner count. Each ARC build
+node owns one persistent BuildKit shard. Node and Pod traffic crosses an
+authenticated WireGuard mesh on `10.202.0.0/24`. Each worker address has one
 owner. Before
 mutating a controller peer, deployment verifies that any persisted peer key
 and Kubernetes `InternalIP` assignment identify that same worker. Address collisions fail
@@ -714,9 +715,9 @@ The Dockerfile follows Nook's cargo-chef boundary:
 6. publish both already-verified BuildKit graphs only from `main`.
 
 Each parallel Cargo branch uses two build jobs. Together, the test and Clippy
-branches consume the runner's four-CPU BuildKit envelope without launching
-eight competing compiler processes. BuildKit requests 4 GiB and may burst to
-6 GiB for rustc and linker peaks.
+branches cap compiler-process fan-out without constraining the Hive runner
+Pod's CPU usage. BuildKit requests 4 GiB and may burst to 6 GiB for rustc and
+linker peaks.
 
 Pull requests restore the `nook-hive-linux-amd64-v2` GitHub Actions BuildKit
 scope read-only. After the BuildKit verification target succeeds, an internal

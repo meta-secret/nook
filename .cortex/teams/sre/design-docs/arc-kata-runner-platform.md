@@ -73,8 +73,12 @@ target aggregate envelope remains:
 - home worker: about 8-10 runners; and
 - KS-6: about 5-7 runners.
 
-The limits are queue ceilings. Kubernetes resource availability remains the
-final admission boundary.
+The scale-set limits are queue ceilings. Disposable runner and job containers
+do not declare CPU requests or limits. Kubernetes may admit Pods up to the
+scale-set ceilings. Each container may share all CPU available on its node.
+Topology spreading and tier preferences distribute that burst work across
+qualified nodes. Memory, ephemeral-storage, and persistent-volume envelopes
+remain the resource admission and isolation boundaries.
 
 ## Persistent local BuildKit shards
 
@@ -170,14 +174,21 @@ Distribution follows these rules:
 
 ## Resource envelopes
 
-The initial resource envelopes are:
+The resource envelopes are:
 
-- General runner Pods request 2 CPU and may use up to 4 CPU and 6 GiB. Their
-  ephemeral work volume is limited to 32 GiB.
+- Every container in a disposable general or Hive runner Pod declares no CPU
+  requests or limits.
+- Container-scale-set runner and container-job Pod containers also declare no
+  CPU requests or limits.
+- Concurrent Pods share all CPU available on their node.
+- Scale-set ceilings bound aggregate runner count.
+- General and container-job workloads retain their memory and ephemeral-storage
+  requests and limits. Their ephemeral work volume is limited to 32 GiB.
 - The persistent BuildKit shard performs compilation, layer extraction,
   import, and export. It must not inherit fractional control-plane CPU limits.
-- Hive's Rust test-runtime sidecar receives 4 CPU and 4 GiB. The runner
-  container coordinates that work and remains smaller.
+- Hive's Rust test-runtime sidecar retains its 4 GiB memory limit. Its runner,
+  init containers, Neo4j sidecar, and Rust test-runtime sidecar remain free of
+  CPU requests and limits.
 - Zot may use up to 8 CPU and 12 GiB because it serves all nodes.
 
 These are operational starting points. Live CPU, memory, disk, and network
