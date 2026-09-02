@@ -9,7 +9,7 @@ Review policy is explicit:
 - Codex is the only automatic review provider. Do not activate Cursor Bugbot.
 - A Codex eye reaction is liveness evidence only. It does not settle review and
   is never required for validation or readiness.
-- Review findings remain actionable before merge.
+- Every substantive review finding requires a disposition before merge.
 - Other external review services remain optional. Do not request or wait for
   Claude, CodeRabbit, or similar services unless the user explicitly asks.
 
@@ -39,8 +39,9 @@ relevant focused `task remote` job when the head is not validation-ready.
 Dispatch complete validation immediately when it is ready; focused jobs are
 optional on that path.
 
-Treat any actionable Cloud finding as normal correction work. Run pre-push
-hygiene again before Gizmo pushes the replacement head.
+Record a disposition for every substantive Cloud finding. Treat only an
+accepted finding as correction work. Run pre-push hygiene again before Gizmo
+pushes the replacement head.
 
 ## Complete validation and Cloud review
 
@@ -152,7 +153,7 @@ result and does not wait for one.
 Before merge or handoff, inspect the PR comments, submitted review bodies, and
 inline threads that are currently present. Follow
 [the code-review-comments skill](../dynamic-skills/code-review-comments.md) for
-every active actionable finding, whether it came from a human, Codex, Claude,
+every active substantive finding, whether it came from a human, Codex, Claude,
 Cursor, CodeRabbit, or another service:
 
 1. Verify the finding against the current branch and `.cortex` rules.
@@ -186,9 +187,10 @@ boundary as a command to expand the change. Do not create speculative
 follow-up work or an issue without explicit user authority.
 
 After those items are handled, rerun the feedback query immediately before
-merge. If another actionable comment arrives while the agent is working,
-address it. When repository-owned checks finish and no review feedback is
-present, continue to readiness without waiting.
+merge. If another substantive comment arrives while the agent is working,
+record its three-gate disposition. Implement it only when accepted. When
+repository-owned checks finish and no review feedback is present, continue to
+readiness without waiting.
 
 Gizmo routes every implementation finding to the responsible team. Gizmo does
 not implement the fix. A separately requested service may own a finding only
@@ -198,7 +200,7 @@ when its team task contract grants the required scope.
 
 Report:
 
-- every actionable finding that was already present and how it was handled;
+- every substantive finding that was already present and its disposition;
 - unresolved active review-thread count at the time of the final inspection;
 - Loom pre-push and optional debug results when used; and
 - the state of Nook's applicable repository-owned PR test checks.
