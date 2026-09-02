@@ -36,30 +36,42 @@ notices never become feedback state.
 
 For each routed item, the responsible team agent:
 
-1. Verifies the reviewer's claim against current code, repository authority,
-   and reproducible evidence.
-2. Applies the validity gate.
+1. Separates the defect claim from any reviewer-proposed remedy.
+2. Verifies the defect claim against current code, repository authority, and
+   reproducible evidence.
+3. Applies the validity gate to the defect claim.
    - Accept the claim only when the evidence proves a real defect or a binding
      policy violation.
    - Technical plausibility alone does not pass this gate.
-3. Applies the current-task relevance gate.
-   - Accept the requested change only when it is necessary to satisfy the
+4. Applies the current-task relevance gate to the defect claim.
+   - Accept the defect only when correcting it is necessary to satisfy the
      current PR's acceptance boundary.
-   - Reject it for this change when it introduces a new capability, product
-     area, architecture, or separately valuable follow-up.
-4. Applies the proportionality and scope gate.
-   - Accept only the smallest correction needed for the proven in-scope
-     defect.
-   - Reject speculative hardening, generalized machinery, and unrelated
-     cleanup.
-5. Classifies the finding as accepted, rejected, or clarification-needed.
-6. Records the evidence and rationale for that disposition.
-7. Uses reviewer-provided agent prompts as context, not as blind patches.
-8. Implements the minimal correct fix only when all three gates pass.
-9. Returns focused validation and a concise explanation to Gizmo.
+   - Reject a claim for this change when it concerns a new capability, product
+     area, architecture, or separately valuable follow-up instead of a defect
+     inside that boundary.
+5. Classifies the defect claim as accepted, rejected, or
+   clarification-needed.
+   - A clarification-needed claim remains unresolved and blocks readiness.
+   - Reclassify it as accepted or rejected after obtaining the missing
+     evidence.
+6. Applies the proportionality and scope gate to the proposed remedy and the
+   selected correction.
+   - Accept a proposed remedy only when it is the smallest correct in-scope fix.
+   - Classify the proposed remedy as accepted or rejected.
+   - Reject speculative hardening, generalized machinery, unrelated cleanup,
+     and scope-expanding remedies.
+   - Do not reject an accepted defect merely because its proposed remedy is
+     rejected.
+7. Selects the smallest correct in-scope fix for every accepted defect.
+8. Records separate evidence and rationale for the defect disposition and any
+   proposed-remedy disposition.
+9. Uses reviewer-provided agent prompts as context, not as blind patches.
+10. Implements the selected fix only after all three evaluations are complete.
+11. Returns focused validation and a concise explanation to Gizmo.
 
 A finding is actionable only after the responsible team accepts it through all
-three gates.
+defect-claim gates. A valid in-scope defect remains actionable when the
+reviewer-proposed remedy is rejected.
 
 ### Finding disposition boundaries
 
@@ -69,11 +81,12 @@ inapplicable claim with specific evidence, then record that rationale on the
 original feedback target.
 
 A plausible edge case, enhancement, hardening idea, or request for new
-functionality is not an accepted finding merely because it could improve the
-system. Reject it for the current change when it exceeds the PR's acceptance
-boundary. State the boundary and evidence in the disposition. Do not implement
-speculative follow-up work. Do not create a follow-up issue, task, or PR without
-explicit user authority.
+functionality is not a defect merely because it could improve the system.
+Reject that claim for the current change when it exceeds the PR's acceptance
+boundary. Reject an overbroad proposed remedy without rejecting a separately
+proven in-scope defect. State the boundary and evidence in each disposition. Do
+not implement speculative follow-up work. Do not create a follow-up issue,
+task, or PR without explicit user authority.
 
 Security and authority violations remain binding. Fail closed when evidence
 confirms one. Do not reject or downgrade it as an optional enhancement. If the
@@ -87,9 +100,12 @@ pushes the result. It then applies the handling rule for the feedback target:
 
 - **Inline conversation:** Reply on the original target. Resolve it only after
   the finding is fixed or explicitly invalidated.
+  - Keep a clarification-needed finding unresolved until evidence supports an
+    accepted or rejected reclassification.
 - **Top-level PR comment:** Minimize the original comment with GitHub's
   `RESOLVED` classifier after addressing it. The comment remains visible in
   inspection output. Readiness blocks until that explicit state exists.
+  - Do not minimize a clarification-needed comment as `RESOLVED`.
 - **Review body without a thread:** Keep the substantive item and its
   disposition in the delivery checklist and final handoff. Do not post a broad
   or duplicative PR comment.
@@ -99,10 +115,12 @@ The response states the disposition and its evidence. When no change is
 required, Gizmo records the team's verified rationale.
 
 Inspect the currently available feedback before merge or handoff. Proceed when
-every substantive item has a disposition and every accepted actionable item is
-handled. Nook's applicable repository-owned checks must be green. The
-unresolved-thread query must be clear. Request exact-head review during hosted
-validation rather than after repository-owned checks finish.
+every substantive defect claim has a final accepted or rejected disposition.
+Every accepted actionable item must be fixed. Every rejected item must be
+explicitly invalidated. A clarification-needed item blocks readiness. Nook's
+applicable repository-owned checks must be green. The unresolved-thread query
+must be clear. Request exact-head review during hosted validation rather than
+after repository-owned checks finish.
 
 ## Scope
 
@@ -147,14 +165,21 @@ Does not apply to:
 - [ ] Gizmo inspects review bodies and top-level PR comments from every head.
 - [ ] Gizmo builds a checklist for every active substantive finding.
 - [ ] Gizmo routes each finding to the responsible team agent.
-- [ ] The team agent applies validity, current-task relevance, and
-      proportionality and scope gates before editing.
-- [ ] The team agent records an evidence-backed disposition for every
-      substantive finding.
-- [ ] The team agent implements the minimal correct fix only when every gate
-      passes.
-- [ ] The team agent rejects scope-expanding edge cases, enhancements,
-      hardening, and new functionality for the current change.
+- [ ] The team agent applies validity and current-task relevance gates to the
+      defect claim before editing.
+- [ ] The team agent applies the proportionality and scope gate separately to
+      the reviewer-proposed remedy and selected correction.
+- [ ] The team agent records an evidence-backed defect disposition and any
+      proposed-remedy disposition.
+- [ ] A rejected remedy does not erase an accepted defect.
+- [ ] The team agent implements the minimal correct fix for every accepted
+      defect after all evaluations are complete.
+- [ ] A clarification-needed finding remains unresolved and blocks readiness
+      until reclassified as accepted or rejected.
+- [ ] The team agent rejects defect claims that consist only of scope-expanding
+      edge cases, enhancements, hardening, or new functionality.
+- [ ] The team agent rejects scope-expanding remedies without erasing a proven
+      in-scope defect.
 - [ ] No agent creates speculative follow-up work without user authority.
 - [ ] Confirmed security and authority violations fail closed and reach the
       authorized owner.
@@ -164,8 +189,8 @@ Does not apply to:
 - [ ] Gizmo uses focused `task remote` jobs when useful, then explicitly triggers
       complete PR validation.
 - [ ] Gizmo pushes changed code or documentation.
-- [ ] Gizmo leaves a targeted reply with the fix, validation, or no-change
-      rationale when GitHub supports one.
+- [ ] Gizmo leaves a targeted reply with the fix, validation, no-change
+      rationale, or clarification request when GitHub supports one.
 - [ ] Gizmo minimizes each handled top-level PR comment as `RESOLVED`.
 - [ ] Gizmo resolves a conversation only after the targeted reply is visible.
 - [ ] Gizmo tracks unthreaded review-body findings in the delivery checklist and
@@ -232,10 +257,10 @@ those threads' resolution state as the deterministic handled state.
 ## Validation
 
 Gizmo uses GraphQL or `gh pr view`/`gh api` to confirm that every substantive
-review thread has a disposition. It separately confirms zero unresolved
-accepted actionable findings. It also inspects submitted reviews and PR
-comments from every head for remaining substantive items and their
-dispositions.
+review thread has a final accepted or rejected defect disposition. It confirms
+zero clarification-needed findings and zero unresolved handled findings. It
+also inspects submitted reviews and PR comments from every head for remaining
+substantive items and their defect and remedy dispositions.
 
 Gizmo reports:
 

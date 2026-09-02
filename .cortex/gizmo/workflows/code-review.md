@@ -88,17 +88,23 @@ without complete validation. It is idempotent and does not wait for a result.
 
 ## Actionable feedback priority
 
-Before merge, inspect feedback currently present. A finding becomes actionable
-only after the responsible team accepts it through the validity, current-task
-relevance, and proportionality and scope gates in the
+Before merge, inspect feedback currently present. A defect becomes actionable
+only after the responsible team accepts its validity and current-task
+relevance. Rejecting a reviewer-proposed remedy does not erase an accepted
+defect. Follow the
 [code-review-comments skill](../dynamic-skills/code-review-comments.md). Gizmo
 must coordinate these actions:
 
 - obtain an evidence-backed disposition for every substantive PR comment and
   submitted review finding, including feedback created before the current
   head;
-- implement every accepted finding and record why each rejected or
-  clarification-needed finding requires no current change;
+- record the defect-claim disposition separately from the disposition of any
+  reviewer-proposed remedy;
+- implement the smallest correct fix for every accepted defect, including when
+  its proposed remedy is rejected;
+- record why each rejected defect claim requires no current change;
+- keep every clarification-needed finding unresolved and readiness-blocking
+  until evidence supports accepted or rejected reclassification;
 - retain every substantive top-level PR comment in inspection output;
 - minimize a handled top-level PR comment with GitHub's `RESOLVED` classifier;
 - block readiness on every substantive top-level comment that is not minimized
@@ -122,15 +128,17 @@ When a new finding arrives:
 1. For a security finding, fail closed and stop or cancel unsafe validation.
 2. For every other finding, keep the in-flight validation head running until
    hosted checks and exact-head review settle.
-3. Dispatch each finding to the responsible team for the three-gate
-   disposition.
+3. Dispatch each finding to the responsible team for separate defect and
+   remedy dispositions.
 4. Combine accepted findings and failed checks into one coherent repair batch.
-5. Record evidence-backed no-change dispositions for rejected or
-   clarification-needed findings.
-6. Continue from the verified fix commit, then reply to and resolve the thread.
-7. Run pre-push hygiene through the responsible formatter owner and push the
+5. Record evidence-backed no-change dispositions for rejected defect claims.
+6. Keep clarification-needed findings unresolved until the team obtains the
+   missing evidence and reclassifies them as accepted or rejected.
+7. Continue from the verified fix commit, then reply to and resolve handled
+   accepted or rejected threads.
+8. Run pre-push hygiene through the responsible formatter owner and push the
    replacement head.
-8. Restart complete validation for that head. If it is not yet
+9. Restart complete validation for that head. If it is not yet
    validation-ready, dispatch at least one relevant focused remote job first.
 
 A confirmed security or authority violation is binding and fails closed. Route
@@ -159,26 +167,34 @@ every active substantive finding, whether it came from a human, Codex, Claude,
 Cursor, CodeRabbit, or another service:
 
 1. Verify the finding against the current branch and `.cortex` rules.
-2. Apply the validity, current-task relevance, and proportionality and scope
-   gates.
-3. Dispatch the minimal correct fix only for an accepted finding, or document
-   the evidence-backed no-change disposition.
-4. Continue from the verified fix commit.
-5. Run `task loom:pre-push PR=<number>` through the responsible formatter owner, commit,
+2. Apply validity and current-task relevance gates to the defect claim.
+3. Apply the proportionality and scope gate separately to any proposed remedy.
+4. Dispatch the smallest correct fix for an accepted defect even when its
+   proposed remedy is rejected.
+5. Document the evidence-backed no-change disposition for a rejected defect
+   claim.
+6. Keep a clarification-needed finding unresolved until evidence supports
+   accepted or rejected reclassification.
+7. Continue from the verified fix commit.
+8. Run `task loom:pre-push PR=<number>` through the responsible formatter owner, commit,
    and push when files changed.
-6. If the head is not validation-ready, dispatch at least one relevant focused
+9. If the head is not validation-ready, dispatch at least one relevant focused
    hosted task.
-7. If complete validation was already requested, dispatch it for the
+10. If complete validation was already requested, dispatch it for the
    replacement head first and collect exact-head Codex review concurrently.
    Otherwise start it when that head is ready for the final gate. In both cases,
    wait for both result sets before forming another repair batch.
-8. Reply on the original thread or comment with the disposition, evidence, fix,
+11. Reply on the original thread or comment with the disposition, evidence, fix,
    and validation as applicable when a
    targeted reply is possible.
-9. Resolve only after the targeted reply is visible and the finding is fixed or
+12. Resolve only after the targeted reply is visible and the finding is fixed or
    explicitly invalidated.
-10. Re-query feedback throughout validation and immediately before handoff or
+13. Re-query feedback throughout validation and immediately before handoff or
    merge.
+
+Do not resolve or minimize a clarification-needed finding as handled. Its
+targeted response requests or identifies the missing evidence. The finding
+remains readiness-blocking until reclassification.
 
 Inspect every external-service review comment already present. An optional
 review service never makes its delivered feedback optional; classify
@@ -188,11 +204,14 @@ enhancement, hardening idea, or new functionality outside the PR acceptance
 boundary as a command to expand the change. Do not create speculative
 follow-up work or an issue without explicit user authority.
 
+### Completion and ownership
+
 After those items are handled, rerun the feedback query immediately before
 merge. If another substantive comment arrives while the agent is working,
-record its three-gate disposition. Implement it only when accepted. When
-repository-owned checks finish and no review feedback is present, continue to
-readiness without waiting.
+record its separate defect and remedy dispositions. Implement the smallest
+correct fix only when the defect is accepted. When repository-owned checks
+finish and no review feedback is present, continue to readiness without
+waiting.
 
 Gizmo routes every implementation finding to the responsible team. Gizmo does
 not implement the fix. A separately requested service may own a finding only
