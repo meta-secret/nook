@@ -137,6 +137,8 @@ A confirmed security or authority violation is binding and fails closed. Route
 it to the authorized owner when its correction exceeds the current task scope.
 Do not downgrade it into an optional or out-of-scope enhancement.
 
+### Validation-head handling
+
 Use a focused task instead only when it isolates a known failure faster.
 
 Non-security feedback that arrives while checks run joins the pending repair

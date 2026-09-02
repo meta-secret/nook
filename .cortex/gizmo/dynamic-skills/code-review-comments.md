@@ -61,6 +61,8 @@ For each routed item, the responsible team agent:
 A finding is actionable only after the responsible team accepts it through all
 three gates.
 
+### Finding disposition boundaries
+
 A review label, severity, or confident explanation is not proof. Do not change
 the implementation merely to agree with a reviewer. Reject a false or
 inapplicable claim with specific evidence, then record that rationale on the
@@ -77,6 +79,8 @@ Security and authority violations remain binding. Fail closed when evidence
 confirms one. Do not reject or downgrade it as an optional enhancement. If the
 required correction exceeds the assigned scope, report the blocker and route
 it to the authorized owner instead of implementing outside scope.
+
+### Feedback target handling
 
 Gizmo continues from the verified commit, completes applicable validation, and
 pushes the result. It then applies the handling rule for the feedback target:
