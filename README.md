@@ -618,10 +618,12 @@ See [`infra/k0s/README.md`](infra/k0s/README.md) for the failed Main-repair
 inspection and recovery workflow.
 
 UI-facing pull requests must add or update a focused
-`e2e/demos/*.demo.spec.ts`. PR CI records those specs in headless Chromium and
-keeps the videos as a 90-day workflow artifact linked from the PR. Demo specs
-may pause briefly at meaningful UI states; regression e2e remains full-speed.
-From `nook-app/`, `cargo ui-demo` is an alias for `task ui:demo`.
+`e2e/demos/*.demo.spec.ts`. Headless demo execution and recording are
+temporarily disabled in GitHub workflows. The implementation and focused-spec
+requirement remain available for later re-enable. The normal PR browser-image
+producer also skips unless full E2E is requested. Demo specs may pause briefly
+at meaningful UI states; regression e2e remains full-speed. From `nook-app/`,
+`cargo ui-demo` is an alias for `task ui:demo`.
 
 Live sync e2e reads `NOOK_GITHUB_PAT` from the environment or
 `nook-app/nook-web/nook-web-app/.env.test.local`; see
