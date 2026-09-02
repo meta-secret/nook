@@ -60,6 +60,7 @@ type AppendAuthoritySentencesRequest = {
 };
 
 const TEAM_CATALOG_PATH = 'agentic-ai/loom/src/team-agents/catalog.ts';
+const REPOSITORY_AUTHORITY_PATH = 'AGENTS.md';
 const TEAM_AUTHORITY_PATH = '.cortex/AGENTS.md';
 const GIZMO_AUTHORITY_PATH = '.cortex/gizmo/AGENTS.md';
 const TEAM_AUTHORITY_MARKERS = [
@@ -81,21 +82,24 @@ const GIZMO_AUTHORITY_MARKERS = [
   'final verdict is bound to the exact pull-request head',
 ] as const;
 const AGENT_EXECUTION_DIRECTION =
-  /\b(?:agents?|team agents?|workers?|gizmo)\s+(?:may|can|must|shall|need to|are allowed to|is allowed to|are permitted to|is permitted to|are required to|is required to)\s+(?:ask\s+(?:an?\s+)?(?:team\s+)?(?:agent|worker)s?\s+to\s+)?(?:locally\s+)?(?:(?:run|invoke|perform|execute)\s+(?:(?:focused|required|shared|product|project|repository|source|package|local)\s+){0,4}(?:compilation|compilers?|checks?|checking|tests?|testing|test runners?|linting|linters?|typechecks?|typechecking|typecheckers?|builds?|bundles?|bundling|bundlers?|validation|installs?|installing|dependency installation|package installers?|browser suites?)|(?:compile|compiling|check(?:ing)?|test(?:ing)?|lint(?:ing)?|typecheck(?:ing)?|validate|validating|bundle|bundling|install(?:ing)?)(?:\s+(?:the\s+)?(?:product|project|repository|source|package|dependencies|browser suites?))?|build(?:ing)?\s+(?:the\s+)?(?:product|project|repository|source|package))\b/iu;
+  /\b(?:agents?|team agents?|workers?|subagents?|gizmo|ai|sre|security|development core|web development)\s+(?:may|can|must|shall|need to|are allowed to|is allowed to|are permitted to|is permitted to|are required to|is required to)\s+(?:ask\s+(?:an?\s+)?(?:team\s+)?(?:agent|worker)s?\s+to\s+)?(?:locally\s+)?(?:(?:run|invoke|perform|execute)\s+(?:(?:focused|required|shared|product|project|repository|source|package|local)\s+){0,4}(?:compilation|compilers?|checks?|checking|tests?|testing|test runners?|linting|linters?|typechecks?|typechecking|typecheckers?|builds?|bundles?|bundling|bundlers?|validation|installs?|installing|dependency installation|package installers?|browser suites?)|(?:compile|compiling|check(?:ing)?|test(?:ing)?|lint(?:ing)?|typecheck(?:ing)?|validate|validating|bundle|bundling|install(?:ing)?)(?:\s+(?:the\s+)?(?:product|project|repository|source|package|dependencies|browser suites?))?|build(?:ing)?\s+(?:the\s+)?(?:product|project|repository|source|package))\b/iu;
 const IMPERATIVE_EXECUTION_DIRECTION =
   /^(?:locally\s+)?(?:(?:run|invoke|perform|execute)\s+(?:(?:focused|required|shared|product|project|repository|source|package|local)\s+){0,4}(?:compilation|compilers?|checks?|checking|tests?|testing|test runners?|linting|linters?|typechecks?|typechecking|typecheckers?|builds?|bundles?|bundling|bundlers?|validation|installs?|installing|dependency installation|package installers?|browser suites?)|(?:compile|compiling|check(?:ing)?|test(?:ing)?|lint(?:ing)?|typecheck(?:ing)?|validate|validating|bundle|bundling|install(?:ing)?)(?:\s+(?:the\s+)?(?:product|project|repository|source|package|dependencies|browser suites?))?|build(?:ing)?\s+(?:the\s+)?(?:product|project|repository|source|package))\b/iu;
 const PROHIBITED_COMMAND =
   /^(?:cargo\s+(?:test|build|check|run|clippy|install|add|update)\b|rustc\b|wasm-pack\b|bun\s+(?:test|install|add|build|x\s+(?:tsc|eslint)|run\s+(?:test|lint|check|typecheck|build|bundle))\b|(?:npm|pnpm|yarn)\s+(?:test|install|add|exec\s+(?:tsc|eslint)|run\s+(?:test|lint|check|typecheck|build|bundle))\b|tsc\b|eslint\b|task\s+(?!(?:loom:pre-push|loom:cortex-session-clean|loom:delegation-visualization|loom:agent-stats-control|remote|loom:pr-land|pr:validate|pr:review|pr:ready)(?=\s|$))\S+)/iu;
 const AGENT_COMMAND_DIRECTION =
-  /\b(?:agents?|team agents?|workers?|gizmo)\s+(?:may|can|must|shall|need to|are allowed to|is allowed to|are permitted to|is permitted to|are required to|is required to)\s+(?:ask\s+(?:an?\s+)?(?:team\s+)?(?:agent|worker)s?\s+to\s+)?(?:locally\s+)?(?:run|invoke|perform|execute)\s+/iu;
+  /\b(?:agents?|team agents?|workers?|subagents?|gizmo|ai|sre|security|development core|web development)\s+(?:may|can|must|shall|need to|are allowed to|is allowed to|are permitted to|is permitted to|are required to|is required to)\s+(?:ask\s+(?:an?\s+)?(?:team\s+)?(?:agent|worker)s?\s+to\s+)?(?:locally\s+)?(?:(?:run|invoke|perform|execute)\s+)?/iu;
 const IMPERATIVE_COMMAND_DIRECTION = /^(?:run|invoke|perform|execute)\s+/iu;
 const PROHIBITED_EXECUTION_OBJECT =
   /(?:compilation|compilers?|checks?|checking|tests?|testing|test runners?|test suites?|linting|linters?|typechecks?|typechecking|typecheckers?|builds?|bundles?|bundling|bundlers?|validation|installs?|installing|dependency installation|package installers?|browser suites?)$/iu;
 const EXECUTION_LIST_DIRECTION =
-  /^(?:agents?|team agents?|workers?|gizmo)\s+(?:may|can|must|shall|need to|are allowed to|is allowed to|are permitted to|is permitted to|are required to|is required to)(?:\s+not)?(?:\s+ask\s+(?:an?\s+)?(?:team\s+)?(?:agent|worker)s?\s+to)?\s*:$/iu;
+  /^(?:agents?|team agents?|workers?|subagents?|gizmo|ai|sre|security|development core|web development)\s+(?:may|can|must|shall|need to|are allowed to|is allowed to|are permitted to|is permitted to|are required to|is required to)(?:\s+not)?(?:\s+ask\s+(?:an?\s+)?(?:team\s+)?(?:agent|worker)s?\s+to)?\s*:$/iu;
 const QUALIFIED_AUTHORITY_DIRECTION =
-  /(\b(?:agents?|team agents?|workers?|gizmo)\s+(?:may|can|must|shall|need to|are allowed to|is allowed to|are permitted to|is permitted to|are required to|is required to))\s*,\s*(?:(?:only\s+)?when|while|during|for|if|unless|after|before)\b[^,.;!?]*,\s*/iu;
-const AUTHORITY_ACTOR = /^(?:agents?|team agents?|workers?|gizmo)\b/iu;
+  /(\b(?:agents?|team agents?|workers?|subagents?|gizmo|ai|sre|security|development core|web development)\s+(?:may|can|must|shall|need to|are allowed to|is allowed to|are permitted to|is permitted to|are required to|is required to))\s*,\s*(?:(?:only\s+)?when|while|during|for|if|unless|after|before)\b[^,.;!?]*,\s*/iu;
+const AUTHORITY_ACTOR =
+  /^(?:agents?|team agents?|workers?|subagents?|gizmo|ai|sre|security|development core|web development)\b/iu;
+const HOSTED_EXECUTION =
+  /\b(?:on|through|via)\s+(?:(?:a|the)\s+)?(?:(?:gizmo(?:-owned)?[- ]+)?hosted|github actions|configured actions)(?:\s+(?:runners?|workers?|jobs?|validation|control plane))?\b/iu;
 const ELLIPTICAL_AUTHORITY_DIRECTION =
   /^(?:may|can|must|shall|need to|are allowed to|is allowed to|are permitted to|is permitted to|are required to|is required to)\b/iu;
 const LOCAL_EXECUTION = /\b(?:local(?:ly)?|on (?:a|the) local host)\b/iu;
@@ -224,6 +228,15 @@ export function auditTeamAuthorities(
     path: GIZMO_AUTHORITY_PATH,
     authorityName: CortexAuthorityName.Gizmo,
   });
+  const repositoryAuthority = join(request.repoRoot, REPOSITORY_AUTHORITY_PATH);
+  if (existsSync(repositoryAuthority)) {
+    appendLocalExecutionGrantFindings({
+      findings,
+      source: readFileSync(repositoryAuthority, 'utf8'),
+      path: REPOSITORY_AUTHORITY_PATH,
+      authorityName: CortexAuthorityName.Team,
+    });
+  }
   for (const authority of request.authorities) {
     const teamAuthorityPath = authority.contextPaths.find((contextPath) =>
       contextPath.endsWith('/AGENTS.md'),
@@ -344,7 +357,10 @@ function appendLocalExecutionGrantFindings(
         IMPERATIVE_EXECUTION_DIRECTION.test(normalizedStatement)) &&
       LOCAL_EXECUTION.test(statement) &&
       !NEGATED_LOCAL_EXECUTION.test(statement);
-    if (commandDirection || localExecutionDirection) {
+    if (
+      (commandDirection && !HOSTED_EXECUTION.test(statement)) ||
+      localExecutionDirection
+    ) {
       request.findings.push({
         code: `invalid-cortex-${request.authorityName.toLowerCase()}-authority`,
         path: request.path,

@@ -8,6 +8,7 @@ import { AgentStatsOperation, RequestFamily } from '../codec/enums.ts';
 import { resolveAgentTempPath } from '../lib/agent-temp-path.ts';
 import { assembleAgentStats } from '../lib/agent-stats-assemble.ts';
 import { validateAgentStatsYaml } from '../lib/agent-stats-schema.ts';
+import { stringProperty } from '../lib/agent-stats-github-api.ts';
 import { findRepoRoot } from '../lib/repo.ts';
 import { runCommand } from '../lib/run.ts';
 import {
@@ -15,6 +16,7 @@ import {
   asUntrustedYamlNode,
   isRecord,
   untrustedYamlProperty,
+  type UntrustedYamlMap,
   type UntrustedYamlNode,
 } from '../lib/guards.ts';
 import {
@@ -34,18 +36,13 @@ export type AgentStatsReport = {
   readonly outputPath: string;
 };
 
-export enum AgentStatsSourcePrField {
-  State = 'state',
-  MergedAt = 'mergedAt',
-}
-
 export enum GitHubPullRequestState {
   Merged = 'MERGED',
 }
 
-export type VerifyMergedAgentStatsSourcePrRequest = {
-  readonly repoRoot: string;
-  readonly prNumber: number;
+export type AgentStatsSourceIdentity = {
+  readonly headSha: string;
+  readonly mergeSha: string;
 };
 
 export async function runAgentStatsAssemble(
@@ -143,7 +140,11 @@ export async function runAgentStatsPublish(
     loomFailureDetail(loomFailureDetailArgs3);
   }
 
-  verifyMergedAgentStatsSourcePr({ repoRoot, prNumber });
+  verifyMergedAgentStatsSourcePr({
+    repoRoot,
+    prNumber,
+    sourceIdentity: agentStatsSourceIdentity(content),
+  });
 
   const remotePath = `stats/ai-agent/${prNumber}.yaml`;
   const publishedArgs: RunCommandArgs = {
@@ -173,9 +174,11 @@ export async function runAgentStatsPublish(
   };
 }
 
-export function verifyMergedAgentStatsSourcePr(
-  request: VerifyMergedAgentStatsSourcePrRequest,
-): void {
+export function verifyMergedAgentStatsSourcePr(request: {
+  readonly repoRoot: string;
+  readonly prNumber: number;
+  readonly sourceIdentity: AgentStatsSourceIdentity;
+}): void {
   const viewArgs: RunCommandArgs = {
     command: 'gh',
     args: [
@@ -183,7 +186,7 @@ export function verifyMergedAgentStatsSourcePr(
       'view',
       String(request.prNumber),
       '--json',
-      `${AgentStatsSourcePrField.State},${AgentStatsSourcePrField.MergedAt}`,
+      'state,mergedAt,headRefOid,mergeCommit',
     ],
     cwd: request.repoRoot,
   };
@@ -195,58 +198,75 @@ export function verifyMergedAgentStatsSourcePr(
     };
     loomFailureDetail(failure);
   }
-  assertMergedAgentStatsSourcePr(view.stdout);
+  assertMergedAgentStatsSourcePr(view.stdout, request.sourceIdentity);
 }
 
-export function assertMergedAgentStatsSourcePr(serialized: string): void {
+export function assertMergedAgentStatsSourcePr(
+  serialized: string,
+  expected: AgentStatsSourceIdentity,
+): void {
   let parsed: UntrustedYamlNode;
   try {
     parsed = asUntrustedYamlNode(JSON.parse(serialized) as UntrustedYamlNode);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    const failure: LoomFailureDetailArgs = {
-      code: LoomFailureCode.PrMetadataInvalid,
-      text: `Failed to parse source PR merge state: ${message}`,
-    };
-    loomFailureDetail(failure);
+    failPrMetadata(`Failed to parse source PR merge state: ${message}`);
   }
+  if (!isRecord(parsed) || Object.keys(parsed).length !== 4) {
+    failPrMetadata('Source PR metadata has an invalid field set');
+  }
+  const mergeCommit = recordProperty(parsed, 'mergeCommit');
+  if (Object.keys(mergeCommit).length !== 1) {
+    failPrMetadata('Source PR mergeCommit has an invalid field set');
+  }
+  const state = stringProperty({ record: parsed, key: 'state' });
+  const mergedAt = stringProperty({ record: parsed, key: 'mergedAt' });
+  const headSha = stringProperty({ record: parsed, key: 'headRefOid' });
+  const mergeSha = stringProperty({ record: mergeCommit, key: 'oid' });
   if (
-    !isRecord(parsed) ||
-    Object.keys(parsed).length !== 2 ||
-    Object.keys(parsed).some(
-      (key) =>
-        key !== AgentStatsSourcePrField.State &&
-        key !== AgentStatsSourcePrField.MergedAt,
-    )
+    state !== GitHubPullRequestState.Merged ||
+    mergedAt === '' ||
+    Number.isNaN(Date.parse(mergedAt))
   ) {
-    const failure: LoomFailureDetailArgs = {
-      code: LoomFailureCode.PrMetadataInvalid,
-      text: 'Source PR merge state must contain exactly state and mergedAt',
-    };
-    loomFailureDetail(failure);
+    failPrMetadata(
+      'AI-agent stats publication requires a currently merged source PR',
+    );
   }
-  const state = untrustedYamlProperty({
-    record: parsed,
-    key: AgentStatsSourcePrField.State,
-  });
-  const mergedAt = untrustedYamlProperty({
-    record: parsed,
-    key: AgentStatsSourcePrField.MergedAt,
-  });
+  if (headSha !== expected.headSha || mergeSha !== expected.mergeSha) {
+    failPrMetadata(
+      'AI-agent stats source PR commit identity does not match GitHub',
+    );
+  }
+}
+
+function agentStatsSourceIdentity(content: string): AgentStatsSourceIdentity {
+  const parsed = asUntrustedYamlNode(
+    Bun.YAML.parse(content) as UntrustedYamlNode,
+  );
+  if (!isRecord(parsed)) failPrMetadata('Agent stats root must be a mapping');
+  const sourcePr = recordProperty(parsed, 'source_pr');
+  return {
+    headSha: stringProperty({ record: sourcePr, key: 'head_sha' }),
+    mergeSha: stringProperty({ record: sourcePr, key: 'merge_sha' }),
+  };
+}
+
+function recordProperty(
+  record: UntrustedYamlMap,
+  key: string,
+): UntrustedYamlMap {
+  const property = untrustedYamlProperty({ record, key });
   if (
-    state.presence === UntrustedYamlPropertyPresence.Absent ||
-    state.value !== GitHubPullRequestState.Merged ||
-    mergedAt.presence === UntrustedYamlPropertyPresence.Absent ||
-    typeof mergedAt.value !== 'string' ||
-    mergedAt.value === '' ||
-    Number.isNaN(Date.parse(mergedAt.value))
+    property.presence === UntrustedYamlPropertyPresence.Absent ||
+    !isRecord(property.value)
   ) {
-    const failure: LoomFailureDetailArgs = {
-      code: LoomFailureCode.PrMetadataInvalid,
-      text: 'AI-agent stats publication requires a currently merged source PR',
-    };
-    loomFailureDetail(failure);
+    failPrMetadata(`Agent stats metadata field ${key} must be a mapping`);
   }
+  return property.value;
+}
+
+function failPrMetadata(text: string): never {
+  loomFailureDetail({ code: LoomFailureCode.PrMetadataInvalid, text });
 }
 
 type ValidateFileArgs = {

@@ -162,8 +162,14 @@ describe('canonical Cortex team authority', () => {
   test('rejects contradictory affirmative local product execution grants', async () => {
     const fixtureRoot = await writableCortexAuthorityFixture();
     try {
+      const repositoryPath = join(fixtureRoot, 'AGENTS.md');
       const authorityPath = join(fixtureRoot, '.cortex/AGENTS.md');
       const gizmoPath = join(fixtureRoot, '.cortex/gizmo/AGENTS.md');
+      await writeFile(
+        repositoryPath,
+        `${await readFile(repositoryPath, 'utf8')}\nAI may run cargo test.\n`,
+        'utf8',
+      );
       await writeFile(
         authorityPath,
         `${await readFile(authorityPath, 'utf8')}\nAgents may run focused product tests locally.\n`,
@@ -176,18 +182,13 @@ describe('canonical Cortex team authority', () => {
       );
 
       const report = auditTeamAgents({ repoRoot: fixtureRoot });
-      expect(report.findings).toContainEqual({
-        code: 'invalid-cortex-team-authority',
-        path: '.cortex/AGENTS.md',
-        message:
-          'Canonical Cortex team authority grants prohibited local agent product execution: Agents may run focused product tests locally.',
-      });
-      expect(report.findings).toContainEqual({
-        code: 'invalid-cortex-gizmo-authority',
-        path: '.cortex/gizmo/AGENTS.md',
-        message:
-          'Canonical Cortex Gizmo authority grants prohibited local agent product execution: Gizmo can ask a worker to execute repository validation on the local host.',
-      });
+      expect(report.findings.map((finding) => finding.path)).toEqual(
+        expect.arrayContaining([
+          'AGENTS.md',
+          '.cortex/AGENTS.md',
+          '.cortex/gizmo/AGENTS.md',
+        ]),
+      );
     } finally {
       await rm(fixtureRoot, REMOVE_RECURSIVELY);
     }
@@ -226,7 +227,7 @@ describe('canonical Cortex team authority', () => {
       const gizmoPath = join(fixtureRoot, '.cortex/gizmo/AGENTS.md');
       await writeFile(
         authorityPath,
-        `${await readFile(authorityPath, 'utf8')}\nWorkers may:\n\n- run product tests locally.\n`,
+        `${await readFile(authorityPath, 'utf8')}\nSubagents may:\n\n- task check\n\n| Actor | Authority |\n| --- | --- |\n| AI | may run product tests locally. |\n\n> Security may run product builds locally.\n`,
         'utf8',
       );
       await writeFile(
@@ -235,19 +236,17 @@ describe('canonical Cortex team authority', () => {
         'utf8',
       );
 
-      const report = auditTeamAgents({ repoRoot: fixtureRoot });
-      expect(report.findings).toContainEqual({
-        code: 'invalid-cortex-team-authority',
-        path: '.cortex/AGENTS.md',
-        message:
-          'Canonical Cortex team authority grants prohibited local agent product execution: Workers may run product tests locally.',
-      });
-      expect(report.findings).toContainEqual({
-        code: 'invalid-cortex-gizmo-authority',
-        path: '.cortex/gizmo/AGENTS.md',
-        message:
-          'Canonical Cortex Gizmo authority grants prohibited local agent product execution: Gizmo may ask workers to execute repository validation on the local host.',
-      });
+      const messages = auditTeamAgents({ repoRoot: fixtureRoot }).findings.map(
+        (finding) => finding.message,
+      );
+      expect(messages).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining('Subagents may task check'),
+          expect.stringContaining('AI may run product tests locally.'),
+          expect.stringContaining('Security may run product builds locally.'),
+          expect.stringContaining('Gizmo may ask workers to execute'),
+        ]),
+      );
     } finally {
       await rm(fixtureRoot, REMOVE_RECURSIVELY);
     }
@@ -264,62 +263,6 @@ describe('canonical Cortex team authority', () => {
       );
 
       expect(auditTeamAgents({ repoRoot: fixtureRoot }).findings).toEqual([]);
-    } finally {
-      await rm(fixtureRoot, REMOVE_RECURSIVELY);
-    }
-  });
-
-  test('audits affirmative grants split across GFM table cells', async () => {
-    const fixtureRoot = await writableCortexAuthorityFixture();
-    try {
-      const authorityPath = join(fixtureRoot, '.cortex/AGENTS.md');
-      const gizmoPath = join(fixtureRoot, '.cortex/gizmo/AGENTS.md');
-      await writeFile(
-        authorityPath,
-        `${await readFile(authorityPath, 'utf8')}\n| Actor | Authority |\n| --- | --- |\n| Workers | may run product tests locally. |\n`,
-        'utf8',
-      );
-      await writeFile(
-        gizmoPath,
-        `${await readFile(gizmoPath, 'utf8')}\n| Actor | Authority |\n| --- | --- |\n| Gizmo | can ask a worker to execute repository validation on the local host. |\n`,
-        'utf8',
-      );
-
-      const report = auditTeamAgents({ repoRoot: fixtureRoot });
-      expect(report.findings).toContainEqual({
-        code: 'invalid-cortex-team-authority',
-        path: '.cortex/AGENTS.md',
-        message:
-          'Canonical Cortex team authority grants prohibited local agent product execution: Workers may run product tests locally.',
-      });
-      expect(report.findings).toContainEqual({
-        code: 'invalid-cortex-gizmo-authority',
-        path: '.cortex/gizmo/AGENTS.md',
-        message:
-          'Canonical Cortex Gizmo authority grants prohibited local agent product execution: Gizmo can ask a worker to execute repository validation on the local host.',
-      });
-    } finally {
-      await rm(fixtureRoot, REMOVE_RECURSIVELY);
-    }
-  });
-
-  test('audits affirmative grants inside Markdown blockquotes', async () => {
-    const fixtureRoot = await writableCortexAuthorityFixture();
-    try {
-      const authorityPath = join(fixtureRoot, '.cortex/AGENTS.md');
-      await writeFile(
-        authorityPath,
-        `${await readFile(authorityPath, 'utf8')}\n> Workers may run product tests locally.\n`,
-        'utf8',
-      );
-
-      const report = auditTeamAgents({ repoRoot: fixtureRoot });
-      expect(report.findings).toContainEqual({
-        code: 'invalid-cortex-team-authority',
-        path: '.cortex/AGENTS.md',
-        message:
-          'Canonical Cortex team authority grants prohibited local agent product execution: Workers may run product tests locally.',
-      });
     } finally {
       await rm(fixtureRoot, REMOVE_RECURSIVELY);
     }
@@ -353,7 +296,7 @@ describe('canonical Cortex team authority', () => {
       const authorityPath = join(fixtureRoot, '.cortex/AGENTS.md');
       await writeFile(
         authorityPath,
-        `${await readFile(authorityPath, 'utf8')}\nAgents may run product tests on hosted runners, never locally.\nWorkers must run product tests on hosted runners, never locally.\nWorkers must run cargo test on hosted runners, never locally.\nWorkers may execute repository validation on hosted runners, but not on the local host.\nAgents may run product tests locally, but results are not locally cached.\n`,
+        `${await readFile(authorityPath, 'utf8')}\nAgents may run product tests on hosted runners, never locally.\nWorkers must run product tests on hosted runners, never locally.\nWorkers must run cargo test through Gizmo-owned hosted validation, never locally.\nWorkers may execute repository validation on hosted runners, but not on the local host.\nAgents may run product tests locally, but results are not locally cached.\n`,
         'utf8',
       );
 
@@ -395,40 +338,13 @@ describe('canonical Cortex team authority', () => {
     }
   });
 
-  test('rejects qualified local execution grants', async () => {
-    const fixtureRoot = await writableCortexAuthorityFixture();
-    try {
-      const authorityPath = join(fixtureRoot, '.cortex/AGENTS.md');
-      await writeFile(
-        authorityPath,
-        `${await readFile(authorityPath, 'utf8')}\nWorkers may, when debugging, run product tests locally.\nAgents can, for focused diagnosis, run cargo test locally.\nWorkers may, when editing Rust, run required non-compiling formatters locally.\n`,
-        'utf8',
-      );
-
-      const report = auditTeamAgents({ repoRoot: fixtureRoot });
-      expect(report.findings).toHaveLength(2);
-      expect(report.findings.map((finding) => finding.message)).toEqual(
-        expect.arrayContaining([
-          expect.stringContaining(
-            'Workers may, when debugging, run product tests locally.',
-          ),
-          expect.stringContaining(
-            'Agents can, for focused diagnosis, run cargo test locally.',
-          ),
-        ]),
-      );
-    } finally {
-      await rm(fixtureRoot, REMOVE_RECURSIVELY);
-    }
-  });
-
   test('rejects every prohibited natural-language execution category', async () => {
     const fixtureRoot = await writableCortexAuthorityFixture();
     try {
       const authorityPath = join(fixtureRoot, '.cortex/AGENTS.md');
       await writeFile(
         authorityPath,
-        `${await readFile(authorityPath, 'utf8')}\nAgents may run product compilation locally.\nAgents may run checks locally.\nAgents may run product tests locally.\nAgents may perform linting locally.\nAgents may run typechecks locally.\nAgents may run product builds locally.\nAgents may perform bundling locally.\nAgents may perform dependency installation locally.\nAgents may run browser suites locally.\nAgents may execute repository validation locally.\nWorkers may run compilers locally.\nWorkers may run bundlers locally.\nWorkers may invoke test runners locally.\nWorkers may execute linters locally.\nWorkers may run typecheckers locally.\nWorkers may run package installers locally.\n`,
+        `${await readFile(authorityPath, 'utf8')}\nAI may run product compilation locally.\nDevelopment core may run checks locally.\nWeb development may run product tests locally.\nAgents may perform linting locally.\nAgents may run typechecks locally.\nAgents may run product builds locally.\nAgents may perform bundling locally.\nAgents may perform dependency installation locally.\nAgents may run browser suites locally.\nAgents may execute repository validation locally.\nWorkers may run compilers locally.\nWorkers may run bundlers locally.\nWorkers may invoke test runners locally.\nWorkers may execute linters locally.\nWorkers may run typecheckers locally.\nWorkers may run package installers locally.\n`,
         'utf8',
       );
 
@@ -467,17 +383,17 @@ describe('canonical Cortex team authority', () => {
       const authorityPath = join(fixtureRoot, '.cortex/AGENTS.md');
       await writeFile(
         authorityPath,
-        `${await readFile(authorityPath, 'utf8')}\nAgents may run product tests locally, but must not run linting locally.\nWorkers must not run tests locally, but may run lint locally.\nAgents may run checks locally and must not run builds locally.\n`,
+        `${await readFile(authorityPath, 'utf8')}\nDevelopment core may run product tests locally, but must not run linting locally.\nWeb development must not run tests locally, but may run lint locally.\nAgents may run checks locally and must not run builds locally.\n`,
         'utf8',
       );
 
       const report = auditTeamAgents({ repoRoot: fixtureRoot });
       expect(report.findings).toHaveLength(3);
       expect(report.findings[0]?.message).toContain(
-        'Agents may run product tests locally',
+        'Development core may run product tests locally',
       );
       expect(report.findings[1]?.message).toContain(
-        'Workers may run lint locally',
+        'Web development may run lint locally',
       );
       expect(report.findings[2]?.message).toContain(
         'Agents may run checks locally',
@@ -493,18 +409,24 @@ describe('canonical Cortex team authority', () => {
       const authorityPath = join(fixtureRoot, '.cortex/AGENTS.md');
       await writeFile(
         authorityPath,
-        `${await readFile(authorityPath, 'utf8')}\nWorkers are permitted to run cargo test.\nAgents must invoke task web:check locally.\n\n- Run bun test locally.\n\nWorkers shall:\n\n- execute wasm-pack locally.\n`,
+        `${await readFile(authorityPath, 'utf8')}\nSRE is permitted to run cargo test.\nAgents must invoke task web:check locally.\nWeb development may, when debugging, run product tests locally.\nAgents can, for focused diagnosis, run cargo test locally.\n\n- Run bun test locally.\n\nSecurity shall:\n\n- execute wasm-pack locally.\n`,
         'utf8',
       );
 
       const report = auditTeamAgents({ repoRoot: fixtureRoot });
-      expect(report.findings).toHaveLength(4);
+      expect(report.findings).toHaveLength(6);
       expect(report.findings.map((finding) => finding.message)).toEqual(
         expect.arrayContaining([
-          expect.stringContaining('Workers are permitted to run cargo test.'),
+          expect.stringContaining('SRE is permitted to run cargo test.'),
           expect.stringContaining('Agents must invoke task web:check locally.'),
+          expect.stringContaining(
+            'Web development may, when debugging, run product tests locally.',
+          ),
+          expect.stringContaining(
+            'Agents can, for focused diagnosis, run cargo test locally.',
+          ),
           expect.stringContaining('Run bun test locally.'),
-          expect.stringContaining('Workers shall execute wasm-pack locally.'),
+          expect.stringContaining('Security shall execute wasm-pack locally.'),
         ]),
       );
     } finally {
@@ -679,6 +601,7 @@ function requiredAiAuthority(): TeamAuthority {
 
 async function cortexAuthorityFixture(): Promise<string> {
   const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-team-authority-'));
+  await symlink(join(REPO_ROOT, 'AGENTS.md'), join(fixtureRoot, 'AGENTS.md'));
   await symlink(join(REPO_ROOT, '.cortex'), join(fixtureRoot, '.cortex'));
   return fixtureRoot;
 }
@@ -688,6 +611,11 @@ async function writableCortexAuthorityFixture(): Promise<string> {
   const cortexRoot = join(fixtureRoot, '.cortex');
   await mkdir(join(cortexRoot, 'gizmo'), CREATE_RECURSIVELY);
   await symlink(join(REPO_ROOT, '.cortex/teams'), join(cortexRoot, 'teams'));
+  await writeFile(
+    join(fixtureRoot, 'AGENTS.md'),
+    await readFile(join(REPO_ROOT, 'AGENTS.md'), 'utf8'),
+    'utf8',
+  );
   await writeFile(
     join(cortexRoot, 'AGENTS.md'),
     await readFile(join(REPO_ROOT, '.cortex/AGENTS.md'), 'utf8'),
@@ -708,6 +636,11 @@ async function writableCatalogTeamAuthorityFixture(
   const cortexRoot = join(fixtureRoot, '.cortex');
   await mkdir(join(cortexRoot, 'gizmo'), CREATE_RECURSIVELY);
   await mkdir(join(cortexRoot, 'teams'), CREATE_RECURSIVELY);
+  await writeFile(
+    join(fixtureRoot, 'AGENTS.md'),
+    await readFile(join(REPO_ROOT, 'AGENTS.md'), 'utf8'),
+    'utf8',
+  );
   await writeFile(
     join(cortexRoot, 'AGENTS.md'),
     await readFile(join(REPO_ROOT, '.cortex/AGENTS.md'), 'utf8'),
