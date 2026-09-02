@@ -47,6 +47,8 @@ jobs:
     name: Validate explicit CI request
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
     timeout-minutes: 2
+    outputs:
+      ui-demos-enabled: ${{ 'false' }}
     steps:
       - name: Reject unsupported label events
         env:
@@ -508,7 +510,10 @@ jobs:
           GHA_CACHE_WRITE_ENABLED: "1"
 
       - name: Publish exact-source PR browser job image
-        if: contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')
+        if: >-
+          contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') ||
+          (needs.validation-request.outputs.ui-demos-enabled == 'true' &&
+          steps.ui-demo-contract.outputs.required == 'true')
         run: >-
           task web:e2e:kubernetes-image:artifacts
           CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
@@ -546,7 +551,7 @@ jobs:
   ui-demo:
     name: Headless UI demo
     if: >-
-      false &&
+      needs.validation-request.outputs.ui-demos-enabled == 'true' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.user.login != 'dependabot[bot]' &&
       (github.event.label.name == 'ci:validate' ||

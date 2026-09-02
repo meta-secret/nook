@@ -249,6 +249,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "types: [labeled]",
         "name: Validate explicit CI request",
         "name: Reject unsupported label events",
+        "ui-demos-enabled: ${{ 'false' }}",
         "github.event.label.name == 'ci:validate'",
         "name: Full browser e2e (main fix)",
         "name: Full extension e2e (main fix)",
@@ -362,7 +363,9 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
                 .contains("ui-demo-required: ${{ steps.ui-demo-contract.outputs.required }}")
             && verify_job.contains("ui-demo-specs: ${{ steps.ui-demo-contract.outputs.specs }}")
             && !verify_job.contains("Record headless UI demo")
-            && ui_demo_job.contains("if: >-\n      false &&")
+            && ui_demo_job.contains(
+                "if: >-\n      needs.validation-request.outputs.ui-demos-enabled == 'true' &&"
+            )
             && ui_demo_job
                 .contains("github.event.pull_request.head.repo.full_name == github.repository")
             && ui_demo_job.contains("github.event.pull_request.user.login != 'dependabot[bot]'")
@@ -487,7 +490,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
             && verify_job.contains("name: Confirm WASM handoff shape")
             && verify_job.contains("name: Upload preview dist handoff")
             && verify_job.contains(
-                "name: Publish exact-source PR browser job image\n        if: contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')"
+                "contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') ||\n          (needs.validation-request.outputs.ui-demos-enabled == 'true' &&\n          steps.ui-demo-contract.outputs.required == 'true')"
             )
             && verify_job.contains("actions/download-artifact@v8")
             && verify_job.contains("name: pr-wasm-${{ github.run_id }}")
