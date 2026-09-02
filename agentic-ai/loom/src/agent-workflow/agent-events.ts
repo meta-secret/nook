@@ -12,15 +12,8 @@ import type {
   WorkflowRunId,
   WorkflowVersion,
 } from './domain.ts';
-import type {
-  RuntimeActivityObservation,
-  WorkflowRuntimeActivityKind,
-} from './events.ts';
-import type { CortexReference } from './cortex-references.ts';
-
 export enum AgentAttemptEventKind {
   AttemptStarted = 'attempt-started',
-  RuntimeActivity = 'runtime-activity',
   ResultProjected = 'result-projected',
   ViewProjected = 'view-projected',
   AttemptTerminalRecorded = 'attempt-terminal-recorded',
@@ -46,13 +39,6 @@ export type AgentAttemptStartedEvent = AgentAttemptEventMetadata & {
   readonly kind: AgentAttemptEventKind.AttemptStarted;
 };
 
-export type AgentRuntimeActivityEvent = AgentAttemptEventMetadata & {
-  readonly kind: AgentAttemptEventKind.RuntimeActivity;
-  readonly activity: WorkflowRuntimeActivityKind;
-  readonly evidenceSha256?: string;
-  readonly cortexReferences: readonly CortexReference[];
-};
-
 export type AgentResultProjectedEvent = AgentAttemptEventMetadata & {
   readonly kind: AgentAttemptEventKind.ResultProjected;
   readonly result: ProjectionReference;
@@ -72,24 +58,12 @@ export type AgentAttemptTerminalRecordedEvent = AgentAttemptEventMetadata & {
 
 export type AgentAttemptEvent =
   | AgentAttemptStartedEvent
-  | AgentRuntimeActivityEvent
   | AgentResultProjectedEvent
   | AgentViewProjectedEvent
   | AgentAttemptTerminalRecordedEvent;
 
 export type AgentAttemptEventWithoutMetadata =
   | Omit<AgentAttemptStartedEvent, keyof AgentAttemptEventMetadata>
-  | Omit<AgentRuntimeActivityEvent, keyof AgentAttemptEventMetadata>
   | Omit<AgentResultProjectedEvent, keyof AgentAttemptEventMetadata>
   | Omit<AgentViewProjectedEvent, keyof AgentAttemptEventMetadata>
   | Omit<AgentAttemptTerminalRecordedEvent, keyof AgentAttemptEventMetadata>;
-
-export function runtimeActivityEvent(
-  observation: RuntimeActivityObservation,
-): Omit<AgentRuntimeActivityEvent, keyof AgentAttemptEventMetadata> {
-  return {
-    kind: AgentAttemptEventKind.RuntimeActivity,
-    activity: observation.activity,
-    cortexReferences: observation.cortexReferences ?? [],
-  };
-}

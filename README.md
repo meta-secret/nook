@@ -477,11 +477,12 @@ Invoke one selected role with
 Invocation requires a non-empty **`CODEX_API_KEY`**. It does not reuse or copy
 interactive ChatGPT login state.
 The request binds an exact source commit, registered expert, stable run/task
-identity, attempt, parent lineage, and bounded instruction. Loom finalizes the
-attempt journal and returns its content-addressed evidence references, but does
-not schedule a successor or mutate lifecycle state. Before invocation, Loom
-replay-verifies a completed depth-one `ModuleDevelopmentPlan` with an exact
-typed authorization for that child. Depth-three work also requires its
+identity, attempt, parent lineage, and bounded instruction. Runtime progress is
+printed live but never written to JSONL. Loom finalizes the lifecycle journal
+and terminal handoff and returns their content-addressed evidence references,
+but does not schedule a successor or mutate lifecycle state. Before invocation,
+Loom replay-verifies a completed depth-one `ModuleDevelopmentPlan` with an
+exact typed authorization for that child. Depth-three work also requires its
 completed immediate parent. Direct named experts are agent-attempt children at
 depth two or three; they never use workflow-root lineage, and their evidence
 cannot authorize descendants.

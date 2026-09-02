@@ -2,7 +2,6 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { AgentAttemptJournal } from './agent-journal.ts';
-import { AgentAttemptEventKind } from './agent-events.ts';
 import { readVerifiedBarrierAttempt } from './attempt-verification.ts';
 import {
   decodeDelegationAdmissionRequest,
@@ -20,9 +19,7 @@ import {
   TaskTerminalKind,
   WorkflowResultKind,
 } from './domain.ts';
-import { WorkflowRuntimeActivityKind } from './events.ts';
 import { decodeWorkflowTaskOutput } from './structured-result-codec.ts';
-import type { AgentAttemptEventWithoutMetadata } from './agent-events.ts';
 import type { AgentAttemptJournalConfiguration } from './agent-journal.ts';
 import type { ReadParentAttemptArgs } from './attempt-verification.ts';
 import type {
@@ -45,11 +42,6 @@ import {
 } from './delegation-aggregation.ts';
 import type { FinalizeDelegationRunInput } from './delegation-aggregation.ts';
 import { renderDelegationPlanTree } from './delegation-plan-tree.ts';
-import { registeredCortexIdentifiersAtCommit } from '../lib/cortex-identifiers.ts';
-import {
-  assertCortexReferences,
-  type CortexReference,
-} from './cortex-references.ts';
 
 const HELP = `Loom delegated agent journal
 
@@ -61,9 +53,10 @@ Usage:
 
 Start persists one immutable source-bound delegation plan. Admit authorizes one
 exactly declared attempt before dispatch. Record requires that admission,
-creates the finalized content-addressed journal, and then rereads and verifies
-its persisted event, result, and semantic view. Finalize verifies the planned
-all-terminal hierarchy and materializes its root semantic view.
+creates the finalized content-addressed lifecycle journal and terminal handoff,
+then rereads and verifies its event, result, and semantic view. Runtime progress
+is live and is not accepted by this persistence boundary. Finalize verifies the
+planned all-terminal hierarchy and materializes its root semantic view.
 `;
 
 enum DelegationCommandKind {
@@ -108,12 +101,6 @@ type DelegationStartResponse = {
   readonly rootAdmission: Awaited<ReturnType<typeof admitDelegationAttempt>>;
 };
 
-type DelegationActivity = {
-  readonly activity: WorkflowRuntimeActivityKind;
-  readonly detail: string;
-  readonly cortexReferences?: readonly CortexReference[];
-};
-
 type DelegationRecordRequest = {
   readonly runId: string;
   readonly sourceCommit: string;
@@ -122,14 +109,20 @@ type DelegationRecordRequest = {
   readonly attempt: WorkflowAttemptNumber;
   readonly depth: number;
   readonly parent: AgentAttemptParent;
-  readonly activities: readonly DelegationActivity[];
   readonly terminal: TaskTerminal<string>;
 };
 
-const ACTIVITY_KINDS = new Set<string>(
-  Object.values(WorkflowRuntimeActivityKind),
-);
 const TERMINAL_KINDS = new Set<string>(Object.values(TaskTerminalKind));
+const RECORD_REQUEST_KEYS = new Set([
+  'runId',
+  'sourceCommit',
+  'task',
+  'agent',
+  'attempt',
+  'depth',
+  'parent',
+  'terminal',
+]);
 
 async function main(): Promise<number> {
   const commandLine = parseCommandLine(process.argv.slice(2));
@@ -214,17 +207,6 @@ async function record(
   const serialized = await readFile(commandLine.requestPath, 'utf8');
   const request = JSON.parse(serialized) as DelegationRecordRequest;
   assertRequest(request);
-  const knownCortexIdentifiers = registeredCortexIdentifiersAtCommit({
-    repoRoot: commandLine.workingDirectory,
-    sourceCommit: request.sourceCommit,
-  });
-  for (const activity of request.activities) {
-    const referenceArgs = {
-      references: activity.cortexReferences ?? [],
-      knownIdentifiers: knownCortexIdentifiers,
-    } as const;
-    assertCortexReferences(referenceArgs);
-  }
   const terminal = normalizedTerminal(request.terminal);
   const runDirectory = resolve(
     commandLine.workingDirectory,
@@ -263,18 +245,9 @@ async function record(
     depth: request.depth,
     parent: request.parent,
     now: () => new Date().toISOString(),
-    knownCortexIdentifiers,
   };
   const journal = new AgentAttemptJournal<string>(journalConfiguration);
   await journal.initialize();
-  for (const activity of request.activities) {
-    const event: AgentAttemptEventWithoutMetadata = {
-      kind: AgentAttemptEventKind.RuntimeActivity,
-      activity: activity.activity,
-      cortexReferences: activity.cortexReferences ?? [],
-    };
-    await journal.append(event);
-  }
   const processing = await journal.finalize(terminal);
   const verificationRequest: ReadParentAttemptArgs = {
     runDirectory,
@@ -355,10 +328,11 @@ function parseCommandLine(
 function assertRequest(request: DelegationRecordRequest): void {
   if (
     !request ||
+    Object.keys(request).length !== RECORD_REQUEST_KEYS.size ||
+    !Object.keys(request).every((key) => RECORD_REQUEST_KEYS.has(key)) ||
     typeof request.runId !== 'string' ||
     !safeFilesystemIdentifier(request.runId) ||
     !/^[0-9a-f]{40}$/.test(request.sourceCommit) ||
-    !Array.isArray(request.activities) ||
     !request.terminal ||
     !TERMINAL_KINDS.has(request.terminal.kind) ||
     request.terminal.task !== request.task ||
@@ -381,20 +355,6 @@ function assertRequest(request: DelegationRecordRequest): void {
         request.terminal.summary.length > 4096))
   ) {
     throw new Error('Delegation journal request terminal is invalid.');
-  }
-  for (const activity of request.activities) {
-    if (
-      !activity ||
-      !ACTIVITY_KINDS.has(activity.activity) ||
-      typeof activity.detail !== 'string'
-    ) {
-      throw new Error('Delegation journal request activity is invalid.');
-    }
-    const referenceArgs = {
-      references: activity.cortexReferences ?? [],
-      knownIdentifiers: false,
-    } as const;
-    assertCortexReferences(referenceArgs);
   }
   if (request.terminal.kind === TaskTerminalKind.Completed) {
     const view = request.terminal.output.materializedViewMarkdown;

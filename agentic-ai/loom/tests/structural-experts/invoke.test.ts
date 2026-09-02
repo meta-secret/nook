@@ -29,6 +29,7 @@ import type {
 } from '../../src/agent-workflow/domain.ts';
 import { AgentAttemptEventKind } from '../../src/agent-workflow/agent-events.ts';
 import type { AgentAttemptEvent } from '../../src/agent-workflow/agent-events.ts';
+import { WorkflowRuntimeActivityKind } from '../../src/agent-workflow/events.ts';
 import { invokeStructuralExpert } from '../../src/structural-experts/invoke.ts';
 import type { InvokeStructuralExpertRequest } from '../../src/structural-experts/invoke.ts';
 import { StructuralExpertKind } from '../../src/structural-experts/catalog.ts';
@@ -48,7 +49,10 @@ class ValidRuntime implements AgentTaskRuntime<string, string> {
     invocation: AgentExecutionInvocation<string, string>,
   ): Promise<AgentExecutionCompletion> {
     this.executionCount += 1;
-    void invocation;
+    await invocation.observe({
+      activity: WorkflowRuntimeActivityKind.TurnCompleted,
+      detail: 'Structural inspection completed.',
+    });
     return {
       threadId: 'structural-thread',
       output: codeEvidence(),
@@ -94,6 +98,7 @@ test('records completed structural evidence only through structural provenance',
     expect(events[0]?.adapter).toBe(
       AgentAttemptAdapterKind.StructuralExpertInvocation,
     );
+    expect(JSON.stringify(events)).not.toContain('runtime-activity');
   } finally {
     await rm(runDirectory, REMOVE_RECURSIVELY);
   }
@@ -123,6 +128,7 @@ test('invalid completion becomes a replayable sanitized failed terminal', async 
     expect(events.at(-1)?.kind).toBe(
       AgentAttemptEventKind.AttemptTerminalRecorded,
     );
+    expect(JSON.stringify(events)).not.toContain('runtime-activity');
   } finally {
     await rm(runDirectory, REMOVE_RECURSIVELY);
   }

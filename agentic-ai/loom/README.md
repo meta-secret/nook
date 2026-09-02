@@ -12,20 +12,20 @@ Humans do not use Loom interactively. AI agents and Task wrappers do.
 ## Delegated agent action references
 
 Every persisted agent-attempt event has a compact action identifier derived
-from its sequence, such as `a0002`. Runtime activities may also name registered
-Cortex guidance with a `loaded`, `cited`, `applied`, or `validated` relation.
+from its sequence, such as `a0002`. Runtime activities remain live observations
+with an independent ordered identifier such as `live-a0002`; they may also name
+registered Cortex guidance with a `loaded`, `cited`, `applied`, or `validated`
+relation.
 
-The registry lives at `.cortex/identifiers.json`. Loom validates references
-before persistence and prints a compact action summary to stderr after the
-journal write, while machine-readable responses remain on stdout. These records
-trace observable actions and references. Action metadata persists only typed
-activity kinds, Cortex references, and optional evidence digests; free-form
-adapter observations remain transient. Existing result and view projections
-remain governed by their structured evidence contracts.
+The registry lives at `.cortex/identifiers.json`. Loom validates live references
+before printing a compact activity summary to stderr, while machine-readable
+responses remain on stdout. Runtime observations are transient and never enter
+`events.jsonl`; lifecycle events plus result and view projections remain the
+persisted, replayable terminal handoff.
 
-Adapter-bearing attempt streams use workflow version `3.0.0`. Earlier versions
-do not contain action identities and require local cleanup or explicit
-migration rather than inferred replay data.
+Lifecycle-only attempt streams use workflow version `4.0.0`. Version `3.0.0`
+streams may contain persisted progress and must be removed and recreated rather
+than inferred or accepted through fallback replay.
 
 ## Module expert catalog
 

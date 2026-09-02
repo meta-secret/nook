@@ -17,12 +17,10 @@ import type {
   AgentAttemptProcessingReference,
   TaskTerminal,
 } from '../agent-workflow/domain.ts';
-import { runtimeActivityEvent } from '../agent-workflow/agent-events.ts';
 import { decodeWorkflowTaskOutput } from '../agent-workflow/structured-result-codec.ts';
 import { WorkflowRuntimeActivityKind } from '../agent-workflow/events.ts';
 import type { RuntimeActivityObservation } from '../agent-workflow/events.ts';
 import { replayAgentAttemptJournal } from '../agent-workflow/agent-replay.ts';
-import { publishedCortexIdentifiersAtCommit } from '../lib/cortex-identifiers.ts';
 import { auditStructuralExperts } from './audit.ts';
 import { structuralExpertProfile, StructuralExpertKind } from './catalog.ts';
 import { validateStructuralOutputScope } from './output-scope.ts';
@@ -121,7 +119,7 @@ export async function invokeStructuralExpert(
     if (activityCount >= MAX_ACTIVITY_COUNT) {
       throw new Error('Structural expert runtime activity limit exceeded.');
     }
-    await journal.append(runtimeActivityEvent(observation));
+    await journal.observe(observation);
     activityCount += 1;
   };
   let execution: TrustedStructuralExecution;
@@ -218,7 +216,7 @@ async function finalizeStructuralFailure(
       activity: WorkflowRuntimeActivityKind.RuntimeError,
       detail: 'Structural expert runtime failed.',
     };
-    await input.journal.append(runtimeActivityEvent(observation));
+    await input.journal.observe(observation);
   }
   const terminal: TaskTerminal<string> = {
     kind: TaskTerminalKind.Failed,
@@ -331,11 +329,7 @@ export async function verifyStructuralExpertInvocationResult(
   }
   let replayed: ReturnType<typeof replayAgentAttemptJournal>;
   try {
-    const knownCortexIdentifiers = publishedCortexIdentifiersAtCommit({
-      repoRoot: resolve(result.runDirectory, '../../../..'),
-      sourceCommit: result.sourceCommit,
-    });
-    const replayRequest = { events, knownCortexIdentifiers };
+    const replayRequest = { events };
     replayed = replayAgentAttemptJournal(replayRequest);
   } catch {
     verificationFailed();

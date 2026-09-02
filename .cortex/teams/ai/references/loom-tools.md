@@ -21,14 +21,16 @@ the registry at the pull request's exact published base commit. The audit fails
 closed when an established base cannot be resolved.
 
 Every persisted agent-attempt event receives an action ID derived from its
-one-based event sequence, such as `a0002`. Runtime activities may attach bounded
-registered Cortex references whose relation is one of `loaded`, `cited`,
-`applied`, or `validated`. Loom persists the event before emitting its compact
-summary to stderr, and optional display failure cannot block the journal.
+one-based event sequence, such as `a0002`. Runtime activities are live,
+transient observations with an independent ordered ID such as `live-a0002`.
+They may attach bounded registered Cortex references whose relation is one of
+`loaded`, `cited`, `applied`, or `validated`. Loom emits their compact summary
+to stderr without writing them to `events.jsonl`; optional display failure
+cannot block the lifecycle journal.
 
-These records expose auditable actions and cited authority, not private
-reasoning. Event counts are diagnostic activity signals and are not an effort,
-quality, or billing measure.
+Persisted records expose replayable lifecycle and terminal handoff evidence,
+not private reasoning. Live activity counts are diagnostic signals and are not
+an effort, quality, or billing measure.
 
 ## Invoke a leaf tool
 
