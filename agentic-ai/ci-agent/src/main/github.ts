@@ -408,12 +408,13 @@ export async function inspectPrFeedback(
       ...(signal ? { request: { signal } } : {}),
     }),
   ]);
-  const retiredAutomationComments = issueComments.filter((comment) =>
-    isRetiredHeadTransitionAutomationComment({
-      body: comment.body ?? "",
+  const retiredAutomationComments = issueComments.filter((comment) => {
+    const { body = "" } = comment;
+    return isRetiredHeadTransitionAutomationComment({
+      body,
       user: comment.user,
-    }),
-  );
+    });
+  });
   await Promise.all(
     retiredAutomationComments.map((comment) =>
       octokit.rest.issues.deleteComment({
@@ -496,14 +497,15 @@ export async function inspectPrFeedback(
 
   const marker = codexReviewRequestMarker(pr.head.sha, pr.base.sha);
   const cursorMarker = cursorReviewRequestMarker(pr.head.sha);
-  const reviewRequests = activeIssueComments.filter((comment) =>
-    isTrustedExactHeadReviewRequest({
+  const reviewRequests = activeIssueComments.filter((comment) => {
+    const { body = "" } = comment;
+    return isTrustedExactHeadReviewRequest({
       authorAssociation: comment.author_association,
-      body: comment.body ?? "",
+      body,
       marker,
       user: comment.user,
-    }),
-  );
+    });
+  });
   const cursorReviewRequests = activeIssueComments.filter((comment) =>
     comment.body?.includes(cursorMarker),
   );
@@ -535,23 +537,25 @@ export async function inspectPrFeedback(
   const approvalReaction = requestReactions.some(
     (reaction) => reaction.content === "+1" && isCodexReviewer(reaction.user),
   );
-  const cleanComment = activeIssueComments.some(
-    (comment) =>
-      isCleanCodexReviewComment(comment.body ?? "", comment.user, pr.head.sha),
-  );
+  const cleanComment = activeIssueComments.some((comment) => {
+    const { body = "" } = comment;
+    return isCleanCodexReviewComment(body, comment.user, pr.head.sha);
+  });
 
-  const substantiveComments = activeIssueComments.filter(
-    (comment) =>
+  const substantiveComments = activeIssueComments.filter((comment) => {
+    const { body = "" } = comment;
+    return (
       !isRepositoryStatusComment({
         authorAssociation: comment.author_association,
-        body: comment.body ?? "",
+        body,
         cursorMarker,
         marker,
         user: comment.user,
       }) &&
-      !isCodexCleanReviewStatusComment(comment.body ?? "", comment.user) &&
-      !isNonActionableReviewBody(comment.body ?? ""),
-  );
+      !isCodexCleanReviewStatusComment(body, comment.user) &&
+      !isNonActionableReviewBody(body)
+    );
+  });
   const unhandledComments = substantiveComments.filter(
     (comment) => !handledIssueCommentIds.has(comment.id),
   );
@@ -565,7 +569,7 @@ export async function inspectPrFeedback(
     if (review.state === "CHANGES_REQUESTED") {
       return true;
     }
-    const body = review.body?.trim() ?? "";
+    const [body = ("")] = [review.body?.trim()];
     return (
       body.length > 0 &&
       !isCodexReviewStatusBody(body, review.user) &&
@@ -595,16 +599,20 @@ export async function inspectPrFeedback(
       };
     },
   );
-  const normalizedReviews: ReviewFindingReview[] = reviews.map((review) => ({
-    active: isSubmittedReviewState(review.state),
-    actionable: isActionableReviewBody({
-      body: review.body?.trim() ?? "",
-      state: review.state,
-      user: review.user,
-    }),
-    reviewId: review.id,
-    reviewerLogin: review.user?.login ?? "",
-  }));
+  const normalizedReviews: ReviewFindingReview[] = reviews.map((review) => {
+    const [body = ""] = [review.body?.trim()];
+    const [reviewerLogin = ""] = [review.user?.login];
+    return {
+      active: isSubmittedReviewState(review.state),
+      actionable: isActionableReviewBody({
+        body,
+        state: review.state,
+        user: review.user,
+      }),
+      reviewId: review.id,
+      reviewerLogin,
+    };
+  });
   const findingBatchRequest: AutomatedFindingBatchRequest = {
     comments: normalizedReviewComments,
     reviews: normalizedReviews,

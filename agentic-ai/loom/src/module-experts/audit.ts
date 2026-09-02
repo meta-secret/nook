@@ -244,12 +244,13 @@ export function auditModuleExpertRuntimePolicy(
     actual: args.processEnvironmentKeys,
     expected: EXPECTED_PROCESS_ENVIRONMENT_KEYS,
   };
+  const actualShellEnvironment = configRecord(
+    shellEnvironmentPolicy === false ? false : shellEnvironmentPolicy.set,
+  );
   const runtimeEnvironmentValidation: ValidateModuleExpertRuntimeEnvironmentArgs =
     {
       actualProcessEnvironment: args.codexOptions.env,
-      actualShellEnvironment: shellEnvironmentPolicy
-        ? (shellEnvironmentPolicy.set ?? false)
-        : false,
+      actualShellEnvironment,
       allowedShellKeys: EXPECTED_PROCESS_ENVIRONMENT_KEYS,
       safeCodexEnvironment: args.safeCodexEnvironment,
       safeShellEnvironment: args.safeShellEnvironment,

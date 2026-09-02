@@ -180,8 +180,9 @@ export function assertAuditedSource([runtime, state, words]: readonly [
     };
     if (isAuditedSource(request)) return;
   }
+  const [defaulted1 = 'missing'] = [executable?.source];
   throw new Error(
-    `Unsupported sourced shell execution in ${state.sourcePath || 'inline'}: ${executable?.source ?? 'missing'}`,
+    `Unsupported sourced shell execution in ${state.sourcePath || 'inline'}: ${defaulted1}`,
   );
 }
 

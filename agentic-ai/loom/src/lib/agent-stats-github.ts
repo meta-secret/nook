@@ -597,8 +597,9 @@ function reviewRequests(
     const body = requiredStringProperty(bodyRequest);
     const marker = body.match(/nook-codex-review:([0-9a-f]{7,40})/);
     if (!marker) continue;
+    const [defaulted1 = ''] = [marker[1]];
     const headRequest: ResolveHeadShaRequest = {
-      candidate: marker[1] ?? '',
+      candidate: defaulted1,
       knownHeadShas: request.knownHeadShas,
     };
     const headSha = resolveHeadSha(headRequest);
@@ -711,8 +712,9 @@ function reviewResults(
     if (!body.includes('find any major issues')) continue;
     const match = body.match(/Reviewed commit:\*\* `([0-9a-f]{7,40})/i);
     if (!match) continue;
+    const [defaulted2 = ''] = [match[1]];
     const headRequest: ResolveHeadShaRequest = {
-      candidate: match[1] ?? '',
+      candidate: defaulted2,
       knownHeadShas: request.knownHeadShas,
     };
     const headSha = resolveHeadSha(headRequest);
@@ -794,7 +796,8 @@ function resolveHeadSha(request: ResolveHeadShaRequest): string {
   const matches = request.knownHeadShas.filter((headSha) =>
     headSha.startsWith(request.candidate),
   );
-  return matches.length === 1 ? (matches[0] ?? '') : '';
+  const [defaulted3 = ''] = [matches[0]];
+  return matches.length === 1 ? defaulted3 : '';
 }
 
 type ReviewEventPairRequest = {

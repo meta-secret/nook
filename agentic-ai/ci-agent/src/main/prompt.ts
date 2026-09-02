@@ -38,7 +38,7 @@ export async function loadPrompt(config: CiAgentConfig): Promise<string> {
   const majorChangeAuthorization = resolveMajorChangeAuthorization();
   let validatedPlan = "";
   if (template.includes("${VALIDATED_PLAN}")) {
-    const expectedHash = process.env.VALIDATED_PLAN_SHA256?.trim() ?? "";
+    const [expectedHash = ("")] = [process.env.VALIDATED_PLAN_SHA256?.trim()];
     const planName = process.env.WORKBENCH_PLAN_FILE?.trim();
     if (
       !/^[0-9a-f]{64}$/.test(expectedHash) ||
@@ -66,7 +66,7 @@ export async function loadPrompt(config: CiAgentConfig): Promise<string> {
 
   let outdatedReport = "";
   if (template.includes("${RUST_DEPS_OUTDATED_REPORT}")) {
-    const reportPath = process.env.RUST_DEPS_OUTDATED_REPORT?.trim() ?? "";
+    const [reportPath = ("")] = [process.env.RUST_DEPS_OUTDATED_REPORT?.trim()];
     if (!reportPath.endsWith("rust-deps-outdated.txt"))
       throw new Error("RUST_DEPS_OUTDATED_REPORT path is invalid");
     outdatedReport = await readFile(reportPath, "utf8");

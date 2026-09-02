@@ -6,8 +6,10 @@ const DEFAULT_TIMEOUT_MS = 90 * 60 * 1000;
 const DEFAULT_HEARTBEAT_MS = 60 * 1000;
 
 export function loadAgentWaitOptions(): { timeoutMs: number; heartbeatMs: number } {
-  const timeoutMs = Number(process.env.CI_AGENT_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS);
-  const heartbeatMs = Number(process.env.CI_AGENT_HEARTBEAT_MS ?? DEFAULT_HEARTBEAT_MS);
+  const [defaulted1 = (DEFAULT_TIMEOUT_MS)] = [process.env.CI_AGENT_TIMEOUT_MS];
+  const timeoutMs = Number(defaulted1);
+  const [defaulted2 = (DEFAULT_HEARTBEAT_MS)] = [process.env.CI_AGENT_HEARTBEAT_MS];
+  const heartbeatMs = Number(defaulted2);
   return {
     timeoutMs: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_TIMEOUT_MS,
     heartbeatMs:

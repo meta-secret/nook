@@ -58,7 +58,7 @@ class MockApi implements KubernetesApi {
         : [];
       return { subsets: [{ addresses }] } as T;
     }
-    const policyName = input.path.split("/").at(-1) ?? "";
+    const [policyName = ("")] = [input.path.split("/").at(-1)];
     this.policyReads += 1;
     if (!this.policies.has(policyName)) {
       throw new Error(`unexpected API path: ${input.path}`);
@@ -88,11 +88,12 @@ class MockApi implements KubernetesApi {
 }
 
 function cidrs(payload: NetworkPolicyPatch): string[] {
-  return payload.spec.egress.flatMap((rule) =>
-    (rule.to ?? []).flatMap((target) =>
+  return payload.spec.egress.flatMap((rule) => {
+    const [targets = []] = [rule.to];
+    return targets.flatMap((target) =>
       "ipBlock" in target ? [target.ipBlock.cidr] : [],
-    ),
-  );
+    );
+  });
 }
 
 test("reconciles service and endpoint CIDRs without losing concurrent policy edits", async () => {
@@ -202,10 +203,11 @@ function reaperController(input: {
   pollAttempts?: number;
   sleeps?: number[];
 }): ReaperController {
-  const sleeps = input.sleeps ?? [];
+  const [sleeps = ([])] = [input.sleeps];
+  const [pollAttempts = 2] = [input.pollAttempts];
   const options: ReaperControllerOptions = {
     api: input.api,
-    pollAttempts: input.pollAttempts ?? 2,
+    pollAttempts,
     sleep: async (milliseconds) => {
       sleeps.push(milliseconds);
     },
@@ -217,9 +219,10 @@ function reaperHandler(input: {
   controller: ReaperController;
   expectedToken?: string;
 }): (request: Request) => Promise<Response> {
+  const [expectedToken = "secret-token"] = [input.expectedToken];
   const options: ReaperRequestHandlerOptions = {
     controller: input.controller,
-    readExpectedToken: async () => input.expectedToken ?? "secret-token",
+    readExpectedToken: async () => expectedToken,
   };
   return createReaperRequestHandler(options);
 }

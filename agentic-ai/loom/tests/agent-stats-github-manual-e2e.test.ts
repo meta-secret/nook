@@ -169,19 +169,22 @@ function actionPages(
   return asUntrustedYamlNode([
     {
       total_count: fixtures.length,
-      workflow_runs: fixtures.map((fixture) => ({
-        id: fixture.id,
-        name: 'E2E (PR)',
-        run_attempt: 1,
-        head_sha: fixture.headSha,
-        event: 'workflow_dispatch',
-        created_at: '2026-08-01T10:00:00Z',
-        updated_at: fixture.finishedAt,
-        conclusion: fixture.conclusion,
-        status: fixture.status ?? 'completed',
-        pull_requests: [{ number: 42 }],
-        validation_requested: 'true',
-      })),
+      workflow_runs: fixtures.map((fixture) => {
+        const [status = 'completed'] = [fixture.status];
+        return {
+          id: fixture.id,
+          name: 'E2E (PR)',
+          run_attempt: 1,
+          head_sha: fixture.headSha,
+          event: 'workflow_dispatch',
+          created_at: '2026-08-01T10:00:00Z',
+          updated_at: fixture.finishedAt,
+          conclusion: fixture.conclusion,
+          status,
+          pull_requests: [{ number: 42 }],
+          validation_requested: 'true',
+        };
+      }),
     },
   ]);
 }

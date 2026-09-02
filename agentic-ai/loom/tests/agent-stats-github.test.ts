@@ -927,19 +927,23 @@ type ActionRunFixture = {
 };
 
 function actionRun(fixture: ActionRunFixture): UntrustedYamlNode {
+  const [defaulted1 = 'PR'] = [fixture.workflow];
+  const [defaulted2 = 'pull_request'] = [fixture.trigger];
+  const [defaulted3 = fixture.startedAt] = [fixture.createdAt];
+  const [defaulted4 = 'completed'] = [fixture.status];
+  const [defaulted5 = 42] = [fixture.sourcePr];
   return {
     id: fixture.id,
-    name: fixture.workflow ?? 'PR',
+    name: defaulted1,
     run_attempt: fixture.runAttempt,
     head_sha: fixture.headSha,
-    event: fixture.trigger ?? 'pull_request',
-    created_at: fixture.createdAt ?? fixture.startedAt,
+    event: defaulted2,
+    created_at: defaulted3,
     run_started_at: fixture.startedAt,
     updated_at: fixture.finishedAt,
     conclusion: fixture.conclusion,
-    status: fixture.status ?? 'completed',
-    pull_requests:
-      fixture.sourcePr === false ? [] : [{ number: fixture.sourcePr ?? 42 }],
+    status: defaulted4,
+    pull_requests: fixture.sourcePr === false ? [] : [{ number: defaulted5 }],
     validation_requested:
       fixture.validationRequested === false ? 'false' : 'true',
   };

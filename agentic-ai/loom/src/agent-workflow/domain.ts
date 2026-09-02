@@ -237,7 +237,8 @@ function exactClaimCanNameDirectory(resourcePath: string): boolean {
 }
 
 function basenameOfPath(resourcePath: string): string {
-  return resourcePath.split('/').at(-1) ?? resourcePath;
+  const [defaulted1 = resourcePath] = [resourcePath.split('/').at(-1)];
+  return defaulted1;
 }
 
 function directGlobOverlaps(pair: ResourceDescriptorPair): boolean {
@@ -256,7 +257,7 @@ function directGlobOverlaps(pair: ResourceDescriptorPair): boolean {
       if (!outer) return false;
       const inner = outer === first ? second : first;
       const relative = inner.path.slice(outer.path.length + 1);
-      const firstSegment = relative.split('/')[0] ?? '';
+      const [firstSegment = ''] = [relative.split('/')[0]];
       const nestedBasenames: TaskResourcePatternPair = {
         first: outer.basename,
         second: firstSegment,
@@ -274,7 +275,7 @@ function directGlobOverlaps(pair: ResourceDescriptorPair): boolean {
   if (concrete.path === glob.path) return true;
   if (concrete.path.startsWith(`${glob.path}/`)) {
     const relative = concrete.path.slice(glob.path.length + 1);
-    const firstSegment = relative.split('/')[0] ?? '';
+    const [firstSegment = ''] = [relative.split('/')[0]];
     const basenames: TaskResourcePatternPair = {
       first: glob.basename,
       second: firstSegment,

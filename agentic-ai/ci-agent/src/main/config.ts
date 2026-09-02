@@ -20,25 +20,26 @@ export type CiAgentConfigLoad =
   | { kind: CiAgentConfigLoadKind.Ready; config: CiAgentConfig };
 
 export function loadConfig(): CiAgentConfigLoad {
-  const cursorApiKey = process.env.CURSOR_API_KEY?.trim() ?? "";
+  const [cursorApiKey = ("")] = [process.env.CURSOR_API_KEY?.trim()];
   if (!cursorApiKey) {
     return { kind: CiAgentConfigLoadKind.MissingApiKey };
   }
 
-  const githubRunId = process.env.GITHUB_RUN_ID?.trim() ?? "";
+  const [githubRunId = ("")] = [process.env.GITHUB_RUN_ID?.trim()];
   const repoRoot = process.env.REPO_ROOT?.trim() || process.cwd();
   const fixBranch =
     process.env.AGENT_BRANCH?.trim() ||
     process.env.FIX_BRANCH?.trim() ||
     (githubRunId ? `fix/ci-${githubRunId}` : "");
 
+  const [defaulted1 = ("")] = [process.env.GITHUB_REPOSITORY?.trim()];
   return {
     kind: CiAgentConfigLoadKind.Ready,
     config: {
       repoRoot,
       toolingRoot: process.env.CI_AGENT_TOOLING_ROOT?.trim() || repoRoot,
       cursorApiKey,
-      githubRepository: process.env.GITHUB_REPOSITORY?.trim() ?? "",
+      githubRepository: defaulted1,
       githubRunId,
       fixBranch,
       fixLabel: process.env.CI_FIX_LABEL?.trim() || "main CI",

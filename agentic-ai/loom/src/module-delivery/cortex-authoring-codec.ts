@@ -34,7 +34,7 @@ export function composeCortexAuthoringResources(
 export function unauthorizedSelectedSkill(
   request: CortexAuthoringResourceCompositionRequest,
 ): string | false {
-  return (
+  const [defaulted1 = false] = [
     request.cortexAuthoring.selectedSkillPaths.find(
       (path) =>
         !CORTEX_AUTHORING_SKILL_PATHS.includes(
@@ -44,6 +44,7 @@ export function unauthorizedSelectedSkill(
           const matchRequest: ResourcePathMatchRequest = { claim, path };
           return resourceClaimMatchesPath(matchRequest);
         }),
-    ) ?? false
-  );
+    ),
+  ];
+  return defaulted1;
 }

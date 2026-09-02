@@ -41,13 +41,12 @@ function mockOctokit(input: {
   reviews?: MockReview[];
   sha?: string;
 }): Octokit {
-  const comments = input.comments ?? [];
+  const [comments = new Array<MockComment>(), createdBodies = new Array<string>(), reviews = [], sha = "head-sha", reactions = []] = [input.comments, input.createdBodies, input.reviews, input.sha, input.reactions];
   for (const comment of comments) {
-    comment.author_association ??= "OWNER";
+    if (!Object.hasOwn(comment, "author_association")) {
+      comment.author_association = "OWNER";
+    }
   }
-  const createdBodies = input.createdBodies ?? [];
-  const reviews = input.reviews ?? [];
-  const sha = input.sha ?? "head-sha";
   let revisionReads = 0;
   return {
     rest: {
@@ -73,13 +72,14 @@ function mockOctokit(input: {
             Math.min(revisionReads, input.revisions.length - 1)
           ];
           revisionReads += 1;
+          const [baseRef = "main", baseSha = "base-sha", headSha = sha] = [revision?.baseRef, revision?.baseSha, revision?.headSha];
           return {
             data: {
               base: {
-                ref: revision?.baseRef ?? "main",
-                sha: revision?.baseSha ?? "base-sha",
+                ref: baseRef,
+                sha: baseSha,
               },
-              head: { sha: revision?.headSha ?? sha },
+              head: { sha: headSha },
             },
           };
         },
@@ -87,7 +87,7 @@ function mockOctokit(input: {
       },
       reactions: {
         listForIssueComment: async () => ({
-          data: input.reactions ?? [],
+          data: reactions,
         }),
       },
     },

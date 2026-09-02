@@ -131,7 +131,8 @@ export function childProcessCapability(
   if (owner !== SubprocessCallKind.Namespace) return false;
   if (member === false)
     throw new Error('Dynamic child-process method selection is forbidden.');
-  return CHILD_PROCESS_CALLS.get(member) ?? false;
+  const [defaulted1 = false] = [CHILD_PROCESS_CALLS.get(member)];
+  return defaulted1;
 }
 
 export function workerThreadCapability(
@@ -141,7 +142,8 @@ export function workerThreadCapability(
   if (owner !== SubprocessCallKind.WorkerNamespace) return false;
   if (member === false)
     throw new Error('Dynamic worker-thread member selection is forbidden.');
-  return WORKER_THREAD_CALLS.get(member) ?? false;
+  const [defaulted2 = false] = [WORKER_THREAD_CALLS.get(member)];
+  return defaulted2;
 }
 
 export function bunNamespaceCapability(
@@ -345,8 +347,9 @@ export function isStaticWorkerThreadsRequire(
 export function serializeSubprocessCommand(
   command: SerializedSubprocessCommand,
 ): string {
+  const [defaulted3 = ''] = [command.words[0]?.value];
   const source = command.shellSource
-    ? (command.words[0]?.value ?? '')
+    ? defaulted3
     : command.words
         .map((word) => {
           const escaped = word.value.replaceAll("'", "'\\''");
@@ -384,28 +387,28 @@ export function auditSubprocessEnvironment(
 function subprocessOptionsObject(
   request: SubprocessCwdRequest,
 ): ts.ObjectLiteralExpression | false {
-  const args = request.call.arguments ?? [];
+  const [args = []] = [request.call.arguments];
   const first = args[0];
   let options: ts.Expression | false = false;
   if (request.kind === SubprocessCallKind.Bun) {
+    const [defaulted4 = false] = [args[1]];
     options =
-      first && request.resolveObject(first) !== false
-        ? first
-        : (args[1] ?? false);
+      first && request.resolveObject(first) !== false ? first : defaulted4;
   } else if (request.kind === SubprocessCallKind.Exec) {
-    options = args[1] ?? false;
+    const [defaulted5 = false] = [args[1]];
+    options = defaulted5;
   } else if (request.kind === SubprocessCallKind.Worker) {
-    options = args[1] ?? false;
+    const [defaulted6 = false] = [args[1]];
+    options = defaulted6;
   } else if (
     request.kind === SubprocessCallKind.ExecFile ||
     request.kind === SubprocessCallKind.Fork ||
     request.kind === SubprocessCallKind.Spawn
   ) {
     const second = args[1];
+    const [defaulted7 = false] = [args[2]];
     options =
-      second && request.resolveObject(second) !== false
-        ? second
-        : (args[2] ?? false);
+      second && request.resolveObject(second) !== false ? second : defaulted7;
   }
   if (
     options === false ||

@@ -373,7 +373,8 @@ function runtimeReceiverExpression(
 function runtimeReceiverInitializer(
   resolution: RuntimeReceiverInitializerResolution,
 ): ts.Expression | false {
-  for (const declaration of resolution.symbol.declarations ?? []) {
+  const [defaulted1 = []] = [resolution.symbol.declarations];
+  for (const declaration of defaulted1) {
     if (ts.isVariableDeclaration(declaration) && declaration.initializer) {
       return declaration.initializer;
     }
@@ -468,7 +469,8 @@ function bindingPatternInitializer(
     (ts.isVariableDeclaration(parent) || ts.isParameter(parent)) &&
     parent.name === resolution.pattern
   ) {
-    return parent.initializer ?? false;
+    const [defaulted2 = false] = [parent.initializer];
+    return defaulted2;
   }
   if (ts.isBindingElement(parent) && parent.name === resolution.pattern) {
     const parentResolution: BindingElementInitializerResolution = {

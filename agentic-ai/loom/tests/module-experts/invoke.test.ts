@@ -625,11 +625,12 @@ describe('module expert invocation runtime', () => {
     try {
       await journal.initialize();
       const processing = await journal.finalize(terminal);
+      const [defaulted1 = []] = [request.selectedContextPaths];
       const forgedResult: ModuleExpertInvocationResult = {
         runDirectory,
         runId: request.runId,
         expert: request.expert,
-        selectedContextPaths: request.selectedContextPaths ?? [],
+        selectedContextPaths: defaulted1,
         sourceCommit: request.sourceCommit,
         task: request.task,
         attempt: request.attempt,

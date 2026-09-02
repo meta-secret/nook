@@ -94,29 +94,39 @@ type FixtureOverrides = {
 };
 
 async function packageFixture(overrides?: FixtureOverrides): Promise<string> {
-  const selected = overrides ?? {};
+  const [defaulted1 = {}] = [overrides];
+  const selected: FixtureOverrides = defaulted1;
   const repoRoot = await mkdtemp(join(tmpdir(), 'executable-skill-package-'));
   await mkdir(join(repoRoot, SCRIPTS, 'src'), DIRECTORY_OPTIONS);
   await mkdir(join(repoRoot, SCRIPTS, 'tests'), DIRECTORY_OPTIONS);
-  const packageDocument = selected.packageDocument ?? PACKAGE_DOCUMENT;
-  const lock = selected.lock ?? {
-    lockfileVersion: 1,
-    configVersion: 1,
-    workspaces: {
-      '': { name: '@nook/executable-skills-workspace' },
-      'teams/ai/dynamic-skills/example/scripts': {
-        name: '@nook/example-skill',
-        version: '0.1.0',
-        devDependencies: packageDocument.devDependencies,
+  const [packageDocument = PACKAGE_DOCUMENT] = [selected.packageDocument];
+  const [
+    lock = {
+      lockfileVersion: 1,
+      configVersion: 1,
+      workspaces: {
+        '': { name: '@nook/executable-skills-workspace' },
+        'teams/ai/dynamic-skills/example/scripts': {
+          name: '@nook/example-skill',
+          version: '0.1.0',
+          devDependencies: packageDocument.devDependencies,
+        },
       },
+      packages: {},
     },
-    packages: {},
-  };
+  ] = [selected.lock];
   const [prettier, tsconfig, eslint] = await Promise.all(
     ['.prettierrc', 'tsconfig.json', 'eslint.config.js'].map((name) =>
       readFile(join(CANONICAL_SCRIPTS, name), 'utf8'),
     ),
   );
+  const [defaulted2 = '---\nname: example\ndescription: Test skill.\n---\n'] = [
+    selected.skill,
+  ];
+  const [defaulted3 = MANIFEST] = [selected.manifest];
+  const [defaulted4 = ''] = [prettier];
+  const [defaulted5 = ''] = [tsconfig];
+  const [defaulted6 = ''] = [eslint];
   await Promise.all([
     writeFile(join(repoRoot, '.cortex/.gitignore'), 'node_modules/\n'),
     writeFile(
@@ -128,21 +138,18 @@ async function packageFixture(overrides?: FixtureOverrides): Promise<string> {
       '[install]\nlinker = "hoisted"\n',
     ),
     writeFile(join(repoRoot, '.cortex/bun.lock'), JSON.stringify(lock)),
-    writeFile(
-      join(repoRoot, ROOT, 'SKILL.md'),
-      selected.skill ?? '---\nname: example\ndescription: Test skill.\n---\n',
-    ),
+    writeFile(join(repoRoot, ROOT, 'SKILL.md'), defaulted2),
     writeFile(
       join(repoRoot, SCRIPTS, 'package.json'),
       JSON.stringify(packageDocument),
     ),
     writeFile(
       join(repoRoot, SCRIPTS, 'executable-skill.json'),
-      JSON.stringify(selected.manifest ?? MANIFEST),
+      JSON.stringify(defaulted3),
     ),
-    writeFile(join(repoRoot, SCRIPTS, '.prettierrc'), prettier ?? ''),
-    writeFile(join(repoRoot, SCRIPTS, 'tsconfig.json'), tsconfig ?? ''),
-    writeFile(join(repoRoot, SCRIPTS, 'eslint.config.js'), eslint ?? ''),
+    writeFile(join(repoRoot, SCRIPTS, '.prettierrc'), defaulted4),
+    writeFile(join(repoRoot, SCRIPTS, 'tsconfig.json'), defaulted5),
+    writeFile(join(repoRoot, SCRIPTS, 'eslint.config.js'), defaulted6),
   ]);
   return repoRoot;
 }
@@ -563,7 +570,7 @@ test('bounds and sanitizes adversarial package diagnostics', async () => {
     };
     files.push(oversizedPath);
     for (let index = 0; index < 200; index += 1) {
-      const suffix = dangerous.at(index % dangerous.length) ?? ':colon';
+      const [suffix = ':colon'] = [dangerous.at(index % dangerous.length)];
       const dangerousFile: TrackedRepositoryFile = {
         mode: '100755',
         path: `${SCRIPTS}/${index}${suffix}`,

@@ -97,7 +97,7 @@ describe("implementation working tree", () => {
     const repoRoot = join(tempRoot, "repo");
     const globalConfig = join(tempRoot, "global.gitconfig");
     const hadGlobalConfig = Object.hasOwn(process.env, "GIT_CONFIG_GLOBAL");
-    const previousGlobalConfig = process.env.GIT_CONFIG_GLOBAL ?? "";
+    const [previousGlobalConfig = ("")] = [process.env.GIT_CONFIG_GLOBAL];
     process.env.GIT_CONFIG_GLOBAL = globalConfig;
     try {
       await mkdir(repoRoot);

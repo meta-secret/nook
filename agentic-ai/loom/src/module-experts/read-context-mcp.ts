@@ -226,9 +226,8 @@ async function handleHttpRequest(
   incoming: ModuleExpertReadContextHttpRequest,
 ): Promise<Response> {
   const url = new URL(incoming.request.url);
-  const declaredLength = Number(
-    incoming.request.headers.get('content-length') ?? '0',
-  );
+  const [defaulted1 = '0'] = [incoming.request.headers.get('content-length')];
+  const declaredLength = Number(defaulted1);
   if (
     url.pathname !== `/${incoming.endpoint}` ||
     incoming.request.method !== 'POST'
@@ -655,7 +654,7 @@ function searchFile(request: SearchFileRequest): boolean {
   if (content.includes('\u0000')) return true;
   const lines = content.split('\n');
   for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index] ?? '';
+    const [line = ''] = [lines[index]];
     if (!line.includes(request.state.query)) continue;
     const boundedLine = Buffer.from(line, 'utf8')
       .subarray(0, MAX_RESULT_LINE_BYTES)

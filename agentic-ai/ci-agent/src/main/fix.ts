@@ -588,7 +588,8 @@ export async function withValidationEnvironment<T>(
   try {
     const base = createValidationEnvironment(hostEnvironment);
     let dockerHost = "";
-    for (const dir of (base.PATH ?? "").split(":")) {
+    const [defaulted1 = ("")] = [base.PATH];
+    for (const dir of (defaulted1).split(":")) {
       try {
         await lstat(join(dir, "docker"));
         dockerHost = join(dir, "docker");
@@ -779,9 +780,9 @@ export async function runCiFix(): Promise<CiFixOutcome> {
     prNumber = openPr.number;
     if (profile === CiAgentFixProfile.RustDependencyUpdate) {
       const token = process.env.NOOK_GITHUB_PAT?.trim();
-      const priorCount = process.env.GIT_CONFIG_COUNT ?? "";
-      const priorKey = process.env.GIT_CONFIG_KEY_0 ?? "";
-      const priorValue = process.env.GIT_CONFIG_VALUE_0 ?? "";
+      const [priorCount = ("")] = [process.env.GIT_CONFIG_COUNT];
+      const [priorKey = ("")] = [process.env.GIT_CONFIG_KEY_0];
+      const [priorValue = ("")] = [process.env.GIT_CONFIG_VALUE_0];
       const hadCount = Object.hasOwn(process.env, "GIT_CONFIG_COUNT");
       const hadKey = Object.hasOwn(process.env, "GIT_CONFIG_KEY_0");
       const hadValue = Object.hasOwn(process.env, "GIT_CONFIG_VALUE_0");

@@ -178,7 +178,7 @@ describe('module expert read-context MCP', () => {
           server,
         };
         const shallowList = await toolCall(shallowListCall);
-        const shallowText = shallowList.result?.content?.[0]?.text ?? '';
+        const [shallowText = ''] = [shallowList.result?.content?.[0]?.text];
         expect(shallowText).not.toContain('provider-types.ts');
         expect(shallowText).toContain('"truncated":true');
 
@@ -374,7 +374,7 @@ describe('module expert read-context MCP', () => {
           server,
         };
         const boundedSearch = await toolCall(boundedSearchCall);
-        const searchText = boundedSearch.result?.content?.[0]?.text ?? '';
+        const [searchText = ''] = [boundedSearch.result?.content?.[0]?.text];
         expect(searchText).toContain('"truncated":true');
         expect(Buffer.byteLength(searchText, 'utf8')).toBeLessThanOrEqual(
           262_144,

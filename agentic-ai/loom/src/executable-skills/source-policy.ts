@@ -340,7 +340,8 @@ export function isExecutableSkillApplicationSourcePath(path: string): boolean {
 
 function executableSkillRoot(relativePath: string): string | false {
   const match = EXECUTABLE_SKILL_SOURCE_PATH.exec(relativePath);
-  return match?.at(1) ?? false;
+  const [defaulted1 = false] = [match?.at(1)];
+  return defaulted1;
 }
 
 type AssertNoForbiddenCapabilityRequest = {
@@ -679,8 +680,14 @@ function isErasedBindingUsedAsValue(
   const valueSymbols = resolveSourceLocalSymbols(valueRequest);
   const typeSymbols = resolveSourceLocalSymbols(typeRequest);
   const declarations = [
-    ...valueSymbols.flatMap((symbol) => symbol.declarations ?? []),
-    ...typeSymbols.flatMap((symbol) => symbol.declarations ?? []),
+    ...valueSymbols.flatMap((symbol) => {
+      const [declarations = []] = [symbol.declarations];
+      return declarations;
+    }),
+    ...typeSymbols.flatMap((symbol) => {
+      const [declarations = []] = [symbol.declarations];
+      return declarations;
+    }),
   ];
   return Boolean(
     declarations.length > 0 && !declarations.some(isRuntimeValueDeclaration),
@@ -824,7 +831,7 @@ function isAllowedImportMetaUse(node: ts.MetaProperty): boolean {
 function isForbiddenEvaluatorBinding(node: ts.BindingElement): boolean {
   const propertyName = node.propertyName;
   if (propertyName && ts.isComputedPropertyName(propertyName)) return true;
-  const candidate = propertyName ?? node.name;
+  const [candidate = node.name] = [propertyName];
   if (ts.isIdentifier(candidate) || ts.isStringLiteral(candidate)) {
     return FORBIDDEN_EVALUATOR_MEMBERS.has(candidate.text);
   }

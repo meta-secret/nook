@@ -50,15 +50,15 @@ export function withoutLeadingRedirections(
 ): readonly ShellWord[] {
   const words = [...input];
   for (let index = 0; index < words.length;) {
-    const value = words[index]?.value ?? '';
-    if (ASSIGNMENT.test(value)) {
+    const [word = false] = words.slice(index);
+    if (word === false) break;
+    if (ASSIGNMENT.test(word.value)) {
       index += 1;
       continue;
     }
-    const source = words[index]?.source ?? '';
-    const match = source.match(REDIRECTION)?.[0];
+    const match = word.source.match(REDIRECTION)?.[0];
     if (!match) break;
-    const count = match === source ? 2 : 1;
+    const count = match === word.source ? 2 : 1;
     if (count === 2 && !words[index + 1])
       throw new Error('Shell redirection has no target.');
     words.splice(index, count);
@@ -85,7 +85,9 @@ export function hasLeadingStdinRedirection(
 
 export function normalizedRuntime(value: string): string {
   const match = value.match(ABSOLUTE_RUNTIME);
-  return match?.[1] ?? match?.[2] ?? value;
+  const [defaulted1 = match?.[2]] = [match?.[1]];
+  const [defaulted8 = value] = [defaulted1];
+  return defaulted8;
 }
 
 export function isolatedShellState(state: ShellParseState): ShellParseState {
@@ -141,7 +143,9 @@ export function mergeConditionalShellState([target, snapshot]: readonly [
     const before = snapshot.environment.get(name);
     if (after?.source === before?.source && after?.value === before?.value)
       continue;
-    target.environment.set(name, mergedWord([before ?? false, after ?? false]));
+    const [previous = false] = [before];
+    const [next = false] = [after];
+    target.environment.set(name, mergedWord([previous, next]));
   }
   const afterArguments = target.positionalArguments;
   const beforeArguments = snapshot.positionalArguments;
@@ -149,23 +153,20 @@ export function mergeConditionalShellState([target, snapshot]: readonly [
   if (!afterArguments || !beforeArguments) {
     const available = afterArguments || beforeArguments;
     if (!available) return;
-    target.positionalArguments = [...available.keys()].map((index) =>
-      mergedWord([
-        beforeArguments ? (beforeArguments[index] ?? false) : false,
-        afterArguments ? (afterArguments[index] ?? false) : false,
-      ]),
-    );
+    target.positionalArguments = [...available.keys()].map((index) => {
+      const [before = false] = beforeArguments ? [beforeArguments[index]] : [];
+      const [after = false] = afterArguments ? [afterArguments[index]] : [];
+      return mergedWord([before, after]);
+    });
     return;
   }
   const length = Math.max(afterArguments.length, beforeArguments.length);
   const merged: ShellWord[] = [];
-  for (let index = 0; index < length; index += 1)
-    merged.push(
-      mergedWord([
-        beforeArguments[index] ?? false,
-        afterArguments[index] ?? false,
-      ]),
-    );
+  for (let index = 0; index < length; index += 1) {
+    const [before = false] = [beforeArguments[index]];
+    const [after = false] = [afterArguments[index]];
+    merged.push(mergedWord([before, after]));
+  }
   target.positionalArguments = merged;
 }
 
@@ -192,10 +193,14 @@ function mapsEqual([left, right]: readonly [
 
 export function shellStdinConsumer(words: readonly ShellWord[]): boolean {
   let index = 0;
-  while (['builtin', 'command', 'exec'].includes(words[index]?.value ?? ''))
+  while (true) {
+    const [word = false] = [words[index]];
+    if (word === false) break;
+    if (!['builtin', 'command', 'exec'].includes(word.value)) break;
     index += 1;
-  if (!['bash', 'sh'].includes(normalizedRuntime(words[index]?.value ?? '')))
-    return false;
+  }
+  const [runtime = ''] = [words[index]?.value];
+  if (!['bash', 'sh'].includes(normalizedRuntime(runtime))) return false;
   return words.slice(index + 1).every((word) => word.value.startsWith('-'));
 }
 

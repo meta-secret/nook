@@ -27,9 +27,10 @@ test('extracts finite TypeScript subprocess calls for shared classification', ()
   for (const source of sources) {
     const [command] = extract(source);
     expect(command).toContain(protectedPath);
+    const [defaulted1 = ''] = [command];
     const inspection: ShellCommandInspection = {
       positionalArguments: false,
-      source: command ?? '',
+      source: defaulted1,
       sourcePath: false,
     };
     expect(analyzeShellCommands(inspection).launches[0]?.specifier).toBe(
@@ -40,9 +41,10 @@ test('extracts finite TypeScript subprocess calls for shared classification', ()
 
 test('fails closed for dynamic executables but permits benign maintenance args', () => {
   const [dynamic] = extract("Bun.spawn(['bun', input + '/cli.ts']);");
+  const [defaulted2 = ''] = [dynamic];
   const dynamicInspection: ShellCommandInspection = {
     positionalArguments: false,
-    source: dynamic ?? '',
+    source: defaulted2,
     sourcePath: false,
   };
   expect(() => analyzeShellCommands(dynamicInspection)).toThrow(
@@ -104,9 +106,10 @@ child.execFile('bun', ['scripts/check.ts']);`);
   const [dynamic] = extract(
     "import {spawn} from 'node:child_process'; spawn('bun', args);",
   );
+  const [defaulted3 = ''] = [dynamic];
   const inspection: ShellCommandInspection = {
     positionalArguments: false,
-    source: dynamic ?? '',
+    source: defaulted3,
     sourcePath: false,
   };
   expect(() => analyzeShellCommands(inspection)).toThrow(

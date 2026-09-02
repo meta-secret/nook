@@ -25,7 +25,7 @@ export function findBrokenRelativeLinks(
   const fileDir = path.dirname(filePath);
 
   for (let i = 0; i < lines.length; i += 1) {
-    const line = lines[i] ?? '';
+    const [line = ''] = [lines[i]];
     LINK_RE.lastIndex = 0;
     for (;;) {
       const match = LINK_RE.exec(line);

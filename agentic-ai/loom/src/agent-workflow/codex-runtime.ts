@@ -172,9 +172,11 @@ async function executeStableAgent<TTask extends string, TAgent extends string>(
   const moduleExpertThreadOptionsArgs = {
     workingDirectory: execution.invocation.workingDirectory,
   };
-  const baseThreadOptions =
-    execution.threadOptions ??
-    moduleExpertThreadOptions(moduleExpertThreadOptionsArgs);
+  const [
+    baseThreadOptions = moduleExpertThreadOptions(
+      moduleExpertThreadOptionsArgs,
+    ),
+  ] = [execution.threadOptions];
   const threadOptions: ThreadOptions = {
     ...baseThreadOptions,
     modelReasoningEffort: reasoningEffort(

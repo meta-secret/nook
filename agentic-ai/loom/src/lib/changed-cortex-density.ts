@@ -66,10 +66,11 @@ export function lintChangedCortexDensity(
     };
     const spans = lintProseDensitySpans(lintArgs);
     const trackedChange = trackedByCurrentPath.get(relativePath);
+    const [defaulted1 = relativePath] = [trackedChange?.previousPath];
     const rangeArgs: ChangedLineRangesArgs = {
       comparisonCommit,
       currentPath: relativePath,
-      previousPath: trackedChange?.previousPath ?? relativePath,
+      previousPath: defaulted1,
       repoRoot: args.repoRoot,
     };
     const addedLines =
@@ -232,9 +233,10 @@ function gitOutput(args: GitOutputArgs): string {
   };
   const output = runCommand(commandArgs);
   if (output.exitCode !== 0) {
+    const [defaulted2 = 'command'] = [args.arguments[0]];
     const failureArgs: LoomFailureDetailArgs = {
       code: LoomFailureCode.CommandFailed,
-      text: `git ${args.arguments[0] ?? 'command'} failed while selecting changed Cortex Markdown: ${output.stderr}`,
+      text: `git ${defaulted2} failed while selecting changed Cortex Markdown: ${output.stderr}`,
     };
     loomFailureDetail(failureArgs);
   }

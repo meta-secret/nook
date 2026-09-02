@@ -117,7 +117,7 @@ function requestTooLargeOutcome(): SkillCliOutcome {
   return errorOutcome(request);
 }
 function errorOutcome(request: SkillErrorOutcomeRequest): SkillCliOutcome {
-  const path = request.path ?? '';
+  const { path = '' } = request;
   const response: SkillCommandErrorResponse = {
     ok: false,
     isError: true,

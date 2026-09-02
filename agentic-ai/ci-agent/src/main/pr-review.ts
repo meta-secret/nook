@@ -166,10 +166,11 @@ export async function requestExactHeadReviewWithCircuitBreaker(
     operation: (signal) => input.inspectFeedback(revision, signal),
     phase: "feedback inspection",
   });
+  const [defaulted1 = (false)] = [input.circuitBreakerAcknowledged];
   if (
     classifyFeedbackState(
       feedback,
-      input.circuitBreakerAcknowledged ?? false,
+      defaulted1,
     ) === FeedbackClassificationState.CircuitBreaker
   ) {
     return { feedback, state: ReviewRequestState.CircuitBreaker };
@@ -275,9 +276,10 @@ export async function stabilizeExactHeadReview(
       }
       const feedback = inspection.value;
       latestFeedback = { state: LatestFeedbackState.Present, value: feedback };
+      const [defaulted2 = (false)] = [input.circuitBreakerAcknowledged];
       const findingState = classifyFeedbackState(
         feedback,
-        input.circuitBreakerAcknowledged ?? false,
+        defaulted2,
       );
       if (findingState === FeedbackClassificationState.CircuitBreaker) {
         return {
@@ -357,9 +359,10 @@ export async function stabilizeExactHeadReview(
           state: LatestFeedbackState.Present,
           value: feedback,
         };
+        const [defaulted3 = (false)] = [input.circuitBreakerAcknowledged];
         const findingState = classifyFeedbackState(
           feedback,
-          input.circuitBreakerAcknowledged ?? false,
+          defaulted3,
         );
         if (findingState === FeedbackClassificationState.CircuitBreaker) {
           return {
@@ -460,7 +463,7 @@ function finalizeAtDeadline(
 }
 
 function readCircuitBreakerAcknowledgement(): boolean {
-  const value = process.env.REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED?.trim() ?? "0";
+  const [value = ("0")] = [process.env.REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED?.trim()];
   if (value !== "0" && value !== "1") {
     throw new Error(
       `REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED must be 0 or 1 (received ${value})`,
@@ -474,7 +477,7 @@ function readReviewContext(): { prNumber: number; repository: string } {
   if (!repository) {
     throw new Error("GITHUB_REPOSITORY is required");
   }
-  const rawPrNumber = process.env.PR_NUMBER?.trim() ?? "";
+  const [rawPrNumber = ("")] = [process.env.PR_NUMBER?.trim()];
   const prNumber = Number(rawPrNumber);
   if (!Number.isInteger(prNumber) || prNumber <= 0) {
     throw new Error(

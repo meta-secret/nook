@@ -95,7 +95,7 @@ export function collectDispatchedActionAttemptPages(
         key: 'source_verified',
       };
       const sourceVerified = stringProperty(verifiedRequest) === 'true';
-      const headSha = sourceHeadByRun.get(runId) ?? '';
+      const [headSha = ''] = [sourceHeadByRun.get(runId)];
       const associatedRecord = {
         ...run,
         head_sha: sourceVerified ? headSha : '',
@@ -382,7 +382,8 @@ export function actionJobsRequestedValidation(
 
 export function runGitHubApi(request: GitHubApiRequest): UntrustedYamlNode {
   const args = ['api', '--paginate', '--slurp', '-X', 'GET', request.endpoint];
-  for (const field of request.fields ?? []) args.push('-f', field);
+  const [defaulted1 = []] = [request.fields];
+  for (const field of defaulted1) args.push('-f', field);
   const commandRequest: RunCommandArgs = {
     command: 'gh',
     args,
