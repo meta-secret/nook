@@ -502,6 +502,7 @@ type StagedAuthenticatorEnrollment = {
   vaultStoreId: string
   otpauthUri: string
   expiresAt: number
+  expiryTimer: ReturnType<typeof setTimeout>
 }
 
 const STAGED_ENROLLMENT_TTL_MS = 5 * 60 * 1000
@@ -520,8 +521,7 @@ export function authenticatorEnrollmentAuthorizationIsCurrent(
 function purgeExpiredStagedEnrollments(now = Date.now()): void {
   for (const [stageId, staged] of stagedAuthenticatorEnrollments) {
     if (staged.expiresAt <= now) {
-      staged.otpauthUri = ''
-      stagedAuthenticatorEnrollments.delete(stageId)
+      clearStagedEnrollment(stageId)
     }
   }
 }
@@ -529,12 +529,14 @@ function purgeExpiredStagedEnrollments(now = Date.now()): void {
 function clearStagedEnrollment(stageId: string): void {
   const staged = stagedAuthenticatorEnrollments.get(stageId)
   if (!staged) return
+  clearTimeout(staged.expiryTimer)
   staged.otpauthUri = ''
   stagedAuthenticatorEnrollments.delete(stageId)
 }
 
 export function clearStagedAuthenticatorEnrollments(): void {
   for (const staged of stagedAuthenticatorEnrollments.values()) {
+    clearTimeout(staged.expiryTimer)
     staged.otpauthUri = ''
   }
   stagedAuthenticatorEnrollments.clear()
@@ -596,18 +598,7 @@ export async function websiteAuthenticatorEnrollStage({
     }
     const stageId = crypto.randomUUID()
     const expiresAt = Date.now() + STAGED_ENROLLMENT_TTL_MS
-    const stagedEnrollment: Parameters<
-      typeof stagedAuthenticatorEnrollments.set
-    >[1] = {
-      stageId,
-      authorizationGeneration,
-      origin: message.payload.origin,
-      vaultStoreId: message.payload.vaultStoreId,
-      otpauthUri: otpauthUri.value,
-      expiresAt,
-    }
     if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
-      stagedEnrollment.otpauthUri = ''
       return { ok: false, reason: 'authenticator-locked' }
     }
     await ensureExtensionSessionDocument()
@@ -624,8 +615,21 @@ export async function websiteAuthenticatorEnrollStage({
       !accountPickerAuthorizationIsCurrent(authorizationGeneration)
     ) {
       await revokeAuthenticatorEnrollmentFromSession(stageId)
-      stagedEnrollment.otpauthUri = ''
       return { ok: false, reason: 'authenticator-locked' }
+    }
+    const stagedEnrollment: Parameters<
+      typeof stagedAuthenticatorEnrollments.set
+    >[1] = {
+      stageId,
+      authorizationGeneration,
+      origin: message.payload.origin,
+      vaultStoreId: message.payload.vaultStoreId,
+      otpauthUri: otpauthUri.value,
+      expiresAt,
+      expiryTimer: setTimeout(
+        () => clearStagedEnrollment(stageId),
+        Math.max(0, expiresAt - Date.now()),
+      ),
     }
     stagedAuthenticatorEnrollments.set(stageId, stagedEnrollment)
     return { ok: true, stageId }
@@ -788,16 +792,17 @@ export async function websiteAuthenticatorEnrollDismiss({
     return { ok: false, reason: 'authenticator-forbidden-origin' }
   }
   const staged = stagedAuthenticatorEnrollments.get(message.payload.stageId)
-  if (staged && staged.origin === message.payload.origin) {
-    await ensureExtensionSessionDocument()
-    const revoked = await revokeAuthenticatorEnrollmentFromSession(
-      message.payload.stageId,
-    )
-    if (!revoked) {
-      return { ok: false, reason: 'authenticator-enroll-failed' }
-    }
-    clearStagedEnrollment(message.payload.stageId)
+  if (staged && staged.origin !== message.payload.origin) {
+    return { ok: false, reason: 'authenticator-stage-missing' }
   }
+  await ensureExtensionSessionDocument()
+  const revoked = await revokeAuthenticatorEnrollmentFromSession(
+    message.payload.stageId,
+  )
+  if (!revoked) {
+    return { ok: false, reason: 'authenticator-enroll-failed' }
+  }
+  clearStagedEnrollment(message.payload.stageId)
   return { ok: true }
 }
 

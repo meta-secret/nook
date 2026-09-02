@@ -192,6 +192,8 @@ const sensitiveSessionFields: Readonly<
   [ExtensionSessionMessageType.AuthenticatorCode]: [],
   [ExtensionSessionMessageType.AuthenticatorEnrollPreview]: ['otpauthUri'],
   [ExtensionSessionMessageType.AuthenticatorEnrollCode]: ['otpauthUri'],
+  [ExtensionSessionMessageType.AuthenticatorEnrollAuthorize]: [],
+  [ExtensionSessionMessageType.AuthenticatorEnrollRevoke]: [],
   [ExtensionSessionMessageType.AuthenticatorEnrollConfirm]: ['otpauthUri'],
   [ExtensionSessionMessageType.AuthenticatorBackupAttach]: ['codes'],
   [ExtensionSessionMessageType.PlanLoginSave]: ['username', 'password'],

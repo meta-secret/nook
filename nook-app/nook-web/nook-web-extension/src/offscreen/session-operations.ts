@@ -432,6 +432,8 @@ export async function handleSessionMessage({
     }
     case ExtensionSessionMessageType.AuthenticatorEnrollPreview:
     case ExtensionSessionMessageType.AuthenticatorEnrollCode:
+    case ExtensionSessionMessageType.AuthenticatorEnrollAuthorize:
+    case ExtensionSessionMessageType.AuthenticatorEnrollRevoke:
     case ExtensionSessionMessageType.AuthenticatorEnrollConfirm:
     case ExtensionSessionMessageType.AuthenticatorBackupAttach: {
       const authenticatorArgs: Parameters<

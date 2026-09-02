@@ -24,6 +24,14 @@ async function decodeProviders(providers: StorageProvider[]) {
   return structuredClone(providers)
 }
 
+function deferred() {
+  let release = () => {}
+  const promise = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  return { promise, release: () => release() }
+}
+
 describe('ExtensionSessionMessageDispatcher', () => {
   test('accepts explicit default queue state for control commands', async () => {
     for (const type of [
@@ -692,9 +700,17 @@ describe('ExtensionSessionMessageDispatcher', () => {
         },
       },
     } as typeof chrome
+    const queueBlocker = deferred()
+    const handledTypes: string[] = []
     const dispatcher = new ExtensionSessionMessageDispatcher({
       decodeProviders,
-      handleMessage: async () => ({ ok: true }),
+      handleMessage: async (message) => {
+        handledTypes.push(message.type)
+        if (message.type === ExtensionSessionMessageType.CreatePin) {
+          await queueBlocker.promise
+        }
+        return { ok: true }
+      },
     })
     dispatcher.registerRuntimeListener()
 
@@ -754,5 +770,82 @@ describe('ExtensionSessionMessageDispatcher', () => {
       ok: false,
       error: 'Invalid extension session request.',
     })
+
+    const enrollmentAuthorizationId = 'dispatcher-authorization'
+    const expiresAt = Date.now() + 5_000
+    const authorizeMessage = {
+      type: ExtensionSessionMessageType.AuthenticatorEnrollAuthorize,
+      payload: {
+        enrollmentAuthorizationId,
+        expiresAt,
+        queue: {
+          kind: 'deadline' as const,
+          expiresAt,
+          priority: 'interactive' as const,
+        },
+      },
+    }
+    const runtimeResponse = (sender: chrome.runtime.MessageSender) =>
+      new Promise<unknown>((resolve) => {
+        expect(registration.listener(authorizeMessage, sender, resolve)).toBe(
+          true,
+        )
+      })
+    const serviceWorkerUrl = chrome.runtime.getURL(
+      'background/service-worker.js',
+    )
+    await expect(
+      runtimeResponse({ id: 'nook-extension', url: serviceWorkerUrl }),
+    ).resolves.toEqual({ ok: true })
+    await expect(
+      runtimeResponse({
+        id: 'nook-extension',
+        url: chrome.runtime.getURL('popup/index.html'),
+      }),
+    ).resolves.toEqual({
+      ok: false,
+      error: 'Forbidden extension session request.',
+    })
+    await expect(runtimeResponse({ id: 'nook-extension' })).resolves.toEqual({
+      ok: false,
+      error: 'Forbidden extension session request.',
+    })
+
+    for (const payload of [
+      { ...authorizeMessage.payload, enrollmentAuthorizationId: '' },
+      { ...authorizeMessage.payload, foreign: true },
+    ]) {
+      const invalidResponse = new Promise<unknown>((resolve) => {
+        const invalidMessage = { ...authorizeMessage, payload }
+        expect(
+          registration.listener(
+            invalidMessage,
+            { id: 'nook-extension', url: serviceWorkerUrl },
+            resolve,
+          ),
+        ).toBe(true)
+      })
+      await expect(invalidResponse).resolves.toEqual({
+        ok: false,
+        error: 'Invalid extension session request.',
+      })
+    }
+
+    const queued = dispatcher.enqueue({
+      type: ExtensionSessionMessageType.CreatePin,
+      payload: {
+        pin: '123456',
+        queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+      },
+    })
+    await Promise.resolve()
+    await expect(
+      runtimeResponse({ id: 'nook-extension', url: serviceWorkerUrl }),
+    ).resolves.toEqual({ ok: true })
+    expect(handledTypes.at(-1)).toBe(
+      ExtensionSessionMessageType.AuthenticatorEnrollAuthorize,
+    )
+    queueBlocker.release()
+    await expect(queued).resolves.toEqual({ ok: true })
   })
 })

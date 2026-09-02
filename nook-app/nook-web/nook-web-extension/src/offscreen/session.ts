@@ -20,7 +20,6 @@ import {
   type HandleSessionMessageArgs,
   type SessionOperationContext,
 } from './session-operations'
-import { registerAuthenticatorEnrollmentAuthorizationListener } from './authenticator-enrollment-session'
 
 const SESSION_DURATION_MS = 15 * 60 * 1000
 const SESSION_LOCKED_ERROR = 'EXTENSION_SESSION_LOCKED'
@@ -192,4 +191,3 @@ const sessionMessageDispatcher = new ExtensionSessionMessageDispatcher(
   dispatchContext,
 )
 sessionMessageDispatcher.registerRuntimeListener()
-registerAuthenticatorEnrollmentAuthorizationListener()

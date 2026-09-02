@@ -19,6 +19,8 @@ type AuthenticatorEnrollmentMessage = Extract<
     type:
       | ExtensionSessionMessageType.AuthenticatorEnrollPreview
       | ExtensionSessionMessageType.AuthenticatorEnrollCode
+      | ExtensionSessionMessageType.AuthenticatorEnrollAuthorize
+      | ExtensionSessionMessageType.AuthenticatorEnrollRevoke
       | ExtensionSessionMessageType.AuthenticatorEnrollConfirm
       | ExtensionSessionMessageType.AuthenticatorBackupAttach
   }
@@ -40,41 +42,58 @@ type AuthenticatorEnrollmentMessageHandlingRequest = {
 enum EnrollmentAuthorizationState {
   Authorized = 'authorized',
   Committing = 'committing',
+  Committed = 'committed',
 }
 
 type EnrollmentAuthorization = {
   state: EnrollmentAuthorizationState
   expiresAt: number
+  expiryTimer: ReturnType<typeof setTimeout>
 }
 
 const enrollmentAuthorizations = new Map<string, EnrollmentAuthorization>()
+const MAX_ENROLLMENT_AUTHORIZATION_TTL_MS = 5 * 60 * 1000
 
 type AuthorizeAuthenticatorEnrollmentArgs = {
   enrollmentAuthorizationId: string
   expiresAt: number
 }
 
-export function authorizeAuthenticatorEnrollment({
+function authorizeAuthenticatorEnrollment({
   enrollmentAuthorizationId,
   expiresAt,
 }: AuthorizeAuthenticatorEnrollmentArgs): boolean {
-  if (expiresAt <= Date.now()) return false
+  const now = Date.now()
+  if (
+    expiresAt <= now ||
+    expiresAt > now + MAX_ENROLLMENT_AUTHORIZATION_TTL_MS ||
+    enrollmentAuthorizations.has(enrollmentAuthorizationId)
+  ) {
+    return false
+  }
+  const expiryTimer = setTimeout(() => {
+    enrollmentAuthorizations.delete(enrollmentAuthorizationId)
+  }, expiresAt - now)
   const authorization: EnrollmentAuthorization = {
     state: EnrollmentAuthorizationState.Authorized,
     expiresAt,
+    expiryTimer,
   }
   enrollmentAuthorizations.set(enrollmentAuthorizationId, authorization)
   return true
 }
 
-export function revokeAuthenticatorEnrollment(
+function revokeAuthenticatorEnrollment(
   enrollmentAuthorizationId: string,
 ): boolean {
   const authorization = enrollmentAuthorizations.get(enrollmentAuthorizationId)
-  if (!authorization) return true
-  if (authorization.state === EnrollmentAuthorizationState.Committing) {
+  if (
+    !authorization ||
+    authorization.state !== EnrollmentAuthorizationState.Authorized
+  ) {
     return false
   }
+  clearTimeout(authorization.expiryTimer)
   enrollmentAuthorizations.delete(enrollmentAuthorizationId)
   return true
 }
@@ -88,83 +107,26 @@ function claimAuthenticatorEnrollment(
     authorization.state !== EnrollmentAuthorizationState.Authorized ||
     authorization.expiresAt <= Date.now()
   ) {
-    enrollmentAuthorizations.delete(enrollmentAuthorizationId)
+    failAuthenticatorEnrollment(enrollmentAuthorizationId)
     return false
   }
   authorization.state = EnrollmentAuthorizationState.Committing
   return true
 }
 
-function completeAuthenticatorEnrollment(
-  enrollmentAuthorizationId: string,
-): void {
+function failAuthenticatorEnrollment(enrollmentAuthorizationId: string): void {
+  const authorization = enrollmentAuthorizations.get(enrollmentAuthorizationId)
+  if (authorization) clearTimeout(authorization.expiryTimer)
   enrollmentAuthorizations.delete(enrollmentAuthorizationId)
 }
 
-type EnrollmentAuthorizationControlMessage = {
-  type:
-    | 'nook:extension-authenticator-enrollment-authorize'
-    | 'nook:extension-authenticator-enrollment-revoke'
-  payload: {
-    enrollmentAuthorizationId: string
-    expiresAt?: number
+function commitAuthenticatorEnrollment(
+  enrollmentAuthorizationId: string,
+): void {
+  const authorization = enrollmentAuthorizations.get(enrollmentAuthorizationId)
+  if (authorization?.state === EnrollmentAuthorizationState.Committing) {
+    authorization.state = EnrollmentAuthorizationState.Committed
   }
-}
-
-type EnrollmentAuthorizationControlCandidate = {
-  type?: string
-  payload?: {
-    enrollmentAuthorizationId?: string
-    expiresAt?: number
-  }
-}
-
-function isEnrollmentAuthorizationControlMessage(
-  message: EnrollmentAuthorizationControlCandidate,
-): message is EnrollmentAuthorizationControlMessage {
-  return (
-    (message.type === 'nook:extension-authenticator-enrollment-authorize' ||
-      message.type === 'nook:extension-authenticator-enrollment-revoke') &&
-    !!message.payload &&
-    typeof message.payload.enrollmentAuthorizationId === 'string'
-  )
-}
-
-export function registerAuthenticatorEnrollmentAuthorizationListener(): void {
-  // eslint-disable-next-line max-params -- Chrome owns the runtime listener callback signature.
-  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    const candidate = message as EnrollmentAuthorizationControlCandidate
-    if (!isEnrollmentAuthorizationControlMessage(candidate)) return false
-    const controlMessage = candidate
-    const serviceWorkerSender =
-      sender.id === chrome.runtime.id &&
-      !sender.tab &&
-      (!sender.url ||
-        sender.url === chrome.runtime.getURL('background/service-worker.js'))
-    if (!serviceWorkerSender) {
-      const forbiddenResponse: Parameters<typeof sendResponse>[0] = {
-        ok: false,
-        accepted: false,
-      }
-      sendResponse(forbiddenResponse)
-      return false
-    }
-    const { enrollmentAuthorizationId } = controlMessage.payload
-    const authorizeArgs: AuthorizeAuthenticatorEnrollmentArgs = {
-      enrollmentAuthorizationId,
-      expiresAt: controlMessage.payload.expiresAt ?? 0,
-    }
-    const accepted =
-      controlMessage.type ===
-      'nook:extension-authenticator-enrollment-authorize'
-        ? typeof controlMessage.payload.expiresAt === 'number' &&
-          Number.isSafeInteger(controlMessage.payload.expiresAt) &&
-          authorizeAuthenticatorEnrollment(authorizeArgs)
-        : revokeAuthenticatorEnrollment(enrollmentAuthorizationId)
-    const response: Parameters<typeof sendResponse>[0] = { ok: true, accepted }
-    sendResponse(response)
-    return false
-  })
 }
 
 export async function handleAuthenticatorEnrollmentMessage({
@@ -172,6 +134,23 @@ export async function handleAuthenticatorEnrollmentMessage({
   dependencies,
 }: AuthenticatorEnrollmentMessageHandlingRequest) {
   switch (message.type) {
+    case ExtensionSessionMessageType.AuthenticatorEnrollAuthorize: {
+      const authorizeArgs: AuthorizeAuthenticatorEnrollmentArgs = {
+        enrollmentAuthorizationId: message.payload.enrollmentAuthorizationId,
+        expiresAt: message.payload.expiresAt,
+      }
+      return {
+        ok: true,
+        accepted: authorizeAuthenticatorEnrollment(authorizeArgs),
+      }
+    }
+    case ExtensionSessionMessageType.AuthenticatorEnrollRevoke:
+      return {
+        ok: true,
+        accepted: revokeAuthenticatorEnrollment(
+          message.payload.enrollmentAuthorizationId,
+        ),
+      }
     case ExtensionSessionMessageType.AuthenticatorEnrollPreview: {
       const payload = message.payload
       if (typeof payload.otpauthUri !== 'string') {
@@ -217,9 +196,7 @@ export async function handleAuthenticatorEnrollmentMessage({
       const grant = dependencies.extensionVaultGrant(payload)
       if (
         typeof payload.otpauthUri !== 'string' ||
-        typeof payload.origin !== 'string' ||
-        !('enrollmentAuthorizationId' in payload) ||
-        typeof payload.enrollmentAuthorizationId !== 'string'
+        typeof payload.origin !== 'string'
       ) {
         throw new Error('Extension session received an invalid enrollment.')
       }
@@ -243,9 +220,11 @@ export async function handleAuthenticatorEnrollmentMessage({
           vaultStoreId: grant.vaultStoreId,
         }
         await flushPasskeyEventToProviders(flushArgs)
+        commitAuthenticatorEnrollment(enrollmentAuthorizationId)
         return { ok: true, secretId }
-      } finally {
-        completeAuthenticatorEnrollment(enrollmentAuthorizationId)
+      } catch (error) {
+        failAuthenticatorEnrollment(enrollmentAuthorizationId)
+        throw error
       }
     }
     case ExtensionSessionMessageType.AuthenticatorBackupAttach: {

@@ -95,6 +95,8 @@ function sessionMessagePriority(
     case ExtensionSessionMessageType.ListPasskeys:
     case ExtensionSessionMessageType.AuthenticatorEnrollPreview:
     case ExtensionSessionMessageType.AuthenticatorEnrollCode:
+    case ExtensionSessionMessageType.AuthenticatorEnrollAuthorize:
+    case ExtensionSessionMessageType.AuthenticatorEnrollRevoke:
     case ExtensionSessionMessageType.PendingLoginSave:
     case ExtensionSessionMessageType.DismissLoginSave:
     case ExtensionSessionMessageType.CancelPasskey:
@@ -378,7 +380,6 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
   }
 
   registerRuntimeListener(): void {
-    // eslint-disable-next-line max-params -- Chrome owns the runtime listener callback signature.
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (sender.id !== chrome.runtime.id) return false
       if (
@@ -404,12 +405,21 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
         const type = request.type
         const serviceWorkerOnly =
           type === ExtensionSessionMessageType.SealIdentityHandoff ||
-          type === ExtensionSessionMessageType.CancelPasskey
+          type === ExtensionSessionMessageType.CancelPasskey ||
+          type === ExtensionSessionMessageType.AuthenticatorEnrollAuthorize ||
+          type === ExtensionSessionMessageType.AuthenticatorEnrollRevoke
+        const enrollmentAuthorizationControl =
+          type === ExtensionSessionMessageType.AuthenticatorEnrollAuthorize ||
+          type === ExtensionSessionMessageType.AuthenticatorEnrollRevoke
         const serviceWorkerSender =
           !sender.tab &&
-          (!sender.url ||
+          ((enrollmentAuthorizationControl &&
             sender.url ===
-              chrome.runtime.getURL('background/service-worker.js'))
+              chrome.runtime.getURL('background/service-worker.js')) ||
+            (!enrollmentAuthorizationControl &&
+              (!sender.url ||
+                sender.url ===
+                  chrome.runtime.getURL('background/service-worker.js'))))
         if (
           (serviceWorkerOnly && !serviceWorkerSender) ||
           !type.startsWith('nook:extension-session-')
@@ -423,7 +433,8 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
         }
         const direct =
           type === ExtensionSessionMessageType.DismissLoginSave ||
-          type === ExtensionSessionMessageType.CancelPasskey
+          type === ExtensionSessionMessageType.CancelPasskey ||
+          enrollmentAuthorizationControl
         const response = direct
           ? this.context.handleMessage(request)
           : this.enqueue(request)

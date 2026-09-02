@@ -21,6 +21,8 @@ export enum ExtensionSessionMessageType {
   AuthenticatorCode = 'nook:extension-session-authenticator-code',
   AuthenticatorEnrollPreview = 'nook:extension-session-authenticator-enroll-preview',
   AuthenticatorEnrollCode = 'nook:extension-session-authenticator-enroll-code',
+  AuthenticatorEnrollAuthorize = 'nook:extension-session-authenticator-enroll-authorize',
+  AuthenticatorEnrollRevoke = 'nook:extension-session-authenticator-enroll-revoke',
   AuthenticatorEnrollConfirm = 'nook:extension-session-authenticator-enroll-confirm',
   AuthenticatorBackupAttach = 'nook:extension-session-authenticator-backup-attach',
   PlanLoginSave = 'nook:extension-session-plan-login-save',
