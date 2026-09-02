@@ -119,12 +119,18 @@ named contract.
 
 The rule is configured in `nook-app/nook-web/eslint.config.js`.
 
-Format the changed files and return one coherent commit to Gizmo. Gizmo
-continues from that commit, runs pre-push hygiene, and pushes the exact head.
-Gizmo then dispatches the applicable hosted pull-request validation.
+### Delivery
 
-Do not run `task web:lint` locally. There is no focused remote selector for
-this rule. Do not invent a selector or substitute local validation.
+1. Format the changed files and return one coherent commit to Gizmo.
+2. Gizmo continues from that commit, runs pre-push hygiene, and pushes the
+   exact head.
+3. Gizmo dispatches the applicable hosted pull-request validation.
+
+### Local validation
+
+- Do not run `task web:lint` locally.
+- There is no focused remote selector for this rule.
+- Do not invent a selector or substitute local validation.
 
 ## Application Checklist
 
