@@ -101,6 +101,8 @@ Every focused issue follows
 
 - YAML frontmatter with title, lifecycle status, priority, automation mode,
   owner, timestamps, source issues, related PRs, and dependencies;
+- a title that satisfies the canonical
+  [PR metadata contract](pull-requests.md#pr-metadata-and-provenance);
 - a canonical lowercase-hyphenated `gizmo_id` in every focused issue
   assigned by the current one-PR plan;
 - context and an observable outcome;
@@ -169,6 +171,23 @@ Create a new feature directory only when no existing feature owns the work.
 Create its `README.md` first, then add focused issue files and link them from the
 feature index. Do not put unrelated work into a flat `backlog` directory merely
 to avoid naming the feature; `backlog` is primarily the historical import area.
+
+Automated manual dispatches without a narrower feature use `unplanned`.
+Publish the generated issue and its `issues/unplanned/README.md` index entry in
+one Workbench commit.
+
+- Read the exact `main` commit, feature index, and candidate issue state first.
+- Add one unchecked relative issue link under the index's `## Issues` article.
+- Use the trusted issue title and generated filename in that link.
+- Update the index `updated_at` value in the same commit.
+- Create both blobs and one tree from that exact parent.
+- Update `refs/heads/main` without force.
+- A moved ref, malformed index, conflicting issue, or mismatched existing index
+  entry blocks publication of both records.
+- A bounded retry must re-read and revalidate the complete pair.
+- Do not publish one record and compensate with a later mutation.
+- A same-run rerun may reuse the pair only after every issue-identity field and
+  the exact index link match.
 
 ## Publishing changes
 

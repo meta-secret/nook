@@ -41,6 +41,9 @@ readers; it does not control or resume agent execution.
   - At PR creation, choose a truthful capability-oriented title.
   - Make it broad enough to survive normal in-scope iteration.
   - Describe the complete current capability in the PR body.
+  - Keep the title between 3 and 120 characters after trimming.
+  - Reject ASCII control characters and DEL.
+  - Allow Unicode text and punctuation.
 - **Lifecycle refresh**
   - Re-read the whole PR when its scope, design, or material diff changes.
   - Update both the title and description so they describe the current PR.
