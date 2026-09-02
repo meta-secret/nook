@@ -593,8 +593,12 @@ repositoryPolicyWorkflow.requireAll([
   "files: '[]'",
   "sync: false",
   'find "$RUNNER_TOOL_CACHE/vale/3.19.0"',
+  'vale_dir="$(dirname "$vale_bin")"',
+  'PATH="$vale_dir:$PATH"',
+  '"$(vale --version)"',
   '"vale version 3.19.0"',
 ]);
+repositoryPolicyWorkflow.forbid('"$("$vale_bin" --version)"');
 repositoryPolicyWorkflow.requireBefore({
   first: "name: Activate Vale 3.19.0",
   second: "run: task loom:cortex-audit",
@@ -672,8 +676,12 @@ remoteWorkflow.requireAll([
   "files: '[]'",
   "sync: false",
   'find "$RUNNER_TOOL_CACHE/vale/3.19.0"',
+  'vale_dir="$(dirname "$vale_bin")"',
+  'PATH="$vale_dir:$PATH"',
+  '"$(vale --version)"',
   '"vale version 3.19.0"',
 ]);
+remoteWorkflow.forbid('"$("$vale_bin" --version)"');
 remoteWorkflow.requireBefore({
   first: "name: Report Kubernetes worker node",
   second: "uses: actions/checkout@v7",
