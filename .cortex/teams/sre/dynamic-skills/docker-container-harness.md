@@ -21,7 +21,8 @@ This card does not authorize Docker inside k8s or k0s. Cluster execution follows
 - Cache mounts introduce hidden BuildKit state and cause runner lockups.
 - Install dependencies directly in ordinary Dockerfile `RUN` layers.
 - Let immutable Docker layers and lockfiles define the cache boundary.
-- Enforced by the standalone `preflight/` invariant suite (`task preflight`).
+- Enforced by the standalone `preflight/` invariant suite. Gizmo dispatches
+  that suite on a hosted worker with `task remote TASK_NAME=preflight`.
 
 ### Never kill the Docker daemon
 
@@ -53,9 +54,20 @@ Cluster Pods are excluded from local Docker lifecycle guidance. They may use a r
 2. [ ] Only individual containers are stopped (`docker stop <id>`); daemon remains untouched.
 3. [ ] Dependency requirements and lockfiles match the owning update policy.
 4. [ ] Bun lockfiles are committed for web packages.
-5. [ ] Invariant preflight passes: `task preflight`.
+5. [ ] Gizmo has collected hosted invariant evidence from
+       `task remote TASK_NAME=preflight`.
+6. [ ] Path-applicable build and harness evidence comes from Gizmo's
+       exact-head complete PR validation. If no configured hosted selector or
+       complete-validation job supplies required evidence, report a blocker;
+       do not run a local fallback.
 
 ## Validation
 
-- Invariant test suite: `task preflight`
-- Harness setup solve: `task setup`
+- Invariant test suite: Gizmo dispatches
+  `task remote TASK_NAME=preflight` against the pushed head.
+- Harness build evidence: Gizmo dispatches
+  `task pr:validate PR=<number>` for path-applicable exact-head complete
+  validation.
+- A missing hosted selector or path-applicable complete-validation job is an
+  explicit evidence blocker. Workers must not substitute local `task preflight`,
+  `task setup`, or another local build or test command.
