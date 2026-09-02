@@ -12,12 +12,31 @@ type ValeReport = Readonly<Record<string, readonly ValeAlert[]>>;
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, '../../../../../../..');
 
-function runFixture(name: 'invalid' | 'valid') {
+function runValidFixture() {
   return Bun.spawnSync({
     cmd: [
       'task',
       'vale:cortex',
-      `CORTEX_ROOT=.vale/fixtures/cortex-navigation/${name}/.cortex`,
+      'CORTEX_ROOT=.vale/fixtures/cortex-navigation/valid/.cortex',
+    ],
+    cwd: REPOSITORY_ROOT,
+    env: process.env,
+    stderr: 'pipe',
+    stdout: 'pipe',
+  });
+}
+
+function runInvalidFixture() {
+  return Bun.spawnSync({
+    cmd: [
+      'vale',
+      '--no-global',
+      `--config=${path.join(REPOSITORY_ROOT, '.vale.ini')}`,
+      '--output=JSON',
+      path.join(
+        REPOSITORY_ROOT,
+        '.vale/fixtures/cortex-navigation/invalid/.cortex/article.md',
+      ),
     ],
     cwd: REPOSITORY_ROOT,
     env: process.env,
@@ -31,14 +50,14 @@ function report(stdout: Uint8Array): ValeReport {
 }
 
 test('accepts exclusions, ignored directories, and non-matching Markdown', () => {
-  const result = runFixture('valid');
+  const result = runValidFixture();
   expect(new TextDecoder().decode(result.stderr)).toBe('');
   expect(result.exitCode).toBe(0);
   expect(report(result.stdout)).toEqual({});
 });
 
 test('reports each exact prohibited H2 through the Vale rule', () => {
-  const result = runFixture('invalid');
+  const result = runInvalidFixture();
   expect(result.exitCode).not.toBe(0);
   const alerts = Object.values(report(result.stdout))
     .flat()
