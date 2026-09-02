@@ -246,13 +246,13 @@ describe('module expert invocation runtime', () => {
         expect(event.sequence).toBe(index + 1);
       }
       expect(result.processing.events.sha256).toBe(sha256(eventsSerialized));
-      expect(
-        events.some(
-          (event) =>
-            event.kind === 'runtime-activity' &&
-            event.activity === WorkflowRuntimeActivityKind.TurnCompleted,
+      expect(events[0]).toMatchObject({
+        kind: 'attempt-started',
+        invocationContextSha256: sha256(
+          JSON.stringify(request.selectedContextPaths),
         ),
-      ).toBe(true);
+      });
+      expect(eventsSerialized.includes('runtime-activity')).toBe(false);
       const replayRequest = { events };
       expect(replayAgentAttemptJournal(replayRequest).terminalKind).toBe(
         TaskTerminalKind.Completed,
@@ -391,13 +391,7 @@ describe('module expert invocation runtime', () => {
       const eventsSerialized = await readFile(eventsPath, 'utf8');
       const events = await readEvents(eventsPath);
       expect(eventsSerialized).not.toContain('private runtime detail');
-      expect(
-        events.some(
-          (event) =>
-            event.kind === 'runtime-activity' &&
-            event.activity === WorkflowRuntimeActivityKind.RuntimeError,
-        ),
-      ).toBe(true);
+      expect(eventsSerialized.includes('runtime-activity')).toBe(false);
       expect(eventsSerialized).not.toContain('"detail"');
       const replayRequest = { events };
       expect(replayAgentAttemptJournal(replayRequest).terminalKind).toBe(

@@ -60,7 +60,13 @@ import {
 import {
   cortexActionId,
   renderAgentAttemptEvent,
+  renderRuntimeActivityObservation,
 } from './agent-event-renderer.ts';
+import {
+  RuntimeActivityObservationField,
+  WorkflowRuntimeActivityKind,
+} from './events.ts';
+import type { RuntimeActivityObservation } from './events.ts';
 import type {
   ModuleExpertJournalAuthority,
   ModuleExpertJournalBinding,
@@ -87,6 +93,7 @@ export type AgentAttemptJournalConfiguration = {
   readonly attempt: WorkflowAttemptNumber;
   readonly depth: number;
   readonly parent: AgentAttemptParent;
+  readonly invocationContextSha256?: string;
   readonly now: () => IsoTimestamp;
   readonly knownCortexIdentifiers?: ReadonlySet<string>;
   readonly compactOutput?: (line: string) => void | Promise<void>;
@@ -94,8 +101,10 @@ export type AgentAttemptJournalConfiguration = {
 
 export type ModuleExpertAttemptJournalConfiguration = Omit<
   AgentAttemptJournalConfiguration,
-  'adapter'
->;
+  'adapter' | 'invocationContextSha256'
+> & {
+  readonly invocationContextSha256: string;
+};
 
 export type CreateModuleExpertAttemptJournalArgs = {
   readonly configuration: ModuleExpertAttemptJournalConfiguration;
@@ -143,6 +152,7 @@ export class AgentAttemptJournal<TTask extends string> {
   readonly eventsPath: string;
   private readonly configuration: AgentAttemptJournalConfiguration;
   private sequence: WorkflowEventSequence;
+  private liveSequence: WorkflowEventSequence;
   private pendingAppend: Promise<void>;
   private finalized: boolean;
   private readonly moduleExpertJournalBinding:
@@ -175,6 +185,15 @@ export class AgentAttemptJournal<TTask extends string> {
     } else if (!Object.values(AgentAttemptAdapterKind).includes(adapter)) {
       throw new Error('Agent attempt adapter provenance is invalid.');
     }
+    const invocationContextSha256 = configuration.invocationContextSha256;
+    if (
+      adapter === AgentAttemptAdapterKind.ModuleExpertInvocation
+        ? !invocationContextSha256 ||
+          !/^[0-9a-f]{64}$/u.test(invocationContextSha256)
+        : invocationContextSha256
+    ) {
+      throw new Error('Agent attempt invocation context binding is invalid.');
+    }
     assertCurrentAgentAttemptWorkflowVersion(configuration.workflowVersion);
     assertFilesystemIdentifier(configuration.task);
     assertFilesystemIdentifier(configuration.agent);
@@ -206,6 +225,7 @@ export class AgentAttemptJournal<TTask extends string> {
     );
     this.eventsPath = join(this.attemptDirectory, 'events.jsonl');
     this.sequence = 0;
+    this.liveSequence = 0;
     this.pendingAppend = Promise.resolve();
     this.finalized = false;
     this.moduleExpertJournalBinding = pendingBinding ?? false;
@@ -221,9 +241,13 @@ export class AgentAttemptJournal<TTask extends string> {
   async initialize(): Promise<void> {
     await mkdir(dirname(this.attemptDirectory), RECURSIVE_DIRECTORY_OPTIONS);
     await mkdir(this.attemptDirectory);
-    const event: AgentAttemptEventWithoutMetadata = {
-      kind: AgentAttemptEventKind.AttemptStarted,
-    };
+    const invocationContextSha256 = this.configuration.invocationContextSha256;
+    const event: AgentAttemptEventWithoutMetadata = invocationContextSha256
+      ? {
+          kind: AgentAttemptEventKind.AttemptStarted,
+          invocationContextSha256,
+        }
+      : { kind: AgentAttemptEventKind.AttemptStarted };
     await this.append(event);
   }
 
@@ -235,27 +259,6 @@ export class AgentAttemptJournal<TTask extends string> {
     }
     if (!eventHasExactKeys(event)) {
       throw new Error('Agent attempt event fields are invalid.');
-    }
-    if (event.kind === AgentAttemptEventKind.RuntimeActivity) {
-      if (
-        'evidenceSha256' in event &&
-        !/^[0-9a-f]{64}$/u.test(event.evidenceSha256)
-      ) {
-        throw new Error('Agent runtime activity evidence digest is invalid.');
-      }
-      if (
-        event.cortexReferences.length > 0 &&
-        !this.configuration.knownCortexIdentifiers
-      ) {
-        throw new Error(
-          'Agent runtime activity Cortex references require a source-bound registry.',
-        );
-      }
-      const referenceArgs: AssertCortexReferencesArgs = {
-        references: event.cortexReferences,
-        knownIdentifiers: this.configuration.knownCortexIdentifiers ?? false,
-      };
-      assertCortexReferences(referenceArgs);
     }
     this.sequence += 1;
     const occurredAt = this.configuration.now();
@@ -295,6 +298,62 @@ export class AgentAttemptJournal<TTask extends string> {
       // Compact human evidence is optional and cannot gate the journal.
     }
     return completeEvent;
+  }
+
+  async observe(observation: RuntimeActivityObservation): Promise<void> {
+    if (this.finalized) {
+      throw new Error('Cannot observe a finalized agent attempt journal.');
+    }
+    const observationKeys = Object.keys(observation);
+    if (
+      observationKeys.length < 2 ||
+      observationKeys.length > 3 ||
+      !observationKeys.every((key) =>
+        Object.values(RuntimeActivityObservationField).includes(
+          key as RuntimeActivityObservationField,
+        ),
+      ) ||
+      typeof observation.detail !== 'string' ||
+      observation.detail.length > 4096
+    ) {
+      throw new Error('Agent runtime activity fields are invalid.');
+    }
+    if (
+      !Object.values(WorkflowRuntimeActivityKind).includes(observation.activity)
+    ) {
+      throw new Error('Agent runtime activity is invalid.');
+    }
+    const references = observation.cortexReferences ?? [];
+    if (references.length > 0 && !this.configuration.knownCortexIdentifiers) {
+      throw new Error(
+        'Agent runtime activity Cortex references require a source-bound registry.',
+      );
+    }
+    const referenceArgs: AssertCortexReferencesArgs = {
+      references,
+      knownIdentifiers: this.configuration.knownCortexIdentifiers ?? false,
+    };
+    assertCortexReferences(referenceArgs);
+    this.liveSequence += 1;
+    const compactOutput =
+      this.configuration.compactOutput ??
+      ((line: string): void => {
+        process.stderr.write(line);
+      });
+    try {
+      await compactOutput(
+        renderRuntimeActivityObservation({
+          identity: {
+            task: this.configuration.task,
+            attempt: this.configuration.attempt,
+            sequence: this.liveSequence,
+          },
+          observation,
+        }),
+      );
+    } catch {
+      // Live human evidence is optional and cannot gate the journal.
+    }
   }
 
   async finalize(
@@ -521,19 +580,13 @@ export class AgentAttemptJournal<TTask extends string> {
 }
 
 function eventHasExactKeys(event: AgentAttemptEventWithoutMetadata): boolean {
-  if (event.kind === AgentAttemptEventKind.RuntimeActivity) {
-    const expected = new Set(['kind', 'activity', 'cortexReferences']);
-    const keys = Object.keys(event);
-    return (
-      (keys.length === expected.size ||
-        (keys.length === expected.size + 1 &&
-          keys.includes('evidenceSha256'))) &&
-      keys.every((key) => expected.has(key) || key === 'evidenceSha256')
-    );
-  }
+  const startFields =
+    event.kind === AgentAttemptEventKind.AttemptStarted &&
+    event.invocationContextSha256
+      ? ['kind', 'invocationContextSha256']
+      : ['kind'];
   const expectedByKind: Record<AgentAttemptEventKind, ReadonlySet<string>> = {
-    [AgentAttemptEventKind.AttemptStarted]: new Set(['kind']),
-    [AgentAttemptEventKind.RuntimeActivity]: new Set(),
+    [AgentAttemptEventKind.AttemptStarted]: new Set(startFields),
     [AgentAttemptEventKind.ResultProjected]: new Set(['kind', 'result']),
     [AgentAttemptEventKind.ViewProjected]: new Set(['kind', 'view']),
     [AgentAttemptEventKind.AttemptTerminalRecorded]: new Set([

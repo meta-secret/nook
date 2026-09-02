@@ -294,6 +294,7 @@ describe('Codex streamed turn terminal state', () => {
         TaskTerminalKind.Failed,
       );
       expect(eventsSerialized).not.toContain('private streamed failure');
+      expect(eventsSerialized).not.toContain('runtime-activity');
     } finally {
       runtimeMock.dispose();
       await rm(runDirectory, REMOVE_RECURSIVELY);

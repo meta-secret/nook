@@ -11,11 +11,12 @@ import {
 
 export const CORTEX_CONSISTENCY_COMPILE_EXAMPLE = `cortexConsistency:
   compile:
-    kind: cortex-consistency-compile-v1
+    kind: cortex-consistency-compile-v2
     documents:
       - relativePath: .cortex/AGENTS.md
         references:
           - teams/ai/dynamic-skills/cortex-consistency/SKILL.md
+        commands: []
 `;
 
 function referenceSchema() {
@@ -44,10 +45,15 @@ export const CORTEX_CONSISTENCY_COMPILE_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['relativePath', 'references'],
+        required: ['relativePath', 'references', 'commands'],
         properties: {
           relativePath: referenceSchema(),
           references: {
+            type: 'array',
+            maxItems: CORTEX_CONSISTENCY_REFERENCE_LIMIT,
+            items: referenceSchema(),
+          },
+          commands: {
             type: 'array',
             maxItems: CORTEX_CONSISTENCY_REFERENCE_LIMIT,
             items: referenceSchema(),

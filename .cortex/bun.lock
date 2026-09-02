@@ -44,6 +44,18 @@
         "typescript-eslint": "8.66.0",
       },
     },
+    "teams/ai/dynamic-skills/delegation-visualization/scripts": {
+      "name": "@nook/delegation-visualization-skill",
+      "version": "0.1.0",
+      "devDependencies": {
+        "@eslint/js": "10.0.1",
+        "@types/bun": "1.3.14",
+        "eslint": "10.8.1",
+        "prettier": "3.9.6",
+        "typescript": "6.0.3",
+        "typescript-eslint": "8.66.0",
+      },
+    },
     "teams/ai/dynamic-skills/executable-skill-host/scripts": {
       "name": "@nook/executable-skill-host-skill",
       "version": "0.1.0",
@@ -90,6 +102,8 @@
     "@nook/cortex-consistency-skill": ["@nook/cortex-consistency-skill@workspace:teams/ai/dynamic-skills/cortex-consistency/scripts"],
 
     "@nook/cortex-document-map-skill": ["@nook/cortex-document-map-skill@workspace:teams/ai/dynamic-skills/cortex-document-map/scripts"],
+
+    "@nook/delegation-visualization-skill": ["@nook/delegation-visualization-skill@workspace:teams/ai/dynamic-skills/delegation-visualization/scripts"],
 
     "@nook/executable-skill-host-skill": ["@nook/executable-skill-host-skill@workspace:teams/ai/dynamic-skills/executable-skill-host/scripts"],
 

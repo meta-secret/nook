@@ -28,6 +28,7 @@ import type { ReplayAgentAttemptJournalRequest } from '../../src/agent-workflow/
 import {
   CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
   LEGACY_AGENT_ATTEMPT_WORKFLOW_VERSION,
+  PERSISTED_ACTIVITY_AGENT_ATTEMPT_WORKFLOW_VERSION,
   PROVENANCE_AGENT_ATTEMPT_WORKFLOW_VERSION,
 } from '../../src/agent-workflow/agent-attempt-version.ts';
 import { CortexReferenceRelation } from '../../src/agent-workflow/cortex-references.ts';
@@ -40,18 +41,38 @@ describe('agent attempt journal', () => {
     const runDirectory = await mkdtemp(join(tmpdir(), 'loom-agent-journal-'));
     const removeOptions: RmOptions = { recursive: true, force: true };
     try {
-      const journal = new AgentAttemptJournal<'inspect'>(
-        configuration(runDirectory),
-      );
+      const liveOutput: string[] = [];
+      const journal = new AgentAttemptJournal<'inspect'>({
+        ...configuration(runDirectory),
+        compactOutput: (line) => {
+          liveOutput.push(line);
+        },
+      });
       await journal.initialize();
-      const activityEvent: AgentAttemptEventWithoutMetadata = {
-        kind: AgentAttemptEventKind.RuntimeActivity,
+      await journal.observe({
         activity: WorkflowRuntimeActivityKind.TurnCompleted,
+        detail: 'Live Cortex evidence.',
         cortexReferences: [
           { id: 'CX-AI', relation: CortexReferenceRelation.Applied },
         ],
-      };
-      await journal.append(activityEvent);
+      });
+      await journal.observe({
+        activity: WorkflowRuntimeActivityKind.CommandCompleted,
+        detail: 'Transient detail is never persisted.',
+      });
+      await expect(
+        journal.observe({
+          activity: 'caller-invented-activity',
+          detail: 'Invalid.',
+        } as never),
+      ).rejects.toThrow('activity is invalid');
+      await expect(
+        journal.observe({
+          activity: WorkflowRuntimeActivityKind.TurnCompleted,
+          detail: 'Invalid fields.',
+          prompt: 'must not cross the observer boundary',
+        } as never),
+      ).rejects.toThrow('activity fields are invalid');
       const terminal: CompletedTaskTerminal<'inspect'> = {
         kind: TaskTerminalKind.Completed,
         task: 'inspect',
@@ -72,46 +93,26 @@ describe('agent attempt journal', () => {
         .trim()
         .split('\n')
         .map((line) => JSON.parse(line) as AgentAttemptEvent);
-      const knownCortexIdentifiers = new Set(['CX-AI']);
       const replayRequest: ReplayAgentAttemptJournalRequest = {
         events: parsedEvents,
-        knownCortexIdentifiers,
       };
       const replay = replayAgentAttemptJournal(replayRequest);
       expect(processing.events.sha256).toBe(sha256(events));
       expect(replay.terminalKind).toBe(TaskTerminalKind.Completed);
-      const unregisteredReferenceEvents = parsedEvents.map((event) =>
-        event.kind === AgentAttemptEventKind.RuntimeActivity
-          ? {
-              ...event,
-              cortexReferences: [
-                {
-                  id: 'CX-AI-7K3M2',
-                  relation: CortexReferenceRelation.Applied,
-                },
-              ],
-            }
-          : event,
-      );
-      expect(() =>
-        replayAgentAttemptJournal({
-          events: unregisteredReferenceEvents,
-          knownCortexIdentifiers,
-        }),
-      ).toThrow('invalid Cortex reference');
       expect(parsedEvents.map((event) => event.actionId)).toEqual([
         'a0001',
         'a0002',
         'a0003',
         'a0004',
-        'a0005',
       ]);
-      const expectedReferencedEvent = {
-        cortexReferences: [
-          { id: 'CX-AI', relation: CortexReferenceRelation.Applied },
-        ],
-      };
-      expect(parsedEvents[1]).toMatchObject(expectedReferencedEvent);
+      expect(events).not.toContain('runtime-activity');
+      expect(events).not.toContain('Transient detail');
+      expect(liveOutput).toContain(
+        '[inspect/attempt-1:live-a0001] runtime-activity turn-completed CX-AI:applied\n',
+      );
+      expect(liveOutput).toContain(
+        '[inspect/attempt-1:live-a0002] runtime-activity command-completed\n',
+      );
       const firstEvent = parsedEvents[0]!;
       const unknownKindEvent = {
         ...firstEvent,
@@ -131,7 +132,6 @@ describe('agent attempt journal', () => {
       ];
       const unknownKindRequest: ReplayAgentAttemptJournalRequest = {
         events: unknownKindEvents,
-        knownCortexIdentifiers,
       };
       expect(() => replayAgentAttemptJournal(unknownKindRequest)).toThrow(
         'unknown event kind',
@@ -141,7 +141,6 @@ describe('agent attempt journal', () => {
       );
       const invalidActionRequest = {
         events: invalidActionIdentity,
-        knownCortexIdentifiers,
       };
       expect(() => replayAgentAttemptJournal(invalidActionRequest)).toThrow(
         'action identity is invalid',
@@ -156,7 +155,6 @@ describe('agent attempt journal', () => {
       );
       const mismatchedReplayRequest: ReplayAgentAttemptJournalRequest = {
         events: mismatchedEvents,
-        knownCortexIdentifiers,
       };
       expect(() => replayAgentAttemptJournal(mismatchedReplayRequest)).toThrow(
         'terminal result differs from its projection event',
@@ -184,29 +182,15 @@ describe('agent attempt journal', () => {
       }
       const duplicateViewReplayRequest: ReplayAgentAttemptJournalRequest = {
         events: duplicateViewEvents,
-        knownCortexIdentifiers,
       };
       expect(() =>
         replayAgentAttemptJournal(duplicateViewReplayRequest),
       ).toThrow('duplicate views');
-      const secretBearingActivityEvents = parsedEvents.map((event) =>
-        event.kind === AgentAttemptEventKind.RuntimeActivity
-          ? { ...event, detail: 'secret-bearing free-form text' }
-          : event,
-      );
-      const secretBearingActivityRequest = {
-        events: secretBearingActivityEvents,
-        knownCortexIdentifiers,
-      };
-      expect(() =>
-        replayAgentAttemptJournal(secretBearingActivityRequest),
-      ).toThrow('event fields are invalid');
       const extraEventFieldRequest = {
         events: parsedEvents.map((event) => ({
           ...event,
           prompt: 'secret-bearing prompt',
         })),
-        knownCortexIdentifiers,
       };
       expect(() => replayAgentAttemptJournal(extraEventFieldRequest)).toThrow(
         'event fields are invalid',
@@ -217,7 +201,6 @@ describe('agent attempt journal', () => {
       })) as never as readonly AgentAttemptEvent[];
       const malformedParentRequest = {
         events: malformedParentEvents,
-        knownCortexIdentifiers,
       };
       expect(() => replayAgentAttemptJournal(malformedParentRequest)).toThrow(
         'identity is invalid',
@@ -228,7 +211,6 @@ describe('agent attempt journal', () => {
       }));
       const excessiveDepthRequest = {
         events: excessiveDepthEvents,
-        knownCortexIdentifiers,
       };
       expect(() => replayAgentAttemptJournal(excessiveDepthRequest)).toThrow(
         'identity is invalid',
@@ -243,7 +225,6 @@ describe('agent attempt journal', () => {
       );
       const mismatchedAdapterRequest = {
         events: mismatchedAdapterEvents,
-        knownCortexIdentifiers,
       };
       expect(() => replayAgentAttemptJournal(mismatchedAdapterRequest)).toThrow(
         'identity changed within the stream',
@@ -254,7 +235,6 @@ describe('agent attempt journal', () => {
       })) as never as readonly AgentAttemptEvent[];
       const unknownAdapterRequest = {
         events: unknownAdapterEvents,
-        knownCortexIdentifiers,
       };
       expect(() => replayAgentAttemptJournal(unknownAdapterRequest)).toThrow(
         'identity is invalid',
@@ -276,7 +256,6 @@ describe('agent attempt journal', () => {
       }) as readonly AgentAttemptEvent[];
       const wrongAuthorRequest = {
         events: wrongAuthorEvents,
-        knownCortexIdentifiers,
       };
       expect(() => replayAgentAttemptJournal(wrongAuthorRequest)).toThrow(
         'view author',
@@ -344,8 +323,13 @@ describe('agent attempt journal', () => {
       );
 
       await journal.initialize();
+      await journal.observe({
+        activity: WorkflowRuntimeActivityKind.TurnCompleted,
+        detail: 'Live output still cannot gate coordination.',
+      });
       const events = await readFile(journal.eventsPath, 'utf8');
       expect(events).toContain('"actionId":"a0001"');
+      expect(events).not.toContain('runtime-activity');
     } finally {
       await rm(runDirectory, removeOptions);
     }
@@ -374,14 +358,14 @@ describe('agent attempt journal', () => {
         missingRegistryConfiguration,
       );
       await journal.initialize();
-      const referencedActivity: AgentAttemptEventWithoutMetadata = {
-        kind: AgentAttemptEventKind.RuntimeActivity,
+      const referencedActivity = {
         activity: WorkflowRuntimeActivityKind.TurnCompleted,
+        detail: 'Live Cortex evidence.',
         cortexReferences: [
           { id: 'CX-AI', relation: CortexReferenceRelation.Applied },
         ],
       };
-      await expect(journal.append(referencedActivity)).rejects.toThrow(
+      await expect(journal.observe(referencedActivity)).rejects.toThrow(
         'source-bound registry',
       );
       expect(
@@ -505,7 +489,7 @@ describe('agent attempt journal', () => {
 
     const unsupportedVersion = {
       ...legacyWithoutAdapter,
-      workflowVersion: '4.0.0',
+      workflowVersion: '5.0.0',
     };
     const unsupportedReplayRequest = { events: [unsupportedVersion] };
     expect(() => replayAgentAttemptJournal(unsupportedReplayRequest)).toThrow(
@@ -520,6 +504,14 @@ describe('agent attempt journal', () => {
     expect(() => replayAgentAttemptJournal(provenanceRequest)).toThrow(
       'predates compact action identities',
     );
+
+    const persistedActivityVersion = {
+      ...legacyWithoutAdapter,
+      workflowVersion: PERSISTED_ACTIVITY_AGENT_ATTEMPT_WORKFLOW_VERSION,
+    };
+    expect(() =>
+      replayAgentAttemptJournal({ events: [persistedActivityVersion] }),
+    ).toThrow('may contain persisted runtime activity');
   });
 });
 

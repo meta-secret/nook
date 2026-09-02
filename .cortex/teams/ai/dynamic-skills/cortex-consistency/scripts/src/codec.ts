@@ -11,6 +11,7 @@ import {
 type CortexConsistencyDocumentTransport = {
   readonly relativePath: string | false;
   readonly references: readonly (string | false)[] | false;
+  readonly commands: readonly (string | false)[] | false;
 };
 
 type CortexConsistencyRequestTransport = {
@@ -19,7 +20,12 @@ type CortexConsistencyRequestTransport = {
 };
 
 const REQUEST_KEYS = ['kind', 'documents'] as const;
-const DOCUMENT_KEYS = ['relativePath', 'references'] as const;
+enum CortexConsistencyDocumentField {
+  RelativePath = 'relativePath',
+  References = 'references',
+  Commands = 'commands',
+}
+const DOCUMENT_KEYS = Object.values(CortexConsistencyDocumentField);
 const UTF8_ENCODER = new TextEncoder();
 
 export class CortexConsistencyRequestDecodeError extends Error {
@@ -88,10 +94,22 @@ export function decodeCortexConsistencyRequest(
     ) {
       throw new CortexConsistencyRequestDecodeError(`${path}.references`);
     }
+    if (
+      !Array.isArray(candidate.commands) ||
+      candidate.commands.length > CORTEX_CONSISTENCY_REFERENCE_LIMIT ||
+      candidate.commands.some(
+        (command: string | false) =>
+          typeof command !== 'string' ||
+          command.length > CORTEX_CONSISTENCY_PATH_LIMIT,
+      )
+    ) {
+      throw new CortexConsistencyRequestDecodeError(`${path}.commands`);
+    }
     paths.add(candidate.relativePath);
     documents.push({
       relativePath: candidate.relativePath,
       references: candidate.references as readonly string[],
+      commands: candidate.commands as readonly string[],
     });
   }
   return {

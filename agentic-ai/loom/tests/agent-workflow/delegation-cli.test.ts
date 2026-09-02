@@ -23,11 +23,9 @@ import {
   DelegationBarrierPolicy,
 } from '../../src/agent-workflow/delegation-domain.ts';
 import type { DelegationPlan } from '../../src/agent-workflow/delegation-domain.ts';
-import { WorkflowRuntimeActivityKind } from '../../src/agent-workflow/events.ts';
 import { CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION } from '../../src/agent-workflow/agent-attempt-version.ts';
 import { readVerifiedBarrierAttempt } from '../../src/agent-workflow/attempt-verification.ts';
 import type { ReadParentAttemptArgs } from '../../src/agent-workflow/attempt-verification.ts';
-import { CortexReferenceRelation } from '../../src/agent-workflow/cortex-references.ts';
 
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
 
@@ -70,15 +68,6 @@ describe('delegated agent journal CLI', () => {
         attempt: 1,
         depth: 1,
         parent: { kind: AgentAttemptParentKind.WorkflowRoot },
-        activities: [
-          {
-            activity: WorkflowRuntimeActivityKind.TurnCompleted,
-            detail: 'Contract inspection completed.',
-            cortexReferences: [
-              { id: 'CX-AI', relation: CortexReferenceRelation.Applied },
-            ],
-          },
-        ],
         terminal: {
           kind: TaskTerminalKind.Completed,
           task: 'inspect-contract',
@@ -185,28 +174,23 @@ describe('delegated agent journal CLI', () => {
         workingDirectory,
       ];
 
-      const unknownReferenceRequest = {
+      const legacyActivityRequest = {
         ...request,
         activities: [
           {
-            ...request.activities[0],
-            cortexReferences: [
-              {
-                id: 'CX-AI-4D7NQ',
-                relation: CortexReferenceRelation.Applied,
-              },
-            ],
+            activity: 'turn-completed',
+            detail: 'Persisted progress is no longer accepted.',
           },
         ],
       };
       await writeFile(
         requestPath,
-        JSON.stringify(unknownReferenceRequest),
+        JSON.stringify(legacyActivityRequest),
         'utf8',
       );
-      const unknownReferenceProcess = Bun.spawn(command, spawnOptions);
-      expect(await unknownReferenceProcess.exited).not.toBe(0);
-      await new Response(unknownReferenceProcess.stderr).text();
+      const legacyActivityProcess = Bun.spawn(command, spawnOptions);
+      expect(await legacyActivityProcess.exited).not.toBe(0);
+      await new Response(legacyActivityProcess.stderr).text();
       const attemptDirectory = join(
         workingDirectory,
         'workflow',
@@ -257,9 +241,7 @@ describe('delegated agent journal CLI', () => {
       const stderr = await new Response(processResult.stderr).text();
       expect(exitCode).toBe(0);
       expect(stdout).toContain('events.jsonl');
-      expect(stderr).toContain(
-        '[inspect-contract/attempt-1:a0002] runtime-activity turn-completed CX-AI:applied',
-      );
+      expect(stderr).not.toContain('runtime-activity');
       expect(await readFile(join(attemptDirectory, 'view.md'), 'utf8')).toBe(
         '# Contract view\n\nConsistent.\n',
       );
@@ -267,15 +249,13 @@ describe('delegated agent journal CLI', () => {
         (await readFile(join(attemptDirectory, 'events.jsonl'), 'utf8'))
           .trim()
           .split('\n'),
-      ).toHaveLength(5);
+      ).toHaveLength(4);
       const eventLines = (
         await readFile(join(attemptDirectory, 'events.jsonl'), 'utf8')
       )
         .trim()
         .split('\n');
-      expect(eventLines.join('\n')).not.toContain(
-        'Contract inspection completed.',
-      );
+      expect(eventLines.join('\n')).not.toContain('runtime-activity');
       expect(eventLines.join('\n')).not.toContain('"detail"');
       expect(
         eventLines.every(
@@ -516,7 +496,6 @@ describe('delegated agent journal CLI', () => {
           ...identity,
           depth: 1,
           parent,
-          activities: [],
           terminal: {
             kind,
             task,

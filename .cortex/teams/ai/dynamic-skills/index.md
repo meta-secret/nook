@@ -33,6 +33,8 @@ Harness profile directories must not mirror or redefine these cards.
   - Purpose: Discover and invoke the closed executable-skill catalog through one strict bounded YAML argument
 - **[cortex-consistency](cortex-consistency/SKILL.md)**
   - Purpose: **P1 / critical `.cortex` GC rule:** verify docs are current, agree with each other, and agree with the code
+- **[delegation-visualization](delegation-visualization/SKILL.md)**
+  - Purpose: Render Gizmo's ordered ephemeral Team Agent plan without acquiring lifecycle authority
 - **[product-spec-lifecycle.md](product-spec-lifecycle.md)**
   - Purpose: **P1 / critical product spec rule:** read owning product specs before implementation; update specs on new knowledge from chat, tasks, or PR iterations
 - **[agent-feature-ownership.md](../../../gizmo/dynamic-skills/agent-feature-ownership.md)**

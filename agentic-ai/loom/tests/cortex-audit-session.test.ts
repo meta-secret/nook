@@ -508,6 +508,12 @@ ${gizmoIndexRows}
           message:
             'Cortex context .cortex/AGENTS.md imports policy .cortex/teams/ai/dynamic-skills/cortex-consistency/SKILL.md but its authority document does not reference it.',
         },
+        {
+          code: CortexContractFindingCode.MissingRuntimeDocument,
+          file: '.cortex/gizmo/workflows/subagent-delegation.md',
+          message:
+            'Cortex runtime references a missing document: .cortex/gizmo/workflows/subagent-delegation.md',
+        },
       ],
       auditOk: false,
     };

@@ -32,6 +32,7 @@ export type CortexContractDocument = {
 type MarkdownReferenceCollection = {
   readonly definitions: ReadonlyMap<string, string>;
   readonly references: string[];
+  readonly commands: string[];
 };
 
 export function compileCortexContracts(
@@ -48,14 +49,16 @@ export function compileCortexContracts(
 export function adaptCortexContractDocuments(
   documents: readonly CortexContractDocument[],
 ): SemanticCortexContractDocument[] {
-  return documents.map((document) => ({
-    relativePath: document.relativePath,
-    references: markdownReferences(document.content),
-  }));
+  return documents.map(adaptCortexContractDocument);
 }
 
-function markdownReferences(content: string): readonly string[] {
-  const root = unified().use(remarkParse).use(remarkGfm).parse(content);
+function adaptCortexContractDocument(
+  document: CortexContractDocument,
+): SemanticCortexContractDocument {
+  const root = unified()
+    .use(remarkParse)
+    .use(remarkGfm)
+    .parse(document.content);
   const definitions = new Map<string, string>();
   visitMarkdownNode({
     node: root,
@@ -69,12 +72,17 @@ function markdownReferences(content: string): readonly string[] {
   const collection: MarkdownReferenceCollection = {
     definitions,
     references: [],
+    commands: [],
   };
   visitMarkdownNode({
     node: root,
     visitor: (node) => collectMarkdownReference({ node, collection }),
   });
-  return collection.references;
+  return {
+    relativePath: document.relativePath,
+    references: collection.references,
+    commands: collection.commands,
+  };
 }
 
 type CollectMarkdownReferenceArgs = {
@@ -92,6 +100,9 @@ function collectMarkdownReference(args: CollectMarkdownReferenceArgs): void {
     if (destination) args.collection.references.push(destination);
   } else if (args.node.type === 'inlineCode') {
     args.collection.references.push(args.node.value);
+    args.collection.commands.push(args.node.value);
+  } else if (args.node.type === 'code') {
+    args.collection.commands.push(...args.node.value.split('\n'));
   }
 }
 
