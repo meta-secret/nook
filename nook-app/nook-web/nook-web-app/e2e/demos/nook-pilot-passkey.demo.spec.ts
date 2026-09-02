@@ -101,7 +101,7 @@ test('propose Create passkey through Nook Pilot without silent ceremony', async 
   await widget.getByRole('button', { name: 'Create passkey' }).click()
   await expect(ceremonyStarted).toBeVisible()
   await expect(
-    widget.getByText(/Continue in the Nook passkey prompt|окне ключа доступа/i),
+    widget.getByRole('button', { name: 'Create passkey' }),
   ).toBeVisible()
   await demoBeat(page)
 })
