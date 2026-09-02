@@ -323,12 +323,10 @@ describe('agent attempt journal', () => {
       );
 
       await journal.initialize();
-      await expect(
-        journal.observe({
-          activity: WorkflowRuntimeActivityKind.TurnCompleted,
-          detail: 'Live output still cannot gate coordination.',
-        }),
-      ).resolves.toBeUndefined();
+      await journal.observe({
+        activity: WorkflowRuntimeActivityKind.TurnCompleted,
+        detail: 'Live output still cannot gate coordination.',
+      });
       const events = await readFile(journal.eventsPath, 'utf8');
       expect(events).toContain('"actionId":"a0001"');
       expect(events).not.toContain('runtime-activity');
