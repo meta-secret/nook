@@ -575,7 +575,6 @@ jobs:
         if: steps.agent_edit.outputs.changed == 'true' && steps.format.outcome == 'success' && steps.rerun.outputs.terminal != 'true'
         uses: actions/github-script@v9
         env:
-          AGENT_PROMPT: ${{ env.AGENT_PROMPT }}
           IMPLEMENTATION_REPO_ROOT: ${{ env.IMPLEMENTATION_REPO_ROOT }}
           ISSUE_URL: ${{ steps.workbench.outputs.url }}
           PLAN_URL: ${{ steps.plan.outputs.url }}
@@ -601,7 +600,6 @@ jobs:
               summary,
               'worklog',
               [process.env.CURSOR_SECRET],
-              process.env.AGENT_PROMPT,
             )
             if (rejection) {
               core.setFailed(`Rejected implementation work summary: ${rejection}.`)
@@ -837,11 +835,35 @@ jobs:
             const worklogUrl = `https://github.com/${owner}/${repo}/blob/${publishedWorklog.data.commit.sha}/${worklogPath}`
             if (success) {
               const currentPullBody = pull.body || ''
-              const nextPullBody = currentPullBody.replace('- Worklog: pending', `- Worklog: ${worklogUrl}`)
-              if (nextPullBody === currentPullBody) {
+              const workbenchHeading = '## Nook Workbench\n'
+              const workbenchSectionStart = currentPullBody.indexOf(workbenchHeading)
+              const workbenchSectionEnd = workbenchSectionStart < 0
+                ? -1
+                : currentPullBody.indexOf(
+                    '\n## ',
+                    workbenchSectionStart + workbenchHeading.length,
+                  )
+              const workbenchSection = workbenchSectionStart < 0
+                ? ''
+                : currentPullBody.slice(
+                    workbenchSectionStart,
+                    workbenchSectionEnd < 0 ? undefined : workbenchSectionEnd,
+                  )
+              const nextWorkbenchSection = workbenchSection.replace(
+                /^- Worklog: pending$/m,
+                `- Worklog: ${worklogUrl}`,
+              )
+              if (nextWorkbenchSection === workbenchSection) {
                 core.setFailed(`PR #${pull.number} is missing its pending Worklog field.`)
                 return
               }
+              const nextPullBody = [
+                currentPullBody.slice(0, workbenchSectionStart),
+                nextWorkbenchSection,
+                currentPullBody.slice(
+                  workbenchSectionEnd < 0 ? currentPullBody.length : workbenchSectionEnd,
+                ),
+              ].join('')
               await github.rest.pulls.update({
                 ...context.repo,
                 pull_number: pull.number,
