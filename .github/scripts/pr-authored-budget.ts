@@ -48,7 +48,9 @@ function classify(
   const normalizedPath = `/${path.replaceAll('\\', '/')}`
   const filename = normalizedPath.slice(normalizedPath.lastIndexOf('/') + 1)
   if (!Number.isInteger(added) || !Number.isInteger(deleted)) {
-    if (deletedOnly) {
+    if (renamed) {
+      summary.pureRenameFiles += 1
+    } else if (deletedOnly) {
       summary.binaryFiles += 1
     } else if (authoredTextExtensions.has(extname(filename))) {
       summary.unmeasurableAuthoredFiles += 1

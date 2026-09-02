@@ -9,6 +9,7 @@ import { createLogger } from "./logger.js";
 
 const log = createLogger("git");
 const execFileAsync = promisify(execFile);
+const PR_ADDITION_WARNING = 1_500;
 
 const ACTIONS_BOT = {
   email: "41898282+github-actions[bot]@users.noreply.github.com",
@@ -224,6 +225,10 @@ export function summarizeAuthoredNumstat(
     const normalizedPath = `/${parsed.destinationPath.replaceAll("\\", "/")}`;
     const filename = normalizedPath.slice(normalizedPath.lastIndexOf("/") + 1);
     if (!/^\d+$/.test(parsed.added) || !/^\d+$/.test(parsed.deleted)) {
+      if (parsed.renamed) {
+        reportedOnly.pureRenameFiles += 1;
+        continue;
+      }
       if (deletedPaths.has(parsed.destinationPath)) {
         reportedOnly.binaryFiles += 1;
         continue;
@@ -302,6 +307,11 @@ export async function assertAuthoredChangeBudget(
     `Implemented diff contains ${summary.authoredLines} authored additions against ${args.baseRef}`,
   );
   log.info(`Reported-only diff rows: ${JSON.stringify(summary.reportedOnly)}`);
+  if (summary.authoredLines >= PR_ADDITION_WARNING) {
+    log.warn(
+      `Implemented diff is near the ${args.maximumLines} authored-addition budget: ${summary.authoredLines}`,
+    );
+  }
   if (summary.reportedOnly.unmeasurableAuthoredFiles > 0) {
     throw new Error(
       `Implemented diff contains ${summary.reportedOnly.unmeasurableAuthoredFiles} authored source file(s) whose line counts are hidden by binary attributes`,
