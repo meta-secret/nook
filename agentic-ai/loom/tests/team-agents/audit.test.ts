@@ -99,6 +99,26 @@ describe('canonical Cortex team authority', () => {
     }
   });
 
+  test('rejects removal of either autonomous mission invariant', async () => {
+    const invariants = [
+      'Routine uncertainty, implementation breadth, validation failures, and\n  delivery sequencing are not blockers or reasons to ask the user.',
+      'Continue implementation, validation, repair, and authorized delivery until\n  the user-selected terminal state is reached.',
+    ] as const;
+    for (const invariant of invariants) {
+      const fixtureRoot = await autonomyDriftFixture(invariant);
+      try {
+        const report = auditTeamAgents({ repoRoot: fixtureRoot });
+        expect(report.findings).toContainEqual({
+          code: 'invalid-cortex-team-authority',
+          path: '.cortex/AGENTS.md',
+          message: `Canonical Cortex team authority is missing marker: ${invariant}`,
+        });
+      } finally {
+        await rm(fixtureRoot, REMOVE_RECURSIVELY);
+      }
+    }
+  });
+
   test('rejects an affirmative Gizmo implementation grant', async () => {
     const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-gizmo-grant-'));
     const cortexRoot = join(fixtureRoot, '.cortex');
@@ -184,6 +204,24 @@ async function driftedAuthorityFixture(): Promise<string> {
   await writeFile(
     join(cortexRoot, 'gizmo/AGENTS.md'),
     'delivery only\n',
+    'utf8',
+  );
+  return fixtureRoot;
+}
+
+async function autonomyDriftFixture(invariant: string): Promise<string> {
+  const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-autonomy-drift-'));
+  const cortexRoot = join(fixtureRoot, '.cortex');
+  await mkdir(cortexRoot, CREATE_RECURSIVELY);
+  await symlink(join(REPO_ROOT, '.cortex/teams'), join(cortexRoot, 'teams'));
+  await symlink(join(REPO_ROOT, '.cortex/gizmo'), join(cortexRoot, 'gizmo'));
+  const authority = await readFile(
+    join(REPO_ROOT, '.cortex/AGENTS.md'),
+    'utf8',
+  );
+  await writeFile(
+    join(cortexRoot, 'AGENTS.md'),
+    authority.replace(invariant, 'Autonomous mission invariant removed.'),
     'utf8',
   );
   return fixtureRoot;
