@@ -225,10 +225,6 @@ export function summarizeAuthoredNumstat(
     const normalizedPath = `/${parsed.destinationPath.replaceAll("\\", "/")}`;
     const filename = normalizedPath.slice(normalizedPath.lastIndexOf("/") + 1);
     if (!/^\d+$/.test(parsed.added) || !/^\d+$/.test(parsed.deleted)) {
-      if (parsed.renamed) {
-        reportedOnly.pureRenameFiles += 1;
-        continue;
-      }
       if (deletedPaths.has(parsed.destinationPath)) {
         reportedOnly.binaryFiles += 1;
         continue;

@@ -56,10 +56,10 @@ test('does not require line counts for a deleted binary source file', () => {
   assert.equal(summary.binaryFiles, 1)
 })
 
-test('reports a binary source rename without requiring line counts', () => {
+test('fails closed when a binary source rename hides line counts', () => {
   const summary = summarizeNumstat('-\t-\t\0src/old.ts\0src/new.ts\0')
-  assert.equal(summary.pureRenameFiles, 1)
-  assert.equal(summary.unmeasurableAuthoredFiles, 0)
+  assert.equal(summary.pureRenameFiles, 0)
+  assert.equal(summary.unmeasurableAuthoredFiles, 1)
 })
 
 test('counts newline-terminated untracked text like Git numstat', () => {

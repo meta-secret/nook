@@ -63,11 +63,11 @@ describe("countAuthoredNumstat", () => {
     assert.equal(summary.reportedOnly.unmeasurableAuthoredFiles, 1);
   });
 
-  it("reports a binary source rename without requiring line counts", () => {
+  it("fails closed when a binary source rename hides line counts", () => {
     const numstat = "-\t-\t\0src/old.ts\0src/new.ts\0";
     const summary = summarizeAuthoredNumstat(numstat);
-    assert.equal(summary.reportedOnly.pureRenameFiles, 1);
-    assert.equal(summary.reportedOnly.unmeasurableAuthoredFiles, 0);
+    assert.equal(summary.reportedOnly.pureRenameFiles, 0);
+    assert.equal(summary.reportedOnly.unmeasurableAuthoredFiles, 1);
   });
 
   it("reports a deleted binary source file without requiring an addition count", () => {
