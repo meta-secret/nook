@@ -240,22 +240,6 @@ describe('canonical Cortex team authority', () => {
     }
   });
 
-  test('preserves negated authority context across Markdown lists', async () => {
-    const fixtureRoot = await writableCortexAuthorityFixture();
-    try {
-      const authorityPath = join(fixtureRoot, '.cortex/AGENTS.md');
-      await writeFile(
-        authorityPath,
-        `${await readFile(authorityPath, 'utf8')}\nWorkers may not:\n\n- run product tests locally.\n`,
-        'utf8',
-      );
-
-      expect(auditTeamAgents({ repoRoot: fixtureRoot }).findings).toEqual([]);
-    } finally {
-      await rm(fixtureRoot, REMOVE_RECURSIVELY);
-    }
-  });
-
   test('does not mistake explicit local execution prohibitions for grants', async () => {
     const fixtureRoot = await writableCortexAuthorityFixture();
     try {

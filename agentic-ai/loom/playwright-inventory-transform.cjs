@@ -1,11 +1,13 @@
-module.exports = ({ types: t }) => ({
+// prettier-ignore
+const normalize = ({ node }) => {
+  const [rest, ...trailing] = node.params;
+  if (rest?.type !== 'RestElement' || rest.argument?.type !== 'ArrayPattern' || rest.argument.elements.length !== 1) return;
+  const [value] = rest.argument.elements;
+  if (value?.type === 'AssignmentPattern' && value.left?.type === 'Identifier' && node.body?.type === 'Identifier' && node.body.name === value.left.name) node.params = [value, ...trailing];
+};
+
+module.exports = () => ({
   visitor: {
-    // prettier-ignore
-    ArrowFunctionExpression({ node }) {
-      const [rest] = node.params;
-      if (node.params.length !== 1 || !t.isRestElement(rest) || !t.isArrayPattern(rest.argument) || rest.argument.elements.length !== 1) return;
-      const [value] = rest.argument.elements;
-      if (t.isAssignmentPattern(value) && t.isIdentifier(value.left) && t.isIdentifier(node.body, { name: value.left.name })) node.params = [value];
-    },
+    ArrowFunctionExpression: normalize,
   },
 });
