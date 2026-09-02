@@ -83,7 +83,7 @@ import {
 import {
   emptyPasswordFormSummary,
   passwordFieldQuery,
-} from './password-form-summary-state'
+} from "./password-form-summary-state";
 export {
   findOneTimeCodeFields,
   findPasswordFields,
@@ -621,6 +621,7 @@ export function authenticationPageObservationFacts({
         passkeyControls.length > 0
           ? passkeyControlPresent
           : passkeyControlAbsent,
+      passkeyAccountAvailability: "unavailable",
       matchingPasskeyAccountCount: 0,
       detailedPasskeyControl,
     },

@@ -2,6 +2,7 @@ import {
   authentication_passkey_control_evidence_is_safe,
   authentication_workflow_saved_login_capability,
   authentication_workflow_requires_login_match_availability,
+  type AuthenticationPageObservationFacts,
   type AuthenticationSavedLoginCapability,
   type AuthenticationDetailedPasskeyControlObservation,
   type WebsiteLoginMatchAvailability,
@@ -12,8 +13,13 @@ import type {
   AuthenticationWorkflowSnapshotMessage,
   AuthenticationWorkflowSnapshotView,
 } from '../../lib/auth-workflow-messages'
-import type * as PasskeyOperations from './passkey-operations'
 import type * as AccountPickers from './account-pickers'
+import {
+  type MatchingPasskeyAvailability,
+  MatchingPasskeyAvailabilityKind,
+  passkeyAccountCountForClassification,
+} from './passkey-availability'
+import type { matchingPasskeyAvailabilityForOriginSafe } from './passkey-operations'
 import type * as VaultRuntime from '../vault-runtime'
 
 export type AuthenticationWorkflowRoutingDependencies = {
@@ -22,7 +28,7 @@ export type AuthenticationWorkflowRoutingDependencies = {
   authenticationWorkflowSnapshot: typeof VaultRuntime.authenticationWorkflowSnapshot
   authenticationWorkflowSavedLoginCapability: typeof authenticationWorkflowSavedLoginCapability
   authenticationWorkflowRequiresLoginMatchAvailability: typeof authenticationWorkflowRequiresLoginMatchAvailability
-  matchingPasskeyAccountCountForOriginSafe: typeof PasskeyOperations.matchingPasskeyAccountCountForOriginSafe
+  matchingPasskeyAvailabilityForOriginSafe: typeof matchingPasskeyAvailabilityForOriginSafe
   websiteLoginMatchAvailability: typeof AccountPickers.websiteLoginMatchAvailability
 }
 
@@ -69,7 +75,7 @@ export async function authenticationWorkflowMessageResponse({
     authenticationWorkflowSnapshot,
     authenticationWorkflowSavedLoginCapability,
     authenticationWorkflowRequiresLoginMatchAvailability,
-    matchingPasskeyAccountCountForOriginSafe,
+    matchingPasskeyAvailabilityForOriginSafe,
     websiteLoginMatchAvailability,
   } = dependencies
   try {
@@ -81,14 +87,34 @@ export async function authenticationWorkflowMessageResponse({
       },
     )
     const needsPasskeyLookup = passkeyEvidenceIsSafe.some(Boolean)
-    const matchingPasskeyAccountCount = needsPasskeyLookup
-      ? await matchingPasskeyAccountCountForOriginSafe(message.payload.origin)
-      : 0
-    const observations = Array.from(message.payload.observations.entries()).map(
+    const passkeyLookupNotRequired: MatchingPasskeyAvailability = {
+      kind: MatchingPasskeyAvailabilityKind.Ready,
+      accountCount: 0,
+    }
+    const passkeyAvailability = needsPasskeyLookup
+      ? await matchingPasskeyAvailabilityForOriginSafe(message.payload.origin)
+      : passkeyLookupNotRequired
+    const passkeyAccountCountArgs: Parameters<
+      typeof passkeyAccountCountForClassification
+    >[0] = {
+      needsPasskeyLookup,
+      availability: passkeyAvailability,
+    }
+    const matchingPasskeyAccountCount = passkeyAccountCountForClassification(
+      passkeyAccountCountArgs,
+    )
+    const observations: AuthenticationPageObservationFacts[] = Array.from(
+      message.payload.observations.entries(),
       ([observationIndex, observation]) => ({
         ...observation,
         authenticator: {
           ...observation.authenticator,
+          passkeyAccountAvailability:
+            passkeyEvidenceIsSafe[observationIndex] === true &&
+            passkeyAvailability.kind ===
+              MatchingPasskeyAvailabilityKind.Unavailable
+              ? 'unavailable'
+              : 'ready',
           matchingPasskeyAccountCount:
             passkeyEvidenceIsSafe[observationIndex] === true
               ? Math.min(

@@ -32,6 +32,7 @@ import {
   performRevalidatedAuthenticationAction,
   RevalidatedAuthenticationActionOutcomeKind,
   RevalidatedAuthenticationActResultKind,
+  type AuthenticationObservationBinding,
 } from '../../../../nook-web-extension/src/content/autofill/workflow-revalidation'
 
 const explicitUserApproval =
@@ -67,12 +68,115 @@ function matchedDelivery(
   }
 }
 
+function matchedDeliveryWithSelectedFacts(
+  message: AuthenticationWorkflowSnapshotMessage,
+  action: AuthenticationWorkflowAction,
+) {
+  const selectedFacts = message.payload.observations[0]
+  if (!selectedFacts) throw new Error('expected selected workflow facts')
+  const delivery = matchedDelivery(action)
+  return {
+    ...delivery,
+    response: { ...delivery.response, selectedFacts },
+  }
+}
+
+function enrichedMatchedDelivery(
+  message: AuthenticationWorkflowSnapshotMessage,
+  action: AuthenticationWorkflowAction,
+) {
+  const selectedFacts = message.payload.observations[0]
+  if (!selectedFacts) throw new Error('expected selected workflow facts')
+  const delivery = matchedDelivery(action)
+  return {
+    ...delivery,
+    response: {
+      ...delivery.response,
+      selectedFacts: {
+        ...selectedFacts,
+        authenticator: {
+          ...selectedFacts.authenticator,
+          passkeyAccountAvailability: 'ready' as const,
+        },
+      },
+    },
+  }
+}
+
 afterEach(() => {
   document.body.replaceChildren()
   runtime.sendSnapshot.mockReset()
 })
 
 describe('credential-bearing workflow revalidation', () => {
+  test.each([
+    {
+      flow: 'saved-login',
+      action: AuthenticationWorkflowAction.ContinueWithNook,
+      markup: `<form action="/login"><input autocomplete="username" /><input type="password" autocomplete="current-password" /><button type="submit">Sign in</button></form>`,
+    },
+    {
+      flow: 'authenticator',
+      action: AuthenticationWorkflowAction.FillTotp,
+      markup: `<form action="/login/mfa"><input autocomplete="one-time-code" /><button type="submit">Verify code</button></form>`,
+    },
+  ])(
+    'preserves an enriched binding across two-stage $flow authorization',
+    async ({ action, markup }) => {
+      document.body.innerHTML = markup
+      const workflow = firstWorkflow()
+      runtime.sendSnapshot.mockImplementation(
+        async (message: AuthenticationWorkflowSnapshotMessage) =>
+          enrichedMatchedDelivery(message, action),
+      )
+      const releaseState: { binding: AuthenticationObservationBinding } = {
+        binding: { kind: AuthenticationObservationBindingKind.Unbound },
+      }
+
+      await expect(
+        performRevalidatedAuthenticationAction({
+          workflow,
+          expectedAction: action,
+          observationBinding: {
+            kind: AuthenticationObservationBindingKind.Unbound,
+          },
+          approvalIsActive: () => true,
+          act: ({ observationBindingToken }) => {
+            releaseState.binding = {
+              kind: AuthenticationObservationBindingKind.Required,
+              token: observationBindingToken,
+            }
+            return { kind: RevalidatedAuthenticationActResultKind.Acted }
+          },
+        }),
+      ).resolves.toEqual({
+        kind: RevalidatedAuthenticationActionOutcomeKind.Acted,
+      })
+      if (
+        releaseState.binding.kind !==
+        AuthenticationObservationBindingKind.Required
+      ) {
+        throw new Error('expected an enriched binding token')
+      }
+      const stagedAct = vi.fn(() => ({
+        kind: RevalidatedAuthenticationActResultKind.Acted,
+      }))
+
+      await expect(
+        performRevalidatedAuthenticationAction({
+          workflow,
+          expectedAction: action,
+          observationBinding: releaseState.binding,
+          approvalIsActive: () => true,
+          act: stagedAct,
+        }),
+      ).resolves.toEqual({
+        kind: RevalidatedAuthenticationActionOutcomeKind.Acted,
+      })
+      expect(stagedAct).toHaveBeenCalledOnce()
+    },
+  )
+
   test('refuses actuation when DOM facts change while Rust is deciding', async () => {
     document.body.innerHTML = `
       <form id="otp" action="/login/mfa">
@@ -196,37 +300,31 @@ describe('credential-bearing workflow revalidation', () => {
       </form>
     `
     const workflow = firstWorkflow()
-    runtime.sendSnapshot.mockResolvedValue({
-      kind: RuntimeMessageDeliveryKind.Delivered,
-      response: {
-        verdict: {
-          kind: AuthenticationWorkflowSnapshotResponseKind.Matched,
-          snapshot: {
-            kind: AuthenticationWorkflowKind.Login,
-            stage: AuthenticationWorkflowStage.Credentials,
-            action: AuthenticationWorkflowAction.ContinueWithNook,
-            currentStep: 1,
-            totalSteps: 3,
-            approvalRequirement: explicitUserApproval,
-            observationIndex: 0,
-          },
-        },
-        loginMatches: [],
-      },
-    })
+    runtime.sendSnapshot.mockImplementation(
+      async (message: AuthenticationWorkflowSnapshotMessage) =>
+        matchedDeliveryWithSelectedFacts(
+          message,
+          AuthenticationWorkflowAction.ContinueWithNook,
+        ),
+    )
     let observationBindingToken = ''
-    await performRevalidatedAuthenticationAction({
-      workflow,
-      expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
-      observationBinding: {
-        kind: AuthenticationObservationBindingKind.Unbound,
-      },
-      approvalIsActive: () => true,
-      act: ({ observationBindingToken: approvedToken }) => {
-        observationBindingToken = approvedToken
-        return { kind: RevalidatedAuthenticationActResultKind.Acted }
-      },
+    await expect(
+      performRevalidatedAuthenticationAction({
+        workflow,
+        expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
+        observationBinding: {
+          kind: AuthenticationObservationBindingKind.Unbound,
+        },
+        approvalIsActive: () => true,
+        act: ({ observationBindingToken: approvedToken }) => {
+          observationBindingToken = approvedToken
+          return { kind: RevalidatedAuthenticationActResultKind.Acted }
+        },
+      }),
+    ).resolves.toEqual({
+      kind: RevalidatedAuthenticationActionOutcomeKind.Acted,
     })
+    expect(observationBindingToken).not.toBe('')
     document
       .querySelector<HTMLFormElement>('#login')
       ?.setAttribute('action', '/different-safe-login')
@@ -423,22 +521,31 @@ describe('credential-bearing workflow revalidation', () => {
       </form>
     `
     const workflow = firstWorkflow()
-    runtime.sendSnapshot.mockResolvedValue(
-      matchedDelivery(AuthenticationWorkflowAction.ContinueWithNook),
+    runtime.sendSnapshot.mockImplementation(
+      async (message: AuthenticationWorkflowSnapshotMessage) =>
+        matchedDeliveryWithSelectedFacts(
+          message,
+          AuthenticationWorkflowAction.ContinueWithNook,
+        ),
     )
     let token = ''
-    await performRevalidatedAuthenticationAction({
-      workflow,
-      expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
-      observationBinding: {
-        kind: AuthenticationObservationBindingKind.Unbound,
-      },
-      approvalIsActive: () => true,
-      act: ({ observationBindingToken }) => {
-        token = observationBindingToken
-        return { kind: RevalidatedAuthenticationActResultKind.Acted }
-      },
+    await expect(
+      performRevalidatedAuthenticationAction({
+        workflow,
+        expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
+        observationBinding: {
+          kind: AuthenticationObservationBindingKind.Unbound,
+        },
+        approvalIsActive: () => true,
+        act: ({ observationBindingToken }) => {
+          token = observationBindingToken
+          return { kind: RevalidatedAuthenticationActResultKind.Acted }
+        },
+      }),
+    ).resolves.toEqual({
+      kind: RevalidatedAuthenticationActionOutcomeKind.Acted,
     })
+    expect(token).not.toBe('')
     const password = document.querySelector<HTMLInputElement>('#password')
     const form = document.querySelector<HTMLFormElement>('#login')
     if (!password || !form) throw new Error('expected login controls')

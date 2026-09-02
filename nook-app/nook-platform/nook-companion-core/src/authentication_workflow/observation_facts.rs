@@ -13,7 +13,8 @@ mod passkey;
 mod submission;
 pub use authenticator::{
     AuthenticationAuthenticatorObservationFacts, AuthenticationAuthenticatorSetupObservation,
-    AuthenticationBackupCodesObservation, classify_authentication_backup_codes_observation,
+    AuthenticationBackupCodesObservation, AuthenticationPasskeyAccountAvailability,
+    classify_authentication_backup_codes_observation,
 };
 pub use ceremony::{
     AuthenticationCeremonyContextObservation, AuthenticationCeremonyObservationFacts,
@@ -70,7 +71,7 @@ impl AuthenticationPageObservationFacts {
             authenticator_setup_hint: self.authenticator.authenticator_setup_hint(),
             backup_codes_hint: self.authenticator.backup_codes_hint(),
             passkey_control_present: self.authenticator.passkey_control_present(self.fields),
-            matching_passkey_account_count: self.authenticator.matching_passkey_account_count,
+            matching_passkey_account_count: self.authenticator.matching_passkey_account_count(),
         }
     }
 
@@ -404,6 +405,7 @@ mod tests {
         };
         let facts = AuthenticationPageObservationFacts {
             authenticator: AuthenticationAuthenticatorObservationFacts {
+                passkey_account_availability: AuthenticationPasskeyAccountAvailability::Ready,
                 detailed_passkey_control:
                     AuthenticationDetailedPasskeyControlObservation::ExplicitlyMarked(control),
                 ..Default::default()
@@ -437,6 +439,7 @@ mod tests {
         };
         let facts = AuthenticationPageObservationFacts {
             authenticator: AuthenticationAuthenticatorObservationFacts {
+                passkey_account_availability: AuthenticationPasskeyAccountAvailability::Ready,
                 detailed_passkey_control:
                     AuthenticationDetailedPasskeyControlObservation::Candidates(vec![
                         AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(
@@ -452,6 +455,40 @@ mod tests {
         };
 
         assert!(facts.into_observation().passkey_control_present);
+    }
+
+    #[test]
+    fn unavailable_passkey_lookup_preserves_the_password_login_workflow() {
+        let mut facts = password_login();
+        facts.authenticator.detailed_passkey_control =
+            AuthenticationDetailedPasskeyControlObservation::ExplicitlyMarked(
+                AuthenticationAdvanceControlObservation {
+                    actionability: PageControlActionability::Actionable,
+                    ownership: PageControlOwnership::LocallyScoped,
+                    semantics: PageControlSemantics::Activation,
+                    authentication_username: AuthenticationUsernameEvidence::Explicit,
+                    password_field_count: 0,
+                    new_password_field_count: 0,
+                    one_time_code_field_count: 0,
+                    semantic_submit_control_count: 0,
+                    source_origin: "https://example.test".to_owned(),
+                    form_identity: "login".to_owned(),
+                    destination_identity: "https://example.test/login".to_owned(),
+                    label: "Use passkey".to_owned(),
+                    machine_identity: String::new(),
+                    submission_method: PageControlSubmissionMethod::Absent,
+                },
+            );
+
+        assert!(matches!(
+            AuthenticationPageObservationFactsBatch {
+                observations: vec![facts],
+            }
+            .classify(),
+            AuthenticationWorkflowMatch::Matched(snapshot)
+                if snapshot.kind == AuthenticationWorkflowKind::Login
+                    && snapshot.action == crate::AuthenticationWorkflowAction::ContinueWithNook
+        ));
     }
 
     #[test]
@@ -722,6 +759,7 @@ mod tests {
                 ..Default::default()
             },
             authenticator: AuthenticationAuthenticatorObservationFacts {
+                passkey_account_availability: AuthenticationPasskeyAccountAvailability::Ready,
                 detailed_passkey_control:
                     AuthenticationDetailedPasskeyControlObservation::Candidates(vec![
                         AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(control),

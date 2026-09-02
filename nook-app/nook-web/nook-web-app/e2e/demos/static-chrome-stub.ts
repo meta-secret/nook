@@ -608,7 +608,17 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
         loginMatches: { kind: 'unavailable' },
       }
     }
-    const selectedFacts = observations[observationIndex]
+    const observedFacts = observations[observationIndex]
+    const selectedFacts =
+      passkeyPilotFlow && observedFacts
+        ? {
+            ...observedFacts,
+            authenticator: {
+              ...observedFacts.authenticator,
+              passkeyAccountAvailability: 'ready',
+            },
+          }
+        : observedFacts
     if (!selectedFacts) {
       return {
         workflow: response,

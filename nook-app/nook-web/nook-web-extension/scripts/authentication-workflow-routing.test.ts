@@ -13,6 +13,7 @@ const message = {
       {
         authenticator: {
           detailedPasskeyControl: { control: 'candidate' },
+          passkeyAccountAvailability: 'unavailable',
           matchingPasskeyAccountCount: 0,
         },
       },
@@ -34,9 +35,9 @@ describe('authentication workflow routing', () => {
         events.push('evidence-classified')
         return true
       },
-      matchingPasskeyAccountCountForOriginSafe: async () => {
+      matchingPasskeyAvailabilityForOriginSafe: async () => {
         events.push('passkeys-counted')
-        return 2
+        return { kind: 'ready', accountCount: 2 }
       },
       authenticationWorkflowSnapshot: async ({ observations }) => {
         events.push(
@@ -78,7 +79,10 @@ describe('authentication workflow routing', () => {
     const dependencies = {
       companionWasmReady: Promise.resolve(),
       authenticationPasskeyEvidenceIsSafe: () => true,
-      matchingPasskeyAccountCountForOriginSafe: async () => 101,
+      matchingPasskeyAvailabilityForOriginSafe: async () => ({
+        kind: 'ready',
+        accountCount: 101,
+      }),
       authenticationWorkflowSnapshot: async ({ observations }) => {
         expect(observations[0]?.authenticator.matchingPasskeyAccountCount).toBe(
           100,
@@ -108,7 +112,10 @@ describe('authentication workflow routing', () => {
       const dependencies = {
         companionWasmReady: Promise.resolve(),
         authenticationPasskeyEvidenceIsSafe: () => true,
-        matchingPasskeyAccountCountForOriginSafe: async () => 2,
+        matchingPasskeyAvailabilityForOriginSafe: async () => ({
+          kind: 'ready',
+          accountCount: 2,
+        }),
         authenticationWorkflowSnapshot: async () => ({
           kind: 'matched',
           snapshot: { observationIndex: 0, action: 4 },
@@ -147,7 +154,10 @@ describe('authentication workflow routing', () => {
     const dependencies = {
       companionWasmReady: Promise.resolve(),
       authenticationPasskeyEvidenceIsSafe: () => false,
-      matchingPasskeyAccountCountForOriginSafe: async () => 0,
+      matchingPasskeyAvailabilityForOriginSafe: async () => ({
+        kind: 'ready',
+        accountCount: 0,
+      }),
       authenticationWorkflowSnapshot: async () => ({
         kind: 'matched',
         snapshot: { observationIndex: 0, action: 0 },
@@ -177,7 +187,10 @@ describe('authentication workflow routing', () => {
       authenticationPasskeyEvidenceIsSafe: () => {
         throw new Error('WASM not initialized')
       },
-      matchingPasskeyAccountCountForOriginSafe: async () => 0,
+      matchingPasskeyAvailabilityForOriginSafe: async () => ({
+        kind: 'ready',
+        accountCount: 0,
+      }),
       authenticationWorkflowSnapshot: async () => ({ kind: 'no-match' }),
       authenticationWorkflowSavedLoginCapability: () => 'unavailable',
       websiteLoginMatchAvailability: async () => ({ kind: 'unavailable' }),
@@ -195,5 +208,30 @@ describe('authentication workflow routing', () => {
       workflow: { ok: false, reason: 'workflow-snapshot-failed' },
       loginMatches: { kind: 'unavailable' },
     })
+  })
+
+  test('preserves non-passkey classification when lookup is unavailable', async () => {
+    const observedAvailability: string[] = []
+    const dependencies = {
+      companionWasmReady: Promise.resolve(),
+      authenticationPasskeyEvidenceIsSafe: () => true,
+      matchingPasskeyAvailabilityForOriginSafe: async () => ({
+        kind: 'unavailable',
+      }),
+      authenticationWorkflowSnapshot: async ({ observations }) => {
+        observedAvailability.push(
+          observations[0]?.authenticator.passkeyAccountAvailability ?? '',
+        )
+        return { kind: 'no-match' }
+      },
+    } as unknown as AuthenticationWorkflowRoutingDependencies
+
+    await expect(
+      authenticationWorkflowMessageResponse({ message, sender, dependencies }),
+    ).resolves.toEqual({
+      workflow: { ok: true },
+      loginMatches: { kind: 'unavailable' },
+    })
+    expect(observedAvailability).toEqual(['unavailable'])
   })
 })
