@@ -153,23 +153,33 @@ countFragment({
 });
 
 type ArcTaint = { key: string; value: string; effect: string };
+enum QuarantineDisposition {
+  Owned = "owned",
+  Preserved = "preserved",
+  Reject = "reject",
+}
+
 function quarantineDisposition(
   taints: ArcTaint[],
   owner: string,
-): "owned" | "preserved" | "reject" {
-  if (owner !== "" && owner !== "registry-controller-v1") return "reject";
+): QuarantineDisposition {
+  if (owner !== "" && owner !== "registry-controller-v1") {
+    return QuarantineDisposition.Reject;
+  }
   const matching = taints.filter(
     (taint) => taint.key === "nook.nokey.sh/arc-build",
   );
-  if (matching.length === 0) return "owned";
+  if (matching.length === 0) return QuarantineDisposition.Owned;
   if (
     matching.length === 1 &&
     matching[0]?.value === "preparing" &&
     matching[0]?.effect === "NoSchedule"
   ) {
-    return owner === "registry-controller-v1" ? "owned" : "preserved";
+    return owner === "registry-controller-v1"
+      ? QuarantineDisposition.Owned
+      : QuarantineDisposition.Preserved;
   }
-  return "reject";
+  return QuarantineDisposition.Reject;
 }
 const controllerQuarantineFixtures = [
   {
@@ -177,14 +187,14 @@ const controllerQuarantineFixtures = [
     arcBuildQualified: true,
     taints: [] as ArcTaint[],
     owner: "",
-    expected: "owned",
+    expected: QuarantineDisposition.Owned,
   },
   {
     name: "interrupted owned quarantine before taint",
     arcBuildQualified: true,
     taints: [] as ArcTaint[],
     owner: "registry-controller-v1",
-    expected: "owned",
+    expected: QuarantineDisposition.Owned,
   },
   {
     name: "pre-existing exact quarantine",
@@ -197,7 +207,7 @@ const controllerQuarantineFixtures = [
       },
     ],
     owner: "",
-    expected: "preserved",
+    expected: QuarantineDisposition.Preserved,
   },
   {
     name: "interrupted owned exact quarantine",
@@ -210,7 +220,7 @@ const controllerQuarantineFixtures = [
       },
     ],
     owner: "registry-controller-v1",
-    expected: "owned",
+    expected: QuarantineDisposition.Owned,
   },
   {
     name: "conflicting quarantine",
@@ -223,14 +233,14 @@ const controllerQuarantineFixtures = [
       },
     ],
     owner: "",
-    expected: "reject",
+    expected: QuarantineDisposition.Reject,
   },
   {
     name: "foreign quarantine owner",
     arcBuildQualified: true,
     taints: [] as ArcTaint[],
     owner: "foreign",
-    expected: "reject",
+    expected: QuarantineDisposition.Reject,
   },
 ] as const;
 for (const fixture of controllerQuarantineFixtures) {
