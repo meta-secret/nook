@@ -28,17 +28,19 @@
   `.wasm-source-sha256` with `no-opt`.
 - `WASM_BUILD_MODE=prod` runs the Binaryen size-focused `wasm-opt -Oz` pass and
   stamps `optimized`.
-- Local `task check`, `task setup`, `task web:dev`, `task wasm:build`, PR CI,
+- Human-local `task check`, `task setup`, `task web:dev`, `task wasm:build`, PR CI,
   and main development delivery use dev mode.
 - Release CI passes `WASM_BUILD_MODE=prod`.
 
-**Fast local iteration**
+**Human-only local iteration**
 
 - `task wasm:build:fast` regenerates the web pkg on the mounted worktree in
   dev/no-opt mode.
 - It uses the existing `nook-web:local` image and bind-mounts the worktree.
-- Run `task setup` once first if that image does not exist.
-- `task wasm:build:prod` is the explicit optimized local path.
+- A human developer may run `task setup` if that image is absent. Agents do not;
+  they return their coherent handoff, and Gizmo dispatches
+  `task remote TASK_NAME=web:build`.
+- `task wasm:build:prod` is the human-owned optimized local path.
 
 Production vault HTML preloads the fingerprinted `nook-wasm` artifact so the
 browser can fetch it while JavaScript loads. The isolation verifier reports raw

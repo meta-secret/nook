@@ -493,7 +493,7 @@ describe('canonical Cortex team authority', () => {
       const authorityPath = join(fixtureRoot, '.cortex/AGENTS.md');
       await writeFile(
         authorityPath,
-        `${await readFile(authorityPath, 'utf8')}\nWorkers must run cargo test.\nAgents are required to invoke task web:check locally.\n\n- Run bun test locally.\n\nWorkers shall:\n\n- execute wasm-pack locally.\n`,
+        `${await readFile(authorityPath, 'utf8')}\nWorkers are permitted to run cargo test.\nAgents must invoke task web:check locally.\n\n- Run bun test locally.\n\nWorkers shall:\n\n- execute wasm-pack locally.\n`,
         'utf8',
       );
 
@@ -501,10 +501,8 @@ describe('canonical Cortex team authority', () => {
       expect(report.findings).toHaveLength(4);
       expect(report.findings.map((finding) => finding.message)).toEqual(
         expect.arrayContaining([
-          expect.stringContaining('Workers must run cargo test.'),
-          expect.stringContaining(
-            'Agents are required to invoke task web:check locally.',
-          ),
+          expect.stringContaining('Workers are permitted to run cargo test.'),
+          expect.stringContaining('Agents must invoke task web:check locally.'),
           expect.stringContaining('Run bun test locally.'),
           expect.stringContaining('Workers shall execute wasm-pack locally.'),
         ]),

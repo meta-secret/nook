@@ -20,9 +20,11 @@ It is not a free-form task diary.
 1. Gizmo starts an out-of-tree scratch event log when PR-bound work begins.
 2. Gizmo appends every local lightweight execution, focused remote run, complete
    validation run, retrigger, and merge attempt as it happens.
-3. Gizmo squash-merges the implementation PR through the readiness workflow.
-4. Gizmo assembles `stats/ai-agent/<pr-number>.yaml` with Loom after merge.
-5. Gizmo compares the record with one or two recent comparable records.
+3. Before readiness or merge, Gizmo dispatches inventory for the exact final PR
+   head and retains the downloaded JSON out of tree.
+4. Only after that exact-head artifact is retained, Gizmo squash-merges the PR.
+5. After merge, Gizmo assembles and compares `stats/ai-agent/<pr-number>.yaml`
+   using the retained inventory.
 6. Gizmo publishes the YAML to Workbench `main` with Loom.
 7. Gizmo opens a separate build-performance PR when waste or regression is
    actionable.
@@ -30,8 +32,6 @@ It is not a free-form task diary.
 ## Mechanical entrypoint — Loom
 
 - Keep judgment in this document.
-- Gizmo invokes assemble, validate, and publish through the dependency-free
-  statistics control entrypoint after the source PR is merged.
 - Scratch JSON must include:
   - `started_at`;
   - `change_surface`;
@@ -50,31 +50,16 @@ task loom:agent-stats-control <<'JSON'
 JSON
 ```
 
-Gizmo dispatches `task remote TASK_NAME=agent-stats:inventory`. Download the
-artifact with `gh run download <run-id> -n test-inventory-<head-sha> -D <dir>`,
-then copy its JSON into the scratch log as `test_inventory`. No local fallback.
+Before readiness or merge, Gizmo runs `task remote TASK_NAME=agent-stats:inventory`
+for the exact final PR head and waits for success. It downloads with `gh run
+download <run-id> -n test-inventory-<head-sha> -D <agent-temp-dir>`, retains the
+JSON through publication, and copies it to `test_inventory`. Missing or
+mismatched evidence blocks merge without fallback; assembly never redispatches it.
 
 ### Agent-local path token
 
 - `scratchPath`, `outputPath`, and `statsFile` accept `{agentTempDir}`.
-- Loom resolves the token under the operating system's temporary directory.
-- The resolved directory contains the exact 40-character task-anchor commit.
-- That anchor is the branch-entry commit, or the worktree's initial commit for
-  a branch created with the worktree. Implementation commits do not move it.
-- The first task-branch entry remains authoritative after branch re-entry.
-- It also contains an opaque identifier derived from the canonical worktree.
-- Separate worktrees cannot collide when they use the same commit.
-- One worktree and commit resolve consistently across `assemble`, `validate`,
-  and `publish`.
-- Loom provisions the resolved agent directory during token resolution.
-- Use the token in the control request and the corresponding task-anchored
-  temporary directory when creating the scratch JSON before `assemble`.
 - Ordinary absolute and relative paths remain supported.
-- **Validate and publish:** invoke `task loom:agent-stats-control` with
-  `{"operation":"validate","request":{"statsFile":"{agentTempDir}/123.yaml"}}`.
-  To publish, use the same request with operation `publish`.
-- **Transport:** pass exactly one JSON request on stdin. Unknown fields and
-  operations fail closed.
 - **Protocol:** [Loom tools](../../teams/ai/references/loom-tools.md).
 - **AI-owned Loom tooling provides:** PR metadata, paginated Actions and Codex
   review history, per-head delivery evidence, optional test inventory, and
@@ -117,13 +102,13 @@ Measure wall-clock time, including owned wait time.
 - **PR retriggers:** count complete validation cycles after the first.
 - **Merge attempts:** count executed merge commands, including failures.
 - **PR elapsed time:** first agent action through `mergedAt`.
-- **Repository test inventory:** absolute case counts on the merged head.
+- **Repository test inventory:** retained case counts from the final PR head.
 
 Never record secrets, credentials, vault data, raw logs, or prompt contents.
 
 ## Test inventory counting
 
-Measure on the merged implementation `head_sha`.
+Measure the final PR `head_sha` before merge and retain it for assembly.
 
 Count individual test cases, not files or suites.
 
