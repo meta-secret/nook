@@ -109,17 +109,13 @@ export async function assertHiveRenderContract(
     if (!hiveRunner) {
       throw new Error("Hive ARC must retain its runner container");
     }
-    for (const container of [
-      ...hivePod.initContainers,
-      ...hivePod.containers,
-    ]) {
+    for (const container of hivePod.initContainers) {
       assertCpuUnconstrained(container);
     }
-    if (
-      hiveRunner.resources?.requests?.memory !== "1Gi" ||
-      hiveRunner.resources.limits?.memory !== "1Gi"
-    ) {
-      throw new Error("Hive ARC runner must retain its memory envelope");
+    if ("resources" in hiveRunner) {
+      throw new Error(
+        "Hive ARC runner must not declare resource requests or limits",
+      );
     }
     if (
       hiveRunner?.env?.some((item) =>

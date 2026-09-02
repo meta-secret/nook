@@ -128,6 +128,12 @@ function assertCpuUnconstrained(container: ArcContainer, label: string): void {
   }
 }
 
+function assertNoResourceEnvelope(container: ArcContainer, label: string): void {
+  if ("resources" in container) {
+    throw new Error(`${label} must not declare resource requests or limits`);
+  }
+}
+
 interface WorkflowJob {
   if?: string;
   "runs-on"?: string;
@@ -319,16 +325,7 @@ if (
     "ARC runner must expose its Kubernetes worker through the Downward API",
   );
 }
-if (
-  runner.resources?.requests?.memory !== "1Gi" ||
-  runner.resources.requests["ephemeral-storage"] !== "4Gi" ||
-  runner.resources.limits?.memory !== "6Gi" ||
-  runner.resources.limits["ephemeral-storage"] !== "32Gi"
-) {
-  throw new Error(
-    "general ARC runner must retain its memory and ephemeral-storage envelope",
-  );
-}
+assertNoResourceEnvelope(runner, "general ARC runner");
 
 const containerValues = Bun.YAML.parse(containerRunnersSource) as ArcValues;
 const containerRunner = containerValues.template.spec.containers.find(
@@ -338,14 +335,7 @@ if (!containerRunner) {
   throw new Error("container ARC must retain its runner coordinator");
 }
 assertCpuUnconstrained(containerRunner, "container ARC runner coordinator");
-if (
-  containerRunner.resources?.requests?.memory !== "256Mi" ||
-  containerRunner.resources.limits?.memory !== "1Gi"
-) {
-  throw new Error(
-    "container ARC runner coordinator must retain its memory envelope",
-  );
-}
+assertNoResourceEnvelope(containerRunner, "container ARC runner coordinator");
 
 const containerHookManifest = Bun.YAML.parse(
   containerHookSource,
@@ -365,16 +355,7 @@ const jobContainer = containerPodTemplate.spec.containers.find(
 if (!jobContainer) {
   throw new Error("ARC container hook must retain its job container");
 }
-if (
-  jobContainer.resources?.requests?.memory !== "1Gi" ||
-  jobContainer.resources.requests["ephemeral-storage"] !== "4Gi" ||
-  jobContainer.resources.limits?.memory !== "6Gi" ||
-  jobContainer.resources.limits["ephemeral-storage"] !== "32Gi"
-) {
-  throw new Error(
-    "ARC job container must retain its memory and ephemeral-storage envelope",
-  );
-}
+assertNoResourceEnvelope(jobContainer, "ARC job container");
 
 runners.requireAll([
   "maxSkew: 5",
@@ -426,8 +407,6 @@ containerHook.requireAll([
   "values: [primary]",
   "values: [secondary]",
   "values: [overflow]",
-  "memory: 6Gi",
-  "ephemeral-storage: 32Gi",
   'drop: ["ALL"]',
   "fsGroup: 1000",
   "fsGroupChangePolicy: OnRootMismatch",

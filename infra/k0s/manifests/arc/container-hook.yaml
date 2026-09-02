@@ -81,10 +81,3 @@ data:
               drop: ["ALL"]
             seccompProfile:
               type: RuntimeDefault
-          resources:
-            requests:
-              memory: 1Gi
-              ephemeral-storage: 4Gi
-            limits:
-              memory: 6Gi
-              ephemeral-storage: 32Gi

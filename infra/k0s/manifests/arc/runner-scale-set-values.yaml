@@ -147,13 +147,6 @@ template:
             mountPath: /tmp
           - name: tool-cache
             mountPath: /opt/hostedtoolcache
-        resources:
-          requests:
-            memory: 1Gi
-            ephemeral-storage: 4Gi
-          limits:
-            memory: 6Gi
-            ephemeral-storage: 32Gi
     volumes:
       - name: work
         emptyDir:
