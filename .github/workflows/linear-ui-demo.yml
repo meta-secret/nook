@@ -1,6 +1,5 @@
-# Linear publication is intentionally isolated from pull_request workflows. This workflow is
-# loaded from the trusted default branch before it receives LINEAR_API_KEY; unmerged PR code can
-# produce WebM artifacts, but it cannot execute while the credential is present.
+# Linear publication remains isolated from pull_request workflows, but its jobs are temporarily
+# disabled with the retained implementation available for later re-enable.
 
 name: Linear UI demos
 
@@ -17,8 +16,8 @@ permissions:
   issues: write
   pull-requests: write
 
-# A close event claims the same exact-head group as pr.yml and cancels current
-# validation. workflow_run publishers use a unique group.
+# A close event retains the same exact-head group as pr.yml for later re-enable.
+# workflow_run publishers use a unique group.
 concurrency:
   group: ${{ github.event_name == 'pull_request_target' && format('pr-{0}-{1}', github.event.pull_request.number, github.event.pull_request.head.sha) || format('linear-ui-demo-{0}', github.run_id) }}
   cancel-in-progress: true
@@ -31,9 +30,7 @@ env:
 jobs:
   publish:
     name: Publish trusted PR UI demos
-    if: >-
-      github.event_name == 'workflow_run' &&
-      github.event.workflow_run.conclusion == 'success'
+    if: ${{ false }}
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     steps:
       - name: Locate the PR UI demo artifact
@@ -152,7 +149,7 @@ jobs:
 
   close:
     name: Complete or cancel trusted PR UI demo issue
-    if: github.event_name == 'pull_request_target'
+    if: ${{ false }}
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     steps:
       - name: Checkout the trusted publisher
