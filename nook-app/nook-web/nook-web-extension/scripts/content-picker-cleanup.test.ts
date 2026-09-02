@@ -15,6 +15,7 @@ await companionWasmReady
 
 const addListener = mock(() => {})
 type RuntimeResponseCallback = (response: unknown) => void
+let runEnrollmentPoll = () => {}
 
 enum RuntimeResponseStateKind {
   Immediate = 'immediate',
@@ -87,7 +88,11 @@ Object.assign(globalThis, {
       sendMessage,
     },
   },
-  document: { documentElement: {}, querySelectorAll: () => [] },
+  document: {
+    documentElement: {},
+    querySelector: () => undefined,
+    querySelectorAll: () => [],
+  },
   location: {
     origin: 'https://login.example.test',
     pathname: '/enroll',
@@ -99,10 +104,12 @@ Object.assign(globalThis, {
   window: {
     clearInterval: mock(() => {}),
     clearTimeout: mock(() => {}),
-    setInterval: mock(() => 1),
+    setInterval: mock((callback: TimerHandler) => {
+      if (typeof callback === 'function') runEnrollmentPoll = callback
+      return 1
+    }),
   },
 })
-
 type RefreshResponse = { ok: true } | { ok: false }
 
 function captureRefreshResponse(): {
@@ -122,6 +129,8 @@ function captureRefreshResponse(): {
     response,
   }
 }
+
+const deferred = <T>() => Promise.withResolvers<T>()
 
 test('delivers cleanup cancellation through the content-script router', async () => {
   const { LoginPickerKind, pickerState } =
@@ -200,7 +209,6 @@ test('refresh preserves dismissal while clearing stale surface state', async () 
       sendResponse,
     ),
   ).toBe(true)
-
   expect(widgetState.dismissed).toBe(true)
   expect(widgetState.busy).toBe(false)
   expect(widgetState.host.kind).toBe(WidgetHostKind.Attached)
@@ -434,6 +442,7 @@ test('pending cancellation revokes the serialized stage and scrubs local URI', a
 async function runMismatchedStageResponse(
   dismissalResults: boolean[],
   onFirstDismiss?: () => Promise<void>,
+  scenario: 'mismatch' | 'expiry' | 'confirmation' = 'mismatch',
 ) {
   const { beginEnrollmentCeremony } =
     await import('../src/content/enrollment-flow')
@@ -458,54 +467,80 @@ async function runMismatchedStageResponse(
     },
   })
   let busy = false
-  let markRefreshRequested = () => {}
-  const refreshRequested = new Promise<void>((resolve) => {
-    markRefreshRequested = resolve
-  })
+  let codeRequestCount = 0
+  let commitReady = false
+  let refreshRequestCount = 0
+  const refreshRequested = deferred<void>()
   let cancelRenderCount = 0
-  let markCancelRetryRendered = () => {}
-  const cancelRetryRendered = new Promise<void>((resolve) => {
-    markCancelRetryRendered = resolve
-  })
+  const cancelRetryRendered = deferred<void>()
+  const confirm = deferred<unknown>()
+  const confirmStarted = deferred<void>()
+  const dismiss = deferred<boolean>()
   const section = {
     replaceChildren: () => {
       controls.splice(0)
       cancelRenderCount += 1
-      if (cancelRenderCount === 2) markCancelRetryRendered()
+      if (cancelRenderCount === 2) cancelRetryRendered.resolve()
     },
     append: (control: Control) => controls.push(control),
   } as unknown as HTMLElement
-  const host = {
+  const hostDefinition: Partial<EnrollmentFlowHost> = {
     description: { textContent: '' },
     panel: { querySelector: () => undefined },
     isBusy: () => busy,
     setBusy: (value: boolean) => {
       busy = value
     },
-    requestWorkflowReclassification: markRefreshRequested,
+    requestWorkflowReclassification: () => {
+      refreshRequestCount += 1
+      refreshRequested.resolve()
+    },
     translatedMessage: (key: string) => key,
-    sendAuthenticatorEnrollmentStageRuntimeMessage: async (
-      message: Parameters<
-        EnrollmentFlowHost['sendAuthenticatorEnrollmentStageRuntimeMessage']
-      >[0],
-    ) => {
+    sendAuthenticatorEnrollmentStageRuntimeMessage: async (message) => {
       requestedStageId = message.payload.stageId
       return {
         kind: 'delivered',
-        response: { kind: 0, stageId: 'response-supplied-mismatch' },
+        response: {
+          kind: 0,
+          stageId:
+            scenario !== 'mismatch'
+              ? requestedStageId
+              : 'response-supplied-mismatch',
+        },
       }
     },
-    sendAuthenticatorEnrollmentDismissRuntimeMessage: async (
-      message: Parameters<
-        EnrollmentFlowHost['sendAuthenticatorEnrollmentDismissRuntimeMessage']
-      >[0],
-    ) => {
+    sendAuthenticatorCodeRuntimeMessage: async () => ({
+      kind: 'delivered',
+      response:
+        scenario === 'expiry' && codeRequestCount++ > 0
+          ? { kind: 1, reason: 'authenticator-stage-missing' }
+          : { kind: 0, code: '123456', expiresAt: Date.now() + 30_000 },
+    }),
+    sendAuthenticationOutcomeRuntimeMessage: async () =>
+      scenario === 'confirmation' && commitReady
+        ? {
+            kind: 'delivered',
+            response: {
+              kind: 0,
+              verdict: { verdict: 0, allowsCredentialCommit: true },
+            },
+          }
+        : { kind: 'unavailable' },
+    sendAuthenticatorEnrollmentConfirmRuntimeMessage: () => {
+      confirmStarted.resolve()
+      return confirm.promise
+    },
+    sendAuthenticatorEnrollmentDismissRuntimeMessage: async (message) => {
       dismissedStageIds.push(message.payload.stageId)
+      if (scenario === 'confirmation') {
+        return dismiss.promise
+      }
       const dismissed = dismissalResults.shift() ?? true
       if (dismissedStageIds.length === 1) await onFirstDismiss?.()
       return dismissed
     },
-  } as unknown as EnrollmentFlowHost
+  }
+  const host = hostDefinition as EnrollmentFlowHost
   await beginEnrollmentCeremony({
     host,
     section,
@@ -518,11 +553,19 @@ async function runMismatchedStageResponse(
   })
   return {
     controls,
-    cancelRetryRendered,
+    confirm,
+    confirmStarted: confirmStarted.promise,
+    cancelRetryRendered: cancelRetryRendered.promise,
+    dismiss,
     dismissedStageIds,
     host,
-    refreshRequested,
+    refreshRequestCount: () => refreshRequestCount,
+    refreshRequested: refreshRequested.promise,
     requestedStageId,
+    startCommit: () => {
+      commitReady = true
+      runEnrollmentPoll()
+    },
   }
 }
 
@@ -540,16 +583,9 @@ test('failed mismatched cleanup retains the known stage for cancel retry', async
   expect(result.host.description.textContent).toBe(
     BROWSER_MESSAGE_KEYS.WidgetEnrollFailed,
   )
-  expect(result.controls).toHaveLength(1)
-  expect(result.controls[0]?.textContent).toBe(
+  expect(result.controls.map(({ textContent }) => textContent)).toEqual([
     BROWSER_MESSAGE_KEYS.WidgetEnrollCancel,
-  )
-  expect(
-    result.controls.some(
-      (control) =>
-        control.textContent === BROWSER_MESSAGE_KEYS.WidgetAddFromPage,
-    ),
-  ).toBe(false)
+  ])
   result.host.description.textContent =
     BROWSER_MESSAGE_KEYS.WidgetEnrollVerifyPending
   result.controls[0]?.triggerTrusted()
@@ -560,16 +596,46 @@ test('failed mismatched cleanup retains the known stage for cancel retry', async
   expect(result.controls).toHaveLength(1)
   result.controls[0]?.triggerTrusted()
   await result.refreshRequested
-  expect(result.dismissedStageIds).toEqual([
-    result.requestedStageId,
-    result.requestedStageId,
-    result.requestedStageId,
-  ])
+  expect(result.dismissedStageIds).toHaveLength(3)
+  expect(new Set(result.dismissedStageIds)).toEqual(
+    new Set([result.requestedStageId]),
+  )
   expect(result.dismissedStageIds).not.toContain('response-supplied-mismatch')
   expect(enrollmentCeremonyActive()).toBe(false)
   expect(await cancelActiveEnrollmentCeremony()).toBe(true)
 })
-
+test('expired staged poll retires enrollment and requests fresh actions', async () => {
+  const { enrollmentCeremonyActive } =
+    await import('../src/content/enrollment-flow')
+  const result = await runMismatchedStageResponse([], undefined, 'expiry')
+  runEnrollmentPoll()
+  await result.refreshRequested
+  expect(result.host.description.textContent).toBe(
+    BROWSER_MESSAGE_KEYS.WidgetEnrollFailed,
+  )
+  expect(result.refreshRequestCount()).toBe(1)
+  expect(enrollmentCeremonyActive()).toBe(false)
+})
+test('confirmed save remains authoritative while cancellation is rejected', async () => {
+  const { cancelActiveEnrollmentCeremony, enrollmentCeremonyActive } =
+    await import('../src/content/enrollment-flow')
+  const result = await runMismatchedStageResponse([], undefined, 'confirmation')
+  result.startCommit()
+  await result.confirmStarted
+  result.controls[0]?.triggerTrusted()
+  result.confirm.resolve({ kind: 'delivered', response: { kind: 0 } })
+  await result.cancelRetryRendered
+  result.dismiss.resolve(false)
+  await Promise.resolve()
+  await Promise.resolve()
+  expect(result.host.description.textContent).toBe(
+    BROWSER_MESSAGE_KEYS.WidgetEnrollSaved,
+  )
+  expect(result.controls).toHaveLength(0)
+  expect(result.refreshRequestCount()).toBe(0)
+  expect(await cancelActiveEnrollmentCeremony()).toBe(true)
+  expect(enrollmentCeremonyActive()).toBe(false)
+})
 test('stale mismatched cleanup continuation does not mutate UI', async () => {
   const { cancelActiveEnrollmentCeremony, enrollmentCeremonyActive } =
     await import('../src/content/enrollment-flow')

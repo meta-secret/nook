@@ -256,14 +256,14 @@ export async function cancelActiveEnrollmentCeremony(): Promise<boolean> {
   stopPendingEnrollmentWatch()
   const ceremony = activeEnrollmentCeremony
   if (ceremony.kind === ActiveEnrollmentCeremonyKind.Idle) return true
-  if (ceremony.kind === ActiveEnrollmentCeremonyKind.CancellationPending) {
+  if (ceremony.kind === ActiveEnrollmentCeremonyKind.CancellationPending)
     return false
-  }
-  if (ceremony.kind === ActiveEnrollmentCeremonyKind.Pending) {
+  if (ceremony.kind === ActiveEnrollmentCeremonyKind.Pending)
     clearPendingEnrollmentSensitiveMaterial(ceremony.sensitiveMaterial)
-  }
-  enrollmentAuthorizationGeneration += 1
-  const cancellationGeneration = enrollmentAuthorizationGeneration
+  const cancellationGeneration =
+    ceremony.kind === ActiveEnrollmentCeremonyKind.Pending
+      ? ++enrollmentAuthorizationGeneration
+      : ceremony.authorizationGeneration
   activeEnrollmentCeremony = {
     kind: ActiveEnrollmentCeremonyKind.CancellationPending,
     authorizationGeneration: cancellationGeneration,
@@ -276,6 +276,7 @@ export async function cancelActiveEnrollmentCeremony(): Promise<boolean> {
   }
   const dismissed = await dismissStagedEnrollment(dismissArgs)
   if (!enrollmentCeremonyIsCurrent(cancellationGeneration)) return false
+  if (dismissed) enrollmentAuthorizationGeneration += 1
   activeEnrollmentCeremony = dismissed
     ? { kind: ActiveEnrollmentCeremonyKind.Idle }
     : {
@@ -291,7 +292,6 @@ export function requestFreshEnrollmentActions(host: EnrollmentFlowHost): void {
   clearEnrollmentSection(host.panel)
   host.requestWorkflowReclassification()
 }
-
 type CommitStagedEnrollmentArgs = {
   host: EnrollmentFlowHost
   section: HTMLElement
@@ -400,34 +400,29 @@ function enrollmentEvidenceCallbacks({
       return commitStagedEnrollment(nookArrowArgs0)
     },
     reject: () => {
-      const nookTypedArgs0_5: Parameters<typeof setHostDescription>[0] = {
-        host,
-        text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollFailed),
-      }
-      setHostDescription(nookTypedArgs0_5)
+      host.description.textContent = host.translatedMessage(failedKey)
       host.setBusy(true)
       void cancelActiveEnrollmentCeremony().then((dismissed) => {
+        if (!dismissed && !enrollmentCeremonyIsCurrent(authorizationGeneration))
+          return
         host.setBusy(false)
         if (dismissed) {
           renderEnrollmentRetryActions(host)
           return
         }
-        const failure: Parameters<typeof setHostDescription>[0] = {
-          host,
-          text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollFailed),
-        }
-        setHostDescription(failure)
+        host.description.textContent = host.translatedMessage(failedKey)
       })
     },
+    expired: () => {
+      if (!enrollmentCeremonyIsCurrent(authorizationGeneration)) return
+      completeEnrollmentCeremony(authorizationGeneration)
+      host.description.textContent = host.translatedMessage(failedKey)
+      requestFreshEnrollmentActions(host)
+    },
     timeout: () => {
-      // Keep the staged secret; ask the user to finish verification or cancel.
-      const nookTypedArgs0_7: Parameters<typeof setHostDescription>[0] = {
-        host,
-        text: host.translatedMessage(
-          BROWSER_MESSAGE_KEYS.WidgetEnrollVerifyPending,
-        ),
-      }
-      setHostDescription(nookTypedArgs0_7)
+      host.description.textContent = host.translatedMessage(
+        BROWSER_MESSAGE_KEYS.WidgetEnrollVerifyPending,
+      )
     },
   }
 }
@@ -472,8 +467,13 @@ function renderEnrollmentCancelRetry(
       labelKey: BROWSER_MESSAGE_KEYS.WidgetEnrollCancel,
       onClick: (event) => {
         if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
+        const generation =
+          activeEnrollmentCeremony.kind === ActiveEnrollmentCeremonyKind.Staged
+            ? activeEnrollmentCeremony.authorizationGeneration
+            : 0
         host.setBusy(true)
         void cancelActiveEnrollmentCeremony().then((dismissed) => {
+          if (!dismissed && !enrollmentCeremonyIsCurrent(generation)) return
           host.setBusy(false)
           if (dismissed) requestFreshEnrollmentActions(host)
           else {

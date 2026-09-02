@@ -39,6 +39,7 @@ type EnrollmentOutcomeHost = {
 
 type EnrollmentEvidenceCallbacks = {
   commit: () => Promise<void>
+  expired: () => void
   reject: () => void
   timeout: () => void
 }
@@ -185,12 +186,14 @@ type FillStagedEnrollmentCodeArgs = {
   host: EnrollmentOutcomeHost
   stageId: string
   authorizationIsCurrent: () => boolean
+  expired?: () => void
 }
 
 export async function fillStagedEnrollmentCode({
   host,
   stageId,
   authorizationIsCurrent,
+  expired,
 }: FillStagedEnrollmentCodeArgs): Promise<boolean> {
   const message: Parameters<
     typeof host.sendAuthenticatorCodeRuntimeMessage
@@ -199,6 +202,15 @@ export async function fillStagedEnrollmentCode({
     payload: { origin: location.origin, stageId },
   }
   const delivery = await host.sendAuthenticatorCodeRuntimeMessage(message)
+  if (
+    delivery.kind === RuntimeMessageDeliveryKind.Delivered &&
+    delivery.response.kind === AuthenticatorCodeResponseKind.Rejected &&
+    'reason' in delivery.response &&
+    delivery.response.reason === 'authenticator-stage-missing'
+  ) {
+    if (authorizationIsCurrent()) expired?.()
+    return false
+  }
   if (
     delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
     delivery.response.kind !== AuthenticatorCodeResponseKind.Ready ||
@@ -313,6 +325,16 @@ export function beginEnrollmentEvidenceWatch({
   callbacks,
 }: BeginEnrollmentEvidenceWatchArgs): void {
   stopPendingEnrollmentWatch()
+  const expired = () => {
+    if (
+      enrollmentWatchState.kind !== EnrollmentWatchStateKind.Watching ||
+      enrollmentWatchState.watch.stageId !== stageId ||
+      enrollmentWatchState.watch.callbacks !== callbacks
+    )
+      return
+    stopPendingEnrollmentWatch()
+    callbacks.expired()
+  }
   const observer = new MutationObserver(() => {
     if (enrollmentWatchState.kind !== EnrollmentWatchStateKind.Watching) return
     enrollmentWatchState.watch.sawMutation = true
@@ -323,6 +345,7 @@ export function beginEnrollmentEvidenceWatch({
         authorizationIsCurrent: () =>
           enrollmentWatchState.kind === EnrollmentWatchStateKind.Watching &&
           enrollmentWatchState.watch.stageId === stageId,
+        expired,
       }
       void fillStagedEnrollmentCode(nookTypedArgs0_3)
     }
@@ -342,6 +365,7 @@ export function beginEnrollmentEvidenceWatch({
         authorizationIsCurrent: () =>
           enrollmentWatchState.kind === EnrollmentWatchStateKind.Watching &&
           enrollmentWatchState.watch.stageId === stageId,
+        expired,
       }
       void fillStagedEnrollmentCode(nookTypedArgs0_4)
     }
