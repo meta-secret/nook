@@ -18,7 +18,7 @@ impl NookVaultManager {
         let current_vault = if current_store_id.is_empty() {
             nook_core::CurrentVaultReplaceability::Unknown
         } else {
-            let store = crate::storage::event_db::load_local_event_store(current_store_id)
+            let store = crate::storage::event_db::load_local_event_store_strict(current_store_id)
                 .await
                 .map_err(|error| JsError::new(&error.to_string()))?;
             match store.load_graph(current_store_id) {
