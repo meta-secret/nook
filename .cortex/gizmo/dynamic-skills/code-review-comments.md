@@ -17,11 +17,12 @@ Bugbot remains inactive.
 
 ## Problem Pattern
 
-Agents sometimes inspect only inline review threads and miss actionable findings
-in a top-level review body. They also sometimes fix a finding in code and resolve
-the conversation without documenting the fix and validation, or resolve a
-stale-looking comment without recording why it no longer applies. That hides the
-review reasoning from the PR timeline and makes later agents rediscover it.
+Agents sometimes inspect only inline review threads and miss substantive
+findings in a top-level review body. They also sometimes fix a finding in code
+and resolve the conversation without documenting the fix and validation, or
+resolve a stale-looking comment without recording why it no longer applies.
+That hides the review reasoning from the PR timeline and makes later agents
+rediscover it.
 
 ## Preferred Pattern
 
@@ -85,17 +86,19 @@ pushes the result. It then applies the handling rule for the feedback target:
 - **Top-level PR comment:** Minimize the original comment with GitHub's
   `RESOLVED` classifier after addressing it. The comment remains visible in
   inspection output. Readiness blocks until that explicit state exists.
-- **Review body without a thread:** Keep the actionable item in the delivery
-  checklist and final handoff. Do not post a broad or duplicative PR comment.
+- **Review body without a thread:** Keep the substantive item and its
+  disposition in the delivery checklist and final handoff. Do not post a broad
+  or duplicative PR comment.
 
 Every substantive item receives a targeted response when GitHub supports one.
 The response states the disposition and its evidence. When no change is
 required, Gizmo records the team's verified rationale.
 
 Inspect the currently available feedback before merge or handoff. Proceed when
-all actionable items are handled, Nook's applicable repository-owned checks are
-green, and the unresolved-thread query is clear. Request exact-head review
-during hosted validation rather than after repository-owned checks finish.
+every substantive item has a disposition and every accepted actionable item is
+handled. Nook's applicable repository-owned checks must be green. The
+unresolved-thread query must be clear. Request exact-head review during hosted
+validation rather than after repository-owned checks finish.
 
 ## Scope
 
@@ -105,7 +108,7 @@ Applies to:
 - Human PR review comments and conversations.
 - Codex review findings and submitted review bodies.
 - Findings already posted by any other reviewer, including Cursor Bugbot.
-- Equivalent automated review feedback with a concrete actionable finding.
+- Equivalent automated review feedback with a concrete substantive finding.
 
 Does not apply to:
 
@@ -214,24 +217,27 @@ gh api graphql --paginate \
   }'
 ```
 
-Build the actionable checklist from every unresolved thread and every submitted
-review body, including feedback from older heads. An older thread that remains
-unresolved still needs a targeted reply explaining the addressing commit or why
-it no longer applies before resolution. A substantive review body without
-inline comments remains a readiness blocker. When a review has inline comments,
-retain its body in inspection output and use those threads' resolution state as
-the deterministic handled state.
+Build the disposition checklist from every substantive unresolved thread and
+every substantive submitted review body. Include feedback from older heads. An
+older thread that remains unresolved still needs a targeted reply explaining
+the addressing commit or why it no longer applies before resolution. A
+substantive review body without inline comments remains a readiness blocker.
+When a review has inline comments, retain its body in inspection output and use
+those threads' resolution state as the deterministic handled state.
 
 ## Validation
 
-Gizmo uses GraphQL or `gh pr view`/`gh api` to confirm zero unresolved actionable
-review threads. It also inspects submitted reviews and PR comments from every
-head for remaining actionable items.
+Gizmo uses GraphQL or `gh pr view`/`gh api` to confirm that every substantive
+review thread has a disposition. It separately confirms zero unresolved
+accepted actionable findings. It also inspects submitted reviews and PR
+comments from every head for remaining substantive items and their
+dispositions.
 
 Gizmo reports:
 
 - complete repository-owned validation state;
-- the unresolved-thread query result; and
-- any unthreaded actionable review-body item in the handoff.
+- the unresolved-thread query result and disposition summary; and
+- any unthreaded substantive review-body item and its disposition in the
+  handoff.
 
 This workflow does not request reviewers or wait for checks to change state.
