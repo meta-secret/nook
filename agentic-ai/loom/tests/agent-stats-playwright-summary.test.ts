@@ -3,9 +3,10 @@ import { parsePlaywrightSummary } from '../src/lib/agent-stats-assemble.ts';
 const inventoryTransform = require('../playwright-inventory-transform.cjs');
 
 // prettier-ignore
-test('Playwright inventory summaries are exact and unambiguous', () => {
+test('Playwright inventory summaries and sibling-package scope are exact', async () => {
   for (const [summary, total] of [['Total: 239 tests in 70 files', 239], ['Total: 1 test in 1 file', 1], ['', -1], ['Total: broken', -1], ['Total: 1 test in 1 file\nTotal: 2 tests in 2 files', -1]] as const)
     expect(parsePlaywrightSummary(summary)).toBe(total);
+  expect(await Bun.file(new URL('../src/lib/agent-stats-assemble.ts', import.meta.url)).text()).toContain('`PW_TEST_SOURCE_TRANSFORM_SCOPE=${webRoot}${path.sep}`');
 });
 
 // prettier-ignore

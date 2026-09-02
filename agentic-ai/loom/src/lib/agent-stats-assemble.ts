@@ -513,7 +513,7 @@ function countPlaywright(repoRoot: string): number {
       command: 'env',
       // Keep the Playwright-supported transform and its scope adjacent and exact.
       // prettier-ignore
-      args: [`PW_TEST_SOURCE_TRANSFORM=${path.join(repoRoot, 'agentic-ai/loom/playwright-inventory-transform.cjs')}`, `PW_TEST_SOURCE_TRANSFORM_SCOPE=${suiteRoot}${path.sep}`, 'bunx', 'playwright', 'test', '--list'],
+      args: [`PW_TEST_SOURCE_TRANSFORM=${path.join(repoRoot, 'agentic-ai/loom/playwright-inventory-transform.cjs')}`, `PW_TEST_SOURCE_TRANSFORM_SCOPE=${webRoot}${path.sep}`, 'bunx', 'playwright', 'test', '--list'],
       cwd: suiteRoot,
     };
     const listed = runCommand(listedArgs);
