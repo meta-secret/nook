@@ -42,6 +42,44 @@ tasks:
     cmds:
       - bun "{{.REPO_ROOT}}/.cortex/teams/ai/dynamic-skills/executable-skill-host/scripts/src/cli.ts" --tools-list
 
+  vale:cortex:
+    desc: Lint individual Cortex Markdown documents with Vale.
+    silent: true
+    vars:
+      CORTEX_ROOT: '{{default ".cortex" .CORTEX_ROOT}}'
+    cmds:
+      - |
+        set -euo pipefail
+        if ! command -v vale >/dev/null 2>&1; then
+          echo "Vale 3.19.0 is required for Cortex Markdown linting." >&2
+          exit 1
+        fi
+        if [ "$(vale --version)" != "vale version 3.19.0" ]; then
+          echo "Vale 3.19.0 is required for Cortex Markdown linting." >&2
+          exit 1
+        fi
+        cortex_root="{{.CORTEX_ROOT}}"
+        if [ ! -d "$cortex_root" ]; then
+          echo "Cortex Markdown root does not exist: $cortex_root" >&2
+          exit 1
+        fi
+        find "$cortex_root" -type f -name '*.md' \
+          ! -name 'knowledge-graph.md' \
+          ! -path "$cortex_root/k-graph.md" \
+          ! -path "$cortex_root/INDEX.md" \
+          -print0 \
+          | xargs -0 vale \
+              --no-global \
+              --config="{{.REPO_ROOT}}/.vale.ini" \
+              --output=JSON
+
+  vale:cortex:test:
+    desc: Verify the Cortex Vale rules against focused engine fixtures.
+    cmds:
+      - >-
+        bun test
+        ./.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/tests/vale-navigation.test.ts
+
   loom:install:
     desc: Install Loom Bun dependencies with a frozen lockfile.
     dir: agentic-ai/loom
@@ -182,6 +220,8 @@ tasks:
     vars:
       CONFIG: '{{default "" .CONFIG}}'
     cmds:
+      - task: vale:cortex:test
+      - task: vale:cortex
       - |
         set -euo pipefail
         if [ -n "{{.CONFIG}}" ]; then

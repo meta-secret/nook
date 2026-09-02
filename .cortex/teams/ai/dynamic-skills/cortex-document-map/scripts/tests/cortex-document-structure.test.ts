@@ -326,25 +326,6 @@ test('requires the sole H1 title to be the first document node', () => {
   );
 });
 
-test('rejects prohibited inline relationships or document map in individual files', () => {
-  const documentArgs: MakeDocumentArgs = {
-    path: '.cortex/with-rel.md',
-    content: `# With Rel
-
-## Relationships
-
-- [A](a.md)
-
-## Overview
-
-Text.
-`,
-  };
-  const document = makeDocument(documentArgs);
-  const codes = audit([INDEX_DOC, document]).map((finding) => finding.code);
-  expect(codes).toContain(CortexStructureFindingCode.ProhibitedNavigation);
-});
-
 test('rejects block, inline, comment, and indexed Cortex HTML nodes', () => {
   const htmlDocuments = [
     '<details>Block HTML</details>',

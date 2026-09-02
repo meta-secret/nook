@@ -1,0 +1,7 @@
+extends: existence
+message: "Inline `## %s` is prohibited; navigation is centralized in `.cortex/knowledge-graph.md`."
+level: error
+scope: heading.h2
+nonword: true
+tokens:
+  - "^(?:Relationships|Document map)$"

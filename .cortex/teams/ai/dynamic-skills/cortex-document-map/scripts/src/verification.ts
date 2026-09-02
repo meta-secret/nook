@@ -314,16 +314,6 @@ function deriveDocumentFindings(args: {
       message: 'Document must begin with exactly one H1 title.',
     });
   }
-  for (const heading of headings.filter((candidate) => candidate.depth === 2)) {
-    const text = nodeText(heading).trim();
-    if (text !== 'Relationships' && text !== 'Document map') continue;
-    add(args.findings)({
-      code: CortexStructureFindingCode.ProhibitedNavigation,
-      file: args.document.relativePath,
-      line: line(heading),
-      message: `Inline \`## ${text}\` is prohibited; navigation is centralized in \`.cortex/knowledge-graph.md\`.`,
-    });
-  }
 }
 
 function evidenceDocument(

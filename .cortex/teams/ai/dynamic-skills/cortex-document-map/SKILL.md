@@ -67,7 +67,9 @@ Every Cortex document except a knowledge graph has:
 3. content organized under semantic H2 and H3 headings.
 
 Individual documents do not contain inline `Relationships` or `Document map`
-sections. Their natural heading hierarchy is the local map.
+sections. Their natural heading hierarchy is the local map. Vale owns this
+case-sensitive H2 lint rule; knowledge-graph documents are excluded because
+they own centralized navigation.
 
 ## Application procedure
 
@@ -98,9 +100,13 @@ Loom enforces:
 - each graph indexes a document once; and
 - graphs contain no fragment-link duplication.
 
-The co-located read-only TypeScript application owns the deterministic
-Markdown parser, graph-topology diagnostics, and legacy index migration
-rendering. The project is automatically installed and verified with every
-executable skill. Discover its bounded audit action with
+Vale rejects exact `## Relationships` and `## Document map` headings in
+individual Cortex documents. Run `task vale:cortex` for this focused lint.
+
+The co-located read-only TypeScript application owns deterministic graph
+topology diagnostics and legacy index migration rendering. Vale owns prose and
+heading lint rules that its Markdown scopes express directly. The project is
+automatically installed and verified with every executable skill. Discover its
+bounded audit action with
 `task skills:tools-list`. The action does not read or write repository files,
 spawn processes, or coordinate agents.
