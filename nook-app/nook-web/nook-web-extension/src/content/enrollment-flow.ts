@@ -21,20 +21,12 @@ import {
 import { isTrustedAuthAction } from '../lib/auth-widget-policy'
 import {
   WebsiteAuthenticatorEnrollConfirmMessageType,
-  WebsiteAuthenticatorEnrollDismissMessageType,
   WebsiteAuthenticatorEnrollPreviewMessageType,
   WebsiteAuthenticatorEnrollStageMessageType,
 } from '../lib/enrollment-messages'
 import {
-  beginEnrollmentEvidenceWatch,
-  enrollmentEvidenceWatchActive,
-  fillStagedEnrollmentCode,
-  stopPendingEnrollmentWatch,
-} from './enrollment-outcome'
-import {
   RuntimeMessageDeliveryKind,
   type AuthenticatorBackupAttachResponse,
-  type AuthenticatorCodeResponse,
   type AuthenticatorEnrollmentConfirmResponse,
   type AuthenticatorEnrollmentStageResponse,
   type AuthenticatorOptionsResponse,
@@ -42,7 +34,6 @@ import {
   type DecodedRuntimeMessageArgs,
   type RuntimeMessageDelivery,
 } from './autofill/login-passkey-actions'
-import type { AuthenticationOutcomeResponse } from '../lib/outcome-evidence-messages'
 import {
   appendButtonRow,
   clearEnrollmentSection,
@@ -94,21 +85,11 @@ export type EnrollmentFlowHost = EnrollmentFlowViewHost & {
   sendDecodedRuntimeMessage: <Response>(
     args: DecodedRuntimeMessageArgs<Response>,
   ) => Promise<RuntimeMessageDelivery<Response>>
-  sendAuthenticationOutcomeRuntimeMessage: (
-    message: Parameters<
-      typeof import('./autofill/login-passkey-actions').sendAuthenticationOutcomeRuntimeMessage
-    >[0],
-  ) => Promise<RuntimeMessageDelivery<AuthenticationOutcomeResponse>>
   sendAuthenticatorBackupAttachRuntimeMessage: (
     message: Parameters<
       typeof import('./autofill/login-passkey-actions').sendAuthenticatorBackupAttachRuntimeMessage
     >[0],
   ) => Promise<RuntimeMessageDelivery<AuthenticatorBackupAttachResponse>>
-  sendAuthenticatorCodeRuntimeMessage: (
-    message: Parameters<
-      typeof import('./autofill/login-passkey-actions').sendAuthenticatorCodeRuntimeMessage
-    >[0],
-  ) => Promise<RuntimeMessageDelivery<AuthenticatorCodeResponse>>
   sendAuthenticatorEnrollmentConfirmRuntimeMessage: (
     message: Parameters<
       typeof import('./autofill/login-passkey-actions').sendAuthenticatorEnrollmentConfirmRuntimeMessage
@@ -129,11 +110,6 @@ export type EnrollmentFlowHost = EnrollmentFlowViewHost & {
       typeof import('./autofill/login-passkey-actions').sendAuthenticatorPreviewRuntimeMessage
     >[0],
   ) => Promise<RuntimeMessageDelivery<AuthenticatorPreviewResponse>>
-  sendRuntimeMessageWithoutResponse: (
-    message: Parameters<
-      typeof import('./autofill/login-passkey-actions').sendRuntimeMessageWithoutResponse
-    >[0],
-  ) => void
   translatedMessage: (key: BrowserMessageKey) => string
   translatedMessageWithSubstitution: (
     args: TranslatedMessageWithSubstitutionArgs,
@@ -142,6 +118,7 @@ export type EnrollmentFlowHost = EnrollmentFlowViewHost & {
 
 /** Keep the post-save enrollment widget from being rebuilt by scanAndRender. */
 let holdEnrollmentWidgetAfterSave = false
+let enrollmentSavePending = false
 
 type CommitStagedEnrollmentArgs = {
   host: EnrollmentFlowHost
@@ -171,8 +148,11 @@ async function commitStagedEnrollment({
       stageId,
     },
   }
-  const confirmDelivery =
-    await host.sendAuthenticatorEnrollmentConfirmRuntimeMessage(confirmMessage)
+  const confirmDelivery = await host
+    .sendAuthenticatorEnrollmentConfirmRuntimeMessage(confirmMessage)
+    .finally(() => {
+      enrollmentSavePending = false
+    })
   if (
     confirmDelivery.kind === RuntimeMessageDeliveryKind.Delivered &&
     confirmDelivery.response.kind ===
@@ -217,62 +197,6 @@ async function commitStagedEnrollment({
   section.replaceChildren()
 }
 
-type EnrollmentEvidenceCallbacksArgs = {
-  host: EnrollmentFlowHost
-  section: HTMLElement
-  stageId: string
-  vaultStoreId: string
-}
-
-function enrollmentEvidenceCallbacks({
-  host,
-  section,
-  stageId,
-  vaultStoreId,
-}: EnrollmentEvidenceCallbacksArgs) {
-  return {
-    commit: () => {
-      const nookArrowArgs0: Parameters<typeof commitStagedEnrollment>[0] = {
-        host,
-        section,
-        stageId,
-        vaultStoreId,
-      }
-      return commitStagedEnrollment(nookArrowArgs0)
-    },
-    reject: () => {
-      const message: Parameters<
-        typeof host.sendRuntimeMessageWithoutResponse
-      >[0] = {
-        type: WebsiteAuthenticatorEnrollDismissMessageType.NookWebsiteAuthenticatorEnrollDismiss,
-        payload: { origin: location.origin, stageId },
-      }
-      host.sendRuntimeMessageWithoutResponse(message)
-      const nookTypedArgs0_5: Parameters<typeof setHostDescription>[0] = {
-        host,
-        text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollFailed),
-      }
-      setHostDescription(nookTypedArgs0_5)
-      host.setBusy(false)
-      const nookTypedArgs0_6: Parameters<typeof renderEnrollmentActions>[0] = {
-        host,
-        hints: detectEnrollmentHints(),
-      }
-      renderEnrollmentActions(nookTypedArgs0_6)
-    },
-    timeout: () => {
-      // Keep the staged secret; ask the user to finish verification or cancel.
-      const nookTypedArgs0_7: Parameters<typeof setHostDescription>[0] = {
-        host,
-        text: host.translatedMessage(
-          BROWSER_MESSAGE_KEYS.WidgetEnrollVerifyPending,
-        ),
-      }
-      setHostDescription(nookTypedArgs0_7)
-    },
-  }
-}
-
 type BeginEnrollmentCeremonyArgs = {
   host: EnrollmentFlowHost
   section: HTMLElement
@@ -281,7 +205,7 @@ type BeginEnrollmentCeremonyArgs = {
   candidate: DecodedOtpauthCandidate
 }
 
-async function beginEnrollmentCeremony({
+export async function beginEnrollmentCeremony({
   host,
   section,
   vaultStoreId,
@@ -289,24 +213,12 @@ async function beginEnrollmentCeremony({
   candidate,
 }: BeginEnrollmentCeremonyArgs): Promise<void> {
   holdEnrollmentWidgetAfterSave = false
+  enrollmentSavePending = true
   const nookTypedArgs0_8: Parameters<typeof setHostDescription>[0] = {
     host,
     text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollStaging),
   }
   setHostDescription(nookTypedArgs0_8)
-  // Arm the watch early so fill-driven mutations cannot re-scan and wipe the UI.
-  const nookTypedArgs0_9: Parameters<typeof enrollmentEvidenceCallbacks>[0] = {
-    host,
-    section,
-    stageId: 'pending',
-    vaultStoreId,
-  }
-  const nookTypedArgs1_0: Parameters<typeof beginEnrollmentEvidenceWatch>[0] = {
-    host,
-    stageId: 'pending',
-    callbacks: enrollmentEvidenceCallbacks(nookTypedArgs0_9),
-  }
-  beginEnrollmentEvidenceWatch(nookTypedArgs1_0)
   const message: Parameters<
     typeof host.sendAuthenticatorEnrollmentStageRuntimeMessage
   >[0] = {
@@ -317,12 +229,13 @@ async function beginEnrollmentCeremony({
       otpauthUri: otpauthUri.value,
     },
   }
-  const stageDelivery =
-    await host.sendAuthenticatorEnrollmentStageRuntimeMessage(message)
-  clearOtpauthUri(otpauthUri)
-  clearCandidate(candidate)
+  const stageDelivery = await host
+    .sendAuthenticatorEnrollmentStageRuntimeMessage(message)
+    .finally(() => {
+      clearOtpauthUri(otpauthUri)
+      clearCandidate(candidate)
+    })
   if (stageDelivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
-    stopPendingEnrollmentWatch()
     const nookTypedArgs0_10: Parameters<typeof setHostDescription>[0] = {
       host,
       text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollFailed),
@@ -333,6 +246,7 @@ async function beginEnrollmentCeremony({
       host,
       hints: detectEnrollmentHints(),
     }
+    enrollmentSavePending = false
     renderEnrollmentActions(nookTypedArgs0_11)
     return
   }
@@ -341,7 +255,6 @@ async function beginEnrollmentCeremony({
     stageResponse.kind !== AuthenticatorEnrollmentStageResponseKind.Staged ||
     !('stageId' in stageResponse)
   ) {
-    stopPendingEnrollmentWatch()
     const nookTypedArgs0_12: Parameters<typeof setHostDescription>[0] = {
       host,
       text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollFailed),
@@ -352,70 +265,17 @@ async function beginEnrollmentCeremony({
       host,
       hints: detectEnrollmentHints(),
     }
+    enrollmentSavePending = false
     renderEnrollmentActions(nookTypedArgs0_13)
     return
   }
-  const stageId = stageResponse.stageId
-  // Replace the temporary pending watch with the real stage id.
-  const nookTypedArgs0_14: Parameters<typeof enrollmentEvidenceCallbacks>[0] = {
+  const nookTypedArgs0_14: Parameters<typeof commitStagedEnrollment>[0] = {
     host,
     section,
-    stageId,
+    stageId: stageResponse.stageId,
     vaultStoreId,
   }
-  const nookTypedArgs1_1: Parameters<typeof beginEnrollmentEvidenceWatch>[0] = {
-    host,
-    stageId,
-    callbacks: enrollmentEvidenceCallbacks(nookTypedArgs0_14),
-  }
-  beginEnrollmentEvidenceWatch(nookTypedArgs1_1)
-
-  const nookTypedArgs0_15: Parameters<typeof fillStagedEnrollmentCode>[0] = {
-    host,
-    stageId,
-  }
-  const filled = await fillStagedEnrollmentCode(nookTypedArgs0_15)
-  const nookTypedArgs0_16: Parameters<typeof setHostDescription>[0] = {
-    host,
-    text: host.translatedMessage(
-      filled
-        ? BROWSER_MESSAGE_KEYS.WidgetEnrollVerifyFilled
-        : BROWSER_MESSAGE_KEYS.WidgetEnrollVerifyPending,
-    ),
-  }
-  setHostDescription(nookTypedArgs0_16)
-  section.replaceChildren()
-  const nookTypedArgs1_2: Parameters<typeof createTextButton>[0] = {
-    host,
-    labelKey: BROWSER_MESSAGE_KEYS.WidgetEnrollCancel,
-    onClick: (event) => {
-      if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
-      stopPendingEnrollmentWatch()
-      const message: Parameters<
-        typeof host.sendRuntimeMessageWithoutResponse
-      >[0] = {
-        type: WebsiteAuthenticatorEnrollDismissMessageType.NookWebsiteAuthenticatorEnrollDismiss,
-        payload: {
-          origin: location.origin,
-          stageId: stageResponse.stageId,
-        },
-      }
-      host.sendRuntimeMessageWithoutResponse(message)
-      const nookTypedArgs0_17: Parameters<typeof resetEnrollmentHeadline>[0] = {
-        host,
-        hints: detectEnrollmentHints(),
-      }
-      resetEnrollmentHeadline(nookTypedArgs0_17)
-      const nookTypedArgs0_18: Parameters<typeof renderEnrollmentActions>[0] = {
-        host,
-        hints: detectEnrollmentHints(),
-      }
-      renderEnrollmentActions(nookTypedArgs0_18)
-    },
-  }
-  const cancelButton = createTextButton(nookTypedArgs1_2)
-  section.append(cancelButton)
-  host.setBusy(false)
+  await commitStagedEnrollment(nookTypedArgs0_14)
 }
 
 type ClearOtpauthUriArgs = { value: string }
@@ -727,7 +587,7 @@ export async function startQrEnrollment({
 }
 
 export function enrollmentCeremonyActive(): boolean {
-  return enrollmentEvidenceWatchActive() || holdEnrollmentWidgetAfterSave
+  return enrollmentSavePending || holdEnrollmentWidgetAfterSave
 }
 
 export function releaseEnrollmentWidgetHold(): void {
@@ -771,7 +631,7 @@ export function renderEnrollmentActions({
   host,
   hints,
 }: RenderEnrollmentActionsArgs): void {
-  if (enrollmentEvidenceWatchActive()) return
+  if (enrollmentSavePending) return
   if (!hints.qr && !hints.backupCodes) {
     clearEnrollmentSection(host.panel)
     return
