@@ -40,11 +40,10 @@ gh pr merge <number> --squash
 
 See [Loom tools](../../teams/ai/references/loom-tools.md).
 
-PR metadata follows the canonical
-[PR metadata contract](../workflows/pull-requests.md#pr-metadata-and-provenance).
-Apply it at initial publication, after a material change, and before readiness
-or handoff. A trusted publisher must return a compliant PR. Treat a missing
-required field as a producer blocker instead of continuing delivery.
+Create and refresh PR metadata using the exact
+[title and description contract](../workflows/pull-requests.md#pr-title-and-description).
+Do this at publication, after a material scope change, and before readiness or
+handoff.
 
 Delivery rules:
 
@@ -108,7 +107,7 @@ Does not apply to:
 ## Application Checklist
 
 - [ ] Establish the branch and PR path from current `origin/main`.
-- [ ] Apply the canonical PR metadata contract at each delivery boundary.
+- [ ] Apply the canonical PR title and description contract.
 - [ ] Run `task loom:pre-push` before every push.
 - [ ] Route formatter mutations in team-owned source or Cortex files back to
       that team for a fresh formatted commit.

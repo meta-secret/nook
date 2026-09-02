@@ -315,7 +315,7 @@ export function normalizeConfigurationShellSource([
     if (
       sourcePath === '.github/workflows/agent-implement.yml' &&
       new Bun.CryptoHasher('sha256').update(source).digest('hex') ===
-        '454cf33c204c0c14f3dbad5821cbbf20e809aae67388bc27a23ef9e4fb47c535'
+        'b6888f4d29111806e405c1f36957a6a4528118cab0696ea77151326dff882e1e'
     )
       return 'true';
     throw new Error('Unaudited AGENT_EOF shell exemption.');

@@ -6,13 +6,6 @@ You are Gizmo coordinating direct Rust dependency updates for Nook.
 - Dependency-audit workflow run id: ${GITHUB_RUN_ID}
 - Fix branch: `${FIX_BRANCH}`
 
-## Trusted validated plan
-
-The following exact plan was validated and hash-bound by trusted workflow
-tooling. It is the implementation authority for this run.
-
-${VALIDATED_PLAN}
-
 ## Context boundary
 
 Load only:
@@ -36,21 +29,20 @@ ${RUST_DEPS_OUTDATED_REPORT}
 
 ## Coordination procedure
 
-1. Read `.nook-workbench-plan.md` and implement only its current PR scope.
-2. Record the exact 40-character baseline commit.
-3. Inventory every direct dependency in these Rust roots:
+1. Record the exact 40-character baseline commit.
+2. Inventory every direct dependency in these Rust roots:
    - `nook-app/nook-platform/`;
    - `nook-app/nook-platform/fuzz/`;
    - `agentic-ai/minds/`; and
    - `preflight/`.
-4. Classify each root and compatibility change by functional owner through the
+3. Classify each root and compatibility change by functional owner through the
    root router.
-5. Partition writer tasks by functional owner and allowed path.
-6. Assign each dependency, lockfile, source, and test task to exactly one
+4. Partition writer tasks by functional owner and allowed path.
+5. Assign each dependency, lockfile, source, and test task to exactly one
    semantic team identity.
-7. Integrate each non-Git handoff: bounded diff, owned paths, focused summary.
-8. Finish the bounded working-tree edit without running validation or Git.
-9. Let the trusted host validate and publish before returning the exact head to
+6. Integrate each non-Git handoff: bounded diff, owned paths, focused summary.
+7. Finish the bounded working-tree edit without running validation or Git.
+8. Let the trusted host validate and publish before returning the exact head to
    the normal Gizmo PR-delivery workflow.
 
 Gizmo selects each team through the canonical mapping authority at

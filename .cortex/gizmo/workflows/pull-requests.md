@@ -30,82 +30,61 @@ For implementation tasks, Gizmo's default job is to land a coherent PR with
 Nook's applicable GitHub Actions PR test checks green. Team subagents make the
 implementation edits.
 
-### PR metadata and provenance
+### PR title and description
 
-PR metadata stays truthful throughout delivery. Provenance records context for
-readers; it does not control or resume agent execution.
+The PR must describe the change that is currently in the branch, not the task
+that started it.
 
-**Required actions**
+Use a title that names the delivered capability in one sentence. Do not use a
+file name, workflow run number, temporary symptom, or implementation step as
+the title. After trimming, it must be 3–120 characters on one line with no
+control characters.
 
-- **Capability-oriented identity**
-  - At PR creation, choose a truthful capability-oriented title.
-  - Make it broad enough to survive normal in-scope iteration.
-  - Describe the complete current capability in the PR body.
-  - Keep the title between 3 and 120 characters after trimming.
-  - Reject ASCII control characters and DEL.
-  - Allow Unicode text and punctuation.
-- **Lifecycle refresh**
-  - Re-read the whole PR when its scope, design, or material diff changes.
-  - Update both the title and description so they describe the current PR.
-  - Repeat that review before readiness or handoff.
-- **Agent-task provenance**
-  - Include a compact agent-task provenance section in the PR description.
-  - Record the harness or execution surface.
-  - Record the human-readable task name.
-  - Record the harness-provided opaque task or thread ID when available.
-  - When the harness exposes no stable name or ID, say so explicitly in that
-    field.
-- **Workbench authority**
-  - Use public [Nook Workbench](https://github.com/meta-secret/nook-workbench)
-    URLs as durable plan and handoff authority.
-  - Link the exact focused issue that owns the PR.
-  - A direct or manual task that reaches PR delivery must create that focused
-    issue before PR publication.
-  - It must then publish a superseding plan bound to the issue's canonical
-    `gizmo_id`.
-  - Link the immutable task-start plan and each superseding plan.
-  - Add the published worklog when it becomes available.
-  - Update the PR description as those lifecycle links appear.
-- **Trusted-publisher production**
-  - A trusted publisher must satisfy this metadata contract before it creates
-    a PR.
-  - It must produce the capability-oriented title from trusted task context.
-  - It must include agent-task provenance in the body.
-  - It must include the exact focused-issue and immutable-plan URLs in the
-    body.
-  - Missing trusted context blocks publication.
-  - A publisher-created PR that lacks any required metadata is not eligible
-    for readiness.
-  - Gizmo reports the producer defect to its owning team.
+Use these description headings exactly once and in this order:
 
-**Prohibited actions**
+```markdown
+## Summary
 
-- **Fragile titles**
-  - Do not tie the title to one file, the first implementation detail, or a
-    temporary symptom.
-- **Invented provenance**
-  - Never invent a task name, task ID, thread ID, issue, plan, or worklog.
-  - Do not substitute a machine-local identifier when the harness exposes no
-    stable value.
-- **Private and machine-local context**
-  - Do not publish absolute machine paths, usernames, environment values,
-    private task content, or local plan paths.
-  - This includes `~/.codex/plans/**` and paths under `$CODEX_HOME`.
-  - These values are neither portable provenance nor valid handoff links.
-- **Transcript publication**
-  - Do not automatically create or publish an immutable Codex transcript share
-    link.
-  - A transcript share URL requires separate explicit user authorization
-    because it exposes task content.
-- **Execution authority**
-  - Passive PR provenance is not delegation, communication, or handoff
-    transport.
-  - It grants no authority to mutate or resume a separate Codex task.
-- **Publisher exceptions**
-  - Trusted publication authority does not exempt a producer from this
-    contract.
-  - Do not invent missing metadata after publication to make a noncompliant
-    producer output appear ready.
+- <observable capability delivered by this PR>
+
+## Agent task provenance
+
+- Harness: <execution surface>
+- Task name: <human-readable task name>
+- Task ID: <stable harness ID or `unavailable — <reason>`>
+
+## Nook Workbench
+
+- Focused issue: <public URL or `unavailable — <reason>`>
+- Immutable plan: <public URL or `unavailable — <reason>`>
+- Worklog: <public URL, `pending`, or `unavailable — <reason>`>
+
+## Validation
+
+- <command or hosted check and its result>
+```
+
+Apply the following rules:
+
+- State only capabilities present in the current diff.
+- Use the exact Workbench issue URL when a focused issue owns the task.
+- Link a plan with a Workbench commit SHA in the URL, not `blob/main`, so the
+  link cannot change after publication.
+- Replace `pending` with the worklog URL when the worklog is published.
+- Use `unavailable — <reason>` only when the harness or workflow genuinely has
+  no corresponding public record. Never invent an identifier or URL.
+- Do not publish prompts, transcripts, local paths, usernames, environment
+  values, secrets, or other machine-local context.
+- A transcript share URL requires separate explicit user authorization.
+- Treat this metadata as audit information only. It does not authorize or
+  resume another task.
+
+Write the description at PR creation. After a material scope change:
+
+1. Re-read the complete diff.
+2. Update the title, Summary, and links.
+
+Repeat this check immediately before readiness or handoff.
 
 ### Dispatch meaning
 
@@ -128,8 +107,8 @@ ownership until merge or a concrete blocked handoff:
    - Define the module boundary.
    - Confirm the complete PR can stay within the 2,000-addition limit.
    - Create the first feature branch.
-   - Define the first PR's title, body, scope, and agent-task provenance under
-     [PR metadata and provenance](#pr-metadata-and-provenance).
+   - Define the first PR's title, body, and scope under
+     [PR title and description](#pr-title-and-description).
    - Create ignored `.cortex/.session/` memory only when temporary notes
      materially help the work.
 2. **Implement functionality** — dispatch the requested code, documentation,
@@ -146,8 +125,8 @@ ownership until merge or a concrete blocked handoff:
      `task ci-agent:fix` with
      `CI_AGENT_FIX_PROFILE=rust-dependency-update`.
 4. **Promptly push and create or update the PR.** Do not add another local
-   product or review gate. Refresh its title, description, provenance, and
-   available Workbench links.
+   product or review gate. Keep its title and description synchronized with the
+   current diff.
 5. **Request review and validate on GitHub Actions:**
    - If the pushed head is not validation-ready, immediately dispatch at least
      one relevant focused `task remote TASK_NAME=<name>` job.
@@ -182,8 +161,8 @@ ownership until merge or a concrete blocked handoff:
 8. **Merge automatically when ready.** Require a current branch, green
    repository-owned checks, resolved actionable comments, every required team
    and security verdict, and the exact-head readiness audit. Then squash-merge
-   without separate permission. Re-read the whole PR and refresh its title and
-   description before this readiness handoff.
+   without separate permission. First re-read the complete diff and refresh the
+   PR title and description.
 
 ## Pull request size and modularity
 
@@ -659,11 +638,6 @@ Merge only when all readiness conditions pass:
 
 - Nook's applicable repository-owned PR test checks are green.
 - The branch is current with `origin/main`.
-- The PR links its exact focused Workbench issue.
-- The focused issue and current plan share the canonical `gizmo_id`.
-- The PR links the immutable task-start plan and every superseding plan.
-- The PR title, description, and agent-task provenance satisfy the canonical
-  [metadata contract](#pr-metadata-and-provenance).
 - All actionable comments are resolved.
 - Gizmo's final verdict is ready for the exact head.
 - Every required team verdict is satisfied.

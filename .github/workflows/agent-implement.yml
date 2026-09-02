@@ -18,6 +18,10 @@ on:
         description: Required unless issue_path is supplied
         required: false
         type: string
+      pr_title:
+        description: Required capability-oriented PR title when prompt is supplied
+        required: false
+        type: string
       continuing_owner:
         description: Required GitHub login for the prompt-backed continuing owner
         required: false
@@ -52,6 +56,7 @@ jobs:
           CONTINUING_OWNER: ${{ inputs.continuing_owner }}
           ISSUE_PATH: ${{ inputs.issue_path }}
           PROMPT: ${{ inputs.prompt }}
+          PR_TITLE: ${{ inputs.pr_title }}
         run: |
           if { [ -z "$PROMPT" ] && [ -z "$ISSUE_PATH" ]; } || { [ -n "$PROMPT" ] && [ -n "$ISSUE_PATH" ]; }; then
             echo "::error::Supply exactly one of issue_path or prompt."
@@ -59,6 +64,14 @@ jobs:
           fi
           if [ -n "$PROMPT" ] && [ -z "$CONTINUING_OWNER" ]; then
             echo "::error::A prompt-backed run requires continuing_owner."
+            exit 1
+          fi
+          if [ -n "$PROMPT" ] && [ -z "$PR_TITLE" ]; then
+            echo "::error::A prompt-backed run requires pr_title."
+            exit 1
+          fi
+          if [ -n "$PR_TITLE" ] && { [ "${#PR_TITLE}" -lt 3 ] || [ "${#PR_TITLE}" -gt 120 ] || printf '%s' "$PR_TITLE" | LC_ALL=C grep -q '[[:cntrl:]]'; }; then
+            echo "::error::pr_title must be 3-120 characters on one line without control characters."
             exit 1
           fi
           if [ -n "$CONTINUING_OWNER" ] && ! printf '%s' "$CONTINUING_OWNER" | grep -Eq '^[a-z0-9][a-z0-9._-]*$'; then
@@ -85,9 +98,6 @@ jobs:
           github-token: ${{ secrets.NOOK_GITHUB_PAT }}
           retries: 3
           script: |
-            const { safeCapabilityTitle } = require(
-              `${process.env.GITHUB_WORKSPACE}/.github/scripts/trusted-pr-publisher.cjs`,
-            )
             const [owner, repo] = process.env.WORKBENCH_REPOSITORY.split('/')
             const requestedPath = process.env.REQUESTED_PATH.trim()
             const decode = (data) => Buffer.from(data.content, 'base64').toString('utf8')
@@ -122,13 +132,8 @@ jobs:
             }
             const rawGizmoId = gizmoIdRows[0]?.[1].trim() || ''
             const assignedGizmoId = rawGizmoId === 'null' ? '' : rawGizmoId
-            if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(assignedGizmoId)) {
-              core.setFailed(`${path} must have a valid canonical gizmo_id before PR publication`)
-              return
-            }
-            const issueTitle = String(value(body, 'title')).trim()
-            if (!safeCapabilityTitle(issueTitle)) {
-              core.setFailed(`${path} must have a trusted capability-oriented title before PR publication`)
+            if (assignedGizmoId && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(assignedGizmoId)) {
+              core.setFailed(`${path} has an invalid canonical gizmo_id`)
               return
             }
             if (
@@ -136,6 +141,11 @@ jobs:
               /^stack_predecessor_branch:/m.test(frontmatter)
             ) {
               core.setFailed(`${path} uses unsupported stacked-PR metadata`)
+              return
+            }
+            const issueTitle = String(value(body, 'title')).trim()
+            if (issueTitle.length < 3 || issueTitle.length > 120 || /[\u0000-\u001f\u007f]/.test(issueTitle)) {
+              core.setFailed(`${path} title must be 3-120 characters on one line without control characters`)
               return
             }
             const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
@@ -185,6 +195,7 @@ jobs:
           ISSUE_URL: ${{ steps.workbench.outputs.url }}
           ISSUE_CONTINUING_OWNER: ${{ steps.workbench.outputs.continuing_owner }}
           MANUAL_CONTINUING_OWNER: ${{ inputs.continuing_owner }}
+          MANUAL_PR_TITLE: ${{ inputs.pr_title }}
           MAJOR_CHANGE_AUTHORIZED: ${{ inputs.major_change_authorized }}
           RUN_ID: ${{ github.run_id }}
           WORKBENCH_SLUG: ${{ steps.workbench.outputs.slug }}
@@ -195,7 +206,7 @@ jobs:
             base_branch="main"
             checkout_ref="main"
             target_kind="standalone"
-            title="Manual agent implementation"
+            title="$MANUAL_PR_TITLE"
             task="$DISPATCH_PROMPT"
             continuing_owner="$MANUAL_CONTINUING_OWNER"
           else
@@ -212,12 +223,27 @@ jobs:
           plan_started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           plan_timestamp="$(printf '%s' "$plan_started_at" | tr ':' '-')"
           plan_path="plans/${feature}/${plan_timestamp}-run-${RUN_ID}.md"
+          pr_body="$(
+            printf '%s\n' "## Summary"
+            if [ -n "$ISSUE_URL" ]; then
+              printf '%s\n' "Agent implementation for [\`${ISSUE_PATH}\`](${ISSUE_URL})."
+            else
+              printf '%s\n' "Agent implementation from a manual workflow prompt."
+            fi
+            printf '%s\n' "" "## Ownership" "Continuing agent: \`${continuing_owner}\`"
+            if [ -n "$ISSUE_URL" ]; then
+              printf '%s\n' "Owned scope: \`${ISSUE_PATH}\`"
+            else
+              printf '%s\n' "Owned scope: manual prompt run \`${RUN_ID}\`"
+            fi
+            printf '%s\n' "" "## Test plan" "- [ ] CI green on this PR"
+          )"
           while :; do
             random_suffix="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
             test "${#random_suffix}" -eq 64
             delim="AGENT_EOF_${random_suffix}"
             collision=false
-            for value in "$task" "$title"; do
+            for value in "$task" "$title" "$pr_body"; do
               if printf '%s\n' "$value" | grep -Fqx -- "$delim"; then
                 collision=true
                 break
@@ -234,12 +260,15 @@ jobs:
             echo "AGENT_PR_BASE_BRANCH=$base_branch"
             echo "AGENT_PR_TARGET_KIND=$target_kind"
             emit_multiline_env "AGENT_PROMPT" "$task"
+            emit_multiline_env "AGENT_PR_TITLE" "$title"
+            emit_multiline_env "AGENT_COMMIT_MESSAGE" "$title"
             echo "TASK_FEATURE=$feature"
             echo "TASK_PLAN_PATH=$plan_path"
             echo "TASK_PLAN_STARTED_AT=$plan_started_at"
             emit_multiline_env "TASK_TITLE" "$title"
             echo "CONTINUING_AGENT_OWNER=$continuing_owner"
             echo "MAJOR_CHANGE_AUTHORIZED=$MAJOR_CHANGE_AUTHORIZED"
+            emit_multiline_env "AGENT_PR_BODY" "$pr_body"
           } >> "$GITHUB_ENV"
           echo "ready=true" >> "$GITHUB_OUTPUT"
           echo "checkout_ref=$checkout_ref" >> "$GITHUB_OUTPUT"
@@ -401,8 +430,7 @@ jobs:
         uses: actions/github-script@v9
         env:
           ISSUE_PATH: ${{ steps.workbench.outputs.path }}
-          ISSUE_TITLE: ${{ steps.workbench.outputs.title }}
-          CONTINUING_AGENT_OWNER: ${{ env.CONTINUING_AGENT_OWNER }}
+          ISSUE_URL: ${{ steps.workbench.outputs.url }}
           TASK_FEATURE: ${{ env.TASK_FEATURE }}
           TASK_PLAN_PATH: ${{ env.TASK_PLAN_PATH }}
           TASK_PLAN_STARTED_AT: ${{ env.TASK_PLAN_STARTED_AT }}
@@ -416,10 +444,82 @@ jobs:
           github-token: ${{ secrets.NOOK_GITHUB_PAT }}
           retries: 3
           script: |
-            const { publishTrustedPlan } = require(
-              `${process.env.GITHUB_WORKSPACE}/.github/scripts/trusted-pr-publisher.cjs`,
-            )
-            await publishTrustedPlan({ core, context, github })
+            const crypto = require('node:crypto')
+            const fs = require('node:fs')
+            const { validateAgentRecord } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/workbench-records.cjs`)
+            const [owner, repo] = process.env.WORKBENCH_REPOSITORY.split('/')
+            const planPath = process.env.TASK_PLAN_PATH
+            const localPath = `${process.env.GITHUB_WORKSPACE}/${process.env.WORKBENCH_PLAN_FILE}`
+            const summaryPath = `${process.env.GITHUB_WORKSPACE}/${process.env.WORKBENCH_SUMMARY_FILE}`
+            const secrets = [process.env.CURSOR_SECRET]
+            if (!fs.existsSync(localPath)) {
+              if (!fs.existsSync(summaryPath)) {
+                core.setFailed('Planning produced neither a plan nor a planning blocker.')
+                return
+              }
+              const blocker = fs.readFileSync(summaryPath, 'utf8').trim()
+              const rejection = validateAgentRecord(blocker, 'worklog', secrets, process.env.AGENT_PROMPT)
+              if (rejection) {
+                core.setFailed(`Rejected planning blocker: ${rejection}.`)
+                return
+              }
+              core.setOutput('planning_blocked', 'true')
+              return
+            }
+            const candidate = fs.readFileSync(localPath, 'utf8').trim()
+            const sourceTask = process.env.AGENT_PROMPT
+            const rejection = validateAgentRecord(candidate, 'plan', secrets, sourceTask, {
+              assignedGizmoId: process.env.ASSIGNED_GIZMO_ID,
+            })
+            if (rejection) {
+              core.setFailed(`Rejected agent-authored Workbench task plan: ${rejection}.`)
+              return
+            }
+            const validatedPlan = `${candidate}\n`
+            fs.writeFileSync(localPath, validatedPlan, { encoding: 'utf8', mode: 0o600 })
+            core.setOutput('sha256', crypto.createHash('sha256').update(validatedPlan).digest('hex'))
+            const currentGizmoIdMatch = /^- Current Gizmo ID:\s*([a-z0-9]+(?:-[a-z0-9]+)*)\s*$/m.exec(candidate)
+            const currentGizmoId = currentGizmoIdMatch?.[1]
+            if (!currentGizmoId) {
+              core.setFailed('Validated Workbench task plan is missing its Current Gizmo ID.')
+              return
+            }
+            const plan = [
+              '---',
+              `title: ${JSON.stringify(process.env.TASK_TITLE)}`,
+              `feature: ${process.env.TASK_FEATURE}`,
+              `issue: ${process.env.ISSUE_PATH || 'null'}`,
+              `gizmo_id: ${currentGizmoId}`,
+              `started_at: ${process.env.TASK_PLAN_STARTED_AT}`,
+              'agent: cursor',
+              '---',
+              '',
+              candidate,
+              '',
+            ].join('\n')
+            const published = await github.rest.repos.createOrUpdateFileContents({
+              owner,
+              repo,
+              path: planPath,
+              branch: 'main',
+              message: `plan: agent run ${context.runId}`,
+              content: Buffer.from(plan).toString('base64'),
+            })
+            const planUrl = `https://github.com/${owner}/${repo}/blob/${published.data.commit.sha}/${planPath}`
+            const issue = process.env.ISSUE_URL
+              || 'unavailable — manual workflow dispatch has no focused Workbench issue'
+            core.exportVariable('AGENT_PR_BODY', [
+              '## Summary', '', `- ${process.env.TASK_TITLE}`, '',
+              '## Agent task provenance', '',
+              '- Harness: GitHub Actions workflow `agent-implement.yml`',
+              `- Task name: ${process.env.TASK_TITLE}`,
+              `- Task ID: [run ${context.runId}](${process.env.GITHUB_SERVER_URL}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`, '',
+              '## Nook Workbench', '', `- Focused issue: ${issue}`,
+              `- Immutable plan: ${planUrl}`, '- Worklog: pending', '',
+              '## Validation', '', '- Hosted PR checks: pending',
+            ].join('\n'))
+            core.setOutput('path', planPath)
+            core.setOutput('url', planUrl)
 
       - name: Materialize validated implementation plan
         if: steps.plan.outcome == 'success' && steps.plan.outputs.planning_blocked != 'true' && steps.rerun.outputs.terminal != 'true'
@@ -505,8 +605,8 @@ jobs:
           AGENT_PROMPT: ${{ env.AGENT_PROMPT }}
           IMPLEMENT_OUTCOME: ${{ steps.implement.outcome }}
           BUDGET_BLOCKER_B64: ${{ steps.implement.outputs.budget_blocker_b64 }}
-          ISSUE_PATH: ${{ steps.plan.outputs.issue_path || steps.workbench.outputs.path }}
-          ISSUE_TITLE: ${{ steps.plan.outputs.issue_title || steps.workbench.outputs.title }}
+          ISSUE_PATH: ${{ steps.workbench.outputs.path }}
+          ISSUE_TITLE: ${{ steps.workbench.outputs.title }}
           PLAN_PATH: ${{ steps.plan.outputs.path }}
           WORKBENCH_REPOSITORY: ${{ env.WORKBENCH_REPOSITORY }}
           WORKBENCH_SUMMARY_FILE: ${{ env.WORKBENCH_SUMMARY_FILE }}
@@ -518,7 +618,190 @@ jobs:
           github-token: ${{ secrets.NOOK_GITHUB_PAT }}
           retries: 3
           script: |
-            const { publishTrustedResult } = require(
-              `${process.env.GITHUB_WORKSPACE}/.github/scripts/trusted-pr-publisher.cjs`,
-            )
-            await publishTrustedResult({ core, context, github })
+            const fs = require('node:fs')
+            const { validateAgentRecord } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/workbench-records.cjs`)
+            const [owner, repo] = process.env.WORKBENCH_REPOSITORY.split('/')
+            const issuePath = process.env.ISSUE_PATH.trim()
+            const feature = issuePath ? issuePath.split('/')[1] : 'unplanned'
+            const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
+            const timestamp = now.replaceAll('-', '').replaceAll(':', '')
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+            const pulls = await github.rest.pulls.list({
+              ...context.repo,
+              state: 'open',
+              head: `${context.repo.owner}:${process.env.AGENT_BRANCH}`,
+            })
+            const { data: workflowRun } = await github.rest.actions.getWorkflowRun({
+              ...context.repo,
+              run_id: context.runId,
+            })
+            const pull = pulls.data[0]
+            const success = process.env.IMPLEMENT_OUTCOME === 'success' && Boolean(pull)
+            if (success) {
+              const continuingOwner = process.env.CONTINUING_AGENT_OWNER
+              await github.rest.issues.addAssignees({
+                ...context.repo,
+                issue_number: pull.number,
+                assignees: [continuingOwner],
+              })
+              const { data: assignedPull } = await github.rest.issues.get({
+                ...context.repo,
+                issue_number: pull.number,
+              })
+              const ownerWasAssigned = assignedPull.assignees?.some(
+                ({ login }) => login.toLowerCase() === continuingOwner.toLowerCase(),
+              ) ?? false
+              if (!ownerWasAssigned) {
+                core.setFailed(`Failed to assign PR #${pull.number} to ${continuingOwner}`)
+                return
+              }
+              await github.rest.issues.createComment({
+                ...context.repo,
+                issue_number: pull.number,
+                body: `@${continuingOwner} this workflow assigned you PR #${pull.number}. Continue only this PR's recorded scope through review, exact-head validation, and squash merge.`,
+              })
+            }
+            const implementationSummaryPath = `${process.env.IMPLEMENTATION_REPO_ROOT}/${process.env.WORKBENCH_SUMMARY_FILE}`
+            const planningSummaryPath = `${process.env.GITHUB_WORKSPACE}/${process.env.WORKBENCH_SUMMARY_FILE}`
+            const implementationSummaryExists = fs.existsSync(implementationSummaryPath)
+            if (implementationSummaryExists) {
+              const artifact = fs.lstatSync(implementationSummaryPath)
+              if (!artifact.isFile() || artifact.isSymbolicLink() || artifact.size > 65536) {
+                core.setFailed('Rejected unsafe implementation worklog artifact.')
+                return
+              }
+            }
+            const summaryPath = implementationSummaryExists
+              ? implementationSummaryPath
+              : planningSummaryPath
+            const fallbackSummary = [
+                  '# Automated agent work summary',
+                  '',
+                  '## Outcome',
+                  '',
+                  success ? `Opened Nook PR [#${pull.number}](${pull.html_url}).` : 'The bounded implementation run did not open a pull request.',
+                  '',
+                  '## Progress',
+                  '',
+                  '- See the linked workflow run for the execution boundary.',
+                  '',
+                  '## Implementation problems',
+                  '',
+                  success ? '- No problem summary was emitted by the bounded worker.' : '- The workflow or agent stopped before a pull request was opened.',
+                  '',
+                  '## Decisions',
+                  '',
+                  '- None recorded.',
+                  '',
+                  '## Validation',
+                  '',
+                  `- [Agent implement run ${context.runId}](${runUrl})`,
+                  '',
+                  '## Remaining work',
+                  '',
+                  success ? `- GitHub assigned and notified continuing owner \`${process.env.CONTINUING_AGENT_OWNER}\` for validation and merge of the Nook PR.` : '- Inspect the workflow failure and return the issue to ready after correcting the blocker.',
+                ].join('\n')
+            let summary = fallbackSummary
+            if (fs.existsSync(summaryPath)) {
+              const candidate = fs.readFileSync(summaryPath, 'utf8').trim()
+              const secrets = [process.env.CURSOR_SECRET, process.env.NOOK_SECRET]
+              const rejection = validateAgentRecord(candidate, 'worklog', secrets, process.env.AGENT_PROMPT)
+              if (rejection) {
+                core.warning(`Rejected agent-authored Workbench summary: ${rejection}; publishing trusted fallback metadata.`)
+              } else {
+                summary = candidate
+              }
+            }
+            const budgetBlocker = process.env.BUDGET_BLOCKER_B64
+              ? Buffer.from(process.env.BUDGET_BLOCKER_B64, 'base64').toString('utf8')
+              : ''
+            const budgetMatch = budgetBlocker.match(/^Implemented diff exceeds the 2000 authored-addition budget: (\d+)$/)
+            if (budgetMatch) {
+              summary = [
+                '# Automated agent work summary',
+                '',
+                '## Outcome',
+                '',
+                `Blocked before publication: the trusted formatter measured ${budgetMatch[1]} authored changed lines, above the 2,000-line PR creation limit.`,
+                '',
+                '## Progress',
+                '',
+                '- The bounded agent completed editing and trusted formatting, but no implementation branch or PR was published.',
+                '',
+                '## Implementation problems',
+                '',
+                `- ${budgetBlocker}. The accepted plan underestimated the final formatted diff.`,
+                '',
+                '## Decisions',
+                '',
+                '- Delivery stopped at the trusted authored-line budget; no split or successor PR was created.',
+                '',
+                '## Validation',
+                '',
+                `- [Agent implement run ${context.runId}](${runUrl})`,
+                '',
+                '## Remaining work',
+                '',
+                '- Re-scope or simplify the task before returning it to ready.',
+              ].join('\n')
+            }
+            const worklogPath = `worklogs/${feature}/${timestamp}-run-${context.runId}.md`
+            const worklog = [
+              '---',
+              `title: ${JSON.stringify(process.env.ISSUE_TITLE || `Manual agent run ${context.runId}`)}`,
+              `feature: ${feature}`,
+              `issue: ${issuePath || 'null'}`,
+              `plan: ${process.env.PLAN_PATH || 'null'}`,
+              `nook_pr: ${pull?.html_url || 'null'}`,
+              `status: ${success ? 'in_progress' : 'blocked'}`,
+              `started_at: ${workflowRun.created_at || now}`,
+              `finished_at: ${now}`,
+              'agent: cursor',
+              '---',
+              '',
+              summary,
+              '',
+            ].join('\n')
+            await github.rest.repos.createOrUpdateFileContents({
+              owner,
+              repo,
+              path: worklogPath,
+              branch: 'main',
+              message: `worklog: agent run ${context.runId}`,
+              content: Buffer.from(worklog).toString('base64'),
+            })
+
+            if (!issuePath) return
+            const { data } = await github.rest.repos.getContent({ owner, repo, path: issuePath, ref: 'main' })
+            if (Array.isArray(data) || data.type !== 'file') {
+              core.setFailed(`Workbench issue is not a file: ${issuePath}`)
+              return
+            }
+            let body = Buffer.from(data.content, 'base64').toString('utf8')
+              .replace(/^updated_at:\s*.+$/m, `updated_at: ${now}`)
+            if (!success) body = body.replace(/^status:\s*in_progress$/m, 'status: blocked')
+            if (pull) {
+              body = body.replace(
+                /^related_prs:\s*\[(.*)\]$/m,
+                (_line, entries) => {
+                  const current = entries.trim()
+                  if (current.includes(pull.html_url)) return _line
+                  const separator = current ? ', ' : ''
+                  return `related_prs: [${current}${separator}${JSON.stringify(pull.html_url)}]`
+                },
+              )
+            }
+            const progressOutcome = success
+              ? `opened [Nook PR #${pull.number}](${pull.html_url})`
+              : 'stopped before opening a PR'
+            const progress = `- ${now}: [Agent run ${context.runId}](${runUrl}) ${progressOutcome}; [worklog](/${owner}/${repo}/blob/main/${worklogPath}).`
+            body = body.replace(/^## Progress\s*$/m, `## Progress\n\n${progress}`)
+            await github.rest.repos.createOrUpdateFileContents({
+              owner,
+              repo,
+              path: issuePath,
+              branch: 'main',
+              sha: data.sha,
+              message: `${success ? 'progress' : 'block'}: ${issuePath}`,
+              content: Buffer.from(body).toString('base64'),
+            })

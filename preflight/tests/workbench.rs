@@ -33,8 +33,6 @@ fn directory_has_files(path: &Path) -> bool {
 #[test]
 fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Result<()> {
     let workflow = read(".github/workflows/agent-implement.yml");
-    let publisher = read(".github/scripts/trusted-pr-publisher.cjs");
-    let publication = format!("{workflow}\n{publisher}");
     let plan_script = read(".github/scripts/ci-agent-plan.sh");
     let record_validator = read(".github/scripts/workbench-records.cjs");
 
@@ -64,12 +62,12 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "node \"$GITHUB_WORKSPACE/agentic-ai/ci-agent/dist/main/main.js\" deliver",
         "Rejected unsafe implementation worklog artifact.",
         "ASSIGNED_GIZMO_ID: ${{ steps.workbench.outputs.gizmo_id }}",
-        "assignedGizmoId,",
-        "^- Current Gizmo ID:\\s*([a-z0-9]+(?:-[a-z0-9]+)*)\\s*$/m",
-        "const currentGizmoId =",
-        "Validated plan is missing its Current Gizmo ID.",
+        "assignedGizmoId: process.env.ASSIGNED_GIZMO_ID",
+        "const currentGizmoIdMatch = /^- Current Gizmo ID:\\s*([a-z0-9]+(?:-[a-z0-9]+)*)\\s*$/m",
+        "const currentGizmoId = currentGizmoIdMatch?.[1]",
+        "Validated Workbench task plan is missing its Current Gizmo ID.",
         "`gizmo_id: ${currentGizmoId}`",
-        "!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(assignedGizmoId)",
+        "assignedGizmoId && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(assignedGizmoId)",
         "frontmatter.matchAll(/^gizmo_id:\\s*(.*)$/gm)",
         "gizmoIdRows.length > 1",
         "continuing_owner:",
@@ -122,15 +120,15 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "if: steps.plan.outcome == 'success'",
         "steps.plan.outputs.planning_blocked != 'true'",
         "Rejected planning blocker",
-        "blocker,\n      'worklog',",
-        "candidate,\n      'worklog',",
+        "validateAgentRecord(blocker, 'worklog', secrets, process.env.AGENT_PROMPT)",
+        "validateAgentRecord(candidate, 'worklog', secrets, process.env.AGENT_PROMPT)",
         "`plan: ${process.env.PLAN_PATH || 'null'}`",
-        "No problem summary was emitted by the bounded worker.",
+        "publishing trusted fallback metadata",
         "## Decisions",
         "worklogs/${feature}/",
     ] {
         assert!(
-            publication.contains(required),
+            workflow.contains(required),
             "Workbench agent workflow is missing: {required}"
         );
     }
@@ -252,10 +250,19 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
     let plan_position = workflow
         .find("Validate and publish Workbench task plan")
         .context("the workflow must validate and publish its Workbench plan")?;
+    let trusted_plan_validation_position = workflow
+        .find("const rejection = validateAgentRecord(candidate, 'plan'")
+        .context("the workflow must validate the candidate plan with trusted context")?;
+    let current_gizmo_position = workflow
+        .find("const currentGizmoIdMatch")
+        .context("the workflow must extract the validated Current Gizmo ID")?;
+    let persisted_gizmo_position = workflow
+        .find("`gizmo_id: ${currentGizmoId}`")
+        .context("the workflow must persist the validated Current Gizmo ID")?;
     assert!(
-        publisher.contains("validateAgentRecord(candidate, 'plan'")
-            || publisher.contains("candidate,\n    'plan',"),
-        "the publisher must validate the candidate plan with trusted context"
+        trusted_plan_validation_position < current_gizmo_position
+            && current_gizmo_position < persisted_gizmo_position,
+        "Current Gizmo ID must be extracted only after trusted validation and then persisted"
     );
     let implementation_position = workflow
         .find("Run sandboxed implementation agent")
@@ -263,100 +270,6 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
     assert!(
         plan_position < implementation_position,
         "the workflow must publish the interpreted task plan before implementation"
-    );
-    Ok(())
-}
-
-#[test]
-fn agent_implementation_publishes_prs_with_trusted_workbench_metadata() -> anyhow::Result<()> {
-    let workflow = read(".github/workflows/agent-implement.yml");
-    let publisher = read(".github/scripts/trusted-pr-publisher.cjs");
-    let plan_prompt = read(".github/prompts/agent-plan.md");
-    let normalized_plan_prompt = plan_prompt.split_whitespace().collect::<Vec<_>>().join(" ");
-
-    for required in [
-        "must have a valid canonical gizmo_id before PR publication",
-        "must have a trusted capability-oriented title before PR publication",
-        "issues/unplanned/run-${runId}.md",
-        "Existing manual focused issue does not match this trusted run",
-        "Validated task context is missing a safe capability title.",
-        "## Agent-task provenance",
-        "- Harness: GitHub Actions trusted publisher",
-        "- Opaque task ID: [workflow run ${runId}](${runUrl})",
-        "## Workbench authority",
-        "Focused issue: [\\`${issuePath}\\`](${issueUrl})",
-        "Task-start plan: [\\`${taskStartPath}\\`](${taskStartUrl})",
-        "AGENT_PR_TITLE<<${delimiter}",
-        "AGENT_PR_BODY<<${delimiter}",
-        "ISSUE_PATH: ${{ steps.plan.outputs.issue_path || steps.workbench.outputs.path }}",
-        "ISSUE_TITLE: ${{ steps.plan.outputs.issue_title || steps.workbench.outputs.title }}",
-        "safeCapabilityTitle(issueTitle)",
-        "github.rest.git.updateRef",
-        "force: false",
-        "`- [ ] [${markdownTitle}](${issueName})`",
-        "core.setOutput('issue_path', claimedIssuePath)",
-        "core.setOutput('issue_title', claimedIssueTitle)",
-        "Gizmo name:\\\\s*(.+?)\\\\s*;\\\\s*Predecessor Gizmo ID:",
-        "const worklogUrl = `https://github.com/${owner}/${repo}/blob/main/${worklogPath}`",
-    ] {
-        assert!(
-            publisher.contains(required) || workflow.contains(required),
-            "trusted PR publisher is missing: {required}"
-        );
-    }
-    assert!(
-        !workflow.contains("title=\"Agent implement (run ${RUN_ID})\"")
-            && !workflow.contains("Owned scope: manual prompt run")
-            && !workflow.contains("[\\p{L}\\p{N} .,:()'’\\/&+_-]"),
-        "PR metadata must not publish generic or private manual-prompt context"
-    );
-    assert!(
-        workflow.contains("if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(assignedGizmoId))")
-            && normalized_plan_prompt.contains(
-                "When the task source is a focused Workbench issue, require canonical `gizmo_id` frontmatter."
-            )
-            && !normalized_plan_prompt.contains("Legacy standalone issues without `gizmo_id`"),
-        "missing, null, and invalid focused-issue Gizmo IDs must fail before claim"
-    );
-
-    let claimed_issue_output_position = publisher
-        .find("core.setOutput('issue_path', claimedIssuePath)")
-        .context("the plan step must retain the claimed issue path")?;
-    let planning_blocked_position = publisher
-        .find("core.setOutput('planning_blocked', 'true')")
-        .context("the plan step must report a validated planning blocker")?;
-    assert!(
-        claimed_issue_output_position < planning_blocked_position,
-        "claimed issue metadata must survive the planning-blocked return"
-    );
-
-    let manual_plan_positions = publisher
-        .match_indices("await publishImmutablePlan({")
-        .map(|(position, _)| position)
-        .collect::<Vec<_>>();
-    let manual_issue_position = publisher
-        .find("await establishManualIssue({")
-        .context("manual dispatch must establish its focused issue")?;
-    let pr_body_position = publisher
-        .find("const prBody = [")
-        .context("the workflow must construct trusted PR metadata")?;
-    let worklog_publication_position = publisher
-        .find("path: worklogPath")
-        .context("the workflow must publish its immutable worklog")?;
-    let pr_worklog_update_position = publisher
-        .find("github.rest.pulls.update")
-        .context("the workflow must add the worklog URL to the PR body")?;
-    assert!(
-        manual_plan_positions.len() == 3
-            && manual_plan_positions[1] < manual_issue_position
-            && manual_issue_position < manual_plan_positions[2]
-            && manual_plan_positions[2] < pr_body_position,
-        "focused issue and immutable plan publication must precede PR metadata construction and delivery"
-    );
-    assert!(
-        worklog_publication_position < pr_worklog_update_position
-            && publisher.contains("const body = withWorklogUrl(currentBody"),
-        "the published worklog URL must extend the existing PR metadata without replacing it"
     );
     Ok(())
 }
