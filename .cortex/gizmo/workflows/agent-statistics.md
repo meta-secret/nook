@@ -39,7 +39,8 @@ It is not a free-form task diary.
   - `pr_retriggers`;
   - `merge_attempts`;
   - `comparison`; and
-  - `waste_assessment`.
+  - `waste_assessment`;
+  - `test_inventory` from hosted exact-head validation.
 
 Assemble request:
 

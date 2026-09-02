@@ -11,6 +11,7 @@ rust:ci
 loom:verify
 web:build
 web:e2e
+extension:check:fast
 extension:e2e
 hive:verify
 check
@@ -67,6 +68,7 @@ normalize_tasks() {
   if (( count > 1 )) \
     && { [[ "$seen" == *",web:build,"* ]] \
       || [[ "$seen" == *",web:e2e,"* ]] \
+      || [[ "$seen" == *",extension:check:fast,"* ]] \
       || [[ "$seen" == *",extension:e2e,"* ]] \
       || [[ "$seen" == *",check,"* ]] \
       || [[ "$seen" == *",ci:pr,"* ]] \
@@ -86,6 +88,7 @@ task_command() {
     loom:verify) echo "task loom:verify" ;;
     web:build) echo "task web:build" ;;
     web:e2e) echo "task web:test:e2e" ;;
+    extension:check:fast) echo "task extension:check:fast" ;;
     extension:e2e) echo "task extension:test:e2e" ;;
     hive:verify) echo "task hive:verify" ;;
     check) echo "task check" ;;
@@ -102,7 +105,7 @@ task_timeout_minutes() {
     loom:verify) echo 15 ;;
     rust:ci|hive:verify) echo 20 ;;
     web:build) echo 25 ;;
-    web:e2e|extension:e2e) echo 30 ;;
+    web:e2e|extension:check:fast|extension:e2e) echo 30 ;;
     check|ci:pr) echo 35 ;;
     ci:pr:e2e) echo 45 ;;
     *) return 2 ;;
@@ -150,6 +153,7 @@ run_task() {
     loom:verify) run_with_timeout "$timeout_minutes" task loom:verify ;;
     web:build) run_with_timeout "$timeout_minutes" task web:build ;;
     web:e2e) run_with_timeout "$timeout_minutes" env E2E_ARTIFACT_DIR="$artifact_root/web-e2e" task web:test:e2e ;;
+    extension:check:fast) run_with_timeout "$timeout_minutes" task extension:check:fast ;;
     extension:e2e) run_with_timeout "$timeout_minutes" env E2E_ARTIFACT_DIR="$artifact_root/extension-e2e" task extension:test:e2e ;;
     hive:verify) run_with_timeout "$timeout_minutes" env HIVE_CACHE_TO= task hive:verify ;;
     check) run_with_timeout "$timeout_minutes" task check ;;
@@ -167,7 +171,7 @@ requires_current_base() {
   IFS=',' read -r -a tasks <<< "$normalized_tasks"
   for task in "${tasks[@]}"; do
     case "$task" in
-      loom:verify|web:e2e|extension:e2e|check|ci:pr|ci:pr:e2e) return 0 ;;
+      loom:verify|web:e2e|extension:check:fast|extension:e2e|check|ci:pr|ci:pr:e2e) return 0 ;;
     esac
   done
   return 1

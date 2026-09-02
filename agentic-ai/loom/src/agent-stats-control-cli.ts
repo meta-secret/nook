@@ -15,6 +15,7 @@ import {
   asUntrustedYamlNode,
   isRecord,
   untrustedYamlProperty,
+  type UntrustedYamlMap,
   type UntrustedYamlNode,
 } from './lib/guards.ts';
 import {
@@ -23,6 +24,12 @@ import {
   runAgentStatsValidate,
   type AgentStatsReport,
 } from './commands/agent-stats.ts';
+import { resolveAgentTempPath } from './lib/agent-temp-path.ts';
+import {
+  OptionalRecordKind,
+  loadScratchEventLog,
+} from './lib/agent-stats-assemble.ts';
+import { findRepoRoot } from './lib/repo.ts';
 
 export enum AgentStatsControlField {
   Operation = 'operation',
@@ -121,12 +128,43 @@ export async function executeAgentStatsControlRequest(
 ): Promise<AgentStatsReport> {
   switch (request.operation) {
     case AgentStatsOperation.Assemble:
+      requireHostedTestInventory(request.request);
       return runAgentStatsAssemble(request.request);
     case AgentStatsOperation.Validate:
       return runAgentStatsValidate(request.request);
     case AgentStatsOperation.Publish:
       return runAgentStatsPublish(request.request);
   }
+}
+
+export function requireHostedTestInventory(
+  request: AgentStatsAssembleRequest,
+): void {
+  const repoRoot = findRepoRoot();
+  const scratchPath = resolveAgentTempPath({
+    repoRoot,
+    authoredPath: request.scratchPath,
+  });
+  const scratch = loadScratchEventLog(scratchPath);
+  assertHostedTestInventory(
+    scratch.test_inventory.kind === OptionalRecordKind.Present
+      ? scratch.test_inventory.value
+      : false,
+  );
+}
+
+export function assertHostedTestInventory(
+  inventory: UntrustedYamlMap | false,
+): void {
+  if (!inventory) {
+    hostedTestInventoryFailure();
+  }
+}
+
+function hostedTestInventoryFailure(): never {
+  throw new Error(
+    'Agent statistics assembly requires typed test_inventory from hosted exact-head validation.',
+  );
 }
 
 function decodeFailure(errors: readonly FieldError[]): string {

@@ -1,6 +1,16 @@
 import { describe, expect, test } from 'bun:test';
 import { AgentStatsOperation } from '../src/codec/enums.ts';
-import { decodeAgentStatsControlRequest } from '../src/agent-stats-control-cli.ts';
+import {
+  assertHostedTestInventory,
+  decodeAgentStatsControlRequest,
+} from '../src/agent-stats-control-cli.ts';
+
+const VALID_HOSTED_INVENTORY = {
+  measured_at: '2026-09-02T12:00:00Z',
+  head_sha: '0123456789abcdef0123456789abcdef01234567',
+  by_type: { rust: 1, preflight: 2, web_unit: 3, e2e: 4 },
+  total: 10,
+} as const;
 
 describe('agent statistics control request', () => {
   test('accepts dependency-free assemble, validate, and publish requests', () => {
@@ -66,5 +76,14 @@ describe('agent statistics control request', () => {
         }),
       ),
     ).toThrow('must contain exactly operation and request');
+  });
+
+  test('requires hosted inventory before assembly', () => {
+    expect(() => assertHostedTestInventory(false)).toThrow(
+      'requires typed test_inventory from hosted exact-head validation',
+    );
+    expect(() =>
+      assertHostedTestInventory(VALID_HOSTED_INVENTORY),
+    ).not.toThrow();
   });
 });

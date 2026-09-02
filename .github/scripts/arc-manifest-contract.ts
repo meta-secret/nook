@@ -648,6 +648,7 @@ remoteWorkflow.requireAll([
   "Run selected task without a nested container runtime",
   "web:build) task _web:build",
   "task _web:test:e2e",
+  "extension:check:fast) task extension:check:fast",
   "extension:e2e) task _extension:test:e2e",
   "check) task _check",
   "ci:pr) task _ci:pr",

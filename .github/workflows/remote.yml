@@ -60,6 +60,7 @@ jobs:
       ((inputs.task != 'rust-cache:promote' || inputs.tasks != '') &&
       (inputs.tasks || inputs.task) != 'web:build' &&
       (inputs.tasks || inputs.task) != 'web:e2e' &&
+      (inputs.tasks || inputs.task) != 'extension:check:fast' &&
       (inputs.tasks || inputs.task) != 'extension:e2e' &&
       (inputs.tasks || inputs.task) != 'check' &&
       (inputs.tasks || inputs.task) != 'ci:pr' &&
@@ -165,6 +166,7 @@ jobs:
       (inputs.tasks == '' || inputs.task == '') &&
       ((inputs.tasks || inputs.task) == 'web:build' ||
       (inputs.tasks || inputs.task) == 'web:e2e' ||
+      (inputs.tasks || inputs.task) == 'extension:check:fast' ||
       (inputs.tasks || inputs.task) == 'extension:e2e' ||
       (inputs.tasks || inputs.task) == 'check' ||
       (inputs.tasks || inputs.task) == 'ci:pr' ||
@@ -203,6 +205,7 @@ jobs:
       (inputs.tasks == '' || inputs.task == '') &&
       ((inputs.tasks || inputs.task) == 'web:build' ||
       (inputs.tasks || inputs.task) == 'web:e2e' ||
+      (inputs.tasks || inputs.task) == 'extension:check:fast' ||
       (inputs.tasks || inputs.task) == 'extension:e2e' ||
       (inputs.tasks || inputs.task) == 'check' ||
       (inputs.tasks || inputs.task) == 'ci:pr' ||
@@ -228,6 +231,7 @@ jobs:
           case "$REMOTE_CONTAINER_TASK" in
             web:build) task _web:build ;;
             web:e2e) task _web:test:e2e ;;
+            extension:check:fast) task extension:check:fast ;;
             extension:e2e) task _extension:test:e2e ;;
             check) task _check ;;
             ci:pr) task _ci:pr ;;

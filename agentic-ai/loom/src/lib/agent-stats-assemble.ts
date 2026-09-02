@@ -270,12 +270,11 @@ export async function assembleAgentStats(
     const inventoryArgs = { repoRoot: options.repoRoot, headSha };
     inventory = countTestInventory(inventoryArgs);
   } else {
-    inventory = {
-      measured_at: new Date().toISOString(),
-      head_sha: headSha,
-      by_type: { rust: 0, preflight: 0, web_unit: 0, e2e: 0 },
-      total: 0,
+    const inventoryFailure: LoomFailureDetailArgs = {
+      code: LoomFailureCode.ScratchLogInvalid,
+      text: 'AI-agent stats require test_inventory from hosted exact-head validation',
     };
+    loomFailureDetail(inventoryFailure);
   }
 
   const cacheTelemetry =

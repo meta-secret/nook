@@ -395,6 +395,29 @@ describe('canonical Cortex team authority', () => {
     }
   });
 
+  test('rejects locally scoped test directives with arbitrary modifiers', async () => {
+    const fixtureRoot = await writableCortexAuthorityFixture();
+    try {
+      const authorityPath = join(fixtureRoot, '.cortex/AGENTS.md');
+      await writeFile(
+        authorityPath,
+        `${await readFile(authorityPath, 'utf8')}\nWorkers must run unit tests locally.\nRun all tests locally.\n`,
+        'utf8',
+      );
+
+      const report = auditTeamAgents({ repoRoot: fixtureRoot });
+      expect(report.findings).toHaveLength(2);
+      expect(report.findings.map((finding) => finding.message)).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining('Workers must run unit tests locally.'),
+          expect.stringContaining('Run all tests locally.'),
+        ]),
+      );
+    } finally {
+      await rm(fixtureRoot, REMOVE_RECURSIVELY);
+    }
+  });
+
   test('rejects qualified local execution grants', async () => {
     const fixtureRoot = await writableCortexAuthorityFixture();
     try {

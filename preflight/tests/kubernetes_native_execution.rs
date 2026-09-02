@@ -20,6 +20,7 @@ const EXPECTED_REMOTE_CATALOG: &[&str] = &[
     "loom:verify",
     "web:build",
     "web:e2e",
+    "extension:check:fast",
     "extension:e2e",
     "hive:verify",
     "check",

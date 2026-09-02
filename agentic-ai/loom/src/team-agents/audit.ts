@@ -89,6 +89,8 @@ const PROHIBITED_COMMAND =
 const AGENT_COMMAND_DIRECTION =
   /\b(?:agents?|team agents?|workers?|gizmo)\s+(?:may|can|must|shall|need to|are allowed to|is allowed to|are required to|is required to)\s+(?:ask\s+(?:an?\s+)?(?:team\s+)?(?:agent|worker)s?\s+to\s+)?(?:locally\s+)?(?:run|invoke|perform|execute)\s+/iu;
 const IMPERATIVE_COMMAND_DIRECTION = /^(?:run|invoke|perform|execute)\s+/iu;
+const PROHIBITED_EXECUTION_OBJECT =
+  /(?:compilation|compilers?|checks?|checking|tests?|testing|test runners?|test suites?|linting|linters?|typechecks?|typechecking|typecheckers?|builds?|bundles?|bundling|bundlers?|validation|installs?|installing|dependency installation|package installers?|browser suites?)$/iu;
 const EXECUTION_LIST_DIRECTION =
   /^(?:agents?|team agents?|workers?|gizmo)\s+(?:may|can|must|shall|need to|are allowed to|is allowed to|are required to|is required to)(?:\s+not)?(?:\s+ask\s+(?:an?\s+)?(?:team\s+)?(?:agent|worker)s?\s+to)?\s*:$/iu;
 const QUALIFIED_AUTHORITY_DIRECTION =
@@ -332,7 +334,7 @@ function appendLocalExecutionGrantFindings(
       IMPERATIVE_COMMAND_DIRECTION.exec(normalizedStatement),
     ].some((match) =>
       match
-        ? PROHIBITED_COMMAND.test(
+        ? prohibitedExecutionObject(
             normalizedStatement.slice(match.index + match[0].length),
           )
         : false,
@@ -351,6 +353,19 @@ function appendLocalExecutionGrantFindings(
       });
     }
   }
+}
+
+function prohibitedExecutionObject(text: string): boolean {
+  const localExecutionIndex = text.search(LOCAL_EXECUTION);
+  const normalizedObject = text
+    .slice(0, localExecutionIndex === -1 ? undefined : localExecutionIndex)
+    .trim()
+    .replace(/[,:;]+$/u, '')
+    .trim();
+  return (
+    PROHIBITED_COMMAND.test(text) ||
+    PROHIBITED_EXECUTION_OBJECT.test(normalizedObject)
+  );
 }
 
 function markdownStatements(source: string): readonly string[] {
