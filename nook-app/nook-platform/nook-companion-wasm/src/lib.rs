@@ -29,10 +29,12 @@ const EXTENSION_VAULT_EVENT_TYPESCRIPT: &str =
 #[wasm_bindgen]
 #[must_use]
 pub fn validate_extension_session_request(
-    request: nook_companion_core::ExtensionSessionRequestWire,
+    #[wasm_bindgen(unchecked_param_type = "ExtensionSessionRequestWire")]
+    request: wasm_bindgen::JsValue,
 ) -> nook_companion_core::ExtensionSessionRequestValidation {
-    drop(request);
-    nook_companion_core::ExtensionSessionRequestValidation::Accepted
+    serde_wasm_bindgen::from_value::<nook_companion_core::ExtensionSessionRequestWire>(request)
+        .map(|_| nook_companion_core::ExtensionSessionRequestValidation::Accepted)
+        .unwrap_or(nook_companion_core::ExtensionSessionRequestValidation::Rejected)
 }
 
 #[wasm_bindgen]
