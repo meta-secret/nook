@@ -8,7 +8,6 @@ import type {
   WebsiteLoginSaveOfferView,
 } from '../src/lib/login-save-messages'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
-import type { DecodedOtpauthCandidate } from '../src/lib/page-qr-capture'
 import type { EnrollmentFlowHost } from '../src/content/enrollment-flow'
 
 await companionWasmReady
@@ -116,7 +115,6 @@ Object.assign(globalThis, {
   },
 })
 type RefreshResponse = { ok: true } | { ok: false }
-
 function captureRefreshResponse(): {
   sendResponse: (response: RefreshResponse) => void
   response: Promise<RefreshResponse>
@@ -136,6 +134,7 @@ function captureRefreshResponse(): {
 }
 
 const deferred = <T>() => Promise.withResolvers<T>()
+const delivered = <T>(response: T) => ({ kind: 'delivered' as const, response })
 
 test('delivers cleanup cancellation through the content-script router', async () => {
   const { LoginPickerKind, pickerState } =
@@ -334,139 +333,94 @@ test('refresh dismisses an in-flight save offer before rescanning', async () => 
   )
   expect(schedule).toHaveBeenCalledOnce()
 })
-
+const enrollmentFlow = await import('../src/content/enrollment-flow')
+const {
+  WidgetEnrollCancel: enrollmentCancel,
+  WidgetEnrollFailed: enrollmentFailed,
+  WidgetEnrollSaved: enrollmentSaved,
+  WidgetEnrollStaging: enrollmentStaging,
+  WidgetEnrollVerifyPending: enrollmentPending,
+} = BROWSER_MESSAGE_KEYS
 test('refresh retains staged enrollment UI when dismissal fails', async () => {
-  const {
-    assignStagedEnrollmentCeremony,
-    beginActiveEnrollmentCeremony,
-    cancelActiveEnrollmentCeremony,
-  } = await import('../src/content/enrollment-flow')
   const { routeAutofillMessage, removeScannedWidget } =
     await import('../src/content/autofill/message-router')
   const { scanState, widgetState } =
     await import('../src/content/autofill/state')
-  let dismissalAccepted = false
-  const description = { textContent: 'Enrollment retry available' }
-  const host = {
-    description,
-    sendAuthenticatorEnrollmentDismissRuntimeMessage: async () =>
-      dismissalAccepted,
-  } as EnrollmentFlowHost
-  const sensitiveMaterial = {
-    uri: { value: '' },
-    payload: { otpauthUri: '' },
-    candidate: { sourceLabel: '', otpauthUri: '' },
-  }
-  const generation = beginActiveEnrollmentCeremony({
-    host,
-    stageId: 'stage-refresh-dismissal',
-    sensitiveMaterial,
-  })
-  expect(
-    assignStagedEnrollmentCeremony({
-      authorizationGeneration: generation,
-      host,
-      stageId: 'stage-refresh-dismissal',
-    }),
-  ).toBe(true)
+  const result = await runMismatchedStageResponse([false, false, true])
+  expect(enrollmentFlow.enrollmentCeremonyActive()).toBe(true)
+  result.host.description.textContent = 'Enrollment retry available'
   const remove = mock(() => {})
   widgetState.attachHost({ remove } as unknown as HTMLElement)
   const schedule = mock(() => {})
   scanState.schedule = schedule
   const responseCapture = captureRefreshResponse()
-
   routeAutofillMessage(
     { type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces },
     { id: 'nook-extension' },
     responseCapture.sendResponse,
   )
-
   await expect(responseCapture.response).resolves.toEqual({ ok: false })
   expect(remove).not.toHaveBeenCalled()
-  expect(description.textContent).toBe('Enrollment retry available')
+  expect(result.host.description.textContent).toBe('Enrollment retry available')
   expect(schedule).not.toHaveBeenCalled()
-  dismissalAccepted = true
-  expect(await cancelActiveEnrollmentCeremony()).toBe(true)
+  expect(await enrollmentFlow.cancelActiveEnrollmentCeremony()).toBe(true)
   removeScannedWidget()
 })
-
 test('pending cancellation revokes the serialized stage and scrubs local URI', async () => {
-  const { beginEnrollmentCeremony, cancelActiveEnrollmentCeremony } =
-    await import('../src/content/enrollment-flow')
-  const uri = { value: 'otpauth://pending-secret' }
-  const candidate: DecodedOtpauthCandidate = {
-    sourceLabel: 'QR',
-    otpauthUri: uri.value,
-  }
-  const neverSettles = new Promise<void>(() => {})
+  const pendingSecret = 'otpauth://pending-secret'
+  const uri = { value: pendingSecret }
+  const candidate = { sourceLabel: 'QR', otpauthUri: uri.value }
   const serializedMessages: Parameters<
     EnrollmentFlowHost['sendAuthenticatorEnrollmentStageRuntimeMessage']
   >[0][] = []
   let contentPayload: { otpauthUri: string } | false = false
   const dismissalStageIds: string[] = []
-  const host = {
+  const host: Partial<EnrollmentFlowHost> = {
     description: { textContent: '' },
     translatedMessage: () => 'Staging enrollment',
-    sendAuthenticatorEnrollmentStageRuntimeMessage: (
-      message: (typeof serializedMessages)[number],
-    ) => {
+    sendAuthenticatorEnrollmentStageRuntimeMessage: (message) => {
       contentPayload = message.payload
       serializedMessages.push(structuredClone(message))
-      return neverSettles
+      return new Promise<void>(() => {})
     },
-    sendAuthenticatorEnrollmentDismissRuntimeMessage: async (
-      message: Parameters<
-        EnrollmentFlowHost['sendAuthenticatorEnrollmentDismissRuntimeMessage']
-      >[0],
-    ) => {
-      dismissalStageIds.push(message.payload.stageId)
-      return true
-    },
-  } as unknown as EnrollmentFlowHost
-  void beginEnrollmentCeremony({
-    host,
+    sendAuthenticatorEnrollmentDismissRuntimeMessage: async ({ payload }) =>
+      dismissalStageIds.push(payload.stageId) > 0,
+  }
+  void enrollmentFlow.beginEnrollmentCeremony({
+    host: host as EnrollmentFlowHost,
     section: {} as HTMLElement,
     vaultStoreId: 'vault-pending',
     otpauthUri: uri,
     candidate,
   })
   expect(serializedMessages).toHaveLength(1)
-  expect(serializedMessages[0]?.payload.otpauthUri).toBe(
-    'otpauth://pending-secret',
-  )
-  expect(await cancelActiveEnrollmentCeremony()).toBe(true)
+  expect(serializedMessages[0]?.payload.otpauthUri).toBe(pendingSecret)
+  expect(await enrollmentFlow.cancelActiveEnrollmentCeremony()).toBe(true)
   expect(uri.value).toBe('')
   expect(candidate.otpauthUri).toBe('')
   expect(contentPayload && contentPayload.otpauthUri).toBe('')
   expect(dismissalStageIds).toEqual([serializedMessages[0]?.payload.stageId])
-  expect(serializedMessages[0]?.payload.otpauthUri).toBe(
-    'otpauth://pending-secret',
-  )
+  expect(serializedMessages[0]?.payload.otpauthUri).toBe(pendingSecret)
 })
-
 async function runMismatchedStageResponse(
   dismissalResults: boolean[],
   scenario = StageScenario.Mismatch,
   onFirstDismiss?: () => Promise<void>,
 ) {
-  const { beginEnrollmentCeremony } =
-    await import('../src/content/enrollment-flow')
+  const mismatchSecret = 'otpauth://mismatch-secret'
   let requestedStageId = ''
   const dismissedStageIds: string[] = []
+  type Click = (event: { isTrusted: boolean }) => void
   type Control = { textContent: string; triggerTrusted: () => void }
   const controls: Control[] = []
   Object.assign(document, {
     createElement: () => {
-      let click: (event: { isTrusted: boolean }) => void = () => {}
+      let click: Click = () => {}
       return {
         textContent: '',
         setAttribute: () => {},
-        addEventListener: (
-          _type: string,
-          listener: (event: { isTrusted: boolean }) => void,
-        ) => {
-          click = listener
-        },
+        addEventListener: (_type: string, listener: Click) =>
+          (click = listener),
         triggerTrusted: () => click({ isTrusted: true }),
       }
     },
@@ -474,8 +428,8 @@ async function runMismatchedStageResponse(
   let busy = false
   let codeRequestCount = 0
   let commitReady = false
-  let refreshRequestCount = 0
   const refreshRequested = deferred<void>()
+  const requestRefresh = mock(() => refreshRequested.resolve())
   let cancelRenderCount = 0
   const cancelRetryRendered = deferred<void>()
   const confirm = deferred<unknown>()
@@ -489,47 +443,35 @@ async function runMismatchedStageResponse(
     },
     append: (control: Control) => controls.push(control),
   } as unknown as HTMLElement
-  const hostDefinition: Partial<EnrollmentFlowHost> = {
+  const host = {
     description: { textContent: '' },
     panel: { querySelector: () => ({ remove: () => {} }) as Element },
     isBusy: () => busy,
-    setBusy: (value: boolean) => {
-      busy = value
-    },
-    requestWorkflowReclassification: () => {
-      refreshRequestCount += 1
-      refreshRequested.resolve()
-    },
+    setBusy: (value: boolean) => (busy = value),
+    requestWorkflowReclassification: requestRefresh,
     translatedMessage: (key: string) => key,
     sendAuthenticatorEnrollmentStageRuntimeMessage: async (message) => {
       requestedStageId = message.payload.stageId
-      return {
-        kind: 'delivered',
-        response: {
-          kind: 0,
-          stageId:
-            scenario !== StageScenario.Mismatch
-              ? requestedStageId
-              : 'response-supplied-mismatch',
-        },
-      }
+      return delivered({
+        kind: 0,
+        stageId:
+          scenario === StageScenario.Mismatch
+            ? 'response-supplied-mismatch'
+            : requestedStageId,
+      })
     },
-    sendAuthenticatorCodeRuntimeMessage: async () => ({
-      kind: 'delivered',
-      response:
+    sendAuthenticatorCodeRuntimeMessage: async () =>
+      delivered(
         scenario === StageScenario.Expiry && codeRequestCount++ > 0
           ? { kind: 1, reason: 'authenticator-stage-missing' }
           : { kind: 0, code: '123456', expiresAt: Date.now() + 30_000 },
-    }),
+      ),
     sendAuthenticationOutcomeRuntimeMessage: async () =>
       scenario === StageScenario.Confirm && commitReady
-        ? {
-            kind: 'delivered',
-            response: {
-              kind: 0,
-              verdict: { verdict: 0, allowsCredentialCommit: true },
-            },
-          }
+        ? delivered({
+            kind: 0,
+            verdict: { verdict: 0, allowsCredentialCommit: true },
+          })
         : { kind: 'unavailable' },
     sendAuthenticatorEnrollmentConfirmRuntimeMessage: () => {
       confirmStarted.resolve()
@@ -537,123 +479,94 @@ async function runMismatchedStageResponse(
     },
     sendAuthenticatorEnrollmentDismissRuntimeMessage: async (message) => {
       dismissedStageIds.push(message.payload.stageId)
-      if (scenario === StageScenario.Confirm) {
-        return dismiss.promise
-      }
+      if (scenario === StageScenario.Confirm) return dismiss.promise
       const dismissed = dismissalResults.shift() ?? true
       if (dismissedStageIds.length === 1) await onFirstDismiss?.()
       return dismissed
     },
-  }
-  const host = hostDefinition as EnrollmentFlowHost
-  await beginEnrollmentCeremony({
+  } as EnrollmentFlowHost
+  await enrollmentFlow.beginEnrollmentCeremony({
     host,
     section,
     vaultStoreId: 'vault-mismatch',
-    otpauthUri: { value: 'otpauth://mismatch-secret' },
-    candidate: {
-      sourceLabel: 'QR',
-      otpauthUri: 'otpauth://mismatch-secret',
-    },
+    otpauthUri: { value: mismatchSecret },
+    candidate: { sourceLabel: 'QR', otpauthUri: mismatchSecret },
   })
   return {
     controls,
     confirm,
-    confirmStarted: confirmStarted.promise,
-    cancelRetryRendered: cancelRetryRendered.promise,
+    confirmStarted,
+    cancelRetryRendered,
     dismiss,
     dismissedStageIds,
     host,
-    refreshRequestCount: () => refreshRequestCount,
-    refreshRequested: refreshRequested.promise,
+    requestRefresh,
+    refreshRequested,
     requestedStageId,
-    startCommit: () => {
-      commitReady = true
-      runEnrollmentPoll()
-    },
+    enableCommit: () => (commitReady = true),
   }
 }
-
 test('mismatched stage response dismisses only the requested stage', async () => {
   const result = await runMismatchedStageResponse([true])
   expect(result.dismissedStageIds).toEqual([result.requestedStageId])
   expect(result.dismissedStageIds).not.toContain('response-supplied-mismatch')
 })
-
 test('failed mismatched cleanup retains the known stage for cancel retry', async () => {
-  const { cancelActiveEnrollmentCeremony, enrollmentCeremonyActive } =
-    await import('../src/content/enrollment-flow')
   const result = await runMismatchedStageResponse([false, false, true])
-  expect(enrollmentCeremonyActive()).toBe(true)
-  expect(result.host.description.textContent).toBe(
-    BROWSER_MESSAGE_KEYS.WidgetEnrollFailed,
-  )
+  expect(enrollmentFlow.enrollmentCeremonyActive()).toBe(true)
+  expect(result.host.description.textContent).toBe(enrollmentFailed)
   expect(result.controls.map(({ textContent }) => textContent)).toEqual([
-    BROWSER_MESSAGE_KEYS.WidgetEnrollCancel,
+    enrollmentCancel,
   ])
-  result.host.description.textContent =
-    BROWSER_MESSAGE_KEYS.WidgetEnrollVerifyPending
+  result.host.description.textContent = enrollmentPending
   result.controls[0]?.triggerTrusted()
-  await result.cancelRetryRendered
-  expect(result.host.description.textContent).toBe(
-    BROWSER_MESSAGE_KEYS.WidgetEnrollFailed,
-  )
+  await result.cancelRetryRendered.promise
+  expect(result.host.description.textContent).toBe(enrollmentFailed)
   expect(result.controls).toHaveLength(1)
   result.controls[0]?.triggerTrusted()
-  await result.refreshRequested
+  await result.refreshRequested.promise
   expect(result.dismissedStageIds).toHaveLength(3)
   expect(new Set(result.dismissedStageIds)).toEqual(
     new Set([result.requestedStageId]),
   )
   expect(result.dismissedStageIds).not.toContain('response-supplied-mismatch')
-  expect(enrollmentCeremonyActive()).toBe(false)
-  expect(await cancelActiveEnrollmentCeremony()).toBe(true)
+  expect(enrollmentFlow.enrollmentCeremonyActive()).toBe(false)
+  expect(await enrollmentFlow.cancelActiveEnrollmentCeremony()).toBe(true)
 })
 test('expired staged poll retires enrollment and requests fresh actions', async () => {
-  const { enrollmentCeremonyActive } =
-    await import('../src/content/enrollment-flow')
   const result = await runMismatchedStageResponse([], StageScenario.Expiry)
   runEnrollmentPoll()
-  await result.refreshRequested
-  expect(result.host.description.textContent).toBe(
-    BROWSER_MESSAGE_KEYS.WidgetEnrollFailed,
-  )
-  expect(result.refreshRequestCount()).toBe(1)
-  expect(enrollmentCeremonyActive()).toBe(false)
+  await result.refreshRequested.promise
+  expect(result.host.description.textContent).toBe(enrollmentFailed)
+  expect(result.requestRefresh).toHaveBeenCalledOnce()
+  expect(enrollmentFlow.enrollmentCeremonyActive()).toBe(false)
 })
 test('confirmed save remains authoritative while cancellation is rejected', async () => {
-  const { cancelActiveEnrollmentCeremony, enrollmentCeremonyActive } =
-    await import('../src/content/enrollment-flow')
   const result = await runMismatchedStageResponse([], StageScenario.Confirm)
-  result.startCommit()
-  await result.confirmStarted
+  result.enableCommit()
+  runEnrollmentPoll()
+  await result.confirmStarted.promise
   result.controls[0]?.triggerTrusted()
   result.confirm.resolve({ kind: 'delivered', response: { kind: 0 } })
-  await result.cancelRetryRendered
+  await result.cancelRetryRendered.promise
   result.dismiss.resolve(false)
   await Promise.resolve()
   await Promise.resolve()
-  expect(result.host.description.textContent).toBe(
-    BROWSER_MESSAGE_KEYS.WidgetEnrollSaved,
-  )
+  expect(result.host.description.textContent).toBe(enrollmentSaved)
   expect(result.controls).toHaveLength(0)
-  expect(result.refreshRequestCount()).toBe(0)
-  expect(await cancelActiveEnrollmentCeremony()).toBe(true)
-  expect(enrollmentCeremonyActive()).toBe(false)
+  expect(result.requestRefresh).not.toHaveBeenCalled()
+  expect(await enrollmentFlow.cancelActiveEnrollmentCeremony()).toBe(true)
+  expect(enrollmentFlow.enrollmentCeremonyActive()).toBe(false)
 })
 test('stale mismatched cleanup continuation does not mutate UI', async () => {
-  const { cancelActiveEnrollmentCeremony, enrollmentCeremonyActive } =
-    await import('../src/content/enrollment-flow')
   const result = await runMismatchedStageResponse(
     [false, true],
     StageScenario.Mismatch,
     async () => {
-      expect(await cancelActiveEnrollmentCeremony()).toBe(true)
+      expect(await enrollmentFlow.cancelActiveEnrollmentCeremony()).toBe(true)
     },
   )
   expect(result.controls).toHaveLength(0)
-  expect(result.host.description.textContent).toBe(
-    BROWSER_MESSAGE_KEYS.WidgetEnrollStaging,
-  )
-  expect(enrollmentCeremonyActive()).toBe(false)
+  expect(result.host.description.textContent).toBe(enrollmentStaging)
+  expect(enrollmentFlow.enrollmentCeremonyActive()).toBe(false)
 })
