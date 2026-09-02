@@ -2,12 +2,13 @@
 # Rust ecosystem gates beside the product pipeline. Product verification produces immutable
 # handoffs before cache publication, so a cache exporter failure cannot suppress web or browser
 # evidence. After the verified
-# WASM handoff, local-provider web e2e, extension e2e, and headless UI demos overlap on ARC
-# runtime-capable runners. Each browser solve is read-only. The successful UI-demo lane then exports its
-# warm graph to the shared browser cache. Deploy the fast, unoptimized development channel to Cloudflare
+# WASM handoff, local-provider web e2e, and extension e2e overlap on ARC runtime-capable runners.
+# Each browser solve is read-only. Headless UI demos are temporarily disabled while their
+# implementation remains available for later re-enable. Deploy the fast, unoptimized development
+# channel to Cloudflare
 # Pages only after web verify, web e2e, and the portable WASM cache proof succeed.
-# Extension e2e and UI demos remain required for the workflow but do not gate the development
-# deploy. Immutable releases remain
+# Extension e2e remains required for the workflow but does not gate the development deploy.
+# Immutable releases remain
 # responsible for production wasm optimization.
 # Research-only changes are handled by web-research.yml. Cortex, Cursor,
 # repository-policy-only, and non-minds agentic-AI-only changes do not need
@@ -422,6 +423,7 @@ jobs:
 
   ui-demos:
     name: UI demos
+    if: ${{ false }}
     # This is the final local cache producer. Serialize it behind web so it
     # clones the promoted web generation instead of racing a sibling lineage.
     needs: [web]

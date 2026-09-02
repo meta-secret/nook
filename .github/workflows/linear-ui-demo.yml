@@ -1,6 +1,6 @@
-# Linear publication is intentionally isolated from pull_request workflows. This workflow is
-# loaded from the trusted default branch before it receives LINEAR_API_KEY; unmerged PR code can
-# produce WebM artifacts, but it cannot execute while the credential is present.
+# Linear publication remains isolated from pull_request workflows. Artifact publication is
+# temporarily disabled with the retained implementation available for later re-enable. The close
+# job still transitions any Linear demo issues that were created before publication was disabled.
 
 name: Linear UI demos
 
@@ -32,6 +32,7 @@ jobs:
   publish:
     name: Publish trusted PR UI demos
     if: >-
+      false &&
       github.event_name == 'workflow_run' &&
       github.event.workflow_run.conclusion == 'success'
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}

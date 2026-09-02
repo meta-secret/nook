@@ -42,7 +42,8 @@ See [issues](../../../gizmo/workflows/issues.md),
   - GitHub PAT: No
 - **[`linear-ui-demo.yml`](../../../../.github/workflows/linear-ui-demo.yml)**
   - Trigger: Successful PR workflow / PR close
-  - Purpose: Publish PR demo WebMs to Linear
+  - Purpose: Retain disabled publication and close previously created Linear
+    issues
   - GitHub PAT: No
 - **[`main.yml`](../../../../.github/workflows/main.yml)**
   - Trigger: Push to `main`
@@ -101,8 +102,9 @@ See [issues](../../../gizmo/workflows/issues.md),
 - Those ecosystem jobs run in parallel with native Rust, WASM, and verify.
 - Ordinary pushes do not start this workflow.
 - Only `ci:validate` / `ci:full-e2e` label events start it.
-- Changed headless UI demo specs run beside web verification when UI changes.
-- Those demos retain a 90-day artifact.
+- Headless UI-demo execution is temporarily disabled.
+- The UI-demo contract and focused spec requirement remain active.
+- New UI-demo artifacts are not published.
 - Internal harness plus isolated native Pages aliases.
 - `github-pages` deployment status.
 - `ci:full-e2e` additionally runs the Main-equivalent local-provider + extension browser suite.
@@ -170,9 +172,10 @@ See [issues](../../../gizmo/workflows/issues.md),
 
 - Runs from the trusted default branch.
 - Claims the current `pr-<number>-<head-sha>` concurrency group on close to cancel in-flight validation.
-- Downloads the PR demo artifact.
-- Publishes its 10 largest WebMs to Linear.
-- Updates the PR comment and completes/cancels the matching Linear issue.
+- Keeps artifact publication disabled.
+- Keeps the retained publisher implementation available for later re-enable.
+- Completes or cancels matching Linear issues created before publication was
+  disabled.
 
 **`main.yml`**
 
@@ -182,10 +185,13 @@ See [issues](../../../gizmo/workflows/issues.md),
 - Owns merged-head ecosystem cache seeding, statistics, and failure handoff.
 - Native Rust, WASM, and browser-free web verification use the configured ARC scale set.
 - Each lane serially exports its already-solved local BuildKit graph after validation.
-- Local-provider web e2e, extension e2e, and headless UI demos consume verified WASM on separate runners.
-- Each browser solve is read-only.
-- The successful UI-demo lane publishes the warm browser-image graph.
-- 90-day artifact + 10 largest recordings on the merged PR's Linear issue.
+- Local-provider web e2e and extension e2e consume verified WASM on separate
+  runners.
+- Each browser E2E solve is read-only.
+- Headless UI-demo execution and new artifact publication are temporarily
+  disabled.
+- The retained Main UI-demo implementation remains available for later
+  re-enable.
 - Deploy to `dev.nokey.sh` / `*.dev.nokey.sh` after web verify, web e2e, and
   the portable WASM cache publication proof.
 
@@ -198,7 +204,7 @@ See [issues](../../../gizmo/workflows/issues.md),
 
 - Creates or refreshes one ready automated Workbench incident per failed Main revision.
 - Uses run metadata and failed job names only.
-- Includes browser E2E and UI-demo failures.
+- Includes browser E2E failures.
 
 **`hive.yml`**
 
@@ -521,10 +527,12 @@ Main's portable WASM cache writer/proof uses the general ARC scale set.
 - On a native producer miss, preflight must finish before the native application Docker solve begins.
 - `Web verification` declares `needs` on the WASM build producer.
 - It downloads the run-stable WASM artifact directly after that job succeeds.
-- `Headless UI demo` declares `needs` on the WASM build producer.
-- Required demos therefore overlap browser-free web verification.
+- The disabled `Headless UI demo` job retains its WASM producer dependency.
+- Its implementation remains available for later re-enable.
 - `Verify and preview` waits for Native Rust, web verification, and WASM Node tests.
-- It also waits for the UI demo job.
+- It retains the UI-demo job in `needs` so the skipped result remains visible.
+- A disabled or non-required skip is permitted.
+- An enabled, required UI-demo failure blocks preview and readiness.
 - That keeps the merge-gate check red when Native fails.
 - Preview deploys from a host dist handoff with pinned wrangler.
 - No consumer polls GitHub for a sibling producer.
@@ -538,12 +546,12 @@ The web dependency stage runs `bun install --frozen-lockfile` directly in its
 Dockerfile layer. It has no host or BuildKit daemon cache mount; the frozen
 lockfile and immutable Docker layer are the cache and reproducibility boundary.
 
-PR web solves normally use browser-free `web-base`. UI-changing PRs, main,
-and explicitly requested browser e2e also build `web-e2e-base` with Debian's
-`chromium` and `ffmpeg` packages. Playwright is pointed at `/usr/bin/chromium`,
-and its revisioned recording path links to `/usr/bin/ffmpeg`; do not install
-its bundled Chromium + headless-shell payload, which creates a roughly 1.3 GB
-image layer (about 432 MB compressed) on cold runners.
+PR web solves normally use browser-free `web-base`. Explicitly requested
+browser e2e builds `web-e2e-base` with Debian's
+`chromium` and `ffmpeg` packages. Playwright uses `/usr/bin/chromium`.
+Its revisioned recording path links to `/usr/bin/ffmpeg`. Do not install its
+bundled Chromium and headless-shell payload. That payload creates a roughly
+1.3 GB image layer on cold runners, or about 432 MB compressed.
 The preparation solve runs once. The small final web-image solve retries once
 after the known immediate BuildKit frontend/Dockerfile-load flake, without
 repeating the multi-minute Rust/WASM and dependency graph.
@@ -571,7 +579,8 @@ PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label.
   - A missing exact ref falls back to the browser-image seed owned by trusted Main.
   - Neither web shard nor its join writes a low-reuse exact-head browser cache.
   - Trusted Main remains the reusable browser-image seed.
-  - The UI-demo publisher consumes the exact run image without writing cache refs.
+  - The disabled UI-demo publisher retains its exact-run image implementation
+    for later re-enable.
 - **Readiness requirement:**
   - Adding or removing the label retriggers PR Actions for the current head.
   - A labeled PR cannot be ready while this job is queued, failing, or cancelled.
@@ -700,6 +709,15 @@ Do **not** spin up multiple Nook servers for parallel e2e unless debugging port 
 
 UI demo rules:
 
+- PR and Main headless UI-demo execution is temporarily disabled.
+- New Actions and Linear demo artifacts are not published.
+- Demo implementations remain retained for later re-enable.
+- The UI-demo contract and focused demo-spec requirements remain active.
+- PR readiness observes the UI-demo result through the preview dependency.
+- It permits a disabled or non-required skip.
+- It rejects an enabled, required demo failure.
+- Browser E2E remains a separate validation authority.
+
 - UI-facing changes under web apps, shared vault UI, or extension browser
   surfaces must add or update a focused
   `nook-web-app/e2e/demos/*.demo.spec.ts`.
@@ -720,9 +738,9 @@ The integrated `task loom:pre-push` call combines this contract with
 unconditional host formatting — see
 [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md).
 
-The `ui-demo` Playwright project runs Chromium headlessly at 1280x720.
-It always records WebM video.
-The pull-request demo job starts beside web verification.
+When re-enabled, the `ui-demo` Playwright project runs Chromium headlessly at
+1280x720. It records WebM video. The pull-request demo job starts beside web
+verification.
 
 - The demo job starts after the WASM handoff is ready.
 - Its browser-image solve is read-only.
@@ -740,18 +758,23 @@ The pull-request demo job starts beside web verification.
   - Linear publication is best-effort and cannot invalidate Playwright
     assertions or block the product gate.
 
-- Main runs the complete UI-demo project.
+- When re-enabled, Main runs the complete UI-demo project.
   - It retains every WebM in the 90-day Actions artifact.
   - It adds only the 10 largest recordings to the associated Linear issue.
   - It leaves the issue in Done.
 
-The trusted post-workflow and Main workflow require the repository Actions
-secret `LINEAR_API_KEY`; the unmerged `pull_request` workflow never receives it
-or loads secret-consuming code from the PR checkout. Never put that value in
-workflow YAML, logs, comments, artifacts, or agent statistics. The local Linear
-MCP OAuth connection is useful for interactive issue management but is separate
-from this unattended CI credential. Use `task ui:demo` from the repository root
-or `cargo ui-demo` from `nook-app/` to reproduce a recording locally.
+- Active Linear close cleanup requires the repository Actions secret
+  `LINEAR_API_KEY`.
+- The retained publisher requires the same secret when re-enabled.
+- The unmerged `pull_request` workflow never receives that secret.
+- It never loads secret-consuming code from the PR checkout.
+- Never put the secret in workflow YAML, logs, comments, artifacts, or agent
+  statistics.
+
+The local Linear MCP OAuth connection is useful for interactive issue
+management. It is separate from this unattended CI credential. Use
+`task ui:demo` from the repository root or `cargo ui-demo` from `nook-app/` to
+reproduce a recording locally.
 
 Playwright DOM/state assertions decide pass or failure. Humans and multimodal AI
 agents may review the video as supporting evidence, but visual AI review is
@@ -833,10 +856,12 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 - `Web verification` depends on the build job and downloads the package with `actions/download-artifact`.
 - It can run browser-free web validation while Node tests continue.
 - It exports host dist trees for preview deploy.
-- `Headless UI demo` also depends on the WASM build job.
-- It runs changed demo specs in parallel with web verification.
+- The disabled `Headless UI demo` job retains its WASM build dependency and
+  changed-spec implementation.
 - `Verify and preview` waits for Native Rust, web verification, and WASM Node tests.
-- It also waits for the UI demo job.
+- It also retains the UI-demo job in `needs` for observable skip handling.
+- A disabled or non-required skip is permitted.
+- An enabled, required demo failure blocks preview.
 - Optional web and extension e2e consumers need both WASM jobs and receive only a fully verified handoff.
 - A separate `Rust coverage report` job declares `needs: rust`, downloads the native handoff directly, and performs reporting without occupying or delaying the preview runner.
 
@@ -915,8 +940,7 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 - The preview job never waits for native coverage.
 - It runs without browser e2e. Trusted sources deploy Cloudflare previews and
   record a successful `github-pages` deployment status for the PR head SHA.
-- Fork and Dependabot validation remains secret-free. It succeeds without a UI
-  demo when the UI demo contract is not required, and it never attempts a
+- Fork and Dependabot validation remains secret-free. It never attempts a
   credentialed preview deployment.
 - A `ci:full-e2e` PR also runs the parallel artifact-backed web and extension browser jobs.
 - The preview deploy reuses that prepared sealed image and must not declare another `setup` dependency.

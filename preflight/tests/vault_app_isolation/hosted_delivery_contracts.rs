@@ -237,21 +237,22 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "name: Headless UI demo",
         "name: Verify and preview",
         "always() &&",
-        "needs: [rust, wasm, verify, wasm-node-test, ui-demo]",
+        "needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo]",
         "name: Enforce required verification results",
         "NATIVE_RESULT: ${{ needs.rust.result }}",
         "WASM_RESULT: ${{ needs.wasm.result }}",
         "WEB_RESULT: ${{ needs.verify.result }}",
         "WASM_NODE_RESULT: ${{ needs.wasm-node-test.result }}",
-        "UI_DEMO_RESULT: ${{ needs.ui-demo.result }}",
+        "UI_DEMOS_ENABLED: ${{ needs.validation-request.outputs.ui-demos-enabled }}",
         "UI_DEMO_REQUIRED: ${{ needs.verify.outputs.ui-demo-required }}",
-        "Headless UI demo is not required for this untrusted source",
+        "UI_DEMO_RESULT: ${{ needs.ui-demo.result }}",
         "Preserve the secret-free hosted validation boundary",
         "name: Rust coverage report",
         "uses: ./.github/workflows/pr-coverage.yml",
         "types: [labeled]",
         "name: Validate explicit CI request",
         "name: Reject unsupported label events",
+        "ui-demos-enabled: ${{ 'false' }}",
         "github.event.label.name == 'ci:validate'",
         "name: Full browser e2e (main fix)",
         "name: Full extension e2e (main fix)",
@@ -284,7 +285,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "chmod +x \"$dir/tools/nook-preflight\"",
         "test -x \"$dir/tools/nook-preflight\"",
         "needs: [validation-request, wasm]",
-        "needs: [rust, wasm, verify, wasm-node-test, ui-demo]",
+        "needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo]",
         "name: Download built WASM handoff",
         "name: Upload preview dist handoff",
         "NOOK_HOST_PAGES_DEPLOY",
@@ -327,6 +328,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     let wasm_node_job = section(&pr, "  wasm-node-test:\n", "  verify:\n");
     let verify_job = section(&pr, "  verify:\n", "  ui-demo:\n");
     let ui_demo_job = section(&pr, "  ui-demo:\n", "  preview:\n");
+    let preview_job = section(&pr, "  preview:\n", "  coverage:\n");
     assert!(
         wasm_job.contains("task ci:pr:wasm")
             && !wasm_job.contains("task ci:wasm:node-test")
@@ -364,9 +366,15 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
                 .contains("ui-demo-required: ${{ steps.ui-demo-contract.outputs.required }}")
             && verify_job.contains("ui-demo-specs: ${{ steps.ui-demo-contract.outputs.specs }}")
             && !verify_job.contains("Record headless UI demo")
+            && ui_demo_job.contains(
+                "if: >-\n      needs.validation-request.outputs.ui-demos-enabled == 'true' &&"
+            )
+            && ui_demo_job.contains("needs.verify.outputs.ui-demo-required == 'true'")
             && ui_demo_job
                 .contains("github.event.pull_request.head.repo.full_name == github.repository")
             && ui_demo_job.contains("github.event.pull_request.user.login != 'dependabot[bot]'")
+            && ui_demo_job.contains("github.event.label.name == 'ci:validate'")
+            && ui_demo_job.contains("github.event.label.name == 'ci:full-e2e'")
             && ui_demo_job.contains("needs: [validation-request, verify]")
             && ui_demo_job.contains("runs-on: nook-k0s-container")
             && ui_demo_job
@@ -376,7 +384,18 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
             && !ui_demo_job.contains("nook-docker-setup")
             && ui_demo_job.contains("needs.verify.outputs.ui-demo-required == 'true'")
             && ui_demo_job.contains("needs.verify.outputs.ui-demo-specs"),
-        "the real ARC checkout must classify UI changes before changed PR demos consume the exact browser image on container ARC"
+        "the disabled UI demo job must retain its exact trusted ARC implementation for later re-enable"
+    );
+    assert!(
+        preview_job
+            .contains("needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo]")
+            && preview_job.contains("UI_DEMOS_ENABLED")
+            && preview_job.contains("UI_DEMO_REQUIRED")
+            && preview_job.contains("UI_DEMO_RESULT")
+            && preview_job.contains("Headless UI demo=$UI_DEMO_RESULT")
+            && preview_job.contains("[ \"$UI_DEMO_RESULT\" != \"success\" ]")
+            && !preview_job.contains("UI_DEMO_RESULT=success"),
+        "PR readiness must observe disabled demos and propagate enabled required demo failures without rewriting skipped results"
     );
     assert!(
         !pr.contains("actions/cache/"),
@@ -397,6 +416,14 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
             )
             && linear_ui_demo.contains("cancel-in-progress: true"),
         "PR validation must isolate replacement heads while the trusted close workflow cancels the current exact-head group"
+    );
+    assert!(
+        linear_ui_demo.contains(
+            "name: Publish trusted PR UI demos\n    if: >-\n      false &&\n      github.event_name == 'workflow_run' &&\n      github.event.workflow_run.conclusion == 'success'"
+        ) && linear_ui_demo.contains(
+            "name: Complete or cancel trusted PR UI demo issue\n    if: github.event_name == 'pull_request_target'"
+        ),
+        "trusted UI demo artifact publication must stay disabled while close transitions remain active"
     );
 
     let trusted_handoff = read(root, ".github/workflows/pr-validation-handoff.yml");
@@ -467,6 +494,9 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
             && verify_job.contains("name: Download built WASM handoff")
             && verify_job.contains("name: Confirm WASM handoff shape")
             && verify_job.contains("name: Upload preview dist handoff")
+            && verify_job.contains(
+                "contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') ||\n          (needs.validation-request.outputs.ui-demos-enabled == 'true' &&\n          steps.ui-demo-contract.outputs.required == 'true')"
+            )
             && verify_job.contains("actions/download-artifact@v8")
             && verify_job.contains("name: pr-wasm-${{ github.run_id }}")
             && !verify_job.contains("Wait for built WASM handoff")
@@ -479,7 +509,8 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "PR web verification must wait on the WASM build through needs, download its artifact, and export host dist"
     );
     assert!(
-        preview_job.contains("needs: [rust, wasm, verify, wasm-node-test, ui-demo]")
+        preview_job
+            .contains("needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo]")
             && preview_job.contains("always() &&")
             && preview_job.contains("name: Enforce required verification results")
             && preview_job.contains("NOOK_HOST_PAGES_DEPLOY: \"1\"")
@@ -489,7 +520,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
             )
             && preview_job.contains("name: pr-web-dist-${{ github.run_id }}")
             && !preview_job.contains("attempt $attempt/900"),
-        "PR preview must deploy only after Native Rust, WASM, web verification, WASM Node tests, and the UI demo succeed"
+        "PR preview must deploy only after required Native Rust, WASM, web, Node, and enabled UI demo verification succeeds"
     );
     let coverage_job = section(&pr, "  coverage:\n", "  full-e2e-shard:\n");
     let coverage_workflow = read(root, ".github/workflows/pr-coverage.yml");
@@ -823,6 +854,7 @@ fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> 
         "historical release refs must use current workflow tooling against the immutable source root"
     );
     let main = read(root, ".github/workflows/main.yml");
+    let main_ui_demo_job = section(&main, "  ui-demos:\n", "  deploy:\n");
     for required in [
         "\n  rust:\n",
         "\n  wasm:\n",
@@ -847,6 +879,11 @@ fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> 
             "main parallel delivery contract missing: {required}"
         );
     }
+    assert!(
+        main_ui_demo_job.contains("name: UI demos\n    if: ${{ false }}")
+            && main_ui_demo_job.contains("task _web:test:ui-demo"),
+        "the disabled Main UI demo job must retain its implementation for later re-enable"
+    );
     assert!(
         !root.join(".github/scripts/main-post-web-e2e.sh").exists(),
         "same-runner Main suite coordinator was replaced by multi-job consumers"

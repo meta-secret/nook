@@ -1,8 +1,8 @@
 # Pull requests: run Rust/WASM/JS unit tests, Svelte/type/lint/format checks, build no-opt WASM,
 # build and deploy the preview, and the shared Rust ecosystem gates. Full browser regression e2e
-# is opt-in through the `ci:full-e2e` label for PRs that repair a Main failure; UI-changing PRs
-# otherwise run only their dedicated headless demo specs and retain the resulting videos on the
-# PR workflow run. Main also runs the full local-provider and extension suites. Live-provider
+# is opt-in through the `ci:full-e2e` label for PRs that repair a Main failure. Headless UI demos
+# are temporarily disabled while their implementation remains available for later re-enable.
+# Main still runs the full local-provider and extension suites. Live-provider
 # sync checks remain available through the manually dispatched e2e-pr.yml workflow.
 # Research-only changes are handled by web-research.yml. Cortex, Cursor,
 # repository-policy-only, and agentic-AI-only changes do not need the product
@@ -47,6 +47,8 @@ jobs:
     name: Validate explicit CI request
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
     timeout-minutes: 2
+    outputs:
+      ui-demos-enabled: ${{ 'false' }}
     steps:
       - name: Reject unsupported label events
         env:
@@ -508,6 +510,10 @@ jobs:
           GHA_CACHE_WRITE_ENABLED: "1"
 
       - name: Publish exact-source PR browser job image
+        if: >-
+          contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') ||
+          (needs.validation-request.outputs.ui-demos-enabled == 'true' &&
+          steps.ui-demo-contract.outputs.required == 'true')
         run: >-
           task web:e2e:kubernetes-image:artifacts
           CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
@@ -545,6 +551,8 @@ jobs:
   ui-demo:
     name: Headless UI demo
     if: >-
+      needs.validation-request.outputs.ui-demos-enabled == 'true' &&
+      needs.verify.outputs.ui-demo-required == 'true' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.user.login != 'dependabot[bot]' &&
       (github.event.label.name == 'ci:validate' ||
@@ -634,7 +642,7 @@ jobs:
       github.event.label.name == 'ci:full-e2e')
     # Native must succeed before the merge gate check can go green. A green
     # preview with a failed Native job previously allowed false readiness.
-    needs: [rust, wasm, verify, wasm-node-test, ui-demo]
+    needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo]
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
     steps:
       - name: Enforce required verification results
@@ -643,24 +651,17 @@ jobs:
           WASM_RESULT: ${{ needs.wasm.result }}
           WEB_RESULT: ${{ needs.verify.result }}
           WASM_NODE_RESULT: ${{ needs.wasm-node-test.result }}
-          UI_DEMO_RESULT: ${{ needs.ui-demo.result }}
+          UI_DEMOS_ENABLED: ${{ needs.validation-request.outputs.ui-demos-enabled }}
           UI_DEMO_REQUIRED: ${{ needs.verify.outputs.ui-demo-required }}
-          TRUSTED_SOURCE: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && 'true' || 'false' }}
+          UI_DEMO_RESULT: ${{ needs.ui-demo.result }}
         run: |
           set -euo pipefail
-          if [ "$TRUSTED_SOURCE" != "true" ] \
-            && [ "$UI_DEMO_REQUIRED" != "true" ] \
-            && [ "$UI_DEMO_RESULT" = "skipped" ]; then
-            echo "Headless UI demo is not required for this untrusted source"
-            UI_DEMO_RESULT=success
-          fi
           failed=0
           for dependency in \
             "Native Rust=$NATIVE_RESULT" \
             "WASM build=$WASM_RESULT" \
             "Web verification=$WEB_RESULT" \
-            "WASM Node tests=$WASM_NODE_RESULT" \
-            "Headless UI demo=$UI_DEMO_RESULT"
+            "WASM Node tests=$WASM_NODE_RESULT"
           do
             name="${dependency%%=*}"
             result="${dependency#*=}"
@@ -669,6 +670,13 @@ jobs:
               failed=1
             fi
           done
+          echo "Headless UI demo=$UI_DEMO_RESULT (enabled=$UI_DEMOS_ENABLED, required=$UI_DEMO_REQUIRED)"
+          if [ "$UI_DEMOS_ENABLED" = "true" ] \
+            && [ "$UI_DEMO_REQUIRED" = "true" ] \
+            && [ "$UI_DEMO_RESULT" != "success" ]; then
+            echo "::error::Headless UI demo finished with $UI_DEMO_RESULT"
+            failed=1
+          fi
           test "$failed" -eq 0
 
       - name: Checkout
