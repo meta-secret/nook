@@ -16,6 +16,11 @@ await companionWasmReady
 const addListener = mock(() => {})
 type RuntimeResponseCallback = (response: unknown) => void
 let runEnrollmentPoll = () => {}
+enum StageScenario {
+  Mismatch = 'mismatch',
+  Expiry = 'expiry',
+  Confirm = 'confirmation',
+}
 
 enum RuntimeResponseStateKind {
   Immediate = 'immediate',
@@ -90,7 +95,7 @@ Object.assign(globalThis, {
   },
   document: {
     documentElement: {},
-    querySelector: () => undefined,
+    querySelector: () => false,
     querySelectorAll: () => [],
   },
   location: {
@@ -441,8 +446,8 @@ test('pending cancellation revokes the serialized stage and scrubs local URI', a
 
 async function runMismatchedStageResponse(
   dismissalResults: boolean[],
+  scenario = StageScenario.Mismatch,
   onFirstDismiss?: () => Promise<void>,
-  scenario: 'mismatch' | 'expiry' | 'confirmation' = 'mismatch',
 ) {
   const { beginEnrollmentCeremony } =
     await import('../src/content/enrollment-flow')
@@ -486,7 +491,7 @@ async function runMismatchedStageResponse(
   } as unknown as HTMLElement
   const hostDefinition: Partial<EnrollmentFlowHost> = {
     description: { textContent: '' },
-    panel: { querySelector: () => undefined },
+    panel: { querySelector: () => ({ remove: () => {} }) as Element },
     isBusy: () => busy,
     setBusy: (value: boolean) => {
       busy = value
@@ -503,7 +508,7 @@ async function runMismatchedStageResponse(
         response: {
           kind: 0,
           stageId:
-            scenario !== 'mismatch'
+            scenario !== StageScenario.Mismatch
               ? requestedStageId
               : 'response-supplied-mismatch',
         },
@@ -512,12 +517,12 @@ async function runMismatchedStageResponse(
     sendAuthenticatorCodeRuntimeMessage: async () => ({
       kind: 'delivered',
       response:
-        scenario === 'expiry' && codeRequestCount++ > 0
+        scenario === StageScenario.Expiry && codeRequestCount++ > 0
           ? { kind: 1, reason: 'authenticator-stage-missing' }
           : { kind: 0, code: '123456', expiresAt: Date.now() + 30_000 },
     }),
     sendAuthenticationOutcomeRuntimeMessage: async () =>
-      scenario === 'confirmation' && commitReady
+      scenario === StageScenario.Confirm && commitReady
         ? {
             kind: 'delivered',
             response: {
@@ -532,7 +537,7 @@ async function runMismatchedStageResponse(
     },
     sendAuthenticatorEnrollmentDismissRuntimeMessage: async (message) => {
       dismissedStageIds.push(message.payload.stageId)
-      if (scenario === 'confirmation') {
+      if (scenario === StageScenario.Confirm) {
         return dismiss.promise
       }
       const dismissed = dismissalResults.shift() ?? true
@@ -607,7 +612,7 @@ test('failed mismatched cleanup retains the known stage for cancel retry', async
 test('expired staged poll retires enrollment and requests fresh actions', async () => {
   const { enrollmentCeremonyActive } =
     await import('../src/content/enrollment-flow')
-  const result = await runMismatchedStageResponse([], undefined, 'expiry')
+  const result = await runMismatchedStageResponse([], StageScenario.Expiry)
   runEnrollmentPoll()
   await result.refreshRequested
   expect(result.host.description.textContent).toBe(
@@ -619,7 +624,7 @@ test('expired staged poll retires enrollment and requests fresh actions', async 
 test('confirmed save remains authoritative while cancellation is rejected', async () => {
   const { cancelActiveEnrollmentCeremony, enrollmentCeremonyActive } =
     await import('../src/content/enrollment-flow')
-  const result = await runMismatchedStageResponse([], undefined, 'confirmation')
+  const result = await runMismatchedStageResponse([], StageScenario.Confirm)
   result.startCommit()
   await result.confirmStarted
   result.controls[0]?.triggerTrusted()
@@ -639,9 +644,13 @@ test('confirmed save remains authoritative while cancellation is rejected', asyn
 test('stale mismatched cleanup continuation does not mutate UI', async () => {
   const { cancelActiveEnrollmentCeremony, enrollmentCeremonyActive } =
     await import('../src/content/enrollment-flow')
-  const result = await runMismatchedStageResponse([false, true], async () => {
-    expect(await cancelActiveEnrollmentCeremony()).toBe(true)
-  })
+  const result = await runMismatchedStageResponse(
+    [false, true],
+    StageScenario.Mismatch,
+    async () => {
+      expect(await cancelActiveEnrollmentCeremony()).toBe(true)
+    },
+  )
   expect(result.controls).toHaveLength(0)
   expect(result.host.description.textContent).toBe(
     BROWSER_MESSAGE_KEYS.WidgetEnrollStaging,
