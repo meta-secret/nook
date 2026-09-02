@@ -30,10 +30,16 @@ a manifest is not evidence that every feature uses that crate.
   - **Primary evidence:** `nook-app/nook-platform/nook-event-log/src/signing.rs`, `nook-app/nook-platform/nook-event-log/src/event.rs`
 - **SHA-256**
   - **Implemented purpose:** Content IDs, actor IDs, public-key-derived identifiers, and bounded digests
-  - **Primary evidence:** `nook-app/nook-platform/nook-event-log/src/event.rs`, `nook-app/nook-platform/nook-event-log/src/signing.rs`, `nook-app/nook-platform/nook-auth2/src/auth/multi_device/state.rs`
+  - **Primary evidence:**
+    - `nook-app/nook-platform/nook-event-log/src/event.rs`
+    - `nook-app/nook-platform/nook-event-log/src/signing.rs`
+    - `nook-app/nook-platform/nook-auth2/src/auth/multi_device/state.rs`
 - **HMAC-SHA256**
   - **Implemented purpose:** Vault-keyed secret fingerprints, search-catalog integrity, and SLIP-0039 share digest support
-  - **Primary evidence:** `nook-app/nook-platform/nook-core/src/secrets/secret_fingerprint.rs`, `nook-app/nook-platform/nook-core/src/vault/vault_search_catalog.rs`, `nook-app/nook-platform/nook-auth2/src/auth/slip39.rs`
+  - **Primary evidence:**
+    - `nook-app/nook-platform/nook-core/src/secrets/secret_fingerprint.rs`
+    - `nook-app/nook-platform/nook-core/src/vault/vault_search_catalog.rs`
+    - `nook-app/nook-platform/nook-auth2/src/auth/slip39.rs`
 - **SLIP-0039 threshold sharing**
   - **Implemented purpose:** Mnemonic recovery shares for protected material
   - **Primary evidence:** `nook-app/nook-platform/nook-auth2/src/auth/slip39.rs`

@@ -25,7 +25,11 @@ cross-installation enrollment, and revocation remain target architecture. See
 - **`device_mode`**
   - **Values:** `standard`, `anti-hacker`
   - **Owner:** `nook-auth2` / `nook-core`
-  - **Notes:** Existing protection modes. `standard` deterministically derives the current age identity from passkey PRF and is a compatibility boundary; the target model always wraps a fresh installation-specific device key. The UI calls the latter High security.
+  - **Notes:** Existing protection modes
+    - `standard` deterministically derives the current age identity from passkey PRF.
+    - This is a compatibility boundary.
+    - The target model always wraps a fresh installation-specific device key.
+    - The UI calls the target model High security.
 - **`vault_type`**
   - **Values:** `simple`, `sentinel`
   - **Owner:** `nook-core`

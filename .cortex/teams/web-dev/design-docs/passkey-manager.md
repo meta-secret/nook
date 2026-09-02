@@ -77,7 +77,10 @@ explicit fallback action. Conditional mediation is left to the browser.
 - **Private key leaks through UI or logs**
   - **Required behavior:** Keep key parsing/signing in Rust, redact `Debug`, zeroize decrypted payloads, and expose no key getter.
 - **Duplicate/replayed ceremony**
-  - **Required behavior:** Deduplicate pending tab/frame/request tuples; use fresh browser challenges and random credential ids; persist counters atomically.
+  - **Required behavior:**
+    - Deduplicate pending tab/frame/request tuples.
+    - Use fresh browser challenges and random credential ids.
+    - Persist counters atomically.
 - **Malformed or oversized page input**
   - **Required behavior:** Reject over 64 KiB in the isolated bridge and runtime validator, then apply typed bounded parsing in Rust.
 - **Extension is locked or unavailable**

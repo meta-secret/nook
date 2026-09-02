@@ -99,7 +99,10 @@ accepted only if it is:
 - **`join-requested`**
   - **Self-signed rule:** Always allowed when self-signed (pending join)
 - **`join-approved`**
-  - **Self-signed rule:** Self-signed only for simple password QR self-enrol, and only when causal ancestry has no Sentinel membership/share ops (`sentinel-participant-enrolled` / `sentinel-shares-issued`)
+  - **Self-signed rule:** Conditional
+    - Self-signing is only for simple password QR self-enrol.
+    - Causal ancestry must have no Sentinel membership or share operations.
+    - Those operations are `sentinel-participant-enrolled` and `sentinel-shares-issued`.
 - **`sentinel-participant-enrolled`**
   - **Self-signed rule:** Never self-signed; must be signed by an already-authorized actor (owner approval / genesis)
 

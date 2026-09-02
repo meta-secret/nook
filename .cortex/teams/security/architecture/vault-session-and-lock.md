@@ -40,11 +40,18 @@ material are derived projection, interchange, or migration context. See
   - **What it is:** End session; return to login gate
   - **Persists when locked?:** N/A
 
-`nook-auth2` owns the portable security/key-access primitives behind these concepts:
-device identities, `auth:` envelopes, `password_entries`, member roster
-encryption, passkey-PRF/PIN wrapping, and vault key resolution. Sync
-providers remain separate replica credentials and do not define how a vault is
-unlocked.
+`nook-auth2` owns the portable security and key-access primitives behind these
+concepts:
+
+- device identities;
+- `auth:` envelopes;
+- `password_entries`;
+- member roster encryption;
+- passkey-PRF/PIN wrapping; and
+- vault key resolution.
+
+Sync providers remain separate replica credentials. They do not define how a
+vault is unlocked.
 
 ```mermaid
 flowchart TB

@@ -359,10 +359,17 @@ Apache-2.0 audit/reference source. Do not depend directly on the
   - **Rationale:** Published as `slip39` but GPL-3.0-or-later, old, command-oriented, and a wrapper around another crate. Useful only as a behavioral reference.
 - **`rust-bitcoin/rust-wallet/src/sss.rs`**
   - **Decision:** Use as primary reference, not blind vendoring
-  - **Rationale:** Apache-2.0 and contains generate/combine/share parsing plus test vectors, but the repo is archived and the code uses old wallet-local types and dependencies.
+  - **Rationale:** Primary reference strengths and limitations
+    - It is Apache-2.0.
+    - It contains generate, combine, and share parsing plus test vectors.
+    - The repository is archived.
+    - The code uses old wallet-local types and dependencies.
 - **`yeastplume/rust-sssmc39`**
   - **Decision:** Use as secondary reference only
-  - **Rationale:** Apache-2.0 and closer to a library, but explicitly work-in-progress and uses older dependency choices.
+  - **Rationale:** Secondary reference strengths and limitations
+    - It is Apache-2.0 and closer to a library.
+    - It is explicitly work-in-progress.
+    - It uses older dependency choices.
 
 Follow-up #261 should create a Nook-owned module rather than add a large
 external dependency.
