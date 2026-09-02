@@ -1,98 +1,65 @@
 import { afterAll, beforeAll, expect, mock, test } from 'bun:test'
-import {
-  EnrollmentAuthorizeOutcome,
-  EnrollmentRevokeOutcome,
-} from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+// prettier-ignore
+import { EnrollmentAuthorizeOutcome, EnrollmentRevokeOutcome } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+
+type Code = { ok: true; code: string; expiresAt: number }
+type SessionRequest = { type: string; payload: Record<string, unknown> }
 let revokeOutcome = EnrollmentRevokeOutcome.Missing
 let authorizeEnrollment: () => Promise<boolean> = async () => true
 let authorizationStarted = () => {}
-let stagedCodeDelivery = async () => ({
-  ok: true,
-  code: '123456',
-  expiresAt: Date.now() + 30_000,
-})
-type SessionRequest = { type: string; payload: Record<string, unknown> }
+// prettier-ignore
+let stagedCodeDelivery: () => Promise<Code> = async () => ({ ok: true, code: '123456', expiresAt: Date.now() + 30_000 })
 const authorizedStageIds: string[] = []
 const stagedCodeUris: string[] = []
 let authorizedOrigin = 'https://example.test'
 let ops: typeof import('../src/background/service-worker/authenticator-operations')
+
+async function sendSessionMessage({ type, payload }: SessionRequest) {
+  if (type.endsWith('authorize')) {
+    authorizedStageIds.push(payload.enrollmentAuthorizationId as string)
+    authorizationStarted()
+    // prettier-ignore
+    return { ok: true, outcome: (await authorizeEnrollment()) ? EnrollmentAuthorizeOutcome.Authorized : EnrollmentAuthorizeOutcome.Invalid }
+  }
+  if (type.endsWith('revoke')) return { ok: true, outcome: revokeOutcome }
+  if (type.endsWith('enroll-code')) {
+    stagedCodeUris.push(payload.otpauthUri as string)
+    return stagedCodeDelivery()
+  }
+  return new Promise((resolve) =>
+    chrome.runtime.sendMessage({ type, payload }, resolve),
+  )
+}
+
 beforeAll(async () => {
-  mock.module('../src/background/service-worker/account-pickers', () => ({
-    AccountPickerSurfaceKind: {},
-    AuthenticatorPickerLoadKind: {},
-    AUTHENTICATOR_PICKER_TTL_MS: 30_000,
-    accountPickerAuthorizationGeneration: async () => 'generation-1',
-    accountPickerAuthorizationCleanupPending: () => false,
-    accountPickerAuthorizationIsCurrent: () => true,
-    authenticatorAccounts: async () => [],
-    authorizedWebsiteGrant: async () => ({ grant: {} }),
-    closeAccountPickerSurface: () => {},
-    emptyAccountPickerSurface: () => ({}),
-    isAuthenticatorPickerSender: () => true,
-    loadAuthenticatorPicker: async () => ({}),
-    removeAuthenticatorPicker: async () => {},
-    storeAuthenticatorPicker: async () => {},
-  }))
-  mock.module('../src/background/service-worker/pairing-identity', () => ({
-    availableWebsiteGrants: async () => [],
-    isAuthorizedWebsiteSender: ({ origin }: { origin: string }) =>
-      origin === authorizedOrigin,
-    passwordPairingGrants: async () => [],
-    randomNonce: () => 'nonce-1',
-    sendSessionMessage: async ({ type, payload }: SessionRequest) => {
-      if (type.endsWith('authorize')) {
-        authorizedStageIds.push(payload.enrollmentAuthorizationId as string)
-        authorizationStarted()
-        return {
-          ok: true,
-          outcome: (await authorizeEnrollment())
-            ? EnrollmentAuthorizeOutcome.Authorized
-            : EnrollmentAuthorizeOutcome.Invalid,
-        }
-      }
-      if (type.endsWith('revoke')) {
-        return { ok: true, outcome: revokeOutcome }
-      }
-      if (type.endsWith('enroll-code')) {
-        stagedCodeUris.push(payload.otpauthUri as string)
-        return stagedCodeDelivery()
-      }
-      return new Promise((resolve) =>
-        chrome.runtime.sendMessage({ type, payload }, resolve),
-      )
-    },
-  }))
-  mock.module('../src/background/service-worker/session-lifecycle', () => ({
-    ensureExtensionSessionDocument: async () => {},
-  }))
+  // prettier-ignore
+  mock.module('../src/background/service-worker/account-pickers', () => ({ AccountPickerSurfaceKind: {}, AuthenticatorPickerLoadKind: {}, AUTHENTICATOR_PICKER_TTL_MS: 30_000, accountPickerAuthorizationGeneration: async () => 'generation-1', accountPickerAuthorizationCleanupPending: () => false, accountPickerAuthorizationIsCurrent: () => true, authenticatorAccounts: async () => [], authorizedWebsiteGrant: async () => ({ grant: {} }), closeAccountPickerSurface: () => {}, emptyAccountPickerSurface: () => ({}), isAuthenticatorPickerSender: () => true, loadAuthenticatorPicker: async () => ({}), removeAuthenticatorPicker: async () => {}, storeAuthenticatorPicker: async () => {} }))
+  // prettier-ignore
+  mock.module('../src/background/service-worker/pairing-identity', () => ({ availableWebsiteGrants: async () => [], isAuthorizedWebsiteSender: ({ origin }: { origin: string }) => origin === authorizedOrigin, passwordPairingGrants: async () => [], randomNonce: () => 'nonce-1', sendSessionMessage }))
+  // prettier-ignore
+  mock.module('../src/background/service-worker/session-lifecycle', () => ({ ensureExtensionSessionDocument: async () => {} }))
   ops =
     await import('../src/background/service-worker/authenticator-operations')
 })
+afterAll(() => mock.restore())
+
 const sender = {} as chrome.runtime.MessageSender
 const origin = 'https://example.test'
 const uri = 'otpauth://totp/Nook:test?secret=JBSWY3DPEHPK3PXP&issuer=Nook'
 const missing = 'authenticator-stage-missing'
-const stageArgs = (stageId: string) => ({
-  message: {
-    payload: { origin, stageId, vaultStoreId: 'vault-1', otpauthUri: uri },
-  },
-  sender,
-})
-const dismissArgs = (stageId: string, requestOrigin = origin) => ({
-  message: { payload: { origin: requestOrigin, stageId } },
-  sender,
-})
-const pendingArgs = { message: { payload: { origin } }, sender }
+// prettier-ignore
 const dismiss = (stageId: string, requestOrigin = origin) =>
-  ops.websiteAuthenticatorEnrollDismiss(dismissArgs(stageId, requestOrigin))
-const pending = () => ops.websiteAuthenticatorEnrollPending(pendingArgs)
+  ops.websiteAuthenticatorEnrollDismiss({ message: { payload: { origin: requestOrigin, stageId } }, sender })
+// prettier-ignore
 const stage = (stageId: string) =>
-  ops.websiteAuthenticatorEnrollStage(stageArgs(stageId))
+  ops.websiteAuthenticatorEnrollStage({ message: { payload: { origin, stageId, vaultStoreId: 'vault-1', otpauthUri: uri } }, sender })
+// prettier-ignore
+const pending = () =>
+  ops.websiteAuthenticatorEnrollPending({ message: { payload: { origin } }, sender })
 const expectOk = (request: Promise<unknown>) =>
   expect(request).resolves.toEqual(expect.objectContaining({ ok: true }))
 const expectReason = (request: Promise<unknown>, reason: string) =>
   expect(request).resolves.toEqual({ ok: false, reason })
-afterAll(() => mock.restore())
 function deferAuthorization(result: boolean) {
   const authorization = Promise.withResolvers<boolean>()
   const started = Promise.withResolvers<void>()
@@ -105,24 +72,19 @@ async function expectDeferredCodeRejected(
   invalidate: () => unknown,
 ) {
   expect(await stage(stageId)).toEqual({ ok: true, stageId })
-  const delivery = Promise.withResolvers<{
-    ok: true
-    code: string
-    expiresAt: number
-  }>()
+  const delivery = Promise.withResolvers<Code>()
   stagedCodeDelivery = () => delivery.promise
-  const request = ops.websiteAuthenticatorEnrollCode(dismissArgs(stageId))
+  // prettier-ignore
+  const request = ops.websiteAuthenticatorEnrollCode({ message: { payload: { origin, stageId } }, sender })
   await Promise.resolve()
   await invalidate()
-  const response = {
-    ok: true as const,
-    code: '654321',
-    expiresAt: Date.now() + 30_000,
-  }
+  // prettier-ignore
+  const response: Code = { ok: true, code: '654321', expiresAt: Date.now() + 30_000 }
   delivery.resolve(response)
   await expectReason(request, missing)
   expect(response.code).toBe('')
 }
+
 test('cancel before stage delivery prevents authorization', async () => {
   await expectOk(dismiss('before-delivery'))
   authorizedStageIds.length = 0
@@ -133,18 +95,16 @@ test('cancel before stage delivery prevents authorization', async () => {
   authorizeEnrollment = async () => true
   await expectOk(stage('after-loss'))
   await expectOk(dismiss('after-loss'))
-})
-test('staged enrollment cancel during authorization prevents staging', async () => {
+  // Cancellation while authorization is in flight cannot retain the stage.
   revokeOutcome = EnrollmentRevokeOutcome.Missing
   authorizedStageIds.length = 0
-  const [started, release] = deferAuthorization(true)
-  const staging = stage('during')
-  await started
+  const [duringStarted, releaseDuring] = deferAuthorization(true)
+  const duringStaging = stage('during')
+  await duringStarted
   await expectOk(dismiss('during'))
-  release()
-  await expectReason(staging, missing)
-})
-test('same-origin staging lease rejects a second request before authorization resolves', async () => {
+  releaseDuring()
+  await expectReason(duringStaging, missing)
+  // A synchronous origin lease rejects a second request and protects foreign origin.
   authorizedStageIds.length = 0
   const [started, release] = deferAuthorization(true)
   const first = stage('origin-lease-first')
@@ -159,28 +119,26 @@ test('same-origin staging lease rejects a second request before authorization re
   revokeOutcome = EnrollmentRevokeOutcome.Revoked
   await expectOk(dismiss('origin-lease-first'))
 })
-test('failed revoke retains staged URI for retry', async () => {
+test('failed revoke and tombstone capacity retain authoritative state', async () => {
   authorizeEnrollment = async () => true
   authorizationStarted = () => {}
   revokeOutcome = EnrollmentRevokeOutcome.Committing
   expect(await stage('retry')).toEqual({ ok: true, stageId: 'retry' })
   await expectOk(dismiss('retry'))
-  await ops.websiteAuthenticatorEnrollCode(dismissArgs('retry'))
+  // prettier-ignore
+  await ops.websiteAuthenticatorEnrollCode({ message: { payload: { origin, stageId: 'retry' } }, sender })
   expect(stagedCodeUris.at(-1)).toContain('secret=JBSWY3DPEHPK3PXP')
   revokeOutcome = EnrollmentRevokeOutcome.Revoked
   await expectOk(dismiss('retry'))
-})
-test('staged enrollment full tombstones preserve origin isolation', async () => {
+  // Full tombstones preserve the pending continuation and origin isolation.
   revokeOutcome = EnrollmentRevokeOutcome.Missing
-  const capacityOrigin = origin
-  authorizedOrigin = capacityOrigin
   for (let index = 0; index < 128; index += 1)
-    await expectOk(dismiss(`capacity-${index}`, capacityOrigin))
+    await expectOk(dismiss(`capacity-${index}`))
   const [started, release] = deferAuthorization(true)
   const staging = stage('capacity-pending')
   await started
   await expectReason(
-    dismiss('capacity-pending', capacityOrigin),
+    dismiss('capacity-pending'),
     'authenticator-retry-required',
   )
   release()
@@ -189,12 +147,11 @@ test('staged enrollment full tombstones preserve origin isolation', async () => 
   await expectOk(dismiss('isolated-stage', authorizedOrigin))
   authorizedOrigin = origin
 })
-test('code returned after exact stage ownership is revoked is scrubbed', async () => {
+test('stale and expired code are scrubbed and the active timer cleans up', async () => {
   authorizeEnrollment = async () => true
   revokeOutcome = EnrollmentRevokeOutcome.Revoked
   await expectDeferredCodeRejected('code-race', () => dismiss('code-race'))
-})
-test('code crossing its actual staged TTL while deferred is scrubbed', async () => {
+  // Crossing the actual staged TTL is independently rejected.
   const nativeNow = Date.now
   const nativeTimeout = globalThis.setTimeout
   let expire = () => {}

@@ -148,6 +148,8 @@ mod tests {
         let mut session = AuthenticatorEnrollmentSession::default();
         assert_eq!(session.authorize("", 20, 10), A::Invalid);
         assert_eq!(session.authorize(&"a".repeat(129), 20, 10), A::Invalid);
+        let over_max_ttl = MAX_ENROLLMENT_AUTHORIZATION_TTL_MILLIS + 11;
+        assert_eq!(session.authorize("long", over_max_ttl, 10), A::Invalid);
         assert_eq!(session.authorize("stage", 20, 10), A::Authorized);
         assert!(session.claim("stage", 11));
         assert_eq!(session.revoke("stage", 12), R::Committing);

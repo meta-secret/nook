@@ -14,11 +14,13 @@ import {
   LoginPickerOpenResponseKind,
   WebsiteLoginOptionsKind,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { EnrollmentRevokeOutcome } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import {
   RuntimeMessageDeliveryKind,
   sendAuthenticatorBackupAttachRuntimeMessage,
   sendAuthenticatorCodeRuntimeMessage,
   sendAuthenticatorEnrollmentConfirmRuntimeMessage,
+  sendAuthenticatorEnrollmentDismissRuntimeMessage,
   sendAuthenticatorEnrollmentStageRuntimeMessage,
   sendAuthenticatorOptionsRuntimeMessage,
   sendAuthenticatorPickerOpenRuntimeMessage,
@@ -39,6 +41,7 @@ import {
   WebsiteAuthenticatorBackupAttachMessageType,
   WebsiteAuthenticatorEnrollCodeMessageType,
   WebsiteAuthenticatorEnrollConfirmMessageType,
+  WebsiteAuthenticatorEnrollDismissMessageType,
   WebsiteAuthenticatorEnrollPreviewMessageType,
   WebsiteAuthenticatorEnrollStageMessageType,
 } from '../src/lib/enrollment-messages'
@@ -615,6 +618,26 @@ describe('runtime message adapters', () => {
               authenticatorConfirmMessage,
             )
       expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
+    }
+  })
+
+  test('preserves refusal outcomes when enrollment dismissal is not safe', async () => {
+    const outcomes = [
+      EnrollmentRevokeOutcome.Committing,
+      EnrollmentRevokeOutcome.Committed,
+    ]
+    for (const outcome of outcomes) {
+      installRuntimeMock({
+        kind: RuntimeMockKind.Response,
+        response: { ok: true, outcome },
+      })
+      const message = {
+        type: WebsiteAuthenticatorEnrollDismissMessageType.NookWebsiteAuthenticatorEnrollDismiss,
+        payload: { origin: 'https://example.test', stageId: 'stage' },
+      }
+      expect(
+        await sendAuthenticatorEnrollmentDismissRuntimeMessage(message),
+      ).toBe(outcome)
     }
   })
 

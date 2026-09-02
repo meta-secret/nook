@@ -10,34 +10,16 @@ import {
 } from '../../../../nook-web-extension/src/content/enrollment-flow'
 import { BROWSER_MESSAGE_KEYS } from '../../../../nook-web-extension/src/lib/browser-message-keys'
 
-const hostView = (panel = document.createElement('section')) => ({
-  description: document.createElement('p'),
-  isBusy: () => false,
-  panel,
-  requestWorkflowReclassification: vi.fn(),
-  setBusy: vi.fn(),
-  title: document.createElement('h2'),
-  translatedMessage: (key: string) => key,
-})
-const sensitive = (value: string) => {
-  const uri = { value }
-  return {
-    uri,
-    payload: { otpauthUri: value },
-    candidate: { sourceLabel: 'QR', otpauthUri: value },
-  }
-}
-function stageCeremony(
-  host: Parameters<typeof beginActiveEnrollmentCeremony>[0]['host'],
-  section: HTMLElement,
-  stageId: string,
-) {
-  const authorizationGeneration = beginActiveEnrollmentCeremony({
-    host,
-    section,
-    stageId,
-    sensitiveMaterial: sensitive(`otpauth://${stageId}`),
-  })
+type Host = Parameters<typeof beginActiveEnrollmentCeremony>[0]['host']
+type Dismiss = { payload: { stageId: string } }
+// prettier-ignore
+const hostView = (extra = {}, panel = document.createElement('section')) =>
+  ({ description: document.createElement('p'), isBusy: () => false, panel, requestWorkflowReclassification: vi.fn(), setBusy: vi.fn(), title: document.createElement('h2'), translatedMessage: (key: string) => key, ...extra }) as unknown as Host
+// prettier-ignore
+const sensitive = (value: string) => ({ uri: { value }, payload: { otpauthUri: value }, candidate: { sourceLabel: 'QR', otpauthUri: value } })
+const stage = (host: Host, section: HTMLElement, stageId: string) => {
+  // prettier-ignore
+  const authorizationGeneration = beginActiveEnrollmentCeremony({ host, section, stageId, sensitiveMaterial: sensitive(`otpauth://${stageId}`) })
   assignStagedEnrollmentCeremony({
     authorizationGeneration,
     host,
@@ -50,21 +32,8 @@ function stageCeremony(
 test('failed pending cancellation keeps identity and renders Cancel-only retry', async () => {
   const section = document.createElement('section')
   const stageIds: string[] = []
-  let attempt = 0
-  const host = {
-    ...hostView(),
-    sendAuthenticatorEnrollmentDismissRuntimeMessage: async (message: {
-      payload: { stageId: string }
-    }) => {
-      stageIds.push(message.payload.stageId)
-      attempt += 1
-      return attempt === 1 ? 'committing' : 'revoked'
-    },
-    translatedMessage: (key: string) =>
-      key === BROWSER_MESSAGE_KEYS.WidgetEnrollFailed
-        ? 'Authenticator setup failed.'
-        : 'Cancel',
-  } as unknown as Parameters<typeof beginActiveEnrollmentCeremony>[0]['host']
+  // prettier-ignore
+  const host = hostView({ sendAuthenticatorEnrollmentDismissRuntimeMessage: async (message: Dismiss) => stageIds.push(message.payload.stageId) === 1 ? 'committing' : 'revoked', translatedMessage: (key: string) => key === BROWSER_MESSAGE_KEYS.WidgetEnrollFailed ? 'Authenticator setup failed.' : 'Cancel' })
   beginActiveEnrollmentCeremony({
     host,
     section,
@@ -80,16 +49,10 @@ test('failed pending cancellation keeps identity and renders Cancel-only retry',
 
 test('mismatched stage retains the requested identity and Cancel UI', async () => {
   const section = document.createElement('section')
-  let dismissals = 0
-  const host = {
-    ...hostView(),
-    sendAuthenticatorEnrollmentDismissRuntimeMessage: async () =>
-      ++dismissals === 1 ? 'committing' : 'revoked',
-    sendAuthenticatorEnrollmentStageRuntimeMessage: async () => ({
-      kind: 'delivered',
-      response: { kind: 0, stageId: 'foreign-stage' },
-    }),
-  } as unknown as Parameters<typeof beginEnrollmentCeremony>[0]['host']
+  const dismissedStageIds: string[] = []
+  let requestedStageId = ''
+  // prettier-ignore
+  const host = hostView({ sendAuthenticatorEnrollmentDismissRuntimeMessage: async (message: Dismiss) => dismissedStageIds.push(message.payload.stageId) === 1 ? 'committing' : 'revoked', sendAuthenticatorEnrollmentStageRuntimeMessage: async (message: Dismiss) => { requestedStageId = message.payload.stageId; return { kind: 'delivered', response: { kind: 0, stageId: 'foreign-stage' } } } }) as Parameters<typeof beginEnrollmentCeremony>[0]['host']
   await beginEnrollmentCeremony({
     host,
     section,
@@ -102,6 +65,8 @@ test('mismatched stage retains the requested identity and Cancel UI', async () =
   )
   expect(section.querySelectorAll('button')).toHaveLength(1)
   expect(await cancelActiveEnrollmentCeremony()).toBe(true)
+  expect(dismissedStageIds).toEqual([requestedStageId, requestedStageId])
+  expect(requestedStageId).not.toBe('foreign-stage')
 })
 
 test('expiry keeps translated failure and local retry actions', () => {
@@ -111,16 +76,14 @@ test('expiry keeps translated failure and local retry actions', () => {
     'getBoundingClientRect',
   ).mockReturnValue(DOMRect.fromRect({ width: 100, height: 100 }))
   const section = document.createElement('section')
-  const host = hostView(document.body) as unknown as Parameters<
-    typeof beginActiveEnrollmentCeremony
-  >[0]['host']
-  const generation = stageCeremony(host, section, 'expired')
+  const host = hostView({}, document.body)
+  const authorizationGeneration = stage(host, section, 'expired')
   enrollmentEvidenceCallbacks({
     host,
     section,
     stageId: 'expired',
     vaultStoreId: 'vault',
-    authorizationGeneration: generation,
+    authorizationGeneration,
   }).expired()
   expect(host.description.textContent).toBe(
     BROWSER_MESSAGE_KEYS.WidgetEnrollFailed,
@@ -131,11 +94,10 @@ test('expiry keeps translated failure and local retry actions', () => {
 test('stale cancellation cannot overwrite authoritative completion', async () => {
   const dismissal = Promise.withResolvers<'committing'>()
   const section = document.createElement('section')
-  const host = {
-    ...hostView(),
+  const host = hostView({
     sendAuthenticatorEnrollmentDismissRuntimeMessage: () => dismissal.promise,
-  } as unknown as Parameters<typeof beginActiveEnrollmentCeremony>[0]['host']
-  const generation = stageCeremony(host, section, 'confirmed')
+  })
+  const generation = stage(host, section, 'confirmed')
   const cancellation = cancelActiveEnrollmentCeremony()
   completeEnrollmentCeremony(generation)
   host.description.textContent = 'Saved'

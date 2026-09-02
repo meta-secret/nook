@@ -61,6 +61,17 @@ describe('enrollment message guards', () => {
         },
       }),
     ).toBe(false)
+
+    for (const stageId of [undefined, '', 'x'.repeat(65)]) {
+      // prettier-ignore
+      const payload = { origin: 'https://example.test', vaultStoreId: 'store-1', otpauthUri: 'otpauth://totp/Example:alice?secret=JBSWY3DPEHPK3PXP', ...(stageId === undefined ? {} : { stageId }) }
+      expect(
+        isWebsiteAuthenticatorEnrollStageMessage({
+          type: 'nook:website-authenticator-enroll-stage',
+          payload,
+        }),
+      ).toBe(false)
+    }
   })
 
   test('rejects hotp, missing vault, and invalid backup attach modes', () => {

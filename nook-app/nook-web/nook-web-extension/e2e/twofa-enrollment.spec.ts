@@ -1,6 +1,10 @@
 import { expect, test } from '@playwright/test'
 import { readExtensionPairingStorage } from './helpers/extension-pairing-storage'
-import { launchPairedPinExtension } from './helpers/paired-pin-extension'
+import {
+  launchPairedPinExtension,
+  lockExtensionSession,
+  unlockExtensionPopupPin,
+} from './helpers/paired-pin-extension'
 import { startMockAuthServer } from './mock-auth'
 import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
 import { WebsiteAuthenticatorBackupAttachMessageMode } from '../src/lib/enrollment-messages'
@@ -420,6 +424,44 @@ test.describe('Browser 2FA enrollment', () => {
         otpPage.locator('[autocomplete="one-time-code"]'),
       ).toHaveValue(/^\d{6}$/)
       await expect.poll(() => authenticatorPicker.isClosed()).toBe(true)
+    } finally {
+      await paired.context.close()
+      await mockAuth.close()
+    }
+  })
+
+  test('discards a staged enrollment when the extension session locks', async ({
+    browserName,
+  }, testInfo) => {
+    test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+
+    const mockAuth = await startMockAuthServer()
+    const paired = await launchPairedPinExtension(testInfo, {
+      vaultName: 'Canceled enrollment vault',
+    })
+    try {
+      const enrollPage = await paired.context.newPage()
+      await enrollPage.goto(`${mockAuth.origin}/totp/enroll`)
+      const widget = enrollPage.locator('#nook-auth-widget')
+      await widget
+        .getByRole('button', { name: 'Add 2FA from this page' })
+        .click()
+      await widget.getByRole('button', { name: 'Continue enrollment' }).click()
+      await expect(
+        widget.getByText(/Verification code filled|Complete verification/i),
+      ).toBeVisible({ timeout: 20_000 })
+
+      await lockExtensionSession(paired.context)
+      await expect(
+        widget.getByText(/Verification code filled|Complete verification/i),
+      ).toHaveCount(0, { timeout: 20_000 })
+      await enrollPage.getByTestId('mock-auth-enroll-continue-verify').click()
+      const otpInput = enrollPage.getByTestId('mock-auth-enroll-otp-input')
+      await expect(otpInput).toBeVisible({ timeout: 10_000 })
+      await expect(otpInput).toHaveValue('')
+      await unlockExtensionPopupPin(paired.context, paired.extensionId)
+      await expect(otpInput).toHaveValue('')
+      expect(await listExtensionAuthenticators(paired.context)).toEqual([])
     } finally {
       await paired.context.close()
       await mockAuth.close()
