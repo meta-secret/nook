@@ -250,6 +250,29 @@ Promote durable lessons only when evidence justifies them. The
 [self-improvement skill](teams/ai/dynamic-skills/self-improvement.md) keeps
 temporary notes optional and requires cleanup before readiness.
 
+## Autonomous mission execution
+
+- Proceed without asking for confirmation while safe progress remains inside
+  the authorized scope.
+- Make reasonable, evidence-backed assumptions for bounded choices.
+- Record consequential assumptions in progress updates or the final handoff.
+- Routine uncertainty, implementation breadth, validation failures, and
+  delivery sequencing are not blockers or reasons to ask the user.
+- Continue implementation, validation, repair, and authorized delivery until
+  the user-selected terminal state is reached.
+- Team Agents report missing authority, cross-team dependencies, and
+  non-inferable material decisions to Gizmo through the active harness.
+- Gizmo Prime alone asks the user when safe progress still requires new
+  authority or a material decision that cannot be inferred from evidence.
+- Autonomy does not expand permissions or ownership.
+- Autonomy does not weaken security, no-fallback behavior, or an explicit stop.
+- Autonomy does not authorize destructive or unrelated actions.
+- The user still selects major architectural initiatives under the
+  [self-improvement authority](teams/ai/dynamic-skills/self-improvement.md#user-authority-for-major-architectural-initiatives).
+- When a concrete blocker remains, exhaust safe in-scope evidence and
+  alternatives before stopping.
+- Report the exact missing authority, decision, or external state to Gizmo.
+
 ## Delivery and validation
 
 An implementation request continues through the user-selected terminal state.

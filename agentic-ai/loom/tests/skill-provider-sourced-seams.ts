@@ -18,7 +18,7 @@ export type AuditedRuntimeSourceRequest = {
 const AUDITED_RUNTIME_SOURCES = new Map([
   [
     '.github/scripts/arc-hive-render-contract.ts',
-    'c2967a2f817ccd9326a0005247fb0cab89f410b2f422ab18cba7f0b43219d5e8',
+    '302c268ba1a8bf17b09155635c3bc9892110acfdf1b610bbb95c93d7318cf42d',
   ],
   [
     'infra/sim/kubernetes-cache/contracts.ts',
