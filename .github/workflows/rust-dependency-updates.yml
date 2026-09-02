@@ -69,7 +69,6 @@ jobs:
       CI_AGENT_PROMPT_FILE: .github/prompts/rust-dependency-update-agent.md
       CI_FIX_LABEL: Rust dependency update
       CI_AGENT_TIMEOUT_MS: '10800000'
-      RUST_DEPS_OUTDATED_REPORT: ${{ runner.temp }}/rust-deps-outdated.txt
       WORKBENCH_REPOSITORY: meta-secret/nook-workbench
       WORKBENCH_PLAN_FILE: .nook-workbench-plan.md
       WORKBENCH_SUMMARY_FILE: .nook-workbench-worklog.md
@@ -106,6 +105,7 @@ jobs:
             echo "TASK_FEATURE=rust-dependency-updates"
             echo "TASK_PLAN_STARTED_AT=$started_at"
             echo "$plan_path_name=plans/rust-dependency-updates/run-$GITHUB_RUN_ID-attempt-$GITHUB_RUN_ATTEMPT.md"
+            echo "RUST_DEPS_OUTDATED_REPORT=$RUNNER_TEMP/rust-deps-outdated.txt"
           } >> "$GITHUB_ENV"
 
       - name: Prepare isolated dependency worktree

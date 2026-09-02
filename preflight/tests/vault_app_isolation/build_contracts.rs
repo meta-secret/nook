@@ -888,6 +888,8 @@ fn rust_dependency_updates_are_coordinated_by_gizmo_and_delegated_to_teams() -> 
         "CI_AGENT_PROMPT_FILE: .github/prompts/rust-dependency-update-agent.md",
         "uses: ./.github/actions/nook-node-setup",
         "uses: go-task/setup-task@v2",
+        "CI_AGENT_TIMEOUT_MS: '10800000'\n      WORKBENCH_REPOSITORY:",
+        "RUST_DEPS_OUTDATED_REPORT=$RUNNER_TEMP/rust-deps-outdated.txt",
         "task ci-agent:fix",
     ] {
         assert!(
@@ -908,7 +910,6 @@ fn rust_dependency_updates_are_coordinated_by_gizmo_and_delegated_to_teams() -> 
             "dependency update audit script missing required contract: {required}"
         );
     }
-
     let prompt = read(&root, ".github/prompts/rust-dependency-update-agent.md");
     for required in [
         "`nook-app/nook-platform/`",
@@ -928,7 +929,6 @@ fn rust_dependency_updates_are_coordinated_by_gizmo_and_delegated_to_teams() -> 
     }
     Ok(())
 }
-
 #[test]
 fn coverage_dependencies_are_warmed_in_one_instrumented_build() -> anyhow::Result<()> {
     let root = repository_root();
