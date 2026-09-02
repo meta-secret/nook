@@ -37,6 +37,7 @@ export type AgentAttemptEventMetadata = {
 
 export type AgentAttemptStartedEvent = AgentAttemptEventMetadata & {
   readonly kind: AgentAttemptEventKind.AttemptStarted;
+  readonly invocationContextSha256?: string;
 };
 
 export type AgentResultProjectedEvent = AgentAttemptEventMetadata & {

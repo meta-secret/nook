@@ -246,6 +246,12 @@ describe('module expert invocation runtime', () => {
         expect(event.sequence).toBe(index + 1);
       }
       expect(result.processing.events.sha256).toBe(sha256(eventsSerialized));
+      expect(events[0]).toMatchObject({
+        kind: 'attempt-started',
+        invocationContextSha256: sha256(
+          JSON.stringify(request.selectedContextPaths),
+        ),
+      });
       expect(eventsSerialized.includes('runtime-activity')).toBe(false);
       const replayRequest = { events };
       expect(replayAgentAttemptJournal(replayRequest).terminalKind).toBe(

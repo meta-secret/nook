@@ -90,6 +90,7 @@ export type AgentAttemptJournalConfiguration = {
   readonly attempt: WorkflowAttemptNumber;
   readonly depth: number;
   readonly parent: AgentAttemptParent;
+  readonly invocationContextSha256?: string;
   readonly now: () => IsoTimestamp;
   readonly knownCortexIdentifiers?: ReadonlySet<string>;
   readonly compactOutput?: (line: string) => void | Promise<void>;
@@ -97,8 +98,10 @@ export type AgentAttemptJournalConfiguration = {
 
 export type ModuleExpertAttemptJournalConfiguration = Omit<
   AgentAttemptJournalConfiguration,
-  'adapter'
->;
+  'adapter' | 'invocationContextSha256'
+> & {
+  readonly invocationContextSha256: string;
+};
 
 export type CreateModuleExpertAttemptJournalArgs = {
   readonly configuration: ModuleExpertAttemptJournalConfiguration;
@@ -179,6 +182,15 @@ export class AgentAttemptJournal<TTask extends string> {
     } else if (!Object.values(AgentAttemptAdapterKind).includes(adapter)) {
       throw new Error('Agent attempt adapter provenance is invalid.');
     }
+    const invocationContextSha256 = configuration.invocationContextSha256;
+    if (
+      adapter === AgentAttemptAdapterKind.ModuleExpertInvocation
+        ? !invocationContextSha256 ||
+          !/^[0-9a-f]{64}$/u.test(invocationContextSha256)
+        : invocationContextSha256
+    ) {
+      throw new Error('Agent attempt invocation context binding is invalid.');
+    }
     assertCurrentAgentAttemptWorkflowVersion(configuration.workflowVersion);
     assertFilesystemIdentifier(configuration.task);
     assertFilesystemIdentifier(configuration.agent);
@@ -226,9 +238,13 @@ export class AgentAttemptJournal<TTask extends string> {
   async initialize(): Promise<void> {
     await mkdir(dirname(this.attemptDirectory), RECURSIVE_DIRECTORY_OPTIONS);
     await mkdir(this.attemptDirectory);
-    const event: AgentAttemptEventWithoutMetadata = {
-      kind: AgentAttemptEventKind.AttemptStarted,
-    };
+    const invocationContextSha256 = this.configuration.invocationContextSha256;
+    const event: AgentAttemptEventWithoutMetadata = invocationContextSha256
+      ? {
+          kind: AgentAttemptEventKind.AttemptStarted,
+          invocationContextSha256,
+        }
+      : { kind: AgentAttemptEventKind.AttemptStarted };
     await this.append(event);
   }
 
@@ -559,8 +575,13 @@ export class AgentAttemptJournal<TTask extends string> {
 }
 
 function eventHasExactKeys(event: AgentAttemptEventWithoutMetadata): boolean {
+  const startFields =
+    event.kind === AgentAttemptEventKind.AttemptStarted &&
+    event.invocationContextSha256
+      ? ['kind', 'invocationContextSha256']
+      : ['kind'];
   const expectedByKind: Record<AgentAttemptEventKind, ReadonlySet<string>> = {
-    [AgentAttemptEventKind.AttemptStarted]: new Set(['kind']),
+    [AgentAttemptEventKind.AttemptStarted]: new Set(startFields),
     [AgentAttemptEventKind.ResultProjected]: new Set(['kind', 'result']),
     [AgentAttemptEventKind.ViewProjected]: new Set(['kind', 'view']),
     [AgentAttemptEventKind.AttemptTerminalRecorded]: new Set([

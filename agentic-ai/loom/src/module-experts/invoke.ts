@@ -168,6 +168,9 @@ export async function invokeModuleExpert(
     attempt: request.attempt,
     depth: request.depth,
     parent: request.parent,
+    invocationContextSha256: sha256(
+      JSON.stringify(request.selectedContextPaths),
+    ),
     now: () => new Date().toISOString(),
   };
   const sessionArgs = {
@@ -428,6 +431,7 @@ export async function verifyModuleExpertInvocationResult(
     !firstEvent ||
     terminalEvents.length !== 1 ||
     !terminalEvent ||
+    firstEvent.kind !== AgentAttemptEventKind.AttemptStarted ||
     firstEvent.adapter !== AgentAttemptAdapterKind.ModuleExpertInvocation ||
     firstEvent.runId !== result.runId ||
     firstEvent.workflow !== DelegatedAgentWorkflowName.AgentWork ||
@@ -438,6 +442,8 @@ export async function verifyModuleExpertInvocationResult(
     firstEvent.attempt !== result.attempt ||
     firstEvent.depth !== result.depth ||
     JSON.stringify(firstEvent.parent) !== JSON.stringify(result.parent) ||
+    firstEvent.invocationContextSha256 !==
+      sha256(JSON.stringify(result.selectedContextPaths)) ||
     projectedTerminal.task !== result.task ||
     projectedTerminal.attempt !== result.attempt ||
     projectedTerminal.kind !== result.terminal.kind ||
