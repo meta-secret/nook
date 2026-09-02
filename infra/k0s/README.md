@@ -159,9 +159,9 @@ therefore reach only the BuildKit Pod on the same node. Runner Pods mount no
 host path and receive no Kubernetes token, daemon socket, Podman service, DinD
 process, privileged context, or Kata runtime.
 
-BuildKit garbage collection targets 56 GB. Its Pod requests 4 CPU and 8 GiB,
-has no CPU limit, and may use up to 48 GiB. Multiple jobs safely share the
-content-addressed store on that node.
+BuildKit garbage collection targets 56 GB. Its Pod requests 4 CPU and 8 GiB.
+It has no CPU or memory limit, so large parallel solves may use available node
+memory. Multiple jobs safely share the content-addressed store on that node.
 
 Zot carries cache state between nodes. A job on a cold shard imports only the
 referenced blobs. Later jobs on that node reuse the hydrated local snapshots.

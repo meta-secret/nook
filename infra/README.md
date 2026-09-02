@@ -148,12 +148,13 @@ eligible node.
 Node-to-node connectivity is a separate Cloudflare Mesh concern and is not used
 by the compiler cache.
 
-Each node's shared BuildKit Pod requests 4 CPU and 8 GiB, has no CPU limit, and
-may use 48 GiB during a large parallel solve. Each disposable runner requests
-0.5 CPU and 1 GiB and may use 4 CPU and 6 GiB, with a 32 GiB ephemeral work
-volume. These are ordinary Pods, not per-job microVMs. Kubernetes admits work
-from requests and live node pressure; the scale-set ceilings are queue limits,
-not promises that one node can run every runner simultaneously.
+Each node's shared BuildKit Pod requests 4 CPU and 8 GiB and has no CPU or
+memory limit. Large parallel solves may use available node memory. Each
+disposable runner requests 0.5 CPU and 1 GiB and may use 4 CPU and 6 GiB, with
+a 32 GiB ephemeral work volume. These are ordinary Pods, not per-job microVMs.
+Kubernetes admits work from requests and live node pressure; the scale-set
+ceilings are queue limits, not promises that one node can run every runner
+simultaneously.
 
 Install the pinned browserless LAN alias before operating the home worker from
 the local operator network:

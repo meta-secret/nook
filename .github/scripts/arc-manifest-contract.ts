@@ -160,9 +160,22 @@ const containerHook = new TextContract({
   label: "ARC Kubernetes container hook",
   source: containerHookSource,
 });
+const buildkitSource = await read("infra/k0s/manifests/arc/buildkit.yaml");
 const buildkit = new TextContract({
   label: "ARC persistent BuildKit",
-  source: await read("infra/k0s/manifests/arc/buildkit.yaml"),
+  source: buildkitSource,
+});
+const buildkitContainerStart = buildkitSource.indexOf("        - name: buildkitd");
+const buildkitContainerEnd = buildkitSource.indexOf(
+  "          volumeMounts:",
+  buildkitContainerStart,
+);
+if (buildkitContainerStart < 0 || buildkitContainerEnd < 0) {
+  throw new Error("ARC persistent BuildKit container envelope is missing");
+}
+const buildkitContainer = new TextContract({
+  label: "ARC persistent BuildKit container",
+  source: buildkitSource.slice(buildkitContainerStart, buildkitContainerEnd),
 });
 const network = new TextContract({
   label: "ARC network policy",
@@ -428,7 +441,6 @@ buildkit.requireAll([
   "--oci-worker-no-process-sandbox",
   'cpu: "4"',
   "memory: 8Gi",
-  "memory: 48Gi",
   "storage: 64Gi",
   "type: Unconfined",
   'mirrors = ["registry.dev.nokey.sh"]',
@@ -438,6 +450,13 @@ buildkit.count({
   fragment: "local:\n    path: /var/lib/nook-arc-buildkit/state",
   expected: 4,
 });
+buildkitContainer.requireAll([
+  "resources:",
+  "requests:",
+  'cpu: "4"',
+  "memory: 8Gi",
+]);
+buildkitContainer.forbid("limits:");
 buildkit.forbidAll([
   "runtimeClassName:",
   "privileged: true",
