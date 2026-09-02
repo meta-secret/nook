@@ -148,7 +148,7 @@ sandbox and lifecycle checks continue.
 
 | Component               | Runs where                      | Owns                                                                                                                                                                     | Must not own                                                       |
 | ----------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------ |
-| Main failure handoff    | GitHub Actions                  | Converts every actionable unsuccessful trusted `Main` run into one Workbench incident keyed by failed SHA, including browser E2E and UI-demo failures                    | Agent execution, raw failure logs, deployment                      |
+| Main failure handoff    | GitHub Actions                  | Converts every actionable unsuccessful trusted `Main` run into one Workbench incident keyed by failed SHA. Includes browser E2E. Retains UI-demo failure evidence from eligible historical runs. | Agent execution, raw failure logs, deployment                      |
 | Workbench dispatcher    | One Kata Pod                    | Polls public-safe `status: ready`, `automation: hive` incidents, binds the referenced run to the exact Nook Main push SHA, and idempotently enqueues unresolved failures | GitHub publication token, Codex auth                               |
 | Neo4j                   | `hive-data`, runc, retained PVC | Task DAG, readiness, claims, leases, agents, attempts, results, artifacts, schema migrations                                                                             | Codex or repository execution                                      |
 | Control Center observer | Dedicated runc Pod              | Read-only, localized task/worker projection and the static operator dashboard                                                                                            | Task mutation, Codex auth, GitHub credentials, or raw agent output |
@@ -398,8 +398,10 @@ flowchart LR
   worklog --> complete["Neo4j task COMPLETED"]
 ```
 
-Every failed browser E2E, UI-demo, native, WASM, build, deployment, mixed, or
-unknown Main attempt follows the repair path above.
+Every failed browser E2E, native, WASM, build, deployment, mixed, or unknown
+Main attempt follows the repair path above. The disabled Main UI-demo job
+produces no new failures. The handoff still accepts UI-demo failure evidence
+from eligible historical runs or reruns.
 
 A later failed rerun:
 
