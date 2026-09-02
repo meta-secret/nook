@@ -8,6 +8,6 @@ const normalize = ({ node }) => {
 
 module.exports = () => ({
   visitor: {
-    ArrowFunctionExpression: normalize,
+    ArrowFunctionExpression: { exit: normalize },
   },
 });
