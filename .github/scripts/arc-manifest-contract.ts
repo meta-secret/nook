@@ -160,9 +160,22 @@ const containerHook = new TextContract({
   label: "ARC Kubernetes container hook",
   source: containerHookSource,
 });
+const buildkitSource = await read("infra/k0s/manifests/arc/buildkit.yaml");
 const buildkit = new TextContract({
   label: "ARC persistent BuildKit",
-  source: await read("infra/k0s/manifests/arc/buildkit.yaml"),
+  source: buildkitSource,
+});
+const buildkitContainerStart = buildkitSource.indexOf("        - name: buildkitd");
+const buildkitContainerEnd = buildkitSource.indexOf(
+  "          volumeMounts:",
+  buildkitContainerStart,
+);
+if (buildkitContainerStart < 0 || buildkitContainerEnd < 0) {
+  throw new Error("ARC persistent BuildKit container envelope is missing");
+}
+const buildkitContainer = new TextContract({
+  label: "ARC persistent BuildKit container",
+  source: buildkitSource.slice(buildkitContainerStart, buildkitContainerEnd),
 });
 const network = new TextContract({
   label: "ARC network policy",
@@ -223,9 +236,26 @@ const remoteWorkflow = new TextContract({
   label: "Remote workflow",
   source: await read(".github/workflows/remote.yml"),
 });
+const workerTasksSource = await read("infra/tasks/k0s-workers.yml");
 const workerTasks = new TextContract({
   label: "k0s worker tasks",
-  source: await read("infra/tasks/k0s-workers.yml"),
+  source: workerTasksSource,
+});
+const workerInstallStart = workerTasksSource.indexOf("  k0s:worker:install:");
+const workerInstallEnd = workerTasksSource.indexOf(
+  "  k0s:worker:kata:verify:",
+  workerInstallStart,
+);
+if (workerInstallStart < 0 || workerInstallEnd < 0) {
+  throw new Error("k0s worker install task is missing");
+}
+const workerInstall = new TextContract({
+  label: "k0s worker install",
+  source: workerTasksSource.slice(workerInstallStart, workerInstallEnd),
+});
+const workerMeshTasks = new TextContract({
+  label: "k0s fleet worker mesh reconciliation",
+  source: await read("infra/k0s/scripts/k0s-worker-mesh-reconcile"),
 });
 
 const values = Bun.YAML.parse(runnersSource) as ArcValues;
@@ -428,7 +458,6 @@ buildkit.requireAll([
   "--oci-worker-no-process-sandbox",
   'cpu: "4"',
   "memory: 8Gi",
-  "memory: 48Gi",
   "storage: 64Gi",
   "type: Unconfined",
   'mirrors = ["registry.dev.nokey.sh"]',
@@ -438,6 +467,13 @@ buildkit.count({
   fragment: "local:\n    path: /var/lib/nook-arc-buildkit/state",
   expected: 4,
 });
+buildkitContainer.requireAll([
+  "resources:",
+  "requests:",
+  'cpu: "4"',
+  "memory: 8Gi",
+]);
+buildkitContainer.forbid("limits:");
 buildkit.forbidAll([
   "runtimeClassName:",
   "privileged: true",
@@ -652,6 +688,75 @@ workerTasks.requireAll([
   "INFRA_WORKER_MESH_ADDRESS",
   "nook.nokey.sh/arc-build=preparing:NoSchedule",
 ]);
+workerTasks.count({
+  fragment:
+    'iifname "wg-nook" ip saddr 10.244.0.0/16 tcp dport 10250 accept comment "nook k0s worker kubelet mesh pods"',
+  expected: 2,
+});
+workerInstall.requireAll([
+  "nook.nokey.sh/arc-build=preparing:NoSchedule --overwrite",
+  "actions.github.com/scale-set-name",
+  'select(.status.phase == "Pending" or .status.phase == "Running")',
+  "Timed out waiting for $active_runners ARC runner(s) on $node",
+  "worker_was_active=false",
+  "sudo -n systemctl restart k0sworker.service",
+  "sudo -n systemctl is-active --quiet k0sworker.service",
+  'sudo -n k0s kubectl wait "node/$node" --for=condition=Ready --timeout=5m',
+]);
+workerInstall.requireBefore({
+  first: "nook.nokey.sh/arc-build=preparing:NoSchedule --overwrite",
+  second: "sudo -n rm -f /etc/k0s/containerd.d/registry-auth.toml",
+});
+workerInstall.requireBefore({
+  first: "sudo -n rm -f /etc/k0s/containerd.d/registry-auth.toml",
+  second: "sudo -n systemctl restart k0sworker.service",
+});
+workerInstall.requireBefore({
+  first: "sudo -n systemctl restart k0sworker.service",
+  second:
+    'sudo -n k0s kubectl wait "node/$node" --for=condition=Ready --timeout=5m',
+});
+workerMeshTasks.count({
+  fragment:
+    'iifname "wg-nook" ip saddr 10.244.0.0/16 tcp dport 10250 accept comment "nook k0s worker kubelet mesh pods"',
+  expected: 2,
+});
+workerMeshTasks.requireAll([
+  'controller_kubelet_rule=\'    iifname "wg-nook" ip saddr 10.201.0.1 tcp dport 10250 accept comment "nook k0s worker kubelet controller"\'',
+  'legacy_controller_kubelet_rule=\'    iifname "wg-nook" ip saddr 10.201.0.1 tcp dport 10250 accept\'',
+  'if test "$controller_kubelet_count" != 1; then',
+  "Worker firewall must contain exactly one controller kubelet rule",
+  "$0 == canonical || $0 == legacy { print canonical; print rule; next }",
+  'sudo -n nft --check --file "$firewall_next"',
+  'sudo -n install -m 0644 "$firewall_next" /etc/nftables.conf',
+  'sudo -n nft --check --file "$live"',
+  'sudo -n nft --file "$live"',
+  "inspect_worker_containerd_auth",
+  'set_mesh_pending "$node_name"',
+  'restart) wait_for_arc_runners "$node_name"',
+  "actions.github.com/scale-set-name",
+  "sudo -n rm -f /etc/k0s/containerd.d/registry-auth.toml",
+  "sudo -n systemctl restart k0sworker.service",
+  "sudo -n systemctl is-active --quiet k0sworker.service",
+  "sport = :10250",
+  "k0s worker did not start a clean containerd invocation",
+  'wait_for_node_ready "$node_name"',
+  "Worker containerd auth state changed during reconciliation",
+  "/var/lib/k0s/nook-containerd-auth-clean-invocation",
+  'previous_invocation="$invocation"',
+]);
+workerMeshTasks.count({
+  fragment: "sudo -n systemctl restart k0sworker.service",
+  expected: 1,
+});
+workerMeshTasks.requireBefore({
+  first: 'previous_invocation="$invocation"',
+  second: "sudo -n systemctl restart k0sworker.service",
+});
+workerMeshTasks.requireBefore({
+  first: "sudo -n systemctl restart k0sworker.service",
+  second: "k0s worker did not start a clean containerd invocation",
+});
 
 await assertHiveRenderContract({ root });
 
