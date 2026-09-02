@@ -30,6 +30,7 @@ export type ExternalCompanionRoutingDependencies = {
   isExtensionPairedVaultUnlockRequestMessage: typeof RuntimeMessages.isExtensionPairedVaultUnlockRequestMessage
   normalizeOpenCompanionLauncherMessage: typeof normalizeOpenCompanionLauncherMessage
   openCompanionLauncher: typeof SessionLifecycle.openCompanionLauncher
+  refreshAuthenticationSurfaces: typeof SessionLifecycle.refreshAuthenticationSurfaces
   requestPairedVaultUnlock: typeof PairingIdentity.requestPairedVaultUnlock
 }
 
@@ -50,6 +51,10 @@ const invalidPairingGrantResponse: MessageResponse = {
   ok: false,
   reason: 'invalid-pairing-grant',
 }
+const authenticationSurfaceRefreshFailureResponse: MessageResponse = {
+  ok: false,
+  reason: 'authentication-surface-refresh-failed',
+}
 
 export function routeExternalCompanionMessage({
   dependencies,
@@ -68,6 +73,7 @@ export function routeExternalCompanionMessage({
     isExtensionPairedVaultUnlockRequestMessage,
     normalizeOpenCompanionLauncherMessage,
     openCompanionLauncher,
+    refreshAuthenticationSurfaces,
     requestPairedVaultUnlock,
   } = dependencies
   const launcherMessage = normalizeOpenCompanionLauncherMessage(message)
@@ -128,6 +134,17 @@ export function routeExternalCompanionMessage({
     sendResponse(invalidPairingGrantResponse)
     return false
   }
-  void importPairingAfterCompanionReady(message).then(sendResponse)
+  void importPairingAfterCompanionReady(message)
+    .then(async (response) => {
+      if (response.ok) {
+        try {
+          await refreshAuthenticationSurfaces()
+        } catch {
+          return authenticationSurfaceRefreshFailureResponse
+        }
+      }
+      return response
+    })
+    .then(sendResponse)
   return true
 }

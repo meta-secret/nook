@@ -43,6 +43,7 @@ export type ExtensionLifecycleRoutingDependencies = {
   hasPairingApprovedType: typeof PairingIdentity.hasPairingApprovedType
   importLocalEventLogUpdate: typeof PairingImport.importLocalEventLogUpdate
   importPairingAfterCompanionReady: typeof PairingImport.importPairingAfterCompanionReady
+  isExtensionAuthenticationSurfacesRefreshMessage: typeof SessionRuntimeMessages.isExtensionAuthenticationSurfacesRefreshMessage
   isExtensionPairingStateQueryMessage: typeof PairingState.isExtensionPairingStateQueryMessage
   isExtensionSessionEnsureMessage: typeof SessionRuntimeMessages.isExtensionSessionEnsureMessage
   isExtensionSessionExpiryMessage: typeof SessionRuntimeMessages.isExtensionSessionExpiryMessage
@@ -51,6 +52,7 @@ export type ExtensionLifecycleRoutingDependencies = {
   openExtensionPairing: typeof PairingIdentity.openExtensionPairing
   openSimpleVault: typeof SessionLifecycle.openSimpleVault
   releaseAccountPickerAuthorizationCleanup: typeof AccountPickers.releaseAccountPickerAuthorizationCleanup
+  refreshAuthenticationSurfaces: typeof SessionLifecycle.refreshAuthenticationSurfaces
 }
 
 type MessageResponse = Parameters<
@@ -203,6 +205,7 @@ export function routeExtensionLifecycleMessage({
     hasPairingApprovedType,
     importLocalEventLogUpdate,
     importPairingAfterCompanionReady,
+    isExtensionAuthenticationSurfacesRefreshMessage,
     isExtensionPairingStateQueryMessage,
     isExtensionSessionEnsureMessage,
     isExtensionSessionExpiryMessage,
@@ -212,6 +215,7 @@ export function routeExtensionLifecycleMessage({
     openSimpleVault,
     releaseAccountPickerAuthorizationCleanup,
     rebindStagedAuthenticatorEnrollmentsAuthorization,
+    refreshAuthenticationSurfaces,
   } = dependencies
   if (isExtensionPairingStateQueryMessage(message)) {
     const queryContext: Parameters<typeof handlePairingStateQuery>[0] = {
@@ -227,6 +231,17 @@ export function routeExtensionLifecycleMessage({
       return false
     }
     void ensureExtensionSessionDocument()
+      .then(() => sendResponse(successResponse))
+      .catch(() => sendResponse(sessionRuntimeFailureResponse))
+    return true
+  }
+
+  if (isExtensionAuthenticationSurfacesRefreshMessage(message)) {
+    if (!isExtensionRuntimeSender(sender)) {
+      sendResponse(forbiddenSenderResponse)
+      return false
+    }
+    void refreshAuthenticationSurfaces()
       .then(() => sendResponse(successResponse))
       .catch(() => sendResponse(sessionRuntimeFailureResponse))
     return true
@@ -286,7 +301,11 @@ export function routeExtensionLifecycleMessage({
       sendResponse(forbiddenSenderResponse)
       return false
     }
-    void importPairingAfterCompanionReady(message).then(sendResponse)
+    void importPairingAfterCompanionReady(message)
+      .then(async (response) => {
+        if (response.ok) await refreshAuthenticationSurfaces()
+      })
+      .then(sendResponse)
     return true
   }
 
@@ -330,6 +349,7 @@ export function routeExtensionLifecycleMessage({
               cleanupStart.authorizationGeneration,
               false,
             )
+            await refreshAuthenticationSurfaces()
           }
           return response
         } catch (error) {

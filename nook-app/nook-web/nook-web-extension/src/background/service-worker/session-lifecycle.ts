@@ -1,6 +1,10 @@
-import { runtimeSimpleVaultUrl } from '../../lib/simple-vault-runtime'
+import {
+  isRuntimeNookVaultAppUrl,
+  runtimeSimpleVaultUrl,
+} from '../../lib/simple-vault-runtime'
 import { DeviceProtectionStatus } from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { OpenCompanionLauncherIntent } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
+import { ExtensionRuntimeRequestType } from '../../lib/extension-runtime-request-type'
 
 export const extensionSessionDocument = 'offscreen/session.html'
 
@@ -125,6 +129,88 @@ export function openSimpleVault(path = ''): void {
   void chrome.tabs.create(nookTypedArgs0_1)
 }
 
+type AuthenticationSurfaceNotification = {
+  type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces
+}
+
+type AuthenticationSurfaceRefreshSuccess = { ok: true }
+
+function authenticationSurfaceRefreshSucceeded(
+  response: unknown,
+): response is AuthenticationSurfaceRefreshSuccess {
+  return (
+    !!response &&
+    typeof response === 'object' &&
+    'ok' in response &&
+    response.ok === true
+  )
+}
+
+type AuthenticationSurfaceDeliveryRequest = {
+  tabId: number
+  message: AuthenticationSurfaceNotification
+}
+
+function authenticationSurfaceTabId(tab: chrome.tabs.Tab): number | false {
+  if (
+    typeof tab.id !== 'number' ||
+    !Number.isInteger(tab.id) ||
+    typeof tab.url !== 'string' ||
+    isRuntimeNookVaultAppUrl(tab.url)
+  ) {
+    return false
+  }
+  try {
+    const protocol = new URL(tab.url).protocol
+    if (!['http:', 'https:'].includes(protocol)) return false
+  } catch {
+    return false
+  }
+  return tab.id
+}
+
+async function deliverAuthenticationSurfaceNotification({
+  tabId,
+  message,
+}: AuthenticationSurfaceDeliveryRequest): Promise<void> {
+  const response = await chrome.tabs.sendMessage(tabId, message)
+  if (!authenticationSurfaceRefreshSucceeded(response)) {
+    throw new Error('authentication surface refresh rejected')
+  }
+}
+
+async function notifyAuthenticationSurfaces(
+  message: AuthenticationSurfaceNotification,
+): Promise<void> {
+  const queryArgs: Parameters<typeof chrome.tabs.query>[0] = {}
+  const tabs = await new Promise<chrome.tabs.Tab[]>((resolve) => {
+    chrome.tabs.query(queryArgs, resolve)
+  })
+  const eligibleTabIds: number[] = []
+  for (const tab of tabs) {
+    const tabId = authenticationSurfaceTabId(tab)
+    if (tabId !== false) eligibleTabIds.push(tabId)
+  }
+  const deliveries = await Promise.allSettled(
+    eligibleTabIds.map((tabId) => {
+      const deliveryRequest: AuthenticationSurfaceDeliveryRequest = {
+        tabId,
+        message,
+      }
+      return deliverAuthenticationSurfaceNotification(deliveryRequest)
+    }),
+  )
+  if (deliveries.some((delivery) => delivery.status === 'rejected')) {
+    throw new Error('authentication surface refresh delivery failed')
+  }
+}
+
+export function refreshAuthenticationSurfaces(): Promise<void> {
+  const args: AuthenticationSurfaceNotification = {
+    type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces,
+  }
+  return notifyAuthenticationSurfaces(args)
+}
 export async function openCompanionLauncher(
   intent: OpenCompanionLauncherIntent,
 ): Promise<void> {
