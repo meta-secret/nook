@@ -59,26 +59,30 @@ test('propose Create passkey through Nook Pilot without silent ceremony', async 
         <main>
           <form id="passkey-signin" method="post">
             <h1>Sign in with a passkey</h1>
-            <p>Nook can propose creating a passkey after you approve.</p>
-            <button type="button" data-nook-passkey-control data-testid="demo-passkey-control">
-              Sign in with a passkey
-            </button>
+            <p id="passkey-copy">Nook can propose creating a passkey after you approve.</p>
             <p id="started" data-testid="demo-passkey-started">Site passkey ceremony started</p>
           </form>
         </main>
       </body>
     </html>`)
-  await page.evaluate(() => {
-    document
-      .querySelector('[data-testid="demo-passkey-control"]')
-      ?.addEventListener('click', () => {
-        document.body.classList.add('started')
-      })
-  })
   await page.evaluate(installDemoChromeStub, stubArgs)
   await injectPilotAutofill(page)
 
   const widget = page.locator('#nook-auth-widget')
+  await expect(widget).toHaveCount(0)
+  await page.evaluate(() => {
+    const copy = document.querySelector('#passkey-copy')
+    if (!copy) throw new Error('expected passkey demo copy')
+    const passkeyControl = document.createElement('button')
+    passkeyControl.type = 'button'
+    passkeyControl.dataset.nookPasskeyControl = ''
+    passkeyControl.dataset.testid = 'demo-passkey-control'
+    passkeyControl.textContent = 'Sign in with a passkey'
+    passkeyControl.addEventListener('click', () => {
+      document.body.classList.add('started')
+    })
+    copy.after(passkeyControl)
+  })
   await expect(
     widget.getByRole('button', { name: 'Create passkey' }),
   ).toBeVisible()
