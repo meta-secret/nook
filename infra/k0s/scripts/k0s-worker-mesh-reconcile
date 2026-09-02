@@ -237,10 +237,23 @@ if sudo -n nft list table inet bynull_filter >/dev/null 2>&1; then
     -e '/comment "nook k0s worker kubelet mesh pods"/d' \
     "$firewall" > "$firewall_next"
   kubelet_rule='            iifname "wg-nook" ip saddr 10.244.0.0/16 tcp dport 10250 accept comment "nook k0s worker kubelet mesh pods"'
-  kubelet_anchor='            iifname "wg-nook" ip saddr 10.201.0.1 tcp dport 10250 accept comment "nook k0s worker kubelet controller"'
-  test "$(grep -Fxc "$kubelet_anchor" "$firewall_next")" = 1
-  awk -v anchor="$kubelet_anchor" -v rule="$kubelet_rule" \
-    '{ print; if ($0 == anchor) print rule }' "$firewall_next" > "$firewall"
+  controller_kubelet_rule='            iifname "wg-nook" ip saddr 10.201.0.1 tcp dport 10250 accept comment "nook k0s worker kubelet controller"'
+  legacy_controller_kubelet_rule='            iifname "wg-nook" ip saddr 10.201.0.1 tcp dport 10250 accept'
+  controller_kubelet_count="$(awk \
+    -v canonical="$controller_kubelet_rule" \
+    -v legacy="$legacy_controller_kubelet_rule" \
+    '$0 == canonical || $0 == legacy { count += 1 } END { print count + 0 }' \
+    "$firewall_next")"
+  if test "$controller_kubelet_count" != 1; then
+    echo "Worker firewall must contain exactly one controller kubelet rule" >&2
+    exit 1
+  fi
+  awk \
+    -v canonical="$controller_kubelet_rule" \
+    -v legacy="$legacy_controller_kubelet_rule" \
+    -v rule="$kubelet_rule" \
+    '$0 == canonical || $0 == legacy { print canonical; print rule; next } { print }' \
+    "$firewall_next" > "$firewall"
   mv "$firewall" "$firewall_next"
   sudo -n nft --check --file "$firewall_next"
   sudo -n install -m 0644 "$firewall_next" /etc/nftables.conf
