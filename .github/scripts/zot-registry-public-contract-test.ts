@@ -95,6 +95,22 @@ for (const fragment of [
   };
   requireFragment(assertion);
 }
+for (const fragment of [
+  "grep -Eq \"^${username}\"':[$]2[ay][$]'",
+  "grep -Eq \"^${remote_username}\"':[$]2[ay][$]'",
+]) {
+  requireFragment({
+    source: registryTask,
+    fragment,
+    message: `registry bcrypt guard must use literal-dollar classes: ${fragment}`,
+  });
+}
+forbidFragment({
+  source: registryTask,
+  fragment: "':\\$2[ay]\\$'",
+  message:
+    "registry bcrypt guard must not rely on Task-sensitive dollar escapes",
+});
 forbidFragment({
   source: controllerAuthReconcile,
   fragment: "metadata.labels.nook\\.nokey\\.sh/arc-build}')\" != true",
