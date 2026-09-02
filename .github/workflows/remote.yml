@@ -175,7 +175,7 @@ jobs:
       (inputs.tasks || inputs.task) == 'ci:pr:e2e')
     name: Remote / browser image
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       DOCKER_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-web-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
       DOCKER_E2E_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-web-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
@@ -244,9 +244,7 @@ jobs:
           esac
       - uses: actions/upload-artifact@v7
         if: ${{ (inputs.tasks || inputs.task) == 'agent-stats:inventory' }}
-        with:
-          name: test-inventory-${{ github.sha }}
-          path: test-inventory.json
+        with: { name: "test-inventory-${{ github.sha }}", path: test-inventory.json }
 
       - name: Collect Playwright diagnostics
         if: always()

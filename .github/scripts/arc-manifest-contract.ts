@@ -640,7 +640,7 @@ remoteWorkflow.requireAll([
   "name: Report Kubernetes worker node",
   ': "${KUBERNETES_NODE_NAME:?KUBERNETES_NODE_NAME is required}"',
   "printf '::notice title=Kubernetes worker::%s\\n' \"$KUBERNETES_NODE_NAME\"",
-  "Remote / browser image",
+  "timeout-minutes: 45",
   "runs-on: nook-k0s-container",
   "Run repository invariant preflight",
   "run: task preflight",
@@ -656,7 +656,7 @@ remoteWorkflow.requireAll([
   "inputs.tasks != '' && inputs.task != ''",
   "(inputs.tasks == '' || inputs.task == '')",
   "DOCKER_RUST_BROWSER_IMAGE=$DOCKER_E2E_IMAGE task setup:rust:browser SETUP_OUTPUT=type=registry",
-  "name: test-inventory-${{ github.sha }}",
+  "test-inventory-${{ github.sha }}",
 ]);
 remoteWorkflow.requireBefore({
   first: "name: Report Kubernetes worker node",
