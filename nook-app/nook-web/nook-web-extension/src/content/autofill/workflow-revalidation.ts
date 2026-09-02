@@ -207,20 +207,11 @@ export async function performRevalidatedAuthenticationAction({
   const approvedFactsBatch: AuthenticationPageObservationFactsBatch = {
     observations: [approvedObservation.facts],
   }
-  let approvedObservationBindingToken: AuthenticationObservationBindingToken
+  let approvedDomObservationBindingToken: AuthenticationObservationBindingToken
   try {
-    approvedObservationBindingToken =
+    approvedDomObservationBindingToken =
       bind_authentication_page_observation_facts(approvedFactsBatch)
   } catch {
-    return rejected()
-  }
-  if (
-    observationBinding.kind === AuthenticationObservationBindingKind.Required &&
-    !authentication_page_observation_facts_match_binding(
-      observationBinding.token,
-      approvedFactsBatch,
-    )
-  ) {
     return rejected()
   }
   const message: Parameters<
@@ -241,8 +232,28 @@ export async function performRevalidatedAuthenticationAction({
   if (
     verdict.kind !== AuthenticationWorkflowSnapshotResponseKind.Matched ||
     !('snapshot' in verdict) ||
+    !delivery.response.selectedFacts ||
     verdict.snapshot.observationIndex !== approvedObservation.selectedIndex ||
     verdict.snapshot.action !== expectedAction
+  ) {
+    return rejected()
+  }
+  const selectedFactsBatch: AuthenticationPageObservationFactsBatch = {
+    observations: [delivery.response.selectedFacts],
+  }
+  let selectedObservationBindingToken: AuthenticationObservationBindingToken
+  try {
+    selectedObservationBindingToken =
+      bind_authentication_page_observation_facts(selectedFactsBatch)
+  } catch {
+    return rejected()
+  }
+  if (
+    observationBinding.kind === AuthenticationObservationBindingKind.Required &&
+    !authentication_page_observation_facts_match_binding(
+      observationBinding.token,
+      selectedFactsBatch,
+    )
   ) {
     return rejected()
   }
@@ -260,7 +271,7 @@ export async function performRevalidatedAuthenticationAction({
   if (
     currentObservation.selectedIndex !== approvedObservation.selectedIndex ||
     !authentication_page_observation_facts_match_binding(
-      approvedObservationBindingToken,
+      approvedDomObservationBindingToken,
       currentFactsBatch,
     ) ||
     !authenticationControlIdentitiesMatch(currentIdentitiesMatchRequest) ||
@@ -284,7 +295,7 @@ export async function performRevalidatedAuthenticationAction({
       postActionObservation.selectedIndex !==
         approvedObservation.selectedIndex ||
       !authentication_page_observation_facts_match_binding(
-        approvedObservationBindingToken,
+        approvedDomObservationBindingToken,
         postActionFactsBatch,
       ) ||
       !authenticationControlIdentitiesMatch(postActionIdentitiesMatchRequest)
@@ -295,7 +306,7 @@ export async function performRevalidatedAuthenticationAction({
   }
   const actRequest: RevalidatedAuthenticationActRequest = {
     currentWorkflow: currentObservation.currentWorkflow,
-    observationBindingToken: approvedObservationBindingToken,
+    observationBindingToken: selectedObservationBindingToken,
     revalidateCurrentWorkflow,
   }
   const actResult = act(actRequest)
