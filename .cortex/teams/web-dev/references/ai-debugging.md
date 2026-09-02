@@ -40,8 +40,10 @@ For every submitted annotation, the agent must:
    content, Gizmo returns the exact diff for a fresh web-development commit
    instead of committing it.
 8. After the owner commit and a clean gate, Gizmo pushes.
-9. Run a relevant focused remote task when the head is not validation-ready.
-10. Run complete exact-head validation when the head is validation-ready.
+9. Gizmo runs a relevant focused remote task when the head is not
+   validation-ready.
+10. Gizmo runs complete exact-head validation when the head is
+    validation-ready.
 11. Gizmo owns readiness and merge.
 
 The agent may stop without a code fix only when:
@@ -75,16 +77,20 @@ capability, so the checked-in project configuration enables
 AI-debug mode is a live developer handoff. It is not just a running dev server or
 an agent-owned browser page.
 
-When a developer asks an agent to enable AI-debug mode, the request is complete
-only after the agent has:
+When a developer asks an agent to enable AI-debug mode, the developer starts
+the local server and gives the ready URL to the agent. The agent may start the
+server only when the user authorizes that exact local command for the current
+task.
 
-1. started `task ai-debug:dev` and confirmed the selected local `/app/` URL
-   responds;
-2. opened that exact URL with Playwright MCP's `browser_navigate`;
-3. called `browser_tabs` and verified the active origin is exactly one of the
+The request is complete only after:
+
+1. the developer starts `task ai-debug:dev` and confirms that the selected
+   local `/app/` URL responds;
+2. the agent opens that exact URL with Playwright MCP's `browser_navigate`;
+3. the agent calls `browser_tabs` and verifies that the active origin is one of the
    configured local origins; and
-4. called `browser_annotate` and left the call waiting while the developer uses
-   the visible Playwright Dashboard.
+4. the agent calls `browser_annotate` and leaves the call waiting while the
+   developer uses the visible Playwright Dashboard.
 
 Do **not** report AI-debug mode as enabled after `task ai-debug:dev` alone.
 That command verifies the MCP configuration and starts Nook. It cannot open the
@@ -133,7 +139,10 @@ pinned Playwright MCP profile through
    the session keeps Nook's isolated origins, local-only route, and annotation
    capability.
 
-### Verify
+### Developer verification
+
+The developer runs this local setup check. An agent runs it only when the user
+authorizes this exact local command for the current task.
 
 ```sh
 task ai-debug:check
@@ -193,30 +202,31 @@ while `browser_annotate` depends on visible Chrome and Dashboard windows. A
 custom headed image with Xvfb/noVNC is possible but adds a remote-desktop layer
 and custom infrastructure. Treat that as a #336 gate option, not part of #335.
 
-## Run an annotation session
+## Developer startup and agent annotation
 
-Start Nook through the repository command surface:
+The developer starts Nook through the repository command surface:
 
 ```sh
 task ai-debug:dev
 ```
 
 The default URL is `https://localhost:5173/app/`. Local Docker sets
-`NOOK_LOCAL_HTTPS=1`, so agents must open the **https** origin (not bare
+`NOOK_LOCAL_HTTPS=1`, so the agent must open the **https** origin (not bare
 `http://127.0.0.1`). The MCP profile allows both schemes for compatibility, but
 the canonical handoff URL is HTTPS on `localhost`.
 
-In the multi-worktree repo, another agent may already own port `5173`; do not
-stop its container. Start this worktree on the alternate origin already allowed
-by the pilot configuration. AI-debug mode intentionally accepts only these two
-host ports:
+In the multi-worktree repo, another worktree may already own port `5173`. Do
+not stop its container. The developer starts this worktree on the alternate
+origin already allowed by the pilot configuration. AI-debug mode intentionally
+accepts only these two host ports:
 
 ```sh
 WEB_DEV_PORT=5175 task ai-debug:dev
 ```
 
 Then replace `5173` with `5175` in the agent instruction below.
-`task ai-debug:check` prints the exact ready URL for the selected port.
+The developer can use `task ai-debug:check` to print the exact ready URL for
+the selected port.
 
 Starting the server does not launch the developer-facing annotation UI. Give
 the agent this instruction so it performs the browser handoff too (adapt the

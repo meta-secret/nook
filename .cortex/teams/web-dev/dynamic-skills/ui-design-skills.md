@@ -191,13 +191,16 @@ Any visual shortcut that weakens these boundaries is a failed design.
 4. Inspect representative phone and desktop widths.
 5. Add or update focused Playwright UI-demo coverage.
 6. Run `task format` and return one coherent commit to Gizmo.
-7. Gizmo pushes the exact head and dispatches the repository-hosted UI demo
-   contract against current `origin/main`.
-8. Do not substitute raw host Playwright,
-   Vitest, Lighthouse, or generic framework commands.
-9. Inspect attached app logs before changing code after Playwright or UI CI
+7. Gizmo pushes the exact head and runs the available complete exact-head
+   validation.
+8. UI-demo evidence blocks readiness only when an applicable hosted selector
+   exists and the changed scope requires it. Gizmo dispatches that selector.
+9. When no applicable hosted UI-demo selector exists, do not invent one or
+   substitute raw host Playwright, Vitest, Lighthouse, or generic framework
+   commands. Use the available exact-head validation evidence.
+10. Inspect attached app logs before changing code after Playwright or UI CI
    failure.
-10. Leave complete product validation and shared delivery state to Gizmo.
+11. Leave complete product validation and shared delivery state to Gizmo.
 
 For Cortex-only changes, run `git diff --check`, return the coherent commit to
 Gizmo, and let Gizmo dispatch `task remote TASK_NAME=loom:verify`. Any
