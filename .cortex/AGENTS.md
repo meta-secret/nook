@@ -131,6 +131,11 @@ Workbench record, not another coordinator or worker. See the
   - Gizmo Prime, Team Agents, and subagents must not run product compilation or
     full repository validation locally, whether directly or through a Task
     target or script.
+  - The local prohibition includes preflight, Rust/WASM compilation and tests,
+    web builds, browser end-to-end suites, Hive verification, full Loom
+    verification, and combined repository or PR validation.
+  - Do not bypass the prohibition by invoking an underlying compiler, test
+    runner, package script, or workflow script directly.
   - Fast focused local Loom tests, lint, and typechecks are allowed only for
     direct implementation feedback as defined above.
   - Team workers must not run the full `task loom:verify` suite locally.
@@ -156,7 +161,18 @@ Workbench record, not another coordinator or worker. See the
 
 ## Remote task execution
 
-Run focused hosted validation from a clean, committed non-main branch:
+The allowlisted remote selectors map prohibited local work to hosted execution:
+
+- `preflight` runs repository preflight.
+- `rust:ci` runs Rust product validation.
+- `loom:verify` runs the full Loom suite.
+- `web:build` runs the web product build.
+- `web:e2e` and `extension:e2e` run browser suites.
+- `hive:verify` runs Hive verification.
+- `check`, `ci:pr`, and `ci:pr:e2e` run combined repository and PR validation.
+- `arc:runtime` runs the ARC runtime smoke check.
+
+Run hosted validation from a clean, committed non-main branch:
 
 1. Push the branch and confirm that the remote branch is at the same commit as
    local `HEAD`.
@@ -170,6 +186,8 @@ Run focused hosted validation from a clean, committed non-main branch:
 
 `task remote` rejects a dirty checkout, `main`, an unpushed branch, a local
 `HEAD` that differs from the remote branch, and tasks outside the allowlist.
+Runtime-backed selectors and `arc:runtime` must be dispatched alone; compatible
+batches may contain at most eight selectors.
 When a task requires a current base, it also verifies that the branch contains
 the current `origin/main`. A later push invalidates the earlier run as delivery
 evidence; dispatch the task again for the new head.
