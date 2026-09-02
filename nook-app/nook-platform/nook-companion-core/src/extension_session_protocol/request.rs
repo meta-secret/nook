@@ -4,6 +4,7 @@
 
 use super::queue::{
     MessageDefaultQueueDisposition, PasskeyCeremonyQueueDisposition, QueueDisposition,
+    deserialize_finite_f64,
 };
 use crate::ExtensionVaultEventPayload;
 use serde::{Deserialize, Deserializer, de::Error as _};
@@ -271,6 +272,22 @@ impl<'de> Deserialize<'de> for EnrollmentAuthorizationId {
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct EnrollmentAuthorizationPayload {
+    enrollment_authorization_id: EnrollmentAuthorizationId,
+    #[serde(deserialize_with = "deserialize_finite_f64")]
+    expires_at: f64,
+    queue: QueueDisposition,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct EnrollmentAuthorizationRevokePayload {
+    enrollment_authorization_id: EnrollmentAuthorizationId,
+    queue: MessageDefaultQueueDisposition,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct BackupAttachPayload {
     vault_store_id: String,
     device_id: String,
@@ -400,6 +417,10 @@ pub enum ExtensionSessionRequest {
     AuthenticatorEnrollPreview(OtpauthPayload),
     #[serde(rename = "nook:extension-session-authenticator-enroll-code")]
     AuthenticatorEnrollCode(OtpauthPayload),
+    #[serde(rename = "nook:extension-session-authenticator-enroll-authorize")]
+    AuthenticatorEnrollAuthorize(EnrollmentAuthorizationPayload),
+    #[serde(rename = "nook:extension-session-authenticator-enroll-revoke")]
+    AuthenticatorEnrollRevoke(EnrollmentAuthorizationRevokePayload),
     #[serde(rename = "nook:extension-session-authenticator-enroll-confirm")]
     AuthenticatorEnrollConfirm(OtpauthGrantPayload),
     #[serde(rename = "nook:extension-session-authenticator-backup-attach")]
@@ -460,6 +481,8 @@ impl Drop for ExtensionSessionRequestWire {
             | ExtensionSessionRequest::AuthenticatorEnrollCode(payload) => {
                 payload.otpauth_uri.zeroize();
             }
+            ExtensionSessionRequest::AuthenticatorEnrollAuthorize(_)
+            | ExtensionSessionRequest::AuthenticatorEnrollRevoke(_) => {}
             ExtensionSessionRequest::AuthenticatorEnrollConfirm(payload) => {
                 payload.otpauth_uri.zeroize();
             }
@@ -742,6 +765,51 @@ mod tests {
             valid.replace(
                 r#""enrollmentAuthorizationId":"authorization""#,
                 r#""enrollmentAuthorizationId":"authorization","foreign":true"#,
+            ),
+        ] {
+            assert_eq!(
+                validate_extension_session_request_json(&invalid),
+                ExtensionSessionRequestValidation::Rejected
+            );
+        }
+    }
+
+    #[test]
+    fn validates_enrollment_authorization_control_requests() {
+        let authorize = r#"{"type":"nook:extension-session-authenticator-enroll-authorize","payload":{"enrollmentAuthorizationId":"authorization","expiresAt":42,"queue":{"kind":"deadline","expiresAt":42,"priority":"interactive"}}}"#;
+        let revoke = r#"{"type":"nook:extension-session-authenticator-enroll-revoke","payload":{"enrollmentAuthorizationId":"authorization","queue":{"kind":"message-default"}}}"#;
+        for valid in [authorize, revoke] {
+            assert_eq!(
+                validate_extension_session_request_json(valid),
+                ExtensionSessionRequestValidation::Accepted
+            );
+        }
+        for invalid in [
+            authorize.replace(r#""enrollmentAuthorizationId":"authorization","#, ""),
+            authorize.replace("authorization", ""),
+            authorize.replace(
+                "authorization",
+                &"a".repeat(MAX_ENROLLMENT_AUTHORIZATION_ID_BYTES + 1),
+            ),
+            authorize.replace(r#""expiresAt":42,"#, r#""expiresAt":null,"#),
+            authorize.replace("interactive", "background"),
+            authorize.replace(
+                r#""queue":{"kind":"deadline","expiresAt":42,"priority":"interactive"}"#,
+                r#""queue":{"kind":"deadline","expiresAt":42,"priority":"interactive","foreign":true}"#,
+            ),
+            revoke.replace(r#""enrollmentAuthorizationId":"authorization","#, ""),
+            revoke.replace("authorization", "   "),
+            revoke.replace(
+                "authorization",
+                &"a".repeat(MAX_ENROLLMENT_AUTHORIZATION_ID_BYTES + 1),
+            ),
+            revoke.replace(
+                r#"{"kind":"message-default"}"#,
+                r#"{"kind":"deadline","expiresAt":42,"priority":"interactive"}"#,
+            ),
+            revoke.replace(
+                r#""queue":{"kind":"message-default"}"#,
+                r#""queue":{"kind":"message-default"},"foreign":true"#,
             ),
         ] {
             assert_eq!(
