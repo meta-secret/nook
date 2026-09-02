@@ -90,13 +90,15 @@ test('explicit authenticator confirmation saves immediately after staging', asyn
   const uri = { value: 'otpauth://totp/Nook:test?secret=secret' }
   const candidate = { sourceLabel: 'Nook', otpauthUri: uri.value }
 
-  await enrollmentFlow.beginEnrollmentCeremony({
+  const enrollment = enrollmentFlow.beginEnrollmentCeremony({
     host,
     section,
     vaultStoreId: 'vault-1',
     otpauthUri: uri,
     candidate,
   })
+  expect(enrollmentFlow.enrollmentScanBlocked()).toBe(true)
+  await enrollment
 
   expect(order).toEqual(['stage', 'confirm'])
   expect(
@@ -127,7 +129,9 @@ test('explicit authenticator confirmation saves immediately after staging', asyn
     BROWSER_MESSAGE_KEYS.WidgetEnrollSaved,
   )
   expect(section.replaceChildren).toHaveBeenCalledOnce()
-  enrollmentFlow.releaseEnrollmentWidgetHold()
+  expect(enrollmentFlow.enrollmentCeremonyActive()).toBe(true)
+  expect(enrollmentFlow.enrollmentScanBlocked()).toBe(false)
+  expect(enrollmentFlow.enrollmentCeremonyActive()).toBe(false)
 })
 
 test('immediate authenticator save reports confirmation failure truthfully', async () => {

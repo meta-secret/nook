@@ -593,6 +593,12 @@ export function enrollmentCeremonyActive(): boolean {
   return enrollmentSavePending || holdEnrollmentWidgetAfterSave
 }
 
+/** Release a completed save hold while continuing to block an in-flight save. */
+export function enrollmentScanBlocked(): boolean {
+  holdEnrollmentWidgetAfterSave = false
+  return enrollmentSavePending
+}
+
 export function releaseEnrollmentWidgetHold(): void {
   holdEnrollmentWidgetAfterSave = false
 }

@@ -67,13 +67,13 @@ import {
 import { loadPilotVaultConnection } from './autofill/workflow-ui'
 import {
   detectEnrollmentHintsFromRecoveryCopy,
-  enrollmentCeremonyActive,
+  enrollmentScanBlocked,
 } from './enrollment-flow'
 
 async function performScanAndRender(): Promise<void> {
   if (widgetState.dismissed) return
   if (saveOfferState.confirmationActive) return
-  if (enrollmentCeremonyActive()) return
+  if (enrollmentScanBlocked()) return
   const sequence = ++scanState.sequence
   if (saveOfferState.display.kind === SaveOfferDisplayKind.Visible) {
     const { offer } = saveOfferState.display

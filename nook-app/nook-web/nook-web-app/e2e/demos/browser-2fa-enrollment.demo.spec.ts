@@ -228,6 +228,19 @@ test('saves a confirmed authenticator without website success evidence', async (
   expect(enrollmentMessages).not.toContain(
     'nook:authentication-outcome-classify',
   )
+  await page.locator('#app').evaluate((root) => {
+    root.innerHTML = `
+      <h1>Authentication complete</h1>
+      <p>Save these backup codes in a safe place.</p>
+      <ul>
+        <li>A1B2-C3D4-E5F6</li>
+        <li>G7H8-I9J0-K1L2</li>
+      </ul>
+    `
+  })
+  await expect(
+    widget.getByRole('button', { name: 'Save backup codes' }),
+  ).toBeVisible()
   await demoBeat(page)
   expect(bootstrapErrors).toEqual([])
 })
