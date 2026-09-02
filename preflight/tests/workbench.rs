@@ -67,7 +67,7 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "const currentGizmoId = currentGizmoIdMatch?.[1]",
         "Validated Workbench task plan is missing its Current Gizmo ID.",
         "`gizmo_id: ${currentGizmoId}`",
-        "assignedGizmoId && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(assignedGizmoId)",
+        "!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(assignedGizmoId)",
         "frontmatter.matchAll(/^gizmo_id:\\s*(.*)$/gm)",
         "gizmoIdRows.length > 1",
         "continuing_owner:",
@@ -153,7 +153,11 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         })
     };
     fn assigned_gizmo_id(raw: &str) -> &str {
-        if raw == "null" { "" } else { raw }
+        if raw == "null" {
+            ""
+        } else {
+            raw
+        }
     }
     for accepted in ["2fa-slice", "123", "true", "false"] {
         assert!(
@@ -270,6 +274,58 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
     assert!(
         plan_position < implementation_position,
         "the workflow must publish the interpreted task plan before implementation"
+    );
+    Ok(())
+}
+
+#[test]
+fn agent_implementation_publishes_prs_with_trusted_workbench_metadata() -> anyhow::Result<()> {
+    let workflow = read(".github/workflows/agent-implement.yml");
+
+    for required in [
+        "must have a valid canonical gizmo_id before PR publication",
+        "must have a trusted capability-oriented title before PR publication",
+        "issues/unplanned/run-${context.runId}.md",
+        "Existing manual focused issue does not match this trusted run",
+        "Trusted PR publication requires a focused issue URL and canonical Gizmo ID.",
+        "## Agent-task provenance",
+        "- Harness: GitHub Actions `Agent implement`",
+        "- Opaque task ID: [workflow run ${context.runId}](${runUrl})",
+        "## Workbench authority",
+        "Focused issue: [\\`${issuePath}\\`](${issueUrl})",
+        "Immutable plan: [\\`${planPath}\\`](${planUrl})",
+        "AGENT_PR_TITLE<<${delimiter}",
+        "AGENT_PR_BODY<<${delimiter}",
+        "ISSUE_PATH: ${{ steps.plan.outputs.issue_path }}",
+    ] {
+        assert!(
+            workflow.contains(required),
+            "trusted PR publisher is missing: {required}"
+        );
+    }
+    assert!(
+        !workflow.contains("title=\"Agent implement (run ${RUN_ID})\"")
+            && !workflow.contains("Owned scope: manual prompt run"),
+        "PR metadata must not publish generic or private manual-prompt context"
+    );
+
+    let manual_issue_position = workflow
+        .find("issues: establish agent run ${context.runId}")
+        .context("manual dispatch must establish its focused issue")?;
+    let plan_publication_position = workflow
+        .find("message: `plan: agent run ${context.runId}`")
+        .context("the workflow must publish the immutable plan")?;
+    let pr_body_position = workflow
+        .find("const prBody = [")
+        .context("the workflow must construct trusted PR metadata")?;
+    let delivery_position = workflow
+        .find("Validate, commit, and publish implementation")
+        .context("the workflow must retain its delivery step")?;
+    assert!(
+        manual_issue_position < plan_publication_position
+            && plan_publication_position < pr_body_position
+            && pr_body_position < delivery_position,
+        "focused issue and immutable plan publication must precede PR metadata construction and delivery"
     );
     Ok(())
 }

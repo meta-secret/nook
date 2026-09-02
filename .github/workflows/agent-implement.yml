@@ -119,8 +119,13 @@ jobs:
             }
             const rawGizmoId = gizmoIdRows[0]?.[1].trim() || ''
             const assignedGizmoId = rawGizmoId === 'null' ? '' : rawGizmoId
-            if (assignedGizmoId && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(assignedGizmoId)) {
-              core.setFailed(`${path} has an invalid canonical gizmo_id`)
+            if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(assignedGizmoId)) {
+              core.setFailed(`${path} must have a valid canonical gizmo_id before PR publication`)
+              return
+            }
+            const issueTitle = String(value(body, 'title')).trim()
+            if (!/^[\p{L}\p{N}][\p{L}\p{N} .,:()'’\/&+_-]{2,119}$/u.test(issueTitle)) {
+              core.setFailed(`${path} must have a trusted capability-oriented title before PR publication`)
               return
             }
             if (
@@ -159,7 +164,7 @@ jobs:
 
             core.setOutput('found', 'true')
             core.setOutput('path', path)
-            core.setOutput('title', String(value(body, 'title') || path))
+            core.setOutput('title', issueTitle)
             core.setOutput('body', body)
             core.setOutput('url', `https://github.com/${owner}/${repo}/blob/main/${path}`)
             core.setOutput('slug', path.replace(/^issues\//, '').replace(/\.md$/, '').replaceAll('/', '-'))
@@ -187,7 +192,7 @@ jobs:
             base_branch="main"
             checkout_ref="main"
             target_kind="standalone"
-            title="Agent implement (run ${RUN_ID})"
+            title="Manual agent implementation"
             task="$DISPATCH_PROMPT"
             continuing_owner="$MANUAL_CONTINUING_OWNER"
           else
@@ -195,7 +200,7 @@ jobs:
             base_branch="main"
             checkout_ref="main"
             target_kind="standalone"
-            title="Implement ${ISSUE_TITLE}"
+            title="$ISSUE_TITLE"
             task="$(printf 'Nook Workbench issue `%s`: %s\nURL: %s\n\n%s' "$ISSUE_PATH" "$ISSUE_TITLE" "$ISSUE_URL" "$ISSUE_BODY")"
             continuing_owner="$ISSUE_CONTINUING_OWNER"
           fi
@@ -204,27 +209,12 @@ jobs:
           plan_started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           plan_timestamp="$(printf '%s' "$plan_started_at" | tr ':' '-')"
           plan_path="plans/${feature}/${plan_timestamp}-run-${RUN_ID}.md"
-          pr_body="$(
-            printf '%s\n' "## Summary"
-            if [ -n "$ISSUE_URL" ]; then
-              printf '%s\n' "Agent implementation for [\`${ISSUE_PATH}\`](${ISSUE_URL})."
-            else
-              printf '%s\n' "Agent implementation from a manual workflow prompt."
-            fi
-            printf '%s\n' "" "## Ownership" "Continuing agent: \`${continuing_owner}\`"
-            if [ -n "$ISSUE_URL" ]; then
-              printf '%s\n' "Owned scope: \`${ISSUE_PATH}\`"
-            else
-              printf '%s\n' "Owned scope: manual prompt run \`${RUN_ID}\`"
-            fi
-            printf '%s\n' "" "## Test plan" "- [ ] CI green on this PR"
-          )"
           while :; do
             random_suffix="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
             test "${#random_suffix}" -eq 64
             delim="AGENT_EOF_${random_suffix}"
             collision=false
-            for value in "$task" "$title" "$pr_body"; do
+            for value in "$task" "$title"; do
               if printf '%s\n' "$value" | grep -Fqx -- "$delim"; then
                 collision=true
                 break
@@ -241,15 +231,12 @@ jobs:
             echo "AGENT_PR_BASE_BRANCH=$base_branch"
             echo "AGENT_PR_TARGET_KIND=$target_kind"
             emit_multiline_env "AGENT_PROMPT" "$task"
-            emit_multiline_env "AGENT_PR_TITLE" "$title"
-            emit_multiline_env "AGENT_COMMIT_MESSAGE" "$title"
             echo "TASK_FEATURE=$feature"
             echo "TASK_PLAN_PATH=$plan_path"
             echo "TASK_PLAN_STARTED_AT=$plan_started_at"
             emit_multiline_env "TASK_TITLE" "$title"
             echo "CONTINUING_AGENT_OWNER=$continuing_owner"
             echo "MAJOR_CHANGE_AUTHORIZED=$MAJOR_CHANGE_AUTHORIZED"
-            emit_multiline_env "AGENT_PR_BODY" "$pr_body"
           } >> "$GITHUB_ENV"
           echo "ready=true" >> "$GITHUB_OUTPUT"
           echo "checkout_ref=$checkout_ref" >> "$GITHUB_OUTPUT"
@@ -411,6 +398,8 @@ jobs:
         uses: actions/github-script@v9
         env:
           ISSUE_PATH: ${{ steps.workbench.outputs.path }}
+          ISSUE_TITLE: ${{ steps.workbench.outputs.title }}
+          CONTINUING_AGENT_OWNER: ${{ env.CONTINUING_AGENT_OWNER }}
           TASK_FEATURE: ${{ env.TASK_FEATURE }}
           TASK_PLAN_PATH: ${{ env.TASK_PLAN_PATH }}
           TASK_PLAN_STARTED_AT: ${{ env.TASK_PLAN_STARTED_AT }}
@@ -464,11 +453,127 @@ jobs:
               core.setFailed('Validated Workbench task plan is missing its Current Gizmo ID.')
               return
             }
+            const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+            const gizmoNamePattern = new RegExp(
+              `^1\\. Gizmo ID: ${escapeRegExp(currentGizmoId)}; Gizmo name: ([^;\\r\\n]+);`,
+              'm',
+            )
+            const gizmoName = gizmoNamePattern.exec(candidate)?.[1].trim() || ''
+            const trustedTitle = process.env.ISSUE_PATH.trim()
+              ? process.env.ISSUE_TITLE.trim()
+              : gizmoName
+            if (!/^[\p{L}\p{N}][\p{L}\p{N} .,:()'’\/&+_-]{2,119}$/u.test(trustedTitle)) {
+              core.setFailed('Validated task context is missing a safe capability-oriented PR title.')
+              return
+            }
+            const bindingRejection = validateAgentRecord(candidate, 'plan', secrets, sourceTask, {
+              assignedGizmoId: currentGizmoId,
+            })
+            if (bindingRejection) {
+              core.setFailed(`Rejected plan binding for canonical Gizmo ID: ${bindingRejection}.`)
+              return
+            }
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+            let issuePath = process.env.ISSUE_PATH.trim()
+            if (!issuePath) {
+              issuePath = `issues/unplanned/run-${context.runId}.md`
+              const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
+              const issue = [
+                '---',
+                `title: ${JSON.stringify(trustedTitle)}`,
+                'status: in_progress',
+                'priority: p2',
+                'automation: agent',
+                `owner: ${process.env.CONTINUING_AGENT_OWNER}`,
+                `created_at: ${now}`,
+                `updated_at: ${now}`,
+                'source_issues: []',
+                'related_prs: []',
+                'depends_on: []',
+                `gizmo_id: ${currentGizmoId}`,
+                '---',
+                '',
+                `# ${trustedTitle}`,
+                '',
+                '## Context',
+                '',
+                'This focused issue is the public lifecycle authority for a manual Agent implement dispatch.',
+                '',
+                '## Outcome',
+                '',
+                `Deliver ${trustedTitle} through one bounded Nook pull request.`,
+                '',
+                '## Scope',
+                '',
+                '- Implement the capability and acceptance evidence defined by the linked immutable task plan.',
+                '- Preserve repository ownership, security, validation, and exact-head delivery boundaries.',
+                '',
+                '## Acceptance criteria',
+                '',
+                '- [ ] The implementation satisfies the immutable plan and repository-owned validation.',
+                '- [ ] The resulting PR remains assigned to the named continuing owner through merge.',
+                '',
+                '## Progress',
+                '',
+                `<!-- agent-implement-run:${context.runId} -->`,
+                `- ${now}: [Agent implement run ${context.runId}](${runUrl}) established this focused issue and canonical Gizmo ID.`,
+                '',
+                '## Findings and decisions',
+                '',
+                '- The private dispatch prompt is not published; the validated plan owns the public task interpretation.',
+                '',
+              ].join('\n')
+              try {
+                const { data: existing } = await github.rest.repos.getContent({
+                  owner,
+                  repo,
+                  path: issuePath,
+                  ref: 'main',
+                })
+                if (Array.isArray(existing) || existing.type !== 'file') {
+                  core.setFailed(`Manual focused issue is not a file: ${issuePath}`)
+                  return
+                }
+                const existingBody = Buffer.from(existing.content, 'base64').toString('utf8')
+                const existingFrontmatter = existingBody.match(
+                  /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/,
+                )?.[1] || ''
+                if (
+                  !existingBody.includes(`<!-- agent-implement-run:${context.runId} -->`) ||
+                  !/^status:\s*in_progress$/m.test(existingFrontmatter) ||
+                  !/^automation:\s*agent$/m.test(existingFrontmatter) ||
+                  !new RegExp(`^owner:\\s*${escapeRegExp(process.env.CONTINUING_AGENT_OWNER)}$`, 'm')
+                    .test(existingFrontmatter) ||
+                  !new RegExp(`^gizmo_id:\\s*${escapeRegExp(currentGizmoId)}$`, 'm')
+                    .test(existingFrontmatter) ||
+                  !new RegExp(`^title:\\s*${escapeRegExp(JSON.stringify(trustedTitle))}$`, 'm')
+                    .test(existingFrontmatter)
+                ) {
+                  core.setFailed(`Existing manual focused issue does not match this trusted run: ${issuePath}`)
+                  return
+                }
+              } catch (error) {
+                if (error.status !== 404) throw error
+                await github.rest.repos.createOrUpdateFileContents({
+                  owner,
+                  repo,
+                  path: issuePath,
+                  branch: 'main',
+                  message: `issues: establish agent run ${context.runId}`,
+                  content: Buffer.from(issue).toString('base64'),
+                })
+              }
+            }
+            const issueUrl = `https://github.com/${owner}/${repo}/blob/main/${issuePath}`
+            if (!issuePath || !issueUrl || !currentGizmoId) {
+              core.setFailed('Trusted PR publication requires a focused issue URL and canonical Gizmo ID.')
+              return
+            }
             const plan = [
               '---',
-              `title: ${JSON.stringify(process.env.TASK_TITLE)}`,
-              `feature: ${process.env.TASK_FEATURE}`,
-              `issue: ${process.env.ISSUE_PATH || 'null'}`,
+              `title: ${JSON.stringify(trustedTitle)}`,
+              `feature: ${issuePath.split('/')[1]}`,
+              `issue: ${issuePath}`,
               `gizmo_id: ${currentGizmoId}`,
               `started_at: ${process.env.TASK_PLAN_STARTED_AT}`,
               'agent: cursor',
@@ -485,8 +590,58 @@ jobs:
               message: `plan: agent run ${context.runId}`,
               content: Buffer.from(plan).toString('base64'),
             })
+            const planUrl = `https://github.com/${owner}/${repo}/blob/main/${planPath}`
+            const prBody = [
+              '## Summary',
+              '',
+              `Automated implementation of ${trustedTitle}.`,
+              '',
+              '## Agent-task provenance',
+              '',
+              '- Harness: GitHub Actions `Agent implement`',
+              `- Task: ${trustedTitle}`,
+              `- Opaque task ID: [workflow run ${context.runId}](${runUrl})`,
+              `- Gizmo ID: \`${currentGizmoId}\``,
+              '',
+              '## Workbench authority',
+              '',
+              `- Focused issue: [\`${issuePath}\`](${issueUrl})`,
+              `- Immutable plan: [\`${planPath}\`](${planUrl})`,
+              '',
+              '## Ownership',
+              '',
+              `Continuing agent: \`${process.env.CONTINUING_AGENT_OWNER}\``,
+              '',
+              '## Test plan',
+              '',
+              '- [ ] CI green on this PR',
+            ].join('\n')
+            const delimiter = `AGENT_METADATA_${crypto.randomBytes(32).toString('hex')}`
+            if ([trustedTitle, prBody].some((value) => value.split('\n').includes(delimiter))) {
+              core.setFailed('Failed to construct collision-safe PR metadata.')
+              return
+            }
+            fs.appendFileSync(
+              process.env.GITHUB_ENV,
+              [
+                `AGENT_PR_TITLE<<${delimiter}`,
+                trustedTitle,
+                delimiter,
+                `AGENT_COMMIT_MESSAGE<<${delimiter}`,
+                trustedTitle,
+                delimiter,
+                `AGENT_PR_BODY<<${delimiter}`,
+                prBody,
+                delimiter,
+                '',
+              ].join('\n'),
+            )
             core.setOutput('path', planPath)
-            core.setOutput('url', `https://github.com/${owner}/${repo}/blob/main/${planPath}`)
+            core.setOutput('url', planUrl)
+            core.setOutput('issue_path', issuePath)
+            core.setOutput('issue_url', issueUrl)
+            core.setOutput('issue_title', trustedTitle)
+            core.setOutput('gizmo_id', currentGizmoId)
 
       - name: Materialize validated implementation plan
         if: steps.plan.outcome == 'success' && steps.plan.outputs.planning_blocked != 'true' && steps.rerun.outputs.terminal != 'true'
@@ -572,8 +727,8 @@ jobs:
           AGENT_PROMPT: ${{ env.AGENT_PROMPT }}
           IMPLEMENT_OUTCOME: ${{ steps.implement.outcome }}
           BUDGET_BLOCKER_B64: ${{ steps.implement.outputs.budget_blocker_b64 }}
-          ISSUE_PATH: ${{ steps.workbench.outputs.path }}
-          ISSUE_TITLE: ${{ steps.workbench.outputs.title }}
+          ISSUE_PATH: ${{ steps.plan.outputs.issue_path }}
+          ISSUE_TITLE: ${{ steps.plan.outputs.issue_title }}
           PLAN_PATH: ${{ steps.plan.outputs.path }}
           WORKBENCH_REPOSITORY: ${{ env.WORKBENCH_REPOSITORY }}
           WORKBENCH_SUMMARY_FILE: ${{ env.WORKBENCH_SUMMARY_FILE }}
