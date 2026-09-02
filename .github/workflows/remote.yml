@@ -123,6 +123,28 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
+      - name: Provision Vale 3.19.0
+        if: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',loom:verify,') }}
+        uses: vale-cli/vale-action@518a9136acc6e6668ce7c00d367051e0941e87ff # v3.0.0
+        with:
+          version: 3.19.0
+          files: '[]'
+          sync: false
+      - name: Activate Vale 3.19.0
+        if: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',loom:verify,') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          vale_bin="$(find "$RUNNER_TOOL_CACHE/vale/3.19.0" -type f -name vale -perm -u+x -print -quit)"
+          if [ -z "$vale_bin" ]; then
+            echo "Vale 3.19.0 was not provisioned." >&2
+            exit 1
+          fi
+          if [ "$("$vale_bin" --version)" != "vale version 3.19.0" ]; then
+            echo "Vale 3.19.0 was not provisioned." >&2
+            exit 1
+          fi
+          printf '%s\n' "$(dirname "$vale_bin")" >> "$GITHUB_PATH"
       - uses: ./.github/actions/nook-docker-setup
         if: ${{ (inputs.tasks || inputs.task) != 'loom:verify' }}
         with:

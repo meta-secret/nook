@@ -20,6 +20,8 @@ on:
       - .github/scripts/arc-manifest-contract.ts
       - .github/workflows/**
       - .task/agentic-ai.yml
+      - .vale.ini
+      - .vale/**
       - AGENTS.md
       - CODEX.md
       - README.md
@@ -89,7 +91,7 @@ jobs:
               *) cortex_markdown_only=false ;;
             esac
             case "$changed_file" in
-              .agents/skills/* | .claude/skills/* | .codex/hooks.json | .cortex/* | .cursor/rules.md | .cursor/skills/* | .github/formatting/* | .github/prompts/* | .github/scripts/format-host-apply.sh | .github/scripts/format-host-apply.test.sh | .github/workflows/repository-policy.yml | .task/agentic-ai.yml | AGENTS.md | CODEX.md | README.md | agentic-ai/loom/* | .cortex/*/dynamic-skills/*/scripts/* | preflight/*)
+              .agents/skills/* | .claude/skills/* | .codex/hooks.json | .cortex/* | .cursor/rules.md | .cursor/skills/* | .github/formatting/* | .github/prompts/* | .github/scripts/format-host-apply.sh | .github/scripts/format-host-apply.test.sh | .github/workflows/repository-policy.yml | .task/agentic-ai.yml | .vale.ini | .vale/* | AGENTS.md | CODEX.md | README.md | agentic-ai/loom/* | .cortex/*/dynamic-skills/*/scripts/* | preflight/*)
                 loom_changed=true
                 ;;
             esac
@@ -170,6 +172,30 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
+
+      - name: Provision Vale 3.19.0
+        if: steps.policy-paths.outputs.loom == 'true'
+        uses: vale-cli/vale-action@518a9136acc6e6668ce7c00d367051e0941e87ff # v3.0.0
+        with:
+          version: 3.19.0
+          files: '[]'
+          sync: false
+
+      - name: Activate Vale 3.19.0
+        if: steps.policy-paths.outputs.loom == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          vale_bin="$(find "$RUNNER_TOOL_CACHE/vale/3.19.0" -type f -name vale -perm -u+x -print -quit)"
+          if [ -z "$vale_bin" ]; then
+            echo "Vale 3.19.0 was not provisioned." >&2
+            exit 1
+          fi
+          if [ "$("$vale_bin" --version)" != "vale version 3.19.0" ]; then
+            echo "Vale 3.19.0 was not provisioned." >&2
+            exit 1
+          fi
+          printf '%s\n' "$(dirname "$vale_bin")" >> "$GITHUB_PATH"
 
       - name: Install Ruby for the legacy Hive values renderer
         if: steps.policy-paths.outputs.runner_placement == 'true'

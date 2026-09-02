@@ -585,7 +585,20 @@ repositoryPolicyWorkflow.requireAll([
   "github.event.pull_request.head.repo.full_name == github.repository",
   "uses: ./.github/actions/nook-docker-setup",
   "run: task preflight:test",
+  "- .vale.ini",
+  "- .vale/**",
+  ".vale.ini | .vale/*",
+  "uses: vale-cli/vale-action@518a9136acc6e6668ce7c00d367051e0941e87ff",
+  "version: 3.19.0",
+  "files: '[]'",
+  "sync: false",
+  'find "$RUNNER_TOOL_CACHE/vale/3.19.0"',
+  '"vale version 3.19.0"',
 ]);
+repositoryPolicyWorkflow.requireBefore({
+  first: "name: Activate Vale 3.19.0",
+  second: "run: task loom:cortex-audit",
+});
 hiveWorkflow.requireAll([
   "Build Hive Control Center browser image",
   "nook-hive-console:run-${{ github.run_id }}-${{ github.run_attempt }}",
@@ -654,10 +667,20 @@ remoteWorkflow.requireAll([
   "ci:pr:e2e) task _ci:main",
   "inputs.tasks != '' && inputs.task != ''",
   "(inputs.tasks == '' || inputs.task == '')",
+  "uses: vale-cli/vale-action@518a9136acc6e6668ce7c00d367051e0941e87ff",
+  "version: 3.19.0",
+  "files: '[]'",
+  "sync: false",
+  'find "$RUNNER_TOOL_CACHE/vale/3.19.0"',
+  '"vale version 3.19.0"',
 ]);
 remoteWorkflow.requireBefore({
   first: "name: Report Kubernetes worker node",
   second: "uses: actions/checkout@v7",
+});
+remoteWorkflow.requireBefore({
+  first: "name: Activate Vale 3.19.0",
+  second: "name: Run allowlisted task batch",
 });
 remoteWorkflow.require(
   "inputs.dispatch_nonce || 'default'",
