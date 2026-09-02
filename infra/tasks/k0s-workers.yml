@@ -646,6 +646,37 @@ tasks:
           echo "k0s worker: refusing invalid ARC tier" >&2
           exit 2
         fi
+        ssh -o BatchMode=yes "$controller_target" bash -s -- \
+          "$worker_mesh_address" <<'REMOTE'
+        set -euo pipefail
+        worker_mesh_address="$1"
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        node="$(kubectl get nodes -o json | jq -r \
+          --arg address "$worker_mesh_address" \
+          '.items[] | select(any(.status.addresses[]; .type == "InternalIP" and .address == $address)) | .metadata.name')"
+        test "$(printf '%s\n' "$node" | sed '/^$/d' | wc -l | tr -d ' ')" -le 1
+        node="$(printf '%s\n' "$node" | sed '/^$/d')"
+        if test -n "$node"; then
+          kubectl taint node "$node" \
+            nook.nokey.sh/arc-build=preparing:NoSchedule --overwrite >/dev/null
+          deadline="$(( $(date +%s) + 7200 ))"
+          while :; do
+            active_runners="$(kubectl get pods --namespace arc-runners \
+              --field-selector "spec.nodeName=$node" \
+              -l actions.github.com/scale-set-name -o json | jq \
+              '[.items[] | select(.status.phase == "Pending" or .status.phase == "Running")] | length')"
+            if test "$active_runners" = 0; then
+              break
+            fi
+            if test "$(date +%s)" -ge "$deadline"; then
+              echo "Timed out waiting for $active_runners ARC runner(s) on $node" >&2
+              exit 1
+            fi
+            echo "Waiting for $active_runners ARC runner(s) to finish on $node" >&2
+            sleep 30
+          done
+        fi
+        REMOTE
         ssh -o BatchMode=yes "$worker_target" bash -s -- \
           "$remote_dir" "{{.K0S_VERSION}}" "{{.K0S_AMD64_SHA256}}" <<'REMOTE'
         set -euo pipefail
@@ -697,6 +728,10 @@ tasks:
         remote_program='set -euo pipefail
         worker_mesh_address="$1"
         worker_arc_tier="$2"
+        worker_was_active=false
+        if sudo -n systemctl is-active --quiet k0sworker.service; then
+          worker_was_active=true
+        fi
         token_file=/etc/k0s/worker-token
         token_temp="$(mktemp)"
         cleanup() { rm -f "$token_temp"; }
@@ -709,7 +744,13 @@ tasks:
           --kubelet-extra-args="--node-ip=$worker_mesh_address --register-with-taints=nook.nokey.sh/arc-build=preparing:NoSchedule" \
           --labels="nook.nokey.sh/arc-build=true,nook.nokey.sh/node-role=compute,nook.nokey.sh/arc-tier=$worker_arc_tier"
         sudo -n systemctl daemon-reload
-        sudo -n systemctl enable --now k0sworker'
+        sudo -n systemctl enable k0sworker
+        if test "$worker_was_active" = true; then
+          sudo -n systemctl restart k0sworker.service
+        else
+          sudo -n systemctl start k0sworker.service
+        fi
+        sudo -n systemctl is-active --quiet k0sworker.service'
         encoded_program="$(printf '%s' "$remote_program" | base64 | tr -d '\n')"
         printf '%s' "$token" |
           ssh -o BatchMode=yes "$worker_target" \

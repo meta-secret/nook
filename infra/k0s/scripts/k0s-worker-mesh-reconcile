@@ -188,9 +188,11 @@ private_key="$(sudo -n cat /etc/wireguard/nook-private.key)"
 config="$(mktemp)"
 stripped="$(mktemp)"
 live="$(mktemp)"
+firewall="$(mktemp)"
+firewall_next="$(mktemp)"
 cleanup() {
   private_key=
-  rm -f "$config" "$stripped" "$live"
+  rm -f "$config" "$stripped" "$live" "$firewall" "$firewall_next"
   sudo -n rm -f /etc/wireguard/.nook-syncconf
 }
 trap cleanup EXIT
@@ -229,16 +231,31 @@ while IFS=$'\t' read -r kind node_name address pod_cidr public_key endpoint ssh_
   sudo -n ip route replace "$pod_cidr" dev wg-nook
 done < <(printf '%s' "$inventory_payload" | base64 -d)
 if sudo -n nft list table inet bynull_filter >/dev/null 2>&1; then
-  sudo -n sed -E -i \
+  sudo -n cat /etc/nftables.conf > "$firewall"
+  sed -E \
     -e 's/ip saddr ([0-9]{1,3}\.){3}[0-9]{1,3} udp dport 51820 accept comment "nook k0s worker wireguard"/udp dport 51820 accept comment "nook k0s worker wireguard"/' \
-    /etc/nftables.conf
+    -e '/comment "nook k0s worker kubelet mesh pods"/d' \
+    "$firewall" > "$firewall_next"
+  kubelet_rule='            iifname "wg-nook" ip saddr 10.244.0.0/16 tcp dport 10250 accept comment "nook k0s worker kubelet mesh pods"'
+  kubelet_anchor='            iifname "wg-nook" ip saddr 10.201.0.1 tcp dport 10250 accept comment "nook k0s worker kubelet controller"'
+  test "$(grep -Fxc "$kubelet_anchor" "$firewall_next")" = 1
+  awk -v anchor="$kubelet_anchor" -v rule="$kubelet_rule" \
+    '{ print; if ($0 == anchor) print rule }' "$firewall_next" > "$firewall"
+  mv "$firewall" "$firewall_next"
+  sudo -n nft --check --file "$firewall_next"
+  sudo -n install -m 0644 "$firewall_next" /etc/nftables.conf
   sudo -n nft --handle list chain inet bynull_filter input |
     awk '
       /udp dport 51820 accept.*comment "nook k0s worker wireguard"/ {
         print "delete rule inet bynull_filter input handle " $NF
+      }
+      /comment "nook k0s worker kubelet mesh pods"/ {
+        print "delete rule inet bynull_filter input handle " $NF
       }' > "$live"
   printf '%s\n' \
-    'add rule inet bynull_filter input udp dport 51820 accept comment "nook k0s worker wireguard"' >> "$live"
+    'add rule inet bynull_filter input udp dport 51820 accept comment "nook k0s worker wireguard"' \
+    'add rule inet bynull_filter input iifname "wg-nook" ip saddr 10.244.0.0/16 tcp dport 10250 accept comment "nook k0s worker kubelet mesh pods"' \
+    >> "$live"
   sudo -n nft --check --file "$live"
   sudo -n nft --file "$live"
 else

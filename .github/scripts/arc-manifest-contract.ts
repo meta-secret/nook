@@ -236,9 +236,26 @@ const remoteWorkflow = new TextContract({
   label: "Remote workflow",
   source: await read(".github/workflows/remote.yml"),
 });
+const workerTasksSource = await read("infra/tasks/k0s-workers.yml");
 const workerTasks = new TextContract({
   label: "k0s worker tasks",
-  source: await read("infra/tasks/k0s-workers.yml"),
+  source: workerTasksSource,
+});
+const workerInstallStart = workerTasksSource.indexOf("  k0s:worker:install:");
+const workerInstallEnd = workerTasksSource.indexOf(
+  "  k0s:worker:kata:verify:",
+  workerInstallStart,
+);
+if (workerInstallStart < 0 || workerInstallEnd < 0) {
+  throw new Error("k0s worker install task is missing");
+}
+const workerInstall = new TextContract({
+  label: "k0s worker install",
+  source: workerTasksSource.slice(workerInstallStart, workerInstallEnd),
+});
+const workerMeshTasks = new TextContract({
+  label: "k0s fleet worker mesh reconciliation",
+  source: await read("infra/k0s/scripts/k0s-worker-mesh-reconcile"),
 });
 
 const values = Bun.YAML.parse(runnersSource) as ArcValues;
@@ -676,6 +693,40 @@ workerTasks.count({
     'iifname "wg-nook" ip saddr 10.244.0.0/16 tcp dport 10250 accept comment "nook k0s worker kubelet mesh pods"',
   expected: 2,
 });
+workerInstall.requireAll([
+  "nook.nokey.sh/arc-build=preparing:NoSchedule --overwrite",
+  "actions.github.com/scale-set-name",
+  'select(.status.phase == "Pending" or .status.phase == "Running")',
+  "Timed out waiting for $active_runners ARC runner(s) on $node",
+  "worker_was_active=false",
+  "sudo -n systemctl restart k0sworker.service",
+  "sudo -n systemctl is-active --quiet k0sworker.service",
+  'sudo -n k0s kubectl wait "node/$node" --for=condition=Ready --timeout=5m',
+]);
+workerInstall.requireBefore({
+  first: "nook.nokey.sh/arc-build=preparing:NoSchedule --overwrite",
+  second: "sudo -n rm -f /etc/k0s/containerd.d/registry-auth.toml",
+});
+workerInstall.requireBefore({
+  first: "sudo -n rm -f /etc/k0s/containerd.d/registry-auth.toml",
+  second: "sudo -n systemctl restart k0sworker.service",
+});
+workerInstall.requireBefore({
+  first: "sudo -n systemctl restart k0sworker.service",
+  second:
+    'sudo -n k0s kubectl wait "node/$node" --for=condition=Ready --timeout=5m',
+});
+workerMeshTasks.count({
+  fragment:
+    'iifname "wg-nook" ip saddr 10.244.0.0/16 tcp dport 10250 accept comment "nook k0s worker kubelet mesh pods"',
+  expected: 2,
+});
+workerMeshTasks.requireAll([
+  'sudo -n nft --check --file "$firewall_next"',
+  'sudo -n install -m 0644 "$firewall_next" /etc/nftables.conf',
+  'sudo -n nft --check --file "$live"',
+  'sudo -n nft --file "$live"',
+]);
 
 await assertHiveRenderContract({ root });
 
