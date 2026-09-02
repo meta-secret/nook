@@ -20,12 +20,8 @@ const sensitive = (value: string) => ({ uri: { value }, payload: { otpauthUri: v
 const stage = (host: Host, section: HTMLElement, stageId: string) => {
   // prettier-ignore
   const authorizationGeneration = beginActiveEnrollmentCeremony({ host, section, stageId, sensitiveMaterial: sensitive(`otpauth://${stageId}`) })
-  assignStagedEnrollmentCeremony({
-    authorizationGeneration,
-    host,
-    section,
-    stageId,
-  })
+  // prettier-ignore
+  assignStagedEnrollmentCeremony({ authorizationGeneration, host, section, stageId })
   return authorizationGeneration
 }
 
@@ -34,12 +30,8 @@ test('failed pending cancellation keeps identity and renders Cancel-only retry',
   const stageIds: string[] = []
   // prettier-ignore
   const host = hostView({ sendAuthenticatorEnrollmentDismissRuntimeMessage: async (message: Dismiss) => stageIds.push(message.payload.stageId) === 1 ? 'committing' : 'revoked', translatedMessage: (key: string) => key === BROWSER_MESSAGE_KEYS.WidgetEnrollFailed ? 'Authenticator setup failed.' : 'Cancel' })
-  beginActiveEnrollmentCeremony({
-    host,
-    section,
-    stageId: 'retained-stage',
-    sensitiveMaterial: sensitive('otpauth://pending-secret'),
-  })
+  // prettier-ignore
+  beginActiveEnrollmentCeremony({ host, section, stageId: 'retained-stage', sensitiveMaterial: sensitive('otpauth://pending-secret') })
   expect(await cancelActiveEnrollmentCeremony()).toBe(false)
   expect(host.description.textContent).toBe('Authenticator setup failed.')
   expect(section.querySelector('button')?.textContent).toBe('Cancel')
@@ -53,13 +45,8 @@ test('mismatched stage retains the requested identity and Cancel UI', async () =
   let requestedStageId = ''
   // prettier-ignore
   const host = hostView({ sendAuthenticatorEnrollmentDismissRuntimeMessage: async (message: Dismiss) => dismissedStageIds.push(message.payload.stageId) === 1 ? 'committing' : 'revoked', sendAuthenticatorEnrollmentStageRuntimeMessage: async (message: Dismiss) => { requestedStageId = message.payload.stageId; return { kind: 'delivered', response: { kind: 0, stageId: 'foreign-stage' } } } }) as Parameters<typeof beginEnrollmentCeremony>[0]['host']
-  await beginEnrollmentCeremony({
-    host,
-    section,
-    vaultStoreId: 'vault',
-    otpauthUri: { value: 'otpauth://mismatch' },
-    candidate: { sourceLabel: 'QR', otpauthUri: 'otpauth://mismatch' },
-  })
+  // prettier-ignore
+  await beginEnrollmentCeremony({ host, section, vaultStoreId: 'vault', otpauthUri: { value: 'otpauth://mismatch' }, candidate: { sourceLabel: 'QR', otpauthUri: 'otpauth://mismatch' } })
   expect(host.description.textContent).toBe(
     BROWSER_MESSAGE_KEYS.WidgetEnrollFailed,
   )

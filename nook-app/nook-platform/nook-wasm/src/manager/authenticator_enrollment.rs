@@ -150,6 +150,30 @@ mod wasm_tests {
 
     wasm_bindgen_test_configure!(run_in_browser);
 
+    async fn commit(
+        manager: &mut NookVaultManager,
+        id: &str,
+        uri: &str,
+        now: f64,
+    ) -> Result<String, JsError> {
+        manager
+            .commit_authenticator_enrollment_js(id, uri, "https://example.test", now)
+            .await
+    }
+
+    fn authorize(manager: &mut NookVaultManager, id: &str, now: f64) -> Result<(), JsError> {
+        manager
+            .authorize_authenticator_enrollment(id, now + 10_000.0, now)
+            .map(|_| ())
+    }
+
+    fn revoke(
+        manager: &mut NookVaultManager,
+        id: &str,
+    ) -> Result<nook_core::EnrollmentRevokeOutcome, JsError> {
+        manager.revoke_authenticator_enrollment(id, js_sys::Date::now())
+    }
+
     #[wasm_bindgen_test]
     async fn reviewed_backup_attach_rejects_invalid_input_and_commits_verified_projection()
     -> anyhow::Result<()> {
@@ -243,39 +267,41 @@ mod wasm_tests {
 
         use nook_core::EnrollmentRevokeOutcome as R;
         let uri = "otpauth://totp/Nook:test?secret=JBSWY3DPEHPK3PXP&issuer=Nook";
-        let unauthorized = manager
-            .commit_authenticator_enrollment_js("missing", uri, "https://example.test", 10.0)
-            .await;
+        let unauthorized = commit(&mut manager, "missing", uri, 10.0).await;
         assert!(unauthorized.is_err());
         manager.authorize_authenticator_enrollment("invalid", 20.0, 10.0)?;
-        let invalid = manager
-            .commit_authenticator_enrollment_js("invalid", "not-otpauth", "", 11.0)
-            .await;
+        let invalid = commit(&mut manager, "invalid", "not-otpauth", 11.0).await;
         assert!(invalid.is_err());
         assert_eq!(
             manager.revoke_authenticator_enrollment("invalid", 12.0)?,
             R::Missing
         );
-        manager.authorize_authenticator_enrollment("valid", 20.0, 10.0)?;
-        manager
-            .commit_authenticator_enrollment_js("valid", uri, "https://example.test", 11.0)
-            .await?;
-        assert_eq!(
-            manager.revoke_authenticator_enrollment("valid", 20.0)?,
-            R::Committed
+        let enrollment_now = js_sys::Date::now();
+        authorize(&mut manager, "valid", enrollment_now)?;
+        commit(&mut manager, "valid", uri, enrollment_now).await?;
+        assert_eq!(revoke(&mut manager, "valid")?, R::Committed);
+        let crossing_expiry = js_sys::Date::now();
+        manager.authorize_authenticator_enrollment(
+            "crossing",
+            crossing_expiry,
+            crossing_expiry - 1.0,
+        )?;
+        let secret_count = manager.vault.meta.secrets.len();
+        assert!(
+            commit(&mut manager, "crossing", uri, crossing_expiry - 1.0)
+                .await
+                .is_err()
         );
-        manager.authorize_authenticator_enrollment("ambiguous", 30.0, 20.0)?;
+        assert_eq!(manager.vault.meta.secrets.len(), secret_count);
+        assert_eq!(revoke(&mut manager, "crossing")?, R::Missing);
+        let enrollment_now = js_sys::Date::now();
+        authorize(&mut manager, "ambiguous", enrollment_now)?;
         manager.event_log.key_epoch = "invalid".to_owned();
         let secret_count = manager.vault.meta.secrets.len();
-        let ambiguous = manager
-            .commit_authenticator_enrollment_js("ambiguous", uri, "https://example.test", 21.0)
-            .await;
+        let ambiguous = commit(&mut manager, "ambiguous", uri, enrollment_now).await;
         assert!(ambiguous.is_err());
         assert_eq!(manager.vault.meta.secrets.len(), secret_count + 1);
-        assert_eq!(
-            manager.revoke_authenticator_enrollment("ambiguous", 22.0)?,
-            R::Committing
-        );
+        assert_eq!(revoke(&mut manager, "ambiguous")?, R::Committing);
         Ok(())
     }
 }
@@ -325,7 +351,7 @@ impl NookVaultManager {
         page_origin: &str,
         now_millis: f64,
     ) -> Result<String, JsError> {
-        let now_millis = enrollment_millis(now_millis)?;
+        let preparation_started_at = enrollment_millis(now_millis)?;
         let (secret_id, yaml) = match self
             .prepare_authenticator_enrollment(uri, page_origin)
             .await
@@ -333,26 +359,22 @@ impl NookVaultManager {
             Ok(prepared) => prepared,
             Err(error) => {
                 self.authenticator_enrollment
-                    .revoke(authorization_id, now_millis);
+                    .revoke(authorization_id, preparation_started_at);
                 return Err(error);
             }
         };
+        let claim_millis = enrollment_millis(js_sys::Date::now())?;
         if !self
             .authenticator_enrollment
-            .claim(authorization_id, now_millis)
+            .claim(authorization_id, claim_millis)
         {
             return Err(JsError::new("Authenticator enrollment is not authorized."));
         }
-        match self
+        let persisted_id = self
             .persist_authenticator_yaml(secret_id, yaml.as_str().to_owned())
-            .await
-        {
-            Ok(persisted_id) => {
-                self.authenticator_enrollment.commit(authorization_id);
-                Ok(persisted_id)
-            }
-            Err(error) => Err(error),
-        }
+            .await?;
+        self.authenticator_enrollment.commit(authorization_id);
+        Ok(persisted_id)
     }
 
     /// Attach reviewed recovery codes to an authenticator via replace/merge.

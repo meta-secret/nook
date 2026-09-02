@@ -95,7 +95,6 @@ test('cancel before stage delivery prevents authorization', async () => {
   authorizeEnrollment = async () => true
   await expectOk(stage('after-loss'))
   await expectOk(dismiss('after-loss'))
-  // Cancellation while authorization is in flight cannot retain the stage.
   revokeOutcome = EnrollmentRevokeOutcome.Missing
   authorizedStageIds.length = 0
   const [duringStarted, releaseDuring] = deferAuthorization(true)
@@ -104,7 +103,6 @@ test('cancel before stage delivery prevents authorization', async () => {
   await expectOk(dismiss('during'))
   releaseDuring()
   await expectReason(duringStaging, missing)
-  // A synchronous origin lease rejects a second request and protects foreign origin.
   authorizedStageIds.length = 0
   const [started, release] = deferAuthorization(true)
   const first = stage('origin-lease-first')
@@ -130,7 +128,6 @@ test('failed revoke and tombstone capacity retain authoritative state', async ()
   expect(stagedCodeUris.at(-1)).toContain('secret=JBSWY3DPEHPK3PXP')
   revokeOutcome = EnrollmentRevokeOutcome.Revoked
   await expectOk(dismiss('retry'))
-  // Full tombstones preserve the pending continuation and origin isolation.
   revokeOutcome = EnrollmentRevokeOutcome.Missing
   for (let index = 0; index < 128; index += 1)
     await expectOk(dismiss(`capacity-${index}`))
@@ -151,16 +148,13 @@ test('stale and expired code are scrubbed and the active timer cleans up', async
   authorizeEnrollment = async () => true
   revokeOutcome = EnrollmentRevokeOutcome.Revoked
   await expectDeferredCodeRejected('code-race', () => dismiss('code-race'))
-  // Crossing the actual staged TTL is independently rejected.
   const nativeNow = Date.now
   const nativeTimeout = globalThis.setTimeout
   let expire = () => {}
   let now = nativeNow()
   Date.now = () => now
-  globalThis.setTimeout = ((callback: TimerHandler) => {
-    expire = callback as () => void
-    return 1
-  }) as typeof setTimeout
+  // prettier-ignore
+  globalThis.setTimeout = ((callback: TimerHandler) => { expire = callback as () => void; return 1 }) as typeof setTimeout
   try {
     await expectDeferredCodeRejected('ttl-code', () => {
       now += 5 * 60 * 1_000 + 1
