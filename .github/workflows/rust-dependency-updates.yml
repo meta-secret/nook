@@ -69,7 +69,27 @@ jobs:
       CI_AGENT_PROMPT_FILE: .github/prompts/rust-dependency-update-agent.md
       CI_FIX_LABEL: Rust dependency update
       CI_AGENT_TIMEOUT_MS: '10800000'
-      RUST_DEPS_OUTDATED_REPORT: ${{ runner.temp }}/rust-deps-outdated.txt
+      AGENT_PR_TITLE: "chore(rust): update direct dependencies"
+      AGENT_PR_BODY: |
+        ## Summary
+
+        - Update the audited direct Rust dependencies included in this PR.
+
+        ## Agent task provenance
+
+        - Harness: GitHub Actions workflow `rust-dependency-updates.yml`
+        - Task name: Weekly direct Rust dependency update
+        - Task ID: [run ${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+        ## Nook Workbench
+
+        - Focused issue: unavailable — scheduled maintenance has no focused Workbench issue
+        - Immutable plan: unavailable — this fixed-scope workflow does not publish a Workbench plan
+        - Worklog: unavailable — the workflow run records the result
+
+        ## Validation
+
+        - Repository dependency-update validation: passed before publication
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -104,6 +124,7 @@ jobs:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
           NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
           REPO_ROOT: ${{ github.workspace }}
+          RUST_DEPS_OUTDATED_REPORT: ${{ runner.temp }}/rust-deps-outdated.txt
           VITE_BASE: /
           WASM_BUILD_MODE: prod
           VITE_VAULT_SYNC_INTERVAL_MS: '1000'

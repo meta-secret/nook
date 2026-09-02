@@ -40,6 +40,11 @@ gh pr merge <number> --squash
 
 See [Loom tools](../../teams/ai/references/loom-tools.md).
 
+Create and refresh PR metadata using the exact
+[title and description contract](../workflows/pull-requests.md#pr-title-and-description).
+Do this at publication, after a material scope change, and before readiness or
+handoff.
+
 Delivery rules:
 
 - Do not run `task check` or `task ci:pr` as a local product gate.
@@ -102,6 +107,7 @@ Does not apply to:
 ## Application Checklist
 
 - [ ] Establish the branch and PR path from current `origin/main`.
+- [ ] Apply the canonical PR title and description contract.
 - [ ] Run `task loom:pre-push` before every push.
 - [ ] Route formatter mutations in team-owned source or Cortex files back to
       that team for a fresh formatted commit.

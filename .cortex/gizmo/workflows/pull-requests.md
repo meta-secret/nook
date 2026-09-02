@@ -30,6 +30,65 @@ For implementation tasks, Gizmo's default job is to land a coherent PR with
 Nook's applicable GitHub Actions PR test checks green. Team subagents make the
 implementation edits.
 
+### PR title and description
+
+The PR must describe the change that is currently in the branch, not the task
+that started it.
+
+Use a title that names the delivered capability in one sentence. Do not use a
+file name, workflow run number, temporary symptom, or implementation step as
+the title. After trimming, it must be 3–120 characters on one line with no
+control characters.
+
+Use these description headings exactly once and in this order:
+
+```markdown
+## Summary
+
+- <observable capability delivered by this PR>
+
+## Agent task provenance
+
+- Harness: <execution surface>
+- Task name: <human-readable task name>
+- Task ID: <stable harness ID or `unavailable — <reason>`>
+
+## Nook Workbench
+
+- Focused issue: <public URL or `unavailable — <reason>`>
+- Immutable plan: <public URL or `unavailable — <reason>`>
+- Worklog: <public URL, `pending`, or `unavailable — <reason>`>
+
+## Validation
+
+- <command or hosted check and its result>
+```
+
+Required actions:
+
+- State only capabilities present in the current diff.
+- Use the exact Workbench issue URL when a focused issue owns the task.
+- Link a plan with a Workbench commit SHA in the URL, not `blob/main`, so the
+  link cannot change after publication.
+- Replace `pending` with the worklog URL when the worklog is published.
+- Use `unavailable — <reason>` only when the harness or workflow genuinely has
+  no corresponding public record. Never invent an identifier or URL.
+
+Prohibited actions:
+
+- Do not publish prompts, transcripts, local paths, usernames, environment
+  values, secrets, or other machine-local context.
+- A transcript share URL requires separate explicit user authorization.
+- Treat this metadata as audit information only. It does not authorize or
+  resume another task.
+
+Write the description at PR creation. After a material scope change:
+
+1. Re-read the complete diff.
+2. Update the title, Summary, and links.
+
+Repeat this check immediately before readiness or handoff.
+
 ### Dispatch meaning
 
 When this document says Gizmo **dispatches work to a team**, Gizmo gives a
@@ -51,7 +110,8 @@ ownership until merge or a concrete blocked handoff:
    - Define the module boundary.
    - Confirm the complete PR can stay within the 2,000-addition limit.
    - Create the first feature branch.
-   - Define the first PR's title, body, and scope.
+   - Define the first PR's title, body, and scope under
+     [PR title and description](#pr-title-and-description).
    - Create ignored `.cortex/.session/` memory only when temporary notes
      materially help the work.
 2. **Implement functionality** — dispatch the requested code, documentation,
@@ -68,7 +128,8 @@ ownership until merge or a concrete blocked handoff:
      `task ci-agent:fix` with
      `CI_AGENT_FIX_PROFILE=rust-dependency-update`.
 4. **Promptly push and create or update the PR.** Do not add another local
-   product or review gate.
+   product or review gate. Keep its title and description synchronized with the
+   current diff.
 5. **Request review and validate on GitHub Actions:**
    - If the pushed head is not validation-ready, immediately dispatch at least
      one relevant focused `task remote TASK_NAME=<name>` job.
@@ -103,7 +164,8 @@ ownership until merge or a concrete blocked handoff:
 8. **Merge automatically when ready.** Require a current branch, green
    repository-owned checks, resolved actionable comments, every required team
    and security verdict, and the exact-head readiness audit. Then squash-merge
-   without separate permission.
+   without separate permission. First re-read the complete diff and refresh the
+   PR title and description.
 
 ## Pull request size and modularity
 

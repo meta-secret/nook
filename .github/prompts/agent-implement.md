@@ -89,7 +89,10 @@ a container runtime.
    `.nook-workbench-worklog.md`. Include `# Work summary` and the sections
    `## Outcome`, `## Progress`, `## Implementation problems`, `## Decisions`,
    `## Validation`, and `## Remaining work`. Do not add YAML frontmatter; the
-   workflow adds it when publishing and links it to the task-start plan. Never
+   workflow adds it when publishing and links it to the task-start plan. Under
+   `## Outcome`, write exactly one bullet of 3–120 characters naming the
+   observable capability present in the final diff. The trusted publisher uses
+   that post-implementation sentence for the PR title and Summary. Never
    include prompts, chat transcripts, secrets, credentials, vault data, private
    user information, or raw logs.
 
