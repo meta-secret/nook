@@ -122,8 +122,21 @@ jobs:
               return
             }
             const body = decode(data)
-            if (value(body, 'status') !== 'ready' || value(body, 'automation') !== 'agent') {
-              core.setFailed(`${path} must have status: ready and automation: agent`)
+            const slug = path.replace(/^issues\//, '').replace(/\.md$/, '').replaceAll('/', '-')
+            const expectedBranch = `agent/workbench-${slug}-${context.runId}`
+            const status = value(body, 'status')
+            let recoveringOpenPull = false
+            if (status === 'in_progress' && value(body, 'automation') === 'agent') {
+              const pulls = await github.rest.pulls.list({
+                ...context.repo,
+                state: 'open',
+                head: `${context.repo.owner}:${expectedBranch}`,
+                per_page: 2,
+              })
+              recoveringOpenPull = pulls.data.length === 1
+            }
+            if ((status !== 'ready' && !recoveringOpenPull) || value(body, 'automation') !== 'agent') {
+              core.setFailed(`${path} must have status: ready or this run's open implementation PR, with automation: agent`)
               return
             }
             const frontmatter = body.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/)?.[1] || ''
@@ -169,25 +182,27 @@ jobs:
               core.setFailed(`${path} owner ${continuingOwner} must have write access to Nook`)
               return
             }
-            const claimed = body
-              .replace(/^status:\s*ready$/m, 'status: in_progress')
-              .replace(/^updated_at:\s*.+$/m, `updated_at: ${now}`)
-            await github.rest.repos.createOrUpdateFileContents({
-              owner,
-              repo,
-              path,
-              branch: 'main',
-              sha: data.sha,
-              message: `claim: ${path}`,
-              content: Buffer.from(claimed).toString('base64'),
-            })
+            if (!recoveringOpenPull) {
+              const claimed = body
+                .replace(/^status:\s*ready$/m, 'status: in_progress')
+                .replace(/^updated_at:\s*.+$/m, `updated_at: ${now}`)
+              await github.rest.repos.createOrUpdateFileContents({
+                owner,
+                repo,
+                path,
+                branch: 'main',
+                sha: data.sha,
+                message: `claim: ${path}`,
+                content: Buffer.from(claimed).toString('base64'),
+              })
+            }
 
             core.setOutput('found', 'true')
             core.setOutput('path', path)
             core.setOutput('title', issueTitle)
             core.setOutput('body', body)
             core.setOutput('url', `https://github.com/${owner}/${repo}/blob/main/${path}`)
-            core.setOutput('slug', path.replace(/^issues\//, '').replace(/\.md$/, '').replaceAll('/', '-'))
+            core.setOutput('slug', slug)
             core.setOutput('continuing_owner', continuingOwner)
             core.setOutput('gizmo_id', assignedGizmoId)
 
@@ -279,9 +294,9 @@ jobs:
           echo "ready=true" >> "$GITHUB_OUTPUT"
           echo "checkout_ref=$checkout_ref" >> "$GITHUB_OUTPUT"
 
-      - name: Resolve standalone prompt rerun
+      - name: Resolve existing implementation PR
         id: rerun
-        if: steps.task.outputs.ready == 'true' && inputs.prompt != ''
+        if: steps.task.outputs.ready == 'true'
         uses: actions/github-script@v9
         env:
           AGENT_BRANCH: ${{ env.AGENT_BRANCH }}
@@ -575,6 +590,7 @@ jobs:
         if: steps.agent_edit.outputs.changed == 'true' && steps.format.outcome == 'success' && steps.rerun.outputs.terminal != 'true'
         uses: actions/github-script@v9
         env:
+          AGENT_PROMPT: ${{ env.AGENT_PROMPT }}
           IMPLEMENTATION_REPO_ROOT: ${{ env.IMPLEMENTATION_REPO_ROOT }}
           ISSUE_URL: ${{ steps.workbench.outputs.url }}
           PLAN_URL: ${{ steps.plan.outputs.url }}
@@ -625,6 +641,24 @@ jobs:
               core.setFailed('Delivered PR title must be 3–120 characters on one line with no control characters.')
               return
             }
+            const words = (value) => value.toLocaleLowerCase('en-US').match(/[\p{L}\p{N}]+/gu) ?? []
+            const sourceWords = words(process.env.AGENT_PROMPT)
+            const outcomeWords = words(deliveredCapability)
+            const phraseLength = 12
+            const phrases = (values) =>
+              values.length < phraseLength
+                ? []
+                : Array.from(
+                    { length: values.length - phraseLength + 1 },
+                    (_, index) => values.slice(index, index + phraseLength).join(' '),
+                  )
+            const sourcePhrases = new Set(phrases(sourceWords))
+            const copiedPrompt = sourceWords.join(' ') === outcomeWords.join(' ') ||
+              phrases(outcomeWords).some((phrase) => sourcePhrases.has(phrase))
+            if (copiedPrompt) {
+              core.setFailed('Delivered PR metadata must not copy the source task.')
+              return
+            }
             const issue = process.env.ISSUE_URL
               || 'unavailable — manual workflow dispatch has no focused Workbench issue'
             core.exportVariable('AGENT_PR_TITLE', title)
@@ -658,7 +692,7 @@ jobs:
       - name: Publish Workbench result
         if: >-
           always() &&
-          steps.rerun.outputs.terminal != 'true' &&
+          steps.rerun.outputs.terminal_reason != 'merged' &&
           (steps.task.outputs.ready == 'true' ||
            steps.workbench.outputs.found == 'true')
         uses: actions/github-script@v9
