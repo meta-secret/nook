@@ -193,6 +193,40 @@ describe('canonical Cortex team authority', () => {
     }
   });
 
+  test('preserves affirmative authority context across Markdown lists', async () => {
+    const fixtureRoot = await writableCortexAuthorityFixture();
+    try {
+      const authorityPath = join(fixtureRoot, '.cortex/AGENTS.md');
+      const gizmoPath = join(fixtureRoot, '.cortex/gizmo/AGENTS.md');
+      await writeFile(
+        authorityPath,
+        `${await readFile(authorityPath, 'utf8')}\nWorkers may:\n\n- run product tests locally.\n`,
+        'utf8',
+      );
+      await writeFile(
+        gizmoPath,
+        `${await readFile(gizmoPath, 'utf8')}\nGizmo may ask workers to:\n\n- execute repository validation on the local host.\n`,
+        'utf8',
+      );
+
+      const report = auditTeamAgents({ repoRoot: fixtureRoot });
+      expect(report.findings).toContainEqual({
+        code: 'invalid-cortex-team-authority',
+        path: '.cortex/AGENTS.md',
+        message:
+          'Canonical Cortex team authority grants prohibited local agent product execution: Workers may run product tests locally.',
+      });
+      expect(report.findings).toContainEqual({
+        code: 'invalid-cortex-gizmo-authority',
+        path: '.cortex/gizmo/AGENTS.md',
+        message:
+          'Canonical Cortex Gizmo authority grants prohibited local agent product execution: Gizmo may ask workers to execute repository validation on the local host.',
+      });
+    } finally {
+      await rm(fixtureRoot, REMOVE_RECURSIVELY);
+    }
+  });
+
   test('does not mistake explicit local execution prohibitions for grants', async () => {
     const fixtureRoot = await writableCortexAuthorityFixture();
     try {
@@ -200,7 +234,7 @@ describe('canonical Cortex team authority', () => {
       const gizmoPath = join(fixtureRoot, '.cortex/gizmo/AGENTS.md');
       await writeFile(
         authorityPath,
-        `${await readFile(authorityPath, 'utf8')}\nAgents may not run product tests locally.\nWorkers cannot perform repository validation on the local host.\nAgents may locally run required non-compiling formatters.\n`,
+        `${await readFile(authorityPath, 'utf8')}\nAgents may not run product tests locally.\nWorkers cannot perform repository validation on the local host.\nAgents may locally run required non-compiling formatters.\n\nWorkers may not:\n\n- run product tests locally.\n\nWorkers may:\n\n- run required non-compiling formatters locally.\n`,
         'utf8',
       );
       await writeFile(

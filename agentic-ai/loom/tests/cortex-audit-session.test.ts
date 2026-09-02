@@ -1,4 +1,6 @@
 import {
+  appendFileSync,
+  cpSync,
   mkdirSync,
   mkdtempSync,
   rmSync,
@@ -18,6 +20,8 @@ import type { CortexAuditReport } from '../src/commands/cortex-audit.ts';
 import { CortexStructureFindingCode } from '../../../.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/src/cortex-document-structure.ts';
 import { CortexContractFindingCode } from '../src/lib/cortex-contracts.ts';
 import { CortexArticleFindingCode } from '../src/lib/cortex-article-structure.ts';
+
+const REPO_ROOT = path.join(import.meta.dir, '../../..');
 
 test('uses the pre-push commit for push stability audits', () => {
   const before = '1'.repeat(40);
@@ -358,6 +362,38 @@ test('admits session Markdown only through the global HTML syntax gate', async (
   }
 });
 
+test('integrates team authority findings into the lightweight Cortex audit', async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), 'cortex-team-authority-'));
+  try {
+    cpSync(path.join(REPO_ROOT, '.cortex'), path.join(repoRoot, '.cortex'), {
+      recursive: true,
+      filter: (source) =>
+        !source.includes(`${path.sep}node_modules${path.sep}`) &&
+        !source.includes(`${path.sep}.session${path.sep}`),
+    });
+    appendFileSync(
+      path.join(repoRoot, '.cortex/AGENTS.md'),
+      '\nWorkers may:\n\n- run product tests locally.\n',
+    );
+
+    const report = await runCortexAuditFromDirectory({
+      request: { includeDensityLint: false },
+      startDirectory: repoRoot,
+    });
+
+    expect(report.teamAuthorityFindings).toContainEqual({
+      code: 'invalid-cortex-team-authority',
+      path: '.cortex/AGENTS.md',
+      message:
+        'Canonical Cortex team authority grants prohibited local agent product execution: Workers may run product tests locally.',
+    });
+    expect(report.auditOk).toBe(false);
+  } finally {
+    const removeOptions = { recursive: true, force: true } as const;
+    rmSync(repoRoot, removeOptions);
+  }
+});
+
 test('admits Gizmo skill rows without cascading from rejected syntax', async () => {
   const repoRoot = mkdtempSync(path.join(tmpdir(), 'cortex-html-cascade-'));
   try {
@@ -448,7 +484,9 @@ ${gizmoIndexRows}
     const request = { includeDensityLint: false };
     const auditArgs = { request, startDirectory: repoRoot };
     const report = await runCortexAuditFromDirectory(auditArgs);
-    const expectedReport: CortexAuditReport = {
+    const { teamAuthorityFindings, ...reportWithoutTeamAuthority } = report;
+    expect(teamAuthorityFindings.length).toBeGreaterThan(0);
+    const expectedReport: Omit<CortexAuditReport, 'teamAuthorityFindings'> = {
       brokenLinks: [],
       invalidExecutableSkillPackages: [],
       missingFromIndex: [],
@@ -517,7 +555,7 @@ ${gizmoIndexRows}
       ],
       auditOk: false,
     };
-    expect(report).toEqual(expectedReport);
+    expect(reportWithoutTeamAuthority).toEqual(expectedReport);
   } finally {
     const removeOptions = { recursive: true, force: true } as const;
     rmSync(repoRoot, removeOptions);

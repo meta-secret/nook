@@ -1,5 +1,9 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join, normalize } from 'node:path';
+import type { Nodes } from 'mdast';
+import remarkGfm from 'remark-gfm';
+import remarkParse from 'remark-parse';
+import { unified } from 'unified';
 import { TEAM_AUTHORITY_CATALOG, TeamKey } from './catalog.ts';
 import type { TeamAuthority } from './catalog.ts';
 import { CORTEX_AUTHORING_SKILL_PATHS } from './context.ts';
@@ -44,6 +48,17 @@ type LocalExecutionGrantAudit = {
   readonly authorityName: CortexAuthorityName;
 };
 
+type AuthorityStatementInspection = {
+  readonly nodes: readonly Nodes[];
+  readonly inheritedGrant: string | false;
+  readonly statements: string[];
+};
+
+type AppendAuthoritySentencesRequest = {
+  readonly statements: string[];
+  readonly text: string;
+};
+
 const TEAM_CATALOG_PATH = 'agentic-ai/loom/src/team-agents/catalog.ts';
 const TEAM_AUTHORITY_PATH = '.cortex/AGENTS.md';
 const GIZMO_AUTHORITY_PATH = '.cortex/gizmo/AGENTS.md';
@@ -67,6 +82,8 @@ const GIZMO_AUTHORITY_MARKERS = [
 ] as const;
 const AFFIRMATIVE_AGENT_GRANT =
   /\b(?:agents?|team agents?|workers?|gizmo)\s+(?:may|can|are allowed to|is allowed to)\s+(?:ask\s+(?:an?\s+)?(?:team\s+)?(?:agent|worker)s?\s+to\s+)?(?:locally\s+)?(?:(?:run|invoke|perform|execute)\s+(?:(?:focused|required|product|project|repository|source|package|local)\s+){0,4}(?:compilation|tests?|testing|linting|builds?|validation)|(?:compile|test|lint|validate)(?:\s+(?:the\s+)?(?:product|project|repository|source|package))?|build(?:ing)?\s+(?:the\s+)?(?:product|project|repository|source|package))\b/iu;
+const AFFIRMATIVE_LIST_GRANT =
+  /^(?:agents?|team agents?|workers?|gizmo)\s+(?:may|can|are allowed to|is allowed to)(?:\s+ask\s+(?:an?\s+)?(?:team\s+)?(?:agent|worker)s?\s+to)?\s*:$/iu;
 const LOCAL_EXECUTION = /\b(?:local(?:ly)?|on (?:a|the) local host)\b/iu;
 const PARENT_OWNED_LIFECYCLE_BOUNDARY =
   'The active harness owns creation, communication, scheduling, retries, cancellation, barriers, synthesis, and delivery lifecycle state.';
@@ -289,10 +306,65 @@ function appendLocalExecutionGrantFindings(
 }
 
 function markdownStatements(source: string): readonly string[] {
-  return source
-    .split(/\n{2,}|\n(?=\s*(?:[-*+]|\d+\.)\s+)|(?<=[.!?])\s+/u)
-    .map((statement) => statement.replace(/\s+/gu, ' ').trim())
-    .filter((statement) => statement !== '');
+  const root = unified().use(remarkParse).use(remarkGfm).parse(source);
+  const statements: string[] = [];
+  inspectAuthorityStatements({
+    nodes: root.children,
+    inheritedGrant: false,
+    statements,
+  });
+  return statements;
+}
+
+function inspectAuthorityStatements(
+  request: AuthorityStatementInspection,
+): void {
+  let listGrant = request.inheritedGrant;
+  for (const node of request.nodes) {
+    if (node.type === 'paragraph') {
+      const text = markdownText(node).replace(/\s+/gu, ' ').trim();
+      const ownGrant = affirmativeListGrant(text);
+      appendAuthoritySentences({
+        statements: request.statements,
+        text: listGrant && !ownGrant ? `${listGrant} ${text}` : text,
+      });
+      listGrant = ownGrant;
+      continue;
+    }
+    if (node.type === 'list') {
+      for (const item of node.children) {
+        inspectAuthorityStatements({
+          nodes: item.children,
+          inheritedGrant: listGrant,
+          statements: request.statements,
+        });
+      }
+    }
+    listGrant = false;
+  }
+}
+
+function affirmativeListGrant(text: string): string | false {
+  return AFFIRMATIVE_LIST_GRANT.test(text) ? text.slice(0, -1).trim() : false;
+}
+
+function appendAuthoritySentences(
+  request: AppendAuthoritySentencesRequest,
+): void {
+  request.statements.push(
+    ...request.text
+      .split(/(?<=[.!?])\s+/u)
+      .map((statement) => statement.trim())
+      .filter((statement) => statement !== ''),
+  );
+}
+
+function markdownText(node: Nodes): string {
+  if (node.type === 'image' || node.type === 'imageReference') return '';
+  if (node.type === 'break') return ' ';
+  if ('value' in node && typeof node.value === 'string') return node.value;
+  if (!('children' in node)) return '';
+  return node.children.map(markdownText).join('');
 }
 
 function safeRepositoryPath(path: string): boolean {
