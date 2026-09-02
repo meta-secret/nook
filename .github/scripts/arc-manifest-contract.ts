@@ -655,7 +655,7 @@ remoteWorkflow.requireAll([
   "ci:pr:e2e) task _ci:main",
   "inputs.tasks != '' && inputs.task != ''",
   "(inputs.tasks == '' || inputs.task == '')",
-  "build-essential mold",
+  "DOCKER_RUST_BROWSER_IMAGE=$DOCKER_E2E_IMAGE task setup:rust:browser SETUP_OUTPUT=type=registry",
   "name: test-inventory-${{ github.sha }}",
 ]);
 remoteWorkflow.requireBefore({
