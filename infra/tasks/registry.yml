@@ -120,41 +120,104 @@ tasks:
           quarantine_owner="$(printf '%s' "$node" | jq -r \
             '.metadata.annotations["nook.nokey.sh/containerd-auth-quarantine"] // ""')"
           case "$quarantine_owner" in
-            ''|registry-controller-v1) ;;
+            ''|registry-controller-owned-v1|registry-controller-borrowed-v1) ;;
             *)
               echo "Controller has a foreign containerd auth quarantine owner" >&2
               exit 1
               ;;
           esac
-          quarantine_owned=false
+          printf '%s' "$node" | jq -e '.metadata.annotations | type == "object"' \
+            >/dev/null
+          resource_version="$(printf '%s' "$node" | jq -r '.metadata.resourceVersion')"
+          test -n "$resource_version"
+          quarantine_taint_owned=false
+          quarantine_patch=''
           case "$arc_taint_count" in
             0)
-              if test -z "$quarantine_owner"; then
-                kubectl annotate "node/$controller_node" \
-                  nook.nokey.sh/containerd-auth-quarantine=registry-controller-v1 \
-                  >/dev/null
-              fi
-              kubectl taint "node/$controller_node" \
-                nook.nokey.sh/arc-build=preparing:NoSchedule >/dev/null
-              quarantine_owned=true
+              case "$quarantine_owner" in
+                ''|registry-controller-owned-v1)
+                  quarantine_taint_owned=true
+                  taints_type="$(printf '%s' "$node" | jq -r \
+                    'if (.spec | has("taints")) and (.spec.taints != null)
+                     then (.spec.taints | type) else "missing" end')"
+                  case "$taints_type" in
+                    array)
+                      quarantine_patch="$(jq -cn \
+                        --arg resource_version "$resource_version" '
+                        [
+                          {op: "test", path: "/metadata/resourceVersion", value: $resource_version},
+                          {op: "add", path: "/metadata/annotations/nook.nokey.sh~1containerd-auth-quarantine", value: "registry-controller-owned-v1"},
+                          {op: "add", path: "/spec/taints/-", value: {key: "nook.nokey.sh/arc-build", value: "preparing", effect: "NoSchedule"}}
+                        ]
+                      ')"
+                      ;;
+                    missing)
+                      quarantine_patch="$(jq -cn \
+                        --arg resource_version "$resource_version" '
+                        [
+                          {op: "test", path: "/metadata/resourceVersion", value: $resource_version},
+                          {op: "add", path: "/metadata/annotations/nook.nokey.sh~1containerd-auth-quarantine", value: "registry-controller-owned-v1"},
+                          {op: "add", path: "/spec/taints", value: [{key: "nook.nokey.sh/arc-build", value: "preparing", effect: "NoSchedule"}]}
+                        ]
+                      ')"
+                      ;;
+                    *)
+                      echo "Controller taints are not an array" >&2
+                      exit 1
+                      ;;
+                  esac
+                  ;;
+                registry-controller-borrowed-v1)
+                  echo "Borrowed controller quarantine lost its taint" >&2
+                  exit 1
+                  ;;
+              esac
               ;;
             1)
               printf '%s' "$node" | jq -e '
                 [.spec.taints[]? | select(.key == "nook.nokey.sh/arc-build")]
                 == [{key: "nook.nokey.sh/arc-build", value: "preparing", effect: "NoSchedule"}]
               ' >/dev/null
-              if test "$quarantine_owner" = registry-controller-v1; then
-                quarantine_owned=true
-              fi
+              case "$quarantine_owner" in
+                '')
+                  quarantine_patch="$(jq -cn \
+                    --arg resource_version "$resource_version" '
+                    [
+                      {op: "test", path: "/metadata/resourceVersion", value: $resource_version},
+                      {op: "add", path: "/metadata/annotations/nook.nokey.sh~1containerd-auth-quarantine", value: "registry-controller-borrowed-v1"}
+                    ]
+                  ')"
+                  ;;
+                registry-controller-owned-v1)
+                  quarantine_taint_owned=true
+                  ;;
+                registry-controller-borrowed-v1) ;;
+              esac
               ;;
             *)
               echo "Controller has ambiguous ARC quarantine state" >&2
               exit 1
               ;;
           esac
-          test "$(kubectl get "node/$controller_node" \
-            -o jsonpath='{.spec.taints[?(@.key=="nook.nokey.sh/arc-build")].value}:{.spec.taints[?(@.key=="nook.nokey.sh/arc-build")].effect}')" = \
-            preparing:NoSchedule
+          if test -n "$quarantine_patch"; then
+            if ! kubectl patch "node/$controller_node" \
+              --type=json --patch "$quarantine_patch" >/dev/null; then
+              echo "Controller quarantine changed during atomic acquisition" >&2
+              exit 1
+            fi
+          fi
+          node="$(kubectl get "node/$controller_node" -o json)"
+          expected_quarantine_owner=registry-controller-borrowed-v1
+          if test "$quarantine_taint_owned" = true; then
+            expected_quarantine_owner=registry-controller-owned-v1
+          fi
+          test "$(printf '%s' "$node" | jq -r \
+            '.metadata.annotations["nook.nokey.sh/containerd-auth-quarantine"] // ""')" = \
+            "$expected_quarantine_owner"
+          printf '%s' "$node" | jq -e '
+            [.spec.taints[]? | select(.key == "nook.nokey.sh/arc-build")]
+            == [{key: "nook.nokey.sh/arc-build", value: "preparing", effect: "NoSchedule"}]
+          ' >/dev/null
           rm -f "$remote_dir/infra/k0s/config/registry-auth.toml"
           sudo -n rm -f /etc/k0s/containerd.d/registry-auth.toml
           deadline="$(( $(date +%s) + 7200 ))"
@@ -178,7 +241,7 @@ tasks:
             preparing:NoSchedule
           sudo -n systemctl restart k0scontroller.service
         else
-          quarantine_owned=false
+          quarantine_taint_owned=false
           rm -f "$remote_dir/infra/k0s/config/registry-auth.toml"
           sudo -n rm -f /etc/k0s/containerd.d/registry-auth.toml
         fi
@@ -203,18 +266,55 @@ tasks:
         printf '%s\n' "$invocation" > "$marker_next"
         sudo -n install -m 0600 "$marker_next" "$marker"
         sudo -n test ! -e "$auth_file"
-        if test "$quarantine_owned" = true; then
-          test "$(kubectl get "node/$controller_node" \
-            -o jsonpath='{.metadata.annotations.nook\.nokey\.sh/containerd-auth-quarantine}')" = \
-            registry-controller-v1
-          kubectl taint "node/$controller_node" \
-            nook.nokey.sh/arc-build:NoSchedule- >/dev/null
-          kubectl annotate "node/$controller_node" \
-            nook.nokey.sh/containerd-auth-quarantine- >/dev/null
-          test -z "$(kubectl get "node/$controller_node" \
-            -o jsonpath='{.spec.taints[?(@.key=="nook.nokey.sh/arc-build")].effect}')"
-          test -z "$(kubectl get "node/$controller_node" \
-            -o jsonpath='{.metadata.annotations.nook\.nokey\.sh/containerd-auth-quarantine}')"
+        if test "$restart_required" = true; then
+          node="$(kubectl get "node/$controller_node" -o json)"
+          resource_version="$(printf '%s' "$node" | jq -r '.metadata.resourceVersion')"
+          test -n "$resource_version"
+          taint_index="$(printf '%s' "$node" | jq -r '
+            [.spec.taints | to_entries[] | select(.value.key == "nook.nokey.sh/arc-build")]
+            | if length == 1 then .[0].key else empty end
+          ')"
+          [[ "$taint_index" =~ ^[0-9]+$ ]]
+          expected_quarantine_owner=registry-controller-borrowed-v1
+          if test "$quarantine_taint_owned" = true; then
+            expected_quarantine_owner=registry-controller-owned-v1
+          fi
+          printf '%s' "$node" | jq -e \
+            --arg owner "$expected_quarantine_owner" \
+            --argjson taint_index "$taint_index" '
+            .metadata.annotations["nook.nokey.sh/containerd-auth-quarantine"] == $owner
+            and .spec.taints[$taint_index] == {key: "nook.nokey.sh/arc-build", value: "preparing", effect: "NoSchedule"}
+          ' >/dev/null
+          release_patch="$(jq -cn \
+            --arg resource_version "$resource_version" \
+            --arg owner "$expected_quarantine_owner" \
+            --arg taint_path "/spec/taints/$taint_index" \
+            --argjson remove_taint "$quarantine_taint_owned" '
+            [
+              {op: "test", path: "/metadata/resourceVersion", value: $resource_version},
+              {op: "test", path: "/metadata/annotations/nook.nokey.sh~1containerd-auth-quarantine", value: $owner},
+              {op: "test", path: $taint_path, value: {key: "nook.nokey.sh/arc-build", value: "preparing", effect: "NoSchedule"}}
+            ]
+            + (if $remove_taint then [{op: "remove", path: $taint_path}] else [] end)
+            + [{op: "remove", path: "/metadata/annotations/nook.nokey.sh~1containerd-auth-quarantine"}]
+          ')"
+          if ! kubectl patch "node/$controller_node" \
+            --type=json --patch "$release_patch" >/dev/null; then
+            echo "Controller quarantine changed during atomic release" >&2
+            exit 1
+          fi
+          node="$(kubectl get "node/$controller_node" -o json)"
+          test -z "$(printf '%s' "$node" | jq -r \
+            '.metadata.annotations["nook.nokey.sh/containerd-auth-quarantine"] // ""')"
+          if test "$quarantine_taint_owned" = true; then
+            test "$(printf '%s' "$node" | jq \
+              '[.spec.taints[]? | select(.key == "nook.nokey.sh/arc-build")] | length')" = 0
+          else
+            printf '%s' "$node" | jq -e '
+              [.spec.taints[]? | select(.key == "nook.nokey.sh/arc-build")]
+              == [{key: "nook.nokey.sh/arc-build", value: "preparing", effect: "NoSchedule"}]
+            ' >/dev/null
+          fi
         fi
         REMOTE
 

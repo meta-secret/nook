@@ -995,9 +995,10 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 - The path-filtered Hive workflow uses its own `nook-hive-linux-amd64-v2` scope.
 - Its pinned cargo-chef planner/recipe/cook stages match the `nook-app` strategy, then warm real-lock test and Clippy profiles in independent BuildKit stages before authored sources are copied.
 - The stages execute in parallel, so Cargo metadata and linking for the two verification graphs do not form one serial critical path.
-- Each parallel Cargo branch is capped at two jobs, matching the shared
-  four-CPU Hive BuildKit envelope. BuildKit requests 4 GiB and may burst to
-  6 GiB for compiler and linker peaks.
+- Each parallel Cargo branch is capped at two jobs to bound compiler-process
+  fan-out against the shared BuildKit shard. BuildKit requests 4 CPU and 8 GiB
+  of memory. It has no CPU or memory limits and may share all resources
+  available on its node for compiler and linker peaks.
 - Pull requests restore Main's scope read-only and may publish only a
   quarantined exact-head cache. Only Main exports both shared graphs, in a
   final step after check and behavior tests pass.

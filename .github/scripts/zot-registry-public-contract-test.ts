@@ -106,14 +106,16 @@ forbidFragment({
   message: "controller quarantine must not overwrite concurrent ownership",
 });
 for (const fragment of [
-  "quarantine_owned=false",
-  "nook.nokey.sh/containerd-auth-quarantine=registry-controller-v1",
+  "quarantine_taint_owned=false",
+  "registry-controller-owned-v1",
+  "registry-controller-borrowed-v1",
   "Controller has a foreign containerd auth quarantine owner",
-  "nook.nokey.sh/arc-build=preparing:NoSchedule",
   "Controller has ambiguous ARC quarantine state",
-  'if test "$quarantine_owned" = true; then',
-  "nook.nokey.sh/arc-build:NoSchedule-",
-  "nook.nokey.sh/containerd-auth-quarantine-",
+  '{op: "test", path: "/metadata/resourceVersion", value: $resource_version}',
+  '--type=json --patch "$quarantine_patch"',
+  "Controller quarantine changed during atomic acquisition",
+  '--type=json --patch "$release_patch"',
+  "Controller quarantine changed during atomic release",
 ]) {
   requireFragment({
     source: controllerAuthReconcile,
@@ -121,9 +123,16 @@ for (const fragment of [
     message: `controller quarantine ownership is missing: ${fragment}`,
   });
 }
+for (const fragment of ["kubectl annotate", "kubectl taint"]) {
+  forbidFragment({
+    source: controllerAuthReconcile,
+    fragment,
+    message: `controller quarantine must use atomic Node patches, not ${fragment}`,
+  });
+}
 requireBefore({
   source: controllerAuthReconcile,
-  first: "nook.nokey.sh/arc-build=preparing:NoSchedule",
+  first: '--type=json --patch "$quarantine_patch"',
   second: "actions.github.com/scale-set-name",
   message: "controller quarantine must block scheduling before the ARC drain",
 });
@@ -136,7 +145,7 @@ requireBefore({
 requireBefore({
   source: controllerAuthReconcile,
   first: 'sudo -n install -m 0600 "$marker_next" "$marker"',
-  second: 'if test "$quarantine_owned" = true; then',
+  second: 'if test "$restart_required" = true; then',
   message: "owned controller quarantine must remain until cleanup is proven",
 });
 countFragment({
@@ -144,6 +153,13 @@ countFragment({
   fragment: "sudo -n systemctl restart k0scontroller.service",
   expected: 1,
   message: "controller auth cleanup must restart exactly once",
+});
+countFragment({
+  source: controllerAuthReconcile,
+  fragment:
+    '{op: "test", path: "/metadata/resourceVersion", value: $resource_version}',
+  expected: 4,
+  message: "every controller quarantine mutation must guard resourceVersion",
 });
 countFragment({
   source: workerMesh,
@@ -155,7 +171,7 @@ countFragment({
 type ArcTaint = { key: string; value: string; effect: string };
 enum QuarantineDisposition {
   Owned = "owned",
-  Preserved = "preserved",
+  Borrowed = "borrowed",
   Reject = "reject",
 }
 
@@ -163,21 +179,29 @@ function quarantineDisposition(
   taints: ArcTaint[],
   owner: string,
 ): QuarantineDisposition {
-  if (owner !== "" && owner !== "registry-controller-v1") {
+  if (
+    owner !== "" &&
+    owner !== "registry-controller-owned-v1" &&
+    owner !== "registry-controller-borrowed-v1"
+  ) {
     return QuarantineDisposition.Reject;
   }
   const matching = taints.filter(
     (taint) => taint.key === "nook.nokey.sh/arc-build",
   );
-  if (matching.length === 0) return QuarantineDisposition.Owned;
+  if (matching.length === 0) {
+    return owner === "registry-controller-borrowed-v1"
+      ? QuarantineDisposition.Reject
+      : QuarantineDisposition.Owned;
+  }
   if (
     matching.length === 1 &&
     matching[0]?.value === "preparing" &&
     matching[0]?.effect === "NoSchedule"
   ) {
-    return owner === "registry-controller-v1"
+    return owner === "registry-controller-owned-v1"
       ? QuarantineDisposition.Owned
-      : QuarantineDisposition.Preserved;
+      : QuarantineDisposition.Borrowed;
   }
   return QuarantineDisposition.Reject;
 }
@@ -193,7 +217,7 @@ const controllerQuarantineFixtures = [
     name: "interrupted owned quarantine before taint",
     arcBuildQualified: true,
     taints: [] as ArcTaint[],
-    owner: "registry-controller-v1",
+    owner: "registry-controller-owned-v1",
     expected: QuarantineDisposition.Owned,
   },
   {
@@ -207,7 +231,7 @@ const controllerQuarantineFixtures = [
       },
     ],
     owner: "",
-    expected: QuarantineDisposition.Preserved,
+    expected: QuarantineDisposition.Borrowed,
   },
   {
     name: "interrupted owned exact quarantine",
@@ -219,8 +243,15 @@ const controllerQuarantineFixtures = [
         effect: "NoSchedule",
       },
     ],
-    owner: "registry-controller-v1",
+    owner: "registry-controller-owned-v1",
     expected: QuarantineDisposition.Owned,
+  },
+  {
+    name: "borrowed quarantine lost its taint",
+    arcBuildQualified: true,
+    taints: [] as ArcTaint[],
+    owner: "registry-controller-borrowed-v1",
+    expected: QuarantineDisposition.Reject,
   },
   {
     name: "conflicting quarantine",
@@ -256,6 +287,28 @@ for (const fixture of controllerQuarantineFixtures) {
     throw new Error(`controller quarantine fixture failed: ${fixture.name}`);
   }
 }
+function releaseRemovesTaint(disposition: QuarantineDisposition): boolean {
+  if (disposition === QuarantineDisposition.Reject) {
+    throw new Error("rejected quarantine has no release authority");
+  }
+  return disposition === QuarantineDisposition.Owned;
+}
+for (const fixture of [
+  {
+    name: "owned release removes its taint",
+    disposition: QuarantineDisposition.Owned,
+    removesTaint: true,
+  },
+  {
+    name: "borrowed release preserves the pre-existing taint",
+    disposition: QuarantineDisposition.Borrowed,
+    removesTaint: false,
+  },
+] as const) {
+  if (releaseRemovesTaint(fixture.disposition) !== fixture.removesTaint) {
+    throw new Error(`controller release fixture failed: ${fixture.name}`);
+  }
+}
 const previousWorkerInvocation = "0123456789abcdef0123456789abcdef";
 function didInvocationChange(previous: string, current: string): boolean {
   return previous !== current;
@@ -270,6 +323,39 @@ if (
 }
 if (didInvocationChange(previousWorkerInvocation, previousWorkerInvocation)) {
   throw new Error("unchanged worker InvocationID fixture was accepted");
+}
+function resourceVersionGuardMatches(
+  expected: string,
+  observed: string,
+): boolean {
+  return expected === observed;
+}
+for (const fixture of [
+  {
+    name: "acquisition resourceVersion conflict",
+    expected: "41",
+    observed: "42",
+    accepted: false,
+  },
+  {
+    name: "release resourceVersion race",
+    expected: "51",
+    observed: "52",
+    accepted: false,
+  },
+  {
+    name: "unchanged resourceVersion",
+    expected: "61",
+    observed: "61",
+    accepted: true,
+  },
+] as const) {
+  if (
+    resourceVersionGuardMatches(fixture.expected, fixture.observed) !==
+    fixture.accepted
+  ) {
+    throw new Error(`resourceVersion fixture failed: ${fixture.name}`);
+  }
 }
 for (const fragment of ["kubectl port-forward --", "port-forward --address"]) {
   const assertion = {
@@ -424,7 +510,9 @@ const completeInstall = completeDeploy.indexOf("      - task: k0s:install");
 const completeWorkers = completeDeploy.indexOf(
   "      - task: k0s:worker-mesh:reconcile",
 );
-const completeRegistry = completeDeploy.indexOf("      - task: registry:deploy");
+const completeRegistry = completeDeploy.indexOf(
+  "      - task: registry:deploy",
+);
 if (
   completeInstall < 0 ||
   completeWorkers <= completeInstall ||
