@@ -62,8 +62,7 @@ const GIZMO_AUTHORITY_MARKERS = [
 ] as const;
 const AFFIRMATIVE_AGENT_GRANT =
   /\b(?:agents?|team agents?|workers?|gizmo)\s+(?:may|can|are allowed to|is allowed to)\s+(?:ask\s+(?:an?\s+)?(?:team\s+)?(?:agent|worker)s?\s+to\s+)?(?:locally\s+)?(?:(?:run|invoke|perform|execute)\s+(?:(?:focused|required|product|project|repository|source|package|local)\s+){0,4}(?:compilation|tests?|testing|linting|builds?|validation)|(?:compile|test|lint|validate)(?:\s+(?:the\s+)?(?:product|project|repository|source|package))?|build(?:ing)?\s+(?:the\s+)?(?:product|project|repository|source|package))\b/iu;
-const LOCAL_EXECUTION =
-  /\b(?:local(?:ly)?|on (?:a|the) local host)\b/iu;
+const LOCAL_EXECUTION = /\b(?:local(?:ly)?|on (?:a|the) local host)\b/iu;
 const PARENT_OWNED_LIFECYCLE_BOUNDARY =
   'The active harness owns creation, communication, scheduling, retries, cancellation, barriers, synthesis, and delivery lifecycle state.';
 const EXPECTED_TEAM_AUTHORITIES = new Map<TeamKey, ExpectedTeamAuthority>([
