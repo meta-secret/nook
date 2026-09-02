@@ -5,7 +5,6 @@ import {
   AuthenticationWorkflowSnapshotResponseKind,
   AuthenticationWorkflowStage,
   type AuthenticationApprovalRequirement,
-  type AuthenticationObservationBindingToken,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   PasswordFormScopeKind,
@@ -33,6 +32,7 @@ import {
   performRevalidatedAuthenticationAction,
   RevalidatedAuthenticationActionOutcomeKind,
   RevalidatedAuthenticationActResultKind,
+  type AuthenticationObservationBinding,
 } from '../../../../nook-web-extension/src/content/autofill/workflow-revalidation'
 
 const explicitUserApproval =
@@ -116,7 +116,9 @@ describe('credential-bearing workflow revalidation', () => {
         async (message: AuthenticationWorkflowSnapshotMessage) =>
           enrichedMatchedDelivery(message, action),
       )
-      let releasedToken: AuthenticationObservationBindingToken | undefined
+      const releaseState: { binding: AuthenticationObservationBinding } = {
+        binding: { kind: AuthenticationObservationBindingKind.Unbound },
+      }
 
       await expect(
         performRevalidatedAuthenticationAction({
@@ -127,14 +129,22 @@ describe('credential-bearing workflow revalidation', () => {
           },
           approvalIsActive: () => true,
           act: ({ observationBindingToken }) => {
-            releasedToken = observationBindingToken
+            releaseState.binding = {
+              kind: AuthenticationObservationBindingKind.Required,
+              token: observationBindingToken,
+            }
             return { kind: RevalidatedAuthenticationActResultKind.Acted }
           },
         }),
       ).resolves.toEqual({
         kind: RevalidatedAuthenticationActionOutcomeKind.Acted,
       })
-      if (!releasedToken) throw new Error('expected an enriched binding token')
+      if (
+        releaseState.binding.kind !==
+        AuthenticationObservationBindingKind.Required
+      ) {
+        throw new Error('expected an enriched binding token')
+      }
       const stagedAct = vi.fn(() => ({
         kind: RevalidatedAuthenticationActResultKind.Acted,
       }))
@@ -143,10 +153,7 @@ describe('credential-bearing workflow revalidation', () => {
         performRevalidatedAuthenticationAction({
           workflow,
           expectedAction: action,
-          observationBinding: {
-            kind: AuthenticationObservationBindingKind.Required,
-            token: releasedToken,
-          },
+          observationBinding: releaseState.binding,
           approvalIsActive: () => true,
           act: stagedAct,
         }),
