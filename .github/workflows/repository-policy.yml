@@ -188,7 +188,9 @@ jobs:
         run: task loom:verify
 
       - name: Audit Cortex document structure
-        if: steps.policy-paths.outputs.loom == 'true'
+        if: >-
+          steps.policy-paths.outputs.loom == 'true' &&
+          steps.policy-paths.outputs.cortex_markdown_only == 'true'
         run: task loom:cortex-audit
 
       - name: Enforce authored TypeScript state invariants

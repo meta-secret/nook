@@ -172,8 +172,10 @@ Agents never run product compilation or repository validation locally.
   `task loom:cortex-session-clean` check, and required formatters.
 - `task loom:pre-push` is the only local repository-validation exception.
 - The pre-push exception may prepare only its bounded Loom dependencies.
-- `task pr:validate`, `task pr:review`, and `task pr:ready` are local
-  delivery-control entrypoints.
+- The read-only session-clean check may prepare only its bounded Loom
+  dependencies.
+- `task remote`, `task pr:validate`, `task pr:review`, and `task pr:ready` are
+  local delivery-control entrypoints.
 - Delivery-control entrypoints may prepare their bounded control-plane helper.
 - They may only dispatch or inspect hosted product and repository evidence.
 - Only the user may authorize another exact local command for the current
