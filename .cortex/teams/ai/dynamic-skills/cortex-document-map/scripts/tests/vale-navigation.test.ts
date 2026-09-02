@@ -30,7 +30,7 @@ function report(stdout: Uint8Array): ValeReport {
   return JSON.parse(new TextDecoder().decode(stdout)) as ValeReport;
 }
 
-test('accepts non-matching Markdown and every knowledge-graph path', () => {
+test('accepts exclusions, ignored directories, and non-matching Markdown', () => {
   const result = runFixture('valid');
   expect(new TextDecoder().decode(result.stderr)).toBe('');
   expect(result.exitCode).toBe(0);

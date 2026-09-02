@@ -63,7 +63,10 @@ tasks:
           echo "Cortex Markdown root does not exist: $cortex_root" >&2
           exit 1
         fi
-        find "$cortex_root" -type f -name '*.md' \
+        find "$cortex_root" \
+          \( -path "$cortex_root/node_modules" -o -path "$cortex_root/.session" \) \
+          -prune -o \
+          -type f -name '*.md' \
           ! -name 'knowledge-graph.md' \
           ! -path "$cortex_root/k-graph.md" \
           ! -path "$cortex_root/INDEX.md" \
