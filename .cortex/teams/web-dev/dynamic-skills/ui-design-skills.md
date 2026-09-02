@@ -190,9 +190,10 @@ Any visual shortcut that weakens these boundaries is a failed design.
 3. Inspect every changed state in light and dark themes.
 4. Inspect representative phone and desktop widths.
 5. Add or update focused Playwright UI-demo coverage.
-6. Run `task format` before the parent-owned push.
-7. Run the repository UI demo contract against current `origin/main`.
-8. Use repository-hosted validation; do not substitute raw host Playwright,
+6. Run `task format` and return one coherent commit to Gizmo.
+7. Gizmo pushes the exact head and dispatches the repository-hosted UI demo
+   contract against current `origin/main`.
+8. Do not substitute raw host Playwright,
    Vitest, Lighthouse, or generic framework commands.
 9. Inspect attached app logs before changing code after Playwright or UI CI
    failure.

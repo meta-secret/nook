@@ -109,9 +109,13 @@ Mechanical rules do not prove generic-value containment. Review must still
 verify that each adapter narrows immediately and returns a concrete domain
 value.
 
-```bash
-task remote TASK_NAME=loom:verify
-```
+### Delivery
+
+1. Format the changed files and return one coherent commit to Gizmo.
+2. Gizmo pushes the exact head.
+3. Gizmo dispatches the applicable hosted validation against that head.
+   - For Loom-owned changes, this includes
+     `task remote TASK_NAME=loom:verify`.
 
 ## Application Checklist
 
@@ -122,4 +126,4 @@ task remote TASK_NAME=loom:verify
 - [ ] Remove generic recursive values from state, results, and service APIs.
 - [ ] Keep any unavoidable external-value use inside a dedicated adapter.
 - [ ] Prove that each adapter returns a concrete domain type or typed failure.
-- [ ] Keep the applicable Loom or Nook web lint task green.
+- [ ] Keep the applicable hosted Loom or Nook Web validation green.

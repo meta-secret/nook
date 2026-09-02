@@ -78,9 +78,13 @@ ESLint `max-params: [error, 1]` enforces the rule in:
 - `agentic-ai/loom/eslint.config.js`;
 - `nook-app/nook-web/eslint.config.js`.
 
-```bash
-task remote TASK_NAME=loom:verify
-```
+### Delivery
+
+1. Format the changed files and return one coherent commit to Gizmo.
+2. Gizmo pushes the exact head.
+3. Gizmo dispatches the applicable hosted validation against that head.
+   - For Loom-owned changes, this includes
+     `task remote TASK_NAME=loom:verify`.
 
 ## Review checklist
 
@@ -88,4 +92,4 @@ task remote TASK_NAME=loom:verify
 - [ ] Multi-value inputs use a typed object argument.
 - [ ] Every object-shaped parameter refers to a named semantic contract.
 - [ ] Any host-callback exception is local and explains the host contract.
-- [ ] The applicable Loom or Nook web lint task stays green.
+- [ ] The applicable hosted Loom or Nook Web validation stays green.
