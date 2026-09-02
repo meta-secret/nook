@@ -1,6 +1,8 @@
 import {
   CortexArticleFindingCode,
   CortexArticleSemanticKind,
+  CORTEX_ARTICLE_DETAIL_TEXT_LIMIT,
+  CORTEX_ARTICLE_FINDING_MESSAGE_LIMIT,
   type AuditCortexArticleStructureRequest,
   type CortexArticleDocument,
   type CortexArticleFinding,
@@ -34,6 +36,21 @@ type OwnedSectionBlocksRequest = {
 const MAX_CONSECUTIVE_PARAGRAPHS = 3;
 const PROCEDURE_HEADING =
   /\b(procedures?|runbooks?|steps|ordered deliver(?:y|ies)|delivery sequences?)\b/i;
+const TABLE_MESSAGE_PREFIX = 'Rendered Markdown table in ';
+const TABLE_MESSAGE_SUFFIX = ' is prohibited; use an enclosed structured list.';
+
+export function formatMarkdownTableFindingMessage(
+  relativePath: string,
+): string {
+  const messagePathLimit = Math.min(
+    CORTEX_ARTICLE_DETAIL_TEXT_LIMIT,
+    CORTEX_ARTICLE_FINDING_MESSAGE_LIMIT -
+      TABLE_MESSAGE_PREFIX.length -
+      TABLE_MESSAGE_SUFFIX.length,
+  );
+  const boundedPath = relativePath.slice(0, messagePathLimit);
+  return `${TABLE_MESSAGE_PREFIX}${boundedPath}${TABLE_MESSAGE_SUFFIX}`;
+}
 
 export function auditCortexArticleStructure(
   request: AuditCortexArticleStructureRequest,
@@ -55,7 +72,7 @@ function auditDocument(request: AuditDocumentRequest): void {
       code: CortexArticleFindingCode.MarkdownTable,
       file: request.document.relativePath,
       line: block.line,
-      message: `Rendered Markdown table in ${request.document.relativePath} is prohibited; use an enclosed structured list.`,
+      message: formatMarkdownTableFindingMessage(request.document.relativePath),
     };
     addFinding(findingRequest);
   }

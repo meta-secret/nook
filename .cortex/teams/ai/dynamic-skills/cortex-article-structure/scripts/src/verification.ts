@@ -9,6 +9,7 @@ import {
   type CortexArticleSemanticBlock,
   type CortexArticleStructureResult,
 } from './domain.ts';
+import { formatMarkdownTableFindingMessage } from './audit.ts';
 
 export type VerifyCortexArticleStructureResultRequest = {
   readonly auditRequest: AuditCortexArticleStructureRequest;
@@ -83,7 +84,7 @@ function verifyDocument(request: VerifyDocumentRequest): void {
       code: CortexArticleFindingCode.MarkdownTable,
       file: request.document.relativePath,
       line: block.line,
-      message: `Rendered Markdown table in ${request.document.relativePath} is prohibited; use an enclosed structured list.`,
+      message: formatMarkdownTableFindingMessage(request.document.relativePath),
     };
     request.expected.push(finding);
   }

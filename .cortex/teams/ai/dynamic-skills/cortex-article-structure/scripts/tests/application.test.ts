@@ -8,6 +8,8 @@ import {
   CortexArticleContractKind,
   CortexArticleFindingCode,
   CortexArticleSemanticKind,
+  CORTEX_ARTICLE_FINDING_MESSAGE_LIMIT,
+  CORTEX_ARTICLE_PATH_LIMIT,
   type AuditCortexArticleStructureRequest,
   type CortexArticleFinding,
   type CortexArticleStructureResult,
@@ -66,6 +68,36 @@ test('validates, audits, verifies, and bounds the accepted application result', 
     CortexArticleFindingCode.EmptyArticle,
     CortexArticleFindingCode.EmptyArticle,
   ]);
+});
+
+test('returns a bounded table finding for the longest accepted Cortex path', () => {
+  const prefix = '.cortex/';
+  const suffix = '.md';
+  const relativePath = `${prefix}${'x'.repeat(
+    CORTEX_ARTICLE_PATH_LIMIT - prefix.length - suffix.length,
+  )}${suffix}`;
+  const previousUnboundedMessage = `Rendered Markdown table in ${relativePath} is prohibited; use an enclosed structured list.`;
+  const request: AuditCortexArticleStructureRequest = {
+    kind: CortexArticleContractKind.Request,
+    documents: [
+      {
+        relativePath,
+        blocks: [{ kind: CortexArticleSemanticKind.Table, line: 1 }],
+      },
+    ],
+  };
+
+  const result = executeCortexArticleStructureApplication(request);
+
+  expect(result.findings).toHaveLength(1);
+  expect(result.findings[0]?.code).toBe(CortexArticleFindingCode.MarkdownTable);
+  expect(result.findings[0]?.file).toBe(relativePath);
+  expect(previousUnboundedMessage.length).toBeGreaterThan(
+    CORTEX_ARTICLE_FINDING_MESSAGE_LIMIT,
+  );
+  expect(result.findings[0]?.message.length).toBeLessThanOrEqual(
+    CORTEX_ARTICLE_FINDING_MESSAGE_LIMIT,
+  );
 });
 
 test('production acceptance rejects reordered, duplicated, and mutated results', () => {
