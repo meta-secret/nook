@@ -12,6 +12,7 @@ import type {
   ProviderActionsContext,
   SyncActionsContext,
 } from '../../../../nook-web-shared/src/vault-app/lib/vault/action-contexts'
+import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import ProviderVaultDecisionPanel from '../../../../nook-web-shared/src/vault-app/lib/components/ProviderVaultDecisionPanel.svelte'
 import { loadProviders } from '../../../../nook-web-shared/src/vault-app/lib/vault/providers.svelte'
 import { ProviderVaultIdentitySelectionKind } from '../../../../nook-web-shared/src/vault-app/lib/vault/provider-vault-decision'
@@ -84,7 +85,7 @@ describe('provider vault decision panel', () => {
     )
     await waitFor(() =>
       expect(
-        rejected.getByText('auth_storage.provider_vault_reason_unknown'),
+        rejected.getByText(I18N_KEYS.AuthStorageProviderVaultReasonUnknown),
       ).toBeTruthy(),
     )
     expect(
