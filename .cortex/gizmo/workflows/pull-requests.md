@@ -573,8 +573,11 @@ task pr:ready PR=<number>
 - Collect and disposition all substantive feedback already present, regardless
   of author.
   - Follow [Code review comments](../dynamic-skills/code-review-comments.md).
-- Implement only accepted defect claims.
+- Preserve the broader repository meaning of `actionable`.
+- Require implementation only for an accepted defect claim.
 - Evaluate any reviewer-proposed remedy separately from its defect claim.
+- Select a candidate correction before applying the proportionality and scope
+  gate.
 - Keep clarification-needed findings unresolved until evidence supports
   accepted or rejected reclassification.
 - Measure the authored diff before and after each review-fix batch.
@@ -606,6 +609,10 @@ gh api repos/meta-secret/nook/pulls/<pr-number>/reviews \
 - Reply to every handled inline thread and resolve it only after its accepted
   defect is fixed or its rejected defect claim is explicitly invalidated.
 - Keep clarification-needed threads unresolved and readiness-blocking.
+- Run commit, push, and replacement-head validation only when an accepted fix
+  or failed-check repair changed the head.
+- Do not invent replacement-head work when a batch has no accepted fix or
+  failed-check repair.
 - Re-query immediately before merge.
 - Do not request another review after repository checks finish.
   - Codex is the sole automatic review provider. Do not activate Cursor Bugbot.

@@ -54,49 +54,61 @@ For each routed item, the responsible team agent:
    - A clarification-needed claim remains unresolved and blocks readiness.
    - Reclassify it as accepted or rejected after obtaining the missing
      evidence.
-6. Applies the proportionality and scope gate to the proposed remedy and the
-   selected correction.
+6. Selects a candidate for the smallest correct in-scope fix for every accepted
+   defect.
+7. Applies the proportionality and scope gate to the proposed remedy and the
+   candidate correction.
    - Accept a proposed remedy only when it is the smallest correct in-scope fix.
    - Classify the proposed remedy as accepted or rejected.
    - Reject speculative hardening, generalized machinery, unrelated cleanup,
      and scope-expanding remedies.
    - Do not reject an accepted defect merely because its proposed remedy is
      rejected.
-7. Selects the smallest correct in-scope fix for every accepted defect.
 8. Records separate evidence and rationale for the defect disposition and any
    proposed-remedy disposition.
 9. Uses reviewer-provided agent prompts as context, not as blind patches.
-10. Implements the selected fix only after all three evaluations are complete.
+10. Implements the candidate correction only after it passes the
+    proportionality and scope gate.
 11. Returns focused validation and a concise explanation to Gizmo.
 
-A finding is actionable only after the responsible team accepts it through all
-defect-claim gates. A valid in-scope defect remains actionable when the
-reviewer-proposed remedy is rejected.
+Repository workflows may use `actionable` more broadly. This skill does not
+redefine that term. A review finding requires implementation only after its
+defect claim passes validity and current-task relevance. A valid in-scope
+defect still requires implementation when the reviewer-proposed remedy is
+rejected.
 
-### Finding disposition boundaries
+### Required actions
 
-A review label, severity, or confident explanation is not proof. Do not change
-the implementation merely to agree with a reviewer. Reject a false or
-inapplicable claim with specific evidence, then record that rationale on the
-original feedback target.
+- Record specific evidence when a defect claim is false or inapplicable.
+- Record that rationale on the original feedback target.
+- Fail closed when evidence confirms a security or authority violation.
+- Route a required correction to the authorized owner when it exceeds the
+  assigned scope.
 
-A plausible edge case, enhancement, hardening idea, or request for new
-functionality is not a defect merely because it could improve the system.
-Reject that claim for the current change when it exceeds the PR's acceptance
-boundary. Reject an overbroad proposed remedy without rejecting a separately
-proven in-scope defect. State the boundary and evidence in each disposition. Do
-not implement speculative follow-up work. Do not create a follow-up issue,
-task, or PR without explicit user authority.
+### Prohibited actions
 
-Security and authority violations remain binding. Fail closed when evidence
-confirms one. Do not reject or downgrade it as an optional enhancement. If the
-required correction exceeds the assigned scope, report the blocker and route
-it to the authorized owner instead of implementing outside scope.
+- Do not treat a review label, severity, or confident explanation as proof.
+- Do not change the implementation merely to agree with a reviewer.
+- Do not treat a plausible edge case, enhancement, hardening idea, or request
+  for new functionality as a defect merely because it could improve the
+  system.
+- Do not accept a defect claim for the current change when it exceeds the PR's
+  acceptance boundary.
+- Do not reject a proven in-scope defect merely because the proposed remedy is
+  overbroad.
+- Do not reject or downgrade a confirmed security or authority violation as an
+  optional enhancement.
+- Do not implement outside the assigned scope.
+- Do not implement speculative follow-up work.
+- Do not create a follow-up issue, task, or PR without explicit user authority.
 
 ### Feedback target handling
 
-Gizmo continues from the verified commit, completes applicable validation, and
-pushes the result. It then applies the handling rule for the feedback target:
+When an accepted fix or failed-check repair changes the head, Gizmo continues
+from the verified commit, runs pre-push hygiene, pushes the result, and obtains
+replacement-head validation. A batch with no accepted fix or failed-check
+repair does not create replacement-head work. Gizmo then applies the handling
+rule for the feedback target:
 
 - **Inline conversation:** Reply on the original target. Resolve it only after
   the finding is fixed or explicitly invalidated.
@@ -116,7 +128,7 @@ required, Gizmo records the team's verified rationale.
 
 Inspect the currently available feedback before merge or handoff. Proceed when
 every substantive defect claim has a final accepted or rejected disposition.
-Every accepted actionable item must be fixed. Every rejected item must be
+Every accepted defect must be fixed. Every rejected item must be
 explicitly invalidated. A clarification-needed item blocks readiness. Nook's
 applicable repository-owned checks must be green. The unresolved-thread query
 must be clear. Request exact-head review during hosted validation rather than
@@ -167,13 +179,14 @@ Does not apply to:
 - [ ] Gizmo routes each finding to the responsible team agent.
 - [ ] The team agent applies validity and current-task relevance gates to the
       defect claim before editing.
+- [ ] The team agent selects a candidate correction for every accepted defect.
 - [ ] The team agent applies the proportionality and scope gate separately to
-      the reviewer-proposed remedy and selected correction.
+      the reviewer-proposed remedy and candidate correction.
 - [ ] The team agent records an evidence-backed defect disposition and any
       proposed-remedy disposition.
 - [ ] A rejected remedy does not erase an accepted defect.
-- [ ] The team agent implements the minimal correct fix for every accepted
-      defect after all evaluations are complete.
+- [ ] The team agent implements the candidate correction only after it passes
+      the proportionality and scope gate.
 - [ ] A clarification-needed finding remains unresolved and blocks readiness
       until reclassified as accepted or rejected.
 - [ ] The team agent rejects defect claims that consist only of scope-expanding
@@ -185,10 +198,13 @@ Does not apply to:
       authorized owner.
 - [ ] The team agent returns focused proof and any no-change rationale.
 - [ ] Gizmo continues from verified commits and runs
-      `task loom:pre-push PR=<number>` when files changed.
+      `task loom:pre-push PR=<number>` only when an accepted fix or failed-check
+      repair changed files.
 - [ ] Gizmo uses focused `task remote` jobs when useful, then explicitly triggers
       complete PR validation.
-- [ ] Gizmo pushes changed code or documentation.
+- [ ] Gizmo pushes changed code or documentation only when the head changed.
+- [ ] A batch with no accepted fix or failed-check repair does not create
+      replacement-head work.
 - [ ] Gizmo leaves a targeted reply with the fix, validation, no-change
       rationale, or clarification request when GitHub supports one.
 - [ ] Gizmo minimizes each handled top-level PR comment as `RESOLVED`.

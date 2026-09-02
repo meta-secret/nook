@@ -88,10 +88,10 @@ without complete validation. It is idempotent and does not wait for a result.
 
 ## Actionable feedback priority
 
-Before merge, inspect feedback currently present. A defect becomes actionable
-only after the responsible team accepts its validity and current-task
-relevance. Rejecting a reviewer-proposed remedy does not erase an accepted
-defect. Follow the
+Before merge, inspect feedback currently present. Preserve the repository's
+broader use of `actionable`. A review finding requires implementation only
+after its defect claim passes validity and current-task relevance. Rejecting a
+reviewer-proposed remedy does not erase an accepted defect. Follow the
 [code-review-comments skill](../dynamic-skills/code-review-comments.md). Gizmo
 must coordinate these actions:
 
@@ -130,16 +130,21 @@ When a new finding arrives:
    hosted checks and exact-head review settle.
 3. Dispatch each finding to the responsible team for separate defect and
    remedy dispositions.
-4. Combine accepted findings and failed checks into one coherent repair batch.
+4. Combine accepted defects and failed checks into one coherent repair batch.
 5. Record evidence-backed no-change dispositions for rejected defect claims.
 6. Keep clarification-needed findings unresolved until the team obtains the
    missing evidence and reclassifies them as accepted or rejected.
-7. Continue from the verified fix commit, then reply to and resolve handled
-   accepted or rejected threads.
-8. Run pre-push hygiene through the responsible formatter owner and push the
-   replacement head.
-9. Restart complete validation for that head. If it is not yet
-   validation-ready, dispatch at least one relevant focused remote job first.
+7. Determine whether an accepted fix or failed-check repair changed the head.
+8. When the head changed, continue from the verified fix commit. Run pre-push
+   hygiene through the responsible formatter owner and push the replacement
+   head.
+9. When the head changed, restart complete validation for that head. If it is
+   not yet validation-ready, dispatch at least one relevant focused remote job
+   first.
+10. When the batch is rejected-only, reply with the no-change rationale and
+    resolve the explicitly invalidated threads without replacement-head work.
+11. Reply to clarification-needed findings with the missing evidence and keep
+    them unresolved without replacement-head work.
 
 A confirmed security or authority violation is binding and fails closed. Route
 it to the authorized owner when its correction exceeds the current task scope.
@@ -168,28 +173,35 @@ Cursor, CodeRabbit, or another service:
 
 1. Verify the finding against the current branch and `.cortex` rules.
 2. Apply validity and current-task relevance gates to the defect claim.
-3. Apply the proportionality and scope gate separately to any proposed remedy.
-4. Dispatch the smallest correct fix for an accepted defect even when its
+3. Select a candidate for the smallest correct in-scope fix for an accepted
+   defect.
+4. Apply the proportionality and scope gate separately to any proposed remedy
+   and the candidate correction.
+5. Dispatch the candidate correction after it passes that gate, even when the
    proposed remedy is rejected.
-5. Document the evidence-backed no-change disposition for a rejected defect
+6. Document the evidence-backed no-change disposition for a rejected defect
    claim.
-6. Keep a clarification-needed finding unresolved until evidence supports
+7. Keep a clarification-needed finding unresolved until evidence supports
    accepted or rejected reclassification.
-7. Continue from the verified fix commit.
-8. Run `task loom:pre-push PR=<number>` through the responsible formatter owner, commit,
-   and push when files changed.
-9. If the head is not validation-ready, dispatch at least one relevant focused
-   hosted task.
-10. If complete validation was already requested, dispatch it for the
-   replacement head first and collect exact-head Codex review concurrently.
-   Otherwise start it when that head is ready for the final gate. In both cases,
-   wait for both result sets before forming another repair batch.
-11. Reply on the original thread or comment with the disposition, evidence, fix,
+8. Determine whether an accepted fix or failed-check repair changed the head.
+9. When the head changed, continue from the verified fix commit. Run
+   `task loom:pre-push PR=<number>` through the responsible formatter owner,
+   commit, and push the replacement head.
+10. When the head changed and is not validation-ready, dispatch at least one
+   relevant focused hosted task.
+11. When complete validation was already requested for a changed head,
+    dispatch it for the replacement head first and collect exact-head Codex
+    review concurrently. Otherwise start it when that changed head is ready for
+    the final gate. Wait for both result sets before forming another repair
+    batch.
+12. Do not run commit, push, or replacement-head validation when the batch has
+    no accepted fix or failed-check repair.
+13. Reply on the original thread or comment with the disposition, evidence, fix,
    and validation as applicable when a
    targeted reply is possible.
-12. Resolve only after the targeted reply is visible and the finding is fixed or
+14. Resolve only after the targeted reply is visible and the finding is fixed or
    explicitly invalidated.
-13. Re-query feedback throughout validation and immediately before handoff or
+15. Re-query feedback throughout validation and immediately before handoff or
    merge.
 
 Do not resolve or minimize a clarification-needed finding as handled. Its
