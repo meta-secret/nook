@@ -18,11 +18,10 @@ Bugbot remains inactive.
 ## Problem Pattern
 
 Agents sometimes inspect only inline review threads and miss substantive
-findings in a top-level review body. They also sometimes fix a finding in code
-and resolve the conversation without documenting the fix and validation, or
-resolve a stale-looking comment without recording why it no longer applies.
-That hides the review reasoning from the PR timeline and makes later agents
-rediscover it.
+findings in a top-level review body. They also sometimes fix a finding without
+documenting the fix and validation. They may resolve a stale-looking comment
+without recording why it no longer applies. That hides the review reasoning
+from the PR timeline. Later agents must then rediscover it.
 
 ## Preferred Pattern
 
@@ -105,10 +104,10 @@ rejected.
 ### Feedback target handling
 
 When an accepted fix or failed-check repair changes the head, Gizmo continues
-from the verified commit, runs pre-push hygiene, pushes the result, and obtains
-replacement-head validation. A batch with no accepted fix or failed-check
-repair does not create replacement-head work. Gizmo then applies the handling
-rule for the feedback target:
+from the verified commit. It runs pre-push hygiene. It pushes the result. It
+then obtains replacement-head validation. A batch with no accepted fix or
+failed-check repair does not create replacement-head work. Gizmo then applies
+the handling rule for the feedback target:
 
 - **Inline conversation:** Reply on the original target. Resolve it only after
   the finding is fixed or explicitly invalidated.
@@ -274,9 +273,11 @@ those threads' resolution state as the deterministic handled state.
 
 Gizmo uses GraphQL or `gh pr view`/`gh api` to confirm that every substantive
 review thread has a final accepted or rejected defect disposition. It confirms
-zero clarification-needed findings and zero unresolved handled findings. It
-also inspects submitted reviews and PR comments from every head for remaining
-substantive items and their defect and remedy dispositions.
+zero clarification-needed findings. It confirms zero unresolved handled
+findings. It inspects submitted reviews from every head. It also inspects PR
+comments from every head. The inspection identifies remaining substantive
+items. It records their defect dispositions and any proposed-remedy
+dispositions.
 
 Gizmo reports:
 

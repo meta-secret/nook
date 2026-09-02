@@ -161,13 +161,18 @@ ownership until merge or a concrete blocked handoff:
    when the work revealed a durable lesson or Cortex defect. No promotion is
    required when no candidate qualifies. If a promotion changes the head,
    repeat complete hosted validation.
-8. **Merge automatically when ready.** Require a current branch, green
-   repository-owned checks, final dispositions for every substantive review
-   finding, handled accepted or rejected comments, every required team and
-   security verdict, and the exact-head readiness audit. A
-   clarification-needed finding remains unresolved and blocks readiness. Then
-   squash-merge without separate permission. First re-read the complete diff
-   and refresh the PR title and description.
+8. **Merge automatically when ready.**
+   - Require a current branch.
+   - Require green repository-owned checks.
+   - Require final dispositions for every substantive review finding.
+   - Require handled accepted or rejected comments.
+   - Require every required team verdict.
+   - Require every required security verdict.
+   - Require the exact-head readiness audit.
+   - Keep a clarification-needed finding unresolved and readiness-blocking.
+   - Re-read the complete diff.
+   - Refresh the PR title and description.
+   - Squash-merge without separate permission.
 
 ## Pull request size and modularity
 
