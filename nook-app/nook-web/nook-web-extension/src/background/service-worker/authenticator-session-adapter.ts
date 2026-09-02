@@ -134,23 +134,92 @@ type ConfirmAuthenticatorEnrollmentArgs = {
   grant: StoredExtensionPairingGrant
   otpauthUri: string
   origin: string
+  enrollmentAuthorizationId: string
+}
+
+type AuthenticatorEnrollmentConfirmSessionMessage = Extract<
+  Parameters<typeof sendSessionMessage>[0],
+  { type: 'nook:extension-session-authenticator-enroll-confirm' }
+> & {
+  payload: Extract<
+    Parameters<typeof sendSessionMessage>[0],
+    { type: 'nook:extension-session-authenticator-enroll-confirm' }
+  >['payload'] & { enrollmentAuthorizationId: string }
 }
 
 export async function confirmAuthenticatorEnrollment({
   grant,
   otpauthUri,
   origin,
+  enrollmentAuthorizationId,
 }: ConfirmAuthenticatorEnrollmentArgs): Promise<AuthenticatorSecretSessionResponse> {
-  const message: Parameters<typeof sendSessionMessage>[0] = {
+  const message: AuthenticatorEnrollmentConfirmSessionMessage = {
     type: 'nook:extension-session-authenticator-enroll-confirm',
     payload: {
       ...extensionSessionGrantIdentity(grant),
       otpauthUri,
       origin,
+      enrollmentAuthorizationId,
       queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
     },
   }
-  return authenticatorSecretResponse(await sendSessionMessage(message))
+  const response = await sendSessionMessage(message)
+  return authenticatorSecretResponse(response)
+}
+
+type AuthenticatorEnrollmentAuthorizationControlResponse = {
+  ok: true
+  accepted: boolean
+}
+
+function enrollmentAuthorizationControlResponse(
+  response: unknown,
+): AuthenticatorEnrollmentAuthorizationControlResponse {
+  const record = responseRecord(response)
+  if (record.ok !== true || typeof record.accepted !== 'boolean') {
+    throw new Error(
+      'Extension session returned an invalid enrollment authorization response.',
+    )
+  }
+  return { ok: true, accepted: record.accepted }
+}
+
+type AuthorizeAuthenticatorEnrollmentFromSessionArgs = {
+  enrollmentAuthorizationId: string
+  expiresAt: number
+}
+
+type AuthorizeAuthenticatorEnrollmentControlMessage = {
+  type: 'nook:extension-authenticator-enrollment-authorize'
+  payload: AuthorizeAuthenticatorEnrollmentFromSessionArgs
+}
+
+type RevokeAuthenticatorEnrollmentControlMessage = {
+  type: 'nook:extension-authenticator-enrollment-revoke'
+  payload: { enrollmentAuthorizationId: string }
+}
+
+export async function authorizeAuthenticatorEnrollmentFromSession({
+  enrollmentAuthorizationId,
+  expiresAt,
+}: AuthorizeAuthenticatorEnrollmentFromSessionArgs): Promise<boolean> {
+  const message: AuthorizeAuthenticatorEnrollmentControlMessage = {
+    type: 'nook:extension-authenticator-enrollment-authorize',
+    payload: { enrollmentAuthorizationId, expiresAt },
+  }
+  const response: unknown = await chrome.runtime.sendMessage(message)
+  return enrollmentAuthorizationControlResponse(response).accepted
+}
+
+export async function revokeAuthenticatorEnrollmentFromSession(
+  enrollmentAuthorizationId: string,
+): Promise<boolean> {
+  const message: RevokeAuthenticatorEnrollmentControlMessage = {
+    type: 'nook:extension-authenticator-enrollment-revoke',
+    payload: { enrollmentAuthorizationId },
+  }
+  const response: unknown = await chrome.runtime.sendMessage(message)
+  return enrollmentAuthorizationControlResponse(response).accepted
 }
 
 type AuthenticatorBackupCodesSessionAttachmentRequest = {

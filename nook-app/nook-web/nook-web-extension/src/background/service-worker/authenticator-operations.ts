@@ -32,9 +32,11 @@ import { AUTHENTICATOR_PICKER_TTL_MS } from './account-pickers'
 import { ensureExtensionSessionDocument } from './session-lifecycle'
 import {
   attachAuthenticatorBackupCodesFromSession,
+  authorizeAuthenticatorEnrollmentFromSession,
   authenticatorCodeFromSession,
   authenticatorPreviewFromSession,
   confirmAuthenticatorEnrollment,
+  revokeAuthenticatorEnrollmentFromSession,
   selectedAuthenticatorPageAcknowledged,
   stagedAuthenticatorCodeFromSession,
 } from './authenticator-session-adapter'
@@ -585,10 +587,15 @@ export async function websiteAuthenticatorEnrollStage({
     purgeExpiredStagedEnrollments()
     for (const [stageId, staged] of stagedAuthenticatorEnrollments) {
       if (staged.origin === message.payload.origin) {
+        const revoked = await revokeAuthenticatorEnrollmentFromSession(stageId)
+        if (!revoked) {
+          return { ok: false, reason: 'authenticator-enroll-failed' }
+        }
         clearStagedEnrollment(stageId)
       }
     }
     const stageId = crypto.randomUUID()
+    const expiresAt = Date.now() + STAGED_ENROLLMENT_TTL_MS
     const stagedEnrollment: Parameters<
       typeof stagedAuthenticatorEnrollments.set
     >[1] = {
@@ -597,9 +604,26 @@ export async function websiteAuthenticatorEnrollStage({
       origin: message.payload.origin,
       vaultStoreId: message.payload.vaultStoreId,
       otpauthUri: otpauthUri.value,
-      expiresAt: Date.now() + STAGED_ENROLLMENT_TTL_MS,
+      expiresAt,
     }
     if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
+      stagedEnrollment.otpauthUri = ''
+      return { ok: false, reason: 'authenticator-locked' }
+    }
+    await ensureExtensionSessionDocument()
+    const authorizeArgs: Parameters<
+      typeof authorizeAuthenticatorEnrollmentFromSession
+    >[0] = {
+      enrollmentAuthorizationId: stageId,
+      expiresAt,
+    }
+    const authorized =
+      await authorizeAuthenticatorEnrollmentFromSession(authorizeArgs)
+    if (
+      !authorized ||
+      !accountPickerAuthorizationIsCurrent(authorizationGeneration)
+    ) {
+      await revokeAuthenticatorEnrollmentFromSession(stageId)
       stagedEnrollment.otpauthUri = ''
       return { ok: false, reason: 'authenticator-locked' }
     }
@@ -728,6 +752,7 @@ export async function websiteAuthenticatorEnrollConfirm({
       grant: access.grant,
       otpauthUri: staged.otpauthUri,
       origin: message.payload.origin,
+      enrollmentAuthorizationId: message.payload.stageId,
     }
     const response = await confirmAuthenticatorEnrollment(confirmArgs)
     return authenticatorEnrollmentAuthorizationIsCurrent(
@@ -764,6 +789,13 @@ export async function websiteAuthenticatorEnrollDismiss({
   }
   const staged = stagedAuthenticatorEnrollments.get(message.payload.stageId)
   if (staged && staged.origin === message.payload.origin) {
+    await ensureExtensionSessionDocument()
+    const revoked = await revokeAuthenticatorEnrollmentFromSession(
+      message.payload.stageId,
+    )
+    if (!revoked) {
+      return { ok: false, reason: 'authenticator-enroll-failed' }
+    }
     clearStagedEnrollment(message.payload.stageId)
   }
   return { ok: true }
