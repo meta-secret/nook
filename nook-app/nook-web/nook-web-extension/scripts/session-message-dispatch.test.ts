@@ -24,13 +24,7 @@ async function decodeProviders(providers: StorageProvider[]) {
   return structuredClone(providers)
 }
 
-function deferred() {
-  let release = () => {}
-  const promise = new Promise<void>((resolve) => {
-    release = resolve
-  })
-  return { promise, release: () => release() }
-}
+const deferred = () => Promise.withResolvers<void>()
 
 describe('ExtensionSessionMessageDispatcher', () => {
   test('accepts explicit default queue state for control commands', async () => {
@@ -81,10 +75,15 @@ describe('ExtensionSessionMessageDispatcher', () => {
       devicePublicKey: 'public',
       deviceSigningPublicKey: 'signing',
     }
-    for (const provider of [
-      { githubPat: 'secret' },
-      { id: 'provider', type: 'github', foreign: true },
-    ]) {
+    const githubPat = 'foreign-secret'
+    const foreignProvider = {
+      id: 'p',
+      type: 'github',
+      foreign: true,
+      githubPat,
+    }
+    const providers = [{ githubPat: 'secret' }, foreignProvider]
+    for (const provider of providers) {
       const malformedProvider = await parseExtensionSessionRequest({
         type: ExtensionSessionMessageType.ImportVault,
         payload: {
@@ -98,6 +97,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
         ExtensionSessionRequestParseKind.Invalid,
       )
     }
+    expect(foreignProvider).not.toHaveProperty('githubPat')
 
     const malformedEvent = await parseExtensionSessionRequest({
       type: ExtensionSessionMessageType.UpdateVault,
@@ -152,6 +152,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
       oauthFile: { state: 'notApplicable' },
       localFolder: { state: 'notApplicable' },
       storeId: { state: 'unscoped' },
+      syncCheckpoint: { state: 'neverSynced' },
       createdAt: '2026-08-10T00:00:00Z',
     }
     const message = {
@@ -711,9 +712,8 @@ describe('ExtensionSessionMessageDispatcher', () => {
       decodeProviders,
       handleMessage: async (message) => {
         handledTypes.push(message.type)
-        if (message.type === ExtensionSessionMessageType.CreatePin) {
+        if (message.type === ExtensionSessionMessageType.CreatePin)
           await queueBlocker.promise
-        }
         return { ok: true }
       },
     })
@@ -775,47 +775,39 @@ describe('ExtensionSessionMessageDispatcher', () => {
       ok: false,
       error: 'Invalid extension session request.',
     })
-
-    const enrollmentAuthorizationId = 'dispatcher-authorization'
     const expiresAt = Date.now() + 5_000
+    const queue = {
+      kind: 'deadline' as const,
+      expiresAt,
+      priority: 'interactive' as const,
+    }
     const authorizeMessage = {
       type: ExtensionSessionMessageType.AuthenticatorEnrollAuthorize,
       payload: {
-        enrollmentAuthorizationId,
+        enrollmentAuthorizationId: 'dispatcher-authorization',
         expiresAt,
-        queue: {
-          kind: 'deadline' as const,
-          expiresAt,
-          priority: 'interactive' as const,
-        },
+        queue,
       },
     }
-    const runtimeResponse = (sender: chrome.runtime.MessageSender) =>
-      new Promise<unknown>((resolve) => {
-        expect(registration.listener(authorizeMessage, sender, resolve)).toBe(
-          true,
-        )
-      })
-    const serviceWorkerUrl = chrome.runtime.getURL(
-      'background/service-worker.js',
-    )
-    await expect(
-      runtimeResponse({ id: 'nook-extension', url: serviceWorkerUrl }),
-    ).resolves.toEqual({ ok: true })
-    await expect(
-      runtimeResponse({
-        id: 'nook-extension',
-        url: chrome.runtime.getURL('popup/index.html'),
-      }),
-    ).resolves.toEqual({
-      ok: false,
-      error: 'Forbidden extension session request.',
-    })
-    await expect(runtimeResponse({ id: 'nook-extension' })).resolves.toEqual({
-      ok: false,
-      error: 'Forbidden extension session request.',
-    })
-
+    function runtimeResponse(
+      sender: chrome.runtime.MessageSender,
+      message = authorizeMessage,
+    ) {
+      const response = Promise.withResolvers<unknown>()
+      expect(registration.listener(message, sender, response.resolve)).toBe(
+        true,
+      )
+      return response.promise
+    }
+    const workerUrl = chrome.runtime.getURL('background/service-worker.js')
+    const serviceWorker = { id: 'nook-extension', url: workerUrl }
+    await expect(runtimeResponse(serviceWorker)).resolves.toEqual({ ok: true })
+    const forbiddenError = 'Forbidden extension session request.'
+    const forbidden = { ok: false, error: forbiddenError }
+    for (const url of [chrome.runtime.getURL('popup/index.html'), false]) {
+      const sender = { id: 'nook-extension', ...(url ? { url } : {}) }
+      await expect(runtimeResponse(sender)).resolves.toEqual(forbidden)
+    }
     for (const payload of [
       { ...authorizeMessage.payload, enrollmentAuthorizationId: '' },
       { ...authorizeMessage.payload, foreign: true },
@@ -824,22 +816,11 @@ describe('ExtensionSessionMessageDispatcher', () => {
         queue: { ...authorizeMessage.payload.queue, foreign: true },
       },
     ]) {
-      const invalidResponse = new Promise<unknown>((resolve) => {
-        const invalidMessage = { ...authorizeMessage, payload }
-        expect(
-          registration.listener(
-            invalidMessage,
-            { id: 'nook-extension', url: serviceWorkerUrl },
-            resolve,
-          ),
-        ).toBe(true)
-      })
-      await expect(invalidResponse).resolves.toEqual({
-        ok: false,
-        error: 'Invalid extension session request.',
-      })
+      const invalid = { ok: false, error: 'Invalid extension session request.' }
+      await expect(
+        runtimeResponse(serviceWorker, { ...authorizeMessage, payload }),
+      ).resolves.toEqual(invalid)
     }
-
     const queued = dispatcher.enqueue({
       type: ExtensionSessionMessageType.CreatePin,
       payload: {
@@ -848,13 +829,11 @@ describe('ExtensionSessionMessageDispatcher', () => {
       },
     })
     await Promise.resolve()
-    await expect(
-      runtimeResponse({ id: 'nook-extension', url: serviceWorkerUrl }),
-    ).resolves.toEqual({ ok: true })
+    await expect(runtimeResponse(serviceWorker)).resolves.toEqual({ ok: true })
     expect(handledTypes.at(-1)).toBe(
       ExtensionSessionMessageType.AuthenticatorEnrollAuthorize,
     )
-    queueBlocker.release()
+    queueBlocker.resolve()
     await expect(queued).resolves.toEqual({ ok: true })
   })
 })

@@ -7,10 +7,19 @@ export type SerializedExtensionStorageProviders = SerializedStorageProvider[]
 export type DecodedExtensionStorageProviders = StorageProvider[]
 export type ExtensionStorageProviderIdentities =
   ExtensionStorageProviderPayload[]
-
+const providerKey =
+  /^(?:id|type|label|githubPat|githubRepo|oauthFile|localFolder|storeId|syncCheckpoint|createdAt)$/
+function hasProviderKeys(value: unknown): boolean {
+  if (!value || Object.getPrototypeOf(value) !== Object.prototype) return false
+  return Object.keys(value).every((key) => providerKey.test(key))
+}
+export function assertProviderKeys(providers: readonly unknown[]): void {
+  if (!providers.every(hasProviderKeys)) throw Error('Invalid provider keys.')
+}
 export function extensionSessionProviderIdentities(
   providers: SerializedExtensionStorageProviders,
 ): ExtensionStorageProviderIdentities {
+  assertProviderKeys(providers)
   return providers.map((provider) => ({
     id: provider.id,
     type: provider.type,
@@ -101,10 +110,16 @@ export type StageProviderCredentialsArgs = {
 export async function stageProviderCredentials(
   args: StageProviderCredentialsArgs,
 ): Promise<ProviderCredentialStaging> {
-  if (!args.providers.every(isSerializedProviderField)) {
+  let staged: SerializedExtensionStorageProviders
+  try {
+    assertProviderKeys(args.providers)
+    if (!args.providers.every(isSerializedProviderField))
+      throw new Error('Invalid storage provider payload.')
+    staged = structuredClone(args.providers)
+  } catch {
+    scrubProviderCredentials(args.providers)
     return { kind: ProviderCredentialStagingKind.InvalidInput }
   }
-  const staged = structuredClone(args.providers)
   try {
     const providers = await args.decode(staged)
     return { kind: ProviderCredentialStagingKind.Staged, providers }

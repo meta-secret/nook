@@ -2,6 +2,7 @@ import { companionWasmReady } from '../../../nook-web-shared/src/extension/compa
 import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type { SerializedStorageProvider } from '../lib/provider-credential-staging'
 import {
+  assertProviderKeys,
   extensionSessionProviderIdentities,
   scrubProviderCredentials,
 } from '../lib/provider-credential-staging'
@@ -370,6 +371,7 @@ function stageExtensionSessionIngressRequest(
       return { kind: ExtensionSessionIngressStageKind.Invalid }
     }
     try {
+      assertProviderKeys(providers)
       const stagedProviders = structuredClone(providers)
       scrubProviderCredentials(providers)
       request.payload.providers = []

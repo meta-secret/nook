@@ -144,18 +144,12 @@ describe('provider credential staging', () => {
     expect(source[0]).not.toHaveProperty('githubPat')
   })
 
-  test('clones __proto__ as an own data property', async () => {
+  test('rejects __proto__ outside the provider contract', async () => {
     const source = JSON.parse(
       '[{"id":"github","__proto__":{"githubPat":"inherited-secret"}}]',
     )
     const staging = await stageFixture(source)
 
-    expect(staging.kind).toBe(ProviderCredentialStagingKind.Staged)
-    if (staging.kind !== ProviderCredentialStagingKind.Staged) return
-    const provider = staging.providers[0]
-    expect(provider && typeof provider === 'object').toBe(true)
-    if (!provider || typeof provider !== 'object') return
-    expect(Object.hasOwn(provider, '__proto__')).toBe(true)
-    expect('githubPat' in provider).toBe(false)
+    expect(staging.kind).toBe(ProviderCredentialStagingKind.InvalidInput)
   })
 })
