@@ -35,6 +35,12 @@ and [mission delivery](../../../gizmo/workflows/mission-delivery.md).
 
 E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_INTERVAL_MS=1000` for fast background sync. Main saves prod dist before e2e and restores after (`web:e2e:restore-prod-dist`).
 
+- Headless UI-demo execution is temporarily disabled in PR and Main workflows.
+- New UI-demo artifacts are not published.
+- Demo implementations and the UI-demo contract remain available for later
+  re-enable.
+- Browser E2E remains an independent validation path.
+
 ## Secrets and env
 
 - **`NOOK_GITHUB_PAT`**
@@ -84,7 +90,8 @@ separate Task-backed harness.
 - One isolated logical task owns diagnosis through exact-head checks, review resolution, squash merge, and replacement Main verification.
 - The explicitly dispatched implementation worker does not claim Hive
   incidents.
-- Browser E2E and UI-demo failures enter the same durable repair queue as native, WASM, build, deployment, mixed, and unknown failures.
+- Browser E2E failures enter the same durable repair queue as native, WASM,
+  build, deployment, mixed, and unknown failures.
 
 **Hive delivery generations:**
 
@@ -282,10 +289,16 @@ publication steps. Registry credentials are not used. Prompt:
    [pull requests](../../../gizmo/workflows/pull-requests.md) when workflow
    behavior changes.
 5. Explicitly labeled PR CI runs Rust/WASM/JS unit tests, Svelte/type checks, lint, formatting, and builds.
-   - UI-changing PRs additionally record only their changed headless demo specs.
+   - UI-changing PRs must still add or update their focused headless demo specs.
+   - PR and Main UI-demo execution is temporarily disabled.
+   - New UI-demo artifacts are not published while execution is disabled.
    - Main-fix validation uses `task pr:validate PR=<number> FULL_E2E=1` and runs the Main-equivalent deterministic browser suites before merge.
    - Main runs the same local-provider and extension **e2e**.
-   - Every actionable unsuccessful Main run, including browser E2E and UI-demo failures, is reconciled through one `automation: hive` Workbench incident into an isolated task that owns the repair PR, review loop, squash merge, and replacement Main verification.
+   - Every actionable unsuccessful Main run is reconciled through one
+     `automation: hive` Workbench incident.
+     - Browser E2E failures are included.
+     - One isolated task owns the repair PR, review loop, squash merge, and
+       replacement Main verification.
    - Credentialed **sync-live** checks are explicit manual runs.
 6. **Never** add Dockerfile `RUN --mount=type=cache`; dependency installs must use normal image layers. The repository-root Rust suite invoked by `task preflight` rejects violations before app setup.
 

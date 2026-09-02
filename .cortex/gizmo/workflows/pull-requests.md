@@ -414,6 +414,9 @@ Rust may use the configured ARC scale set. WASM and fork PR jobs remain hosted.
 - After clippy/build, the WASM producer uploads only the small generated package.
 - Parallel browser-free preview validation can begin while required Node tests continue.
 - Preview deployment remains blocked until the producer succeeds.
+- Headless UI-demo execution is temporarily disabled.
+- The UI-demo implementation and focused spec contract remain retained.
+- Exact-head readiness structurally excludes the disabled UI-demo job.
 - Optional browser-e2e consumers wait for that fully verified producer.
 - No consumer recompiles Rust.
 
@@ -603,7 +606,7 @@ After merge, `main.yml` independently runs full local-provider and extension **e
 **Main failure incidents (Hive):**
 
 - Every actionable unsuccessful Main run creates one `automation: hive` Workbench incident keyed by failed SHA.
-- This includes `Web e2e`, `UI demos`, and `Extension e2e`.
+- This includes `Web e2e` and `Extension e2e`.
 - Each run attempt creates a run-and-attempt-keyed delivery generation whose plan/worklog are generation-specific.
 - A later failed rerun supersedes and cancels an active delivery before the new generation is enqueued.
 - The dispatcher retries only after a poll interval longer than the worker heartbeat.
