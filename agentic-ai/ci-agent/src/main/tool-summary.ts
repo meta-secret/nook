@@ -46,7 +46,8 @@ export function formatToolStarted(toolCall: ToolCall): string {
       return server && tool ? `mcp ${server}/${tool}` : "mcp";
     }
     default:
-      return toolCall.type ?? "tool";
+      const [defaulted1 = ("tool")] = [toolCall.type];
+      return defaulted1;
   }
 }
 
@@ -54,7 +55,7 @@ export function formatToolCompleted(
   toolCall: ToolCall,
   options: { includeShellOutput?: boolean } = {},
 ): string[] {
-  const includeShellOutput = options.includeShellOutput ?? true;
+  const [includeShellOutput = (true)] = [options.includeShellOutput];
   const result = toolCall.result;
   if (!result) {
     return [];

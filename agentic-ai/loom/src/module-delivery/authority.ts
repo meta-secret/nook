@@ -366,7 +366,7 @@ export function createAcceptedModuleDeliveryEvidenceRegistry(): AcceptedModuleDe
       );
     authorities.set(request.evidence, request.authority);
     const key = JSON.stringify(identity(request.evidence));
-    const authorityClosures = closures.get(request.authority) ?? new Map();
+    const [authorityClosures = new Map()] = [closures.get(request.authority)];
     const existing = authorityClosures.get(key);
     if (
       existing &&

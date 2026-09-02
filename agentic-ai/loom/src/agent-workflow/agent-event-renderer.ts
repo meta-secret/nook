@@ -28,7 +28,8 @@ export function renderRuntimeActivityObservation(
 ): string {
   const identity = args.identity;
   const observation = args.observation;
-  const references = (observation.cortexReferences ?? [])
+  const [cortexReferences = []] = [observation.cortexReferences];
+  const references = cortexReferences
     .map((reference) => `${reference.id}:${reference.relation}`)
     .join(' ');
   return `[${identity.task}/attempt-${identity.attempt}:live-${cortexActionId(identity.sequence)}] runtime-activity ${observation.activity}${references ? ` ${references}` : ''}\n`;

@@ -77,7 +77,7 @@ function auditDocument(request: AuditDocumentRequest): void {
     addFinding(findingRequest);
   }
   for (let index = 0; index < blocks.length; index += 1) {
-    const block = blocks.at(index) ?? false;
+    const [block = false] = [blocks.at(index)];
     if (
       block === false ||
       block.kind !== CortexArticleSemanticKind.Heading ||
@@ -102,7 +102,7 @@ function auditDocument(request: AuditDocumentRequest): void {
 function ownedSectionBlocks(
   request: OwnedSectionBlocksRequest,
 ): readonly CortexArticleSemanticBlock[] {
-  const heading = request.blocks.at(request.headingIndex) ?? false;
+  const [heading = false] = [request.blocks.at(request.headingIndex)];
   if (heading === false || heading.kind !== CortexArticleSemanticKind.Heading) {
     return [];
   }

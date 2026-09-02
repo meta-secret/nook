@@ -113,7 +113,7 @@ export function resolveImplementPrTarget(input: ImplementPrTargetInput) {
   };
 }
 function resolveTargetFromEnvironment() {
-  const runId = process.env.GITHUB_RUN_ID?.trim() ?? "";
+  const [runId = ("")] = [process.env.GITHUB_RUN_ID?.trim()];
   const agentBranch =
     process.env.AGENT_BRANCH?.trim() ||
     process.env.FIX_BRANCH?.trim() ||

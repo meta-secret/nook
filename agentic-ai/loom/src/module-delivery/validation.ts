@@ -803,11 +803,12 @@ function topologyForDependencies(
   const waves: string[][] = [];
   while (remaining.size > 0) {
     const ready = [...remaining]
-      .filter((taskId) =>
-        [...(request.dependencies.get(taskId) ?? [])].every((dependency) =>
+      .filter((taskId) => {
+        const [dependencies = []] = [request.dependencies.get(taskId)];
+        return [...dependencies].every((dependency) =>
           completed.has(dependency),
-        ),
-      )
+        );
+      })
       .sort();
     if (ready.length === 0) {
       const cycle = [...remaining].sort().join(', ');

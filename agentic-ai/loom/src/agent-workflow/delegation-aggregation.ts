@@ -490,8 +490,9 @@ async function assertExactAttemptStorage(
 ): Promise<void> {
   const expected = new Map<string, Set<string>>();
   for (const declaration of loaded.plan.attempts) {
-    const attempts =
-      expected.get(declaration.identity.task) ?? new Set<string>();
+    const [attempts = new Set<string>()] = [
+      expected.get(declaration.identity.task),
+    ];
     attempts.add(`attempt-${declaration.identity.attempt}`);
     expected.set(declaration.identity.task, attempts);
   }

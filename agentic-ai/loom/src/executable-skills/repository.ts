@@ -789,10 +789,14 @@ function sameKeys(
 function property(
   record: UntrustedYamlMap,
 ): (key: string) => UntrustedYamlNode {
-  return (key) =>
-    Object.entries(record)
-      .find(([name]) => name === key)
-      ?.at(1) ?? false;
+  return (key) => {
+    const [value = false] = [
+      Object.entries(record)
+        .find(([name]) => name === key)
+        ?.at(1),
+    ];
+    return value;
+  };
 }
 
 function sameRecord(
@@ -827,7 +831,7 @@ function positiveInteger(value: UntrustedYamlNode): boolean {
 
 function dangerousPath(candidate: string): boolean {
   for (const character of candidate) {
-    const codePoint = character.codePointAt(0) ?? 0;
+    const [codePoint = 0] = [character.codePointAt(0)];
     if (
       character === ':' ||
       character === '\\' ||

@@ -16,10 +16,11 @@ test('specializes only closed finite external package loaders', async () => {
     [path, await Bun.file(join(REPOSITORY_ROOT, path)).text()],
     [packagePath, await Bun.file(join(REPOSITORY_ROOT, packagePath)).text()],
   ]);
+  const [defaulted1 = ''] = [sources.get(path)];
   const inspection = {
     path,
     roots: new Set<string>(),
-    source: sources.get(path) ?? '',
+    source: defaulted1,
     sources,
   };
   const specialized = specializeBoundedPackageLoaders(inspection);
@@ -40,10 +41,11 @@ test('specializes only closed tracked local data modules', async () => {
     [path, await Bun.file(join(REPOSITORY_ROOT, path)).text()],
     [modulePath, await Bun.file(join(REPOSITORY_ROOT, modulePath)).text()],
   ]);
+  const [defaulted2 = ''] = [sources.get(path)];
   const inspection = {
     path,
     roots: new Set<string>(),
-    source: sources.get(path) ?? '',
+    source: defaulted2,
     sources,
   };
   const specialized = specializeBoundedLocalDataLoaders(inspection);
@@ -100,7 +102,7 @@ test('specializes only exact source-closed generated artifacts', async () => {
     );
   }
   const roots = new Set([producerPath, envPath]);
-  const source = sources.get(path) ?? '';
+  const [source = ''] = [sources.get(path)];
   const inspection = { path, roots, source, sources };
   const specialized = specializeProvenGeneratedArtifactLoader(inspection);
   expect(specialized).toContain(

@@ -165,8 +165,8 @@ function aliasesFromTsconfig(
     throw new Error(`Runnable tsconfig is invalid: ${aliasRequest.path}`);
   }
   const options = document.compilerOptions;
-  const mappings = options?.paths ?? {};
-  const baseUrl = options?.baseUrl ?? '.';
+  const [mappings = {}] = [options?.paths];
+  const [baseUrl = '.'] = [options?.baseUrl];
   if (typeof baseUrl !== 'string')
     throw new Error(
       `Runnable tsconfig baseUrl is invalid: ${aliasRequest.path}`,
@@ -249,9 +249,10 @@ export function isRepositoryBackedPackageSpecifier(
   if (specifier.startsWith('#') || specifier.startsWith('file:')) return true;
   if (specifier.startsWith('.') || specifier.startsWith('node:')) return false;
   const segments = specifier.split('/');
+  const [defaulted1 = ''] = [segments[0]];
   const packageName = specifier.startsWith('@')
     ? segments.slice(0, 2).join('/')
-    : (segments[0] ?? '');
+    : defaulted1;
   for (const [path, source] of request.sources) {
     if (!path.endsWith('package.json') || source.length === 0) continue;
     assertRunnableConfigurationBytes(source);
@@ -267,7 +268,7 @@ export function isRepositoryBackedPackageSpecifier(
       document.devDependencies,
       document.optionalDependencies,
     ]) {
-      const dependency = dependencies?.[packageName] ?? false;
+      const [dependency = false] = [dependencies?.[packageName]];
       if (dependency !== false && /^(?:file|workspace):/u.test(dependency))
         return true;
     }
@@ -370,8 +371,8 @@ export function normalizeConfigurationShellSource([
           /^([A-Za-z_]\w*)="\$\(cd "\$\(dirname "(?:\$0|\$\{BASH_SOURCE\[0\]\})"\)((?:\/\.\.)*)" && pwd\)"$/u.exec(
             assignment,
           );
-        const name = match?.[1] ?? '';
-        const ascents = match?.[2] ?? '';
+        const [name = ''] = [match?.[1]];
+        const [ascents = ''] = [match?.[2]];
         const levels =
           ascents.length === 0 ? 0 : ascents.split('/..').length - 1;
         const base = posix.dirname(sourcePath);
@@ -381,7 +382,7 @@ export function normalizeConfigurationShellSource([
     .replace(
       /\b([A-Za-z_]\w*)="\$\(cd "\$[A-Za-z_]\w*(?:\/\.\.)+" && pwd\)"/gu,
       (assignment) => {
-        const name = /^([A-Za-z_]\w*)=/u.exec(assignment)?.[1] ?? '';
+        const [name = ''] = [/^([A-Za-z_]\w*)=/u.exec(assignment)?.[1]];
         return protectedPath.test(assignment) ? assignment : `${name}=.`;
       },
     )

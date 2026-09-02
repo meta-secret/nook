@@ -76,10 +76,10 @@ export const TEAM_AUTHORITY_CATALOG: readonly TeamAuthority[] = [
 ] as const;
 
 export function teamAuthority(teamKey: TeamKey): TeamAuthority | false {
-  return (
-    TEAM_AUTHORITY_CATALOG.find((authority) => authority.key === teamKey) ??
-    false
-  );
+  const [defaulted1 = false] = [
+    TEAM_AUTHORITY_CATALOG.find((authority) => authority.key === teamKey),
+  ];
+  return defaulted1;
 }
 
 export function teamCortexRoot(teamKey: TeamKey): string {

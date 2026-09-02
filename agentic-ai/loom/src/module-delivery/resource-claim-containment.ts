@@ -88,7 +88,8 @@ export function buildModuleDeliveryReachability(
   const result = new Map<string, ReadonlySet<string>>();
   for (const taskId of request.order) {
     const dependencies = new Set<string>();
-    for (const dependency of request.dependencies.get(taskId) ?? []) {
+    const [defaulted1 = []] = [request.dependencies.get(taskId)];
+    for (const dependency of defaulted1) {
       dependencies.add(dependency);
       const ancestors = result.get(dependency);
       if (ancestors)

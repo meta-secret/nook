@@ -88,7 +88,8 @@ const validReferences = [
 ] as const;
 
 for (const reference of validReferences) {
-  test(`accepts Markdown policy reference: ${reference.split(']')[0] ?? ''}`, () => {
+  const [defaulted1 = ''] = [reference.split(']')[0]];
+  test(`accepts Markdown policy reference: ${defaulted1}`, () => {
     expect(compile(`# SRE\n\n${reference}\n`)).toEqual([]);
   });
 }

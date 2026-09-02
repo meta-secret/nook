@@ -142,11 +142,12 @@ function runtimeFacts(): readonly string[] {
       };
     }
   ).process;
-  return [
-    nodeProcess?.versions?.node ?? '',
-    nodeProcess?.env?.NOOK_COMPANION_WASM_PATH?.trim() ?? '',
-    nodeProcess?.cwd?.() ?? '',
+  const [nodeVersion = ''] = [nodeProcess?.versions?.node];
+  const [wasmPath = ''] = [
+    nodeProcess?.env?.NOOK_COMPANION_WASM_PATH?.trim(),
   ];
+  const [workingDirectory = ''] = [nodeProcess?.cwd?.()];
+  return [nodeVersion, wasmPath, workingDirectory];
 }
 `;
   const specialized = specialize(source);

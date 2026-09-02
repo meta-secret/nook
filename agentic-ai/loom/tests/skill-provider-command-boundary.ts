@@ -152,7 +152,10 @@ export function staticTypeScriptScriptLaunches(
   if (source.includes('{{')) return [];
   TYPESCRIPT_SCRIPT_REFERENCE.lastIndex = 0;
   return [...source.matchAll(TYPESCRIPT_SCRIPT_REFERENCE)]
-    .map((match) => match[1] ?? false)
+    .map((match) => {
+      const [, specifier = false] = match;
+      return specifier;
+    })
     .filter((specifier): specifier is string => {
       if (specifier === false) return false;
       const escaped = specifier.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
@@ -253,9 +256,10 @@ function analyzeCommand(request: RuntimeCommandRequest): void {
   }
   if (index > 0) {
     const scopedNames = new Set(
-      words
-        .slice(0, index)
-        .map((word) => word.value.split(/\+?=/u, 1)[0] ?? ''),
+      words.slice(0, index).map((word) => {
+        const [name = ''] = word.value.split(/\+?=/u, 1);
+        return name;
+      }),
     );
     if (scopedNames.has('PATH'))
       throw new Error('Command-scoped PATH mutation is forbidden.');
@@ -361,7 +365,7 @@ function analyzeResolvedCommand(resolved: ResolvedCommandRequest): void {
     analyzeCommandSource(nestedRequest);
     return;
   }
-  const functionBody = request.state.functions.get(command.value) ?? false;
+  const [functionBody = false] = [request.state.functions.get(command.value)];
   if (functionBody !== false) {
     const positionalArguments = request.state.positionalArguments;
     request.state.positionalArguments = words.slice(index + 1).map((word) => {
@@ -439,10 +443,11 @@ function analyzeResolvedCommand(resolved: ResolvedCommandRequest): void {
   )
     return;
   if (applyParentMutation([command.value, request.state, words, index])) return;
+  const [defaulted3 = ''] = [words[index]?.value];
   if (
     ['command', 'exec'].includes(command.value) &&
     request.state.positionalArguments === false &&
-    ['$@', '${@}'].includes(words[index]?.value ?? '')
+    ['$@', '${@}'].includes(defaulted3)
   )
     throw new Error('Unbound shell positional delegation is forbidden.');
   let normalized = false;
@@ -842,7 +847,7 @@ function runtimeExecutable(
         throw new Error('Dynamic runtime option construction is forbidden.');
       return false;
     }
-    const option = word.value.split('=')[0] ?? '';
+    const [option = ''] = [word.value.split('=')[0]];
     if (EXECUTABLE_RUNTIME_OPTIONS.has(option))
       throw new Error(
         `Executable ${request.runtime} runtime option is forbidden.`,
@@ -968,8 +973,8 @@ function expandPositionalWords(
       for (const match of word.value.matchAll(
         /\$(?:\{([1-9]\d*)\}|([1-9]\d*))/gu,
       )) {
-        const argument =
-          request.positionalArguments[Number(match[1] ?? match[2]) - 1];
+        const [defaulted4 = match[2]] = [match[1]];
+        const argument = request.positionalArguments[Number(defaulted4) - 1];
         value += word.value.slice(end, match.index);
         if (argument) {
           value += argument.value;

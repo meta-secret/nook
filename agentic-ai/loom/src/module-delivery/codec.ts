@@ -642,10 +642,11 @@ function legacyTaskTeam(request: LegacyTaskTeamRequest): TeamKey {
     (candidate) => candidate === request.kind,
   );
   if (!taskKind) return TeamKey.Ai;
+  const [defaulted1 = []] = [profile?.canonicalContextPaths];
   const teamRequest = {
     kind: taskKind,
     moduleRoot: request.moduleRoot,
-    expertContextPaths: profile?.canonicalContextPaths ?? [],
+    expertContextPaths: defaulted1,
   };
   const team = moduleDeliveryTaskTeam(teamRequest);
   return team === false ? TeamKey.Ai : team;

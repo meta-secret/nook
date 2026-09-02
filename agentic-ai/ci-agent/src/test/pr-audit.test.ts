@@ -471,7 +471,7 @@ function mockOctokitWithAgentHandoff(
 
 function createMockOctokit(options: MockOptions): Octokit {
   const headSha = "0123456789abcdef0123456789abcdef01234567";
-  const headRepository = options.headRepository ?? repoRef;
+  const [headRepository = (repoRef)] = [options.headRepository];
   const pulls = {
     get: async () => ({
       data: {
@@ -678,9 +678,10 @@ function createMockOctokit(options: MockOptions): Octokit {
       ],
     }),
   };
+  const [behindBy = 0, nativeConclusion = MockJobConclusion.Success, runStatus = MockRunStatus.Completed, unresolvedThreads = 0, dismissedThreads = 0] = [options.behindBy, options.nativeConclusion, options.runStatus, options.unresolvedThreads, options.dismissedThreads];
   const repos = {
     compareCommitsWithBasehead: async () => ({
-      data: { behind_by: options.behindBy ?? 0 },
+      data: { behind_by: behindBy },
     }),
     getBranchProtection: async () => ({
       data: {
@@ -717,7 +718,7 @@ function createMockOctokit(options: MockOptions): Octokit {
             .map((name) => ({
               conclusion:
                 name === "Native Rust verification"
-                  ? (options.nativeConclusion ?? MockJobConclusion.Success)
+                  ? nativeConclusion
                   : MockJobConclusion.Success,
               name,
               status: MockRunStatus.Completed,
@@ -745,7 +746,7 @@ function createMockOctokit(options: MockOptions): Octokit {
                     number: 410,
                   },
                 ],
-                status: options.runStatus ?? MockRunStatus.Completed,
+                status: runStatus,
               },
             ],
           },
@@ -796,7 +797,7 @@ function createMockOctokit(options: MockOptions): Octokit {
           },
           reviewThreads: {
             nodes: Array.from(
-              { length: options.unresolvedThreads ?? 0 },
+              { length: unresolvedThreads },
               () => ({
                 comments: {
                   nodes: [{ pullRequestReview: { state: "COMMENTED" } }],
@@ -804,7 +805,7 @@ function createMockOctokit(options: MockOptions): Octokit {
                 isResolved: false,
               }),
             ).concat(
-              Array.from({ length: options.dismissedThreads ?? 0 }, () => ({
+              Array.from({ length: dismissedThreads }, () => ({
                 comments: {
                   nodes: [{ pullRequestReview: { state: "DISMISSED" } }],
                 },

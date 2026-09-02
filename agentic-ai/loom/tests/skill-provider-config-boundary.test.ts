@@ -116,7 +116,7 @@ export function configurationScriptPaths(
       if (!source.includes(seam.marker))
         throw new Error(`Audited source seam is absent: ${importer}`);
       if (seam.targetPath === false || seam.digest === false) continue;
-      const target = graph.sources.get(seam.targetPath) ?? '';
+      const [target = ''] = [graph.sources.get(seam.targetPath)];
       const digest = new Bun.CryptoHasher('sha256')
         .update(target)
         .digest('hex');
@@ -149,8 +149,9 @@ export function configurationScriptPaths(
         workingDirectory: next.workingDirectory,
       };
       const candidates = resolutionCandidates(resolutionRequest);
-      const dependency =
-        candidates.find((path) => graph.sources.has(path)) ?? false;
+      const [dependency = false] = candidates.filter((path) =>
+        graph.sources.has(path),
+      );
       if (dependency === false) {
         const packageRequest = { sources: graph.sources, specifier };
         if (isRepositoryBackedPackageSpecifier(packageRequest))
@@ -187,7 +188,7 @@ export function configurationScriptPaths(
         }
         const specializationRequest = {
           arguments: reference.positionalArguments,
-          source: graph.sources.get(dependency) ?? '',
+          source: [graph.sources.get(dependency)].join(''),
         };
         const specializedSource = specializePositionalArguments(
           specializationRequest,
@@ -211,7 +212,7 @@ export function configurationScriptPaths(
         };
         const runtimeSourceRequest = {
           path: dependency,
-          source: graph.sources.get(dependency) ?? '',
+          source: [graph.sources.get(dependency)].join(''),
         };
         if (
           !applicationEdge &&
@@ -989,7 +990,6 @@ test('checks external and extensionless configuration scripts as executable sour
   expect(() => configurationScriptPaths(executableGraph)).toThrow(
     'Runnable script violates runtime boundary',
   );
-
   const nonExecutableGraph: ConfigurationScriptGraph = {
     executablePaths: new Set<string>(),
     roots: ['Taskfile.yml'],

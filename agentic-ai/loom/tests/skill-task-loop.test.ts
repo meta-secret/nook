@@ -258,10 +258,8 @@ test('a failing discovered package stops the gate', async () => {
 test('structural findings fail before any package command runs', async () => {
   const fixture = await fixtureRepository();
   try {
-    await writeFile(
-      join(fixture.repoRoot, fixture.packageRoots[1] ?? '', 'package.json'),
-      '{}',
-    );
+    const [defaulted1 = ''] = [fixture.packageRoots[1]];
+    await writeFile(join(fixture.repoRoot, defaulted1, 'package.json'), '{}');
     const requests: ExecutableSkillCommandRequest[] = [];
     const request = {
       action: 'verify',

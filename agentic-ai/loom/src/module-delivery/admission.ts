@@ -367,8 +367,9 @@ export function verifyModuleDeliveryEvidenceSubmission(
     authorized,
   };
   const accepted = validateModuleDeliveryEvidenceSubmission(validation);
-  const integratedTaskIds =
-    verification.state.integratedWriterFrontiers[0]?.integratedTaskIds ?? [];
+  const [integratedTaskIds = []] = [
+    verification.state.integratedWriterFrontiers[0]?.integratedTaskIds,
+  ];
   const registration: AcceptedModuleDeliveryEvidenceRegistration = {
     authority: verification.authority,
     evidence: accepted,
@@ -910,10 +911,10 @@ function terminallyBlockedTaskIds(
 ): readonly string[] {
   const failed = new Set(
     authority.acceptedPlan.plan.nodes
-      .filter(
-        ({ taskId }) =>
-          (authority.attemptsByTask.get(taskId) ?? 0) >=
-            authority.acceptedPlan.plan.maxAttempts &&
+      .filter(({ taskId }) => {
+        const [attempts = 0] = [authority.attemptsByTask.get(taskId)];
+        return (
+          attempts >= authority.acceptedPlan.plan.maxAttempts &&
           ![...authority.activeLeases.values()].some(
             (lease) => lease.taskId === taskId,
           ) &&
@@ -921,8 +922,9 @@ function terminallyBlockedTaskIds(
             (entry) =>
               entry.taskId === taskId &&
               entry.kind === ModuleDeliveryAttemptDispositionKind.Accepted,
-          ),
-      )
+          )
+        );
+      })
       .map(({ taskId }) => taskId),
   );
   for (const taskId of authority.acceptedPlan.topologicalOrder) {
@@ -976,7 +978,10 @@ function startingFrontier(request: StartingFrontierRequest): string {
 }
 
 function nextAttempt(request: AuthorityTaskRequest): number {
-  return (request.authority.attemptsByTask.get(request.taskId) ?? 0) + 1;
+  const [defaulted2 = 0] = [
+    request.authority.attemptsByTask.get(request.taskId),
+  ];
+  return defaulted2 + 1;
 }
 
 function attemptKey(identity: AttemptIdentity): string {

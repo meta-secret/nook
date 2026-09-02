@@ -354,7 +354,7 @@ function validEntryIdentifier(entry: CortexIdentifierEntry): boolean {
 
 function validateLocator(args: ValidateLocatorArgs): void {
   const [relativePath, fragment, ...extra] = args.entry.locator.split('#');
-  const locatorSegments = relativePath?.split('/') ?? [];
+  const locatorSegments = relativePath ? relativePath.split('/') : [];
   if (
     extra.length > 0 ||
     !relativePath ||

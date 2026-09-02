@@ -263,5 +263,6 @@ function nodeText(node: RootContent): string {
 }
 
 function nodeLine(node: Nodes): number {
-  return node.position?.start.line ?? 1;
+  const [line = 1] = [node.position?.start.line];
+  return line;
 }

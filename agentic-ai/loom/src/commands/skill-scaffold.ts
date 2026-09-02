@@ -85,14 +85,15 @@ export function findExistingSkillCard(
     };
     return skillOwnerDynamicSkillsDirectory(directoryArgs);
   });
-  return (
+  const [defaulted1 = false] = [
     ownerRoots
       .flatMap((ownerRoot) => [
         path.join(ownerRoot, `${args.slug}.md`),
         path.join(ownerRoot, args.slug),
       ])
-      .find((candidatePath) => existsSync(candidatePath)) ?? false
-  );
+      .find((candidatePath) => existsSync(candidatePath)),
+  ];
+  return defaulted1;
 }
 
 export function insertSkillCatalogEntry(

@@ -283,10 +283,11 @@ function decodeFinding(request: DecodeFindingRequest): CortexStructureFinding {
     expected: FINDING_KEYS,
     path,
   });
-  const code =
+  const [code = false] = [
     Object.values(CortexStructureFindingCode).find(
       (candidate) => candidate === request.transport.code,
-    ) ?? false;
+    ),
+  ];
   if (code === false) {
     throw resultFailure({
       message: 'Invalid Cortex finding code.',

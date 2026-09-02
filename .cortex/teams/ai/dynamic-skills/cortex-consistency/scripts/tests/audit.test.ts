@@ -333,6 +333,7 @@ type PersistedRequestArgs = {
 function persistedRequest(
   args: PersistedRequestArgs,
 ): AuditCortexContractsArgs {
+  const { references = [] } = args;
   return {
     registry: {
       contexts: [],
@@ -357,7 +358,7 @@ function persistedRequest(
     documents: [
       {
         relativePath: RUST_POLICY,
-        references: args.references ?? [],
+        references,
         commands: [],
       },
       { relativePath: SCHEMA_POLICY, references: [], commands: [] },

@@ -118,7 +118,8 @@ function edge(request: EvidenceEdgeRequest): ModuleDeliveryEdgeContract {
 }
 
 function runtime(existingFixture?: GitFixture): Runtime {
-  const fixture = existingFixture ?? createGitFixture();
+  let fixture = existingFixture;
+  if (!fixture) fixture = createGitFixture();
   const provider: ModuleDeliveryReadOnlyNodeV2 = {
     kind: ModuleDeliveryTaskKind.ReadOnly,
     taskId: 'core-evidence',

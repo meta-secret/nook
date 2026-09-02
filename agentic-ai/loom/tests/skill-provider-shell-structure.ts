@@ -58,7 +58,9 @@ function stripHeredocs(source: string): StrippedHeredocs {
   const output: string[] = [];
   const pending: Delimiter[] = [];
   const substitutions: string[] = [];
-  for (const line of source.match(/[^\n]*(?:\n|$)/gu) ?? []) {
+  const lines = source.match(/[^\n]*(?:\n|$)/gu);
+  if (!lines) return { source, substitutions };
+  for (const line of lines) {
     const active = pending[0];
     if (active) {
       const candidate = (
@@ -88,7 +90,7 @@ function heredocLine(source: string): HeredocLine {
   let quote = '';
   let wordActive = false;
   for (let index = 0; index < source.length; index += 1) {
-    const character = source[index] ?? '';
+    const [character = ''] = [source[index]];
     if (quote) {
       if (character === '\\' && quote === '"') index += 1;
       else if (character === quote) quote = '';
@@ -151,7 +153,7 @@ function compoundSubstitutions(source: string): readonly string[] {
   const substitutions: string[] = [];
   let quote = '';
   for (let index = 0; index < source.length; index += 1) {
-    const character = source[index] ?? '';
+    const [character = ''] = [source[index]];
     if (quote) {
       if (character === '\\' && quote === '"') {
         index += 1;
@@ -209,13 +211,14 @@ function delimiterWord(request: DelimiterRequest): DelimiterWord | false {
   let quoted = false;
   let index = request.start;
   for (; index < request.source.length; index += 1) {
-    const character = request.source[index] ?? '';
+    const [character = ''] = [request.source[index]];
     if (quote) {
       if (character === quote) quote = '';
       else if (character === '\\' && quote === '"') {
         quoted = true;
         index += 1;
-        value += request.source[index] ?? '';
+        const [defaulted2 = ''] = [request.source[index]];
+        value += defaulted2;
       } else value += character;
       continue;
     }
@@ -227,7 +230,8 @@ function delimiterWord(request: DelimiterRequest): DelimiterWord | false {
     if (character === '\\') {
       quoted = true;
       index += 1;
-      value += request.source[index] ?? '';
+      const [defaulted3 = ''] = [request.source[index]];
+      value += defaulted3;
       continue;
     }
     if (/\s/u.test(character) || ';&|()<>'.includes(character)) break;
@@ -242,7 +246,7 @@ function extractFunctions(inspection: ShellStructureInspection): string {
   let quote = '';
   let wordActive = false;
   for (let index = 0; index < inspection.source.length; index += 1) {
-    const character = inspection.source[index] ?? '';
+    const [character = ''] = [inspection.source[index]];
     if (quote) {
       if (character === '\\' && quote === '"') index += 1;
       else if (character === quote) quote = '';
@@ -277,7 +281,8 @@ function extractFunctions(inspection: ShellStructureInspection): string {
       wordActive = true;
       continue;
     }
-    const start = (match.index ?? 0) + match[0].length;
+    const [defaulted4 = 0] = [match.index];
+    const start = defaulted4 + match[0].length;
     const closingRequest: ClosingRequest = {
       closing: '}',
       opening: '{',
@@ -285,7 +290,8 @@ function extractFunctions(inspection: ShellStructureInspection): string {
       start: index + start,
     };
     const end = findClosing(closingRequest);
-    const name = match[1] ?? match[2] ?? '';
+    const [defaulted5 = match[2]] = [match[1]];
+    const [name = ''] = [defaulted5];
     const body = inspection.source.slice(index + start, end);
     const previous = inspection.functions.get(name);
     inspection.functions.set(name, previous ? `${previous}\n${body}` : body);
@@ -301,7 +307,7 @@ function findClosing(request: ClosingRequest): number {
   let quote = '';
   let wordActive = false;
   for (let index = request.start; index < request.source.length; index += 1) {
-    const character = request.source[index] ?? '';
+    const [character = ''] = [request.source[index]];
     if (quote.length > 0) {
       if (character === '\\') index += 1;
       else if (character === quote) quote = '';
@@ -334,7 +340,7 @@ export function shellSubstitutionBodies(source: string): readonly string[] {
   const bodies: string[] = [];
   let quote = '';
   for (let index = 0; index < source.length; index += 1) {
-    const character = source[index] ?? '';
+    const [character = ''] = [source[index]];
     if (quote === "'") {
       if (character === "'") quote = '';
       continue;

@@ -77,7 +77,8 @@ export function runnableCommandSources(
 export function taskIncludeSpecifiers(source: string): readonly string[] {
   assertRunnableConfigurationBytes(source);
   const document = Bun.YAML.parse(source) as ConfigurationNode;
-  const includes = mapping(mapping(document).includes ?? false);
+  const [includeNode = false] = [mapping(document).includes];
+  const includes = mapping(includeNode);
   return bounded(
     Object.values(includes).flatMap((value) => {
       if (typeof value === 'string') return [value];
@@ -122,9 +123,9 @@ function taskCommands(request: TaskCommandRequest): readonly string[] {
     taskfileDirectory: posix.dirname(request.taskfilePath),
   };
   const rootValues = taskStaticVariables(rootVariableRequest);
-  for (let index = 0; index < commands.length; index += 1) {
+  for (const [index, source] of commands.entries()) {
     const templateRequest: TaskTemplateRequest = {
-      source: commands[index] ?? '',
+      source,
       values: rootValues,
     };
     const shellRequest: TaskShellVariableRequest = {
@@ -133,7 +134,8 @@ function taskCommands(request: TaskCommandRequest): readonly string[] {
     };
     commands[index] = resolveTaskShellVariables(shellRequest);
   }
-  for (const task of Object.values(mapping(root.tasks ?? false))) {
+  const [tasks = false] = [root.tasks];
+  for (const task of Object.values(mapping(tasks))) {
     const node = mapping(task);
     if ('dotenv' in node)
       throw new Error('Task dotenv configuration is forbidden.');
@@ -144,23 +146,27 @@ function taskCommands(request: TaskCommandRequest): readonly string[] {
     };
     collectShellVariables(shellVariableRequest);
     for (const value of [node.cmds, node.status]) {
+      const [commandList = false] = [value];
       const commandRequest: CommandCollectionRequest = {
-        value: value ?? false,
+        value: commandList,
         target: commands,
       };
       collectCommandList(commandRequest);
     }
+    const [dependencies = false] = [node.deps];
     const dependencyRequest: CommandCollectionRequest = {
-      value: node.deps ?? false,
+      value: dependencies,
       target: commands,
     };
     collectTaskDependencies(dependencyRequest);
+    const [preconditions = false] = [node.preconditions];
     const shellRequest: CommandCollectionRequest = {
-      value: node.preconditions ?? false,
+      value: preconditions,
       target: commands,
     };
     collectTaskShellList(shellRequest);
-    for (const value of Object.values(mapping(node.vars ?? false))) {
+    const [taskVariables = false] = [node.vars];
+    for (const value of Object.values(mapping(taskVariables))) {
       const shell = mapping(value).sh;
       if (typeof shell === 'string') commands.push(shell);
     }
@@ -177,9 +183,10 @@ function taskCommands(request: TaskCommandRequest): readonly string[] {
     const directory = resolveTaskTemplate(directoryRequest);
     const environmentRequest: TaskEnvironmentRequest = { root, task: node };
     const environment = taskEnvironment(environmentRequest);
-    for (let index = start; index < commands.length; index += 1) {
+    for (const [index, source] of commands.entries()) {
+      if (index < start) continue;
       const templateRequest: TaskTemplateRequest = {
-        source: commands[index] ?? '',
+        source,
         values,
       };
       const shellVariableRequest: TaskShellVariableRequest = {
@@ -195,18 +202,22 @@ function taskCommands(request: TaskCommandRequest): readonly string[] {
 }
 
 function collectShellVariables(request: ShellVariableCollectionRequest): void {
-  for (const field of ['vars', 'env'] as const)
-    for (const value of Object.values(mapping(request.node[field] ?? false))) {
+  for (const field of ['vars', 'env'] as const) {
+    const [entries = false] = [request.node[field]];
+    for (const value of Object.values(mapping(entries))) {
       const shell = mapping(value).sh;
       if (typeof shell === 'string') request.target.push(shell);
     }
+  }
 }
 
 function taskEnvironment(request: TaskEnvironmentRequest): string {
   const values = new Map<string, string>();
+  const [rootEnvironment = false] = [request.root.env];
+  const [taskEnvironment = false] = [request.task.env];
   for (const environment of [
-    mapping(request.root.env ?? false),
-    mapping(request.task.env ?? false),
+    mapping(rootEnvironment),
+    mapping(taskEnvironment),
   ])
     for (const [name, value] of Object.entries(environment))
       if (/^[A-Za-z_]\w*$/u.test(name) && typeof value === 'string')
@@ -233,10 +244,9 @@ function taskStaticVariables(
     ['WEB_ROOT', 'nook-app/nook-web/nook-web-app'],
     ['WEB_SHARED_ROOT', 'nook-app/nook-web/nook-web-shared'],
   ]);
-  for (const variables of [
-    mapping(request.root.vars ?? false),
-    mapping(request.task.vars ?? false),
-  ])
+  const [rootVariables = false] = [request.root.vars];
+  const [taskVariables = false] = [request.task.vars];
+  for (const variables of [mapping(rootVariables), mapping(taskVariables)])
     for (const [name, value] of Object.entries(variables)) {
       if (typeof value === 'string') values.set(name, value);
       const shell = mapping(value).sh;
@@ -264,14 +274,15 @@ function resolveTaskTemplate(request: TaskTemplateRequest): string {
       const match = /^\{\{default "([^"]*)" \.([A-Za-z_]\w*)\}\}$/u.exec(
         template,
       );
-      const fallback = match?.[1] ?? '';
-      const name = match?.[2] ?? '';
+      const [fallback = ''] = [match?.[1]];
+      const [name = ''] = [match?.[2]];
       const value = request.values.get(name);
       return value && !value.includes('{{') ? value : fallback;
     })
     .replace(/\{\{\.([A-Za-z_]\w*)\}\}/gu, (template) => {
-      const name = /^\{\{\.([A-Za-z_]\w*)\}\}$/u.exec(template)?.[1] ?? '';
-      return request.values.get(name) ?? template;
+      const [name = ''] = [/^\{\{\.([A-Za-z_]\w*)\}\}$/u.exec(template)?.[1]];
+      const [defaulted13 = template] = [request.values.get(name)];
+      return defaulted13;
     });
 }
 

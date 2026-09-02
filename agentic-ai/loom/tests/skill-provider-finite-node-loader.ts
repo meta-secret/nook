@@ -132,7 +132,7 @@ function candidateUsesAmbientEvaluatorBindings(
       AMBIENT_EVALUATOR_BINDINGS.has(node.text)
     ) {
       const symbol = validation.checker.getSymbolAtLocation(node);
-      const declarations = symbol?.declarations ?? [];
+      const [declarations = []] = [symbol?.declarations];
       if (
         declarations.length === 0 ||
         declarations.some(
@@ -159,8 +159,8 @@ function descendingNonOverlappingReplacements(
   while (pending.length > 0) {
     let latestIndex = 0;
     for (let index = 1; index < pending.length; index += 1) {
-      const candidate = pending[index] ?? false;
-      const latest = pending[latestIndex] ?? false;
+      const [candidate = false] = [pending[index]];
+      const [latest = false] = [pending[latestIndex]];
       if (
         candidate !== false &&
         latest !== false &&
@@ -169,10 +169,10 @@ function descendingNonOverlappingReplacements(
         latestIndex = index;
       }
     }
-    const replacement = pending[latestIndex] ?? false;
+    const [replacement = false] = [pending[latestIndex]];
     if (replacement === false) return false;
     pending.splice(latestIndex, 1);
-    const previous = ordered[ordered.length - 1] ?? false;
+    const [previous = false] = [ordered[ordered.length - 1]];
     if (previous !== false && replacement.end > previous.start) return false;
     ordered.push(replacement);
   }
@@ -193,7 +193,7 @@ function finiteNodeCapabilityImportReplacement(
   ) {
     return false;
   }
-  const clause = inspection.declaration.importClause ?? false;
+  const [clause = false] = [inspection.declaration.importClause];
   if (
     clause === false ||
     clause.name ||
@@ -205,7 +205,7 @@ function finiteNodeCapabilityImportReplacement(
   }
   const bindings: string[] = [];
   for (const specifier of clause.namedBindings.elements) {
-    const imported = specifier.propertyName?.text ?? specifier.name.text;
+    const [imported = specifier.name.text] = [specifier.propertyName?.text];
     if (imported !== AllowedProcessCapability.ChangeDirectory) return false;
     bindings.push(`const ${specifier.name.text} = safeProcessChangeDirectory;`);
   }
@@ -227,8 +227,9 @@ function closedProcessViewReplacements(
   if (inspection.statement.declarationList.declarations.length !== 1) {
     return false;
   }
-  const declaration =
-    inspection.statement.declarationList.declarations[0] ?? false;
+  const [declaration = false] = [
+    inspection.statement.declarationList.declarations[0],
+  ];
   if (
     declaration === false ||
     !ts.isIdentifier(declaration.name) ||
@@ -323,13 +324,13 @@ function outermostAccessExpression(node: ts.Identifier): ts.Expression {
 function finiteNodeLoaderCandidate(
   declaration: ts.FunctionDeclaration,
 ): FiniteNodeLoaderCandidate | false {
-  const name = declaration.name ?? false;
-  const parameterDeclaration = declaration.parameters[0] ?? false;
+  const [name = false] = [declaration.name];
+  const [parameterDeclaration = false] = [declaration.parameters[0]];
   const parameter =
     parameterDeclaration !== false && ts.isIdentifier(parameterDeclaration.name)
       ? parameterDeclaration.name
       : false;
-  const body = declaration.body ?? false;
+  const [body = false] = [declaration.body];
   const adapterInspection: ExactEvaluatorAdapterInspection | false =
     parameter === false || body === false ? false : { body, parameter };
   if (
@@ -362,7 +363,7 @@ type ExactEvaluatorAdapterInspection = {
 function isExactEvaluatorAdapter(
   inspection: ExactEvaluatorAdapterInspection,
 ): boolean {
-  const tryStatement = inspection.body.statements[0] ?? false;
+  const [tryStatement = false] = [inspection.body.statements[0]];
   if (
     inspection.body.statements.length !== 1 ||
     tryStatement === false ||
@@ -374,9 +375,11 @@ function isExactEvaluatorAdapter(
   ) {
     return false;
   }
-  const loaderStatement = tryStatement.tryBlock.statements[0] ?? false;
-  const loaderReturn = tryStatement.tryBlock.statements[1] ?? false;
-  const fallbackReturn = tryStatement.catchClause.block.statements[0] ?? false;
+  const [loaderStatement = false] = [tryStatement.tryBlock.statements[0]];
+  const [loaderReturn = false] = [tryStatement.tryBlock.statements[1]];
+  const [fallbackReturn = false] = [
+    tryStatement.catchClause.block.statements[0],
+  ];
   const loaderInspection: EvaluatorStatementInspection = {
     parameter: inspection.parameter,
     statement: loaderStatement,
@@ -417,8 +420,9 @@ function evaluatorLoaderBinding(
   ) {
     return false;
   }
-  const declaration =
-    inspection.statement.declarationList.declarations[0] ?? false;
+  const [declaration = false] = [
+    inspection.statement.declarationList.declarations[0],
+  ];
   if (declaration === false || !ts.isIdentifier(declaration.name)) return false;
   const initializer = declaration.initializer
     ? unwrapTransparentExpression(declaration.initializer)
@@ -432,8 +436,8 @@ function evaluatorLoaderBinding(
   ) {
     return false;
   }
-  const parameterArgument = initializer.arguments[0] ?? false;
-  const bodyArgument = initializer.arguments[1] ?? false;
+  const [parameterArgument = false] = [initializer.arguments[0]];
+  const [bodyArgument = false] = [initializer.arguments[1]];
   return parameterArgument !== false &&
     bodyArgument !== false &&
     ts.isStringLiteralLike(parameterArgument) &&
@@ -452,9 +456,7 @@ function isLoaderReturn(inspection: LoaderReturnInspection): boolean {
   const expression = returnedExpression(inspection.statement);
   if (expression === false || !ts.isAwaitExpression(expression)) return false;
   const call = unwrapTransparentExpression(expression.expression);
-  const argument = ts.isCallExpression(call)
-    ? (call.arguments[0] ?? false)
-    : false;
+  const [argument = false] = ts.isCallExpression(call) ? call.arguments : [];
   return (
     ts.isCallExpression(call) &&
     ts.isIdentifier(call.expression) &&
@@ -484,7 +486,7 @@ function isIndirectEvalReturn(
   ) {
     return false;
   }
-  const argument = call.arguments[0] ?? false;
+  const [argument = false] = [call.arguments[0]];
   if (
     argument === false ||
     !ts.isTemplateExpression(argument) ||
@@ -493,12 +495,12 @@ function isIndirectEvalReturn(
   ) {
     return false;
   }
-  const span = argument.templateSpans[0] ?? false;
+  const [span = false] = [argument.templateSpans[0]];
   if (span === false || span.literal.text !== ')') return false;
   const stringify = unwrapTransparentExpression(span.expression);
-  const stringifyArgument = ts.isCallExpression(stringify)
-    ? (stringify.arguments[0] ?? false)
-    : false;
+  const [stringifyArgument = false] = ts.isCallExpression(stringify)
+    ? stringify.arguments
+    : [];
   return (
     ts.isCallExpression(stringify) &&
     ts.isPropertyAccessExpression(stringify.expression) &&
@@ -548,7 +550,7 @@ function finiteNodeLoaderModules(
         safe = false;
         return;
       }
-      const argument = parent.arguments[0] ?? false;
+      const [argument = false] = [parent.arguments[0]];
       if (
         argument === false ||
         parent.arguments.length !== 1 ||

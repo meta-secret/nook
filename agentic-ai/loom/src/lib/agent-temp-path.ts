@@ -51,7 +51,7 @@ export function selectTaskAnchorCommit(selection: TaskAnchorSelection): string {
   const checkoutSuffix = ` to ${selection.branchName}`;
   const lines = selection.reflog.split('\n');
   for (let index = lines.length - 1; index >= 0; index -= 1) {
-    const line = lines[index] ?? '';
+    const [line = ''] = [lines[index]];
     const [commit = '', subject = ''] = line.split('\t', 2);
     if (
       selection.branchName.length > 0 &&
@@ -64,7 +64,7 @@ export function selectTaskAnchorCommit(selection: TaskAnchorSelection): string {
   }
 
   for (let index = lines.length - 1; index >= 0; index -= 1) {
-    const line = lines[index] ?? '';
+    const [line = ''] = [lines[index]];
     const [commit = ''] = line.split('\t', 1);
     if (/^[0-9a-f]{40}$/.test(commit)) {
       return commit;
