@@ -13,6 +13,12 @@ This is a P1 documentation rule for every `.cortex` Markdown file.
 - A Cortex writer that reads, reviews, authors, or refactors a large list must
   split it into logical groups organized around the items' domains.
 - Arbitrary chunking by item count does not satisfy this rule.
+- Most Cortex instruction sets contain both positive and negative constraints.
+  - Begin their instructional structure with `Required actions`, followed by
+    `Prohibited actions`.
+  - Place domain-specific groups beneath the correct branch.
+  - Omit a branch only when the content genuinely contains no instruction of
+    that kind.
 
 ## Purpose
 
@@ -64,6 +70,8 @@ Warning signs include:
 - markdown tables used for multi-attribute inventories;
 - a large list that remains flat or uses item-count chunks instead of domain
   groups;
+- positive and negative constraints interleaved inside one domain-specific
+  group;
 - nested conditions inside a single clause;
 - ASCII directory trees (`├──`, `└──`) or nested file listings in Markdown;
 - ASCII box drawings (`+---+`, `| |`) or manual ASCII flowcharts.
@@ -72,27 +80,46 @@ Warning signs include:
 
 Split the idea before writing the final prose.
 
-1. List each fact, rule, actor, or command as its own unit.
-2. Write one short sentence per unit when the fact stands alone.
-3. Use a bullet list when several units share one topic.
-4. Split every large list into logical groups based on the items' domains.
-   - Use meaningful headings or parent items that name the domains.
-   - Do not divide items into arbitrary count-based chunks.
-5. Use a nested list only when a parent item owns clear children.
-6. **Prefer enclosed structured lists.**
-   - Use a table only for compact repeated fields or exact mappings.
-   - Keep every table cell short and free of procedural prose.
-   - Replace explanatory or multi-clause tables with enclosed structured lists.
-   - Enclose related properties under a bold primary item with nested child bullets.
-   - Enclosed lists are clean, wrap naturally, and are easily parsed and maintained by AI agents.
-7. **Never include project or directory trees in Cortex files.**
-   - Project structure is dynamic.
-   - Agents must investigate repository structure directly using tools (`list_dir`, `find_by_name`, `grep_search`).
-   - Having directory trees in docs is bad practice.
-   - Maximum allowed is a flat list when a directory represents an entire top-level subsystem (such as `infra`, `nook-app`, `agentic-ai`, `preflight`).
-8. **Never use ASCII graphics, ASCII boxes, or manual text diagrams.**
-   - Use Mermaid (` ```mermaid `) for flowcharts, sequence diagrams, and architecture maps.
-   - Use structured ordered or unordered lists for execution procedures.
+Instruction sets with both kinds of constraint use the paired branches below.
+
+### Required actions
+
+- **Atomic content**
+  1. List each fact, rule, actor, or command as its own unit.
+  2. Write one short sentence per unit when the fact stands alone.
+- **List structure**
+  1. Use a bullet list when several units share one topic.
+  2. Split every large list into logical groups based on the items' domains.
+     - Use meaningful headings or parent items that name the domains.
+  3. Use a nested list only when a parent item owns clear children.
+- **Enclosed structured lists**
+  - Prefer enclosed structured lists.
+  - Use a table only for compact repeated fields or exact mappings.
+  - Keep every table cell short and free of procedural prose.
+  - Replace explanatory or multi-clause tables with enclosed structured lists.
+  - Enclose related properties under a bold primary item with nested child
+    bullets.
+  - Enclosed lists are clean, wrap naturally, and remain easy for AI agents to
+    parse and maintain.
+- **Repository structure**
+  - Investigate repository structure directly using tools such as `list_dir`,
+    `find_by_name`, and `grep_search`.
+  - Use at most a flat list when a directory represents an entire top-level
+    subsystem such as `infra`, `nook-app`, `agentic-ai`, or `preflight`.
+- **Diagrams and procedures**
+  - Use Mermaid (` ```mermaid `) for flowcharts, sequence diagrams, and
+    architecture maps.
+  - Use structured ordered or unordered lists for execution procedures.
+
+### Prohibited actions
+
+- **List grouping**
+  - Do not divide items into arbitrary count-based chunks.
+- **Repository structure**
+  - Do not include project or directory trees in Cortex files.
+  - Static trees describe dynamic project structure and quickly become stale.
+- **Diagrams**
+  - Do not use ASCII graphics, ASCII boxes, or manual text diagrams.
 
 Use [Cortex structured articles](cortex-article-structure/SKILL.md) to choose the
 body shape. This rule governs sentence complexity and content conciseness. The
@@ -194,6 +221,8 @@ Full rewritten example:
 - [ ] Replace tables with enclosed structured lists with nested bullet attributes.
 - [ ] Split every large list into logical groups based on the items' domains
       during reading, review, authoring, and refactoring.
+- [ ] Put `Required actions` and `Prohibited actions` before domain groups when
+      an instruction set contains both kinds of constraint.
 - [ ] Remove project/directory trees and replace with dynamic inspection or flat subsystem lists.
 - [ ] Replace ASCII graphics with Mermaid diagrams or structured lists.
 - [ ] Apply the same rule to this skill card when updating it.
