@@ -9,25 +9,35 @@ const rootDir = path.dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: path.join(rootDir, '.env.test.local') })
 
 /** Fast GitHub sync in e2e — production default stays 60s via app code. */
-process.env.VITE_VAULT_SYNC_INTERVAL_MS ??= '500'
+process.env.VITE_VAULT_SYNC_INTERVAL_MS = ((...[v = '500']) => v)(
+  process.env.VITE_VAULT_SYNC_INTERVAL_MS,
+)
 /** Fast idle auto-lock in e2e — production default stays 5 minutes via app code. */
-process.env.VITE_VAULT_IDLE_TIMEOUT_MS ??= '2500'
-process.env.VITE_VAULT_IDLE_WARNING_MS ??= '0'
-process.env.NOOK_GITHUB_POLL_MS ??= '3000'
+process.env.VITE_VAULT_IDLE_TIMEOUT_MS = ((...[v = '2500']) => v)(
+  process.env.VITE_VAULT_IDLE_TIMEOUT_MS,
+)
+process.env.VITE_VAULT_IDLE_WARNING_MS = ((...[v = '0']) => v)(
+  process.env.VITE_VAULT_IDLE_WARNING_MS,
+)
+process.env.NOOK_GITHUB_POLL_MS = ((...[v = '3000']) => v)(
+  process.env.NOOK_GITHUB_POLL_MS,
+)
 
 const isCi = !!process.env.CI
 const isUiDemo = process.env.NOOK_UI_DEMO === '1'
 const configuredWorkers = Number.parseInt(
-  process.env.PLAYWRIGHT_WORKERS ?? '',
+  ((v) => (v ? v : ''))(process.env.PLAYWRIGHT_WORKERS),
   10,
 )
 const hasConfiguredWorkers =
   Number.isSafeInteger(configuredWorkers) && configuredWorkers > 0
-const chromiumExecutablePath =
-  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim() ?? ''
+const chromiumExecutablePath = ((v) => (v ? v : ''))(
+  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim(),
+)
 const distDir = path.join(rootDir, 'dist')
-const uiDemoOutputDir =
-  process.env.NOOK_UI_DEMO_OUTPUT_DIR ?? path.join(rootDir, 'ui-demo-results')
+const [uiDemoOutputDir = path.join(rootDir, 'ui-demo-results')] = [
+  process.env.NOOK_UI_DEMO_OUTPUT_DIR,
+]
 const webPort = isUiDemo ? 5183 : 5173
 /** One shared preview/dev server is safe: app state lives in per-context IndexedDB; provider routes are per-page. */
 
@@ -92,7 +102,9 @@ export default defineConfig({
           VITE_E2E_EXPOSE_VAULT: 'true',
           VITE_VAULT_IDLE_TIMEOUT_MS: process.env.VITE_VAULT_IDLE_TIMEOUT_MS,
           VITE_VAULT_IDLE_WARNING_MS: process.env.VITE_VAULT_IDLE_WARNING_MS,
-          NOOK_E2E_SYNC_PROVIDER: process.env.NOOK_E2E_SYNC_PROVIDER ?? 'file',
+          NOOK_E2E_SYNC_PROVIDER: ((...[v = 'file']) => v)(
+            process.env.NOOK_E2E_SYNC_PROVIDER,
+          ),
         }
       : {
           VITE_VAULT_SYNC_INTERVAL_MS: process.env.VITE_VAULT_SYNC_INTERVAL_MS,
@@ -102,8 +114,10 @@ export default defineConfig({
           VITE_E2E_EXPOSE_VAULT: 'true',
           // Capture debug logs so auto-dump-on-failure carries a useful trail
           // (dev server only; prebuilt CI dist keeps the `info` default).
-          VITE_LOG_LEVEL: process.env.VITE_LOG_LEVEL ?? 'debug',
-          NOOK_E2E_SYNC_PROVIDER: process.env.NOOK_E2E_SYNC_PROVIDER ?? 'file',
+          VITE_LOG_LEVEL: ((...[v = 'debug']) => v)(process.env.VITE_LOG_LEVEL),
+          NOOK_E2E_SYNC_PROVIDER: ((...[v = 'file']) => v)(
+            process.env.NOOK_E2E_SYNC_PROVIDER,
+          ),
         },
   },
   projects: [

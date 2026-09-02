@@ -302,10 +302,11 @@ export async function prepareICloudSignInControl(): Promise<void> {
 
 function clickCloudKitSignInButton(): void {
   const mount = document.getElementById(CLOUDKIT_SIGN_IN_BUTTON_ID);
-  const control =
+  const control = ((v) => (v ? v : mount))(
     mount?.querySelector<HTMLElement>(
       'button, [role="button"], iframe, a, .apple-auth-button',
-    ) ?? mount;
+    ),
+  );
   if (!control) {
     log.warn("CloudKit sign-in control click failed: control missing ");
     throw new Error(

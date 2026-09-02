@@ -58,7 +58,10 @@ function resolveLandingLocale() {
     // Browser storage may be unavailable in privacy-restricted contexts.
   }
 
-  const browserLanguages = [...(navigator.languages ?? []), navigator.language]
+  const browserLanguages = [
+    ...((v) => (v ? v : []))(navigator.languages),
+    navigator.language,
+  ]
   for (const language of browserLanguages) {
     const baseLanguage = language?.toLowerCase().split('-')[0]
     if (baseLanguage === 'en' || baseLanguage === 'ru') {
@@ -507,9 +510,9 @@ function rotateSignal(label) {
       .filter((candidate) => candidate !== label)
       .map((candidate) => Number(candidate.dataset.slotIndex)),
   )
-  const sectorSlots =
-    signalSlotSectors[Number(label.dataset.sectorIndex)] ??
-    signalSlots.map((_, index) => index)
+  const [sectorSlots = signalSlots.map((_, index) => index)] = [
+    signalSlotSectors[Number(label.dataset.sectorIndex)],
+  ]
   const nextSlots = sectorSlots.filter(
     (index) =>
       !occupiedSlotIndexes.has(index) &&

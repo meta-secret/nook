@@ -135,7 +135,7 @@ test.describe('application logging', () => {
               }
             ).__nookLog
             await log?.flush()
-            return (await log?.count()) ?? -1
+            return ((...[v = -1]) => v)(await log?.count())
           }),
         { timeout: UI_TIMEOUT_MS * 2 },
       )
@@ -151,13 +151,14 @@ test.describe('application logging', () => {
     await page.getByTestId('logs-capture-level').selectOption('debug')
     await expect
       .poll(async () =>
-        page.evaluate(
-          () =>
+        page.evaluate(() =>
+          ((v) => (v ? v : ''))(
             (
               window as Window & {
                 __nookLog?: { getLevel: () => string }
               }
-            ).__nookLog?.getLevel() ?? '',
+            ).__nookLog?.getLevel(),
+          ),
         ),
       )
       .toBe('debug')

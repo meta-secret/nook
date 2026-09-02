@@ -128,8 +128,8 @@ function parseJoinValue(
 ): { deviceId: string; publicKey: string } {
   const payload = JSON.parse(value) as JoinRequestJson
   return {
-    deviceId: payload.device_id ?? key,
-    publicKey: payload.public_key ?? '',
+    deviceId: ((...[v = key]) => v)(payload.device_id),
+    publicKey: ((v) => (v ? v : ''))(payload.public_key),
   }
 }
 
@@ -146,13 +146,19 @@ function collectPasswordEntries(vault: StoredVaultYaml): PasswordEntryYaml[] {
 export function parseVaultYamlSnapshot(yaml: string): VaultYamlSnapshot {
   const vault = parseYaml(yaml) as StoredVaultYaml
 
-  const secretIds = (vault.secrets ?? []).map((record) => record.id)
-  const authPkIds = (vault.auth ?? []).map((record) => record.pk_id)
-  const memberPkIds = (vault.members ?? []).map((record) => record.pk_id)
-  const joinEntries = (vault.joins ?? []).map((record) =>
+  const secretIds = ((v) => (v ? v : []))(vault.secrets).map(
+    (record) => record.id,
+  )
+  const authPkIds = ((v) => (v ? v : []))(vault.auth).map(
+    (record) => record.pk_id,
+  )
+  const memberPkIds = ((v) => (v ? v : []))(vault.members).map(
+    (record) => record.pk_id,
+  )
+  const joinEntries = ((v) => (v ? v : []))(vault.joins).map((record) =>
     parseJoinValue(record.id, record.data),
   )
-  const sentinelShareCount = (vault.sentinel_shares ?? []).length
+  const sentinelShareCount = ((v) => (v ? v : []))(vault.sentinel_shares).length
 
   const passwordEntries = collectPasswordEntries(vault)
   const hasPasswordEnvelope = passwordEntries.length > 0
@@ -201,8 +207,8 @@ function eventSecretToStored(secret?: EventSecretRecord): EventSecretParse {
     kind: EventSecretParseKind.Valid,
     secret: {
       id: secret.id,
-      type: secret.type ?? StoredSecretRecordType.ApiKey,
-      data: secret.ciphertext ?? '',
+      type: ((...[v = StoredSecretRecordType.ApiKey]) => v)(secret.type),
+      data: ((v) => (v ? v : ''))(secret.ciphertext),
     },
   }
 }
@@ -210,14 +216,16 @@ function eventSecretToStored(secret?: EventSecretRecord): EventSecretParse {
 function passwordEventEnvelope(
   envelope?: PasswordEnvelopeYaml,
 ): PasswordEnvelopeYaml {
-  return envelope ?? {}
+  return ((v) => (v ? v : {}))(envelope)
 }
 
 function sortEventYamls(eventYamls: string[]): VaultEventYaml[] {
   return eventYamls
     .map((yaml) => parseYaml(yaml) as VaultEventYaml)
     .sort((left, right) =>
-      (left.created_at ?? '').localeCompare(right.created_at ?? ''),
+      ((v) => (v ? v : ''))(left.created_at).localeCompare(
+        ((v) => (v ? v : ''))(right.created_at),
+      ),
     )
 }
 
@@ -236,23 +244,25 @@ export function parseVaultEventLogSnapshot(
   const sentinelShares = new Map<string, StoredSecretRecord>()
 
   for (const event of sortEventYamls(eventYamls)) {
-    for (const operation of event.operations ?? []) {
+    for (const operation of ((v) => (v ? v : []))(event.operations)) {
       if (!operation.type) continue
       switch (operation.type) {
         case 'vault-imported':
-          for (const secret of operation.secrets ?? []) {
+          for (const secret of ((v) => (v ? v : []))(operation.secrets)) {
             const stored = eventSecretToStored(secret)
             if (stored.kind === EventSecretParseKind.Valid) {
               secrets.set(stored.secret.id, stored.secret)
             }
           }
           passwordEntries.clear()
-          for (const entry of operation.password_entries ?? []) {
+          for (const entry of ((v) => (v ? v : []))(
+            operation.password_entries,
+          )) {
             if (entry.id) passwordEntries.set(entry.id, entry)
           }
           break
         case 'epoch-checkpoint':
-          for (const secret of operation.secrets ?? []) {
+          for (const secret of ((v) => (v ? v : []))(operation.secrets)) {
             const stored = eventSecretToStored(secret)
             if (stored.kind === EventSecretParseKind.Valid) {
               secrets.set(stored.secret.id, stored.secret)
@@ -276,7 +286,9 @@ export function parseVaultEventLogSnapshot(
           break
         }
         case 'secret-conflict-resolved':
-          for (const rejected of operation.rejected_secret_ids ?? []) {
+          for (const rejected of ((v) => (v ? v : []))(
+            operation.rejected_secret_ids,
+          )) {
             secrets.delete(rejected)
           }
           break
@@ -284,7 +296,7 @@ export function parseVaultEventLogSnapshot(
           if (operation.device_id) {
             joins.set(operation.device_id, {
               deviceId: operation.device_id,
-              publicKey: operation.encryption_public_key ?? '',
+              publicKey: ((v) => (v ? v : ''))(operation.encryption_public_key),
             })
           }
           break
@@ -293,12 +305,18 @@ export function parseVaultEventLogSnapshot(
             joins.delete(operation.device_id)
             auth.set(operation.device_id, {
               pk_id: operation.device_id,
-              secrets_key: operation.secrets_key_ciphertext ?? '',
-              members_key: operation.members_key_ciphertext ?? '',
+              secrets_key: ((v) => (v ? v : ''))(
+                operation.secrets_key_ciphertext,
+              ),
+              members_key: ((v) => (v ? v : ''))(
+                operation.members_key_ciphertext,
+              ),
             })
             members.set(operation.device_id, {
               pk_id: operation.device_id,
-              ciphertext: operation.members_key_ciphertext ?? '',
+              ciphertext: ((v) => (v ? v : ''))(
+                operation.members_key_ciphertext,
+              ),
             })
           }
           break
@@ -312,13 +330,13 @@ export function parseVaultEventLogSnapshot(
           }
           break
         case 'sentinel-shares-issued':
-          for (const share of operation.shares ?? []) {
+          for (const share of ((v) => (v ? v : []))(operation.shares)) {
             const deviceId = share.device_id?.trim()
             if (!deviceId) continue
             sentinelShares.set(deviceId, {
               id: `sentinel_share:${deviceId}`,
               type: StoredSecretRecordType.SecureNote,
-              data: share.ciphertext ?? '',
+              data: ((v) => (v ? v : ''))(share.ciphertext),
             })
           }
           break
@@ -424,7 +442,9 @@ export function assertJoinPendingYaml(
     ? snapshot.joinEntries.find((entry) => entry.deviceId === deviceId)
     : snapshot.joinEntries[0]
   if (!join) {
-    throw new Error(`Join request for device ${deviceId ?? '(any)'} not found`)
+    throw new Error(
+      `Join request for device ${((...[v = '(any)']) => v)(deviceId)} not found`,
+    )
   }
   if (!join.publicKey.startsWith('age1')) {
     throw new Error('Join request must include age1 public_key while pending')
@@ -452,7 +472,7 @@ export function assertEnrolledVaultYaml(
   }
 
   const vault = parseYaml(snapshot.raw) as StoredVaultYaml
-  const authHasPlaintextAgeKey = (vault.auth ?? []).some(
+  const authHasPlaintextAgeKey = ((v) => (v ? v : []))(vault.auth).some(
     (record) =>
       record.secrets_key.includes('age1') ||
       record.members_key.includes('age1'),

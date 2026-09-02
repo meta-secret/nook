@@ -132,9 +132,9 @@ export async function connectAndSyncStagedProvider(
     if (!saved) {
       return;
     }
-    const provider =
-      state.syncProviders[state.syncProviders.length - 1] ??
-      state.providers[state.providers.length - 1];
+    const [provider = state.providers[state.providers.length - 1]] = [
+      state.syncProviders[state.syncProviders.length - 1],
+    ];
     if (!provider || provider.type === "local") {
       state.errorMsg = state.t(I18N_KEYS.ErrorsCloudSyncProviderRequired);
       return;

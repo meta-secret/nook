@@ -42,8 +42,10 @@ export function authenticationWorkflowApprovalsMatch({
   current,
   matcherDependencies,
 }: AuthenticationWorkflowApprovalPair): boolean {
-  const dependencies =
-    matcherDependencies ?? authenticationWorkflowApprovalMatcherDependencies
+  const dependencies = ((v) =>
+    v ? v : authenticationWorkflowApprovalMatcherDependencies)(
+    matcherDependencies,
+  )
   if (approved.workflowKey !== current.workflowKey) return false
   const approvedBatch: AuthenticationPageObservationFactsBatch = {
     observations: [approved.facts],

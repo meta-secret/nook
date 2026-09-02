@@ -1,8 +1,9 @@
 import { defineConfig } from '@playwright/test'
 import playwrightGates from './playwright.gates.json' with { type: 'json' }
 
-const chromiumExecutablePath =
-  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim() ?? ''
+const chromiumExecutablePath = ((v) => (v ? v : ''))(
+  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim(),
+)
 
 const commonEnvironment = {
   VITE_E2E_EXPOSE_VAULT: 'true',

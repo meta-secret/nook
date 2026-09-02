@@ -220,7 +220,9 @@ describe('authentication workflow routing', () => {
       }),
       authenticationWorkflowSnapshot: async ({ observations }) => {
         observedAvailability.push(
-          observations[0]?.authenticator.passkeyAccountAvailability ?? '',
+          ((v) => (v ? v : ''))(
+            observations[0]?.authenticator.passkeyAccountAvailability,
+          ),
         )
         return { kind: 'no-match' }
       },

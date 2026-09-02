@@ -75,7 +75,7 @@ export function createLocalE2eICloudVaultStub(
           const body = request.postDataJSON() as {
             records?: Array<{ recordName?: string }>
           }
-          const requested = body.records?.[0]?.recordName ?? fileName
+          const [requested = fileName] = [body.records?.[0]?.recordName]
           const event = eventRecord(requested)
           const records = event
             ? [event]
@@ -126,10 +126,12 @@ export function createLocalE2eICloudVaultStub(
             }>
           }
           const record = body.operations?.[0]?.record
-          const content = record?.fields?.content?.value ?? ''
+          const content = ((v) => (v ? v : ''))(record?.fields?.content?.value)
           if (record?.recordType === 'NookVaultEvent') {
-            const eventId = record.fields?.event_id?.value ?? ''
-            const name = record.recordName ?? eventRecordName(eventId)
+            const eventId = ((v) => (v ? v : ''))(
+              record.fields?.event_id?.value,
+            )
+            const [name = eventRecordName(eventId)] = [record.recordName]
             eventRecords.set(name, {
               eventId,
               content,
@@ -145,8 +147,8 @@ export function createLocalE2eICloudVaultStub(
             body: JSON.stringify({
               records: [
                 {
-                  recordName: record?.recordName ?? fileName,
-                  recordType: record?.recordType ?? 'NookVault',
+                  recordName: ((...[v = fileName]) => v)(record?.recordName),
+                  recordType: ((...[v = 'NookVault']) => v)(record?.recordType),
                   recordChangeTag,
                 },
               ],

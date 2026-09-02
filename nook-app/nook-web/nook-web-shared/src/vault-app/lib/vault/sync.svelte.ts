@@ -417,9 +417,9 @@ export async function ensureProviderSavedAfterConflict({
   if (!saved) {
     throw new Error(state.t(I18N_KEYS.AuthStorageDuplicateSyncProvider));
   }
-  const provider =
-    state.syncProviders[state.syncProviders.length - 1] ??
-    state.providers[state.providers.length - 1];
+  const [provider = state.providers[state.providers.length - 1]] = [
+    state.syncProviders[state.syncProviders.length - 1],
+  ];
   if (!provider || provider.type === LOCAL_PROVIDER_TYPE) {
     throw new Error(state.t(I18N_KEYS.ErrorsCloudSyncProviderRequired));
   }

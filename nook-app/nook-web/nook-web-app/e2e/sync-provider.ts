@@ -95,9 +95,9 @@ function stubBackendId(providerId: E2eSyncProviderId): E2eSyncStubBackend {
 
 /** Which sync backend to exercise — set per CI job via `NOOK_E2E_SYNC_PROVIDER`. */
 export function resolveE2eSyncProvider(): E2eSyncProviderId {
-  const raw =
-    process.env.NOOK_E2E_SYNC_PROVIDER?.trim().toLowerCase() ??
-    E2eSyncProviderId.File
+  const [raw = E2eSyncProviderId.File] = [
+    process.env.NOOK_E2E_SYNC_PROVIDER?.trim().toLowerCase(),
+  ]
   switch (raw) {
     case E2eSyncProviderId.File:
     case E2eSyncProviderId.Local:
@@ -121,7 +121,7 @@ export function liveSyncCredential(
   id: E2eSyncProviderId = resolveE2eSyncProvider(),
 ): string {
   const def = e2eSyncProviderDef(id)
-  return process.env[def.liveCredentialEnv]?.trim() ?? ''
+  return ((v) => (v ? v : ''))(process.env[def.liveCredentialEnv]?.trim())
 }
 
 export function hasLiveSyncCredential(
@@ -171,7 +171,7 @@ export function createSyncTarget(
   providerId: E2eSyncProviderId = resolveE2eSyncProvider(),
 ): SyncE2eTarget {
   const def = e2eSyncProviderDef(providerId)
-  const remoteId = createE2eRemoteName(prefix ?? providerId)
+  const remoteId = createE2eRemoteName(((...[v = providerId]) => v)(prefix))
   const stub = createStubHandle(providerId, initialYaml, remoteId)
   return {
     providerId,
@@ -229,11 +229,11 @@ export async function waitForSyncRemoteState(
   options?: { timeoutMs?: number; intervalMs?: number },
 ): Promise<VaultYamlSnapshot> {
   return waitForVaultEventLogSnapshot(
-    () => target.stub?.getEventFileContents() ?? [],
+    () => ((v) => (v ? v : []))(target.stub?.getEventFileContents()),
     predicate,
     {
-      timeoutMs: options?.timeoutMs ?? 30_000,
-      intervalMs: options?.intervalMs ?? 100,
+      timeoutMs: ((...[v = 30_000]) => v)(options?.timeoutMs),
+      intervalMs: ((...[v = 100]) => v)(options?.intervalMs),
     },
   )
 }

@@ -12,7 +12,9 @@ import {
 } from './helpers'
 
 /** Matches playwright.config.ts — fast idle lock for e2e only. */
-const IDLE_LOCK_MS = Number(process.env.VITE_VAULT_IDLE_TIMEOUT_MS ?? '2500')
+const IDLE_LOCK_MS = Number(
+  ((...[v = '2500']) => v)(process.env.VITE_VAULT_IDLE_TIMEOUT_MS),
+)
 
 test.describe('idle session auto-lock', () => {
   test.beforeEach(async ({ page }) => {

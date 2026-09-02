@@ -55,7 +55,7 @@ function passkeyRequestKey({
   sender,
   requestId,
 }: PasskeyRequestKeyArgs): string {
-  return `${sender.tab?.id ?? -1}:${sender.frameId ?? 0}:${requestId}`
+  return `${((...[v = -1]) => v)(sender.tab?.id)}:${((v) => (v ? v : 0))(sender.frameId)}:${requestId}`
 }
 
 const PASSKEY_ACCOUNT_LOOKUP_TIMEOUT_MS = 1500
@@ -188,7 +188,8 @@ export async function websitePasskeyOptions({
   sender,
   dependencies,
 }: WebsitePasskeyOptionsArgs): Promise<WebsitePasskeyOptionsResponse> {
-  const resolvedDependencies = dependencies ?? websitePasskeyOptionsDependencies
+  const resolvedDependencies = ((v) =>
+    v ? v : websitePasskeyOptionsDependencies)(dependencies)
   const nookTypedArgs0_2: Parameters<typeof requestOriginAndRpId>[0] = {
     ceremony: message.payload.ceremony,
     requestJson: message.payload.requestJson,

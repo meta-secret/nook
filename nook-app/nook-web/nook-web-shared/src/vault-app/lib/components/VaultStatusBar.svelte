@@ -68,29 +68,39 @@
       0,
       Math.floor((now - sync.syncedAtUnixMilliseconds) / 1000),
     )
-    if (secs < 5) return vault ? vault.t(I18N_KEYS.StatusBarJustNow) : 'just now'
+    if (secs < 5)
+      return vault ? vault.t(I18N_KEYS.StatusBarJustNow) : 'just now'
     if (secs < 60)
       return vault
-        ? (() => { const translationRequest: Parameters<typeof vault.t>[0] = {
-  key: I18N_KEYS.StatusBarSecsAgo,
-  replacements: { secs: String(secs) },
-}; return vault.t(translationRequest); })()
+        ? (() => {
+            const translationRequest: Parameters<typeof vault.t>[0] = {
+              key: I18N_KEYS.StatusBarSecsAgo,
+              replacements: { secs: String(secs) },
+            }
+            return vault.t(translationRequest)
+          })()
         : `${secs}s ago`
     const mins = Math.floor(secs / 60)
     if (mins < 60)
       return vault
-        ? (() => { const translationRequest2: Parameters<typeof vault.t>[0] = {
-  key: I18N_KEYS.StatusBarMinsAgo,
-  replacements: { mins: String(mins) },
-}; return vault.t(translationRequest2); })()
+        ? (() => {
+            const translationRequest2: Parameters<typeof vault.t>[0] = {
+              key: I18N_KEYS.StatusBarMinsAgo,
+              replacements: { mins: String(mins) },
+            }
+            return vault.t(translationRequest2)
+          })()
         : `${mins}m ago`
     return vault
-      ? (() => { const translationRequest3: Parameters<typeof vault.t>[0] = {
-  key: I18N_KEYS.StatusBarHoursAgo,
-  replacements: {
-          hours: String(Math.floor(mins / 60)),
-        },
-}; return vault.t(translationRequest3); })()
+      ? (() => {
+          const translationRequest3: Parameters<typeof vault.t>[0] = {
+            key: I18N_KEYS.StatusBarHoursAgo,
+            replacements: {
+              hours: String(Math.floor(mins / 60)),
+            },
+          }
+          return vault.t(translationRequest3)
+        })()
       : `${Math.floor(mins / 60)}h ago`
   }
 
@@ -98,33 +108,36 @@
   const isQuiet = $derived(variant === VaultStatusBarVariant.Quiet)
 
   const statusLabel = $derived(
-    label ??
-      (isAuthenticatedVault
-        ? vault!.t(I18N_KEYS.StatusBarLocalVault)
-        : storageMode === 'github'
-          ? githubRepo.trim() || 'GitHub'
-          : storageMode === 'oauth-file'
-            ? vault
-              ? vault.t(I18N_KEYS.ProviderPickerGoogleDrive)
-              : 'Google Drive'
-            : storageMode === 'local-folder'
+    ((
+      ...[
+        v = isAuthenticatedVault
+          ? vault!.t(I18N_KEYS.StatusBarLocalVault)
+          : storageMode === 'github'
+            ? githubRepo.trim() || 'GitHub'
+            : storageMode === 'oauth-file'
               ? vault
-                ? vault.t(I18N_KEYS.ProviderPickerLocalFolder)
-                : 'Local backup'
-              : vault
-                ? vault.t(I18N_KEYS.ProviderPickerThisDevice)
-                : 'This device'),
+                ? vault.t(I18N_KEYS.ProviderPickerGoogleDrive)
+                : 'Google Drive'
+              : storageMode === 'local-folder'
+                ? vault
+                  ? vault.t(I18N_KEYS.ProviderPickerLocalFolder)
+                  : 'Local backup'
+                : vault
+                  ? vault.t(I18N_KEYS.ProviderPickerThisDevice)
+                  : 'This device',
+      ]
+    ) => v)(label),
   )
 
   const syncDetail = $derived.by(() => {
     if (!vault || !showSyncStatus) return ''
     if (vault.syncingProviderLabel.kind === SyncProviderLabelKind.Active) {
       const translationRequest4: Parameters<typeof vault.t>[0] = {
-  key: I18N_KEYS.StatusBarSyncingTo,
-  replacements: {
-        provider: vault.syncingProviderLabel.label,
-      },
-};
+        key: I18N_KEYS.StatusBarSyncingTo,
+        replacements: {
+          provider: vault.syncingProviderLabel.label,
+        },
+      }
       return vault.t(translationRequest4)
     }
     if (vault.isFanOutSyncing) {
@@ -133,12 +146,15 @@
     if (vault.syncProviderCount > 0) {
       return vault.syncProviderCount === 1
         ? vault.t(I18N_KEYS.StatusBarSyncProvidersSingular)
-        : (() => { const translationRequest5: Parameters<typeof vault.t>[0] = {
-  key: I18N_KEYS.StatusBarSyncProvidersPlural,
-  replacements: {
-            count: String(vault.syncProviderCount),
-          },
-}; return vault.t(translationRequest5); })()
+        : (() => {
+            const translationRequest5: Parameters<typeof vault.t>[0] = {
+              key: I18N_KEYS.StatusBarSyncProvidersPlural,
+              replacements: {
+                count: String(vault.syncProviderCount),
+              },
+            }
+            return vault.t(translationRequest5)
+          })()
     }
     return vault.t(I18N_KEYS.StatusBarSavedLocalOnly)
   })
@@ -317,7 +333,9 @@
             data-testid="vault-sync-conflict-open-btn"
             onclick={() => onOpenSyncConflict()}
           >
-            {vault ? vault.t(I18N_KEYS.AuthStorageSyncConflictResolve) : 'Resolve'}
+            {vault
+              ? vault.t(I18N_KEYS.AuthStorageSyncConflictResolve)
+              : 'Resolve'}
           </button>
         {/if}
       </div>

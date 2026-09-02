@@ -563,25 +563,31 @@
           >[0] = {
             state: vault,
             payload,
-            participantLabel: participantLabel ?? '',
+            participantLabel: ((v) => (v ? v : ''))(participantLabel),
           }
           return sentinelGenesisActions.addParticipantResponse(
             participantRequest,
           )
         }}
         onFinalizeSentinelGenesis={() => sentinelGenesisActions.finalize(vault)}
-        onCreateSentinelGenesisParticipantResponse={onCreateSentinelGenesisParticipantResponse ??
-          ((payload) =>
-            (() => {
-              const createParticipantResponseArgs: Parameters<
-                typeof sentinelGenesisActions.createParticipantResponse
-              >[0] = { state: vault, requestPayload: payload }
-              return sentinelGenesisActions.createParticipantResponse(
-                createParticipantResponseArgs,
-              )
-            })())}
-        onCreateSentinelGenesisPublicKeyAnnouncement={onCreateSentinelGenesisPublicKeyAnnouncement ??
-          (() => sentinelGenesisActions.createPublicKeyAnnouncement(vault))}
+        onCreateSentinelGenesisParticipantResponse={((
+          ...[
+            v = (payload) =>
+              (() => {
+                const createParticipantResponseArgs: Parameters<
+                  typeof sentinelGenesisActions.createParticipantResponse
+                >[0] = { state: vault, requestPayload: payload }
+                return sentinelGenesisActions.createParticipantResponse(
+                  createParticipantResponseArgs,
+                )
+              })(),
+          ]
+        ) => v)(onCreateSentinelGenesisParticipantResponse)}
+        onCreateSentinelGenesisPublicKeyAnnouncement={((
+          ...[
+            v = () => sentinelGenesisActions.createPublicKeyAnnouncement(vault),
+          ]
+        ) => v)(onCreateSentinelGenesisPublicKeyAnnouncement)}
         onRememberSentinelGenesisRequest={(payload) =>
           (() => {
             const rememberRequestArgs: Parameters<

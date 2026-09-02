@@ -1,11 +1,21 @@
 <script lang="ts">
   type NumericRange = { readonly min: number; readonly max: number }
 
-  type SecuritySignalDefinition = { readonly id: number; readonly label: string; readonly slot: number }
+  type SecuritySignalDefinition = {
+    readonly id: number
+    readonly label: string
+    readonly slot: number
+  }
 
-  type ScheduledSecurityCallback = { readonly callback: () => void; readonly delay: number }
+  type ScheduledSecurityCallback = {
+    readonly callback: () => void
+    readonly delay: number
+  }
 
-  type SecuritySignalSchedule = { readonly item: Signal; readonly initial: boolean }
+  type SecuritySignalSchedule = {
+    readonly item: Signal
+    readonly initial: boolean
+  }
 
   import { onMount } from 'svelte'
 
@@ -37,9 +47,30 @@
     [4, 5],
   ]
   let signals = $state<Signal[]>([
-    (() => { const signalArgs: Parameters<typeof signal>[0] = { id: 0, label: 'AGE', slot: 0 }; return signal(signalArgs); })(),
-    (() => { const signalArgs2: Parameters<typeof signal>[0] = { id: 1, label: 'X25519', slot: 2 }; return signal(signalArgs2); })(),
-    (() => { const signalArgs3: Parameters<typeof signal>[0] = { id: 2, label: 'KDF', slot: 4 }; return signal(signalArgs3); })(),
+    (() => {
+      const signalArgs: Parameters<typeof signal>[0] = {
+        id: 0,
+        label: 'AGE',
+        slot: 0,
+      }
+      return signal(signalArgs)
+    })(),
+    (() => {
+      const signalArgs2: Parameters<typeof signal>[0] = {
+        id: 1,
+        label: 'X25519',
+        slot: 2,
+      }
+      return signal(signalArgs2)
+    })(),
+    (() => {
+      const signalArgs3: Parameters<typeof signal>[0] = {
+        id: 2,
+        label: 'KDF',
+        slot: 4,
+      }
+      return signal(signalArgs3)
+    })(),
   ])
 
   function randomBetween({ min, max }: NumericRange) {
@@ -51,10 +82,38 @@
       id,
       label,
       slot,
-      driftX: Math.round((() => { const randomBetweenArgs: Parameters<typeof randomBetween>[0] = { min: -11, max: 11 }; return randomBetween(randomBetweenArgs); })()),
-      driftY: Math.round((() => { const randomBetweenArgs2: Parameters<typeof randomBetween>[0] = { min: -9, max: 9 }; return randomBetween(randomBetweenArgs2); })()),
-      duration: (() => { const randomBetweenArgs3: Parameters<typeof randomBetween>[0] = { min: 7, max: 12 }; return randomBetween(randomBetweenArgs3); })(),
-      delay: -(() => { const randomBetweenArgs4: Parameters<typeof randomBetween>[0] = { min: 0, max: 6 }; return randomBetween(randomBetweenArgs4); })(),
+      driftX: Math.round(
+        (() => {
+          const randomBetweenArgs: Parameters<typeof randomBetween>[0] = {
+            min: -11,
+            max: 11,
+          }
+          return randomBetween(randomBetweenArgs)
+        })(),
+      ),
+      driftY: Math.round(
+        (() => {
+          const randomBetweenArgs2: Parameters<typeof randomBetween>[0] = {
+            min: -9,
+            max: 9,
+          }
+          return randomBetween(randomBetweenArgs2)
+        })(),
+      ),
+      duration: (() => {
+        const randomBetweenArgs3: Parameters<typeof randomBetween>[0] = {
+          min: 7,
+          max: 12,
+        }
+        return randomBetween(randomBetweenArgs3)
+      })(),
+      delay: -(() => {
+        const randomBetweenArgs4: Parameters<typeof randomBetween>[0] = {
+          min: 0,
+          max: 6,
+        }
+        return randomBetween(randomBetweenArgs4)
+      })(),
       changing: false,
     }
   }
@@ -93,15 +152,33 @@
       const laterArgs: Parameters<typeof later>[0] = {
         callback: () => rotate(item),
         delay: initial
-          ? 1300 + item.id * 1050 + (() => { const randomBetweenArgs6: Parameters<typeof randomBetween>[0] = { min: 0, max: 450 }; return randomBetween(randomBetweenArgs6); })()
-          : 4800 + (() => { const randomBetweenArgs5: Parameters<typeof randomBetween>[0] = { min: 0, max: 3700 }; return randomBetween(randomBetweenArgs5); })(),
+          ? 1300 +
+            item.id * 1050 +
+            (() => {
+              const randomBetweenArgs6: Parameters<typeof randomBetween>[0] = {
+                min: 0,
+                max: 450,
+              }
+              return randomBetween(randomBetweenArgs6)
+            })()
+          : 4800 +
+            (() => {
+              const randomBetweenArgs5: Parameters<typeof randomBetween>[0] = {
+                min: 0,
+                max: 3700,
+              }
+              return randomBetween(randomBetweenArgs5)
+            })(),
       }
       later(laterArgs)
     }
 
     function rotate(item: Signal) {
       if (document.hidden) {
-        const scheduleArgs: Parameters<typeof schedule>[0] = { item, initial: false };
+        const scheduleArgs: Parameters<typeof schedule>[0] = {
+          item,
+          initial: false,
+        }
         schedule(scheduleArgs)
         return
       }
@@ -109,36 +186,58 @@
       item.changing = true
       const laterArgs: Parameters<typeof later>[0] = {
         callback: () => {
-        const visibleTerms = new Set(
-          signals.map((candidate) => candidate.label),
-        )
-        const availableTerms = terms.filter((term) => !visibleTerms.has(term))
-        const sector = slotSectors[item.id]
-        const availableSlots = sector.filter((slot) => slot !== item.slot)
-        item.label =
-          availableTerms[Math.floor(Math.random() * availableTerms.length)] ??
-          item.label
-        item.slot =
-          availableSlots[Math.floor(Math.random() * availableSlots.length)] ??
-          item.slot
-        const randomBetweenArgs7: Parameters<typeof randomBetween>[0] = { min: -11, max: 11 };
-        item.driftX = Math.round(randomBetween(randomBetweenArgs7))
-        const randomBetweenArgs8: Parameters<typeof randomBetween>[0] = { min: -9, max: 9 };
-        item.driftY = Math.round(randomBetween(randomBetweenArgs8))
-        const randomBetweenArgs9: Parameters<typeof randomBetween>[0] = { min: 7, max: 12 };
-        item.duration = randomBetween(randomBetweenArgs9)
-        const randomBetweenArgs10: Parameters<typeof randomBetween>[0] = { min: 0, max: 6 };
-        item.delay = -randomBetween(randomBetweenArgs10)
-        item.changing = false
-        const scheduleArgs2: Parameters<typeof schedule>[0] = { item, initial: false };
-        schedule(scheduleArgs2)
+          const visibleTerms = new Set(
+            signals.map((candidate) => candidate.label),
+          )
+          const availableTerms = terms.filter((term) => !visibleTerms.has(term))
+          const sector = slotSectors[item.id]
+          const availableSlots = sector.filter((slot) => slot !== item.slot)
+          item.label = ((...[v = item.label]) => v)(
+            availableTerms[Math.floor(Math.random() * availableTerms.length)],
+          )
+          item.slot = ((...[v = item.slot]) => v)(
+            availableSlots[Math.floor(Math.random() * availableSlots.length)],
+          )
+          const randomBetweenArgs7: Parameters<typeof randomBetween>[0] = {
+            min: -11,
+            max: 11,
+          }
+          item.driftX = Math.round(randomBetween(randomBetweenArgs7))
+          const randomBetweenArgs8: Parameters<typeof randomBetween>[0] = {
+            min: -9,
+            max: 9,
+          }
+          item.driftY = Math.round(randomBetween(randomBetweenArgs8))
+          const randomBetweenArgs9: Parameters<typeof randomBetween>[0] = {
+            min: 7,
+            max: 12,
+          }
+          item.duration = randomBetween(randomBetweenArgs9)
+          const randomBetweenArgs10: Parameters<typeof randomBetween>[0] = {
+            min: 0,
+            max: 6,
+          }
+          item.delay = -randomBetween(randomBetweenArgs10)
+          item.changing = false
+          const scheduleArgs2: Parameters<typeof schedule>[0] = {
+            item,
+            initial: false,
+          }
+          schedule(scheduleArgs2)
         },
         delay: 420,
       }
       later(laterArgs)
     }
 
-    for (const item of signals) (() => { const scheduleArgs3: Parameters<typeof schedule>[0] = { item, initial: true }; return schedule(scheduleArgs3); })()
+    for (const item of signals)
+      (() => {
+        const scheduleArgs3: Parameters<typeof schedule>[0] = {
+          item,
+          initial: true,
+        }
+        return schedule(scheduleArgs3)
+      })()
 
     return () => {
       for (const timer of timers) window.clearTimeout(timer)

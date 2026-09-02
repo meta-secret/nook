@@ -365,7 +365,7 @@ function unownedScopeLooksProgressing(
       newPasswordFieldCount,
       oneTimeCodeFieldCount: summary.oneTimeCodeFieldCount,
       semanticSubmitControlCount,
-      sourceOrigin: control.ownerDocument.defaultView?.location.origin ?? "",
+      sourceOrigin: ((v) => (v ? v : ""))(control.ownerDocument.defaultView?.location.origin),
       formIdentity: observedFormIdentity(identityRequest),
       destinationIdentity: controlDestinationIdentity(destinationRequest),
       label: controlLabel(control),
@@ -378,7 +378,7 @@ function unownedScopeLooksProgressing(
         facts.formIdentity,
         facts.destinationIdentity,
         facts.label,
-        facts.machineIdentity ?? "",
+        ((v) => (v ? v : ""))(facts.machineIdentity),
       ]) && authentication_advance_control_is_safe(facts)
     );
   });

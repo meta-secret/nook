@@ -22,7 +22,7 @@ export function parseEventMultipart(body: string): EventMultipartParse {
   const nameDigest = body.match(
     new RegExp(`"name"\\s*:\\s*"(${EVENT_DIGEST_PATTERN})\\.yaml"`),
   )?.[1]
-  const digest = eventId ?? nameDigest
+  const [digest = nameDigest] = [eventId]
   if (!digest) return { kind: EventMultipartParseKind.Invalid }
   const markers = [
     '\r\nContent-Type: application/x-yaml\r\n\r\n',

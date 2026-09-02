@@ -90,7 +90,7 @@ describe('provider credential staging', () => {
     const args: ProviderCredentialCleanupArgs<{ ok: boolean }> = {
       providers,
       operation: async () => {
-        observedDuringHandoff = providers[0]?.githubPat ?? ''
+        observedDuringHandoff = ((v) => (v ? v : ''))(providers[0]?.githubPat)
         return { ok: true }
       },
     }

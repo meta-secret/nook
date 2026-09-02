@@ -8,16 +8,26 @@
     const form = event.currentTarget
     if (!(form instanceof HTMLFormElement)) return
     // Prefer the visible main-password field when both share a name.
-    const password =
-      form.querySelector<HTMLInputElement>('#main-password')?.value ??
-      form.querySelector<HTMLInputElement>('[name="LoginPassword"]')?.value ??
-      ''
-    const username =
-      form.querySelector<HTMLInputElement>(
-        'fieldset.loginForm [name="LoginUserName"]',
-      )?.value ??
-      form.querySelector<HTMLInputElement>('[name="LoginUserName"]')?.value ??
-      ''
+    const password = ((v) => (v ? v : ''))(
+      ((
+        ...[
+          v = form.querySelector<HTMLInputElement>('[name="LoginPassword"]')
+            ?.value,
+        ]
+      ) => v)(form.querySelector<HTMLInputElement>('#main-password')?.value),
+    )
+    const username = ((v) => (v ? v : ''))(
+      ((
+        ...[
+          v = form.querySelector<HTMLInputElement>('[name="LoginUserName"]')
+            ?.value,
+        ]
+      ) => v)(
+        form.querySelector<HTMLInputElement>(
+          'fieldset.loginForm [name="LoginUserName"]',
+        )?.value,
+      ),
+    )
     if (completePlainLogin(username, password) === PlainLoginResult.Invalid) {
       error = 'Invalid username or password.'
     }

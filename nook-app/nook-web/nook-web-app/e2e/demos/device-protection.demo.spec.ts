@@ -91,7 +91,7 @@ test('offer PIN device protection when passkeys are unavailable', async ({
   await themeToggle.click()
   await expect(themeToggle).not.toHaveAttribute(
     'aria-label',
-    initialThemeLabel ?? '',
+    ((v) => (v ? v : ''))(initialThemeLabel),
   )
   await page.getByTestId('help-open-btn').click()
   await expect(page.getByTestId('help-page')).toBeVisible()
@@ -154,12 +154,13 @@ test('reject an empty folder before existing-vault recovery', async ({
         if (!this.files.has(name) && !options?.create) {
           throw new DOMException('Not found', 'NotFoundError')
         }
-        this.files.set(name, this.files.get(name) ?? '')
+        this.files.set(name, ((v) => (v ? v : ''))(this.files.get(name)))
         const files = this.files
         return {
           kind: 'file' as const,
           name,
-          getFile: async () => new File([files.get(name) ?? ''], name),
+          getFile: async () =>
+            new File([((v) => (v ? v : ''))(files.get(name))], name),
           createWritable: async () => ({
             write: async (data: string) => files.set(name, data),
             close: async () => {},

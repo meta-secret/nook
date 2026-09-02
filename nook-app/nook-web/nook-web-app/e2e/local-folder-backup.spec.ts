@@ -108,8 +108,8 @@ test.describe('local folder backup provider', () => {
     const sourceSecretKey = uniqueSecretKey('existing-folder-source')
     await addSecret(page, sourceSecretKey, 'existing-folder-value')
     await waitForLocalFolderEventRecords(page)
-    const passkeyLabel = await page.evaluate(
-      () => localStorage.getItem('nook_e2e_passkey_label') ?? '',
+    const passkeyLabel = await page.evaluate(() =>
+      ((v) => (v ? v : ''))(localStorage.getItem('nook_e2e_passkey_label')),
     )
     const passkeyDeviceHint = passkeyLabel.split(' - device ')[1]
     expect(passkeyDeviceHint).toBeTruthy()
@@ -214,8 +214,8 @@ test.describe('local folder backup provider', () => {
     await expect
       .poll(
         async () => {
-          const records = await page.evaluate(
-            () =>
+          const records = await page.evaluate(() =>
+            ((v) => (v ? v : []))(
               (
                 window as Window & {
                   __nookE2eLocalFolderSnapshot?: () => Array<{
@@ -223,7 +223,8 @@ test.describe('local folder backup provider', () => {
                     content: string
                   }>
                 }
-              ).__nookE2eLocalFolderSnapshot?.() ?? [],
+              ).__nookE2eLocalFolderSnapshot?.(),
+            ),
           )
           return records.filter(
             (record) =>
@@ -259,8 +260,8 @@ test.describe('local folder backup provider', () => {
     await expect
       .poll(
         async () => {
-          const records = await page.evaluate(
-            () =>
+          const records = await page.evaluate(() =>
+            ((v) => (v ? v : []))(
               (
                 window as Window & {
                   __nookE2eLocalFolderSnapshot?: () => Array<{
@@ -268,7 +269,8 @@ test.describe('local folder backup provider', () => {
                     content: string
                   }>
                 }
-              ).__nookE2eLocalFolderSnapshot?.() ?? [],
+              ).__nookE2eLocalFolderSnapshot?.(),
+            ),
           )
           return records.filter((record) =>
             /^nook-log\/v1\/events\/[A-Za-z0-9_-]{43}\.yaml$/.test(record.path),
@@ -278,8 +280,8 @@ test.describe('local folder backup provider', () => {
       )
       .toBeGreaterThan(0)
 
-    const eventsBeforeSecondConnect = await page.evaluate(
-      () =>
+    const eventsBeforeSecondConnect = await page.evaluate(() =>
+      ((v) => (v ? v : []))(
         (
           window as Window & {
             __nookE2eLocalFolderSnapshot?: () => Array<{
@@ -287,7 +289,8 @@ test.describe('local folder backup provider', () => {
               content: string
             }>
           }
-        ).__nookE2eLocalFolderSnapshot?.() ?? [],
+        ).__nookE2eLocalFolderSnapshot?.(),
+      ),
     )
 
     await clearBrowserVault(page)
@@ -309,8 +312,8 @@ test.describe('local folder backup provider', () => {
       page.getByTestId('sync-conflict-import-new-vault-btn'),
     ).toBeVisible()
     await expect(page.getByTestId('sync-conflict-cancel-btn')).toBeVisible()
-    const eventsAfterSecondConnect = await page.evaluate(
-      () =>
+    const eventsAfterSecondConnect = await page.evaluate(() =>
+      ((v) => (v ? v : []))(
         (
           window as Window & {
             __nookE2eLocalFolderSnapshot?: () => Array<{
@@ -318,7 +321,8 @@ test.describe('local folder backup provider', () => {
               content: string
             }>
           }
-        ).__nookE2eLocalFolderSnapshot?.() ?? [],
+        ).__nookE2eLocalFolderSnapshot?.(),
+      ),
     )
     expect(eventsAfterSecondConnect).toEqual(eventsBeforeSecondConnect)
   })

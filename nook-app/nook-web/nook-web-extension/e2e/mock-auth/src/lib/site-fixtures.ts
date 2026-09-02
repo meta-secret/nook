@@ -105,7 +105,7 @@ function resolveSiteFixture(id: string): SiteFixtureLookup {
   const ref = siteShells[id]
   if (!ref) return { kind: SiteFixtureLookupKind.Missing }
   const template = templatesById.get(ref.template)
-  const steps = ref.steps ?? template?.steps
+  const [steps = template?.steps] = [ref.steps]
   if (!steps || steps.length === 0) {
     return { kind: SiteFixtureLookupKind.Missing }
   }
@@ -115,7 +115,9 @@ function resolveSiteFixture(id: string): SiteFixtureLookup {
       id,
       source: ref.source,
       loginUrl: ref.loginUrl,
-      quirks: ref.quirks ?? template?.quirks ?? [],
+      quirks: ((v) => (v ? v : []))(
+        ((...[v = template?.quirks]) => v)(ref.quirks),
+      ),
       steps,
       template: ref.template,
     },
@@ -164,7 +166,7 @@ export function getTemplateFixture(templateId: string): SiteFixtureLookup {
       id: templateId,
       source: SiteFixtureSource.Research,
       loginUrl: `https://template.invalid/${templateId}`,
-      quirks: template.quirks ?? [],
+      quirks: ((v) => (v ? v : []))(template.quirks),
       steps: template.steps,
       template: templateId,
     },
@@ -196,10 +198,13 @@ export function renderFixtureHtml(
   fixture: SiteFixture,
   options?: { stepIndex?: number; wrapAriaHidden?: boolean },
 ): string {
-  const stepIndex = options?.stepIndex ?? Math.max(0, fixture.steps.length - 1)
-  const step = fixture.steps[stepIndex] ?? fixture.steps[0]
-  const ariaHidden =
-    options?.wrapAriaHidden ?? fixture.quirks.includes('aria-hidden-ancestor')
+  const [stepIndex = Math.max(0, fixture.steps.length - 1)] = [
+    options?.stepIndex,
+  ]
+  const [step = fixture.steps[0]] = [fixture.steps[stepIndex]]
+  const [ariaHidden = fixture.quirks.includes('aria-hidden-ancestor')] = [
+    options?.wrapAriaHidden,
+  ]
   const fields = step.fields
     .map((field) => {
       const attrs = [

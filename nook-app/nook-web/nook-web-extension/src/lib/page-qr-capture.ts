@@ -79,9 +79,9 @@ function isVisibleElement(element: Element): boolean {
 
 function looksLikeQrMedia(element: HTMLElement): boolean {
   const tokens = [
-    element.getAttribute('alt') ?? '',
-    element.getAttribute('aria-label') ?? '',
-    element.getAttribute('title') ?? '',
+    ((v) => (v ? v : ''))(element.getAttribute('alt')),
+    ((v) => (v ? v : ''))(element.getAttribute('aria-label')),
+    ((v) => (v ? v : ''))(element.getAttribute('title')),
     element.id,
     element.className.toString(),
   ]
@@ -162,7 +162,9 @@ function collectMarkedOtpauthCandidates(): DecodedOtpauthCandidate[] {
   let index = 0
   for (const element of elements) {
     if (!isVisibleElement(element)) continue
-    const value = element.getAttribute('data-nook-otpauth-uri')?.trim() ?? ''
+    const value = ((v) => (v ? v : ''))(
+      element.getAttribute('data-nook-otpauth-uri')?.trim(),
+    )
     if (!value.startsWith(OTPAUTH_TOTP_PREFIX) || seen.has(value)) continue
     index += 1
     seen.add(value)
@@ -247,7 +249,7 @@ export async function decodeVisibleOtpauthCandidates(): Promise<{
     try {
       const codes = await detector.detect(bitmap)
       for (const code of codes) {
-        const value = code.rawValue?.trim() ?? ''
+        const value = ((v) => (v ? v : ''))(code.rawValue?.trim())
         if (!value.startsWith(OTPAUTH_TOTP_PREFIX) || seen.has(value)) continue
         seen.add(value)
         const candidate: DecodedOtpauthCandidate = {

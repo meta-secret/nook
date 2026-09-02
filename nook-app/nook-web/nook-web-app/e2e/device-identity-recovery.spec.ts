@@ -150,7 +150,7 @@ test('waits for peer storage work before destructive identity recovery', async (
             __nookVault?: { readonly localDataDeletionStarted: boolean }
           }
         ).__nookVault
-        return peerVault?.localDataDeletionStarted ?? false
+        return ((v) => (v ? v : false))(peerVault?.localDataDeletionStarted)
       }),
     )
     .toBe(true)
@@ -177,7 +177,7 @@ test('waits for peer storage work before destructive identity recovery', async (
             __nookVault?: { readonly localDataDeletionStarted: boolean }
           }
         ).__nookVault
-        return peerVault?.localDataDeletionStarted ?? true
+        return ((...[v = true]) => v)(peerVault?.localDataDeletionStarted)
       }),
     )
     .toBe(false)

@@ -69,9 +69,14 @@ export function installMockPasskeyRuntime() {
     }) => {
       localStorage.setItem(
         'nook_e2e_passkey_label',
-        details.displayName ?? details.name ?? '',
+        ((v) => (v ? v : ''))(
+          ((...[v = details.name]) => v)(details.displayName),
+        ),
       )
-      localStorage.setItem('nook_e2e_passkey_signal_rp_id', details.rpId ?? '')
+      localStorage.setItem(
+        'nook_e2e_passkey_signal_rp_id',
+        ((v) => (v ? v : ''))(details.rpId),
+      )
       if (details.userId) {
         localStorage.setItem(
           'nook_e2e_passkey_signal_user_id',
@@ -141,9 +146,11 @@ export function installMockPasskeyRuntime() {
         }
         localStorage.setItem(
           'nook_e2e_passkey_label',
-          options.publicKey?.user?.displayName ??
-            options.publicKey?.user?.name ??
-            '',
+          ((v) => (v ? v : ''))(
+            ((...[v = options.publicKey?.user?.name]) => v)(
+              options.publicKey?.user?.displayName,
+            ),
+          ),
         )
         const first = options.publicKey?.extensions?.prf?.eval?.first
         if (!(first instanceof Uint8Array)) {
@@ -182,9 +189,10 @@ export function installMockPasskeyRuntime() {
         if (!(options.publicKey?.challenge instanceof Uint8Array)) {
           throw new TypeError('WebAuthn request challenge must be binary')
         }
-        const first =
-          prf?.eval?.first ??
-          Object.values(prf?.evalByCredential ?? {})[0]?.first
+        const [
+          first = Object.values(((v) => (v ? v : {}))(prf?.evalByCredential))[0]
+            ?.first,
+        ] = [prf?.eval?.first]
         if (!(first instanceof Uint8Array)) {
           throw new TypeError('WebAuthn request PRF input must be binary')
         }

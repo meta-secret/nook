@@ -18,17 +18,23 @@ test.describe('authenticated shell height', () => {
     const shell = page.getByTestId('authenticated-shell')
 
     await expect(page.getByTestId('vault-panel')).toBeVisible()
-    const vaultHeight = (await shell.boundingBox())?.height ?? 0
+    const vaultHeight = ((v) => (v ? v : 0))(
+      (await shell.boundingBox())?.height,
+    )
     expect(vaultHeight).toBeGreaterThan(0)
 
     await page.getByTestId('vault-admin-tab').click()
     await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
-    const adminHeight = (await shell.boundingBox())?.height ?? 0
+    const adminHeight = ((v) => (v ? v : 0))(
+      (await shell.boundingBox())?.height,
+    )
     expect(adminHeight).toBeCloseTo(vaultHeight, 0)
 
     await page.getByTestId('vault-onboard-tab').click()
     await expect(page.getByTestId('onboard-device-panel')).toBeVisible()
-    const onboardHeight = (await shell.boundingBox())?.height ?? 0
+    const onboardHeight = ((v) => (v ? v : 0))(
+      (await shell.boundingBox())?.height,
+    )
     expect(onboardHeight).toBeCloseTo(vaultHeight, 0)
 
     await page.getByTestId('vault-settings-tab').click()
@@ -39,12 +45,16 @@ test.describe('authenticated shell height', () => {
       'not_installed',
     )
     await expect(page.getByTestId('extension-setup-settings-cta')).toBeVisible()
-    const settingsHeight = (await shell.boundingBox())?.height ?? 0
+    const settingsHeight = ((v) => (v ? v : 0))(
+      (await shell.boundingBox())?.height,
+    )
     expect(settingsHeight).toBeCloseTo(vaultHeight, 0)
 
     await page.getByTestId('vault-secrets-tab').click()
     await expect(page.getByTestId('vault-panel')).toBeVisible()
-    const vaultAgainHeight = (await shell.boundingBox())?.height ?? 0
+    const vaultAgainHeight = ((v) => (v ? v : 0))(
+      (await shell.boundingBox())?.height,
+    )
     expect(vaultAgainHeight).toBeCloseTo(vaultHeight, 0)
   })
 
