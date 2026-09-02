@@ -207,6 +207,10 @@ task skills:run REQUEST_YAML='<cortexConsistency.compile request>'
 The executable request contains parsed document paths and references. The
 registry and policy semantics remain internal to this skill.
 
+Request contract v2 adds the required `commands` collection to each document.
+The former `cortex-consistency-compile-v1` transport is not accepted; callers
+must regenerate the request through the current Loom Markdown adapter.
+
 - Context ownership and policy applicability determine required policy imports.
 - Authority and policy document paths are their contract identities.
 - The registry does not repeat owner names beside those paths.

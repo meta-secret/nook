@@ -62,7 +62,10 @@ import {
   renderAgentAttemptEvent,
   renderRuntimeActivityObservation,
 } from './agent-event-renderer.ts';
-import { WorkflowRuntimeActivityKind } from './events.ts';
+import {
+  RuntimeActivityObservationField,
+  WorkflowRuntimeActivityKind,
+} from './events.ts';
 import type { RuntimeActivityObservation } from './events.ts';
 import type {
   ModuleExpertJournalAuthority,
@@ -306,7 +309,9 @@ export class AgentAttemptJournal<TTask extends string> {
       observationKeys.length < 2 ||
       observationKeys.length > 3 ||
       !observationKeys.every((key) =>
-        ['activity', 'detail', 'cortexReferences'].includes(key),
+        Object.values(RuntimeActivityObservationField).includes(
+          key as RuntimeActivityObservationField,
+        ),
       ) ||
       typeof observation.detail !== 'string' ||
       observation.detail.length > 4096

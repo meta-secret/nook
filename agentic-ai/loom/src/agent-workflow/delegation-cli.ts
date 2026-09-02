@@ -112,17 +112,21 @@ type DelegationRecordRequest = {
   readonly terminal: TaskTerminal<string>;
 };
 
+enum DelegationRecordRequestField {
+  RunId = 'runId',
+  SourceCommit = 'sourceCommit',
+  Task = 'task',
+  Agent = 'agent',
+  Attempt = 'attempt',
+  Depth = 'depth',
+  Parent = 'parent',
+  Terminal = 'terminal',
+}
+
 const TERMINAL_KINDS = new Set<string>(Object.values(TaskTerminalKind));
-const RECORD_REQUEST_KEYS = new Set([
-  'runId',
-  'sourceCommit',
-  'task',
-  'agent',
-  'attempt',
-  'depth',
-  'parent',
-  'terminal',
-]);
+const RECORD_REQUEST_KEYS = new Set<string>(
+  Object.values(DelegationRecordRequestField),
+);
 
 async function main(): Promise<number> {
   const commandLine = parseCommandLine(process.argv.slice(2));

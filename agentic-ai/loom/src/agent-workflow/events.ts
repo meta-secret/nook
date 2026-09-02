@@ -12,6 +12,12 @@ export enum WorkflowRuntimeActivityKind {
   RuntimeError = 'runtime-error',
 }
 
+export enum RuntimeActivityObservationField {
+  Activity = 'activity',
+  Detail = 'detail',
+  CortexReferences = 'cortexReferences',
+}
+
 export type RuntimeActivityObservation = {
   readonly activity: WorkflowRuntimeActivityKind;
   readonly detail: string;

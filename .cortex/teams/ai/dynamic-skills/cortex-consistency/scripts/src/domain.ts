@@ -18,7 +18,7 @@ export enum CortexPolicyContractKind {
 }
 
 export enum CortexConsistencyContractKind {
-  Request = 'cortex-consistency-compile-v1',
+  Request = 'cortex-consistency-compile-v2',
   Result = 'cortex-consistency-findings-v1',
 }
 
@@ -94,6 +94,7 @@ export enum CortexContractFindingCode {
   MissingPolicyDocument = 'missing-policy-document',
   MissingPolicyImport = 'missing-policy-import',
   MissingPolicyReference = 'missing-policy-reference',
+  MissingRuntimeDocument = 'missing-runtime-document',
   MissingSchemaAuthorityReference = 'missing-schema-authority-reference',
   MissingRuntimeEntrypoint = 'missing-runtime-entrypoint',
   RetiredRuntimeEntrypoint = 'retired-runtime-entrypoint',

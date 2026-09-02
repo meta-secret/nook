@@ -19,6 +19,8 @@ The output is a compact user-visible hierarchy. It is not execution state.
 - Every Team Agent is rendered directly beneath `gizmo`.
 - Repeated teams remain separate Team Agent entries.
 - The renderer preserves the validated request order.
+- The application round-trips the bounded result contract and independently
+  verifies the exact tree against the admitted request before returning it.
 
 The application has no filesystem, process, network, persistence, admission,
 scheduling, retry, or agent-lifecycle authority. The active harness alone

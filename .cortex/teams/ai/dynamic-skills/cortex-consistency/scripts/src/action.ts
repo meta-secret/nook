@@ -11,7 +11,7 @@ import {
 
 export const CORTEX_CONSISTENCY_COMPILE_EXAMPLE = `cortexConsistency:
   compile:
-    kind: cortex-consistency-compile-v1
+    kind: cortex-consistency-compile-v2
     documents:
       - relativePath: .cortex/AGENTS.md
         references:

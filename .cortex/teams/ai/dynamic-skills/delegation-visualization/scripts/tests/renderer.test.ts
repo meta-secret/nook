@@ -5,6 +5,11 @@ import {
   type RenderDelegationVisualizationRequest,
 } from '../src/domain.ts';
 import { renderDelegationVisualization } from '../src/renderer.ts';
+import { executeDelegationVisualizationApplication } from '../src/application.ts';
+import {
+  decodeDelegationVisualizationResult,
+  verifyDelegationVisualizationResult,
+} from '../src/result-codec.ts';
 
 describe('delegation visualization renderer', () => {
   test('renders independent Team Agents as ordered Gizmo siblings', () => {
@@ -66,5 +71,37 @@ describe('delegation visualization renderer', () => {
     expect(renderDelegationVisualization(request).match(/ai/gu)).toHaveLength(
       2,
     );
+  });
+
+  test('round-trips and verifies the admitted request against the tree', () => {
+    const request: RenderDelegationVisualizationRequest = {
+      kind: DelegationVisualizationContractKind.Request,
+      tasks: [
+        {
+          id: 'first',
+          team: DelegationVisualizationTeam.Ai,
+          description: 'first task',
+          dependencies: [],
+        },
+      ],
+    };
+    const result = executeDelegationVisualizationApplication(request);
+    expect(
+      verifyDelegationVisualizationResult({
+        request,
+        result: decodeDelegationVisualizationResult(JSON.stringify(result)),
+      }),
+    ).toEqual(result);
+    expect(() =>
+      verifyDelegationVisualizationResult({
+        request,
+        result: { ...result, tree: 'gizmo\n' },
+      }),
+    ).toThrow();
+    expect(() =>
+      decodeDelegationVisualizationResult(
+        JSON.stringify({ ...result, unverified: true }),
+      ),
+    ).toThrow();
   });
 });

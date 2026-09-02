@@ -126,6 +126,67 @@ test('accepts the static skill host for native delegation rendering', () => {
   expect(compileCortexContracts(compileRequest)).toEqual([]);
 });
 
+test('rejects a missing registered runtime document', () => {
+  const workflow = '.cortex/gizmo/workflows/subagent-delegation.md';
+  const compileRequest: AuditCortexContractsArgs = {
+    registry: {
+      contexts: [],
+      policies: [],
+      runtimes: [
+        {
+          document: workflow,
+          allowedCommandPrefixes: ['task skills:run'],
+          requiredCommandPrefixes: ['task skills:run'],
+          retiredCommandPrefixes: [],
+        },
+      ],
+    },
+    documents: [],
+  };
+  expect(compileCortexContracts(compileRequest)).toEqual([
+    expect.objectContaining({
+      code: CortexContractFindingCode.MissingRuntimeDocument,
+      file: workflow,
+    }),
+  ]);
+});
+
+test('requires an exact runtime command prefix boundary', () => {
+  const workflow = '.cortex/gizmo/workflows/subagent-delegation.md';
+  const compileRequest: AuditCortexContractsArgs = {
+    registry: {
+      contexts: [],
+      policies: [],
+      runtimes: [
+        {
+          document: workflow,
+          allowedCommandPrefixes: ['task skills:run'],
+          requiredCommandPrefixes: ['task skills:run'],
+          retiredCommandPrefixes: [],
+        },
+      ],
+    },
+    documents: [
+      {
+        relativePath: workflow,
+        references: [],
+        commands: ['task skills:runaway REQUEST_YAML=strict-yaml'],
+      },
+    ],
+  };
+  expect(compileCortexContracts(compileRequest)).toHaveLength(2);
+  expect(compileCortexContracts(compileRequest)).toEqual([
+    expect.objectContaining({
+      message:
+        'Cortex workflow names an unregistered runtime entrypoint: task skills:runaway REQUEST_YAML=strict-yaml',
+    }),
+    expect.objectContaining({
+      message:
+        'Cortex workflow is missing its required runtime entrypoint: task skills:run',
+    }),
+  ]);
+});
+
 test('rejects an imported policy without an authority reference', () => {
   expect(compileCortexContracts(request([]))).toContainEqual(
     expect.objectContaining({

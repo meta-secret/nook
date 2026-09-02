@@ -109,14 +109,21 @@ function validateRuntimeContract(
 ): void {
   const documentPath = normalizePath(request.runtime.document);
   const document = request.documents.get(documentPath);
-  if (!document) return;
+  if (!document) {
+    request.findings.push({
+      code: CortexContractFindingCode.MissingRuntimeDocument,
+      file: documentPath,
+      message: `Cortex runtime references a missing document: ${documentPath}`,
+    });
+    return;
+  }
   const commands = document.commands.map(normalizeCommand);
   for (const command of commands) {
     if (!runtimeCommand(command)) continue;
     const recognized = [
       ...request.runtime.allowedCommandPrefixes,
       ...request.runtime.retiredCommandPrefixes,
-    ].some((prefix) => command.startsWith(prefix));
+    ].some((prefix) => commandMatchesPrefix({ command, prefix }));
     if (recognized) continue;
     request.findings.push({
       code: CortexContractFindingCode.MissingRuntimeEntrypoint,
@@ -125,7 +132,12 @@ function validateRuntimeContract(
     });
   }
   for (const required of request.runtime.requiredCommandPrefixes) {
-    if (commands.some((command) => command.startsWith(required))) continue;
+    if (
+      commands.some((command) =>
+        commandMatchesPrefix({ command, prefix: required }),
+      )
+    )
+      continue;
     request.findings.push({
       code: CortexContractFindingCode.MissingRuntimeEntrypoint,
       file: documentPath,
@@ -133,13 +145,30 @@ function validateRuntimeContract(
     });
   }
   for (const retired of request.runtime.retiredCommandPrefixes) {
-    if (!commands.some((command) => command.startsWith(retired))) continue;
+    if (
+      !commands.some((command) =>
+        commandMatchesPrefix({ command, prefix: retired }),
+      )
+    )
+      continue;
     request.findings.push({
       code: CortexContractFindingCode.RetiredRuntimeEntrypoint,
       file: documentPath,
       message: `Cortex workflow names a retired runtime entrypoint: ${retired}`,
     });
   }
+}
+
+type CommandPrefixMatchRequest = {
+  readonly command: string;
+  readonly prefix: string;
+};
+
+function commandMatchesPrefix(request: CommandPrefixMatchRequest): boolean {
+  return (
+    request.command === request.prefix ||
+    request.command.startsWith(`${request.prefix} `)
+  );
 }
 
 function normalizeCommand(command: string): string {
