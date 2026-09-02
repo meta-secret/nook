@@ -251,7 +251,7 @@ The plan must contain:
 - a `PR slices, estimates, and acceptance evidence` value with exactly one row;
   - the row uses the current Gizmo ID;
   - its predecessor is `None`;
-  - its positive estimate is at most 2,000; and
+  - its non-negative estimate is at most 2,000; and
   - it states the PR acceptance evidence;
 - expected completion evidence; and
 - a safety review confirming that no raw prompt, transcript, secret, private

@@ -808,16 +808,11 @@ export function finalizeModuleDeliveryIntegration(
   if (!allAccepted) {
     throw new Error('Final module join requires every accepted task result.');
   }
-  const handoffs: TreeHandoff[] = request.acceptedPlan.topologicalOrder.flatMap(
-    (taskId) =>
-      request.state.acceptedWrites
-        .filter((entry) => entry.taskId === taskId)
-        .map((entry) => ({
-          taskId: entry.taskId,
-          baselineCommit: entry.startingFrontier,
-          commit: entry.handoff.commit,
-        })),
-  );
+  const handoffs: TreeHandoff[] = request.state.acceptedWrites.map((entry) => ({
+    taskId: entry.taskId,
+    baselineCommit: entry.startingFrontier,
+    commit: entry.handoff.commit,
+  }));
   const application: ApplyModuleWaveTreeRequest = {
     workspace: request.state.workspace,
     currentHead: request.state.sourceCommit,

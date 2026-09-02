@@ -13,6 +13,7 @@ creating a separate Git integration system.
 - Write-capable Team Agents run sequentially in the current checkout.
 - A downstream Team Agent starts from the current shared-branch commit.
 - A Team Agent may commit its complete scoped change when Gizmo requests it.
+- Before another writer starts, the current writer must commit its scoped change.
 - Gizmo continues from that commit without replaying it elsewhere.
 - Read-only experts return evidence only. They do not mutate Git or delivery
   state.
@@ -24,8 +25,8 @@ creating a separate Git integration system.
 2. Assign each implementation task to its functional owner.
 3. Start the first write-capable Team Agent in the current checkout.
 4. Verify its focused tests and scoped changes.
-5. Continue from its commit or working-tree result.
-6. Start the next dependent writer only after the provider result is present.
+5. If another writer follows, require the current writer's scoped commit.
+6. Start the next dependent writer from that provider commit.
 7. Run shared validation after the coherent module sequence is complete.
 
 ## Review and corrections
