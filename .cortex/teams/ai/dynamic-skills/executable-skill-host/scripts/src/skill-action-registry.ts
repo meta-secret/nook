@@ -25,17 +25,9 @@ import {
 import type { CortexConsistencyResult } from '../../../cortex-consistency/scripts/src/domain.ts';
 import { CortexContractFindingCode } from '../../../cortex-consistency/scripts/src/domain.ts';
 import {
-  DELEGATION_VISUALIZATION_ACTION_DEFINITION,
-  decodeDelegationVisualizationActionPayload,
-  DelegationVisualizationRequestDecodeError,
-  executeDelegationVisualizationAction,
-} from '../../../delegation-visualization/scripts/src/action.ts';
-import type { DelegationVisualizationResult } from '../../../delegation-visualization/scripts/src/domain.ts';
-import {
   CortexArticleStructureOperation,
   CortexConsistencyOperation,
   CortexDocumentMapOperation,
-  DelegationVisualizationOperation,
   SkillRequestFamily,
   SKILL_HOST_REQUEST_BYTE_LIMIT,
   SKILL_HOST_RESPONSE_BYTE_LIMIT,
@@ -97,11 +89,6 @@ const CORTEX_CONSISTENCY_DISCOVERY_SCHEMA: SkillObjectSchema = {
   maximumRequestBytes: SKILL_HOST_REQUEST_BYTE_LIMIT,
   maximumResponseBytes: SKILL_HOST_RESPONSE_BYTE_LIMIT,
 };
-const DELEGATION_VISUALIZATION_DISCOVERY_SCHEMA: SkillObjectSchema = {
-  ...DELEGATION_VISUALIZATION_ACTION_DEFINITION.inputSchema,
-  maximumRequestBytes: SKILL_HOST_REQUEST_BYTE_LIMIT,
-  maximumResponseBytes: SKILL_HOST_RESPONSE_BYTE_LIMIT,
-};
 const DISCOVERABLE_ACTIONS: readonly DiscoverableSkillAction[] = [
   {
     skillId: 'skills',
@@ -145,17 +132,6 @@ const DISCOVERABLE_ACTIONS: readonly DiscoverableSkillAction[] = [
       CORTEX_CONSISTENCY_ACTION_DEFINITION.resolvedExampleYaml,
     inputSchema: CORTEX_CONSISTENCY_DISCOVERY_SCHEMA,
   },
-  {
-    skillId: DELEGATION_VISUALIZATION_ACTION_DEFINITION.skillId,
-    family: SkillRequestFamily.DelegationVisualization,
-    operation: DelegationVisualizationOperation.Render,
-    description: DELEGATION_VISUALIZATION_ACTION_DEFINITION.description,
-    exampleRequest: SKILL_RUN_INVOKE,
-    exampleYaml: DELEGATION_VISUALIZATION_ACTION_DEFINITION.exampleYaml,
-    resolvedExampleYaml:
-      DELEGATION_VISUALIZATION_ACTION_DEFINITION.resolvedExampleYaml,
-    inputSchema: DELEGATION_VISUALIZATION_DISCOVERY_SCHEMA,
-  },
 ];
 export function listDiscoverableSkillActions(): SkillToolsListResult {
   return { actions: DISCOVERABLE_ACTIONS };
@@ -179,20 +155,12 @@ export type SkillActionRequest =
       readonly family: SkillRequestFamily.CortexConsistency;
       readonly operation: CortexConsistencyOperation.Compile;
       readonly request: ReturnType<typeof decodeCortexConsistencyActionPayload>;
-    }
-  | {
-      readonly family: SkillRequestFamily.DelegationVisualization;
-      readonly operation: DelegationVisualizationOperation.Render;
-      readonly request: ReturnType<
-        typeof decodeDelegationVisualizationActionPayload
-      >;
     };
 export type SkillActionResult =
   | SkillToolsListResult
   | CortexArticleStructureResult
   | CortexConsistencyResult
-  | CortexDocumentMapResult
-  | DelegationVisualizationResult;
+  | CortexDocumentMapResult;
 export type SkillActionDecodeOutcome =
   | { readonly ok: true; readonly request: SkillActionRequest }
   | { readonly ok: false; readonly path: string; readonly message: string };
@@ -218,9 +186,6 @@ export function decodeSkillActionRequest(
   if (Object.hasOwn(value, SkillRequestFamily.CortexConsistency)) {
     return decodeCortexConsistencyAction(value);
   }
-  if (Object.hasOwn(value, SkillRequestFamily.DelegationVisualization)) {
-    return decodeDelegationVisualizationAction(value);
-  }
   const request: InvalidSkillRequest = {
     path: unknownSkillCommandPath(''),
     message: 'Unknown skill request family.',
@@ -239,9 +204,7 @@ export function executeSkillAction(
   if (request.family === SkillRequestFamily.CortexDocumentMap) {
     return executeCortexDocumentMapAction(request.request);
   }
-  return request.family === SkillRequestFamily.CortexConsistency
-    ? executeCortexConsistencyAction(request.request)
-    : executeDelegationVisualizationAction(request.request);
+  return executeCortexConsistencyAction(request.request);
 }
 export function defaultSkillBlueprint(): string {
   return TOOLS_LIST_EXAMPLE;
@@ -494,72 +457,6 @@ function decodeCortexConsistencyAction(
     const separator = suffix.startsWith('[') ? '' : '.';
     return invalidRequest({
       path: `cortexConsistency.compile${suffix ? `${separator}${suffix}` : ''}`,
-      message: error instanceof Error ? error.message : String(error),
-    });
-  }
-}
-function decodeDelegationVisualizationAction(
-  root: UntrustedSkillYamlMap,
-): SkillActionDecodeOutcome {
-  const family = skillYamlProperty({
-    map: root,
-    key: SkillRequestFamily.DelegationVisualization,
-  });
-  if (!family.found || !isSkillYamlMap(family.value)) {
-    return invalidRequest({
-      path: 'delegationVisualization',
-      message: 'Expected an action object.',
-    });
-  }
-  const render = skillYamlProperty({
-    map: family.value,
-    key: DelegationVisualizationOperation.Render,
-  });
-  const operation = Object.keys(family.value).find(
-    (key) => key !== DelegationVisualizationOperation.Render,
-  );
-  if (typeof operation === 'string') {
-    return invalidRequest({
-      path: unknownSkillCommandPath('delegationVisualization'),
-      message: 'Expected only the render action.',
-    });
-  }
-  if (!render.found) {
-    return invalidRequest({
-      path: 'delegationVisualization.render',
-      message: 'Expected the render action.',
-    });
-  }
-  const validation = validateSkillInput({
-    path: 'delegationVisualization.render',
-    schema: DELEGATION_VISUALIZATION_ACTION_DEFINITION.inputSchema,
-    value: render.value,
-  });
-  if (!validation.ok) {
-    return invalidRequest({
-      path: validation.path,
-      message: validation.message,
-    });
-  }
-  try {
-    return {
-      ok: true,
-      request: {
-        family: SkillRequestFamily.DelegationVisualization,
-        operation: DelegationVisualizationOperation.Render,
-        request: decodeDelegationVisualizationActionPayload(
-          JSON.stringify(render.value),
-        ),
-      },
-    };
-  } catch (error) {
-    const suffix =
-      error instanceof DelegationVisualizationRequestDecodeError
-        ? error.path
-        : '';
-    const separator = suffix.startsWith('[') ? '' : '.';
-    return invalidRequest({
-      path: `delegationVisualization.render${suffix ? `${separator}${suffix}` : ''}`,
       message: error instanceof Error ? error.message : String(error),
     });
   }

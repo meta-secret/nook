@@ -21,8 +21,7 @@ This card does not authorize Docker inside k8s or k0s. Cluster execution follows
 - Cache mounts introduce hidden BuildKit state and cause runner lockups.
 - Install dependencies directly in ordinary Dockerfile `RUN` layers.
 - Let immutable Docker layers and lockfiles define the cache boundary.
-- Enforced by the standalone `preflight/` invariant suite. Gizmo dispatches
-  that suite on a hosted worker with `task remote TASK_NAME=preflight`.
+- Hosted enforcement: Gizmo dispatches `task remote TASK_NAME=preflight`.
 
 ### Never kill the Docker daemon
 
@@ -54,14 +53,12 @@ Cluster Pods are excluded from local Docker lifecycle guidance. They may use a r
 2. [ ] Only individual containers are stopped (`docker stop <id>`); daemon remains untouched.
 3. [ ] Dependency requirements and lockfiles match the owning update policy.
 4. [ ] Bun lockfiles are committed for web packages.
-5. [ ] Gizmo collected hosted `task remote TASK_NAME=preflight` evidence and
-       path-applicable exact-head complete PR validation.
+5. [ ] Gizmo collected hosted preflight and exact-head complete PR validation.
 6. [ ] Missing hosted evidence is a blocker, never grounds for local fallback.
 
 ## Validation
 
-- Gizmo dispatches `task remote TASK_NAME=preflight` against the pushed head.
-- Gizmo dispatches `task pr:validate PR=<number>` for path-applicable exact-head
-  build and harness evidence.
+- Gizmo dispatches hosted `task remote TASK_NAME=preflight` and path-applicable
+  exact-head `task pr:validate PR=<number>` evidence.
 - Missing hosted evidence blocks delivery; workers must not substitute local
   `task preflight`, `task setup`, or another local build or test command.

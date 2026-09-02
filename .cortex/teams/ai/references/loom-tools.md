@@ -115,19 +115,9 @@ arguments:
   pr: 123
 ```
 
-Use one domain root family and descriptive fields. Same-prefix operations nest:
-
-```yaml
-# right
-agentStats:
-  assemble:
-    prNumber: 123
-    scratchPath: '{agentTempDir}/pr-123-scratch.json'
-    outputPath: '{agentTempDir}/123.yaml'
-    includeTestInventory: true
-```
-
-Exactly one root family key is allowed.
+Use one registered domain root family and descriptive fields. Exactly one root
+family key is allowed. Agent statistics is not a generic Loom family; use its
+control adapter below.
 
 Unknown fields fail closed.
 
@@ -203,12 +193,20 @@ Validate and publish use `agentStats.validate` / `agentStats.publish` with
 `statsFile`. Agent-statistics paths accept `{agentTempDir}` for stable isolation
 by Git commit and worktree. See
 [Agent PR Statistics](../../../gizmo/workflows/agent-statistics.md#mechanical-entrypoint--loom).
-AI workers do not invoke its local alias; Gizmo follows that delivery-control
-workflow. After the source PR is merged, Gizmo uses the dependency-free
+Generic Loom discovery and dispatch reject this family. After the source PR is
+merged, Gizmo uses the dependency-free
 `task loom:agent-stats-control` stdin JSON adapter for assemble, validate, and
 publish. The adapter rejects local test-inventory collection; hosted exact-head
 evidence supplies that inventory. It does not install Loom or expose generic
 tool discovery or invocation.
+
+The complete stdin envelope is exactly one of these JSON objects:
+
+```jsonl
+{"operation":"assemble","request":{"prNumber":123,"scratchPath":"{agentTempDir}/pr-123-scratch.json","outputPath":"{agentTempDir}/123.yaml","includeTestInventory":false}}
+{"operation":"validate","request":{"statsFile":"{agentTempDir}/123.yaml"}}
+{"operation":"publish","request":{"statsFile":"{agentTempDir}/123.yaml"}}
+```
 
 ### prLand (status / validate / ready / mergeCheck)
 

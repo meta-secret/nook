@@ -8,10 +8,8 @@ import {
 import { decodeLoomRequest } from '../src/codec/request.ts';
 import { parseYamlText } from '../src/codec/yaml.ts';
 import { dispatchValue } from '../src/tools/dispatch.ts';
-import { decodeAgentStatsAssemblePayload } from '../src/codec/args/agent-stats.ts';
 import { decodePrePushRequest } from '../src/codec/args/pre-push.ts';
 
-import type { DecodeAgentStatsAssemblePayloadArgs } from '../src/codec/args/agent-stats.ts';
 describe('loom domain request codec', () => {
   test('decodes a valid prePush request', () => {
     const decodedArgs6 = {
@@ -24,22 +22,22 @@ describe('loom domain request codec', () => {
     }
   });
 
-  test('decodes nested agentStats.assemble request', () => {
+  test('rejects generic local agentStats execution', async () => {
     const decodedArgs5 = {
       agentStats: {
         assemble: {
           prNumber: 12,
           scratchPath: '/tmp/a.json',
           outputPath: '/tmp/12.yaml',
-          includeTestInventory: false,
+          includeTestInventory: true,
         },
       },
     };
-    const decoded = decodeLoomRequest(decodedArgs5);
-    expect(decoded.status).toBe(DecodeStatus.Ok);
-    if (decoded.status === DecodeStatus.Ok) {
-      expect(decoded.value.family).toBe(RequestFamily.AgentStats);
-    }
+    const outcome = await dispatchValue(decodedArgs5);
+    expect(outcome.exitCode).toBe(1);
+    expect(JSON.stringify(outcome.body)).toContain(
+      'task loom:agent-stats-control',
+    );
   });
 
   test('rejects generic arguments envelopes', () => {
@@ -68,42 +66,6 @@ describe('loom domain request codec', () => {
       expect(
         decoded.errors.some(
           (entry) => entry.path === 'prePush.stageHostUpdates',
-        ),
-      ).toBe(true);
-    }
-  });
-
-  test('decodes agentStats assemble payload', () => {
-    const decodedArgs2: DecodeAgentStatsAssemblePayloadArgs = {
-      value: {
-        prNumber: 12,
-        scratchPath: '/tmp/a.json',
-        outputPath: '/tmp/12.yaml',
-        includeTestInventory: false,
-      },
-      path: 'agentStats.assemble',
-    };
-    const decoded = decodeAgentStatsAssemblePayload(decodedArgs2);
-    expect(decoded.status).toBe(DecodeStatus.Ok);
-  });
-
-  test('rejects unknown agentStats assemble fields', () => {
-    const decodedArgs: DecodeAgentStatsAssemblePayloadArgs = {
-      value: {
-        prNumber: 12,
-        scratchPath: '/tmp/a.json',
-        outputPath: '/tmp/12.yaml',
-        includeTestInventory: false,
-        action: 'assemble',
-      },
-      path: 'agentStats.assemble',
-    };
-    const decoded = decodeAgentStatsAssemblePayload(decodedArgs);
-    expect(decoded.status).toBe(DecodeStatus.Failed);
-    if (decoded.status === DecodeStatus.Failed) {
-      expect(
-        decoded.errors.some(
-          (entry) => entry.path === 'agentStats.assemble.action',
         ),
       ).toBe(true);
     }

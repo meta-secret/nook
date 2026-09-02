@@ -640,7 +640,7 @@ remoteWorkflow.requireAll([
   "name: Report Kubernetes worker node",
   ': "${KUBERNETES_NODE_NAME:?KUBERNETES_NODE_NAME is required}"',
   "printf '::notice title=Kubernetes worker::%s\\n' \"$KUBERNETES_NODE_NAME\"",
-  "timeout-minutes: 45",
+  "timeout-minutes: ${{ (inputs.tasks || inputs.task) == 'agent-stats:inventory' && 45 || 30 }}",
   "runs-on: nook-k0s-container",
   "Run repository invariant preflight",
   "run: task preflight",
@@ -661,6 +661,10 @@ remoteWorkflow.requireAll([
 remoteWorkflow.requireBefore({
   first: "name: Report Kubernetes worker node",
   second: "uses: actions/checkout@v7",
+});
+remoteWorkflow.requireBefore({
+  first: "timeout-minutes: ${{ (inputs.tasks || inputs.task) == 'agent-stats:inventory' && 45 || 30 }}",
+  second: "container:\n      image: registry.dev.nokey.sh/nook/remote-buildcache/nook-web-e2e:run-",
 });
 remoteWorkflow.require(
   "inputs.dispatch_nonce || 'default'",

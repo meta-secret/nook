@@ -814,7 +814,9 @@ RUN apt-get update \
     && install -m 0755 /tmp/chromedriver/chromedriver-linux64/chromedriver "$CHROMEDRIVER" \
     && rm -rf /tmp/chromedriver /tmp/chromedriver.zip /var/lib/apt/lists/* \
     && bun install --cwd agentic-ai/loom --frozen-lockfile \
-    && bun install --cwd nook-app/nook-web/nook-web-app --frozen-lockfile
+    && bun install --cwd nook-app/nook-web/nook-web-app --frozen-lockfile \
+    && bun install --cwd nook-app/nook-web/nook-web-research --frozen-lockfile \
+    && ln -s ../nook-web-app/node_modules nook-app/nook-web/nook-web-extension/node_modules
 
 # -----------------------------------------------------------------------------
 

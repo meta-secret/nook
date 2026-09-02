@@ -3,7 +3,6 @@ export enum SkillRequestFamily {
   CortexArticleStructure = 'cortexArticleStructure',
   CortexConsistency = 'cortexConsistency',
   CortexDocumentMap = 'cortexDocumentMap',
-  DelegationVisualization = 'delegationVisualization',
 }
 
 export enum SkillToolsOperation {
@@ -20,10 +19,6 @@ export enum CortexDocumentMapOperation {
 
 export enum CortexConsistencyOperation {
   Compile = 'compile',
-}
-
-export enum DelegationVisualizationOperation {
-  Render = 'render',
 }
 
 export enum SkillCommandPhase {
@@ -117,7 +112,6 @@ export type DiscoverableSkillAction = {
     | CortexArticleStructureOperation
     | CortexConsistencyOperation
     | CortexDocumentMapOperation
-    | DelegationVisualizationOperation
     | SkillToolsOperation;
   readonly description: string;
   readonly exampleRequest: string;

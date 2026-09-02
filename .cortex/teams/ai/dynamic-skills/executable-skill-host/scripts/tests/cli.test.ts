@@ -53,7 +53,6 @@ type CliResponse = {
       readonly line: number;
       readonly message: string;
     }[];
-    readonly tree?: string;
     readonly actions?: readonly {
       readonly description: string;
       readonly exampleRequest: string;
@@ -115,7 +114,7 @@ describe('provider-neutral executable skill YAML host', () => {
     expect(response.ok).toBe(true);
     const actions = response.result?.actions;
     if (!actions) throw new Error('Missing discovered actions.');
-    expect(actions).toHaveLength(5);
+    expect(actions).toHaveLength(4);
     const action = actions[0];
     if (!action) throw new Error('Missing tools-list action.');
     expect(action.description).not.toBeEmpty();
@@ -215,25 +214,6 @@ describe('provider-neutral executable skill YAML host', () => {
     expect(response.family).toBe(SkillRequestFamily.CortexConsistency);
     expect(response.operation).toBe('compile');
     expect(response.result?.findings?.length).toBeGreaterThan(0);
-  });
-  test('renders delegation through its validated static provider', () => {
-    const action = listDiscoverableSkillActions().actions.at(4);
-    if (!action) throw new Error('Missing delegation visualization action.');
-    const outcome = dispatchSkillYamlText(action.exampleYaml);
-    const response = parseResponse(outcome.yaml);
-    expect(outcome.exitCode).toBe(0);
-    expect(response.family).toBe(SkillRequestFamily.DelegationVisualization);
-    expect(response.operation).toBe('render');
-    expect(response.result?.tree).toBe(
-      [
-        'gizmo',
-        '├─ ai',
-        '│ └─ update Cortex',
-        '└─ web-development',
-        '  └─ create security key component [after: update-cortex]',
-        '',
-      ].join('\n'),
-    );
   });
   test('aligns discovered and provider UTF-16 string limits', () => {
     const action = listDiscoverableSkillActions().actions.at(1);

@@ -300,16 +300,6 @@ tasks:
         vars:
           CONFIG: '{{.CONFIG}}'
 
-  loom:agent-stats:
-    desc: Assemble, validate, or publish AI-agent stats via Loom (CONFIG=<request.yaml>).
-    deps: [loom:install]
-    requires:
-      vars: [CONFIG]
-    cmds:
-      - task: loom:run
-        vars:
-          CONFIG: '{{.CONFIG}}'
-
   loom:pr-land:
     desc: PR land assist via Loom (CONFIG=<request.yaml>).
     deps: [loom:install]

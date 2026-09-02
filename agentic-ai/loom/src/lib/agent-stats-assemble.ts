@@ -494,24 +494,37 @@ function countVitest(repoRoot: string): number {
     .length;
 }
 
+export function parsePlaywrightSummary(stdout: string): number {
+  // prettier-ignore
+  const [line, ...extra] = stdout.match(/^Total:.*$/gm) || [], summary = line ? line.match(/^Total:\s+(\d+)\s+tests?\s+in\s+\d+\s+files?$/) : false, count = summary ? Number.parseInt(summary[1], 10) : -1;
+  return extra.length || !Number.isSafeInteger(count) || count < 0 ? -1 : count;
+}
+
 function countPlaywright(repoRoot: string): number {
-  const appRoot = path.join(repoRoot, 'nook-app', 'nook-web', 'nook-web-app');
-  const listedArgs: RunCommandArgs = {
-    command: 'env',
-    // Keep the Playwright-supported transform and its scope adjacent and exact.
+  const webRoot = path.join(repoRoot, 'nook-app', 'nook-web');
+  let total = 0;
+  for (const suite of [
+    'nook-web-app',
+    'nook-web-extension',
+    'nook-web-research',
+  ]) {
+    const suiteRoot = path.join(webRoot, suite);
+    const listedArgs: RunCommandArgs = {
+      command: 'env',
+      // Keep the Playwright-supported transform and its scope adjacent and exact.
+      // prettier-ignore
+      args: [`PW_TEST_SOURCE_TRANSFORM=${path.join(repoRoot, 'agentic-ai/loom/playwright-inventory-transform.cjs')}`, `PW_TEST_SOURCE_TRANSFORM_SCOPE=${suiteRoot}${path.sep}`, 'bunx', 'playwright', 'test', '--list'],
+      cwd: suiteRoot,
+    };
+    const listed = runCommand(listedArgs);
     // prettier-ignore
-    args: [`PW_TEST_SOURCE_TRANSFORM=${path.join(repoRoot, 'agentic-ai/loom/playwright-inventory-transform.cjs')}`, `PW_TEST_SOURCE_TRANSFORM_SCOPE=${appRoot}${path.sep}`, 'bunx', 'playwright', 'test', '--list'],
-    cwd: appRoot,
-  };
-  const listed = runCommand(listedArgs);
-  if (listed.exitCode !== 0) {
-    failInventory({ name: 'playwright list', root: repoRoot, result: listed });
+    if (listed.exitCode !== 0) failInventory({ name: `${suite} playwright list`, root: repoRoot, result: listed });
+    const count = parsePlaywrightSummary(listed.stdout);
+    // prettier-ignore
+    if (count < 0) failInventory({ name: `${suite} playwright summary`, root: repoRoot, result: listed });
+    total += count;
   }
-  // prettier-ignore
-  const [line, ...extra] = listed.stdout.match(/^Total:.*$/gm) || [], summary = line ? line.match(/^Total:\s+(\d+)\s+tests?\s+in\s+\d+\s+files?$/) : false, count = summary ? Number.parseInt(summary[1], 10) : -1;
-  // prettier-ignore
-  if (extra.length || !Number.isSafeInteger(count) || count < 0) failInventory({ name: 'playwright summary', root: repoRoot, result: listed });
-  return count;
+  return total;
 }
 
 type InventoryFailure = { name: string; root: string; result: CommandOutput };

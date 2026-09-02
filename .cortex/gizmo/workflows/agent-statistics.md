@@ -42,6 +42,15 @@ It is not a free-form task diary.
 Before merge, Gizmo runs `task remote TASK_NAME=agent-stats:inventory` for the exact final PR head.
 It retains `test-inventory-<head-sha>` as `test_inventory`; missing or mismatched evidence blocks merge without fallback, and assembly never redispatches or runs it locally.
 
+After merge, pipe exactly one complete envelope to
+`task loom:agent-stats-control`:
+
+```jsonl
+{"operation":"assemble","request":{"prNumber":123,"scratchPath":"{agentTempDir}/pr-123-scratch.json","outputPath":"{agentTempDir}/123.yaml","includeTestInventory":false}}
+{"operation":"validate","request":{"statsFile":"{agentTempDir}/123.yaml"}}
+{"operation":"publish","request":{"statsFile":"{agentTempDir}/123.yaml"}}
+```
+
 ### Agent-local path token
 
 - `scratchPath`, `outputPath`, and `statsFile` accept `{agentTempDir}`.

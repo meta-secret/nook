@@ -1,7 +1,3 @@
-import {
-  AGENT_STATS_ASSEMBLE_INPUT_SCHEMA,
-  AGENT_STATS_FILE_INPUT_SCHEMA,
-} from '../codec/args/agent-stats.ts';
 import { CORTEX_AUDIT_INPUT_SCHEMA } from '../codec/args/cortex-audit.ts';
 import { CORTEX_SESSION_CLEAN_INPUT_SCHEMA } from '../codec/args/cortex-session-clean.ts';
 import { DEPENDENCY_POPULARITY_INPUT_SCHEMA } from '../codec/args/dependency-popularity.ts';
@@ -12,11 +8,7 @@ import {
 } from '../codec/args/pr-land.ts';
 import { SKILL_SCAFFOLD_INPUT_SCHEMA } from '../codec/args/skill-scaffold.ts';
 import { TOOLS_LIST_INPUT_SCHEMA } from '../codec/args/tools-list.ts';
-import {
-  AgentStatsOperation,
-  PrLandOperation,
-  RequestFamily,
-} from '../codec/enums.ts';
+import { PrLandOperation, RequestFamily } from '../codec/enums.ts';
 import {
   ExampleCatalogPresence,
   ExampleOperationMarker,
@@ -26,12 +18,6 @@ import {
 } from '../codec/example-documents.ts';
 import type { ObjectJsonSchema } from '../codec/json-schema.ts';
 import { listRequestFamilies, type LoomRequest } from '../codec/request.ts';
-import {
-  runAgentStatsAssemble,
-  runAgentStatsPublish,
-  runAgentStatsValidate,
-  type AgentStatsReport,
-} from '../commands/agent-stats.ts';
 import {
   runCortexAudit,
   type CortexAuditReport,
@@ -67,7 +53,7 @@ import type { LoomFailureDetailArgs } from '../loom-failure.ts';
 import type { ResolveAgentTempPathRequest } from '../lib/agent-temp-path.ts';
 export type DiscoverableRequest = {
   readonly family: RequestFamily;
-  readonly operation?: AgentStatsOperation | PrLandOperation;
+  readonly operation?: PrLandOperation;
   readonly description: string;
   readonly exampleRequest: string;
   readonly exampleYaml: string;
@@ -80,7 +66,6 @@ export type LoomCommandResult =
   | CortexAuditReport
   | CortexSessionCleanReport
   | SkillScaffoldReport
-  | AgentStatsReport
   | PrLandReport
   | DependencyPopularityReport;
 type DiscoverableRequestDefinition = Omit<
@@ -118,27 +103,6 @@ const DISCOVERABLE_DEFINITIONS: readonly DiscoverableRequestDefinition[] = [
     description: 'Create a canonical team-owned Cortex dynamic-skill card.',
     exampleRequest: 'task loom:skill-scaffold CONFIG=<request.yaml>',
     inputSchema: SKILL_SCAFFOLD_INPUT_SCHEMA,
-  },
-  {
-    family: RequestFamily.AgentStats,
-    operation: AgentStatsOperation.Assemble,
-    description: 'Assemble AI-agent stats YAML for a PR.',
-    exampleRequest: 'task loom:agent-stats CONFIG=<request.yaml>',
-    inputSchema: AGENT_STATS_ASSEMBLE_INPUT_SCHEMA,
-  },
-  {
-    family: RequestFamily.AgentStats,
-    operation: AgentStatsOperation.Validate,
-    description: 'Validate an AI-agent stats YAML file.',
-    exampleRequest: 'task loom:agent-stats CONFIG=<request.yaml>',
-    inputSchema: AGENT_STATS_FILE_INPUT_SCHEMA,
-  },
-  {
-    family: RequestFamily.AgentStats,
-    operation: AgentStatsOperation.Publish,
-    description: 'Publish an AI-agent stats YAML file to Workbench.',
-    exampleRequest: 'task loom:agent-stats CONFIG=<request.yaml>',
-    inputSchema: AGENT_STATS_FILE_INPUT_SCHEMA,
   },
   {
     family: RequestFamily.PrLand,
@@ -240,17 +204,11 @@ export async function executeRequest(
       return runCortexSessionClean(request.cortexSessionClean);
     case RequestFamily.SkillScaffold:
       return runSkillScaffold(request.skillScaffold);
-    case RequestFamily.AgentStats: {
-      switch (request.operation) {
-        case AgentStatsOperation.Assemble:
-          return runAgentStatsAssemble(request.assemble);
-        case AgentStatsOperation.Validate:
-          return runAgentStatsValidate(request.validate);
-        case AgentStatsOperation.Publish:
-          return runAgentStatsPublish(request.publish);
-      }
-      break;
-    }
+    case RequestFamily.AgentStats:
+      loomFailureDetail({
+        code: LoomFailureCode.ValidationFailed,
+        text: 'Agent statistics require task loom:agent-stats-control',
+      });
     case RequestFamily.PrLand: {
       switch (request.operation) {
         case PrLandOperation.Status:
