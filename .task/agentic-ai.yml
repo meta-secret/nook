@@ -42,6 +42,26 @@ tasks:
     cmds:
       - bun "{{.REPO_ROOT}}/.cortex/teams/ai/dynamic-skills/executable-skill-host/scripts/src/cli.ts" --tools-list
 
+  vale:cortex:
+    desc: Lint individual Cortex Markdown documents with Vale.
+    silent: true
+    vars:
+      CORTEX_ROOT: '{{default ".cortex" .CORTEX_ROOT}}'
+    cmds:
+      - |
+        set -euo pipefail
+        cortex_root="{{.CORTEX_ROOT}}"
+        bun "{{.REPO_ROOT}}/agentic-ai/loom/src/commands/cortex-vale-cli.ts" \
+          "{{.REPO_ROOT}}" \
+          "$cortex_root"
+
+  vale:cortex:test:
+    desc: Verify the Cortex Vale rules against focused engine fixtures.
+    cmds:
+      - >-
+        bun test
+        ./.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/tests/vale-navigation.test.ts
+
   loom:install:
     desc: Install Loom Bun dependencies with a frozen lockfile.
     dir: agentic-ai/loom

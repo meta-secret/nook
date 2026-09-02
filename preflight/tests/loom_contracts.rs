@@ -239,7 +239,7 @@ fn loom_workflow_audits_every_cortex_change() {
             && workflow
                 .matches("steps.policy-paths.outputs.loom == 'true'")
                 .count()
-                == 5,
+                == 7,
         "repository policy must classify rename sources and condition every Loom-only step"
     );
     assert!(

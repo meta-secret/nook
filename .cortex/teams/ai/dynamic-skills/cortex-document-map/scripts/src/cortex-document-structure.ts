@@ -7,7 +7,6 @@ import type { Heading, Link, Parent, Root, RootContent } from 'mdast';
 
 export enum CortexStructureFindingCode {
   InvalidTitle = 'invalid-title',
-  ProhibitedNavigation = 'prohibited-navigation',
   ProhibitedHtml = 'prohibited-html',
   MissingIndex = 'missing-index',
   InvalidIndexEntry = 'invalid-index-entry',
@@ -366,22 +365,6 @@ function validateDocument(args: ValidateDocumentArgs): void {
       message: 'Document must begin with exactly one H1 title.',
     };
     addFinding(findingArgs);
-  }
-
-  // Check for obsolete inline Relationships or Document map
-  const rootH2s = headings.filter((heading) => heading.depth === 2);
-  for (const h2 of rootH2s) {
-    const text = nodeText(h2).trim();
-    if (text === 'Relationships' || text === 'Document map') {
-      const findingArgs: AddFindingArgs = {
-        findings: args.findings,
-        code: CortexStructureFindingCode.ProhibitedNavigation,
-        file: args.document.relativePath,
-        line: nodeLine(h2),
-        message: `Inline \`## ${text}\` is prohibited; navigation is centralized in \`.cortex/knowledge-graph.md\`.`,
-      };
-      addFinding(findingArgs);
-    }
   }
 }
 
