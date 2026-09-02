@@ -70,8 +70,8 @@ that option invokes product test runners locally.
   temporary directory when creating the scratch JSON before `assemble`.
 - Ordinary absolute and relative paths remain supported.
 - **Validate and publish:** invoke `task loom:agent-stats-control` with
-  `{"operation":"validate","request":{"statsFile":"{agentTempDir}/123.yaml"}}`
-  or the same request with operation `publish`.
+  `{"operation":"validate","request":{"statsFile":"{agentTempDir}/123.yaml"}}`.
+  To publish, use the same request with operation `publish`.
 - **Transport:** pass exactly one JSON request on stdin. Unknown fields and
   operations fail closed.
 - **Protocol:** [Loom tools](../../teams/ai/references/loom-tools.md).
