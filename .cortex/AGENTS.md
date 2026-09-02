@@ -151,7 +151,7 @@ Workbench record, not another coordinator or worker. See the
 
 ## Remote-only agent execution
 
-Agents never run project compilation or validation locally.
+Agents never run product compilation or repository validation locally.
 
 - This prohibition applies to Gizmo Prime and every Team Agent or subagent.
 - It applies even when a command is focused, fast, or needed for direct
@@ -169,7 +169,11 @@ Agents never run project compilation or validation locally.
 - A missing remote task is a blocker. Never substitute local execution.
 - Local activity is limited to read-only inspection, owner-authorized Git
   operations, `git diff --check`, and required formatters.
-- `task loom:pre-push` is the only local validation exception.
+- `task loom:pre-push` is the only local repository-validation exception.
+- `task pr:validate`, `task pr:review`, and `task pr:ready` are local
+  delivery-control entrypoints.
+- Delivery-control entrypoints may prepare their bounded control-plane helper.
+- They may only dispatch or inspect hosted product and repository evidence.
 - Only the user may authorize another exact local command for the current
   task.
 

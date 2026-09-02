@@ -137,7 +137,7 @@ describe('canonical Cortex team authority', () => {
       await writeFile(
         join(cortexRoot, 'AGENTS.md'),
         authority.replace(
-          'Agents never run project compilation or validation locally.',
+          'Agents never run product compilation or repository validation locally.',
           'Agents may run focused project validation locally.',
         ),
         'utf8',
@@ -152,7 +152,7 @@ describe('canonical Cortex team authority', () => {
         code: 'invalid-cortex-team-authority',
         path: '.cortex/AGENTS.md',
         message:
-          'Canonical Cortex team authority is missing marker: Agents never run project compilation or validation locally.',
+          'Canonical Cortex team authority is missing marker: Agents never run product compilation or repository validation locally.',
       });
     } finally {
       await rm(fixtureRoot, REMOVE_RECURSIVELY);

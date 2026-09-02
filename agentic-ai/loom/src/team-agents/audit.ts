@@ -39,7 +39,7 @@ const TEAM_AUTHORITY_MARKERS = [
   '## Mandatory context selection',
   '## Team worker contract',
   '## Remote-only agent execution',
-  'Agents never run project compilation or validation locally.',
+  'Agents never run product compilation or repository validation locally.',
   'A missing remote task is a blocker. Never substitute local execution.',
   'exactly one team identity',
   'canonical typed\nCortex authoring composition',
