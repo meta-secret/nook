@@ -161,11 +161,18 @@ ownership until merge or a concrete blocked handoff:
    when the work revealed a durable lesson or Cortex defect. No promotion is
    required when no candidate qualifies. If a promotion changes the head,
    repeat complete hosted validation.
-8. **Merge automatically when ready.** Require a current branch, green
-   repository-owned checks, resolved actionable comments, every required team
-   and security verdict, and the exact-head readiness audit. Then squash-merge
-   without separate permission. First re-read the complete diff and refresh the
-   PR title and description.
+8. **Merge automatically when ready.**
+   - Require a current branch.
+   - Require green repository-owned checks.
+   - Require final dispositions for every substantive review finding.
+   - Require handled accepted or rejected comments.
+   - Require every required team verdict.
+   - Require every required security verdict.
+   - Require the exact-head readiness audit.
+   - Keep a clarification-needed finding unresolved and readiness-blocking.
+   - Re-read the complete diff.
+   - Refresh the PR title and description.
+   - Squash-merge without separate permission.
 
 ## Pull request size and modularity
 
@@ -510,7 +517,7 @@ Rust may use the configured ARC scale set. WASM and fork PR jobs remain hosted.
 - The agent may plan its polling cadence and next delivery action. Keep that
   plan inside the active task; do not persist it as Codex scheduling state.
 - "Merge when ready" is a terminal delivery instruction. Test the PR, monitor
-  its exact-head checks and actionable review state, and merge it as soon as
+  its exact-head checks and substantive review state, and merge it as soon as
   readiness succeeds.
 - Never use an all-check watcher that can remain blocked on external services.
 - If neither repository workflow applies to the changed paths, there is no
@@ -568,12 +575,25 @@ task pr:ready PR=<number>
 
 ### 6.1. Address review comments
 
-- Handle all actionable feedback already present, regardless of author.
+- Collect and disposition all substantive feedback already present, regardless
+  of author.
   - Follow [Code review comments](../dynamic-skills/code-review-comments.md).
+- Preserve the broader repository meaning of `actionable`.
+- Require implementation only for an accepted defect claim.
+- Treat every regression caused by the current PR as current-task relevant.
+- Do not exclude that regression because another product area or consumer
+  exposes it.
+- Reject or route outside the current change only unrelated pre-existing
+  defects and enhancements.
+- Evaluate any reviewer-proposed remedy separately from its defect claim.
+- Select a candidate correction before applying the proportionality and scope
+  gate.
+- Keep clarification-needed findings unresolved until evidence supports
+  accepted or rejected reclassification.
 - Measure the authored diff before and after each review-fix batch.
 - Apply the 2,000-authored-addition limit to every review fix.
 - Before resolving a conversation, leave an agent-authored reply with the fix,
-  validation, or no-change rationale.
+  validation, no-change rationale, or clarification request.
   - Do not resolve silently.
 - Inspect submitted review bodies, inline threads, and PR comments:
 
@@ -585,7 +605,7 @@ gh api repos/meta-secret/nook/pulls/<pr-number>/reviews \
 ```
 
 - Inspect submitted-review bodies from every head and disposition every
-  actionable finding.
+  substantive finding.
   - A substantive body without inline comments blocks readiness.
   - When a review has inline comments, retain its body as audit context and use
     unresolved-thread state as the deterministic readiness authority.
@@ -596,7 +616,14 @@ gh api repos/meta-secret/nook/pulls/<pr-number>/reviews \
 - Reply only where a real thread or comment supports a targeted reply.
 - Track unthreaded submitted-review items in the checklist and handoff instead
   of creating comment spam.
-- Resolve all actionable threads and re-query immediately before merge.
+- Reply to every handled inline thread and resolve it only after its accepted
+  defect is fixed or its rejected defect claim is explicitly invalidated.
+- Keep clarification-needed threads unresolved and readiness-blocking.
+- Run commit, push, and replacement-head validation only when an accepted fix
+  or failed-check repair changed the head.
+- Do not invent replacement-head work when a batch has no accepted fix or
+  failed-check repair.
+- Re-query immediately before merge.
 - Do not request another review after repository checks finish.
   - Codex is the sole automatic review provider. Do not activate Cursor Bugbot.
   - Do not request Claude, CodeRabbit, or other optional reviewers.
@@ -641,7 +668,11 @@ Merge only when all readiness conditions pass:
 
 - Nook's applicable repository-owned PR test checks are green.
 - The branch is current with `origin/main`.
-- All actionable comments are resolved.
+- Every substantive review finding has a final accepted or rejected defect
+  disposition.
+- Every accepted or rejected inline thread has a targeted reply and is
+  resolved.
+- No clarification-needed finding remains.
 - Gizmo's final verdict is ready for the exact head.
 - Every required team verdict is satisfied.
 - Every required security verdict is satisfied.
@@ -679,7 +710,9 @@ After merge, `main.yml` independently runs full local-provider and extension **e
 - Reconciliation of the current generation is idempotent.
 - Successful reruns retire existing incidents and stop active delivery.
 - The isolated Hive dispatcher enqueues actionable incidents once.
-- One logical task owns diagnosis, a normal exact-head PR, actionable review resolution, squash merge, and verification of the resulting Main run.
+- One logical task owns diagnosis, a normal exact-head PR, substantive review
+  disposition, accepted-finding resolution, squash merge, and verification of
+  the resulting Main run.
 - An explicitly dispatched `agent-implement.yml` worker does not claim Hive
   incidents.
 - Credentialed sync-live checks are available only through explicit manual validation.
@@ -754,7 +787,8 @@ See [mission delivery](mission-delivery.md) for the delivery procedure.
    after both settle.
 10. Keep Codex as the sole automatic provider. Do not activate Cursor Bugbot,
     Claude, CodeRabbit, or other optional reviews.
-11. Address and resolve actionable comments.
+11. Disposition all substantive review findings. Implement accepted defects and
+    resolve handled comments.
 12. Before final readiness, promote durable discoveries only when the
     self-improvement review finds an evidence-backed candidate. Repeat hosted
     validation if promotion changes the head.
