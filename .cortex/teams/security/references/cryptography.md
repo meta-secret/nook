@@ -10,17 +10,39 @@ a manifest is not evidence that every feature uses that crate.
 
 ## Primary mechanisms
 
-| Mechanism | Implemented purpose | Primary evidence |
-| --- | --- | --- |
-| age X25519 recipient encryption | Per-app vault-key envelopes, enrollment material, and extension identity handoff | `nook-app/nook-platform/nook-auth2/src/auth/multi_device/`, `nook-app/nook-platform/nook-core/src/auth/extension_identity_handoff.rs` |
-| age scrypt encryption | Vault secret records keyed by random vault material; password-protected wrapping identities | `nook-app/nook-platform/nook-auth2/src/crypto/vault_crypto.rs`, `nook-app/nook-platform/nook-auth2/src/auth/password_envelope.rs` |
-| AES-256-GCM | Passkey-wrapped and PIN-wrapped local app encryption identities | `nook-app/nook-platform/nook-auth2/src/auth/device_key_protection/protected_identity.rs` |
-| HKDF-SHA256 | Passkey PRF to app identity or app-identity wrapping key; Sentinel derivation contexts | `nook-app/nook-platform/nook-auth2/src/auth/device_key_protection.rs`, `nook-app/nook-platform/nook-auth2/src/auth/multi_device/sentinel.rs` |
-| PBKDF2-SHA256 | PIN fallback wrapping key | `nook-app/nook-platform/nook-auth2/src/auth/device_key_protection/protected_identity.rs` |
-| Ed25519 | Event signatures and actor identity | `nook-app/nook-platform/nook-event-log/src/signing.rs`, `nook-app/nook-platform/nook-event-log/src/event.rs` |
-| SHA-256 | Content IDs, actor IDs, public-key-derived identifiers, and bounded digests | `nook-app/nook-platform/nook-event-log/src/event.rs`, `nook-app/nook-platform/nook-event-log/src/signing.rs`, `nook-app/nook-platform/nook-auth2/src/auth/multi_device/state.rs` |
-| HMAC-SHA256 | Vault-keyed secret fingerprints, search-catalog integrity, and SLIP-0039 share digest support | `nook-app/nook-platform/nook-core/src/secrets/secret_fingerprint.rs`, `nook-app/nook-platform/nook-core/src/vault/vault_search_catalog.rs`, `nook-app/nook-platform/nook-auth2/src/auth/slip39.rs` |
-| SLIP-0039 threshold sharing | Mnemonic recovery shares for protected material | `nook-app/nook-platform/nook-auth2/src/auth/slip39.rs` |
+- **age X25519 recipient encryption**
+  - **Implemented purpose:** Per-app vault-key envelopes, enrollment material, and extension identity handoff
+  - **Primary evidence:** `nook-app/nook-platform/nook-auth2/src/auth/multi_device/`, `nook-app/nook-platform/nook-core/src/auth/extension_identity_handoff.rs`
+- **age scrypt encryption**
+  - **Implemented purpose:** Vault secret records keyed by random vault material; password-protected wrapping identities
+  - **Primary evidence:** `nook-app/nook-platform/nook-auth2/src/crypto/vault_crypto.rs`, `nook-app/nook-platform/nook-auth2/src/auth/password_envelope.rs`
+- **AES-256-GCM**
+  - **Implemented purpose:** Passkey-wrapped and PIN-wrapped local app encryption identities
+  - **Primary evidence:** `nook-app/nook-platform/nook-auth2/src/auth/device_key_protection/protected_identity.rs`
+- **HKDF-SHA256**
+  - **Implemented purpose:** Passkey PRF to app identity or app-identity wrapping key; Sentinel derivation contexts
+  - **Primary evidence:** `nook-app/nook-platform/nook-auth2/src/auth/device_key_protection.rs`, `nook-app/nook-platform/nook-auth2/src/auth/multi_device/sentinel.rs`
+- **PBKDF2-SHA256**
+  - **Implemented purpose:** PIN fallback wrapping key
+  - **Primary evidence:** `nook-app/nook-platform/nook-auth2/src/auth/device_key_protection/protected_identity.rs`
+- **Ed25519**
+  - **Implemented purpose:** Event signatures and actor identity
+  - **Primary evidence:** `nook-app/nook-platform/nook-event-log/src/signing.rs`, `nook-app/nook-platform/nook-event-log/src/event.rs`
+- **SHA-256**
+  - **Implemented purpose:** Content IDs, actor IDs, public-key-derived identifiers, and bounded digests
+  - **Primary evidence:**
+    - `nook-app/nook-platform/nook-event-log/src/event.rs`
+    - `nook-app/nook-platform/nook-event-log/src/signing.rs`
+    - `nook-app/nook-platform/nook-auth2/src/auth/multi_device/state.rs`
+- **HMAC-SHA256**
+  - **Implemented purpose:** Vault-keyed secret fingerprints, search-catalog integrity, and SLIP-0039 share digest support
+  - **Primary evidence:**
+    - `nook-app/nook-platform/nook-core/src/secrets/secret_fingerprint.rs`
+    - `nook-app/nook-platform/nook-core/src/vault/vault_search_catalog.rs`
+    - `nook-app/nook-platform/nook-auth2/src/auth/slip39.rs`
+- **SLIP-0039 threshold sharing**
+  - **Implemented purpose:** Mnemonic recovery shares for protected material
+  - **Primary evidence:** `nook-app/nook-platform/nook-auth2/src/auth/slip39.rs`
 
 ## Current protection parameters
 

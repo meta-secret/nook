@@ -9,12 +9,22 @@ building blocks. They are not selectable modes inside one production web app.
 
 ## Product Surfaces
 
-| Surface           | Project               | Production origin           | Vault capability                               |
-| ----------------- | --------------------- | --------------------------- | ---------------------------------------------- |
-| Public site       | `nook-web-app`        | `https://nokey.sh`          | Cannot open a vault session                    |
-| Everyday vault    | `nook-vault-simple`   | `https://simple.nokey.sh`   | Simple only; extension pairing allowed         |
-| Quorum safe       | `nook-vault-sentinel` | `https://sentinel.nokey.sh` | Sentinel only; extension integration forbidden |
-| Browser companion | `nook-web-extension`  | extension origin            | Simple only                                    |
+- **Public site**
+  - **Project:** `nook-web-app`
+  - **Production origin:** `https://nokey.sh`
+  - **Vault capability:** Cannot open a vault session
+- **Everyday vault**
+  - **Project:** `nook-vault-simple`
+  - **Production origin:** `https://simple.nokey.sh`
+  - **Vault capability:** Simple only; extension pairing allowed
+- **Quorum safe**
+  - **Project:** `nook-vault-sentinel`
+  - **Production origin:** `https://sentinel.nokey.sh`
+  - **Vault capability:** Sentinel only; extension integration forbidden
+- **Browser companion**
+  - **Project:** `nook-web-extension`
+  - **Production origin:** extension origin
+  - **Vault capability:** Simple only
 
 Main mirrors the same origin isolation at `dev.nokey.sh`,
 `simple.dev.nokey.sh`, and `sentinel.dev.nokey.sh`. Pull requests use native

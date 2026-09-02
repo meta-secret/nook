@@ -54,13 +54,16 @@ artifact for event-log vaults.
 
 ## Event identity
 
-| Property                   | Rule                                                           |
-| -------------------------- | -------------------------------------------------------------- |
-| Event ID                   | SHA-256 of canonical body bytes (`sha256u:{base64url_no_pad}`) |
-| Remote path                | `nook-log/v1/events/{digest}.yaml`                             |
-| Writes                     | append-only; `put_event_if_absent`                             |
-| Duplicate identical event  | success (idempotent)                                           |
-| Same path, different bytes | quarantine (corruption)                                        |
+- **Event ID**
+  - **Rule:** SHA-256 of canonical body bytes (`sha256u:{base64url_no_pad}`)
+- **Remote path**
+  - **Rule:** `nook-log/v1/events/{digest}.yaml`
+- **Writes**
+  - **Rule:** append-only; `put_event_if_absent`
+- **Duplicate identical event**
+  - **Rule:** success (idempotent)
+- **Same path, different bytes**
+  - **Rule:** quarantine (corruption)
 
 Current event schema `3` binds each event to `actor_signing_public_key`. The
 actor id must be the SHA-256 digest of that Ed25519 public key. The event
@@ -93,11 +96,15 @@ accepted only if it is:
   `sentinel-participant-enrolled`; or
 - publishing its own self-signed membership event under a narrow policy:
 
-| Event                           | Self-signed rule                                                                                                                                                                    |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `join-requested`                | Always allowed when self-signed (pending join)                                                                                                                                      |
-| `join-approved`                 | Self-signed only for simple password QR self-enrol, and only when causal ancestry has no Sentinel membership/share ops (`sentinel-participant-enrolled` / `sentinel-shares-issued`) |
-| `sentinel-participant-enrolled` | Never self-signed; must be signed by an already-authorized actor (owner approval / genesis)                                                                                         |
+- **`join-requested`**
+  - **Self-signed rule:** Always allowed when self-signed (pending join)
+- **`join-approved`**
+  - **Self-signed rule:** Conditional
+    - Self-signing is only for simple password QR self-enrol.
+    - Causal ancestry must have no Sentinel membership or share operations.
+    - Those operations are `sentinel-participant-enrolled` and `sentinel-shares-issued`.
+- **`sentinel-participant-enrolled`**
+  - **Self-signed rule:** Never self-signed; must be signed by an already-authorized actor (owner approval / genesis)
 
 The current event body requires the signing-key field. The shared signing-key
 type explicitly distinguishes `Unavailable` from a validated Ed25519 hex key.
@@ -156,17 +163,24 @@ and actor authorization live in `nook-app/nook-platform/nook-event-log/src/graph
 The reducer (`nook-app/nook-platform/nook-event-log/src/projection.rs`) must yield the same
 result for every permutation of the same valid event set.
 
-| Operation                                                                                                 | Semantics                                                                                                                                  |
-| --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `secret-created`                                                                                          | Grow-only; idempotent duplicate                                                                                                            |
-| `secret-deleted`                                                                                          | Tombstone when delete is causal descendant of create                                                                                       |
-| `secret-replaced`                                                                                         | Atomic tombstone + new record                                                                                                              |
-| Concurrent replacements                                                                                   | Both new records live; conflict group on old id                                                                                            |
-| `secret-conflict-resolved`                                                                                | Tombstones rejected candidates and causally clears the conflict                                                                            |
-| Independent concurrent adds                                                                               | Both preserved                                                                                                                             |
-| Concurrent creates with the same login identity (same website+username, different secret ids / passwords) | Both preserved as separate live secrets — **no password merge, no LWW**; neither password may be dropped. Sync is not import enrich/dedup. |
-| `device-revoked` / password rotate/remove                                                                 | Starts new **key epoch** with fresh vault keys and checkpoint                                                                              |
-| Concurrent security epochs                                                                                | Security conflict — fail closed; local edits are blocked until all devices sync/recover                                                    |
+- **`secret-created`**
+  - **Semantics:** Grow-only; idempotent duplicate
+- **`secret-deleted`**
+  - **Semantics:** Tombstone when delete is causal descendant of create
+- **`secret-replaced`**
+  - **Semantics:** Atomic tombstone + new record
+- **Concurrent replacements**
+  - **Semantics:** Both new records live; conflict group on old id
+- **`secret-conflict-resolved`**
+  - **Semantics:** Tombstones rejected candidates and causally clears the conflict
+- **Independent concurrent adds**
+  - **Semantics:** Both preserved
+- **Concurrent creates with the same login identity (same website+username, different secret ids / passwords)**
+  - **Semantics:** Both preserved as separate live secrets — **no password merge, no LWW**; neither password may be dropped. Sync is not import enrich/dedup.
+- **`device-revoked` / password rotate/remove**
+  - **Semantics:** Starts new **key epoch** with fresh vault keys and checkpoint
+- **Concurrent security epochs**
+  - **Semantics:** Security conflict — fail closed; local edits are blocked until all devices sync/recover
 
 File-sync disconnect/reconnect coverage (shared vault bucket cleared, offline concurrent
 `login-a-1` creates, reconnect):
@@ -215,14 +229,18 @@ Provider synchronization rules:
 - Use a complete trigger/checkpoint pair for password rotation.
 - Classify the provider event set before writing outbox or repair events.
 
-| Provider state                  | Action                                         |
-| ------------------------------- | ---------------------------------------------- |
-| Empty                           | May be initialized from the active local vault |
-| Exactly the active `store_id`   | May be union-synced                            |
-| Different `store_id`            | Fail closed before any write                   |
-| Multiple discovered `store_id`s | Fail closed before any write                   |
-| Unreadable event files          | Fail closed before any write                   |
-| Invalid event bytes             | Fail closed before any write                   |
+- **Empty**
+  - **Action:** May be initialized from the active local vault
+- **Exactly the active `store_id`**
+  - **Action:** May be union-synced
+- **Different `store_id`**
+  - **Action:** Fail closed before any write
+- **Multiple discovered `store_id`s**
+  - **Action:** Fail closed before any write
+- **Unreadable event files**
+  - **Action:** Fail closed before any write
+- **Invalid event bytes**
+  - **Action:** Fail closed before any write
 
 The user must choose an explicit recovery/import path. The current local vault
 must not silently take over provider data.
@@ -252,13 +270,16 @@ fetches only remote event ids that are missing locally.
 
 `nook_db` version `2` separates event-log state into dedicated object stores:
 
-| Store               | Purpose                                                      |
-| ------------------- | ------------------------------------------------------------ |
-| `events`            | Immutable event bytes and event indexes                      |
-| `outbox`            | Durable per-provider retry queue                             |
-| `projections`       | Projection heads and key-epoch markers                       |
-| `provider_receipts` | Reserved for compact per-provider sync receipts              |
-| `vault`             | Local projection cache plus device/signing identity material |
+- **`events`**
+  - **Purpose:** Immutable event bytes and event indexes
+- **`outbox`**
+  - **Purpose:** Durable per-provider retry queue
+- **`projections`**
+  - **Purpose:** Projection heads and key-epoch markers
+- **`provider_receipts`**
+  - **Purpose:** Reserved for compact per-provider sync receipts
+- **`vault`**
+  - **Purpose:** Local projection cache plus device/signing identity material
 
 Event-log reads and writes use the separated stores. Event heads, key epochs,
 event bytes, and outbox rows must not be read from any other `IndexedDB` object
@@ -267,15 +288,20 @@ event source.
 
 ## Rollout phases
 
-| Phase | Scope                                                                                                        |
-| ----- | ------------------------------------------------------------------------------------------------------------ |
-| 0     | This ADR                                                                                                     |
-| 1     | `nook-replication` causal/replica mechanics plus `nook-event-log` event model, authorization, and projection |
-| 2     | Ed25519 device keys, epoch crypto, actor authorization                                                       |
-| 3     | IndexedDB event store, outbox, projection cache                                                              |
-| 4     | GitHub / Drive event adapters                                                                                |
-| 5     | WASM manager + UI                                                                                            |
-| 6     | Provider projection removal — **done** (event log is the only provider write path)                           |
+- **0**
+  - **Scope:** This ADR
+- **1**
+  - **Scope:** `nook-replication` causal/replica mechanics plus `nook-event-log` event model, authorization, and projection
+- **2**
+  - **Scope:** Ed25519 device keys, epoch crypto, actor authorization
+- **3**
+  - **Scope:** IndexedDB event store, outbox, projection cache
+- **4**
+  - **Scope:** GitHub / Drive event adapters
+- **5**
+  - **Scope:** WASM manager + UI
+- **6**
+  - **Scope:** Provider projection removal — **done** (event log is the only provider write path)
 
 ## Testing requirements
 
@@ -283,17 +309,24 @@ Nook uses a **causal DAG** (parent head sets), not scalar vector clocks. Concurr
 
 These behaviors must be covered by **Rust tests** (~99% of sync correctness). E2e does not substitute.
 
-| Scenario                                        | Test location                                                                                            |
-| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| Generic causal ordering, pending parents, union | `nook-replication/src/causal_graph.rs`                                                                   |
-| Generic outbox idempotence and repair planning  | `nook-replication/src/replica_store.rs`                                                                  |
-| Concurrent append, both secrets live            | `nook-event-log/src/graph.rs`, `nook-event-log/src/projection.rs`, `event_log_workflow.rs`               |
-| Out-of-order delivery → pending → applied       | `causal_graph.rs`, `nook-event-log/src/graph.rs`, `nook-event-log/src/store.rs`, `event_log_workflow.rs` |
-| Join event collapses multiple heads             | `nook-event-log/src/graph.rs`, `event_log_workflow.rs`                                                   |
-| Replacement / security conflicts                | `nook-event-log/src/projection.rs`, `nook-event-log/src/epoch.rs`                                        |
-| Multi-device decentralized union                | `event_log_workflow.rs` (harness)                                                                        |
-| Projection replay invariance                    | `nook-event-log/src/projection.rs` (`assert_projection_permutation_invariant`)                           |
-| Provider outbox + union                         | `event_log_workflow.rs`, `nook-event-log/src/store.rs`                                                   |
+- **Generic causal ordering, pending parents, union**
+  - **Test location:** `nook-replication/src/causal_graph.rs`
+- **Generic outbox idempotence and repair planning**
+  - **Test location:** `nook-replication/src/replica_store.rs`
+- **Concurrent append, both secrets live**
+  - **Test location:** `nook-event-log/src/graph.rs`, `nook-event-log/src/projection.rs`, `event_log_workflow.rs`
+- **Out-of-order delivery → pending → applied**
+  - **Test location:** `causal_graph.rs`, `nook-event-log/src/graph.rs`, `nook-event-log/src/store.rs`, `event_log_workflow.rs`
+- **Join event collapses multiple heads**
+  - **Test location:** `nook-event-log/src/graph.rs`, `event_log_workflow.rs`
+- **Replacement / security conflicts**
+  - **Test location:** `nook-event-log/src/projection.rs`, `nook-event-log/src/epoch.rs`
+- **Multi-device decentralized union**
+  - **Test location:** `event_log_workflow.rs` (harness)
+- **Projection replay invariance**
+  - **Test location:** `nook-event-log/src/projection.rs` (`assert_projection_permutation_invariant`)
+- **Provider outbox + union**
+  - **Test location:** `event_log_workflow.rs`, `nook-event-log/src/store.rs`
 
 When adding operations or merge rules, add colocated unit tests **and** extend the harness scenarios if multi-device behavior changes.
 

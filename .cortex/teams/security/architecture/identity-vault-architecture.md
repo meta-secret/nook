@@ -11,16 +11,22 @@ and vaults. None of these names are interchangeable.
 
 ## Normative vocabulary
 
-| Term                     | Meaning                                                                                                                  |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
-| **Person / user**        | The human operator. One person may own or join multiple identities.                                                      |
-| **Identity**             | Logical authorization subject. It possesses passkeys and therefore app keys. It owns per-vault DEKs.                     |
-| **Passkey / device key** | WebAuthn credential or PIN/passphrase fallback that protects a local app key.                                            |
-| **App key**              | Installation-local asymmetric key for Simple, Sentinel, or the web extension. Replaces the former `DeviceIdentity` name. |
-| **`app_id`**             | Stable id for one app-key installation. Replaces the former `device_id` / `DeviceId` name.                               |
-| **Installation**         | Browser-origin or extension storage context that holds one app private key.                                              |
-| **Sync-provider mount**  | Replication transport for an identity control log or vault event log. Not authority.                                     |
-| **Vault**                | Encrypted secret event log addressed by `store_id`. It cannot exist without an authorizing identity.                     |
+- **Person / user**
+  - **Meaning:** The human operator. One person may own or join multiple identities.
+- **Identity**
+  - **Meaning:** Logical authorization subject. It possesses passkeys and therefore app keys. It owns per-vault DEKs.
+- **Passkey / device key**
+  - **Meaning:** WebAuthn credential or PIN/passphrase fallback that protects a local app key.
+- **App key**
+  - **Meaning:** Installation-local asymmetric key for Simple, Sentinel, or the web extension. Replaces the former `DeviceIdentity` name.
+- **`app_id`**
+  - **Meaning:** Stable id for one app-key installation. Replaces the former `device_id` / `DeviceId` name.
+- **Installation**
+  - **Meaning:** Browser-origin or extension storage context that holds one app private key.
+- **Sync-provider mount**
+  - **Meaning:** Replication transport for an identity control log or vault event log. Not authority.
+- **Vault**
+  - **Meaning:** Encrypted secret event log addressed by `store_id`. It cannot exist without an authorizing identity.
 
 Historical name `DeviceIdentity` means app key.
 Historical name `device_id` means `app_id`.

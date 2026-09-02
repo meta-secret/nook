@@ -9,6 +9,7 @@ import {
   type CortexArticleSemanticBlock,
   type CortexArticleStructureResult,
 } from './domain.ts';
+import { formatMarkdownTableFindingMessage } from './audit.ts';
 
 export type VerifyCortexArticleStructureResultRequest = {
   readonly auditRequest: AuditCortexArticleStructureRequest;
@@ -77,6 +78,16 @@ function independentlyDeriveFindings(
 }
 
 function verifyDocument(request: VerifyDocumentRequest): void {
+  for (const block of request.document.blocks) {
+    if (block.kind !== CortexArticleSemanticKind.Table) continue;
+    const finding: CortexArticleFinding = {
+      code: CortexArticleFindingCode.MarkdownTable,
+      file: request.document.relativePath,
+      line: block.line,
+      message: formatMarkdownTableFindingMessage(request.document.relativePath),
+    };
+    request.expected.push(finding);
+  }
   for (let index = 0; index < request.document.blocks.length; index += 1) {
     const block = request.document.blocks.at(index) ?? false;
     if (

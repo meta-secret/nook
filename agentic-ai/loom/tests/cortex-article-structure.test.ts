@@ -260,9 +260,15 @@ test('rejects Markdown containers without visible content', () => {
       path: `.cortex/empty-${index}.md`,
       content: `# Empty\n\n## Empty article\n\n${body}\n`,
     };
+    const expectedCodes = body.startsWith('|')
+      ? [
+          CortexArticleFindingCode.MarkdownTable,
+          CortexArticleFindingCode.EmptyArticle,
+        ]
+      : [CortexArticleFindingCode.EmptyArticle];
     expect(
       audit([makeDocument(documentArgs)]).map((item) => item.code),
-    ).toEqual([CortexArticleFindingCode.EmptyArticle]);
+    ).toEqual(expectedCodes);
   }
 });
 
@@ -304,7 +310,7 @@ test('rejects documents with no content articles after the map', () => {
   );
 });
 
-test('treats a GFM table as visible article structure', () => {
+test('rejects a GFM table with a typed source-line finding', () => {
   const documentArgs: MakeDocumentArgs = {
     path: '.cortex/table-structure.md',
     content: `# Table structure
@@ -336,7 +342,46 @@ Fourth paragraph.
 `,
   };
   const document = makeDocument(documentArgs);
-  expect(audit([document])).toEqual([]);
+  const findings = audit([document]);
+  expect(findings).toContainEqual({
+    code: CortexArticleFindingCode.MarkdownTable,
+    file: '.cortex/table-structure.md',
+    line: 17,
+    message:
+      'Rendered Markdown table in .cortex/table-structure.md is prohibited; use an enclosed structured list.',
+  });
+  expect(
+    findings.filter(
+      (finding) => finding.code === CortexArticleFindingCode.MarkdownTable,
+    ),
+  ).toHaveLength(1);
+});
+
+test('preserves visible container prose while rejecting its nested GFM table', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/nested-table.md',
+    content: `# Nested table
+
+## Reference
+
+> Visible explanatory prose.
+>
+> | Shape | Use |
+> | --- | --- |
+> | Rule | Parallel constraints |
+`,
+  };
+  const findings = audit([makeDocument(documentArgs)]);
+  expect(findings).toContainEqual({
+    code: CortexArticleFindingCode.MarkdownTable,
+    file: '.cortex/nested-table.md',
+    line: 7,
+    message:
+      'Rendered Markdown table in .cortex/nested-table.md is prohibited; use an enclosed structured list.',
+  });
+  expect(findings.map((finding) => finding.code)).not.toContain(
+    CortexArticleFindingCode.EmptyArticle,
+  );
 });
 
 test('does not count a link definition as article content', () => {

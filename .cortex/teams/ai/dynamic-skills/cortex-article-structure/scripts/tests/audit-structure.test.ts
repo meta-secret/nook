@@ -35,6 +35,7 @@ const densitySeparator = simpleBlock(
 const visibleOrderedList = simpleBlock(
   CortexArticleSemanticKind.VisibleOrderedList,
 );
+const table = simpleBlock(CortexArticleSemanticKind.Table);
 
 function findingsFor(blocks: SemanticBlocks) {
   const documentRequest: MakeDocumentRequest = {
@@ -56,6 +57,26 @@ test('accepts visible structure and visible ordered procedures', () => {
     visibleOrderedList(11),
   ];
   expect(findingsFor(blocks)).toEqual([]);
+});
+
+test('reports every rendered Markdown table', () => {
+  const blocks = [heading('Reference'), paragraph(3), table(5), table(9)];
+  expect(findingsFor(blocks)).toEqual([
+    {
+      code: CortexArticleFindingCode.MarkdownTable,
+      file: '.cortex/article.md',
+      line: 5,
+      message:
+        'Rendered Markdown table in .cortex/article.md is prohibited; use an enclosed structured list.',
+    },
+    {
+      code: CortexArticleFindingCode.MarkdownTable,
+      file: '.cortex/article.md',
+      line: 9,
+      message:
+        'Rendered Markdown table in .cortex/article.md is prohibited; use an enclosed structured list.',
+    },
+  ]);
 });
 
 test('reports empty articles with active heading diagnostics', () => {

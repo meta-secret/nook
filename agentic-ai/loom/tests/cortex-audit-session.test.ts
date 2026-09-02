@@ -17,6 +17,7 @@ import {
 import type { CortexAuditReport } from '../src/commands/cortex-audit.ts';
 import { CortexStructureFindingCode } from '../../../.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/src/cortex-document-structure.ts';
 import { CortexContractFindingCode } from '../src/lib/cortex-contracts.ts';
+import { CortexArticleFindingCode } from '../src/lib/cortex-article-structure.ts';
 
 test('uses the pre-push commit for push stability audits', () => {
   const before = '1'.repeat(40);
@@ -156,6 +157,56 @@ test('excludes workspace dependencies and canonical executable package scripts',
   } finally {
     const removeOptions = { recursive: true, force: true } as const;
     rmSync(cortexRoot, removeOptions);
+  }
+});
+
+test('fails the integrated Cortex audit for rendered Markdown tables', async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), 'cortex-table-audit-'));
+  try {
+    const cortexRoot = path.join(repoRoot, '.cortex');
+    const skillsRoot = path.join(cortexRoot, 'dynamic-skills');
+    const directoryOptions = { recursive: true } as const;
+    mkdirSync(skillsRoot, directoryOptions);
+    writeFileSync(
+      path.join(cortexRoot, 'AGENTS.md'),
+      `# Agent Map
+
+## Relationships
+
+- None.
+
+## Document map
+
+- [Policy](#policy)
+  - Defines the policy.
+  - Read for the rule.
+
+## Policy
+
+| Shape | Use |
+| --- | --- |
+| Rule | Parallel constraints |
+`,
+    );
+    writeFileSync(
+      path.join(cortexRoot, 'knowledge-graph.md'),
+      '# Knowledge Graph\n',
+    );
+    writeFileSync(path.join(skillsRoot, 'index.md'), '# Skills\n');
+    const request = { includeDensityLint: true };
+    const auditArgs = { request, startDirectory: repoRoot };
+    const report = await runCortexAuditFromDirectory(auditArgs);
+    expect(report.auditOk).toBe(false);
+    expect(report.articleStructureFindings).toContainEqual({
+      code: CortexArticleFindingCode.MarkdownTable,
+      file: '.cortex/AGENTS.md',
+      line: 15,
+      message:
+        'Rendered Markdown table in .cortex/AGENTS.md is prohibited; use an enclosed structured list.',
+    });
+  } finally {
+    const removeOptions = { recursive: true, force: true } as const;
+    rmSync(repoRoot, removeOptions);
   }
 });
 

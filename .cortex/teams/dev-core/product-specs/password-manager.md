@@ -306,14 +306,18 @@ do not grant vault access.
 
 ## 5. Rust Domain Modules (`nook-core`)
 
-| Module                     | Responsibility                                               |
-| -------------------------- | ------------------------------------------------------------ |
-| `lib.rs` / `Database`      | Typed in-memory session, stored vault encrypt/decrypt        |
-| `vault_format.rs`          | YAML serialization and parsing                               |
-| `vault_crypto.rs`          | Session-scoped age encrypt/decrypt                           |
-| `validation.rs`            | Connect/secret validation, search filter                     |
-| `password.rs`              | CSPRNG password generation                                   |
-| `passkey_authenticator.rs` | RP/origin validation, ES256 registration/assertion, counters |
+- **`lib.rs` / `Database`**
+  - **Responsibility:** Typed in-memory session, stored vault encrypt/decrypt
+- **`vault_format.rs`**
+  - **Responsibility:** YAML serialization and parsing
+- **`vault_crypto.rs`**
+  - **Responsibility:** Session-scoped age encrypt/decrypt
+- **`validation.rs`**
+  - **Responsibility:** Connect/secret validation, search filter
+- **`password.rs`**
+  - **Responsibility:** CSPRNG password generation
+- **`passkey_authenticator.rs`**
+  - **Responsibility:** RP/origin validation, ES256 registration/assertion, counters
 
 All format, crypto, validation, and generator behavior must be covered by Rust tests (`task rust:test`). Integration workflows live in `nook-app/nook-platform/nook-core/tests/vault_workflow.rs`.
 

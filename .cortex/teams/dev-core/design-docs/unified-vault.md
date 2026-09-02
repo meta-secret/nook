@@ -47,14 +47,24 @@ flowchart TB
   S --> V
 ```
 
-| Concept               | Old                          | New                                                                                                                                          |
-| --------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Vault**             | Implicit per provider        | Explicit logical DB (`store_id`); user may have **many vaults** over time ([vault-session-and-lock.md](../../security/architecture/vault-session-and-lock.md))           |
-| **Primary copy**      | Immutable provider event log | Local IndexedDB (`vault:{store_id}`) projection cache for the active vault                                                                   |
-| **Unlock**            | Provider-first wizard        | Login gate: unlock local cache or connect provider to fetch a vault                                                                          |
-| **Sync providers**    | Vault selectors              | **Mounted replica targets** supplied to vault sync — many providers, one `store_id`; identity control logs may mount providers independently |
-| **Lock**              | N/A                          | Clear decrypted session; encrypted vault + providers remain                                                                                  |
-| **Conflict handling** | Last poll wins               | Explicit user choice on version tie                                                                                                          |
+- **Vault**
+  - **Old:** Implicit per provider
+  - **New:** Explicit logical DB (`store_id`); user may have **many vaults** over time ([vault-session-and-lock.md](../../security/architecture/vault-session-and-lock.md))
+- **Primary copy**
+  - **Old:** Immutable provider event log
+  - **New:** Local IndexedDB (`vault:{store_id}`) projection cache for the active vault
+- **Unlock**
+  - **Old:** Provider-first wizard
+  - **New:** Login gate: unlock local cache or connect provider to fetch a vault
+- **Sync providers**
+  - **Old:** Vault selectors
+  - **New:** **Mounted replica targets** supplied to vault sync — many providers, one `store_id`; identity control logs may mount providers independently
+- **Lock**
+  - **Old:** N/A
+  - **New:** Clear decrypted session; encrypted vault + providers remain
+- **Conflict handling**
+  - **Old:** Last poll wins
+  - **New:** Explicit user choice on version tie
 
 **Today:** one active vault per browser profile. **Target:** vault picker after lock for users with multiple `store_id`s on the same device.
 
@@ -64,11 +74,15 @@ flowchart TB
 
 ### IndexedDB layout (`nook_db`)
 
-| Key                       | Value                                                           | Notes                                                                    |
-| ------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `vault:{store_id}`        | UTF-8 vault YAML                                                | Derived local projection cache                                           |
-| `device_identity_wrapped` | Versioned AES-256-GCM ciphertext + WebAuthn PRF or PIN metadata | Never synced; legacy `device_identity_secret` is deleted after migration |
-| `device_id`               | Short fingerprint                                               | UI only                                                                  |
+- **`vault:{store_id}`**
+  - **Value:** UTF-8 vault YAML
+  - **Notes:** Derived local projection cache
+- **`device_identity_wrapped`**
+  - **Value:** Versioned AES-256-GCM ciphertext + WebAuthn PRF or PIN metadata
+  - **Notes:** Never synced; legacy `device_identity_secret` is deleted after migration
+- **`device_id`**
+  - **Value:** Short fingerprint
+  - **Notes:** UI only
 
 The local vault is created on first setup and persists regardless of which sync providers are connected.
 
@@ -76,10 +90,10 @@ The local vault is created on first setup and persists regardless of which sync 
 
 Canonical layout and field list: [auth-providers.md](auth-providers.md) §2.
 
-| Piece                  | Value                                                           |
-| ---------------------- | --------------------------------------------------------------- |
-| Database / store / key | `nook_auth` / `auth` / `providers`                              |
-| Value                  | `{ providers: StorageProvider[], activeVaultStoreId?: string }` |
+- **Database / store / key**
+  - **Value:** `nook_auth` / `auth` / `providers`
+- **Value**
+  - **Value:** `{ providers: StorageProvider[], activeVaultStoreId?: string }`
 
 Types are Rust/Tsify (`StorageProvider`, `OAuthFileConfig`, …), not a separate
 hand-authored TypeScript interface. Provider credentials are **sync
@@ -100,10 +114,10 @@ secrets:
     ...
 ```
 
-| Rule           | Behaviour                           |
-| -------------- | ----------------------------------- |
-| **Genesis**    | `vault_version: 1` on first persist |
-| **Every save** | Increment before write              |
+- **Genesis**
+  - **Behaviour:** `vault_version: 1` on first persist
+- **Every save**
+  - **Behaviour:** Increment before write
 
 Implementation: `nook-app/nook-platform/nook-core/src/vault/vault_format.rs` (`read_vault_version`), `nook-app/nook-platform/nook-core/src/sync/vault_sync.rs`.
 
@@ -129,12 +143,18 @@ flowchart TD
   F -->|equal, same hash| U
 ```
 
-| Action         | Meaning                        | Automatic?                  |
-| -------------- | ------------------------------ | --------------------------- |
-| `unchanged`    | Nothing to do                  | Yes                         |
-| `adopt_remote` | Overwrite local with remote    | Yes                         |
-| `push_local`   | Overwrite remote with local    | Yes                         |
-| `conflict`     | Same version, diverged content | **No** — show resolution UI |
+- **`unchanged`**
+  - **Meaning:** Nothing to do
+  - **Automatic?:** Yes
+- **`adopt_remote`**
+  - **Meaning:** Overwrite local with remote
+  - **Automatic?:** Yes
+- **`push_local`**
+  - **Meaning:** Overwrite remote with local
+  - **Automatic?:** Yes
+- **`conflict`**
+  - **Meaning:** Same version, diverged content
+  - **Automatic?:** **No** — show resolution UI
 
 **Conflict UI** offers exactly two choices:
 
@@ -225,20 +245,33 @@ Manual **Sync all** in the status bar runs the same sync loop with user-visible 
 
 ## 10. Implementation status
 
-| Piece                                                 | Status                              |
-| ----------------------------------------------------- | ----------------------------------- |
-| `vault_version` in YAML read/write                    | Done (#61)                          |
-| `compare_vault_sync` in `nook-core`                   | Done (#61)                          |
-| In-memory sync replication tests (`vault_sync_store`) | Done                                |
-| `compare_vault_sync` WASM export                      | Done (#61)                          |
-| Historical whole-blob reconciliation (apply in core)  | Superseded by event-log replication |
-| Version increment on save                             | Done (#61)                          |
-| Local-first login gate                                | Done (#71, Phase 1)                 |
-| Sync providers in Settings                            | Done (#72, Phase 2)                 |
-| Session-independent sync I/O (`sync_io.rs`)           | Done (#72)                          |
-| Conflict resolution UI                                | Done (#73, Phase 3)                 |
-| Fan-out sync after secret CRUD                        | Done (#74, Phase 4)                 |
-| Local-first status bar                                | Done (#74, Phase 4)                 |
-| Onboard / enrollment QR (local-first)                 | Done (#75, Phase 5)                 |
-| Help page rewrite                                     | Done (#76, Phase 6)                 |
-| Join sync propagation                                 | Done (#77, Phase 7)                 |
+- **`vault_version` in YAML read/write**
+  - **Status:** Done (#61)
+- **`compare_vault_sync` in `nook-core`**
+  - **Status:** Done (#61)
+- **In-memory sync replication tests (`vault_sync_store`)**
+  - **Status:** Done
+- **`compare_vault_sync` WASM export**
+  - **Status:** Done (#61)
+- **Historical whole-blob reconciliation (apply in core)**
+  - **Status:** Superseded by event-log replication
+- **Version increment on save**
+  - **Status:** Done (#61)
+- **Local-first login gate**
+  - **Status:** Done (#71, Phase 1)
+- **Sync providers in Settings**
+  - **Status:** Done (#72, Phase 2)
+- **Session-independent sync I/O (`sync_io.rs`)**
+  - **Status:** Done (#72)
+- **Conflict resolution UI**
+  - **Status:** Done (#73, Phase 3)
+- **Fan-out sync after secret CRUD**
+  - **Status:** Done (#74, Phase 4)
+- **Local-first status bar**
+  - **Status:** Done (#74, Phase 4)
+- **Onboard / enrollment QR (local-first)**
+  - **Status:** Done (#75, Phase 5)
+- **Help page rewrite**
+  - **Status:** Done (#76, Phase 6)
+- **Join sync propagation**
+  - **Status:** Done (#77, Phase 7)

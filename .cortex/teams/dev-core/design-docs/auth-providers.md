@@ -39,14 +39,18 @@ how provider transports relate independently to identities and vaults.
 
 ## 2. IndexedDB layout (`nook_auth`)
 
-| Piece              | Value                                                           |
-| ------------------ | --------------------------------------------------------------- |
-| Database           | `nook_auth`                                                     |
-| Object store       | `auth`                                                          |
-| Identity key       | `providers:{app_id}`                                            |
-| Rollback projection | `providers`                                                     |
-| Value              | `{ providers: StorageProvider[], activeVaultStoreId?: string }` |
-| Schema markers     | `providers-schema:{app_id}` and `providers-schema` (`1`)         |
+- **Database**
+  - **Value:** `nook_auth`
+- **Object store**
+  - **Value:** `auth`
+- **Identity key**
+  - **Value:** `providers:{app_id}`
+- **Rollback projection**
+  - **Value:** `providers`
+- **Value**
+  - **Value:** `{ providers: StorageProvider[], activeVaultStoreId?: string }`
+- **Schema markers**
+  - **Value:** `providers-schema:{app_id}` and `providers-schema` (`1`)
 
 The persisted object is a structured-clone JS object (not a JSON string). Rust
 owns both contracts:
@@ -81,24 +85,31 @@ A domain-type refactor alone never authorizes a wire format change.
 
 ### Wire fields (`StorageProvider`, camelCase)
 
-| Field                                                                                | Notes                                                                                             |
-| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| `id`, `type`, `label`, `createdAt`                                                   | `type`: `local` \| `github` \| `oauth-file` \| `local-folder`                                     |
-| `githubPat?`, `githubRepo?`                                                          | GitHub only — PAT sealed at rest                                                                  |
-| `oauthFile?`                                                                         | Drive/iCloud block — see below                                                                    |
-| `localFolder?`                                                                       | File System Access directory handle metadata (`directoryName?`, `handleId?`)                      |
-| `storeId?`                                                                           | Logical secret store (`store_{token}`) — see [secret-store-identity.md](../../security/architecture/secret-store-identity.md) |
-| `lastSyncedVersion?`, `lastSyncedAt?`, `lastSyncRevision?`, `lastCommonContentHash?` | Sync bookkeeping                                                                                  |
+- **`id`, `type`, `label`, `createdAt`**
+  - **Notes:** `type`: `local` \| `github` \| `oauth-file` \| `local-folder`
+- **`githubPat?`, `githubRepo?`**
+  - **Notes:** GitHub only — PAT sealed at rest
+- **`oauthFile?`**
+  - **Notes:** Drive/iCloud block — see below
+- **`localFolder?`**
+  - **Notes:** File System Access directory handle metadata (`directoryName?`, `handleId?`)
+- **`storeId?`**
+  - **Notes:** Logical secret store (`store_{token}`) — see [secret-store-identity.md](../../security/architecture/secret-store-identity.md)
+- **`lastSyncedVersion?`, `lastSyncedAt?`, `lastSyncRevision?`, `lastCommonContentHash?`**
+  - **Notes:** Sync bookkeeping
 
 ### Wire fields (`oauthFile`)
 
-| Field                                                 | Notes                                                          |
-| ----------------------------------------------------- | -------------------------------------------------------------- |
-| `preset`                                              | `google-drive` \| `icloud`                                     |
-| `accessToken`, `refreshToken?`                        | Sealed at rest                                                 |
-| `expiresAt?`, `fileId?`, `fileName?`, `accountEmail?` | Non-secret metadata                                            |
-| `driveMode?`, `folderId?`                             | Google Drive private/shared; absent legacy rows migrate        |
-| `iCloudMode?`, `iCloudShareTarget?`                   | iCloud private/shared; share target is credential-free routing |
+- **`preset`**
+  - **Notes:** `google-drive` \| `icloud`
+- **`accessToken`, `refreshToken?`**
+  - **Notes:** Sealed at rest
+- **`expiresAt?`, `fileId?`, `fileName?`, `accountEmail?`**
+  - **Notes:** Non-secret metadata
+- **`driveMode?`, `folderId?`**
+  - **Notes:** Google Drive private/shared; absent legacy rows migrate
+- **`iCloudMode?`, `iCloudShareTarget?`**
+  - **Notes:** iCloud private/shared; share target is credential-free routing
 
 ### Ownership
 
@@ -106,21 +117,40 @@ A domain-type refactor alone never authorizes a wire format change.
 legacy note). Snapshot shaping and sealing are unit-tested in core; IndexedDB I/O
 and the load pipeline live in wasm; the web shim is adapters + i18n only.
 
-| Concern                                                                                                                                             | Home                                                                                               |
-| --------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Snapshot model + pure transforms (`normalize`, `migrate_provider_fields`, `ensure_local_provider_row`, `find_duplicate_sync_provider`, legacy-seed) | `nook-app/nook-platform/nook-core/src/sync/sync_provider_store/`                                   |
-| Provider-save policy                                                                                                                                | `nook-app/nook-platform/nook-core/src/sync/sync_provider_store/save.rs`                            |
-| Seal/open credential fields with device identity                                                                                                    | `nook-app/nook-platform/nook-core/src/sync/sync_provider_credentials.rs`                           |
-| `nook_auth` IndexedDB I/O (rexie), load pipeline, legacy `localStorage` read/clear                                                                  | `nook-app/nook-platform/nook-wasm/src/storage/auth_providers.rs`                                   |
-| Manager APIs (`load_auth_providers_snapshot`, `load_auth_providers_with_local_row`, `save_auth_providers_snapshot`)                                 | `NookVaultManager` methods in `nook-app/nook-platform/nook-wasm/src/vault_api.rs`                  |
-| Delete the auth-provider database with `delete_auth_providers_db`                                                                                   | WASM binding + thin TypeScript wrapper                                                             |
-| Find duplicate sync providers with `find_duplicate_sync_provider`                                                                                   | WASM binding + thin TypeScript wrapper                                                             |
-| Ensure the local provider row with `ensure_local_provider_row`                                                                                      | WASM binding + thin TypeScript wrapper                                                             |
-| Seal providers with `seal_auth_providers_for_device_public_key`                                                                                     | WASM binding + thin TypeScript wrapper                                                             |
-| Bind provider storage modes                                                                                                                         | WASM bindings + thin TypeScript wrappers                                                           |
-| Enrollment typestates (`TypedEnrollmentProvider`, personal vs shared)                                                                               | `nook-app/nook-platform/nook-auth2/src/auth/enrollment.rs` (re-exported via `nook-core`)           |
-| Type re-exports, i18n presentation, wasm wrappers                                                                                                   | [`auth/providers.ts`](../../../../nook-app/nook-web/nook-web-shared/src/vault-app/lib/auth/providers.ts) |
-| Browser persistence and Svelte state                                                                                                                | `vault/providers.svelte.ts` under `nook-web-shared`                                                |
+**Core domain and policy**
+
+- **Snapshot model + pure transforms (`normalize`, `migrate_provider_fields`, `ensure_local_provider_row`, `find_duplicate_sync_provider`, legacy-seed)**
+  - **Home:** `nook-app/nook-platform/nook-core/src/sync/sync_provider_store/`
+- **Provider-save policy**
+  - **Home:** `nook-app/nook-platform/nook-core/src/sync/sync_provider_store/save.rs`
+- **Seal/open credential fields with device identity**
+  - **Home:** `nook-app/nook-platform/nook-core/src/sync/sync_provider_credentials.rs`
+
+**WASM storage and manager APIs**
+
+- **`nook_auth` IndexedDB I/O (rexie), load pipeline, legacy `localStorage` read/clear**
+  - **Home:** `nook-app/nook-platform/nook-wasm/src/storage/auth_providers.rs`
+- **Manager APIs (`load_auth_providers_snapshot`, `load_auth_providers_with_local_row`, `save_auth_providers_snapshot`)**
+  - **Home:** `NookVaultManager` methods in `nook-app/nook-platform/nook-wasm/src/vault_api.rs`
+- **Delete the auth-provider database with `delete_auth_providers_db`**
+  - **Home:** WASM binding + thin TypeScript wrapper
+- **Find duplicate sync providers with `find_duplicate_sync_provider`**
+  - **Home:** WASM binding + thin TypeScript wrapper
+- **Ensure the local provider row with `ensure_local_provider_row`**
+  - **Home:** WASM binding + thin TypeScript wrapper
+- **Seal providers with `seal_auth_providers_for_device_public_key`**
+  - **Home:** WASM binding + thin TypeScript wrapper
+- **Bind provider storage modes**
+  - **Home:** WASM bindings + thin TypeScript wrappers
+
+**Enrollment and web presentation**
+
+- **Enrollment typestates (`TypedEnrollmentProvider`, personal vs shared)**
+  - **Home:** `nook-app/nook-platform/nook-auth2/src/auth/enrollment.rs` (re-exported via `nook-core`)
+- **Type re-exports, i18n presentation, wasm wrappers**
+  - **Home:** [`auth/providers.ts`](../../../../nook-app/nook-web/nook-web-shared/src/vault-app/lib/auth/providers.ts)
+- **Browser persistence and Svelte state**
+  - **Home:** `vault/providers.svelte.ts` under `nook-web-shared`
 
 The provider-save policy owns:
 
@@ -282,13 +312,21 @@ stateDiagram-v2
 Shared components live under
 `nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/`.
 
-| Component              | When shown                                                                       | Purpose                                                                                              |
-| ---------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `DeviceProtectionGate` | Device-key unlock selected while identity is locked, or identity needs migration | Create/authorize passkey, or PIN fallback when PRF is unavailable, before loading device-sealed data |
-| `LoginGate`            | Vault locked                                                                     | Get started chooser, unlock local cache, connect sync provider, enrollment                           |
-| `SecretVault`          | Authenticated                                                                    | Primary app — secrets CRUD                                                                           |
-| `AuthStorage`          | Settings → Sync providers                                                        | Manage replica targets for **current** vault                                                         |
-| Header **Lock vault**  | Authenticated                                                                    | `VaultState.lockVault()` — clear session                                                             |
+- **`DeviceProtectionGate`**
+  - **When shown:** Device-key unlock selected while identity is locked, or identity needs migration
+  - **Purpose:** Create/authorize passkey, or PIN fallback when PRF is unavailable, before loading device-sealed data
+- **`LoginGate`**
+  - **When shown:** Vault locked
+  - **Purpose:** Get started chooser, unlock local cache, connect sync provider, enrollment
+- **`SecretVault`**
+  - **When shown:** Authenticated
+  - **Purpose:** Primary app — secrets CRUD
+- **`AuthStorage`**
+  - **When shown:** Settings → Sync providers
+  - **Purpose:** Manage replica targets for **current** vault
+- **Header** **Lock vault**
+  - **When shown:** Authenticated
+  - **Purpose:** `VaultState.lockVault()` — clear session
 
 ### Lock
 
@@ -305,10 +343,10 @@ gate. A backup password can unlock the local vault without opening it.
 
 ### Login gate (current)
 
-| Local vault? | Primary UI                                                                  |
-| ------------ | --------------------------------------------------------------------------- |
-| No           | **Get started** — create local vault (device keys) or connect cloud storage |
-| Yes          | Unlock with device keys and/or backup password                              |
+- **No**
+  - **Primary UI:** **Get started** — create local vault (device keys) or connect cloud storage
+- **Yes**
+  - **Primary UI:** Unlock with device keys and/or backup password
 
 Legacy login wizard docs (connection × authorization accordion) are superseded
 by the unified login gate; see git history before Phase 8 if needed.
@@ -339,12 +377,14 @@ Event-log sync is the live provider path — see
 projection cache and fans events out to sync providers listed in `nook_auth`
 (`fanOutSyncToProviders`).
 
-| Capability                         | Status                                                                                                                                                      |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Multiple sync providers per vault  | Done — fan-out after local save                                                                                                                             |
-| Single `store_id` across replicas  | Enforced — `StoreIdMismatch` in `sync/vault_sync.rs`                                                                                                        |
-| Event-log causal sync              | Done — [vault-event-log.md](vault-event-log.md)                                                                                                             |
-| Multi-vault on one browser profile | Partial — e2e coverage in `nook-web-app/e2e/multi-vault.spec.ts`; full picker UX still evolving ([vault-session-and-lock.md](../../security/architecture/vault-session-and-lock.md) §3) |
+- **Multiple sync providers per vault**
+  - **Status:** Done — fan-out after local save
+- **Single `store_id` across replicas**
+  - **Status:** Enforced — `StoreIdMismatch` in `sync/vault_sync.rs`
+- **Event-log causal sync**
+  - **Status:** Done — [vault-event-log.md](vault-event-log.md)
+- **Multi-vault on one browser profile**
+  - **Status:** Partial — e2e coverage in `nook-web-app/e2e/multi-vault.spec.ts`; full picker UX still evolving ([vault-session-and-lock.md](../../security/architecture/vault-session-and-lock.md) §3)
 
 **Do not confuse:** adding a sync provider **replicates** the active vault;
 opening a **different** vault requires Lock and connect/import flow (or the
@@ -489,9 +529,15 @@ curl -H 'Origin: https://simple.nokey.sh' \
 
 Alternative provider-preview options:
 
-| Option                  | Summary                                                                                                                                               | Trade-off                                                                                    |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Stable preview origin   | Serve previews from one registered origin such as `https://nook-1n8.pages.dev/pr-191/` or `https://preview.nokey.sh/pr-191/` via Worker/path routing. | Best reviewer UX; requires Cloudflare routing/base-path work and careful static asset paths. |
-| Preview OAuth client    | Create a separate Google OAuth client for a small set of fixed staging origins.                                                                       | Good for staging; still does not solve per-PR subdomains.                                    |
-| Backend/redirect broker | Move to an authorization-code flow with PKCE and a fixed redirect/broker origin.                                                                      | More secure and flexible, but adds server or Worker state and a larger auth surface.         |
-| Manual one-off origin   | Add the exact PR origin in Google Cloud Console for a specific review.                                                                                | Useful for urgent manual testing; not automatable or scalable as the normal PR flow.         |
+- **Stable preview origin**
+  - **Summary:** Serve previews from one registered origin such as `https://nook-1n8.pages.dev/pr-191/` or `https://preview.nokey.sh/pr-191/` via Worker/path routing.
+  - **Trade-off:** Best reviewer UX; requires Cloudflare routing/base-path work and careful static asset paths.
+- **Preview OAuth client**
+  - **Summary:** Create a separate Google OAuth client for a small set of fixed staging origins.
+  - **Trade-off:** Good for staging; still does not solve per-PR subdomains.
+- **Backend/redirect broker**
+  - **Summary:** Move to an authorization-code flow with PKCE and a fixed redirect/broker origin.
+  - **Trade-off:** More secure and flexible, but adds server or Worker state and a larger auth surface.
+- **Manual one-off origin**
+  - **Summary:** Add the exact PR origin in Google Cloud Console for a specific review.
+  - **Trade-off:** Useful for urgent manual testing; not automatable or scalable as the normal PR flow.

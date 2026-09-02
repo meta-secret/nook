@@ -103,10 +103,21 @@ devices the user happened to add.
 The Card Stack also keeps a stable interaction boundary between its two
 columns:
 
-| Column | Role                                                                                                                                                                                   |
-| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Left   | Every setup and management action: creating local keys, naming the draft, choosing `T` and `N`, importing participant responses, finalizing genesis, and continuing to Sentinel unlock |
-| Right  | Read-only ceremony context: chosen vault name, policy, roster count, invitation QR data, and encrypted-share delivery QR data                                                          |
+- **Left**
+  - **Role:** Every setup and management action
+    - Create local keys.
+    - Name the draft.
+    - Choose `T` and `N`.
+    - Import participant responses.
+    - Finalize genesis.
+    - Continue to Sentinel unlock.
+- **Right**
+  - **Role:** Read-only ceremony context
+    - Chosen vault name.
+    - Policy.
+    - Roster count.
+    - Invitation QR data.
+    - Encrypted-share delivery QR data.
 
 Copying displayed ceremony data is allowed on the right. Configuration controls
 are not.

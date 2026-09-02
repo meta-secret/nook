@@ -78,6 +78,7 @@ const SIMPLE_BLOCK_SCHEMA = {
         CortexArticleSemanticKind.Structure,
         CortexArticleSemanticKind.Transparent,
         CortexArticleSemanticKind.DensitySeparator,
+        CortexArticleSemanticKind.Table,
       ],
     },
     line: positiveSourceLineSchema(),

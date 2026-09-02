@@ -35,6 +35,11 @@ type MarkdownContentInspection = {
   readonly excludeProcedureExamples: boolean;
 };
 
+type CollectTableBlocksRequest = {
+  readonly node: Nodes;
+  readonly blocks: CortexArticleSemanticBlock[];
+};
+
 const INVISIBLE_TEXT = /[\s\p{Default_Ignorable_Code_Point}]/gu;
 
 export function auditCortexArticleStructure(
@@ -61,9 +66,26 @@ function semanticDocument(
       )
     : request.document.content;
   const root = unified().use(remarkParse).use(remarkGfm).parse(content);
-  const blocks = root.children.map((node) => {
+  const blocks = root.children.flatMap((node) => {
     const blockRequest: SemanticBlockRequest = { node };
-    return semanticBlock(blockRequest);
+    const containerBlock = semanticBlock(blockRequest);
+    if (node.type === 'table') return [containerBlock];
+    const tableBlocks: CortexArticleSemanticBlock[] = [];
+    const tableRequest: CollectTableBlocksRequest = {
+      node,
+      blocks: tableBlocks,
+    };
+    collectTableBlocks(tableRequest);
+    return [
+      containerBlock,
+      ...tableBlocks.map((tableBlock) =>
+        // A nested table can share its container's opening line. Its delimiter
+        // is the next source line and keeps the semantic transport ordered.
+        tableBlock.line === containerBlock.line
+          ? { ...tableBlock, line: tableBlock.line + 1 }
+          : tableBlock,
+      ),
+    ];
   });
   return { relativePath: request.document.relativePath, blocks };
 }
@@ -72,6 +94,9 @@ function semanticBlock(
   request: SemanticBlockRequest,
 ): CortexArticleSemanticBlock {
   const line = nodeLine(request.node);
+  if (request.node.type === 'table') {
+    return { kind: CortexArticleSemanticKind.Table, line };
+  }
   if (request.node.type === 'heading') {
     return {
       kind: CortexArticleSemanticKind.Heading,
@@ -106,6 +131,24 @@ function semanticBlock(
       : CortexArticleSemanticKind.Structure,
     line,
   };
+}
+
+function collectTableBlocks(request: CollectTableBlocksRequest): void {
+  if (request.node.type === 'table') {
+    request.blocks.push({
+      kind: CortexArticleSemanticKind.Table,
+      line: nodeLine(request.node),
+    });
+    return;
+  }
+  if (!('children' in request.node)) return;
+  for (const child of request.node.children) {
+    const childRequest: CollectTableBlocksRequest = {
+      node: child,
+      blocks: request.blocks,
+    };
+    collectTableBlocks(childRequest);
+  }
 }
 
 function isVisibleArticleNode(node: RootContent): boolean {
@@ -219,6 +262,6 @@ function nodeText(node: RootContent): string {
   return node.children.map(nodeText).join('');
 }
 
-function nodeLine(node: RootContent): number {
+function nodeLine(node: Nodes): number {
   return node.position?.start.line ?? 1;
 }

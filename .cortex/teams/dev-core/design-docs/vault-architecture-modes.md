@@ -22,12 +22,26 @@ cross-installation enrollment, and revocation remain target architecture. See
 
 ## Architecture Groups
 
-| Group                | Values                               | Owner                                          | Notes                                                                                                                                                                                                                                                     |
-| -------------------- | ------------------------------------ | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `device_mode`        | `standard`, `anti-hacker`            | `nook-auth2` / `nook-core`                     | Existing protection modes. `standard` deterministically derives the current age identity from passkey PRF and is a compatibility boundary; the target model always wraps a fresh installation-specific device key. The UI calls the latter High security. |
-| `vault_type`         | `simple`, `sentinel`                 | `nook-core`                                    | Vault key-access lifecycle. This is the only vault-type choice during creation.                                                                                                                                                                           |
-| Sentinel policy      | participant count `N`, threshold `T` | `nook-auth2` / `nook-core`                     | Chosen only for Sentinel genesis before vault keys exist.                                                                                                                                                                                                 |
-| Replication provider | provider-specific connection/mount   | `nook-replication` / `nook-core` / `nook-wasm` | Neutral encrypted transport usable by identity control logs and vault event logs. Not a vault mode, identity, or unlock factor.                                                                                                                           |
+- **`device_mode`**
+  - **Values:** `standard`, `anti-hacker`
+  - **Owner:** `nook-auth2` / `nook-core`
+  - **Notes:** Existing protection modes
+    - `standard` deterministically derives the current age identity from passkey PRF.
+    - This is a compatibility boundary.
+    - The target model always wraps a fresh installation-specific device key.
+    - The UI calls the target model High security.
+- **`vault_type`**
+  - **Values:** `simple`, `sentinel`
+  - **Owner:** `nook-core`
+  - **Notes:** Vault key-access lifecycle. This is the only vault-type choice during creation.
+- **Sentinel policy**
+  - **Values:** participant count `N`, threshold `T`
+  - **Owner:** `nook-auth2` / `nook-core`
+  - **Notes:** Chosen only for Sentinel genesis before vault keys exist.
+- **Replication provider**
+  - **Values:** provider-specific connection/mount
+  - **Owner:** `nook-replication` / `nook-core` / `nook-wasm`
+  - **Notes:** Neutral encrypted transport usable by identity control logs and vault event logs. Not a vault mode, identity, or unlock factor.
 
 `replication_type` and its derived `onboarding_type` are legacy implementation
 concepts. Provider account ownership or sharing capability belongs to an
@@ -42,19 +56,39 @@ exactly one of Simple create or Sentinel create. Participants join only through
 an owner-issued invitation URL. Sync-provider import remains a secondary
 “already have a vault” action, not a third create intent.
 
-| Stage / surface                         | Choice or state                      | Transition                                                                                                                                                                                             |
-| --------------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Landing handoff (empty device)          | Vault name                           | Collect the vault name before path choice. Passkey is **not** required yet. **Exception:** an `#enroll=` deep link skips create landing and opens Finish device onboarding (passkey + vault password). |
-| Path chooser                            | Path                                 | Choose exactly one: Create Simple or Create Sentinel. There is no unrestricted Join path.                                                                                                              |
-| Create Simple confirm                   | Create action                        | Confirm local create; **then** show the passkey/device-protection form (top-right overlay) before sealing the vault.                                                                                   |
-| Existing vault unlock                   | Device protection                    | Passkey/PIN gate runs **first** when a local vault already exists on this browser.                                                                                                                     |
-| Create Sentinel                         | Name (carried), then Sentinel policy | Choose participant count `N` and unlock threshold `T`; do not create/open a vault yet.                                                                                                                 |
-| Create Sentinel waiting                 | Participant responses                | Gather session-bound responses to the owner-issued invitation through QR/link/paste. Standalone public-key announcements are rejected.                                                                 |
-| Sentinel atomic genesis                 | Encrypted shares                     | Generate the Sentinel root/DEK only after the roster is complete, split it with SLIP-0039, encrypt one share per participant, then create the empty vault atomically.                                  |
-| Owner invitation / participant response | Invitation-bound join                | Participant opens the owner invitation URL, authorizes this device, and returns a signed session-bound response. Share delivery is a secondary post-genesis step.                                      |
-| Sentinel open                           | Quorum contributions                 | Do not open the vault unless at least `T` distinct participant contributions reconstruct the root in Rust/WASM.                                                                                        |
-| Import                                  | Detected vault type                  | Fetch from a provider, then route Simple to its unlock/enrollment path or Sentinel to quorum access. Provider login never opens Sentinel.                                                              |
-| Unlocked provider management / Onboard  | Sync provider                        | Add/remove post-genesis backup replicas, or onboard another browser with the standard password + sync QR after the vault exists.                                                                       |
+- **Landing handoff (empty device)**
+  - **Choice or state:** Vault name
+  - **Transition:** Collect the vault name before path choice. Passkey is **not** required yet. **Exception:** an `#enroll=` deep link skips create landing and opens Finish device onboarding (passkey + vault password).
+- **Path chooser**
+  - **Choice or state:** Path
+  - **Transition:** Choose exactly one: Create Simple or Create Sentinel. There is no unrestricted Join path.
+- **Create Simple confirm**
+  - **Choice or state:** Create action
+  - **Transition:** Confirm local create; **then** show the passkey/device-protection form (top-right overlay) before sealing the vault.
+- **Existing vault unlock**
+  - **Choice or state:** Device protection
+  - **Transition:** Passkey/PIN gate runs **first** when a local vault already exists on this browser.
+- **Create Sentinel**
+  - **Choice or state:** Name (carried), then Sentinel policy
+  - **Transition:** Choose participant count `N` and unlock threshold `T`; do not create/open a vault yet.
+- **Create Sentinel waiting**
+  - **Choice or state:** Participant responses
+  - **Transition:** Gather session-bound responses to the owner-issued invitation through QR/link/paste. Standalone public-key announcements are rejected.
+- **Sentinel atomic genesis**
+  - **Choice or state:** Encrypted shares
+  - **Transition:** Generate the Sentinel root/DEK only after the roster is complete, split it with SLIP-0039, encrypt one share per participant, then create the empty vault atomically.
+- **Owner invitation / participant response**
+  - **Choice or state:** Invitation-bound join
+  - **Transition:** Participant opens the owner invitation URL, authorizes this device, and returns a signed session-bound response. Share delivery is a secondary post-genesis step.
+- **Sentinel open**
+  - **Choice or state:** Quorum contributions
+  - **Transition:** Do not open the vault unless at least `T` distinct participant contributions reconstruct the root in Rust/WASM.
+- **Import**
+  - **Choice or state:** Detected vault type
+  - **Transition:** Fetch from a provider, then route Simple to its unlock/enrollment path or Sentinel to quorum access. Provider login never opens Sentinel.
+- **Unlocked provider management / Onboard**
+  - **Choice or state:** Sync provider
+  - **Transition:** Add/remove post-genesis backup replicas, or onboard another browser with the standard password + sync QR after the vault exists.
 
 See [sentinel-genesis.md](sentinel-genesis.md) for the complete two-round ceremony and
 security invariants. Product and persisted wire names use **Sentinel** consistently.

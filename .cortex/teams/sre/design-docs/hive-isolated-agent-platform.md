@@ -148,18 +148,61 @@ sandbox and lifecycle checks continue.
 
 ## 3. Components and ownership
 
-| Component               | Runs where                      | Owns                                                                                                                                                                     | Must not own                                                       |
-| ----------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------ |
-| Main failure handoff    | GitHub Actions                  | Converts every actionable unsuccessful trusted `Main` run into one Workbench incident keyed by failed SHA. Includes browser E2E. Retains UI-demo failure evidence from eligible historical runs. | Agent execution, raw failure logs, deployment                      |
-| Workbench dispatcher    | One Kata Pod                    | Polls public-safe `status: ready`, `automation: hive` incidents, binds the referenced run to the exact Nook Main push SHA, and idempotently enqueues unresolved failures | GitHub publication token, Codex auth                               |
-| Neo4j                   | `hive-data`, runc, retained PVC | Task DAG, readiness, claims, leases, agents, attempts, results, artifacts, schema migrations                                                                             | Codex or repository execution                                      |
-| Control Center observer | Dedicated runc Pod              | Read-only, localized task/worker projection and the static operator dashboard                                                                                            | Task mutation, Codex auth, GitHub credentials, or raw agent output |
-| Coordinator             | Worker Kata Pod                 | Neo4j credential and a typed Unix-socket task-store protocol                                                                                                             | Raw-query access for the worker                                    |
-| Worker                  | Worker Kata Pod                 | Claim loop, workspace, heartbeat, embedded Codex thread, scoped GitHub credential, standard GitHub delivery, terminal result, dependency patch integration               | Raw Neo4j access or Kubernetes administrative credentials          |
-| Auth broker             | Worker Kata Pod                 | Codex credential source, refresh, and one established token channel                                                                                                      | Repository execution or GitHub publication                         |
-| Pod reaper              | Worker Kata Pod                 | Requests whole-Pod replacement with an opaque one-purpose credential                                                                                                     | Kubernetes API or auth persistence                                 |
-| Lifecycle controller    | Dedicated runc Pod              | Validates Hive Pod identity, deletes only labeled Hive Pods, and reconciles the live Neo4j endpoint into worker and dispatcher egress policies                           | Codex auth or task execution                                       |
-| Kubernetes Deployment   | k0s                             | Four ready worker Pods and clean replacement                                                                                                                             | Durable task semantics                                             |
+### Required actions
+
+- **Main failure handoff**
+  - **Runs where:** GitHub Actions
+  - **Owns:** Converts every actionable unsuccessful trusted `Main` run into one Workbench incident keyed by failed SHA. Includes browser E2E. Retains UI-demo failure evidence from eligible historical runs.
+- **Workbench dispatcher**
+  - **Runs where:** One Kata Pod
+  - **Owns:** Polls public-safe `status: ready`, `automation: hive` incidents, binds the referenced run to the exact Nook Main push SHA, and idempotently enqueues unresolved failures
+- **Neo4j**
+  - **Runs where:** `hive-data`, runc, retained PVC
+  - **Owns:** Task DAG, readiness, claims, leases, agents, attempts, results, artifacts, schema migrations
+- **Control Center observer**
+  - **Runs where:** Dedicated runc Pod
+  - **Owns:** Read-only, localized task/worker projection and the static operator dashboard
+- **Coordinator**
+  - **Runs where:** Worker Kata Pod
+  - **Owns:** Neo4j credential and a typed Unix-socket task-store protocol
+- **Worker**
+  - **Runs where:** Worker Kata Pod
+  - **Owns:** Claim loop, workspace, heartbeat, embedded Codex thread, scoped GitHub credential, standard GitHub delivery, terminal result, dependency patch integration
+- **Auth broker**
+  - **Runs where:** Worker Kata Pod
+  - **Owns:** Codex credential source, refresh, and one established token channel
+- **Pod reaper**
+  - **Runs where:** Worker Kata Pod
+  - **Owns:** Requests whole-Pod replacement with an opaque one-purpose credential
+- **Lifecycle controller**
+  - **Runs where:** Dedicated runc Pod
+  - **Owns:** Validates Hive Pod identity, deletes only labeled Hive Pods, and reconciles the live Neo4j endpoint into worker and dispatcher egress policies
+- **Kubernetes Deployment**
+  - **Runs where:** k0s
+  - **Owns:** Four ready worker Pods and clean replacement
+
+### Prohibited actions
+
+- **Main failure handoff**
+  - **Must not own:** Agent execution, raw failure logs, deployment
+- **Workbench dispatcher**
+  - **Must not own:** GitHub publication token, Codex auth
+- **Neo4j**
+  - **Must not own:** Codex or repository execution
+- **Control Center observer**
+  - **Must not own:** Task mutation, Codex auth, GitHub credentials, or raw agent output
+- **Coordinator**
+  - **Must not own:** Raw-query access for the worker
+- **Worker**
+  - **Must not own:** Raw Neo4j access or Kubernetes administrative credentials
+- **Auth broker**
+  - **Must not own:** Repository execution or GitHub publication
+- **Pod reaper**
+  - **Must not own:** Kubernetes API or auth persistence
+- **Lifecycle controller**
+  - **Must not own:** Codex auth or task execution
+- **Kubernetes Deployment:**
+  - **Must not own:** Durable task semantics
 
 The warm-pool size is four. Each Pod is a security and lifecycle unit, not four
 independent long-lived worker processes sharing one filesystem.

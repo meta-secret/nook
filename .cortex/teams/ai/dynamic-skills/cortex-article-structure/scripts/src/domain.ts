@@ -1,6 +1,7 @@
 export enum CortexArticleFindingCode {
   EmptyArticle = 'empty-article',
   DenseArticle = 'dense-article',
+  MarkdownTable = 'markdown-table',
   UnorderedProcedure = 'unordered-procedure',
 }
 
@@ -16,6 +17,7 @@ export enum CortexArticleSemanticKind {
   Structure = 'structure',
   Transparent = 'transparent',
   DensitySeparator = 'density-separator',
+  Table = 'table',
 }
 
 export const CORTEX_ARTICLE_DETAIL_TEXT_LIMIT = 3_800;
@@ -50,7 +52,8 @@ export type CortexArticleSemanticBlock =
         | CortexArticleSemanticKind.VisibleOrderedList
         | CortexArticleSemanticKind.Structure
         | CortexArticleSemanticKind.Transparent
-        | CortexArticleSemanticKind.DensitySeparator;
+        | CortexArticleSemanticKind.DensitySeparator
+        | CortexArticleSemanticKind.Table;
       readonly line: number;
     };
 

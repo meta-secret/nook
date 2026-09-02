@@ -364,18 +364,36 @@ legacy registered `nook` runner is not used.
 
 ## 9. Docker Cache Model
 
-| Artifact                | Cache Strategy                                     | Location                            |
-| ----------------------- | -------------------------------------------------- | ----------------------------------- |
-| Rust/web/browser layers | Local builder store; hosted BuildKit registry refs | `registry.dev.nokey.sh`             |
-| Native Rust dependencies | cargo-chef + Zot refs                             | `nook-rust-deps-v4`                 |
-| WASM Rust dependencies   | fingerprinted cargo-chef + Zot refs               | `nook-rust-wasm-deps-v6`            |
-| Rust compiler cache     | SeaweedFS S3 `sccache`                             | `sccache.dev.nokey.sh`              |
-| OCI registry            | Zot in k0s                                         | `10.96.90.10:5000` via Traefik      |
-| `nook-app/target/`      | Rust lineage only                                  | `/meta-secret/nook/nook-app/target` |
-| `node_modules`          | `web-deps` Dockerfile layer                        | Immutable image layer               |
-| Web wasm pkg + coverage | Host artifact handoff                              | `${TMPDIR}/nook-web-artifacts/...`  |
-| Web dist                | Image build time (`bun run build`)                 | Built into `nook-web` image         |
-| Playwright Chromium     | `web-e2e-base` only                                | Isolated browser image              |
+- **Rust/web/browser layers**
+  - **Cache Strategy:** Local builder store; hosted BuildKit registry refs
+  - **Location:** `registry.dev.nokey.sh`
+- **Native Rust dependencies**
+  - **Cache Strategy:** cargo-chef + Zot refs
+  - **Location:** `nook-rust-deps-v4`
+- **WASM Rust dependencies**
+  - **Cache Strategy:** fingerprinted cargo-chef + Zot refs
+  - **Location:** `nook-rust-wasm-deps-v6`
+- **Rust compiler cache**
+  - **Cache Strategy:** SeaweedFS S3 `sccache`
+  - **Location:** `sccache.dev.nokey.sh`
+- **OCI registry**
+  - **Cache Strategy:** Zot in k0s
+  - **Location:** `10.96.90.10:5000` via Traefik
+- **`nook-app/target/`**
+  - **Cache Strategy:** Rust lineage only
+  - **Location:** `/meta-secret/nook/nook-app/target`
+- **`node_modules`**
+  - **Cache Strategy:** `web-deps` Dockerfile layer
+  - **Location:** Immutable image layer
+- **Web wasm pkg + coverage**
+  - **Cache Strategy:** Host artifact handoff
+  - **Location:** `${TMPDIR}/nook-web-artifacts/...`
+- **Web dist**
+  - **Cache Strategy:** Image build time (`bun run build`)
+  - **Location:** Built into `nook-web` image
+- **Playwright Chromium**
+  - **Cache Strategy:** `web-e2e-base` only
+  - **Location:** Isolated browser image
 
 ---
 
