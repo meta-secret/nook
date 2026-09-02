@@ -319,8 +319,12 @@ function commandSegments(
 
 function firstCommandWord(words: readonly ShellWord[]): number {
   let index = 0;
-  const [defaulted4 = ''] = [words[index]?.value];
-  while (/^[A-Za-z_]\w*=/u.test(defaulted4)) index += 1;
+  while (true) {
+    const [word = false] = [words[index]];
+    if (word === false) break;
+    if (!/^[A-Za-z_]\w*=/u.test(word.value)) break;
+    index += 1;
+  }
   const [defaulted5 = ''] = [words[index]?.value];
   if (posix.basename(defaulted5) === 'env') {
     const envRequest = {
