@@ -159,6 +159,7 @@ const authenticatorStageMessage: Parameters<
   type: WebsiteAuthenticatorEnrollStageMessageType.NookWebsiteAuthenticatorEnrollStage,
   payload: {
     origin: 'https://example.test',
+    stageId: 'stage',
     vaultStoreId: 'vault',
     otpauthUri: 'otpauth://totp/Nook:test',
   },

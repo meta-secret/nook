@@ -31,6 +31,7 @@ describe('enrollment message guards', () => {
         type: 'nook:website-authenticator-enroll-stage',
         payload: {
           origin: 'https://example.test',
+          stageId: 'stage-1',
           vaultStoreId: 'store-1',
           otpauthUri:
             'otpauth://totp/Example:alice?secret=JBSWY3DPEHPK3PXP&issuer=Example',
@@ -69,6 +70,31 @@ describe('enrollment message guards', () => {
         payload: {
           origin: 'https://example.test',
           otpauthUri: 'otpauth://hotp/Example:alice?secret=JBSWY3DPEHPK3PXP',
+        },
+      }),
+    ).toBe(false)
+
+    expect(
+      isWebsiteAuthenticatorEnrollStageMessage({
+        type: 'nook:website-authenticator-enroll-stage',
+        payload: {
+          origin: 'https://example.test',
+          vaultStoreId: 'store-1',
+          otpauthUri:
+            'otpauth://totp/Example:alice?secret=JBSWY3DPEHPK3PXP&issuer=Example',
+        },
+      }),
+    ).toBe(false)
+
+    expect(
+      isWebsiteAuthenticatorEnrollStageMessage({
+        type: 'nook:website-authenticator-enroll-stage',
+        payload: {
+          origin: 'https://example.test',
+          stageId: 'x'.repeat(65),
+          vaultStoreId: 'store-1',
+          otpauthUri:
+            'otpauth://totp/Example:alice?secret=JBSWY3DPEHPK3PXP&issuer=Example',
         },
       }),
     ).toBe(false)

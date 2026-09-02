@@ -20,6 +20,7 @@ export type WebsiteAuthenticatorEnrollStageMessage = {
   type: WebsiteAuthenticatorEnrollStageMessageType.NookWebsiteAuthenticatorEnrollStage
   payload: {
     origin: string
+    stageId: string
     vaultStoreId: string
     otpauthUri: string
   }
@@ -108,6 +109,16 @@ function isOtpauthTotpUri(value: string): value is string {
   return typeof value === 'string' && value.startsWith('otpauth://totp/')
 }
 
+const MAX_ENROLLMENT_STAGE_ID_LENGTH = 64
+
+export function isBoundedEnrollmentStageId(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= MAX_ENROLLMENT_STAGE_ID_LENGTH
+  )
+}
+
 export function isWebsiteAuthenticatorEnrollPreviewMessage(
   message: unknown,
 ): message is WebsiteAuthenticatorEnrollPreviewMessage {
@@ -138,6 +149,7 @@ export function isWebsiteAuthenticatorEnrollStageMessage(
     message.payload as WebsiteAuthenticatorEnrollStageMessage['payload']
 
   return (
+    isBoundedEnrollmentStageId(payload.stageId) &&
     typeof payload.vaultStoreId === 'string' &&
     payload.vaultStoreId.length > 0 &&
     isOtpauthTotpUri(payload.otpauthUri)
@@ -157,7 +169,7 @@ export function isWebsiteAuthenticatorEnrollCodeMessage(
   const payload =
     message.payload as WebsiteAuthenticatorEnrollCodeMessage['payload']
 
-  return typeof payload.stageId === 'string' && payload.stageId.length > 0
+  return isBoundedEnrollmentStageId(payload.stageId)
 }
 
 export function isWebsiteAuthenticatorEnrollConfirmMessage(
@@ -176,8 +188,7 @@ export function isWebsiteAuthenticatorEnrollConfirmMessage(
   return (
     typeof payload.vaultStoreId === 'string' &&
     payload.vaultStoreId.length > 0 &&
-    typeof payload.stageId === 'string' &&
-    payload.stageId.length > 0
+    isBoundedEnrollmentStageId(payload.stageId)
   )
 }
 
@@ -194,7 +205,7 @@ export function isWebsiteAuthenticatorEnrollDismissMessage(
   const payload =
     message.payload as WebsiteAuthenticatorEnrollDismissMessage['payload']
 
-  return typeof payload.stageId === 'string' && payload.stageId.length > 0
+  return isBoundedEnrollmentStageId(payload.stageId)
 }
 
 export function isWebsiteAuthenticatorEnrollPendingMessage(

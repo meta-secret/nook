@@ -1,6 +1,7 @@
-import type {
-  OtpauthEnrollmentPreview,
-  WebsiteAuthenticatorBackupAttachMessageMode,
+import {
+  isBoundedEnrollmentStageId,
+  type OtpauthEnrollmentPreview,
+  type WebsiteAuthenticatorBackupAttachMessageMode,
 } from '../../lib/enrollment-messages'
 import {
   type WebsiteAuthenticatorOption,
@@ -504,13 +505,53 @@ type StagedAuthenticatorEnrollment = {
   expiresAt: number
   expiryTimer: ReturnType<typeof setTimeout>
 }
-
 const STAGED_ENROLLMENT_TTL_MS = 5 * 60 * 1000
-
+const MAX_STAGED_ENROLLMENT_ENTRIES = 128
 const stagedAuthenticatorEnrollments = new Map<
   string,
   StagedAuthenticatorEnrollment
 >()
+const pendingAuthenticatorEnrollments = new Map<
+  string,
+  { origin: string; uri: { value: string } }
+>()
+const revokedAuthenticatorEnrollments = new Map<string, number>()
+let enrollmentRevocationsSaturatedUntil = 0
+const enrollmentRevocationKey = (origin: string, stageId: string) =>
+  `${origin}\n${stageId}`
+
+function purgeExpiredEnrollmentRevocations(now = Date.now()): void {
+  for (const [key, expiresAt] of revokedAuthenticatorEnrollments) {
+    if (expiresAt <= now) revokedAuthenticatorEnrollments.delete(key)
+  }
+  if (enrollmentRevocationsSaturatedUntil <= now)
+    enrollmentRevocationsSaturatedUntil = 0
+}
+
+function enrollmentStageIsRevoked(origin: string, stageId: string): boolean {
+  const now = Date.now()
+  purgeExpiredEnrollmentRevocations(now)
+  return (
+    enrollmentRevocationsSaturatedUntil > now ||
+    revokedAuthenticatorEnrollments.has(
+      enrollmentRevocationKey(origin, stageId),
+    )
+  )
+}
+
+function revokeEnrollmentStage(origin: string, stageId: string): void {
+  const now = Date.now()
+  purgeExpiredEnrollmentRevocations(now)
+  const key = enrollmentRevocationKey(origin, stageId)
+  if (
+    revokedAuthenticatorEnrollments.has(key) ||
+    revokedAuthenticatorEnrollments.size < MAX_STAGED_ENROLLMENT_ENTRIES
+  ) {
+    revokedAuthenticatorEnrollments.set(key, now + STAGED_ENROLLMENT_TTL_MS)
+    return
+  }
+  enrollmentRevocationsSaturatedUntil = now + STAGED_ENROLLMENT_TTL_MS
+}
 
 export function authenticatorEnrollmentAuthorizationIsCurrent(
   authorizationGeneration: string,
@@ -540,6 +581,9 @@ export function clearStagedAuthenticatorEnrollments(): void {
     staged.otpauthUri = ''
   }
   stagedAuthenticatorEnrollments.clear()
+  for (const pending of pendingAuthenticatorEnrollments.values())
+    pending.uri.value = ''
+  pendingAuthenticatorEnrollments.clear()
 }
 
 export function rebindStagedAuthenticatorEnrollmentsAuthorization(
@@ -552,7 +596,12 @@ export function rebindStagedAuthenticatorEnrollmentsAuthorization(
 
 type WebsiteAuthenticatorEnrollStageArgs = {
   message: {
-    payload: { origin: string; vaultStoreId: string; otpauthUri: string }
+    payload: {
+      origin: string
+      stageId: string
+      vaultStoreId: string
+      otpauthUri: string
+    }
   }
   sender: chrome.runtime.MessageSender
 }
@@ -563,8 +612,22 @@ export async function websiteAuthenticatorEnrollStage({
 }: WebsiteAuthenticatorEnrollStageArgs): Promise<AuthenticatorStageResponse> {
   const otpauthUri = { value: message.payload.otpauthUri }
   message.payload.otpauthUri = ''
+  const { origin, stageId } = message.payload
   try {
+    if (
+      !isBoundedEnrollmentStageId(stageId) ||
+      enrollmentStageIsRevoked(origin, stageId) ||
+      pendingAuthenticatorEnrollments.size >= MAX_STAGED_ENROLLMENT_ENTRIES ||
+      pendingAuthenticatorEnrollments.has(stageId) ||
+      stagedAuthenticatorEnrollments.has(stageId)
+    ) {
+      return { ok: false, reason: 'authenticator-stage-missing' }
+    }
+    pendingAuthenticatorEnrollments.set(stageId, { origin, uri: otpauthUri })
     const authorizationGeneration = await accountPickerAuthorizationGeneration()
+    if (enrollmentStageIsRevoked(origin, stageId)) {
+      return { ok: false, reason: 'authenticator-stage-missing' }
+    }
     if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
       return { ok: false, reason: 'authenticator-locked' }
     }
@@ -582,26 +645,41 @@ export async function websiteAuthenticatorEnrollStage({
       reasons: nookTypedArgs0_10,
     }
     const access = await authorizedWebsiteGrant(accessArgs)
+    if (enrollmentStageIsRevoked(origin, stageId)) {
+      return { ok: false, reason: 'authenticator-stage-missing' }
+    }
     if ('response' in access) return access.response
     if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
       return { ok: false, reason: 'authenticator-locked' }
     }
     purgeExpiredStagedEnrollments()
-    for (const [stageId, staged] of stagedAuthenticatorEnrollments) {
+    for (const [existingStageId, staged] of stagedAuthenticatorEnrollments) {
       if (staged.origin === message.payload.origin) {
-        const revoked = await revokeAuthenticatorEnrollmentFromSession(stageId)
+        const revoked =
+          await revokeAuthenticatorEnrollmentFromSession(existingStageId)
         if (!revoked) {
           return { ok: false, reason: 'authenticator-enroll-failed' }
         }
-        clearStagedEnrollment(stageId)
+        clearStagedEnrollment(existingStageId)
+        if (enrollmentStageIsRevoked(origin, stageId)) {
+          return { ok: false, reason: 'authenticator-stage-missing' }
+        }
       }
     }
-    const stageId = crypto.randomUUID()
     const expiresAt = Date.now() + STAGED_ENROLLMENT_TTL_MS
-    if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
+    if (enrollmentStageIsRevoked(origin, stageId)) {
+      return { ok: false, reason: 'authenticator-stage-missing' }
+    }
+    if (
+      stagedAuthenticatorEnrollments.size >= MAX_STAGED_ENROLLMENT_ENTRIES ||
+      !accountPickerAuthorizationIsCurrent(authorizationGeneration)
+    ) {
       return { ok: false, reason: 'authenticator-locked' }
     }
     await ensureExtensionSessionDocument()
+    if (enrollmentStageIsRevoked(origin, stageId)) {
+      return { ok: false, reason: 'authenticator-stage-missing' }
+    }
     const authorizeArgs: Parameters<
       typeof authorizeAuthenticatorEnrollmentFromSession
     >[0] = {
@@ -616,6 +694,10 @@ export async function websiteAuthenticatorEnrollStage({
     ) {
       await revokeAuthenticatorEnrollmentFromSession(stageId)
       return { ok: false, reason: 'authenticator-locked' }
+    }
+    if (enrollmentStageIsRevoked(origin, stageId)) {
+      await revokeAuthenticatorEnrollmentFromSession(stageId)
+      return { ok: false, reason: 'authenticator-stage-missing' }
     }
     const stagedEnrollment: Parameters<
       typeof stagedAuthenticatorEnrollments.set
@@ -635,6 +717,9 @@ export async function websiteAuthenticatorEnrollStage({
     return { ok: true, stageId }
   } finally {
     otpauthUri.value = ''
+    if (pendingAuthenticatorEnrollments.get(stageId)?.uri === otpauthUri) {
+      pendingAuthenticatorEnrollments.delete(stageId)
+    }
   }
 }
 
@@ -791,15 +876,25 @@ export async function websiteAuthenticatorEnrollDismiss({
   if (!isAuthorizedWebsiteSender(nookTypedArgs0_17)) {
     return { ok: false, reason: 'authenticator-forbidden-origin' }
   }
-  const staged = stagedAuthenticatorEnrollments.get(message.payload.stageId)
-  if (staged && staged.origin !== message.payload.origin) {
+  if (!isBoundedEnrollmentStageId(message.payload.stageId)) {
     return { ok: false, reason: 'authenticator-stage-missing' }
   }
+  const staged = stagedAuthenticatorEnrollments.get(message.payload.stageId)
+  const pending = pendingAuthenticatorEnrollments.get(message.payload.stageId)
+  if (
+    (staged && staged.origin !== message.payload.origin) ||
+    (pending && pending.origin !== message.payload.origin)
+  ) {
+    return { ok: false, reason: 'authenticator-stage-missing' }
+  }
+  revokeEnrollmentStage(message.payload.origin, message.payload.stageId)
+  if (staged) staged.otpauthUri = ''
+  if (pending) pending.uri.value = ''
   await ensureExtensionSessionDocument()
   const revoked = await revokeAuthenticatorEnrollmentFromSession(
     message.payload.stageId,
   )
-  if (!revoked) {
+  if (staged && !revoked) {
     return { ok: false, reason: 'authenticator-enroll-failed' }
   }
   clearStagedEnrollment(message.payload.stageId)

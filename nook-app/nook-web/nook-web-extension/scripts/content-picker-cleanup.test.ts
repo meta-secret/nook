@@ -340,11 +340,11 @@ test('refresh retains staged enrollment UI when dismissal fails', async () => {
   } as EnrollmentFlowHost
   const sensitiveMaterial = {
     uri: { value: '' },
-    payload: { otpauthUri: '' },
     candidate: { sourceLabel: '', otpauthUri: '' },
   }
   const generation = beginActiveEnrollmentCeremony({
     host,
+    stageId: 'stage-refresh-dismissal',
     sensitiveMaterial,
   })
   expect(
@@ -375,7 +375,7 @@ test('refresh retains staged enrollment UI when dismissal fails', async () => {
   removeScannedWidget()
 })
 
-test('pending enrollment cancellation scrubs every URI copy immediately', async () => {
+test('pending cancellation revokes the serialized stage and scrubs local URI', async () => {
   const { beginEnrollmentCeremony, cancelActiveEnrollmentCeremony } =
     await import('../src/content/enrollment-flow')
   const uri = { value: 'otpauth://pending-secret' }
@@ -384,17 +384,26 @@ test('pending enrollment cancellation scrubs every URI copy immediately', async 
     otpauthUri: uri.value,
   }
   const neverSettles = new Promise<void>(() => {})
-  const outboundMessages: Parameters<
+  const serializedMessages: Parameters<
     EnrollmentFlowHost['sendAuthenticatorEnrollmentStageRuntimeMessage']
   >[0][] = []
+  const dismissalStageIds: string[] = []
   const host = {
     description: { textContent: '' },
     translatedMessage: () => 'Staging enrollment',
     sendAuthenticatorEnrollmentStageRuntimeMessage: (
-      message: (typeof outboundMessages)[number],
+      message: (typeof serializedMessages)[number],
     ) => {
-      outboundMessages.push(message)
+      serializedMessages.push(structuredClone(message))
       return neverSettles
+    },
+    sendAuthenticatorEnrollmentDismissRuntimeMessage: async (
+      message: Parameters<
+        EnrollmentFlowHost['sendAuthenticatorEnrollmentDismissRuntimeMessage']
+      >[0],
+    ) => {
+      dismissalStageIds.push(message.payload.stageId)
+      return true
     },
   } as unknown as EnrollmentFlowHost
   void beginEnrollmentCeremony({
@@ -404,12 +413,15 @@ test('pending enrollment cancellation scrubs every URI copy immediately', async 
     otpauthUri: uri,
     candidate,
   })
-  expect(outboundMessages).toHaveLength(1)
-  expect(outboundMessages[0]?.payload.otpauthUri).toBe(
+  expect(serializedMessages).toHaveLength(1)
+  expect(serializedMessages[0]?.payload.otpauthUri).toBe(
     'otpauth://pending-secret',
   )
   expect(await cancelActiveEnrollmentCeremony()).toBe(true)
   expect(uri.value).toBe('')
-  expect(outboundMessages[0]?.payload.otpauthUri).toBe('')
   expect(candidate.otpauthUri).toBe('')
+  expect(dismissalStageIds).toEqual([serializedMessages[0]?.payload.stageId])
+  expect(serializedMessages[0]?.payload.otpauthUri).toBe(
+    'otpauth://pending-secret',
+  )
 })

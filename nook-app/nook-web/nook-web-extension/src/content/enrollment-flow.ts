@@ -161,6 +161,7 @@ type ActiveEnrollmentCeremony =
       kind: ActiveEnrollmentCeremonyKind.Pending
       authorizationGeneration: number
       host: EnrollmentFlowHost
+      stageId: string
       sensitiveMaterial: PendingEnrollmentSensitiveMaterial
     }
   | {
@@ -179,11 +180,13 @@ let activeEnrollmentCeremony: ActiveEnrollmentCeremony = {
 
 type BeginActiveEnrollmentCeremonyArgs = {
   host: EnrollmentFlowHost
+  stageId: string
   sensitiveMaterial: PendingEnrollmentSensitiveMaterial
 }
 
 export function beginActiveEnrollmentCeremony({
   host,
+  stageId,
   sensitiveMaterial,
 }: BeginActiveEnrollmentCeremonyArgs): number {
   enrollmentAuthorizationGeneration += 1
@@ -191,6 +194,7 @@ export function beginActiveEnrollmentCeremony({
     kind: ActiveEnrollmentCeremonyKind.Pending,
     authorizationGeneration: enrollmentAuthorizationGeneration,
     host,
+    stageId,
     sensitiveMaterial,
   }
   return enrollmentAuthorizationGeneration
@@ -256,10 +260,7 @@ export async function cancelActiveEnrollmentCeremony(): Promise<boolean> {
     return false
   }
   if (ceremony.kind === ActiveEnrollmentCeremonyKind.Pending) {
-    enrollmentAuthorizationGeneration += 1
     clearPendingEnrollmentSensitiveMaterial(ceremony.sensitiveMaterial)
-    activeEnrollmentCeremony = { kind: ActiveEnrollmentCeremonyKind.Idle }
-    return true
   }
   enrollmentAuthorizationGeneration += 1
   const cancellationGeneration = enrollmentAuthorizationGeneration
@@ -441,7 +442,6 @@ type BeginEnrollmentCeremonyArgs = {
 
 type PendingEnrollmentSensitiveMaterial = {
   uri: { value: string }
-  payload: { otpauthUri: string }
   candidate: DecodedOtpauthCandidate
 }
 
@@ -449,7 +449,6 @@ function clearPendingEnrollmentSensitiveMaterial(
   material: PendingEnrollmentSensitiveMaterial,
 ): void {
   material.uri.value = ''
-  material.payload.otpauthUri = ''
   clearOtpauthCandidate(material.candidate)
 }
 
@@ -460,21 +459,23 @@ export async function beginEnrollmentCeremony({
   otpauthUri,
   candidate,
 }: BeginEnrollmentCeremonyArgs): Promise<void> {
+  const stageId = crypto.randomUUID()
   const message: Parameters<
     typeof host.sendAuthenticatorEnrollmentStageRuntimeMessage
   >[0] = {
     type: WebsiteAuthenticatorEnrollStageMessageType.NookWebsiteAuthenticatorEnrollStage,
     payload: {
       origin: location.origin,
+      stageId,
       vaultStoreId,
       otpauthUri: otpauthUri.value,
     },
   }
   const beginArgs: BeginActiveEnrollmentCeremonyArgs = {
     host,
+    stageId,
     sensitiveMaterial: {
       uri: otpauthUri,
-      payload: message.payload,
       candidate,
     },
   }
@@ -511,7 +512,7 @@ export async function beginEnrollmentCeremony({
     ) {
       const dismissArgs: Parameters<typeof dismissStagedEnrollment>[0] = {
         host,
-        stageId: stageDelivery.response.stageId,
+        stageId,
       }
       await dismissStagedEnrollment(dismissArgs)
     }
@@ -532,7 +533,8 @@ export async function beginEnrollmentCeremony({
   const { response: stageResponse } = stageDelivery
   if (
     stageResponse.kind !== AuthenticatorEnrollmentStageResponseKind.Staged ||
-    !('stageId' in stageResponse)
+    !('stageId' in stageResponse) ||
+    stageResponse.stageId !== stageId
   ) {
     stopPendingEnrollmentWatch()
     completeEnrollmentCeremony(authorizationGeneration)
@@ -545,7 +547,6 @@ export async function beginEnrollmentCeremony({
     renderEnrollmentRetryActions(host)
     return
   }
-  const stageId = stageResponse.stageId
   const stagedCeremony: Parameters<typeof assignStagedEnrollmentCeremony>[0] = {
     authorizationGeneration,
     host,
