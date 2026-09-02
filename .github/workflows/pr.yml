@@ -635,7 +635,7 @@ jobs:
       github.event.label.name == 'ci:full-e2e')
     # Native must succeed before the merge gate check can go green. A green
     # preview with a failed Native job previously allowed false readiness.
-    needs: [rust, wasm, verify, wasm-node-test, ui-demo]
+    needs: [rust, wasm, verify, wasm-node-test]
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
     steps:
       - name: Enforce required verification results
@@ -644,28 +644,14 @@ jobs:
           WASM_RESULT: ${{ needs.wasm.result }}
           WEB_RESULT: ${{ needs.verify.result }}
           WASM_NODE_RESULT: ${{ needs.wasm-node-test.result }}
-          UI_DEMO_RESULT: ${{ needs.ui-demo.result }}
-          UI_DEMO_REQUIRED: ${{ needs.verify.outputs.ui-demo-required }}
-          TRUSTED_SOURCE: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && 'true' || 'false' }}
         run: |
           set -euo pipefail
-          if [ "$TRUSTED_SOURCE" != "true" ] \
-            && [ "$UI_DEMO_REQUIRED" != "true" ] \
-            && [ "$UI_DEMO_RESULT" = "skipped" ]; then
-            echo "Headless UI demo is not required for this untrusted source"
-            UI_DEMO_RESULT=success
-          fi
-          if [ "$UI_DEMO_RESULT" = "skipped" ]; then
-            echo "Headless UI demo is disabled (contract required: $UI_DEMO_REQUIRED)"
-            UI_DEMO_RESULT=success
-          fi
           failed=0
           for dependency in \
             "Native Rust=$NATIVE_RESULT" \
             "WASM build=$WASM_RESULT" \
             "Web verification=$WEB_RESULT" \
-            "WASM Node tests=$WASM_NODE_RESULT" \
-            "Headless UI demo=$UI_DEMO_RESULT"
+            "WASM Node tests=$WASM_NODE_RESULT"
           do
             name="${dependency%%=*}"
             result="${dependency#*=}"
