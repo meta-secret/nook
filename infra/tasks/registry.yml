@@ -83,8 +83,80 @@ tasks:
         install -d -m 0700 "$HOME/.docker"
         install -m 0600 "$docker_config" "$HOME/.docker/config.json"
 
+        REMOTE
+      - task: registry:containerd-auth:reconcile
+
+  registry:containerd-auth:reconcile:
+    internal: true
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        auth_file=/etc/k0s/containerd.d/registry-auth.toml
+        marker=/var/lib/k0s/nook-containerd-auth-clean-invocation
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        sudo -n systemctl is-active --quiet k0scontroller.service
+        controller_node="$(kubectl get nodes \
+          -l node.k0sproject.io/role=control-plane \
+          -o jsonpath='{.items[0].metadata.name}')"
+        test -n "$controller_node"
+        test "$(kubectl get "node/$controller_node" \
+          -o jsonpath='{.metadata.labels.nook\.nokey\.sh/arc-build}')" != true
+        auth_existed=false
+        if sudo -n test -e "$auth_file"; then
+          auth_existed=true
+        fi
         rm -f "$remote_dir/infra/k0s/config/registry-auth.toml"
         sudo -n rm -f /etc/k0s/containerd.d/registry-auth.toml
+        invocation="$(sudo -n systemctl show k0scontroller.service \
+          --property=InvocationID --value)"
+        [[ "$invocation" =~ ^[0-9a-f]{32}$ ]]
+        previous_invocation="$invocation"
+        marked_invocation="$(sudo -n cat "$marker" 2>/dev/null || true)"
+        restart_required=false
+        if test "$auth_existed" = true || test "$marked_invocation" != "$invocation"; then
+          restart_required=true
+          deadline="$(( $(date +%s) + 7200 ))"
+          while :; do
+            active_runners="$(kubectl get pods --namespace arc-runners \
+              --field-selector "spec.nodeName=$controller_node" \
+              -l actions.github.com/scale-set-name -o json | jq \
+              '[.items[] | select(.status.phase == "Pending" or .status.phase == "Running")] | length')"
+            if test "$active_runners" = 0; then
+              break
+            fi
+            if test "$(date +%s)" -ge "$deadline"; then
+              echo "Timed out waiting for $active_runners ARC runner(s) on $controller_node" >&2
+              exit 1
+            fi
+            echo "Waiting for $active_runners ARC runner(s) to finish on $controller_node" >&2
+            sleep 30
+          done
+          sudo -n systemctl restart k0scontroller.service
+        fi
+        sudo -n systemctl is-active --quiet k0scontroller.service
+        for _ in $(seq 1 120); do
+          if kubectl get --raw=/readyz >/dev/null 2>&1; then
+            break
+          fi
+          sleep 2
+        done
+        kubectl get --raw=/readyz >/dev/null
+        kubectl wait "node/$controller_node" --for=condition=Ready --timeout=5m
+        invocation="$(sudo -n systemctl show k0scontroller.service \
+          --property=InvocationID --value)"
+        [[ "$invocation" =~ ^[0-9a-f]{32}$ ]]
+        if test "$restart_required" = true && test "$invocation" = "$previous_invocation"; then
+          echo "k0s controller did not start a clean containerd invocation" >&2
+          exit 1
+        fi
+        marker_next="$(mktemp)"
+        trap 'rm -f "$marker_next"' EXIT
+        printf '%s\n' "$invocation" > "$marker_next"
+        sudo -n install -m 0600 "$marker_next" "$marker"
+        sudo -n test ! -e "$auth_file"
         REMOTE
 
   registry:credential:sync:

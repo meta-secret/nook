@@ -821,8 +821,19 @@ tasks:
         sudo -n k0s kubectl label "node/$node" \
           "nook.nokey.sh/arc-tier=$worker_arc_tier" --overwrite
         REMOTE
-        ssh -n -o BatchMode=yes "$worker_target" \
-          'sudo -n rm -f /etc/k0s/worker-token'
+        ssh -n -o BatchMode=yes "$worker_target" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        sudo -n rm -f /etc/k0s/worker-token
+        sudo -n test ! -e /etc/k0s/containerd.d/registry-auth.toml
+        invocation="$(sudo -n systemctl show k0sworker.service \
+          --property=InvocationID --value)"
+        [[ "$invocation" =~ ^[0-9a-f]{32}$ ]]
+        marker_next="$(mktemp)"
+        trap 'rm -f "$marker_next"' EXIT
+        printf '%s\n' "$invocation" > "$marker_next"
+        sudo -n install -m 0600 "$marker_next" \
+          /var/lib/k0s/nook-containerd-auth-clean-invocation
+        REMOTE
         BASH
 
   k0s:worker:kata:verify:

@@ -731,6 +731,18 @@ workerMeshTasks.requireAll([
   'sudo -n install -m 0644 "$firewall_next" /etc/nftables.conf',
   'sudo -n nft --check --file "$live"',
   'sudo -n nft --file "$live"',
+  "inspect_worker_containerd_auth",
+  'set_mesh_pending "$node_name"',
+  'restart) wait_for_arc_runners "$node_name"',
+  "actions.github.com/scale-set-name",
+  "sudo -n rm -f /etc/k0s/containerd.d/registry-auth.toml",
+  "sudo -n systemctl restart k0sworker.service",
+  "sudo -n systemctl is-active --quiet k0sworker.service",
+  "sport = :10250",
+  "k0s worker did not start a clean containerd invocation",
+  'wait_for_node_ready "$node_name"',
+  "Worker containerd auth state changed during reconciliation",
+  "/var/lib/k0s/nook-containerd-auth-clean-invocation",
 ]);
 
 await assertHiveRenderContract({ root });

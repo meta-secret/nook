@@ -29,6 +29,8 @@ function forbidFragment(input: {
 const registryTask = await read("infra/tasks/registry.yml");
 const k0sTask = await read("infra/tasks/k0s.yml");
 const workerTask = await read("infra/tasks/k0s-workers.yml");
+const workerMesh = await read("infra/k0s/scripts/k0s-worker-mesh-reconcile");
+const completeDeploy = await read("infra/tasks/host-services.yml");
 const zot = await read("infra/k0s/manifests/registry/zot.yaml");
 const traefik = await read("infra/traefik-dynamic.yaml");
 const compose = await read("infra/compose.yaml");
@@ -146,7 +148,7 @@ requireFragment({
   fragment: 'config_path = "/etc/k0s/containerd.d/certs.d"',
   message: "containerd must load registry hosts through config_path",
 });
-for (const source of [registryTask, k0sTask, workerTask]) {
+for (const source of [registryTask, k0sTask, workerTask, workerMesh]) {
   forbidFragment({
     source,
     fragment: "registry.configs",
@@ -159,6 +161,68 @@ for (const source of [registryTask, k0sTask, workerTask]) {
     message:
       "every k0s convergence path must remove deprecated containerd authentication",
   });
+}
+for (const fragment of [
+  "registry:containerd-auth:reconcile:",
+  "/var/lib/k0s/nook-containerd-auth-clean-invocation",
+  "--property=InvocationID --value",
+  "actions.github.com/scale-set-name",
+  "nook\\.nokey\\.sh/arc-build",
+  "restart_required=true",
+  "sudo -n systemctl restart k0scontroller.service",
+  "k0s controller did not start a clean containerd invocation",
+  "kubectl get --raw=/readyz",
+  'kubectl wait "node/$controller_node" --for=condition=Ready --timeout=5m',
+  'sudo -n test ! -e "$auth_file"',
+  "- task: registry:containerd-auth:reconcile",
+]) {
+  requireFragment({
+    source: registryTask,
+    fragment,
+    message: `controller registry-auth reconciliation is missing: ${fragment}`,
+  });
+}
+for (const source of [k0sTask, workerTask, workerMesh]) {
+  requireFragment({
+    source,
+    fragment: "/var/lib/k0s/nook-containerd-auth-clean-invocation",
+    message: "k0s convergence must record the clean containerd invocation",
+  });
+  requireFragment({
+    source,
+    fragment: "--property=InvocationID --value",
+    message: "k0s convergence must bind cleanup to a systemd invocation",
+  });
+}
+for (const fragment of [
+  "inspect_worker_containerd_auth",
+  "wait_for_arc_runners",
+  "actions.github.com/scale-set-name",
+  "sudo -n systemctl restart k0sworker.service",
+  "sport = :10250",
+  "k0s worker did not start a clean containerd invocation",
+  'wait_for_node_ready "$node_name"',
+  "Worker containerd auth state changed during reconciliation",
+]) {
+  requireFragment({
+    source: workerMesh,
+    fragment,
+    message: `fleet worker registry-auth reconciliation is missing: ${fragment}`,
+  });
+}
+const completeInstall = completeDeploy.indexOf("      - task: k0s:install");
+const completeWorkers = completeDeploy.indexOf(
+  "      - task: k0s:worker-mesh:reconcile",
+);
+const completeRegistry = completeDeploy.indexOf("      - task: registry:deploy");
+if (
+  completeInstall < 0 ||
+  completeWorkers <= completeInstall ||
+  completeRegistry <= completeWorkers
+) {
+  throw new Error(
+    "complete deploy must reconcile controller, then worker, then registry auth",
+  );
 }
 for (const source of [hosts, hive]) {
   const assertion = {

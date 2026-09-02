@@ -69,8 +69,9 @@ printf '%s' "$compute_nodes" |
     [.metadata.name,
      (.status.addresses[] | select(.type == "InternalIP") | .address),
      .spec.podCIDR,
-     .metadata.annotations["nook.nokey.sh/ssh-target"]] | @tsv' |
-  while IFS=$'\t' read -r node_name address pod_cidr ssh_target; do
+     .metadata.annotations["nook.nokey.sh/ssh-target"],
+     .metadata.annotations["nook.nokey.sh/infra-remote-dir"]] | @tsv' |
+  while IFS=$'\t' read -r node_name address pod_cidr ssh_target remote_dir; do
     peer_file="/etc/wireguard/nook-peers/$address.conf"
     endpoint_file="/etc/nftables.d/nook-k0s-mesh-endpoints/$address.endpoint"
     test "$(sudo -n stat -c '%F:%u:%g:%h' -- "$peer_file")" = "regular file:0:0:1"
@@ -96,10 +97,12 @@ printf '%s' "$compute_nodes" |
       ((endpoint_port >= 1 && endpoint_port <= 65535))
     fi
     [[ "$ssh_target" =~ ^[a-z_][a-z0-9_-]*@10\.202\.0\.[0-9]{1,3}$ ]]
+    [[ "$remote_dir" =~ ^/[A-Za-z0-9._/-]+$ ]]
+    [[ "$remote_dir" != *'/../'* && "$remote_dir" != */.. ]]
     ssh_host="${ssh_target#*@}"
     test "$ssh_host" = "$address"
-    printf 'worker\t%s\t%s\t%s\t%s\t%s\t%s\n' \
-      "$node_name" "$address" "$pod_cidr" "$public_key" "$endpoint" "$ssh_target"
+    printf 'worker\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+      "$node_name" "$address" "$pod_cidr" "$public_key" "$endpoint" "$ssh_target" "$remote_dir"
   done
 REMOTE
 inventory="$(cat "$inventory_file")"
@@ -140,12 +143,64 @@ fi
 REMOTE
 }
 
-while IFS=$'\t' read -r worker_kind node_name address pod_cidr public_key endpoint ssh_target; do
+wait_for_arc_runners() {
+  local node_name="$1"
+  ssh -o BatchMode=yes "$controller_target" bash -s -- "$node_name" <<'REMOTE'
+set -euo pipefail
+node_name="$1"
+kubectl() { sudo -n k0s kubectl "$@"; }
+deadline="$(( $(date +%s) + 7200 ))"
+while :; do
+  active_runners="$(kubectl get pods --namespace arc-runners \
+    --field-selector "spec.nodeName=$node_name" \
+    -l actions.github.com/scale-set-name -o json | jq \
+    '[.items[] | select(.status.phase == "Pending" or .status.phase == "Running")] | length')"
+  if test "$active_runners" = 0; then
+    break
+  fi
+  if test "$(date +%s)" -ge "$deadline"; then
+    echo "Timed out waiting for $active_runners ARC runner(s) on $node_name" >&2
+    exit 1
+  fi
+  echo "Waiting for $active_runners ARC runner(s) to finish on $node_name" >&2
+  sleep 30
+done
+REMOTE
+}
+
+inspect_worker_containerd_auth() {
+  local ssh_target="$1"
+  ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+    -J "$controller_target" "$ssh_target" 'bash -s' <<'REMOTE'
+set -euo pipefail
+auth_file=/etc/k0s/containerd.d/registry-auth.toml
+marker=/var/lib/k0s/nook-containerd-auth-clean-invocation
+sudo -n systemctl is-active --quiet k0sworker.service
+invocation="$(sudo -n systemctl show k0sworker.service \
+  --property=InvocationID --value)"
+[[ "$invocation" =~ ^[0-9a-f]{32}$ ]]
+previous_invocation="$invocation"
+marked_invocation="$(sudo -n cat "$marker" 2>/dev/null || true)"
+if sudo -n test -e "$auth_file" || test "$marked_invocation" != "$invocation"; then
+  printf 'restart\n'
+else
+  printf 'current\n'
+fi
+REMOTE
+}
+
+wait_for_node_ready() {
+  local node_name="$1"
+  ssh -n -o BatchMode=yes "$controller_target" \
+    "sudo -n k0s kubectl wait 'node/$node_name' --for=condition=Ready --timeout=5m"
+}
+
+while IFS=$'\t' read -r worker_kind node_name address pod_cidr public_key endpoint ssh_target remote_dir; do
   test "$worker_kind" = worker
   set_mesh_pending "$node_name"
 done <<<"$workers"
 
-while IFS=$'\t' read -r worker_kind node_name address pod_cidr public_key endpoint ssh_target; do
+while IFS=$'\t' read -r worker_kind node_name address pod_cidr public_key endpoint ssh_target remote_dir; do
   test "$worker_kind" = worker
   if test "$endpoint" = unavailable; then
     set_mesh_pending "$node_name"
@@ -159,8 +214,14 @@ while IFS=$'\t' read -r worker_kind node_name address pod_cidr public_key endpoi
     echo "Deferred offline worker $address ($ssh_target)" >&2
     continue
   fi
-  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
-    "$worker_kind" "$node_name" "$address" "$pod_cidr" "$public_key" "$endpoint" "$ssh_target" \
+  containerd_auth_state="$(inspect_worker_containerd_auth "$ssh_target")"
+  case "$containerd_auth_state" in
+    current) ;;
+    restart) wait_for_arc_runners "$node_name" ;;
+    *) echo "Invalid worker containerd auth state: $containerd_auth_state" >&2; exit 2 ;;
+  esac
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    "$worker_kind" "$node_name" "$address" "$pod_cidr" "$public_key" "$endpoint" "$ssh_target" "$remote_dir" "$containerd_auth_state" \
     >> "$reachable_file"
 done <<<"$workers"
 
@@ -171,11 +232,11 @@ if test -z "$reachable_workers"; then
 fi
 inventory_payload="$(printf '%s\n' "$reachable_workers" | base64 | tr -d '\n')"
 
-while IFS=$'\t' read -r worker_kind node_name address pod_cidr public_key endpoint ssh_target; do
+while IFS=$'\t' read -r worker_kind node_name address pod_cidr public_key endpoint ssh_target remote_dir containerd_auth_state; do
   test "$worker_kind" = worker
-  printf -v worker_command 'bash -s -- %q %q %q %q %q' \
+  printf -v worker_command 'bash -s -- %q %q %q %q %q %q %q' \
     "$address" "$controller_public_ip" "$controller_public_key" \
-    "$controller_pod_cidr" "$inventory_payload"
+    "$controller_pod_cidr" "$inventory_payload" "$remote_dir" "$containerd_auth_state"
   ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
     -J "$controller_target" "$ssh_target" "$worker_command" <<'REMOTE'
 set -euo pipefail
@@ -184,15 +245,18 @@ controller_public_ip="$2"
 controller_public_key="$3"
 controller_pod_cidr="$4"
 inventory_payload="$5"
+remote_dir="$6"
+expected_containerd_auth_state="$7"
 private_key="$(sudo -n cat /etc/wireguard/nook-private.key)"
 config="$(mktemp)"
 stripped="$(mktemp)"
 live="$(mktemp)"
 firewall="$(mktemp)"
 firewall_next="$(mktemp)"
+marker_next="$(mktemp)"
 cleanup() {
   private_key=
-  rm -f "$config" "$stripped" "$live" "$firewall" "$firewall_next"
+  rm -f "$config" "$stripped" "$live" "$firewall" "$firewall_next" "$marker_next"
   sudo -n rm -f /etc/wireguard/.nook-syncconf
 }
 trap cleanup EXIT
@@ -207,7 +271,7 @@ printf '%s\n' \
   "Endpoint = $controller_public_ip:51820" \
   "AllowedIPs = 10.202.0.1/32,10.201.0.1/32,$controller_pod_cidr" \
   'PersistentKeepalive = 25' > "$config"
-while IFS=$'\t' read -r kind node_name address pod_cidr public_key endpoint ssh_target; do
+while IFS=$'\t' read -r kind node_name address pod_cidr public_key endpoint ssh_target worker_remote_dir containerd_auth_state; do
   test "$kind" = worker
   test "$address" != "$local_address" || continue
   printf '%s\n' \
@@ -225,7 +289,7 @@ sudo -n install -m 0600 "$stripped" /etc/wireguard/.nook-syncconf
 sudo -n wg syncconf wg-nook /etc/wireguard/.nook-syncconf
 sudo -n rm -f /etc/wireguard/.nook-syncconf
 sudo -n ip route replace "$controller_pod_cidr" dev wg-nook
-while IFS=$'\t' read -r kind node_name address pod_cidr public_key endpoint ssh_target; do
+while IFS=$'\t' read -r kind node_name address pod_cidr public_key endpoint ssh_target worker_remote_dir containerd_auth_state; do
   test "$kind" = worker
   test "$address" != "$local_address" || continue
   sudo -n ip route replace "$pod_cidr" dev wg-nook
@@ -276,19 +340,60 @@ else
     jq -e '.nftables[] | select(.chain.name == "INPUT") | .chain.policy == "accept"' \
     >/dev/null
 fi
+auth_file=/etc/k0s/containerd.d/registry-auth.toml
+marker=/var/lib/k0s/nook-containerd-auth-clean-invocation
+observed_containerd_auth_state=current
+invocation="$(sudo -n systemctl show k0sworker.service \
+  --property=InvocationID --value)"
+[[ "$invocation" =~ ^[0-9a-f]{32}$ ]]
+marked_invocation="$(sudo -n cat "$marker" 2>/dev/null || true)"
+if sudo -n test -e "$auth_file" || test "$marked_invocation" != "$invocation"; then
+  observed_containerd_auth_state=restart
+fi
+if test "$observed_containerd_auth_state" != "$expected_containerd_auth_state"; then
+  echo "Worker containerd auth state changed during reconciliation" >&2
+  exit 1
+fi
+sudo -n rm -f /etc/k0s/containerd.d/registry-auth.toml
+rm -f "$remote_dir/infra/k0s/config/registry-auth.toml"
+if test "$expected_containerd_auth_state" = restart; then
+  sudo -n systemctl restart k0sworker.service
+fi
+sudo -n systemctl is-active --quiet k0sworker.service
+for _ in $(seq 1 60); do
+  if sudo -n ss --tcp --listening --numeric --no-header 'sport = :10250' |
+    grep -q .; then
+    break
+  fi
+  sleep 2
+done
+sudo -n ss --tcp --listening --numeric --no-header 'sport = :10250' |
+  grep -q .
+invocation="$(sudo -n systemctl show k0sworker.service \
+  --property=InvocationID --value)"
+[[ "$invocation" =~ ^[0-9a-f]{32}$ ]]
+if test "$expected_containerd_auth_state" = restart &&
+  test "$invocation" = "$previous_invocation"; then
+  echo "k0s worker did not start a clean containerd invocation" >&2
+  exit 1
+fi
+printf '%s\n' "$invocation" > "$marker_next"
+sudo -n install -m 0600 "$marker_next" "$marker"
+sudo -n test ! -e "$auth_file"
 REMOTE
+  wait_for_node_ready "$node_name"
 done <<<"$reachable_workers"
 
-while IFS=$'\t' read -r source_kind source_node source_address source_pod_cidr source_key source_endpoint source_target; do
+while IFS=$'\t' read -r source_kind source_node source_address source_pod_cidr source_key source_endpoint source_target source_remote_dir source_auth_state; do
   test "$source_kind" = worker
-  while IFS=$'\t' read -r target_kind target_node target_address target_pod_cidr target_key target_endpoint target_target; do
+  while IFS=$'\t' read -r target_kind target_node target_address target_pod_cidr target_key target_endpoint target_target target_remote_dir target_auth_state; do
     test "$target_kind" = worker
     test "$source_address" != "$target_address" || continue
     ssh -n -o BatchMode=yes -J "$controller_target" "$source_target" \
       "ping -c 1 -W 3 '$target_address' >/dev/null"
   done <<<"$reachable_workers"
 done <<<"$reachable_workers"
-while IFS=$'\t' read -r worker_kind node_name address pod_cidr public_key endpoint ssh_target; do
+while IFS=$'\t' read -r worker_kind node_name address pod_cidr public_key endpoint ssh_target remote_dir containerd_auth_state; do
   test "$worker_kind" = worker
   clear_mesh_pending "$node_name"
 done <<<"$reachable_workers"
