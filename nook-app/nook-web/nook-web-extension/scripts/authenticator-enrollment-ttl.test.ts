@@ -2,6 +2,7 @@ import { afterAll, beforeAll, expect, mock, test } from 'bun:test'
 let revokeAccepted = true
 let authorizeEnrollment: () => Promise<boolean> = async () => true
 let authorizationStarted = () => {}
+type SessionRequest = { type: string; payload: Record<string, unknown> }
 const authorizedStageIds: string[] = []
 const revokedStageIds: string[] = []
 const stagedCodeUris: string[] = []
@@ -30,13 +31,7 @@ beforeAll(async () => {
       origin === authorizedOrigin,
     passwordPairingGrants: async () => [],
     randomNonce: () => 'nonce-1',
-    sendSessionMessage: async ({
-      type,
-      payload,
-    }: {
-      type: string
-      payload: Record<string, unknown>
-    }) => {
+    sendSessionMessage: async ({ type, payload }: SessionRequest) => {
       if (type.endsWith('authorize')) {
         authorizedStageIds.push(payload.enrollmentAuthorizationId as string)
         authorizationStarted()

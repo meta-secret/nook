@@ -1,5 +1,7 @@
-import { describe, expect, test } from 'bun:test'
+import { afterAll, describe, expect, test } from 'bun:test'
 import { OpenCompanionLauncherIntent } from '../../nook-web-shared/src/extension/companion-launcher-message'
+const originalChrome = globalThis.chrome
+afterAll(() => (globalThis.chrome = originalChrome))
 
 describe('ensureExtensionSessionDocument', () => {
   test('uses an existing offscreen session when Chrome rejects with a string', async () => {
@@ -16,7 +18,7 @@ describe('ensureExtensionSessionDocument', () => {
       },
     } as typeof chrome
     const { ensureExtensionSessionDocument } =
-      await import('../src/background/service-worker/session-lifecycle')
+      await import('../src/background/service-worker/session-lifecycle?test')
 
     await ensureExtensionSessionDocument()
     expect(createAttempts).toBe(1)
@@ -37,7 +39,7 @@ describe('openCompanionLauncherBestEffort', () => {
       },
     } as typeof chrome
     const { openCompanionLauncher } =
-      await import('../src/background/service-worker/session-lifecycle')
+      await import('../src/background/service-worker/session-lifecycle?test')
 
     await expect(
       openCompanionLauncher(OpenCompanionLauncherIntent.Default),
@@ -57,7 +59,7 @@ describe('openCompanionLauncherBestEffort', () => {
       },
     } as typeof chrome
     const { openCompanionLauncherBestEffort } =
-      await import('../src/background/service-worker/session-lifecycle')
+      await import('../src/background/service-worker/session-lifecycle?test')
 
     expect(() =>
       openCompanionLauncherBestEffort(OpenCompanionLauncherIntent.Default),
@@ -84,7 +86,7 @@ describe('authentication surface notifications', () => {
       },
     } as unknown as typeof chrome
     const { refreshAuthenticationSurfaces } =
-      await import('../src/background/service-worker/session-lifecycle')
+      await import('../src/background/service-worker/session-lifecycle?test')
 
     await refreshAuthenticationSurfaces()
 
@@ -107,7 +109,7 @@ describe('authentication surface notifications', () => {
       },
     } as unknown as typeof chrome
     const { refreshAuthenticationSurfaces } =
-      await import('../src/background/service-worker/session-lifecycle')
+      await import('../src/background/service-worker/session-lifecycle?test')
 
     await expect(refreshAuthenticationSurfaces()).rejects.toThrow(
       'authentication surface refresh delivery failed',
@@ -126,7 +128,7 @@ describe('authentication surface notifications', () => {
       },
     } as unknown as typeof chrome
     const { refreshAuthenticationSurfaces } =
-      await import('../src/background/service-worker/session-lifecycle')
+      await import('../src/background/service-worker/session-lifecycle?test')
 
     await expect(refreshAuthenticationSurfaces()).rejects.toThrow(
       'authentication surface refresh delivery failed',
@@ -146,7 +148,7 @@ describe('authentication surface notifications', () => {
       },
     } as unknown as typeof chrome
     const { refreshAuthenticationSurfaces } =
-      await import('../src/background/service-worker/session-lifecycle')
+      await import('../src/background/service-worker/session-lifecycle?test')
 
     await expect(refreshAuthenticationSurfaces()).rejects.toThrow(
       'authentication surface refresh delivery failed',
@@ -170,7 +172,7 @@ describe('authentication surface notifications', () => {
       },
     } as unknown as typeof chrome
     const { refreshAuthenticationSurfaces } =
-      await import('../src/background/service-worker/session-lifecycle')
+      await import('../src/background/service-worker/session-lifecycle?test')
 
     await refreshAuthenticationSurfaces()
 
