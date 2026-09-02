@@ -179,6 +179,24 @@ pub(crate) async fn load_local_event_store(store_id: &str) -> Result<LocalEventS
     Ok(local)
 }
 
+pub(crate) async fn load_local_event_store_strict(
+    store_id: &str,
+) -> Result<LocalEventStore, NookError> {
+    let rexie = open_nook_database().await?;
+    let transaction = rexie
+        .transaction(&[STORE_EVENTS], rexie::TransactionMode::ReadOnly)
+        .map_err(|error| NookError::IndexedDb(format!("Transaction error: {error:?}")))?;
+    let store = transaction
+        .store(STORE_EVENTS)
+        .map_err(|error| NookError::IndexedDb(format!("Store error: {error:?}")))?;
+    let result = load_local_event_store_from_store(&store, store_id).await;
+    transaction
+        .done()
+        .await
+        .map_err(|error| NookError::IndexedDb(format!("Transaction done error: {error:?}")))?;
+    result
+}
+
 /// Load one vault graph from an already-open `events` store.
 ///
 /// Callers use this inside a multi-store transaction when authorization
@@ -472,6 +490,30 @@ mod tests {
             ));
         };
         assert!(error.to_string().contains("references missing event"));
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn strict_loader_rejects_malformed_indexed_event_id() -> Result<(), NookError> {
+        let store_id = "malformed-indexed-id-test";
+        let index_key = format!("event_index:{store_id}");
+        store_put(STORE_EVENTS, &index_key, "[\"not-an-event-id\"]").await?;
+        store_put(
+            STORE_EVENTS,
+            &event_key(store_id, "not-an-event-id"),
+            "event bytes",
+        )
+        .await?;
+
+        let result = load_local_event_store_strict(store_id).await;
+        clear_local_event_store(store_id).await?;
+
+        let Err(error) = result else {
+            return Err(NookError::Database(
+                "Malformed indexed event ID did not fail closed.".to_owned(),
+            ));
+        };
+        assert!(error.to_string().contains("Invalid indexed event id"));
         Ok(())
     }
 

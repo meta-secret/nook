@@ -418,7 +418,9 @@ export async function loadProviders({ state, options }: ProviderLoad) {
   state.providers = snapshot.providers.map((p) =>
     p.label === "GitHub sync" ? { ...p, label: "GitHub" } : p,
   );
-  if (snapshot.activeVaultStoreId.state === "storeId") {
+  if (state.selectedLoginVault.kind === LoginVaultSelectionKind.Selected) {
+    state.openActiveVault(state.selectedLoginVault.storeId);
+  } else if (snapshot.activeVaultStoreId.state === "storeId") {
     state.openActiveVault(snapshot.activeVaultStoreId.value);
   }
   state.providersLoaded = true;

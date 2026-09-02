@@ -237,12 +237,24 @@ test.describe('sync conflict resolution', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     await expect(page.getByTestId('vault-sync-conflict-dialog')).toContainText(
-      'Different vault on sync provider',
+      'Choose how to open this provider vault',
     )
     await expect(
       page.getByTestId('sync-conflict-import-new-vault-btn'),
     ).toBeVisible()
     await expect(page.getByTestId('sync-conflict-cancel-btn')).toBeVisible()
+    await expect(
+      page.getByTestId('provider-vault-preserve-both'),
+    ).toContainText('Nook does not merge them automatically')
+    await expect(page.getByText(storeA, { exact: true })).not.toBeVisible()
+    await expect(page.getByText(storeB, { exact: true })).not.toBeVisible()
+    await page.getByText('Technical details', { exact: true }).click()
+    await expect(page.getByText(storeA, { exact: true })).toBeVisible()
+    await expect(page.getByText(storeB, { exact: true })).toBeVisible()
+    await expect(
+      page.getByText(/A passkey unlocks one protected Nook identity/),
+    ).toBeVisible()
+    await expect(page.getByText(/A backup password is separate/)).toBeVisible()
     await expect(page.getByTestId('vault-error')).toHaveCount(0)
     await expect
       .poll(() =>
@@ -269,7 +281,7 @@ test.describe('sync conflict resolution', () => {
     expect(stub.getEventFileContents()).toEqual(remoteEventsBeforeConflict)
   })
 
-  test('import as new vault keeps the prior local vault and shows the picker', async ({
+  test('sole linked identity opens the imported vault and keeps the prior vault', async ({
     page,
   }) => {
     const fileName = 'nook-e2e-import-new-vault.yaml'
@@ -367,9 +379,15 @@ test.describe('sync conflict resolution', () => {
     await page.getByTestId('sync-conflict-import-new-vault-btn').click()
     await waitForVaultOperationsIdle(page, ENROLLMENT_UNLOCK_TIMEOUT_MS)
 
-    await expect(page.getByTestId('login-vault-picker')).toBeVisible({
+    await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
+    await expect(
+      page.locator(
+        `[data-testid="login-vault-card"][data-store-id="${storeA}"]`,
+      ),
+    ).toBeVisible()
+    await page.getByTestId('login-switch-vault-btn').click()
     await expect(page.getByTestId('login-vault-option')).toHaveCount(2)
     await expect(
       page.locator(

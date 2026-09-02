@@ -12,6 +12,8 @@
   import type { NookSyncConflictReview } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
   import { VaultSyncConflictKind } from '$app-wasm'
+  import ProviderVaultDecisionPanel from './ProviderVaultDecisionPanel.svelte'
+  import type { ProviderVaultIdentitySelection } from '$lib/vault/provider-vault-decision'
 
   let {
     vault,
@@ -27,7 +29,9 @@
     isBusy?: boolean
     onKeepLocal: () => void | Promise<void>
     onKeepRemote: () => void | Promise<void>
-    onImportAsNewVault: () => void | Promise<void>
+    onImportAsNewVault: (
+      selection: ProviderVaultIdentitySelection,
+    ) => void | Promise<void>
     onCancel: () => void | Promise<void>
   } = $props()
 
@@ -36,7 +40,6 @@
         kind: VaultSyncConflictKind.StoreId
         localStoreId: string
         remoteStoreId: string
-        eventLogStoreMismatch: boolean
       }
     | {
         kind: VaultSyncConflictKind.Content
@@ -50,7 +53,6 @@
         kind: VaultSyncConflictKind.StoreId,
         localStoreId: conflict.local_store_id(),
         remoteStoreId: conflict.remote_store_id(),
-        eventLogStoreMismatch: !conflict.remoteYaml.trim(),
       }
     }
     return {
@@ -62,10 +64,6 @@
   const isStoreIdConflict = $derived(
     conflictView.kind === VaultSyncConflictKind.StoreId,
   )
-  const isEventLogStoreMismatch = $derived(
-    conflictView.kind === VaultSyncConflictKind.StoreId &&
-      conflictView.eventLogStoreMismatch,
-  )
   const versionLabel = $derived(
     conflictView.kind === VaultSyncConflictKind.StoreId
       ? `${conflictView.localStoreId} / ${conflictView.remoteStoreId}`
@@ -75,23 +73,17 @@
   )
   const conflictDescription = $derived(
     conflictView.kind === VaultSyncConflictKind.StoreId
-      ? (() => { const translationRequest: Parameters<typeof vault.t>[0] = {
-          key: isEventLogStoreMismatch
-            ? I18N_KEYS.AuthStorageSyncConflictStoreIdEventDesc
-            : I18N_KEYS.AuthStorageSyncConflictStoreIdDesc,
-          replacements: {
-            provider: conflict.providerLabel,
-            localStore: conflictView.localStoreId,
-            remoteStore: conflictView.remoteStoreId,
-          },
-        }; return vault.t(translationRequest); })()
-      : (() => { const translationRequest2: Parameters<typeof vault.t>[0] = {
-  key: I18N_KEYS.AuthStorageSyncConflictDesc,
-  replacements: {
-          provider: conflict.providerLabel,
-          version: versionLabel,
-        },
-}; return vault.t(translationRequest2); })(),
+      ? vault.t(I18N_KEYS.AuthStorageProviderVaultIntro)
+      : (() => {
+          const translationRequest2: Parameters<typeof vault.t>[0] = {
+            key: I18N_KEYS.AuthStorageSyncConflictDesc,
+            replacements: {
+              provider: conflict.providerLabel,
+              version: versionLabel,
+            },
+          }
+          return vault.t(translationRequest2)
+        })(),
   )
   const conflictTitle = $derived(
     isStoreIdConflict
@@ -113,7 +105,7 @@
   ></div>
 
   <Card
-    class="relative z-10 w-full max-w-lg border-border bg-card shadow-2xl shadow-black/40 animate-in fade-in zoom-in-95 duration-200"
+    class="relative z-10 max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto border-border bg-card shadow-2xl shadow-black/40 animate-in fade-in zoom-in-95 duration-200"
   >
     <CardHeader class="border-b border-border/60 pb-4">
       <div class="flex items-start justify-between gap-3">
@@ -133,98 +125,75 @@
     </CardHeader>
 
     <CardContent class="space-y-4 pt-4">
-      <ul class="space-y-2 text-sm">
-        <li
-          class="flex items-start gap-3 rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5"
-          data-testid="sync-conflict-local-option"
-        >
-          <HardDrive class="mt-0.5 size-4 shrink-0 text-primary" />
-          <span>
-            <span class="block font-medium text-foreground">
-              {vault.t(I18N_KEYS.AuthStorageSyncConflictLocalCopy)}
+      {#if conflictView.kind === VaultSyncConflictKind.StoreId}
+        <ProviderVaultDecisionPanel
+          {vault}
+          providerLabel={conflict.providerLabel}
+          localStoreId={conflictView.localStoreId}
+          remoteStoreId={conflictView.remoteStoreId}
+          {isBusy}
+          onImport={onImportAsNewVault}
+          {onCancel}
+        />
+      {:else}
+        <ul class="space-y-2 text-sm">
+          <li
+            class="flex items-start gap-3 rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5"
+            data-testid="sync-conflict-local-option"
+          >
+            <HardDrive class="mt-0.5 size-4 shrink-0 text-primary" />
+            <span>
+              <span class="block font-medium text-foreground">
+                {vault.t(I18N_KEYS.AuthStorageSyncConflictLocalCopy)}
+              </span>
+              <span class="block text-xs text-muted-foreground">
+                {(() => {
+                  const translationRequest4: Parameters<typeof vault.t>[0] = {
+                    key: I18N_KEYS.AuthStorageSyncConflictVersion,
+                    replacements: {
+                      version: String(conflictView.localVersion),
+                    },
+                  }
+                  return vault.t(translationRequest4)
+                })()}
+              </span>
             </span>
-            <span class="block text-xs text-muted-foreground">
-              {#if conflictView.kind === VaultSyncConflictKind.StoreId}
-                {(() => { const translationRequest3: Parameters<typeof vault.t>[0] = {
-  key: I18N_KEYS.AuthStorageSyncConflictStoreIdLocal,
-  replacements: {
-                  store: conflictView.localStoreId,
-                },
-}; return vault.t(translationRequest3); })()}
-              {:else}
-                {(() => { const translationRequest4: Parameters<typeof vault.t>[0] = {
-  key: I18N_KEYS.AuthStorageSyncConflictVersion,
-  replacements: {
-                  version: String(conflictView.localVersion),
-                },
-}; return vault.t(translationRequest4); })()}
-              {/if}
+          </li>
+          <li
+            class="flex items-start gap-3 rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5"
+            data-testid="sync-conflict-remote-option"
+          >
+            <Cloud class="mt-0.5 size-4 shrink-0 text-primary" />
+            <span>
+              <span class="block font-medium text-foreground">
+                {(() => {
+                  const translationRequest5: Parameters<typeof vault.t>[0] = {
+                    key: I18N_KEYS.AuthStorageSyncConflictRemoteCopy,
+                    replacements: {
+                      provider: conflict.providerLabel,
+                    },
+                  }
+                  return vault.t(translationRequest5)
+                })()}
+              </span>
+              <span class="block text-xs text-muted-foreground">
+                {(() => {
+                  const translationRequest7: Parameters<typeof vault.t>[0] = {
+                    key: I18N_KEYS.AuthStorageSyncConflictVersion,
+                    replacements: {
+                      version: String(conflictView.remoteVersion),
+                    },
+                  }
+                  return vault.t(translationRequest7)
+                })()}
+              </span>
             </span>
-          </span>
-        </li>
-        <li
-          class="flex items-start gap-3 rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5"
-          data-testid="sync-conflict-remote-option"
-        >
-          <Cloud class="mt-0.5 size-4 shrink-0 text-primary" />
-          <span>
-            <span class="block font-medium text-foreground">
-              {(() => { const translationRequest5: Parameters<typeof vault.t>[0] = {
-  key: I18N_KEYS.AuthStorageSyncConflictRemoteCopy,
-  replacements: {
-                provider: conflict.providerLabel,
-              },
-}; return vault.t(translationRequest5); })()}
-            </span>
-            <span class="block text-xs text-muted-foreground">
-              {#if conflictView.kind === VaultSyncConflictKind.StoreId}
-                {(() => { const translationRequest6: Parameters<typeof vault.t>[0] = {
-  key: I18N_KEYS.AuthStorageSyncConflictStoreIdRemote,
-  replacements: {
-                  store: conflictView.remoteStoreId,
-                },
-}; return vault.t(translationRequest6); })()}
-              {:else}
-                {(() => { const translationRequest7: Parameters<typeof vault.t>[0] = {
-  key: I18N_KEYS.AuthStorageSyncConflictVersion,
-  replacements: {
-                  version: String(conflictView.remoteVersion),
-                },
-}; return vault.t(translationRequest7); })()}
-              {/if}
-            </span>
-          </span>
-        </li>
-      </ul>
+          </li>
+        </ul>
 
-      <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
-        {#if isStoreIdConflict}
-          <Button
-            type="button"
-            variant="secondary"
-            class="sm:min-w-[160px]"
-            data-testid="sync-conflict-import-new-vault-btn"
-            disabled={isBusy}
-            onclick={() => void onImportAsNewVault()}
-          >
-            {#if isBusy}
-              <RefreshCw class="size-4 animate-spin" />
-            {/if}
-            {vault.t(I18N_KEYS.AuthStorageSyncConflictImportNewVault)}
-          </Button>
-        {/if}
-        {#if isEventLogStoreMismatch}
-          <Button
-            type="button"
-            variant="outline"
-            class="sm:min-w-[160px]"
-            data-testid="sync-conflict-cancel-btn"
-            disabled={isBusy}
-            onclick={() => void onCancel()}
-          >
-            {vault.t(I18N_KEYS.AuthStorageSyncConflictChooseDifferentProvider)}
-          </Button>
-        {:else}
+        <div
+          class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end"
+        >
           <Button
             type="button"
             variant="outline"
@@ -236,12 +205,15 @@
             {#if isBusy}
               <RefreshCw class="size-4 animate-spin" />
             {/if}
-            {(() => { const translationRequest8: Parameters<typeof vault.t>[0] = {
-  key: I18N_KEYS.AuthStorageSyncConflictKeepRemote,
-  replacements: {
-              provider: conflict.providerLabel,
-            },
-}; return vault.t(translationRequest8); })()}
+            {(() => {
+              const translationRequest8: Parameters<typeof vault.t>[0] = {
+                key: I18N_KEYS.AuthStorageSyncConflictKeepRemote,
+                replacements: {
+                  provider: conflict.providerLabel,
+                },
+              }
+              return vault.t(translationRequest8)
+            })()}
           </Button>
           <Button
             type="button"
@@ -255,8 +227,8 @@
             {/if}
             {vault.t(I18N_KEYS.AuthStorageSyncConflictKeepLocal)}
           </Button>
-        {/if}
-      </div>
+        </div>
+      {/if}
     </CardContent>
   </Card>
 </div>
