@@ -86,6 +86,8 @@ jobs:
           : "${KUBERNETES_NODE_NAME:?KUBERNETES_NODE_NAME is required}"
           printf '::notice title=Kubernetes worker::%s\n' "$KUBERNETES_NODE_NAME"
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',loom:verify,') && '0' || '1' }}
       - name: Validate batch request
         shell: bash
         run: |
