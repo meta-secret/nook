@@ -558,14 +558,24 @@ Quality gates exist to force remediation. When **Knip**, **jscpd**, or **any
 other** check in `task check` / `task ci:pr` / PR CI fails, agents **must fix the
 reported problems in the same task** and leave the gate green.
 
-| Gate                                                  | Typical findings                    | Correct fix                                                    |
-| ----------------------------------------------------- | ----------------------------------- | -------------------------------------------------------------- |
-| Knip (`bun run unused`)                               | unused files, exports, dependencies | delete dead code, wire it up, or export only what callers need |
-| jscpd (`bun run duplicates`)                          | copy/paste clones over threshold    | extract a shared helper/module; do not duplicate again         |
-| fmt / prettier / eslint / svelte-check / clippy / tsc | style, type, lint defects           | correct the code                                               |
-| vitest / Rust tests / coverage / e2e / preflight      | failing or missing coverage         | fix behavior and add the required tests                        |
+### Required actions
 
-**Do not** "resolve" a finding by:
+- **Knip (`bun run unused`)**
+  - **Typical findings:** unused files, exports, dependencies
+  - **Correct fix:** delete dead code, wire it up, or export only what callers need
+- **jscpd (`bun run duplicates`)**
+  - **Typical findings:** copy/paste clones over threshold
+  - **Correct fix:** extract a shared helper/module; do not duplicate again
+- **fmt / prettier / eslint / svelte-check / clippy / tsc**
+  - **Typical findings:** style, type, lint defects
+  - **Correct fix:** correct the code
+- **vitest / Rust tests / coverage / e2e / preflight**
+  - **Typical findings:** failing or missing coverage
+  - **Correct fix:** fix behavior and add the required tests
+
+### Prohibited actions
+
+Do not "resolve" a finding by:
 
 - raising the jscpd `threshold` or Knip config to hide clones/unused code
 - adding ignore/exclude paths for authored product sources that should stay in

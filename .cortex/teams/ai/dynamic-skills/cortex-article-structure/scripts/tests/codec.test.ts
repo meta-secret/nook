@@ -45,6 +45,7 @@ const validRequest: AuditCortexArticleStructureRequest = {
         { kind: CortexArticleSemanticKind.Structure, line: 7 },
         { kind: CortexArticleSemanticKind.Transparent, line: 9 },
         { kind: CortexArticleSemanticKind.DensitySeparator, line: 11 },
+        { kind: CortexArticleSemanticKind.Table, line: 13 },
       ],
     },
   ],
@@ -97,6 +98,13 @@ test('accepts active diagnostics for every finding code', () => {
         line: 3,
         message:
           'Article #Example has more than 3 consecutive prose blocks without visible structure.',
+      },
+      {
+        code: CortexArticleFindingCode.MarkdownTable,
+        file: '.cortex/example.md',
+        line: 4,
+        message:
+          'Rendered Markdown table in .cortex/example.md is prohibited; use an enclosed structured list.',
       },
       {
         code: CortexArticleFindingCode.UnorderedProcedure,

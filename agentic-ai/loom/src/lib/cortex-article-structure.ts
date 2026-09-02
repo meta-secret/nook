@@ -61,9 +61,12 @@ function semanticDocument(
       )
     : request.document.content;
   const root = unified().use(remarkParse).use(remarkGfm).parse(content);
-  const blocks = root.children.map((node) => {
+  const blocks = root.children.flatMap((node) => {
+    const tableBlocks: CortexArticleSemanticBlock[] = [];
+    collectTableBlocks(node, tableBlocks);
+    if (tableBlocks.length > 0) return tableBlocks;
     const blockRequest: SemanticBlockRequest = { node };
-    return semanticBlock(blockRequest);
+    return [semanticBlock(blockRequest)];
   });
   return { relativePath: request.document.relativePath, blocks };
 }
@@ -72,6 +75,9 @@ function semanticBlock(
   request: SemanticBlockRequest,
 ): CortexArticleSemanticBlock {
   const line = nodeLine(request.node);
+  if (request.node.type === 'table') {
+    return { kind: CortexArticleSemanticKind.Table, line };
+  }
   if (request.node.type === 'heading') {
     return {
       kind: CortexArticleSemanticKind.Heading,
@@ -106,6 +112,23 @@ function semanticBlock(
       : CortexArticleSemanticKind.Structure,
     line,
   };
+}
+
+function collectTableBlocks(
+  node: Nodes,
+  blocks: CortexArticleSemanticBlock[],
+): void {
+  if (node.type === 'table') {
+    blocks.push({
+      kind: CortexArticleSemanticKind.Table,
+      line: nodeLine(node),
+    });
+    return;
+  }
+  if (!('children' in node)) return;
+  for (const child of node.children) {
+    collectTableBlocks(child, blocks);
+  }
 }
 
 function isVisibleArticleNode(node: RootContent): boolean {
@@ -219,6 +242,6 @@ function nodeText(node: RootContent): string {
   return node.children.map(nodeText).join('');
 }
 
-function nodeLine(node: RootContent): number {
+function nodeLine(node: Nodes): number {
   return node.position?.start.line ?? 1;
 }

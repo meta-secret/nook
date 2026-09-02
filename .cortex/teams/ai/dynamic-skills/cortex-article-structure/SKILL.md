@@ -91,10 +91,11 @@ data, not a procedure.
 Use the smallest lookup structure that preserves meaning.
 
 - Use bullets for a short catalog.
-- Use a table for compact repeated fields or exact mappings.
+- Use an enclosed list keyed by a bold primary item for repeated fields or exact
+  mappings. Rendered Markdown tables are prohibited.
 - Use a definition paragraph followed by bullets when entries need explanation.
 - Use code blocks only for literal syntax, commands, or examples.
-- Move long table-cell explanations below the table.
+- Keep explanations as named nested properties beneath their primary list item.
 
 Reference structure supports lookup. It must not duplicate an authoritative
 rule owned by another article or document.
@@ -138,7 +139,7 @@ Do not add an empty block merely because the label exists in this standard.
 - Deep nesting used only to make a document look structured.
 - One list item containing several independent rules.
 - A heading for every sentence or label.
-- A table cell that contains a miniature manual.
+- A rendered Markdown table.
 - Repeated boilerplate headings with no content.
 - A rewrite that changes policy while claiming to change presentation only.
 
@@ -154,12 +155,14 @@ It rejects mechanically provable failures:
 
 - empty substantive H2 or H3 articles, including mapless articles;
 - excessive consecutive prose blocks without structural relief;
-- explicitly procedure-labeled articles that contain no ordered list;
+- explicitly procedure-labeled articles that contain no ordered list; and
+- any GFM `table` node.
 
 The audit uses Markdown syntax semantics only.
 
-- Empty code blocks, block quotes, lists, list items, and tables do not make an
+- Empty code blocks, block quotes, lists, and list items do not make an
   article substantive.
+- Any GFM `table` node is prohibited and produces a typed audit finding.
 - Definitions and footnote definitions are transparent to emptiness and prose
   density.
 - A thematic break provides structural relief between prose blocks but does not
@@ -208,6 +211,10 @@ task preflight:loom-contracts
 ```
 
 Review the diff semantically after the mechanical checks pass.
+
+- Confirm every `.cortex/**/*.md` document parses with no GFM `table` node.
+- Confirm repeated fields and exact mappings remain explicit as named
+  properties in enclosed lists.
 
 The reviewer must be able to identify article purpose, action order, branches,
 and completion evidence without reconstructing them from dense prose.

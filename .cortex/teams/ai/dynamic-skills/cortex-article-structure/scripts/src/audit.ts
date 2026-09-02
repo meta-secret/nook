@@ -48,6 +48,17 @@ export function auditCortexArticleStructure(
 
 function auditDocument(request: AuditDocumentRequest): void {
   const { blocks } = request.document;
+  for (const block of blocks) {
+    if (block.kind !== CortexArticleSemanticKind.Table) continue;
+    const findingRequest: AddFindingRequest = {
+      findings: request.findings,
+      code: CortexArticleFindingCode.MarkdownTable,
+      file: request.document.relativePath,
+      line: block.line,
+      message: `Rendered Markdown table in ${request.document.relativePath} is prohibited; use an enclosed structured list.`,
+    };
+    addFinding(findingRequest);
+  }
   for (let index = 0; index < blocks.length; index += 1) {
     const block = blocks.at(index) ?? false;
     if (

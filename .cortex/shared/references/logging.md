@@ -97,11 +97,15 @@ default is `info`. Almost all app logs today are `debug` (`wasm` status drain,
 
   Query parameters (all optional):
 
-  | Param      | Default | Description                                     |
-  | ---------- | ------- | ----------------------------------------------- |
-  | `minLevel` | `trace` | Minimum severity to include (`error` … `trace`) |
-  | `limit`    | `500`   | Max entries returned (cap `5000`)               |
-  | `offset`   | `0`     | Skip oldest N entries (pagination)              |
+- **`minLevel`**
+  - **Default:** `trace`
+  - **Description:** Minimum severity to include (`error` … `trace`)
+- **`limit`**
+  - **Default:** `500`
+  - **Description:** Max entries returned (cap `5000`)
+- **`offset`**
+  - **Default:** `0`
+  - **Description:** Skip oldest N entries (pagination)
 
   Example: `/app-logs?minLevel=debug&limit=1000`
 
@@ -218,17 +222,37 @@ at default capture level in CI). Ordered assertions should cover causality that
 the UI does not show directly, for example "manual sync started" before "secret
 added" in an event-log sync flow.
 
-| Spec                                                                                              | When                  | Scope           | Message (includes)                      |
-| ------------------------------------------------------------------------------------------------- | --------------------- | --------------- | --------------------------------------- |
-| [`connect.spec.ts`](../../../nook-app/nook-web/nook-web-app/e2e/connect.spec.ts)                     | Local vault created   | `vault-local`   | `local vault created`                   |
-|                                                                                                   | WASM connect finished | `wasm-connect`  | `connect complete`                      |
-|                                                                                                   | Session unlocked      | `vault`         | `vault session unlocked`                |
-|                                                                                                   | User locks vault      | `vault-session` | `vault locked`                          |
-| [`idle-session-lock.spec.ts`](../../../nook-app/nook-web/nook-web-app/e2e/idle-session-lock.spec.ts) | Idle timeout          | `vault-session` | `vault locked`                          |
-|                                                                                                   | Re-unlock             | `vault`         | `vault session unlocked`                |
-| [`event-log-sync.spec.ts`](../../../nook-app/nook-web/nook-web-app/e2e/event-log-sync.spec.ts)       | Manual sync           | `vault-sync`    | `manual sync started`                   |
-|                                                                                                   | Secret saved          | `connect`       | `secret added`                          |
-| [`logs-page.spec.ts`](../../../nook-app/nook-web/nook-web-app/e2e/logs-page.spec.ts)                 | Logging infra         | (multiple)      | See spec — owns `/logs` and `/app-logs` |
+- **[`connect.spec.ts`](../../../nook-app/nook-web/nook-web-app/e2e/connect.spec.ts)**
+  - **Local vault created**
+    - **Scope:** `vault-local`
+    - **Message (includes):** `local vault created`
+  - **WASM connect finished**
+    - **Scope:** `wasm-connect`
+    - **Message (includes):** `connect complete`
+  - **Session unlocked**
+    - **Scope:** `vault`
+    - **Message (includes):** `vault session unlocked`
+  - **User locks vault**
+    - **Scope:** `vault-session`
+    - **Message (includes):** `vault locked`
+- **[`idle-session-lock.spec.ts`](../../../nook-app/nook-web/nook-web-app/e2e/idle-session-lock.spec.ts)**
+  - **Idle timeout**
+    - **Scope:** `vault-session`
+    - **Message (includes):** `vault locked`
+  - **Re-unlock**
+    - **Scope:** `vault`
+    - **Message (includes):** `vault session unlocked`
+- **[`event-log-sync.spec.ts`](../../../nook-app/nook-web/nook-web-app/e2e/event-log-sync.spec.ts)**
+  - **Manual sync**
+    - **Scope:** `vault-sync`
+    - **Message (includes):** `manual sync started`
+  - **Secret saved**
+    - **Scope:** `connect`
+    - **Message (includes):** `secret added`
+- **[`logs-page.spec.ts`](../../../nook-app/nook-web/nook-web-app/e2e/logs-page.spec.ts)**
+  - **Logging infra**
+    - **Scope:** (multiple)
+    - **Message (includes):** See spec — owns `/logs` and `/app-logs`
 
 **Note:** `connect` / `vault connected` is emitted by `loadDb` (provider unlock
 path), not device-key local vault creation (`vault-local` + `wasm-connect` instead).

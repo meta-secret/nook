@@ -77,6 +77,16 @@ function independentlyDeriveFindings(
 }
 
 function verifyDocument(request: VerifyDocumentRequest): void {
+  for (const block of request.document.blocks) {
+    if (block.kind !== CortexArticleSemanticKind.Table) continue;
+    const finding: CortexArticleFinding = {
+      code: CortexArticleFindingCode.MarkdownTable,
+      file: request.document.relativePath,
+      line: block.line,
+      message: `Rendered Markdown table in ${request.document.relativePath} is prohibited; use an enclosed structured list.`,
+    };
+    request.expected.push(finding);
+  }
   for (let index = 0; index < request.document.blocks.length; index += 1) {
     const block = request.document.blocks.at(index) ?? false;
     if (

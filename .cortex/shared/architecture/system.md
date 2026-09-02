@@ -188,20 +188,42 @@ Nook operates on three primary data flows: multi-device vault unlock, incrementa
 
 ## 4. Storage & Cryptographic Specs
 
-| Layer                            | Format                                        | Location                                         |
-| -------------------------------- | --------------------------------------------- | ------------------------------------------------ |
-| Session (plaintext user secrets) | Typed `Database` records                      | WASM memory only                                 |
-| On-disk user secrets             | YAML `secrets:` list                          | Values encrypted with `secrets_key`              |
-| Local search catalog             | Age-encrypted `SecretListItem` buckets        | IndexedDB `secret_search_v2:{store_id}:{bucket}` |
-| Logical secret store             | YAML `store_id`                               | `store_{token}` across replicas                  |
-| Vault revision                   | Event-log causal heads                        | Live sync is the event log                       |
-| Active unlock mode               | YAML `unlock:` tagged union                   | Omitted when device keys are the default         |
-| Vault authorization envelopes    | YAML `auth:` list                             | Per-device encrypted key envelopes               |
-| Vault member catalog             | YAML `members:` list                          | `members_key`-encrypted relationship data        |
-| Vault-coupled joins              | YAML `joins:` list                            | Transient device join wire                       |
-| Local identity keyring           | Wrapped X25519 app keys and sealed signer seeds | IndexedDB `local_identity_keyring_v1`           |
-| Identity directory               | Public membership and local selection          | IndexedDB `identity_directory_v1`               |
-| Replication-provider connections | App-key-sealed JSON snapshots                   | IndexedDB `nook_auth` → app-scoped providers    |
+- **Session (plaintext user secrets)**
+  - **Format:** Typed `Database` records
+  - **Location:** WASM memory only
+- **On-disk user secrets**
+  - **Format:** YAML `secrets:` list
+  - **Location:** Values encrypted with `secrets_key`
+- **Local search catalog**
+  - **Format:** Age-encrypted `SecretListItem` buckets
+  - **Location:** IndexedDB `secret_search_v2:{store_id}:{bucket}`
+- **Logical secret store**
+  - **Format:** YAML `store_id`
+  - **Location:** `store_{token}` across replicas
+- **Vault revision**
+  - **Format:** Event-log causal heads
+  - **Location:** Live sync is the event log
+- **Active unlock mode**
+  - **Format:** YAML `unlock:` tagged union
+  - **Location:** Omitted when device keys are the default
+- **Vault authorization envelopes**
+  - **Format:** YAML `auth:` list
+  - **Location:** Per-device encrypted key envelopes
+- **Vault member catalog**
+  - **Format:** YAML `members:` list
+  - **Location:** `members_key`-encrypted relationship data
+- **Vault-coupled joins**
+  - **Format:** YAML `joins:` list
+  - **Location:** Transient device join wire
+- **Local identity keyring**
+  - **Format:** Wrapped X25519 app keys and sealed signer seeds
+  - **Location:** IndexedDB `local_identity_keyring_v1`
+- **Identity directory**
+  - **Format:** Public membership and local selection
+  - **Location:** IndexedDB `identity_directory_v1`
+- **Replication-provider connections**
+  - **Format:** App-key-sealed JSON snapshots
+  - **Location:** IndexedDB `nook_auth` → app-scoped providers
 
 Legacy `device_identity_wrapped` and singleton provider records are read only
 during migration into the keyring and app-scoped provider storage.
@@ -278,19 +300,28 @@ YAML payload sections:
 
 ## 6. Testing Strategy
 
-| Package                       | Tests                                              |
-| ----------------------------- | -------------------------------------------------- |
-| `preflight`                   | `task preflight`                                   |
-| `nook-app-common`             | `task rust:coverage:check`                         |
-| `nook-authenticator-domain`   | `task rust:coverage:check`                         |
-| `nook-auth2`                  | `task rust:coverage:check`                         |
-| `nook-replication`            | `task rust:coverage:check`                         |
-| `nook-event-log`              | `task rust:coverage:check`                         |
-| `nook-companion-core`         | `task rust:coverage:check`                         |
-| `nook-core`                   | `task rust:coverage:check`                         |
-| `nook-web/nook-web-app`       | Playwright e2e                                     |
-| `nook-wasm`                   | `task ci:wasm:node-test` + manual browser tests    |
-| `nook-web/nook-web-extension` | `task extension:check` + `task extension:test:e2e` |
+- **`preflight`**
+  - **Tests:** `task preflight`
+- **`nook-app-common`**
+  - **Tests:** `task rust:coverage:check`
+- **`nook-authenticator-domain`**
+  - **Tests:** `task rust:coverage:check`
+- **`nook-auth2`**
+  - **Tests:** `task rust:coverage:check`
+- **`nook-replication`**
+  - **Tests:** `task rust:coverage:check`
+- **`nook-event-log`**
+  - **Tests:** `task rust:coverage:check`
+- **`nook-companion-core`**
+  - **Tests:** `task rust:coverage:check`
+- **`nook-core`**
+  - **Tests:** `task rust:coverage:check`
+- **`nook-web/nook-web-app`**
+  - **Tests:** Playwright e2e
+- **`nook-wasm`**
+  - **Tests:** `task ci:wasm:node-test` + manual browser tests
+- **`nook-web/nook-web-extension`**
+  - **Tests:** `task extension:check` + `task extension:test:e2e`
 
 `preflight` detail:
 

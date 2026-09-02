@@ -27,7 +27,7 @@ There is no approval round-trip.
 **Related:**
 [decentralized-auth.md](decentralized-auth.md) §2 (key hierarchy),
 [auth-providers.md](../design-docs/auth-providers.md) §3 (UI states),
-[ARCHITECTURE.md](../../../shared/architecture/system.md) §4 (storage table).
+[ARCHITECTURE.md](../../../shared/architecture/system.md) §4 (storage and cryptographic catalog).
 
 ---
 
@@ -154,11 +154,12 @@ password_entries:
 
 ### Credential effects
 
-| Operation             | Effect                                                                                                       |
-| --------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Add password entry    | Appends a labelled `password_entries` item; keeps `auth:`, `joins:`, and the current device-key unlock path. |
-| Rotate password entry | Starts a new key epoch, rewraps live vault keys for remaining credentials, and updates the selected entry.   |
-| Remove password entry | Starts a new key epoch and removes that password's future access while preserving enrolled devices.          |
+- **Add password entry**
+  - **Effect:** Appends a labelled `password_entries` item; keeps `auth:`, `joins:`, and the current device-key unlock path.
+- **Rotate password entry**
+  - **Effect:** Starts a new key epoch, rewraps live vault keys for remaining credentials, and updates the selected entry.
+- **Remove password entry**
+  - **Effect:** Starts a new key epoch and removes that password's future access while preserving enrolled devices.
 
 ### Existing sections
 
@@ -262,13 +263,16 @@ self-enrolment path as QR.
 
 ### 5.1 Threat coverage
 
-| Threat                                                 | Mitigation                                                                                                                                                                |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| QR captured in transit (screen photo, MITM screenshot) | Rotate or remove the selected password entry. Old codes stop unwrapping future epoch keys. Provider PAT scope is user-controlled. The user can revoke it at the provider. |
-| Weak password brute force on leaked vault data         | Scrypt work factor >=18 (age default, around 1s on a laptop). UI blocks empty/typo entries. UI encourages generated passwords.                                            |
-| Stolen vault file alone                                | `secrets:` ciphertext remains bound to `secrets_key`; password entries add a brute-force path gated by scrypt cost.                                                       |
-| Compromise of one device                               | Device revocation and password removal are event-log security operations that rotate future epoch keys.                                                                   |
-| Password reuse across services                         | UI warns and recommends generating a random password.                                                                                                                     |
+- **QR captured in transit (screen photo, MITM screenshot)**
+  - **Mitigation:** Rotate or remove the selected password entry. Old codes stop unwrapping future epoch keys. Provider PAT scope is user-controlled. The user can revoke it at the provider.
+- **Weak password brute force on leaked vault data**
+  - **Mitigation:** Scrypt work factor >=18 (age default, around 1s on a laptop). UI blocks empty/typo entries. UI encourages generated passwords.
+- **Stolen vault file alone**
+  - **Mitigation:** `secrets:` ciphertext remains bound to `secrets_key`; password entries add a brute-force path gated by scrypt cost.
+- **Compromise of one device**
+  - **Mitigation:** Device revocation and password removal are event-log security operations that rotate future epoch keys.
+- **Password reuse across services**
+  - **Mitigation:** UI warns and recommends generating a random password.
 
 ### 5.2 Non-goals
 
@@ -297,15 +301,20 @@ self-enrolment path as QR.
 same APIs are re-exported through `nook-core` for existing callers, while sync
 provider credentials remain outside the auth crate.
 
-| Item                                                                                 | Role                                                        |
-| ------------------------------------------------------------------------------------ | ----------------------------------------------------------- |
-| `PasswordUnlockEntry`                                                                | Labelled backup credential stored in `password_entries`.    |
-| `attach_password_envelope(keys, password) -> PasswordEnvelope`                       | Build the scrypt/age envelope for current vault keys.       |
-| `resolve_keys_from_entry(entry, password) -> VaultKeys`                              | Unwrap a selected entry for password unlock/enrolment.      |
-| `verify_password_entry(entry, password) -> bool`                                     | Side-effect-free password check.                            |
-| `serialize_stored_yaml_with_unlock_and_name(records, unlock, password_entries, ...)` | Writes hybrid `auth:` + `password_entries` projection YAML. |
-| `read_vault_password_entries(yaml)`                                                  | Reads current labelled password entries.                    |
-| `VaultOperation::{PasswordAdded, PasswordRotated, PasswordRemoved}`                  | Event-log operations for password credential changes.       |
+- **`PasswordUnlockEntry`**
+  - **Role:** Labelled backup credential stored in `password_entries`.
+- **`attach_password_envelope(keys, password) -> PasswordEnvelope`**
+  - **Role:** Build the scrypt/age envelope for current vault keys.
+- **`resolve_keys_from_entry(entry, password) -> VaultKeys`**
+  - **Role:** Unwrap a selected entry for password unlock/enrolment.
+- **`verify_password_entry(entry, password) -> bool`**
+  - **Role:** Side-effect-free password check.
+- **`serialize_stored_yaml_with_unlock_and_name(records, unlock, password_entries, ...)`**
+  - **Role:** Writes hybrid `auth:` + `password_entries` projection YAML.
+- **`read_vault_password_entries(yaml)`**
+  - **Role:** Reads current labelled password entries.
+- **`VaultOperation::{PasswordAdded, PasswordRotated, PasswordRemoved}`**
+  - **Role:** Event-log operations for password credential changes.
 
 All scrypt work happens in portable Rust (`nook-auth2`, Wasm-compatible).
 
@@ -313,14 +322,18 @@ All scrypt work happens in portable Rust (`nook-auth2`, Wasm-compatible).
 
 ## 7. WASM bridge additions (`nook-wasm`)
 
-| Method                                                                | Role                                                            |
-| --------------------------------------------------------------------- | --------------------------------------------------------------- |
-| `list_vault_password_entries()` / `fetch_vault_password_entries(...)` | Surface labelled password choices to login/settings/onboarding. |
-| `add_vault_password(label, password)`                                 | Add a new backup password entry.                                |
-| `update_vault_password_entry(entry_id, password)`                     | Rotate one entry and start a new key epoch.                     |
-| `remove_vault_password_entry(entry_id)`                               | Remove one entry and start a new key epoch.                     |
-| `verify_vault_password(entry_id, password)`                           | Local password check for QR issuance and login UX.              |
-| `connect_with_password(mode, creds, entry_id, password)`              | Self-enrol/unlock via a selected password entry.                |
+- **`list_vault_password_entries()` / `fetch_vault_password_entries(...)`**
+  - **Role:** Surface labelled password choices to login/settings/onboarding.
+- **`add_vault_password(label, password)`**
+  - **Role:** Add a new backup password entry.
+- **`update_vault_password_entry(entry_id, password)`**
+  - **Role:** Rotate one entry and start a new key epoch.
+- **`remove_vault_password_entry(entry_id)`**
+  - **Role:** Remove one entry and start a new key epoch.
+- **`verify_vault_password(entry_id, password)`**
+  - **Role:** Local password check for QR issuance and login UX.
+- **`connect_with_password(mode, creds, entry_id, password)`**
+  - **Role:** Self-enrol/unlock via a selected password entry.
 
 There is no separate client unlock-mode flag: device keys remain primary and
 the presence of `password_entries` determines whether additive password
@@ -330,14 +343,24 @@ recovery is available.
 
 ## 8. Phase plan
 
-| Phase | Scope                                                                     | Status |
-| ----- | ------------------------------------------------------------------------- | ------ |
-| P0    | Spec, design review, threat model sign-off                                | Done   |
-| P1    | `nook-core`: envelope format, hybrid YAML serde, unit tests               | Done   |
-| P2    | `nook-wasm`: add/update/remove/list/verify/connect password entry APIs    | Done   |
-| P3    | `nook-web`: labelled vault passwords for settings, onboarding, and login  | Done   |
-| P4    | Authenticated **Onboard** page, QR/link issuer, paste-to-enrol login flow | Done   |
-| P5    | E2E tests: QR/deep-link enrolment across browser contexts                 | Done   |
+- **P0**
+  - **Scope:** Spec, design review, threat model sign-off
+  - **Status:** Done
+- **P1**
+  - **Scope:** `nook-core`: envelope format, hybrid YAML serde, unit tests
+  - **Status:** Done
+- **P2**
+  - **Scope:** `nook-wasm`: add/update/remove/list/verify/connect password entry APIs
+  - **Status:** Done
+- **P3**
+  - **Scope:** `nook-web`: labelled vault passwords for settings, onboarding, and login
+  - **Status:** Done
+- **P4**
+  - **Scope:** Authenticated **Onboard** page, QR/link issuer, paste-to-enrol login flow
+  - **Status:** Done
+- **P5**
+  - **Scope:** E2E tests: QR/deep-link enrolment across browser contexts
+  - **Status:** Done
 
 Authenticated UI contract: the bottom nav exposes **Onboard** between **Vault**
 and **Settings**. It is a standalone page with provider and password-entry

@@ -367,13 +367,15 @@ function isSimpleSemanticKind(
   | CortexArticleSemanticKind.VisibleOrderedList
   | CortexArticleSemanticKind.Structure
   | CortexArticleSemanticKind.Transparent
-  | CortexArticleSemanticKind.DensitySeparator {
+  | CortexArticleSemanticKind.DensitySeparator
+  | CortexArticleSemanticKind.Table {
   return (
     kind === CortexArticleSemanticKind.Paragraph ||
     kind === CortexArticleSemanticKind.VisibleOrderedList ||
     kind === CortexArticleSemanticKind.Structure ||
     kind === CortexArticleSemanticKind.Transparent ||
-    kind === CortexArticleSemanticKind.DensitySeparator
+    kind === CortexArticleSemanticKind.DensitySeparator ||
+    kind === CortexArticleSemanticKind.Table
   );
 }
 
@@ -461,6 +463,13 @@ function findingDiagnosticShape(
       prefix: 'Article #',
       suffix:
         ' has more than 3 consecutive prose blocks without visible structure.',
+    };
+  }
+  if (code === CortexArticleFindingCode.MarkdownTable) {
+    return {
+      minimumDetailLength: 0,
+      prefix: 'Rendered Markdown table in ',
+      suffix: ' is prohibited; use an enclosed structured list.',
     };
   }
   return {

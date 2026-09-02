@@ -42,13 +42,16 @@ application capability checks enforce the vault-type boundary.
 
 ## Product Boundary
 
-| Surface                           | Responsibility                                                                                                |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `simple.nokey.sh`                 | Complete vault UI, unlock, consent, device management, recovery, and settings                                 |
-| Extension toolbar action          | Create or unlock the extension device; companion home always offers stay-ready and optional Open Simple Vault |
-| Extension background/WASM runtime | Local device key, selected identity, encrypted state, sync, domain matching, and fill authorization           |
-| In-page auth gate                 | Universal Continue with Nook gate plus optional open/unlock/select/fill/save actions                          |
-| Content script                    | DOM detection and the minimum selected fill payload; never vault search, crypto, or provider credentials      |
+- **`simple.nokey.sh`**
+  - **Responsibility:** Complete vault UI, unlock, consent, device management, recovery, and settings
+- **Extension toolbar action**
+  - **Responsibility:** Create or unlock the extension device; companion home always offers stay-ready and optional Open Simple Vault
+- **Extension background/WASM runtime**
+  - **Responsibility:** Local device key, selected identity, encrypted state, sync, domain matching, and fill authorization
+- **In-page auth gate**
+  - **Responsibility:** Universal Continue with Nook gate plus optional open/unlock/select/fill/save actions
+- **Content script**
+  - **Responsibility:** DOM detection and the minimum selected fill payload; never vault search, crypto, or provider credentials
 
 Authenticator items remain standalone.
 They are not guessed from an issuer name or silently associated with the current

@@ -12,12 +12,18 @@ derived, browser-local cache and is never imported as an event source.
 
 ## Version axes
 
-| Axis                        | Current value           | Owned by                      |
-| --------------------------- | ----------------------- | ----------------------------- |
-| App semver                  | Release tag             | CI and deployment workflows   |
-| Projection `schema_version` | `1`                     | `nook-core` `vault_format.rs` |
-| Event `schema_version`      | `3`                     | `nook-event-log` `event.rs`   |
-| Password envelope `version` | Envelope crypto version | `password_envelope.rs`        |
+- **App semver**
+  - **Current value:** Release tag
+  - **Owned by:** CI and deployment workflows
+- **Projection `schema_version`**
+  - **Current value:** `1`
+  - **Owned by:** `nook-core` `vault_format.rs`
+- **Event `schema_version`**
+  - **Current value:** `3`
+  - **Owned by:** `nook-event-log` `event.rs`
+- **Password envelope `version`**
+  - **Current value:** Envelope crypto version
+  - **Owned by:** `password_envelope.rs`
 
 Current builds write event schema `3` and read schemas `2` and `3`. Schema `3`
 adds checkpoint replacement fields, so schema-2 readers reject those events

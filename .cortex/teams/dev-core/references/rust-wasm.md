@@ -127,18 +127,26 @@ Syntax-aware repository preflight rejects authored `JsValue` paths before
 wasm-bindgen macro expansion. Clippy's built-in `disallowed_types` cannot
 distinguish wasm-bindgen's generated ABI code from authored code.
 
-| Export                                                                       | Use                                                                                                      |
-| ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `NookSecretListItem`                                                         | Metadata-only list item with no credential/body getters                                                  |
-| `NookSecretRecord`                                                           | One explicitly decrypted vault item; freed on hide/action completion                                     |
-| `NookSecretPage`                                                             | Page-scoped metadata items plus total/offset/limit                                                       |
-| `NookJoinRequest`                                                            | Pending device join rows (`deviceId`, `publicKey`, `requestedAt`)                                        |
-| `NookVaultMember`                                                            | Enrolled devices (`authId`, `deviceId`, …)                                                               |
-| `NookPasswordEntrySummary`                                                   | Backup-password list entries                                                                             |
-| `NookVaultSyncResult`                                                        | `sync_vault_from_storage` payload (`changed`, `accessStatus`, `secrets`, `pendingJoins`, `vaultMembers`) |
-| `NookVaultClientPolicy`                                                      | Portable login, lock, sync, join, remote-recovery, vault-switch, and pagination decisions                |
-| `NookResolveConflictKeepLocalResult` / `NookResolveConflictKeepRemoteResult` | conflict resolution                                                                                      |
-| `NookSecretFormFields`                                                       | WASM wrapper over core-owned variant-specific `SecretFormFields`; static constructors select the variant |
+- **`NookSecretListItem`**
+  - **Use:** Metadata-only list item with no credential/body getters
+- **`NookSecretRecord`**
+  - **Use:** One explicitly decrypted vault item; freed on hide/action completion
+- **`NookSecretPage`**
+  - **Use:** Page-scoped metadata items plus total/offset/limit
+- **`NookJoinRequest`**
+  - **Use:** Pending device join rows (`deviceId`, `publicKey`, `requestedAt`)
+- **`NookVaultMember`**
+  - **Use:** Enrolled devices (`authId`, `deviceId`, …)
+- **`NookPasswordEntrySummary`**
+  - **Use:** Backup-password list entries
+- **`NookVaultSyncResult`**
+  - **Use:** `sync_vault_from_storage` payload (`changed`, `accessStatus`, `secrets`, `pendingJoins`, `vaultMembers`)
+- **`NookVaultClientPolicy`**
+  - **Use:** Portable login, lock, sync, join, remote-recovery, vault-switch, and pagination decisions
+- **`NookResolveConflictKeepLocalResult` / `NookResolveConflictKeepRemoteResult`**
+  - **Use:** conflict resolution
+- **`NookSecretFormFields`**
+  - **Use:** WASM wrapper over core-owned variant-specific `SecretFormFields`; static constructors select the variant
 
 - **Rust decisions:** Provider scoping, locked-device visibility, staged connect
   arguments, remote-reference normalization, and sync metadata updates cross as
@@ -210,11 +218,12 @@ notes, or secure-note bodies. Explicit reveal/copy calls return one
 `NookSecretRecord`, which must be freed as soon as the action or revealed state
 ends.
 
-| Layer       | Responsibility                                                                            |
-| ----------- | ----------------------------------------------------------------------------------------- |
-| `nook-core` | Schema, validation, YAML parse/serialize, display/search helpers (`secret_view.rs`)       |
-| `nook-wasm` | Typed boundary structs, `build_secret_yaml`, session CRUD                                 |
-| `nook-web`  | Svelte forms and rendering; the type picker uses Rust-owned generated `SecretType` values |
+- **`nook-core`**
+  - **Responsibility:** Schema, validation, YAML parse/serialize, display/search helpers (`secret_view.rs`)
+- **`nook-wasm`**
+  - **Responsibility:** Typed boundary structs, `build_secret_yaml`, session CRUD
+- **`nook-web`**
+  - **Responsibility:** Svelte forms and rendering; the type picker uses Rust-owned generated `SecretType` values
 
 **Reads:** page queries convert decrypted records into
 `Vec<NookSecretListItem>` and zeroize the full records before returning.

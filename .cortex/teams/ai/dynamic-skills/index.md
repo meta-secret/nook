@@ -20,9 +20,9 @@ Harness profile directories must not mirror or redefine these cards.
 - **[source-file-size.md](../../../shared/dynamic-skills/source-file-size.md)**
   - Purpose: **P1 / most critical structure rule:** every authored file, including Rust, has one non-bypassable 1,000-line ceiling; a violation requires architectural review and cohesive decomposition
 - **[cortex-writer.md](cortex-writer.md)**
-  - Purpose: **P1 / critical `.cortex` writing rule:** split long dense sentences into short sentences, bullets, and lists; reserve tables for compact repeated fields or exact mappings
+  - Purpose: **P1 / critical `.cortex` writing rule:** split long dense sentences into short sentences, bullets, and lists; prohibit rendered Markdown tables and use enclosed lists for repeated fields or exact mappings
 - **[cortex-article-structure/SKILL.md](cortex-article-structure/SKILL.md)**
-  - Purpose: **P1 / critical `.cortex` article rule:** expose semantic Markdown hierarchy; authored HTML nodes are prohibited, while literal HTML belongs in inline or block code
+  - Purpose: **P1 / critical `.cortex` article rule:** expose semantic Markdown hierarchy; authored HTML and rendered Markdown table nodes are prohibited, while literal syntax belongs in inline or block code
 - **[executable-skill-host/SKILL.md](executable-skill-host/SKILL.md)**
   - Purpose: Discover and invoke the closed executable-skill catalog through one strict bounded YAML argument
 - **[cortex-consistency](cortex-consistency/SKILL.md)**
