@@ -334,9 +334,10 @@ function referencesSkillProvider(
   return (
     path === '.agents/skills' ||
     path.startsWith('.agents/skills/') ||
-    /^\.cortex\/(?:gizmo|shared|teams\/(?:ai|dev-core|security|sre|web-dev))\/dynamic-skills\/[^/]+\/scripts(?:\/|$)/u.test(
-      path,
-    )
+    path === ARTICLE_PROVIDER_PREFIX.slice(0, -1) ||
+    path.startsWith(ARTICLE_PROVIDER_PREFIX) ||
+    path === CONSISTENCY_PROVIDER_PREFIX.slice(0, -1) ||
+    path.startsWith(CONSISTENCY_PROVIDER_PREFIX)
   );
 }
 
