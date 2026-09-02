@@ -166,8 +166,8 @@ An `Expertise provider` must be exactly `AI`, `Development core`, `Security`,
 never implements a bounded unit or fix. A feature-slice Gizmo is also not an
 expertise provider or implementation team.
 
-If planning finds that the requested outcome exceeds 2,000 authored changed
-lines, do not create `.nook-workbench-plan.md`. Write the typed planning blocker
+If planning finds that the requested outcome exceeds 2,000 authored additions,
+do not create `.nook-workbench-plan.md`. Write the typed planning blocker
 to `.nook-workbench-worklog.md` using the exact structure above. Do not authorize
 implementation, reduce the requested outcome, or create another PR.
 

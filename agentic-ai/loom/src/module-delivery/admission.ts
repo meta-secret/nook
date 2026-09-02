@@ -582,9 +582,15 @@ export function selectModuleDeliveryAdmissions(
       plan: authority.acceptedPlan,
     };
     const resources = frozenModuleDeliveryResources(resourcesRequest);
+    const activeAdmissions = [
+      ...authority.activeLeases.values(),
+      ...admissions,
+    ];
     if (
       admissions.length >= Math.max(available, 0) ||
-      [...authority.activeLeases.values(), ...admissions].some((active) => {
+      (node.kind === ModuleDeliveryTaskKind.Write &&
+        activeAdmissions.some((active) => active.resources.write.length > 0)) ||
+      activeAdmissions.some((active) => {
         const conflictRequest: ResourceConflictRequest = {
           first: resources,
           second: active.resources,
@@ -970,16 +976,7 @@ function startingFrontier(request: StartingFrontierRequest): string {
     ({ taskId }) => taskId === request.node.taskId,
   );
   if (previous) return previous.startingFrontier;
-  const requiresIntegrated = request.plan.executionPrecedence.some(
-    (edge) =>
-      edge.successorTaskId === request.node.taskId &&
-      edge.requiresIntegratedWriterFrontier,
-  );
-  return !requiresIntegrated &&
-    request.node.baseline.kind === ModuleDeliveryBaselineKind.SourceCommit &&
-    request.node.dependencies.length === 0
-    ? request.node.baseline.sourceCommit
-    : request.state.headCommit;
+  return request.state.headCommit;
 }
 
 function nextAttempt(request: AuthorityTaskRequest): number {

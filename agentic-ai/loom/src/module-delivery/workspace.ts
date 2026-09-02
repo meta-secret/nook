@@ -133,6 +133,20 @@ export function prepareModuleWorktree(
   );
   if (top !== sourceRepositoryRoot)
     throw new Error('Shared repository root is not the Git top level.');
+  if (
+    git({
+      cwd: sourceRepositoryRoot,
+      args: ['rev-parse', '--verify', 'HEAD^{commit}'],
+    }) !== request.baselineCommit
+  )
+    throw new Error('Shared module checkout HEAD must match its baseline.');
+  if (
+    runModuleDeliveryGit({
+      cwd: sourceRepositoryRoot,
+      args: ['status', '--porcelain=v1', '-z'],
+    }).stdout.length !== 0
+  )
+    throw new Error('Shared module checkout must be clean before dispatch.');
   const gitCommonDirectory = realpathSync(
     resolve(
       git({

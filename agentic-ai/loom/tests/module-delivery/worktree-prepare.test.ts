@@ -93,6 +93,22 @@ describe('prepareModuleWorktree', () => {
     expect(second.attempt).toBe(2);
   });
 
+  test('rejects a dirty or stale shared checkout before dispatch', () => {
+    const fixture = createTrackedFixture();
+    const request = prepareRequest(fixture);
+    writeFileSync(join(fixture.sourceRoot, 'dirty.ts'), 'dirty\n');
+    expect(() => prepareModuleWorktree(request)).toThrow(
+      'must be clean before dispatch',
+    );
+    fixtureGit(fixture)(['clean', '-fd']);
+    writeFileSync(join(fixture.sourceRoot, 'later.ts'), 'later\n');
+    fixtureGit(fixture)(['add', 'later.ts']);
+    fixtureGit(fixture)(['commit', '--quiet', '-m', 'later']);
+    expect(() => prepareModuleWorktree(request)).toThrow(
+      'HEAD must match its baseline',
+    );
+  });
+
   test('rejects nonexact commits and ignores obsolete workspace roots', () => {
     const fixture = createTrackedFixture();
     const base = prepareRequest(fixture);
