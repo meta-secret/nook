@@ -129,7 +129,7 @@ jobs:
       - uses: taiki-e/install-action@nextest
         if: ${{ (inputs.tasks || inputs.task) == 'agent-stats:inventory' }}
       - if: ${{ (inputs.tasks || inputs.task) == 'agent-stats:inventory' }}
-        run: bun install --cwd agentic-ai/loom --frozen-lockfile && bun install --cwd nook-app/nook-web/nook-web-app --frozen-lockfile
+        run: sudo -n apt-get update -qq && sudo -n apt-get install -y -qq --no-install-recommends build-essential mold && bun install --cwd agentic-ai/loom --frozen-lockfile && bun install --cwd nook-app/nook-web/nook-web-app --frozen-lockfile
       - uses: ./.github/actions/nook-docker-setup
         if: ${{ (inputs.tasks || inputs.task) != 'loom:verify' && (inputs.tasks || inputs.task) != 'agent-stats:inventory' }}
         with:

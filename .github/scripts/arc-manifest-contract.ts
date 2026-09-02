@@ -655,6 +655,7 @@ remoteWorkflow.requireAll([
   "ci:pr:e2e) task _ci:main",
   "inputs.tasks != '' && inputs.task != ''",
   "(inputs.tasks == '' || inputs.task == '')",
+  "build-essential mold",
   "name: test-inventory-${{ github.sha }}",
 ]);
 remoteWorkflow.requireBefore({

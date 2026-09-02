@@ -190,7 +190,6 @@ fn remote_task_batches_are_validated_and_keep_requested_order() -> Result<()> {
         "preflight,preflight",
         "preflight,arbitrary:command",
         "preflight, rust:ci",
-        "preflight,agent-stats:inventory",
         "preflight,web:e2e",
         "preflight,extension:check:fast",
         "preflight,extension:e2e",
