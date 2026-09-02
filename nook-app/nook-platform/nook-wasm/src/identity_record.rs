@@ -7,6 +7,9 @@ use crate::storage::{
     indexed_db::load_wrapped_device_identity,
 };
 
+#[cfg(test)]
+mod provider_vault_decision_tests;
+
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NookIdentitySnapshotKind {
@@ -58,10 +61,22 @@ pub(crate) async fn provider_vault_identity_observations(
     store_id: &nook_core::StoreId,
 ) -> Result<Vec<nook_core::ProviderVaultIdentityObservation>, crate::NookError> {
     let projection = load_local_identity_projection(session_app_id).await?;
+    Ok(provider_vault_identity_observations_from_projection(
+        session_app_id,
+        store_id,
+        &projection,
+    ))
+}
+
+fn provider_vault_identity_observations_from_projection(
+    session_app_id: &str,
+    store_id: &nook_core::StoreId,
+    projection: &crate::storage::identity_record::LocalIdentityProjection,
+) -> Vec<nook_core::ProviderVaultIdentityObservation> {
     let local_protections = local_app_protections(&projection.keyring);
     let current_app_id = nook_core::AppId::parse(session_app_id).ok();
 
-    Ok(projection
+    projection
         .directory
         .identities()
         .iter()
@@ -123,7 +138,7 @@ pub(crate) async fn provider_vault_identity_observations(
                 ),
             }
         })
-        .collect())
+        .collect()
 }
 
 #[wasm_bindgen]

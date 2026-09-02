@@ -2,6 +2,7 @@ import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { SyncActionsContext } from "$lib/vault/action-contexts";
 import {
   import_named_local_vault_blob,
+  DeviceProtectionStatus,
   NookSyncConflictReviewState,
   ProviderSyncFailureHandling,
   ProviderSyncVisibility,
@@ -55,17 +56,54 @@ export interface ProviderVaultImportRequest {
 interface ImportedProviderVaultIdentityActivation {
   readonly state: SyncActionsContext;
   readonly identityId: string;
+  readonly importedStoreId: string;
 }
+
+enum ProviderVaultImportOutcomeKind {
+  NotImported = "not-imported",
+  Imported = "imported",
+}
+
+type ProviderVaultImportOutcome =
+  | { readonly kind: ProviderVaultImportOutcomeKind.NotImported }
+  | {
+      readonly kind: ProviderVaultImportOutcomeKind.Imported;
+      readonly storeId: string;
+    };
 
 export async function activateImportedProviderVaultIdentity({
   state,
   identityId,
+  importedStoreId,
 }: ImportedProviderVaultIdentityActivation): Promise<void> {
   try {
     await state.enqueueStorage(() =>
       state.requireManager().activate_local_identity(identityId),
     );
   } catch {
+    state.errorMsg = state.t(
+      I18N_KEYS.AuthStorageProviderVaultIdentitySelectionFailed,
+    );
+    return;
+  }
+  state.deviceProtectionStatus = DeviceProtectionStatus.Loading;
+  state.deviceId = "";
+  state.devicePublicKey = "";
+  state.clearIdentityProviderSession();
+  state.selectLoginVault(importedStoreId);
+  try {
+    const protectionStatus = await state.enqueueStorage(() =>
+      state.requireManager().device_protection_status(),
+    );
+    state.deviceProtectionStatus = protectionStatus;
+    if (
+      protectionStatus === DeviceProtectionStatus.Pin ||
+      protectionStatus === DeviceProtectionStatus.Passkey
+    ) {
+      state.deviceProtectionLockedStatus = protectionStatus;
+    }
+  } catch {
+    state.deviceProtectionStatus = DeviceProtectionStatus.Error;
     state.errorMsg = state.t(
       I18N_KEYS.AuthStorageProviderVaultIdentitySelectionFailed,
     );
@@ -274,7 +312,9 @@ export async function resolveSyncConflictImportRemote({
   state.isVerifying = true;
   state.errorMsg = "";
   let providerSave: ConflictProviderSave;
-  let importedAsSeparateVault = false;
+  let importOutcome: ProviderVaultImportOutcome = {
+    kind: ProviderVaultImportOutcomeKind.NotImported,
+  };
   try {
     let importedStoreId: string;
     if (conflict.remoteYaml.trim()) {
@@ -373,7 +413,10 @@ export async function resolveSyncConflictImportRemote({
       },
     };
     state.showSuccess(state.t(tArgs));
-    importedAsSeparateVault = true;
+    importOutcome = {
+      kind: ProviderVaultImportOutcomeKind.Imported,
+      storeId: importedStoreId,
+    };
   } catch (error) {
     state.errorMsg =
       error instanceof Error
@@ -384,7 +427,7 @@ export async function resolveSyncConflictImportRemote({
   try {
     if (
       providerSave.kind === ConflictProviderSaveKind.Saved &&
-      !importedAsSeparateVault
+      importOutcome.kind === ProviderVaultImportOutcomeKind.NotImported
     ) {
       const resumeConnectAfterSyncConflictArgs: Parameters<
         typeof resumeConnectAfterSyncConflict
@@ -392,12 +435,16 @@ export async function resolveSyncConflictImportRemote({
       await resumeConnectAfterSyncConflict(resumeConnectAfterSyncConflictArgs);
     }
     if (
-      importedAsSeparateVault &&
+      importOutcome.kind === ProviderVaultImportOutcomeKind.Imported &&
       identitySelection.kind === ProviderVaultIdentitySelectionKind.Selected
     ) {
       const activation: Parameters<
         typeof activateImportedProviderVaultIdentity
-      >[0] = { state, identityId: identitySelection.identityId };
+      >[0] = {
+        state,
+        identityId: identitySelection.identityId,
+        importedStoreId: importOutcome.storeId,
+      };
       await activateImportedProviderVaultIdentity(activation);
     }
   } finally {

@@ -75,7 +75,7 @@
   )
   const importDisabled = $derived(
     isBusy ||
-      evidence.kind === ProviderVaultEvidenceKind.Loading ||
+      evidence.kind !== ProviderVaultEvidenceKind.Ready ||
       (identitySelectionRequired &&
         identitySelection.kind ===
           ProviderVaultIdentitySelectionKind.NotSelected),

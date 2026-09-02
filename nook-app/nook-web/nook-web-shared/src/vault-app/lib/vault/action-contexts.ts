@@ -188,6 +188,7 @@ type SyncProviderFields = Pick<
   VaultProviderState,
   | "activeVault"
   | "addProviderOpen"
+  | "clearIdentityProviderSession"
   | "clearLoginSetup"
   | "activateLoginSetup"
   | "clearSelectedLoginVaultStore"
@@ -207,6 +208,10 @@ type SyncRuntimeFields = Pick<
 type SyncSessionFields = Pick<
   VaultSessionState,
   | "awaitingJoinApproval"
+  | "deviceId"
+  | "deviceProtectionLockedStatus"
+  | "deviceProtectionStatus"
+  | "devicePublicKey"
   | "isAuthenticated"
   | "isPasswordBusy"
   | "joinEnrollmentPrompt"
