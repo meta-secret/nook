@@ -85,12 +85,12 @@ const AGENT_EXECUTION_DIRECTION =
 const IMPERATIVE_EXECUTION_DIRECTION =
   /^(?:locally\s+)?(?:(?:run|invoke|perform|execute)\s+(?:(?:focused|required|shared|product|project|repository|source|package|local)\s+){0,4}(?:compilation|compilers?|checks?|checking|tests?|testing|test runners?|linting|linters?|typechecks?|typechecking|typecheckers?|builds?|bundles?|bundling|bundlers?|validation|installs?|installing|dependency installation|package installers?|browser suites?)|(?:compile|compiling|check(?:ing)?|test(?:ing)?|lint(?:ing)?|typecheck(?:ing)?|validate|validating|bundle|bundling|install(?:ing)?)(?:\s+(?:the\s+)?(?:product|project|repository|source|package|dependencies|browser suites?))?|build(?:ing)?\s+(?:the\s+)?(?:product|project|repository|source|package))\b/iu;
 const PROHIBITED_COMMAND =
-  /^(?:cargo\s+(?:test|build|check|run|clippy|install|add|update)\b|rustc\b|wasm-pack\b|bun\s+(?:test|install|add|build|x\s+(?:tsc|eslint)|run\s+(?:test|lint|check|typecheck|build|bundle))\b|(?:npm|pnpm|yarn)\s+(?:test|install|add|exec\s+(?:tsc|eslint)|run\s+(?:test|lint|check|typecheck|build|bundle))\b|tsc\b|eslint\b|task\s+(?!(?:loom:pre-push|loom:cortex-session-clean|loom:delegation-visualization|remote|loom:pr-land|pr:validate|pr:review|pr:ready)(?=\s|$))\S+)/iu;
+  /^(?:cargo\s+(?:test|build|check|run|clippy|install|add|update)\b|rustc\b|wasm-pack\b|bun\s+(?:test|install|add|build|x\s+(?:tsc|eslint)|run\s+(?:test|lint|check|typecheck|build|bundle))\b|(?:npm|pnpm|yarn)\s+(?:test|install|add|exec\s+(?:tsc|eslint)|run\s+(?:test|lint|check|typecheck|build|bundle))\b|tsc\b|eslint\b|task\s+(?!(?:loom:pre-push|loom:cortex-session-clean|loom:delegation-visualization|loom:agent-stats-control|remote|loom:pr-land|pr:validate|pr:review|pr:ready)(?=\s|$))\S+)/iu;
 const AGENT_COMMAND_DIRECTION =
   /\b(?:agents?|team agents?|workers?|gizmo)\s+(?:may|can|must|shall|need to|are allowed to|is allowed to|are required to|is required to)\s+(?:ask\s+(?:an?\s+)?(?:team\s+)?(?:agent|worker)s?\s+to\s+)?(?:locally\s+)?(?:run|invoke|perform|execute)\s+/iu;
 const IMPERATIVE_COMMAND_DIRECTION = /^(?:run|invoke|perform|execute)\s+/iu;
 const EXECUTION_LIST_DIRECTION =
-  /^(?:agents?|team agents?|workers?|gizmo)\s+(?:may|can|must|shall|need to|are allowed to|is allowed to|are required to|is required to)(?:\s+ask\s+(?:an?\s+)?(?:team\s+)?(?:agent|worker)s?\s+to)?\s*:$/iu;
+  /^(?:agents?|team agents?|workers?|gizmo)\s+(?:may|can|must|shall|need to|are allowed to|is allowed to|are required to|is required to)(?:\s+not)?(?:\s+ask\s+(?:an?\s+)?(?:team\s+)?(?:agent|worker)s?\s+to)?\s*:$/iu;
 const AUTHORITY_ACTOR = /^(?:agents?|team agents?|workers?|gizmo)\b/iu;
 const ELLIPTICAL_AUTHORITY_DIRECTION =
   /^(?:may|can|must|shall|need to|are allowed to|is allowed to|are required to|is required to)\b/iu;
@@ -220,6 +220,23 @@ export function auditTeamAuthorities(
     path: GIZMO_AUTHORITY_PATH,
     authorityName: CortexAuthorityName.Gizmo,
   });
+  for (const authority of request.authorities) {
+    const teamAuthorityPath = authority.contextPaths.find((contextPath) =>
+      contextPath.endsWith('/AGENTS.md'),
+    );
+    if (
+      teamAuthorityPath &&
+      safeRepositoryPath(teamAuthorityPath) &&
+      existsSync(join(request.repoRoot, teamAuthorityPath))
+    ) {
+      appendLocalExecutionGrantFindings({
+        findings,
+        source: readFileSync(join(request.repoRoot, teamAuthorityPath), 'utf8'),
+        path: teamAuthorityPath,
+        authorityName: CortexAuthorityName.Team,
+      });
+    }
+  }
   for (const skillPath of CORTEX_AUTHORING_SKILL_PATHS) {
     if (!existsSync(join(request.repoRoot, skillPath))) {
       const finding: TeamAuthorityAuditFinding = {
@@ -397,7 +414,9 @@ function appendAuthoritySentences(
 ): void {
   for (const sentence of request.text.split(/(?<=[.!?])\s+/u)) {
     const clauses = sentence
-      .split(/\s*;\s*|\s*,?\s+(?:but|yet)\s+/iu)
+      .split(
+        /\s*;\s*|\s*,?\s+(?:but|yet)\s+|\s+and\s+(?=(?:may|can|must|shall|need to|are allowed to|is allowed to|are required to|is required to)\b)/iu,
+      )
       .map((clause) => clause.trim())
       .filter((clause) => clause !== '');
     const actor = AUTHORITY_ACTOR.exec(clauses[0] ?? '')?.[0] ?? false;

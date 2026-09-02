@@ -182,6 +182,10 @@ Agents never run product compilation or repository validation locally.
   entrypoint. It may run only the dependency-free static renderer over one
   transient request. It must not install dependencies, validate the repository,
   or acquire admission, scheduling, persistence, or agent-lifecycle authority.
+- `task loom:agent-stats-control` is a local post-merge statistics-control
+  entrypoint for Gizmo only. It may run only the dependency-free
+  assemble/validate/publish adapter, must not collect local test inventory or
+  install dependencies, and may publish only after the source PR is merged.
 - Only the user may authorize another exact local command for the current
   task.
 

@@ -30,7 +30,8 @@ It is not a free-form task diary.
 ## Mechanical entrypoint — Loom
 
 - Keep judgment in this document.
-- Run assemble, validate, and publish through Loom YAML requests.
+- Gizmo invokes assemble, validate, and publish through the dependency-free
+  statistics control entrypoint after the source PR is merged.
 - Scratch JSON must include:
   - `started_at`;
   - `change_surface`;
@@ -42,18 +43,15 @@ It is not a free-form task diary.
 
 Assemble request:
 
-```yaml
-agentStats:
-  assemble:
-    prNumber: 123
-    scratchPath: "{agentTempDir}/pr-123-scratch.json"
-    outputPath: "{agentTempDir}/123.yaml"
-    includeTestInventory: true
+```bash
+task loom:agent-stats-control <<'JSON'
+{"operation":"assemble","request":{"prNumber":123,"scratchPath":"{agentTempDir}/pr-123-scratch.json","outputPath":"{agentTempDir}/123.yaml","includeTestInventory":false}}
+JSON
 ```
 
-```bash
-task loom:agent-stats CONFIG=path/to/agent-owned/assemble-request.yaml
-```
+The scratch log supplies the test inventory collected by hosted exact-head
+validation. The control entrypoint rejects `includeTestInventory: true` because
+that option invokes product test runners locally.
 
 ### Agent-local path token
 
@@ -67,16 +65,15 @@ task loom:agent-stats CONFIG=path/to/agent-owned/assemble-request.yaml
 - Separate worktrees cannot collide when they use the same commit.
 - One worktree and commit resolve consistently across `assemble`, `validate`,
   and `publish`.
-- `task loom:tools-list` returns the filled path in `resolvedExampleYaml`.
 - Loom provisions the resolved agent directory during token resolution.
-- Use that resolved path when creating the scratch JSON before `assemble`.
+- Use the token in the control request and the corresponding task-anchored
+  temporary directory when creating the scratch JSON before `assemble`.
 - Ordinary absolute and relative paths remain supported.
-- The request file passed through `CONFIG` must also live in agent-owned
-  storage. Do not reuse a shared fixed `/tmp` request filename.
-
-- **Validate and publish:** use `agentStats.validate` or `agentStats.publish`
-  with `statsFile: "{agentTempDir}/123.yaml"`.
-- **Examples:** copy `exampleYaml` from `task loom:tools-list`.
+- **Validate and publish:** invoke `task loom:agent-stats-control` with
+  `{"operation":"validate","request":{"statsFile":"{agentTempDir}/123.yaml"}}`
+  or the same request with operation `publish`.
+- **Transport:** pass exactly one JSON request on stdin. Unknown fields and
+  operations fail closed.
 - **Protocol:** [Loom tools](../../teams/ai/references/loom-tools.md).
 - **AI-owned Loom tooling provides:** PR metadata, paginated Actions and Codex
   review history, per-head delivery evidence, optional test inventory, and
@@ -141,7 +138,8 @@ Count individual test cases, not files or suites.
 
 `total` equals the sum of those four counts.
 
-Loom `--inventory` runs the list commands when the toolchains are available.
+Hosted exact-head validation owns these inventory list commands. The local
+statistics control entrypoint never invokes them.
 
 ## YAML contract
 
@@ -209,6 +207,7 @@ Before publishing:
 - do not create a Nook branch or PR;
 - do not wait for Main or deployment;
 - validate with Loom;
-- publish with Loom (`task loom:agent-stats CONFIG=<publish-request.yaml>`).
+- publish with Loom through `task loom:agent-stats-control` and the `publish`
+  request shown above.
 
 Invalid records must be corrected before publication.

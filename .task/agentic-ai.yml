@@ -49,6 +49,13 @@ tasks:
     cmds:
       - bun "{{.REPO_ROOT}}/.cortex/teams/ai/dynamic-skills/delegation-visualization/scripts/src/cli.ts"
 
+  loom:agent-stats-control:
+    desc: >-
+      Assemble, validate, or publish post-merge agent statistics without
+      installing project dependencies.
+    cmds:
+      - bun "{{.REPO_ROOT}}/agentic-ai/loom/src/agent-stats-control-cli.ts"
+
   loom:install:
     desc: Install Loom Bun dependencies with a frozen lockfile.
     dir: agentic-ai/loom

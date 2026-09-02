@@ -41,7 +41,8 @@ task loom:pre-push
 
 - **Default:** `task loom:pre-push` uses the in-code pre-push example.
 - **Success:** `ok: true`, `result.formatOk: true`, and `result.uiDemoOk: true`.
-- **Decode failure:** run `task loom:tools-list` and fix the YAML request.
+- **Decode failure:** inspect the typed `prePush` codec and its in-code example,
+  then fix the YAML request. Do not invoke generic local tool discovery.
 
 Loom always:
 

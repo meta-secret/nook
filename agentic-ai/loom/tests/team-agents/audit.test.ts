@@ -193,6 +193,32 @@ describe('canonical Cortex team authority', () => {
     }
   });
 
+  test('audits every catalogued team authority for local grants', async () => {
+    const fixtureRoot = await writableCatalogTeamAuthorityFixture('web-dev');
+    try {
+      const authorityPath = join(
+        fixtureRoot,
+        '.cortex/teams/web-dev/AGENTS.md',
+      );
+      await writeFile(
+        authorityPath,
+        `${await readFile(authorityPath, 'utf8')}\nWorkers may run product tests locally.\n`,
+        'utf8',
+      );
+
+      expect(
+        auditTeamAgents({ repoRoot: fixtureRoot }).findings,
+      ).toContainEqual({
+        code: 'invalid-cortex-team-authority',
+        path: '.cortex/teams/web-dev/AGENTS.md',
+        message:
+          'Canonical Cortex team authority grants prohibited local agent product execution: Workers may run product tests locally.',
+      });
+    } finally {
+      await rm(fixtureRoot, REMOVE_RECURSIVELY);
+    }
+  });
+
   test('preserves affirmative authority context across Markdown lists', async () => {
     const fixtureRoot = await writableCortexAuthorityFixture();
     try {
@@ -222,6 +248,22 @@ describe('canonical Cortex team authority', () => {
         message:
           'Canonical Cortex Gizmo authority grants prohibited local agent product execution: Gizmo may ask workers to execute repository validation on the local host.',
       });
+    } finally {
+      await rm(fixtureRoot, REMOVE_RECURSIVELY);
+    }
+  });
+
+  test('preserves negated authority context across Markdown lists', async () => {
+    const fixtureRoot = await writableCortexAuthorityFixture();
+    try {
+      const authorityPath = join(fixtureRoot, '.cortex/AGENTS.md');
+      await writeFile(
+        authorityPath,
+        `${await readFile(authorityPath, 'utf8')}\nWorkers may not:\n\n- run product tests locally.\n`,
+        'utf8',
+      );
+
+      expect(auditTeamAgents({ repoRoot: fixtureRoot }).findings).toEqual([]);
     } finally {
       await rm(fixtureRoot, REMOVE_RECURSIVELY);
     }
@@ -398,17 +440,20 @@ describe('canonical Cortex team authority', () => {
       const authorityPath = join(fixtureRoot, '.cortex/AGENTS.md');
       await writeFile(
         authorityPath,
-        `${await readFile(authorityPath, 'utf8')}\nAgents may run product tests locally, but must not run linting locally.\nWorkers must not run tests locally, but may run lint locally.\n`,
+        `${await readFile(authorityPath, 'utf8')}\nAgents may run product tests locally, but must not run linting locally.\nWorkers must not run tests locally, but may run lint locally.\nAgents may run checks locally and must not run builds locally.\n`,
         'utf8',
       );
 
       const report = auditTeamAgents({ repoRoot: fixtureRoot });
-      expect(report.findings).toHaveLength(2);
+      expect(report.findings).toHaveLength(3);
       expect(report.findings[0]?.message).toContain(
         'Agents may run product tests locally',
       );
       expect(report.findings[1]?.message).toContain(
         'Workers may run lint locally',
+      );
+      expect(report.findings[2]?.message).toContain(
+        'Agents may run checks locally',
       );
     } finally {
       await rm(fixtureRoot, REMOVE_RECURSIVELY);
@@ -448,17 +493,20 @@ describe('canonical Cortex team authority', () => {
       const gizmoPath = join(fixtureRoot, '.cortex/gizmo/AGENTS.md');
       await writeFile(
         gizmoPath,
-        `${await readFile(gizmoPath, 'utf8')}\nGizmo may run task loom:pre-push:full locally.\nGizmo may run task loom:delegation-visualization:unsafe locally.\nGizmo may run task remote:unsafe locally.\nGizmo may run task pr:validate-extra locally.\nGizmo may run task loom:pre-push locally.\nGizmo may run task loom:delegation-visualization locally.\nGizmo may run task remote locally.\nGizmo may run task pr:validate locally.\n`,
+        `${await readFile(gizmoPath, 'utf8')}\nGizmo may run task loom:pre-push:full locally.\nGizmo may run task loom:delegation-visualization:unsafe locally.\nGizmo may run task loom:agent-stats-control:unsafe locally.\nGizmo may run task remote:unsafe locally.\nGizmo may run task pr:validate-extra locally.\nGizmo may run task loom:pre-push locally.\nGizmo may run task loom:delegation-visualization locally.\nGizmo may run task loom:agent-stats-control locally.\nGizmo may run task remote locally.\nGizmo may run task pr:validate locally.\n`,
         'utf8',
       );
 
       const report = auditTeamAgents({ repoRoot: fixtureRoot });
-      expect(report.findings).toHaveLength(4);
+      expect(report.findings).toHaveLength(5);
       expect(report.findings.map((finding) => finding.message)).toEqual(
         expect.arrayContaining([
           expect.stringContaining('task loom:pre-push:full locally'),
           expect.stringContaining(
             'task loom:delegation-visualization:unsafe locally',
+          ),
+          expect.stringContaining(
+            'task loom:agent-stats-control:unsafe locally',
           ),
           expect.stringContaining('task remote:unsafe locally'),
           expect.stringContaining('task pr:validate-extra locally'),
@@ -491,6 +539,25 @@ describe('canonical Cortex team authority', () => {
     expect(renderSource).not.toContain('env:');
     expect(renderSource).not.toContain('skills:install');
     expect(renderSource).not.toContain('bun install');
+  });
+
+  test('binds agent statistics to a dependency-free control-plane task', async () => {
+    const taskSource = await readFile(
+      join(REPO_ROOT, '.task/agentic-ai.yml'),
+      'utf8',
+    );
+    const controlStart = taskSource.indexOf('\n  loom:agent-stats-control:\n');
+    const controlEnd = taskSource.indexOf('\n  loom:install:\n', controlStart);
+    const controlSource = taskSource.slice(controlStart, controlEnd);
+
+    expect(controlStart).toBeGreaterThan(-1);
+    expect(controlEnd).toBeGreaterThan(controlStart);
+    expect(controlSource).toContain('agent-stats-control-cli.ts');
+    expect(controlSource).not.toContain('deps:');
+    expect(controlSource).not.toContain('requires:');
+    expect(controlSource).not.toContain('env:');
+    expect(controlSource).not.toContain('loom:install');
+    expect(controlSource).not.toContain('bun install');
   });
 
   test('binds hosted Loom verification to the Cortex audit', async () => {
@@ -606,6 +673,47 @@ async function writableCortexAuthorityFixture(): Promise<string> {
     await readFile(join(REPO_ROOT, '.cortex/gizmo/AGENTS.md'), 'utf8'),
     'utf8',
   );
+  return fixtureRoot;
+}
+
+async function writableCatalogTeamAuthorityFixture(
+  writableTeamDirectory: string,
+): Promise<string> {
+  const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-team-authority-'));
+  const cortexRoot = join(fixtureRoot, '.cortex');
+  await mkdir(join(cortexRoot, 'gizmo'), CREATE_RECURSIVELY);
+  await mkdir(join(cortexRoot, 'teams'), CREATE_RECURSIVELY);
+  await writeFile(
+    join(cortexRoot, 'AGENTS.md'),
+    await readFile(join(REPO_ROOT, '.cortex/AGENTS.md'), 'utf8'),
+    'utf8',
+  );
+  await writeFile(
+    join(cortexRoot, 'gizmo/AGENTS.md'),
+    await readFile(join(REPO_ROOT, '.cortex/gizmo/AGENTS.md'), 'utf8'),
+    'utf8',
+  );
+  for (const authority of TEAM_AUTHORITY_CATALOG) {
+    const authorityPath = authority.contextPaths[0];
+    if (!authorityPath) continue;
+    const teamDirectory = dirname(authorityPath);
+    const teamName = teamDirectory.split('/').at(-1);
+    if (teamName === writableTeamDirectory) {
+      await mkdir(join(fixtureRoot, teamDirectory), CREATE_RECURSIVELY);
+      for (const contextPath of authority.contextPaths) {
+        await writeFile(
+          join(fixtureRoot, contextPath),
+          await readFile(join(REPO_ROOT, contextPath), 'utf8'),
+          'utf8',
+        );
+      }
+    } else {
+      await symlink(
+        join(REPO_ROOT, teamDirectory),
+        join(fixtureRoot, teamDirectory),
+      );
+    }
+  }
   return fixtureRoot;
 }
 

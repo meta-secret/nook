@@ -204,7 +204,11 @@ Validate and publish use `agentStats.validate` / `agentStats.publish` with
 by Git commit and worktree. See
 [Agent PR Statistics](../../../gizmo/workflows/agent-statistics.md#mechanical-entrypoint--loom).
 AI workers do not invoke its local alias; Gizmo follows that delivery-control
-workflow.
+workflow. After the source PR is merged, Gizmo uses the dependency-free
+`task loom:agent-stats-control` stdin JSON adapter for assemble, validate, and
+publish. The adapter rejects local test-inventory collection; hosted exact-head
+evidence supplies that inventory. It does not install Loom or expose generic
+tool discovery or invocation.
 
 ### prLand (status / validate / ready / mergeCheck)
 
