@@ -110,6 +110,31 @@ mutable flags create the same problem.
   absence matchers preserve the forbidden implicit contract without spelling
   the value token and are prohibited.
 
+## Nullish operators
+
+Authored JavaScript, TypeScript, and Svelte must not use nullish coalescing
+(`??`) or nullish assignment (`??=`). These operators are nullish checks.
+Authored state must make absence explicit before a value is consumed.
+
+### Required actions
+
+- Model meaningful absence with an enum-backed discriminated union.
+- Make always-present values required fields and initialize them during
+  construction or an explicit state transition.
+- Normalize external absence at the boundary with a structural property or
+  capability check.
+- Use an exhaustive branch on the normalized state at the consumption site.
+- Use a destructuring default only when a boundary contract defines omission
+  as one concrete value.
+- Preserve `false`, `0`, and empty strings as valid values.
+- Evaluate an alternate value only inside the branch that selects it.
+
+### Prohibited actions
+
+- Do not replace a nullish operator with `||` or a truthiness-based branch.
+- Do not add a generic optional-value helper, sentinel, fake default object,
+  compatibility path, or fallback path.
+
 ## Scope
 
 Applies to every authored `.js`, `.mjs`, `.cjs`, `.ts`, and `.svelte` file,

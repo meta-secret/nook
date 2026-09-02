@@ -28,12 +28,15 @@ use svelte_fragments::{
 };
 use svelte_raw_discriminants::svelte_raw_string_discriminant_lines;
 
-/// Finds every authored JavaScript, TypeScript, and Svelte use of `undefined`
-/// or an assertion matcher that encodes the same implicit absence contract.
+/// Finds every authored JavaScript, TypeScript, and Svelte use of `undefined`,
+/// nullish coalescing, nullish assignment, or an assertion matcher that
+/// encodes the same implicit absence contract.
 ///
 /// Authored code must model absence explicitly. Optional object shape may use
 /// `?`, callbacks with no value return `void`, and external/browser absence is
 /// normalized by a narrow boundary adapter before it enters application code.
+/// Alternate values are selected only through explicit normalized state, never
+/// a nullish operator.
 /// Quoting the sentinel in a `typeof value === "undefined"` comparison is also
 /// forbidden: structural boundaries use property/capability checks, while
 /// application state uses a named tagged union.
@@ -492,6 +495,15 @@ fn collect_undefined_nodes(
     first_line: usize,
     lines: &mut Vec<usize>,
 ) {
+    if matches!(
+        node.kind(),
+        "binary_expression" | "augmented_assignment_expression"
+    ) && node
+        .child_by_field_name("operator")
+        .is_some_and(|operator| matches!(operator.kind(), "??" | "??="))
+    {
+        lines.push(first_line + node.start_position().row);
+    }
     if node.kind() == "undefined" || node.kind() == "undefined_type" {
         lines.push(first_line + node.start_position().row);
         return;
@@ -639,6 +651,24 @@ const value = null
 "#;
 
         assert_eq!(typescript_code_null_token_lines(source, 1)?, vec![4, 5]);
+        Ok(())
+    }
+
+    #[test]
+    fn reports_nullish_operators_but_not_prose_or_other_logic()
+    -> Result<(), tree_sitter::LanguageError> {
+        let source = r#"
+// Nullish syntax like ?? and ??= is discussed here.
+const prose = "value ?? fallback"
+const selected = value ?? fallback
+state.value ??= fallback
+const logical = value || fallback
+"#;
+
+        assert_eq!(
+            typescript_code_undefined_token_lines(source, 1)?,
+            vec![4, 5]
+        );
         Ok(())
     }
 
