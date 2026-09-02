@@ -196,7 +196,11 @@ pub use vault_sentinel_onboarding::{
     encode_sentinel_onboarding_package,
 };
 pub use vault_sync_conflict::{
-    ContentSyncConflict, StoreIdSyncConflict, VaultSyncConflict, VaultSyncConflictKind,
+    ContentSyncConflict, CurrentVaultReplaceability, ProviderVaultDecision,
+    ProviderVaultDecisionProjection, ProviderVaultDecisionReason, ProviderVaultIdentityEligibility,
+    ProviderVaultIdentityObservation, ProviderVaultIdentityProjection, StoreIdSyncConflict,
+    VaultSyncConflict, VaultSyncConflictKind, classify_current_vault_replaceability,
+    project_provider_vault_decision,
 };
 pub use vault_sync_state::{
     LocalFolderHealth, LocalFolderMultipleVaultsIssue, ManualProviderSync, SyncConflictReview,
