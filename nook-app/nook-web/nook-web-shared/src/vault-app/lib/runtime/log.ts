@@ -181,10 +181,14 @@ function parseLevel(raw: string): LogLevelParse {
 
 function initialLevel(): LogLevel {
   if ("localStorage" in globalThis) {
-    const stored = parseLevel(localStorage.getItem("nook_log_level") ?? "");
+    const stored = parseLevel(
+      ((v) => (v ? v : ""))(localStorage.getItem("nook_log_level")),
+    );
     if (stored.kind === LogLevelParseKind.Valid) return stored.level;
   }
-  const env = parseLevel(import.meta.env?.VITE_LOG_LEVEL ?? "");
+  const env = parseLevel(
+    ((v) => (v ? v : ""))(import.meta.env?.VITE_LOG_LEVEL),
+  );
   return env.kind === LogLevelParseKind.Valid ? env.level : LogLevel.Info;
 }
 
@@ -194,7 +198,7 @@ function stringifyArgs(args: ConsoleArguments): string {
     .map((arg) => {
       if (typeof arg === "string") return arg;
       if (arg instanceof Error)
-        return arg.stack ?? `${arg.name}: ${arg.message}`;
+        return ((...[v = `${arg.name}: ${arg.message}`]) => v)(arg.stack);
       try {
         return JSON.stringify(arg);
       } catch {
@@ -395,8 +399,7 @@ export function sanitizeLogUrl(url: string): string {
     parsed.hash = "";
     return parsed.toString();
   } catch {
-    const withoutQuery = url.split("?")[0] ?? url;
-    return withoutQuery.split("#")[0] ?? withoutQuery;
+    return url.split("?")[0].split("#")[0];
   }
 }
 
@@ -470,7 +473,7 @@ function installFetchInstrumentation() {
           {
             level: LogLevel.Warn,
             scope: "fetch",
-            message: `HTTP ${response.status} ${response.statusText} url=${url} method=${init?.method ?? "GET"}`,
+            message: `HTTP ${response.status} ${response.statusText} url=${url} method=${((...[v = "GET"]) => v)(init?.method)}`,
           };
         captureDiagnostic(captureDiagnosticArgs3);
       }

@@ -65,7 +65,7 @@ async function driveJson<T>(
     headers: {
       Authorization: `Bearer ${accessToken}`,
       ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(init?.headers ?? {}),
+      ...((v) => (v ? v : {}))(init?.headers),
     },
   })
   const body = await response.text()

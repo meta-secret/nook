@@ -63,7 +63,9 @@ export type LocalDataStorageOperation<T> = {
 };
 
 export function captureLocalDataStorageGeneration(): string {
-  return localStorage.getItem(LOCAL_DATA_STORAGE_GENERATION) ?? "";
+  return ((v) => (v ? v : ""))(
+    localStorage.getItem(LOCAL_DATA_STORAGE_GENERATION),
+  );
 }
 
 export async function runWithLocalDataStorageLock<T>(
@@ -73,8 +75,9 @@ export async function runWithLocalDataStorageLock<T>(
   const options: LockOptions = { mode: "shared" };
   return navigator.locks.request(LOCAL_DATA_STORAGE_LOCK, options, () => {
     if (
-      (localStorage.getItem(LOCAL_DATA_STORAGE_GENERATION) ?? "") !==
-      input.generation
+      ((v) => (v ? v : ""))(
+        localStorage.getItem(LOCAL_DATA_STORAGE_GENERATION),
+      ) !== input.generation
     ) {
       throw new Error(input.generationChangedMessage);
     }

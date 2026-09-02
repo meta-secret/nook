@@ -14,7 +14,7 @@ export async function waitForExtensionPairingReady(
           return 'approved'
         }
         const alerts = await vaultPage.getByRole('alert').allTextContents()
-        return alerts.at(-1) ?? 'pending'
+        return ((...[v = 'pending']) => v)(alerts.at(-1))
       },
       { timeout: 15_000 },
     )

@@ -146,14 +146,16 @@ export async function appendAuthProviders(
       new Promise<void>((resolve, reject) => {
         const request = indexedDB.open('nook_auth', 1)
         request.onerror = () =>
-          reject(request.error ?? new Error('idb open failed'))
+          reject(((v) => (v ? v : new Error('idb open failed')))(request.error))
         request.onsuccess = () => {
           const db = request.result
           const tx = db.transaction('auth', 'readwrite')
           const store = tx.objectStore('auth')
           const getRequest = store.get('providers')
           getRequest.onerror = () =>
-            reject(getRequest.error ?? new Error('idb read failed'))
+            reject(
+              ((v) => (v ? v : new Error('idb read failed')))(getRequest.error),
+            )
           getRequest.onsuccess = () => {
             const rawSnapshot = getRequest.result as unknown
             const snapshot =
@@ -174,13 +176,18 @@ export async function appendAuthProviders(
             )
             const putRequest = store.put(snapshot, 'providers')
             putRequest.onerror = () =>
-              reject(putRequest.error ?? new Error('idb write failed'))
+              reject(
+                ((v) => (v ? v : new Error('idb write failed')))(
+                  putRequest.error,
+                ),
+              )
           }
           tx.oncomplete = () => {
             db.close()
             resolve()
           }
-          tx.onerror = () => reject(tx.error ?? new Error('idb tx failed'))
+          tx.onerror = () =>
+            reject(((v) => (v ? v : new Error('idb tx failed')))(tx.error))
         }
       }),
     { providers },
@@ -245,7 +252,9 @@ export async function waitForAuthProviderIds(
                   })
                 : { providers: [] }
             const storedIds = new Set(
-              snapshot.providers?.map((provider) => provider.id) ?? [],
+              ((v) => (v ? v : []))(
+                snapshot.providers?.map((provider) => provider.id),
+              ),
             )
             resolve(ids.every((id) => storedIds.has(id)))
           }
@@ -389,14 +398,14 @@ export async function readRawAuthProvidersFromIdb(
         resolve(rawSnapshot)
       const request = indexedDB.open('nook_auth', 1)
       request.onerror = () =>
-        reject(request.error ?? new Error('idb open failed'))
+        reject(((v) => (v ? v : new Error('idb open failed')))(request.error))
       request.onsuccess = () => {
         const db = request.result
         const tx = db.transaction('auth', 'readonly')
         const store = tx.objectStore('auth')
         const getReq = store.get(scopedStateKey)
         getReq.onerror = () =>
-          reject(getReq.error ?? new Error('idb read failed'))
+          reject(((v) => (v ? v : new Error('idb read failed')))(getReq.error))
         getReq.onsuccess = () => {
           if (getReq.result) {
             resolveSnapshot(getReq.result as RawAuthProvidersSnapshot)
@@ -408,7 +417,11 @@ export async function readRawAuthProvidersFromIdb(
           }
           const legacyReq = store.get('providers')
           legacyReq.onerror = () =>
-            reject(legacyReq.error ?? new Error('legacy idb read failed'))
+            reject(
+              ((v) => (v ? v : new Error('legacy idb read failed')))(
+                legacyReq.error,
+              ),
+            )
           legacyReq.onsuccess = () => {
             if (legacyReq.result) {
               resolveSnapshot(legacyReq.result as RawAuthProvidersSnapshot)
@@ -418,7 +431,8 @@ export async function readRawAuthProvidersFromIdb(
           }
         }
         tx.oncomplete = () => db.close()
-        tx.onerror = () => reject(tx.error ?? new Error('idb tx failed'))
+        tx.onerror = () =>
+          reject(((v) => (v ? v : new Error('idb tx failed')))(tx.error))
       }
     })
   }, stateKey)

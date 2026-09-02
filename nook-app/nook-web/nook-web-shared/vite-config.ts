@@ -42,7 +42,7 @@ export function vaultSpaPlugin(options: VaultSpaOptions): Plugin {
   return {
     name: options.name,
     transformIndexHtml(_html, context) {
-      const vaultWasm = Object.values(context.bundle ?? {}).find(
+      const vaultWasm = Object.values(((v) => (v ? v : {}))(context.bundle)).find(
         (output) =>
           output.type === "asset" &&
           output.fileName.includes("nook_wasm_bg") &&

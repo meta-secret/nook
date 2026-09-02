@@ -105,7 +105,7 @@ export function arrayAtSummaryValues(args) {
   const selected = new Set()
   for (const length of summary.lengths) {
     const selectedIndex = index < 0 ? length + index : index
-    for (const value of summary.values.get(selectedIndex) ?? []) {
+    for (const value of ((v) => (v ? v : []))(summary.values.get(selectedIndex))) {
       selected.add(value)
     }
   }
@@ -484,7 +484,7 @@ export function mergeArraySummaries(summaries) {
   for (const summary of summaries) {
     for (const length of summary.lengths) merged.lengths.add(length)
     for (const [index, values] of summary.values) {
-      const selected = merged.values.get(index) ?? new Set()
+      const selected = ((v) => (v ? v : new Set()))(merged.values.get(index))
       for (const value of values) selected.add(value)
       merged.values.set(index, selected)
     }
@@ -505,7 +505,7 @@ export function concatenateArraySummaries(args) {
     for (const [index, selectedValues] of second.values) {
       const shiftedIndex = firstLength + index
       if (shiftedIndex > limit) continue
-      const shiftedValues = values.get(shiftedIndex) ?? new Set()
+      const shiftedValues = ((v) => (v ? v : new Set()))(values.get(shiftedIndex))
       for (const value of selectedValues) shiftedValues.add(value)
       values.set(shiftedIndex, shiftedValues)
     }
@@ -621,8 +621,8 @@ export function writeExitsBeforeFollowingNode(args) {
       parent.type === 'IfStatement' &&
       (current === parent.consequent || current === parent.alternate) &&
       statementAlwaysTerminates(current) &&
-      (parent.range?.[1] ?? Number.POSITIVE_INFINITY) <=
-        (following.range?.[0] ?? Number.NEGATIVE_INFINITY)
+      (((...[v = Number.POSITIVE_INFINITY]) => v)(parent.range?.[1])) <=
+        (((...[v = Number.NEGATIVE_INFINITY]) => v)(following.range?.[0]))
     ) {
       return true
     }

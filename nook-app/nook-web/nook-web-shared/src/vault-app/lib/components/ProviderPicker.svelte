@@ -1,8 +1,8 @@
 <script lang="ts">
   type ProviderDescriptionRequest = {
-      readonly key: string
-      readonly request: ProviderSetupRequest
-    }
+    readonly key: string
+    readonly request: ProviderSetupRequest
+  }
 
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { ReplicationType } from '$app-wasm'
@@ -60,10 +60,11 @@
 
   function draftProvider(request: ProviderSetupRequest): StorageProvider {
     const { type } = request
-    const oauthPreset = type === OAUTH_FILE_PROVIDER_TYPE ? request.oauthPreset : 'default'
+    const oauthPreset =
+      type === OAUTH_FILE_PROVIDER_TYPE ? request.oauthPreset : 'default'
     const base: StorageProvider = {
       ...providerPersistenceDefaults(),
-      id: `draft-${type}-${oauthPreset ?? 'default'}`,
+      id: `draft-${type}-${((...[v = 'default']) => v)(oauthPreset)}`,
       type,
       label: type,
       syncCheckpoint: { state: 'neverSynced' },
@@ -77,10 +78,11 @@
       }
     }
     if (type === OAUTH_FILE_PROVIDER_TYPE) {
-      const defaultConfigRequest: Parameters<typeof defaultOAuthFileConfig>[0] = {
-        preset: request.oauthPreset,
-        fileName: DEFAULT_DRIVE_BACKUP_NAME,
-      }
+      const defaultConfigRequest: Parameters<typeof defaultOAuthFileConfig>[0] =
+        {
+          preset: request.oauthPreset,
+          fileName: DEFAULT_DRIVE_BACKUP_NAME,
+        }
       return {
         ...base,
         oauthFile: configuredOAuthFile(
@@ -92,7 +94,7 @@
   }
 
   function blocked(request: ProviderSetupRequest): boolean {
-    const draftProviderArgs: Parameters<typeof draftProvider>[0] = request;
+    const draftProviderArgs: Parameters<typeof draftProvider>[0] = request
     const result = provider_replication_capability(
       draftProvider(draftProviderArgs),
     )
@@ -105,10 +107,7 @@
     }
   }
 
-  function description({
-    key,
-    request,
-  }: ProviderDescriptionRequest): string {
+  function description({ key, request }: ProviderDescriptionRequest): string {
     if (blocked(request)) {
       return vault.t(I18N_KEYS.ProviderPickerUnsupportedReplicationDesc)
     }
@@ -117,7 +116,9 @@
 </script>
 
 <fieldset class="min-w-0 w-full max-w-full space-y-2">
-  <legend class="sr-only">{vault.t(I18N_KEYS.ProviderPickerChooseProvider)}</legend>
+  <legend class="sr-only"
+    >{vault.t(I18N_KEYS.ProviderPickerChooseProvider)}</legend
+  >
   <ul
     class="min-w-0 w-full max-w-full space-y-1.5 overflow-hidden"
     data-testid="provider-picker-list"
@@ -137,10 +138,13 @@
               >{vault.t(I18N_KEYS.ProviderPickerThisDevice)}</span
             >
             <span class="block truncate text-xs text-muted-foreground">
-              {(() => { const descriptionRequest: Parameters<typeof description>[0] = {
-                key: I18N_KEYS.ProviderPickerThisDeviceDesc,
-                request: localProviderRequest,
-              }; return description(descriptionRequest); })()}
+              {(() => {
+                const descriptionRequest: Parameters<typeof description>[0] = {
+                  key: I18N_KEYS.ProviderPickerThisDeviceDesc,
+                  request: localProviderRequest,
+                }
+                return description(descriptionRequest)
+              })()}
             </span>
           </span>
         </button>
@@ -152,7 +156,8 @@
           type="button"
           class="flex min-w-0 w-full max-w-full items-center gap-3 overflow-hidden rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-accent disabled:cursor-not-allowed disabled:border-border disabled:bg-muted/10 disabled:opacity-60 disabled:hover:bg-muted/10"
           data-testid="provider-option-local-folder"
-          disabled={localFolderUnavailable || blocked(localFolderProviderRequest)}
+          disabled={localFolderUnavailable ||
+            blocked(localFolderProviderRequest)}
           onclick={() => {
             if (!localFolderUnavailable && !blocked(localFolderProviderRequest))
               onSelect(localFolderProviderRequest)
@@ -166,10 +171,15 @@
             <span class="block truncate text-xs text-muted-foreground">
               {localFolderUnavailable
                 ? vault.t(I18N_KEYS.ProviderPickerLocalFolderUnavailableDesc)
-                : (() => { const descriptionRequest: Parameters<typeof description>[0] = {
-                    key: I18N_KEYS.ProviderPickerLocalFolderDesc,
-                    request: localFolderProviderRequest,
-                  }; return description(descriptionRequest); })()}
+                : (() => {
+                    const descriptionRequest: Parameters<
+                      typeof description
+                    >[0] = {
+                      key: I18N_KEYS.ProviderPickerLocalFolderDesc,
+                      request: localFolderProviderRequest,
+                    }
+                    return description(descriptionRequest)
+                  })()}
             </span>
           </span>
         </button>
@@ -213,10 +223,13 @@
             >{vault.t(I18N_KEYS.ProviderPickerGoogleDrive)}</span
           >
           <span class="block truncate text-xs text-muted-foreground">
-            {(() => { const descriptionRequest: Parameters<typeof description>[0] = {
-              key: I18N_KEYS.ProviderPickerGoogleDriveDesc,
-              request: googleDriveProviderRequest,
-            }; return description(descriptionRequest); })()}
+            {(() => {
+              const descriptionRequest: Parameters<typeof description>[0] = {
+                key: I18N_KEYS.ProviderPickerGoogleDriveDesc,
+                request: googleDriveProviderRequest,
+              }
+              return description(descriptionRequest)
+            })()}
           </span>
         </span>
       </button>
@@ -246,10 +259,13 @@
             >{vault.t(I18N_KEYS.ProviderPickerIcloud)}</span
           >
           <span class="block truncate text-xs text-muted-foreground">
-            {(() => { const descriptionRequest: Parameters<typeof description>[0] = {
-              key: I18N_KEYS.ProviderPickerIcloudDesc,
-              request: iCloudProviderRequest,
-            }; return description(descriptionRequest); })()}
+            {(() => {
+              const descriptionRequest: Parameters<typeof description>[0] = {
+                key: I18N_KEYS.ProviderPickerIcloudDesc,
+                request: iCloudProviderRequest,
+              }
+              return description(descriptionRequest)
+            })()}
           </span>
         </span>
       </button>
@@ -270,10 +286,13 @@
             >{vault.t(I18N_KEYS.ProviderPickerGithub)}</span
           >
           <span class="block truncate text-xs text-muted-foreground">
-            {(() => { const descriptionRequest: Parameters<typeof description>[0] = {
-              key: I18N_KEYS.ProviderPickerGithubDesc,
-              request: githubProviderRequest,
-            }; return description(descriptionRequest); })()}
+            {(() => {
+              const descriptionRequest: Parameters<typeof description>[0] = {
+                key: I18N_KEYS.ProviderPickerGithubDesc,
+                request: githubProviderRequest,
+              }
+              return description(descriptionRequest)
+            })()}
           </span>
         </span>
       </button>

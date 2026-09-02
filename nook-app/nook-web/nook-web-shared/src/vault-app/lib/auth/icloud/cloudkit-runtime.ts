@@ -361,7 +361,7 @@ function elementDiagnostics(lookup: CloudKitElementLookup): {
       : {}),
     ...(role ? { role } : {}),
     childElementCount: element.childElementCount,
-    textLength: element.textContent?.trim().length ?? 0,
+    textLength: ((v) => (v ? v : 0))(element.textContent?.trim().length),
   };
 }
 

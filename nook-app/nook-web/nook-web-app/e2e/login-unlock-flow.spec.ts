@@ -158,13 +158,14 @@ test.describe('login unlock flow (local-first)', () => {
     })
     await expect
       .poll(() =>
-        page.evaluate(
-          () =>
+        page.evaluate(() =>
+          ((v) => (v ? v : ''))(
             (
               window as Window & {
                 __nookVault?: { deviceId?: string }
               }
-            ).__nookVault?.deviceId ?? '',
+            ).__nookVault?.deviceId,
+          ),
         ),
       )
       .toBe('')
@@ -181,8 +182,10 @@ test.describe('login unlock flow (local-first)', () => {
     await page.getByTestId('devices-access-back').click()
     await expect(reviewIdentities).toBeFocused()
     await page.keyboard.press('Tab')
-    const focusAfterTab = await page.evaluate(
-      () => document.activeElement?.getAttribute('data-testid') ?? '',
+    const focusAfterTab = await page.evaluate(() =>
+      ((v) => (v ? v : ''))(
+        document.activeElement?.getAttribute('data-testid'),
+      ),
     )
     expect(focusAfterTab).not.toBe('login-review-identities')
     await page.evaluate(async () => {
@@ -193,8 +196,10 @@ test.describe('login unlock flow (local-first)', () => {
       }
     })
     expect(
-      await page.evaluate(
-        () => document.activeElement?.getAttribute('data-testid') ?? '',
+      await page.evaluate(() =>
+        ((v) => (v ? v : ''))(
+          document.activeElement?.getAttribute('data-testid'),
+        ),
       ),
     ).toBe(focusAfterTab)
 

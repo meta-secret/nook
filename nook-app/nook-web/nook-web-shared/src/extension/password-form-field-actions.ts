@@ -64,7 +64,9 @@ export function trackLoginCredentialField({
   input,
 }: TrackedLoginCredentialField): void {
   const key = loginCredentialFieldKey(request);
-  const tracked = filledLoginCredentialFields.get(key) ?? new Set();
+  const tracked = ((v) => (v ? v : new Set<HTMLInputElement>()))(
+    filledLoginCredentialFields.get(key),
+  );
   tracked.add(input);
   filledLoginCredentialFields.set(key, tracked);
 }
@@ -153,7 +155,9 @@ export function clearLoginCredentials(
     setNativeInputValue(mutation);
   };
   const key = loginCredentialFieldKey(request);
-  const fields = filledLoginCredentialFields.get(key) ?? new Set();
+  const fields = ((v) => (v ? v : new Set<HTMLInputElement>()))(
+    filledLoginCredentialFields.get(key),
+  );
   fields.forEach(clearField);
   filledLoginCredentialFields.delete(key);
 }

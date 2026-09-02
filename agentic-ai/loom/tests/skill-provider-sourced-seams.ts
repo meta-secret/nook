@@ -74,7 +74,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'nook-app/nook-web/nook-web-extension/scripts/setup-brave-vault.mjs',
-    '648f9893b06dd4a896608919686c7d85b45f121ca5c44e4870233d52548c7657',
+    'ec3010f2f755694e1962b6a42b7ccc5c17618d30e42d1694c14bbd2484c992d9',
   ],
   [
     'nook-app/nook-web/nook-web-extension/scripts/setup-brave-vault.sh',

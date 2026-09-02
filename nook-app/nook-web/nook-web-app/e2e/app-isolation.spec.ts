@@ -175,7 +175,7 @@ test('keeps extension routing and local session behavior app-specific', async ({
     const browserWindow = window as Window & {
       chrome?: { runtime?: unknown }
     }
-    const chrome = browserWindow.chrome ?? {}
+    const chrome = ((v) => (v ? v : {}))(browserWindow.chrome)
     Object.defineProperty(chrome, 'runtime', {
       configurable: true,
       value: {

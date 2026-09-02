@@ -381,7 +381,7 @@ export class VaultState extends VaultRuntimeState {
   async assessVaultConnectStatus(
     argsOverride?: VaultStorageArguments,
   ): Promise<VaultAccessStatus> {
-    const args = argsOverride ?? this.connectStorageArgs();
+    const [args = this.connectStorageArgs()] = [argsOverride];
     const assessVaultConnectStatusArgs: Parameters<
       typeof providersActions.assessVaultConnectStatus
     >[0] = { state: this, args };

@@ -87,7 +87,9 @@ export async function addSecret(
           const activeReq = store.get('active_vault_id')
           activeReq.onerror = () => resolve(`idb-read-error:${activeReq.error}`)
           activeReq.onsuccess = () => {
-            const activeId = String(activeReq.result ?? '').trim()
+            const activeId = String(
+              ((v) => (v ? v : ''))(activeReq.result),
+            ).trim()
             if (!activeId) {
               resolve('')
               return
@@ -109,8 +111,9 @@ export async function addSecret(
         isSyncing: vault?.isSyncing,
         errorMsg: vault?.errorMsg,
         localYamlHasKey: idbYaml.includes(expectedKey),
-        localYamlSecretCount:
-          idbYaml.match(/\n\s*-\s+id:\s+secret_/g)?.length ?? 0,
+        localYamlSecretCount: ((v) => (v ? v : 0))(
+          idbYaml.match(/\n\s*-\s+id:\s+secret_/g)?.length,
+        ),
       }
     }, key)
     throw new Error(
@@ -151,7 +154,7 @@ export async function revealSecretValue(page: Page, key: string) {
   }
   const code = row.locator('code')
   await expect(code).toBeVisible()
-  return (await code.textContent()) ?? ''
+  return ((v) => (v ? v : ''))(await code.textContent())
 }
 
 export async function waitForSecretOnDevice(

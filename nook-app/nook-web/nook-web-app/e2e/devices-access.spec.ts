@@ -278,8 +278,10 @@ test.describe('devices and access dashboard', () => {
     await expect(page.getByTestId('device-protection-error')).toBeVisible()
     await expect(identityOptions).toHaveCount(1)
     expect(
-      await page.evaluate(
-        () => sessionStorage.getItem('nook_vault_session_locked') ?? '',
+      await page.evaluate(() =>
+        ((v) => (v ? v : ''))(
+          sessionStorage.getItem('nook_vault_session_locked'),
+        ),
       ),
     ).toBe('')
     await page.evaluate(() => {
@@ -360,13 +362,15 @@ test.describe('devices and access dashboard', () => {
             }
           ).__nookVault
           return {
-            transitionPending:
-              vault?.devicesAccessIdentityTransitionPending ?? true,
-            providersLoaded: vault?.providersLoaded ?? false,
-            personalProviderRecovered:
+            transitionPending: ((...[v = true]) => v)(
+              vault?.devicesAccessIdentityTransitionPending,
+            ),
+            providersLoaded: ((v) => (v ? v : false))(vault?.providersLoaded),
+            personalProviderRecovered: ((v) => (v ? v : false))(
               vault?.providers.some(
                 (provider) => provider.id === 'personal-remote-provider',
-              ) ?? false,
+              ),
+            ),
           }
         }),
       )

@@ -3,7 +3,9 @@ import { expect, test } from './fixtures'
 // The combined production preview mounts the independently built nokey.sh
 // artifact at /site. The default local Vite server serves the same public
 // surface at /, so Playwright config supplies the matching path.
-const PUBLIC_SITE_PATH = process.env.NOOK_E2E_PUBLIC_SITE_PATH ?? ''
+const PUBLIC_SITE_PATH = ((v) => (v ? v : ''))(
+  process.env.NOOK_E2E_PUBLIC_SITE_PATH,
+)
 const deploymentUrl = (configured: unknown, fallback: string) =>
   (typeof configured === 'string' && configured.trim()
     ? configured.trim()
@@ -76,8 +78,8 @@ test.describe('legal pages', () => {
     )
     const structuredData = await page
       .locator('script[type="application/ld+json"]')
-      .textContent()
-    expect(JSON.parse(structuredData ?? '{}')).toMatchObject({
+      .innerHTML()
+    expect(JSON.parse(structuredData)).toMatchObject({
       '@context': 'https://schema.org',
       '@type': 'WebApplication',
       name: 'Nook',

@@ -1,5 +1,9 @@
 <script lang="ts">
-  type IdentityTextTruncation = { readonly value: string; readonly head: number; readonly tail: number }
+  type IdentityTextTruncation = {
+    readonly value: string
+    readonly head: number
+    readonly tail: number
+  }
 
   type DeviceRename = { readonly authId: string; readonly label: string }
 
@@ -89,7 +93,12 @@
   async function refreshExtensionSetupStatus() {
     if (!SUPPORTS_EXTENSION) return
     const state = await resolveExtensionSetupState(vault.activeVault)
-    extensionSetupState = (() => { const shouldOfferExtensionSetupArgs: Parameters<typeof shouldOfferExtensionSetup>[0] = { status: state.status, environment: navigator }; return shouldOfferExtensionSetup(shouldOfferExtensionSetupArgs); })()
+    extensionSetupState = (() => {
+      const shouldOfferExtensionSetupArgs: Parameters<
+        typeof shouldOfferExtensionSetup
+      >[0] = { status: state.status, environment: navigator }
+      return shouldOfferExtensionSetup(shouldOfferExtensionSetupArgs)
+    })()
       ? { kind: ExtensionSetupOfferKind.Visible, setup: state }
       : { kind: ExtensionSetupOfferKind.Hidden }
   }
@@ -154,7 +163,7 @@
     const observeArgs: Parameters<typeof observer.observe>[1] = {
       attributes: true,
       attributeFilter: ['data-nook-extension-runtime-id'],
-    };
+    }
     observer.observe(document.documentElement, observeArgs)
 
     return () => {
@@ -164,12 +173,14 @@
   })
 
   const sortedMembers = $derived(
-    [...vaultMembers].sort(// eslint-disable-next-line max-params -- Host API owns this positional callback signature.
-    (a, b) => {
-      if (a.deviceId === deviceId) return -1
-      if (b.deviceId === deviceId) return 1
-      return displayName(a).localeCompare(displayName(b))
-    }),
+    [...vaultMembers].sort(
+      // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
+      (a, b) => {
+        if (a.deviceId === deviceId) return -1
+        if (b.deviceId === deviceId) return 1
+        return displayName(a).localeCompare(displayName(b))
+      },
+    ),
   )
 
   function currentDeviceName(): string {
@@ -200,13 +211,15 @@
     if (!value || value === 'genesis' || value === 'self-sync')
       return vault.t(I18N_KEYS.DevicesCardEnrolled)
     const date = new Date(value)
-    if (Number.isNaN(date.getTime())) return vault.t(I18N_KEYS.DevicesCardEnrolled)
+    if (Number.isNaN(date.getTime()))
+      return vault.t(I18N_KEYS.DevicesCardEnrolled)
     return `${vault.t(I18N_KEYS.DevicesCardEnrolledDatePrefix)}${date.toLocaleDateString()}`
   }
 
   function formatRequestDate(value: string): string {
     const date = new Date(value)
-    if (Number.isNaN(date.getTime())) return vault.t(I18N_KEYS.DevicesCardRecently)
+    if (Number.isNaN(date.getTime()))
+      return vault.t(I18N_KEYS.DevicesCardRecently)
     return date.toLocaleDateString()
   }
 
@@ -214,7 +227,11 @@
     const label = member.label.trim()
     if (label) return label
     if (member.deviceId === deviceId) return currentDeviceName()
-    const truncateArgs: Parameters<typeof truncate>[0] = { value: member.deviceId, head: 6, tail: 4 };
+    const truncateArgs: Parameters<typeof truncate>[0] = {
+      value: member.deviceId,
+      head: 6,
+      tail: 4,
+    }
     return `${vault.t(I18N_KEYS.DevicesCardDevicePrefix)}${truncate(truncateArgs)}`
   }
 
@@ -271,10 +288,18 @@
           class="font-mono text-[11px] leading-relaxed text-amber-700 dark:text-amber-300"
           data-testid="extension-setup-settings-connected-vault"
         >
-          {(() => { const tArgs: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.ExtensionSetupConnectedVault, replacements: {
-            vault: extensionSetup.connectedVaultName ?? '',
-            store: extensionSetup.connectedVaultStoreId ?? '',
-          } }; return vault.t(tArgs); })()}
+          {(() => {
+            const tArgs: Parameters<typeof vault.t>[0] = {
+              key: I18N_KEYS.ExtensionSetupConnectedVault,
+              replacements: {
+                vault: ((v) => (v ? v : ''))(extensionSetup.connectedVaultName),
+                store: ((v) => (v ? v : ''))(
+                  extensionSetup.connectedVaultStoreId,
+                ),
+              },
+            }
+            return vault.t(tArgs)
+          })()}
         </p>
       {/if}
       {#if extensionSetup.status === ExtensionSetupStatus.InstalledUnpaired || extensionSetup.status === ExtensionSetupStatus.PairedElsewhere}
@@ -358,9 +383,15 @@
         <span class="text-xs text-muted-foreground">
           {pendingJoins.length === 1
             ? vault.t(I18N_KEYS.DevicesCardRequestsCountSingular)
-            : (() => { const tArgs2: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.DevicesCardRequestsCountPlural, replacements: {
-                count: String(pendingJoins.length),
-              } }; return vault.t(tArgs2); })()}
+            : (() => {
+                const tArgs2: Parameters<typeof vault.t>[0] = {
+                  key: I18N_KEYS.DevicesCardRequestsCountPlural,
+                  replacements: {
+                    count: String(pendingJoins.length),
+                  },
+                }
+                return vault.t(tArgs2)
+              })()}
         </span>
       </div>
       <ul class="space-y-2">
@@ -378,9 +409,14 @@
                 </div>
                 <div class="min-w-0">
                   <p class="truncate text-sm font-medium text-foreground">
-                    {vault.t(I18N_KEYS.DevicesCardDevicePrefix)}{(() => { const truncateArgs2: Parameters<typeof truncate>[0] = { value: join.deviceId, head: 14, tail: 10 }; return truncate(
-                      truncateArgs2,
-                    ); })()}
+                    {vault.t(I18N_KEYS.DevicesCardDevicePrefix)}{(() => {
+                      const truncateArgs2: Parameters<typeof truncate>[0] = {
+                        value: join.deviceId,
+                        head: 14,
+                        tail: 10,
+                      }
+                      return truncate(truncateArgs2)
+                    })()}
                   </p>
                   <p class="text-xs text-muted-foreground">
                     {vault.t(
@@ -428,9 +464,15 @@
       <span class="text-xs text-muted-foreground">
         {vaultMembers.length === 1
           ? vault.t(I18N_KEYS.DevicesCardDeviceCountSingular)
-          : (() => { const tArgs3: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.DevicesCardDeviceCountPlural, replacements: {
-              count: String(vaultMembers.length),
-            } }; return vault.t(tArgs3); })()}
+          : (() => {
+              const tArgs3: Parameters<typeof vault.t>[0] = {
+                key: I18N_KEYS.DevicesCardDeviceCountPlural,
+                replacements: {
+                  count: String(vaultMembers.length),
+                },
+              }
+              return vault.t(tArgs3)
+            })()}
       </span>
     </div>
 
@@ -674,7 +716,14 @@
                     {vault.t(I18N_KEYS.DevicesCardAuthId)}
                   </dt>
                   <dd class="font-mono" title={member.authId}>
-                    {(() => { const truncateArgs3: Parameters<typeof truncate>[0] = { value: member.authId, head: 10, tail: 8 }; return truncate(truncateArgs3); })()}
+                    {(() => {
+                      const truncateArgs3: Parameters<typeof truncate>[0] = {
+                        value: member.authId,
+                        head: 10,
+                        tail: 8,
+                      }
+                      return truncate(truncateArgs3)
+                    })()}
                   </dd>
                 </div>
                 <div class="flex items-start justify-between gap-3">
@@ -683,7 +732,14 @@
                   </dt>
                   <dd class="flex min-w-0 items-center gap-1 font-mono">
                     <span class="truncate" title={member.publicKey}>
-                      {(() => { const truncateArgs4: Parameters<typeof truncate>[0] = { value: member.publicKey, head: 12, tail: 10 }; return truncate(truncateArgs4); })()}
+                      {(() => {
+                        const truncateArgs4: Parameters<typeof truncate>[0] = {
+                          value: member.publicKey,
+                          head: 12,
+                          tail: 10,
+                        }
+                        return truncate(truncateArgs4)
+                      })()}
                     </span>
                     <button
                       type="button"

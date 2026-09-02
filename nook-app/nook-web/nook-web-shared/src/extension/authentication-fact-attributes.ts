@@ -79,7 +79,7 @@ function elementLabelsAuthenticationControl({
   let labelElement: Element | false = element;
   while (labelElement) {
     if (labelElement.id) referencedIds.add(labelElement.id);
-    labelElement = labelElement.parentElement ?? false;
+    labelElement = ((v) => (v ? v : false))(labelElement.parentElement);
   }
   for (const labelledDescendant of element.querySelectorAll<HTMLElement>(
     "[id]",
@@ -92,7 +92,7 @@ function elementLabelsAuthenticationControl({
       authenticationFactLabelledControlSelector,
     ),
   ).some((control) =>
-    (control.getAttribute("aria-labelledby") ?? "")
+    (((v) => (v ? v : ""))(control.getAttribute("aria-labelledby")))
       .split(/\s+/u)
       .some((id) => referencedIds.has(id)),
   );

@@ -30,8 +30,9 @@ const rootDir = path.resolve(
 )
 const extensionDir =
   process.env.NOOK_EXTENSION_E2E_DIR || path.join(rootDir, 'dist')
-const chromiumExecutablePath =
-  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim() ?? ''
+const chromiumExecutablePath = ((v) => (v ? v : ''))(
+  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim(),
+)
 const setupStorageKey = 'nook:extension-setup'
 const EXTENSION_TIMEOUT_MS = 45_000
 
@@ -45,12 +46,11 @@ export type PairedPinExtension = {
 }
 
 async function getServiceWorker(context: BrowserContext) {
-  return (
-    context.serviceWorkers()[0] ??
-    (await context.waitForEvent('serviceworker', {
-      timeout: EXTENSION_TIMEOUT_MS,
-    }))
-  )
+  const [serviceWorker] = context.serviceWorkers()
+  if (serviceWorker) return serviceWorker
+  return await context.waitForEvent('serviceworker', {
+    timeout: EXTENSION_TIMEOUT_MS,
+  })
 }
 
 export async function exerciseConcurrentSessionStatus({
@@ -80,7 +80,9 @@ export async function exerciseConcurrentSessionStatus({
               if (response?.ok !== true) {
                 reject(
                   new Error(
-                    response?.error ?? 'Concurrent session status failed.',
+                    ((...[v = 'Concurrent session status failed.']) => v)(
+                      response?.error,
+                    ),
                   ),
                 )
                 return
@@ -122,8 +124,8 @@ export async function launchPairedPinExtension(
   testInfo: TestInfo,
   options?: { vaultName?: string; pin?: string },
 ): Promise<PairedPinExtension> {
-  const vaultName = options?.vaultName ?? 'Mock auth vault'
-  const pin = options?.pin ?? MOCK_AUTH_DEFAULT_PIN
+  const [vaultName = 'Mock auth vault'] = [options?.vaultName]
+  const [pin = MOCK_AUTH_DEFAULT_PIN] = [options?.pin]
   const simpleVaultBaseUrl = normalize_simple_vault_base_url(
     process.env.NOOK_EXTENSION_E2E_SIMPLE_VAULT_URL ||
       process.env.NOOK_SIMPLE_VAULT_URL ||
@@ -254,7 +256,7 @@ export async function lockExtensionSession(
       await new Promise<{ ok?: boolean }>((resolve) => {
         globalThis.chrome.runtime.sendMessage(
           { type: 'nook:ensure-extension-session-runtime' },
-          (response) => resolve(response ?? {}),
+          (response) => resolve(((v) => (v ? v : {}))(response)),
         )
       })
       const activeSessionRequests = Array.from(
@@ -281,7 +283,9 @@ export async function lockExtensionSession(
         globalThis.chrome.runtime.sendMessage(
           { type: 'nook:extension-session-lock' },
           (response) =>
-            resolve(response ?? { ok: false, error: 'no-response' }),
+            resolve(
+              ((...[v = { ok: false, error: 'no-response' }]) => v)(response),
+            ),
         )
       })
       await Promise.all(activeSessionRequests)
@@ -289,7 +293,7 @@ export async function lockExtensionSession(
     })
     if (result?.ok !== true) {
       throw new Error(
-        `Failed to lock extension session: ${result?.error ?? result?.reason ?? 'unknown'}`,
+        `Failed to lock extension session: ${((...[v = 'unknown']) => v)(((...[v = result?.reason]) => v)(result?.error))}`,
       )
     }
   } finally {

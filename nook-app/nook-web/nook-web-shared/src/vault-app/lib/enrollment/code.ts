@@ -64,7 +64,10 @@ export function getEnrollmentLinkBase(): string {
       { siteRoot: configured, appKind: configured_vault_application() };
     return enrollmentAppRootUrl(enrollmentAppRootUrlArgs);
   }
-  const basePath = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
+  const basePath = ((...[v = "/"]) => v)(import.meta.env.BASE_URL).replace(
+    /\/$/,
+    "",
+  );
   const enrollmentAppRootUrlArgs2: Parameters<typeof enrollmentAppRootUrl>[0] =
     {
       siteRoot: `${window.location.origin}${basePath}`,

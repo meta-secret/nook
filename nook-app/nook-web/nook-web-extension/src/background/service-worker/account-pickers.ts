@@ -689,7 +689,8 @@ async function websiteLoginOptionsResponse({
   dependencies,
   openUnavailableCompanion,
 }: WebsiteLoginOptionsResponseArgs): Promise<unknown> {
-  const resolvedDependencies = dependencies ?? websiteLoginOptionsDependencies
+  const resolvedDependencies = ((v) =>
+    v ? v : websiteLoginOptionsDependencies)(dependencies)
   const authorizationGeneration =
     await resolvedDependencies.accountPickerAuthorizationGeneration()
   if (

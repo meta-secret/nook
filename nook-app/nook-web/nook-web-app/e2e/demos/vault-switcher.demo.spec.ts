@@ -135,10 +135,12 @@ test('list every local vault and pair the open vault with the companion', async 
             JSON.stringify(message),
           )
           const type = message.type
-          const routedTypes = JSON.parse(
-            document.documentElement.getAttribute(
+          const routedTypesAttribute =
+            document.documentElement.attributes.getNamedItem(
               'data-demo-extension-message-types',
-            ) ?? '[]',
+            )?.value
+          const routedTypes = JSON.parse(
+            ((...[v = '[]']) => v)(routedTypesAttribute),
           ) as string[]
           if (type) {
             routedTypes.push(type)

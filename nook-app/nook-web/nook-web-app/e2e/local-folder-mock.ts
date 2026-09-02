@@ -28,7 +28,10 @@ export async function installLocalFolderPickerMock(page: Page) {
     const storageKey = '__nookE2eLocalFolderFiles'
     const readSnapshot = () => {
       try {
-        return JSON.parse(sessionStorage.getItem(storageKey) ?? '[]') as Array<{
+        const encodedFiles = Object.hasOwn(sessionStorage, storageKey)
+          ? sessionStorage[storageKey]
+          : '[]'
+        return JSON.parse(encodedFiles) as Array<{
           path: string
           content: string
         }>
@@ -49,9 +52,13 @@ export async function installLocalFolderPickerMock(page: Page) {
       ) {}
 
       async getFile() {
-        return new File([this.files.get(this.name) ?? ''], this.name, {
-          type: 'application/x-yaml',
-        })
+        return new File(
+          [((v) => (v ? v : ''))(this.files.get(this.name))],
+          this.name,
+          {
+            type: 'application/x-yaml',
+          },
+        )
       }
 
       async createWritable() {
@@ -173,26 +180,28 @@ export async function installLocalFolderPickerMock(page: Page) {
 export async function localFolderPickerInvocationCount(
   page: Page,
 ): Promise<number> {
-  return page.evaluate(
-    () =>
+  return page.evaluate(() =>
+    ((v) => (v ? v : 0))(
       (
         window as Window & {
           __nookE2eLocalFolderPickerInvocationCount?: () => number
         }
-      ).__nookE2eLocalFolderPickerInvocationCount?.() ?? 0,
+      ).__nookE2eLocalFolderPickerInvocationCount?.(),
+    ),
   )
 }
 
 export async function localFolderSnapshot(
   page: Page,
 ): Promise<LocalFolderRecord[]> {
-  return page.evaluate(
-    () =>
+  return page.evaluate(() =>
+    ((v) => (v ? v : []))(
       (
         window as Window & {
           __nookE2eLocalFolderSnapshot?: () => LocalFolderRecord[]
         }
-      ).__nookE2eLocalFolderSnapshot?.() ?? [],
+      ).__nookE2eLocalFolderSnapshot?.(),
+    ),
   )
 }
 

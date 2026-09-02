@@ -25,9 +25,11 @@ export function credentialsFromLoginSubmit(
   }
   return {
     kind: LoginSubmissionKind.Credentials,
-    username:
-      form.querySelector<HTMLInputElement>('[name="username"]')?.value ?? '',
-    password:
-      form.querySelector<HTMLInputElement>('[name="password"]')?.value ?? '',
+    username: ((v) => (v ? v : ''))(
+      form.querySelector<HTMLInputElement>('[name="username"]')?.value,
+    ),
+    password: ((v) => (v ? v : ''))(
+      form.querySelector<HTMLInputElement>('[name="password"]')?.value,
+    ),
   }
 }

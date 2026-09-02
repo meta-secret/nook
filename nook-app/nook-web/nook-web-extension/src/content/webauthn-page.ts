@@ -49,10 +49,8 @@ function bytes(value: unknown): ArrayBuffer {
 }
 
 function requestId(): string {
-  return (
-    crypto.randomUUID?.() ??
-    base64url(crypto.getRandomValues(new Uint8Array(24)))
-  )
+  return ((...[v = base64url(crypto.getRandomValues(new Uint8Array(24)))]) =>
+    v)(crypto.randomUUID?.())
 }
 
 function serializeCreation(
@@ -62,7 +60,7 @@ function serializeCreation(
     origin: location.origin,
     challenge: base64url(options.challenge),
     relyingParty: {
-      id: options.rp.id ?? location.hostname,
+      id: ((...[v = location.hostname]) => v)(options.rp.id),
       name: options.rp.name,
     },
     user: {
@@ -71,7 +69,7 @@ function serializeCreation(
       displayName: options.user.displayName,
     },
     algorithms: options.pubKeyCredParams.map((parameter) => parameter.alg),
-    excludeCredentials: (options.excludeCredentials ?? []).map(
+    excludeCredentials: ((v) => (v ? v : []))(options.excludeCredentials).map(
       (credential) => ({
         id: base64url(credential.id),
       }),
@@ -89,10 +87,12 @@ function serializeAssertion(
   return {
     origin: location.origin,
     challenge: base64url(options.challenge),
-    rpId: options.rpId ?? location.hostname,
-    allowCredentials: (options.allowCredentials ?? []).map((credential) => ({
-      id: base64url(credential.id),
-    })),
+    rpId: ((...[v = location.hostname]) => v)(options.rpId),
+    allowCredentials: ((v) => (v ? v : []))(options.allowCredentials).map(
+      (credential) => ({
+        id: base64url(credential.id),
+      }),
+    ),
     userVerificationRequired: options.userVerification === 'required',
   }
 }
@@ -174,7 +174,7 @@ async function extensionCeremony({
           options.publicKey as PublicKeyCredentialRequestOptions,
         )
   const timeout = Math.min(
-    Math.max(options.publicKey.timeout ?? 60_000, 1_000),
+    Math.max(((...[v = 60_000]) => v)(options.publicKey.timeout), 1_000),
     120_000,
   )
   const signal = options.signal
@@ -200,8 +200,9 @@ async function extensionCeremony({
         window.postMessage(nookTypedArgs0_0, location.origin)
         finish(() =>
           reject(
-            signal?.reason ??
-              new DOMException('The operation was aborted.', 'AbortError'),
+            signal
+              ? signal.reason
+              : new DOMException('The operation was aborted.', 'AbortError'),
           ),
         )
       }
@@ -231,7 +232,7 @@ async function extensionCeremony({
             reject(
               new DOMException(
                 'Nook passkey request was not completed.',
-                event.data.reason ?? 'NotAllowedError',
+                ((...[v = 'NotAllowedError']) => v)(event.data.reason),
               ),
             ),
           )

@@ -7,16 +7,19 @@
     event.preventDefault()
     const form = event.currentTarget
     if (!(form instanceof HTMLFormElement)) return
-    const username =
-      form.querySelector<HTMLInputElement>('[name="email"]')?.value.trim() ?? ''
-    const current =
-      form.querySelector<HTMLInputElement>('[name="current-password"]')
-        ?.value ?? ''
-    const next =
-      form.querySelector<HTMLInputElement>('[name="new-password"]')?.value ?? ''
-    const confirm =
+    const username = ((v) => (v ? v : ''))(
+      form.querySelector<HTMLInputElement>('[name="email"]')?.value.trim(),
+    )
+    const current = ((v) => (v ? v : ''))(
+      form.querySelector<HTMLInputElement>('[name="current-password"]')?.value,
+    )
+    const next = ((v) => (v ? v : ''))(
+      form.querySelector<HTMLInputElement>('[name="new-password"]')?.value,
+    )
+    const confirm = ((v) => (v ? v : ''))(
       form.querySelector<HTMLInputElement>('[name="new-password-confirm"]')
-        ?.value ?? ''
+        ?.value,
+    )
     if (!username || !current || !next) {
       error = 'Email, current password, and new password are required.'
       return

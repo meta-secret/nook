@@ -181,13 +181,14 @@ test('open trusted pairing from disconnected Nook Pilot', async ({ page }) => {
   ).toBeVisible()
   await expect
     .poll(() =>
-      page.evaluate(
-        () =>
+      page.evaluate(() =>
+        ((v) => (v ? v : []))(
           (
             window as typeof window & {
               __nookDemoCompanionLauncherUrls?: string[]
             }
-          ).__nookDemoCompanionLauncherUrls ?? [],
+          ).__nookDemoCompanionLauncherUrls,
+        ),
       ),
     )
     .toEqual(['chrome-extension://demo-extension/popup/index.html?intent=pair'])
@@ -284,13 +285,14 @@ test('guide a login through the Nook Pilot control plane', async ({ page }) => {
   )
   await expect
     .poll(() =>
-      page.evaluate(
-        () =>
+      page.evaluate(() =>
+        ((v) => (v ? v : []))(
           (
             window as typeof window & {
               __nookDemoRuntimeMessageTypes?: string[]
             }
-          ).__nookDemoRuntimeMessageTypes ?? [],
+          ).__nookDemoRuntimeMessageTypes,
+        ),
       ),
     )
     .not.toContain('nook:website-login-options')

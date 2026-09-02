@@ -69,11 +69,11 @@ export class SecretFormState {
       this.websiteUrl = item.websiteUrl;
       this.username = item.username;
       this.password = item.password;
-      this.notes = item.notes ?? "";
+      this.notes = ((v) => (v ? v : ""))(item.notes);
     } else if (item.type === SecretType.ApiKey) {
       this.websiteUrl = item.websiteUrl;
       this.apiKey = item.primaryCredential || item.key;
-      this.expiresAt = item.expiresAt ?? "";
+      this.expiresAt = ((v) => (v ? v : ""))(item.expiresAt);
     } else if (item.type === SecretType.SeedPhrase) {
       this.accountName = item.name;
       this.seedPhrase = item.seed;
@@ -87,7 +87,7 @@ export class SecretFormState {
       this.fileSizeBytes = item.sizeBytes;
       this.fileContentBase64 = item.contentBase64;
     } else if (item.type === SecretType.Authenticator) {
-      this.websiteUrl = item.websiteUrl ?? "";
+      this.websiteUrl = ((v) => (v ? v : ""))(item.websiteUrl);
       this.authenticatorIssuer = item.issuer;
       this.authenticatorAccount = item.account;
       this.authenticatorSecret = item.totpSecret;
@@ -102,7 +102,7 @@ export class SecretFormState {
       this.expirationMonth = item.expirationMonth;
       this.expirationYear = item.expirationYear;
       this.cardCvv = item.cvv;
-      this.cardNotes = item.notes ?? "";
+      this.cardNotes = ((v) => (v ? v : ""))(item.notes);
     }
   }
 

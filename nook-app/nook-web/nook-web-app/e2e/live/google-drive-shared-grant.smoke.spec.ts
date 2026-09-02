@@ -108,7 +108,7 @@ describeLive('live Google Drive shared-folder grant', () => {
       expect(joinerFolder.id).toBe(folderId)
 
       const joinerFile = await getFileMetadata(joinerToken, markerFileId)
-      expect(joinerFile.parents ?? []).toContain(folderId)
+      expect(((v) => (v ? v : []))(joinerFile.parents)).toContain(folderId)
       expect(joinerFile.name).toBe(markerName)
     }
   })

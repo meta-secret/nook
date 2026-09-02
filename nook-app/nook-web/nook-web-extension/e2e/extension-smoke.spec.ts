@@ -37,8 +37,9 @@ import {
 import { lockExtensionSession } from './helpers/paired-pin-extension'
 import { ExtensionSessionMessageType } from '../src/offscreen/session-message-dispatch'
 
-const chromiumExecutablePath =
-  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim() ?? ''
+const chromiumExecutablePath = ((v) => (v ? v : ''))(
+  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim(),
+)
 
 test('sets up the extension device first and sends its public keys to Simple Vault', async ({
   browserName,

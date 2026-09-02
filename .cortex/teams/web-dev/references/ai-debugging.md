@@ -294,8 +294,10 @@ page logger API so the current UI state is not destroyed by navigation:
 
 ```js
 async () => {
-  await window.__nookLog?.flush();
-  return window.__nookLog?.dump({ minLevel: "debug", limit: 200 }) ?? [];
+  const logger = window.__nookLog;
+  if (!logger) return [];
+  await logger.flush();
+  return logger.dump({ minLevel: "debug", limit: 200 });
 };
 ```
 

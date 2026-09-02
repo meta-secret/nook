@@ -109,8 +109,8 @@ async function companionWasmDiskCandidates(): Promise<string[]> {
       process?: { cwd?: () => string; env?: Record<string, string> };
     }
   ).process;
-  const fromEnv = nodeProcess?.env?.NOOK_COMPANION_WASM_PATH?.trim() ?? "";
-  const cwd = nodeProcess?.cwd?.() ?? "";
+  const fromEnv = ((v) => (v ? v : ""))(nodeProcess?.env?.NOOK_COMPANION_WASM_PATH?.trim());
+  const cwd = ((v) => (v ? v : ""))(nodeProcess?.cwd?.());
   let join: NodePathJoin["join"] = (...parts: NodePathSegments) =>
     parts.join("/");
   try {

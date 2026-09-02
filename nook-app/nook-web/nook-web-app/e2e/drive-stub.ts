@@ -74,7 +74,7 @@ export function createLocalE2eGoogleDriveVaultStub(
 
   function parseParentsFromBody(body: string): string {
     const match = body.match(/"parents"\s*:\s*\[\s*"([^"]+)"/)
-    return match?.[1] ?? 'appDataFolder'
+    return ((...[v = 'appDataFolder']) => v)(match?.[1])
   }
 
   function eventFileId(digest: string) {
@@ -162,7 +162,9 @@ export function createLocalE2eGoogleDriveVaultStub(
 
       await page.route('https://www.googleapis.com/**', async (route) => {
         if (accessToken) {
-          const authorization = route.request().headers().authorization ?? ''
+          const authorization = ((v) => (v ? v : ''))(
+            route.request().headers().authorization,
+          )
           if (authorization !== `Bearer ${accessToken}`) {
             await route.fallback()
             return
@@ -173,7 +175,7 @@ export function createLocalE2eGoogleDriveVaultStub(
         const url = request.url().split('?')[0]!
         const method = request.method()
         const fullUrl = request.url()
-        const bodyText = request.postData() ?? ''
+        const bodyText = ((v) => (v ? v : ''))(request.postData())
 
         if (url === 'https://www.googleapis.com/drive/v3/about') {
           await route.fulfill({
@@ -223,7 +225,7 @@ export function createLocalE2eGoogleDriveVaultStub(
           let email: string
           try {
             const parsed = JSON.parse(bodyText) as { emailAddress?: string }
-            email = parsed.emailAddress?.trim() ?? ''
+            email = ((v) => (v ? v : ''))(parsed.emailAddress?.trim())
           } catch {
             email = ''
           }

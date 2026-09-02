@@ -116,8 +116,8 @@ export async function websiteAuthenticatorOptions({
   sender,
   dependencies,
 }: WebsiteAuthenticatorOptionsArgs): Promise<AuthenticatorOptionsResponse> {
-  const resolvedDependencies =
-    dependencies ?? websiteAuthenticatorOptionsDependencies
+  const resolvedDependencies = ((v) =>
+    v ? v : websiteAuthenticatorOptionsDependencies)(dependencies)
   const authorizationGeneration =
     await resolvedDependencies.accountPickerAuthorizationGeneration()
   if (
@@ -414,9 +414,9 @@ export async function websiteAuthenticatorFill({
   message,
   sender,
 }: WebsiteAuthenticatorFillArgs): Promise<AuthenticatorCodeResponse> {
-  const authorizationGeneration =
-    message.payload.authorizationGeneration ??
-    (await accountPickerAuthorizationGeneration())
+  const {
+    authorizationGeneration = await accountPickerAuthorizationGeneration(),
+  } = message.payload
   if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
     return { ok: false, reason: 'authenticator-locked' }
   }

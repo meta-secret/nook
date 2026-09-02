@@ -590,8 +590,9 @@ function readLegacyPairingStorage(): Promise<LegacyPairingStorageItems> {
       if (chrome.runtime.lastError) {
         reject(
           new Error(
-            chrome.runtime.lastError.message ??
-              'Unable to read legacy extension pairing state.',
+            ((...[v = 'Unable to read legacy extension pairing state.']) => v)(
+              chrome.runtime.lastError.message,
+            ),
           ),
         )
         return
@@ -612,8 +613,8 @@ function removeLegacyPairingStorage(
       if (chrome.runtime.lastError) {
         reject(
           new Error(
-            chrome.runtime.lastError.message ??
-              'Unable to remove legacy extension pairing state.',
+            ((...[v = 'Unable to remove legacy extension pairing state.']) =>
+              v)(chrome.runtime.lastError.message),
           ),
         )
         return

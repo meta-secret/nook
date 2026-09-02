@@ -28,8 +28,10 @@ export async function waitForStubVaultState(
     target.stub.getEventFileContents,
     predicate,
     {
-      timeoutMs: options?.timeoutMs ?? ENROLLMENT_UNLOCK_TIMEOUT_MS,
-      intervalMs: options?.intervalMs ?? 100,
+      timeoutMs: ((...[v = ENROLLMENT_UNLOCK_TIMEOUT_MS]) => v)(
+        options?.timeoutMs,
+      ),
+      intervalMs: ((...[v = 100]) => v)(options?.intervalMs),
     },
   )
 }

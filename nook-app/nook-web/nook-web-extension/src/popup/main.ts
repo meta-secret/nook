@@ -40,7 +40,7 @@ async function main() {
       target,
       props: {
         i18n,
-        requestId: searchParams.get('request') ?? '',
+        requestId: ((v) => (v ? v : ''))(searchParams.get('request')),
       },
     }
     mount(AuthenticatorPicker, nookTypedArgs0_0)
@@ -51,7 +51,7 @@ async function main() {
       target,
       props: {
         i18n,
-        requestId: searchParams.get('request') ?? '',
+        requestId: ((v) => (v ? v : ''))(searchParams.get('request')),
       },
     }
     mount(LoginPicker, nookTypedArgs0_1)

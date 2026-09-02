@@ -10,7 +10,9 @@ dotenv.config({
   ),
 })
 
-export const githubPat = process.env.NOOK_GITHUB_PAT?.trim() ?? ''
+export const githubPat = ((v) => (v ? v : ''))(
+  process.env.NOOK_GITHUB_PAT?.trim(),
+)
 /** Legacy default for docs; GitHub e2e suites use {@link createE2eGithubRepoName}. */
 export const DEFAULT_GITHUB_REPO = 'nook'
 

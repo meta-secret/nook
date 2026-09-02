@@ -20,14 +20,14 @@ async function listLocalVaultEntries(page: import('@playwright/test').Page) {
     return new Promise<LocalVaultRegistryEntry[]>((resolve, reject) => {
       const request = indexedDB.open('nook_db')
       request.onerror = () =>
-        reject(request.error ?? new Error('idb open failed'))
+        reject(((v) => (v ? v : new Error('idb open failed')))(request.error))
       request.onsuccess = () => {
         const db = request.result
         const tx = db.transaction('vault', 'readonly')
         const store = tx.objectStore('vault')
         const getReq = store.get('vault_registry')
         getReq.onerror = () =>
-          reject(getReq.error ?? new Error('idb read failed'))
+          reject(((v) => (v ? v : new Error('idb read failed')))(getReq.error))
         getReq.onsuccess = () => {
           try {
             const raw = getReq.result
@@ -35,7 +35,7 @@ async function listLocalVaultEntries(page: import('@playwright/test').Page) {
               typeof raw === 'string'
                 ? (JSON.parse(raw) as { vaults?: LocalVaultRegistryEntry[] })
                 : { vaults: [] }
-            resolve(parsed.vaults ?? [])
+            resolve(((v) => (v ? v : []))(parsed.vaults))
           } catch (error) {
             reject(error)
           }
