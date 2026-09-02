@@ -759,6 +759,7 @@ mod tests {
                 ..Default::default()
             },
             authenticator: AuthenticationAuthenticatorObservationFacts {
+                passkey_account_availability: AuthenticationPasskeyAccountAvailability::Ready,
                 detailed_passkey_control:
                     AuthenticationDetailedPasskeyControlObservation::Candidates(vec![
                         AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(control),
