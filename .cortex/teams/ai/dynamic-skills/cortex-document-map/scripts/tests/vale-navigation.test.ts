@@ -20,7 +20,6 @@ function runValidFixture() {
       'CORTEX_ROOT=.vale/fixtures/cortex-navigation/valid/.cortex',
     ],
     cwd: REPOSITORY_ROOT,
-    env: process.env,
     stderr: 'pipe',
     stdout: 'pipe',
   });
@@ -39,7 +38,6 @@ function runInvalidFixture() {
       ),
     ],
     cwd: REPOSITORY_ROOT,
-    env: process.env,
     stderr: 'pipe',
     stdout: 'pipe',
   });
