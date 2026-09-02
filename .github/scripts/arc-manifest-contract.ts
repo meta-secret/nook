@@ -655,6 +655,7 @@ remoteWorkflow.requireAll([
   "ci:pr:e2e) task _ci:main",
   "inputs.tasks != '' && inputs.task != ''",
   "(inputs.tasks == '' || inputs.task == '')",
+  "name: test-inventory-${{ github.sha }}",
 ]);
 remoteWorkflow.requireBefore({
   first: "name: Report Kubernetes worker node",

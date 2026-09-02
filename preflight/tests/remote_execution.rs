@@ -190,6 +190,7 @@ fn remote_task_batches_are_validated_and_keep_requested_order() -> Result<()> {
         "preflight,preflight",
         "preflight,arbitrary:command",
         "preflight, rust:ci",
+        "preflight,agent-stats:inventory",
         "preflight,web:e2e",
         "preflight,extension:check:fast",
         "preflight,extension:e2e",
@@ -445,6 +446,7 @@ fn expensive_remote_validation_requires_the_current_base() -> Result<()> {
     assert!(remote_tasks.contains("remote-task-batch.sh --requires-current-base"));
     for tasks in [
         "loom:verify",
+        "agent-stats:inventory",
         "web:e2e",
         "extension:check:fast",
         "extension:e2e",

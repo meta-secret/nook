@@ -50,9 +50,9 @@ task loom:agent-stats-control <<'JSON'
 JSON
 ```
 
-The scratch log supplies the test inventory collected by hosted exact-head
-validation. The control entrypoint rejects `includeTestInventory: true` because
-that option invokes product test runners locally.
+Gizmo dispatches `task remote TASK_NAME=agent-stats:inventory`. Download the
+artifact with `gh run download <run-id> -n test-inventory-<head-sha> -D <dir>`,
+then copy its JSON into the scratch log as `test_inventory`. No local fallback.
 
 ### Agent-local path token
 

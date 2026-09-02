@@ -157,14 +157,10 @@ export function assertHostedTestInventory(
   inventory: UntrustedYamlMap | false,
 ): void {
   if (!inventory) {
-    hostedTestInventoryFailure();
+    throw new Error(
+      'Agent statistics assembly requires typed test_inventory from hosted exact-head validation.',
+    );
   }
-}
-
-function hostedTestInventoryFailure(): never {
-  throw new Error(
-    'Agent statistics assembly requires typed test_inventory from hosted exact-head validation.',
-  );
 }
 
 function decodeFailure(errors: readonly FieldError[]): string {

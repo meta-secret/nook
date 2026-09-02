@@ -303,10 +303,11 @@ export function validateAgentStatsYaml(
       };
       const totalProperty = untrustedYamlProperty(totalPropertyArgs);
       if (
-        totalProperty.presence === UntrustedYamlPropertyPresence.Present &&
-        isNonNegativeInt(totalProperty.value) &&
-        totalProperty.value !== sum
+        totalProperty.presence === UntrustedYamlPropertyPresence.Absent ||
+        !isNonNegativeInt(totalProperty.value)
       ) {
+        errors.push('test_inventory.total must be a non-negative integer');
+      } else if (totalProperty.value !== sum) {
         errors.push('test_inventory.total must equal the sum of by_type');
       }
     }

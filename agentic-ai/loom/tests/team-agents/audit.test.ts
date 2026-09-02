@@ -373,12 +373,12 @@ describe('canonical Cortex team authority', () => {
       const authorityPath = join(fixtureRoot, '.cortex/AGENTS.md');
       await writeFile(
         authorityPath,
-        `${await readFile(authorityPath, 'utf8')}\nWorkers must run product tests locally.\n\n- Run repository validation on the local host.\n\nWorkers are required to:\n\n- run product builds locally.\n`,
+        `${await readFile(authorityPath, 'utf8')}\nWorkers must run product tests locally.\nWorkers must run unit tests locally.\nRun all tests locally.\n\n- Run repository validation on the local host.\n\nWorkers are required to:\n\n- run product builds locally.\n`,
         'utf8',
       );
 
       const report = auditTeamAgents({ repoRoot: fixtureRoot });
-      expect(report.findings).toHaveLength(3);
+      expect(report.findings).toHaveLength(5);
       expect(report.findings.map((finding) => finding.message)).toEqual(
         expect.arrayContaining([
           expect.stringContaining('Workers must run product tests locally.'),
@@ -388,29 +388,6 @@ describe('canonical Cortex team authority', () => {
           expect.stringContaining(
             'Workers are required to run product builds locally.',
           ),
-        ]),
-      );
-    } finally {
-      await rm(fixtureRoot, REMOVE_RECURSIVELY);
-    }
-  });
-
-  test('rejects locally scoped test directives with arbitrary modifiers', async () => {
-    const fixtureRoot = await writableCortexAuthorityFixture();
-    try {
-      const authorityPath = join(fixtureRoot, '.cortex/AGENTS.md');
-      await writeFile(
-        authorityPath,
-        `${await readFile(authorityPath, 'utf8')}\nWorkers must run unit tests locally.\nRun all tests locally.\n`,
-        'utf8',
-      );
-
-      const report = auditTeamAgents({ repoRoot: fixtureRoot });
-      expect(report.findings).toHaveLength(2);
-      expect(report.findings.map((finding) => finding.message)).toEqual(
-        expect.arrayContaining([
-          expect.stringContaining('Workers must run unit tests locally.'),
-          expect.stringContaining('Run all tests locally.'),
         ]),
       );
     } finally {
@@ -516,7 +493,7 @@ describe('canonical Cortex team authority', () => {
       const authorityPath = join(fixtureRoot, '.cortex/AGENTS.md');
       await writeFile(
         authorityPath,
-        `${await readFile(authorityPath, 'utf8')}\nWorkers must run cargo test locally.\nAgents are required to invoke task web:check locally.\n\n- Run bun test locally.\n\nWorkers shall:\n\n- execute wasm-pack locally.\n`,
+        `${await readFile(authorityPath, 'utf8')}\nWorkers must run cargo test.\nAgents are required to invoke task web:check locally.\n\n- Run bun test locally.\n\nWorkers shall:\n\n- execute wasm-pack locally.\n`,
         'utf8',
       );
 
@@ -524,7 +501,7 @@ describe('canonical Cortex team authority', () => {
       expect(report.findings).toHaveLength(4);
       expect(report.findings.map((finding) => finding.message)).toEqual(
         expect.arrayContaining([
-          expect.stringContaining('Workers must run cargo test locally.'),
+          expect.stringContaining('Workers must run cargo test.'),
           expect.stringContaining(
             'Agents are required to invoke task web:check locally.',
           ),

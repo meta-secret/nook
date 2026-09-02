@@ -18,6 +18,7 @@ const EXPECTED_REMOTE_CATALOG: &[&str] = &[
     "arc:runtime",
     "rust:ci",
     "loom:verify",
+    "agent-stats:inventory",
     "web:build",
     "web:e2e",
     "extension:check:fast",

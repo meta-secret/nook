@@ -339,12 +339,14 @@ function appendLocalExecutionGrantFindings(
           )
         : false,
     );
+    const executionDirection =
+      AGENT_EXECUTION_DIRECTION.test(normalizedStatement) ||
+      IMPERATIVE_EXECUTION_DIRECTION.test(normalizedStatement);
     if (
-      (AGENT_EXECUTION_DIRECTION.test(normalizedStatement) ||
-        IMPERATIVE_EXECUTION_DIRECTION.test(normalizedStatement) ||
-        commandDirection) &&
-      LOCAL_EXECUTION.test(statement) &&
-      !NEGATED_LOCAL_EXECUTION.test(statement)
+      commandDirection ||
+      (executionDirection &&
+        LOCAL_EXECUTION.test(statement) &&
+        !NEGATED_LOCAL_EXECUTION.test(statement))
     ) {
       request.findings.push({
         code: `invalid-cortex-${request.authorityName.toLowerCase()}-authority`,

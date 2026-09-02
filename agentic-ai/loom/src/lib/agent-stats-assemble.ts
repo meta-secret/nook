@@ -16,7 +16,11 @@ import {
   type AgentStatsGitHubEvidenceRequest,
 } from './agent-stats-github.ts';
 import { validationRetriggerCount } from './agent-stats-validation-cycles.ts';
-import { LoomFailureCode, loomFailureDetail } from '../loom-failure.ts';
+import {
+  LoomFailureCode,
+  loomFailure,
+  loomFailureDetail,
+} from '../loom-failure.ts';
 
 import type { UntrustedYamlPropertyArgs } from './guards.ts';
 import type { RunCommandArgs } from './run.ts';
@@ -466,6 +470,13 @@ function countTestInventory(args: CountTestInventoryArgs): UntrustedYamlMap {
   };
 }
 
+if (import.meta.main) {
+  const headSha = process.env.GITHUB_SHA ?? '';
+  process.stdout.write(
+    JSON.stringify(countTestInventory({ repoRoot: process.cwd(), headSha })),
+  );
+}
+
 type CountNextestArgs = {
   readonly repoRoot: string;
   readonly filter: string;
@@ -481,7 +492,7 @@ function countNextest(args: CountNextestArgs): number {
   };
   const listed = runCommand(listedArgs3);
   if (listed.exitCode !== 0) {
-    return 0;
+    loomFailure(LoomFailureCode.CommandFailed);
   }
   const matches = listed.stdout.match(/^[^\s].*:/gm);
   if (!matches) {
@@ -499,7 +510,7 @@ function countVitest(repoRoot: string): number {
   };
   const listed = runCommand(listedArgs2);
   if (listed.exitCode !== 0) {
-    return 0;
+    loomFailure(LoomFailureCode.CommandFailed);
   }
   const lines = listed.stdout
     .split(/\r?\n/)
@@ -517,7 +528,7 @@ function countPlaywright(repoRoot: string): number {
   };
   const listed = runCommand(listedArgs);
   if (listed.exitCode !== 0) {
-    return 0;
+    loomFailure(LoomFailureCode.CommandFailed);
   }
   const matches = listed.stdout.match(/^\s+\d+/gm);
   if (!matches) {

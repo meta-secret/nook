@@ -124,6 +124,12 @@ describe('validateAgentStatsYaml', () => {
     const result = validateAgentStatsYaml(resultArgs2);
     expect(result.ok).toBe(true);
     expect(result.errors).toEqual([]);
+    expect(
+      validateAgentStatsYaml({
+        content: validYaml.replace('\n  total: 4\n', '\n'),
+        expectedPrNumber: 481,
+      }).errors,
+    ).toContain('test_inventory.total must be a non-negative integer');
   });
 
   test('preserves validation for schema-v3 records', () => {
