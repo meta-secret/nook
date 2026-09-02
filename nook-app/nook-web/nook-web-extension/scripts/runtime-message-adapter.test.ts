@@ -19,6 +19,7 @@ import {
   sendAuthenticatorBackupAttachRuntimeMessage,
   sendAuthenticatorCodeRuntimeMessage,
   sendAuthenticatorEnrollmentConfirmRuntimeMessage,
+  sendAuthenticatorEnrollmentDismissRuntimeMessage,
   sendAuthenticatorEnrollmentStageRuntimeMessage,
   sendAuthenticatorOptionsRuntimeMessage,
   sendAuthenticatorPickerOpenRuntimeMessage,
@@ -39,6 +40,7 @@ import {
   WebsiteAuthenticatorBackupAttachMessageType,
   WebsiteAuthenticatorEnrollCodeMessageType,
   WebsiteAuthenticatorEnrollConfirmMessageType,
+  WebsiteAuthenticatorEnrollDismissMessageType,
   WebsiteAuthenticatorEnrollPreviewMessageType,
   WebsiteAuthenticatorEnrollStageMessageType,
 } from '../src/lib/enrollment-messages'
@@ -170,6 +172,12 @@ const authenticatorConfirmMessage: Parameters<
     vaultStoreId: 'vault',
     stageId: 'stage',
   },
+}
+const authenticatorDismissMessage: Parameters<
+  typeof sendAuthenticatorEnrollmentDismissRuntimeMessage
+>[0] = {
+  type: WebsiteAuthenticatorEnrollDismissMessageType.NookWebsiteAuthenticatorEnrollDismiss,
+  payload: { origin: 'https://example.test', stageId: 'stage' },
 }
 const generatedPasswordMessage: Parameters<
   typeof sendGeneratePasswordRuntimeMessage
@@ -597,6 +605,35 @@ describe('runtime message adapters', () => {
         AuthenticatorEnrollmentConfirmResponseKind.Completed,
       )
     }
+  })
+
+  test('reports whether enrollment dismissal reached the service worker', async () => {
+    installRuntimeMock({
+      kind: RuntimeMockKind.Response,
+      response: { ok: true },
+    })
+    await expect(
+      sendAuthenticatorEnrollmentDismissRuntimeMessage(
+        authenticatorDismissMessage,
+      ),
+    ).resolves.toBe(true)
+
+    installRuntimeMock({
+      kind: RuntimeMockKind.Response,
+      response: { ok: false, reason: 'authenticator-forbidden-origin' },
+    })
+    await expect(
+      sendAuthenticatorEnrollmentDismissRuntimeMessage(
+        authenticatorDismissMessage,
+      ),
+    ).resolves.toBe(false)
+
+    installRuntimeMock({ kind: RuntimeMockKind.LastError })
+    await expect(
+      sendAuthenticatorEnrollmentDismissRuntimeMessage(
+        authenticatorDismissMessage,
+      ),
+    ).resolves.toBe(false)
   })
 
   test('rejects blank and contradictory authenticator enrollment identities through Rust', async () => {

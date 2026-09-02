@@ -68,7 +68,7 @@ type AuthenticatorPickerQueryResponse =
   | AuthenticatorFailureResponse
   | { ok: true; origin: string; accounts: WebsiteAuthenticatorOption[] }
 type AuthenticatorCodeResponse =
-  AuthenticatorFailureResponse | { ok: true; code: string }
+  AuthenticatorFailureResponse | { ok: true; code: string; expiresAt: number }
 type AuthenticatorPreviewResponse =
   | AuthenticatorFailureResponse
   | { ok: true; status: WebsiteAuthenticatorResponseStatus.Unavailable }
@@ -557,59 +557,57 @@ export async function websiteAuthenticatorEnrollStage({
   message,
   sender,
 }: WebsiteAuthenticatorEnrollStageArgs): Promise<AuthenticatorStageResponse> {
-  const authorizationGeneration = await accountPickerAuthorizationGeneration()
   const otpauthUri = { value: message.payload.otpauthUri }
   message.payload.otpauthUri = ''
-  if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
-    otpauthUri.value = ''
-    return { ok: false, reason: 'authenticator-locked' }
-  }
-  const nookTypedArgs0_10: Parameters<
-    typeof authorizedWebsiteGrant
-  >[0]['reasons'] = {
-    forbidden: 'authenticator-forbidden-origin',
-    missing: 'authenticator-vault-not-granted',
-    locked: 'authenticator-locked',
-  }
-  const accessArgs: Parameters<typeof authorizedWebsiteGrant>[0] = {
-    origin: message.payload.origin,
-    vaultStoreId: message.payload.vaultStoreId,
-    sender,
-    reasons: nookTypedArgs0_10,
-  }
-  const access = await authorizedWebsiteGrant(accessArgs)
-  if ('response' in access) {
-    otpauthUri.value = ''
-    return access.response
-  }
-  if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
-    otpauthUri.value = ''
-    return { ok: false, reason: 'authenticator-locked' }
-  }
-  purgeExpiredStagedEnrollments()
-  for (const [stageId, staged] of stagedAuthenticatorEnrollments) {
-    if (staged.origin === message.payload.origin) {
-      clearStagedEnrollment(stageId)
+  try {
+    const authorizationGeneration = await accountPickerAuthorizationGeneration()
+    if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
+      return { ok: false, reason: 'authenticator-locked' }
     }
+    const nookTypedArgs0_10: Parameters<
+      typeof authorizedWebsiteGrant
+    >[0]['reasons'] = {
+      forbidden: 'authenticator-forbidden-origin',
+      missing: 'authenticator-vault-not-granted',
+      locked: 'authenticator-locked',
+    }
+    const accessArgs: Parameters<typeof authorizedWebsiteGrant>[0] = {
+      origin: message.payload.origin,
+      vaultStoreId: message.payload.vaultStoreId,
+      sender,
+      reasons: nookTypedArgs0_10,
+    }
+    const access = await authorizedWebsiteGrant(accessArgs)
+    if ('response' in access) return access.response
+    if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
+      return { ok: false, reason: 'authenticator-locked' }
+    }
+    purgeExpiredStagedEnrollments()
+    for (const [stageId, staged] of stagedAuthenticatorEnrollments) {
+      if (staged.origin === message.payload.origin) {
+        clearStagedEnrollment(stageId)
+      }
+    }
+    const stageId = crypto.randomUUID()
+    const stagedEnrollment: Parameters<
+      typeof stagedAuthenticatorEnrollments.set
+    >[1] = {
+      stageId,
+      authorizationGeneration,
+      origin: message.payload.origin,
+      vaultStoreId: message.payload.vaultStoreId,
+      otpauthUri: otpauthUri.value,
+      expiresAt: Date.now() + STAGED_ENROLLMENT_TTL_MS,
+    }
+    if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
+      stagedEnrollment.otpauthUri = ''
+      return { ok: false, reason: 'authenticator-locked' }
+    }
+    stagedAuthenticatorEnrollments.set(stageId, stagedEnrollment)
+    return { ok: true, stageId }
+  } finally {
+    otpauthUri.value = ''
   }
-  const stageId = crypto.randomUUID()
-  const nookTypedArgs0_11: Parameters<
-    typeof stagedAuthenticatorEnrollments.set
-  >[1] = {
-    stageId,
-    authorizationGeneration,
-    origin: message.payload.origin,
-    vaultStoreId: message.payload.vaultStoreId,
-    otpauthUri: otpauthUri.value,
-    expiresAt: Date.now() + STAGED_ENROLLMENT_TTL_MS,
-  }
-  if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
-    nookTypedArgs0_11.otpauthUri = ''
-    return { ok: false, reason: 'authenticator-locked' }
-  }
-  stagedAuthenticatorEnrollments.set(stageId, nookTypedArgs0_11)
-  otpauthUri.value = ''
-  return { ok: true, stageId }
 }
 
 type WebsiteAuthenticatorEnrollCodeArgs = {
@@ -654,11 +652,15 @@ export async function websiteAuthenticatorEnrollCode({
   }
   try {
     const response = await stagedAuthenticatorCodeFromSession(staged.otpauthUri)
-    return authenticatorEnrollmentAuthorizationIsCurrent(
-      staged.authorizationGeneration,
-    )
-      ? response
-      : { ok: false, reason: 'authenticator-locked' }
+    if (
+      authenticatorEnrollmentAuthorizationIsCurrent(
+        staged.authorizationGeneration,
+      )
+    ) {
+      return response
+    }
+    response.code = ''
+    return { ok: false, reason: 'authenticator-locked' }
   } catch {
     return { ok: false, reason: 'authenticator-code-failed' }
   }

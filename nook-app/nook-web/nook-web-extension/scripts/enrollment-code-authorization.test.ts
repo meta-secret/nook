@@ -15,6 +15,7 @@ describe('staged enrollment code authorization', () => {
     const response: AuthenticatorCodeResponse = {
       kind: AuthenticatorCodeResponseKind.Ready,
       code: '123456',
+      expiresAt: Date.now() + 30_000,
     }
     const host: Parameters<typeof fillStagedEnrollmentCode>[0]['host'] = {
       sendAuthenticatorCodeRuntimeMessage: async () => ({

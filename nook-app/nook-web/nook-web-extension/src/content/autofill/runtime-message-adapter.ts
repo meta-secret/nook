@@ -466,6 +466,19 @@ export async function sendAuthenticatorEnrollmentConfirmRuntimeMessage(
   }
 }
 
+export async function sendAuthenticatorEnrollmentDismissRuntimeMessage(
+  message: WebsiteAuthenticatorEnrollDismissMessage,
+): Promise<boolean> {
+  const delivery = await sendRuntimeMessage(message)
+  return (
+    delivery.kind === RuntimeMessageDeliveryKind.Delivered &&
+    !!delivery.response &&
+    typeof delivery.response === 'object' &&
+    'ok' in delivery.response &&
+    delivery.response.ok === true
+  )
+}
+
 export async function sendAuthenticationOutcomeRuntimeMessage(
   message: AuthenticationOutcomeClassifyMessage,
 ): Promise<RuntimeMessageDelivery<AuthenticationOutcomeResponse>> {

@@ -60,7 +60,12 @@ export const routeAutofillMessage: AutofillMessageListener =
         clearAuthenticationSurface(),
         cancelActiveEnrollmentCeremony(),
       ])
-        .then(() => {
+        .then(([, enrollmentCanceled]) => {
+          if (!enrollmentCanceled) {
+            const response: Parameters<typeof sendResponse>[0] = { ok: false }
+            sendResponse(response)
+            return
+          }
           scanState.schedule()
           const response: Parameters<typeof sendResponse>[0] = { ok: true }
           sendResponse(response)

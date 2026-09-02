@@ -224,28 +224,28 @@ type DismissStagedEnrollmentArgs = {
 async function dismissStagedEnrollment({
   host,
   stageId,
-}: DismissStagedEnrollmentArgs): Promise<void> {
+}: DismissStagedEnrollmentArgs): Promise<boolean> {
   const message: Parameters<
     typeof host.sendAuthenticatorEnrollmentDismissRuntimeMessage
   >[0] = {
     type: WebsiteAuthenticatorEnrollDismissMessageType.NookWebsiteAuthenticatorEnrollDismiss,
     payload: { origin: location.origin, stageId },
   }
-  await host.sendAuthenticatorEnrollmentDismissRuntimeMessage(message)
+  return host.sendAuthenticatorEnrollmentDismissRuntimeMessage(message)
 }
 
-export async function cancelActiveEnrollmentCeremony(): Promise<void> {
+export async function cancelActiveEnrollmentCeremony(): Promise<boolean> {
   enrollmentAuthorizationGeneration += 1
   holdEnrollmentWidgetAfterSave = false
   stopPendingEnrollmentWatch()
   const ceremony = activeEnrollmentCeremony
   activeEnrollmentCeremony = { kind: ActiveEnrollmentCeremonyKind.Idle }
-  if (ceremony.kind !== ActiveEnrollmentCeremonyKind.Staged) return
+  if (ceremony.kind !== ActiveEnrollmentCeremonyKind.Staged) return true
   const dismissArgs: Parameters<typeof dismissStagedEnrollment>[0] = {
     host: ceremony.host,
     stageId: ceremony.stageId,
   }
-  await dismissStagedEnrollment(dismissArgs)
+  return dismissStagedEnrollment(dismissArgs)
 }
 
 export function requestFreshEnrollmentActions(host: EnrollmentFlowHost): void {

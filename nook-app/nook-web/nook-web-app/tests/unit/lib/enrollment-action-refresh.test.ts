@@ -4,7 +4,10 @@ import { requestFreshEnrollmentActions } from '../../../../nook-web-extension/sr
 describe('enrollment action refresh', () => {
   test('clears stale actions before requesting a remounted classification', () => {
     const panel = document.createElement('section')
-    panel.append(document.createElement('button'))
+    const enrollmentActions = document.createElement('div')
+    enrollmentActions.className = 'enrollment-actions'
+    enrollmentActions.append(document.createElement('button'))
+    panel.append(enrollmentActions)
     const requestWorkflowReclassification = vi.fn()
     const host = {
       panel,
