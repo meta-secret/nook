@@ -224,16 +224,16 @@ mod tests {
 
     const TEST_STORE_ID: &str = "store_conflictux1";
 
-    fn encrypted_secret(secret_id: &str) -> EncryptedSecretPayload {
-        EncryptedSecretPayload {
-            id: SecretId::parse(secret_id).expect("valid test secret id"),
+    fn encrypted_secret(secret_id: &str) -> anyhow::Result<EncryptedSecretPayload> {
+        Ok(EncryptedSecretPayload {
+            id: SecretId::parse(secret_id)?,
             secret_type: SecretType::SecureNote,
             ciphertext: OpaqueCiphertext::from_trusted("encrypted-secret".to_owned()),
             identity_fingerprint: SecretFingerprint::from_trusted(
                 "identity-fingerprint".to_owned(),
             ),
             fingerprint: SecretFingerprint::from_trusted("version-fingerprint".to_owned()),
-        }
+        })
     }
 
     fn accepted_graph_fixture(
@@ -242,6 +242,7 @@ mod tests {
         let signing = SigningIdentity::generate()?.0;
         let secrets = with_secret
             .then(|| encrypted_secret("secret_conflictux1"))
+            .transpose()?
             .into_iter()
             .collect();
         let event = build_genesis_import_event(
@@ -523,7 +524,7 @@ mod tests {
             &signing,
             genesis,
             crate::VaultOperation::SecretCreated {
-                secret: encrypted_secret(secret_id.as_str()),
+                secret: encrypted_secret(secret_id.as_str())?,
             },
         )?;
         append_operation(
