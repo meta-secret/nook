@@ -93,10 +93,12 @@ function proveStableCache(request: {
   readonly kubeconfigPath: string;
   readonly buildkitNodes: readonly string[];
 }): void {
+  const [firstNode = "", secondNode = "", thirdNode = ""] =
+    request.buildkitNodes;
   const forbidden: BuildJobRequest = {
     kubeconfigPath: request.kubeconfigPath,
     name: "cache-stable-write-denied",
-    nodeName: request.buildkitNodes[2] ?? "",
+    nodeName: thirdNode,
     buildkitAddress: BUILDKIT_ADDRESS,
     input: "forbidden-stable-write",
     dockerConfigSecret: REMOTE_SECRET,
@@ -114,7 +116,7 @@ function proveStableCache(request: {
   const publish: BuildJobRequest = {
     kubeconfigPath: request.kubeconfigPath,
     name: "cache-main-publish",
-    nodeName: request.buildkitNodes[0] ?? "",
+    nodeName: firstNode,
     buildkitAddress: BUILDKIT_ADDRESS,
     input: "main-cache-input",
     dockerConfigSecret: ADMIN_SECRET,
@@ -149,7 +151,7 @@ function proveStableCache(request: {
   const freshShard: BuildJobRequest = {
     kubeconfigPath: request.kubeconfigPath,
     name: "cache-main-fresh-shard",
-    nodeName: request.buildkitNodes[1] ?? "",
+    nodeName: secondNode,
     buildkitAddress: BUILDKIT_ADDRESS,
     input: "main-cache-input",
     dockerConfigSecret: REMOTE_SECRET,
@@ -165,10 +167,12 @@ function proveIsolatedCache(request: {
   readonly kubeconfigPath: string;
   readonly buildkitNodes: readonly string[];
 }): void {
+  const [firstNode = "", secondNode = "", thirdNode = ""] =
+    request.buildkitNodes;
   const isolatedA: BuildJobRequest = {
     kubeconfigPath: request.kubeconfigPath,
     name: "cache-isolated-a-publish",
-    nodeName: request.buildkitNodes[1] ?? "",
+    nodeName: secondNode,
     buildkitAddress: BUILDKIT_ADDRESS,
     input: "isolated-cache-a",
     dockerConfigSecret: REMOTE_SECRET,
@@ -179,7 +183,7 @@ function proveIsolatedCache(request: {
   const isolatedB: BuildJobRequest = {
     kubeconfigPath: request.kubeconfigPath,
     name: "cache-isolated-b-publish",
-    nodeName: request.buildkitNodes[2] ?? "",
+    nodeName: thirdNode,
     buildkitAddress: BUILDKIT_ADDRESS,
     input: "isolated-cache-b",
     dockerConfigSecret: REMOTE_SECRET,
@@ -195,7 +199,7 @@ function proveIsolatedCache(request: {
   const restoreA: BuildJobRequest = {
     ...isolatedA,
     name: "cache-isolated-a-restore",
-    nodeName: request.buildkitNodes[2] ?? "",
+    nodeName: thirdNode,
     buildkitAddress: BUILDKIT_ADDRESS,
     cacheImport: ISOLATED_A_CACHE_REF,
     cacheExport: "",
@@ -203,7 +207,7 @@ function proveIsolatedCache(request: {
   const restoreB: BuildJobRequest = {
     ...isolatedB,
     name: "cache-isolated-b-restore",
-    nodeName: request.buildkitNodes[0] ?? "",
+    nodeName: firstNode,
     buildkitAddress: BUILDKIT_ADDRESS,
     cacheImport: ISOLATED_B_CACHE_REF,
     cacheExport: "",
@@ -239,15 +243,16 @@ function runProof(): void {
   if (new Set(buildkitNodes).size !== 3) {
     throw new Error(`BuildKit anti-affinity: expected 3 nodes, got ${buildkitNodes}`);
   }
+  const [firstNode = ""] = buildkitNodes;
   proveBuildkitShardAccess({
     kubeconfigPath,
     name: "cache-shard-allowed",
-    nodeName: buildkitNodes[0] ?? "",
+    nodeName: firstNode,
   });
   proveNetworkPolicy({
     kubeconfigPath,
     name: "cache-network-denied",
-    nodeName: buildkitNodes[0] ?? "",
+    nodeName: firstNode,
   });
   proveStableCache({ kubeconfigPath, buildkitNodes });
   proveIsolatedCache({ kubeconfigPath, buildkitNodes });

@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 const root = resolve(import.meta.dir, "../..");
+const { PATH: executablePath = "" } = process.env;
 const taskfile = resolve(root, "infra/tasks/k0s.yml");
 const start = '        cni_migrated="$cni_was_unmasqueraded"\n';
 const end =
@@ -90,7 +91,7 @@ ${migrationSource()}
     cmd: [harness],
     env: {
       ...process.env,
-      PATH: `${mockBin}:${process.env.PATH ?? ""}`,
+      PATH: `${mockBin}:${executablePath}`,
       MOCK_LOG: log,
     },
     stdout: "inherit" as const,
