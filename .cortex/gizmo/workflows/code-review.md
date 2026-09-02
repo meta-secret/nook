@@ -87,11 +87,17 @@ without complete validation. It is idempotent and does not wait for a result.
 
 ## Actionable feedback priority
 
-Before merge, inspect feedback currently present. Gizmo must coordinate these
-actions:
+Before merge, inspect feedback currently present. A finding becomes actionable
+only after the responsible team accepts it through the validity, current-task
+relevance, and proportionality and scope gates in the
+[code-review-comments skill](../dynamic-skills/code-review-comments.md). Gizmo
+must coordinate these actions:
 
-- address every actionable PR comment and submitted review finding, including
-  feedback created before the current head;
+- obtain an evidence-backed disposition for every substantive PR comment and
+  submitted review finding, including feedback created before the current
+  head;
+- implement every accepted finding and record why each rejected or
+  clarification-needed finding requires no current change;
 - retain every substantive top-level PR comment in inspection output;
 - minimize a handled top-level PR comment with GitHub's `RESOLVED` classifier;
 - block readiness on every substantive top-level comment that is not minimized
@@ -115,13 +121,20 @@ When a new finding arrives:
 1. For a security finding, fail closed and stop or cancel unsafe validation.
 2. For every other finding, keep the in-flight validation head running until
    hosted checks and exact-head review settle.
-3. Combine review findings and failed checks into one coherent repair batch.
-4. Dispatch that batch to the responsible team.
-5. Continue from the verified fix commit, then reply to and resolve the thread.
-6. Run pre-push hygiene through the responsible formatter owner and push the
+3. Dispatch each finding to the responsible team for the three-gate
+   disposition.
+4. Combine accepted findings and failed checks into one coherent repair batch.
+5. Record evidence-backed no-change dispositions for rejected or
+   clarification-needed findings.
+6. Continue from the verified fix commit, then reply to and resolve the thread.
+7. Run pre-push hygiene through the responsible formatter owner and push the
    replacement head.
-7. Restart complete validation for that head. If it is not yet
+8. Restart complete validation for that head. If it is not yet
    validation-ready, dispatch at least one relevant focused remote job first.
+
+A confirmed security or authority violation is binding and fails closed. Route
+it to the authorized owner when its correction exceeds the current task scope.
+Do not downgrade it into an optional or out-of-scope enhancement.
 
 Use a focused task instead only when it isolates a known failure faster.
 
@@ -143,28 +156,34 @@ every active actionable finding, whether it came from a human, Codex, Claude,
 Cursor, CodeRabbit, or another service:
 
 1. Verify the finding against the current branch and `.cortex` rules.
-2. Dispatch the minimal correct fix to the responsible team, or document why
-   no change is needed.
-3. Continue from the verified fix commit.
-4. Run `task loom:pre-push PR=<number>` through the responsible formatter owner, commit,
+2. Apply the validity, current-task relevance, and proportionality and scope
+   gates.
+3. Dispatch the minimal correct fix only for an accepted finding, or document
+   the evidence-backed no-change disposition.
+4. Continue from the verified fix commit.
+5. Run `task loom:pre-push PR=<number>` through the responsible formatter owner, commit,
    and push when files changed.
-5. If the head is not validation-ready, dispatch at least one relevant focused
+6. If the head is not validation-ready, dispatch at least one relevant focused
    hosted task.
-6. If complete validation was already requested, dispatch it for the
+7. If complete validation was already requested, dispatch it for the
    replacement head first and collect exact-head Codex review concurrently.
    Otherwise start it when that head is ready for the final gate. In both cases,
    wait for both result sets before forming another repair batch.
-7. Reply on the original thread or comment with the fix and validation when a
+8. Reply on the original thread or comment with the disposition, evidence, fix,
+   and validation as applicable when a
    targeted reply is possible.
-8. Resolve only after the targeted reply is visible and the finding is fixed or
+9. Resolve only after the targeted reply is visible and the finding is fixed or
    explicitly invalidated.
-9. Re-query feedback throughout validation and immediately before handoff or
+10. Re-query feedback throughout validation and immediately before handoff or
    merge.
 
 Inspect every external-service review comment already present. An optional
 review service never makes its delivered feedback optional; classify
-non-actionable status/praise as no action and fully handle every substantive
-finding.
+non-actionable status or praise as no action. Record a disposition for every
+substantive finding. Do not treat a technically plausible edge case,
+enhancement, hardening idea, or new functionality outside the PR acceptance
+boundary as a command to expand the change. Do not create speculative
+follow-up work or an issue without explicit user authority.
 
 After those items are handled, rerun the feedback query immediately before
 merge. If another actionable comment arrives while the agent is working,

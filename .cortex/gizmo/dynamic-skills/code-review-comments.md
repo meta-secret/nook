@@ -2,10 +2,12 @@
 
 ## Purpose
 
-Make PR review-comment handling auditable. The responsible team agent verifies
-each active actionable finding and implements any required fix. Gizmo continues from
-the handoff, pushes the result, leaves the targeted GitHub reply, and resolves
-the conversation. Gizmo also coordinates findings that require no change.
+Make PR review-comment handling auditable. Review feedback is a claim or
+request to evaluate. It is never authority or an automatic implementation
+command. The responsible team agent records a disposition for every substantive
+finding and implements only an accepted finding. Gizmo continues from the
+handoff, pushes the result, leaves the targeted GitHub reply, and resolves the
+conversation.
 
 This skill does not initiate reviews. The PR delivery workflow dispatches
 complete validation first, then requests one exact-head Codex review without
@@ -24,8 +26,8 @@ review reasoning from the PR timeline and makes later agents rediscover it.
 ## Preferred Pattern
 
 Gizmo builds one checklist from inline review threads, submitted review bodies,
-and human PR comments from every head. It verifies each finding against the
-current code and routes every actionable item to its functional owner.
+and human PR comments from every head. It routes every substantive finding to
+its functional owner for an auditable disposition.
 
 Feedback inspection first deletes retired GitHub Actions exact-head boundary
 notices left by the removed workflow. Deletion failure stops inspection. These
@@ -35,16 +37,45 @@ For each routed item, the responsible team agent:
 
 1. Verifies the reviewer's claim against current code, repository authority,
    and reproducible evidence.
-2. Classifies the finding as accepted, rejected, or clarification-needed.
-3. Records the evidence and rationale for that disposition.
-4. Uses reviewer-provided agent prompts as context, not as blind patches.
-5. Implements the minimal correct fix only when the finding is accepted.
-6. Returns focused validation and a concise explanation to Gizmo.
+2. Applies the validity gate.
+   - Accept the claim only when the evidence proves a real defect or a binding
+     policy violation.
+   - Technical plausibility alone does not pass this gate.
+3. Applies the current-task relevance gate.
+   - Accept the requested change only when it is necessary to satisfy the
+     current PR's acceptance boundary.
+   - Reject it for this change when it introduces a new capability, product
+     area, architecture, or separately valuable follow-up.
+4. Applies the proportionality and scope gate.
+   - Accept only the smallest correction needed for the proven in-scope
+     defect.
+   - Reject speculative hardening, generalized machinery, and unrelated
+     cleanup.
+5. Classifies the finding as accepted, rejected, or clarification-needed.
+6. Records the evidence and rationale for that disposition.
+7. Uses reviewer-provided agent prompts as context, not as blind patches.
+8. Implements the minimal correct fix only when all three gates pass.
+9. Returns focused validation and a concise explanation to Gizmo.
+
+A finding is actionable only after the responsible team accepts it through all
+three gates.
 
 A review label, severity, or confident explanation is not proof. Do not change
 the implementation merely to agree with a reviewer. Reject a false or
 inapplicable claim with specific evidence, then record that rationale on the
 original feedback target.
+
+A plausible edge case, enhancement, hardening idea, or request for new
+functionality is not an accepted finding merely because it could improve the
+system. Reject it for the current change when it exceeds the PR's acceptance
+boundary. State the boundary and evidence in the disposition. Do not implement
+speculative follow-up work. Do not create a follow-up issue, task, or PR without
+explicit user authority.
+
+Security and authority violations remain binding. Fail closed when evidence
+confirms one. Do not reject or downgrade it as an optional enhancement. If the
+required correction exceeds the assigned scope, report the blocker and route
+it to the authorized owner instead of implementing outside scope.
 
 Gizmo continues from the verified commit, completes applicable validation, and
 pushes the result. It then applies the handling rule for the feedback target:
@@ -57,7 +88,9 @@ pushes the result. It then applies the handling rule for the feedback target:
 - **Review body without a thread:** Keep the actionable item in the delivery
   checklist and final handoff. Do not post a broad or duplicative PR comment.
 
-When no change is required, Gizmo records the team's verified rationale.
+Every substantive item receives a targeted response when GitHub supports one.
+The response states the disposition and its evidence. When no change is
+required, Gizmo records the team's verified rationale.
 
 Inspect the currently available feedback before merge or handoff. Proceed when
 all actionable items are handled, Nook's applicable repository-owned checks are
@@ -105,10 +138,19 @@ Does not apply to:
 
 - [ ] Gizmo fetches submitted reviews, active review threads, and PR comments.
 - [ ] Gizmo inspects review bodies and top-level PR comments from every head.
-- [ ] Gizmo builds a checklist for every active actionable finding.
+- [ ] Gizmo builds a checklist for every active substantive finding.
 - [ ] Gizmo routes each finding to the responsible team agent.
-- [ ] The team agent verifies and dispositions the finding before editing.
-- [ ] The team agent implements the minimal correct fix when required.
+- [ ] The team agent applies validity, current-task relevance, and
+      proportionality and scope gates before editing.
+- [ ] The team agent records an evidence-backed disposition for every
+      substantive finding.
+- [ ] The team agent implements the minimal correct fix only when every gate
+      passes.
+- [ ] The team agent rejects scope-expanding edge cases, enhancements,
+      hardening, and new functionality for the current change.
+- [ ] No agent creates speculative follow-up work without user authority.
+- [ ] Confirmed security and authority violations fail closed and reach the
+      authorized owner.
 - [ ] The team agent returns focused proof and any no-change rationale.
 - [ ] Gizmo continues from verified commits and runs
       `task loom:pre-push PR=<number>` when files changed.
