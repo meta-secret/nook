@@ -150,6 +150,7 @@ bindings are excluded because they mirror contracts Nook does not author.
 
 ## Validation
 
-Run `task preflight:typescript-state`, the affected package's focused typecheck
-and behavior tests, and `task format`. Treat existing boolean-focused lint
+Run `task format`, commit the coherent handoff, and return it to Gizmo. Gizmo
+dispatches the relevant hosted validation for TypeScript state, the affected
+package typecheck, and behavior tests. Treat existing boolean-focused lint
 suppressions as migration findings, not as justification for another boolean.

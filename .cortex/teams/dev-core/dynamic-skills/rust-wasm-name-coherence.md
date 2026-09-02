@@ -53,7 +53,6 @@ Does not apply to:
 
 ## Validation
 
-- Run the preflight core-ownership tests.
-- Run WASM build and Node tests for generated binding coherence.
-- Run web checks and tests for all consumers.
-- Trigger complete exact-head PR validation.
+- Return the formatted implementation to Gizmo.
+- Gizmo dispatches hosted preflight, WASM, Node, and web consumer evidence.
+- Gizmo triggers complete exact-head PR validation.

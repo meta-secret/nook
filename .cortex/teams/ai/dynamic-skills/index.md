@@ -123,6 +123,7 @@ Harness profile directories must not mirror or redefine these cards.
    graph. Use the shared graph only for ownerless cross-team knowledge.
 4. Keep harness-specific profiles outside the tracked repository. Do not create
    `.agents/skills`, `.cursor/skills`, or `.claude/skills` mirrors.
-5. Push the exact head and verify with `task remote TASK_NAME=loom:verify`.
+5. Return the coherent commit to Gizmo; Gizmo pushes the exact head and
+   verifies with `task remote TASK_NAME=loom:verify`.
 
 See [Loom tools](../references/loom-tools.md).

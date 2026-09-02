@@ -77,13 +77,13 @@ Does not apply to:
     lockfile;
   - update `.cortex/teams/ai/dynamic-skills/index.md` and the owning knowledge graph if
     Loom did not.
-- Push the exact head and run `task remote TASK_NAME=loom:verify` after the
-  card and registry agree.
+- Return the coherent commit to Gizmo after the card and registry agree. Gizmo
+  pushes the exact head and runs `task remote TASK_NAME=loom:verify`.
 
 ## Validation
 
-For documentation-only captures, push the exact head and run
-`task remote TASK_NAME=loom:verify`.
+For documentation-only captures, return the coherent commit to Gizmo. Gizmo
+pushes the exact head and runs `task remote TASK_NAME=loom:verify`.
 
 For code refactors using a dynamic skill, run the focused worker proof and
 required formatters. Commit every resulting mutation in the allowed paths and

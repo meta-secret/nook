@@ -41,5 +41,6 @@ recovery request. Request scalars and unknown keys are never echoed.
 Keep generic transport here and action schema, example, decode, execution, and
 verification in the owning skill. Provider integration must be static and
 one-way from host to provider. Discover the catalog with
-`task skills:tools-list`; validate every workspace package and the repository
-boundary through `task remote TASK_NAME=loom:verify`.
+`task skills:tools-list`; return the coherent commit to Gizmo. Gizmo pushes the
+exact head and validates every workspace package and the repository boundary
+through `task remote TASK_NAME=loom:verify`.

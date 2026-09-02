@@ -110,9 +110,7 @@ verify that each adapter narrows immediately and returns a concrete domain
 value.
 
 ```bash
-task loom:verify
-# or
-bun run --cwd agentic-ai/loom lint
+task remote TASK_NAME=loom:verify
 ```
 
 ## Application Checklist

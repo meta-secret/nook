@@ -85,9 +85,10 @@ tasks:
       - bun run lint
 
   loom:verify:
-    desc: Format-check, lint, typecheck, and unit-test Loom.
+    desc: Audit Cortex, then format-check, lint, typecheck, and unit-test Loom.
     deps: [loom:install]
     cmds:
+      - task: loom:cortex-audit
       - task: skills:verify
       - task: loom:format:check
       - task: loom:lint

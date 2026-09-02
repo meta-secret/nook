@@ -81,7 +81,7 @@ sections. Their natural heading hierarchy is the local map.
 
 ## Validation
 
-Run:
+Return the coherent commit to Gizmo. Gizmo pushes the exact head and runs:
 
 ```bash
 task remote TASK_NAME=loom:verify

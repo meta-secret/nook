@@ -40,8 +40,9 @@ finishes or stops.
 
 - Route every finding to the team that owns the affected change.
 - Keep fixes inside the same shared checkout and writer sequence.
-- Team Agents run focused implementation checks.
-- Gizmo runs shared pre-push and exact-head validation.
+- Team Agents run required non-compiling formatters.
+- Gizmo runs shared pre-push and dispatches focused and exact-head validation
+  remotely.
 - Gizmo owns pushes, pull requests, review replies, readiness, and merge.
 
 ## Prohibited complexity
@@ -59,5 +60,5 @@ The technical result is ready when:
 - each change has one functional owner;
 - only one writer ran at a time;
 - all accepted changes are already on the shared branch;
-- focused tests passed; and
+- hosted focused tests passed when applicable; and
 - the branch is ready for Gizmo's external delivery sequence.

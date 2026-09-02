@@ -138,7 +138,8 @@ After:
 - The proof is a docs diff that restores agreement.
 - Name the checked docs and the code or Task paths used as evidence.
 
-Run the mechanical link and index audit:
+Return the coherent commit to Gizmo. Gizmo pushes the exact head and runs the
+mechanical link and index audit:
 
 Request:
 
@@ -189,7 +190,7 @@ The ownership boundary is explicit:
 - Markdown does not become executable state.
 - The rules and their executable policy remain beside this procedure.
 
-Run the compiler through the normal Cortex consistency command:
+Gizmo runs the compiler through the normal hosted Cortex consistency command:
 
 ```bash
 task remote TASK_NAME=loom:verify

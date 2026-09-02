@@ -198,5 +198,6 @@ Any visual shortcut that weakens these boundaries is a failed design.
    failure.
 10. Leave complete product validation and shared delivery state to Gizmo.
 
-For Cortex-only changes, run `task loom:cortex-audit` and `git diff --check`.
-Any applicable failed directive means the UI is not ready.
+For Cortex-only changes, run `git diff --check`, return the coherent commit to
+Gizmo, and let Gizmo dispatch `task remote TASK_NAME=loom:verify`. Any
+applicable failed directive means the UI is not ready.

@@ -182,7 +182,8 @@ Running the same semantic audit again should not propose equivalent churn.
 
 ## Validation
 
-For Cortex and workflow guidance, run:
+For Cortex and workflow guidance, return the coherent commit to Gizmo. Gizmo
+pushes the exact head and runs:
 
 ```bash
 task remote TASK_NAME=loom:verify

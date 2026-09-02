@@ -458,9 +458,10 @@ When `Option<T>` is still acceptable (do not force an enum):
 
 ## Validation
 
-Development-core workers run the smallest focused Rust domain tests that prove
-the changed behavior. They also run typed bridge tests when the WASM contract
-changes. Browser E2E does not replace this domain proof.
+Development-core workers return the formatted implementation to Gizmo. Gizmo
+dispatches the smallest hosted Rust domain task that proves the changed
+behavior and hosted typed bridge tests when the WASM contract changes. Browser
+E2E does not replace this domain proof.
 
 For implementation tasks, run `task format`. Format every allowed Rust or
 development-core Cortex file the worker changed. Inspect that diff and return

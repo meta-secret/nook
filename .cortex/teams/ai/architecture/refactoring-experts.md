@@ -383,7 +383,8 @@ Provider readiness still controls implementation order.
 
 ## Validation
 
-Validate structural-expert documentation with:
+Return structural-expert documentation changes to Gizmo. Gizmo pushes the
+exact head and validates with:
 
 ```bash
 task remote TASK_NAME=loom:verify

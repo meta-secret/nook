@@ -79,9 +79,7 @@ ESLint `max-params: [error, 1]` enforces the rule in:
 - `nook-app/nook-web/eslint.config.js`.
 
 ```bash
-task loom:verify
-# or
-bun run --cwd agentic-ai/loom lint
+task remote TASK_NAME=loom:verify
 ```
 
 ## Review checklist

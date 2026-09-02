@@ -98,7 +98,8 @@ task loom:skill-scaffold CONFIG=path/to/request.yaml
 The scaffold creates the prose-only `<slug>.md` form. When the skill needs a
 deterministic application, convert it in the same change to
 `<slug>/SKILL.md`, add the co-located `scripts/` package, and update its index
-link. Then fill the card content, push the exact head, and verify with
+link. Then fill the card content and return the coherent commit to Gizmo.
+Gizmo pushes the exact head and verifies with
 `task remote TASK_NAME=loom:verify`.
 
 See [loom-tools.md](../references/loom-tools.md).

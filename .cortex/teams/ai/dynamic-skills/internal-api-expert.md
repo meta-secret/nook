@@ -64,7 +64,10 @@ Do not create a separate WASM or bridge expert.
 
 ## Validation
 
-- Verify provider behavior with module tests.
-- Verify generated Rust/WASM/TypeScript coherence when bindings change.
+- Return the coherent formatted implementation to Gizmo.
+- Gizmo dispatches hosted provider module tests.
+- Gizmo dispatches hosted generated Rust/WASM/TypeScript coherence evidence
+  when bindings change.
 - Continue to consumer code only after the provider contract is accepted.
-- Run `task loom:module-experts:validate` after routing changes.
+- After routing changes, Gizmo pushes the exact head and runs
+  `task remote TASK_NAME=loom:verify`.

@@ -64,7 +64,9 @@ Applies to all k8s and k0s workloads, ARC runners, GitHub Actions jobs placed on
 
 ## Validation
 
-- Run `task preflight` for repository policy and script enforcement.
+- Return the coherent change to Gizmo. Gizmo pushes the exact head and
+  dispatches `task remote TASK_NAME=preflight` for repository policy and
+  script enforcement.
 - Render ARC manifests and verify that Pods contain no nested runtime, runtime socket, privileged context, or host path.
 - Verify browser jobs select a purpose-built image and invoke Playwright directly inside that Pod.
 - Verify BuildKit consumers use build and export operations only.

@@ -69,5 +69,6 @@ Do not use this skill to:
 
 ## Validation
 
-Run `task loom:module-experts:validate` after registry or role changes.
-Run the role's focused validation selectors for product changes.
+Return registry or role changes to Gizmo, which pushes the exact head and runs
+`task remote TASK_NAME=loom:verify`. For product changes, Gizmo dispatches the
+role's relevant allowlisted remote selector.

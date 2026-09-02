@@ -159,6 +159,30 @@ describe('canonical Cortex team authority', () => {
     }
   });
 
+  test('binds hosted Loom verification to the Cortex audit', async () => {
+    const taskSource = await readFile(
+      join(REPO_ROOT, '.task/agentic-ai.yml'),
+      'utf8',
+    );
+    const verifyStart = taskSource.indexOf('\n  loom:verify:\n');
+    const verifyEnd = taskSource.indexOf(
+      '\n  loom:module-experts:validate:\n',
+      verifyStart,
+    );
+    const verifySource = taskSource.slice(verifyStart, verifyEnd);
+    const remoteSource = await readFile(
+      join(REPO_ROOT, '.github/scripts/remote-task-batch.sh'),
+      'utf8',
+    );
+
+    expect(verifyStart).toBeGreaterThan(-1);
+    expect(verifyEnd).toBeGreaterThan(verifyStart);
+    expect(verifySource).toContain('task: loom:cortex-audit');
+    expect(remoteSource).toContain(
+      'loom:verify) run_with_timeout "$timeout_minutes" task loom:verify',
+    );
+  });
+
   test('rejects an affirmative Gizmo implementation grant', async () => {
     const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-gizmo-grant-'));
     const cortexRoot = join(fixtureRoot, '.cortex');
