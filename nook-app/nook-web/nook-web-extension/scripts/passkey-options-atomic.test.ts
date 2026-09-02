@@ -6,10 +6,13 @@ import {
   WebsitePasskeyOptionsMessageType,
   WebsitePasskeyOptionsStatus,
 } from '../src/lib/webauthn-messages'
+import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 
 Object.assign(globalThis, {
   __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
 })
+
+await companionWasmReady
 
 function pairingGrant(id: string): StoredExtensionPairingGrant {
   return {

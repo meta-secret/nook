@@ -38,6 +38,30 @@ function observedAuthenticationWorkflow(): PasswordFormObservation {
   return observation
 }
 
+function classifiedObservedAuthenticationWorkflow(): ReturnType<
+  typeof classifiedAuthenticationWorkflowObservations
+>[number] {
+  const classified = classifiedAuthenticationWorkflowObservations({
+    workflowForms: [observedAuthenticationWorkflow()],
+    authenticatorSetupHint: false,
+    backupCodesHint: false,
+  })[0]
+  if (!classified) throw new Error('expected an approved workflow')
+  return classified
+}
+
+function approvedWorkflowIsStillCurrent(
+  approved: ReturnType<
+    typeof classifiedAuthenticationWorkflowObservations
+  >[number],
+): boolean {
+  return liveApprovedAuthenticationWorkflow({
+    approved,
+    authenticatorSetupHint: false,
+    backupCodesHint: false,
+  })
+}
+
 afterEach(() => {
   document.body.replaceChildren()
 })
@@ -439,31 +463,12 @@ describe('authentication workflow ranking', () => {
         <button type="submit">Sign in</button>
       </form>
     `
-    const workflow = observedAuthenticationWorkflow()
-    const approvedRequest: Parameters<
-      typeof classifiedAuthenticationWorkflowObservations
-    >[0] = {
-      workflowForms: [workflow],
-      authenticatorSetupHint: false,
-      backupCodesHint: false,
-    }
-    const approved =
-      classifiedAuthenticationWorkflowObservations(approvedRequest)[0]
-    if (!approved) {
-      throw new Error('expected an approved login workflow')
-    }
-    const liveRequest: Parameters<
-      typeof liveApprovedAuthenticationWorkflow
-    >[0] = {
-      approved,
-      authenticatorSetupHint: false,
-      backupCodesHint: false,
-    }
-    expect(liveApprovedAuthenticationWorkflow(liveRequest)).toBe(true)
+    const approved = classifiedObservedAuthenticationWorkflow()
+    expect(approvedWorkflowIsStillCurrent(approved)).toBe(true)
     document
       .querySelector('form')
       ?.setAttribute('action', '/settings/delete-account')
-    expect(liveApprovedAuthenticationWorkflow(liveRequest)).toBe(false)
+    expect(approvedWorkflowIsStillCurrent(approved)).toBe(false)
   })
 
   test('rejects a previously approved workflow after password field semantics change', () => {
@@ -474,31 +479,12 @@ describe('authentication workflow ranking', () => {
         <button type="submit">Sign in</button>
       </form>
     `
-    const workflow = observedAuthenticationWorkflow()
-    const approvedRequest: Parameters<
-      typeof classifiedAuthenticationWorkflowObservations
-    >[0] = {
-      workflowForms: [workflow],
-      authenticatorSetupHint: false,
-      backupCodesHint: false,
-    }
-    const approved =
-      classifiedAuthenticationWorkflowObservations(approvedRequest)[0]
-    if (!approved) {
-      throw new Error('expected an approved login workflow')
-    }
-    const liveRequest: Parameters<
-      typeof liveApprovedAuthenticationWorkflow
-    >[0] = {
-      approved,
-      authenticatorSetupHint: false,
-      backupCodesHint: false,
-    }
-    expect(liveApprovedAuthenticationWorkflow(liveRequest)).toBe(true)
+    const approved = classifiedObservedAuthenticationWorkflow()
+    expect(approvedWorkflowIsStillCurrent(approved)).toBe(true)
     document
       .querySelector('input[type="password"]')
       ?.setAttribute('autocomplete', 'new-password')
-    expect(liveApprovedAuthenticationWorkflow(liveRequest)).toBe(false)
+    expect(approvedWorkflowIsStillCurrent(approved)).toBe(false)
   })
 
   test('preserves enriched passkey matches during live approval checks', () => {
@@ -507,17 +493,7 @@ describe('authentication workflow ranking', () => {
         <button type="button">Use passkey</button>
       </form>
     `
-    const workflow = observedAuthenticationWorkflow()
-    const approvedRequest: Parameters<
-      typeof classifiedAuthenticationWorkflowObservations
-    >[0] = {
-      workflowForms: [workflow],
-      authenticatorSetupHint: false,
-      backupCodesHint: false,
-    }
-    const classified =
-      classifiedAuthenticationWorkflowObservations(approvedRequest)[0]
-    if (!classified) throw new Error('expected an approved passkey workflow')
+    const classified = classifiedObservedAuthenticationWorkflow()
     const approved = {
       ...classified,
       facts: {
@@ -529,14 +505,7 @@ describe('authentication workflow ranking', () => {
         },
       },
     } satisfies typeof classified
-    const liveRequest: Parameters<
-      typeof liveApprovedAuthenticationWorkflow
-    >[0] = {
-      approved,
-      authenticatorSetupHint: false,
-      backupCodesHint: false,
-    }
-    expect(liveApprovedAuthenticationWorkflow(liveRequest)).toBe(true)
+    expect(approvedWorkflowIsStillCurrent(approved)).toBe(true)
   })
 
   test('preserves ready availability during a password workflow live check', () => {
@@ -547,17 +516,7 @@ describe('authentication workflow ranking', () => {
         <button type="submit">Sign in</button>
       </form>
     `
-    const workflow = observedAuthenticationWorkflow()
-    const approvedRequest: Parameters<
-      typeof classifiedAuthenticationWorkflowObservations
-    >[0] = {
-      workflowForms: [workflow],
-      authenticatorSetupHint: false,
-      backupCodesHint: false,
-    }
-    const classified =
-      classifiedAuthenticationWorkflowObservations(approvedRequest)[0]
-    if (!classified) throw new Error('expected an approved password workflow')
+    const classified = classifiedObservedAuthenticationWorkflow()
     const approved = {
       ...classified,
       facts: {
@@ -568,14 +527,7 @@ describe('authentication workflow ranking', () => {
         },
       },
     } satisfies typeof classified
-    const liveRequest: Parameters<
-      typeof liveApprovedAuthenticationWorkflow
-    >[0] = {
-      approved,
-      authenticatorSetupHint: false,
-      backupCodesHint: false,
-    }
-    expect(liveApprovedAuthenticationWorkflow(liveRequest)).toBe(true)
+    expect(approvedWorkflowIsStillCurrent(approved)).toBe(true)
   })
 
   test('keeps a password login when OTP forms with vetoed submitters fill the bound', () => {
