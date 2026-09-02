@@ -71,6 +71,7 @@ type OwnedFormAssociationRequest = {
 }
 
 const AUTHENTICATION_WORKFLOW_MUTATION_SELECTOR = [
+  'a[href]',
   'canvas',
   'form',
   'img',

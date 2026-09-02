@@ -66,7 +66,6 @@ export const routeAutofillMessage: AutofillMessageListener =
     ) {
       scanState.sequence += 1
       widgetState.busy = false
-      widgetState.dismissed = false
       clearAuthenticationSurface()
       scanState.schedule()
       const response: Parameters<typeof sendResponse>[0] = { ok: true }

@@ -155,4 +155,23 @@ describe('authentication surface mutation filtering', () => {
       ),
     ).toBe(false)
   })
+
+  test('rescans dynamically inserted passkey links and QR evidence', () => {
+    const passkeyLink = document.createElement('a')
+    passkeyLink.href = '/passkey'
+    passkeyLink.setAttribute('aria-label', 'Use passkey')
+    const qrImage = document.createElement('img')
+    qrImage.alt = 'Authenticator QR code'
+
+    for (const evidence of [passkeyLink, qrImage]) {
+      const request: Parameters<typeof authenticationMutationImpact>[0] = {
+        records: [childListMutation(document.body, [evidence])],
+        mountedHost: false,
+        renderedWorkflow: false,
+      }
+      expect(authenticationMutationImpact(request).shouldScheduleScan).toBe(
+        true,
+      )
+    }
+  })
 })
