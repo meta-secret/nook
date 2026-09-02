@@ -358,7 +358,7 @@ function appendLocalExecutionGrantFindings(
 function prohibitedExecutionObject(text: string): boolean {
   const localExecutionIndex = text.search(LOCAL_EXECUTION);
   const normalizedObject = text
-    .slice(0, localExecutionIndex === -1 ? undefined : localExecutionIndex)
+    .slice(0, localExecutionIndex === -1 ? text.length : localExecutionIndex)
     .trim()
     .replace(/[,:;]+$/u, '')
     .trim();
