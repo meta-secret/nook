@@ -1,4 +1,4 @@
-import { expect, mock, test } from 'bun:test'
+import { afterAll, expect, mock, test } from 'bun:test'
 import { BROWSER_MESSAGE_KEYS } from '../src/lib/browser-message-keys'
 import type { EnrollmentFlowHost } from '../src/content/enrollment-flow'
 
@@ -16,6 +16,10 @@ mock.module(
 )
 mock.module('../src/lib/backup-code-candidates', () => ({
   authenticationRecoveryEvidence: () => ['', false],
+  authenticationRecoveryCopy: () => '',
+  clearBackupCodeCandidates: (codes: string[]) => codes.fill(''),
+  extractDocumentBackupCodeCandidates: () => [],
+  pageHasDocumentBackupCodeHint: () => false,
   recoveryCopyHasBackupCodeHint: () => false,
 }))
 mock.module('../src/lib/page-qr-capture', () => ({
@@ -51,6 +55,7 @@ Object.assign(globalThis, {
 })
 
 const enrollmentFlow = await import('../src/content/enrollment-flow')
+afterAll(() => mock.restore())
 const delivered = <Response>(response: Response) => ({
   kind: 'delivered' as const,
   response,
