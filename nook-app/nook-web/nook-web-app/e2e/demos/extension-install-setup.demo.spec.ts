@@ -74,10 +74,12 @@ test('offer browser extension install on vault home and in Devices', async ({
             JSON.stringify(message),
           )
           const type = message.type
-          const routedTypes = JSON.parse(
-            document.documentElement.getAttribute(
+          const routedTypesAttribute =
+            document.documentElement.attributes.getNamedItem(
               'data-demo-extension-message-types',
-            ) ?? '[]',
+            )?.value
+          const routedTypes = JSON.parse(
+            ((...[v = '[]']) => v)(routedTypesAttribute),
           ) as string[]
           if (type) {
             routedTypes.push(type)
@@ -158,9 +160,15 @@ test('offer browser extension install on vault home and in Devices', async ({
   }
   expect(launcherMessage.payload).toEqual({ intent: 'pair' })
   const routedTypes = JSON.parse(
-    (await page
-      .locator('html')
-      .getAttribute('data-demo-extension-message-types')) ?? '[]',
+    ((...[v = '[]']) => v)(
+      await page
+        .locator('html')
+        .evaluate(
+          (element) =>
+            element.attributes.getNamedItem('data-demo-extension-message-types')
+              ?.value,
+        ),
+    ),
   ) as string[]
   expect(routedTypes).toEqual([
     'nook:extension-paired-vault-identity-discovery',
@@ -198,9 +206,15 @@ test('offer browser extension install on vault home and in Devices', async ({
   // Moving between extension setup surfaces must not replay the session-owned
   // launcher request. The browser lifecycle keeps one operation per click.
   const routedTypesAfterSettings = JSON.parse(
-    (await page
-      .locator('html')
-      .getAttribute('data-demo-extension-message-types')) ?? '[]',
+    ((...[v = '[]']) => v)(
+      await page
+        .locator('html')
+        .evaluate(
+          (element) =>
+            element.attributes.getNamedItem('data-demo-extension-message-types')
+              ?.value,
+        ),
+    ),
   ) as string[]
   expect(routedTypesAfterSettings).toEqual([
     extensionInstallDemoMessageTypes.pairedVaultIdentityDiscovery,

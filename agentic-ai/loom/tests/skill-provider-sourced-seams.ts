@@ -18,11 +18,11 @@ export type AuditedRuntimeSourceRequest = {
 const AUDITED_RUNTIME_SOURCES = new Map([
   [
     '.github/scripts/arc-hive-render-contract.ts',
-    '302c268ba1a8bf17b09155635c3bc9892110acfdf1b610bbb95c93d7318cf42d',
+    '36e7c75dd8c5661213cf04398f36c2d084043c0c57237c16232982c1fd4a6e1c',
   ],
   [
     'infra/sim/kubernetes-cache/contracts.ts',
-    '6497fdf6579ce20a577a1613785baa2009562855c5ec5837ad990b717040aafc',
+    'cce43622b18c40f64c020bd262d97e55d1193dcb13066a4dd6a6bcdb2de94a96',
   ],
   [
     '.github/scripts/format-host-apply.test.sh',
@@ -42,15 +42,15 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     '.github/scripts/services-network-repair-test.ts',
-    '936746c2aee4f6cb8b3525222d7619ab7796aa541314a466db98150a8f7fe006',
+    'b721ee0fe9e8515b625a11e14a3ba598b0b4fdb42f821dbaafd2b7e3f7915bcd',
   ],
   [
     '.github/scripts/k0s-cni-migration-test.ts',
-    '1399fa145b50cb4c97c7f409380c899be9c57b05db150d6e0424b1598e709ea9',
+    '177eaf8c2fb1087f7305f15dc6d28df2b5d6861407f4bd055bd2f19293ae0abb',
   ],
   [
     '.github/scripts/k0s-firewall-rollback-test.ts',
-    '5b9fbf0739db31d91e535ad8b779f0c2cdfcfc8d484cec9679c3a9010d03fa9f',
+    '2eb7c30dd3399c84729ae971b8cf078e0506806fda19925f764af15e52410955',
   ],
   [
     '.github/scripts/remote-task-batch.sh',
@@ -62,7 +62,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'infra/providers/ovh-dedicated.ts',
-    'e32c98b4f3c280cf994e44b78a9df3d636beaefff82701d86b5ebaeff43a9b15',
+    '82bb56a284546337e64c39d2205d674ecddaf830bcbc85075132092c1569665e',
   ],
   [
     'nook-app/nook-web/nook-web-app/scripts/verify-app-isolation.ts',
@@ -74,7 +74,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'nook-app/nook-web/nook-web-extension/scripts/setup-brave-vault.mjs',
-    '648f9893b06dd4a896608919686c7d85b45f121ca5c44e4870233d52548c7657',
+    'ec3010f2f755694e1962b6a42b7ccc5c17618d30e42d1694c14bbd2484c992d9',
   ],
   [
     'nook-app/nook-web/nook-web-extension/scripts/setup-brave-vault.sh',
@@ -180,8 +180,9 @@ export function assertAuditedSource([runtime, state, words]: readonly [
     };
     if (isAuditedSource(request)) return;
   }
+  const [defaulted1 = 'missing'] = [executable?.source];
   throw new Error(
-    `Unsupported sourced shell execution in ${state.sourcePath || 'inline'}: ${executable?.source ?? 'missing'}`,
+    `Unsupported sourced shell execution in ${state.sourcePath || 'inline'}: ${defaulted1}`,
   );
 }
 

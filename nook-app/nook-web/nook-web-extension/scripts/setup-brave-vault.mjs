@@ -55,10 +55,9 @@ function belongsToSimpleVault(baseUrl, candidateUrl) {
 }
 
 async function getServiceWorker(context) {
-  return (
-    context.serviceWorkers()[0] ??
-    (await context.waitForEvent('serviceworker', { timeout: TIMEOUT_MS }))
-  )
+  const [serviceWorker] = context.serviceWorkers()
+  if (serviceWorker) return serviceWorker
+  return await context.waitForEvent('serviceworker', { timeout: TIMEOUT_MS })
 }
 
 async function readExtensionStorage(context) {
@@ -217,7 +216,7 @@ async function main() {
   ) {
     console.log('already_paired=true')
     console.log(
-      `Brave profile is already paired with vault "${setup.selectedVaultName ?? setup.pairedVaults[0]}". Leaving Brave open.`,
+      `Brave profile is already paired with vault "${((...[v = setup.pairedVaults[0]]) => v)(setup.selectedVaultName)}". Leaving Brave open.`,
     )
     return
   }

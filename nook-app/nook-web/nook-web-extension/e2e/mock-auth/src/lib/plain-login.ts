@@ -39,9 +39,11 @@ export function readLoginFields(
   usernameSelector: string,
   passwordSelector: string,
 ): { username: string; password: string } {
-  const username =
-    form.querySelector<HTMLInputElement>(usernameSelector)?.value ?? ''
-  const password =
-    form.querySelector<HTMLInputElement>(passwordSelector)?.value ?? ''
+  const username = ((v) => (v ? v : ''))(
+    form.querySelector<HTMLInputElement>(usernameSelector)?.value,
+  )
+  const password = ((v) => (v ? v : ''))(
+    form.querySelector<HTMLInputElement>(passwordSelector)?.value,
+  )
   return { username, password }
 }

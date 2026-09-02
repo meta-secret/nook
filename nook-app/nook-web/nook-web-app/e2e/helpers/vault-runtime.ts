@@ -54,13 +54,21 @@ export async function clearBrowserVault(page: Page) {
         const vaultDb = indexedDB.deleteDatabase('nook_db')
         vaultDb.onsuccess = done
         vaultDb.onerror = () =>
-          reject(vaultDb.error ?? new Error('Vault database failed to open'))
+          reject(
+            ((v) => (v ? v : new Error('Vault database failed to open')))(
+              vaultDb.error,
+            ),
+          )
         vaultDb.onblocked = done
 
         const authDb = indexedDB.deleteDatabase('nook_auth')
         authDb.onsuccess = done
         authDb.onerror = () =>
-          reject(authDb.error ?? new Error('Auth database failed to open'))
+          reject(
+            ((v) => (v ? v : new Error('Auth database failed to open')))(
+              authDb.error,
+            ),
+          )
         authDb.onblocked = done
       }),
     clearedThroughManager,
@@ -418,7 +426,7 @@ export async function wipeDeviceIdentity(page: Page): Promise<void> {
       new Promise<void>((resolve, reject) => {
         const request = indexedDB.open('nook_db')
         request.onerror = () =>
-          reject(request.error ?? new Error('idb open failed'))
+          reject(((v) => (v ? v : new Error('idb open failed')))(request.error))
         request.onsuccess = () => {
           const db = request.result
           const tx = db.transaction('vault', 'readwrite')
@@ -432,7 +440,8 @@ export async function wipeDeviceIdentity(page: Page): Promise<void> {
             db.close()
             resolve()
           }
-          tx.onerror = () => reject(tx.error ?? new Error('idb delete failed'))
+          tx.onerror = () =>
+            reject(((v) => (v ? v : new Error('idb delete failed')))(tx.error))
         }
       }),
   )

@@ -61,7 +61,7 @@ function boundedRecoveryCopy(texts: RecoveryCopyTexts): RecoveryCopyEvidence {
 export function authenticationRecoveryEvidence(): RecoveryCopyEvidence {
   if (typeof document.querySelectorAll !== 'function') {
     return boundedRecoveryCopy(
-      (document.body?.innerText ?? '').split(/[\r\n]+/),
+      ((v) => (v ? v : ''))(document.body?.innerText).split(/[\r\n]+/),
     )
   }
   const texts: RecoveryCopyTexts = []
@@ -71,7 +71,7 @@ export function authenticationRecoveryEvidence(): RecoveryCopyEvidence {
   for (const element of elements) {
     if (texts.length >= MAX_RECOVERY_COPY_ELEMENTS) break
     if (!isVisibleRecoveryCopy(element)) continue
-    const text = element.textContent ?? ''
+    const text = ((v) => (v ? v : ''))(element.textContent)
     if (text.length > MAX_RECOVERY_SOURCE_TEXT_UNITS) continue
     texts.push(text)
   }
@@ -96,7 +96,9 @@ export function pageHasDocumentBackupCodeHint(): boolean {
 export function extractDocumentBackupCodeCandidates(
   sourceText?: string,
 ): string[] {
-  const text = sourceText ?? document.body?.innerText ?? ''
+  const text = ((v) => (v ? v : ''))(
+    ((...[v = document.body?.innerText]) => v)(sourceText),
+  )
   return extract_backup_code_candidates(text)
 }
 

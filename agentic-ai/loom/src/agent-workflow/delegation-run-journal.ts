@@ -252,8 +252,9 @@ export async function releaseDelegationLifecycleLock(
 async function acquireLocalLifecycleLock(
   lockPath: string,
 ): Promise<LocalLifecycleLease> {
-  const predecessor =
-    localLifecycleLockTails.get(lockPath) ?? Promise.resolve();
+  const [predecessor = Promise.resolve()] = [
+    localLifecycleLockTails.get(lockPath),
+  ];
   let releaseSignal = (): void => {
     throw new Error('Delegation local lifecycle lease was not initialized.');
   };

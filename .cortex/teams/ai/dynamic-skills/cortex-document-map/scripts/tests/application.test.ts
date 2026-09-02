@@ -16,6 +16,7 @@ type MakeRequest = {
 };
 
 function request(args: MakeRequest): AuditCortexDocumentMapRequest {
+  const { excludedDocumentPaths = [] } = args;
   return {
     kind: CortexDocumentMapContractKind.Request,
     documents: [
@@ -24,7 +25,7 @@ function request(args: MakeRequest): AuditCortexDocumentMapRequest {
         content: args.content,
       },
     ],
-    excludedDocumentPaths: args.excludedDocumentPaths ?? [],
+    excludedDocumentPaths,
   };
 }
 

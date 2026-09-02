@@ -14,9 +14,10 @@ describe('module expert invocation request codec', () => {
   test('decodes a bounded exact request with direct expert lineage', () => {
     const request = directRequest('module-expert-decode');
     const serialized = JSON.stringify(request);
+    const [defaulted1 = []] = [request.selectedContextPaths];
     const expectedRequest = {
       ...request,
-      selectedContextPaths: request.selectedContextPaths ?? [],
+      selectedContextPaths: defaulted1,
     };
 
     expect(decodeModuleExpertInvocationRequest(serialized)).toEqual(
@@ -59,9 +60,10 @@ describe('module expert invocation request codec', () => {
         attempt: 2,
       },
     };
+    const [defaulted2 = []] = [request.selectedContextPaths];
     const expectedRequest = {
       ...request,
-      selectedContextPaths: request.selectedContextPaths ?? [],
+      selectedContextPaths: defaulted2,
     };
 
     expect(
@@ -81,9 +83,10 @@ describe('module expert invocation request codec', () => {
       expert: 'web_expert',
       selectedContextPaths,
     };
+    const [defaulted3 = []] = [request.selectedContextPaths];
     const expectedRequest = {
       ...request,
-      selectedContextPaths: request.selectedContextPaths ?? [],
+      selectedContextPaths: defaulted3,
     };
 
     expect(

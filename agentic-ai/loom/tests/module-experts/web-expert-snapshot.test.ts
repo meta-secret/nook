@@ -51,11 +51,12 @@ test('materializes exact committed web product and release authorities', async (
     const fixture = await createWebSnapshotFixture(fixtureRoot);
     const temporaryRoot = join(fixtureRoot, 'isolated');
     await mkdir(temporaryRoot);
+    const [defaulted1 = ''] = [process.env.PATH];
     const isolationRequest: ModuleExpertRuntimeIsolationRequest = {
       expertName: 'web_expert',
       parentEnvironment: {
         CODEX_API_KEY: 'web-snapshot-test-key',
-        PATH: process.env.PATH ?? '',
+        PATH: defaulted1,
       },
       sourceCommit: fixture.sourceCommit,
       selectedContextPaths: SELECTED_CONTEXT_PATHS,
@@ -106,11 +107,12 @@ test('keeps ordinary web analysis free of design and extension release context',
     const fixture = await createWebSnapshotFixture(fixtureRoot);
     const temporaryRoot = join(fixtureRoot, 'isolated');
     await mkdir(temporaryRoot);
+    const [defaulted2 = ''] = [process.env.PATH];
     const isolationRequest: ModuleExpertRuntimeIsolationRequest = {
       expertName: 'web_expert',
       parentEnvironment: {
         CODEX_API_KEY: 'web-base-snapshot-test-key',
-        PATH: process.env.PATH ?? '',
+        PATH: defaulted2,
       },
       sourceCommit: fixture.sourceCommit,
       selectedContextPaths: [],

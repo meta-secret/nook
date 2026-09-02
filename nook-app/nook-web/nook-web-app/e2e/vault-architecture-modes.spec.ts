@@ -73,13 +73,14 @@ async function assertAppLogsDoNotLeak(page: Page, sensitiveValues: string[]) {
 }
 
 async function lastMockPrfOutput(page: Page) {
-  return page.evaluate(
-    () =>
+  return page.evaluate(() =>
+    ((v) => (v ? v : ''))(
       (
         window as Window & {
           __nookE2eLastPrfOutput?: string
         }
-      ).__nookE2eLastPrfOutput ?? '',
+      ).__nookE2eLastPrfOutput,
+    ),
   )
 }
 

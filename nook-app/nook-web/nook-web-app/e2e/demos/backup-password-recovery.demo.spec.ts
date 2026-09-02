@@ -34,13 +34,14 @@ test('recover a local vault with its backup password after device-key loss', asy
   })
   await expect
     .poll(() =>
-      page.evaluate(
-        () =>
+      page.evaluate(() =>
+        ((v) => (v ? v : ''))(
           (
             window as Window & {
               __nookVault?: { deviceId?: string }
             }
-          ).__nookVault?.deviceId ?? '',
+          ).__nookVault?.deviceId,
+        ),
       ),
     )
     .toBe('')

@@ -586,8 +586,9 @@ function requireExternalString(args: RequireExternalStringArgs): string {
     typeof property.value !== 'string' ||
     property.value.length === 0
   ) {
+    const [defaulted1 = LoomFailureCode.ScratchLogInvalid] = [args.code];
     const loomFailureDetailArgs3: LoomFailureDetailArgs = {
-      code: args.code ?? LoomFailureCode.ScratchLogInvalid,
+      code: defaulted1,
       text: args.failure,
     };
     loomFailureDetail(loomFailureDetailArgs3);

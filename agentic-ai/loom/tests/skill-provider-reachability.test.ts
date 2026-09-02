@@ -261,7 +261,7 @@ function isAuthorizedSkillApplicationEdge(
 function skillApplicationDependencies(
   request: RuntimeDependencyListRequest,
 ): readonly string[] {
-  const source = request.sources.get(request.importer) ?? '';
+  const [source = ''] = [request.sources.get(request.importer)];
   const dependencies = new Set<string>();
   for (const imported of RUNTIME_IMPORT_SCANNER.scanImports(source)) {
     const resolution: RuntimeDependencyResolution = {
@@ -298,9 +298,10 @@ function isRepositoryBackedSpecifier(
   if (specifier.startsWith('#') || specifier.startsWith('file:')) return true;
   if (specifier.startsWith('.') || specifier.startsWith('node:')) return false;
   const segments = specifier.split('/');
+  const [defaulted1 = ''] = [segments[0]];
   const packageName = specifier.startsWith('@')
     ? segments.slice(0, 2).join('/')
-    : (segments[0] ?? '');
+    : defaulted1;
   for (const [path, source] of resolution.sources) {
     if (!path.endsWith('package.json') || source.length === 0) continue;
     let document: RepositoryPackageDocument;
@@ -315,7 +316,7 @@ function isRepositoryBackedSpecifier(
       document.devDependencies,
       document.optionalDependencies,
     ]) {
-      const dependency = dependencies?.[packageName] ?? false;
+      const [dependency = false] = [dependencies?.[packageName]];
       if (
         dependency !== false &&
         (dependency.startsWith('file:') || dependency.startsWith('workspace:'))

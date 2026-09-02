@@ -119,8 +119,7 @@ test('rejects oversized serialized results', () => {
 
 test('acceptance rejects removal, reordering, duplication, and mutation', () => {
   const result = executeCortexDocumentMapApplication(invalidRootRequest);
-  const first = result.findings.at(0) ?? false;
-  const second = result.findings.at(1) ?? false;
+  const [first = false, second = false] = result.findings;
   expect(first).not.toBe(false);
   expect(second).not.toBe(false);
   if (first === false || second === false) return;

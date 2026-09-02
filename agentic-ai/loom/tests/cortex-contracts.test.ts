@@ -35,6 +35,7 @@ function registry(imports: readonly string[]): CortexContractRegistry {
         capabilities: [],
       },
     ],
+    runtimes: [],
   };
 }
 
@@ -55,6 +56,7 @@ test('accepts the reviewed repository contract registry', () => {
       (context) => context.authorityDocument,
     ),
     ...CORTEX_CONTRACT_REGISTRY.policies.map((policy) => policy.document),
+    ...CORTEX_CONTRACT_REGISTRY.runtimes.map((runtime) => runtime.document),
   ];
   const documents = [...new Set(paths)].map((relativePath) => ({
     relativePath,
@@ -86,7 +88,8 @@ const validReferences = [
 ] as const;
 
 for (const reference of validReferences) {
-  test(`accepts Markdown policy reference: ${reference.split(']')[0] ?? ''}`, () => {
+  const [defaulted1 = ''] = [reference.split(']')[0]];
+  test(`accepts Markdown policy reference: ${defaulted1}`, () => {
     expect(compile(`# SRE\n\n${reference}\n`)).toEqual([]);
   });
 }
@@ -100,4 +103,28 @@ test('uses the first duplicate Markdown reference definition', () => {
       file: AUTHORITY,
     }),
   );
+});
+
+test('adapts inline and fenced runtime commands without prose inference', () => {
+  const documents = adaptCortexContractDocuments([
+    {
+      relativePath: '.cortex/gizmo/workflows/subagent-delegation.md',
+      content: `# Delegation
+
+Prose mentions loom-agent-delegation but does not invoke it.
+
+Use \`task skills:run REQUEST_YAML=request\`.
+
+\`\`\`bash
+task skills:tools-list
+task skills:run REQUEST_YAML=request
+\`\`\`
+`,
+    },
+  ]);
+  expect(documents[0]?.commands).toEqual([
+    'task skills:run REQUEST_YAML=request',
+    'task skills:tools-list',
+    'task skills:run REQUEST_YAML=request',
+  ]);
 });

@@ -87,7 +87,8 @@ function execCommand(request: ExecCallRequest): string {
     }
   }
   const source = parts.join(' ');
-  const cwd = execCwd([request.call.arguments[2] ?? false, request.member]);
+  const [defaulted1 = false] = [request.call.arguments[2]];
+  const cwd = execCwd([defaulted1, request.member]);
   return cwd === false ? source : `cd ${shellQuote(cwd)} && ${source}`;
 }
 

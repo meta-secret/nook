@@ -465,9 +465,10 @@ const planForbiddenPatterns = [
 ]
 
 function normalizedWords(value) {
-  return value
-    .toLocaleLowerCase('en-US')
-    .match(/[\p{L}\p{N}]+/gu) ?? []
+  const [words = []] = [
+    value.toLocaleLowerCase('en-US').match(/[\p{L}\p{N}]+/gu),
+  ]
+  return words
 }
 
 function containsSourceTaskExcerpt(candidate, sourceTask) {

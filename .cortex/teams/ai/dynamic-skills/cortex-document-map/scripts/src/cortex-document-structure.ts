@@ -123,14 +123,18 @@ export function auditCortexDocumentStructure(
     ]),
   );
 
-  const rootIndexDoc =
-    catalog.get('.cortex/knowledge-graph.md') ??
-    catalog.get('knowledge-graph.md') ??
-    catalog.get('.cortex/k-graph.md') ??
-    catalog.get('k-graph.md') ??
-    catalog.get('.cortex/INDEX.md') ??
-    catalog.get('INDEX.md') ??
-    false;
+  const [rootIndexDoc = false] = [
+    [
+      '.cortex/knowledge-graph.md',
+      'knowledge-graph.md',
+      '.cortex/k-graph.md',
+      'k-graph.md',
+      '.cortex/INDEX.md',
+      'INDEX.md',
+    ]
+      .map((path) => catalog.get(path))
+      .find(Boolean),
+  ];
 
   if (rootIndexDoc === false) {
     const findingArgs: AddFindingArgs = {
@@ -213,7 +217,9 @@ export function auditCortexDocumentStructure(
     }
 
     if (distributedTopology) {
-      const rootIndexedFiles = indexedByGraph.get(rootGraphPath) ?? new Set();
+      const [rootIndexedFiles = new Set<string>()] = [
+        indexedByGraph.get(rootGraphPath),
+      ];
       for (const ownerGraphPath of ownerGraphPaths) {
         if (!rootIndexedFiles.has(ownerGraphPath)) {
           const findingArgs: AddFindingArgs = {
@@ -228,8 +234,9 @@ export function auditCortexDocumentStructure(
       }
       for (const ownerGraphPath of ownerGraphPaths) {
         const graphOwner = cortexGraphOwner(ownerGraphPath);
-        const ownerIndexedFiles =
-          indexedByGraph.get(ownerGraphPath) ?? new Set();
+        const [ownerIndexedFiles = new Set<string>()] = [
+          indexedByGraph.get(ownerGraphPath),
+        ];
         for (const indexedPath of ownerIndexedFiles) {
           const indexedOwner = cortexGraphOwner(indexedPath);
           if (indexedOwner === false || indexedOwner === graphOwner) continue;
@@ -347,6 +354,7 @@ function headingFragmentsForRoot(root: Root): ReadonlySet<string> {
 function validateDocument(args: ValidateDocumentArgs): void {
   const headings = args.document.root.children.filter(isHeading);
   const h1s = headings.filter((heading) => heading.depth === 1);
+  const [firstH1 = false] = h1s;
   const firstNode = args.document.root.children[0];
 
   if (h1s.length !== 1 || firstNode !== h1s[0]) {
@@ -354,7 +362,7 @@ function validateDocument(args: ValidateDocumentArgs): void {
       findings: args.findings,
       code: CortexStructureFindingCode.InvalidTitle,
       file: args.document.relativePath,
-      line: nodeLine(h1s[0] ?? false),
+      line: nodeLine(firstH1),
       message: 'Document must begin with exactly one H1 title.',
     };
     addFinding(findingArgs);
@@ -380,6 +388,7 @@ function validateDocument(args: ValidateDocumentArgs): void {
 function validateIndex(args: ValidateIndexArgs): void {
   const headings = args.indexDocument.root.children.filter(isHeading);
   const h1s = headings.filter((heading) => heading.depth === 1);
+  const [firstH1 = false] = h1s;
   const firstNode = args.indexDocument.root.children[0];
 
   if (h1s.length !== 1 || firstNode !== h1s[0]) {
@@ -387,7 +396,7 @@ function validateIndex(args: ValidateIndexArgs): void {
       findings: args.findings,
       code: CortexStructureFindingCode.InvalidTitle,
       file: args.indexDocument.relativePath,
-      line: nodeLine(h1s[0] ?? false),
+      line: nodeLine(firstH1),
       message: 'Knowledge graph must begin with exactly one H1 title.',
     };
     addFinding(findingArgs);
@@ -424,7 +433,9 @@ function validateIndex(args: ValidateIndexArgs): void {
     }
 
     args.indexedFiles.add(resolved.targetRelativePath);
-    const linkCount = indexedLinkCounts.get(resolved.targetRelativePath) ?? 0;
+    const [linkCount = 0] = [
+      indexedLinkCounts.get(resolved.targetRelativePath),
+    ];
     indexedLinkCounts.set(resolved.targetRelativePath, linkCount + 1);
 
     if (resolved.fragment !== false) {

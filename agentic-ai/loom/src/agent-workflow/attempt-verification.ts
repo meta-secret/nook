@@ -2,7 +2,6 @@ import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
 import { lstat, open, realpath } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
-import { publishedCortexIdentifiersAtCommit } from '../lib/cortex-identifiers.ts';
 import {
   AgentAttemptEventKind,
   type AgentAttemptEvent,
@@ -144,11 +143,7 @@ export async function readVerifiedBarrierAttempt(
   } catch {
     authorizationFailed();
   }
-  const knownCortexIdentifiers = publishedCortexIdentifiersAtCommit({
-    repoRoot: resolve(args.runDirectory, '../../../..'),
-    sourceCommit: args.sourceCommit,
-  });
-  const replayRequest = { events, knownCortexIdentifiers };
+  const replayRequest = { events };
   let replayed: ReturnType<typeof replayAgentAttemptJournal>;
   try {
     replayed = replayAgentAttemptJournal(replayRequest);

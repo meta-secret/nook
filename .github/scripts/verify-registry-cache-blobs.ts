@@ -56,6 +56,7 @@ if (!username || !password) {
 const authorization = `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`
 
 const registryRequest = async (input: RegistryRequest): Promise<Response> => {
+  const { method = 'GET' } = input
   const headers = new Headers()
   headers.set('Authorization', authorization)
   if (input.path.startsWith('manifests/')) {
@@ -66,7 +67,7 @@ const registryRequest = async (input: RegistryRequest): Promise<Response> => {
   }
   const init: RequestInit = {
     headers,
-    method: input.method ?? 'GET',
+    method,
     signal: AbortSignal.timeout(5 * 60_000),
   }
   const response = await fetch(`https://${location.host}/v2/${location.repository}/${input.path}`, init)
@@ -122,9 +123,10 @@ const collectManifest = async (input: ManifestInput): Promise<void> => {
     }
   }
   const document = JSON.parse(new TextDecoder().decode(bytes)) as RegistryDocument
+  const { layers = [], manifests = [] } = document
   if (document.config) registerBlobDescriptor(document.config)
-  for (const layer of document.layers ?? []) registerBlobDescriptor(layer)
-  for (const manifest of document.manifests ?? []) await collectManifest(childManifestInput(manifest))
+  for (const layer of layers) registerBlobDescriptor(layer)
+  for (const manifest of manifests) await collectManifest(childManifestInput(manifest))
 }
 
 const verifyBlob = async (descriptor: RegistryDescriptor): Promise<void> => {

@@ -250,7 +250,7 @@ function associatedLabelText(field: HTMLInputElement): string {
   const parts: string[] = [];
   if (field.labels) {
     for (const label of field.labels) {
-      parts.push(label.textContent ?? "");
+      parts.push(((v) => (v ? v : ""))(label.textContent));
     }
   }
   const labelledBy = field.getAttribute("aria-labelledby");
@@ -280,16 +280,16 @@ function rawFieldIdentityText(field: HTMLInputElement): string {
     fieldIdentityId(field),
     field.placeholder,
     field.title,
-    field.getAttribute("aria-label") ?? "",
-    field.getAttribute("autocomplete") ?? "",
-    field.getAttribute("data-qa") ?? "",
-    field.getAttribute("data-testid") ?? "",
+    ((v) => (v ? v : ""))(field.getAttribute("aria-label")),
+    ((v) => (v ? v : ""))(field.getAttribute("autocomplete")),
+    ((v) => (v ? v : ""))(field.getAttribute("data-qa")),
+    ((v) => (v ? v : ""))(field.getAttribute("data-testid")),
     associatedLabelText(field),
   ].join(" ");
 }
 
 function autocompleteTokens(field: HTMLInputElement): string[] {
-  return (field.getAttribute("autocomplete") ?? "")
+  return (((v) => (v ? v : ""))(field.getAttribute("autocomplete")))
     .split(/\s+/u)
     .map((token) => token.trim())
     .filter(Boolean);
@@ -308,7 +308,7 @@ function hasLoginContext(field: HTMLInputElement): boolean {
       [
         container.id,
         container.className,
-        container.getAttribute("role") ?? "",
+        ((v) => (v ? v : ""))(container.getAttribute("role")),
       ].join(" "),
     );
     container = container.parentElement;
@@ -334,29 +334,28 @@ function hasLoginContext(field: HTMLInputElement): boolean {
       : [];
   const advanceControlLabels = advanceControls.map((control) =>
     [
-      control.textContent ?? "",
-      control.getAttribute("aria-label") ?? "",
-      control.getAttribute("title") ?? "",
+      ((v) => (v ? v : ""))(control.textContent),
+      ((v) => (v ? v : ""))(control.getAttribute("aria-label")),
+      ((v) => (v ? v : ""))(control.getAttribute("title")),
       control instanceof HTMLInputElement ? control.value : "",
     ].join(" "),
   );
-  const authenticationAdvanceControlLabel =
-    advanceControlLabels.find((label) =>
+  const [authenticationAdvanceControlLabel = advanceControlLabels.join(" ")] = [advanceControlLabels.find((label) =>
       looks_like_login_advance_control_label(label),
-    ) ?? advanceControlLabels.join(" ");
+    )];
   const doc = field.ownerDocument;
   const observation = new NookLoginContextObservation(
     form
       ? [
           form.id,
           form.className,
-          form.getAttribute("action") ?? "",
+          ((v) => (v ? v : ""))(form.getAttribute("action")),
           form.name,
         ].join(" ")
       : "",
     ancestorIdentities,
     authenticationAdvanceControlLabel,
-    `${doc.defaultView?.location?.pathname ?? ""} ${doc.defaultView?.location?.hostname ?? ""}`,
+    `${((v) => (v ? v : ""))(doc.defaultView?.location?.pathname)} ${((v) => (v ? v : ""))(doc.defaultView?.location?.hostname)}`,
   );
   try {
     return has_login_context(observation);
@@ -499,7 +498,7 @@ export function preferredOneTimeCodeFillField(
   fields: OneTimeCodeFieldList,
 ): HTMLInputElement | false {
   const preferred = fields.find(fieldHasOneTimeCodeAutoSubmitHandler);
-  return preferred ? preferred : (fields[0] ?? false);
+  return preferred ? preferred : (((v) => (v ? v : false))(fields[0]));
 }
 
 export function hasAutocompleteToken({
@@ -550,7 +549,7 @@ export function findPasskeyControls(
   root: ParentNode = document,
 ): PasskeyControlCandidate[] {
   const descendants = Array.from(
-    root.querySelectorAll?.<HTMLElement>(passkeyControlSelector) ?? [],
+    ((v) => (v ? v : []))(root.querySelectorAll?.<HTMLElement>(passkeyControlSelector)),
   );
   const rooted =
     root instanceof HTMLElement && root.matches(passkeyControlSelector)
@@ -587,12 +586,12 @@ export function pageHasPasskeyControl(root: ParentNode = document): boolean {
 }
 
 function localActivationControlLabel(control: Element): string {
-  const labelledBy = (control.getAttribute("aria-labelledby") ?? "")
+  const labelledBy = (((v) => (v ? v : ""))(control.getAttribute("aria-labelledby")))
     .split(/\s+/u)
     .filter(Boolean)
     .flatMap((id) => {
       const label = control.ownerDocument.getElementById(id);
-      return label ? [label.textContent ?? ""] : [];
+      return label ? [((v) => (v ? v : ""))(label.textContent)] : [];
     })
     .join(" ");
   const value =
@@ -600,10 +599,10 @@ function localActivationControlLabel(control: Element): string {
       ? control.value
       : "";
   return [
-    control.textContent ?? "",
-    control.getAttribute("aria-label") ?? "",
-    control.getAttribute("title") ?? "",
-    control.getAttribute("alt") ?? "",
+    ((v) => (v ? v : ""))(control.textContent),
+    ((v) => (v ? v : ""))(control.getAttribute("aria-label")),
+    ((v) => (v ? v : ""))(control.getAttribute("title")),
+    ((v) => (v ? v : ""))(control.getAttribute("alt")),
     value,
     labelledBy,
   ]
@@ -858,7 +857,7 @@ export function localUnownedPasskeyContainer({
 }
 
 export function pageHasManualCheckpoint(root: ParentNode): boolean {
-  const doc = root.ownerDocument ?? document;
+  const doc = ((v) => (v ? v : document))(root.ownerDocument);
   if (
     doc.querySelector(
       'iframe[src*="recaptcha" i], iframe[src*="hcaptcha" i], iframe[src*="turnstile" i], iframe[title*="captcha" i], [data-nook-manual-checkpoint]',
@@ -870,16 +869,19 @@ export function pageHasManualCheckpoint(root: ParentNode): boolean {
     root.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
   );
   for (const checkbox of checkboxes) {
-    const labeled = (
-      checkbox.labels?.[0]?.textContent ??
-      checkbox.getAttribute("aria-label") ??
-      checkbox.name ??
-      checkbox.id ??
-      ""
+    const label = checkbox.labels?.[0];
+    const ariaLabel = checkbox.attributes.getNamedItem("aria-label");
+    const labeled = (label
+      ? label.textContent
+        ? label.textContent
+        : ""
+      : ariaLabel
+        ? ariaLabel.value
+        : checkbox.name
     ).toLowerCase();
     if (looks_like_manual_checkpoint_label(labeled)) {
       return true;
     }
   }
-  return looks_like_email_verification_body(root.textContent ?? "");
+  return looks_like_email_verification_body(((v) => (v ? v : ""))(root.textContent));
 }

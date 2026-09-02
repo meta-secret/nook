@@ -106,7 +106,10 @@ function legacyCliPlan(): LegacyModuleDeliveryPlan {
 }
 
 function resultLine(output: string): string {
-  return output.split('\n').find((line) => line.startsWith('{"status"')) ?? '';
+  const [defaulted1 = ''] = [
+    output.split('\n').find((line) => line.startsWith('{"status"')),
+  ];
+  return defaulted1;
 }
 
 test('module delivery CLI validates one plan file with deterministic JSON', async () => {

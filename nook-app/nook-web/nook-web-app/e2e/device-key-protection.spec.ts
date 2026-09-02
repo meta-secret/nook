@@ -206,7 +206,7 @@ async function readActiveIdentityKeyringEntry(
   )
   if (!entry) {
     throw new Error(
-      `Selected local identity keyring entry is missing: ${selectedIdentityId ?? directory.selection.kind}`,
+      `Selected local identity keyring entry is missing: ${((...[v = directory.selection.kind]) => v)(selectedIdentityId)}`,
     )
   }
   return entry
@@ -606,10 +606,10 @@ test.describe('passkey device-key protection', () => {
     await expect
       .poll(
         () =>
-          page.evaluate(
-            () =>
-              (window as DelayedStorageWindow).__nookVault?.isVerifying ??
-              false,
+          page.evaluate(() =>
+            ((v) => (v ? v : false))(
+              (window as DelayedStorageWindow).__nookVault?.isVerifying,
+            ),
           ),
         { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
       )
@@ -624,9 +624,10 @@ test.describe('passkey device-key protection', () => {
     await expect
       .poll(
         () =>
-          page.evaluate(
-            () =>
-              (window as DelayedStorageWindow).__nookVault?.isVerifying ?? true,
+          page.evaluate(() =>
+            ((...[v = true]) => v)(
+              (window as DelayedStorageWindow).__nookVault?.isVerifying,
+            ),
           ),
         { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
       )
@@ -827,7 +828,7 @@ test.describe('passkey device-key protection', () => {
       messageIncludes:
         'passkey unavailable; offering PIN device protection fallback',
     })
-    expect(entry.data ?? '').toContain('passkey_unavailable')
+    expect(((v) => (v ? v : ''))(entry.data)).toContain('passkey_unavailable')
   })
 
   test('falls back to a new PIN identity when passkey recovery is unavailable', async ({

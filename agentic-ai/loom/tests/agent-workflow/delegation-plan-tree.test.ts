@@ -112,7 +112,7 @@ type DeclarationInput = {
 };
 
 function declaration(input: DeclarationInput): DelegationAttemptDeclaration {
-  const children = input.children ?? [];
+  const [children = []] = [input.children];
   return {
     identity: input.identity,
     depth: input.depth,

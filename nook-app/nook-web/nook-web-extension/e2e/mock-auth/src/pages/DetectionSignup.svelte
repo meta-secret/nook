@@ -8,13 +8,15 @@
     event.preventDefault()
     const form = event.currentTarget
     if (!(form instanceof HTMLFormElement)) return
-    const username =
-      form.querySelector<HTMLInputElement>('[name="email"]')?.value.trim() ?? ''
-    const password =
-      form.querySelector<HTMLInputElement>('[name="password"]')?.value ?? ''
-    const confirm =
-      form.querySelector<HTMLInputElement>('[name="password-confirm"]')
-        ?.value ?? ''
+    const username = ((v) => (v ? v : ''))(
+      form.querySelector<HTMLInputElement>('[name="email"]')?.value.trim(),
+    )
+    const password = ((v) => (v ? v : ''))(
+      form.querySelector<HTMLInputElement>('[name="password"]')?.value,
+    )
+    const confirm = ((v) => (v ? v : ''))(
+      form.querySelector<HTMLInputElement>('[name="password-confirm"]')?.value,
+    )
     if (!username || !password) {
       error = 'Email and password are required.'
       return

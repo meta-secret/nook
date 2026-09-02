@@ -20,9 +20,9 @@ export function assignmentWord(
 ): { readonly name: string; readonly value: ShellWord } | false {
   const match = request.word.value.match(SHELL_ASSIGNMENT);
   if (!match) return false;
-  const name = match[1] ?? '';
-  const operator = match[2] ?? '=';
-  const rawValue = match[3] ?? '';
+  const [name = ''] = [match[1]];
+  const [operator = '='] = [match[2]];
+  const [rawValue = ''] = [match[3]];
   if (
     REPOSITORY_ROOT_ASSIGNMENT.test(rawValue) ||
     SCRIPT_DIRECTORY_ASSIGNMENT.test(rawValue)
@@ -32,20 +32,19 @@ export function assignmentWord(
     return { name, value: staticWord('/tmp/nook-ephemeral') };
   const staticDefault = STATIC_EXECUTABLE_DEFAULT.exec(rawValue);
   if (staticDefault) {
-    const existing = request.environment.get(staticDefault[1] ?? '') ?? false;
+    const [defaulted1 = ''] = [staticDefault[1]];
+    const [defaulted2 = ''] = [staticDefault[2]];
+    const [existing = false] = [request.environment.get(defaulted1)];
     if (existing !== false && !existing.dynamic)
       return {
         name,
-        value:
-          existing.value.length > 0
-            ? existing
-            : staticWord(staticDefault[2] ?? ''),
+        value: existing.value.length > 0 ? existing : staticWord(defaulted2),
       };
     return {
       name,
       value: {
         source: rawValue,
-        value: staticDefault[2] ?? '',
+        value: defaulted2,
         dynamic: true,
       },
     };

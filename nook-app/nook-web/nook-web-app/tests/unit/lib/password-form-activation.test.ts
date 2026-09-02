@@ -252,10 +252,14 @@ describe('classified login activation', () => {
     const workflow = summarizeAuthenticationWorkflowForms()[0]
     const submissionArgs: Parameters<typeof submitLoginForm>[0] = {
       kind: PasswordFormQueryKind.Scoped,
-      root: workflow?.root ?? document,
-      formScope: workflow?.formScope ?? {
-        kind: PasswordFormScopeKind.Unowned,
-      },
+      root: ((...[v = document]) => v)(workflow?.root),
+      formScope: ((
+        ...[
+          v = {
+            kind: PasswordFormScopeKind.Unowned,
+          },
+        ]
+      ) => v)(workflow?.formScope),
     }
 
     expect(didSubmit(submissionArgs)).toBe(true)
@@ -449,10 +453,14 @@ describe('classified login activation', () => {
     expect(workflow?.formScope.kind).toBe(PasswordFormScopeKind.Unowned)
     const submissionArgs: Parameters<typeof submitLoginForm>[0] = {
       kind: PasswordFormQueryKind.Scoped,
-      root: workflow?.root ?? document,
-      formScope: workflow?.formScope ?? {
-        kind: PasswordFormScopeKind.Unowned,
-      },
+      root: ((...[v = document]) => v)(workflow?.root),
+      formScope: ((
+        ...[
+          v = {
+            kind: PasswordFormScopeKind.Unowned,
+          },
+        ]
+      ) => v)(workflow?.formScope),
     }
 
     expect(didSubmit(submissionArgs)).toBe(expected)

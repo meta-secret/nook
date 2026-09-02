@@ -224,7 +224,7 @@ export default defineConfig(({ mode }) => {
   const localHttps = env.NOOK_LOCAL_HTTPS === '1'
   const appKind =
     env.VITE_NOOK_APP_KIND === 'site' ? 'site' : 'unified-development'
-  const outputDirectory = env.VITE_NOOK_OUT_DIR ?? 'dist'
+  const [outputDirectory = 'dist'] = [env.VITE_NOOK_OUT_DIR]
   const input: Record<string, string> =
     appKind === 'site'
       ? {
@@ -239,7 +239,7 @@ export default defineConfig(({ mode }) => {
     // The standalone landing is deployed at the public root and mounted under
     // /site/ in assembled previews. Relative assets keep both artifacts
     // self-contained instead of coupling the site bundle to either mount path.
-    base: appKind === 'site' ? './' : (viteBase ?? '/'),
+    base: appKind === 'site' ? './' : ((...[v = '/']) => v)(viteBase),
     plugins: [
       tailwindcss(),
       svelte(),

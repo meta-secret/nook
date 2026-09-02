@@ -19,7 +19,7 @@ async function demoBeat(page: Page) {
   await page.waitForTimeout(DEMO_BEAT_MS)
 }
 
-test('uses the paired demo vault for authenticator enrollment', async ({
+test('saves a confirmed authenticator without website success evidence', async ({
   page,
 }) => {
   const bootstrapErrors: Error[] = []
@@ -39,6 +39,7 @@ test('uses the paired demo vault for authenticator enrollment', async ({
     localizedMessages: messages,
     ...demoDomainEnumArgs,
     enrollPilotFlow: true,
+    recordRuntimeMessageTypes: true,
   }
 
   await page.addInitScript(installDemoChromeStub, stubArgs)
@@ -128,7 +129,6 @@ test('uses the paired demo vault for authenticator enrollment', async ({
             color: #f7f7f8;
             font: inherit;
           }
-          #success { color: #94d4ae; font-weight: 650; }
         </style>
       </head>
       <body>
@@ -160,28 +160,6 @@ test('uses the paired demo vault for authenticator enrollment', async ({
     .locator('[data-bootstrap-sentinel="replacement-root"]')
     .evaluate((root) => root.children.length)
 
-  await page.evaluate(() => {
-    document
-      .querySelector('#verify-form')
-      ?.addEventListener('submit', (event) => {
-        event.preventDefault()
-        const setup = document.querySelector('#app')
-        setup?.remove()
-        const success = document.createElement('main')
-        success.id = 'success'
-        success.dataset.nookAuthOutcome = 'success'
-        success.dataset.testid = 'mock-auth-success'
-        success.innerHTML = `
-          <h1>Authentication complete</h1>
-          <p>Save your backup codes in a safe place.</p>
-          <ul>
-            <li>A1B2-C3D4-E5F6</li>
-            <li>G7H8-I9J0-K1L2</li>
-          </ul>
-        `
-        document.body.append(success)
-      })
-  })
   await page.evaluate(installDemoChromeStub, stubArgs)
   await page.addScriptTag({
     path: path.join(extensionDist, 'content/autofill.js'),
@@ -219,40 +197,47 @@ test('uses the paired demo vault for authenticator enrollment', async ({
   await demoBeat(page)
 
   await widget.getByRole('button', { name: 'Continue enrollment' }).click()
-  await expect(page.locator('input[name="Code"]')).toHaveValue('482913', {
-    timeout: 15_000,
-  })
-  await expect(
-    widget.getByText(
-      'Verification code filled. Submit on the site — Nook saves only after verified success.',
-    ),
-  ).toBeVisible()
-  await demoBeat(page)
-
-  await page.getByRole('button', { name: 'Verify' }).click()
-  await expect(page.getByTestId('mock-auth-success')).toBeVisible()
-  // Enrollment evidence watches soft SPA success markers; keep this patient so
-  // the demo matches the content-script commit path under load.
   await expect(
     widget.getByText('Authenticator saved to your vault.'),
-  ).toBeVisible({ timeout: 30_000 })
+  ).toBeVisible()
+  await expect(page.locator('input[name="Code"]')).toHaveValue('')
+  await expect(
+    page.locator('[data-bootstrap-sentinel="replacement-root"]'),
+  ).toBeVisible()
   await expect(widget.getByTestId('nook-auth-gate-vault-status')).toHaveText(
     'Connected to Demo vault',
   )
-  await demoBeat(page)
-
-  await widget.getByRole('button', { name: 'Save backup codes' }).click()
-  await expect(widget.locator('textarea')).toBeVisible()
-  await demoBeat(page)
-
-  await widget.getByRole('button', { name: 'Save backup codes' }).click()
-  await expect(
-    widget.getByRole('button', { name: 'Replace existing codes' }),
-  ).toBeVisible()
-  await demoBeat(page)
-
-  await widget.getByRole('button', { name: 'Replace existing codes' }).click()
-  await expect(widget.getByText('Backup codes saved')).toBeVisible()
+  const enrollmentMessages = await page.evaluate(() =>
+    ((v) => (v ? v : []))(
+      (
+        globalThis as unknown as {
+          __nookDemoRuntimeMessageTypes?: string[]
+        }
+      ).__nookDemoRuntimeMessageTypes,
+    ),
+  )
+  expect(enrollmentMessages).toContain(
+    'nook:website-authenticator-enroll-stage',
+  )
+  expect(enrollmentMessages).toContain(
+    'nook:website-authenticator-enroll-confirm',
+  )
+  expect(enrollmentMessages).not.toContain(
+    'nook:website-authenticator-enroll-code',
+  )
+  expect(enrollmentMessages).not.toContain(
+    'nook:authentication-outcome-classify',
+  )
+  await page.locator('#app').evaluate((root) => {
+    root.innerHTML = `
+      <h1>Authentication complete</h1>
+      <p>Save these backup codes in a safe place.</p>
+      <ul>
+        <li>A1B2-C3D4-E5F6</li>
+        <li>G7H8-I9J0-K1L2</li>
+      </ul>
+    `
+  })
   await expect(
     widget.getByRole('button', { name: 'Save backup codes' }),
   ).toBeVisible()

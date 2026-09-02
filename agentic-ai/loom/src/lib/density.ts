@@ -116,7 +116,7 @@ type InspectProseBlockArgs = {
 function inspectProseBlock(args: InspectProseBlockArgs): void {
   const text = markdownText(args.proseBlock).replace(/\s+/gu, ' ').trim();
   if (text.length === 0) return;
-  const line = args.proseBlock.position?.start.line ?? 1;
+  const [line = 1] = [args.proseBlock.position?.start.line];
   for (const sentence of text.split(/(?<=[.!?])\s+/u)) {
     const sentenceArgs: AddSentenceFindingsArgs = {
       ...args,
@@ -133,7 +133,7 @@ type AddSentenceFindingsArgs = InspectProseBlockArgs & {
 };
 
 function addSentenceFindings(args: AddSentenceFindingsArgs): void {
-  const endLine = args.proseBlock.position?.end.line ?? args.line;
+  const [endLine = args.line] = [args.proseBlock.position?.end.line];
   const findingBase = {
     file: args.filePath,
     line: args.line,
@@ -147,7 +147,7 @@ function addSentenceFindings(args: AddSentenceFindingsArgs): void {
     };
     args.findings.push(lengthFinding);
   }
-  const semicolons = args.sentence.match(/;/gu)?.length ?? 0;
+  const [semicolons = 0] = [args.sentence.match(/;/gu)?.length];
   if (semicolons > MAX_SEMICOLONS) {
     const semicolonFinding: DensityFindingSpan = {
       ...findingBase,
@@ -155,7 +155,7 @@ function addSentenceFindings(args: AddSentenceFindingsArgs): void {
     };
     args.findings.push(semicolonFinding);
   }
-  const andJoins = args.sentence.match(/\sand\s/giu)?.length ?? 0;
+  const [andJoins = 0] = [args.sentence.match(/\sand\s/giu)?.length];
   if (andJoins > MAX_AND_JOINS && args.sentence.length > 120) {
     const joinsFinding: DensityFindingSpan = {
       ...findingBase,

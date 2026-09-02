@@ -146,8 +146,8 @@ export async function waitForVaultYaml(
   predicate: (snapshot: VaultYamlSnapshot) => boolean,
   options?: { timeoutMs?: number; intervalMs?: number; page?: Page },
 ): Promise<VaultYamlSnapshot> {
-  const timeoutMs = options?.timeoutMs ?? GITHUB_SYNC_TIMEOUT_MS
-  const intervalMs = options?.intervalMs ?? GITHUB_SYNC_INTERVAL_MS
+  const [timeoutMs = GITHUB_SYNC_TIMEOUT_MS] = [options?.timeoutMs]
+  const [intervalMs = GITHUB_SYNC_INTERVAL_MS] = [options?.intervalMs]
   const deadline = Date.now() + timeoutMs
   let lastError = 'vault file missing'
 
@@ -178,7 +178,7 @@ export async function assertNoVaultErrors(
     return
   }
 
-  const text = ((await vaultError.textContent()) ?? '').trim()
+  const text = ((v) => (v ? v : ''))(await vaultError.textContent()).trim()
   if (options?.allowTransient && isTransientVaultSyncError(text)) {
     console.warn(
       `[e2e] transient vault sync error (expected): ${summarizeVaultError(text)}`,
@@ -201,7 +201,7 @@ export async function assertNoVaultError(page: Page) {
   if (!(await vaultError.isVisible())) {
     return
   }
-  const text = ((await vaultError.textContent()) ?? '').trim()
+  const text = ((v) => (v ? v : ''))(await vaultError.textContent()).trim()
   if (
     KNOWN_VAULT_FAILURE_PATTERNS.some((pattern) => pattern.test(text)) ||
     text.length > 0
@@ -253,8 +253,10 @@ export async function waitForSyncRemoteVaultState(
   options?: { timeoutMs?: number; intervalMs?: number; page?: Page },
 ): Promise<VaultYamlSnapshot> {
   return waitForVaultEventLogSnapshot(remote.getEventFileContents, predicate, {
-    timeoutMs: options?.timeoutMs ?? ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    intervalMs: options?.intervalMs ?? 100,
+    timeoutMs: ((...[v = ENROLLMENT_UNLOCK_TIMEOUT_MS]) => v)(
+      options?.timeoutMs,
+    ),
+    intervalMs: ((...[v = 100]) => v)(options?.intervalMs),
   })
 }
 

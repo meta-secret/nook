@@ -5,10 +5,7 @@ import {
   AgentAttemptJournal,
   createModuleExpertAttemptJournal,
 } from '../agent-workflow/agent-journal.ts';
-import {
-  AgentAttemptEventKind,
-  runtimeActivityEvent,
-} from '../agent-workflow/agent-events.ts';
+import { AgentAttemptEventKind } from '../agent-workflow/agent-events.ts';
 import {
   AgentAttemptAdapterKind,
   AgentAttemptParentKind,
@@ -19,8 +16,6 @@ import {
 } from '../agent-workflow/domain.ts';
 import type {
   AgentAttemptEvent,
-  AgentAttemptEventWithoutMetadata,
-  AgentRuntimeActivityEvent,
   AgentAttemptTerminalRecordedEvent,
 } from '../agent-workflow/agent-events.ts';
 import type {
@@ -45,7 +40,6 @@ import type { AuditModuleExpertsArgs } from './audit.ts';
 import { MODULE_EXPERT_CATALOG } from './catalog.ts';
 import type { ModuleExpertProfile } from './catalog.ts';
 import { verifyModuleExpertParentAuthorization } from './parent-authorization.ts';
-import { publishedCortexIdentifiersAtCommit } from '../lib/cortex-identifiers.ts';
 import type {
   ModuleExpertChildRequest,
   VerifyModuleExpertParentAuthorizationArgs,
@@ -174,6 +168,9 @@ export async function invokeModuleExpert(
     attempt: request.attempt,
     depth: request.depth,
     parent: request.parent,
+    invocationContextSha256: sha256(
+      JSON.stringify(request.selectedContextPaths),
+    ),
     now: () => new Date().toISOString(),
   };
   const sessionArgs = {
@@ -193,11 +190,7 @@ export async function invokeModuleExpert(
     activity: WorkflowRuntimeActivityKind.SourceReadCompleted,
     detail: 'Module expert context selected.',
   };
-  const selectedContextEvent: AgentAttemptEventWithoutMetadata = {
-    ...runtimeActivityEvent(selectedContextObservation),
-    evidenceSha256: sha256(JSON.stringify(request.selectedContextPaths)),
-  };
-  await journal.append(selectedContextEvent);
+  await journal.observe(selectedContextObservation);
   let activityCount = 1;
   const observe = async (
     observation: RuntimeActivityObservation,
@@ -205,8 +198,7 @@ export async function invokeModuleExpert(
     if (activityCount >= MAX_ACTIVITY_COUNT) {
       throw new Error('Module expert runtime activity limit exceeded.');
     }
-    const event = runtimeActivityEvent(observation);
-    await journal.append(event);
+    await journal.observe(observation);
     activityCount += 1;
   };
   let trustedExecution: TrustedModuleExpertExecution;
@@ -308,8 +300,7 @@ async function finalizeFailedAttempt(
       activity: WorkflowRuntimeActivityKind.RuntimeError,
       detail: 'Module expert runtime failed.',
     };
-    const failureEvent = runtimeActivityEvent(failureObservation);
-    await context.journal.append(failureEvent);
+    await context.journal.observe(failureObservation);
   }
   const terminal: TaskTerminal<string> = {
     kind: TaskTerminalKind.Failed,
@@ -426,26 +417,21 @@ export async function verifyModuleExpertInvocationResult(
   }
   let replayed: ReturnType<typeof replayAgentAttemptJournal>;
   try {
-    const knownCortexIdentifiers = publishedCortexIdentifiersAtCommit({
-      repoRoot: resolve(result.runDirectory, '../../../..'),
-      sourceCommit: result.sourceCommit,
-    });
-    const replayRequest = { events, knownCortexIdentifiers };
+    const replayRequest = { events };
     replayed = replayAgentAttemptJournal(replayRequest);
   } catch {
     processingVerificationFailed();
   }
   const firstEvent = events[0];
-  const selectedContextEvent = events[1] as AgentRuntimeActivityEvent;
   const terminalEvents = events.filter(
     (event) => event.kind === AgentAttemptEventKind.AttemptTerminalRecorded,
   ) as readonly AgentAttemptTerminalRecordedEvent[];
   const terminalEvent = terminalEvents[0];
   if (
     !firstEvent ||
-    !selectedContextEvent ||
     terminalEvents.length !== 1 ||
     !terminalEvent ||
+    firstEvent.kind !== AgentAttemptEventKind.AttemptStarted ||
     firstEvent.adapter !== AgentAttemptAdapterKind.ModuleExpertInvocation ||
     firstEvent.runId !== result.runId ||
     firstEvent.workflow !== DelegatedAgentWorkflowName.AgentWork ||
@@ -456,10 +442,7 @@ export async function verifyModuleExpertInvocationResult(
     firstEvent.attempt !== result.attempt ||
     firstEvent.depth !== result.depth ||
     JSON.stringify(firstEvent.parent) !== JSON.stringify(result.parent) ||
-    selectedContextEvent.kind !== AgentAttemptEventKind.RuntimeActivity ||
-    selectedContextEvent.activity !==
-      WorkflowRuntimeActivityKind.SourceReadCompleted ||
-    selectedContextEvent.evidenceSha256 !==
+    firstEvent.invocationContextSha256 !==
       sha256(JSON.stringify(result.selectedContextPaths)) ||
     projectedTerminal.task !== result.task ||
     projectedTerminal.attempt !== result.attempt ||

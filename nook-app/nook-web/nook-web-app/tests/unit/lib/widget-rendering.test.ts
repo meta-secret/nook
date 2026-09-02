@@ -190,10 +190,10 @@ function renderPasskeyWidget({ loginMatches }: RenderPasskeyWidgetArgs): void {
 }
 
 function savedLoginButton(): HTMLButtonElement | false {
-  return (
+  return ((v) => (v ? v : false))(
     Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find(
       (button) => button.textContent === 'widgetContinue',
-    ) ?? false
+    ),
   )
 }
 

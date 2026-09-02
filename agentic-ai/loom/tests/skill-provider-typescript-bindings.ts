@@ -195,6 +195,9 @@ export function collectBinding(request: BindingCollectionRequest): void {
     const declarationList = node.parent;
     for (const element of node.name.elements) {
       if (!ts.isIdentifier(element.name)) continue;
+      const [defaulted1 = false] = [node.initializer];
+      const [defaulted2 = element.name] = [element.propertyName];
+      const [defaulted3 = element.name] = [element.propertyName];
       const binding: LexicalBinding = {
         capability: false,
         constant:
@@ -202,10 +205,8 @@ export function collectBinding(request: BindingCollectionRequest): void {
           Boolean(declarationList.flags & ts.NodeFlags.Const),
         declaration: element,
         importedFrom: false,
-        initializer: node.initializer ?? false,
-        member: ts.isIdentifier(element.propertyName ?? element.name)
-          ? (element.propertyName ?? element.name).getText()
-          : false,
+        initializer: defaulted1,
+        member: ts.isIdentifier(defaulted2) ? defaulted3.getText() : false,
         name: element.name.text,
         scope: lexicalScope(node),
       };
@@ -215,6 +216,7 @@ export function collectBinding(request: BindingCollectionRequest): void {
   }
   if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
     const declarationList = node.parent;
+    const [defaulted4 = false] = [node.initializer];
     const binding: LexicalBinding = {
       capability: false,
       constant:
@@ -222,7 +224,7 @@ export function collectBinding(request: BindingCollectionRequest): void {
         Boolean(declarationList.flags & ts.NodeFlags.Const),
       declaration: node,
       importedFrom: false,
-      initializer: node.initializer ?? false,
+      initializer: defaulted4,
       member: false,
       name: node.name.text,
       scope: lexicalScope(node),
@@ -343,12 +345,15 @@ export function collectBinding(request: BindingCollectionRequest): void {
   }
   if (!namedBindings || !ts.isNamedImports(namedBindings)) return;
   for (const element of namedBindings.elements) {
-    const imported = (element.propertyName ?? element.name).text;
+    const [defaulted5 = element.name] = [element.propertyName];
+    const imported = defaulted5.text;
+    const [defaulted6 = false] = [CHILD_PROCESS_CALLS.get(imported)];
+    const [defaulted7 = false] = [WORKER_THREAD_CALLS.get(imported)];
     const binding: LexicalBinding = {
       capability: /^(?:node:)?child_process$/u.test(specifier)
-        ? (CHILD_PROCESS_CALLS.get(imported) ?? false)
+        ? defaulted6
         : /^(?:node:)?worker_threads$/u.test(specifier)
-          ? (WORKER_THREAD_CALLS.get(imported) ?? false)
+          ? defaulted7
           : specifier === 'bun' && imported === '$'
             ? SubprocessCallKind.BunShell
             : imported === 'runCommand' &&

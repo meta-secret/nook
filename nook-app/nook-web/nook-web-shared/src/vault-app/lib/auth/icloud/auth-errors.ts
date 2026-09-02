@@ -74,10 +74,10 @@ type CloudKitDiagnosticStrings = CloudKitDiagnosticString[];
 function firstDiagnosticString(
   values: CloudKitDiagnosticStrings,
 ): CloudKitDiagnosticString {
-  return (
+  return ((v) => (v ? v : { kind: CloudKitDiagnosticValueKind.Unavailable }))(
     values.find(
       (value) => value.kind === CloudKitDiagnosticValueKind.Available,
-    ) ?? { kind: CloudKitDiagnosticValueKind.Unavailable }
+    ),
   );
 }
 
@@ -121,9 +121,12 @@ export function cloudKitAuthErrorDetails(
       numericStatus(authError.status),
       numericStatus(authError.statusCode),
     ];
-    const status: CloudKitDiagnosticNumber = statusCandidates.find(
-      (value) => value.kind === CloudKitDiagnosticValueKind.Available,
-    ) ?? { kind: CloudKitDiagnosticValueKind.Unavailable };
+    const status: CloudKitDiagnosticNumber = ((v) =>
+      v ? v : { kind: CloudKitDiagnosticValueKind.Unavailable })(
+      statusCandidates.find(
+        (value) => value.kind === CloudKitDiagnosticValueKind.Available,
+      ),
+    );
     const statusText = stringValue(authError.statusText);
     const uuid = stringValue(authError.uuid);
     return {

@@ -1,9 +1,24 @@
 <script lang="ts">
-  type VaultNameDraftChange = { readonly entry: NookLocalVaultEntry; readonly value: string }
-  type VaultPasswordCreation = { readonly label: string; readonly password: string }
-  type VaultPasswordEntryUpdate = { readonly entryId: PasswordEntryId; readonly password: string }
-  type EnrollmentCodeIssue = { readonly entryId: PasswordEntryId; readonly password: string }
-  type BitwardenVaultImport = { readonly json: string; readonly password: string }
+  type VaultNameDraftChange = {
+    readonly entry: NookLocalVaultEntry
+    readonly value: string
+  }
+  type VaultPasswordCreation = {
+    readonly label: string
+    readonly password: string
+  }
+  type VaultPasswordEntryUpdate = {
+    readonly entryId: PasswordEntryId
+    readonly password: string
+  }
+  type EnrollmentCodeIssue = {
+    readonly entryId: PasswordEntryId
+    readonly password: string
+  }
+  type BitwardenVaultImport = {
+    readonly json: string
+    readonly password: string
+  }
   type AuthenticatorMigrationUriCollection = string[]
 
   import { I18N_KEYS } from '../../../generated/i18n-keys'
@@ -135,15 +150,11 @@
     onCancelSetup: () => void
     onRemoveProvider?: (id: string) => void | Promise<void>
     onAddPassword: (args: VaultPasswordCreation) => void | Promise<void>
-    onUpdatePassword: (
-      args: VaultPasswordEntryUpdate,
-    ) => void | Promise<void>
+    onUpdatePassword: (args: VaultPasswordEntryUpdate) => void | Promise<void>
     onRemovePassword: (entryId: PasswordEntryId) => void | Promise<void>
     onIssueCode: (args: EnrollmentCodeIssue) => Promise<string>
     onClearCode: () => void
-    onImportBitwarden: (
-      args: BitwardenVaultImport,
-    ) => Promise<NookImportResult>
+    onImportBitwarden: (args: BitwardenVaultImport) => Promise<NookImportResult>
     onImportKeePassXc: (csv: string) => Promise<NookImportResult>
     onImportLastPass: (csv: string) => Promise<NookImportResult>
     onImportKeeper: (csv: string) => Promise<NookImportResult>
@@ -242,7 +253,7 @@
 
   $effect(() => {
     const seed = vaults
-      .map((entry) => `${entry.storeId}:${entry.label ?? ''}`)
+      .map((entry) => `${entry.storeId}:${((v) => (v ? v : ''))(entry.label)}`)
       .join('|')
     if (seed !== draftSeed) {
       draftSeed = seed
@@ -251,10 +262,9 @@
   })
 
   function draftFor(entry: NookLocalVaultEntry) {
-    return (
-      drafts[entry.storeId] ??
-      entry.display_label(vault.t(I18N_KEYS.LoginVaultPickerUnnamed))
-    )
+    return ((
+      ...[v = entry.display_label(vault.t(I18N_KEYS.LoginVaultPickerUnnamed))]
+    ) => v)(drafts[entry.storeId])
   }
 
   function setDraft({ entry, value }: VaultNameDraftChange) {
@@ -272,7 +282,10 @@
 
   function beginRename(entry: NookLocalVaultEntry) {
     if (isBusy) return
-    const setDraftArgs: Parameters<typeof setDraft>[0] = { entry, value: entry.display_label(vault.t(I18N_KEYS.LoginVaultPickerUnnamed)) };
+    const setDraftArgs: Parameters<typeof setDraft>[0] = {
+      entry,
+      value: entry.display_label(vault.t(I18N_KEYS.LoginVaultPickerUnnamed)),
+    }
     setDraft(setDraftArgs)
     editingStoreId = {
       kind: VaultLabelEditorKind.Editing,
@@ -281,7 +294,10 @@
   }
 
   function cancelRename(entry: NookLocalVaultEntry) {
-    const setDraftArgs2: Parameters<typeof setDraft>[0] = { entry, value: entry.display_label(vault.t(I18N_KEYS.LoginVaultPickerUnnamed)) };
+    const setDraftArgs2: Parameters<typeof setDraft>[0] = {
+      entry,
+      value: entry.display_label(vault.t(I18N_KEYS.LoginVaultPickerUnnamed)),
+    }
     setDraft(setDraftArgs2)
     if (
       editingStoreId.kind === VaultLabelEditorKind.Editing &&
@@ -312,7 +328,8 @@
       storeId: entry.storeId,
     }
     try {
-      const renameLocalVaultArgs: Parameters<typeof vault.renameLocalVault>[0] = { storeId: entry.storeId, label: draftFor(entry) };
+      const renameLocalVaultArgs: Parameters<typeof vault.renameLocalVault>[0] =
+        { storeId: entry.storeId, label: draftFor(entry) }
       await vault.renameLocalVault(renameLocalVaultArgs)
       if (!vault.errorMsg) {
         editingStoreId = { kind: VaultLabelEditorKind.Closed }
@@ -350,7 +367,13 @@
         data-testid="vault-admin-vault-count"
       >
         <CheckCircle2 class="size-3" />
-        {(() => { const tArgs: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.VaultAdminVaultCount, replacements: { count: String(vaults.length) } }; return vault.t(tArgs); })()}
+        {(() => {
+          const tArgs: Parameters<typeof vault.t>[0] = {
+            key: I18N_KEYS.VaultAdminVaultCount,
+            replacements: { count: String(vaults.length) },
+          }
+          return vault.t(tArgs)
+        })()}
       </span>
     {/snippet}
 
@@ -433,9 +456,13 @@
                   value={draftFor(entry)}
                   disabled={isBusy}
                   oninput={(event) =>
-                    (() => { const setDraftArgs3: Parameters<typeof setDraft>[0] = { entry, value: (event.currentTarget as HTMLInputElement).value }; return setDraft(
-                      setDraftArgs3,
-                    ); })()}
+                    (() => {
+                      const setDraftArgs3: Parameters<typeof setDraft>[0] = {
+                        entry,
+                        value: (event.currentTarget as HTMLInputElement).value,
+                      }
+                      return setDraft(setDraftArgs3)
+                    })()}
                   onkeydown={(event) => {
                     if (event.key === 'Enter') {
                       event.preventDefault()
@@ -604,9 +631,15 @@
           <ShieldCheck class="size-3" />
           {passwordEntries.length === 1
             ? vault.t(I18N_KEYS.SettingsPasswordCountSingular)
-            : (() => { const tArgs2: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.SettingsPasswordCountPlural, replacements: {
-                count: String(passwordEntries.length),
-              } }; return vault.t(tArgs2); })()}
+            : (() => {
+                const tArgs2: Parameters<typeof vault.t>[0] = {
+                  key: I18N_KEYS.SettingsPasswordCountPlural,
+                  replacements: {
+                    count: String(passwordEntries.length),
+                  },
+                }
+                return vault.t(tArgs2)
+              })()}
         {:else}
           <Lock class="size-3" />
           {vault.t(I18N_KEYS.SettingsNoPasswords)}

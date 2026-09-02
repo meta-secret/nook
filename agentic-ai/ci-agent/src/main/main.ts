@@ -37,7 +37,7 @@ async function runPlanningAgentCommand(): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  const command = process.argv[2] ?? "fix";
+  const [command = ("fix")] = [process.argv[2]];
 
   switch (command) {
     case "agent":

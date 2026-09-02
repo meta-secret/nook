@@ -31,7 +31,11 @@ async function clearAuthProviderStore(): Promise<void> {
       }
     }
     request.onerror = () =>
-      reject(request.error ?? new Error('Failed to clear nook_auth.'))
+      reject(
+        ((v) => (v ? v : new Error('Failed to clear nook_auth.')))(
+          request.error,
+        ),
+      )
     request.onsuccess = () => {
       const db = request.result
       const transaction = db.transaction('auth', 'readwrite')
@@ -41,7 +45,11 @@ async function clearAuthProviderStore(): Promise<void> {
         resolve()
       }
       transaction.onerror = () =>
-        reject(transaction.error ?? new Error('Failed to clear nook_auth.'))
+        reject(
+          ((v) => (v ? v : new Error('Failed to clear nook_auth.')))(
+            transaction.error,
+          ),
+        )
     }
   })
 }
@@ -63,19 +71,28 @@ async function readRawAuthProvidersFromIdb(): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open('nook_auth', 1)
     request.onerror = () =>
-      reject(request.error ?? new Error('Failed to open nook_auth.'))
+      reject(
+        ((v) => (v ? v : new Error('Failed to open nook_auth.')))(
+          request.error,
+        ),
+      )
     request.onsuccess = () => {
       const db = request.result
       const tx = db.transaction('auth', 'readonly')
       const store = tx.objectStore('auth')
       const getReq = store.get('providers')
       getReq.onerror = () =>
-        reject(getReq.error ?? new Error('Failed to read providers.'))
+        reject(
+          ((v) => (v ? v : new Error('Failed to read providers.')))(
+            getReq.error,
+          ),
+        )
       getReq.onsuccess = () => {
         resolve(getReq.result)
       }
       tx.oncomplete = () => db.close()
-      tx.onerror = () => reject(tx.error ?? new Error('IndexedDB tx failed.'))
+      tx.onerror = () =>
+        reject(((v) => (v ? v : new Error('IndexedDB tx failed.')))(tx.error))
     }
   })
 }
@@ -182,7 +199,11 @@ describe.sequential(
           }
         }
         request.onerror = () =>
-          reject(request.error ?? new Error('Failed to open nook_auth.'))
+          reject(
+            ((v) => (v ? v : new Error('Failed to open nook_auth.')))(
+              request.error,
+            ),
+          )
         request.onsuccess = () => {
           const db = request.result
           const tx = db.transaction('auth', 'readwrite')
@@ -207,7 +228,9 @@ describe.sequential(
             resolve()
           }
           tx.onerror = () =>
-            reject(tx.error ?? new Error('IndexedDB tx failed.'))
+            reject(
+              ((v) => (v ? v : new Error('IndexedDB tx failed.')))(tx.error),
+            )
         }
       })
 

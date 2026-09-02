@@ -10,7 +10,10 @@ const options: LintTextOptions = { filePath: 'src/cli.ts' };
 async function ruleIds(source: string) {
   const eslint = new ESLint();
   const results = await eslint.lintText(source, options);
-  return results[0]?.messages.map((message) => message.ruleId) ?? [];
+  const [defaulted1 = []] = [
+    results[0]?.messages.map((message) => message.ruleId),
+  ];
+  return defaulted1;
 }
 
 describe('Loom ESLint contracts', () => {

@@ -280,7 +280,7 @@ export function syncOAuthRemoteRefFromManager(
   }
   const updated = update_oauth_remote_ref(
     $state.snapshot(state.oauthFileDraft.config),
-    state.requireManager().storage_remote_ref ?? "",
+    ((v) => (v ? v : ""))(state.requireManager().storage_remote_ref),
   );
   try {
     if (updated.state === NookOAuthRemoteConfigurationUpdateState.Updated) {

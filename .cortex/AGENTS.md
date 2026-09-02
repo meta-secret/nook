@@ -128,8 +128,19 @@ Workbench record, not another coordinator or worker. See the
 - **Parent and worker ownership**
   - Parent-owned control operations do not create Team Agent work.
 - **Validation and delivery**
-  - Team workers must not run the full `task loom:verify` suite locally during
-    agent delivery.
+  - Gizmo Prime, Team Agents, and subagents must not run product compilation or
+    full repository validation locally, whether directly or through a Task
+    target or script.
+  - The local prohibition includes preflight, Rust/WASM compilation and tests,
+    web builds, browser end-to-end suites, Hive verification, full Loom
+    verification, and combined repository or PR validation.
+  - Do not bypass the prohibition by invoking an underlying compiler, test
+    runner, package script, or workflow script directly.
+  - Fast focused local Loom tests, lint, and typechecks are allowed only for
+    direct implementation feedback as defined above.
+  - Team workers must not run the full `task loom:verify` suite locally.
+  - Missing hosted validation is a blocker, not permission to run locally.
+  - Only the user may authorize an exact local command for the current task.
 - **Feature ownership**
   - Security review does not transfer implementation ownership.
   - Another active agent's work is read-only until ownership is explicitly
@@ -147,6 +158,39 @@ Workbench record, not another coordinator or worker. See the
   - Moving unit tests or making arbitrary fragments is not source-size
     compliance.
   - Repository-authored automation does not use Python.
+
+## Remote task execution
+
+The allowlisted remote selectors map prohibited local work to hosted execution:
+
+- `preflight` runs repository preflight.
+- `rust:ci` runs Rust product validation.
+- `loom:verify` runs the full Loom suite.
+- `web:build` runs the web product build.
+- `web:e2e` and `extension:e2e` run browser suites.
+- `hive:verify` runs Hive verification.
+- `check`, `ci:pr`, and `ci:pr:e2e` run combined repository and PR validation.
+- `arc:runtime` runs the ARC runtime smoke check.
+
+Run hosted validation from a clean, committed non-main branch:
+
+1. Push the branch and confirm that the remote branch is at the same commit as
+   local `HEAD`.
+2. Run `task remote:list` to see the allowlisted hosted tasks.
+3. Dispatch one task with `task remote TASK_NAME=<task>`, for example
+   `task remote TASK_NAME=loom:verify`.
+4. Dispatch compatible tasks together with
+   `task remote TASK_NAMES=<task-a>,<task-b>` when one hosted job is preferred.
+5. Follow the run URL printed by the command, or inspect the exact-head run
+   with the printed `gh run list` command.
+
+`task remote` rejects a dirty checkout, `main`, an unpushed branch, a local
+`HEAD` that differs from the remote branch, and tasks outside the allowlist.
+Runtime-backed selectors and `arc:runtime` must be dispatched alone; compatible
+batches may contain at most eight selectors.
+When a task requires a current base, it also verifies that the branch contains
+the current `origin/main`. A later push invalidates the earlier run as delivery
+evidence; dispatch the task again for the new head.
 
 ## No fallback behavior
 
@@ -308,6 +352,6 @@ Use the detailed authority only when its stage is reached:
 - [Pull requests](gizmo/workflows/pull-requests.md) owns exact-head review,
   validation, readiness, and merge.
 
-Run `task loom:cortex-audit` after Cortex changes. Knowledge graphs index
-documents, not their headings; update a graph only when document ownership,
-path, or discoverability changes.
+Cortex instruction-only changes do not require local preflight or Loom checks.
+Knowledge graphs index documents, not their headings; update a graph only when
+document ownership, path, or discoverability changes.

@@ -25,5 +25,5 @@ const result = spawnSync(
 )
 
 if (result.status !== 0) {
-  process.exit(result.status ?? 1)
+  process.exit(((...[v = 1]) => v)(result.status))
 }

@@ -9,6 +9,8 @@ import {
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
+const { PATH: executablePath = "" } = process.env;
+
 const root = resolve(import.meta.dir, "../..");
 const taskfile = resolve(root, "infra/tasks/host-services.yml");
 const taskStart = "  services:repair-network:\n";
@@ -99,7 +101,7 @@ esac
       cmd: [harness.path],
       env: {
         ...process.env,
-        PATH: `${mockBin}:${process.env.PATH ?? ""}`,
+        PATH: `${mockBin}:${executablePath}`,
         MOCK_LOG: log,
         MOCK_STATE: state,
         MOCK_DOCKER_VERSION: input.version,

@@ -53,7 +53,7 @@ function labelFor(review: NookSyncConflictReview): string {
       syncConflictReview: review,
       t: (request: TranslationRequest) => {
         const replacements = translationReplacements(request)
-        return `${translationKey(request)}:${replacements.provider ?? ''}`
+        return `${translationKey(request)}:${((v) => (v ? v : ''))(replacements.provider)}`
       },
     })
   } finally {

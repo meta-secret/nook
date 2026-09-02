@@ -34,8 +34,9 @@ import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/exten
 import { OpenCompanionLauncherIntent } from '../../nook-web-shared/src/extension/companion-launcher-message'
 import { createLocalVaultOnLogin } from '../../nook-web-app/e2e/helpers'
 
-const chromiumExecutablePath =
-  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim() ?? ''
+const chromiumExecutablePath = ((v) => (v ? v : ''))(
+  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim(),
+)
 
 enum WebsitePageStateKind {
   Skipped = 'skipped',

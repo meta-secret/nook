@@ -12,10 +12,14 @@ the active harness.
 - Every Team Agent task has one team identity.
 - Every task names its outcome, allowed files, forbidden files, and acceptance
   evidence.
-- Before any Team Agent starts, Gizmo builds one complete immutable delegation
-  plan that declares every Team Agent task and dependency currently known.
-- The user-visible plan hierarchy comes only from Loom's decoded and validated
-  plan. Gizmo never composes, edits, or infers the tree itself.
+- Before any Team Agent starts, Gizmo lists every task and dependency currently
+  known in native harness dispatch order.
+- The user-visible hierarchy comes only from the validated
+  [delegation visualization](../../teams/ai/dynamic-skills/delegation-visualization/SKILL.md)
+  `delegationVisualization.render` result.
+- The visualization request is ephemeral presentation input.
+- It is not admission, scheduling, persistence, or agent-lifecycle state.
+- Gizmo never composes, edits, or infers the returned tree.
 - Give the Team Agent only its team entry point and task-relevant Cortex.
 - Use the active harness for Team Agent communication.
 - Do not use another Codex task, thread, cloud task, or external agent as
@@ -38,14 +42,15 @@ the active harness.
 2. Discover every Team Agent task and dependency currently known.
 3. Define each bounded task with explicit file scope and acceptance evidence.
 4. Check that no other write-capable Team Agent is active.
-5. Build the complete immutable delegation plan for that known work.
-6. Start the plan through
-   `loom-agent-delegation start --plan <plan.json> --working-directory <repo-root>`.
+5. Build one `delegationVisualization.render` request for that known work.
+   - Give every task one identifier, team, description, and dependency list.
+   - Keep tasks in native harness dispatch order.
+   - Name only earlier tasks as dependencies.
+6. Invoke the static renderer through `task skills:run`.
 7. Emit one normal `GIZMO:STATE` activity line for the plan visualization.
-8. Publish the tree emitted by the start command on standard error verbatim as
-   one compact user-visible block immediately below that activity line.
-   - Keep the machine-readable response on standard output out of the tree.
-9. Start the Team Agent in the current checkout.
+8. Publish the returned `tree` verbatim as one compact user-visible block
+   immediately below that activity line.
+9. Start the Team Agent through the active harness in the current checkout.
 10. Let the Team Agent implement and run focused checks.
 11. Ask for a commit when a commit is useful for the delivery sequence.
 12. Verify that the result stays inside the declared scope.
@@ -65,14 +70,14 @@ delivery sequence.
 
 ### Later discovery
 
-A genuinely later dependency was not part of the initial known plan. Gizmo
+A genuinely later dependency was not part of the initial known work. Gizmo
 must not backfill that dependency into the initial visualization or claim it
-was known earlier. Before its Team Agent starts, Gizmo builds and visualizes a
-new immutable plan for the newly known work through the same startup gate.
+was known earlier. Before its Team Agent starts, Gizmo renders a new request
+for the newly known work through the same presentation gate.
 
 ## Failure handling
 
-- If plan start or plan visualization publication fails, report the blocker.
+- If request validation or visualization publication fails, report the blocker.
   Do not dispatch a Team Agent.
 - If a required Team Agent cannot start, report the blocker.
 - If a Team Agent produces out-of-scope changes, reject those changes and route

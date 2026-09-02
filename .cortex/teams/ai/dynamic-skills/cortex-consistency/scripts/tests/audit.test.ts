@@ -38,10 +38,11 @@ function request(references: readonly string[]): AuditCortexContractsArgs {
           capabilities: [],
         },
       ],
+      runtimes: [],
     },
     documents: [
-      { relativePath: AUTHORITY, references },
-      { relativePath: POLICY, references: [] },
+      { relativePath: AUTHORITY, references, commands: [] },
+      { relativePath: POLICY, references: [], commands: [] },
     ],
   };
 }
@@ -52,6 +53,138 @@ test('accepts a referenced imported policy', () => {
       request(['../web-dev/dynamic-skills/typescript-enums-over-booleans.md']),
     ),
   ).toEqual([]);
+});
+
+test('rejects missing and retired native delegation runtime bindings', () => {
+  const workflow = '.cortex/gizmo/workflows/subagent-delegation.md';
+  const compileRequest: AuditCortexContractsArgs = {
+    registry: {
+      contexts: [],
+      policies: [],
+      runtimes: [
+        {
+          document: workflow,
+          allowedCommandPrefixes: ['task skills:run'],
+          requiredCommandPrefixes: ['task skills:run'],
+          retiredCommandPrefixes: ['loom-agent-delegation'],
+        },
+      ],
+    },
+    documents: [
+      {
+        relativePath: workflow,
+        references: [],
+        commands: [
+          'loom-agent-delegation start --plan plan.json',
+          'delegationVisualization.render',
+          'task missing:runtime',
+        ],
+      },
+    ],
+  };
+  expect(compileCortexContracts(compileRequest)).toEqual([
+    expect.objectContaining({
+      code: CortexContractFindingCode.MissingRuntimeEntrypoint,
+      file: workflow,
+      message:
+        'Cortex workflow names an unregistered runtime entrypoint: task missing:runtime',
+    }),
+    expect.objectContaining({
+      code: CortexContractFindingCode.MissingRuntimeEntrypoint,
+      file: workflow,
+    }),
+    expect.objectContaining({
+      code: CortexContractFindingCode.RetiredRuntimeEntrypoint,
+      file: workflow,
+    }),
+  ]);
+});
+
+test('accepts the static skill host for native delegation rendering', () => {
+  const workflow = '.cortex/gizmo/workflows/subagent-delegation.md';
+  const compileRequest: AuditCortexContractsArgs = {
+    registry: {
+      contexts: [],
+      policies: [],
+      runtimes: [
+        {
+          document: workflow,
+          allowedCommandPrefixes: ['task skills:run'],
+          requiredCommandPrefixes: ['task skills:run'],
+          retiredCommandPrefixes: ['loom-agent-delegation'],
+        },
+      ],
+    },
+    documents: [
+      {
+        relativePath: workflow,
+        references: [],
+        commands: ['task skills:run REQUEST_YAML=strict-yaml'],
+      },
+    ],
+  };
+  expect(compileCortexContracts(compileRequest)).toEqual([]);
+});
+
+test('rejects a missing registered runtime document', () => {
+  const workflow = '.cortex/gizmo/workflows/subagent-delegation.md';
+  const compileRequest: AuditCortexContractsArgs = {
+    registry: {
+      contexts: [],
+      policies: [],
+      runtimes: [
+        {
+          document: workflow,
+          allowedCommandPrefixes: ['task skills:run'],
+          requiredCommandPrefixes: ['task skills:run'],
+          retiredCommandPrefixes: [],
+        },
+      ],
+    },
+    documents: [],
+  };
+  expect(compileCortexContracts(compileRequest)).toEqual([
+    expect.objectContaining({
+      code: CortexContractFindingCode.MissingRuntimeDocument,
+      file: workflow,
+    }),
+  ]);
+});
+
+test('requires an exact runtime command prefix boundary', () => {
+  const workflow = '.cortex/gizmo/workflows/subagent-delegation.md';
+  const compileRequest: AuditCortexContractsArgs = {
+    registry: {
+      contexts: [],
+      policies: [],
+      runtimes: [
+        {
+          document: workflow,
+          allowedCommandPrefixes: ['task skills:run'],
+          requiredCommandPrefixes: ['task skills:run'],
+          retiredCommandPrefixes: [],
+        },
+      ],
+    },
+    documents: [
+      {
+        relativePath: workflow,
+        references: [],
+        commands: ['task skills:runaway REQUEST_YAML=strict-yaml'],
+      },
+    ],
+  };
+  expect(compileCortexContracts(compileRequest)).toHaveLength(2);
+  expect(compileCortexContracts(compileRequest)).toEqual([
+    expect.objectContaining({
+      message:
+        'Cortex workflow names an unregistered runtime entrypoint: task skills:runaway REQUEST_YAML=strict-yaml',
+    }),
+    expect.objectContaining({
+      message:
+        'Cortex workflow is missing its required runtime entrypoint: task skills:run',
+    }),
+  ]);
 });
 
 test('rejects an imported policy without an authority reference', () => {
@@ -76,11 +209,13 @@ test('rejects context ownership disguised by traversal', () => {
         },
       ],
       policies: [],
+      runtimes: [],
     },
     documents: [
       {
         relativePath: '.cortex/teams/web-dev/../../rogue/AGENTS.md',
         references: [],
+        commands: [],
       },
     ],
   };
@@ -110,8 +245,8 @@ test('rejects a non-authority document under a recognized owner', () => {
       ],
     },
     documents: [
-      { relativePath: nonAuthority, references: [POLICY] },
-      { relativePath: POLICY, references: [] },
+      { relativePath: nonAuthority, references: [POLICY], commands: [] },
+      { relativePath: POLICY, references: [], commands: [] },
     ],
   };
   expect(compileCortexContracts(invalidRequest)).toContainEqual(
@@ -134,8 +269,11 @@ test('preserves leading traversal so it cannot alias a canonical authority', () 
         },
       ],
       policies: [],
+      runtimes: [],
     },
-    documents: [{ relativePath: escapedAuthority, references: [] }],
+    documents: [
+      { relativePath: escapedAuthority, references: [], commands: [] },
+    ],
   };
   expect(compileCortexContracts(compileRequest)).toContainEqual(
     expect.objectContaining({
@@ -174,8 +312,9 @@ test('rejects uncovered foreign policy and invalid policy ownership', () => {
             capabilities: [],
           },
         ],
+        runtimes: [],
       },
-      documents: [{ relativePath: roguePolicy, references: [] }],
+      documents: [{ relativePath: roguePolicy, references: [], commands: [] }],
     }),
   ).toContainEqual(
     expect.objectContaining({
@@ -194,6 +333,7 @@ type PersistedRequestArgs = {
 function persistedRequest(
   args: PersistedRequestArgs,
 ): AuditCortexContractsArgs {
+  const { references = [] } = args;
   return {
     registry: {
       contexts: [],
@@ -213,10 +353,15 @@ function persistedRequest(
           capabilities: [CortexPolicyCapability.SchemaVersioning],
         },
       ],
+      runtimes: [],
     },
     documents: [
-      { relativePath: RUST_POLICY, references: args.references ?? [] },
-      { relativePath: SCHEMA_POLICY, references: [] },
+      {
+        relativePath: RUST_POLICY,
+        references,
+        commands: [],
+      },
+      { relativePath: SCHEMA_POLICY, references: [], commands: [] },
     ],
   };
 }

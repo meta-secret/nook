@@ -7,7 +7,6 @@ import {
   MaterializedViewPresence,
   TaskTerminalKind,
 } from './domain.ts';
-import { WorkflowRuntimeActivityKind } from './events.ts';
 import type {
   AgentAttemptEvent,
   AgentAttemptEventMetadata,
@@ -18,12 +17,10 @@ import type {
   ProjectionReference,
 } from './domain.ts';
 import { assertCurrentAgentAttemptWorkflowVersion } from './agent-attempt-version.ts';
-import { assertCortexReferences } from './cortex-references.ts';
 import { cortexActionId } from './agent-event-renderer.ts';
 
 export type ReplayAgentAttemptJournalRequest = {
   readonly events: readonly AgentAttemptEvent[];
-  readonly knownCortexIdentifiers?: ReadonlySet<string>;
 };
 
 export type ReplayedAgentAttempt = {
@@ -35,9 +32,6 @@ export type ReplayedAgentAttempt = {
 const AGENT_EVENT_KINDS = new Set<string>(Object.values(AgentAttemptEventKind));
 const AGENT_ATTEMPT_ADAPTER_KINDS = new Set<string>(
   Object.values(AgentAttemptAdapterKind),
-);
-const RUNTIME_ACTIVITY_KINDS = new Set<string>(
-  Object.values(WorkflowRuntimeActivityKind),
 );
 const TASK_TERMINAL_KINDS = new Set<string>(Object.values(TaskTerminalKind));
 const VIEW_AUTHOR_KINDS = new Set<string>(
@@ -69,6 +63,16 @@ export function replayAgentAttemptJournal(
   const first = request.events[0];
   if (!first || first.kind !== AgentAttemptEventKind.AttemptStarted) {
     throw new Error('Agent attempt journal must start with attempt-started.');
+  }
+  const moduleExpertAttempt =
+    first.adapter === AgentAttemptAdapterKind.ModuleExpertInvocation;
+  if (
+    moduleExpertAttempt
+      ? !first.invocationContextSha256 ||
+        !/^[0-9a-f]{64}$/u.test(first.invocationContextSha256)
+      : first.invocationContextSha256
+  ) {
+    throw new Error('Agent attempt invocation context binding is invalid.');
   }
   assertCurrentAgentAttemptWorkflowVersion(first.workflowVersion);
   let projectedResult: ProjectionReference | false = false;
@@ -118,32 +122,6 @@ export function replayAgentAttemptJournal(
         throw new Error('Agent attempt result projection is invalid.');
       }
       projectedResult = event.result;
-    }
-    if (
-      event.kind === AgentAttemptEventKind.RuntimeActivity &&
-      (!RUNTIME_ACTIVITY_KINDS.has(event.activity) ||
-        Object.hasOwn(event, 'detail') ||
-        ('evidenceSha256' in event &&
-          !/^[0-9a-f]{64}$/u.test(event.evidenceSha256)))
-    ) {
-      throw new Error(
-        'Agent attempt journal contains unknown runtime activity.',
-      );
-    }
-    if (event.kind === AgentAttemptEventKind.RuntimeActivity) {
-      if (
-        event.cortexReferences.length > 0 &&
-        !request.knownCortexIdentifiers
-      ) {
-        throw new Error(
-          'Agent attempt journal Cortex references require a source-bound registry.',
-        );
-      }
-      const referenceArgs = {
-        references: event.cortexReferences,
-        knownIdentifiers: request.knownCortexIdentifiers ?? false,
-      } as const;
-      assertCortexReferences(referenceArgs);
     }
     if (event.kind === AgentAttemptEventKind.ViewProjected) {
       if (sawView) {
@@ -285,9 +263,13 @@ function validMaterializedView(view: MaterializedViewReference): boolean {
 }
 
 function eventHasExactKeys(event: AgentAttemptEvent): boolean {
+  const startFields =
+    event.kind === AgentAttemptEventKind.AttemptStarted &&
+    event.invocationContextSha256
+      ? ['invocationContextSha256']
+      : [];
   const fieldsByKind: Record<AgentAttemptEventKind, readonly string[]> = {
-    [AgentAttemptEventKind.AttemptStarted]: [],
-    [AgentAttemptEventKind.RuntimeActivity]: ['activity', 'cortexReferences'],
+    [AgentAttemptEventKind.AttemptStarted]: startFields,
     [AgentAttemptEventKind.ResultProjected]: ['result'],
     [AgentAttemptEventKind.ViewProjected]: ['view'],
     [AgentAttemptEventKind.AttemptTerminalRecorded]: [
@@ -302,12 +284,6 @@ function eventHasExactKeys(event: AgentAttemptEvent): boolean {
     ...fieldsByKind[event.kind],
   ]);
   const keys = Object.keys(event);
-  if (
-    event.kind === AgentAttemptEventKind.RuntimeActivity &&
-    Object.hasOwn(event, 'evidenceSha256')
-  ) {
-    expected.add('evidenceSha256');
-  }
   return (
     keys.length === expected.size && keys.every((key) => expected.has(key))
   );

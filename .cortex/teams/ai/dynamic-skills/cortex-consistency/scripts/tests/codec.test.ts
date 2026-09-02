@@ -8,7 +8,11 @@ test('decodes the strict consistency request', () => {
       JSON.stringify({
         kind: CortexConsistencyContractKind.Request,
         documents: [
-          { relativePath: '.cortex/AGENTS.md', references: ['policy.md'] },
+          {
+            relativePath: '.cortex/AGENTS.md',
+            references: ['policy.md'],
+            commands: [],
+          },
         ],
       }),
     ).documents,
@@ -16,7 +20,11 @@ test('decodes the strict consistency request', () => {
 });
 
 test('rejects duplicate documents and extra fields', () => {
-  const document = { relativePath: '.cortex/AGENTS.md', references: [] };
+  const document = {
+    relativePath: '.cortex/AGENTS.md',
+    references: [],
+    commands: [],
+  };
   expect(() =>
     decodeCortexConsistencyRequest(
       JSON.stringify({

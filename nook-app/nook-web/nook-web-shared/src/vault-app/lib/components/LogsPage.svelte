@@ -54,7 +54,11 @@
     loading = true
     try {
       total = await logCount()
-      const dumpLogsArgs: Parameters<typeof dumpLogs>[0] = { minLevel, limit: PAGE_SIZE, offset };
+      const dumpLogsArgs: Parameters<typeof dumpLogs>[0] = {
+        minLevel,
+        limit: PAGE_SIZE,
+        offset,
+      }
       entries = await dumpLogs(dumpLogsArgs)
     } finally {
       loading = false
@@ -62,13 +66,13 @@
   }
 
   function changeMinLevel(value: string) {
-    minLevel = (value as LogLevel) ?? LogLevel.Trace
+    minLevel = ((...[v = LogLevel.Trace]) => v)(value as LogLevel)
     offset = 0
     void load()
   }
 
   function changeCaptureLevel(value: string) {
-    captureLevel = (value as LogLevel) ?? LogLevel.Info
+    captureLevel = ((...[v = LogLevel.Info]) => v)(value as LogLevel)
     setLogLevel(captureLevel)
   }
 
@@ -92,9 +96,7 @@
 
   async function copyAll() {
     try {
-      await navigator.clipboard.writeText(
-        JSON.stringify(newestFirst),
-      )
+      await navigator.clipboard.writeText(JSON.stringify(newestFirst))
       copied = true
       setTimeout(() => {
         copied = false

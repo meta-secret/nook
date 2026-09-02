@@ -35,7 +35,9 @@ spyOn(codexRuntime, 'runIsolatedModuleExpertCodex').mockImplementation(
 export function registerModuleExpertRuntimeMock(
   args: RegisterModuleExpertRuntimeMockArgs,
 ): ModuleExpertRuntimeMockRegistration {
-  const runtimes = registeredRuntimes.get(args.runId) ?? [];
+  const [runtimes = new Array<AgentTaskRuntime<string, string>>()] = [
+    registeredRuntimes.get(args.runId),
+  ];
   runtimes.push(args.runtime);
   registeredRuntimes.set(args.runId, runtimes);
   return {

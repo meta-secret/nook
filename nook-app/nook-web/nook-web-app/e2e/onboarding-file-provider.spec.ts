@@ -172,9 +172,11 @@ test.describe('Google Drive provider modes', () => {
     await expect
       .poll(
         () =>
-          driveStub
-            .getSharedFolders()[0]
-            ?.writers.includes(collaboratorEmail) ?? false,
+          ((v) => (v ? v : false))(
+            driveStub
+              .getSharedFolders()[0]
+              ?.writers.includes(collaboratorEmail),
+          ),
         { timeout: UI_TIMEOUT_MS },
       )
       .toBe(true)

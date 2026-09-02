@@ -16,12 +16,13 @@ test('materializes synthesis context without repository paths or credentials', a
   const temporaryRoot = await mkdtemp(join(tmpdir(), 'structural-synthesis-'));
   const removeOptions: RmOptions = { recursive: true, force: true };
   try {
+    const [defaulted1 = ''] = [process.env.PATH];
     const isolationRequest: ReadOnlyExpertRuntimeIsolationRequest = {
       expertName: 'system_coherence_synthesizer',
       parentEnvironment: {
         CODEX_API_KEY: 'must-not-persist',
         GITHUB_TOKEN: 'must-not-inherit',
-        PATH: process.env.PATH ?? '',
+        PATH: defaulted1,
       },
       snapshot: {
         excludedPaths: [],
@@ -70,11 +71,12 @@ test('rejects traversal and oversized synthetic context before agent execution',
   const temporaryRoot = await mkdtemp(join(tmpdir(), 'structural-context-'));
   const removeOptions: RmOptions = { recursive: true, force: true };
   try {
+    const [defaulted2 = ''] = [process.env.PATH];
     const unsafeRequest: ReadOnlyExpertRuntimeIsolationRequest = {
       expertName: 'system_coherence_synthesizer',
       parentEnvironment: {
         CODEX_API_KEY: 'test-key',
-        PATH: process.env.PATH ?? '',
+        PATH: defaulted2,
       },
       snapshot: {
         excludedPaths: [],
@@ -115,11 +117,12 @@ test('materializes only exact shared formatter and lint tooling', async () => {
   };
   const sourceCommit = runCommand(revisionRequest).stdout.trim();
   try {
+    const [defaulted3 = ''] = [process.env.PATH];
     const isolationRequest: ReadOnlyExpertRuntimeIsolationRequest = {
       expertName: profile.name,
       parentEnvironment: {
         CODEX_API_KEY: 'structural-snapshot-test-key',
-        PATH: process.env.PATH ?? '',
+        PATH: defaulted3,
       },
       snapshot: {
         excludedPaths: profile.excludedPaths,

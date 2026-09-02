@@ -75,8 +75,9 @@ const rootDir = path.resolve(
 )
 export const extensionDir =
   process.env.NOOK_EXTENSION_E2E_DIR || path.join(rootDir, 'dist')
-const chromiumExecutablePath =
-  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim() ?? ''
+const chromiumExecutablePath = ((v) => (v ? v : ''))(
+  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim(),
+)
 export const setupStorageKey = 'nook:extension-setup'
 export const pairingGrantStorageKey = 'nook:extension-pairing-grant:store-e2e'
 export const syntheticEventLogRecords = [
@@ -205,10 +206,9 @@ export async function assertWebsitePasskeyThroughExtension({
 }
 
 export async function getServiceWorker(context: BrowserContext) {
-  return (
-    context.serviceWorkers()[0] ??
-    (await context.waitForEvent('serviceworker', { timeout: 15_000 }))
-  )
+  const [serviceWorker] = context.serviceWorkers()
+  if (serviceWorker) return serviceWorker
+  return await context.waitForEvent('serviceworker', { timeout: 15_000 })
 }
 
 export async function launchExtensionContext(userDataDir: string) {

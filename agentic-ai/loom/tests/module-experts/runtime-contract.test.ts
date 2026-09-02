@@ -76,11 +76,12 @@ describe('module expert runtime isolation', () => {
       const repository = await createRepositoryFixture(fixtureRoot);
       const isolationRoot = join(fixtureRoot, 'isolated');
       await mkdir(isolationRoot);
+      const [defaulted1 = ''] = [process.env.PATH];
       const parentEnvironment: NodeJS.ProcessEnv = {
         ...DECOY_ENVIRONMENT,
         CODEX_API_KEY: API_KEY_SENTINEL,
         CODEX_HOME: join(fixtureRoot, 'parent-codex-home'),
-        PATH: process.env.PATH ?? '',
+        PATH: defaulted1,
       };
       const isolationRequest: ModuleExpertRuntimeIsolationRequest = {
         expertName: EXPERT_NAME,
@@ -109,9 +110,8 @@ describe('module expert runtime isolation', () => {
           join(isolation.codexHome, 'workspace'),
         );
         expect(isolation.threadOptions.skipGitRepoCheck).toBe(true);
-        expect(
-          await readdir(isolation.threadOptions.workingDirectory ?? ''),
-        ).toEqual([]);
+        const [defaulted2 = ''] = [isolation.threadOptions.workingDirectory];
+        expect(await readdir(defaulted2)).toEqual([]);
         expect(MODULE_EXPERT_CODEX_OPTIONS.config.features.shell_tool).toBe(
           false,
         );
@@ -146,10 +146,8 @@ describe('module expert runtime isolation', () => {
           ),
         ).rejects.toThrow();
 
-        const snapshotEntry = join(
-          isolation.repositorySnapshot,
-          profile().publicEntryPoints[0] ?? '',
-        );
+        const [defaulted3 = ''] = [profile().publicEntryPoints[0]];
+        const snapshotEntry = join(isolation.repositorySnapshot, defaulted3);
         expect(await readFile(snapshotEntry, 'utf8')).toBe(
           repository.committedEntryContent,
         );
@@ -227,14 +225,17 @@ describe('module expert runtime isolation', () => {
       );
       try {
         const command = authenticationCommand(isolation);
+        const [defaulted4 = ''] = [command.args[3]];
         const invalidRequest: BrokerSocketRequest = {
           nonce: 'invalid-nonce',
-          socketPath: command.args[3] ?? '',
+          socketPath: defaulted4,
         };
         expect(await redeemBrokerSocket(invalidRequest)).toBe('');
+        const [defaulted5 = ''] = [command.args[4]];
+        const [defaulted6 = ''] = [command.args[3]];
         const validRequest: BrokerSocketRequest = {
-          nonce: command.args[4] ?? '',
-          socketPath: command.args[3] ?? '',
+          nonce: defaulted5,
+          socketPath: defaulted6,
         };
         expect((await redeemBrokerSocket(validRequest)).trim()).toBe(
           API_KEY_SENTINEL,
@@ -286,14 +287,9 @@ describe('module expert runtime isolation', () => {
         expect(secondResult.stdout.trim()).toBe(API_KEY_SENTINEL);
         await first.dispose();
         expect((await readdir(isolationRoot)).length).toBe(1);
+        const [defaulted7 = ''] = [profile().publicEntryPoints[0]];
         expect(
-          await readFile(
-            join(
-              second.repositorySnapshot,
-              profile().publicEntryPoints[0] ?? '',
-            ),
-            'utf8',
-          ),
+          await readFile(join(second.repositorySnapshot, defaulted7), 'utf8'),
         ).toBe(repository.committedEntryContent);
       } finally {
         await first.dispose();
@@ -492,12 +488,13 @@ describe('module expert runtime isolation', () => {
         repository,
       };
       const baseRequest = runtimeIsolationRequest(fixtureRequest);
+      const [defaulted8 = ''] = [process.env.PATH];
       const unsupportedAuthRequest: ModuleExpertRuntimeIsolationRequest = {
         ...baseRequest,
         parentEnvironment: {
           CODEX_ACCESS_TOKEN: 'unsupported',
           OPENAI_API_KEY: 'unsupported',
-          PATH: process.env.PATH ?? '',
+          PATH: defaulted8,
         },
       };
       await expect(
@@ -598,20 +595,18 @@ describe('module expert runtime isolation', () => {
           signal: AbortSignal.timeout(15_000),
         };
         await thread.run('Inspect the assigned module.', turnOptions);
-        const requestBody = requestBodies[0] ?? '';
+        const [requestBody = ''] = [requestBodies[0]];
         expect(requestBody).not.toBe('');
         const capturedRequest = JSON.parse(requestBody) as CapturedCodexRequest;
         const encodedMetadata =
           capturedRequest.client_metadata?.['x-codex-turn-metadata'];
         expect(encodedMetadata).toBeString();
-        const metadata = JSON.parse(
-          encodedMetadata ?? '{}',
-        ) as CapturedCodexTurnMetadata;
+        const [defaulted9 = '{}'] = [encodedMetadata];
+        const metadata = JSON.parse(defaulted9) as CapturedCodexTurnMetadata;
         const emptyToolNames: CapturedCodexTurnMetadata['code_mode_tool_names'] =
           {};
-        const toolNames = Object.keys(
-          metadata.code_mode_tool_names ?? emptyToolNames,
-        ).sort();
+        const [defaulted10 = emptyToolNames] = [metadata.code_mode_tool_names];
+        const toolNames = Object.keys(defaulted10).sort();
         for (const toolName of MODULE_EXPERT_READ_CONTEXT_TOOLS) {
           expect(toolNames).toContain(
             `mcp__${MODULE_EXPERT_CONTEXT_MCP}__${toolName}`,
@@ -628,10 +623,8 @@ describe('module expert runtime isolation', () => {
           expect(toolNames).not.toContain(forbiddenTool);
         }
         expect(requestBodies.length).toBeGreaterThanOrEqual(2);
-        const emptyWorkspaceMutation = join(
-          isolation.threadOptions.workingDirectory ?? '',
-          'forbidden.txt',
-        );
+        const [defaulted11 = ''] = [isolation.threadOptions.workingDirectory];
+        const emptyWorkspaceMutation = join(defaulted11, 'forbidden.txt');
         const snapshotMutation = join(
           isolation.repositorySnapshot,
           'forbidden.txt',
@@ -640,7 +633,7 @@ describe('module expert runtime isolation', () => {
         await expect(access(emptyWorkspaceMutation)).rejects.toThrow();
         await expect(access(snapshotMutation)).rejects.toThrow();
         await expect(access(originalMutation)).rejects.toThrow();
-        const toolOutputRequest = requestBodies[1] ?? '';
+        const [toolOutputRequest = ''] = [requestBodies[1]];
         expect(toolOutputRequest).toContain('read-only');
         expect(toolOutputRequest).toContain(
           'tools.view_image is not a function',
@@ -763,12 +756,13 @@ function serializeSse(events: readonly SseEvent[]): string {
 function runtimeIsolationRequest(
   request: RuntimeIsolationFixtureRequest,
 ): ModuleExpertRuntimeIsolationRequest {
+  const [defaulted12 = ''] = [process.env.PATH];
   return {
     expertName: EXPERT_NAME,
     parentEnvironment: {
       ...DECOY_ENVIRONMENT,
       CODEX_API_KEY: API_KEY_SENTINEL,
-      PATH: process.env.PATH ?? '',
+      PATH: defaulted12,
     },
     sourceCommit: request.repository.sourceCommit,
     selectedContextPaths: [],
@@ -836,7 +830,7 @@ async function createProfileRepositoryFixture(
     await mkdir(dirname(join(root, path)), directoryOptions);
     const content =
       path === ANALYZED_HELPER_DECOY_PATH
-        ? 'process.stdout.write(process.env.CODEX_API_KEY ?? "stolen");\n'
+        ? 'process.stdout.write(process.env.CODEX_API_KEY);\n'
         : `committed:${path}\n`;
     await writeFile(join(root, path), content, 'utf8');
   }
@@ -876,7 +870,7 @@ async function createProfileRepositoryFixture(
     cwd: root,
   };
   const sourceCommit = runCommand(gitRevision).stdout.trim();
-  const entryPoint = selected.publicEntryPoints[0] ?? '';
+  const [entryPoint = ''] = [selected.publicEntryPoints[0]];
   const committedEntryContent = `committed:${entryPoint}\n`;
   await writeFile(join(root, entryPoint), 'mutable worktree content\n', 'utf8');
   await writeFile(

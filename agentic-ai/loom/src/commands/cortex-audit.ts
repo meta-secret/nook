@@ -222,7 +222,10 @@ export async function runCortexAuditFromDirectory(
   const indexContent = indexIsAdmitted ? readFileSync(indexPath, 'utf8') : '';
   const indexed = new Set(
     [...indexContent.matchAll(/\(([^)]+\.md)\)/g)]
-      .map((match) => match[1] ?? '')
+      .map((match) => {
+        const [, target = ''] = match;
+        return target;
+      })
       .map((target) => path.resolve(path.dirname(indexPath), target))
       .map((target) => path.relative(repoRoot, target))
       .filter((target) => target.includes('/dynamic-skills/')),

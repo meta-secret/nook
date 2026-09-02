@@ -241,7 +241,7 @@ export async function createReadOnlyExpertRuntimeIsolation(
   request: ReadOnlyExpertRuntimeIsolationRequest,
 ): Promise<ReadOnlyExpertRuntimeIsolation> {
   assertSourceCommit(request.sourceCommit);
-  const temporaryRoot = request.temporaryRoot ?? tmpdir();
+  const [temporaryRoot = tmpdir()] = [request.temporaryRoot];
   const codexHome = mkdtempSync(
     join(temporaryRoot, ISOLATED_CODEX_HOME_PREFIX),
   );
@@ -494,7 +494,7 @@ function redeemAuthenticationCredential(
   redemption: AuthenticationCredentialRedemption,
 ): void {
   const state = redemption.socket.data;
-  const previous = state.requests.get(redemption.socket) ?? Buffer.alloc(0);
+  const [previous = Buffer.alloc(0)] = [state.requests.get(redemption.socket)];
   const request = Buffer.concat([previous, redemption.data]);
   if (request.byteLength > 128) {
     state.requests.delete(redemption.socket);

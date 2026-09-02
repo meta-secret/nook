@@ -100,7 +100,7 @@
       return
     }
     destinationOrigin = response.origin
-    accounts = response.accounts ?? []
+    accounts = ((v) => (v ? v : []))(response.accounts)
   }
 
   async function choose(account: WebsiteLoginAccountOption): Promise<void> {

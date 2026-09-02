@@ -269,7 +269,7 @@ test("dependency update scope accepts only regular Rust mission files", async ()
     const symlinkPath = "preflight/src/linked.rs";
     await mkdir(join(root, "preflight/src"), { recursive: true });
     await symlink(join(root, allowed[2]!), join(root, symlinkPath));
-    await rejects(symlinkPath, "??", /symlink or special file/);
+    await rejects(symlinkPath, " M", /symlink or special file/);
     await rejects(
       "preflight/src/deleted.rs",
       " D",

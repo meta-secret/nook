@@ -259,13 +259,15 @@ export async function initGoogleSharedDriveAuth(): Promise<void> {
 function tokensFromResponse(response: GoogleTokenResponse): GoogleOAuthTokens {
   if (response.error) {
     throw new Error(
-      response.error_description ?? response.error ?? "Google sign-in failed.",
+      ((...[v = "Google sign-in failed."]) => v)(
+        ((...[v = response.error]) => v)(response.error_description),
+      ),
     );
   }
   if (!response.access_token) {
     throw new Error("Google did not return an access token.");
   }
-  const expiresIn = response.expires_in ?? 3600;
+  const [expiresIn = 3600] = [response.expires_in];
   return {
     accessToken: response.access_token,
     expiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),

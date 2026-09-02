@@ -1,25 +1,43 @@
 <script lang="ts">
-  type PastedMnemonicApplication = { readonly text: string; readonly startIndex: number }
+  type PastedMnemonicApplication = {
+    readonly text: string
+    readonly startIndex: number
+  }
 
-  type SeedPhraseCellChange = { readonly index: number; readonly nextValue: string }
+  type SeedPhraseCellChange = {
+    readonly index: number
+    readonly nextValue: string
+  }
 
-  type SeedPhraseCellInput = { readonly index: number; readonly nextValue: string }
+  type SeedPhraseCellInput = {
+    readonly index: number
+    readonly nextValue: string
+  }
 
-  type SeedPhraseCellPaste = { readonly index: number; readonly event: ClipboardEvent }
+  type SeedPhraseCellPaste = {
+    readonly index: number
+    readonly event: ClipboardEvent
+  }
 
-  type SeedPhraseSuggestionSelection = { readonly word: string; readonly index: number }
+  type SeedPhraseSuggestionSelection = {
+    readonly word: string
+    readonly index: number
+  }
 
-  type SeedPhraseCellKeydown = { readonly index: number; readonly event: KeyboardEvent }
+  type SeedPhraseCellKeydown = {
+    readonly index: number
+    readonly event: KeyboardEvent
+  }
 
   import { I18N_KEYS } from '../../../generated/i18n-keys'
-  import { Check } from "@lucide/svelte";
-  import type { VaultState } from "$lib/vault.svelte";
+  import { Check } from '@lucide/svelte'
+  import type { VaultState } from '$lib/vault.svelte'
   import {
     ChecksumStatusKind,
     FocusedWordKind,
     type ChecksumStatus,
     type FocusedWord,
-  } from "./seed-phrase-grid-state";
+  } from './seed-phrase-grid-state'
   import {
     infer_bip39_mnemonic_length,
     is_bip39_word_sequence_valid,
@@ -29,160 +47,173 @@
     parse_bip39_words,
     suggest_bip39_words,
     validate_bip39_mnemonic,
-  } from "$app-wasm";
+  } from '$app-wasm'
 
-  type MnemonicLength = 12 | 24;
+  type MnemonicLength = 12 | 24
 
   let {
     vault,
-    value = $bindable(""),
+    value = $bindable(''),
     // eslint-disable-next-line no-useless-assignment -- parent bind:valid output
     valid = $bindable(false),
     readonly = false,
     revealed = true,
   }: {
-    vault: VaultState;
-    value?: string;
-    valid?: boolean;
-    readonly?: boolean;
-    revealed?: boolean;
-  } = $props();
+    vault: VaultState
+    value?: string
+    valid?: boolean
+    readonly?: boolean
+    revealed?: boolean
+  } = $props()
 
-  let wordCount = $state<MnemonicLength>(12);
-  const fromArgs: Parameters<typeof Array.from>[0] = { length: 24 };
-  let cells = $state<string[]>(Array.from(fromArgs, () => ""));
-  let syncingFromCells = $state(false);
-  let focusedIndex = $state<FocusedWord>({ kind: FocusedWordKind.None });
-  let suggestionIndex = $state(0);
-  let inputRefs = $state<HTMLInputElement[]>([]);
+  let wordCount = $state<MnemonicLength>(12)
+  const fromArgs: Parameters<typeof Array.from>[0] = { length: 24 }
+  let cells = $state<string[]>(Array.from(fromArgs, () => ''))
+  let syncingFromCells = $state(false)
+  let focusedIndex = $state<FocusedWord>({ kind: FocusedWordKind.None })
+  let suggestionIndex = $state(0)
+  let inputRefs = $state<HTMLInputElement[]>([])
   let checksumValid = $state<ChecksumStatus>({
     kind: ChecksumStatusKind.NotChecked,
-  });
+  })
 
-  const gridCols = $derived(wordCount === 12 ? "grid-cols-3" : "grid-cols-4");
-  const activeCells = $derived(cells.slice(0, wordCount));
-  const perWordValid = $derived(is_bip39_word_sequence_valid(value, wordCount));
+  const gridCols = $derived(wordCount === 12 ? 'grid-cols-3' : 'grid-cols-4')
+  const activeCells = $derived(cells.slice(0, wordCount))
+  const perWordValid = $derived(is_bip39_word_sequence_valid(value, wordCount))
   const allWordsFilled = $derived(
     activeCells.every((word) => word.trim().length > 0),
-  );
+  )
   const hasPhraseContent = $derived(
     activeCells.some((word) => word.trim().length > 0) ||
       value.trim().length > 0,
-  );
+  )
 
   const suggestions = $derived.by(() => {
-    if (readonly || focusedIndex.kind !== FocusedWordKind.Focused) return [];
-    const prefix = cells[focusedIndex.index]?.trim().toLowerCase() ?? "";
-    if (!prefix || prefix.includes(" ")) return [];
-    if (is_known_bip39_word(prefix)) return [];
-    return suggest_bip39_words(prefix, 8);
-  });
+    if (readonly || focusedIndex.kind !== FocusedWordKind.Focused) return []
+    const prefix = ((v) => (v ? v : ''))(
+      cells[focusedIndex.index]?.trim().toLowerCase(),
+    )
+    if (!prefix || prefix.includes(' ')) return []
+    if (is_known_bip39_word(prefix)) return []
+    return suggest_bip39_words(prefix, 8)
+  })
 
   function applyValueToCells(seed: string) {
-    const inferred = infer_bip39_mnemonic_length(seed);
-    if (inferred === NookBip39MnemonicLength.Words12) wordCount = 12;
-    if (inferred === NookBip39MnemonicLength.Words24) wordCount = 24;
+    const inferred = infer_bip39_mnemonic_length(seed)
+    if (inferred === NookBip39MnemonicLength.Words12) wordCount = 12
+    if (inferred === NookBip39MnemonicLength.Words24) wordCount = 24
 
-    const words = parse_bip39_words(seed);
-    const fromArgs2: Parameters<typeof Array.from>[0] = { length: 24 };
-    const next = Array.from(fromArgs2, () => "");
+    const words = parse_bip39_words(seed)
+    const fromArgs2: Parameters<typeof Array.from>[0] = { length: 24 }
+    const next = Array.from(fromArgs2, () => '')
     for (let index = 0; index < words.length && index < 24; index += 1) {
-      next[index] = words[index] ?? "";
+      next[index] = ((v) => (v ? v : ''))(words[index])
     }
-    cells = next;
+    cells = next
   }
 
   function syncValueFromCells() {
-    syncingFromCells = true;
-    value = join_bip39_words(cells.slice(0, wordCount));
+    syncingFromCells = true
+    value = join_bip39_words(cells.slice(0, wordCount))
     queueMicrotask(() => {
-      syncingFromCells = false;
-    });
+      syncingFromCells = false
+    })
   }
 
-  function applyPastedMnemonic({ text, startIndex }: PastedMnemonicApplication) {
-    const words = parse_bip39_words(text);
-    if (words.length === 0) return;
+  function applyPastedMnemonic({
+    text,
+    startIndex,
+  }: PastedMnemonicApplication) {
+    const words = parse_bip39_words(text)
+    if (words.length === 0) return
 
     if (words.length === 24) {
-      wordCount = 24;
+      wordCount = 24
     } else if (words.length > 12) {
-      wordCount = 24;
+      wordCount = 24
     } else {
-      wordCount = 12;
+      wordCount = 12
     }
 
-    const next = [...cells];
+    const next = [...cells]
     for (let offset = 0; offset < words.length; offset += 1) {
-      const targetIndex = startIndex + offset;
-      if (targetIndex >= wordCount) break;
-      next[targetIndex] = words[offset] ?? "";
+      const targetIndex = startIndex + offset
+      if (targetIndex >= wordCount) break
+      next[targetIndex] = ((v) => (v ? v : ''))(words[offset])
     }
-    cells = next;
-    syncValueFromCells();
-    focusedIndex = { kind: FocusedWordKind.None };
-    focusCell(Math.min(startIndex + words.length, wordCount - 1));
+    cells = next
+    syncValueFromCells()
+    focusedIndex = { kind: FocusedWordKind.None }
+    focusCell(Math.min(startIndex + words.length, wordCount - 1))
   }
 
   function setWordCount(count: MnemonicLength) {
-    if (readonly) return;
-    wordCount = count;
-    syncValueFromCells();
+    if (readonly) return
+    wordCount = count
+    syncValueFromCells()
   }
 
   function clearPhrase() {
-    if (readonly) return;
-    const fromArgs3: Parameters<typeof Array.from>[0] = { length: 24 };
-    cells = Array.from(fromArgs3, () => "");
-    wordCount = 12;
-    value = "";
-    checksumValid = { kind: ChecksumStatusKind.NotChecked };
-    focusedIndex = { kind: FocusedWordKind.None };
-    suggestionIndex = 0;
-    focusCell(0);
+    if (readonly) return
+    const fromArgs3: Parameters<typeof Array.from>[0] = { length: 24 }
+    cells = Array.from(fromArgs3, () => '')
+    wordCount = 12
+    value = ''
+    checksumValid = { kind: ChecksumStatusKind.NotChecked }
+    focusedIndex = { kind: FocusedWordKind.None }
+    suggestionIndex = 0
+    focusCell(0)
   }
 
   function setCellValue({ index, nextValue }: SeedPhraseCellChange) {
-    const next = [...cells];
-    next[index] = nextValue.toLowerCase();
-    cells = next;
-    syncValueFromCells();
+    const next = [...cells]
+    next[index] = nextValue.toLowerCase()
+    cells = next
+    syncValueFromCells()
   }
 
   function onCellInput({ index, nextValue }: SeedPhraseCellInput) {
     if (/\s/.test(nextValue)) {
-      const applyPastedMnemonicArgs: Parameters<typeof applyPastedMnemonic>[0] = { text: nextValue, startIndex: index };
-      applyPastedMnemonic(applyPastedMnemonicArgs);
-      return;
+      const applyPastedMnemonicArgs: Parameters<typeof applyPastedMnemonic>[0] =
+        { text: nextValue, startIndex: index }
+      applyPastedMnemonic(applyPastedMnemonicArgs)
+      return
     }
 
-    const setCellValueArgs: Parameters<typeof setCellValue>[0] = { index, nextValue };
-    setCellValue(setCellValueArgs);
-    suggestionIndex = 0;
+    const setCellValueArgs: Parameters<typeof setCellValue>[0] = {
+      index,
+      nextValue,
+    }
+    setCellValue(setCellValueArgs)
+    suggestionIndex = 0
   }
 
   function onCellPaste({ index, event }: SeedPhraseCellPaste) {
-    if (readonly) return;
-    const text = event.clipboardData?.getData("text");
-    if (!text?.trim()) return;
-    event.preventDefault();
-    const applyPastedMnemonicArgs2: Parameters<typeof applyPastedMnemonic>[0] = { text, startIndex: index };
-    applyPastedMnemonic(applyPastedMnemonicArgs2);
+    if (readonly) return
+    const text = event.clipboardData?.getData('text')
+    if (!text?.trim()) return
+    event.preventDefault()
+    const applyPastedMnemonicArgs2: Parameters<typeof applyPastedMnemonic>[0] =
+      { text, startIndex: index }
+    applyPastedMnemonic(applyPastedMnemonicArgs2)
   }
 
   function selectSuggestion({ word, index }: SeedPhraseSuggestionSelection) {
-    const setCellValueArgs2: Parameters<typeof setCellValue>[0] = { index, nextValue: word };
-    setCellValue(setCellValueArgs2);
-    focusedIndex = { kind: FocusedWordKind.None };
-    suggestionIndex = 0;
-    focusCell(index + 1);
+    const setCellValueArgs2: Parameters<typeof setCellValue>[0] = {
+      index,
+      nextValue: word,
+    }
+    setCellValue(setCellValueArgs2)
+    focusedIndex = { kind: FocusedWordKind.None }
+    suggestionIndex = 0
+    focusCell(index + 1)
   }
 
   function focusCell(index: number) {
-    if (index < 0 || index >= wordCount) return;
+    if (index < 0 || index >= wordCount) return
     queueMicrotask(() => {
-      inputRefs[index]?.focus();
-    });
+      inputRefs[index]?.focus()
+    })
   }
 
   function onCellKeyDown({ index, event }: SeedPhraseCellKeydown) {
@@ -191,63 +222,65 @@
       focusedIndex.kind === FocusedWordKind.Focused &&
       focusedIndex.index === index
     ) {
-      if (event.key === "ArrowDown") {
-        event.preventDefault();
-        suggestionIndex = Math.min(suggestionIndex + 1, suggestions.length - 1);
-        return;
+      if (event.key === 'ArrowDown') {
+        event.preventDefault()
+        suggestionIndex = Math.min(suggestionIndex + 1, suggestions.length - 1)
+        return
       }
-      if (event.key === "ArrowUp") {
-        event.preventDefault();
-        suggestionIndex = Math.max(suggestionIndex - 1, 0);
-        return;
+      if (event.key === 'ArrowUp') {
+        event.preventDefault()
+        suggestionIndex = Math.max(suggestionIndex - 1, 0)
+        return
       }
-      if (event.key === "Enter") {
-        event.preventDefault();
-        const selectSuggestionArgs: Parameters<typeof selectSuggestion>[0] = { word: suggestions[suggestionIndex] ?? suggestions[0]!, index };
-        selectSuggestion(
-          selectSuggestionArgs,
-        );
-        return;
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        const selectSuggestionArgs: Parameters<typeof selectSuggestion>[0] = {
+          word: ((...[v = suggestions[0]!]) => v)(suggestions[suggestionIndex]),
+          index,
+        }
+        selectSuggestion(selectSuggestionArgs)
+        return
       }
-      if (event.key === "Tab" && !event.shiftKey) {
-        event.preventDefault();
-        const selectSuggestionArgs2: Parameters<typeof selectSuggestion>[0] = { word: suggestions[suggestionIndex] ?? suggestions[0]!, index };
-        selectSuggestion(
-          selectSuggestionArgs2,
-        );
-        return;
+      if (event.key === 'Tab' && !event.shiftKey) {
+        event.preventDefault()
+        const selectSuggestionArgs2: Parameters<typeof selectSuggestion>[0] = {
+          word: ((...[v = suggestions[0]!]) => v)(suggestions[suggestionIndex]),
+          index,
+        }
+        selectSuggestion(selectSuggestionArgs2)
+        return
       }
     }
 
-    if (event.key === "Escape") {
-      focusedIndex = { kind: FocusedWordKind.None };
-      suggestionIndex = 0;
+    if (event.key === 'Escape') {
+      focusedIndex = { kind: FocusedWordKind.None }
+      suggestionIndex = 0
     }
   }
 
   function cellInvalid(index: number): boolean {
-    const word = cells[index]?.trim();
-    if (!word) return false;
-    return !is_known_bip39_word(word);
+    const word = cells[index]?.trim()
+    if (!word) return false
+    return !is_known_bip39_word(word)
   }
 
   $effect(() => {
-    if (syncingFromCells) return;
-    applyValueToCells(value);
-  });
+    if (syncingFromCells) return
+    applyValueToCells(value)
+  })
 
   $effect(() => {
     if (readonly || !perWordValid || !allWordsFilled) {
-      checksumValid = { kind: ChecksumStatusKind.NotChecked };
-      valid = false;
-      return;
+      checksumValid = { kind: ChecksumStatusKind.NotChecked }
+      valid = false
+      return
     }
 
-    const mnemonic = value;
-    const ok = validate_bip39_mnemonic(mnemonic);
-    checksumValid = { kind: ChecksumStatusKind.Checked, valid: ok };
-    valid = ok;
-  });
+    const mnemonic = value
+    const ok = validate_bip39_mnemonic(mnemonic)
+    checksumValid = { kind: ChecksumStatusKind.Checked, valid: ok }
+    valid = ok
+  })
 </script>
 
 <div class="space-y-3" data-testid="seed-phrase-grid">
@@ -325,23 +358,37 @@
             {...focusedIndex.kind === FocusedWordKind.Focused &&
             focusedIndex.index === index &&
             suggestions.length > 0
-              ? { "aria-controls": `seed-word-suggestions-${index + 1}` }
+              ? { 'aria-controls': `seed-word-suggestions-${index + 1}` }
               : {}}
             data-testid="seed-word-{index + 1}"
             aria-invalid={cellInvalid(index)}
             {...cellInvalid(index)
-              ? { "aria-describedby": `seed-word-error-${index + 1}` }
+              ? { 'aria-describedby': `seed-word-error-${index + 1}` }
               : {}}
             class="flex h-10 w-full rounded-md border bg-background/80 px-2 pt-3 font-mono text-xs focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background {cellInvalid(
               index,
             )
               ? 'border-destructive focus:ring-destructive/40'
               : 'border-border/45'}"
-            oninput={(event) => (() => { const onCellInputArgs: Parameters<typeof onCellInput>[0] = { index, nextValue: event.currentTarget.value }; return onCellInput(onCellInputArgs); })()}
-            onpaste={(event) => (() => { const onCellPasteArgs: Parameters<typeof onCellPaste>[0] = { index, event }; return onCellPaste(onCellPasteArgs); })()}
+            oninput={(event) =>
+              (() => {
+                const onCellInputArgs: Parameters<typeof onCellInput>[0] = {
+                  index,
+                  nextValue: event.currentTarget.value,
+                }
+                return onCellInput(onCellInputArgs)
+              })()}
+            onpaste={(event) =>
+              (() => {
+                const onCellPasteArgs: Parameters<typeof onCellPaste>[0] = {
+                  index,
+                  event,
+                }
+                return onCellPaste(onCellPasteArgs)
+              })()}
             onfocus={() => {
-              focusedIndex = { kind: FocusedWordKind.Focused, index };
-              suggestionIndex = 0;
+              focusedIndex = { kind: FocusedWordKind.Focused, index }
+              suggestionIndex = 0
             }}
             onblur={() => {
               queueMicrotask(() => {
@@ -350,16 +397,23 @@
                     '[data-testid^="seed-word-suggestion-"]',
                   )
                 ) {
-                  return;
+                  return
                 }
                 if (
                   focusedIndex.kind === FocusedWordKind.Focused &&
                   focusedIndex.index === index
                 )
-                  focusedIndex = { kind: FocusedWordKind.None };
-              });
+                  focusedIndex = { kind: FocusedWordKind.None }
+              })
             }}
-            onkeydown={(event) => (() => { const onCellKeyDownArgs: Parameters<typeof onCellKeyDown>[0] = { index, event }; return onCellKeyDown(onCellKeyDownArgs); })()}
+            onkeydown={(event) =>
+              (() => {
+                const onCellKeyDownArgs: Parameters<typeof onCellKeyDown>[0] = {
+                  index,
+                  event,
+                }
+                return onCellKeyDown(onCellKeyDownArgs)
+              })()}
           />
           {#if focusedIndex.kind === FocusedWordKind.Focused && focusedIndex.index === index && suggestions.length > 0}
             <ul
@@ -380,7 +434,13 @@
                       ? 'bg-accent text-accent-foreground'
                       : 'text-foreground hover:bg-accent/60'}"
                     onmousedown={(event) => event.preventDefault()}
-                    onclick={() => (() => { const selectSuggestionArgs3: Parameters<typeof selectSuggestion>[0] = { word: suggestion, index }; return selectSuggestion(selectSuggestionArgs3); })()}
+                    onclick={() =>
+                      (() => {
+                        const selectSuggestionArgs3: Parameters<
+                          typeof selectSuggestion
+                        >[0] = { word: suggestion, index }
+                        return selectSuggestion(selectSuggestionArgs3)
+                      })()}
                   >
                     {suggestion}
                   </button>
