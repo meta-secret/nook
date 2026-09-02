@@ -61,8 +61,8 @@ Workbench record, not another coordinator or worker. See the
     - planning and shared-branch sequencing;
     - Git, pull-request, Workbench, and review coordination;
     - validation, readiness, and merge.
-  - Team workers implement their assigned changes in the current shared
-    checkout without running local compilation or validation.
+  - Team workers implement and test their assigned changes in the current
+    shared checkout.
   - Gizmo Prime controls write sequencing and external delivery state.
   - Only one write-capable Team Agent runs at a time.
   - Read-only Team Agents may run concurrently when their evidence scopes are
@@ -71,10 +71,14 @@ Workbench record, not another coordinator or worker. See the
     requests a commit.
   - Gizmo continues directly from that commit.
 - **Validation and delivery**
-  - Team workers return coherent changes without running local compilation,
-    builds, tests, lint, typechecks, package installation, or browser suites.
-  - Gizmo Prime promptly pushes the shared branch and obtains any required
-    evidence through existing hosted validation.
+  - Team workers run only fast focused local Loom tests, lint, or typechecks
+    that provide direct implementation feedback.
+  - For Loom-affecting work, the Team Agent returns a coherent result to Gizmo
+    Prime after focused local evidence.
+  - Gizmo Prime runs pre-push hygiene on the Team Agent's direct commit.
+  - Gizmo Prime promptly pushes the shared branch.
+  - Gizmo Prime then dispatches `task remote TASK_NAME=loom:verify` for the
+    exact pushed head.
 - **Feature ownership**
   - Portable security behavior stays in Rust/WASM.
   - Web code receives public typed projections.
@@ -124,10 +128,12 @@ Workbench record, not another coordinator or worker. See the
 - **Parent and worker ownership**
   - Parent-owned control operations do not create Team Agent work.
 - **Validation and delivery**
-  - Gizmo Prime, Team Agents, and subagents must not run project compilation or
-    repository validation locally, whether directly or through a Task target
-    or script.
-  - Focused or fast commands are not exceptions.
+  - Gizmo Prime, Team Agents, and subagents must not run product compilation or
+    full repository validation locally, whether directly or through a Task
+    target or script.
+  - Fast focused local Loom tests, lint, and typechecks are allowed only for
+    direct implementation feedback as defined above.
+  - Team workers must not run the full `task loom:verify` suite locally.
   - Missing hosted validation is a blocker, not permission to run locally.
   - Only the user may authorize an exact local command for the current task.
 - **Feature ownership**
@@ -147,6 +153,26 @@ Workbench record, not another coordinator or worker. See the
   - Moving unit tests or making arbitrary fragments is not source-size
     compliance.
   - Repository-authored automation does not use Python.
+
+## Remote task execution
+
+Run focused hosted validation from a clean, committed non-main branch:
+
+1. Push the branch and confirm that the remote branch is at the same commit as
+   local `HEAD`.
+2. Run `task remote:list` to see the allowlisted hosted tasks.
+3. Dispatch one task with `task remote TASK_NAME=<task>`, for example
+   `task remote TASK_NAME=loom:verify`.
+4. Dispatch compatible tasks together with
+   `task remote TASK_NAMES=<task-a>,<task-b>` when one hosted job is preferred.
+5. Follow the run URL printed by the command, or inspect the exact-head run
+   with the printed `gh run list` command.
+
+`task remote` rejects a dirty checkout, `main`, an unpushed branch, a local
+`HEAD` that differs from the remote branch, and tasks outside the allowlist.
+When a task requires a current base, it also verifies that the branch contains
+the current `origin/main`. A later push invalidates the earlier run as delivery
+evidence; dispatch the task again for the new head.
 
 ## No fallback behavior
 
