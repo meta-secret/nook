@@ -88,18 +88,4 @@ describe('authentication surface notifications', () => {
       { tabId: 11, type: 'nook:refresh-authentication-surfaces' },
     ])
   })
-
-  test('contains absent-tab enumeration failures during cleanup', async () => {
-    globalThis.chrome = {
-      tabs: {
-        query: () => {
-          throw new Error('tabs unavailable')
-        },
-      },
-    } as unknown as typeof chrome
-    const { clearMountedAuthenticationSurfaces } =
-      await import('../src/background/service-worker/session-lifecycle')
-
-    await clearMountedAuthenticationSurfaces()
-  })
 })

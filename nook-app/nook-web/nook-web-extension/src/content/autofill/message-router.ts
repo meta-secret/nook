@@ -50,18 +50,6 @@ export const routeAutofillMessage: AutofillMessageListener =
     if (
       sender.id === chrome.runtime.id &&
       'type' in message &&
-      message.type === ExtensionRuntimeRequestType.ClearAuthenticationSurface
-    ) {
-      scanState.sequence += 1
-      widgetState.busy = false
-      clearAuthenticationSurface()
-      const response: Parameters<typeof sendResponse>[0] = { ok: true }
-      sendResponse(response)
-      return false
-    }
-    if (
-      sender.id === chrome.runtime.id &&
-      'type' in message &&
       message.type === ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces
     ) {
       scanState.sequence += 1

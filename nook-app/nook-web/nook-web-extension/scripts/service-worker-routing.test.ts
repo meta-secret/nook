@@ -36,7 +36,6 @@ const beginAccountPickerAuthorizationCleanup = mock(() =>
   }),
 )
 const clearPendingAccountPickers = mock(() => Promise.resolve())
-const clearMountedAuthenticationSurfaces = mock(() => Promise.resolve())
 const clearStagedAuthenticatorEnrollments = mock(() => {})
 const rebindStagedAuthenticatorEnrollmentsAuthorization = mock(() => {})
 const completeAccountPickerAuthorizationCleanup = mock(() => Promise.resolve())
@@ -47,7 +46,6 @@ const lifecycleDependencies: ExtensionLifecycleRoutingDependencies = {
   accountPickerAuthorizationCleanupPending,
   beginAccountPickerAuthorizationCleanup,
   clearPendingAccountPickers,
-  clearMountedAuthenticationSurfaces,
   clearStagedAuthenticatorEnrollments,
   closeExtensionSessionDocument: unusedAsyncDependency,
   completeAccountPickerAuthorizationCleanup,
@@ -172,10 +170,6 @@ describe('service worker routing', () => {
         events.push(`pickers-cleared-${pickerCleanupCount}`)
         return Promise.resolve()
       },
-      clearMountedAuthenticationSurfaces: () => {
-        events.push('surfaces-cleared')
-        return Promise.resolve()
-      },
       clearStagedAuthenticatorEnrollments: () => {
         events.push('enrollments-cleared')
       },
@@ -214,7 +208,6 @@ describe('service worker routing', () => {
       'session-closed',
       'enrollments-cleared',
       'pickers-cleared-1',
-      'surfaces-cleared',
       'pickers-cleared-2',
       'enrollments-cleared',
       'authorization-restored-epoch-4',

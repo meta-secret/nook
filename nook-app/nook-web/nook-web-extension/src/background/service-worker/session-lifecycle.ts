@@ -127,9 +127,7 @@ export function openSimpleVault(path = ''): void {
 }
 
 type AuthenticationSurfaceNotification = {
-  type:
-    | ExtensionRuntimeRequestType.ClearAuthenticationSurface
-    | ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces
+  type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces
 }
 
 async function notifyAuthenticationSurfaces(
@@ -149,13 +147,6 @@ async function notifyAuthenticationSurfaces(
   } catch {
     // Authorization cleanup must complete even when tab enumeration is absent.
   }
-}
-
-export function clearMountedAuthenticationSurfaces(): Promise<void> {
-  const args: AuthenticationSurfaceNotification = {
-    type: ExtensionRuntimeRequestType.ClearAuthenticationSurface,
-  }
-  return notifyAuthenticationSurfaces(args)
 }
 
 export function refreshAuthenticationSurfaces(): Promise<void> {

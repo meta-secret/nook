@@ -117,7 +117,6 @@ import {
   authenticationWorkflowSavedLoginCapability,
 } from './service-worker/authentication-workflow-routing'
 import {
-  clearMountedAuthenticationSurfaces,
   closeExtensionSessionDocument,
   ensureExtensionSessionDocument,
   extensionSessionDocument,
@@ -143,7 +142,6 @@ const extensionLifecycleRoutingDependencies: Parameters<
   accountPickerAuthorizationCleanupPending,
   beginAccountPickerAuthorizationCleanup,
   clearPendingAccountPickers,
-  clearMountedAuthenticationSurfaces,
   clearStagedAuthenticatorEnrollments,
   rebindStagedAuthenticatorEnrollmentsAuthorization,
   closeExtensionSessionDocument,

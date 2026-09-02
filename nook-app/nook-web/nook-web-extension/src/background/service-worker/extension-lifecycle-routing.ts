@@ -33,7 +33,6 @@ export type ExtensionLifecycleRoutingDependencies = {
   accountPickerAuthorizationCleanupPending: typeof AccountPickers.accountPickerAuthorizationCleanupPending
   beginAccountPickerAuthorizationCleanup: typeof AccountPickers.beginAccountPickerAuthorizationCleanup
   clearPendingAccountPickers: typeof AccountPickers.clearPendingAccountPickers
-  clearMountedAuthenticationSurfaces: typeof SessionLifecycle.clearMountedAuthenticationSurfaces
   clearStagedAuthenticatorEnrollments: typeof AuthenticatorOperations.clearStagedAuthenticatorEnrollments
   rebindStagedAuthenticatorEnrollmentsAuthorization: typeof AuthenticatorOperations.rebindStagedAuthenticatorEnrollmentsAuthorization
   closeExtensionSessionDocument: typeof SessionLifecycle.closeExtensionSessionDocument
@@ -85,7 +84,6 @@ const pairingLaunchFailureResponse: MessageResponse = {
 type ClearAuthorizationStateArgs = {
   beginAccountPickerAuthorizationCleanup: typeof AccountPickers.beginAccountPickerAuthorizationCleanup
   clearPendingAccountPickers: typeof AccountPickers.clearPendingAccountPickers
-  clearMountedAuthenticationSurfaces: typeof SessionLifecycle.clearMountedAuthenticationSurfaces
   clearStagedAuthenticatorEnrollments: typeof AuthenticatorOperations.clearStagedAuthenticatorEnrollments
   closeExtensionSessionDocument: typeof SessionLifecycle.closeExtensionSessionDocument
   completeAccountPickerAuthorizationCleanup: typeof AccountPickers.completeAccountPickerAuthorizationCleanup
@@ -109,7 +107,6 @@ type AuthorizationCleanupStart =
 async function clearAuthorizationState({
   beginAccountPickerAuthorizationCleanup,
   clearPendingAccountPickers,
-  clearMountedAuthenticationSurfaces,
   clearStagedAuthenticatorEnrollments,
   closeExtensionSessionDocument,
   completeAccountPickerAuthorizationCleanup,
@@ -135,11 +132,6 @@ async function clearAuthorizationState({
   clearStagedAuthenticatorEnrollments()
   try {
     await clearPendingAccountPickers()
-  } catch {
-    failed = true
-  }
-  try {
-    await clearMountedAuthenticationSurfaces()
   } catch {
     failed = true
   }
@@ -204,7 +196,6 @@ export function routeExtensionLifecycleMessage({
   const {
     beginAccountPickerAuthorizationCleanup,
     clearPendingAccountPickers,
-    clearMountedAuthenticationSurfaces,
     clearStagedAuthenticatorEnrollments,
     closeExtensionSessionDocument,
     completeAccountPickerAuthorizationCleanup,
@@ -268,7 +259,6 @@ export function routeExtensionLifecycleMessage({
     const cleanupArgs: ClearAuthorizationStateArgs = {
       beginAccountPickerAuthorizationCleanup,
       clearPendingAccountPickers,
-      clearMountedAuthenticationSurfaces,
       clearStagedAuthenticatorEnrollments,
       closeExtensionSessionDocument,
       completeAccountPickerAuthorizationCleanup,
@@ -293,7 +283,6 @@ export function routeExtensionLifecycleMessage({
     const cleanupArgs: ClearAuthorizationStateArgs = {
       beginAccountPickerAuthorizationCleanup,
       clearPendingAccountPickers,
-      clearMountedAuthenticationSurfaces,
       clearStagedAuthenticatorEnrollments,
       closeExtensionSessionDocument,
       completeAccountPickerAuthorizationCleanup,
@@ -337,7 +326,6 @@ export function routeExtensionLifecycleMessage({
             const cleanupArgs: ClearAuthorizationStateArgs = {
               beginAccountPickerAuthorizationCleanup,
               clearPendingAccountPickers,
-              clearMountedAuthenticationSurfaces,
               clearStagedAuthenticatorEnrollments,
               closeExtensionSessionDocument,
               completeAccountPickerAuthorizationCleanup,
