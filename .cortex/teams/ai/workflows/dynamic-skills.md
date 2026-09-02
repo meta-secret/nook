@@ -78,12 +78,13 @@ include:
 The `.cortex` workspace owns one frozen lockfile and one hoisted dependency
 tree. A skill package must not contain its own lockfile or dependency tree.
 
-It must not contain another `SKILL.md` or become a harness mirror. Discover
-actions with `task skills:tools-list`. Invoke one with
-`task skills:run REQUEST_YAML='<strict-yaml>'`. Static applications return
-validated data or plans; the active harness owns agent and subagent lifecycle.
+It must not contain another `SKILL.md` or become a harness mirror. Inspect the
+typed registry and request codecs read-only to discover actions. Include a
+strict request and focused behavior coverage when an executable application
+changes. Static applications return validated data or plans. The active
+harness owns agent and subagent lifecycle.
 
-For a new card scaffold, prefer Loom:
+For a new card, use the canonical scaffold request shape:
 
 ```yaml
 skillScaffold:
@@ -91,12 +92,9 @@ skillScaffold:
   skillOwner: gizmo # or ai, shared, dev-core, security, sre, or web-dev
 ```
 
-```bash
-task loom:skill-scaffold CONFIG=path/to/request.yaml
-```
-
-The scaffold creates the prose-only `<slug>.md` form. When the skill needs a
-deterministic application, convert it in the same change to
+Materialize the prose-only `<slug>.md` scaffold directly in the assigned owner
+scope. When the skill needs a deterministic application, convert it in the
+same change to
 `<slug>/SKILL.md`, add the co-located `scripts/` package, and update its index
 link. Then fill the card content and return the coherent commit to Gizmo.
 Gizmo pushes the exact head and verifies with

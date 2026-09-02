@@ -174,8 +174,8 @@ Agents never run product compilation or repository validation locally.
 - The pre-push exception may prepare only its bounded Loom dependencies.
 - The read-only session-clean check may prepare only its bounded Loom
   dependencies.
-- `task remote`, `task pr:validate`, `task pr:review`, and `task pr:ready` are
-  local delivery-control entrypoints.
+- `task remote`, `task loom:pr-land`, `task pr:validate`, `task pr:review`, and
+  `task pr:ready` are local delivery-control entrypoints.
 - Delivery-control entrypoints may prepare their bounded control-plane helper.
 - They may only dispatch or inspect hosted product and repository evidence.
 - Only the user may authorize another exact local command for the current

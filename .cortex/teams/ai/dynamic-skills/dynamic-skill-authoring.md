@@ -61,8 +61,7 @@ Does not apply to:
 - Read `.cortex/teams/ai/workflows/dynamic-skills.md` before capture.
 - Update an existing skill card when it already owns the lesson.
 - For a new card:
-  - scaffold with
-    `task loom:skill-scaffold CONFIG=<skill-scaffold-request.yaml>`;
+  - materialize the canonical scaffold directly in the assigned owner scope;
   - set `skillOwner` to `gizmo` for delivery control, to the responsible team
     for implementation knowledge, to `ai` for AI-system knowledge, or to
     `shared` for ownerless repository-wide policy;
@@ -75,21 +74,22 @@ Does not apply to:
       repository TypeScript configuration;
   - keep dependencies in the shared `.cortex` Bun workspace and its frozen
     lockfile;
-  - update `.cortex/teams/ai/dynamic-skills/index.md` and the owning knowledge graph if
-    Loom did not.
+  - update `.cortex/teams/ai/dynamic-skills/index.md`; and
+  - update the owning knowledge graph when document ownership, path, or
+    discoverability changes.
 - Return the coherent commit to Gizmo after the card and registry agree. Gizmo
-  pushes the exact head and runs `task remote TASK_NAME=loom:verify`.
+  pushes the exact head and runs `task remote TASK_NAME=loom:verify`. The
+  hosted path checks the scaffold, registry, and executable package contracts.
 
 ## Validation
 
 For documentation-only captures, return the coherent commit to Gizmo. Gizmo
 pushes the exact head and runs `task remote TASK_NAME=loom:verify`.
 
-For code refactors using a dynamic skill, run the focused worker proof and
-required formatters. Commit every resulting mutation in the allowed paths and
-return the exact direct commit to Gizmo. If pre-push hygiene mutates
-AI-owned content, the AI team returns a fresh formatted commit. Gizmo then
-continues from it, reruns hygiene, and pushes. Gizmo dispatches at least one
-relevant focused hosted task when the pushed head is not validation-ready.
-Gizmo dispatches complete exact-head validation immediately when the head is
-ready.
+For code refactors using a dynamic skill, run required non-compiling
+formatters. Commit every resulting mutation in the allowed paths and return the
+exact direct commit to Gizmo. If pre-push hygiene mutates AI-owned content, the
+AI team returns a fresh formatted commit. Gizmo then continues from it, reruns
+hygiene, and pushes. Gizmo dispatches at least one relevant focused hosted task
+when the pushed head is not validation-ready. Gizmo dispatches complete
+exact-head validation immediately when the head is ready.

@@ -198,15 +198,12 @@ task remote TASK_NAME=loom:verify
 
 The command reports failures in `contractFindings`.
 
-The co-located application is also a discoverable executable skill:
-
-```bash
-task skills:tools-list
-task skills:run REQUEST_YAML='<cortexConsistency.compile request>'
-```
-
-The executable request contains parsed document paths and references. The
-registry and policy semantics remain internal to this skill.
+The co-located application remains in the closed executable-skill registry.
+AI workers inspect its typed request and provider read-only. They do not invoke
+local `skills:*` targets. Hosted `loom:verify` exercises the compile request,
+provider, and package contract. The executable request contains parsed document
+paths and references. The registry and policy semantics remain internal to
+this skill.
 
 Request contract v2 adds the required `commands` collection to each document.
 The former `cortex-consistency-compile-v1` transport is not accepted; callers

@@ -80,10 +80,12 @@ const GIZMO_AUTHORITY_MARKERS = [
   'exactly one team identity',
   'final verdict is bound to the exact pull-request head',
 ] as const;
-const AFFIRMATIVE_AGENT_GRANT =
-  /\b(?:agents?|team agents?|workers?|gizmo)\s+(?:may|can|are allowed to|is allowed to)\s+(?:ask\s+(?:an?\s+)?(?:team\s+)?(?:agent|worker)s?\s+to\s+)?(?:locally\s+)?(?:(?:run|invoke|perform|execute)\s+(?:(?:focused|required|product|project|repository|source|package|local)\s+){0,4}(?:compilation|tests?|testing|linting|builds?|validation)|(?:compile|test|lint|validate)(?:\s+(?:the\s+)?(?:product|project|repository|source|package))?|build(?:ing)?\s+(?:the\s+)?(?:product|project|repository|source|package))\b/iu;
-const AFFIRMATIVE_LIST_GRANT =
-  /^(?:agents?|team agents?|workers?|gizmo)\s+(?:may|can|are allowed to|is allowed to)(?:\s+ask\s+(?:an?\s+)?(?:team\s+)?(?:agent|worker)s?\s+to)?\s*:$/iu;
+const AGENT_EXECUTION_DIRECTION =
+  /\b(?:agents?|team agents?|workers?|gizmo)\s+(?:may|can|must|shall|need to|are allowed to|is allowed to|are required to|is required to)\s+(?:ask\s+(?:an?\s+)?(?:team\s+)?(?:agent|worker)s?\s+to\s+)?(?:locally\s+)?(?:(?:run|invoke|perform|execute)\s+(?:(?:focused|required|shared|product|project|repository|source|package|local)\s+){0,4}(?:compilation|tests?|testing|linting|builds?|validation)|(?:compile|test|lint|validate)(?:\s+(?:the\s+)?(?:product|project|repository|source|package))?|build(?:ing)?\s+(?:the\s+)?(?:product|project|repository|source|package))\b/iu;
+const IMPERATIVE_EXECUTION_DIRECTION =
+  /^(?:locally\s+)?(?:(?:run|invoke|perform|execute)\s+(?:(?:focused|required|shared|product|project|repository|source|package|local)\s+){0,4}(?:compilation|tests?|testing|linting|builds?|validation)|(?:compile|test|lint|validate)(?:\s+(?:the\s+)?(?:product|project|repository|source|package))?|build(?:ing)?\s+(?:the\s+)?(?:product|project|repository|source|package))\b/iu;
+const EXECUTION_LIST_DIRECTION =
+  /^(?:agents?|team agents?|workers?|gizmo)\s+(?:may|can|must|shall|need to|are allowed to|is allowed to|are required to|is required to)(?:\s+ask\s+(?:an?\s+)?(?:team\s+)?(?:agent|worker)s?\s+to)?\s*:$/iu;
 const LOCAL_EXECUTION = /\b(?:local(?:ly)?|on (?:a|the) local host)\b/iu;
 const NEGATED_LOCAL_EXECUTION =
   /\b(?:never|not)\s+(?:(?:run|invoke|perform|execute|compile|test|lint|validate|build)\b[^;.!?]*\s+)?(?:locally|on (?:a|the) local host)(?:\s+(?:at all|under any circumstances))?(?=\s*[,.;!?]|$)/iu;
@@ -295,7 +297,8 @@ function appendLocalExecutionGrantFindings(
 ): void {
   for (const statement of markdownStatements(request.source)) {
     if (
-      AFFIRMATIVE_AGENT_GRANT.test(statement) &&
+      (AGENT_EXECUTION_DIRECTION.test(statement) ||
+        IMPERATIVE_EXECUTION_DIRECTION.test(statement)) &&
       LOCAL_EXECUTION.test(statement) &&
       !NEGATED_LOCAL_EXECUTION.test(statement)
     ) {
@@ -326,12 +329,12 @@ function inspectAuthorityStatements(
   for (const node of request.nodes) {
     if (node.type === 'paragraph') {
       const text = markdownText(node).replace(/\s+/gu, ' ').trim();
-      const ownGrant = affirmativeListGrant(text);
+      const ownDirection = executionListDirection(text);
       appendAuthoritySentences({
         statements: request.statements,
-        text: listGrant && !ownGrant ? `${listGrant} ${text}` : text,
+        text: listGrant && !ownDirection ? `${listGrant} ${text}` : text,
       });
-      listGrant = ownGrant;
+      listGrant = ownDirection;
       continue;
     }
     if (node.type === 'list') {
@@ -347,8 +350,8 @@ function inspectAuthorityStatements(
   }
 }
 
-function affirmativeListGrant(text: string): string | false {
-  return AFFIRMATIVE_LIST_GRANT.test(text) ? text.slice(0, -1).trim() : false;
+function executionListDirection(text: string): string | false {
+  return EXECUTION_LIST_DIRECTION.test(text) ? text.slice(0, -1).trim() : false;
 }
 
 function appendAuthoritySentences(
