@@ -41,6 +41,7 @@ const TEAM_AUTHORITY_MARKERS = [
   'exactly one team identity',
   'canonical typed\nCortex authoring composition',
   'Routine uncertainty, implementation breadth, validation failures, and\n  delivery sequencing are not blockers or reasons to ask the user.',
+  'Continue implementation, validation, repair, and authorized delivery until\n  the user-selected terminal state is reached.',
 ] as const;
 const GIZMO_AUTHORITY_MARKERS = [
   'single root delivery owner',
