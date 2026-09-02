@@ -244,10 +244,11 @@ if (
   );
 }
 if (
-  runner?.resources?.limits?.cpu !== "4" ||
+  runner?.resources?.requests?.cpu !== "2" ||
+  runner.resources.limits?.cpu !== "4" ||
   runner.resources.limits.memory !== "6Gi"
 ) {
-  throw new Error("ARC runner must retain its 4 CPU and 6 GiB envelope");
+  throw new Error("ARC runner must retain its 2-to-4 CPU and 6 GiB envelope");
 }
 
 runners.requireAll([

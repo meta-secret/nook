@@ -8,7 +8,7 @@ rules belong to Gizmo's linked authorities.
 
 1. Read the [root context router](knowledge-graph.md).
 2. Classify the work as Gizmo delivery control, AI, development core, security,
-   SRE, web development, or shared integration.
+   SRE, web development, or shared ownership.
 3. Load exactly one owning `AGENTS.md` and knowledge graph.
 4. Open only the documents and headings needed for the assigned work.
 5. Stop loading Cortex when the task can be executed safely.
@@ -21,8 +21,8 @@ requires an explicit expertise task from Gizmo Prime.
 ## Context routes
 
 - [Gizmo Prime](gizmo/AGENTS.md) owns mission planning, delegation,
-  integration, review coordination, GitHub and Workbench state, readiness, and
-  merge.
+  shared-branch sequencing, review coordination, GitHub and Workbench state,
+  readiness, and merge.
 - [AI contract](teams/ai/AGENTS.md) and
   [graph](teams/ai/knowledge-graph.md): Cortex, Loom, agent skills, routing, and
   agent automation.
@@ -39,9 +39,9 @@ requires an explicit expertise task from Gizmo Prime.
   [graph](teams/web-dev/knowledge-graph.md): TypeScript, Svelte, browser
   behavior, and extension interaction.
 
-Gizmo Prime is the existing root delivery owner. A feature-slice Gizmo is an
-immutable typed Workbench slice record, not a process, agent, worker attempt,
-or second coordinator. See the [Gizmo contract](gizmo/AGENTS.md).
+Gizmo Prime is the existing root delivery owner. A feature-slice Gizmo is a
+Workbench record, not another coordinator or worker. See the
+[Gizmo contract](gizmo/AGENTS.md).
 
 ## Team worker contract
 
@@ -51,16 +51,8 @@ or second coordinator. See the [Gizmo contract](gizmo/AGENTS.md).
   active harness. This includes implementation and review fixes.
 - Gizmo Prime is prohibited from performing any worker-executable Team Agent
   work itself.
-- Gizmo Prime stops the task immediately and reports the blocker when:
-  - a required real Team Agent cannot be created;
-  - an authorized attempt cannot be dispatched; or
-  - a dispatched attempt cannot be started.
-- Before execution, the immutable generation plan freezes the canonical finite
-  attempt bound.
-- After an attempt starts, Gizmo Prime follows sequential retry and conclusive
-  disposition within that bound.
-- Canonical exhaustion is hard-coded to block the task when the bound is
-  exhausted without an accepted completion.
+- Gizmo Prime stops the task and reports the blocker when a required Team Agent
+  cannot be created or started.
 - Gizmo Prime must never approximate the work, take over the worker scope, or
   continue past that blocked scope. This is the
   [no-fallback rule](#no-fallback-behavior) for worker execution.
@@ -69,24 +61,25 @@ or second coordinator. See the [Gizmo contract](gizmo/AGENTS.md).
 - This ordinary-transport prohibition preserves the two trusted publisher
   handoffs below. Those publishers are not ordinary delegation transport.
 - Parent-owned Gizmo control operations remain with Gizmo Prime:
-  - planning and integration;
+  - planning and shared-branch sequencing;
   - Git, pull-request, Workbench, and review coordination;
   - validation, readiness, and merge.
-- Parent-owned control operations stay outside the worker graph and do not
-  create worker attempts.
-- The canonical delegation workflow remains the sole worker-lifecycle
-  authority. Do not invent another lifecycle system.
-- Team workers implement and test their assigned changes. Gizmo Prime controls
-  shared integration and external delivery state and does not implement team
-  work on their behalf.
+- Parent-owned control operations do not create Team Agent work.
+- Team workers implement and test their assigned changes in the current shared
+  checkout. Gizmo Prime controls write sequencing and external delivery state.
+- Only one write-capable Team Agent runs at a time.
+- Read-only Team Agents may run concurrently when their evidence scopes are
+  safe to inspect while the writer runs.
+- A write-capable Team Agent may commit its complete scoped change when Gizmo
+  requests a commit. Gizmo continues directly from that commit.
 - Team workers run only fast focused local Loom tests, lint, or typechecks that
   provide direct implementation feedback.
 - Team workers must not run the full `task loom:verify` suite locally during
   agent delivery.
-- For Loom-affecting work, the Team Agent returns a coherent handoff to Gizmo
+- For Loom-affecting work, the Team Agent returns a coherent result to Gizmo
   Prime after focused local evidence.
-- Gizmo Prime promptly integrates, runs pre-push hygiene, commits, and pushes
-  that handoff.
+- Gizmo Prime runs pre-push hygiene on the Team Agent's direct commit and
+  promptly pushes the shared branch.
 - Gizmo Prime then dispatches `task remote TASK_NAME=loom:verify` for the exact
   pushed head.
 - Security review does not transfer implementation ownership. Portable
@@ -213,11 +206,9 @@ Cortex authoring composition:
 - `teams/ai/dynamic-skills/cortex-article-structure/SKILL.md`; and
 - `teams/ai/dynamic-skills/cortex-consistency.md`.
 
-Before dispatch, Gizmo includes the typed `cortexAuthoring` grant in the
-immutable Loom generation. Admission validates the candidate batch, lease,
-exact frontier, team-owned writes, and any serialized shared-file grants before
-the harness receives context paths. Team-specific authoring skills may add
-domain policy but must not copy or rename the canonical skills.
+Gizmo gives the writer these three authorities with its bounded file scope.
+Team-specific authoring skills may add domain policy but must not copy or
+rename the canonical skills.
 
 Promote durable lessons only when evidence justifies them. The
 [self-improvement skill](teams/ai/dynamic-skills/self-improvement.md) keeps
@@ -251,8 +242,8 @@ completion.
 
 Use the detailed authority only when its stage is reached:
 
-- [Canonical delegation](gizmo/workflows/subagent-delegation.md) owns task,
-  attempt, admission, lease, evidence, retry, and join semantics.
+- [Team Agent delegation](gizmo/workflows/subagent-delegation.md) owns worker
+  scope and shared-branch sequencing.
 - [Mission delivery](gizmo/workflows/mission-delivery.md) owns the end-to-end
   delivery sequence.
 - [Pull requests](gizmo/workflows/pull-requests.md) owns exact-head review,

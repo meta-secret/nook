@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { gitText, runModuleDeliveryGit } from './git-command.ts';
 import { ModuleDeliveryTaskKind } from './domain.ts';
 import {
@@ -16,7 +18,6 @@ import {
   cleanupRegisteredModuleIntegration,
   createIntegrationSession,
   integrationProvenance,
-  moduleIntegrationRef,
   moduleIntegrationCompletedWaveCount,
   moduleIntegrationNodeByTaskId,
   immutableModuleIntegrationState,
@@ -108,7 +109,6 @@ import type {
   AcceptedPlanStateInspection,
   ModuleIntegrationNodeLookup,
   RecordIntegratedLeaseAcceptanceRequest,
-  SourceSnapshotExpectation,
   UpdateModuleIntegrationRefRequest,
 } from './integration-provenance.ts';
 import type {
@@ -190,7 +190,6 @@ type IntegratedWriterFrontierProvenance = Readonly<{
   integratedTaskIds: readonly string[];
 }>;
 type MintIntegratedWriterFrontierRequest = IntegratedWriterFrontierProvenance;
-const ZERO_COMMIT = '0'.repeat(40);
 const PROHIBITED_MATERIALIZATION_FILES = new Set([
   '.gitattributes',
   '.gitmodules',
@@ -339,21 +338,8 @@ function verifyExpectedHandoff(
 }
 
 function applyAndValidateWave(application: ValidatedWaveApplication): string {
-  const sourceExpectation: SourceSnapshotExpectation = {
-    repositoryRoot: application.state.workspace.sourceRepositoryRoot,
-    expected: application.provenance.sourceSnapshot,
-  };
-  const workspaceExpectation: SourceSnapshotExpectation = {
-    repositoryRoot: application.state.workspace.worktreePath,
-    expected: application.provenance.workspaceSnapshot,
-  };
-  assertSourceSnapshot(sourceExpectation);
-  assertSourceSnapshot(workspaceExpectation);
-  if (application.expectedHandoffs.length === 0) {
-    assertSourceSnapshot(sourceExpectation);
-    assertSourceSnapshot(workspaceExpectation);
+  if (application.expectedHandoffs.length === 0)
     return application.state.headCommit;
-  }
   const handoffs: TreeHandoff[] = application.expectedHandoffs.map(
     (expected) => ({
       taskId: expected.node.taskId,
@@ -367,25 +353,12 @@ function applyAndValidateWave(application: ValidatedWaveApplication): string {
     handoffs,
   };
   const headCommit = applyModuleWaveTree(applyRequest);
-  const refUpdate: UpdateModuleIntegrationRefRequest = {
+  updateModuleIntegrationRef({
     provenance: application.provenance,
     nextCommit: headCommit,
     rollback: false,
-  };
-  updateModuleIntegrationRef(refUpdate);
-  try {
-    assertSourceSnapshot(sourceExpectation);
-    assertSourceSnapshot(workspaceExpectation);
-    return headCommit;
-  } catch {
-    const rollback: UpdateModuleIntegrationRefRequest = {
-      provenance: application.provenance,
-      nextCommit: headCommit,
-      rollback: true,
-    };
-    updateModuleIntegrationRef(rollback);
-    throw new Error('Module delivery wave failed and was fully rolled back.');
-  }
+  });
+  return headCommit;
 }
 
 function advancedIntegrationState(
@@ -510,32 +483,9 @@ export function prepareModuleIntegration(
     baselineCommit: request.acceptedPlan.plan.sourceCommit,
   };
   const workspace = prepareModuleWorktree(prepareRequest);
-  const sourceExpectation: SourceSnapshotExpectation = {
-    repositoryRoot: request.repositoryRoot,
-    expected: before,
-  };
-  const refRequest: ModuleIntegrationRefRequest = {
-    workspace,
-    planDigest: request.acceptedPlan.planDigest,
-  };
-  const ref = moduleIntegrationRef(refRequest);
-  const createRefInvocation: ModuleGitInvocation = {
-    cwd: workspace.sourceRepositoryRoot,
-    args: [
-      'update-ref',
-      '--create-reflog',
-      ref,
-      request.acceptedPlan.plan.sourceCommit,
-      ZERO_COMMIT,
-    ],
-  };
-  let refCreated = false;
   try {
-    assertSourceSnapshot(sourceExpectation);
-    runModuleDeliveryGit(gitRequest(createRefInvocation));
-    refCreated = true;
     const cleanupHandleValue: ModuleIntegrationCleanupHandle = {
-      sessionId: `${request.acceptedPlan.planDigest}:${workspace.worktreeId}`,
+      sessionId: `${request.acceptedPlan.planDigest}:${randomUUID()}`,
     };
     const cleanupHandle = Object.freeze(cleanupHandleValue);
     const state: ModuleIntegrationState = {
@@ -559,7 +509,7 @@ export function prepareModuleIntegration(
     const sessionRegistration: IntegrationSessionRegistration = {
       cleanupHandle,
       workspace: immutable.workspace,
-      integrationRef: ref,
+      integrationRef: '',
       currentHead: immutable.headCommit,
     };
     const session = createIntegrationSession(sessionRegistration);
@@ -577,23 +527,8 @@ export function prepareModuleIntegration(
     });
     return immutable;
   } catch {
-    let refDeleted = true;
-    if (refCreated) {
-      const deleteInvocation: ModuleGitInvocation = {
-        cwd: workspace.sourceRepositoryRoot,
-        args: ['update-ref', '-d', ref, request.acceptedPlan.plan.sourceCommit],
-        allowFailure: true,
-      };
-      refDeleted =
-        runModuleDeliveryGit(gitRequest(deleteInvocation)).exitCode === 0;
-    }
     const cleanupRequest: CleanupModuleWorktreeRequest = { workspace };
     cleanupModuleWorktree(cleanupRequest);
-    if (!refDeleted) {
-      throw new Error(
-        'Module integration preparation left a changed private ref.',
-      );
-    }
     throw new Error(
       'Module integration preparation failed and was cleaned up.',
     );
@@ -765,15 +700,7 @@ export function integrateVerifiedModuleDeliveryTask(
       recordIntegratedLeaseAcceptance(disposition);
       return advancedIntegrationState(advance);
     } catch {
-      const rollback: UpdateModuleIntegrationRefRequest = {
-        provenance,
-        nextCommit: headCommit,
-        rollback: true,
-      };
-      updateModuleIntegrationRef(rollback);
-      throw new Error(
-        'Module delivery integration failed and was rolled back.',
-      );
+      throw new Error('Shared-branch handoff acceptance failed.');
     }
   }
   const authorizedProviderEvidence = request.state.acceptedEvidence.filter(
@@ -881,16 +808,11 @@ export function finalizeModuleDeliveryIntegration(
   if (!allAccepted) {
     throw new Error('Final module join requires every accepted task result.');
   }
-  const handoffs: TreeHandoff[] = request.acceptedPlan.topologicalOrder.flatMap(
-    (taskId) =>
-      request.state.acceptedWrites
-        .filter((entry) => entry.taskId === taskId)
-        .map((entry) => ({
-          taskId: entry.taskId,
-          baselineCommit: entry.startingFrontier,
-          commit: entry.handoff.commit,
-        })),
-  );
+  const handoffs: TreeHandoff[] = request.state.acceptedWrites.map((entry) => ({
+    taskId: entry.taskId,
+    baselineCommit: entry.startingFrontier,
+    commit: entry.handoff.commit,
+  }));
   const application: ApplyModuleWaveTreeRequest = {
     workspace: request.state.workspace,
     currentHead: request.state.sourceCommit,
@@ -900,16 +822,6 @@ export function finalizeModuleDeliveryIntegration(
     handoffs.length === 0
       ? request.state.headCommit
       : applyModuleWaveTree(application);
-  const sourceExpectation: SourceSnapshotExpectation = {
-    repositoryRoot: request.state.workspace.sourceRepositoryRoot,
-    expected: provenance.sourceSnapshot,
-  };
-  assertSourceSnapshot(sourceExpectation);
-  const workspaceExpectation: SourceSnapshotExpectation = {
-    repositoryRoot: request.state.workspace.worktreePath,
-    expected: provenance.workspaceSnapshot,
-  };
-  assertSourceSnapshot(workspaceExpectation);
   const canonicalInspection: CanonicalModuleFinalizationInspection = {
     repositoryRoot: request.state.workspace.sourceRepositoryRoot,
     previousHeadCommit: request.state.headCommit,

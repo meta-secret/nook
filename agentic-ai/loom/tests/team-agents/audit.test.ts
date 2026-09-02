@@ -1,4 +1,11 @@
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import type { MakeDirectoryOptions, RmOptions } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -84,6 +91,42 @@ describe('canonical Cortex team authority', () => {
       expect(report.findings.map((finding) => finding.code)).toContain(
         'invalid-cortex-team-authority',
       );
+      expect(report.findings.map((finding) => finding.code)).toContain(
+        'invalid-cortex-gizmo-authority',
+      );
+    } finally {
+      await rm(fixtureRoot, REMOVE_RECURSIVELY);
+    }
+  });
+
+  test('rejects an affirmative Gizmo implementation grant', async () => {
+    const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-gizmo-grant-'));
+    const cortexRoot = join(fixtureRoot, '.cortex');
+    try {
+      await mkdir(join(cortexRoot, 'gizmo'), CREATE_RECURSIVELY);
+      await symlink(
+        join(REPO_ROOT, '.cortex/teams'),
+        join(cortexRoot, 'teams'),
+      );
+      await writeFile(
+        join(cortexRoot, 'AGENTS.md'),
+        await readFile(join(REPO_ROOT, '.cortex/AGENTS.md'), 'utf8'),
+        'utf8',
+      );
+      const gizmoAuthority = await readFile(
+        join(REPO_ROOT, '.cortex/gizmo/AGENTS.md'),
+        'utf8',
+      );
+      await writeFile(
+        join(cortexRoot, 'gizmo/AGENTS.md'),
+        gizmoAuthority.replace(
+          'Gizmo does not:\n\n- implement or repair team-owned work;',
+          'Gizmo may:\n\n- implement or repair team-owned work;',
+        ),
+        'utf8',
+      );
+
+      const report = auditTeamAgents({ repoRoot: fixtureRoot });
       expect(report.findings.map((finding) => finding.code)).toContain(
         'invalid-cortex-gizmo-authority',
       );

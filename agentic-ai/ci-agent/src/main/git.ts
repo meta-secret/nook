@@ -9,6 +9,7 @@ import { createLogger } from "./logger.js";
 
 const log = createLogger("git");
 const execFileAsync = promisify(execFile);
+const PR_ADDITION_WARNING = 1_500;
 
 const ACTIONS_BOT = {
   email: "41898282+github-actions[bot]@users.noreply.github.com",
@@ -206,6 +207,7 @@ function emptyReportedOnlyNumstat(): ReportedOnlyNumstat {
 
 export function summarizeAuthoredNumstat(
   numstat: string,
+  deletedPaths: ReadonlySet<string> = new Set(),
 ): AuthoredNumstatSummary {
   let authoredLines = 0;
   const reportedOnly = emptyReportedOnlyNumstat();
@@ -223,6 +225,10 @@ export function summarizeAuthoredNumstat(
     const normalizedPath = `/${parsed.destinationPath.replaceAll("\\", "/")}`;
     const filename = normalizedPath.slice(normalizedPath.lastIndexOf("/") + 1);
     if (!/^\d+$/.test(parsed.added) || !/^\d+$/.test(parsed.deleted)) {
+      if (deletedPaths.has(parsed.destinationPath)) {
+        reportedOnly.binaryFiles += 1;
+        continue;
+      }
       const extensionStart = filename.lastIndexOf(".");
       const extension =
         extensionStart >= 0 ? filename.slice(extensionStart) : "";
@@ -233,7 +239,8 @@ export function summarizeAuthoredNumstat(
       }
       continue;
     }
-    const changedLines = Number(parsed.added) + Number(parsed.deleted);
+    const addedLines = Number(parsed.added);
+    const changedLines = addedLines + Number(parsed.deleted);
     if (REPORTED_ONLY_FILENAMES.has(filename)) {
       reportedOnly.lockfileLines += changedLines;
     } else if (normalizedPath.endsWith(".snap")) {
@@ -250,7 +257,7 @@ export function summarizeAuthoredNumstat(
     } else if (parsed.renamed && changedLines === 0) {
       reportedOnly.pureRenameFiles += 1;
     } else {
-      authoredLines += changedLines;
+      authoredLines += addedLines;
     }
   }
   return { authoredLines, reportedOnly };
@@ -281,11 +288,26 @@ export async function assertAuthoredChangeBudget(
     "-l0",
     args.baseRef,
   ]);
-  const summary = summarizeAuthoredNumstat(stdout);
+  const deletedDiff = await trustedGit(args.repoRoot, [
+    "diff",
+    "--cached",
+    "--no-ext-diff",
+    "--diff-filter=D",
+    "--name-only",
+    "-z",
+    args.baseRef,
+  ]);
+  const deletedPaths = new Set(deletedDiff.stdout.split("\0").filter(Boolean));
+  const summary = summarizeAuthoredNumstat(stdout, deletedPaths);
   log.info(
-    `Implemented diff contains ${summary.authoredLines} authored changed lines against ${args.baseRef}`,
+    `Implemented diff contains ${summary.authoredLines} authored additions against ${args.baseRef}`,
   );
   log.info(`Reported-only diff rows: ${JSON.stringify(summary.reportedOnly)}`);
+  if (summary.authoredLines >= PR_ADDITION_WARNING) {
+    log.warn(
+      `Implemented diff is near the ${args.maximumLines} authored-addition budget: ${summary.authoredLines}`,
+    );
+  }
   if (summary.reportedOnly.unmeasurableAuthoredFiles > 0) {
     throw new Error(
       `Implemented diff contains ${summary.reportedOnly.unmeasurableAuthoredFiles} authored source file(s) whose line counts are hidden by binary attributes`,
@@ -293,7 +315,7 @@ export async function assertAuthoredChangeBudget(
   }
   if (summary.authoredLines > args.maximumLines) {
     throw new AuthoredChangeBudgetExceededError(
-      `Implemented diff exceeds the ${args.maximumLines} authored changed-line budget: ${summary.authoredLines}`,
+      `Implemented diff exceeds the ${args.maximumLines} authored-addition budget: ${summary.authoredLines}`,
     );
   }
 }

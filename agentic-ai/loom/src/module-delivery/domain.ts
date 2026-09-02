@@ -230,11 +230,11 @@ export enum ModuleDeliveryEvidenceInputSchema {
 }
 
 export enum ModuleDeliveryWorkspaceKind {
-  IsolatedWorktree = 'isolated-worktree',
+  SharedCheckout = 'shared-checkout',
 }
 
 export enum ModuleDeliveryJoinKind {
-  OrderedCommitHandoffs = 'ordered-commit-handoffs',
+  DirectCommits = 'direct-commits',
 }
 
 export enum ModuleDeliveryBaselineKind {
@@ -313,7 +313,7 @@ export type ModuleDeliveryWriteNodeV2 = ModuleDeliveryNodeFields & {
   readonly kind: ModuleDeliveryTaskKind.Write;
   readonly cortexAuthoring?: ModuleDeliveryCortexAuthoring;
   readonly workspace: {
-    readonly kind: ModuleDeliveryWorkspaceKind.IsolatedWorktree;
+    readonly kind: ModuleDeliveryWorkspaceKind.SharedCheckout;
     readonly expectedCommitHandoff: true;
   };
 };
@@ -336,7 +336,7 @@ export type ModuleDeliveryEdgeContract = {
 };
 
 export type ModuleDeliveryParentJoin = {
-  readonly kind: ModuleDeliveryJoinKind.OrderedCommitHandoffs;
+  readonly kind: ModuleDeliveryJoinKind.DirectCommits;
   readonly owner: string;
   readonly validationCommands: readonly string[];
 };
@@ -385,7 +385,7 @@ export type LegacyReadOnlyModuleDeliveryNode =
 export type LegacyWriteModuleDeliveryNode = LegacyModuleDeliveryNodeFields & {
   readonly kind: ModuleDeliveryTaskKind.Write;
   readonly workspace: {
-    readonly kind: ModuleDeliveryWorkspaceKind.IsolatedWorktree;
+    readonly kind: ModuleDeliveryWorkspaceKind.SharedCheckout;
     readonly expectedCommitHandoff: true;
   };
 };

@@ -172,8 +172,8 @@ Distribution follows these rules:
 
 The initial resource envelopes are:
 
-- General runner Pods may use up to 4 CPU and 6 GiB. Their ephemeral work
-  volume is limited to 32 GiB.
+- General runner Pods request 2 CPU and may use up to 4 CPU and 6 GiB. Their
+  ephemeral work volume is limited to 32 GiB.
 - The persistent BuildKit shard performs compilation, layer extraction,
   import, and export. It must not inherit fractional control-plane CPU limits.
 - Hive's Rust test-runtime sidecar receives 4 CPU and 4 GiB. The runner

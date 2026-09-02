@@ -277,14 +277,11 @@ fn gizmo_dispatches_complete_harness_neutral_team_contracts() {
             &["one functional team", "exactly one team identity"][..],
         ),
         ("explicit team identity", &["team identity"][..]),
-        ("exact baseline", &["exact baseline"][..]),
-        ("allowed paths", &["allowed paths"][..]),
-        ("forbidden paths", &["forbidden paths"][..]),
-        ("expected result", &["expected result"][..]),
+        ("bounded file scope", &["bounded file scope"][..]),
         ("acceptance evidence", &["acceptance evidence"][..]),
         (
-            "parent-owned integration",
-            &["parent-owned integration", "parent-owned join"][..],
+            "shared-branch sequencing",
+            &["shared-branch sequencing", "shared-branch write sequencing"][..],
         ),
     ] {
         assert!(
@@ -295,13 +292,10 @@ fn gizmo_dispatches_complete_harness_neutral_team_contracts() {
         );
     }
 
-    for team_path in ["ai", "dev-core", "security", "sre", "web-dev"] {
-        assert!(
-            authority.contains(&format!("teams/{team_path}/AGENTS.md"))
-                && authority.contains(&format!("teams/{team_path}/knowledge-graph.md")),
-            "Gizmo authority must identify the exact AGENTS.md and knowledge graph for {team_path}"
-        );
-    }
+    assert!(
+        authority.contains("workflows/subagent-delegation.md"),
+        "Gizmo authority must link the compact Team Agent delegation workflow"
+    );
 }
 
 #[test]

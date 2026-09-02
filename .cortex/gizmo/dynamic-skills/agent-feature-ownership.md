@@ -38,21 +38,15 @@ An agent owns only:
 Treat every other active task as foreign work.
 
 - A child worker is not another delivery owner.
-- Gizmo may assign a bounded worker task:
-  - an exact immutable baseline;
-  - a non-empty read-covered repository evidence surface;
-  - empty repository claims and evidence surface plus frozen provider edges,
-    expected producer identities, input schema, and acceptance criteria for
-    evidence-only synthesis; or
-  - an isolated and disjoint write scope.
-- The worker returns its result to Gizmo under frozen parent-lineage metadata.
-  - While its claims remain leased, it must not create another worker attempt.
-  - A missing dependency is returned to Gizmo for a replacement immutable
-    generation, Loom/Nook candidate computation, Gizmo admission authorization
-    and frontier freezing, and harness attempt creation after conclusive
-    disposition.
-  - It must not mutate Workbench, branch, PR, review, check, or merge state.
-  - Its ownership ends when the result is handed back.
+- Gizmo may assign a bounded Team Agent task with explicit read scope, write
+  scope, and acceptance evidence.
+- A write-capable Team Agent uses the current checkout after any prior writer
+  finishes.
+- The worker must not create another worker.
+- A missing dependency returns to Gizmo for assignment to its owner.
+- The worker must not mutate Workbench, branch publication, PR, review, check,
+  or merge state.
+- Its ownership ends when the result is handed back.
 
 See [subagent-delegation.md](../workflows/subagent-delegation.md).
 

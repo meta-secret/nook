@@ -10,10 +10,10 @@ Use this workflow for feature work that touches more than one package.
    0b. **Merge with squash only.** When a PR is merged, use **Squash and
    merge** (`gh pr merge --squash`). Never merge commit or rebase merge. See
    [pull requests](../../../gizmo/workflows/pull-requests.md#squash-merge-only---no-exceptions).
-   0c. Estimate authored changed lines and map package ownership before editing.
+   0c. Estimate authored additions and map package ownership before editing.
    Do not create a PR whose planned authored diff exceeds 2,000 lines. Do not
    split, stack, or rebuild a PR to recover from size growth. If review fixes
-   grow the PR to 3,000 lines, stop and produce the required failure report.
+   exceed 2,000 authored additions, stop and simplify the design.
    Follow
    [pull request size](../../../gizmo/workflows/pull-requests.md#pull-request-size-and-modularity).
 1. Identify the lowest package that should own the behavior.
@@ -25,10 +25,10 @@ Use this workflow for feature work that touches more than one package.
 7. Add new app routine commands to the nearest owning Taskfile: web-family tasks under `nook-app/nook-web/Taskfile.yml` , Docker tasks under `nook-app/nook-platform/docker/Taskfile.yml`, CI tasks under `nook-app/ci/Taskfile.yml`, and repo-level non-app commands under the root `Taskfile.yml` or root `.task/`.
 8. Update `.cortex` docs when architecture or workflow changes.
 9. Run required formatters and commit every resulting mutation in the allowed
-   AI paths. Gizmo integrates that coherent handoff and runs
+   AI paths. Gizmo continues from that coherent commit and runs
    `task loom:pre-push`.
    - If hygiene mutates AI-owned source or Cortex content, the AI team returns
-     a fresh formatted commit. Gizmo reintegrates it and reruns hygiene before
+     a fresh formatted commit. Gizmo continues from it and reruns hygiene before
      pushing.
    - Do not add broad local builds, tests, e2e, container product gates, or
      duplicate hosted-check mirrors before push.
@@ -47,10 +47,9 @@ For a PR that changes multiple packages:
    or controller. Team Agent count does not determine record or PR count.
 3. Return the AI Team Agent's existing typed handoff directly to Gizmo Prime;
    bind it to the assigned Gizmo ID through existing plan/task context. Gizmo
-   Prime aggregates scope, stable interfaces, estimate, exact
-   handoff commits, and evidence under that record. This introduces no new
-   handoff transport. The AI worker does not create PRs, request readiness, or
-   merge.
+   Prime aggregates scope, stable interfaces, estimate, exact direct commits,
+   and evidence under that record. This introduces no new handoff transport.
+   The AI worker does not create PRs, request readiness, or merge.
 4. Gizmo Prime owns the complete PR lifecycle: same-repository branch and PR
    creation, full checks, exact-head readiness, and squash merge.
 5. Keep unrelated package changes out of the PR.

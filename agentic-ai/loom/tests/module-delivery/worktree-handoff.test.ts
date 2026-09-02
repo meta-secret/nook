@@ -85,6 +85,15 @@ describe('verifyModuleCommitHandoff', () => {
     expect(handoff.taskId).toBe('writer_with_underscore');
   });
 
+  test('rejects a handoff committed on a different branch', () => {
+    const active = createWorkspace();
+    worktreeGit(active)(['switch', '--quiet', '-c', 'other']);
+    commitPath(active);
+    expect(() =>
+      verifyModuleCommitHandoff(verificationRequest(active)),
+    ).toThrow('identity does not match');
+  });
+
   test('rejects dirty and out-of-scope handoffs', () => {
     const active = createWorkspace();
     const write = worktreeFileWriter(active);
@@ -140,7 +149,7 @@ describe('verifyModuleCommitHandoff', () => {
     );
   });
 
-  test('rejects empty, multiple, and noncanonical commits', () => {
+  test('rejects empty, multi-commit, and noncanonical handoffs', () => {
     const active = createWorkspace();
     const git = worktreeGit(active);
     git(['commit', '--quiet', '--allow-empty', '-m', 'empty']);
@@ -151,7 +160,7 @@ describe('verifyModuleCommitHandoff', () => {
     git(['commit', '--quiet', '-m', 'second']);
     const multipleRequest = verificationRequest(active);
     expect(() => verifyModuleCommitHandoff(multipleRequest)).toThrow(
-      'direct-child',
+      'directly after its baseline',
     );
     git(['reset', '--hard', active.baselineCommit]);
     worktreeFileWriter(active)(['module/bad name.ts', 'bad\n']);

@@ -21,7 +21,7 @@ test("trusted budget rejection is exported for blocked worklog publication", () 
   const output = join(root, "github-output");
   try {
     const error = new AuthoredChangeBudgetExceededError(
-      "Implemented diff exceeds the 2000 authored changed-line budget: 2001",
+      "Implemented diff exceeds the 2000 authored-addition budget: 2001",
     );
     recordTrustedBudgetBlocker(error, output);
     const encoded = readFileSync(output, "utf8").trim().split("=")[1];
@@ -56,7 +56,7 @@ test("oversized implementation is rejected before push", async () => {
   const events: string[] = [];
   const args = deliveryArgs(events);
   const budgetError = new AuthoredChangeBudgetExceededError(
-    "exceeds the 2000 authored changed-line budget: 2001",
+    "exceeds the 2000 authored-addition budget: 2001",
   );
   args.assertBudget = async () => {
     events.push("budget");

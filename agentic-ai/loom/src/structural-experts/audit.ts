@@ -35,7 +35,6 @@ export type AuditStructuralExpertProfilesRequest =
   };
 
 export type AuditStructuralExpertCortexAuthorityRequest = {
-  readonly delegationSource: string;
   readonly registrySource: string;
   readonly skillSource: string;
   readonly workflowSource: string;
@@ -136,8 +135,6 @@ const STRUCTURAL_EXPERT_CATALOG_PATH =
   'agentic-ai/loom/src/structural-experts/catalog.ts';
 const STRUCTURAL_EXPERT_CORTEX_AUTHORITY_PATH =
   '.cortex/teams/ai/architecture/refactoring-experts.md';
-const SUBAGENT_DELEGATION_AUTHORITY_PATH =
-  '.cortex/gizmo/workflows/subagent-delegation.md';
 const SYSTEM_COHERENCE_SKILL_AUTHORITY_PATH =
   '.cortex/teams/ai/dynamic-skills/system-coherence-synthesizer.md';
 const STRUCTURAL_REFACTORING_WORKFLOW_AUTHORITY_PATH =
@@ -197,17 +194,6 @@ const STRUCTURAL_EXPERT_REGISTRY_CONTRACT_SECTIONS: readonly MarkdownContractSec
         'The repository-reader category remains separate:',
         'repository evidence surface covered by its bounded read claims.',
         'It cannot schedule successors or authorize writes.',
-      ],
-    },
-  ];
-const SUBAGENT_DELEGATION_CONTRACT_SECTIONS: readonly MarkdownContractSection[] =
-  [
-    {
-      heading: '## Safe delegation patterns',
-      requiredMarkers: [
-        '`system_coherence_synthesizer` and `SystemCoherenceSynthesis` remain legacy `loom-structural-experts` diagnostic identities.',
-        'They accept verified structural `Completed` and `Failed` observations, cannot satisfy ordinary provider edges, and must not be reused for future ordinary accepted-evidence synthesis.',
-        'Future ordinary synthesis requires a distinct typed role, profile, and result contract before implementation; no such identity or runtime support is declared here, so ordinary dispatch remains fail-closed.',
       ],
     },
   ];
@@ -275,13 +261,6 @@ export function auditStructuralExpertProfiles(
   const registrySource = existsSync(authorityPath)
     ? readFileSync(authorityPath, 'utf8')
     : '';
-  const delegationPath = join(
-    request.repoRoot,
-    SUBAGENT_DELEGATION_AUTHORITY_PATH,
-  );
-  const delegationSource = existsSync(delegationPath)
-    ? readFileSync(delegationPath, 'utf8')
-    : '';
   const skillPath = join(
     request.repoRoot,
     SYSTEM_COHERENCE_SKILL_AUTHORITY_PATH,
@@ -297,7 +276,6 @@ export function auditStructuralExpertProfiles(
     ? readFileSync(workflowPath, 'utf8')
     : '';
   const authorityRequest: AuditStructuralExpertCortexAuthorityRequest = {
-    delegationSource,
     registrySource,
     skillSource,
     workflowSource,
@@ -492,13 +470,6 @@ export function auditStructuralExpertCortexAuthority(
     source: request.registrySource,
   };
   auditAuthorityContract(registryAuditRequest);
-  const delegationAuditRequest: AuditAuthorityContractRequest = {
-    findings,
-    path: SUBAGENT_DELEGATION_AUTHORITY_PATH,
-    sections: SUBAGENT_DELEGATION_CONTRACT_SECTIONS,
-    source: request.delegationSource,
-  };
-  auditAuthorityContract(delegationAuditRequest);
   const skillAuditRequest: AuditAuthorityContractRequest = {
     findings,
     path: SYSTEM_COHERENCE_SKILL_AUTHORITY_PATH,

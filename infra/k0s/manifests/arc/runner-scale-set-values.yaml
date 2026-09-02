@@ -151,7 +151,7 @@ template:
             mountPath: /opt/hostedtoolcache
         resources:
           requests:
-            cpu: 500m
+            cpu: "2"
             memory: 1Gi
             ephemeral-storage: 4Gi
           limits:

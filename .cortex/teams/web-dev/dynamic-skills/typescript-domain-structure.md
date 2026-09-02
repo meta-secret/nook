@@ -105,13 +105,14 @@ Does not apply to:
   applies this skill only to web-owned implementation or through an explicit
   Web expertise task; the skill does not grant generic ownership of
   `agentic-ai/` or Loom.
-- Gizmo integrates the formatted handoff and runs `task loom:pre-push` on the
+- Gizmo continues from the formatted commit and runs `task loom:pre-push` on the
   combined head. If that gate formats team-owned content, Gizmo returns the
   exact diff to its owning worker for a fresh formatted commit instead of
-  committing it. After reintegration and a clean gate, Gizmo pushes and
-  immediately obtains remote evidence for that head: at least one relevant
-  focused remote task when it is not validation-ready, or complete exact-head
-  validation immediately when it is ready. Gizmo then owns readiness and merge.
+  committing it.
+- After the owner commit and a clean gate, Gizmo pushes.
+- A head that is not validation-ready receives a relevant focused remote task.
+- A validation-ready head receives complete exact-head validation.
+- Gizmo owns readiness and merge.
 
 For Loom's one-parameter function rule, see
 [typescript-single-parameter.md](typescript-single-parameter.md).

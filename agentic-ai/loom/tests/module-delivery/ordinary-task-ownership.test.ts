@@ -46,7 +46,7 @@ function ordinaryWrite(request: {
     parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
     acceptance: { commands: ['task test'], evidence: ['tests pass'] },
     workspace: {
-      kind: ModuleDeliveryWorkspaceKind.IsolatedWorktree,
+      kind: ModuleDeliveryWorkspaceKind.SharedCheckout,
       expectedCommitHandoff: true,
     },
   };
@@ -62,7 +62,7 @@ function accepted(node: ModuleDeliveryWriteNodeV2): boolean {
     maxAttempts: 1,
     parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
     parentJoin: {
-      kind: ModuleDeliveryJoinKind.OrderedCommitHandoffs,
+      kind: ModuleDeliveryJoinKind.DirectCommits,
       owner: 'delivery-owner',
       validationCommands: ['task test'],
     },

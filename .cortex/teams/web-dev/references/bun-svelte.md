@@ -87,15 +87,15 @@ and `preflight` sources. Unused-code ownership is split as follows:
   handoff evidence: it runs on the configured GitHub Actions worker against a
   published SHA. Humans may use local single-spec Docker e2e for interactive
   debugging.
-- Gizmo integrates accepted formatted handoffs and runs `task loom:pre-push`
+- Gizmo continues from accepted formatted commits and runs `task loom:pre-push`
   on the combined head. If that gate formats web-owned content, Gizmo returns
   the exact diff to web development for a fresh formatted commit instead of
-  committing it. After reintegration and a clean gate, Gizmo pushes and
-  immediately obtains exact-published-head remote evidence: at least one
-  relevant focused remote task, including any required Web-owned browser E2E
-  through `task remote`, while the head is not validation-ready; or complete
-  exact-head validation immediately when it is ready. Gizmo must collect every
-  required browser E2E result against that published head before readiness.
+  committing it.
+- After the owner commit and a clean gate, Gizmo pushes.
+- Run a relevant focused remote task while the head is not validation-ready.
+- Include required Web-owned browser E2E through `task remote`.
+- Run complete exact-head validation when the head is ready.
+- Gizmo collects every required browser E2E result against that published head.
   Web development owns the browser acceptance requirement; Gizmo owns
   publication, remote dispatch and collection, readiness, and merge.
   See [workflows/remote-execution.md](../../sre/workflows/remote-execution.md).

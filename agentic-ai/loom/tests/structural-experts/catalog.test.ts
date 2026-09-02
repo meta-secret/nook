@@ -20,10 +20,6 @@ const REGISTRY_AUTHORITY_PATH = resolve(
   REPO_ROOT,
   '.cortex/teams/ai/architecture/refactoring-experts.md',
 );
-const DELEGATION_AUTHORITY_PATH = resolve(
-  REPO_ROOT,
-  '.cortex/gizmo/workflows/subagent-delegation.md',
-);
 const SKILL_AUTHORITY_PATH = resolve(
   REPO_ROOT,
   '.cortex/teams/ai/dynamic-skills/system-coherence-synthesizer.md',
@@ -34,7 +30,6 @@ const WORKFLOW_AUTHORITY_PATH = resolve(
 );
 
 type CortexAuthoritySources = {
-  readonly delegationSource: string;
   readonly registrySource: string;
   readonly skillSource: string;
   readonly workflowSource: string;
@@ -42,11 +37,9 @@ type CortexAuthoritySources = {
 
 async function cortexAuthoritySources(): Promise<CortexAuthoritySources> {
   const registrySource = await readFile(REGISTRY_AUTHORITY_PATH, 'utf8');
-  const delegationSource = await readFile(DELEGATION_AUTHORITY_PATH, 'utf8');
   const skillSource = await readFile(SKILL_AUTHORITY_PATH, 'utf8');
   const workflowSource = await readFile(WORKFLOW_AUTHORITY_PATH, 'utf8');
   return {
-    delegationSource,
     registrySource,
     skillSource,
     workflowSource,
@@ -105,16 +98,6 @@ test('passes deterministic catalog and Cortex authority audit', () => {
 async function expectAllAuthorityDriftCoverage(): Promise<void> {
   const sources = await cortexAuthoritySources();
   const driftedAuthorities = [
-    {
-      expectedPath: '.cortex/gizmo/workflows/subagent-delegation.md',
-      request: {
-        ...sources,
-        delegationSource: sources.delegationSource.replace(
-          'Future ordinary synthesis requires a distinct typed role, profile, and result\n  contract before implementation;',
-          'Future ordinary synthesis reuses a legacy role.',
-        ),
-      },
-    },
     {
       expectedPath: '.cortex/teams/ai/architecture/refactoring-experts.md',
       request: {

@@ -28,10 +28,10 @@ validation, readiness, and merge.
 
 ### Ordinary worker handoff
 
-For an ordinary worker handoff, once Gizmo integrates a coherent commit it runs
-`task loom:pre-push`. Gizmo may commit deterministic integration-only state.
+For an ordinary worker handoff, once Gizmo continues from a coherent commit it runs
+`task loom:pre-push`. Gizmo may commit parent-owned delivery state.
 If hygiene mutates team-owned source or Cortex content, Gizmo returns that diff
-to the responsible team for a fresh formatted commit, reintegrates it, and
+to the responsible team for a fresh formatted commit, continues from it, and
 reruns hygiene. Gizmo then promptly pushes the coherent head.
 
 Every pushed head immediately selects remote evidence. Dispatch at least one
@@ -117,7 +117,7 @@ When a new finding arrives:
    hosted checks and exact-head review settle.
 3. Combine review findings and failed checks into one coherent repair batch.
 4. Dispatch that batch to the responsible team.
-5. Integrate the verified fix commit, then reply to and resolve the thread.
+5. Continue from the verified fix commit, then reply to and resolve the thread.
 6. Run pre-push hygiene through the responsible formatter owner and push the
    replacement head.
 7. Restart complete validation for that head. If it is not yet
@@ -145,7 +145,7 @@ Cursor, CodeRabbit, or another service:
 1. Verify the finding against the current branch and `.cortex` rules.
 2. Dispatch the minimal correct fix to the responsible team, or document why
    no change is needed.
-3. Integrate the verified fix commit.
+3. Continue from the verified fix commit.
 4. Run `task loom:pre-push PR=<number>` through the responsible formatter owner, commit,
    and push when files changed.
 5. If the head is not validation-ready, dispatch at least one relevant focused
@@ -187,14 +187,14 @@ Report:
 Confirm that unresolved review-thread count was zero at the final readiness
 audit.
 
-## Integrated verdict
+## Exact-head verdict
 
-Gizmo issues the final integrated PR verdict for the exact head.
+Gizmo issues the final PR verdict for the exact head.
 
 - Required team verdicts remain independent acceptance evidence.
 - A required blocking team verdict remains binding until that team clears it.
 - A required blocking security verdict remains binding until security clears
   it.
 - Gizmo cannot waive, downgrade, or override either block.
-- Gizmo may block the PR when integration evidence is incomplete.
+- Gizmo may block the PR when exact-head evidence is incomplete.
 - A replacement head invalidates verdicts whose evidence is not head-stable.

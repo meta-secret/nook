@@ -46,11 +46,11 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 - Web-family tasks live in `nook-app/nook-web/Taskfile.yml` and `nook-web-extension/Taskfile.yml`.
 - Agents do not run raw compiler, bundler, or environment commands.
 - Gizmo uses `task loom:pre-push` as the only required local pre-push hygiene,
-  then promptly pushes a coherent integrated head. Team workers run required
+  then promptly pushes a coherent shared-branch head. Team workers run required
   formatters and commit every mutation in their allowed source or Cortex paths.
-- Gizmo may commit deterministic integration-only state. It routes formatter
+- Gizmo may commit parent-owned delivery state. It routes formatter
   mutations in team-owned content back to that team for a fresh formatted
-  commit, then reintegrates and reruns pre-push hygiene.
+  commit, then continues from it and reruns pre-push hygiene.
 - Every pushed head immediately selects remote evidence. A head that is not
   validation-ready requires at least one relevant focused `task remote` job.
 - Gizmo dispatches `task pr:validate` immediately when the pushed head is ready
@@ -87,27 +87,24 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 - **Every implementation mission** follows
   [mission delivery](../../../gizmo/workflows/mission-delivery.md).
 - Responsible team agents own implementation and scoped fixes.
-- Gizmo owns delivery planning, team-task admission authorization and contract
-  submission, integration, review coordination, validation, readiness, and
-  merge. The active harness creates and runs authorized attempts.
+- Gizmo owns delivery planning, Team Agent assignment, shared-branch
+  sequencing, review coordination, validation, readiness, and merge.
 - The delivery pipeline has these ordered steps:
   1. Gizmo fetches the repository and plans from `origin/main`.
-  2. Gizmo admission-authorizes the implementation task and submits its bounded
-     contract to the active harness, which creates and runs the attempt.
-  3. Gizmo integrates the verified implementation handoff.
+  2. Gizmo assigns the bounded implementation task through the active harness.
+  3. Gizmo continues from the Team Agent's shared-branch result.
   4. Gizmo runs Loom pre-push. Team-owned formatter mutations return to their
      owners for a fresh committed handoff before Gizmo updates the PR.
   5. Gizmo immediately dispatches a relevant focused hosted task when the head
      is not validation-ready. Otherwise it immediately dispatches complete
      validation.
-  6. Gizmo admission-authorizes each bounded correction task and submits its
-     contract to the active harness, which creates and runs the attempt.
-  7. Gizmo integrates verified fixes and runs Loom pre-push. Team-owned
+  6. Gizmo assigns each bounded correction task to its owning team.
+  7. Gizmo continues from verified fixes and runs Loom pre-push. Team-owned
      formatter mutations return to their owners for a fresh committed handoff
      before Gizmo pushes and obtains fresh exact-head validation.
   8. Before final readiness, the AI team reviews self-improvement only when the
      work revealed a durable lesson or Cortex defect.
-  9. When a candidate qualifies, Gizmo integrates its clean committed promotion
+  9. When a candidate qualifies, Gizmo continues from its clean committed promotion
      and runs Loom pre-push. It repeats hosted validation if the head changes.
   10. Gizmo runs readiness and completes the squash merge.
 - **Do not stop at push or readiness.** Gizmo owns the PR through squash merge

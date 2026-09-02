@@ -263,7 +263,7 @@ publication steps. Registry credentials are not used. Prompt:
 
 - GitHub Actions is the agent build/test environment and sole merge-validation
   pipeline.
-- Team Agents format and commit without pushing. Gizmo integrates, runs
+- Team Agents format and commit without pushing. Gizmo continues from the commit, runs
   pre-push, pushes, and owns remote validation.
 - Gizmo starts complete PR validation with `task pr:validate`; an ordinary
   push does not refresh that gate.

@@ -15,7 +15,7 @@ trusted workflow dispatch. The source task cannot set this value.
 Classify the requested solution before writing an implementation plan.
 
 A typed planning blocker includes an unauthorized major architectural initiative
-or a complete estimate above 2,000 authored changed lines. A major initiative includes a new subsystem, runtime, execution
+or a complete estimate above 2,000 authored additions. A major initiative includes a new subsystem, runtime, execution
 model, storage model, protocol, security boundary, multi-PR program, or
 materially new project pattern. If the source task states only a broad problem
 and the major direction would come from your reasoning, stop at analysis. Do
@@ -92,11 +92,11 @@ material functional, workflow, security, validation, and delivery requirement,
 plus explicit assumptions or exclusions. Keep the execution plan small and
 ordered.
 
-Estimate additions and deletions for authored source, tests, documentation,
-configuration, scripts, and workflow code. Exclude generated files, lockfiles,
-snapshots, vendored sources, binary artifacts, and pure renames from the
-estimate. Set `Delivery shape` and `PR sequence mode` to exactly `One PR`.
-The estimate must not exceed 2,000 authored changed lines. A larger estimate is
+Estimate additions for authored source, tests, documentation, configuration,
+scripts, and workflow code. Deletions do not count and have no limit. Exclude
+generated files, lockfiles, snapshots, vendored sources, binary artifacts, and
+pure renames from the estimate. Set `Delivery shape` and `PR sequence mode` to
+exactly `One PR`. The estimate must not exceed 2,000 authored additions. A larger estimate is
 a blocker. Report that the complete requested outcome does not fit the PR
 contract. Do not create slices, successor PRs, or a stack. Use `None` when no
 public or cross-module interface changes.
@@ -105,9 +105,10 @@ Set `Mission controller` to exactly `Gizmo Prime`. Give every feature-slice
 Gizmo record a stable lowercase-hyphenated ID and a unique human-readable name. Set
 `Current Gizmo ID` to the first/current PR slice's Gizmo ID. List every PR slice
 on its own consecutively numbered line as
-`<number>. Gizmo ID: <id>; Gizmo name: <name>; Predecessor Gizmo ID: <id-or-None>; <scope>; Estimated authored changed lines: <positive integer>; Acceptance evidence: <observable proof>`.
+`<number>. Gizmo ID: <id>; Gizmo name: <name>; Predecessor Gizmo ID: <id-or-None>; <scope>; Estimated authored changed lines: <non-negative integer>; Acceptance evidence: <observable proof>`.
 The sole slice estimate must equal `Current PR estimated authored changed
-lines` and `Estimated authored changed lines`. Missing, zero, oversized, or
+lines` and `Estimated authored changed lines`. These existing labels mean
+authored additions; no deletion-report field is required. Missing, oversized, or
 incomplete estimates are invalid.
 
 When the task source is a focused Workbench issue with canonical `gizmo_id`
@@ -128,20 +129,19 @@ an engineering team. It creates one named feature-slice Gizmo record by default
 for one feature and PR. Each feature-slice Gizmo is an immutable typed Workbench
 slice record, not a process, agent, worker attempt, or controller. It groups
 exactly one PR. Gizmo Prime does not create another record because the feature
-exceeds 2,000 authored changed lines. Team Agent count never determines PR or
+exceeds 2,000 authored additions. Team Agent count never determines PR or
 Gizmo count.
 Published records are never updated in place; changes require a superseding new
 immutable Workbench plan.
-Gizmo Prime admission-authorizes Team Agent task attempts through the existing
-harness, routes tasks by assigned Gizmo ID, receives existing typed handoffs
-directly, and aggregates verified results under each record. Do not introduce a
-slice-process handoff transport or intermediate agent.
+Gizmo Prime assigns bounded Team Agent tasks through the existing harness,
+routes tasks by assigned Gizmo ID, and receives results directly. Do not
+introduce a slice-process transport or intermediate agent.
 
 Add one consecutively numbered `Ownership units` row per capability. Set its
 `Gizmo ID` to a declared PR-slice Gizmo. Set each
 `Functional owner` to exactly `Gizmo Prime`, `AI`, `Development core`,
 `Security`, `SRE`, or `Web development`. Use `Gizmo Prime` only for
-coordination, integration, or lifecycle capabilities; it does not name an
+coordination, shared-branch sequencing, or delivery capabilities; it does not name an
 engineering team or grant a feature-slice Gizmo lifecycle authority. The
 validator accepts legacy published `Gizmo` values as a compatibility alias for
 Gizmo Prime.
@@ -166,8 +166,8 @@ An `Expertise provider` must be exactly `AI`, `Development core`, `Security`,
 never implements a bounded unit or fix. A feature-slice Gizmo is also not an
 expertise provider or implementation team.
 
-If planning finds that the requested outcome exceeds 2,000 authored changed
-lines, do not create `.nook-workbench-plan.md`. Write the typed planning blocker
+If planning finds that the requested outcome exceeds 2,000 authored additions,
+do not create `.nook-workbench-plan.md`. Write the typed planning blocker
 to `.nook-workbench-worklog.md` using the exact structure above. Do not authorize
 implementation, reduce the requested outcome, or create another PR.
 

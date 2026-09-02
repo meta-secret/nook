@@ -68,7 +68,7 @@ function plan(sourceCommit: string): ModuleDeliveryPlanV2 {
     maxAttempts: 2,
     parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
     parentJoin: {
-      kind: ModuleDeliveryJoinKind.OrderedCommitHandoffs,
+      kind: ModuleDeliveryJoinKind.DirectCommits,
       owner: 'gizmo-prime',
       validationCommands: ['task loom:verify'],
     },
@@ -106,7 +106,7 @@ function plan(sourceCommit: string): ModuleDeliveryPlanV2 {
           evidence: ['SRE Cortex guidance is indexed and audited.'],
         },
         workspace: {
-          kind: ModuleDeliveryWorkspaceKind.IsolatedWorktree,
+          kind: ModuleDeliveryWorkspaceKind.SharedCheckout,
           expectedCommitHandoff: true,
         },
       },

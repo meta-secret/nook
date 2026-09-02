@@ -682,7 +682,7 @@ jobs:
             const budgetBlocker = process.env.BUDGET_BLOCKER_B64
               ? Buffer.from(process.env.BUDGET_BLOCKER_B64, 'base64').toString('utf8')
               : ''
-            const budgetMatch = budgetBlocker.match(/^Implemented diff exceeds the 2000 authored changed-line budget: (\d+)$/)
+            const budgetMatch = budgetBlocker.match(/^Implemented diff exceeds the 2000 authored-addition budget: (\d+)$/)
             if (budgetMatch) {
               summary = [
                 '# Automated agent work summary',

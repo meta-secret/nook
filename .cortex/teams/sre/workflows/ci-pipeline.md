@@ -930,11 +930,11 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 - Ordinary Team Agents format every changed file in their allowed scope and
   return coherent exact committed handoffs. They do not push, dispatch remote
   work, or operate external PR/check state.
-- After integration, Gizmo runs `task loom:pre-push` and inspects every
-  host-applied change. If formatting changes team-owned source or Cortex, Gizmo
-  routes that exact diff to the responsible Team Agent for a fresh formatted
-  commit, reintegrates it, and repeats pre-push rather than authoring or
-  committing the diff itself. Gizmo pushes only after pre-push is clean.
+- Gizmo continues from the Team Agent commit and runs `task loom:pre-push`.
+- Gizmo inspects every host-applied change.
+- If formatting changes team-owned content, Gizmo returns that diff to its
+  owner for a fresh commit.
+- Gizmo repeats pre-push and pushes only after it is clean.
 - Every pushed head receives remote evidence immediately. For a
   non-validation-ready head, Gizmo uses `task remote TASK_NAME=<name>` for at
   least one relevant focused command; `TASK_NAMES=<a>,<b>` may reuse one job for

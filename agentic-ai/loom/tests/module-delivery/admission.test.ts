@@ -162,7 +162,7 @@ function writeNode(request: WriteNodeRequest): ModuleDeliveryWriteNodeV2 {
       evidence: [`${taskId} passed`],
     },
     workspace: {
-      kind: ModuleDeliveryWorkspaceKind.IsolatedWorktree,
+      kind: ModuleDeliveryWorkspaceKind.SharedCheckout,
       expectedCommitHandoff: true,
     },
   };
@@ -212,7 +212,7 @@ const PLAN: ModuleDeliveryPlanV2 = {
   maxAttempts: 2,
   parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
   parentJoin: {
-    kind: ModuleDeliveryJoinKind.OrderedCommitHandoffs,
+    kind: ModuleDeliveryJoinKind.DirectCommits,
     owner: 'delivery-owner',
     validationCommands: ['task loom:verify'],
   },
@@ -420,13 +420,11 @@ function acceptEvidence(
 }
 
 describe('module delivery admission authority', () => {
-  test('selects the maximal safe set and rejects unproven writer frontiers', () => {
+  test('serializes writers and rejects unproven writer frontiers', () => {
     const active = runtime(validate(PLAN));
     const first = select(active);
-    expect(first.admissions.map(({ taskId }) => taskId)).toEqual([
-      'alpha',
-      'beta',
-    ]);
+    expect(first.admissions.map(({ taskId }) => taskId)).toEqual(['alpha']);
+    expect(first.pendingTaskIds).toContain('beta');
     const forgedFrontier = {
       taskId: 'alpha',
       attempt: 1,
@@ -630,7 +628,7 @@ describe('module delivery admission authority', () => {
     const assertPriorGenerationUsable = (): void => {
       const current = select(active);
       expect(current.admissions.map(({ generation }) => generation)).toEqual([
-        1, 1,
+        1,
       ]);
     };
     const replacementPlanRequest: GenerationPlanRequest = {
@@ -717,9 +715,7 @@ describe('module delivery admission authority', () => {
     expect(() =>
       restartModuleDeliveryGeneration(restartRequest(blockedRestartRequest)),
     ).toThrow('terminal release evidence');
-    expect(select(active).admissions.map(({ taskId }) => taskId)).toEqual([
-      beta.taskId,
-    ]);
+    expect(select(active).admissions).toEqual([]);
     const cancellationRequest: CancelledLeaseRequest = {
       runtime: active,
       lease: leasedAlpha,
@@ -791,16 +787,6 @@ describe('module delivery admission authority', () => {
       {
         taskId: alpha.taskId,
         attempt: 2,
-        startingFrontier: REPLACEMENT_SOURCE,
-      },
-      {
-        taskId: beta.taskId,
-        attempt: 1,
-        startingFrontier: REPLACEMENT_SOURCE,
-      },
-      {
-        taskId: gamma.taskId,
-        attempt: 1,
         startingFrontier: REPLACEMENT_SOURCE,
       },
     ]);
@@ -985,10 +971,8 @@ describe('module delivery admission authority', () => {
         taskId,
         attempt,
       })),
-    ).toEqual([
-      { taskId: beta.taskId, attempt: 1 },
-      { taskId: gamma.taskId, attempt: 1 },
-    ]);
+    ).toEqual([{ taskId: beta.taskId, attempt: 1 }]);
+    expect(selection.pendingTaskIds).toContain(gamma.taskId);
   });
 });
 

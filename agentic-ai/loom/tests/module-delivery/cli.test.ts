@@ -30,7 +30,7 @@ function cliPlan(): ModuleDeliveryPlanV2 {
     maxAttempts: 2,
     parentOwnedResources: [...REQUIRED_PARENT_OWNED_RESOURCES],
     parentJoin: {
-      kind: ModuleDeliveryJoinKind.OrderedCommitHandoffs,
+      kind: ModuleDeliveryJoinKind.DirectCommits,
       owner: 'delivery-owner',
       validationCommands: ['task loom:verify'],
     },
@@ -76,7 +76,7 @@ function legacyCliPlan(): LegacyModuleDeliveryPlan {
     maxAttempts: 2,
     parentOwnedResources: [...REQUIRED_PARENT_OWNED_RESOURCES],
     parentJoin: {
-      kind: ModuleDeliveryJoinKind.OrderedCommitHandoffs,
+      kind: ModuleDeliveryJoinKind.DirectCommits,
       owner: 'delivery-owner',
       validationCommands: ['task loom:verify'],
     },

@@ -48,16 +48,16 @@ to generate bookkeeping.
 3. Treat every other active task as read-only.
 4. Update the existing record or create a focused non-duplicate.
 5. Bound the work:
-   - Record one positive authored additions-plus-deletions estimate at or below
-     2,000 for the PR.
+   - Record one non-negative authored-additions estimate at or below 2,000 for
+     the PR. Deletions do not count and have no limit.
    - Keep the issue inside one cohesive module, package, layer, or
      responsibility.
    - Keep acceptance criteria deliverable and testable in that PR.
    - Copy the plan's stable Gizmo ID into the canonical `gizmo_id` frontmatter.
    - Do not split, stack, rebuild, or replace an oversized PR.
-   - If planned work cannot fit below 2,000 lines, stop and record the blocker.
-   - If review work reaches 3,000 lines, stop and produce the report required by
-     [pull requests](../workflows/pull-requests.md#review-growth-stop).
+   - If planned additions cannot fit at or below 2,000, stop and record the
+     blocker.
+   - Stop before review work exceeds 2,000 authored additions.
 6. Link the parent feature, dependencies, historical issue context, and Nook
    PR.
 7. Publish a worklog before completion or blocked handoff.

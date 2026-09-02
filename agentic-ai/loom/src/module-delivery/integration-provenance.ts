@@ -712,25 +712,9 @@ export function moduleIntegrationRef(
 export function updateModuleIntegrationRef(
   request: UpdateModuleIntegrationRefRequest,
 ): void {
-  const args = request.rollback
-    ? [
-        'update-ref',
-        request.provenance.session.integrationRef,
-        request.provenance.headCommit,
-        request.nextCommit,
-      ]
-    : [
-        'update-ref',
-        '--create-reflog',
-        request.provenance.session.integrationRef,
-        request.nextCommit,
-        request.provenance.headCommit,
-      ];
-  const invocation: GitCommandRequest = {
-    cwd: request.provenance.workspace.sourceRepositoryRoot,
-    args,
-  };
-  runModuleDeliveryGit(invocation);
+  if (request.rollback)
+    request.provenance.session.currentHead = request.provenance.headCommit;
+  else request.provenance.session.currentHead = request.nextCommit;
 }
 
 export function assertFreshModuleIntegrationState(
@@ -770,15 +754,6 @@ export function assertFreshModuleIntegrationState(
     state.workspace.attempt !== 1
   )
     throw new Error('Module integration workspace metadata is inconsistent.');
-  const headInvocation: GitCommandRequest = {
-    cwd: state.workspace.worktreePath,
-    args: ['rev-parse', '--verify', 'HEAD^{commit}'],
-  };
-  const head = gitText(runModuleDeliveryGit(headInvocation));
-  if (head !== state.sourceCommit)
-    throw new Error(
-      'Module integration worktree was changed without authority.',
-    );
   if (
     provenance.session.cleaned ||
     provenance.session.cleanupHandle !== state.cleanupHandle ||
@@ -786,35 +761,6 @@ export function assertFreshModuleIntegrationState(
     provenance.session.currentHead !== state.headCommit
   )
     throw new Error('Module integration session is stale or already cleaned.');
-  const refInvocation: GitCommandRequest = {
-    cwd: state.workspace.sourceRepositoryRoot,
-    args: [
-      'rev-parse',
-      '--verify',
-      `${provenance.session.integrationRef}^{commit}`,
-    ],
-  };
-  const ref = gitText(runModuleDeliveryGit(refInvocation));
-  if (ref !== state.headCommit)
-    throw new Error('Module integration state is stale.');
-  const branchInvocation: GitCommandRequest = {
-    cwd: state.workspace.worktreePath,
-    args: ['symbolic-ref', '--quiet', 'HEAD'],
-    allowFailure: true,
-  };
-  const branch = runModuleDeliveryGit(branchInvocation);
-  if (branch.exitCode === 0)
-    throw new Error('Module integration workspace must keep detached HEAD.');
-  const sourceExpectation: SourceSnapshotExpectation = {
-    repositoryRoot: state.workspace.sourceRepositoryRoot,
-    expected: provenance.sourceSnapshot,
-  };
-  assertSourceSnapshot(sourceExpectation);
-  const workspaceExpectation: SourceSnapshotExpectation = {
-    repositoryRoot: state.workspace.worktreePath,
-    expected: provenance.workspaceSnapshot,
-  };
-  assertSourceSnapshot(workspaceExpectation);
 }
 
 export function recordIntegratedLeaseAcceptance(
@@ -970,30 +916,10 @@ export function cleanupRegisteredModuleIntegration(
 ): CleanupModuleIntegrationResult {
   const session = integrationSession(request.cleanupHandle);
   if (session.cleaned) return { removed: false };
-  const deleteInvocation: GitCommandRequest = {
-    cwd: session.workspace.sourceRepositoryRoot,
-    args: ['update-ref', '-d', session.integrationRef, session.currentHead],
-  };
-  runModuleDeliveryGit(deleteInvocation);
   const cleanupRequest: CleanupModuleWorktreeRequest = {
     workspace: session.workspace,
   };
-  try {
-    cleanupModuleWorktree(cleanupRequest);
-  } catch {
-    const restoreInvocation: GitCommandRequest = {
-      cwd: session.workspace.sourceRepositoryRoot,
-      args: [
-        'update-ref',
-        '--create-reflog',
-        session.integrationRef,
-        session.currentHead,
-        '0'.repeat(40),
-      ],
-    };
-    runModuleDeliveryGit(restoreInvocation);
-    throw new Error('Module integration cleanup failed and restored its ref.');
-  }
+  cleanupModuleWorktree(cleanupRequest);
   session.cleaned = true;
   return { removed: true };
 }

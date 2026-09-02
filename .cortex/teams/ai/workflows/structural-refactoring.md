@@ -117,7 +117,7 @@ The synthesizer then:
 
 `SystemCoherenceSynthesis` is diagnostic-only. It cannot satisfy an ordinary
 provider edge, authorize implementation, or claim ordinary accepted-evidence
-synthesis compliance. Its execution remains outside Gizmo multi-team admission.
+synthesis compliance.
 
 ## Future ordinary synthesis boundary
 

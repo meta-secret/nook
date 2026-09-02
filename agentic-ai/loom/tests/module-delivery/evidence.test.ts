@@ -215,7 +215,7 @@ function runtime(existingFixture?: GitFixture): Runtime {
     maxAttempts: 2,
     parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
     parentJoin: {
-      kind: ModuleDeliveryJoinKind.OrderedCommitHandoffs,
+      kind: ModuleDeliveryJoinKind.DirectCommits,
       owner: 'delivery-owner',
       validationCommands: ['task loom:verify'],
     },
@@ -281,7 +281,7 @@ function writeRuntime(fixture: GitFixture): WriteRuntime {
       evidence: ['Core tests pass.'],
     },
     workspace: {
-      kind: ModuleDeliveryWorkspaceKind.IsolatedWorktree,
+      kind: ModuleDeliveryWorkspaceKind.SharedCheckout,
       expectedCommitHandoff: true,
     },
   };
@@ -294,7 +294,7 @@ function writeRuntime(fixture: GitFixture): WriteRuntime {
     maxAttempts: 2,
     parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
     parentJoin: {
-      kind: ModuleDeliveryJoinKind.OrderedCommitHandoffs,
+      kind: ModuleDeliveryJoinKind.DirectCommits,
       owner: 'delivery-owner',
       validationCommands: ['task loom:verify'],
     },

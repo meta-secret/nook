@@ -62,7 +62,7 @@ function prepared(request: PrepareModuleWorktreeRequest): ModuleWorktreeHandle {
 }
 
 describe('prepareModuleWorktree', () => {
-  test('prepares a clean detached direct child at the exact baseline', () => {
+  test('identifies the current shared checkout at the exact baseline', () => {
     const fixture = createTrackedFixture();
     const marker = installCheckoutHook(fixture);
     const request = prepareRequest(fixture);
@@ -70,16 +70,17 @@ describe('prepareModuleWorktree', () => {
     const git = worktreeGit(workspace);
 
     expect(workspace.baselineCommit).toBe(fixture.baselineCommit);
-    expect(workspace.worktreePath.startsWith(`${fixture.workspaceRoot}/`)).toBe(
-      true,
-    );
+    expect(workspace.worktreePath).toBe(fixture.sourceRoot);
+    expect(workspace.ownedWorkspaceRoot).toBe(fixture.sourceRoot);
+    expect(workspace.worktreeId).toBe('shared-checkout');
+    expect(workspace.branchName).toMatch(/^refs\/heads\/.+$/);
     expect(git(['rev-parse', 'HEAD'])).toBe(fixture.baselineCommit);
     expect(git(['status', '--porcelain=v1'])).toBe('');
-    expect(git(['rev-parse', '--abbrev-ref', 'HEAD'])).toBe('HEAD');
+    expect(git(['rev-parse', '--abbrev-ref', 'HEAD'])).not.toBe('HEAD');
     expect(existsSync(marker)).toBe(false);
   });
 
-  test('uses distinct generated worktrees for retry attempts', () => {
+  test('reuses the shared checkout for retry attempts', () => {
     const fixture = createTrackedFixture();
     const firstRequest = prepareRequest(fixture);
     const first = prepared(firstRequest);
@@ -88,11 +89,34 @@ describe('prepareModuleWorktree', () => {
       attempt: 2,
     };
     const second = prepared(secondRequest);
-    expect(second.worktreePath).not.toBe(first.worktreePath);
-    expect(second.worktreeId).not.toBe(first.worktreeId);
+    expect(second.worktreePath).toBe(first.worktreePath);
+    expect(second.worktreeId).toBe(first.worktreeId);
+    expect(second.attempt).toBe(2);
   });
 
-  test('rejects nonexact commits, Git environment poisoning, and overlapping roots', () => {
+  test('rejects a dirty or stale shared checkout before dispatch', () => {
+    const fixture = createTrackedFixture();
+    const request = prepareRequest(fixture);
+    writeFileSync(join(fixture.sourceRoot, 'dirty.ts'), 'dirty\n');
+    expect(() => prepareModuleWorktree(request)).toThrow(
+      'must be clean before dispatch',
+    );
+    fixtureGit(fixture)(['clean', '-fd']);
+    writeFileSync(join(fixture.sourceRoot, 'later.ts'), 'later\n');
+    fixtureGit(fixture)(['add', 'later.ts']);
+    fixtureGit(fixture)(['commit', '--quiet', '-m', 'later']);
+    expect(() => prepareModuleWorktree(request)).toThrow(
+      'HEAD must match its baseline',
+    );
+  });
+
+  test('rejects a detached shared checkout before dispatch', () => {
+    const fixture = createTrackedFixture();
+    fixtureGit(fixture)(['checkout', '--quiet', '--detach']);
+    expect(() => prepareModuleWorktree(prepareRequest(fixture))).toThrow();
+  });
+
+  test('rejects nonexact commits and ignores obsolete workspace roots', () => {
     const fixture = createTrackedFixture();
     const base = prepareRequest(fixture);
     const shortCommitRequest: PrepareModuleWorktreeRequest = {
@@ -117,10 +141,12 @@ describe('prepareModuleWorktree', () => {
       ...base,
       workspaceRoot: nestedRoot,
     };
-    expect(() => prepareModuleWorktree(nestedRequest)).toThrow('disjoint');
+    expect(prepareModuleWorktree(nestedRequest).worktreePath).toBe(
+      fixture.sourceRoot,
+    );
   });
 
-  test('rejects symlink roots before creating a registration', () => {
+  test('does not create a worktree registration', () => {
     const fixture = createTrackedFixture();
     const linkedRoot = join(fixture.root, 'linked-workspaces');
     symlinkSync(fixture.workspaceRoot, linkedRoot);
@@ -128,7 +154,9 @@ describe('prepareModuleWorktree', () => {
       ...prepareRequest(fixture),
       workspaceRoot: linkedRoot,
     };
-    expect(() => prepareModuleWorktree(request)).toThrow('real directory');
+    expect(prepareModuleWorktree(request).worktreePath).toBe(
+      fixture.sourceRoot,
+    );
     expect(
       fixtureGit(fixture)(['worktree', 'list', '--porcelain']),
     ).not.toContain(linkedRoot);

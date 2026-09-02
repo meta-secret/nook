@@ -17,9 +17,9 @@ import {
 const execFileAsync = promisify(execFile);
 
 describe("countAuthoredNumstat", () => {
-  it("counts authored additions and deletions", () => {
+  it("counts only authored additions", () => {
     const numstat = "12\t3\tsrc/domain.ts\0" + "4\t5\ttests/domain.test.ts\0";
-    assert.equal(countAuthoredNumstat(numstat), 24);
+    assert.equal(countAuthoredNumstat(numstat), 16);
   });
 
   it("reports generated, lock, snapshot, vendor, binary, and pure rename rows separately", () => {
@@ -39,7 +39,7 @@ describe("countAuthoredNumstat", () => {
       "src/new.ts",
       "",
     ].join("\0");
-    assert.equal(countAuthoredNumstat(numstat), 9);
+    assert.equal(countAuthoredNumstat(numstat), 8);
     const expectedReportedOnly = {
       binaryFiles: 1,
       generatedLines: 26,
@@ -63,9 +63,27 @@ describe("countAuthoredNumstat", () => {
     assert.equal(summary.reportedOnly.unmeasurableAuthoredFiles, 1);
   });
 
+  it("fails closed when a binary source rename hides line counts", () => {
+    const numstat = "-\t-\t\0src/old.ts\0src/new.ts\0";
+    const summary = summarizeAuthoredNumstat(numstat);
+    assert.equal(summary.reportedOnly.pureRenameFiles, 0);
+    assert.equal(summary.reportedOnly.unmeasurableAuthoredFiles, 1);
+  });
+
+  it("reports a deleted binary source file without requiring an addition count", () => {
+    const numstat = "-\t-\tsrc/obsolete.ts\0";
+    const summary = summarizeAuthoredNumstat(
+      numstat,
+      new Set(["src/obsolete.ts"]),
+    );
+    assert.equal(summary.authoredLines, 0);
+    assert.equal(summary.reportedOnly.binaryFiles, 1);
+    assert.equal(summary.reportedOnly.unmeasurableAuthoredFiles, 0);
+  });
+
   it("skips malformed NUL-delimited records explicitly", () => {
     const numstat = "8\t1\tsrc/domain.ts\0malformed\0";
-    assert.equal(countAuthoredNumstat(numstat), 9);
+    assert.equal(countAuthoredNumstat(numstat), 8);
     assert.equal(
       summarizeAuthoredNumstat(numstat).reportedOnly.malformedRecords,
       1,

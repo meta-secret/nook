@@ -51,12 +51,12 @@ The feature `README.md` must record:
 - feature-level acceptance criteria;
 - current completion status.
 
-- The planned PR must stay at or below 2,000 authored changed lines.
+- The planned PR must stay at or below 2,000 authored additions.
+- Deletions do not count and have no limit.
 - Do not create a size-driven issue sequence, successor PR, or PR stack.
 - If the planned work cannot fit, record the blocker instead of decomposing the
   delivery automatically.
-- If review fixes grow the PR to 3,000 lines, stop and publish the report
-  required by [pull requests](pull-requests.md#review-growth-stop).
+- Review fixes use the same 2,000-authored-addition limit.
 
 See
 [pull-requests.md](pull-requests.md#pull-request-size-and-modularity) for the
@@ -251,7 +251,7 @@ The plan must contain:
 - a `PR slices, estimates, and acceptance evidence` value with exactly one row;
   - the row uses the current Gizmo ID;
   - its predecessor is `None`;
-  - its positive estimate is at most 2,000; and
+  - its non-negative estimate is at most 2,000; and
   - it states the PR acceptance evidence;
 - expected completion evidence; and
 - a safety review confirming that no raw prompt, transcript, secret, private
@@ -295,7 +295,7 @@ NOOK_WORKBENCH_ASSIGNED_GIZMO_ID=<focused-issue-gizmo-id> \
   2. validates and publishes the plan; and
   3. begins implementation only after publication.
 - A missing or rejected plan blocks implementation.
-- A plan above the 2,000-line creation limit blocks bounded implementation.
+- A plan above the 2,000-authored-addition limit blocks implementation.
 
 ## Worklog requirement
 

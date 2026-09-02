@@ -105,7 +105,7 @@ Does not apply to:
 - [ ] Run `task loom:pre-push` before every push.
 - [ ] Route formatter mutations in team-owned source or Cortex files back to
       that team for a fresh formatted commit.
-- [ ] Commit only deterministic integration state as Gizmo.
+- [ ] Commit only parent-owned delivery state as Gizmo.
 - [ ] Promptly push without another local product or review gate.
 - [ ] If the pushed head is not validation-ready, dispatch at least one
       relevant focused hosted task immediately.
