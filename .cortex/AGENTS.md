@@ -45,89 +45,108 @@ Workbench record, not another coordinator or worker. See the
 
 ## Team worker contract
 
-### Delegation boundary
+### Required actions
 
-- Each worker task has exactly one team identity, a bounded file scope, and
-  named acceptance evidence. Workers write only inside that scope.
-- Gizmo Prime delegates every worker-executable Team Agent task through the
-  active harness. This includes implementation and review fixes.
-- Gizmo Prime is prohibited from performing any worker-executable Team Agent
-  work itself.
-- Gizmo Prime stops the task and reports the blocker when a required Team Agent
-  cannot be created or started.
-- Gizmo Prime must never approximate the work, take over the worker scope, or
-  continue past that blocked scope. This is the
-  [no-fallback rule](#no-fallback-behavior) for worker execution.
-- Separate Codex tasks, threads, cloud tasks, and ordinary external agents must
-  not serve as delegation, communication, or handoff transport.
-- This ordinary-transport prohibition preserves the two trusted publisher
-  handoffs below. Those publishers are not ordinary delegation transport.
+- **Delegation boundary**
+  - Each worker task has exactly one team identity, a bounded file scope, and
+    named acceptance evidence.
+  - Workers write only inside that scope.
+  - Gizmo Prime delegates every worker-executable Team Agent task through the
+    active harness.
+  - This includes implementation and review fixes.
+  - Gizmo Prime stops the task and reports the blocker when a required Team
+    Agent cannot be created or started.
+- **Parent and worker ownership**
+  - Parent-owned Gizmo control operations remain with Gizmo Prime:
+    - planning and shared-branch sequencing;
+    - Git, pull-request, Workbench, and review coordination;
+    - validation, readiness, and merge.
+  - Team workers implement and test their assigned changes in the current
+    shared checkout.
+  - Gizmo Prime controls write sequencing and external delivery state.
+  - Only one write-capable Team Agent runs at a time.
+  - Read-only Team Agents may run concurrently when their evidence scopes are
+    safe to inspect while the writer runs.
+  - A write-capable Team Agent may commit its complete scoped change when Gizmo
+    requests a commit.
+  - Gizmo continues directly from that commit.
+- **Validation and delivery**
+  - Team workers run only fast focused local Loom tests, lint, or typechecks
+    that provide direct implementation feedback.
+  - For Loom-affecting work, the Team Agent returns a coherent result to Gizmo
+    Prime after focused local evidence.
+  - Gizmo Prime runs pre-push hygiene on the Team Agent's direct commit.
+  - Gizmo Prime promptly pushes the shared branch.
+  - Gizmo Prime then dispatches `task remote TASK_NAME=loom:verify` for the
+    exact pushed head.
+- **Feature ownership**
+  - Portable security behavior stays in Rust/WASM.
+  - Web code receives public typed projections.
+  - Agents mutate only their owned feature.
+  - See
+    [agent feature ownership](gizmo/dynamic-skills/agent-feature-ownership.md).
+- **Trusted publishers**
+  - Exactly two trusted GitHub Actions publishers are narrow exceptions to the
+    committed worker-handoff path:
+    - `agent-implement.yml` uses trusted host tooling for publication.
+      - The tooling formats the change.
+      - It validates change budget and PR identity.
+      - It publishes and returns the exact head.
+    - `rust-dependency-updates.yml` may publish only through
+      `task ci-agent:fix` with
+      `CI_AGENT_FIX_PROFILE=rust-dependency-update`.
+      - It freezes HEAD and index.
+      - It accepts only declared Rust dependency files.
+      - It verifies PR number, base, head ref, and remote SHA before
+        publication.
+  - Gizmo owns review, validation, readiness, and merge for the returned head.
+- **Repository constraints**
+  - The source-size limit is a non-bypassable hard rule.
+  - Every authored source file stays at or below the **1,000-line delivery
+    limit**.
+  - A violation blocks delivery and requires a cohesive domain or architectural
+    decomposition.
+  - Rust unit tests remain inline with their focused implementation.
+  - Crate-level integration tests remain separate.
+  - See [source file size](shared/dynamic-skills/source-file-size.md).
+  - Repository-authored automation uses TypeScript/Bun, Rust, and Taskfiles.
+  - Keep `.cortex/.session/` temporary and physically clean before readiness.
 
-### Parent and worker ownership
+### Prohibited actions
 
-- Parent-owned Gizmo control operations remain with Gizmo Prime:
-  - planning and shared-branch sequencing;
-  - Git, pull-request, Workbench, and review coordination;
-  - validation, readiness, and merge.
-- Parent-owned control operations do not create Team Agent work.
-- Team workers implement and test their assigned changes in the current shared
-  checkout. Gizmo Prime controls write sequencing and external delivery state.
-- Only one write-capable Team Agent runs at a time.
-- Read-only Team Agents may run concurrently when their evidence scopes are
-  safe to inspect while the writer runs.
-- A write-capable Team Agent may commit its complete scoped change when Gizmo
-  requests a commit. Gizmo continues directly from that commit.
-
-### Validation and delivery
-
-- Team workers run only fast focused local Loom tests, lint, or typechecks that
-  provide direct implementation feedback.
-- Team workers must not run the full `task loom:verify` suite locally during
-  agent delivery.
-- For Loom-affecting work, the Team Agent returns a coherent result to Gizmo
-  Prime after focused local evidence.
-- Gizmo Prime runs pre-push hygiene on the Team Agent's direct commit and
-  promptly pushes the shared branch.
-- Gizmo Prime then dispatches `task remote TASK_NAME=loom:verify` for the exact
-  pushed head.
-
-### Feature ownership
-
-- Security review does not transfer implementation ownership. Portable
-  security behavior stays in Rust/WASM; web code receives public typed
-  projections.
-- Agents mutate only their owned feature. Another active agent's work is
-  read-only until ownership is explicitly transferred. See
-  [agent feature ownership](gizmo/dynamic-skills/agent-feature-ownership.md).
-
-### Trusted publishers
-
-- Exactly two trusted GitHub Actions publishers are narrow exceptions to the
-  committed worker-handoff path:
-  - `agent-implement.yml` gives its bounded editor no Git or external delivery
-    authority. Trusted host tooling formats, validates change budget and PR
-    identity, publishes, and returns the exact head.
-  - `rust-dependency-updates.yml` may publish only through `task ci-agent:fix`
-    with `CI_AGENT_FIX_PROFILE=rust-dependency-update`. Its bounded editor has
-    no Git or external delivery authority; the job rejects persisted checkout
-    credentials, freezes HEAD and index, accepts only declared Rust dependency
-    files, and verifies PR number, base, head ref, and remote SHA before
-    publication.
-  - Neither exception grants publication authority to an ordinary worker.
-    Gizmo owns review, validation, readiness, and merge for the returned head.
-
-### Repository constraints
-
-- The source-size limit is a non-bypassable hard rule: every authored source
-  file stays at or below the **1,000-line delivery limit**. A violation blocks
-  delivery and requires a
-  cohesive domain or architectural decomposition; moving unit tests or making
-  arbitrary fragments is not compliance. Rust unit tests remain inline with
-  their focused implementation, while crate-level integration tests remain
-  separate. See [source file size](shared/dynamic-skills/source-file-size.md).
-- Repository-authored automation uses TypeScript/Bun, Rust, and Taskfiles. It
-  does not use Python.
-- Keep `.cortex/.session/` temporary and physically clean before readiness.
+- **Delegation boundary**
+  - Gizmo Prime is prohibited from performing any worker-executable Team Agent
+    work itself.
+  - Gizmo Prime must never approximate the work, take over the worker scope, or
+    continue past that blocked scope.
+  - This is the [no-fallback rule](#no-fallback-behavior) for worker execution.
+  - Separate Codex tasks, threads, cloud tasks, and ordinary external agents
+    must not serve as delegation, communication, or handoff transport.
+  - This ordinary-transport prohibition preserves the two trusted publisher
+    handoffs above.
+  - Those publishers are not ordinary delegation transport.
+- **Parent and worker ownership**
+  - Parent-owned control operations do not create Team Agent work.
+- **Validation and delivery**
+  - Team workers must not run the full `task loom:verify` suite locally during
+    agent delivery.
+- **Feature ownership**
+  - Security review does not transfer implementation ownership.
+  - Another active agent's work is read-only until ownership is explicitly
+    transferred.
+- **Trusted publishers**
+  - Neither trusted-publisher exception grants publication authority to an
+    ordinary worker.
+  - The `agent-implement.yml` bounded editor has no Git or external delivery
+    authority.
+  - The `rust-dependency-updates.yml` bounded editor has no Git or external
+    delivery authority.
+  - The `rust-dependency-updates.yml` job rejects persisted checkout
+    credentials.
+- **Repository constraints**
+  - Moving unit tests or making arbitrary fragments is not source-size
+    compliance.
+  - Repository-authored automation does not use Python.
 
 ## No fallback behavior
 

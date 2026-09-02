@@ -10,13 +10,20 @@ This is a P1 documentation rule for every `.cortex` Markdown file.
 - ASCII art, ASCII box drawings, and text flowcharts are prohibited.
 - Rendered Markdown tables are prohibited. Represent repeated fields and exact
   mappings as enclosed lists keyed by a bold primary item.
-- A Cortex writer that reads, reviews, authors, or refactors a large list must
-  split it into logical groups organized around the items' domains.
+- A Cortex reader or reviewer reports a grouping defect when a large list has
+  genuine semantic domains but leaves them hidden.
+- A Cortex writer refactors that defect only in content inside the task's
+  bounded write scope.
+- Group only around genuine semantic domains.
+- Preserve one ordered procedure or one semantically homogeneous peer list
+  when subdivision would invent domains or break the list's meaning.
 - Arbitrary chunking by item count does not satisfy this rule.
 - Most Cortex instruction sets contain both positive and negative constraints.
   - Begin their instructional structure with `Required actions`, followed by
     `Prohibited actions`.
   - Place domain-specific groups beneath the correct branch.
+  - Keep negative failure conditions and conditional substeps beneath the
+    procedure action that owns them.
   - Omit a branch only when the content genuinely contains no instruction of
     that kind.
 
@@ -70,8 +77,11 @@ Warning signs include:
 - rendered Markdown tables used for any inventory or mapping;
 - a large list that remains flat or uses item-count chunks instead of domain
   groups;
+- a semantically homogeneous list split into invented domains;
 - positive and negative constraints interleaved inside one domain-specific
   group;
+- a procedure whose failure conditions were detached from their owning action
+  to create a top-level polarity branch;
 - nested conditions inside a single clause;
 - ASCII directory trees (`├──`, `└──`) or nested file listings in Markdown;
 - ASCII box drawings (`+---+`, `| |`) or manual ASCII flowcharts.
@@ -88,10 +98,12 @@ Instruction sets with both kinds of constraint use the paired branches below.
   1. List each fact, rule, actor, or command as its own unit.
   2. Write one short sentence per unit when the fact stands alone.
 - **List structure**
-  1. Use a bullet list when several units share one topic.
-  2. Split every large list into logical groups based on the items' domains.
-     - Use meaningful headings or parent items that name the domains.
-  3. Use a nested list only when a parent item owns clear children.
+  - Use a bullet list when several units share one topic.
+  - Split a large list when its items have genuine semantic domains.
+    - Use meaningful headings or parent items that name those domains.
+  - Preserve a single ordered procedure or semantically homogeneous peer list
+    when grouping would invent domains or sever ownership.
+  - Use a nested list only when a parent item owns clear children.
 - **Enclosed structured lists**
   - Prefer enclosed structured lists.
   - Do not use rendered Markdown tables.
@@ -114,6 +126,10 @@ Instruction sets with both kinds of constraint use the paired branches below.
 
 - **List grouping**
   - Do not divide items into arbitrary count-based chunks.
+  - Do not invent domains for a homogeneous list.
+- **Procedure ownership**
+  - Do not move negative failure conditions or conditional substeps away from
+    the action that owns them merely to create a polarity branch.
 - **Repository structure**
   - Do not include project or directory trees in Cortex files.
   - Static trees describe dynamic project structure and quickly become stale.
@@ -216,10 +232,14 @@ Full rewritten example:
 - [ ] Prefer lists for actors, credentials, commands, and failure modes.
 - [ ] Confirm the document contains no rendered Markdown table and represent
       every repeated-field or exact mapping as an enclosed structured list.
-- [ ] Split every large list into logical groups based on the items' domains
-      during reading, review, authoring, and refactoring.
+- [ ] Report large lists whose genuine semantic domains remain hidden.
+- [ ] Refactor grouping defects only inside the task's bounded write scope.
+- [ ] Preserve a single ordered procedure or semantically homogeneous peer
+      list when it has no genuine domain split.
 - [ ] Put `Required actions` and `Prohibited actions` before domain groups when
       an instruction set contains both kinds of constraint.
+- [ ] Keep negative failure conditions and conditional substeps with their
+      owning procedure action.
 - [ ] Remove project/directory trees and replace with dynamic inspection or flat subsystem lists.
 - [ ] Replace ASCII graphics with Mermaid diagrams or structured lists.
 - [ ] Apply the same rule to this skill card when updating it.

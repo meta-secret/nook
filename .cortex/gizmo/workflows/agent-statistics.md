@@ -129,14 +129,15 @@ Measure on the merged implementation `head_sha`.
 
 Count individual test cases, not files or suites.
 
-- **`rust`**
-  - **What to count:** Nextest cases in core domain crates
-- **`preflight`**
-  - **What to count:** Nextest/cargo cases in `preflight`
-- **`web_unit`**
-  - **What to count:** Vitest cases under `nook-app/nook-web`
-- **`e2e`**
-  - **What to count:** Playwright cases under `nook-app/nook-web`
+- **`test_inventory.by_type`**
+  - **`rust`**
+    - **What to count:** Nextest cases in core domain crates
+  - **`preflight`**
+    - **What to count:** Nextest/cargo cases in `preflight`
+  - **`web_unit`**
+    - **What to count:** Vitest cases under `nook-app/nook-web`
+  - **`e2e`**
+    - **What to count:** Playwright cases under `nook-app/nook-web`
 
 `total` equals the sum of those four counts.
 
