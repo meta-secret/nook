@@ -123,7 +123,7 @@ For a bounded worker:
 
 - Review the task plan, Workbench owner, branch, and pull request together.
   - They must identify one coherent owned scope.
-- Run `task loom:cortex-audit` after guidance changes.
+- Push guidance changes and run `task remote TASK_NAME=loom:verify`.
 
 The repository preflight contract must retain the ownership guard in:
 

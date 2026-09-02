@@ -123,6 +123,6 @@ Harness profile directories must not mirror or redefine these cards.
    graph. Use the shared graph only for ownerless cross-team knowledge.
 4. Keep harness-specific profiles outside the tracked repository. Do not create
    `.agents/skills`, `.cursor/skills`, or `.claude/skills` mirrors.
-5. Verify with `task loom:cortex-audit`.
+5. Push the exact head and verify with `task remote TASK_NAME=loom:verify`.
 
 See [Loom tools](../references/loom-tools.md).

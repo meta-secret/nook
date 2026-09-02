@@ -18,11 +18,12 @@ simple shared-branch sequence.
 
 1. Confirm that no write-capable Team Agent is active.
 2. Start the next writer in the current checkout.
-3. Let the Team Agent implement and run focused checks.
+3. Let the Team Agent implement and run required non-compiling formatters.
 4. Ask for a complete scoped commit when a commit helps sequencing.
-5. Verify the changed paths and evidence.
+5. Verify the changed paths.
 6. Continue directly from the resulting shared-branch state.
-7. Start the next dependent writer only after the current writer finishes.
+7. Push and dispatch the acceptance evidence remotely.
+8. Start the next dependent writer only after the current writer finishes.
 
 Read-only Team Agents may run concurrently when their inspection cannot
 interfere with the writer.

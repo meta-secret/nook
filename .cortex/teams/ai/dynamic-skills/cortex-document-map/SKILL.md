@@ -84,9 +84,7 @@ sections. Their natural heading hierarchy is the local map.
 Run:
 
 ```bash
-task loom:cortex-audit
-task loom:verify
-task preflight:loom-contracts
+task remote TASK_NAME=loom:verify
 ```
 
 Loom enforces:

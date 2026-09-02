@@ -148,7 +148,7 @@ cortexAudit:
 ```
 
 ```bash
-task loom:cortex-audit
+task remote TASK_NAME=loom:verify
 ```
 
 - For density findings, set `includeDensityLint: true` in the cortexAudit
@@ -192,7 +192,7 @@ The ownership boundary is explicit:
 Run the compiler through the normal Cortex consistency command:
 
 ```bash
-task loom:cortex-audit
+task remote TASK_NAME=loom:verify
 ```
 
 The command reports failures in `contractFindings`.

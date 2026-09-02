@@ -41,5 +41,5 @@ recovery request. Request scalars and unknown keys are never echoed.
 Keep generic transport here and action schema, example, decode, execution, and
 verification in the owning skill. Provider integration must be static and
 one-way from host to provider. Discover the catalog with
-`task skills:tools-list`; validate every workspace package with
-`task skills:verify` and the repository boundary with `task loom:verify`.
+`task skills:tools-list`; validate every workspace package and the repository
+boundary through `task remote TASK_NAME=loom:verify`.

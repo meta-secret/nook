@@ -178,14 +178,12 @@ head requires fresh exact-head hosted validation.
 
 ## Validation
 
-1. Run focused checks for changed authorities.
-2. Run required formatters and include their mutations in the owned scope.
-3. Run `task loom:cortex-audit`.
-4. Remove optional `.cortex/.session/` notes.
-5. Run `task loom:cortex-session-clean` and confirm no session file is tracked.
-6. If formatting changed the tree after the audit, repeat the audit and cleanup
-   check.
-7. Return the coherent audited handoff to Gizmo.
+1. Run required formatters and include their mutations in the owned scope.
+2. Remove optional `.cortex/.session/` notes.
+3. Return the coherent formatted handoff to Gizmo.
+4. Let Gizmo run `task loom:pre-push` and push the exact head.
+5. Run `task remote TASK_NAME=loom:verify`.
+6. Return any hosted finding to its owning team.
 
-Do not add broad local product gates or duplicate hosted validation to this
-focused sequence.
+Do not run local product or repository gates or duplicate hosted validation in
+this focused sequence.

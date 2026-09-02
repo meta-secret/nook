@@ -386,9 +386,7 @@ Provider readiness still controls implementation order.
 Validate structural-expert documentation with:
 
 ```bash
-task loom:cortex-audit
-task loom:verify
-task preflight:loom-contracts
+task remote TASK_NAME=loom:verify
 ```
 
 Validate direct skill routing by checking:

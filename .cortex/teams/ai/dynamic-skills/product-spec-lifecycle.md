@@ -135,7 +135,8 @@ After:
 ## Validation
 
 - Review the docs diff to verify that product specifications accurately describe current product behavior.
-- Run `task loom:cortex-audit` to verify links, index entries, and structure.
+- Push the exact head and run `task remote TASK_NAME=loom:verify` to verify
+  links, index entries, and structure.
 - For implementation tasks, run the focused worker proof and commit the
   coherent formatted handoff. Include every formatter mutation in allowed
   source or Cortex paths. Return the exact commit and evidence to Gizmo. If

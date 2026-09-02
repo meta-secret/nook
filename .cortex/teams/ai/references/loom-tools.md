@@ -39,10 +39,13 @@ Defaultable tools use a Task alias and an in-code example:
 ```bash
 task loom:pre-push
 task loom:tools-list
-task loom:cortex-audit
 task loom:cortex-session-clean
 task loom:dependency-popularity
 ```
+
+Agents use `task loom:pre-push` as the only local validation alias. They invoke
+`cortexAudit` through `task remote TASK_NAME=loom:verify`. Other aliases in
+this reference are hosted or human-operated command surfaces.
 
 Parameterized tools still take an agent-owned YAML file:
 
@@ -59,9 +62,9 @@ implementation is an ordinary Bun and TypeScript project in its owning
 the Cortex article application through a narrow in-process adapter. The
 application validates its request, audits it, independently verifies its
 result, and enforces contract bounds without command, network, write, agent, or
-lifecycle authority. Run the shared workspace gate with `task skills:verify`.
-Run `task loom:verify` for the recursive AST capability audit and exact
-Loom-consumer boundary.
+lifecycle authority. Run the shared workspace gate as a hosted task. Run
+`task remote TASK_NAME=loom:verify` for the recursive AST capability audit and
+exact Loom-consumer boundary.
 
 Use `task skills:tools-list` for the closed action catalog and schemas. Use
 `task skills:run REQUEST_YAML='<strict-yaml>'` to pass one complete YAML
@@ -100,8 +103,9 @@ and [typescript-named-args.md](../../web-dev/dynamic-skills/typescript-named-arg
 - review enforces semantic reusable and public contracts plus generic-value
   containment while the existing debt is migrated
 
-Enforced by `task preflight:typescript-state` across the repository, plus
-`task loom:verify` (includes ESLint) for Loom-local rules.
+Enforced by hosted `task preflight:typescript-state` across the repository,
+plus `task remote TASK_NAME=loom:verify` (includes ESLint) for Loom-local
+rules.
 
 ## Domain request rule
 
@@ -177,7 +181,7 @@ task loom:pre-push
 ### cortexAudit
 
 ```bash
-task loom:cortex-audit
+task remote TASK_NAME=loom:verify
 ```
 
 ### cortexSessionClean

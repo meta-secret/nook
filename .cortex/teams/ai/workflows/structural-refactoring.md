@@ -185,9 +185,7 @@ Running the same semantic audit again should not propose equivalent churn.
 For Cortex and workflow guidance, run:
 
 ```bash
-task loom:cortex-audit
-task loom:verify
-task preflight:loom-contracts
+task remote TASK_NAME=loom:verify
 ```
 
 For implementation work, add the focused module and consumer validations from

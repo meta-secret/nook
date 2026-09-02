@@ -170,6 +170,7 @@ Agents never run product compilation or repository validation locally.
 - Local activity is limited to read-only inspection, owner-authorized Git
   operations, `git diff --check`, and required formatters.
 - `task loom:pre-push` is the only local repository-validation exception.
+- The pre-push exception may prepare only its bounded Loom dependencies.
 - `task pr:validate`, `task pr:review`, and `task pr:ready` are local
   delivery-control entrypoints.
 - Delivery-control entrypoints may prepare their bounded control-plane helper.
@@ -241,7 +242,7 @@ HH:mm:(<PR>):<ACTOR>:<ACTION> -> <description>
 - Place exactly one space before and after `->`.
 - State what changed, why it was done, or what current state was observed.
 - Show a command before waiting for it to finish.
-  - Prefer the task entrypoint, such as `task loom:verify`.
+  - Prefer the task entrypoint, such as `task remote TASK_NAME=loom:verify`.
   - Truncate a command longer than roughly 20 to 30 characters when its full
     spelling would obscure the status.
   - Report the command's completion, failure, or interruption with elapsed
@@ -337,6 +338,7 @@ Use the detailed authority only when its stage is reached:
 - [Pull requests](gizmo/workflows/pull-requests.md) owns exact-head review,
   validation, readiness, and merge.
 
-Run `task loom:cortex-audit` after Cortex changes. Knowledge graphs index
-documents, not their headings; update a graph only when document ownership,
-path, or discoverability changes.
+Run `task remote TASK_NAME=loom:verify` after pushing Cortex changes. That
+hosted path includes the Cortex audit. Knowledge graphs index documents, not
+their headings; update a graph only when document ownership, path, or
+discoverability changes.

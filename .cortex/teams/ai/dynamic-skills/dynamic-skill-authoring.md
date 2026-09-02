@@ -77,11 +77,13 @@ Does not apply to:
     lockfile;
   - update `.cortex/teams/ai/dynamic-skills/index.md` and the owning knowledge graph if
     Loom did not.
-- Run `task loom:cortex-audit` after the card and registry agree.
+- Push the exact head and run `task remote TASK_NAME=loom:verify` after the
+  card and registry agree.
 
 ## Validation
 
-For documentation-only captures, run `task loom:cortex-audit`.
+For documentation-only captures, push the exact head and run
+`task remote TASK_NAME=loom:verify`.
 
 For code refactors using a dynamic skill, run the focused worker proof and
 required formatters. Commit every resulting mutation in the allowed paths and

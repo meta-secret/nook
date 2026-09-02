@@ -205,9 +205,7 @@ Run the focused checks. The provider contract and independent verifier live in
 Loom with the production audit implementation:
 
 ```bash
-task loom:cortex-audit
-task loom:verify
-task preflight:loom-contracts
+task remote TASK_NAME=loom:verify
 ```
 
 Review the diff semantically after the mechanical checks pass.

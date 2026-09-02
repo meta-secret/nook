@@ -129,7 +129,8 @@ Does not apply to:
 
 ## Validation
 
-- Run `task loom:test` and `cd agentic-ai/ci-agent && npm test`.
+- Run `task remote TASK_NAME=loom:verify` after the exact head is pushed.
+- Run `task pr:validate PR=<number>` for complete hosted evidence.
 - The readiness audit must reject:
   - stale heads;
   - missing or failed Nook runs;
