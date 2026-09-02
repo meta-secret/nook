@@ -24,8 +24,13 @@ pub enum PasskeyCeremonyPriority {
     rename_all_fields = "camelCase"
 )]
 pub enum QueueDisposition {
-    MessageDefault {},
+    MessageDefault {
+        #[serde(flatten, skip)]
+        _strict_unknown_fields: (),
+    },
     Deadline {
+        #[serde(flatten, skip)]
+        _strict_unknown_fields: (),
         #[serde(deserialize_with = "deserialize_finite_f64")]
         expires_at: f64,
         priority: QueuePriority,
@@ -35,7 +40,10 @@ pub enum QueueDisposition {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, tag = "kind", rename_all = "kebab-case")]
 pub enum MessageDefaultQueueDisposition {
-    MessageDefault {},
+    MessageDefault {
+        #[serde(flatten, skip)]
+        _strict_unknown_fields: (),
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
@@ -47,6 +55,8 @@ pub enum MessageDefaultQueueDisposition {
 )]
 pub enum PasskeyCeremonyQueueDisposition {
     Deadline {
+        #[serde(flatten, skip)]
+        _strict_unknown_fields: (),
         #[serde(deserialize_with = "deserialize_finite_f64")]
         expires_at: f64,
         priority: PasskeyCeremonyPriority,

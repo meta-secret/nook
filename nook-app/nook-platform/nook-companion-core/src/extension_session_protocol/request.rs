@@ -7,12 +7,28 @@ use super::queue::{
     deserialize_finite_f64,
 };
 use crate::ExtensionVaultEventPayload;
-use serde::{Deserialize, Deserializer, de::Error as _};
+use serde::{
+    Deserialize, Deserializer,
+    de::{Error as _, MapAccess, Visitor, value::MapAccessDeserializer},
+};
+use std::fmt;
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 use zeroize::Zeroize;
 
 const MAX_ENROLLMENT_AUTHORIZATION_ID_BYTES: usize = 128;
+
+macro_rules! strict_camel_payload {
+    ($name:ident { $($fields:tt)* }) => {
+        #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+        #[serde(deny_unknown_fields, rename_all = "camelCase")]
+        pub struct $name {
+            #[serde(flatten, skip)]
+            _strict_unknown_fields: (),
+            $($fields)*
+        }
+    };
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Tsify)]
 #[tsify(type = "0 | 1")]
@@ -77,6 +93,8 @@ impl Drop for SessionSecretBytes {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields)]
 pub struct SerializedStorageProvider {
+    #[serde(flatten, skip)]
+    _strict_unknown_fields: (),
     id: String,
     #[serde(rename = "type")]
     provider_type: SerializedStorageProviderType,
@@ -95,6 +113,8 @@ pub enum SerializedStorageProviderType {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct ExtensionEventLogRecord {
+    #[serde(flatten, skip)]
+    _strict_unknown_fields: (),
     event_id: String,
     path: String,
     event: ExtensionVaultEventPayload,
@@ -103,57 +123,51 @@ pub struct ExtensionEventLogRecord {
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields)]
 pub struct EmptyPayload {
+    #[serde(flatten, skip)]
+    _strict_unknown_fields: (),
     queue: QueueDisposition,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct FinishPasskeySetupPayload {
+strict_camel_payload!(FinishPasskeySetupPayload {
     credential_id: SessionSecretBytes,
     user_handle: SessionSecretBytes,
     prf_input: SessionSecretBytes,
     prf_output: SessionSecretBytes,
     device_mode: PasskeyDeviceModeWire,
     queue: QueueDisposition,
-}
+});
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct RecoverPasskeyPayload {
+strict_camel_payload!(RecoverPasskeyPayload {
     credential_id: SessionSecretBytes,
     user_handle: SessionSecretBytes,
     prf_output: SessionSecretBytes,
     queue: QueueDisposition,
-}
+});
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct UnlockPasskeyPayload {
+strict_camel_payload!(UnlockPasskeyPayload {
     prf_output: SessionSecretBytes,
     queue: QueueDisposition,
-}
+});
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields)]
 pub struct PinPayload {
+    #[serde(flatten, skip)]
+    _strict_unknown_fields: (),
     pin: SessionSecretText,
     queue: QueueDisposition,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct IdentityHandoffPayload {
+strict_camel_payload!(IdentityHandoffPayload {
     recipient_public_key: String,
     nonce: String,
     expected_device_id: String,
     expected_device_public_key: String,
     expected_device_signing_public_key: String,
     queue: QueueDisposition,
-}
+});
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct ImportVaultPayload {
+strict_camel_payload!(ImportVaultPayload {
     vault_store_id: String,
     device_id: String,
     device_public_key: String,
@@ -161,22 +175,18 @@ pub struct ImportVaultPayload {
     providers: Vec<SerializedStorageProvider>,
     event_log_records: Vec<ExtensionEventLogRecord>,
     queue: QueueDisposition,
-}
+});
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct UpdateVaultPayload {
+strict_camel_payload!(UpdateVaultPayload {
     vault_store_id: String,
     device_id: String,
     device_public_key: String,
     device_signing_public_key: String,
     event_log_records: Vec<ExtensionEventLogRecord>,
     queue: QueueDisposition,
-}
+});
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct PasskeyLookupPayload {
+strict_camel_payload!(PasskeyLookupPayload {
     vault_store_id: String,
     device_id: String,
     device_public_key: String,
@@ -184,22 +194,18 @@ pub struct PasskeyLookupPayload {
     rp_id: String,
     origin: String,
     queue: QueueDisposition,
-}
+});
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct OriginGrantPayload {
+strict_camel_payload!(OriginGrantPayload {
     vault_store_id: String,
     device_id: String,
     device_public_key: String,
     device_signing_public_key: String,
     origin: String,
     queue: QueueDisposition,
-}
+});
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct SecretGrantPayload {
+strict_camel_payload!(SecretGrantPayload {
     vault_store_id: String,
     device_id: String,
     device_public_key: String,
@@ -207,40 +213,32 @@ pub struct SecretGrantPayload {
     origin: String,
     secret_id: String,
     queue: QueueDisposition,
-}
+});
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct QueryGrantPayload {
+strict_camel_payload!(QueryGrantPayload {
     vault_store_id: String,
     device_id: String,
     device_public_key: String,
     device_signing_public_key: String,
     query: String,
     queue: QueueDisposition,
-}
+});
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct SecretIdGrantPayload {
+strict_camel_payload!(SecretIdGrantPayload {
     vault_store_id: String,
     device_id: String,
     device_public_key: String,
     device_signing_public_key: String,
     secret_id: String,
     queue: QueueDisposition,
-}
+});
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct OtpauthPayload {
+strict_camel_payload!(OtpauthPayload {
     otpauth_uri: SessionSecretText,
     queue: QueueDisposition,
-}
+});
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct OtpauthGrantPayload {
+strict_camel_payload!(OtpauthGrantPayload {
     vault_store_id: String,
     device_id: String,
     device_public_key: String,
@@ -249,7 +247,7 @@ pub struct OtpauthGrantPayload {
     origin: String,
     enrollment_authorization_id: EnrollmentAuthorizationId,
     queue: QueueDisposition,
-}
+});
 
 #[derive(Debug, Clone, PartialEq, Eq, Tsify)]
 #[tsify(type = "string")]
@@ -270,25 +268,23 @@ impl<'de> Deserialize<'de> for EnrollmentAuthorizationId {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct EnrollmentAuthorizationPayload {
+strict_camel_payload!(EnrollmentAuthorizationPayload {
     enrollment_authorization_id: EnrollmentAuthorizationId,
     #[serde(deserialize_with = "deserialize_finite_f64")]
     expires_at: f64,
     queue: QueueDisposition,
-}
+});
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct EnrollmentAuthorizationRevokePayload {
+    #[serde(flatten, skip)]
+    _strict_unknown_fields: (),
     enrollment_authorization_id: EnrollmentAuthorizationId,
     queue: MessageDefaultQueueDisposition,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct BackupAttachPayload {
+strict_camel_payload!(BackupAttachPayload {
     vault_store_id: String,
     device_id: String,
     device_public_key: String,
@@ -298,11 +294,9 @@ pub struct BackupAttachPayload {
     #[tsify(type = "'replace' | 'merge'")]
     mode: nook_authenticator_domain::BackupCodeAttachMode,
     queue: QueueDisposition,
-}
+});
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct LoginSavePlanPayload {
+strict_camel_payload!(LoginSavePlanPayload {
     vault_store_id: String,
     device_id: String,
     device_public_key: String,
@@ -311,26 +305,24 @@ pub struct LoginSavePlanPayload {
     username: SessionSecretText,
     password: SessionSecretText,
     queue: QueueDisposition,
-}
+});
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields)]
 pub struct OriginPayload {
+    #[serde(flatten, skip)]
+    _strict_unknown_fields: (),
     origin: String,
     queue: QueueDisposition,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct LoginSaveActionPayload {
+strict_camel_payload!(LoginSaveActionPayload {
     origin: String,
     offer_id: String,
     queue: QueueDisposition,
-}
+});
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct GrantedLoginSaveActionPayload {
+strict_camel_payload!(GrantedLoginSaveActionPayload {
     vault_store_id: String,
     device_id: String,
     device_public_key: String,
@@ -338,18 +330,18 @@ pub struct GrantedLoginSaveActionPayload {
     origin: String,
     offer_id: String,
     queue: QueueDisposition,
-}
+});
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct RequestPayload {
+strict_camel_payload!(RequestPayload {
     request_id: String,
     queue: QueueDisposition,
-}
+});
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct DirectLoginSaveActionPayload {
+    #[serde(flatten, skip)]
+    _strict_unknown_fields: (),
     origin: String,
     offer_id: String,
     queue: MessageDefaultQueueDisposition,
@@ -358,13 +350,13 @@ pub struct DirectLoginSaveActionPayload {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct DirectRequestPayload {
+    #[serde(flatten, skip)]
+    _strict_unknown_fields: (),
     request_id: String,
     queue: MessageDefaultQueueDisposition,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct PasskeyCeremonyPayload {
+strict_camel_payload!(PasskeyCeremonyPayload {
     vault_store_id: String,
     device_id: String,
     device_public_key: String,
@@ -372,7 +364,7 @@ pub struct PasskeyCeremonyPayload {
     request_id: String,
     request_json: SessionSecretText,
     queue: PasskeyCeremonyQueueDisposition,
-}
+});
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, tag = "type", content = "payload")]
@@ -451,7 +443,36 @@ pub enum ExtensionSessionRequest {
 #[derive(Debug, Deserialize, Tsify)]
 #[serde(transparent)]
 #[tsify(from_wasm_abi)]
-pub struct ExtensionSessionRequestWire(ExtensionSessionRequest);
+pub struct ExtensionSessionRequestWire(
+    #[serde(deserialize_with = "deserialize_extension_session_request_map")]
+    ExtensionSessionRequest,
+);
+
+fn deserialize_extension_session_request_map<'de, D>(
+    deserializer: D,
+) -> Result<ExtensionSessionRequest, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct RequestMapVisitor;
+
+    impl<'de> Visitor<'de> for RequestMapVisitor {
+        type Value = ExtensionSessionRequest;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("a strict extension session request object")
+        }
+
+        fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
+        where
+            A: MapAccess<'de>,
+        {
+            ExtensionSessionRequest::deserialize(MapAccessDeserializer::new(map))
+        }
+    }
+
+    deserializer.deserialize_map(RequestMapVisitor)
+}
 
 impl Drop for ExtensionSessionRequestWire {
     fn drop(&mut self) {
@@ -533,6 +554,13 @@ pub fn validate_extension_session_request_json(
 mod tests {
     use super::*;
 
+    fn assert_validation(serialized: &str, expected: ExtensionSessionRequestValidation) {
+        assert_eq!(
+            validate_extension_session_request_json(serialized),
+            expected
+        );
+    }
+
     #[test]
     fn validates_concrete_provider_and_event_log_elements() {
         let valid_event = serde_json::json!({
@@ -563,71 +591,48 @@ mod tests {
             },
         });
         let valid = valid_request.to_string();
-        assert_eq!(
-            validate_extension_session_request_json(&valid),
-            ExtensionSessionRequestValidation::Accepted
-        );
+        assert_validation(&valid, ExtensionSessionRequestValidation::Accepted);
 
         let malformed_provider = valid.replace(
             r#"{"id":"provider","type":"github"}"#,
             r#"{"githubPat":"secret"}"#,
         );
-        assert_eq!(
-            validate_extension_session_request_json(&malformed_provider),
-            ExtensionSessionRequestValidation::Rejected
+        assert_validation(
+            &malformed_provider,
+            ExtensionSessionRequestValidation::Rejected,
         );
 
         let valid_signature = format!(r#""signature":"ed25519:{}""#, "0".repeat(128));
         let malformed_event = valid.replace(&valid_signature, r#""signature":1"#);
-        assert_eq!(
-            validate_extension_session_request_json(&malformed_event),
-            ExtensionSessionRequestValidation::Rejected
+        assert_validation(
+            &malformed_event,
+            ExtensionSessionRequestValidation::Rejected,
         );
     }
 
     #[test]
     fn validates_passkey_bytes_and_queue_metadata() {
         let valid = r#"{"type":"nook:extension-session-finish-passkey-setup","payload":{"credentialId":[1],"userHandle":[2],"prfInput":[3],"prfOutput":[4],"deviceMode":1,"queue":{"kind":"deadline","expiresAt":42,"priority":"interactive"}}}"#;
-        assert_eq!(
-            validate_extension_session_request_json(valid),
-            ExtensionSessionRequestValidation::Accepted
-        );
-        assert_eq!(
-            validate_extension_session_request_json(&valid.replace("[4]", "[256]")),
-            ExtensionSessionRequestValidation::Rejected
-        );
-        assert_eq!(
-            validate_extension_session_request_json(&valid.replace("interactive", "background")),
-            ExtensionSessionRequestValidation::Rejected
-        );
-        assert_eq!(
-            validate_extension_session_request_json(
-                &valid.replace(r#""expiresAt":42"#, r#""expiresAt":null"#,),
-            ),
-            ExtensionSessionRequestValidation::Rejected
-        );
-        assert_eq!(
-            validate_extension_session_request_json(
-                &valid.replace(r#""priority":"interactive""#, r#""priority":null"#),
-            ),
-            ExtensionSessionRequestValidation::Rejected
-        );
+        assert_validation(valid, ExtensionSessionRequestValidation::Accepted);
+        for invalid in [
+            valid.replace("[4]", "[256]"),
+            valid.replace("interactive", "background"),
+            valid.replace(r#""expiresAt":42"#, r#""expiresAt":null"#),
+            valid.replace(r#""priority":"interactive""#, r#""priority":null"#),
+        ] {
+            assert_validation(&invalid, ExtensionSessionRequestValidation::Rejected);
+        }
         let ceremony = r#"{"type":"nook:extension-session-register-passkey","payload":{"vaultStoreId":"vault","deviceId":"device","devicePublicKey":"public","deviceSigningPublicKey":"signing","requestId":"request","requestJson":"{}","queue":{"kind":"deadline","expiresAt":42,"priority":"interactive"}}}"#;
-        assert_eq!(
-            validate_extension_session_request_json(ceremony),
-            ExtensionSessionRequestValidation::Accepted
-        );
-        assert_eq!(
-            validate_extension_session_request_json(&ceremony.replace("interactive", "probe")),
-            ExtensionSessionRequestValidation::Rejected
-        );
-        assert_eq!(
-            validate_extension_session_request_json(&ceremony.replace(
+        assert_validation(ceremony, ExtensionSessionRequestValidation::Accepted);
+        for invalid in [
+            ceremony.replace("interactive", "probe"),
+            ceremony.replace(
                 r#"{"kind":"deadline","expiresAt":42,"priority":"interactive"}"#,
                 r#"{"kind":"message-default"}"#,
-            )),
-            ExtensionSessionRequestValidation::Rejected
-        );
+            ),
+        ] {
+            assert_validation(&invalid, ExtensionSessionRequestValidation::Rejected);
+        }
     }
 
     #[test]
@@ -716,11 +721,7 @@ mod tests {
         ];
 
         for (family, valid, required_field) in cases {
-            assert_eq!(
-                validate_extension_session_request_json(valid),
-                ExtensionSessionRequestValidation::Accepted,
-                "{family} request should be accepted"
-            );
+            assert_validation(valid, ExtensionSessionRequestValidation::Accepted);
             assert_eq!(
                 validate_extension_session_request_json(&valid.replace(required_field, "")),
                 ExtensionSessionRequestValidation::Rejected,
@@ -732,59 +733,31 @@ mod tests {
     #[test]
     fn rejects_open_ended_session_domain_values() {
         let passkey_setup = r#"{"type":"nook:extension-session-finish-passkey-setup","payload":{"credentialId":[1],"userHandle":[2],"prfInput":[3],"prfOutput":[4],"deviceMode":1,"queue":{"kind":"deadline","expiresAt":42,"priority":"interactive"}}}"#;
-        assert_eq!(
-            validate_extension_session_request_json(
-                &passkey_setup.replace(r#""deviceMode":1"#, r#""deviceMode":2"#),
-            ),
-            ExtensionSessionRequestValidation::Rejected
+        assert_validation(
+            &passkey_setup.replace(r#""deviceMode":1"#, r#""deviceMode":2"#),
+            ExtensionSessionRequestValidation::Rejected,
         );
         let backup_attach = r#"{"type":"nook:extension-session-authenticator-backup-attach","payload":{"vaultStoreId":"vault","deviceId":"device","devicePublicKey":"public","deviceSigningPublicKey":"signing","secretId":"secret","codes":["backup"],"mode":"replace","queue":{"kind":"message-default"}}}"#;
-        assert_eq!(
-            validate_extension_session_request_json(
-                &backup_attach.replace(r#""mode":"replace""#, r#""mode":"append""#),
-            ),
-            ExtensionSessionRequestValidation::Rejected
+        assert_validation(
+            &backup_attach.replace(r#""mode":"replace""#, r#""mode":"append""#),
+            ExtensionSessionRequestValidation::Rejected,
         );
     }
 
     #[test]
-    fn validates_bounded_enrollment_authorization_identifiers() {
-        let valid = r#"{"type":"nook:extension-session-authenticator-enroll-confirm","payload":{"vaultStoreId":"vault","deviceId":"device","devicePublicKey":"public","deviceSigningPublicKey":"signing","otpauthUri":"otpauth://totp/example","origin":"https://example.com","enrollmentAuthorizationId":"authorization","queue":{"kind":"message-default"}}}"#;
-        assert_eq!(
-            validate_extension_session_request_json(valid),
-            ExtensionSessionRequestValidation::Accepted
-        );
+    fn validates_enrollment_authorization_requests() {
+        let confirm = r#"{"type":"nook:extension-session-authenticator-enroll-confirm","payload":{"vaultStoreId":"vault","deviceId":"device","devicePublicKey":"public","deviceSigningPublicKey":"signing","otpauthUri":"otpauth://totp/example","origin":"https://example.com","enrollmentAuthorizationId":"authorization","queue":{"kind":"message-default"}}}"#;
+        let authorize = r#"{"type":"nook:extension-session-authenticator-enroll-authorize","payload":{"enrollmentAuthorizationId":"authorization","expiresAt":42,"queue":{"kind":"deadline","expiresAt":42,"priority":"interactive"}}}"#;
+        let revoke = r#"{"type":"nook:extension-session-authenticator-enroll-revoke","payload":{"enrollmentAuthorizationId":"authorization","queue":{"kind":"message-default"}}}"#;
+        for valid in [confirm, authorize, revoke] {
+            assert_validation(valid, ExtensionSessionRequestValidation::Accepted);
+        }
         for invalid in [
-            valid.replace(r#""enrollmentAuthorizationId":"authorization","#, ""),
-            valid.replace("authorization", ""),
-            valid.replace("authorization", "   "),
-            valid.replace(
-                "authorization",
-                &"a".repeat(MAX_ENROLLMENT_AUTHORIZATION_ID_BYTES + 1),
-            ),
-            valid.replace(
+            confirm.replace(r#""enrollmentAuthorizationId":"authorization","#, ""),
+            confirm.replace(
                 r#""enrollmentAuthorizationId":"authorization""#,
                 r#""enrollmentAuthorizationId":"authorization","foreign":true"#,
             ),
-        ] {
-            assert_eq!(
-                validate_extension_session_request_json(&invalid),
-                ExtensionSessionRequestValidation::Rejected
-            );
-        }
-    }
-
-    #[test]
-    fn validates_enrollment_authorization_control_requests() {
-        let authorize = r#"{"type":"nook:extension-session-authenticator-enroll-authorize","payload":{"enrollmentAuthorizationId":"authorization","expiresAt":42,"queue":{"kind":"deadline","expiresAt":42,"priority":"interactive"}}}"#;
-        let revoke = r#"{"type":"nook:extension-session-authenticator-enroll-revoke","payload":{"enrollmentAuthorizationId":"authorization","queue":{"kind":"message-default"}}}"#;
-        for valid in [authorize, revoke] {
-            assert_eq!(
-                validate_extension_session_request_json(valid),
-                ExtensionSessionRequestValidation::Accepted
-            );
-        }
-        for invalid in [
             authorize.replace(r#""enrollmentAuthorizationId":"authorization","#, ""),
             authorize.replace("authorization", ""),
             authorize.replace(
@@ -812,10 +785,7 @@ mod tests {
                 r#""queue":{"kind":"message-default"},"foreign":true"#,
             ),
         ] {
-            assert_eq!(
-                validate_extension_session_request_json(&invalid),
-                ExtensionSessionRequestValidation::Rejected
-            );
+            assert_validation(&invalid, ExtensionSessionRequestValidation::Rejected);
         }
     }
 
@@ -826,10 +796,7 @@ mod tests {
             r#"{"type":"nook:extension-session-status","payload":{"queue":{"kind":"message-default"},"requestJson":"{}"}}"#,
             r#"{"type":"nook:extension-session-status","payload":{"queue":{"kind":"message-default"}},"codes":["foreign"]}"#,
         ] {
-            assert_eq!(
-                validate_extension_session_request_json(request),
-                ExtensionSessionRequestValidation::Rejected
-            );
+            assert_validation(request, ExtensionSessionRequestValidation::Rejected);
         }
     }
 
@@ -839,10 +806,7 @@ mod tests {
             r#"{"type":"nook:extension-session-dismiss-login-save","payload":{"origin":"https://example.com","offerId":"offer","queue":{"kind":"deadline","expiresAt":42,"priority":"interactive"}}}"#,
             r#"{"type":"nook:extension-session-cancel-passkey","payload":{"requestId":"request","queue":{"kind":"deadline","expiresAt":42,"priority":"interactive"}}}"#,
         ] {
-            assert_eq!(
-                validate_extension_session_request_json(request),
-                ExtensionSessionRequestValidation::Rejected
-            );
+            assert_validation(request, ExtensionSessionRequestValidation::Rejected);
         }
     }
 }

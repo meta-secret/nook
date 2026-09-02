@@ -81,18 +81,23 @@ describe('ExtensionSessionMessageDispatcher', () => {
       devicePublicKey: 'public',
       deviceSigningPublicKey: 'signing',
     }
-    const malformedProvider = await parseExtensionSessionRequest({
-      type: ExtensionSessionMessageType.ImportVault,
-      payload: {
-        ...grant,
-        providers: [{ githubPat: 'secret' }],
-        eventLogRecords: [],
-        queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
-      },
-    })
-    expect(malformedProvider.kind).toBe(
-      ExtensionSessionRequestParseKind.Invalid,
-    )
+    for (const provider of [
+      { githubPat: 'secret' },
+      { id: 'provider', type: 'github', foreign: true },
+    ]) {
+      const malformedProvider = await parseExtensionSessionRequest({
+        type: ExtensionSessionMessageType.ImportVault,
+        payload: {
+          ...grant,
+          providers: [provider],
+          eventLogRecords: [],
+          queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+        },
+      })
+      expect(malformedProvider.kind).toBe(
+        ExtensionSessionRequestParseKind.Invalid,
+      )
+    }
 
     const malformedEvent = await parseExtensionSessionRequest({
       type: ExtensionSessionMessageType.UpdateVault,
@@ -814,6 +819,10 @@ describe('ExtensionSessionMessageDispatcher', () => {
     for (const payload of [
       { ...authorizeMessage.payload, enrollmentAuthorizationId: '' },
       { ...authorizeMessage.payload, foreign: true },
+      {
+        ...authorizeMessage.payload,
+        queue: { ...authorizeMessage.payload.queue, foreign: true },
+      },
     ]) {
       const invalidResponse = new Promise<unknown>((resolve) => {
         const invalidMessage = { ...authorizeMessage, payload }
