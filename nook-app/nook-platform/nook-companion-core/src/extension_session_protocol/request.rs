@@ -18,18 +18,6 @@ use zeroize::Zeroize;
 
 const MAX_ENROLLMENT_AUTHORIZATION_ID_BYTES: usize = 128;
 
-macro_rules! strict_camel_payload {
-    ($name:ident { $($fields:tt)* }) => {
-        #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-        #[serde(deny_unknown_fields, rename_all = "camelCase")]
-        pub struct $name {
-            #[serde(flatten, skip_serializing)]
-            _strict_unknown_fields: (),
-            $($fields)*
-        }
-    };
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Tsify)]
 #[tsify(type = "0 | 1")]
 pub struct PasskeyDeviceModeWire(nook_authenticator_domain::PasskeyDeviceProtectionMode);
@@ -128,26 +116,38 @@ pub struct EmptyPayload {
     queue: QueueDisposition,
 }
 
-strict_camel_payload!(FinishPasskeySetupPayload {
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct FinishPasskeySetupPayload {
+    #[serde(flatten, skip_serializing)]
+    _strict_unknown_fields: (),
     credential_id: SessionSecretBytes,
     user_handle: SessionSecretBytes,
     prf_input: SessionSecretBytes,
     prf_output: SessionSecretBytes,
     device_mode: PasskeyDeviceModeWire,
     queue: QueueDisposition,
-});
+}
 
-strict_camel_payload!(RecoverPasskeyPayload {
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct RecoverPasskeyPayload {
+    #[serde(flatten, skip_serializing)]
+    _strict_unknown_fields: (),
     credential_id: SessionSecretBytes,
     user_handle: SessionSecretBytes,
     prf_output: SessionSecretBytes,
     queue: QueueDisposition,
-});
+}
 
-strict_camel_payload!(UnlockPasskeyPayload {
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct UnlockPasskeyPayload {
+    #[serde(flatten, skip_serializing)]
+    _strict_unknown_fields: (),
     prf_output: SessionSecretBytes,
     queue: QueueDisposition,
-});
+}
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields)]
@@ -158,16 +158,24 @@ pub struct PinPayload {
     queue: QueueDisposition,
 }
 
-strict_camel_payload!(IdentityHandoffPayload {
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct IdentityHandoffPayload {
+    #[serde(flatten, skip_serializing)]
+    _strict_unknown_fields: (),
     recipient_public_key: String,
     nonce: String,
     expected_device_id: String,
     expected_device_public_key: String,
     expected_device_signing_public_key: String,
     queue: QueueDisposition,
-});
+}
 
-strict_camel_payload!(ImportVaultPayload {
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct ImportVaultPayload {
+    #[serde(flatten, skip_serializing)]
+    _strict_unknown_fields: (),
     vault_store_id: String,
     device_id: String,
     device_public_key: String,
@@ -175,18 +183,26 @@ strict_camel_payload!(ImportVaultPayload {
     providers: Vec<SerializedStorageProvider>,
     event_log_records: Vec<ExtensionEventLogRecord>,
     queue: QueueDisposition,
-});
+}
 
-strict_camel_payload!(UpdateVaultPayload {
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct UpdateVaultPayload {
+    #[serde(flatten, skip_serializing)]
+    _strict_unknown_fields: (),
     vault_store_id: String,
     device_id: String,
     device_public_key: String,
     device_signing_public_key: String,
     event_log_records: Vec<ExtensionEventLogRecord>,
     queue: QueueDisposition,
-});
+}
 
-strict_camel_payload!(PasskeyLookupPayload {
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct PasskeyLookupPayload {
+    #[serde(flatten, skip_serializing)]
+    _strict_unknown_fields: (),
     vault_store_id: String,
     device_id: String,
     device_public_key: String,
@@ -194,18 +210,26 @@ strict_camel_payload!(PasskeyLookupPayload {
     rp_id: String,
     origin: String,
     queue: QueueDisposition,
-});
+}
 
-strict_camel_payload!(OriginGrantPayload {
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct OriginGrantPayload {
+    #[serde(flatten, skip_serializing)]
+    _strict_unknown_fields: (),
     vault_store_id: String,
     device_id: String,
     device_public_key: String,
     device_signing_public_key: String,
     origin: String,
     queue: QueueDisposition,
-});
+}
 
-strict_camel_payload!(SecretGrantPayload {
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct SecretGrantPayload {
+    #[serde(flatten, skip_serializing)]
+    _strict_unknown_fields: (),
     vault_store_id: String,
     device_id: String,
     device_public_key: String,
@@ -213,32 +237,48 @@ strict_camel_payload!(SecretGrantPayload {
     origin: String,
     secret_id: String,
     queue: QueueDisposition,
-});
+}
 
-strict_camel_payload!(QueryGrantPayload {
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct QueryGrantPayload {
+    #[serde(flatten, skip_serializing)]
+    _strict_unknown_fields: (),
     vault_store_id: String,
     device_id: String,
     device_public_key: String,
     device_signing_public_key: String,
     query: String,
     queue: QueueDisposition,
-});
+}
 
-strict_camel_payload!(SecretIdGrantPayload {
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct SecretIdGrantPayload {
+    #[serde(flatten, skip_serializing)]
+    _strict_unknown_fields: (),
     vault_store_id: String,
     device_id: String,
     device_public_key: String,
     device_signing_public_key: String,
     secret_id: String,
     queue: QueueDisposition,
-});
+}
 
-strict_camel_payload!(OtpauthPayload {
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct OtpauthPayload {
+    #[serde(flatten, skip_serializing)]
+    _strict_unknown_fields: (),
     otpauth_uri: SessionSecretText,
     queue: QueueDisposition,
-});
+}
 
-strict_camel_payload!(OtpauthGrantPayload {
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct OtpauthGrantPayload {
+    #[serde(flatten, skip_serializing)]
+    _strict_unknown_fields: (),
     vault_store_id: String,
     device_id: String,
     device_public_key: String,
@@ -247,7 +287,7 @@ strict_camel_payload!(OtpauthGrantPayload {
     origin: String,
     enrollment_authorization_id: EnrollmentAuthorizationId,
     queue: QueueDisposition,
-});
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Tsify)]
 #[tsify(type = "string")]
@@ -268,12 +308,16 @@ impl<'de> Deserialize<'de> for EnrollmentAuthorizationId {
     }
 }
 
-strict_camel_payload!(EnrollmentAuthorizationPayload {
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct EnrollmentAuthorizationPayload {
+    #[serde(flatten, skip_serializing)]
+    _strict_unknown_fields: (),
     enrollment_authorization_id: EnrollmentAuthorizationId,
     #[serde(deserialize_with = "deserialize_finite_f64")]
     expires_at: f64,
     queue: QueueDisposition,
-});
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -284,7 +328,11 @@ pub struct EnrollmentAuthorizationRevokePayload {
     queue: MessageDefaultQueueDisposition,
 }
 
-strict_camel_payload!(BackupAttachPayload {
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct BackupAttachPayload {
+    #[serde(flatten, skip_serializing)]
+    _strict_unknown_fields: (),
     vault_store_id: String,
     device_id: String,
     device_public_key: String,
@@ -294,9 +342,13 @@ strict_camel_payload!(BackupAttachPayload {
     #[tsify(type = "'replace' | 'merge'")]
     mode: nook_authenticator_domain::BackupCodeAttachMode,
     queue: QueueDisposition,
-});
+}
 
-strict_camel_payload!(LoginSavePlanPayload {
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct LoginSavePlanPayload {
+    #[serde(flatten, skip_serializing)]
+    _strict_unknown_fields: (),
     vault_store_id: String,
     device_id: String,
     device_public_key: String,
@@ -305,7 +357,7 @@ strict_camel_payload!(LoginSavePlanPayload {
     username: SessionSecretText,
     password: SessionSecretText,
     queue: QueueDisposition,
-});
+}
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields)]
@@ -316,13 +368,21 @@ pub struct OriginPayload {
     queue: QueueDisposition,
 }
 
-strict_camel_payload!(LoginSaveActionPayload {
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct LoginSaveActionPayload {
+    #[serde(flatten, skip_serializing)]
+    _strict_unknown_fields: (),
     origin: String,
     offer_id: String,
     queue: QueueDisposition,
-});
+}
 
-strict_camel_payload!(GrantedLoginSaveActionPayload {
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct GrantedLoginSaveActionPayload {
+    #[serde(flatten, skip_serializing)]
+    _strict_unknown_fields: (),
     vault_store_id: String,
     device_id: String,
     device_public_key: String,
@@ -330,12 +390,16 @@ strict_camel_payload!(GrantedLoginSaveActionPayload {
     origin: String,
     offer_id: String,
     queue: QueueDisposition,
-});
+}
 
-strict_camel_payload!(RequestPayload {
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct RequestPayload {
+    #[serde(flatten, skip_serializing)]
+    _strict_unknown_fields: (),
     request_id: String,
     queue: QueueDisposition,
-});
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -356,7 +420,11 @@ pub struct DirectRequestPayload {
     queue: MessageDefaultQueueDisposition,
 }
 
-strict_camel_payload!(PasskeyCeremonyPayload {
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct PasskeyCeremonyPayload {
+    #[serde(flatten, skip_serializing)]
+    _strict_unknown_fields: (),
     vault_store_id: String,
     device_id: String,
     device_public_key: String,
@@ -364,7 +432,7 @@ strict_camel_payload!(PasskeyCeremonyPayload {
     request_id: String,
     request_json: SessionSecretText,
     queue: PasskeyCeremonyQueueDisposition,
-});
+}
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, tag = "type", content = "payload")]
