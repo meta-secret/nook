@@ -3,6 +3,15 @@ import { lintProseDensity } from '../src/lib/density.ts';
 
 import type { LintProseDensityArgs } from '../src/lib/density.ts';
 describe('lintProseDensity', () => {
+  test('leaves semicolon density to Vale', () => {
+    const lintArgs: LintProseDensityArgs = {
+      filePath: 'semicolon.md',
+      content:
+        '> Command output: one clause; another clause; final clause.\n\nTable prose; has another; clause.',
+    };
+    expect(lintProseDensity(lintArgs)).toEqual([]);
+  });
+
   test('flags dense sentences', () => {
     const long =
       'This sentence keeps adding clauses and constraints and failure modes and commands until it becomes too dense for a single pass reader who also needs to remember actors and extras.';

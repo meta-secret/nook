@@ -8,6 +8,7 @@ import { findBrokenRelativeLinks, type BrokenLink } from '../lib/links.ts';
 import { findRepoRoot } from '../lib/repo.ts';
 import { listCortexMarkdownFiles } from '../lib/cortex-markdown-files.ts';
 import { runCortexVale } from '../lib/cortex-vale.ts';
+import { runValeFiles, type ValeNativeAlert } from '../lib/vale-files.ts';
 import {
   LoomFailureCode,
   loomFailure,
@@ -53,6 +54,7 @@ export type CortexAuditReport = {
   readonly orphanIndexRows: string[];
   readonly prohibitedHarnessSkillPaths: string[];
   readonly densityFindings: DensityFinding[];
+  readonly densityValeAlerts: readonly ValeNativeAlert[];
   readonly structureFindings: CortexStructureFinding[];
   readonly articleStructureFindings: CortexArticleFinding[];
   readonly identifierFindings: readonly CortexIdentifierFinding[];
@@ -104,6 +106,7 @@ export async function runCortexAuditFromDirectory(
   runCortexVale({ cortexRoot, repoRoot });
   const brokenLinks: BrokenLink[] = [];
   const densityFindings: DensityFinding[] = [];
+  let densityValeAlerts: readonly ValeNativeAlert[] = [];
   const syntaxDocuments = allMarkdownFiles.map((filePath) => {
     const documentSource: CortexDocumentSource = {
       absolutePath: filePath,
@@ -163,6 +166,14 @@ export async function runCortexAuditFromDirectory(
   const admittedDocumentPaths = new Set(
     documents.map((document) => document.relativePath),
   );
+
+  if (args.request.includeDensityLint && documents.length > 0) {
+    densityValeAlerts = runValeFiles({
+      configPath: path.join(repoRoot, '.vale', 'density.ini'),
+      files: documents.map((document) => document.absolutePath),
+      repoRoot,
+    }).alerts;
+  }
 
   for (const documentSource of documents) {
     const filePath = documentSource.absolutePath;
@@ -275,6 +286,7 @@ export async function runCortexAuditFromDirectory(
     orphanIndexRows,
     prohibitedHarnessSkillPaths,
     densityFindings,
+    densityValeAlerts,
     structureFindings,
     articleStructureFindings,
     identifierFindings,
@@ -286,6 +298,7 @@ export async function runCortexAuditFromDirectory(
       orphanIndexRows.length === 0 &&
       prohibitedHarnessSkillPaths.length === 0 &&
       densityFindings.length === 0 &&
+      densityValeAlerts.length === 0 &&
       structureFindings.length === 0 &&
       articleStructureFindings.length === 0 &&
       identifierFindings.length === 0 &&

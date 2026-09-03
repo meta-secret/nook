@@ -11,10 +11,17 @@ import {
   type DensityFindingSpan,
 } from './density.ts';
 import { runCommand, type RunCommandArgs } from './run.ts';
+import { runValeFiles, type ValeNativeAlert } from './vale-files.ts';
+import {
+  auditCortexMarkdownSyntax,
+  CortexStructureFindingCode,
+  type CortexDocumentSource,
+} from '../../../../.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/src/cortex-document-structure.ts';
 
 export type ChangedCortexDensityReport = {
   readonly checkedPaths: readonly string[];
   readonly findings: readonly DensityFinding[];
+  readonly valeAlerts: readonly ValeNativeAlert[];
 };
 
 export type LintChangedCortexDensityArgs = {
@@ -47,7 +54,7 @@ export function lintChangedCortexDensity(
   const trackedByCurrentPath = new Map(
     tracked.map((change) => [change.currentPath, change]),
   );
-  const checkedPaths = [
+  const candidatePaths = [
     ...new Set([...trackedByCurrentPath.keys(), ...untracked]),
   ]
     .filter(isPersistentCortexMarkdownPath)
@@ -59,6 +66,26 @@ export function lintChangedCortexDensity(
       return isRegularFile(fileArgs);
     })
     .sort();
+  const candidateDocuments = candidatePaths.map((relativePath) => {
+    const document: CortexDocumentSource = {
+      absolutePath: path.join(args.repoRoot, relativePath),
+      relativePath,
+      content: readFileSync(path.join(args.repoRoot, relativePath), 'utf8'),
+    };
+    return document;
+  });
+  const syntaxInvalidPaths = new Set(
+    auditCortexMarkdownSyntax({ documents: candidateDocuments })
+      .filter(
+        (finding) => finding.code === CortexStructureFindingCode.ProhibitedHtml,
+      )
+      .map((finding) => finding.file),
+  );
+  const documents = candidateDocuments.filter(
+    (document) => !syntaxInvalidPaths.has(document.relativePath),
+  );
+  const checkedPaths = documents.map((document) => document.relativePath);
+  const addedLinesByPath = new Map<string, readonly ChangedLineRange[]>();
   const findings = checkedPaths.flatMap((relativePath) => {
     const lintArgs = {
       filePath: relativePath,
@@ -77,6 +104,7 @@ export function lintChangedCortexDensity(
       untrackedPaths.has(relativePath) || trackedChange?.inspectAll === true
         ? [ALL_LINES]
         : changedLineRanges(rangeArgs);
+    addedLinesByPath.set(relativePath, addedLines);
     return spans
       .filter((finding) => {
         const intersectionArgs: IntersectsAddedLinesArgs = {
@@ -87,7 +115,22 @@ export function lintChangedCortexDensity(
       })
       .map(withoutSpan);
   });
-  return { checkedPaths, findings };
+  const valeAlerts =
+    documents.length === 0
+      ? []
+      : runValeFiles({
+          configPath: path.join(args.repoRoot, '.vale', 'density.ini'),
+          files: documents.map((document) => document.absolutePath),
+          repoRoot: args.repoRoot,
+        }).alerts.filter((alert) => {
+          const relativePath = path.relative(args.repoRoot, alert.file);
+          return addedLinesByPath
+            .get(relativePath)
+            ?.some(
+              (range) => alert.line >= range.start && alert.line <= range.end,
+            );
+        });
+  return { checkedPaths, findings, valeAlerts };
 }
 
 type GitOutputArgs = {

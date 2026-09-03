@@ -3,8 +3,10 @@ import {
   cpSync,
   mkdirSync,
   mkdtempSync,
+  realpathSync,
   rmSync,
   symlinkSync,
+  unlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -34,6 +36,10 @@ function installValeConfiguration(repoRoot: string): void {
     path.join(REPOSITORY_ROOT, '.vale', 'styles'),
     path.join(repoRoot, '.vale', 'styles'),
     { recursive: true },
+  );
+  copyFileSync(
+    path.join(REPOSITORY_ROOT, '.vale', 'density.ini'),
+    path.join(repoRoot, '.vale', 'density.ini'),
   );
 }
 
@@ -179,7 +185,9 @@ test('excludes workspace dependencies and canonical executable package scripts',
 });
 
 test('enforces Vale through the common Cortex audit execution path', async () => {
-  const repoRoot = mkdtempSync(path.join(tmpdir(), 'cortex-vale-audit-'));
+  const repoRoot = realpathSync(
+    mkdtempSync(path.join(tmpdir(), 'cortex-vale-audit-')),
+  );
   try {
     installValeConfiguration(repoRoot);
     const cortexRoot = path.join(repoRoot, '.cortex');
@@ -199,7 +207,9 @@ test('enforces Vale through the common Cortex audit execution path', async () =>
 });
 
 test('fails the integrated Cortex audit for rendered Markdown tables', async () => {
-  const repoRoot = mkdtempSync(path.join(tmpdir(), 'cortex-table-audit-'));
+  const repoRoot = realpathSync(
+    mkdtempSync(path.join(tmpdir(), 'cortex-table-audit-')),
+  );
   try {
     installValeConfiguration(repoRoot);
     const cortexRoot = path.join(repoRoot, '.cortex');
@@ -250,7 +260,9 @@ test('fails the integrated Cortex audit for rendered Markdown tables', async () 
 });
 
 test('fails the integrated Cortex audit for authored HTML', async () => {
-  const repoRoot = mkdtempSync(path.join(tmpdir(), 'cortex-html-audit-'));
+  const repoRoot = realpathSync(
+    mkdtempSync(path.join(tmpdir(), 'cortex-html-audit-')),
+  );
   try {
     installValeConfiguration(repoRoot);
     const cortexRoot = path.join(repoRoot, '.cortex');
@@ -279,7 +291,7 @@ test('fails the integrated Cortex audit for authored HTML', async () => {
 
 ## Policy
 
-First paragraph and another clause and another clause and another clause that makes this sentence deliberately dense enough for the density audit.
+First paragraph; another clause; and another clause that makes this sentence deliberately dense enough for the density audit.
 
 Second paragraph.
 
@@ -292,7 +304,7 @@ Fourth paragraph.
     );
     writeFileSync(
       path.join(cortexRoot, 'knowledge-graph.md'),
-      '# Knowledge Graph\n',
+      '# Knowledge Graph\n\nRoute one; route two; route three.\n',
     );
     writeFileSync(path.join(skillsRoot, 'index.md'), '# Skills\n');
     writeFileSync(
@@ -333,6 +345,18 @@ Fourth paragraph.
         (finding) => finding.file === '.cortex/AGENTS.md',
       ),
     ).toBe(false);
+    expect(
+      report.densityValeAlerts.some((alert) =>
+        alert.file.endsWith('/.cortex/AGENTS.md'),
+      ),
+    ).toBe(false);
+    expect(
+      report.densityValeAlerts.some(
+        (alert) =>
+          alert.check === 'NookDensity.Semicolons' &&
+          alert.file.endsWith('/.cortex/knowledge-graph.md'),
+      ),
+    ).toBe(true);
   } finally {
     const removeOptions = { recursive: true, force: true } as const;
     rmSync(repoRoot, removeOptions);
@@ -340,7 +364,9 @@ Fourth paragraph.
 });
 
 test('admits session Markdown only through the global HTML syntax gate', async () => {
-  const repoRoot = mkdtempSync(path.join(tmpdir(), 'cortex-session-html-'));
+  const repoRoot = realpathSync(
+    mkdtempSync(path.join(tmpdir(), 'cortex-session-html-')),
+  );
   try {
     installValeConfiguration(repoRoot);
     const cortexRoot = path.join(repoRoot, '.cortex');
@@ -400,7 +426,9 @@ test('admits session Markdown only through the global HTML syntax gate', async (
 });
 
 test('admits Gizmo skill rows without cascading from rejected syntax', async () => {
-  const repoRoot = mkdtempSync(path.join(tmpdir(), 'cortex-html-cascade-'));
+  const repoRoot = realpathSync(
+    mkdtempSync(path.join(tmpdir(), 'cortex-html-cascade-')),
+  );
   try {
     installValeConfiguration(repoRoot);
     const cortexRoot = path.join(repoRoot, '.cortex');
@@ -487,6 +515,7 @@ ${gizmoIndexRows}
       writeFileSync(path.join(gizmoSkillsRoot, `${slug}.md`), `# ${slug}\n`);
     }
 
+    unlinkSync(path.join(repoRoot, '.vale', 'density.ini'));
     const request = { includeDensityLint: false };
     const auditArgs = { request, startDirectory: repoRoot };
     const report = await runCortexAuditFromDirectory(auditArgs);
@@ -497,6 +526,7 @@ ${gizmoIndexRows}
       orphanIndexRows: [],
       prohibitedHarnessSkillPaths: [],
       densityFindings: [],
+      densityValeAlerts: [],
       structureFindings: [
         {
           code: CortexStructureFindingCode.ProhibitedHtml,

@@ -80,13 +80,16 @@ export async function runPrePush(
 
   const densityArgs = { baseSha, repoRoot };
   const density = lintChangedCortexDensity(densityArgs);
-  if (density.findings.length > 0) {
-    const detail = density.findings
-      .map(
-        (finding) =>
-          `${finding.file}:${finding.line}: ${finding.reason}: ${finding.excerpt}`,
-      )
-      .join('\n');
+  if (density.findings.length > 0 || density.valeAlerts.length > 0) {
+    const typedDetail = density.findings.map(
+      (finding) =>
+        `${finding.file}:${finding.line}: ${finding.reason}: ${finding.excerpt}`,
+    );
+    const valeDetail = density.valeAlerts.map(
+      (alert) =>
+        `${alert.file}:${alert.line}: ${alert.check}: ${alert.message}`,
+    );
+    const detail = [...typedDetail, ...valeDetail].join('\n');
     const densityFailureArgs: LoomFailureDetailArgs = {
       code: LoomFailureCode.CortexAuditFailed,
       text: `Cortex Writer density failed for changed Markdown:\n${detail}`,
