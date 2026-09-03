@@ -5,7 +5,7 @@
 # Main still runs the full local-provider and extension suites. Live-provider
 # sync checks remain available through the manually dispatched e2e-pr.yml workflow.
 # Research-only changes are handled by web-research.yml. Cortex, Cursor,
-# repository-policy-only, and agentic-AI-only changes do not need the product
+# Vale-policy, repository-policy-only, and agentic-AI-only changes do not need the product
 # pipeline. Agent statistics live in meta-secret/nook-workbench.
 # Validation is requested explicitly by adding a label. Ordinary pushes do not
 # spend hosted workers. A later push invalidates the prior head's checks, so the
@@ -21,6 +21,8 @@ on:
     paths-ignore:
       - .cortex/**
       - .cursor/**
+      - .vale.ini
+      - .vale/**
       - .github/workflows/repository-policy.yml
       - .github/workflows/web-research.yml
       - agentic-ai/**

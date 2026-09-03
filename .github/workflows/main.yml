@@ -11,7 +11,7 @@
 # Immutable releases remain
 # responsible for production wasm optimization.
 # Research-only changes are handled by web-research.yml. Cortex, Cursor,
-# repository-policy-only, and non-minds agentic-AI-only changes do not need
+# Vale-policy, repository-policy-only, and non-minds agentic-AI-only changes do not need
 # this workflow. Minds-only changes run the ecosystem gates here but skip the
 # product pipeline. A trusted workflow_run collector records each attempt in
 # meta-secret/nook-workbench.
@@ -33,6 +33,8 @@ on:
       - "**"
       - "!.cortex/**"
       - "!.cursor/**"
+      - "!.vale.ini"
+      - "!.vale/**"
       - "!.github/workflows/repository-policy.yml"
       - "!.github/workflows/web-research.yml"
       - "!agentic-ai/**"
