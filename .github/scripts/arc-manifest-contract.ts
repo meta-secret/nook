@@ -528,6 +528,8 @@ tasks.requireAll([
 mainWorkflow.forbid("NOOK_CACHE_RUNS_ON");
 mainWorkflow.forbid("    runs-on: ubuntu-latest");
 mainWorkflow.requireAll([
+  '- "!.vale.ini"',
+  '- "!.vale/**"',
   "wasm-cache-publish:",
   "name: WASM cache publication",
   "needs: [wasm]",
@@ -559,6 +561,8 @@ mainWorkflow.requireAll([
 ]);
 mainWorkflow.forbid("Build sealed web image for development deploy");
 prWorkflow.requireAll([
+  "- .vale.ini",
+  "- .vale/**",
   "full-e2e-shard:",
   "name: Full browser e2e shard (${{ matrix.shard }}/2)",
   "fail-fast: false",
