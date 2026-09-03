@@ -41,6 +41,13 @@ permit raw parsing, alert translation, or compatibility behavior.
 
 All listed validators are owned by the AI team.
 
+The repository-wide TypeScript inventory is complete for authored Markdown
+validation. Every prose or exact-heading check that Vale 3.19 can express
+natively has moved below under **Complete**. The residual TypeScript parsers
+own Markdown structure, section state, document topology, link resolution, or
+engine-invisible prose; their exact native blockers are recorded below so a
+future Vale upgrade can be evaluated without repeating lossy prototypes.
+
 - **Complete — exact Cortex navigation headings**
   - **Files:** `styles/Nook/CortexNavigation.yml` and
     `../.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/tests/vale-navigation.test.ts`.
@@ -76,9 +83,11 @@ All listed validators are owned by the AI team.
     its independent `verification.ts`, and
     `../agentic-ai/loom/src/lib/cortex-article-structure.ts`.
   - **Contract:** One typed finding per GFM table at the table opening line.
-  - **Vale blocker:** Vale exposes table cells as lint blocks; native existence
-    rules change alert cardinality and line placement. Raw delimiter matching
-    would approximate the Markdown grammar.
+  - **Vale blocker:** Vale 3.19 exposes each nonempty table cell as a lint block,
+    producing one alert per matching cell and no alert for an otherwise valid
+    all-empty rendered table. It does not expose the table node needed for one
+    opening-line finding. Raw delimiter matching would approximate the Markdown
+    grammar.
 
 - **Blocked — empty H2/H3 articles**
   - **Files:** article-structure `audit.ts` and `verification.ts` above.
@@ -125,8 +134,12 @@ All listed validators are owned by the AI team.
     over 120 characters. Findings use the containing paragraph or table-cell
     line; fenced code, labeled quoted output, and one-line link-only index cells
     retain exact exclusions.
-  - **Vale blocker:** Vale's sentence segmentation, source positions, and
-    structural exclusions differ from the current remark-GFM reconstruction.
+  - **Vale blocker:** Vale-native sentence matching can express the length and
+    join thresholds, but Vale 3.19 structurally hides GitHub alert bodies that
+    this policy covers. Its JSON for occurrence rules also reports only the
+    matched token and opening line, so a hard-wrapped sentence's ending line
+    cannot be derived for changed-line filtering. Raw alert parsing or a typed
+    sentence compatibility layer would recreate Markdown and Vale semantics.
 
 - **Blocked — executable-skill frontmatter**
   - **Files:** `../agentic-ai/loom/src/executable-skills/repository.ts` and
@@ -144,6 +157,15 @@ All listed validators are owned by the AI team.
   - **Contract:** Exact normalized markers must remain inside named bounded
     sections of specific authority documents.
   - **Boundary:** This is cross-block semantic contract validation.
+
+- **Not a Vale rule — policy references and runtime commands**
+  - **Files:** `../agentic-ai/loom/src/lib/cortex-contracts.ts` and
+    `../.cortex/teams/ai/dynamic-skills/cortex-consistency/scripts/src/audit.ts`.
+  - **Contract:** Markdown links and definitions must bind policy imports to
+    owned authority documents, while inline and fenced commands must agree with
+    the registered required and retired runtime entrypoints.
+  - **Boundary:** This is cross-document policy and runtime contract
+    compilation, not prose style validation.
 
 - **Not a Vale rule — indexes, locators, and fragments**
   - **Files:** `../agentic-ai/loom/src/commands/cortex-audit.ts` and
