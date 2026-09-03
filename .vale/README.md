@@ -8,6 +8,8 @@ behavior, source line, and alert cardinality.
 ## Tracked content
 
 - `README.md` records migration decisions and blockers.
+- `capabilities.ini` configures test-only probes for parser boundaries that
+  prevent a native migration.
 - `styles/Nook/**` contains authored Nook rules and must remain tracked.
 - `fixtures/**` contains authored engine fixtures and must remain tracked.
 
@@ -82,6 +84,8 @@ future Vale upgrade can be evaluated without repeating lossy prototypes.
     `../.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/audit.ts`,
     its independent `verification.ts`, and
     `../agentic-ai/loom/src/lib/cortex-article-structure.ts`.
+  - **Evidence:** `fixtures/capabilities/tables.md` and
+    `../agentic-ai/loom/tests/vale-files.test.ts`.
   - **Contract:** One typed finding per GFM table at the table opening line.
   - **Vale blocker:** Vale 3.19 exposes each nonempty table cell as a lint block,
     producing one alert per matching cell and no alert for an otherwise valid
@@ -130,16 +134,19 @@ future Vale upgrade can be evaluated without repeating lossy prototypes.
 - **Blocked — remaining prose sentence density**
   - **Files:** `../agentic-ai/loom/src/lib/density.ts` and
     `../agentic-ai/loom/tests/density.test.ts`.
+  - **Evidence:** `fixtures/capabilities/density.md` and
+    `../agentic-ai/loom/tests/vale-files.test.ts`.
   - **Contract:** Typed findings cover more than two `and` joins in a sentence
     over 120 characters. Findings use the containing paragraph or table-cell
     line; fenced code, labeled quoted output, and one-line link-only index cells
     retain exact exclusions.
-  - **Vale blocker:** Vale-native sentence matching can express the length and
-    join thresholds, but Vale 3.19 structurally hides GitHub alert bodies that
-    this policy covers. Its JSON for occurrence rules also reports only the
-    matched token and opening line, so a hard-wrapped sentence's ending line
-    cannot be derived for changed-line filtering. Raw alert parsing or a typed
-    sentence compatibility layer would recreate Markdown and Vale semantics.
+  - **Vale blocker:** Vale-native existence matching expresses the length and
+    join thresholds for ordinary prose, but Vale 3.19 does not emit that rule
+    for a GitHub alert body even though an occurrence rule sees the same body.
+    Its occurrence alert also reports only the matched token and opening line,
+    so a hard-wrapped sentence's ending line cannot be derived for changed-line
+    filtering. Raw alert parsing or a typed sentence compatibility layer would
+    recreate Markdown and Vale semantics.
 
 - **Blocked — executable-skill frontmatter**
   - **Files:** `../agentic-ai/loom/src/executable-skills/repository.ts` and
@@ -161,11 +168,21 @@ future Vale upgrade can be evaluated without repeating lossy prototypes.
 - **Not a Vale rule — policy references and runtime commands**
   - **Files:** `../agentic-ai/loom/src/lib/cortex-contracts.ts` and
     `../.cortex/teams/ai/dynamic-skills/cortex-consistency/scripts/src/audit.ts`.
-  - **Contract:** Markdown links and definitions must bind policy imports to
-    owned authority documents, while inline and fenced commands must agree with
-    the registered required and retired runtime entrypoints.
+  - **Contract:** Markdown links, definitions, and inline-code paths must bind
+    policy imports to owned authority documents, while inline and fenced
+    commands must agree with the registered required and retired runtime
+    entrypoints.
   - **Boundary:** This is cross-document policy and runtime contract
     compilation, not prose style validation.
+
+- **Not a Vale rule — team authority source markers**
+  - **Files:** `../agentic-ai/loom/src/team-agents/audit.ts` and
+    `../agentic-ai/loom/tests/team-agents/audit.test.ts`.
+  - **Contract:** The root Cortex authority must retain exact H2 headings and
+    multiline literal policy markers; the Gizmo authority must retain its exact
+    literal policy markers alongside the typed team catalog.
+  - **Boundary:** This is whole-document authority identity and literal-source
+    drift validation, not prose style validation.
 
 - **Not a Vale rule — indexes, locators, and fragments**
   - **Files:** `../agentic-ai/loom/src/commands/cortex-audit.ts` and

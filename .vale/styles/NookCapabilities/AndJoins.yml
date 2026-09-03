@@ -1,0 +1,8 @@
+extends: existence
+message: 'Vale exposes this long sentence with three "and" joins.'
+level: error
+scope: sentence
+ignorecase: true
+nonword: true
+tokens:
+  - '(?s)^(?=.{121,}$)(?=(?:.*?\sand\s){3}).+$'

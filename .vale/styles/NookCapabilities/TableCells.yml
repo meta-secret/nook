@@ -1,0 +1,7 @@
+extends: existence
+message: 'Vale exposes this rendered table cell.'
+level: error
+scope: table
+nonword: true
+tokens:
+  - '(?s)^.*$'

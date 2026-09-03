@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import {
   mkdtempSync,
+  readFileSync,
   realpathSync,
   rmSync,
   symlinkSync,
@@ -14,6 +15,10 @@ import {
   runValeFiles,
   ValeAlertSeverity,
 } from '../src/lib/vale-files.ts';
+import {
+  auditCortexArticleStructure,
+  CortexArticleFindingCode,
+} from '../src/lib/cortex-article-structure.ts';
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, '../../..');
 const CONFIG_PATH = path.join(REPOSITORY_ROOT, '.vale.ini');
@@ -26,6 +31,18 @@ const INVALID_FIXTURE = path.join(
   '.vale/fixtures/cortex-navigation/invalid/.cortex/article.md',
 );
 const DENSITY_CONFIG_PATH = path.join(REPOSITORY_ROOT, '.vale/density.ini');
+const CAPABILITIES_CONFIG_PATH = path.join(
+  REPOSITORY_ROOT,
+  '.vale/capabilities.ini',
+);
+const TABLE_CAPABILITIES_FIXTURE = path.join(
+  REPOSITORY_ROOT,
+  '.vale/fixtures/capabilities/tables.md',
+);
+const DENSITY_CAPABILITIES_FIXTURE = path.join(
+  REPOSITORY_ROOT,
+  '.vale/fixtures/capabilities/density.md',
+);
 const VALID_DENSITY_FIXTURE = path.join(
   REPOSITORY_ROOT,
   '.vale/fixtures/density/valid.md',
@@ -84,6 +101,7 @@ test('lints only the explicit ordered Markdown files and parses native alerts', 
       check: 'Nook.CortexNavigation',
       file: INVALID_FIXTURE,
       line: 3,
+      match: 'Relationships',
       message:
         'Inline `## Relationships` is prohibited; navigation is centralized in `.cortex/knowledge-graph.md`.',
       severity: ValeAlertSeverity.Error,
@@ -92,6 +110,7 @@ test('lints only the explicit ordered Markdown files and parses native alerts', 
       check: 'Nook.CortexNavigation',
       file: INVALID_FIXTURE,
       line: 7,
+      match: 'Document map',
       message:
         'Inline `## Document map` is prohibited; navigation is centralized in `.cortex/knowledge-graph.md`.',
       severity: ValeAlertSeverity.Error,
@@ -174,6 +193,74 @@ test('uses Vale-native character counting and cardinality for sentence length', 
       severity: ValeAlertSeverity.Error,
     },
   ]);
+});
+
+test('pins Vale 3.19 structural boundaries for residual Markdown checks', () => {
+  const tableResult = runValeFiles({
+    configPath: CAPABILITIES_CONFIG_PATH,
+    files: [TABLE_CAPABILITIES_FIXTURE],
+    repoRoot: REPOSITORY_ROOT,
+  });
+  expect(
+    tableResult.alerts.map((alert) => ({
+      check: alert.check,
+      line: alert.line,
+    })),
+  ).toEqual(
+    [3, 3, 5, 5].map((line) => ({
+      check: 'NookCapabilities.TableCells',
+      line,
+    })),
+  );
+  expect(
+    auditCortexArticleStructure({
+      documents: [
+        {
+          absolutePath: TABLE_CAPABILITIES_FIXTURE,
+          relativePath: '.cortex/vale-capability-tables.md',
+          content: readFileSync(TABLE_CAPABILITIES_FIXTURE, 'utf8'),
+        },
+      ],
+    }).map((finding) => ({ code: finding.code, line: finding.line })),
+  ).toEqual(
+    [3, 7].map((line) => ({
+      code: CortexArticleFindingCode.MarkdownTable,
+      line,
+    })),
+  );
+
+  const andJoinResult = runValeFiles({
+    configPath: CAPABILITIES_CONFIG_PATH,
+    files: [DENSITY_CAPABILITIES_FIXTURE],
+    repoRoot: REPOSITORY_ROOT,
+  });
+  expect(andJoinResult.alerts).toEqual([
+    {
+      check: 'NookCapabilities.AndJoins',
+      file: DENSITY_CAPABILITIES_FIXTURE,
+      line: 6,
+      match:
+        'This ordinary paragraph uses enough padding xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx and one and two and three.',
+      message: 'Vale exposes this long sentence with three "and" joins.',
+      severity: ValeAlertSeverity.Error,
+    },
+  ]);
+
+  const densityResult = runValeFiles({
+    configPath: DENSITY_CONFIG_PATH,
+    files: [DENSITY_CAPABILITIES_FIXTURE],
+    repoRoot: REPOSITORY_ROOT,
+  });
+  expect(densityResult.alerts).toEqual(
+    [4, 8].map((line) => ({
+      check: 'NookDensity.Semicolons',
+      file: DENSITY_CAPABILITIES_FIXTURE,
+      line,
+      match: ';',
+      message: 'Use at most one semicolon per sentence.',
+      severity: ValeAlertSeverity.Error,
+    })),
+  );
 });
 
 test('rejects empty, duplicate, and non-Markdown file lists', () => {
