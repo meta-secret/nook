@@ -52,8 +52,9 @@ All listed validators are owned by the AI team.
   - **Vale fit:** Exact native `heading.h2` existence rule with fixture-proven
     discovery, line, and cardinality.
 
-- **Complete — Vale-native semicolon density**
+- **Complete — Vale-native sentence density**
   - **Files:** `density.ini`, `styles/NookDensity/Semicolons.yml`,
+    `styles/NookDensity/SentenceLength.yml`,
     `../agentic-ai/loom/src/lib/changed-cortex-density.ts`, and
     `../agentic-ai/loom/src/commands/cortex-audit.ts`.
   - **Contract:** The explicitly enabled full audit checks every admitted
@@ -61,11 +62,13 @@ All listed validators are owned by the AI team.
     excluding documents rejected for authored HTML. Changed-density checks
     exact changed admitted files and retains alerts whose native line is added.
   - **Vale-native deltas:** Vale 3.19 owns sentence segmentation, alert line,
-    and one-alert-per-over-limit-sentence cardinality. Native `sentence` scope
-    includes ordinary and labeled blockquotes, table prose, and reader-visible
-    link text; fenced code remains parser-excluded. Alerts retain their native
-    check, file, line, message, and severity instead of becoming legacy density
-    findings.
+    Unicode character counting, and one-alert-per-over-limit-sentence
+    cardinality for both semicolon and 180-character limits. Native `sentence`
+    scope includes ordinary and labeled blockquotes, table prose, and
+    reader-visible link text. Inline-code width contributes to the native
+    sentence-length count, while fenced code remains parser-excluded. Alerts
+    retain their native check, file, line, message, and severity instead of
+    becoming legacy density findings.
 
 - **Blocked — rendered GFM tables**
   - **Files:**
@@ -118,10 +121,10 @@ All listed validators are owned by the AI team.
 - **Blocked — remaining prose sentence density**
   - **Files:** `../agentic-ai/loom/src/lib/density.ts` and
     `../agentic-ai/loom/tests/density.test.ts`.
-  - **Contract:** Independent typed findings cover more than 180 characters
-    and more than two `and` joins in a sentence over 120 characters. Findings
-    use the containing paragraph or table-cell line; fenced code, labeled
-    quoted output, and one-line link-only index cells retain exact exclusions.
+  - **Contract:** Typed findings cover more than two `and` joins in a sentence
+    over 120 characters. Findings use the containing paragraph or table-cell
+    line; fenced code, labeled quoted output, and one-line link-only index cells
+    retain exact exclusions.
   - **Vale blocker:** Vale's sentence segmentation, source positions, and
     structural exclusions differ from the current remark-GFM reconstruction.
 

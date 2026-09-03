@@ -165,15 +165,17 @@ This changed-file gate has bounded scope.
 - A Git type change into regular Cortex Markdown checks the full file.
 - Content edited during a rename remains in scope.
 - It also checks untracked Cortex Markdown.
-- Typed length and `and`-join rules check prose spans that intersect additions
-  or deletion boundaries.
-  - They reconstruct ordinary hard-wrapped lines.
-  - They check each list-item paragraph independently.
-  - They exclude labeled command or log output in blockquotes, fenced code,
+- The typed `and`-join rule checks prose spans that intersect additions or
+  deletion boundaries.
+  - It reconstructs ordinary hard-wrapped lines.
+  - It checks each list-item paragraph independently.
+  - It excludes labeled command or log output in blockquotes, fenced code,
     structural Markdown blocks, and one-line link-only index cells.
-- Vale owns semicolon density through its native sentence scope.
+- Vale owns semicolon and sentence-length density through its native sentence
+  scope.
   - It includes ordinary and labeled blockquotes, table prose, and
     reader-visible link text.
+  - Inline-code width contributes to the native sentence-length count.
   - It excludes fenced code through the Markdown parser.
   - The changed gate retains a native Vale alert only when its native line
     intersects an added range.
@@ -193,8 +195,9 @@ task loom:run CONFIG=path/to/cortex-audit-density.yaml
 The enabled full audit runs density checks only after Cortex admission. It
 checks exact persistent documents, including canonical knowledge graphs, and
 excludes documents rejected for authored HTML. Typed findings retain the
-length and `and`-join behavior above. Semicolon alerts retain Vale's native
-sentence boundary, line, check, message, severity, and cardinality.
+`and`-join behavior above. Semicolon and length alerts retain Vale's native
+sentence boundary, line, check, message, severity, cardinality, and Unicode
+character counting.
 
 It does not rewrite meaning. The agent still owns the edit.
 

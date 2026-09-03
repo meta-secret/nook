@@ -1,0 +1,6 @@
+extends: occurrence
+message: 'Keep sentences at 180 characters or fewer.'
+level: error
+scope: sentence
+token: '.'
+max: 180

@@ -34,6 +34,23 @@ const INVALID_DENSITY_FIXTURE = path.join(
   REPOSITORY_ROOT,
   '.vale/fixtures/density/invalid.md',
 );
+const VALID_LENGTH_FIXTURES = [
+  path.join(REPOSITORY_ROOT, '.vale/fixtures/density/length-valid.md'),
+  path.join(REPOSITORY_ROOT, '.vale/fixtures/density/length-inline-valid.md'),
+  path.join(REPOSITORY_ROOT, '.vale/fixtures/density/length-unicode-valid.md'),
+] as const;
+const INVALID_LENGTH_FIXTURE = path.join(
+  REPOSITORY_ROOT,
+  '.vale/fixtures/density/length-invalid.md',
+);
+const INVALID_UNICODE_LENGTH_FIXTURE = path.join(
+  REPOSITORY_ROOT,
+  '.vale/fixtures/density/length-unicode-invalid.md',
+);
+const INVALID_INLINE_LENGTH_FIXTURE = path.join(
+  REPOSITORY_ROOT,
+  '.vale/fixtures/density/length-inline-invalid.md',
+);
 const REAL_TEMP_DIRECTORY = realpathSync(tmpdir());
 const VALID_NATIVE_ALERT =
   '{"Action":{"Name":"","Params":null},"Span":[3,15],"Check":"Nook.CortexNavigation","Description":"","Link":"","Message":"Navigation is prohibited.","Severity":"error","Match":"Relationships","Line":3}';
@@ -108,6 +125,55 @@ test('uses Vale-native sentence and Markdown scopes for semicolon density', () =
       severity: ValeAlertSeverity.Error,
     })),
   );
+});
+
+test('uses Vale-native character counting and cardinality for sentence length', () => {
+  const result = runValeFiles({
+    configPath: DENSITY_CONFIG_PATH,
+    files: [
+      ...VALID_LENGTH_FIXTURES,
+      INVALID_LENGTH_FIXTURE,
+      INVALID_INLINE_LENGTH_FIXTURE,
+      INVALID_UNICODE_LENGTH_FIXTURE,
+    ],
+    repoRoot: REPOSITORY_ROOT,
+  });
+  expect(
+    result.alerts.filter((alert) =>
+      VALID_LENGTH_FIXTURES.some((file) => file === alert.file),
+    ),
+  ).toEqual([]);
+  expect(
+    result.alerts.map((alert) => ({
+      check: alert.check,
+      file: alert.file,
+      line: alert.line,
+      message: alert.message,
+      severity: alert.severity,
+    })),
+  ).toEqual([
+    {
+      check: 'NookDensity.SentenceLength',
+      file: INVALID_INLINE_LENGTH_FIXTURE,
+      line: 1,
+      message: 'Keep sentences at 180 characters or fewer.',
+      severity: ValeAlertSeverity.Error,
+    },
+    ...[3, 5, 8, 12, 13, 15].map((line) => ({
+      check: 'NookDensity.SentenceLength',
+      file: INVALID_LENGTH_FIXTURE,
+      line,
+      message: 'Keep sentences at 180 characters or fewer.',
+      severity: ValeAlertSeverity.Error,
+    })),
+    {
+      check: 'NookDensity.SentenceLength',
+      file: INVALID_UNICODE_LENGTH_FIXTURE,
+      line: 1,
+      message: 'Keep sentences at 180 characters or fewer.',
+      severity: ValeAlertSeverity.Error,
+    },
+  ]);
 });
 
 test('rejects empty, duplicate, and non-Markdown file lists', () => {
