@@ -10,6 +10,7 @@ import {
 
 export type CommandOutput = {
   readonly exitCode: number;
+  readonly signaled: boolean;
   readonly stdout: string;
   readonly stderr: string;
 };
@@ -55,6 +56,7 @@ export function runCommand(input: RunCommandArgs): CommandOutput {
   const exitCode = typeof result.status === 'number' ? result.status : 1;
   return {
     exitCode,
+    signaled: typeof result.signal === 'string',
     stdout: typeof result.stdout === 'string' ? result.stdout : '',
     stderr: typeof result.stderr === 'string' ? result.stderr : '',
   };

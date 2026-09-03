@@ -14,6 +14,7 @@ describe('run command', () => {
     });
 
     expect(result.exitCode).toBe(0);
+    expect(result.signaled).toBe(false);
     expect(result.stderr).toBe('');
     expect(result.stdout.length).toBe(LARGE_OUTPUT_BYTES);
   });
@@ -30,5 +31,16 @@ describe('run command', () => {
         outputPolicy: CommandOutputPolicy.GitHubApi,
       }),
     ).toThrow('failed to start');
+  });
+
+  test('preserves subprocess signal termination', () => {
+    const result = runCommand({
+      command: process.execPath,
+      args: ['-e', "process.kill(process.pid, 'SIGTERM')"],
+      cwd: process.cwd(),
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.signaled).toBe(true);
   });
 });
