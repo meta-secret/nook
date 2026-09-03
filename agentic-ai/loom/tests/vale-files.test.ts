@@ -25,6 +25,15 @@ const INVALID_FIXTURE = path.join(
   REPOSITORY_ROOT,
   '.vale/fixtures/cortex-navigation/invalid/.cortex/article.md',
 );
+const DENSITY_CONFIG_PATH = path.join(REPOSITORY_ROOT, '.vale/density.ini');
+const VALID_DENSITY_FIXTURE = path.join(
+  REPOSITORY_ROOT,
+  '.vale/fixtures/density/valid.md',
+);
+const INVALID_DENSITY_FIXTURE = path.join(
+  REPOSITORY_ROOT,
+  '.vale/fixtures/density/invalid.md',
+);
 const REAL_TEMP_DIRECTORY = realpathSync(tmpdir());
 const VALID_NATIVE_ALERT =
   '{"Action":{"Name":"","Params":null},"Span":[3,15],"Check":"Nook.CortexNavigation","Description":"","Link":"","Message":"Navigation is prohibited.","Severity":"error","Match":"Relationships","Line":3}';
@@ -71,6 +80,34 @@ test('lints only the explicit ordered Markdown files and parses native alerts', 
       severity: ValeAlertSeverity.Error,
     },
   ]);
+});
+
+test('uses Vale-native sentence and Markdown scopes for semicolon density', () => {
+  const result = runValeFiles({
+    configPath: DENSITY_CONFIG_PATH,
+    files: [VALID_DENSITY_FIXTURE, INVALID_DENSITY_FIXTURE],
+    repoRoot: REPOSITORY_ROOT,
+  });
+  expect(
+    result.alerts.filter((alert) => alert.file === VALID_DENSITY_FIXTURE),
+  ).toEqual([]);
+  expect(
+    result.alerts.map((alert) => ({
+      check: alert.check,
+      file: alert.file,
+      line: alert.line,
+      message: alert.message,
+      severity: alert.severity,
+    })),
+  ).toEqual(
+    [3, 5, 7, 11, 12].map((line) => ({
+      check: 'NookDensity.Semicolons',
+      file: INVALID_DENSITY_FIXTURE,
+      line,
+      message: 'Use at most one semicolon per sentence.',
+      severity: ValeAlertSeverity.Error,
+    })),
+  );
 });
 
 test('rejects empty, duplicate, and non-Markdown file lists', () => {

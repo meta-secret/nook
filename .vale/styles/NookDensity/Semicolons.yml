@@ -1,0 +1,6 @@
+extends: occurrence
+message: 'Use at most one semicolon per sentence.'
+level: error
+scope: sentence
+token: ';'
+max: 1

@@ -1,8 +1,11 @@
 import { execFileSync } from 'node:child_process';
 import type { ExecFileSyncOptionsWithStringEncoding } from 'node:child_process';
 import {
+  copyFileSync,
+  cpSync,
   mkdirSync,
   mkdtempSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   unlinkSync,
@@ -14,6 +17,21 @@ import { expect, test } from 'bun:test';
 import { lintChangedCortexDensity } from '../src/lib/changed-cortex-density.ts';
 
 const REMOVE_OPTIONS = { force: true, recursive: true } as const;
+const REPOSITORY_ROOT = path.resolve(import.meta.dir, '../../..');
+
+function installDensityValeConfiguration(repoRoot: string): void {
+  const styleRoot = path.join(repoRoot, '.vale', 'styles', 'NookDensity');
+  mkdirSync(styleRoot, { recursive: true });
+  copyFileSync(
+    path.join(REPOSITORY_ROOT, '.vale', 'density.ini'),
+    path.join(repoRoot, '.vale', 'density.ini'),
+  );
+  cpSync(
+    path.join(REPOSITORY_ROOT, '.vale', 'styles', 'NookDensity'),
+    styleRoot,
+    { recursive: true },
+  );
+}
 
 test('limits enforcement to affected prose in changed Cortex Markdown', () => {
   const fixtureArgs: CreateFixtureArgs = {
@@ -22,7 +40,7 @@ test('limits enforcement to affected prose in changed Cortex Markdown', () => {
       {
         relativePath: '.cortex/legacy.md',
         content:
-          'Legacy prose has one rule and another rule and another rule and another rule and another rule and another rule and remains dense enough to fail the writer policy when inspected.\n',
+          'Legacy prose has one rule; another rule; and another rule and another rule and another rule and remains dense enough to fail the writer policy when inspected.\n',
       },
     ],
   };
@@ -31,7 +49,7 @@ test('limits enforcement to affected prose in changed Cortex Markdown', () => {
     writeFileSync(
       path.join(fixture.repoRoot, '.cortex/legacy.md'),
       [
-        'Legacy prose has one rule and another rule and another rule and another rule and another rule and another rule and remains dense enough to fail the writer policy when inspected.',
+        'Legacy prose has one rule; another rule; and another rule and another rule and another rule and remains dense enough to fail the writer policy when inspected.',
         '',
         '- Recheck the current change.',
       ].join('\n'),
@@ -39,9 +57,17 @@ test('limits enforcement to affected prose in changed Cortex Markdown', () => {
     writeFileSync(
       path.join(fixture.repoRoot, '.cortex/changed.md'),
       [
-        '- Require the successor branch and the open pull request and the recorded',
+        '- Require the successor branch; the open pull request; and the recorded',
         '  predecessor and the frozen base SHA and the containment proof before claim.',
       ].join('\n'),
+    );
+    writeFileSync(
+      path.join(fixture.repoRoot, '.cortex/knowledge-graph.md'),
+      '# Graph; route; policy.\n',
+    );
+    writeFileSync(
+      path.join(fixture.repoRoot, '.cortex/rejected.md'),
+      '<div>Invalid; prose; ignored.</div>\n',
     );
     const reportArgs: LintFixtureArgs = {
       baseSha: fixture.baseSha,
@@ -50,12 +76,22 @@ test('limits enforcement to affected prose in changed Cortex Markdown', () => {
     const report = lintFixture(reportArgs);
     expect(report.checkedPaths).toEqual([
       '.cortex/changed.md',
+      '.cortex/knowledge-graph.md',
       '.cortex/legacy.md',
     ]);
     expect(report.findings.length).toBeGreaterThan(0);
     expect(
       report.findings.every((finding) => finding.file === '.cortex/changed.md'),
     ).toBe(true);
+    expect(
+      report.valeAlerts.map((alert) => ({
+        file: path.relative(fixture.repoRoot, alert.file),
+        line: alert.line,
+      })),
+    ).toEqual([
+      { file: '.cortex/changed.md', line: 1 },
+      { file: '.cortex/knowledge-graph.md', line: 1 },
+    ]);
   } finally {
     rmSync(fixture.repoRoot, REMOVE_OPTIONS);
   }
@@ -191,13 +227,14 @@ test('checks full destinations promoted from nonpersistent sources', () => {
 });
 
 test('checks a full regular file promoted from a symlink type change', () => {
-  const repoRoot = mkdtempSync(
-    path.join(tmpdir(), 'type-changed-cortex-density-'),
+  const repoRoot = realpathSync(
+    mkdtempSync(path.join(tmpdir(), 'type-changed-cortex-density-')),
   );
   try {
     const cortexRoot = path.join(repoRoot, '.cortex');
     const directoryOptions = { recursive: true } as const;
     mkdirSync(cortexRoot, directoryOptions);
+    installDensityValeConfiguration(repoRoot);
     writeFileSync(
       path.join(repoRoot, 'source.md'),
       '- The external source remains outside persistent Cortex.\n',
@@ -310,9 +347,10 @@ type Fixture = {
 };
 
 function createFixture(args: CreateFixtureArgs): Fixture {
-  const repoRoot = mkdtempSync(path.join(tmpdir(), args.prefix));
+  const repoRoot = realpathSync(mkdtempSync(path.join(tmpdir(), args.prefix)));
   const directoryOptions = { recursive: true } as const;
   mkdirSync(path.join(repoRoot, '.cortex'), directoryOptions);
+  installDensityValeConfiguration(repoRoot);
   for (const file of args.files) {
     const filePath = path.join(repoRoot, file.relativePath);
     mkdirSync(path.dirname(filePath), directoryOptions);

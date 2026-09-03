@@ -31,6 +31,12 @@ that translates Vale alerts back into the old typed result does not satisfy the
 gate. Cross-block, cross-document, graph, link-resolution, codec, and product
 behavior remain in their typed owners.
 
+Exact equivalence remains the default deletion gate. A validator may instead
+adopt Vale-native semantics only when the user explicitly authorizes that
+change and fixtures record every scope, source-position, segmentation, and
+cardinality delta. The native alert must remain intact; this exception does not
+permit raw parsing, alert translation, or compatibility behavior.
+
 ## Migration inventory
 
 All listed validators are owned by the AI team.
@@ -45,6 +51,21 @@ All listed validators are owned by the AI team.
     `node_modules/` are excluded.
   - **Vale fit:** Exact native `heading.h2` existence rule with fixture-proven
     discovery, line, and cardinality.
+
+- **Complete — Vale-native semicolon density**
+  - **Files:** `density.ini`, `styles/NookDensity/Semicolons.yml`,
+    `../agentic-ai/loom/src/lib/changed-cortex-density.ts`, and
+    `../agentic-ai/loom/src/commands/cortex-audit.ts`.
+  - **Contract:** The explicitly enabled full audit checks every admitted
+    persistent Cortex document, including canonical knowledge graphs and
+    excluding documents rejected for authored HTML. Changed-density checks
+    exact changed admitted files and retains alerts whose native line is added.
+  - **Vale-native deltas:** Vale 3.19 owns sentence segmentation, alert line,
+    and one-alert-per-over-limit-sentence cardinality. Native `sentence` scope
+    includes ordinary and labeled blockquotes, table prose, and reader-visible
+    link text; fenced code remains parser-excluded. Alerts retain their native
+    check, file, line, message, and severity instead of becoming legacy density
+    findings.
 
 - **Blocked — rendered GFM tables**
   - **Files:**
@@ -94,14 +115,13 @@ All listed validators are owned by the AI team.
   - **Vale blocker:** Heading occurrence cannot also prove root-node order and
     the same fallback line.
 
-- **Blocked — prose sentence density**
+- **Blocked — remaining prose sentence density**
   - **Files:** `../agentic-ai/loom/src/lib/density.ts` and
     `../agentic-ai/loom/tests/density.test.ts`.
-  - **Contract:** Independent findings cover more than 180 characters, more
-    than one semicolon, and more than two `and` joins in a sentence over 120
-    characters. Findings use the containing paragraph or table-cell line;
-    fenced code, labeled quoted output, and one-line link-only index cells have
-    exact exclusions.
+  - **Contract:** Independent typed findings cover more than 180 characters
+    and more than two `and` joins in a sentence over 120 characters. Findings
+    use the containing paragraph or table-cell line; fenced code, labeled
+    quoted output, and one-line link-only index cells retain exact exclusions.
   - **Vale blocker:** Vale's sentence segmentation, source positions, and
     structural exclusions differ from the current remark-GFM reconstruction.
 

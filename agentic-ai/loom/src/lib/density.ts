@@ -15,7 +15,6 @@ export type DensityFindingSpan = DensityFinding & {
 };
 
 const MAX_SENTENCE_CHARS = 180;
-const MAX_SEMICOLONS = 1;
 const MAX_AND_JOINS = 2;
 
 export type LintProseDensityArgs = {
@@ -146,14 +145,6 @@ function addSentenceFindings(args: AddSentenceFindingsArgs): void {
       reason: `sentence longer than ${MAX_SENTENCE_CHARS} characters`,
     };
     args.findings.push(lengthFinding);
-  }
-  const [semicolons = 0] = [args.sentence.match(/;/gu)?.length];
-  if (semicolons > MAX_SEMICOLONS) {
-    const semicolonFinding: DensityFindingSpan = {
-      ...findingBase,
-      reason: 'too many semicolons in one sentence',
-    };
-    args.findings.push(semicolonFinding);
   }
   const [andJoins = 0] = [args.sentence.match(/\sand\s/giu)?.length];
   if (andJoins > MAX_AND_JOINS && args.sentence.length > 120) {
