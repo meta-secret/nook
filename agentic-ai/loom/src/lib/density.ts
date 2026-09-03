@@ -14,7 +14,6 @@ export type DensityFindingSpan = DensityFinding & {
   readonly endLine: number;
 };
 
-const MAX_SENTENCE_CHARS = 180;
 const MAX_AND_JOINS = 2;
 
 export type LintProseDensityArgs = {
@@ -139,13 +138,6 @@ function addSentenceFindings(args: AddSentenceFindingsArgs): void {
     endLine,
     excerpt: args.sentence.slice(0, 120),
   };
-  if (args.sentence.length > MAX_SENTENCE_CHARS) {
-    const lengthFinding: DensityFindingSpan = {
-      ...findingBase,
-      reason: `sentence longer than ${MAX_SENTENCE_CHARS} characters`,
-    };
-    args.findings.push(lengthFinding);
-  }
   const [andJoins = 0] = [args.sentence.match(/\sand\s/giu)?.length];
   if (andJoins > MAX_AND_JOINS && args.sentence.length > 120) {
     const joinsFinding: DensityFindingSpan = {

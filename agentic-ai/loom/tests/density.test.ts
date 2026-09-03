@@ -12,6 +12,14 @@ describe('lintProseDensity', () => {
     expect(lintProseDensity(lintArgs)).toEqual([]);
   });
 
+  test('leaves sentence length to Vale', () => {
+    const lintArgs: LintProseDensityArgs = {
+      filePath: 'length.md',
+      content: `${'x'.repeat(220)}.`,
+    };
+    expect(lintProseDensity(lintArgs)).toEqual([]);
+  });
+
   test('flags dense sentences', () => {
     const long =
       'This sentence keeps adding clauses and constraints and failure modes and commands until it becomes too dense for a single pass reader who also needs to remember actors and extras.';
