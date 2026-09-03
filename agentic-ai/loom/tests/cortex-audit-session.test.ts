@@ -24,6 +24,7 @@ import type { CortexAuditReport } from '../src/commands/cortex-audit.ts';
 import { CortexStructureFindingCode } from '../../../.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/src/cortex-document-structure.ts';
 import { CortexContractFindingCode } from '../src/lib/cortex-contracts.ts';
 import { CortexArticleFindingCode } from '../src/lib/cortex-article-structure.ts';
+import { GitHubAlertDensityReason } from '../src/lib/github-alert-density.ts';
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, '../../..');
 
@@ -259,6 +260,58 @@ test('fails the integrated Cortex audit for rendered Markdown tables', async () 
   }
 });
 
+test('uses the typed density owner only for GitHub alert bodies', async () => {
+  const repoRoot = realpathSync(
+    mkdtempSync(path.join(tmpdir(), 'cortex-alert-density-')),
+  );
+  try {
+    installValeConfiguration(repoRoot);
+    const cortexRoot = path.join(repoRoot, '.cortex');
+    mkdirSync(cortexRoot, { recursive: true });
+    writeFileSync(
+      path.join(cortexRoot, 'AGENTS.md'),
+      [
+        '# Agent Map',
+        '',
+        '> [!NOTE]',
+        '> Require the successor branch and the open pull request and the',
+        '> predecessor metadata and the frozen base SHA and the containment proof',
+        '> before claim.',
+      ].join('\n'),
+    );
+    writeFileSync(
+      path.join(cortexRoot, 'knowledge-graph.md'),
+      '# Knowledge Graph\n',
+    );
+    const report = await runCortexAuditFromDirectory({
+      request: { includeDensityLint: true },
+      startDirectory: repoRoot,
+    });
+    expect(
+      report.densityCalloutFindings.map(({ endLine, file, line, reason }) => ({
+        endLine,
+        file,
+        line,
+        reason,
+      })),
+    ).toEqual([
+      {
+        endLine: 6,
+        file: '.cortex/AGENTS.md',
+        line: 4,
+        reason: GitHubAlertDensityReason.AndJoins,
+      },
+    ]);
+    expect(
+      report.densityValeAlerts.some((alert) =>
+        alert.file.endsWith('/.cortex/AGENTS.md'),
+      ),
+    ).toBe(false);
+  } finally {
+    rmSync(repoRoot, { recursive: true, force: true });
+  }
+});
+
 test('fails the integrated Cortex audit for authored HTML', async () => {
   const repoRoot = realpathSync(
     mkdtempSync(path.join(tmpdir(), 'cortex-html-audit-')),
@@ -341,11 +394,6 @@ Fourth paragraph.
       ),
     ).toBe(false);
     expect(
-      report.densityFindings.some(
-        (finding) => finding.file === '.cortex/AGENTS.md',
-      ),
-    ).toBe(false);
-    expect(
       report.densityValeAlerts.some((alert) =>
         alert.file.endsWith('/.cortex/AGENTS.md'),
       ),
@@ -400,8 +448,8 @@ test('admits session Markdown only through the global HTML syntax gate', async (
       ),
     ).toBe(false);
     expect(
-      ordinaryReport.densityFindings.some((finding) =>
-        finding.file.includes('.session'),
+      ordinaryReport.densityValeAlerts.some((alert) =>
+        alert.file.includes('.session'),
       ),
     ).toBe(false);
 
@@ -525,7 +573,7 @@ ${gizmoIndexRows}
       missingFromIndex: [],
       orphanIndexRows: [],
       prohibitedHarnessSkillPaths: [],
-      densityFindings: [],
+      densityCalloutFindings: [],
       densityValeAlerts: [],
       structureFindings: [
         {

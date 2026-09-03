@@ -165,21 +165,25 @@ This changed-file gate has bounded scope.
 - A Git type change into regular Cortex Markdown checks the full file.
 - Content edited during a rename remains in scope.
 - It also checks untracked Cortex Markdown.
-- The typed `and`-join rule checks prose spans that intersect additions or
-  deletion boundaries.
-  - It reconstructs ordinary hard-wrapped lines.
-  - It checks each list-item paragraph independently.
-  - It excludes labeled command or log output in blockquotes, fenced code,
-    structural Markdown blocks, and one-line link-only index cells.
-- Vale owns semicolon and sentence-length density through its native sentence
-  scope.
-  - It includes ordinary and labeled blockquotes, table prose, and
+- Vale owns semicolon, sentence-length, and `and`-join density for ordinary
+  prose through its native sentence scope.
+  - The `and`-join rule reports one alert when a native sentence exceeds 120
+    characters and contains more than two case-insensitive `and` joins.
+  - Native scope includes ordinary blockquotes, textually labeled blockquotes
+    such as `Command output:`, table prose, one-line link-only cells, and
     reader-visible link text.
-  - Inline-code width contributes to the native sentence-length count.
-  - It excludes fenced code through the Markdown parser.
-  - The changed gate retains a native Vale alert only when its native line
-    intersects an added range.
-- Neither rule family audits unchanged legacy prose.
+  - Inline-code width contributes to native character counts, but an `and`
+    token inside inline code is hidden from the join matcher.
+  - Fenced code remains parser-excluded.
+- A minimal typed Remark check owns only GitHub alert bodies introduced by
+  labels such as `[!NOTE]`, which Vale 3.19 does not expose to sentence rules.
+  - It enforces the same semicolon, sentence-length, and `and`-join limits.
+  - It counts Unicode code points and preserves inline-code width while hiding
+    inline-code punctuation and join tokens from density matching.
+  - It retains the containing alert-body paragraph span.
+- The changed gate retains a native Vale alert or typed GitHub-alert finding
+  when its native or typed line span intersects an added range.
+- The changed gate does not audit unchanged legacy prose.
 
 Use Loom configuration for an explicit full-corpus density pass:
 
@@ -194,10 +198,10 @@ task loom:run CONFIG=path/to/cortex-audit-density.yaml
 
 The enabled full audit runs density checks only after Cortex admission. It
 checks exact persistent documents, including canonical knowledge graphs, and
-excludes documents rejected for authored HTML. Typed findings retain the
-`and`-join behavior above. Semicolon and length alerts retain Vale's native
-sentence boundary, line, check, message, severity, cardinality, and Unicode
-character counting.
+excludes documents rejected for authored HTML. Ordinary-prose density alerts
+retain Vale's native sentence boundary, line span, check, message, severity,
+cardinality, and Unicode character counting. GitHub alert bodies retain their
+typed Remark paragraph spans and rule-specific messages.
 
 It does not rewrite meaning. The agent still owns the edit.
 

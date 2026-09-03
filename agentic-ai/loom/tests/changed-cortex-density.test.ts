@@ -15,6 +15,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { expect, test } from 'bun:test';
 import { lintChangedCortexDensity } from '../src/lib/changed-cortex-density.ts';
+import { GitHubAlertDensityReason } from '../src/lib/github-alert-density.ts';
 
 const REMOVE_OPTIONS = { force: true, recursive: true } as const;
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, '../../..');
@@ -79,18 +80,23 @@ test('limits enforcement to affected prose in changed Cortex Markdown', () => {
       '.cortex/knowledge-graph.md',
       '.cortex/legacy.md',
     ]);
-    expect(report.findings.length).toBeGreaterThan(0);
-    expect(
-      report.findings.every((finding) => finding.file === '.cortex/changed.md'),
-    ).toBe(true);
     expect(
       report.valeAlerts.map((alert) => ({
+        check: alert.check,
         file: path.relative(fixture.repoRoot, alert.file),
         line: alert.line,
       })),
     ).toEqual([
-      { file: '.cortex/changed.md', line: 1 },
-      { file: '.cortex/knowledge-graph.md', line: 1 },
+      {
+        check: 'NookDensity.Semicolons',
+        file: '.cortex/changed.md',
+        line: 1,
+      },
+      {
+        check: 'NookDensity.Semicolons',
+        file: '.cortex/knowledge-graph.md',
+        line: 1,
+      },
     ]);
   } finally {
     rmSync(fixture.repoRoot, REMOVE_OPTIONS);
@@ -125,8 +131,113 @@ test('checks a paragraph merged by a deletion-only hunk', () => {
       repoRoot: fixture.repoRoot,
     };
     const report = lintFixture(reportArgs);
-    expect(report.findings.length).toBeGreaterThan(0);
-    expect(report.findings[0]?.file).toBe('.cortex/merged.md');
+    expect(
+      report.valeAlerts.map((alert) => ({
+        check: alert.check,
+        file: path.relative(fixture.repoRoot, alert.file),
+        line: alert.line,
+      })),
+    ).toEqual([
+      {
+        check: 'NookDensity.AndJoins',
+        file: '.cortex/merged.md',
+        line: 1,
+      },
+      {
+        check: 'NookDensity.SentenceLength',
+        file: '.cortex/merged.md',
+        line: 1,
+      },
+    ]);
+  } finally {
+    rmSync(fixture.repoRoot, REMOVE_OPTIONS);
+  }
+});
+
+test('keeps a native alert when a later hard-wrapped line changes', () => {
+  const fixture = createFixture({
+    prefix: 'wrapped-native-density-',
+    files: [
+      {
+        relativePath: '.cortex/wrapped.md',
+        content: [
+          'The workflow requires the successor branch and the open pull request and the predecessor metadata',
+          'before claim.',
+        ].join('\n'),
+      },
+    ],
+  });
+  try {
+    writeFileSync(
+      path.join(fixture.repoRoot, '.cortex/wrapped.md'),
+      [
+        'The workflow requires the successor branch and the open pull request and the predecessor metadata',
+        'and the frozen base SHA and the containment proof before claim.',
+      ].join('\n'),
+    );
+    const report = lintFixture({
+      baseSha: fixture.baseSha,
+      repoRoot: fixture.repoRoot,
+    });
+    expect(
+      report.valeAlerts.map(({ check, endLine, line }) => ({
+        check,
+        endLine,
+        line,
+      })),
+    ).toContainEqual({
+      check: 'NookDensity.AndJoins',
+      endLine: 2,
+      line: 1,
+    });
+  } finally {
+    rmSync(fixture.repoRoot, REMOVE_OPTIONS);
+  }
+});
+
+test('checks a changed later line in a GitHub alert body span', () => {
+  const fixture = createFixture({
+    prefix: 'wrapped-alert-density-',
+    files: [
+      {
+        relativePath: '.cortex/callout.md',
+        content: [
+          '> [!NOTE]',
+          '> Require the successor branch and the open pull request and the',
+          '> predecessor metadata and the frozen base SHA before claim.',
+        ].join('\n'),
+      },
+    ],
+  });
+  try {
+    writeFileSync(
+      path.join(fixture.repoRoot, '.cortex/callout.md'),
+      [
+        '> [!NOTE]',
+        '> Require the successor branch and the open pull request and the',
+        '> predecessor metadata and the frozen base SHA and the containment proof before claim.',
+      ].join('\n'),
+    );
+    const report = lintFixture({
+      baseSha: fixture.baseSha,
+      repoRoot: fixture.repoRoot,
+    });
+    expect(
+      report.calloutFindings.map(({ endLine, file, line, reason }) => ({
+        endLine,
+        file,
+        line,
+        reason,
+      })),
+    ).toEqual([
+      {
+        endLine: 3,
+        file: '.cortex/callout.md',
+        line: 2,
+        reason: GitHubAlertDensityReason.AndJoins,
+      },
+    ]);
+    expect(report.valeAlerts).toEqual([]);
   } finally {
     rmSync(fixture.repoRoot, REMOVE_OPTIONS);
   }
@@ -156,7 +267,7 @@ test('preserves rename ancestry and checks edits made during a rename', () => {
     };
     const pureRename = lintFixture(reportArgs);
     expect(pureRename.checkedPaths).toEqual(['.cortex/renamed.md']);
-    expect(pureRename.findings).toEqual([]);
+    expect(pureRename.valeAlerts).toEqual([]);
 
     writeFileSync(
       path.join(fixture.repoRoot, '.cortex/renamed.md'),
@@ -167,10 +278,10 @@ test('preserves rename ancestry and checks edits made during a rename', () => {
       ].join('\n'),
     );
     const editedRename = lintFixture(reportArgs);
-    expect(editedRename.findings.length).toBeGreaterThan(0);
-    expect(editedRename.findings.every((finding) => finding.line === 3)).toBe(
-      true,
-    );
+    expect(editedRename.valeAlerts).toHaveLength(1);
+    const editedAlert = editedRename.valeAlerts[0];
+    if (!editedAlert) throw new Error('expected edited rename density alert');
+    expect(editedAlert.line).toBe(3);
   } finally {
     rmSync(fixture.repoRoot, REMOVE_OPTIONS);
   }
@@ -217,10 +328,11 @@ test('checks full destinations promoted from nonpersistent sources', () => {
       '.cortex/external.md',
       '.cortex/session-promoted.md',
     ]);
-    expect(report.findings.map((finding) => finding.file).sort()).toEqual([
-      '.cortex/external.md',
-      '.cortex/session-promoted.md',
-    ]);
+    expect(
+      report.valeAlerts
+        .map((alert) => path.relative(fixture.repoRoot, alert.file))
+        .sort(),
+    ).toEqual(['.cortex/external.md', '.cortex/session-promoted.md']);
   } finally {
     rmSync(fixture.repoRoot, REMOVE_OPTIONS);
   }
@@ -257,12 +369,12 @@ test('checks a full regular file promoted from a symlink type change', () => {
     const reportArgs: LintFixtureArgs = { baseSha, repoRoot };
     const report = lintFixture(reportArgs);
     expect(report.checkedPaths).toEqual(['.cortex/promoted.md']);
-    expect(report.findings.length).toBeGreaterThan(0);
-    expect(
-      report.findings.every(
-        (finding) => finding.file === '.cortex/promoted.md',
-      ),
-    ).toBe(true);
+    expect(report.valeAlerts).toHaveLength(1);
+    const promotedAlert = report.valeAlerts[0];
+    if (!promotedAlert) throw new Error('expected promoted density alert');
+    expect(path.relative(repoRoot, promotedAlert.file)).toBe(
+      '.cortex/promoted.md',
+    );
   } finally {
     rmSync(repoRoot, REMOVE_OPTIONS);
   }
@@ -322,10 +434,12 @@ test('compares a stale feature branch from its merge base with main', () => {
     };
     const report = lintFixture(reportArgs);
     expect(report.checkedPaths).toEqual(['.cortex/feature.md']);
-    expect(report.findings.length).toBeGreaterThan(0);
-    expect(
-      report.findings.every((finding) => finding.file === '.cortex/feature.md'),
-    ).toBe(true);
+    expect(report.valeAlerts).toHaveLength(1);
+    const featureAlert = report.valeAlerts[0];
+    if (!featureAlert) throw new Error('expected feature density alert');
+    expect(path.relative(fixture.repoRoot, featureAlert.file)).toBe(
+      '.cortex/feature.md',
+    );
   } finally {
     rmSync(fixture.repoRoot, REMOVE_OPTIONS);
   }

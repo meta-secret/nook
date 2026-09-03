@@ -37,6 +37,7 @@ enum ValeActionField {
 
 export type ValeNativeAlert = {
   readonly check: string;
+  readonly endLine: number;
   readonly file: string;
   readonly line: number;
   readonly message: string;
@@ -283,12 +284,19 @@ function parseAlert(args: ParseAlertArgs): ValeNativeAlert {
   if (
     typeof Description !== 'string' ||
     typeof Link !== 'string' ||
-    typeof Match !== 'string'
+    typeof Match !== 'string' ||
+    Match.length === 0
   ) {
     fail(`Vale exact-file lint alert text fields are invalid: ${args.file}`);
   }
+  const matchNewlines = Match.match(/\n/gu);
+  const endLine = Number(Line) + (matchNewlines ? matchNewlines.length : 0);
+  if (!Number.isSafeInteger(endLine)) {
+    fail(`Vale exact-file lint alert Match span is invalid: ${args.file}`);
+  }
   return {
     check: Check,
+    endLine,
     file: args.file,
     line: Number(Line),
     message: Message,

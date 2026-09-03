@@ -1,0 +1,8 @@
+extends: existence
+message: 'Use at most two "and" joins in sentences over 120 characters.'
+level: error
+scope: sentence
+ignorecase: true
+nonword: true
+tokens:
+  - '(?s)^(?=.{121,}$)(?=(?:.*?\sand\s){3}).+$'

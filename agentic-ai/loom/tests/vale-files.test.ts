@@ -51,6 +51,14 @@ const INVALID_INLINE_LENGTH_FIXTURE = path.join(
   REPOSITORY_ROOT,
   '.vale/fixtures/density/length-inline-invalid.md',
 );
+const VALID_AND_JOINS_FIXTURE = path.join(
+  REPOSITORY_ROOT,
+  '.vale/fixtures/density/and-valid.md',
+);
+const INVALID_AND_JOINS_FIXTURE = path.join(
+  REPOSITORY_ROOT,
+  '.vale/fixtures/density/and-invalid.md',
+);
 const REAL_TEMP_DIRECTORY = realpathSync(tmpdir());
 const VALID_NATIVE_ALERT =
   '{"Action":{"Name":"","Params":null},"Span":[3,15],"Check":"Nook.CortexNavigation","Description":"","Link":"","Message":"Navigation is prohibited.","Severity":"error","Match":"Relationships","Line":3}';
@@ -64,6 +72,21 @@ function valeReportJson(args: ValeReportJsonArgs): string {
   const [file = INVALID_FIXTURE] = [args.file];
   return `{${JSON.stringify(file)}:[${args.alert}]}`;
 }
+
+test('derives the native sentence line span from Match', () => {
+  const multilineAlert = VALID_NATIVE_ALERT.replace(
+    '"Match":"Relationships"',
+    '"Match":"Relation\\nships"',
+  );
+  const result = parseValeFilesOutput({
+    files: [INVALID_FIXTURE],
+    stdout: valeReportJson({ alert: multilineAlert }),
+  });
+  const alert = result.alerts[0];
+  if (!alert) throw new Error('expected parsed native alert');
+  expect(alert.line).toBe(3);
+  expect(alert.endLine).toBe(4);
+});
 
 test('lints only the explicit ordered Markdown files and parses native alerts', () => {
   expect(
@@ -82,6 +105,7 @@ test('lints only the explicit ordered Markdown files and parses native alerts', 
   expect(result.alerts).toEqual([
     {
       check: 'Nook.CortexNavigation',
+      endLine: 3,
       file: INVALID_FIXTURE,
       line: 3,
       message:
@@ -90,6 +114,7 @@ test('lints only the explicit ordered Markdown files and parses native alerts', 
     },
     {
       check: 'Nook.CortexNavigation',
+      endLine: 7,
       file: INVALID_FIXTURE,
       line: 7,
       message:
@@ -174,6 +199,34 @@ test('uses Vale-native character counting and cardinality for sentence length', 
       severity: ValeAlertSeverity.Error,
     },
   ]);
+});
+
+test('uses Vale-native sentence and Markdown scopes for and-join density', () => {
+  const result = runValeFiles({
+    configPath: DENSITY_CONFIG_PATH,
+    files: [VALID_AND_JOINS_FIXTURE, INVALID_AND_JOINS_FIXTURE],
+    repoRoot: REPOSITORY_ROOT,
+  });
+  expect(
+    result.alerts.filter((alert) => alert.file === VALID_AND_JOINS_FIXTURE),
+  ).toEqual([]);
+  expect(
+    result.alerts.map((alert) => ({
+      check: alert.check,
+      file: alert.file,
+      line: alert.line,
+      message: alert.message,
+      severity: alert.severity,
+    })),
+  ).toEqual(
+    [3, 5, 7, 9, 12, 14, 18, 19, 21, 23, 25].map((line) => ({
+      check: 'NookDensity.AndJoins',
+      file: INVALID_AND_JOINS_FIXTURE,
+      line,
+      message: 'Use at most two "and" joins in sentences over 120 characters.',
+      severity: ValeAlertSeverity.Error,
+    })),
+  );
 });
 
 test('rejects empty, duplicate, and non-Markdown file lists', () => {
@@ -287,6 +340,18 @@ test('fails closed on invalid JSON and native alert schema', () => {
     }),
     valeReportJson({
       alert: VALID_NATIVE_ALERT.replace('"Span":[3,15]', '"Span":[3]'),
+    }),
+    valeReportJson({
+      alert: VALID_NATIVE_ALERT.replace(
+        '"Match":"Relationships"',
+        '"Match":""',
+      ),
+    }),
+    valeReportJson({
+      alert: VALID_NATIVE_ALERT.replace(
+        '"Match":"Relationships","Line":3',
+        '"Match":"Relation\\nships","Line":9007199254740991',
+      ),
     }),
     valeReportJson({
       alert: VALID_NATIVE_ALERT.replace(',"Link":""', ''),

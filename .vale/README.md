@@ -55,6 +55,8 @@ All listed validators are owned by the AI team.
 - **Complete — Vale-native sentence density**
   - **Files:** `density.ini`, `styles/NookDensity/Semicolons.yml`,
     `styles/NookDensity/SentenceLength.yml`,
+    `styles/NookDensity/AndJoins.yml`,
+    `../agentic-ai/loom/src/lib/github-alert-density.ts`,
     `../agentic-ai/loom/src/lib/changed-cortex-density.ts`, and
     `../agentic-ai/loom/src/commands/cortex-audit.ts`.
   - **Contract:** The explicitly enabled full audit checks every admitted
@@ -62,13 +64,24 @@ All listed validators are owned by the AI team.
     excluding documents rejected for authored HTML. Changed-density checks
     exact changed admitted files and retains alerts whose native line is added.
   - **Vale-native deltas:** Vale 3.19 owns sentence segmentation, alert line,
-    Unicode character counting, and one-alert-per-over-limit-sentence
-    cardinality for both semicolon and 180-character limits. Native `sentence`
-    scope includes ordinary and labeled blockquotes, table prose, and
-    reader-visible link text. Inline-code width contributes to the native
-    sentence-length count, while fenced code remains parser-excluded. Alerts
-    retain their native check, file, line, message, and severity instead of
-    becoming legacy density findings.
+    Unicode character counting, and one-alert-per-failing-sentence cardinality
+    for semicolon, 180-character, and long `and`-join limits. The join rule
+    alerts when a native sentence exceeds 120 characters and contains more
+    than two case-insensitive whitespace-delimited `and` joins. Native
+    `sentence` scope includes ordinary blockquotes, textually labeled quoted
+    output, table prose, one-line link-only cells, and reader-visible link
+    text. Inline-code width contributes to character counts, but an `and` token
+    inside inline code is hidden from the join matcher. Fenced code remains
+    parser-excluded. Changed-density retains an alert when its native sentence
+    line span intersects an added range. Alerts retain their native check,
+    file, line, message, and severity instead of becoming legacy density
+    findings.
+  - **Typed parser boundary:** Vale 3.19 structurally excludes GitHub alert
+    bodies introduced by labels such as `[!NOTE]`. A minimal Remark owner
+    checks only those bodies for the three density limits and retains each
+    containing paragraph span for changed-line filtering. It counts Unicode
+    code points and preserves inline-code width while hiding inline-code rule
+    tokens. It does not inspect ordinary prose or translate Vale alerts.
 
 - **Blocked — rendered GFM tables**
   - **Files:**
@@ -117,16 +130,6 @@ All listed validators are owned by the AI team.
     exactly one H1 as the first root node, reported at the first H1 or line 1.
   - **Vale blocker:** Heading occurrence cannot also prove root-node order and
     the same fallback line.
-
-- **Blocked — remaining prose sentence density**
-  - **Files:** `../agentic-ai/loom/src/lib/density.ts` and
-    `../agentic-ai/loom/tests/density.test.ts`.
-  - **Contract:** Typed findings cover more than two `and` joins in a sentence
-    over 120 characters. Findings use the containing paragraph or table-cell
-    line; fenced code, labeled quoted output, and one-line link-only index cells
-    retain exact exclusions.
-  - **Vale blocker:** Vale's sentence segmentation, source positions, and
-    structural exclusions differ from the current remark-GFM reconstruction.
 
 - **Blocked — executable-skill frontmatter**
   - **Files:** `../agentic-ai/loom/src/executable-skills/repository.ts` and

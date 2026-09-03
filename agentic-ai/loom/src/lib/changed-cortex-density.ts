@@ -5,13 +5,12 @@ import {
   loomFailureDetail,
   type LoomFailureDetailArgs,
 } from '../loom-failure.ts';
-import {
-  lintProseDensitySpans,
-  type DensityFinding,
-  type DensityFindingSpan,
-} from './density.ts';
 import { runCommand, type RunCommandArgs } from './run.ts';
 import { runValeFiles, type ValeNativeAlert } from './vale-files.ts';
+import {
+  lintGitHubAlertDensity,
+  type GitHubAlertDensityFinding,
+} from './github-alert-density.ts';
 import {
   auditCortexMarkdownSyntax,
   CortexStructureFindingCode,
@@ -19,8 +18,8 @@ import {
 } from '../../../../.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/src/cortex-document-structure.ts';
 
 export type ChangedCortexDensityReport = {
+  readonly calloutFindings: readonly GitHubAlertDensityFinding[];
   readonly checkedPaths: readonly string[];
-  readonly findings: readonly DensityFinding[];
   readonly valeAlerts: readonly ValeNativeAlert[];
 };
 
@@ -86,12 +85,7 @@ export function lintChangedCortexDensity(
   );
   const checkedPaths = documents.map((document) => document.relativePath);
   const addedLinesByPath = new Map<string, readonly ChangedLineRange[]>();
-  const findings = checkedPaths.flatMap((relativePath) => {
-    const lintArgs = {
-      filePath: relativePath,
-      content: readFileSync(path.join(args.repoRoot, relativePath), 'utf8'),
-    };
-    const spans = lintProseDensitySpans(lintArgs);
+  for (const relativePath of checkedPaths) {
     const trackedChange = trackedByCurrentPath.get(relativePath);
     const [defaulted1 = relativePath] = [trackedChange?.previousPath];
     const rangeArgs: ChangedLineRangesArgs = {
@@ -105,16 +99,22 @@ export function lintChangedCortexDensity(
         ? [ALL_LINES]
         : changedLineRanges(rangeArgs);
     addedLinesByPath.set(relativePath, addedLines);
-    return spans
-      .filter((finding) => {
-        const intersectionArgs: IntersectsAddedLinesArgs = {
-          finding,
-          ranges: addedLines,
-        };
-        return intersectsAddedLines(intersectionArgs);
-      })
-      .map(withoutSpan);
-  });
+  }
+  const calloutFindings = documents.flatMap((document) =>
+    lintGitHubAlertDensity({
+      content: document.content,
+      filePath: document.relativePath,
+    }).filter((finding) =>
+      intersectsAddedLines({
+        endLine: finding.endLine,
+        line: finding.line,
+        ranges: requiredAddedLineRanges({
+          addedLinesByPath,
+          relativePath: document.relativePath,
+        }),
+      }),
+    ),
+  );
   const valeAlerts =
     documents.length === 0
       ? []
@@ -124,13 +124,16 @@ export function lintChangedCortexDensity(
           repoRoot: args.repoRoot,
         }).alerts.filter((alert) => {
           const relativePath = path.relative(args.repoRoot, alert.file);
-          return addedLinesByPath
-            .get(relativePath)
-            ?.some(
-              (range) => alert.line >= range.start && alert.line <= range.end,
-            );
+          return intersectsAddedLines({
+            endLine: alert.endLine,
+            line: alert.line,
+            ranges: requiredAddedLineRanges({
+              addedLinesByPath,
+              relativePath,
+            }),
+          });
         });
-  return { checkedPaths, findings, valeAlerts };
+  return { calloutFindings, checkedPaths, valeAlerts };
 }
 
 type GitOutputArgs = {
@@ -211,6 +214,33 @@ type ChangedLineRange = {
   readonly end: number;
   readonly start: number;
 };
+
+type IntersectsAddedLinesArgs = {
+  readonly endLine: number;
+  readonly line: number;
+  readonly ranges: readonly ChangedLineRange[];
+};
+
+function intersectsAddedLines(args: IntersectsAddedLinesArgs): boolean {
+  return args.ranges.some(
+    (range) => args.line <= range.end && args.endLine >= range.start,
+  );
+}
+
+type RequiredAddedLineRangesArgs = {
+  readonly addedLinesByPath: ReadonlyMap<string, readonly ChangedLineRange[]>;
+  readonly relativePath: string;
+};
+
+function requiredAddedLineRanges(
+  args: RequiredAddedLineRangesArgs,
+): readonly ChangedLineRange[] {
+  const ranges = args.addedLinesByPath.get(args.relativePath);
+  if (ranges) return ranges;
+  return failChangedCortexGit(
+    `missing changed-line ranges for ${args.relativePath}`,
+  );
+}
 
 const ALL_LINES: ChangedLineRange = {
   start: 1,
@@ -306,23 +336,6 @@ function failChangedCortexGit(message: string): never {
     text: `Unable to select changed Cortex Markdown: ${message}`,
   };
   return loomFailureDetail(failureArgs);
-}
-
-type IntersectsAddedLinesArgs = {
-  readonly finding: DensityFindingSpan;
-  readonly ranges: readonly ChangedLineRange[];
-};
-
-function intersectsAddedLines(args: IntersectsAddedLinesArgs): boolean {
-  return args.ranges.some(
-    (range) =>
-      args.finding.line <= range.end && args.finding.endLine >= range.start,
-  );
-}
-
-function withoutSpan(findingSpan: DensityFindingSpan): DensityFinding {
-  const { endLine: _endLine, ...finding } = findingSpan;
-  return finding;
 }
 
 function isPersistentCortexMarkdownPath(relativePath: string): boolean {

@@ -3,19 +3,21 @@ import { execFileSync } from 'node:child_process';
 import type { ExecFileSyncOptionsWithStringEncoding } from 'node:child_process';
 import path from 'node:path';
 import type { CortexAuditRequest } from '../codec/args/cortex-audit.ts';
-import { lintProseDensity, type DensityFinding } from '../lib/density.ts';
 import { findBrokenRelativeLinks, type BrokenLink } from '../lib/links.ts';
 import { findRepoRoot } from '../lib/repo.ts';
 import { listCortexMarkdownFiles } from '../lib/cortex-markdown-files.ts';
 import { runCortexVale } from '../lib/cortex-vale.ts';
 import { runValeFiles, type ValeNativeAlert } from '../lib/vale-files.ts';
 import {
+  lintGitHubAlertDensity,
+  type GitHubAlertDensityFinding,
+} from '../lib/github-alert-density.ts';
+import {
   LoomFailureCode,
   loomFailure,
   loomFailureDetail,
 } from '../loom-failure.ts';
 
-import type { LintProseDensityArgs } from '../lib/density.ts';
 import type { FindBrokenRelativeLinksArgs } from '../lib/links.ts';
 import type { LoomFailureDetailArgs } from '../loom-failure.ts';
 import {
@@ -53,7 +55,7 @@ export type CortexAuditReport = {
   readonly missingFromIndex: string[];
   readonly orphanIndexRows: string[];
   readonly prohibitedHarnessSkillPaths: string[];
-  readonly densityFindings: DensityFinding[];
+  readonly densityCalloutFindings: readonly GitHubAlertDensityFinding[];
   readonly densityValeAlerts: readonly ValeNativeAlert[];
   readonly structureFindings: CortexStructureFinding[];
   readonly articleStructureFindings: CortexArticleFinding[];
@@ -105,7 +107,7 @@ export async function runCortexAuditFromDirectory(
   const allMarkdownFiles = listCortexMarkdownFiles(cortexRoot);
   runCortexVale({ cortexRoot, repoRoot });
   const brokenLinks: BrokenLink[] = [];
-  const densityFindings: DensityFinding[] = [];
+  let densityCalloutFindings: readonly GitHubAlertDensityFinding[] = [];
   let densityValeAlerts: readonly ValeNativeAlert[] = [];
   const syntaxDocuments = allMarkdownFiles.map((filePath) => {
     const documentSource: CortexDocumentSource = {
@@ -173,6 +175,12 @@ export async function runCortexAuditFromDirectory(
       files: documents.map((document) => document.absolutePath),
       repoRoot,
     }).alerts;
+    densityCalloutFindings = documents.flatMap((document) =>
+      lintGitHubAlertDensity({
+        content: document.content,
+        filePath: document.relativePath,
+      }),
+    );
   }
 
   for (const documentSource of documents) {
@@ -183,13 +191,6 @@ export async function runCortexAuditFromDirectory(
       repoRoot,
     };
     brokenLinks.push(...findBrokenRelativeLinks(findBrokenRelativeLinksArgs));
-    if (args.request.includeDensityLint) {
-      const lintProseDensityArgs: LintProseDensityArgs = {
-        filePath: path.relative(repoRoot, filePath),
-        content: documentSource.content,
-      };
-      densityFindings.push(...lintProseDensity(lintProseDensityArgs));
-    }
   }
 
   const articleStructureAuditArgs: AuditCortexArticleStructureArgs = {
@@ -285,7 +286,7 @@ export async function runCortexAuditFromDirectory(
     missingFromIndex,
     orphanIndexRows,
     prohibitedHarnessSkillPaths,
-    densityFindings,
+    densityCalloutFindings,
     densityValeAlerts,
     structureFindings,
     articleStructureFindings,
@@ -297,7 +298,7 @@ export async function runCortexAuditFromDirectory(
       missingFromIndex.length === 0 &&
       orphanIndexRows.length === 0 &&
       prohibitedHarnessSkillPaths.length === 0 &&
-      densityFindings.length === 0 &&
+      densityCalloutFindings.length === 0 &&
       densityValeAlerts.length === 0 &&
       structureFindings.length === 0 &&
       articleStructureFindings.length === 0 &&
