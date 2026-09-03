@@ -39,6 +39,7 @@ export type ValeNativeAlert = {
   readonly check: string;
   readonly file: string;
   readonly line: number;
+  readonly match: string;
   readonly message: string;
   readonly severity: ValeAlertSeverity;
 };
@@ -291,6 +292,7 @@ function parseAlert(args: ParseAlertArgs): ValeNativeAlert {
     check: Check,
     file: args.file,
     line: Number(Line),
+    match: Match,
     message: Message,
     severity: Severity,
   };
