@@ -79,10 +79,8 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(platform_tasks.contains("set -e") && platform_tasks.contains("|| coverage_status=1"));
     assert!(nightly.contains("cargo llvm-cov test -p nook_domain_api"));
     assert!(nightly.contains("rustup show active-toolchain | cut -d' ' -f1"));
-    assert!(
-        nightly
-            .contains("dylint/nook-domain-api/target/debug/libnook_domain_api@${toolchain_id}.so")
-    );
+    let dylint_object = "dylint/nook-domain-api/target/debug/libnook_domain_api@${toolchain_id}.so";
+    assert!(nightly.contains(dylint_object));
     assert!(nightly.contains("ARG RUST_DYLINT_COVERAGE_FLOOR"));
     assert!(nightly.contains("--fail-under-lines \"${RUST_DYLINT_COVERAGE_FLOOR:?}\""));
     assert!(docker_tasks.contains(".package_lines_percent[\"nook_domain_api\"] | numbers"));
@@ -141,23 +139,19 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(hive_tasks.contains("hive-coverage-profiles=$profiles"));
     assert!(hive_tasks.contains("LLVM_PROFILE_FILE=/profiles/%m-%p.profraw"));
     assert!(hive_arc.contains("LLVM_PROFILE_FILE=%q exec %q"));
-    assert!(
-        preflight.contains(
-            "cargo llvm-cov test --locked -p nook-preflight --fail-under-lines \"$floor\""
-        )
-    );
+    let preflight_gate =
+        "cargo llvm-cov test --locked -p nook-preflight --fail-under-lines \"$floor\"";
+    assert!(preflight.contains(preflight_gate));
     assert!(preflight.contains("WORKDIR /meta-secret/nook/preflight"));
-    assert_eq!(
-        preflight
-            .matches("ENV CARGO_TARGET_DIR=/meta-secret/preflight-target")
-            .count(),
-        2
-    );
+    let target_envs = preflight
+        .matches("ENV CARGO_TARGET_DIR=/meta-secret/preflight-target")
+        .count();
+    assert_eq!(target_envs, 2);
     assert!(preflight.contains("ENV NOOK_REPO_ROOT=/meta-secret/nook"));
     assert!(preflight.contains(".package_lines_percent[\"nook-preflight\"] | numbers"));
-    assert!(preflight.contains(
-        "COPY --from=build /meta-secret/preflight-target/debug/nook-preflight /nook-preflight"
-    ));
+    let preflight_export =
+        "COPY --from=build /meta-secret/preflight-target/debug/nook-preflight /nook-preflight";
+    assert!(preflight.contains(preflight_export));
     assert!(!preflight.contains("/meta-secret/nook/preflight/target"));
     assert!(!preflight.contains("/opt/nook/preflight"));
     assert!(!preflight.contains("/opt/nook/coverage-floor.json"));
