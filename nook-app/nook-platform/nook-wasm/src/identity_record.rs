@@ -240,7 +240,7 @@ impl NookIdentitySnapshot {
         Self {
             identity_id: record.identity_id.as_str().to_owned(),
             label: record.label.clone(),
-            control_epoch: record.control_epoch.into(),
+            control_epoch: record.control_epoch,
             app_id,
             members: record
                 .members

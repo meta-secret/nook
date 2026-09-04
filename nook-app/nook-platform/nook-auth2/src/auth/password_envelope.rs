@@ -17,7 +17,7 @@
 
 use crate::VaultKeys;
 use crate::errors::{AgeCryptoError, PasswordError, PasswordResult};
-use crate::{AgeArmoredCiphertext, PasswordCharacterCount, PasswordWorkFactor, SymmetricKey};
+use crate::{AgeArmoredCiphertext, PasswordWorkFactor, SymmetricKey};
 use age::{
     scrypt,
     secrecy::{self, ExposeSecret},
@@ -37,29 +37,29 @@ pub const PASSWORD_SCRYPT_LOG_N: PasswordWorkFactor = PasswordWorkFactor(18);
 
 /// Recommended minimum password length. UI layers should enforce a stricter
 /// entropy policy; this is the absolute floor below which we refuse to wrap.
-pub const PASSWORD_MIN_LENGTH: PasswordCharacterCount = PasswordCharacterCount(5);
+pub const PASSWORD_MIN_LENGTH: usize = 5;
 
 /// Recommended floor for creating a new password-backed vault.
-pub const PASSWORD_RECOMMENDED_MIN_LENGTH: PasswordCharacterCount = PasswordCharacterCount(8);
+pub const PASSWORD_RECOMMENDED_MIN_LENGTH: usize = 8;
 
 #[must_use]
-pub fn vault_password_min_length() -> PasswordCharacterCount {
+pub fn vault_password_min_length() -> usize {
     PASSWORD_MIN_LENGTH
 }
 
 #[must_use]
 pub fn is_vault_password_long_enough(password: &str) -> bool {
-    password.len() >= usize::from(PASSWORD_MIN_LENGTH)
+    password.len() >= PASSWORD_MIN_LENGTH
 }
 
 #[must_use]
-pub fn vault_password_recommended_min_length() -> PasswordCharacterCount {
+pub fn vault_password_recommended_min_length() -> usize {
     PASSWORD_RECOMMENDED_MIN_LENGTH
 }
 
 #[must_use]
 pub fn is_vault_password_recommended_length(password: &str) -> bool {
-    password.trim().len() >= usize::from(PASSWORD_RECOMMENDED_MIN_LENGTH)
+    password.trim().len() >= PASSWORD_RECOMMENDED_MIN_LENGTH
 }
 
 /// A labelled password unlock slot. Each entry wraps the same vault keys with
@@ -567,14 +567,14 @@ mod tests {
 
     #[test]
     fn exposes_password_length_floor() {
-        assert_eq!(usize::from(vault_password_min_length()), 5);
+        assert_eq!(vault_password_min_length(), 5);
         assert!(!is_vault_password_long_enough("1234"));
         assert!(is_vault_password_long_enough("12345"));
     }
 
     #[test]
     fn exposes_recommended_password_length_floor() {
-        assert_eq!(usize::from(vault_password_recommended_min_length()), 8);
+        assert_eq!(vault_password_recommended_min_length(), 8);
         assert!(!is_vault_password_recommended_length("1234567"));
         assert!(is_vault_password_recommended_length("12345678"));
         assert!(!is_vault_password_recommended_length(" 1234567 "));

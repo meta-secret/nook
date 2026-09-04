@@ -212,9 +212,9 @@ pub use website_login_save::{
 };
 
 pub use nook_auth2::{
-    DeviceKeyDerivationIterations, EnrollmentKeyDerivationIterations, IdentityControlEpoch,
-    MockPasskeyCredentialCount, PasswordCharacterCount, PasswordWorkFactor, SentinelGenesisIssued,
-    SentinelGenesisParticipant, SentinelGenesisParticipantResponse, SentinelGenesisPolicy,
+    DeviceKeyDerivationIterations, EnrollmentKeyDerivationIterations, MockPasskeyCredentialCount,
+    PasswordWorkFactor, SentinelGenesisIssued, SentinelGenesisParticipant,
+    SentinelGenesisParticipantResponse, SentinelGenesisPolicy,
     SentinelGenesisPublicKeyAnnouncement, SentinelGenesisRequest, SentinelGenesisSession,
     SentinelGenesisShareDelivery, SentinelParticipantCount, SentinelRecordCount,
     SentinelShareCount, SentinelShareIndex, SentinelThreshold,

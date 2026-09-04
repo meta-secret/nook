@@ -5,25 +5,6 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct IdentityControlEpoch(pub(crate) u64);
-impl From<u64> for IdentityControlEpoch {
-    fn from(value: u64) -> Self {
-        Self(value)
-    }
-}
-impl From<IdentityControlEpoch> for u64 {
-    fn from(value: IdentityControlEpoch) -> Self {
-        value.0
-    }
-}
-impl IdentityControlEpoch {
-    pub(crate) fn next(self) -> Option<Self> {
-        self.0.checked_add(1).map(Self)
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct MockPasskeyCredentialCount(pub(crate) usize);
@@ -63,25 +44,6 @@ impl From<u32> for EnrollmentKeyDerivationIterations {
 impl From<EnrollmentKeyDerivationIterations> for u32 {
     fn from(value: EnrollmentKeyDerivationIterations) -> Self {
         value.0
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct PasswordCharacterCount(pub(crate) usize);
-impl From<usize> for PasswordCharacterCount {
-    fn from(value: usize) -> Self {
-        Self(value)
-    }
-}
-impl From<PasswordCharacterCount> for usize {
-    fn from(value: PasswordCharacterCount) -> Self {
-        value.0
-    }
-}
-impl Display for PasswordCharacterCount {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(formatter)
     }
 }
 

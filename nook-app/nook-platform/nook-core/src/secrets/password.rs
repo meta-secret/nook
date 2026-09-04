@@ -40,8 +40,8 @@ impl PasswordGenerationOptions {
     pub fn validate(self) -> PasswordResult<()> {
         if !(MIN_PASSWORD_LENGTH..=MAX_PASSWORD_LENGTH).contains(&self.length) {
             return Err(PasswordError::LengthOutOfRange {
-                min: (MIN_PASSWORD_LENGTH as usize).into(),
-                max: (MAX_PASSWORD_LENGTH as usize).into(),
+                min: MIN_PASSWORD_LENGTH,
+                max: MAX_PASSWORD_LENGTH,
             });
         }
         if !self.lowercase && !self.uppercase && !self.numbers && !self.symbols {

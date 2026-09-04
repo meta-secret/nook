@@ -417,7 +417,6 @@ impl IdentityDirectory {
         if matches!(&self.selection, IdentitySelection::Empty) {
             return self.create_identity(label, app_key, None);
         }
-        let next_control_epoch;
         {
             let selected = self.selected()?;
             if let Some(member) = selected
@@ -436,17 +435,15 @@ impl IdentityDirectory {
             if !selected.vault_deks.is_empty() {
                 return Err(MultiDeviceError::IdentityEnrollmentRequired);
             }
-            next_control_epoch = selected.next_control_epoch()?;
         }
         let selected = self.selected_mut()?;
-        selected.members.push(IdentityMember {
+        selected.add_prevalidated_member(IdentityMember {
             app_id: app_key.app_id().clone(),
             auth_id: app_key.auth_id(),
             public_key: app_key.public_key(),
             signing_public_key: crate::DeviceSigningPublicKey::Unavailable,
             label: None,
         });
-        selected.control_epoch = next_control_epoch;
         Ok(selected.identity_id.clone())
     }
 
@@ -643,12 +640,11 @@ mod tests {
         let later_key = AppKey::generate()?;
         let _ =
             directory.open_or_generate_vault_dek(&extension_key, crate::generate_store_id()?)?;
-        let enrollment =
-            directory.enroll_selected_app_key_for_vault_creation(&later_key, "Personal");
-        match enrollment {
-            Err(MultiDeviceError::IdentityEnrollmentRequired) => Ok(()),
-            result => Err(anyhow::anyhow!("unexpected enrollment result: {result:?}")),
-        }
+        assert!(matches!(
+            directory.enroll_selected_app_key_for_vault_creation(&later_key, "Personal"),
+            Err(MultiDeviceError::IdentityEnrollmentRequired)
+        ));
+        Ok(())
     }
 
     #[test]
