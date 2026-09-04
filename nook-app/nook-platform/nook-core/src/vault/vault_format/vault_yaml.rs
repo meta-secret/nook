@@ -112,6 +112,11 @@ pub(super) fn partition_yaml_records(
         // serialization boundary defensive even if a caller accidentally
         // mixes an IndexedDB wrapper into the vault record collection.
         if is_local_device_wrapper(record.value.as_str()) {
+            if record.secret_type.is_some() {
+                return Err(VaultFormatError::InvalidAuthRecord(
+                    "browser-local device wrapper cannot be a typed vault secret".to_owned(),
+                ));
+            }
             continue;
         }
         if is_join_stored_record(record) {
@@ -285,8 +290,19 @@ mod tests {
             r#""protection":"passkey-wrapped-local""#,
             r#""protection":"future-local-wrapper""#,
         );
+        let mut invalid_typed_value: serde_json::Value = serde_json::from_str(&local_record)?;
+        invalid_typed_value["credentialId"] = serde_json::Value::from(7);
+        let invalid_typed = StoredSecretRecord {
+            key: sid("typed_wrapper_shape"),
+            secret_type: Some(SecretType::Login),
+            value: StoredRecordPayload::from_trusted(serde_json::to_string(&invalid_typed_value)?),
+        };
         assert_ne!(unsupported, local_record);
         assert_ne!(unknown, local_record);
+        assert!(matches!(
+            partition_yaml_records(&[invalid_typed]),
+            Err(VaultFormatError::InvalidAuthRecord(_))
+        ));
         let records = [local_record, unsupported, unknown]
             .into_iter()
             .enumerate()
