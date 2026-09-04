@@ -13,9 +13,9 @@ use rustc_ast::attr::AttributeExt;
 use rustc_hir::def::{DefKind, Res};
 use rustc_hir::intravisit::{self, FnKind, Visitor, VisitorExt};
 use rustc_hir::{
-    AmbigArg, Attribute, CRATE_HIR_ID, FieldDef, FnDecl, ForeignItem, ForeignItemKind, HirId,
-    ImplItem, ImplItemKind, Item, ItemKind, Node, PrimTy, QPath, TraitFn, TraitItem, TraitItemKind,
-    Ty as HirTy, TyKind as HirTyKind, Variant,
+    AmbigArg, Attribute, CRATE_HIR_ID, FieldDef, FnDecl, ForeignItem, ForeignItemKind,
+    GenericParam, GenericParamKind, HirId, ImplItem, ImplItemKind, Item, ItemKind, Node, PrimTy,
+    QPath, TraitFn, TraitItem, TraitItemKind, Ty as HirTy, TyKind as HirTyKind, Variant,
 };
 use rustc_lint::{LateContext, LateLintPass, LintStore};
 use rustc_middle::ty::{self, Ty};
@@ -193,12 +193,14 @@ fn contains_raw_numeric<'tcx>(cx: &LateContext<'tcx>, ty: Ty<'tcx>) -> bool {
         .tcx
         .try_normalize_erasing_regions(cx.typing_env(), ty)
         .unwrap_or(ty);
+    let raw_args = |args: ty::GenericArgsRef<'tcx>| {
+        args.types()
+            .any(|argument| contains_raw_numeric(cx, argument))
+    };
 
     match normalized.kind() {
         ty::Int(_) | ty::Uint(_) | ty::Float(_) => true,
-        ty::Adt(_, arguments) | ty::FnDef(_, arguments) => arguments
-            .types()
-            .any(|argument| contains_raw_numeric(cx, argument)),
+        ty::Adt(_, arguments) | ty::FnDef(_, arguments) => raw_args(arguments),
         ty::Array(element, _) | ty::Slice(element) => contains_raw_numeric(cx, *element),
         ty::RawPtr(element, _) | ty::Ref(_, element, _) => contains_raw_numeric(cx, *element),
         ty::Tuple(elements) => elements
@@ -209,18 +211,20 @@ fn contains_raw_numeric<'tcx>(cx: &LateContext<'tcx>, ty: Ty<'tcx>) -> bool {
             .inputs_and_output
             .iter()
             .any(|element| contains_raw_numeric(cx, element)),
-        ty::Dynamic(predicates, _) => predicates.projection_bounds().any(|projection| {
-            projection
-                .skip_binder()
-                .term
-                .as_type()
-                .is_some_and(|term| contains_raw_numeric(cx, term))
-        }),
+        ty::Dynamic(predicates, _) => {
+            predicates
+                .iter()
+                .any(|predicate| match predicate.skip_binder() {
+                    ty::ExistentialPredicate::Trait(trait_ref) => raw_args(trait_ref.args),
+                    ty::ExistentialPredicate::Projection(projection) => projection
+                        .term
+                        .as_type()
+                        .is_some_and(|term| contains_raw_numeric(cx, term)),
+                    ty::ExistentialPredicate::AutoTrait(_) => false,
+                })
+        }
         ty::Alias(alias) => {
-            alias
-                .args
-                .types()
-                .any(|argument| contains_raw_numeric(cx, argument))
+            raw_args(alias.args)
                 || matches!(alias.kind, ty::AliasTyKind::Opaque { def_id } if
                     cx.tcx.explicit_item_bounds(def_id).iter_instantiated_copied(cx.tcx, alias.args)
                         .filter_map(|(clause, _)| clause.as_projection_clause())
@@ -234,6 +238,12 @@ fn contains_raw_numeric<'tcx>(cx: &LateContext<'tcx>, ty: Ty<'tcx>) -> bool {
 struct RawNumericHirVisitor<'a, 'tcx>(&'a LateContext<'tcx>, bool);
 
 impl<'tcx> Visitor<'tcx> for RawNumericHirVisitor<'_, 'tcx> {
+    fn visit_generic_param(&mut self, param: &'tcx GenericParam<'tcx>) {
+        if !matches!(param.kind, GenericParamKind::Const { .. }) {
+            intravisit::walk_generic_param(self, param);
+        }
+    }
+
     fn visit_ty(&mut self, hir_ty: &'tcx HirTy<'tcx, AmbigArg>) {
         let raw = match hir_ty.kind {
             HirTyKind::Path(QPath::Resolved(_, path)) => match path.res {

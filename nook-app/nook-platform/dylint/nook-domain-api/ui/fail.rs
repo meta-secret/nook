@@ -2,6 +2,7 @@
 #![allow(private_interfaces)]
 
 pub type RawAlias = u128;
+pub type RawSink = dyn Fn(u64) -> RawAlias;
 
 pub struct Wrapper<T>(T);
 
@@ -44,9 +45,7 @@ pub fn borrowed_slice(_value: &[u8]) -> &UserId {
     panic!()
 }
 
-pub fn pointer_parameter(_value: *const i64) {}
-
-pub fn callback_parameter(_callback: fn(u16) -> i8) {}
+pub fn callback_parameter(_callback: fn(u16) -> i8, _pointer: *const i64) {}
 
 unsafe extern "C" {
     pub fn raw_foreign(_raw: u32) -> i32;
@@ -94,7 +93,7 @@ pub async fn async_raw_output() -> Option<RawAlias> {
 }
 
 pub struct ProjectedField {
-    pub values: Box<dyn Iterator<Item = Option<RawAlias>>>,
+    pub values: Box<RawSink>,
 }
 
 fn main() {}

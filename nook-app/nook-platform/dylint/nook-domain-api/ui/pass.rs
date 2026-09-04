@@ -10,7 +10,7 @@ pub struct AccountBalance(u64);
 pub struct Wrapper<T>(T);
 pub type DomainAlias = UserId;
 
-pub fn user(id: UserId) -> Option<AccountBalance> {
+pub fn user<const N: usize>(id: [UserId; N]) -> Option<AccountBalance> {
     let _ = id;
     None
 }
