@@ -45,14 +45,18 @@ impl CredentialFillFieldRole {
     #[must_use]
     pub fn current_password() -> Self {
         Self {
-            inner: nook_companion_core::credential_fill::field::CredentialRole::CurrentPassword,
+            inner: nook_companion_core::credential_fill::field::CredentialRole::Password(
+                nook_companion_core::credential_fill::field::Password::Current,
+            ),
         }
     }
 
     #[must_use]
     pub fn generic_password() -> Self {
         Self {
-            inner: nook_companion_core::credential_fill::field::CredentialRole::GenericPassword,
+            inner: nook_companion_core::credential_fill::field::CredentialRole::Password(
+                nook_companion_core::credential_fill::field::Password::Generic,
+            ),
         }
     }
 }

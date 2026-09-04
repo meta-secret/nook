@@ -39,20 +39,14 @@ pub mod field {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
     pub enum CredentialRole {
         Username,
-        CurrentPassword,
-        GenericPassword,
+        Password(Password),
     }
 
-    impl CredentialRole {
-        #[must_use]
-        pub const fn is_username(self) -> bool {
-            matches!(self, Self::Username)
-        }
-
-        #[must_use]
-        pub const fn is_password(self) -> bool {
-            matches!(self, Self::CurrentPassword | Self::GenericPassword)
-        }
+    /// Password semantics observed for a credential field.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+    pub enum Password {
+        Current,
+        Generic,
     }
 
     /// Whether the host observed a credential field as writable.
@@ -134,16 +128,6 @@ pub mod field {
     #[cfg(test)]
     mod tests {
         use super::*;
-
-        #[test]
-        fn roles_classify_only_their_intrinsic_credential_kind() {
-            assert!(CredentialRole::Username.is_username());
-            assert!(!CredentialRole::Username.is_password());
-            assert!(!CredentialRole::CurrentPassword.is_username());
-            assert!(CredentialRole::CurrentPassword.is_password());
-            assert!(!CredentialRole::GenericPassword.is_username());
-            assert!(CredentialRole::GenericPassword.is_password());
-        }
 
         #[test]
         fn variant_payloads_preserve_their_field_index() {
@@ -263,7 +247,7 @@ pub fn plan(fields: &[field::Observation]) -> Result<Plan, Error> {
             let field::Observation::Credential(credential) = field else {
                 return None;
             };
-            if !credential.role.is_username()
+            if !matches!(credential.role, field::CredentialRole::Username)
                 || !matches!(credential.editability, field::Editability::Writable)
             {
                 return None;
@@ -277,7 +261,7 @@ pub fn plan(fields: &[field::Observation]) -> Result<Plan, Error> {
             let field::Observation::Credential(credential) = field else {
                 return None;
             };
-            if !credential.role.is_password() {
+            if !matches!(credential.role, field::CredentialRole::Password(_)) {
                 return None;
             }
             Some((credential.field_index, credential.editability))
@@ -362,7 +346,7 @@ mod tests {
     fn login_form() -> Vec<field::Observation> {
         vec![
             field(0, field::CredentialRole::Username),
-            field(1, field::CredentialRole::CurrentPassword),
+            field(1, field::CredentialRole::Password(field::Password::Current)),
         ]
     }
 
@@ -401,7 +385,10 @@ mod tests {
 
     #[test]
     fn plans_password_only_fill_for_password_step() -> anyhow::Result<()> {
-        let password_only = vec![field(0, field::CredentialRole::CurrentPassword)];
+        let password_only = vec![field(
+            0,
+            field::CredentialRole::Password(field::Password::Current),
+        )];
         let plan = plan(&password_only)?;
         assert_eq!(
             plan.assignments,
@@ -417,7 +404,7 @@ mod tests {
     fn plans_a_single_generic_password_as_a_login_password() -> anyhow::Result<()> {
         let generic_login = vec![
             field(0, field::CredentialRole::Username),
-            field(1, field::CredentialRole::GenericPassword),
+            field(1, field::CredentialRole::Password(field::Password::Generic)),
         ];
         let plan = plan(&generic_login)?;
         assert_eq!(
@@ -450,15 +437,18 @@ mod tests {
 
     #[test]
     fn fails_closed_when_all_password_fields_are_readonly() {
-        let readonly_password = vec![readonly_field(0, field::CredentialRole::CurrentPassword)];
+        let readonly_password = vec![readonly_field(
+            0,
+            field::CredentialRole::Password(field::Password::Current),
+        )];
         assert_eq!(plan(&readonly_password), Err(Error::PasswordFieldsReadonly));
     }
 
     #[test]
     fn fails_closed_on_multiple_current_password_fields() {
         let ambiguous = vec![
-            field(0, field::CredentialRole::CurrentPassword),
-            field(1, field::CredentialRole::CurrentPassword),
+            field(0, field::CredentialRole::Password(field::Password::Current)),
+            field(1, field::CredentialRole::Password(field::Password::Current)),
         ];
         assert_eq!(plan(&ambiguous), Err(Error::AmbiguousPasswordField));
     }
@@ -467,12 +457,12 @@ mod tests {
     fn fails_closed_on_mixed_or_multiple_login_password_fields() {
         for ambiguous in [
             vec![
-                field(0, field::CredentialRole::CurrentPassword),
-                field(1, field::CredentialRole::GenericPassword),
+                field(0, field::CredentialRole::Password(field::Password::Current)),
+                field(1, field::CredentialRole::Password(field::Password::Generic)),
             ],
             vec![
-                field(0, field::CredentialRole::GenericPassword),
-                field(1, field::CredentialRole::GenericPassword),
+                field(0, field::CredentialRole::Password(field::Password::Generic)),
+                field(1, field::CredentialRole::Password(field::Password::Generic)),
             ],
         ] {
             assert_eq!(plan(&ambiguous), Err(Error::AmbiguousPasswordField));
@@ -483,7 +473,7 @@ mod tests {
     fn fails_closed_on_duplicate_field_indices() {
         let duplicate = vec![
             field(4, field::CredentialRole::Username),
-            field(4, field::CredentialRole::CurrentPassword),
+            field(4, field::CredentialRole::Password(field::Password::Current)),
         ];
         assert_eq!(plan(&duplicate), Err(Error::DuplicateFieldIndex));
     }
@@ -521,7 +511,7 @@ mod tests {
     fn skips_readonly_username_but_still_plans_password_fill() -> anyhow::Result<()> {
         let fields = vec![
             readonly_field(0, field::CredentialRole::Username),
-            field(1, field::CredentialRole::CurrentPassword),
+            field(1, field::CredentialRole::Password(field::Password::Current)),
         ];
         let plan = plan(&fields)?;
         assert_eq!(
@@ -579,12 +569,12 @@ mod tests {
         for (value, expected) in [
             (field::CredentialRole::Username, r#""Username""#),
             (
-                field::CredentialRole::CurrentPassword,
-                r#""CurrentPassword""#,
+                field::CredentialRole::Password(field::Password::Current),
+                r#"{"Password":"Current"}"#,
             ),
             (
-                field::CredentialRole::GenericPassword,
-                r#""GenericPassword""#,
+                field::CredentialRole::Password(field::Password::Generic),
+                r#"{"Password":"Generic"}"#,
             ),
         ] {
             assert_eq!(serde_json::to_string(&value)?, expected);
