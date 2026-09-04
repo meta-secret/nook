@@ -79,6 +79,13 @@ impl CredentialFillFieldIndex {
 impl CredentialFillFieldIndex {
     #[wasm_bindgen(constructor)]
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: converts a JavaScript field index into its Rust domain type"
+        )
+    )]
     pub fn new(value: u32) -> Self {
         Self {
             inner: value.into(),
@@ -87,6 +94,13 @@ impl CredentialFillFieldIndex {
 
     #[wasm_bindgen(getter)]
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: exposes the typed field index to JavaScript"
+        )
+    )]
     pub fn value(&self) -> u32 {
         self.inner.value
     }
@@ -108,6 +122,13 @@ impl CredentialFillObservationCount {
 impl CredentialFillObservationCount {
     #[wasm_bindgen(getter)]
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: exposes the typed observation count to JavaScript"
+        )
+    )]
     pub fn value(&self) -> u32 {
         self.inner.value
     }
