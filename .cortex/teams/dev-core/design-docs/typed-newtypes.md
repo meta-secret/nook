@@ -158,9 +158,19 @@ enum VersionedVaultEventBody {
 
 Development core owns `raw_numeric_public_api`, suppression validation, and rollout.
 Both lints remain allow-by-default, so unmigrated crates remain unenforced until activated.
-An activated crate denies the detector and forbids lowering the suppression policy.
 `nook-app-common` is the first clean activation; later crates migrate in dependency order.
-Serialization, database, and FFI expectations must be item-scoped and reason-bearing.
+Activate a migrated crate only while the Dylint library is loaded:
+
+```rust
+#![cfg_attr(dylint_lib = "nook_domain_api", forbid(invalid_raw_numeric_api_suppression))]
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(raw_numeric_public_api))]
+```
+
+Boundary exceptions use an item-scoped `expect(raw_numeric_public_api, reason = "...")`.
+The reason starts with `serialization boundary:`, `database boundary:`, or `FFI boundary:` and then explains the edge.
+Crate, module, type, and other blanket `allow` or expectation attributes are forbidden.
+Development core owns pass/fail UI fixtures, diagnostics snapshots, and staged crate activation.
+Hosted validation runs the locked standalone lint tests with the repository-pinned nightly toolchain.
 
 ## Remaining type-safety checklist
 

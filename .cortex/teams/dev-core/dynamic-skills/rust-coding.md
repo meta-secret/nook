@@ -51,10 +51,7 @@ When you see `Option<T>`, ask:
   scripts use concrete `thiserror` enums with operation-specific variants and
   typed sources. Only `#[cfg(test)]` unit tests and integration tests under
   `tests/` may use `anyhow`. Crates declare it under `[dev-dependencies]`.
-- Do not use `String` for typed domain values such as timestamps, YAML payloads,
-  YAML payloads, storage/provider types, vault/store ids, event ids, or secret
-  keys. Prefer existing core newtypes (`IsoTimestamp`, `StoredVaultYaml`,
-  `StoreId`, `EventId`, `SymmetricKey`, etc.) or add one.
+- Use named domain newtypes for reachable public function parameters, returns, and public struct or enum fields. Do not expose raw `String`, `u8`–`u128`, `i8`–`i128`, `usize`, `isize`, `f32`, or `f64`. Apply this recursively through `Option`, `Result`, collections, tuples, generics, aliases, and bounds. Exclude private implementation details and private inner storage of a newtype. Only legitimate serialization, database, or FFI boundaries may use a narrow item-scoped `expect` with a reason. Blanket `allow` is forbidden.
 - Keep raw YAML/JSON strings only at I/O boundaries. Parse them into typed Rust
   records immediately after deserialization, and serialize typed records back to
   wire strings only when crossing storage, provider, or JS boundaries.
@@ -435,8 +432,7 @@ whether a value exists.
   dependencies.
 - Check that helper APIs accept typed variants/enums instead of strings or
   optional field bags.
-- Inventory authored Rust `bool` fields, parameters, returns, and lint
-  allowances in the changed scope.
+- Inventory reachable public numeric APIs recursively. Enforce them with `raw_numeric_public_api`. Separately inventory authored Rust `bool` fields, parameters, returns, and allowances.
 - Replace every domain, state, policy, mode, command, configuration, persisted,
   and owned-boundary boolean with a meaningfully named enum.
 - Keep a boolean only for a required trait, fixed external protocol, or private
