@@ -9,6 +9,9 @@ import {
   CredentialFillObservationCount,
   CredentialFillObservations,
   CredentialFillPlan,
+  CredentialFillPlanningOutcome,
+  CredentialFillRejection,
+  CredentialFillResult,
   CredentialKind,
   plan_companion_credential_fill,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
@@ -34,34 +37,41 @@ describe('companion credential-fill WASM ABI', () => {
     fields.add(username)
     fields.add(password)
 
-    const plan = plan_companion_credential_fill(fields)
+    const result = plan_companion_credential_fill(fields)
     try {
-      expect(plan).toBeInstanceOf(CredentialFillPlan)
-      const assignments = plan.take_assignments()
+      expect(result).toBeInstanceOf(CredentialFillResult)
+      expect(result.kind).toBe(CredentialFillPlanningOutcome.Planned)
+      const plan = result.plan()
       try {
-        expect(assignments).toHaveLength(2)
-        const usernameAssignment = assignments[0]!
-        const passwordAssignment = assignments[1]!
-        expect(usernameAssignment).toBeInstanceOf(CredentialFillAssignment)
-        expect(passwordAssignment).toBeInstanceOf(CredentialFillAssignment)
-        const assignedUsernameIndex = usernameAssignment.field_index
-        const assignedPasswordIndex = passwordAssignment.field_index
-        const assignedUsernameKind = usernameAssignment.credential
-        const assignedPasswordKind = passwordAssignment.credential
+        expect(plan).toBeInstanceOf(CredentialFillPlan)
+        const assignments = plan.take_assignments()
         try {
-          expect(assignedUsernameIndex.value).toBe(4)
-          expect(assignedUsernameKind).toBe(CredentialKind.Username)
-          expect(assignedPasswordIndex.value).toBe(7)
-          expect(assignedPasswordKind).toBe(CredentialKind.CurrentPassword)
+          expect(assignments).toHaveLength(2)
+          const usernameAssignment = assignments[0]!
+          const passwordAssignment = assignments[1]!
+          expect(usernameAssignment).toBeInstanceOf(CredentialFillAssignment)
+          expect(passwordAssignment).toBeInstanceOf(CredentialFillAssignment)
+          const assignedUsernameIndex = usernameAssignment.field_index
+          const assignedPasswordIndex = passwordAssignment.field_index
+          const assignedUsernameKind = usernameAssignment.credential
+          const assignedPasswordKind = passwordAssignment.credential
+          try {
+            expect(assignedUsernameIndex.value).toBe(4)
+            expect(assignedUsernameKind).toBe(CredentialKind.Username)
+            expect(assignedPasswordIndex.value).toBe(7)
+            expect(assignedPasswordKind).toBe(CredentialKind.CurrentPassword)
+          } finally {
+            assignedUsernameIndex.free()
+            assignedPasswordIndex.free()
+          }
         } finally {
-          assignedUsernameIndex.free()
-          assignedPasswordIndex.free()
+          for (const assignment of assignments) assignment.free()
         }
       } finally {
-        for (const assignment of assignments) assignment.free()
+        plan.free()
       }
     } finally {
-      plan.free()
+      result.free()
       fields.free()
       username.free()
       password.free()
@@ -85,11 +95,15 @@ describe('companion credential-fill WASM ABI', () => {
     const fields = new CredentialFillObservations()
     fields.add(observation)
 
+    const result = plan_companion_credential_fill(fields)
     try {
-      expect(() => plan_companion_credential_fill(fields)).toThrow(
-        'every password field is read-only, so credential disclosure is blocked',
+      expect(result).toBeInstanceOf(CredentialFillResult)
+      expect(result.kind).toBe(CredentialFillPlanningOutcome.Rejected)
+      expect(result.rejection()).toBe(
+        CredentialFillRejection.PasswordFieldsReadonly,
       )
     } finally {
+      result.free()
       fields.free()
       observation.free()
       readonly.free()
@@ -109,14 +123,30 @@ describe('companion credential-fill WASM ABI', () => {
     newPasswordFields.add(newPassword)
     oneTimeCodeFields.add(oneTimeCode)
 
+    const newPasswordResult = plan_companion_credential_fill(newPasswordFields)
     try {
-      expect(() => plan_companion_credential_fill(newPasswordFields)).toThrow(
-        'the observed scope contains a new-password field',
+      expect(newPasswordResult).toBeInstanceOf(CredentialFillResult)
+      expect(newPasswordResult.kind).toBe(
+        CredentialFillPlanningOutcome.Rejected,
       )
-      expect(() => plan_companion_credential_fill(oneTimeCodeFields)).toThrow(
-        'the observed scope contains a one-time-code field',
+      expect(newPasswordResult.rejection()).toBe(
+        CredentialFillRejection.NewPasswordFieldPresent,
       )
+      const oneTimeCodeResult =
+        plan_companion_credential_fill(oneTimeCodeFields)
+      try {
+        expect(oneTimeCodeResult).toBeInstanceOf(CredentialFillResult)
+        expect(oneTimeCodeResult.kind).toBe(
+          CredentialFillPlanningOutcome.Rejected,
+        )
+        expect(oneTimeCodeResult.rejection()).toBe(
+          CredentialFillRejection.OneTimeCodeFieldPresent,
+        )
+      } finally {
+        oneTimeCodeResult.free()
+      }
     } finally {
+      newPasswordResult.free()
       newPasswordFields.free()
       oneTimeCodeFields.free()
       newPassword.free()
@@ -143,9 +173,7 @@ describe('companion credential-fill WASM ABI', () => {
       for (let count = 0; count < maxCount.value; count += 1) {
         fields.add(observation)
       }
-      expect(() => fields.add(observation)).toThrow(
-        'the observed scope exceeds the field-count limit',
-      )
+      expect(() => fields.add(observation)).toThrow()
     } finally {
       fields.free()
       observation.free()
