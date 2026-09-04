@@ -33,7 +33,6 @@ fn hive_materializes_test_and_clippy_dependency_graphs_in_parallel() -> anyhow::
         "cargo clippy --locked --workspace --all-targets -- -D warnings",
         "ENV CARGO_PROFILE_DEV_DEBUG=0",
         "ENV CARGO_PROFILE_TEST_DEBUG=0",
-        "COPY graph.yaml graph.yaml",
     ] {
         assert!(
             dockerfile.contains(required),

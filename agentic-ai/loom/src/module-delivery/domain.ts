@@ -68,7 +68,6 @@ export const ORDINARY_TASK_WRITE_ROOTS = {
     'agentic-ai/minds/hive/Cargo.toml',
     'agentic-ai/minds/hive/src',
     'agentic-ai/minds/hive/tests',
-    'agentic-ai/minds/lace',
     'nook-app/nook-platform/Cargo.lock',
     'nook-app/nook-platform/Cargo.toml',
     'nook-app/nook-platform/fuzz',
