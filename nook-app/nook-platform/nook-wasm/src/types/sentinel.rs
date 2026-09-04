@@ -76,8 +76,9 @@ impl NookSentinelUnlockSessionStatus {
 mod tests {
     use super::NookSentinelUnlockSessionStatus;
     use nook_core::SentinelUnlockStatus;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn unlock_status_bridge_projects_counts_and_rejects_overflow()
     -> Result<(), wasm_bindgen::JsError> {
         let status = SentinelUnlockStatus {
