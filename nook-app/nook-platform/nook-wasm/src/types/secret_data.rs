@@ -1,6 +1,8 @@
 use super::{
     NookError, NookJoinRequest, NookSecretListItem, NookSecretRecord, NookVaultMember, wasm_bindgen,
 };
+use nook_core::SecretFormFields;
+use std::mem;
 
 #[wasm_bindgen]
 pub struct NookSecretPage {
@@ -65,7 +67,7 @@ impl NookSecretPage {
     /// Transfer page-owned metadata items to JavaScript without cloning them.
     #[wasm_bindgen]
     pub fn take_items(&mut self) -> Vec<NookSecretListItem> {
-        std::mem::take(&mut self.items)
+        mem::take(&mut self.items)
     }
 }
 
@@ -142,7 +144,7 @@ impl NookSecretFormFields {
     #[wasm_bindgen]
     pub fn login(website_url: String, username: String, password: String, notes: String) -> Self {
         Self {
-            inner: nook_core::SecretFormFields::Login(nook_core::LoginSecretForm {
+            inner: SecretFormFields::Login(nook_core::LoginSecretForm {
                 website_url,
                 username,
                 password,
@@ -154,7 +156,7 @@ impl NookSecretFormFields {
     #[wasm_bindgen]
     pub fn api_key(website_url: String, key: String, expires_at: String) -> Self {
         Self {
-            inner: nook_core::SecretFormFields::ApiKey(nook_core::ApiKeySecretForm {
+            inner: SecretFormFields::ApiKey(nook_core::ApiKeySecretForm {
                 website_url,
                 key,
                 expires_at,
@@ -165,20 +167,14 @@ impl NookSecretFormFields {
     #[wasm_bindgen]
     pub fn seed_phrase(name: String, seed: String) -> Self {
         Self {
-            inner: nook_core::SecretFormFields::SeedPhrase(nook_core::SeedPhraseSecretForm {
-                name,
-                seed,
-            }),
+            inner: SecretFormFields::SeedPhrase(nook_core::SeedPhraseSecretForm { name, seed }),
         }
     }
 
     #[wasm_bindgen]
     pub fn secure_note(title: String, note: String) -> Self {
         Self {
-            inner: nook_core::SecretFormFields::SecureNote(nook_core::SecureNoteSecretForm {
-                title,
-                note,
-            }),
+            inner: SecretFormFields::SecureNote(nook_core::SecureNoteSecretForm { title, note }),
         }
     }
 
@@ -195,7 +191,7 @@ impl NookSecretFormFields {
         backup_codes: String,
     ) -> Self {
         Self {
-            inner: nook_core::SecretFormFields::Authenticator(nook_core::AuthenticatorSecretForm {
+            inner: SecretFormFields::Authenticator(nook_core::AuthenticatorSecretForm {
                 issuer,
                 account,
                 website_url,
@@ -220,7 +216,7 @@ impl NookSecretFormFields {
         notes: String,
     ) -> Self {
         Self {
-            inner: nook_core::SecretFormFields::CreditCard(nook_core::CreditCardSecretForm {
+            inner: SecretFormFields::CreditCard(nook_core::CreditCardSecretForm {
                 title,
                 cardholder_name,
                 number,
@@ -248,15 +244,13 @@ impl NookSecretFormFields {
         content_base64: String,
     ) -> Self {
         Self {
-            inner: nook_core::SecretFormFields::FileAttachment(
-                nook_core::FileAttachmentSecretForm {
-                    title,
-                    file_name,
-                    mime_type,
-                    size_bytes: u64::from(size_bytes),
-                    content_base64,
-                },
-            ),
+            inner: SecretFormFields::FileAttachment(nook_core::FileAttachmentSecretForm {
+                title,
+                file_name,
+                mime_type,
+                size_bytes: u64::from(size_bytes),
+                content_base64,
+            }),
         }
     }
 }
@@ -367,6 +361,7 @@ pub(crate) fn members_to_vec(members: Vec<nook_core::VaultMember>) -> Vec<NookVa
 #[cfg(all(test, target_arch = "wasm32"))]
 mod wasm_tests {
     use super::NookSecretFormFields;
+    use nook_core::SecretFormFields;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
@@ -379,7 +374,7 @@ mod wasm_tests {
             "cmVjb3ZlcnkgY29kZXM=".to_owned(),
         );
 
-        let nook_core::SecretFormFields::FileAttachment(attachment) = fields.inner else {
+        let SecretFormFields::FileAttachment(attachment) = fields.inner else {
             panic!("file attachment constructor must preserve its variant");
         };
         assert_eq!(attachment.title, "Recovery codes");

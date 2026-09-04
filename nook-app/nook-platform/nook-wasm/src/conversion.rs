@@ -2,6 +2,8 @@
 
 use crate::types::{NookVaultSyncResult, joins_to_vec, members_to_vec};
 use crate::{NookError, NookVaultManager};
+use js_sys::Date;
+use nook_core::SymmetricKey;
 use wasm_bindgen::JsError;
 
 pub(crate) fn content_requires_genesis(
@@ -45,7 +47,7 @@ pub(crate) fn apply_member_records(
 }
 
 pub(crate) fn wasm_iso_timestamp() -> String {
-    js_sys::Date::new_0().to_iso_string().into()
+    Date::new_0().to_iso_string().into()
 }
 
 pub(crate) struct LoadedVault {
@@ -78,7 +80,7 @@ pub(crate) fn vault_member_records(
 ) -> Result<Vec<nook_core::VaultMember>, NookError> {
     Ok(nook_core::resolve_member_roster(
         records,
-        &nook_core::SymmetricKey::parse(members_key)?,
+        &SymmetricKey::parse(members_key)?,
     )?)
 }
 

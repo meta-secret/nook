@@ -1,6 +1,7 @@
 //! Thin WASM exports for portable auth-companion heuristics and host policy.
 
 use crate::{NookAuthenticationPageObservation, NookAuthenticationPageObservations};
+use nook_core::{OAuthOriginSupport, OAuthOriginUnsupportedReason, PageInputType};
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
@@ -148,7 +149,7 @@ pub fn authentication_page_observations_are_valid(
 #[wasm_bindgen]
 #[must_use]
 pub fn parse_page_input_type(value: &str) -> nook_core::PageInputType {
-    nook_core::PageInputType::parse(value)
+    PageInputType::parse(value)
 }
 
 #[wasm_bindgen]
@@ -170,8 +171,7 @@ impl NookOAuthOriginSupport {
     pub fn is_supported(&self) -> bool {
         matches!(
             self.inner,
-            nook_core::OAuthOriginSupport::LocationUnavailable
-                | nook_core::OAuthOriginSupport::Supported { .. }
+            OAuthOriginSupport::LocationUnavailable | OAuthOriginSupport::Supported { .. }
         )
     }
 
@@ -179,19 +179,16 @@ impl NookOAuthOriginSupport {
     #[must_use]
     pub fn origin(&self) -> String {
         match &self.inner {
-            nook_core::OAuthOriginSupport::LocationUnavailable => String::new(),
-            nook_core::OAuthOriginSupport::Supported { origin }
-            | nook_core::OAuthOriginSupport::Unsupported { origin, .. } => origin.clone(),
+            OAuthOriginSupport::LocationUnavailable => String::new(),
+            OAuthOriginSupport::Supported { origin }
+            | OAuthOriginSupport::Unsupported { origin, .. } => origin.clone(),
         }
     }
 
     #[wasm_bindgen]
     #[must_use]
     pub fn is_unsupported(&self) -> bool {
-        matches!(
-            self.inner,
-            nook_core::OAuthOriginSupport::Unsupported { .. }
-        )
+        matches!(self.inner, OAuthOriginSupport::Unsupported { .. })
     }
 
     /// Reason when [`Self::is_unsupported`] is true; otherwise `UnregisteredOrigin`.
@@ -199,8 +196,8 @@ impl NookOAuthOriginSupport {
     #[must_use]
     pub fn unsupported_reason(&self) -> nook_core::OAuthOriginUnsupportedReason {
         match self.inner {
-            nook_core::OAuthOriginSupport::Unsupported { reason, .. } => reason,
-            _ => nook_core::OAuthOriginUnsupportedReason::UnregisteredOrigin,
+            OAuthOriginSupport::Unsupported { reason, .. } => reason,
+            _ => OAuthOriginUnsupportedReason::UnregisteredOrigin,
         }
     }
 }
@@ -309,6 +306,7 @@ pub fn belongs_to_sentinel_vault(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nook_core::BrowserOAuthProvider;
 
     #[test]
     fn backup_code_wasm_exports_match_core_policy() {
@@ -328,7 +326,7 @@ mod tests {
     #[test]
     fn oauth_origin_and_vault_host_wasm_exports_match_core_policy() {
         let supported = resolve_oauth_origin_support(
-            nook_core::BrowserOAuthProvider::GoogleDrive,
+            BrowserOAuthProvider::GoogleDrive,
             "https://simple.nokey.sh",
             "simple.nokey.sh",
         );
@@ -346,7 +344,7 @@ mod tests {
     #[test]
     fn page_form_wasm_exports_match_core_policy() {
         let otp = NookPageInputFieldObservation::new(
-            nook_core::PageInputType::Text,
+            PageInputType::Text,
             false,
             false,
             Vec::new(),
@@ -356,7 +354,7 @@ mod tests {
         assert!(looks_like_one_time_code_field(&otp));
 
         let username = NookPageInputFieldObservation::new(
-            nook_core::PageInputType::Text,
+            PageInputType::Text,
             false,
             false,
             Vec::new(),

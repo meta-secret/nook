@@ -1,4 +1,11 @@
 use super::{NookError, NookSecretRecord, NookVaultManager, application, wasm_bindgen};
+use crate::storage::{auth_providers, extension_state, identity_record, indexed_db};
+use js_sys::Date;
+use nook_core::{
+    ActiveProviderLoginSetup, AppId, DevicePublicKey, IsoTimestamp, ProviderSaveOutcome,
+    ProviderSaveSetup, VaultApplication, VaultConnectIntent, VaultSyncAction, VaultType,
+};
+use wasm_bindgen::JsError;
 
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -11,7 +18,7 @@ pub enum NookProviderSaveOutcomeState {
 #[wasm_bindgen]
 #[must_use]
 pub fn existing_provider_save_setup() -> nook_core::ProviderSaveSetup {
-    nook_core::ProviderSaveSetup::Existing
+    ProviderSaveSetup::Existing
 }
 
 #[wasm_bindgen]
@@ -19,13 +26,13 @@ pub fn existing_provider_save_setup() -> nook_core::ProviderSaveSetup {
 pub fn new_provider_save_setup(
     provider_type: nook_core::StorageProviderType,
 ) -> nook_core::ProviderSaveSetup {
-    nook_core::ProviderSaveSetup::New(provider_type)
+    ProviderSaveSetup::New(provider_type)
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn inactive_provider_login_setup() -> nook_core::ActiveProviderLoginSetup {
-    nook_core::ActiveProviderLoginSetup::Inactive
+    ActiveProviderLoginSetup::Inactive
 }
 
 #[wasm_bindgen]
@@ -33,7 +40,7 @@ pub fn inactive_provider_login_setup() -> nook_core::ActiveProviderLoginSetup {
 pub fn active_provider_login_setup(
     provider_type: nook_core::StorageProviderType,
 ) -> nook_core::ActiveProviderLoginSetup {
-    nook_core::ActiveProviderLoginSetup::Active(provider_type)
+    ActiveProviderLoginSetup::Active(provider_type)
 }
 
 #[wasm_bindgen]
@@ -45,9 +52,9 @@ impl NookProviderSaveOutcome {
     #[must_use]
     pub fn state(&self) -> NookProviderSaveOutcomeState {
         match self.0 {
-            nook_core::ProviderSaveOutcome::Saved { .. } => NookProviderSaveOutcomeState::Saved,
-            nook_core::ProviderSaveOutcome::Duplicate => NookProviderSaveOutcomeState::Duplicate,
-            nook_core::ProviderSaveOutcome::LocalFolderRequired => {
+            ProviderSaveOutcome::Saved { .. } => NookProviderSaveOutcomeState::Saved,
+            ProviderSaveOutcome::Duplicate => NookProviderSaveOutcomeState::Duplicate,
+            ProviderSaveOutcome::LocalFolderRequired => {
                 NookProviderSaveOutcomeState::LocalFolderRequired
             }
         }
@@ -56,8 +63,8 @@ impl NookProviderSaveOutcome {
     #[wasm_bindgen(getter)]
     pub fn snapshot(&self) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
         match &self.0 {
-            nook_core::ProviderSaveOutcome::Saved { snapshot, .. } => Ok(snapshot.clone()),
-            _ => Err(wasm_bindgen::JsError::new(
+            ProviderSaveOutcome::Saved { snapshot, .. } => Ok(snapshot.clone()),
+            _ => Err(JsError::new(
                 "provider save outcome does not contain a snapshot",
             )),
         }
@@ -68,8 +75,8 @@ impl NookProviderSaveOutcome {
         &self,
     ) -> Result<nook_core::StoredOAuthFileConfiguration, wasm_bindgen::JsError> {
         match &self.0 {
-            nook_core::ProviderSaveOutcome::Saved { oauth_file, .. } => Ok((**oauth_file).clone()),
-            _ => Err(wasm_bindgen::JsError::new(
+            ProviderSaveOutcome::Saved { oauth_file, .. } => Ok((**oauth_file).clone()),
+            _ => Err(JsError::new(
                 "provider save outcome does not contain an OAuth configuration",
             )),
         }
@@ -109,7 +116,7 @@ impl NookVaultManager {
         &self,
     ) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
         let identity = self.device_identity()?;
-        let loaded = crate::storage::auth_providers::load_auth_providers(&identity).await?;
+        let loaded = auth_providers::load_auth_providers(&identity).await?;
         Ok(loaded.snapshot)
     }
 
@@ -121,17 +128,17 @@ impl NookVaultManager {
         &self,
     ) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
         let identity = self.device_identity()?;
-        let loaded = crate::storage::auth_providers::load_auth_providers(&identity).await?;
+        let loaded = auth_providers::load_auth_providers(&identity).await?;
         let snapshot = loaded.snapshot;
         if !has_local_vault().await? {
             return Ok(snapshot);
         }
         let new_id = nook_core::generate_id()?.to_string();
-        let created_at: String = js_sys::Date::new_0().to_iso_string().into();
+        let created_at: String = Date::new_0().to_iso_string().into();
         let (snapshot, changed) =
             nook_core::ensure_local_provider_row(&snapshot, None, &new_id, &created_at);
         if changed {
-            crate::storage::auth_providers::save_auth_providers(&identity, &snapshot).await?;
+            auth_providers::save_auth_providers(&identity, &snapshot).await?;
         }
         Ok(snapshot)
     }
@@ -148,11 +155,11 @@ impl NookVaultManager {
         }
         let identity = self.device_identity()?;
         let new_id = nook_core::generate_id()?.to_string();
-        let created_at: String = js_sys::Date::new_0().to_iso_string().into();
+        let created_at: String = Date::new_0().to_iso_string().into();
         let (snapshot, changed) =
             nook_core::ensure_local_provider_row(&snapshot, None, &new_id, &created_at);
         if changed {
-            crate::storage::auth_providers::save_auth_providers(&identity, &snapshot).await?;
+            auth_providers::save_auth_providers(&identity, &snapshot).await?;
         }
         Ok(snapshot)
     }
@@ -165,7 +172,7 @@ impl NookVaultManager {
         snapshot: nook_core::AuthProvidersSnapshotData,
     ) -> Result<(), wasm_bindgen::JsError> {
         let identity = self.device_identity()?;
-        crate::storage::auth_providers::save_auth_providers(&identity, &snapshot).await?;
+        auth_providers::save_auth_providers(&identity, &snapshot).await?;
         Ok(())
     }
 
@@ -177,11 +184,11 @@ impl NookVaultManager {
         snapshot: nook_core::AuthProvidersSnapshotData,
     ) -> Result<(), wasm_bindgen::JsError> {
         let identity = self.device_identity()?;
-        let existing = crate::storage::auth_providers::load_auth_providers(&identity)
+        let existing = auth_providers::load_auth_providers(&identity)
             .await?
             .snapshot;
         let replaced = nook_core::replace_active_vault_provider_grants(&existing, &snapshot);
-        crate::storage::auth_providers::save_auth_providers(&identity, &replaced).await?;
+        auth_providers::save_auth_providers(&identity, &replaced).await?;
         Ok(())
     }
 
@@ -195,19 +202,16 @@ impl NookVaultManager {
         app_id: &str,
         snapshot: nook_core::AuthProvidersSnapshotData,
     ) -> Result<(), wasm_bindgen::JsError> {
-        let app_id = nook_core::AppId::parse(app_id)?;
-        if crate::storage::identity_record::load_entry_for_app_id(&app_id)
+        let app_id = AppId::parse(app_id)?;
+        if identity_record::load_entry_for_app_id(&app_id)
             .await?
             .is_none()
         {
-            return Err(wasm_bindgen::JsError::new(
+            return Err(JsError::new(
                 "Presealed provider snapshot has no protected local app key",
             ));
         }
-        crate::storage::auth_providers::save_presealed_auth_providers_for_app_id(
-            &app_id, &snapshot,
-        )
-        .await?;
+        auth_providers::save_presealed_auth_providers_for_app_id(&app_id, &snapshot).await?;
         Ok(())
     }
 }
@@ -220,7 +224,7 @@ pub fn seal_auth_providers_for_device_public_key(
     device_public_key: &str,
     mut snapshot: nook_core::AuthProvidersSnapshotData,
 ) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
-    let public_key = nook_core::DevicePublicKey::parse(device_public_key)?;
+    let public_key = DevicePublicKey::parse(device_public_key)?;
     nook_core::seal_provider_credentials_for_public_key(&public_key, &mut snapshot)?;
     Ok(snapshot)
 }
@@ -228,7 +232,7 @@ pub fn seal_auth_providers_for_device_public_key(
 /// Delete the `nook_auth` `IndexedDB` database (used on full sign-out / reset).
 #[wasm_bindgen]
 pub async fn delete_auth_providers_db() -> Result<(), wasm_bindgen::JsError> {
-    crate::storage::auth_providers::delete_auth_providers_db().await?;
+    auth_providers::delete_auth_providers_db().await?;
     Ok(())
 }
 
@@ -236,7 +240,7 @@ pub async fn delete_auth_providers_db() -> Result<(), wasm_bindgen::JsError> {
 #[wasm_bindgen]
 pub async fn read_extension_pairing_state()
 -> Result<nook_companion_core::ExtensionPairingState, wasm_bindgen::JsError> {
-    Ok(crate::storage::extension_state::read_all().await?)
+    Ok(extension_state::read_all().await?)
 }
 
 /// Persist extension pairing metadata in extension-origin Rexie storage.
@@ -244,7 +248,7 @@ pub async fn read_extension_pairing_state()
 pub async fn write_extension_pairing_state(
     state: nook_companion_core::ExtensionPairingState,
 ) -> Result<(), wasm_bindgen::JsError> {
-    crate::storage::extension_state::write_all(&state).await?;
+    extension_state::write_all(&state).await?;
     Ok(())
 }
 
@@ -253,7 +257,7 @@ pub async fn write_extension_pairing_state(
 pub async fn remove_extension_pairing_state(
     keys: Vec<String>,
 ) -> Result<(), wasm_bindgen::JsError> {
-    crate::storage::extension_state::remove(&keys).await?;
+    extension_state::remove(&keys).await?;
     Ok(())
 }
 
@@ -263,7 +267,7 @@ pub async fn reconcile_extension_pairing_state(
     state: nook_companion_core::ExtensionPairingState,
     removed_keys: Vec<String>,
 ) -> Result<(), wasm_bindgen::JsError> {
-    crate::storage::extension_state::reconcile(&state, &removed_keys).await?;
+    extension_state::reconcile(&state, &removed_keys).await?;
     Ok(())
 }
 
@@ -291,9 +295,9 @@ impl NookDuplicateSyncProvider {
 
     #[wasm_bindgen(getter)]
     pub fn provider(&self) -> Result<nook_core::StorageProviderData, wasm_bindgen::JsError> {
-        self.0.clone().ok_or_else(|| {
-            wasm_bindgen::JsError::new("sync provider target does not have a duplicate")
-        })
+        self.0
+            .clone()
+            .ok_or_else(|| JsError::new("sync provider target does not have a duplicate"))
     }
 }
 
@@ -337,7 +341,7 @@ pub fn ensure_local_provider_row(
     active_store_id: &str,
 ) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
     let new_id = nook_core::generate_id()?.to_string();
-    let created_at: String = js_sys::Date::new_0().to_iso_string().into();
+    let created_at: String = Date::new_0().to_iso_string().into();
     let (next, _changed) = nook_core::ensure_local_provider_row(
         &snapshot,
         Some(active_store_id),
@@ -427,8 +431,7 @@ mod application_url_tests {
 pub fn vault_connect_intent_permits_empty_remote_genesis(
     intent_name: &str,
 ) -> Result<bool, wasm_bindgen::JsError> {
-    let intent = nook_core::VaultConnectIntent::parse(intent_name)
-        .map_err(|error| wasm_bindgen::JsError::new(&error))?;
+    let intent = VaultConnectIntent::parse(intent_name).map_err(|error| JsError::new(&error))?;
     Ok(intent.permits_empty_remote_genesis())
 }
 
@@ -464,9 +467,9 @@ pub async fn approve_extension_device(
 pub fn validate_extension_pairing_vault_type(
     vault_type: &str,
 ) -> Result<(), wasm_bindgen::JsError> {
-    let vault_type = nook_core::VaultType::parse(vault_type)?;
+    let vault_type = VaultType::parse(vault_type)?;
     let application = application::configured_vault_application();
-    if application == nook_core::VaultApplication::Extension {
+    if application == VaultApplication::Extension {
         application.validate_session_access(vault_type)?;
     } else {
         application.validate_extension_approval(vault_type)?;
@@ -475,7 +478,7 @@ pub fn validate_extension_pairing_vault_type(
 }
 
 async fn local_vault_matches_compiled_application(store_id: &str) -> Result<bool, NookError> {
-    let Some(content) = crate::storage::indexed_db::load_vault_blob(store_id).await? else {
+    let Some(content) = indexed_db::load_vault_blob(store_id).await? else {
         return Ok(false);
     };
     let architecture = nook_core::read_vault_architecture(&content)?;
@@ -484,7 +487,7 @@ async fn local_vault_matches_compiled_application(store_id: &str) -> Result<bool
 
 #[wasm_bindgen]
 pub async fn has_local_vault() -> Result<bool, wasm_bindgen::JsError> {
-    for entry in crate::storage::indexed_db::list_vault_registry_entries().await? {
+    for entry in indexed_db::list_vault_registry_entries().await? {
         if local_vault_matches_compiled_application(&entry.store_id).await? {
             return Ok(true);
         }
@@ -494,7 +497,7 @@ pub async fn has_local_vault() -> Result<bool, wasm_bindgen::JsError> {
 
 #[wasm_bindgen]
 pub async fn has_active_local_vault() -> Result<bool, wasm_bindgen::JsError> {
-    let Some(store_id) = crate::storage::indexed_db::get_active_vault_id().await? else {
+    let Some(store_id) = indexed_db::get_active_vault_id().await? else {
         return Ok(false);
     };
     Ok(local_vault_matches_compiled_application(&store_id).await?)
@@ -551,15 +554,15 @@ impl NookLocalVaultEntry {
     pub fn last_unlocked_at(&self) -> Result<String, wasm_bindgen::JsError> {
         self.last_unlocked_at
             .as_ref()
-            .map(nook_core::IsoTimestamp::to_string)
-            .ok_or_else(|| wasm_bindgen::JsError::new("local vault has never been unlocked"))
+            .map(IsoTimestamp::to_string)
+            .ok_or_else(|| JsError::new("local vault has never been unlocked"))
     }
 }
 
 #[wasm_bindgen]
 pub async fn list_local_vaults() -> Result<Vec<NookLocalVaultEntry>, wasm_bindgen::JsError> {
     let mut matching = Vec::new();
-    for entry in crate::storage::indexed_db::list_vault_registry_entries().await? {
+    for entry in indexed_db::list_vault_registry_entries().await? {
         if local_vault_matches_compiled_application(&entry.store_id).await? {
             matching.push(NookLocalVaultEntry {
                 store_id: entry.store_id,
@@ -597,14 +600,14 @@ impl NookActiveVaultSelection {
     pub fn store_id(&self) -> Result<String, wasm_bindgen::JsError> {
         self.0
             .clone()
-            .ok_or_else(|| wasm_bindgen::JsError::new("no active local vault is selected"))
+            .ok_or_else(|| JsError::new("no active local vault is selected"))
     }
 }
 
 #[wasm_bindgen]
 pub async fn get_active_vault_selection() -> Result<NookActiveVaultSelection, wasm_bindgen::JsError>
 {
-    let Some(store_id) = crate::storage::indexed_db::get_active_vault_id().await? else {
+    let Some(store_id) = indexed_db::get_active_vault_id().await? else {
         return Ok(NookActiveVaultSelection(None));
     };
     if local_vault_matches_compiled_application(&store_id).await? {
@@ -616,11 +619,11 @@ pub async fn get_active_vault_selection() -> Result<NookActiveVaultSelection, wa
 
 #[wasm_bindgen]
 pub async fn set_active_vault(store_id: String) -> Result<(), wasm_bindgen::JsError> {
-    let content = crate::storage::indexed_db::load_vault_blob(&store_id)
+    let content = indexed_db::load_vault_blob(&store_id)
         .await?
         .ok_or_else(|| NookError::Database("Local vault was not found.".to_owned()))?;
     validate_configured_application_for_content(&content)?;
-    crate::storage::indexed_db::switch_active_vault(&store_id)
+    indexed_db::switch_active_vault(&store_id)
         .await
         .map_err(Into::into)
 }
@@ -630,14 +633,14 @@ pub async fn set_local_vault_label(
     store_id: String,
     label: String,
 ) -> Result<(), wasm_bindgen::JsError> {
-    crate::storage::indexed_db::set_local_vault_label(&store_id, &label)
+    indexed_db::set_local_vault_label(&store_id, &label)
         .await
         .map_err(Into::into)
 }
 
 #[wasm_bindgen]
 pub async fn prepare_new_local_vault_slot() -> Result<(), wasm_bindgen::JsError> {
-    crate::storage::indexed_db::prepare_new_local_vault_slot()
+    indexed_db::prepare_new_local_vault_slot()
         .await
         .map_err(Into::into)
 }
@@ -645,7 +648,7 @@ pub async fn prepare_new_local_vault_slot() -> Result<(), wasm_bindgen::JsError>
 #[wasm_bindgen]
 pub async fn import_local_vault_blob(content: String) -> Result<String, wasm_bindgen::JsError> {
     validate_configured_application_for_content(&content)?;
-    crate::storage::indexed_db::import_vault_blob(&content, None)
+    indexed_db::import_vault_blob(&content, None)
         .await
         .map_err(Into::into)
 }
@@ -656,7 +659,7 @@ pub async fn import_named_local_vault_blob(
     label: String,
 ) -> Result<String, wasm_bindgen::JsError> {
     validate_configured_application_for_content(&content)?;
-    crate::storage::indexed_db::import_vault_blob(&content, Some(&label))
+    indexed_db::import_vault_blob(&content, Some(&label))
         .await
         .map_err(Into::into)
 }
@@ -667,12 +670,12 @@ pub async fn import_named_local_vault_blob(
 pub fn compare_vault_sync(local: &str, remote: &str) -> Result<String, wasm_bindgen::JsError> {
     match nook_core::compare_vault_sync(local, remote) {
         Ok(action) => Ok(match action {
-            nook_core::VaultSyncAction::Unchanged => "unchanged".to_owned(),
-            nook_core::VaultSyncAction::AdoptRemote => "adopt_remote".to_owned(),
-            nook_core::VaultSyncAction::PushLocal => "push_local".to_owned(),
-            nook_core::VaultSyncAction::Conflict => "conflict".to_owned(),
+            VaultSyncAction::Unchanged => "unchanged".to_owned(),
+            VaultSyncAction::AdoptRemote => "adopt_remote".to_owned(),
+            VaultSyncAction::PushLocal => "push_local".to_owned(),
+            VaultSyncAction::Conflict => "conflict".to_owned(),
         }),
-        Err(e) => Err(wasm_bindgen::JsError::new(&e.to_string())),
+        Err(e) => Err(JsError::new(&e.to_string())),
     }
 }
 

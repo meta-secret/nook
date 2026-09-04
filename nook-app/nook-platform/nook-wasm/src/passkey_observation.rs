@@ -1,6 +1,10 @@
 //! Best-effort, non-authoritative metadata reported by a `WebAuthn` ceremony.
 
 use js_sys::{Array, ArrayBuffer, Function, Uint8Array};
+use nook_core::{
+    PasskeyAuthenticatorAttachment, PasskeyBackupState, PasskeyObservedBrowser,
+    PasskeyObservedPlatform, PasskeyTransport,
+};
 use wasm_bindgen::{JsCast, prelude::wasm_bindgen};
 use web_sys::{
     AuthenticatorAssertionResponse, AuthenticatorAttestationResponse, PublicKeyCredential,
@@ -39,7 +43,7 @@ pub(crate) fn observe_registration(credential: &PublicKeyCredential) -> PasskeyB
         transports: registration_transports(&response),
         backup_state: authenticator_data
             .as_deref()
-            .map_or(nook_core::PasskeyBackupState::Unknown, backup_state),
+            .map_or(PasskeyBackupState::Unknown, backup_state),
         aaguid: authenticator_data.as_deref().and_then(aaguid),
         ..client_environment()
     }
@@ -69,7 +73,7 @@ pub(crate) fn observe_assertion(credential: &PublicKeyCredential) -> PasskeyBrow
         transports: Vec::new(),
         backup_state: authenticator_data
             .as_deref()
-            .map_or(nook_core::PasskeyBackupState::Unknown, backup_state),
+            .map_or(PasskeyBackupState::Unknown, backup_state),
         aaguid: None,
         ..client_environment()
     }
@@ -78,9 +82,9 @@ pub(crate) fn observe_assertion(credential: &PublicKeyCredential) -> PasskeyBrow
 fn attachment(credential: &PublicKeyCredential) -> nook_core::PasskeyAuthenticatorAttachment {
     let credential: &ObservedPublicKeyCredential = credential.unchecked_ref();
     match credential.authenticator_attachment().as_deref() {
-        Some("platform") => nook_core::PasskeyAuthenticatorAttachment::Platform,
-        Some("cross-platform") => nook_core::PasskeyAuthenticatorAttachment::CrossPlatform,
-        _ => nook_core::PasskeyAuthenticatorAttachment::Unknown,
+        Some("platform") => PasskeyAuthenticatorAttachment::Platform,
+        Some("cross-platform") => PasskeyAuthenticatorAttachment::CrossPlatform,
+        _ => PasskeyAuthenticatorAttachment::Unknown,
     }
 }
 
@@ -91,11 +95,11 @@ fn transports(array: &Array) -> Vec<nook_core::PasskeyTransport> {
             continue;
         };
         let transport = match value.as_str() {
-            "ble" => nook_core::PasskeyTransport::Ble,
-            "hybrid" => nook_core::PasskeyTransport::Hybrid,
-            "internal" => nook_core::PasskeyTransport::Internal,
-            "nfc" => nook_core::PasskeyTransport::Nfc,
-            "usb" => nook_core::PasskeyTransport::Usb,
+            "ble" => PasskeyTransport::Ble,
+            "hybrid" => PasskeyTransport::Hybrid,
+            "internal" => PasskeyTransport::Internal,
+            "nfc" => PasskeyTransport::Nfc,
+            "usb" => PasskeyTransport::Usb,
             _ => continue,
         };
         if !values.contains(&transport) {
@@ -116,14 +120,14 @@ fn backup_state(data: &[u8]) -> nook_core::PasskeyBackupState {
     const BACKUP_ELIGIBLE: u8 = 0x08;
     const BACKUP_STATE: u8 = 0x10;
     let Some(flags) = data.get(FLAGS_INDEX).copied() else {
-        return nook_core::PasskeyBackupState::Unknown;
+        return PasskeyBackupState::Unknown;
     };
     if flags & BACKUP_STATE != 0 {
-        nook_core::PasskeyBackupState::BackedUp
+        PasskeyBackupState::BackedUp
     } else if flags & BACKUP_ELIGIBLE != 0 {
-        nook_core::PasskeyBackupState::Eligible
+        PasskeyBackupState::Eligible
     } else {
-        nook_core::PasskeyBackupState::NotEligible
+        PasskeyBackupState::NotEligible
     }
 }
 
@@ -169,41 +173,41 @@ fn observed_platform(
     max_touch_points: i32,
 ) -> nook_core::PasskeyObservedPlatform {
     if user_agent.contains("Android") {
-        nook_core::PasskeyObservedPlatform::Android
+        PasskeyObservedPlatform::Android
     } else if user_agent.contains("iPhone") || user_agent.contains("iPad") {
-        nook_core::PasskeyObservedPlatform::AppleMobile
+        PasskeyObservedPlatform::AppleMobile
     } else if user_agent.contains("Macintosh") && max_touch_points > 1 {
         // iPadOS desktop mode deliberately uses a Macintosh user agent. Touch
         // capability is the browser-supported discriminator recommended for
         // this otherwise indistinguishable case.
-        nook_core::PasskeyObservedPlatform::AppleMobile
+        PasskeyObservedPlatform::AppleMobile
     } else if user_agent.contains("Mac OS X") {
-        nook_core::PasskeyObservedPlatform::MacOs
+        PasskeyObservedPlatform::MacOs
     } else if user_agent.contains("Windows") {
-        nook_core::PasskeyObservedPlatform::Windows
+        PasskeyObservedPlatform::Windows
     } else if user_agent.contains("Linux") {
-        nook_core::PasskeyObservedPlatform::Linux
+        PasskeyObservedPlatform::Linux
     } else {
-        nook_core::PasskeyObservedPlatform::Other
+        PasskeyObservedPlatform::Other
     }
 }
 
 fn observed_browser(user_agent: &str) -> nook_core::PasskeyObservedBrowser {
     if user_agent.contains("OPR/") || user_agent.contains("SamsungBrowser/") {
-        nook_core::PasskeyObservedBrowser::Other
+        PasskeyObservedBrowser::Other
     } else if user_agent.contains("Edg/")
         || user_agent.contains("EdgA/")
         || user_agent.contains("EdgiOS/")
     {
-        nook_core::PasskeyObservedBrowser::Edge
+        PasskeyObservedBrowser::Edge
     } else if user_agent.contains("Firefox/") || user_agent.contains("FxiOS/") {
-        nook_core::PasskeyObservedBrowser::Firefox
+        PasskeyObservedBrowser::Firefox
     } else if user_agent.contains("CriOS/") || user_agent.contains("Chrome/") {
-        nook_core::PasskeyObservedBrowser::Chrome
+        PasskeyObservedBrowser::Chrome
     } else if user_agent.contains("Safari/") {
-        nook_core::PasskeyObservedBrowser::Safari
+        PasskeyObservedBrowser::Safari
     } else {
-        nook_core::PasskeyObservedBrowser::Other
+        PasskeyObservedBrowser::Other
     }
 }
 
@@ -215,14 +219,11 @@ mod tests {
     fn decodes_backup_flags_without_claiming_provider_identity() {
         let mut data = vec![0; 53];
         data[32] = 0x08;
-        assert_eq!(backup_state(&data), nook_core::PasskeyBackupState::Eligible);
+        assert_eq!(backup_state(&data), PasskeyBackupState::Eligible);
         data[32] = 0x18;
-        assert_eq!(backup_state(&data), nook_core::PasskeyBackupState::BackedUp);
+        assert_eq!(backup_state(&data), PasskeyBackupState::BackedUp);
         data[32] = 0;
-        assert_eq!(
-            backup_state(&data),
-            nook_core::PasskeyBackupState::NotEligible
-        );
+        assert_eq!(backup_state(&data), PasskeyBackupState::NotEligible);
     }
 
     #[test]
@@ -241,11 +242,11 @@ mod tests {
     fn recognizes_ios_browser_tokens_before_safari_fallback() {
         assert_eq!(
             observed_browser("Mozilla/5.0 FxiOS/140.0 Mobile/15E148 Safari/605.1.15"),
-            nook_core::PasskeyObservedBrowser::Firefox
+            PasskeyObservedBrowser::Firefox
         );
         assert_eq!(
             observed_browser("Mozilla/5.0 EdgiOS/140.0 Mobile/15E148 Safari/605.1.15"),
-            nook_core::PasskeyObservedBrowser::Edge
+            PasskeyObservedBrowser::Edge
         );
     }
 
@@ -255,7 +256,7 @@ mod tests {
             observed_browser(
                 "Mozilla/5.0 (Linux; Android 15) Chrome/151.0.0.0 Mobile Safari/537.36 EdgA/151.0"
             ),
-            nook_core::PasskeyObservedBrowser::Edge
+            PasskeyObservedBrowser::Edge
         );
     }
 
@@ -265,11 +266,11 @@ mod tests {
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) AppleWebKit/605.1.15 Safari/605.1.15";
         assert_eq!(
             observed_platform(desktop_safari, 5),
-            nook_core::PasskeyObservedPlatform::AppleMobile
+            PasskeyObservedPlatform::AppleMobile
         );
         assert_eq!(
             observed_platform(desktop_safari, 0),
-            nook_core::PasskeyObservedPlatform::MacOs
+            PasskeyObservedPlatform::MacOs
         );
     }
 
@@ -277,7 +278,7 @@ mod tests {
     fn recognizes_opera_before_the_generic_chrome_token() {
         assert_eq!(
             observed_browser("Mozilla/5.0 Chrome/151.0.0.0 Safari/537.36 OPR/117.0.0.0"),
-            nook_core::PasskeyObservedBrowser::Other
+            PasskeyObservedBrowser::Other
         );
     }
 
@@ -287,7 +288,7 @@ mod tests {
             observed_browser(
                 "Mozilla/5.0 (Linux; Android 15) Chrome/151.0 Mobile Safari/537.36 SamsungBrowser/29.0"
             ),
-            nook_core::PasskeyObservedBrowser::Other
+            PasskeyObservedBrowser::Other
         );
     }
 }

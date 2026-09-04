@@ -3,6 +3,8 @@ use crate::{
     NookAuthenticationPageObservations, NookAuthenticationWorkflowMatch,
     NookVaultSecurityRecommendations,
 };
+use nook_core::AppLocale;
+use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
@@ -16,9 +18,9 @@ pub enum NookAppLocaleParse {
 impl From<nook_core::AppLocale> for NookAppLocaleParse {
     fn from(locale: nook_core::AppLocale) -> Self {
         match locale {
-            nook_core::AppLocale::English => Self::English,
-            nook_core::AppLocale::Russian => Self::Russian,
-            nook_core::AppLocale::Unsupported => Self::Unsupported,
+            AppLocale::English => Self::English,
+            AppLocale::Russian => Self::Russian,
+            AppLocale::Unsupported => Self::Unsupported,
         }
     }
 }
@@ -126,7 +128,7 @@ pub fn supported_app_locale_code(
     match locale {
         NookAppLocaleParse::English => Ok("en".to_owned()),
         NookAppLocaleParse::Russian => Ok("ru".to_owned()),
-        NookAppLocaleParse::Unsupported => Err(wasm_bindgen::JsError::new(
+        NookAppLocaleParse::Unsupported => Err(JsError::new(
             "unsupported locale does not have an application locale code",
         )),
     }
@@ -141,7 +143,7 @@ pub fn get_translation_catalog(locale: &str) -> String {
 #[wasm_bindgen]
 pub fn lookup_translation(catalog_json: &str, key: &str) -> Result<String, wasm_bindgen::JsError> {
     nook_core::lookup_translation(catalog_json, key)
-        .ok_or_else(|| wasm_bindgen::JsError::new(&format!("missing translation key: {key}")))
+        .ok_or_else(|| JsError::new(&format!("missing translation key: {key}")))
 }
 
 #[wasm_bindgen]

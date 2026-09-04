@@ -1,5 +1,7 @@
 use super::wasm_bindgen;
 use crate::{NookDecryptedEnrollmentPayload, NookEnrollmentIssueInput};
+use nook_core::EnrollmentEntryLabel;
+use wasm_bindgen::JsError;
 
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -17,18 +19,18 @@ impl NookEnrollmentEntryLabel {
     #[must_use]
     pub fn state(&self) -> NookEnrollmentEntryLabelState {
         match &self.0 {
-            nook_core::EnrollmentEntryLabel::Unlabeled => NookEnrollmentEntryLabelState::Unlabeled,
-            nook_core::EnrollmentEntryLabel::Labeled(_) => NookEnrollmentEntryLabelState::Labeled,
+            EnrollmentEntryLabel::Unlabeled => NookEnrollmentEntryLabelState::Unlabeled,
+            EnrollmentEntryLabel::Labeled(_) => NookEnrollmentEntryLabelState::Labeled,
         }
     }
 
     #[wasm_bindgen(getter)]
     pub fn value(&self) -> Result<String, wasm_bindgen::JsError> {
         match &self.0 {
-            nook_core::EnrollmentEntryLabel::Unlabeled => Err(wasm_bindgen::JsError::new(
-                "enrollment entry does not have a label",
-            )),
-            nook_core::EnrollmentEntryLabel::Labeled(label) => Ok(label.clone()),
+            EnrollmentEntryLabel::Unlabeled => {
+                Err(JsError::new("enrollment entry does not have a label"))
+            }
+            EnrollmentEntryLabel::Labeled(label) => Ok(label.clone()),
         }
     }
 }

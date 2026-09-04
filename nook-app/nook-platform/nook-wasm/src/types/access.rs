@@ -1,4 +1,5 @@
 use super::wasm_bindgen;
+use crate::passkey_browser;
 
 #[wasm_bindgen]
 #[derive(Clone)]
@@ -48,10 +49,10 @@ impl NookPasskeySetup {
         rp_id: &str,
         rp_name: &str,
     ) -> Result<web_sys::CredentialCreationOptions, wasm_bindgen::JsError> {
-        crate::passkey_browser::creation_options(
+        passkey_browser::creation_options(
             rp_id,
             rp_name,
-            crate::passkey_browser::DEFAULT_PASSKEY_LABEL,
+            passkey_browser::DEFAULT_PASSKEY_LABEL,
             &self.user_handle,
             &self.prf_input,
         )
@@ -67,7 +68,7 @@ impl NookPasskeySetup {
         rp_name: &str,
         passkey_label: &str,
     ) -> Result<web_sys::CredentialCreationOptions, wasm_bindgen::JsError> {
-        crate::passkey_browser::creation_options(
+        passkey_browser::creation_options(
             rp_id,
             rp_name,
             passkey_label,
@@ -127,7 +128,7 @@ impl NookPasskeyUnlockOptions {
         &self,
         rp_id: &str,
     ) -> Result<web_sys::CredentialRequestOptions, wasm_bindgen::JsError> {
-        crate::passkey_browser::request_options(rp_id, &self.credential_id, &self.prf_input)
+        passkey_browser::request_options(rp_id, &self.credential_id, &self.prf_input)
     }
 }
 

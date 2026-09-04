@@ -1,4 +1,5 @@
 use super::wasm_bindgen;
+use nook_core::{SecretValue, TotpDigits};
 
 #[wasm_bindgen]
 #[derive(Clone)]
@@ -56,9 +57,9 @@ impl NookSecretRecord {
     #[wasm_bindgen(getter, js_name = websiteUrl)]
     pub fn website_url(&self) -> String {
         match &self.record.data {
-            nook_core::SecretValue::Login(value) => value.website_url.clone(),
-            nook_core::SecretValue::ApiKey(value) => value.website_url.clone(),
-            nook_core::SecretValue::Authenticator(value) => value.website_url.clone(),
+            SecretValue::Login(value) => value.website_url.clone(),
+            SecretValue::ApiKey(value) => value.website_url.clone(),
+            SecretValue::Authenticator(value) => value.website_url.clone(),
             _ => String::new(),
         }
     }
@@ -66,7 +67,7 @@ impl NookSecretRecord {
     #[wasm_bindgen(getter)]
     pub fn username(&self) -> String {
         match &self.record.data {
-            nook_core::SecretValue::Login(value) => value.username.clone(),
+            SecretValue::Login(value) => value.username.clone(),
             _ => String::new(),
         }
     }
@@ -74,7 +75,7 @@ impl NookSecretRecord {
     #[wasm_bindgen(getter)]
     pub fn password(&self) -> String {
         match &self.record.data {
-            nook_core::SecretValue::Login(value) => value.password.clone(),
+            SecretValue::Login(value) => value.password.clone(),
             _ => String::new(),
         }
     }
@@ -82,8 +83,8 @@ impl NookSecretRecord {
     #[wasm_bindgen(getter)]
     pub fn notes(&self) -> String {
         match &self.record.data {
-            nook_core::SecretValue::Login(value) => value.notes.clone(),
-            nook_core::SecretValue::CreditCard(value) => value.notes.clone(),
+            SecretValue::Login(value) => value.notes.clone(),
+            SecretValue::CreditCard(value) => value.notes.clone(),
             _ => String::new(),
         }
     }
@@ -91,7 +92,7 @@ impl NookSecretRecord {
     #[wasm_bindgen(getter, js_name = key)]
     pub fn api_key(&self) -> String {
         match &self.record.data {
-            nook_core::SecretValue::ApiKey(value) => value.key.clone(),
+            SecretValue::ApiKey(value) => value.key.clone(),
             _ => String::new(),
         }
     }
@@ -99,7 +100,7 @@ impl NookSecretRecord {
     #[wasm_bindgen(getter, js_name = expiresAt)]
     pub fn expires_at(&self) -> String {
         match &self.record.data {
-            nook_core::SecretValue::ApiKey(value) => value.expires_at.clone(),
+            SecretValue::ApiKey(value) => value.expires_at.clone(),
             _ => String::new(),
         }
     }
@@ -107,7 +108,7 @@ impl NookSecretRecord {
     #[wasm_bindgen(getter)]
     pub fn name(&self) -> String {
         match &self.record.data {
-            nook_core::SecretValue::SeedPhrase(value) => value.name.clone(),
+            SecretValue::SeedPhrase(value) => value.name.clone(),
             _ => String::new(),
         }
     }
@@ -115,7 +116,7 @@ impl NookSecretRecord {
     #[wasm_bindgen(getter)]
     pub fn seed(&self) -> String {
         match &self.record.data {
-            nook_core::SecretValue::SeedPhrase(value) => value.seed.clone(),
+            SecretValue::SeedPhrase(value) => value.seed.clone(),
             _ => String::new(),
         }
     }
@@ -124,9 +125,9 @@ impl NookSecretRecord {
     #[allow(clippy::match_same_arms)]
     pub fn title(&self) -> String {
         match &self.record.data {
-            nook_core::SecretValue::SecureNote(value) => value.title.clone(),
-            nook_core::SecretValue::CreditCard(value) => value.title.clone(),
-            nook_core::SecretValue::FileAttachment(value) => value.title.clone(),
+            SecretValue::SecureNote(value) => value.title.clone(),
+            SecretValue::CreditCard(value) => value.title.clone(),
+            SecretValue::FileAttachment(value) => value.title.clone(),
             _ => String::new(),
         }
     }
@@ -134,7 +135,7 @@ impl NookSecretRecord {
     #[wasm_bindgen(getter)]
     pub fn note(&self) -> String {
         match &self.record.data {
-            nook_core::SecretValue::SecureNote(value) => value.note.clone(),
+            SecretValue::SecureNote(value) => value.note.clone(),
             _ => String::new(),
         }
     }
@@ -142,7 +143,7 @@ impl NookSecretRecord {
     #[wasm_bindgen(getter, js_name = cardholderName)]
     pub fn cardholder_name(&self) -> String {
         match &self.record.data {
-            nook_core::SecretValue::CreditCard(value) => value.cardholder_name.clone(),
+            SecretValue::CreditCard(value) => value.cardholder_name.clone(),
             _ => String::new(),
         }
     }
@@ -150,7 +151,7 @@ impl NookSecretRecord {
     #[wasm_bindgen(getter, js_name = cardNumber)]
     pub fn card_number(&self) -> String {
         match &self.record.data {
-            nook_core::SecretValue::CreditCard(value) => value.number.clone(),
+            SecretValue::CreditCard(value) => value.number.clone(),
             _ => String::new(),
         }
     }
@@ -158,7 +159,7 @@ impl NookSecretRecord {
     #[wasm_bindgen(getter)]
     pub fn last4(&self) -> String {
         match &self.record.data {
-            nook_core::SecretValue::CreditCard(value) => value.last4(),
+            SecretValue::CreditCard(value) => value.last4(),
             _ => String::new(),
         }
     }
@@ -166,7 +167,7 @@ impl NookSecretRecord {
     #[wasm_bindgen(getter, js_name = expirationMonth)]
     pub fn expiration_month(&self) -> String {
         match &self.record.data {
-            nook_core::SecretValue::CreditCard(value) => value.expiration_month.clone(),
+            SecretValue::CreditCard(value) => value.expiration_month.clone(),
             _ => String::new(),
         }
     }
@@ -174,7 +175,7 @@ impl NookSecretRecord {
     #[wasm_bindgen(getter, js_name = expirationYear)]
     pub fn expiration_year(&self) -> String {
         match &self.record.data {
-            nook_core::SecretValue::CreditCard(value) => value.expiration_year.clone(),
+            SecretValue::CreditCard(value) => value.expiration_year.clone(),
             _ => String::new(),
         }
     }
@@ -182,7 +183,7 @@ impl NookSecretRecord {
     #[wasm_bindgen(getter)]
     pub fn cvv(&self) -> String {
         match &self.record.data {
-            nook_core::SecretValue::CreditCard(value) => value.cvv.clone(),
+            SecretValue::CreditCard(value) => value.cvv.clone(),
             _ => String::new(),
         }
     }
@@ -190,7 +191,7 @@ impl NookSecretRecord {
     #[wasm_bindgen(getter, js_name = fileName)]
     pub fn file_name(&self) -> String {
         match &self.record.data {
-            nook_core::SecretValue::FileAttachment(value) => value.file_name.clone(),
+            SecretValue::FileAttachment(value) => value.file_name.clone(),
             _ => String::new(),
         }
     }
@@ -198,7 +199,7 @@ impl NookSecretRecord {
     #[wasm_bindgen(getter, js_name = mimeType)]
     pub fn mime_type(&self) -> String {
         match &self.record.data {
-            nook_core::SecretValue::FileAttachment(value) => value.mime_type.clone(),
+            SecretValue::FileAttachment(value) => value.mime_type.clone(),
             _ => String::new(),
         }
     }
@@ -213,7 +214,7 @@ impl NookSecretRecord {
     )]
     pub fn size_bytes(&self) -> u32 {
         match &self.record.data {
-            nook_core::SecretValue::FileAttachment(value) => {
+            SecretValue::FileAttachment(value) => {
                 u32::try_from(value.size_bytes).unwrap_or(u32::MAX)
             }
             _ => 0,
@@ -223,7 +224,7 @@ impl NookSecretRecord {
     #[wasm_bindgen(getter, js_name = contentBase64)]
     pub fn content_base64(&self) -> String {
         match &self.record.data {
-            nook_core::SecretValue::FileAttachment(value) => value.content_base64.clone(),
+            SecretValue::FileAttachment(value) => value.content_base64.clone(),
             _ => String::new(),
         }
     }
@@ -231,7 +232,7 @@ impl NookSecretRecord {
     #[wasm_bindgen(getter, js_name = rpId)]
     pub fn rp_id(&self) -> String {
         match &self.record.data {
-            nook_core::SecretValue::Passkey(value) => value.rp_id.clone(),
+            SecretValue::Passkey(value) => value.rp_id.clone(),
             _ => String::new(),
         }
     }
@@ -239,7 +240,7 @@ impl NookSecretRecord {
     #[wasm_bindgen(getter)]
     pub fn issuer(&self) -> String {
         match &self.record.data {
-            nook_core::SecretValue::Authenticator(value) => value.issuer.clone(),
+            SecretValue::Authenticator(value) => value.issuer.clone(),
             _ => String::new(),
         }
     }
@@ -247,7 +248,7 @@ impl NookSecretRecord {
     #[wasm_bindgen(getter, js_name = passkeyUserName)]
     pub fn passkey_user_name(&self) -> String {
         match &self.record.data {
-            nook_core::SecretValue::Passkey(value) => value.user_name.clone(),
+            SecretValue::Passkey(value) => value.user_name.clone(),
             _ => String::new(),
         }
     }
@@ -255,7 +256,7 @@ impl NookSecretRecord {
     #[wasm_bindgen(getter)]
     pub fn account(&self) -> String {
         match &self.record.data {
-            nook_core::SecretValue::Authenticator(value) => value.account.clone(),
+            SecretValue::Authenticator(value) => value.account.clone(),
             _ => String::new(),
         }
     }
@@ -263,7 +264,7 @@ impl NookSecretRecord {
     #[wasm_bindgen(getter, js_name = passkeyUserDisplayName)]
     pub fn passkey_user_display_name(&self) -> String {
         match &self.record.data {
-            nook_core::SecretValue::Passkey(value) => value.user_display_name.clone(),
+            SecretValue::Passkey(value) => value.user_display_name.clone(),
             _ => String::new(),
         }
     }
@@ -271,7 +272,7 @@ impl NookSecretRecord {
     #[wasm_bindgen(getter, js_name = totpSecret)]
     pub fn totp_secret(&self) -> String {
         match &self.record.data {
-            nook_core::SecretValue::Authenticator(value) => value.secret.as_str().to_owned(),
+            SecretValue::Authenticator(value) => value.secret.as_str().to_owned(),
             _ => String::new(),
         }
     }
@@ -279,7 +280,7 @@ impl NookSecretRecord {
     #[wasm_bindgen(getter)]
     pub fn algorithm(&self) -> String {
         match &self.record.data {
-            nook_core::SecretValue::Authenticator(value) => value.algorithm.as_str().to_owned(),
+            SecretValue::Authenticator(value) => value.algorithm.as_str().to_owned(),
             _ => String::new(),
         }
     }
@@ -294,10 +295,10 @@ impl NookSecretRecord {
     )]
     pub fn digits(&self) -> u32 {
         match &self.record.data {
-            nook_core::SecretValue::Authenticator(value) => match value.digits {
-                nook_core::TotpDigits::Six => 6,
-                nook_core::TotpDigits::Seven => 7,
-                nook_core::TotpDigits::Eight => 8,
+            SecretValue::Authenticator(value) => match value.digits {
+                TotpDigits::Six => 6,
+                TotpDigits::Seven => 7,
+                TotpDigits::Eight => 8,
             },
             _ => 0,
         }
@@ -313,7 +314,7 @@ impl NookSecretRecord {
     )]
     pub fn period(&self) -> u32 {
         match &self.record.data {
-            nook_core::SecretValue::Authenticator(value) => {
+            SecretValue::Authenticator(value) => {
                 u32::try_from(value.period.serialized_value()).unwrap_or(u32::MAX)
             }
             _ => 0,
@@ -323,7 +324,7 @@ impl NookSecretRecord {
     #[wasm_bindgen(getter, js_name = backupCodes)]
     pub fn backup_codes(&self) -> Vec<String> {
         match &self.record.data {
-            nook_core::SecretValue::Authenticator(value) => value.backup_codes.clone(),
+            SecretValue::Authenticator(value) => value.backup_codes.clone(),
             _ => Vec::new(),
         }
     }

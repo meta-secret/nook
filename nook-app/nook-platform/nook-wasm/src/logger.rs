@@ -22,13 +22,21 @@
 //! logging never blocks or throws into callers.
 
 use crate::NookError;
+use js_sys::Date;
+use nook_core::IsoTimestamp;
+use rexie::{ObjectStore, Rexie, TransactionMode};
+use serde_json::Value;
+use serde_wasm_bindgen::from_value;
 use std::cell::{Cell, RefCell};
+use std::{fmt, mem};
 use tracing::field::{Field, Visit};
+use tracing::{Level, subscriber};
 use tracing_subscriber::Layer;
 use tracing_subscriber::filter::LevelFilter;
+use tracing_subscriber::fmt::format::DefaultFields;
 use tracing_subscriber::layer::{Context, SubscriberExt};
 use tracing_subscriber::registry::Registry;
-use tracing_subscriber::reload;
+use tracing_subscriber::reload::Layer as ReloadLayer;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -102,11 +110,11 @@ impl LogLevel {
 
     fn from_tracing(level: tracing::Level) -> LogLevel {
         match level {
-            tracing::Level::ERROR => LogLevel::Error,
-            tracing::Level::WARN => LogLevel::Warn,
-            tracing::Level::INFO => LogLevel::Info,
-            tracing::Level::DEBUG => LogLevel::Debug,
-            tracing::Level::TRACE => LogLevel::Trace,
+            Level::ERROR => LogLevel::Error,
+            Level::WARN => LogLevel::Warn,
+            Level::INFO => LogLevel::Info,
+            Level::DEBUG => LogLevel::Debug,
+            Level::TRACE => LogLevel::Trace,
         }
     }
 }
@@ -153,7 +161,7 @@ thread_local! {
 }
 
 fn now_iso() -> nook_core::IsoTimestamp {
-    nook_core::IsoTimestamp::from_trusted(js_sys::Date::new_0().to_iso_string().into())
+    IsoTimestamp::from_trusted(Date::new_0().to_iso_string().into())
 }
 
 /// Push an entry onto the write-behind queue.
@@ -195,9 +203,9 @@ impl FieldVisitor {
         let map: serde_json::Map<String, serde_json::Value> = self
             .fields
             .iter()
-            .map(|(k, v)| (k.clone(), serde_json::Value::String(v.clone())))
+            .map(|(k, v)| (k.clone(), Value::String(v.clone())))
             .collect();
-        serde_json::to_string(&serde_json::Value::Object(map)).ok()
+        serde_json::to_string(&Value::Object(map)).ok()
     }
 }
 
@@ -206,7 +214,7 @@ impl Visit for FieldVisitor {
         self.push(field.name(), value.to_owned());
     }
 
-    fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+    fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
         self.push(field.name(), format!("{value:?}"));
     }
 }
@@ -241,24 +249,23 @@ impl<S: tracing::Subscriber> Layer<S> for IndexedDbLayer {
 }
 
 async fn logs_db() -> Result<rexie::Rexie, NookError> {
-    rexie::Rexie::builder(LOG_DB_NAME)
+    Rexie::builder(LOG_DB_NAME)
         .version(1)
-        .add_object_store(rexie::ObjectStore::new(LOG_STORE).auto_increment(true))
+        .add_object_store(ObjectStore::new(LOG_STORE).auto_increment(true))
         .build()
         .await
         .map_err(|e| NookError::IndexedDb(format!("logs db build error: {:?}", e)))
 }
 
 async fn flush_pending() -> Result<(), NookError> {
-    let batch: Vec<LogEntry> =
-        LOGGER.with(|logger| std::mem::take(&mut logger.borrow_mut().pending));
+    let batch: Vec<LogEntry> = LOGGER.with(|logger| mem::take(&mut logger.borrow_mut().pending));
     if batch.is_empty() {
         return Ok(());
     }
 
     let db = logs_db().await?;
     let transaction = db
-        .transaction(&[LOG_STORE], rexie::TransactionMode::ReadWrite)
+        .transaction(&[LOG_STORE], TransactionMode::ReadWrite)
         .map_err(|e| NookError::IndexedDb(format!("logs transaction error: {:?}", e)))?;
     let store = transaction
         .store(LOG_STORE)
@@ -307,7 +314,7 @@ async fn dump_entries(
 
     let db = logs_db().await?;
     let transaction = db
-        .transaction(&[LOG_STORE], rexie::TransactionMode::ReadOnly)
+        .transaction(&[LOG_STORE], TransactionMode::ReadOnly)
         .map_err(|e| NookError::IndexedDb(format!("logs transaction error: {:?}", e)))?;
     let store = transaction
         .store(LOG_STORE)
@@ -329,7 +336,7 @@ async fn dump_entries(
 
     let filtered: Vec<LogEntry> = values
         .into_iter()
-        .filter_map(|value| serde_wasm_bindgen::from_value::<LogEntry>(value).ok())
+        .filter_map(|value| from_value::<LogEntry>(value).ok())
         .filter(|entry| LogLevel::parse(&entry.level).is_none_or(|level| level.rank() <= max_rank))
         .collect();
 
@@ -356,10 +363,9 @@ pub fn log_init() {
     INIT_DONE.with(|done| done.set(true));
 
     let active = LOGGER.with(|logger| logger.borrow().level);
-    let (filter, handle) = reload::Layer::new(active.to_filter());
+    let (filter, handle) = ReloadLayer::new(active.to_filter());
 
-    let perf = tracing_web::performance_layer()
-        .with_details_from_fields(tracing_subscriber::fmt::format::DefaultFields::new());
+    let perf = tracing_web::performance_layer().with_details_from_fields(DefaultFields::new());
 
     let subscriber = Registry::default()
         .with(filter)
@@ -368,7 +374,7 @@ pub fn log_init() {
 
     // Ignore an existing default (e.g. across HMR reloads); the INIT_DONE guard
     // already prevents re-entrancy on this thread.
-    if tracing::subscriber::set_global_default(subscriber).is_ok() {
+    if subscriber::set_global_default(subscriber).is_ok() {
         let setter = Box::new(move |level: LevelFilter| {
             let _ = handle.modify(|current| *current = level);
         });
@@ -474,7 +480,7 @@ pub async fn log_count() -> Result<u32, wasm_bindgen::JsError> {
     flush_pending().await?;
     let db = logs_db().await?;
     let transaction = db
-        .transaction(&[LOG_STORE], rexie::TransactionMode::ReadOnly)
+        .transaction(&[LOG_STORE], TransactionMode::ReadOnly)
         .map_err(|e| NookError::IndexedDb(format!("logs transaction error: {:?}", e)))?;
     let store = transaction
         .store(LOG_STORE)
@@ -496,7 +502,7 @@ pub async fn log_clear() -> Result<(), wasm_bindgen::JsError> {
     LOGGER.with(|logger| logger.borrow_mut().pending.clear());
     let db = logs_db().await?;
     let transaction = db
-        .transaction(&[LOG_STORE], rexie::TransactionMode::ReadWrite)
+        .transaction(&[LOG_STORE], TransactionMode::ReadWrite)
         .map_err(|e| NookError::IndexedDb(format!("logs transaction error: {:?}", e)))?;
     let store = transaction
         .store(LOG_STORE)
@@ -516,7 +522,7 @@ pub(crate) async fn clear_logs_db() -> Result<(), NookError> {
     LOGGER.with(|logger| logger.borrow_mut().pending.clear());
     let db = logs_db().await?;
     let transaction = db
-        .transaction(&[LOG_STORE], rexie::TransactionMode::ReadWrite)
+        .transaction(&[LOG_STORE], TransactionMode::ReadWrite)
         .map_err(|e| NookError::IndexedDb(format!("logs clear transaction error: {e:?}")))?;
     transaction
         .store(LOG_STORE)

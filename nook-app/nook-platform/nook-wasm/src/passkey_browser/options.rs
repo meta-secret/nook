@@ -1,6 +1,9 @@
 use super::{DEFAULT_PASSKEY_LABEL, get_optional_array, get_optional_object, get_required_object};
 use coset::iana;
 use getrandom::fill;
+use iana::Algorithm;
+use js_sys::{JsString, Reflect, Uint8Array};
+use nook_core::{DeviceKeyProtectionSetup, PasskeyAssertionRequest};
 use passkey_types::{
     Bytes,
     webauthn::{
@@ -14,6 +17,7 @@ use passkey_types::{
     },
 };
 use serde::Serialize;
+use serde_wasm_bindgen::{Error, Serializer};
 use std::{collections::HashMap, fmt::Write as _};
 use wasm_bindgen::{JsCast, JsError};
 use web_sys::{CredentialCreationOptions, CredentialRequestOptions};
@@ -27,7 +31,7 @@ pub(crate) fn creation_options(
     user_handle: &[u8],
     prf_input: &[u8],
 ) -> Result<CredentialCreationOptions, JsError> {
-    let setup = nook_core::DeviceKeyProtectionSetup::new(user_handle, prf_input)
+    let setup = DeviceKeyProtectionSetup::new(user_handle, prf_input)
         .map_err(|error| JsError::new(&error.to_string()))?;
     let passkey_label = passkey_label_with_passkey_handle(passkey_label, setup.user_handle());
     let options = creation_options_struct(
@@ -51,7 +55,7 @@ pub(crate) fn request_options(
     credential_id: &[u8],
     prf_input: &[u8],
 ) -> Result<CredentialRequestOptions, JsError> {
-    let request = nook_core::PasskeyAssertionRequest::new(credential_id, prf_input)
+    let request = PasskeyAssertionRequest::new(credential_id, prf_input)
         .map_err(|error| JsError::new(&error.to_string()))?;
     let options = request_options_struct(rp_id, request.credential_id(), request.prf_input())?;
     to_browser_object(&options)
@@ -72,11 +76,10 @@ pub(crate) fn recovery_options(rp_id: &str) -> Result<CredentialRequestOptions, 
 }
 
 fn to_browser_object<T: Serialize>(value: &T) -> Result<js_sys::Object, serde_wasm_bindgen::Error> {
-    let value =
-        value.serialize(&serde_wasm_bindgen::Serializer::new().serialize_maps_as_objects(true))?;
+    let value = value.serialize(&Serializer::new().serialize_maps_as_objects(true))?;
     let value: js_sys::Object = value.unchecked_into();
     normalize_webauthn_binary_fields(&value)
-        .map_err(|_| serde_wasm_bindgen::Error::new("Failed to normalize passkey binary fields"))?;
+        .map_err(|_| Error::new("Failed to normalize passkey binary fields"))?;
     Ok(value)
 }
 
@@ -120,10 +123,10 @@ fn normalize_prf_binary_fields(public_key: &js_sys::Object) -> Result<(), JsErro
     }
 
     if let Some(eval_by_credential) = get_optional_object(&prf, "evalByCredential")? {
-        let keys = js_sys::Reflect::own_keys(&eval_by_credential)
+        let keys = Reflect::own_keys(&eval_by_credential)
             .map_err(|_| JsError::new("Failed to inspect passkey PRF evalByCredential entries"))?;
         for key in keys.iter() {
-            let values = js_sys::Reflect::get(&eval_by_credential, &key)
+            let values = Reflect::get(&eval_by_credential, &key)
                 .map_err(|_| JsError::new("Failed to read passkey PRF evalByCredential entry"))?;
             let values: js_sys::Object = values.unchecked_into();
             set_prf_value_fields(&values)?;
@@ -141,8 +144,8 @@ fn set_uint8_array_field(target: &js_sys::Object, field: &str) -> Result<(), JsE
     let Some(bytes) = get_optional_object(target, field)? else {
         return Ok(());
     };
-    let typed_array = js_sys::Uint8Array::new(&bytes);
-    js_sys::Reflect::set(target, &js_sys::JsString::from(field), typed_array.as_ref())
+    let typed_array = Uint8Array::new(&bytes);
+    Reflect::set(target, &JsString::from(field), typed_array.as_ref())
         .map_err(|_| JsError::new(&format!("Failed to normalize passkey binary field {field}")))?;
     Ok(())
 }
@@ -170,11 +173,11 @@ fn creation_options_struct(
             pub_key_cred_params: vec![
                 PublicKeyCredentialParameters {
                     ty: PublicKeyCredentialType::PublicKey,
-                    alg: iana::Algorithm::ES256,
+                    alg: Algorithm::ES256,
                 },
                 PublicKeyCredentialParameters {
                     ty: PublicKeyCredentialType::PublicKey,
-                    alg: iana::Algorithm::RS256,
+                    alg: Algorithm::RS256,
                 },
             ],
             timeout: None,
@@ -356,8 +359,8 @@ mod tests {
             .iter()
             .map(|parameter| parameter.alg)
             .collect::<Vec<_>>();
-        assert!(algorithms.contains(&iana::Algorithm::ES256));
-        assert!(algorithms.contains(&iana::Algorithm::RS256));
+        assert!(algorithms.contains(&Algorithm::ES256));
+        assert!(algorithms.contains(&Algorithm::RS256));
         let authenticator_selection = public_key
             .authenticator_selection
             .as_ref()
@@ -476,25 +479,26 @@ mod tests {
 #[cfg(all(test, target_arch = "wasm32"))]
 mod wasm_tests {
     use super::*;
+    use js_sys::ArrayBuffer;
     use wasm_bindgen_test::*;
 
     fn get(target: &js_sys::Object, field: &str) -> Result<js_sys::Object, wasm_bindgen::JsError> {
-        Ok(js_sys::Reflect::get(target, &js_sys::JsString::from(field))
-            .map_err(|_| wasm_bindgen::JsError::new("failed to read reflected field"))?
+        Ok(Reflect::get(target, &JsString::from(field))
+            .map_err(|_| JsError::new("failed to read reflected field"))?
             .unchecked_into())
     }
 
     fn get_string(target: &js_sys::Object, field: &str) -> Result<String, wasm_bindgen::JsError> {
-        js_sys::Reflect::get(target, &js_sys::JsString::from(field))
-            .map_err(|_| wasm_bindgen::JsError::new("failed to read reflected string field"))?
+        Reflect::get(target, &JsString::from(field))
+            .map_err(|_| JsError::new("failed to read reflected string field"))?
             .as_string()
-            .ok_or_else(|| wasm_bindgen::JsError::new("field is not a string"))
+            .ok_or_else(|| JsError::new("field is not a string"))
     }
 
     fn assert_uint8_array(value: &js_sys::Object, expected_len: u32) {
-        let bytes = js_sys::Uint8Array::new(value);
+        let bytes = Uint8Array::new(value);
         assert_eq!(bytes.length(), expected_len);
-        assert!(js_sys::ArrayBuffer::is_view(value));
+        assert!(ArrayBuffer::is_view(value));
     }
 
     #[wasm_bindgen_test]
