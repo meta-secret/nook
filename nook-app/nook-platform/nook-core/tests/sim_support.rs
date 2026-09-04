@@ -16,7 +16,6 @@
     clippy::missing_panics_doc,
     clippy::return_self_not_must_use
 )]
-#![deny(clippy::absolute_paths)]
 
 #[path = "event_log_harness.rs"]
 pub mod harness;

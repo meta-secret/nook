@@ -11,7 +11,6 @@
     clippy::must_use_candidate,
     clippy::uninlined_format_args
 )]
-#![deny(clippy::absolute_paths)]
 
 use nook_companion_core::{
     ExtensionPairingState, ExtensionReadySetup, StoredExtensionPairingGrant,
