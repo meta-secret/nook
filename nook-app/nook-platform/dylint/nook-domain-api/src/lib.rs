@@ -87,6 +87,10 @@ declare_lint_pass! {
     DomainApi => [RAW_NUMERIC_PUBLIC_API, INVALID_RAW_NUMERIC_API_SUPPRESSION]
 }
 
+#[allow(
+    clippy::no_mangle_with_rust_abi,
+    reason = "Dylint 6.0.1 requires this Rust ABI loader entry point"
+)]
 #[unsafe(no_mangle)]
 pub fn register_lints(session: &Session, lint_store: &mut LintStore) {
     dylint_linting::init_config(session);
@@ -202,8 +206,10 @@ fn contains_raw_numeric<'tcx>(cx: &LateContext<'tcx>, ty: Ty<'tcx>) -> bool {
     match normalized.kind() {
         ty::Int(_) | ty::Uint(_) | ty::Float(_) => true,
         ty::Adt(_, arguments) | ty::FnDef(_, arguments) => raw_args(arguments),
-        ty::Array(element, _) | ty::Slice(element) => contains_raw_numeric(cx, *element),
-        ty::RawPtr(element, _) | ty::Ref(_, element, _) => contains_raw_numeric(cx, *element),
+        ty::Array(element, _)
+        | ty::Slice(element)
+        | ty::RawPtr(element, _)
+        | ty::Ref(_, element, _) => contains_raw_numeric(cx, *element),
         ty::Tuple(elements) => elements
             .iter()
             .any(|element| contains_raw_numeric(cx, element)),
@@ -317,7 +323,7 @@ fn check_suppression_attributes(
         } else if matches!(scope, SuppressionScope::Broad) {
             "crate, module, type, variant, and other blanket expectations are forbidden"
         } else if let Some(reason) = suppression_reason(attribute) {
-            if valid_boundary_reason(&reason.as_str()) {
+            if valid_boundary_reason(reason.as_str()) {
                 continue;
             }
             "reason must identify exactly a serialization, database, or FFI boundary"
