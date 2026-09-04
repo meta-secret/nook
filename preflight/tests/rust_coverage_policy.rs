@@ -80,13 +80,21 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
         )
     );
     assert!(preflight.contains("WORKDIR /meta-secret/nook/preflight"));
+    assert_eq!(
+        preflight
+            .matches("ENV CARGO_TARGET_DIR=/meta-secret/preflight-target")
+            .count(),
+        2,
+        "chef and dependency roots must keep generated Cargo output outside repository source"
+    );
     assert!(preflight.contains("ENV NOOK_REPO_ROOT=/meta-secret/nook"));
     assert!(preflight.contains(
         "floor=\"$(jq -r '.lines_percent' /meta-secret/nook/nook-app/nook-platform/nook-core/coverage-floor.json)\""
     ));
     assert!(preflight.contains(
-        "COPY --from=build /meta-secret/nook/preflight/target/debug/nook-preflight /nook-preflight"
+        "COPY --from=build /meta-secret/preflight-target/debug/nook-preflight /nook-preflight"
     ));
+    assert!(!preflight.contains("/meta-secret/nook/preflight/target"));
     assert!(!preflight.contains("/opt/nook/preflight"));
     assert!(!preflight.contains("/opt/nook/coverage-floor.json"));
 

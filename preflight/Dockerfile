@@ -5,6 +5,7 @@
 
 FROM rust-base AS chef
 
+ENV CARGO_TARGET_DIR=/meta-secret/preflight-target
 WORKDIR /meta-secret/nook/preflight
 COPY preflight/Cargo.toml preflight/Cargo.lock ./
 RUN mkdir -p src \
@@ -14,6 +15,7 @@ RUN cargo chef prepare --recipe-path recipe.json
 
 FROM rust-base AS deps
 
+ENV CARGO_TARGET_DIR=/meta-secret/preflight-target
 WORKDIR /meta-secret/nook/preflight
 COPY --from=chef /meta-secret/nook/preflight/recipe.json recipe.json
 COPY preflight/Cargo.toml preflight/Cargo.lock ./
@@ -38,7 +40,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && cargo clippy --locked --all-targets -- -D warnings \
     && cargo test --locked --no-run \
     && cargo build --locked --bin nook-preflight \
-    && strip target/debug/nook-preflight \
+    && strip /meta-secret/preflight-target/debug/nook-preflight \
     && nook-sccache-report preflight-build
 
 FROM build AS test
@@ -54,4 +56,4 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
 
 FROM scratch AS cli-export
 
-COPY --from=build /meta-secret/nook/preflight/target/debug/nook-preflight /nook-preflight
+COPY --from=build /meta-secret/preflight-target/debug/nook-preflight /nook-preflight
