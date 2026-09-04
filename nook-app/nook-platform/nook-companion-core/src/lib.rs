@@ -118,9 +118,7 @@ pub use credential_fill::{
     AuthenticationCredentialFillAssignment, AuthenticationCredentialFillError,
     AuthenticationCredentialFillPlan, AuthenticationCredentialKind,
     AuthenticationFillFieldEditability, AuthenticationFillFieldObservation,
-    AuthenticationFillFieldRole, SimulatedAuthenticationCredentials,
-    SimulatedAuthenticationFieldState, SimulatedAuthenticationFill,
-    plan_authentication_credential_fill, simulate_authentication_credential_fill,
+    AuthenticationFillFieldRole, plan_authentication_credential_fill,
 };
 pub use extension_pairing_state::{
     CreateExtensionPairingStateInput, EXTENSION_GRANT_KEY_PREFIX, EXTENSION_SETUP_KEY,

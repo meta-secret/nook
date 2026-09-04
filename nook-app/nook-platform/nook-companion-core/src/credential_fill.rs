@@ -5,9 +5,8 @@
 //! and submission stay in the host adapter; this module owns which field
 //! receives which credential kind and which plans are safe to execute.
 //!
-//! `simulate_authentication_credential_fill` consumes the same observations
-//! through the same planner, so deterministic zero-vault simulations exercise
-//! the exact fill decision the extension performs on a live page.
+//! Deterministic zero-vault tests apply fake credentials to this plan entirely
+//! inside the test harness, so production Rust and WASM remain credential-free.
 
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -58,6 +57,9 @@ pub struct AuthenticationFillFieldObservation {
 #[serde(rename_all = "kebab-case")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum AuthenticationCredentialFillError {
+    /// The host supplied more field observations than the portable boundary permits.
+    #[error("the observed scope exceeds the field-count limit")]
+    TooManyObservedFields,
     /// Two observations claim the same host field identity.
     #[error("the observed scope contains a duplicate field index")]
     DuplicateFieldIndex,
@@ -77,6 +79,9 @@ pub enum AuthenticationCredentialFillError {
     /// into one current-password target.
     #[error("the observed scope has multiple login-password fields")]
     AmbiguousPasswordField,
+    /// The scope contains multiple writable username targets.
+    #[error("the observed scope has multiple writable username fields")]
+    AmbiguousUsernameField,
 }
 
 /// Rust-owned decision for which field receives which credential kind.
@@ -123,6 +128,9 @@ impl AuthenticationFillFieldObservation {
 pub fn plan_authentication_credential_fill(
     fields: &[AuthenticationFillFieldObservation],
 ) -> Result<AuthenticationCredentialFillPlan, AuthenticationCredentialFillError> {
+    if fields.len() > crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT as usize {
+        return Err(AuthenticationCredentialFillError::TooManyObservedFields);
+    }
     for (offset, field) in fields.iter().enumerate() {
         if fields[..offset]
             .iter()
@@ -144,9 +152,12 @@ pub fn plan_authentication_credential_fill(
         return Err(AuthenticationCredentialFillError::OneTimeCodeFieldPresent);
     }
 
-    let username_field = fields.iter().find(|field| {
-        matches!(field.role, AuthenticationFillFieldRole::Username) && field.is_writable()
-    });
+    let writable_username_fields = fields
+        .iter()
+        .filter(|field| {
+            matches!(field.role, AuthenticationFillFieldRole::Username) && field.is_writable()
+        })
+        .collect::<Vec<_>>();
     let password_fields: Vec<&AuthenticationFillFieldObservation> = fields
         .iter()
         .filter(|field| {
@@ -158,6 +169,10 @@ pub fn plan_authentication_credential_fill(
         })
         .collect();
 
+    if writable_username_fields.len() > 1 {
+        return Err(AuthenticationCredentialFillError::AmbiguousUsernameField);
+    }
+    let username_field = writable_username_fields.first().copied();
     if username_field.is_none() && password_fields.is_empty() {
         return Err(AuthenticationCredentialFillError::NoCredentialField);
     }
@@ -185,69 +200,21 @@ pub fn plan_authentication_credential_fill(
     Ok(AuthenticationCredentialFillPlan { assignments })
 }
 
-/// Caller-supplied credentials for deterministic zero-vault simulations.
-///
-/// Tests supply fake values so simulations and host wiring can be exercised
-/// without a vault. Production credential disclosure continues to flow through
-/// the extension's vault runtime messages.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
-pub struct SimulatedAuthenticationCredentials {
-    pub username: String,
-    pub password: String,
-}
-
-/// One simulated field state after a deterministic fill.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
-pub struct SimulatedAuthenticationFieldState {
-    pub field_index: u32,
-    pub filled_with: String,
-}
-
-/// The outcome of one simulated credential fill.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
-pub struct SimulatedAuthenticationFill {
-    pub assignments: Vec<SimulatedAuthenticationFieldState>,
-}
-
-impl SimulatedAuthenticationCredentials {
-    fn value_for(&self, credential: AuthenticationCredentialKind) -> &str {
-        match credential {
-            AuthenticationCredentialKind::Username => &self.username,
-            AuthenticationCredentialKind::CurrentPassword => &self.password,
-        }
-    }
-}
-
-/// Deterministically apply supplied credentials to the planned fields.
-///
-/// Returns the assignment values in plan order. The simulation caller supplies
-/// its own credentials so fill behavior can be verified with hardcoded fake
-/// values and no vault.
-pub fn simulate_authentication_credential_fill(
-    fields: &[AuthenticationFillFieldObservation],
-    credentials: &SimulatedAuthenticationCredentials,
-) -> Result<SimulatedAuthenticationFill, AuthenticationCredentialFillError> {
-    let plan = plan_authentication_credential_fill(fields)?;
-    let assignments = plan
-        .assignments
-        .iter()
-        .map(|assignment| SimulatedAuthenticationFieldState {
-            field_index: assignment.field_index,
-            filled_with: credentials.value_for(assignment.credential).to_owned(),
-        })
-        .collect();
-    Ok(SimulatedAuthenticationFill { assignments })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[derive(Debug, PartialEq, Eq)]
+    struct TestCredentials {
+        username: &'static str,
+        password: &'static str,
+    }
+
+    #[derive(Debug, PartialEq, Eq)]
+    struct TestFilledField {
+        field_index: u32,
+        value: &'static str,
+    }
 
     fn field(
         field_index: u32,
@@ -268,13 +235,6 @@ mod tests {
             field_index,
             role,
             editability: AuthenticationFillFieldEditability::Readonly,
-        }
-    }
-
-    fn fixture_credentials() -> SimulatedAuthenticationCredentials {
-        SimulatedAuthenticationCredentials {
-            username: "test-user@example.test".to_owned(),
-            password: "correct-horse-battery-staple-1".to_owned(),
         }
     }
 
@@ -429,6 +389,30 @@ mod tests {
     }
 
     #[test]
+    fn fails_closed_before_scanning_an_oversized_scope() {
+        let fields = vec![
+            field(0, AuthenticationFillFieldRole::Username);
+            crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT as usize + 1
+        ];
+        assert_eq!(
+            plan_authentication_credential_fill(&fields),
+            Err(AuthenticationCredentialFillError::TooManyObservedFields)
+        );
+    }
+
+    #[test]
+    fn fails_closed_on_multiple_writable_username_fields() {
+        let ambiguous = vec![
+            field(0, AuthenticationFillFieldRole::Username),
+            field(1, AuthenticationFillFieldRole::Username),
+        ];
+        assert_eq!(
+            plan_authentication_credential_fill(&ambiguous),
+            Err(AuthenticationCredentialFillError::AmbiguousUsernameField)
+        );
+    }
+
+    #[test]
     fn rejects_unsafe_scope_before_planning_username_only_fill() {
         for (role, expected) in [
             (
@@ -466,43 +450,36 @@ mod tests {
     }
 
     #[test]
-    fn simulation_applies_fixture_credentials_in_plan_order() -> anyhow::Result<()> {
-        let credentials = fixture_credentials();
-        let simulated = simulate_authentication_credential_fill(&login_form(), &credentials)?;
-        assert_eq!(
-            simulated.assignments,
-            vec![
-                SimulatedAuthenticationFieldState {
-                    field_index: 0,
-                    filled_with: credentials.username.clone(),
+    fn test_harness_applies_fake_credentials_to_the_plan() -> anyhow::Result<()> {
+        let credentials = TestCredentials {
+            username: "test-user@example.test",
+            password: "correct-horse-battery-staple-1",
+        };
+        let plan = plan_authentication_credential_fill(&login_form())?;
+        let simulated = plan
+            .assignments
+            .iter()
+            .map(|assignment| TestFilledField {
+                field_index: assignment.field_index,
+                value: match assignment.credential {
+                    AuthenticationCredentialKind::Username => credentials.username,
+                    AuthenticationCredentialKind::CurrentPassword => credentials.password,
                 },
-                SimulatedAuthenticationFieldState {
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            simulated,
+            vec![
+                TestFilledField {
+                    field_index: 0,
+                    value: credentials.username,
+                },
+                TestFilledField {
                     field_index: 1,
-                    filled_with: credentials.password.clone(),
+                    value: credentials.password,
                 },
             ]
         );
-        Ok(())
-    }
-
-    #[test]
-    fn simulation_propagates_planner_failures() {
-        assert_eq!(
-            simulate_authentication_credential_fill(&[], &fixture_credentials()),
-            Err(AuthenticationCredentialFillError::NoCredentialField)
-        );
-    }
-
-    #[test]
-    fn simulation_reflects_custom_credentials() -> anyhow::Result<()> {
-        let credentials = SimulatedAuthenticationCredentials {
-            username: "custom-user".to_owned(),
-            password: "custom-password".to_owned(),
-        };
-        let simulated =
-            simulate_authentication_credential_fill(&login_form().clone(), &credentials)?;
-        assert_eq!(simulated.assignments[0].filled_with, "custom-user");
-        assert_eq!(simulated.assignments[1].filled_with, "custom-password");
         Ok(())
     }
 
