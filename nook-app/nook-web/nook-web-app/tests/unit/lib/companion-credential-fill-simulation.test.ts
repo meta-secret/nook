@@ -6,14 +6,15 @@ import {
   CredentialFillFieldRole,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
+  CredentialFillJourneyOutcomeKind,
   SimulatedCredentialField,
-  SimulatedCredentialForm,
-  simulateCredentialFill,
-  type CredentialFillSimulationRequest,
+  simulateLoginJourney,
+  type CredentialFillJourneyOutcome,
+  type CredentialFillJourneyRequest,
   type FakeLoginCredentials,
   type SimulatedCredentialFieldDefinition,
-  type SimulatedCredentialFields,
-  type SimulatedCredentialFormDefinition,
+  type SimulatedCredentialForm,
+  type SimulatedCredentialFormSnapshot,
 } from './companion-credential-fill-simulation'
 
 const FAKE_CREDENTIALS: FakeLoginCredentials = {
@@ -21,14 +22,25 @@ const FAKE_CREDENTIALS: FakeLoginCredentials = {
   password: 'fake-login-password',
 }
 
-function runCombinedUsernamePasswordScenario(): void {
+const USERNAME_FILLED_SNAPSHOT: SimulatedCredentialFormSnapshot = [
+  { name: 'username', value: FAKE_CREDENTIALS.username },
+  { name: 'password', value: '' },
+]
+const LOGIN_FILLED_SNAPSHOT: SimulatedCredentialFormSnapshot = [
+  { name: 'username', value: FAKE_CREDENTIALS.username },
+  { name: 'password', value: FAKE_CREDENTIALS.password },
+]
+
+function createCombinedUsernamePasswordJourney(): CredentialFillJourneyRequest {
   const usernameDefinition: SimulatedCredentialFieldDefinition = {
+    name: 'username',
     field_index: new CredentialFillFieldIndex(3),
     role: CredentialFillFieldRole.username(),
     editability: CredentialFillEditability.writable(),
     value: '',
   }
   const passwordDefinition: SimulatedCredentialFieldDefinition = {
+    name: 'password',
     field_index: new CredentialFillFieldIndex(19),
     role: CredentialFillFieldRole.generic_password(),
     editability: CredentialFillEditability.writable(),
@@ -36,32 +48,24 @@ function runCombinedUsernamePasswordScenario(): void {
   }
   const username = new SimulatedCredentialField(usernameDefinition)
   const password = new SimulatedCredentialField(passwordDefinition)
-  const fields: SimulatedCredentialFields = [username, password]
-  const formDefinition: SimulatedCredentialFormDefinition = { fields }
-  const form = new SimulatedCredentialForm(formDefinition)
-  const request: CredentialFillSimulationRequest = {
-    observedFields: fields,
+  const form: SimulatedCredentialForm = [username, password]
+  return {
     form,
+    steps: [{ observedFields: form }],
     credentials: FAKE_CREDENTIALS,
-  }
-
-  try {
-    simulateCredentialFill(request)
-    expect(username.value).toBe(FAKE_CREDENTIALS.username)
-    expect(password.value).toBe(FAKE_CREDENTIALS.password)
-  } finally {
-    form.free()
   }
 }
 
-function runSequentialUsernamePasswordScenario(): void {
+function createSequentialUsernamePasswordJourney(): CredentialFillJourneyRequest {
   const usernameDefinition: SimulatedCredentialFieldDefinition = {
+    name: 'username',
     field_index: new CredentialFillFieldIndex(5),
     role: CredentialFillFieldRole.username(),
     editability: CredentialFillEditability.writable(),
     value: '',
   }
   const passwordDefinition: SimulatedCredentialFieldDefinition = {
+    name: 'password',
     field_index: new CredentialFillFieldIndex(12),
     role: CredentialFillFieldRole.current_password(),
     editability: CredentialFillEditability.writable(),
@@ -69,68 +73,41 @@ function runSequentialUsernamePasswordScenario(): void {
   }
   const username = new SimulatedCredentialField(usernameDefinition)
   const password = new SimulatedCredentialField(passwordDefinition)
-  const fields: SimulatedCredentialFields = [username, password]
-  const formDefinition: SimulatedCredentialFormDefinition = { fields }
-  const form = new SimulatedCredentialForm(formDefinition)
-  const usernameRequest: CredentialFillSimulationRequest = {
-    observedFields: [username],
+  const form: SimulatedCredentialForm = [username, password]
+  return {
     form,
+    steps: [{ observedFields: [username] }, { observedFields: [password] }],
     credentials: FAKE_CREDENTIALS,
-  }
-  const passwordRequest: CredentialFillSimulationRequest = {
-    observedFields: [password],
-    form,
-    credentials: FAKE_CREDENTIALS,
-  }
-
-  try {
-    simulateCredentialFill(usernameRequest)
-    expect(username.value).toBe(FAKE_CREDENTIALS.username)
-    expect(password.value).toBe('')
-
-    simulateCredentialFill(passwordRequest)
-    expect(username.value).toBe(FAKE_CREDENTIALS.username)
-    expect(password.value).toBe(FAKE_CREDENTIALS.password)
-  } finally {
-    form.free()
   }
 }
 
-function runReadonlyFailureScenario(): void {
+function createReadonlyPasswordJourney(): CredentialFillJourneyRequest {
   const passwordDefinition: SimulatedCredentialFieldDefinition = {
+    name: 'password',
     field_index: new CredentialFillFieldIndex(8),
     role: CredentialFillFieldRole.current_password(),
     editability: CredentialFillEditability.readonly(),
     value: '',
   }
   const password = new SimulatedCredentialField(passwordDefinition)
-  const fields: SimulatedCredentialFields = [password]
-  const formDefinition: SimulatedCredentialFormDefinition = { fields }
-  const form = new SimulatedCredentialForm(formDefinition)
-  const request: CredentialFillSimulationRequest = {
-    observedFields: fields,
+  const form: SimulatedCredentialForm = [password]
+  return {
     form,
+    steps: [{ observedFields: form }],
     credentials: FAKE_CREDENTIALS,
-  }
-
-  try {
-    expect(() => simulateCredentialFill(request)).toThrow(
-      'every password field is read-only, so credential disclosure is blocked',
-    )
-    expect(password.value).toBe('')
-  } finally {
-    form.free()
   }
 }
 
-function runUnrelatedFieldScenario(): void {
+function createJourneyWithUnrelatedField(): CredentialFillJourneyRequest {
   const usernameDefinition: SimulatedCredentialFieldDefinition = {
+    name: 'username',
     field_index: new CredentialFillFieldIndex(2),
     role: CredentialFillFieldRole.username(),
     editability: CredentialFillEditability.writable(),
     value: '',
   }
   const unrelatedDefinition: SimulatedCredentialFieldDefinition = {
+    name: 'unrelated-password',
     field_index: new CredentialFillFieldIndex(41),
     role: CredentialFillFieldRole.current_password(),
     editability: CredentialFillEditability.writable(),
@@ -138,51 +115,80 @@ function runUnrelatedFieldScenario(): void {
   }
   const username = new SimulatedCredentialField(usernameDefinition)
   const unrelated = new SimulatedCredentialField(unrelatedDefinition)
-  const fields: SimulatedCredentialFields = [username, unrelated]
-  const formDefinition: SimulatedCredentialFormDefinition = { fields }
-  const form = new SimulatedCredentialForm(formDefinition)
-  const observedFields: SimulatedCredentialFields = [username]
-  const request: CredentialFillSimulationRequest = {
-    observedFields,
+  const form: SimulatedCredentialForm = [username, unrelated]
+  return {
     form,
+    steps: [{ observedFields: [username] }],
     credentials: FAKE_CREDENTIALS,
-  }
-
-  try {
-    simulateCredentialFill(request)
-    expect(username.value).toBe(FAKE_CREDENTIALS.username)
-    expect(unrelated.value).toBe('leave-this-value-untouched')
-  } finally {
-    form.free()
   }
 }
 
 type LoginJourneyScenario = {
   readonly name: string
-  readonly run: () => void
+  readonly createJourney: () => CredentialFillJourneyRequest
+  readonly expected: CredentialFillJourneyOutcome[]
 }
 
-type LoginJourneyScenarios = LoginJourneyScenario[]
-
-const LOGIN_JOURNEY_SCENARIOS: LoginJourneyScenarios = [
+const LOGIN_JOURNEY_SCENARIOS: LoginJourneyScenario[] = [
   {
     name: 'fills a combined username and generic-password form',
-    run: runCombinedUsernamePasswordScenario,
+    createJourney: createCombinedUsernamePasswordJourney,
+    expected: [
+      {
+        kind: CredentialFillJourneyOutcomeKind.Filled,
+        snapshot: LOGIN_FILLED_SNAPSHOT,
+      },
+    ],
   },
   {
     name: 'fills username then password across sequential steps',
-    run: runSequentialUsernamePasswordScenario,
+    createJourney: createSequentialUsernamePasswordJourney,
+    expected: [
+      {
+        kind: CredentialFillJourneyOutcomeKind.Filled,
+        snapshot: USERNAME_FILLED_SNAPSHOT,
+      },
+      {
+        kind: CredentialFillJourneyOutcomeKind.Filled,
+        snapshot: LOGIN_FILLED_SNAPSHOT,
+      },
+    ],
   },
   {
-    name: 'fails readonly password planning without mutation',
-    run: runReadonlyFailureScenario,
+    name: 'rejects readonly password planning without mutation',
+    createJourney: createReadonlyPasswordJourney,
+    expected: [
+      {
+        kind: CredentialFillJourneyOutcomeKind.Rejected,
+        message:
+          'every password field is read-only, so credential disclosure is blocked',
+        snapshot: [{ name: 'password', value: '' }],
+      },
+    ],
   },
   {
     name: 'leaves fields outside the observed step untouched',
-    run: runUnrelatedFieldScenario,
+    createJourney: createJourneyWithUnrelatedField,
+    expected: [
+      {
+        kind: CredentialFillJourneyOutcomeKind.Filled,
+        snapshot: [
+          { name: 'username', value: FAKE_CREDENTIALS.username },
+          {
+            name: 'unrelated-password',
+            value: 'leave-this-value-untouched',
+          },
+        ],
+      },
+    ],
   },
 ]
 
 describe('deterministic zero-vault login journeys', () => {
-  test.each(LOGIN_JOURNEY_SCENARIOS)('$name', (scenario) => scenario.run())
+  test.each(LOGIN_JOURNEY_SCENARIOS)('$name', (scenario) => {
+    const journey = scenario.createJourney()
+    const result = simulateLoginJourney(journey)
+    const expected = scenario.expected
+    expect(result).toEqual(expected)
+  })
 })

@@ -6,8 +6,8 @@ import {
   CredentialFillObservations,
   CredentialKind,
   plan_companion_credential_fill,
-  type CredentialFillPlan,
   type CredentialFillAssignment,
+  type CredentialFillPlan,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 export type FakeLoginCredentials = {
@@ -16,6 +16,7 @@ export type FakeLoginCredentials = {
 }
 
 export type SimulatedCredentialFieldDefinition = {
+  readonly name: string
   readonly field_index: CredentialFillFieldIndex
   readonly role: CredentialFillFieldRole
   readonly editability: CredentialFillEditability
@@ -23,6 +24,7 @@ export type SimulatedCredentialFieldDefinition = {
 }
 
 export class SimulatedCredentialField {
+  readonly name: string
   readonly field_index: CredentialFillFieldIndex
   readonly observation: CredentialFillObservation
   value: string
@@ -31,11 +33,13 @@ export class SimulatedCredentialField {
   private readonly editability: CredentialFillEditability
 
   constructor({
+    name,
     field_index,
     role,
     editability,
     value,
   }: SimulatedCredentialFieldDefinition) {
+    this.name = name
     this.field_index = field_index
     this.role = role
     this.editability = editability
@@ -55,23 +59,51 @@ export class SimulatedCredentialField {
   }
 }
 
-export type SimulatedCredentialFields = SimulatedCredentialField[]
-
-export type SimulatedCredentialFormDefinition = {
-  readonly fields: SimulatedCredentialFields
+export type SimulatedCredentialForm = SimulatedCredentialField[]
+export type CredentialFillJourneyStep = {
+  readonly observedFields: SimulatedCredentialField[]
+}
+export enum CredentialFillJourneyOutcomeKind {
+  Filled = 'filled',
+  Rejected = 'rejected',
 }
 
-export class SimulatedCredentialForm {
-  readonly fields: SimulatedCredentialFields
+export type SimulatedCredentialFormSnapshot = {
+  readonly name: string
+  readonly value: string
+}[]
 
-  constructor({ fields }: SimulatedCredentialFormDefinition) {
-    this.fields = fields
-  }
+export type CredentialFillJourneyOutcome =
+  | {
+      readonly kind: CredentialFillJourneyOutcomeKind.Filled
+      readonly snapshot: SimulatedCredentialFormSnapshot
+    }
+  | {
+      readonly kind: CredentialFillJourneyOutcomeKind.Rejected
+      readonly message: string
+      readonly snapshot: SimulatedCredentialFormSnapshot
+    }
 
-  free(): void {
-    for (const field of this.fields) field.free()
-  }
+export type CredentialFillJourneyRequest = {
+  readonly form: SimulatedCredentialForm
+  readonly steps: CredentialFillJourneyStep[]
+  readonly credentials: FakeLoginCredentials
 }
+
+enum CredentialFillPlanningKind {
+  Planned = 'planned',
+  Rejected = 'rejected',
+}
+
+type CredentialFillPlanning =
+  | {
+      readonly kind: CredentialFillPlanningKind.Planned
+      readonly plan: CredentialFillPlan
+    }
+  | {
+      readonly kind: CredentialFillPlanningKind.Rejected
+      readonly message: string
+    }
 
 type ApplyCredentialPlanRequest = {
   readonly plan: CredentialFillPlan
@@ -79,12 +111,30 @@ type ApplyCredentialPlanRequest = {
   readonly credentials: FakeLoginCredentials
 }
 
-type FakeCredentialValues = Record<CredentialKind, string>
-
 type ApplyCredentialAssignmentRequest = {
   readonly assignment: CredentialFillAssignment
   readonly form: SimulatedCredentialForm
-  readonly credentialValues: FakeCredentialValues
+  readonly credentialValues: Record<CredentialKind, string>
+}
+
+function planCredentialFillStep(
+  step: CredentialFillJourneyStep,
+): CredentialFillPlanning {
+  const observations = new CredentialFillObservations()
+  try {
+    for (const field of step.observedFields) {
+      observations.add(field.observation)
+    }
+    try {
+      const plan = plan_companion_credential_fill(observations)
+      return { kind: CredentialFillPlanningKind.Planned, plan }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return { kind: CredentialFillPlanningKind.Rejected, message }
+    }
+  } finally {
+    observations.free()
+  }
 }
 
 function applyCredentialAssignment({
@@ -94,7 +144,7 @@ function applyCredentialAssignment({
 }: ApplyCredentialAssignmentRequest): void {
   const assignedFieldIndex = assignment.field_index
   try {
-    for (const field of form.fields) {
+    for (const field of form) {
       if (field.field_index.value === assignedFieldIndex.value) {
         field.value = credentialValues[assignment.credential]
         return
@@ -114,7 +164,7 @@ function applyCredentialPlan({
   const credentialValues = {
     [CredentialKind.Username]: credentials.username,
     [CredentialKind.CurrentPassword]: credentials.password,
-  } satisfies FakeCredentialValues
+  } satisfies Record<CredentialKind, string>
   const assignments = plan.take_assignments()
   try {
     for (const assignment of assignments) {
@@ -130,34 +180,53 @@ function applyCredentialPlan({
   }
 }
 
-export type CredentialFillSimulationRequest = {
-  readonly observedFields: SimulatedCredentialFields
-  readonly form: SimulatedCredentialForm
-  readonly credentials: FakeLoginCredentials
+function snapshotForm(
+  form: SimulatedCredentialForm,
+): SimulatedCredentialFormSnapshot {
+  return form.map((field) => ({ name: field.name, value: field.value }))
 }
 
-export function simulateCredentialFill({
-  observedFields,
+export function simulateLoginJourney({
   form,
+  steps,
   credentials,
-}: CredentialFillSimulationRequest): void {
-  const observations = new CredentialFillObservations()
+}: CredentialFillJourneyRequest): CredentialFillJourneyOutcome[] {
+  const outcomes: CredentialFillJourneyOutcome[] = []
   try {
-    for (const field of observedFields) {
-      observations.add(field.observation)
-    }
-    const plan = plan_companion_credential_fill(observations)
-    try {
-      const applyRequest: ApplyCredentialPlanRequest = {
-        plan,
-        form,
-        credentials,
+    for (const step of steps) {
+      const planning = planCredentialFillStep(step)
+      switch (planning.kind) {
+        case CredentialFillPlanningKind.Planned: {
+          try {
+            const applyRequest: ApplyCredentialPlanRequest = {
+              plan: planning.plan,
+              form,
+              credentials,
+            }
+            applyCredentialPlan(applyRequest)
+            const outcome: CredentialFillJourneyOutcome = {
+              kind: CredentialFillJourneyOutcomeKind.Filled,
+              snapshot: snapshotForm(form),
+            }
+            outcomes.push(outcome)
+          } finally {
+            planning.plan.free()
+          }
+          break
+        }
+        case CredentialFillPlanningKind.Rejected: {
+          const outcome: CredentialFillJourneyOutcome = {
+            kind: CredentialFillJourneyOutcomeKind.Rejected,
+            message: planning.message,
+            snapshot: snapshotForm(form),
+          }
+          outcomes.push(outcome)
+          break
+        }
       }
-      applyCredentialPlan(applyRequest)
-    } finally {
-      plan.free()
     }
+    return outcomes
   } finally {
-    observations.free()
+    for (const field of form) field.free()
   }
 }
