@@ -578,6 +578,7 @@ mod metadata_tests {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod wasm_tests {
     use super::*;
+    use crate::manager::VaultNameState;
     use crate::storage::indexed_db;
     use crate::storage::indexed_db::{import_vault_blob, switch_active_vault};
     use nook_core::{
